@@ -227,15 +227,15 @@ void G_PlayAnim(const char *fn, char t)
 
     walock[TILE_ANIM] = 219 + t;
 
-    cacheAllocateBlock((intptr_t *)&animbuf, length + 1, &walock[TILE_ANIM]);
+    g_cache.allocateBlock((intptr_t *)&animbuf, length + 1, &walock[TILE_ANIM]);
 
-    tilesizx[TILE_ANIM] = 200;
-    tilesizy[TILE_ANIM] = 320;
+    tilesiz[TILE_ANIM].x = 200;
+    tilesiz[TILE_ANIM].y = 320;
 
     kread(handle, animbuf, length);
     kclose(handle);
 
-    ANIM_LoadAnim(animbuf);
+    ANIM_LoadAnim((uint8_t*)animbuf, length);
     numframes = ANIM_NumFrames();
     anim_pal = ANIM_GetPalette();
 
@@ -249,7 +249,7 @@ void G_PlayAnim(const char *fn, char t)
     gltexapplyprops();
 #endif
 
-    ototalclock = totalclock + 10;
+    ototalclock = (int32_t)totalclock + 10;
 
     for (i = 1; i<numframes; i++)
     {
@@ -259,10 +259,10 @@ void G_PlayAnim(const char *fn, char t)
             goto ENDOFANIMLOOP;
         }
 
-        frametime = totalclock;
+        frametime = (int32_t)totalclock;
 
         waloff[TILE_ANIM] = (intptr_t)ANIM_DrawFrame(i);
-        invalidatetile(TILE_ANIM, 0, 1 << 4);  // JBF 20031228
+        tileInvalidate(TILE_ANIM, 0, 1 << 4);  // JBF 20031228
 
         while (totalclock < ototalclock)
         {
@@ -279,7 +279,7 @@ void G_PlayAnim(const char *fn, char t)
             }
 
             rotatesprite(0 << 16, 0 << 16, 65536L, 512, TILE_ANIM, 0, 0, 2 + 4 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
-            nextpage();
+            videoNextPage();
         }
 
         if (t == 10) ototalclock += 14;
