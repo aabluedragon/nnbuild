@@ -211,8 +211,6 @@
     <ClCompile Include="..\..\source\duke3d\rsrc\eduke32_icon.c" />
     <ClCompile Include="..\..\source\oldmp\actors.cpp" />
     <ClCompile Include="..\..\source\oldmp\anim.cpp" />
-    <ClCompile Include="..\..\source\oldmp\astub.cpp" />
-    <ClCompile Include="..\..\source\oldmp\audiolib_musicstub.cpp" />
     <ClCompile Include="..\..\source\oldmp\config.cpp" />
     <ClCompile Include="..\..\source\oldmp\discord.cpp" />
     <ClCompile Include="..\..\source\oldmp\game.cpp" />
@@ -243,7 +241,6 @@
     <ClCompile Include="..\..\source\oldmp\sync.cpp" />
     <ClCompile Include="..\..\source\oldmp\testcd.cpp" />
     <ClCompile Include="..\..\source\oldmp\winbits.cpp" />
-    <ClCompile Include="..\..\source\oldmp\wrapper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="audiolib.vcxproj">
