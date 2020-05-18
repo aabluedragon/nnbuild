@@ -1,3 +1,5 @@
+#ifdef DISCORD_RPC
+
 #include "discord.h"
 #include "duke3d.h"
 
@@ -228,3 +230,5 @@ void UpdateDiscord()
 
     Discord_UpdatePresence(&discordPresence);
 }
+
+#endif

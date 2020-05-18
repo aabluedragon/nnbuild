@@ -1,5 +1,7 @@
 #ifndef DISCORD_H
 #define DISCORD_H
+
+#ifdef DISCORD_RPC
 #include "discord_rpc.h"
 
 extern int8_t discord_status;
@@ -13,5 +15,6 @@ extern DiscordRichPresence discordPresence;
 void InitDiscord();
 void CheckDiscord();
 void UpdateDiscord();
+#endif
 
 #endif // DISCORD_H
