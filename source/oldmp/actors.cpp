@@ -516,13 +516,13 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
         sprite[spritenum].y += (ychange*TICSPERFRAME)>>2;
         sprite[spritenum].z += (zchange*TICSPERFRAME)>>2;
         if (bg)
-            setsprite(spritenum,sprite[spritenum].x,sprite[spritenum].y,sprite[spritenum].z);
+            setsprite(spritenum, &sprite[spritenum].pos);
         return 0;
     }
 
     dasectnum = sprite[spritenum].sectnum;
 
-    daz = sprite[spritenum].z - ((tilesizy[sprite[spritenum].picnum]*sprite[spritenum].yrepeat)<<1);
+    daz = sprite[spritenum].z - ((tilesiz[sprite[spritenum].picnum].y*sprite[spritenum].yrepeat)<<1);
 
     if (bg)
     {
@@ -760,7 +760,7 @@ static void ms(int i)
         for (;x<endwall;x++)
         {
             rotatepoint(0,0,msx[j],msy[j],k&2047,&tx,&ty);
-            dragpoint(x,s->x+tx,s->y+ty);
+            dragpoint(x,s->x+tx,s->y+ty, 0);
 
             j++;
         }
@@ -1051,7 +1051,7 @@ void A_MoveDummyPlayers(void)
 
         SX += (g_player[p].ps->posx-g_player[p].ps->oposx);
         SY += (g_player[p].ps->posy-g_player[p].ps->oposy);
-        setsprite(i,SX,SY,SZ);
+        setsprite(i,&sprite[i].pos);
 
 BOLT:
 
@@ -6990,7 +6990,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     {
                         sprite[j].x += x;
                         sprite[j].y += l;
-                        setsprite(j,sprite[j].x,sprite[j].y,sprite[j].z);
+                        setsprite(j,sprite[j].pos);
                         if (sector[sprite[j].sectnum].floorstat&2)
                             if (sprite[j].statnum == 2)
                                 A_Fall(j);
@@ -6998,8 +6998,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     j = nextj;
                 }
 
-                dragpoint((short)t[1],wall[t[1]].x+x,wall[t[1]].y+l);
-                dragpoint((short)t[2],wall[t[2]].x+x,wall[t[2]].y+l);
+                dragpoint((short)t[1],wall[t[1]].x+x,wall[t[1]].y+l, 0);
+                dragpoint((short)t[2],wall[t[2]].x+x,wall[t[2]].y+l, 0);
 
                 TRAVERSE_CONNECT(p)
                 if (g_player[p].ps->cursectnum == s->sectnum && g_player[p].ps->on_ground)
@@ -7157,7 +7157,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     k = A_Spawn(i,SMALLSMOKE);
                     sprite[k].xvel = 96+(krand()&127);
                     A_SetSprite(k,CLIPMASK0);
-                    setsprite(k,sprite[k].x,sprite[k].y,sprite[k].z);
+                    setsprite(k,&sprite[k].pos);
                     if (rnd(16))
                         A_Spawn(i,EXPLOSION2);
                 }
@@ -7236,7 +7236,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     sprite[j].y += x;
 
                     sprite[j].z += s->zvel;
-                    setsprite(j,sprite[j].x,sprite[j].y,sprite[j].z);
+                    setsprite(j,&sprite[j].pos);
                 }
                 j = nextj;
             }
@@ -7253,7 +7253,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     g_player[p].ps->posz += s->zvel;
 
             ms(i);
-            setsprite(i,s->x,s->y,s->z);
+            setsprite(i,&s->pos);
 
             break;
 

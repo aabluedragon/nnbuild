@@ -32,9 +32,15 @@ extern const char *s_buildDate;
 
 #define MOVEFIFOSIZ 256
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#define OSDTEXT_DEFAULT   "^00"
+#define OSDTEXT_DARKRED   "^10"
+#define OSDTEXT_GREEN     "^11"
+#define OSDTEXT_RED       "^21"
+#define OSDTEXT_YELLOW    "^23"
+
+#define OSDTEXT_BRIGHT    "^S0"
+
+#define OSD_ERROR OSDTEXT_DARKRED OSDTEXT_BRIGHT
 
 // JBF
 #include "compat.h"
@@ -62,8 +68,6 @@ extern "C" {
 
 #define HORIZ_MIN -99
 #define HORIZ_MAX 299
-
-extern int g_scriptVersion, g_Shareware, g_gameType;
 
 #define GAMEDUKE 0
 #define GAMENAM 1
@@ -95,12 +99,12 @@ extern int g_scriptVersion, g_Shareware, g_gameType;
 #define MAXVOLUMES 14
 #define MAXLEVELS 64
 
-#include "types.h"
-#include "file_lib.h"
+//#include "types.h"
+//#include "file_lib.h"
 #include "gamedefs.h"
 #include "keyboard.h"
-#include "util_lib.h"
-#include "mathutil.h"
+//#include "util_lib.h"
+//#include "mathutil.h"
 #include "function.h"
 #include "fx_man.h"
 #include "config.h"
@@ -113,6 +117,12 @@ extern int g_scriptVersion, g_Shareware, g_gameType;
 #include "music.h"
 
 #include "namesdyn.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern int g_scriptVersion, g_Shareware, g_gameType;
 
 ////////// TIMING CONSTANTS //////////
 // The number of 'totalclock' increments per second:
@@ -598,7 +608,7 @@ extern int g_currentMenu;
 extern int tempwallptr,g_animateCount;
 extern int lockclock;
 extern intptr_t frameplace;
-extern char display_mirror,g_loadFromGroupOnly,g_RTSPlaying;
+extern char g_loadFromGroupOnly,g_RTSPlaying;
 
 extern int g_groupFileHandle;
 extern int ototalclock;
@@ -664,8 +674,6 @@ extern int packetrate;
 #define BASEPALCOUNT 7
 
 extern uint8_t water_pal[768], slime_pal[768], title_pal[768], dre_alms[768], ending_pal[768], *anim_pal;
-
-extern uint8_t *basepaltable[BASEPALCOUNT];
 
 typedef enum basepal_ {
     BASEPAL = 0,
@@ -916,8 +924,6 @@ enum SpriteFlags_t {
     SPRITE_DAMAGEEVENT  = 0x04000000,
 };
 
-extern const char pow2char[];
-
 extern short SpriteCacheList[MAXTILES][3];
 
 extern int g_iReturnVarID;
@@ -1074,7 +1080,7 @@ typedef struct {
     short numsectors;
     sectortype sector[MAXSECTORS];
     spritetype sprite[MAXSPRITES];
-    spriteexttype spriteext[MAXSPRITES];
+    spriteext_t spriteext[MAXSPRITES];
     short tailspritefree;
     short headspritesect[MAXSECTORS+1];
     short prevspritesect[MAXSPRITES];

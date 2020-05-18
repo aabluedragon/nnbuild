@@ -69,12 +69,7 @@ extern void allignwarpelevators(void);
 extern void G_HandleSharedKeys(int snum);
 extern void checksectors(int snum);
 extern int32_t RTS_AddFile(const char *filename);
-extern void RTS_Init(const char *filename);
-extern int32_t RTS_NumSounds(void);
-extern int32_t RTS_SoundLength(int32_t lump);
-extern const char *RTS_GetSoundName(int32_t i);
 extern void RTS_ReadLump(int32_t lump,void *dest);
-extern void *RTS_GetSound(int32_t lump);
 extern void G_CacheMapData(void);
 extern void xyzmirror(int i,int wn);
 extern void G_UpdateScreenArea(void);
@@ -142,7 +137,6 @@ extern void A_SpawnGlass(int i,int n);
 extern void A_SpawnCeilingGlass(int i,int sectnum,int n);
 extern void A_SpawnRandomGlass(int i,int wallnum,int n);
 extern int GetTime(void);
-extern void CONFIG_GetSetupFilename(void);
 extern int32_t CONFIG_FunctionNameToNum(char *func);
 extern char *CONFIG_FunctionNumToName(int32_t func);
 extern int32_t CONFIG_AnalogNameToNum(char *func);
@@ -150,8 +144,6 @@ extern char *CONFIG_AnalogNumToName(int32_t func);
 extern void CONFIG_SetDefaults(void);
 extern void CONFIG_ReadKeys(void);
 extern void ReadSaveGameHeaders(void);
-extern int32_t CONFIG_ReadSetup(void);
-extern void CONFIG_WriteSetup(void);
 extern void G_UpdateInterpolations(void);
 extern void G_SetInterpolation(int *posptr);
 extern void G_StopInterpolation(int *posptr);
@@ -250,8 +242,6 @@ extern void onvideomodechange(int newmode);
 
 extern void X_OnEvent(int iEventID, int sActor, int sPlayer, int lDist);
 
-extern int32_t A_CheckSoundPlaying(int32_t i, int32_t num);
-extern int32_t S_CheckSoundPlaying(int soundNum);
 extern void G_UpdatePlayerFromMenu(void);
 
 extern void G_AddUserQuote(const char *daquote);
@@ -266,7 +256,6 @@ extern int32_t G_FindLevelByFile(const char *fn);
 
 extern void G_GetCrosshairColor(void);
 extern void G_SetCrosshairColor(int r, int g, int b);
-extern int kopen4loadfrommod(char *filename, char searchfirst);
 
 extern int _EnterText(int small,int x,int y,char *t,int dalen,int c);
 
