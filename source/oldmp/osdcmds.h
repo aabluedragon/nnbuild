@@ -12,17 +12,6 @@ int registerosdcommands(void);
 
 extern float r_ambientlight,r_ambientlightrecip;
 
-enum cvartypes
-{
-    CVAR_INT,
-    CVAR_UNSIGNEDINT,
-    CVAR_BOOL,
-    CVAR_STRING,
-    CVAR_NOMULTI = 128,
-    CVAR_MULTI = 256,
-    CVAR_NOSAVE = 512
-};
-
 typedef struct
 {
     char *name;
