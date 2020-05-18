@@ -33,6 +33,7 @@ extern const char *s_buildDate;
 #define MOVEFIFOSIZ 256
 
 #define OSDTEXT_DEFAULT   "^00"
+#define OSDTEXT_BLUE      "^01"
 #define OSDTEXT_DARKRED   "^10"
 #define OSDTEXT_GREEN     "^11"
 #define OSDTEXT_RED       "^21"
@@ -739,8 +740,8 @@ extern int g_myAimMode, g_myAimStat, g_oldAimStat;
 
 extern unsigned int g_moveThingsCount;
 
-#define IFISGLMODE if (getrendermode() >= 3)
-#define IFISSOFTMODE if (getrendermode() < 3)
+#define IFISGLMODE if (videoGetRenderMode() >= 3)
+#define IFISSOFTMODE if (videoGetRenderMode() < 3)
 
 #define TILE_SAVESHOT (MAXTILES-1)
 #define TILE_LOADSHOT (MAXTILES-3)
