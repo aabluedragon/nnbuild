@@ -61,27 +61,6 @@ extern "C" {
 
 #define MAXJOYBUTTONS (32+4)
 
-// Number of EXTERNAL buttons
-
-//#define MAXEXTERNALBUTTONS 6
-
-//
-// modem string defines
-//
-
-#define MAXMODEMSTRING 50
-
-// MACRO defines
-
-#define MAXMACROS      10
-#define MAXMACROLENGTH 34
-
-// Phone list defines
-
-#define PHONENUMBERLENGTH 28
-#define PHONENAMELENGTH   16
-#define MAXPHONEENTRIES   10
-
 // length of program functions
 
 #define MAXFUNCTIONLENGTH 30
