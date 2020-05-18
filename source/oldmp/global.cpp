@@ -49,7 +49,10 @@ int *animateptr[MAXANIMATES];
 int animategoal[MAXANIMATES], animatevel[MAXANIMATES], g_animateCount;
 // int oanimateval[MAXANIMATES];
 short animatesect[MAXANIMATES];
-int msx[2048],msy[2048];
+
+//int msx[2048],msy[2048];
+vec2_t g_origins[2048];
+
 short cyclers[MAXCYCLERS][6],g_numCyclers;
 
 char *ScriptQuotes[MAXQUOTES], *ScriptQuoteRedefinitions[MAXQUOTES];

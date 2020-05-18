@@ -105,6 +105,7 @@ extern const char *s_buildDate;
 #include "keyboard.h"
 //#include "util_lib.h"
 //#include "mathutil.h"
+#include "common.h"
 #include "function.h"
 #include "fx_man.h"
 #include "config.h"
@@ -295,7 +296,10 @@ extern int probey;
 
 extern char typebuflen,typebuf[141];
 extern int g_musicSize;
-extern int msx[2048],msy[2048];
+
+//extern int msx[2048],msy[2048];
+extern vec2_t g_origins[2048];
+
 extern short cyclers[MAXCYCLERS][6],g_numCyclers;
 extern char szPlayerName[32];
 
@@ -464,10 +468,12 @@ extern int fricxv,fricyv;
 // mywhatever type globals
 
 typedef struct {
+    vec3_t pos, opos, vel;
+
     int zoom, exitx, exity;
-    int posx, posy, posz, invdisptime;
-    int bobposx, bobposy, oposx, oposy, oposz, pyoff, opyoff;
-    int posxv, posyv, poszv, last_pissed_time, truefz, truecz;
+    int invdisptime;
+    int bobposx, bobposy, pyoff, opyoff;
+    int last_pissed_time, truefz, truecz;
     int player_par, visibility;
     int bobcounter, weapon_sway;
     int pals_time, randomflamex, crack_time;
