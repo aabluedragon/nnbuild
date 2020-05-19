@@ -1157,7 +1157,8 @@ typedef struct {
 extern keydef_t keynames[];
 extern char *mousenames[];
 
-extern const char *duke3dgrp, *duke3dgrpstring;
+extern char* duke3dgrp;
+extern const char* duke3dgrpstring;
 extern char mod_dir[BMAX_PATH];
 
 extern hashtable_t gamevarH;

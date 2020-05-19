@@ -108,7 +108,7 @@ static int g_noLogo = 0;
 
 char eduke32dat[BMAX_PATH] = "eduke32.dat";
 char defaultduke3dgrp[BMAX_PATH] = "duke3d.grp";
-const char *duke3dgrp = defaultduke3dgrp;
+char *duke3dgrp = defaultduke3dgrp;
 const char *duke3dgrpstring = NULL;
 static char defaultconfilename[BMAX_PATH] = {"EDUKE.CON"};
 static char *confilename = defaultconfilename;

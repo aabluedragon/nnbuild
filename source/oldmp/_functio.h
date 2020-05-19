@@ -213,7 +213,7 @@ const char oldkeydefaults[NUMGAMEFUNCTIONS*3][MAXGAMEFUNCLEN] =
    "Show_DukeMatch_Scores", "Backslash", ""
    };
 
-static char * mousedefaults[] =
+static const char * mousedefaults[] =
    {
    "Fire",
    "MedKit",
@@ -228,7 +228,7 @@ static char * mousedefaults[] =
    };
 
 
-static char * mouseclickeddefaults[] =
+static const char * mouseclickeddefaults[] =
    {
    "",
    "",
@@ -243,7 +243,7 @@ static char * mouseclickeddefaults[] =
    };
 
 
-static char * joystickdefaults[] =
+static const char * joystickdefaults[] =
    {
    "Fire",
    "Strafe",
@@ -284,7 +284,7 @@ static char * joystickdefaults[] =
    };
 
 
-static char * joystickclickeddefaults[] =
+static const char * joystickclickeddefaults[] =
    {
    "",
    "Inventory",
@@ -325,14 +325,14 @@ static char * joystickclickeddefaults[] =
    };
 
 
-static char * mouseanalogdefaults[] =
+static const char * mouseanalogdefaults[] =
    {
    "analog_turning",
    "analog_moving",
    };
 
 
-static char * mousedigitaldefaults[] =
+static const char * mousedigitaldefaults[] =
    {
    "",
    "",
@@ -341,7 +341,7 @@ static char * mousedigitaldefaults[] =
    };
 
 
-static char * joystickanalogdefaults[] =
+static const char * joystickanalogdefaults[] =
    {
    "analog_turning",
    "analog_moving",
@@ -354,7 +354,7 @@ static char * joystickanalogdefaults[] =
    };
 
 
-static char * joystickdigitaldefaults[] =
+static const char * joystickdigitaldefaults[] =
    {
    "",
    "",

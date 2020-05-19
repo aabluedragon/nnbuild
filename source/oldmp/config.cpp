@@ -51,18 +51,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 ===================
 */
 
-struct HASH_table gamefuncH    = { NUMGAMEFUNCTIONS<<1, NULL };
+hashtable_t gamefuncH    = { NUMGAMEFUNCTIONS<<1, NULL };
 
-int32_t CONFIG_FunctionNameToNum(char * func)
+int32_t CONFIG_FunctionNameToNum(const char * func)
 {
     int32_t i;
 
-    i = HASH_find(&gamefuncH,func);
+    i = hash_find(&gamefuncH,func);
 
     if (i < 0)
     {
-        char *str = strtolower(Bstrdup(func),Bstrlen(func));
-        i = HASH_find(&gamefuncH,str);
+        char *str = Bstrtolower(Bstrdup(func));
+        i = hash_find(&gamefuncH,str);
         Bfree(str);
 
         return i;
@@ -95,7 +95,7 @@ char * CONFIG_FunctionNumToName(int32_t func)
 */
 
 
-int32_t CONFIG_AnalogNameToNum(char * func)
+int32_t CONFIG_AnalogNameToNum(const char * func)
 {
 
     if (!Bstrcasecmp(func,"analog_turning"))
@@ -119,7 +119,7 @@ int32_t CONFIG_AnalogNameToNum(char * func)
 }
 
 
-char * CONFIG_AnalogNumToName(int32_t func)
+const char * CONFIG_AnalogNumToName(int32_t func)
 {
     switch (func)
     {
@@ -150,8 +150,10 @@ void CONFIG_SetDefaultKeys(int type)
     int32_t i,f;
 
     Bmemset(ud.config.KeyboardKeys, 0xff, sizeof(ud.config.KeyboardKeys));
-    Bmemset(&boundkeys,0,sizeof(boundkeys));
-    Bmemset(&mousebind,0,sizeof(mousebind));
+
+    //Bmemset(&boundkeys,0,sizeof(boundkeys));
+    //Bmemset(&mousebind,0,sizeof(mousebind));
+    CONTROL_ClearAllBinds();
 
     if (type == 1)
     {
@@ -301,7 +303,9 @@ void CONFIG_SetDefaults(void)
         ud.config.MouseAnalogueAxes[i] = CONFIG_AnalogNameToNum(mouseanalogdefaults[i]);
         CONTROL_MapAnalogAxis(i, ud.config.MouseAnalogueAxes[i], controldevice_mouse);
     }
-    CONTROL_SetMouseSensitivity(DEFAULTMOUSESENSITIVITY);
+
+    //CONTROL_SetMouseSensitivity(DEFAULTMOUSESENSITIVITY);
+    CONTROL_MouseSensitivity = DEFAULTMOUSESENSITIVITY;
 
     memset(ud.config.JoystickFunctions, -1, sizeof(ud.config.JoystickFunctions));
     for (i=0; i<MAXJOYBUTTONS; i++)
@@ -350,7 +354,8 @@ void CONFIG_ReadKeys(void)
 
     numkeyentries = SCRIPT_NumberEntries(ud.config.scripthandle,"KeyDefinitions");
 
-    Bmemset(&boundkeys,0,sizeof(boundkeys));
+    //Bmemset(&boundkeys,0,sizeof(boundkeys));
+    CONTROL_ClearKeyBinds();
 
     for (i=0;i<numkeyentries;i++)
     {
@@ -371,11 +376,11 @@ void CONFIG_ReadKeys(void)
             key2 = 0xff;
             if (keyname1[0])
             {
-                key1 = (byte) KB_StringToScanCode(keyname1);
+                key1 = (uint8_t) KB_StringToScanCode(keyname1);
             }
             if (keyname2[0])
             {
-                key2 = (byte) KB_StringToScanCode(keyname2);
+                key2 = (uint8_t) KB_StringToScanCode(keyname2);
             }
             ud.config.KeyboardKeys[function][0] = key1;
             ud.config.KeyboardKeys[function][1] = key2;
@@ -392,41 +397,49 @@ void CONFIG_ReadKeys(void)
 }
 
 // wrapper for CONTROL_MapKey(), generates key bindings to reflect changes to keyboard setup
-void CONFIG_MapKey(int32_t which, kb_scancode key1, kb_scancode oldkey1, kb_scancode key2, kb_scancode oldkey2)
+void CONFIG_MapKey(int which, kb_scancode key1, kb_scancode oldkey1, kb_scancode key2, kb_scancode oldkey2)
 {
-    int i, j, k;
-    int ii[] = { key1, key2, oldkey1, oldkey2 };
-    char buf[64];
+    int const keys[] = { key1, key2, oldkey1, oldkey2 };
+    char buf[2 * MAXGAMEFUNCLEN];
 
-    CONTROL_MapKey(which, key1, key2);
+    if (which == gamefunc_Show_Console)
+        OSD_CaptureKey(key1);
 
-    for (k = 0; (unsigned)k < (sizeof(ii) / sizeof(ii[0])); k++)
+    for (int k = 0; (unsigned)k < ARRAY_SIZE(keys); k++)
     {
-        if (ii[k] == 0xff || !ii[k]) continue;
+        if (keys[k] == 0xff || !keys[k])
+            continue;
 
-        for (j=0;keynames[j].name;j++)
-            if (ii[k] == keynames[j].id)
+        int match = 0;
+
+        for (; match < ARRAY_SSIZE(sctokeylut); ++match)
+        {
+            if (keys[k] == sctokeylut[match].sc)
                 break;
-        if (keynames[j].name)
-            boundkeys[ii[k]].key=Bstrdup(keynames[j].name);
+        }
 
-        boundkeys[ii[k]].repeat = 1;
-        boundkeys[ii[k]].cmd[0] = 0;
         tempbuf[0] = 0;
 
-        for (i=NUMGAMEFUNCTIONS-1;i>=0;i--)
+        for (int i = NUMGAMEFUNCTIONS - 1; i >= 0; i--)
         {
-            if (ud.config.KeyboardKeys[i][0] == ii[k] || ud.config.KeyboardKeys[i][1] == ii[k])
+            if (ud.config.KeyboardKeys[i][0] == keys[k] || ud.config.KeyboardKeys[i][1] == keys[k])
             {
-                Bsprintf(buf,"gamefunc_%s; ",CONFIG_FunctionNumToName(i));
-                Bstrcat(tempbuf,buf);
+                Bsprintf(buf, "gamefunc_%s; ", CONFIG_FunctionNumToName(i));
+                Bstrcat(tempbuf, buf);
             }
         }
-        Bstrncpy(boundkeys[ii[k]].cmd,tempbuf, MAXBINDSTRINGLENGTH-1);
 
-        i = Bstrlen(boundkeys[ii[k]].cmd);
-        if (i)
-            boundkeys[ii[k]].cmd[i-2] = 0; // cut off the trailing "; "
+        int const len = Bstrlen(tempbuf);
+
+        if (len >= 2)
+        {
+            tempbuf[len - 2] = 0;  // cut off the trailing "; "
+            CONTROL_BindKey(keys[k], tempbuf, 1, sctokeylut[match].key ? sctokeylut[match].key : "<?>");
+        }
+        else
+        {
+            CONTROL_FreeKeyBind(keys[k]);
+        }
     }
 }
 
@@ -491,7 +504,9 @@ void CONFIG_SetupMouse(void)
     SCRIPT_GetNumber(ud.config.scripthandle, "Controls","Mouse_Sensitivity",&function);
     if (function == 0) // bug fix for reading newer cfgs
         function = DEFAULTMOUSESENSITIVITY;
-    CONTROL_SetMouseSensitivity(function);
+
+    //CONTROL_SetMouseSensitivity(function);
+    CONTROL_MouseSensitivity = function;
 
     for (i=0; i<MAXMOUSEBUTTONS; i++)
     {
@@ -614,9 +629,9 @@ int32_t CONFIG_ReadSetup(void)
     ud.config.setupread = 1;
 
     pathsearchmode = 1;
-    if (SafeFileExists(setupfilename) && ud.config.scripthandle < 0)  // JBF 20031211
+    if (buildvfs_exists(setupfilename) && ud.config.scripthandle < 0)  // JBF 20031211
         ud.config.scripthandle = SCRIPT_Load(setupfilename);
-    else if (SafeFileExists(SETUPFILENAME) && ud.config.scripthandle < 0)
+    else if (buildvfs_exists(SETUPFILENAME) && ud.config.scripthandle < 0)
     {
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
                  "Import configuration data from \"%s\"?",setupfilename,SETUPFILENAME);
@@ -624,7 +639,7 @@ int32_t CONFIG_ReadSetup(void)
         i=wm_ynbox("Import Configuration Settings",tempbuf);
         if (i) ud.config.scripthandle = SCRIPT_Load(SETUPFILENAME);
     }
-    else if (SafeFileExists("eduke32.cfg") && ud.config.scripthandle < 0)
+    else if (buildvfs_exists("eduke32.cfg") && ud.config.scripthandle < 0)
     {
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
                  "Import configuration data from \"eduke32.cfg\"?",setupfilename);
@@ -632,7 +647,7 @@ int32_t CONFIG_ReadSetup(void)
         i=wm_ynbox("Import Configuration Settings",tempbuf);
         if (i) ud.config.scripthandle = SCRIPT_Load("eduke32.cfg");
     }
-    else if (SafeFileExists("duke3d.cfg") && ud.config.scripthandle < 0)
+    else if (buildvfs_exists("duke3d.cfg") && ud.config.scripthandle < 0)
     {
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
                  "Import configuration data from \"duke3d.cfg\"?",setupfilename);
@@ -656,7 +671,7 @@ int32_t CONFIG_ReadSetup(void)
 
         SCRIPT_GetString(ud.config.scripthandle, "Comm Setup","PlayerName",&tempbuf[0]);
 
-        while (Bstrlen(stripcolorcodes(dummybuf,tempbuf)) > 10)
+        while (Bstrlen(OSD_StripColors(dummybuf,tempbuf)) > 10)
             tempbuf[Bstrlen(tempbuf)-1] = '\0';
 
         Bstrncpy(szPlayerName,tempbuf,sizeof(szPlayerName)-1);
@@ -709,7 +724,7 @@ int32_t CONFIG_ReadSetup(void)
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "Detail",&ud.detail);
 
         {
-            extern unsigned int g_frameDelay;
+            //extern unsigned int g_frameDelay;
 
             SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "MaxFPS",&r_maxfps);
             r_maxfps = max(0,min(1000,r_maxfps));
@@ -738,19 +753,19 @@ int32_t CONFIG_ReadSetup(void)
         {
             tempbuf[0] = 0;
             SCRIPT_GetString(ud.config.scripthandle, "Screen Setup", "VidGamma",&tempbuf[0]);
-            if (tempbuf[0]) vid_gamma = atof(tempbuf);
+            if (tempbuf[0]) g_videoGamma = atof(tempbuf);
         }
 
         {
             tempbuf[0] = 0;
             SCRIPT_GetString(ud.config.scripthandle, "Screen Setup", "VidBrightness",&tempbuf[0]);
-            if (tempbuf[0]) vid_brightness = atof(tempbuf);
+            if (tempbuf[0]) g_videoBrightness = atof(tempbuf);
         }
 
         {
             tempbuf[0] = 0;
             SCRIPT_GetString(ud.config.scripthandle, "Screen Setup", "VidContrast",&tempbuf[0]);
-            if (tempbuf[0]) vid_contrast = atof(tempbuf);
+            if (tempbuf[0]) g_videoContrast = atof(tempbuf);
         }
 
 #ifdef RENDERTYPEWIN
@@ -916,10 +931,12 @@ int32_t CONFIG_ReadSetup(void)
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","MouseDeadZone",&ud.config.MouseDeadZone);
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","RunKeyBehaviour",&ud.runkey_mode);   // JBF 20031125
 
+        /*
         {
             SCRIPT_GetNumber(ud.config.scripthandle, "Controls","SmoothInput",&ud.config.SmoothInput);
             control_smoothmouse = ud.config.SmoothInput;
         }
+        */
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","UseJoystick",&ud.config.UseJoystick);
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","UseMouse",&ud.config.UseMouse);
@@ -964,17 +981,17 @@ void CONFIG_WriteBinds(void) // save binds and aliases to disk
 
     if (fp)
     {
-        symbol_t *symb;
+        osdsymbol_t *symb;
         fprintf(fp,"// this file automatically generated by EDuke32\n// do not modify if you lack common sense\n");
         for (i=0;i<MAXBOUNDKEYS;i++)
-            if (boundkeys[i].cmd[0] && boundkeys[i].key)
-                fprintf(fp,"bind \"%s\"%s \"%s\"\n",boundkeys[i].key,boundkeys[i].repeat?"":" norepeat",boundkeys[i].cmd);
+            if (CONTROL_KeyBinds[i].cmdstr[0] && CONTROL_KeyBinds[i].key)
+                fprintf(fp,"bind \"%s\"%s \"%s\"\n", CONTROL_KeyBinds[i].key, CONTROL_KeyBinds[i].repeat?"":" norepeat", CONTROL_KeyBinds[i].cmdstr);
 
         for (i=0;i<MAXMOUSEBUTTONS;i++)
-            if (mousebind[i].cmd[0])
-                fprintf(fp,"bind \"%s\"%s \"%s\"\n",mousebind[i].key,mousebind[i].repeat?"":" norepeat",mousebind[i].cmd);
+            if (CONTROL_KeyBinds[MAXBOUNDKEYS + i].cmdstr[0])
+                fprintf(fp,"bind \"%s\"%s \"%s\"\n", CONTROL_KeyBinds[MAXBOUNDKEYS + i].key, CONTROL_KeyBinds[MAXBOUNDKEYS + i].repeat?"":" norepeat", CONTROL_KeyBinds[MAXBOUNDKEYS + i].cmdstr);
 
-        for (symb=symbols; symb!=NULL; symb=symb->next)
+        for (symb=osd->symbols; symb!=NULL; symb=symb->next)
             if (symb->func == (void *)OSD_ALIAS)
                 fprintf(fp,"alias \"%s\" \"%s\"\n", symb->name, symb->help);
 
@@ -1113,11 +1130,11 @@ void CONFIG_WriteSetup(void)
 #endif
 
     {
-        Bsprintf(tempbuf,"%.2f",vid_brightness);
+        Bsprintf(tempbuf,"%.2f",g_videoBrightness);
         SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "VidBrightness",tempbuf);
-        Bsprintf(tempbuf,"%.2f",vid_contrast);
+        Bsprintf(tempbuf,"%.2f",g_videoContrast);
         SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "VidContrast",tempbuf);
-        Bsprintf(tempbuf,"%.2f",vid_gamma);
+        Bsprintf(tempbuf,"%.2f",g_videoGamma);
         SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "VidGamma",tempbuf);
     }
 
@@ -1176,8 +1193,9 @@ void CONFIG_WriteSetup(void)
         Bsprintf(buf,"MouseAnalogScale%d",dummy);
         SCRIPT_PutNumber(ud.config.scripthandle, "Controls", buf, ud.config.MouseAnalogueScale[dummy], false, false);
     }
-    dummy = CONTROL_GetMouseSensitivity();
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","Mouse_Sensitivity",dummy,false,false);
+
+    //dummy = CONTROL_GetMouseSensitivity();
+    SCRIPT_PutDouble(ud.config.scripthandle, "Controls","Mouse_Sensitivity", CONTROL_MouseSensitivity, 0);
 
     for (dummy=0;dummy<MAXJOYBUTTONS;dummy++)
     {
