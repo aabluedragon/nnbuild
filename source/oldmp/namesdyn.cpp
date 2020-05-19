@@ -35,7 +35,8 @@ struct dynitem
     short vstat;
     short val;
 };
-struct HASH_table dynnamesH = {512, NULL};
+
+hashtable_t dynnamesH = {512, NULL};
 
 struct dynitem list[]=
 {

@@ -95,7 +95,7 @@ extern void ChangeToMenu(int cm);
 extern int G_LoadPlayer(int spot);
 extern int G_SavePlayer(int spot);
 extern int menutext_(int x,int y,int s,int p,char *t,int bits);
-#define menutext(x,y,s,p,t) menutext_(x,y,s,p,(char *)stripcolorcodes(menutextbuf,t),10+16)
+#define menutext(x,y,s,p,t) menutext_(x,y,s,p,(char *)OSD_StripColors(menutextbuf,t),10+16)
 extern void M_DisplayMenus(void);
 extern void G_FadePalette(int r,int g,int b,int e);
 extern void G_PlayAnim(const char *fn,char);
@@ -111,7 +111,7 @@ extern void G_Shutdown(void);
 extern void getpackets(void);
 extern void A_PlayAlertSound(int i);
 extern int A_CheckInventorySprite(spritetype *s);
-extern int A_CheckEnemySprite(spritetype *s);
+extern int A_CheckEnemySprite(void const* s);
 extern int A_CheckEnemyTile(int pn);
 extern void G_DrawTile(int x,int y,int tilenum,int shade,int orientation);
 extern void G_DrawTilePal(int x,int y,int tilenum,int shade,int orientation,int p);
@@ -178,7 +178,7 @@ extern uint8_t playerColor_getPreviousColor(uint8_t palnum, uint8_t useauto);
 extern int mpgametext(int y, const char *t, int s, int dabits);
 extern void G_SetStatusBarScale(int sc);
 
-extern void P_SetGamePalette(DukePlayer_t *player, uint8_t palid, int32_t set);
+extern void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set);
 extern void fadepal(int r, int g, int b, int start, int end, int step);
 
 extern int G_GameTextLen(int x, const char *t);

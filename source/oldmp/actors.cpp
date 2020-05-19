@@ -7733,9 +7733,9 @@ int A_CheckEnemyTile(int pn)
     return 0;
 }
 
-int A_CheckEnemySprite(spritetype *s)
+int A_CheckEnemySprite(const void *s)
 {
-    return(A_CheckEnemyTile(s->picnum));
+    return(A_CheckEnemyTile(((uspriteptr_t)s)->picnum));
 }
 
 int A_CheckSwitchTile(int i)

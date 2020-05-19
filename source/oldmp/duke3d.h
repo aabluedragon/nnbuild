@@ -1157,13 +1157,13 @@ typedef struct {
 extern keydef_t keynames[];
 extern char *mousenames[];
 
-extern char *duke3dgrp, *duke3dgrpstring;
+extern const char *duke3dgrp, *duke3dgrpstring;
 extern char mod_dir[BMAX_PATH];
 
-extern struct HASH_table gamevarH;
-extern struct HASH_table arrayH;
-extern struct HASH_table keywH;
-extern struct HASH_table gamefuncH;
+extern hashtable_t gamevarH;
+extern hashtable_t arrayH;
+extern hashtable_t keywH;
+extern hashtable_t gamefuncH;
 
 #ifdef __cplusplus
 }
