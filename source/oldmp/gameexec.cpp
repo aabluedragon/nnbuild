@@ -44,7 +44,7 @@ int g_tw;
 
 static int X_DoExecute(void);
 
-#include "gamestructures.c"
+#include "gamestructures.cpp"
 
 void X_ScriptInfo(void)
 {
@@ -213,47 +213,45 @@ static int A_Dodge(spritetype *s)
     return 0;
 }
 
-int A_GetFurthestAngle(int iActor,int angs)
+int A_GetFurthestAngle(int const spriteNum, int const angDiv)
 {
-    spritetype *s = &sprite[iActor];
+    auto const pSprite = (uspriteptr_t)&sprite[spriteNum];
 
-    if (s->picnum != APLAYER && (ActorExtra[iActor].temp_data[0]&63) > 2)
-        return(s->ang + 1024);
+    if (pSprite->picnum != APLAYER && ((ActorExtra[spriteNum].temp_data[0] & 63) > 2))
+        return (pSprite->ang + 1024) & 2047;
 
+    int       furthestAngle = 0;
+    int const angIncs = tabledivide32_noinline(2048, angDiv);
+    int32_t   greatestDist = INT32_MIN;
+    hitdata_t hit;
+
+    for (native_t j = pSprite->ang; j < (2048 + pSprite->ang); j += angIncs)
     {
-        int furthest_angle=0;
-        short hitsect,hitwall,hitspr;
-        int hx, hy, hz, d;
-        int greatestd = -(1<<30);
-        int angincs = 2048/angs,j;
+        vec3_t origin = *(const vec3_t*)pSprite;
+        origin.z -= (8 << 8);//ZOFFSET3;
+        hitscan(&origin, pSprite->sectnum, sintable[(j + 512) & 2047], sintable[j & 2047], 0, &hit, CLIPMASK1);
 
-        for (j=s->ang;j<(2048+s->ang);j+=angincs)
+        int const hitDist = klabs(hit.pos.x - pSprite->x) + klabs(hit.pos.y - pSprite->y);
+
+        if (hitDist > greatestDist)
         {
-            hitscan(s->x, s->y, s->z-(8<<8), s->sectnum,
-                    sintable[(j+512)&2047],
-                    sintable[j&2047],0,
-                    &hitsect,&hitwall,&hitspr,&hx,&hy,&hz,CLIPMASK1);
-
-            d = klabs(hx-s->x) + klabs(hy-s->y);
-
-            if (d > greatestd)
-            {
-                greatestd = d;
-                furthest_angle = j;
-            }
+            greatestDist = hitDist;
+            furthestAngle = j;
         }
-        return (furthest_angle&2047);
     }
+
+    return furthestAngle & 2047;
 }
 
 int A_FurthestVisiblePoint(int iActor,spritetype *ts,int *dax,int *day)
 {
     if ((ActorExtra[iActor].temp_data[0]&63)) return -1;
     {
-        short hitsect,hitwall,hitspr, angincs;
-        int hx, hy, hz, d, da;//, d, cd, ca,tempx,tempy,cx,cy;
+        short angincs;
+        int d, da;//, d, cd, ca,tempx,tempy,cx,cy;
         int j;
         spritetype *s = &sprite[iActor];
+        hitdata_t hit;
 
         if (ud.multimode < 2 && ud.player_skill < 3)
             angincs = 2048/2;
@@ -261,20 +259,20 @@ int A_FurthestVisiblePoint(int iActor,spritetype *ts,int *dax,int *day)
 
         for (j=ts->ang;j<(2048+ts->ang);j+=(angincs-(krand()&511)))
         {
-            hitscan(ts->x, ts->y, ts->z-(16<<8), ts->sectnum,
-                    sintable[(j+512)&2047],
-                    sintable[j&2047],16384-(krand()&32767),
-                    &hitsect,&hitwall,&hitspr,&hx,&hy,&hz,CLIPMASK1);
+            vec3_t origin = ts->pos;
+            origin.z -= (16 << 8);//ZOFFSET2;
 
-            d = klabs(hx-ts->x)+klabs(hy-ts->y);
-            da = klabs(hx-s->x)+klabs(hy-s->y);
+            hitscan(&origin, ts->sectnum, sintable[(j + 512) & 2047], sintable[j & 2047], 16384 - (krand() & 32767), &hit, CLIPMASK1);
 
-            if (d < da && hitsect > -1)
-                if (cansee(hx,hy,hz,hitsect,s->x,s->y,s->z-(16<<8),s->sectnum))
+            d = klabs(hit.pos.x-ts->x)+klabs(hit.pos.y-ts->y);
+            da = klabs(hit.pos.x-s->x)+klabs(hit.pos.y-s->y);
+
+            if (d < da && hit.sect > -1)
+                if (cansee(hit.pos.x, hit.pos.y, hit.pos.z,hit.sect,s->x,s->y,s->z-(16<<8),s->sectnum))
                 {
-                    *dax = hx;
-                    *day = hy;
-                    return hitsect;
+                    *dax = hit.pos.x;
+                    *day = hit.pos.y;
+                    return hit.sect;
                 }
         }
         return -1;
@@ -295,7 +293,7 @@ void A_GetZLimits(int iActor)
         if (s->statnum == 4)
             zr = 4L;
 
-        getzrange(s->x,s->y,s->z-(FOURSLEIGHT),s->sectnum,&ActorExtra[iActor].ceilingz,&hz,&ActorExtra[iActor].floorz,&lz,zr,CLIPMASK0);
+        getzrange_old(s->x,s->y,s->z-(FOURSLEIGHT),s->sectnum,&ActorExtra[iActor].ceilingz,&hz,&ActorExtra[iActor].floorz,&lz,zr,CLIPMASK0);
 
         s->cstat = cstat;
 
@@ -350,7 +348,7 @@ void A_Fall(int iActor)
     {
         cstat = s->cstat;
         s->cstat = 0;
-        getzrange(s->x, s->y, s->z - (FOURSLEIGHT), s->sectnum, &ActorExtra[iActor].ceilingz, &hz, &ActorExtra[iActor].floorz, &lz, 127L, CLIPMASK0);
+        getzrange_old(s->x, s->y, s->z - (FOURSLEIGHT), s->sectnum, &ActorExtra[iActor].ceilingz, &hz, &ActorExtra[iActor].floorz, &lz, 127L, CLIPMASK0);
         s->cstat = cstat;
     }
     else
@@ -476,7 +474,7 @@ static void X_Move(void)
         {
             ActorExtra[g_i].bposx = g_sp->x;
             ActorExtra[g_i].bposy = g_sp->y;
-            setsprite(g_i,g_sp->x,g_sp->y,g_sp->z);
+            setspritez_old(g_i,g_sp->x,g_sp->y,g_sp->z);
         }
         return;
     }
@@ -484,8 +482,8 @@ static void X_Move(void)
     if (a&face_player && !deadflag)
     {
         if (g_player[g_p].ps->newowner >= 0)
-            goalang = getangle(g_player[g_p].ps->oposx-g_sp->x,g_player[g_p].ps->oposy-g_sp->y);
-        else goalang = getangle(g_player[g_p].ps->posx-g_sp->x,g_player[g_p].ps->posy-g_sp->y);
+            goalang = getangle(g_player[g_p].ps->opos.x-g_sp->x,g_player[g_p].ps->opos.y-g_sp->y);
+        else goalang = getangle(g_player[g_p].ps->pos.x-g_sp->x,g_player[g_p].ps->pos.y-g_sp->y);
         angdif = G_GetAngleDelta(g_sp->ang,goalang)>>2;
         if ((angdif > -8 && angdif < 0) || (angdif < 8 && angdif > 0))
             angdif *= 2;
@@ -498,8 +496,8 @@ static void X_Move(void)
     if (a&face_player_slow && !deadflag)
     {
         if (g_player[g_p].ps->newowner >= 0)
-            goalang = getangle(g_player[g_p].ps->oposx-g_sp->x,g_player[g_p].ps->oposy-g_sp->y);
-        else goalang = getangle(g_player[g_p].ps->posx-g_sp->x,g_player[g_p].ps->posy-g_sp->y);
+            goalang = getangle(g_player[g_p].ps->opos.x-g_sp->x,g_player[g_p].ps->opos.y-g_sp->y);
+        else goalang = getangle(g_player[g_p].ps->pos.x-g_sp->x,g_player[g_p].ps->pos.y-g_sp->y);
         angdif = G_GetAngleDelta(g_sp->ang,goalang)>>4;
         if ((angdif > -8 && angdif < 0) || (angdif < 8 && angdif > 0))
             angdif *= 2;
@@ -514,8 +512,8 @@ static void X_Move(void)
 
     if (a&face_player_smart && !deadflag)
     {
-        int newx = g_player[g_p].ps->posx+(g_player[g_p].ps->posxv/768);
-        int newy = g_player[g_p].ps->posy+(g_player[g_p].ps->posyv/768);
+        int newx = g_player[g_p].ps->pos.x+(g_player[g_p].ps->vel.x/768);
+        int newy = g_player[g_p].ps->pos.y+(g_player[g_p].ps->vel.y/768);
 
         goalang = getangle(newx-g_sp->x,newy-g_sp->y);
         angdif = G_GetAngleDelta(g_sp->ang,goalang)>>2;
@@ -608,17 +606,17 @@ static void X_Move(void)
             {
 
                 daxvel = -(1024-g_x);
-                angdif = getangle(g_player[g_p].ps->posx-g_sp->x,g_player[g_p].ps->posy-g_sp->y);
+                angdif = getangle(g_player[g_p].ps->pos.x-g_sp->x,g_player[g_p].ps->pos.y-g_sp->y);
 
                 if (g_x < 512)
                 {
-                    g_player[g_p].ps->posxv = 0;
-                    g_player[g_p].ps->posyv = 0;
+                    g_player[g_p].ps->vel.x = 0;
+                    g_player[g_p].ps->vel.y = 0;
                 }
                 else
                 {
-                    g_player[g_p].ps->posxv = mulscale(g_player[g_p].ps->posxv,g_player[g_p].ps->runspeed-0x2000,16);
-                    g_player[g_p].ps->posyv = mulscale(g_player[g_p].ps->posyv,g_player[g_p].ps->runspeed-0x2000,16);
+                    g_player[g_p].ps->vel.x = mulscale(g_player[g_p].ps->vel.x,g_player[g_p].ps->runspeed-0x2000,16);
+                    g_player[g_p].ps->vel.y = mulscale(g_player[g_p].ps->vel.y,g_player[g_p].ps->runspeed-0x2000,16);
                 }
             }
             else if (g_sp->picnum != DRONE && g_sp->picnum != SHARK && g_sp->picnum != COMMANDER)
@@ -832,7 +830,7 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFCANSEETARGET:
-        j = cansee(g_sp->x,g_sp->y,g_sp->z-((krand()&41)<<8),g_sp->sectnum,g_player[g_p].ps->posx,g_player[g_p].ps->posy,g_player[g_p].ps->posz/*-((krand()&41)<<8)*/,sprite[g_player[g_p].ps->i].sectnum);
+        j = cansee(g_sp->x,g_sp->y,g_sp->z-((krand()&41)<<8),g_sp->sectnum,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z/*-((krand()&41)<<8)*/,sprite[g_player[g_p].ps->i].sectnum);
         X_DoConditional(j);
         if (j) ActorExtra[g_i].timetosleep = SLEEPTIME;
         break;
@@ -1041,7 +1039,7 @@ static int X_DoExecute(void)
         j = (*insptr++-g_sp->xrepeat)<<1;
         g_sp->xrepeat += ksgn(j);
 
-        if ((g_sp->picnum == APLAYER && g_sp->yrepeat < 36) || *insptr < g_sp->yrepeat || ((g_sp->yrepeat*(tilesizy[g_sp->picnum]+8))<<2) < (ActorExtra[g_i].floorz - ActorExtra[g_i].ceilingz))
+        if ((g_sp->picnum == APLAYER && g_sp->yrepeat < 36) || *insptr < g_sp->yrepeat || ((g_sp->yrepeat*(tilesiz[g_sp->picnum].y+8))<<2) < (ActorExtra[g_i].floorz - ActorExtra[g_i].ceilingz))
         {
             j = ((*insptr)-g_sp->yrepeat)<<1;
             if (klabs(j)) g_sp->yrepeat += ksgn(j);
@@ -1097,17 +1095,19 @@ static int X_DoExecute(void)
 
     case CON_ACTORSOUND:
         insptr++;
-        int const spriteNum = (*insptr++ != g_iThisActorID) ? Gv_GetVarX(*(insptr - 1)) : g_i;
-        int const soundNum = Gv_GetVarX(*insptr++);
-
-        if ((unsigned)soundNum >= MAXSOUNDS)
         {
-            CON_ERRPRINTF("invalid sound %d\n", soundNum);
+            int const spriteNum = (*insptr++ != g_iThisActorID) ? Gv_GetVarX(*(insptr - 1)) : g_i;
+            int const soundNum = Gv_GetVarX(*insptr++);
+
+            if ((unsigned)soundNum >= MAXSOUNDS)
+            {
+                CON_ERRPRINTF("invalid sound %d\n", soundNum);
+            }
+
+            A_PlaySound(soundNum, spriteNum);
+
+            break;
         }
-
-        A_PlaySound(soundNum, spriteNum);
-
-        break;
 
     case CON_GLOBALSOUND:
         insptr++;
@@ -1180,7 +1180,7 @@ static int X_DoExecute(void)
             else if (g_sp->zvel > 2048  && sector[g_sp->sectnum].lotag != 1)
             {
                 j = g_sp->sectnum;
-                pushmove(&g_sp->x,&g_sp->y,&g_sp->z,(short*)&j,128L,(4L<<8),(4L<<8),CLIPMASK0);
+                pushmove_old(&g_sp->x,&g_sp->y,&g_sp->z,(short*)&j,128L,(4L<<8),(4L<<8),CLIPMASK0);
                 if (j != g_sp->sectnum && j >= 0 && j < MAXSECTORS)
                     changespritesect(g_i,j);
                 A_PlaySound(THUD,g_i);
@@ -1314,11 +1314,11 @@ static int X_DoExecute(void)
         if (g_player[g_p].ps->newowner >= 0)
         {
             g_player[g_p].ps->newowner = -1;
-            g_player[g_p].ps->posx = g_player[g_p].ps->oposx;
-            g_player[g_p].ps->posy = g_player[g_p].ps->oposy;
-            g_player[g_p].ps->posz = g_player[g_p].ps->oposz;
+            g_player[g_p].ps->pos.x = g_player[g_p].ps->opos.x;
+            g_player[g_p].ps->pos.y = g_player[g_p].ps->opos.y;
+            g_player[g_p].ps->pos.z = g_player[g_p].ps->opos.z;
             g_player[g_p].ps->q16ang = g_player[g_p].ps->oq16ang;
-            updatesector(g_player[g_p].ps->posx,g_player[g_p].ps->posy,&g_player[g_p].ps->cursectnum);
+            updatesector(g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,&g_player[g_p].ps->cursectnum);
             P_UpdateScreenPal(g_player[g_p].ps);
 
             j = headspritestat[STAT_ACTOR];
@@ -1438,7 +1438,7 @@ static int X_DoExecute(void)
                 G_OperateActivators(var1, var2);
                 break;
             case CON_SETASPECT:
-                setaspect(var1, var2);
+                renderSetAspect(var1, var2);
                 break;
             case CON_SSP:
                 if ((var1<0 || var1>=MAXSPRITES) && g_scriptSanityChecks) { OSD_Printf(CON_ERROR "Invalid sprite %d\n",g_errorLineNum,keyw[g_tw],var1);break;}
@@ -1975,7 +1975,7 @@ static int X_DoExecute(void)
                 OSD_Printf(CON_ERROR "Invalid wall %d\n",g_errorLineNum,keyw[g_tw],wallnum);
                 break;
             }
-            dragpoint(wallnum,newx,newy);
+            dragpoint(wallnum,newx,newy,0);
             break;
         }
 
@@ -2238,7 +2238,7 @@ static int X_DoExecute(void)
             int y1=scale(Gv_GetVarX(*insptr++),ydim,200);
             int x2=scale(Gv_GetVarX(*insptr++),xdim,320);
             int y2=scale(Gv_GetVarX(*insptr++),ydim,200);
-            int smoothratio = calc_smoothratio(totalclock, ototalclock);
+            int smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
 
             if (x1 > x2) swaplong(&x1,&x2);
             if (y1 > y2) swaplong(&y1,&y2);
@@ -2254,21 +2254,21 @@ static int X_DoExecute(void)
                 break;
             }
 
-#if defined(USE_OPENGL) && defined(POLYMOST)
+#if defined(USE_OPENGL)
             j = glprojectionhacks;
             glprojectionhacks = 0;
 #endif
-            setview(x1,y1,x2,y2);
+            videoSetViewableArea(x1,y1,x2,y2);
 
 #if 0
             if (!ud.pause_on && ((ud.show_help == 0 && ud.multimode < 2 && !(g_player[myconnectindex].ps->gm&MODE_MENU)) || ud.multimode > 1 || ud.recstat == 2))
-                smoothratio = calc_smoothratio(totalclock, ototalclock);
+                smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
 #endif
             G_DoInterpolations(smoothratio);
 
             if (((gotpic[MIRROR>>3]&(1<<(MIRROR&7))) > 0)
 #if defined(POLYMER) && defined(USE_OPENGL)
-                    && (getrendermode() != 4)
+                    && (videoGetRenderMode() != 4)
 #endif
                )
             {
@@ -2286,36 +2286,36 @@ static int X_DoExecute(void)
                     int tposx,tposy;
                     fix16_t tang;
 
-                    preparemirror(x,y,z,fix16_from_int(a),fix16_from_int(horiz),g_mirrorWall[i],g_mirrorSector[i],&tposx,&tposy,&tang);
+                    renderPrepareMirror(x,y,z,fix16_from_int(a),fix16_from_int(horiz),g_mirrorWall[i],&tposx,&tposy,&tang);
 
-                    j = visibility;
-                    visibility = (j>>1) + (j>>2);
+                    j = g_visibility;
+                    g_visibility = (j>>1) + (j>>2);
 
-                    drawrooms_q16(tposx,tposy,z,tang,fix16_from_int(horiz),g_mirrorSector[i]+MAXSECTORS);
+                    renderDrawRoomsQ16(tposx,tposy,z,tang,fix16_from_int(horiz),g_mirrorSector[i]+MAXSECTORS);
 
                     display_mirror = 1;
                     G_DoSpriteAnimations(tposx,tposy,fix16_to_int(tang),smoothratio);
                     display_mirror = 0;
 
-                    drawmasks();
-                    completemirror();   //Reverse screen x-wise in this function
-                    visibility = j;
+                    renderDrawMasks();
+                    renderCompleteMirror();   //Reverse screen x-wise in this function
+                    g_visibility = j;
                 }
                 gotpic[MIRROR>>3] &= ~(1<<(MIRROR&7));
             }
 
-#ifdef POLYMER
-            if (getrendermode() == 4)
+#if 0 //POLYMER
+            if (videoGetRenderMode() == 4)
                 polymer_setanimatesprites(G_DoSpriteAnimations, x,y,a,smoothratio);
 #endif
             drawrooms(x,y,z, fix16_from_int(a),fix16_from_int(horiz),sect);
             display_mirror = 2;
             G_DoSpriteAnimations(x,y,a,smoothratio);
             display_mirror = 0;
-            drawmasks();
+            renderDrawMasks();
             G_RestoreInterpolations();
             G_UpdateScreenArea();
-#if defined(USE_OPENGL) && defined(POLYMOST)
+#if defined(USE_OPENGL)
             glprojectionhacks = j;
 #endif
             break;
@@ -2338,7 +2338,7 @@ static int X_DoExecute(void)
                 y<<=16;
             }
 
-            rotatesprite_(x, y, z, a, tilenum, shade, pal, 2 | orientation, alpha, x1, y1, x2, y2);
+            rotatesprite_(x, y, z, a, tilenum, shade, pal, 2 | orientation, alpha, 0, x1, y1, x2, y2);
             break;
         }
 
@@ -2449,7 +2449,7 @@ static int X_DoExecute(void)
                 OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],sectnum);
                 break;
             }
-            getzrange(x, y, z, sectnum, &ceilz, &ceilhit, &florz, &florhit, walldist, clipmask);
+            getzrange_old(x, y, z, sectnum, &ceilz, &ceilhit, &florz, &florhit, walldist, clipmask);
             Gv_SetVarX(ceilzvar, ceilz);
             Gv_SetVarX(ceilhitvar, ceilhit);
             Gv_SetVarX(florzvar, florz);
@@ -2460,26 +2460,38 @@ static int X_DoExecute(void)
     case CON_HITSCAN:
         insptr++;
         {
-            int xs=Gv_GetVarX(*insptr++), ys=Gv_GetVarX(*insptr++), zs=Gv_GetVarX(*insptr++);
-            int sectnum=Gv_GetVarX(*insptr++);
-            int vx=Gv_GetVarX(*insptr++), vy=Gv_GetVarX(*insptr++), vz=Gv_GetVarX(*insptr++);
+            struct
+            {
+                vec3_t  origin;
+                int32_t sectnum;
+                vec3_t  vect;
+            } v;
+
+            v.origin.x = Gv_GetVarX(*insptr++);
+            v.origin.y = Gv_GetVarX(*insptr++);
+            v.origin.z = Gv_GetVarX(*insptr++);
+            v.sectnum = Gv_GetVarX(*insptr++);
+            v.vect.x = Gv_GetVarX(*insptr++);
+            v.vect.y = Gv_GetVarX(*insptr++);
+            v.vect.z = Gv_GetVarX(*insptr++);
+
             int hitsectvar=*insptr++, hitwallvar=*insptr++, hitspritevar=*insptr++;
             int hitxvar=*insptr++, hityvar=*insptr++, hitzvar=*insptr++, cliptype=Gv_GetVarX(*insptr++);
-            short hitsect, hitwall, hitsprite;
-            int hitx, hity, hitz;
 
-            if ((sectnum<0 || sectnum>=numsectors) && g_scriptSanityChecks)
+            if ((v.sectnum<0 || v.sectnum>=numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],sectnum);
+                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],v.sectnum);
                 break;
             }
-            hitscan(xs, ys, zs, sectnum, vx, vy, vz, &hitsect, &hitwall, &hitsprite, &hitx, &hity, &hitz, cliptype);
-            Gv_SetVarX(hitsectvar, hitsect);
-            Gv_SetVarX(hitwallvar, hitwall);
-            Gv_SetVarX(hitspritevar, hitsprite);
-            Gv_SetVarX(hitxvar, hitx);
-            Gv_SetVarX(hityvar, hity);
-            Gv_SetVarX(hitzvar, hitz);
+
+            hitdata_t hit;
+            hitscan(&v.origin, v.sectnum, v.vect.x, v.vect.y, v.vect.z, &hit, cliptype);
+            Gv_SetVarX(hitsectvar, hit.sect);
+            Gv_SetVarX(hitwallvar, hit.wall);
+            Gv_SetVarX(hitspritevar, hit.sprite);
+            Gv_SetVarX(hitxvar, hit.pos.x);
+            Gv_SetVarX(hityvar, hit.pos.y);
+            Gv_SetVarX(hitzvar, hit.pos.z);
             break;
         }
 
@@ -2504,14 +2516,22 @@ static int X_DoExecute(void)
     case CON_ROTATEPOINT:
         insptr++;
         {
-            int xpivot=Gv_GetVarX(*insptr++), ypivot=Gv_GetVarX(*insptr++);
-            int x=Gv_GetVarX(*insptr++), y=Gv_GetVarX(*insptr++), daang=Gv_GetVarX(*insptr++);
-            int x2var=*insptr++, y2var=*insptr++;
-            int x2, y2;
+            vec2_t pivot;
+            pivot.x = Gv_GetVarX(*insptr++);
+            pivot.y = Gv_GetVarX(*insptr++);
 
-            rotatepoint(xpivot,ypivot,x,y,daang,&x2,&y2);
-            Gv_SetVarX(x2var, x2);
-            Gv_SetVarX(y2var, y2);
+            vec2_t point;
+            point.x = Gv_GetVarX(*insptr++);
+            point.y = Gv_GetVarX(*insptr++);
+
+            int daang=Gv_GetVarX(*insptr++);
+            int x2var=*insptr++, y2var=*insptr++;
+
+            vec2_t point2;
+
+            rotatepoint(pivot,point,daang,&point2);
+            Gv_SetVarX(x2var, point2.x);
+            Gv_SetVarX(y2var, point2.y);
             break;
         }
 
@@ -2536,7 +2556,7 @@ static int X_DoExecute(void)
                 OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],sectnum);
                 break;
             }
-            neartag(x, y, z, sectnum, ang, &neartagsector, &neartagwall, &neartagsprite, &neartaghitdist, neartagrange, tagsearch);
+            neartag(x, y, z, sectnum, ang, &neartagsector, &neartagwall, &neartagsprite, &neartaghitdist, neartagrange, tagsearch, NULL);
 
             Gv_SetVarX(neartagsectorvar, neartagsector);
             Gv_SetVarX(neartagwallvar, neartagwall);
@@ -2581,7 +2601,7 @@ static int X_DoExecute(void)
                     OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],spritenum);
                     break;
                 }
-                setsprite(spritenum, x, y, z);
+                setspritez_old(spritenum, x, y, z);
                 break;
             }
 
@@ -2779,11 +2799,11 @@ static int X_DoExecute(void)
         else
         {
             P_RandomSpawnPoint(g_p);
-            g_sp->x = ActorExtra[g_i].bposx = g_player[g_p].ps->bobposx = g_player[g_p].ps->oposx = g_player[g_p].ps->posx;
-            g_sp->y = ActorExtra[g_i].bposy = g_player[g_p].ps->bobposy = g_player[g_p].ps->oposy =g_player[g_p].ps->posy;
-            g_sp->z = ActorExtra[g_i].bposz = g_player[g_p].ps->oposz =g_player[g_p].ps->posz;
-            updatesector(g_player[g_p].ps->posx,g_player[g_p].ps->posy,&g_player[g_p].ps->cursectnum);
-            setsprite(g_player[g_p].ps->i,g_player[g_p].ps->posx,g_player[g_p].ps->posy,g_player[g_p].ps->posz+PHEIGHT);
+            g_sp->x = ActorExtra[g_i].bposx = g_player[g_p].ps->bobposx = g_player[g_p].ps->opos.x = g_player[g_p].ps->pos.x;
+            g_sp->y = ActorExtra[g_i].bposy = g_player[g_p].ps->bobposy = g_player[g_p].ps->opos.y =g_player[g_p].ps->pos.y;
+            g_sp->z = ActorExtra[g_i].bposz = g_player[g_p].ps->opos.z =g_player[g_p].ps->pos.z;
+            updatesector(g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,&g_player[g_p].ps->cursectnum);
+            setspritez_old(g_player[g_p].ps->i,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z+PHEIGHT);
             g_sp->cstat = 257;
 
             g_sp->shade = -12;
@@ -2809,7 +2829,7 @@ static int X_DoExecute(void)
             g_player[g_p].ps->weapreccnt = 0;
             g_player[g_p].ps->fta = 0;
             g_player[g_p].ps->ftq = 0;
-            g_player[g_p].ps->posxv = g_player[g_p].ps->posyv = 0;
+            g_player[g_p].ps->vel.x = g_player[g_p].ps->vel.y = 0;
             g_player[g_p].ps->rotscrnang = 0;
             g_player[g_p].ps->runspeed = g_playerFriction;
             g_player[g_p].ps->falling_counter = 0;
@@ -2833,7 +2853,7 @@ static int X_DoExecute(void)
 
             X_OnEvent(EVENT_RESETPLAYER, g_player[g_p].ps->i, g_p, -1);
             g_cameraDistance = 0;
-            g_cameraClock = totalclock;
+            g_cameraClock = (int32_t)totalclock;
         }
         P_UpdateScreenPal(g_player[g_p].ps);
         //AddLog("EOF: resetplayer");
@@ -2915,7 +2935,7 @@ static int X_DoExecute(void)
 
             if (ud.multimode > 1)
             {
-                Bsprintf(tempbuf, "^12%s^12 has acquired a ^%d%s^12 key!", &g_player[g_p].user_name[0], g_sp->pal, keyname);
+                Bsprintf(tempbuf, "^12%s^12 has acquired a ^%d%s^12 key!", &g_player[g_p].user_name[0], TrackerCast(g_sp->pal), keyname);
                 G_AddUserQuote(tempbuf);
             }
 
@@ -2969,7 +2989,7 @@ static int X_DoExecute(void)
         if ((l&8) && g_player[g_p].ps->on_ground && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_CROUCH))
             j = 1;
         else if ((l&16) && g_player[g_p].ps->jumping_counter == 0 && !g_player[g_p].ps->on_ground &&
-                 g_player[g_p].ps->poszv > 2048)
+                 g_player[g_p].ps->vel.z > 2048)
             j = 1;
         else if ((l&32) && g_player[g_p].ps->jumping_counter > 348)
             j = 1;
@@ -2979,7 +2999,7 @@ static int X_DoExecute(void)
             j = 1;
         else if ((l&4) && s >= 8 && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l&64) && g_player[g_p].ps->posz < (g_sp->z-(48<<8)))
+        else if ((l&64) && g_player[g_p].ps->pos.z < (g_sp->z-(48<<8)))
             j = 1;
         else if ((l&128) && s <= -8 && !TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
             j = 1;
@@ -3002,9 +3022,9 @@ static int X_DoExecute(void)
         else if ((l&65536L))
         {
             if (g_sp->picnum == APLAYER && ud.multimode > 1)
-                j = G_GetAngleDelta(fix16_to_int(g_player[otherp].ps->q16ang),getangle(g_player[g_p].ps->posx-g_player[otherp].ps->posx,g_player[g_p].ps->posy-g_player[otherp].ps->posy));
+                j = G_GetAngleDelta(fix16_to_int(g_player[otherp].ps->q16ang),getangle(g_player[g_p].ps->pos.x-g_player[otherp].ps->pos.x,g_player[g_p].ps->pos.y-g_player[otherp].ps->pos.y));
             else
-                j = G_GetAngleDelta(fix16_to_int(g_player[g_p].ps->q16ang),getangle(g_sp->x-g_player[g_p].ps->posx,g_sp->y-g_player[g_p].ps->posy));
+                j = G_GetAngleDelta(fix16_to_int(g_player[g_p].ps->q16ang),getangle(g_sp->x-g_player[g_p].ps->pos.x,g_sp->y-g_player[g_p].ps->pos.y));
 
             if (j > -128 && j < 128)
                 j = 1;
@@ -3040,12 +3060,12 @@ static int X_DoExecute(void)
         insptr++;
         sprite[g_i].shade = -127;
         g_player[g_p].ps->visibility = -127;
-        lastvisinc = totalclock+32;
+        lastvisinc = (int32_t)totalclock+32;
         return 0;
 
     case CON_SAVEMAPSTATE:
         if (MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate == NULL)
-            MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = Bcalloc(1,sizeof(mapstate_t));
+            MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = (mapstate_t*)Bcalloc(1,sizeof(mapstate_t));
         G_SaveMapState(MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
         insptr++;
         return 0;
@@ -3095,7 +3115,7 @@ static int X_DoExecute(void)
         insptr++;
         if (sector[g_sp->sectnum].lotag == 0)
         {
-            neartag(g_sp->x,g_sp->y,g_sp->z-(32<<8),g_sp->sectnum,g_sp->ang,&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,768L,1);
+            neartag(g_sp->x,g_sp->y,g_sp->z-(32<<8),g_sp->sectnum,g_sp->ang,&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,768L,1, NULL);
             if (neartagsector >= 0 && isanearoperator(sector[neartagsector].lotag))
                 if ((sector[neartagsector].lotag&0xff) == 23 || sector[neartagsector].floorz == sector[neartagsector].ceilingz)
                     if ((sector[neartagsector].lotag&16384) == 0)
@@ -3763,7 +3783,7 @@ static int X_DoExecute(void)
             if (asize > 0)
             {
                 OSD_Printf(OSDTEXT_GREEN "CON_RESIZEARRAY: resizing array %s from %d to %d\n", aGameArrays[j].szLabel, aGameArrays[j].size, asize);
-                aGameArrays[j].plValues=Brealloc(aGameArrays[j].plValues, sizeof(int) * asize);
+                aGameArrays[j].plValues=(int*)Brealloc(aGameArrays[j].plValues, sizeof(int) * asize);
                 aGameArrays[j].size = asize;
             }
             break;
@@ -4225,7 +4245,7 @@ static int X_DoExecute(void)
     case CON_PSTOMP:
         insptr++;
         if (g_player[g_p].ps->knee_incs == 0 && sprite[g_player[g_p].ps->i].xrepeat >= 40)
-            if (cansee(g_sp->x,g_sp->y,g_sp->z-(4<<8),g_sp->sectnum,g_player[g_p].ps->posx,g_player[g_p].ps->posy,g_player[g_p].ps->posz+(16<<8),sprite[g_player[g_p].ps->i].sectnum))
+            if (cansee(g_sp->x,g_sp->y,g_sp->z-(4<<8),g_sp->sectnum,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z+(16<<8),sprite[g_player[g_p].ps->i].sectnum))
             {
                 for (j=ud.multimode-1;j>=0;j--) // [JM] REWRITE THIS!
                 {
@@ -4543,7 +4563,7 @@ void G_SaveMapState(mapstate_t *save)
         Bmemcpy(&save->numsectors,&numsectors,sizeof(numsectors));
         Bmemcpy(&save->sector[0],&sector[0],sizeof(sectortype)*MAXSECTORS);
         Bmemcpy(&save->sprite[0],&sprite[0],sizeof(spritetype)*MAXSPRITES);
-        Bmemcpy(&save->spriteext[0],&spriteext[0],sizeof(spriteexttype)*MAXSPRITES);
+        Bmemcpy(&save->spriteext[0],&spriteext[0],sizeof(spriteext_t)*MAXSPRITES);
         save->tailspritefree = tailspritefree;
         Bmemcpy(&save->headspritesect[0],&headspritesect[0],sizeof(headspritesect));
         Bmemcpy(&save->prevspritesect[0],&prevspritesect[0],sizeof(prevspritesect));
@@ -4599,8 +4619,7 @@ void G_SaveMapState(mapstate_t *save)
         Bmemcpy(&save->SpriteDeletionQueue[0],&SpriteDeletionQueue[0],sizeof(SpriteDeletionQueue));
         Bmemcpy(&save->g_spriteDeleteQueuePos,&g_spriteDeleteQueuePos,sizeof(g_spriteDeleteQueuePos));
         Bmemcpy(&save->animwall[0],&animwall[0],sizeof(animwall));
-        Bmemcpy(&save->msx[0],&msx[0],sizeof(msx));
-        Bmemcpy(&save->msy[0],&msy[0],sizeof(msy));
+        Bmemcpy(&save->origins[0],&g_origins[0],sizeof(g_origins));
         Bmemcpy(&save->g_mirrorWall[0],&g_mirrorWall[0],sizeof(g_mirrorWall));
         Bmemcpy(&save->g_mirrorSector[0],&g_mirrorSector[0],sizeof(g_mirrorSector));
         Bmemcpy(&save->g_mirrorCount,&g_mirrorCount,sizeof(g_mirrorCount));
@@ -4609,8 +4628,11 @@ void G_SaveMapState(mapstate_t *save)
         Bmemcpy(&save->clouds[0],&clouds[0],sizeof(clouds));
         Bmemcpy(&save->cloudx[0],&cloudx[0],sizeof(cloudx));
         Bmemcpy(&save->cloudy[0],&cloudy[0],sizeof(cloudy));
-        Bmemcpy(&save->pskyoff[0],&pskyoff[0],sizeof(pskyoff));
-        Bmemcpy(&save->pskybits,&pskybits,sizeof(pskybits));
+
+        // OLDMP FIXME
+        //Bmemcpy(&save->pskyoff[0],&pskyoff[0],sizeof(pskyoff));
+        //Bmemcpy(&save->pskybits,&pskybits,sizeof(pskybits));
+
         Bmemcpy(&save->animategoal[0],&animategoal[0],sizeof(animategoal));
         Bmemcpy(&save->animatevel[0],&animatevel[0],sizeof(animatevel));
         Bmemcpy(&save->g_animateCount,&g_animateCount,sizeof(g_animateCount));
@@ -4630,19 +4652,19 @@ void G_SaveMapState(mapstate_t *save)
             if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
             {
                 if (!save->vars[i])
-                    save->vars[i] = Bcalloc(MAXPLAYERS,sizeof(intptr_t));
+                    save->vars[i] = (intptr_t*)Bcalloc(MAXPLAYERS,sizeof(intptr_t));
                 Bmemcpy(&save->vars[i][0],&aGameVars[i].val.plValues[0],sizeof(intptr_t) * MAXPLAYERS);
             }
             else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
             {
                 if (!save->vars[i])
-                    save->vars[i] = Bcalloc(MAXSPRITES,sizeof(intptr_t));
+                    save->vars[i] = (intptr_t*)Bcalloc(MAXSPRITES,sizeof(intptr_t));
                 Bmemcpy(&save->vars[i][0],&aGameVars[i].val.plValues[0],sizeof(intptr_t) * MAXSPRITES);
             }
             else save->vars[i] = (intptr_t *)aGameVars[i].val.lValue;
         }
 
-        ototalclock = totalclock;
+        ototalclock = (int32_t)totalclock;
     }
 }
 
@@ -4668,7 +4690,7 @@ void G_RestoreMapState(mapstate_t *save)
         Bmemcpy(&numsectors,&save->numsectors,sizeof(numsectors));
         Bmemcpy(&sector[0],&save->sector[0],sizeof(sectortype)*MAXSECTORS);
         Bmemcpy(&sprite[0],&save->sprite[0],sizeof(spritetype)*MAXSPRITES);
-        Bmemcpy(&spriteext[0],&save->spriteext[0],sizeof(spriteexttype)*MAXSPRITES);
+        Bmemcpy(&spriteext[0],&save->spriteext[0],sizeof(spriteext_t)*MAXSPRITES);
         tailspritefree = save->tailspritefree;
         Bmemcpy(&headspritesect[0],&save->headspritesect[0],sizeof(headspritesect));
         Bmemcpy(&prevspritesect[0],&save->prevspritesect[0],sizeof(prevspritesect));
@@ -4693,8 +4715,8 @@ void G_RestoreMapState(mapstate_t *save)
         Bmemcpy(&SpriteDeletionQueue[0],&save->SpriteDeletionQueue[0],sizeof(SpriteDeletionQueue));
         Bmemcpy(&g_spriteDeleteQueuePos,&save->g_spriteDeleteQueuePos,sizeof(g_spriteDeleteQueuePos));
         Bmemcpy(&animwall[0],&save->animwall[0],sizeof(animwall));
-        Bmemcpy(&msx[0],&save->msx[0],sizeof(msx));
-        Bmemcpy(&msy[0],&save->msy[0],sizeof(msy));
+        Bmemcpy(&g_origins[0],&save->origins[0],sizeof(g_origins));
+
         Bmemcpy(&g_mirrorWall[0],&save->g_mirrorWall[0],sizeof(g_mirrorWall));
         Bmemcpy(&g_mirrorSector[0],&save->g_mirrorSector[0],sizeof(g_mirrorSector));
         Bmemcpy(&g_mirrorCount,&save->g_mirrorCount,sizeof(g_mirrorCount));
@@ -4703,8 +4725,11 @@ void G_RestoreMapState(mapstate_t *save)
         Bmemcpy(&clouds[0],&save->clouds[0],sizeof(clouds));
         Bmemcpy(&cloudx[0],&save->cloudx[0],sizeof(cloudx));
         Bmemcpy(&cloudy[0],&save->cloudy[0],sizeof(cloudy));
-        Bmemcpy(&pskyoff[0],&save->pskyoff[0],sizeof(pskyoff));
-        Bmemcpy(&pskybits,&save->pskybits,sizeof(pskybits));
+
+        // OLDMP FIXME
+        //Bmemcpy(&pskyoff[0],&save->pskyoff[0],sizeof(pskyoff));
+        //Bmemcpy(&pskybits,&save->pskybits,sizeof(pskybits));
+
         Bmemcpy(&animategoal[0],&save->animategoal[0],sizeof(animategoal));
         Bmemcpy(&animatevel[0],&save->animatevel[0],sizeof(animatevel));
         Bmemcpy(&g_animateCount,&save->g_animateCount,sizeof(g_animateCount));

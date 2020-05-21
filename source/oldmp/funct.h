@@ -103,7 +103,7 @@ extern int G_GetAngleDelta(int a,int na);
 extern void A_GetZLimits(int iActor);
 extern void A_Fall(int iActor);
 extern void C_Compile(const char *fn);
-extern int A_GetFurthestAngle(int iActor,int angs);
+extern int A_GetFurthestAngle(int const spriteNum, int const angDiv);
 extern void A_Execute(int iActor,int iPlayer,int lDist);
 extern void overwritesprite(int thex,int they,int tilenum,int shade,int stat,int dapalnum);
 extern void gamenumber(int x,int y,int n,int s);

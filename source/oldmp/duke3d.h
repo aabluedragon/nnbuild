@@ -1101,7 +1101,7 @@ typedef struct {
     short g_numAnimWalls;
     short SpriteDeletionQueue[1024],g_spriteDeleteQueuePos;
     animwalltype animwall[MAXANIMWALLS];
-    int msx[2048], msy[2048];
+    vec2_t origins[2048];
     short g_mirrorWall[64], g_mirrorSector[64], g_mirrorCount;
     char show2dsector[(MAXSECTORS+7)>>3];
     short g_numClouds,clouds[128],cloudx[128],cloudy[128];
