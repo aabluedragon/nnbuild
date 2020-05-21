@@ -204,7 +204,7 @@ void G_PlayAnim(const char *fn, char t)
 {
     char *animbuf;
     int32_t i, length = 0, numframes = 0;
-#if defined(POLYMOST) && defined(USE_OPENGL)
+#if defined(USE_OPENGL)
     int32_t ogltexfiltermode = gltexfiltermode;
 #endif
     int32_t handle = -1;
@@ -244,7 +244,7 @@ void G_PlayAnim(const char *fn, char t)
     //videoSetPalette(ud.brightness>>2,tempbuf,2);
     P_SetGamePalette(g_player[myconnectindex].ps, ANIMPAL, 10);
 
-#if defined(POLYMOST) && defined(USE_OPENGL)
+#if defined(USE_OPENGL)
     gltexfiltermode = 0;
     gltexapplyprops();
 #endif
@@ -303,7 +303,7 @@ void G_PlayAnim(const char *fn, char t)
     }
 
 ENDOFANIMLOOP:
-#if defined(POLYMOST) && defined(USE_OPENGL)
+#if defined(USE_OPENGL)
     gltexfiltermode = ogltexfiltermode;
     gltexapplyprops();
 #endif
