@@ -1344,28 +1344,28 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_POSX:
         if (iSet)
         {
-            g_player[iPlayer].ps->posx=lValue;
+            g_player[iPlayer].ps->pos.x=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->posx, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->pos.x, g_i, g_p);
         return;
 
     case PLAYER_POSY:
         if (iSet)
         {
-            g_player[iPlayer].ps->posy=lValue;
+            g_player[iPlayer].ps->pos.y=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->posy, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->pos.y, g_i, g_p);
         return;
 
     case PLAYER_POSZ:
         if (iSet)
         {
-            g_player[iPlayer].ps->posz=lValue;
+            g_player[iPlayer].ps->pos.z=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->posz, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->pos.z, g_i, g_p);
         return;
 
     case PLAYER_HORIZ:
@@ -1425,28 +1425,28 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_OPOSX:
         if (iSet)
         {
-            g_player[iPlayer].ps->oposx=lValue;
+            g_player[iPlayer].ps->opos.x=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->oposx, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->opos.x, g_i, g_p);
         return;
 
     case PLAYER_OPOSY:
         if (iSet)
         {
-            g_player[iPlayer].ps->oposy=lValue;
+            g_player[iPlayer].ps->opos.y=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->oposy, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->opos.y, g_i, g_p);
         return;
 
     case PLAYER_OPOSZ:
         if (iSet)
         {
-            g_player[iPlayer].ps->oposz=lValue;
+            g_player[iPlayer].ps->opos.z=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->oposz, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->opos.z, g_i, g_p);
         return;
 
     case PLAYER_PYOFF:
@@ -1470,28 +1470,28 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_POSXV:
         if (iSet)
         {
-            g_player[iPlayer].ps->posxv=lValue;
+            g_player[iPlayer].ps->vel.x=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->posxv, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->vel.x, g_i, g_p);
         return;
 
     case PLAYER_POSYV:
         if (iSet)
         {
-            g_player[iPlayer].ps->posyv=lValue;
+            g_player[iPlayer].ps->vel.y=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->posyv, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->vel.y, g_i, g_p);
         return;
 
     case PLAYER_POSZV:
         if (iSet)
         {
-            g_player[iPlayer].ps->poszv=lValue;
+            g_player[iPlayer].ps->vel.z=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->poszv, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->vel.z, g_i, g_p);
         return;
 
     case PLAYER_LAST_PISSED_TIME:
@@ -3106,10 +3106,10 @@ static inline void X_AccessSector(int iSet, int lVar1, int lLabelID, int lVar2)
     case SECTOR_ALIGNTO:
         if (iSet)
         {
-            s->filler=lValue;
+            s->fogpal=lValue;
             return;
         }
-        Gv_SetVar(lVar2, s->filler,g_i,g_p);
+        Gv_SetVar(lVar2, s->fogpal,g_i,g_p);
         return;
 
     case SECTOR_LOTAG:
@@ -3249,10 +3249,10 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     case ACTOR_DETAIL:
         if (iSet)
         {
-            sprite[iActor].filler=lValue;
+            sprite[iActor].blend=lValue;
             return;
         }
-        Gv_SetVar(lVar2, sprite[iActor].filler,g_i,g_p);
+        Gv_SetVar(lVar2, sprite[iActor].blend,g_i,g_p);
         return;
 
     case ACTOR_XREPEAT:
@@ -3573,28 +3573,28 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     case ACTOR_MDXOFF:
         if (iSet)
         {
-            spriteext[iActor].xoff=lValue;
+            spriteext[iActor].pivot_offset.x=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].xoff, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].pivot_offset.x, g_i, g_p);
         return;
 
     case ACTOR_MDYOFF:
         if (iSet)
         {
-            spriteext[iActor].yoff=lValue;
+            spriteext[iActor].pivot_offset.y=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].yoff, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].pivot_offset.y, g_i, g_p);
         return;
 
     case ACTOR_MDZOFF:
         if (iSet)
         {
-            spriteext[iActor].zoff=lValue;
+            spriteext[iActor].pivot_offset.z=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].zoff, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].pivot_offset.z, g_i, g_p);
         return;
 
     case ACTOR_MDFLAGS:
@@ -3739,10 +3739,10 @@ static inline void X_AccessTsprite(int iSet, int lVar1, int lLabelID, int lVar2)
     case ACTOR_DETAIL:
         if (iSet)
         {
-            spriteext[iActor].tspr->filler=lValue;
+            spriteext[iActor].tspr->blend=lValue;
             return;
         }
-        Gv_SetVar(lVar2, spriteext[iActor].tspr->filler,g_i,g_p);
+        Gv_SetVar(lVar2, spriteext[iActor].tspr->blend,g_i,g_p);
         return;
 
     case ACTOR_XREPEAT:
