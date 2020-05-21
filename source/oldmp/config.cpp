@@ -1195,7 +1195,7 @@ void CONFIG_WriteSetup(void)
     }
 
     //dummy = CONTROL_GetMouseSensitivity();
-    SCRIPT_PutDouble(ud.config.scripthandle, "Controls","Mouse_Sensitivity", CONTROL_MouseSensitivity, 0);
+    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","Mouse_Sensitivity", CONTROL_MouseSensitivity, false, false);
 
     for (dummy=0;dummy<MAXJOYBUTTONS;dummy++)
     {
