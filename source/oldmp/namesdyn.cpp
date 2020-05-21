@@ -30,7 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 struct dynitem
 {
-    char *s;
+    const char *s;
     int *v;
     short vstat;
     short val;
@@ -1526,21 +1526,21 @@ void G_ProcessDynamicTileMapping(const char *szLabel, int lValue)
     if (lValue >= MAXTILES || !szLabel)
         return;
 
-    i = HASH_find(&dynnamesH,szLabel);
+    i = hash_find(&dynnamesH,szLabel);
     if (i>=0) *(list[i].v)=lValue;
 }
 
 void inithashnames()
 {
     int i;
-    HASH_init(&dynnamesH);
+    hash_init(&dynnamesH);
     for (i=0;list[i].val;i++)
-        HASH_add(&dynnamesH,list[i].s,i);
+        hash_add(&dynnamesH,list[i].s,i, 0);
 }
 
 void freehashnames()
 {
-    HASH_free(&dynnamesH);
+    hash_free(&dynnamesH);
 }
 
 void G_InitDynamicTiles(void)
