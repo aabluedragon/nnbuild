@@ -93,7 +93,7 @@ extern int qsetmode;
 char *textptr;
 int g_numCompilerErrors,g_numCompilerWarnings;
 
-extern char *duke3dgrpstring;
+extern const char *duke3dgrpstring;
 extern char *duke3ddef;
 
 enum ScriptLabel_t
@@ -954,20 +954,20 @@ const memberlabel_t InputLabels[]=
 char *bitptr; // pointer to bitmap of which bytecode positions contain pointers
 #define BITPTR_POINTER 1
 
-struct HASH_table gamevarH    = { MAXGAMEVARS>>1, NULL };
-struct HASH_table arrayH      = { MAXGAMEARRAYS>>1, NULL };
-struct HASH_table labelH      = { 11264>>1, NULL };
-struct HASH_table keywH       = { CON_END>>1, NULL };
+hashtable_t gamevarH    = { MAXGAMEVARS>>1, NULL };
+hashtable_t arrayH      = { MAXGAMEARRAYS>>1, NULL };
+hashtable_t labelH      = { 11264>>1, NULL };
+hashtable_t keywH       = { CON_END>>1, NULL };
 
-struct HASH_table sectorH     = { SECTOR_END>>1, NULL };
-struct HASH_table wallH       = { WALL_END>>1, NULL };
-struct HASH_table userdefH    = { USERDEFS_END>>1, NULL };
+hashtable_t sectorH     = { SECTOR_END>>1, NULL };
+hashtable_t wallH       = { WALL_END>>1, NULL };
+hashtable_t userdefH    = { USERDEFS_END>>1, NULL };
 
-struct HASH_table projectileH = { PROJ_END>>1, NULL };
-struct HASH_table playerH     = { PLAYER_END>>1, NULL };
-struct HASH_table inputH      = { INPUT_END>>1, NULL };
-struct HASH_table actorH      = { ACTOR_END>>1, NULL };
-struct HASH_table tspriteH    = { ACTOR_END>>1, NULL };
+hashtable_t projectileH = { PROJ_END>>1, NULL };
+hashtable_t playerH     = { PLAYER_END>>1, NULL };
+hashtable_t inputH      = { INPUT_END>>1, NULL };
+hashtable_t actorH      = { ACTOR_END>>1, NULL };
+hashtable_t tspriteH    = { ACTOR_END>>1, NULL };
 
 void inithashnames();
 void freehashnames();
@@ -976,38 +976,38 @@ void inithash()
 {
     int32_t i;
 
-    HASH_init(&gamevarH);
-    HASH_init(&arrayH);
-    HASH_init(&labelH);
+    hash_init(&gamevarH);
+    hash_init(&arrayH);
+    hash_init(&labelH);
     inithashnames();
 
-    HASH_init(&keywH);
-    HASH_init(&sectorH);
-    HASH_init(&wallH);
-    HASH_init(&userdefH);
-    HASH_init(&projectileH);
-    HASH_init(&playerH);
-    HASH_init(&inputH);
-    HASH_init(&actorH);
-    HASH_init(&tspriteH);
+    hash_init(&keywH);
+    hash_init(&sectorH);
+    hash_init(&wallH);
+    hash_init(&userdefH);
+    hash_init(&projectileH);
+    hash_init(&playerH);
+    hash_init(&inputH);
+    hash_init(&actorH);
+    hash_init(&tspriteH);
 
-    for (i = NUMKEYWORDS - 1; i >= 0; i--) HASH_add(&keywH, keyw[i], i);
-    for (i = 0; SectorLabels[i].lId >= 0; i++) HASH_add(&sectorH, SectorLabels[i].name, i);
-    for (i = 0; WallLabels[i].lId >= 0; i++) HASH_add(&wallH, WallLabels[i].name, i);
-    for (i = 0; UserdefsLabels[i].lId >= 0; i++) HASH_add(&userdefH, UserdefsLabels[i].name, i);
-    for (i = 0; ProjectileLabels[i].lId >= 0; i++) HASH_add(&projectileH, ProjectileLabels[i].name, i);
-    for (i = 0; PlayerLabels[i].lId >= 0; i++) HASH_add(&playerH, PlayerLabels[i].name, i);
-    for (i = 0; InputLabels[i].lId >= 0; i++) HASH_add(&inputH, InputLabels[i].name, i);
-    for (i = 0; ActorLabels[i].lId >= 0; i++) HASH_add(&actorH, ActorLabels[i].name, i);
-    for (i = 0; TsprLabels[i].lId >= 0; i++) HASH_add(&tspriteH, TsprLabels[i].name, i);
+    for (i = NUMKEYWORDS - 1; i >= 0; i--) hash_add(&keywH, keyw[i], i, 0);
+    for (i = 0; SectorLabels[i].lId >= 0; i++) hash_add(&sectorH, SectorLabels[i].name, i, 0);
+    for (i = 0; WallLabels[i].lId >= 0; i++) hash_add(&wallH, WallLabels[i].name, i, 0);
+    for (i = 0; UserdefsLabels[i].lId >= 0; i++) hash_add(&userdefH, UserdefsLabels[i].name, i, 0);
+    for (i = 0; ProjectileLabels[i].lId >= 0; i++) hash_add(&projectileH, ProjectileLabels[i].name, i, 0);
+    for (i = 0; PlayerLabels[i].lId >= 0; i++) hash_add(&playerH, PlayerLabels[i].name, i, 0);
+    for (i = 0; InputLabels[i].lId >= 0; i++) hash_add(&inputH, InputLabels[i].name, i, 0);
+    for (i = 0; ActorLabels[i].lId >= 0; i++) hash_add(&actorH, ActorLabels[i].name, i, 0);
+    for (i = 0; TsprLabels[i].lId >= 0; i++) hash_add(&tspriteH, TsprLabels[i].name, i, 0);
 }
 
 
 void freehash()
 {
-    HASH_free(&gamevarH);
-    HASH_free(&arrayH);
-    HASH_free(&labelH);
+    hash_free(&gamevarH);
+    hash_free(&arrayH);
+    hash_free(&labelH);
 }
 
 static int C_SetScriptSize(int size)
@@ -1030,7 +1030,7 @@ static int C_SetScriptSize(int size)
         }
     }
 
-    scriptptrs = Bcalloc(1,g_scriptSize * sizeof(char));
+    scriptptrs = (char*)Bcalloc(1,g_scriptSize * sizeof(char));
     for (i=g_scriptSize-1;i>=0;i--)
     {
 //            initprintf("%d\n",i);
@@ -1077,7 +1077,7 @@ static int C_SetScriptSize(int size)
     newscript = (intptr_t *)Brealloc(script, g_scriptSize * sizeof(intptr_t));
 
 //    bitptr = (char *)Brealloc(bitptr, g_scriptSize * sizeof(char));
-    newbitptr = Bcalloc(1,(((size+7)>>3)+1) * sizeof(char));
+    newbitptr = (char*)Bcalloc(1,(((size+7)>>3)+1) * sizeof(char));
 
     if (newscript == NULL || newbitptr == NULL)
     {
@@ -1419,33 +1419,33 @@ void AddLog(const char *psz, ...)
 }
 #endif
 
-#define GetDefID(szGameLabel) HASH_find(&gamevarH,szGameLabel)
-#define GetADefID(szGameLabel) HASH_find(&arrayH,szGameLabel)
+#define GetDefID(szGameLabel) hash_find(&gamevarH,szGameLabel)
+#define GetADefID(szGameLabel) hash_find(&arrayH,szGameLabel)
 
 static inline int isaltok(char c)
 {
     return (isalnum(c) || c == '{' || c == '}' || c == '/' || c == '*' || c == '-' || c == '_' || c == '.');
 }
 
-static inline int GetLabelNameid(const memberlabel_t *pLabel, struct HASH_table *tH, const char *psz)
+static inline int GetLabelNameid(const memberlabel_t *pLabel, hashtable_t *tH, const char *psz)
 {
     // find the label psz in the table pLabel.
     // returns the ID for the label, or -1
 
     int l=-1;
 
-    l = HASH_findcase(tH,psz);
+    l = hash_findcase(tH,psz);
     if (l>=0) l= pLabel[l].lId;
 
     return l;
 }
 
-static inline int C_GetLabelNameOffset(struct HASH_table *tH, const char *psz)
+static inline int C_GetLabelNameOffset(hashtable_t *tH, const char *psz)
 {
     // find the label psz in the table pLabel.
     // returns the offset in the array for the label, or -1
 
-    return HASH_findcase(tH,psz);
+    return hash_findcase(tH,psz);
 }
 
 static void C_GetNextLabelName(void)
@@ -1491,7 +1491,7 @@ static int C_GetKeyword(void)
     while (isaltok(*temptextptr))
         tempbuf[i++] = *(temptextptr++);
     tempbuf[i] = 0;
-    return HASH_find(&keywH,tempbuf);
+    return hash_find(&keywH,tempbuf);
 }
 
 static int C_GetNextKeyword(void) //Returns its code #
@@ -1521,7 +1521,7 @@ static int C_GetNextKeyword(void) //Returns its code #
     }
     tempbuf[l] = 0;
 
-    i = HASH_find(&keywH,tempbuf);
+    i = hash_find(&keywH,tempbuf);
     if (i>=0)
     {
         *g_scriptPtr = i + (g_lineNumber<<12);
@@ -1588,7 +1588,7 @@ static void C_GetNextVarType(int type)
     }
     C_GetNextLabelName();
 
-    if (!g_skipKeywordCheck && HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+    if (!g_skipKeywordCheck && hash_find(&keywH,label+(g_numLabels<<6))>=0)
     {
         g_numCompilerErrors++;
         C_ReportError(ERROR_ISAKEYWORD);
@@ -1637,7 +1637,7 @@ static void C_GetNextVarType(int type)
         {
             //try looking for a define instead
             Bstrcpy(tempbuf,label+(g_numLabels<<6));
-            i = HASH_find(&labelH,tempbuf);
+            i = hash_find(&labelH,tempbuf);
             if (i>=0)
             {
                 if (labeltype[i] & LABEL_DEFINE)
@@ -1725,14 +1725,14 @@ static int C_GetNextValue(int type)
     }
     tempbuf[l] = 0;
 
-    if (!g_skipKeywordCheck && HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+    if (!g_skipKeywordCheck && hash_find(&keywH,label+(g_numLabels<<6))>=0)
     {
         g_numCompilerErrors++;
         C_ReportError(ERROR_ISAKEYWORD);
         textptr+=l;
     }
 
-    i = HASH_find(&labelH,tempbuf);
+    i = hash_find(&labelH,tempbuf);
     if (i>=0)
     {
         char *el,*gl;
@@ -1892,28 +1892,28 @@ static int C_ParseCommand(void)
 
             g_processingState = 1;
             Bsprintf(g_szCurrentBlockName,"%s",label+(g_numLabels<<6));
-            HASH_add(&labelH,label+(g_numLabels<<6),g_numLabels);
+            hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
             g_numLabels++;
             return 0;
         }
 
         C_GetNextLabelName();
 
-        if (HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
             g_numCompilerErrors++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = HASH_find(&gamevarH,label+(g_numLabels<<6));
+        i = hash_find(&gamevarH,label+(g_numLabels<<6));
         if (i>=0)
         {
             g_numCompilerWarnings++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
-        j = HASH_find(&labelH,label+(g_numLabels<<6));
+        j = hash_find(&labelH,label+(g_numLabels<<6));
         if (j>=0)
         {
             if (labeltype[j] & LABEL_STATE)
@@ -2026,7 +2026,7 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=C_GetLabelNameOffset(&projectileH,strtolower(label+(g_numLabels<<6),Bstrlen(label+(g_numLabels<<6))));
+        lLabelID=C_GetLabelNameOffset(&projectileH,Bstrtolower(label+(g_numLabels<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -2078,7 +2078,7 @@ static int C_ParseCommand(void)
         //printf("Got Label '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
             g_numCompilerErrors++;
             C_ReportError(ERROR_ISAKEYWORD);
@@ -2123,14 +2123,14 @@ static int C_ParseCommand(void)
         //printf("Got Label '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
             g_numCompilerErrors++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = HASH_find(&gamevarH,label+(g_numLabels<<6));
+        i = hash_find(&gamevarH,label+(g_numLabels<<6));
         if (i>=0)
         {
             g_numCompilerWarnings++;
@@ -2151,21 +2151,21 @@ static int C_ParseCommand(void)
         //printf("Got label. '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
             g_numCompilerErrors++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = HASH_find(&gamevarH,label+(g_numLabels<<6));
+        i = hash_find(&gamevarH,label+(g_numLabels<<6));
         if (i>=0)
         {
             g_numCompilerWarnings++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
-        i = HASH_find(&labelH,label+(g_numLabels<<6));
+        i = hash_find(&labelH,label+(g_numLabels<<6));
         if (i>=0)
         {
             /*            if (i >= g_numDefaultLabels)
@@ -2181,7 +2181,7 @@ static int C_ParseCommand(void)
         if (i == -1)
         {
             //              printf("Defining Definition '%s' to be '%d'\n",label+(g_numLabels<<6),*(g_scriptPtr-1));
-            HASH_add(&labelH,label+(g_numLabels<<6),g_numLabels);
+            hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
             labeltype[g_numLabels] = LABEL_DEFINE;
             labelcode[g_numLabels++] = *(g_scriptPtr-1);
             if (*(g_scriptPtr-1) >= 0 && *(g_scriptPtr-1) < MAXTILES && g_dynamicTileMapping)
@@ -2244,21 +2244,21 @@ static int C_ParseCommand(void)
             C_GetNextLabelName();
             // Check to see it's already defined
 
-            if (HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+            if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
             {
                 g_numCompilerErrors++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = HASH_find(&gamevarH,label+(g_numLabels<<6));
+            i = hash_find(&gamevarH,label+(g_numLabels<<6));
             if (i>=0)
             {
                 g_numCompilerWarnings++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = HASH_find(&labelH,label+(g_numLabels<<6));
+            i = hash_find(&labelH,label+(g_numLabels<<6));
             if (i>=0)
             {
                 g_numCompilerWarnings++;
@@ -2266,7 +2266,7 @@ static int C_ParseCommand(void)
             }
             if (i == -1)
             {
-                HASH_add(&labelH,label+(g_numLabels<<6),g_numLabels);
+                hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
                 labeltype[g_numLabels] = LABEL_MOVE;
                 labelcode[g_numLabels++] = (intptr_t) g_scriptPtr;
             }
@@ -2318,9 +2318,9 @@ static int C_ParseCommand(void)
                 tempbuf[j+1] = '\0';
 
                 if (MapInfo[(k*MAXLEVELS)+i].musicfn == NULL)
-                    MapInfo[(k*MAXLEVELS)+i].musicfn = Bcalloc(Bstrlen(tempbuf)+1,sizeof(char));
+                    MapInfo[(k*MAXLEVELS)+i].musicfn = (char*)Bcalloc(Bstrlen(tempbuf)+1,sizeof(char));
                 else if ((Bstrlen(tempbuf)+1) > sizeof(MapInfo[(k*MAXLEVELS)+i].musicfn))
-                    MapInfo[(k*MAXLEVELS)+i].musicfn = Brealloc(MapInfo[(k*MAXLEVELS)+i].musicfn,(Bstrlen(tempbuf)+1));
+                    MapInfo[(k*MAXLEVELS)+i].musicfn = (char*)Brealloc(MapInfo[(k*MAXLEVELS)+i].musicfn,(Bstrlen(tempbuf)+1));
 
                 Bstrcpy(MapInfo[(k*MAXLEVELS)+i].musicfn,tempbuf);
 
@@ -2446,21 +2446,21 @@ static int C_ParseCommand(void)
             g_scriptPtr--;
             C_GetNextLabelName();
 
-            if (HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+            if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
             {
                 g_numCompilerErrors++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = HASH_find(&gamevarH,label+(g_numLabels<<6));
+            i = hash_find(&gamevarH,label+(g_numLabels<<6));
             if (i>=0)
             {
                 g_numCompilerWarnings++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = HASH_find(&labelH,label+(g_numLabels<<6));
+            i = hash_find(&labelH,label+(g_numLabels<<6));
             if (i>=0)
             {
                 g_numCompilerWarnings++;
@@ -2470,7 +2470,7 @@ static int C_ParseCommand(void)
             if (i == -1)
             {
                 labeltype[g_numLabels] = LABEL_AI;
-                HASH_add(&labelH,label+(g_numLabels<<6),g_numLabels);
+                hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
                 labelcode[g_numLabels++] = (intptr_t) g_scriptPtr;
             }
 
@@ -2527,21 +2527,21 @@ static int C_ParseCommand(void)
             C_GetNextLabelName();
             // Check to see it's already defined
 
-            if (HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+            if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
             {
                 g_numCompilerErrors++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = HASH_find(&gamevarH,label+(g_numLabels<<6));
+            i = hash_find(&gamevarH,label+(g_numLabels<<6));
             if (i>=0)
             {
                 g_numCompilerWarnings++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = HASH_find(&labelH,label+(g_numLabels<<6));
+            i = hash_find(&labelH,label+(g_numLabels<<6));
             if (i>=0)
             {
                 g_numCompilerWarnings++;
@@ -2552,7 +2552,7 @@ static int C_ParseCommand(void)
             {
                 labeltype[g_numLabels] = LABEL_ACTION;
                 labelcode[g_numLabels] = (intptr_t) g_scriptPtr;
-                HASH_add(&labelH,label+(g_numLabels<<6),g_numLabels);
+                hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
                 g_numLabels++;
             }
 
@@ -3001,7 +3001,7 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=GetLabelNameid(SectorLabels,&sectorH,strtolower(label+(g_numLabels<<6),Bstrlen(label+(g_numLabels<<6))));
+        lLabelID=GetLabelNameid(SectorLabels,&sectorH,Bstrtolower(label+(g_numLabels<<6)));
 
         if (lLabelID == -1)
         {
@@ -3136,7 +3136,7 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=GetLabelNameid(WallLabels,&wallH,strtolower(label+(g_numLabels<<6),Bstrlen(label+(g_numLabels<<6))));
+        lLabelID=GetLabelNameid(WallLabels,&wallH,Bstrtolower(label+(g_numLabels<<6)));
 
         if (lLabelID == -1)
         {
@@ -3203,7 +3203,7 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=C_GetLabelNameOffset(&playerH,strtolower(label+(g_numLabels<<6),Bstrlen(label+(g_numLabels<<6))));
+        lLabelID=C_GetLabelNameOffset(&playerH,Bstrtolower(label+(g_numLabels<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3284,7 +3284,7 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=C_GetLabelNameOffset(&inputH,strtolower(label+(g_numLabels<<6),Bstrlen(label+(g_numLabels<<6))));
+        lLabelID=C_GetLabelNameOffset(&inputH,Bstrtolower(label+(g_numLabels<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3335,7 +3335,7 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=GetLabelNameid(UserdefsLabels,&userdefH,strtolower(label+(g_numLabels<<6),Bstrlen(label+(g_numLabels<<6))));
+        lLabelID=GetLabelNameid(UserdefsLabels,&userdefH,Bstrtolower(label+(g_numLabels<<6)));
 
         if (lLabelID == -1)
         {
@@ -3438,7 +3438,7 @@ static int C_ParseCommand(void)
         //printf("found label of '%s'\n",   label+(g_numLabels<<6));
 
         // Check to see if it's a keyword
-        if (HASH_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
             g_numCompilerErrors++;
             C_ReportError(ERROR_ISAKEYWORD);
@@ -3552,7 +3552,7 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=C_GetLabelNameOffset(&actorH,strtolower(label+(g_numLabels<<6),Bstrlen(label+(g_numLabels<<6))));
+        lLabelID=C_GetLabelNameOffset(&actorH,Bstrtolower(label+(g_numLabels<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3635,7 +3635,7 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=C_GetLabelNameOffset(&tspriteH,strtolower(label+(g_numLabels<<6),Bstrlen(label+(g_numLabels<<6))));
+        lLabelID=C_GetLabelNameOffset(&tspriteH,Bstrtolower(label+(g_numLabels<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -4907,10 +4907,10 @@ repeatcase:
         }
         gamefunctions[j][i] = '\0';
         keydefaults[j*3][i] = '\0';
-        HASH_add(&gamefuncH,gamefunctions[j],j);
+        hash_add(&gamefuncH,gamefunctions[j],j, 0);
         {
-            char *str = strtolower(Bstrdup(gamefunctions[j]),Bstrlen(gamefunctions[j]));
-            HASH_add(&gamefuncH,str,j);
+            char *str = Bstrtolower(Bstrdup(gamefunctions[j]));
+            hash_add(&gamefuncH,str,j, 0);
             Bfree(str);
         }
 
@@ -5134,9 +5134,9 @@ repeatcase:
         Bcorrectfilename(tempbuf,0);
 
         if (MapInfo[j*MAXLEVELS+k].filename == NULL)
-            MapInfo[j*MAXLEVELS+k].filename = Bcalloc(Bstrlen(tempbuf)+1,sizeof(char));
+            MapInfo[j*MAXLEVELS+k].filename = (char*)Bcalloc(Bstrlen(tempbuf)+1,sizeof(char));
         else if ((Bstrlen(tempbuf)+1) > sizeof(MapInfo[j*MAXLEVELS+k].filename))
-            MapInfo[j*MAXLEVELS+k].filename = Brealloc(MapInfo[j*MAXLEVELS+k].filename,(Bstrlen(tempbuf)+1));
+            MapInfo[j*MAXLEVELS+k].filename = (char*)Brealloc(MapInfo[j*MAXLEVELS+k].filename,(Bstrlen(tempbuf)+1));
 
         /*         initprintf("level file name string len: %d\n",Bstrlen(tempbuf)); */
 
@@ -5176,9 +5176,9 @@ repeatcase:
         tempbuf[i] = '\0';
 
         if (MapInfo[j*MAXLEVELS+k].name == NULL)
-            MapInfo[j*MAXLEVELS+k].name = Bcalloc(Bstrlen(tempbuf)+1,sizeof(char));
+            MapInfo[j*MAXLEVELS+k].name = (char*)Bcalloc(Bstrlen(tempbuf)+1,sizeof(char));
         else if ((Bstrlen(tempbuf)+1) > sizeof(MapInfo[j*MAXLEVELS+k].name))
-            MapInfo[j*MAXLEVELS+k].name = Brealloc(MapInfo[j*MAXLEVELS+k].name,(Bstrlen(tempbuf)+1));
+            MapInfo[j*MAXLEVELS+k].name = (char*)Brealloc(MapInfo[j*MAXLEVELS+k].name,(Bstrlen(tempbuf)+1));
 
         /*         initprintf("level name string len: %d\n",Bstrlen(tempbuf)); */
 
@@ -5204,7 +5204,7 @@ repeatcase:
         }
 
         if (ScriptQuotes[k] == NULL)
-            ScriptQuotes[k] = Bcalloc(MAXQUOTELEN,sizeof(char));
+            ScriptQuotes[k] = (char*)Bcalloc(MAXQUOTELEN,sizeof(char));
         if (!ScriptQuotes[k])
         {
             ScriptQuotes[k] = NULL;
@@ -5223,7 +5223,7 @@ repeatcase:
         if (tw == CON_REDEFINEQUOTE)
         {
             if (ScriptQuoteRedefinitions[g_numQuoteRedefinitions] == NULL)
-                ScriptQuoteRedefinitions[g_numQuoteRedefinitions] = Bcalloc(MAXQUOTELEN,sizeof(char));
+                ScriptQuoteRedefinitions[g_numQuoteRedefinitions] = (char*)Bcalloc(MAXQUOTELEN,sizeof(char));
             if (!ScriptQuoteRedefinitions[g_numQuoteRedefinitions])
             {
                 ScriptQuoteRedefinitions[g_numQuoteRedefinitions] = NULL;
@@ -5319,7 +5319,7 @@ repeatcase:
         C_SkipComments();
 
         if (g_sounds[k].filename == NULL)
-            g_sounds[k].filename = Bcalloc(BMAX_PATH,sizeof(char));
+            g_sounds[k].filename = (char*)Bcalloc(BMAX_PATH,sizeof(char));
         if (!g_sounds[k].filename)
         {
             Bsprintf(tempbuf,"Failed allocating %" PRIdPTR " byte buffer.",sizeof(char) * BMAX_PATH);
@@ -5613,7 +5613,7 @@ static void AddDefinition(const char *lLabel,int lValue,int lType)
 {
     Bstrcpy(label+(g_numLabels<<6),lLabel);
     labeltype[g_numLabels] = lType;
-    HASH_add(&labelH,label+(g_numLabels<<6),g_numLabels);
+    hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
     labelcode[g_numLabels++] = lValue;
     g_numDefaultLabels++;
 }
@@ -5859,8 +5859,8 @@ void C_Compile(const char *filenam)
     if (script != NULL)
         Bfree(script);
 
-    script = Bcalloc(1,g_scriptSize * sizeof(intptr_t));
-    bitptr = Bcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(char));
+    script = (intptr_t*)Bcalloc(1,g_scriptSize * sizeof(intptr_t));
+    bitptr = (char*)Bcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(char));
 //    initprintf("script: %d, bitptr: %d\n",script,bitptr);
 
     g_numLabels = g_numDefaultLabels = 0;
@@ -5942,18 +5942,18 @@ void C_Compile(const char *filenam)
     {
         int j=0, k=0;
 
-        HASH_free(&keywH);
+        hash_free(&keywH);
         freehashnames();
 
-        HASH_free(&sectorH);
-        HASH_free(&wallH);
-        HASH_free(&userdefH);
+        hash_free(&sectorH);
+        hash_free(&wallH);
+        hash_free(&userdefH);
 
-        HASH_free(&projectileH);
-        HASH_free(&playerH);
-        HASH_free(&inputH);
-        HASH_free(&actorH);
-        HASH_free(&tspriteH);
+        hash_free(&projectileH);
+        hash_free(&playerH);
+        hash_free(&inputH);
+        hash_free(&actorH);
+        hash_free(&tspriteH);
 
         g_totalLines += g_lineNumber;
 
@@ -5983,7 +5983,7 @@ void C_Compile(const char *filenam)
 
         for (i=127;i>=0;i--)
             if (ScriptQuotes[i] == NULL)
-                ScriptQuotes[i] = Bcalloc(MAXQUOTELEN,sizeof(char));
+                ScriptQuotes[i] = (char*)Bcalloc(MAXQUOTELEN,sizeof(char));
 
 //        if (!Bstrcmp(ScriptQuotes[13],"PRESS SPACE TO RESTART LEVEL"))
 //            Bstrcpy(ScriptQuotes[13],"PRESS USE TO RESTART LEVEL");
@@ -6066,7 +6066,7 @@ void C_Compile(const char *filenam)
             {
                 if (ScriptQuotes[i+FIRST_OBITUARY_QUOTE] == NULL)
                 {
-                    ScriptQuotes[i+FIRST_OBITUARY_QUOTE] = Bcalloc(MAXQUOTELEN,sizeof(char));
+                    ScriptQuotes[i+FIRST_OBITUARY_QUOTE] = (char*)Bcalloc(MAXQUOTELEN,sizeof(char));
                     Bstrcpy(ScriptQuotes[i+FIRST_OBITUARY_QUOTE],PlayerObituaries[i]);
                 }
             }
@@ -6076,7 +6076,7 @@ void C_Compile(const char *filenam)
             {
                 if (ScriptQuotes[i+FIRST_SUICIDE_QUOTE] == NULL)
                 {
-                    ScriptQuotes[i+FIRST_SUICIDE_QUOTE] = Bcalloc(MAXQUOTELEN,sizeof(char));
+                    ScriptQuotes[i+FIRST_SUICIDE_QUOTE] = (char*)Bcalloc(MAXQUOTELEN,sizeof(char));
                     Bstrcpy(ScriptQuotes[i+FIRST_SUICIDE_QUOTE],PlayerSelfObituaries[i]);
                 }
             }
