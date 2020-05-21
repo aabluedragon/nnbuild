@@ -64,9 +64,9 @@ char Net_PlayerSync(void)
     TRAVERSE_CONNECT(i)
     {
         pp = g_player[i].ps;
-        updatecrc(crc, pp->posx & 255);
-        updatecrc(crc, pp->posy & 255);
-        updatecrc(crc, pp->posz & 255);
+        updatecrc(crc, pp->pos.x & 255);
+        updatecrc(crc, pp->pos.y & 255);
+        updatecrc(crc, pp->pos.z & 255);
         updatecrc(crc, pp->q16ang & 255);
     }
 
@@ -208,7 +208,7 @@ char Net_RandomSync(void)
     return ((char) crc & 255);
 }
 
-char *SyncNames[] =
+const char *SyncNames[] =
 {
     "Net_CheckRandomSync",
     "Net_CheckPlayerSync",
