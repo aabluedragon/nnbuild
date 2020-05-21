@@ -52,8 +52,8 @@ static void Gv_Free(void) /* called from Gv_ReadSave() and Gv_ResetVars() */
         aGameArrays[i].bReset=1;
     }
     g_gameVarCount=g_gameArrayCount=0;
-    HASH_init(&gamevarH);
-    HASH_init(&arrayH);
+    hash_init(&gamevarH);
+    hash_init(&arrayH);
     return;
 }
 
@@ -90,8 +90,8 @@ static void Gv_Clear(void)
         aGameArrays[i].bReset=1;
     }
     g_gameVarCount=g_gameArrayCount=0;
-    HASH_init(&gamevarH);
-    HASH_init(&arrayH);
+    hash_init(&gamevarH);
+    hash_init(&arrayH);
     return;
 }
 
@@ -114,18 +114,18 @@ int Gv_ReadSave(int fil)
     for (i=0;i<g_gameVarCount;i++)
     {
         if (kdfread(&(aGameVars[i]),sizeof(gamevar_t),1,fil) != 1) goto corrupt;
-        aGameVars[i].szLabel=Bcalloc(MAXVARLABEL,sizeof(char));
+        aGameVars[i].szLabel=(char*)Bcalloc(MAXVARLABEL,sizeof(char));
         if (kdfread(aGameVars[i].szLabel,sizeof(char) * MAXVARLABEL, 1, fil) != 1) goto corrupt;
-        HASH_replace(&gamevarH,aGameVars[i].szLabel,i);
+        hash_add(&gamevarH,aGameVars[i].szLabel,i, 1);
 
         if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
         {
-            aGameVars[i].val.plValues=Bcalloc(MAXPLAYERS,sizeof(intptr_t));
+            aGameVars[i].val.plValues=(intptr_t*)Bcalloc(MAXPLAYERS,sizeof(intptr_t));
             if (kdfread(aGameVars[i].val.plValues,sizeof(intptr_t) * MAXPLAYERS, 1, fil) != 1) goto corrupt;
         }
         else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
         {
-            aGameVars[i].val.plValues=Bcalloc(MAXSPRITES,sizeof(intptr_t));
+            aGameVars[i].val.plValues= (intptr_t*)Bcalloc(MAXSPRITES,sizeof(intptr_t));
             if (kdfread(&aGameVars[i].val.plValues[0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
         }
     }
@@ -142,11 +142,11 @@ int Gv_ReadSave(int fil)
     for (i=0;i<g_gameArrayCount;i++)
     {
         if (kdfread(&(aGameArrays[i]),sizeof(gamearray_t),1,fil) != 1) goto corrupt;
-        aGameArrays[i].szLabel=Bcalloc(MAXARRAYLABEL,sizeof(char));
+        aGameArrays[i].szLabel=(char*)Bcalloc(MAXARRAYLABEL,sizeof(char));
         if (kdfread(aGameArrays[i].szLabel,sizeof(char) * MAXARRAYLABEL, 1, fil) != 1) goto corrupt;
-        HASH_replace(&arrayH,aGameArrays[i].szLabel,i);
+        hash_add(&arrayH,aGameArrays[i].szLabel,i, 1);
 
-        aGameArrays[i].plValues=Bcalloc(aGameArrays[i].size,sizeof(intptr_t));
+        aGameArrays[i].plValues=(intptr_t*)Bcalloc(aGameArrays[i].size,sizeof(intptr_t));
         if (kdfread(aGameArrays[i].plValues,sizeof(intptr_t) * aGameArrays[i].size, 1, fil) < 1) goto corrupt;
     }
 
@@ -170,7 +170,7 @@ int Gv_ReadSave(int fil)
         if (savedstate[i])
         {
             if (MapInfo[i].savedstate == NULL)
-                MapInfo[i].savedstate = Bcalloc(1,sizeof(mapstate_t));
+                MapInfo[i].savedstate = (mapstate_t*)Bcalloc(1,sizeof(mapstate_t));
             if (kdfread(MapInfo[i].savedstate,sizeof(mapstate_t),1,fil) != sizeof(mapstate_t)) goto corrupt;
             for (j=0;j<g_gameVarCount;j++)
             {
@@ -178,13 +178,13 @@ int Gv_ReadSave(int fil)
                 if (aGameVars[j].dwFlags & GAMEVAR_PERPLAYER)
                 {
                     if (!MapInfo[i].savedstate->vars[j])
-                        MapInfo[i].savedstate->vars[j] = Bcalloc(MAXPLAYERS,sizeof(intptr_t));
+                        MapInfo[i].savedstate->vars[j] = (intptr_t*)Bcalloc(MAXPLAYERS,sizeof(intptr_t));
                     if (kdfread(&MapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXPLAYERS, 1, fil) != 1) goto corrupt;
                 }
                 else if (aGameVars[j].dwFlags & GAMEVAR_PERACTOR)
                 {
                     if (!MapInfo[i].savedstate->vars[j])
-                        MapInfo[i].savedstate->vars[j] = Bcalloc(MAXSPRITES,sizeof(intptr_t));
+                        MapInfo[i].savedstate->vars[j] = (intptr_t*)Bcalloc(MAXSPRITES,sizeof(intptr_t));
                     if (kdfread(&MapInfo[i].savedstate->vars[j][0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
                 }
             }
@@ -379,7 +379,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
         initprintf("%s:%d: error: array name `%s' exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,pszLabel, MAXARRAYLABEL);
         return 0;
     }
-    i = HASH_find(&arrayH,pszLabel);
+    i = hash_find(&arrayH,pszLabel);
     if (i >=0 && !aGameArrays[i].bReset)
     {
         // found it it's a duplicate in error
@@ -391,14 +391,14 @@ int Gv_NewArray(const char *pszLabel, int asize)
     i = g_gameArrayCount;
 
     if (aGameArrays[i].szLabel == NULL)
-        aGameArrays[i].szLabel=Bcalloc(MAXVARLABEL,sizeof(char));
+        aGameArrays[i].szLabel= (char*)Bcalloc(MAXVARLABEL,sizeof(char));
     if (aGameArrays[i].szLabel != pszLabel)
         Bstrcpy(aGameArrays[i].szLabel,pszLabel);
-    aGameArrays[i].plValues=Bcalloc(asize,sizeof(intptr_t));
+    aGameArrays[i].plValues=(intptr_t*)Bcalloc(asize,sizeof(intptr_t));
     aGameArrays[i].size=asize;
     aGameArrays[i].bReset=0;
     g_gameArrayCount++;
-    HASH_replace(&arrayH,aGameArrays[i].szLabel,i);
+    hash_add(&arrayH,aGameArrays[i].szLabel,i, 1);
     return 1;
 }
 
@@ -425,7 +425,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
         return 0;
     }
 
-    i = HASH_find(&gamevarH,pszLabel);
+    i = hash_find(&gamevarH,pszLabel);
 
     if (i >= 0 && !(aGameVars[i].dwFlags & GAMEVAR_RESET))
     {
@@ -454,7 +454,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
     if ((aGameVars[i].dwFlags & GAMEVAR_SYSTEM) == 0)
     {
         if (aGameVars[i].szLabel == NULL)
-            aGameVars[i].szLabel=Bcalloc(MAXVARLABEL,sizeof(char));
+            aGameVars[i].szLabel=(char*)Bcalloc(MAXVARLABEL,sizeof(char));
         if (aGameVars[i].szLabel != pszLabel)
             Bstrcpy(aGameVars[i].szLabel,pszLabel);
         aGameVars[i].dwFlags=dwFlags;
@@ -475,20 +475,20 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
     if (i == g_gameVarCount)
     {
         // we're adding a new one.
-        HASH_add(&gamevarH, aGameVars[i].szLabel, g_gameVarCount++);
+        hash_add(&gamevarH, aGameVars[i].szLabel, g_gameVarCount++, 0);
     }
 
     if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
     {
         if (!aGameVars[i].val.plValues)
-            aGameVars[i].val.plValues=Bcalloc(MAXPLAYERS,sizeof(intptr_t));
+            aGameVars[i].val.plValues=(intptr_t*)Bcalloc(MAXPLAYERS,sizeof(intptr_t));
         for (j=MAXPLAYERS-1;j>=0;j--)
             aGameVars[i].val.plValues[j]=lValue;
     }
     else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
     {
         if (!aGameVars[i].val.plValues)
-            aGameVars[i].val.plValues=Bcalloc(MAXSPRITES,sizeof(intptr_t));
+            aGameVars[i].val.plValues=(intptr_t*)Bcalloc(MAXSPRITES,sizeof(intptr_t));
         for (j=MAXSPRITES-1;j>=0;j--)
             aGameVars[i].val.plValues[j]=lValue;
     }
@@ -507,7 +507,7 @@ void A_ResetVars(int iActor)
 
 static int Gv_GetVarIndex(const char *szGameLabel)
 {
-    int i = HASH_find(&gamevarH,szGameLabel);
+    int i = hash_find(&gamevarH,szGameLabel);
     if (i == -1)
     {
         OSD_Printf(OSD_ERROR "Gv_GetVarDataPtr(): INTERNAL ERROR: couldn't find gamevar %s!\n",szGameLabel);
@@ -750,7 +750,7 @@ void __fastcall Gv_SetVarX(int id, int lValue)
 
 int Gv_GetVarByLabel(const char *szGameLabel, int lDefault, int iActor, int iPlayer)
 {
-    int i = HASH_find(&gamevarH,szGameLabel);
+    int i = hash_find(&gamevarH,szGameLabel);
 
     if (i < 0)
         return lDefault;
@@ -760,7 +760,7 @@ int Gv_GetVarByLabel(const char *szGameLabel, int lDefault, int iActor, int iPla
 
 static intptr_t *Gv_GetVarDataPtr(const char *szGameLabel)
 {
-    int i = HASH_find(&gamevarH,szGameLabel);
+    int i = hash_find(&gamevarH,szGameLabel);
 
     if (i < 0)
         return NULL;
@@ -1347,10 +1347,10 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("looking_angSR1",(intptr_t)&g_looking_angSR1, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_SYNCCHECK);
     Gv_NewVar("xdim",(intptr_t)&xdim, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("ydim",(intptr_t)&ydim, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("windowx1",(intptr_t)&windowx1, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("windowx2",(intptr_t)&windowx2, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("windowy1",(intptr_t)&windowy1, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("windowy2",(intptr_t)&windowy2, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("windowx1",(intptr_t)&windowxy1.x, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("windowx2",(intptr_t)&windowxy2.x, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("windowy1",(intptr_t)&windowxy1.y, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("windowy2",(intptr_t)&windowxy2.y, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("totalclock",(intptr_t)&totalclock, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("lastvisinc",(intptr_t)&lastvisinc, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("numsectors",(intptr_t)&numsectors, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_READONLY);
@@ -1510,10 +1510,10 @@ void Gv_RefreshPointers(void)
     aGameVars[Gv_GetVarIndex("looking_angSR1")].val.lValue = (intptr_t)&g_looking_angSR1;
     aGameVars[Gv_GetVarIndex("xdim")].val.lValue = (intptr_t)&xdim;
     aGameVars[Gv_GetVarIndex("ydim")].val.lValue = (intptr_t)&ydim;
-    aGameVars[Gv_GetVarIndex("windowx1")].val.lValue = (intptr_t)&windowx1;
-    aGameVars[Gv_GetVarIndex("windowx2")].val.lValue = (intptr_t)&windowx2;
-    aGameVars[Gv_GetVarIndex("windowy1")].val.lValue = (intptr_t)&windowy1;
-    aGameVars[Gv_GetVarIndex("windowy2")].val.lValue = (intptr_t)&windowy2;
+    aGameVars[Gv_GetVarIndex("windowx1")].val.lValue = (intptr_t)&windowxy1.x;
+    aGameVars[Gv_GetVarIndex("windowx2")].val.lValue = (intptr_t)&windowxy2.x;
+    aGameVars[Gv_GetVarIndex("windowy1")].val.lValue = (intptr_t)&windowxy1.y;
+    aGameVars[Gv_GetVarIndex("windowy2")].val.lValue = (intptr_t)&windowxy2.y;
     aGameVars[Gv_GetVarIndex("totalclock")].val.lValue = (intptr_t)&totalclock;
     aGameVars[Gv_GetVarIndex("lastvisinc")].val.lValue = (intptr_t)&lastvisinc;
     aGameVars[Gv_GetVarIndex("numsectors")].val.lValue = (intptr_t)&numsectors;
