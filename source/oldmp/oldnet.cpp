@@ -48,7 +48,7 @@ void faketimerhandler(void)
         G_GameExit("Quick Exit.");
     }
 
-    timerUpdate();
+    timerUpdateClock();
     MUSIC_Update();
 
     if ((totalclock < ototalclock+TICSPERFRAME) || (ready2send == 0)) return;
@@ -225,7 +225,7 @@ void faketimerhandler(void)
 
         TRAVERSE_CONNECT(i)
         if (i != myconnectindex)
-            mmulti_sendpacket(i,packbuf,j);
+            mmulti_sendpacket(i,(unsigned char*)packbuf,j);
 
         return;
     }
@@ -322,7 +322,7 @@ void faketimerhandler(void)
                 } */
         Net_AddSyncInfoToPacket(&j);
 
-        mmulti_sendpacket(connecthead,packbuf,j);
+        mmulti_sendpacket(connecthead, (unsigned char*)packbuf,j);
         return;
     }
 
@@ -332,7 +332,7 @@ void faketimerhandler(void)
     {
         packbuf[0] = PACKET_TYPE_NULL_PACKET;
         for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-            mmulti_sendpacket(i,packbuf,1);
+            mmulti_sendpacket(i, (unsigned char*)packbuf,1);
         return;
     }
 
@@ -438,7 +438,7 @@ void faketimerhandler(void)
         for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
             if (g_player[i].playerquitflag)
             {
-                mmulti_sendpacket(i,packbuf,j);
+                mmulti_sendpacket(i, (unsigned char*)packbuf,j);
                 if (TEST_SYNC_KEY(nsyn[i].bits,SK_GAMEQUIT))
                     g_player[i].playerquitflag = 0;
             }
@@ -456,9 +456,9 @@ void Net_ParsePackets(void)
     input_t *osyn, *nsyn;
     
     if (numplayers < 2) return;
-    while ((packbufleng = mmulti_getpacket(&other,packbuf)) > 0)
+    while ((packbufleng = mmulti_getpacket(&other, (unsigned char*)packbuf)) > 0)
     {
-        lastpackettime = totalclock;
+        lastpackettime = (int32_t)totalclock;
 #if 0
         initprintf("RECEIVED PACKET: type: %d : len %d\n", packbuf[0], packbufleng);
 #endif
@@ -723,12 +723,12 @@ void Net_ParsePackets(void)
                         //Master re-transmits message to all others
                         for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                             if (i != other)
-                                mmulti_sendpacket(i,packbuf,packbufleng);
+                                mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
                     }
                     else if (((int)packbuf[1]) != myconnectindex)
                     {
                         //Master re-transmits message not intended for master
-                        mmulti_sendpacket((int)packbuf[1],packbuf,packbufleng);
+                        mmulti_sendpacket((int)packbuf[1], (unsigned char*)packbuf,packbufleng);
                         break;
                     }
                 }
@@ -749,7 +749,7 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i,packbuf,packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
                 if (vote_map != -1 || vote_episode != -1 || voting != -1)
                     G_AddUserQuote("VOTE SUCCEEDED");
@@ -786,7 +786,7 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i, packbuf, packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
 
                 ud.m_level_number = ud.level_number = packbuf[1];
                 ud.m_volume_number = ud.volume_number = packbuf[2];
@@ -809,7 +809,7 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i,packbuf,packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
                 if (packbuf[2] != (char)atoi(s_buildDate))
                 {
@@ -834,7 +834,7 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i,packbuf,packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
                 other = packbuf[1];
                 i = 2;
@@ -852,7 +852,7 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i = connectpoint2[connecthead];i >= 0;i = connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i, packbuf, packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
 
                 ud.fraglimit = packbuf[2];
 
@@ -863,7 +863,7 @@ void Net_ParsePackets(void)
             case PACKET_TYPE_EOL:
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i,packbuf,packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
                 TRAVERSE_CONNECT(i)
                 g_player[i].ps->gm = MODE_EOL;
@@ -878,7 +878,7 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i,packbuf,packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
                 other = packbuf[1];
 
@@ -896,7 +896,7 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i,packbuf,packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
                 other = packbuf[1];
 
@@ -911,14 +911,14 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i,packbuf,packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
                 if (numlumps == 0) break;
 
                 if (ud.config.SoundToggle == 0 || ud.lockout == 1 || ud.config.FXDevice < 0 || !(ud.config.VoiceToggle & 4))
                     break;
                 rtsptr = (char *)RTS_GetSound(packbuf[1]-1);
-                FX_PlayAuto3D(rtsptr,RTS_SoundLength(packbuf[1]-1),0,0,0,255,-packbuf[1]);
+                FX_Play3D(rtsptr, RTS_SoundLength(packbuf[1] - 1), FX_ONESHOT, 0, 0, 1, 255, fix16_one, -packbuf[1]);
                 g_RTSPlaying = 7;
                 break;
 
@@ -929,7 +929,7 @@ void Net_ParsePackets(void)
                     //Master re-transmits message to all others
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                         if (i != other)
-                            mmulti_sendpacket(i,packbuf,packbufleng);
+                            mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
                 }
 
                 G_GameExit("Game aborted from menu; disconnected.");
@@ -943,7 +943,7 @@ void Net_ParsePackets(void)
                     //Master re-transmits message to all others
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                         if (i != other)
-                            mmulti_sendpacket(i,packbuf,packbufleng);
+                            mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
                 }
 
                 Bstrcpy(boardfilename,packbuf+1);
@@ -973,7 +973,7 @@ void Net_ParsePackets(void)
                     //Master re-transmits message to all others
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                         if (i != other)
-                            mmulti_sendpacket(i,packbuf,packbufleng);
+                            mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
                 }
 
                 switch (packbuf[0])
@@ -1039,7 +1039,7 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i,packbuf,packbufleng);
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
                 multiflag = 2;
                 multiwhat = 0;
@@ -1061,7 +1061,7 @@ void Net_SendQuit(void)
         if (g_player[myconnectindex].ps->gm&MODE_GAME)
         {
             g_gameQuit = 1;
-            quittimer = totalclock+120;
+            quittimer = (int32_t)totalclock+120;
         }
         else
         {
@@ -1072,7 +1072,7 @@ void Net_SendQuit(void)
 
             TRAVERSE_CONNECT(i)
             {
-                if (i != myconnectindex) mmulti_sendpacket(i,tempbuf,2);
+                if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf,2);
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
             }
             G_GameExit(" ");
@@ -1101,7 +1101,7 @@ void Net_SendWeaponChoice(void)
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i,&buf[0],l);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)&buf[0],l);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }
@@ -1120,7 +1120,7 @@ void Net_SendVersion(void)
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i,&buf[0],5);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)&buf[0],5);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
     waitforeverybody();
@@ -1147,7 +1147,7 @@ void Net_SendPlayerOptions(void)
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i,&buf[0],l);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)&buf[0],l);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }
@@ -1163,7 +1163,7 @@ void Net_SendFragLimit(void)
 
         TRAVERSE_CONNECT(i)
         {
-            if (i != myconnectindex) mmulti_sendpacket(i, buf, 3);
+            if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)buf, 3);
             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
         }
     }
@@ -1188,7 +1188,7 @@ void Net_SendPlayerName(void)
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i,&buf[0],l);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)&buf[0],l);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }
@@ -1211,7 +1211,7 @@ void Net_SendUserMapName(void)
 
         TRAVERSE_CONNECT(ch)
         {
-            if (ch != myconnectindex) mmulti_sendpacket(ch,packbuf,j);
+            if (ch != myconnectindex) mmulti_sendpacket(ch, (unsigned char*)packbuf,j);
             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
         }
     }
@@ -1239,7 +1239,7 @@ void Net_SendInitialSettings(void)
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, packbuf, 13);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 13);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }
@@ -1264,7 +1264,7 @@ void Net_NewGame(int volume, int level)
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i,packbuf,13);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf,13);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }
@@ -1295,7 +1295,7 @@ void Net_EndOfLevel(void)
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, packbuf, 3);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 3);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }
@@ -1345,12 +1345,12 @@ void Net_EnterMessage(void)
                 tempbuf[1] = 255;
                 TRAVERSE_CONNECT(ch)
                 {
-                    if (ch != myconnectindex) mmulti_sendpacket(ch,tempbuf,j+2);
+                    if (ch != myconnectindex) mmulti_sendpacket(ch, (unsigned char*)tempbuf,j+2);
                     if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                 }
                 G_AddUserQuote(recbuf);
                 quotebot += 8;
-                l = G_GameTextLen(USERQUOTE_LEFTOFFSET,stripcolorcodes(tempbuf,recbuf));
+                l = G_GameTextLen(USERQUOTE_LEFTOFFSET,OSD_StripColors(tempbuf,recbuf));
                 while (l > (ud.config.ScreenWidth - USERQUOTE_RIGHTOFFSET))
                 {
                     l -= (ud.config.ScreenWidth - USERQUOTE_RIGHTOFFSET);
@@ -1363,7 +1363,7 @@ void Net_EnterMessage(void)
                 tempbuf[1] = (char)g_chatPlayer;
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead))
                     g_chatPlayer = connecthead;
-                mmulti_sendpacket(g_chatPlayer,tempbuf,j+2);
+                mmulti_sendpacket(g_chatPlayer, (unsigned char*)tempbuf,j+2);
             }
 
             g_chatPlayer = -1;
@@ -1471,23 +1471,23 @@ void Net_CorrectPrediction(void)
     i = ((movefifoplc-1)&(MOVEFIFOSIZ-1));
     p = g_player[myconnectindex].ps;
 
-    if (p->posx == myxbak[i] && p->posy == myybak[i] && p->posz == myzbak[i]
+    if (p->pos.x == myxbak[i] && p->pos.y == myybak[i] && p->pos.z == myzbak[i]
             && p->q16horiz == myhorizbak[i] && p->q16ang == myangbak[i]) return;
 
     if (ud.config.PredictionDebug)
     {
         initprintf("Prediction Mismatch - ");
-        if (p->posx != myxbak[i])
+        if (p->pos.x != myxbak[i])
         {
-            initprintf("^01xpos^12(^02%d^12/^08%d^12) ", myxbak[i], p->posx);
+            initprintf("^01xpos^12(^02%d^12/^08%d^12) ", myxbak[i], p->pos.x);
         }
-        if (p->posy != myybak[i])
+        if (p->pos.y != myybak[i])
         {
-            initprintf("^01ypos^12(^02%d^12/^08%d^12) ", myybak[i], p->posy);
+            initprintf("^01ypos^12(^02%d^12/^08%d^12) ", myybak[i], p->pos.y);
         }
-        if (p->posz != myzbak[i])
+        if (p->pos.z != myzbak[i])
         {
-            initprintf("^01zpos^12(^02%d^12/^08%d^12) ", myzbak[i], p->posz);
+            initprintf("^01zpos^12(^02%d^12/^08%d^12) ", myzbak[i], p->pos.z);
         }
         if (p->q16horiz != myhorizbak[i])
         {
@@ -1500,15 +1500,15 @@ void Net_CorrectPrediction(void)
         initprintf("\n");
     }
 
-    myx = p->posx;
-    omyx = p->oposx;
-    myxvel = p->posxv;
-    myy = p->posy;
-    omyy = p->oposy;
-    myyvel = p->posyv;
-    myz = p->posz;
-    omyz = p->oposz;
-    myzvel = p->poszv;
+    myx = p->pos.x;
+    omyx = p->opos.x;
+    myxvel = p->vel.x;
+    myy = p->pos.y;
+    omyy = p->opos.y;
+    myyvel = p->vel.y;
+    myz = p->pos.z;
+    omyz = p->opos.z;
+    myzvel = p->vel.z;
     myang = p->q16ang;
     omyang = p->oq16ang;
     mycursectnum = p->cursectnum;
@@ -1529,9 +1529,9 @@ void Net_CorrectPrediction(void)
 
 void Net_ResetPrediction(void)
 {
-    myx = omyx = g_player[myconnectindex].ps->posx;
-    myy = omyy = g_player[myconnectindex].ps->posy;
-    myz = omyz = g_player[myconnectindex].ps->posz;
+    myx = omyx = g_player[myconnectindex].ps->pos.x;
+    myy = omyy = g_player[myconnectindex].ps->pos.y;
+    myz = omyz = g_player[myconnectindex].ps->pos.z;
     myxvel = myyvel = myzvel = 0;
     myang = omyang = g_player[myconnectindex].ps->q16ang;
     myhoriz = omyhoriz = g_player[myconnectindex].ps->q16horiz;
@@ -1584,7 +1584,7 @@ void Net_DoPrediction(void)
     omyz = myz;
     omyang = myang;
 
-    getzrange(myx,myy,myz,psect,&cz,&hz,&fz,&lz,163L,CLIPMASK0);
+    getzrange_old(myx,myy,myz,psect,&cz,&hz,&fz,&lz,163L,CLIPMASK0);
 
     j = getflorzofslope(psect,myx,myy);
 
@@ -1653,11 +1653,11 @@ void Net_DoPrediction(void)
                 if (klabs(myz-fz) > (PHEIGHT>>1))
                     myz += 348;
             }
-            clipmove(&myx,&myy,&myz,&mycursectnum,0,0,164L,(4L<<8),(4L<<8),CLIPMASK0);
+            clipmove_old(&myx,&myy,&myz,&mycursectnum,0,0,164L,(4L<<8),(4L<<8),CLIPMASK0);
         }
 
         updatesector(myx,myy,&mycursectnum);
-        pushmove(&myx,&myy,&myz,&mycursectnum,128L,(4L<<8),(20L<<8),CLIPMASK0);
+        pushmove_old(&myx,&myy,&myz,&mycursectnum,128L,(4L<<8),(20L<<8),CLIPMASK0);
 
         myhoriz = F16(100);
         myhorizoff = 0;
@@ -1916,8 +1916,8 @@ FAKEHORIZONLY:
     if (psectlotag == 1 || spritebridge == 1) i = (4L<<8);
     else i = (20L<<8);
 
-    clipmove(&myx,&myy,&myz,&mycursectnum,myxvel,myyvel,164L,4L<<8,i,CLIPMASK0);
-    pushmove(&myx,&myy,&myz,&mycursectnum,164L,4L<<8,4L<<8,CLIPMASK0);
+    clipmove_old(&myx,&myy,&myz,&mycursectnum,myxvel,myyvel,164L,4L<<8,i,CLIPMASK0);
+    pushmove_old(&myx,&myy,&myz,&mycursectnum,164L,4L<<8,4L<<8,CLIPMASK0);
 
     if (p->jetpack_on == 0 && psectlotag != 1 && psectlotag != 2 && shrunk)
     {
@@ -2040,7 +2040,7 @@ void waitforeverybody(void)
     if ((g_networkBroadcastMode == NETMODE_P2P) || ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)))
         TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, packbuf, 1);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 1);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 
@@ -2055,7 +2055,7 @@ void waitforeverybody(void)
             rotatesprite(160 << 16, (151) << 16, 30 << 11, 0, PLUTOPAKSPRITE + 1, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
 
         gametext(160, 190, "WAITING FOR PLAYERS", 14, 2);
-        nextpage();
+        videoNextPage();
     }
 
     while (1)
@@ -2082,7 +2082,7 @@ void waitforeverybody(void)
                 TRAVERSE_CONNECT(i)
             {
                 packbuf[0] = PACKET_TYPE_PLAYER_READY;
-                if (i != myconnectindex) mmulti_sendpacket(i, packbuf, 1);
+                if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 1);
             }
 
             P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);
@@ -2099,7 +2099,7 @@ void allowtimetocorrecterrorswhenquitting(void)
 
     for (j=MAXPLAYERS-1;j>=0;j--)
     {
-        oldtotalclock = totalclock;
+        oldtotalclock = (int32_t)totalclock;
 
         while (totalclock < oldtotalclock+TICSPERFRAME)
         {
@@ -2111,7 +2111,7 @@ void allowtimetocorrecterrorswhenquitting(void)
         packbuf[0] = PACKET_TYPE_NULL_PACKET;
         TRAVERSE_CONNECT(i)
         {
-            if (i != myconnectindex) mmulti_sendpacket(i,packbuf,1);
+            if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf,1);
             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
         }
     }
