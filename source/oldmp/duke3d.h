@@ -317,7 +317,7 @@ typedef struct {
     int AutoAim;
     int ShowOpponentWeapons;
     int MouseDeadZone,MouseBias;
-    int SmoothInput;
+    //int SmoothInput;
 
     // JBF 20031211: Store the input settings because
     // (currently) jmact can't regurgitate them
@@ -1150,12 +1150,12 @@ extern char *team_names[];
 
 // key bindings stuff
 typedef struct {
-    char *name;
+    const char *name;
     int id;
 } keydef_t;
 
 extern keydef_t keynames[];
-extern char *mousenames[];
+extern const char *mousenames[];
 
 extern char* duke3dgrp;
 extern const char* duke3dgrpstring;
