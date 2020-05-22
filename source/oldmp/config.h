@@ -43,5 +43,6 @@ const char* CONFIG_AnalogNumToName(int32_t func);
 int32_t CONFIG_AnalogNameToNum(const char* func);
 
 char* CONFIG_FunctionNumToName(int32_t func);
+int32_t CONFIG_FunctionNameToNum(const char* func);
 
 #endif
