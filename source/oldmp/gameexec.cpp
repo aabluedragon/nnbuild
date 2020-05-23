@@ -2267,7 +2267,7 @@ static int X_DoExecute(void)
             G_DoInterpolations(smoothratio);
 
             if (((gotpic[MIRROR>>3]&(1<<(MIRROR&7))) > 0)
-#if defined(POLYMER) && defined(USE_OPENGL)
+#if 0 //POLYMER USE_OPENGL
                     && (videoGetRenderMode() != 4)
 #endif
                )
@@ -4630,6 +4630,7 @@ void G_SaveMapState(mapstate_t *save)
         Bmemcpy(&save->cloudy[0],&cloudy[0],sizeof(cloudy));
 
         // OLDMP FIXME
+        Bmemcpy(&save->g_pskyidx, &g_pskyidx, sizeof(g_pskyidx));
         //Bmemcpy(&save->pskyoff[0],&pskyoff[0],sizeof(pskyoff));
         //Bmemcpy(&save->pskybits,&pskybits,sizeof(pskybits));
 
@@ -4727,6 +4728,7 @@ void G_RestoreMapState(mapstate_t *save)
         Bmemcpy(&cloudy[0],&save->cloudy[0],sizeof(cloudy));
 
         // OLDMP FIXME
+        Bmemcpy(&g_pskyidx, &save->g_pskyidx, sizeof(g_pskyidx));
         //Bmemcpy(&pskyoff[0],&save->pskyoff[0],sizeof(pskyoff));
         //Bmemcpy(&pskybits,&save->pskybits,sizeof(pskybits));
 

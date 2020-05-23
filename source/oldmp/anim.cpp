@@ -237,11 +237,10 @@ void G_PlayAnim(const char *fn, char t)
 
     ANIM_LoadAnim((uint8_t*)animbuf, length);
     numframes = ANIM_NumFrames();
-    anim_pal = ANIM_GetPalette();
 
-    basepaltable[ANIMPAL] = anim_pal;
     //setpalette(0L,256L,tempbuf);
     //videoSetPalette(ud.brightness>>2,tempbuf,2);
+    paletteSetColorTable(ANIMPAL, ANIM_GetPalette());
     P_SetGamePalette(g_player[myconnectindex].ps, ANIMPAL, 10);
 
 #if defined(USE_OPENGL)

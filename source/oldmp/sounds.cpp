@@ -29,9 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osd.h"
 #include "sounds.h"
 
-#ifdef WIN32
-#include "winlayer.h"
-#endif
+#include "renderlayer.h"
 
 int32_t g_numEnvSoundsPlaying,g_highestSoundIdx = 0;
 
@@ -59,7 +57,7 @@ void S_SoundStartup(void)
 
     initprintf("Initializing sound... ");
 
-    if (FX_Init(fxdevicetype, ud.config.NumVoices, ud.config.NumChannels, ud.config.NumBits, ud.config.MixRate, initdata) != FX_Ok)
+    if (FX_Init(ud.config.NumVoices, ud.config.NumChannels, ud.config.MixRate, initdata) != FX_Ok)
     {
         initprintf("failed! %s\n", FX_ErrorString(FX_Error));
         return;
@@ -84,7 +82,7 @@ void S_SoundStartup(void)
     }
 
     FX_SetVolume(ud.config.FXVolume);
-    FX_SetReverseStereo(ud.config.ReverseStereo);
+    //FX_SetReverseStereo(ud.config.ReverseStereo);
     FX_SetCallBack(S_Callback);
     FX_SetPrintf(initprintf);
     mutex_init(&s_mutex);
@@ -112,7 +110,7 @@ void S_MusicStartup(void)
 
     initprintf("Initializing music...\n");
 
-    if (MUSIC_Init(ud.config.MusicDevice, 0) == MUSIC_Ok || MUSIC_Init((ud.config.MusicDevice = 0), 0) == MUSIC_Ok)
+    if (MUSIC_Init(ud.config.MusicDevice) == MUSIC_Ok || MUSIC_Init((ud.config.MusicDevice = 0)) == MUSIC_Ok)
     {
         MUSIC_SetVolume(ud.config.MusicVolume);
         return;
@@ -249,14 +247,14 @@ int32_t S_PlayMusic(const char *fn, const int32_t sel)
 
     if (!Bmemcmp(MusicPtr, "MThd", 4))
     {
-        MUSIC_PlaySong(MusicPtr, MUSIC_LoopSong);
+        MUSIC_PlaySong(MusicPtr, MusicLen, MUSIC_LoopSong, fn);
         MusicIsWaveform = 0;
     }
     else
     {
-        if ((MusicVoice = FX_PlayLoopedAuto(MusicPtr, MusicLen, 0, 0, 0, ud.config.MusicVolume,
-                                            ud.config.MusicVolume, ud.config.MusicVolume,
-                                            FX_MUSIC_PRIORITY, MUSIC_ID)) > FX_Ok)
+        if ((MusicVoice = FX_Play(MusicPtr, MusicLen, 0, 0, 0, ud.config.MusicVolume, ud.config.MusicVolume, ud.config.MusicVolume,
+            FX_MUSIC_PRIORITY, fix16_one, MUSIC_ID)) > FX_Ok)
+
             MusicIsWaveform = 1;
     }
     return (alt != 0);
@@ -309,8 +307,8 @@ void S_Cleanup(void)
         // negative index is RTS playback
         if ((int32_t)num < 0)
         {
-            if (lumplockbyte[-(int32_t)num] >= 200)
-                lumplockbyte[-(int32_t)num]--;
+            if (rts_lumplockbyte[-(int32_t)num] >= 200)
+                rts_lumplockbyte[-(int32_t)num]--;
             continue;
         }
 
@@ -372,7 +370,7 @@ int32_t S_LoadSound(uint32_t num)
 
     g_soundlocks[num] = 255;
 
-    cacheAllocateBlock((intptr_t *)&g_sounds[num].ptr, l, (char *)&g_soundlocks[num]);
+    g_cache.allocateBlock((intptr_t *)&g_sounds[num].ptr, l, (char *)&g_soundlocks[num]);
     l = kread(fp, g_sounds[num].ptr, l);
     kclose(fp);
 
@@ -662,13 +660,13 @@ int32_t S_PlaySound3D(int32_t num, int32_t i, const vec3_t *pos)
             return -1;
         }
 
-        voice = FX_PlayLoopedAuto(g_sounds[num].ptr, g_sounds[num].soundsiz, 0, -1,
-                                  pitch,sndist>>6,sndist>>6,0,g_sounds[num].pr,(num * MAXSOUNDINSTANCES) + j);
+        voice = FX_Play3D(g_sounds[num].ptr, g_sounds[num].soundsiz, FX_LOOP,
+            pitch, sndang >> 4, sndist >> 6, g_sounds[num].pr, fix16_one, (num * MAXSOUNDINSTANCES) + j);
     }
     else
     {
-        voice = FX_PlayAuto3D(g_sounds[ num ].ptr, g_sounds[num].soundsiz, pitch,sndang>>4,sndist>>6, g_sounds[num].pr,
-                              (num * MAXSOUNDINSTANCES) + j);
+        voice = FX_Play3D(g_sounds[num].ptr, g_sounds[num].soundsiz, FX_ONESHOT,
+            pitch, sndang >> 4, sndist >> 6, g_sounds[num].pr, fix16_one, (num * MAXSOUNDINSTANCES) + j);
     }
 
     if (voice <= FX_Ok)
@@ -733,14 +731,6 @@ int32_t S_PlaySound(int32_t num)
     j = find_free_slot(num);
 
     if (j >= MAXSOUNDINSTANCES) // no slots available, so let's see if one opens up after multivoc kills a voice
-        doretry = 1;
-
-    voice = (g_sounds[num].m&1) ?
-            FX_PlayLoopedAuto(g_sounds[num].ptr, g_sounds[num].soundsiz, 0, -1,
-                              pitch,LOUDESTVOLUME,LOUDESTVOLUME,LOUDESTVOLUME,g_sounds[num].soundsiz, (num * MAXSOUNDINSTANCES) + j) :
-            FX_PlayAuto3D(g_sounds[ num ].ptr, g_sounds[num].soundsiz, pitch,0,255-LOUDESTVOLUME,g_sounds[num].pr, (num * MAXSOUNDINSTANCES) + j);
-
-    if (voice <= FX_Ok)
     {
 #ifdef CACHING_ISNT_HOT_FECES
         g_soundlocks[num]--;
@@ -748,19 +738,19 @@ int32_t S_PlaySound(int32_t num)
         return -1;
     }
 
-    if (doretry)
+
+    voice = (g_sounds[num].m & 1) ?
+            FX_Play(g_sounds[num].ptr, g_sounds[num].soundsiz, 0, -1,
+                              pitch, LOUDESTVOLUME, LOUDESTVOLUME, LOUDESTVOLUME, g_sounds[num].soundsiz, fix16_one, (num * MAXSOUNDINSTANCES) + j) :
+            FX_Play3D(g_sounds[num].ptr, g_sounds[num].soundsiz, FX_ONESHOT,
+                              pitch, 0, 255 - LOUDESTVOLUME, g_sounds[num].pr, fix16_one, (num * MAXSOUNDINSTANCES) + j);
+
+    if (voice <= FX_Ok)
     {
-        S_Cleanup();
-
-        j = find_free_slot(num);
-
-        if (j >= MAXSOUNDINSTANCES) // still no slots available
-        {
-            FX_SetVoiceCallback(voice, num + (MAXSOUNDS*MAXSOUNDINSTANCES));
-            return voice;
-        }
-
-        FX_SetVoiceCallback(voice, (num * MAXSOUNDINSTANCES) + j);
+#ifdef CACHING_ISNT_HOT_FECES
+        g_soundlocks[num]--;
+#endif
+        return -1;
     }
 
     g_sounds[num].num++;
@@ -904,7 +894,7 @@ void S_Update(void)
     while (num--);
 }
 
-void S_Callback(uint32_t num)
+void S_Callback(intptr_t num)
 {
     if ((int32_t)num == MUSIC_ID)
         return;

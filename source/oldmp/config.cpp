@@ -30,7 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <time.h>
 */
 
-#include "baselayer.h"
+#include "renderlayer.h"
 #include "duke3d.h"
 #include "scriplib.h"
 #include "osd.h"
@@ -204,7 +204,6 @@ void CONFIG_SetDefaults(void)
     ud.config.MixRate = 48000;
 #endif
     ud.config.MouseBias = 0;
-    ud.config.MouseDeadZone = 0;
     ud.config.MusicDevice = 0;
     ud.config.MusicToggle = 1;
     ud.config.MusicVolume = 200;
@@ -212,12 +211,12 @@ void CONFIG_SetDefaults(void)
     ud.config.NumBits = 16;
     ud.config.NumChannels = 2;
     ud.config.NumVoices = 96;
-    ud.config.ReverseStereo = 0;
+    //ud.config.ReverseStereo = 0;
     ud.config.RunMode = ud.auto_run = 1;
     ud.config.ShowOpponentWeapons = 0;
-    ud.config.SmoothInput = 0;
+    //ud.config.SmoothInput = 0;
     ud.config.SoundToggle = 1;
-    ud.config.CheckForUpdates = 0;
+    //ud.config.CheckForUpdates = 0;
     ud.config.PredictionDebug = 0;
     ud.althud = 1;
     ud.automsg = 0;
@@ -614,7 +613,6 @@ extern char *duke3dgrp;
 extern palette_t CrosshairColors;
 extern palette_t DefaultCrosshairColors;
 extern char mod_dir[BMAX_PATH];
-extern int r_maxfps;
 extern int g_noSetup;
 
 int32_t CONFIG_ReadSetup(void)
@@ -679,16 +677,10 @@ int32_t CONFIG_ReadSetup(void)
 
         SCRIPT_GetString(ud.config.scripthandle, "Comm Setup","RTSName",&ud.rtsname[0]);
 
-#ifndef RANCID_NETWORKING
-        // The packetrate mechanism is specific to the eduke32 networking code
-        SCRIPT_GetNumber(ud.config.scripthandle, "Comm Setup", "Rate",(int32_t *)&packetrate);
-        packetrate = min(max(packetrate,50),1000);
-#endif
-
         SCRIPT_GetNumber(ud.config.scripthandle, "Setup","ConfigVersion",&ud.configversion);
         SCRIPT_GetNumber(ud.config.scripthandle, "Setup","ForceSetup",&ud.config.ForceSetup);
 
-#ifdef _WIN32
+#ifdef STARTUP_SETUP_WINDOW
         if (g_noSetup == 0 && mod_dir[0] == '/')
         {
             struct stat st;
@@ -900,7 +892,7 @@ int32_t CONFIG_ReadSetup(void)
         SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "NumBits",&ud.config.NumBits);
         SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "NumChannels",&ud.config.NumChannels);
         SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "NumVoices",&ud.config.NumVoices);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "ReverseStereo",&ud.config.ReverseStereo);
+        //SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "ReverseStereo",&ud.config.ReverseStereo);
         SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "SoundToggle",&ud.config.SoundToggle);
 
         {
@@ -923,7 +915,6 @@ int32_t CONFIG_ReadSetup(void)
         }
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","MouseBias",&ud.config.MouseBias);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Controls","MouseDeadZone",&ud.config.MouseDeadZone);
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","RunKeyBehaviour",&ud.runkey_mode);   // JBF 20031125
 
         /*
@@ -942,8 +933,8 @@ int32_t CONFIG_ReadSetup(void)
         }
 
 #ifdef _WIN32
-        SCRIPT_GetNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", &ud.config.CheckForUpdates);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Updates", "LastUpdateCheck", &ud.config.LastUpdateCheck);
+        //SCRIPT_GetNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", &ud.config.CheckForUpdates);
+        //SCRIPT_GetNumber(ud.config.scripthandle, "Updates", "LastUpdateCheck", &ud.config.LastUpdateCheck);
 #endif
 
     }
@@ -1020,7 +1011,6 @@ void CONFIG_WriteSetup(void)
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","MouseAimingFlipped",ud.mouseflip,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","MouseAiming",ud.mouseaiming,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","MouseBias",ud.config.MouseBias,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","MouseDeadZone",ud.config.MouseDeadZone,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","RunKeyBehaviour",ud.runkey_mode,false,false);
     //SCRIPT_PutNumber(ud.config.scripthandle, "Controls","SmoothInput",ud.config.SmoothInput,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","UseJoystick",ud.config.UseJoystick,false,false);
@@ -1142,13 +1132,13 @@ void CONFIG_WriteSetup(void)
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "NumChannels",ud.config.NumChannels,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "NumBits",ud.config.NumBits,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "MixRate",ud.config.MixRate,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "ReverseStereo",ud.config.ReverseStereo,false,false);
+    //SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "ReverseStereo",ud.config.ReverseStereo,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "SoundToggle",ud.config.SoundToggle,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "VoiceToggle",ud.config.VoiceToggle,false,false);
 
 #ifdef _WIN32
-    SCRIPT_PutNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", ud.config.CheckForUpdates, false, false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Updates", "LastUpdateCheck", ud.config.LastUpdateCheck, false, false);
+    //SCRIPT_PutNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", ud.config.CheckForUpdates, false, false);
+    //SCRIPT_PutNumber(ud.config.scripthandle, "Updates", "LastUpdateCheck", ud.config.LastUpdateCheck, false, false);
 #endif
 
     // JBF 20031211
@@ -1219,15 +1209,10 @@ void CONFIG_WriteSetup(void)
     SCRIPT_PutString(ud.config.scripthandle, "Comm Setup","PlayerName",&szPlayerName[0]);
     SCRIPT_PutString(ud.config.scripthandle, "Comm Setup","RTSName",&ud.rtsname[0]);
 
-#ifndef RANCID_NETWORKING
-    // The packetrate mechanism is specific to the eduke32 networking code
-    SCRIPT_PutNumber(ud.config.scripthandle, "Comm Setup", "Rate", packetrate, false, false);
-#endif
-
 
     SCRIPT_PutString(ud.config.scripthandle, "Setup","SelectedGRP",&duke3dgrp[0]);
 
-#ifdef _WIN32
+#ifdef STARTUP_SETUP_WINDOW
     if (g_noSetup == 0)
         SCRIPT_PutString(ud.config.scripthandle, "Setup","ModDir",&mod_dir[0]);
 #endif

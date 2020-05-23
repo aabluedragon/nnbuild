@@ -47,7 +47,7 @@ extern const char *s_buildDate;
 #include "compat.h"
 #include "a.h"
 #include "build.h"
-#ifdef POLYMER
+#if 0 //POLYMER
 # include "polymer.h"
 #endif
 #include "cache1d.h"
@@ -316,7 +316,7 @@ typedef struct {
     int RunMode;
     int AutoAim;
     int ShowOpponentWeapons;
-    int MouseDeadZone,MouseBias;
+    int MouseBias;
     //int SmoothInput;
 
     // JBF 20031211: Store the input settings because
@@ -350,7 +350,7 @@ typedef struct {
     int NumBits;
     int MixRate;
     
-    int ReverseStereo;
+    //int ReverseStereo;
 
     //
     // Screen variables
@@ -368,7 +368,7 @@ typedef struct {
     int setupread;
 
     // Misc
-    int CheckForUpdates;
+    //int CheckForUpdates;
     int LastUpdateCheck;
     int useprecache;
     int PredictionDebug;
@@ -588,7 +588,7 @@ typedef struct {
     short ang, oldang, angdir, angdif;
 } spriteinterpolate;
 
-spriteinterpolate sprpos[MAXSPRITES];
+extern spriteinterpolate sprpos[MAXSPRITES];
 
 typedef struct {
     int floorz,ceilingz,lastvx,lastvy,bposx,bposy,bposz;
@@ -674,13 +674,6 @@ extern char g_numVolumes;
 
 extern int g_lastSaveSlot;
 extern int g_restorePalette;
-#ifndef RANCID_NETWORKING
-extern int packetrate;
-#endif
-
-#define BASEPALCOUNT 7
-
-extern uint8_t water_pal[768], slime_pal[768], title_pal[768], dre_alms[768], ending_pal[768], *anim_pal;
 
 typedef enum basepal_ {
     BASEPAL = 0,
@@ -688,17 +681,17 @@ typedef enum basepal_ {
     SLIMEPAL,
     DREALMSPAL,
     TITLEPAL,
-    ENDINGPAL,
-    ANIMPAL
+    ENDINGPAL,  // 5
+    ANIMPAL,
+    BASEPALCOUNT
 } basepal_t;
 
 extern int cachecount;
 extern char boardfilename[BMAX_PATH];
 extern char currentboardfilename[BMAX_PATH];
-extern char cachedebug,g_earthquakeTime;
+extern char g_earthquakeTime;
 // 0: master/slave, 1: peer-to-peer
 extern int g_networkBroadcastMode;
-extern char lumplockbyte[11];
 
 extern short g_skillSoundID;
 extern short BlimpSpawnSprites[15];
@@ -1105,6 +1098,7 @@ typedef struct {
     short g_mirrorWall[64], g_mirrorSector[64], g_mirrorCount;
     char show2dsector[(MAXSECTORS+7)>>3];
     short g_numClouds,clouds[128],cloudx[128],cloudy[128];
+    int g_pskyidx;
     ActorData_t ActorExtra[MAXSPRITES];
     short pskyoff[MAXPSKYTILES], pskybits;
 

@@ -107,7 +107,7 @@ extern "C" {
 
 // DEFAULT mouse sensitivity scale
 
-#define DEFAULTMOUSESENSITIVITY 18
+#define DEFAULTMOUSESENSITIVITY 4
 
 enum
    {

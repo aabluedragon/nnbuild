@@ -72,7 +72,7 @@ extern int32_t g_numEnvSoundsPlaying,g_highestSoundIdx;
 
 extern int32_t A_CheckSoundPlaying(int32_t i,int32_t num);
 extern int32_t A_PlaySound(uint32_t num,int32_t i);
-extern void S_Callback(uint32_t num);
+extern void S_Callback(intptr_t num);
 extern int32_t S_CheckSoundPlaying(int32_t soundNum);
 extern void S_Cleanup(void);
 extern void S_ClearSoundLocks(void);

@@ -30,7 +30,6 @@ static int g_chatPlayer = -1;
 static char recbuf[180];
 
 extern int qe,cp;
-extern int numlumps; // rts.c
 extern char *rtsptr; // game.c
 extern void computergetinput(int snum, input_t *syn);
 
@@ -913,7 +912,7 @@ void Net_ParsePackets(void)
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                         if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
-                if (numlumps == 0) break;
+                if (rts_numlumps == 0) break;
 
                 if (ud.config.SoundToggle == 0 || ud.lockout == 1 || ud.config.FXDevice < 0 || !(ud.config.VoiceToggle & 4))
                     break;

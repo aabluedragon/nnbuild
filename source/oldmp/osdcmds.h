@@ -14,8 +14,8 @@ extern float r_ambientlight,r_ambientlightrecip;
 
 typedef struct
 {
-    char *name;
-    char *helpstr;
+    const char *name;
+    const char *helpstr;
     void *var;
     int type;       // 0 = integer, 1 = unsigned integer, 2 = boolean, 3 = string, |128 = not in multiplayer, |256 = update multi
     int extra;      // for string, is the length

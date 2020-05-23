@@ -129,7 +129,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
 
                 TRAVERSE_CONNECT(i)
                 {
-                    if (i != myconnectindex) mmulti_sendpacket(i,tempbuf,4);
+                    if (i != myconnectindex) mmulti_sendpacket(i,(unsigned char*)tempbuf,4);
                     if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                 }
             }
@@ -170,7 +170,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
-static CACHE1D_FIND_REC *findfiles = NULL;
+static BUILDVFS_FIND_REC *findfiles = NULL;
 static int numfiles = 0;
 
 static void clearfilenames(void)
@@ -180,12 +180,12 @@ static void clearfilenames(void)
     numfiles = 0;
 }
 
-static int getfilenames(char *path)
+static int getfilenames(const char *path)
 {
-    CACHE1D_FIND_REC *r;
+    BUILDVFS_FIND_REC *r;
 
     clearfilenames();
-    findfiles = klistpath(path,"*.MAP",CACHE1D_FIND_FILE);
+    findfiles = klistpath(path,"*.MAP",BUILDVFS_FIND_FILE);
     for (r = findfiles; r; r=r->next) numfiles++;
     return(0);
 }
@@ -193,7 +193,7 @@ static int getfilenames(char *path)
 static int osdcmd_map(const osdfuncparm_t *parm)
 {
     int i;
-    CACHE1D_FIND_REC *r;
+    BUILDVFS_FIND_REC *r;
     char filename[256];
 
     if (parm->numparms != 1)
@@ -287,7 +287,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
 
                 TRAVERSE_CONNECT(i)
                 {
-                    if (i != myconnectindex) mmulti_sendpacket(i,tempbuf,4);
+                    if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf,4);
                     if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                 }
             }
@@ -349,7 +349,8 @@ static int osdcmd_noclip(const osdfuncparm_t *parm)
 
 static int osdcmd_fileinfo(const osdfuncparm_t *parm)
 {
-    unsigned int crc, length;
+    unsigned int length;
+    unsigned int crc = 0;
     int i,j;
     char buf[256];
 
@@ -363,14 +364,12 @@ static int osdcmd_fileinfo(const osdfuncparm_t *parm)
 
     length = kfilelength(i);
 
-    crc32init(&crc);
     do
     {
         j = kread(i,buf,256);
-        crc32block(&crc,(unsigned char *)buf,j);
+        crc = Bcrc32((unsigned char*)buf, j, crc);
     }
     while (j == 256);
-    crc32finish(&crc);
 
     kclose(i);
 
@@ -382,6 +381,7 @@ static int osdcmd_fileinfo(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
+#if 0
 static int osdcmd_rate(const osdfuncparm_t *parm)
 {
 #ifndef RANCID_NETWORKING
@@ -406,6 +406,7 @@ static int osdcmd_rate(const osdfuncparm_t *parm)
     UNREFERENCED_PARAMETER(parm);
     return OSDCMD_OK;
 }
+#endif
 
 static int osdcmd_fraglimit(const osdfuncparm_t *parm)
 {
@@ -437,7 +438,7 @@ static int osdcmd_fraglimit(const osdfuncparm_t *parm)
 
         TRAVERSE_CONNECT(i)
         {
-            if (i != myconnectindex) mmulti_sendpacket(i, tempbuf, 3);
+            if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf, 3);
             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
         }
     }
@@ -549,11 +550,11 @@ static int osdcmd_restartsound(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
-static int osdcmd_restartvid(const osdfuncparm_t *parm)
+int osdcmd_restartvid(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
-    resetvideomode();
-    if (setgamemode(ud.config.ScreenMode,ud.config.ScreenWidth,ud.config.ScreenHeight,ud.config.ScreenBPP))
+    videoResetMode();
+    if (videoSetGameMode(ud.config.ScreenMode,ud.config.ScreenWidth,ud.config.ScreenHeight,ud.config.ScreenBPP, ud.detail))
         G_GameExit("restartvid: Reset failed...\n");
     onvideomodechange(ud.config.ScreenBPP>8);
     G_UpdateScreenArea();
@@ -586,10 +587,10 @@ static int osdcmd_vidmode(const osdfuncparm_t *parm)
         break;
     }
 
-    if (setgamemode(newfs,newwidth,newheight,newbpp))
+    if (videoSetGameMode(newfs,newwidth,newheight,newbpp,ud.detail))
     {
         initprintf("vidmode: Mode change failed!\n");
-        if (setgamemode(ud.config.ScreenMode, ud.config.ScreenWidth, ud.config.ScreenHeight, ud.config.ScreenBPP))
+        if (videoSetGameMode(ud.config.ScreenMode, ud.config.ScreenWidth, ud.config.ScreenHeight, ud.config.ScreenBPP, ud.detail))
             G_GameExit("vidmode: Reset failed!\n");
     }
     ud.config.ScreenBPP = newbpp;
@@ -623,7 +624,7 @@ static int osdcmd_setweaponscale(const osdfuncparm_t *parm)
         return OSDCMD_SHOWHELP;
     }
     else if (parm->numparms != 1) return OSDCMD_SHOWHELP;
-    ud.weaponscale = min(100,max(10,Batol(parm->parms[0])));
+    ud.weaponscale = min(100,max(10,Batoi(parm->parms[0])));
     OSD_Printf("hud_weaponscale %d\n", ud.weaponscale);
     return OSDCMD_OK;
 }
@@ -704,7 +705,7 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
     if (set & 4) sprite[idx].ang = ang;
     if (set & 8)
     {
-        if (setsprite(idx, x,y,z) < 0)
+        if (setspritez_old(idx, x,y,z) < 0)
         {
             OSD_Printf("spawn: Sprite can't be spawned into null space\n");
             deletesprite(idx);
@@ -729,12 +730,12 @@ static int osdcmd_setvar(const osdfuncparm_t *parm)
 
     strcpy(varname,parm->parms[1]);
     varval = Batol(varname);
-    i = HASH_find(&gamevarH,varname);
+    i = hash_find(&gamevarH,varname);
     if (i >= 0)
         varval=Gv_GetVar(i, g_player[myconnectindex].ps->i, myconnectindex);
 
     strcpy(varname,parm->parms[0]);
-    i = HASH_find(&gamevarH,varname);
+    i = hash_find(&gamevarH,varname);
     if (i >= 0)
         Gv_SetVar(i, varval, g_player[myconnectindex].ps->i, myconnectindex);
     return OSDCMD_OK;
@@ -754,7 +755,7 @@ static int osdcmd_addlogvar(const osdfuncparm_t *parm)
     }
 
     strcpy(varname,parm->parms[0]);
-    i = HASH_find(&gamevarH,varname);
+    i = hash_find(&gamevarH,varname);
     if (i >= 0)
         OSD_Printf("%s = %d\n", varname, Gv_GetVar(i, g_player[myconnectindex].ps->i, myconnectindex));
     return OSDCMD_OK;
@@ -783,12 +784,12 @@ static int osdcmd_setactorvar(const osdfuncparm_t *parm)
     varval = Batol(parm->parms[2]);
     strcpy(varname,parm->parms[2]);
     varval = Batol(varname);
-    i = HASH_find(&gamevarH,varname);
+    i = hash_find(&gamevarH,varname);
     if (i >= 0)
         varval=Gv_GetVar(i, g_player[myconnectindex].ps->i, myconnectindex);
 
     strcpy(varname,parm->parms[1]);
-    i = HASH_find(&gamevarH,varname);
+    i = hash_find(&gamevarH,varname);
     if (i >= 0)
         Gv_SetVar(i, varval, ID, -1);
     return OSDCMD_OK;
@@ -865,15 +866,14 @@ cvarmappings cvar[] =
     { "cl_angleinterpolation", "cl_angleinterpolation: enable/disable angle interpolation", (void*)&ud.angleinterpolation, CVAR_INT, 0, 0, 256 },
 
     { "in_mousebias", "in_mousebias: emulates the original mouse code's weighting of input towards whichever axis is moving the most at any given time", (void*)&ud.config.MouseBias, CVAR_INT, 0, 0, 32 },
-    { "in_mousedeadzone", "in_mousedeadzone: amount of mouse movement to filter out", (void*)&ud.config.MouseDeadZone, CVAR_INT, 0, 0, 512 },
-    { "in_mousesmoothing", "in_mousesmoothing: enable/disable mouse input smoothing", (void*)&ud.config.SmoothInput, CVAR_BOOL, 0, 0, 1 },
+    //{ "in_mousesmoothing", "in_mousesmoothing: enable/disable mouse input smoothing", (void*)&ud.config.SmoothInput, CVAR_BOOL, 0, 0, 1 },
 
-#if defined(POLYMOST) && defined(USE_OPENGL)
-    { "r_anamorphic", "r_anamorphic: enable/disable widescreen mode", (void*)&glwidescreen, CVAR_BOOL, 0, 0, 1 },
+#if defined(USE_OPENGL)
+    //{ "r_anamorphic", "r_anamorphic: enable/disable widescreen mode", (void*)&glwidescreen, CVAR_BOOL, 0, 0, 1 },
     { "r_projectionhack", "r_projectionhack: enable/disable projection hack", (void*)&glprojectionhacks, CVAR_INT, 0, 0, 2 },
-# ifdef POLYMER
+#if 0 //POLYMER
     // polymer cvars
-    { "pr_occlusionculling", "pr_occlusionculling: insert description that noone will ever read", (void*)&pr_occlusionculling, CVAR_INT, 0, 0, 512 },
+    //{ "pr_occlusionculling", "pr_occlusionculling: insert description that noone will ever read", (void*)&pr_occlusionculling, CVAR_INT, 0, 0, 512 },
     { "pr_fov", "pr_fov: sets the field of vision in build angle", (void*)&pr_fov, CVAR_INT, 0, 0, 1023},
     { "pr_billboardingmode", "pr_billboardingmode: face sprite display method. 0: classic mode; 1: polymost mode", (void*)&pr_billboardingmode, CVAR_INT, 0, 0, 1 },
     { "pr_verbosity", "pr_verbosity: verbosity level of the polymer renderer", (void*)&pr_verbosity, CVAR_INT, 0, 0, 3 },
@@ -896,7 +896,7 @@ cvarmappings cvar[] =
     { "snd_numbits", "snd_numbits: sound bits", (void*)&ud.config.NumBits, CVAR_INT, 0, 8, 16 },
     { "snd_numchannels", "snd_numchannels: the number of sound channels", (void*)&ud.config.NumChannels, CVAR_INT, 0, 0, 2 },
     { "snd_numvoices", "snd_numvoices: the number of concurrent sounds", (void*)&ud.config.NumVoices, CVAR_INT, 0, 0, 32 },
-    { "snd_reversestereo", "snd_reversestereo: reverses the stereo channels", (void*)&ud.config.ReverseStereo, CVAR_BOOL, 0, 0, 16 },
+    //{ "snd_reversestereo", "snd_reversestereo: reverses the stereo channels", (void*)&ud.config.ReverseStereo, CVAR_BOOL, 0, 0, 16 },
 };
 
 static int osdcmd_cvar_set(const osdfuncparm_t *parm)
@@ -908,6 +908,7 @@ static int osdcmd_cvar_set(const osdfuncparm_t *parm)
     {
         if (!Bstrcasecmp(parm->name, cvar[i].name))
         {
+#if 0
             if ((cvar[i].type & CVAR_NOMULTI) && numplayers > 1)
             {
                 // sound the alarm
@@ -915,10 +916,11 @@ static int osdcmd_cvar_set(const osdfuncparm_t *parm)
                 return OSDCMD_OK;
             }
             else
+#endif
                 switch (cvar[i].type&0x7f)
                 {
                 case CVAR_INT:
-                case CVAR_UNSIGNEDINT:
+                case CVAR_UINT:
                 case CVAR_BOOL:
                 {
                     int val;
@@ -970,11 +972,11 @@ static int osdcmd_sensitivity(const osdfuncparm_t *parm)
 {
     if (parm->numparms != 1)
     {
-        OSD_Printf("\"sensitivity\" is \"%d\"\n",CONTROL_GetMouseSensitivity());
+        OSD_Printf("\"sensitivity\" is \"%f\"\n",CONTROL_MouseSensitivity);
         return OSDCMD_SHOWHELP;
     }
-    CONTROL_SetMouseSensitivity(atoi(parm->parms[0]));
-    OSD_Printf("sensitivity %d\n",CONTROL_GetMouseSensitivity());
+    CONTROL_MouseSensitivity = atof(parm->parms[0]);
+    OSD_Printf("sensitivity %d\n", CONTROL_MouseSensitivity);
     return OSDCMD_OK;
 }
 
@@ -1062,7 +1064,7 @@ void onvideomodechange(int newmode)
         palid = g_player[screenpeek].ps->palette;
     }
 
-    videoSetPalette(ud.brightness >> 2, basepaltable[palid], 0);
+    videoSetPalette(ud.brightness >> 2, palid, 0);
     g_restorePalette = 1;
     g_crosshairSum = 0;
 }
@@ -1111,7 +1113,7 @@ static int osdcmd_name(const osdfuncparm_t *parm)
 
     Bstrcpy(tempbuf,parm->parms[0]);
 
-    while (Bstrlen(stripcolorcodes(namebuf,tempbuf)) > 10)
+    while (Bstrlen(OSD_StripColors(namebuf,tempbuf)) > 10)
         tempbuf[Bstrlen(tempbuf)-1] = '\0';
 
     Bstrncpy(szPlayerName,tempbuf,sizeof(szPlayerName)-1);
@@ -1124,11 +1126,16 @@ static int osdcmd_name(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
-static int osdcmd_button(const osdfuncparm_t *parm)
+static int osdcmd_button(osdcmdptr_t parm)
 {
-    char *p = (char *)parm->name+9;  // skip "gamefunc_"
-//    if (g_player[myconnectindex].ps->gm == MODE_GAME) // only trigger these if in game
-    extinput[CONFIG_FunctionNameToNum(p)] = 1; // FIXME
+    static char const s_gamefunc_[] = "gamefunc_";
+    int constexpr strlen_gamefunc_ = ARRAY_SIZE(s_gamefunc_) - 1;
+
+    char const* p = parm->name + strlen_gamefunc_;
+
+    //    if (g_player[myconnectindex].ps->gm == MODE_GAME) // only trigger these if in game
+    CONTROL_ButtonFlags[CONFIG_FunctionNameToNum(p)] = 1; // FIXME
+
     return OSDCMD_OK;
 }
 
@@ -1239,36 +1246,35 @@ keydef_t keynames[]=
     {0,0}
 };
 
-char *mousenames[] = { "mouse1", "mouse2", "mouse3", "mouse4", "mwheelup", "mwheeldn", "mouse5", "mouse6", "mouse7", "mouse8" };
-
-static int osdcmd_bind(const osdfuncparm_t *parm)
+const char* const ConsoleButtons[] =
 {
-    int i, j;
+    "mouse1", "mouse2", "mouse3", "mouse4", "mwheelup",
+    "mwheeldn", "mouse5", "mouse6", "mouse7", "mouse8"
+};
 
-    if (parm->numparms==1&&!Bstrcasecmp(parm->parms[0],"showkeys"))
+static int osdcmd_bind(osdcmdptr_t parm)
+{
+    if (parm->numparms == 1 && !Bstrcasecmp(parm->parms[0], "showkeys"))
     {
-        for (i=0;keynames[i].name;i++)OSD_Printf("%s\n",keynames[i].name);
-        for (i=0;i<MAXMOUSEBUTTONS;i++)OSD_Printf("%s\n",mousenames[i]);
+        for (auto& s : sctokeylut)
+            OSD_Printf("%s\n", s.key);
+        for (auto ConsoleButton : ConsoleButtons)
+            OSD_Printf("%s\n", ConsoleButton);
         return OSDCMD_OK;
     }
 
-    if (parm->numparms==0)
+    if (parm->numparms == 0)
     {
-        int j=0;
+        int j = 0;
 
         OSD_Printf("Current key bindings:\n");
-        for (i=0;i<MAXBOUNDKEYS;i++)
-            if (boundkeys[i].cmd[0] && boundkeys[i].key)
-            {
-                j++;
-                OSD_Printf("%-9s %s\"%s\"\n",boundkeys[i].key, boundkeys[i].repeat?"":"norepeat ", boundkeys[i].cmd);
-            }
 
-        for (i=0;i<MAXMOUSEBUTTONS;i++)
-            if (mousebind[i].cmd[0] && mousebind[i].key)
+        for (int i = 0; i < MAXBOUNDKEYS + MAXMOUSEBUTTONS; i++)
+            if (CONTROL_KeyIsBound(i))
             {
                 j++;
-                OSD_Printf("%-9s %s\"%s\"\n",mousebind[i].key, mousebind[i].repeat?"":"norepeat ",mousebind[i].cmd);
+                OSD_Printf("%-9s %s\"%s\"\n", CONTROL_KeyBinds[i].key, CONTROL_KeyBinds[i].repeat ? "" : "norepeat ",
+                    CONTROL_KeyBinds[i].cmdstr);
             }
 
         if (j == 0)
@@ -1277,116 +1283,167 @@ static int osdcmd_bind(const osdfuncparm_t *parm)
         return OSDCMD_OK;
     }
 
-    for (i=0;keynames[i].name;i++)
-        if (!Bstrcasecmp(parm->parms[0],keynames[i].name))
-            break;
+    int i, j, repeat;
 
-    if (!keynames[i].name)
+    for (i = 0; i < ARRAY_SSIZE(sctokeylut); i++)
     {
-        for (i=0;i<MAXMOUSEBUTTONS;i++)
-            if (!Bstrcasecmp(parm->parms[0],mousenames[i]))
+        if (!Bstrcasecmp(parm->parms[0], sctokeylut[i].key))
+            break;
+    }
+
+    // didn't find the key
+    if (i == ARRAY_SSIZE(sctokeylut))
+    {
+        for (i = 0; i < MAXMOUSEBUTTONS; i++)
+            if (!Bstrcasecmp(parm->parms[0], ConsoleButtons[i]))
                 break;
+
         if (i >= MAXMOUSEBUTTONS)
             return OSDCMD_SHOWHELP;
 
         if (parm->numparms < 2)
         {
-            OSD_Printf("%-9s %s\"%s\"\n",mousenames[i], mousebind[i].repeat?"":"norepeat ",mousebind[i].cmd);
+            if (CONTROL_KeyBinds[MAXBOUNDKEYS + i].cmdstr && CONTROL_KeyBinds[MAXBOUNDKEYS + i].key)
+                OSD_Printf("%-9s %s\"%s\"\n", ConsoleButtons[i], CONTROL_KeyBinds[MAXBOUNDKEYS + i].repeat ? "" : "norepeat ",
+                    CONTROL_KeyBinds[MAXBOUNDKEYS + i].cmdstr);
+            else OSD_Printf("%s is unbound\n", ConsoleButtons[i]);
             return OSDCMD_OK;
         }
 
         j = 1;
 
-        mousebind[i].repeat = 1;
-        if (parm->numparms >= 2 && !Bstrcasecmp(parm->parms[j],"norepeat"))
+        repeat = 1;
+        if (!Bstrcasecmp(parm->parms[j], "norepeat"))
         {
-            mousebind[i].repeat = 0;
+            repeat = 0;
             j++;
         }
 
-        Bstrcpy(tempbuf,parm->parms[j++]);
-        for (;j<parm->numparms;j++)
+        Bstrcpy(tempbuf, parm->parms[j++]);
+        for (; j < parm->numparms; j++)
         {
-            Bstrcat(tempbuf," ");
-            Bstrcat(tempbuf,parm->parms[j++]);
+            Bstrcat(tempbuf, " ");
+            Bstrcat(tempbuf, parm->parms[j++]);
         }
-        Bstrncpy(mousebind[i].cmd,tempbuf, MAXBINDSTRINGLENGTH-1);
 
-        mousebind[i].key=mousenames[i];
+        CONTROL_BindMouse(i, tempbuf, repeat, ConsoleButtons[i]);
+
         if (!OSD_ParsingScript())
-            OSD_Printf("%s\n",parm->raw);
+            OSD_Printf("%s\n", parm->raw);
         return OSDCMD_OK;
     }
 
     if (parm->numparms < 2)
     {
-        OSD_Printf("%-9s %s\"%s\"\n",keynames[i].name, boundkeys[keynames[i].id].repeat?"":"norepeat ", boundkeys[keynames[i].id].cmd);
+        if (CONTROL_KeyIsBound(sctokeylut[i].sc))
+            OSD_Printf("%-9s %s\"%s\"\n", sctokeylut[i].key, CONTROL_KeyBinds[sctokeylut[i].sc].repeat ? "" : "norepeat ",
+                CONTROL_KeyBinds[sctokeylut[i].sc].cmdstr);
+        else OSD_Printf("%s is unbound\n", sctokeylut[i].key);
+
         return OSDCMD_OK;
     }
 
     j = 1;
 
-    boundkeys[keynames[i].id].repeat = 1;
-    if (parm->numparms >= 2 && !Bstrcasecmp(parm->parms[j],"norepeat"))
+    repeat = 1;
+    if (!Bstrcasecmp(parm->parms[j], "norepeat"))
     {
-        boundkeys[keynames[i].id].repeat = 0;
+        repeat = 0;
         j++;
     }
 
-    Bstrcpy(tempbuf,parm->parms[j++]);
-    for (;j<parm->numparms;j++)
+    Bstrcpy(tempbuf, parm->parms[j++]);
+    for (; j < parm->numparms; j++)
     {
-        Bstrcat(tempbuf," ");
-        Bstrcat(tempbuf,parm->parms[j++]);
+        Bstrcat(tempbuf, " ");
+        Bstrcat(tempbuf, parm->parms[j++]);
     }
-    Bstrncpy(boundkeys[keynames[i].id].cmd,tempbuf, MAXBINDSTRINGLENGTH-1);
 
-    boundkeys[keynames[i].id].key=keynames[i].name;
+    CONTROL_BindKey(sctokeylut[i].sc, tempbuf, repeat, sctokeylut[i].key);
+
+    char* cp = tempbuf;
+
+    // Populate the keyboard config menu based on the bind.
+    // Take care of processing one-to-many bindings properly, too.
+    static char const s_gamefunc_[] = "gamefunc_";
+    int constexpr strlen_gamefunc_ = ARRAY_SIZE(s_gamefunc_) - 1;
+
+    while ((cp = Bstrstr(cp, s_gamefunc_)))
+    {
+        cp += strlen_gamefunc_;
+
+        char* semi = Bstrchr(cp, ';');
+
+        if (semi)
+            *semi = 0;
+
+        j = CONFIG_FunctionNameToNum(cp);
+
+        if (semi)
+            cp = semi + 1;
+
+        if (j != -1)
+        {
+            ud.config.KeyboardKeys[j][1] = ud.config.KeyboardKeys[j][0];
+            ud.config.KeyboardKeys[j][0] = sctokeylut[i].sc;
+            //            CONTROL_MapKey(j, sctokeylut[i].sc, ud.config.KeyboardKeys[j][0]);
+
+            if (j == gamefunc_Show_Console)
+                OSD_CaptureKey(sctokeylut[i].sc);
+        }
+    }
+
     if (!OSD_ParsingScript())
-        OSD_Printf("%s\n",parm->raw);
+        OSD_Printf("%s\n", parm->raw);
+
     return OSDCMD_OK;
 }
 
-static int osdcmd_unbindall(const osdfuncparm_t *parm)
+static int osdcmd_unbindall(osdcmdptr_t UNUSED(parm))
 {
-    int i;
+    UNREFERENCED_CONST_PARAMETER(parm);
 
-    UNREFERENCED_PARAMETER(parm);
+    for (int i = 0; i < MAXBOUNDKEYS; ++i)
+        CONTROL_FreeKeyBind(i);
 
-    for (i=0;i<MAXBOUNDKEYS;i++)
-        if (boundkeys[i].cmd[0])
-            boundkeys[i].cmd[0] = 0;
-    for (i=0;i<MAXMOUSEBUTTONS;i++)
-        if (mousebind[i].cmd[0])
-            mousebind[i].cmd[0] = 0;
-    OSD_Printf("unbound all keys\n");
+    for (int i = 0; i < MAXMOUSEBUTTONS; ++i)
+        CONTROL_FreeMouseBind(i);
+
+    for (auto& KeyboardKey : ud.config.KeyboardKeys)
+        KeyboardKey[0] = KeyboardKey[1] = 0xff;
+
+    if (!OSD_ParsingScript())
+        OSD_Printf("unbound all controls\n");
+
     return OSDCMD_OK;
 }
 
-static int osdcmd_unbind(const osdfuncparm_t *parm)
+static int osdcmd_unbind(osdcmdptr_t parm)
 {
-    int i;
+    if (parm->numparms != 1)
+        return OSDCMD_SHOWHELP;
 
-    if (parm->numparms < 1) return OSDCMD_SHOWHELP;
-    for (i=0;keynames[i].name;i++)
-        if (!Bstrcasecmp(parm->parms[0],keynames[i].name))
-            break;
-    if (!keynames[i].name)
+    for (auto& ConsoleKey : sctokeylut)
     {
-        for (i=0;i<MAXMOUSEBUTTONS;i++)
-            if (!Bstrcasecmp(parm->parms[0],mousenames[i]))
-                break;
-        if (i >= MAXMOUSEBUTTONS)
-            return OSDCMD_SHOWHELP;
-        mousebind[i].repeat = 0;
-        mousebind[i].cmd[0] = 0;
-        OSD_Printf("unbound %s\n",mousenames[i]);
-        return OSDCMD_OK;
+        if (ConsoleKey.key && !Bstrcasecmp(parm->parms[0], ConsoleKey.key))
+        {
+            CONTROL_FreeKeyBind(ConsoleKey.sc);
+            OSD_Printf("unbound key %s\n", ConsoleKey.key);
+            return OSDCMD_OK;
+        }
     }
-    boundkeys[keynames[i].id].repeat = 0;
-    boundkeys[keynames[i].id].cmd[0] = 0;
-    OSD_Printf("unbound key %s\n",keynames[i].name);
-    return OSDCMD_OK;
+
+    for (int i = 0; i < MAXMOUSEBUTTONS; i++)
+    {
+        if (!Bstrcasecmp(parm->parms[0], ConsoleButtons[i]))
+        {
+            CONTROL_FreeMouseBind(i);
+            OSD_Printf("unbound %s\n", ConsoleButtons[i]);
+            return OSDCMD_OK;
+        }
+    }
+
+    return OSDCMD_SHOWHELP;
 }
 
 static int osdcmd_quicksave(const osdfuncparm_t *parm)
@@ -1411,7 +1468,7 @@ static int osdcmd_screenshot(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
 //    KB_ClearKeysDown();
-    screencapture("duke0000.tga",0);
+    videoCaptureScreen("duke0000.tga",0);
     return OSDCMD_OK;
 }
 
@@ -1441,14 +1498,14 @@ static int osdcmd_vid_gamma(const osdfuncparm_t *parm)
 {
     if (parm->numparms != 1)
     {
-        OSD_Printf("\"vid_gamma\" is \"%.1f\"\n",vid_gamma);
+        OSD_Printf("\"vid_gamma\" is \"%.1f\"\n",g_videoGamma);
         return OSDCMD_SHOWHELP;
     }
-    vid_gamma = atof(parm->parms[0]);
-    ud.brightness = (int)(min(max((float)((vid_gamma-1.0)*10.0),0),15));
+    g_videoGamma = atof(parm->parms[0]);
+    ud.brightness = (int)(min(max((float)((g_videoGamma -1.0)*10.0),0.0f),15.0f));
     ud.brightness <<= 2;
     OSD_Printf("%s\n",parm->raw);
-    videoSetPalette(ud.brightness>>2, basepaltable[g_player[myconnectindex].ps->palette],0);
+    videoSetPalette(ud.brightness>>2, g_player[myconnectindex].ps->palette,0);
     return OSDCMD_OK;
 }
 
@@ -1456,12 +1513,12 @@ static int osdcmd_vid_brightness(const osdfuncparm_t *parm)
 {
     if (parm->numparms != 1)
     {
-        OSD_Printf("\"vid_brightness\" is \"%.1f\"\n",vid_brightness);
+        OSD_Printf("\"vid_brightness\" is \"%.1f\"\n",g_videoBrightness);
         return OSDCMD_SHOWHELP;
     }
-    vid_brightness = atof(parm->parms[0]);
+    g_videoBrightness = atof(parm->parms[0]);
     OSD_Printf("%s\n",parm->raw);
-    videoSetPalette(ud.brightness>>2, basepaltable[g_player[myconnectindex].ps->palette],0);
+    videoSetPalette(ud.brightness>>2, g_player[myconnectindex].ps->palette,0);
     return OSDCMD_OK;
 }
 
@@ -1469,12 +1526,12 @@ static int osdcmd_vid_contrast(const osdfuncparm_t *parm)
 {
     if (parm->numparms != 1)
     {
-        OSD_Printf("\"vid_contrast\" is \"%.1f\"\n",vid_contrast);
+        OSD_Printf("\"vid_contrast\" is \"%.1f\"\n",g_videoContrast);
         return OSDCMD_SHOWHELP;
     }
-    vid_contrast = atof(parm->parms[0]);
+    g_videoContrast = atof(parm->parms[0]);
     OSD_Printf("%s\n",parm->raw);
-    videoSetPalette(ud.brightness>>2, basepaltable[g_player[myconnectindex].ps->palette],0);
+    videoSetPalette(ud.brightness>>2, g_player[myconnectindex].ps->palette,0);
     return OSDCMD_OK;
 }
 
@@ -1487,7 +1544,7 @@ static int osdcmd_setcrosshairscale(const osdfuncparm_t *parm)
     }
     else if (parm->numparms != 1) return OSDCMD_SHOWHELP;
 
-    ud.crosshairscale = min(100,max(10,Batol(parm->parms[0])));
+    ud.crosshairscale = min(100,max(10,Batoi(parm->parms[0])));
     OSD_Printf("%s\n", parm->raw);
     return OSDCMD_OK;
 }
@@ -1521,7 +1578,7 @@ static int osdcmd_visibility(const osdfuncparm_t *parm)
         OSD_Printf("\"r_ambientlight\" is \"%.1f\"\n",r_ambientlight);
         return OSDCMD_SHOWHELP;
     }
-    f = max(0.05f,min(10.f,atof(parm->parms[0])));
+    f = max(0.05f,min(10.f,(float)Batof(parm->parms[0])));
     r_ambientlight = f;
     r_ambientlightrecip = 1.f/r_ambientlight;
     OSD_Printf("%s\n",parm->raw);
@@ -1530,14 +1587,14 @@ static int osdcmd_visibility(const osdfuncparm_t *parm)
 
 static int osdcmd_maxfps(const osdfuncparm_t *parm)
 {
-    extern unsigned int g_frameDelay;
+    //extern unsigned int g_frameDelay;
 
     if (parm->numparms != 1)
     {
         OSD_Printf("\"r_maxfps\" is \"%d\"\n",r_maxfps);
         return OSDCMD_SHOWHELP;
     }
-    r_maxfps = max(0,min(1000,atol(parm->parms[0])));
+    r_maxfps = max(0,min(1000,Batoi(parm->parms[0])));
     if (r_maxfps) g_frameDelay = (1000/r_maxfps);
     else g_frameDelay = 0;
     OSD_Printf("%s\n",parm->raw);
@@ -1631,7 +1688,7 @@ int registerosdcommands(void)
     OSD_RegisterFunction("quit","quit: exits the game immediately", osdcmd_quit);
     OSD_RegisterFunction("exit","exit: exits the game immediately", osdcmd_quit);
 
-    OSD_RegisterFunction("rate","rate: sets the multiplayer packet send rate, in packets/sec",osdcmd_rate);
+    //OSD_RegisterFunction("rate","rate: sets the multiplayer packet send rate, in packets/sec",osdcmd_rate);
     OSD_RegisterFunction("restartsound","restartsound: reinitializes the sound system",osdcmd_restartsound);
     OSD_RegisterFunction("restartvid","restartvid: reinitializes the video mode",osdcmd_restartvid);
 

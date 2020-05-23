@@ -94,7 +94,7 @@ char *textptr;
 int g_numCompilerErrors,g_numCompilerWarnings;
 
 extern const char *duke3dgrpstring;
-extern char *duke3ddef;
+extern const char *duke3ddef;
 
 enum ScriptLabel_t
 {

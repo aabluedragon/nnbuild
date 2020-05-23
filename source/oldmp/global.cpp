@@ -173,7 +173,7 @@ int oldipos[MAXINTERPOLATIONS];
 int bakipos[MAXINTERPOLATIONS];
 int *curipos[MAXINTERPOLATIONS];
 
-int nextvoxid = 0;
+//int nextvoxid = 0;
 
 int SpriteFlags[MAXTILES];
 
@@ -185,4 +185,6 @@ char setupfilename[BMAX_PATH]= SETUPFILENAME;
 
 int g_doQuickSave = 0;
 unsigned int g_moveThingsCount = 0;
+
+spriteinterpolate sprpos[MAXSPRITES];
 

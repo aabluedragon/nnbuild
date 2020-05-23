@@ -163,9 +163,12 @@ extern void G_MoveWorld(void);
 extern void A_MoveCyclers(void);
 extern void A_MoveDummyPlayers(void);
 
+// premap.c
+extern void G_SetupGlobalPsky(void);
+
 // player.c
 extern void playerColor_init(void);
-extern void playerColor_add(char *name, int palnum);
+extern void playerColor_add(const char *name, int palnum);
 extern void playerColor_delete(int palnum);
 extern uint8_t playerColor_getNextColor(uint8_t palnum, uint8_t useauto);
 extern uint8_t playerColor_getPreviousColor(uint8_t palnum, uint8_t useauto);

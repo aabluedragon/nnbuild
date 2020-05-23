@@ -8,7 +8,7 @@
 #include "duke3d.h"
 #include "grpscan.h"
 
-struct grpfile grpfiles[numgrpfiles] =
+grpfile grpfiles[numgrpfiles] =
 {
     { "Duke Nukem 3D",						    0xBBC9CE44, 26524524, GAMEDUKE, NULL },
     { "Duke Nukem 3D: Atomic Edition",		    0xF514A6AC, 44348015, GAMEDUKE, NULL },
@@ -20,7 +20,7 @@ struct grpfile grpfiles[numgrpfiles] =
     { "Napalm",                        			0x3DE1589A, 44365728, GAMENAM,  NULL },
     { "WW2GI",                         			0x907B82BF, 77939508, GAMEWW2,  NULL },
 };
-struct grpfile *foundgrps = NULL;
+grpfile *foundgrps = NULL;
 
 #define GRPCACHEFILE "grpfiles.cache"
 static struct grpcache
@@ -31,7 +31,7 @@ static struct grpcache
     int mtime;
     int crcval;
 }
-*grpcache = NULL, *usedgrpcache = NULL;
+*grp_cache = NULL, *usedgrpcache = NULL;
 
 static int LoadGroupsCache(void)
 {
@@ -52,9 +52,9 @@ static int LoadGroupsCache(void)
         if (scriptfile_getnumber(script, &fmtime)) break;	// modification time
         if (scriptfile_getnumber(script, &fcrcval)) break;	// crc checksum
 
-        fg = Bcalloc(1, sizeof(struct grpcache));
-        fg->next = grpcache;
-        grpcache = fg;
+        fg = (grpcache*)Bcalloc(1, sizeof(struct grpcache));
+        fg->next = grp_cache;
+        grp_cache = fg;
 
         strncpy(fg->name, fname, BMAX_PATH);
         fg->size = fsize;
@@ -70,17 +70,17 @@ static void FreeGroupsCache(void)
 {
     struct grpcache *fg;
 
-    while (grpcache)
+    while (grp_cache)
     {
-        fg = grpcache->next;
-        free(grpcache);
-        grpcache = fg;
+        fg = grp_cache->next;
+        free(grp_cache);
+        grp_cache = fg;
     }
 }
 
 int ScanGroups(void)
 {
-    CACHE1D_FIND_REC *srch, *sidx;
+    BUILDVFS_FIND_REC *sidx, *srch;
     struct grpcache *fg, *fgg;
     struct grpfile *grp;
     char *fn;
@@ -90,11 +90,11 @@ int ScanGroups(void)
 
     LoadGroupsCache();
 
-    srch = klistpath("/", "*.grp", CACHE1D_FIND_FILE);
+    srch = klistpath("/", "*.grp", BUILDVFS_FIND_FILE);
 
     for (sidx = srch; sidx; sidx = sidx->next)
     {
-        for (fg = grpcache; fg; fg = fg->next)
+        for (fg = grp_cache; fg; fg = fg->next)
         {
             if (!Bstrcmp(fg->name, sidx->name)) break;
         }
@@ -130,7 +130,7 @@ int ScanGroups(void)
 
         {
             int b, fh;
-            int crcval;
+            int crcval = 0;
             char buf[16*512];
 
             fh = openfrompath(sidx->name, BO_RDONLY|BO_BINARY, BS_IREAD);
@@ -138,14 +138,12 @@ int ScanGroups(void)
             if (fstat(fh, &st)) continue;
 
             initprintf(" Checksumming %s...", sidx->name);
-            crc32init((unsigned int *)&crcval);
             do
             {
                 b = read(fh, buf, sizeof(buf));
-                if (b > 0) crc32block((unsigned int *)&crcval, (unsigned char *)buf, b);
+                if (b > 0) crcval = Bcrc32((uint8_t*)buf, b, crcval);
             }
             while (b == sizeof(buf));
-            crc32finish((unsigned int *)&crcval);
             close(fh);
             initprintf(" Done\n");
 

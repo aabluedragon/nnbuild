@@ -190,7 +190,6 @@
     <ClInclude Include="..\..\source\oldmp\macros.h" />
     <ClInclude Include="..\..\source\oldmp\mapster32.h" />
     <ClInclude Include="..\..\source\oldmp\mdump.h" />
-    <ClInclude Include="..\..\source\oldmp\midi.h" />
     <ClInclude Include="..\..\source\oldmp\mpu401.h" />
     <ClInclude Include="..\..\source\oldmp\names.h" />
     <ClInclude Include="..\..\source\oldmp\namesdyn.h" />
@@ -222,9 +221,7 @@
     <ClCompile Include="..\..\source\oldmp\grpscan.cpp" />
     <ClCompile Include="..\..\source\oldmp\mdump.cpp" />
     <ClCompile Include="..\..\source\oldmp\menus.cpp" />
-    <ClCompile Include="..\..\source\oldmp\midi.cpp" />
     <ClCompile Include="..\..\source\oldmp\mpu401.cpp" />
-    <ClCompile Include="..\..\source\oldmp\music.cpp" />
     <ClCompile Include="..\..\source\oldmp\namesdyn.cpp" />
     <ClCompile Include="..\..\source\oldmp\oldnet.cpp" />
     <ClCompile Include="..\..\source\oldmp\osdcmds.cpp" />
@@ -233,7 +230,6 @@
     <ClCompile Include="..\..\source\oldmp\premap.cpp" />
     <ClCompile Include="..\..\source\oldmp\rts.cpp" />
     <ClCompile Include="..\..\source\oldmp\savegame.cpp" />
-    <ClCompile Include="..\..\source\oldmp\sdlmusic.cpp" />
     <ClCompile Include="..\..\source\oldmp\sector.cpp" />
     <ClCompile Include="..\..\source\oldmp\sounds.cpp" />
     <ClCompile Include="..\..\source\oldmp\startgtk.game.cpp">
@@ -244,7 +240,6 @@
     </ClCompile>
     <ClCompile Include="..\..\source\oldmp\startwin.game.cpp" />
     <ClCompile Include="..\..\source\oldmp\sync.cpp" />
-    <ClCompile Include="..\..\source\oldmp\testcd.cpp" />
     <ClCompile Include="..\..\source\oldmp\winbits.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -265,12 +260,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="..\..\source\duke3d\rsrc\gameres.rc">
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">%(PreprocessorDefinitions);POLYMER=1</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">%(PreprocessorDefinitions);POLYMER=1</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(PreprocessorDefinitions);POLYMER=1</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(PreprocessorDefinitions);POLYMER=1</PreprocessorDefinitions>
-    </ResourceCompile>
+    <ResourceCompile Include="..\..\source\oldmp\rsrc\gameres.rc" />
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="eduke32.exe.manifest" />

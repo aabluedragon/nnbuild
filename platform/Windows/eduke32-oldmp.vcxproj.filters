@@ -84,9 +84,6 @@
     <ClInclude Include="..\..\source\oldmp\mdump.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\midi.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\source\oldmp\mpu401.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -116,13 +113,7 @@
     <ClCompile Include="..\..\source\oldmp\menus.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\midi.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\source\oldmp\mpu401.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\music.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\oldmp\namesdyn.cpp">
@@ -149,9 +140,6 @@
     <ClCompile Include="..\..\source\oldmp\savegame.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\sdlmusic.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\source\oldmp\sector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -165,9 +153,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\oldmp\sync.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\testcd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\oldmp\winbits.cpp">
@@ -199,7 +184,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="..\..\source\duke3d\rsrc\gameres.rc">
+    <ResourceCompile Include="..\..\source\oldmp\rsrc\gameres.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>

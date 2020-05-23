@@ -38,39 +38,37 @@ short SpriteCacheList[MAXTILES][3];
 static char precachehightile[2][MAXTILES>>3];
 static int  g_precacheCount;
 
-extern char *duke3dgrpstring;
+//extern const char *duke3dgrpstring;
 extern int g_levelTextTime;
+
+void G_SetupGlobalPsky(void);
+
+static void flag_precache(int32_t tile, int32_t type)
+{
+    if (!(gotpic[tile >> 3] & pow2char[tile & 7]))
+        g_precacheCount++;
+
+    gotpic[tile >> 3] |= pow2char[tile & 7];
+    precachehightile[type][tile >> 3] |= pow2char[tile & 7];
+}
 
 static void tloadtile(int tilenume, int type)
 {
-    if ((picanm[tilenume]&63) < 1)
+    int firstTile, lastTile;
+
+    if ((picanm[tilenume].sf & PICANM_ANIMTYPE_MASK) == PICANM_ANIMTYPE_BACK)
     {
-        if (!(gotpic[tilenume>>3] & pow2char[tilenume&7])) g_precacheCount++;
-        gotpic[tilenume>>3] |= pow2char[tilenume&7];
-        precachehightile[(unsigned char)type][tilenume>>3] |= pow2char[tilenume&7];
-        return;
+        firstTile = tilenume - picanm[tilenume].num;
+        lastTile = tilenume;
+    }
+    else
+    {
+        firstTile = tilenume;
+        lastTile = tilenume + picanm[tilenume].num;
     }
 
-    {
-        int i,j;
-
-        if ((picanm[tilenume]&192)==192)
-        {
-            i = tilenume - (picanm[tilenume]&63);
-            j = tilenume;
-        }
-        else
-        {
-            i = tilenume;
-            j = tilenume + (picanm[tilenume]&63);
-        }
-        for (;i<=j;i++)
-        {
-            if (!(gotpic[i>>3] & pow2char[i&7])) g_precacheCount++;
-            gotpic[i>>3] |= pow2char[i&7];
-            precachehightile[(unsigned char)type][i>>3] |= pow2char[i&7];
-        }
-    }
+    for (; firstTile <= lastTile; firstTile++)
+        flag_precache(firstTile, type);
 }
 
 static void G_CacheSpriteNum(int i)
@@ -289,7 +287,7 @@ static void G_DoLoadScreen(char *statustext, int percent)
             i = ud.screen_size;
             ud.screen_size = 0;
             G_UpdateScreenArea();
-            clearview(0L);
+            videoClearViewableArea(0L);
         }
 
         Gv_SetVar(g_iReturnVarID,LOADSCREEN, -1, -1);
@@ -298,7 +296,7 @@ static void G_DoLoadScreen(char *statustext, int percent)
         rotatesprite(320<<15,200<<15,65536L,0,j > MAXTILES-1?j-MAXTILES:j,0,0,2+8+64,0,0,xdim-1,ydim-1);
         if (j > MAXTILES-1)
         {
-            nextpage();
+            videoNextPage();
             return;
         }
         if (boardfilename[0] != 0 && ud.level_number == 7 && ud.volume_number == 0)
@@ -332,7 +330,7 @@ static void G_DoLoadScreen(char *statustext, int percent)
             usehightile = j;
         }
         X_OnEvent(EVENT_DISPLAYLOADINGSCREEN, g_player[screenpeek].ps->i, screenpeek, -1);
-        nextpage();
+        videoNextPage();
 
         if (!statustext)
         {
@@ -346,7 +344,7 @@ static void G_DoLoadScreen(char *statustext, int percent)
     {
         if (!statustext)
         {
-            clearview(0L);
+            videoClearViewableArea(0L);
             //g_player[myconnectindex].ps->palette = palette;
             //G_FadePalette(0,0,0,0);
             P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 0);    // JBF 20040308
@@ -357,13 +355,13 @@ static void G_DoLoadScreen(char *statustext, int percent)
         rotatesprite(320<<15,200<<15,65536L,0,j > MAXTILES-1?j-MAXTILES:j,0,0,2+8+64,0,0,xdim-1,ydim-1);
         if (j > MAXTILES-1)
         {
-            nextpage();
+            videoNextPage();
             return;
         }
         menutext(160,105,0,0,"LOADING...");
         if (statustext) gametext(160,180,statustext,0,2+8+16);
         X_OnEvent(EVENT_DISPLAYLOADINGSCREEN, g_player[screenpeek].ps->i, screenpeek, -1);
-        nextpage();
+        videoNextPage();
     }
 }
 
@@ -419,7 +417,7 @@ void G_CacheMapData(void)
         }
     }
 
-    tc = totalclock;
+    tc = (int32_t)totalclock;
     j = 0;
 
     for (i=0;i<MAXTILES;i++)
@@ -432,9 +430,9 @@ void G_CacheMapData(void)
         if (gotpic[i>>3] & pow2char[i&7])
         {
             if (waloff[i] == 0)
-                loadtile((short)i);
+                tileLoad((short)i);
 
-#if defined(POLYMOST) && defined(USE_OPENGL)
+#if defined(USE_OPENGL)
             if (ud.config.useprecache)
             {
                 int k;
@@ -464,7 +462,7 @@ void G_CacheMapData(void)
         {
             sprintf(tempbuf,"%d resources remaining\n",g_precacheCount-pc+1);
             G_DoLoadScreen(tempbuf, min(100,100*pc/g_precacheCount));
-            tc = totalclock;
+            tc = (int32_t)totalclock;
         }
     }
 
@@ -476,20 +474,20 @@ void G_CacheMapData(void)
 
 void xyzmirror(int i,int wn)
 {
-    //if (waloff[wn] == 0) loadtile(wn);
-    setviewtotile(wn,tilesizy[wn],tilesizx[wn]);
+    //if (waloff[wn] == 0) tileLoad(wn);
+    renderSetTarget(wn,tilesiz[wn].y,tilesiz[wn].x);
 
     drawrooms(SX,SY,SZ,SA,100+sprite[i].shade,SECT);
     display_mirror = 1;
     G_DoSpriteAnimations(SX,SY,SA,65536L);
     display_mirror = 0;
-    drawmasks();
+    renderDrawMasks();
 
-    initprintf("%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i\n",i,wn,tilesizy[wn],tilesizx[wn],SX,SY,SZ,SA,100+sprite[i].shade,SECT,sprite[i].picnum);
+    initprintf("%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i\n",i,wn,tilesiz[wn].y,tilesiz[wn].x,SX,SY,SZ,SA,100+sprite[i].shade,SECT,sprite[i].picnum);
 
-    setviewback();
+    renderRestoreTarget();
     squarerotatetile(wn);
-    invalidatetile(wn,-1,255);
+    tileInvalidate(wn,-1,255);
 }
 
 void G_UpdateScreenArea(void)
@@ -498,7 +496,7 @@ void G_UpdateScreenArea(void)
 
     if (ud.screen_size < 0) ud.screen_size = 0;
     if (ud.screen_size > 64) ud.screen_size = 64;
-    if (ud.screen_size == 0) flushperms();
+    if (ud.screen_size == 0) renderFlushPerms();
 
     ss = max(ud.screen_size-8,0);
 
@@ -519,21 +517,40 @@ void G_UpdateScreenArea(void)
         if (j >= 12) y1 += 8;
     }
 
-    if (ud.screen_size >= 8 && !(getrendermode() >= 3 && ud.screen_size == 8 && ud.statusbarmode))
-        y2 -= (ss+scale(tilesizy[BOTTOMSTATUSBAR],ud.statusbarscale,100));
+    if (ud.screen_size >= 8 && !(videoGetRenderMode() >= 3 && ud.screen_size == 8 && ud.statusbarmode))
+        y2 -= (ss+scale(tilesiz[BOTTOMSTATUSBAR].y,ud.statusbarscale,100));
 
     y1 = scale(y1,ydim,200);
     y2 = scale(y2,ydim,200);
 
-    if (getrendermode() >= 3)
-        setview(x1,y1,x2-1,y2);
-    else setview(x1,y1,x2-1,y2-1);
+    if (videoGetRenderMode() >= 3)
+        videoSetViewableArea(x1,y1,x2-1,y2);
+    else videoSetViewableArea(x1,y1,x2-1,y2-1);
 
     G_GetCrosshairColor();
     G_SetCrosshairColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b);
 
     pub = NUMPAGES;
     pus = NUMPAGES;
+}
+
+void G_SetupGlobalPsky(void)
+{
+    int skyIdx = 0;
+
+    // NOTE: Loop must be running backwards for the same behavior as the game
+    // (greatest sector index with matching parallaxed sky takes precedence).
+    for (int i = numsectors - 1; i >= 0; i--)
+    {
+        if (sector[i].ceilingstat & 1)
+        {
+            skyIdx = getpskyidx(sector[i].ceilingpicnum);
+            if (skyIdx > 0)
+                break;
+        }
+    }
+
+    g_pskyidx = skyIdx;
 }
 
 void P_RandomSpawnPoint(int snum)
@@ -555,7 +572,7 @@ void P_RandomSpawnPoint(int snum)
                 {
                     for (k=0;k<g_numPlayerSprites;k++)
                     {
-                        dist = FindDistance2D(g_player[j].ps->posx-g_playerSpawnPoints[k].ox,g_player[j].ps->posy-g_playerSpawnPoints[k].oy);
+                        dist = FindDistance2D(g_player[j].ps->pos.x-g_playerSpawnPoints[k].ox,g_player[j].ps->pos.y-g_playerSpawnPoints[k].oy);
                         if (dist < pdist)
                             i = k, pdist = dist;
                     }
@@ -565,9 +582,9 @@ void P_RandomSpawnPoint(int snum)
         }
     }
 
-    p->bobposx = p->oposx = p->posx = g_playerSpawnPoints[i].ox;
-    p->bobposy = p->oposy = p->posy = g_playerSpawnPoints[i].oy;
-    p->oposz = p->posz = g_playerSpawnPoints[i].oz;
+    p->bobposx = p->opos.x = p->pos.x = g_playerSpawnPoints[i].ox;
+    p->bobposy = p->opos.y = p->pos.y = g_playerSpawnPoints[i].oy;
+    p->opos.z = p->pos.z = g_playerSpawnPoints[i].oz;
     p->q16ang = fix16_from_int(g_playerSpawnPoints[i].oa);
     p->cursectnum = g_playerSpawnPoints[i].os;
 }
@@ -648,9 +665,9 @@ static void P_ResetStatus(int snum)
     p->newowner          =-1;
     p->jumping_counter   = 0;
     p->hard_landing      = 0;
-    p->posxv             = 0;
-    p->posyv             = 0;
-    p->poszv             = 0;
+    p->vel.x             = 0;
+    p->vel.y             = 0;
+    p->vel.z             = 0;
     fricxv            = 0;
     fricyv            = 0;
     p->somethingonplayer =-1;
@@ -795,48 +812,6 @@ static void resetprestat(int snum,int g)
     p->customexitsound  = 0;
 }
 
-static void setupbackdrop(short sky)
-{
-    short i;
-
-    for (i=0;i<MAXPSKYTILES;i++) pskyoff[i]=0;
-
-    if (parallaxyscale != 65536L)
-        parallaxyscale = 32768;
-
-    switch (DynamicTileMap[sky])
-    {
-    case CLOUDYOCEAN__STATIC:
-        parallaxyscale = 65536L;
-        break;
-    case MOONSKY1__STATIC :
-        pskyoff[6]=1;
-        pskyoff[1]=2;
-        pskyoff[4]=2;
-        pskyoff[2]=3;
-        break;
-    case BIGORBIT1__STATIC: // orbit
-        pskyoff[5]=1;
-        pskyoff[6]=2;
-        pskyoff[7]=3;
-        pskyoff[2]=4;
-        break;
-    case LA__STATIC:
-        parallaxyscale = 16384+1024;
-        pskyoff[0]=1;
-        pskyoff[1]=2;
-        pskyoff[2]=1;
-        pskyoff[3]=3;
-        pskyoff[4]=4;
-        pskyoff[5]=0;
-        pskyoff[6]=2;
-        pskyoff[7]=3;
-        break;
-    }
-
-    pskybits=3;
-}
-
 static void prelevel(char g)
 {
     int i, nexti, j, startwall, endwall, lotaglist;
@@ -858,6 +833,7 @@ static void prelevel(char g)
     }
 
     g_numClouds = 0;
+    G_SetupGlobalPsky();
 
     X_OnEvent(EVENT_PRELEVEL, -1, -1, -1);
 
@@ -876,14 +852,6 @@ static void prelevel(char g)
 
         if (sector[i].ceilingstat&1)
         {
-            if (waloff[sector[i].ceilingpicnum] == 0)
-            {
-                if (sector[i].ceilingpicnum == LA)
-                    for (j=0;j<5;j++)
-                        tloadtile(sector[i].ceilingpicnum+j, 0);
-            }
-            setupbackdrop(sector[i].ceilingpicnum);
-
             if (sector[i].ceilingpicnum == CLOUDYSKIES && g_numClouds < 127)
                 clouds[g_numClouds++] = i;
 
@@ -1215,19 +1183,19 @@ void G_NewGame(int vn,int ln,int sk)
     {
         S_PlayMusic(&EnvMusicFilename[1][0],MAXVOLUMES*MAXLEVELS+1);
 
-        flushperms();
-        setview(0,0,xdim-1,ydim-1);
-        clearview(0L);
-        nextpage();
+        renderFlushPerms();
+        videoSetViewableArea(0,0,xdim-1,ydim-1);
+        videoClearViewableArea(0L);
+        videoNextPage();
 
         G_PlayAnim("vol41a.anm",6);
-        clearview(0L);
-        nextpage();
+        videoClearViewableArea(0L);
+        videoNextPage();
 
         G_PlayAnim("vol42a.anm",7);
         G_PlayAnim("vol43a.anm",9);
-        clearview(0L);
-        nextpage();
+        videoClearViewableArea(0L);
+        videoNextPage();
 
         FX_StopAllSounds();
     }
@@ -1240,7 +1208,6 @@ void G_NewGame(int vn,int ln,int sk)
     ud.secretlevel =    0;
     ud.from_bonus = 0;
     ud.limit_hit = 0;
-    parallaxyscale = 0;
 
     ud.last_level = -1;
     g_lastSaveSlot = -1;
@@ -1314,7 +1281,7 @@ static void prepare_spawns(void)
     spritetype *s;
 
     // Insert brown arrow player. Gets deleted by the next loop.
-    A_InsertSprite(g_player[0].ps->cursectnum, g_player[0].ps->posx, g_player[0].ps->posy, g_player[0].ps->posz,
+    A_InsertSprite(g_player[0].ps->cursectnum, g_player[0].ps->pos.x, g_player[0].ps->pos.y, g_player[0].ps->pos.z,
         APLAYER, 0, 0, 0, fix16_to_int(g_player[0].ps->q16ang), 0, 0, 0, 10);
 
     g_numPlayerSprites = 0;
@@ -1438,9 +1405,9 @@ static void insert_player_sprite(int p)
     g_player[p].ps->frag_ps = p;
     ActorExtra[spriteIndex].owner = spriteIndex;
 
-    ActorExtra[spriteIndex].bposx = g_player[p].ps->bobposx = g_player[p].ps->oposx = g_player[p].ps->posx = s->x;
-    ActorExtra[spriteIndex].bposy = g_player[p].ps->bobposy = g_player[p].ps->oposy = g_player[p].ps->posy = s->y;
-    ActorExtra[spriteIndex].bposz = g_player[p].ps->oposz = g_player[p].ps->posz = s->z;
+    ActorExtra[spriteIndex].bposx = g_player[p].ps->bobposx = g_player[p].ps->opos.x = g_player[p].ps->pos.x = s->x;
+    ActorExtra[spriteIndex].bposy = g_player[p].ps->bobposy = g_player[p].ps->opos.y = g_player[p].ps->pos.y = s->y;
+    ActorExtra[spriteIndex].bposz = g_player[p].ps->opos.z = g_player[p].ps->pos.z = s->z;
     g_player[p].ps->oq16ang = g_player[p].ps->q16ang = fix16_from_int(s->ang);
 
     updatesector(s->x, s->y, &g_player[p].ps->cursectnum);
@@ -1644,7 +1611,7 @@ int G_EnterLevel(int g)
         if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
         {
             if (MapInfo[mii].filename == NULL)
-                MapInfo[mii].filename = Bcalloc(BMAX_PATH, sizeof(uint8_t));
+                MapInfo[mii].filename = (char*)Bcalloc(BMAX_PATH, sizeof(uint8_t));
             if (MapInfo[mii].name == NULL)
                 MapInfo[mii].name = Bstrdup("User Map");
         }
@@ -1675,7 +1642,7 @@ int G_EnterLevel(int g)
     {
         if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
         {
-            if (loadboard(boardfilename,0,&g_player[0].ps->posx, &g_player[0].ps->posy, &g_player[0].ps->posz, &lbang ,&g_player[0].ps->cursectnum) == -1)
+            if (engineLoadBoard(boardfilename,0,&g_player[0].ps->pos, &lbang ,&g_player[0].ps->cursectnum) == -1)
             {
                 OSD_Printf(OSD_ERROR "Map '%s' not found!\n",boardfilename);
                 //G_GameExit(tempbuf);
@@ -1695,7 +1662,7 @@ int G_EnterLevel(int g)
                     p[3]='k';
                     p[4]=0;
                 }
-                if (!loadmaphack(levname)) initprintf("Loaded map hack file '%s'\n",levname);
+                if (!engineLoadMHK(levname)) initprintf("Loaded map hack file '%s'\n",levname);
 
                 // usermap music based on map filename
                 Bcorrectfilename(levname,0);
@@ -1715,9 +1682,9 @@ int G_EnterLevel(int g)
                     {
                         kclose(fil);
                         if (MapInfo[ud.m_level_number].alt_musicfn == NULL)
-                            MapInfo[ud.m_level_number].alt_musicfn = Bcalloc(Bstrlen(levname)+1,sizeof(char));
+                            MapInfo[ud.m_level_number].alt_musicfn = (char*)Bcalloc(Bstrlen(levname)+1,sizeof(char));
                         else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.m_level_number].alt_musicfn))
-                            MapInfo[ud.m_level_number].alt_musicfn = Brealloc(MapInfo[ud.m_level_number].alt_musicfn,(Bstrlen(levname)+1));
+                            MapInfo[ud.m_level_number].alt_musicfn = (char*)Brealloc(MapInfo[ud.m_level_number].alt_musicfn,(Bstrlen(levname)+1));
                         Bstrcpy(MapInfo[ud.m_level_number].alt_musicfn,levname);
                     }
                     else if (MapInfo[ud.m_level_number].alt_musicfn != NULL)
@@ -1738,14 +1705,14 @@ int G_EnterLevel(int g)
                     else kclose(fil);
 
                     if (MapInfo[ud.m_level_number].musicfn == NULL)
-                        MapInfo[ud.m_level_number].musicfn = Bcalloc(Bstrlen(levname)+1,sizeof(char));
+                        MapInfo[ud.m_level_number].musicfn = (char*)Bcalloc(Bstrlen(levname)+1,sizeof(char));
                     else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.m_level_number].musicfn))
-                        MapInfo[ud.m_level_number].musicfn = Brealloc(MapInfo[ud.m_level_number].musicfn,(Bstrlen(levname)+1));
+                        MapInfo[ud.m_level_number].musicfn = (char*)Brealloc(MapInfo[ud.m_level_number].musicfn,(Bstrlen(levname)+1));
                     Bstrcpy(MapInfo[ud.m_level_number].musicfn,levname);
                 }
             }
         }
-        else if (loadboard(MapInfo[mii].filename,0,&g_player[0].ps->posx, &g_player[0].ps->posy, &g_player[0].ps->posz, &lbang, &g_player[0].ps->cursectnum) == -1)
+        else if (engineLoadBoard(MapInfo[mii].filename,0,&g_player[0].ps->pos, &lbang, &g_player[0].ps->cursectnum) == -1)
         {
             OSD_Printf(OSD_ERROR "Map %s not found!\n",MapInfo[mii].filename);
             //G_GameExit(tempbuf);
@@ -1764,7 +1731,7 @@ int G_EnterLevel(int g)
                 p[3]='k';
                 p[4]=0;
             }
-            if (!loadmaphack(levname)) initprintf("Loaded map hack file '%s'\n",levname);
+            if (!engineLoadMHK(levname)) initprintf("Loaded map hack file '%s'\n",levname);
         }
     }
     else
@@ -1775,7 +1742,7 @@ int G_EnterLevel(int g)
         levname[i] = 255;
         levname[i+1] = 0;
 
-        if (loadboard(levname,1,&g_player[0].ps->posx, &g_player[0].ps->posy, &g_player[0].ps->posz, &lbang, &g_player[0].ps->cursectnum) == -1)
+        if (engineLoadBoard(levname,1,&g_player[0].ps->pos, &lbang, &g_player[0].ps->cursectnum) == -1)
         {
             OSD_Printf(OSD_ERROR "Map '%s' not found!\n",MapInfo[mii].filename);
             //G_GameExit(tempbuf);
@@ -1793,7 +1760,7 @@ int G_EnterLevel(int g)
                 p[3]='k';
                 p[4]=0;
             }
-            if (!loadmaphack(levname)) initprintf("Loaded map hack file '%s'\n",levname);
+            if (!engineLoadMHK(levname)) initprintf("Loaded map hack file '%s'\n",levname);
         }
     }
 
@@ -1809,7 +1776,7 @@ int G_EnterLevel(int g)
     allignwarpelevators();
     resetpspritevars(g);
 
-    cachedebug = 0;
+    //cachedebug = 0;
     automapping = 0;
 
     G_CacheMapData();
@@ -1863,7 +1830,7 @@ int G_EnterLevel(int g)
     P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 0);    // JBF 20040308
 
     P_UpdateScreenPal(g_player[myconnectindex].ps);
-    flushperms();
+    renderFlushPerms();
 
     everyothertime = 0;
     g_globalRandom = 0;
@@ -1881,7 +1848,7 @@ int G_EnterLevel(int g)
 
     G_FadePalette(0,0,0,0);
     G_UpdateScreenArea();
-    clearview(0L);
+    videoClearViewableArea(0L);
     G_DrawBackground();
     G_DrawRooms(myconnectindex,65536);
 

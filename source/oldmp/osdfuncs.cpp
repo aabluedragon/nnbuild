@@ -9,8 +9,8 @@ float osdscale = 1.f, osdrscale = 1.f;
 
 #define OSD_SCALE(x) (int32_t)(osdscale != 1.f ? Blrintf(osdscale*(float)(x)) : (x))
 #define OSD_SCALEDIV(x) (int32_t)Blrintf((float)(x) * osdrscale)
-#define OSDCHAR_WIDTH (tilesizx[STARTALPHANUM + 'A' - '!'])
-#define OSDCHAR_HEIGHT (tilesizy[STARTALPHANUM + 'A' - '!'] + 1)
+#define OSDCHAR_WIDTH (tilesiz[STARTALPHANUM + 'A' - '!'].x)
+#define OSDCHAR_HEIGHT (tilesiz[STARTALPHANUM + 'A' - '!'].y + 1)
 
 static inline int32_t GAME_isspace(int32_t ch)
 {
@@ -110,15 +110,15 @@ void GAME_onshowosd(int shown)
 {
     // fix for TCs like Layre which don't have the BGTILE for some reason
     // most of this is copied from my dummytile stuff in defs.c
-    if (!tilesizx[BGTILE] || !tilesizy[BGTILE])
+    if (!tilesiz[BGTILE].x || !tilesiz[BGTILE].y)
     {
-        extern char faketile[MAXTILES];
         int j;
 
-        tilesizx[BGTILE] = BGTILE_SIZEX;
-        tilesizy[BGTILE] = BGTILE_SIZEY;
+        tilesiz[BGTILE].x = BGTILE_SIZEX;
+        tilesiz[BGTILE].y = BGTILE_SIZEY;
         faketile[BGTILE] = 1;
-        picanm[BGTILE] = 0;
+        // OLDMP FIXME
+        //picanm[BGTILE] = 0;
 
         j = 15; while ((j > 1) && (pow2long[j] > BGTILE_SIZEX)) j--;
         picsiz[BGTILE] = ((char)j);
@@ -139,14 +139,14 @@ void GAME_clearbackground(int c, int r)
 
     UNREFERENCED_PARAMETER(c);
 
-    if (getrendermode() < 3) bits = BITS;
+    if (videoGetRenderMode() < 3) bits = BITS;
     else bits = BITSTL;
 
     daydim = r<<3;
 
-    xsiz = tilesizx[BGTILE];
+    xsiz = tilesiz[BGTILE].x;
     tx2 = xdim/xsiz;
-    ysiz = tilesizy[BGTILE];
+    ysiz = tilesiz[BGTILE].y;
 //    ty2 = ydim/ysiz;
     ty2 = daydim/ysiz;
 
@@ -156,9 +156,9 @@ void GAME_clearbackground(int c, int r)
 //            rotatesprite(x*xsiz<<16,((daydim-ydim)+(y*ysiz))<<16,65536L,0,BGTILE,SHADE,PALETTE,bits,0,0,xdim,daydim);
             rotatesprite(x*xsiz<<16,y*ysiz<<16,65536L,0,BGTILE,SHADE,PALETTE,bits,0,0,xdim,daydim);
 
-    xsiz = tilesizy[BORDTILE];
+    xsiz = tilesiz[BORDTILE].y;
     tx2 = xdim/xsiz;
-    ysiz = tilesizx[BORDTILE];
+    ysiz = tilesiz[BORDTILE].x;
 
     for (x=tx2;x>=0;x--)
         rotatesprite(x*xsiz<<16,(daydim+ysiz+1)<<16,65536L,1536,BORDTILE,SHADE-12,PALETTE,BITS,0,0,xdim,daydim+ysiz+1);

@@ -108,11 +108,11 @@ int32_t G_LoadSaveHeader(char spot,struct savehead *saveh)
     if (kdfread(&saveh->plrskl,sizeof(int32_t),1,fil) != 1) goto corrupt;
     if (kdfread(saveh->boardfn,BMAX_PATH,1,fil) != 1) goto corrupt;
 
-    if (waloff[TILE_LOADSHOT] == 0) cacheAllocateBlock(&waloff[TILE_LOADSHOT],320*200,&walock[TILE_LOADSHOT]);
-    tilesizx[TILE_LOADSHOT] = 200;
-    tilesizy[TILE_LOADSHOT] = 320;
+    if (waloff[TILE_LOADSHOT] == 0) g_cache.allocateBlock(&waloff[TILE_LOADSHOT],320*200,&walock[TILE_LOADSHOT]);
+    tilesiz[TILE_LOADSHOT].x = 200;
+    tilesiz[TILE_LOADSHOT].y = 320;
     if (kdfread((char *)waloff[TILE_LOADSHOT],320,200,fil) != 200) goto corrupt;
-    invalidatetile(TILE_LOADSHOT,0,255);
+    tileInvalidate(TILE_LOADSHOT,0,255);
 
     kclose(fil);
 
@@ -175,7 +175,7 @@ int32_t G_LoadPlayer(int32_t spot)
     {
         P_DoQuote(114,g_player[myconnectindex].ps);
         kclose(fil);
-        ototalclock = totalclock;
+        ototalclock = (int32_t)totalclock;
         ready2send = 1;
         return 1;
     }
@@ -184,7 +184,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (nump != ud.multimode)
     {
         kclose(fil);
-        ototalclock = totalclock;
+        ototalclock = (int32_t)totalclock;
         ready2send = 1;
         P_DoQuote(124,g_player[myconnectindex].ps);
         return 1;
@@ -198,7 +198,7 @@ int32_t G_LoadPlayer(int32_t spot)
         G_UpdateScreenArea();
         G_DrawBackground();
         menutext(160,100,0,0,"LOADING...");
-        nextpage();
+        videoNextPage();
     }
 
     waitforeverybody();
@@ -228,27 +228,27 @@ int32_t G_LoadPlayer(int32_t spot)
 
     //Fake read because lseek won't work with compression
     walock[TILE_LOADSHOT] = 1;
-    if (waloff[TILE_LOADSHOT] == 0) cacheAllocateBlock(&waloff[TILE_LOADSHOT],320*200,&walock[TILE_LOADSHOT]);
-    tilesizx[TILE_LOADSHOT] = 200;
-    tilesizy[TILE_LOADSHOT] = 320;
+    if (waloff[TILE_LOADSHOT] == 0) g_cache.allocateBlock(&waloff[TILE_LOADSHOT],320*200,&walock[TILE_LOADSHOT]);
+    tilesiz[TILE_LOADSHOT].x = 200;
+    tilesiz[TILE_LOADSHOT].y = 320;
     if (kdfread((char *)waloff[TILE_LOADSHOT],320,200,fil) != 200) goto corrupt;
-    invalidatetile(TILE_LOADSHOT,0,255);
+    tileInvalidate(TILE_LOADSHOT,0,255);
 
     if (kdfread(&numwalls,sizeof(numwalls),1,fil) != 1) goto corrupt;
     if (kdfread(&wall[0],sizeof(walltype),MAXWALLS,fil) != MAXWALLS) goto corrupt;
     if (kdfread(&numsectors,sizeof(numsectors),1,fil) != 1) goto corrupt;
     if (kdfread(&sector[0],sizeof(sectortype),MAXSECTORS,fil) != MAXSECTORS) goto corrupt;
     if (kdfread(&sprite[0],sizeof(spritetype),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
-    if (kdfread(&spriteext[0],sizeof(spriteexttype),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
+    if (kdfread(&spriteext[0],sizeof(spriteext_t),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
 
-#ifdef POLYMER
+#if 0 // Polymer
     if (kdfread(&lightcount,sizeof(lightcount),1,fil) != 1) goto corrupt;
     if (kdfread(&prlights[0],sizeof(_prlight),lightcount,fil) != lightcount) goto corrupt;
 #else
     if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
 #endif // POLYMER
 
-#if defined(POLYMOST) && defined(USE_OPENGL)
+#if defined(USE_OPENGL)
     for (i=0; i<MAXSPRITES; i++)
         if (spriteext[i].mdanimtims)
             spriteext[i].mdanimtims+=mdtims;
@@ -267,8 +267,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_playerSpawnPoints,sizeof(g_playerSpawnPoints),1,fil) != 1) goto corrupt;
     if (kdfread(&g_numAnimWalls,sizeof(g_numAnimWalls),1,fil) != 1) goto corrupt;
     if (kdfread(&animwall,sizeof(animwall),1,fil) != 1) goto corrupt;
-    if (kdfread(&msx[0],sizeof(int32_t),sizeof(msx)/sizeof(int32_t),fil) != sizeof(msx)/sizeof(int32_t)) goto corrupt;
-    if (kdfread(&msy[0],sizeof(int32_t),sizeof(msy)/sizeof(int32_t),fil) != sizeof(msy)/sizeof(int32_t)) goto corrupt;
+    if (kdfread(&g_origins[0], sizeof(vec2_t), sizeof(g_origins) / sizeof(vec2_t), fil) != sizeof(g_origins) / sizeof(vec2_t)) goto corrupt;
     if (kdfread((int16_t *)&g_spriteDeleteQueuePos,sizeof(int16_t),1,fil) != 1) goto corrupt;
     if (kdfread((int16_t *)&g_spriteDeleteQueueSize,sizeof(int16_t),1,fil) != 1) goto corrupt;
     if (kdfread((int16_t *)&SpriteDeletionQueue[0],sizeof(int16_t),g_spriteDeleteQueueSize,fil) != g_spriteDeleteQueueSize) goto corrupt;
@@ -285,13 +284,13 @@ int32_t G_LoadPlayer(int32_t spot)
 
     if (kdfread(&g_scriptSize,sizeof(g_scriptSize),1,fil) != 1) goto corrupt;
     if (!g_scriptSize) goto corrupt;
-    scriptptrs = Bcalloc(1,g_scriptSize * sizeof(scriptptrs));
+    scriptptrs = (char*)Bcalloc(1,g_scriptSize * sizeof(scriptptrs));
     Bfree(bitptr);
-    bitptr = Bcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(uint8_t));
+    bitptr = (char*)Bcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(uint8_t));
     if (kdfread(&bitptr[0],sizeof(uint8_t),(g_scriptSize+7)>>3,fil) != ((g_scriptSize+7)>>3)) goto corrupt;
     if (script != NULL)
         Bfree(script);
-    script = Bcalloc(1,g_scriptSize * sizeof(intptr_t));
+    script = (intptr_t*)Bcalloc(1,g_scriptSize * sizeof(intptr_t));
     if (kdfread(&script[0],sizeof(script),g_scriptSize,fil) != g_scriptSize) goto corrupt;
     for (i=0; i<g_scriptSize; i++)
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)))
@@ -315,7 +314,7 @@ int32_t G_LoadPlayer(int32_t spot)
             actorLoadEventScrptr[i] = (intptr_t *)j;
         }
 
-    scriptptrs = Brealloc(scriptptrs, MAXSPRITES * sizeof(scriptptrs));
+    scriptptrs = (char*)Brealloc(scriptptrs, MAXSPRITES * sizeof(scriptptrs));
 
     if (kdfread(&scriptptrs[0],sizeof(scriptptrs),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
     if (kdfread(&ActorExtra[0],sizeof(ActorData_t),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
@@ -329,8 +328,7 @@ int32_t G_LoadPlayer(int32_t spot)
     }
 
     if (kdfread(&lockclock,sizeof(lockclock),1,fil) != 1) goto corrupt;
-    if (kdfread(&pskybits,sizeof(pskybits),1,fil) != 1) goto corrupt;
-    if (kdfread(&pskyoff[0],sizeof(pskyoff[0]),MAXPSKYTILES,fil) != MAXPSKYTILES) goto corrupt;
+    if (kdfread(&g_pskyidx,sizeof(g_pskyidx),1,fil) != 1) goto corrupt;
 
     if (kdfread(&g_animateCount,sizeof(g_animateCount),1,fil) != 1) goto corrupt;
     if (kdfread(&animatesect[0],sizeof(animatesect[0]),MAXANIMATES,fil) != MAXANIMATES) goto corrupt;
@@ -375,7 +373,7 @@ int32_t G_LoadPlayer(int32_t spot)
 
     if (kdfread(&randomseed,sizeof(randomseed),1,fil) != 1) goto corrupt;
     if (kdfread(&g_globalRandom,sizeof(g_globalRandom),1,fil) != 1) goto corrupt;
-    if (kdfread(&parallaxyscale,sizeof(parallaxyscale),1,fil) != 1) goto corrupt;
+    //if (kdfread(&parallaxyscale,sizeof(parallaxyscale),1,fil) != 1) goto corrupt;
 
     if (kdfread(&ProjectileData[0],sizeof(projectile_t),MAXTILES,fil) != MAXTILES) goto corrupt;
     if (kdfread(&DefaultProjectileData[0],sizeof(projectile_t),MAXTILES,fil) != MAXTILES) goto corrupt;
@@ -391,7 +389,7 @@ int32_t G_LoadPlayer(int32_t spot)
         if (ScriptQuotes[i] != NULL)
             Bfree(ScriptQuotes[i]);
 
-        ScriptQuotes[i] = Bcalloc(MAXQUOTELEN,sizeof(uint8_t));
+        ScriptQuotes[i] = (char*)Bcalloc(MAXQUOTELEN,sizeof(uint8_t));
 
         if (kdfread((char *)ScriptQuotes[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
         if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
@@ -404,7 +402,7 @@ int32_t G_LoadPlayer(int32_t spot)
         if (ScriptQuoteRedefinitions[i] != NULL)
             Bfree(ScriptQuoteRedefinitions[i]);
 
-        ScriptQuoteRedefinitions[i] = Bcalloc(MAXQUOTELEN,sizeof(uint8_t));
+        ScriptQuoteRedefinitions[i] = (char*)Bcalloc(MAXQUOTELEN,sizeof(uint8_t));
 
         if (kdfread((char *)ScriptQuoteRedefinitions[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
     }
@@ -460,9 +458,9 @@ int32_t G_LoadPlayer(int32_t spot)
         {
             kclose(fil);
             if (MapInfo[ud.level_number].alt_musicfn == NULL)
-                MapInfo[ud.level_number].alt_musicfn = Bcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
+                MapInfo[ud.level_number].alt_musicfn = (char*)Bcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
             else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.level_number].alt_musicfn))
-                MapInfo[ud.level_number].alt_musicfn = Brealloc(MapInfo[ud.level_number].alt_musicfn,(Bstrlen(levname)+1));
+                MapInfo[ud.level_number].alt_musicfn = (char*)Brealloc(MapInfo[ud.level_number].alt_musicfn,(Bstrlen(levname)+1));
             Bstrcpy(MapInfo[ud.level_number].alt_musicfn,levname);
         }
         else if (MapInfo[ud.level_number].alt_musicfn != NULL)
@@ -483,9 +481,9 @@ int32_t G_LoadPlayer(int32_t spot)
         else kclose(fil);
 
         if (MapInfo[ud.level_number].musicfn == NULL)
-            MapInfo[ud.level_number].musicfn = Bcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
+            MapInfo[ud.level_number].musicfn = (char*)Bcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
         else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.level_number].musicfn))
-            MapInfo[ud.level_number].musicfn = Brealloc(MapInfo[ud.level_number].musicfn,(Bstrlen(levname)+1));
+            MapInfo[ud.level_number].musicfn = (char*)Brealloc(MapInfo[ud.level_number].musicfn,(Bstrlen(levname)+1));
         Bstrcpy(MapInfo[ud.level_number].musicfn,levname);
     }
 
@@ -589,7 +587,7 @@ int32_t G_LoadPlayer(int32_t spot)
 
     G_ResetTimers();
 
-#ifdef POLYMER
+#if 0 //POLYMER
     if (getrendermode() == 4)
     {
         int32_t i = 0;
@@ -682,7 +680,7 @@ int32_t G_SavePlayer(int32_t spot)
     if (!waloff[TILE_SAVESHOT])
     {
         walock[TILE_SAVESHOT] = 254;
-        cacheAllocateBlock(&waloff[TILE_SAVESHOT],200*320,&walock[TILE_SAVESHOT]);
+        g_cache.allocateBlock(&waloff[TILE_SAVESHOT],200*320,&walock[TILE_SAVESHOT]);
         clearbuf((void*)waloff[TILE_SAVESHOT],(200*320)/4,0);
         walock[TILE_SAVESHOT] = 1;
     }
@@ -693,7 +691,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&numsectors,sizeof(numsectors),1,fil);
     dfwrite(&sector[0],sizeof(sectortype),MAXSECTORS,fil);
     dfwrite(&sprite[0],sizeof(spritetype),MAXSPRITES,fil);
-#if defined(POLYMOST) && defined(USE_OPENGL)
+#if defined(USE_OPENGL)
     for (i=0; i<MAXSPRITES; i++)
         if (spriteext[i].mdanimtims)
         {
@@ -702,9 +700,9 @@ int32_t G_SavePlayer(int32_t spot)
                 spriteext[i].mdanimtims++;
         }
 #endif
-    dfwrite(&spriteext[0],sizeof(spriteexttype),MAXSPRITES,fil);
+    dfwrite(&spriteext[0],sizeof(spriteext_t),MAXSPRITES,fil);
 
-#ifdef POLYMER
+#if 0 //POLYMER
     dfwrite(&lightcount,sizeof(lightcount),1,fil);
     dfwrite(&prlights[0],sizeof(_prlight),lightcount,fil);
 #else
@@ -712,7 +710,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&i,sizeof(int32_t),1,fil);
 #endif // POLYMER
 
-#if defined(POLYMOST) && defined(USE_OPENGL)
+#if defined(USE_OPENGL)
     for (i=0; i<MAXSPRITES; i++)if (spriteext[i].mdanimtims)spriteext[i].mdanimtims+=mdtims;
 #endif
     dfwrite(&tailspritefree,sizeof(tailspritefree),1,fil);
@@ -729,8 +727,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&g_playerSpawnPoints,sizeof(g_playerSpawnPoints),1,fil);
     dfwrite(&g_numAnimWalls,sizeof(g_numAnimWalls),1,fil);
     dfwrite(&animwall,sizeof(animwall),1,fil);
-    dfwrite(&msx[0],sizeof(int32_t),sizeof(msx)/sizeof(int32_t),fil);
-    dfwrite(&msy[0],sizeof(int32_t),sizeof(msy)/sizeof(int32_t),fil);
+    dfwrite(&g_origins[0], sizeof(vec2_t), sizeof(g_origins) / sizeof(vec2_t), fil);
     dfwrite(&g_spriteDeleteQueuePos,sizeof(int16_t),1,fil);
     dfwrite(&g_spriteDeleteQueueSize,sizeof(int16_t),1,fil);
     dfwrite(&SpriteDeletionQueue[0],sizeof(int16_t),g_spriteDeleteQueueSize,fil);
@@ -746,7 +743,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&cloudy[0],sizeof(int16_t)<<7,1,fil);
 
     dfwrite(&g_scriptSize,sizeof(g_scriptSize),1,fil);
-    scriptptrs = Bcalloc(1, g_scriptSize * sizeof(scriptptrs));
+    scriptptrs = (char*)Bcalloc(1, g_scriptSize * sizeof(scriptptrs));
     for (i=0; i<g_scriptSize; i++)
     {
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)))
@@ -798,7 +795,7 @@ int32_t G_SavePlayer(int32_t spot)
         }
 
     Bfree(scriptptrs);
-    scriptptrs = Bcalloc(1, MAXSPRITES * sizeof(scriptptrs));
+    scriptptrs = (char*)Bcalloc(1, MAXSPRITES * sizeof(scriptptrs));
 
     for (i=0; i<MAXSPRITES; i++)
     {
@@ -842,8 +839,7 @@ int32_t G_SavePlayer(int32_t spot)
     }
 
     dfwrite(&lockclock,sizeof(lockclock),1,fil);
-    dfwrite(&pskybits,sizeof(pskybits),1,fil);
-    dfwrite(&pskyoff[0],sizeof(pskyoff[0]),MAXPSKYTILES,fil);
+    dfwrite(&g_pskyidx,sizeof(g_pskyidx),1,fil);
     dfwrite(&g_animateCount,sizeof(g_animateCount),1,fil);
     dfwrite(&animatesect[0],sizeof(animatesect[0]),MAXANIMATES,fil);
     for (i = g_animateCount-1; i>=0; i--) animateptr[i] = (int32_t *)((intptr_t)animateptr[i]-(intptr_t)(&sector[0]));
@@ -878,7 +874,7 @@ int32_t G_SavePlayer(int32_t spot)
 
     dfwrite(&randomseed,sizeof(randomseed),1,fil);
     dfwrite(&g_globalRandom,sizeof(g_globalRandom),1,fil);
-    dfwrite(&parallaxyscale,sizeof(parallaxyscale),1,fil);
+    //dfwrite(&parallaxyscale,sizeof(parallaxyscale),1,fil);
 
     dfwrite(&ProjectileData[0],sizeof(projectile_t),MAXTILES,fil);
     dfwrite(&DefaultProjectileData[0],sizeof(projectile_t),MAXTILES,fil);
@@ -922,7 +918,7 @@ int32_t G_SavePlayer(int32_t spot)
 
     waitforeverybody();
 
-    ototalclock = totalclock;
+    ototalclock = (int32_t)totalclock;
 
     return(0);
 }

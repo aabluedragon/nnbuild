@@ -46,6 +46,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#include "util_lib.h"
 #include "hightile.h"
 #include "al_midi.h"
+#include "colmatch.h"
+#include "renderlayer.h"
 
 #ifdef DISCORD_RPC
 #include "discord.h"
@@ -55,7 +57,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
-extern int G_GetVersionFromWebsite(char *buffer);
 #define UPDATEINTERVAL 604800 // 1w
 #else
 static int usecwd = 0;
@@ -86,8 +87,6 @@ static strllist *CommandPaths = NULL, *CommandGrps = NULL;
 char boardfilename[BMAX_PATH] = {0}, currentboardfilename[BMAX_PATH] = {0};
 char root[BMAX_PATH];
 
-uint8_t water_pal[768], slime_pal[768], title_pal[768], dre_alms[768], ending_pal[768], *anim_pal;
-
 static char firstdemofile[80] = { '\0' };
 static int userconfiles = 0;
 
@@ -98,7 +97,6 @@ int recfilep,totalreccnt;
 int debug_on = 0,g_noEnemies = 0;
 
 char *rtsptr;
-extern int numlumps; // rts.c
 
 static FILE *frecfilep = (FILE *)NULL;
 
@@ -148,8 +146,6 @@ int hud_glowingquotes = 1;
 int hud_showmapname = 1;
 
 int g_levelTextTime = 0;
-
-int r_maxfps = 0;
 
 #if defined(RENDERTYPEWIN) && defined(USE_OPENGL)
 extern char forcegl;
@@ -1359,24 +1355,17 @@ void getpackets(void)
     Net_ParsePackets();
 }
 
-extern int cacnum;
-typedef struct
-{
-    int *hand, leng;
-    char *lock ;
-}
-cactype;
-extern cactype cac[];
-
 static void G_ShowCacheLocks(void)
 {
     short i,k;
 
+    auto indexes = g_cache.getIndex();
+
     k = 0;
-    for (i=cacnum-1;i>=0;i--)
-        if ((*cac[i].lock) >= 200)
+    for (i=g_cache.numBlocks()-1;i>=0;i--)
+        if ((*indexes[i].lock) >= 200)
         {
-            Bsprintf(tempbuf,"Locked- %d: Leng:%d, Lock:%d",i,cac[i].leng,*cac[i].lock);
+            Bsprintf(tempbuf,"Locked- %d: Leng:%d, Lock:%d",i,indexes[i].leng,*indexes[i].lock);
             printext256(0L,k,31,-1,tempbuf,1);
             k += 6;
         }
@@ -1384,7 +1373,7 @@ static void G_ShowCacheLocks(void)
     k += 6;
 
     for (i=10;i>=0;i--)
-        if (lumplockbyte[i] >= 200)
+        if (rts_lumplockbyte[i] >= 200)
         {
             Bsprintf(tempbuf,"RTS Locked %d:",i);
             printext256(0L,k,31,-1,tempbuf,1);
@@ -2715,7 +2704,8 @@ extern int g_doQuickSave;
 
 void G_GameExit(const char *t)
 {
-    if (*t != 0) g_player[myconnectindex].ps->palette = BASEPAL;
+    if (*t != 0 && g_player[myconnectindex].ps != NULL)
+        g_player[myconnectindex].ps->palette = BASEPAL;
 
     if (numplayers > 1)
         allowtimetocorrecterrorswhenquitting();
@@ -3157,93 +3147,87 @@ static void G_DrawOverheadMap(int cposx, int cposy, int czoom, short cang)
 
 #define CROSSHAIR_PAL (MAXPALOOKUPS-RESERVEDPALS-1)
 
-extern int getclosestcol(int r, int g, int b);
 palette_t CrosshairColors = { 255, 255, 0, 0 };
 palette_t DefaultCrosshairColors = { 0, 0, 0, 0 };
 int g_crosshairSum = 0;
 
 void G_GetCrosshairColor(void)
 {
-    if (DefaultCrosshairColors.f == 0)
+    if (DefaultCrosshairColors.f)
+        return;
+
+    tileLoad(CROSSHAIR);
+
+    if (!waloff[CROSSHAIR])
+        return;
+
+    char const* ptr = (char const*)waloff[CROSSHAIR];
+
+    // find the brightest color in the original 8-bit tile
+    int32_t ii = tilesiz[CROSSHAIR].x * tilesiz[CROSSHAIR].y;
+    int32_t bri = 0, j = 0, i;
+
+    Bassert(ii > 0);
+
+    do
     {
-        // use the brightest color in the original 8-bit tile
-        int bri = 0, j = 0, i;
-        int ii;
-        char *ptr = (char *)waloff[CROSSHAIR];
-
-        if (waloff[CROSSHAIR] == 0)
+        if (*ptr != 255)
         {
-            tileLoad(CROSSHAIR);
-            ptr = (char *)waloff[CROSSHAIR];
+            i = curpalette[(int32_t)*ptr].r + curpalette[(int32_t)*ptr].g + curpalette[(int32_t)*ptr].b;
+            if (i > j) { j = i; bri = *ptr; }
         }
+        ptr++;
+    } while (--ii);
 
-        ii = tilesiz[CROSSHAIR].x*tilesiz[CROSSHAIR].y;
-
-        if (ii <= 0) return;
-
-        do
-        {
-            if (*ptr != 255)
-            {
-                i = curpalette[(int)*ptr].r+curpalette[(int)*ptr].g+curpalette[(int)*ptr].b;
-                if (i > j) { j = i; bri = *ptr; }
-            }
-            ptr++;
-            ii--;
-        }
-        while (ii > 0);
-
-        DefaultCrosshairColors.r = CrosshairColors.r = curpalette[bri].r;
-        DefaultCrosshairColors.g = CrosshairColors.g = curpalette[bri].g;
-        DefaultCrosshairColors.b = CrosshairColors.b = curpalette[bri].b;
-        DefaultCrosshairColors.f = 1; // this flag signifies that the color has been detected
-    }
+    Bmemcpy(&CrosshairColors, &curpalette[bri], sizeof(palette_t));
+    Bmemcpy(&DefaultCrosshairColors, &curpalette[bri], sizeof(palette_t));
+    DefaultCrosshairColors.f = 1; // this flag signifies that the color has been detected
 }
 
-void G_SetCrosshairColor(int r, int g, int b)
+void G_SetCrosshairColor(int32_t r, int32_t g, int32_t b)
 {
-    char *ptr = (char *)waloff[CROSSHAIR];
-    int i, ii;
+    if (g_crosshairSum == r + (g << 8) + (b << 16))
+        return;
 
-    if (DefaultCrosshairColors.f == 0 || g_crosshairSum == r+(g<<1)+(b<<2)) return;
+    tileLoad(CROSSHAIR);
 
-    g_crosshairSum = r+(g<<1)+(b<<2);
+    if (!waloff[CROSSHAIR])
+        return;
+
+    if (!DefaultCrosshairColors.f)
+        G_GetCrosshairColor();
+
+    g_crosshairSum = r + (g << 8) + (b << 16);
     CrosshairColors.r = r;
     CrosshairColors.g = g;
     CrosshairColors.b = b;
 
-    if (waloff[CROSSHAIR] == 0)
-    {
-        tileLoad(CROSSHAIR);
-        ptr = (char *)waloff[CROSSHAIR];
-    }
+    char* ptr = (char*)waloff[CROSSHAIR];
 
-    ii = tilesiz[CROSSHAIR].x*tilesiz[CROSSHAIR].y;
-    if (ii <= 0) return;
+    int32_t ii = tilesiz[CROSSHAIR].x * tilesiz[CROSSHAIR].y;
 
-    if (videoGetRenderMode() < 3)
-        i = getclosestcol(CrosshairColors.r>>2, CrosshairColors.g>>2, CrosshairColors.b>>2);
-    else i = getclosestcol(63, 63, 63); // use white in GL so we can tint it to the right color
+    Bassert(ii > 0);
+
+    int32_t i = (videoGetRenderMode() == REND_CLASSIC)
+        ? paletteGetClosestColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b)
+        : paletteGetClosestColor(255, 255, 255);  // use white in GL so we can tint it to the right color
 
     do
     {
         if (*ptr != 255)
             *ptr = i;
         ptr++;
-        ii--;
-    }
-    while (ii > 0);
+    } while (--ii);
 
-    for (i = 255; i >= 0; i--)
-        tempbuf[i] = i;
+    paletteMakeLookupTable(CROSSHAIR_PAL, NULL, CrosshairColors.r, CrosshairColors.g, CrosshairColors.b, 1);
 
-    paletteMakeLookupTable(CROSSHAIR_PAL,tempbuf,CrosshairColors.r>>2, CrosshairColors.g>>2, CrosshairColors.b>>2,0);
-
-#if defined(USE_OPENGL)
-    hictinting[CROSSHAIR_PAL].r = CrosshairColors.r;
-    hictinting[CROSSHAIR_PAL].g = CrosshairColors.g;
-    hictinting[CROSSHAIR_PAL].b = CrosshairColors.b;
-    hictinting[CROSSHAIR_PAL].f = HICTINT_USEONART | HICTINT_GRAYSCALE;
+#ifdef USE_OPENGL
+    // XXX: this makes us also load all hightile textures tinted with the crosshair color!
+    polytint_t& crosshairtint = hictinting[CROSSHAIR_PAL];
+    crosshairtint.r = CrosshairColors.r;
+    crosshairtint.g = CrosshairColors.g;
+    crosshairtint.b = CrosshairColors.b;
+    crosshairtint.f = HICTINT_USEONART | HICTINT_GRAYSCALE;
 #endif
     tileInvalidate(CROSSHAIR, -1, -1);
 }
@@ -8805,6 +8789,7 @@ static inline int stringsort(const char *p1, const char *p2)
     return Bstrcmp(&p1[0],&p2[0]);
 }
 
+#if 0
 // Not supported with the enet network backend currently
 static void setup_rancid_net(const char *fn)
 {
@@ -8908,6 +8893,8 @@ static void setup_rancid_net(const char *fn)
             netparam[i] = (char *)&rancid_local_port_string;
     }
 }
+#endif
+
 #endif
 
 // OLDMP MERGE CHECKME
@@ -9275,7 +9262,7 @@ static void G_AddPath(const char *buffer)
 }
 
 
-static void G_CheckCommandLine(int argc, const char **argv)
+static void G_CheckCommandLine(int argc, char const* const* argv)
 {
     short i, j;
     char *c;
@@ -10204,55 +10191,124 @@ static void G_CheckGametype(void)
     //     initprintf("ud.m_coop=%i after sanitisation\n",ud.m_coop);
 }
 
-static void G_LoadExtraPalettes(void)
+void G_LoadLookups(void)
 {
-    int j,fp;
-    signed char look_pos;
-    const char *lookfn = "lookup.dat";
+    int32_t j;
+    buildvfs_kfd fp;
 
-    fp = kopen4loadfrommod(lookfn,0);
-    if (fp != -1)
-        kread(fp,(char *)&g_numRealPalettes,1);
-    else
-        G_GameExit("\nERROR: File 'lookup.dat' not found.");
+    if ((fp = kopen4loadfrommod("lookup.dat", 0)) == buildvfs_kfd_invalid)
+        if ((fp = kopen4loadfrommod("lookup.dat", 1)) == buildvfs_kfd_invalid)
+            return;
 
-#if defined(__APPLE__) && B_BIG_ENDIAN != 0
-    // this is almost as bad as just setting the value to 25 :P
-    g_numRealPalettes = (g_numRealPalettes * (uint64)0x0202020202 & (uint64)0x010884422010) % 1023;
-#endif
+    j = paletteLoadLookupTable(fp);
 
-    for (j = 0; j < 256; j++)
-        tempbuf[j] = j;
-
-    for (j=g_numRealPalettes+1;j<MAXPALOOKUPS;j++)
-        paletteMakeLookupTable(j,tempbuf,0,0,0,0);
-
-    for (j=g_numRealPalettes-1;j>=0;j--)
+    if (j < 0)
     {
-        kread(fp,(signed char *)&look_pos,1);
-        kread(fp,tempbuf,256);
-        paletteMakeLookupTable((int)look_pos,tempbuf,0,0,0,0);
+        if (j == -1)
+            initprintf("ERROR loading \"lookup.dat\": failed reading enough data.\n");
+
+        return kclose(fp);
+}
+
+    uint8_t paldata[768];
+
+    for (j = 1; j <= 5; j++)
+    {
+        // Account for TITLE and REALMS swap between basepal number and on-disk order.
+        int32_t basepalnum = (j == 3 || j == 4) ? 4 + 3 - j : j;
+
+        if (kread_and_test(fp, paldata, 768))
+            return kclose(fp);
+
+        for (unsigned char& k : paldata)
+            k <<= 2;
+
+        paletteSetColorTable(basepalnum, paldata);
     }
 
-    for (j = 255; j>=0; j--)
-        tempbuf[j] = j;
-    g_numRealPalettes++;
-    paletteMakeLookupTable(g_numRealPalettes, tempbuf, 15, 15, 15, 0);
-    paletteMakeLookupTable(g_numRealPalettes + 1, tempbuf, 15, 0, 0, 0);
-    paletteMakeLookupTable(g_numRealPalettes + 2, tempbuf, 0, 15, 0, 0);
-    paletteMakeLookupTable(g_numRealPalettes + 3, tempbuf, 0, 0, 15, 0);
-
-    kread(fp, &water_pal[0], 768);
-    kread(fp, &slime_pal[0], 768);
-    kread(fp, &title_pal[0], 768);
-    kread(fp, &dre_alms[0], 768);
-    kread(fp, &ending_pal[0], 768);
-
-    palette[765] = palette[766] = palette[767] = 0;
-    slime_pal[765] = slime_pal[766] = slime_pal[767] = 0;
-    water_pal[765] = water_pal[766] = water_pal[767] = 0;
-
     kclose(fp);
+}
+
+static void G_PostLoadPalette(void)
+{
+    //if (!(duke3d_globalflags & DUKE3D_NO_PALETTE_CHANGES))
+    {
+        // Make color index 255 of default/water/slime palette black.
+        if (basepaltable[BASEPAL] != NULL)
+            Bmemset(&basepaltable[BASEPAL][255 * 3], 0, 3);
+        if (basepaltable[WATERPAL] != NULL)
+            Bmemset(&basepaltable[WATERPAL][255 * 3], 0, 3);
+        if (basepaltable[SLIMEPAL] != NULL)
+            Bmemset(&basepaltable[SLIMEPAL][255 * 3], 0, 3);
+    }
+
+    //if (!(duke3d_globalflags & DUKE3D_NO_HARDCODED_FOGPALS))
+        paletteSetupDefaultFog();
+
+    //if (!(duke3d_globalflags & DUKE3D_NO_PALETTE_CHANGES))
+        paletteFixTranslucencyMask();
+
+    palettePostLoadLookups();
+}
+
+// Set up new-style multi-psky handling.
+void G_InitMultiPsky(int CLOUDYOCEAN__DYN, int MOONSKY1__DYN, int BIGORBIT1__DYN, int LA__DYN)
+{
+    // When adding other multi-skies, take care that the tileofs[] values are
+    // <= PSKYOFF_MAX. (It can be increased up to MAXPSKYTILES, but should be
+    // set as tight as possible.)
+
+    // The default sky properties (all others are implicitly zero):
+    psky_t* sky = tileSetupSky(DEFAULTPSKY);
+    sky->lognumtiles = 3;
+    sky->horizfrac = 32768;
+
+    // CLOUDYOCEAN
+    // Aligns with the drawn scene horizon because it has one itself.
+    sky = tileSetupSky(CLOUDYOCEAN__DYN);
+    sky->lognumtiles = 3;
+    sky->horizfrac = 65536;
+
+    // MOONSKY1
+    //        earth          mountain   mountain         sun
+    sky = tileSetupSky(MOONSKY1__DYN);
+    sky->lognumtiles = 3;
+    sky->horizfrac = 32768;
+    sky->tileofs[6] = 1;
+    sky->tileofs[1] = 2;
+    sky->tileofs[4] = 2;
+    sky->tileofs[2] = 3;
+
+    // BIGORBIT1   // orbit
+    //       earth1         2           3           moon/sun
+    sky = tileSetupSky(BIGORBIT1__DYN);
+    sky->lognumtiles = 3;
+    sky->horizfrac = 32768;
+    sky->tileofs[5] = 1;
+    sky->tileofs[6] = 2;
+    sky->tileofs[7] = 3;
+    sky->tileofs[2] = 4;
+
+    // LA // la city
+    //       earth1         2           3           moon/sun
+    sky = tileSetupSky(LA__DYN);
+    sky->lognumtiles = 3;
+    sky->horizfrac = 16384 + 1024;
+    sky->tileofs[0] = 1;
+    sky->tileofs[1] = 2;
+    sky->tileofs[2] = 1;
+    sky->tileofs[3] = 3;
+    sky->tileofs[4] = 4;
+    sky->tileofs[5] = 0;
+    sky->tileofs[6] = 2;
+    sky->tileofs[7] = 3;
+
+#if 0
+    // This assertion should hold. See note above.
+    for (bssize_t i = 0; i < pskynummultis; ++i)
+        for (bssize_t j = 0; j < (1 << multipsky[i].lognumtiles); ++j)
+            Bassert(multipsky[i].tileofs[j] <= PSKYOFF_MAX);
+#endif
 }
 
 extern int startwin_run(void);
@@ -10277,6 +10333,7 @@ static void G_Startup(void)
     }
 
     G_InitDynamicTiles();
+    G_InitMultiPsky(CLOUDYOCEAN, MOONSKY1, BIGORBIT1, LA);
 
     if (ud.multimode > 1) G_CheckGametype();
 
@@ -10343,6 +10400,7 @@ static void G_Startup(void)
     for (i=0;i<MAXPLAYERS;i++)
         g_player[i].playerreadyflag = 0;
 
+#if 0
 #ifndef RANCID_NETWORKING
     if (CommandNet)
     {
@@ -10354,6 +10412,7 @@ static void G_Startup(void)
         }
         CommandNet = NULL;
     }
+#endif
 #endif
 
 #ifdef RANCID_NETWORKING
@@ -10415,7 +10474,7 @@ static void G_Startup(void)
     S_PrecacheSounds();
 
 //    initprintf("Loading palette/lookups...\n");
-    G_LoadExtraPalettes();
+    G_LoadLookups();
 
     ReadSaveGameHeaders();
 
@@ -10479,7 +10538,7 @@ void app_crashhandler(void)
 }
 #endif
 
-void app_main(int argc,const char **argv)
+int app_main(int32_t argc, char const* const* argv)
 {
     int i = 0, j;
     char cwd[BMAX_PATH];
@@ -10622,10 +10681,6 @@ void app_main(int argc,const char **argv)
     glusetexcache = -1;
 #endif
 
-#ifdef _WIN32
-    ud.config.CheckForUpdates = -1;
-#endif
-
     hash_init(&gamefuncH);
     for (i=NUMGAMEFUNCTIONS-1;i>=0;i--)
     {
@@ -10652,55 +10707,7 @@ void app_main(int argc,const char **argv)
 #endif
 
 #ifdef _WIN32
-    if (ud.config.CheckForUpdates == -1)
-    {
-        i=wm_ynbox("Automatic Update Notifications",
-                   "Would you like to check for new versions of EDuke32 at startup?");
-        ud.config.CheckForUpdates = 0;
-        if (i) ud.config.CheckForUpdates = 1;
-    }
-
 //    initprintf("build %d\n",(char)atoi(BUILDDATE));
-
-    if (ud.config.CheckForUpdates == 1)
-    {
-        if (time(NULL) - ud.config.LastUpdateCheck > UPDATEINTERVAL)
-        {
-            initprintf("Checking for updates...\n");
-            if (G_GetVersionFromWebsite(tempbuf))
-            {
-                initprintf("Current version is %d",atoi(tempbuf));
-                ud.config.LastUpdateCheck = time(NULL);
-
-                if (atoi(tempbuf) > atoi(s_buildDate))
-                {
-                    if (wm_ynbox("EDuke32","A new version of EDuke32 is available. "
-                                 "Browse to http://eduke32.sourceforge.net now?"))
-                    {
-                        SHELLEXECUTEINFOA sinfo;
-                        const char *p = "http://eduke32.sourceforge.net";
-
-                        Bmemset(&sinfo, 0, sizeof(sinfo));
-                        sinfo.cbSize = sizeof(sinfo);
-                        sinfo.fMask = SEE_MASK_CLASSNAME;
-                        sinfo.lpVerb = "open";
-                        sinfo.lpFile = p;
-                        sinfo.nShow = SW_SHOWNORMAL;
-                        sinfo.lpClass = "http";
-
-                        if (!ShellExecuteExA(&sinfo))
-                            initprintf("update: error launching browser!\n");
-                        CONFIG_SetupMouse();
-                        CONFIG_SetupJoystick();
-                        CONFIG_WriteSetup();
-                        G_GameExit(" ");
-                    }
-                }
-                else initprintf("... no upgrade available\n");
-            }
-            else initprintf("update: failed to check for updates\n");
-        }
-    }
 #endif
     if (enginePreInit())
     {
@@ -10745,7 +10752,7 @@ void app_main(int argc,const char **argv)
     }
 
 // OLDMP MERGE CHECKME
-#if (defined RENDERTYPEWIN || (defined RENDERTYPESDL && !defined __APPLE__ && defined HAVE_GTK2) || (defined RENDERTYPESDL && defined _WIN32))
+#ifdef STARTUP_SETUP_WINDOW
     if (i < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_JF || ud.config.ForceSetup)) || g_commandSetup)
     {
         if (quitevent || !startwin_run())
@@ -11019,7 +11026,7 @@ CLEAN_DIRECTORY:
         i = 1-i;
     }
 
-    if (quitevent) return;
+    if (quitevent) return 4;
     if (!loaddefinitionsfile(eduke32def))
     {
         initprintf("Internal def file '%s' loaded.\n", eduke32def);
@@ -11032,6 +11039,8 @@ CLEAN_DIRECTORY:
         loaddefinitions_game(duke3ddef, FALSE);
     }
     //     initprintf("numplayers=%i\n",numplayers);
+
+    G_PostLoadPalette();
 
     Net_SendVersion();
     Net_SendPlayerName();
@@ -11094,7 +11103,7 @@ CLEAN_DIRECTORY:
     }
 
     RTS_Init(ud.rtsname);
-    if (numlumps) initprintf("Using .RTS file '%s'\n",ud.rtsname);
+    if (rts_numlumps) initprintf("Using .RTS file '%s'\n",ud.rtsname);
 
     if (ud.last_level == 1)
     {
@@ -11412,6 +11421,8 @@ MAIN_LOOP_RESTART:
     }
 
     G_GameExit(" ");
+
+    return 0;
 }
 
 static int demo_version;
@@ -13017,6 +13028,15 @@ static void G_SetupGameButtons(void)
     CONTROL_DefineFlag(gamefunc_Quick_Kick,false);
     CONTROL_DefineFlag(gamefunc_Next_Weapon,false);
     CONTROL_DefineFlag(gamefunc_Previous_Weapon,false);
+}
+
+// [JM] Needed for build linkage
+void M32RunScript(const char* s) { UNREFERENCED_PARAMETER(s); }
+void G_Polymer_UnInit(void) { }
+void app_crashhandler(void) { }
+const char* G_DefaultDefFile(void)
+{
+    return duke3ddef;
 }
 
 /*

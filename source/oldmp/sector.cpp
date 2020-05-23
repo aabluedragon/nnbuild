@@ -229,7 +229,7 @@ int __fastcall A_FindPlayer(spritetype *s, int *d)
 {
     if (ud.multimode < 2)
     {
-        *d = klabs(g_player[myconnectindex].ps->oposx-s->x) + klabs(g_player[myconnectindex].ps->oposy-s->y) + ((klabs(g_player[myconnectindex].ps->oposz-s->z+(28<<8)))>>4);
+        *d = klabs(g_player[myconnectindex].ps->opos.x-s->x) + klabs(g_player[myconnectindex].ps->opos.y-s->y) + ((klabs(g_player[myconnectindex].ps->opos.z-s->z+(28<<8)))>>4);
         return myconnectindex;
     }
 
@@ -239,7 +239,7 @@ int __fastcall A_FindPlayer(spritetype *s, int *d)
 
         TRAVERSE_CONNECT(j)
         {
-            x = klabs(g_player[j].ps->oposx-s->x) + klabs(g_player[j].ps->oposy-s->y) + ((klabs(g_player[j].ps->oposz-s->z+(28<<8)))>>4);
+            x = klabs(g_player[j].ps->opos.x-s->x) + klabs(g_player[j].ps->opos.y-s->y) + ((klabs(g_player[j].ps->opos.z-s->z+(28<<8)))>>4);
             if (x < closest && sprite[g_player[j].ps->i].extra > 0)
             {
                 closest_player = j;
@@ -260,7 +260,7 @@ int P_FindOtherPlayer(int p,int *d)
     TRAVERSE_CONNECT(j)
     if (p != j && sprite[g_player[j].ps->i].extra > 0)
     {
-        x = klabs(g_player[j].ps->oposx-g_player[p].ps->posx) + klabs(g_player[j].ps->oposy-g_player[p].ps->posy) + (klabs(g_player[j].ps->oposz-g_player[p].ps->posz)>>4);
+        x = klabs(g_player[j].ps->opos.x-g_player[p].ps->pos.x) + klabs(g_player[j].ps->opos.y-g_player[p].ps->pos.y) + (klabs(g_player[j].ps->opos.z-g_player[p].ps->pos.z)>>4);
 
         if (x < closest)
         {
@@ -323,16 +323,16 @@ void G_DoSectorAnimations(void)
         {
             TRAVERSE_CONNECT(p)
             if (g_player[p].ps->cursectnum == dasect)
-                if ((sector[dasect].floorz-g_player[p].ps->posz) < (64<<8))
+                if ((sector[dasect].floorz-g_player[p].ps->pos.z) < (64<<8))
                     if (sprite[g_player[p].ps->i].owner >= 0)
                     {
-                        g_player[p].ps->posz += v;
-                        g_player[p].ps->poszv = 0;
+                        g_player[p].ps->pos.z += v;
+                        g_player[p].ps->vel.z = 0;
                         if (p == myconnectindex)
                         {
                             myz += v;
                             myzvel = 0;
-                            myzbak[((movefifoplc-1)&(MOVEFIFOSIZ-1))] = g_player[p].ps->posz;
+                            myzbak[((movefifoplc-1)&(MOVEFIFOSIZ-1))] = g_player[p].ps->pos.z;
                         }
                     }
 
@@ -406,7 +406,7 @@ void G_AnimateCamSprite(void)
         else if (OW >= 0 && dist(&sprite[g_player[screenpeek].ps->i],&sprite[i]) < 2048)
         {
             if (waloff[TILE_VIEWSCR] == 0)
-                allocatepermanenttile(TILE_VIEWSCR,tilesizx[PN],tilesizy[PN]);
+                tileCreate(TILE_VIEWSCR,tilesiz[PN].x,tilesiz[PN].y);
             else walock[TILE_VIEWSCR] = 255;
             xyzmirror(OW,/*PN*/TILE_VIEWSCR);
         }
@@ -1492,17 +1492,17 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
             if (picnum == ALIENSWITCH || picnum == ALIENSWITCH+1)
             {
                 if (switchtype == 1)
-                    S_PlaySoundXYZ(ALIEN_SWITCH1,w,sx,sy,g_player[snum].ps->posz);
-                else S_PlaySoundXYZ(ALIEN_SWITCH1,g_player[snum].ps->i,sx,sy,g_player[snum].ps->posz);
+                    S_PlaySoundXYZ(ALIEN_SWITCH1,w,sx,sy,g_player[snum].ps->pos.z);
+                else S_PlaySoundXYZ(ALIEN_SWITCH1,g_player[snum].ps->i,sx,sy,g_player[snum].ps->pos.z);
             }
             else
             {
                 if (switchtype == 1)
-                    S_PlaySoundXYZ(SWITCH_ON,w,sx,sy,g_player[snum].ps->posz);
-                else S_PlaySoundXYZ(SWITCH_ON,g_player[snum].ps->i,sx,sy,g_player[snum].ps->posz);
+                    S_PlaySoundXYZ(SWITCH_ON,w,sx,sy,g_player[snum].ps->pos.z);
+                else S_PlaySoundXYZ(SWITCH_ON,g_player[snum].ps->i,sx,sy,g_player[snum].ps->pos.z);
             }
             if (numdips != correctdips) break;
-            S_PlaySoundXYZ(END_OF_LEVEL_WARN,g_player[snum].ps->i,sx,sy,g_player[snum].ps->posz);
+            S_PlaySoundXYZ(END_OF_LEVEL_WARN,g_player[snum].ps->i,sx,sy,g_player[snum].ps->pos.z);
         }
     case DIPSWITCH2__STATIC:
         //case DIPSWITCH2+1:
@@ -1582,13 +1582,13 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         if (hitag == 0 && CheckDoorTile(picnum) == 0)
         {
             if (switchtype == 1)
-                S_PlaySoundXYZ(SWITCH_ON,w,sx,sy,g_player[snum].ps->posz);
-            else S_PlaySoundXYZ(SWITCH_ON,g_player[snum].ps->i,sx,sy,g_player[snum].ps->posz);
+                S_PlaySoundXYZ(SWITCH_ON,w,sx,sy,g_player[snum].ps->pos.z);
+            else S_PlaySoundXYZ(SWITCH_ON,g_player[snum].ps->i,sx,sy,g_player[snum].ps->pos.z);
         }
         else if (hitag != 0)
         {
             if (switchtype == 1 && (g_sounds[hitag].m&4) == 0)
-                S_PlaySoundXYZ(hitag,w,sx,sy,g_player[snum].ps->posz);
+                S_PlaySoundXYZ(hitag,w,sx,sy,g_player[snum].ps->pos.z);
             else A_PlaySound(hitag,g_player[snum].ps->i);
         }
 
@@ -1935,23 +1935,23 @@ void P_CheckTouchDamage(DukePlayer_t *p,int j)
             p->pals[1] = 0;
             p->pals[2] = 0;
 
-            p->posxv = -(sintable[(fix16_to_int(p->q16ang)+512)&2047]<<8);
-            p->posyv = -(sintable[fix16_to_int(p->q16ang)&2047]<<8);
+            p->vel.x = -(sintable[(fix16_to_int(p->q16ang)+512)&2047]<<8);
+            p->vel.y = -(sintable[fix16_to_int(p->q16ang)&2047]<<8);
             A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
 
             A_DamageWall(p->i,j,
-                         p->posx+(sintable[(fix16_to_int(p->q16ang)+512)&2047]>>9),
-                         p->posy+(sintable[fix16_to_int(p->q16ang)&2047]>>9),
-                         p->posz,-1);
+                         p->pos.x+(sintable[(fix16_to_int(p->q16ang)+512)&2047]>>9),
+                         p->pos.y+(sintable[fix16_to_int(p->q16ang)&2047]>>9),
+                         p->pos.z,-1);
 
             break;
 
         case BIGFORCE__STATIC:
             p->hurt_delay = 26;
             A_DamageWall(p->i,j,
-                         p->posx+(sintable[(fix16_to_int(p->q16ang)+512)&2047]>>9),
-                         p->posy+(sintable[fix16_to_int(p->q16ang)&2047]>>9),
-                         p->posz,-1);
+                         p->pos.x+(sintable[(fix16_to_int(p->q16ang)+512)&2047]>>9),
+                         p->pos.y+(sintable[fix16_to_int(p->q16ang)&2047]>>9),
+                         p->pos.z,-1);
             break;
 
         }
@@ -2448,7 +2448,7 @@ void A_DamageObject_Internal(int i,int sn)
                             SA = (sprite[sn].ang+1024)&2047;
                         sprite[i].xvel = -(sprite[sn].extra<<2);
                         j = SECT;
-                        pushmove(&SX,&SY,&SZ,&j,128L,(4L<<8),(4L<<8),CLIPMASK0);
+                        pushmove_old(&SX,&SY,&SZ,&j,128L,(4L<<8),(4L<<8),CLIPMASK0);
                         if (j != SECT && j >= 0 && j < MAXSECTORS)
                             changespritesect(i,j);
                     }
@@ -2485,12 +2485,12 @@ void A_DamageObject_Internal(int i,int sn)
                 if (g_player[p].ps->newowner >= 0)
                 {
                     g_player[p].ps->newowner = -1;
-                    g_player[p].ps->posx = g_player[p].ps->oposx;
-                    g_player[p].ps->posy = g_player[p].ps->oposy;
-                    g_player[p].ps->posz = g_player[p].ps->oposz;
+                    g_player[p].ps->pos.x = g_player[p].ps->opos.x;
+                    g_player[p].ps->pos.y = g_player[p].ps->opos.y;
+                    g_player[p].ps->pos.z = g_player[p].ps->opos.z;
                     g_player[p].ps->q16ang = g_player[p].ps->oq16ang;
 
-                    updatesector(g_player[p].ps->posx,g_player[p].ps->posy,&g_player[p].ps->cursectnum);
+                    updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&g_player[p].ps->cursectnum);
                     P_UpdateScreenPal(g_player[p].ps);
 
                     j = headspritestat[STAT_ACTOR];
@@ -3057,9 +3057,9 @@ CHECKINV1:
                         {
                             p->holoduke_on = i =
                                                  A_InsertSprite(p->cursectnum,
-                                                                p->posx,
-                                                                p->posy,
-                                                                p->posz+(30<<8),APLAYER,-64,0,0,fix16_to_int(p->q16ang),0,0,-1,10);
+                                                                p->pos.x,
+                                                                p->pos.y,
+                                                                p->pos.z+(30<<8),APLAYER,-64,0,0,fix16_to_int(p->q16ang),0,0,-1,10);
                             T4 = T5 = 0;
                             SP = snum;
                             sprite[i].extra = 0;
@@ -3137,7 +3137,7 @@ CHECKINV1:
                     else
                     {
                         p->hard_landing = 0;
-                        p->poszv = 0;
+                        p->vel.z = 0;
                         A_PlaySound(DUKE_JETPACK_OFF,p->i);
                         S_StopEnvSound(DUKE_JETPACK_IDLE,p->i);
                         S_StopEnvSound(DUKE_JETPACK_ON,p->i);
@@ -3162,36 +3162,40 @@ CHECKINV1:
 
 int A_CheckHitSprite(int i,short *hitsp)
 {
-    int sx,sy,sz,zoff;
-    short sect,hw;
+    int zoff;
 
     if (A_CheckEnemySprite(&sprite[i]))
         zoff = (42<<8);
     else if (PN == APLAYER) zoff = (39<<8);
     else zoff = 0;
 
-    hitscan(SX,SY,SZ-zoff,SECT,
+    vec3_t origin;
+    origin.x = sprite[i].x;
+    origin.y = sprite[i].y;
+    origin.z = sprite[i].z-zoff;
+
+    hitdata_t hit;
+
+    hitscan(&origin,SECT,
             sintable[(SA+512)&2047],
             sintable[SA&2047],
-            0,&sect,&hw,hitsp,&sx,&sy,&sz,CLIPMASK1);
+            0,&hit,CLIPMASK1);
 
-    if (hw >= 0 && (wall[hw].cstat&16) && A_CheckEnemySprite(&sprite[i]))
+    if (hit.wall >= 0 && (wall[hit.wall].cstat&16) && A_CheckEnemySprite(&sprite[i]))
         return((1<<30));
 
-    return (FindDistance2D(sx-SX,sy-SY));
+    return (FindDistance2D(hit.pos.x-origin.x,hit.pos.y-origin.y));
 }
 
 static int hitawall(DukePlayer_t *p,short *hitw)
 {
-    int sx,sy,sz;
-    short sect,hs;
-
-    hitscan(p->posx,p->posy,p->posz,p->cursectnum,
+    hitdata_t hit;
+    hitscan(&p->pos,p->cursectnum,
             sintable[(fix16_to_int(p->q16ang)+512)&2047],
             sintable[fix16_to_int(p->q16ang)&2047],
-            0,&sect,hitw,&hs,&sx,&sy,&sz,CLIPMASK0);
+            0,&hit,CLIPMASK0);
 
-    return (FindDistance2D(sx-p->posx,sy-p->posy));
+    return (FindDistance2D(hit.pos.x-p->pos.x,hit.pos.y-p->pos.y));
 }
 
 
@@ -3306,17 +3310,17 @@ void checksectors(int snum)
             }
 
         if (p->newowner >= 0)
-            neartag(p->oposx,p->oposy,p->oposz,sprite[p->i].sectnum,fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1);
+            neartag(p->opos.x,p->opos.y,p->opos.z,sprite[p->i].sectnum,fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1, NULL);
         else
         {
-            neartag(p->posx,p->posy,p->posz,sprite[p->i].sectnum,fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1);
+            neartag(p->pos.x,p->pos.y,p->pos.z,sprite[p->i].sectnum,fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1, NULL);
             if (neartagsprite == -1 && neartagwall == -1 && neartagsector == -1)
-                neartag(p->posx,p->posy,p->posz+(8<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1);
+                neartag(p->pos.x,p->pos.y,p->pos.z+(8<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1, NULL);
             if (neartagsprite == -1 && neartagwall == -1 && neartagsector == -1)
-                neartag(p->posx,p->posy,p->posz+(16<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1);
+                neartag(p->pos.x,p->pos.y,p->pos.z+(16<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1, NULL);
             if (neartagsprite == -1 && neartagwall == -1 && neartagsector == -1)
             {
-                neartag(p->posx,p->posy,p->posz+(16<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,3);
+                neartag(p->pos.x,p->pos.y,p->pos.z+(16<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,3, NULL);
                 if (neartagsprite >= 0)
                 {
                     switch (DynamicTileMap[sprite[neartagsprite].picnum])
@@ -3466,13 +3470,13 @@ CLEARCAMERAS:
 
             if (i < 0)
             {
-                p->posx = p->oposx;
-                p->posy = p->oposy;
-                p->posz = p->oposz;
+                p->pos.x = p->opos.x;
+                p->pos.y = p->opos.y;
+                p->pos.z = p->opos.z;
                 p->q16ang = p->oq16ang;
                 p->newowner = -1;
 
-                updatesector(p->posx,p->posy,&p->cursectnum);
+                updatesector(p->pos.x,p->pos.y,&p->cursectnum);
                 P_UpdateScreenPal(p);
 
 

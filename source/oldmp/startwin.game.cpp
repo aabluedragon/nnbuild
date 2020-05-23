@@ -1,4 +1,4 @@
-#ifndef RENDERTYPEWIN
+#ifndef _WIN32
 #error Only for Windows
 #endif
 
@@ -6,7 +6,7 @@
 #include "sounds.h"
 
 #include "build.h"
-#include "winlayer.h"
+#include "renderlayer.h"
 #include "compat.h"
 
 #include "grpscan.h"
@@ -48,7 +48,7 @@ static HWND pages[3] =
 };
 static int done = -1, mode = TAB_CONFIG;
 
-static CACHE1D_FIND_REC *finddirs=NULL;
+static BUILDVFS_FIND_REC *finddirs=NULL;
 static int numdirs=0;
 
 static void clearfilenames(void)
@@ -58,12 +58,12 @@ static void clearfilenames(void)
     numdirs = 0;
 }
 
-static int getfilenames(char *path)
+static int getfilenames(const char *path)
 {
-    CACHE1D_FIND_REC *r;
+    BUILDVFS_FIND_REC *r;
 
     clearfilenames();
-    finddirs = klistpath(path,"*",CACHE1D_FIND_DIR);
+    finddirs = klistpath(path,"*",BUILDVFS_FIND_DIR);
     for (r = finddirs; r; r=r->next) numdirs++;
     return(0);
 }
@@ -73,7 +73,7 @@ static int getfilenames(char *path)
 #define POPULATE_GAME 4
 #define POPULATE_GAMEDIRS 8
 
-#if defined(POLYMOST)
+#if defined(USE_OPENGL)
 extern char TEXCACHEFILE[];
 #endif
 
@@ -91,7 +91,7 @@ static void PopulateForm(int pgs)
 
         hwnd = GetDlgItem(pages[TAB_CONFIG], IDCVMODE);
 
-        mode = checkvideomode(&settings.xdim, &settings.ydim, settings.bpp, settings.fullscreen, 1);
+        mode = videoCheckMode(&settings.xdim, &settings.ydim, settings.bpp, settings.fullscreen, 1);
         if (mode < 0)
         {
             int cd[] = { 32, 24, 16, 15, 8, 0 };
@@ -102,7 +102,7 @@ static void PopulateForm(int pgs)
             }
             for (; cd[i]; i++)
             {
-                mode = checkvideomode(&settings.xdim, &settings.ydim, cd[i], settings.fullscreen, 1);
+                mode = videoCheckMode(&settings.xdim, &settings.ydim, cd[i], settings.fullscreen, 1);
                 if (mode < 0) continue;
                 settings.bpp = cd[i];
                 break;
@@ -181,7 +181,7 @@ static void PopulateForm(int pgs)
 
     if (pgs & POPULATE_GAMEDIRS)
     {
-        CACHE1D_FIND_REC *dirs = NULL;
+        BUILDVFS_FIND_REC *dirs = NULL;
 
         hwnd = GetDlgItem(pages[TAB_CONFIG], IDCGAMEDIR);
 
@@ -192,7 +192,7 @@ static void PopulateForm(int pgs)
         (void)ComboBox_SetCurSel(hwnd, j);
         for (dirs=finddirs,i=1; dirs != NULL; dirs=dirs->next,i++)
         {
-#if defined(POLYMOST) && defined(USE_OPENGL)
+#if defined(USE_OPENGL)
             if (Bstrcasecmp(TEXCACHEFILE,dirs->name) == 0) continue;
 #endif
             j = ComboBox_AddString(hwnd, dirs->name);
@@ -241,7 +241,7 @@ static INT_PTR CALLBACK ConfigPageProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
             if (HIWORD(wParam) == CBN_SELCHANGE)
             {
                 int i,j;
-                CACHE1D_FIND_REC *dir = NULL;
+                BUILDVFS_FIND_REC *dir = NULL;
                 i = ComboBox_GetCurSel((HWND)lParam);
                 if (i != CB_ERR) i = ComboBox_GetItemData((HWND)lParam, i);
                 if (i != CB_ERR)
@@ -394,16 +394,19 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
 
         // Add tabs to the tab control
         {
+            static char textSetup[] = TEXT("Setup");
+            static char textMessageLog[] = TEXT("Message Log");
+
             TCITEM tab;
 
             hwnd = GetDlgItem(hwndDlg, WIN_STARTWIN_TABCTL);
 
             ZeroMemory(&tab, sizeof(tab));
             tab.mask = TCIF_TEXT;
-            tab.pszText = TEXT("Setup");
+            tab.pszText = textSetup;
             SendMessage(hwnd, TCM_INSERTITEM, (WPARAM)TAB_CONFIG, (LPARAM)&tab);
             tab.mask = TCIF_TEXT;
-            tab.pszText = TEXT("Message Log");
+            tab.pszText = textMessageLog;
             SendMessage(hwnd, TCM_INSERTITEM, (WPARAM)TAB_MESSAGES, (LPARAM)&tab);
 
             // Work out the position and size of the area inside the tab control for the pages
