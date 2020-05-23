@@ -1,6 +1,6 @@
 #include <windows.h>
 #include <commctrl.h>
-#include "../startwin.game.h"
+#include "../src/startwin.game.h"
 
 RSRC_ICON ICON "game_icon.ico"
 RSRC_BMP BITMAP "game.bmp"
