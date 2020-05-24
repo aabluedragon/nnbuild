@@ -204,7 +204,7 @@ void CONFIG_SetDefaults(void)
     ud.config.MixRate = 48000;
 #endif
     ud.config.MouseBias = 0;
-    ud.config.MusicDevice = 0;
+    ud.config.MusicDevice = ASS_AutoDetect;
     ud.config.MusicToggle = 1;
     ud.config.MusicVolume = 200;
     g_myAimMode = g_player[0].ps->aim_mode = 1;
@@ -1132,6 +1132,7 @@ void CONFIG_WriteSetup(void)
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "NumChannels",ud.config.NumChannels,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "NumBits",ud.config.NumBits,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "MixRate",ud.config.MixRate,false,false);
+    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "MusicDevice", ud.config.MusicDevice, false, false);
     //SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "ReverseStereo",ud.config.ReverseStereo,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "SoundToggle",ud.config.SoundToggle,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "VoiceToggle",ud.config.VoiceToggle,false,false);

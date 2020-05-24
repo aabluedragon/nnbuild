@@ -10019,20 +10019,6 @@ static void G_DisplayLogo(void)
     videoClearViewableArea(0L);
 }
 
-// OLDMP MERGE CHECKME
-static void loadtmb(void)
-{
-    uint8_t tmb[8000];
-    int fil, l;
-
-    fil = kopen4load("d3dtimbr.tmb",0);
-    if (fil == -1) return;
-    l = kfilelength(fil);
-    kread(fil,(char *)tmb,l);
-    AL_RegisterTimbreBank(tmb);
-    kclose(fil);
-}
-
 void freehash();
 static void G_FreeCONMem(void)
 {
@@ -10538,6 +10524,18 @@ void app_crashhandler(void)
 }
 #endif
 
+static void G_FatalEngineInitError(void)
+{
+#ifdef DEBUGGINGAIDS
+    debug_break();
+#endif
+    //G_Cleanup();
+    Bsprintf(tempbuf, "There was a problem initializing the engine: %s\n", engineerrstr);
+    ERRprintf("%s", tempbuf);
+    //fatal_exit(tempbuf);
+    G_Shutdown();
+}
+
 int app_main(int32_t argc, char const* const* argv)
 {
     int i = 0, j;
@@ -11040,6 +11038,9 @@ CLEAN_DIRECTORY:
     }
     //     initprintf("numplayers=%i\n",numplayers);
 
+    if (enginePostInit())
+        G_FatalEngineInitError();
+
     G_PostLoadPalette();
 
     Net_SendVersion();
@@ -11178,7 +11179,6 @@ CLEAN_DIRECTORY:
     S_MusicStartup();
     initprintf("Initializing sound...\n");
     S_SoundStartup();
-    loadtmb();
 
     /*    if (VOLUMEONE)
         {

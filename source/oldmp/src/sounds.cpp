@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "osd.h"
 #include "sounds.h"
+#include "al_midi.h"
 
 #include "renderlayer.h"
 
@@ -105,18 +106,35 @@ void S_SoundShutdown(void)
 
 void S_MusicStartup(void)
 {
-    if (ud.config.MusicDevice < 0)
-        return;
-
-    initprintf("Initializing music...\n");
-
-    if (MUSIC_Init(ud.config.MusicDevice) == MUSIC_Ok || MUSIC_Init((ud.config.MusicDevice = 0)) == MUSIC_Ok)
+    int status;
+    if ((status = MUSIC_Init(ud.config.MusicDevice)) == MUSIC_Ok)
     {
-        MUSIC_SetVolume(ud.config.MusicVolume);
+        if (ud.config.MusicDevice == ASS_AutoDetect)
+            ud.config.MusicDevice = MIDI_GetDevice();
+    }
+    else if ((status = MUSIC_Init(ASS_AutoDetect)) == MUSIC_Ok)
+    {
+        ud.config.MusicDevice = MIDI_GetDevice();
+    }
+    else
+    {
+        initprintf("S_MusicStartup(): failed initializing: %s\n", MUSIC_ErrorString(status));
         return;
     }
 
-    initprintf("S_MusicStartup(): failed initializing\n");
+    MUSIC_SetVolume(ud.config.MusicVolume);
+
+    auto const fil = kopen4load("d3dtimbr.tmb", 0);
+
+    if (fil != buildvfs_kfd_invalid)
+    {
+        int l = kfilelength(fil);
+        auto tmb = (uint8_t*)Xmalloc(l);
+        kread(fil, tmb, l);
+        AL_RegisterTimbreBank(tmb);
+        Xfree(tmb);
+        kclose(fil);
+    }
 }
 
 void S_MusicShutdown(void)
