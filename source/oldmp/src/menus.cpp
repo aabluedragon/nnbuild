@@ -34,6 +34,7 @@ extern int recfilep;
 //extern char vgacompatible;
 short g_skillSoundID=-1;
 int probey=0;
+static int musicdevice = 0;
 static int lastsavehead=0,last_menu_pos=0,last_menu,sh,onbar,buttonstat;
 static int last_zero,last_fifty,last_onehundred,last_twoohtwo,last_threehundred = 0;
 
@@ -58,6 +59,28 @@ extern int voting;
 
 #define mgametext(x,y,t,s,dabits) G_PrintGameText(2,STARTALPHANUM, x,y,t,s,0,dabits,0, 0, xdim-1, ydim-1, 65536)
 #define mgametextpal(x,y,t,s,p) G_PrintGameText(2,STARTALPHANUM, x,y,t,s,p,26,0, 0, xdim-1, ydim-1, 65536)
+
+static char const* MEOSN_SOUND_MIDIDRIVER[] = {
+    "OPL3 emu.",
+#ifdef _WIN32
+    "Windows MME",
+#endif
+#ifdef __linux__
+    "ALSA MIDI",
+#endif
+    ".sf2 synth",
+};
+
+static int32_t MEOSV_SOUND_MIDIDRIVER[] = {
+    ASS_OPL3,
+#ifdef _WIN32
+    ASS_WinMM,
+#endif
+#ifdef __linux__
+    ASS_ALSA,
+#endif
+    ASS_SF2,
+};
 
 void ChangeToMenu(int cm)
 {
@@ -393,7 +416,7 @@ static void modval(int min, int max,int *p,int dainc,int damodify)
     {
         if (rev == 0)
         {
-            if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4) || ((buttonstat&1) && minfo.dyaw < -256))        // && onbar) )
+            if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4) || ((buttonstat&1) && minfo.mousex < -256))        // && onbar) )
             {
                 KB_ClearKeyDown(sc_LeftArrow);
                 KB_ClearKeyDown(sc_kpad_4);
@@ -407,7 +430,7 @@ static void modval(int min, int max,int *p,int dainc,int damodify)
                 }
                 S_PlaySound(PISTOL_BODYHIT);
             }
-            if (KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6) || ((buttonstat&1) && minfo.dyaw > 256))       //&& onbar) )
+            if (KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6) || ((buttonstat&1) && minfo.mousex > 256))       //&& onbar) )
             {
                 KB_ClearKeyDown(sc_RightArrow);
                 KB_ClearKeyDown(sc_kpad_6);
@@ -424,7 +447,7 @@ static void modval(int min, int max,int *p,int dainc,int damodify)
         }
         else
         {
-            if (KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6) || ((buttonstat&1) && minfo.dyaw > 256))      //&& onbar ))
+            if (KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6) || ((buttonstat&1) && minfo.mousex > 256))      //&& onbar ))
             {
                 KB_ClearKeyDown(sc_RightArrow);
                 KB_ClearKeyDown(sc_kpad_6);
@@ -438,7 +461,7 @@ static void modval(int min, int max,int *p,int dainc,int damodify)
                 }
                 S_PlaySound(PISTOL_BODYHIT);
             }
-            if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4) || ((buttonstat&1) && minfo.dyaw < -256))      // && onbar) )
+            if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4) || ((buttonstat&1) && minfo.mousex < -256))      // && onbar) )
             {
                 KB_ClearKeyDown(sc_LeftArrow);
                 KB_ClearKeyDown(sc_kpad_4);
@@ -2215,7 +2238,7 @@ cheat_for_port_credits:
                     io++;
                 }
 
-                onbar = (probey==3||probey==5);
+                onbar = (probey==2);
                 x = probesm(c,yy+5,0,io);
 
                 if (x == -1)
@@ -2285,15 +2308,22 @@ cheat_for_port_credits:
                     {
                         i = r_downsize;
                         enabled = usehightile;
-                        _bar(1,d+8,yy+7, &r_downsize,-1,enabled && x==io,MENUHIGHLIGHT(io),!enabled,0,2);
+
+                        static char const* qualityopts[] = { "Full", "Half", "Barf", };
+
+                        if (enabled) modval(0, 2, (int*)&r_downsize, 1, probey == io);
+                        mgametextpal(d, yy, qualityopts[r_downsize], enabled ? MENUHIGHLIGHT(io) : DISABLEDMENUSHADE, 0);
+
                         if (r_downsize != i)
                         {
                             texcache_invalidate();
+                            r_downsizevar = r_downsize;
                             videoResetMode();
                             if (videoSetGameMode(fullscreen,xdim,ydim,bpp, ud.detail))
                                 OSD_Printf("restartvid: Reset failed...\n");
                             return;
                         }
+
                         break;
                     }
                     case 5:
@@ -2303,17 +2333,27 @@ cheat_for_port_credits:
                         mgametextpal(d,yy, ud.config.useprecache ? "On" : "Off", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, 0);
                         break;
                     case 6:
+                    {
                         enabled = usehightile;
-                        if (enabled && x==io) glusetexcompr = !glusetexcompr;
-                        if (enabled) modval(0,1,(int *)&glusetexcompr,1,probey==io);
-                        mgametextpal(d,yy, glusetexcompr ? "On" : "Off", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, 0);
+                        if (enabled && x == io) glusetexcompr = !glusetexcompr;
+                        if (enabled) modval(0, 2, (int*)&glusetexcompr, 1, probey == io);
+
+                        const char* texcompressionopts[] = { "No", "Hi-res Only", "Hi-res & 8-bit" };
+
+                        mgametextpal(d, yy, texcompressionopts[glusetexcompr], enabled ? MENUHIGHLIGHT(io) : DISABLEDMENUSHADE, 0);
                         break;
+                    }
                     case 7:
+                    {
                         enabled = (glusetexcompr && usehightile);
-                        if (enabled && x==io) glusetexcache = !glusetexcache;
-                        if (enabled) modval(0,1,(int *)&glusetexcache,1,probey==io);
-                        mgametextpal(d,yy, glusetexcache ? "On" : "Off", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, 0);
+                        if (enabled && x == io) glusetexcache = !glusetexcache;
+                        if (enabled) modval(0, 2, (int*)&glusetexcache, 1, probey == io);
+
+                        const char* texcacheopts[] = { "No", "Yes", "Compressed" };
+
+                        mgametextpal(d, yy, texcacheopts[glusetexcache], enabled ? MENUHIGHLIGHT(io) : DISABLEDMENUSHADE, 0);
                         break;
+                    }
                     case 8:
                         enabled = usehightile;
                         if (enabled && x==io) r_detailmapping = !r_detailmapping;
@@ -3366,9 +3406,9 @@ cheat_for_port_credits:
 
             onbar = (probey == (MAXMOUSEBUTTONS-2)*2+2);
             if (probey < (MAXMOUSEBUTTONS-2)*2+2)
-                x = probesm(73,38,8,(MAXMOUSEBUTTONS-2)*2+2+2+2+1);
+                x = probesm(73,38,8,(MAXMOUSEBUTTONS-2)*2+2+2+2);
             else
-                x = probesm(40,123-((MAXMOUSEBUTTONS-2)*2+2)*9,9,(MAXMOUSEBUTTONS-2)*2+2+2+2+1);
+                x = probesm(40,123-((MAXMOUSEBUTTONS-2)*2+2)*9,9,(MAXMOUSEBUTTONS-2)*2+2+2+2);
 
             if (x==-1)
             {
@@ -3391,13 +3431,6 @@ cheat_for_port_credits:
                 ud.mouseflip = 1-ud.mouseflip;
             }
             else if (x == (MAXMOUSEBUTTONS-2)*2+2+2+1)
-            {
-                // OLDMP FIXME
-                //input smoothing
-                //ud.config.SmoothInput = !ud.config.SmoothInput;
-                //control_smoothmouse = ud.config.SmoothInput;
-            }
-            else if (x == (MAXMOUSEBUTTONS-2)*2+2+2+2)
             {
                 //advanced
                 ChangeToMenu(212);
@@ -3452,13 +3485,12 @@ cheat_for_port_credits:
             mgametextpal(40,118,"Base mouse sensitivity",MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2),10);
             mgametextpal(40,118+9,"Use mouse aiming",!ud.mouseaiming?MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2+1):DISABLEDMENUSHADE,10);
             mgametextpal(40,118+9+9,"Invert mouse",MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2+2),10);
-            mgametextpal(40,118+9+9+9,"----",MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2+2+1),10); // OLDMP FIXME
-            mgametextpal(40,118+9+9+9+9,"Advanced mouse setup",MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2+2+2),10);
+            mgametextpal(40,118+9+9+9,"Advanced mouse setup",MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2+2+1),10);
 
             {
                 int sense;
                 sense = (int)CONTROL_MouseSensitivity-1;
-                barsm(248,126,&sense,2,x==(MAXMOUSEBUTTONS-2)*2+2,MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2),PHX(-7));
+                _bar(1, 248, 126, &sense, 1, x == (MAXMOUSEBUTTONS - 2) * 2 + 2, MENUHIGHLIGHT((MAXMOUSEBUTTONS - 2) * 2 + 2), PHX(-7), 0, 10);
                 CONTROL_MouseSensitivity=sense+1;
             }
 
@@ -3471,18 +3503,8 @@ cheat_for_port_credits:
 
             modval(0,1,(int *)&ud.mouseflip,1,probey == (MAXMOUSEBUTTONS-2)*2+2+2);
 
-            //modval(0,1,(int *)&ud.config.SmoothInput,1,probey == (MAXMOUSEBUTTONS-2)*2+2+2+1);
-            if (probey == (MAXMOUSEBUTTONS-2)*2+2+2+1)
-            {
-                // OLDMP FIXME
-    //            mgametext(160,160+9,"THIS OPTION INCURS A MOVEMENT DELAY",0,2+8+16);
-                //control_smoothmouse = ud.config.SmoothInput;
-            }
-
             mgametextpal(240,118+9, g_myAimMode && !ud.mouseaiming ? "Yes" : "No", !ud.mouseaiming?MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2+1):DISABLEDMENUSHADE, 0);
             mgametextpal(240,118+9+9, !ud.mouseflip ? "Yes" : "No", MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2+2), 0);
-
-            //mgametextpal(240,118+9+9+9, ud.config.SmoothInput ? "Yes" : "No", MENUHIGHLIGHT((MAXMOUSEBUTTONS-2)*2+2+2+1), 0);
 
             if (probey < (MAXMOUSEBUTTONS-2)*2+2)
             {
@@ -4164,6 +4186,14 @@ cheat_for_port_credits:
                 soundrate = ud.config.MixRate;
                 soundvoices = ud.config.NumVoices;
                 soundbits = ud.config.NumBits;
+                for (i = 0; i < ARRAY_SIZE(MEOSV_SOUND_MIDIDRIVER); i++)
+                {
+                    if (MEOSV_SOUND_MIDIDRIVER[i] == ud.config.MusicDevice)
+                    {
+                        musicdevice = i;
+                        break;
+                    }
+                }
             }
 
             {
@@ -4179,6 +4209,8 @@ cheat_for_port_credits:
                     "Sample rate",
                     "Sample size",
                     "Number of voices",
+                    "-",
+                    "Midi System",
                     "-",
                     "Restart sound system",
                     "-",
@@ -4360,6 +4392,24 @@ cheat_for_port_credits:
                         mgametextpal(d,yy, tempbuf, MENUHIGHLIGHT(io), 0);
                         break;
                     case 7:
+                        i = musicdevice;
+                        if (x == io)
+                        {
+                            musicdevice++;
+                            if (musicdevice >= ARRAY_SIZE(MEOSV_SOUND_MIDIDRIVER))
+                                musicdevice = 0;
+                        }
+                        modval(0, 2, (int*)&musicdevice, 1, probey == io);
+
+                        if (musicdevice != i)
+                            changesmade |= 8;
+
+                        ud.config.MusicDevice = MEOSV_SOUND_MIDIDRIVER[musicdevice];
+
+                        Bsprintf(tempbuf, "%s", MEOSN_SOUND_MIDIDRIVER[musicdevice]);
+                        mgametextpal(d, yy, tempbuf, MENUHIGHLIGHT(io), 0);
+                        break;
+                    case 8:
                         enabled = (changesmade&8);
                         if (!enabled) break;
                         if (x == io)
@@ -4387,7 +4437,7 @@ cheat_for_port_credits:
                             changesmade &= ~8;
                         }
                         break;
-                    case 8:
+                    case 9:
                         enabled = (ud.config.SoundToggle && ud.config.FXDevice >= 0);
                         i = j = (ud.config.VoiceToggle&1);
                         modval(0,1,(int *)&i,1,enabled && probey==io);
@@ -4395,7 +4445,7 @@ cheat_for_port_credits:
                             ud.config.VoiceToggle ^= 1;
                         mgametextpal(d,yy, ud.config.VoiceToggle&1? "Yes" : "No", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, enabled?0:1);
                         break;
-                    case 9:
+                    case 10:
                         enabled = (ud.config.SoundToggle && ud.config.FXDevice >= 0);
                         i = j = (ud.config.VoiceToggle&4);
                         modval(0,1,(int *)&i,1,enabled && probey==io);
@@ -4403,7 +4453,7 @@ cheat_for_port_credits:
                             ud.config.VoiceToggle ^= 4;
                         mgametextpal(d,yy, ud.config.VoiceToggle&4? "Yes" : "No", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, enabled?0:1);
                         break;
-                    case 10:
+                    case 11:
                         enabled = (ud.config.SoundToggle && ud.config.FXDevice >= 0);
                         modval(0,1,(int *)&ud.config.AmbienceToggle,1,enabled && probey==io);
                         if (enabled && x == io)
