@@ -12,85 +12,85 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\source\oldmp\oldnet.h">
+    <ClInclude Include="..\..\source\oldmp\src\_functio.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\osdcmds.h">
+    <ClInclude Include="..\..\source\oldmp\src\_midi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\osdfuncs.h">
+    <ClInclude Include="..\..\source\oldmp\src\_rts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\rts.h">
+    <ClInclude Include="..\..\source\oldmp\src\config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\soundefs.h">
+    <ClInclude Include="..\..\source\oldmp\src\discord.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\sounds.h">
+    <ClInclude Include="..\..\source\oldmp\src\duke3d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\standard.h">
+    <ClInclude Include="..\..\source\oldmp\src\funct.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\startwin.game.h">
+    <ClInclude Include="..\..\source\oldmp\src\function.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\sync.h">
+    <ClInclude Include="..\..\source\oldmp\src\gamedef.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\_functio.h">
+    <ClInclude Include="..\..\source\oldmp\src\gamedefs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\_midi.h">
+    <ClInclude Include="..\..\source\oldmp\src\grpscan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\_rts.h">
+    <ClInclude Include="..\..\source\oldmp\src\keys.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\config.h">
+    <ClInclude Include="..\..\source\oldmp\src\macros.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\discord.h">
+    <ClInclude Include="..\..\source\oldmp\src\mapster32.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\duke3d.h">
+    <ClInclude Include="..\..\source\oldmp\src\mdump.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\funct.h">
+    <ClInclude Include="..\..\source\oldmp\src\mpu401.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\function.h">
+    <ClInclude Include="..\..\source\oldmp\src\names.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\gamedef.h">
+    <ClInclude Include="..\..\source\oldmp\src\namesdyn.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\gamedefs.h">
+    <ClInclude Include="..\..\source\oldmp\src\oldnet.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\grpscan.h">
+    <ClInclude Include="..\..\source\oldmp\src\osdcmds.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\keys.h">
+    <ClInclude Include="..\..\source\oldmp\src\osdfuncs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\macros.h">
+    <ClInclude Include="..\..\source\oldmp\src\rts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\mapster32.h">
+    <ClInclude Include="..\..\source\oldmp\src\soundefs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\mdump.h">
+    <ClInclude Include="..\..\source\oldmp\src\sounds.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\mpu401.h">
+    <ClInclude Include="..\..\source\oldmp\src\standard.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\names.h">
+    <ClInclude Include="..\..\source\oldmp\src\startwin.game.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\namesdyn.h">
+    <ClInclude Include="..\..\source\oldmp\src\sync.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -98,88 +98,85 @@
     <ClCompile Include="..\..\source\duke3d\rsrc\eduke32_icon.c">
       <Filter>Resource Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\mdump.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\actors.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\gamevars.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\anim.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\global.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\config.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\grpscan.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\discord.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\menus.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\game.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\mpu401.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\gamedef.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\namesdyn.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\gameexec.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\oldnet.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\gamestructures.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\osdcmds.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\gamevars.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\osdfuncs.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\global.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\player.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\grpscan.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\premap.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\mdump.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\rts.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\menus.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\savegame.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\namesdyn.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\sector.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\oldnet.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\sounds.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\osdcmds.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\startgtk.game.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\osdfuncs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\startwin.game.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\player.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\sync.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\premap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\winbits.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\rts.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\actors.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\savegame.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\anim.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\sector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\config.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\sounds.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\discord.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\startgtk.game.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\game.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\startwin.game.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\gamedef.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\sync.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\gameexec.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\gamestructures.cpp">
+    <ClCompile Include="..\..\source\oldmp\src\winbits.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

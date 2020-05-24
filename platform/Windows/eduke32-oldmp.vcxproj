@@ -221,7 +221,6 @@
     <ClCompile Include="..\..\source\oldmp\src\grpscan.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\mdump.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\menus.cpp" />
-    <ClCompile Include="..\..\source\oldmp\src\mpu401.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\namesdyn.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\oldnet.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\osdcmds.cpp" />
