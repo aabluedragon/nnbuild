@@ -607,8 +607,6 @@ extern ActorData_t ActorExtra[MAXSPRITES];
 extern input_t loc;
 extern input_t recsync[RECSYNCBUFSIZ];
 
-extern int numplayers, myconnectindex;
-extern int connecthead, connectpoint2[MAXPLAYERS];   //Player linked list variables (indeces, not connection numbers)
 extern int screenpeek;
 
 extern int g_currentMenu;
@@ -693,7 +691,6 @@ extern char g_earthquakeTime;
 // 0: master/slave, 1: peer-to-peer
 extern int g_networkBroadcastMode;
 
-extern short g_skillSoundID;
 extern short BlimpSpawnSprites[15];
 
 //DUKE3D.H:

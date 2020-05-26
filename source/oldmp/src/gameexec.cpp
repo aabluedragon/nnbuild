@@ -1956,8 +1956,8 @@ static int X_DoExecute(void)
         }
 
     case CON_ENDSWITCH:
-    case CON_ENDEVENT:
         insptr++;
+    case CON_ENDEVENT:
         return 1;
 
     case CON_DISPLAYRAND:

@@ -5,7 +5,7 @@
 #define numgrpfiles 8
 struct grpfile {
 	const char *name;
-	int crcval;
+	uint32_t crcval;
 	int size;
 	int game;
 	struct grpfile *next;

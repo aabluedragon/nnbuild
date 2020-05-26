@@ -3246,6 +3246,7 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
         Gv_SetVar(lVar2, sprite[iActor].clipdist,g_i,g_p);
         return;
 
+    case ACTOR_BLEND:
     case ACTOR_DETAIL:
         if (iSet)
         {
@@ -3633,6 +3634,15 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
         Gv_SetVar(lVar2,ActorExtra[iActor].flags, g_i, g_p);
         return;
 
+    case ACTOR_ALPHA:
+        if (iSet)
+        {
+            spriteext[iActor].alpha = (float)lValue * (1.f / 255.0f);;
+            return;
+        }
+        Gv_SetVar(lVar2, (uint8_t)(spriteext[iActor].alpha * 255.0f), g_i, g_p);
+        return;
+
     default:
         return;
     }
@@ -3736,6 +3746,7 @@ static inline void X_AccessTsprite(int iSet, int lVar1, int lLabelID, int lVar2)
         Gv_SetVar(lVar2, spriteext[iActor].tspr->clipdist,g_i,g_p);
         return;
 
+    case ACTOR_BLEND:
     case ACTOR_DETAIL:
         if (iSet)
         {

@@ -66,8 +66,6 @@ extern void A_DamageObject(int i, int sn);
 extern void allignwarpelevators(void);
 extern void G_HandleSharedKeys(int snum);
 extern void checksectors(int snum);
-extern int32_t RTS_AddFile(const char *filename);
-extern void RTS_ReadLump(int32_t lump,void *dest);
 extern void G_CacheMapData(void);
 extern void xyzmirror(int i,int wn);
 extern void G_UpdateScreenArea(void);

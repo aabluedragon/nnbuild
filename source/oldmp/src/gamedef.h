@@ -451,6 +451,8 @@ enum ActorLabel_t
     ACTOR_PAL,
     ACTOR_CLIPDIST,
     ACTOR_DETAIL,
+    ACTOR_BLEND,
+    ACTOR_ALPHA,
     ACTOR_XREPEAT,
     ACTOR_YREPEAT,
     ACTOR_XOFFSET,
@@ -894,9 +896,7 @@ enum ScriptKeywords_t
     CON_ROTATESPRITEA,      // 349. was 364 in r3610
     CON_DAMAGEEVENTTILE,	// 350, was 429 in r6771
     CON_DAMAGEEVENTTILERANGE, // 351, was 430 in r6771
-    CON_ADDPLAYERCOLOR,     // 352
-    CON_DELETEPLAYERCOLOR,  // 353
-    CON_GETTEAMNAME,        // 354
+    CON_GETTEAMNAME,        // 352
     CON_END
 };
 #endif

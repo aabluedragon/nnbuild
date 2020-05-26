@@ -899,7 +899,7 @@ cvarmappings cvar[] =
     //{ "snd_reversestereo", "snd_reversestereo: reverses the stereo channels", (void*)&ud.config.ReverseStereo, CVAR_BOOL, 0, 0, 16 },
 };
 
-static int osdcmd_cvar_set(const osdfuncparm_t *parm)
+static int osdcmd_cvar_set_game(const osdfuncparm_t *parm)
 {
     int showval = (parm->numparms == 0);
     unsigned int i;
@@ -1631,7 +1631,7 @@ int registerosdcommands(void)
 
     for (i=0; i<sizeof(cvar)/sizeof(cvar[0]); i++)
     {
-        OSD_RegisterFunction(cvar[i].name, cvar[i].helpstr, osdcmd_cvar_set);
+        OSD_RegisterFunction(cvar[i].name, cvar[i].helpstr, osdcmd_cvar_set_game);
     }
 
     if (VOLUMEONE)

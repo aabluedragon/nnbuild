@@ -488,9 +488,7 @@ const char *keyw[] =
     "rotatespritea",            // 349, was 364 in r3610
     "damageeventtile",          // 350, was 429 in r6771
     "damageeventtilerange",     // 351, was 430 in r6771
-    "addplayercolor",           // 352
-    "deleteplayercolor",        // 353
-    "getteamname",              // 354
+    "getteamname",              // 352
     "<null>"
 };
 
@@ -559,8 +557,9 @@ const memberlabel_t ActorLabels[]=
     { "shade", ACTOR_SHADE, 0, 0 },
     { "pal", ACTOR_PAL, 0, 0 },
     { "clipdist", ACTOR_CLIPDIST, 0, 0 },
-//    { "filler", ACTOR_DETAIL, 0, 0 },
     { "detail", ACTOR_DETAIL, 0, 0 }, // aka filler, not used
+    { "blend", ACTOR_BLEND, 0, 0 },
+    { "alpha", ACTOR_ALPHA, 0, 0 },
     { "xrepeat", ACTOR_XREPEAT, 0, 0 },
     { "yrepeat", ACTOR_YREPEAT, 0, 0 },
     { "xoffset", ACTOR_XOFFSET, 0, 0 },
@@ -627,6 +626,7 @@ const memberlabel_t TsprLabels[]=
     { "tsprclipdist", ACTOR_CLIPDIST, 0, 0 },
 //    { "tsprfiller", ACTOR_DETAIL, 0, 0 },
     { "tsprdetail", ACTOR_DETAIL, 0, 0 }, // aka filler, not used
+    { "tsprblend", ACTOR_BLEND, 0, 0 },
     { "tsprxrepeat", ACTOR_XREPEAT, 0, 0 },
     { "tspryrepeat", ACTOR_YREPEAT, 0, 0 },
     { "tsprxoffset", ACTOR_XOFFSET, 0, 0 },
@@ -3930,75 +3930,6 @@ static int C_ParseCommand(void)
         return 0;
     }
 
-    case CON_ADDPLAYERCOLOR:
-    {
-        char name[32];
-        if (g_processingState || g_parsingActorPtr)
-        {
-            C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
-        }
-
-        g_scriptPtr--;
-
-        C_GetNextValue(LABEL_DEFINE);
-        j = *(g_scriptPtr - 1);
-
-        if (j >= MAXPALOOKUPS)
-        {
-            C_ReportError(ERROR_EXCEEDSMAXPALS);
-            g_numCompilerErrors++;
-            return 0;
-        }
-
-        g_scriptPtr--;
-        i = 0;
-        while (*textptr == ' ' || *textptr == '\t')
-            textptr++;
-        while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
-        {
-            name[i] = *textptr;
-            textptr++, i++;
-            if (i >= (signed)sizeof(name) - 1)
-            {
-                initprintf("%s:%d: error: player color name exceeds limit of %d characters.\n", g_szScriptFileName, g_lineNumber, sizeof(name));
-                g_numCompilerErrors++;
-                while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0 && *textptr != ' ') textptr++;
-                break;
-            }
-        }
-        name[i] = '\0';
-
-        playerColor_add(name, j);
-
-        return 0;
-    }
-
-    case CON_DELETEPLAYERCOLOR:
-    {
-        if (g_processingState || g_parsingActorPtr)
-        {
-            C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
-        }
-
-        g_scriptPtr--;
-
-        C_GetNextValue(LABEL_DEFINE);
-        j = *(g_scriptPtr - 1);
-
-        if (j >= MAXPALOOKUPS)
-        {
-            C_ReportError(ERROR_EXCEEDSMAXPALS);
-            g_numCompilerErrors++;
-            return 0;
-        }
-
-        playerColor_delete(j);
-
-        return 0;
-    }
-
     case CON_DAMAGEEVENTTILE:
     {
         if (g_processingState || g_parsingActorPtr)
@@ -5755,12 +5686,7 @@ static void C_AddDefaultDefinitions(void)
 static void C_InitProjectiles(void)
 {
     int i;
-    struct
-    {
-        int workslike, extra, cstat, extra_rand, hitradius, range;
-        short spawns, sound, isound, vel, decal, trail, tnum, drop, clipdist, offset, bounces, bsound, toffset;
-        signed char sxrepeat, syrepeat, txrepeat, tyrepeat, shade, xrepeat, yrepeat, pal, velmult;
-    } DefaultProjectile =
+    projectile_t DefaultProjectile =
     {
         1, 100, -1, -1, 2048, 0,
         SMALLSMOKE, -1, -1, 600, BULLETHOLE, -1, 0, 0, 32, 448, g_numFreezeBounces, PIPEBOMB_BOUNCE, 1,

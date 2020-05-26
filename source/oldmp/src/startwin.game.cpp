@@ -36,7 +36,7 @@ static struct
     int usemouse, usejoy;
     char selectedgrp[BMAX_PATH+1];
     int game;
-    int crcval; // for finding the grp in the list again
+    uint32_t crcval; // for finding the grp in the list again
     char *gamedir;
 }
 settings;
@@ -680,7 +680,7 @@ int startwin_run(void)
 
         for (i = 0; i<numgrpfiles; i++) if (settings.crcval == grpfiles[i].crcval) break;
         if (i != numgrpfiles)
-            duke3dgrpstring = (char *)grpfiles[i].name;
+            duke3dgrpstring = grpfiles[i].name;
     }
 
     if (wavedevs)

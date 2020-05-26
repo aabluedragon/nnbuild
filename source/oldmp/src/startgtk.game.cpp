@@ -31,7 +31,7 @@ static struct
     int usemouse, usejoy;
     char selectedgrp[BMAX_PATH+1];
     int game;
-    int crcval;
+    uint32_t crcval;
 } settings;
 
 extern int gtkenabled;
