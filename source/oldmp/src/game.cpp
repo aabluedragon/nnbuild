@@ -175,6 +175,8 @@ enum
     T_MUSIC,
     T_SOUND,
     T_FILE,
+    T_ADDPLAYERCOL,
+    T_DELPLAYERCOL,
     T_ID
 };
 
@@ -4487,6 +4489,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
     s->clipdist = 0;
     s->pal = 0;
     s->lotag = 0;
+    s->blend = 0;
 
     if (s_ow > -1 && s_ow < MAXSPRITES)
     {
@@ -4530,8 +4533,8 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
     if (show2dsector[SECT>>3]&(1<<(SECT&7))) show2dsprite[i>>3] |= (1<<(i&7));
     else show2dsprite[i>>3] &= ~(1<<(i&7));
 
-    clearbufbyte(&spriteext[i], sizeof(spriteext_t), 0);
-    clearbufbyte(&spritesmooth[i], sizeof(spritesmooth_t), 0);
+    spriteext[i] = {};
+    spritesmooth[i] = {};
 
     /*
         if(s->sectnum < 0)
@@ -9024,13 +9027,15 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
 
     tokenlist tokens[] =
     {
-        { "include",         T_INCLUDE          },
-        { "#include",        T_INCLUDE          },
-        { "loadgrp",         T_LOADGRP          },
-        { "cachesize",       T_CACHESIZE        },
-        { "noautload",       T_NOAUTOLOAD       },
-        { "music",           T_MUSIC            },
-        { "sound",           T_SOUND            },
+        { "include",           T_INCLUDE          },
+        { "#include",          T_INCLUDE          },
+        { "loadgrp",           T_LOADGRP          },
+        { "cachesize",         T_CACHESIZE        },
+        { "noautload",         T_NOAUTOLOAD       },
+        { "music",             T_MUSIC            },
+        { "sound",             T_SOUND            },
+        { "addplayercolor",    T_ADDPLAYERCOL     },
+        { "delplayercolor",    T_DELPLAYERCOL     },
     };
 
     tokenlist sound_musictokens[] =
@@ -9203,6 +9208,29 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
             }
         }
         break;
+
+        case T_ADDPLAYERCOL:
+        {
+            int palnum;
+            char* palname;
+
+            if (scriptfile_getsymbol(script, &palnum)) break;
+            if (scriptfile_getstring(script, &palname)) break;
+
+            playerColor_add(palname, palnum);
+        }
+        break;
+
+        case T_DELPLAYERCOL:
+        {
+            int palnum;
+
+            if (scriptfile_getsymbol(script, &palnum)) break;
+            
+            playerColor_delete(palnum);
+        }
+        break;
+
         case T_EOF:
             return(0);
         default:
@@ -9227,7 +9255,7 @@ static int loaddefinitions_game(const char *fn, int preload)
     return 0;
 }
 
-static void G_AddGroup(const char *buffer)
+void G_AddGroup(const char *buffer)
 {
     struct strllist *s;
     s = (struct strllist *)Bcalloc(1,sizeof(struct strllist));
@@ -9245,7 +9273,7 @@ static void G_AddGroup(const char *buffer)
     CommandGrps = s;
 }
 
-static void G_AddPath(const char *buffer)
+void G_AddPath(const char *buffer)
 {
     struct strllist *s;
     s = (struct strllist *)Bcalloc(1,sizeof(struct strllist));

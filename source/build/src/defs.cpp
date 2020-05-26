@@ -127,6 +127,7 @@ enum scripttoken_t
     T_NEWGAMECHOICES,
     T_LOCALIZATION, T_STRING,
     T_TILEFONT, T_CHARACTER,
+    T_ADDPLAYERCOL, T_DELPLAYERCOL,
 };
 
 static int32_t lastmodelid = -1, lastvoxid = -1, modelskin = -1, lastmodelskin = -1, seenframe = 0;
@@ -409,6 +410,8 @@ static int32_t defsparser(scriptfile *script)
         { "newgamechoices",  T_NEWGAMECHOICES   },
         { "localization",    T_LOCALIZATION     },
         { "tilefont",        T_TILEFONT         },
+        { "addplayercolor",  T_ADDPLAYERCOL     },
+        { "delplayercolor",  T_DELPLAYERCOL     },
     };
 
     while (1)
@@ -3868,6 +3871,24 @@ static int32_t defsparser(scriptfile *script)
             }
             break;
         }
+
+        case T_ADDPLAYERCOL:
+        {
+            int palnum;
+            char* palname;
+
+            if (scriptfile_getsymbol(script, &palnum)) break;
+            if (scriptfile_getstring(script, &palname)) break;
+        }
+        break;
+
+        case T_DELPLAYERCOL:
+        {
+            int palnum;
+
+            if (scriptfile_getsymbol(script, &palnum)) break;
+        }
+        break;
 
         default:
             initprintf("Unknown token.\n"); break;
