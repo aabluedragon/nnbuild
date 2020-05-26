@@ -827,7 +827,6 @@ ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
 endif
 ifeq ($(RENDERTYPE),SDL)
     oldmp_game_rsrc_objs += game_icon.c
-    oldmp_editor_rsrc_objs += build_icon.c
 endif
 
 #### Final setup
