@@ -757,6 +757,78 @@ ifeq ($(PLATFORM),DARWIN)
     endif
 endif
 
+#### EDuke32-OldMP
+
+oldmp := oldmp
+
+oldmp_game_ldflags :=
+
+oldmp_game_stripflags :=
+
+oldmp_root := $(source)/$(oldmp)
+oldmp_src := $(oldmp_root)/src
+oldmp_rsrc := $(oldmp_root)/rsrc
+oldmp_obj := $(obj)/$(oldmp)
+
+oldmp_cflags := -I$(oldmp_src)
+
+oldmp_game_deps := audiolib mact
+
+oldmp_game := eduke32-oldmp
+
+ifneq (,$(APPBASENAME))
+    oldmp_game := $(APPBASENAME)
+endif
+
+oldmp_game_proper := EDuke32-OldMP
+
+oldmp_game_objs := \
+    actors.cpp \
+    anim.cpp \
+    config.cpp \
+    discord.cpp \
+    game.cpp \
+    gamedef.cpp \
+    gameexec.cpp \
+    gamestructures.cpp \
+    gamevars.cpp \
+    global.cpp \
+    grpscan.cpp \
+    menus.cpp \
+    namesdyn.cpp \
+    oldnet.cpp \
+    osdcmds.cpp \
+    osdfuncs.cpp \
+    player.cpp \
+    premap.cpp \
+    rts.cpp \
+    savegame.cpp \
+    sector.cpp \
+    sounds.cpp \
+    sync.cpp \
+
+oldmp_game_rsrc_objs :=
+oldmp_game_gen_objs :=
+
+oldmp_game_miscdeps :=
+oldmp_game_orderonlydeps :=
+
+ifeq ($(PLATFORM),WINDOWS)
+    oldmp_game_objs += winbits.cpp
+    oldmp_game_rsrc_objs += gameres.rc
+    ifeq ($(STARTUP_WINDOW),1)
+        oldmp_game_objs += startwin.game.cpp
+    endif
+endif
+
+ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
+    oldmp_game_objs += startgtk.game.cpp
+    oldmp_game_gen_objs += game_banner.c
+endif
+ifeq ($(RENDERTYPE),SDL)
+    oldmp_game_rsrc_objs += game_icon.c
+    oldmp_editor_rsrc_objs += build_icon.c
+endif
 
 #### Final setup
 
@@ -779,6 +851,7 @@ games := \
     duke3d \
     kenbuild \
     sw \
+    oldmp \
 
 libraries := \
     audiolib \
