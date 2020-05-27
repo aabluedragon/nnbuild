@@ -3160,31 +3160,28 @@ CHECKINV1:
     }
 }
 
-int A_CheckHitSprite(int i,short *hitsp)
+int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite)
 {
-    int zoff;
+    hitdata_t hitData;
+    int32_t   zOffset = 0;
 
-    if (A_CheckEnemySprite(&sprite[i]))
-        zoff = (42<<8);
-    else if (PN == APLAYER) zoff = (39<<8);
-    else zoff = 0;
+    if (A_CheckEnemySprite(&sprite[spriteNum]))
+        zOffset = (42 << 8);
+    else if (sprite[spriteNum].picnum == APLAYER)
+        zOffset = (39 << 8);
 
-    vec3_t origin;
-    origin.x = sprite[i].x;
-    origin.y = sprite[i].y;
-    origin.z = sprite[i].z-zoff;
+    sprite[spriteNum].z -= zOffset;
+    hitscan((const vec3_t*)&sprite[spriteNum], sprite[spriteNum].sectnum, sintable[sprite[spriteNum].ang + 512 & 2047],
+        sintable[sprite[spriteNum].ang & 2047], 0, &hitData, CLIPMASK1);
+    sprite[spriteNum].z += zOffset;
 
-    hitdata_t hit;
+    if (hitSprite)
+        *hitSprite = hitData.sprite;
 
-    hitscan(&origin,SECT,
-            sintable[(SA+512)&2047],
-            sintable[SA&2047],
-            0,&hit,CLIPMASK1);
+    if (hitData.wall >= 0 && (wall[hitData.wall].cstat & 16) && A_CheckEnemySprite(&sprite[spriteNum]))
+        return 1 << 30;
 
-    if (hit.wall >= 0 && (wall[hit.wall].cstat&16) && A_CheckEnemySprite(&sprite[i]))
-        return((1<<30));
-
-    return (FindDistance2D(hit.pos.x-origin.x,hit.pos.y-origin.y));
+    return FindDistance2D(hitData.pos.x - sprite[spriteNum].x, hitData.pos.y - sprite[spriteNum].y);
 }
 
 static int hitawall(DukePlayer_t *p,short *hitw)

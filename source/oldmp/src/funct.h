@@ -80,7 +80,7 @@ extern void G_BackToMenu(void);
 extern void P_UpdateScreenPal(DukePlayer_t *p);
 extern void P_QuickKill(DukePlayer_t *p);
 extern int A_GetHitscanRange(int i);
-extern int A_CheckHitSprite(int i,short *hitsp);
+extern int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite);
 extern int A_Shoot(int i,int atwith);
 extern void P_DisplayScubaMask(int snum);
 extern void P_DisplayWeapon(int snum);
