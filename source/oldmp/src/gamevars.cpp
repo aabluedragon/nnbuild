@@ -1363,9 +1363,9 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("CLIPMASK0", CLIPMASK0, GAMEVAR_SYSTEM|GAMEVAR_READONLY);
     Gv_NewVar("CLIPMASK1", CLIPMASK1, GAMEVAR_SYSTEM|GAMEVAR_READONLY);
 
-    Gv_NewVar("camerax",(intptr_t)&ud.camera.x, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("cameray",(intptr_t)&ud.camera.y, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("cameraz",(intptr_t)&ud.camera.z, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("camerax",(intptr_t)&ud.camerapos.x, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("cameray",(intptr_t)&ud.camerapos.y, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("cameraz",(intptr_t)&ud.camerapos.z, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("cameraang",(intptr_t)&ud.cameraq16ang, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("cameraq16ang", (intptr_t)&ud.cameraq16ang, GAMEVAR_SYSTEM | GAMEVAR_RAWQ16PTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("camerahoriz",(intptr_t)&ud.cameraq16horiz, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
@@ -1523,9 +1523,9 @@ void Gv_RefreshPointers(void)
     aGameVars[Gv_GetVarIndex("gametype_flags")].val.lValue = (intptr_t)&GametypeFlags[ud.coop];
     aGameVars[Gv_GetVarIndex("framerate")].val.lValue = (intptr_t)&g_currentFrameRate;
 
-    aGameVars[Gv_GetVarIndex("camerax")].val.lValue = (intptr_t)&ud.camera.x;
-    aGameVars[Gv_GetVarIndex("cameray")].val.lValue = (intptr_t)&ud.camera.y;
-    aGameVars[Gv_GetVarIndex("cameraz")].val.lValue = (intptr_t)&ud.camera.z;
+    aGameVars[Gv_GetVarIndex("camerax")].val.lValue = (intptr_t)&ud.camerapos.x;
+    aGameVars[Gv_GetVarIndex("cameray")].val.lValue = (intptr_t)&ud.camerapos.y;
+    aGameVars[Gv_GetVarIndex("cameraz")].val.lValue = (intptr_t)&ud.camerapos.z;
     aGameVars[Gv_GetVarIndex("cameraang")].val.lValue = (intptr_t)&ud.cameraq16ang;
     aGameVars[Gv_GetVarIndex("cameraq16ang")].val.lValue = (intptr_t)&ud.cameraq16ang;
     aGameVars[Gv_GetVarIndex("camerahoriz")].val.lValue = (intptr_t)&ud.cameraq16horiz; // XXX FIXME

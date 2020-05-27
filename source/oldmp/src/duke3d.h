@@ -377,7 +377,7 @@ typedef struct {
 #define MAX_RETURN_VALUES 6
 
 typedef struct {
-    vec3_t camera;
+    vec3_t camerapos;
     int const_visibility,uw_framerate;
     int camera_time,folfvel,folavel,folx,foly,fola;
     int reccnt,crosshairscale;

@@ -3216,9 +3216,9 @@ static void G_MoveTransports(void)
 
                             if (p == screenpeek)
                             {
-                                ud.camera.x = g_player[p].ps->pos.x;
-                                ud.camera.y = g_player[p].ps->pos.y;
-                                ud.camera.z = g_player[p].ps->pos.z;
+                                ud.camerapos.x = g_player[p].ps->pos.x;
+                                ud.camerapos.y = g_player[p].ps->pos.y;
+                                ud.camerapos.z = g_player[p].ps->pos.z;
                                 ud.cameraq16ang = g_player[p].ps->q16ang;
                                 ud.camerasect = g_player[p].ps->cursectnum;
                             }

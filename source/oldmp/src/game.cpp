@@ -3292,7 +3292,7 @@ void G_DisplayPlayerId(void)
                 sprite[g_player[i].ps->holoduke_on].cstat ^= 256;
         }
 
-        hitscan(&ud.camera, ud.camerasect,
+        hitscan(&ud.camerapos, ud.camerasect,
             sintable[(fix16_to_int(ud.cameraq16ang) + 512) & 2047],
             sintable[fix16_to_int(ud.cameraq16ang) & 2047],
             fix16_to_int(F16(100) - ud.cameraq16horiz) << 11, &hit, 0xffff0030);
@@ -3305,7 +3305,7 @@ void G_DisplayPlayerId(void)
 
         if ((hit.sprite >= 0) && !(g_player[myconnectindex].ps->gm & MODE_MENU) && sprite[hit.sprite].picnum == APLAYER && sprite[hit.sprite].yvel != screenpeek && g_player[sprite[hit.sprite].yvel].ps->dead_flag == 0)
         {
-            if (GetDistance2D(ud.camera.x, ud.camera.y, sprite[hit.sprite].x, sprite[hit.sprite].y) < 9216)
+            if (GetDistance2D(ud.camerapos.x, ud.camerapos.y, sprite[hit.sprite].x, sprite[hit.sprite].y) < 9216)
             {
                 ud.playerid_num = sprite[hit.sprite].yvel;
                 ud.playerid_time = (int32_t)totalclock + ID_TIME;
@@ -3964,9 +3964,9 @@ static void G_SE40(int32_t smoothratio)
         if (klabs(sector[sp->sectnum].floorz - sp->z) < klabs(sector[sprite[sprite2].sectnum].floorz - sprite[sprite2].z))
             level = 1;
 
-        x = ud.camera.x - sp->x;
-        y = ud.camera.y - sp->y;
-        z = ud.camera.z - (level ? sector[sp->sectnum].floorz : sector[sp->sectnum].ceilingz);
+        x = ud.camerapos.x - sp->x;
+        y = ud.camerapos.y - sp->y;
+        z = ud.camerapos.z - (level ? sector[sp->sectnum].floorz : sector[sp->sectnum].ceilingz);
 
         sect = sprite[sprite2].sectnum;
         updatesector(sprite[sprite2].x + x, sprite[sprite2].y + y, &sect);
@@ -4043,7 +4043,7 @@ static void G_SE40(int32_t smoothratio)
             if (drawing_ror == 2) // viewing from top
                 G_OROR_DupeSprites(sp);
 
-            G_DoSpriteAnimations(ud.camera.x, ud.camera.y, fix16_to_int(ud.cameraq16ang), smoothratio);
+            G_DoSpriteAnimations(ud.camerapos.x, ud.camerapos.y, fix16_to_int(ud.cameraq16ang), smoothratio);
             renderDrawMasks();
 
             if (level)
@@ -4219,18 +4219,18 @@ void G_DrawRooms(int snum,int smoothratio)
 
         if ((snum == myconnectindex) && (numplayers > 1))
         {
-            ud.camera.x = omyx+mulscale16((int)(myx-omyx),smoothratio);
-            ud.camera.y = omyy+mulscale16((int)(myy-omyy),smoothratio);
-            ud.camera.z = omyz+mulscale16((int)(myz-omyz),smoothratio);
+            ud.camerapos.x = omyx+mulscale16((int)(myx-omyx),smoothratio);
+            ud.camerapos.y = omyy+mulscale16((int)(myy-omyy),smoothratio);
+            ud.camerapos.z = omyz+mulscale16((int)(myz-omyz),smoothratio);
             ud.cameraq16ang = omyang+mulscale16(((myang+F16(1024)-omyang) & 0x7FFFFFF)-F16(1024),smoothratio);
             ud.cameraq16horiz = omyhoriz+omyhorizoff+mulscale16((myhoriz+myhorizoff-omyhoriz-omyhorizoff),smoothratio);
             ud.camerasect = mycursectnum;
         }
         else
         {
-            ud.camera.x = p->opos.x+mulscale16((int)(p->pos.x-p->opos.x),smoothratio);
-            ud.camera.y = p->opos.y+mulscale16((int)(p->pos.y-p->opos.y),smoothratio);
-            ud.camera.z = p->opos.z+mulscale16((int)(p->pos.z-p->opos.z),smoothratio);
+            ud.camerapos.x = p->opos.x+mulscale16((int)(p->pos.x-p->opos.x),smoothratio);
+            ud.camerapos.y = p->opos.y+mulscale16((int)(p->pos.y-p->opos.y),smoothratio);
+            ud.camerapos.z = p->opos.z+mulscale16((int)(p->pos.z-p->opos.z),smoothratio);
             ud.cameraq16ang = p->oq16ang+mulscale16(((p->q16ang+F16(1024)-p->oq16ang) & 0x7FFFFFF)-F16(1024),smoothratio);
             ud.cameraq16horiz = p->oq16horiz+p->oq16horizoff+mulscale16((p->q16horiz+p->q16horizoff-p->oq16horiz-p->oq16horizoff),smoothratio);
         }
@@ -4241,43 +4241,43 @@ void G_DrawRooms(int snum,int smoothratio)
         {
             ud.cameraq16ang = p->q16ang + fix16_from_int(p->look_ang);
             ud.cameraq16horiz = p->q16horiz+p->q16horizoff;
-            ud.camera.x = p->pos.x;
-            ud.camera.y = p->pos.y;
-            ud.camera.z = p->pos.z;
+            ud.camerapos.x = p->pos.x;
+            ud.camerapos.y = p->pos.y;
+            ud.camerapos.z = p->pos.z;
             ud.camerasect = sprite[p->newowner].sectnum;
             smoothratio = 65536L;
         }
         else if (p->over_shoulder_on == 0)
         {
             if (ud.viewbob)
-                ud.camera.z += p->opyoff+mulscale16((int)(p->pyoff-p->opyoff),smoothratio);
+                ud.camerapos.z += p->opyoff+mulscale16((int)(p->pyoff-p->opyoff),smoothratio);
         }
-        else G_DoThirdPerson(p,&ud.camera,&ud.camerasect,fix16_to_int(ud.cameraq16ang),fix16_to_int(ud.cameraq16horiz));
+        else G_DoThirdPerson(p,&ud.camerapos,&ud.camerasect,fix16_to_int(ud.cameraq16ang),fix16_to_int(ud.cameraq16horiz));
 
         cz = ActorExtra[p->i].ceilingz;
         fz = ActorExtra[p->i].floorz;
 
         if (g_earthquakeTime > 0 && p->on_ground == 1)
         {
-            ud.camera.z += 256-(((g_earthquakeTime)&1)<<9);
+            ud.camerapos.z += 256-(((g_earthquakeTime)&1)<<9);
             ud.cameraq16ang += fix16_from_int((2-((g_earthquakeTime)&2))<<2);
         }
 
-        if (sprite[p->i].pal == 1) ud.camera.z -= (18<<8);
+        if (sprite[p->i].pal == 1) ud.camerapos.z -= (18<<8);
 
         if (p->newowner >= 0)
             ud.cameraq16horiz = fix16_from_int(100+sprite[p->newowner].shade);
         else if (p->spritebridge == 0)
         {
-            if (ud.camera.z < (p->truecz + (4<<8))) ud.camera.z = cz + (4<<8);
-            else if (ud.camera.z > (p->truefz - (4<<8))) ud.camera.z = fz - (4<<8);
+            if (ud.camerapos.z < (p->truecz + (4<<8))) ud.camerapos.z = cz + (4<<8);
+            else if (ud.camerapos.z > (p->truefz - (4<<8))) ud.camerapos.z = fz - (4<<8);
         }
 
         if (ud.camerasect >= 0)
         {
-            getzsofslope(ud.camerasect,ud.camera.x,ud.camera.y,&cz,&fz);
-            if (ud.camera.z < cz+(4<<8)) ud.camera.z = cz+(4<<8);
-            if (ud.camera.z > fz-(4<<8)) ud.camera.z = fz-(4<<8);
+            getzsofslope(ud.camerasect,ud.camerapos.x,ud.camerapos.y,&cz,&fz);
+            if (ud.camerapos.z < cz+(4<<8)) ud.camerapos.z = cz+(4<<8);
+            if (ud.camerapos.z > fz-(4<<8)) ud.camerapos.z = fz-(4<<8);
         }
 
         X_OnEvent(EVENT_DISPLAYROOMS, g_player[screenpeek].ps->i, screenpeek, -1);
@@ -4294,19 +4294,19 @@ void G_DrawRooms(int snum,int smoothratio)
             i = 0;
             for (k=g_mirrorCount-1;k>=0;k--)
             {
-                j = klabs(wall[g_mirrorWall[k]].x-ud.camera.x);
-                j += klabs(wall[g_mirrorWall[k]].y-ud.camera.y);
+                j = klabs(wall[g_mirrorWall[k]].x-ud.camerapos.x);
+                j += klabs(wall[g_mirrorWall[k]].y-ud.camerapos.y);
                 if (j < dst) dst = j, i = k;
             }
 
             if (wall[g_mirrorWall[i]].overpicnum == MIRROR)
             {
-                renderPrepareMirror(ud.camera.x,ud.camera.y,ud.camera.z,ud.cameraq16ang,ud.cameraq16horiz,g_mirrorWall[i],&tposx,&tposy,&q16tang);
+                renderPrepareMirror(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,g_mirrorWall[i],&tposx,&tposy,&q16tang);
 
                 j = g_visibility;
                 g_visibility = (j>>1) + (j>>2);
 
-                renderDrawRoomsQ16(tposx,tposy,ud.camera.z,q16tang,ud.cameraq16horiz,g_mirrorSector[i]+MAXSECTORS);
+                renderDrawRoomsQ16(tposx,tposy,ud.camerapos.z,q16tang,ud.cameraq16horiz,g_mirrorSector[i]+MAXSECTORS);
 
                 display_mirror = 1;
                 G_DoSpriteAnimations(tposx,tposy,fix16_to_int(q16tang),smoothratio);
@@ -4321,17 +4321,17 @@ void G_DrawRooms(int snum,int smoothratio)
 
 #if 0//POLYMER
         if (videoGetRenderMode() == 4)
-            polymer_setanimatesprites(G_DoSpriteAnimations, ud.camera.x,ud.camera.y,ud.cameraang,smoothratio);
+            polymer_setanimatesprites(G_DoSpriteAnimations, ud.camerapos.x,ud.camerapos.y,ud.cameraang,smoothratio);
 #endif
         G_SE40(smoothratio);
 
-        renderDrawRoomsQ16(ud.camera.x,ud.camera.y,ud.camera.z,ud.cameraq16ang,ud.cameraq16horiz,ud.camerasect);
+        renderDrawRoomsQ16(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,ud.camerasect);
 
         // dupe the sprites touching the portal to the other sector
         if ((unsigned)ror_sprite < MAXSPRITES && drawing_ror == 1)
             G_OROR_DupeSprites(&sprite[ror_sprite]);
 
-        G_DoSpriteAnimations(ud.camera.x,ud.camera.y,fix16_to_int(ud.cameraq16ang),smoothratio);
+        G_DoSpriteAnimations(ud.camerapos.x,ud.camerapos.y,fix16_to_int(ud.cameraq16ang),smoothratio);
         drawing_ror = 0;
         renderDrawMasks();
 
