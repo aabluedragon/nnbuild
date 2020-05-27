@@ -59,6 +59,8 @@ extern const char *s_buildDate;
 #include "mmulti.h"
 #endif
 
+#include "screens.h"
+
 #include "oldnet.h"
 
 #include "baselayer.h"
@@ -607,6 +609,7 @@ extern ActorData_t ActorExtra[MAXSPRITES];
 extern input_t loc;
 extern input_t recsync[RECSYNCBUFSIZ];
 
+extern int playerswhenstarted;
 extern int screenpeek;
 
 extern int g_currentMenu;

@@ -107,6 +107,7 @@ input_t loc;
 input_t recsync[RECSYNCBUFSIZ];
 
 //Multiplayer syncing variables
+int playerswhenstarted;
 int screenpeek;
 
 //Game recording variables

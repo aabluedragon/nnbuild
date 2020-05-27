@@ -95,7 +95,6 @@ extern int G_SavePlayer(int spot);
 extern int menutext_(int x,int y,int s,int p,char *t,int bits);
 #define menutext(x,y,s,p,t) menutext_(x,y,s,p,(char *)OSD_StripColors(menutextbuf,t),10+16)
 extern void M_DisplayMenus(void);
-extern void G_FadePalette(int r,int g,int b,int e);
 extern void G_PlayAnim(const char *fn,char);
 extern int G_GetAngleDelta(int a,int na);
 extern void A_GetZLimits(int iActor);
@@ -127,7 +126,6 @@ extern void G_DoSpriteAnimations(int x,int y,int a,int smoothratio);
 extern int main(int argc,char **argv);
 extern void G_OpenDemoWrite(void);
 extern void G_CloseDemoWrite(void);
-extern void G_BonusScreen(int bonusonly);
 extern void A_SpawnWallGlass(int i,int wallnum,int n);
 extern void A_SpawnGlass(int i,int n);
 extern void A_SpawnCeilingGlass(int i,int sectnum,int n);
@@ -176,7 +174,6 @@ extern int mpgametext(int y, const char *t, int s, int dabits);
 extern void G_SetStatusBarScale(int sc);
 
 extern void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set);
-extern void fadepal(int r, int g, int b, int start, int end, int step);
 
 extern int G_GameTextLen(int x, const char *t);
 extern int G_PrintGameText(int small, int starttile, int x,int y,const char *t,int s,int p,int orientation,int x1, int y1, int x2, int y2,int z);

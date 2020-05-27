@@ -803,6 +803,7 @@ oldmp_game_objs := \
     premap.cpp \
     rts.cpp \
     savegame.cpp \
+    screens.cpp \
     sector.cpp \
     sounds.cpp \
     sync.cpp \
