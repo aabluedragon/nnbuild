@@ -2858,6 +2858,7 @@ static void G_MoveWeapons(void)
                     sprite[j].yrepeat = 32;
                     KILLIT(i);
                 }
+                fallthrough__;
             case SHRINKSPARK__STATIC:
             case RPG__STATIC:
             case FIRELASER__STATIC:
@@ -3335,6 +3336,7 @@ static void G_MoveTransports(void)
                     if (sprite[j].extra > 0)
                         goto JBOLT;
                 }
+                fallthrough__;
             case 5:
             case 12:
             case 13:
@@ -3362,7 +3364,7 @@ static void G_MoveTransports(void)
                     if (warpspriteto && A_CheckSpriteFlags(j,SPRITE_DECAL)) goto JBOLT;
 
                     if (warpspriteto) switch (DynamicTileMap[sprite[j].picnum])
-                        {
+                    {
                         case TRANSPORTERSTAR__STATIC:
                         case TRANSPORTERBEAM__STATIC:
                         case TRIPBOMB__STATIC:
@@ -3375,28 +3377,37 @@ static void G_MoveTransports(void)
                         case TOILETWATER__STATIC:
                         case LASERLINE__STATIC:
                             goto JBOLT;
+
                         case PLAYERONWATER__STATIC:
+                        {
                             if (sectlotag == 2)
                             {
                                 sprite[j].cstat &= 32767;
                                 break;
                             }
+                        }
+                        fallthrough__;
+
                         default:
+                        {
                             if (sprite[j].statnum == 5 && !(sectlotag == 1 || sectlotag == 2))
                                 break;
+                        }
+                        fallthrough__;
 
                         case WATERBUBBLE__STATIC:
+                        {
                             //                                if( rnd(192) && sprite[j].picnum == WATERBUBBLE)
                             //                                 break;
 
                             if (sectlotag > 0)
                             {
-                                k = A_Spawn(j,WATERSPLASH2);
+                                k = A_Spawn(j, WATERSPLASH2);
                                 if (sectlotag == 1 && sprite[j].statnum == 4)
                                 {
-                                    sprite[k].xvel = sprite[j].xvel>>1;
+                                    sprite[k].xvel = sprite[j].xvel >> 1;
                                     sprite[k].ang = sprite[j].ang;
-                                    A_SetSprite(k,CLIPMASK0);
+                                    A_SetSprite(k, CLIPMASK0);
                                 }
                             }
 
@@ -3405,10 +3416,10 @@ static void G_MoveTransports(void)
                             case 0:
                                 if (onfloorz)
                                 {
-                                    if (sprite[j].statnum == 4 || (CheckPlayerInSector(sect) == -1 && CheckPlayerInSector(sprite[OW].sectnum)  == -1))
+                                    if (sprite[j].statnum == 4 || (CheckPlayerInSector(sect) == -1 && CheckPlayerInSector(sprite[OW].sectnum) == -1))
                                     {
-                                        sprite[j].x += (sprite[OW].x-SX);
-                                        sprite[j].y += (sprite[OW].y-SY);
+                                        sprite[j].x += (sprite[OW].x - SX);
+                                        sprite[j].y += (sprite[OW].y - SY);
                                         sprite[j].z -= SZ - sector[sprite[OW].sectnum].floorz;
                                         sprite[j].ang = sprite[OW].ang;
 
@@ -3418,11 +3429,11 @@ static void G_MoveTransports(void)
 
                                         if (sprite[i].pal == 0)
                                         {
-                                            k = A_Spawn(i,TRANSPORTERBEAM);
-                                            A_PlaySound(TELEPORTER,k);
+                                            k = A_Spawn(i, TRANSPORTERBEAM);
+                                            A_PlaySound(TELEPORTER, k);
 
-                                            k = A_Spawn(OW,TRANSPORTERBEAM);
-                                            A_PlaySound(TELEPORTER,k);
+                                            k = A_Spawn(OW, TRANSPORTERBEAM);
+                                            A_PlaySound(TELEPORTER, k);
                                         }
 
                                         if (sprite[OW].owner != OW)
@@ -3431,50 +3442,51 @@ static void G_MoveTransports(void)
                                             ActorExtra[OW].temp_data[0] = 13;
                                         }
 
-                                        changespritesect(j,sprite[OW].sectnum);
+                                        changespritesect(j, sprite[OW].sectnum);
                                     }
                                 }
                                 else
                                 {
-                                    sprite[j].x += (sprite[OW].x-SX);
-                                    sprite[j].y += (sprite[OW].y-SY);
-                                    sprite[j].z = sprite[OW].z+4096;
+                                    sprite[j].x += (sprite[OW].x - SX);
+                                    sprite[j].y += (sprite[OW].y - SY);
+                                    sprite[j].z = sprite[OW].z + 4096;
 
                                     ActorExtra[j].bposx = sprite[j].x;
                                     ActorExtra[j].bposy = sprite[j].y;
                                     ActorExtra[j].bposz = sprite[j].z;
 
-                                    changespritesect(j,sprite[OW].sectnum);
+                                    changespritesect(j, sprite[OW].sectnum);
                                 }
                                 break;
                             case 1:
-                                sprite[j].x += (sprite[OW].x-SX);
-                                sprite[j].y += (sprite[OW].y-SY);
-                                sprite[j].z = sector[sprite[OW].sectnum].ceilingz+ll;
+                                sprite[j].x += (sprite[OW].x - SX);
+                                sprite[j].y += (sprite[OW].y - SY);
+                                sprite[j].z = sector[sprite[OW].sectnum].ceilingz + ll;
 
                                 ActorExtra[j].bposx = sprite[j].x;
                                 ActorExtra[j].bposy = sprite[j].y;
                                 ActorExtra[j].bposz = sprite[j].z;
 
-                                changespritesect(j,sprite[OW].sectnum);
+                                changespritesect(j, sprite[OW].sectnum);
 
                                 break;
                             case 2:
-                                sprite[j].x += (sprite[OW].x-SX);
-                                sprite[j].y += (sprite[OW].y-SY);
-                                sprite[j].z = sector[sprite[OW].sectnum].floorz-ll;
+                                sprite[j].x += (sprite[OW].x - SX);
+                                sprite[j].y += (sprite[OW].y - SY);
+                                sprite[j].z = sector[sprite[OW].sectnum].floorz - ll;
 
                                 ActorExtra[j].bposx = sprite[j].x;
                                 ActorExtra[j].bposy = sprite[j].y;
                                 ActorExtra[j].bposz = sprite[j].z;
 
-                                changespritesect(j,sprite[OW].sectnum);
+                                changespritesect(j, sprite[OW].sectnum);
 
                                 break;
                             }
 
                             break;
                         }
+                    }
                 }
                 break;
 
@@ -4373,6 +4385,7 @@ static void G_MoveActors(void)
         case MORTER__STATIC:
             j = A_Spawn(i,(PLUTOPAK?FRAMEEFFECT1:FRAMEEFFECT1_13));
             ActorExtra[j].temp_data[0] = 3;
+            fallthrough__;
 
         case HEAVYHBOMB__STATIC:
 
@@ -4968,6 +4981,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 goto BOLT;
             case FRAMEEFFECT1_13__STATIC:
                 if (PLUTOPAK) goto BOLT;	// JBF: ideally this should never happen...
+                fallthrough__;
             case FRAMEEFFECT1__STATIC:
 
                 if (s->owner >= 0)
@@ -4998,6 +5012,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                     g_player[p].ps->pals[2] = 0;
                     sprite[g_player[p].ps->i].extra -= 4;
                 }
+                fallthrough__;
 
             case FIRELASER__STATIC:
                 if (s->extra != 999)
@@ -5683,7 +5698,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 j = nextspritestat[j];
             }
             x = 0;
-
+            fallthrough__;
 
         case 14:
             if (s->owner==-1)
@@ -6390,6 +6405,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         case 26:
                             if (GetAnimationGoal(&sector[s->sectnum].ceilingz) >= 0)
                                 break;
+                            fallthrough__;
                         default:
                             activatebysector(s->sectnum,i);
                             t[0] = 0;
@@ -7108,8 +7124,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             j = nextj;
                             continue;
                         }
+                        fallthrough__;
                     case 6:
                         if (sprite[j].picnum == TRIPBOMB) break;
+                        fallthrough__;
                     case 1:
                     case 0:
                         if (

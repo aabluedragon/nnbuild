@@ -631,6 +631,7 @@ void Net_ParsePackets(void)
         case PACKET_TYPE_BROADCAST:
             g_player[other].movefifoend = movefifoplc = movefifosendplc = predictfifoplc = 0;
             g_player[other].syncvalhead = syncvaltottail = 0L;
+            fallthrough__;
         case SERVER_GENERATED_BROADCAST:
             j = 1;
 
