@@ -871,8 +871,11 @@ components := \
 
 roles := \
     game \
-    editor \
 
+# If blank string, substring not found.
+ifeq (,$(findstring oldmp,$(MAKECMDGOALS)))
+    roles += editor
+endif
 
 ifeq ($(PRETTY_OUTPUT),1)
 .SILENT:
