@@ -159,10 +159,10 @@ void CONFIG_SetDefaultKeys(int type)
     {
         for (i=0; i < (int32_t)(sizeof(oldkeydefaults)/sizeof(oldkeydefaults[0])); i+=3)
         {
-            f = CONFIG_FunctionNameToNum((char *)oldkeydefaults[i+0]);
+            f = CONFIG_FunctionNameToNum(oldkeydefaults[i+0]);
             if (f == -1) continue;
-            ud.config.KeyboardKeys[f][0] = KB_StringToScanCode((char *)oldkeydefaults[i+1]);
-            ud.config.KeyboardKeys[f][1] = KB_StringToScanCode((char *)oldkeydefaults[i+2]);
+            ud.config.KeyboardKeys[f][0] = KB_StringToScanCode(oldkeydefaults[i+1]);
+            ud.config.KeyboardKeys[f][1] = KB_StringToScanCode(oldkeydefaults[i+2]);
 
             if (f == gamefunc_Show_Console) OSD_CaptureKey(ud.config.KeyboardKeys[f][0]);
             else CONFIG_MapKey(f, ud.config.KeyboardKeys[f][0], 0, ud.config.KeyboardKeys[f][1], 0);
@@ -172,10 +172,10 @@ void CONFIG_SetDefaultKeys(int type)
 
     for (i=0; i < (int32_t)(sizeof(keydefaults)/sizeof(keydefaults[0])); i+=3)
     {
-        f = CONFIG_FunctionNameToNum((char *)keydefaults[i+0]);
+        f = CONFIG_FunctionNameToNum(keydefaults[i+0]);
         if (f == -1) continue;
-        ud.config.KeyboardKeys[f][0] = KB_StringToScanCode((char *)keydefaults[i+1]);
-        ud.config.KeyboardKeys[f][1] = KB_StringToScanCode((char *)keydefaults[i+2]);
+        ud.config.KeyboardKeys[f][0] = KB_StringToScanCode(keydefaults[i+1]);
+        ud.config.KeyboardKeys[f][1] = KB_StringToScanCode(keydefaults[i+2]);
 
         if (f == gamefunc_Show_Console) OSD_CaptureKey(ud.config.KeyboardKeys[f][0]);
         else CONFIG_MapKey(f, ud.config.KeyboardKeys[f][0], 0, ud.config.KeyboardKeys[f][1], 0);

@@ -92,8 +92,8 @@ extern void ChangeToMenu(int cm);
 // extern int G_LoadSaveHeader(char spot,int32_t *vn,int32_t *ln,int32_t *psk,int32_t *numplr);
 extern int G_LoadPlayer(int spot);
 extern int G_SavePlayer(int spot);
-extern int menutext_(int x,int y,int s,int p,char *t,int bits);
-#define menutext(x,y,s,p,t) menutext_(x,y,s,p,(char *)OSD_StripColors(menutextbuf,t),10+16)
+extern int menutext_(int x,int y,int s,int p,const char *t,int bits);
+#define menutext(x,y,s,p,t) menutext_(x,y,s,p,OSD_StripColors(menutextbuf,t),10+16)
 extern void M_DisplayMenus(void);
 extern void G_PlayAnim(const char *fn,char);
 extern int G_GetAngleDelta(int a,int na);

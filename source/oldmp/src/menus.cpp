@@ -220,7 +220,7 @@ static inline int probesm(int x,int y,int i,int n)
     return probe_(1,x,y,i,n);
 }
 
-int menutext_(int x,int y,int s,int p,char *t,int bits)
+int menutext_(int x,int y,int s,int p,const char *t,int bits)
 {
     short i, ac, centre;
 //    int ht = usehightile;
