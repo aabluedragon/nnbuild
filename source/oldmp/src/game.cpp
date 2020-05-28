@@ -73,10 +73,10 @@ int g_noSetup = 0;
 static int g_noAutoLoad = 0;
 static int g_noSound = 0;
 static int g_noMusic = 0;
-static char *CommandMap = NULL;
-static char *CommandName = NULL;
+static const char *CommandMap = NULL;
+static const char *CommandName = NULL;
 #ifndef RANCID_NETWORKING
-static char *CommandNet = NULL;
+static const char *CommandNet = NULL;
 #endif
 static int g_keepAddr = 0;
 int CommandWeaponChoice = 0;
@@ -9148,7 +9148,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
         i = 1;
         while (i < argc)
         {
-            c = (char *)argv[i];
+            c = const_cast<char *>(argv[i]);
             if (((*c == '/') || (*c == '-')) && (!firstnet))
             {
                 if (!Bstrcasecmp(c+1,"?") || !Bstrcasecmp(c+1,"help") || !Bstrcasecmp(c+1,"-help"))
@@ -9271,7 +9271,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     {
                         g_noSetup = TRUE;
                         g_networkBroadcastMode = NETMODE_P2P;
-                        CommandNet = (char *)argv[i+1];
+                        CommandNet = argv[i+1];
                         i++;
                     }
                     i++;
@@ -9295,7 +9295,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     if (argc > i+1)
                     {
-                        CommandName = (char *)argv[i+1];
+                        CommandName = argv[i+1];
                         i++;
                     }
                     i++;
@@ -9305,7 +9305,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     if (argc > i+1)
                     {
-                        CommandMap = (char *)argv[i+1];
+                        CommandMap = argv[i+1];
                         i++;
                     }
                     i++;
@@ -9347,7 +9347,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     if (argc > i+1)
                     {
-                        unsigned int j = atol((char *)argv[i+1]);
+                        unsigned int j = atol(argv[i+1]);
                         MAXCACHE1DSIZE = j<<10;
                         initprintf("Cache size: %dkB\n",j);
                         i++;
@@ -9387,7 +9387,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     }
 
                 }
-                netparam[i-firstnet-1] = (char *)argv[i];
+                netparam[i-firstnet-1] = const_cast<char*>(argv[i]);
                 i++;
                 continue;
             }
@@ -9664,7 +9664,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     if (!Bstrcasecmp(k,".map"))
                     {
-                        CommandMap = (char *)argv[i++];
+                        CommandMap = argv[i++];
                         continue;
                     }
                     if (!Bstrcasecmp(k,".grp") || !Bstrcasecmp(k,".zip") || !Bstrcasecmp(k,".pk3"))
@@ -9674,14 +9674,14 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     }
                     if (!Bstrcasecmp(k,".con"))
                     {
-                        confilename = (char *)argv[i++];
+                        confilename = const_cast<char*>(argv[i++]);
                         userconfiles = 1;
                         initprintf("Using CON file '%s'.\n",confilename);
                         continue;
                     }
                     if (!Bstrcasecmp(k,".def"))
                     {
-                        duke3ddef = (char *)argv[i++];
+                        duke3ddef = argv[i++];
                         initprintf("Using DEF file: %s.\n",duke3ddef);
                         continue;
                     }
