@@ -1181,6 +1181,7 @@ static int32_t C_SkipComments(void)
         {
         case '\n':
             g_lineNumber++;
+            fallthrough__;
         case ' ':
         case '\t':
         case '\r':
@@ -1229,6 +1230,7 @@ static int32_t C_SkipComments(void)
                 textptr++;
                 break;
             }
+            fallthrough__;
         case 0: // EOF
             return ((g_scriptPtr - script) > (g_scriptSize - 32)) ? C_SetScriptSize(g_scriptSize << 1) : 0;
         }
@@ -1984,6 +1986,7 @@ static int C_ParseCommand(void)
     case CON_SETPROJECTILE:
         if (!C_CheckEventSync(g_currentEvent))
             C_ReportError(WARNING_EVENTSYNC);
+        fallthrough__;
     case CON_GETTHISPROJECTILE:
     case CON_GETPROJECTILE:
     {
@@ -2878,6 +2881,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_ANGOFF:
     case CON_QUOTE:
     case CON_SOUND:
@@ -2917,6 +2921,7 @@ static int C_ParseCommand(void)
         C_GetNextValue(LABEL_DEFINE);
         C_GetNextValue(LABEL_DEFINE);
         C_GetNextValue(LABEL_DEFINE);
+        fallthrough__;
     case CON_ADDAMMO:
     case CON_ADDWEAPON:
     case CON_SIZETO:
@@ -2961,6 +2966,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_GETSECTOR:
     {
         int lLabelID;
@@ -3096,6 +3102,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_GETWALL:
     {
         int lLabelID;
@@ -3163,6 +3170,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_GETPLAYER:
     {
         int lLabelID;
@@ -3244,6 +3252,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_GETINPUT:
     {
         int lLabelID;
@@ -3375,6 +3384,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_GETACTORVAR:
     case CON_GETPLAYERVAR:
     {
@@ -3512,6 +3522,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_GETACTOR:
     {
         int lLabelID;
@@ -3665,6 +3676,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_REVEVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_GETCURRADDRESS:
         C_GetNextVarType(GAMEVAR_READONLY);
         return 0;
@@ -3686,6 +3698,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_JUMP:
     case CON_CMENU:
     case CON_SOUNDVAR:
@@ -3741,6 +3754,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_SETVAR:
     case CON_ADDVAR:
     case CON_SUBVAR:
@@ -3815,6 +3829,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_SETVARVAR:
     case CON_ADDVARVAR:
     case CON_SUBVARVAR:
@@ -3842,6 +3857,7 @@ static int C_ParseCommand(void)
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_GMAXAMMO:
     case CON_DIST:
     case CON_LDIST:
@@ -4260,12 +4276,15 @@ static int C_ParseCommand(void)
         {
         case CON_SCREENTEXT:
             C_GetManyVars(8);
+            fallthrough__;
         case CON_GAMETEXTZ:
         case CON_DIGITALNUMBERZ:
             C_GetManyVars(1);
+            fallthrough__;
         case CON_GAMETEXT:
         case CON_DIGITALNUMBER:
             C_GetManyVars(6);
+            fallthrough__;
         default:
             C_GetManyVars(5);
             break;
@@ -4559,6 +4578,7 @@ repeatcase:
             g_numCompilerWarnings++;
             C_ReportError(WARNING_EVENTSYNC);
         }
+        fallthrough__;
     case CON_GETPNAME:
     case CON_GETTEAMNAME:
     case CON_STARTLEVEL:
@@ -4590,6 +4610,7 @@ repeatcase:
             g_numCompilerWarnings++;
             C_ReportError(WARNING_EVENTSYNC);
         }
+        fallthrough__;
     case CON_GETANGLETOTARGET:
     case CON_GETACTORANGLE:
     case CON_GETPLAYERANGLE:
@@ -4614,6 +4635,7 @@ repeatcase:
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_IFPDISTL:
     case CON_IFPDISTG:
     case CON_IFWASWEAPON:
@@ -4661,11 +4683,12 @@ repeatcase:
                 C_ReportError(WARNING_REVEVENTSYNC);
                 g_numCompilerWarnings++;
             }
+            fallthrough__;
         default:
             C_GetNextValue(LABEL_DEFINE);
             break;
         }
-
+        fallthrough__;
     case CON_IFONWATER:
     case CON_IFINWATER:
     case CON_IFACTORNOTSTAYPUT:
@@ -5390,12 +5413,14 @@ repeatcase:
             C_ReportError(WARNING_EVENTSYNC);
             g_numCompilerWarnings++;
         }
+        fallthrough__;
     case CON_NULLOP:
         if (tw == CON_NULLOP)
         {
             if (C_GetKeyword() != CON_ELSE)
                 initprintf("%s:%d: warning: found 'nullop' without 'else'\n",g_szScriptFileName,g_lineNumber);
         }
+        fallthrough__;
     case CON_STOPALLSOUNDS:
         return 0;
     case CON_GAMESTARTUP:
