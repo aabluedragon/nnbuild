@@ -356,7 +356,7 @@ static int osdcmd_fileinfo(const osdfuncparm_t *parm)
 
     if (parm->numparms != 1) return OSDCMD_SHOWHELP;
 
-    if ((i = kopen4loadfrommod((char *)parm->parms[0],0)) < 0)
+    if ((i = kopen4loadfrommod(parm->parms[0],0)) < 0)
     {
         OSD_Printf("fileinfo: File \"%s\" not found.\n", parm->parms[0]);
         return OSDCMD_OK;
@@ -650,15 +650,19 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
         y = Batol(parm->parms[5]);
         z = Batol(parm->parms[6]);
         set |= 8;
+        fallthrough__;
     case 4: // ang
         ang = Batol(parm->parms[3]) & 2047;
         set |= 4;
+        fallthrough__;
     case 3: // cstat
         cstat = (unsigned short)Batol(parm->parms[2]);
         set |= 2;
+        fallthrough__;
     case 2: // pal
         pal = (unsigned char)Batol(parm->parms[1]);
         set |= 1;
+        fallthrough__;
     case 1: // tile number
         if (isdigit(parm->parms[0][0]))
         {
@@ -926,7 +930,7 @@ static int osdcmd_cvar_set_game(const osdfuncparm_t *parm)
                     int val;
                     if (showval)
                     {
-                        OSD_Printf("\"%s\" is \"%d\"\n%s\n",cvar[i].name,*(int*)cvar[i].var,(char*)cvar[i].helpstr);
+                        OSD_Printf("\"%s\" is \"%d\"\n%s\n",cvar[i].name,*(int*)cvar[i].var,cvar[i].helpstr);
                         return OSDCMD_OK;
                     }
 
@@ -946,7 +950,7 @@ static int osdcmd_cvar_set_game(const osdfuncparm_t *parm)
                 {
                     if (showval)
                     {
-                        OSD_Printf("\"%s\" is \"%s\"\n%s\n",cvar[i].name,(char*)cvar[i].var,(char*)cvar[i].helpstr);
+                        OSD_Printf("\"%s\" is \"%s\"\n%s\n",cvar[i].name,(char*)cvar[i].var,cvar[i].helpstr);
                         return OSDCMD_OK;
                     }
                     else
@@ -976,7 +980,7 @@ static int osdcmd_sensitivity(const osdfuncparm_t *parm)
         return OSDCMD_SHOWHELP;
     }
     CONTROL_MouseSensitivity = atof(parm->parms[0]);
-    OSD_Printf("sensitivity %d\n", CONTROL_MouseSensitivity);
+    OSD_Printf("sensitivity %f\n", CONTROL_MouseSensitivity);
     return OSDCMD_OK;
 }
 
