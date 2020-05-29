@@ -6780,9 +6780,7 @@ void G_DoSpriteAnimations(int x,int y,int a,int smoothratio)
             }
 #endif
             k = getangle(s->x-x,s->y-y);
-            if (T1 < 4)
-                k = (((s->ang+3072+128-k)&2047)/170);
-            else k = (((s->ang+3072+128-k)&2047)/170);
+            k = (((s->ang+3072+128-k)&2047)/170);
 
             if (k>6)
             {
@@ -8723,6 +8721,7 @@ static BUILDVFS_FIND_REC* finddirshigh = NULL, * findfileshigh = NULL;
 static int32_t currentlist = 0;
 static fnlist_t fnlist;
 
+#if 0
 static void clearfilenames(void)
 {
     klistfree(fnlist.finddirs);
@@ -8730,6 +8729,7 @@ static void clearfilenames(void)
     fnlist.finddirs = fnlist.findfiles = NULL;
     fnlist.numfiles = fnlist.numdirs = 0;
 }
+#endif
 
 static int32_t getfilenames(const char* path, const char* kind)
 {

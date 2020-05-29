@@ -483,7 +483,7 @@ void xyzmirror(int i,int wn)
     display_mirror = 0;
     renderDrawMasks();
 
-    initprintf("%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i\n",i,wn,tilesiz[wn].y,tilesiz[wn].x,SX,SY,SZ,SA,100+sprite[i].shade,SECT,sprite[i].picnum);
+    initprintf("%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i\n",i,wn,tilesiz[wn].y,tilesiz[wn].x,TrackerCast(SX),TrackerCast(SY),TrackerCast(SZ),TrackerCast(SA),100+TrackerCast(SS),TrackerCast(SECT),TrackerCast(PN));
 
     renderRestoreTarget();
     squarerotatetile(wn);
@@ -1056,6 +1056,7 @@ static void prelevel(char g)
             if (wal->lotag && wal->nextwall >= 0)
                 wall[wal->nextwall].lotag =
                     wal->lotag;
+            fallthrough__;
 
         case BIGFORCE__STATIC:
 

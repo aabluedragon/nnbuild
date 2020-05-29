@@ -45,12 +45,8 @@ static volatile uint32_t dq[128], dnum = 0;
 
 void S_SoundStartup(void)
 {
-    int32_t fxdevicetype, i;
+    int32_t i;
     void *initdata = 0;
-
-    if (ud.config.FXDevice >= 0)
-        fxdevicetype = ASS_AutoDetect;
-    else return;
 
 #ifdef WIN32
     initdata = (void *) win_gethwnd();
@@ -204,7 +200,7 @@ void S_MenuSound(void)
 
 int32_t S_PlayMusic(const char *fn, const int32_t sel)
 {
-    char *ofn = (char *)fn, *testfn, *extension;
+    char *ofn = const_cast<char *>(fn), *testfn, *extension;
     int32_t fp;
     const char *alt = 0;
 
@@ -236,7 +232,7 @@ int32_t S_PlayMusic(const char *fn, const int32_t sel)
         Bfree(testfn);
 
         // just use what we've been given
-        fp = kopen4loadfrommod((char *)fn, 0);
+        fp = kopen4loadfrommod(fn, 0);
 
         if (alt && fp < 0)
             fp = kopen4loadfrommod(ofn, 0);
@@ -705,7 +701,6 @@ int32_t S_PlaySound(int32_t num)
 {
     int32_t pitch;
     int32_t voice, j;
-    int32_t doretry = 0;
     int32_t oldReturn;
 
 /*
