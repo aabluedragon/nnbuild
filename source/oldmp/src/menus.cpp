@@ -2012,7 +2012,7 @@ cheat_for_port_credits:
                     if (dir == finddirshigh && currentlist == 0) c=0;
                     else c=16;
                     len = Bstrlen(dir->name);
-                    Bstrncpy(tempbuf,dir->name,len);
+                    Bstrcpy(tempbuf, dir->name);
                     if (len > USERMAPENTRYLENGTH)
                     {
                         len = USERMAPENTRYLENGTH-3;
@@ -2039,7 +2039,7 @@ cheat_for_port_credits:
                     if (dir == findfileshigh && currentlist == 1) c=0;
                     else c=16;
                     len = Bstrlen(dir->name);
-                    Bstrncpy(tempbuf,dir->name,len);
+                    Bstrcpy(tempbuf,dir->name);
                     if (len > USERMAPENTRYLENGTH)
                     {
                         len = USERMAPENTRYLENGTH-3;
