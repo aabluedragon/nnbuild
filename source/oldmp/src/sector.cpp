@@ -1244,6 +1244,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
 
             return 0;
         }
+        fallthrough__;
     case DIPSWITCH2__STATIC:
         //case DIPSWITCH2+1:
     case DIPSWITCH3__STATIC:
@@ -1479,6 +1480,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
     {
     default:
         if (CheckDoorTile(picnum) == 0) break;
+        fallthrough__;
     case DIPSWITCH__STATIC:
         //case DIPSWITCH+1:
     case TECHSWITCH__STATIC:
@@ -1504,6 +1506,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
             if (numdips != correctdips) break;
             S_PlaySoundXYZ(END_OF_LEVEL_WARN,g_player[snum].ps->i,sx,sy,g_player[snum].ps->pos.z);
         }
+        fallthrough__;
     case DIPSWITCH2__STATIC:
         //case DIPSWITCH2+1:
     case DIPSWITCH3__STATIC:
@@ -1679,6 +1682,8 @@ void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith)
                     //case W_FORCEFIELD+1:
                     //case W_FORCEFIELD+2:
                     wal->extra = 1; // tell the forces to animate
+                    fallthrough__;
+
                 case BIGFORCE__STATIC:
                     updatesector(x,y,&sn);
                     if (sn < 0) return;
@@ -2243,6 +2248,7 @@ void A_DamageObject_Internal(int i,int sn)
         }
         A_PlaySound(GLASS_HEAVYBREAK,i);
         A_PlaySound(SQUISHED,i);
+        fallthrough__;
     case BOTTLE7__STATIC:
         A_PlaySound(GLASS_BREAKING,i);
         A_SpawnWallGlass(i,-1,10);
@@ -2356,6 +2362,8 @@ void A_DamageObject_Internal(int i,int sn)
     case JURYGUY__STATIC:
         A_PlaySound(SLT,i);
         A_Spawn(i,SHT);
+        fallthrough__;
+
     case SPACEMARINE__STATIC:
         sprite[i].extra -= sprite[sn].extra;
         if (sprite[i].extra > 0) break;
@@ -2406,6 +2414,7 @@ void A_DamageObject_Internal(int i,int sn)
         break;
     case PLAYERONWATER__STATIC:
         i = OW;
+        fallthrough__;
     default:
         if ((sprite[i].cstat&16) && SHT == 0 && SLT == 0 && sprite[i].statnum == 0)
             break;
@@ -2997,6 +3006,7 @@ CHECKINV1:
                                 p->show_empty_weapon = 32;
                                 p->last_full_weapon = p->curr_weapon;
                             }
+                            fallthrough__;
                         case KNEE_WEAPON:
                             P_AddWeapon(p, j);
                             break;
@@ -3171,7 +3181,7 @@ int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite)
         zOffset = (39 << 8);
 
     sprite[spriteNum].z -= zOffset;
-    hitscan((const vec3_t*)&sprite[spriteNum], sprite[spriteNum].sectnum, sintable[sprite[spriteNum].ang + 512 & 2047],
+    hitscan((const vec3_t*)&sprite[spriteNum], sprite[spriteNum].sectnum, sintable[(sprite[spriteNum].ang + 512) & 2047],
         sintable[sprite[spriteNum].ang & 2047], 0, &hitData, CLIPMASK1);
     sprite[spriteNum].z += zOffset;
 
@@ -3184,13 +3194,18 @@ int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite)
     return FindDistance2D(hitData.pos.x - sprite[spriteNum].x, hitData.pos.y - sprite[spriteNum].y);
 }
 
-static int hitawall(DukePlayer_t *p,short *hitw)
+static int hitawall(DukePlayer_t *p,int16_t *hitw)
 {
     hitdata_t hit;
     hitscan(&p->pos,p->cursectnum,
             sintable[(fix16_to_int(p->q16ang)+512)&2047],
             sintable[fix16_to_int(p->q16ang)&2047],
             0,&hit,CLIPMASK0);
+
+    *hitw = hit.wall;
+
+    if (hit.wall < 0)
+        return INT32_MAX;
 
     return (FindDistance2D(hit.pos.x-p->pos.x,hit.pos.y-p->pos.y));
 }
