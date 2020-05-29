@@ -1112,6 +1112,8 @@ DOSKIPBULLETHOLE:
                 sa += 64 - (krand()&127);
             else sa += 1024 + 64 - (krand()&127);
             zvel = 1024-(krand()&2047);
+            fallthrough__;
+
         case KNEE__STATIC:
             if (atwith == KNEE)
             {
@@ -1633,6 +1635,8 @@ SKIPBULLETHOLE:
 
         case FREEZEBLAST__STATIC:
             spos.z += (3<<8);
+            fallthrough__;
+
         case RPG__STATIC:
 
             if (s->extra >= 0) s->shade = -96;
@@ -2529,6 +2533,7 @@ void P_DisplayWeapon(int snum)
                         guniqhudid = cw<<1;
                         G_DrawWeaponTile(weapon_xoffset+168-(p->look_ang>>1),looking_arc+201-gun_pos,
                                          SHOTGUN+2,-128,o,pal);
+                        fallthrough__;
                     case 0:
                     case 6:
                     case 7:
@@ -4635,9 +4640,9 @@ void P_ProcessInput(int snum)
                 {
                 case 0:
 
-                    if (lz >= 0 && (lz&(MAXSPRITES-1))==49152)
-                        j = sprite[lz&(MAXSPRITES-1)].picnum;
-                    else j = sector[psect].floorpicnum;
+                    j = (lz >= 0 && (lz & 49152) == 49152)
+                        ? TrackerCast(sprite[lz & (MAXSPRITES - 1)].picnum)
+                        : TrackerCast(sector[psect].floorpicnum);
 
                     switch (DynamicTileMap[j])
                     {
