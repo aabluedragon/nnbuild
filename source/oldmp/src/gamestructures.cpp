@@ -979,7 +979,7 @@ static inline void X_AccessActiveProjectile(int iSet, int lVar1, int lLabelID, i
     {
 //        OSD_Printf("X_AccessActiveProjectile(): invalid projectile (%d)\n",proj);
         OSD_Printf(CON_ERROR "tried to %s %s on invalid target projectile (%d) %d %d from %s\n",g_errorLineNum,keyw[g_tw],
-                   iSet?"set":"get",ProjectileLabels[lLabelID].name,proj,g_i,g_sp->picnum,
+                   iSet?"set":"get",ProjectileLabels[lLabelID].name,proj,g_i,TrackerCast(g_sp->picnum),
                    (lVar1<MAXGAMEVARS)?aGameVars[lVar1].szLabel:"extended");
         insptr += (lVar2 == MAXGAMEVARS);
         return;
@@ -3155,7 +3155,7 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     if ((iActor < 0 || iActor >= MAXSPRITES) && g_scriptSanityChecks)
     {
         OSD_Printf(CON_ERROR "tried to %s %s on invalid target sprite (%d) from spr %d pic %d gv %s\n",g_errorLineNum,keyw[g_tw],
-                   iSet?"set":"get",ActorLabels[lLabelID].name,iActor,g_i,g_sp->picnum,
+                   iSet?"set":"get",ActorLabels[lLabelID].name,iActor,g_i,TrackerCast(g_sp->picnum),
                    (lVar1<MAXGAMEVARS)?aGameVars[lVar1].szLabel:"extended");
         insptr += (lVar2 == MAXGAMEVARS);
         return;
@@ -3658,7 +3658,7 @@ static inline void X_AccessTsprite(int iSet, int lVar1, int lLabelID, int lVar2)
 
     if ((iActor < 0 || iActor >= MAXSPRITES) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "invalid target sprite (%d) %d %d\n",g_errorLineNum,keyw[g_tw],iActor,g_i,g_sp->picnum);
+        OSD_Printf(CON_ERROR "invalid target sprite (%d) %d %d\n",g_errorLineNum,keyw[g_tw],iActor,g_i,TrackerCast(g_sp->picnum));
         insptr += (lVar2 == MAXGAMEVARS);
         return;
     }

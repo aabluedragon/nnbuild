@@ -598,7 +598,7 @@ void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
 {
     if (id<0 || id >= g_gameVarCount)
     {
-        OSD_Printf(CON_ERROR "Gv_SetVar(): tried to set invalid gamevar ID (%d) from sprite %d (%d), player %d\n",g_errorLineNum,keyw[g_tw],id,g_i,sprite[g_i].picnum,g_p);
+        OSD_Printf(CON_ERROR "Gv_SetVar(): tried to set invalid gamevar ID (%d) from sprite %d (%d), player %d\n",g_errorLineNum,keyw[g_tw],id,g_i,TrackerCast(sprite[g_i].picnum),g_p);
         return;
     }
     //Bsprintf(g_szBuf,"SGVI: %d ('%s') to %d for %d %d",id,aGameVars[id].szLabel,lValue,iActor,iPlayer);
@@ -621,7 +621,7 @@ void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
     case GAMEVAR_PERACTOR:
         if (iActor < 0 || iActor > MAXSPRITES-1)
         {
-            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid sprite (%d) for per-actor gamevar %s from sprite %d (%d), player %d\n",g_errorLineNum,keyw[g_tw],iActor,aGameVars[id].szLabel,g_i,sprite[g_i].picnum,g_p);
+            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid sprite (%d) for per-actor gamevar %s from sprite %d (%d), player %d\n",g_errorLineNum,keyw[g_tw],iActor,aGameVars[id].szLabel,g_i,TrackerCast(sprite[g_i].picnum),g_p);
             return;
         }
         // for the current actor

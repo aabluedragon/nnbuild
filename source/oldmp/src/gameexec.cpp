@@ -73,7 +73,7 @@ void X_ScriptInfo(void)
     }
 
     if (g_i)
-        initprintf("current actor: %d (%d)\n",g_i,g_sp->picnum);
+        initprintf("current actor: %d (%d)\n",g_i,TrackerCast(g_sp->picnum));
 
     initprintf("g_errorLineNum: %d, g_tw: %d\n",g_errorLineNum,g_tw);
 }
@@ -752,7 +752,7 @@ static int X_DoExecute(void)
             int q = *insptr++, i = *insptr++;
             if ((ScriptQuotes[q] == NULL || ScriptQuoteRedefinitions[i] == NULL) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "%s %d null quote\n",g_errorLineNum,keyw[g_tw],q,i);
+                OSD_Printf(CON_ERROR "%d %d null quote\n",g_errorLineNum,keyw[g_tw],q,i);
                 break;
             }
             Bstrcpy(ScriptQuotes[q],ScriptQuoteRedefinitions[i]);
@@ -1013,7 +1013,7 @@ static int X_DoExecute(void)
         insptr++;
         if ((g_sp->yvel<0 || g_sp->yvel>=MAXSOUNDS) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],g_sp->yvel);
+            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->yvel));
             insptr++;
             break;
         }
@@ -1957,6 +1957,7 @@ static int X_DoExecute(void)
 
     case CON_ENDSWITCH:
         insptr++;
+        fallthrough__;
     case CON_ENDEVENT:
         return 1;
 
@@ -2046,7 +2047,7 @@ static int X_DoExecute(void)
             int lIn=Gv_GetVarX(*insptr++);
             if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],g_sp->sectnum);
+                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
                 break;
             }
             j = A_Spawn(g_i, lIn);
@@ -2055,6 +2056,7 @@ static int X_DoExecute(void)
             case CON_EQSPAWNVAR:
                 if (j != -1)
                     A_AddToDeleteQueue(j);
+                fallthrough__;
             case CON_ESPAWNVAR:
                 Gv_SetVarX(g_iReturnVarID, j);
                 break;
@@ -2073,7 +2075,7 @@ static int X_DoExecute(void)
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],g_sp->sectnum);
+            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
             insptr++;
             break;
         }
@@ -2085,6 +2087,7 @@ static int X_DoExecute(void)
         case CON_EQSPAWN:
             if (j != -1)
                 A_AddToDeleteQueue(j);
+            fallthrough__;
         case CON_ESPAWN:
             Gv_SetVarX(g_iReturnVarID, j);
             break;
@@ -2109,7 +2112,7 @@ static int X_DoExecute(void)
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],g_sp->sectnum);
+            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
             insptr++;
             ActorExtra[g_i].temp_data[9]=0;
             break;
@@ -2142,7 +2145,7 @@ static int X_DoExecute(void)
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],g_sp->sectnum);
+            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
             ActorExtra[g_i].temp_data[9]=0;
             break;
         }
@@ -2608,7 +2611,7 @@ static int X_DoExecute(void)
             {
                 int cliptype = Gv_GetVarX(*insptr++);
 
-                if ((spritenum < 0 && spritenum >= MAXSPRITES) && g_scriptSanityChecks)
+                if ((spritenum < 0 || spritenum >= MAXSPRITES) && g_scriptSanityChecks)
                 {
                     OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],spritenum);
                     insptr++;
@@ -3239,7 +3242,7 @@ static int X_DoExecute(void)
                     index=Gv_GetVarX(*insptr++);
                     if ((index < aGameArrays[lVarID].size)&&(index>=0))
                     {
-                        OSD_Printf(OSDTEXT_GREEN "%s: L=%d %s[%d] =%d\n",g_errorLineNum,keyw[g_tw],
+                        OSD_Printf(OSDTEXT_GREEN "CONLOGVAR: Line %d, %s: %s[%d] =%d\n",g_errorLineNum,keyw[g_tw],
                                    aGameArrays[lVarID].szLabel,index,m*aGameArrays[lVarID].plValues[index]);
                         break;
                     }
@@ -3763,7 +3766,7 @@ static int X_DoExecute(void)
 //            SetGameArrayID(j,index,value);
             if (j<0 || j >= g_gameArrayCount || index >= aGameArrays[j].size || index < 0)
             {
-                OSD_Printf(OSD_ERROR "Gv_SetVar(): tried to set invalid array ID (%d) or index out of bounds from sprite %d (%d), player %d\n",j,g_i,sprite[g_i].picnum,g_p);
+                OSD_Printf(OSD_ERROR "Gv_SetVar(): tried to set invalid array ID (%d) or index out of bounds from sprite %d (%d), player %d\n",j,g_i,TrackerCast(sprite[g_i].picnum),g_p);
                 return 0;
             }
             aGameArrays[j].plValues[index]=value;
