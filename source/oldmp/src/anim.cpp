@@ -221,7 +221,7 @@ void G_PlayAnim(const char *fn, char t)
         goto ENDOFANIMLOOP;
     }
 
-    handle = kopen4load((char *)fn, 0);
+    handle = kopen4load(fn, 0);
     if (handle == -1) return;
     length = kfilelength(handle);
 

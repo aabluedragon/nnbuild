@@ -1648,8 +1648,8 @@ cheat_for_port_credits:
                     for (m = 0, i = ((int32_t)totalclock / 104) % numlines; m < 6; m++, i++)
                     {
                         if (i == numlines) i = 0;
-                        minitext(161 - (Bstrlen(scroller[i]) << 1), 101 + 10 + 10 + 8 + 4 + (m * 7) - l, (char*)scroller[i], 4, 10 + 16 + 128);
-                        minitext(160 - (Bstrlen(scroller[i]) << 1), 100 + 10 + 10 + 8 + 4 + (m * 7) - l, (char*)scroller[i], 8, 10 + 16 + 128);
+                        minitext(161 - (Bstrlen(scroller[i]) << 1), 101 + 10 + 10 + 8 + 4 + (m * 7) - l, scroller[i], 4, 10 + 16 + 128);
+                        minitext(160 - (Bstrlen(scroller[i]) << 1), 100 + 10 + 10 + 8 + 4 + (m * 7) - l, scroller[i], 8, 10 + 16 + 128);
                     }
                 }
 
@@ -1928,6 +1928,7 @@ cheat_for_port_credits:
             getfilenames(boardfilename, "*.map");
             ChangeToMenu(102);
             KB_FlushKeyboardQueue();
+            fallthrough__;
         }
 
         case 102:
@@ -2876,6 +2877,7 @@ cheat_for_port_credits:
                 break;
             case 4:
                 currentlist = 0;
+                fallthrough__;
             case 5:
             case 6:
                 if (x==6 && !CONTROL_JoyPresent) break;
@@ -3332,13 +3334,13 @@ cheat_for_port_credits:
                 minitextshade(70,34+l*8,tempbuf,(m+l == probey)?0:16,1,10+16);
 
                 //strcpy(tempbuf, KB_ScanCodeToString(ud.config.KeyboardKeys[m+l][0]));
-                strcpy(tempbuf, (char *)keyGetName(ud.config.KeyboardKeys[m+l][0]));
+                strcpy(tempbuf, keyGetName(ud.config.KeyboardKeys[m+l][0]));
                 if (!tempbuf[0]) strcpy(tempbuf, "  -");
                 minitextshade(70+100,34+l*8,tempbuf,
                               (m+l == probey && !currentlist?0:16),2,10+16);
 
                 //strcpy(tempbuf, KB_ScanCodeToString(ud.config.KeyboardKeys[m+l][1]));
-                strcpy(tempbuf, (char *)keyGetName(ud.config.KeyboardKeys[m+l][1]));
+                strcpy(tempbuf, keyGetName(ud.config.KeyboardKeys[m+l][1]));
                 if (!tempbuf[0]) strcpy(tempbuf, "  -");
                 minitextshade(70+120+34,34+l*8,tempbuf,
                               (m+l == probey && currentlist?0:16),2,10+16);
@@ -4013,11 +4015,11 @@ cheat_for_port_credits:
                 break;
             }
 
-            Bstrcpy(tempbuf,(char *)joyGetName(0,thispage*2));
+            Bstrcpy(tempbuf,joyGetName(0,thispage*2));
             menutext(42,32,0,0,tempbuf);
             if (twothispage)
             {
-                Bstrcpy(tempbuf,(char *)joyGetName(0,thispage*2+1));
+                Bstrcpy(tempbuf,joyGetName(0,thispage*2+1));
                 menutext(42,32+64,0,0,tempbuf);
             }
             mgametext(76,38,"SCALE",0,2+8+16);
@@ -4142,7 +4144,7 @@ cheat_for_port_credits:
             for (m=first;m<last-1;m++)
             {
                 int odx,dx,ody,dy;
-                Bstrcpy(tempbuf,(char *)joyGetName(0,m));
+                Bstrcpy(tempbuf,joyGetName(0,m));
                 menutext(32,48+30*(m-first),0,0,tempbuf);
 
                 mgametext(128,48+30*(m-first)-8,"DEAD",0,2+8+16);
@@ -4186,7 +4188,7 @@ cheat_for_port_credits:
                 soundrate = ud.config.MixRate;
                 soundvoices = ud.config.NumVoices;
                 soundbits = ud.config.NumBits;
-                for (i = 0; i < ARRAY_SIZE(MEOSV_SOUND_MIDIDRIVER); i++)
+                for (i = 0; i < (int32_t)ARRAY_SIZE(MEOSV_SOUND_MIDIDRIVER); i++)
                 {
                     if (MEOSV_SOUND_MIDIDRIVER[i] == ud.config.MusicDevice)
                     {
@@ -4396,7 +4398,7 @@ cheat_for_port_credits:
                         if (x == io)
                         {
                             musicdevice++;
-                            if (musicdevice >= ARRAY_SIZE(MEOSV_SOUND_MIDIDRIVER))
+                            if (musicdevice >= (int32_t)ARRAY_SIZE(MEOSV_SOUND_MIDIDRIVER))
                                 musicdevice = 0;
                         }
                         modval(0, 2, (int*)&musicdevice, 1, probey == io);
@@ -4660,6 +4662,7 @@ DISPLAYNAMES:
         case 400:
         case 401:
             if (VOLUMEALL) goto VOLUME_ALL_40x;
+            fallthrough__;
         case 402:
         case 403:
         {
@@ -4887,6 +4890,7 @@ VOLUME_ALL_40x:
                 if (menunamecnt == 0)
                     ChangeToMenu(600);
             }
+            fallthrough__;
         }
 
         case 603:
