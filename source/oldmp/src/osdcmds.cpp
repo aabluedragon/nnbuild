@@ -1054,7 +1054,6 @@ static int osdcmd_give(const osdfuncparm_t *parm)
 void onvideomodechange(int newmode)
 {
     uint8_t palid;
-    extern int32_t g_crosshairSum;
 
     if (newmode)
     {
@@ -1552,9 +1551,6 @@ static int osdcmd_setcrosshairscale(const osdfuncparm_t *parm)
     OSD_Printf("%s\n", parm->raw);
     return OSDCMD_OK;
 }
-
-extern void G_SetCrosshairColor(int r, int g, int b);
-extern palette_t CrosshairColors;
 
 static int osdcmd_crosshaircolor(const osdfuncparm_t *parm)
 {

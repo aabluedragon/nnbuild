@@ -45,7 +45,7 @@ extern "C" {
 //
 // Setup program defines
 //
-#define SETUPFILENAME "eduke32-oldmp.cfg"
+#define SETUPFILENAME APPBASENAME ".cfg"
 
 
 // Max number of players

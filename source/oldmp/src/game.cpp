@@ -65,6 +65,9 @@ int g_scriptSanityChecks = 1;
 #define IDFSIZE 479985668
 #define IDFILENAME "DUKE3D.IDF"
 
+const char* AppProperName = APPNAME;
+const char* AppTechnicalName = APPBASENAME;
+
 int g_cameraDistance = 0, g_cameraClock = 0;
 int qe, cp;
 static int g_commandSetup = 0;
@@ -11006,15 +11009,14 @@ CLEAN_DIRECTORY:
     FX_StopAllSounds();
     S_ClearSoundLocks();
 
-    OSD_Exec("autoexec.cfg");
-
     {
-        char *ptr = Bstrdup(setupfilename);
-        Bsprintf(tempbuf,"%s_binds.cfg",strtok(ptr,"."));
+        char* ptr = Bstrdup(setupfilename);
+        Bsprintf(tempbuf, "%s_settings.cfg", strtok(ptr, "."));
         Bfree(ptr);
     }
 
     OSD_Exec(tempbuf);
+    OSD_Exec("autoexec.cfg");
 
     if (ud.warp_on > 1 && ud.multimode < 2)
     {

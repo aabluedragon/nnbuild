@@ -610,8 +610,6 @@ void CONFIG_SetupJoystick(void)
 ===================
 */
 extern char *duke3dgrp;
-extern palette_t CrosshairColors;
-extern palette_t DefaultCrosshairColors;
 extern char mod_dir[BMAX_PATH];
 extern int g_noSetup;
 
@@ -715,17 +713,6 @@ int32_t CONFIG_ReadSetup(void)
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "Detail",&ud.detail);
 
-        {
-            //extern unsigned int g_frameDelay;
-
-            SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "MaxFPS",&r_maxfps);
-            r_maxfps = max(0,min(1000,r_maxfps));
-
-            if (r_maxfps)
-                g_frameDelay = (1000/r_maxfps);
-            else g_frameDelay = 0;
-        }
-
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "Messages",&ud.fta_on);
 
         if (!NAM)
@@ -770,48 +757,17 @@ int32_t CONFIG_ReadSetup(void)
         }
 #endif
 
-        {
-#ifdef _WIN32
-            dummy = 0;
-#else
-            dummy = 1;
-#endif
-            SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "OSDTextMode",&dummy);
-            OSD_SetTextMode(dummy);
-        }
-
-#ifdef RENDERTYPEWIN
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "MaxRefreshFreq", (int32_t*)&maxrefreshfreq);
-#endif
 
 #if defined(USE_OPENGL)
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLAnimationSmoothing", &r_animsmoothing);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLAnisotropy", &glanisotropy);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLDetailMapping", &r_detailmapping);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLFullbrights", &r_fullbrights);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLGlowMapping", &r_glowmapping);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLParallaxSkyClamping", &r_parallaxskyclamping);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLParallaxSkyPanning", &r_parallaxskypanning);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLProjectionFix", &glprojectionhacks);
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLTextureMode", &gltexfiltermode);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLTextureQuality", &r_downsize);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLUseCompressedTextureCache", &glusetexcache);
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLUseTextureCompr", &glusetexcompr);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLVBOCount", &r_vbocount);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLVBOs", &r_vbos);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLVertexArrays", &r_vertexarrays);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "GLVSync", &vsync);
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "OSDHightile",&osdhightile);
 
         {
             SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "ScreenBPP", &ud.config.ScreenBPP);
             if (ud.config.ScreenBPP < 8) ud.config.ScreenBPP = 8;
-        }
-
-        {
-            dummy = usehightile;
-            SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "UseHightile",&dummy);
-            usehightile = dummy != 0;
         }
 
         {
@@ -827,29 +783,6 @@ int32_t CONFIG_ReadSetup(void)
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "AutoVote",&ud.autovote);
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Color",&ud.m_color);
-
-        {
-            tempbuf[0] = 0;
-            SCRIPT_GetString(ud.config.scripthandle, "Misc", "CrosshairColor",&tempbuf[0]);
-            if (tempbuf[0])
-            {
-                char *ptr = strtok(tempbuf,",");
-                palette_t temppal;
-                char *palptr = (char *)&temppal;
-
-                i = 0;
-                while (ptr != NULL && i < 3)
-                {
-                    palptr[i++] = atoi(ptr);
-                    ptr = strtok(NULL,",");
-                }
-                if (i == 3)
-                {
-                    Bmemcpy(&CrosshairColors,&temppal,sizeof(palette_t));
-                    DefaultCrosshairColors.f = 1;
-                }
-            }
-        }
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "CrosshairScale",&ud.crosshairscale);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Crosshairs",&ud.crosshair);
@@ -955,45 +888,59 @@ int32_t CONFIG_ReadSetup(void)
 ===================
 */
 
-void CONFIG_WriteBinds(void) // save binds and aliases to disk
+void CONFIG_WriteSettings(void) // save binds and aliases to <cfgname>_settings.cfg
 {
-    int i;
-    FILE *fp;
-    char *ptr = Bstrdup(setupfilename);
-    char tempbuf[128];
+    char filename[BMAX_PATH];
 
-    Bsprintf(tempbuf,"%s_binds.cfg",strtok(ptr,"."));
-    fp = fopen(tempbuf, "wt");
+    {
+        char* ptr = Bstrdup(setupfilename);
+        Bsprintf(filename, "%s_settings.cfg", strtok(ptr, "."));
+        Bfree(ptr);
+    }
+
+    buildvfs_FILE fp = buildvfs_fopen_write(filename);
 
     if (fp)
     {
-        osdsymbol_t *symb;
-        fprintf(fp,"// this file automatically generated by EDuke32\n// do not modify if you lack common sense\n");
-        for (i=0;i<MAXBOUNDKEYS;i++)
-            if (CONTROL_KeyBinds[i].cmdstr && CONTROL_KeyBinds[i].key)
-                fprintf(fp,"bind \"%s\"%s \"%s\"\n", CONTROL_KeyBinds[i].key, CONTROL_KeyBinds[i].repeat?"":" norepeat", CONTROL_KeyBinds[i].cmdstr);
+        buildvfs_fputstr(fp, "// this file is automatically generated by ");
+        buildvfs_fputstrptr(fp, AppProperName);
+        buildvfs_fputstr(fp, "\n//unbindall\n");
 
-        for (i=0;i<MAXMOUSEBUTTONS;i++)
-            if (mousebind(i).cmdstr)
-                fprintf(fp,"bind \"%s\"%s \"%s\"\n", mousebind(i).key, mousebind(i).repeat?"":" norepeat", mousebind(i).cmdstr);
+        for (int i = 0; i < MAXBOUNDKEYS + MAXMOUSEBUTTONS; i++)
+        {
+            if (CONTROL_KeyIsBound(i))
+            {
+                buildvfs_fputstr(fp, "bind \"");
+                buildvfs_fputstrptr(fp, CONTROL_KeyBinds[i].key);
+                if (CONTROL_KeyBinds[i].repeat)
+                    buildvfs_fputstr(fp, "\" \"");
+                else
+                    buildvfs_fputstr(fp, "\" norepeat \"");
+                buildvfs_fputstrptr(fp, CONTROL_KeyBinds[i].cmdstr);
+                buildvfs_fputstr(fp, "\"\n");
+            }
+        }
 
-        for (symb=osd->symbols; symb!=NULL; symb=symb->next)
-            if (symb->func == (void *)OSD_ALIAS)
-                fprintf(fp,"alias \"%s\" \"%s\"\n", symb->name, symb->help);
+        OSD_WriteAliases(fp);
 
-        /*        for (i = 0; i < sizeof(cvar)/sizeof(cvarmappings); i++)
-                    if (!(cvar[i].type&CVAR_NOSAVE))
-                        fprintf(fp,"%s \"%d\"\n",cvar[i].name,*(int*)cvar[i].var);
-                        */
-        fclose(fp);
-        Bsprintf(tempbuf,"Wrote %s_binds.cfg\n",ptr);
-        OSD_Printf(tempbuf);
-        Bfree(ptr);
+        if (g_crosshairSum != -1 && g_crosshairSum != DefaultCrosshairColors.r + (DefaultCrosshairColors.g << 8) + (DefaultCrosshairColors.b << 16))
+        {
+            buildvfs_fputstr(fp, "crosshaircolor ");
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%d %d %d\n", CrosshairColors.r, CrosshairColors.g, CrosshairColors.b);
+            buildvfs_fputstrptr(fp, buf);
+        }
+
+        OSD_WriteCvars(fp);
+
+        buildvfs_fclose(fp);
+
+        OSD_Printf("Wrote %s\n", filename);
+
         return;
     }
-    Bsprintf(tempbuf,"Error writing %s_binds.cfg: %s\n",ptr,strerror(errno));
-    OSD_Printf(tempbuf);
-    Bfree(ptr);
+
+    OSD_Printf("Error writing %s: %s\n", filename, strerror(errno));
 }
 
 void CONFIG_WriteSetup(void)
@@ -1022,13 +969,6 @@ void CONFIG_WriteSetup(void)
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "AutoMsg",ud.automsg,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "AutoVote",ud.autovote,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Color",ud.m_color,false,false);
-
-    if (CrosshairColors.r != DefaultCrosshairColors.r || CrosshairColors.g != DefaultCrosshairColors.g
-            || CrosshairColors.b != DefaultCrosshairColors.b)
-    {
-        Bsprintf(tempbuf,"%d,%d,%d",CrosshairColors.r,CrosshairColors.g,CrosshairColors.b);
-        SCRIPT_PutString(ud.config.scripthandle, "Misc", "CrosshairColor",tempbuf);
-    }
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "CrosshairScale",ud.crosshairscale,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Crosshairs",ud.crosshair,false,false);
@@ -1064,30 +1004,15 @@ void CONFIG_WriteSetup(void)
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "Detail",ud.detail,false,false);
 #if defined(USE_OPENGL)
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLAnimationSmoothing",r_animsmoothing,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLAnisotropy",glanisotropy,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLDetailMapping", r_detailmapping,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLFullbrights", r_fullbrights,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLGlowMapping", r_glowmapping,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLParallaxSkyClamping",r_parallaxskyclamping,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLParallaxSkyPanning",r_parallaxskypanning,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLProjectionFix",glprojectionhacks,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLTextureMode",gltexfiltermode,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLTextureQuality", r_downsize,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLUseCompressedTextureCache", glusetexcache,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLUseTextureCompr",glusetexcompr,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLVBOCount", r_vbocount,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLVBOs", r_vbos,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLVertexArrays", r_vertexarrays,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "GLVSync", vsync,false,false);
 #endif
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "MaxFPS", r_maxfps, false, false);
-#ifdef RENDERTYPEWIN
+
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "MaxRefreshFreq",maxrefreshfreq,false,false);
-#endif
+
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "Messages",ud.fta_on,false,false);
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "OSDHightile",osdhightile,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "OSDTextMode",OSD_GetTextMode(),false,false);
 
     if (!NAM)
     {
@@ -1105,7 +1030,6 @@ void CONFIG_WriteSetup(void)
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "Tilt",ud.screen_tilting,false,false);
 
 #if defined(USE_OPENGL)
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "UseHightile",usehightile,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "UseModels",usemodels,false,false);
 #endif
 
@@ -1231,7 +1155,7 @@ void CONFIG_WriteSetup(void)
     SCRIPT_Save(ud.config.scripthandle, setupfilename);
     SCRIPT_Free(ud.config.scripthandle);
     OSD_Printf("Wrote %s\n",setupfilename);
-    CONFIG_WriteBinds();
+    CONFIG_WriteSettings();
 }
 
 

@@ -360,9 +360,6 @@ static void G_DoLoadScreen(char *statustext, int percent)
     }
 }
 
-extern void G_SetCrosshairColor(int r, int g, int b);
-extern palette_t CrosshairColors;
-
 void G_CacheMapData(void)
 {
     int i,j,pc=0;
