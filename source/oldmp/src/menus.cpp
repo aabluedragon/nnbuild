@@ -2053,8 +2053,8 @@ cheat_for_port_credits:
                 }
             }
 
-            if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4) || ((buttonstat&1) && minfo.dyaw < -256) ||
-                    KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6) || ((buttonstat&1) && minfo.dyaw > 256) ||
+            if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4) || ((buttonstat&1) && minfo.mousex < -256) ||
+                    KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6) || ((buttonstat&1) && minfo.mousex > 256) ||
                     KB_KeyPressed(sc_Tab))
             {
                 KB_ClearKeyDown(sc_LeftArrow);
@@ -2336,6 +2336,7 @@ cheat_for_port_credits:
                         break;
                     case 6:
                     {
+                        i = glusetexcompr;
                         enabled = usehightile;
                         if (enabled && x == io) glusetexcompr = !glusetexcompr;
                         if (enabled) modval(0, 2, (int*)&glusetexcompr, 1, probey == io);
@@ -2343,10 +2344,20 @@ cheat_for_port_credits:
                         const char* texcompressionopts[] = { "No", "Hi-res Only", "Hi-res & 8-bit" };
 
                         mgametextpal(d, yy, texcompressionopts[glusetexcompr], enabled ? MENUHIGHLIGHT(io) : DISABLEDMENUSHADE, 0);
+
+                        if (glusetexcompr != i)
+                        {
+                            texcache_invalidate();
+                            videoResetMode();
+                            if (videoSetGameMode(fullscreen, xdim, ydim, bpp, ud.detail))
+                                OSD_Printf("restartvid: Reset failed...\n");
+                            return;
+                        }
                         break;
                     }
                     case 7:
                     {
+                        i = glusetexcache;
                         enabled = (glusetexcompr && usehightile);
                         if (enabled && x == io) glusetexcache = !glusetexcache;
                         if (enabled) modval(0, 2, (int*)&glusetexcache, 1, probey == io);
@@ -2354,6 +2365,15 @@ cheat_for_port_credits:
                         const char* texcacheopts[] = { "No", "Yes", "Compressed" };
 
                         mgametextpal(d, yy, texcacheopts[glusetexcache], enabled ? MENUHIGHLIGHT(io) : DISABLEDMENUSHADE, 0);
+
+                        if (glusetexcache != i)
+                        {
+                            texcache_invalidate();
+                            videoResetMode();
+                            if (videoSetGameMode(fullscreen, xdim, ydim, bpp, ud.detail))
+                                OSD_Printf("restartvid: Reset failed...\n");
+                            return;
+                        }
                         break;
                     }
                     case 8:
