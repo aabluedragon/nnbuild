@@ -1740,7 +1740,7 @@ static int X_DoExecute(void)
                     Bstrcpy(ScriptQuotes[i],g_player[g_p].user_name);
                     break;
                 case STR_VERSION:
-                    Bsprintf(tempbuf,HEAD2 " %s",s_buildDate);
+                    Bsprintf(tempbuf,HEAD2 " %s",s_buildRev);
                     Bstrcpy(ScriptQuotes[i],tempbuf);
                     break;
                 case STR_GAMETYPE:

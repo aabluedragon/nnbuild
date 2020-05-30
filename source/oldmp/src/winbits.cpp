@@ -22,7 +22,7 @@ Windows-specific hooks for JonoF's Duke3D port.
 */
 //-------------------------------------------------------------------------
 
-#ifdef RENDERTYPEWIN
+#ifdef _WIN32
 
 #define WIN32_LEAN_AND_MEAN
 #include "compat.h"
@@ -63,8 +63,8 @@ int G_GetVersionFromWebsite(char *buffer)
     int bytes_sent, i=0, j=0;
     struct sockaddr_in dest_addr;
     struct hostent *h;
-    char *host = "eduke32.sourceforge.net";
-    char *req = "GET http://eduke32.sourceforge.net/VERSION HTTP/1.0\r\n\r\n";
+    const char *host = "eduke32.sourceforge.net";
+    const char *req = "GET http://eduke32.sourceforge.net/VERSION HTTP/1.0\r\n\r\n";
     char tempbuf[2048],otherbuf[16],ver[16];
     SOCKET mysock;
 

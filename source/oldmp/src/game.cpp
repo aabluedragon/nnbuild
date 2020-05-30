@@ -54,10 +54,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <shellapi.h>
 #define UPDATEINTERVAL 604800 // 1w
+#include "winbits.h"
 #else
 static int usecwd = 0;
 #endif /* _WIN32 */
@@ -144,10 +143,6 @@ int hud_glowingquotes = 1;
 int hud_showmapname = 1;
 
 int g_levelTextTime = 0;
-
-#if defined(RENDERTYPEWIN) && defined(USE_OPENGL)
-extern char forcegl;
-#endif
 
 int kopen4loadfrommod(char *filename, char searchfirst)
 {
@@ -2723,7 +2718,7 @@ void G_GameExit(const char *t)
         if (!(t[0] == ' ' && t[1] == 0))
         {
             char titlebuf[256];
-            Bsprintf(titlebuf,HEAD2 " %s",s_buildDate);
+            Bsprintf(titlebuf,HEAD2 " %s",s_buildTimestamp);
             wm_msgbox(titlebuf, t);
         }
     }
@@ -8475,7 +8470,7 @@ static void G_ShowParameterHelp(void)
               "\n"
               "-r\t\tRecord demo\n"
               "-s#\t\tSet skill level (1-4)\n"
-#if defined RENDERTYPEWIN || (defined RENDERTYPESDL && !defined __APPLE__ && defined HAVE_GTK2)
+#if STARTUP_WINDOW
               "-setup/nosetup\tEnables/disables startup window\n"
 #endif
               "-t#\t\tSet respawn mode: 1 = Monsters, 2 = Items, 3 = Inventory, x = All\n"
@@ -8491,8 +8486,8 @@ static void G_ShowParameterHelp(void)
 //              "\n-?/--help\tDisplay this help message and exit\n"
               "\nSee eduke32 -debughelp for debug parameters"
               ;
-#if defined RENDERTYPEWIN
-    Bsprintf(tempbuf,HEAD2 " %s",s_buildDate);
+#if _WIN32
+    Bsprintf(tempbuf,HEAD2 " %s", s_buildTimestamp);
     wm_msgbox(tempbuf,s);
 #else
     initprintf("%s\n",s);
@@ -8521,8 +8516,8 @@ static void G_ShowDebugHelp(void)
               "-w\t\tShow coordinates\n"
               "-z#/-condebug\tEnable line-by-line CON compile debugging at level #\n"
               ;
-#if defined RENDERTYPEWIN
-    Bsprintf(tempbuf,HEAD2 " %s",s_buildDate);
+#ifdef _WIN32
+    Bsprintf(tempbuf,HEAD2 " %s",s_buildTimestamp);
     wm_msgbox(tempbuf,s);
 #else
     initprintf("%s\n",s);
@@ -10388,25 +10383,15 @@ int app_main(int32_t argc, char const* const* argv)
     char cwd[BMAX_PATH];
 //    extern char datetimestring[];
 
-#ifdef RENDERTYPEWIN
-    if (argc > 1)
+#ifdef _WIN32
+#ifndef DEBUGGINGAIDS
+    if (!G_CheckCmdSwitch(argc, argv, "-noinstancechecking") && !windowsCheckAlreadyRunning())
     {
-        for (;i<argc;i++)
-        {
-            if (Bstrcasecmp("-noinstancechecking",*(&argv[i])) == 0)
-                break;
-        }
-    }
-    if (i == argc && win_checkinstance())
-    {
-        if (!wm_ynbox("EDuke32","Another Build game is currently running. "
-                      "Do you wish to continue starting this copy?"))
-            return;
+        if (!wm_ynbox(APPNAME, "It looks like " APPNAME " is already running.\n\n"
+            "Are you sure you want to start another copy?"))
+            return 3;
     }
 #endif
-
-#ifdef RENDERTYPEWIN
-    backgroundidle = 0;
 #endif
 
 #ifdef _WIN32
@@ -10430,7 +10415,7 @@ int app_main(int32_t argc, char const* const* argv)
         (int(*)(void))GetTime,
         GAME_onshowosd
     );
-    Bsprintf(tempbuf,HEAD2 " %s",s_buildDate);
+    Bsprintf(tempbuf,HEAD2 " %s",s_buildTimestamp);
     wm_setapptitle(tempbuf);
 
     initprintf("%s\n",apptitle);
@@ -10520,11 +10505,6 @@ int app_main(int32_t argc, char const* const* argv)
         }
     }
 
-// OLDMP MERGE CHECKME
-#if defined(USE_OPENGL)
-    glusetexcache = -1;
-#endif
-
     hash_init(&gamefuncH);
     for (i=NUMGAMEFUNCTIONS-1;i>=0;i--)
     {
@@ -10536,19 +10516,6 @@ int app_main(int32_t argc, char const* const* argv)
 
     i = CONFIG_ReadSetup();
     if (getenv("DUKE3DGRP")) duke3dgrp = getenv("DUKE3DGRP");
-
-#if 0 // OLDMP MERGE CHECKME
-#if defined(USE_OPENGL)
-    if (glusetexcache == -1 || glusetexcachecompression == -1)
-    {
-        i=wm_ynbox("Texture Caching",
-                   "Would you like to enable the on-disk texture cache?\n\n"
-                   "You will generally want to say 'yes' here, especially if using the HRP.");
-        if (i) ud.config.useprecache = glusetexcompr = glusetexcache = glusetexcachecompression = 1;
-        else glusetexcache = glusetexcachecompression = 0;
-    }
-#endif
-#endif
 
 #ifdef _WIN32
 //    initprintf("build %d\n",(char)atoi(BUILDDATE));
@@ -10960,7 +10927,7 @@ CLEAN_DIRECTORY:
 
     initprintf("Initializing OSD...\n");
 
-    Bsprintf(tempbuf,HEAD2 " %s",s_buildDate);
+    Bsprintf(tempbuf,HEAD2 " - %s (%s)",s_buildRev, s_buildTimestamp);
     OSD_SetVersion(tempbuf, 10, 0);
     registerosdcommands();
 

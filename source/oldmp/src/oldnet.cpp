@@ -811,9 +811,9 @@ void Net_ParsePackets(void)
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                         if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
-                if (packbuf[2] != (char)atoi(s_buildDate))
+                if (packbuf[2] != (char)atoi(s_buildRev))
                 {
-                    initprintf("Player has version %d, expecting %d\n",packbuf[2],(char)atoi(s_buildDate));
+                    initprintf("Player has version %d, expecting %d\n",packbuf[2],(char)atoi(s_buildRev));
                     G_GameExit("You cannot play with different versions of EDuke32!");
                 }
                 if (packbuf[3] != (char)BYTEVERSION)
@@ -1114,7 +1114,7 @@ void Net_SendVersion(void)
 
     buf[0] = PACKET_TYPE_VERSION;
     buf[1] = myconnectindex;
-    buf[2] = (char)atoi(s_buildDate);
+    buf[2] = (char)atoi(s_buildRev);
     buf[3] = BYTEVERSION;
     buf[4] = g_numSyncBytes;
 

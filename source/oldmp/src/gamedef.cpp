@@ -5880,7 +5880,7 @@ void C_Compile(const char *filenam)
                 }
                 else
                 {
-#if (defined RENDERTYPEWIN || (defined RENDERTYPESDL && !defined __APPLE__ && defined HAVE_GTK2))
+#ifdef STARTUP_WINDOW
                     while (!quitevent) // keep the window open so people can copy CON errors out of it
                         handleevents();
 #endif

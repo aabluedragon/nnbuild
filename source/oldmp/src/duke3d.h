@@ -24,10 +24,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifndef _duke3d_h_
 # define _duke3d_h_
-#define APPNAME "EDuke32-OldMP (Maintenance Build)"
+#define APPNAME "EDuke32-OldMP"
 #define VERSION " Release 32"
 // this is checked against http://eduke32.com/VERSION
-extern const char *s_buildDate;
 #define HEAD2 APPNAME VERSION
 
 #define MOVEFIFOSIZ 256

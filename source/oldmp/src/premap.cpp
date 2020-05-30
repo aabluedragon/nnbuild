@@ -25,11 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "osd.h"
 
-#ifdef RENDERTYPEWIN
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-
 extern int everyothertime;
 static int g_lastPlayerPal = 0;
 int g_numRealPalettes;

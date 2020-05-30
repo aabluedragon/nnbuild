@@ -23,12 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //-------------------------------------------------------------------------
 #include "duke3d.h"
 
-#ifndef BUILD_DATE
-#define BUILD_DATE "NO DATE"
-#endif
-
-// Was "20120912"
-const char *s_buildDate = BUILD_DATE;
 char *MusicPtr = NULL;
 int g_musicSize;
 
