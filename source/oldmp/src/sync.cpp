@@ -343,7 +343,6 @@ void  Net_AddSyncInfoToPacket(int *j)
 void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int otherconnectindex)
 {
     int sb, i;
-    extern int syncvaltail, syncvaltottail;
     playerdata_t *ppo = &g_player[otherconnectindex];
     char found = 0;
 
