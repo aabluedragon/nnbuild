@@ -10918,8 +10918,9 @@ CLEAN_DIRECTORY:
         }
     }
 
-    CONFIG_WriteSetup(1);
-    CONFIG_ReadSetup();
+    // [JM] This right here is a buggy piece of shit.
+    //CONFIG_WriteSetup(1);
+    //CONFIG_ReadSetup();
 
     RTS_Init(ud.rtsname);
     if (rts_numlumps) initprintf("Using .RTS file '%s'\n",ud.rtsname);

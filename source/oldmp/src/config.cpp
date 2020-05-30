@@ -579,8 +579,7 @@ int32_t CONFIG_ReadSetup(void)
         while (Bstrlen(OSD_StripColors(dummybuf,tempbuf)) > 10)
             tempbuf[Bstrlen(tempbuf)-1] = '\0';
 
-        Bstrncpy(szPlayerName,tempbuf,sizeof(szPlayerName)-1);
-        szPlayerName[sizeof(szPlayerName)-1] = '\0';
+        Bstrncpyz(szPlayerName, tempbuf, sizeof(szPlayerName));
 
         SCRIPT_GetString(ud.config.scripthandle, "Comm Setup","RTSName",&ud.rtsname[0]);
 
