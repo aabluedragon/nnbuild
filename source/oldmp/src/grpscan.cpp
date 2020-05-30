@@ -197,7 +197,6 @@ void FreeGroups(void)
     while (foundgrps)
     {
         fg = foundgrps->next;
-        free((char*)foundgrps->name);
         free(foundgrps);
         foundgrps = fg;
     }
