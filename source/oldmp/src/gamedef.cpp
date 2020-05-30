@@ -5714,7 +5714,7 @@ static void C_InitProjectiles(void)
     projectile_t DefaultProjectile =
     {
         1, 100, -1, -1, 2048, 0,
-        SMALLSMOKE, -1, -1, 600, BULLETHOLE, -1, 0, 0, 32, 448, g_numFreezeBounces, PIPEBOMB_BOUNCE, 1,
+        (int16_t)SMALLSMOKE, -1, -1, 600, (int16_t)BULLETHOLE, -1, 0, 0, 32, 448, (int16_t)g_numFreezeBounces, PIPEBOMB_BOUNCE, 1,
         -1, -1, -1, -1, -96, 18, 18, 0, 1
     };
 
