@@ -35,9 +35,9 @@ Windows-specific hooks for JonoF's Duke3D port.
 #include <ws2tcpip.h>
 
 #include "winlayer.h"
+#include "duke3d.h"
 
 // this replaces the Error() function in jmact/util_lib.c
-extern void G_Shutdown(void);	// game.c
 void Error(char *error, ...)
 {
     char buf[1000];
