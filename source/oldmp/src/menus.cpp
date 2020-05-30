@@ -3771,25 +3771,23 @@ cheat_for_port_credits:
             }
 
             menutext(c,46,MENUHIGHLIGHT(0),0,"X-AXIS SCALE");
-            l = (ud.config.MouseAnalogueScale[0]+262144) >> 13;
+            l = (CONTROL_MouseAxesScale[0]+262144) >> 13;
             bar(c+160+40,46,&l,1,x==0,MENUHIGHLIGHT(0),0);
             l = (l<<13)-262144;
-            if (l != ud.config.MouseAnalogueScale[0])
+            if (l != CONTROL_MouseAxesScale[0])
             {
                 CONTROL_SetAnalogAxisScale(0, l, controldevice_mouse);
-                ud.config.MouseAnalogueScale[0] = l;
             }
             Bsprintf(tempbuf,"%s%.2f",l>=0?" ":"",(float)l/65536.0);
             mgametext(c+160-16,46-8,tempbuf,MENUHIGHLIGHT(0),2+8+16);
 
             menutext(c,46+16,MENUHIGHLIGHT(1),0,"Y-AXIS SCALE");
-            l = (ud.config.MouseAnalogueScale[1]+262144) >> 13;
+            l = (CONTROL_MouseAxesScale[1]+262144) >> 13;
             bar(c+160+40,46+16,&l,1,x==1,MENUHIGHLIGHT(1),0);
             l = (l<<13)-262144;
-            if (l != ud.config.MouseAnalogueScale[1])
+            if (l != CONTROL_MouseAxesScale[1])
             {
                 CONTROL_SetAnalogAxisScale(1, l, controldevice_mouse);
-                ud.config.MouseAnalogueScale[1] = l;
             }
             Bsprintf(tempbuf,"%s%.2f",l>=0?" ":"",(float)l/65536.0);
             mgametext(c+160-16,46+16-8,tempbuf,MENUHIGHLIGHT(1),2+8+16);
@@ -3797,9 +3795,6 @@ cheat_for_port_credits:
             // OLDMP CHECKME
             rotatesprite(320<<15,94<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
             menutext(320>>1,43+16+16+16+8,0,0,"DIGITAL AXES SETUP");
-
-            mgametext(c+160-16,46+16+16-8,tempbuf,MENUHIGHLIGHT(2),2+8+16);
-
 
             mgametextpal(c+10,92+16,"UP:",MENUHIGHLIGHT(3),10);
             if (ud.config.MouseDigitalFunctions[1][0] < 0)
