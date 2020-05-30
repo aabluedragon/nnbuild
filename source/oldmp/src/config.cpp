@@ -205,7 +205,11 @@ void CONFIG_SetDefaults(void)
     ud.config.MixRate = 48000;
 #endif
     ud.config.MouseBias = 0;
+#if defined(_WIN32)
+    ud.config.MusicDevice = ASS_WinMM;
+#else
     ud.config.MusicDevice = ASS_AutoDetect;
+#endif
     ud.config.MusicToggle = 1;
     ud.config.MusicVolume = 200;
     g_myAimMode = g_player[0].ps->aim_mode = 1;
