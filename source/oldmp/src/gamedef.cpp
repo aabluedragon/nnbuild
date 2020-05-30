@@ -1560,7 +1560,7 @@ static void C_GetNextVarType(int type)
     if (!type && !g_labelsOnly && (isdigit(*textptr) || ((*textptr == '-') && (isdigit(*(textptr+1))))))
     {
         if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
-            initprintf("%s:%d: debug: accepted constant %d in place of gamevar.\n",g_szScriptFileName,g_lineNumber,atol(textptr));
+            initprintf("%s:%d: debug: accepted constant %d in place of gamevar.\n",g_szScriptFileName,g_lineNumber,Batoi(textptr));
         bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
         *g_scriptPtr++=MAXGAMEVARS;
         if (tolower(textptr[1])=='x')
@@ -1577,7 +1577,7 @@ static void C_GetNextVarType(int type)
         if (!type)
         {
             if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
-                initprintf("%s:%d: debug: flagging gamevar as negative.\n",g_szScriptFileName,g_lineNumber,atol(textptr));
+                initprintf("%s:%d: debug: flagging gamevar as negative. (%d)\n",g_szScriptFileName,g_lineNumber,atoi(textptr));
             f = (MAXGAMEVARS<<1);
         }
         else
@@ -1737,15 +1737,15 @@ static int C_GetNextValue(int type)
     i = hash_find(&labelH,tempbuf);
     if (i>=0)
     {
-        char *el,*gl;
+        const char *el,*gl;
 
         if (labeltype[i] & type)
         {
             if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
             {
-                gl = (char *)C_GetLabelType(labeltype[i]);
+                gl = C_GetLabelType(labeltype[i]);
                 initprintf("%s:%d: debug: accepted %s label `%s'.\n",g_szScriptFileName,g_lineNumber,gl,label+(i<<6));
-                Bfree(gl);
+                //Bfree(gl);
             }
             if (labeltype[i] != LABEL_DEFINE && labelcode[i] >= (intptr_t)&script[0] && labelcode[i] < (intptr_t)&script[g_scriptSize])
                 bitptr[(g_scriptPtr-script)>>3] |= (BITPTR_POINTER<<((g_scriptPtr-script)&7));
@@ -1757,13 +1757,13 @@ static int C_GetNextValue(int type)
         bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
         *(g_scriptPtr++) = 0;
         textptr += l;
-        el = (char *)C_GetLabelType(type);
-        gl = (char *)C_GetLabelType(labeltype[i]);
+        el = C_GetLabelType(type);
+        gl = C_GetLabelType(labeltype[i]);
         C_ReportError(-1);
         initprintf("%s:%d: warning: expected a %s, found a %s.\n",g_szScriptFileName,g_lineNumber,el,gl);
         g_numCompilerWarnings++;
-        Bfree(el);
-        Bfree(gl);
+        //Bfree(el);
+        //Bfree(gl);
         return -1;  // valid label name, but wrong type
     }
 
@@ -1799,7 +1799,7 @@ static int C_GetNextValue(int type)
     while (i > 0);
 
     if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
-        initprintf("%s:%d: debug: accepted constant %d.\n",g_szScriptFileName,g_lineNumber,atol(textptr));
+        initprintf("%s:%d: debug: accepted constant %d.\n",g_szScriptFileName,g_lineNumber,atoi(textptr));
     bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
 
     if (tolower(textptr[1])=='x')
@@ -1931,11 +1931,11 @@ static int C_ParseCommand(void)
             }
             else
             {
-                char *gl = (char *)C_GetLabelType(labeltype[j]);
+                const char *gl = C_GetLabelType(labeltype[j]);
                 C_ReportError(-1);
                 initprintf("%s:%d: warning: expected a state, found a %s.\n",g_szScriptFileName,g_lineNumber,gl);
                 g_numCompilerWarnings++;
-                Bfree(gl);
+                //Bfree(gl);
                 *(g_scriptPtr-1) = CON_NULLOP; // get rid of the state, leaving a nullop to satisfy if conditions
                 bitptr[(g_scriptPtr-script-1)>>3] &= ~(1<<((g_scriptPtr-script-1)&7));
                 return 0;  // valid label name, but wrong type
@@ -2399,7 +2399,7 @@ static int C_ParseCommand(void)
                 kclose(fp);
                 g_numCompilerErrors++;
                 initprintf("%s:%d: error: could not allocate %d bytes to include `%s'.\n",
-                           g_lineNumber,g_szScriptFileName,j,tempbuf);
+                           g_szScriptFileName,g_lineNumber,j,tempbuf);
                 return 0;
             }
 
@@ -5250,7 +5250,7 @@ repeatcase:
             textptr++,i++;
             if (i >= (signed)sizeof(CheatStrings[k])-1)
             {
-                initprintf("%s:%d: error: cheat exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,MAXCHEATLEN,sizeof(CheatStrings[k])-1);
+                initprintf("%s:%d: error: cheat exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,MAXCHEATLEN);
                 g_numCompilerErrors++;
                 C_NextLine();
                 break;
@@ -5265,7 +5265,7 @@ repeatcase:
         k = *(g_scriptPtr-1);
         if (k >= MAXSOUNDS)
         {
-            initprintf("%s:%ld: error: exceeded sound limit of %ld.\n",g_szScriptFileName,g_lineNumber,MAXSOUNDS);
+            initprintf("%s:%d: error: exceeded sound limit of %d.\n",g_szScriptFileName,g_lineNumber,MAXSOUNDS);
             g_numCompilerErrors++;
         }
         g_scriptPtr--;
@@ -5542,10 +5542,10 @@ void copydefaultcons(void)
 
     for (i=0;i<NUM_DEFAULT_CONS;i++)
     {
-        fpi = kopen4loadfrommod((char *)defaultcons[i] , 1);
+        fpi = kopen4loadfrommod(defaultcons[i] , 1);
         if (fpi < 0) continue;
 
-        fpo = fopenfrompath((char *)defaultcons[i],"wb");
+        fpo = fopenfrompath(defaultcons[i],"wb");
 
         if (fpo == NULL)
         {
@@ -5761,7 +5761,7 @@ void C_Compile(const char *filenam)
         }
     }
     */
-    fp = kopen4loadfrommod((char *)filenam,g_loadFromGroupOnly);
+    fp = kopen4loadfrommod(filenam,g_loadFromGroupOnly);
     if (fp == -1) // JBF: was 0
     {
         extern int numgroupfiles;
@@ -5912,15 +5912,15 @@ void C_Compile(const char *filenam)
 
         initprintf("Script compiled in %dms\n",timerGetTicks()-startcompiletime);
 
-        initprintf("Compiled code size: %ld*%d bytes, version %s\n",(unsigned)(g_scriptPtr-script),sizeof(intptr_t),(g_scriptVersion == 14?"1.4+":"1.3D"));
-        initprintf("Pointer bitmap size: %ld bytes\n",(g_scriptSize+7)>>3);
-        initprintf("%ld/%ld labels, %d/%d variables\n",g_numLabels,min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
+        initprintf("Compiled code size: %d*%d bytes, version %s\n",(unsigned)(g_scriptPtr-script),sizeof(intptr_t),(g_scriptVersion == 14?"1.4+":"1.3D"));
+        initprintf("Pointer bitmap size: %d bytes\n",(g_scriptSize+7)>>3);
+        initprintf("%d/%d labels, %d/%d variables\n",g_numLabels,min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
 
         for (i=MAXQUOTES-1;i>=0;i--)
             if (ScriptQuotes[i])
                 j++;
 
-        initprintf("%ld/%d quotes, %d quote redefinitions\n",j,MAXQUOTES,g_numQuoteRedefinitions);
+        initprintf("%d/%d quotes, %d quote redefinitions\n",j,MAXQUOTES,g_numQuoteRedefinitions);
 
         j = 0;
         for (i=MAXGAMEEVENTS-1;i>=0;i--)
@@ -5930,7 +5930,7 @@ void C_Compile(const char *filenam)
             if (actorscrptr[i])
                 k++;
 
-        initprintf("%ld/%d event definitions, %ld defined actors\n",j,MAXEVENTS,k);
+        initprintf("%d/%d event definitions, %d defined actors\n",j,MAXEVENTS,k);
 
         for (i=127;i>=0;i--)
             if (ScriptQuotes[i] == NULL)
@@ -6107,10 +6107,10 @@ void C_ReportError(int iError)
         initprintf("%s:%d: error: variable `%s' is of the wrong type.\n",g_szScriptFileName,g_lineNumber,label+(g_numLabels<<6));
         break;
     case WARNING_BADGAMEVAR:
-        initprintf("%s:%ld: warning: variable `%s' should be either per-player OR per-actor, not both.\n",g_szScriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        initprintf("%s:%d: warning: variable `%s' should be either per-player OR per-actor, not both.\n",g_szScriptFileName,g_lineNumber,label+(g_numLabels<<6));
         break;
     case WARNING_DUPLICATECASE:
-        initprintf("%s:%ld: warning: duplicate case ignored.\n",g_szScriptFileName,g_lineNumber);
+        initprintf("%s:%d: warning: duplicate case ignored.\n",g_szScriptFileName,g_lineNumber);
         break;
     case WARNING_DUPLICATEDEFINITION:
         initprintf("%s:%d: warning: duplicate game definition `%s' ignored.\n",g_szScriptFileName,g_lineNumber,label+(g_numLabels<<6));
