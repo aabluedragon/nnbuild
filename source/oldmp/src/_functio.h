@@ -1,10 +1,8 @@
 //-------------------------------------------------------------------------
 /*
-Copyright (C) 1996, 2003 - 3D Realms Entertainment
-Copyright (C) 2000, 2003 - Matt Saettler (EDuke Enhancements)
-Copyright (C) 2004, 2007 - EDuke32 developers
+Copyright (C) 2010 EDuke32 developers and contributors
 
-This file is part of EDuke32
+This file is part of EDuke32.
 
 EDuke32 is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License version 2
@@ -18,7 +16,7 @@ See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 
@@ -29,12 +27,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // default button assignments and game function names
 // axis defaults are also included
 
+#include "_control.h"
+#include "control.h"
 
-#ifndef _function_private_
-#define _function_private_
+#ifndef function_private_h_
+#define function_private_h_
 #ifdef __cplusplus
 extern "C" {
 #endif
+// KEEPINSYNC lunatic/con_lang.lua
 char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    {
    "Move_Forward",
@@ -45,7 +46,7 @@ char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "Fire",
    "Open",
    "Run",
-   "AutoRun",
+   "Alt_Fire",
    "Jump",
    "Crouch",
    "Look_Up",
@@ -69,10 +70,17 @@ char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "Inventory",
    "Inventory_Left",
    "Inventory_Right",
+#ifndef EDUKE32_STANDALONE
    "Holo_Duke",
    "Jetpack",
    "NightVision",
    "MedKit",
+#else
+   "",
+   "",
+   "",
+   "",
+#endif
    "TurnAround",
    "SendMessage",
    "Map",
@@ -85,150 +93,217 @@ char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "See_Coop_View",
    "Mouse_Aiming",
    "Toggle_Crosshair",
+#ifndef EDUKE32_STANDALONE
    "Steroids",
    "Quick_Kick",
+#else
+   "",
+   "",
+#endif
    "Next_Weapon",
    "Previous_Weapon",
    "Show_Console",
-   "Show_DukeMatch_Scores"
+#ifndef EDUKE32_STANDALONE
+   "Show_DukeMatch_Scores",
+#else
+   "Show_Multiplayer_Scores",
+#endif
+   "Dpad_Select",
+   "Dpad_Aiming",
+   "AutoRun",
+   "Last_Used_Weapon",
+   "Quick_Save",
+   "Quick_Load",
+   "Alt_Weapon",
+   "Third_Person_View",
+   "Toggle_Crouch",
    };
 
 #ifdef __SETUP__
 
-#define NUMKEYENTRIES 54
-
-char keydefaults[NUMGAMEFUNCTIONS*3][MAXGAMEFUNCLEN] =
+const char keydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
    {
-   "Move_Forward", "W", "Kpad8",
-   "Move_Backward", "S", "Kpad2",
-   "Turn_Left", "Left", "Kpad4",
-   "Turn_Right", "Right", "KPad6",
-   "Strafe", "LAlt", "RAlt",
-   "Fire", "", "RCtrl",
-   "Open", "E", "",
-   "Run", "LShift", "RShift",
-   "AutoRun", "CapLck", "",
-   "Jump", "Space", "/",
-   "Crouch", "LCtrl", "",
-   "Look_Up", "PgUp", "Kpad9",
-   "Look_Down", "PgDn", "Kpad3",
-   "Look_Left", "Insert", "Kpad0",
-   "Look_Right", "Delete", "Kpad.",
-   "Strafe_Left", "A", "",
-   "Strafe_Right", "D", "",
-   "Aim_Up", "Home", "KPad7",
-   "Aim_Down", "End", "Kpad1",
-   "Weapon_1", "1", "",
-   "Weapon_2", "2", "",
-   "Weapon_3", "3", "",
-   "Weapon_4", "4", "",
-   "Weapon_5", "5", "",
-   "Weapon_6", "6", "",
-   "Weapon_7", "7", "",
-   "Weapon_8", "8", "",
-   "Weapon_9", "9", "",
-   "Weapon_10", "0", "",
-   "Inventory", "Enter", "KpdEnt",
-   "Inventory_Left", "[", "",
-   "Inventory_Right", "]", "",
-   "Holo_Duke", "H", "",
-   "Jetpack", "J", "",
-   "NightVision", "N", "",
-   "MedKit", "M", "",
-   "TurnAround", "BakSpc", "",
-   "SendMessage", "T", "",
-   "Map", "Tab", "",
-   "Shrink_Screen", "-", "Kpad-",
-   "Enlarge_Screen", "=", "Kpad+",
-   "Center_View", "KPad5", "",
-   "Holster_Weapon", "ScrLck", "",
-   "Show_Opponents_Weapon", "Y", "",
-   "Map_Follow_Mode", "F", "",
-   "See_Coop_View", "K", "",
-   "Mouse_Aiming", "U", "",
-   "Toggle_Crosshair", "I", "",
-   "Steroids", "R", "",
-   "Quick_Kick", "Q", "",
-   "Next_Weapon", "'", "",
-   "Previous_Weapon", ";", "",
-   "Show_Console", "`", "",
-   "Show_DukeMatch_Scores", "Backslash", ""
+   "W", "Kpad8",
+   "S", "Kpad2",
+   "Left", "Kpad4",
+   "Right", "KPad6",
+   "LAlt", "RAlt",
+   "RCtrl", "",
+   "E", "",
+   "LShift", "RShift",
+   "", "",
+   "Space", "/",
+   "LCtrl", "",
+   "PgUp", "Kpad9",
+   "PgDn", "Kpad3",
+   "Insert", "Kpad0",
+   "Delete", "Kpad.",
+   "A", "",
+   "D", "",
+   "Home", "KPad7",
+   "End", "Kpad1",
+   "1", "",
+   "2", "",
+   "3", "",
+   "4", "",
+   "5", "",
+   "6", "",
+   "7", "",
+   "8", "",
+   "9", "",
+   "0", "",
+   "Enter", "KpdEnt",
+   "[", "",
+   "]", "",
+   "H", "",
+   "J", "",
+   "N", "",
+   "M", "",
+   "BakSpc", "",
+   "T", "",
+   "Tab", "",
+   "-", "Kpad-",
+   "=", "Kpad+",
+   "KPad5", "",
+   "ScrLck", "",
+   "Y", "",
+   "F", "",
+   "K", "",
+   "", "",
+   "", "",
+   "R", "",
+   "Q", "",
+   "'", "",
+   ";", "",
+   "`", "",
+   "Backslash", "",
+   "", "",
+   "", "",
+   "CapLck", "",
+   "X", "",
+   "F6", "",
+   "F9", "",
+   "", "",
+   "F7", "",
+   "C", "",
    };
 
-const char oldkeydefaults[NUMGAMEFUNCTIONS*3][MAXGAMEFUNCLEN] =
+const char oldkeydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
    {
-   "Move_Forward", "Up", "Kpad8",
-   "Move_Backward", "Down", "Kpad2",
-   "Turn_Left", "Left", "Kpad4",
-   "Turn_Right", "Right", "KPad6",
-   "Strafe", "LAlt", "RAlt",
-   "Fire", "LCtrl", "RCtrl",
-   "Open", "Space", "",
-   "Run", "LShift", "RShift",
-   "AutoRun", "CapLck", "",
-   "Jump", "A", "/",
-   "Crouch", "Z", "",
-   "Look_Up", "PgUp", "Kpad9",
-   "Look_Down", "PgDn", "Kpad3",
-   "Look_Left", "Insert", "Kpad0",
-   "Look_Right", "Delete", "Kpad.",
-   "Strafe_Left", ",", "",
-   "Strafe_Right", ".", "",
-   "Aim_Up", "Home", "KPad7",
-   "Aim_Down", "End", "Kpad1",
-   "Weapon_1", "1", "",
-   "Weapon_2", "2", "",
-   "Weapon_3", "3", "",
-   "Weapon_4", "4", "",
-   "Weapon_5", "5", "",
-   "Weapon_6", "6", "",
-   "Weapon_7", "7", "",
-   "Weapon_8", "8", "",
-   "Weapon_9", "9", "",
-   "Weapon_10", "0", "",
-   "Inventory", "Enter", "KpdEnt",
-   "Inventory_Left", "[", "",
-   "Inventory_Right", "]", "",
-   "Holo_Duke", "H", "",
-   "Jetpack", "J", "",
-   "NightVision", "N", "",
-   "MedKit", "M", "",
-   "TurnAround", "BakSpc", "",
-   "SendMessage", "T", "",
-   "Map", "Tab", "",
-   "Shrink_Screen", "-", "Kpad-",
-   "Enlarge_Screen", "=", "Kpad+",
-   "Center_View", "KPad5", "",
-   "Holster_Weapon", "ScrLck", "",
-   "Show_Opponents_Weapon", "W", "",
-   "Map_Follow_Mode", "F", "",
-   "See_Coop_View", "K", "",
-   "Mouse_Aiming", "U", "",
-   "Toggle_Crosshair", "I", "",
-   "Steroids", "R", "",
-   "Quick_Kick", "`", "",
-   "Next_Weapon", "'", "",
-   "Previous_Weapon", ";", "",
-   "Show_Console", "`", "",
-   "Show_DukeMatch_Scores", "Backslash", ""
+   "Up", "Kpad8",
+   "Down", "Kpad2",
+   "Left", "Kpad4",
+   "Right", "KPad6",
+   "LAlt", "RAlt",
+   "LCtrl", "RCtrl",
+   "Space", "",
+   "LShift", "RShift",
+   "", "",
+   "A", "/",
+   "Z", "",
+   "PgUp", "Kpad9",
+   "PgDn", "Kpad3",
+   "Insert", "Kpad0",
+   "Delete", "Kpad.",
+   ",", "",
+   ".", "",
+   "Home", "KPad7",
+   "End", "Kpad1",
+   "1", "",
+   "2", "",
+   "3", "",
+   "4", "",
+   "5", "",
+   "6", "",
+   "7", "",
+   "8", "",
+   "9", "",
+   "0", "",
+   "Enter", "KpdEnt",
+   "[", "",
+   "]", "",
+   "H", "",
+   "J", "",
+   "N", "",
+   "M", "",
+   "BakSpc", "",
+   "T", "",
+   "Tab", "",
+   "-", "Kpad-",
+   "=", "Kpad+",
+   "KPad5", "",
+   "ScrLck", "",
+   "W", "",
+   "F", "",
+   "K", "",
+   "U", "",
+   "I", "",
+   "R", "",
+   "`", "",
+   "'", "",
+   ";", "",
+   "C", "",
+   "Backslash", "",
+   "", "",
+   "", "",
+   "CapLck", "",
+   "", "",
+   "F6", "",
+   "F9", "",
+   "", "",
+   "F7", "",
+   "", "",
    };
 
-static const char * mousedefaults[] =
+static const char * mousedefaults[MAXMOUSEBUTTONS] =
    {
    "Fire",
+   "Alt_Fire",
    "MedKit",
-   "Jetpack",
    "",
    "Previous_Weapon",
    "Next_Weapon",
-   "",
-   "",
-   "",
-   ""
    };
 
 
-static const char * mouseclickeddefaults[] =
+static const char * mouseclickeddefaults[MAXMOUSEBUTTONS] =
+   {
+   };
+
+
+static const char * mouseanalogdefaults[MAXMOUSEAXES] =
+   {
+   "analog_strafing",
+   "analog_moving",
+   };
+
+
+#if defined GEKKO
+static const char * joystickdefaults[MAXJOYBUTTONSANDHATS] =
+   {
+   "Open", // A
+   "Fire", // B
+   "Run", // 1
+   "Map", // 2
+   "Previous_Weapon", // -
+   "Next_Weapon", // +
+   "", // Home
+   "Jump", // Z
+   "Crouch", // C
+   "Map", // X
+   "Run", // Y
+   "Jump", // L
+   "Quick_Kick", // R
+   "Crouch", // ZL
+   "Fire", // ZR
+   "Quick_Kick", // D-Pad Up
+   "Inventory_Right", // D-Pad Right
+   "Inventory", // D-Pad Down
+   "Inventory_Left", // D-Pad Left
+   };
+
+
+static const char * joystickclickeddefaults[MAXJOYBUTTONSANDHATS] =
    {
    "",
    "",
@@ -239,142 +314,29 @@ static const char * mouseclickeddefaults[] =
    "",
    "",
    "",
-   ""
-   };
-
-
-static const char * joystickdefaults[] =
-   {
-   "Fire",
-   "Strafe",
-   "Run",
-   "Open",
    "",
    "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "Aim_Down",
-   "Look_Right",
-   "Aim_Up",
-   "Look_Left",
-   };
-
-
-static const char * joystickclickeddefaults[] =
-   {
    "",
    "Inventory",
-   "Jump",
-   "Crouch",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
    };
 
 
-static const char * mouseanalogdefaults[] =
+static const char * joystickanalogdefaults[MAXJOYAXES] =
    {
-   "analog_turning",
-   "analog_moving",
-   };
-
-
-static const char * mousedigitaldefaults[] =
-   {
-   "",
-   "",
-   "",
-   "",
-   };
-
-
-static const char * joystickanalogdefaults[] =
-   {
-   "analog_turning",
-   "analog_moving",
    "analog_strafing",
-   "",
-   "",
-   "",
-   "",
-   "",
+   "analog_moving",
+   "analog_turning",
+   "analog_lookingupanddown",
    };
 
 
-static const char * joystickdigitaldefaults[] =
+static const char * joystickdigitaldefaults[MAXJOYDIGITAL] =
    {
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "Run",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
-   "",
    };
 #endif
+
+#endif
 #ifdef __cplusplus
-};
+}
 #endif
 #endif

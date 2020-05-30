@@ -29,10 +29,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 int32_t CONFIG_ReadSetup( void );
 void CONFIG_GetSetupFilename( void );
-void CONFIG_WriteSetup( void );
+void CONFIG_WriteSetup(uint32_t flags);
 void CONFIG_SetupMouse( void );
 void CONFIG_SetupJoystick( void );
-void CONFIG_SetDefaultKeys(int type);
+void CONFIG_SetDefaultKeys(const char(*keyptr)[MAXGAMEFUNCLEN], bool lazy = false);
 
 int32_t CONFIG_GetMapBestTime(char *mapname);
 int32_t CONFIG_SetMapBestTime(char *mapname, int32_t tm);
@@ -42,7 +42,7 @@ void CONFIG_MapKey(int32_t which, kb_scancode key1, kb_scancode oldkey1, kb_scan
 const char* CONFIG_AnalogNumToName(int32_t func);
 int32_t CONFIG_AnalogNameToNum(const char* func);
 
-char* CONFIG_FunctionNumToName(int32_t func);
+char const* CONFIG_FunctionNumToName(int32_t func);
 int32_t CONFIG_FunctionNameToNum(const char* func);
 
 #endif

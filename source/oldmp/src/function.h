@@ -1,10 +1,8 @@
 //-------------------------------------------------------------------------
 /*
-Copyright (C) 1996, 2003 - 3D Realms Entertainment
-Copyright (C) 2000, 2003 - Matt Saettler (EDuke Enhancements)
-Copyright (C) 2004, 2007 - EDuke32 developers
+Copyright (C) 2010 EDuke32 developers and contributors
 
-This file is part of EDuke32
+This file is part of EDuke32.
 
 EDuke32 is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License version 2
@@ -18,7 +16,7 @@ See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 
@@ -30,18 +28,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // axis defaults are also included
 
 
-#ifndef _function_public_
-#define _function_public_
+#ifndef function_public_h_
+#define function_public_h_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define NUMKEYENTRIES 54
-#define NUMGAMEFUNCTIONS 54
+#define NUMGAMEFUNCTIONS 63
 #define MAXGAMEFUNCLEN 32
 
 extern char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN];
-extern char keydefaults[NUMGAMEFUNCTIONS*3][MAXGAMEFUNCLEN];
+extern const char keydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN];
+extern const char oldkeydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN];
 
 enum GameFunction_t
    {
@@ -53,7 +51,7 @@ enum GameFunction_t
    gamefunc_Fire,
    gamefunc_Open,
    gamefunc_Run,
-   gamefunc_AutoRun,
+   gamefunc_Alt_Fire,
    gamefunc_Jump,
    gamefunc_Crouch,
    gamefunc_Look_Up,
@@ -98,9 +96,18 @@ enum GameFunction_t
    gamefunc_Next_Weapon,
    gamefunc_Previous_Weapon,
    gamefunc_Show_Console,
-   gamefunc_Show_DukeMatch_Scores
+   gamefunc_Show_DukeMatch_Scores,
+   gamefunc_Dpad_Select,
+   gamefunc_Dpad_Aiming,
+   gamefunc_AutoRun,
+   gamefunc_Last_Weapon,
+   gamefunc_Quick_Save,
+   gamefunc_Quick_Load,
+   gamefunc_Alt_Weapon,
+   gamefunc_Third_Person_View,
+   gamefunc_Toggle_Crouch,
    };
 #ifdef __cplusplus
-};
+}
 #endif
 #endif

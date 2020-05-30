@@ -8248,9 +8248,9 @@ FAKE_F3:
 
         }
 
-        if ((KB_UnBoundKeyPressed(sc_F6) || g_doQuickSave == 1) && (g_player[myconnectindex].ps->gm&MODE_GAME))
+        if ((BUTTON(gamefunc_Quick_Save) || g_doQuickSave == 1) && (g_player[myconnectindex].ps->gm&MODE_GAME))
         {
-            KB_ClearKeyDown(sc_F6);
+            CONTROL_ClearButton(gamefunc_Quick_Save);
             g_doQuickSave = 0;
 
             if (g_movesPerPacket == 4 && connecthead != myconnectindex)
@@ -8280,9 +8280,10 @@ FAKE_F3:
             }
         }
 
-        if (KB_UnBoundKeyPressed(sc_F7))
+        if (BUTTON(gamefunc_Third_Person_View))
         {
-            KB_ClearKeyDown(sc_F7);
+            CONTROL_ClearButton(gamefunc_Third_Person_View);
+
             if (g_player[myconnectindex].ps->over_shoulder_on)
                 g_player[myconnectindex].ps->over_shoulder_on = 0;
             else
@@ -8291,7 +8292,7 @@ FAKE_F3:
                 g_cameraDistance = 0;
                 g_cameraClock = (int32_t)totalclock;
             }
-            P_DoQuote(109+g_player[myconnectindex].ps->over_shoulder_on,g_player[myconnectindex].ps);
+            P_DoQuote(109 + g_player[myconnectindex].ps->over_shoulder_on, g_player[myconnectindex].ps);
         }
 
         if (KB_UnBoundKeyPressed(sc_F5) && ud.config.MusicDevice >= 0)
@@ -8321,9 +8322,9 @@ FAKE_F3:
             }
         }
 
-        if ((KB_UnBoundKeyPressed(sc_F9) || g_doQuickSave == 2) && (g_player[myconnectindex].ps->gm&MODE_GAME))
+        if ((BUTTON(gamefunc_Quick_Load) || g_doQuickSave == 2) && (g_player[myconnectindex].ps->gm&MODE_GAME))
         {
-            KB_ClearKeyDown(sc_F9);
+            CONTROL_ClearButton(gamefunc_Quick_Load);
             g_doQuickSave = 0;
 
             if (g_movesPerPacket == 4 && myconnectindex != connecthead)
@@ -9928,11 +9929,11 @@ static void G_FreeCONMem(void)
 
 void G_Shutdown(void)
 {
+    CONFIG_WriteSetup(0);
     S_SoundShutdown();
     S_MusicShutdown();
     timerUninit();
     CONTROL_Shutdown();
-    CONFIG_WriteSetup();
     KB_Shutdown();
     G_FreeCONMem();
 #ifdef DISCORC_RPC
@@ -10151,8 +10152,6 @@ static void G_Startup(void)
     timerInit(TICRATE);
 
     G_CompileScripts();
-
-    CONFIG_ReadKeys(); // we re-read the keys after compiling the CONs
 
     if (engineInit())
     {
@@ -10919,6 +10918,9 @@ CLEAN_DIRECTORY:
         }
     }
 
+    CONFIG_WriteSetup(1);
+    CONFIG_ReadSetup();
+
     RTS_Init(ud.rtsname);
     if (rts_numlumps) initprintf("Using .RTS file '%s'\n",ud.rtsname);
 
@@ -11017,6 +11019,10 @@ CLEAN_DIRECTORY:
 
     OSD_Exec(tempbuf);
     OSD_Exec("autoexec.cfg");
+
+    CONFIG_SetDefaultKeys(keydefaults, true);
+
+    system_getcvars();
 
     if (ud.warp_on > 1 && ud.multimode < 2)
     {

@@ -4827,11 +4827,13 @@ repeatcase:
         C_GetNextValue(LABEL_DEFINE);
         g_scriptPtr--;
         j = *g_scriptPtr;
+
         C_SkipComments();
 
-        if (j < 0 || j > NUMGAMEFUNCTIONS-1)
+        if (EDUKE32_PREDICT_FALSE((unsigned)j > NUMGAMEFUNCTIONS - 1))
         {
-            initprintf("%s:%d: error: function number exceeds number of game functions.\n",g_szScriptFileName,g_lineNumber);
+            initprintf("%s:%d: error: function number exceeds number of game functions.\n",
+                g_szScriptFileName, g_lineNumber);
             g_numCompilerErrors++;
             C_NextLine();
             break;
@@ -4839,34 +4841,31 @@ repeatcase:
 
         i = 0;
 
+        hash_delete(&gamefuncH, gamefunctions[j]);
+
         while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
         {
             gamefunctions[j][i] = *textptr;
-            keydefaults[j*3][i] = *textptr;
-            textptr++,i++;
-            if (*textptr != 0x0a && *textptr != 0x0d && ispecial(*textptr))
+            textptr++, i++;
+            if (EDUKE32_PREDICT_FALSE(*textptr != 0x0a && *textptr != 0x0d && ispecial(*textptr)))
             {
-                initprintf("%s:%d: warning: invalid character in function name.\n",g_szScriptFileName,g_lineNumber);
+                initprintf("%s:%d: warning: invalid character in function name.\n",
+                    g_szScriptFileName, g_lineNumber);
                 g_numCompilerWarnings++;
                 C_NextLine();
                 break;
             }
-            if (i >= MAXGAMEFUNCLEN-1)
+            if (EDUKE32_PREDICT_FALSE(i >= MAXGAMEFUNCLEN))
             {
-                initprintf("%s:%d: warning: function name exceeds limit of %d characters, truncating.\n",g_szScriptFileName,g_lineNumber,MAXGAMEFUNCLEN);
+                initprintf("%s:%d: warning: truncating function name to %d characters.\n",
+                    g_szScriptFileName, g_lineNumber, MAXGAMEFUNCLEN - 1);
                 g_numCompilerWarnings++;
                 C_NextLine();
                 break;
             }
         }
         gamefunctions[j][i] = '\0';
-        keydefaults[j*3][i] = '\0';
-        hash_add(&gamefuncH,gamefunctions[j],j, 0);
-        {
-            char *str = Bstrtolower(Bstrdup(gamefunctions[j]));
-            hash_add(&gamefuncH,str,j, 0);
-            Bfree(str);
-        }
+        hash_add(&gamefuncH, gamefunctions[j], j, 0);
 
         return 0;
 
@@ -4995,7 +4994,7 @@ repeatcase:
                 return 0;
             }
             Bstrcpy(temp,tempbuf);
-            CONFIG_WriteSetup();
+            CONFIG_WriteSetup(0);
             Bsprintf(setupfilename,"%s/",mod_dir);
             Bstrcat(setupfilename,temp);
             CONFIG_ReadSetup();

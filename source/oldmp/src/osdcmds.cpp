@@ -1449,6 +1449,19 @@ static int osdcmd_unbind(osdcmdptr_t parm)
     return OSDCMD_SHOWHELP;
 }
 
+static int osdcmd_unbound(osdcmdptr_t parm)
+{
+    if (parm->numparms != 1)
+        return OSDCMD_OK;
+
+    int const gameFunc = CONFIG_FunctionNameToNum(parm->parms[0]);
+
+    if (gameFunc != -1)
+        ud.config.KeyboardKeys[gameFunc][0] = 0;
+
+    return OSDCMD_OK;
+}
+
 static int osdcmd_quicksave(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
@@ -1706,6 +1719,7 @@ int registerosdcommands(void)
 
     OSD_RegisterFunction("unbind","unbind <key>: unbinds a key", osdcmd_unbind);
     OSD_RegisterFunction("unbindall","unbindall: unbinds all keys", osdcmd_unbindall);
+    OSD_RegisterFunction("unbound", NULL, osdcmd_unbound);
 
     OSD_RegisterFunction("vidmode","vidmode <xdim> <ydim> <bpp> <fullscreen>: change the video mode",osdcmd_vidmode);
     OSD_RegisterFunction("vid_gamma","vid_gamma <gamma>: adjusts gamma ramp",osdcmd_vid_gamma);

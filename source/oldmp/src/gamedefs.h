@@ -47,122 +47,24 @@ extern "C" {
 //
 #define SETUPFILENAME APPBASENAME ".cfg"
 
-
 // Max number of players
 
 #define MAXPLAYERS 16
 #define MAXSPAWNPOINTS 64
 
-// Number of Mouse buttons
+// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
+#define MAXJOYBUTTONS 32
+#define MAXJOYBUTTONSANDHATS (MAXJOYBUTTONS+4)
 
-#define MAXMOUSEBUTTONS 10
-
-// Number of JOY buttons
-
-#define MAXJOYBUTTONS (32+4)
-
-// length of program functions
-
-#define MAXFUNCTIONLENGTH 30
-
-// length of axis functions
-
-#define MAXAXISFUNCTIONLENGTH 30
-
-// Max Player Name length
-
-#define MAXPLAYERNAMELENGTH 11
-
-// Max RTS Name length
-
-#define MAXRTSNAMELENGTH 15
-
-// Number of Mouse Axes
-
+// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
 #define MAXMOUSEAXES 2
 
-// Number of JOY axes
+// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
+#define MAXJOYAXES 9
+#define MAXJOYDIGITAL (MAXJOYAXES*2)
 
-#define MAXJOYAXES 8
-
-// Number of GAMEPAD axes
-
-#define MAXGAMEPADAXES 2
-
-// MIN/MAX scale value for controller scales
-
-#define MAXCONTROLSCALEVALUE (1<<19)
-
-// DEFAULT scale value for controller scales
-
-#define DEFAULTCONTROLSCALEVALUE (1<<16)
-
-// base value for controller scales
-
-#define BASECONTROLSCALEVALUE (1<<16)
-
-// MAX mouse sensitivity scale
-
-#define MAXMOUSESENSITIVITY (1<<17)
-
-// DEFAULT mouse sensitivity scale
-
-#define DEFAULTMOUSESENSITIVITY 4
-
-enum
-   {
-   gametype_network=3,
-   gametype_serial=1,
-   gametype_modem=2
-   };
-
-enum
-   {
-   connecttype_dialing=0,
-   connecttype_answer=1,
-   connecttype_alreadyconnected=2
-   };
-
-enum
-   {
-   screenbuffer_320x200,
-   screenbuffer_640x400,
-   screenbuffer_640x480,
-   screenbuffer_800x600,
-   screenbuffer_1024x768,
-   screenbuffer_1280x1024,
-   screenbuffer_1600x1200
-   };
-
-enum
-   {
-   vesa_320x200,
-   vesa_360x200,
-   vesa_320x240,
-   vesa_360x240,
-   vesa_320x400,
-   vesa_360x400,
-   vesa_640x350,
-   vesa_640x400,
-   vesa_640x480,
-   vesa_800x600,
-   vesa_1024x768,
-   vesa_1280x1024,
-   vesa_1600x1200
-   };
-
-enum
-   {
-   screenmode_chained,
-   screenmode_vesa,
-   screenmode_buffered,
-   screenmode_tseng,
-   screenmode_paradise,
-   screenmode_s3,
-   screenmode_crystal,
-   screenmode_redblue,
-   };
-
+// default mouse scale
+#define DEFAULTMOUSEANALOGUESCALE           65536
 
 #ifdef __cplusplus
 };
