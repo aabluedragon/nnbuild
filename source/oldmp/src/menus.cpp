@@ -549,6 +549,7 @@ void M_DisplayMenus(void)
     const char *p = NULL;
 
     getpackets();
+    S_Update();
 
     {
         if (buttonstat != 0 && !onbar)
