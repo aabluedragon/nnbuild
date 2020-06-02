@@ -4347,7 +4347,7 @@ cheat_for_port_credits:
                         _bar(1,d+8,yy+7, &ud.config.MusicVolume,4,probey==io,enabled?MENUHIGHLIGHT(io):UNSELMENUSHADE,!enabled,0,64);
                         ud.config.MusicVolume <<= 2;
                         if (l != ud.config.MusicVolume)
-                            MUSIC_SetVolume(ud.config.MusicVolume);
+                            S_MusicVolume(ud.config.MusicVolume);
                     }
                     break;
                     case 4:
