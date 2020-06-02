@@ -2805,7 +2805,6 @@ static int X_DoExecute(void)
             g_sp->x = ActorExtra[g_i].bposx = g_player[g_p].ps->bobposx = g_player[g_p].ps->opos.x = g_player[g_p].ps->pos.x;
             g_sp->y = ActorExtra[g_i].bposy = g_player[g_p].ps->bobposy = g_player[g_p].ps->opos.y =g_player[g_p].ps->pos.y;
             g_sp->z = ActorExtra[g_i].bposz = g_player[g_p].ps->opos.z =g_player[g_p].ps->pos.z;
-            updatesector(g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,&g_player[g_p].ps->cursectnum);
             setspritez_old(g_player[g_p].ps->i,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z+PHEIGHT);
             g_sp->cstat = 257;
 
