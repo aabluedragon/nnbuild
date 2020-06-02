@@ -48,32 +48,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define OSD_ERROR OSDTEXT_DARKRED OSDTEXT_BRIGHT
 
-// JBF
-#include "compat.h"
-#include "a.h"
-#include "build.h"
-#if 0 //POLYMER
-# include "polymer.h"
-#endif
-#include "cache1d.h"
-#include "pragmas.h"
-
-#ifdef RANCID_NETWORKING
-#include "mmulti_unstable.h"
-#else
-#include "mmulti.h"
-#endif
-
-#include "screens.h"
-
-#include "oldnet.h"
-
-#include "baselayer.h"
-
-#include "function.h"
-
-#include "macros.h"
-
 #define HORIZ_MIN -99
 #define HORIZ_MAX 299
 
@@ -106,7 +80,31 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAXVOLUMES 14
 #define MAXLEVELS 64
+#define MAXGAMETYPES 16
+#define MAXANIMWALLS 512
+#define MAXANIMATES 1024
+#define MAXCYCLERS 1024
+#define MAXQUOTES 16384
+#define FIRST_OBITUARY_QUOTE MAXQUOTES-128
+#define FIRST_SUICIDE_QUOTE MAXQUOTES-32
 
+#include "compat.h"
+#include "a.h"
+#include "build.h"
+#include "cache1d.h"
+#include "pragmas.h"
+
+#ifdef RANCID_NETWORKING
+#include "mmulti_unstable.h"
+#else
+#include "mmulti.h"
+#endif
+
+#include "screens.h"
+#include "oldnet.h"
+#include "baselayer.h"
+#include "function.h"
+#include "macros.h"
 //#include "types.h"
 //#include "file_lib.h"
 #include "gamedefs.h"
@@ -122,9 +120,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "_rts.h"
 #include "rts.h"
 #include "soundefs.h"
-
 #include "music.h"
-
 #include "namesdyn.h"
 
 #ifdef __cplusplus
@@ -148,15 +144,6 @@ extern int g_scriptVersion, g_Shareware, g_gameType;
 #define GAMETICSPERSEC      26
 
 // #define GC (TICSPERFRAME*44)
-
-/*
-#pragma aux sgn =\
-        "add ebx, ebx",\
-        "sbb eax, eax",\
-        "cmp eax, ebx",\
-        "adc eax, 0",\
-        parm [ebx]\
-*/
 
 #define STAT_DEFAULT        0
 #define STAT_ACTOR          1
@@ -189,18 +176,6 @@ enum GameMode_t {
     MODE_SENDTOWHOM = 64,
     MODE_END        = 128
 };
-
-#define MAXANIMWALLS 512
-#define MAXINTERPOLATIONS MAXSPRITES
-
-#define MAXQUOTES 16384
-
-#define FIRST_OBITUARY_QUOTE MAXQUOTES-128
-#define FIRST_SUICIDE_QUOTE MAXQUOTES-32
-
-#define MAXCYCLERS 1024
-
-#define MAXANIMATES 1024
 
 // Defines the motion characteristics of an actor
 
@@ -297,19 +272,7 @@ typedef struct {
     int wallnum, tag;
 } animwalltype;
 
-extern animwalltype animwall[MAXANIMWALLS];
-
-extern short g_numAnimWalls;
 extern int probey;
-
-extern char typebuflen,typebuf[141];
-extern int g_musicSize;
-
-//extern int msx[2048],msy[2048];
-extern vec2_t g_origins[2048];
-
-extern short cyclers[MAXCYCLERS][6],g_numCyclers;
-extern char szPlayerName[32];
 
 struct savehead {
     char name[19];
@@ -462,8 +425,6 @@ extern char pColorNames[MAXPALOOKUPS][32];
 
 static inline uint8_t playerColor_getValidPal(int palnum) { return TEST_ALLOWEDCOLOR(palnum) ? palnum : 0; }
 
-extern int32_t g_interpolationLock;
-
 static inline int32_t calc_smoothratio(int32_t totalclk, int32_t ototalclk)
 {
     return clamp((totalclk - ototalclk) * (65536 / TICSPERFRAME), 0, 65536);
@@ -545,40 +506,14 @@ typedef struct {
     int8_t padding_[1];
 } DukePlayer_t;
 
-extern char tempbuf[2048], packbuf[576], menutextbuf[128];
-
-extern int g_spriteGravity;
-
-extern int g_impactDamage,g_actorRespawnTime,g_itemRespawnTime;
-extern int g_startArmorAmount;
-
-extern short SpriteDeletionQueue[1024],g_spriteDeleteQueuePos,g_spriteDeleteQueueSize;
-extern user_defs ud;
-extern short int g_globalRandom;
-extern char buf[1024]; //My own generic input buffer
-
 #define MAXQUOTELEN 128
-extern char *ScriptQuotes[MAXQUOTES],*ScriptQuoteRedefinitions[MAXQUOTES];
-
 #define MAXUSERQUOTES 6
 #define USERQUOTE_LEFTOFFSET 5
 #define USERQUOTE_RIGHTOFFSET 14
 extern int quotebot, quotebotgoal; // game.c
 
-extern char ready2send;
-
 void X_ScriptInfo(void);
-extern intptr_t *script,*insptr,*labelcode,*labeltype;
-extern int g_numLabels,g_numDefaultLabels;
-extern int g_scriptSize;
-extern char *label;
-extern intptr_t *actorscrptr[MAXTILES],*g_parsingActorPtr;
 extern intptr_t *actorLoadEventScrptr[MAXTILES];
-extern char ActorType[MAXTILES];
-
-extern int g_musicIndex;
-extern char EnvMusicFilename[MAXVOLUMES+1][BMAX_PATH];
-extern short camsprite;
 
 typedef struct {
     int workslike, extra, cstat, extra_rand, hitradius, range;
@@ -586,16 +521,12 @@ typedef struct {
     signed char sxrepeat, syrepeat, txrepeat, tyrepeat, shade, xrepeat, yrepeat, pal, velmult;
 } projectile_t;
 
-// extern char gotz;
-
 typedef struct {
 /*    int x;
     int y;
     int z; */
     short ang, oldang, angdir, angdif;
 } spriteinterpolate;
-
-extern spriteinterpolate sprpos[MAXSPRITES];
 
 typedef struct {
     int floorz,ceilingz,lastvx,lastvy,bposx,bposy,bposz;
@@ -609,48 +540,11 @@ typedef struct {
     projectile_t projectile;
 } ActorData_t;
 
-extern ActorData_t ActorExtra[MAXSPRITES];
-
-extern input_t loc;
-extern input_t recsync[RECSYNCBUFSIZ];
-
-extern int playerswhenstarted;
-extern int screenpeek;
-
-extern int g_currentMenu;
-extern int tempwallptr,g_animateCount;
-extern int lockclock;
+extern int tempwallptr;
 extern intptr_t frameplace;
-extern char g_loadFromGroupOnly,g_RTSPlaying;
-
-extern int g_groupFileHandle;
-extern int ototalclock;
-
-extern int *animateptr[MAXANIMATES];
-extern int animategoal[MAXANIMATES];
-extern int animatevel[MAXANIMATES];
-// extern int oanimateval[MAXANIMATES];
-extern short neartagsector, neartagwall, neartagsprite;
-extern int neartaghitdist;
-extern short animatesect[MAXANIMATES];
-extern int vel, svel;
-extern fix16_t q16horiz;
-extern fix16_t q16angvel;
-
-extern short g_mirrorWall[64], g_mirrorSector[64], g_mirrorCount;
-
-#include "funct.h"
 
 extern int g_screenCapture;
-extern char EpisodeNames[MAXVOLUMES][33];
-extern char SkillNames[5][33];
 
-extern int g_currentFrameRate;
-
-#define MAXGAMETYPES 16
-extern char GametypeNames[MAXGAMETYPES][33];
-extern int GametypeFlags[MAXGAMETYPES];
-extern char g_numGametypes;
 
 enum GametypeFlags_t {
     GAMETYPE_COOP                   = 1,
@@ -676,8 +570,6 @@ enum GametypeFlags_t {
 #define GTFLAGS(x) (GametypeFlags[ud.coop] & x)
 #define FFIRE_CHECK(x,y) (!ud.ffire && (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY) || (GTFLAGS(GAMETYPE_TDM) && (g_player[x].ps->team == g_player[y].ps->team))))
 
-extern char g_numVolumes;
-
 extern int g_lastSaveSlot;
 extern int g_restorePalette;
 
@@ -695,11 +587,6 @@ typedef enum basepal_ {
 extern int cachecount;
 extern char boardfilename[BMAX_PATH];
 extern char currentboardfilename[BMAX_PATH];
-extern char g_earthquakeTime;
-// 0: master/slave, 1: peer-to-peer
-extern int g_networkBroadcastMode;
-
-extern short BlimpSpawnSprites[15];
 
 //DUKE3D.H:
 typedef struct {
@@ -711,32 +598,11 @@ typedef struct {
     char inven_icon, jetpack_on, heat_on, gotweapon[MAX_WEAPONS];
 } STATUSBARTYPE;
 
-extern STATUSBARTYPE sbar;
-extern int g_cameraDistance, g_cameraClock, g_playerFriction,g_showShareware;
-extern int g_networkBroadcastMode, g_movesPerPacket;
-extern int g_gameQuit;
-
-extern char pus,pub;
-extern int g_damageCameras,g_freezerSelfDamage,g_tripbombLaserMode;
-
-extern signed char multiwho, multipos, multiwhat, multiflag;
-extern int g_numFreezeBounces,g_rpgBlastRadius,g_pipebombBlastRadius,g_tripbombBlastRadius;
-extern int g_shrinkerBlastRadius,g_morterBlastRadius,g_bouncemineBlastRadius,g_seenineBlastRadius;
-extern int everyothertime;
-
-extern int g_interpolationCnt, startofdynamicinterpolations;
-extern int oldipos[MAXINTERPOLATIONS];
-extern int bakipos[MAXINTERPOLATIONS];
-extern int *curipos[MAXINTERPOLATIONS];
-
-extern short g_numClouds,clouds[128],cloudx[128],cloudy[128];
-extern int cloudtotalclock,totalmemory;
+extern int g_cameraDistance, g_cameraClock;
 
 extern int stereomode, stereowidth, stereopixelwidth;
 
 extern int g_myAimMode, g_myAimStat, g_oldAimStat;
-
-extern unsigned int g_moveThingsCount;
 
 #define IFISGLMODE if (videoGetRenderMode() >= 3)
 #define IFISSOFTMODE if (videoGetRenderMode() < 3)
@@ -945,7 +811,7 @@ extern char g_bEnhanced;    // are we 'enhanced' (more minerals, etc)
 
 extern char g_szBuf[1024];
 
-#define NAM_GRENADE_LIFETIME    120
+#define NAM_GRENADE_LIFETIME       120
 #define NAM_GRENADE_LIFETIME_VAR    30
 
 extern intptr_t *aplWeaponClip[MAX_WEAPONS];            // number of items in clip
@@ -1063,19 +929,15 @@ enum ScreenTextFlags_t {
 };
 
 extern int g_numRealPalettes;
-extern int g_scriptDebug;
 
 #define MAXCHEATLEN 20
 #define NUMCHEATCODES (signed int)(sizeof(CheatStrings)/sizeof(CheatStrings[0]))
 
-extern char CheatKeys[2];
 extern char CheatStrings[][MAXCHEATLEN];
 
 extern short WeaponPickupSprites[MAX_WEAPONS];
 
 extern int g_numQuoteRedefinitions;
-
-extern char setupfilename[BMAX_PATH];
 
 typedef struct {
 // this needs to have a copy of everything related to the map/actor state
@@ -1124,8 +986,6 @@ typedef struct {
     mapstate_t *savedstate;
 } map_t;
 
-extern map_t MapInfo[(MAXVOLUMES+1)*MAXLEVELS]; // +1 volume for "intro", "briefing" music
-
 typedef struct {
     DukePlayer_t *ps;
     input_t *inputBits;
@@ -1139,13 +999,7 @@ typedef struct {
     char syncval[SYNCFIFOSIZ][MAXSYNCBYTES];
 } playerdata_t;
 
-extern input_t inputfifo[MOVEFIFOSIZ][MAXPLAYERS];
-extern PlayerSpawn_t g_playerSpawnPoints[MAXSPAWNPOINTS];
-extern playerdata_t g_player[MAXPLAYERS];
-
 extern char *team_names[];
-
-#include "funct.h"
 
 // key bindings stuff
 typedef struct {
@@ -1165,7 +1019,13 @@ extern hashtable_t arrayH;
 extern hashtable_t keywH;
 extern hashtable_t gamefuncH;
 
+#include "funct.h"
+
 #ifdef __cplusplus
 }
 #endif
+
+#include "global.h"
+
 #endif
+

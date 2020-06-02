@@ -43,6 +43,7 @@ static int32_t MusicPaused = 0;
 static mutex_t s_mutex;
 static volatile uint32_t dq[128], dnum = 0;
 
+
 void S_SoundStartup(void)
 {
     int32_t i;
