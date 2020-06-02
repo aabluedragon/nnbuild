@@ -185,6 +185,7 @@
     <ClInclude Include="..\..\source\oldmp\src\function.h" />
     <ClInclude Include="..\..\source\oldmp\src\gamedef.h" />
     <ClInclude Include="..\..\source\oldmp\src\gamedefs.h" />
+    <ClInclude Include="..\..\source\oldmp\src\global.h" />
     <ClInclude Include="..\..\source\oldmp\src\grpscan.h" />
     <ClInclude Include="..\..\source\oldmp\src\keys.h" />
     <ClInclude Include="..\..\source\oldmp\src\macros.h" />
