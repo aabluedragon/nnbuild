@@ -471,7 +471,7 @@ void xyzmirror(int i,int wn)
 
     drawrooms(SX,SY,SZ,SA,100+sprite[i].shade,SECT);
     display_mirror = 1;
-    G_DoSpriteAnimations(SX,SY,SA,65536L);
+    G_DoSpriteAnimations(SX,SY,SZ,SA,65536L);
     display_mirror = 0;
     renderDrawMasks();
 
@@ -1403,7 +1403,7 @@ static void insert_player_sprite(int p)
     ActorExtra[spriteIndex].bposz = g_player[p].ps->opos.z = g_player[p].ps->pos.z = s->z;
     g_player[p].ps->oq16ang = g_player[p].ps->q16ang = fix16_from_int(s->ang);
 
-    updatesector(s->x, s->y, &g_player[p].ps->cursectnum);
+    g_player[p].ps->cursectnum = s->sectnum;
 }
 
 static void resetpspritevars(char g)

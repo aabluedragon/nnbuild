@@ -3561,7 +3561,8 @@ void P_ProcessInput(int snum)
     shrunk = (s->yrepeat < 32);
     getzrange_old(p->pos.x,p->pos.y,p->pos.z,psect,&cz,&hz,&fz,&lz,163L,CLIPMASK0);
 
-    getzsofslope(psect,p->pos.x,p->pos.y,&p->truecz,&p->truefz);
+    yax_getzsofslope(psect, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
+
     j = p->truefz;
 
     truefdist = klabs(p->pos.z-j);
@@ -4301,27 +4302,22 @@ void P_ProcessInput(int snum)
                                     break;
                     if (j < 0)
                     {
-                        p->footprintcount--;
-                        if (p->cursectnum >= 0 && sector[p->cursectnum].lotag == 0 && sector[p->cursectnum].hitag == 0)
-                        {
-                            switch (krand()&3)
+                        if (sector[p->cursectnum].lotag == 0 &&
+                            sector[p->cursectnum].hitag == 0)
+
+                            if (yax_getbunch(p->cursectnum, YAX_FLOOR) < 0 || (sector[p->cursectnum].floorstat & 512))
                             {
-                            case 0:
-                                j = A_Spawn(p->i,FOOTPRINTS);
-                                break;
-                            case 1:
-                                j = A_Spawn(p->i,FOOTPRINTS2);
-                                break;
-                            case 2:
-                                j = A_Spawn(p->i,FOOTPRINTS3);
-                                break;
-                            default:
-                                j = A_Spawn(p->i,FOOTPRINTS4);
-                                break;
+                                switch (krand() & 3)
+                                {
+                                case 0: j = A_Spawn(p->i, FOOTPRINTS); break;
+                                case 1: j = A_Spawn(p->i, FOOTPRINTS2); break;
+                                case 2: j = A_Spawn(p->i, FOOTPRINTS3); break;
+                                default: j = A_Spawn(p->i, FOOTPRINTS4); break;
+                                }
+                                sprite[j].pal = p->footprintpal;
+                                sprite[j].shade = p->footprintshade;
+                                p->footprintcount--;
                             }
-                            sprite[j].pal = p->footprintpal;
-                            sprite[j].shade = p->footprintshade;
-                        }
                     }
                 }
         }
@@ -4718,15 +4714,35 @@ HORIZONLY:
         changespritesect(p->i,p->cursectnum);
     }
     else
-        j = clipmove_old(&p->pos.x,&p->pos.y,
-                     &p->pos.z,&p->cursectnum,
-                     p->vel.x,p->vel.y,164L,(4L<<8),i,CLIPMASK0);
+    {
+        int const playerSectNum = p->cursectnum;
+        int16_t   ceilingBunch, floorBunch;
 
-    if (p->jetpack_on == 0 && psectlotag != 2 && psectlotag != 1 && shrunk)
-        p->pos.z += 32<<8;
+        if (playerSectNum >= 0)
+            yax_getbunches(playerSectNum, &ceilingBunch, &floorBunch);
 
-    if (j)
-        P_CheckTouchDamage(p,j);
+        // This updatesectorz conflicts with Duke3D's way of teleporting through water,
+        // so make it a bit conditional... OTOH, this way we have an ugly z jump when
+        // changing from above water to underwater
+
+        if ((playerSectNum >= 0 && !(sector[playerSectNum].lotag == 1 && p->on_ground && floorBunch >= 0))
+            && ((floorBunch >= 0 && !(sector[playerSectNum].floorstat & 512))
+                || (ceilingBunch >= 0 && !(sector[playerSectNum].ceilingstat & 512))))
+        {
+            p->cursectnum += MAXSECTORS;  // skip initial z check, restored by updatesectorz
+            updatesectorz(p->pos.x, p->pos.y, p->pos.z, &p->cursectnum);
+        }
+
+        j = clipmove_old(&p->pos.x, &p->pos.y,
+            &p->pos.z, &p->cursectnum,
+            p->vel.x, p->vel.y, 164L, (4L << 8), i, CLIPMASK0);
+
+        if (p->jetpack_on == 0 && psectlotag != 2 && psectlotag != 1 && shrunk)
+            p->pos.z += 32 << 8;
+
+        if (j)
+            P_CheckTouchDamage(p, j);
+    }
 
     if (p->jetpack_on == 0)
     {

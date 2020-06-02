@@ -2297,7 +2297,7 @@ static int X_DoExecute(void)
                     renderDrawRoomsQ16(tposx,tposy,z,tang,fix16_from_int(horiz),g_mirrorSector[i]+MAXSECTORS);
 
                     display_mirror = 1;
-                    G_DoSpriteAnimations(tposx,tposy,fix16_to_int(tang),smoothratio);
+                    G_DoSpriteAnimations(tposx,tposy,z,fix16_to_int(tang),smoothratio);
                     display_mirror = 0;
 
                     renderDrawMasks();
@@ -2309,11 +2309,11 @@ static int X_DoExecute(void)
 
 #if 0 //POLYMER
             if (videoGetRenderMode() == 4)
-                polymer_setanimatesprites(G_DoSpriteAnimations, x,y,a,smoothratio);
+                polymer_setanimatesprites(G_DoSpriteAnimations, x,y,z,a,smoothratio);
 #endif
             drawrooms(x,y,z, fix16_from_int(a),fix16_from_int(horiz),sect);
             display_mirror = 2;
-            G_DoSpriteAnimations(x,y,a,smoothratio);
+            G_DoSpriteAnimations(x,y,z,a,smoothratio);
             display_mirror = 0;
             renderDrawMasks();
             G_RestoreInterpolations();

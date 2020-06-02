@@ -3906,7 +3906,7 @@ static void G_SE40(int32_t smoothratio)
             if (drawing_ror == 2) // viewing from top
                 G_OROR_DupeSprites(sp);
 
-            G_DoSpriteAnimations(ud.camerapos.x, ud.camerapos.y, fix16_to_int(ud.cameraq16ang), smoothratio);
+            G_DoSpriteAnimations(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, fix16_to_int(ud.cameraq16ang), smoothratio);
             renderDrawMasks();
 
             if (level)
@@ -3934,7 +3934,7 @@ static void G_SE40(int32_t smoothratio)
 
 void G_DrawRooms(int snum,int smoothratio)
 {
-    int dst,j,fz,cz;
+    int dst, j, floorZ, ceilZ;
     int tposx,tposy,i;
     short k;
     DukePlayer_t *p = g_player[snum].ps;
@@ -3977,13 +3977,13 @@ void G_DrawRooms(int snum,int smoothratio)
 
     if (ud.camerasprite >= 0)
     {
-        spritetype *s = &sprite[ud.camerasprite];
+        spritetype *pSprite = &sprite[ud.camerasprite];
 
-        if (s->yvel < 0) s->yvel = -100;
-        else if (s->yvel > 199) s->yvel = 300;
+        if (pSprite->yvel < 0) pSprite->yvel = -100;
+        else if (pSprite->yvel > 199) pSprite->yvel = 300;
 
         ud.cameraq16ang = fix16_from_int(ActorExtra[ud.camerasprite].tempang
-            +mulscale16(((s->ang+1024-ActorExtra[ud.camerasprite].tempang)&2047)-1024,smoothratio));
+            +mulscale16(((pSprite->ang+1024-ActorExtra[ud.camerasprite].tempang)&2047)-1024,smoothratio));
 
 #if 0//POLYMER
         if (videoGetRenderMode() == 4)
@@ -3992,8 +3992,10 @@ void G_DrawRooms(int snum,int smoothratio)
 
         G_SE40(smoothratio);
 
-        renderDrawRoomsQ16(s->x,s->y,s->z-(4<<8),ud.cameraq16ang,s->yvel,s->sectnum);
-        G_DoSpriteAnimations(s->x,s->y,fix16_to_int(ud.cameraq16ang),smoothratio);
+        yax_preparedrawrooms();
+        renderDrawRoomsQ16(pSprite->x, pSprite->y, pSprite->z-(4<<8),ud.cameraq16ang, pSprite->yvel, pSprite->sectnum);
+        yax_drawrooms(G_DoSpriteAnimations, pSprite->sectnum, 0, smoothratio);
+        G_DoSpriteAnimations(pSprite->x, pSprite->y, pSprite->z, fix16_to_int(ud.cameraq16ang),smoothratio);
         renderDrawMasks();
     }
     else
@@ -4117,8 +4119,8 @@ void G_DrawRooms(int snum,int smoothratio)
         }
         else G_DoThirdPerson(p,&ud.camerapos,&ud.camerasect,fix16_to_int(ud.cameraq16ang),fix16_to_int(ud.cameraq16horiz));
 
-        cz = ActorExtra[p->i].ceilingz;
-        fz = ActorExtra[p->i].floorz;
+        ceilZ = ActorExtra[p->i].ceilingz;
+        floorZ = ActorExtra[p->i].floorz;
 
         if (g_earthquakeTime > 0 && p->on_ground == 1)
         {
@@ -4132,15 +4134,39 @@ void G_DrawRooms(int snum,int smoothratio)
             ud.cameraq16horiz = fix16_from_int(100+sprite[p->newowner].shade);
         else if (p->spritebridge == 0)
         {
-            if (ud.camerapos.z < (p->truecz + (4<<8))) ud.camerapos.z = cz + (4<<8);
-            else if (ud.camerapos.z > (p->truefz - (4<<8))) ud.camerapos.z = fz - (4<<8);
+            if (ud.camerapos.z < (p->truecz + (4<<8))) ud.camerapos.z = ceilZ + (4<<8);
+            else if (ud.camerapos.z > (p->truefz - (4<<8))) ud.camerapos.z = floorZ - (4<<8);
         }
 
-        if (ud.camerasect >= 0)
+        while (ud.camerasect >= 0)
         {
-            getzsofslope(ud.camerasect,ud.camerapos.x,ud.camerapos.y,&cz,&fz);
-            if (ud.camerapos.z < cz+(4<<8)) ud.camerapos.z = cz+(4<<8);
-            if (ud.camerapos.z > fz-(4<<8)) ud.camerapos.z = fz-(4<<8);
+            getzsofslope(ud.camerasect,ud.camerapos.x,ud.camerapos.y,&ceilZ,&floorZ);
+            if (yax_getbunch(ud.camerasect, YAX_CEILING) >= 0)
+            {
+                if (ud.camerapos.z < ceilZ)
+                {
+                    updatesectorz(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, &ud.camerasect);
+                    break;  // since CAMERA(sect) might have been updated to -1
+                    // NOTE: fist discovered in WGR2 SVN r134, til' death level 1
+                    //  (Lochwood Hollow).  A problem REMAINS with Polymost, maybe classic!
+                }
+            }
+            else
+            {
+                if (ud.camerapos.z < ceilZ + (4 << 8)) ud.camerapos.z = ceilZ + (4 << 8);
+            }
+
+            if (yax_getbunch(ud.camerasect, YAX_FLOOR) >= 0)
+            {
+                if (ud.camerapos.z > floorZ)
+                    updatesectorz(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, &ud.camerasect);
+            }
+            else
+            {
+                if (ud.camerapos.z > floorZ - (4 << 8)) ud.camerapos.z = floorZ - (4 << 8);
+            }
+
+            break;
         }
 
         X_OnEvent(EVENT_DISPLAYROOMS, g_player[screenpeek].ps->i, screenpeek, -1);
@@ -4169,10 +4195,13 @@ void G_DrawRooms(int snum,int smoothratio)
                 j = g_visibility;
                 g_visibility = (j>>1) + (j>>2);
 
-                renderDrawRoomsQ16(tposx,tposy,ud.camerapos.z,q16tang,ud.cameraq16horiz,g_mirrorSector[i]+MAXSECTORS);
+                int32_t didmirror = renderDrawRoomsQ16(tposx,tposy,ud.camerapos.z,q16tang,ud.cameraq16horiz,g_mirrorSector[i]+MAXSECTORS);
+
+                if (videoGetRenderMode() != REND_CLASSIC || didmirror)
+                    yax_drawrooms(G_DoSpriteAnimations, g_mirrorSector[i], didmirror, smoothratio);
 
                 display_mirror = 1;
-                G_DoSpriteAnimations(tposx,tposy,fix16_to_int(q16tang),smoothratio);
+                G_DoSpriteAnimations(tposx,tposy,ud.camerapos.z,fix16_to_int(q16tang),smoothratio);
                 display_mirror = 0;
 
                 renderDrawMasks();
@@ -4188,13 +4217,15 @@ void G_DrawRooms(int snum,int smoothratio)
 #endif
         G_SE40(smoothratio);
 
+        yax_preparedrawrooms();
         renderDrawRoomsQ16(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,ud.camerasect);
+        yax_drawrooms(G_DoSpriteAnimations, ud.camerasect, 0, smoothratio);
 
         // dupe the sprites touching the portal to the other sector
         if ((unsigned)ror_sprite < MAXSPRITES && drawing_ror == 1)
             G_OROR_DupeSprites(&sprite[ror_sprite]);
 
-        G_DoSpriteAnimations(ud.camerapos.x,ud.camerapos.y,fix16_to_int(ud.cameraq16ang),smoothratio);
+        G_DoSpriteAnimations(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,fix16_to_int(ud.cameraq16ang),smoothratio);
         drawing_ror = 0;
         renderDrawMasks();
 
@@ -6403,8 +6434,10 @@ static int32_t G_MaybeTakeOnFloorPal(tspriteptr_t datspr, int32_t sect)
 //#pragma auto_inline(off)
 #pragma optimize("g",off)
 #endif
-void G_DoSpriteAnimations(int x,int y,int a,int smoothratio)
+void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t smoothratio)
 {
+    UNREFERENCED_PARAMETER(z);
+
     int i, j, k, p, sect;
     intptr_t l, t1,t3,t4;
     spritetype* s;

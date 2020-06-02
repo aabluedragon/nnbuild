@@ -122,7 +122,7 @@ extern void G_DrawRooms(int snum,int smoothratio);
 extern int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_xr,int s_yr,int s_a,int s_ve,int s_zv,int s_ow,int s_ss);
 extern int A_CheckSwitchTile(int i);
 extern int A_Spawn(int j,int pn);
-extern void G_DoSpriteAnimations(int x,int y,int a,int smoothratio);
+extern void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t smoothratio);
 extern int main(int argc,char **argv);
 extern void G_OpenDemoWrite(void);
 extern void G_CloseDemoWrite(void);
