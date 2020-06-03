@@ -4277,7 +4277,7 @@ void P_ProcessInput(int snum)
             {
                 if (p->on_ground == 1)
                 {
-                    if (p->dummyplayersprite == -1)
+                    if (p->dummyplayersprite == -1 && (yax_getbunch(p->cursectnum, YAX_FLOOR) == -1))
                         p->dummyplayersprite =
                             A_Spawn(p->i,PLAYERONWATER);
                     sprite[p->dummyplayersprite].pal = sprite[p->i].pal;
