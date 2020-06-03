@@ -72,7 +72,7 @@ int g_cameraDistance = 0, g_cameraClock = 0;
 int qe, cp;
 static int g_commandSetup = 0;
 int g_noSetup = 0;
-static int g_noAutoLoad = 0;
+int g_noAutoLoad = 0;
 static int g_noSound = 0;
 static int g_noMusic = 0;
 static const char *CommandMap = NULL;
