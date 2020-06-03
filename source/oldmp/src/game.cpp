@@ -6931,7 +6931,8 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 goto PALONLY;
             }
 
-            if (g_player[p].ps->on_crane == -1 && (sector[s->sectnum].lotag&0x7ff) != 1)
+            // CLAMP PLAYER SPRITE Y TO FLOOR
+            if (g_player[p].ps->on_crane == -1 && ((sector[s->sectnum].lotag&0x7ff) != 1) && !HEAD_ABOVE_TROR_WATER(p))
             {
                 l = s->z-ActorExtra[g_player[p].ps->i].floorz+(3<<8);
                 if (l > 1024 && s->yrepeat > 32 && s->extra > 0)

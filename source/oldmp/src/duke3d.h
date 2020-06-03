@@ -569,6 +569,7 @@ enum GametypeFlags_t {
 
 #define GTFLAGS(x) (GametypeFlags[ud.coop] & x)
 #define FFIRE_CHECK(x,y) (!ud.ffire && (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY) || (GTFLAGS(GAMETYPE_TDM) && (g_player[x].ps->team == g_player[y].ps->team))))
+#define HEAD_ABOVE_TROR_WATER(x) ((yax_getbunch(g_player[x].ps->cursectnum, YAX_FLOOR) != -1) && (sector[g_player[x].ps->cursectnum].lotag & 0x7ff) == 1)
 
 extern int g_lastSaveSlot;
 extern int g_restorePalette;
