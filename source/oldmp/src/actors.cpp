@@ -5401,7 +5401,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
 {
     const spritetype *pSprite = &sprite[spriteNum];
     sectortype *const pSector = &sector[sprite[spriteNum].sectnum];
-    int32_t *const    pData = ActorExtra[spriteNum].temp_data;
+    intptr_t *const    pData = ActorExtra[spriteNum].temp_data;
     int j;
 
     if (klabs(pSector->floorz - spriteZ) < sprite[spriteNum].yvel)

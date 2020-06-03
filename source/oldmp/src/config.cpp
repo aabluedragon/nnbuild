@@ -545,7 +545,7 @@ int32_t CONFIG_ReadSetup(void)
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
                  "Import configuration data from \"%s\"?",setupfilename,SETUPFILENAME);
 
-        i=wm_ynbox("Import Configuration Settings",tempbuf);
+        i = wm_ynbox("Import Configuration Settings", "%s", tempbuf);
         if (i) ud.config.scripthandle = SCRIPT_Load(SETUPFILENAME);
     }
     else if (buildvfs_exists("eduke32.cfg") && ud.config.scripthandle < 0)
@@ -553,7 +553,7 @@ int32_t CONFIG_ReadSetup(void)
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
                  "Import configuration data from \"eduke32.cfg\"?",setupfilename);
 
-        i=wm_ynbox("Import Configuration Settings",tempbuf);
+        i = wm_ynbox("Import Configuration Settings", "%s", tempbuf);
         if (i) ud.config.scripthandle = SCRIPT_Load("eduke32.cfg");
     }
     else if (buildvfs_exists("duke3d.cfg") && ud.config.scripthandle < 0)
@@ -561,7 +561,7 @@ int32_t CONFIG_ReadSetup(void)
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
                  "Import configuration data from \"duke3d.cfg\"?",setupfilename);
 
-        i=wm_ynbox("Import Configuration Settings",tempbuf);
+        i = wm_ynbox("Import Configuration Settings", "%s", tempbuf);
         if (i) ud.config.scripthandle = SCRIPT_Load("duke3d.cfg");
     }
     pathsearchmode = 0;

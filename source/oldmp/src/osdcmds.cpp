@@ -203,7 +203,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
         getfilenames("/");
 
         for (r=findfiles; r!=NULL; r=r->next)
-            maxwidth = max((unsigned)maxwidth,Bstrlen(r->name));
+            maxwidth = max((size_t)maxwidth,Bstrlen(r->name));
 
         if (maxwidth > 0)
         {

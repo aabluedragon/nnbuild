@@ -770,7 +770,7 @@ typedef struct {
 
 typedef struct {
     char *szLabel;
-    int *plValues;     // array of values
+    intptr_t *plValues;     // array of values
     int size;
     char bReset;
 } gamearray_t;

@@ -70,8 +70,34 @@ static void SetPage(int n)
                           (GtkCallback)gtk_widget_set_sensitive, (gpointer)n);
 }
 
-static void on_vmode3dcombo_changed(GtkComboBox *, gpointer);
-static void on_gamelist_selection_changed(GtkTreeSelection *, gpointer);
+static void on_vmode3dcombo_changed(GtkComboBox* combobox, gpointer user_data)
+{
+    GtkTreeModel* data;
+    GtkTreeIter iter;
+    int val;
+    UNREFERENCED_PARAMETER(user_data);
+    if (!gtk_combo_box_get_active_iter(combobox, &iter)) return;
+    if (!(data = gtk_combo_box_get_model(combobox))) return;
+    gtk_tree_model_get(data, &iter, 1, &val, -1);
+    settings.xdim3d = validmode[val].xdim;
+    settings.ydim3d = validmode[val].ydim;
+}
+
+static void on_gamelist_selection_changed(GtkTreeSelection* selection, gpointer user_data)
+{
+    GtkTreeIter iter;
+    GtkTreeModel* model;
+    struct grpfile* fg;
+    UNREFERENCED_PARAMETER(user_data);
+    if (gtk_tree_selection_get_selected(selection, &model, &iter))
+    {
+        gtk_tree_model_get(model, &iter, 2, (gpointer)&fg, -1);
+        strcpy(settings.selectedgrp, fg->name);
+        settings.game = fg->game;
+        settings.crcval = fg->crcval;
+    }
+}
+
 static void PopulateForm(int pgs)
 {
     if (pgs & (1<<TAB_CONFIG))
@@ -82,14 +108,14 @@ static void PopulateForm(int pgs)
         GtkComboBox *box3d;
         char buf[64];
 
-        mode3d = checkvideomode(&settings.xdim3d, &settings.ydim3d, settings.bpp3d, settings.fullscreen, 1);
+        mode3d = videoCheckMode(&settings.xdim3d, &settings.ydim3d, settings.bpp3d, settings.fullscreen, 1);
         if (mode3d < 0)
         {
             int i, cd[] = { 32, 24, 16, 15, 8, 0 };
             for (i=0; cd[i];) { if (cd[i] >= settings.bpp3d) i++; else break; }
             for (; cd[i]; i++)
             {
-                mode3d = checkvideomode(&settings.xdim3d, &settings.ydim3d, cd[i], settings.fullscreen, 1);
+                mode3d = videoCheckMode(&settings.xdim3d, &settings.ydim3d, cd[i], settings.fullscreen, 1);
                 if (mode3d < 0) continue;
                 settings.bpp3d = cd[i];
                 break;
@@ -113,9 +139,9 @@ static void PopulateForm(int pgs)
             gtk_list_store_set(modes3d, &iter, 0,buf, 1,i, -1);
             if (i == mode3d)
             {
-                g_signal_handlers_block_by_func(box3d, on_vmode3dcombo_changed, NULL);
+                g_signal_handlers_block_by_func(box3d, (gpointer)on_vmode3dcombo_changed, NULL);
                 gtk_combo_box_set_active_iter(box3d, &iter);
-                g_signal_handlers_unblock_by_func(box3d, on_vmode3dcombo_changed, NULL);
+                g_signal_handlers_unblock_by_func(box3d, (gpointer)on_vmode3dcombo_changed, NULL);
             }
         }
 
@@ -146,28 +172,15 @@ static void PopulateForm(int pgs)
             if (!Bstrcasecmp(fg->name, settings.selectedgrp))
             {
                 GtkTreeSelection *sel = gtk_tree_view_get_selection(gamelist);
-                g_signal_handlers_block_by_func(sel, on_gamelist_selection_changed, NULL);
+                g_signal_handlers_block_by_func(sel, (gpointer)on_gamelist_selection_changed, NULL);
                 gtk_tree_selection_select_iter(sel, &iter);
-                g_signal_handlers_unblock_by_func(sel, on_gamelist_selection_changed, NULL);
+                g_signal_handlers_unblock_by_func(sel, (gpointer)on_gamelist_selection_changed, NULL);
             }
         }
     }
 }
 
 // -- EVENT CALLBACKS AND CREATION STUFF --------------------------------------
-
-static void on_vmode3dcombo_changed(GtkComboBox *combobox, gpointer user_data)
-{
-    GtkTreeModel *data;
-    GtkTreeIter iter;
-    int val;
-    UNREFERENCED_PARAMETER(user_data);
-    if (!gtk_combo_box_get_active_iter(combobox, &iter)) return;
-    if (!(data = gtk_combo_box_get_model(combobox))) return;
-    gtk_tree_model_get(data, &iter, 1, &val, -1);
-    settings.xdim3d = validmode[val].xdim;
-    settings.ydim3d = validmode[val].ydim;
-}
 
 static void on_fullscreencheck_toggled(GtkToggleButton *togglebutton, gpointer user_data)
 {
@@ -212,21 +225,6 @@ static void on_inputjoycheck_toggled(GtkToggleButton *togglebutton, gpointer use
 {
     UNREFERENCED_PARAMETER(user_data);
     settings.usejoy = (gtk_toggle_button_get_active(togglebutton) == TRUE);
-}
-
-static void on_gamelist_selection_changed(GtkTreeSelection *selection, gpointer user_data)
-{
-    GtkTreeIter iter;
-    GtkTreeModel *model;
-    struct grpfile *fg;
-    UNREFERENCED_PARAMETER(user_data);
-    if (gtk_tree_selection_get_selected(selection, &model, &iter))
-    {
-        gtk_tree_model_get(model, &iter, 2, (gpointer)&fg, -1);
-        strcpy(settings.selectedgrp, fg->name);
-        settings.game = fg->game;
-        settings.crcval = fg->crcval;
-    }
 }
 
 static gboolean on_startwin_delete_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
@@ -515,7 +513,7 @@ static GtkWidget *create_window(void)
                                GDK_C, GDK_MOD1_MASK,
                                GTK_ACCEL_VISIBLE);
     gtk_widget_add_accelerator(cancelbutton, "clicked", accel_group,
-                               GDK_Escape, 0,
+                               GDK_Escape, (GdkModifierType)0,
                                GTK_ACCEL_VISIBLE);
 
     cancelbuttonalign = gtk_alignment_new(0.5, 0.5, 0, 0);
@@ -543,7 +541,7 @@ static GtkWidget *create_window(void)
                                GDK_S, GDK_MOD1_MASK,
                                GTK_ACCEL_VISIBLE);
     gtk_widget_add_accelerator(startbutton, "clicked", accel_group,
-                               GDK_Return, 0,
+                               GDK_Return, (GdkModifierType)0,
                                GTK_ACCEL_VISIBLE);
 
     startbuttonalign = gtk_alignment_new(0.5, 0.5, 0, 0);
@@ -743,8 +741,6 @@ int startwin_idle(void *s)
     return 0;
 }
 
-extern char *duke3dgrp, *duke3dgrpstring;
-
 int startwin_run(void)
 {
     if (!gtkenabled) return 1;
@@ -782,7 +778,7 @@ int startwin_run(void)
 
         for (i = 0; i<numgrpfiles; i++) if (settings.crcval == grpfiles[i].crcval) break;
         if (i != numgrpfiles)
-            duke3dgrpstring = (char *)grpfiles[i].name;
+            duke3dgrpstring = grpfiles[i].name;
     }
 
     return retval;

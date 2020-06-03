@@ -3785,7 +3785,7 @@ static int X_DoExecute(void)
             if (asize > 0)
             {
                 OSD_Printf(OSDTEXT_GREEN "CON_RESIZEARRAY: resizing array %s from %d to %d\n", aGameArrays[j].szLabel, aGameArrays[j].size, asize);
-                aGameArrays[j].plValues=(int*)Brealloc(aGameArrays[j].plValues, sizeof(int) * asize);
+                aGameArrays[j].plValues=(intptr_t*)Brealloc(aGameArrays[j].plValues, sizeof(intptr_t) * asize);
                 aGameArrays[j].size = asize;
             }
             break;

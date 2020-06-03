@@ -2722,7 +2722,7 @@ void G_GameExit(const char *t)
         {
             char titlebuf[256];
             Bsprintf(titlebuf,HEAD2 " %s",s_buildTimestamp);
-            wm_msgbox(titlebuf, t);
+            wm_msgbox(titlebuf, "%s", t);
         }
     }
 
@@ -10051,7 +10051,7 @@ static void G_CheckGametype(void)
     //    initprintf("ud.m_coop=%i before sanitization\n",ud.m_coop);
     ud.m_coop = clamp(ud.m_coop, 0, g_numGametypes-1);
     Bsprintf(tempbuf,"%s\n",GametypeNames[ud.m_coop]);
-    initprintf(tempbuf);
+    initprintf("%s", tempbuf);
     //     initprintf("ud.m_coop=%i after sanitisation\n",ud.m_coop);
 }
 
@@ -10663,7 +10663,7 @@ int app_main(int32_t argc, char const* const* argv)
                 Bsprintf(tempbuf,"EDuke32 has located an obsolete texture cache in the \"%stexcache\" directory.\n\n"
                          "Would you like EDuke32 to purge the contents of this directory?",dir);
 
-                if (wm_ynbox("Obsolete Texture Cache Detected",tempbuf))
+                if (wm_ynbox("Obsolete Texture Cache Detected","%s",tempbuf))
                 {
                     int recursion = 0;
 

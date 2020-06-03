@@ -1037,7 +1037,7 @@ static int C_SetScriptSize(int size)
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)) && !((intptr_t)script[i] >= (intptr_t)(&script[0]) && (intptr_t)script[i] < (intptr_t)(&script[g_scriptSize])))
         {
             g_numCompilerErrors++;
-            initprintf("Internal compiler error at %d (0x%x)\n",i,i);
+            initprintf("Internal compiler error at %d (0x%x)\n",(int32_t)i,(uint32_t)i);
         }
 //        if (bitptr[i] == 0 && ((intptr_t)script[i] >= (intptr_t)(&script[0]) && (intptr_t)script[i] < (intptr_t)(&script[g_scriptSize])))
 //            initprintf("oh no!\n");
@@ -1072,7 +1072,7 @@ static int C_SetScriptSize(int size)
 
     //initprintf("offset: %d\n",(unsigned)(g_scriptPtr-script));
     g_scriptSize = size;
-    initprintf("Resizing code buffer to %d*%d bytes\n",g_scriptSize, sizeof(intptr_t));
+    initprintf("Resizing code buffer to %d*%d bytes\n",g_scriptSize, (int32_t)sizeof(intptr_t));
 
     newscript = (intptr_t *)Brealloc(script, g_scriptSize * sizeof(intptr_t));
 
@@ -1083,7 +1083,7 @@ static int C_SetScriptSize(int size)
     {
         C_ReportError(-1);
         initprintf("%s:%d: out of memory: Aborted (%ud)\n",g_szScriptFileName,g_lineNumber,(unsigned)(g_scriptPtr-script));
-        initprintf(tempbuf);
+        initprintf("%s", tempbuf);
         g_numCompilerErrors++;
         return 1;
     }
@@ -1211,7 +1211,8 @@ static int32_t C_SkipComments(void)
                         initprintf("%s:%d: debug: EOF in comment!\n", g_szScriptFileName, g_lineNumber);
                     C_ReportError(-1);
                     initprintf("%s:%d: error: found `/*' with no `*/'.\n", g_szScriptFileName, g_lineNumber);
-                    g_parsingActorPtr = (intptr_t*)(g_processingState = g_numBraces = 0);
+                    g_parsingActorPtr = 0;
+                    g_processingState = g_numBraces = 0;
                     g_numCompilerErrors++;
                     break;
                 }
@@ -2903,7 +2904,7 @@ static int C_ParseCommand(void)
                 i = *(g_scriptPtr-1);
                 *(g_scriptPtr-1) ^= 48;
                 C_ReportError(-1);
-                initprintf("%s:%d: warning: tried to set cstat %d, using %d instead.\n",g_szScriptFileName,g_lineNumber,i,*(g_scriptPtr-1));
+                initprintf("%s:%d: warning: tried to set cstat %d, using %d instead.\n",g_szScriptFileName,g_lineNumber,i,(int32_t)*(g_scriptPtr-1));
                 g_numCompilerWarnings++;
             }
         }
@@ -4812,7 +4813,7 @@ repeatcase:
             textptr++,i++;
             if (i >= (signed)sizeof(EpisodeNames[j])-1)
             {
-                initprintf("%s:%d: error: volume name exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,sizeof(EpisodeNames[j])-1);
+                initprintf("%s:%d: error: volume name exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,(int32_t)sizeof(EpisodeNames[j])-1);
                 g_numCompilerErrors++;
                 C_NextLine();
                 break;
@@ -4893,7 +4894,7 @@ repeatcase:
             textptr++,i++;
             if (i >= (signed)sizeof(SkillNames[j])-1)
             {
-                initprintf("%s:%d: error: skill name exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,sizeof(SkillNames[j])-1);
+                initprintf("%s:%d: error: skill name exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,(int32_t)sizeof(SkillNames[j])-1);
                 g_numCompilerErrors++;
                 C_NextLine();
                 break;
@@ -4917,7 +4918,7 @@ repeatcase:
             textptr++,i++;
             if (i >= (signed)sizeof(gamename)-1)
             {
-                initprintf("%s:%d: error: game name exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,sizeof(gamename)-1);
+                initprintf("%s:%d: error: game name exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,(int32_t)sizeof(gamename)-1);
                 g_numCompilerErrors++;
                 C_NextLine();
                 break;
@@ -5032,7 +5033,7 @@ repeatcase:
             textptr++,i++;
             if (i >= (signed)sizeof(GametypeNames[j])-1)
             {
-                initprintf("%s:%d: error: gametype name exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,sizeof(GametypeNames[j])-1);
+                initprintf("%s:%d: error: gametype name exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,(int32_t)sizeof(GametypeNames[j])-1);
                 g_numCompilerErrors++;
                 C_NextLine();
                 break;
@@ -5911,9 +5912,9 @@ void C_Compile(const char *filenam)
 
         initprintf("Script compiled in %dms\n",timerGetTicks()-startcompiletime);
 
-        initprintf("Compiled code size: %d*%d bytes, version %s\n",(unsigned)(g_scriptPtr-script),sizeof(intptr_t),(g_scriptVersion == 14?"1.4+":"1.3D"));
+        initprintf("Compiled code size: %d*%d bytes, version %s\n",(unsigned)(g_scriptPtr-script),(int32_t)sizeof(intptr_t),(g_scriptVersion == 14?"1.4+":"1.3D"));
         initprintf("Pointer bitmap size: %d bytes\n",(g_scriptSize+7)>>3);
-        initprintf("%d/%d labels, %d/%d variables\n",g_numLabels,min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
+        initprintf("%d/%d labels, %d/%d variables\n",g_numLabels,(int32_t)min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
 
         for (i=MAXQUOTES-1;i>=0;i--)
             if (ScriptQuotes[i])
