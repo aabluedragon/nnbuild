@@ -6663,12 +6663,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             if (g_player[s->yvel].ps->dead_flag || ((s->pal == 1) && (g_player[s->yvel].ps->last_extra < 2)))
                 t->z += (20<<8); // Matches corpse height of vanilla Duke3D.
         }
-        else if ((s->statnum == STAT_DEFAULT && s->picnum != CRANEPOLE)
-            || s->statnum == STAT_PLAYER
-            || s->statnum == STAT_STANDABLE
-            || s->statnum == STAT_PROJECTILE
-            || s->statnum == STAT_MISC
-            || s->statnum == STAT_ACTOR)
+        else if (s->picnum != CRANEPOLE)
         {
             t->x -= mulscale16(65536-smoothratio,s->x-ActorExtra[i].bposx);
             t->y -= mulscale16(65536-smoothratio,s->y-ActorExtra[i].bposy);
@@ -11264,10 +11259,9 @@ MAIN_LOOP_RESTART:
                 }
 
                 videoNextPage();
+                S_Update();
             }
         }
-
-        S_Update();
 
         if (g_player[myconnectindex].ps->gm&MODE_DEMO)
             goto MAIN_LOOP_RESTART;

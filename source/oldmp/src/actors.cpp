@@ -7814,6 +7814,25 @@ int A_CheckSwitchTile(int i)
     return 0;
 }
 
+static void G_RecordOldSpritePos(void)
+{
+    int statNum = 0;
+    do
+    {
+        int spriteNum = headspritestat[statNum++];
+
+        while (spriteNum >= 0)
+        {
+            int const nextSprite = nextspritestat[spriteNum];
+            ActorExtra[spriteNum].bposx = sprite[spriteNum].pos.x;
+            ActorExtra[spriteNum].bposy = sprite[spriteNum].pos.y;
+            ActorExtra[spriteNum].bposz = sprite[spriteNum].pos.z;
+
+            spriteNum = nextSprite;
+        }
+    } while (statNum < MAXSTATUS);
+}
+
 void G_MoveWorld(void)
 {
     if (apScriptGameEvent[EVENT_PREGAME])
@@ -7840,6 +7859,8 @@ void G_MoveWorld(void)
             }
         } while (k--);
     }
+
+    G_RecordOldSpritePos();
 
     G_MoveZombieActors();     //ST 2
     G_MoveWeapons();          //ST 4

@@ -472,8 +472,6 @@ static void X_Move(void)
     {
         if (deadflag || (ActorExtra[g_i].bposx != g_sp->x) || (ActorExtra[g_i].bposy != g_sp->y))
         {
-            ActorExtra[g_i].bposx = g_sp->x;
-            ActorExtra[g_i].bposy = g_sp->y;
             setspritez_old(g_i,g_sp->x,g_sp->y,g_sp->z);
         }
         return;
