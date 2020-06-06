@@ -258,8 +258,8 @@ const char oldkeydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
 static const char * mousedefaults[MAXMOUSEBUTTONS] =
    {
    "Fire",
-   "Alt_Fire",
    "MedKit",
+   "Jetpack",
    "",
    "Previous_Weapon",
    "Next_Weapon",
