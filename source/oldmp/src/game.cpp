@@ -2721,7 +2721,7 @@ void G_GameExit(const char *t)
         if (!(t[0] == ' ' && t[1] == 0))
         {
             char titlebuf[256];
-            Bsprintf(titlebuf,HEAD2 " %s",s_buildTimestamp);
+            Bsprintf(titlebuf,HEAD2 " (%s)",s_buildTimestamp);
             wm_msgbox(titlebuf, "%s", t);
         }
     }
@@ -8520,7 +8520,7 @@ static void G_ShowParameterHelp(void)
               "\nSee eduke32 -debughelp for debug parameters"
               ;
 #if _WIN32
-    Bsprintf(tempbuf,HEAD2 " %s", s_buildTimestamp);
+    Bsprintf(tempbuf,HEAD2 " (%s)", s_buildTimestamp);
     wm_msgbox(tempbuf,s);
 #else
     initprintf("%s\n",s);
@@ -8550,7 +8550,7 @@ static void G_ShowDebugHelp(void)
               "-z#/-condebug\tEnable line-by-line CON compile debugging at level #\n"
               ;
 #ifdef _WIN32
-    Bsprintf(tempbuf,HEAD2 " %s",s_buildTimestamp);
+    Bsprintf(tempbuf,HEAD2 " (%s)",s_buildTimestamp);
     wm_msgbox(tempbuf,s);
 #else
     initprintf("%s\n",s);
@@ -10446,7 +10446,7 @@ int app_main(int32_t argc, char const* const* argv)
         (int(*)(void))GetTime,
         GAME_onshowosd
     );
-    Bsprintf(tempbuf,HEAD2 " %s",s_buildTimestamp);
+    Bsprintf(tempbuf,HEAD2 " (%s)",s_buildTimestamp);
     wm_setapptitle(tempbuf);
 
     initprintf("%s\n",apptitle);
