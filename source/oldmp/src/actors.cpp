@@ -5502,7 +5502,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             q = sc->extra>>3;
             l = 0;
 
-            if (sc->lotag == 30)
+            if (sc->lotag == ST_30_ROTATE_RISE_BRIDGE)
             {
                 q >>= 2;
 
@@ -6384,13 +6384,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
         case SE_10_DOOR_AUTO_CLOSE:
 
-            if ((sc->lotag&0xff) == 27 || (sc->floorz > sc->ceilingz && (sc->lotag&0xff) != 23) || sc->lotag == (short) 32791)
+            if ((sc->lotag&0xff) == ST_27_STRETCH_BRIDGE || (sc->floorz > sc->ceilingz && (sc->lotag&0xff) != ST_23_SWINGING_DOOR) || sc->lotag == (short) 32791)
             {
                 j = 1;
 
-                if ((sc->lotag&0xff) != 27)
+                if ((sc->lotag&0xff) != ST_27_STRETCH_BRIDGE)
                     TRAVERSE_CONNECT(p)
-                    if (sc->lotag != 30 && sc->lotag != 31 && sc->lotag != 0)
+                    if (sc->lotag != ST_30_ROTATE_RISE_BRIDGE && sc->lotag != ST_31_TWO_WAY_TRAIN && sc->lotag != ST_0_NO_EFFECT)
                         if (s->sectnum == sprite[g_player[p].ps->i].sectnum)
                             j = 0;
 

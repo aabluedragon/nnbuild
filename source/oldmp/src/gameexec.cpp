@@ -141,8 +141,8 @@ static int A_CheckSquished(int i, int p)
     auto const pSprite = &sprite[i];
     auto const pActor = &ActorExtra[i];
 
-    if (pSector->lotag == 23 || (pSprite->picnum == APLAYER && ud.clipping) /*||
-        (pSector->lotag == 1 && !A_CheckNoSE7Water(vm.pUSprite, pSprite->sectnum, pSector->lotag, NULL))*/)
+    if (pSector->lotag == ST_23_SWINGING_DOOR || (pSprite->picnum == APLAYER && ud.clipping) /*||
+        (pSector->lotag == ST_1_ABOVE_WATER && !A_CheckNoSE7Water(vm.pUSprite, pSprite->sectnum, pSector->lotag, NULL))*/)
         return 0;
 
     int32_t floorZ = pSector->floorz;

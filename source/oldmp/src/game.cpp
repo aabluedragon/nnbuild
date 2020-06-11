@@ -3862,7 +3862,7 @@ static void G_SE40(int32_t smoothratio)
                 {
                     backupstat[i] = sector[i].ceilingstat;
                     backupz[i] = sector[i].ceilingz;
-                    if (!ror_protectedsectors[i] || (ror_protectedsectors[i] && sp->lotag == 41))
+                    if (!ror_protectedsectors[i] || (ror_protectedsectors[i] && sp->lotag == SE_41_ROR_LOWER))
                     {
                         sector[i].ceilingstat = 1;
                         sector[i].ceilingz += newz;
@@ -3887,7 +3887,7 @@ static void G_SE40(int32_t smoothratio)
                 {
                     backupstat[i] = sector[i].floorstat;
                     backupz[i] = sector[i].floorz;
-                    if (!ror_protectedsectors[i] || (ror_protectedsectors[i] && sp->lotag == 40))
+                    if (!ror_protectedsectors[i] || (ror_protectedsectors[i] && sp->lotag == SE_40_ROR_UPPER))
                     {
                         sector[i].floorstat = 1;
                         sector[i].floorz += newz;
@@ -3895,10 +3895,6 @@ static void G_SE40(int32_t smoothratio)
                 }
             }
 
-#if 0//POLYMER
-            if (videoGetRenderMode() == REND_POLYMER)
-                polymer_setanimatesprites(G_DoSpriteAnimations, CAMERA(pos.x), CAMERA(pos.y), CAMERA(ang), smoothratio);
-#endif
             renderDrawRoomsQ16(sprite[sprite2].x + x, sprite[sprite2].y + y,
                 z + renderz, ud.cameraq16ang, ud.cameraq16horiz, sect);
             drawing_ror = 1 + level;
@@ -6532,14 +6528,14 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         switch (DynamicTileMap[s->picnum])
         {
         case SECTOREFFECTOR__STATIC:
-            if (s->lotag == 40 || s->lotag == 41)
+            if (s->lotag == SE_40_ROR_UPPER || s->lotag == SE_41_ROR_LOWER)
             {
                 t->cstat = 32768;
 
                 if (ror_sprite == -1) ror_sprite = i;
             }
 
-            if (t->lotag == 27 && ud.recstat == 1)
+            if (t->lotag == SE_27_DEMO_CAM && ud.recstat == 1)
             {
                 t->picnum = 11 + (((int32_t)totalclock >> 3) & 1);
                 t->cstat |= 128;

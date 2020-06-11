@@ -584,13 +584,13 @@ void G_OperateSectors(int sn,int ii)
         {
             haltsoundhack = 1;
             sptr->lotag &= 0xff00;
-            sptr->lotag |= 22;
+            sptr->lotag |= ST_22_SPLITTING_DOOR;
             G_OperateSectors(sn,ii);
             sptr->lotag &= 0xff00;
-            sptr->lotag |= 9;
+            sptr->lotag |= ST_9_SLIDING_ST_DOOR;
             G_OperateSectors(sn,ii);
             sptr->lotag &= 0xff00;
-            sptr->lotag |= 26;
+            sptr->lotag |= ST_26_SPLITTING_ST_DOOR;
         }
         return;
 
