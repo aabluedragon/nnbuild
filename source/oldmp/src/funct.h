@@ -169,12 +169,11 @@ extern void playerColor_delete(int palnum);
 extern uint8_t playerColor_getNextColor(uint8_t palnum, uint8_t useauto);
 extern uint8_t playerColor_getPreviousColor(uint8_t palnum, uint8_t useauto);
 
-// game.c
+// game.cpp
 extern int mpgametext(int y, const char *t, int s, int dabits);
 extern void G_SetStatusBarScale(int sc);
 
-extern void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set);
-
+extern void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q16horiz, int32_t smoothratio);
 extern int G_GameTextLen(int x, const char *t);
 extern int G_PrintGameText(int small, int starttile, int x,int y,const char *t,int s,int p,int orientation,int x1, int y1, int x2, int y2,int z);
 extern void G_DrawTXDigiNumZ(int starttile, int x,int y,int n,int s,int pal,int cs,int x1, int y1, int x2, int y2, int z);

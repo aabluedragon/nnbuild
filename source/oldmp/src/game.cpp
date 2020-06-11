@@ -3932,14 +3932,123 @@ static void G_SE40(int32_t smoothratio)
     }
 }
 
+void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q16horiz, int32_t smoothratio)
+{
+    if ((gotpic[MIRROR >> 3] & pow2char[MIRROR & 7]))
+    {
+        if (g_mirrorCount == 0)
+        {
+            // NOTE: We can have g_mirrorCount==0 but gotpic'd MIRROR,
+            // for example in LNGA2.
+            gotpic[MIRROR >> 3] &= ~pow2char[MIRROR & 7];
+
+            //give scripts the chance to reset gotpics for effects that run in EVENT_DISPLAYROOMS
+            //EVENT_RESETGOTPICS must be called after the last call to EVENT_DISPLAYROOMS in a frame, but before any engine-side renderDrawRoomsQ16
+            //VM_OnEvent(EVENT_RESETGOTPICS, -1, -1);
+            return;
+        }
+
+        int32_t i = 0, dst = INT32_MAX;
+
+        for (bssize_t k = g_mirrorCount - 1; k >= 0; k--)
+        {
+            if (!wallvisible(x, y, g_mirrorWall[k]))
+                continue;
+
+            const int32_t j =
+                klabs(wall[g_mirrorWall[k]].x - x) +
+                klabs(wall[g_mirrorWall[k]].y - y);
+
+            if (j < dst)
+                dst = j, i = k;
+        }
+
+        if (wall[g_mirrorWall[i]].overpicnum != MIRROR)
+        {
+            // Try to find a new mirror wall in case the original one was broken.
+
+            int32_t startwall = sector[g_mirrorSector[i]].wallptr;
+            int32_t endwall = startwall + sector[g_mirrorSector[i]].wallnum;
+
+            for (bssize_t k = startwall; k < endwall; k++)
+            {
+                int32_t j = wall[k].nextwall;
+                if (j >= 0 && (wall[j].cstat & 32) && wall[j].overpicnum == MIRROR)  // cmp. premap.c
+                {
+                    g_mirrorWall[i] = j;
+                    break;
+                }
+            }
+        }
+
+        if (wall[g_mirrorWall[i]].overpicnum == MIRROR)
+        {
+            int32_t tposx, tposy;
+            fix16_t tang;
+
+            //prepare to render any scripted EVENT_DISPLAYROOMS extras as mirrored
+            renderPrepareMirror(x, y, z, a, q16horiz, g_mirrorWall[i], &tposx, &tposy, &tang);
+
+            int32_t j = g_visibility;
+            g_visibility = (j >> 1) + (j >> 2);
+
+            //backup original camera position
+            auto origCam = ud.camerapos;
+            fix16_t origCamq16ang = ud.cameraq16ang;
+            fix16_t origCamq16horiz = ud.cameraq16horiz;
+
+            //set the camera inside the mirror facing out
+            ud.camerapos = { tposx, tposy, z };
+            ud.cameraq16ang = tang;
+            ud.cameraq16horiz = q16horiz;
+
+            display_mirror = 1;
+            //VM_OnEventWithReturn(EVENT_DISPLAYROOMS, g_player[0].ps->i, 0, 0);
+            X_OnEvent(EVENT_DISPLAYROOMS, g_player[screenpeek].ps->i, screenpeek, -1);
+            display_mirror = 0;
+
+            //reset the camera position
+            ud.camerapos = origCam;
+            ud.cameraq16ang = origCamq16ang;
+            ud.cameraq16horiz = origCamq16horiz;
+
+            //give scripts the chance to reset gotpics for effects that run in EVENT_DISPLAYROOMS
+            //EVENT_RESETGOTPICS must be called after the last call to EVENT_DISPLAYROOMS in a frame, but before any engine-side renderDrawRoomsQ16
+            //VM_OnEvent(EVENT_RESETGOTPICS, -1, -1);
+
+            //prepare to render the mirror
+            renderPrepareMirror(x, y, z, a, q16horiz, g_mirrorWall[i], &tposx, &tposy, &tang);
+
+            int32_t didmirror;
+
+            yax_preparedrawrooms();
+            didmirror = renderDrawRoomsQ16(tposx, tposy, z, tang, q16horiz, g_mirrorSector[i] + MAXSECTORS);
+            //POGO: if didmirror == 0, we may simply wish to abort instead of rendering with yax_drawrooms (which may require cleaning yax state)
+            if (videoGetRenderMode() != REND_CLASSIC || didmirror)
+                yax_drawrooms(G_DoSpriteAnimations, g_mirrorSector[i], didmirror, smoothratio);
+
+            display_mirror = 1;
+            G_DoSpriteAnimations(tposx, tposy, z, fix16_to_int(tang), smoothratio);
+            display_mirror = 0;
+
+            renderDrawMasks();
+            renderCompleteMirror();   //Reverse screen x-wise in this function
+            g_visibility = j;
+        }
+    }
+}
+
+static void G_ClearGotMirror()
+{
+    gotpic[MIRROR >> 3] &= ~pow2char[MIRROR & 7];
+}
+
 void G_DrawRooms(int snum,int smoothratio)
 {
-    int dst, j, floorZ, ceilZ;
-    int tposx,tposy,i;
-    short k;
+    int j, floorZ, ceilZ;
+    int i;
     DukePlayer_t *p = g_player[snum].ps;
     short tang;
-    fix16_t q16tang;
     int tiltcx,tiltcy,tiltcs=0;    // JBF 20030807
 
     int32_t tmpyx = yxaspect, tmpvr = viewingrange;
@@ -4173,43 +4282,8 @@ void G_DrawRooms(int snum,int smoothratio)
 
         ud.cameraq16horiz = fix16_clamp(ud.cameraq16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
 
-        if (((gotpic[MIRROR>>3]&(1<<(MIRROR&7))) > 0)
-#if defined(USE_OPENGL)
-                && (videoGetRenderMode() != 4)
-#endif
-           )
-        {
-            dst = 0x7fffffff;
-            i = 0;
-            for (k=g_mirrorCount-1;k>=0;k--)
-            {
-                j = klabs(wall[g_mirrorWall[k]].x-ud.camerapos.x);
-                j += klabs(wall[g_mirrorWall[k]].y-ud.camerapos.y);
-                if (j < dst) dst = j, i = k;
-            }
-
-            if (wall[g_mirrorWall[i]].overpicnum == MIRROR)
-            {
-                renderPrepareMirror(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,g_mirrorWall[i],&tposx,&tposy,&q16tang);
-
-                j = g_visibility;
-                g_visibility = (j>>1) + (j>>2);
-
-                int32_t didmirror = renderDrawRoomsQ16(tposx,tposy,ud.camerapos.z,q16tang,ud.cameraq16horiz,g_mirrorSector[i]+MAXSECTORS);
-
-                if (videoGetRenderMode() != REND_CLASSIC || didmirror)
-                    yax_drawrooms(G_DoSpriteAnimations, g_mirrorSector[i], didmirror, smoothratio);
-
-                display_mirror = 1;
-                G_DoSpriteAnimations(tposx,tposy,ud.camerapos.z,fix16_to_int(q16tang),smoothratio);
-                display_mirror = 0;
-
-                renderDrawMasks();
-                renderCompleteMirror();   //Reverse screen x-wise in this function
-                g_visibility = j;
-            }
-            gotpic[MIRROR>>3] &= ~(1<<(MIRROR&7));
-        }
+        G_HandleMirror(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, ud.cameraq16ang, ud.cameraq16horiz, smoothratio);
+        G_ClearGotMirror();
 
 #if 0//POLYMER
         if (videoGetRenderMode() == 4)

@@ -711,6 +711,57 @@ static int32_t VM_AddWeapon(int32_t weap, int32_t amount, DukePlayer_t *ps)
     return 0;
 }
 
+static void G_ShowView(vec3_t vec, fix16_t a, fix16_t horiz, int sect, int ix1, int iy1, int ix2, int iy2, int unbiasedp)
+{
+    int x1 = min(ix1, ix2);
+    int x2 = max(ix1, ix2);
+    int y1 = min(iy1, iy2);
+    int y2 = max(iy1, iy2);
+
+    if (!unbiasedp)
+    {
+        // The showview command has a rounding bias towards zero,
+        // e.g. floor((319*1680)/320) == 1674
+        x1 = scale(x1, xdim, 320);
+        y1 = scale(y1, ydim, 200);
+        x2 = scale(x2, xdim, 320);
+        y2 = scale(y2, ydim, 200);
+    }
+    else
+    {
+        // This will map the maximum 320-based coordinate to the
+        // maximum real screen coordinate:
+        // floor((319*1679)/319) == 1679
+        x1 = scale(x1, xdim - 1, 319);
+        y1 = scale(y1, ydim - 1, 199);
+        x2 = scale(x2, xdim - 1, 319);
+        y2 = scale(y2, ydim - 1, 199);
+    }
+
+    horiz = fix16_clamp(horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
+
+    int const viewingRange = viewingrange;
+    int const yxAspect = yxaspect;
+
+    videoSetViewableArea(x1, y1, x2, y2);
+    renderSetAspect(viewingRange, yxAspect);
+    int const smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
+    G_DoInterpolations(smoothratio);
+    if (!display_mirror)
+        G_HandleMirror(vec.x, vec.y, vec.z, a, horiz, smoothratio);
+    yax_preparedrawrooms();
+    renderDrawRoomsQ16(vec.x, vec.y, vec.z, a, horiz, sect);
+    yax_drawrooms(G_DoSpriteAnimations, sect, 0, smoothratio);
+
+    display_mirror = 2;
+    G_DoSpriteAnimations(vec.x, vec.y, vec.z, fix16_to_int(a), smoothratio);
+    display_mirror = 0;
+    renderDrawMasks();
+    G_RestoreInterpolations();
+    G_UpdateScreenArea();
+    renderSetAspect(viewingRange, yxAspect);
+}
+
 static inline void X_DoConditional(int condition)
 {
     if (condition)
@@ -2229,96 +2280,17 @@ static int X_DoExecute(void)
     case CON_SHOWVIEW:
         insptr++;
         {
-            int x=Gv_GetVarX(*insptr++);
-            int y=Gv_GetVarX(*insptr++);
-            int z=Gv_GetVarX(*insptr++);
-            int a=Gv_GetVarX(*insptr++);
-            int horiz=Gv_GetVarX(*insptr++);
+            vec3_t vec = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
+            fix16_t a = fix16_from_int(Gv_GetVarX(*insptr++));
+            fix16_t horiz = fix16_from_int(Gv_GetVarX(*insptr++));
+
             int sect=Gv_GetVarX(*insptr++);
-            int x1=scale(Gv_GetVarX(*insptr++),xdim,320);
-            int y1=scale(Gv_GetVarX(*insptr++),ydim,200);
-            int x2=scale(Gv_GetVarX(*insptr++),xdim,320);
-            int y2=scale(Gv_GetVarX(*insptr++),ydim,200);
-            int smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
+            int ix1=scale(Gv_GetVarX(*insptr++),xdim,320);
+            int iy1=scale(Gv_GetVarX(*insptr++),ydim,200);
+            int ix2=scale(Gv_GetVarX(*insptr++),xdim,320);
+            int iy2=scale(Gv_GetVarX(*insptr++),ydim,200);
 
-            if (x1 > x2) swaplong(&x1,&x2);
-            if (y1 > y2) swaplong(&y1,&y2);
-
-            if ((x1 < 0 || y1 < 0 || x2 > xdim-1 || y2 > ydim-1 || x2-x1 < 2 || y2-y1 < 2) && g_scriptSanityChecks)
-            {
-                OSD_Printf(CON_ERROR "incorrect coordinates\n",g_errorLineNum,keyw[g_tw]);
-                break;
-            }
-            if ((sect<0 || sect>=numsectors) && g_scriptSanityChecks)
-            {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],sect);
-                break;
-            }
-
-#if defined(USE_OPENGL)
-            j = glprojectionhacks;
-            glprojectionhacks = 0;
-#endif
-            videoSetViewableArea(x1,y1,x2,y2);
-
-#if 0
-            if (!ud.pause_on && ((ud.show_help == 0 && ud.multimode < 2 && !(g_player[myconnectindex].ps->gm&MODE_MENU)) || ud.multimode > 1 || ud.recstat == 2))
-                smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
-#endif
-            G_DoInterpolations(smoothratio);
-
-            if (((gotpic[MIRROR>>3]&(1<<(MIRROR&7))) > 0)
-#if 0 //POLYMER USE_OPENGL
-                    && (videoGetRenderMode() != 4)
-#endif
-               )
-            {
-                int j, i = 0, k, dst = 0x7fffffff;
-
-                for (k=g_mirrorCount-1;k>=0;k--)
-                {
-                    j = klabs(wall[g_mirrorWall[k]].x-x);
-                    j += klabs(wall[g_mirrorWall[k]].y-y);
-                    if (j < dst) dst = j, i = k;
-                }
-
-                if (wall[g_mirrorWall[i]].overpicnum == MIRROR)
-                {
-                    int tposx,tposy;
-                    fix16_t tang;
-
-                    renderPrepareMirror(x,y,z,fix16_from_int(a),fix16_from_int(horiz),g_mirrorWall[i],&tposx,&tposy,&tang);
-
-                    j = g_visibility;
-                    g_visibility = (j>>1) + (j>>2);
-
-                    renderDrawRoomsQ16(tposx,tposy,z,tang,fix16_from_int(horiz),g_mirrorSector[i]+MAXSECTORS);
-
-                    display_mirror = 1;
-                    G_DoSpriteAnimations(tposx,tposy,z,fix16_to_int(tang),smoothratio);
-                    display_mirror = 0;
-
-                    renderDrawMasks();
-                    renderCompleteMirror();   //Reverse screen x-wise in this function
-                    g_visibility = j;
-                }
-                gotpic[MIRROR>>3] &= ~(1<<(MIRROR&7));
-            }
-
-#if 0 //POLYMER
-            if (videoGetRenderMode() == 4)
-                polymer_setanimatesprites(G_DoSpriteAnimations, x,y,z,a,smoothratio);
-#endif
-            drawrooms(x,y,z, fix16_from_int(a),fix16_from_int(horiz),sect);
-            display_mirror = 2;
-            G_DoSpriteAnimations(x,y,z,a,smoothratio);
-            display_mirror = 0;
-            renderDrawMasks();
-            G_RestoreInterpolations();
-            G_UpdateScreenArea();
-#if defined(USE_OPENGL)
-            glprojectionhacks = j;
-#endif
+            G_ShowView(vec, a, horiz, sect, ix1, iy1, ix2, iy2, 0);
             break;
         }
 

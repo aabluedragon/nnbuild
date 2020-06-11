@@ -100,7 +100,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "mmulti.h"
 #endif
 
-#include "screens.h"
 #include "oldnet.h"
 #include "baselayer.h"
 #include "function.h"
@@ -1027,6 +1026,7 @@ extern hashtable_t gamefuncH;
 #endif
 
 #include "global.h"
+#include "screens.h"
 
 #endif
 
