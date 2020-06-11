@@ -77,6 +77,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define RECSYNCBUFSIZ 2520   //2520 is the (LCM of 1-8)*3
 
 #define FOURSLEIGHT (1<<8)
+#define ZOFFSET2            (16<<8)
+#define ZOFFSET3            (8<<8)
+#define ZOFFSET4            (12<<8)
+#define ZOFFSET5            (32<<8)
+#define ZOFFSET6            (4<<8)
 
 #define MAXVOLUMES 14
 #define MAXLEVELS 64

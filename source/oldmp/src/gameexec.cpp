@@ -137,36 +137,45 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
 
 static int A_CheckSquished(int i, int p)
 {
-    sectortype *sc = &sector[SECT];
-    int squishme = 0;
+    auto const pSector = (usectorptr_t)&sector[SECT];
+    auto const pSprite = &sprite[i];
+    auto const pActor = &ActorExtra[i];
 
-    if (PN == APLAYER && ud.clipping)
+    if (pSector->lotag == 23 || (pSprite->picnum == APLAYER && ud.clipping) /*||
+        (pSector->lotag == 1 && !A_CheckNoSE7Water(vm.pUSprite, pSprite->sectnum, pSector->lotag, NULL))*/)
         return 0;
 
-    if (sc->lotag != 23)
+    int32_t floorZ = pSector->floorz;
+    int32_t ceilZ = pSector->ceilingz;
+#ifdef YAX_ENABLE
+    int16_t cb, fb;
+
+    yax_getbunches(pSprite->sectnum, &cb, &fb);
+
+    if (cb >= 0 && (pSector->ceilingstat & 512) == 0)  // if ceiling non-blocking...
+        ceilZ -= ZOFFSET5;  // unconditionally don't squish... yax_getneighborsect is slowish :/
+    if (fb >= 0 && (pSector->floorstat & 512) == 0)
+        floorZ += ZOFFSET5;
+#endif
+
+    if (pSprite->pal == 1 ? (floorZ - ceilZ >= ZOFFSET5 || (pSector->lotag & 32768u)) : (floorZ - ceilZ >= ZOFFSET4))
+        return 0;
+
+    P_DoQuote(10, g_player[p].ps);
+
+    if (A_CheckEnemySprite(pSprite))
+        pSprite->xvel = 0;
+
+#ifndef EDUKE32_STANDALONE
+    if (EDUKE32_PREDICT_FALSE(pSprite->pal == 1)) // frozen
     {
-        squishme = (sc->floorz - sc->ceilingz < (12<<8)); // && (sc->lotag&32768) == 0;
-
-        if (sprite[i].pal == 1)
-            squishme = (sc->floorz - sc->ceilingz < (32<<8) && (sc->lotag&32768) == 0);
+        pActor->picnum = SHOTSPARK1;
+        pActor->extra = 1;
+        return 0;
     }
+#endif
 
-    if (squishme)
-    {
-        P_DoQuote(10,g_player[p].ps);
-
-        if (A_CheckEnemySprite(&sprite[i])) sprite[i].xvel = 0;
-
-        if (sprite[i].pal == 1)
-        {
-            ActorExtra[i].picnum = SHOTSPARK1;
-            ActorExtra[i].extra = 1;
-            return 0;
-        }
-
-        return 1;
-    }
-    return 0;
+    return 1;
 }
 
 static void P_ForceAngle(DukePlayer_t *p)
