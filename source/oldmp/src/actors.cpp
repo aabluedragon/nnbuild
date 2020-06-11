@@ -4125,9 +4125,9 @@ static void G_MoveActors(void)
 
                 if (t[3]>0)
                 {
-                    static char frames[] = {5,5,6,6,7,7,6,5};
+                    static char slimeFrames[] = {5,5,6,6,7,7,6,5};
 
-                    s->picnum = GREENSLIME+frames[t[3]];
+                    s->picnum = GREENSLIME+slimeFrames[t[3]&7];
 
                     if (t[3] == 5)
                     {
