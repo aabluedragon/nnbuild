@@ -4064,6 +4064,10 @@ static void G_MoveActors(void)
                 if (sprite[g_player[p].ps->i].extra < 1)
                 {
                     t[0] = 0;
+
+                    if (g_player[p].ps->somethingonplayer == i)
+                        g_player[p].ps->somethingonplayer = -1;
+
                     goto BOLT;
                 }
 
