@@ -627,7 +627,7 @@ int32_t S_PlaySound3D(int32_t num, int32_t i, const vec3_t *pos)
 
     if (explosionp)
     {
-        if (peekps->cursectnum > -1 && sector[peekps->cursectnum].lotag == 2)
+        if (peekps->cursectnum > -1 && sector[peekps->cursectnum].lotag == ST_2_UNDERWATER)
             pitch -= 1024;
     }
     else
@@ -635,7 +635,7 @@ int32_t S_PlaySound3D(int32_t num, int32_t i, const vec3_t *pos)
         if (sndist > 32767 && PN != MUSICANDSFX && (g_sounds[num].m & 3) == 0)
             return -1;
 
-        if (peekps->cursectnum > -1 && sector[peekps->cursectnum].lotag == 2 && (g_sounds[num].m&4) == 0)
+        if (peekps->cursectnum > -1 && sector[peekps->cursectnum].lotag == ST_2_UNDERWATER && (g_sounds[num].m&4) == 0)
             pitch = -768;
     }
 

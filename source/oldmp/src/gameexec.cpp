@@ -349,7 +349,7 @@ void A_Fall(int iActor)
         c = 0;
     else
     {
-        if (G_CheckForSpaceCeiling(s->sectnum) || sector[s->sectnum].lotag == 2)
+        if (G_CheckForSpaceCeiling(s->sectnum) || sector[s->sectnum].lotag == ST_2_UNDERWATER)
             c = g_spriteGravity/6;
     }
 
@@ -368,7 +368,7 @@ void A_Fall(int iActor)
 
     if (s->z < ActorExtra[iActor].floorz-(FOURSLEIGHT))
     {
-        if (sector[s->sectnum].lotag == 2 && s->zvel > 3122)
+        if (sector[s->sectnum].lotag == ST_2_UNDERWATER && s->zvel > 3122)
             s->zvel = 3144;
         s->z += s->zvel = min(6144, s->zvel+c);
     }
@@ -1200,7 +1200,7 @@ static int X_DoExecute(void)
 
         j = g_spriteGravity;
 
-        if (G_CheckForSpaceCeiling(g_sp->sectnum) || sector[g_sp->sectnum].lotag == 2)
+        if (G_CheckForSpaceCeiling(g_sp->sectnum) || sector[g_sp->sectnum].lotag == ST_2_UNDERWATER)
             j = g_spriteGravity/6;
         else if (G_CheckForSpaceFloor(g_sp->sectnum))
             j = 0;
@@ -1235,7 +1235,7 @@ static int X_DoExecute(void)
                 ActorExtra[g_i].extra = 1;
                 g_sp->zvel = 0;
             }
-            else if (g_sp->zvel > 2048  && sector[g_sp->sectnum].lotag != 1)
+            else if (g_sp->zvel > 2048  && sector[g_sp->sectnum].lotag != ST_1_ABOVE_WATER)
             {
                 j = g_sp->sectnum;
                 pushmove_old(&g_sp->x,&g_sp->y,&g_sp->z,(short*)&j,128L,(4L<<8),(4L<<8),CLIPMASK0);
@@ -1252,7 +1252,7 @@ static int X_DoExecute(void)
                 g_sp->z = (ActorExtra[g_i].floorz - FOURSLEIGHT);
             break;
         }
-        else if (sector[g_sp->sectnum].lotag == 1)
+        else if (sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER)
         {
             intptr_t *moveptr = (intptr_t *)g_t[1];
             switch (DynamicTileMap[g_sp->picnum])
@@ -2842,11 +2842,11 @@ static int X_DoExecute(void)
     break;
 
     case CON_IFONWATER:
-        X_DoConditional(klabs(g_sp->z-sector[g_sp->sectnum].floorz) < (32<<8) && sector[g_sp->sectnum].lotag == 1);
+        X_DoConditional(klabs(g_sp->z-sector[g_sp->sectnum].floorz) < (32<<8) && sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER);
         break;
 
     case CON_IFINWATER:
-        X_DoConditional(sector[g_sp->sectnum].lotag == 2);
+        X_DoConditional(sector[g_sp->sectnum].lotag == ST_2_UNDERWATER);
         break;
 
     case CON_IFCOUNT:
@@ -3094,7 +3094,7 @@ static int X_DoExecute(void)
 
     case CON_OPERATE:
         insptr++;
-        if (sector[g_sp->sectnum].lotag == 0)
+        if (sector[g_sp->sectnum].lotag == ST_0_NO_EFFECT)
         {
             neartag(g_sp->x,g_sp->y,g_sp->z-(32<<8),g_sp->sectnum,g_sp->ang,&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,768L,1, NULL);
             if (neartagsector >= 0 && isanearoperator(sector[neartagsector].lotag))

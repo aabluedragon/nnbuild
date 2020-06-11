@@ -551,16 +551,16 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
 
         if (dasectnum < 0 || (dasectnum >= 0 &&
                               ((ActorExtra[spritenum].actorstayput >= 0 && ActorExtra[spritenum].actorstayput != dasectnum) ||
-                               ((sprite[spritenum].picnum == BOSS2) && sprite[spritenum].pal == 0 && sector[dasectnum].lotag != 3) ||
-                               ((sprite[spritenum].picnum == BOSS1 || sprite[spritenum].picnum == BOSS2) && sector[dasectnum].lotag == 1) /*||
-                               (sector[dasectnum].lotag == 1 && (sprite[spritenum].picnum == LIZMAN || (sprite[spritenum].picnum == LIZTROOP && sprite[spritenum].zvel == 0)))*/
+                               ((sprite[spritenum].picnum == BOSS2) && sprite[spritenum].pal == 0 && sector[dasectnum].lotag != ST_3) ||
+                               ((sprite[spritenum].picnum == BOSS1 || sprite[spritenum].picnum == BOSS2) && sector[dasectnum].lotag == ST_1_ABOVE_WATER) /*||
+                               (sector[dasectnum].lotag == ST_1_ABOVE_WATER && (sprite[spritenum].picnum == LIZMAN || (sprite[spritenum].picnum == LIZTROOP && sprite[spritenum].zvel == 0)))*/
                               ))
            )
         {
             sprite[spritenum].x = oldpos.x;
             sprite[spritenum].y = oldpos.y;
 
-            /*            if (dasectnum >= 0 && sector[dasectnum].lotag == 1 && sprite[spritenum].picnum == LIZMAN)
+            /*            if (dasectnum >= 0 && sector[dasectnum].lotag == ST_1_ABOVE_WATER && sprite[spritenum].picnum == LIZMAN)
                             sprite[spritenum].ang = (krand()&2047);
                         else if ((ActorExtra[spritenum].temp_data[0]&3) == 1 && sprite[spritenum].picnum != COMMANDER)
                             sprite[spritenum].ang = (krand()&2047); */
@@ -1042,7 +1042,7 @@ void A_MoveDummyPlayers(void)
         }
         else
         {
-            if (g_player[p].ps->on_ground && g_player[p].ps->on_warping_sector == 1 && sector[g_player[p].ps->cursectnum].lotag == 1)
+            if (g_player[p].ps->on_ground && g_player[p].ps->on_warping_sector == 1 && sector[g_player[p].ps->cursectnum].lotag == ST_1_ABOVE_WATER)
             {
                 CS = 257;
                 SZ = sector[SECT].ceilingz+(27<<8);
@@ -1053,7 +1053,7 @@ void A_MoveDummyPlayers(void)
             }
             else
             {
-                if (sector[SECT].lotag != 2) SZ = sector[SECT].floorz;
+                if (sector[SECT].lotag != ST_2_UNDERWATER) SZ = sector[SECT].floorz;
                 CS = (short) 32768;
             }
         }
@@ -1183,9 +1183,9 @@ static void G_MovePlayers(void) //Players
             else
             {
                 s->yrepeat = 36;
-                if (sector[s->sectnum].lotag != 2)
+                if (sector[s->sectnum].lotag != ST_2_UNDERWATER)
                     A_Fall(i);
-                if (s->zvel == 0 && sector[s->sectnum].lotag == 1)
+                if (s->zvel == 0 && sector[s->sectnum].lotag == ST_1_ABOVE_WATER)
                     s->z += (32<<8);
             }
 
@@ -1981,19 +1981,19 @@ DETONATE:
                     {
                         if (s->hitag == sprite[j].hitag)
                         {
-                            if (sprite[j].lotag == 13)
+                            if (sprite[j].lotag == SE_13_EXPLOSIVE)
                             {
                                 if (ActorExtra[j].temp_data[2] == 0)
                                     ActorExtra[j].temp_data[2] = 1;
                             }
-                            else if (sprite[j].lotag == 8)
+                            else if (sprite[j].lotag == SE_8_UP_OPEN_DOOR_LIGHTS)
                                 ActorExtra[j].temp_data[4] = 1;
-                            else if (sprite[j].lotag == 18)
+                            else if (sprite[j].lotag == SE_18_INCREMENTAL_SECTOR_RISE_FALL)
                             {
                                 if (ActorExtra[j].temp_data[0] == 0)
                                     ActorExtra[j].temp_data[0] = 1;
                             }
-                            else if (sprite[j].lotag == 21)
+                            else if (sprite[j].lotag == SE_21_DROP_FLOOR)
                                 ActorExtra[j].temp_data[0] = 1;
                         }
                         j = nextspritestat[j];
@@ -2457,7 +2457,7 @@ static void G_MoveWeapons(void)
                 k = s->xvel;
                 ll = s->zvel;
 
-                if (sector[s->sectnum].lotag == 2)
+                if (sector[s->sectnum].lotag == ST_2_UNDERWATER)
                 {
                     k = s->xvel>>1;
                     ll = s->zvel>>1;
@@ -2590,17 +2590,17 @@ static void G_MoveWeapons(void)
                             s->zvel = -1;
                         }
                         else
-                            if ((s->z > ActorExtra[i].floorz && sector[s->sectnum].lotag != 1) ||
-                                    (s->z > ActorExtra[i].floorz+(16<<8) && sector[s->sectnum].lotag == 1))
+                            if ((s->z > ActorExtra[i].floorz && sector[s->sectnum].lotag != ST_1_ABOVE_WATER) ||
+                                    (s->z > ActorExtra[i].floorz+(16<<8) && sector[s->sectnum].lotag == ST_1_ABOVE_WATER))
                             {
                                 j = 16384|(s->sectnum);
-                                if (sector[s->sectnum].lotag != 1)
+                                if (sector[s->sectnum].lotag != ST_1_ABOVE_WATER)
                                     s->zvel = 1;
                             }
                     }
 
                 if (ActorExtra[i].projectile.workslike & PROJECTILE_WATERBUBBLES &&
-                        sector[s->sectnum].lotag == 2 && rnd(140))
+                        sector[s->sectnum].lotag == ST_2_UNDERWATER && rnd(140))
                     A_Spawn(i,WATERBUBBLE);
 
                 if (j != 0)
@@ -2874,7 +2874,7 @@ static void G_MoveWeapons(void)
                 k = s->xvel;
                 ll = s->zvel;
 
-                if (s->picnum == RPG && sector[s->sectnum].lotag == 2)
+                if (s->picnum == RPG && sector[s->sectnum].lotag == ST_2_UNDERWATER)
                 {
                     k = s->xvel>>1;
                     ll = s->zvel>>1;
@@ -2890,7 +2890,7 @@ static void G_MoveWeapons(void)
                 switch (DynamicTileMap[s->picnum])
                 {
                 case RPG__STATIC:
-                    if (ActorExtra[i].picnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != 2)
+                    if (ActorExtra[i].picnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != ST_2_UNDERWATER)
                     {
                         j = A_Spawn(i,SMALLSMOKE);
                         sprite[j].z += (1<<8);
@@ -2918,11 +2918,11 @@ static void G_MoveWeapons(void)
                             s->zvel = -1;
                         }
                         else
-                            if ((s->z > ActorExtra[i].floorz && sector[s->sectnum].lotag != 1) ||
-                                    (s->z > ActorExtra[i].floorz+(16<<8) && sector[s->sectnum].lotag == 1))
+                            if ((s->z > ActorExtra[i].floorz && sector[s->sectnum].lotag != ST_1_ABOVE_WATER) ||
+                                    (s->z > ActorExtra[i].floorz+(16<<8) && sector[s->sectnum].lotag == ST_1_ABOVE_WATER))
                             {
                                 j = 16384|(s->sectnum);
-                                if (sector[s->sectnum].lotag != 1)
+                                if (sector[s->sectnum].lotag != ST_1_ABOVE_WATER)
                                     s->zvel = 1;
                             }
                     }
@@ -3126,7 +3126,7 @@ static void G_MoveWeapons(void)
                     s->shade++;
                     if (s->shade >= 40) KILLIT(i);
                 }
-                else if (s->picnum == RPG && sector[s->sectnum].lotag == 2 && s->xrepeat >= 10 && rnd(140))
+                else if (s->picnum == RPG && sector[s->sectnum].lotag == ST_2_UNDERWATER && s->xrepeat >= 10 && rnd(140))
                     A_Spawn(i,WATERBUBBLE);
 
                 goto BOLT;
@@ -4423,7 +4423,7 @@ static void G_MoveActors(void)
             {
                 A_Fall(i);
 
-                if ((sector[sect].lotag != 1 || ActorExtra[i].floorz != sector[sect].floorz) && s->z >= ActorExtra[i].floorz-(FOURSLEIGHT) && s->yvel < 3)
+                if ((sector[sect].lotag != ST_1_ABOVE_WATER || ActorExtra[i].floorz != sector[sect].floorz) && s->z >= ActorExtra[i].floorz-(FOURSLEIGHT) && s->yvel < 3)
                 {
                     if (s->yvel > 0 || (s->yvel == 0 && ActorExtra[i].floorz == sector[sect].floorz))
                         A_PlaySound(PIPEBOMB_BOUNCE,i);
@@ -4446,7 +4446,7 @@ static void G_MoveActors(void)
 
             ActorExtra[i].movflag = j;
 
-            if (sector[SECT].lotag == 1 && s->zvel == 0 && ActorExtra[i].floorz == sector[sect].floorz)
+            if (sector[SECT].lotag == ST_1_ABOVE_WATER && s->zvel == 0 && ActorExtra[i].floorz == sector[sect].floorz)
             {
                 s->z += (32<<8);
                 if (t[5] == 0)
@@ -4473,7 +4473,7 @@ static void G_MoveActors(void)
             if (s->xvel > 0)
             {
                 s->xvel -= 5;
-                if (sector[sect].lotag == 2)
+                if (sector[sect].lotag == ST_2_UNDERWATER)
                     s->xvel -= 10;
 
                 if (s->xvel < 0)
@@ -4641,7 +4641,7 @@ DETONATEB:
                     switch (DynamicTileMap[sprite[j].picnum])
                     {
                     case SECTOREFFECTOR__STATIC:
-                        if (sprite[j].lotag == 1)
+                        if (sprite[j].lotag == SE_1_PIVOT)
                         {
                             sprite[j].lotag = (short) 65535;
                             sprite[j].hitag = (short) 65535;
@@ -4960,7 +4960,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 t[0]++;
                 if (t[0] == 1)
                 {
-                    if (sector[sect].lotag != 1 && sector[sect].lotag != 2)
+                    if (sector[sect].lotag != ST_1_ABOVE_WATER && sector[sect].lotag != ST_2_UNDERWATER)
                         KILLIT(i);
                     /*                    else
                                         {
@@ -5104,7 +5104,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 if (s->z < l-(2<<8))
                 {
                     if (t[1] < 2) t[1]++;
-                    else if (sector[sect].lotag != 2)
+                    else if (sector[sect].lotag != ST_2_UNDERWATER)
                     {
                         t[1] = 0;
                         if (s->picnum == DUKELEG || s->picnum == DUKETORSO || s->picnum == DUKEGUN)
@@ -5488,7 +5488,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
         switch (st)
         {
-        case 0:
+        case SE_0_ROTATING_SECTOR:
         {
             int zchange = 0;
 
@@ -5640,7 +5640,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
         }
 
         break;
-        case 1: //Nothing for now used as the pivot
+        case SE_1_PIVOT: //Nothing for now used as the pivot
             if (s->owner == -1) //Init
             {
                 s->owner = i;
@@ -5658,7 +5658,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
 
             break;
-        case 6:
+        case SE_6_SUBWAY:
             k = sc->extra;
 
             if (t[4] > 0)
@@ -5700,7 +5700,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             x = 0;
             fallthrough__;
 
-        case 14:
+        case SE_14_SUBWAY_CAR:
             if (s->owner==-1)
                 s->owner = A_FindLocator((short)t[3],(short)t[0]);
 
@@ -5792,7 +5792,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 for (p = connecthead; p >= 0; p = connectpoint2[p])
                 {
-                    if (sector[g_player[p].ps->cursectnum].lotag != 2)
+                    if (sector[g_player[p].ps->cursectnum].lotag != ST_2_UNDERWATER)
                     {
                         if (s->sectnum == sprite[g_player[p].ps->i].sectnum)
                         {
@@ -5823,7 +5823,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 j = headspritesect[s->sectnum];
                 while (j >= 0)
                 {
-                    if (sprite[j].statnum != 10 && sector[sprite[j].sectnum].lotag != 2 && sprite[j].picnum != SECTOREFFECTOR && sprite[j].picnum != LOCATORS)
+                    if (sprite[j].statnum != STAT_PLAYER && sector[sprite[j].sectnum].lotag != ST_2_UNDERWATER && sprite[j].picnum != SECTOREFFECTOR && sprite[j].picnum != LOCATORS)
                     {
                         rotatepoint(s->pos.vec2,sprite[j].pos.vec2,q,&sprite[j].pos.vec2);
 
@@ -5885,7 +5885,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             break;
 
-        case 30:
+        case SE_30_TWO_WAY_TRAIN:
             if (s->owner == -1)
             {
                 t[3] = !t[3];
@@ -6066,7 +6066,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
 
-        case 2://Quakes
+        case SE_2_EARTHQUAKE://Quakes
             if (t[4] > 0 && t[0] == 0)
             {
                 if (t[4] < sh)
@@ -6133,7 +6133,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             //Flashing sector lights after reactor EXPLOSION2
 
-        case 3:
+        case SE_3_RANDOM_LIGHTS_AFTER_SHOT_OUT:
 
             if (t[4] == 0) break;
             p = A_FindPlayer(s,&x);
@@ -6174,7 +6174,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             break;
 
-        case 4:
+        case SE_4_RANDOM_LIGHTS:
 
             if ((g_globalRandom/(sh+1)&31) < 4)
             {
@@ -6231,7 +6231,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
             //BOSS
-        case 5:
+        case SE_5:
             p = A_FindPlayer(s,&x);
             if (x < 8192)
             {
@@ -6311,8 +6311,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
 
-        case 8:
-        case 9:
+        case SE_8_UP_OPEN_DOOR_LIGHTS:
+        case SE_9_DOWN_OPEN_DOOR_LIGHTS:
 
             // work only if its moving
 
@@ -6382,7 +6382,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
             }
             break;
-        case 10:
+        case SE_10_DOOR_AUTO_CLOSE:
 
             if ((sc->lotag&0xff) == 27 || (sc->floorz > sc->ceilingz && (sc->lotag&0xff) != 23) || sc->lotag == (short) 32791)
             {
@@ -6399,10 +6399,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     if (t[0] > sh)
                         switch (sector[s->sectnum].lotag)
                         {
-                        case 20:
-                        case 21:
-                        case 22:
-                        case 26:
+                        case ST_20_CEILING_DOOR:
+                        case ST_21_FLOOR_DOOR:
+                        case ST_22_SPLITTING_DOOR:
+                        case ST_26_SPLITTING_ST_DOOR:
                             if (GetAnimationGoal(&sector[s->sectnum].ceilingz) >= 0)
                                 break;
                             fallthrough__;
@@ -6416,7 +6416,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             else t[0]=0;
             break;
-        case 11: //Swingdoor
+        case SE_11_SWINGING_DOOR: //Swingdoor
 
             if (t[5] > 0)
             {
@@ -6467,7 +6467,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
             }
             break;
-        case 12:
+        case SE_12_LIGHT_SWITCH:
             if (t[0] == 3 || t[3] == 1)   //Lights going off
             {
                 sc->floorpal = 0;
@@ -6535,7 +6535,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
 
-        case 13:
+        case SE_13_EXPLOSIVE:
             if (t[2])
             {
                 j = (SP<<5)|1;
@@ -6600,7 +6600,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
 
-        case 15:
+        case SE_15_SLIDING_DOOR:
 
             if (t[4])
             {
@@ -6632,7 +6632,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
 
-        case 16: //Reactor
+        case SE_16_REACTOR: //Reactor
 
             t[2]+=32;
             if (sc->floorz<sc->ceilingz) s->shade=0;
@@ -6667,7 +6667,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             break;
 
-        case 17:
+        case SE_17_WARP_ELEVATOR:
             q = t[0] * (SP << 2);
 
             sc->ceilingz += q;
@@ -6809,7 +6809,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
 
-        case 18:
+        case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
             if (t[0])
             {
                 if (s->pal)
@@ -6890,7 +6890,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
 
-        case 19: //Battlestar galactia shields
+        case SE_19_EXPLOSION_LOWERS_CEILING: //Battlestar galactia shields
 
             if (t[0])
             {
@@ -6921,7 +6921,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     j = headspritestat[STAT_EFFECTOR];
                     while (j >= 0)
                     {
-                        if (sprite[j].lotag == 0 && sprite[j].hitag==sh)
+                        if (sprite[j].lotag == SE_0_ROTATING_SECTOR && sprite[j].hitag==sh)
                         {
                             q = sprite[sprite[j].owner].sectnum;
                             sector[sprite[j].sectnum].floorpal = sector[sprite[j].sectnum].ceilingpal =
@@ -6948,7 +6948,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         x = sprite[l].lotag&0x7fff;
                         switch (x)
                         {
-                        case 0:
+                        case SE_0_ROTATING_SECTOR:
                             if (sprite[l].hitag == sh)
                             {
                                 q = sprite[l].sectnum;
@@ -6961,10 +6961,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             }
                             break;
 
-                        case 1:
-                        case 12:
-                            //                                case 18:
-                        case 19:
+                        case SE_1_PIVOT:
+                        case SE_12_LIGHT_SWITCH:
+                        // case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
+                        case SE_19_EXPLOSION_LOWERS_CEILING:
 
                             if (sh == sprite[l].hitag)
                                 if (ActorExtra[l].temp_data[0] == 0)
@@ -6982,7 +6982,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             break;
 
-        case 20: //Extend-o-bridge
+        case SE_20_STRETCH_BRIDGE: //Extend-o-bridge
 
             if (t[0] == 0) break;
             if (t[0] == 1) s->xvel = 8;
@@ -7048,7 +7048,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             break;
 
-        case 21: // Cascading effect
+        case SE_21_DROP_FLOOR: // Cascading effect
 
             if (t[0] == 0) break;
 
@@ -7076,7 +7076,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             else sc->extra--;
             break;
 
-        case 22:
+        case SE_22_TEETH_DOOR:
 
             if (t[1])
             {
@@ -7086,8 +7086,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
 
-        case 24:
-        case 34:
+        case SE_24_CONVEYOR:
+        case SE_34:
 
             if (t[4]) break;
 
@@ -7177,7 +7177,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             break;
 
-        case 35:
+        case SE_35:
             if (sc->ceilingz > s->z)
                 for (j = 0;j < 8;j++)
                 {
@@ -7210,7 +7210,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
 
-        case 25: //PISTONS
+        case SE_25_PISTON: //PISTONS
 
             if (t[4] == 0) break;
 
@@ -7234,7 +7234,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             break;
 
-        case 26:
+        case SE_26:
 
             s->xvel = 32;
             l = (s->xvel*sintable[(s->ang+512)&2047])>>14;
@@ -7286,7 +7286,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
 
-        case 27:
+        case SE_27_DEMO_CAM:
 
             if (ud.recstat == 0 || !ud.democams) break;
 
@@ -7336,7 +7336,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
             }
             break;
-        case 28:
+        case SE_28_LIGHTNING:
             if (t[5] > 0)
             {
                 t[5]--;
@@ -7422,12 +7422,12 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
             }
             break;
-        case 29:
+        case SE_29_WAVES:
             s->hitag += 64;
             l = mulscale12((int)s->yvel,sintable[s->hitag&2047]);
             sc->floorz = s->z + l;
             break;
-        case 31: // True Drop Floor
+        case SE_31_FLOOR_RISE_FALL: // True Drop Floor
             if (t[0] == 1)
             {
                 // Choose dir
@@ -7455,7 +7455,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
 
-        case 32: // True Drop Ceiling
+        case SE_32_CEILING_RISE_FALL: // True Drop Ceiling
             if (t[0] == 1)
             {
                 // Choose dir
@@ -7517,11 +7517,11 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
 
-        case 33:
+        case SE_33_QUAKE_DEBRIS:
             if (g_earthquakeTime > 0 && (krand()&7) == 0)
                 RANDOMSCRAP;
             break;
-        case 36:
+        case SE_36_PROJ_SHOOTER:
 
             if (t[0])
             {
@@ -7563,7 +7563,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
 
-        case 130:
+        case SE_130:
             if (t[0] > 80)
             {
                 KILLIT(i);
@@ -7582,7 +7582,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 A_SetSprite(k,CLIPMASK0);
             }
             break;
-        case 131:
+        case SE_131:
             if (t[0] > 40)
             {
                 KILLIT(i);
@@ -7610,7 +7610,7 @@ BOLT:
     for (i=headspritestat[STAT_EFFECTOR];i>=0;i=nextspritestat[i])
     {
         s = &sprite[i];
-        if (s->lotag != 29) continue;
+        if (s->lotag != SE_29_WAVES) continue;
         sc = &sector[s->sectnum];
         if (sc->wallnum != 4) continue;
         wal = &wall[sc->wallptr+2];

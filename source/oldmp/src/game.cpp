@@ -4718,12 +4718,12 @@ int A_Spawn(int j, int pn)
             sp->cstat |= 128;
             if (j >= 0)
             {
-                if (sector[sprite[j].sectnum].lotag == 2)
+                if (sector[sprite[j].sectnum].lotag == ST_2_UNDERWATER)
                 {
                     sp->z = getceilzofslope(SECT,SX,SY)+(16<<8);
                     sp->cstat |= 8;
                 }
-                else if (sector[sprite[j].sectnum].lotag == 1)
+                else if (sector[sprite[j].sectnum].lotag == ST_1_ABOVE_WATER)
                     sp->z = getflorzofslope(SECT,SX,SY);
             }
 
@@ -4913,7 +4913,7 @@ int A_Spawn(int j, int pn)
 
         }
 
-        if (sector[SECT].lotag == 1)
+        if (sector[SECT].lotag == ST_1_ABOVE_WATER)
         {
             changespritestat(i,5);
             break;
@@ -5145,7 +5145,7 @@ int A_Spawn(int j, int pn)
             }
 
             sp->z = sector[sect].floorz;
-            if (sector[sect].lotag != 1 && sector[sect].lotag != 2)
+            if (sector[sect].lotag != ST_1_ABOVE_WATER && sector[sect].lotag != ST_2_UNDERWATER)
                 sp->xrepeat = sp->yrepeat = 32;
 
             A_AddToDeleteQueue(i);
@@ -5375,7 +5375,7 @@ int A_Spawn(int j, int pn)
                 sp->xrepeat = sprite[j].xrepeat;
                 sp->yrepeat = sprite[j].yrepeat;
                 sp->zvel = 128;
-                if (sector[sp->sectnum].lotag != 2)
+                if (sector[sp->sectnum].lotag != ST_2_UNDERWATER)
                     sp->cstat |= 32768;
             }
             changespritestat(i,13);
@@ -5499,7 +5499,7 @@ int A_Spawn(int j, int pn)
             break;
         case TOUCHPLATE__STATIC:
             T3 = sector[sect].floorz;
-            if (sector[sect].lotag != 1 && sector[sect].lotag != 2)
+            if (sector[sect].lotag != ST_1_ABOVE_WATER && sector[sect].lotag != ST_2_UNDERWATER)
                 sector[sect].floorz = sp->z;
             if ((sp->pal == 1 && ud.multimode > 1) ||
                 (sp->pal == 2 && (!GTFLAGS(GAMETYPE_COOP) || ud.multimode < 2)) || // World Tour
@@ -5894,13 +5894,13 @@ int A_Spawn(int j, int pn)
 
             switch (sp->lotag)
             {
-            case 40:
-            case 41:
+            case SE_40_ROR_UPPER:
+            case SE_41_ROR_LOWER:
                 sp->cstat = 32;
                 sp->xrepeat = sp->yrepeat = 64;
                 changespritestat(i, STAT_EFFECTOR);
                 for (j = 0; j < MAXSPRITES; j++)
-                    if (sprite[j].picnum == SECTOREFFECTOR && (sprite[j].lotag == 40 || sprite[j].lotag == 41) &&
+                    if (sprite[j].picnum == SECTOREFFECTOR && (sprite[j].lotag == SE_40_ROR_UPPER || sprite[j].lotag == SE_41_ROR_LOWER) &&
                         sprite[j].hitag == sp->hitag && i != j)
                     {
                         //                        initprintf("found ror match\n");
@@ -5909,11 +5909,11 @@ int A_Spawn(int j, int pn)
                     }
                 goto SPAWN_END;
                 break;
-            case 46:
+            case SE_46_ROR_PROTECTED:
                 ror_protectedsectors[sp->sectnum] = 1;
                 fallthrough__;
-            case 49:
-            case 50:
+            case SE_49_POINT_LIGHT:
+            case SE_50_SPOT_LIGHT:
                 changespritestat(i, STAT_EFFECTOR);
                 goto SPAWN_END;
                 break;
@@ -5923,15 +5923,15 @@ int A_Spawn(int j, int pn)
 
             switch (sp->lotag)
             {
-            case 28:
+            case SE_28_LIGHTNING:
                 T6 = 65;// Delay for lightning
                 break;
-            case 7: // Transporters!!!!
-            case 23:// XPTR END
-                if (sp->lotag != 23)
+            case SE_7_TELEPORT: // Transporters!!!!
+            case SE_23_ONE_WAY_TELEPORT:// XPTR END
+                if (sp->lotag != SE_23_ONE_WAY_TELEPORT)
                 {
                     for (j=0;j<MAXSPRITES;j++)
-                        if (sprite[j].statnum < MAXSTATUS && sprite[j].picnum == SECTOREFFECTOR && (sprite[j].lotag == 7 || sprite[j].lotag == 23) && i != j && sprite[j].hitag == SHT)
+                        if (sprite[j].statnum < MAXSTATUS && sprite[j].picnum == SECTOREFFECTOR && (sprite[j].lotag == SE_7_TELEPORT || sprite[j].lotag == SE_23_ONE_WAY_TELEPORT) && i != j && sprite[j].hitag == SHT)
                         {
                             OW = j;
                             break;
@@ -5943,11 +5943,11 @@ int A_Spawn(int j, int pn)
                 sp->cstat = 0;
                 changespritestat(i,9);
                 return i;
-            case 1:
+            case SE_1_PIVOT:
                 sp->owner = -1;
                 T1 = 1;
                 break;
-            case 18:
+            case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
 
                 if (sp->ang == 512)
                 {
@@ -5965,32 +5965,32 @@ int A_Spawn(int j, int pn)
                 sp->hitag <<= 2;
                 break;
 
-            case 19:
+            case SE_19_EXPLOSION_LOWERS_CEILING:
                 sp->owner = -1;
                 break;
-            case 25: // Pistons
+            case SE_25_PISTON: // Pistons
                 T4 = sector[sect].ceilingz;
                 T5 = 1;
                 sector[sect].ceilingz = sp->z;
                 G_SetInterpolation(&sector[sect].ceilingz);
                 break;
-            case 35:
+            case SE_35:
                 sector[sect].ceilingz = sp->z;
                 break;
-            case 27:
+            case SE_27_DEMO_CAM:
                 if (ud.recstat == 1)
                 {
                     sp->xrepeat=sp->yrepeat=64;
                     sp->cstat &= 32768;
                 }
                 break;
-            case 12:
+            case SE_12_LIGHT_SWITCH:
 
                 T2 = sector[sect].floorshade;
                 T3 = sector[sect].ceilingshade;
                 break;
 
-            case 13:
+            case SE_13_EXPLOSIVE:
 
                 T1 = sector[sect].ceilingz;
                 T2 = sector[sect].floorz;
@@ -6045,7 +6045,7 @@ int A_Spawn(int j, int pn)
 
                 break;
 
-            case 17:
+            case SE_17_WARP_ELEVATOR:
 
                 T3 = sector[sect].floorz; //Stopping loc
 
@@ -6079,12 +6079,12 @@ int A_Spawn(int j, int pn)
 
                 break;
 
-            case 24:
+            case SE_24_CONVEYOR:
                 sp->yvel <<= 1;
-            case 36:
+            case SE_36_PROJ_SHOOTER:
                 break;
 
-            case 20:
+            case SE_20_STRETCH_BRIDGE:
             {
                 int q;
 
@@ -6129,7 +6129,7 @@ int A_Spawn(int j, int pn)
 
             break;
 
-            case 3:
+            case SE_3_RANDOM_LIGHTS_AFTER_SHOT_OUT:
 
                 T4=sector[sect].floorshade;
 
@@ -6153,7 +6153,7 @@ int A_Spawn(int j, int pn)
                 }
                 break;
 
-            case 31:
+            case SE_31_FLOOR_RISE_FALL:
                 T2 = sector[sect].floorz;
                 //    T3 = sp->hitag;
                 if (sp->ang != 1536) sector[sect].floorz = sp->z;
@@ -6167,7 +6167,7 @@ int A_Spawn(int j, int pn)
                 G_SetInterpolation(&sector[sect].floorz);
 
                 break;
-            case 32:
+            case SE_32_CEILING_RISE_FALL:
                 T2 = sector[sect].ceilingz;
                 T3 = sp->hitag;
                 if (sp->ang != 1536) sector[sect].ceilingz = sp->z;
@@ -6182,7 +6182,7 @@ int A_Spawn(int j, int pn)
 
                 break;
 
-            case 4: //Flashing lights
+            case SE_4_RANDOM_LIGHTS: //Flashing lights
 
                 T3 = sector[sect].floorshade;
 
@@ -6198,12 +6198,12 @@ int A_Spawn(int j, int pn)
 
                 break;
 
-            case 9:
+            case SE_9_DOWN_OPEN_DOOR_LIGHTS:
                 if (sector[sect].lotag &&
                         labs(sector[sect].ceilingz-sp->z) > 1024)
                     sector[sect].lotag |= 32768; //If its open
                 fallthrough__;
-            case 8:
+            case SE_8_UP_OPEN_DOOR_LIGHTS:
                 //First, get the ceiling-floor shade
 
                 T1 = sector[sect].floorshade;
@@ -6220,23 +6220,23 @@ int A_Spawn(int j, int pn)
 
                 break;
 
-            case 11://Pivitor rotater
+            case SE_11_SWINGING_DOOR://Pivitor rotater
                 if (sp->ang>1024) T4 = 2;
                 else T4 = -2;
                 fallthrough__;
-            case 0:
-            case 2://Earthquakemakers
-            case 5://Boss Creature
-            case 6://Subway
-            case 14://Caboos
-            case 15://Subwaytype sliding door
-            case 16://That rotating blocker reactor thing
-            case 26://ESCELATOR
-            case 30://No rotational subways
+            case SE_0_ROTATING_SECTOR:
+            case SE_2_EARTHQUAKE://Earthquakemakers
+            case SE_5://Boss Creature
+            case SE_6_SUBWAY://Subway
+            case SE_14_SUBWAY_CAR://Caboos
+            case SE_15_SLIDING_DOOR://Subwaytype sliding door
+            case SE_16_REACTOR://That rotating blocker reactor thing
+            case SE_26://ESCELATOR
+            case SE_30_TWO_WAY_TRAIN://No rotational subways
 
-                if (sp->lotag == 0)
+                if (sp->lotag == SE_0_ROTATING_SECTOR)
                 {
-                    if (sector[sect].lotag == 30)
+                    if (sector[sect].lotag == ST_30_ROTATE_RISE_BRIDGE)
                     {
                         if (sp->pal) sprite[i].clipdist = 1;
                         else sprite[i].clipdist = 0;
@@ -6248,7 +6248,7 @@ int A_Spawn(int j, int pn)
                     {
                         if (sprite[j].statnum < MAXSTATUS)
                             if (sprite[j].picnum == SECTOREFFECTOR &&
-                                    sprite[j].lotag == 1 &&
+                                    sprite[j].lotag == SE_1_PIVOT &&
                                     sprite[j].hitag == sp->hitag)
                             {
                                 if (sp->ang == 512)
@@ -6290,7 +6290,7 @@ int A_Spawn(int j, int pn)
                         G_GameExit(tempbuf);
                     }
                 }
-                if (sp->lotag == 30 || sp->lotag == 6 || sp->lotag == 14 || sp->lotag == 5)
+                if (sp->lotag == SE_30_TWO_WAY_TRAIN || sp->lotag == SE_6_SUBWAY || sp->lotag == SE_14_SUBWAY_CAR || sp->lotag == SE_5)
                 {
 
                     startwall = sector[sect].wallptr;
@@ -6325,14 +6325,14 @@ int A_Spawn(int j, int pn)
                     sp->owner = -1;
                     T1 = s;
 
-                    if (sp->lotag != 30)
+                    if (sp->lotag != SE_30_TWO_WAY_TRAIN)
                         T4 = sp->hitag;
                 }
 
-                else if (sp->lotag == 16)
+                else if (sp->lotag == SE_16_REACTOR)
                     T4 = sector[sect].ceilingz;
 
-                else if (sp->lotag == 26)
+                else if (sp->lotag == SE_26)
                 {
                     T4 = sp->x;
                     T5 = sp->y;
@@ -6343,7 +6343,7 @@ int A_Spawn(int j, int pn)
 
                     sp->shade = 0;
                 }
-                else if (sp->lotag == 2)
+                else if (sp->lotag == SE_2_EARTHQUAKE)
                 {
                     T6 = sector[sp->sectnum].floorheinum;
                     sector[sp->sectnum].floorheinum = 0;
@@ -6352,22 +6352,22 @@ int A_Spawn(int j, int pn)
 
             switch (sp->lotag)
             {
-            case 6:
-            case 14:
+            case SE_6_SUBWAY:
+            case SE_14_SUBWAY_CAR:
                 j = A_CallSound(sect,i);
                 if (j == -1) j = SUBWAY;
                 ActorExtra[i].lastvx = j;
                 fallthrough__;
-            case 30:
+            case SE_30_TWO_WAY_TRAIN:
                 if (numplayers > 1) break;
                 fallthrough__;
-            case 0:
-            case 1:
-            case 5:
-            case 11:
-            case 15:
-            case 16:
-            case 26:
+            case SE_0_ROTATING_SECTOR:
+            case SE_1_PIVOT:
+            case SE_5:
+            case SE_11_SWINGING_DOOR:
+            case SE_15_SLIDING_DOOR:
+            case SE_16_REACTOR:
+            case SE_26:
                 Sect_SetInterpolation(i);
                 break;
             }
@@ -6991,7 +6991,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     else t->cstat &= ~4;
                 }
 
-                if (sector[t->sectnum].lotag == 2) k += 1795-1405;
+                if (sector[t->sectnum].lotag == ST_2_UNDERWATER) k += 1795-1405;
                 else if ((ActorExtra[i].floorz-s->z) > (64<<8)) k += 60;
 
                 t->picnum += k;
@@ -7237,7 +7237,7 @@ PALONLY:
         switch (DynamicTileMap[s->picnum])
         {
         case LASERLINE__STATIC:
-            if (sector[t->sectnum].lotag == 2) t->pal = 8;
+            if (sector[t->sectnum].lotag == ST_2_UNDERWATER) t->pal = 8;
             t->z = sprite[s->owner].z-(3<<8);
             if (g_tripbombLaserMode == 2 && g_player[screenpeek].ps->heat_on == 0)
                 t->yrepeat = 0;

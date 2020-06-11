@@ -835,8 +835,8 @@ static void prelevel(char g)
 
         switch (sector[i].lotag)
         {
-        case 20:
-        case 22:
+        case ST_20_CEILING_DOOR:
+        case ST_22_SPLITTING_DOOR:
             if (sector[i].floorz > sector[i].ceilingz)
                 sector[i].lotag |= 32768;
             continue;
@@ -980,7 +980,7 @@ static void prelevel(char g)
                 j = headspritestat[STAT_EFFECTOR];
                 while (j >= 0)
                 {
-                    if (sprite[j].lotag == 12 && sprite[j].hitag == SLT)
+                    if (sprite[j].lotag == SE_12_LIGHT_SWITCH && sprite[j].hitag == SLT)
                         ActorExtra[j].temp_data[0] = 1;
                     j = nextspritestat[j];
                 }

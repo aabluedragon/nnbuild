@@ -157,7 +157,7 @@ void P_UpdateScreenPal(DukePlayer_t *p)
     }
     else
     {
-        if (sector[p->cursectnum].lotag == 2) p->palette = WATERPAL;
+        if (sector[p->cursectnum].lotag == ST_2_UNDERWATER) p->palette = WATERPAL;
         else p->palette = BASEPAL;
     }
     g_restorePalette = 1;
@@ -236,7 +236,7 @@ static void A_DoWaterTracers(int x1,int y1,int z1,int x2,int y2,int z2,int n)
         updatesector(x1,y1,&sect);
         if (sect >= 0)
         {
-            if (sector[sect].lotag == 2)
+            if (sector[sect].lotag == ST_2_UNDERWATER)
                 A_InsertSprite(sect,x1,y1,z1,WATERBUBBLE,-32,4+(krand()&3),4+(krand()&3),krand()&2047,0,0,g_player[0].ps->i,5);
             else
                 A_InsertSprite(sect,x1,y1,z1,SMALLSMOKE,-32,14,14,0,0,0,g_player[0].ps->i,5);
@@ -500,11 +500,11 @@ int A_Shoot(int i,int atwith)
                     if (FindDistance2D(wall[hit.wall].x-wall[wall[hit.wall].point2].x,wall[hit.wall].y-wall[wall[hit.wall].point2].y) > (mulscale(ProjectileData[atwith].xrepeat+8,tilesiz[ProjectileData[atwith].decal].x,3)))
                         if (hit.wall >= 0 && wall[hit.wall].overpicnum != BIGFORCE)
                             if ((wall[hit.wall].nextsector >= 0 && hit.sect >= 0 &&
-                                    sector[wall[hit.wall].nextsector].lotag == 0 &&
-                                    sector[hit.sect].lotag == 0 &&
-                                    sector[wall[hit.wall].nextsector].lotag == 0 &&
+                                    sector[wall[hit.wall].nextsector].lotag == ST_0_NO_EFFECT &&
+                                    sector[hit.sect].lotag == ST_0_NO_EFFECT &&
+                                    sector[wall[hit.wall].nextsector].lotag == ST_0_NO_EFFECT &&
                                     (sector[hit.sect].floorz-sector[wall[hit.wall].nextsector].floorz) > (mulscale(ProjectileData[atwith].yrepeat,tilesiz[ProjectileData[atwith].decal].y,3)<<8)) ||
-                                    (wall[hit.wall].nextsector == -1 && sector[hit.sect].lotag == 0))
+                                    (wall[hit.wall].nextsector == -1 && sector[hit.sect].lotag == ST_0_NO_EFFECT))
                                 if ((wall[hit.wall].cstat&16) == 0)
                                 {
                                     if (wall[hit.wall].nextsector >= 0)
@@ -512,7 +512,7 @@ int A_Shoot(int i,int atwith)
                                         k = headspritesect[wall[hit.wall].nextsector];
                                         while (k >= 0)
                                         {
-                                            if (sprite[k].statnum == 3 && sprite[k].lotag == 13)
+                                            if (sprite[k].statnum == STAT_EFFECTOR && sprite[k].lotag == SE_13_EXPLOSIVE)
                                                 return -1;
                                             k = nextspritesect[k];
                                         }
@@ -527,21 +527,6 @@ int A_Shoot(int i,int atwith)
                                         if (ProjectileData[atwith].decal >= 0)
                                         {
                                             k = A_Spawn(i,ProjectileData[atwith].decal);
-                                            /*
-                                                                                    sprite[k].xvel = -12;
-                                                                                    sprite[k].ang = getangle(wall[hit.wall].x-wall[wall[hit.wall].point2].x,
-                                                                                                             wall[hit.wall].y-wall[wall[hit.wall].point2].y)+512;
-                                                                                    sprite[k].x = hitx;
-                                                                                    sprite[k].y = hity;
-                                                                                    sprite[k].z = hitz;
-                                                                                    sprite[k].cstat |= (krand()&4);
-                                                                    sprite[k].xrepeat = ProjectileData[atwith].xrepeat;
-                                                                sprite[k].yrepeat = ProjectileData[atwith].yrepeat;
-                                                                    sprite[k].cstat = 16+(krand()&12);
-                                                                                    A_SetSprite(k,CLIPMASK0);
-                                                                                    setspritez_old(k,sprite[k].x,sprite[k].y,sprite[k].z);
-                                                                    A_AddToDeleteQueue(k);
-                                            */
 
                                             if (!(SpriteFlags[ProjectileData[atwith].decal] & SPRITE_DECAL))
                                                 SpriteFlags[ProjectileData[atwith].decal] |= SPRITE_DECAL;
@@ -647,7 +632,7 @@ int A_Shoot(int i,int atwith)
                         }
                     }
                 }
-                else if (p >= 0 && zvel > 0 && sector[hit.sect].lotag == 1)
+                else if (p >= 0 && zvel > 0 && sector[hit.sect].lotag == ST_1_ABOVE_WATER)
                 {
                     j = A_Spawn(g_player[p].ps->i,WATERSPLASH2);
                     sprite[j].x = hit.pos.x;
@@ -774,7 +759,7 @@ int A_Shoot(int i,int atwith)
 
             if (ProjectileData[atwith].workslike & PROJECTILE_WATERBUBBLES)
             {
-                if ((krand()&15) == 0 && sector[hit.sect].lotag == 2)
+                if ((krand()&15) == 0 && sector[hit.sect].lotag == ST_2_UNDERWATER)
                     A_DoWaterTracers(hit.pos.x,hit.pos.y,hit.pos.z, spos.x, spos.y, spos.z,8-(ud.multimode>>1));
             }
 
@@ -881,10 +866,10 @@ int A_Shoot(int i,int atwith)
                     if (wall[hit.wall].hitag != 0 || (wall[hit.wall].nextwall >= 0 && wall[wall[hit.wall].nextwall].hitag != 0))
                         goto DOSKIPBULLETHOLE;
 
-                    if (hit.sect >= 0 && sector[hit.sect].lotag == 0)
+                    if (hit.sect >= 0 && sector[hit.sect].lotag == ST_0_NO_EFFECT)
                         if (wall[hit.wall].overpicnum != BIGFORCE)
-                            if ((wall[hit.wall].nextsector >= 0 && sector[wall[hit.wall].nextsector].lotag == 0) ||
-                                    (wall[hit.wall].nextsector == -1 && sector[hit.sect].lotag == 0))
+                            if ((wall[hit.wall].nextsector >= 0 && sector[wall[hit.wall].nextsector].lotag == ST_0_NO_EFFECT) ||
+                                    (wall[hit.wall].nextsector == -1 && sector[hit.sect].lotag == ST_0_NO_EFFECT))
                                 if ((wall[hit.wall].cstat&16) == 0)
                                 {
                                     if (wall[hit.wall].nextsector >= 0)
@@ -892,7 +877,7 @@ int A_Shoot(int i,int atwith)
                                         l = headspritesect[wall[hit.wall].nextsector];
                                         while (l >= 0)
                                         {
-                                            if (sprite[l].statnum == 3 && sprite[l].lotag == 13)
+                                            if (sprite[l].statnum == STAT_EFFECTOR && sprite[l].lotag == SE_13_EXPLOSIVE)
                                                 goto DOSKIPBULLETHOLE;
                                             l = nextspritesect[l];
                                         }
@@ -1142,11 +1127,11 @@ DOSKIPBULLETHOLE:
                 if (FindDistance2D(spos.x-hit.pos.x,spos.y-hit.pos.y) < 1024)
                     if (hit.wall >= 0 && wall[hit.wall].overpicnum != BIGFORCE)
                         if ((wall[hit.wall].nextsector >= 0 && hit.sect >= 0 &&
-                                sector[wall[hit.wall].nextsector].lotag == 0 &&
-                                sector[hit.sect].lotag == 0 &&
-                                sector[wall[hit.wall].nextsector].lotag == 0 &&
+                                sector[wall[hit.wall].nextsector].lotag == ST_0_NO_EFFECT &&
+                                sector[hit.sect].lotag == ST_0_NO_EFFECT &&
+                                sector[wall[hit.wall].nextsector].lotag == ST_0_NO_EFFECT &&
                                 (sector[hit.sect].floorz-sector[wall[hit.wall].nextsector].floorz) > (16<<8)) ||
-                                (wall[hit.wall].nextsector == -1 && sector[hit.sect].lotag == 0))
+                                (wall[hit.wall].nextsector == -1 && sector[hit.sect].lotag == ST_0_NO_EFFECT))
                             if ((wall[hit.wall].cstat&16) == 0)
                             {
                                 if (wall[hit.wall].nextsector >= 0)
@@ -1154,7 +1139,7 @@ DOSKIPBULLETHOLE:
                                     k = headspritesect[wall[hit.wall].nextsector];
                                     while (k >= 0)
                                     {
-                                        if (sprite[k].statnum == 3 && sprite[k].lotag == 13)
+                                        if (sprite[k].statnum == STAT_EFFECTOR && sprite[k].lotag == SE_13_EXPLOSIVE)
                                             return -1;
                                         k = nextspritesect[k];
                                     }
@@ -1224,7 +1209,7 @@ DOSKIPBULLETHOLE:
                         }
                     }
                 }
-                else if (p >= 0 && zvel > 0 && sector[hit.sect].lotag == 1)
+                else if (p >= 0 && zvel > 0 && sector[hit.sect].lotag == ST_1_ABOVE_WATER)
                 {
                     j = A_Spawn(g_player[p].ps->i,WATERSPLASH2);
                     sprite[j].x = hit.pos.x;
@@ -1345,7 +1330,7 @@ DOSKIPBULLETHOLE:
 
             if (hit.sect < 0) return -1;
 
-            if ((krand()&15) == 0 && sector[hit.sect].lotag == 2)
+            if ((krand()&15) == 0 && sector[hit.sect].lotag == ST_2_UNDERWATER)
                 A_DoWaterTracers(hit.pos.x,hit.pos.y,hit.pos.z, spos.x, spos.y, spos.z,8-(ud.multimode>>1));
 
             if (p >= 0)
@@ -1438,10 +1423,10 @@ DOSKIPBULLETHOLE:
                     if (wall[hit.wall].hitag != 0 || (wall[hit.wall].nextwall >= 0 && wall[wall[hit.wall].nextwall].hitag != 0))
                         goto SKIPBULLETHOLE;
 
-                    if (hit.sect >= 0 && sector[hit.sect].lotag == 0)
+                    if (hit.sect >= 0 && sector[hit.sect].lotag == ST_0_NO_EFFECT)
                         if (wall[hit.wall].overpicnum != BIGFORCE)
-                            if ((wall[hit.wall].nextsector >= 0 && sector[wall[hit.wall].nextsector].lotag == 0) ||
-                                    (wall[hit.wall].nextsector == -1 && sector[hit.sect].lotag == 0))
+                            if ((wall[hit.wall].nextsector >= 0 && sector[wall[hit.wall].nextsector].lotag == ST_0_NO_EFFECT) ||
+                                    (wall[hit.wall].nextsector == -1 && sector[hit.sect].lotag == ST_0_NO_EFFECT))
                                 if ((wall[hit.wall].cstat&16) == 0)
                                 {
                                     if (wall[hit.wall].nextsector >= 0)
@@ -1449,7 +1434,7 @@ DOSKIPBULLETHOLE:
                                         l = headspritesect[wall[hit.wall].nextsector];
                                         while (l >= 0)
                                         {
-                                            if (sprite[l].statnum == 3 && sprite[l].lotag == 13)
+                                            if (sprite[l].statnum == STAT_EFFECTOR && sprite[l].lotag == SE_13_EXPLOSIVE)
                                                 goto SKIPBULLETHOLE;
                                             l = nextspritesect[l];
                                         }
@@ -3435,7 +3420,7 @@ static int P_DoCounters(DukePlayer_t *p)
         }
     }
 
-    if (p->cursectnum >= 0 && p->scuba_on == 0 && sector[p->cursectnum].lotag == 2)
+    if (p->cursectnum >= 0 && p->scuba_on == 0 && sector[p->cursectnum].lotag == ST_2_UNDERWATER)
     {
         if (p->scuba_amount > 0)
         {
@@ -4302,7 +4287,7 @@ void P_ProcessInput(int snum)
                                     break;
                     if (j < 0)
                     {
-                        if (sector[p->cursectnum].lotag == 0 &&
+                        if (sector[p->cursectnum].lotag == ST_0_NO_EFFECT &&
                             sector[p->cursectnum].hitag == 0)
 
                             if (yax_getbunch(p->cursectnum, YAX_FLOOR) < 0 || (sector[p->cursectnum].floorstat & 512))
@@ -4342,7 +4327,7 @@ void P_ProcessInput(int snum)
                 }
 
                 if ((p->pos.z+p->vel.z) >= (fz-(i<<8)) && p->cursectnum >= 0)   // hit the ground
-                    if (sector[p->cursectnum].lotag != 1)
+                    if (sector[p->cursectnum].lotag != ST_1_ABOVE_WATER)
                     {
                         if (p->falling_counter > 62) P_QuickKill(p);
 
@@ -4702,7 +4687,7 @@ HORIZONLY:
     if (psectlotag == 1 || p->spritebridge == 1) i = (4L<<8);
     else i = (20L<<8);
 
-    if (p->cursectnum >= 0 && sector[p->cursectnum].lotag == 2) k = 0;
+    if (p->cursectnum >= 0 && sector[p->cursectnum].lotag == ST_2_UNDERWATER) k = 0;
     else k = 1;
 
     if (ud.clipping)
@@ -4725,7 +4710,7 @@ HORIZONLY:
         // so make it a bit conditional... OTOH, this way we have an ugly z jump when
         // changing from above water to underwater
 
-        if ((playerSectNum >= 0 && !(sector[playerSectNum].lotag == 1 && p->on_ground && floorBunch >= 0))
+        if ((playerSectNum >= 0 && !(sector[playerSectNum].lotag == ST_1_ABOVE_WATER && p->on_ground && floorBunch >= 0))
             && ((floorBunch >= 0 && !(sector[playerSectNum].floorstat & 512))
                 || (ceilingBunch >= 0 && !(sector[playerSectNum].ceilingstat & 512))))
         {
@@ -4766,7 +4751,7 @@ HORIZONLY:
     if (psectlotag < 3)
     {
         psect = s->sectnum;
-        if (ud.clipping == 0 && sector[psect].lotag == 31)
+        if (ud.clipping == 0 && sector[psect].lotag == ST_31_TWO_WAY_TRAIN)
         {
             if (sprite[sector[psect].hitag].xvel && ActorExtra[sector[psect].hitag].temp_data[0] == 0)
             {
@@ -4776,7 +4761,7 @@ HORIZONLY:
         }
     }
 
-    if (p->cursectnum >= 0 && truefdist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == 1)
+    if (p->cursectnum >= 0 && truefdist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
         if (!A_CheckSoundPlaying(p->i,DUKE_ONWATER))
             A_PlaySound(DUKE_ONWATER,p->i);
 

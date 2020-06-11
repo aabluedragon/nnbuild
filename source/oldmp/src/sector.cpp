@@ -155,13 +155,13 @@ int isanunderoperator(int lotag)
 {
     switch (lotag&0xff)
     {
-    case 15:
-    case 16:
-    case 17:
-    case 18:
-    case 19:
-    case 22:
-    case 26:
+    case ST_15_WARP_ELEVATOR:
+    case ST_16_PLATFORM_DOWN:
+    case ST_17_PLATFORM_UP:
+    case ST_18_ELEVATOR_DOWN:
+    case ST_19_ELEVATOR_UP:
+    case ST_22_SPLITTING_DOOR:
+    case ST_26_SPLITTING_ST_DOOR:
         return 1;
     }
     return 0;
@@ -171,19 +171,19 @@ int isanearoperator(int lotag)
 {
     switch (lotag&0xff)
     {
-    case 9:
-    case 15:
-    case 16:
-    case 17:
-    case 18:
-    case 19:
-    case 20:
-    case 21:
-    case 22:
-    case 23:
-    case 25:
-    case 26:
-    case 29://Toothed door
+    case ST_9_SLIDING_ST_DOOR:
+    case ST_15_WARP_ELEVATOR:
+    case ST_16_PLATFORM_DOWN:
+    case ST_17_PLATFORM_UP:
+    case ST_18_ELEVATOR_DOWN:
+    case ST_19_ELEVATOR_UP:
+    case ST_20_CEILING_DOOR:
+    case ST_21_FLOOR_DOOR:
+    case ST_22_SPLITTING_DOOR:
+    case ST_23_SWINGING_DOOR:
+    case ST_25_SLIDING_DOOR:
+    case ST_26_SPLITTING_ST_DOOR:
+    case ST_29_TEETH_DOOR://Toothed door
         return 1;
     }
     return 0;
@@ -300,7 +300,7 @@ void G_DoSectorAnimations(void)
             animategoal[i] = animategoal[g_animateCount];
             animatevel[i] = animatevel[g_animateCount];
             animatesect[i] = animatesect[g_animateCount];
-            if (sector[animatesect[i]].lotag == 18 || sector[animatesect[i]].lotag == 19)
+            if (sector[animatesect[i]].lotag == ST_18_ELEVATOR_DOWN || sector[animatesect[i]].lotag == ST_19_ELEVATOR_UP)
                 if (animateptr[i] == &sector[animatesect[i]].ceilingz)
                     continue;
 
@@ -559,7 +559,7 @@ void G_OperateSectors(int sn,int ii)
     switch (sptr->lotag&(0xffff-49152))
     {
 
-    case 30:
+    case ST_30_ROTATE_RISE_BRIDGE:
         j = sector[sn].hitag;
         if (ActorExtra[j].tempang == 0 ||
                 ActorExtra[j].tempang == 256)
@@ -569,7 +569,7 @@ void G_OperateSectors(int sn,int ii)
         else sprite[j].extra = 1;
         break;
 
-    case 31:
+    case ST_31_TWO_WAY_TRAIN:
 
         j = sector[sn].hitag;
         if (ActorExtra[j].temp_data[4] == 0)
@@ -578,7 +578,7 @@ void G_OperateSectors(int sn,int ii)
         A_CallSound(sn,ii);
         break;
 
-    case 26: //The split doors
+    case ST_26_SPLITTING_ST_DOOR: //The split doors
         i = GetAnimationGoal(&sptr->ceilingz);
         if (i == -1) //if the door has stopped
         {
@@ -594,7 +594,7 @@ void G_OperateSectors(int sn,int ii)
         }
         return;
 
-    case 9:
+    case ST_9_SLIDING_ST_DOOR:
     {
         int dax,day,dax2,day2,sp;
         int wallfind[2];
@@ -681,7 +681,7 @@ void G_OperateSectors(int sn,int ii)
     }
     return;
 
-    case 15://Warping elevators
+    case ST_15_WARP_ELEVATOR://Warping elevators
 
         if (sprite[ii].picnum != APLAYER) return;
         //            if(ps[sprite[ii].yvel].select_dir == 1) return;
@@ -711,8 +711,8 @@ void G_OperateSectors(int sn,int ii)
 
         return;
 
-    case 16:
-    case 17:
+    case ST_16_PLATFORM_DOWN:
+    case ST_17_PLATFORM_UP:
 
         i = GetAnimationGoal(&sptr->floorz);
 
@@ -736,8 +736,8 @@ void G_OperateSectors(int sn,int ii)
 
         return;
 
-    case 18:
-    case 19:
+    case ST_18_ELEVATOR_DOWN:
+    case ST_19_ELEVATOR_UP:
 
         i = GetAnimationGoal(&sptr->floorz);
 
@@ -755,7 +755,7 @@ void G_OperateSectors(int sn,int ii)
         }
         return;
 
-    case 29:
+    case ST_29_TEETH_DOOR:
 
         if (sptr->lotag&0x8000)
             j = sector[nextsectorneighborz(sn,sptr->ceilingz,1,1)].floorz;
@@ -784,7 +784,7 @@ void G_OperateSectors(int sn,int ii)
 
         return;
 
-    case 20:
+    case ST_20_CEILING_DOOR:
 
 REDODOOR:
 
@@ -822,7 +822,7 @@ REDODOOR:
 
         return;
 
-    case 21:
+    case ST_21_FLOOR_DOOR:
         i = GetAnimationGoal(&sptr->floorz);
         if (i >= 0)
         {
@@ -844,7 +844,7 @@ REDODOOR:
         }
         return;
 
-    case 22:
+    case ST_22_SPLITTING_DOOR:
 
         // REDODOOR22:
 
@@ -868,7 +868,7 @@ REDODOOR:
 
         return;
 
-    case 23: //Swingdoor
+    case ST_23_SWINGING_DOOR: //Swingdoor
 
         j = -1;
         q = 0;
@@ -911,7 +911,7 @@ REDODOOR:
         }
         return;
 
-    case 25: //Subway type sliding doors
+    case ST_25_SLIDING_DOOR: //Subway type sliding doors
 
         j = headspritestat[STAT_EFFECTOR];
         while (j >= 0)//Find the sprite
@@ -943,7 +943,7 @@ REDODOOR:
         }
         return;
 
-    case 27:  //Extended bridge
+    case ST_27_STRETCH_BRIDGE:  //Extended bridge
 
         j = headspritestat[STAT_EFFECTOR];
         while (j >= 0)
@@ -963,7 +963,7 @@ REDODOOR:
         return;
 
 
-    case 28:
+    case ST_28_DROP_FLOOR:
         //activate the rest of them
 
         j = headspritesect[sn];
@@ -1135,7 +1135,7 @@ void G_OperateForceFields(int s, int low)
                     wall[i].cstat   = 0;
 
                     if (s >= 0 && sprite[s].picnum == SECTOREFFECTOR &&
-                            sprite[s].lotag == 30)
+                            sprite[s].lotag == SE_30_TWO_WAY_TRAIN)
                         wall[i].lotag = 0;
                 }
                 else
@@ -3369,7 +3369,7 @@ void checksectors(int snum)
             return;
 
         if (neartagsprite == -1 && neartagwall == -1)
-            if (sector[p->cursectnum].lotag == 2)
+            if (sector[p->cursectnum].lotag == ST_2_UNDERWATER)
             {
                 oldz = A_CheckHitSprite(p->i,&neartagsprite);
                 if (oldz > 1280) neartagsprite = -1;
