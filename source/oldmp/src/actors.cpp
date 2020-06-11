@@ -1390,7 +1390,7 @@ static void G_MoveFallers(void)
                         x = g_spriteGravity;
                 }
 
-                if (s->z < (sector[sect].floorz-FOURSLEIGHT))
+                if (s->z < (sector[sect].floorz - ACTOR_FLOOR_OFFSET))
                 {
                     s->zvel += x;
                     if (s->zvel > 6144)
@@ -4423,7 +4423,7 @@ static void G_MoveActors(void)
             {
                 A_Fall(i);
 
-                if ((sector[sect].lotag != ST_1_ABOVE_WATER || ActorExtra[i].floorz != sector[sect].floorz) && s->z >= ActorExtra[i].floorz-(FOURSLEIGHT) && s->yvel < 3)
+                if ((sector[sect].lotag != ST_1_ABOVE_WATER || ActorExtra[i].floorz != sector[sect].floorz) && s->z >= ActorExtra[i].floorz-(ACTOR_FLOOR_OFFSET) && s->yvel < 3)
                 {
                     if (s->yvel > 0 || (s->yvel == 0 && ActorExtra[i].floorz == sector[sect].floorz))
                         A_PlaySound(PIPEBOMB_BOUNCE,i);
@@ -5189,7 +5189,7 @@ static void G_MoveMisc(void)  // STATNUM 5
 
                 p = A_FindPlayer(s,&x);
 
-                s->z = ActorExtra[i].floorz-(FOURSLEIGHT);
+                s->z = ActorExtra[i].floorz-(ACTOR_FLOOR_OFFSET);
 
                 if (t[2] < 32)
                 {
@@ -5316,7 +5316,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 if (s->zvel > 4096) s->zvel = 4096;
                 if (sect < 0) KILLIT(i);
 
-                if (s->z == ActorExtra[i].floorz-(FOURSLEIGHT) && t[0] < 3)
+                if (s->z == ActorExtra[i].floorz-(ACTOR_FLOOR_OFFSET) && t[0] < 3)
                 {
                     s->zvel = -((3-t[0])<<8)-(krand()&511);
                     if (sector[sect].lotag == 2)

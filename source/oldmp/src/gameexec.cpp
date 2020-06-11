@@ -302,7 +302,7 @@ void A_GetZLimits(int iActor)
         if (s->statnum == 4)
             zr = 4L;
 
-        getzrange_old(s->x,s->y,s->z-(FOURSLEIGHT),s->sectnum,&ActorExtra[iActor].ceilingz,&hz,&ActorExtra[iActor].floorz,&lz,zr,CLIPMASK0);
+        getzrange_old(s->x,s->y,s->z-(ACTOR_FLOOR_OFFSET),s->sectnum,&ActorExtra[iActor].ceilingz,&hz,&ActorExtra[iActor].floorz,&lz,zr,CLIPMASK0);
 
         s->cstat = cstat;
 
@@ -357,7 +357,7 @@ void A_Fall(int iActor)
     {
         cstat = s->cstat;
         s->cstat = 0;
-        getzrange_old(s->x, s->y, s->z - (FOURSLEIGHT), s->sectnum, &ActorExtra[iActor].ceilingz, &hz, &ActorExtra[iActor].floorz, &lz, 127L, CLIPMASK0);
+        getzrange_old(s->x, s->y, s->z - (ACTOR_FLOOR_OFFSET), s->sectnum, &ActorExtra[iActor].ceilingz, &hz, &ActorExtra[iActor].floorz, &lz, 127L, CLIPMASK0);
         s->cstat = cstat;
     }
     else
@@ -366,15 +366,15 @@ void A_Fall(int iActor)
         ActorExtra[iActor].floorz   = sector[s->sectnum].floorz;
     }
 
-    if (s->z < ActorExtra[iActor].floorz-(FOURSLEIGHT))
+    if (s->z < ActorExtra[iActor].floorz-(ACTOR_FLOOR_OFFSET))
     {
         if (sector[s->sectnum].lotag == ST_2_UNDERWATER && s->zvel > 3122)
             s->zvel = 3144;
         s->z += s->zvel = min(6144, s->zvel+c);
     }
-    if (s->z >= ActorExtra[iActor].floorz-(FOURSLEIGHT))
+    if (s->z >= ActorExtra[iActor].floorz-(ACTOR_FLOOR_OFFSET))
     {
-        s->z = ActorExtra[iActor].floorz - FOURSLEIGHT;
+        s->z = ActorExtra[iActor].floorz - ACTOR_FLOOR_OFFSET;
         s->zvel = 0;
     }
 }
@@ -1211,15 +1211,15 @@ static int X_DoExecute(void)
             ActorExtra[g_i].cgg = 3;
         }
 
-        if (g_sp->z < (ActorExtra[g_i].floorz-FOURSLEIGHT))
+        if (g_sp->z < (ActorExtra[g_i].floorz-ACTOR_FLOOR_OFFSET))
         {
             g_sp->z += g_sp->zvel = min(6144, g_sp->zvel+j);
 
-            if (g_sp->z > (ActorExtra[g_i].floorz - FOURSLEIGHT))
-                g_sp->z = (ActorExtra[g_i].floorz - FOURSLEIGHT);
+            if (g_sp->z > (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
+                g_sp->z = (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET);
             break;
         }
-        g_sp->z = ActorExtra[g_i].floorz - FOURSLEIGHT;
+        g_sp->z = ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET;
 
         if (A_CheckEnemySprite(g_sp) || (g_sp->picnum == APLAYER && g_sp->owner >= 0))
         {
@@ -1245,11 +1245,11 @@ static int X_DoExecute(void)
             }
         }
 
-        if (g_sp->z > (ActorExtra[g_i].floorz - FOURSLEIGHT))
+        if (g_sp->z > (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
         {
             A_GetZLimits(g_i);
             if (ActorExtra[g_i].floorz != sector[g_sp->sectnum].floorz)
-                g_sp->z = (ActorExtra[g_i].floorz - FOURSLEIGHT);
+                g_sp->z = (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET);
             break;
         }
         else if (sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER)

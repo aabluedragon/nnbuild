@@ -76,7 +76,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define AUTO_AIM_ANGLE          48
 #define RECSYNCBUFSIZ 2520   //2520 is the (LCM of 1-8)*3
 
-#define FOURSLEIGHT (1<<8)
+#define ACTOR_FLOOR_OFFSET  (1<<8)
 #define ZOFFSET2            (16<<8)
 #define ZOFFSET3            (8<<8)
 #define ZOFFSET4            (12<<8)
