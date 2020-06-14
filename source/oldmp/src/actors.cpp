@@ -5471,7 +5471,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
 static void G_MoveEffectors(void)   //STATNUM 3
 {
     int q=0,  m, x, st, j;
-    intptr_t *t,l;
+    intptr_t *pData,l;
     int i = headspritestat[STAT_EFFECTOR], nexti, nextk, p, sh, nextj;
     short k;
     spritetype *s;
@@ -5489,7 +5489,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
         st = s->lotag;
         sh = s->hitag;
 
-        t = &ActorExtra[i].temp_data[0];
+        pData = &ActorExtra[i].temp_data[0];
 
         switch (st)
         {
@@ -5569,7 +5569,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
 
                 s->ang += (l*q);
-                t[2] += (l*q);
+                pData[2] += (l*q);
             }
             else
             {
@@ -5579,13 +5579,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if (sprite[j].ang > 1024)
                     l = -1;
                 else l = 1;
-                if (t[3] == 0)
-                    t[3] = ldist(s,&sprite[j]);
-                s->xvel = t[3];
+                if (pData[3] == 0)
+                    pData[3] = ldist(s,&sprite[j]);
+                s->xvel = pData[3];
                 s->x = sprite[j].x;
                 s->y = sprite[j].y;
                 s->ang += (l*q);
-                t[2] += (l*q);
+                pData[2] += (l*q);
             }
 
             if (l && (sc->floorstat&64))
@@ -5655,7 +5655,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 {
                     if (sprite[j].lotag == 19 && sprite[j].hitag == sh)
                     {
-                        t[0] = 0;
+                        pData[0] = 0;
                         break;
                     }
                     j = nextspritestat[j];
@@ -5666,18 +5666,18 @@ static void G_MoveEffectors(void)   //STATNUM 3
         case SE_6_SUBWAY:
             k = sc->extra;
 
-            if (t[4] > 0)
+            if (pData[4] > 0)
             {
-                t[4]--;
-                if (t[4] >= (k-(k>>3)))
+                pData[4]--;
+                if (pData[4] >= (k-(k>>3)))
                     s->xvel -= (k>>5);
-                if (t[4] > ((k>>1)-1) && t[4] < (k-(k>>3)))
+                if (pData[4] > ((k>>1)-1) && pData[4] < (k-(k>>3)))
                     s->xvel = 0;
-                if (t[4] < (k>>1))
+                if (pData[4] < (k>>1))
                     s->xvel += (k>>5);
-                if (t[4] < ((k>>1)-(k>>3)))
+                if (pData[4] < ((k>>1)-(k>>3)))
                 {
-                    t[4] = 0;
+                    pData[4] = 0;
                     s->xvel = k;
                 }
             }
@@ -5686,7 +5686,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             j = headspritestat[STAT_EFFECTOR];
             while (j >= 0)
             {
-                if ((sprite[j].lotag == 14) && (sh == sprite[j].hitag) && (ActorExtra[j].temp_data[0] == t[0]))
+                if ((sprite[j].lotag == 14) && (sh == sprite[j].hitag) && (ActorExtra[j].temp_data[0] == pData[0]))
                 {
                     sprite[j].xvel = s->xvel;
                     //                        if( t[4] == 1 )
@@ -5698,7 +5698,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             x = -x;
                         s->xvel += x;
                     }
-                    ActorExtra[j].temp_data[4] = t[4];
+                    ActorExtra[j].temp_data[4] = pData[4];
                 }
                 j = nextspritestat[j];
             }
@@ -5707,11 +5707,11 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
         case SE_14_SUBWAY_CAR:
             if (s->owner==-1)
-                s->owner = A_FindLocator((short)t[3],(short)t[0]);
+                s->owner = A_FindLocator((short)pData[3],(short)pData[0]);
 
             if (s->owner == -1)
             {
-                Bsprintf(tempbuf,"Could not find any locators for SE# 6 and 14 with a hitag of %" PRIdPTR ".\n",t[3]);
+                Bsprintf(tempbuf,"Could not find any locators for SE# 6 and 14 with a hitag of %" PRIdPTR ".\n", pData[3]);
                 G_GameExit(tempbuf);
             }
 
@@ -5721,13 +5721,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
             {
                 if (st==6)
                     if (sprite[s->owner].hitag&1)
-                        t[4]=sc->extra; //Slow it down
-                t[3]++;
-                s->owner = A_FindLocator(t[3],t[0]);
+                        pData[4]=sc->extra; //Slow it down
+                pData[3]++;
+                s->owner = A_FindLocator(pData[3], pData[0]);
                 if (s->owner==-1)
                 {
-                    t[3]=0;
-                    s->owner = A_FindLocator(0,t[0]);
+                    pData[3]=0;
+                    s->owner = A_FindLocator(0, pData[0]);
                 }
             }
 
@@ -5736,7 +5736,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 x = getangle(sprite[s->owner].x-s->x,sprite[s->owner].y-s->y);
                 q = G_GetAngleDelta(s->ang,x)>>3;
 
-                t[2] += q;
+                pData[2] += q;
                 s->ang += q;
 
                 if (s->xvel == sc->extra)
@@ -5893,25 +5893,25 @@ static void G_MoveEffectors(void)   //STATNUM 3
         case SE_30_TWO_WAY_TRAIN:
             if (s->owner == -1)
             {
-                t[3] = !t[3];
-                s->owner = A_FindLocator(t[3],t[0]);
+                pData[3] = !pData[3];
+                s->owner = A_FindLocator(pData[3], pData[0]);
             }
             else
             {
 
-                if (t[4] == 1) // Starting to go
+                if (pData[4] == 1) // Starting to go
                 {
                     if (ldist(&sprite[s->owner],s) < (2048-128))
-                        t[4] = 2;
+                        pData[4] = 2;
                     else
                     {
                         if (s->xvel == 0)
-                            G_OperateActivators(s->hitag+(!t[3]),-1);
+                            G_OperateActivators(s->hitag+(!pData[3]),-1);
                         if (s->xvel < 256)
                             s->xvel += 16;
                     }
                 }
-                if (t[4] == 2)
+                if (pData[4] == 2)
                 {
                     l = FindDistance2D(sprite[s->owner].x-s->x,sprite[s->owner].y-s->y);
 
@@ -5923,10 +5923,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     else
                     {
                         s->xvel = 0;
-                        G_OperateActivators(s->hitag+(short)t[3],-1);
+                        G_OperateActivators(s->hitag+(short)pData[3],-1);
                         s->owner = -1;
                         s->ang += 1024;
-                        t[4] = 0;
+                        pData[4] = 0;
                         G_OperateForceFields(i,s->hitag);
 
                         j = headspritesect[s->sectnum];
@@ -6072,36 +6072,36 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
 
         case SE_2_EARTHQUAKE://Quakes
-            if (t[4] > 0 && t[0] == 0)
+            if (pData[4] > 0 && pData[0] == 0)
             {
-                if (t[4] < sh)
-                    t[4]++;
-                else t[0] = 1;
+                if (pData[4] < sh)
+                    pData[4]++;
+                else pData[0] = 1;
             }
 
-            if (t[0] > 0)
+            if (pData[0] > 0)
             {
-                t[0]++;
+                pData[0]++;
 
                 s->xvel = 3;
 
-                if (t[0] > 96)
+                if (pData[0] > 96)
                 {
-                    t[0] = -1; //Stop the quake
-                    t[4] = -1;
+                    pData[0] = -1; //Stop the quake
+                    pData[4] = -1;
                     KILLIT(i);
                 }
                 else
                 {
-                    if ((t[0]&31) ==  8)
+                    if ((pData[0]&31) ==  8)
                     {
                         g_earthquakeTime = 48;
                         A_PlaySound(EARTHQUAKE,g_player[screenpeek].ps->i);
                     }
 
-                    if (klabs(sc->floorheinum-t[5]) < 8)
-                        sc->floorheinum = t[5];
-                    else sc->floorheinum += (ksgn(t[5]-sc->floorheinum)<<4);
+                    if (klabs(sc->floorheinum-pData[5]) < 8)
+                        sc->floorheinum = pData[5];
+                    else sc->floorheinum += (ksgn(pData[5]-sc->floorheinum)<<4);
                 }
 
                 m = (s->xvel*sintable[(s->ang+512)&2047])>>14;
@@ -6140,28 +6140,28 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
         case SE_3_RANDOM_LIGHTS_AFTER_SHOT_OUT:
 
-            if (t[4] == 0) break;
+            if (pData[4] == 0) break;
             p = A_FindPlayer(s,&x);
 
             //    if(t[5] > 0) { t[5]--; break; }
 
-            if ((g_globalRandom/(sh+1)&31) < 4 && !t[2])
+            if ((g_globalRandom/(sh+1)&31) < 4 && !pData[2])
             {
                 //       t[5] = 4+(g_globalRandom&7);
                 sc->ceilingpal = s->owner>>8;
                 sc->floorpal = s->owner&0xff;
-                t[0] = s->shade + (g_globalRandom&15);
+                pData[0] = s->shade + (g_globalRandom&15);
             }
             else
             {
                 //       t[5] = 4+(g_globalRandom&3);
                 sc->ceilingpal = s->pal;
                 sc->floorpal = s->pal;
-                t[0] = t[3];
+                pData[0] = pData[3];
             }
 
-            sc->ceilingshade = t[0];
-            sc->floorshade = t[0];
+            sc->ceilingshade = pData[0];
+            sc->floorshade = pData[0];
 
             wal = &wall[sc->wallptr];
 
@@ -6169,7 +6169,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             {
                 if (wal->hitag != 1)
                 {
-                    wal->shade = t[0];
+                    wal->shade = pData[0];
                     if ((wal->cstat&2) && wal->nextwall >= 0)
                     {
                         wall[wal->nextwall].shade = wal->shade;
@@ -6183,16 +6183,16 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             if ((g_globalRandom/(sh+1)&31) < 4)
             {
-                t[1] = s->shade + (g_globalRandom&15);//Got really bright
-                t[0] = s->shade + (g_globalRandom&15);
+                pData[1] = s->shade + (g_globalRandom&15);//Got really bright
+                pData[0] = s->shade + (g_globalRandom&15);
                 sc->ceilingpal = s->owner>>8;
                 sc->floorpal = s->owner&0xff;
                 j = 1;
             }
             else
             {
-                t[1] = t[2];
-                t[0] = t[3];
+                pData[1] = pData[2];
+                pData[0] = pData[3];
 
                 sc->ceilingpal = s->pal;
                 sc->floorpal = s->pal;
@@ -6200,8 +6200,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 j = 0;
             }
 
-            sc->floorshade = t[1];
-            sc->ceilingshade = t[1];
+            sc->floorshade = pData[1];
+            sc->ceilingshade = pData[1];
 
             wal = &wall[sc->wallptr];
 
@@ -6212,7 +6212,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 if (wal->hitag != 1)
                 {
-                    wal->shade = t[0];
+                    wal->shade = pData[0];
                     if ((wal->cstat&2) && wal->nextwall >= 0)
                         wall[wal->nextwall].shade = wal->shade;
                 }
@@ -6231,7 +6231,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 j = nextspritesect[j];
             }
 
-            if (t[4]) KILLIT(i);
+            if (pData[4]) KILLIT(i);
 
             break;
 
@@ -6248,11 +6248,11 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             if (s->owner==-1) //Start search
             {
-                t[4]=0;
+                pData[4]=0;
                 l = 0x7fffffff;
                 while (1) //Find the shortest dist
                 {
-                    s->owner = A_FindLocator((short)t[4],-1); //t[0] hold sectnum
+                    s->owner = A_FindLocator((short)pData[4],-1); //t[0] hold sectnum
 
                     if (s->owner==-1) break;
 
@@ -6264,7 +6264,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         l = m;
                     }
 
-                    t[4]++;
+                    pData[4]++;
                 }
 
                 s->owner = q;
@@ -6289,19 +6289,19 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             if (rnd(32))
             {
-                t[2]+=q;
+                pData[2]+=q;
                 sc->ceilingshade = 127;
             }
             else
             {
-                t[2] +=
-                    G_GetAngleDelta(t[2]+512,getangle(g_player[p].ps->pos.x-s->x,g_player[p].ps->pos.y-s->y))>>2;
+                pData[2] +=
+                    G_GetAngleDelta(pData[2]+512,getangle(g_player[p].ps->pos.x-s->x,g_player[p].ps->pos.y-s->y))>>2;
                 sc->ceilingshade = 0;
             }
             IFHIT
             {
-                t[3]++;
-                if (t[3] == 5)
+                pData[3]++;
+                if (pData[3] == 5)
                 {
                     s->zvel += 1024;
                     P_DoQuote(7,g_player[myconnectindex].ps);
@@ -6310,7 +6310,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             s->z += s->zvel;
             sc->ceilingz += s->zvel;
-            sector[t[0]].ceilingz += s->zvel;
+            sector[pData[0]].ceilingz += s->zvel;
             ms(i);
             setspritez_old(i,s->x,s->y,s->z);
             break;
@@ -6336,9 +6336,9 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 short sn;
 
                 if ((sc->lotag&0x8000) || ActorExtra[i].temp_data[4])
-                    x = -t[3];
+                    x = -pData[3];
                 else
-                    x = t[3];
+                    x = pData[3];
 
                 if (st == 9) x = -x;
 
@@ -6401,7 +6401,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 if (j == 1)
                 {
-                    if (t[0] > sh)
+                    if (pData[0] > sh)
                         switch (sector[s->sectnum].lotag)
                         {
                         case ST_20_CEILING_DOOR:
@@ -6413,23 +6413,23 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             fallthrough__;
                         default:
                             activatebysector(s->sectnum,i);
-                            t[0] = 0;
+                            pData[0] = 0;
                             break;
                         }
-                    else t[0]++;
+                    else pData[0]++;
                 }
             }
-            else t[0]=0;
+            else pData[0]=0;
             break;
         case SE_11_SWINGING_DOOR: //Swingdoor
 
-            if (t[5] > 0)
+            if (pData[5] > 0)
             {
-                t[5]--;
+                pData[5]--;
                 break;
             }
 
-            if (t[4])
+            if (pData[4])
             {
                 int endwall = sc->wallptr+sc->wallnum;
 
@@ -6449,31 +6449,29 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         p = A_FindPlayer(s, &x);
                         if (sprite[k].owner >= 0 && clipinsidebox(&sprite[k].pos.vec2,j, sprite[g_player[p].ps->i].clipdist << 1) == 1)
                         {
-                            t[5] = 8; // Delay
+                            pData[5] = 8; // Delay
                             goto BOLT;
                         }
                         k = nextspritestat[k];
                     }
                 }
 
-                k = (SP>>3)*t[3];
-                t[2]+=k;
-                t[4]+=k;
+                k = (SP>>3)*pData[3];
+                pData[2]+=k;
+                pData[4]+=k;
                 ms(i);
-                setspritez_old(i,s->x,s->y,s->z);
 
-                if (t[4] <= -511 || t[4] >= 512)
+                if (pData[4] <= -511 || pData[4] >= 512)
                 {
-                    t[4] = 0;
-                    t[2] &= 0xffffff00;
+                    pData[4] = 0;
+                    pData[2] &= 0xffffff00;
                     ms(i);
-                    setspritez_old(i,s->x,s->y,s->z);
                     break;
                 }
             }
             break;
         case SE_12_LIGHT_SWITCH:
-            if (t[0] == 3 || t[3] == 1)   //Lights going off
+            if (pData[0] == 3 || pData[3] == 1)   //Lights going off
             {
                 sc->floorpal = 0;
                 sc->ceilingpal = 0;
@@ -6482,13 +6480,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 for (j = sc->wallnum;j > 0; j--, wal++)
                     if (wal->hitag != 1)
                     {
-                        wal->shade = t[1];
+                        wal->shade = pData[1];
                         wal->pal = 0;
                     }
 
-                sc->floorshade = t[1];
-                sc->ceilingshade = t[2];
-                t[0]=0;
+                sc->floorshade = pData[1];
+                sc->ceilingshade = pData[2];
+                pData[0]=0;
 
                 j = headspritesect[SECT];
                 while (j >= 0)
@@ -6503,9 +6501,9 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 }
 
-                if (t[3] == 1) KILLIT(i);
+                if (pData[3] == 1) KILLIT(i);
             }
-            if (t[0] == 1)   //Lights flickering on
+            if (pData[0] == 1)   //Lights flickering on
             {
                 if (sc->floorshade > s->shade)
                 {
@@ -6523,7 +6521,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             wal->shade -= 2;
                         }
                 }
-                else t[0] = 2;
+                else pData[0] = 2;
 
                 j = headspritesect[SECT];
                 while (j >= 0)
@@ -6541,7 +6539,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
 
         case SE_13_EXPLOSIVE:
-            if (t[2])
+            if (pData[2])
             {
                 j = (SP<<5)|1;
 
@@ -6549,32 +6547,32 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 {
                     if (s->owner)
                     {
-                        if (klabs(t[0]-sc->ceilingz) >= j)
-                            sc->ceilingz += ksgn(t[0]-sc->ceilingz)*j;
-                        else sc->ceilingz = t[0];
+                        if (klabs(pData[0]-sc->ceilingz) >= j)
+                            sc->ceilingz += ksgn(pData[0]-sc->ceilingz)*j;
+                        else sc->ceilingz = pData[0];
                     }
                     else
                     {
-                        if (klabs(t[1]-sc->floorz) >= j)
-                            sc->floorz += ksgn(t[1]-sc->floorz)*j;
-                        else sc->floorz = t[1];
+                        if (klabs(pData[1]-sc->floorz) >= j)
+                            sc->floorz += ksgn(pData[1]-sc->floorz)*j;
+                        else sc->floorz = pData[1];
                     }
                 }
                 else
                 {
-                    if (klabs(t[1]-sc->floorz) >= j)
-                        sc->floorz += ksgn(t[1]-sc->floorz)*j;
-                    else sc->floorz = t[1];
-                    if (klabs(t[0]-sc->ceilingz) >= j)
-                        sc->ceilingz += ksgn(t[0]-sc->ceilingz)*j;
-                    sc->ceilingz = t[0];
+                    if (klabs(pData[1]-sc->floorz) >= j)
+                        sc->floorz += ksgn(pData[1]-sc->floorz)*j;
+                    else sc->floorz = pData[1];
+                    if (klabs(pData[0]-sc->ceilingz) >= j)
+                        sc->ceilingz += ksgn(pData[0]-sc->ceilingz)*j;
+                    sc->ceilingz = pData[0];
                 }
 
-                if (t[3] == 1)
+                if (pData[3] == 1)
                 {
                     //Change the shades
 
-                    t[3]++;
+                    pData[3]++;
                     sc->ceilingstat ^= 1;
 
                     if (s->ang == 512)
@@ -6594,42 +6592,42 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         }
                     }
                 }
-                t[2]++;
-                if (t[2] > 256)
+                pData[2]++;
+                if (pData[2] > 256)
                     KILLIT(i);
             }
 
 
-            if (t[2] == 4 && s->ang != 512)
+            if (pData[2] == 4 && s->ang != 512)
                 for (x=0;x<7;x++) RANDOMSCRAP;
             break;
 
 
         case SE_15_SLIDING_DOOR:
 
-            if (t[4])
+            if (pData[4])
             {
                 s->xvel = 16;
 
-                if (t[4] == 1) //Opening
+                if (pData[4] == 1) //Opening
                 {
-                    if (t[3] >= (SP>>3))
+                    if (pData[3] >= (SP>>3))
                     {
-                        t[4] = 0; //Turn off the sliders
+                        pData[4] = 0; //Turn off the sliders
                         A_CallSound(s->sectnum,i);
                         break;
                     }
-                    t[3]++;
+                    pData[3]++;
                 }
-                else if (t[4] == 2)
+                else if (pData[4] == 2)
                 {
-                    if (t[3]<1)
+                    if (pData[3]<1)
                     {
-                        t[4] = 0;
+                        pData[4] = 0;
                         A_CallSound(s->sectnum,i);
                         break;
                     }
-                    t[3]--;
+                    pData[3]--;
                 }
 
                 ms(i);
@@ -6639,10 +6637,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
         case SE_16_REACTOR: //Reactor
 
-            t[2]+=32;
+            pData[2]+=32;
             if (sc->floorz<sc->ceilingz) s->shade=0;
 
-            else if (sc->ceilingz < t[3])
+            else if (sc->ceilingz < pData[3])
             {
 
                 //The following code check to see if
@@ -6673,7 +6671,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
         case SE_17_WARP_ELEVATOR:
-            q = t[0] * (SP << 2);
+            q = pData[0] * (SP << 2);
 
             sc->ceilingz += q;
             sc->floorz += q;
@@ -6710,29 +6708,29 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 j = nextspritesect[j];
             }
 
-            if (t[0])  //If in motion
+            if (pData[0])  //If in motion
             {
-                if (klabs(sc->floorz-t[2]) <= SP)
+                if (klabs(sc->floorz-pData[2]) <= SP)
                 {
                     G_ActivateWarpElevators(i,0);
                     break;
                 }
 
-                if (t[0]==-1)
+                if (pData[0]==-1)
                 {
-                    if (sc->floorz > t[3])
+                    if (sc->floorz > pData[3])
                         break;
                 }
-                else if (sc->ceilingz < t[4]) break;
+                else if (sc->ceilingz < pData[4]) break;
 
-                if (t[1] == 0) break;
-                t[1] = 0;
+                if (pData[1] == 0) break;
+                pData[1] = 0;
 
                 j = headspritestat[STAT_EFFECTOR];
                 while (j >= 0)
                 {
                     if (i != j && (sprite[j].lotag) == 17)
-                        if ((sc->hitag-t[0]) ==
+                        if ((sc->hitag-pData[0]) ==
                                 (sector[sprite[j].sectnum].hitag)
                                 && sh == (sprite[j].hitag))
                             break;
@@ -6815,16 +6813,16 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
         case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
-            if (t[0])
+            if (pData[0])
             {
                 if (s->pal)
                 {
                     if (s->ang == 512)
                     {
                         sc->ceilingz -= sc->extra;
-                        if (sc->ceilingz <= t[1])
+                        if (sc->ceilingz <= pData[1])
                         {
-                            sc->ceilingz = t[1];
+                            sc->ceilingz = pData[1];
                             KILLIT(i);
                         }
                     }
@@ -6844,9 +6842,9 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             }
                             j = nextspritesect[j];
                         }
-                        if (sc->floorz >= t[1])
+                        if (sc->floorz >= pData[1])
                         {
-                            sc->floorz = t[1];
+                            sc->floorz = pData[1];
                             KILLIT(i);
                         }
                     }
@@ -6886,22 +6884,22 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     }
                 }
 
-                t[2]++;
-                if (t[2] >= s->hitag)
+                pData[2]++;
+                if (pData[2] >= s->hitag)
                 {
-                    t[2] = 0;
-                    t[0] = 0;
+                    pData[2] = 0;
+                    pData[0] = 0;
                 }
             }
             break;
 
         case SE_19_EXPLOSION_LOWERS_CEILING: //Battlestar galactia shields
 
-            if (t[0])
+            if (pData[0])
             {
-                if (t[0] == 1)
+                if (pData[0] == 1)
                 {
-                    t[0]++;
+                    pData[0]++;
                     x = sc->wallptr;
                     q = x+sc->wallnum;
                     for (j=x;j<q;j++)
@@ -6989,8 +6987,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
         case SE_20_STRETCH_BRIDGE: //Extend-o-bridge
 
-            if (t[0] == 0) break;
-            if (t[0] == 1) s->xvel = 8;
+            if (pData[0] == 0) break;
+            if (pData[0] == 1) s->xvel = 8;
             else s->xvel = -8;
 
             if (s->xvel)   //Moving
@@ -6998,16 +6996,16 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 x = (s->xvel*sintable[(s->ang+512)&2047])>>14;
                 l = (s->xvel*sintable[s->ang&2047])>>14;
 
-                t[3] += s->xvel;
+                pData[3] += s->xvel;
 
                 s->x += x;
                 s->y += l;
 
-                if (t[3] <= 0 || (t[3]>>6) >= (SP>>6))
+                if (pData[3] <= 0 || (pData[3]>>6) >= (SP>>6))
                 {
                     s->x -= x;
                     s->y -= l;
-                    t[0] = 0;
+                    pData[0] = 0;
                     A_CallSound(s->sectnum,i);
                     break;
                 }
@@ -7029,8 +7027,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     j = nextj;
                 }
 
-                dragpoint((short)t[1],wall[t[1]].x+x,wall[t[1]].y+l, 0);
-                dragpoint((short)t[2],wall[t[2]].x+x,wall[t[2]].y+l, 0);
+                dragpoint((short)pData[1],wall[pData[1]].x+x,wall[pData[1]].y+l, 0);
+                dragpoint((short)pData[2],wall[pData[2]].x+x,wall[pData[2]].y+l, 0);
 
                 TRAVERSE_CONNECT(p)
                 if (g_player[p].ps->cursectnum == s->sectnum && g_player[p].ps->on_ground)
@@ -7055,17 +7053,17 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
         case SE_21_DROP_FLOOR: // Cascading effect
 
-            if (t[0] == 0) break;
+            if (pData[0] == 0) break;
 
             if (s->ang == 1536)
                 l = (intptr_t) &sc->ceilingz;
             else
                 l = (intptr_t) &sc->floorz;
 
-            if (t[0] == 1)   //Decide if the s->sectnum should go up or down
+            if (pData[0] == 1)   //Decide if the s->sectnum should go up or down
             {
                 s->zvel = ksgn(s->z-*(int *)l) * (SP<<4);
-                t[0]++;
+                pData[0]++;
             }
 
             if (sc->extra == 0)
@@ -7083,18 +7081,18 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
         case SE_22_TEETH_DOOR:
 
-            if (t[1])
+            if (pData[1])
             {
-                if (GetAnimationGoal(&sector[t[0]].ceilingz) >= 0)
+                if (GetAnimationGoal(&sector[pData[0]].ceilingz) >= 0)
                     sc->ceilingz += sc->extra*9;
-                else t[1] = 0;
+                else pData[1] = 0;
             }
             break;
 
         case SE_24_CONVEYOR:
         case SE_34:
 
-            if (t[4]) break;
+            if (pData[4]) break;
 
             x = (SP*sintable[(s->ang+512)&2047])>>18;
             l = (SP*sintable[s->ang&2047])>>18;
@@ -7195,21 +7193,21 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         A_Spawn(i,EXPLOSION2);
                 }
 
-            switch (t[0])
+            switch (pData[0])
             {
             case 0:
                 sc->ceilingz += s->yvel;
                 if (sc->ceilingz > sc->floorz)
                     sc->floorz = sc->ceilingz;
                 if (sc->ceilingz > s->z+(32<<8))
-                    t[0]++;
+                    pData[0]++;
                 break;
             case 1:
                 sc->ceilingz-=(s->yvel<<2);
-                if (sc->ceilingz < t[4])
+                if (sc->ceilingz < pData[4])
                 {
-                    sc->ceilingz = t[4];
-                    t[0] = 0;
+                    sc->ceilingz = pData[4];
+                    pData[0] = 0;
                 }
                 break;
             }
@@ -7217,11 +7215,11 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
         case SE_25_PISTON: //PISTONS
 
-            if (t[4] == 0) break;
+            if (pData[4] == 0) break;
 
             if (sc->floorz <= sc->ceilingz)
                 s->shade = 0;
-            else if (sc->ceilingz <= t[3])
+            else if (sc->ceilingz <= pData[3])
                 s->shade = 1;
 
             if (s->shade)
@@ -7233,8 +7231,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
             else
             {
                 sc->ceilingz   -= SP<<4;
-                if (sc->ceilingz < t[3])
-                    sc->ceilingz = t[3];
+                if (sc->ceilingz < pData[3])
+                    sc->ceilingz = pData[3];
             }
 
             break;
@@ -7248,8 +7246,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
             s->shade++;
             if (s->shade > 7)
             {
-                s->x = t[3];
-                s->y = t[4];
+                s->x = pData[3];
+                s->y = pData[4];
                 sc->floorz -= ((s->zvel*s->shade)-s->zvel);
                 s->shade = 0;
             }
@@ -7300,10 +7298,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
             p = A_FindPlayer(s,&x);
             if (sprite[g_player[p].ps->i].extra > 0 && myconnectindex == screenpeek)
             {
-                if (t[0] < 0)
+                if (pData[0] < 0)
                 {
                     ud.camerasprite = i;
-                    t[0]++;
+                    pData[0]++;
                 }
                 else if (ud.recstat == 2 && g_player[p].ps->newowner == -1)
                 {
@@ -7312,16 +7310,16 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         if (x < (int)((unsigned)sh))
                         {
                             ud.camerasprite = i;
-                            t[0] = 999;
+                            pData[0] = 999;
                             s->ang += G_GetAngleDelta(s->ang,getangle(g_player[p].ps->pos.x-s->x,g_player[p].ps->pos.y-s->y))>>3;
                             SP = 100+((s->z-g_player[p].ps->pos.z)/257);
 
                         }
-                        else if (t[0] == 999)
+                        else if (pData[0] == 999)
                         {
                             if (ud.camerasprite == i)
-                                t[0] = 0;
-                            else t[0] = -10;
+                                pData[0] = 0;
+                            else pData[0] = -10;
                             ud.camerasprite = i;
 
                         }
@@ -7330,11 +7328,11 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     {
                         s->ang = getangle(g_player[p].ps->pos.x-s->x,g_player[p].ps->pos.y-s->y);
 
-                        if (t[0] == 999)
+                        if (pData[0] == 999)
                         {
                             if (ud.camerasprite == i)
-                                t[0] = 0;
-                            else t[0] = -20;
+                                pData[0] = 0;
+                            else pData[0] = -20;
                             ud.camerasprite = i;
                         }
                     }
@@ -7342,9 +7340,9 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
         case SE_28_LIGHTNING:
-            if (t[5] > 0)
+            if (pData[5] > 0)
             {
-                t[5]--;
+                pData[5]--;
                 break;
             }
 
@@ -7433,22 +7431,22 @@ static void G_MoveEffectors(void)   //STATNUM 3
             sc->floorz = s->z + l;
             break;
         case SE_31_FLOOR_RISE_FALL: // True Drop Floor
-            if (t[0] == 1)
+            if (pData[0] == 1)
             {
                 // Choose dir
 
-                if (t[3] > 0)
+                if (pData[3] > 0)
                 {
-                    t[3]--;
+                    pData[3]--;
                     break;
                 }
 
-                if (t[2] == 1) // Retract
+                if (pData[2] == 1) // Retract
                 {
                     if (SA != 1536)
                         HandleSE31(i, 1, s->z, 0, s->z - sc->floorz);
                     else
-                        HandleSE31(i, 1, t[1], 0, t[1] - sc->floorz);
+                        HandleSE31(i, 1, pData[1], 0, pData[1] - sc->floorz);
 
                     break;
                 }
@@ -7456,16 +7454,16 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if ((s->ang & 2047) == 1536)
                     HandleSE31(i, 0, s->z, 1, s->z - sc->floorz);
                 else
-                    HandleSE31(i, 0, t[1], 1, t[1] - s->z);
+                    HandleSE31(i, 0, pData[1], 1, pData[1] - s->z);
             }
             break;
 
         case SE_32_CEILING_RISE_FALL: // True Drop Ceiling
-            if (t[0] == 1)
+            if (pData[0] == 1)
             {
                 // Choose dir
 
-                if (t[2] == 1) // Retract
+                if (pData[2] == 1) // Retract
                 {
                     if (SA != 1536)
                     {
@@ -7474,24 +7472,24 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         {
                             sc->ceilingz = s->z;
                             A_CallSound(s->sectnum,i);
-                            t[2] = 0;
-                            t[0] = 0;
+                            pData[2] = 0;
+                            pData[0] = 0;
                         }
                         else sc->ceilingz +=
                                 ksgn(s->z-sc->ceilingz)*SP;
                     }
                     else
                     {
-                        if (klabs(sc->ceilingz - t[1]) <
+                        if (klabs(sc->ceilingz - pData[1]) <
                                 (SP<<1))
                         {
-                            sc->ceilingz = t[1];
+                            sc->ceilingz = pData[1];
                             A_CallSound(s->sectnum,i);
-                            t[2] = 0;
-                            t[0] = 0;
+                            pData[2] = 0;
+                            pData[0] = 0;
                         }
                         else sc->ceilingz +=
-                                ksgn(t[1]-sc->ceilingz)*SP;
+                                ksgn(pData[1]-sc->ceilingz)*SP;
                     }
                     break;
                 }
@@ -7501,8 +7499,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     if (klabs(sc->ceilingz-s->z) <
                             (SP<<1))
                     {
-                        t[0] = 0;
-                        t[2] = !t[2];
+                        pData[0] = 0;
+                        pData[2] = !pData[2];
                         A_CallSound(s->sectnum,i);
                         sc->ceilingz = s->z;
                     }
@@ -7511,13 +7509,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
                 else
                 {
-                    if (klabs(sc->ceilingz-t[1]) < (SP<<1))
+                    if (klabs(sc->ceilingz-pData[1]) < (SP<<1))
                     {
-                        t[0] = 0;
-                        t[2] = !t[2];
+                        pData[0] = 0;
+                        pData[2] = !pData[2];
                         A_CallSound(s->sectnum,i);
                     }
-                    else sc->ceilingz -= ksgn(s->z-t[1])*SP;
+                    else sc->ceilingz -= ksgn(s->z-pData[1])*SP;
                 }
             }
             break;
@@ -7528,19 +7526,19 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
         case SE_36_PROJ_SHOOTER:
 
-            if (t[0])
+            if (pData[0])
             {
-                if (t[0] == 1)
+                if (pData[0] == 1)
                     A_Shoot(i,sc->extra);
-                else if (t[0] == 26*5)
-                    t[0] = 0;
-                t[0]++;
+                else if (pData[0] == 26*5)
+                    pData[0] = 0;
+                pData[0]++;
             }
             break;
 
         case 128: //SE to control glass breakage
 
-            wal = &wall[t[2]];
+            wal = &wall[pData[2]];
 
             if (wal->cstat|32)
             {
@@ -7558,7 +7556,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             if (wal->nextwall >= 0)
                 wall[wal->nextwall].overpicnum++;
 
-            if (t[0] < t[1]) t[0]++;
+            if (pData[0] < pData[1]) pData[0]++;
             else
             {
                 wal->cstat &= (128+32+8+4+2);
@@ -7569,11 +7567,11 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
         case SE_130:
-            if (t[0] > 80)
+            if (pData[0] > 80)
             {
                 KILLIT(i);
             }
-            else t[0]++;
+            else pData[0]++;
 
             x = sc->floorz-sc->ceilingz;
 
@@ -7588,11 +7586,11 @@ static void G_MoveEffectors(void)   //STATNUM 3
             }
             break;
         case SE_131:
-            if (t[0] > 40)
+            if (pData[0] > 40)
             {
                 KILLIT(i);
             }
-            else t[0]++;
+            else pData[0]++;
 
             x = sc->floorz-sc->ceilingz;
 
