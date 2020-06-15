@@ -8551,8 +8551,8 @@ FAKE_F3:
 
 static void G_ShowParameterHelp(void)
 {
-    const char *s = "Usage: eduke32 [files] [options]\n"
-              "Example: eduke32 -q4 -a -m -tx -map nukeland.map\n\n"
+    const char *s = "Usage: " APPBASENAME " [files] [options]\n"
+              "Example: " APPBASENAME " -q4 -a -m -tx -map nukeland.map\n\n"
               "Files can be *.grp/zip/con/def\n"
               "\n"
               "-cfg [file.cfg]\tUse an alternate configuration file\n"
