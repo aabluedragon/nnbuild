@@ -8600,7 +8600,7 @@ static void G_ShowParameterHelp(void)
 
 static void G_ShowDebugHelp(void)
 {
-    const char *s = "Usage: eduke32 [files] [options]\n"
+    const char *s = "Usage: " APPBASENAME " [files] [options]\n"
               "\n"
               "-a\t\tUse fake player AI (fake multiplayer only)\n"
               "-cachesize #\tSets cache size, in Kb\n"
