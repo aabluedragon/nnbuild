@@ -8571,6 +8571,7 @@ static void G_ShowParameterHelp(void)
               "-net /n0:3\tHost 3-player match in master/slave mode.\n"
               "-net /n0 192.168.0.1\tJoin specified IP in master/slave mode.\n"
               "\n"
+              "-noffire\t\tDisable friendly fire\n"
               "-r\t\tRecord demo\n"
               "-s#\t\tSet skill level (1-4)\n"
 #if STARTUP_WINDOW
@@ -9221,6 +9222,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
     ud.m_respawn_monsters = 0;
     ud.m_respawn_inventory = 0;
     ud.m_weaponstay = 0;
+    ud.m_ffire = 1;
     ud.warp_on = 0;
     ud.cashman = 0;
     ud.m_player_skill = ud.player_skill = 2;
@@ -9406,6 +9408,12 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                         CommandMap = argv[i+1];
                         i++;
                     }
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "noffire"))
+                {
+                    ud.m_ffire = 0;
                     i++;
                     continue;
                 }
