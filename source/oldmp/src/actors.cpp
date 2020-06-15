@@ -3174,7 +3174,7 @@ static void G_MoveTransports(void)
 
             switch (sprite[j].statnum)
             {
-            case 10:    // Player
+                case STAT_PLAYER:    // Player
 
                 if (sprite[j].owner != -1)
                 {
@@ -3239,13 +3239,14 @@ static void G_MoveTransports(void)
                         if ((g_player[p].ps->jetpack_on == 0) || (g_player[p].ps->jetpack_on && TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_JUMP)) ||
                                 (g_player[p].ps->jetpack_on && TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_CROUCH)))
                         {
-                            g_player[p].ps->opos.x = g_player[p].ps->pos.x += sprite[OW].x-SX;
-                            g_player[p].ps->opos.y = g_player[p].ps->pos.y += sprite[OW].y-SY;
+                            g_player[p].ps->pos.x += sprite[OW].x-SX;
+                            g_player[p].ps->pos.y += sprite[OW].y-SY;
 
                             if (g_player[p].ps->jetpack_on && (TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_JUMP) || g_player[p].ps->jetpack_on < 11))
                                 g_player[p].ps->pos.z = sprite[OW].z-6144;
                             else g_player[p].ps->pos.z = sprite[OW].z+6144;
-                            g_player[p].ps->opos.z = g_player[p].ps->pos.z;
+
+                            g_player[p].ps->opos = g_player[p].ps->pos;
 
                             ActorExtra[g_player[p].ps->i].bposx = g_player[p].ps->pos.x;
                             ActorExtra[g_player[p].ps->i].bposy = g_player[p].ps->pos.y;
@@ -3326,10 +3327,10 @@ static void G_MoveTransports(void)
                 }
                 break;
 
-            case 4:
+            case STAT_PROJECTILE:
                 // comment out to make RPGs pass through water: (r1450 breaks this)
                 //if (sectlotag != 0) goto JBOLT;
-            case 1:
+            case STAT_ACTOR:
                 if ((sprite[j].picnum == SHARK) || (sprite[j].picnum == COMMANDER) || (sprite[j].picnum == OCTABRAIN)
                         || ((sprite[j].picnum >= GREENSLIME) && (sprite[j].picnum <= GREENSLIME+7)))
                 {
@@ -3337,9 +3338,9 @@ static void G_MoveTransports(void)
                         goto JBOLT;
                 }
                 fallthrough__;
-            case 5:
-            case 12:
-            case 13:
+            case STAT_MISC:
+            case STAT_FALLER:
+            case STAT_DUMMYPLAYER:
 
                 ll = klabs(sprite[j].zvel);
 
