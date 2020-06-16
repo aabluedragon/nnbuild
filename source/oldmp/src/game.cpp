@@ -5356,7 +5356,7 @@ int A_Spawn(int j, int pn)
 
             if (j >= 0)
             {
-                x = getflorzofslope(sp->sectnum,sp->x,sp->y);
+                x = yax_getflorzofslope(sp->sectnum,sp->pos.vec2);
                 if (sp->z > x-(12<<8))
                     sp->z = x-(12<<8);
             }
