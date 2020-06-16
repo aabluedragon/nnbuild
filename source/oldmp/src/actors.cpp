@@ -531,6 +531,13 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
 
     daz = sprite[spritenum].z - ((tilesiz[sprite[spritenum].picnum].y*sprite[spritenum].yrepeat)<<1);
 
+    if (yax_getbunch(dasectnum, (zchange > 0)) >= 0
+        && (SECTORFLD(dasectnum, stat, (zchange > 0)) & yax_waltosecmask(cliptype)) == 0)
+    {
+        setspritez(spritenum, &sprite[spritenum].pos);
+        dasectnum = sprite[spritenum].sectnum;
+    }
+
     if (isEnemy)
     {
         
