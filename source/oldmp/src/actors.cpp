@@ -2404,6 +2404,30 @@ static void A_DoProjectileBounce(int i)
     s->ang = getangle(xvect,yvect);
 }
 
+static void G_WeaponHitCeilingOrFloor(int32_t i, spritetype* s, int* j)
+{
+#if 0
+    if (ActorExtra[i].flags & SFLAG_DIDNOSE7WATER)
+    {
+        ActorExtra[i].flags &= ~SFLAG_DIDNOSE7WATER;
+        return;
+    }
+#endif
+
+    if (s->z < ActorExtra[i].ceilingz)
+    {
+        *j = 16384 | s->sectnum;
+        s->zvel = -1;
+    }
+    else if (s->z > ActorExtra[i].floorz + ZOFFSET2 * (sector[s->sectnum].lotag == ST_1_ABOVE_WATER))
+    {
+        *j = 16384 | s->sectnum;
+
+        if (sector[s->sectnum].lotag != ST_1_ABOVE_WATER)
+            s->zvel = 1;
+    }
+}
+
 static void G_MoveWeapons(void)
 {
     int i = headspritestat[STAT_PROJECTILE], j=0, k, f, nexti, p, q;
@@ -2581,23 +2605,8 @@ static void G_MoveWeapons(void)
 
                 }
 
-                if ((j&49152) != 49152)
-                    if (!(ActorExtra[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS))
-                    {
-                        if (s->z < ActorExtra[i].ceilingz)
-                        {
-                            j = 16384|(s->sectnum);
-                            s->zvel = -1;
-                        }
-                        else
-                            if ((s->z > ActorExtra[i].floorz && sector[s->sectnum].lotag != ST_1_ABOVE_WATER) ||
-                                    (s->z > ActorExtra[i].floorz+(16<<8) && sector[s->sectnum].lotag == ST_1_ABOVE_WATER))
-                            {
-                                j = 16384|(s->sectnum);
-                                if (sector[s->sectnum].lotag != ST_1_ABOVE_WATER)
-                                    s->zvel = 1;
-                            }
-                    }
+                if ((j & 49152) != 49152 && !(ActorExtra[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS))
+                    G_WeaponHitCeilingOrFloor(i, s, &j);
 
                 if (ActorExtra[i].projectile.workslike & PROJECTILE_WATERBUBBLES &&
                         sector[s->sectnum].lotag == ST_2_UNDERWATER && rnd(140))
@@ -2909,23 +2918,8 @@ static void G_MoveWeapons(void)
                 if (s->sectnum < 0)
                     KILLIT(i);
 
-                if ((j&49152) != 49152)
-                    if (s->picnum != FREEZEBLAST)
-                    {
-                        if (s->z < ActorExtra[i].ceilingz)
-                        {
-                            j = 16384|(s->sectnum);
-                            s->zvel = -1;
-                        }
-                        else
-                            if ((s->z > ActorExtra[i].floorz && sector[s->sectnum].lotag != ST_1_ABOVE_WATER) ||
-                                    (s->z > ActorExtra[i].floorz+(16<<8) && sector[s->sectnum].lotag == ST_1_ABOVE_WATER))
-                            {
-                                j = 16384|(s->sectnum);
-                                if (sector[s->sectnum].lotag != ST_1_ABOVE_WATER)
-                                    s->zvel = 1;
-                            }
-                    }
+                if ((j & 49152) != 49152 && (s->picnum != FREEZEBLAST))
+                    G_WeaponHitCeilingOrFloor(i, s, &j);
 
                 if (s->picnum == FIRELASER)
                 {
