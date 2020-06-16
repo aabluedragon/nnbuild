@@ -671,7 +671,7 @@ void A_DoGuts(int sp, int gtype, int n)
         sx = sy = 8;
 
     gutz = s->z-(8<<8);
-    floorz = getflorzofslope(s->sectnum,s->x,s->y);
+    floorz = yax_getflorzofslope(s->sectnum,s->pos.vec2);
 
     if (gutz > (floorz-(8<<8)))
         gutz = floorz-(8<<8);
@@ -708,7 +708,7 @@ void A_DoGutsDir(int sp, int gtype, int n)
         sx = sy = 8;
 
     gutz = s->z-(8<<8);
-    floorz = getflorzofslope(s->sectnum,s->x,s->y);
+    floorz = yax_getflorzofslope(s->sectnum,s->pos.vec2);
 
     if (gutz > (floorz-(8<<8)))
         gutz = floorz-(8<<8);
@@ -4877,7 +4877,7 @@ static void G_MoveMisc(void)  // STATNUM 5
             switchpicnum--;
         }
         if ((s->picnum == MONEY+1) || (s->picnum == MAIL+1) || (s->picnum == PAPER+1))
-            ActorExtra[i].floorz = s->z = getflorzofslope(s->sectnum,s->x,s->y);
+            ActorExtra[i].floorz = s->z = yax_getflorzofslope(s->sectnum,s->pos.vec2);
         else switch (DynamicTileMap[switchpicnum])
             {
             case NEON1__STATIC:
@@ -4969,12 +4969,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 {
                     if (sector[sect].lotag != ST_1_ABOVE_WATER && sector[sect].lotag != ST_2_UNDERWATER)
                         KILLIT(i);
-                    /*                    else
-                                        {
-                                            l = getflorzofslope(sect,s->x,s->y)-s->z;
-                                            if( l > (16<<8) ) KILLIT(i);
-                                        }
-                                        else */
+
                     if (!S_CheckSoundPlaying(ITEM_SPLASH))
                         A_PlaySound(ITEM_SPLASH,i);
                 }
@@ -5053,7 +5048,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                     setspritez_old(i,s->x,s->y,s->z);
 
                 if (s->sectnum == -1) KILLIT(i);
-                l = getflorzofslope(s->sectnum,s->x,s->y);
+                l = yax_getflorzofslope(s->sectnum,s->pos.vec2);
 
                 if (s->z > l)
                 {
@@ -5157,7 +5152,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                         }
                         t[2]++;
                     }
-                    l = getflorzofslope(s->sectnum,s->x,s->y);
+                    l = yax_getflorzofslope(s->sectnum,s->pos.vec2);
 
                     s->z = l-(2<<8);
                     s->xvel = 0;

@@ -2605,7 +2605,9 @@ static int X_DoExecute(void)
     case CON_GETCEILZOFSLOPE:
         insptr++;
         {
-            int sectnum = Gv_GetVarX(*insptr++), x = Gv_GetVarX(*insptr++), y = Gv_GetVarX(*insptr++);
+            int sectnum = Gv_GetVarX(*insptr++);
+            vec2_t pos = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
+
             if ((sectnum<0 || sectnum>=numsectors) && g_scriptSanityChecks)
             {
                 OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],sectnum);
@@ -2615,10 +2617,10 @@ static int X_DoExecute(void)
 
             if (tw == CON_GETFLORZOFSLOPE)
             {
-                Gv_SetVarX(*insptr++, getflorzofslope(sectnum,x,y));
+                Gv_SetVarX(*insptr++, yax_getflorzofslope(sectnum,pos));
                 break;
             }
-            Gv_SetVarX(*insptr++, getceilzofslope(sectnum,x,y));
+            Gv_SetVarX(*insptr++, yax_getceilzofslope(sectnum,pos));
             break;
         }
 
