@@ -330,8 +330,8 @@ void G_DoSectorAnimations(void)
                         g_player[p].ps->vel.z = 0;
                         if (p == myconnectindex)
                         {
-                            myz += v;
-                            myzvel = 0;
+                            predictedPlayer.pos.z += v;
+                            predictedPlayer.vel.z = 0;
                             myposbak[((movefifoplc-1)&(MOVEFIFOSIZ-1))].z = g_player[p].ps->pos.z;
                         }
                     }

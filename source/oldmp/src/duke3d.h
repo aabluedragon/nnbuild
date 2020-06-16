@@ -183,7 +183,8 @@ enum
 #include "mmulti.h"
 #endif
 
-#include "oldnet.h"
+#include "sync.h"
+
 #include "baselayer.h"
 #include "function.h"
 #include "macros.h"
@@ -1110,6 +1111,7 @@ extern hashtable_t gamefuncH;
 
 #include "global.h"
 #include "screens.h"
+#include "oldnet.h"
 
 #endif
 

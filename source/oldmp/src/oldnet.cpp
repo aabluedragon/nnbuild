@@ -18,12 +18,6 @@ int movefifoplc;
 // Prediction Vars
 int predictfifoplc;
 
-int myx, omyx, myxvel, myy, omyy, myyvel, myz, omyz, myzvel;
-fix16_t myhoriz, omyhoriz, myhorizoff, omyhorizoff;
-fix16_t myang, omyang;
-int16_t mycursectnum, myjumpingcounter;
-char myjumpingtoggle, myonground, myhardlanding, myreturntocenter;
-
 int oldnet_predicting;
 DukePlayer_t predictedPlayer;
 
@@ -1504,27 +1498,22 @@ void Net_CorrectPrediction(void)
         initprintf("\n");
     }
 
-    myx = p->pos.x;
-    omyx = p->opos.x;
-    myxvel = p->vel.x;
-    myy = p->pos.y;
-    omyy = p->opos.y;
-    myyvel = p->vel.y;
-    myz = p->pos.z;
-    omyz = p->opos.z;
-    myzvel = p->vel.z;
-    myang = p->q16ang;
-    omyang = p->oq16ang;
-    mycursectnum = p->cursectnum;
-    myhoriz = p->q16horiz;
-    omyhoriz = p->oq16horiz;
-    myhorizoff = p->q16horizoff;
-    omyhorizoff = p->oq16horizoff;
-    myjumpingcounter = p->jumping_counter;
-    myjumpingtoggle = p->jumping_toggle;
-    myonground = p->on_ground;
-    myhardlanding = p->hard_landing;
-    myreturntocenter = p->return_to_center;
+    predictedPlayer.pos = p->pos;
+    predictedPlayer.opos = p->opos;
+    predictedPlayer.vel = p->vel;
+
+    predictedPlayer.q16ang = p->q16ang;
+    predictedPlayer.oq16ang = p->oq16ang;
+    predictedPlayer.cursectnum = p->cursectnum;
+    predictedPlayer.q16horiz = p->q16horiz;
+    predictedPlayer.oq16horiz = p->oq16horiz;
+    predictedPlayer.q16horizoff = p->q16horizoff;
+    predictedPlayer.oq16horizoff = p->oq16horizoff;
+    predictedPlayer.jumping_counter = p->jumping_counter;
+    predictedPlayer.jumping_toggle = p->jumping_toggle;
+    predictedPlayer.on_ground = p->on_ground;
+    predictedPlayer.hard_landing = p->hard_landing;
+    predictedPlayer.return_to_center = p->return_to_center;
 
     predictfifoplc = movefifoplc;
     while (predictfifoplc < g_player[myconnectindex].movefifoend)
@@ -1533,19 +1522,17 @@ void Net_CorrectPrediction(void)
 
 void Net_ResetPrediction(void)
 {
-    myx = omyx = g_player[myconnectindex].ps->pos.x;
-    myy = omyy = g_player[myconnectindex].ps->pos.y;
-    myz = omyz = g_player[myconnectindex].ps->pos.z;
-    myxvel = myyvel = myzvel = 0;
-    myang = omyang = g_player[myconnectindex].ps->q16ang;
-    myhoriz = omyhoriz = g_player[myconnectindex].ps->q16horiz;
-    myhorizoff = omyhorizoff = g_player[myconnectindex].ps->q16horizoff;
-    mycursectnum = g_player[myconnectindex].ps->cursectnum;
-    myjumpingcounter = g_player[myconnectindex].ps->jumping_counter;
-    myjumpingtoggle = g_player[myconnectindex].ps->jumping_toggle;
-    myonground = g_player[myconnectindex].ps->on_ground;
-    myhardlanding = g_player[myconnectindex].ps->hard_landing;
-    myreturntocenter = g_player[myconnectindex].ps->return_to_center;
+    predictedPlayer.pos = predictedPlayer.opos = g_player[myconnectindex].ps->pos;
+    predictedPlayer.vel = { 0, 0, 0 };
+    predictedPlayer.q16ang = predictedPlayer.oq16ang = g_player[myconnectindex].ps->q16ang;
+    predictedPlayer.q16horiz = predictedPlayer.oq16horiz = g_player[myconnectindex].ps->q16horiz;
+    predictedPlayer.q16horizoff = predictedPlayer.oq16horizoff = g_player[myconnectindex].ps->q16horizoff;
+    predictedPlayer.cursectnum = g_player[myconnectindex].ps->cursectnum;
+    predictedPlayer.jumping_counter = g_player[myconnectindex].ps->jumping_counter;
+    predictedPlayer.jumping_toggle = g_player[myconnectindex].ps->jumping_toggle;
+    predictedPlayer.on_ground = g_player[myconnectindex].ps->on_ground;
+    predictedPlayer.hard_landing = g_player[myconnectindex].ps->hard_landing;
+    predictedPlayer.return_to_center = g_player[myconnectindex].ps->return_to_center;
 }
 
 void Net_DoPrediction(void)
@@ -1566,7 +1553,7 @@ void Net_DoPrediction(void)
 
     sb_snum = syn->bits;
 
-    psect = mycursectnum;
+    psect = predictedPlayer.cursectnum;
     psectlotag = sector[psect].lotag;
     spritebridge = 0;
 
@@ -1574,52 +1561,52 @@ void Net_DoPrediction(void)
 
     if (ud.clipping == 0 && (sector[psect].floorpicnum == MIRROR || psect < 0 || psect >= MAXSECTORS))
     {
-        myx = omyx;
-        myy = omyy;
+        predictedPlayer.pos.x = predictedPlayer.opos.x;
+        predictedPlayer.pos.y = predictedPlayer.opos.y;
     }
     else
     {
-        omyx = myx;
-        omyy = myy;
+        predictedPlayer.opos.x = predictedPlayer.pos.x;
+        predictedPlayer.opos.y = predictedPlayer.pos.y;
     }
 
-    omyhoriz = myhoriz;
-    omyhorizoff = myhorizoff;
-    omyz = myz;
-    omyang = myang;
+    predictedPlayer.oq16horiz = predictedPlayer.q16horiz;
+    predictedPlayer.oq16horizoff = predictedPlayer.q16horizoff;
+    predictedPlayer.opos.z = predictedPlayer.pos.z;
+    predictedPlayer.oq16ang = predictedPlayer.q16ang;
 
-    getzrange_old(myx,myy,myz,psect,&cz,&hz,&fz,&lz,163L,CLIPMASK0);
+    getzrange_old(predictedPlayer.pos.x,predictedPlayer.pos.y,predictedPlayer.pos.z,psect,&cz,&hz,&fz,&lz,163L,CLIPMASK0);
 
-    j = getflorzofslope(psect,myx,myy);
+    j = getflorzofslope(psect,predictedPlayer.pos.x,predictedPlayer.pos.y);
 
-    if ((lz&49152) == 16384 && psectlotag == 1 && klabs(myz-j) > PHEIGHT+(16<<8))
+    if ((lz&49152) == 16384 && psectlotag == 1 && klabs(predictedPlayer.pos.z-j) > PHEIGHT+(16<<8))
         psectlotag = 0;
 
-    if (p->aim_mode == 0 && myonground && psectlotag != 2 && (sector[psect].floorstat&2))
+    if (p->aim_mode == 0 && predictedPlayer.on_ground && psectlotag != 2 && (sector[psect].floorstat&2))
     {
-        x = myx+(sintable[(fix16_to_int(myang)+512)&2047]>>5);
-        y = myy+(sintable[fix16_to_int(myang)&2047]>>5);
+        x = predictedPlayer.pos.x+(sintable[(fix16_to_int(predictedPlayer.q16ang)+512)&2047]>>5);
+        y = predictedPlayer.pos.y+(sintable[fix16_to_int(predictedPlayer.q16ang)&2047]>>5);
         tempsect = psect;
         updatesector(x,y,&tempsect);
         if (tempsect >= 0)
         {
             k = getflorzofslope(psect,x,y);
             if (psect == tempsect)
-                myhorizoff += fix16_from_int(mulscale16(j-k,160));
+                predictedPlayer.q16horizoff += fix16_from_int(mulscale16(j-k,160));
             else if (klabs(getflorzofslope(tempsect,x,y)-k) <= (4<<8))
-                myhorizoff += fix16_from_int(mulscale16(j-k,160));
+                predictedPlayer.q16horizoff += fix16_from_int(mulscale16(j-k,160));
         }
     }
 
-    if (myhorizoff > 0)
+    if (predictedPlayer.q16horizoff > 0)
     {
-        myhorizoff -= ((myhorizoff >> 3) + fix16_one);
-        myhorizoff = max(myhorizoff, 0);
+        predictedPlayer.q16horizoff -= ((predictedPlayer.q16horizoff >> 3) + fix16_one);
+        predictedPlayer.q16horizoff = max(predictedPlayer.q16horizoff, 0);
     }
     else if (p->q16horizoff < 0)
     {
-        myhorizoff += (((-myhorizoff) >> 3) + fix16_one);
-        myhorizoff = min(myhorizoff, 0);
+        predictedPlayer.q16horizoff += (((-predictedPlayer.q16horizoff) >> 3) + fix16_one);
+        predictedPlayer.q16horizoff = min(predictedPlayer.q16horizoff, 0);
     }
 
     if (hz >= 0 && (hz&49152) == 49152)
@@ -1628,7 +1615,7 @@ void Net_DoPrediction(void)
         if (sprite[hz].statnum == 1 && sprite[hz].extra >= 0)
         {
             hz = 0;
-            cz = getceilzofslope(psect,myx,myy);
+            cz = getceilzofslope(psect,predictedPlayer.pos.x,predictedPlayer.pos.y);
         }
     }
 
@@ -1642,9 +1629,9 @@ void Net_DoPrediction(void)
         }
         if (A_CheckEnemySprite(&sprite[j]) && sprite[j].xrepeat > 24 && klabs(sprite[p->i].z-sprite[j].z) < (84<<8))
         {
-            j = getangle(sprite[j].x-myx,sprite[j].y-myy);
-            myxvel -= sintable[(j+512)&2047]<<4;
-            myyvel -= sintable[j&2047]<<4;
+            j = getangle(sprite[j].x-predictedPlayer.pos.x,sprite[j].y-predictedPlayer.pos.y);
+            predictedPlayer.vel.x -= sintable[(j+512)&2047]<<4;
+            predictedPlayer.vel.y -= sintable[j&2047]<<4;
         }
     }
 
@@ -1654,17 +1641,17 @@ void Net_DoPrediction(void)
         {
             if (p->on_warping_sector == 0)
             {
-                if (klabs(myz-fz) > (PHEIGHT>>1))
-                    myz += 348;
+                if (klabs(predictedPlayer.pos.z-fz) > (PHEIGHT>>1))
+                    predictedPlayer.pos.z += 348;
             }
-            clipmove_old(&myx,&myy,&myz,&mycursectnum,0,0,164L,(4L<<8),(4L<<8),CLIPMASK0);
+            clipmove_old(&predictedPlayer.pos.x,&predictedPlayer.pos.y,&predictedPlayer.pos.z,&predictedPlayer.cursectnum,0,0,164L,(4L<<8),(4L<<8),CLIPMASK0);
         }
 
-        updatesector(myx,myy,&mycursectnum);
-        pushmove_old(&myx,&myy,&myz,&mycursectnum,128L,(4L<<8),(20L<<8),CLIPMASK0);
+        updatesector(predictedPlayer.pos.x,predictedPlayer.pos.y,&predictedPlayer.cursectnum);
+        pushmove_old(&predictedPlayer.pos.x,&predictedPlayer.pos.y,&predictedPlayer.pos.z,&predictedPlayer.cursectnum,128L,(4L<<8),(20L<<8),CLIPMASK0);
 
-        myhoriz = F16(100);
-        myhorizoff = 0;
+        predictedPlayer.q16horiz = F16(100);
+        predictedPlayer.q16horizoff = 0;
 
         goto ENDFAKEPROCESSINPUT;
     }
@@ -1673,80 +1660,80 @@ void Net_DoPrediction(void)
 
     if (p->on_crane >= 0) goto FAKEHORIZONLY;
 
-    if (p->one_eighty_count < 0) myang += F16(128);
+    if (p->one_eighty_count < 0) predictedPlayer.q16ang += F16(128);
 
     i = 40;
 
     if (psectlotag == 2)
     {
-        myjumpingcounter = 0;
+        predictedPlayer.jumping_counter = 0;
 
         if (TEST_SYNC_KEY(sb_snum, SK_JUMP))
         {
-            if (myzvel > 0) myzvel = 0;
-            myzvel -= 348;
-            if (myzvel < -(256*6)) myzvel = -(256*6);
+            if (predictedPlayer.vel.z > 0) predictedPlayer.vel.z = 0;
+            predictedPlayer.vel.z -= 348;
+            if (predictedPlayer.vel.z < -(256*6)) predictedPlayer.vel.z = -(256*6);
         }
         else if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
         {
-            if (myzvel < 0) myzvel = 0;
-            myzvel += 348;
-            if (myzvel > (256*6)) myzvel = (256*6);
+            if (predictedPlayer.vel.z < 0) predictedPlayer.vel.z = 0;
+            predictedPlayer.vel.z += 348;
+            if (predictedPlayer.vel.z > (256*6)) predictedPlayer.vel.z = (256*6);
         }
         else
         {
-            if (myzvel < 0)
+            if (predictedPlayer.vel.z < 0)
             {
-                myzvel += 256;
-                if (myzvel > 0)
-                    myzvel = 0;
+                predictedPlayer.vel.z += 256;
+                if (predictedPlayer.vel.z > 0)
+                    predictedPlayer.vel.z = 0;
             }
-            if (myzvel > 0)
+            if (predictedPlayer.vel.z > 0)
             {
-                myzvel -= 256;
-                if (myzvel < 0)
-                    myzvel = 0;
+                predictedPlayer.vel.z -= 256;
+                if (predictedPlayer.vel.z < 0)
+                    predictedPlayer.vel.z = 0;
             }
         }
 
-        if (myzvel > 2048) myzvel >>= 1;
+        if (predictedPlayer.vel.z > 2048) predictedPlayer.vel.z >>= 1;
 
-        myz += myzvel;
+        predictedPlayer.pos.z += predictedPlayer.vel.z;
 
-        if (myz > (fz-(15<<8)))
-            myz += ((fz-(15<<8))-myz)>>1;
+        if (predictedPlayer.pos.z > (fz-(15<<8)))
+            predictedPlayer.pos.z += ((fz-(15<<8))-predictedPlayer.pos.z)>>1;
 
-        if (myz < (cz+(4<<8)))
+        if (predictedPlayer.pos.z < (cz+(4<<8)))
         {
-            myz = cz+(4<<8);
-            myzvel = 0;
+            predictedPlayer.pos.z = cz+(4<<8);
+            predictedPlayer.vel.z = 0;
         }
     }
 
     else if (p->jetpack_on)
     {
-        myonground = 0;
-        myjumpingcounter = 0;
-        myhardlanding = 0;
+        predictedPlayer.on_ground = 0;
+        predictedPlayer.jumping_counter = 0;
+        predictedPlayer.hard_landing = 0;
 
         if (p->jetpack_on < 11)
-            myz -= (p->jetpack_on<<7); //Goin up
+            predictedPlayer.pos.z -= (p->jetpack_on<<7); //Goin up
 
         if (shrunk) j = 512;
         else j = 2048;
 
         if (TEST_SYNC_KEY(sb_snum, SK_JUMP))                            //A
-            myz -= j;
+            predictedPlayer.pos.z -= j;
         if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))                       //Z
-            myz += j;
+            predictedPlayer.pos.z += j;
 
         if (shrunk == 0 && (psectlotag == 0 || psectlotag == 2)) k = 32;
         else k = 16;
 
-        if (myz > (fz-(k<<8)))
-            myz += ((fz-(k<<8))-myz)>>1;
-        if (myz < (cz+(18<<8)))
-            myz = cz+(18<<8);
+        if (predictedPlayer.pos.z > (fz-(k<<8)))
+            predictedPlayer.pos.z += ((fz-(k<<8))-predictedPlayer.pos.z)>>1;
+        if (predictedPlayer.pos.z < (cz+(18<<8)))
+            predictedPlayer.pos.z = cz+(18<<8);
     }
     else if (psectlotag != 2)
     {
@@ -1756,106 +1743,106 @@ void Net_DoPrediction(void)
             else i = 12;
         }
 
-        if (myz < (fz-(i<<8))) //falling
+        if (predictedPlayer.pos.z < (fz-(i<<8))) //falling
         {
-            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && myonground && (sector[psect].floorstat&2) && myz >= (fz-(i<<8)-(16<<8)))
-                myz = fz-(i<<8);
+            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && predictedPlayer.on_ground && (sector[psect].floorstat&2) && predictedPlayer.pos.z >= (fz-(i<<8)-(16<<8)))
+                predictedPlayer.pos.z = fz-(i<<8);
             else
             {
-                myonground = 0;
+                predictedPlayer.on_ground = 0;
 
-                myzvel += (g_spriteGravity+80);
+                predictedPlayer.vel.z += (g_spriteGravity+80);
 
-                if (myzvel >= (4096+2048)) myzvel = (4096+2048);
+                if (predictedPlayer.vel.z >= (4096+2048)) predictedPlayer.vel.z = (4096+2048);
             }
         }
         else
         {
-            if (psectlotag != 1 && psectlotag != 2 && myonground == 0 && myzvel > (6144>>1))
-                myhardlanding = myzvel>>10;
-            myonground = 1;
+            if (psectlotag != 1 && psectlotag != 2 && predictedPlayer.on_ground == 0 && predictedPlayer.vel.z > (6144>>1))
+                predictedPlayer.hard_landing = predictedPlayer.vel.z>>10;
+            predictedPlayer.on_ground = 1;
 
             if (i==40)
             {
                 //Smooth on the ground
 
-                k = ((fz-(i<<8))-myz)>>1;
+                k = ((fz-(i<<8))-predictedPlayer.pos.z)>>1;
                 if (klabs(k) < 256) k = 0;
-                myz += k; // ((fz-(i<<8))-myz)>>1;
-                myzvel -= 768; // 412;
-                if (myzvel < 0) myzvel = 0;
+                predictedPlayer.pos.z += k; // ((fz-(i<<8))-predictedPlayer.pos.z)>>1;
+                predictedPlayer.vel.z -= 768; // 412;
+                if (predictedPlayer.vel.z < 0) predictedPlayer.vel.z = 0;
             }
-            else if (myjumpingcounter == 0)
+            else if (predictedPlayer.jumping_counter == 0)
             {
-                myz += ((fz-(i<<7))-myz)>>1; //Smooth on the water
-                if (p->on_warping_sector == 0 && myz > fz-(16<<8))
+                predictedPlayer.pos.z += ((fz-(i<<7))-predictedPlayer.pos.z)>>1; //Smooth on the water
+                if (p->on_warping_sector == 0 && predictedPlayer.pos.z > fz-(16<<8))
                 {
-                    myz = fz-(16<<8);
-                    myzvel >>= 1;
+                    predictedPlayer.pos.z = fz-(16<<8);
+                    predictedPlayer.vel.z >>= 1;
                 }
             }
 
             if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
-                myz += (2048+768);
+                predictedPlayer.pos.z += (2048+768);
 
             // jumping
-            if (TEST_SYNC_KEY(sb_snum, SK_JUMP) == 0 && myjumpingtoggle == 1)
-                myjumpingtoggle = 0;
+            if (TEST_SYNC_KEY(sb_snum, SK_JUMP) == 0 && predictedPlayer.jumping_toggle == 1)
+                predictedPlayer.jumping_toggle = 0;
 
-            else if (TEST_SYNC_KEY(sb_snum, SK_JUMP) && myjumpingtoggle == 0)
+            else if (TEST_SYNC_KEY(sb_snum, SK_JUMP) && predictedPlayer.jumping_toggle == 0)
             {
-                if (myjumpingcounter == 0)
+                if (predictedPlayer.jumping_counter == 0)
                     if ((fz-cz) > (56<<8))
                     {
-                        myjumpingcounter = 1;
-                        myjumpingtoggle = 1;
+                        predictedPlayer.jumping_counter = 1;
+                        predictedPlayer.jumping_toggle = 1;
                     }
             }
-            if (myjumpingcounter && TEST_SYNC_KEY(sb_snum, SK_JUMP) == 0)
-                myjumpingcounter = 0;
+            if (predictedPlayer.jumping_counter && TEST_SYNC_KEY(sb_snum, SK_JUMP) == 0)
+                predictedPlayer.jumping_counter = 0;
         }
 
-        if (myjumpingcounter)
+        if (predictedPlayer.jumping_counter)
         {
-            if (TEST_SYNC_KEY(sb_snum, SK_JUMP) == 0 && myjumpingtoggle == 1)
-                myjumpingtoggle = 0;
+            if (TEST_SYNC_KEY(sb_snum, SK_JUMP) == 0 && predictedPlayer.jumping_toggle == 1)
+                predictedPlayer.jumping_toggle = 0;
 
-            if (myjumpingcounter < (1024+256))
+            if (predictedPlayer.jumping_counter < (1024+256))
             {
-                if (psectlotag == 1 && myjumpingcounter > 768)
+                if (psectlotag == 1 && predictedPlayer.jumping_counter > 768)
                 {
-                    myjumpingcounter = 0;
-                    myzvel = -512;
+                    predictedPlayer.jumping_counter = 0;
+                    predictedPlayer.vel.z = -512;
                 }
                 else
                 {
-                    myzvel -= (sintable[(2048-128+myjumpingcounter)&2047])/12;
-                    myjumpingcounter += 180;
+                    predictedPlayer.vel.z -= (sintable[(2048-128+predictedPlayer.jumping_counter)&2047])/12;
+                    predictedPlayer.jumping_counter += 180;
 
-                    myonground = 0;
+                    predictedPlayer.on_ground = 0;
                 }
             }
             else
             {
-                myjumpingcounter = 0;
-                myzvel = 0;
+                predictedPlayer.jumping_counter = 0;
+                predictedPlayer.vel.z = 0;
             }
         }
 
-        myz += myzvel;
+        predictedPlayer.pos.z += predictedPlayer.vel.z;
 
-        if (myz < (cz+(4<<8)))
+        if (predictedPlayer.pos.z < (cz+(4<<8)))
         {
-            myjumpingcounter = 0;
-            if (myzvel < 0) myxvel = myyvel = 0;
-            myzvel = 128;
-            myz = cz+(4<<8);
+            predictedPlayer.jumping_counter = 0;
+            if (predictedPlayer.vel.z < 0) predictedPlayer.vel.x = predictedPlayer.vel.y = 0;
+            predictedPlayer.vel.z = 128;
+            predictedPlayer.pos.z = cz+(4<<8);
         }
     }
 
     if (p->fist_incs ||
             p->transporter_hold > 2 ||
-            myhardlanding ||
+            predictedPlayer.hard_landing ||
             p->access_incs > 0 ||
             p->knee_incs > 0 ||
             (p->curr_weapon == TRIPBOMB_WEAPON &&
@@ -1863,56 +1850,56 @@ void Net_DoPrediction(void)
              p->kickback_pic < 4))
     {
         doubvel = 0;
-        myxvel = 0;
-        myyvel = 0;
+        predictedPlayer.vel.x = 0;
+        predictedPlayer.vel.y = 0;
     }
     else if (syn->q16avel)            //p->ang += syncangvel * constant
     {
         //ENGINE calculates angvel for you
         fix16_t inputAng = syn->q16avel;
 
-        myang += (psectlotag == 2) ? fix16_mul(inputAng - (inputAng >> 3), fix16_from_int(ksgn(doubvel)))
+        predictedPlayer.q16ang += (psectlotag == 2) ? fix16_mul(inputAng - (inputAng >> 3), fix16_from_int(ksgn(doubvel)))
             : fix16_mul(inputAng, fix16_from_int(ksgn(doubvel)));
-        myang &= 0x7FFFFFF;
+        predictedPlayer.q16ang &= 0x7FFFFFF;
     }
 
-    if (myxvel || myyvel || syn->fvel || syn->svel)
+    if (predictedPlayer.vel.x || predictedPlayer.vel.y || syn->fvel || syn->svel)
     {
         if (p->jetpack_on == 0 && p->steroids_amount > 0 && p->steroids_amount < 400)
             doubvel <<= 1;
 
-        myxvel += ((syn->fvel*doubvel)<<6);
-        myyvel += ((syn->svel*doubvel)<<6);
+        predictedPlayer.vel.x += ((syn->fvel*doubvel)<<6);
+        predictedPlayer.vel.y += ((syn->svel*doubvel)<<6);
 
         // There really ought to be a predicted version of kickback_pic for this, to stop stuttering while kicking.
-        if ((aplWeaponWorksLike[p->curr_weapon][myconnectindex] == KNEE_WEAPON && p->kickback_pic > 10 && myonground) || (myonground && TEST_SYNC_KEY(sb_snum, SK_CROUCH)))
+        if ((aplWeaponWorksLike[p->curr_weapon][myconnectindex] == KNEE_WEAPON && p->kickback_pic > 10 && predictedPlayer.on_ground) || (predictedPlayer.on_ground && TEST_SYNC_KEY(sb_snum, SK_CROUCH)))
         {
-            myxvel = mulscale16(myxvel,p->runspeed-0x2000);
-            myyvel = mulscale16(myyvel,p->runspeed-0x2000);
+            predictedPlayer.vel.x = mulscale16(predictedPlayer.vel.x,p->runspeed-0x2000);
+            predictedPlayer.vel.y = mulscale16(predictedPlayer.vel.y,p->runspeed-0x2000);
         }
         else
         {
             if (psectlotag == 2)
             {
-                myxvel = mulscale16(myxvel,p->runspeed-0x1400);
-                myyvel = mulscale16(myyvel,p->runspeed-0x1400);
+                predictedPlayer.vel.x = mulscale16(predictedPlayer.vel.x,p->runspeed-0x1400);
+                predictedPlayer.vel.y = mulscale16(predictedPlayer.vel.y,p->runspeed-0x1400);
             }
             else
             {
-                myxvel = mulscale16(myxvel,p->runspeed);
-                myyvel = mulscale16(myyvel,p->runspeed);
+                predictedPlayer.vel.x = mulscale16(predictedPlayer.vel.x,p->runspeed);
+                predictedPlayer.vel.y = mulscale16(predictedPlayer.vel.y,p->runspeed);
             }
         }
 
-        if (klabs(myxvel) < 2048 && klabs(myyvel) < 2048)
-            myxvel = myyvel = 0;
+        if (klabs(predictedPlayer.vel.x) < 2048 && klabs(predictedPlayer.vel.y) < 2048)
+            predictedPlayer.vel.x = predictedPlayer.vel.y = 0;
 
         if (shrunk)
         {
-            myxvel =
-                mulscale16(myxvel,(p->runspeed)-(p->runspeed>>1)+(p->runspeed>>2));
-            myyvel =
-                mulscale16(myyvel,(p->runspeed)-(p->runspeed>>1)+(p->runspeed>>2));
+            predictedPlayer.vel.x =
+                mulscale16(predictedPlayer.vel.x,(p->runspeed)-(p->runspeed>>1)+(p->runspeed>>2));
+            predictedPlayer.vel.y =
+                mulscale16(predictedPlayer.vel.y,(p->runspeed)-(p->runspeed>>1)+(p->runspeed>>2));
         }
     }
 
@@ -1920,89 +1907,89 @@ FAKEHORIZONLY:
     if (psectlotag == 1 || spritebridge == 1) i = (4L<<8);
     else i = (20L<<8);
 
-    clipmove_old(&myx,&myy,&myz,&mycursectnum,myxvel,myyvel,164L,4L<<8,i,CLIPMASK0);
-    pushmove_old(&myx,&myy,&myz,&mycursectnum,164L,4L<<8,4L<<8,CLIPMASK0);
+    clipmove_old(&predictedPlayer.pos.x,&predictedPlayer.pos.y,&predictedPlayer.pos.z,&predictedPlayer.cursectnum,predictedPlayer.vel.x,predictedPlayer.vel.y,164L,4L<<8,i,CLIPMASK0);
+    pushmove_old(&predictedPlayer.pos.x,&predictedPlayer.pos.y,&predictedPlayer.pos.z,&predictedPlayer.cursectnum,164L,4L<<8,4L<<8,CLIPMASK0);
 
     if (p->jetpack_on == 0 && psectlotag != 1 && psectlotag != 2 && shrunk)
     {
-        myz += 32 << 8;
+        predictedPlayer.pos.z += 32 << 8;
     }
 
     // center_view
     i = 0;
-    if (TEST_SYNC_KEY(sb_snum, SK_CENTER_VIEW) || myhardlanding)
+    if (TEST_SYNC_KEY(sb_snum, SK_CENTER_VIEW) || predictedPlayer.hard_landing)
     {
-        myreturntocenter = 9;
+        predictedPlayer.return_to_center = 9;
     }
 
     if (TEST_SYNC_KEY(sb_snum, SK_LOOK_UP))
     {
-        myreturntocenter = 9;
-        if (TEST_SYNC_KEY(sb_snum, SK_RUN)) myhoriz += fix16_from_int(12);     // running
-        myhoriz += fix16_from_int(12);
+        predictedPlayer.return_to_center = 9;
+        if (TEST_SYNC_KEY(sb_snum, SK_RUN)) predictedPlayer.q16horiz += fix16_from_int(12);     // running
+        predictedPlayer.q16horiz += fix16_from_int(12);
         i++;
     }
     else if (TEST_SYNC_KEY(sb_snum, SK_LOOK_DOWN))
     {
-        myreturntocenter = 9;
-        if (TEST_SYNC_KEY(sb_snum, SK_RUN)) myhoriz -= fix16_from_int(12);
-        myhoriz -= fix16_from_int(12);
+        predictedPlayer.return_to_center = 9;
+        if (TEST_SYNC_KEY(sb_snum, SK_RUN)) predictedPlayer.q16horiz -= fix16_from_int(12);
+        predictedPlayer.q16horiz -= fix16_from_int(12);
         i++;
     }
     else if (TEST_SYNC_KEY(sb_snum, SK_AIM_UP))
     {
-        if (TEST_SYNC_KEY(sb_snum, SK_RUN)) myhoriz += fix16_from_int(6);
-        myhoriz += fix16_from_int(6);
+        if (TEST_SYNC_KEY(sb_snum, SK_RUN)) predictedPlayer.q16horiz += fix16_from_int(6);
+        predictedPlayer.q16horiz += fix16_from_int(6);
         i++;
     }
     else if (TEST_SYNC_KEY(sb_snum, SK_AIM_DOWN))
     {
         // running
-        if (TEST_SYNC_KEY(sb_snum, SK_RUN)) myhoriz -= fix16_from_int(6);
-        myhoriz -= fix16_from_int(6);
+        if (TEST_SYNC_KEY(sb_snum, SK_RUN)) predictedPlayer.q16horiz -= fix16_from_int(6);
+        predictedPlayer.q16horiz -= fix16_from_int(6);
         i++;
     }
 
-    if (myreturntocenter > 0)
+    if (predictedPlayer.return_to_center > 0)
     {
         if (TEST_SYNC_KEY(sb_snum, SK_LOOK_UP) == 0 && TEST_SYNC_KEY(sb_snum, SK_LOOK_DOWN) == 0)
         {
-            myreturntocenter--;
-            myhoriz += F16(33) - fix16_div(myhoriz, F16(3));
+            predictedPlayer.return_to_center--;
+            predictedPlayer.q16horiz += F16(33) - fix16_div(predictedPlayer.q16horiz, F16(3));
             i++;
         }
     }
 
-    if (myhardlanding > 0)
+    if (predictedPlayer.hard_landing > 0)
     {
-        myhardlanding--;
-        myhoriz -= fix16_from_int(myhardlanding << 4);
+        predictedPlayer.hard_landing--;
+        predictedPlayer.q16horiz -= fix16_from_int(predictedPlayer.hard_landing << 4);
     }
 
     if (i)
     {
-        if (myhoriz > F16(95) && myhoriz < F16(105)) myhoriz = F16(100);
-        if (myhorizoff > F16(-5) && myhorizoff < F16(5)) myhorizoff = 0;
+        if (predictedPlayer.q16horiz > F16(95) && predictedPlayer.q16horiz < F16(105)) predictedPlayer.q16horiz = F16(100);
+        if (predictedPlayer.q16horizoff > F16(-5) && predictedPlayer.q16horizoff < F16(5)) predictedPlayer.q16horizoff = 0;
     }
 
-    myhoriz += syn->q16horz;
-    myhoriz = fix16_clamp(myhoriz, F16(HORIZ_MIN), F16(HORIZ_MAX));
+    predictedPlayer.q16horiz += syn->q16horz;
+    predictedPlayer.q16horiz = fix16_clamp(predictedPlayer.q16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
 
     if (p->knee_incs > 0)
     {
-        myhoriz -= F16(48);
-        myreturntocenter = 9;
+        predictedPlayer.q16horiz -= F16(48);
+        predictedPlayer.return_to_center = 9;
     }
 
 ENDFAKEPROCESSINPUT:
 
     X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
 
-    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].x = myx;
-    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].y = myy;
-    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].z = myz;
-    myangbak[predictfifoplc&(MOVEFIFOSIZ-1)] = myang;
-    myhorizbak[predictfifoplc&(MOVEFIFOSIZ-1)] = myhoriz;
+    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].x = predictedPlayer.pos.x;
+    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].y = predictedPlayer.pos.y;
+    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].z = predictedPlayer.pos.z;
+    myangbak[predictfifoplc&(MOVEFIFOSIZ-1)] = predictedPlayer.q16ang;
+    myhorizbak[predictfifoplc&(MOVEFIFOSIZ-1)] = predictedPlayer.q16horiz;
     predictfifoplc++;
 
     sprite[p->i].cstat = backcstat;

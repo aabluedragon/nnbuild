@@ -5447,7 +5447,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
 
                     if (playerNum == myconnectindex)
                     {
-                        myz += zChange;
+                        predictedPlayer.pos.z += zChange;
                         myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))].z = g_player[playerNum].ps->pos.z;
                     }
                 }
@@ -6688,7 +6688,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     if (p == myconnectindex)
                     {
                         //omyz = myz;
-                        myz += q;
+                        predictedPlayer.pos.z += q;
                         myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))].z = g_player[p].ps->pos.z;
                     }
                 }
@@ -6767,17 +6767,16 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                         if (p == myconnectindex)
                         {
-                            myx += sprite[j].x - s->x;
-                            myy += sprite[j].y - s->y;
+                            predictedPlayer.pos.x += sprite[j].x - s->x;
+                            predictedPlayer.pos.y += sprite[j].y - s->y;
 
                             //omyz -= myz;
-                            myz = sector[sprite[j].sectnum].floorz - (sc->floorz - myz);
+                            predictedPlayer.pos.z = sector[sprite[j].sectnum].floorz - (sc->floorz - predictedPlayer.pos.z);
                             //omyz += myz;
 
-                            omyx = myx;
-                            omyy = myy;
+                            predictedPlayer.opos.vec2 = predictedPlayer.pos.vec2;
 
-                            mycursectnum = sprite[j].sectnum;
+                            predictedPlayer.cursectnum = sprite[j].sectnum;
                             myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))] = g_player[p].ps->pos;
                         }
                     }

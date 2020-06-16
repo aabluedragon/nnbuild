@@ -3355,9 +3355,9 @@ void G_DisplayRest(int smoothratio)
                 {
                     if (screenpeek == myconnectindex && numplayers > 1)
                     {
-                        cposx = omyx+mulscale16((int)(myx-omyx),smoothratio);
-                        cposy = omyy+mulscale16((int)(myy-omyy),smoothratio);
-                        cang = fix16_to_int(omyang) + mulscale16((fix16_to_int(myang + F16(1024) - omyang) & 2047) - 1024,smoothratio);
+                        cposx = predictedPlayer.opos.x+mulscale16((int)(predictedPlayer.pos.x-predictedPlayer.opos.x),smoothratio);
+                        cposy = predictedPlayer.opos.y+mulscale16((int)(predictedPlayer.pos.y-predictedPlayer.opos.y),smoothratio);
+                        cang = fix16_to_int(predictedPlayer.oq16ang) + mulscale16((fix16_to_int(predictedPlayer.q16ang + F16(1024) - predictedPlayer.oq16ang) & 2047) - 1024,smoothratio);
                     }
                     else
                     {
@@ -4189,12 +4189,12 @@ void G_DrawRooms(int snum,int smoothratio)
 
         if ((snum == myconnectindex) && (numplayers > 1))
         {
-            ud.camerapos.x = omyx+mulscale16((int)(myx-omyx),smoothratio);
-            ud.camerapos.y = omyy+mulscale16((int)(myy-omyy),smoothratio);
-            ud.camerapos.z = omyz+mulscale16((int)(myz-omyz),smoothratio);
-            ud.cameraq16ang = omyang+mulscale16(((myang+F16(1024)-omyang) & 0x7FFFFFF)-F16(1024),smoothratio);
-            ud.cameraq16horiz = omyhoriz+omyhorizoff+mulscale16((myhoriz+myhorizoff-omyhoriz-omyhorizoff),smoothratio);
-            ud.camerasect = mycursectnum;
+            ud.camerapos.x = predictedPlayer.opos.x+mulscale16((int)(predictedPlayer.pos.x-predictedPlayer.opos.x),smoothratio);
+            ud.camerapos.y = predictedPlayer.opos.y+mulscale16((int)(predictedPlayer.pos.y-predictedPlayer.opos.y),smoothratio);
+            ud.camerapos.z = predictedPlayer.opos.z+mulscale16((int)(predictedPlayer.pos.z-predictedPlayer.opos.z),smoothratio);
+            ud.cameraq16ang = predictedPlayer.oq16ang+mulscale16(((predictedPlayer.q16ang+F16(1024)-predictedPlayer.oq16ang) & 0x7FFFFFF)-F16(1024),smoothratio);
+            ud.cameraq16horiz = predictedPlayer.oq16horiz+predictedPlayer.oq16horizoff+mulscale16((predictedPlayer.q16horiz+predictedPlayer.q16horizoff-predictedPlayer.oq16horiz-predictedPlayer.oq16horizoff),smoothratio);
+            ud.camerasect = predictedPlayer.cursectnum;
         }
         else
         {
@@ -6901,11 +6901,11 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 t->cstat |= 2;
                 if (screenpeek == myconnectindex && numplayers >= 2)
                 {
-                    t->x = omyx+mulscale16((int)(myx-omyx),smoothratio);
-                    t->y = omyy+mulscale16((int)(myy-omyy),smoothratio);
-                    t->z = omyz+mulscale16((int)(myz-omyz),smoothratio)+(40<<8);
-                    t->ang = fix16_to_int(omyang+mulscale16(((myang+1024-omyang)&2047)-1024,smoothratio));
-                    t->sectnum = mycursectnum;
+                    t->x = predictedPlayer.opos.x+mulscale16((int)(predictedPlayer.pos.x - predictedPlayer.opos.x),smoothratio);
+                    t->y = predictedPlayer.opos.y+mulscale16((int)(predictedPlayer.pos.y - predictedPlayer.opos.y),smoothratio);
+                    t->z = predictedPlayer.opos.z+mulscale16((int)(predictedPlayer.pos.z - predictedPlayer.opos.z),smoothratio)+(40<<8);
+                    t->ang = fix16_to_int(predictedPlayer.oq16ang+mulscale16(((predictedPlayer.q16ang+1024 - predictedPlayer.oq16ang)&2047)-1024,smoothratio));
+                    t->sectnum = predictedPlayer.cursectnum;
                 }
             }
 

@@ -1374,29 +1374,29 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("cameradist",(intptr_t)&g_cameraDistance, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("cameraclock",(intptr_t)&g_cameraClock, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
 
-    Gv_NewVar("myx",(intptr_t)&myx, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myy",(intptr_t)&myy, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myz",(intptr_t)&myz, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("omyx",(intptr_t)&omyx, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("omyy",(intptr_t)&omyy, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("omyz",(intptr_t)&omyz, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myxvel",(intptr_t)&myxvel, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myyvel",(intptr_t)&myyvel, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myzvel",(intptr_t)&myzvel, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myx",(intptr_t)&predictedPlayer.pos.x, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myy",(intptr_t)&predictedPlayer.pos.y, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myz",(intptr_t)&predictedPlayer.pos.z, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("omyx",(intptr_t)&predictedPlayer.opos.x, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("omyy",(intptr_t)&predictedPlayer.opos.y, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("omyz",(intptr_t)&predictedPlayer.opos.z, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myxvel",(intptr_t)&predictedPlayer.vel.x, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myyvel",(intptr_t)&predictedPlayer.vel.y, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myzvel",(intptr_t)&predictedPlayer.vel.z, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
 
-    Gv_NewVar("myhoriz",(intptr_t)&myhoriz, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myhorizoff",(intptr_t)&myhorizoff, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("omyhoriz",(intptr_t)&omyhoriz, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("omyhorizoff",(intptr_t)&omyhorizoff, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myang",(intptr_t)&myang, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("omyang",(intptr_t)&omyang, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("mycursectnum",(intptr_t)&mycursectnum, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myjumpingcounter",(intptr_t)&myjumpingcounter, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myhoriz",(intptr_t)&predictedPlayer.q16horiz, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myhorizoff",(intptr_t)&predictedPlayer.q16horizoff, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("omyhoriz",(intptr_t)&predictedPlayer.oq16horiz, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("omyhorizoff",(intptr_t)&predictedPlayer.oq16horizoff, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myang",(intptr_t)&predictedPlayer.q16ang, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("omyang",(intptr_t)&predictedPlayer.oq16ang, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("mycursectnum",(intptr_t)&predictedPlayer.cursectnum, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myjumpingcounter",(intptr_t)&predictedPlayer.jumping_counter, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_SYNCCHECK);
 
-    Gv_NewVar("myjumpingtoggle",(intptr_t)&myjumpingtoggle, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myonground",(intptr_t)&myonground, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myhardlanding",(intptr_t)&myhardlanding, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myreturntocenter",(intptr_t)&myreturntocenter, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myjumpingtoggle",(intptr_t)&predictedPlayer.jumping_toggle, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myonground",(intptr_t)&predictedPlayer.on_ground, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myhardlanding",(intptr_t)&predictedPlayer.hard_landing, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myreturntocenter",(intptr_t)&predictedPlayer.return_to_center, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
 
     Gv_NewVar("display_mirror",(intptr_t)&display_mirror, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("randomseed",(intptr_t)&randomseed, GAMEVAR_SYSTEM | GAMEVAR_INTPTR);
@@ -1534,29 +1534,29 @@ void Gv_RefreshPointers(void)
     aGameVars[Gv_GetVarIndex("cameradist")].val.lValue = (intptr_t)&g_cameraDistance;
     aGameVars[Gv_GetVarIndex("cameraclock")].val.lValue = (intptr_t)&g_cameraClock;
 
-    aGameVars[Gv_GetVarIndex("myx")].val.lValue = (intptr_t)&myx;
-    aGameVars[Gv_GetVarIndex("myy")].val.lValue = (intptr_t)&myy;
-    aGameVars[Gv_GetVarIndex("myz")].val.lValue = (intptr_t)&myz;
-    aGameVars[Gv_GetVarIndex("omyx")].val.lValue = (intptr_t)&omyx;
-    aGameVars[Gv_GetVarIndex("omyy")].val.lValue = (intptr_t)&omyy;
-    aGameVars[Gv_GetVarIndex("omyz")].val.lValue = (intptr_t)&omyz;
-    aGameVars[Gv_GetVarIndex("myxvel")].val.lValue = (intptr_t)&myxvel;
-    aGameVars[Gv_GetVarIndex("myyvel")].val.lValue = (intptr_t)&myyvel;
-    aGameVars[Gv_GetVarIndex("myzvel")].val.lValue = (intptr_t)&myzvel;
+    aGameVars[Gv_GetVarIndex("myx")].val.lValue = (intptr_t)&predictedPlayer.pos.x;
+    aGameVars[Gv_GetVarIndex("myy")].val.lValue = (intptr_t)&predictedPlayer.pos.y;
+    aGameVars[Gv_GetVarIndex("myz")].val.lValue = (intptr_t)&predictedPlayer.pos.z;
+    aGameVars[Gv_GetVarIndex("omyx")].val.lValue = (intptr_t)&predictedPlayer.opos.x;
+    aGameVars[Gv_GetVarIndex("omyy")].val.lValue = (intptr_t)&predictedPlayer.opos.y;
+    aGameVars[Gv_GetVarIndex("omyz")].val.lValue = (intptr_t)&predictedPlayer.opos.z;
+    aGameVars[Gv_GetVarIndex("myxvel")].val.lValue = (intptr_t)&predictedPlayer.vel.x;
+    aGameVars[Gv_GetVarIndex("myyvel")].val.lValue = (intptr_t)&predictedPlayer.vel.y;
+    aGameVars[Gv_GetVarIndex("myzvel")].val.lValue = (intptr_t)&predictedPlayer.vel.z;
 
-    aGameVars[Gv_GetVarIndex("myhoriz")].val.lValue = (intptr_t)&myhoriz;
-    aGameVars[Gv_GetVarIndex("myhorizoff")].val.lValue = (intptr_t)&myhorizoff;
-    aGameVars[Gv_GetVarIndex("omyhoriz")].val.lValue = (intptr_t)&omyhoriz;
-    aGameVars[Gv_GetVarIndex("omyhorizoff")].val.lValue = (intptr_t)&omyhorizoff;
-    aGameVars[Gv_GetVarIndex("myang")].val.lValue = (intptr_t)&myang;
-    aGameVars[Gv_GetVarIndex("omyang")].val.lValue = (intptr_t)&omyang;
-    aGameVars[Gv_GetVarIndex("mycursectnum")].val.lValue = (intptr_t)&mycursectnum;
-    aGameVars[Gv_GetVarIndex("myjumpingcounter")].val.lValue = (intptr_t)&myjumpingcounter;
+    aGameVars[Gv_GetVarIndex("myhoriz")].val.lValue = (intptr_t)&predictedPlayer.q16horiz;
+    aGameVars[Gv_GetVarIndex("myhorizoff")].val.lValue = (intptr_t)&predictedPlayer.q16horizoff;
+    aGameVars[Gv_GetVarIndex("omyhoriz")].val.lValue = (intptr_t)&predictedPlayer.oq16horiz;
+    aGameVars[Gv_GetVarIndex("omyhorizoff")].val.lValue = (intptr_t)&predictedPlayer.oq16horizoff;
+    aGameVars[Gv_GetVarIndex("myang")].val.lValue = (intptr_t)&predictedPlayer.q16ang;
+    aGameVars[Gv_GetVarIndex("omyang")].val.lValue = (intptr_t)&predictedPlayer.oq16ang;
+    aGameVars[Gv_GetVarIndex("mycursectnum")].val.lValue = (intptr_t)&predictedPlayer.cursectnum;
+    aGameVars[Gv_GetVarIndex("myjumpingcounter")].val.lValue = (intptr_t)&predictedPlayer.jumping_counter;
 
-    aGameVars[Gv_GetVarIndex("myjumpingtoggle")].val.lValue = (intptr_t)&myjumpingtoggle;
-    aGameVars[Gv_GetVarIndex("myonground")].val.lValue = (intptr_t)&myonground;
-    aGameVars[Gv_GetVarIndex("myhardlanding")].val.lValue = (intptr_t)&myhardlanding;
-    aGameVars[Gv_GetVarIndex("myreturntocenter")].val.lValue = (intptr_t)&myreturntocenter;
+    aGameVars[Gv_GetVarIndex("myjumpingtoggle")].val.lValue = (intptr_t)&predictedPlayer.jumping_toggle;
+    aGameVars[Gv_GetVarIndex("myonground")].val.lValue = (intptr_t)&predictedPlayer.on_ground;
+    aGameVars[Gv_GetVarIndex("myhardlanding")].val.lValue = (intptr_t)&predictedPlayer.hard_landing;
+    aGameVars[Gv_GetVarIndex("myreturntocenter")].val.lValue = (intptr_t)&predictedPlayer.return_to_center;
 
     aGameVars[Gv_GetVarIndex("display_mirror")].val.lValue = (intptr_t)&display_mirror;
     aGameVars[Gv_GetVarIndex("randomseed")].val.lValue = (intptr_t)&randomseed;

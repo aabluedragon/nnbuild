@@ -3230,7 +3230,7 @@ void getinput(int snum)
     }
 
     if (numplayers > 1)
-        daang = fix16_to_int(myang);
+        daang = fix16_to_int(predictedPlayer.q16ang);
     else daang = fix16_to_int(p->q16ang);
 
     momx = mulscale9(vel,sintable[(daang+2560)&2047]);
@@ -5585,11 +5585,11 @@ void computergetinput(int snum, input_t *syn)
     damysect = sprite[p->i].sectnum;
     if ((numplayers >= 2) && (snum == myconnectindex))
     {
-        pos1.x = myx;
-        pos1.y = myy;
-        pos1.z = myz+PHEIGHT;
-        damyang = fix16_to_int(myang);
-        damysect = mycursectnum;
+        pos1.x = predictedPlayer.pos.x;
+        pos1.y = predictedPlayer.pos.y;
+        pos1.z = predictedPlayer.pos.z+PHEIGHT;
+        damyang = fix16_to_int(predictedPlayer.q16ang);
+        damysect = predictedPlayer.cursectnum;
     }
 
     if (!(numframes&7))

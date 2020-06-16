@@ -1,6 +1,7 @@
 #ifndef OLDNET_H
 #define OLDNET_H
 
+#include "duke3d.h"
 #include "sync.h"
 
 extern int quittimer;
@@ -16,13 +17,8 @@ extern int movefifosendplc;
 extern int movefifoplc;
 
 extern int predictfifoplc;
-extern int myx, omyx, myxvel, myy, omyy, myyvel, myz, omyz, myzvel;
-extern fix16_t myhoriz, omyhoriz, myhorizoff, omyhorizoff;
-extern fix16_t myang, omyang;
 
-extern int16_t mycursectnum, myjumpingcounter;
-extern char myjumpingtoggle, myonground, myhardlanding, myreturntocenter;
-
+extern DukePlayer_t predictedPlayer;
 extern vec3_t myposbak[MOVEFIFOSIZ];
 extern fix16_t myhorizbak[MOVEFIFOSIZ], myangbak[MOVEFIFOSIZ];
 
