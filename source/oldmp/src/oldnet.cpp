@@ -17,13 +17,17 @@ int movefifoplc;
 
 // Prediction Vars
 int predictfifoplc;
+
 int myx, omyx, myxvel, myy, omyy, myyvel, myz, omyz, myzvel;
 fix16_t myhoriz, omyhoriz, myhorizoff, omyhorizoff;
 fix16_t myang, omyang;
 int16_t mycursectnum, myjumpingcounter;
 char myjumpingtoggle, myonground, myhardlanding, myreturntocenter;
 
-int myxbak[MOVEFIFOSIZ], myybak[MOVEFIFOSIZ], myzbak[MOVEFIFOSIZ];
+int oldnet_predicting;
+DukePlayer_t predictedPlayer;
+
+vec3_t myposbak[MOVEFIFOSIZ];
 fix16_t myhorizbak[MOVEFIFOSIZ], myangbak[MOVEFIFOSIZ];
 
 static int g_chatPlayer = -1;
@@ -1471,23 +1475,23 @@ void Net_CorrectPrediction(void)
     i = ((movefifoplc-1)&(MOVEFIFOSIZ-1));
     p = g_player[myconnectindex].ps;
 
-    if (p->pos.x == myxbak[i] && p->pos.y == myybak[i] && p->pos.z == myzbak[i]
+    if (p->pos.x == myposbak[i].x && p->pos.y == myposbak[i].y && p->pos.z == myposbak[i].z
             && p->q16horiz == myhorizbak[i] && p->q16ang == myangbak[i]) return;
 
     if (ud.config.PredictionDebug)
     {
         initprintf("Prediction Mismatch - ");
-        if (p->pos.x != myxbak[i])
+        if (p->pos.x != myposbak[i].x)
         {
-            initprintf("^01xpos^12(^02%d^12/^08%d^12) ", myxbak[i], p->pos.x);
+            initprintf("^01xpos^12(^02%d^12/^08%d^12) ", myposbak[i].x, p->pos.x);
         }
-        if (p->pos.y != myybak[i])
+        if (p->pos.y != myposbak[i].y)
         {
-            initprintf("^01ypos^12(^02%d^12/^08%d^12) ", myybak[i], p->pos.y);
+            initprintf("^01ypos^12(^02%d^12/^08%d^12) ", myposbak[i].y, p->pos.y);
         }
-        if (p->pos.z != myzbak[i])
+        if (p->pos.z != myposbak[i].z)
         {
-            initprintf("^01zpos^12(^02%d^12/^08%d^12) ", myzbak[i], p->pos.z);
+            initprintf("^01zpos^12(^02%d^12/^08%d^12) ", myposbak[i].z, p->pos.z);
         }
         if (p->q16horiz != myhorizbak[i])
         {
@@ -1994,9 +1998,9 @@ ENDFAKEPROCESSINPUT:
 
     X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
 
-    myxbak[predictfifoplc&(MOVEFIFOSIZ-1)] = myx;
-    myybak[predictfifoplc&(MOVEFIFOSIZ-1)] = myy;
-    myzbak[predictfifoplc&(MOVEFIFOSIZ-1)] = myz;
+    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].x = myx;
+    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].y = myy;
+    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].z = myz;
     myangbak[predictfifoplc&(MOVEFIFOSIZ-1)] = myang;
     myhorizbak[predictfifoplc&(MOVEFIFOSIZ-1)] = myhoriz;
     predictfifoplc++;

@@ -5453,7 +5453,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
                     if (playerNum == myconnectindex)
                     {
                         myz += zChange;
-                        myzbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))] = g_player[playerNum].ps->pos.z;
+                        myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))].z = g_player[playerNum].ps->pos.z;
                     }
                 }
             }
@@ -6694,7 +6694,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     {
                         //omyz = myz;
                         myz += q;
-                        myzbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))] = g_player[p].ps->pos.z;
+                        myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))].z = g_player[p].ps->pos.z;
                     }
                 }
 
@@ -6783,9 +6783,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             omyy = myy;
 
                             mycursectnum = sprite[j].sectnum;
-                            myxbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))] = g_player[p].ps->pos.x;
-                            myybak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))] = g_player[p].ps->pos.y;
-                            myzbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))] = g_player[p].ps->pos.z;
+                            myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))] = g_player[p].ps->pos;
                         }
                     }
                     else if (sprite[k].statnum != 3)

@@ -22,7 +22,8 @@ extern fix16_t myang, omyang;
 
 extern int16_t mycursectnum, myjumpingcounter;
 extern char myjumpingtoggle, myonground, myhardlanding, myreturntocenter;
-extern int myxbak[MOVEFIFOSIZ], myybak[MOVEFIFOSIZ], myzbak[MOVEFIFOSIZ];
+
+extern vec3_t myposbak[MOVEFIFOSIZ];
 extern fix16_t myhorizbak[MOVEFIFOSIZ], myangbak[MOVEFIFOSIZ];
 
 enum DukePacket_t

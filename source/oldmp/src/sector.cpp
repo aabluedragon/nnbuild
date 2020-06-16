@@ -332,7 +332,7 @@ void G_DoSectorAnimations(void)
                         {
                             myz += v;
                             myzvel = 0;
-                            myzbak[((movefifoplc-1)&(MOVEFIFOSIZ-1))] = g_player[p].ps->pos.z;
+                            myposbak[((movefifoplc-1)&(MOVEFIFOSIZ-1))].z = g_player[p].ps->pos.z;
                         }
                     }
 
