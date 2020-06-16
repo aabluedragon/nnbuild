@@ -18,6 +18,7 @@ extern int movefifoplc;
 
 extern int predictfifoplc;
 
+extern int oldnet_predicting;
 extern DukePlayer_t predictedPlayer;
 extern vec3_t myposbak[MOVEFIFOSIZ];
 extern fix16_t myhorizbak[MOVEFIFOSIZ], myangbak[MOVEFIFOSIZ];
