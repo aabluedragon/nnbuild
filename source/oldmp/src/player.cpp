@@ -5021,7 +5021,10 @@ HORIZONLY:
             p->actorsqu = -1;
         }
         else if (p->actorsqu >= 0) // Seriously look into predicting this too.
-            p->q16ang += G_GetAngleDelta(fix16_to_int(p->q16ang),getangle(sprite[p->actorsqu].x-p->pos.x,sprite[p->actorsqu].y-p->pos.y))>>2;
+        {
+            int angleDelta = G_GetAngleDelta(fix16_to_int(p->q16ang), getangle(sprite[p->actorsqu].x - p->pos.x, sprite[p->actorsqu].y - p->pos.y)) >> 2;
+            p->q16ang += fix16_from_int(angleDelta);
+        }
     }
 
     if (P_DoCounters(p)) return;
