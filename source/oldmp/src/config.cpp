@@ -658,15 +658,12 @@ int32_t CONFIG_ReadSetup(void)
             if (tempbuf[0]) g_videoContrast = atof(tempbuf);
         }
 
-#ifdef RENDERTYPEWIN
-        {
-            SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPositioning", (int32_t *)&windowpos);
-            windowx = -1;
-            SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPosX", (int32_t *)&windowx);
-            windowy = -1;
-            SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPosY", (int32_t *)&windowy);
-        }
-#endif
+        windowx = -1;
+        windowy = -1;
+
+        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPositioning", (int32_t *)&windowpos);
+        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPosX", (int32_t *)&windowx); 
+        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPosY", (int32_t *)&windowy);
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "MaxRefreshFreq", (int32_t*)&maxrefreshfreq);
 
