@@ -3642,7 +3642,6 @@ void P_SharedInput(int snum)
         p->opos.y = p->pos.y;
         p->opos.z = p->pos.z;
         p->oq16ang = p->q16ang;
-        p->opyoff = p->pyoff;
 
         p->q16horiz = F16(100);
         p->q16horizoff = 0;
@@ -3651,6 +3650,20 @@ void P_SharedInput(int snum)
         pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 128L, (4L << 8), (20L << 8), CLIPMASK0);
         return;
     }
+
+    if (!oldnet_predicting) // Needed here, or we'll fuck up the transporter hold
+    {
+        if (p->transporter_hold > 0)
+        {
+            p->transporter_hold--;
+            if (p->transporter_hold == 0 && p->on_warping_sector)
+                p->transporter_hold = 2;
+        }
+        if (p->transporter_hold < 0)
+            p->transporter_hold++;
+    }
+
+    // p->newowner >= 0 block
 
     doubvel = TICSPERFRAME;
 
@@ -4698,6 +4711,8 @@ void P_ProcessInput(int snum)
             }
         }
 
+        p->opyoff = p->pyoff;
+
         if (fz > cz+(16<<8) && s->pal != 1)
             p->rotscrnang = (p->dead_flag + ((fz+p->pos.z)>>7))&2047;
 
@@ -4705,15 +4720,6 @@ void P_ProcessInput(int snum)
 
         return;
     }
-
-    if (p->transporter_hold > 0)
-    {
-        p->transporter_hold--;
-        if (p->transporter_hold == 0 && p->on_warping_sector)
-            p->transporter_hold = 2;
-    }
-    if (p->transporter_hold < 0)
-        p->transporter_hold++;
 
     if (p->newowner >= 0)
     {
