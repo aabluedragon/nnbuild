@@ -1546,10 +1546,9 @@ void Net_DoPrediction(void)
     sprite[p->i].cstat &= ~257;
 
     oldnet_predicting = 1;
+    X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
     P_SharedInput(myconnectindex);
     oldnet_predicting = 0;
-
-    X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
 
     myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].x = predictedPlayer.pos.x;
     myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].y = predictedPlayer.pos.y;

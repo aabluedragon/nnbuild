@@ -3538,6 +3538,9 @@ void P_SharedInput(int snum)
     }
 
     sb_snum = syn->bits;
+    if (p_nopredict->cheat_phase > 0)
+        sb_snum = 0;
+
     psect = p->cursectnum;
     psectlotag = sector[psect].lotag;
 
@@ -4388,8 +4391,9 @@ void P_ProcessInput(int snum)
     p->player_par++;
 
     X_OnEvent(EVENT_PROCESSINPUT, p->i, snum, -1);
+    P_SharedInput(snum);
 
-    if (p->cheat_phase > 0) sb_snum = 0;
+    if (p->cheat_phase > 0) sb_snum = 0; // Also in P_SharedInput
 
     if (TEST_SYNC_KEY(sb_snum, SK_FIRE))
 //    if ((sb_snum&(1<<2)))
@@ -4410,19 +4414,18 @@ void P_ProcessInput(int snum)
         psect = 0;
     }
 
-    psectlotag = sector[psect].lotag;
 
-    getzrange_old(p->pos.x,p->pos.y,p->pos.z,psect,&cz,&hz,&fz,&lz,163L,CLIPMASK0);
-    yax_getzsofslope(psect, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
-
-    ActorExtra[p->i].floorz = fz;
-    ActorExtra[p->i].ceilingz = cz;
-
-    // Delete above once shared functions match
-    P_SharedInput(snum);
 
     // Some of this is duplicated in P_SharedInput. Ugh.
     {
+        psectlotag = sector[psect].lotag;
+
+        getzrange_old(p->pos.x,p->pos.y,p->pos.z,psect,&cz,&hz,&fz,&lz,163L,CLIPMASK0);
+        yax_getzsofslope(psect, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
+
+        ActorExtra[p->i].floorz = fz;
+        ActorExtra[p->i].ceilingz = cz;
+
         shrunk = (s->yrepeat < 32);
         truefdist = klabs(p->pos.z - p->truefz);
 

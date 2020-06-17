@@ -1374,6 +1374,7 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("cameradist",(intptr_t)&g_cameraDistance, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("cameraclock",(intptr_t)&g_cameraClock, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
 
+    // Prediction
     Gv_NewVar("myx",(intptr_t)&predictedPlayer.pos.x, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("myy",(intptr_t)&predictedPlayer.pos.y, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("myz",(intptr_t)&predictedPlayer.pos.z, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
@@ -1397,6 +1398,9 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("myonground",(intptr_t)&predictedPlayer.on_ground, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("myhardlanding",(intptr_t)&predictedPlayer.hard_landing, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("myreturntocenter",(intptr_t)&predictedPlayer.return_to_center, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
+
+    Gv_NewVar("predicting", (intptr_t)&oldnet_predicting, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    // ---
 
     Gv_NewVar("display_mirror",(intptr_t)&display_mirror, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("randomseed",(intptr_t)&randomseed, GAMEVAR_SYSTEM | GAMEVAR_INTPTR);
@@ -1534,6 +1538,7 @@ void Gv_RefreshPointers(void)
     aGameVars[Gv_GetVarIndex("cameradist")].val.lValue = (intptr_t)&g_cameraDistance;
     aGameVars[Gv_GetVarIndex("cameraclock")].val.lValue = (intptr_t)&g_cameraClock;
 
+    // Prediction
     aGameVars[Gv_GetVarIndex("myx")].val.lValue = (intptr_t)&predictedPlayer.pos.x;
     aGameVars[Gv_GetVarIndex("myy")].val.lValue = (intptr_t)&predictedPlayer.pos.y;
     aGameVars[Gv_GetVarIndex("myz")].val.lValue = (intptr_t)&predictedPlayer.pos.z;
@@ -1557,6 +1562,9 @@ void Gv_RefreshPointers(void)
     aGameVars[Gv_GetVarIndex("myonground")].val.lValue = (intptr_t)&predictedPlayer.on_ground;
     aGameVars[Gv_GetVarIndex("myhardlanding")].val.lValue = (intptr_t)&predictedPlayer.hard_landing;
     aGameVars[Gv_GetVarIndex("myreturntocenter")].val.lValue = (intptr_t)&predictedPlayer.return_to_center;
+
+    aGameVars[Gv_GetVarIndex("predicting")].val.lValue = (intptr_t)&oldnet_predicting;
+    // ---
 
     aGameVars[Gv_GetVarIndex("display_mirror")].val.lValue = (intptr_t)&display_mirror;
     aGameVars[Gv_GetVarIndex("randomseed")].val.lValue = (intptr_t)&randomseed;
