@@ -4575,7 +4575,7 @@ void P_ProcessInput(int snum)
                     p->dead_flag++;
             }
 
-            p->jetpack_on = 0;
+            p->jetpack_on = 0; // If we predict, move this to shared input.
             p->holoduke_on = -1;
 
             S_StopEnvSound(DUKE_JETPACK_IDLE,p->i);
