@@ -4187,23 +4187,15 @@ void G_DrawRooms(int snum,int smoothratio)
             p->orotscrnang = p->rotscrnang; // JBF: save it for next time
         }
 
-        if ((snum == myconnectindex) && (numplayers > 1))
-        {
-            ud.camerapos.x = predictedPlayer.opos.x+mulscale16((int)(predictedPlayer.pos.x-predictedPlayer.opos.x),smoothratio);
-            ud.camerapos.y = predictedPlayer.opos.y+mulscale16((int)(predictedPlayer.pos.y-predictedPlayer.opos.y),smoothratio);
-            ud.camerapos.z = predictedPlayer.opos.z+mulscale16((int)(predictedPlayer.pos.z-predictedPlayer.opos.z),smoothratio);
-            ud.cameraq16ang = predictedPlayer.oq16ang+mulscale16(((predictedPlayer.q16ang+F16(1024)-predictedPlayer.oq16ang) & 0x7FFFFFF)-F16(1024),smoothratio);
-            ud.cameraq16horiz = predictedPlayer.oq16horiz+predictedPlayer.oq16horizoff+mulscale16((predictedPlayer.q16horiz+predictedPlayer.q16horizoff-predictedPlayer.oq16horiz-predictedPlayer.oq16horizoff),smoothratio);
-            ud.camerasect = predictedPlayer.cursectnum;
-        }
-        else
-        {
-            ud.camerapos.x = p->opos.x+mulscale16((int)(p->pos.x-p->opos.x),smoothratio);
-            ud.camerapos.y = p->opos.y+mulscale16((int)(p->pos.y-p->opos.y),smoothratio);
-            ud.camerapos.z = p->opos.z+mulscale16((int)(p->pos.z-p->opos.z),smoothratio);
-            ud.cameraq16ang = p->oq16ang+mulscale16(((p->q16ang+F16(1024)-p->oq16ang) & 0x7FFFFFF)-F16(1024),smoothratio);
-            ud.cameraq16horiz = p->oq16horiz+p->oq16horizoff+mulscale16((p->q16horiz+p->q16horizoff-p->oq16horiz-p->oq16horizoff),smoothratio);
-        }
+        DukePlayer_t* camPlayer = (snum == myconnectindex) && (numplayers > 1) ? &predictedPlayer : p;
+
+        ud.camerapos.x = camPlayer->opos.x + mulscale16((int)(camPlayer->pos.x - camPlayer->opos.x), smoothratio);
+        ud.camerapos.y = camPlayer->opos.y + mulscale16((int)(camPlayer->pos.y - camPlayer->opos.y), smoothratio);
+        ud.camerapos.z = camPlayer->opos.z + mulscale16((int)(camPlayer->pos.z - camPlayer->opos.z), smoothratio);
+        ud.cameraq16ang = camPlayer->oq16ang + mulscale16(((camPlayer->q16ang + F16(1024) - camPlayer->oq16ang) & 0x7FFFFFF) - F16(1024), smoothratio);
+        ud.cameraq16horiz = camPlayer->oq16horiz + camPlayer->oq16horizoff + mulscale16((camPlayer->q16horiz + camPlayer->q16horizoff - camPlayer->oq16horiz - camPlayer->oq16horizoff), smoothratio);
+        ud.camerasect = camPlayer->cursectnum;
+
         ud.cameraq16ang += fix16_from_int(p->look_ang);
 
         // Looking through viewscreen
