@@ -660,8 +660,6 @@ int32_t CONFIG_ReadSetup(void)
 
         windowx = -1;
         windowy = -1;
-
-        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPositioning", (int32_t *)&windowpos);
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPosX", (int32_t *)&windowx); 
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPosY", (int32_t *)&windowy);
 
@@ -976,11 +974,8 @@ void CONFIG_WriteSetup(uint32_t flags)
         SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "VidGamma",tempbuf);
     }
 
-#ifdef RENDERTYPEWIN
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "WindowPositioning", windowpos, false, false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "WindowPosX", windowx, false, false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "WindowPosY", windowy, false, false);
-#endif
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "AmbienceToggle",ud.config.AmbienceToggle,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "FXVolume",ud.config.FXVolume,false,false);
