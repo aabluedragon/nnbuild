@@ -1076,7 +1076,7 @@ typedef struct {
 
     int32_t movefifoend, syncvalhead, myminlag;
     int32_t pcolor, pteam, frags[MAXPLAYERS], wchoice[MAX_WEAPONS];
-    int32_t ping;
+    int32_t lastpingtime, ping;
 
     char vote, gotvote, playerreadyflag, playerquitflag, connected;
     char user_name[32];

@@ -566,6 +566,7 @@ void Net_ParsePackets(void)
 
             break;
         case PACKET_TYPE_SLAVE_TO_MASTER:  //[1] (receive slave sync buffer)
+        {
             j = 3;
             k = packbuf[1] + (int)(packbuf[2]<<8);
 
@@ -576,7 +577,12 @@ void Net_ParsePackets(void)
             pingTime += (int32_t)packbuf[j + 3] << 24;
             j += 4;
 
-            g_player[other].ping = timerGetTicks() - pingTime;
+            int tics = timerGetTicks();
+            if ((tics - g_player[other].lastpingtime) >= 1000) // Update ping display once a second
+            {
+                g_player[other].ping = tics - pingTime;
+                g_player[other].lastpingtime = tics;
+            }
 
             osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)][0];
             nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)][0];
@@ -625,7 +631,7 @@ void Net_ParsePackets(void)
             }
 
             break;
-
+        }
         case PACKET_TYPE_BROADCAST:
             g_player[other].movefifoend = movefifoplc = movefifosendplc = predictfifoplc = 0;
             g_player[other].syncvalhead = syncvaltottail = 0L;
