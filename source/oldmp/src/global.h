@@ -19,6 +19,32 @@ G_EXTERN int oldipos[MAXINTERPOLATIONS];
 G_EXTERN int bakipos[MAXINTERPOLATIONS];
 G_EXTERN int *curipos[MAXINTERPOLATIONS];
 
+// Pre-initialized
+#ifndef global_c_
+extern int g_spriteGravity;
+extern int g_actorRespawnTime;
+extern int g_itemRespawnTime;
+extern int g_timerTicsPerSecond;
+extern int g_scriptSize;
+extern int g_playerFriction;
+extern int g_numFreezeBounces;
+extern short g_spriteDeleteQueueSize;
+extern char g_numVolumes;
+extern char g_numGametypes;
+
+extern char EpisodeNames[MAXVOLUMES][33];
+extern char SkillNames[5][33];
+extern char GametypeNames[MAXGAMETYPES][33];
+extern int GametypeFlags[MAXGAMETYPES];
+extern short BlimpSpawnSprites[15];
+extern char CheatKeys[2];
+extern char setupfilename[BMAX_PATH];
+
+// Multiplayer
+extern int g_networkBroadcastMode; // 0: master/slave, 1: peer-to-peer
+extern int g_movesPerPacket;
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -116,33 +142,6 @@ G_EXTERN fix16_t q16angvel;
 G_EXTERN input_t loc;
 G_EXTERN input_t recsync[RECSYNCBUFSIZ];
 G_EXTERN input_t inputfifo[MOVEFIFOSIZ][MAXPLAYERS];
-
-// Pre-initialized
-#ifndef global_c_
-extern int g_spriteGravity;
-extern int g_actorRespawnTime;
-extern int g_itemRespawnTime;
-extern int g_timerTicsPerSecond;
-extern int g_scriptSize;
-extern int g_playerFriction;
-extern int g_numFreezeBounces;
-extern short g_spriteDeleteQueueSize;
-extern char g_numVolumes;
-extern char g_numGametypes;
-
-extern char EpisodeNames[MAXVOLUMES][33];
-extern char SkillNames[5][33];
-extern char GametypeNames[MAXGAMETYPES][33];
-extern int GametypeFlags[MAXGAMETYPES];
-extern short BlimpSpawnSprites[15];
-extern char CheatKeys[2];
-extern char setupfilename[BMAX_PATH];
-
-// Multiplayer
-extern int g_networkBroadcastMode; // 0: master/slave, 1: peer-to-peer
-extern int g_movesPerPacket;
-#endif
-
 #ifdef __cplusplus
 }
 #endif
