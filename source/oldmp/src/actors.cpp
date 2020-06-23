@@ -3244,8 +3244,8 @@ static void G_MoveTransports(void)
                         if ((g_player[p].ps->jetpack_on == 0) || (g_player[p].ps->jetpack_on && TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_JUMP)) ||
                                 (g_player[p].ps->jetpack_on && TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_CROUCH)))
                         {
-                            g_player[p].ps->pos.x += sprite[OW].x-SX;
-                            g_player[p].ps->pos.y += sprite[OW].y-SY;
+                            g_player[p].ps->bobposx = g_player[p].ps->pos.x += sprite[OW].x-SX;
+                            g_player[p].ps->bobposy = g_player[p].ps->pos.y += sprite[OW].y-SY;
 
                             if (g_player[p].ps->jetpack_on && (TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_JUMP) || g_player[p].ps->jetpack_on < 11))
                                 g_player[p].ps->pos.z = sprite[OW].z-6144;
