@@ -550,7 +550,7 @@ typedef struct {
     short cursectnum, look_ang, last_extra, subweapon;
     short ammo_amount[MAX_WEAPONS], wackedbyactor, frag, fraggedself;
 
-    short curr_weapon, last_weapon, tipincs, wantweaponfire;
+    short curr_weapon, last_weapon, last_used_weapon, tipincs, wantweaponfire;
     short holoduke_amount, newowner, hurt_delay, hbomb_hold_delay;
     short jumping_counter, airleft, knee_incs, access_incs;
     short fta, ftq, access_wallnum, access_spritenum;
@@ -791,6 +791,9 @@ enum GameEvent_t {
     EVENT_PRELEVEL,
     EVENT_DAMAGESPRITE,
     EVENT_POSTDAMAGESPRITE,
+    EVENT_ALTWEAPON,
+    EVENT_LASTWEAPON,
+    EVENT_ALTFIRE,
     MAXEVENTS
 };
 
@@ -898,6 +901,7 @@ extern char g_szBuf[1024];
 #define NAM_GRENADE_LIFETIME       120
 #define NAM_GRENADE_LIFETIME_VAR    30
 
+#define PWEAPON(Player, Weapon, Wmember) (aplWeapon ## Wmember [Weapon][Player])
 extern intptr_t *aplWeaponClip[MAX_WEAPONS];            // number of items in clip
 extern intptr_t *aplWeaponReload[MAX_WEAPONS];          // delay to reload (include fire)
 extern intptr_t *aplWeaponFireDelay[MAX_WEAPONS];       // delay to fire

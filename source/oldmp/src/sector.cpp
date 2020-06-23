@@ -2488,26 +2488,12 @@ void A_DamageObject_Internal(int i,int sn)
                 }
             }
 
-            if (sprite[i].statnum == 10)
+            if (sprite[i].statnum == STAT_PLAYER)
             {
                 p = sprite[i].yvel;
                 if (g_player[p].ps->newowner >= 0)
                 {
-                    g_player[p].ps->newowner = -1;
-                    g_player[p].ps->pos.x = g_player[p].ps->opos.x;
-                    g_player[p].ps->pos.y = g_player[p].ps->opos.y;
-                    g_player[p].ps->pos.z = g_player[p].ps->opos.z;
-                    g_player[p].ps->q16ang = g_player[p].ps->oq16ang;
-
-                    updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&g_player[p].ps->cursectnum);
-                    P_UpdateScreenPal(g_player[p].ps);
-
-                    j = headspritestat[STAT_ACTOR];
-                    while (j >= 0)
-                    {
-                        if (sprite[j].picnum==CAMERA1) sprite[j].yvel = 0;
-                        j = nextspritestat[j];
-                    }
+                    G_ClearCameraView(g_player[p].ps);
                 }
 
                 if (sprite[i].xrepeat < 24 && sprite[sn].picnum == SHRINKSPARK)
@@ -2553,10 +2539,28 @@ void allignwarpelevators(void)
     }
 }
 
+static int P_CheckDetonatorSpecialCase(DukePlayer_t* const pPlayer, int weaponNum)
+{
+    if (weaponNum == HANDBOMB_WEAPON && pPlayer->ammo_amount[HANDBOMB_WEAPON] == 0)
+    {
+        int spriteNum = headspritestat[STAT_ACTOR];
+
+        while (spriteNum >= 0)
+        {
+            if (sprite[spriteNum].picnum == HEAVYHBOMB && sprite[spriteNum].owner == pPlayer->i)
+                return 1;
+
+            spriteNum = nextspritestat[spriteNum];
+        }
+    }
+
+    return 0;
+}
+
 void G_HandleSharedKeys(int snum)
 {
     int i, k, dainv;
-    unsigned int sb_snum = g_player[snum].inputBits->bits, j;
+    unsigned int sb_snum = g_player[snum].inputBits->bits;// , j;
     DukePlayer_t *p = g_player[snum].ps;
 
     if (p->cheat_phase == 1) return;
@@ -2609,13 +2613,12 @@ void G_HandleSharedKeys(int snum)
             }
         }
 
-    // j = sb_snum & ((15<<8)|(1<<12)|(1<<15)|(1<<16)|(1<<22)|(1<<19)|(1<<20)|(1<<21)|(1<<24)|(1<<25)|(1<<27)|(1<<28)|(1<<29)|(1<<30)|(1<<31));
-    j = sb_snum & ((15<<SK_WEAPON_BITS)|BIT(SK_STEROIDS)|BIT(SK_NIGHTVISION)|BIT(SK_MEDKIT)|BIT(SK_QUICK_KICK)| \
-                   BIT(SK_HOLSTER)|BIT(SK_INV_LEFT)|BIT(SK_PAUSE)|BIT(SK_HOLODUKE)|BIT(SK_JETPACK)|BIT(SK_INV_RIGHT)| \
-                   BIT(SK_TURNAROUND)|BIT(SK_OPEN)|BIT(SK_INVENTORY)|BIT(SK_ESCAPE));
-    sb_snum = j & ~p->interface_toggle_flag;
-    p->interface_toggle_flag |= sb_snum | ((sb_snum&0xf00)?0xf00:0);
-    p->interface_toggle_flag &= j | ((j&0xf00)?0xf00:0);
+    uint32_t weaponNum = sb_snum & ((15u << SK_WEAPON_BITS) | BIT(SK_STEROIDS) | BIT(SK_NIGHTVISION) | BIT(SK_MEDKIT) | BIT(SK_QUICK_KICK) | \
+        BIT(SK_HOLSTER) | BIT(SK_INV_LEFT) | BIT(SK_PAUSE) | BIT(SK_HOLODUKE) | BIT(SK_JETPACK) | BIT(SK_INV_RIGHT) | \
+        BIT(SK_TURNAROUND) | BIT(SK_OPEN) | BIT(SK_INVENTORY) | BIT(SK_ESCAPE));
+    sb_snum = weaponNum & ~p->interface_toggle_flag;
+    p->interface_toggle_flag |= sb_snum | ((sb_snum & 0xf00) ? 0xf00 : 0);
+    p->interface_toggle_flag &= weaponNum | ((weaponNum & 0xf00) ? 0xf00 : 0);
 
     if (sb_snum && TEST_SYNC_KEY(sb_snum, SK_MULTIFLAG) == 0)
     {
@@ -2814,41 +2817,16 @@ CHECKINV1:
                 }
             }
 
-        j = ((sb_snum&(15<<SK_WEAPON_BITS))>>SK_WEAPON_BITS) - 1;
+        weaponNum = ((sb_snum&(15<<SK_WEAPON_BITS))>>SK_WEAPON_BITS) - 1;
 
-        Gv_SetVar(g_iReturnVarID,j,p->i,snum);
+        Gv_SetVar(g_iReturnVarID, weaponNum,p->i,snum);
 
-        switch (j)
+        switch ((int32_t)weaponNum)
         {
-        case 0:
-            X_OnEvent(EVENT_WEAPKEY1,p->i,snum, -1);
+        case -1:
             break;
-        case 1:
-            X_OnEvent(EVENT_WEAPKEY2,p->i,snum, -1);
-            break;
-        case 2:
-            X_OnEvent(EVENT_WEAPKEY3,p->i,snum, -1);
-            break;
-        case 3:
-            X_OnEvent(EVENT_WEAPKEY4,p->i,snum, -1);
-            break;
-        case 4:
-            X_OnEvent(EVENT_WEAPKEY5,p->i,snum, -1);
-            break;
-        case 5:
-            X_OnEvent(EVENT_WEAPKEY6,p->i,snum, -1);
-            break;
-        case 6:
-            X_OnEvent(EVENT_WEAPKEY7,p->i,snum, -1);
-            break;
-        case 7:
-            X_OnEvent(EVENT_WEAPKEY8,p->i,snum, -1);
-            break;
-        case 8:
-            X_OnEvent(EVENT_WEAPKEY9,p->i,snum, -1);
-            break;
-        case 9:
-            X_OnEvent(EVENT_WEAPKEY10,p->i,snum, -1);
+        default:
+            X_OnEvent(EVENT_WEAPKEY1+weaponNum,p->i,snum, -1);
             break;
         case 10:
             X_OnEvent(EVENT_PREVIOUSWEAPON,p->i,snum, -1);
@@ -2856,10 +2834,16 @@ CHECKINV1:
         case 11:
             X_OnEvent(EVENT_NEXTWEAPON,p->i,snum, -1);
             break;
+        case 12:
+            X_OnEvent(EVENT_ALTWEAPON, p->i, snum, -1);
+            break;
+        case 13:
+            X_OnEvent(EVENT_LASTWEAPON, p->i, snum, -1);
+            break;
         }
 
-        if ((unsigned int) Gv_GetVar(g_iReturnVarID,p->i,snum) != j)
-            j = (unsigned int) Gv_GetVar(g_iReturnVarID,p->i,snum);
+        if ((unsigned int) Gv_GetVar(g_iReturnVarID,p->i,snum) != weaponNum)
+            weaponNum = (unsigned int) Gv_GetVar(g_iReturnVarID,p->i,snum);
 
         // NOTE: it is assumed that the above events return either -1 or a
         // valid weapon index. Presumably, neither other negative numbers nor
@@ -2867,97 +2851,162 @@ CHECKINV1:
         // a bit inconsistent in checking "j".
 
         if (p->reloading == 1)
-            j = -1;
-        else if ((uint32_t)j < MAX_WEAPONS && p->kickback_pic == 1 && p->weapon_pos == 1)
+            weaponNum = -1;
+        else if ((uint32_t)weaponNum < MAX_WEAPONS && p->kickback_pic == 1 && p->weapon_pos == 1)
         {
-            p->wantweaponfire = j;
+            p->wantweaponfire = weaponNum;
             p->kickback_pic = 0;
         }
-        if (p->last_pissed_time <= (26*218) && p->show_empty_weapon == 0 && p->kickback_pic == 0 && p->quick_kick == 0 && sprite[p->i].xrepeat > 32 && p->access_incs == 0 && p->knee_incs == 0)
+        if ((int32_t)weaponNum != -1 && p->last_pissed_time <= (GAMETICSPERSEC * 218) && p->show_empty_weapon == 0 &&
+            p->kickback_pic == 0 && p->quick_kick == 0 && sprite[p->i].xrepeat > 32 && p->access_incs == 0 &&
+            p->knee_incs == 0)
         {
             //            if(  ( p->weapon_pos == 0 || ( p->holster_weapon && p->weapon_pos == -9 ) ))
             {
-                if (j == 10 || j == 11)
+                if (weaponNum >= 12) // hack
+                    weaponNum++;
+                if (weaponNum == 10 || weaponNum == 11)
                 {
-                    k = p->curr_weapon;
-                    j = (j == 10 ? -1 : 1);     // JBF: prev (-1) or next (1) weapon choice
-                    i = 0;
+                    int currentWeapon = p->curr_weapon;
 
-                    while ((k >= 0 && k < 10) || (PLUTOPAK && k == GROW_WEAPON && (p->subweapon&(1<<GROW_WEAPON))))         // JBF 20040116: so we don't select grower with v1.3d
+                    weaponNum = (weaponNum == 10 ? -1 : 1);  // JBF: prev (-1) or next (1) weapon choice
+                    int i = currentWeapon;
+
+                    while ((currentWeapon >= 0 && currentWeapon < 11) || (PLUTOPAK && currentWeapon == GROW_WEAPON))
                     {
-                        if (k == GROW_WEAPON)   // JBF: this is handling next/previous with the grower selected
-                        {
-                            if (j == (unsigned int)-1)
-                                k = 5;
-                            else k = 7;
+                        // this accounts for the expander when handling next/previous
 
-                        }
-                        else
+                        switch (currentWeapon)
                         {
-                            k += j;
-                            if (PLUTOPAK)   // JBF 20040116: so we don't select grower with v1.3d
-                                if (k == SHRINKER_WEAPON && (p->subweapon&(1<<GROW_WEAPON)))    // JBF: activates grower
-                                    k = GROW_WEAPON;                            // if enabled
-                        }
-
-                        if (k == -1) k = 9;
-                        else if (k == 10) k = 0;
-
-                        if (p->gotweapon[k] && p->ammo_amount[k] > 0)
-                        {
-                            if (PLUTOPAK)   // JBF 20040116: so we don't select grower with v1.3d
-                                if (k == SHRINKER_WEAPON && (p->subweapon&(1<<GROW_WEAPON)))
-                                    k = GROW_WEAPON;
-                            j = k;
-                            break;
-                        }
-                        else    // JBF: grower with no ammo, but shrinker with ammo, switch to shrink
-                            if (PLUTOPAK && k == GROW_WEAPON && p->ammo_amount[GROW_WEAPON] == 0 && p->gotweapon[SHRINKER_WEAPON] && p->ammo_amount[SHRINKER_WEAPON] > 0)   // JBF 20040116: added PLUTOPAK so we don't select grower with v1.3d
+                        case DEVISTATOR_WEAPON:
+                            if ((int32_t)weaponNum == -1)
                             {
-                                j = SHRINKER_WEAPON;
-                                p->subweapon &= ~(1<<GROW_WEAPON);
-                                break;
+                                if (PLUTOPAK)
+                                    currentWeapon = GROW_WEAPON;
+                                else
+                                    currentWeapon--;
                             }
-                            else    // JBF: shrinker with no ammo, but grower with ammo, switch to grow
-                                if (PLUTOPAK && k == SHRINKER_WEAPON && p->ammo_amount[SHRINKER_WEAPON] == 0 && p->gotweapon[SHRINKER_WEAPON] && p->ammo_amount[GROW_WEAPON] > 0)   // JBF 20040116: added PLUTOPAK so we don't select grower with v1.3d
-                                {
-                                    j = GROW_WEAPON;
-                                    p->subweapon |= (1<<GROW_WEAPON);
-                                    break;
-                                }
+                            else
+                                currentWeapon++;
+                            break;
 
-                        i++;    // absolutely no weapons, so use foot
-                        if (i == 10)
-                        {
-                            P_AddWeapon(p, KNEE_WEAPON);
+                        case GROW_WEAPON:
+                            currentWeapon = ((int32_t)weaponNum == -1) ? SHRINKER_WEAPON : DEVISTATOR_WEAPON;
+                            break;
+
+                        case SHRINKER_WEAPON:
+                            if ((int32_t)weaponNum == 1)
+                            {
+                                if (PLUTOPAK)
+                                    currentWeapon = GROW_WEAPON;
+                                else
+                                    currentWeapon++;
+                            }
+                            else
+                                currentWeapon--;
+                            break;
+
+                        case KNEE_WEAPON:
+                            if ((int32_t)weaponNum == -1)
+                            {
+#if 0
+                                if (WORLDTOUR)
+                                    currentWeapon = FLAMETHROWER_WEAPON;
+                                else
+#endif
+                                    currentWeapon = FREEZE_WEAPON;
+                            }
+                            else
+                                currentWeapon++;
+                            break;
+#if 0
+                        case FLAMETHROWER_WEAPON:
+                            currentWeapon = ((int32_t)weaponNum == -1) ? FREEZE_WEAPON : KNEE_WEAPON;
+                            break;
+#endif
+
+                        case FREEZE_WEAPON:
+                            if ((int32_t)weaponNum == 1)
+                            {
+#if 0
+                                if (WORLDTOUR)
+                                    currentWeapon = FLAMETHROWER_WEAPON;
+                                else
+#endif
+                                    currentWeapon = KNEE_WEAPON;
+                            }
+                            else
+                                currentWeapon--;
+                            break;
+
+                        case HANDREMOTE_WEAPON:
+                            i = currentWeapon = HANDBOMB_WEAPON;
+                            fallthrough__;
+                        default:
+                            currentWeapon += weaponNum;
                             break;
                         }
+
+                        if (((p->gotweapon[currentWeapon]) && p->ammo_amount[currentWeapon] > 0) || P_CheckDetonatorSpecialCase(p, currentWeapon))
+                        {
+                            weaponNum = currentWeapon;
+                            break;
+                        }
+
+                        if (i == currentWeapon) // absolutely no weapons, so use foot
+                        {
+                            weaponNum = KNEE_WEAPON;
+                            break;
+                        }
+                    }
+
+                    if (weaponNum == SHRINKER_WEAPON)
+                        p->subweapon &= ~(1 << GROW_WEAPON);
+                    else if (weaponNum == GROW_WEAPON)
+                        p->subweapon |= (1 << GROW_WEAPON);
+#if 0
+                    else if (weaponNum == FREEZE_WEAPON)
+                        pPlayer->subweapon &= ~(1 << FLAMETHROWER_WEAPON);
+                    else if (weaponNum == FLAMETHROWER_WEAPON)
+                        pPlayer->subweapon |= (1 << FLAMETHROWER_WEAPON);
+#endif
+                }
+
+                // last used weapon will depend on subweapon
+                if (weaponNum >= 13) // alt weapon, last used weapon
+                {
+                    uint32_t const weaponNumSwitch = (weaponNum == 14) ? p->last_used_weapon : p->curr_weapon;
+                    switch (weaponNumSwitch)
+                    {
+                    case HANDREMOTE_WEAPON:
+                        weaponNum = HANDBOMB_WEAPON;
+                        break;
+                    case GROW_WEAPON:
+                        weaponNum = SHRINKER_WEAPON;
+                        break;
+                    default:
+                        weaponNum = weaponNumSwitch;
+                        break;
                     }
                 }
 
                 k = -1;
 
-                Gv_SetVar(g_iWeaponVarID,j, p->i, snum);
-                Gv_SetVar(g_iReturnVarID,0,p->i,snum);
+                P_SetWeaponGamevars(snum, p);
+
+                Gv_SetVar(g_iReturnVarID, weaponNum,p->i,snum);
                 X_OnEvent(EVENT_SELECTWEAPON,p->i,snum, -1);
-                if (Gv_GetVar(g_iReturnVarID,p->i,snum) == 0)
+                weaponNum = Gv_GetVar(g_iReturnVarID, p->i, snum);
+
+                if ((int32_t)weaponNum != -1 && weaponNum <= MAX_WEAPONS)
                 {
-                    if (j == HANDBOMB_WEAPON && p->ammo_amount[HANDBOMB_WEAPON] == 0)
+                    if (P_CheckDetonatorSpecialCase(p, weaponNum))
                     {
-                        k = headspritestat[STAT_ACTOR];
-                        while (k >= 0)
-                        {
-                            if (sprite[k].picnum == HEAVYHBOMB && sprite[k].owner == p->i)
-                            {
-                                p->gotweapon[HANDBOMB_WEAPON] = 1;
-                                j = HANDREMOTE_WEAPON;
-                                break;
-                            }
-                            k = nextspritestat[k];
-                        }
+                        p->gotweapon[HANDBOMB_WEAPON] = 1;
+                        weaponNum = HANDREMOTE_WEAPON;
                     }
 
-                    if (j == SHRINKER_WEAPON && PLUTOPAK)   // JBF 20040116: so we don't select the grower with v1.3d
+                    if (weaponNum == SHRINKER_WEAPON && PLUTOPAK)   // JBF 20040116: so we don't select the grower with v1.3d
                     {
                         if (screenpeek == snum) pus = NUMPAGES;
 
@@ -2966,10 +3015,10 @@ CHECKINV1:
                             if (p->ammo_amount[GROW_WEAPON] > 0)
                             {
                                 if ((p->subweapon&(1<<GROW_WEAPON)) == (1<<GROW_WEAPON))
-                                    j = GROW_WEAPON;
+                                    weaponNum = GROW_WEAPON;
                                 else if (p->ammo_amount[SHRINKER_WEAPON] == 0)
                                 {
-                                    j = GROW_WEAPON;
+                                    weaponNum = GROW_WEAPON;
                                     p->subweapon |= (1<<GROW_WEAPON);
                                 }
                             }
@@ -2979,7 +3028,7 @@ CHECKINV1:
                         else if (p->curr_weapon == SHRINKER_WEAPON)
                         {
                             p->subweapon |= (1<<GROW_WEAPON);
-                            j = GROW_WEAPON;
+                            weaponNum = GROW_WEAPON;
                         }
                         else
                             p->subweapon &= ~(1<<GROW_WEAPON);
@@ -2990,8 +3039,8 @@ CHECKINV1:
                         sb_snum |= BIT(SK_HOLSTER);
                         p->weapon_pos = -9;
                     }
-                    else if ((uint32_t)j < MAX_WEAPONS && p->gotweapon[j] && (unsigned int)p->curr_weapon != j)
-                        switch (j)
+                    else if ((uint32_t)weaponNum < MAX_WEAPONS && p->gotweapon[weaponNum] && (uint32_t)p->curr_weapon != weaponNum)
+                        switch (weaponNum)
                         {
                         case PISTOL_WEAPON:
                         case SHOTGUN_WEAPON:
@@ -3001,14 +3050,14 @@ CHECKINV1:
                         case FREEZE_WEAPON:
                         case GROW_WEAPON:
                         case SHRINKER_WEAPON:
-                            if (p->ammo_amount[j] == 0 && p->show_empty_weapon == 0)
+                            if (p->ammo_amount[weaponNum] == 0 && p->show_empty_weapon == 0)
                             {
                                 p->show_empty_weapon = 32;
                                 p->last_full_weapon = p->curr_weapon;
                             }
                             fallthrough__;
                         case KNEE_WEAPON:
-                            P_AddWeapon(p, j);
+                            P_AddWeapon(p, weaponNum, 1);
                             break;
 
                         case HANDREMOTE_WEAPON:
@@ -3023,8 +3072,8 @@ CHECKINV1:
 
                         case HANDBOMB_WEAPON:
                         case TRIPBOMB_WEAPON:
-                            if (p->ammo_amount[j] > 0 && p->gotweapon[j])
-                                P_AddWeapon(p, j);
+                            if (p->ammo_amount[weaponNum] > 0 && p->gotweapon[weaponNum])
+                                P_AddWeapon(p, weaponNum, 1);
                             break;
                         }
                 }
@@ -3101,11 +3150,11 @@ CHECKINV1:
             {
                 if (p->firstaid_amount > 0 && sprite[p->i].extra < p->max_player_health)
                 {
-                    j = p->max_player_health-sprite[p->i].extra;
+                    int healthDiff = p->max_player_health-sprite[p->i].extra;
 
-                    if ((unsigned int)p->firstaid_amount > j)
+                    if (p->firstaid_amount > healthDiff)
                     {
-                        p->firstaid_amount -= j;
+                        p->firstaid_amount -= healthDiff;
                         sprite[p->i].extra = p->max_player_health;
                         p->inven_icon = 1;
                     }
@@ -3210,6 +3259,13 @@ static int hitawall(DukePlayer_t *p,int16_t *hitw)
     return (FindDistance2D(hit.pos.x-p->pos.x,hit.pos.y-p->pos.y));
 }
 
+static void G_ClearCameras(DukePlayer_t* p)
+{
+    G_ClearCameraView(p);
+
+    if (KB_KeyPressed(sc_Escape))
+        KB_ClearKeyDown(sc_Escape);
+}
 
 void checksectors(int snum)
 {
@@ -3279,8 +3335,8 @@ void checksectors(int snum)
     {
         if (klabs(g_player[snum].inputBits->svel) > 768 || klabs(g_player[snum].inputBits->fvel) > 768)
         {
-            i = -1;
-            goto CLEARCAMERAS;
+            G_ClearCameras(p);
+            return;
         }
     }
 
@@ -3294,8 +3350,8 @@ void checksectors(int snum)
         {
             if (p->newowner >= 0)
             {
-                i = -1;
-                goto CLEARCAMERAS;
+                G_ClearCameras(p);
+                return;
             }
             return;
         }
@@ -3381,139 +3437,111 @@ void checksectors(int snum)
 
             switch (DynamicTileMap[sprite[neartagsprite].picnum])
             {
-            case TOILET__STATIC:
-            case STALL__STATIC:
-                if (p->last_pissed_time == 0)
-                {
-                    if (ud.lockout == 0) A_PlaySound(DUKE_URINATE,p->i);
-
-                    p->last_pissed_time = 26*220;
-                    p->transporter_hold = 29*2;
-                    if (p->holster_weapon == 0)
+                case TOILET__STATIC:
+                case STALL__STATIC:
+                    if (p->last_pissed_time == 0)
                     {
-                        p->holster_weapon = 1;
-                        p->weapon_pos = -1;
-                    }
-                    if (sprite[p->i].extra <= (p->max_player_health-(p->max_player_health/10)))
-                    {
-                        sprite[p->i].extra += p->max_player_health/10;
-                        p->last_extra = sprite[p->i].extra;
-                    }
-                    else if (sprite[p->i].extra < p->max_player_health)
-                        sprite[p->i].extra = p->max_player_health;
-                }
-                else if (!A_CheckSoundPlaying(neartagsprite,FLUSH_TOILET))
-                    A_PlaySound(FLUSH_TOILET,neartagsprite);
-                return;
+                        if (ud.lockout == 0) A_PlaySound(DUKE_URINATE,p->i);
 
-            case NUKEBUTTON__STATIC:
-
-                hitawall(p,&j);
-                if (j >= 0 && wall[j].overpicnum == 0)
-                    if (ActorExtra[neartagsprite].temp_data[0] == 0)
-                    {
-                        if (ud.noexits && ud.multimode > 1)
+                        p->last_pissed_time = 26*220;
+                        p->transporter_hold = 29*2;
+                        if (p->holster_weapon == 0)
                         {
-                            ActorExtra[p->i].picnum = NUKEBUTTON;
-                            ActorExtra[p->i].extra = 250;
+                            p->holster_weapon = 1;
+                            p->weapon_pos = -1;
                         }
-                        else
+                        if (sprite[p->i].extra <= (p->max_player_health-(p->max_player_health/10)))
                         {
-                            ActorExtra[neartagsprite].temp_data[0] = 1;
-                            sprite[neartagsprite].owner = p->i;
-                            p->buttonpalette = sprite[neartagsprite].pal;
-                            if (p->buttonpalette)
-                                ud.secretlevel = sprite[neartagsprite].lotag;
-                            else ud.secretlevel = 0;
+                            sprite[p->i].extra += p->max_player_health/10;
+                            p->last_extra = sprite[p->i].extra;
+                        }
+                        else if (sprite[p->i].extra < p->max_player_health)
+                            sprite[p->i].extra = p->max_player_health;
+                    }
+                    else if (!A_CheckSoundPlaying(neartagsprite,FLUSH_TOILET))
+                        A_PlaySound(FLUSH_TOILET,neartagsprite);
+                    return;
+
+                case NUKEBUTTON__STATIC:
+
+                    hitawall(p,&j);
+                    if (j >= 0 && wall[j].overpicnum == 0)
+                        if (ActorExtra[neartagsprite].temp_data[0] == 0)
+                        {
+                            if (ud.noexits && ud.multimode > 1)
+                            {
+                                ActorExtra[p->i].picnum = NUKEBUTTON;
+                                ActorExtra[p->i].extra = 250;
+                            }
+                            else
+                            {
+                                ActorExtra[neartagsprite].temp_data[0] = 1;
+                                sprite[neartagsprite].owner = p->i;
+                                p->buttonpalette = sprite[neartagsprite].pal;
+                                if (p->buttonpalette)
+                                    ud.secretlevel = sprite[neartagsprite].lotag;
+                                else ud.secretlevel = 0;
+                            }
+                        }
+                    return;
+                case WATERFOUNTAIN__STATIC:
+                    if (ActorExtra[neartagsprite].temp_data[0] != 1)
+                    {
+                        ActorExtra[neartagsprite].temp_data[0] = 1;
+                        sprite[neartagsprite].owner = p->i;
+
+                        if (sprite[p->i].extra < p->max_player_health)
+                        {
+                            sprite[p->i].extra++;
+                            A_PlaySound(DUKE_DRINKING,p->i);
                         }
                     }
-                return;
-            case WATERFOUNTAIN__STATIC:
-                if (ActorExtra[neartagsprite].temp_data[0] != 1)
-                {
-                    ActorExtra[neartagsprite].temp_data[0] = 1;
-                    sprite[neartagsprite].owner = p->i;
-
-                    if (sprite[p->i].extra < p->max_player_health)
+                    return;
+                case PLUG__STATIC:
+                    A_PlaySound(SHORT_CIRCUIT,p->i);
+                    sprite[p->i].extra -= 2+(krand()&3);
+                    p->pals[0] = 48;
+                    p->pals[1] = 48;
+                    p->pals[2] = 64;
+                    p->pals_time = 32;
+                    break;
+                case VIEWSCREEN__STATIC:
+                case VIEWSCREEN2__STATIC:
+                    // Try to find a camera sprite for the viewscreen.
+                    for (bssize_t SPRITES_OF(STAT_ACTOR, i))
                     {
-                        sprite[p->i].extra++;
-                        A_PlaySound(DUKE_DRINKING,p->i);
+                        if (PN == CAMERA1 && SP == 0 && sprite[neartagsprite].hitag == SLT)
+                        {
+                            sprite[i].yvel   = 1;  // Using this camera
+                            A_PlaySound(MONITOR_ACTIVE, p->i);
+                            sprite[neartagsprite].owner = i;
+                            sprite[neartagsprite].yvel  = 1;  // VIEWSCREEN_YVEL
+                            //g_curViewscreen          = neartagsprite;
+
+                            int const playerSectnum = p->cursectnum;
+                            p->cursectnum     = SECT;
+                            P_UpdateScreenPal(p);
+                            p->cursectnum     = playerSectnum;
+                            p->newowner       = i;
+
+                            P_UpdatePosWhenViewingCam(p);
+
+                            return;
+                        }
                     }
-                }
-                return;
-            case PLUG__STATIC:
-                A_PlaySound(SHORT_CIRCUIT,p->i);
-                sprite[p->i].extra -= 2+(krand()&3);
-                p->pals[0] = 48;
-                p->pals[1] = 48;
-                p->pals[2] = 64;
-                p->pals_time = 32;
-                break;
-            case VIEWSCREEN__STATIC:
-            case VIEWSCREEN2__STATIC:
-            {
-                i = headspritestat[STAT_ACTOR];
 
-                while (i >= 0)
-                {
-                    if (PN == CAMERA1 && SP == 0 && sprite[neartagsprite].hitag == SLT)
-                    {
-                        SP = 1; //Using this camera
-                        A_PlaySound(MONITOR_ACTIVE,p->i);
-
-                        sprite[neartagsprite].owner = i;
-                        sprite[neartagsprite].yvel = 1;
-
-
-                        j = p->cursectnum;
-                        p->cursectnum = SECT;
-                        P_UpdateScreenPal(p);
-                        p->cursectnum = j;
-
-                        // parallaxtype = 2;
-                        p->newowner = i;
-                        return;
-                    }
-                    i = nextspritestat[i];
-                }
-            }
-
-CLEARCAMERAS:
-
-            if (i < 0)
-            {
-                p->pos.x = p->opos.x;
-                p->pos.y = p->opos.y;
-                p->pos.z = p->opos.z;
-                p->q16ang = p->oq16ang;
-                p->newowner = -1;
-
-                updatesector(p->pos.x,p->pos.y,&p->cursectnum);
-                P_UpdateScreenPal(p);
-
-
-                i = headspritestat[STAT_ACTOR];
-                while (i >= 0)
-                {
-                    if (PN==CAMERA1) SP = 0;
-                    i = nextspritestat[i];
-                }
-            }
-            else if (p->newowner >= 0)
-                p->newowner = -1;
-
-            if (KB_KeyPressed(sc_Escape))
-                KB_ClearKeyDown(sc_Escape);
-
-            return;
+                    G_ClearCameras(p);
+                    return;
             }
         }
 
-        if (TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_OPEN) == 0) return;
-        else if (p->newowner >= 0)
+        if (TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_OPEN) == 0)
+            return;
+
+        if (p->newowner >= 0)
         {
-            i = -1;
-            goto CLEARCAMERAS;
+            G_ClearCameras(p);
+            return;
         }
 
         if (neartagwall == -1 && neartagsector == -1 && neartagsprite == -1)
@@ -3535,8 +3563,8 @@ CLEARCAMERAS:
             }
             else if (p->newowner >= 0)
             {
-                i = -1;
-                goto CLEARCAMERAS;
+                G_ClearCameras(p);
+                return;
             }
         }
 

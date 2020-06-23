@@ -36,6 +36,9 @@ void G_DoOrderScreen(void);
 
 void G_BonusScreen(int bonusonly);
 
+void G_GetCrosshairColor(void);
+void G_SetCrosshairColor(int32_t r, int32_t g, int32_t b);
+
 extern palette_t CrosshairColors;
 extern palette_t DefaultCrosshairColors;
 extern int32_t g_crosshairSum;

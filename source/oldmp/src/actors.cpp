@@ -89,6 +89,20 @@ void G_RestoreInterpolations(void)  //Stick at end of drawscreen
     for (; i >= 0; i--)* curipos[i] = bakipos[i];
 }
 
+void G_ClearCameraView(DukePlayer_t* ps)
+{
+    ps->newowner = -1;
+    ps->pos = ps->opos;
+    ps->q16ang = ps->oq16ang;
+
+    updatesector(ps->pos.x, ps->pos.y, &ps->cursectnum);
+    P_UpdateScreenPal(ps);
+
+    for (bssize_t SPRITES_OF(STAT_ACTOR, k))
+        if (sprite[k].picnum == CAMERA1)
+            sprite[k].yvel = 0;
+}
+
 int G_CheckForSpaceCeiling(int sectnum)
 {
     return ((sector[sectnum].ceilingstat&1) && sector[sectnum].ceilingpal == 0 && (sector[sectnum].ceilingpicnum==MOONSKY1 || sector[sectnum].ceilingpicnum==BIGORBIT1)?1:0);
@@ -161,52 +175,6 @@ void P_AddWeaponNoSwitch(DukePlayer_t *p, int weapon)
 #endif
 }
 
-void P_AddWeapon(DukePlayer_t *p,int weapon)
-{
-    int snum = sprite[p->i].yvel;
-
-    P_AddWeaponNoSwitch(p,weapon);
-
-    if (p->reloading) return;
-
-    if (p->curr_weapon != weapon)
-    {
-        Gv_SetVar(g_iReturnVarID, weapon, p->i, snum);
-        X_OnEvent(EVENT_CHANGEWEAPON, p->i, snum, -1);
-        weapon = Gv_GetVar(g_iReturnVarID, p->i, snum);
-        if (weapon < 0) return;
-    }
-
-    p->random_club_frame = 0;
-
-    if (p->holster_weapon == 0)
-    {
-        if (p->weapon_pos == 0)
-            p->weapon_pos = -1;
-        else p->weapon_pos = -9;
-        p->last_weapon = p->curr_weapon;
-    }
-    else
-    {
-        p->weapon_pos = 10;
-        p->holster_weapon = 0;
-        p->last_weapon = -1;
-    }
-
-    p->kickback_pic = 0;
-    p->curr_weapon = weapon;
-    Gv_SetVar(g_iWeaponVarID,p->curr_weapon, p->i, snum);
-
-    if (p->curr_weapon>=0)
-    {
-        Gv_SetVar(g_iWorksLikeVarID,aplWeaponWorksLike[p->curr_weapon][snum], p->i, snum);
-    }
-    else
-    {
-        Gv_SetVar(g_iWorksLikeVarID,-1, p->i, snum);
-    }
-}
-
 void P_SelectNextInvItem(DukePlayer_t *p)
 {
     if (p->firstaid_amount > 0)
@@ -226,75 +194,125 @@ void P_SelectNextInvItem(DukePlayer_t *p)
     else p->inven_icon = 0;
 }
 
-void P_CheckWeapon(DukePlayer_t *p)
+static void P_ChangeWeapon(DukePlayer_t* const pPlayer, int const weaponNum)
 {
-    short i,snum;
-    int32_t weap;
+    int const    playerNum = sprite[pPlayer->i].yvel;  // PASS_SNUM?
+    int8_t const currentWeapon = pPlayer->curr_weapon;
 
-    if (p->reloading) return;
+    if (pPlayer->reloading)
+        return;
 
-    if (p->wantweaponfire >= 0)
+    int eventReturn = 0;
+
+    if (pPlayer->curr_weapon != weaponNum)
     {
-        weap = p->wantweaponfire;
-        p->wantweaponfire = -1;
+        Gv_SetVar(g_iReturnVarID, weaponNum, pPlayer->i, playerNum);
+        X_OnEvent(EVENT_CHANGEWEAPON, pPlayer->i, playerNum, -1);
+        eventReturn = Gv_GetVar(g_iReturnVarID, pPlayer->i, playerNum);
+    }
 
-        if (weap == p->curr_weapon) return;
-        else if (p->gotweapon[weap] && p->ammo_amount[weap] > 0)
+    if (eventReturn == -1)
+        return;
+
+    if (eventReturn != -2)
+        pPlayer->curr_weapon = weaponNum;
+
+    pPlayer->random_club_frame = 0;
+
+    if (pPlayer->weapon_pos == 0)
+    {
+        pPlayer->weapon_pos = -1;
+        pPlayer->last_weapon = currentWeapon;
+    }
+    else if ((unsigned)pPlayer->weapon_pos < 10)
+    {
+        pPlayer->weapon_pos = -pPlayer->weapon_pos;
+        pPlayer->last_weapon = currentWeapon;
+    }
+    else if (pPlayer->last_weapon == weaponNum)
+    {
+        pPlayer->last_weapon = -1;
+        pPlayer->weapon_pos = -pPlayer->weapon_pos;
+    }
+
+    if (pPlayer->holster_weapon)
+    {
+        pPlayer->weapon_pos = 10;
+        pPlayer->holster_weapon = 0;
+        pPlayer->last_weapon = -1;
+    }
+
+    if (currentWeapon != pPlayer->curr_weapon &&
+        !(PWEAPON(playerNum, currentWeapon, WorksLike) == HANDREMOTE_WEAPON && PWEAPON(playerNum, pPlayer->curr_weapon, WorksLike) == HANDBOMB_WEAPON) &&
+        !(PWEAPON(playerNum, currentWeapon, WorksLike) == HANDBOMB_WEAPON && PWEAPON(playerNum, pPlayer->curr_weapon, WorksLike) == HANDREMOTE_WEAPON))
+    {
+        pPlayer->last_used_weapon = currentWeapon;
+    }
+
+    pPlayer->kickback_pic = 0;
+
+    P_SetWeaponGamevars(playerNum, pPlayer);
+}
+
+void P_AddWeapon(DukePlayer_t* pPlayer, int weaponNum, int switchWeapon)
+{
+    P_AddWeaponNoSwitch(pPlayer, weaponNum);
+
+    if (switchWeapon)
+        P_ChangeWeapon(pPlayer, weaponNum);
+}
+
+void P_CheckWeapon(DukePlayer_t* pPlayer)
+{
+    if (pPlayer->reloading || (unsigned)pPlayer->curr_weapon >= MAX_WEAPONS)
+        return;
+
+    int playerNum, weaponNum;
+
+    if (pPlayer->wantweaponfire >= 0)
+    {
+        weaponNum = pPlayer->wantweaponfire;
+        pPlayer->wantweaponfire = -1;
+
+        if (weaponNum == pPlayer->curr_weapon)
+            return;
+
+        if (pPlayer->gotweapon[weaponNum] && pPlayer->ammo_amount[weaponNum] > 0)
         {
-            P_AddWeapon(p,weap);
+            P_AddWeapon(pPlayer, weaponNum, 1);
             return;
         }
     }
 
-    weap = p->curr_weapon;
-    if (p->gotweapon[weap] && p->ammo_amount[weap] > 0)
-        return;
-    if (p->gotweapon[weap] && !(p->weaponswitch & 2))
+    weaponNum = pPlayer->curr_weapon;
+
+    if (pPlayer->gotweapon[weaponNum] && (pPlayer->ammo_amount[weaponNum] > 0 || !(pPlayer->weaponswitch & 2)))
         return;
 
-    snum = sprite[p->i].yvel;
+    playerNum = sprite[pPlayer->i].yvel;
 
-    for (i=0;i<10;i++)
+    int wpnInc = 0;
+
+    for (wpnInc = 0; wpnInc <= FREEZE_WEAPON; ++wpnInc)
     {
-        weap = g_player[snum].wchoice[i];
-        if (VOLUMEONE && weap > 6) continue;
+        weaponNum = g_player[playerNum].wchoice[wpnInc];
+        if (VOLUMEONE && weaponNum > SHRINKER_WEAPON)
+            continue;
 
-        if (weap == 0) weap = 9;
-        else weap--;
+        if (weaponNum == KNEE_WEAPON)
+            weaponNum = FREEZE_WEAPON;
+        else weaponNum--;
 
-        if (weap == 0 || (p->gotweapon[weap] && p->ammo_amount[weap] > 0))
+        if (weaponNum == KNEE_WEAPON || ((pPlayer->gotweapon[weaponNum]) && pPlayer->ammo_amount[weaponNum] > 0))
             break;
     }
 
-    if (i == 10) weap = 0;
+    if (wpnInc == HANDREMOTE_WEAPON)
+        weaponNum = KNEE_WEAPON;
 
     // Found the weapon
 
-    Gv_SetVar(g_iReturnVarID, weap, p->i, snum);
-    X_OnEvent(EVENT_CHANGEWEAPON, p->i, snum, -1);
-    weap = Gv_GetVar(g_iReturnVarID, p->i, snum);
-    if (weap < 0) return;
-
-    p->last_weapon = p->curr_weapon;
-    p->curr_weapon = weap;
-    p->random_club_frame = 0;
-
-    Gv_SetVar(g_iWeaponVarID,p->curr_weapon, p->i, snum);
-    if (p->curr_weapon>=0)
-    {
-        Gv_SetVar(g_iWorksLikeVarID,aplWeaponWorksLike[p->curr_weapon][snum], p->i, snum);
-    }
-    else
-    {
-        Gv_SetVar(g_iWorksLikeVarID,-1, p->i, snum);
-    }
-    p->kickback_pic = 0;
-    if (p->holster_weapon == 1)
-    {
-        p->holster_weapon = 0;
-        p->weapon_pos = 10;
-    }
-    else p->weapon_pos   = -1;
+    P_ChangeWeapon(pPlayer, weaponNum);
 }
 
 void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
@@ -476,21 +494,7 @@ SKIPWALLCHECK:
                             p = sj->yvel;
                             if (g_player[p].ps->newowner >= 0)
                             {
-                                g_player[p].ps->newowner = -1;
-                                g_player[p].ps->pos.x = g_player[p].ps->opos.x;
-                                g_player[p].ps->pos.y = g_player[p].ps->opos.y;
-                                g_player[p].ps->pos.z = g_player[p].ps->opos.z;
-                                g_player[p].ps->q16ang = g_player[p].ps->oq16ang;
-                                updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&g_player[p].ps->cursectnum);
-                                P_UpdateScreenPal(g_player[p].ps);
-
-                                k = headspritestat[STAT_ACTOR];
-                                while (k >= 0)
-                                {
-                                    if (sprite[k].picnum==CAMERA1)
-                                        sprite[k].yvel = 0;
-                                    k = nextspritestat[k];
-                                }
+                                G_ClearCameraView(g_player[p].ps);
                             }
                         }
                         ActorExtra[j].owner = s->owner;
@@ -1094,8 +1098,8 @@ static void G_MovePlayers(void) //Players
         {
             if (p->newowner >= 0)  //Looking thru the camera
             {
-                s->x = p->opos.x;
-                s->y = p->opos.y;
+                s->pos.vec2 = p->opos.vec2;
+
                 ActorExtra[i].bposz = s->z = p->opos.z+PHEIGHT;
                 s->ang = fix16_to_int(p->oq16ang);
                 setspritez_old(i,s->x,s->y,s->z);
@@ -4111,24 +4115,8 @@ static void G_MoveActors(void)
                 if (t[2] < 348)
                     t[2] += 128;
 
-                if (g_player[p].ps->newowner >= 0)
-                {
-                    g_player[p].ps->newowner = -1;
-                    g_player[p].ps->pos.x = g_player[p].ps->opos.x;
-                    g_player[p].ps->pos.y = g_player[p].ps->opos.y;
-                    g_player[p].ps->pos.z = g_player[p].ps->opos.z;
-                    g_player[p].ps->q16ang = g_player[p].ps->oq16ang;
-
-                    updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&g_player[p].ps->cursectnum);
-                    P_UpdateScreenPal(g_player[p].ps);
-
-                    j = headspritestat[STAT_ACTOR];
-                    while (j >= 0)
-                    {
-                        if (sprite[j].picnum==CAMERA1) sprite[j].yvel = 0;
-                        j = nextspritestat[j];
-                    }
-                }
+                if (g_player[p].ps->newowner >= 0) // Looking through viewscreen
+                    G_ClearCameraView(g_player[p].ps);
 
                 if (t[3]>0)
                 {
@@ -4602,10 +4590,7 @@ DETONATEB:
 
                         if (g_player[p].ps->gotweapon[HANDBOMB_WEAPON] == 0 || s->owner == g_player[p].ps->i)
                         {
-                            /* P_AddWeapon(g_player[p].ps,HANDBOMB_WEAPON); */
-                            if (!(g_player[p].ps->weaponswitch & 1) && *aplWeaponWorksLike[g_player[p].ps->curr_weapon] != HANDREMOTE_WEAPON)
-                                P_AddWeaponNoSwitch(g_player[p].ps,HANDBOMB_WEAPON);
-                            else P_AddWeapon(g_player[p].ps,HANDBOMB_WEAPON);
+                            P_AddWeapon(g_player[p].ps,HANDBOMB_WEAPON, (!(g_player[p].ps->weaponswitch & 1) && *aplWeaponWorksLike[g_player[p].ps->curr_weapon] != HANDREMOTE_WEAPON));
                         }
 
                         if (sprite[s->owner].picnum != APLAYER)

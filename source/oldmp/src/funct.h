@@ -143,7 +143,7 @@ extern int G_CheckForSpaceCeiling(int sectnum);
 extern int G_CheckForSpaceFloor(int sectnum);
 extern void P_AddAmmo(int weapon,DukePlayer_t *p,int amount);
 extern void P_AddWeaponNoSwitch(DukePlayer_t *p,int weapon);
-extern void P_AddWeapon(DukePlayer_t *p,int weapon);
+extern void P_AddWeapon(DukePlayer_t* pPlayer, int weaponNum, int switchWeapon);
 extern void P_SelectNextInvItem(DukePlayer_t *p);
 extern void P_CheckWeapon(DukePlayer_t *p);
 extern void A_RadiusDamage(int i,int r,int hp1,int hp2,int hp3,int hp4);
@@ -168,6 +168,9 @@ extern void playerColor_add(const char *name, int palnum);
 extern void playerColor_delete(int palnum);
 extern uint8_t playerColor_getNextColor(uint8_t palnum, uint8_t useauto);
 extern uint8_t playerColor_getPreviousColor(uint8_t palnum, uint8_t useauto);
+
+extern void P_SetWeaponGamevars(int playerNum, const DukePlayer_t* const pPlayer);
+extern void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer);
 
 // game.cpp
 extern int mpgametext(int y, const char *t, int s, int dabits);
@@ -245,8 +248,7 @@ extern void se40code(int x,int y,int z,int a,int h, int smoothratio);
 extern void G_FreeMapState(int mapnum);
 extern int32_t G_FindLevelByFile(const char *fn);
 
-extern void G_GetCrosshairColor(void);
-extern void G_SetCrosshairColor(int r, int g, int b);
+extern void G_ClearCameraView(DukePlayer_t* ps);
 
 extern int _EnterText(int small,int x,int y,char *t,int dalen,int c);
 

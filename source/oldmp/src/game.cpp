@@ -3353,18 +3353,11 @@ void G_DisplayRest(int smoothratio)
             {
                 if (pp->newowner == -1 && !ud.pause_on)
                 {
-                    if (screenpeek == myconnectindex && numplayers > 1)
-                    {
-                        cposx = predictedPlayer.opos.x+mulscale16((int)(predictedPlayer.pos.x-predictedPlayer.opos.x),smoothratio);
-                        cposy = predictedPlayer.opos.y+mulscale16((int)(predictedPlayer.pos.y-predictedPlayer.opos.y),smoothratio);
-                        cang = fix16_to_int(predictedPlayer.oq16ang) + mulscale16((fix16_to_int(predictedPlayer.q16ang + F16(1024) - predictedPlayer.oq16ang) & 2047) - 1024,smoothratio);
-                    }
-                    else
-                    {
-                        cposx = pp->opos.x+mulscale16((int)(pp->pos.x-pp->opos.x),smoothratio);
-                        cposy = pp->opos.y+mulscale16((int)(pp->pos.y-pp->opos.y),smoothratio);
-                        cang = fix16_to_int(pp->oq16ang) + mulscale16((fix16_to_int(pp->q16ang + F16(1024) - pp->oq16ang) & 2047) - 1024, smoothratio);
-                    }
+                    DukePlayer_t* camPlayer = (screenpeek == myconnectindex && numplayers > 1) ? &predictedPlayer : pp;
+
+                    cposx = camPlayer->opos.x+mulscale16((int)(camPlayer->pos.x - camPlayer->opos.x),smoothratio);
+                    cposy = camPlayer->opos.y+mulscale16((int)(camPlayer->pos.y - camPlayer->opos.y),smoothratio);
+                    cang = fix16_to_int(camPlayer->oq16ang) + mulscale16((fix16_to_int(camPlayer->q16ang + F16(1024) - camPlayer->oq16ang) & 2047) - 1024, smoothratio);
                 }
                 else
                 {
@@ -4039,6 +4032,16 @@ static void G_ClearGotMirror()
     gotpic[MIRROR >> 3] &= ~pow2char[MIRROR & 7];
 }
 
+static inline vec3_t G_GetCameraPosition(int32_t const i, int32_t const smoothratio)
+{
+    auto const cs = (uspriteptr_t)&sprite[i];
+    const ActorData_t* const ca = &ActorExtra[i];
+
+    return { ca->bposx + mulscale16(cs->x - ca->bposx, smoothratio),
+             ca->bposy + mulscale16(cs->y - ca->bposy, smoothratio),
+             ca->bposz + mulscale16(cs->z - ca->bposz, smoothratio) };
+}
+
 void G_DrawRooms(int snum,int smoothratio)
 {
     int j, floorZ, ceilZ;
@@ -4187,35 +4190,37 @@ void G_DrawRooms(int snum,int smoothratio)
             p->orotscrnang = p->rotscrnang; // JBF: save it for next time
         }
 
-        DukePlayer_t* camPlayer = (snum == myconnectindex) && (numplayers > 1) ? &predictedPlayer : p;
-
-        ud.camerapos.x = camPlayer->opos.x + mulscale16((int)(camPlayer->pos.x - camPlayer->opos.x), smoothratio);
-        ud.camerapos.y = camPlayer->opos.y + mulscale16((int)(camPlayer->pos.y - camPlayer->opos.y), smoothratio);
-        ud.camerapos.z = camPlayer->opos.z + mulscale16((int)(camPlayer->pos.z - camPlayer->opos.z), smoothratio);
-        ud.cameraq16ang = camPlayer->oq16ang + mulscale16(((camPlayer->q16ang + F16(1024) - camPlayer->oq16ang) & 0x7FFFFFF) - F16(1024), smoothratio);
-        ud.cameraq16horiz = camPlayer->oq16horiz + camPlayer->oq16horizoff + mulscale16((camPlayer->q16horiz + camPlayer->q16horizoff - camPlayer->oq16horiz - camPlayer->oq16horizoff), smoothratio);
-        ud.camerasect = camPlayer->cursectnum;
-
-        ud.cameraq16ang += fix16_from_int(p->look_ang);
-
-        // Looking through viewscreen
-        if (p->newowner >= 0)
+        if (p->newowner < 0)
         {
+            DukePlayer_t* camPlayer = (snum == myconnectindex) && (numplayers > 1) ? &predictedPlayer : p;
+
+            ud.camerapos.x = camPlayer->opos.x + mulscale16((int)(camPlayer->pos.x - camPlayer->opos.x), smoothratio);
+            ud.camerapos.y = camPlayer->opos.y + mulscale16((int)(camPlayer->pos.y - camPlayer->opos.y), smoothratio);
+            ud.camerapos.z = camPlayer->opos.z + mulscale16((int)(camPlayer->pos.z - camPlayer->opos.z), smoothratio);
+            ud.cameraq16ang = camPlayer->oq16ang + mulscale16(((camPlayer->q16ang + F16(1024) - camPlayer->oq16ang) & 0x7FFFFFF) - F16(1024), smoothratio);
+            ud.cameraq16horiz = camPlayer->oq16horiz + camPlayer->oq16horizoff + mulscale16((camPlayer->q16horiz + camPlayer->q16horizoff - camPlayer->oq16horiz - camPlayer->oq16horizoff), smoothratio);
+            ud.camerasect = camPlayer->cursectnum;
+
+            ud.cameraq16ang += fix16_from_int(p->look_ang);
+
+            if (p->over_shoulder_on == 0)
+            {
+                if (ud.viewbob)
+                    ud.camerapos.z += p->opyoff + mulscale16((int)(p->pyoff - p->opyoff), smoothratio);
+            }
+            else G_DoThirdPerson(p, &ud.camerapos, &ud.camerasect, fix16_to_int(ud.cameraq16ang), fix16_to_int(ud.cameraq16horiz));
+        } 
+        else
+        {
+            vec3_t const camVect = G_GetCameraPosition(p->newowner, smoothratio);
+
+            // Looking through viewscreen
+            ud.camerapos = camVect;
             ud.cameraq16ang = p->q16ang + fix16_from_int(p->look_ang);
-            ud.cameraq16horiz = p->q16horiz+p->q16horizoff;
-            ud.camerapos.x = p->pos.x;
-            ud.camerapos.y = p->pos.y;
-            ud.camerapos.z = p->pos.z;
+            ud.cameraq16horiz = fix16_from_int(100 + sprite[p->newowner].shade);
             ud.camerasect = sprite[p->newowner].sectnum;
-            smoothratio = 65536L;
         }
-        else if (p->over_shoulder_on == 0)
-        {
-            if (ud.viewbob)
-                ud.camerapos.z += p->opyoff+mulscale16((int)(p->pyoff-p->opyoff),smoothratio);
-        }
-        else G_DoThirdPerson(p,&ud.camerapos,&ud.camerasect,fix16_to_int(ud.cameraq16ang),fix16_to_int(ud.cameraq16horiz));
-
+        
         ceilZ = ActorExtra[p->i].ceilingz;
         floorZ = ActorExtra[p->i].floorz;
 
@@ -12179,6 +12184,14 @@ static void G_SetupGameButtons(void)
     CONTROL_DefineFlag(gamefunc_Quick_Kick,false);
     CONTROL_DefineFlag(gamefunc_Next_Weapon,false);
     CONTROL_DefineFlag(gamefunc_Previous_Weapon,false);
+
+    CONTROL_DefineFlag(gamefunc_Alt_Fire, FALSE);
+    CONTROL_DefineFlag(gamefunc_Last_Weapon, FALSE);
+    CONTROL_DefineFlag(gamefunc_Quick_Save, FALSE);
+    CONTROL_DefineFlag(gamefunc_Quick_Load, FALSE);
+    CONTROL_DefineFlag(gamefunc_Alt_Weapon, FALSE);
+    CONTROL_DefineFlag(gamefunc_Third_Person_View, FALSE);
+    CONTROL_DefineFlag(gamefunc_Toggle_Crouch, FALSE);
 }
 
 // [JM] Needed for build linkage

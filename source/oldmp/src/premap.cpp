@@ -707,6 +707,7 @@ void P_ResetWeapons(int snum)
     p->ammo_amount[PISTOL_WEAPON] = 48;
     p->gotweapon[HANDREMOTE_WEAPON] = 1;
     p->last_weapon = -1;
+    p->last_used_weapon = -1;
 
     p->show_empty_weapon= 0;
     p->last_pissed_time = 0;

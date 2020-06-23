@@ -678,15 +678,10 @@ void addweapon_maybeswitch(DukePlayer_t *ps, int32_t weap)
                 new_wchoice = i;
         }
 
-        if (new_wchoice < curr_wchoice)
-            P_AddWeapon(ps, weap);
-        else
-            P_AddWeaponNoSwitch(ps, weap);
+        P_AddWeapon(ps, weap, (new_wchoice < curr_wchoice));
     }
-    else if (ps->weaponswitch & 1)
-        P_AddWeapon(ps, weap);
-    else
-        P_AddWeaponNoSwitch(ps, weap);
+
+    P_AddWeapon(ps, weap, (ps->weaponswitch & 1));
 }
 
 void addweapon_addammo_common(DukePlayer_t *ps, int32_t weap, int32_t amount)
@@ -1371,21 +1366,7 @@ static int X_DoExecute(void)
 
         if (g_player[g_p].ps->newowner >= 0)
         {
-            g_player[g_p].ps->newowner = -1;
-            g_player[g_p].ps->pos.x = g_player[g_p].ps->opos.x;
-            g_player[g_p].ps->pos.y = g_player[g_p].ps->opos.y;
-            g_player[g_p].ps->pos.z = g_player[g_p].ps->opos.z;
-            g_player[g_p].ps->q16ang = g_player[g_p].ps->oq16ang;
-            updatesector(g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,&g_player[g_p].ps->cursectnum);
-            P_UpdateScreenPal(g_player[g_p].ps);
-
-            j = headspritestat[STAT_ACTOR];
-            while (j >= 0)
-            {
-                if (sprite[j].picnum==CAMERA1)
-                    sprite[j].yvel = 0;
-                j = nextspritestat[j];
-            }
+            G_ClearCameraView(g_player[g_p].ps);
         }
 
         j = sprite[g_player[g_p].ps->i].extra;
