@@ -4158,7 +4158,7 @@ void P_SharedInput(int snum)
         }
     }
 
-    if (s->extra <= 0)
+    if (s->extra <= 0) // We're dead
     {
         if (psectlotag == 2)
         {

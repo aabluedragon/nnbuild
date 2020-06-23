@@ -1475,6 +1475,10 @@ void Net_CorrectPrediction(void)
     i = ((movefifoplc-1)&(MOVEFIFOSIZ-1));
     p = g_player[myconnectindex].ps;
 
+    // HACK: Don't correct prediction if we're dead. Fixes "wackedbyactor" cam.
+    if (p->wackedbyactor >= 0 || sprite[p->i].extra <= 0)
+        return;
+
     if (p->pos.x == myposbak[i].x && p->pos.y == myposbak[i].y && p->pos.z == myposbak[i].z
             && p->q16horiz == myhorizbak[i] && p->q16ang == myangbak[i]) return;
 

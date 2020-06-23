@@ -1166,6 +1166,12 @@ static void G_MovePlayers(void) //Players
                     {
                         p->q16ang += fix16_from_int(G_GetAngleDelta(fix16_to_int(p->q16ang),getangle(sprite[p->wackedbyactor].x-p->pos.x,sprite[p->wackedbyactor].y-p->pos.y))>>1);
                         p->q16ang &= 0x7FFFFFF;
+
+                        // HACK: This is so the camera will remain smooth in online play.
+                        if ((s->yvel == myconnectindex) && (screenpeek == myconnectindex))
+                        {
+                            predictedPlayer.q16ang = p->q16ang;
+                        }
                     }
 
                 }
