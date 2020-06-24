@@ -640,24 +640,6 @@ int32_t CONFIG_ReadSetup(void)
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "Shadows",&ud.shadows);
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "Tilt",&ud.screen_tilting);
 
-        {
-            tempbuf[0] = 0;
-            SCRIPT_GetString(ud.config.scripthandle, "Screen Setup", "VidGamma",&tempbuf[0]);
-            if (tempbuf[0]) g_videoGamma = atof(tempbuf);
-        }
-
-        {
-            tempbuf[0] = 0;
-            SCRIPT_GetString(ud.config.scripthandle, "Screen Setup", "VidBrightness",&tempbuf[0]);
-            if (tempbuf[0]) g_videoBrightness = atof(tempbuf);
-        }
-
-        {
-            tempbuf[0] = 0;
-            SCRIPT_GetString(ud.config.scripthandle, "Screen Setup", "VidContrast",&tempbuf[0]);
-            if (tempbuf[0]) g_videoContrast = atof(tempbuf);
-        }
-
         windowx = -1;
         windowy = -1;
         SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "WindowPosX", (int32_t *)&windowx); 
@@ -965,15 +947,6 @@ void CONFIG_WriteSetup(uint32_t flags)
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "UseModels",usemodels,false,false);
 #endif
 
-    {
-        Bsprintf(tempbuf,"%.2f",g_videoBrightness);
-        SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "VidBrightness",tempbuf);
-        Bsprintf(tempbuf,"%.2f",g_videoContrast);
-        SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "VidContrast",tempbuf);
-        Bsprintf(tempbuf,"%.2f",g_videoGamma);
-        SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "VidGamma",tempbuf);
-    }
-
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "WindowPosX", windowx, false, false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "WindowPosY", windowy, false, false);
 
@@ -1021,9 +994,6 @@ void CONFIG_WriteSetup(uint32_t flags)
             SCRIPT_PutString(ud.config.scripthandle, "Controls", buf, CONFIG_AnalogNumToName(ud.config.MouseAnalogueAxes[i]));
         }
     }
-
-    //dummy = CONTROL_GetMouseSensitivity();
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","Mouse_Sensitivity", CONTROL_MouseSensitivity, false, false);
 
     // JOYSTICK
     for (int dummy = 0; dummy < MAXJOYBUTTONSANDHATS; dummy++)

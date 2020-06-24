@@ -7,4 +7,5 @@ void GAME_clearbackground(int c, int r);
 void GAME_onshowosd(int shown);
 
 extern int osdhightile;
+extern float osdscale, osdrscale;
 
