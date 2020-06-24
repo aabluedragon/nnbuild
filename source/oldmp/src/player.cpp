@@ -3371,7 +3371,7 @@ static int P_DoCounters(DukePlayer_t *p)
             {
                 P_ActivateSwitch(snum,p->access_spritenum,1);
 
-                if (!(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+                if (ud.multimode < 2 || (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART)))
                 {
                     keypal = sprite[p->access_spritenum].pal;
                     switch (keypal)
@@ -3397,7 +3397,7 @@ static int P_DoCounters(DukePlayer_t *p)
             {
                 P_ActivateSwitch(snum,p->access_wallnum,0);
 
-                if (!(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+                if (ud.multimode < 2 || (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART)))
                 {
                     keypal = wall[p->access_wallnum].pal;
                     switch (keypal)
@@ -3418,7 +3418,7 @@ static int P_DoCounters(DukePlayer_t *p)
                 }
             }
 
-            if (!(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+            if (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
             {
                 Bsprintf(tempbuf, "^12%s^12 has used a ^%d%s^12 key.", &g_player[snum].user_name[0], keypal, keyname);
                 G_AddUserQuote(tempbuf);
