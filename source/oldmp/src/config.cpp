@@ -672,8 +672,6 @@ int32_t CONFIG_ReadSetup(void)
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Color",&ud.m_color);
 
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "CrosshairScale",&ud.crosshairscale);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Crosshairs",&ud.crosshair);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "DeathMessages",&ud.obituaries);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "DemoCams",&ud.democams);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Executions",&ud.executions);
@@ -891,8 +889,6 @@ void CONFIG_WriteSetup(uint32_t flags)
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "AutoVote",ud.autovote,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Color",ud.m_color,false,false);
 
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "CrosshairScale",ud.crosshairscale,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Crosshairs",ud.crosshair,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "DeathMessages",ud.obituaries,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "DemoCams",ud.democams,false,false);
     

@@ -819,6 +819,8 @@ osdcvardata_t cvar[] =
     { "cl_weaponswitch", "cl_weaponswitch: enable/disable auto weapon switching", (void*)&ud.weaponswitch, CVAR_INT|CVAR_MULTI, 0, 7 },
     { "cl_angleinterpolation", "cl_angleinterpolation: enable/disable angle interpolation", (void*)&ud.angleinterpolation, CVAR_INT, 0, 256 },
 
+    { "crosshairscale","crosshair size", (void*)&ud.crosshairscale, CVAR_INT, 10, 100 },
+
     { "sensitivity","changes the mouse sensitivity", (void*)&CONTROL_MouseSensitivity, CVAR_FLOAT | CVAR_FUNCPTR, 0, 25 },
     { "in_mousebias", "in_mousebias: emulates the original mouse code's weighting of input towards whichever axis is moving the most at any given time", (void*)&ud.config.MouseBias, CVAR_INT, 0, 32 },
     
@@ -1469,20 +1471,6 @@ static int osdcmd_restorestate(const osdfuncparm_t *parm)
 }
 */
 
-static int osdcmd_setcrosshairscale(const osdfuncparm_t *parm)
-{
-    if (parm->numparms == 0)
-    {
-        OSD_Printf("\"crosshairscale\" is \"%d\"\n", ud.crosshairscale);
-        return OSDCMD_SHOWHELP;
-    }
-    else if (parm->numparms != 1) return OSDCMD_SHOWHELP;
-
-    ud.crosshairscale = min(100,max(10,Batoi(parm->parms[0])));
-    OSD_Printf("%s\n", parm->raw);
-    return OSDCMD_OK;
-}
-
 static int osdcmd_crosshaircolor(osdcmdptr_t parm)
 {
     if (parm->numparms != 3)
@@ -1575,7 +1563,6 @@ int registerosdcommands(void)
 
     OSD_RegisterFunction("hud_scale","hud_scale: changes the hud scale", osdcmd_setstatusbarscale);
     OSD_RegisterFunction("hud_weaponscale","hud_weaponscale: changes the weapon scale", osdcmd_setweaponscale);
-    OSD_RegisterFunction("crosshairscale","crosshairscale: changes the crosshair scale", osdcmd_setcrosshairscale);
     OSD_RegisterFunction("crosshaircolor","crosshaircolor: changes crosshair color", osdcmd_crosshaircolor);
     OSD_RegisterFunction("cmenu","cmenu <#>: jumps to menu", osdcmd_cmenu);
 
