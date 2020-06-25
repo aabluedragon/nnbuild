@@ -3026,18 +3026,6 @@ void getinput(int snum)
         }
     }
 
-    {
-        int32_t i;
-        if (g_myAimMode) i = analog_lookingupanddown;
-        else i = ud.config.MouseAnalogueAxes[1];
-
-        if (i != mouseyaxismode)
-        {
-            CONTROL_MapAnalogAxis(1, i, controldevice_mouse);
-            mouseyaxismode = i;
-        }
-    }
-
     CONTROL_GetInput(&info[0]);
 
     if (ud.config.MouseBias)
@@ -3155,12 +3143,15 @@ void getinput(int snum)
         q16angvel = fix16_sadd(q16angvel, fix16_sdiv(fix16_from_int(info[0].mousex), F16(32)));
     }
 
-    q16horiz = fix16_sadd(q16horiz, fix16_sdiv(fix16_from_int(info[0].mousey), F16(64)));
+    if (g_myAimMode)
+        q16horiz = fix16_sadd(q16horiz, fix16_sdiv(fix16_from_int(info[0].mousey), F16(64)));
+    else
+        vel = -(info[0].mousey >> 3);
 
     if (ud.mouseflip) q16horiz = -q16horiz;
 
     svel -= info[0].dx;
-    vel = -info[0].dz>>6;
+    vel -= info[0].dz>>6;
 
     if (running)
     {
