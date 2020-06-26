@@ -130,11 +130,12 @@ void faketimerhandler(void)
     if (((g_player[myconnectindex].movefifoend-1)&(TIMERUPDATESIZ-1)) == 0)
     {
         i = mymaxlag-bufferjitter; mymaxlag = 0;
-        if (i > 0) bufferjitter += ((3+i)>>2);
-        else if (i < 0) bufferjitter -= ((1-i)>>2);
+        if (i > 0) bufferjitter += ((3 + i) >> 2);
+        else if (i < 0) bufferjitter -= ((1 - i) >> 2);
     }
 #endif
 
+    // P2P
     if (g_networkBroadcastMode == NETMODE_P2P)
     {
         packbuf[0] = SERVER_GENERATED_BROADCAST;
@@ -226,6 +227,8 @@ void faketimerhandler(void)
 
         return;
     }
+
+    // Master/Slave
     if (myconnectindex != connecthead)   //Slave
     {
         //Fix timers and buffer/jitter value
