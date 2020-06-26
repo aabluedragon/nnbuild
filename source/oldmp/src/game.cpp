@@ -4071,7 +4071,7 @@ void G_DrawRooms(int snum,int smoothratio)
 //    smoothratio = min(max(smoothratio,0),65536);
     smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
 
-    g_visibility = (int)(p->visibility*(numplayers>1?1.f:r_ambientlightrecip));
+    g_visibility = (int)(p->visibility*(numplayers>1?1.f:r_ambientlightrecip)); // Do not allow visibility changes in online play.
 
     if (ud.pause_on || g_player[snum].ps->on_crane > -1) smoothratio = 65536;
 
@@ -10543,6 +10543,8 @@ int app_main(int32_t argc, char const* const* argv)
 
     initsynccrc();
 
+    enginecompatibilitymode = ENGINE_19961112;
+
     G_CheckCommandLine(argc,argv);
 
 #if defined(RENDERTYPEWIN) && defined(USE_OPENGL)
@@ -11284,8 +11286,8 @@ MAIN_LOOP_RESTART:
         G_DoCheats();
         G_HandleLocalKeys();
 
-        if ((ud.show_help == 0 && ud.multimode < 2 && !(g_player[myconnectindex].ps->gm&MODE_MENU)) || ud.multimode > 1 || ud.recstat == 2)
-            i = min( max(((int32_t)totalclock-ototalclock)*(65536/TICSPERFRAME), 0), 65536);
+        if ((ud.show_help == 0 && ud.multimode < 2 && !(g_player[myconnectindex].ps->gm & MODE_MENU)) || ud.multimode > 1 || ud.recstat == 2)
+            i = calc_smoothratio((int32_t)totalclock, ototalclock);
         else
             i = 65536;
 
