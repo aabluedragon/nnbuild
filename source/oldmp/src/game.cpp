@@ -6727,7 +6727,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             t->z -= mulscale16(65536-smoothratio,g_player[s->yvel].ps->pos.z - g_player[s->yvel].ps->opos.z);
             
             // Dead or frozen?
-            if (g_player[s->yvel].ps->dead_flag || ((s->pal == 1) && (g_player[s->yvel].ps->last_extra < 2)))
+            if (g_player[s->yvel].ps->dead_flag || s->extra <= 0)
                 t->z += (20<<8); // Matches corpse height of vanilla Duke3D.
         }
         else if (s->picnum != CRANEPOLE)
@@ -10543,7 +10543,7 @@ int app_main(int32_t argc, char const* const* argv)
 
     initsynccrc();
 
-    enginecompatibilitymode = ENGINE_19961112;
+    //enginecompatibilitymode = ENGINE_19961112;
 
     G_CheckCommandLine(argc,argv);
 
