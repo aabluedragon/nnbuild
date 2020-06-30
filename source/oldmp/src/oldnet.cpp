@@ -1548,7 +1548,6 @@ void Net_ResetPrediction(void)
     predictedPlayer.return_to_center = g_player[myconnectindex].ps->return_to_center;
 }
 
-extern void P_SharedInput(int snum);
 void Net_DoPrediction(void)
 {
     short backcstat;
@@ -1560,7 +1559,7 @@ void Net_DoPrediction(void)
 
     oldnet_predicting = 1;
     X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    P_SharedInput(myconnectindex);
+    P_ProcessInput(myconnectindex);
     oldnet_predicting = 0;
 
     myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].x = predictedPlayer.pos.x;

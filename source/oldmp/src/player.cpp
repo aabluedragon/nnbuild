@@ -3255,6 +3255,9 @@ void getinput(int snum)
 
 static int P_DoCounters(DukePlayer_t *p)
 {
+    if (oldnet_predicting)
+        return 0;
+
     int snum = sprite[p->i].yvel;
 
     //    j = g_player[snum].inputBits->avel;
@@ -3507,6 +3510,9 @@ void P_DropWeapon(DukePlayer_t *p)
 
 void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer)
 {
+    if (oldnet_predicting)
+        return;
+
     int const newOwner = pPlayer->newowner;
     //pPlayer->pos = sprite[newOwner].pos;
     pPlayer->q16ang = fix16_from_int(sprite[newOwner].ang);
@@ -3519,6 +3525,9 @@ void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer)
 
 static void P_ProcessWeapon(int playerNum)
 {
+    if (oldnet_predicting)
+        return;
+
     DukePlayer_t* p = g_player[playerNum].ps;
     unsigned int sb_snum = g_player[playerNum].inputBits->bits;
     short* kb = &p->kickback_pic;
@@ -4033,22 +4042,425 @@ static void P_ProcessWeapon(int playerNum)
 int g_numObituaries = 0;
 int g_numSelfObituaries = 0;
 
-void P_SharedInput(int snum)
+static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt ProcessInput
 {
-    DukePlayer_t *p;
-    DukePlayer_t *p_nopredict = g_player[snum].ps;
-    input_t *syn;
+    if (oldnet_predicting)
+        return 0;
 
-    spritetype *s = &sprite[g_player[snum].ps->i];
+    DukePlayer_t* p = g_player[playerNum].ps;
+
+    p->player_par++;
+
+    if (p->timebeforeexit > 1 && ((p->last_extra > 0) || ud.limit_hit == 1))
+    {
+        p->timebeforeexit--;
+        if (p->timebeforeexit == 26 * 5 && (ud.limit_hit == 0))
+        {
+            FX_StopAllSounds();
+            S_ClearSoundLocks();
+            if (p->customexitsound >= 0)
+            {
+                S_PlaySound(p->customexitsound);
+                P_DoQuote(102, p);
+            }
+        }
+        else if (p->timebeforeexit == 1)
+        {
+            Net_EndOfLevel();
+            return 1;
+        }
+    }
+
+    if (p->loogcnt > 0) p->loogcnt--;
+    else p->loogcnt = 0;
+
+    if (p->pals_time >= 0)
+        p->pals_time--;
+
+    if (p->fta > 0)
+    {
+        p->fta--;
+        if (p->fta == 0)
+        {
+            pub = NUMPAGES;
+            pus = NUMPAGES;
+            p->ftq = 0;
+        }
+    }
+
+    if (g_levelTextTime > 0)
+        g_levelTextTime--;
+
+    return 0;
+}
+
+static int P_HandleFist(int playerNum)
+{
+    if (oldnet_predicting)
+        return 0;
+
+    DukePlayer_t* p = g_player[playerNum].ps;
+    int i;
+
+    if (p->fist_incs)
+    {
+        // the fist puching the end-of-level thing...
+        p->fist_incs++;
+        if (p->fist_incs == 28)
+        {
+            if (ud.recstat == 1) G_CloseDemoWrite();
+            S_PlaySound(PIPEBOMB_EXPLODE);
+            p->pals[0] = 64;
+            p->pals[1] = 64;
+            p->pals[2] = 64;
+            p->pals_time = 48;
+        }
+        if (p->fist_incs > 42)
+        {
+            if (p->buttonpalette && ud.from_bonus == 0)
+            {
+                ud.from_bonus = ud.level_number + 1;
+                if (ud.secretlevel > 0 && ud.secretlevel < MAXLEVELS) ud.level_number = ud.secretlevel - 1;
+                ud.m_level_number = ud.level_number;
+            }
+            else
+            {
+                if (ud.from_bonus)
+                {
+                    ud.level_number = ud.from_bonus;
+                    ud.m_level_number = ud.level_number;
+                    ud.from_bonus = 0;
+                }
+                else
+                {
+                    if (ud.level_number == ud.secretlevel && ud.from_bonus > 0)
+                        ud.level_number = ud.from_bonus;
+                    else ud.level_number++;
+
+                    if (ud.level_number > MAXLEVELS - 1)
+                        ud.level_number = 0;
+                    ud.m_level_number = ud.level_number;
+                }
+            }
+
+            TRAVERSE_CONNECT(i)
+                g_player[i].ps->gm = MODE_EOL;
+
+            p->fist_incs = 0;
+
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void P_HandleFragged(int snum)
+{
+    if (oldnet_predicting)
+        return;
+
+    DukePlayer_t* p = g_player[snum].ps;
+    DukePlayer_t* frag_p = g_player[p->frag_ps].ps;
+    int playerSprite = g_player[snum].ps->i;
+
+    if ((p->frag_ps != snum) && ud.limit_hit != 1)
+    {
+        if (GTFLAGS(GAMETYPE_TDM) && frag_p->team == g_player[snum].ps->team)
+        {
+            frag_p->fraggedself++;
+            teams[frag_p->team].suicides++;
+        }
+        else
+        {
+            frag_p->frag++;
+            g_player[p->frag_ps].frags[snum]++;
+            teams[frag_p->team].frags++;
+        }
+
+        if (snum == screenpeek)
+        {
+            Bsprintf(ScriptQuotes[115], "KILLED BY %s", &g_player[p->frag_ps].user_name[0]);
+            P_DoQuote(115, p);
+        }
+        else
+        {
+            Bsprintf(ScriptQuotes[116], "KILLED %s", &g_player[snum].user_name[0]);
+            P_DoQuote(116, frag_p);
+        }
+
+        if (ud.obituaries)
+        {
+            //DynamicTileMap[ActorExtra[p->i].picnum]
+            Bsprintf(tempbuf, ScriptQuotes[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)],
+                &g_player[p->frag_ps].user_name[0],
+                &g_player[snum].user_name[0]);
+
+            G_AddUserQuote(tempbuf);
+        }
+        else krand();
+
+        if (GTFLAGS(GAMETYPE_TDM))
+        {
+            int fraggedbyteam = frag_p->team;
+
+            if ((teams[fraggedbyteam].frags - teams[fraggedbyteam].suicides) >= ud.fraglimit && ud.fraglimit != 0)
+            {
+                // Fraglimit hit
+                Bsprintf(tempbuf, "^%d%s^08 team wins!", teams[fraggedbyteam].palnum, teams[fraggedbyteam].name);
+                G_AddUserQuote(tempbuf);
+
+                S_PlaySound(PIPEBOMB_EXPLODE);
+
+                for (int i = 0; i < MAXPLAYERS; i++)
+                {
+                    if (g_player[i].ps == NULL || !g_player[i].connected)
+                        continue;
+
+                    if (g_player[i].ps->team == fraggedbyteam) // Flash screens of all winning players
+                    {
+                        g_player[i].ps->pals[0] = 64;
+                        g_player[i].ps->pals[1] = 64;
+                        g_player[i].ps->pals[2] = 64;
+                        g_player[i].ps->pals_time = 48;
+                    }
+                }
+
+                ud.from_bonus = 0;
+                ud.limit_hit = 1;
+                frag_p->timebeforeexit = 26 * 4;
+            }
+        }
+        else if ((frag_p->frag - frag_p->fraggedself) >= ud.fraglimit && ud.fraglimit != 0)
+        {
+            // Fraglimit hit
+            Bsprintf(tempbuf, "^08%s^08 wins!", &g_player[p->frag_ps].user_name[0]);
+            G_AddUserQuote(tempbuf);
+
+            S_PlaySound(PIPEBOMB_EXPLODE);
+            frag_p->pals[0] = 64;
+            frag_p->pals[1] = 64;
+            frag_p->pals[2] = 64;
+            frag_p->pals_time = 48;
+
+            ud.from_bonus = 0;
+            ud.limit_hit = 1;
+            frag_p->timebeforeexit = 26 * 4;
+        }
+    }
+    else if (ud.limit_hit != 1)
+    {
+        if (ActorExtra[playerSprite].picnum != APLAYERTOP)
+        {
+            if (GTFLAGS(GAMETYPE_TDM))
+            {
+                teams[p->team].suicides++;
+            }
+
+            p->fraggedself++;
+            if (A_CheckEnemyTile(sprite[p->wackedbyactor].picnum))
+                Bsprintf(tempbuf, ScriptQuotes[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)], "A monster", &g_player[snum].user_name[0]);
+            else if (ActorExtra[playerSprite].picnum == NUKEBUTTON)
+                Bsprintf(tempbuf, "^02%s^02 tried to leave", &g_player[snum].user_name[0]);
+            else
+            {
+                // random suicide death string
+                Bsprintf(tempbuf, ScriptQuotes[FIRST_SUICIDE_QUOTE + (krand() % g_numSelfObituaries)], &g_player[snum].user_name[0]);
+            }
+        }
+        else Bsprintf(tempbuf, "^02%s^02 switched to team %d", &g_player[snum].user_name[0], p->team + 1);
+
+        if (ud.obituaries)
+        {
+            G_AddUserQuote(tempbuf);
+        }
+    }
+
+    if (myconnectindex == connecthead)
+    {
+        Bsprintf(tempbuf, "frag %d killed %d\n", p->frag_ps + 1, snum + 1);
+        sendscore(tempbuf);
+    }
+
+    p->frag_ps = snum;
+    pus = NUMPAGES;
+}
+
+static void P_HandleDeath(int snum)
+{
+    if (oldnet_predicting)
+        return;
+
+    DukePlayer_t* p = g_player[snum].ps;
+    int playerSprite = g_player[snum].ps->i;
+
+    spritetype* s = &sprite[playerSprite];
+
+    if (p->dead_flag == 0)
+    {
+        if (s->pal != 1)
+        {
+            p->pals[0] = 63;
+            p->pals[1] = 0;
+            p->pals[2] = 0;
+            p->pals_time = 63;
+            p->pos.z -= (16 << 8);
+            s->z -= (16 << 8);
+        }
+
+        if (ud.recstat == 1 && ud.multimode < 2)
+            G_CloseDemoWrite();
+
+        if (s->pal != 1)
+        {
+            p->dead_flag = (512 - ((krand() & 1) << 10) + (krand() & 255) - 512) & 2047;
+            if (p->dead_flag == 0)
+                p->dead_flag++;
+        }
+
+        p->jetpack_on = 0;
+        p->holoduke_on = -1;
+
+        S_StopEnvSound(DUKE_JETPACK_IDLE, playerSprite);
+        if (p->scream_voice > FX_Ok)
+        {
+            FX_StopSound(p->scream_voice);
+            S_Cleanup();
+            // S_TestSoundCallback(DUKE_SCREAM);
+            p->scream_voice = FX_Ok;
+        }
+
+        if (s->pal != 1 && (s->cstat & 32768) == 0) s->cstat = 0;
+
+        if (ud.multimode > 1 && (s->pal != 1 || (s->cstat & 32768)))
+        {
+            P_HandleFragged(snum);
+        }
+    }
+}
+
+static void P_HandleDamagingFloors(int snum)
+{
+    if (oldnet_predicting)
+        return;
+
+    DukePlayer_t* p = g_player[snum].ps;
+    int playerSprite = g_player[snum].ps->i;
+
+    spritetype* s = &sprite[playerSprite];
+
+    int truefdist = klabs(p->pos.z - p->truefz);
+    int floorPic = sector[s->sectnum].floorpicnum;
+    int useBoot = 0;
+
+    if (floorPic == PURPLELAVA || sector[s->sectnum].ceilingpicnum == PURPLELAVA)
+    {
+        if (p->boot_amount > 0)
+        {
+            p->boot_amount--;
+            p->inven_icon = 7;
+            if (p->boot_amount <= 0)
+                P_SelectNextInvItem(p);
+        }
+        else
+        {
+            if (!A_CheckSoundPlaying(playerSprite, DUKE_LONGTERM_PAIN))
+                A_PlaySound(DUKE_LONGTERM_PAIN, playerSprite);
+            p->pals[0] = 0;
+            p->pals[1] = 8;
+            p->pals[2] = 0;
+            p->pals_time = 32;
+            s->extra--;
+        }
+    }
+
+    if (p->on_ground && truefdist <= PHEIGHT + (16 << 8))
+    {
+        switch (DynamicTileMap[floorPic])
+        {
+        case HURTRAIL__STATIC:
+            if (rnd(32))
+            {
+                if (p->boot_amount > 0)
+                    useBoot = 1;
+                else
+                {
+                    if (!A_CheckSoundPlaying(playerSprite, DUKE_LONGTERM_PAIN))
+                        A_PlaySound(DUKE_LONGTERM_PAIN, playerSprite);
+                    p->pals[0] = 64;
+                    p->pals[1] = 64;
+                    p->pals[2] = 64;
+                    p->pals_time = 32;
+                    s->extra -= 1 + (krand() & 3);
+                    if (!A_CheckSoundPlaying(playerSprite, SHORT_CIRCUIT))
+                        A_PlaySound(SHORT_CIRCUIT, playerSprite);
+                }
+            }
+            break;
+        case FLOORSLIME__STATIC:
+            if (rnd(16))
+            {
+                if (p->boot_amount > 0)
+                    useBoot = 1;
+                else
+                {
+                    if (!A_CheckSoundPlaying(playerSprite, DUKE_LONGTERM_PAIN))
+                        A_PlaySound(DUKE_LONGTERM_PAIN, playerSprite);
+
+                    p->pals[0] = 0;
+                    p->pals[1] = 8;
+                    p->pals[2] = 0;
+                    p->pals_time = 32;
+                    s->extra -= 1 + (krand() & 3);
+                }
+            }
+            break;
+        case FLOORPLASMA__STATIC:
+            if (rnd(32))
+            {
+                if (p->boot_amount > 0)
+                    useBoot = 1;
+                else
+                {
+                    if (!A_CheckSoundPlaying(playerSprite, DUKE_LONGTERM_PAIN))
+                        A_PlaySound(DUKE_LONGTERM_PAIN, playerSprite);
+                    p->pals[0] = 8;
+                    p->pals[1] = 0;
+                    p->pals[2] = 0;
+                    p->pals_time = 32;
+                    s->extra -= 1 + (krand() & 3);
+                }
+            }
+            break;
+        }
+    }
+
+    if (useBoot)
+    {
+        P_DoQuote(75, p);
+        p->boot_amount -= 2;
+        if (p->boot_amount <= 0)
+            P_SelectNextInvItem(p);
+    }
+}
+
+void P_ProcessInput(int snum)
+{
+    DukePlayer_t* p;
+    DukePlayer_t* p_nopredict = g_player[snum].ps;
+    input_t* syn;
+
+    int playerSprite = g_player[snum].ps->i;
+    spritetype* s = &sprite[playerSprite];
 
     unsigned int sb_snum;
     int psect;
     int psectlotag;
-    int shrunk;
+    int shrunk = (s->yrepeat < 32);
     int truefdist;
+    int floorZOffset;
 
     int cz, hz, fz, lz;
-    int i, j, k;
 
     int x, y;
     short tempsect;
@@ -4064,34 +4476,50 @@ void P_SharedInput(int snum)
     {
         syn = g_player[snum].inputBits;
         p = g_player[snum].ps;
+        X_OnEvent(EVENT_PROCESSINPUT, playerSprite, snum, -1);
     }
 
     sb_snum = syn->bits;
+
     if (p_nopredict->cheat_phase > 0)
         sb_snum = 0;
 
     psect = p->cursectnum;
-    psectlotag = sector[psect].lotag;
 
+    if (psect == -1)
+    {
+        if (!oldnet_predicting && s->extra > 0 && ud.clipping == 0)
+        {
+            P_QuickKill(p);
+            A_PlaySound(SQUISHED, playerSprite);
+        }
+        psect = 0;
+    }
+
+    psectlotag = sector[psect].lotag;
     p->spritebridge = 0;
     p->sbs = 0;
 
-    shrunk = (s->yrepeat < 32);
-
     getzrange_old(p->pos.x, p->pos.y, p->pos.z, psect, &cz, &hz, &fz, &lz, 163L, CLIPMASK0);
+
     yax_getzsofslope(psect, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
 
     truefdist = klabs(p->pos.z - p->truefz);
 
-    // Record old horiz
+    /* wtf is this supposed to do? */
+    if ((lz & 49152) == 16384 && psectlotag == ST_1_ABOVE_WATER && truefdist > PHEIGHT + (16 << 8))
+        psectlotag = 0;
+
+    if (!oldnet_predicting)
+    {
+        ActorExtra[playerSprite].floorz = fz;
+        ActorExtra[playerSprite].ceilingz = cz;
+    }
+
     p->oq16horiz = p->q16horiz;
     p->oq16horizoff = p->q16horizoff;
 
-    // Dafuq is this shit?
-    if ((lz & 49152) == 16384 && psectlotag == 1 && truefdist > PHEIGHT + (16 << 8))
-        psectlotag = 0;
-
-    if (p_nopredict->aim_mode == 0 && p->on_ground && psectlotag != 2 && (sector[psect].floorstat & 2))
+    if (p_nopredict->aim_mode == 0 && p->on_ground && psectlotag != ST_2_UNDERWATER && (sector[psect].floorstat & 2))
     {
         x = p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 5);
         y = p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 5);
@@ -4099,11 +4527,11 @@ void P_SharedInput(int snum)
         updatesector(x, y, &tempsect);
         if (tempsect >= 0)
         {
-            k = getflorzofslope(psect, x, y);
+            int florZOfSlope = getflorzofslope(psect, x, y);
             if (psect == tempsect)
-                p->q16horizoff += fix16_from_int(mulscale16(p->truefz - k, 160));
-            else if (klabs(getflorzofslope(tempsect, x, y) - k) <= (4 << 8))
-                p->q16horizoff += fix16_from_int(mulscale16(p->truefz - k, 160));
+                p->q16horizoff += fix16_from_int(mulscale16(p->truefz - florZOfSlope, 160));
+            else if (klabs(getflorzofslope(tempsect, x, y) - florZOfSlope) <= (4 << 8))
+                p->q16horizoff += fix16_from_int(mulscale16(p->truefz - florZOfSlope, 160));
         }
     }
 
@@ -4118,12 +4546,13 @@ void P_SharedInput(int snum)
         p->q16horizoff = min(p->q16horizoff, 0);
     }
 
-    if (hz >= 0 && (hz&49152) == 49152)
+    if (hz >= 0 && (hz & 49152) == 49152)
     {
-        hz &= (MAXSPRITES-1);
+        hz &= (MAXSPRITES - 1);
 
-        if (sprite[hz].statnum == STAT_ACTOR && sprite[hz].extra >= 0)
+        if (sprite[hz].statnum == 1 && sprite[hz].extra >= 0)
         {
+            hz = 0;
             cz = p->truecz;
         }
     }
@@ -4149,13 +4578,33 @@ void P_SharedInput(int snum)
         }
     }
 
-    if (s->extra <= 0) // We're dead
+    if (!oldnet_predicting)
     {
-        if (psectlotag == 2)
+        if (s->extra > 0) P_IncurDamage(p);
+        else
+        {
+            s->extra = 0;
+            p->shield_amount = 0;
+        }
+
+        p->last_extra = s->extra;
+    }
+
+    if (P_HandleFist(snum))
+        return;
+
+    if (P_HandleSpecialTimers(snum))
+        return;
+
+    if (s->extra <= 0)
+    {
+        P_HandleDeath(snum);
+
+        if (psectlotag == ST_2_UNDERWATER)
         {
             if (p_nopredict->on_warping_sector == 0)
             {
-                if (klabs(p->pos.z-fz) > (PHEIGHT>>1))
+                if (klabs(p->pos.z - fz) > (PHEIGHT >> 1))
                     p->pos.z += 348;
             }
             else
@@ -4164,26 +4613,33 @@ void P_SharedInput(int snum)
                 s->zvel = -348;
             }
 
-            clipmove_old(&p->pos.x,&p->pos.y,
-                     &p->pos.z,&p->cursectnum,
-                     0,0,164L,(4L<<8),(4L<<8),CLIPMASK0);
-            //                        p->bobcounter += 32;
+            clipmove_old(&p->pos.x, &p->pos.y,
+                &p->pos.z, &p->cursectnum,
+                0, 0, 164L, (4L << 8), (4L << 8), CLIPMASK0);
         }
 
         p->opos.x = p->pos.x;
         p->opos.y = p->pos.y;
         p->opos.z = p->pos.z;
         p->oq16ang = p->q16ang;
+        p->opyoff = p->pyoff;
 
         p->q16horiz = F16(100);
         p->q16horizoff = 0;
 
         updatesector(p->pos.x, p->pos.y, &p->cursectnum);
+
         pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 128L, (4L << 8), (20L << 8), CLIPMASK0);
+
+        if (fz > cz + (16 << 8) && s->pal != 1)
+            p->rotscrnang = (p->dead_flag + ((fz + p->pos.z) >> 7)) & 2047;
+
+        p->on_warping_sector = 0;
+
         return;
     }
 
-    if (!oldnet_predicting) // Needed here, or we'll fuck up the transporter hold
+    if (!oldnet_predicting)
     {
         if (p->transporter_hold > 0)
         {
@@ -4197,13 +4653,66 @@ void P_SharedInput(int snum)
 
     if (p_nopredict->newowner >= 0) // Using viewscreen
     {
+        P_UpdatePosWhenViewingCam(p);
+
+        P_DoCounters(p);
+
+        if (*aplWeaponWorksLike[p_nopredict->curr_weapon] == HANDREMOTE_WEAPON)
+            P_ProcessWeapon(snum);
+
         return;
     }
 
     doubvel = TICSPERFRAME;
 
+    if (p->rotscrnang > 0) p->rotscrnang -= ((p->rotscrnang >> 1) + 1);
+    else if (p->rotscrnang < 0) p->rotscrnang += (((-p->rotscrnang) >> 1) + 1);
+
+    p->look_ang -= (p->look_ang >> 2);
+
+    if (TEST_SYNC_KEY(sb_snum, SK_LOOK_LEFT))
+    {
+        // look_left
+        Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+        X_OnEvent(EVENT_LOOKLEFT, playerSprite, snum, -1);
+        if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
+        {
+            p->look_ang -= 152;
+            p->rotscrnang += 24;
+        }
+    }
+
+    if (TEST_SYNC_KEY(sb_snum, SK_LOOK_RIGHT))
+    {
+        // look_right
+        Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+        X_OnEvent(EVENT_LOOKRIGHT, playerSprite, snum, -1);
+        if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
+        {
+            p->look_ang += 152;
+            p->rotscrnang -= 24;
+        }
+    }
+
     if (p_nopredict->on_crane >= 0)
-        goto SHAREDHORIZONLY;
+        goto HORIZONLY;
+
+    if (s->xvel < 32 || p->on_ground == 0 || p->bobcounter == 1024)
+    {
+        if ((p->weapon_sway & 2047) > (1024 + 96))
+            p->weapon_sway -= 96;
+        else if ((p->weapon_sway & 2047) < (1024 - 96))
+            p->weapon_sway += 96;
+        else p->weapon_sway = 1024;
+    }
+    else p->weapon_sway = p->bobcounter;
+
+    if (!oldnet_predicting)
+    {
+        s->xvel =
+            ksqrt((p->pos.x - p->bobposx) * (p->pos.x - p->bobposx) + (p->pos.y - p->bobposy) * (p->pos.y - p->bobposy));
+        if (p->on_ground) p->bobcounter += sprite[playerSprite].xvel >> 1;
+    }
 
     if (ud.clipping == 0 && (sector[p->cursectnum].floorpicnum == MIRROR || p->cursectnum < 0 || p->cursectnum >= MAXSECTORS))
     {
@@ -4216,38 +4725,40 @@ void P_SharedInput(int snum)
         p->opos.y = p->pos.y;
     }
 
+    p->bobposx = p->pos.x;
+    p->bobposy = p->pos.y;
+
     p->opos.z = p->pos.z;
+    p->opyoff = p->pyoff;
     p->oq16ang = p->q16ang;
 
     if (p_nopredict->one_eighty_count < 0)
     {
-        if(!oldnet_predicting)
-            p->one_eighty_count += 128;
-
+        p->one_eighty_count += 128;
         p->q16ang += F16(128);
     }
 
-#if 0
-    if (!predicting)
-    {
-        // Might use
-    }
-#endif
+    // Shrinking code
 
-    // Shrinking code?
-    i = 40;
+    floorZOffset = 40;
 
     if (psectlotag == ST_2_UNDERWATER)
     {
-        // Underwater
-
+        // under water
         p->jumping_counter = 0;
+
+        p->pycount += 32;
+        p->pycount &= 2047;
+        p->pyoff = sintable[p->pycount] >> 7;
+
+        if (!oldnet_predicting && !A_CheckSoundPlaying(playerSprite, DUKE_UNDERWATER))
+            A_PlaySound(DUKE_UNDERWATER, playerSprite);
 
         if (TEST_SYNC_KEY(sb_snum, SK_JUMP))
         {
-            Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-            X_OnEvent(EVENT_SWIMUP, p_nopredict->i, snum, -1);
-            if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+            Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+            X_OnEvent(EVENT_SWIMUP, playerSprite, snum, -1);
+            if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
             {
                 // jump
                 if (p->vel.z > 0) p->vel.z = 0;
@@ -4257,9 +4768,9 @@ void P_SharedInput(int snum)
         }
         else if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
         {
-            Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-            X_OnEvent(EVENT_SWIMDOWN, p_nopredict->i, snum, -1);
-            if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+            Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+            X_OnEvent(EVENT_SWIMDOWN, playerSprite, snum, -1);
+            if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
             {
                 // crouch
                 if (p->vel.z < 0) p->vel.z = 0;
@@ -4300,92 +4811,74 @@ void P_SharedInput(int snum)
 
         if (!oldnet_predicting)
         {
-            p->pycount += 32;
-            p->pycount &= 2047;
-            p->pyoff = sintable[p->pycount] >> 7;
-
-            if (!A_CheckSoundPlaying(p->i,DUKE_UNDERWATER))
-                A_PlaySound(DUKE_UNDERWATER,p->i);
-
-            if (p->scuba_on && (krand()&255) < 8)
+            if (p->scuba_on && (krand() & 255) < 8)
             {
-                j = A_Spawn(p->i,WATERBUBBLE);
-                sprite[j].x +=
-                    sintable[(fix16_to_int(p->q16ang)+512+64-(g_globalRandom&128))&2047]>>6;
-                sprite[j].y +=
-                    sintable[(fix16_to_int(p->q16ang)+64-(g_globalRandom&128))&2047]>>6;
-                sprite[j].xrepeat = 3;
-                sprite[j].yrepeat = 2;
-                sprite[j].z = p->pos.z+(8<<8);
+                int spr = A_Spawn(playerSprite, WATERBUBBLE);
+                sprite[spr].x +=
+                    sintable[(fix16_to_int(p->q16ang) + 512 + 64 - (g_globalRandom & 128)) & 2047] >> 6;
+                sprite[spr].y +=
+                    sintable[(fix16_to_int(p->q16ang) + 64 - (g_globalRandom & 128)) & 2047] >> 6;
+                sprite[spr].xrepeat = 3;
+                sprite[spr].yrepeat = 2;
+                sprite[spr].z = p->pos.z + (8 << 8);
             }
         }
     }
-    else if (p_nopredict->jetpack_on) // Predict this later
+    else if (p_nopredict->jetpack_on)
     {
         p->on_ground = 0;
         p->jumping_counter = 0;
         p->hard_landing = 0;
+        p->falling_counter = 0;
 
-        if (!oldnet_predicting)
-        {
-            p->falling_counter = 0;
-            p->pycount += 32;
-            p->pycount &= 2047;
-            p->pyoff = sintable[p->pycount] >> 7;
-        }
+        p->pycount += 32;
+        p->pycount &= 2047;
+        p->pyoff = sintable[p->pycount] >> 7;
 
         if (p_nopredict->jetpack_on < 11)
         {
-            if (!oldnet_predicting)
-                p_nopredict->jetpack_on++;
-
+            p->jetpack_on++;
             p->pos.z -= (p_nopredict->jetpack_on << 7); //Goin up
         }
-        else if (!oldnet_predicting && (p_nopredict->jetpack_on == 11 && !A_CheckSoundPlaying(p->i, DUKE_JETPACK_IDLE)))
-            A_PlaySound(DUKE_JETPACK_IDLE, p->i);
+        else if (!oldnet_predicting && p->jetpack_on == 11 && !A_CheckSoundPlaying(playerSprite, DUKE_JETPACK_IDLE))
+            A_PlaySound(DUKE_JETPACK_IDLE, playerSprite);
 
-        // Want to get rid of this alphabet soup bullfuck
-        if (shrunk) j = 512;
-        else j = 2048;
+        int const zAdjust = shrunk ? 512 : 2048;
 
         if (TEST_SYNC_KEY(sb_snum, SK_JUMP))         //A (soar high)
         {
             // jump
-            Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-            X_OnEvent(EVENT_SOARUP, p_nopredict->i, snum, -1);
-            if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+            Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+            X_OnEvent(EVENT_SOARUP, playerSprite, snum, -1);
+            if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
             {
-                p->pos.z -= j;
-
-                if (!oldnet_predicting)
-                    p->crack_time = 777;
+                p->pos.z -= zAdjust;
+                p->crack_time = 777;
             }
         }
 
         if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))   //Z (soar low)
         {
             // crouch
-            Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-            X_OnEvent(EVENT_SOARDOWN, p_nopredict->i, snum, -1);
-            if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+            Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+            X_OnEvent(EVENT_SOARDOWN, playerSprite, snum, -1);
+            if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
             {
-                p->pos.z += j;
-
-                if (!oldnet_predicting)
-                    p->crack_time = 777;
+                p->pos.z += zAdjust;
+                p->crack_time = 777;
             }
         }
 
-        if (shrunk == 0 && (psectlotag == 0 || psectlotag == 2)) k = 32;
-        else k = 16;
+        int const Zdiff = (shrunk == 0 && (psectlotag == ST_0_NO_EFFECT || psectlotag == ST_2_UNDERWATER)) ? 32 : 16;
 
-        if (!oldnet_predicting && (psectlotag != 2 && p->scuba_on == 1))
+        if (psectlotag != ST_2_UNDERWATER && p->scuba_on == 1)
             p->scuba_on = 0;
 
-        if (p->pos.z > (fz - (k << 8)))
-            p->pos.z += ((fz - (k << 8)) - p->pos.z) >> 1;
+        if (p->pos.z > (fz - (Zdiff << 8)))
+            p->pos.z += ((fz - (Zdiff << 8)) - p->pos.z) >> 1;
         if (p->pos.z < (cz + (18 << 8)))
             p->pos.z = cz + (18 << 8);
+
     }
     else if (psectlotag != ST_2_UNDERWATER)
     {
@@ -4402,25 +4895,21 @@ void P_SharedInput(int snum)
         {
             if (shrunk == 0)
             {
-                i = 34;
-
-                if (!oldnet_predicting)
-                {
-                    p->pycount += 32;
-                    p->pycount &= 2047;
-                    p->pyoff = sintable[p->pycount] >> 6;
-                }
+                floorZOffset = 34;
+                p->pycount += 32;
+                p->pycount &= 2047;
+                p->pyoff = sintable[p->pycount] >> 6;
             }
-            else i = 12;
+            else floorZOffset = 12;
 
-            if (!oldnet_predicting && (shrunk == 0 && truefdist <= PHEIGHT))
+            if (!oldnet_predicting && shrunk == 0 && truefdist <= PHEIGHT)
             {
                 if (p->on_ground == 1)
                 {
                     if (p->dummyplayersprite == -1 && (yax_getbunch(p->cursectnum, YAX_FLOOR) == -1))
                         p->dummyplayersprite =
-                        A_Spawn(p->i, PLAYERONWATER);
-                    sprite[p->dummyplayersprite].pal = sprite[p->i].pal;
+                        A_Spawn(playerSprite, PLAYERONWATER);
+                    sprite[p->dummyplayersprite].pal = sprite[playerSprite].pal;
 
                     p->footprintcount = 6;
                     if (sector[p->cursectnum].floorpicnum == FLOORSLIME)
@@ -4435,12 +4924,14 @@ void P_SharedInput(int snum)
             if (p->footprintcount > 0 && p->on_ground)
                 if (p->cursectnum >= 0 && (sector[p->cursectnum].floorstat & 2) != 2)
                 {
-                    for (j = headspritesect[psect]; j >= 0; j = nextspritesect[j])
-                        if (sprite[j].picnum == FOOTPRINTS || sprite[j].picnum == FOOTPRINTS2 || sprite[j].picnum == FOOTPRINTS3 || sprite[j].picnum == FOOTPRINTS4)
-                            if (klabs(sprite[j].x - p->pos.x) < 384)
-                                if (klabs(sprite[j].y - p->pos.y) < 384)
+                    int spr;
+
+                    for (spr = headspritesect[psect]; spr >= 0; spr = nextspritesect[spr])
+                        if (sprite[spr].picnum == FOOTPRINTS || sprite[spr].picnum == FOOTPRINTS2 || sprite[spr].picnum == FOOTPRINTS3 || sprite[spr].picnum == FOOTPRINTS4)
+                            if (klabs(sprite[spr].x - p->pos.x) < 384)
+                                if (klabs(sprite[spr].y - p->pos.y) < 384)
                                     break;
-                    if (j < 0)
+                    if (spr < 0)
                     {
                         if (sector[p->cursectnum].lotag == ST_0_NO_EFFECT &&
                             sector[p->cursectnum].hitag == 0)
@@ -4449,27 +4940,24 @@ void P_SharedInput(int snum)
                             {
                                 switch (krand() & 3)
                                 {
-                                case 0: j = A_Spawn(p->i, FOOTPRINTS); break;
-                                case 1: j = A_Spawn(p->i, FOOTPRINTS2); break;
-                                case 2: j = A_Spawn(p->i, FOOTPRINTS3); break;
-                                default: j = A_Spawn(p->i, FOOTPRINTS4); break;
+                                case 0: spr = A_Spawn(playerSprite, FOOTPRINTS); break;
+                                case 1: spr = A_Spawn(playerSprite, FOOTPRINTS2); break;
+                                case 2: spr = A_Spawn(playerSprite, FOOTPRINTS3); break;
+                                default: spr = A_Spawn(playerSprite, FOOTPRINTS4); break;
                                 }
-                                sprite[j].pal = p->footprintpal;
-                                sprite[j].shade = p->footprintshade;
+                                sprite[spr].pal = p->footprintpal;
+                                sprite[spr].shade = p->footprintshade;
                                 p->footprintcount--;
                             }
                     }
                 }
         }
 
-        // Falling
-        if (p->pos.z < (fz - (i << 8)))  //falling
+        if (p->pos.z < (fz - (floorZOffset << 8)))  //falling
         {
             // not jumping or crouching
-            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && p->on_ground && (sector[psect].floorstat & 2) && p->pos.z >= (fz - (i << 8) - (16 << 8)))
-            {
-                p->pos.z = fz - (i << 8);
-            }
+            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && p->on_ground && (sector[psect].floorstat & 2) && p->pos.z >= (fz - (floorZOffset << 8) - (16 << 8)))
+                p->pos.z = fz - (floorZOffset << 8);
             else
             {
                 p->on_ground = 0;
@@ -4484,21 +4972,21 @@ void P_SharedInput(int snum)
                     {
                         p->falling_counter++;
                         if (p->falling_counter == 38)
-                            p->scream_voice = A_PlaySound(DUKE_SCREAM, p->i);
+                            p->scream_voice = A_PlaySound(DUKE_SCREAM, playerSprite);
                     }
 
-                    if ((p->pos.z + p->vel.z) >= (fz - (i << 8)) && p->cursectnum >= 0)   // hit the ground
+                    if ((p->pos.z + p->vel.z) >= (fz - (floorZOffset << 8)) && p->cursectnum >= 0)   // hit the ground
+                    {
                         if (sector[p->cursectnum].lotag != ST_1_ABOVE_WATER)
                         {
                             if (p->falling_counter > 62) P_QuickKill(p);
 
                             else if (p->falling_counter > 9)
                             {
-                                j = p->falling_counter;
-                                s->extra -= j - (krand() & 3);
+                                s->extra -= p->falling_counter - (krand() & 3);
                                 if (s->extra <= 0)
                                 {
-                                    A_PlaySound(SQUISHED, p->i);
+                                    A_PlaySound(SQUISHED, playerSprite);
                                     p->pals[0] = 63;
                                     p->pals[1] = 0;
                                     p->pals[2] = 0;
@@ -4506,8 +4994,8 @@ void P_SharedInput(int snum)
                                 }
                                 else
                                 {
-                                    A_PlaySound(DUKE_LAND, p->i);
-                                    A_PlaySound(DUKE_LAND_HURT, p->i);
+                                    A_PlaySound(DUKE_LAND, playerSprite);
+                                    A_PlaySound(DUKE_LAND_HURT, playerSprite);
                                 }
 
                                 p->pals[0] = 16;
@@ -4515,41 +5003,39 @@ void P_SharedInput(int snum)
                                 p->pals[2] = 0;
                                 p->pals_time = 32;
                             }
-                            else if (p->vel.z > 2048) A_PlaySound(DUKE_LAND, p->i);
+                            else if (p->vel.z > 2048) A_PlaySound(DUKE_LAND, playerSprite);
                         }
+                    }
                 }
             }
         }
         else
         {
-            if (!oldnet_predicting)
+            p->falling_counter = 0;
+            if (p->scream_voice > FX_Ok)
             {
-                p->falling_counter = 0;
-                if (p->scream_voice > FX_Ok)
-                {
-                    FX_StopSound(p->scream_voice);
-                    p->scream_voice = FX_Ok;
-                }
+                FX_StopSound(p->scream_voice);
+                p->scream_voice = FX_Ok;
             }
 
-            if (psectlotag != 1 && psectlotag != 2 && p->on_ground == 0 && p->vel.z > (6144 >> 1))
+            if (psectlotag != ST_1_ABOVE_WATER && psectlotag != ST_2_UNDERWATER && p->on_ground == 0 && p->vel.z > (6144 >> 1))
                 p->hard_landing = p->vel.z >> 10;
 
             p->on_ground = 1;
 
-            if (i == 40)
+            if (floorZOffset == 40)
             {
                 //Smooth on the ground
 
-                k = ((fz - (i << 8)) - p->pos.z) >> 1;
-                if (klabs(k) < 256) k = 0;
-                p->pos.z += k;
+                floorZOffset = ((fz - (floorZOffset << 8)) - p->pos.z) >> 1;
+                if (klabs(floorZOffset) < 256) floorZOffset = 0;
+                p->pos.z += floorZOffset;
                 p->vel.z -= 768;
                 if (p->vel.z < 0) p->vel.z = 0;
             }
             else if (p->jumping_counter == 0)
             {
-                p->pos.z += ((fz - (i << 7)) - p->pos.z) >> 1; //Smooth on the water
+                p->pos.z += ((fz - (floorZOffset << 7)) - p->pos.z) >> 1; //Smooth on the water
                 if (p_nopredict->on_warping_sector == 0 && p->pos.z > fz - (16 << 8))
                 {
                     p->pos.z = fz - (16 << 8);
@@ -4557,20 +5043,17 @@ void P_SharedInput(int snum)
                 }
             }
 
-            if (!oldnet_predicting)
-                p->on_warping_sector = 0;
+            p->on_warping_sector = 0;
 
             if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
             {
                 // crouching
-                Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-                X_OnEvent(EVENT_CROUCH, p_nopredict->i, snum, -1);
-                if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+                X_OnEvent(EVENT_CROUCH, playerSprite, snum, -1);
+                if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
                 {
                     p->pos.z += (2048 + 768);
-
-                    if (!oldnet_predicting)
-                        p->crack_time = 777;
+                    p->crack_time = 777;
                 }
             }
 
@@ -4582,9 +5065,9 @@ void P_SharedInput(int snum)
                 if (p->jumping_counter == 0)
                     if ((fz - cz) > (56 << 8))
                     {
-                        Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-                        X_OnEvent(EVENT_JUMP, p_nopredict->i, snum, -1);
-                        if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+                        Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+                        X_OnEvent(EVENT_JUMP, playerSprite, snum, -1);
+                        if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
                         {
                             p->jumping_counter = 1;
                             p->jumping_toggle = 1;
@@ -4603,7 +5086,7 @@ void P_SharedInput(int snum)
 
             if (p->jumping_counter < (1024 + 256))
             {
-                if (psectlotag == 1 && p->jumping_counter > 768)
+                if (psectlotag == ST_1_ABOVE_WATER && p->jumping_counter > 768)
                 {
                     p->jumping_counter = 0;
                     p->vel.z = -512;
@@ -4653,65 +5136,69 @@ void P_SharedInput(int snum)
         //ENGINE calculates angvel for you
         fix16_t inputAng = syn->q16avel;
 
-        p->q16angvel = (psectlotag == 2) ? fix16_mul(inputAng - (inputAng >> 3), fix16_from_int(ksgn(doubvel)))
+        p->q16angvel = (psectlotag == ST_2_UNDERWATER) ? fix16_mul(inputAng - (inputAng >> 3), fix16_from_int(ksgn(doubvel)))
             : fix16_mul(inputAng, fix16_from_int(ksgn(doubvel)));
         p->q16ang += p->q16angvel;
         p->q16ang &= 0x7FFFFFF;
-
-        if (!oldnet_predicting)
-            p->crack_time = 777;
+        p->crack_time = 777;
     }
 
-    // Add these before movement code in shared
+    if (p->spritebridge == 0)
+    {
+        P_HandleDamagingFloors(snum);
+    }
+
     if (syn->extbits & (1))
-        X_OnEvent(EVENT_MOVEFORWARD, p_nopredict->i, snum, -1);
+        X_OnEvent(EVENT_MOVEFORWARD, playerSprite, snum, -1);
 
     if (syn->extbits & (1 << 1))
-        X_OnEvent(EVENT_MOVEBACKWARD, p_nopredict->i, snum, -1);
+        X_OnEvent(EVENT_MOVEBACKWARD, playerSprite, snum, -1);
 
     if (syn->extbits & (1 << 2))
-        X_OnEvent(EVENT_STRAFELEFT, p_nopredict->i, snum, -1);
+        X_OnEvent(EVENT_STRAFELEFT, playerSprite, snum, -1);
 
     if (syn->extbits & (1 << 3))
-        X_OnEvent(EVENT_STRAFERIGHT, p_nopredict->i, snum, -1);
+        X_OnEvent(EVENT_STRAFERIGHT, playerSprite, snum, -1);
 
     if (syn->extbits & (1 << 4) || syn->q16avel < 0)
-        X_OnEvent(EVENT_TURNLEFT, p_nopredict->i, snum, -1);
+        X_OnEvent(EVENT_TURNLEFT, playerSprite, snum, -1);
 
     if (syn->extbits & (1 << 5) || syn->q16avel > 0)
-        X_OnEvent(EVENT_TURNRIGHT, p_nopredict->i, snum, -1);
+        X_OnEvent(EVENT_TURNRIGHT, playerSprite, snum, -1);
 
     if (p->vel.x || p->vel.y || syn->fvel || syn->svel)
     {
         if (!oldnet_predicting)
         {
             p->crack_time = 777;
-            k = sintable[p->bobcounter & 2047] >> 12;
 
-            if ((truefdist < PHEIGHT + (8 << 8)) && (k == 1 || k == 3))
+            int const checkWalkSound = sintable[p->bobcounter & 2047] >> 12;
+
+            if ((truefdist < PHEIGHT + (8 << 8)) && (checkWalkSound == 1 || checkWalkSound == 3))
             {
                 if (p->spritebridge == 0 && p->walking_snd_toggle == 0 && p->on_ground)
                 {
+                    int floorPic;
                     switch (psectlotag)
                     {
-                    case 0:
+                    case ST_0_NO_EFFECT:
 
-                        j = (lz >= 0 && (lz & 49152) == 49152)
+                        floorPic = (lz >= 0 && (lz & 49152) == 49152)
                             ? TrackerCast(sprite[lz & (MAXSPRITES - 1)].picnum)
                             : TrackerCast(sector[psect].floorpicnum);
 
-                        switch (DynamicTileMap[j])
+                        switch (DynamicTileMap[floorPic])
                         {
                         case PANNEL1__STATIC:
                         case PANNEL2__STATIC:
-                            A_PlaySound(DUKE_WALKINDUCTS, p->i);
+                            A_PlaySound(DUKE_WALKINDUCTS, playerSprite);
                             p->walking_snd_toggle = 1;
                             break;
                         }
                         break;
-                    case 1:
+                    case ST_1_ABOVE_WATER:
                         if ((krand() & 1) == 0)
-                            A_PlaySound(DUKE_ONWATER, p->i);
+                            A_PlaySound(DUKE_ONWATER, playerSprite);
                         p->walking_snd_toggle = 1;
                         break;
                     }
@@ -4758,12 +5245,10 @@ void P_SharedInput(int snum)
         }
     }
 
-SHAREDHORIZONLY:
-    if (psectlotag == 1 || p->spritebridge == 1) i = (4L << 8);
-    else i = (20L << 8);
+HORIZONLY:
 
-    if (p->cursectnum >= 0 && sector[p->cursectnum].lotag == ST_2_UNDERWATER) k = 0;
-    else k = 1;
+    //if (p->cursectnum >= 0 && sector[p->cursectnum].lotag == ST_2_UNDERWATER) k = 0;
+    //else k = 1;
 
     if (ud.clipping)
     {
@@ -4772,7 +5257,9 @@ SHAREDHORIZONLY:
         updatesector(p->pos.x, p->pos.y, &p->cursectnum);
 
         if (!oldnet_predicting)
-            changespritesect(p->i, p->cursectnum);
+        {
+            changespritesect(playerSprite, p->cursectnum);
+        }
     }
     else
     {
@@ -4794,31 +5281,87 @@ SHAREDHORIZONLY:
             updatesectorz(p->pos.x, p->pos.y, p->pos.z, &p->cursectnum);
         }
 
-        j = clipmove_old(&p->pos.x, &p->pos.y,
+        int moveResult = clipmove_old(&p->pos.x, &p->pos.y,
             &p->pos.z, &p->cursectnum,
-            p->vel.x, p->vel.y, 164L, (4L << 8), i, CLIPMASK0);
+            p->vel.x, p->vel.y, 164L, (4L << 8), (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : (20L << 8), CLIPMASK0);
 
-        if (p_nopredict->jetpack_on == 0 && psectlotag != 2 && psectlotag != 1 && shrunk)
+        if (p_nopredict->jetpack_on == 0 && psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
 
-        if (!oldnet_predicting && j)
-            P_CheckTouchDamage(p, j);
+        if (!oldnet_predicting && moveResult)
+            P_CheckTouchDamage(p, moveResult);
     }
 
-#if 0
-    if (!predicting)
+    if (p_nopredict->jetpack_on == 0)
     {
-        // Maybe use this
+        if (s->xvel > 16)
+        {
+            if (psectlotag != ST_1_ABOVE_WATER && psectlotag != ST_2_UNDERWATER && p->on_ground)
+            {
+                p->pycount += 52;
+                p->pycount &= 2047;
+                p->pyoff =
+                    klabs(s->xvel * sintable[p->pycount]) / 1596;
+            }
+        }
+        else if (psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER)
+            p->pyoff = 0;
     }
-#endif
+
+    if (!oldnet_predicting)
+    {
+        // RBG***
+        setspritez_old(playerSprite, p->pos.x, p->pos.y, p->pos.z + PHEIGHT);
+
+        if (psectlotag < 3)
+        {
+            psect = s->sectnum;
+            if (ud.clipping == 0 && sector[psect].lotag == ST_31_TWO_WAY_TRAIN)
+            {
+                if (sprite[sector[psect].hitag].xvel && ActorExtra[sector[psect].hitag].temp_data[0] == 0)
+                {
+                    P_QuickKill(p);
+                    return;
+                }
+            }
+        }
+
+        if (p->cursectnum >= 0 && truefdist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
+            if (!A_CheckSoundPlaying(playerSprite, DUKE_ONWATER))
+                A_PlaySound(DUKE_ONWATER, playerSprite);
+
+        if (p->cursectnum != s->sectnum)
+            changespritesect(playerSprite, p->cursectnum);
+    }
+
+    int mashedPotato = 0;
+    if (ud.clipping == 0)
+        mashedPotato = ((pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 164L, (4L << 8), (4L << 8), CLIPMASK0) < 0) && (A_GetFurthestAngle(p->i, 8) < 512));
+
+    if (!oldnet_predicting && ud.clipping == 0)
+    {
+        if (klabs(ActorExtra[playerSprite].floorz - ActorExtra[playerSprite].ceilingz) < (48 << 8) || mashedPotato)
+        {
+            if (!(sector[s->sectnum].lotag & 0x8000) && (isanunderoperator(sector[s->sectnum].lotag) ||
+                isanearoperator(sector[s->sectnum].lotag)))
+                activatebysector(s->sectnum, playerSprite);
+            if (mashedPotato)
+            {
+                P_QuickKill(p);
+                return;
+            }
+        }
+        else if (klabs(fz - cz) < (32 << 8) && isanunderoperator(sector[psect].lotag))
+            activatebysector(psect, playerSprite);
+    }
 
     // center_view
-    i = 0;
+    int center_view = 0;
     if (TEST_SYNC_KEY(sb_snum, SK_CENTER_VIEW) || p->hard_landing)
     {
-        Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-        X_OnEvent(EVENT_RETURNTOCENTER, p_nopredict->i, snum, -1);
-        if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+        Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+        X_OnEvent(EVENT_RETURNTOCENTER, playerSprite, snum, -1);
+        if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
         {
             p->return_to_center = 9;
         }
@@ -4827,65 +5370,65 @@ SHAREDHORIZONLY:
     if (TEST_SYNC_KEY(sb_snum, SK_LOOK_UP))
     {
         // look_up
-        Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-        X_OnEvent(EVENT_LOOKUP, p_nopredict->i, snum, -1);
-        if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+        Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+        X_OnEvent(EVENT_LOOKUP, playerSprite, snum, -1);
+        if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
         {
             p->return_to_center = 9;
             if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz += fix16_from_int(12);     // running
             p->q16horiz += fix16_from_int(12);
-            i++;
+            center_view++;
         }
     }
+
     else if (TEST_SYNC_KEY(sb_snum, SK_LOOK_DOWN))
     {
         // look_down
-        Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-        X_OnEvent(EVENT_LOOKDOWN, p_nopredict->i, snum, -1);
-        if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+        Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+        X_OnEvent(EVENT_LOOKDOWN, playerSprite, snum, -1);
+        if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
         {
             p->return_to_center = 9;
             if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz -= fix16_from_int(12);
             p->q16horiz -= fix16_from_int(12);
-            i++;
+            center_view++;
         }
     }
+
     else if (TEST_SYNC_KEY(sb_snum, SK_AIM_UP))
     {
         // aim_up
-        Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-        X_OnEvent(EVENT_AIMUP, p_nopredict->i, snum, -1);
-        if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+        Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+        X_OnEvent(EVENT_AIMUP, playerSprite, snum, -1);
+        if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
         {
             // running
             if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz += fix16_from_int(6);
             p->q16horiz += fix16_from_int(6);
-            i++;
+            center_view++;
         }
     }
+
     else if (TEST_SYNC_KEY(sb_snum, SK_AIM_DOWN))
     {
         // aim_down
-        Gv_SetVar(g_iReturnVarID, 0, p_nopredict->i, snum);
-        X_OnEvent(EVENT_AIMDOWN, p_nopredict->i, snum, -1);
-        if (Gv_GetVar(g_iReturnVarID, p_nopredict->i, snum) == 0)
+        Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
+        X_OnEvent(EVENT_AIMDOWN, playerSprite, snum, -1);
+        if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
         {
             // running
             if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz -= fix16_from_int(6);
             p->q16horiz -= fix16_from_int(6);
-            i++;
+            center_view++;
         }
     }
-
     if (p->return_to_center > 0)
-    {
         if (TEST_SYNC_KEY(sb_snum, SK_LOOK_UP) == 0 && TEST_SYNC_KEY(sb_snum, SK_LOOK_DOWN) == 0)
         {
             p->return_to_center--;
             p->q16horiz += F16(33) - fix16_div(p->q16horiz, F16(3));
-            i++;
+            center_view++;
         }
-    }
 
     if (p->hard_landing > 0)
     {
@@ -4893,7 +5436,7 @@ SHAREDHORIZONLY:
         p->q16horiz -= fix16_from_int(p->hard_landing << 4);
     }
 
-    if (i)
+    if (center_view)
     {
         if (p->q16horiz > F16(95) && p->q16horiz < F16(105)) p->q16horiz = F16(100);
         if (p->q16horizoff > F16(-5) && p->q16horizoff < F16(5)) p->q16horizoff = 0;
@@ -4902,608 +5445,38 @@ SHAREDHORIZONLY:
     p->q16horiz += syn->q16horz;
     p->q16horiz = fix16_clamp(p->q16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
 
-    if (p_nopredict->knee_incs > 0)
-    {
-        p->q16horiz -= F16(48);
-        p->return_to_center = 9;
-    }
-
-    return;
-}
-
-void P_ProcessInput(int snum)
-{
-    int j, i, k, fz, cz, hz, lz, truefdist, shrunk;
-    unsigned int sb_snum = g_player[snum].inputBits->bits;
-    DukePlayer_t *p = g_player[snum].ps;
-    spritetype *s = &sprite[p->i];
-    int psect = p->cursectnum, psectlotag;
-
-    p->player_par++;
-
-    X_OnEvent(EVENT_PROCESSINPUT, p->i, snum, -1);
-    P_SharedInput(snum);
-
-    if (p->cheat_phase > 0) sb_snum = 0; // Also in P_SharedInput
-
-    if (psect == -1)
-    {
-        if (s->extra > 0 && ud.clipping == 0)
-        {
-            P_QuickKill(p);
-            A_PlaySound(SQUISHED,p->i);
-        }
-        psect = 0;
-    }
-
-
-
-    // Some of this is duplicated in P_SharedInput. Ugh.
-    {
-        psectlotag = sector[psect].lotag;
-
-        getzrange_old(p->pos.x,p->pos.y,p->pos.z,psect,&cz,&hz,&fz,&lz,163L,CLIPMASK0);
-        yax_getzsofslope(psect, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
-
-        ActorExtra[p->i].floorz = fz;
-        ActorExtra[p->i].ceilingz = cz;
-
-        shrunk = (s->yrepeat < 32);
-        truefdist = klabs(p->pos.z - p->truefz);
-
-        /* wtf is this supposed to do? */
-        if ((lz & 49152) == 16384 && psectlotag == 1 && truefdist > PHEIGHT + (16 << 8))
-            psectlotag = 0;
-
-        if (hz >= 0 && (hz & 49152) == 49152)
-        {
-            hz &= (MAXSPRITES - 1);
-
-            if (sprite[hz].statnum == STAT_ACTOR && sprite[hz].extra >= 0)
-            {
-                cz = p->truecz;
-            }
-        }
-
-        if (lz >= 0 && (lz & 49152) == 49152)
-        {
-            int spr = lz & (MAXSPRITES - 1);
-
-            if ((sprite[spr].cstat & 33) == 33)
-            {
-                psectlotag = 0;
-            }
-        }
-    }
-
-    if (s->extra > 0) P_IncurDamage(p);
-    else
-    {
-        s->extra = 0;
-        p->shield_amount = 0;
-    }
-
-    p->last_extra = s->extra;
-
-    if (p->loogcnt > 0) p->loogcnt--;
-    else p->loogcnt = 0;
-
-    if (p->fist_incs)
-    {
-        // the fist puching the end-of-level thing...
-        p->fist_incs++;
-        if (p->fist_incs == 28)
-        {
-            if (ud.recstat == 1) G_CloseDemoWrite();
-            S_PlaySound(PIPEBOMB_EXPLODE);
-            p->pals[0] = 64;
-            p->pals[1] = 64;
-            p->pals[2] = 64;
-            p->pals_time = 48;
-        }
-        if (p->fist_incs > 42)
-        {
-            if (p->buttonpalette && ud.from_bonus == 0)
-            {
-                ud.from_bonus = ud.level_number+1;
-                if (ud.secretlevel > 0 && ud.secretlevel < MAXLEVELS) ud.level_number = ud.secretlevel-1;
-                ud.m_level_number = ud.level_number;
-            }
-            else
-            {
-                if (ud.from_bonus)
-                {
-                    ud.level_number = ud.from_bonus;
-                    ud.m_level_number = ud.level_number;
-                    ud.from_bonus = 0;
-                }
-                else
-                {
-                    if (ud.level_number == ud.secretlevel && ud.from_bonus > 0)
-                        ud.level_number = ud.from_bonus;
-                    else ud.level_number++;
-
-                    if (ud.level_number > MAXLEVELS-1)
-                        ud.level_number = 0;
-                    ud.m_level_number = ud.level_number;
-                }
-            }
-            TRAVERSE_CONNECT(i)
-            g_player[i].ps->gm = MODE_EOL;
-            p->fist_incs = 0;
-
-            return;
-        }
-    }
-
-    if (p->timebeforeexit > 1 && ((p->last_extra > 0) || ud.limit_hit == 1))
-    {
-        p->timebeforeexit--;
-        if (p->timebeforeexit == 26*5 && (ud.limit_hit == 0))
-        {
-            FX_StopAllSounds();
-            S_ClearSoundLocks();
-            if (p->customexitsound >= 0)
-            {
-                S_PlaySound(p->customexitsound);
-                P_DoQuote(102,p);
-            }
-        }
-        else if (p->timebeforeexit == 1)
-        {
-            Net_EndOfLevel();
-            return;
-        }
-    }
-
-    if (p->pals_time >= 0)
-        p->pals_time--;
-
-    if (p->fta > 0)
-    {
-        p->fta--;
-        if (p->fta == 0)
-        {
-            pub = NUMPAGES;
-            pus = NUMPAGES;
-            p->ftq = 0;
-        }
-    }
-
-    if (g_levelTextTime > 0)
-        g_levelTextTime--;
-
-    if (s->extra <= 0)
-    {
-        if (p->dead_flag == 0)
-        {
-            if (s->pal != 1)
-            {
-                p->pals[0] = 63;
-                p->pals[1] = 0;
-                p->pals[2] = 0;
-                p->pals_time = 63;
-                p->pos.z -= (16<<8);
-                s->z -= (16<<8);
-            }
-
-            if (ud.recstat == 1 && ud.multimode < 2)
-                G_CloseDemoWrite();
-
-            if (s->pal != 1)
-            {
-                p->dead_flag = (512-((krand()&1)<<10)+(krand()&255)-512)&2047;
-                if (p->dead_flag == 0)
-                    p->dead_flag++;
-            }
-
-            p->jetpack_on = 0; // If we predict, move this to shared input.
-            p->holoduke_on = -1;
-
-            S_StopEnvSound(DUKE_JETPACK_IDLE,p->i);
-            if (p->scream_voice > FX_Ok)
-            {
-                FX_StopSound(p->scream_voice);
-                S_Cleanup();
-               // S_TestSoundCallback(DUKE_SCREAM);
-                p->scream_voice = FX_Ok;
-            }
-
-            if (s->pal != 1 && (s->cstat&32768) == 0) s->cstat = 0;
-
-            if (ud.multimode > 1 && (s->pal != 1 || (s->cstat&32768)))
-            {
-                if ((p->frag_ps != snum) && ud.limit_hit != 1)
-                {
-                    if (GTFLAGS(GAMETYPE_TDM) && g_player[p->frag_ps].ps->team == g_player[snum].ps->team)
-                    {
-                        g_player[p->frag_ps].ps->fraggedself++;
-                        teams[g_player[p->frag_ps].ps->team].suicides++;
-                    }
-                    else
-                    {
-                        g_player[p->frag_ps].ps->frag++;
-                        g_player[p->frag_ps].frags[snum]++;
-                        teams[g_player[p->frag_ps].ps->team].frags++;
-                    }
-
-                    if (snum == screenpeek)
-                    {
-                        Bsprintf(ScriptQuotes[115],"KILLED BY %s",&g_player[p->frag_ps].user_name[0]);
-                        P_DoQuote(115,p);
-                    }
-                    else
-                    {
-                        Bsprintf(ScriptQuotes[116],"KILLED %s",&g_player[snum].user_name[0]);
-                        P_DoQuote(116,g_player[p->frag_ps].ps);
-                    }
-
-                    if (ud.obituaries)
-                    {
-                        //DynamicTileMap[ActorExtra[p->i].picnum]
-                        Bsprintf(tempbuf,ScriptQuotes[FIRST_OBITUARY_QUOTE+(krand()%g_numObituaries)],
-                                 &g_player[p->frag_ps].user_name[0],
-                                 &g_player[snum].user_name[0]);
-                        G_AddUserQuote(tempbuf);
-                    }
-                    else krand();
-
-                    if (GTFLAGS(GAMETYPE_TDM))
-                    {
-                        int fraggedbyteam = g_player[p->frag_ps].ps->team;
-
-                        if ((teams[fraggedbyteam].frags-teams[fraggedbyteam].suicides) >= ud.fraglimit && ud.fraglimit != 0)
-                        {
-                            // Fraglimit hit
-                            Bsprintf(tempbuf, "^%d%s^08 team wins!", teams[fraggedbyteam].palnum, teams[fraggedbyteam].name);
-                            G_AddUserQuote(tempbuf);
-
-                            S_PlaySound(PIPEBOMB_EXPLODE);
-
-                            for (i = 0; i < MAXPLAYERS; i++)
-                            {
-                                if (g_player[i].ps == NULL || !g_player[i].connected)
-                                    continue;
-
-                                if (g_player[i].ps->team == fraggedbyteam) // Flash screens of all winning players
-                                {
-                                    g_player[i].ps->pals[0] = 64;
-                                    g_player[i].ps->pals[1] = 64;
-                                    g_player[i].ps->pals[2] = 64;
-                                    g_player[i].ps->pals_time = 48;
-                                }
-                            }
-
-                            ud.from_bonus = 0;
-                            ud.limit_hit = 1;
-                            g_player[p->frag_ps].ps->timebeforeexit = 26 * 4;
-                        }
-                    }
-                    else if ((g_player[p->frag_ps].ps->frag - g_player[p->frag_ps].ps->fraggedself) >= ud.fraglimit && ud.fraglimit != 0)
-                    {
-                        // Fraglimit hit
-                        Bsprintf(tempbuf, "^08%s^08 wins!", &g_player[p->frag_ps].user_name[0]);
-                        G_AddUserQuote(tempbuf);
-
-                        S_PlaySound(PIPEBOMB_EXPLODE);
-                        g_player[p->frag_ps].ps->pals[0] = 64;
-                        g_player[p->frag_ps].ps->pals[1] = 64;
-                        g_player[p->frag_ps].ps->pals[2] = 64;
-                        g_player[p->frag_ps].ps->pals_time = 48;
-
-                        ud.from_bonus = 0;
-                        ud.limit_hit = 1;
-                        g_player[p->frag_ps].ps->timebeforeexit = 26 * 4;
-                    }
-                }
-                else if(ud.limit_hit != 1)
-                {
-                    if (ActorExtra[p->i].picnum != APLAYERTOP)
-                    {
-                        if (GTFLAGS(GAMETYPE_TDM))
-                        {
-                            teams[p->team].suicides++;
-                        }
-
-                        p->fraggedself++;
-                        if (A_CheckEnemyTile(sprite[p->wackedbyactor].picnum))
-                            Bsprintf(tempbuf,ScriptQuotes[FIRST_OBITUARY_QUOTE+(krand()%g_numObituaries)],"A monster",&g_player[snum].user_name[0]);
-                        else if (ActorExtra[p->i].picnum == NUKEBUTTON)
-                            Bsprintf(tempbuf,"^02%s^02 tried to leave",&g_player[snum].user_name[0]);
-                        else
-                        {
-                            // random suicide death string
-                            Bsprintf(tempbuf,ScriptQuotes[FIRST_SUICIDE_QUOTE+(krand()%g_numSelfObituaries)],&g_player[snum].user_name[0]);
-                        }
-                    }
-                    else Bsprintf(tempbuf,"^02%s^02 switched to team %d",&g_player[snum].user_name[0],p->team+1);
-
-                    if (ud.obituaries)
-                    {
-                        G_AddUserQuote(tempbuf);
-                    }
-                }
-
-                if (myconnectindex == connecthead)
-                {
-                    Bsprintf(tempbuf,"frag %d killed %d\n",p->frag_ps+1,snum+1);
-                    sendscore(tempbuf);
-                    //                    printf(tempbuf);
-                }
-
-                p->frag_ps = snum;
-                pus = NUMPAGES;
-            }
-        }
-
-        p->opyoff = p->pyoff;
-
-        if (fz > cz+(16<<8) && s->pal != 1)
-            p->rotscrnang = (p->dead_flag + ((fz+p->pos.z)>>7))&2047;
-
-        p->on_warping_sector = 0;
-
-        return;
-    }
-
-    if (p->newowner >= 0) // Using viewscreen
-    {
-        P_UpdatePosWhenViewingCam(p);
-
-        P_DoCounters(p);
-
-        if (*aplWeaponWorksLike[p->curr_weapon] == HANDREMOTE_WEAPON)
-            P_ProcessWeapon(snum);
-
-        return;
-    }
-
-    if (p->rotscrnang > 0) p->rotscrnang -= ((p->rotscrnang>>1)+1);
-    else if (p->rotscrnang < 0) p->rotscrnang += (((-p->rotscrnang)>>1)+1);
-
-    p->look_ang -= (p->look_ang>>2);
-
-    if (TEST_SYNC_KEY(sb_snum, SK_LOOK_LEFT))
-    {
-        // look_left
-        Gv_SetVar(g_iReturnVarID,0,p->i,snum);
-        X_OnEvent(EVENT_LOOKLEFT,p->i,snum, -1);
-        if (Gv_GetVar(g_iReturnVarID,p->i,snum) == 0)
-        {
-            p->look_ang -= 152;
-            p->rotscrnang += 24;
-        }
-    }
-
-    if (TEST_SYNC_KEY(sb_snum, SK_LOOK_RIGHT))
-    {
-        // look_right
-        Gv_SetVar(g_iReturnVarID,0,p->i,snum);
-        X_OnEvent(EVENT_LOOKRIGHT,p->i,snum, -1);
-        if (Gv_GetVar(g_iReturnVarID,p->i,snum) == 0)
-        {
-            p->look_ang += 152;
-            p->rotscrnang -= 24;
-        }
-    }
-
-    // Probably don't need this here since it's in P_SharedInput, but keeping it for safety.
-    if (p->on_crane >= 0)
-        goto HORIZONLY;
-
-    // Maybe move to shared with !predicting block?
-    {
-        if (s->xvel < 32 || p->on_ground == 0 || p->bobcounter == 1024)
-        {
-            if ((p->weapon_sway & 2047) > (1024 + 96))
-                p->weapon_sway -= 96;
-            else if ((p->weapon_sway & 2047) < (1024 - 96))
-                p->weapon_sway += 96;
-            else p->weapon_sway = 1024;
-        }
-        else p->weapon_sway = p->bobcounter;
-
-        s->xvel =
-            ksqrt((p->pos.x - p->bobposx) * (p->pos.x - p->bobposx) + (p->pos.y - p->bobposy) * (p->pos.y - p->bobposy));
-        if (p->on_ground) p->bobcounter += sprite[p->i].xvel >> 1;
-
-        p->bobposx = p->pos.x;
-        p->bobposy = p->pos.y;
-        p->opyoff = p->pyoff;
-    }
-
-    if (p->spritebridge == 0)
-    {
-        j = sector[s->sectnum].floorpicnum;
-
-        if (j == PURPLELAVA || sector[s->sectnum].ceilingpicnum == PURPLELAVA)
-        {
-            if (p->boot_amount > 0)
-            {
-                p->boot_amount--;
-                p->inven_icon = 7;
-                if (p->boot_amount <= 0)
-                    P_SelectNextInvItem(p);
-            }
-            else
-            {
-                if (!A_CheckSoundPlaying(p->i,DUKE_LONGTERM_PAIN))
-                    A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
-                p->pals[0] = 0;
-                p->pals[1] = 8;
-                p->pals[2] = 0;
-                p->pals_time = 32;
-                s->extra--;
-            }
-        }
-
-        k = 0;
-
-        if (p->on_ground && truefdist <= PHEIGHT+(16<<8))
-        {
-            switch (DynamicTileMap[j])
-            {
-            case HURTRAIL__STATIC:
-                if (rnd(32))
-                {
-                    if (p->boot_amount > 0)
-                        k = 1;
-                    else
-                    {
-                        if (!A_CheckSoundPlaying(p->i,DUKE_LONGTERM_PAIN))
-                            A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
-                        p->pals[0] = 64;
-                        p->pals[1] = 64;
-                        p->pals[2] = 64;
-                        p->pals_time = 32;
-                        s->extra -= 1+(krand()&3);
-                        if (!A_CheckSoundPlaying(p->i,SHORT_CIRCUIT))
-                            A_PlaySound(SHORT_CIRCUIT,p->i);
-                    }
-                }
-                break;
-            case FLOORSLIME__STATIC:
-                if (rnd(16))
-                {
-                    if (p->boot_amount > 0)
-                        k = 1;
-                    else
-                    {
-                        if (!A_CheckSoundPlaying(p->i,DUKE_LONGTERM_PAIN))
-                            A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
-                        p->pals[0] = 0;
-                        p->pals[1] = 8;
-                        p->pals[2] = 0;
-                        p->pals_time = 32;
-                        s->extra -= 1+(krand()&3);
-                    }
-                }
-                break;
-            case FLOORPLASMA__STATIC:
-                if (rnd(32))
-                {
-                    if (p->boot_amount > 0)
-                        k = 1;
-                    else
-                    {
-                        if (!A_CheckSoundPlaying(p->i,DUKE_LONGTERM_PAIN))
-                            A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
-                        p->pals[0] = 8;
-                        p->pals[1] = 0;
-                        p->pals[2] = 0;
-                        p->pals_time = 32;
-                        s->extra -= 1+(krand()&3);
-                    }
-                }
-                break;
-            }
-        }
-
-        if (k)
-        {
-            P_DoQuote(75,p);
-            p->boot_amount -= 2;
-            if (p->boot_amount <= 0)
-                P_SelectNextInvItem(p);
-        }
-    }
-
-HORIZONLY:
-
-    // Maybe move to shared in !predicting block
-    {
-        if (p->jetpack_on == 0)
-        {
-            if (s->xvel > 16)
-            {
-                if (psectlotag != 1 && psectlotag != 2 && p->on_ground)
-                {
-                    p->pycount += 52;
-                    p->pycount &= 2047;
-                    p->pyoff =
-                        klabs(s->xvel * sintable[p->pycount]) / 1596;
-                }
-            }
-            else if (psectlotag != 2 && psectlotag != 1)
-                p->pyoff = 0;
-        }
-
-        // RBG***
-        setspritez_old(p->i, p->pos.x, p->pos.y, p->pos.z + PHEIGHT);
-    }
-
-    if (psectlotag < 3)
-    {
-        psect = s->sectnum;
-        if (ud.clipping == 0 && sector[psect].lotag == ST_31_TWO_WAY_TRAIN)
-        {
-            if (sprite[sector[psect].hitag].xvel && ActorExtra[sector[psect].hitag].temp_data[0] == 0)
-            {
-                P_QuickKill(p);
-                return;
-            }
-        }
-    }
-
-    if (p->cursectnum >= 0 && truefdist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
-        if (!A_CheckSoundPlaying(p->i,DUKE_ONWATER))
-            A_PlaySound(DUKE_ONWATER,p->i);
-
-    if (p->cursectnum != s->sectnum)
-        changespritesect(p->i,p->cursectnum);
-
-    // Predict this, perhaps? (just before center view)
-    int mashedPotato = 0;
-    if (ud.clipping == 0)
-        mashedPotato = ((pushmove_old(&p->pos.x,&p->pos.y,&p->pos.z,&p->cursectnum,164L,(4L<<8),(4L<<8),CLIPMASK0) < 0) && (A_GetFurthestAngle(p->i,8) < 512));
-
-    if (ud.clipping == 0)
-    {
-        if (klabs(ActorExtra[p->i].floorz-ActorExtra[p->i].ceilingz) < (48<<8) || mashedPotato)
-        {
-            if (!(sector[s->sectnum].lotag&0x8000) && (isanunderoperator(sector[s->sectnum].lotag) ||
-                    isanearoperator(sector[s->sectnum].lotag)))
-                activatebysector(s->sectnum,p->i);
-            if (mashedPotato)
-            {
-                P_QuickKill(p);
-                return;
-            }
-        }
-        else if (klabs(fz-cz) < (32<<8) && isanunderoperator(sector[psect].lotag))
-            activatebysector(psect,p->i);
-    }
-
     //Shooting code/changes
 
-    if (p->show_empty_weapon > 0)
+    if (!oldnet_predicting && p->show_empty_weapon > 0)
     {
         p->show_empty_weapon--;
         if (p->show_empty_weapon == 0 && (p->weaponswitch & 2) && p->ammo_amount[p->curr_weapon] <= 0)
         {
             if (p->last_full_weapon == GROW_WEAPON)
-                p->subweapon |= (1<<GROW_WEAPON);
+                p->subweapon |= (1 << GROW_WEAPON);
             else if (p->last_full_weapon == SHRINKER_WEAPON)
-                p->subweapon &= ~(1<<GROW_WEAPON);
+                p->subweapon &= ~(1 << GROW_WEAPON);
             P_AddWeapon(p, p->last_full_weapon, 1);
             return;
         }
     }
 
-    if (p->knee_incs > 0)
+    if (p_nopredict->knee_incs > 0)
     {
         p->knee_incs++;
-        if (p->knee_incs > 15)
+        p->q16horiz -= F16(48);
+        p->return_to_center = 9;
+        if (!oldnet_predicting && p->knee_incs > 15)
         {
             p->knee_incs = 0;
             p->holster_weapon = 0;
             if (p->weapon_pos < 0)
                 p->weapon_pos = -p->weapon_pos;
-            if (p->actorsqu >= 0 && dist(&sprite[p->i],&sprite[p->actorsqu]) < 1400 && sprite[p->actorsqu].statnum != MAXSTATUS)
+            if (p->actorsqu >= 0 && dist(&sprite[playerSprite], &sprite[p->actorsqu]) < 1400 && sprite[p->actorsqu].statnum != MAXSTATUS)
             {
-                A_DoGuts(p->actorsqu,JIBS6,7);
-                A_Spawn(p->actorsqu,BLOODPOOL);
-                A_PlaySound(SQUISHED,p->actorsqu);
+                A_DoGuts(p->actorsqu, JIBS6, 7);
+                A_Spawn(p->actorsqu, BLOODPOOL);
+                A_PlaySound(SQUISHED, p->actorsqu);
                 switch (DynamicTileMap[sprite[p->actorsqu].picnum])
                 {
                 case FEM1__STATIC:
@@ -5538,7 +5511,7 @@ HORIZONLY:
             }
             p->actorsqu = -1;
         }
-        else if (p->actorsqu >= 0) // Seriously look into predicting this too.
+        else if (p->actorsqu >= 0)
         {
             int angleDelta = G_GetAngleDelta(fix16_to_int(p->q16ang), getangle(sprite[p->actorsqu].x - p->pos.x, sprite[p->actorsqu].y - p->pos.y)) >> 2;
             p->q16ang += fix16_from_int(angleDelta);
