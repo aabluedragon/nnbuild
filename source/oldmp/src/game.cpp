@@ -4037,9 +4037,9 @@ static inline vec3_t G_GetCameraPosition(int32_t const i, int32_t const smoothra
     auto const cs = (uspriteptr_t)&sprite[i];
     const ActorData_t* const ca = &ActorExtra[i];
 
-    return { ca->bposx + mulscale16(cs->x - ca->bposx, smoothratio),
-             ca->bposy + mulscale16(cs->y - ca->bposy, smoothratio),
-             ca->bposz + mulscale16(cs->z - ca->bposz, smoothratio) };
+    return { ca->bpos.x + mulscale16(cs->x - ca->bpos.x, smoothratio),
+             ca->bpos.y + mulscale16(cs->y - ca->bpos.y, smoothratio),
+             ca->bpos.z + mulscale16(cs->z - ca->bpos.z, smoothratio) };
 }
 
 void G_DrawRooms(int snum,int smoothratio)
@@ -4426,9 +4426,9 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         G_GameExit("Too many sprites spawned.");
     }
 
-    ActorExtra[i].bposx = s_x;
-    ActorExtra[i].bposy = s_y;
-    ActorExtra[i].bposz = s_z;
+    ActorExtra[i].bpos.x = s_x;
+    ActorExtra[i].bpos.y = s_y;
+    ActorExtra[i].bpos.z = s_z;
 
     s->x = s_x;
     s->y = s_y;
@@ -4539,9 +4539,7 @@ int A_Spawn(int j, int pn)
         ActorExtra[i].timetosleep = 0;
         ActorExtra[i].extra = -1;
 
-        ActorExtra[i].bposx = SX;
-        ActorExtra[i].bposy = SY;
-        ActorExtra[i].bposz = SZ;
+        ActorExtra[i].bpos = sprite[i].pos;
 
         OW = ActorExtra[i].owner = i;
         ActorExtra[i].cgg = 0;
@@ -6732,9 +6730,9 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         }
         else if (s->picnum != CRANEPOLE)
         {
-            t->x -= mulscale16(65536-smoothratio,s->x-ActorExtra[i].bposx);
-            t->y -= mulscale16(65536-smoothratio,s->y-ActorExtra[i].bposy);
-            t->z -= mulscale16(65536-smoothratio,s->z-ActorExtra[i].bposz);
+            t->x -= mulscale16(65536-smoothratio,s->x-ActorExtra[i].bpos.x);
+            t->y -= mulscale16(65536-smoothratio,s->y-ActorExtra[i].bpos.y);
+            t->z -= mulscale16(65536-smoothratio,s->z-ActorExtra[i].bpos.z);
         }
 
         sect = s->sectnum;

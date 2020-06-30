@@ -1100,7 +1100,7 @@ static void G_MovePlayers(void) //Players
             {
                 s->pos.vec2 = p->opos.vec2;
 
-                ActorExtra[i].bposz = s->z = p->opos.z+PHEIGHT;
+                ActorExtra[i].bpos.z = s->z = p->opos.z+PHEIGHT;
                 s->ang = fix16_to_int(p->oq16ang);
                 setspritez_old(i,s->x,s->y,s->z);
             }
@@ -1183,9 +1183,9 @@ static void G_MovePlayers(void) //Players
             if (p->holoduke_on == -1)
                 KILLIT(i);
 
-            ActorExtra[i].bposx = s->x;
-            ActorExtra[i].bposy = s->y;
-            ActorExtra[i].bposz = s->z;
+            ActorExtra[i].bpos.x = s->x;
+            ActorExtra[i].bpos.y = s->y;
+            ActorExtra[i].bpos.z = s->z;
 
             s->cstat = 0;
 
@@ -1446,9 +1446,7 @@ static void G_MoveStandables(void)
 
         if (sect < 0) KILLIT(i);
 
-        ActorExtra[i].bposx = s->x;
-        ActorExtra[i].bposy = s->y;
-        ActorExtra[i].bposz = s->z;
+        ActorExtra[i].bpos = s->pos;
 
         IFWITHIN(CRANE,CRANE+3)
         {
@@ -1608,9 +1606,7 @@ static void G_MoveStandables(void)
                 {
                     setspritez_old(s->owner,s->x,s->y,s->z);
 
-                    ActorExtra[s->owner].bposx = s->x;
-                    ActorExtra[s->owner].bposy = s->y;
-                    ActorExtra[s->owner].bposz = s->z;
+                    ActorExtra[s->owner].bpos = s->pos;
 
                     s->zvel = 0;
                 }
@@ -2247,7 +2243,7 @@ CLEAR_THE_BOLT:
                     }
                     else
                     {
-                        ActorExtra[i].bposz = s->z = t[0];
+                        ActorExtra[i].bpos.z = s->z = t[0];
                         t[1] = 48+(krand()&31);
                     }
                 }
@@ -2459,9 +2455,7 @@ static void G_MoveWeapons(void)
 
         if (s->sectnum < 0) KILLIT(i);
 
-        ActorExtra[i].bposx = s->x;
-        ActorExtra[i].bposy = s->y;
-        ActorExtra[i].bposz = s->z;
+        ActorExtra[i].bpos = s->pos;
         // here
 
         if (A_CheckSpriteFlags(i,SPRITE_PROJECTILE))
@@ -3257,11 +3251,7 @@ static void G_MoveTransports(void)
                                 g_player[p].ps->pos.z = sprite[OW].z-6144;
                             else g_player[p].ps->pos.z = sprite[OW].z+6144;
 
-                            g_player[p].ps->opos = g_player[p].ps->pos;
-
-                            ActorExtra[g_player[p].ps->i].bposx = g_player[p].ps->pos.x;
-                            ActorExtra[g_player[p].ps->i].bposy = g_player[p].ps->pos.y;
-                            ActorExtra[g_player[p].ps->i].bposz = g_player[p].ps->pos.z;
+                            ActorExtra[j].bpos = g_player[p].ps->opos = g_player[p].ps->pos;
 
                             changespritesect(j,sprite[OW].sectnum);
                             g_player[p].ps->cursectnum = sprite[OW].sectnum;
@@ -3435,9 +3425,7 @@ static void G_MoveTransports(void)
                                         sprite[j].z -= SZ - sector[sprite[OW].sectnum].floorz;
                                         sprite[j].ang = sprite[OW].ang;
 
-                                        ActorExtra[j].bposx = sprite[j].x;
-                                        ActorExtra[j].bposy = sprite[j].y;
-                                        ActorExtra[j].bposz = sprite[j].z;
+                                        ActorExtra[j].bpos = sprite[j].pos;
 
                                         if (sprite[i].pal == 0)
                                         {
@@ -3463,9 +3451,7 @@ static void G_MoveTransports(void)
                                     sprite[j].y += (sprite[OW].y - SY);
                                     sprite[j].z = sprite[OW].z + 4096;
 
-                                    ActorExtra[j].bposx = sprite[j].x;
-                                    ActorExtra[j].bposy = sprite[j].y;
-                                    ActorExtra[j].bposz = sprite[j].z;
+                                    ActorExtra[j].bpos = sprite[j].pos;
 
                                     changespritesect(j, sprite[OW].sectnum);
                                 }
@@ -3475,9 +3461,7 @@ static void G_MoveTransports(void)
                                 sprite[j].y += (sprite[OW].y - SY);
                                 sprite[j].z = sector[sprite[OW].sectnum].ceilingz + ll;
 
-                                ActorExtra[j].bposx = sprite[j].x;
-                                ActorExtra[j].bposy = sprite[j].y;
-                                ActorExtra[j].bposz = sprite[j].z;
+                                ActorExtra[j].bpos = sprite[j].pos;
 
                                 changespritesect(j, sprite[OW].sectnum);
 
@@ -3487,9 +3471,7 @@ static void G_MoveTransports(void)
                                 sprite[j].y += (sprite[OW].y - SY);
                                 sprite[j].z = sector[sprite[OW].sectnum].floorz - ll;
 
-                                ActorExtra[j].bposx = sprite[j].x;
-                                ActorExtra[j].bposy = sprite[j].y;
-                                ActorExtra[j].bposz = sprite[j].z;
+                                ActorExtra[j].bpos = sprite[j].pos;
 
                                 changespritesect(j, sprite[OW].sectnum);
 
@@ -3545,9 +3527,7 @@ static void G_MoveActors(void)
 
         t = &ActorExtra[i].temp_data[0];
 
-        ActorExtra[i].bposx = s->x;
-        ActorExtra[i].bposy = s->y;
-        ActorExtra[i].bposz = s->z;
+        ActorExtra[i].bpos = s->pos;
         switchpicnum=s->picnum;
         if ((s->picnum > GREENSLIME)&&(s->picnum <= GREENSLIME+7))
         {
@@ -4851,9 +4831,7 @@ static void G_MoveMisc(void)  // STATNUM 5
 
         if (sect < 0 || s->xrepeat == 0) KILLIT(i);
 
-        ActorExtra[i].bposx = s->x;
-        ActorExtra[i].bposy = s->y;
-        ActorExtra[i].bposz = s->z;
+        ActorExtra[i].bpos = s->pos;
         switchpicnum = s->picnum;
         if ((s->picnum > NUKEBUTTON)&&(s->picnum <= NUKEBUTTON+3))
         {
@@ -5411,7 +5389,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
         {
             if (sprite[j].zvel == 0 && sprite[j].statnum != 3 && sprite[j].statnum != 4)
             {
-                ActorExtra[j].bposz = sprite[j].z;
+                ActorExtra[j].bpos.z = sprite[j].z;
                 ActorExtra[j].floorz = pSector->floorz;
             }
             j = nextspritesect[j];
@@ -5446,7 +5424,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
 
             if (sprite[j].zvel == 0 && sprite[j].statnum != STAT_EFFECTOR && sprite[j].statnum != STAT_PROJECTILE)
             {
-                ActorExtra[j].bposz = sprite[j].z;
+                ActorExtra[j].bpos.z = sprite[j].z;
                 sprite[j].z += zChange;
                 ActorExtra[j].floorz = pSector->floorz;
             }
@@ -5827,8 +5805,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                         if (numplayers > 1)
                         {
-                            ActorExtra[j].bposx = sprite[j].x;
-                            ActorExtra[j].bposy = sprite[j].y;
+                            ActorExtra[j].bpos.x = sprite[j].x;
+                            ActorExtra[j].bpos.y = sprite[j].y;
                         }
                     }
                     j = nextspritesect[j];
@@ -5922,8 +5900,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         {
                             if (sprite[j].picnum != SECTOREFFECTOR && sprite[j].picnum != LOCATORS)
                             {
-                                ActorExtra[j].bposx = sprite[j].x;
-                                ActorExtra[j].bposy = sprite[j].y;
+                                ActorExtra[j].bpos.x = sprite[j].x;
+                                ActorExtra[j].bpos.y = sprite[j].y;
                             }
                             j = nextspritesect[j];
                         }
@@ -5990,8 +5968,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     {
                         if (numplayers < 2)
                         {
-                            ActorExtra[j].bposx = sprite[j].x;
-                            ActorExtra[j].bposy = sprite[j].y;
+                            ActorExtra[j].bpos.x = sprite[j].x;
+                            ActorExtra[j].bpos.y = sprite[j].y;
                         }
 
                         sprite[j].x += l;
@@ -5999,8 +5977,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                         if (numplayers > 1)
                         {
-                            ActorExtra[j].bposx = sprite[j].x;
-                            ActorExtra[j].bposy = sprite[j].y;
+                            ActorExtra[j].bpos.x = sprite[j].x;
+                            ActorExtra[j].bpos.y = sprite[j].y;
                         }
                     }
                     j = nextspritesect[j];
@@ -6686,7 +6664,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 if (sprite[j].statnum != 3)
                 {
-                    ActorExtra[j].bposz = sprite[j].z;
+                    ActorExtra[j].bpos.z = sprite[j].z;
                     sprite[j].z += q;
                 }
 
@@ -6776,14 +6754,14 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         sprite[k].x += sprite[j].x-s->x;
                         sprite[k].y += sprite[j].y-s->y;
 
-                        ActorExtra[k].bposz -= sprite[k].z;
+                        ActorExtra[k].bpos.z -= sprite[k].z;
 
                         sprite[k].z = sector[sprite[j].sectnum].floorz-
                                       (sc->floorz-sprite[k].z);
 
-                        ActorExtra[k].bposx = sprite[k].x;
-                        ActorExtra[k].bposy = sprite[k].y;
-                        ActorExtra[k].bposz += sprite[k].z;
+                        ActorExtra[k].bpos.x = sprite[k].x;
+                        ActorExtra[k].bpos.y = sprite[k].y;
+                        ActorExtra[k].bpos.z += sprite[k].z;
 
                         changespritesect(k,sprite[j].sectnum);
                         setspritez_old(k,sprite[k].x,sprite[k].y,sprite[k].z);
@@ -6822,7 +6800,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                                     g_player[sprite[j].yvel].ps->pos.z += sc->extra;
                             if (sprite[j].zvel == 0 && sprite[j].statnum != 3 && sprite[j].statnum != 4)
                             {
-                                ActorExtra[j].bposz = sprite[j].z += sc->extra;
+                                ActorExtra[j].bpos.z = sprite[j].z += sc->extra;
                                 ActorExtra[j].floorz = sc->floorz;
                             }
                             j = nextspritesect[j];
@@ -6856,7 +6834,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                                     g_player[sprite[j].yvel].ps->pos.z -= sc->extra;
                             if (sprite[j].zvel == 0 && sprite[j].statnum != 3 && sprite[j].statnum != 4)
                             {
-                                ActorExtra[j].bposz = sprite[j].z -= sc->extra;
+                                ActorExtra[j].bpos.z = sprite[j].z -= sc->extra;
                                 ActorExtra[j].floorz = sc->floorz;
                             }
                             j = nextspritesect[j];
@@ -7135,8 +7113,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         {
                             if (sprite[j].z > (ActorExtra[j].floorz-(16<<8)))
                             {
-                                ActorExtra[j].bposx = sprite[j].x;
-                                ActorExtra[j].bposy = sprite[j].y;
+                                ActorExtra[j].bpos.x = sprite[j].x;
+                                ActorExtra[j].bpos.y = sprite[j].y;
 
                                 sprite[j].x += x>>2;
                                 sprite[j].y += l>>2;
@@ -7245,8 +7223,8 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 nextj = nextspritesect[j];
                 if (sprite[j].statnum != 3 && sprite[j].statnum != 10)
                 {
-                    ActorExtra[j].bposx = sprite[j].x;
-                    ActorExtra[j].bposy = sprite[j].y;
+                    ActorExtra[j].bpos.x = sprite[j].x;
+                    ActorExtra[j].bpos.y = sprite[j].y;
 
                     sprite[j].x += l;
                     sprite[j].y += x;
@@ -7812,9 +7790,7 @@ static void G_RecordOldSpritePos(void)
         while (spriteNum >= 0)
         {
             int const nextSprite = nextspritestat[spriteNum];
-            ActorExtra[spriteNum].bposx = sprite[spriteNum].pos.x;
-            ActorExtra[spriteNum].bposy = sprite[spriteNum].pos.y;
-            ActorExtra[spriteNum].bposz = sprite[spriteNum].pos.z;
+            ActorExtra[spriteNum].bpos = sprite[spriteNum].pos;
 
             spriteNum = nextSprite;
         }

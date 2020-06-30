@@ -479,7 +479,7 @@ static void X_Move(void)
 
     if (g_t[1] == 0 || a == 0)
     {
-        if (deadflag || (ActorExtra[g_i].bposx != g_sp->x) || (ActorExtra[g_i].bposy != g_sp->y))
+        if (deadflag || (ActorExtra[g_i].bpos.x != g_sp->x) || (ActorExtra[g_i].bpos.y != g_sp->y))
         {
             setspritez_old(g_i,g_sp->x,g_sp->y,g_sp->z);
         }
@@ -2764,9 +2764,9 @@ static int X_DoExecute(void)
         else
         {
             P_RandomSpawnPoint(g_p);
-            g_sp->x = ActorExtra[g_i].bposx = g_player[g_p].ps->bobposx = g_player[g_p].ps->opos.x = g_player[g_p].ps->pos.x;
-            g_sp->y = ActorExtra[g_i].bposy = g_player[g_p].ps->bobposy = g_player[g_p].ps->opos.y =g_player[g_p].ps->pos.y;
-            g_sp->z = ActorExtra[g_i].bposz = g_player[g_p].ps->opos.z =g_player[g_p].ps->pos.z;
+            g_sp->x = ActorExtra[g_i].bpos.x = g_player[g_p].ps->bobposx = g_player[g_p].ps->opos.x = g_player[g_p].ps->pos.x;
+            g_sp->y = ActorExtra[g_i].bpos.y = g_player[g_p].ps->bobposy = g_player[g_p].ps->opos.y =g_player[g_p].ps->pos.y;
+            g_sp->z = ActorExtra[g_i].bpos.z = g_player[g_p].ps->opos.z = g_player[g_p].ps->pos.z;
             setspritez_old(g_player[g_p].ps->i,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z+PHEIGHT);
             g_sp->cstat = 257;
 

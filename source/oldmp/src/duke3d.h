@@ -612,7 +612,8 @@ typedef struct {
 } spriteinterpolate;
 
 typedef struct {
-    int floorz,ceilingz,lastvx,lastvy,bposx,bposy,bposz;
+    int floorz,ceilingz,lastvx,lastvy;
+    vec3_t bpos;
     int flags;
     intptr_t temp_data[10]; // sometimes used to hold pointers to con code
     short picnum,ang,extra,owner,movflag;

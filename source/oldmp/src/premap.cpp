@@ -1399,9 +1399,9 @@ static void insert_player_sprite(int p)
     g_player[p].ps->frag_ps = p;
     ActorExtra[spriteIndex].owner = spriteIndex;
 
-    ActorExtra[spriteIndex].bposx = g_player[p].ps->bobposx = g_player[p].ps->opos.x = g_player[p].ps->pos.x = s->x;
-    ActorExtra[spriteIndex].bposy = g_player[p].ps->bobposy = g_player[p].ps->opos.y = g_player[p].ps->pos.y = s->y;
-    ActorExtra[spriteIndex].bposz = g_player[p].ps->opos.z = g_player[p].ps->pos.z = s->z;
+    ActorExtra[spriteIndex].bpos.x = g_player[p].ps->bobposx = g_player[p].ps->opos.x = g_player[p].ps->pos.x = s->x;
+    ActorExtra[spriteIndex].bpos.y = g_player[p].ps->bobposy = g_player[p].ps->opos.y = g_player[p].ps->pos.y = s->y;
+    ActorExtra[spriteIndex].bpos.z = g_player[p].ps->opos.z = g_player[p].ps->pos.z = s->z;
     g_player[p].ps->oq16ang = g_player[p].ps->q16ang = fix16_from_int(s->ang);
 
     g_player[p].ps->cursectnum = s->sectnum;

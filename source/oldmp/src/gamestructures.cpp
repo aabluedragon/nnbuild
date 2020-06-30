@@ -3511,28 +3511,28 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     case ACTOR_HTBPOSX:
         if (iSet)
         {
-            ActorExtra[iActor].bposx=lValue;
+            ActorExtra[iActor].bpos.x=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].bposx, g_i, g_p);
+        Gv_SetVar(lVar2,ActorExtra[iActor].bpos.x, g_i, g_p);
         return;
 
     case ACTOR_HTBPOSY:
         if (iSet)
         {
-            ActorExtra[iActor].bposy=lValue;
+            ActorExtra[iActor].bpos.y=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].bposy, g_i, g_p);
+        Gv_SetVar(lVar2,ActorExtra[iActor].bpos.y, g_i, g_p);
         return;
 
     case ACTOR_HTBPOSZ:
         if (iSet)
         {
-            ActorExtra[iActor].bposz=lValue;
+            ActorExtra[iActor].bpos.z=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].bposz, g_i, g_p);
+        Gv_SetVar(lVar2,ActorExtra[iActor].bpos.z, g_i, g_p);
         return;
 
     case ACTOR_HTG_T:
