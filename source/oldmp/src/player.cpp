@@ -3613,9 +3613,19 @@ static void P_ProcessWeapon(int playerNum)
         if (TEST_SYNC_KEY(sb_snum, SK_FIRE)) return;
         p->rapid_fire_hold = 0;
     }
+
+    bool const doFire = (sb_snum & BIT(SK_FIRE) && (*kb) == 0);
+    bool const doAltFire = g_player[playerNum].inputBits->extbits & (1 << 6);
+
+    if (doAltFire)
+    {
+        P_SetWeaponGamevars(playerNum, p);
+        X_OnEvent(EVENT_ALTFIRE, p->i, playerNum, -1);
+    }
+
     if (shrunk || p->tipincs || p->access_incs)
         sb_snum &= ~BIT(SK_FIRE);
-    else if (shrunk == 0 && (sb_snum & (1 << 2)) && (*kb) == 0 && p->fist_incs == 0 &&
+    else if (shrunk == 0 && doFire && p->fist_incs == 0 &&
         p->last_weapon == -1 && (p->weapon_pos == 0 || p->holster_weapon == 1))
     {
         p->crack_time = 777;
