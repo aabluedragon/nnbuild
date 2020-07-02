@@ -268,12 +268,12 @@ static void A_HitscanProjTrail(int x1, int y1, int z1, int x2, int y2, int z2, i
         x1 += x2;
         y1 += y2;
         z1 += z2;
-        updatesector(x1,y1,&sect);
+        updatesectorz(x1,y1,z1,&sect);
 
         if (sect < 0)
             break;
         
-        getzsofslope(sect,x1,y1,&n,&j);
+        yax_getzsofslope(sect,x1,y1,&n,&j);
 
         if (z1 > j || z1 < n)
             break;
