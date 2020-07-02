@@ -10541,7 +10541,7 @@ int app_main(int32_t argc, char const* const* argv)
 
     initsynccrc();
 
-    //enginecompatibilitymode = ENGINE_19961112;
+    enginecompatibilitymode = ENGINE_19961112;
 
     G_CheckCommandLine(argc,argv);
 
