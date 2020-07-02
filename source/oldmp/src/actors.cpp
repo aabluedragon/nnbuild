@@ -1137,13 +1137,14 @@ static void G_MovePlayers(void) //Players
                             }
                         }
                     }
+
                 if (ud.god)
                 {
                     s->extra = p->max_player_health;
                     s->cstat = 257;
+                    p->dead_flag = 0; // Fix for player sprite clipping into floor if resurrecting
                     p->jetpack_amount =     1599;
                 }
-
 
                 if (s->extra > 0)
                 {
