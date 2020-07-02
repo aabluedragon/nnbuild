@@ -62,6 +62,7 @@ extern int voting;
 
 // BUILD SHIT THAT NEEDS TO BE EXTERNED:
 extern int32_t r_yshearing;
+extern int32_t r_shadeinterpolate;
 
 static char const* MEOSN_SOUND_MIDIDRIVER[] = {
     "OPL3 emu.",
@@ -2219,6 +2220,7 @@ cheat_for_port_credits:
                     "Ambient light level",
                     "-",
                     "Palette Emulation",
+                    "Palette Shade Interpolation",
                     "Y-Shearing",
                     "-",
                     "Enable hires textures",
@@ -2324,18 +2326,24 @@ cheat_for_port_credits:
                         break;
                     }
                     case 4:
+                        enabled = r_usetileshades;
+                        if (enabled && x==io) r_shadeinterpolate = !r_shadeinterpolate;
+                        if (enabled) modval(0,1,(int *)&r_shadeinterpolate,1,probey==io);
+                        mgametextpal(d,yy, r_shadeinterpolate ? "Yes" : "No", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, 0);
+                        break;
+                    case 5:
                         if (x == io)
                             r_yshearing = 1 - r_yshearing;
 
                         modval(0, 1, (int*)&r_yshearing, 1, probey == io);
                         mgametextpal(d, yy, r_yshearing ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
                         break;
-                    case 5:
+                    case 6:
                         if (x==io) usehightile = 1-usehightile;
                         modval(0,1,(int *)&usehightile,1,probey==io);
                         mgametextpal(d,yy, usehightile ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
                         break;
-                    case 6: 
+                    case 7: 
                     {
                         i = r_downsize;
                         enabled = usehightile;
@@ -2357,13 +2365,13 @@ cheat_for_port_credits:
 
                         break;
                     }
-                    case 7:
+                    case 8:
                         enabled = usehightile;
                         if (enabled && x==io) ud.config.useprecache = !ud.config.useprecache;
                         if (enabled) modval(0,1,(int *)&ud.config.useprecache,1,probey==io);
                         mgametextpal(d,yy, ud.config.useprecache ? "On" : "Off", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, 0);
                         break;
-                    case 8:
+                    case 9:
                     {
                         i = glusetexcompr;
                         enabled = usehightile;
@@ -2384,7 +2392,7 @@ cheat_for_port_credits:
                         }
                         break;
                     }
-                    case 9:
+                    case 10:
                     {
                         i = glusetexcache;
                         enabled = (glusetexcompr && usehightile);
@@ -2405,24 +2413,24 @@ cheat_for_port_credits:
                         }
                         break;
                     }
-                    case 10:
+                    case 11:
                         enabled = usehightile;
                         if (enabled && x==io) r_detailmapping = !r_detailmapping;
                         if (enabled) modval(0,1,(int *)&r_detailmapping,1,probey==io);
                         mgametextpal(d,yy, r_detailmapping ? "Yes" : "No", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, 0);
                         break;
-                    case 11:
+                    case 12:
                         enabled = usehightile;
                         if (enabled && x==io) r_glowmapping = !r_glowmapping;
                         if (enabled) modval(0,1,(int *)&r_glowmapping,1,probey==io);
                         mgametextpal(d,yy, r_glowmapping ? "Yes" : "No", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, 0);
                         break;
-                    case 12:
+                    case 13:
                         if (x==io) usemodels = 1-usemodels;
                         modval(0,1,(int *)&usemodels,1,probey==io);
                         mgametextpal(d,yy, usemodels ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
                         break;
-                    case 13:
+                    case 14:
                         enabled = usemodels;
                         if (enabled && x==io) r_animsmoothing = !r_animsmoothing;
                         if (enabled) modval(0,1,(int *)&r_animsmoothing,1,probey==io);
