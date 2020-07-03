@@ -3119,6 +3119,28 @@ void getinput(int snum)
     loc.bits |=   BUTTON(gamefunc_Inventory)<<SK_INVENTORY;
     loc.bits |=   KB_KeyPressed(sc_Escape)<<SK_ESCAPE;
 
+    int const sectorLotag = p->cursectnum != -1 ? sector[p->cursectnum].lotag : 0;
+    int const crouchable = sectorLotag != 2 && (sectorLotag != 1 || p->spritebridge) && !p->jetpack_on;
+    static int crouch_toggle = 0;
+
+    if (p->cheat_phase < 1)
+    {
+        if (BUTTON(gamefunc_Toggle_Crouch))
+        {
+            crouch_toggle = !crouch_toggle && crouchable;
+
+            if (crouchable)
+                CONTROL_ClearButton(gamefunc_Toggle_Crouch);
+        }
+
+        if (BUTTON(gamefunc_Crouch) || BUTTON(gamefunc_Jump) || p->jetpack_on || (!crouchable && p->on_ground))
+            crouch_toggle = 0;
+
+        int const crouching = BUTTON(gamefunc_Crouch) || BUTTON(gamefunc_Toggle_Crouch) || crouch_toggle;
+
+        loc.bits |= (crouching << SK_CROUCH);
+    }
+
     //    running = BUTTON(gamefunc_Run)|ud.auto_run;
     // JBF: Run key behaviour is selectable
     if (ud.runkey_mode)
