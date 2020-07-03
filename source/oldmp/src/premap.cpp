@@ -268,95 +268,109 @@ static void G_PrecacheSprites(void)
     for (i=0; i<=60; i++) tloadtile(i,1);
 }
 
-static void G_DoLoadScreen(char *statustext, int percent)
+static void G_DemoLoadScreen(const char* statustext, int const loadScreenTile, int percent)
 {
-    int i=0,j;
-
-    if (ud.recstat != 2)
+    if (statustext == NULL)
     {
-        if (!statustext)
-        {
-            //g_player[myconnectindex].ps->palette = palette;
-            P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 1);    // JBF 20040308
-            fadepal(0,0,0, 0,64,7);
-            i = ud.screen_size;
-            ud.screen_size = 0;
-            G_UpdateScreenArea();
-            videoClearViewableArea(0L);
-        }
+        videoClearScreen(0L);
+        // g_player[myconnectindex].ps->palette = palette;
+        // G_FadePalette(0,0,0,0);
+        P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 0);  // JBF 20040308
+    }
 
-        Gv_SetVar(g_iReturnVarID,LOADSCREEN, -1, -1);
-        X_OnEvent(EVENT_GETLOADTILE, -1, myconnectindex, -1);
-        j = Gv_GetVar(g_iReturnVarID, -1, -1);
-        rotatesprite(320<<15,200<<15,65536L,0,j > MAXTILES-1?j-MAXTILES:j,0,0,2+8+64,0,0,xdim-1,ydim-1);
-        if (j > MAXTILES-1)
-        {
-            videoNextPage();
-            return;
-        }
-        if (boardfilename[0] != 0 && ud.level_number == 7 && ud.volume_number == 0)
-        {
-            menutext(160,90,0,0,"LOADING USER MAP");
-            gametextpal(160,90+10,boardfilename,14,2);
-        }
-        else
-        {
-            menutext(160,90,0,0,"LOADING");
-            if (MapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name != NULL)
-                menutext(160,90+16+8,0,0,MapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name);
-        }
-
-        if (statustext) gametext(160,180,statustext,0,2+8+16);
-/*        j = usehightile;
-        usehightile = 0;
-        rotatesprite(34<<16,144<<16,65536,0,LASERLINE,0,0,2+8+16,0,0,scale(scale(xdim-1,288,320),percent,100),ydim-1);
-        rotatesprite(154<<16,144<<16,65536,0,LASERLINE,0,0,2+8+16,0,0,scale(scale(xdim-1,288,320),percent,100),ydim-1);
-        usehightile = j; */
-        {
-            int ii = scale(288,percent,100);
-            int x = 32;
-            j = usehightile;
-            usehightile = 0;
-            do
-            {
-                rotatesprite(x<<16,140<<16,49152,0,NOTCHON,0,2,2+8+16,0,0,xdim-1,ydim-1);  
-                x++;
-            } while (x < ii);
-            usehightile = j;
-        }
-        X_OnEvent(EVENT_DISPLAYLOADINGSCREEN, g_player[screenpeek].ps->i, screenpeek, -1);
-        videoNextPage();
-
-        if (!statustext)
-        {
-            fadepal(0,0,0, 63,0,-7);
-
-            KB_FlushKeyboardQueue();
-            ud.screen_size = i;
-        }
+    if ((unsigned)loadScreenTile < (MAXTILES << 1))
+    {
+        rotatesprite_fs(320 << 15, 200 << 15, 65536L, 0, loadScreenTile, 0, 0, 2 + 8 + 64);
     }
     else
     {
-        if (!statustext)
-        {
-            videoClearViewableArea(0L);
-            //g_player[myconnectindex].ps->palette = palette;
-            //G_FadePalette(0,0,0,0);
-            P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 0);    // JBF 20040308
-        }
-        Gv_SetVar(g_iReturnVarID,LOADSCREEN, -1, -1);
-        X_OnEvent(EVENT_GETLOADTILE, -1, myconnectindex, -1);
-        j = Gv_GetVar(g_iReturnVarID, -1, -1);
-        rotatesprite(320<<15,200<<15,65536L,0,j > MAXTILES-1?j-MAXTILES:j,0,0,2+8+64,0,0,xdim-1,ydim-1);
-        if (j > MAXTILES-1)
-        {
-            videoNextPage();
-            return;
-        }
-        menutext(160,105,0,0,"LOADING...");
-        if (statustext) gametext(160,180,statustext,0,2+8+16);
-        X_OnEvent(EVENT_DISPLAYLOADINGSCREEN, g_player[screenpeek].ps->i, screenpeek, -1);
         videoNextPage();
+        return;
+    }
+
+    menutext(160, 105, 0, 0, "LOADING...");
+
+    if (statustext)
+        gametext(160, 180, statustext, 0, 2 + 8 + 16);
+
+    Gv_SetVar(g_iReturnVarID, percent , -1, -1);
+    X_OnEvent(EVENT_DISPLAYLOADINGSCREEN, g_player[screenpeek].ps->i, screenpeek, -1);
+    videoNextPage();
+}
+
+static void G_DoLoadScreen(const char* statustext, int percent)
+{
+    Gv_SetVar(g_iReturnVarID, LOADSCREEN, -1, -1);
+    X_OnEvent(EVENT_GETLOADTILE, -1, myconnectindex, -1);
+    int const loadScreenTile = Gv_GetVar(g_iReturnVarID, -1, -1);
+
+    if (ud.recstat == 2)
+    {
+        G_DemoLoadScreen(statustext, loadScreenTile, percent);
+        return;
+    }
+
+    int const screenSize = ud.screen_size;
+
+    P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 1);
+
+    if (statustext == NULL)
+    {
+        ud.screen_size = 0;
+        G_UpdateScreenArea();
+        videoClearScreen(0L);
+    }
+
+    if ((unsigned)loadScreenTile < (MAXTILES << 1))
+    {
+        videoClearScreen(0);
+        rotatesprite_fs(320 << 15, 200 << 15, 65536L, 0, loadScreenTile, 0, 0, 2 + 8 + 64);
+    }
+    else
+    {
+        videoNextPage();
+        return;
+    }
+
+    if (boardfilename[0] != 0 && ud.level_number == 7 && ud.volume_number == 0)
+    {
+        menutext(160, 90, 0, 0, "LOADING USER MAP");
+        gametextpal(160, 90 + 10, boardfilename, 14, 2);
+    }
+    else
+    {
+        menutext(160, 90, 0, 0, "LOADING");
+
+        if (MapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name != NULL)
+            menutext(160, 90 + 16 + 8, 0, 0, MapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name);
+    }
+
+#ifndef EDUKE32_TOUCH_DEVICES
+    if (statustext)
+        gametext(160, 180, statustext, 0, 2 + 8 + 16);
+#endif
+
+    if (percent != -1)
+    {
+        int const     width = scale(scale(xdim - 1, 288, 320), percent, 100);
+        int constexpr tile = 929;
+        int constexpr bits = 2 + 8 + 16;
+
+        rotatesprite(31 << 16, 145 << 16, 65536, 0, tile, 15, 0, bits, 0, 0, width, ydim - 1);
+        rotatesprite(159 << 16, 145 << 16, 65536, 0, tile, 15, 0, bits, 0, 0, width, ydim - 1);
+
+        rotatesprite(30 << 16, 144 << 16, 65536, 0, tile, 0, 0, bits, 0, 0, width, ydim - 1);
+        rotatesprite(158 << 16, 144 << 16, 65536, 0, tile, 0, 0, bits, 0, 0, width, ydim - 1);
+    }
+
+    Gv_SetVar(g_iReturnVarID, percent, -1, -1);
+    X_OnEvent(EVENT_DISPLAYLOADINGSCREEN, g_player[screenpeek].ps->i, screenpeek, -1);
+    videoNextPage();
+
+    if (!statustext)
+    {
+        KB_FlushKeyboardQueue();
+        ud.screen_size = screenSize;
     }
 }
 
