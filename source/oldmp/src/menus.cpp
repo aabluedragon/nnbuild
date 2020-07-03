@@ -132,7 +132,7 @@ static ControlInfo minfo;
 
 static short mi, mii;
 
-static int probe_(int type,int x,int y,int i,int n)
+static int probe_(int type,int x,int y,int i,int numItems)
 {
     short centre;
 
@@ -158,7 +158,7 @@ static int probe_(int type,int x,int y,int i,int n)
             S_PlaySound(KICK_HIT);
 
             probey--;
-            if (probey < 0) probey = n-1;
+            if (probey < 0) probey = numItems-1;
         }
         if (KB_KeyPressed(sc_DownArrow) || KB_KeyPressed(sc_PgDn) || KB_KeyPressed(sc_kpad_2) || mi > 8192 || WHEELDOWN)
         {
@@ -172,7 +172,7 @@ static int probe_(int type,int x,int y,int i,int n)
         }
     }
 
-    if (probey >= n)
+    if (probey >= numItems)
         probey = 0;
 
     if (centre)
@@ -214,14 +214,14 @@ static int probe_(int type,int x,int y,int i,int n)
         return(-probey-2);
     }
 }
-static inline int M_Probe(int x,int y,int i,int n)
+static inline int M_Probe(int x,int y,int i,int numItems)
 {
-    return probe_(0,x,y,i,n);
+    return probe_(0,x,y,i, numItems);
 }
 
-static inline int probesm(int x,int y,int i,int n)
+static inline int probesm(int x,int y,int i,int numItems)
 {
-    return probe_(1,x,y,i,n);
+    return probe_(1,x,y,i, numItems);
 }
 
 int menutext_(int x,int y,int s,int p,const char *t,int bits)
@@ -3596,7 +3596,7 @@ cheat_for_port_credits:
                 {
                     // mouse digital axis
                     ChangeToMenu(212);
-                    probey = 3+(whichkey^2);
+                    probey = 2+(whichkey^2); // Keep in sync with advanced mouse menu axis start index
                 }
                 else if (function == 2)
                 {
@@ -3640,7 +3640,7 @@ cheat_for_port_credits:
                     ud.config.MouseDigitalFunctions[whichkey>>1][whichkey&1] = x;
                     CONTROL_MapDigitalAxis(whichkey>>1, x, whichkey&1, controldevice_mouse);
                     ChangeToMenu(212);
-                    probey = 3+(whichkey^2);
+                    probey = 2+(whichkey^2); // Keep in sync with advanced mouse menu axis start index
                 }
                 else if (function == 2)
                 {
@@ -3751,18 +3751,20 @@ cheat_for_port_credits:
             menutext(320>>1,24,0,0,"ADVANCED MOUSE");
 
             c = (320>>1)-120;
+            static const int axes_start_menu_idx = 2;
+            static const int axes_start_ypos = 92;
 
-            onbar = (probey == 0 || probey == 1 || probey == 2);
-            if (probey < 3)
-                x = M_Probe(c,46,16,7);
-            else if (probey < 7)
+            onbar = (probey == 0 || probey == 1);
+            if (probey < 2)
+                x = M_Probe(c,46,16,6);
+            else if (probey < 6)
             {
                 m=50;
-                x = probesm(c+10,97+16-(9+9+9),9,7);
+                x = probesm(c+10, axes_start_ypos+3,9,6);
             }
             else
             {
-                x = M_Probe(c,146+16-(16+16+16+16+16+16),16,7);
+                x = M_Probe(c,146+16-(16 * 6),16,6);
             }
 
             switch (x)
@@ -3776,20 +3778,18 @@ cheat_for_port_credits:
                 // x-axis scale
             case 1:
                 // y-axis scale
-            case 2:
-                // mouse filter
                 break;
 
-            case 3:
+            case 2:
                 // digital up
-            case 4:
+            case 3:
                 // digital down
-            case 5:
+            case 4:
                 // digital left
-            case 6:
+            case 5:
                 // digital right
                 function = 1;
-                whichkey = (x-3)^2; // flip the actual axis number
+                whichkey = (x-axes_start_menu_idx)^2; // flip the actual axis number
                 ChangeToMenu(211);
                 probey = ud.config.MouseDigitalFunctions[whichkey>>1][whichkey&1];
                 if (probey < 0) probey = NUMGAMEFUNCTIONS-1;
@@ -3798,10 +3798,10 @@ cheat_for_port_credits:
 
             switch (probey)
             {
+            case 2:
             case 3:
             case 4:
             case 5:
-            case 6:
                 mgametext(160,144+9+9,"DIGITAL AXES ARE NOT FOR MOUSE LOOK",0,2+8+16);
                 mgametext(160,144+9+9+9,"OR FOR AIMING UP AND DOWN",0,2+8+16);
                 break;
@@ -3829,45 +3829,29 @@ cheat_for_port_credits:
             Bsprintf(tempbuf,"%s%.2f",l>=0?" ":"",(float)l/65536.0);
             mgametext(c+160-16,46+16-8,tempbuf,MENUHIGHLIGHT(1),2+8+16);
 
-            // OLDMP CHECKME
+            // Digital Axes
             rotatesprite(320<<15,94<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
             menutext(320>>1,43+16+16+16+8,0,0,"DIGITAL AXES SETUP");
 
-            mgametextpal(c+10,92+16,"UP:",MENUHIGHLIGHT(3),10);
-            if (ud.config.MouseDigitalFunctions[1][0] < 0)
-                strcpy(tempbuf, "  -NONE-");
-            else
-                strcpy(tempbuf, CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[1][0]));
+            static const char* directions[] = { "UP:", "DOWN:", "LEFT:", "RIGHT:" };
 
-            for (i=0;tempbuf[i];i++) if (tempbuf[i]=='_') tempbuf[i] = ' ';
-            minitextshade(c+10+60,93+16,tempbuf,MENUHIGHLIGHT(3),0,10+16);
+            for (int index = 0; index < 4; index++)
+            {
+                mgametextpal(c + 10, axes_start_ypos + 16 + (9 * index), directions[index], MENUHIGHLIGHT(axes_start_menu_idx + index), 10);
 
-            mgametextpal(c+10,92+16+9,"DOWN:",MENUHIGHLIGHT(4),10);
-            if (ud.config.MouseDigitalFunctions[1][1] < 0)
-                strcpy(tempbuf, "  -NONE-");
-            else
-                strcpy(tempbuf, CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[1][1]));
+                int axis = 0;
+                int direction = index % 2;
+                if (index < 2)
+                    axis = 1;
 
-            for (i=0;tempbuf[i];i++) if (tempbuf[i]=='_') tempbuf[i] = ' ';
-            minitextshade(c+10+60,93+16+9,tempbuf,MENUHIGHLIGHT(4),0,10+16);
+                if (ud.config.MouseDigitalFunctions[axis][direction] < 0)
+                    strcpy(tempbuf, "  -NONE-");
+                else
+                    strcpy(tempbuf, CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[axis][direction]));
 
-            mgametextpal(c+10,92+16+9+9,"LEFT:",MENUHIGHLIGHT(5),10);
-            if (ud.config.MouseDigitalFunctions[0][0] < 0)
-                strcpy(tempbuf, "  -NONE-");
-            else
-                strcpy(tempbuf, CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[0][0]));
-
-            for (i=0;tempbuf[i];i++) if (tempbuf[i]=='_') tempbuf[i] = ' ';
-            minitextshade(c+10+60,93+16+9+9,tempbuf,MENUHIGHLIGHT(5),0,10+16);
-
-            mgametextpal(c+10,92+16+9+9+9,"RIGHT:",MENUHIGHLIGHT(6),10);
-            if (ud.config.MouseDigitalFunctions[0][1] < 0)
-                strcpy(tempbuf, "  -NONE-");
-            else
-                strcpy(tempbuf, CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[0][1]));
-
-            for (i=0;tempbuf[i];i++) if (tempbuf[i]=='_') tempbuf[i] = ' ';
-            minitextshade(c+10+60,93+16+9+9+9,tempbuf,MENUHIGHLIGHT(6),0,10+16);
+                for (i = 0; tempbuf[i]; i++) if (tempbuf[i] == '_') tempbuf[i] = ' ';
+                minitextshade(c + 10 + 60, (axes_start_ypos+1) + 16 + (9 * index), tempbuf, MENUHIGHLIGHT(axes_start_menu_idx + index), 0, 10 + 16);
+            }
 
             break;
         }
