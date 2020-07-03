@@ -277,6 +277,13 @@ static const char * mouseanalogdefaults[MAXMOUSEAXES] =
    "analog_moving",
    };
 
+static const char* mousedigitaldefaults[] =
+   {
+   "",
+   "",
+   "",
+   "",
+   };
 
 #if defined GEKKO
 static const char * joystickdefaults[MAXJOYBUTTONSANDHATS] =
