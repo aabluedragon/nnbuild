@@ -3036,6 +3036,27 @@ void getinput(int snum)
             info[0].mousex = tabledivide32_noinline(info[0].mousex, ud.config.MouseBias);
     }
 
+    // [JM] Brutal shitfuck hack to replace missing MACT functionality.
+    if ((info[0].mousex < -4096) && ud.config.MouseDigitalFunctions[0][0] >= 0) // Left
+    {
+        CONTROL_ButtonState |= ((uint64_t)1 << ((uint64_t)(ud.config.MouseDigitalFunctions[0][0])));
+    }
+
+    if ((info[0].mousex > 4096) && ud.config.MouseDigitalFunctions[0][1] >= 0) // Right
+    {
+        CONTROL_ButtonState |= ((uint64_t)1 << ((uint64_t)(ud.config.MouseDigitalFunctions[0][1])));
+    }
+
+    if ((info[0].mousey < -4096) && ud.config.MouseDigitalFunctions[1][0] >= 0) // Up
+    {
+        CONTROL_ButtonState |= ((uint64_t)1 << ((uint64_t)(ud.config.MouseDigitalFunctions[1][0])));
+    }
+
+    if ((info[0].mousey > 4096) && ud.config.MouseDigitalFunctions[1][1] >= 0) // Down
+    {
+        CONTROL_ButtonState |= ((uint64_t)1 << ((uint64_t)(ud.config.MouseDigitalFunctions[1][1])));
+    }
+
     tics = (int32_t)totalclock-lastcontroltime;
     lastcontroltime = (int32_t)totalclock;
 
