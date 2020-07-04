@@ -803,6 +803,8 @@ osdcvardata_t cvar[] =
     { "hud_textscale", "hud_textscale: sets multiplayer chat message size", (void*)&ud.textscale, CVAR_INT, 100, 400 },
 
     { "cl_autoaim", "cl_autoaim: enable/disable weapon autoaim", (void*)&ud.config.AutoAim, CVAR_INT|CVAR_MULTI, 0, 2 },
+    { "cl_autorun", "player autorun" CVAR_BOOL_OPTSTR, (void*)&ud.auto_run, CVAR_BOOL, 0, 1 },
+
     { "cl_automsg", "cl_automsg: enable/disable automatically sending messages to all players", (void*)&ud.automsg, CVAR_BOOL, 0, 1 },
     { "cl_autovote", "cl_autovote: enable/disable automatic voting", (void*)&ud.autovote, CVAR_INT|CVAR_MULTI, 0, 2 },
 
@@ -821,11 +823,18 @@ osdcvardata_t cvar[] =
 
     { "crosshairscale","crosshair size", (void*)&ud.crosshairscale, CVAR_INT, 10, 100 },
 
+    // Mouse
     { "sensitivity","changes the mouse sensitivity", (void*)&CONTROL_MouseSensitivity, CVAR_FLOAT | CVAR_FUNCPTR, 0, 25 },
+    { "in_aimmode", "hold button for mouse aim" CVAR_BOOL_OPTSTR, (void*)&ud.mouseaiming, CVAR_BOOL, 0, 1 },
+    { "in_mouse", "use mouse input" CVAR_BOOL_OPTSTR,(void*)&ud.config.UseMouse, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },
+    { "in_mousemode", "vertical mouse aiming" CVAR_BOOL_OPTSTR, (void*)&g_myAimMode, CVAR_BOOL, 0, 1 },
+    { "in_mouseflip", "invert vertical mouse movement" CVAR_BOOL_OPTSTR, (void*)&ud.mouseflip, CVAR_BOOL, 0, 1 },
     { "in_mousebias", "in_mousebias: emulates the original mouse code's weighting of input towards whichever axis is moving the most at any given time", (void*)&ud.config.MouseBias, CVAR_INT, 0, 32 },
-    
+    { "in_mousexscale", "scale modifier for mouse x axis", (void*)&CONTROL_MouseAxesScale[0], CVAR_INT, 1, 65536 },
+    { "in_mouseyscale", "scale modifier for mouse y axis", (void*)&CONTROL_MouseAxesScale[1], CVAR_INT, 1, 65536 },
+
+    // Joystick
     { "in_joystick","use joystick or controller input" CVAR_BOOL_OPTSTR,(void*)&ud.config.UseJoystick, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },
-    { "in_mouse","use mouse input" CVAR_BOOL_OPTSTR,(void*)&ud.config.UseMouse, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },
 
 #if defined(USE_OPENGL)
     //{ "r_anamorphic", "r_anamorphic: enable/disable widescreen mode", (void*)&glwidescreen, CVAR_BOOL, 0, 1 },
@@ -843,11 +852,17 @@ osdcvardata_t cvar[] =
     { "r_shadows", "r_shadows: enable/disable sprite and model shadows", (void*)&ud.shadows, CVAR_BOOL, 0, 1 },
     { "r_precache", "r_precache: enable/disable the pre-level caching routine", (void*)&ud.config.useprecache, CVAR_BOOL, 0, 1 },
 
+    // Music
+    { "mus_enabled", "music subsystem" CVAR_BOOL_OPTSTR, (void*)&ud.config.MusicToggle, CVAR_BOOL, 0, 1 },
+    { "mus_device", "music device", (void*)&ud.config.MusicDevice, CVAR_INT, 0, ASS_NumSoundCards },
+    { "mus_volume", "controls music volume", (void*)&ud.config.MusicVolume, CVAR_INT, 0, 255 },
+
+    // Sound
     { "snd_ambience", "snd_ambience: enables/disables ambient sounds", (void*)&ud.config.AmbienceToggle, CVAR_BOOL, 0, 1 },
+    { "snd_enabled", "sound effects" CVAR_BOOL_OPTSTR, (void*)&ud.config.SoundToggle, CVAR_BOOL, 0, 1 },
     { "snd_duketalk", "snd_duketalk: enables/disables Duke's speech", (void*)&ud.config.VoiceToggle, CVAR_INT, 0, 5 },
     { "snd_fxvolume", "snd_fxvolume: volume of sound effects", (void*)&ud.config.FXVolume, CVAR_INT, 0, 255 },
     { "snd_mixrate", "snd_mixrate: sound mixing rate", (void*)&ud.config.MixRate, CVAR_INT, 0, 48000 },
-    { "snd_musvolume", "snd_musvolume: volume of midi music", (void*)&ud.config.MusicVolume, CVAR_INT, 0, 255 },
     { "snd_numbits", "snd_numbits: sound bits", (void*)&ud.config.NumBits, CVAR_INT, 8, 16 },
     { "snd_numchannels", "snd_numchannels: the number of sound channels", (void*)&ud.config.NumChannels, CVAR_INT, 0, 2 },
     { "snd_numvoices", "snd_numvoices: the number of concurrent sounds", (void*)&ud.config.NumVoices, CVAR_INT, 0, 32 },

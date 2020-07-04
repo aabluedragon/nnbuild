@@ -366,7 +366,6 @@ struct savehead {
 typedef struct {
     int UseJoystick;
     int UseMouse;
-    int RunMode;
     int AutoAim;
     int ShowOpponentWeapons;
     int MouseBias;

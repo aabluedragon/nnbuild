@@ -217,7 +217,7 @@ void CONFIG_SetDefaults(void)
     ud.config.NumChannels = 2;
     ud.config.NumVoices = 96;
     //ud.config.ReverseStereo = 0;
-    ud.config.RunMode = ud.auto_run = 1;
+    ud.auto_run = 1;
     ud.config.ShowOpponentWeapons = 0;
     //ud.config.SmoothInput = 0;
     ud.config.SoundToggle = 1;
@@ -424,6 +424,18 @@ void CONFIG_SetupMouse(void)
         temp[0] = 0;
         if (!SCRIPT_GetString(ud.config.scripthandle, "Controls", str, temp))
             ud.config.MouseAnalogueAxes[i] = CONFIG_AnalogNameToNum(temp);
+
+        Bsprintf(str, "MouseDigitalAxes%d_0", i);
+        temp[0] = 0;
+        if (!SCRIPT_GetString(ud.config.scripthandle, "Controls", str, temp))
+            if (CONFIG_FunctionNameToNum(temp) != -1 || (!temp[0] && CONFIG_FunctionNameToNum(temp) != -1))
+                ud.config.MouseDigitalFunctions[i][0] = CONFIG_FunctionNameToNum(temp);
+
+        Bsprintf(str, "MouseDigitalAxes%d_1", i);
+        temp[0] = 0;
+        if (!SCRIPT_GetString(ud.config.scripthandle, "Controls", str, temp))
+            if (CONFIG_FunctionNameToNum(temp) != -1 || (!temp[0] && CONFIG_FunctionNameToNum(temp) != -1))
+                ud.config.MouseDigitalFunctions[i][1] = CONFIG_FunctionNameToNum(temp);
     }
 
     for (int i = 0; i < MAXMOUSEBUTTONS; i++)
@@ -432,7 +444,12 @@ void CONFIG_SetupMouse(void)
         CONTROL_MapButton(ud.config.MouseFunctions[i][1], i, 1, controldevice_mouse);
     }
     for (int i = 0; i < MAXMOUSEAXES; i++)
+    {
         CONTROL_MapAnalogAxis(i, ud.config.MouseAnalogueAxes[i], controldevice_mouse);
+
+        CONTROL_MapDigitalAxis(i, ud.config.MouseDigitalFunctions[i][0], 0, controldevice_mouse);
+        CONTROL_MapDigitalAxis(i, ud.config.MouseDigitalFunctions[i][1], 1, controldevice_mouse);
+    }
 }
 
 /*
@@ -682,7 +699,6 @@ int32_t CONFIG_ReadSetup(void)
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Executions",&ud.executions);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "IDPlayers",&ud.idplayers);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "MPMessageDisplayTime",&ud.msgdisptime);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "RunMode",&ud.config.RunMode);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowFPS",&ud.tickrate);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowLevelStats",&ud.levelstats);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowOpponentWeapons",&ud.config.ShowOpponentWeapons); ud.showweapons = ud.config.ShowOpponentWeapons;
@@ -706,39 +722,9 @@ int32_t CONFIG_ReadSetup(void)
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "WeaponSway",&ud.weaponsway);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "PredictionDebug", &ud.config.PredictionDebug);
 
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "AmbienceToggle",&ud.config.AmbienceToggle);
         SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "FXDevice",&ud.config.FXDevice);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "FXVolume",&ud.config.FXVolume);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "MixRate",&ud.config.MixRate);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "MusicDevice",&ud.config.MusicDevice);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "MusicToggle",&ud.config.MusicToggle);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "MusicVolume",&ud.config.MusicVolume);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "NumBits",&ud.config.NumBits);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "NumChannels",&ud.config.NumChannels);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "NumVoices",&ud.config.NumVoices);
         //SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "ReverseStereo",&ud.config.ReverseStereo);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "SoundToggle",&ud.config.SoundToggle);
 
-        {
-            SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "VoiceToggle",&ud.config.VoiceToggle);
-            if (ud.config.VoiceToggle == 2) ud.config.VoiceToggle = 5;
-        }
-
-        SCRIPT_GetNumber(ud.config.scripthandle, "Controls","AimingFlag",(int32_t *)&g_myAimMode);    // (if toggle mode) gives state
-
-        {
-            SCRIPT_GetNumber(ud.config.scripthandle, "Controls","AutoAim",&ud.config.AutoAim);          // JBF 20031125
-            g_player[0].ps->auto_aim = ud.config.AutoAim;
-        }
-
-        SCRIPT_GetNumber(ud.config.scripthandle, "Controls","MouseAimingFlipped",&ud.mouseflip);  // mouse aiming inverted
-
-        {
-            SCRIPT_GetNumber(ud.config.scripthandle, "Controls","MouseAiming",&ud.mouseaiming);		// 1=momentary/0=toggle
-            g_player[0].ps->aim_mode = ud.mouseaiming;
-        }
-
-        SCRIPT_GetNumber(ud.config.scripthandle, "Controls","MouseBias",&ud.config.MouseBias);
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","RunKeyBehaviour",&ud.runkey_mode);   // JBF 20031125
 
         /*
@@ -877,11 +863,6 @@ void CONFIG_WriteSetup(uint32_t flags)
         return;
     }
 
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","AimingFlag",(int) g_myAimMode,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","AutoAim",ud.config.AutoAim,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","MouseAimingFlipped",ud.mouseflip,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","MouseAiming",ud.mouseaiming,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","MouseBias",ud.config.MouseBias,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","RunKeyBehaviour",ud.runkey_mode,false,false);
     //SCRIPT_PutNumber(ud.config.scripthandle, "Controls","SmoothInput",ud.config.SmoothInput,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","UseJoystick",ud.config.UseJoystick,false,false);
@@ -900,7 +881,6 @@ void CONFIG_WriteSetup(uint32_t flags)
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "IDPlayers",ud.idplayers,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "MPMessageDisplayTime",ud.msgdisptime,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "PredictionDebug", ud.config.PredictionDebug, false, false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "RunMode",ud.config.RunMode,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowFPS",ud.tickrate,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowLevelStats",ud.levelstats,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowOpponentWeapons",ud.config.ShowOpponentWeapons,false,false);
@@ -951,18 +931,7 @@ void CONFIG_WriteSetup(uint32_t flags)
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "WindowPosX", windowx, false, false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "WindowPosY", windowy, false, false);
 
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "AmbienceToggle",ud.config.AmbienceToggle,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "FXVolume",ud.config.FXVolume,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "MusicToggle",ud.config.MusicToggle,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "MusicVolume",ud.config.MusicVolume,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "NumVoices",ud.config.NumVoices,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "NumChannels",ud.config.NumChannels,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "NumBits",ud.config.NumBits,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "MixRate",ud.config.MixRate,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "MusicDevice", ud.config.MusicDevice, false, false);
     //SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "ReverseStereo",ud.config.ReverseStereo,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "SoundToggle",ud.config.SoundToggle,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Sound Setup", "VoiceToggle",ud.config.VoiceToggle,false,false);
 
 #ifdef _WIN32
     //SCRIPT_PutNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", ud.config.CheckForUpdates, false, false);
@@ -993,6 +962,18 @@ void CONFIG_WriteSetup(uint32_t flags)
         {
             Bsprintf(buf, "MouseAnalogAxes%d", i);
             SCRIPT_PutString(ud.config.scripthandle, "Controls", buf, CONFIG_AnalogNumToName(ud.config.MouseAnalogueAxes[i]));
+        }
+
+        if (CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[i][0]))
+        {
+            Bsprintf(buf, "MouseDigitalAxes%d_0", i);
+            SCRIPT_PutString(ud.config.scripthandle, "Controls", buf, CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[i][0]));
+        }
+
+        if (CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[i][1]))
+        {
+            Bsprintf(buf, "MouseDigitalAxes%d_1", i);
+            SCRIPT_PutString(ud.config.scripthandle, "Controls", buf, CONFIG_FunctionNumToName(ud.config.MouseDigitalFunctions[i][1]));
         }
     }
 

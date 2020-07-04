@@ -8491,7 +8491,6 @@ FAKE_F3:
     {
         CONTROL_ClearButton(gamefunc_AutoRun);
         ud.auto_run = 1-ud.auto_run;
-        ud.config.RunMode = ud.auto_run;
         P_DoQuote(85+ud.auto_run,g_player[myconnectindex].ps);
     }
 
@@ -11187,7 +11186,6 @@ MAIN_LOOP_RESTART:
         goto MAIN_LOOP_RESTART;
     }
 
-    ud.auto_run = ud.config.RunMode;
     ud.showweapons = ud.config.ShowOpponentWeapons;
     g_player[myconnectindex].ps->aim_mode = ud.mouseaiming;
     g_player[myconnectindex].ps->auto_aim = ud.config.AutoAim;
