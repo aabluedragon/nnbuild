@@ -687,20 +687,13 @@ int32_t CONFIG_ReadSetup(void)
         }
 #endif
 
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "AltHud",&ud.althud);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc","AngleInterpolation",&ud.angleinterpolation);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "AutoMsg",&ud.automsg);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "AutoVote",&ud.autovote);
-
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Color",&ud.m_color);
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "DeathMessages",&ud.obituaries);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "DemoCams",&ud.democams);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Executions",&ud.executions);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "IDPlayers",&ud.idplayers);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "MPMessageDisplayTime",&ud.msgdisptime);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowFPS",&ud.tickrate);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowLevelStats",&ud.levelstats);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowOpponentWeapons",&ud.config.ShowOpponentWeapons); ud.showweapons = ud.config.ShowOpponentWeapons;
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowViewWeapon",&ud.drawweapon);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "StatusBarMode",&ud.statusbarmode);
@@ -869,20 +862,14 @@ void CONFIG_WriteSetup(uint32_t flags)
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","UseMouse",ud.config.UseMouse,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","WeaponSwitchMode",ud.weaponswitch,false,false);
 
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "AltHud",ud.althud,false,false);
-//    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "AngleInterpolation",ud.angleinterpolation,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "AutoMsg",ud.automsg,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "AutoVote",ud.autovote,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Color",ud.m_color,false,false);
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "DeathMessages",ud.obituaries,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "DemoCams",ud.democams,false,false);
     
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "IDPlayers",ud.idplayers,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "MPMessageDisplayTime",ud.msgdisptime,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "PredictionDebug", ud.config.PredictionDebug, false, false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowFPS",ud.tickrate,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowLevelStats",ud.levelstats,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowOpponentWeapons",ud.config.ShowOpponentWeapons,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowViewWeapon",ud.drawweapon,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "StatusBarMode",ud.statusbarmode,false,false);
