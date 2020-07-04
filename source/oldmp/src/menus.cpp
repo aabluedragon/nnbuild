@@ -3839,10 +3839,10 @@ cheat_for_port_credits:
             {
                 mgametextpal(c + 10, axes_start_ypos + 16 + (9 * index), directions[index], MENUHIGHLIGHT(axes_start_menu_idx + index), 10);
 
-                int axis = 0;
+                int axis = 0; // Left/Right
                 int direction = index % 2;
                 if (index < 2)
-                    axis = 1;
+                    axis = 1; // Up/Down
 
                 if (ud.config.MouseDigitalFunctions[axis][direction] < 0)
                     strcpy(tempbuf, "  -NONE-");
