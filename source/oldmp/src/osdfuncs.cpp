@@ -1,52 +1,81 @@
+//-------------------------------------------------------------------------
+/*
+Copyright (C) 2010 EDuke32 developers and contributors
+
+This file is part of EDuke32.
+
+EDuke32 is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License version 2
+as published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+//-------------------------------------------------------------------------
+#include "compat.h"
 #include "duke3d.h"
 #include "build.h"
 #include "namesdyn.h"
 #include "osdfuncs.h"
-#include "compat.h"
+//#include "premap.h"
 
-int osdhightile = 0;
+int osdhightile = 1;
+int osdshown = 0;
+
+#ifdef EDUKE32_TOUCH_DEVICES
+float osdscale = 2.f, osdrscale = 0.5f;
+#else
 float osdscale = 1.f, osdrscale = 1.f;
+#endif
 
-#define OSD_SCALE(x) (int32_t)(osdscale != 1.f ? Blrintf(osdscale*(float)(x)) : (x))
-#define OSD_SCALEDIV(x) (int32_t)Blrintf((float)(x) * osdrscale)
+#define OSD_SCALE(x) (osdscale != 1.f ? Blrintf(osdscale*(float)(x)) : (x))
+#define OSD_SCALEDIV(x) Blrintf((float)(x) * osdrscale)
+
 #define OSDCHAR_WIDTH (tilesiz[STARTALPHANUM + 'A' - '!'].x)
 #define OSDCHAR_HEIGHT (tilesiz[STARTALPHANUM + 'A' - '!'].y + 1)
 
-static inline int32_t GAME_isspace(int32_t ch)
+static inline CONSTEXPR int GAME_isspace(int ch)
 {
     return (ch == 32 || ch == 9);
 }
 
-static inline int32_t GAME_getchartile(int32_t ch)
+static inline int GAME_getchartile(int ch)
 {
-    const int32_t ac = ch - '!' + STARTALPHANUM;
+    const int ac = ch - '!' + STARTALPHANUM;
     return (ac < STARTALPHANUM || ac > ENDALPHANUM) ? -1 : ac;
 }
 
-void GAME_drawosdchar(int32_t x, int32_t y, char ch, int32_t shade, int32_t pal)
+void GAME_drawosdchar(int x, int y, char ch, int shade, int pal)
 {
-    int16_t ac;
+    int ac;
 #ifndef USE_OPENGL
-    int32_t usehightile = 0;
+    int usehightile = 0;
 #endif
-    int32_t ht = usehightile;
+    int ht = usehightile;
 
     if (GAME_isspace(ch)) return;
     if ((ac = GAME_getchartile(ch)) == -1)
         return;
 
     usehightile = (osdhightile && ht);
-    rotatesprite_fs(OSD_SCALE((OSDCHAR_WIDTH*x) << 16),
-        OSD_SCALE((y*OSDCHAR_HEIGHT) << 16),
+    rotatesprite_fs(OSD_SCALE((OSDCHAR_WIDTH * x) << 16),
+        OSD_SCALE((y * OSDCHAR_HEIGHT) << 16),
         OSD_SCALE(65536.f), 0, ac, shade, pal, 8 | 16);
     usehightile = ht;
 }
 
-void GAME_drawosdstr(int32_t x, int32_t y, const char *ch, int32_t len, int32_t shade, int32_t pal)
+void GAME_drawosdstr(int x, int y, const char* ch, int len, int shade, int pal)
 {
-    int16_t ac;
+    int ac;
 #ifdef USE_OPENGL
-    const int32_t ht = usehightile;
+    const int ht = usehightile;
     usehightile = (osdhightile && ht);
 #endif
 
@@ -58,7 +87,7 @@ void GAME_drawosdstr(int32_t x, int32_t y, const char *ch, int32_t len, int32_t 
             if ((ac = GAME_getchartile(*ch)) >= 0)
             {
                 OSD_GetShadePal(ch, &shade, &pal);
-                rotatesprite_fs(OSD_SCALE(x << 16), OSD_SCALE((y*OSDCHAR_HEIGHT) << 16),
+                rotatesprite_fs(OSD_SCALE(x << 16), OSD_SCALE((y * OSDCHAR_HEIGHT) << 16),
                     OSD_SCALE(65536.f), 0, ac, shade, pal, 8 | 16);
             }
 
@@ -71,96 +100,70 @@ void GAME_drawosdstr(int32_t x, int32_t y, const char *ch, int32_t len, int32_t 
 #endif
 }
 
-void GAME_drawosdcursor(int32_t x, int32_t y, int32_t type, int32_t lastkeypress)
+void GAME_drawosdcursor(int x, int y, int type, int32_t lastkeypress)
 {
-    int16_t ac;
-
-    if (type) ac = SMALLFNTCURSOR;
-    else ac = '_' - '!' + STARTALPHANUM;
+    int ac = (type) ? SMALLFNTCURSOR : '_' - '!' + STARTALPHANUM;
 
     if (((BGetTime() - lastkeypress) & 0x40) == 0)
-        rotatesprite_fs(OSD_SCALE((OSDCHAR_WIDTH*x) << 16),
-            OSD_SCALE(((y*OSDCHAR_HEIGHT) + (type ? -1 : 2)) << 16),
+        rotatesprite_fs(OSD_SCALE((OSDCHAR_WIDTH * x) << 16),
+            OSD_SCALE(((y * OSDCHAR_HEIGHT) + (type ? -1 : 2)) << 16),
             OSD_SCALE(65536.f), 0, ac, 0, 8, 8 | 16);
 }
 
-int32_t GAME_getcolumnwidth(int32_t w)
+int GAME_getcolumnwidth(int w)
 {
     return OSD_SCALEDIV(w / OSDCHAR_WIDTH);
 }
 
-int32_t GAME_getrowheight(int32_t h)
+int GAME_getrowheight(int h)
 {
     return OSD_SCALEDIV(h / OSDCHAR_HEIGHT);
 }
 
-//#define BGTILE 311
-//#define BGTILE 1156
-#define BGTILE 1141	// BIGHOLE
-#define BGTILE_SIZEX 128
-#define BGTILE_SIZEY 128
-#define BORDTILE 3250	// VIEWBORDER
-#define BITSTH 1+32+8+16	// high translucency
-#define BITSTL 1+8+16	// low translucency
-#define BITS 8+16+64		// solid
-#define SHADE 0
-#define PALETTE 4
-
 void GAME_onshowosd(int shown)
 {
-    // fix for TCs like Layre which don't have the BGTILE for some reason
-    // most of this is copied from my dummytile stuff in defs.c
-    if (!tilesiz[BGTILE].x || !tilesiz[BGTILE].y)
-    {
-        int j;
-
-        tilesiz[BGTILE].x = BGTILE_SIZEX;
-        tilesiz[BGTILE].y = BGTILE_SIZEY;
-        faketile[BGTILE] = 1;
-        // OLDMP FIXME
-        //picanm[BGTILE] = 0;
-
-        j = 15; while ((j > 1) && (pow2long[j] > BGTILE_SIZEX)) j--;
-        picsiz[BGTILE] = ((char)j);
-        j = 15; while ((j > 1) && (pow2long[j] > BGTILE_SIZEY)) j--;
-        picsiz[BGTILE] += ((char)(j<<4));
-    }
-
     G_UpdateScreenArea();
-    if (numplayers == 1)
-        if ((shown && !ud.pause_on) || (!shown && ud.pause_on))
-            KB_KeyDown[sc_Pause] = 1;
+
+    mouseLockToWindow((!shown) + 2);
+
+    osdshown = shown;
+
+    // XXX: it's weird to fake a keypress like this.
+//    if (numplayers == 1 && ((shown && !ud.pause_on) || (!shown && ud.pause_on)))
+//        KB_KeyDown[sc_Pause] = 1;
 }
 
-void GAME_clearbackground(int c, int r)
+void GAME_clearbackground(int numcols, int numrows)
 {
-    int x, y, xsiz, ysiz, tx2, ty2;
-    int daydim, bits;
+    UNREFERENCED_PARAMETER(numcols);
 
-    UNREFERENCED_PARAMETER(c);
+#ifdef USE_OPENGL
+    if (videoGetRenderMode() >= REND_POLYMOST && in3dmode())
+    {
+        int const i8n8 = OSD_SCALE(OSDCHAR_HEIGHT * numrows);
 
-    if (videoGetRenderMode() < 3) bits = BITS;
-    else bits = BITSTL;
+        polymost_setFogEnabled(false);
+        polymost_useColorOnly(true);
 
-    daydim = r<<3;
+        polymostSet2dView();
+        glColor4f(0.f, 0.f, 0.f, 0.67f);
+        glEnable(GL_BLEND);
+        glDisable(GL_ALPHA_TEST);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glRecti(0, 0, xdim, i8n8 + OSDCHAR_HEIGHT);
+        glColor4f(0.f, 0.f, 0.f, 1.f);
+        glRecti(0, i8n8 + 4, xdim, i8n8 + OSDCHAR_HEIGHT);
 
-    xsiz = tilesiz[BGTILE].x;
-    tx2 = xdim/xsiz;
-    ysiz = tilesiz[BGTILE].y;
-//    ty2 = ydim/ysiz;
-    ty2 = daydim/ysiz;
+        polymost_useColorOnly(false);
 
-    for (x=tx2;x>=0;x--)
-        for (y=ty2;y>=0;y--)
-//        for (y=ty2+1;y>=1;y--)
-//            rotatesprite(x*xsiz<<16,((daydim-ydim)+(y*ysiz))<<16,65536L,0,BGTILE,SHADE,PALETTE,bits,0,0,xdim,daydim);
-            rotatesprite(x*xsiz<<16,y*ysiz<<16,65536L,0,BGTILE,SHADE,PALETTE,bits,0,0,xdim,daydim);
+        if (!nofog)
+            polymost_setFogEnabled(true);
 
-    xsiz = tilesiz[BORDTILE].y;
-    tx2 = xdim/xsiz;
-    ysiz = tilesiz[BORDTILE].x;
+        return;
+    }
+#endif
 
-    for (x=tx2;x>=0;x--)
-        rotatesprite(x*xsiz<<16,(daydim+ysiz+1)<<16,65536L,1536,BORDTILE,SHADE-12,PALETTE,BITS,0,0,xdim,daydim+ysiz+1);
+    CLEARLINES2D(0, min(ydim, OSD_SCALE(numrows * OSDCHAR_HEIGHT + OSDCHAR_HEIGHT)), editorcolors[16]);
 }
 
+#undef OSD_SCALE
