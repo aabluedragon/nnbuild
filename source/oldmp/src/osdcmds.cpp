@@ -908,6 +908,14 @@ static int osdcmd_cvar_set_game(osdcmdptr_t parm)
     {
         CONTROL_JoystickEnabled = (ud.config.UseJoystick && CONTROL_JoyPresent);
     }
+    else if (!Bstrcasecmp(parm->name, "snd_fxvolume"))
+    {
+        FX_SetVolume(ud.config.FXVolume);
+    }
+    else if (!Bstrcasecmp(parm->name, "mus_volume"))
+    {
+        S_MusicVolume(ud.config.MusicVolume);
+    }
     else if (!Bstrcasecmp(parm->name, "vid_gamma"))
     {
         ud.brightness = GAMMA_CALC;

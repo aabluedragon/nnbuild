@@ -11097,11 +11097,6 @@ CLEAN_DIRECTORY:
         ud.config.ScreenBPP = bpp[i];
     }
 
-    initprintf("Initializing music...\n");
-    S_MusicStartup();
-    initprintf("Initializing sound...\n");
-    S_SoundStartup();
-
     /*    if (VOLUMEONE)
         {
             if (numplayers > 4 || ud.multimode > 4)
@@ -11111,9 +11106,6 @@ CLEAN_DIRECTORY:
     videoSetPalette(ud.brightness >> 2, g_player[myconnectindex].ps->palette, 0);
 
     //    if(KB_KeyPressed( sc_Escape ) ) G_GameExit(" ");
-
-    FX_StopAllSounds();
-    S_ClearSoundLocks();
 
     {
         char* ptr = Bstrdup(setupfilename);
@@ -11127,6 +11119,14 @@ CLEAN_DIRECTORY:
     CONFIG_SetDefaultKeys(keydefaults, true);
 
     system_getcvars();
+
+    initprintf("Initializing music...\n");
+    S_MusicStartup();
+    initprintf("Initializing sound...\n");
+    S_SoundStartup();
+
+    FX_StopAllSounds();
+    S_ClearSoundLocks();
 
     if (ud.warp_on > 1 && ud.multimode < 2)
     {
