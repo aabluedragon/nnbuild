@@ -218,7 +218,6 @@ void CONFIG_SetDefaults(void)
     ud.config.NumVoices = 96;
     //ud.config.ReverseStereo = 0;
     ud.auto_run = 1;
-    ud.config.ShowOpponentWeapons = 0;
     //ud.config.SmoothInput = 0;
     ud.config.SoundToggle = 1;
     //ud.config.CheckForUpdates = 0;
@@ -247,6 +246,7 @@ void CONFIG_SetDefaults(void)
     ud.runkey_mode = 0;
     ud.screen_size = 4;
     ud.screen_tilting = 1;
+    ud.showweapons = 1;
     ud.shadows = 1;
     ud.statusbarmode = 0;
     ud.statusbarscale = 100;
@@ -687,53 +687,19 @@ int32_t CONFIG_ReadSetup(void)
         }
 #endif
 
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Color",&ud.m_color);
-
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "DeathMessages",&ud.obituaries);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "DemoCams",&ud.democams);
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Executions",&ud.executions);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "MPMessageDisplayTime",&ud.msgdisptime);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowFPS",&ud.tickrate);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowOpponentWeapons",&ud.config.ShowOpponentWeapons); ud.showweapons = ud.config.ShowOpponentWeapons;
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ShowViewWeapon",&ud.drawweapon);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "StatusBarMode",&ud.statusbarmode);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "StatusBarScale",&ud.statusbarscale);
 
-        {
-            SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Team",&dummy);
-            ud.team = 0;
-            if (dummy < 4 && dummy > -1) ud.team = dummy;
-            g_player[0].pteam = ud.team;
-        }
-
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "TextScale",&ud.textscale);
         dummy = ud.config.useprecache;
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "UsePrecache",&dummy);
         ud.config.useprecache = dummy != 0;
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "ViewBobbing",&ud.viewbob);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "WeaponScale",&ud.weaponscale);
-        SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "WeaponSway",&ud.weaponsway);
+
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "PredictionDebug", &ud.config.PredictionDebug);
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "FXDevice",&ud.config.FXDevice);
         //SCRIPT_GetNumber(ud.config.scripthandle, "Sound Setup", "ReverseStereo",&ud.config.ReverseStereo);
 
-        SCRIPT_GetNumber(ud.config.scripthandle, "Controls","RunKeyBehaviour",&ud.runkey_mode);   // JBF 20031125
-
-        /*
-        {
-            SCRIPT_GetNumber(ud.config.scripthandle, "Controls","SmoothInput",&ud.config.SmoothInput);
-            control_smoothmouse = ud.config.SmoothInput;
-        }
-        */
-
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","UseJoystick",&ud.config.UseJoystick);
         SCRIPT_GetNumber(ud.config.scripthandle, "Controls","UseMouse",&ud.config.UseMouse);
-
-        {
-            SCRIPT_GetNumber(ud.config.scripthandle, "Controls","WeaponSwitchMode",&ud.weaponswitch);
-            g_player[0].ps->weaponswitch = ud.weaponswitch;
-        }
 
 #ifdef _WIN32
         //SCRIPT_GetNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", &ud.config.CheckForUpdates);
@@ -856,31 +822,11 @@ void CONFIG_WriteSetup(uint32_t flags)
         return;
     }
 
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","RunKeyBehaviour",ud.runkey_mode,false,false);
-    //SCRIPT_PutNumber(ud.config.scripthandle, "Controls","SmoothInput",ud.config.SmoothInput,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","UseJoystick",ud.config.UseJoystick,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Controls","UseMouse",ud.config.UseMouse,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Controls","WeaponSwitchMode",ud.weaponswitch,false,false);
-
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Color",ud.m_color,false,false);
-
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "DeathMessages",ud.obituaries,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "DemoCams",ud.democams,false,false);
     
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "MPMessageDisplayTime",ud.msgdisptime,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "PredictionDebug", ud.config.PredictionDebug, false, false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowFPS",ud.tickrate,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowOpponentWeapons",ud.config.ShowOpponentWeapons,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ShowViewWeapon",ud.drawweapon,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "StatusBarMode",ud.statusbarmode,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "StatusBarScale",ud.statusbarscale,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Team",ud.team,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "TextScale",ud.textscale,false,false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "UsePrecache",ud.config.useprecache,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "ViewBobbing",ud.viewbob,false,false);
-
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "WeaponScale",ud.weaponscale,false,false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "WeaponSway",ud.weaponsway,false,false);
 
     {
         Bsprintf(tempbuf,"%.2f",r_ambientlight);

@@ -367,7 +367,6 @@ typedef struct {
     int UseJoystick;
     int UseMouse;
     int AutoAim;
-    int ShowOpponentWeapons;
     int MouseBias;
     //int SmoothInput;
 

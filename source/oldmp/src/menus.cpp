@@ -2835,8 +2835,7 @@ cheat_for_port_credits:
                     case 8:
                         if (x==io) ud.showweapons = 1-ud.showweapons;
                         modval(0,1,(int *)&ud.showweapons,1,probey==io);
-                        ud.config.ShowOpponentWeapons = ud.showweapons;
-                        mgametextpal(d,yy, ud.config.ShowOpponentWeapons ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
+                        mgametextpal(d,yy, ud.showweapons ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
                         break;
                     case 9:
                         if (x==io) ud.obituaries = 1-ud.obituaries;

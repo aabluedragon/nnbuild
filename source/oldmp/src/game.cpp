@@ -8076,7 +8076,6 @@ static void G_HandleLocalKeys(void)
     {
         CONTROL_ClearButton(gamefunc_Show_Opponents_Weapon);
         ud.showweapons = 1-ud.showweapons;
-        ud.config.ShowOpponentWeapons = ud.showweapons;
         P_DoQuote(82-ud.showweapons,g_player[screenpeek].ps);
     }
 
@@ -11189,7 +11188,6 @@ MAIN_LOOP_RESTART:
         goto MAIN_LOOP_RESTART;
     }
 
-    ud.showweapons = ud.config.ShowOpponentWeapons;
     g_player[myconnectindex].ps->aim_mode = ud.mouseaiming;
     g_player[myconnectindex].ps->auto_aim = ud.config.AutoAim;
     g_player[myconnectindex].ps->weaponswitch = ud.weaponswitch;

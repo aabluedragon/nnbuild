@@ -551,33 +551,6 @@ static int osdcmd_vidmode(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
-static int osdcmd_setstatusbarscale(const osdfuncparm_t *parm)
-{
-    if (parm->numparms == 0)
-    {
-        OSD_Printf("\"hud_scale\" is \"%d\"\n", ud.statusbarscale);
-        return OSDCMD_SHOWHELP;
-    }
-    else if (parm->numparms != 1) return OSDCMD_SHOWHELP;
-
-    G_SetStatusBarScale(Batol(parm->parms[0]));
-    OSD_Printf("hud_scale %d\n", ud.statusbarscale);
-    return OSDCMD_OK;
-}
-
-static int osdcmd_setweaponscale(const osdfuncparm_t *parm)
-{
-    if (parm->numparms == 0)
-    {
-        OSD_Printf("\"hud_weaponscale\" is \"%d\"\n", ud.weaponscale);
-        return OSDCMD_SHOWHELP;
-    }
-    else if (parm->numparms != 1) return OSDCMD_SHOWHELP;
-    ud.weaponscale = min(100,max(10,Batoi(parm->parms[0])));
-    OSD_Printf("hud_weaponscale %d\n", ud.weaponscale);
-    return OSDCMD_OK;
-}
-
 static int osdcmd_spawn(const osdfuncparm_t *parm)
 {
     int x=0,y=0,z=0;
@@ -798,12 +771,16 @@ osdcvardata_t cvar[] =
     { "hud_shadows", "hud_shadows: enable/disable althud shadows", (void*)&althud_shadows, CVAR_BOOL, 0, 1 },
     { "hud_flashing", "hud_flashing: enable/disable althud flashing", (void*)&althud_flashing, CVAR_BOOL, 0, 1 },
     { "hud_glowingquotes", "hud_glowingquotes: enable/disable \"glowing\" quote text", (void*)&hud_glowingquotes, CVAR_BOOL, 0, 1 },
+    { "hud_scale","changes the hud scale", (void*)&ud.statusbarscale, CVAR_INT | CVAR_FUNCPTR, 50, 100 },
     { "hud_showmapname", "hud_showmapname: enable/disable map name display on load", (void*)&hud_showmapname, CVAR_BOOL, 0, 1 },
     { "hud_stats", "hud_stats: enable/disable level statistics display", (void*)&ud.levelstats, CVAR_BOOL, 0, 1 },
+    { "hud_statusbarmode", "status bar draws over player view" CVAR_BOOL_OPTSTR, (void*)&ud.statusbarmode, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },
     { "hud_textscale", "hud_textscale: sets multiplayer chat message size", (void*)&ud.textscale, CVAR_INT, 100, 400 },
+    { "hud_weaponscale","weapon scale", (void*)&ud.weaponscale, CVAR_INT, 10, 100 },
 
     { "cl_autoaim", "cl_autoaim: enable/disable weapon autoaim", (void*)&ud.config.AutoAim, CVAR_INT|CVAR_MULTI, 0, 2 },
     { "cl_autorun", "player autorun" CVAR_BOOL_OPTSTR, (void*)&ud.auto_run, CVAR_BOOL, 0, 1 },
+    { "cl_runmode", "run key behavior with cl_autorun enabled:\n 0: walk\n 1: do nothing", (void*)&ud.runkey_mode, CVAR_BOOL, 0, 1 },
 
     { "cl_automsg", "cl_automsg: enable/disable automatically sending messages to all players", (void*)&ud.automsg, CVAR_BOOL, 0, 1 },
     { "cl_autovote", "cl_autovote: enable/disable automatic voting", (void*)&ud.autovote, CVAR_INT|CVAR_MULTI, 0, 2 },
@@ -814,6 +791,7 @@ osdcvardata_t cvar[] =
     { "cl_idplayers", "cl_idplayers: enable/disable name display when aiming at opponents", (void*)&ud.idplayers, CVAR_BOOL, 0, 1 },
 
     { "cl_showcoords", "cl_showcoords: show your position in the game world", (void*)&ud.coords, CVAR_BOOL, 0, 1 },
+    { "cl_showweapons", "cl_showweapons: show weapons opponents are using", (void*)&ud.showweapons, CVAR_BOOL, 0, 1 },
 
     { "cl_viewbob", "cl_viewbob: enable/disable player head bobbing", (void*)&ud.viewbob, CVAR_BOOL, 0, 1 },
 
@@ -822,6 +800,10 @@ osdcvardata_t cvar[] =
     { "cl_angleinterpolation", "cl_angleinterpolation: enable/disable angle interpolation", (void*)&ud.angleinterpolation, CVAR_INT, 0, 256 },
 
     { "crosshairscale","crosshair size", (void*)&ud.crosshairscale, CVAR_INT, 10, 100 },
+
+    // Player Colors
+    { "team", "team: player's team number", (void*)&ud.team, CVAR_INT | CVAR_MULTI, 0, 3 },
+    { "color", "player palette", (void*)&ud.m_color, CVAR_INT | CVAR_MULTI, 0, MAXPALOOKUPS - 1 },
 
     // Mouse
     { "sensitivity","changes the mouse sensitivity", (void*)&CONTROL_MouseSensitivity, CVAR_FLOAT | CVAR_FUNCPTR, 0, 25 },
@@ -908,6 +890,13 @@ static int osdcmd_cvar_set_game(osdcmdptr_t parm)
     {
         CONTROL_JoystickEnabled = (ud.config.UseJoystick && CONTROL_JoyPresent);
     }
+    else if (!Bstrcasecmp(parm->name, "in_aimmode")
+        || !Bstrcasecmp(parm->name, "cl_weaponswitch")
+        || !Bstrcasecmp(parm->name, "cl_autoaim")
+        || !Bstrcasecmp(parm->name, "team"))
+    {
+        G_UpdatePlayerFromMenu();
+    }
     else if (!Bstrcasecmp(parm->name, "snd_fxvolume"))
     {
         FX_SetVolume(ud.config.FXVolume);
@@ -939,13 +928,11 @@ static int osdcmd_cvar_set_game(osdcmdptr_t parm)
 
         ud.player_skill = ud.m_player_skill;
     }
-#if 0
     else if (!Bstrcasecmp(parm->name, "color"))
     {
-        ud.color = G_CheckPlayerColor(ud.color);
-        g_player[0].ps->palookup = g_player[0].pcolor = ud.color;
+        ud.color = playerColor_getValidPal(ud.m_color);
+        G_UpdatePlayerFromMenu();
     }
-#endif
     else if (!Bstrcasecmp(parm->name, "osdscale"))
     {
         osdrscale = 1.f / osdscale;
@@ -1584,8 +1571,6 @@ int registerosdcommands(void)
 
     OSD_RegisterFunction("bind","bind <key> <string>: associates a keypress with a string of console input. Type \"bind showkeys\" for a list of keys and \"listsymbols\" for a list of valid console commands.", osdcmd_bind);
 
-    OSD_RegisterFunction("hud_scale","hud_scale: changes the hud scale", osdcmd_setstatusbarscale);
-    OSD_RegisterFunction("hud_weaponscale","hud_weaponscale: changes the weapon scale", osdcmd_setweaponscale);
     OSD_RegisterFunction("crosshaircolor","crosshaircolor: changes crosshair color", osdcmd_crosshaircolor);
     OSD_RegisterFunction("cmenu","cmenu <#>: jumps to menu", osdcmd_cmenu);
 
