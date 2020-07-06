@@ -2311,10 +2311,10 @@ cheat_for_port_credits:
                     }
                     case 3:
                     {
+                        int i = r_usetileshades;
+
                         if (x == io)
                             r_usetileshades = 1 - r_usetileshades;
-
-                        int i = r_usetileshades;
 
                         modval(0, 1, (int*)&r_usetileshades, 1, probey == io);
                         mgametextpal(d, yy, r_usetileshades ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
@@ -2322,6 +2322,11 @@ cheat_for_port_credits:
                         if (r_usetileshades != i)
                         {
                             r_useindexedcolortextures = r_usetileshades;
+                            if (r_usetileshades)
+                            {
+                                gltexfiltermode = 0; // Force Nearest
+                                gltexapplyprops();
+                            }
                         }
                         break;
                     }
@@ -3202,25 +3207,13 @@ cheat_for_port_credits:
                     break;
                 }
 #if defined(USE_OPENGL)
-                /*            switch (gltexfiltermode)
-                            {
-                            case 0:
-                                gltexfiltermode = 3;
-                                break;
-                            case 3:
-                                gltexfiltermode = 5;
-                                break;
-                            case 5:
-                                gltexfiltermode = 0;
-                                break;
-                            default:
-                                gltexfiltermode = 3;
-                                break;
-                            }*/
-                gltexfiltermode++;
-                if (gltexfiltermode > 5)
-                    gltexfiltermode = 0;
-                gltexapplyprops();
+                if (!r_usetileshades)
+                {
+                    gltexfiltermode++;
+                    if (gltexfiltermode > 5)
+                        gltexfiltermode = 0;
+                    gltexapplyprops();
+                }
                 break;
             case 6:
                 if (!videoGetRenderMode()) break;
@@ -3277,7 +3270,9 @@ cheat_for_port_credits:
             else
             {
                 int filter = gltexfiltermode;
-                menutext(c,50+62+16+16,MENUHIGHLIGHT(5),0,"TEXTURE FILTER");
+                int enabled = (!r_usetileshades);
+                menutext(c,50+62+16+16, enabled ? MENUHIGHLIGHT(5) : DISABLEDMENUSHADE, enabled ? 0 : 1,"TEXTURE FILTER");
+                
                 switch (gltexfiltermode)
                 {
                 case 0:
@@ -3302,10 +3297,16 @@ cheat_for_port_credits:
                     strcpy(tempbuf,"OTHER");
                     break;
                 }
-                modval(0,5,(int *)&gltexfiltermode,1,probey==5);
-                if (gltexfiltermode != filter)
-                    gltexapplyprops();
-                mgametextpal(c+168,50+62+16+16-8,tempbuf,MENUHIGHLIGHT(5),!videoGetRenderMode());
+
+                if (enabled)
+                {
+                    modval(0, 5, (int*)&gltexfiltermode, 1, probey == 5);
+                    if (gltexfiltermode != filter)
+                        gltexapplyprops();
+                }
+
+                mgametextpal(c+168,50+62+16+16-8,tempbuf, enabled ? MENUHIGHLIGHT(5) : DISABLEDMENUSHADE,!videoGetRenderMode());
+
                 menutext(c,50+62+16+16+16,MENUHIGHLIGHT(6),bpp==8,"RENDERER SETUP");
             }
     #endif
