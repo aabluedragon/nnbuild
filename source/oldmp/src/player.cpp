@@ -2979,6 +2979,7 @@ void P_DisplayWeapon(int snum)
 #define MAXSVEL      ((NORMALKEYMOVE*2)+10)
 #define MAXANGVEL    1024
 #define MAXHORIZ     127
+#define DIGITALAXISDEADZONE 1024
 
 int g_myAimMode = 0, g_myAimStat = 0, g_oldAimStat = 0;
 int32_t mouseyaxismode = -1;
@@ -3037,22 +3038,22 @@ void getinput(int snum)
     }
 
     // [JM] Brutal shitfuck hack to replace missing MACT functionality.
-    if ((info[0].mousex < -4096) && ud.config.MouseDigitalFunctions[0][0] >= 0) // Left
+    if ((info[0].mousex < -DIGITALAXISDEADZONE) && ud.config.MouseDigitalFunctions[0][0] >= 0) // Left
     {
         CONTROL_ButtonState |= ((uint64_t)1 << ((uint64_t)(ud.config.MouseDigitalFunctions[0][0])));
     }
 
-    if ((info[0].mousex > 4096) && ud.config.MouseDigitalFunctions[0][1] >= 0) // Right
+    if ((info[0].mousex > DIGITALAXISDEADZONE) && ud.config.MouseDigitalFunctions[0][1] >= 0) // Right
     {
         CONTROL_ButtonState |= ((uint64_t)1 << ((uint64_t)(ud.config.MouseDigitalFunctions[0][1])));
     }
 
-    if ((info[0].mousey < -4096) && ud.config.MouseDigitalFunctions[1][0] >= 0) // Up
+    if ((info[0].mousey < -DIGITALAXISDEADZONE) && ud.config.MouseDigitalFunctions[1][0] >= 0) // Up
     {
         CONTROL_ButtonState |= ((uint64_t)1 << ((uint64_t)(ud.config.MouseDigitalFunctions[1][0])));
     }
 
-    if ((info[0].mousey > 4096) && ud.config.MouseDigitalFunctions[1][1] >= 0) // Down
+    if ((info[0].mousey > DIGITALAXISDEADZONE) && ud.config.MouseDigitalFunctions[1][1] >= 0) // Down
     {
         CONTROL_ButtonState |= ((uint64_t)1 << ((uint64_t)(ud.config.MouseDigitalFunctions[1][1])));
     }
