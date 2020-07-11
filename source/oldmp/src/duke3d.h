@@ -435,7 +435,7 @@ typedef struct {
 
     int runkey_mode,statusbarscale,mouseaiming,weaponswitch,drawweapon;   // JBF 20031125
     int democams,color,m_color,msgdisptime,statusbarmode;
-    int m_noexits,noexits,autovote,automsg,idplayers;
+    int m_noexits,noexits,autovote,automsg,idplayers, showweapons;
     int team, viewbob, weaponsway, althud, weaponscale, textscale;
 
     int entered_name,screen_tilting,shadows,fta_on,executions,auto_run;
@@ -463,7 +463,7 @@ typedef struct {
     short camerasprite,last_camsprite;
     short last_level,secretlevel;
 
-    char overhead_on,last_overhead,showweapons;
+    char overhead_on,last_overhead;
     char god,warp_on,cashman,eog,showallmap;
     char show_help,scrollmode,clipping;
     char ridecule[10][40];
