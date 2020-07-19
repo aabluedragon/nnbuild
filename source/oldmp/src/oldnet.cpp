@@ -809,6 +809,7 @@ void Net_ParsePackets(void)
                 ud.m_ffire = packbuf[10];
                 ud.m_noexits = packbuf[11];
                 ud.m_weaponstay = packbuf[12];
+                ud.warp_on = packbuf[13];
                 break;
 
             case PACKET_TYPE_VERSION:
@@ -1243,10 +1244,11 @@ void Net_SendInitialSettings(void)
     packbuf[10] = ud.m_ffire;
     packbuf[11] = ud.m_noexits;
     packbuf[12] = ud.m_weaponstay;
+    packbuf[13] = ud.warp_on;
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 13);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 14);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }
