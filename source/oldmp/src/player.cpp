@@ -4232,16 +4232,8 @@ static void P_HandleFragged(int snum)
             teams[frag_p->team].frags++;
         }
 
-        if (snum == screenpeek)
-        {
-            Bsprintf(ScriptQuotes[115], "KILLED BY %s", &g_player[p->frag_ps].user_name[0]);
-            P_DoQuote(115, p);
-        }
-        else
-        {
-            Bsprintf(ScriptQuotes[116], "KILLED %s", &g_player[snum].user_name[0]);
-            P_DoQuote(116, frag_p);
-        }
+        G_AddKillToFeed(snum, p->frag_ps);
+
 
         if (ud.obituaries)
         {

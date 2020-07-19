@@ -184,6 +184,7 @@ extern void G_DrawTileSmall(int x,int y,int tilenum,int shade,int orientation);
 extern void G_DrawTilePalSmall(int x,int y,int tilenum,int shade,int orientation,int p);
 extern void Gv_ResetVars(void);
 extern void A_ResetVars(int iActor);
+extern void G_AddKillToFeed(int victim, int attacker);
 
 extern int minitext_(int x,int y,const char *t,int s,int p,int sb);
 

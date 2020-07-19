@@ -3135,13 +3135,19 @@ int GetDistance2D(int x1, int y1, int x2, int y2)
     }
 }
 
+// Player IDs
 #define ID_ALPHA 64                     // Starting Alpha
 #define ID_ALPHA_RANGE (255-ID_ALPHA)   // Alpha Remainder
-#define ID_YPOS 150                     // Y position for id text
+#define ID_YPOS 145                     // Y position for id text
 #define ID_TIME (TICRATE*2)             // Time for id text
 #define ID_FADETIME (TICRATE*1)         // Remaining time to start fading id text
+#define KILLID_TIME (TICRATE*3)
+#define KILLID_FADETIME (TICRATE*2)
+
 void G_DisplayPlayerId(void)
 {
+    int idalpha;
+
     if (ud.idplayers && (ud.multimode > 1))
     {
         // TODO: (Optimization) Consider moving this segment to a point in the code that operates at 120hz.
@@ -3176,10 +3182,10 @@ void G_DisplayPlayerId(void)
         }
         // End segment
 
-        if ((ud.playerid_time - totalclock) > 0 && (ud.playerid_time - totalclock) <=  ID_TIME)
+        if ((ud.playerid_time - (int32_t)totalclock) > 0 && (ud.playerid_time - (int32_t)totalclock) <= ID_TIME)
         {
-            int idalpha = ID_ALPHA;
-            if ((ud.playerid_time - totalclock) <= ID_FADETIME)
+            idalpha = ID_ALPHA;
+            if ((ud.playerid_time - (int32_t)totalclock) <= ID_FADETIME)
             {
                 idalpha += ID_ALPHA_RANGE - scale(ud.playerid_time - (int32_t)totalclock, ID_ALPHA_RANGE, ID_FADETIME);
             }
@@ -3199,6 +3205,42 @@ void G_DisplayPlayerId(void)
             }
         }
     }
+
+    if (ud.multimode > 1)
+    {
+        if ((g_player[screenpeek].fragged_time - (int32_t)totalclock) > 0 && (g_player[screenpeek].fragged_time - (int32_t)totalclock) <= KILLID_TIME)
+        {
+            idalpha = ID_ALPHA;
+            if ((g_player[screenpeek].fragged_time - (int32_t)totalclock) <= KILLID_FADETIME)
+            {
+                idalpha += ID_ALPHA_RANGE - scale(g_player[screenpeek].fragged_time - (int32_t)totalclock, ID_ALPHA_RANGE, KILLID_FADETIME);
+            }
+
+            // HACK: Modulo palookup to keep under 3 digits. ScreenText really needs 3 digit support for ^ color codes.
+            Bsprintf(tempbuf, "KILLED ^%02d%s", g_player[g_player[screenpeek].fragged_id].ps->palookup % 100, g_player[g_player[screenpeek].fragged_id].user_name);
+            G_ScreenText(STARTALPHANUM, 160, ID_YPOS - 9, 65536, 0, 0, tempbuf, -127, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, idalpha, 4, 8, 0, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
+        }
+
+        if ((g_player[screenpeek].fraggedby_time - (int32_t)totalclock) > 0 && (g_player[screenpeek].fraggedby_time - (int32_t)totalclock) <= KILLID_TIME)
+        {
+            idalpha = ID_ALPHA;
+            if ((g_player[screenpeek].fraggedby_time - (int32_t)totalclock) <= KILLID_FADETIME)
+            {
+                idalpha += ID_ALPHA_RANGE - scale(g_player[screenpeek].fraggedby_time - (int32_t)totalclock, ID_ALPHA_RANGE, KILLID_FADETIME);
+            }
+
+            // HACK: Modulo palookup to keep under 3 digits. ScreenText really needs 3 digit support for ^ color codes.
+            Bsprintf(tempbuf, "KILLED BY ^%02d%s", g_player[g_player[screenpeek].fraggedby_id].ps->palookup % 100, g_player[g_player[screenpeek].fraggedby_id].user_name);
+            G_ScreenText(STARTALPHANUM, 160, ID_YPOS - 18, 65536, 0, 0, tempbuf, -127, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, idalpha, 4, 8, 0, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
+        }
+    }
+}
+
+void G_AddKillToFeed(int victim, int attacker)
+{
+    g_player[victim].fraggedby_id = attacker;
+    g_player[victim].fraggedby_time = g_player[attacker].fragged_time = (int32_t)totalclock + KILLID_TIME;
+    g_player[attacker].fragged_id = victim;
 }
 
 void G_DisplayRest(int smoothratio)

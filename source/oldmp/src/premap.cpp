@@ -766,6 +766,7 @@ static void resetpremapglobals(void)
     ud.pause_on = 0;
     ud.camerasprite = -1;
     ud.eog = 0;
+    ud.playerid_time = 0;
 
     g_numAnimWalls = 0;
     g_numCyclers = 0;
@@ -817,6 +818,9 @@ static void resetprestat(int snum,int g)
 
     p->timebeforeexit   = 0;
     p->customexitsound  = 0;
+
+    g_player[snum].fraggedby_id = g_player[snum].fragged_id = 0;
+    g_player[snum].fraggedby_time = g_player[snum].fragged_time = 0;
 }
 
 static void prelevel(char g)
