@@ -5814,7 +5814,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
 
                 ms(i);
-                setspritez_old(i,s->x,s->y,s->z);
+                //setspritez_old(i,s->x,s->y,s->z); // BREAKS
 
                 if ((sc->floorz-sc->ceilingz) < (108<<8))
                 {
@@ -5986,7 +5986,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
 
                 ms(i);
-                setspritez_old(i,s->x,s->y,s->z);
+                //setspritez_old(i,s->x,s->y,s->z); // BREAKS
 
                 if ((sc->floorz-sc->ceilingz) < (108<<8))
                 {
