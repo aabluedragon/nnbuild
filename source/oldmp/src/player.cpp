@@ -4953,9 +4953,10 @@ void P_ProcessInput(int snum)
                 if (p->on_ground == 1)
                 {
                     if (p->dummyplayersprite == -1 && (yax_getbunch(p->cursectnum, YAX_FLOOR) == -1))
-                        p->dummyplayersprite =
-                        A_Spawn(playerSprite, PLAYERONWATER);
-                    sprite[p->dummyplayersprite].pal = sprite[playerSprite].pal;
+                    {
+                        p->dummyplayersprite = A_Spawn(playerSprite, PLAYERONWATER);
+                        sprite[p->dummyplayersprite].pal = sprite[playerSprite].pal;
+                    }
 
                     p->footprintcount = 6;
                     if (sector[p->cursectnum].floorpicnum == FLOORSLIME)
