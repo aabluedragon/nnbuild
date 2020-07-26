@@ -1476,12 +1476,12 @@ static void C_GetNextLabelName(void)
 
 static int C_GetKeyword(void)
 {
-    int i;
-    char *temptextptr;
-
     C_SkipComments();
 
-    temptextptr = textptr;
+    char* temptextptr = textptr;
+
+    if (*temptextptr == 0) // EOF
+        return -2;
 
     while (isaltok(*temptextptr) == 0)
     {
@@ -1490,18 +1490,21 @@ static int C_GetKeyword(void)
             return 0;
     }
 
-    i = 0;
+    int i = 0;
+
     while (isaltok(*temptextptr))
         tempbuf[i++] = *(temptextptr++);
     tempbuf[i] = 0;
+
     return hash_find(&keywH,tempbuf);
 }
 
 static int C_GetNextKeyword(void) //Returns its code #
 {
-    int i, l;
-
     C_SkipComments();
+
+    if (*textptr == 0) // EOF
+        return -2;
 
     while (isaltok(*textptr) == 0)
     {
@@ -1511,7 +1514,7 @@ static int C_GetNextKeyword(void) //Returns its code #
         textptr++;
     }
 
-    l = 0;
+    int l = 0;
     while (isaltok(*(textptr+l)) && !(*(textptr + l) == '.'))
     {
         tempbuf[l] = textptr[l];
@@ -1524,7 +1527,7 @@ static int C_GetNextKeyword(void) //Returns its code #
     }
     tempbuf[l] = 0;
 
-    i = hash_find(&keywH,tempbuf);
+    int i = hash_find(&keywH,tempbuf);
     if (i>=0)
     {
         *g_scriptPtr = i + (g_lineNumber<<12);
@@ -5806,9 +5809,10 @@ void C_Compile(const char *filenam)
     kread(fp,(char *)textptr,fs);
     kclose(fp);
 
-    clearbuf(actorscrptr,MAXTILES,0L);  // JBF 20040531: MAXSPRITES? I think Todd meant MAXTILES...
-    clearbuf(actorLoadEventScrptr,MAXTILES,0L); // I think this should be here...
-    clearbufbyte(ActorType,MAXTILES,0L);
+    Bmemset(actorscrptr, 0, sizeof(actorscrptr));
+    Bmemset(actorLoadEventScrptr, 0, sizeof(actorLoadEventScrptr));
+    Bmemset(ActorType, 0, sizeof(ActorType));
+
 //    clearbufbyte(script,sizeof(script),0l); // JBF 20040531: yes? no?
     if (script != NULL)
         Bfree(script);
