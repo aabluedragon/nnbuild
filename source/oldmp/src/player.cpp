@@ -4304,7 +4304,7 @@ static void P_HandleFragged(int snum)
             }
 
             p->fraggedself++;
-            if (A_CheckEnemyTile(sprite[p->wackedbyactor].picnum))
+            if ((unsigned)p->wackedbyactor < MAXSPRITES && A_CheckEnemyTile(sprite[p->wackedbyactor].picnum))
                 Bsprintf(tempbuf, ScriptQuotes[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)], "A monster", &g_player[snum].user_name[0]);
             else if (ActorExtra[playerSprite].picnum == NUKEBUTTON)
                 Bsprintf(tempbuf, "^02%s^02 tried to leave", &g_player[snum].user_name[0]);
