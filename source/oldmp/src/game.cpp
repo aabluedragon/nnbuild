@@ -10147,9 +10147,10 @@ static void G_CompileScripts(void)
         label = newlabel;
         labelcode = newlabelcode;
     }
-    clearbufbyte(&sprite[0], sizeof(spritetype) * MAXSPRITES, 0);
-    clearbufbyte(&sector[0], sizeof(sectortype) * MAXSECTORS, 0);
-    clearbufbyte(&wall[0], sizeof(walltype) * MAXWALLS, 0);
+
+    Bmemset(sprite, 0, MAXSPRITES * sizeof(spritetype));
+    Bmemset(sector, 0, MAXSECTORS * sizeof(sectortype));
+    Bmemset(wall, 0, MAXWALLS * sizeof(walltype));
 
     X_OnEvent(EVENT_INIT, -1, -1, -1);
     pathsearchmode = psm;
