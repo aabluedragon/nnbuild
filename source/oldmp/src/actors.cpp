@@ -780,7 +780,7 @@ static void ms(int i)
 
     for (;x<endwall;x++)
     {
-        rotatepoint(zerovec,g_origins[originIdx],rotateAngle&2047,&result);
+        rotatevec(g_origins[originIdx],rotateAngle&2047,&result);
         dragpoint(x,s->x+result.x,s->y+result.y, 0);
 
         originIdx++;
