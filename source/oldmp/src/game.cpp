@@ -6537,6 +6537,19 @@ static int32_t G_MaybeTakeOnFloorPal(tspriteptr_t datspr, int32_t sect)
     return 0;
 }
 
+static inline void G_DoEventAnimSprites(int tspriteNum)
+{
+    int const tsprOwner = tsprite[tspriteNum].owner;
+
+    if ((((unsigned)tsprOwner >= MAXSPRITES || (spriteext[tsprOwner].flags & SPREXT_TSPRACCESS) != SPREXT_TSPRACCESS))
+        && tsprite[tspriteNum].statnum != TSPR_TEMP)
+        return;
+
+    spriteext[tsprOwner].tspr = &tsprite[tspriteNum];
+    X_OnEvent(EVENT_ANIMATESPRITES, tsprOwner, screenpeek, -1);
+    spriteext[tsprOwner].tspr = NULL;
+}
+
 #ifdef _MSC_VER
 // Visual C thought this was a bit too hard to optimise so we'd better
 // tell it not to try... such a pussy it is.
@@ -7399,25 +7412,10 @@ PALONLY:
             t->xrepeat = t->yrepeat = 0;
     }
 
-    j = spritesortcnt-1;
-    do
+    if (apScriptGameEvent[EVENT_ANIMATESPRITES])
     {
-        //if (display_mirror) tsprite[j].statnum = TSPR_MIRROR;
-        if (tsprite[j].owner < MAXSPRITES && tsprite[j].owner > 0 && spriteext[tsprite[j].owner].flags & SPREXT_TSPRACCESS)
-        {
-            spriteext[tsprite[j].owner].tspr = &tsprite[j];
-            X_OnEvent(EVENT_ANIMATESPRITES,tsprite[j].owner, myconnectindex, -1);
-        }
-    }
-    while (j--);
-
-    if (j < 0) return;
-
-    //if (display_mirror) tsprite[j].statnum = TSPR_MIRROR;
-    if (tsprite[j].owner > 0 && tsprite[j].owner < MAXSPRITES && spriteext[tsprite[j].owner].flags & SPREXT_TSPRACCESS)
-    {
-        spriteext[tsprite[j].owner].tspr = &tsprite[j];
-        X_OnEvent(EVENT_ANIMATESPRITES,tsprite[j].owner, myconnectindex, -1);
+        for (j = spritesortcnt - 1; j >= 0; j--)
+            G_DoEventAnimSprites(j);
     }
 }
 #ifdef _MSC_VER
