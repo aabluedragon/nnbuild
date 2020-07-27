@@ -4101,6 +4101,8 @@ void G_DrawRooms(int snum,int smoothratio)
         pub = 0;
     }
 
+    X_OnEvent(EVENT_DISPLAYSTART, p->i, snum, -1);
+
     if (ud.overhead_on == 2 || ud.show_help || (p->cursectnum == -1 && videoGetRenderMode() < 3))
         return;
 
