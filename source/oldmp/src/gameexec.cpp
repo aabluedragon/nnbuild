@@ -552,14 +552,14 @@ static void X_Move(void)
             {
                 if (g_sp->picnum == COMMANDER)
                 {
-                    ActorExtra[g_i].floorz = l = getflorzofslope(g_sp->sectnum,g_sp->x,g_sp->y);
+                    ActorExtra[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->pos.vec2);
                     if (g_sp->z > (l-(8<<8)))
                     {
                         if (g_sp->z > (l-(8<<8))) g_sp->z = l-(8<<8);
                         g_sp->zvel = 0;
                     }
 
-                    ActorExtra[g_i].ceilingz = l = getceilzofslope(g_sp->sectnum,g_sp->x,g_sp->y);
+                    ActorExtra[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
                     if ((g_sp->z-l) < (80<<8))
                     {
                         g_sp->z = l+(80<<8);
@@ -570,13 +570,13 @@ static void X_Move(void)
                 {
                     if (g_sp->zvel > 0)
                     {
-                        ActorExtra[g_i].floorz = l = getflorzofslope(g_sp->sectnum,g_sp->x,g_sp->y);
+                        ActorExtra[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->pos.vec2);
                         if (g_sp->z > (l-(30<<8)))
                             g_sp->z = l-(30<<8);
                     }
                     else
                     {
-                        ActorExtra[g_i].ceilingz = l = getceilzofslope(g_sp->sectnum,g_sp->x,g_sp->y);
+                        ActorExtra[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
                         if ((g_sp->z-l) < (50<<8))
                         {
                             g_sp->z = l+(50<<8);
@@ -591,7 +591,7 @@ static void X_Move(void)
                     g_sp->z = ActorExtra[g_i].floorz;
                 if (g_sp->zvel < 0)
                 {
-                    l = getceilzofslope(g_sp->sectnum,g_sp->x,g_sp->y);
+                    l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
                     if ((g_sp->z-l) < (66<<8))
                     {
                         g_sp->z = l+(66<<8);
