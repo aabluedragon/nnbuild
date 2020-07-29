@@ -859,12 +859,12 @@ static void G_MoveZombieActors(void)
                             else s->shade = sector[s->sectnum].floorshade;
 
                             ActorExtra[i].timetosleep = 0;
-                            changespritestat(i, 6);
+                            changespritestat(i, STAT_STANDABLE);
                             break;
                         default:
                             ActorExtra[i].timetosleep = 0;
                             A_PlayAlertSound(i);
-                            changespritestat(i, 1);
+                            changespritestat(i, STAT_ACTOR);
                             break;
                         }
                     }
@@ -4000,7 +4000,7 @@ static void G_MoveActors(void)
                 if (ActorExtra[i].timetosleep > SLEEPTIME)
                 {
                     ActorExtra[i].timetosleep = 0;
-                    changespritestat(i,2);
+                    changespritestat(i, STAT_ZOMBIEACTOR);
                     goto BOLT;
                 }
             }

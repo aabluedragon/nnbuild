@@ -4508,7 +4508,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
             if (ActorExtra[g_i].timetosleep > 1)
                 ActorExtra[g_i].timetosleep--;
             else if (ActorExtra[g_i].timetosleep == 1)
-                changespritestat(g_i,2);
+                changespritestat(g_i, STAT_ZOMBIEACTOR);
         default:
             return;
         }
@@ -4526,7 +4526,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     if (ActorExtra[g_i].timetosleep > 1)
         ActorExtra[g_i].timetosleep--;
     else if (ActorExtra[g_i].timetosleep == 1)
-        changespritestat(g_i,2);
+        changespritestat(g_i, STAT_ZOMBIEACTOR);
 }
 
 void G_SaveMapState(mapstate_t *save)

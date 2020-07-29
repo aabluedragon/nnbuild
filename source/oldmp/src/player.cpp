@@ -279,7 +279,7 @@ static void A_HitscanProjTrail(int x1, int y1, int z1, int x2, int y2, int z2, i
             break;
 
         j = A_InsertSprite(sect,x1,y1,z1,ProjectileData[atwith].trail,-32,ProjectileData[atwith].txrepeat,ProjectileData[atwith].tyrepeat,ang,0,0,g_player[0].ps->i,0);
-        changespritestat(j,1);
+        changespritestat(j, STAT_ACTOR);
     }
 }
 
@@ -570,7 +570,7 @@ int A_Shoot(int i,int atwith)
 
                                             A_SetSprite(k,CLIPMASK0);
                                             A_AddToDeleteQueue(k);
-                                            changespritestat(k,5);
+                                            changespritestat(k, STAT_MISC);
 
                                         }
                                         //                                    if( PN == OOZFILTER || PN == NEWBEAST )

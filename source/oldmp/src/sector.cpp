@@ -2435,9 +2435,9 @@ void A_DamageObject_Internal(int i,int sn)
                     }
                 }
 
-                if (sprite[i].statnum == 2)
+                if (sprite[i].statnum == STAT_ZOMBIEACTOR)
                 {
-                    changespritestat(i,1);
+                    changespritestat(i, STAT_ACTOR);
                     ActorExtra[i].timetosleep = SLEEPTIME;
                 }
                 if ((sprite[i].xrepeat < 24 || PN == SHARK) && sprite[sn].picnum == SHRINKSPARK) return;
