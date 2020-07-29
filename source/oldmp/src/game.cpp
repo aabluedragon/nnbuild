@@ -4753,12 +4753,12 @@ int A_Spawn(int j, int pn)
             sp->cstat |= 128;
             if (j >= 0)
             {
-                if (sector[sprite[j].sectnum].lotag == ST_2_UNDERWATER)
+                if (sector[sp->sectnum].lotag == ST_2_UNDERWATER)
                 {
                     sp->z = getceilzofslope(SECT,SX,SY)+(16<<8);
                     sp->cstat |= 8;
                 }
-                else if (sector[sprite[j].sectnum].lotag == ST_1_ABOVE_WATER)
+                else if (sector[sp->sectnum].lotag == ST_1_ABOVE_WATER)
                     sp->z = getflorzofslope(SECT,SX,SY);
             }
 
