@@ -3416,7 +3416,7 @@ static void G_MoveTransports(void)
 
                             switch (sectlotag)
                             {
-                            case 0:
+                            case ST_0_NO_EFFECT:
                                 if (onfloorz)
                                 {
                                     if (sprite[j].statnum == 4 || (CheckPlayerInSector(sect) == -1 && CheckPlayerInSector(sprite[OW].sectnum) == -1))
@@ -3457,7 +3457,7 @@ static void G_MoveTransports(void)
                                     changespritesect(j, sprite[OW].sectnum);
                                 }
                                 break;
-                            case 1:
+                            case ST_1_ABOVE_WATER:
                                 sprite[j].x += (sprite[OW].x - SX);
                                 sprite[j].y += (sprite[OW].y - SY);
                                 sprite[j].z = sector[sprite[OW].sectnum].ceilingz + ll;
@@ -3467,7 +3467,7 @@ static void G_MoveTransports(void)
                                 changespritesect(j, sprite[OW].sectnum);
 
                                 break;
-                            case 2:
+                            case ST_2_UNDERWATER:
                                 sprite[j].x += (sprite[OW].x - SX);
                                 sprite[j].y += (sprite[OW].y - SY);
                                 sprite[j].z = sector[sprite[OW].sectnum].floorz - ll;
