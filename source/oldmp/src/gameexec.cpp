@@ -366,13 +366,19 @@ void A_Fall(int iActor)
         ActorExtra[iActor].floorz   = sector[s->sectnum].floorz;
     }
 
-    if (s->z < ActorExtra[iActor].floorz-(ACTOR_FLOOR_OFFSET))
+    int fbunch = (sector[s->sectnum].floorstat & 512) ? -1 : yax_getbunch(s->sectnum, YAX_FLOOR);
+
+    if (s->z < ActorExtra[iActor].floorz-(ACTOR_FLOOR_OFFSET) || fbunch >= 0)
     {
         if (sector[s->sectnum].lotag == ST_2_UNDERWATER && s->zvel > 3122)
             s->zvel = 3144;
+
         s->z += s->zvel = min(6144, s->zvel+c);
     }
-    if (s->z >= ActorExtra[iActor].floorz-(ACTOR_FLOOR_OFFSET))
+
+    if (fbunch >= 0)
+        setspritez(iActor, &s->pos);
+    else if (s->z >= ActorExtra[iActor].floorz-(ACTOR_FLOOR_OFFSET))
     {
         s->z = ActorExtra[iActor].floorz - ACTOR_FLOOR_OFFSET;
         s->zvel = 0;
@@ -1191,85 +1197,93 @@ static int X_DoExecute(void)
 
     case CON_FALL:
         insptr++;
-        g_sp->xoffset = g_sp->yoffset = 0;
-
-        j = g_spriteGravity;
-
-        if (G_CheckForSpaceCeiling(g_sp->sectnum) || sector[g_sp->sectnum].lotag == ST_2_UNDERWATER)
-            j = g_spriteGravity/6;
-        else if (G_CheckForSpaceFloor(g_sp->sectnum))
-            j = 0;
-
-        if (!ActorExtra[g_i].cgg-- || (sector[g_sp->sectnum].floorstat&2))
         {
-            A_GetZLimits(g_i);
-            ActorExtra[g_i].cgg = 3;
-        }
+            g_sp->xoffset = g_sp->yoffset = 0;
 
-        if (g_sp->z < (ActorExtra[g_i].floorz-ACTOR_FLOOR_OFFSET))
-        {
-            g_sp->z += g_sp->zvel = min(6144, g_sp->zvel+j);
+            j = g_spriteGravity;
 
-            if (g_sp->z > (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
-                g_sp->z = (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET);
-            break;
-        }
-        g_sp->z = ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET;
+            if (G_CheckForSpaceCeiling(g_sp->sectnum) || sector[g_sp->sectnum].lotag == ST_2_UNDERWATER)
+                j = g_spriteGravity / 6;
+            else if (G_CheckForSpaceFloor(g_sp->sectnum))
+                j = 0;
 
-        if (A_CheckEnemySprite(g_sp) || (g_sp->picnum == APLAYER && g_sp->owner >= 0))
-        {
-            if (g_sp->zvel > 3084 && g_sp->extra <= 1)
+            if (!ActorExtra[g_i].cgg-- || (sector[g_sp->sectnum].floorstat & 2))
             {
-                if (!(g_sp->picnum == APLAYER && g_sp->extra > 0) && g_sp->pal != 1 && g_sp->picnum != DRONE)
-                {
-                    A_DoGuts(g_i,JIBS6,15);
-                    A_PlaySound(SQUISHED,g_i);
-                    A_Spawn(g_i,BLOODPOOL);
-                }
-                ActorExtra[g_i].picnum = SHOTSPARK1;
-                ActorExtra[g_i].extra = 1;
-                g_sp->zvel = 0;
+                A_GetZLimits(g_i);
+                ActorExtra[g_i].cgg = 3;
             }
-            else if (g_sp->zvel > 2048  && sector[g_sp->sectnum].lotag != ST_1_ABOVE_WATER)
-            {
-                j = g_sp->sectnum;
-                pushmove_old(&g_sp->x,&g_sp->y,&g_sp->z,(short*)&j,128L,(4L<<8),(4L<<8),CLIPMASK0);
-                if (j != g_sp->sectnum && j >= 0 && j < MAXSECTORS)
-                    changespritesect(g_i,j);
-                A_PlaySound(THUD,g_i);
-            }
-        }
 
-        if (g_sp->z > (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
-        {
-            A_GetZLimits(g_i);
-            if (ActorExtra[g_i].floorz != sector[g_sp->sectnum].floorz)
-                g_sp->z = (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET);
-            break;
-        }
-        else if (sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER)
-        {
-            intptr_t *moveptr = (intptr_t *)g_t[1];
-            switch (DynamicTileMap[g_sp->picnum])
+            if (g_sp->z < (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
             {
-            default:
-                // fix for flying/jumping monsters getting stuck in water
-                if (g_sp->hitag & jumptoplayer || (actorscrptr[g_sp->picnum] &&
-                    moveptr >= &script[0] && moveptr <= (&script[0]+g_scriptSize) && *(moveptr+1)))
-                {
-//                    OSD_Printf("%d\n",*(moveptr+1));
-                    break;
-                }
-//                OSD_Printf("hitag: %d\n",g_sp->hitag);
-                g_sp->z += (24<<8);
-            case OCTABRAIN__STATIC:
-            case COMMANDER__STATIC:
-            case DRONE__STATIC:
+                g_sp->zvel = min(6144, g_sp->zvel + j);
+                int newZ = g_sp->z + g_sp->zvel;
+
+                if (yax_getbunch(g_sp->sectnum, YAX_FLOOR) >= 0 && (sector[g_sp->sectnum].floorstat & 512) == 0)
+                    setspritez(g_i, &g_sp->pos);
+                else if (newZ > (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
+                    newZ = (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET);
+
+                g_sp->z = newZ;
                 break;
             }
-            break;
+
+            g_sp->z = ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET;
+
+            if (A_CheckEnemySprite(g_sp) || (g_sp->picnum == APLAYER && g_sp->owner >= 0))
+            {
+                if (g_sp->zvel > 3084 && g_sp->extra <= 1)
+                {
+                    if (!(g_sp->picnum == APLAYER && g_sp->extra > 0) && g_sp->pal != 1 && g_sp->picnum != DRONE)
+                    {
+                        A_DoGuts(g_i, JIBS6, 15);
+                        A_PlaySound(SQUISHED, g_i);
+                        A_Spawn(g_i, BLOODPOOL);
+                    }
+                    ActorExtra[g_i].picnum = SHOTSPARK1;
+                    ActorExtra[g_i].extra = 1;
+                    g_sp->zvel = 0;
+                }
+                else if (g_sp->zvel > 2048 && sector[g_sp->sectnum].lotag != ST_1_ABOVE_WATER)
+                {
+                    j = g_sp->sectnum;
+                    pushmove_old(&g_sp->x, &g_sp->y, &g_sp->z, (short*)&j, 128L, (4L << 8), (4L << 8), CLIPMASK0);
+                    if (j != g_sp->sectnum && j >= 0 && j < MAXSECTORS)
+                        changespritesect(g_i, j);
+                    A_PlaySound(THUD, g_i);
+                }
+            }
+
+            if (g_sp->z > (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
+            {
+                A_GetZLimits(g_i);
+                if (ActorExtra[g_i].floorz != sector[g_sp->sectnum].floorz)
+                    g_sp->z = (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET);
+                break;
+            }
+            else if (sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER)
+            {
+                intptr_t* moveptr = (intptr_t*)g_t[1];
+                switch (DynamicTileMap[g_sp->picnum])
+                {
+                default:
+                    // fix for flying/jumping monsters getting stuck in water
+                    if (g_sp->hitag & jumptoplayer || (actorscrptr[g_sp->picnum] &&
+                        moveptr >= &script[0] && moveptr <= (&script[0] + g_scriptSize) && *(moveptr + 1)))
+                    {
+                        //                    OSD_Printf("%d\n",*(moveptr+1));
+                        break;
+                    }
+                    //                OSD_Printf("hitag: %d\n",g_sp->hitag);
+                    g_sp->z += (24 << 8);
+                case OCTABRAIN__STATIC:
+                case COMMANDER__STATIC:
+                case DRONE__STATIC:
+                    break;
+                }
+                break;
+            }
+            g_sp->zvel = 0;
         }
-        g_sp->zvel = 0;
         break;
 
     case CON_ENDA:
