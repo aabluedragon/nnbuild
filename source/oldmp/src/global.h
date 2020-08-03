@@ -115,6 +115,10 @@ G_EXTERN char EnvMusicFilename[MAXVOLUMES + 1][BMAX_PATH];
 G_EXTERN char ActorType[MAXTILES];
 G_EXTERN int SpriteFlags[MAXTILES];
 
+// Sound
+G_EXTERN sound_t g_sounds[MAXSOUNDS];
+G_EXTERN char g_soundlocks[MAXSOUNDS];
+
 // Clouds
 G_EXTERN short g_numClouds, clouds[128], cloudx[128], cloudy[128];
 G_EXTERN int cloudtotalclock;

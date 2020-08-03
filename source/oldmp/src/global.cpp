@@ -25,10 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "global.h"
 
-// This must remain here.
-sound_t g_sounds[MAXSOUNDS];
-volatile char g_soundlocks[MAXSOUNDS];
-
 // Pre-initialized globals, the rest is in global.h
 int g_spriteGravity = 176; // JBF: g_spriteGravity modified to default to Atomic ed. default when using 1.3d CONs
 int g_actorRespawnTime = 768;
