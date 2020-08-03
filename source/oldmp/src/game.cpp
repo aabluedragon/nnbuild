@@ -3811,7 +3811,6 @@ void G_DrawBackground(void)
 
 static int32_t ror_sprite = -1;
 
-static int32_t oyrepeat = -1;
 extern float r_ambientlight;
 
 char ror_protectedsectors[MAXSECTORS];
@@ -4086,13 +4085,13 @@ static inline vec3_t G_GetCameraPosition(int32_t const i, int32_t const smoothra
 
 void G_DrawRooms(int snum,int smoothratio)
 {
-    int j, floorZ, ceilZ;
+    int floorZ, ceilZ;
     int i;
     DukePlayer_t *p = g_player[snum].ps;
     short tang;
     int tiltcx,tiltcy,tiltcs=0;    // JBF 20030807
 
-    int32_t tmpyx = yxaspect, tmpvr = viewingrange;
+    int const viewingRange = viewingrange;
 
     if (pub > 0 || videoGetRenderMode() >= 3) // JBF 20040101: redraw background always
     {
@@ -4152,23 +4151,16 @@ void G_DrawRooms(int snum,int smoothratio)
     }
     else
     {
-        i = divscale22(1,sprite[p->i].yrepeat+28);
+        int vr = divscale22(1,sprite[p->i].yrepeat+28);
+        int screenTilting = (videoGetRenderMode() == REND_CLASSIC
+            && ((ud.screen_tilting && p->rotscrnang)));
+
+        //vr = Blrintf(float(vr) * tanf(ud.fov * (fPI / 360.f))); // OLDMP FIXME: FOV Calc
 
         if (!r_usenewaspect)
-        {
-            //            if (i != oyrepeat)
-            {
-                oyrepeat = i;
-                renderSetAspect(oyrepeat, yxaspect);
-            }
-        }
+            renderSetAspect(vr, yxaspect);
         else
-        {
-            tmpvr = i;
-            tmpyx = (65536 * ydim * 8) / (xdim * 5);
-
-            renderSetAspect(mulscale16(tmpvr, viewingrange), yxaspect);
-        }
+            renderSetAspect(mulscale16(vr, viewingrange), yxaspect);
 
         if (g_screenCapture)
         {
@@ -4177,54 +4169,86 @@ void G_DrawRooms(int snum,int smoothratio)
                 g_cache.allocateBlock(&waloff[TILE_SAVESHOT],200*320,&walock[TILE_SAVESHOT]);
             renderSetTarget(TILE_SAVESHOT,200L,320L);
         }
-        else if (videoGetRenderMode() == 0 && ((ud.screen_tilting && p->rotscrnang) || ud.detail==0))
+        else if (screenTilting)
         {
-            int32_t oviewingrange = viewingrange;  // save it from renderSetTarget()
+            int32_t oviewingrange = viewingrange;  // save it from renderSetAspect()
+            const int16_t tang = (ud.screen_tilting) ? p->rotscrnang : 0;
 
-            if (ud.screen_tilting) tang = p->rotscrnang;
-            else tang = 0;
-
-            if (xres <= 320 && yres <= 240)
-            {
-                // JBF 20030807: Increased tilted-screen quality
-                tiltcs = 1;
-                tiltcx = 320;
-                tiltcy = 200;
-            }
+            if (tang == 1024)
+                screenTilting = 2;
             else
             {
-                tiltcs = 2;
-                tiltcx = 640;
-                tiltcy = 480;
-            }
-
-            walock[TILE_TILT] = 255;
-            if (waloff[TILE_TILT] == 0)
-                g_cache.allocateBlock(&waloff[TILE_TILT],tiltcx*tiltcx,&walock[TILE_TILT]);
-            if ((tang&1023) == 0)
-                renderSetTarget(TILE_TILT,tiltcy>>(1-ud.detail),tiltcx>>(1-ud.detail));
-            else
-                renderSetTarget(TILE_TILT,tiltcx>>(1-ud.detail),tiltcx>>(1-ud.detail));
-            if ((tang&1023) == 512)
-            {
-                //Block off unscreen section of 90ø tilted screen
-                j = ((tiltcx-(60*tiltcs))>>(1-ud.detail));
-                for (i=((60*tiltcs)>>(1-ud.detail))-1;i>=0;i--)
+                // Maximum possible allocation size passed to allocache() below
+                // since there is no equivalent of free() for allocache().
+#if MAXYDIM >= 640
+                int const maxTiltSize = 640 * 640;
+#else
+                int const maxTiltSize = 320 * 320;
+#endif
+                // To render a tilted screen in high quality, we need at least
+                // 640 pixels of *Y* dimension.
+#if MAXYDIM >= 640
+                // We also need
+                //  * xdim >= 640 since tiltcx will be passed as setview()'s x2
+                //    which must be less than xdim.
+                //  * ydim >= 640 (sic!) since the tile-to-draw-to will be set
+                //    up with dimension 400x640, but the engine's arrays like
+                //    lastx[] are alloc'd with *xdim* elements! (This point is
+                //    the dynamic counterpart of the #if above since we now
+                //    allocate these engine arrays tightly.)
+                // XXX: The engine should be in charge of setting up everything
+                // so that no oob access occur.
+                if (xdim >= 640 && ydim >= 640)
                 {
-                    startumost[i] = 1;
-                    startumost[i+j] = 1;
-                    startdmost[i] = 0;
-                    startdmost[i+j] = 0;
+                    tiltcs = 2;
+                    tiltcx = 640;
+                    tiltcy = 400;
                 }
+                else
+#endif
+                {
+                    // JBF 20030807: Increased tilted-screen quality
+                    tiltcs = 1;
+
+                    // NOTE: The same reflections as above apply here, too.
+                    // TILT_SETVIEWTOTILE_320.
+                    tiltcx = 320;
+                    tiltcy = 200;
+                }
+
+                // If the view is rotated (not 0 or 180 degrees modulo 360 degrees),
+                // we render onto a square tile and display a portion of that
+                // rotated on-screen later on.
+                const int32_t viewtilexsiz = (tang & 1023) ? tiltcx : tiltcy;
+                const int32_t viewtileysiz = tiltcx;
+
+                walock[TILE_TILT] = CACHE1D_PERMANENT;
+                if (waloff[TILE_TILT] == 0)
+                    g_cache.allocateBlock(&waloff[TILE_TILT], maxTiltSize, &walock[TILE_TILT]);
+
+                renderSetTarget(TILE_TILT, viewtilexsiz, viewtileysiz);
+
+                if ((tang & 1023) == 512)
+                {
+                    //Block off unscreen section of 90ø tilted screen
+                    int const j = tiltcx - (60 * tiltcs);
+                    for (bssize_t i = (60 * tiltcs) - 1; i >= 0; i--)
+                    {
+                        startumost[i] = 1;
+                        startumost[i + j] = 1;
+                        startdmost[i] = 0;
+                        startdmost[i + j] = 0;
+                    }
+                }
+
+                int vRange = (tang & 511);
+
+                if (vRange > 256)
+                    vRange = 512 - vRange;
+
+                vRange = sintable[vRange + 512] * 8 + sintable[vRange] * 5;
+                renderSetAspect(mulscale16(oviewingrange, vRange >> 1), yxaspect);
             }
-
-            i = (tang&511);
-            if (i > 256) i = 512-i;
-            i = sintable[i+512]*8 + sintable[i]*5;
-            renderSetAspect(mulscale16(oviewingrange, i >> 1), yxaspect);
-
-            tmpvr = i >> 1;
-            tmpyx = (65536 * ydim * 8) / (xdim * 5);
         }
         else if (videoGetRenderMode() > 0 && ud.screen_tilting /*&& (p->rotscrnang || p->orotscrnang)*/)
         {
@@ -4379,7 +4403,7 @@ void G_DrawRooms(int snum,int smoothratio)
     if (r_usenewaspect)
     {
         newaspect_enable = 0;
-        renderSetAspect(tmpvr, tmpyx);
+        renderSetAspect(viewingRange, tabledivide32_noinline(65536 * ydim * 8, xdim * 5));
     }
 }
 
