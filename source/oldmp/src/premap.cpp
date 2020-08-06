@@ -1864,8 +1864,12 @@ int G_EnterLevel(int g)
     G_DrawBackground();
     G_DrawRooms(myconnectindex,65536);
 
-    for (i=0;i<ud.multimode;i++) // [JM] REWRITE THIS!
-        clearbufbyte(&g_player[i].playerquitflag,1,0x01010101);
+    for (i = 0; i < MAXPLAYERS; i++) // [JM] This block may be unnecessary later.
+    {
+        if (g_player[i].connected)
+            clearbufbyte(&g_player[i].playerquitflag, 1, 0x01010101);
+    }
+
     g_player[myconnectindex].ps->over_shoulder_on = 0;
 
     clearfrags();
