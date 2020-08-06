@@ -64,6 +64,7 @@ enum NetMode_t
     NETMODE_OFFLINE = 255
 };
 
+void Net_GetPackets(void);
 void faketimerhandler(void);
 void Net_ParsePackets(void);
 void Net_SendQuit(void);

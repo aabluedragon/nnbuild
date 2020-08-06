@@ -462,7 +462,7 @@ void G_CacheMapData(void)
         if ((j&7) == 0)
         {
             handleevents();
-            getpackets();
+            Net_GetPackets();
         }
         if (totalclock - tc > TICRATE/4)
         {
@@ -1171,14 +1171,14 @@ void G_NewGame(int vn,int ln,int sk)
     int i,j;
 
     handleevents();
-    getpackets();
+    Net_GetPackets();
 
     if (g_skillSoundID >= 0 && ud.config.FXDevice >= 0 && ud.config.SoundToggle)
     {
         while (S_CheckSoundPlaying(g_skillSoundID))
         {
             handleevents();
-            getpackets();
+            Net_GetPackets();
             S_Cleanup();
         }
     }

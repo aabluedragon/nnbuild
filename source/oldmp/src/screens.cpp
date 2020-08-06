@@ -226,7 +226,7 @@ void G_FadePalette(int r, int g, int b, int e)
     if ((e & 128) == 0)
     {
         videoNextPage();
-        for (tc = (int32_t)totalclock; totalclock < tc + 4; handleevents(), getpackets());
+        for (tc = (int32_t)totalclock; totalclock < tc + 4; handleevents(), Net_GetPackets());
     }
 }
 
@@ -250,7 +250,7 @@ void G_DoOrderScreen(void)
     while (!KB_KeyWaiting())
     {
         handleevents();
-        getpackets();
+        Net_GetPackets();
     }
 
     fadepal(0, 0, 0, 0, 63, 7);
@@ -260,7 +260,7 @@ void G_DoOrderScreen(void)
     while (!KB_KeyWaiting())
     {
         handleevents();
-        getpackets();
+        Net_GetPackets();
     }
 
     fadepal(0, 0, 0, 0, 63, 7);
@@ -270,7 +270,7 @@ void G_DoOrderScreen(void)
     while (!KB_KeyWaiting())
     {
         handleevents();
-        getpackets();
+        Net_GetPackets();
     }
 
     fadepal(0, 0, 0, 0, 63, 7);
@@ -280,7 +280,7 @@ void G_DoOrderScreen(void)
     while (!KB_KeyWaiting())
     {
         handleevents();
-        getpackets();
+        Net_GetPackets();
     }
 }
 
@@ -397,7 +397,7 @@ void G_BonusScreen(int bonusonly)
                             }
                     }
                     handleevents();
-                    getpackets();
+                    Net_GetPackets();
                     videoNextPage();
                     if (KB_KeyWaiting()) break;
                 }
@@ -415,7 +415,7 @@ void G_BonusScreen(int bonusonly)
             while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
             {
                 handleevents();
-                getpackets();
+                Net_GetPackets();
             }
             fadepal(0, 0, 0, 0, 64, 1);
             S_StopMusic();
@@ -448,7 +448,7 @@ void G_BonusScreen(int bonusonly)
             while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
             {
                 handleevents();
-                getpackets();
+                Net_GetPackets();
             }
             IFISSOFTMODE fadepal(0, 0, 0, 0, 64, 1);
 
@@ -497,7 +497,7 @@ void G_BonusScreen(int bonusonly)
             while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
             {
                 handleevents();
-                getpackets();
+                Net_GetPackets();
             }
             fadepal(0, 0, 0, 0, 64, 3);
 
@@ -511,7 +511,7 @@ void G_BonusScreen(int bonusonly)
             while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
             {
                 handleevents();
-                getpackets();
+                Net_GetPackets();
             }
 
             videoClearViewableArea(0L);
@@ -539,7 +539,7 @@ void G_BonusScreen(int bonusonly)
                 while (totalclock < ototalclock)
                 {
                     handleevents();
-                    getpackets();
+                    Net_GetPackets();
                 }
                 videoClearViewableArea(0L);
                 videoNextPage();
@@ -556,35 +556,35 @@ void G_BonusScreen(int bonusonly)
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND5))
                 {
                     handleevents();
-                    getpackets();
+                    Net_GetPackets();
                 }
                 if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
                 S_PlaySound(ENDSEQVOL3SND6);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND6))
                 {
                     handleevents();
-                    getpackets();
+                    Net_GetPackets();
                 }
                 if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
                 S_PlaySound(ENDSEQVOL3SND7);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND7))
                 {
                     handleevents();
-                    getpackets();
+                    Net_GetPackets();
                 }
                 if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
                 S_PlaySound(ENDSEQVOL3SND8);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND8))
                 {
                     handleevents();
-                    getpackets();
+                    Net_GetPackets();
                 }
                 if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
                 S_PlaySound(ENDSEQVOL3SND9);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND9))
                 {
                     handleevents();
-                    getpackets();
+                    Net_GetPackets();
                 }
 
             }
@@ -594,7 +594,7 @@ void G_BonusScreen(int bonusonly)
             while (!KB_KeyWaiting() && totalclock < 120 && !MOUSE_GetButtons() & LEFT_MOUSE)
             {
                 handleevents();
-                getpackets();
+                Net_GetPackets();
             }
 
         ENDANM:
@@ -707,7 +707,7 @@ FRAGBONUS:
                 // continue after 10 seconds...
                 if (totalclock > tc + (120 * 10)) break;
                 handleevents();
-                getpackets();
+                Net_GetPackets();
             }
         }
 
@@ -776,7 +776,7 @@ FRAGBONUS:
     {
         int yy = 0, zz;
 
-        getpackets();
+        Net_GetPackets();
         handleevents();
         MUSIC_Update();
 

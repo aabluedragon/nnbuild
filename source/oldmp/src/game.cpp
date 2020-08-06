@@ -1330,15 +1330,9 @@ static void gameTimerHandler(void)
 {
     MUSIC_Update();
     G_HandleSpecialKeys();
-}
-
-void getpackets(void)
-{
 #ifdef DISCORD_RPC
     CheckDiscord();
 #endif
-
-    Net_ParsePackets();
 }
 
 static void G_ShowCacheLocks(void)
@@ -2644,7 +2638,7 @@ static void G_DisplayExtraScreens(void)
         while (!KB_KeyWaiting())
         {
             handleevents();
-            getpackets();
+            Net_GetPackets();
         }
 
         fadepal(0,0,0, 0,64,7);
@@ -2655,7 +2649,7 @@ static void G_DisplayExtraScreens(void)
         while (!KB_KeyWaiting())
         {
             handleevents();
-            getpackets();
+            Net_GetPackets();
         }
     }
 
@@ -2673,7 +2667,7 @@ static void G_DisplayExtraScreens(void)
         while (!KB_KeyWaiting() && totalclock < 2400)
         {
             handleevents();
-            getpackets();
+            Net_GetPackets();
         }
     }
 }
@@ -9889,7 +9883,7 @@ static void G_DisplayLogo(void)
 
             if (!KB_KeyWaiting() && g_noLogoAnim == 0)
             {
-                getpackets();
+                Net_GetPackets();
                 G_PlayAnim("logo.anm",5);
                 IFISSOFTMODE G_FadePalette(0,0,0,63);
                 KB_FlushKeyboardQueue();
@@ -9921,7 +9915,7 @@ static void G_DisplayLogo(void)
                 while (totalclock < (120*7) && !KB_KeyWaiting() && !MOUSE_GetButtons()&LEFT_MOUSE)
                 {
                     handleevents();
-                    getpackets();
+                    Net_GetPackets();
                     if (g_restorePalette)
                     {
                         P_SetGamePalette(g_player[myconnectindex].ps,g_player[myconnectindex].ps->palette,0);
@@ -10005,7 +9999,7 @@ static void G_DisplayLogo(void)
                 }
                 X_OnEvent(EVENT_LOGO, -1, screenpeek, -1);
                 handleevents();
-                getpackets();
+                Net_GetPackets();
                 if (g_restorePalette)
                 {
                     P_SetGamePalette(g_player[myconnectindex].ps,g_player[myconnectindex].ps->palette,0);
@@ -11039,7 +11033,7 @@ CLEAN_DIRECTORY:
         Net_SendUserMapName();
         Net_SendFragLimit();
         Net_SendInitialSettings();
-        getpackets();
+        Net_GetPackets();
         waitforeverybody();
     }
     else if (boardfilename[0] != 0)
@@ -11208,8 +11202,6 @@ CLEAN_DIRECTORY:
         if (G_LoadPlayer(ud.warp_on-2))
             ud.warp_on = 0;
     }
-
-    //    getpackets();
 
 MAIN_LOOP_RESTART:
     totalclock = 0;
@@ -11711,7 +11703,7 @@ RECHECK:
             G_DisplayRest(j);
 
             if (ud.multimode > 1 && g_player[myconnectindex].ps->gm)
-                getpackets();
+                Net_GetPackets();
 
             if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
                 gametext(160,60,"PRESS F1 TO ACCEPT, F2 TO DECLINE",0,2+8+16);
@@ -11769,7 +11761,7 @@ RECHECK:
                 rotatesprite((320-50)<<16,9<<16,65536L,0,BETAVERSION,0,0,2+8+16+128,0,0,xdim-1,ydim-1);
         }
         handleevents();
-        getpackets();
+        Net_GetPackets();
         videoNextPage();
 
         if (g_player[myconnectindex].ps->gm==MODE_END || g_player[myconnectindex].ps->gm==MODE_GAME)
@@ -11807,7 +11799,7 @@ static int G_MoveLoop()
     if (numplayers > 1)
         while (predictfifoplc < g_player[myconnectindex].movefifoend) Net_DoPrediction();
 
-    getpackets();
+    Net_GetPackets();
 
     if (numplayers < 2) bufferjitter = 0;
     while (g_player[myconnectindex].movefifoend-movefifoplc > bufferjitter)

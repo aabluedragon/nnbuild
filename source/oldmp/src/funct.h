@@ -105,7 +105,6 @@ extern void A_Execute(int iActor,int iPlayer,int lDist);
 extern void overwritesprite(int thex,int they,int tilenum,int shade,int stat,int dapalnum);
 extern void gamenumber(int x,int y,int n,int s);
 extern void G_Shutdown(void);
-extern void getpackets(void);
 extern void A_PlayAlertSound(int i);
 extern int A_CheckInventorySprite(spritetype *s);
 extern int A_CheckEnemySprite(void const* s);

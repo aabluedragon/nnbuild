@@ -411,7 +411,7 @@ void S_PrecacheSounds(void)
             if ((j & 7) == 0)
             {
                 handleevents();
-                getpackets();
+                Net_GetPackets();
             }
             S_LoadSound(i);
         }

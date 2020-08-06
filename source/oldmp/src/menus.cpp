@@ -552,7 +552,7 @@ void M_DisplayMenus(void)
     int l,m;
     const char *p = NULL;
 
-    getpackets();
+    Net_GetPackets();
     S_Update();
 
     {
@@ -1259,7 +1259,7 @@ void M_DisplayMenus(void)
                             if (x != myconnectindex) mmulti_sendpacket(x, (unsigned char*)tempbuf, 3);
                             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                         }
-                        getpackets();
+                        Net_GetPackets();
 
                         G_LoadPlayer(g_lastSaveSlot);
 

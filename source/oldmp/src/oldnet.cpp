@@ -33,6 +33,11 @@ extern void computergetinput(int snum, input_t *syn);
 
 int pingTime;
 
+void Net_GetPackets(void)
+{
+    Net_ParsePackets();
+}
+
 void faketimerhandler(void)
 {
     int i, j, k;
@@ -51,13 +56,7 @@ void faketimerhandler(void)
     if ((totalclock < ototalclock+TICSPERFRAME) || (ready2send == 0)) return;
     ototalclock += TICSPERFRAME;
 
-    getpackets();
-
-//    if (mmulti_getoutputcirclesize() >= 16) return;
-
-//    for (i=connecthead;i>=0;i=connectpoint2[i])
-//        if (i != myconnectindex)
-//            if (g_player[i].movefifoend < g_player[myconnectindex].movefifoend-200) return;
+    Net_GetPackets();
 
     if (g_player[myconnectindex].movefifoend - movefifoplc >= 100)
         return;
@@ -437,11 +436,6 @@ void faketimerhandler(void)
             k++;
         }
 
-        /*        while (g_player[myconnectindex].syncvalhead != syncvaltail)
-                {
-                    packbuf[j++] = g_player[myconnectindex].syncval[syncvaltail&(MOVEFIFOSIZ-1)];
-                    syncvaltail++;
-                } */
         Net_AddSyncInfoToPacket(&j);
 
         for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
@@ -1648,7 +1642,7 @@ void waitforeverybody(void)
         //if (quitevent) G_GameExit("");
 
         handleevents();
-        getpackets();
+        Net_GetPackets();
 
         TRAVERSE_CONNECT(i)
         {
@@ -1689,7 +1683,7 @@ void allowtimetocorrecterrorswhenquitting(void)
         while (totalclock < oldtotalclock+TICSPERFRAME)
         {
             handleevents();
-            getpackets();
+            Net_GetPackets();
         }
         if (KB_KeyPressed(sc_Escape)) return;
 
