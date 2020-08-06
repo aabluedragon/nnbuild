@@ -577,7 +577,7 @@ int32_t G_LoadPlayer(int32_t spot)
     for (i = 0; i < MAXPLAYERS; i++) // [JM] This block may be unnecessary later.
     {
         if(g_player[i].connected)
-            clearbufbyte(&g_player[i].playerquitflag, 1, 0x01010101);
+            g_player[i].playerquitflag = 1;
     }
 
     Net_ResetPrediction();
