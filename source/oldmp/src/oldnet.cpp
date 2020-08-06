@@ -45,8 +45,8 @@ void faketimerhandler(void)
         G_GameExit("Quick Exit.");
     }
 
-    timerUpdateClock();
-    MUSIC_Update();
+    //timerUpdateClock();
+    //MUSIC_Update();
 
     if ((totalclock < ototalclock+TICSPERFRAME) || (ready2send == 0)) return;
     ototalclock += TICSPERFRAME;

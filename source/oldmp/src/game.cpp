@@ -1286,6 +1286,10 @@ void G_AddUserQuote(const char *daquote)
 
 void G_HandleSpecialKeys(void)
 {
+    DukePlayer_t *myplayer = g_player[myconnectindex].ps;
+    if (myplayer == NULL)
+        return;
+
     CONTROL_ProcessBinds();
 
     if (ALT_IS_PRESSED && KB_KeyPressed(sc_Enter))
@@ -1306,11 +1310,11 @@ void G_HandleSpecialKeys(void)
     {
         KB_ClearKeyDown(sc_F12);
         videoCaptureScreen("duke0000.tga",0);
-        P_DoQuote(103,g_player[myconnectindex].ps);
+        P_DoQuote(103, myplayer);
     }
 
     // only dispatch commands here when not in a game
-    if (!(g_player[myconnectindex].ps->gm&MODE_GAME))
+    if (!(myplayer->gm&MODE_GAME))
     {
         OSD_DispatchQueued();
     }
@@ -1322,16 +1326,14 @@ void G_HandleSpecialKeys(void)
     }
 }
 
+static void gameTimerHandler(void)
+{
+    MUSIC_Update();
+    G_HandleSpecialKeys();
+}
+
 void getpackets(void)
 {
-    timerUpdateClock();
-    MUSIC_Update();
-    
-    if (g_player[myconnectindex].ps != NULL)
-    {
-        G_HandleSpecialKeys();
-    }
-
 #ifdef DISCORD_RPC
     CheckDiscord();
 #endif
@@ -10317,6 +10319,7 @@ static void G_Startup(void)
     int i;
 
     timerInit(TICRATE);
+    timerSetCallback(gameTimerHandler);
 
     G_CompileScripts();
 
@@ -11281,7 +11284,6 @@ MAIN_LOOP_RESTART:
             }
         }
 
-        MUSIC_Update();
 
         // only allow binds to function if the player is actually in a game (not in a menu, typing, et cetera) or demo
         CONTROL_BindsEnabled = (g_player[myconnectindex].ps->gm == MODE_GAME || g_player[myconnectindex].ps->gm == MODE_DEMO);
