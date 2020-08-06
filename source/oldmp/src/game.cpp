@@ -10525,14 +10525,12 @@ void G_BackToMenu(void)
     wm_setapptitle(tempbuf);
 }
 
-#ifdef RENDERTYPEWIN
 void app_crashhandler(void)
 {
     G_CloseDemoWrite();
     X_ScriptInfo();
     Net_SendQuit();
 }
-#endif
 
 static void G_FatalEngineInitError(void)
 {
@@ -12263,7 +12261,6 @@ static void G_SetupGameButtons(void)
 // [JM] Needed for build linkage
 void M32RunScript(const char* s) { UNREFERENCED_PARAMETER(s); }
 void G_Polymer_UnInit(void) { }
-void app_crashhandler(void) { }
 const char* G_DefaultDefFile(void)
 {
     return duke3ddef;
