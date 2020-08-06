@@ -339,7 +339,10 @@ void faketimerhandler(void)
     while (1)  //Master
     {
         TRAVERSE_CONNECT(i)
-        if (g_player[i].playerquitflag && (g_player[i].movefifoend <= movefifosendplc)) return;
+        {
+            if (g_player[i].playerquitflag && (g_player[i].movefifoend <= movefifosendplc))
+                return;
+        }
 
         osyn = (input_t *)&inputfifo[(movefifosendplc-1)&(MOVEFIFOSIZ-1)][0];
         nsyn = (input_t *)&inputfifo[(movefifosendplc)&(MOVEFIFOSIZ-1)][0];
@@ -354,6 +357,16 @@ void faketimerhandler(void)
         packbuf[j++] = (char)((pingTime >> 8) & 255);
         packbuf[j++] = (char)((pingTime >> 16) & 255);
         packbuf[j++] = (char)((pingTime >> 24) & 255);
+
+        TRAVERSE_CONNECT(i)
+        {
+            if (g_player[i].playerquitflag == 0) continue;
+
+            packbuf[j++] = (char)((g_player[i].ping) & 255);
+            packbuf[j++] = (char)((g_player[i].ping >> 8) & 255);
+            packbuf[j++] = (char)((g_player[i].ping >> 16) & 255);
+            packbuf[j++] = (char)((g_player[i].ping >> 24) & 255);
+        }
 
         //Fix timers and buffer/jitter value
         if ((movefifosendplc&(TIMERUPDATESIZ-1)) == 0)
@@ -370,12 +383,8 @@ void faketimerhandler(void)
 
         TRAVERSE_CONNECT(i)
         {
-            j += g_player[i].playerquitflag + g_player[i].playerquitflag;
-
-            packbuf[j++] = (char)((g_player[i].ping) & 255);
-            packbuf[j++] = (char)((g_player[i].ping >> 8) & 255);
-            packbuf[j++] = (char)((g_player[i].ping >> 16) & 255);
-            packbuf[j++] = (char)((g_player[i].ping >> 24) & 255);
+            // [JM] Dear lord fucking shitchrist in hell, WHY?
+            j += g_player[i].playerquitflag + g_player[i].playerquitflag; 
         }
 
         TRAVERSE_CONNECT(i)
@@ -474,6 +483,17 @@ void Net_ParsePackets(void)
             pingTime += (int32_t)packbuf[j + 3] << 24;
             j += 4;
 
+            TRAVERSE_CONNECT(i)
+            {
+                if (g_player[i].playerquitflag == 0) continue;
+
+                g_player[i].ping = (int32_t)packbuf[j];
+                g_player[i].ping += (int32_t)packbuf[j + 1] << 8;
+                g_player[i].ping += (int32_t)packbuf[j + 2] << 16;
+                g_player[i].ping += (int32_t)packbuf[j + 3] << 24;
+                j += 4;
+            }
+
             if ((g_player[other].movefifoend&(TIMERUPDATESIZ-1)) == 0)
                 for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                 {
@@ -489,13 +509,8 @@ void Net_ParsePackets(void)
             k = j;
             TRAVERSE_CONNECT(i)
             {
+                // [JM] Dear lord fucking shitchrist in hell, WHY?
                 j += g_player[i].playerquitflag + g_player[i].playerquitflag;
-
-                g_player[i].ping = (int32_t)packbuf[j];
-                g_player[i].ping += (int32_t)packbuf[j + 1] << 8;
-                g_player[i].ping += (int32_t)packbuf[j + 2] << 16;
-                g_player[i].ping += (int32_t)packbuf[j + 3] << 24;
-                j += 4;
             }
 
             TRAVERSE_CONNECT(i)
