@@ -278,7 +278,7 @@ void Net_DisplaySyncMsg(void)
             if (g_numSyncBytes > 1)
             {
                 sprintf(tempbuf, "Out Of Sync - %s", SyncNames[i]);
-                printext256(4L, 100L + (i * 8), 31, 1, tempbuf, 0);
+                printext256(4, 100 + (i * 8), 31, 1, tempbuf, 0);
             }
 
             if (!g_foundSyncError && g_szfirstSyncMsg[i][0] == '\0')
@@ -293,7 +293,7 @@ void Net_DisplaySyncMsg(void)
                 {
                     if (syncstat[j] != 0 && g_szfirstSyncMsg[j][0] == '\0')
                     {
-                        sprintf(tempbuf, "Out Of Sync (%s) - Please restart game", SyncNames[j]);
+                        sprintf(tempbuf, "Out Of Sync - %s", SyncNames[j]);
                         strcpy(g_szfirstSyncMsg[j], tempbuf);
                     }
                 }
@@ -309,13 +309,13 @@ void Net_DisplaySyncMsg(void)
             if (g_numSyncBytes > 1)
             {
                 sprintf(tempbuf, "FIRST %s", g_szfirstSyncMsg[i]);
-                printext256(4L, 44L + (i * 8), 31, 1, tempbuf, 0);
+                printext256(4, 44 + (i * 8), 31, 1, tempbuf, 0);
                 sprintf(tempbuf, "moveCount %d",moveCount);
-                printext256(4L, 52L + (i * 8), 31, 1, tempbuf, 0);
+                printext256(4, 52 + (i * 8), 31, 1, tempbuf, 0);
             }
             else
             {
-                printext256(4L,100L,31,0,g_szfirstSyncMsg[i],0);
+                printext256(4,100,31,0, "Out Of Sync - Please Restart Game",0);
             }
         }
     }
