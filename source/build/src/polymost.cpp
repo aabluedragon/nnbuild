@@ -499,10 +499,10 @@ static GLuint polymost2_compileShader(GLenum shaderType, const char* const sourc
         OSD_Printf("Compile Status: %u\n", compileStatus);
         if (logLength > 0)
         {
-            char *infoLog = (char*)Xmalloc(logLength);
+            char *infoLog = (char*)Bmalloc(logLength);
             glGetShaderInfoLog(shaderID, logLength, &logLength, infoLog);
             OSD_Printf("Log:\n%s\n", infoLog);
-            free(infoLog);
+            Bfree(infoLog);
         }
     }
 
@@ -1134,7 +1134,7 @@ void polymost_glinit()
     glLinkProgram(polymost1ExtendedShaderProgramID);
 
     int polymost1BasicFragLen = strlen(polymost1Frag);
-    char* polymost1BasicFrag = (char*) malloc(polymost1BasicFragLen);
+    char* polymost1BasicFrag = (char*) Bmalloc(polymost1BasicFragLen);
     memcpy(polymost1BasicFrag, polymost1Frag, polymost1BasicFragLen);
     char* extDefineSubstr = strstr(polymost1BasicFrag, " #define POLYMOST1_EXTENDED");
     if (extDefineSubstr)
@@ -1148,7 +1148,7 @@ void polymost_glinit()
     glAttachShader(polymost1BasicShaderProgramID, polymost1BasicVertexShaderID);
     glAttachShader(polymost1BasicShaderProgramID, polymost1BasicFragmentShaderID);
     glLinkProgram(polymost1BasicShaderProgramID);
-    free(polymost1BasicFrag);
+    Bfree(polymost1BasicFrag);
     polymost1BasicFrag = 0;
 
     // set defaults
@@ -8813,8 +8813,8 @@ void polymost_dorotatespritemodel(int32_t sx, int32_t sy, int32_t z, int16_t a, 
         glEnable(GL_ALPHA_TEST);
         glEnable(GL_BLEND);
 
-        spriteext[tspr.owner].roll = a;
-        spriteext[tspr.owner].pivot_offset.z = z;
+        spriteext[tspr.owner].mdroll = a;
+        spriteext[tspr.owner].mdpivot_offset.z = z;
 
         fov = hud->fov;
 
@@ -8830,8 +8830,8 @@ void polymost_dorotatespritemodel(int32_t sx, int32_t sy, int32_t z, int16_t a, 
 
         polymer_setaspect(pr_fov);
 
-        spriteext[tspr.owner].pivot_offset.z = 0;
-        spriteext[tspr.owner].roll = 0;
+        spriteext[tspr.owner].mdpivot_offset.z = 0;
+        spriteext[tspr.owner].mdroll = 0;
 
         glDisable(GL_BLEND);
         glDisable(GL_ALPHA_TEST);
