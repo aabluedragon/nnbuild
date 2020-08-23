@@ -403,7 +403,7 @@ void S_PrecacheSounds(void)
 
     initprintf("Precaching sounds...\n");
 
-    for (i = 0; i < g_highestSoundIdx; ++i)
+    for (i = 0; i <= g_highestSoundIdx; i++)
     {
         if (g_sounds[i].ptr == 0)
         {
@@ -644,6 +644,7 @@ int32_t S_PlaySound3D(int32_t num, int32_t i, const vec3_t *pos)
 
     if (g_sounds[num].ptr == 0)
     {
+        OSD_Printf("WARNING: Sound not cached! - Sound ID: %d (Highest ID: %d)\n", (unsigned)num, (unsigned)g_highestSoundIdx);
         return -1;
     }
     else
