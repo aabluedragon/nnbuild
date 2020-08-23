@@ -2409,7 +2409,7 @@ static int X_DoExecute(void)
 
     case CON_ANGOFF:
         insptr++;
-        spriteext[g_i].angoff=*insptr++;
+        spriteext[g_i].mdangoff=*insptr++;
         break;
 
     case CON_GETZRANGE:
@@ -3674,7 +3674,7 @@ static int X_DoExecute(void)
 
     case CON_ANGOFFVAR:
         insptr++;
-        spriteext[g_i].angoff=Gv_GetVarX(*insptr++);
+        spriteext[g_i].mdangoff=Gv_GetVarX(*insptr++);
         break;
 
     case CON_LOCKPLAYER:

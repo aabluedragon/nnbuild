@@ -6921,7 +6921,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             {
                 int v=getangle(t->xvel,t->zvel>>4);
                 if (v>1023)v-=2048;
-                spriteext[i].pitch=v;
+                spriteext[i].mdpitch=v;
 
                 t->cstat &= ~4;
                 break;

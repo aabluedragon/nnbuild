@@ -3547,55 +3547,55 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     case ACTOR_ANGOFF:
         if (iSet)
         {
-            spriteext[iActor].angoff=lValue;
+            spriteext[iActor].mdangoff=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].angoff, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].mdangoff, g_i, g_p);
         return;
 
     case ACTOR_PITCH:
         if (iSet)
         {
-            spriteext[iActor].pitch=lValue;
+            spriteext[iActor].mdpitch=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].pitch, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].mdpitch, g_i, g_p);
         return;
 
     case ACTOR_ROLL:
         if (iSet)
         {
-            spriteext[iActor].roll=lValue;
+            spriteext[iActor].mdroll=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].roll, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].mdroll, g_i, g_p);
         return;
 
     case ACTOR_MDXOFF:
         if (iSet)
         {
-            spriteext[iActor].pivot_offset.x=lValue;
+            spriteext[iActor].mdpivot_offset.x=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].pivot_offset.x, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].mdpivot_offset.x, g_i, g_p);
         return;
 
     case ACTOR_MDYOFF:
         if (iSet)
         {
-            spriteext[iActor].pivot_offset.y=lValue;
+            spriteext[iActor].mdpivot_offset.y=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].pivot_offset.y, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].mdpivot_offset.y, g_i, g_p);
         return;
 
     case ACTOR_MDZOFF:
         if (iSet)
         {
-            spriteext[iActor].pivot_offset.z=lValue;
+            spriteext[iActor].mdpivot_offset.z=lValue;
             return;
         }
-        Gv_SetVar(lVar2,spriteext[iActor].pivot_offset.z, g_i, g_p);
+        Gv_SetVar(lVar2,spriteext[iActor].mdpivot_offset.z, g_i, g_p);
         return;
 
     case ACTOR_MDFLAGS:
