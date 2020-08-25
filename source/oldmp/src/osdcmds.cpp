@@ -466,6 +466,7 @@ static int osdcmd_debugplayer(const osdfuncparm_t *parm)
         OSD_Printf("timebeforeexit: %d\n", g_player[i].ps->timebeforeexit);
         OSD_Printf("dead_flag: %d\n", g_player[i].ps->dead_flag);
         OSD_Printf("weapreccnt: %d\n", g_player[i].ps->weapreccnt);
+        OSD_Printf("cursectnum/sprsect: %d/%d\n", g_player[i].ps->cursectnum, TrackerCast(sprite[g_player[i].ps->i].sectnum));
     }
     else OSD_Printf("debugplayer: invalid player!\n");
     UNREFERENCED_PARAMETER(parm);
