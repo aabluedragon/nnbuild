@@ -5415,6 +5415,20 @@ static void polymost_drawalls(int32_t const bunch)
         }
 
 #ifdef YAX_ENABLE
+        
+        int32_t checkcf = 0;
+        int16_t bn[2] = {};
+
+        if (g_nodraw)
+        {
+            int32_t baselevp;
+            baselevp = (yax_globallev == YAX_MAXDRAWS);
+
+            yax_getbunches(sectnum, &bn[0], &bn[1]);
+            checkcf = (bn[0]>=0) + ((bn[1]>=0)<<1);
+            if (!baselevp)
+                checkcf &= (1<<yax_globalcf);
+        }
         yax_holencf[YAX_FLOOR] = 0;
         yax_drawcf = YAX_FLOOR;
 #endif
@@ -5446,6 +5460,10 @@ static void polymost_drawalls(int32_t const bunch)
             int32_t fz = getflorzofslope(sectnum, globalposx, globalposy);
             if (globalposz <= fz)
                 polymost_internal_nonparallaxed(n0, n1, ryp0, ryp1, x0, x1, fy0, fy1, sectnum | MAXSECTORS);
+#ifdef YAX_ENABLE
+            else if (g_nodraw && (checkcf & 2) != 0)
+                polymost_domost(x0, fy0, x1, fy1);
+#endif
         }
         else if ((nextsectnum < 0) || (!(sector[nextsectnum].floorstat&1)))
         {
@@ -5840,6 +5858,10 @@ static void polymost_drawalls(int32_t const bunch)
             int32_t cz = getceilzofslope(sectnum, globalposx, globalposy);
             if (globalposz >= cz)
                 polymost_internal_nonparallaxed(n0, n1, ryp0, ryp1, x0, x1, cy0, cy1, sectnum);
+#ifdef YAX_ENABLE
+            else if (g_nodraw && (checkcf & 1) != 0)
+                polymost_domost(x1, cy1, x0, cy0);
+#endif
         }
         else if ((nextsectnum < 0) || (!(sector[nextsectnum].ceilingstat&1)))
         {
@@ -6192,22 +6214,7 @@ static void polymost_drawalls(int32_t const bunch)
 #ifdef YAX_ENABLE
         if (g_nodraw)
         {
-            int32_t baselevp, checkcf, i, j;
-            int16_t bn[2];
-# if 0
-            int32_t obunchchk = (1 && yax_globalbunch>=0 &&
-                                 haveymost[yax_globalbunch>>3]&pow2char[yax_globalbunch&7]);
-
-            // if (obunchchk)
-            const int32_t x2 = yax_globalbunch*xdimen;
-# endif
-            baselevp = (yax_globallev == YAX_MAXDRAWS);
-
-            yax_getbunches(sectnum, &bn[0], &bn[1]);
-            checkcf = (bn[0]>=0) + ((bn[1]>=0)<<1);
-            if (!baselevp)
-                checkcf &= (1<<yax_globalcf);
-
+            int32_t i, j;
             for (i=0; i<2; i++)
                 if (checkcf&(1<<i))
                 {
@@ -6549,7 +6556,11 @@ void polymost_scansector(int32_t sectnum)
 
                 // this said (SCISDIST*SCISDIST*260.f), but SCISDIST is 1 and the significance of 260 isn't obvious to me
                 // is 260 fudged to solve a problem, and does the problem still apply to our version of the renderer?
-                if (d*d < (p1.x*p1.x + p1.y*p1.y) * 256.f)
+                if (d*d < (p1.x*p1.x + p1.y*p1.y) * 256.f
+#ifdef YAX_ENABLE
+                    && yax_globallev == YAX_MAXDRAWS
+#endif
+                    )
                 {
                     sectorborder[sectorbordercnt++] = nextsectnum;
                     gotsector[nextsectnum>>3] |= pow2char[nextsectnum&7];
@@ -6947,7 +6958,30 @@ void polymost_drawrooms()
 
     // NOTE: globalcursectnum has been already adjusted in ADJUST_GLOBALCURSECTNUM.
     Bassert((unsigned)globalcursectnum < MAXSECTORS);
+#ifdef YAX_ENABLE
+    if (yax_globallev != YAX_MAXDRAWS)
+    {
+        int k;
+        for (SECTORS_OF_BUNCH(yax_globalbunch, !yax_globalcf, k))
+        {
+            polymost_scansector(k);
+        }
+    }
+    else
+#endif
     polymost_scansector(globalcursectnum);
+
+#ifdef YAX_ENABLE
+    int startbunches = numbunches;
+    if (yax_globallev != YAX_MAXDRAWS)
+    {
+        for (bssize_t i = 0; i < startbunches; i++)
+        {
+            bunchfirst[MAXWALLSB-1-i] = bunchfirst[i];
+            bunchlast[MAXWALLSB-1-i] = bunchlast[i];
+        }
+    }
+#endif
 
     grhalfxdown10x = grhalfxdown10;
 
@@ -6987,6 +7021,31 @@ void polymost_drawrooms()
             if (!bnch) { ptempbuf[closest] = 1; closest = i; i = 0; }
         }
 
+#ifdef YAX_ENABLE
+        int bunchnodraw = 0;
+
+        if (yax_globallev != YAX_MAXDRAWS)
+        {
+            bunchnodraw = 1;
+            for (bssize_t i = 0; i < startbunches; i++)
+            {
+                int const sbunch = MAXWALLSB-1-i;
+                if (bunchfirst[closest] == bunchfirst[sbunch])
+                {
+                    bunchnodraw = 0;
+                    break;
+                }
+                int const bnch = polymost_bunchfront(sbunch,closest); if (bnch < 0) continue;
+                if (!bnch)
+                {
+                    bunchnodraw = 0;
+                    break;
+                }
+            }
+        }
+
+        if (!bunchnodraw)
+#endif
         polymost_drawalls(closest);
 
         if (automapping)
