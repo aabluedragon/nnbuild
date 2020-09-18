@@ -198,13 +198,13 @@ enum
 #include "function.h"
 #include "fx_man.h"
 #include "config.h"
-#include "sounds.h"
 #include "control.h"
 #include "_rts.h"
 #include "rts.h"
+#include "namesdyn.h"
+#include "sounds.h"
 #include "soundefs.h"
 #include "music.h"
-#include "namesdyn.h"
 
 #ifdef __cplusplus
 extern "C" {
