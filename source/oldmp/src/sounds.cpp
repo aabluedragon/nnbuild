@@ -926,13 +926,13 @@ void S_ClearSoundLocks(void)
 
     for (i=g_highestSoundIdx; i >= 0 ; i--)
     {
-        if (g_soundlocks[i] >= 200)
-            g_soundlocks[i] = 199;
+        if (g_soundlocks[i] >= CACHE1D_LOCKED)
+            g_soundlocks[i] = CACHE1D_UNLOCKED;
     }
 
     for (i=0; i<11; i++)
-        if (lumplockbyte[i] >= 200)
-            lumplockbyte[i] = 199;
+        if (lumplockbyte[i] >= CACHE1D_LOCKED)
+            lumplockbyte[i] = CACHE1D_UNLOCKED;
 #endif
 }
 
