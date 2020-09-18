@@ -75,7 +75,7 @@ void S_SoundStartup(void)
             g_sounds[i].SoundOwner[j].ow = -1;
         }
 #ifdef CACHING_ISNT_HOT_FECES
-        g_soundlocks[i] = 199;
+        g_soundlocks[i] = CACHE1D_UNLOCKED;
 #endif
     }
 
@@ -383,7 +383,7 @@ int32_t S_LoadSound(uint32_t num)
 
     g_sounds[num].soundsiz = l = kfilelength(fp);
 
-    g_soundlocks[num] = 255;
+    g_soundlocks[num] = CACHE1D_PERMANENT;
 
     g_cache.allocateBlock((intptr_t *)&g_sounds[num].ptr, l, (char *)&g_soundlocks[num]);
     l = kread(fp, g_sounds[num].ptr, l);
@@ -650,8 +650,8 @@ int32_t S_PlaySound3D(int32_t num, int32_t i, const vec3_t *pos)
     else
     {
 #ifdef CACHING_ISNT_HOT_FECES
-        if (++g_soundlocks[num] < 200)
-            g_soundlocks[num] = 200;
+        if (++g_soundlocks[num] < CACHE1D_LOCKED)
+            g_soundlocks[num] = CACHE1D_LOCKED;
 #endif
 
     }
