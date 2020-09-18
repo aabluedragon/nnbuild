@@ -175,7 +175,7 @@ void S_MusicVolume(int32_t volume)
 void S_MenuSound(void)
 {
     static int32_t SoundNum=0;
-    static const uint8_t menusnds[] =
+    int const menusnds[] =
     {
         LASERTRIP_EXPLODE,
         DUKE_GRUNT,
@@ -196,7 +196,7 @@ void S_MenuSound(void)
         SELECT_WEAPON
     };
 
-    S_PlaySound(menusnds[SoundNum++ % (sizeof(menusnds)/sizeof(menusnds[0]))]);
+    S_PlaySound(menusnds[SoundNum++ % ARRAY_SIZE(menusnds)]);
 }
 
 int32_t S_PlayMusic(const char *fn, const int32_t sel)
