@@ -51,8 +51,8 @@ int32_t EnumAudioDevs(struct audioenumdrv **wave, struct audioenumdev **midi, st
 
 typedef struct
 {
-    int16_t voice;
-    int16_t ow;
+    int16_t id;
+    int16_t owner;
 } SOUNDOWNER;
 
 
@@ -60,7 +60,7 @@ typedef struct
 {
     int32_t  length, num, soundsiz; // 12b
     char *filename, *ptr, *filename1; // 12b/24b
-    SOUNDOWNER SoundOwner[MAXSOUNDINSTANCES]; // 32b
+    SOUNDOWNER voices[MAXSOUNDINSTANCES]; // 32b
     int16_t ps,pe,vo; // 6b
     char pr,m; // 2b
 } sound_t;

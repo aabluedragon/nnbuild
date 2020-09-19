@@ -4345,7 +4345,7 @@ static int X_DoExecute(void)
 
     case CON_IFNOSOUNDS:
         for (j=MAXSOUNDS-1;j>=0;j--)
-            if (g_sounds[j].SoundOwner[0].ow == g_i)
+            if (g_sounds[j].voices[0].owner == g_i)
                 break;
 
         X_DoConditional(j < 0);
