@@ -53,14 +53,14 @@ typedef struct
 {
     int16_t id;
     int16_t owner;
-} SOUNDOWNER;
+} assvoice_t;
 
 
 typedef struct
 {
-    int32_t  length, num, soundsiz; // 12b
+    int32_t  length, num, siz; // 12b
     char *filename, *ptr, *filename1; // 12b/24b
-    SOUNDOWNER voices[MAXSOUNDINSTANCES]; // 32b
+    assvoice_t voices[MAXSOUNDINSTANCES]; // 32b
     int16_t ps,pe,vo; // 6b
     char pr,m; // 2b
 } sound_t;

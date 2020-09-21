@@ -381,7 +381,7 @@ int32_t S_LoadSound(uint32_t num)
         return 0;
     }
 
-    g_sounds[num].soundsiz = l = kfilelength(fp);
+    g_sounds[num].siz = l = kfilelength(fp);
 
     g_soundlocks[num] = CACHE1D_PERMANENT;
 
@@ -676,12 +676,12 @@ int32_t S_PlaySound3D(int32_t num, int32_t i, const vec3_t *pos)
             return -1;
         }
 
-        voice = FX_Play3D(g_sounds[num].ptr, g_sounds[num].soundsiz, FX_LOOP,
+        voice = FX_Play3D(g_sounds[num].ptr, g_sounds[num].siz, FX_LOOP,
             pitch, sndang >> 4, sndist >> 6, g_sounds[num].pr, fix16_one, (num * MAXSOUNDINSTANCES) + j);
     }
     else
     {
-        voice = FX_Play3D(g_sounds[num].ptr, g_sounds[num].soundsiz, FX_ONESHOT,
+        voice = FX_Play3D(g_sounds[num].ptr, g_sounds[num].siz, FX_ONESHOT,
             pitch, sndang >> 4, sndist >> 6, g_sounds[num].pr, fix16_one, (num * MAXSOUNDINSTANCES) + j);
     }
 
@@ -755,9 +755,9 @@ int32_t S_PlaySound(int32_t num)
 
 
     voice = (g_sounds[num].m & 1) ?
-            FX_Play(g_sounds[num].ptr, g_sounds[num].soundsiz, 0, -1,
-                              pitch, LOUDESTVOLUME, LOUDESTVOLUME, LOUDESTVOLUME, g_sounds[num].soundsiz, fix16_one, (num * MAXSOUNDINSTANCES) + j) :
-            FX_Play3D(g_sounds[num].ptr, g_sounds[num].soundsiz, FX_ONESHOT,
+            FX_Play(g_sounds[num].ptr, g_sounds[num].siz, 0, -1,
+                              pitch, LOUDESTVOLUME, LOUDESTVOLUME, LOUDESTVOLUME, g_sounds[num].siz, fix16_one, (num * MAXSOUNDINSTANCES) + j) :
+            FX_Play3D(g_sounds[num].ptr, g_sounds[num].siz, FX_ONESHOT,
                               pitch, 0, 255 - LOUDESTVOLUME, g_sounds[num].pr, fix16_one, (num * MAXSOUNDINSTANCES) + j);
 
     if (voice <= FX_Ok)
