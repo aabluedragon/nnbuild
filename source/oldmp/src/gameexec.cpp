@@ -135,6 +135,26 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
     }
 }
 
+int X_OnEventWithReturn(int iEventID, int iActor, int iPlayer, int nReturn)
+{
+    if (iEventID < 0 || iEventID >= MAXGAMEEVENTS)
+    {
+        OSD_Printf(CON_ERROR "invalid event ID", g_errorLineNum, keyw[g_tw]);
+        return nReturn;
+    }
+
+    int oldReturn = Gv_GetVar(g_iReturnVarID, iActor, iPlayer);
+
+    Gv_SetVar(g_iReturnVarID, nReturn, iActor, iPlayer);
+    X_OnEvent(iEventID, iActor, iPlayer, -1);
+
+    int newReturn = Gv_GetVar(g_iReturnVarID, iActor, iPlayer);
+
+    Gv_SetVar(g_iReturnVarID, oldReturn, iActor, iPlayer);
+
+    return newReturn;
+}
+
 static int A_CheckSquished(int i, int p)
 {
     auto const pSector = (usectorptr_t)&sector[SECT];
