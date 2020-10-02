@@ -541,7 +541,6 @@ int32_t S_PlaySound3D(int32_t num, int32_t i, const vec3_t *pos)
     int32_t k = 0;
     int32_t sndist, sndang, explosionp;
     int32_t voice, pitch;
-    int32_t oldReturn;
 
     const DukePlayer_t *const myps = g_player[myconnectindex].ps;
     const DukePlayer_t *peekps;
@@ -551,11 +550,10 @@ int32_t S_PlaySound3D(int32_t num, int32_t i, const vec3_t *pos)
         num = VM_OnEvent(EVENT_SOUND, i, screenpeek, -1, num);
 */
 
-    oldReturn = Gv_GetVar(g_iReturnVarID, i, screenpeek);
-    Gv_SetVar(g_iReturnVarID, num, i, screenpeek);
-    X_OnEvent(EVENT_SOUND, i, screenpeek, -1);
-    num = Gv_GetVar(g_iReturnVarID, i, screenpeek);
-    Gv_SetVar(g_iReturnVarID, oldReturn, i, screenpeek);
+    num = X_OnEventWithReturn(EVENT_SOUND, i, screenpeek, num);
+
+    if (num < 0)
+        return -1;
 
     if ((unsigned)num > (unsigned)g_highestSoundIdx ||
             ud.config.FXDevice < 0 ||
@@ -703,18 +701,16 @@ int32_t S_PlaySound(int32_t num)
 {
     int32_t pitch;
     int32_t voice, j;
-    int32_t oldReturn;
 
 /*
     if (apScriptGameEvent[EVENT_SOUND])
         num = VM_OnEvent(EVENT_SOUND, g_player[screenpeek].ps->i, screenpeek, -1, num);
 */
     
-    oldReturn = Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek);
-    Gv_SetVar(g_iReturnVarID, num, g_player[screenpeek].ps->i, screenpeek);
-    X_OnEvent(EVENT_SOUND, g_player[screenpeek].ps->i, screenpeek, -1);
-    num = Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek);
-    Gv_SetVar(g_iReturnVarID, oldReturn, g_player[screenpeek].ps->i, screenpeek);
+    num = X_OnEventWithReturn(EVENT_SOUND, g_player[screenpeek].ps->i, screenpeek, num);
+
+    if (num < 0)
+        return -1;
 
     if (ud.config.FXDevice < 0) return -1;
     if (ud.config.SoundToggle==0) return -1;
