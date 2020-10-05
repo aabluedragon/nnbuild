@@ -34,6 +34,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAXSOUNDINSTANCES   8
 #define LOUDESTVOLUME       150
 #define MUSIC_ID            -65536
+#define MAXVOICES           128
+
+// Sound flags
+enum {
+    SF_LOOP = 1,
+    SF_MSFX = 2,
+    SF_TALK = 4,
+    SF_ADULT = 8,
+    SF_GLOBAL = 16,
+    SF_ONEINST_INTERNAL = 32,
+
+    SF_DTAG = 128,
+};
 
 struct audioenumdev
 {
@@ -53,12 +66,19 @@ typedef struct
 {
     int16_t id;
     int16_t owner;
+    uint16_t dist;
+    uint16_t clock;
+
+    int16_t detached;
+    int16_t last_sect;
+    vec3_t last_pos;
 } assvoice_t;
 
 
 typedef struct
 {
     int32_t  length, num, siz; // 12b
+    float     volume;                        // 4b
     char *filename, *ptr, *filename1; // 12b/24b
     assvoice_t voices[MAXSOUNDINSTANCES]; // 32b
     int16_t ps,pe,vo; // 6b
@@ -69,9 +89,9 @@ extern int16_t g_skillSoundID;
 extern int32_t g_numEnvSoundsPlaying,g_highestSoundIdx;
 
 extern int32_t A_CheckSoundPlaying(int32_t i,int32_t num);
-extern int32_t A_PlaySound(uint32_t num,int32_t i);
+extern int A_PlaySound(int soundNum, int spriteNum);
 extern void S_Callback(intptr_t num);
-extern int32_t S_CheckSoundPlaying(int32_t soundNum);
+extern int S_CheckSoundPlaying(int soundNum);
 extern void S_Cleanup(void);
 extern void S_ClearSoundLocks(void);
 extern int32_t S_LoadSound(uint32_t num);
@@ -90,6 +110,12 @@ extern void S_SoundStartup(void);
 extern void S_StopEnvSound(int32_t num,int32_t i);
 extern void S_StopMusic(void);
 extern void S_Update(void);
-extern void S_ChangeSoundPitch(int32_t num, int32_t i, int32_t pitchoffset);
+extern void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
+extern void S_DetachSoundsFromSprite(int spriteNum);
+
+static inline bool S_IsAmbientSFX(int spriteNum)
+{
+    return (sprite[spriteNum].picnum == MUSICANDSFX && sprite[spriteNum].lotag < 999);
+}
 
 #endif

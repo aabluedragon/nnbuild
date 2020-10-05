@@ -5329,6 +5329,8 @@ repeatcase:
         g_sounds[k].vo = *(g_scriptPtr-1);
         g_scriptPtr--;
 
+        g_sounds[k].volume = fix16_one;
+
         if (k > g_highestSoundIdx)
             g_highestSoundIdx = k;
 

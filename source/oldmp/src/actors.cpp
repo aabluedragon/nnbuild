@@ -633,6 +633,9 @@ void A_DeleteSprite(int s)
         if (Gv_GetVar(g_iReturnVarID, -1, -1))
             return;
     }
+
+    S_DetachSoundsFromSprite(s);
+
     deletesprite(s);
 }
 #define deletesprite A_DeleteSprite
