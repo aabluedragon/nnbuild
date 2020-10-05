@@ -83,6 +83,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define ZOFFSET5            (32<<8)
 #define ZOFFSET6            (4<<8)
 
+#define CAMERA(Membname) (ud.camera ## Membname)
+
 #define MAXVOLUMES 14
 #define MAXLEVELS 64
 #define MAXGAMETYPES 16
