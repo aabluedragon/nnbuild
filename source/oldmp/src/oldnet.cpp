@@ -819,6 +819,11 @@ void Net_ParsePackets(void)
                 ud.m_noexits = packbuf[11];
                 ud.m_weaponstay = packbuf[12];
                 ud.warp_on = packbuf[13];
+                ud.allow_visibility = packbuf[14];
+
+                if(ud.allow_visibility)
+                    initprintf("Visibility adjustment enabled for multiplayer.\n");
+
                 break;
 
             case PACKET_TYPE_VERSION:
@@ -1254,10 +1259,11 @@ void Net_SendInitialSettings(void)
     packbuf[11] = ud.m_noexits;
     packbuf[12] = ud.m_weaponstay;
     packbuf[13] = ud.warp_on;
+    packbuf[14] = ud.allow_visibility;
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 14);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 15);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }

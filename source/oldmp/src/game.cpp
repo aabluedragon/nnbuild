@@ -4110,7 +4110,7 @@ void G_DrawRooms(int snum,int smoothratio)
 //    smoothratio = min(max(smoothratio,0),65536);
     smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
 
-    g_visibility = (int)(p->visibility*(numplayers>1?1.f:r_ambientlightrecip)); // Do not allow visibility changes in online play.
+    g_visibility = (int)(p->visibility * ((numplayers > 1 && !ud.allow_visibility) ? 1.f : r_ambientlightrecip)); // Do not allow visibility changes in online play.
 
     if (ud.pause_on || g_player[snum].ps->on_crane > -1) smoothratio = 65536;
 
@@ -8610,6 +8610,8 @@ static void G_ShowParameterHelp(void)
               "Example: " APPBASENAME " -q4 -a -m -tx -map nukeland.map\n\n"
               "Files can be *.grp/zip/con/def\n"
               "\n"
+              "-allowvisibility\tAllows visibility adjustment in multiplayer."
+              "\n"
               "-cfg [file.cfg]\tUse an alternate configuration file\n"
               "-c#\t\tUse MP mode #, 1 = Dukematch, 2 = Coop, 3 = Team Dukematch\n"
               "-d[file.dmo]\tPlay a demo\n"
@@ -8659,6 +8661,7 @@ static void G_ShowDebugHelp(void)
               "\n"
               "-a\t\tUse fake player AI (fake multiplayer only)\n"
               "-cachesize #\tSets cache size, in Kb\n"
+              "-debugsync \tEnables network synchronization debugging.\n"
               "-fNUM\t\tSend fewer packets in multiplayer (1, 2, 4) (deprecated)\n"
               "-game_dir [dir]\tDuke3d_w32 compatibility option, see -j\n"
               "-gamegrp   \tSelects which file to use as main grp\n"
@@ -9469,6 +9472,13 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 if (!Bstrcasecmp(c + 1, "noffire"))
                 {
                     ud.m_ffire = 0;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "allowvisibility"))
+                {
+                    ud.allow_visibility = 1;
+                    initprintf("Visibility adjustment enabled for multiplayer.\n");
                     i++;
                     continue;
                 }

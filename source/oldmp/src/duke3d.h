@@ -475,6 +475,7 @@ typedef struct {
     char show_level_text;
     char wchoice[MAX_WEAPONS];
     char limit_hit;
+    char allow_visibility;
 
     int32_t returnvar[MAX_RETURN_VALUES - 1];
 
