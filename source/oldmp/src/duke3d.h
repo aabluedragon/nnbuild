@@ -1086,7 +1086,7 @@ typedef struct {
     int32_t lastpingtime, ping;
     int32_t fraggedby_time, fraggedby_id, fragged_time, fragged_id;
 
-    char vote, gotvote, playerreadyflag, playerquitflag, connected;
+    char vote, gotvote, playerreadyflag, connected;
     char user_name[32];
     char syncval[SYNCFIFOSIZ][MAXSYNCBYTES];
 } playerdata_t;

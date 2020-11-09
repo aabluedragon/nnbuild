@@ -339,7 +339,7 @@ void faketimerhandler(void)
     {
         TRAVERSE_CONNECT(i)
         {
-            if (g_player[i].playerquitflag && (g_player[i].movefifoend <= movefifosendplc))
+            if (g_player[i].connected && (g_player[i].movefifoend <= movefifosendplc))
                 return;
         }
 
@@ -359,7 +359,7 @@ void faketimerhandler(void)
 
         TRAVERSE_CONNECT(i)
         {
-            if (g_player[i].playerquitflag == 0) continue;
+            if (g_player[i].connected == 0) continue;
 
             packbuf[j++] = (char)((g_player[i].ping) & 255);
             packbuf[j++] = (char)((g_player[i].ping >> 8) & 255);
@@ -371,7 +371,7 @@ void faketimerhandler(void)
         if ((movefifosendplc&(TIMERUPDATESIZ-1)) == 0)
         {
             for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                if (g_player[i].playerquitflag)
+                if (g_player[i].connected)
                     packbuf[j++] = min(max(g_player[i].myminlag,-128),127);
 
             TRAVERSE_CONNECT(i)
@@ -383,12 +383,12 @@ void faketimerhandler(void)
         TRAVERSE_CONNECT(i)
         {
             // [JM] Dear lord fucking shitchrist in hell, WHY?
-            j += g_player[i].playerquitflag + g_player[i].playerquitflag; 
+            j += g_player[i].connected + g_player[i].connected;
         }
 
         TRAVERSE_CONNECT(i)
         {
-            if (g_player[i].playerquitflag == 0) continue;
+            if (g_player[i].connected == 0) continue;
 
             packbuf[k] = 0;
             if (nsyn[i].fvel != osyn[i].fvel)
@@ -439,11 +439,11 @@ void faketimerhandler(void)
         Net_AddSyncInfoToPacket(&j);
 
         for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-            if (g_player[i].playerquitflag)
+            if (g_player[i].connected)
             {
                 mmulti_sendpacket(i, (unsigned char*)packbuf,j);
-                if (TEST_SYNC_KEY(nsyn[i].bits,SK_GAMEQUIT))
-                    g_player[i].playerquitflag = 0;
+                if (TEST_SYNC_KEY(nsyn[i].bits, SK_GAMEQUIT))
+                    g_player[i].connected = 0;
             }
 
         movefifosendplc += g_movesPerPacket;
@@ -479,7 +479,7 @@ void Net_ParsePackets(void)
 
             TRAVERSE_CONNECT(i)
             {
-                if (g_player[i].playerquitflag == 0) continue;
+                if (g_player[i].connected == 0) continue;
 
                 g_player[i].ping = (int32_t)packbuf[j];
                 g_player[i].ping += (int32_t)packbuf[j + 1] << 8;
@@ -491,7 +491,7 @@ void Net_ParsePackets(void)
             if ((g_player[other].movefifoend&(TIMERUPDATESIZ-1)) == 0)
                 for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                 {
-                    if (g_player[i].playerquitflag == 0) continue;
+                    if (g_player[i].connected == 0) continue;
                     if (i == myconnectindex)
                         otherminlag = (int)((signed char)packbuf[j]);
                     j++;
@@ -504,12 +504,12 @@ void Net_ParsePackets(void)
             TRAVERSE_CONNECT(i)
             {
                 // [JM] Dear lord fucking shitchrist in hell, WHY?
-                j += g_player[i].playerquitflag + g_player[i].playerquitflag;
+                j += g_player[i].connected + g_player[i].connected;
             }
 
             TRAVERSE_CONNECT(i)
             {
-                if (g_player[i].playerquitflag == 0) continue;
+                if (g_player[i].connected == 0) continue;
 
                 l = packbuf[k]+(int)(packbuf[k+1]<<8);
                 k += 2;
@@ -560,7 +560,9 @@ void Net_ParsePackets(void)
                                 if (l&1024) nsyn[i].extbits = ((nsyn[i].extbits&0xff00ffff)|((int)packbuf[j++])<<16);
                                 if (l&2048) nsyn[i].extbits = ((nsyn[i].extbits&0x00ffffff)|((int)packbuf[j++])<<24); */
 
-                if (TEST_SYNC_KEY(nsyn[i].bits,SK_GAMEQUIT)) g_player[i].playerquitflag = 0;
+                if (TEST_SYNC_KEY(nsyn[i].bits, SK_GAMEQUIT))
+                    g_player[i].connected = 0;
+
                 g_player[i].movefifoend++;
             }
 

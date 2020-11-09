@@ -11915,7 +11915,7 @@ static int G_DoMoveThings(void)
     j = -1;
     TRAVERSE_CONNECT(i)
     {
-        if (TEST_SYNC_KEY(g_player[i].inputBits->bits,SK_GAMEQUIT) == 0)
+        if (TEST_SYNC_KEY(g_player[i].inputBits->bits, SK_GAMEQUIT) == 0)
         {
             j = i;
             continue;
@@ -11943,7 +11943,6 @@ static int G_DoMoveThings(void)
         pus = NUMPAGES;
         G_UpdateScreenArea();
 
-        g_player[i].connected = 0;
         P_QuickKill(g_player[i].ps);
         deletesprite(g_player[i].ps->i);
 
@@ -11966,16 +11965,6 @@ static int G_DoMoveThings(void)
         if (j < 0 && g_networkBroadcastMode == 0)
             G_GameExit("Server terminated");
     }
-    /*
-        if ((numplayers >= 2) && ((movefifoplc&7) == 7))
-        {
-            ch = (char)(randomseed&255);
-            for (i=connecthead;i>=0;i=connectpoint2[i])
-                ch += ((g_player[i].ps->pos.x+g_player[i].ps->pos.y+g_player[i].ps->pos.z+g_player[i].ps->ang+g_player[i].ps->horiz)&255);
-            g_player[myconnectindex].syncval[g_player[myconnectindex].syncvalhead&(MOVEFIFOSIZ-1)] = ch;
-            g_player[myconnectindex].syncvalhead++;
-        }
-    */
 
     Net_GetSyncStat();
 
