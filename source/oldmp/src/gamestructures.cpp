@@ -1255,7 +1255,7 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     if (lVar1 != g_iThisActorID)
         iPlayer=Gv_GetVar(lVar1, g_i, g_p);
 
-    if (((unsigned)iPlayer >= MAXPLAYERS || g_player[iPlayer].ps == NULL) && g_scriptSanityChecks)
+    if (((unsigned)iPlayer >= MAXPLAYERS || (g_player[iPlayer].ps == NULL && lLabelID != PLAYER_CONNECTED)) && g_scriptSanityChecks)
     {
 //        OSD_Printf("X_AccessPlayer(): invalid target player (%d) %d\n",iPlayer,g_i);
         OSD_Printf(CON_ERROR "tried to %s %s on invalid target player (%d) from spr %d gv %s\n",g_errorLineNum,keyw[g_tw],
