@@ -359,7 +359,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
 
     TRAVERSE_CONNECT(i)
     {
-        if (otherconnectindex == i)
+        if (otherconnectindex == i && g_player[otherconnectindex].connected)
             found = 1;
     }
 
@@ -390,7 +390,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
 
     while (1)
     {
-        for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
+        TRAVERSE_CONNECT(i)
         {
             for (sb = 0; sb < g_numSyncBytes; sb++)
             {

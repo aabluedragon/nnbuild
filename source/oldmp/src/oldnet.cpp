@@ -38,6 +38,167 @@ void Net_GetPackets(void)
     Net_ParsePackets();
 }
 
+static void Net_AddPingTimeToPacket(int* j)
+{
+    packbuf[(*j)++] = (char)((pingTime) & 255);
+    packbuf[(*j)++] = (char)((pingTime >> 8) & 255);
+    packbuf[(*j)++] = (char)((pingTime >> 16) & 255);
+    packbuf[(*j)++] = (char)((pingTime >> 24) & 255);
+}
+
+static void Net_GetPingTimeFromPacket(int* j)
+{
+    pingTime = (int32_t)packbuf[(*j)];
+    pingTime += (int32_t)packbuf[(*j) + 1] << 8;
+    pingTime += (int32_t)packbuf[(*j) + 2] << 16;
+    pingTime += (int32_t)packbuf[(*j) + 3] << 24;
+    (*j) += 4;
+}
+
+static void Net_AddPlayerPingToPacket(int* j, int playerNum)
+{
+    packbuf[(*j)++] = (char)((g_player[playerNum].ping) & 255);
+    packbuf[(*j)++] = (char)((g_player[playerNum].ping >> 8) & 255);
+    packbuf[(*j)++] = (char)((g_player[playerNum].ping >> 16) & 255);
+    packbuf[(*j)++] = (char)((g_player[playerNum].ping >> 24) & 255);
+}
+
+static void Net_GetPlayerPingFromPacket(int* j, int playerNum)
+{
+    g_player[playerNum].ping = (int32_t)packbuf[(*j)];
+    g_player[playerNum].ping += (int32_t)packbuf[(*j) + 1] << 8;
+    g_player[playerNum].ping += (int32_t)packbuf[(*j) + 2] << 16;
+    g_player[playerNum].ping += (int32_t)packbuf[(*j) + 3] << 24;
+    (*j) += 4;
+}
+
+static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
+{
+    int inputFlagsPos = (*j)++;
+    int extFlagsPos = (*j)++;
+
+    packbuf[inputFlagsPos] = 0;
+    packbuf[extFlagsPos] = 0;
+
+    if (g_player[playerNum].connected == 0) // HACK
+    {
+        nsyn[playerNum].bits |= (1 << SK_GAMEQUIT);
+    }
+
+    if (nsyn[playerNum].fvel != osyn[playerNum].fvel)
+    {
+        packbuf[(*j)++] = (char)nsyn[playerNum].fvel;
+        packbuf[(*j)++] = (char)(nsyn[playerNum].fvel >> 8);
+        packbuf[inputFlagsPos] |= 1;
+    }
+    if (nsyn[playerNum].svel != osyn[playerNum].svel)
+    {
+        packbuf[(*j)++] = (char)nsyn[playerNum].svel;
+        packbuf[(*j)++] = (char)(nsyn[playerNum].svel >> 8);
+        packbuf[inputFlagsPos] |= 2;
+    }
+    if (nsyn[playerNum].q16avel != osyn[playerNum].q16avel)
+    {
+        packbuf[(*j)++] = (char)((nsyn[playerNum].q16avel) & 255);
+        packbuf[(*j)++] = (char)((nsyn[playerNum].q16avel >> 8) & 255);
+        packbuf[(*j)++] = (char)((nsyn[playerNum].q16avel >> 16) & 255);
+        packbuf[(*j)++] = (char)((nsyn[playerNum].q16avel >> 24) & 255);
+        packbuf[inputFlagsPos] |= 4;
+    }
+
+    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x000000ff) packbuf[(*j)++] = (nsyn[playerNum].bits & 255), packbuf[inputFlagsPos] |= 8;
+    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x0000ff00) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 8) & 255), packbuf[inputFlagsPos] |= 16;
+    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x00ff0000) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 16) & 255), packbuf[inputFlagsPos] |= 32;
+    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0xff000000) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 24) & 255), packbuf[inputFlagsPos] |= 64;
+
+    if (nsyn[playerNum].q16horz != osyn[playerNum].q16horz)
+    {
+        packbuf[(*j)++] = (char)((nsyn[playerNum].q16horz) & 255);
+        packbuf[(*j)++] = (char)((nsyn[playerNum].q16horz >> 8) & 255);
+        packbuf[(*j)++] = (char)((nsyn[playerNum].q16horz >> 16) & 255);
+        packbuf[(*j)++] = (char)((nsyn[playerNum].q16horz >> 24) & 255);
+        packbuf[inputFlagsPos] |= 128;
+    }
+
+    if (nsyn[playerNum].extbits != osyn[playerNum].extbits)
+    {
+        packbuf[(*j)++] = nsyn[playerNum].extbits;
+        packbuf[extFlagsPos] |= 1;
+    }
+
+    /*
+    if ((nsyn[playerNum].extbits^osyn[playerNum].extbits)&0x000000ff) packbuf[(*j)++] = (nsyn[playerNum].extbits&255), packbuf[k] |= 1;
+    if ((nsyn[playerNum].extbits^osyn[playerNum].extbits)&0x0000ff00) packbuf[(*j)++] = ((nsyn[playerNum].extbits>>8)&255), packbuf[k] |= 2;
+    if ((nsyn[playerNum].extbits^osyn[playerNum].extbits)&0x00ff0000) packbuf[(*j)++] = ((nsyn[playerNum].extbits>>16)&255), packbuf[k] |= 4;
+    if ((nsyn[playerNum].extbits^osyn[playerNum].extbits)&0xff000000) packbuf[(*j)++] = ((nsyn[playerNum].extbits>>24)&255), packbuf[k] |= 8; */
+}
+
+static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
+{
+    char inputFlags = packbuf[(*j)++];
+    char extFlags = packbuf[(*j)++];
+
+    if (playerNum == myconnectindex)
+    {
+        //(*j) += ((l&1)<<1)+(l&2)+((l&4)>>2)+((l&8)>>3)+((l&16)>>4)+((l&32)>>5)+((l&64)>>6)+((l&128)>>7)+((l&256)>>8)/*+((l&512)>>9)+((l&1024)>>10)+((l&2048)>>11)*/;
+
+        if (inputFlags & 1) (*j) += 2;
+        if (inputFlags & 2) (*j) += 2;
+        if (inputFlags & 4) (*j) += 4;
+        if (inputFlags & 8) (*j)++;
+        if (inputFlags & 16) (*j)++;
+        if (inputFlags & 32) (*j)++;
+        if (inputFlags & 64) (*j)++;
+        if (inputFlags & 128) (*j) += 4;
+
+        if (extFlags & 1) (*j)++;
+
+        return;
+    }
+
+    copybufbyte(&osyn[playerNum], &nsyn[playerNum], sizeof(input_t));
+    if (inputFlags & 1)   nsyn[playerNum].fvel = packbuf[(*j)] + ((short)packbuf[(*j) + 1] << 8), (*j) += 2;
+    if (inputFlags & 2)   nsyn[playerNum].svel = packbuf[(*j)] + ((short)packbuf[(*j) + 1] << 8), (*j) += 2;
+    if (inputFlags & 4)
+    {
+        nsyn[playerNum].q16avel = (fix16_t)packbuf[(*j)];
+        nsyn[playerNum].q16avel += (fix16_t)packbuf[(*j) + 1] << 8;
+        nsyn[playerNum].q16avel += (fix16_t)packbuf[(*j) + 2] << 16;
+        nsyn[playerNum].q16avel += (fix16_t)packbuf[(*j) + 3] << 24;
+        (*j) += 4;
+    }
+    if (inputFlags & 8)   nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffffff00) | ((int)packbuf[(*j)++]));
+    if (inputFlags & 16)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffff00ff) | ((int)packbuf[(*j)++]) << 8);
+    if (inputFlags & 32)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xff00ffff) | ((int)packbuf[(*j)++]) << 16);
+    if (inputFlags & 64)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0x00ffffff) | ((int)packbuf[(*j)++]) << 24);
+    if (inputFlags & 128)
+    {
+        nsyn[playerNum].q16horz = (fix16_t)packbuf[(*j)];
+        nsyn[playerNum].q16horz += (fix16_t)packbuf[(*j) + 1] << 8;
+        nsyn[playerNum].q16horz += (fix16_t)packbuf[(*j) + 2] << 16;
+        nsyn[playerNum].q16horz += (fix16_t)packbuf[(*j) + 3] << 24;
+        (*j) += 4;
+    }
+
+    if (extFlags & 1)
+    {
+        nsyn[playerNum].extbits = (unsigned char)packbuf[(*j)++];
+    }
+
+    /*                if (l&256)  nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0xffffff00)|((int)packbuf[(*j)++]));
+                    if (l&512)  nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0xffff00ff)|((int)packbuf[(*j)++])<<8);
+                    if (l&1024) nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0xff00ffff)|((int)packbuf[(*j)++])<<16);
+                    if (l&2048) nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0x00ffffff)|((int)packbuf[(*j)++])<<24); */
+
+    g_player[playerNum].movefifoend++;
+
+    for (int count = g_movesPerPacket - 1; count >= 1; count--)
+    {
+        copybufbyte(&nsyn[playerNum], &inputfifo[g_player[playerNum].movefifoend & (MOVEFIFOSIZ - 1)][playerNum], sizeof(input_t));
+        g_player[playerNum].movefifoend++;
+    }
+}
+
 void faketimerhandler(void)
 {
     int i, j, k;
@@ -212,12 +373,6 @@ void faketimerhandler(void)
                 if ((nsyn[0].extbits^osyn[0].extbits)&0x00ff0000) packbuf[j++] = ((nsyn[0].extbits>>16)&255), packbuf[k] |= 4;
                 if ((nsyn[0].extbits^osyn[0].extbits)&0xff000000) packbuf[j++] = ((nsyn[0].extbits>>24)&255), packbuf[k] |= 8; */
 
-        /*        while (g_player[myconnectindex].syncvalhead != syncvaltail)
-                {
-                    packbuf[j++] = g_player[myconnectindex].syncval[syncvaltail&(MOVEFIFOSIZ-1)];
-                    syncvaltail++;
-                } */
-
         Net_AddSyncInfoToPacket(&j);
 
         TRAVERSE_CONNECT(i)
@@ -260,65 +415,18 @@ void faketimerhandler(void)
         }
 
         packbuf[0] = PACKET_TYPE_SLAVE_TO_MASTER;
-        packbuf[1] = 0;
-        packbuf[2] = 0;
-        j = 3;
+        j = 1;
+
+        packbuf[j++] = myconnectindex;
 
         // PING
-        packbuf[j++] = (char)((pingTime) & 255);
-        packbuf[j++] = (char)((pingTime >> 8) & 255);
-        packbuf[j++] = (char)((pingTime >> 16) & 255);
-        packbuf[j++] = (char)((pingTime >> 24) & 255);
+        Net_AddPingTimeToPacket(&j);
 
         osyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-2)&(MOVEFIFOSIZ-1)][myconnectindex];
         nsyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-1)&(MOVEFIFOSIZ-1)][myconnectindex];
 
-        if (nsyn[0].fvel != osyn[0].fvel)
-        {
-            packbuf[j++] = (char)nsyn[0].fvel;
-            packbuf[j++] = (char)(nsyn[0].fvel>>8);
-            packbuf[1] |= 1;
-        }
-        if (nsyn[0].svel != osyn[0].svel)
-        {
-            packbuf[j++] = (char)nsyn[0].svel;
-            packbuf[j++] = (char)(nsyn[0].svel>>8);
-            packbuf[1] |= 2;
-        }
-        if (nsyn[0].q16avel != osyn[0].q16avel)
-        {
-            packbuf[j++] = (char)((nsyn[0].q16avel) & 255);
-            packbuf[j++] = (char)((nsyn[0].q16avel >> 8) & 255);
-            packbuf[j++] = (char)((nsyn[0].q16avel >> 16) & 255);
-            packbuf[j++] = (char)((nsyn[0].q16avel >> 24) & 255);
-            packbuf[1] |= 4;
-        }
+        Net_AddPlayerInputToPacket(&j, 0, osyn, nsyn);
 
-        if ((nsyn[0].bits^osyn[0].bits)&0x000000ff) packbuf[j++] = (nsyn[0].bits&255), packbuf[1] |= 8;
-        if ((nsyn[0].bits^osyn[0].bits)&0x0000ff00) packbuf[j++] = ((nsyn[0].bits>>8)&255), packbuf[1] |= 16;
-        if ((nsyn[0].bits^osyn[0].bits)&0x00ff0000) packbuf[j++] = ((nsyn[0].bits>>16)&255), packbuf[1] |= 32;
-        if ((nsyn[0].bits^osyn[0].bits)&0xff000000) packbuf[j++] = ((nsyn[0].bits>>24)&255), packbuf[1] |= 64;
-
-        if (nsyn[0].q16horz != osyn[0].q16horz)
-        {
-            packbuf[j++] = (char)((nsyn[0].q16horz) & 255);
-            packbuf[j++] = (char)((nsyn[0].q16horz >> 8) & 255);
-            packbuf[j++] = (char)((nsyn[0].q16horz >> 16) & 255);
-            packbuf[j++] = (char)((nsyn[0].q16horz >> 24) & 255);
-            packbuf[1] |= 128;
-        }
-        packbuf[2] = 0;
-        if (nsyn[0].extbits != osyn[0].extbits) packbuf[j++] = nsyn[0].extbits, packbuf[2] |= 1;
-        /*        if ((nsyn[0].extbits^osyn[0].extbits)&0x000000ff) packbuf[j++] = (nsyn[0].extbits&255), packbuf[2] |= 1;
-                if ((nsyn[0].extbits^osyn[0].extbits)&0x0000ff00) packbuf[j++] = ((nsyn[0].extbits>>8)&255), packbuf[2] |= 2;
-                if ((nsyn[0].extbits^osyn[0].extbits)&0x00ff0000) packbuf[j++] = ((nsyn[0].extbits>>16)&255), packbuf[2] |= 4;
-                if ((nsyn[0].extbits^osyn[0].extbits)&0xff000000) packbuf[j++] = ((nsyn[0].extbits>>24)&255), packbuf[2] |= 8; */
-
-        /*        while (g_player[myconnectindex].syncvalhead != syncvaltail)
-                {
-                    packbuf[j++] = g_player[myconnectindex].syncval[syncvaltail&(MOVEFIFOSIZ-1)];
-                    syncvaltail++;
-                } */
         Net_AddSyncInfoToPacket(&j);
 
         mmulti_sendpacket(connecthead, (unsigned char*)packbuf,j);
@@ -352,99 +460,37 @@ void faketimerhandler(void)
 
         // PING
         pingTime = timerGetTicks();
-        packbuf[j++] = (char)((pingTime) & 255);
-        packbuf[j++] = (char)((pingTime >> 8) & 255);
-        packbuf[j++] = (char)((pingTime >> 16) & 255);
-        packbuf[j++] = (char)((pingTime >> 24) & 255);
+        Net_AddPingTimeToPacket(&j);
 
         TRAVERSE_CONNECT(i)
         {
-            if (g_player[i].connected == 0) continue;
+            packbuf[j++] = i;
 
-            packbuf[j++] = (char)((g_player[i].ping) & 255);
-            packbuf[j++] = (char)((g_player[i].ping >> 8) & 255);
-            packbuf[j++] = (char)((g_player[i].ping >> 16) & 255);
-            packbuf[j++] = (char)((g_player[i].ping >> 24) & 255);
-        }
+            Net_AddPlayerPingToPacket(&j, i);
+            Net_AddPlayerInputToPacket(&j, i, osyn, nsyn);
 
-        //Fix timers and buffer/jitter value
-        if ((movefifosendplc&(TIMERUPDATESIZ-1)) == 0)
-        {
-            for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-                if (g_player[i].connected)
-                    packbuf[j++] = min(max(g_player[i].myminlag,-128),127);
-
-            TRAVERSE_CONNECT(i)
-            g_player[i].myminlag = 0x7fffffff;
-        }
-
-        k = j;
-
-        TRAVERSE_CONNECT(i)
-        {
-            // [JM] Dear lord fucking shitchrist in hell, WHY?
-            j += g_player[i].connected + g_player[i].connected;
-        }
-
-        TRAVERSE_CONNECT(i)
-        {
-            if (g_player[i].connected == 0) continue;
-
-            packbuf[k] = 0;
-            if (nsyn[i].fvel != osyn[i].fvel)
+            //Fix timers and buffer/jitter value 
+            packbuf[j++] = min(max(g_player[i].myminlag, -128), 127);
+            if ((movefifosendplc & (TIMERUPDATESIZ - 1)) == 0)
             {
-                packbuf[j++] = (char)nsyn[i].fvel;
-                packbuf[j++] = (char)(nsyn[i].fvel>>8);
-                packbuf[k] |= 1;
+                g_player[i].myminlag = 0x7fffffff;
             }
-            if (nsyn[i].svel != osyn[i].svel)
-            {
-                packbuf[j++] = (char)nsyn[i].svel;
-                packbuf[j++] = (char)(nsyn[i].svel>>8);
-                packbuf[k] |= 2;
-            }
-            if (nsyn[i].q16avel != osyn[i].q16avel)
-            {
-                packbuf[j++] = (char)((nsyn[i].q16avel) & 255);
-                packbuf[j++] = (char)((nsyn[i].q16avel >> 8) & 255);
-                packbuf[j++] = (char)((nsyn[i].q16avel >> 16) & 255);
-                packbuf[j++] = (char)((nsyn[i].q16avel >> 24) & 255);
-                packbuf[k] |= 4;
-            }
-
-            if ((nsyn[i].bits^osyn[i].bits)&0x000000ff) packbuf[j++] = (nsyn[i].bits&255), packbuf[k] |= 8;
-            if ((nsyn[i].bits^osyn[i].bits)&0x0000ff00) packbuf[j++] = ((nsyn[i].bits>>8)&255), packbuf[k] |= 16;
-            if ((nsyn[i].bits^osyn[i].bits)&0x00ff0000) packbuf[j++] = ((nsyn[i].bits>>16)&255), packbuf[k] |= 32;
-            if ((nsyn[i].bits^osyn[i].bits)&0xff000000) packbuf[j++] = ((nsyn[i].bits>>24)&255), packbuf[k] |= 64;
-
-            if (nsyn[i].q16horz != osyn[i].q16horz)
-            {
-                packbuf[j++] = (char)((nsyn[i].q16horz) & 255);
-                packbuf[j++] = (char)((nsyn[i].q16horz >> 8) & 255);
-                packbuf[j++] = (char)((nsyn[i].q16horz >> 16) & 255);
-                packbuf[j++] = (char)((nsyn[i].q16horz >> 24) & 255);
-                packbuf[k] |= 128;
-            }
-            k++;
-            packbuf[k] = 0;
-            if (nsyn[i].extbits != osyn[i].extbits) packbuf[j++] = nsyn[i].extbits, packbuf[k] |= 1;
-            /*
-            if ((nsyn[i].extbits^osyn[i].extbits)&0x000000ff) packbuf[j++] = (nsyn[i].extbits&255), packbuf[k] |= 1;
-            if ((nsyn[i].extbits^osyn[i].extbits)&0x0000ff00) packbuf[j++] = ((nsyn[i].extbits>>8)&255), packbuf[k] |= 2;
-            if ((nsyn[i].extbits^osyn[i].extbits)&0x00ff0000) packbuf[j++] = ((nsyn[i].extbits>>16)&255), packbuf[k] |= 4;
-            if ((nsyn[i].extbits^osyn[i].extbits)&0xff000000) packbuf[j++] = ((nsyn[i].extbits>>24)&255), packbuf[k] |= 8; */
-            k++;
         }
 
         Net_AddSyncInfoToPacket(&j);
 
-        for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
+        TRAVERSE_CONNECT(i)
+        {
             if (g_player[i].connected)
             {
-                mmulti_sendpacket(i, (unsigned char*)packbuf,j);
+                mmulti_sendpacket(i, (unsigned char*)packbuf, j);
                 if (TEST_SYNC_KEY(nsyn[i].bits, SK_GAMEQUIT))
+                {
+                    OSD_Printf("Player %d disconnected.\n", i + 1);
                     g_player[i].connected = 0;
+                }
             }
+        }
 
         movefifosendplc += g_movesPerPacket;
     }
@@ -452,7 +498,7 @@ void faketimerhandler(void)
 
 void Net_ParsePackets(void)
 {
-    int i, j, k, l;
+    int i, j, k;
     int other;
     int packbufleng;
 
@@ -468,128 +514,49 @@ void Net_ParsePackets(void)
         switch (packbuf[0])
         {
         case PACKET_TYPE_MASTER_TO_SLAVE:  //[0] (receive master sync buffer)
+        {
             j = 1;
 
             // PING
-            pingTime = (int32_t)packbuf[j];
-            pingTime += (int32_t)packbuf[j + 1] << 8;
-            pingTime += (int32_t)packbuf[j + 2] << 16;
-            pingTime += (int32_t)packbuf[j + 3] << 24;
-            j += 4;
+            Net_GetPingTimeFromPacket(&j);
 
+            osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)][0];
+            nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)][0];
             TRAVERSE_CONNECT(i)
             {
-                if (g_player[i].connected == 0) continue;
+                int playerNum = packbuf[j++];
 
-                g_player[i].ping = (int32_t)packbuf[j];
-                g_player[i].ping += (int32_t)packbuf[j + 1] << 8;
-                g_player[i].ping += (int32_t)packbuf[j + 2] << 16;
-                g_player[i].ping += (int32_t)packbuf[j + 3] << 24;
-                j += 4;
-            }
+                Net_GetPlayerPingFromPacket(&j, playerNum);
+                Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
 
-            if ((g_player[other].movefifoend&(TIMERUPDATESIZ-1)) == 0)
-                for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
+                //Fix timers and buffer/jitter value 
+                int temp = (int)((signed char)packbuf[j++]);
+
+                if (((g_player[other].movefifoend & (TIMERUPDATESIZ - 1)) == 0) && (playerNum == myconnectindex))
+                    otherminlag = temp;
+
+                if (TEST_SYNC_KEY(nsyn[playerNum].bits, SK_GAMEQUIT) && g_player[playerNum].connected)
                 {
-                    if (g_player[i].connected == 0) continue;
-                    if (i == myconnectindex)
-                        otherminlag = (int)((signed char)packbuf[j]);
-                    j++;
+                    OSD_Printf("Player %d disconnected.\n", i + 1);
+                    g_player[playerNum].connected = 0;
                 }
-
-            osyn = (input_t *)&inputfifo[(g_player[connecthead].movefifoend-1)&(MOVEFIFOSIZ-1)][0];
-            nsyn = (input_t *)&inputfifo[(g_player[connecthead].movefifoend)&(MOVEFIFOSIZ-1)][0];
-
-            k = j;
-            TRAVERSE_CONNECT(i)
-            {
-                // [JM] Dear lord fucking shitchrist in hell, WHY?
-                j += g_player[i].connected + g_player[i].connected;
-            }
-
-            TRAVERSE_CONNECT(i)
-            {
-                if (g_player[i].connected == 0) continue;
-
-                l = packbuf[k]+(int)(packbuf[k+1]<<8);
-                k += 2;
-
-                if (i == myconnectindex)
-                {
-                    //j += ((l&1)<<1)+(l&2)+((l&4)>>2)+((l&8)>>3)+((l&16)>>4)+((l&32)>>5)+((l&64)>>6)+((l&128)>>7)+((l&256)>>8)/*+((l&512)>>9)+((l&1024)>>10)+((l&2048)>>11)*/;
-
-                    if (l & 1) j += 2;
-                    if (l & 2) j += 2;
-                    if (l & 4) j += 4;
-                    if (l & 8) j++;
-                    if (l & 16) j++;
-                    if (l & 32) j++;
-                    if (l & 64) j++;
-                    if (l & 128) j += 4;
-                    if (l & 256) j++;
-
-                    continue;
-                }
-
-                copybufbyte(&osyn[i],&nsyn[i],sizeof(input_t));
-                if (l&1)   nsyn[i].fvel = packbuf[j]+((short)packbuf[j+1]<<8), j += 2;
-                if (l&2)   nsyn[i].svel = packbuf[j]+((short)packbuf[j+1]<<8), j += 2;
-                if (l&4)
-                {
-                    nsyn[i].q16avel = (fix16_t)packbuf[j];
-                    nsyn[i].q16avel += (fix16_t)packbuf[j + 1] << 8;
-                    nsyn[i].q16avel += (fix16_t)packbuf[j + 2] << 16;
-                    nsyn[i].q16avel += (fix16_t)packbuf[j + 3] << 24;
-                    j += 4;
-                }
-                if (l&8)   nsyn[i].bits = ((nsyn[i].bits&0xffffff00)|((int)packbuf[j++]));
-                if (l&16)  nsyn[i].bits = ((nsyn[i].bits&0xffff00ff)|((int)packbuf[j++])<<8);
-                if (l&32)  nsyn[i].bits = ((nsyn[i].bits&0xff00ffff)|((int)packbuf[j++])<<16);
-                if (l&64)  nsyn[i].bits = ((nsyn[i].bits&0x00ffffff)|((int)packbuf[j++])<<24);
-                if (l&128)
-                {
-                    nsyn[i].q16horz = (fix16_t)packbuf[j];
-                    nsyn[i].q16horz += (fix16_t)packbuf[j + 1] << 8;
-                    nsyn[i].q16horz += (fix16_t)packbuf[j + 2] << 16;
-                    nsyn[i].q16horz += (fix16_t)packbuf[j + 3] << 24;
-                    j += 4;
-                }
-                if (l&256)  nsyn[i].extbits = (unsigned char)packbuf[j++];
-                /*                if (l&256)  nsyn[i].extbits = ((nsyn[i].extbits&0xffffff00)|((int)packbuf[j++]));
-                                if (l&512)  nsyn[i].extbits = ((nsyn[i].extbits&0xffff00ff)|((int)packbuf[j++])<<8);
-                                if (l&1024) nsyn[i].extbits = ((nsyn[i].extbits&0xff00ffff)|((int)packbuf[j++])<<16);
-                                if (l&2048) nsyn[i].extbits = ((nsyn[i].extbits&0x00ffffff)|((int)packbuf[j++])<<24); */
-
-                if (TEST_SYNC_KEY(nsyn[i].bits, SK_GAMEQUIT))
-                    g_player[i].connected = 0;
-
-                g_player[i].movefifoend++;
             }
 
             Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
 
-            TRAVERSE_CONNECT(i)
-            if (i != myconnectindex)
-                for (j=g_movesPerPacket-1;j>=1;j--)
-                {
-                    copybufbyte(&nsyn[i],&inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ-1)][i],sizeof(input_t));
-                    g_player[i].movefifoend++;
-                }
-
             movefifosendplc += g_movesPerPacket;
 
             break;
+        }
         case PACKET_TYPE_SLAVE_TO_MASTER:  //[1] (receive slave sync buffer)
         {
-            j = 3;
-            k = packbuf[1] + (int)(packbuf[2]<<8);
+            j = 1;
+
+            if (g_player[packbuf[j++]].connected == 0)
+                break;
 
             // PING
-            pingTime = (int32_t)packbuf[j];
-            pingTime += (int32_t)packbuf[j + 1] << 8;
-            pingTime += (int32_t)packbuf[j + 2] << 16;
-            pingTime += (int32_t)packbuf[j + 3] << 24;
-            j += 4;
+            Net_GetPingTimeFromPacket(&j);
 
             int tics = timerGetTicks();
             if ((tics - g_player[other].lastpingtime) >= 1000) // Update ping display once a second
@@ -601,48 +568,8 @@ void Net_ParsePackets(void)
             osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)][0];
             nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)][0];
 
-            copybufbyte(&osyn[other],&nsyn[other],sizeof(input_t));
-            if (k&1)   nsyn[other].fvel = packbuf[j]+((short)packbuf[j+1]<<8), j += 2;
-            if (k&2)   nsyn[other].svel = packbuf[j]+((short)packbuf[j+1]<<8), j += 2;
-            if (k&4)
-            {
-                nsyn[other].q16avel = (fix16_t)packbuf[j];
-                nsyn[other].q16avel += (fix16_t)packbuf[j + 1] << 8;
-                nsyn[other].q16avel += (fix16_t)packbuf[j + 2] << 16;
-                nsyn[other].q16avel += (fix16_t)packbuf[j + 3] << 24;
-                j += 4;
-            }
-            if (k&8)   nsyn[other].bits = ((nsyn[other].bits&0xffffff00)|((int)packbuf[j++]));
-            if (k&16)  nsyn[other].bits = ((nsyn[other].bits&0xffff00ff)|((int)packbuf[j++])<<8);
-            if (k&32)  nsyn[other].bits = ((nsyn[other].bits&0xff00ffff)|((int)packbuf[j++])<<16);
-            if (k&64)  nsyn[other].bits = ((nsyn[other].bits&0x00ffffff)|((int)packbuf[j++])<<24);
-            if (k&128)
-            {
-                nsyn[other].q16horz = (fix16_t)packbuf[j];
-                nsyn[other].q16horz += (fix16_t)packbuf[j + 1] << 8;
-                nsyn[other].q16horz += (fix16_t)packbuf[j + 2] << 16;
-                nsyn[other].q16horz += (fix16_t)packbuf[j + 3] << 24;
-                j += 4;
-            }
-            if (k&256) nsyn[other].extbits = (unsigned char)packbuf[j++];
-            /*            if (k&256)  nsyn[other].extbits = ((nsyn[other].extbits&0xffffff00)|((int)packbuf[j++]));
-                        if (k&512)  nsyn[other].extbits = ((nsyn[other].extbits&0xffff00ff)|((int)packbuf[j++])<<8);
-                        if (k&1024) nsyn[other].extbits = ((nsyn[other].extbits&0xff00ffff)|((int)packbuf[j++])<<16);
-                        if (k&2048) nsyn[other].extbits = ((nsyn[other].extbits&0x00ffffff)|((int)packbuf[j++])<<24); */
-            g_player[other].movefifoend++;
-
-            /*            while (j != packbufleng)
-                        {
-                            g_player[other].syncval[g_player[other].syncvalhead&(MOVEFIFOSIZ-1)] = packbuf[j++];
-                            g_player[other].syncvalhead++;
-                        } */
+            Net_GetPlayerInputFromPacket(&j, other, osyn, nsyn);
             Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
-
-            for (i=g_movesPerPacket-1;i>=1;i--)
-            {
-                copybufbyte(&nsyn[other],&inputfifo[g_player[other].movefifoend&(MOVEFIFOSIZ-1)][other],sizeof(input_t));
-                g_player[other].movefifoend++;
-            }
 
             break;
         }
@@ -1085,7 +1012,7 @@ void Net_SendQuit(void)
         if (g_player[myconnectindex].ps->gm&MODE_GAME)
         {
             g_gameQuit = 1;
-            quittimer = (int32_t)totalclock+120;
+            quittimer = (int32_t)totalclock+(CLOCKTICKSPERSECOND*2);
         }
         else
         {

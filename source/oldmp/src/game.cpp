@@ -11924,14 +11924,17 @@ static int G_DoMoveThings(void)
         G_CloseDemoWrite();
 
         if (i == myconnectindex) G_GameExit(" ");
+
         if (screenpeek == i)
         {
             screenpeek = connectpoint2[i];
             if (screenpeek < 0) screenpeek = connecthead;
         }
 
-        if (i == connecthead) connecthead = connectpoint2[connecthead];
-        else connectpoint2[j] = connectpoint2[i];
+        if (i == connecthead)
+            connecthead = connectpoint2[connecthead];
+        else
+            connectpoint2[j] = connectpoint2[i];
 
         numplayers--;
         ud.multimode--;
