@@ -202,7 +202,7 @@ void G_ShowScores(void)
             {
                 minitext(ping_x, 80 + t, "Master", 8, 2 + 8 + 16 + 128);
             }
-            else if ((g_networkBroadcastMode == NETMODE_P2P))
+            else if ((g_networkBroadcastMode == NETMODE_P2P) || !g_player[i].connected)
             {
                 minitext(ping_x, 80 + t, "N/A", 2, 2 + 8 + 16 + 128);
             }
