@@ -214,7 +214,9 @@ void faketimerhandler(void)
     //timerUpdateClock();
     //MUSIC_Update();
 
-    if ((totalclock < ototalclock+TICSPERFRAME) || (ready2send == 0)) return;
+    if ((totalclock < ototalclock+TICSPERFRAME) || (ready2send == 0))
+        return;
+
     ototalclock += TICSPERFRAME;
 
     Net_GetPackets();
@@ -276,6 +278,7 @@ void faketimerhandler(void)
         g_player[i].myminlag = min(g_player[i].myminlag,k);
         mymaxlag = max(mymaxlag,k);
     }
+
 #if 0
     if (((g_player[myconnectindex].movefifoend - 1) & (TIMERUPDATESIZ - 1)) == 0)
     {
@@ -417,9 +420,9 @@ void faketimerhandler(void)
         packbuf[0] = PACKET_TYPE_SLAVE_TO_MASTER;
         j = 1;
 
-        packbuf[j++] = myconnectindex;
+        packbuf[j++] = myconnectindex; // Send slave index to master for verification
 
-        // PING
+        // Send ping time we got from master back to it, to calculate how long it took.
         Net_AddPingTimeToPacket(&j);
 
         osyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-2)&(MOVEFIFOSIZ-1)][myconnectindex];
@@ -464,7 +467,7 @@ void faketimerhandler(void)
 
         TRAVERSE_CONNECT(i)
         {
-            packbuf[j++] = i;
+            packbuf[j++] = i; // Player Index
 
             Net_AddPlayerPingToPacket(&j, i);
             Net_AddPlayerInputToPacket(&j, i, osyn, nsyn);
@@ -552,7 +555,7 @@ void Net_ParsePackets(void)
         {
             j = 1;
 
-            if (g_player[packbuf[j++]].connected == 0)
+            if (g_player[packbuf[j++]].connected == 0) // If this is a packet from a disconnected slave, ignore.
                 break;
 
             // PING
@@ -1560,23 +1563,26 @@ void waitforeverybody(void)
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 
+    if (ud.multimode > 1)
+    {
+        P_SetGamePalette(g_player[myconnectindex].ps, TITLEPAL, 11);
+        rotatesprite(0, 0, 65536L, 0, BETASCREEN, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
+
+        rotatesprite(160 << 16, (104) << 16, 60 << 10, 0, DUKENUKEM, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+        rotatesprite(160 << 16, (129) << 16, 30 << 11, 0, THREEDEE, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+        if (PLUTOPAK)   // JBF 20030804
+            rotatesprite(160 << 16, (151) << 16, 30 << 11, 0, PLUTOPAKSPRITE + 1, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+
+        gametext(160, 190, "WAITING FOR PLAYERS", 14, 2);
+        videoNextPage();
+    }
+
+    // [JM] FIXME: This will cause desyncs if faketimerhandler is ever called during this loop!
+    //             Why? Fuck if I know, but I think faketimerhandler needs a good colon cleansing.
+    //             BTW, this includes functions like videoNextPage, which call faketimerhandler.
     while (1)
     {
         //if (quitevent) G_GameExit("");
-
-        if (ud.multimode > 1)
-        {
-            P_SetGamePalette(g_player[myconnectindex].ps, TITLEPAL, 11);
-            rotatesprite(0, 0, 65536L, 0, BETASCREEN, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
-
-            rotatesprite(160 << 16, (104) << 16, 60 << 10, 0, DUKENUKEM, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(160 << 16, (129) << 16, 30 << 11, 0, THREEDEE, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-            if (PLUTOPAK)   // JBF 20030804
-                rotatesprite(160 << 16, (151) << 16, 30 << 11, 0, PLUTOPAKSPRITE + 1, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-
-            gametext(160, 190, "WAITING FOR PLAYERS", 14, 2);
-            videoNextPage();
-        }
 
         handleevents();
         Net_GetPackets();
