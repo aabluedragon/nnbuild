@@ -5503,7 +5503,7 @@ static void Keys3d(void)
                 Bsprintf(tempbuf,"%s Z %s", AIMING_AT_CEILING?"CEILING":"FLOOR", eitherCTRL?"512":"");
             else if (eitherSHIFT)
                 Bsprintf(tempbuf,"PAN");
-            else if (eitherCTRL)
+            else if (keystatus[KEYSC_LCTRL])
                 Bsprintf(tempbuf,"SLOPE");
             break;
         case SEARCH_SPRITE:
@@ -5910,7 +5910,7 @@ static void Keys3d(void)
 
     mouseaction=0;
 
-    if (eitherCTRL && !eitherSHIFT && (bstatus&1) && AIMING_AT_CEILING_OR_FLOOR)
+    if (keystatus[KEYSC_LCTRL] && !eitherSHIFT && (bstatus&1) && AIMING_AT_CEILING_OR_FLOOR)
     {
         g_mousePos.x=0; mskip=1;
         if (g_mousePos.y)
@@ -8464,7 +8464,11 @@ static int osdcmd_artdump(osdcmdptr_t UNUSED(parm))
         p.num |= p.sf & 192;
         p.sf &= 0x0F;
 
-        Bfwrite(&p, sizeof(picanm_t), 1, f);
+        // do not write the tileflags member
+        Bfwrite(&p.num, sizeof(uint8_t), 1, f);
+        Bfwrite(&p.xofs, sizeof(int8_t), 1, f);
+        Bfwrite(&p.yofs, sizeof(int8_t), 1, f);
+        Bfwrite(&p.sf, sizeof(uint8_t), 1, f);
     }
 
     for (uint32_t i = 0; i < numtiles; ++i)

@@ -1038,7 +1038,7 @@ uint8_t *bitptr; // pointer to bitmap of which bytecode positions contain pointe
 
 hashtable_t h_arrays   = { MAXGAMEARRAYS >> 1, NULL };
 hashtable_t h_gamevars = { MAXGAMEVARS >> 1, NULL };
-hashtable_t h_labels   = { 11264 >> 1, NULL };
+hashtable_t h_labels   = { MAXLABELS >> 1, NULL };
 
 static void C_SetScriptSize(int32_t newsize)
 {
@@ -1046,7 +1046,7 @@ static void C_SetScriptSize(int32_t newsize)
     {
         if (BITPTR_IS_POINTER(i))
         {
-            if (EDUKE32_PREDICT_FALSE(apScript[i] < (intptr_t)apScript || apScript[i] >= (intptr_t)g_scriptPtr))
+            if (EDUKE32_PREDICT_FALSE(apScript[i] < (intptr_t)apScript || apScript[i] > (intptr_t)g_scriptPtr))
             {
                 g_errorCnt++;
                 buildprint("Internal compiler error at ", i, " (0x", hex(i), ")\n");
@@ -1060,11 +1060,17 @@ static void C_SetScriptSize(int32_t newsize)
     G_Util_PtrToIdx2(&g_tile[0].execPtr, MAXTILES, sizeof(tiledata_t), apScript, P2I_FWD_NON0);
     G_Util_PtrToIdx2(&g_tile[0].loadPtr, MAXTILES, sizeof(tiledata_t), apScript, P2I_FWD_NON0);
 
+    size_t old_bitptr_size = (((g_scriptSize + 7) >> 3) + 1) * sizeof(uint8_t);
+    size_t new_bitptr_size = (((newsize + 7) >> 3) + 1) * sizeof(uint8_t);
+
     auto newscript = (intptr_t *)Xrealloc(apScript, newsize * sizeof(intptr_t));
-    bitptr = (uint8_t *)Xrealloc(bitptr, (((newsize + 7) >> 3) + 1) * sizeof(uint8_t));
+    bitptr = (uint8_t *)Xrealloc(bitptr, new_bitptr_size);
 
     if (newsize > g_scriptSize)
+    {
         Bmemset(&newscript[g_scriptSize], 0, (newsize - g_scriptSize) * sizeof(intptr_t));
+        Bmemset(&bitptr[old_bitptr_size], 0, new_bitptr_size - old_bitptr_size);
+    }
 
     if (apScript != newscript)
     {
@@ -1213,6 +1219,14 @@ static inline int32_t C_GetLabelNameOffset(hashtable_t const * const table, cons
 static void C_GetNextLabelName(void)
 {
     int32_t i = 0;
+
+    if (EDUKE32_PREDICT_FALSE(g_labelCnt >= MAXLABELS))
+    {
+        g_errorCnt++;
+        C_ReportError(ERROR_TOOMANYLABELS);
+        G_GameExit("Error: too many labels defined!");
+        return;
+    }
 
     C_SkipComments();
 
@@ -2780,6 +2794,8 @@ DO_DEFSTATE:
             else
             {
                 g_scriptPtr--;
+                scriptWriteValue(CON_MOVE);
+
                 C_GetNextLabelName();
                 // Check to see it's already defined
 
@@ -2817,7 +2833,7 @@ DO_DEFSTATE:
                 for (k=j; k>=0; k--)
                     scriptWriteValue(0);
 
-                scriptWriteValue(CON_MOVE);
+                scriptWriteValue(CON_END);
             }
             continue;
 
@@ -2900,6 +2916,8 @@ DO_DEFSTATE:
             else
             {
                 g_scriptPtr--;
+                scriptWriteValue(CON_AI);
+
                 C_GetNextLabelName();
 
                 if (EDUKE32_PREDICT_FALSE(hash_find(&h_keywords,LAST_LABEL)>=0))
@@ -2956,7 +2974,7 @@ DO_DEFSTATE:
                 for (k=j; k<3; k++)
                     scriptWriteValue(0);
 
-                scriptWriteValue(CON_AI);
+                scriptWriteValue(CON_END);
             }
             continue;
 
@@ -2968,6 +2986,8 @@ DO_DEFSTATE:
             else
             {
                 g_scriptPtr--;
+                scriptWriteValue(CON_ACTION);
+
                 C_GetNextLabelName();
                 // Check to see it's already defined
 
@@ -3007,7 +3027,7 @@ DO_DEFSTATE:
                 for (k=j; k>=0; k--)
                     scriptWriteValue(0);
 
-                scriptWriteValue(CON_ACTION);
+                scriptWriteValue(CON_END);
             }
             continue;
 
@@ -6263,9 +6283,7 @@ static char const * C_ScriptVersionString(int32_t version)
 
 void C_PrintStats(void)
 {
-    initprintf("%d/%d labels, %d/%d variables, %d/%d arrays\n", g_labelCnt,
-        (int32_t) min((MAXSECTORS * sizeof(sectortype)/sizeof(int32_t)),
-            MAXSPRITES * sizeof(spritetype)/(1<<6)),
+    initprintf("%d/%d labels, %d/%d variables, %d/%d arrays\n", g_labelCnt, MAXLABELS,
         g_gameVarCount, MAXGAMEVARS, g_gameArrayCount, MAXGAMEARRAYS);
 
     int cnt = g_numXStrings;
@@ -6577,6 +6595,9 @@ void C_ReportError(int error)
         break;
     case ERROR_VARTYPEMISMATCH:
         initprintf("%s:%d: error: variable `%s' is of the wrong type.\n",g_scriptFileName,g_lineNumber,LAST_LABEL);
+        break;
+    case ERROR_TOOMANYLABELS:
+        initprintf("%s:%d: error: too many labels defined! Maximum is %d\n.",g_scriptFileName,g_lineNumber, MAXLABELS);
         break;
     case WARNING_BADGAMEVAR:
         initprintf("%s:%d: warning: variable `%s' should be either per-player OR per-actor, not both.\n",g_scriptFileName,g_lineNumber,LAST_LABEL);

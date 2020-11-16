@@ -467,8 +467,10 @@ int32_t G_LoadPlayer(savebrief_t & sv)
             {
                 // only setup art if map differs from previous
                 if (!previousboardfilename[0] || Bstrcmp(previousboardfilename, currentboardfilename))
+                {
                     artSetupMapArt(currentboardfilename);
-                Bstrcpy(previousboardfilename, currentboardfilename);
+                    Bstrcpy(previousboardfilename, currentboardfilename);
+                }
                 append_ext_UNSAFE(currentboardfilename, ".mhk");
                 engineLoadMHK(currentboardfilename);
             }
@@ -649,10 +651,10 @@ int32_t G_LoadPlayer(savebrief_t & sv)
     ud.m_level_number = h.levnum;
     ud.m_player_skill = h.skill;
 
-    // NOTE: Bmemcpy needed for SAVEGAME_MUSIC.
-//    EDUKE32_STATIC_ASSERT(sizeof(boardfilename) == sizeof(h.boardfn));
+    EDUKE32_STATIC_ASSERT(sizeof(h.boardfn) < sizeof(boardfilename));
     different_user_map = Bstrncmp(boardfilename, h.boardfn, sizeof(h.boardfn));
-    Bmemcpy(boardfilename, h.boardfn, sizeof(boardfilename));
+    // NOTE: size arg is (unconventionally) that of the source, it being smaller.
+    Bstrncpyz(boardfilename, h.boardfn, sizeof(h.boardfn) /*!*/);
 
     int const mapIdx = h.volnum*MAXLEVELS + h.levnum;
 
@@ -665,8 +667,10 @@ int32_t G_LoadPlayer(savebrief_t & sv)
     {
         // only setup art if map differs from previous
         if (!previousboardfilename[0] || Bstrcmp(previousboardfilename, currentboardfilename))
+        {
             artSetupMapArt(currentboardfilename);
-        Bstrcpy(previousboardfilename, currentboardfilename);
+            Bstrcpy(previousboardfilename, currentboardfilename);
+        }
         append_ext_UNSAFE(currentboardfilename, ".mhk");
         engineLoadMHK(currentboardfilename);
     }
@@ -1669,9 +1673,7 @@ int32_t sv_saveandmakesnapshot(buildvfs_FILE fil, char const *name, int8_t spot,
     h.levnum     = ud.level_number;
     h.skill      = ud.player_skill;
 
-    const uint32_t BSZ = sizeof(h.boardfn);
-    // EDUKE32_STATIC_ASSERT(BSZ == sizeof(currentboardfilename));
-    Bstrncpy(h.boardfn, currentboardfilename, BSZ);
+    Bstrncpyz(h.boardfn, currentboardfilename, sizeof(h.boardfn));
 
     if (spot >= 0)
     {
@@ -2005,7 +2007,7 @@ static void sv_prelabelload(void)
     savegame_labels = (char *)Xmalloc(savegame_labelcnt << 6);
 }
 
-static int sv_findlabelindex(int32_t val, int type)
+static int sv_findlabelindex(int32_t const val, int const type)
 {
     for (int i=0;i<g_labelCnt;i++)
         if (labelcode[i] == val && (labeltype[i] & type) != 0)
@@ -2018,14 +2020,21 @@ static int sv_findlabelindex(int32_t val, int type)
     return -1;
 }
 
+static inline int sv_checkoffset(int const scriptoffs, int const val, int const endoffs)
+{
+    return ((unsigned)scriptoffs > 0 && (unsigned)scriptoffs + endoffs < (unsigned)g_scriptSize
+            && apScript[scriptoffs - 1] == val
+            && apScript[scriptoffs + endoffs] == CON_END);
+}
+
 // translate anything in actor[] that holds an offset into compiled CON into a label index
 static void sv_preactorsave(void)
 {
     for (int i = 0; i < MAXSPRITES; i++)
     {
-        actor_t &a = actor[i];
+        auto &a = actor[i];
 
-        if ((unsigned)AC_MOVE_ID(a.t_data) + 3 < (unsigned)g_scriptSize && apScript[AC_MOVE_ID(a.t_data) + 3] == CON_MOVE)
+        if (sv_checkoffset(AC_MOVE_ID(a.t_data), CON_MOVE, 3))
         {
             int const index = sv_findlabelindex(AC_MOVE_ID(a.t_data), LABEL_MOVE | LABEL_DEFINE);
             Bassert(index != -1);
@@ -2033,8 +2042,7 @@ static void sv_preactorsave(void)
             a.flags |= SFLAG_RESERVED;
         }
 
-        if ((unsigned)AC_ACTION_ID(a.t_data) + ACTION_PARAM_COUNT < (unsigned)g_scriptSize
-            && apScript[AC_ACTION_ID(a.t_data) + ACTION_PARAM_COUNT] == CON_ACTION)
+        if (sv_checkoffset(AC_ACTION_ID(a.t_data), CON_ACTION, ACTION_PARAM_COUNT))
         {
             int const index = sv_findlabelindex(AC_ACTION_ID(a.t_data), LABEL_ACTION);
             Bassert(index != -1);
@@ -2042,7 +2050,7 @@ static void sv_preactorsave(void)
             a.flags |= SFLAG_RESERVED2;
         }
 
-        if ((unsigned)AC_AI_ID(a.t_data) + 3 < (unsigned)g_scriptSize && apScript[AC_AI_ID(a.t_data) + 3] == CON_AI)
+        if (sv_checkoffset(AC_AI_ID(a.t_data), CON_AI, 3))
         {
             int const index = sv_findlabelindex(AC_AI_ID(a.t_data), LABEL_AI);
             Bassert(index != -1);
