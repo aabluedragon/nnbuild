@@ -2443,7 +2443,7 @@ void A_DamageObject_Internal(int i,int sn)
                 if ((sprite[i].xrepeat < 24 || PN == SHARK) && sprite[sn].picnum == SHRINKSPARK) return;
             }
 
-            if (sprite[i].statnum != 2)
+            if (sprite[i].statnum != STAT_ZOMBIEACTOR)
             {
                 if (sprite[sn].picnum == FREEZEBLAST && ((PN == APLAYER && sprite[i].pal == 1) || (g_freezerSelfDamage == 0 && sprite[sn].owner == i)))
                     return;
