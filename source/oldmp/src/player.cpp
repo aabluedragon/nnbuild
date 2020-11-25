@@ -4653,7 +4653,7 @@ void P_ProcessInput(int snum)
                 if (klabs(p->pos.z - fz) > (PHEIGHT >> 1))
                     p->pos.z += 348;
             }
-            else
+            else if (!oldnet_predicting)
             {
                 s->z -= 512;
                 s->zvel = -348;
