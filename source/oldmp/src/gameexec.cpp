@@ -1046,22 +1046,38 @@ static int X_DoExecute(void)
     case CON_IFGOTWEAPONCE:
         insptr++;
 
+        // [JM] I fucking hate this code.
         if ((GametypeFlags[ud.coop]&GAMETYPE_WEAPSTAY) && ud.multimode > 1)
         {
-            if (*insptr == 0)
+            // HACK: Don't do this for pipebombs and tripmines, the weapon is also ammo.
+            if (g_sp->picnum == HBOMBAMMO || g_sp->picnum == TRIPBOMBSPRITE)
             {
+                // To-do: Make this a sprite or weapon flag, not a hardcoded picnum check.
+                X_DoConditional(0);
+            }
+            else if (*insptr == 0) // Param is 0, check if recently picked up.
+            {
+                // To-do: Make this block do fuck all (return false),
+                //        and make a much more reliable, less shitty check in addweapon.
+
                 for (j=0;j < g_player[g_p].ps->weapreccnt;j++)
                     if (g_player[g_p].ps->weaprecs[j] == g_sp->picnum)
-                        break;
+                        break; // Yes
 
+                // If we have this weapon already, and it's not dropped, return true.
                 X_DoConditional(j < g_player[g_p].ps->weapreccnt && g_sp->owner == g_i);
             }
-            else if (g_player[g_p].ps->weapreccnt < 16)
+            else if (g_player[g_p].ps->weapreccnt < 16) // Param is non-zero, and we've picked up under 16 weapons?
             {
+                // To-do: Just check if param is 1, and remove the line underneath this one.
+                //        This weapreccnt shit is wack.
+
+                // Add weapon to recent pickup list.
                 g_player[g_p].ps->weaprecs[g_player[g_p].ps->weapreccnt++] = g_sp->picnum;
-                X_DoConditional(g_sp->owner == g_i);
+
+                X_DoConditional(g_sp->owner == g_i); // Return true if map spawned, not dropped.
             }
-            else X_DoConditional(0);
+            else X_DoConditional(0); // If we're at 16 weapons or above, just give up it seems.
         }
         else X_DoConditional(0);
         break;
