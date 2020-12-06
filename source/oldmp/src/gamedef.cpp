@@ -489,6 +489,7 @@ const char *keyw[] =
     "damageeventtile",          // 350, was 429 in r6771
     "damageeventtilerange",     // 351, was 430 in r6771
     "getteamname",              // 352
+    "abs",                      // 353
     "<null>"
 };
 
@@ -4332,6 +4333,7 @@ static int C_ParseCommand(void)
     case CON_FINDPLAYER:
     case CON_FINDOTHERPLAYER:
     case CON_DISPLAYRAND:
+    case CON_KLABS:
 
         // syntax: displayrand <var>
         // gets rand (not game rand) into <var>
