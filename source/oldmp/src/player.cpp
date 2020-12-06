@@ -2004,6 +2004,21 @@ static void P_DisplaySpitAnim(int snum)
     }
 }
 
+static int P_GetHudPal(const DukePlayer_t* p)
+{
+    if (sprite[p->i].pal == 1)
+        return 1;
+
+    if (p->cursectnum >= 0)
+    {
+        int const hudPal = sector[p->cursectnum].floorpal;
+        if (!g_noFloorPal[hudPal])
+            return hudPal;
+    }
+
+    return 0;
+}
+
 static int P_DisplayFistAnim(int gs,int snum)
 {
     int looking_arc,fisti,fistpal;
@@ -2255,28 +2270,41 @@ void P_DisplayScubaMask(int snum)
     }
 }
 
-static int P_DisplayTipAnim(int gs,int snum)
+static int P_DisplayTip(int tipShade, int playerNum)
 {
-    int p,looking_arc;
-    static short tip_y[] = {0,-8,-16,-32,-64,-84,-108,-108,-108,-108,-108,-108,-108,-108,-108,-108,-96,-72,-64,-32,-16};
+    static int8_t const tip_y_offsets[] = {
+    0, -8, -16, -32, -64, -84, -108, -108, -108, -108, -108, -108, -108, -108, -108, -108, -96, -72, -64, -32, -16,
+    /* EDuke32: */ 0, 16, 32, 48,
+    // At y coord 64, the hand is already not shown.
+    };
 
-    if (g_player[snum].ps->tipincs == 0) return 0;
+    auto const pPlayer = g_player[playerNum].ps;
 
-    looking_arc = klabs(g_player[snum].ps->look_ang)/9;
-    looking_arc -= (g_player[snum].ps->hard_landing<<3);
+    if (pPlayer->tipincs == 0)
+        return 0;
 
-    if (sprite[g_player[snum].ps->i].pal == 1)
-        p = 1;
-    else
-        p = sector[g_player[snum].ps->cursectnum].floorpal;
+    switch (X_OnEventWithReturn(EVENT_DISPLAYTIP, pPlayer->i, playerNum, 0))
+    {
+        case 1: return 1;
+        case -1: return 0;
+    }
 
-    /*    if(g_player[snum].ps->access_spritenum >= 0)
-            p = sprite[g_player[snum].ps->access_spritenum].pal;
-        else
-            p = wall[g_player[snum].ps->access_wallnum].pal;
-      */
-    G_DrawTileScaled(170+(fix16_to_int(g_player[snum].inputBits->q16avel)>>4)-(g_player[snum].ps->look_ang>>1),
-                     (tip_y[g_player[snum].ps->tipincs]>>1)+looking_arc+240-(fix16_to_int(g_player[snum].ps->q16horiz-g_player[snum].ps->q16horizoff)>>4),TIP+((26-g_player[snum].ps->tipincs)>>4),gs,262144,p);
+    // Report that the tipping hand has been drawn so that the otherwise
+    // selected weapon is not drawn.
+    if ((unsigned)pPlayer->tipincs >= ARRAY_SIZE(tip_y_offsets))
+        return 1;
+
+    int const tipY = (klabs(pPlayer->look_ang) / 9) - (pPlayer->hard_landing << 3);
+    int const tipPal = P_GetHudPal(pPlayer);
+    int const tipYOffset = tip_y_offsets[pPlayer->tipincs] >> 1;
+
+    guniqhudid = 201;
+
+    G_DrawTileScaled(170 + (fix16_to_int(g_player[playerNum].inputBits->q16avel) >> 5) - (pPlayer->look_ang >> 1),
+        tipYOffset + tipY + 240 - (fix16_to_int(pPlayer->q16horiz - pPlayer->q16horizoff) >> 4),
+        TIP + ((26 - pPlayer->tipincs) >> 4), tipShade, 262144, tipPal);
+
+    guniqhudid = 0;
 
     return 1;
 }
@@ -2323,7 +2351,7 @@ void P_DisplayWeapon(int snum)
     gs = sprite[p->i].shade;
     if (gs > 24) gs = 24;
 
-    if (p->newowner >= 0 || ud.camerasprite >= 0 || p->over_shoulder_on > 0 || (sprite[p->i].pal != 1 && sprite[p->i].extra <= 0) || P_DisplayFistAnim(gs,snum) || P_DisplayKnuckleAnim(gs,snum) || P_DisplayTipAnim(gs,snum) || P_DisplayAccessAnim(gs,snum))
+    if (p->newowner >= 0 || ud.camerasprite >= 0 || p->over_shoulder_on > 0 || (sprite[p->i].pal != 1 && sprite[p->i].extra <= 0) || P_DisplayFistAnim(gs,snum) || P_DisplayKnuckleAnim(gs,snum) || P_DisplayTip(gs,snum) || P_DisplayAccessAnim(gs,snum))
         return;
 
     P_DisplayKneeAnim(gs,snum);
