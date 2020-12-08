@@ -3118,8 +3118,9 @@ cheat_for_port_credits:
                     do
                     {
                         newvidmode++;
-                        if (newvidmode == lastvidmode) break;   // end of cycle
+
                         if (newvidmode >= validmodecnt) newvidmode = 0;
+
                         if (validmode[newvidmode].bpp == (vidsets[newvidset]&0x0ffff) &&
                                 validmode[newvidmode].fs == newfullscreen &&
                                 validmode[newvidmode].xdim <= validmode[lastvidmode].xdim &&
@@ -3128,6 +3129,8 @@ cheat_for_port_credits:
                                 (safevidmode==-1?1:(validmode[newvidmode].ydim>=validmode[safevidmode].ydim))
                            )
                             safevidmode = newvidmode;
+
+                        if (newvidmode == lastvidmode) break;   // end of cycle
                     }
                     while (1);
                     if (safevidmode == -1)
