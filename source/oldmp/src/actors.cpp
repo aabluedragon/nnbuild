@@ -4373,31 +4373,80 @@ static void G_MoveActors(void)
             fallthrough__;
 
         case HEAVYHBOMB__STATIC:
-
-            if ((s->cstat&32768))
+        {
+            enum
             {
-                t[2]--;
-                if (t[2] <= 0)
+                PIPEBOMB_PICKUPTIMER = 0,
+                PIPEBOMB_ORIGINALOWNER,
+                PIPEBOMB_RESPAWNTIME,
+                PIPEBOMB_WASHIT,
+                PIPEBOMB_EXPLOSIONTIMER,
+                PIPEBOMB_INWATER,
+                PIPEBOMB_FUSETYPE,
+                PIPEBOMB_FUSETIME,
+                PIPEBOMB_INITIALZ,
+                PIPEBOMB_INITIALSECT,
+            };
+
+            enum
+            {
+                FUSE_TIMED = 1,
+                FUSE_REMOTE,
+                FUSE_EXPLODE,
+            };
+
+            if ((s->cstat & 32768))
+            {
+                t[PIPEBOMB_RESPAWNTIME]--;
+                if (t[PIPEBOMB_RESPAWNTIME] <= 0)
                 {
-                    A_PlaySound(TELEPORTER,i);
-                    A_Spawn(i,TRANSPORTERSTAR);
+                    A_PlaySound(TELEPORTER, i);
+                    A_Spawn(i, TRANSPORTERSTAR);
+
+                    t[PIPEBOMB_WASHIT] = 0;
+                    t[PIPEBOMB_EXPLOSIONTIMER] = 0;
+                    t[PIPEBOMB_INWATER] = 0;
+                    t[PIPEBOMB_FUSETYPE] = 0;
+                    t[PIPEBOMB_FUSETIME] = 0;
+
+                    l = -1;
+                    s->xvel = 0;
+                    s->yvel = 4;
+                    s->zvel = 0;
+                    s->extra = *actorscrptr[s->picnum];
                     s->cstat = 257;
+
+                    ActorExtra[i].extra = -1;
+                    ActorExtra[i].owner = i;
+                    ActorExtra[i].picnum = s->picnum;
                 }
                 goto BOLT;
             }
 
-            p = A_FindPlayer(s,&x);
+            p = A_FindPlayer(s, &x);
 
             if (x < 1220) s->cstat &= ~257;
             else s->cstat |= 257;
 
-            if (t[3] == 0)
+            if (t[PIPEBOMB_WASHIT] == 0)
             {
+                t[PIPEBOMB_ORIGINALOWNER] = -1;
+                int temp_owner = s->owner;
                 j = A_IncurDamage(i);
                 if (j >= 0)
                 {
-                    t[3] = 1;
-                    t[4] = 0;
+                    t[PIPEBOMB_WASHIT] = 1;
+                    t[PIPEBOMB_EXPLOSIONTIMER] = 0;
+                    t[PIPEBOMB_ORIGINALOWNER] = temp_owner;
+
+                    // [JM] HACK: I'd gladly use temp_data here, but there's not enough space.
+                    // Time to pull a Todd and use something that's otherwise completely unused for this actor.
+                    // I don't like this, but it'll do. If anyone is willing to suggest a better way, I'm all ears.
+                    ActorExtra[i].lastvx = s->x;
+                    ActorExtra[i].lastvy = s->y;
+                    t[PIPEBOMB_INITIALZ] = s->z;
+                    t[PIPEBOMB_INITIALSECT] = s->sectnum;
+
                     l = 0;
                     s->xvel = 0;
                     goto DETONATEB;
@@ -4408,7 +4457,7 @@ static void G_MoveActors(void)
             {
                 A_Fall(i);
 
-                if ((sector[sect].lotag != ST_1_ABOVE_WATER || ActorExtra[i].floorz != sector[sect].floorz) && s->z >= ActorExtra[i].floorz-(ACTOR_FLOOR_OFFSET) && s->yvel < 3)
+                if ((sector[sect].lotag != ST_1_ABOVE_WATER || ActorExtra[i].floorz != sector[sect].floorz) && s->z >= ActorExtra[i].floorz - (ACTOR_FLOOR_OFFSET) && s->yvel < 3)
                 {
                     if (s->yvel > 0 || (s->yvel == 0 && ActorExtra[i].floorz == sector[sect].floorz))
                         A_PlaySound(PIPEBOMB_BOUNCE,i);
@@ -4434,18 +4483,18 @@ static void G_MoveActors(void)
             if (sector[SECT].lotag == ST_1_ABOVE_WATER && s->zvel == 0 && ActorExtra[i].floorz == sector[sect].floorz)
             {
                 s->z += (32<<8);
-                if (t[5] == 0)
+                if (t[PIPEBOMB_INWATER] == 0)
                 {
-                    t[5] = 1;
+                    t[PIPEBOMB_INWATER] = 1;
                     A_Spawn(i,WATERSPLASH2);
                 }
             }
-            else t[5] = 0;
+            else t[PIPEBOMB_INWATER] = 0;
 
-            if (t[3] == 0 && (s->picnum == BOUNCEMINE || s->picnum == MORTER) && (j || x < 844))
+            if (t[PIPEBOMB_WASHIT] == 0 && (s->picnum == BOUNCEMINE || s->picnum == MORTER) && (j || x < 844))
             {
-                t[3] = 1;
-                t[4] = 0;
+                t[PIPEBOMB_WASHIT] = 1;
+                t[PIPEBOMB_EXPLOSIONTIMER] = 0;
                 l = 0;
                 s->xvel = 0;
                 goto DETONATEB;
@@ -4480,40 +4529,25 @@ static void G_MoveActors(void)
                 s->xvel >>= 1;
             }
 
-            //      int lPipeBombControl=Gv_GetVarByLabel("PIPEBOMB_CONTROL", PIPEBOMB_REMOTE, -1, -1);
-
 DETONATEB:
 
-            //  if(lPipeBombControl & PIPEBOMB_TIMER)
-            //       {
-
-            if (s->picnum == HEAVYHBOMB && t[6] == 1)
+            if (s->picnum == HEAVYHBOMB && t[PIPEBOMB_FUSETYPE] == FUSE_TIMED)
             {
-                /*                if(s->extra >= 1)
-                                {
-                                    s->extra--;
-                                }
+                if (t[PIPEBOMB_FUSETIME] > 0)
+                    t[PIPEBOMB_FUSETIME]--;
 
-                                if(s->extra <= 0)
-                                    s->lotag=911;
-                */
-
-                if (t[7] > 0)
-                    t[7]--;
-
-                if (t[7] == 0)
-                    t[6] = 3;
+                if (t[PIPEBOMB_FUSETIME] == 0)
+                    t[PIPEBOMB_FUSETYPE] = FUSE_EXPLODE;
             }
-            //      }
 
-            if ((l >= 0 && g_player[l].ps->hbomb_on == 0 && t[6] == 2) || t[3] == 1)
-                t[6] = 3;
+            if ((l >= 0 && g_player[l].ps->hbomb_on == 0 && t[PIPEBOMB_FUSETYPE] == FUSE_REMOTE) || t[PIPEBOMB_WASHIT] == 1)
+                t[PIPEBOMB_FUSETYPE] = FUSE_EXPLODE;
 
-            if (t[6] == 3)
+            if (t[PIPEBOMB_FUSETYPE] == FUSE_EXPLODE)
             {
-                t[4]++;
+                t[PIPEBOMB_EXPLOSIONTIMER]++;
 
-                if (t[4] == 2)
+                if (t[PIPEBOMB_EXPLOSIONTIMER] == 2)
                 {
                     x = s->extra;
                     m = 0;
@@ -4537,6 +4571,9 @@ DETONATEB:
                     A_PlaySound(PIPEBOMB_EXPLODE,i);
                     for (x=0;x<8;x++)
                         RANDOMSCRAP;
+
+                    if (t[PIPEBOMB_ORIGINALOWNER] > -1)
+                        s->owner = t[PIPEBOMB_ORIGINALOWNER];
                 }
 
                 if (s->yrepeat)
@@ -4545,42 +4582,42 @@ DETONATEB:
                     goto BOLT;
                 }
 
-                if (t[4] > 20)
+                if (t[PIPEBOMB_EXPLOSIONTIMER] > 20)
                 {
-                    if (s->owner != i || ud.respawn_items == 0)
+                    if (s->owner != i || ud.respawn_items == 0 || s->picnum == MORTER || s->picnum == BOUNCEMINE)
                     {
                         KILLIT(i);
                     }
                     else
                     {
-                        t[2] = g_itemRespawnTime;
-                        A_Spawn(i,RESPAWNMARKERRED);
-                        s->cstat = (short) 32768;
+                        if (t[PIPEBOMB_WASHIT] == 1)
+                        {
+                            s->x = ActorExtra[i].lastvx;
+                            s->y = ActorExtra[i].lastvy;
+                            s->z = t[PIPEBOMB_INITIALZ];
+                            changespritesect(i, t[PIPEBOMB_INITIALSECT]);
+                        }
+
+                        t[PIPEBOMB_RESPAWNTIME] = g_itemRespawnTime;
+                        A_Spawn(i, RESPAWNMARKERRED);
+                        s->cstat = (short)32768;
                         s->yrepeat = 9;
                         goto BOLT;
                     }
                 }
             }
-            else if (s->picnum == HEAVYHBOMB && x < 788 && t[0] > 7 && s->xvel == 0)
-                if (cansee(s->x,s->y,s->z-(8<<8),s->sectnum,g_player[p].ps->pos.x,g_player[p].ps->pos.y,g_player[p].ps->pos.z,g_player[p].ps->cursectnum))
+            else if (s->picnum == HEAVYHBOMB && x < 788 && t[PIPEBOMB_PICKUPTIMER] > 7 && s->xvel == 0)
+            {
+                if (cansee(s->x, s->y, s->z - (8 << 8), s->sectnum, g_player[p].ps->pos.x, g_player[p].ps->pos.y, g_player[p].ps->pos.z, g_player[p].ps->cursectnum))
+                {
                     if (g_player[p].ps->ammo_amount[HANDBOMB_WEAPON] < g_player[p].ps->max_ammo_amount[HANDBOMB_WEAPON])
                     {
-                        if ((GametypeFlags[ud.coop] & GAMETYPE_WEAPSTAY) && s->owner == i)
-                        {
-                            for (j=0;j<g_player[p].ps->weapreccnt;j++)
-                                if (g_player[p].ps->weaprecs[j] == s->picnum)
-                                    goto BOLT;
-
-                            if (g_player[p].ps->weapreccnt < 255)
-                                g_player[p].ps->weaprecs[g_player[p].ps->weapreccnt++] = s->picnum;
-                        }
-
-                        P_AddAmmo(HANDBOMB_WEAPON,g_player[p].ps,1);
-                        A_PlaySound(DUKE_GET,g_player[p].ps->i);
+                        P_AddAmmo(HANDBOMB_WEAPON, g_player[p].ps, 1);
+                        A_PlaySound(DUKE_GET, g_player[p].ps->i);
 
                         if (g_player[p].ps->gotweapon[HANDBOMB_WEAPON] == 0 || s->owner == g_player[p].ps->i)
                         {
-                            P_AddWeapon(g_player[p].ps,HANDBOMB_WEAPON, (!(g_player[p].ps->weaponswitch & 1) && *aplWeaponWorksLike[g_player[p].ps->curr_weapon] != HANDREMOTE_WEAPON));
+                            P_AddWeapon(g_player[p].ps, HANDBOMB_WEAPON, (!(g_player[p].ps->weaponswitch & 1) && *aplWeaponWorksLike[g_player[p].ps->curr_weapon] != HANDREMOTE_WEAPON));
                         }
 
                         if (sprite[s->owner].picnum != APLAYER)
@@ -4593,21 +4630,21 @@ DETONATEB:
 
                         if (s->owner != i || ud.respawn_items == 0)
                         {
-                            if (s->owner == i && (GametypeFlags[ud.coop] & GAMETYPE_WEAPSTAY))
-                                goto BOLT;
                             KILLIT(i);
                         }
                         else
                         {
-                            t[2] = g_itemRespawnTime;
-                            A_Spawn(i,RESPAWNMARKERRED);
-                            s->cstat = (short) 32768;
+                            t[PIPEBOMB_RESPAWNTIME] = g_itemRespawnTime;
+                            A_Spawn(i, RESPAWNMARKERRED);
+                            s->cstat = (short)32768;
                         }
                     }
+                }
+            }
 
-            if (t[0] < 8) t[0]++;
+            if (t[PIPEBOMB_PICKUPTIMER] < 8) t[PIPEBOMB_PICKUPTIMER]++;
             goto BOLT;
-
+        }
         case REACTORBURNT__STATIC:
         case REACTOR2BURNT__STATIC:
             goto BOLT;
