@@ -4003,8 +4003,8 @@ static int X_DoExecute(void)
         break;
 
     case CON_KLABS:
-        insptr++;
-        Gv_SetVarX(*insptr, klabs(Gv_GetVarX(*(insptr++))));
+        Gv_SetVarX(insptr[1], klabs(Gv_GetVarX(insptr[1])));
+        insptr += 2;
         break;
 
     case CON_ADDVARVAR:
