@@ -44,6 +44,28 @@ endef
 
 ##### External Library Definitions
 
+#### discord-rpc
+
+discordrpc := discordrpc
+
+discordrpc_root := $(source)/$(discordrpc)
+discordrpc_src := $(discordrpc_root)/src
+discordrpc_inc := $(discordrpc_root)/include
+discordrpc_obj := $(obj)/$(discordrpc)
+
+discordrpc_objs := \
+    discord_rpc.cpp \
+    rpc_connection.cpp \
+    serialization.cpp \
+
+ifeq ($(PLATFORM),WINDOWS)
+discordrpc_objs+=connection_win.cpp discord_register_win.cpp
+else
+discordrpc_objs+=connection_unix.cpp discord_register_linux.cpp
+endif
+
+discordrpc_cflags=-g -I$(discordrpc_inc) -Wno-class-memaccess
+
 #### libxmp-lite
 
 libxmplite := libxmp-lite
@@ -772,9 +794,9 @@ oldmp_src := $(oldmp_root)/src
 oldmp_rsrc := $(oldmp_root)/rsrc
 oldmp_obj := $(obj)/$(oldmp)
 
-oldmp_cflags := -I$(oldmp_src)
+oldmp_cflags := -I$(oldmp_src) -DDISCORD_RPC
 
-oldmp_game_deps := audiolib mact
+oldmp_game_deps := audiolib mact discordrpc
 
 oldmp_game := eduke32-oldmp
 
@@ -840,6 +862,7 @@ COMPILERFLAGS += \
     -I$(audiolib_inc) \
     -I$(glad_inc) \
     -I$(voidwrap_inc) \
+    -I$(discordrpc_inc) \
     -MP -MMD \
 
 ifneq (0,$(USE_PHYSFS))
@@ -865,6 +888,7 @@ libraries := \
     libxmplite \
     mact \
     voidwrap \
+    discordrpc \
 
 ifneq (0,$(USE_PHYSFS))
     libraries += physfs

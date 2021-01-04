@@ -17,9 +17,9 @@ int32_t last_max_secrets;
 int32_t last_mode = -1;
 int64_t time_started;
 
-static void handleDiscordReady()
+static void handleDiscordReady(const DiscordUser* user)
 {
-    initprintf("Discord: Ready!\n");
+    initprintf("Discord: Ready! Welcome, %s#%s.\n", user->username, user->discriminator);
     discord_status = DISCORD_READY;
 }
 
