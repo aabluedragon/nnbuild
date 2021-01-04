@@ -31,7 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef APPBASENAME
 #define APPBASENAME "eduke32-oldmp"
 #endif
-#define VERSION "Release 33"
+#define VERSION "Release 34"
 
 #define HEAD2 APPNAME " " VERSION
 
