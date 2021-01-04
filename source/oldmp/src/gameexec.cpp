@@ -2336,6 +2336,7 @@ static int X_DoExecute(void)
 
     case CON_ROTATESPRITE16:
     case CON_ROTATESPRITE:
+    case CON_ROTATESPRITEA:
         insptr++;
         {
             int32_t x = Gv_GetVarX(*insptr++), y = Gv_GetVarX(*insptr++), z = Gv_GetVarX(*insptr++);
