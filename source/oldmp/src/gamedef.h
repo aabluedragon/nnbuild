@@ -895,7 +895,9 @@ enum ScriptKeywords_t
     CON_DAMAGEEVENTTILE,	// 350, was 429 in r6771
     CON_DAMAGEEVENTTILERANGE, // 351, was 430 in r6771
     CON_GETTEAMNAME,        // 352
-    CON_KLABS,                // 353
+    CON_KLABS,              // 353
+    CON_SHIFTVARVARL,       // 354
+    CON_SHIFTVARVARR,       // 355
     CON_END
 };
 #endif

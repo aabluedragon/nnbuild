@@ -490,6 +490,8 @@ const char *keyw[] =
     "damageeventtilerange",     // 351, was 430 in r6771
     "getteamname",              // 352
     "abs",                      // 353
+    "shiftvarvarl",             // 354
+    "shiftvarvarr",             // 355
     "<null>"
 };
 
@@ -3846,6 +3848,8 @@ static int C_ParseCommand(void)
     case CON_ANDVARVAR:
     case CON_ORVARVAR:
     case CON_XORVARVAR:
+    case CON_SHIFTVARVARR:
+    case CON_SHIFTVARVARL:
     case CON_DISPLAYRANDVARVAR:
     case CON_SIN:
     case CON_COS:

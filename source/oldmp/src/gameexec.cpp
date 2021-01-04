@@ -3990,6 +3990,18 @@ static int X_DoExecute(void)
         insptr += 2;
         break;
 
+    case CON_SHIFTVARVARL:
+        insptr++;
+        j = *insptr++;
+        Gv_SetVarX(j, Gv_GetVarX(j) << Gv_GetVarX(*insptr++));
+        break;
+
+    case CON_SHIFTVARVARR:
+        insptr++;
+        j = *insptr++;
+        Gv_SetVarX(j, Gv_GetVarX(j) >> Gv_GetVarX(*insptr++));
+        break;
+
     case CON_SIN:
         insptr++;
         Gv_SetVarX(*insptr, sintable[Gv_GetVarX(*(insptr+1))&2047]);
