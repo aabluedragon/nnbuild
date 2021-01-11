@@ -3565,6 +3565,18 @@ static int X_DoExecute(void)
             break;
         }
 
+    case CON_SETTILEDATA:
+    case CON_GETTILEDATA:
+        insptr++;
+        {
+            // syntax [gs]ettiledata[<var>].x <VAR>
+            // <varid> <xxxid> <varid>
+            int lVar1 = *insptr++, lLabelID = *insptr++, lVar2 = *insptr++;
+
+            X_AccessTileData(tw == CON_SETTILEDATA, lVar1, lLabelID, lVar2);
+            break;
+        }
+
     case CON_GETUSERDEF:
     case CON_SETUSERDEF:
         insptr++;

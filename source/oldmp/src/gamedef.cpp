@@ -492,6 +492,8 @@ const char *keyw[] =
     "abs",                      // 353
     "shiftvarvarl",             // 354
     "shiftvarvarr",             // 355
+    "gettiledata",              // 356
+    "settiledata",              // 357
     "<null>"
 };
 
@@ -954,6 +956,24 @@ const memberlabel_t InputLabels[]=
     { "", -1, 0, 0  }     // END OF LIST
 };
 
+const memberlabel_t TileDataLabels[] =
+{
+    // tilesiz[]
+    { "xsize",      TILEDATA_XSIZE,      0, 0 },
+    { "ysize",      TILEDATA_YSIZE,      0, 0 },
+
+    // picanm[]
+    { "animframes", TILEDATA_ANIMFRAMES, 0, 0 },
+    { "xoffset",    TILEDATA_XOFFSET,    0, 0 },
+    { "yoffset",    TILEDATA_YOFFSET,    0, 0 },
+    { "animspeed",  TILEDATA_ANIMSPEED,  0, 0 },
+    { "animtype",   TILEDATA_ANIMTYPE,   0, 0 },
+
+    // g_tile[]
+    { "gameflags",  TILEDATA_GAMEFLAGS,  0, 0 },
+    { "", -1, 0, 0  }     // END OF LIST
+};
+
 char *bitptr; // pointer to bitmap of which bytecode positions contain pointers
 #define BITPTR_POINTER 1
 
@@ -971,6 +991,7 @@ hashtable_t playerH     = { PLAYER_END>>1, NULL };
 hashtable_t inputH      = { INPUT_END>>1, NULL };
 hashtable_t actorH      = { ACTOR_END>>1, NULL };
 hashtable_t tspriteH    = { ACTOR_END>>1, NULL };
+hashtable_t tileDataH   = { TILEDATA_END >> 1, NULL };
 
 void inithashnames();
 void freehashnames();
@@ -993,6 +1014,7 @@ void inithash()
     hash_init(&inputH);
     hash_init(&actorH);
     hash_init(&tspriteH);
+    hash_init(&tileDataH);
 
     for (i = NUMKEYWORDS - 1; i >= 0; i--) hash_add(&keywH, keyw[i], i, 0);
     for (i = 0; SectorLabels[i].lId >= 0; i++) hash_add(&sectorH, SectorLabels[i].name, i, 0);
@@ -1003,6 +1025,7 @@ void inithash()
     for (i = 0; InputLabels[i].lId >= 0; i++) hash_add(&inputH, InputLabels[i].name, i, 0);
     for (i = 0; ActorLabels[i].lId >= 0; i++) hash_add(&actorH, ActorLabels[i].name, i, 0);
     for (i = 0; TsprLabels[i].lId >= 0; i++) hash_add(&tspriteH, TsprLabels[i].name, i, 0);
+    for (i = 0; TileDataLabels[i].lId >= 0; i++) hash_add(&tileDataH, TileDataLabels[i].name, i, 0);
 }
 
 
@@ -3318,6 +3341,75 @@ static int C_ParseCommand(void)
 
         // get the ID of the DEF
         if (tw==CON_GETINPUT)
+            C_GetNextVarType(GAMEVAR_READONLY);
+        else
+            C_GetNextVar();
+        break;
+    }
+
+    case CON_SETTILEDATA:
+        if (!C_CheckEventSync(g_currentEvent))
+        {
+            C_ReportError(WARNING_EVENTSYNC);
+            g_numCompilerWarnings++;
+        }
+        fallthrough__;
+    case CON_GETTILEDATA:
+    {
+        int lLabelID;
+
+        // syntax gettiledata[<var>].xxx <VAR>
+        // gets various pieces of tile data into <VAR>
+
+        // now get name of .xxx
+        while ((*textptr != '['))
+        {
+            textptr++;
+        }
+        if (*textptr == '[')
+            textptr++;
+
+        // get the ID of the DEF
+        g_labelsOnly = 1;
+        C_GetNextVar();
+        g_labelsOnly = 0;
+        // now get name of .xxx
+        while (*textptr != '.')
+        {
+            if (*textptr == 0xa)
+                break;
+            if (!*textptr)
+                break;
+
+            textptr++;
+        }
+        if (*textptr != '.')
+        {
+            g_numCompilerErrors++;
+            C_ReportError(ERROR_SYNTAXERROR);
+            return 0;
+        }
+        textptr++;
+        /// now pointing at 'xxx'
+        C_GetNextLabelName();
+        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+
+        lLabelID = C_GetLabelNameOffset(&tileDataH, Bstrtolower(label + (g_numLabels << 6)));
+        //printf("LabelID is %d\n",lLabelID);
+        if (lLabelID == -1)
+        {
+            g_numCompilerErrors++;
+            C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
+            return 0;
+        }
+
+        bitptr[(g_scriptPtr - script) >> 3] &= ~(1 << ((g_scriptPtr - script) & 7));
+        *g_scriptPtr++ = InputLabels[lLabelID].lId;
+
+        // now at target VAR...
+
+        // get the ID of the DEF
+        if (tw == CON_GETTILEDATA)
             C_GetNextVarType(GAMEVAR_READONLY);
         else
             C_GetNextVar();
@@ -5924,6 +6016,7 @@ void C_Compile(const char *filenam)
         hash_free(&inputH);
         hash_free(&actorH);
         hash_free(&tspriteH);
+        hash_free(&tileDataH);
 
         g_totalLines += g_lineNumber;
 

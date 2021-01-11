@@ -29,6 +29,95 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // this is all the crap for accessing the game's structs through the CON VM
 // I got a 3-4 fps gain by inlining these...
 
+static inline void X_AccessTileData(int iSet, int lVar1, int lLabelID, int lVar2)
+{
+    int lValue = 0, tile = g_i;
+
+    if (lVar1 != g_iThisActorID)
+        tile = Gv_GetVar(lVar1, g_i, g_p);
+
+    if ((tile < 0 || tile >= MAXTILES) && g_scriptSanityChecks)
+    {
+        OSD_Printf(CON_ERROR "tried to %s %s on invalid tile number (%d) from sprite id: %d, picnum: %d.\n", g_errorLineNum, keyw[g_tw],
+            iSet ? "set" : "get", TileDataLabels[lLabelID].name, tile, g_i, TrackerCast(g_sp->picnum));
+        insptr += (lVar2 == MAXGAMEVARS);
+        return;
+    }
+
+    if (iSet)
+        lValue = Gv_GetVar(lVar2, g_i, g_p);
+
+    switch (lLabelID)
+    {
+    case TILEDATA_XSIZE:
+        if (iSet)
+        {
+            tilesiz[tile].x = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, tilesiz[tile].x, g_i, g_p);
+        return;
+    case TILEDATA_YSIZE:
+        if (iSet)
+        {
+            tilesiz[tile].y = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, tilesiz[tile].y, g_i, g_p);
+        return;
+    case TILEDATA_GAMEFLAGS:
+        if (iSet)
+        {
+            SpriteFlags[tile] = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, SpriteFlags[tile], g_i, g_p);
+        return;
+    case TILEDATA_ANIMFRAMES:
+        if (iSet)
+        {
+            picanm[tile].num = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, picanm[tile].num, g_i, g_p);
+        return;
+    case TILEDATA_XOFFSET:
+        if (iSet)
+        {
+            picanm[tile].xofs = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, picanm[tile].xofs, g_i, g_p);
+        return;
+    case TILEDATA_YOFFSET:
+        if (iSet)
+        {
+            picanm[tile].yofs = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, picanm[tile].yofs, g_i, g_p);
+        return;
+    case TILEDATA_ANIMSPEED:
+        if (iSet)
+        {
+            picanm[tile].sf = (picanm[tile].sf & ~PICANM_ANIMSPEED_MASK) | (lValue & PICANM_ANIMSPEED_MASK);
+            return;
+        }
+        Gv_SetVar(lVar2, (picanm[tile].sf & PICANM_ANIMSPEED_MASK), g_i, g_p);
+        return;
+    case TILEDATA_ANIMTYPE:
+        if (iSet)
+        {
+            picanm[tile].sf = (picanm[tile].sf & ~PICANM_ANIMTYPE_MASK) | ((lValue << PICANM_ANIMTYPE_SHIFT) & PICANM_ANIMTYPE_MASK);
+            return;
+        }
+        Gv_SetVar(lVar2, (picanm[tile].sf & PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT, g_i, g_p);
+        return;
+    default:
+        return;
+    }
+}
+
 static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2)
 {
     int lValue=0;

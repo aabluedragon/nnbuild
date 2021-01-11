@@ -74,6 +74,7 @@ extern const memberlabel_t ProjectileLabels[];
 extern const memberlabel_t UserdefsLabels[];
 extern const memberlabel_t InputLabels[];
 extern const memberlabel_t TsprLabels[];
+extern const memberlabel_t TileDataLabels[];
 
 /*
 extern void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2);
@@ -540,6 +541,19 @@ enum ProjectileLabel_t
     PROJ_END
 };
 
+enum TileDataLabel_t
+{
+    TILEDATA_XSIZE,
+    TILEDATA_YSIZE,
+    TILEDATA_ANIMFRAMES,
+    TILEDATA_XOFFSET,
+    TILEDATA_YOFFSET,
+    TILEDATA_ANIMSPEED,
+    TILEDATA_ANIMTYPE,
+    TILEDATA_GAMEFLAGS,
+    TILEDATA_END
+};
+
 enum ScriptKeywords_t
 {
     CON_DEFINELEVELNAME,    // 0
@@ -898,6 +912,8 @@ enum ScriptKeywords_t
     CON_KLABS,              // 353
     CON_SHIFTVARVARL,       // 354
     CON_SHIFTVARVARR,       // 355
+    CON_GETTILEDATA,        // 356
+    CON_SETTILEDATA,        // 357
     CON_END
 };
 #endif
