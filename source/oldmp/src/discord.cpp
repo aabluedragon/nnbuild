@@ -227,6 +227,10 @@ void UpdateDiscord()
     discordPresence.largeImageText = buffer[1];
     discordPresence.smallImageKey = "default_small";
     discordPresence.smallImageText = HEAD2;
+    //discordPresence.instance = 0;
+    //discordPresence.partySize = ud.multimode;
+    //discordPresence.partyMax = MAXPLAYERS;
+    //discordPresence.partyPrivacy = DISCORD_PARTY_PUBLIC;
 
     Discord_UpdatePresence(&discordPresence);
 }
