@@ -199,7 +199,9 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
     }
 }
 
-void faketimerhandler(void)
+void faketimerhandler(void) { ; };
+
+void Net_HandleInput(void)
 {
     int i, j, k;
     //    short who;

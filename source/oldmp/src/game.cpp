@@ -11409,8 +11409,8 @@ MAIN_LOOP_RESTART:
         if (g_player[myconnectindex].ps->gm&MODE_DEMO)
             goto MAIN_LOOP_RESTART;
 
-        while (!(g_player[myconnectindex].ps->gm&MODE_MENU) && ready2send && totalclock >= ototalclock+TICSPERFRAME)
-            faketimerhandler();
+        while ((!(g_player[myconnectindex].ps->gm&MODE_MENU) || ud.multimode > 1) && ready2send && totalclock >= ototalclock+TICSPERFRAME)
+            Net_HandleInput();
     }
 
     G_GameExit(" ");
