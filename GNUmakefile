@@ -794,9 +794,14 @@ oldmp_src := $(oldmp_root)/src
 oldmp_rsrc := $(oldmp_root)/rsrc
 oldmp_obj := $(obj)/$(oldmp)
 
-oldmp_cflags := -I$(oldmp_src) -DDISCORD_RPC
+oldmp_cflags := -I$(oldmp_src) 
 
-oldmp_game_deps := audiolib mact discordrpc
+oldmp_game_deps := audiolib mact
+
+ifeq ($(USE_DISCORDRPC), 1)
+    oldmp_game_deps += discordrpc
+    oldmp_cflags += -DDISCORD_RPC
+endif
 
 oldmp_game := eduke32-oldmp
 
