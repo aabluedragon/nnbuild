@@ -288,15 +288,15 @@ int A_GetHitscanRange(int i)
     hitdata_t hit;
     int zoff = 0;
 
-    if (PN == APLAYER) zoff = (40<<8);
+    if (PN(i) == APLAYER) zoff = (40<<8);
 
     vec3_t origin;
     origin = sprite[i].pos;
     origin.z -= zoff;
 
-    hitscan(&origin,SECT,
-            sintable[(SA+512)&2047],
-            sintable[SA&2047],
+    hitscan(&origin,SECT(i),
+            sintable[(SA(i)+512)&2047],
+            sintable[SA(i)&2047],
             0,&hit,CLIPMASK1);
 
     return (FindDistance2D(hit.pos.x-origin.x,hit.pos.y-origin.y));
@@ -360,9 +360,9 @@ static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
             if (sprite[i].xrepeat > 0 && sprite[i].extra >= 0 && (sprite[i].cstat&(257+32768)) == 257)
                 if (A_CheckEnemySprite(&sprite[i]) || k < 2)
                 {
-                    if (A_CheckEnemySprite(&sprite[i]) || PN == APLAYER || PN == SHARK)
+                    if (A_CheckEnemySprite(&sprite[i]) || PN(i) == APLAYER || PN(i) == SHARK)
                     {
-                        if (PN == APLAYER &&
+                        if (PN(i) == APLAYER &&
                                 // ud.ffire == 0 &&
                                 (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY) || (GTFLAGS(GAMETYPE_TDM) && g_player[sprite[i].yvel].ps->team == g_player[s->yvel].ps->team)) &&
                                 s->picnum == APLAYER &&
@@ -371,19 +371,19 @@ static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
 
                         if (gotshrinker && sprite[i].xrepeat < 30)
                         {
-                            if (PN == SHARK)
+                            if (PN(i) == SHARK)
                             {
                                 if (sprite[i].xrepeat < 20) continue;
                                 continue;
                             }
-                            else if (!(PN >= GREENSLIME && PN <= GREENSLIME+7))
+                            else if (!(PN(i) >= GREENSLIME && PN(i) <= GREENSLIME+7))
                                 continue;
                         }
                         if (gotfreezer && sprite[i].pal == 1) continue;
                     }
 
-                    xv = (SX-s->x);
-                    yv = (SY-s->y);
+                    xv = (SX(i)-s->x);
+                    yv = (SY(i)-s->y);
 
                     if ((dy1*xv) <= (dx1*yv))
                         if ((dy2*xv) >= (dx2*yv))
@@ -392,12 +392,12 @@ static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
                             if (sdist > 512 && sdist < smax)
                             {
                                 if (s->picnum == APLAYER)
-                                    a = (klabs(scale(SZ-s->z,10,sdist)-fix16_to_int(g_player[s->yvel].ps->q16horiz+g_player[s->yvel].ps->q16horizoff-F16(100))) < 100);
+                                    a = (klabs(scale(SZ(i)-s->z,10,sdist)-fix16_to_int(g_player[s->yvel].ps->q16horiz+g_player[s->yvel].ps->q16horizoff-F16(100))) < 100);
                                 else a = 1;
 
-                                if (PN == ORGANTIC || PN == ROTATEGUN)
-                                    cans = cansee(SX,SY,SZ,SECT,s->x,s->y,s->z-(32<<8),s->sectnum);
-                                else cans = cansee(SX,SY,SZ-(32<<8),SECT,s->x,s->y,s->z-(32<<8),s->sectnum);
+                                if (PN(i) == ORGANTIC || PN(i) == ROTATEGUN)
+                                    cans = cansee(SX(i),SY(i),SZ(i),SECT(i),s->x,s->y,s->z-(32<<8),s->sectnum);
+                                else cans = cansee(SX(i),SY(i),SZ(i)-(32<<8),SECT(i),s->x,s->y,s->z-(32<<8),s->sectnum);
 
                                 if (a && cans)
                                 {
@@ -444,7 +444,7 @@ int A_Shoot(int i,int atwith)
         if (s->picnum != ROTATEGUN)
         {
             spos.z -= (7<<8);
-            if (A_CheckEnemySprite(s) && PN != COMMANDER)
+            if (A_CheckEnemySprite(s) && PN(i) != COMMANDER)
             {
                 spos.x += (sintable[(sa+1024+96)&2047]>>7);
                 spos.y += (sintable[(sa+512+96)&2047]>>7);
@@ -573,7 +573,7 @@ int A_Shoot(int i,int atwith)
                                             changespritestat(k, STAT_MISC);
 
                                         }
-                                        //                                    if( PN == OOZFILTER || PN == NEWBEAST )
+                                        //                                    if( PN(i) == OOZFILTER || PN(i) == NEWBEAST )
                                         //                                        sprite[k].pal = 6;
                                     }
                                 }
@@ -1161,7 +1161,7 @@ DOSKIPBULLETHOLE:
                                     sprite[k].cstat |= (krand()&4);
                                     A_SetSprite(k,CLIPMASK0);
                                     setspritez_old(k,sprite[k].x,sprite[k].y,sprite[k].z);
-                                    if (PN == OOZFILTER || PN == NEWBEAST)
+                                    if (PN(i) == OOZFILTER || PN(i) == NEWBEAST)
                                         sprite[k].pal = 6;
                                 }
                             }
@@ -1597,7 +1597,7 @@ SKIPBULLETHOLE:
                 if (atwith == COOLEXPLOSION1)
                 {
                     sprite[j].shade = 0;
-                    if (PN == BOSS2)
+                    if (PN(i) == BOSS2)
                     {
                         l = sprite[j].xvel;
                         sprite[j].xvel = 1024;
@@ -1659,9 +1659,9 @@ SKIPBULLETHOLE:
             {
                 j = A_FindPlayer(s,&x);
                 sa = getangle(g_player[j].ps->opos.x-spos.x,g_player[j].ps->opos.y-spos.y);
-                if (PN == BOSS3)
+                if (PN(i) == BOSS3)
                     spos.z -= (32<<8);
-                else if (PN == BOSS2)
+                else if (PN(i) == BOSS2)
                 {
                     vel += 128;
                     spos.z += 24<<8;
@@ -1698,7 +1698,7 @@ SKIPBULLETHOLE:
 
             if (p == -1)
             {
-                if (PN == BOSS3)
+                if (PN(i) == BOSS3)
                 {
                     if (krand()&1)
                     {
@@ -1715,7 +1715,7 @@ SKIPBULLETHOLE:
                     sprite[j].xrepeat = 42;
                     sprite[j].yrepeat = 42;
                 }
-                else if (PN == BOSS2)
+                else if (PN(i) == BOSS2)
                 {
                     sprite[j].x -= sintable[sa&2047]/56;
                     sprite[j].y -= sintable[(sa+1024+512)&2047]/56;

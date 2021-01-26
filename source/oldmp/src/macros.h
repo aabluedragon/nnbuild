@@ -15,7 +15,7 @@
 
 #define TEST_SYNC_KEY(bits, sync_num) TEST(bits, BIT(sync_num))
 
-#define IFWITHIN(B,E) if((PN)>=(B) && (PN)<=(E))
+#define IFWITHIN(B,E) if((PN(i))>=(B) && (PN(i))<=(E))
 #define IFMOVING if(A_SetSprite(i,CLIPMASK0))
 #define IFHIT j=A_IncurDamage(i);if(j >= 0)
 #define AFLAMABLE(X) (X==BOX||X==TREE1||X==TREE2||X==TIRE||X==CONE)
@@ -147,27 +147,27 @@
 
 #define CSTAT_SPRITE_BREAKABLE (CSTAT_SPRITE_BLOCK_HITSCAN)
 
-#define SP  sprite[i].yvel
-#define SX  sprite[i].x
-#define SY  sprite[i].y
-#define SZ  sprite[i].z
-#define SS  sprite[i].shade
-#define PN  sprite[i].picnum
-#define SA  sprite[i].ang
+#define SP(i)  sprite[i].yvel
+#define SX(i)  sprite[i].x
+#define SY(i)  sprite[i].y
+#define SZ(i)  sprite[i].z
+#define SS(i)  sprite[i].shade
+#define PN(i)  sprite[i].picnum
+#define SA(i)  sprite[i].ang
 //#define SV  sprite[i].xvel
 //#define ZV  sprite[i].zvel
 //#define RX  sprite[i].xrepeat
 //#define RY  sprite[i].yrepeat
-#define OW  sprite[i].owner
-#define CS  sprite[i].cstat
-#define SH  sprite[i].extra
+#define OW(i)  sprite[i].owner
+#define CS(i)  sprite[i].cstat
+#define SH(i)  sprite[i].extra
 //#define CX  sprite[i].xoffset
 //#define CY  sprite[i].yoffset
 //#define CD  sprite[i].clipdist
 //#define PL  sprite[i].pal
-#define SLT  sprite[i].lotag
-#define SHT  sprite[i].hitag
-#define SECT sprite[i].sectnum
+#define SLT(i)  sprite[i].lotag
+#define SHT(i)  sprite[i].hitag
+#define SECT(i) sprite[i].sectnum
 
 #define T1  ActorExtra[i].temp_data[0]
 #define T2  ActorExtra[i].temp_data[1]

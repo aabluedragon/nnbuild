@@ -4555,7 +4555,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         s->hitag = 0;
     }
 
-    if (show2dsector[SECT>>3]&(1<<(SECT&7))) show2dsprite[i>>3] |= (1<<(i&7));
+    if (show2dsector[SECT(i)>>3]&(1<<(SECT(i)&7))) show2dsprite[i>>3] |= (1<<(i&7));
     else show2dsprite[i>>3] &= ~(1<<(i&7));
 
     spriteext[i] = {};
@@ -4599,19 +4599,19 @@ int A_Spawn(int j, int pn)
     else
     {
         i = pn;
-        ActorExtra[i].picnum = PN;
+        ActorExtra[i].picnum = PN(i);
         ActorExtra[i].timetosleep = 0;
         ActorExtra[i].extra = -1;
 
         ActorExtra[i].bpos = sprite[i].pos;
 
-        OW = ActorExtra[i].owner = i;
+        OW(i) = ActorExtra[i].owner = i;
         ActorExtra[i].cgg = 0;
         ActorExtra[i].movflag = 0;
         ActorExtra[i].tempang = 0;
         ActorExtra[i].dispicnum = 0;
-        ActorExtra[i].floorz = sector[SECT].floorz;
-        ActorExtra[i].ceilingz = sector[SECT].ceilingz;
+        ActorExtra[i].floorz = sector[SECT(i)].floorz;
+        ActorExtra[i].ceilingz = sector[SECT(i)].ceilingz;
 
         ActorExtra[i].lastvx = 0;
         ActorExtra[i].lastvy = 0;
@@ -4623,47 +4623,47 @@ int A_Spawn(int j, int pn)
 
         sprpos[i].ang = sprpos[i].oldang = sprite[i].ang;
 
-        if (PN != SPEAKER && PN != LETTER && PN != DUCK && PN != TARGET && PN != TRIPBOMB && PN != VIEWSCREEN && PN != VIEWSCREEN2 && (CS&48))
-            if (!(PN >= CRACK1 && PN <= CRACK4))
+        if (PN(i) != SPEAKER && PN(i) != LETTER && PN(i) != DUCK && PN(i) != TARGET && PN(i) != TRIPBOMB && PN(i) != VIEWSCREEN && PN(i) != VIEWSCREEN2 && (CS(i)&48))
+            if (!(PN(i) >= CRACK1 && PN(i) <= CRACK4))
             {
-                if (SS == 127) return i;
-                if (A_CheckSwitchTile(i) == 1 && (CS&16))
+                if (SS(i) == 127) return i;
+                if (A_CheckSwitchTile(i) == 1 && (CS(i)&16))
                 {
-                    if (PN != ACCESSSWITCH && PN != ACCESSSWITCH2 && sprite[i].pal)
+                    if (PN(i) != ACCESSSWITCH && PN(i) != ACCESSSWITCH2 && sprite[i].pal)
                     {
                         if ((ud.multimode < 2) || (ud.multimode > 1 && !GTFLAGS(GAMETYPE_DMSWITCHES)))
                         {
                             sprite[i].xrepeat = sprite[i].yrepeat = 0;
-                            sprite[i].cstat = SLT = SHT = 0;
+                            sprite[i].cstat = SLT(i) = SHT(i) = 0;
                             return i;
                         }
                     }
-                    CS |= 257;
-                    if (sprite[i].pal && PN != ACCESSSWITCH && PN != ACCESSSWITCH2)
+                    CS(i) |= 257;
+                    if (sprite[i].pal && PN(i) != ACCESSSWITCH && PN(i) != ACCESSSWITCH2)
                         sprite[i].pal = 0;
                     return i;
                 }
 
-                if (SHT)
+                if (SHT(i))
                 {
                     changespritestat(i, STAT_FALLER);
-                    CS |=  257;
-                    SH = g_impactDamage;
+                    CS(i) |=  257;
+                    SH(i) = g_impactDamage;
                     return i;
                 }
             }
 
-        s = PN;
+        s = PN(i);
 
-        if (CS&1) CS |= 256;
+        if (CS(i)&1) CS(i) |= 256;
 
         if (actorscrptr[s])
         {
-            SH = *(actorscrptr[s]);
+            SH(i) = *(actorscrptr[s]);
             T5 = *(actorscrptr[s]+1);
             T2 = *(actorscrptr[s]+2);
-            if (*(actorscrptr[s]+3) && SHT == 0)
-                SHT = *(actorscrptr[s]+3);
+            if (*(actorscrptr[s]+3) && SHT(i) == 0)
+                SHT(i) = *(actorscrptr[s]+3);
         }
         else T2 = T5 = 0;
     }
@@ -4775,11 +4775,11 @@ int A_Spawn(int j, int pn)
             {
                 if (sector[sp->sectnum].lotag == ST_2_UNDERWATER)
                 {
-                    sp->z = getceilzofslope(SECT,SX,SY)+(16<<8);
+                    sp->z = getceilzofslope(SECT(i),SX(i),SY(i))+(16<<8);
                     sp->cstat |= 8;
                 }
                 else if (sector[sp->sectnum].lotag == ST_1_ABOVE_WATER)
-                    sp->z = getflorzofslope(SECT,SX,SY);
+                    sp->z = getflorzofslope(SECT(i),SX(i),SY(i));
             }
 
             if (sector[sect].floorpicnum == FLOORSLIME ||
@@ -4968,7 +4968,7 @@ int A_Spawn(int j, int pn)
 
         }
 
-        if (sector[SECT].lotag == ST_1_ABOVE_WATER)
+        if (sector[SECT(i)].lotag == ST_1_ABOVE_WATER)
         {
             changespritestat(i, STAT_MISC);
             break;
@@ -5475,7 +5475,7 @@ int A_Spawn(int j, int pn)
             s = headspritestat[STAT_DEFAULT];
             while (s >= 0)
             {
-                if (sprite[s].picnum == CRANEPOLE && SHT == (sprite[s].hitag))
+                if (sprite[s].picnum == CRANEPOLE && SHT(i) == (sprite[s].hitag))
                 {
                     g_origins[tempwallptr+2].y = s;
 
@@ -5801,7 +5801,7 @@ int A_Spawn(int j, int pn)
             if (sp->picnum == REACTOR || sp->picnum == REACTOR2)
                 sp->extra = g_impactDamage;
 
-            CS |= 257; // Make it hitable
+            CS(i) |= 257; // Make it hitable
 
             if (ud.multimode < 2 && sp->pal != 0)
             {
@@ -5810,7 +5810,7 @@ int A_Spawn(int j, int pn)
                 break;
             }
             sp->pal = 0;
-            SS = -17;
+            SS(i) = -17;
 
             changespritestat(i, STAT_ZOMBIEACTOR);
             break;
@@ -5900,7 +5900,7 @@ int A_Spawn(int j, int pn)
             break;
 
         case WATERFOUNTAIN__STATIC:
-            SLT = 1;
+            SLT(i) = 1;
             fallthrough__;
 
         case TREE1__STATIC:
@@ -5908,7 +5908,7 @@ int A_Spawn(int j, int pn)
         case TIRE__STATIC:
         case CONE__STATIC:
         case BOX__STATIC:
-            CS = 257; // Make it hittable
+            CS(i) = 257; // Make it hittable
             sprite[i].extra = 1;
             changespritestat(i, STAT_STANDABLE);
             break;
@@ -5986,15 +5986,15 @@ int A_Spawn(int j, int pn)
                 if (sp->lotag != SE_23_ONE_WAY_TELEPORT)
                 {
                     for (j=0;j<MAXSPRITES;j++)
-                        if (sprite[j].statnum < MAXSTATUS && sprite[j].picnum == SECTOREFFECTOR && (sprite[j].lotag == SE_7_TELEPORT || sprite[j].lotag == SE_23_ONE_WAY_TELEPORT) && i != j && sprite[j].hitag == SHT)
+                        if (sprite[j].statnum < MAXSTATUS && sprite[j].picnum == SECTOREFFECTOR && (sprite[j].lotag == SE_7_TELEPORT || sprite[j].lotag == SE_23_ONE_WAY_TELEPORT) && i != j && sprite[j].hitag == SHT(i))
                         {
-                            OW = j;
+                            OW(i) = j;
                             break;
                         }
                 }
-                else OW = i;
+                else OW(i) = i;
 
-                T5 = sector[sect].floorz == SZ;
+                T5 = sector[sect].floorz == SZ(i);
                 sp->cstat = 0;
                 changespritestat(i, STAT_TRANSPORT);
                 return i;
@@ -6895,7 +6895,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             continue;
         case VIEWSCREEN__STATIC:
         case VIEWSCREEN2__STATIC:
-            if (camsprite >= 0 && ActorExtra[OW].temp_data[0] == 1)
+            if (camsprite >= 0 && ActorExtra[OW(i)].temp_data[0] == 1)
             {
                 t->picnum = STATIC;
                 t->cstat |= (rand()&12);
@@ -12076,8 +12076,8 @@ void A_SpawnWallGlass(int i,int wallnum,int n)
     {
         for (j=n-1; j >= 0 ;j--)
         {
-            a = SA-256+(krand()&511)+1024;
-            A_InsertSprite(SECT,SX,SY,SZ,GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),1024-(krand()&1023),i,5);
+            a = SA(i)-256+(krand()&511)+1024;
+            A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i),GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),1024-(krand()&1023),i,5);
         }
         return;
     }
@@ -12106,9 +12106,9 @@ void A_SpawnWallGlass(int i,int wallnum,int n)
         {
             z = sector[sect].floorz-(krand()&(klabs(sector[sect].ceilingz-sector[sect].floorz)));
             if (z < -(32<<8) || z > (32<<8))
-                z = SZ-(32<<8)+(krand()&((64<<8)-1));
-            a = SA-1024;
-            A_InsertSprite(SECT,x1,y1,z,GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),-(krand()&1023),i,5);
+                z = SZ(i)-(32<<8)+(krand()&((64<<8)-1));
+            a = SA(i)-1024;
+            A_InsertSprite(SECT(i),x1,y1,z,GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),-(krand()&1023),i,5);
         }
     }
 }
@@ -12120,8 +12120,8 @@ void A_SpawnGlass(int i,int n)
     for (j=n;j>0;j--)
     {
         a = krand()&2047;
-        z = SZ-((krand()&16)<<8);
-        k = A_InsertSprite(SECT,SX,SY,z,GLASSPIECES+(j%3),krand()&15,36,36,a,32+(krand()&63),-512-(krand()&2047),i,5);
+        z = SZ(i)-((krand()&16)<<8);
+        k = A_InsertSprite(SECT(i),SX(i),SY(i),z,GLASSPIECES+(j%3),krand()&15,36,36,a,32+(krand()&63),-512-(krand()&2047),i,5);
         sprite[k].pal = sprite[i].pal;
     }
 }
@@ -12162,7 +12162,7 @@ void A_SpawnRandomGlass(int i,int wallnum,int n)
         for (j=n-1; j >= 0 ;j--)
         {
             a = krand()&2047;
-            k = A_InsertSprite(SECT,SX,SY,SZ-(krand()&(63<<8)),GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),1024-(krand()&2047),i,5);
+            k = A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(krand()&(63<<8)),GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),1024-(krand()&2047),i,5);
             sprite[k].pal = krand()&15;
         }
         return;
@@ -12183,9 +12183,9 @@ void A_SpawnRandomGlass(int i,int wallnum,int n)
         updatesector(x1,y1,&sect);
         z = sector[sect].floorz-(krand()&(klabs(sector[sect].ceilingz-sector[sect].floorz)));
         if (z < -(32<<8) || z > (32<<8))
-            z = SZ-(32<<8)+(krand()&((64<<8)-1));
-        a = SA-1024;
-        k = A_InsertSprite(SECT,x1,y1,z,GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),-(krand()&2047),i,5);
+            z = SZ(i)-(32<<8)+(krand()&((64<<8)-1));
+        a = SA(i)-1024;
+        k = A_InsertSprite(SECT(i),x1,y1,z,GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),-(krand()&2047),i,5);
         sprite[k].pal = krand()&7;
     }
 }

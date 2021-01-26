@@ -75,11 +75,11 @@ static void G_CacheSpriteNum(int i)
 
     maxc = 1;
 
-    if (SpriteCacheList[PN][0] == PN)
-        for (j = PN; j <= SpriteCacheList[PN][1]; j++)
+    if (SpriteCacheList[PN(i)][0] == PN(i))
+        for (j = PN(i); j <= SpriteCacheList[PN(i)][1]; j++)
             tloadtile(j,1);
 
-    switch (DynamicTileMap[PN])
+    switch (DynamicTileMap[PN(i)])
     {
     case HYDRENT__STATIC:
         tloadtile(BROKEFIREHYDRENT,1);
@@ -202,7 +202,7 @@ static void G_CacheSpriteNum(int i)
 
     }
 
-    for (j = PN; j < (PN+maxc); j++) tloadtile(j,1);
+    for (j = PN(i); j < (PN(i)+maxc); j++) tloadtile(j,1);
 }
 
 static void G_PrecacheSprites(void)
@@ -483,13 +483,13 @@ void xyzmirror(int i,int wn)
     //if (waloff[wn] == 0) tileLoad(wn);
     renderSetTarget(wn,tilesiz[wn].y,tilesiz[wn].x);
 
-    drawrooms(SX,SY,SZ,SA,100+sprite[i].shade,SECT);
+    drawrooms(SX(i),SY(i),SZ(i),SA(i),100+sprite[i].shade,SECT(i));
     display_mirror = 1;
-    G_DoSpriteAnimations(SX,SY,SZ,SA,65536L);
+    G_DoSpriteAnimations(SX(i),SY(i),SZ(i),SA(i),65536L);
     display_mirror = 0;
     renderDrawMasks();
 
-    initprintf("%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i\n",i,wn,tilesiz[wn].y,tilesiz[wn].x,TrackerCast(SX),TrackerCast(SY),TrackerCast(SZ),TrackerCast(SA),100+TrackerCast(SS),TrackerCast(SECT),TrackerCast(PN));
+    initprintf("%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i\n",i,wn,tilesiz[wn].y,tilesiz[wn].x,TrackerCast(SX(i)),TrackerCast(SY(i)),TrackerCast(SZ(i)),TrackerCast(SA(i)),100+TrackerCast(SS(i)),TrackerCast(SECT(i)),TrackerCast(PN(i)));
 
     renderRestoreTarget();
     squarerotatetile(wn);
@@ -904,14 +904,14 @@ static void prelevel(char g)
         {
             TRAVERSE_CONNECT(j)
             {
-                g_player[j].ps->exitx = SX;
-                g_player[j].ps->exity = SY;
+                g_player[j].ps->exitx = SX(i);
+                g_player[j].ps->exity = SY(i);
             }
         }
-        else switch (DynamicTileMap[PN])
+        else switch (DynamicTileMap[PN(i)])
             {
             case GPSPEED__STATIC:
-                sector[SECT].extra = SLT;
+                sector[SECT(i)].extra = SLT(i);
                 deletesprite(i);
                 break;
 
@@ -921,12 +921,12 @@ static void prelevel(char g)
                     Bsprintf(tempbuf,"\nToo many cycling sectors (%d max).",MAXCYCLERS);
                     G_GameExit(tempbuf);
                 }
-                cyclers[g_numCyclers][0] = SECT;
-                cyclers[g_numCyclers][1] = SLT;
-                cyclers[g_numCyclers][2] = SS;
-                cyclers[g_numCyclers][3] = sector[SECT].floorshade;
-                cyclers[g_numCyclers][4] = SHT;
-                cyclers[g_numCyclers][5] = (SA == 1536);
+                cyclers[g_numCyclers][0] = SECT(i);
+                cyclers[g_numCyclers][1] = SLT(i);
+                cyclers[g_numCyclers][2] = SS(i);
+                cyclers[g_numCyclers][3] = sector[SECT(i)].floorshade;
+                cyclers[g_numCyclers][4] = SHT(i);
+                cyclers[g_numCyclers][5] = (SA(i) == 1536);
                 g_numCyclers++;
                 deletesprite(i);
                 break;
@@ -949,7 +949,7 @@ static void prelevel(char g)
     {
         if (sprite[i].statnum < MAXSTATUS)
         {
-            if (PN == SECTOREFFECTOR && SLT == 14)
+            if (PN(i) == SECTOREFFECTOR && SLT(i) == 14)
                 continue;
             A_Spawn(-1,i);
         }
@@ -958,7 +958,7 @@ static void prelevel(char g)
     for (i=0;i < MAXSPRITES;i++)
         if (sprite[i].statnum < MAXSTATUS)
         {
-            if (PN == SECTOREFFECTOR && SLT == 14)
+            if (PN(i) == SECTOREFFECTOR && SLT(i) == 14)
                 A_Spawn(-1,i);
 
             if (sprite[i].cstat & 2048)
@@ -970,7 +970,7 @@ static void prelevel(char g)
     i = headspritestat[STAT_DEFAULT];
     while (i >= 0)
     {
-        switch (DynamicTileMap[PN-1])
+        switch (DynamicTileMap[PN(i)-1])
         {
         case DIPSWITCH__STATIC:
         case DIPSWITCH2__STATIC:
@@ -986,12 +986,12 @@ static void prelevel(char g)
         case LOCKSWITCH1__STATIC:
         case POWERSWITCH2__STATIC:
             for (j=0;j<lotaglist;j++)
-                if (SLT == lotags[j])
+                if (SLT(i) == lotags[j])
                     break;
 
             if (j == lotaglist)
             {
-                lotags[lotaglist] = SLT;
+                lotags[lotaglist] = SLT(i);
                 lotaglist++;
                 if (lotaglist > MAXSPRITES-1)
                     G_GameExit("\nToo many switches.");
@@ -999,7 +999,7 @@ static void prelevel(char g)
                 j = headspritestat[STAT_EFFECTOR];
                 while (j >= 0)
                 {
-                    if (sprite[j].lotag == SE_12_LIGHT_SWITCH && sprite[j].hitag == SLT)
+                    if (sprite[j].lotag == SE_12_LIGHT_SWITCH && sprite[j].hitag == SLT(i))
                         ActorExtra[j].temp_data[0] = 1;
                     j = nextspritestat[j];
                 }

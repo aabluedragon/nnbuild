@@ -798,7 +798,7 @@ int32_t G_SavePlayer(int32_t spot)
     {
         scriptptrs[i] = 0;
 
-        if (actorscrptr[PN] == 0) continue;
+        if (actorscrptr[PN(i)] == 0) continue;
 
         j = (intptr_t)&script[0];
 
@@ -824,7 +824,7 @@ int32_t G_SavePlayer(int32_t spot)
 
     for (i=0; i<MAXSPRITES; i++)
     {
-        if (actorscrptr[PN] == 0) continue;
+        if (actorscrptr[PN(i)] == 0) continue;
         j = (intptr_t)&script[0];
 
         if (scriptptrs[i]&1)

@@ -157,7 +157,7 @@ int X_OnEventWithReturn(int iEventID, int iActor, int iPlayer, int nReturn)
 
 static int A_CheckSquished(int i, int p)
 {
-    auto const pSector = (usectorptr_t)&sector[SECT];
+    auto const pSector = (usectorptr_t)&sector[SECT(i)];
     auto const pSprite = &sprite[i];
     auto const pActor = &ActorExtra[i];
 
@@ -220,13 +220,13 @@ static int A_Dodge(spritetype *s)
 
     for (i=headspritestat[STAT_PROJECTILE];i>=0;i=nextspritestat[i]) //weapons list
     {
-        if (OW == i || SECT != s->sectnum)
+        if (OW(i) == i || SECT(i) != s->sectnum)
             continue;
 
-        bx = SX-mx;
-        by = SY-my;
-        bxvect = sintable[(SA+512)&2047];
-        byvect = sintable[SA&2047];
+        bx = SX(i)-mx;
+        by = SY(i)-my;
+        bxvect = sintable[(SA(i)+512)&2047];
+        byvect = sintable[SA(i)&2047];
 
         if (mxvect*bx + myvect*by >= 0)
             if (bxvect*bx + byvect*by < 0)
@@ -4620,7 +4620,7 @@ void G_SaveMapState(mapstate_t *save)
         {
             save->scriptptrs[i] = 0;
 
-            if (actorscrptr[PN] == 0) continue;
+            if (actorscrptr[PN(i)] == 0) continue;
 
             j = (intptr_t)&script[0];
 
@@ -4645,7 +4645,7 @@ void G_SaveMapState(mapstate_t *save)
 
         for (i=MAXSPRITES-1;i>=0;i--)
         {
-            if (actorscrptr[PN] == 0) continue;
+            if (actorscrptr[PN(i)] == 0) continue;
             j = (intptr_t)&script[0];
 
             if (save->scriptptrs[i]&1)
