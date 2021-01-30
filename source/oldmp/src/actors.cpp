@@ -1240,103 +1240,120 @@ BOLT:
 
 static void G_MoveFX(void)
 {
-    int i = headspritestat[STAT_FX], j, nexti, p;
-    int x, ht;
-    spritetype *s;
+    int spriteNum = headspritestat[STAT_FX];
 
-    while (i >= 0)
+    while (spriteNum >= 0)
     {
-        s = &sprite[i];
+        auto const pSprite = &sprite[spriteNum];
+        int const  nextSprite = nextspritestat[spriteNum];
 
-        nexti = nextspritestat[i];
-
-        switch (DynamicTileMap[s->picnum])
+        switch (DynamicTileMap[pSprite->picnum])
         {
         case RESPAWN__STATIC:
-            if (sprite[i].extra == 66)
+            if (pSprite->extra == 66)
             {
-                j = A_Spawn(i,SHT(i));
+                /*int32_t j =*/ A_Spawn(spriteNum, SHT(spriteNum));
                 //                    sprite[j].pal = sprite[i].pal;
-                KILLIT(i);
+                KILLIT(spriteNum);
             }
-            else if (sprite[i].extra > (66-13))
-                sprite[i].extra++;
+            else if (pSprite->extra > (66 - 13))
+                sprite[spriteNum].extra++;
             break;
 
         case MUSICANDSFX__STATIC:
+        {
+            int32_t const spriteHitag = (uint16_t)pSprite->hitag;
+            auto const    pPlayer = g_player[screenpeek].ps;
 
-            ht = s->hitag;
-
-            if (T2(i) != ud.config.SoundToggle)
+            if (T2(spriteNum) != ud.config.SoundToggle)
             {
-                T2(i) = ud.config.SoundToggle;
-                T1(i) = 0;
+                // If sound playback was toggled, restart.
+                T2(spriteNum) = ud.config.SoundToggle;
+                T1(spriteNum) = 0;
             }
 
-            if (s->lotag >= 1000 && s->lotag < 2000)
+            if (pSprite->lotag >= 1000 && pSprite->lotag < 2000)
             {
-                x = ldist(&sprite[g_player[screenpeek].ps->i],s);
-                if (x < ht && T1(i) == 0)
+                int32_t playerDist = ldist(&sprite[pPlayer->i], pSprite);
+
+                if (playerDist < spriteHitag && T1(spriteNum) == 0)
                 {
-                    FX_SetReverb(s->lotag - 1000);
-                    T1(i) = 1;
+                    FX_SetReverb(pSprite->lotag - 1000);
+                    T1(spriteNum) = 1;
                 }
-                if (x >= ht && T1(i) == 1)
+                else if (playerDist >= spriteHitag && T1(spriteNum) == 1)
                 {
                     FX_SetReverb(0);
                     FX_SetReverbDelay(0);
-                    T1(i) = 0;
+                    T1(spriteNum) = 0;
                 }
             }
-            else if (s->lotag < 999 && (unsigned)sector[s->sectnum].lotag < 9 &&
-                ud.config.AmbienceToggle && sector[SECT(i)].floorz != sector[SECT(i)].ceilingz)
+            else if (pSprite->lotag < 999 && (unsigned)sector[pSprite->sectnum].lotag < 9 &&  // ST_9_SLIDING_ST_DOOR
+                ud.config.AmbienceToggle && sector[SECT(spriteNum)].floorz != sector[SECT(spriteNum)].ceilingz)
             {
-                if ((g_sounds[s->lotag].m & SF_MSFX))
+                if (g_sounds[pSprite->lotag].m & SF_MSFX)
                 {
-                    x = dist(&sprite[g_player[screenpeek].ps->i],s);
-                    if (x < ht && T1(i) == 0 && FX_VoiceAvailable(g_sounds[s->lotag].pr-1))
+                    int playerDist = dist(&sprite[pPlayer->i], pSprite);
+
+                    if (playerDist < spriteHitag && T1(spriteNum) == 0 && FX_VoiceAvailable(g_sounds[pSprite->lotag].pr - 1))
                     {
+                        // Start playing an ambience sound.
+
+                        char om = g_sounds[pSprite->lotag].m;
                         if (g_numEnvSoundsPlaying == ud.config.NumVoices)
                         {
-                            j = headspritestat[STAT_FX];
-                            while (j >= 0)
-                            {
-                                if (j != i && S_IsAmbientSFX(j) && ActorExtra[j].temp_data[0] == 1 &&
-                                    dist(&sprite[j],&sprite[g_player[screenpeek].ps->i]) > x)
+                            int32_t j;
+
+                            for (SPRITES_OF(STAT_FX, j))
+                                if (j != spriteNum && S_IsAmbientSFX(j) && ActorExtra[j].temp_data[0] == 1 &&
+                                    dist(&sprite[j], &sprite[pPlayer->i]) > playerDist)
                                 {
-                                    S_StopEnvSound(sprite[j].lotag,j);
+                                    S_StopEnvSound(sprite[j].lotag, j);
                                     break;
                                 }
-                                j = nextspritestat[j];
-                            }
-                            if (j == -1) goto BOLT;
+
+                            if (j == -1)
+                                goto BOLT;
                         }
-                        A_PlaySound(s->lotag,i);
-                        T1(i) = 1;
+
+                        g_sounds[pSprite->lotag].m |= SF_LOOP;
+                        A_PlaySound(pSprite->lotag, spriteNum);
+                        g_sounds[pSprite->lotag].m = om;
+                        T1(spriteNum) = 1;  // AMBIENT_SFX_PLAYING
                     }
-                    if (x >= ht && T1(i) == 1)
+                    else if (playerDist >= spriteHitag && T1(spriteNum) == 1)
                     {
-                        T1(i) = 0;
-                        S_StopEnvSound(s->lotag,i);
+                        // Stop playing ambience sound because we're out of its range.
+
+                        // T1 will be reset in sounds.c: CLEAR_SOUND_T0
+                        // T1 = 0;
+                        S_StopEnvSound(pSprite->lotag, spriteNum);
                     }
                 }
-                if ((g_sounds[s->lotag].m & (SF_GLOBAL | SF_DTAG)) == SF_GLOBAL)
+
+                if ((g_sounds[pSprite->lotag].m & (SF_GLOBAL | SF_DTAG)) == SF_GLOBAL)
                 {
-                    if (T5(i) > 0) T5(i)--;
+                    // Randomly playing global sounds (flyby of planes, screams, ...)
+
+                    if (T5(spriteNum) > 0)
+                        T5(spriteNum)--;
                     else
-                        TRAVERSE_CONNECT(p)
-                        if (p == myconnectindex && g_player[p].ps->cursectnum == s->sectnum)
-                        {
-                            j = s->lotag+((unsigned)g_globalRandom%(s->hitag+1));
-                            S_PlaySound(j);
-                            T5(i) =  26*40 + (g_globalRandom%(26*40));
-                        }
+                    {
+                        int playerNum;
+                        TRAVERSE_CONNECT(playerNum)
+                            if (playerNum == myconnectindex && g_player[playerNum].ps->cursectnum == pSprite->sectnum)
+                            {
+                                S_PlaySound(pSprite->lotag + (unsigned)g_globalRandom % (pSprite->hitag + 1));
+                                T5(spriteNum) = GAMETICSPERSEC * 40 + g_globalRandom % (GAMETICSPERSEC * 40);
+                            }
+                    }
                 }
             }
             break;
         }
-BOLT:
-        i = nexti;
+        }
+    BOLT:
+        spriteNum = nextSprite;
     }
 }
 
