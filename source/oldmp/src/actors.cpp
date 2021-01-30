@@ -5531,7 +5531,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             j = s->owner;
 
-            if (sprite[j].lotag == (short) 65535)
+            if ((uint16_t)sprite[j].lotag == UINT16_MAX)
                 KILLIT(i);
 
             q = sc->extra>>3;
