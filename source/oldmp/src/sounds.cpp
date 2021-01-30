@@ -350,7 +350,7 @@ void S_Cleanup(void)
 
         // MUSICANDSFX uses t_data[0] to control restarting the sound
         // CLEAR_SOUND_T0
-        if (spriteNum != -1 && S_IsAmbientSFX(spriteNum) && sector[sprite[spriteNum].sectnum].lotag < 3)  // ST_2_UNDERWATER
+        if (spriteNum != -1 && S_IsAmbientSFX(spriteNum) && sector[SECT(spriteNum)].lotag < 3)  // ST_2_UNDERWATER
             ActorExtra[spriteNum].temp_data[0] = 0;
 
         S_SetProperties(&voice, -1, 0, UINT16_MAX, 0);
