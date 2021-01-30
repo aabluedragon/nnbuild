@@ -29,50 +29,74 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 static int haltsoundhack;
 
-// this function activates a sector's MUSICANDSFX sprite
-int A_CallSound(int sn,int whatsprite)
+int S_FindMusicSFX(int sectNum, int* sndptr)
 {
-    int i;
+    for (bssize_t SPRITES_OF_SECT(sectNum, spriteNum))
+    {
+        const int32_t snd = sprite[spriteNum].lotag;
+        EDUKE32_STATIC_ASSERT(MAXSOUNDS >= 1000);
+
+        if (PN(spriteNum) == MUSICANDSFX && (unsigned)snd < 1000)  // XXX: in other places, 999
+        {
+            *sndptr = snd;
+            return spriteNum;
+        }
+    }
+
+    *sndptr = -1;
+    return -1;
+}
+
+// this function activates a sector's MUSICANDSFX sprite
+int A_CallSound(int sectNum, int spriteNum)
+{
     if (haltsoundhack)
     {
         haltsoundhack = 0;
         return -1;
     }
-    i = headspritesect[sn];
-    while (i >= 0)
+
+    int soundNum;
+    int const SFXsprite = S_FindMusicSFX(sectNum, &soundNum);
+
+    if (SFXsprite >= 0)
     {
-        if (PN(i) == MUSICANDSFX && SLT(i) < 1000)
+        if (spriteNum == -1)
+            spriteNum = SFXsprite;
+
+        if (T1(SFXsprite) == 0)
         {
-            if (whatsprite == -1) whatsprite = i;
-
-            if (T1 == 0)
+            if ((g_sounds[soundNum].m & (SF_GLOBAL | SF_DTAG)) != SF_GLOBAL)
             {
-                if ((g_sounds[SLT(i)].m & (SF_GLOBAL | SF_DTAG)) != SF_GLOBAL)
+                if (soundNum)
                 {
-                    if (SLT(i))
-                    {
-                        A_PlaySound(SLT(i),whatsprite);
-                        if (SHT(i) && SLT(i) != SHT(i) && SHT(i) < MAXSOUNDS)
-                            S_StopEnvSound(SHT(i),T6);
-                        T6 = whatsprite;
-                    }
+                    A_PlaySound(soundNum, spriteNum);
 
-                    if ((sector[SECT(i)].lotag&0xff) != ST_22_SPLITTING_DOOR)
-                        T1 = 1;
+                    if (SHT(SFXsprite) && soundNum != SHT(SFXsprite) && SHT(SFXsprite) < MAXSOUNDS)
+                        S_StopEnvSound(SHT(SFXsprite), T6(SFXsprite));
+
+                    T6(SFXsprite) = spriteNum;
                 }
+
+                if ((sector[SECT(SFXsprite)].lotag & 0xff) != ST_22_SPLITTING_DOOR)
+                    T1(SFXsprite) = 1;
             }
-            else if (SHT(i) < MAXSOUNDS)
-            {
-                if (SHT(i)) A_PlaySound(SHT(i),whatsprite);
-                if ((g_sounds[SLT(i)].m & SF_LOOP) || (SHT(i) && SHT(i) != SLT(i)))
-                    S_StopEnvSound(SLT(i),T6);
-                T6 = whatsprite;
-                T1 = 0;
-            }
-            return SLT(i);
         }
-        i = nextspritesect[i];
+        else if (SHT(SFXsprite) < MAXSOUNDS)
+        {
+            if (SHT(SFXsprite))
+                A_PlaySound(SHT(SFXsprite), spriteNum);
+
+            if ((g_sounds[soundNum].m & SF_LOOP) || (SHT(SFXsprite) && SHT(SFXsprite) != soundNum))
+                S_StopEnvSound(soundNum, T6(SFXsprite));
+
+            T6(SFXsprite) = spriteNum;
+            T1(SFXsprite) = 0;
+        }
+
+        return soundNum;
     }
+
     return -1;
 }
 
@@ -276,7 +300,7 @@ void G_DoSectorAnimations(void)
                 if (animateptr[i] == &sector[animatesect[i]].ceilingz)
                     continue;
 
-            if ((sector[dasect].lotag&0xff) != 22)
+            if ((sector[dasect].lotag&0xff) != ST_22_SPLITTING_DOOR)
                 A_CallSound(dasect,-1);
 
             continue;
@@ -369,9 +393,9 @@ void G_AnimateCamSprite(void)
 
     if (camsprite <= 0) return;
 
-    if (T1 >= 11)
+    if (T1(i) >= 11)
     {
-        T1 = 0;
+        T1(i) = 0;
 
         if (g_player[screenpeek].ps->newowner >= 0)
             OW(i) = g_player[screenpeek].ps->newowner;
@@ -383,7 +407,7 @@ void G_AnimateCamSprite(void)
             xyzmirror(OW(i),/*PN(i)*/TILE_VIEWSCR);
         }
     }
-    else T1++;
+    else T1(i)++;
 }
 
 void G_AnimateWalls(void)
@@ -514,8 +538,8 @@ int G_ActivateWarpElevators(int s,int d) //Parm = sectoreffectornum
         if (SLT(i) == 17)
             if (SHT(i) == sprite[s].hitag)
             {
-                T1 = d;
-                T2 = d; //Make all check warp
+                T1(i) = d;
+                T2(i) = d; //Make all check warp
             }
         i = nextspritestat[i];
     }
@@ -742,8 +766,8 @@ void G_OperateSectors(int sn,int ii)
             {
                 sector[SECT(i)].extra = -sector[SECT(i)].extra;
 
-                T1 = sn;
-                T2 = 1;
+                T1(i) = sn;
+                T2(i) = 1;
             }
             i = nextspritestat[i];
         }
@@ -848,7 +872,7 @@ REDODOOR:
         i = headspritestat[STAT_EFFECTOR];
         while (i >= 0)
         {
-            if (SLT(i) == 11 && SECT(i) == sn && !T5)
+            if (SLT(i) == 11 && SECT(i) == sn && !T5(i))
             {
                 j = i;
                 break;
@@ -866,12 +890,12 @@ REDODOOR:
             i = headspritestat[STAT_EFFECTOR];
             while (i >= 0)
             {
-                if (l == (sector[SECT(i)].lotag&0x8000) && SLT(i) == 11 && sprite[j].hitag == SHT(i) && !T5)
+                if (l == (sector[SECT(i)].lotag&0x8000) && SLT(i) == 11 && sprite[j].hitag == SHT(i) && !T5(i))
                 {
                     if (sector[SECT(i)].lotag&0x8000) sector[SECT(i)].lotag &= 0x7fff;
                     else sector[SECT(i)].lotag |= 0x8000;
-                    T5 = 1;
-                    T4 = -T4;
+                    T5(i) = 1;
+                    T4(i) = -T4(i);
                     if (q == 0)
                     {
                         A_CallSound(sn,i);
@@ -905,10 +929,10 @@ REDODOOR:
                 {
                     sector[SECT(i)].lotag ^= 0x8000; // Toggle the open or close
                     SA(i) += 1024;
-                    if (T5) A_CallSound(SECT(i),i);
+                    if (T5(i)) A_CallSound(SECT(i),i);
                     A_CallSound(SECT(i),i);
-                    if (sector[SECT(i)].lotag&0x8000) T5 = 1;
-                    else T5 = 2;
+                    if (sector[SECT(i)].lotag&0x8000) T5(i) = 1;
+                    else T5(i) = 2;
                 }
             }
             i = nextspritestat[i];
@@ -1701,8 +1725,8 @@ void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith)
 
                     i = A_InsertSprite(sn,x,y,z,SECTOREFFECTOR,0,0,0,fix16_to_int(g_player[0].ps->q16ang),0,0,spr,3);
                     SLT(i) = 128;
-                    T2 = 5;
-                    T3 = dawallnum;
+                    T2(i) = 5;
+                    T3(i) = dawallnum;
                     A_PlaySound(GLASS_BREAKING,i);
                     return;
                 case STAINGLASS1__STATIC:
@@ -1854,9 +1878,9 @@ void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith)
         {
             if (SHT(i) == wall[dawallnum].lotag && SLT(i) == 3)
             {
-                T3 = j;
-                T4 = darkestwall;
-                T5 = 1;
+                T3(i) = j;
+                T4(i) = darkestwall;
+                T5(i) = 1;
             }
             i = nextspritestat[i];
         }
@@ -1996,8 +2020,8 @@ int Sect_DamageCeiling(int sn)
         {
             if (SHT(i) == (sector[sn].hitag) && SLT(i) == 3)
             {
-                T3 = j;
-                T5 = 1;
+                T3(i) = j;
+                T5(i) = 1;
             }
             i = nextspritestat[i];
         }
@@ -2071,10 +2095,10 @@ void A_DamageObject_Internal(int i,int sn)
     case BOX__STATIC:
     {
         if (rpg == 1)
-            if (T1 == 0)
+            if (T1(i) == 0)
             {
                 CS(i) &= ~257;
-                T1 = 1;
+                T1(i) = 1;
                 A_Spawn(i,BURNING);
             }
         switch (DynamicTileMap[sprite[sn].picnum])
@@ -2084,10 +2108,10 @@ void A_DamageObject_Internal(int i,int sn)
         case FIRELASER__STATIC:
         case HYDRENT__STATIC:
         case HEAVYHBOMB__STATIC:
-            if (T1 == 0)
+            if (T1(i) == 0)
             {
                 CS(i) &= ~257;
-                T1 = 1;
+                T1(i) = 1;
                 A_Spawn(i,BURNING);
             }
             break;
@@ -3091,7 +3115,7 @@ CHECKINV1:
                                                                 p->pos.x,
                                                                 p->pos.y,
                                                                 p->pos.z+(30<<8),APLAYER,-64,0,0,fix16_to_int(p->q16ang),0,0,-1,10);
-                            T4 = T5 = 0;
+                            T4(i) = T5(i) = 0;
                             SP(i) = snum;
                             sprite[i].extra = 0;
                             P_DoQuote(47,p);

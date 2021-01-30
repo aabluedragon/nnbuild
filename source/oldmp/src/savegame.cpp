@@ -322,9 +322,9 @@ int32_t G_LoadPlayer(int32_t spot)
     for (i=0; i<MAXSPRITES; i++)
     {
         j = (intptr_t)(&script[0]);
-        if (scriptptrs[i]&1) T2 += j;
-        if (scriptptrs[i]&2) T5 += j;
-        if (scriptptrs[i]&4) T6 += j;
+        if (scriptptrs[i]&1) T2(i) += j;
+        if (scriptptrs[i]&2) T5(i) += j;
+        if (scriptptrs[i]&4) T6(i) += j;
     }
 
     if (kdfread(&lockclock,sizeof(lockclock),1,fil) != 1) goto corrupt;
@@ -802,20 +802,20 @@ int32_t G_SavePlayer(int32_t spot)
 
         j = (intptr_t)&script[0];
 
-        if (T2 >= j && T2 < (intptr_t)(&script[g_scriptSize]))
+        if (T2(i) >= j && T2(i) < (intptr_t)(&script[g_scriptSize]))
         {
             scriptptrs[i] |= 1;
-            T2 -= j;
+            T2(i) -= j;
         }
-        if (T5 >= j && T5 < (intptr_t)(&script[g_scriptSize]))
+        if (T5(i) >= j && T5(i) < (intptr_t)(&script[g_scriptSize]))
         {
             scriptptrs[i] |= 2;
-            T5 -= j;
+            T5(i) -= j;
         }
-        if (T6 >= j && T6 < (intptr_t)(&script[g_scriptSize]))
+        if (T6(i) >= j && T6(i) < (intptr_t)(&script[g_scriptSize]))
         {
             scriptptrs[i] |= 4;
-            T6 -= j;
+            T6(i) -= j;
         }
     }
 
@@ -828,11 +828,11 @@ int32_t G_SavePlayer(int32_t spot)
         j = (intptr_t)&script[0];
 
         if (scriptptrs[i]&1)
-            T2 += j;
+            T2(i) += j;
         if (scriptptrs[i]&2)
-            T5 += j;
+            T5(i) += j;
         if (scriptptrs[i]&4)
-            T6 += j;
+            T6(i) += j;
     }
 
     dfwrite(&lockclock,sizeof(lockclock),1,fil);

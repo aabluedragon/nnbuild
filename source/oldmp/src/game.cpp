@@ -4535,7 +4535,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
     ActorExtra[i].tempang = 0;
     ActorExtra[i].dispicnum = 0;
 
-    T1=T3=T4=T6=T7=T8=T9=0;
+    T1(i)=T3(i)=T4(i)=T6(i)=T7(i)=T8(i)=T9(i)=0;
 
     ActorExtra[i].flags = 0;
 
@@ -4544,13 +4544,13 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
     if (actorscrptr[s_pn])
     {
         s->extra = *actorscrptr[s_pn];
-        T5 = *(actorscrptr[s_pn]+1);
-        T2 = *(actorscrptr[s_pn]+2);
+        T5(i) = *(actorscrptr[s_pn]+1);
+        T2(i) = *(actorscrptr[s_pn]+2);
         s->hitag = *(actorscrptr[s_pn]+3);
     }
     else
     {
-        T2=T5=0;
+        T2(i)=T5(i)=0;
         s->extra = 0;
         s->hitag = 0;
     }
@@ -4617,7 +4617,7 @@ int A_Spawn(int j, int pn)
         ActorExtra[i].lastvy = 0;
         ActorExtra[i].actorstayput = -1;
 
-        T1 = T2 = T3 = T4 = T5 = T6 = T7 = T8 = T9 = 0;
+        T1(i) = T2(i) = T3(i) = T4(i) = T5(i) = T6(i) = T7(i) = T8(i) = T9(i) = 0;
 
         ActorExtra[i].flags = 0;
 
@@ -4660,12 +4660,12 @@ int A_Spawn(int j, int pn)
         if (actorscrptr[s])
         {
             SH(i) = *(actorscrptr[s]);
-            T5 = *(actorscrptr[s]+1);
-            T2 = *(actorscrptr[s]+2);
+            T5(i) = *(actorscrptr[s]+1);
+            T2(i) = *(actorscrptr[s]+2);
             if (*(actorscrptr[s]+3) && SHT(i) == 0)
                 SHT(i) = *(actorscrptr[s]+3);
         }
-        else T2 = T5 = 0;
+        else T2(i) = T5(i) = 0;
     }
 
     sp = &sprite[i];
@@ -4674,8 +4674,8 @@ int A_Spawn(int j, int pn)
     //some special cases that can't be handled through the dynamictostatic system.
     if (((sp->picnum >= BOLT1)&&(sp->picnum <= BOLT1+3))||((sp->picnum >= SIDEBOLT1)&&(sp->picnum <= SIDEBOLT1+3)))
     {
-        T1 = sp->xrepeat;
-        T2 = sp->yrepeat;
+        T1(i) = sp->xrepeat;
+        T2(i) = sp->yrepeat;
         sp->yvel = 0;
         changespritestat(i, STAT_STANDABLE);
     }
@@ -4872,7 +4872,7 @@ int A_Spawn(int j, int pn)
             {
                 sp->xrepeat = sprite[j].xrepeat;
                 sp->yrepeat = sprite[j].yrepeat;
-                T2 = sprite[j].picnum;
+                T2(i) = sprite[j].picnum;
             }
             else sp->xrepeat = sp->yrepeat = 0;
 
@@ -5287,8 +5287,8 @@ int A_Spawn(int j, int pn)
             break;
 
         case SPOTLITE__STATIC:
-            T1 = sp->x;
-            T2 = sp->y;
+            T1(i) = sp->x;
+            T2(i) = sp->y;
             break;
         case BULLETHOLE__STATIC:
             sp->xrepeat = sp->yrepeat = 3;
@@ -5326,7 +5326,7 @@ int A_Spawn(int j, int pn)
                     snum = sprite[j].yvel;
                     a = fix16_to_int(g_player[snum].ps->q16ang)-(krand()&63)+8;  //Fine tune
 
-                    T1 = krand()&1;
+                    T1(i) = krand()&1;
                     sp->z = (3<<8)+g_player[snum].ps->pyoff+g_player[snum].ps->pos.z-
                             (fix16_to_int(g_player[snum].ps->q16horizoff+g_player[snum].ps->q16horiz-F16(100))<<4);
                     if (sp->picnum == SHOTGUNSHELL)
@@ -5466,7 +5466,7 @@ int A_Spawn(int j, int pn)
 
             sp->picnum += 2;
             sp->z = sector[sect].ceilingz+(48<<8);
-            T5 = tempwallptr;
+            T5(i) = tempwallptr;
 
             g_origins[tempwallptr].x = sp->x;
             g_origins[tempwallptr].y = sp->y;
@@ -5479,7 +5479,7 @@ int A_Spawn(int j, int pn)
                 {
                     g_origins[tempwallptr+2].y = s;
 
-                    T2 = sprite[s].sectnum;
+                    T2(i) = sprite[s].sectnum;
 
                     sprite[s].xrepeat = 48;
                     sprite[s].yrepeat = 128;
@@ -5521,8 +5521,8 @@ int A_Spawn(int j, int pn)
             else if (j == -1)
             {
                 sp->z += (4<<8);
-                T1 = sp->z;
-                T2 = krand()&127;
+                T1(i) = sp->z;
+                T2(i) = krand()&127;
             }
             
             sp->xrepeat = 24;
@@ -5553,7 +5553,7 @@ int A_Spawn(int j, int pn)
             changespritestat(i, STAT_STANDABLE);
             break;
         case TOUCHPLATE__STATIC:
-            T3 = sector[sect].floorz;
+            T3(i) = sector[sect].floorz;
             if (sector[sect].lotag != ST_1_ABOVE_WATER && sector[sect].lotag != ST_2_UNDERWATER)
                 sector[sect].floorz = sp->z;
             if ((sp->pal == 1 && ud.multimode > 1) ||
@@ -5979,7 +5979,7 @@ int A_Spawn(int j, int pn)
             switch (sp->lotag)
             {
             case SE_28_LIGHTNING:
-                T6 = 65;// Delay for lightning
+                T6(i) = 65;// Delay for lightning
                 break;
             case SE_7_TELEPORT: // Transporters!!!!
             case SE_23_ONE_WAY_TELEPORT:// XPTR END
@@ -5994,25 +5994,25 @@ int A_Spawn(int j, int pn)
                 }
                 else OW(i) = i;
 
-                T5 = sector[sect].floorz == SZ(i);
+                T5(i) = sector[sect].floorz == SZ(i);
                 sp->cstat = 0;
                 changespritestat(i, STAT_TRANSPORT);
                 return i;
             case SE_1_PIVOT:
                 sp->owner = -1;
-                T1 = 1;
+                T1(i) = 1;
                 break;
             case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
 
                 if (sp->ang == 512)
                 {
-                    T2 = sector[sect].ceilingz;
+                    T2(i) = sector[sect].ceilingz;
                     if (sp->pal)
                         sector[sect].ceilingz = sp->z;
                 }
                 else
                 {
-                    T2 = sector[sect].floorz;
+                    T2(i) = sector[sect].floorz;
                     if (sp->pal)
                         sector[sect].floorz = sp->z;
                 }
@@ -6024,8 +6024,8 @@ int A_Spawn(int j, int pn)
                 sp->owner = -1;
                 break;
             case SE_25_PISTON: // Pistons
-                T4 = sector[sect].ceilingz;
-                T5 = 1;
+                T4(i) = sector[sect].ceilingz;
+                T5(i) = 1;
                 sector[sect].ceilingz = sp->z;
                 G_SetInterpolation(&sector[sect].ceilingz);
                 break;
@@ -6041,16 +6041,16 @@ int A_Spawn(int j, int pn)
                 break;
             case SE_12_LIGHT_SWITCH:
 
-                T2 = sector[sect].floorshade;
-                T3 = sector[sect].ceilingshade;
+                T2(i) = sector[sect].floorshade;
+                T3(i) = sector[sect].ceilingshade;
                 break;
 
             case SE_13_EXPLOSIVE:
 
-                T1 = sector[sect].ceilingz;
-                T2 = sector[sect].floorz;
+                T1(i) = sector[sect].ceilingz;
+                T2(i) = sector[sect].floorz;
 
-                if (klabs(T1-sp->z) < klabs(T2-sp->z))
+                if (klabs(T1(i)-sp->z) < klabs(T2(i)-sp->z))
                     sp->owner = 1;
                 else sp->owner = 0;
 
@@ -6067,12 +6067,12 @@ int A_Spawn(int j, int pn)
                 if (sector[sect].ceilingstat&1)
                 {
                     sector[sect].ceilingstat ^= 1;
-                    T4 = 1;
+                    T4(i) = 1;
 
                     if (!sp->owner && sp->ang==512)
                     {
                         sector[sect].ceilingstat ^= 1;
-                        T4 = 0;
+                        T4(i) = 0;
                     }
 
                     sector[sect].ceilingshade =
@@ -6102,17 +6102,17 @@ int A_Spawn(int j, int pn)
 
             case SE_17_WARP_ELEVATOR:
 
-                T3 = sector[sect].floorz; //Stopping loc
+                T3(i) = sector[sect].floorz; //Stopping loc
 
                 j = nextsectorneighborz(sect, sector[sect].floorz, -1, -1);
                 if (j >= 0)
                 {
-                    T4 = sector[j].ceilingz;
+                    T4(i) = sector[j].ceilingz;
                 }
                 else
                 {
                     // use elevator sector's ceiling as heuristic
-                    T4 = sector[sect].ceilingz;
+                    T4(i) = sector[sect].ceilingz;
 
                     OSD_Printf(OSD_ERROR "WARNING: SE17 sprite %d using own sector's ceilingz to "
                         "determine when to warp. Sector %d adjacent to a door?\n", i, sect);
@@ -6120,7 +6120,7 @@ int A_Spawn(int j, int pn)
 
                 j = nextsectorneighborz(sect, sector[sect].ceilingz, 1, 1);
                 if (j >= 0)
-                    T5 = sector[j].floorz;
+                    T5(i) = sector[j].floorz;
                 else
                 {
                     // XXX: we should return to the menu for this and similar failures
@@ -6162,7 +6162,7 @@ int A_Spawn(int j, int pn)
                     }
                 }
 
-                T2 = clostest;
+                T2(i) = clostest;
 
                 q = 0x7fffffff;
 
@@ -6172,21 +6172,21 @@ int A_Spawn(int j, int pn)
                     y = wall[s].y;
 
                     d = FindDistance2D(sp->x-x,sp->y-y);
-                    if (d < q && s != T2)
+                    if (d < q && s != T2(i))
                     {
                         q = d;
                         clostest = s;
                     }
                 }
 
-                T3 = clostest;
+                T3(i) = clostest;
             }
 
             break;
 
             case SE_3_RANDOM_LIGHTS_AFTER_SHOT_OUT:
 
-                T4=sector[sect].floorshade;
+                T4(i)=sector[sect].floorshade;
 
                 sector[sect].floorshade = sp->shade;
                 sector[sect].ceilingshade = sp->shade;
@@ -6209,8 +6209,8 @@ int A_Spawn(int j, int pn)
                 break;
 
             case SE_31_FLOOR_RISE_FALL:
-                T2 = sector[sect].floorz;
-                //    T3 = sp->hitag;
+                T2(i) = sector[sect].floorz;
+                //    T3(i) = sp->hitag;
                 if (sp->ang != 1536) sector[sect].floorz = sp->z;
 
                 startwall = sector[sect].wallptr;
@@ -6223,8 +6223,8 @@ int A_Spawn(int j, int pn)
 
                 break;
             case SE_32_CEILING_RISE_FALL:
-                T2 = sector[sect].ceilingz;
-                T3 = sp->hitag;
+                T2(i) = sector[sect].ceilingz;
+                T3(i) = sp->hitag;
                 if (sp->ang != 1536) sector[sect].ceilingz = sp->z;
 
                 startwall = sector[sect].wallptr;
@@ -6239,7 +6239,7 @@ int A_Spawn(int j, int pn)
 
             case SE_4_RANDOM_LIGHTS: //Flashing lights
 
-                T3 = sector[sect].floorshade;
+                T3(i) = sector[sect].floorshade;
 
                 startwall = sector[sect].wallptr;
                 endwall = startwall+sector[sect].wallnum;
@@ -6248,8 +6248,8 @@ int A_Spawn(int j, int pn)
                 sp->owner |= sector[sect].floorpal;
 
                 for (s=startwall;s<endwall;s++)
-                    if (wall[s].shade > T4)
-                        T4 = wall[s].shade;
+                    if (wall[s].shade > T4(i))
+                        T4(i) = wall[s].shade;
 
                 break;
 
@@ -6261,23 +6261,23 @@ int A_Spawn(int j, int pn)
             case SE_8_UP_OPEN_DOOR_LIGHTS:
                 //First, get the ceiling-floor shade
 
-                T1 = sector[sect].floorshade;
-                T2 = sector[sect].ceilingshade;
+                T1(i) = sector[sect].floorshade;
+                T2(i) = sector[sect].ceilingshade;
 
                 startwall = sector[sect].wallptr;
                 endwall = startwall+sector[sect].wallnum;
 
                 for (s=startwall;s<endwall;s++)
-                    if (wall[s].shade > T3)
-                        T3 = wall[s].shade;
+                    if (wall[s].shade > T3(i))
+                        T3(i) = wall[s].shade;
 
-                T4 = 1; //Take Out;
+                T4(i) = 1; //Take Out;
 
                 break;
 
             case SE_11_SWINGING_DOOR://Pivitor rotater
-                if (sp->ang>1024) T4 = 2;
-                else T4 = -2;
+                if (sp->ang>1024) T4(i) = 2;
+                else T4(i) = -2;
                 fallthrough__;
             case SE_0_ROTATING_SECTOR:
             case SE_2_EARTHQUAKE://Earthquakemakers
@@ -6295,7 +6295,7 @@ int A_Spawn(int j, int pn)
                     {
                         if (sp->pal) sprite[i].clipdist = 1;
                         else sprite[i].clipdist = 0;
-                        T4 = sector[sect].floorz;
+                        T4(i) = sector[sect].floorz;
                         sector[sect].hitag = i;
                     }
 
@@ -6333,7 +6333,7 @@ int A_Spawn(int j, int pn)
                 startwall = sector[sect].wallptr;
                 endwall = startwall+sector[sect].wallnum;
 
-                T2 = tempwallptr;
+                T2(i) = tempwallptr;
                 for (s=startwall;s<endwall;s++)
                 {
                     g_origins[tempwallptr].x = wall[s].x-sp->x;
@@ -6378,19 +6378,19 @@ int A_Spawn(int j, int pn)
                     }
 
                     sp->owner = -1;
-                    T1 = s;
+                    T1(i) = s;
 
                     if (sp->lotag != SE_30_TWO_WAY_TRAIN)
-                        T4 = sp->hitag;
+                        T4(i) = sp->hitag;
                 }
 
                 else if (sp->lotag == SE_16_REACTOR)
-                    T4 = sector[sect].ceilingz;
+                    T4(i) = sector[sect].ceilingz;
 
                 else if (sp->lotag == SE_26)
                 {
-                    T4 = sp->x;
-                    T5 = sp->y;
+                    T4(i) = sp->x;
+                    T5(i) = sp->y;
                     if (sp->shade==sector[sect].floorshade) //UP
                         sp->zvel = -256;
                     else
@@ -6400,7 +6400,7 @@ int A_Spawn(int j, int pn)
                 }
                 else if (sp->lotag == SE_2_EARTHQUAKE)
                 {
-                    T6 = sector[sp->sectnum].floorheinum;
+                    T6(i) = sector[sp->sectnum].floorheinum;
                     sector[sp->sectnum].floorheinum = 0;
                 }
             }
@@ -6813,9 +6813,9 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         }
 
         sect = s->sectnum;
-        t1 = T2;
-        t3 = T4;
-        t4 = T5;
+        t1 = T2(i);
+        t3 = T4(i);
+        t4 = T5(i);
         switchpic = s->picnum;
         //some special cases because dynamictostatic system can't handle addition to constants
         if ((s->picnum >= SCRAP6)&&(s->picnum<=SCRAP6+7))
@@ -7133,7 +7133,7 @@ PALONLY:
         case SCRAP5__STATIC:
             if (ActorExtra[i].picnum == BLIMP && t->picnum == SCRAP1 && s->yvel >= 0)
                 t->picnum = s->yvel;
-            else t->picnum += T1;
+            else t->picnum += T1(i);
             t->shade -= 6;
 
             G_MaybeTakeOnFloorPal(t, sect);
@@ -7360,7 +7360,7 @@ PALONLY:
                 else t->cstat &= ~4;
             }
 
-            t->picnum = s->picnum+k+((T1<4)*5);
+            t->picnum = s->picnum+k+((T1(i)<4)*5);
             t->shade = sprite[s->owner].shade;
 
             break;
@@ -7369,12 +7369,12 @@ PALONLY:
             t->picnum = WATERSPLASH2+t1;
             break;
         case SHELL__STATIC:
-            t->picnum = s->picnum+(T1&1);
+            t->picnum = s->picnum+(T1(i)&1);
             fallthrough__;
         case SHOTGUNSHELL__STATIC:
             t->cstat |= 12;
-            if (T1 > 1) t->cstat &= ~4;
-            if (T1 > 2) t->cstat &= ~12;
+            if (T1(i) > 1) t->cstat &= ~4;
+            if (T1(i) > 2) t->cstat &= ~12;
             break;
         case FRAMEEFFECT1_13__STATIC:
             if (PLUTOPAK) break;
@@ -12031,7 +12031,7 @@ static void G_DrawCameraText(short i)
     char flipbits;
     int x , y;
 
-    if (!T1)
+    if (!T1(i))
     {
         rotatesprite(24<<16,33<<16,65536L,0,CAMCORNER,0,0,2,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);
         rotatesprite((320-26)<<16,34<<16,65536L,0,CAMCORNER+1,0,0,2,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);

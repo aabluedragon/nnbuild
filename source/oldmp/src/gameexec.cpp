@@ -1894,15 +1894,15 @@ static int X_DoExecute(void)
                     ActorExtra[i].movflag = 0;
                     ActorExtra[i].tempang = 0;
                     ActorExtra[i].dispicnum = 0;
-                    T1=T2=T3=T4=T5=T6=T7=T8=T9=0;
+                    T1(i)=T2(i)=T3(i)=T4(i)=T5(i)=T6(i)=T7(i)=T8(i)=T9(i)=0;
                     ActorExtra[i].flags = 0;
                     sprite[i].hitag = 0;
 
                     // pointers
                     if (actorscrptr[sprite[i].picnum])
                     {
-                        T5 = *(actorscrptr[sprite[i].picnum]+1);
-                        T2 = *(actorscrptr[sprite[i].picnum]+2);
+                        T5(i) = *(actorscrptr[sprite[i].picnum]+1);
+                        T2(i) = *(actorscrptr[sprite[i].picnum]+2);
                         sprite[i].hitag = *(actorscrptr[sprite[i].picnum]+3);
                     }
                 }
@@ -4624,20 +4624,20 @@ void G_SaveMapState(mapstate_t *save)
 
             j = (intptr_t)&script[0];
 
-            if (T2 >= j && T2 < (intptr_t)(&script[g_scriptSize]))
+            if (T2(i) >= j && T2(i) < (intptr_t)(&script[g_scriptSize]))
             {
                 save->scriptptrs[i] |= 1;
-                T2 -= j;
+                T2(i) -= j;
             }
-            if (T5 >= j && T5 < (intptr_t)(&script[g_scriptSize]))
+            if (T5(i) >= j && T5(i) < (intptr_t)(&script[g_scriptSize]))
             {
                 save->scriptptrs[i] |= 2;
-                T5 -= j;
+                T5(i) -= j;
             }
-            if (T6 >= j && T6 < (intptr_t)(&script[g_scriptSize]))
+            if (T6(i) >= j && T6(i) < (intptr_t)(&script[g_scriptSize]))
             {
                 save->scriptptrs[i] |= 4;
-                T6 -= j;
+                T6(i) -= j;
             }
         }
 
@@ -4649,11 +4649,11 @@ void G_SaveMapState(mapstate_t *save)
             j = (intptr_t)&script[0];
 
             if (save->scriptptrs[i]&1)
-                T2 += j;
+                T2(i) += j;
             if (save->scriptptrs[i]&2)
-                T5 += j;
+                T5(i) += j;
             if (save->scriptptrs[i]&4)
-                T6 += j;
+                T6(i) += j;
         }
 
         Bmemcpy(&save->g_numCyclers,&g_numCyclers,sizeof(g_numCyclers));
@@ -4748,9 +4748,9 @@ void G_RestoreMapState(mapstate_t *save)
         for (i=MAXSPRITES-1;i>=0;i--)
         {
             j = (intptr_t)(&script[0]);
-            if (save->scriptptrs[i]&1) T2 += j;
-            if (save->scriptptrs[i]&2) T5 += j;
-            if (save->scriptptrs[i]&4) T6 += j;
+            if (save->scriptptrs[i]&1) T2(i) += j;
+            if (save->scriptptrs[i]&2) T5(i) += j;
+            if (save->scriptptrs[i]&4) T6(i) += j;
         }
 
         Bmemcpy(&g_numCyclers,&save->g_numCyclers,sizeof(g_numCyclers));
