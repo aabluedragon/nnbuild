@@ -88,7 +88,7 @@ typedef struct
 extern int16_t g_skillSoundID;
 extern int32_t g_numEnvSoundsPlaying,g_highestSoundIdx;
 
-extern int32_t A_CheckSoundPlaying(int32_t i,int32_t num);
+extern int A_CheckSoundPlaying(int spriteNum, int soundNum);
 extern int A_PlaySound(int soundNum, int spriteNum);
 extern void S_Callback(intptr_t num);
 extern int S_CheckSoundPlaying(int soundNum);
@@ -101,13 +101,13 @@ extern void S_MusicShutdown(void);
 extern void S_MusicStartup(void);
 extern void S_MusicVolume(int32_t volume);
 extern void S_PauseMusic(int32_t onf);
-extern int32_t S_PlayMusic(const char *fn,const int32_t sel);
-extern int32_t S_PlaySound(int32_t num);
+extern int32_t S_PlayMusic(const char* fn, const int32_t sel);
+extern int S_PlaySound(int num);
 extern int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z);
-extern int32_t S_PlaySound3D(int32_t num,int32_t i,const vec3_t *pos);
+extern int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos);
 extern void S_SoundShutdown(void);
 extern void S_SoundStartup(void);
-extern void S_StopEnvSound(int32_t num,int32_t i);
+extern void S_StopEnvSound(int sndNum, int sprNum);
 extern void S_StopMusic(void);
 extern void S_Update(void);
 extern void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
