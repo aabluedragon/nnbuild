@@ -552,17 +552,18 @@ void G_OperateSectors(int sn,int ii)
     int i;
     sectortype *sptr = &sector[sn];
 
-    switch (sptr->lotag&(0xffff-49152))
+    switch (sptr->lotag & (uint16_t)~49152u)
     {
 
     case ST_30_ROTATE_RISE_BRIDGE:
         j = sector[sn].hitag;
-        if (ActorExtra[j].tempang == 0 ||
-                ActorExtra[j].tempang == 256)
-            A_CallSound(sn,ii);
-        if (sprite[j].extra == 1)
-            sprite[j].extra = 3;
-        else sprite[j].extra = 1;
+
+        if (E_SpriteIsValid(j))
+        {
+            if (ActorExtra[j].tempang == 0 || ActorExtra[j].tempang == 256)
+                A_CallSound(sn, ii);
+            sprite[j].extra = (sprite[j].extra == 1) ? 3 : 1;
+        }
         break;
 
     case ST_31_TWO_WAY_TRAIN:
@@ -1006,98 +1007,81 @@ void G_OperateRespawns(int low)
     }
 }
 
-void G_OperateActivators(int low,int snum)
+void G_OperateActivators(int lotag, int playerNum)
 {
-    int i, j, k;
-    short *p;
-    walltype *wal;
-
-    for (i=g_numCyclers-1;i>=0;i--)
+    for (int spriteNum = g_numCyclers - 1; spriteNum >= 0; spriteNum--)
     {
-        p = &cyclers[i][0];
+        int16_t* const pCycler = &cyclers[spriteNum][0];
 
-        if (p[4] == low)
+        if (pCycler[4] == lotag)
         {
-            p[5] = !p[5];
+            pCycler[5] = !pCycler[5];
+            sector[pCycler[0]].floorshade = pCycler[3];
+            sector[pCycler[0]].ceilingshade = pCycler[3];
+            walltype* pWall = &wall[sector[pCycler[0]].wallptr];
 
-            sector[p[0]].floorshade = sector[p[0]].ceilingshade = p[3];
-            wal = &wall[sector[p[0]].wallptr];
-            for (j=sector[p[0]].wallnum;j > 0;j--,wal++)
-                wal->shade = p[3];
+            for (int j = sector[pCycler[0]].wallnum; j > 0; j--, pWall++)
+                pWall->shade = pCycler[3];
         }
     }
 
-    i = headspritestat[STAT_ACTIVATOR];
-    k = -1;
-    while (i >= 0)
-    {
-        if (sprite[i].lotag == low)
-        {
-            if (sprite[i].picnum == ACTIVATORLOCKED)
-            {
-                if (sector[SECT(i)].lotag&16384)
-                    sector[SECT(i)].lotag &= 65535-16384;
-                else
-                    sector[SECT(i)].lotag |= 16384;
+    int soundPlayed = -1;
 
-                if (snum >= 0 && snum < ud.multimode)
-                {
-                    if (sector[SECT(i)].lotag&16384)
-                        P_DoQuote(4,g_player[snum].ps);
-                    else P_DoQuote(8,g_player[snum].ps);
-                }
+    for (bssize_t nextSprite, SPRITES_OF_STAT_SAFE(STAT_ACTIVATOR, spriteNum, nextSprite))
+    {
+        if (sprite[spriteNum].lotag == lotag)
+        {
+            if (sprite[spriteNum].picnum == ACTIVATORLOCKED)
+            {
+                sector[SECT(spriteNum)].lotag ^= 16384;
+
+                if (playerNum >= 0 && playerNum < ud.multimode)
+                    P_DoQuote((sector[SECT(spriteNum)].lotag & 16384) ? 4 : 8, g_player[playerNum].ps);
             }
             else
             {
-                switch (SHT(i))
+                switch (SHT(spriteNum))
                 {
-                case 0:
-                    break;
                 case 1:
-                    if (sector[SECT(i)].floorz != sector[SECT(i)].ceilingz)
-                    {
-                        i = nextspritestat[i];
+                    if (sector[SECT(spriteNum)].floorz != sector[SECT(spriteNum)].ceilingz)
                         continue;
-                    }
                     break;
                 case 2:
-                    if (sector[SECT(i)].floorz == sector[SECT(i)].ceilingz)
-                    {
-                        i = nextspritestat[i];
+                    if (sector[SECT(spriteNum)].floorz == sector[SECT(spriteNum)].ceilingz)
                         continue;
-                    }
                     break;
                 }
 
-                if (sector[sprite[i].sectnum].lotag < 3)
+                // ST_2_UNDERWATER
+                if (sector[sprite[spriteNum].sectnum].lotag < 3)
                 {
-                    j = headspritesect[sprite[i].sectnum];
-                    while (j >= 0)
+                    for (bssize_t SPRITES_OF_SECT(sprite[spriteNum].sectnum, foundSprite))
                     {
-                        if (sprite[j].statnum == 3) switch (sprite[j].lotag)
+                        if (sprite[foundSprite].statnum == STAT_EFFECTOR)
+                        {
+                            switch (sprite[foundSprite].lotag)
                             {
-                            case 36:
-                            case 31:
-                            case 32:
-                            case 18:
-                                ActorExtra[j].temp_data[0] = 1-ActorExtra[j].temp_data[0];
-                                A_CallSound(SECT(i),j);
+                            case SE_36_PROJ_SHOOTER:
+                            case SE_31_FLOOR_RISE_FALL:
+                            case SE_32_CEILING_RISE_FALL:
+                            case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
+                                ActorExtra[foundSprite].temp_data[0] = 1 - ActorExtra[foundSprite].temp_data[0];
+                                A_CallSound(SECT(spriteNum), foundSprite);
                                 break;
                             }
-                        j = nextspritesect[j];
+                        }
                     }
                 }
 
-                if (k == -1 && (sector[SECT(i)].lotag&0xff) == 22)
-                    k = A_CallSound(SECT(i),i);
+                if (soundPlayed == -1 && (sector[SECT(spriteNum)].lotag & 0xff) == ST_22_SPLITTING_DOOR)
+                    soundPlayed = A_CallSound(SECT(spriteNum), spriteNum);
 
-                G_OperateSectors(SECT(i),i);
+                G_OperateSectors(SECT(spriteNum), spriteNum);
             }
         }
-        i = nextspritestat[i];
     }
 
-    G_OperateRespawns(low);
+    G_OperateRespawns(lotag);
 }
 
 void G_OperateMasterSwitches(int low)
@@ -1586,7 +1570,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         }
         else if (hitag != 0)
         {
-            if (switchtype == 1 && (g_sounds[hitag].m&4) == 0)
+            if (switchtype == 1 && (g_sounds[hitag].m & SF_TALK) == 0)
                 S_PlaySoundXYZ(hitag,w,sx,sy,g_player[snum].ps->pos.z);
             else A_PlaySound(hitag,g_player[snum].ps->i);
         }
@@ -2165,7 +2149,7 @@ void A_DamageObject_Internal(int i,int sn)
 
         A_PlaySound(GLASS_HEAVYBREAK,i);
         s = &sprite[i];
-        for (j=16;j>0;j--) RANDOMSCRAP;
+        for (j=16;j>0;j--) RANDOMSCRAP(s, i);
 
         break;
     case WATERFOUNTAIN__STATIC:
@@ -2405,7 +2389,7 @@ void A_DamageObject_Internal(int i,int sn)
     case TRIPODCAMERA__STATIC:
         A_PlaySound(GLASS_HEAVYBREAK,i);
         s = &sprite[i];
-        for (j=16;j>0;j--) RANDOMSCRAP;
+        for (j=16;j>0;j--) RANDOMSCRAP(s, i);
         deletesprite(i);
         break;
     case PLAYERONWATER__STATIC:

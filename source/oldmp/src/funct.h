@@ -52,7 +52,7 @@ extern void G_AnimateWalls(void);
 extern int G_ActivateWarpElevators(int s,int d);
 extern void G_OperateSectors(int sn,int ii);
 extern void G_OperateRespawns(int low);
-extern void G_OperateActivators(int low,int snum);
+extern void G_OperateActivators(int lotag, int playerNum);
 extern void G_OperateMasterSwitches(int low);
 extern void G_OperateForceFields(int s,int low);
 extern int P_ActivateSwitch(int snum,int w,int switchtype);

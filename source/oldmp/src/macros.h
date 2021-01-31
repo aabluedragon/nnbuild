@@ -17,7 +17,7 @@
 
 #define IFWITHIN(B,E) if((PN(i))>=(B) && (PN(i))<=(E))
 #define IFMOVING if(A_SetSprite(i,CLIPMASK0))
-#define IFHIT j=A_IncurDamage(i);if(j >= 0)
+#define IFHIT(i) j=A_IncurDamage(i);if(j >= 0)
 #define AFLAMABLE(X) (X==BOX||X==TREE1||X==TREE2||X==TIRE||X==CONE)
 #define rnd(X) ((krand()>>8)>=(255-(X)))
 
