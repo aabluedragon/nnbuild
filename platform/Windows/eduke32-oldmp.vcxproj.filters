@@ -57,9 +57,6 @@
     <ClInclude Include="..\..\source\oldmp\src\mdump.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\mpu401.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\source\oldmp\src\names.h">
       <Filter>Header Files</Filter>
     </ClInclude>

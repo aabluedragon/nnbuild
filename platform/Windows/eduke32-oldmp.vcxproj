@@ -191,7 +191,6 @@
     <ClInclude Include="..\..\source\oldmp\src\macros.h" />
     <ClInclude Include="..\..\source\oldmp\src\mapster32.h" />
     <ClInclude Include="..\..\source\oldmp\src\mdump.h" />
-    <ClInclude Include="..\..\source\oldmp\src\mpu401.h" />
     <ClInclude Include="..\..\source\oldmp\src\names.h" />
     <ClInclude Include="..\..\source\oldmp\src\namesdyn.h" />
     <ClInclude Include="..\..\source\oldmp\src\oldnet.h" />
