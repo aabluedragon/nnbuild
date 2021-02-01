@@ -554,10 +554,6 @@ void M_DisplayMenus(void)
 
     Net_GetPackets();
 
-    // [JM] Temporary hack until main loop restructured to match mainline.
-    if(g_player[myconnectindex].ps->gm & MODE_END)
-        S_Update();
-
     {
         if (buttonstat != 0 && !onbar)
         {
