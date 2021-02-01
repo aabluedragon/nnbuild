@@ -88,30 +88,30 @@ typedef struct
 extern int16_t g_skillSoundID;
 extern int32_t g_numEnvSoundsPlaying,g_highestSoundIdx;
 
-extern int A_CheckSoundPlaying(int spriteNum, int soundNum);
-extern int A_PlaySound(int soundNum, int spriteNum);
-extern void S_Callback(intptr_t num);
-extern int S_CheckSoundPlaying(int soundNum);
-extern void S_Cleanup(void);
-extern void S_ClearSoundLocks(void);
-extern int32_t S_LoadSound(uint32_t num);
-extern void S_PrecacheSounds(void);
-extern void S_MenuSound(void);
-extern void S_MusicShutdown(void);
-extern void S_MusicStartup(void);
-extern void S_MusicVolume(int32_t volume);
-extern void S_PauseMusic(int32_t onf);
-extern int32_t S_PlayMusic(const char* fn, const int32_t sel);
-extern int S_PlaySound(int num);
-extern int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z);
-extern int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos);
-extern void S_SoundShutdown(void);
-extern void S_SoundStartup(void);
-extern void S_StopEnvSound(int sndNum, int sprNum);
-extern void S_StopMusic(void);
-extern void S_Update(void);
-extern void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
-extern void S_DetachSoundsFromSprite(int spriteNum);
+int A_CheckSoundPlaying(int spriteNum, int soundNum);
+int A_PlaySound(int soundNum, int spriteNum);
+void S_Callback(intptr_t num);
+int S_CheckSoundPlaying(int soundNum);
+void S_Cleanup(void);
+void S_ClearSoundLocks(void);
+int32_t S_LoadSound(uint32_t num);
+void S_PrecacheSounds(void);
+void S_MenuSound(void);
+void S_MusicShutdown(void);
+void S_MusicStartup(void);
+void S_MusicVolume(int32_t volume);
+void S_PauseMusic(int32_t onf);
+int32_t S_PlayMusic(const char* fn, const int32_t sel);
+int S_PlaySound(int num);
+int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z);
+int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos);
+void S_SoundShutdown(void);
+void S_SoundStartup(void);
+void S_StopEnvSound(int sndNum, int sprNum);
+void S_StopMusic(void);
+void S_Update(void);
+void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
+void S_DetachSoundsFromSprite(int spriteNum);
 
 static inline bool S_IsAmbientSFX(int spriteNum)
 {

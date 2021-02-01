@@ -52,6 +52,8 @@ static inline void S_SetProperties(assvoice_t* snd, int const owner, int const v
     snd->dist = dist;
     snd->clock = clock;
     snd->detached = 0;
+    //snd->last_pos = { 0, 0, 0 };
+    //snd->last_sect = -1;
 }
 
 void S_SoundStartup(void)
