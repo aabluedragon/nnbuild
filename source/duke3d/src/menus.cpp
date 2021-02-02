@@ -2182,10 +2182,6 @@ static void Menu_Pre(MenuID_t cm)
 #ifdef TEXFILTER_MENU_OPTIONS
         if (videoGetRenderMode() != REND_CLASSIC)
         {
-            //POGOTODO: allow setting anisotropy again while r_useindexedcolortextures is set when support is added down the line
-            // don't allow setting anisotropy while in POLYMOST and r_useindexedcolortextures is enabled
-            MenuEntry_DisableOnCondition(&ME_DISPLAYSETUP_ANISOTROPY, videoGetRenderMode() == REND_POLYMOST && r_useindexedcolortextures);
-
             for (i = (int32_t) ARRAY_SIZE(MEOSV_DISPLAYSETUP_ANISOTROPY) - 1; i >= 0; --i)
             {
                 if (MEOSV_DISPLAYSETUP_ANISOTROPY[i] <= glinfo.maxanisotropy)
@@ -3488,7 +3484,7 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
             || (musicdevice == ASS_ALSA && (size_t)alsadevice < alsadevices.size() &&
                 (ALSA_ClientID != alsadevices[alsadevice].clntid || ALSA_PortID != alsadevices[alsadevice].portid))
 #endif
-)
+        )
         {
             S_MusicShutdown();
             S_SoundShutdown();
@@ -3510,10 +3506,10 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
         {
             int const needsReInit = (ud.config.MusicDevice != musicdevice || (musicdevice == ASS_SF2 && Bstrcmp(SF2_BankFile, sf2bankfile))
 #ifdef __linux__
-            || (musicdevice == ASS_ALSA && (size_t)alsadevice < alsadevices.size() &&
-                (ALSA_ClientID != alsadevices[alsadevice].clntid || ALSA_PortID != alsadevices[alsadevice].portid))
+                || (musicdevice == ASS_ALSA && (size_t)alsadevice < alsadevices.size() &&
+                    (ALSA_ClientID != alsadevices[alsadevice].clntid || ALSA_PortID != alsadevices[alsadevice].portid))
 #endif
-);
+            );
 
             AL_Stereo = opl3stereo;
             Bstrcpy(SF2_BankFile, sf2bankfile);
@@ -3816,7 +3812,7 @@ static int32_t Menu_EntryRangeDoubleModify(void /*MenuEntry_t *entry, double new
 }
 #endif
 
-static uint32_t save_xxh = 0;
+static XXH64_hash_t save_xxh = 0;
 
 static void Menu_EntryStringActivate(/*MenuEntry_t *entry*/)
 {
@@ -3827,7 +3823,7 @@ static void Menu_EntryStringActivate(/*MenuEntry_t *entry*/)
         {
             savebrief_t & sv = g_menusaves[M_SAVE.currentEntry-1].brief;
             if (!save_xxh)
-                save_xxh = XXH32((uint8_t *)sv.name, MAXSAVEGAMENAME, 0xDEADBEEF);
+                save_xxh = XXH3_64bits_withSeed((uint8_t *)sv.name, MAXSAVEGAMENAME, 0xDEADBEEF);
             if (sv.isValid())
                 Menu_Change(MENU_SAVEVERIFY);
         }
@@ -3859,7 +3855,7 @@ static int32_t Menu_EntryStringSubmit(/*MenuEntry_t *entry, */char *input)
 #else
         if (input[0] == 0 || (sv.name[MAXSAVEGAMENAME] == 127 &&
             strncmp(sv.name, input, MAXSAVEGAMENAME) == 0 &&
-            save_xxh == XXH32((uint8_t *)sv.name, MAXSAVEGAMENAME, 0xDEADBEEF)))
+            save_xxh == XXH3_64bits_withSeed((uint8_t *)sv.name, MAXSAVEGAMENAME, 0xDEADBEEF)))
 #endif
         {
             strncpy(sv.name, g_mapInfo[ud.volume_number * MAXLEVELS + ud.level_number].name, MAXSAVEGAMENAME);
