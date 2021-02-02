@@ -593,6 +593,8 @@ void P_RandomSpawnPoint(int snum)
     p->opos.z = p->pos.z = g_playerSpawnPoints[i].oz;
     p->q16ang = fix16_from_int(g_playerSpawnPoints[i].oa);
     p->cursectnum = g_playerSpawnPoints[i].os;
+    // [JM] Need to prevent perpetual gibbing after being killed by a space sector.
+    changespritesect(p->i, p->cursectnum);
 }
 
 static void P_ResetStatus(int snum)
