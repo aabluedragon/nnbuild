@@ -1559,15 +1559,26 @@ void waitforeverybody(void)
 
     // if we're a peer or slave, not a master
     if ((g_networkBroadcastMode == NETMODE_P2P) || ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)))
-        TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 1);
-        if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+        TRAVERSE_CONNECT(i)
+        {
+            if (i != myconnectindex)
+                mmulti_sendpacket(i, (unsigned char*)packbuf, 1);
+
+            if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead))
+                break; //slaves in M/S mode only send to master
+        }
     }
 
-    if (ud.multimode > 1)
+    P_SetGamePalette(g_player[myconnectindex].ps, TITLEPAL, 11);
+
+    while (1)
     {
-        P_SetGamePalette(g_player[myconnectindex].ps, TITLEPAL, 11);
+        //if (quitevent) G_GameExit(""); // This sucks
+
+        handleevents();
+        Net_GetPackets();
+
         rotatesprite(0, 0, 65536L, 0, BETASCREEN, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
 
         rotatesprite(160 << 16, (104) << 16, 60 << 10, 0, DUKENUKEM, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
@@ -1576,41 +1587,53 @@ void waitforeverybody(void)
             rotatesprite(160 << 16, (151) << 16, 30 << 11, 0, PLUTOPAKSPRITE + 1, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
 
         gametext(160, 190, "WAITING FOR PLAYERS", 14, 2);
+
+        if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
+        {
+            int ypos = 8;
+            gametext(8, ypos, "^12Player Status:", -127, 2);
+            TRAVERSE_CONNECT(i)
+            {
+                ypos += 8;
+                gametext(8, ypos, g_player[i].user_name, -127, 2);
+
+                if (g_player[i].playerreadyflag >= g_player[myconnectindex].playerreadyflag)
+                    gametext(89, ypos, "^7- ^8Ready!", -127, 2);
+                else
+                    gametext(89, ypos, "^7- ^2Loading", -127, 2);
+            }
+        }
+
         videoNextPage();
-    }
 
-    // [JM] FIXME: This will cause desyncs if faketimerhandler is ever called during this loop!
-    //             Why? Fuck if I know, but I think faketimerhandler needs a good colon cleansing.
-    //             BTW, this includes functions like videoNextPage, which call faketimerhandler.
-    while (1)
-    {
-        //if (quitevent) G_GameExit("");
-
-        handleevents();
-        Net_GetPackets();
-
+        // Check if ready, if not, break from loop.
         TRAVERSE_CONNECT(i)
         {
             if (g_player[i].playerreadyflag < g_player[myconnectindex].playerreadyflag)
                 break;
 
+            //slaves in M/S mode only wait for master
             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead))
             {
                 // we're a slave
                 i = -1;
                 break;
             }
-            //slaves in M/S mode only wait for master
         }
 
-        if (i < 0)
+        // -1 Means we iterated through all players without breaking in above loop. All players ready.
+        if (i <= -1)
         {
             // master sends ready packet once it hears from all slaves
             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && myconnectindex == connecthead)
-                TRAVERSE_CONNECT(i)
             {
-                packbuf[0] = PACKET_TYPE_PLAYER_READY;
-                if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 1);
+                TRAVERSE_CONNECT(i)
+                {
+                    packbuf[0] = PACKET_TYPE_PLAYER_READY;
+
+                    if (i != myconnectindex)
+                        mmulti_sendpacket(i, (unsigned char*)packbuf, 1);
+                }
             }
 
             P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);
