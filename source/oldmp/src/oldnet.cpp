@@ -157,8 +157,17 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
     }
 
     copybufbyte(&osyn[playerNum], &nsyn[playerNum], sizeof(input_t));
-    if (inputFlags & 1)   nsyn[playerNum].fvel = packbuf[(*j)] + ((short)packbuf[(*j) + 1] << 8), (*j) += 2;
-    if (inputFlags & 2)   nsyn[playerNum].svel = packbuf[(*j)] + ((short)packbuf[(*j) + 1] << 8), (*j) += 2;
+    if (inputFlags & 1)
+    {
+        nsyn[playerNum].fvel = (short)packbuf[(*j)] + ((short)packbuf[(*j) + 1] << 8);
+        (*j) += 2;
+    }
+    if (inputFlags & 2)
+    {
+        nsyn[playerNum].svel = (short)packbuf[(*j)] + ((short)packbuf[(*j) + 1] << 8);
+        (*j) += 2;
+    }
+
     if (inputFlags & 4)
     {
         nsyn[playerNum].q16avel = (fix16_t)packbuf[(*j)];
@@ -171,6 +180,7 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
     if (inputFlags & 16)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffff00ff) | ((int)packbuf[(*j)++]) << 8);
     if (inputFlags & 32)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xff00ffff) | ((int)packbuf[(*j)++]) << 16);
     if (inputFlags & 64)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0x00ffffff) | ((int)packbuf[(*j)++]) << 24);
+
     if (inputFlags & 128)
     {
         nsyn[playerNum].q16horz = (fix16_t)packbuf[(*j)];
@@ -471,15 +481,15 @@ void Net_HandleInput(void)
         {
             packbuf[j++] = i; // Player Index
 
-            Net_AddPlayerPingToPacket(&j, i);
-            Net_AddPlayerInputToPacket(&j, i, osyn, nsyn);
-
             //Fix timers and buffer/jitter value 
             packbuf[j++] = min(max(g_player[i].myminlag, -128), 127);
             if ((movefifosendplc & (TIMERUPDATESIZ - 1)) == 0)
             {
                 g_player[i].myminlag = 0x7fffffff;
             }
+
+            Net_AddPlayerPingToPacket(&j, i);
+            Net_AddPlayerInputToPacket(&j, i, osyn, nsyn);
         }
 
         Net_AddSyncInfoToPacket(&j);
@@ -521,6 +531,10 @@ void Net_ParsePackets(void)
         case PACKET_TYPE_MASTER_TO_SLAVE:  //[0] (receive master sync buffer)
         {
             j = 1;
+            if (myconnectindex == connecthead)
+            {
+                OSD_Printf("PACKET_TYPE_MASTER_TO_SLAVE: MASTER SHOULDN'T GET THIS PACKET!\n");
+            }
 
             // PING
             Net_GetPingTimeFromPacket(&j);
@@ -531,14 +545,14 @@ void Net_ParsePackets(void)
             {
                 int playerNum = packbuf[j++];
 
-                Net_GetPlayerPingFromPacket(&j, playerNum);
-                Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
-
                 //Fix timers and buffer/jitter value 
                 int temp = (int)((signed char)packbuf[j++]);
 
                 if (((g_player[other].movefifoend & (TIMERUPDATESIZ - 1)) == 0) && (playerNum == myconnectindex))
                     otherminlag = temp;
+
+                Net_GetPlayerPingFromPacket(&j, playerNum);
+                Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
 
                 if (TEST_SYNC_KEY(nsyn[playerNum].bits, SK_GAMEQUIT) && g_player[playerNum].connected)
                 {
