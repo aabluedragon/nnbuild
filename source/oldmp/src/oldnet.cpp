@@ -304,9 +304,12 @@ void Net_HandleInput(void)
 #else
     if (((g_player[myconnectindex].movefifoend-1)&(TIMERUPDATESIZ-1)) == 0)
     {
-        i = mymaxlag-bufferjitter; mymaxlag = 0;
-        if (i > 0) bufferjitter += ((3 + i) >> 2);
-        else if (i < 0) bufferjitter -= ((1 - i) >> 2);
+        i = mymaxlag-bufferjitter;
+        mymaxlag = 0;
+        if (i > 0)
+            bufferjitter += ((3 + i) >> 2);
+        else if (i < 0)
+            bufferjitter -= ((1 - i) >> 2);
     }
 #endif
 
