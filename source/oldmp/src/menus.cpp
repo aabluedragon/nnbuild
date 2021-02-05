@@ -1678,9 +1678,6 @@ cheat_for_port_credits:
             {
                 if (ud.multimode > 1 && x == 0 && ud.recstat != 2)
                 {
-                    if (g_movesPerPacket == 4 && myconnectindex != connecthead)
-                        break;
-
                     last_zero = 0;
                     ChangeToMenu(600);
                 }
@@ -1697,8 +1694,6 @@ cheat_for_port_credits:
                         ChangeToMenu(202);
                         break;   // JBF 20031205: was 200
                     case 2:
-                        if (g_movesPerPacket == 4 && connecthead != myconnectindex)
-                            break;
                         ChangeToMenu(300);
                         break;
                     case 3:
@@ -1727,23 +1722,13 @@ cheat_for_port_credits:
                 }
             }
 
-            if (g_movesPerPacket == 4)
-            {
-                if (myconnectindex == connecthead)
-                    menutext(c,67,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
-                else
-                    menutext(c,67,MENUHIGHLIGHT(0),1,"NEW GAME");
-            }
-            else
-                menutext(c,67,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
+            menutext(c,67,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
 
             //    menutext(c,67+16,0,1,"NETWORK GAME");
 
             menutext(c,67+16/*+16*/,MENUHIGHLIGHT(1),PHX(-3),"OPTIONS");
 
-            if (g_movesPerPacket == 4 && connecthead != myconnectindex)
-                menutext(c,67+16+16/*+16*/,MENUHIGHLIGHT(2),1,"LOAD GAME");
-            else menutext(c,67+16+16/*+16*/,MENUHIGHLIGHT(2),PHX(-4),"LOAD GAME");
+            menutext(c,67+16+16/*+16*/,MENUHIGHLIGHT(2),PHX(-4),"LOAD GAME");
 
             if (!VOLUMEALL)
             {
@@ -1773,8 +1758,6 @@ cheat_for_port_credits:
             switch (x)
             {
             case 0:
-                if (g_movesPerPacket == 4 && myconnectindex != connecthead)
-                    break;
                 if (ud.multimode < 2 || ud.recstat == 2)
                     ChangeToMenu(1500);
                 else
@@ -1784,8 +1767,6 @@ cheat_for_port_credits:
                 }
                 break;
             case 1:
-                if (g_movesPerPacket == 4 && connecthead != myconnectindex)
-                    break;
                 if (ud.recstat != 2)
                 {
                     last_fifty = 1;
@@ -1794,8 +1775,6 @@ cheat_for_port_credits:
                 }
                 break;
             case 2:
-                if (g_movesPerPacket == 4 && connecthead != myconnectindex)
-                    break;
                 last_fifty = 2;
                 ChangeToMenu(300);
                 break;
@@ -1832,18 +1811,9 @@ cheat_for_port_credits:
             if (KB_KeyPressed(sc_Q))
                 ChangeToMenu(500);
 
-            if (g_movesPerPacket == 4 && connecthead != myconnectindex)
-            {
-                menutext(c,67                  ,MENUHIGHLIGHT(0),1,"NEW GAME");
-                menutext(c,67+16               ,MENUHIGHLIGHT(1),1,"SAVE GAME");
-                menutext(c,67+16+16            ,MENUHIGHLIGHT(2),1,"LOAD GAME");
-            }
-            else
-            {
-                menutext(c,67                  ,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
-                menutext(c,67+16               ,MENUHIGHLIGHT(1),PHX(-3),"SAVE GAME");
-                menutext(c,67+16+16            ,MENUHIGHLIGHT(2),PHX(-4),"LOAD GAME");
-            }
+            menutext(c,67                  ,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
+            menutext(c,67+16               ,MENUHIGHLIGHT(1),PHX(-3),"SAVE GAME");
+            menutext(c,67+16+16            ,MENUHIGHLIGHT(2),PHX(-4),"LOAD GAME");
 
             menutext(c,67+16+16+16         ,MENUHIGHLIGHT(3),PHX(-5),"OPTIONS");
             if (!VOLUMEALL)

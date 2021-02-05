@@ -8337,9 +8337,6 @@ static void G_HandleLocalKeys(void)
             {
                 KB_ClearKeyDown(sc_F2);
 
-                if (g_movesPerPacket == 4 && connecthead != myconnectindex)
-                    return;
-
 FAKE_F2:
                 if (sprite[g_player[myconnectindex].ps->i].extra <= 0)
                 {
@@ -8369,8 +8366,6 @@ FAKE_F2:
             {
                 KB_ClearKeyDown(sc_F3);
 
-                if (g_movesPerPacket == 4 && connecthead != myconnectindex)
-                    return;
 FAKE_F3:
                 ChangeToMenu(300);
                 FX_StopAllSounds();
@@ -8407,9 +8402,6 @@ FAKE_F3:
         {
             CONTROL_ClearButton(gamefunc_Quick_Save);
             g_doQuickSave = 0;
-
-            if (g_movesPerPacket == 4 && connecthead != myconnectindex)
-                return;
 
             if (g_lastSaveSlot == -1) goto FAKE_F2;
 
@@ -8481,9 +8473,6 @@ FAKE_F3:
         {
             CONTROL_ClearButton(gamefunc_Quick_Load);
             g_doQuickSave = 0;
-
-            if (g_movesPerPacket == 4 && myconnectindex != connecthead)
-                return;
 
             if (g_lastSaveSlot == -1) goto FAKE_F3;
 
@@ -9598,19 +9587,6 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                         Bstrcat(c,".dmo");
                     initprintf("Play demo %s.\n",c);
                     Bstrcpy(firstdemofile,c);
-                    break;
-                case 'f':
-                case 'F':
-                    c++;
-                    if (*c == '1')
-                        g_movesPerPacket = 1;
-                    if (*c == '2')
-                        g_movesPerPacket = 2;
-                    if (*c == '4')
-                    {
-                        g_movesPerPacket = 4;
-                        mmulti_setpackettimeout(0x3fffffff,0x3fffffff); // this doesn't do anything anymore
-                    }
                     break;
                 case 'g':
                 case 'G':

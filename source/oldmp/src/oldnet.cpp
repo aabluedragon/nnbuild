@@ -8,10 +8,6 @@ int lastpackettime = 0;
 int mymaxlag, otherminlag, bufferjitter = 1;
 int voting = -1, vote_map = -1, vote_episode = -1;
 
-int avgfvel, avgsvel, avgbits, avgextbits;
-fix16_t avghorz;
-fix16_t avgavel;
-
 int movefifosendplc;
 int movefifoplc;
 
@@ -201,12 +197,6 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
                     if (l&2048) nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0x00ffffff)|((int)packbuf[(*j)++])<<24); */
 
     g_player[playerNum].movefifoend++;
-
-    for (int count = g_movesPerPacket - 1; count >= 1; count--)
-    {
-        copybufbyte(&nsyn[playerNum], &inputfifo[g_player[playerNum].movefifoend & (MOVEFIFOSIZ - 1)][playerNum], sizeof(input_t));
-        g_player[playerNum].movefifoend++;
-    }
 }
 
 void faketimerhandler(void) { ; };
@@ -238,27 +228,9 @@ void Net_HandleInput(void)
 
     getinput(myconnectindex);
 
-    avgfvel += loc.fvel;
-    avgsvel += loc.svel;
-    avgavel += loc.q16avel;
-    avghorz += loc.q16horz;
-    avgbits |= loc.bits;
-    avgextbits |= loc.extbits;
-    if (g_player[myconnectindex].movefifoend&(g_movesPerPacket-1))
-    {
-        copybufbyte(&inputfifo[(g_player[myconnectindex].movefifoend-1)&(MOVEFIFOSIZ-1)][myconnectindex],
-                    &inputfifo[g_player[myconnectindex].movefifoend&(MOVEFIFOSIZ-1)][myconnectindex],sizeof(input_t));
-        g_player[myconnectindex].movefifoend++;
-        return;
-    }
     nsyn = &inputfifo[g_player[myconnectindex].movefifoend&(MOVEFIFOSIZ-1)][myconnectindex];
-    nsyn[0].fvel = avgfvel/g_movesPerPacket;
-    nsyn[0].svel = avgsvel/g_movesPerPacket;
-    nsyn[0].q16avel = avgavel/g_movesPerPacket;
-    nsyn[0].q16horz = avghorz/g_movesPerPacket;
-    nsyn[0].bits = avgbits;
-    nsyn[0].extbits = avgextbits;
-    avgfvel = avgsvel = avgavel = avghorz = avgbits = avgextbits = 0;
+    copybufbyte(&loc, nsyn, sizeof(input_t));
+
     g_player[myconnectindex].movefifoend++;
 
     if (numplayers < 2)
@@ -510,7 +482,7 @@ void Net_HandleInput(void)
             }
         }
 
-        movefifosendplc += g_movesPerPacket;
+        movefifosendplc++;
     }
 }
 
@@ -566,7 +538,7 @@ void Net_ParsePackets(void)
 
             Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
 
-            movefifosendplc += g_movesPerPacket;
+            movefifosendplc++;
 
             break;
         }
@@ -647,12 +619,6 @@ void Net_ParsePackets(void)
                         if (k&1024) nsyn[other].extbits = ((nsyn[other].extbits&0xff00ffff)|((int)packbuf[j++])<<16);
                         if (k&2048) nsyn[other].extbits = ((nsyn[other].extbits&0x00ffffff)|((int)packbuf[j++])<<24); */
             g_player[other].movefifoend++;
-
-            for (i=g_movesPerPacket-1;i>=1;i--)
-            {
-                copybufbyte(&nsyn[other],&inputfifo[g_player[other].movefifoend&(MOVEFIFOSIZ-1)][other],sizeof(input_t));
-                g_player[other].movefifoend++;
-            }
 
             /*
                         while (j < packbufleng)
@@ -1281,7 +1247,7 @@ void Net_EnterMessage(void)
 
     if (g_player[myconnectindex].ps->gm&MODE_SENDTOWHOM)
     {
-        if (g_chatPlayer != -1 || ud.multimode < 3 || g_movesPerPacket == 4)
+        if (g_chatPlayer != -1 || ud.multimode < 3)
         {
             tempbuf[0] = PACKET_TYPE_MESSAGE;
             tempbuf[2] = 0;
@@ -1315,7 +1281,7 @@ void Net_EnterMessage(void)
             recbuf[j] = 0;
             Bstrcat(tempbuf+2,recbuf);
 
-            if (g_chatPlayer >= ud.multimode || g_movesPerPacket == 4)
+            if (g_chatPlayer >= ud.multimode)
             {
                 tempbuf[1] = 255;
                 TRAVERSE_CONNECT(ch)
@@ -1553,7 +1519,6 @@ void Net_ClearFIFO(void)
     bufferjitter = 1;
     mymaxlag = otherminlag = 0;
     movefifoplc = movefifosendplc = predictfifoplc = 0;
-    avgfvel = avgsvel = avgavel = avghorz = avgbits = avgextbits = 0;
 
     for (; i < MAXPLAYERS; i++)
     {

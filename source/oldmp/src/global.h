@@ -42,7 +42,6 @@ extern char setupfilename[BMAX_PATH];
 
 // Multiplayer
 extern int g_networkBroadcastMode; // 0: master/slave, 1: peer-to-peer
-extern int g_movesPerPacket;
 #endif
 
 #ifdef __cplusplus

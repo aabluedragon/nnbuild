@@ -33,7 +33,6 @@ int g_timerTicsPerSecond = TICRATE;
 int g_scriptSize = 16384;
 int g_playerFriction = 0xcc00;
 int g_networkBroadcastMode = NETMODE_OFFLINE;
-int g_movesPerPacket = 1;
 int g_numFreezeBounces = 3;
 short g_spriteDeleteQueueSize=64;
 

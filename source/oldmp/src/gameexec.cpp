@@ -2757,7 +2757,7 @@ static int X_DoExecute(void)
 
             g_lastSaveSlot = *insptr++;
 
-            if ((g_movesPerPacket == 4 && connecthead != myconnectindex) || g_lastSaveSlot > 9)
+            if (g_lastSaveSlot > 9)
                 break;
             if ((tw == CON_SAVE) || !(ud.savegame[g_lastSaveSlot][0]))
             {

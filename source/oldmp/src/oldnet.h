@@ -9,10 +9,6 @@ extern int lastpackettime;
 extern int mymaxlag, otherminlag, bufferjitter;
 extern int voting, vote_map, vote_episode;
 
-extern int avgfvel, avgsvel, avgbits, avgextbits;
-extern fix16_t avghorz;
-extern fix16_t avgavel;
-
 extern int movefifosendplc;
 extern int movefifoplc;
 
