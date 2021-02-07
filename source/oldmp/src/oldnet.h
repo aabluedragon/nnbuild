@@ -50,6 +50,7 @@ enum DukePacket_t
     PACKET_TYPE_PLAYER_READY,
     PACKET_TYPE_FRAGLIMIT_CHANGED,
     PACKET_TYPE_EOL,
+    PACKET_TYPE_PING,
     PACKET_TYPE_QUIT = 255 // should match mmulti I think
 };
 

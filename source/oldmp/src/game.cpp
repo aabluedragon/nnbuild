@@ -11888,7 +11888,7 @@ static int G_DoMoveThings(void)
 
     G_UpdateInterpolations();
 
-    j = -1;
+    j = -1; // TODO: Move to Net_CheckPlayerQuit
     TRAVERSE_CONNECT(i)
     {
         if (TEST_SYNC_KEY(g_player[i].inputBits->bits, SK_GAMEQUIT) == 0)

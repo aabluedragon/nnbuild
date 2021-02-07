@@ -61,11 +61,41 @@ static void Net_AddPlayerPingToPacket(int* j, int playerNum)
 
 static void Net_GetPlayerPingFromPacket(int* j, int playerNum)
 {
-    g_player[playerNum].ping = (int32_t)packbuf[(*j)];
-    g_player[playerNum].ping += (int32_t)packbuf[(*j) + 1] << 8;
-    g_player[playerNum].ping += (int32_t)packbuf[(*j) + 2] << 16;
-    g_player[playerNum].ping += (int32_t)packbuf[(*j) + 3] << 24;
+    g_player[playerNum].ping = (uint32_t)packbuf[(*j)];
+    g_player[playerNum].ping += (uint32_t)packbuf[(*j) + 1] << 8;
+    g_player[playerNum].ping += (uint32_t)packbuf[(*j) + 2] << 16;
+    g_player[playerNum].ping += (uint32_t)packbuf[(*j) + 3] << 24;
     (*j) += 4;
+}
+
+static void Net_SendPing(void)
+{
+    if (g_networkBroadcastMode != NETMODE_MASTERSLAVE || (myconnectindex != connecthead))
+        return;
+
+    static uint32_t lastPingTime;
+
+    uint32_t tics = timerGetTicks();
+    if (tics - lastPingTime >= 1000)
+    {
+        packbuf[0] = PACKET_TYPE_PING;
+        int j = 1;
+
+        lastPingTime = pingTime = tics;
+        Net_AddPingTimeToPacket(&j);
+
+        int i;
+        TRAVERSE_CONNECT(i)
+        {
+            Net_AddPlayerPingToPacket(&j, i);
+        }
+
+        TRAVERSE_CONNECT(i)
+        {
+            if (i != myconnectindex)
+                mmulti_sendpacket(i, (unsigned char*)packbuf, j);
+        }
+    }
 }
 
 static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
@@ -241,13 +271,13 @@ void Net_HandleInput(void)
             {
                 if (i != myconnectindex)
                 {
-                    //clearbufbyte(&inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ-1)][i],sizeof(input_t),0L);
-                    if (ud.playerai)
+                    if (ud.playerai /*&& g_player[i].isBot*/) // To-do: Add per-player variable.
                     {
                         computergetinput(i, &inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i]);
                         inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i].svel++;
                         inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i].fvel++;
                     }
+
                     g_player[i].movefifoend++;
                 }
             }
@@ -263,7 +293,6 @@ void Net_HandleInput(void)
         mymaxlag = max(mymaxlag,k);
     }
 
-#if 0
     if (((g_player[myconnectindex].movefifoend - 1) & (TIMERUPDATESIZ - 1)) == 0)
     {
         i = mymaxlag - bufferjitter;
@@ -273,17 +302,6 @@ void Net_HandleInput(void)
         else if (i < 0)
             bufferjitter -= ((2 - i) >> 2);
     }
-#else
-    if (((g_player[myconnectindex].movefifoend-1)&(TIMERUPDATESIZ-1)) == 0)
-    {
-        i = mymaxlag-bufferjitter;
-        mymaxlag = 0;
-        if (i > 0)
-            bufferjitter += ((3 + i) >> 2);
-        else if (i < 0)
-            bufferjitter -= ((1 - i) >> 2);
-    }
-#endif
 
     // P2P
     if (g_networkBroadcastMode == NETMODE_P2P)
@@ -409,9 +427,6 @@ void Net_HandleInput(void)
 
         packbuf[j++] = myconnectindex; // Send slave index to master for verification
 
-        // Send ping time we got from master back to it, to calculate how long it took.
-        Net_AddPingTimeToPacket(&j);
-
         osyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-2)&(MOVEFIFOSIZ-1)][myconnectindex];
         nsyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-1)&(MOVEFIFOSIZ-1)][myconnectindex];
 
@@ -423,15 +438,7 @@ void Net_HandleInput(void)
         return;
     }
 
-    //This allows allow packet resends
-    TRAVERSE_CONNECT(i)
-    if (g_player[i].movefifoend <= movefifosendplc)
-    {
-        packbuf[0] = PACKET_TYPE_NULL_PACKET;
-        for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
-            mmulti_sendpacket(i, (unsigned char*)packbuf,1);
-        return;
-    }
+    Net_SendPing();
 
     while (1)  //Master
     {
@@ -448,10 +455,6 @@ void Net_HandleInput(void)
         packbuf[0] = PACKET_TYPE_MASTER_TO_SLAVE;
         j = 1;
 
-        // PING
-        pingTime = timerGetTicks();
-        Net_AddPingTimeToPacket(&j);
-
         TRAVERSE_CONNECT(i)
         {
             packbuf[j++] = i; // Player Index
@@ -463,7 +466,6 @@ void Net_HandleInput(void)
                 g_player[i].myminlag = 0x7fffffff;
             }
 
-            Net_AddPlayerPingToPacket(&j, i);
             Net_AddPlayerInputToPacket(&j, i, osyn, nsyn);
         }
 
@@ -511,9 +513,6 @@ void Net_ParsePackets(void)
                 OSD_Printf("PACKET_TYPE_MASTER_TO_SLAVE: MASTER SHOULDN'T GET THIS PACKET!\n");
             }
 
-            // PING
-            Net_GetPingTimeFromPacket(&j);
-
             osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)][0];
             nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)][0];
             TRAVERSE_CONNECT(i)
@@ -526,7 +525,6 @@ void Net_ParsePackets(void)
                 if (((g_player[other].movefifoend & (TIMERUPDATESIZ - 1)) == 0) && (playerNum == myconnectindex))
                     otherminlag = temp;
 
-                Net_GetPlayerPingFromPacket(&j, playerNum);
                 Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
 
                 if (TEST_SYNC_KEY(nsyn[playerNum].bits, SK_GAMEQUIT) && g_player[playerNum].connected)
@@ -548,16 +546,6 @@ void Net_ParsePackets(void)
 
             if (g_player[packbuf[j++]].connected == 0) // If this is a packet from a disconnected slave, ignore.
                 break;
-
-            // PING
-            Net_GetPingTimeFromPacket(&j);
-
-            int tics = timerGetTicks();
-            if ((tics - g_player[other].lastpingtime) >= 1000) // Update ping display once a second
-            {
-                g_player[other].ping = tics - pingTime;
-                g_player[other].lastpingtime = tics;
-            }
 
             osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)][0];
             nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)][0];
@@ -633,6 +621,7 @@ void Net_ParsePackets(void)
                 initprintf("INVALID GAME PACKET!!! (packet %d, %d too many bytes (%d %d))\n",packbuf[0],j-packbufleng,packbufleng,k);
 
             break;
+
         case PACKET_TYPE_NULL_PACKET:
             break;
 
@@ -647,6 +636,31 @@ void Net_ParsePackets(void)
         default:
             switch (packbuf[0])
             {
+            case PACKET_TYPE_PING:
+            {
+                j = 1;
+                if (myconnectindex == connecthead) // We're the master, recieving from the client
+                {
+                    Net_GetPingTimeFromPacket(&j);
+                    uint32_t tics = timerGetTicks();
+                    g_player[other].ping = tics - pingTime;
+                }
+                else
+                {
+                    Net_GetPingTimeFromPacket(&j);
+                    TRAVERSE_CONNECT(i)
+                    {
+                        Net_GetPlayerPingFromPacket(&j, i);
+                    }
+
+                    // Send ping time we got from master back to it, to calculate how long it took.
+                    j = 1;
+                    Net_AddPingTimeToPacket(&j);
+                    mmulti_sendpacket(connecthead, (unsigned char*)packbuf, j);
+                }
+                break;
+            }
+
             case PACKET_TYPE_MESSAGE:
                 //slaves in M/S mode only send to master
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
@@ -988,6 +1002,7 @@ void Net_ParsePackets(void)
                 multiflag = 0;
                 break;
             }
+
             break;
         }
     }
