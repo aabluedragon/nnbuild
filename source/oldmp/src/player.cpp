@@ -244,42 +244,51 @@ static void A_DoWaterTracers(int x1,int y1,int z1,int x2,int y2,int z2,int n)
     }
 }
 
-static void A_HitscanProjTrail(int x1, int y1, int z1, int x2, int y2, int z2, int ang, int atwith)
+static void A_HitscanProjTrail(const vec3_t *startPos, const vec3_t *endPos, int projAng, int tileNum, int ownerSpriteNum)
 {
-    int n, j, i;
-    short sect = -1;
+    const projectile_t* const pProj = &ProjectileData[tileNum];
 
-    x1 += (sintable[(348+ang+512)&2047]/ProjectileData[atwith].offset);
-    y1 += (sintable[(ang+348)&2047]/ProjectileData[atwith].offset);
-    z1 += 1024+(ProjectileData[atwith].toffset<<8);
+    vec3_t        spawnPos = { startPos->x + tabledivide32_noinline(sintable[(348 + projAng + 512) & 2047], pProj->offset),
+                               startPos->y + tabledivide32_noinline(sintable[(projAng + 348) & 2047], pProj->offset),
+                               startPos->z + 1024 + (pProj->toffset << 8) };
 
-    n = ((FindDistance2D(x1-x2,y1-y2))>>8)+1;
+    int32_t      numSegments   = ((FindDistance2D(spawnPos.x - endPos->x, spawnPos.y - endPos->y)) >> 8) + 1;
 
-    x2 = ((x2-x1)/n);
-    y2 = ((y2-y1)/n);
-    z2 = ((z2-z1)/n);
+    vec3_t const increment = { tabledivide32_noinline((endPos->x - spawnPos.x), numSegments),
+                               tabledivide32_noinline((endPos->y - spawnPos.y), numSegments),
+                               tabledivide32_noinline((endPos->z - spawnPos.z), numSegments) };
 
-    x1 += x2>>2;
-    y1 += y2>>2;
-    z1 += (z2>>2);
+    spawnPos.x += increment.x >> 2;
+    spawnPos.y += increment.y >> 2;
+    spawnPos.z += increment.z >> 2;
 
-    for (i=ProjectileData[atwith].tnum;i>0;i--)
+    int16_t sectNum = sprite[ownerSpriteNum].sectnum;
+    for (bssize_t i = pProj->tnum; i > 0; --i)
     {
-        x1 += x2;
-        y1 += y2;
-        z1 += z2;
-        updatesectorz(x1,y1,z1,&sect);
+        int32_t ceilZ, floorZ;
 
-        if (sect < 0)
-            break;
-        
-        yax_getzsofslope(sect,x1,y1,&n,&j);
+        spawnPos.x += increment.x;
+        spawnPos.y += increment.y;
+        spawnPos.z += increment.z;
 
-        if (z1 > j || z1 < n)
+        updatesectorz(spawnPos.x, spawnPos.y, spawnPos.z, &sectNum);
+
+        if (sectNum < 0)
             break;
 
-        j = A_InsertSprite(sect,x1,y1,z1,ProjectileData[atwith].trail,-32,ProjectileData[atwith].txrepeat,ProjectileData[atwith].tyrepeat,ang,0,0,g_player[0].ps->i,0);
-        changespritestat(j, STAT_ACTOR);
+        yax_getzsofslope(sectNum, spawnPos.x, spawnPos.y, &ceilZ, &floorZ);
+
+        if (spawnPos.z > floorZ || spawnPos.z < ceilZ)
+            break;
+
+        int trailSprite = A_InsertSprite(sectNum, spawnPos.x, spawnPos.y, spawnPos.z, pProj->trail, -32,
+                           pProj->txrepeat, pProj->tyrepeat, projAng, 0, 0, ownerSpriteNum, 0);
+        changespritestat(trailSprite, STAT_ACTOR);
+
+        // [JM] Let's not overshoot our target here.
+        numSegments--;
+        if (numSegments <= 0)
+            break;
     }
 }
 
@@ -649,10 +658,11 @@ int A_Shoot(int i,int atwith)
 
         if (ProjectileData[atwith].workslike & PROJECTILE_HITSCAN)
         {
-            if (s->extra >= 0) s->shade = ProjectileData[atwith].shade;
+            if (s->extra >= 0)
+                s->shade = ProjectileData[atwith].shade;
 
             if (p >= 0)
-            {
+            { // P_PrefireHitscan
                 int angRange=32;
                 int zRange=256;
 
@@ -666,7 +676,7 @@ int A_Shoot(int i,int atwith)
                 if (j >= 0)
                 {
                     dal = ((sprite[j].yrepeat*tilesiz[sprite[j].picnum].y)<<1)+(5<<8);
-                    if (((sprite[j].picnum >= GREENSLIME)&&(sprite[j].picnum <= GREENSLIME+7))||(sprite[j].picnum ==ROTATEGUN))
+                    if (((sprite[j].picnum >= GREENSLIME) && (sprite[j].picnum <= GREENSLIME+7)) || (sprite[j].picnum == ROTATEGUN))
                     {
                         dal -= (8<<8);
 //                        return -1;
@@ -718,7 +728,7 @@ int A_Shoot(int i,int atwith)
                 spos.z -= (2<<8);
             }
             else
-            {
+            { // A_PrefireHitscan
                 j = A_FindPlayer(s,&x);
                 spos.z -= (4<<8);
                 hit.pos.x = ldist(&sprite[g_player[j].ps->i], s);
@@ -740,7 +750,9 @@ int A_Shoot(int i,int atwith)
             if (ProjectileData[atwith].cstat >= 0) s->cstat &= ~ProjectileData[atwith].cstat;
             else s->cstat &= ~257;
 
-            if (ActorExtra[i].temp_data[9]) zvel = ActorExtra[i].temp_data[9];
+            if (ActorExtra[i].temp_data[9])
+                zvel = ActorExtra[i].temp_data[9];
+
             hitscan(&spos,sect,
                     sintable[(sa+512)&2047],
                     sintable[sa&2047],
@@ -752,10 +764,11 @@ int A_Shoot(int i,int atwith)
 
             if (hit.sect < 0) return -1;
 
-            if ((ProjectileData[atwith].range > 0) && ((klabs(spos.x-hit.pos.x)+klabs(spos.y-hit.pos.y)) > ProjectileData[atwith].range)) return -1;
+            if ((ProjectileData[atwith].range > 0) && ((klabs(spos.x-hit.pos.x)+klabs(spos.y-hit.pos.y)) > ProjectileData[atwith].range))
+                return -1;
 
             if (ProjectileData[atwith].trail >= 0)
-                A_HitscanProjTrail(spos.x, spos.y, spos.z,hit.pos.x,hit.pos.y,hit.pos.z,sa,atwith);
+                A_HitscanProjTrail(&spos, &hit.pos, sa, atwith, i);
 
             if (ProjectileData[atwith].workslike & PROJECTILE_WATERBUBBLES)
             {
@@ -790,8 +803,10 @@ int A_Shoot(int i,int atwith)
                     if (ProjectileData[atwith].spawns >= 0)
                     {
                         wh=A_Spawn(k,ProjectileData[atwith].spawns);
-                        if (ProjectileData[atwith].sxrepeat > 4) sprite[wh].xrepeat=ProjectileData[atwith].sxrepeat;
-                        if (ProjectileData[atwith].syrepeat > 4) sprite[wh].yrepeat=ProjectileData[atwith].syrepeat;
+                        if (ProjectileData[atwith].sxrepeat > 4)
+                            sprite[wh].xrepeat=ProjectileData[atwith].sxrepeat;
+                        if (ProjectileData[atwith].syrepeat > 4)
+                            sprite[wh].yrepeat=ProjectileData[atwith].syrepeat;
                         ActorExtra[wh].temp_data[6] = hit.wall;
                         ActorExtra[wh].temp_data[7] = hit.sect;
                         ActorExtra[wh].temp_data[8] = hit.sprite;
@@ -815,8 +830,10 @@ int A_Shoot(int i,int atwith)
                         if (ProjectileData[atwith].spawns >= 0)
                         {
                             wh=A_Spawn(k,ProjectileData[atwith].spawns);
-                            if (ProjectileData[atwith].sxrepeat > 4) sprite[wh].xrepeat=ProjectileData[atwith].sxrepeat;
-                            if (ProjectileData[atwith].syrepeat > 4) sprite[wh].yrepeat=ProjectileData[atwith].syrepeat;
+                            if (ProjectileData[atwith].sxrepeat > 4)
+                                sprite[wh].xrepeat=ProjectileData[atwith].sxrepeat;
+                            if (ProjectileData[atwith].syrepeat > 4)
+                                sprite[wh].yrepeat=ProjectileData[atwith].syrepeat;
                             ActorExtra[wh].temp_data[6] = hit.wall;
                             ActorExtra[wh].temp_data[7] = hit.sect;
                             ActorExtra[wh].temp_data[8] = hit.sprite;
