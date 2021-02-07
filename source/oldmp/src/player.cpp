@@ -263,7 +263,8 @@ static void A_HitscanProjTrail(const vec3_t *startPos, const vec3_t *endPos, int
     spawnPos.z += increment.z >> 2;
 
     int16_t sectNum = sprite[ownerSpriteNum].sectnum;
-    for (bssize_t i = pProj->tnum; i > 0; --i)
+    // [JM] Limit by numSegments so we don't overshoot the target.
+    for (bssize_t i = pProj->tnum; i > 0 && numSegments > 0; --i, --numSegments)
     {
         int32_t ceilZ, floorZ;
 
@@ -284,11 +285,6 @@ static void A_HitscanProjTrail(const vec3_t *startPos, const vec3_t *endPos, int
         int trailSprite = A_InsertSprite(sectNum, spawnPos.x, spawnPos.y, spawnPos.z, pProj->trail, -32,
                            pProj->txrepeat, pProj->tyrepeat, projAng, 0, 0, ownerSpriteNum, 0);
         changespritestat(trailSprite, STAT_ACTOR);
-
-        // [JM] Let's not overshoot our target here.
-        numSegments--;
-        if (numSegments <= 0)
-            break;
     }
 }
 
