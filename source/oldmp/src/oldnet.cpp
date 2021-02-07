@@ -425,8 +425,6 @@ void Net_HandleInput(void)
         packbuf[0] = PACKET_TYPE_SLAVE_TO_MASTER;
         j = 1;
 
-        packbuf[j++] = myconnectindex; // Send slave index to master for verification
-
         osyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-2)&(MOVEFIFOSIZ-1)][myconnectindex];
         nsyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-1)&(MOVEFIFOSIZ-1)][myconnectindex];
 
@@ -444,7 +442,7 @@ void Net_HandleInput(void)
     {
         TRAVERSE_CONNECT(i)
         {
-            if (g_player[i].connected && (g_player[i].movefifoend <= movefifosendplc))
+            if (g_player[i].movefifoend <= movefifosendplc)
                 return;
         }
 
@@ -473,15 +471,12 @@ void Net_HandleInput(void)
 
         TRAVERSE_CONNECT(i)
         {
-            if (g_player[i].connected)
-            {
-                mmulti_sendpacket(i, (unsigned char*)packbuf, j);
-                if (TEST_SYNC_KEY(nsyn[i].bits, SK_GAMEQUIT))
-                {
-                    OSD_Printf("Player %d disconnected.\n", i + 1);
-                    g_player[i].connected = 0;
-                }
-            }
+            mmulti_sendpacket(i, (unsigned char*)packbuf, j);
+        }
+
+        if (TEST_SYNC_KEY(nsyn[myconnectindex].bits, SK_GAMEQUIT) && g_player[myconnectindex].connected)
+        {
+            g_player[myconnectindex].connected = 0;
         }
 
         movefifosendplc++;
@@ -531,6 +526,11 @@ void Net_ParsePackets(void)
                 {
                     OSD_Printf("Player %d disconnected.\n", i + 1);
                     g_player[playerNum].connected = 0;
+                    if (playerNum == myconnectindex)
+                    {
+                        ready2send = 0;
+                        G_GameExit("");
+                    }
                 }
             }
 
@@ -544,15 +544,17 @@ void Net_ParsePackets(void)
         {
             j = 1;
 
-            if (g_player[packbuf[j++]].connected == 0) // If this is a packet from a disconnected slave, ignore.
-                break;
-
             osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)][0];
             nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)][0];
 
             Net_GetPlayerInputFromPacket(&j, other, osyn, nsyn);
             Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
 
+            if (TEST_SYNC_KEY(nsyn[other].bits, SK_GAMEQUIT) && g_player[other].connected)
+            {
+                OSD_Printf("Player %d disconnected.\n", other + 1);
+                g_player[other].connected = 0;
+            }
             break;
         }
         case PACKET_TYPE_BROADCAST:

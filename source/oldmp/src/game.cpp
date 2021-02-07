@@ -11792,10 +11792,16 @@ static int G_MoveLoop()
     {
         TRAVERSE_CONNECT(i)
         {
-            if (movefifoplc == g_player[i].movefifoend) break;
+            if ((movefifoplc == g_player[i].movefifoend) && g_player[i].connected)
+                break;
         }
-        if (i >= 0) break;
-        if (G_DoMoveThings()) return 1;
+
+        //i is >= 0 only if last loop was broken, meaning a player wasn't caught up
+        if (i >= 0)
+            break;
+
+        if (G_DoMoveThings())
+            return 1;
     }
     return 0;
 }
