@@ -257,6 +257,7 @@ void Net_GetSyncStat(void)
 //
 ////////////////////////////////////////////////////////////////////////
 
+int desynched_players[MAXPLAYERS];
 
 void Net_DisplaySyncMsg(void)
 {
@@ -317,6 +318,17 @@ void Net_DisplaySyncMsg(void)
             {
                 printext256(4,100,31,0, "Out Of Sync - Please Restart Game",0);
             }
+
+            int ypos = 180;
+            for (i = 0; i < MAXPLAYERS; i++)
+            {
+                if (desynched_players[i] == 1)
+                {
+                    Bsprintf(tempbuf, "DESYNCHED: %s (IDX: %d)", g_player[i].user_name, i);
+                    printext256(4, ypos, 31, 0, tempbuf, 0);
+                    ypos += 8;
+                }
+            }
         }
     }
 
@@ -359,7 +371,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
 
     TRAVERSE_CONNECT(i)
     {
-        if (otherconnectindex == i && g_player[otherconnectindex].connected)
+        if (otherconnectindex == i && g_player[i].connected)
             found = 1;
     }
 
@@ -397,6 +409,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
                 if (g_player[i].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb] != g_player[connecthead].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb])
                 {
                     syncstat[sb] = 1;
+                    desynched_players[i] = 1;
                 }
             }
         }
