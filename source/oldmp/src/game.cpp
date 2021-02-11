@@ -11847,7 +11847,7 @@ static int G_MoveLoop()
     {
         TRAVERSE_CONNECT(i)
         {
-            if (movefifoplc == g_player[i].movefifoend)
+            if ((movefifoplc == g_player[i].movefifoend) && !g_gameQuit)
                 break;
         }
 
