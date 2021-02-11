@@ -3026,7 +3026,7 @@ int g_myAimMode = 0, g_myAimStat = 0, g_oldAimStat = 0;
 int32_t mouseyaxismode = -1;
 int jump_input = 0;
 
-void getinput(int snum)
+void P_GetInput(int snum)
 {
     int j, daang;
     static ControlInfo info[2];
@@ -3039,7 +3039,7 @@ void getinput(int snum)
     DukePlayer_t *p = g_player[snum].ps;
 
     if ((p->gm&MODE_MENU) || (p->gm&MODE_TYPE) || (ud.pause_on && !KB_KeyPressed(sc_Pause)) || (numplayers > 1 && (int32_t)totalclock < 10))
-        // HACK: kill getinput() for the first 10 tics of a new map in multi
+        // HACK: kill P_GetInput() for the first 10 tics of a new map in multi
     {
         if (!(p->gm&MODE_MENU))
             CONTROL_GetInput(&info[0]);

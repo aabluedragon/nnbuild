@@ -10527,6 +10527,123 @@ static void G_FatalEngineInitError(void)
     G_Shutdown();
 }
 
+static int G_EndOfLevel(void)
+{
+    auto& p = *g_player[myconnectindex].ps;
+
+    P_SetGamePalette(&p, BASEPAL, 0);
+    P_UpdateScreenPal(&p);
+
+    if (p.gm & MODE_EOL)
+    {
+        G_CloseDemoWrite();
+        waitforeverybody();
+
+        ready2send = 0;
+
+        if (ud.display_bonus_screen == 1)
+        {
+            int const ssize = ud.screen_size;
+            ud.screen_size = 0;
+            G_UpdateScreenArea();
+            ud.screen_size = ssize;
+            G_BonusScreen(0);
+        }
+
+        // Clear potentially loaded per-map ART only after the bonus screens.
+        artClearMapArt();
+
+        if (ud.eog)
+        {
+            ud.eog = 0;
+            if (ud.multimode < 2)
+            {
+                if (!VOLUMEALL)
+                {
+                    G_DoOrderScreen();
+                }
+                p.gm = MODE_MENU;
+                ChangeToMenu(0);
+                probey = 0;
+                return 2;
+            }
+            else
+            {
+                ud.m_level_number = 0;
+                ud.level_number = 0;
+            }
+        }
+    }
+
+    ud.display_bonus_screen = 1;
+    ready2send = 0;
+
+    waitforeverybody();
+
+    if (numplayers > 1)
+        p.gm = MODE_GAME;
+
+    if (G_EnterLevel(p.gm))
+    {
+        G_BackToMenu();
+        return 2;
+    }
+
+    return 1;
+}
+
+static void G_DrawFrame()
+{
+    // only allow binds to function if the player is actually in a game (not in a menu, typing, et cetera) or demo
+    CONTROL_BindsEnabled = (g_player[myconnectindex].ps->gm == MODE_GAME || g_player[myconnectindex].ps->gm == MODE_DEMO);
+    G_HandleLocalKeys();
+    OSD_DispatchQueued();
+
+    int smoothRatio = calc_smoothratio((int32_t)totalclock, ototalclock);
+
+    // Necessary anymore?
+    if (ud.statusbarmode == 1 && (ud.statusbarscale == 100 || !videoGetRenderMode()))
+    {
+        ud.statusbarmode = 0;
+        G_UpdateScreenArea();
+    }
+
+    G_DrawRooms(screenpeek, smoothRatio);
+    if (videoGetRenderMode() >= REND_POLYMOST)
+        G_DrawBackground();
+    G_DisplayRest(smoothRatio);
+
+    // Shoud this go into DisplayRest?
+    // ---------
+    if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
+    {
+        Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE FOR MAP", g_player[voting].user_name);
+        gametext(160, 40, tempbuf, 0, 2 + 8 + 16);
+        Bsprintf(tempbuf, "%s (E%dL%d)", MapInfo[vote_episode * MAXLEVELS + vote_map].name, vote_episode + 1, vote_map + 1);
+        gametext(160, 48, tempbuf, 0, 2 + 8 + 16);
+        gametext(160, 70, "PRESS F1 TO ACCEPT, F2 TO DECLINE", 0, 2 + 8 + 16);
+    }
+
+    if (BUTTON(gamefunc_Show_DukeMatch_Scores))
+        G_ShowScores();
+
+    if (debug_on)
+        G_ShowCacheLocks();
+
+    //                checksync();
+    Net_DisplaySyncMsg();
+
+    if (VOLUMEONE)
+    {
+        if (ud.show_help == 0 && g_showShareware > 0 && (g_player[myconnectindex].ps->gm & MODE_MENU) == 0)
+            rotatesprite((320 - 50) << 16, 9 << 16, 65536L, 0, BETAVERSION, 0, 0, 2 + 8 + 16 + 128, 0, 0, xdim - 1, ydim - 1);
+    }
+    // ---------
+
+    videoNextPage();
+    S_Update();
+}
+
 int app_main(int32_t argc, char const* const* argv)
 {
     int i = 0, j;
@@ -10977,7 +11094,8 @@ CLEAN_DIRECTORY:
         memcpy(g_player[i].ps, g_player[0].ps, sizeof(DukePlayer_t));
     }
 
-    g_player[myconnectindex].ps->palette = BASEPAL;
+    auto& myplayer = *g_player[myconnectindex].ps;
+    myplayer.palette = BASEPAL;
 
     i = 1;
     for (j=numplayers;j<ud.multimode;j++)
@@ -11013,7 +11131,7 @@ CLEAN_DIRECTORY:
 
     if (numplayers > 1)
     {
-        mmulti_sendlogon();
+        mmulti_sendlogon(); // Does nothing
         Net_SendPlayerOptions();
         Net_SendWeaponChoice();
         Net_SendUserMapName();
@@ -11234,160 +11352,96 @@ MAIN_LOOP_RESTART:
         goto MAIN_LOOP_RESTART;
     }
 
-    g_player[myconnectindex].ps->aim_mode = ud.mouseaiming;
-    g_player[myconnectindex].ps->auto_aim = ud.config.AutoAim;
-    g_player[myconnectindex].ps->weaponswitch = ud.weaponswitch;
+    myplayer.aim_mode = ud.mouseaiming;
+    myplayer.auto_aim = ud.config.AutoAim;
+    myplayer.weaponswitch = ud.weaponswitch;
     g_player[myconnectindex].pteam = ud.team;
 
     if (GametypeFlags[ud.coop] & GAMETYPE_TDM)
-        g_player[myconnectindex].ps->palookup = g_player[myconnectindex].pcolor = teams[g_player[myconnectindex].pteam].palnum;
+        myplayer.palookup = g_player[myconnectindex].pcolor = teams[g_player[myconnectindex].pteam].palnum;
     else
     {
-        if (ud.color) g_player[myconnectindex].ps->palookup = g_player[myconnectindex].pcolor = playerColor_getValidPal(ud.color);
-        else g_player[myconnectindex].ps->palookup = g_player[myconnectindex].pcolor;
+        if (ud.color) myplayer.palookup = g_player[myconnectindex].pcolor = playerColor_getValidPal(ud.color);
+        else myplayer.palookup = g_player[myconnectindex].pcolor;
     }
 
     ud.warp_on = 0;
     KB_KeyDown[sc_Pause] = 0;   // JBF: I hate the pause key
 
-    while (!(g_player[myconnectindex].ps->gm&MODE_END)) //The whole loop!!!!!!!!!!!!!!!!!!
+    do // main loop
     {
-        if (handleevents())
+        if (handleevents() && quitevent)
         {
             // JBF
-            if (quitevent)
-            {
-                KB_KeyDown[sc_Escape] = 1;
-                quitevent = 0;
-            }
+            KB_KeyDown[sc_Escape] = 1;
+            quitevent = 0;
         }
 
+        static bool frameJustDrawn;
+        //bool gameUpdate = false;
+        //double gameUpdateStartTime = timerGetHiTicks();
 
-        // only allow binds to function if the player is actually in a game (not in a menu, typing, et cetera) or demo
-        CONTROL_BindsEnabled = (g_player[myconnectindex].ps->gm == MODE_GAME || g_player[myconnectindex].ps->gm == MODE_DEMO);
-
-        OSD_DispatchQueued();
-
-        if (ud.recstat == 2 || ud.multimode > 1 || (ud.show_help == 0 && (g_player[myconnectindex].ps->gm&MODE_MENU) != MODE_MENU))
-            if (g_player[myconnectindex].ps->gm&MODE_GAME)
-                if (G_MoveLoop()) continue;
-
-        if (g_player[myconnectindex].ps->gm&MODE_EOL || g_player[myconnectindex].ps->gm&MODE_RESTART)
+        if (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && totalclock >= ototalclock + TICSPERFRAME)
         {
-            P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 0);
-            P_UpdateScreenPal(g_player[myconnectindex].ps);
-
-            if (g_player[myconnectindex].ps->gm&MODE_EOL)
+            do
             {
-                G_CloseDemoWrite();
-                waitforeverybody();
+                if (!frameJustDrawn)
+                    break;
 
-                ready2send = 0;
+                frameJustDrawn = false;
+                P_GetInput(myconnectindex);
+                
+                do
+                {
+                    if (ready2send == 0)
+                        break;
 
-                if (ud.display_bonus_screen == 1)
-                {
-                    i = ud.screen_size;
-                    ud.screen_size = 0;
-                    G_UpdateScreenArea();
-                    ud.screen_size = i;
-                    G_BonusScreen(0);
-                }
-                if (ud.eog)
-                {
-                    ud.eog = 0;
-                    if (ud.multimode < 2)
+                    ototalclock += TICSPERFRAME;
+
+                    Net_HandleInput();
+
+                    if (((ud.show_help == 0 && (myplayer.gm & MODE_MENU) != MODE_MENU) || ud.recstat == 2 || (ud.multimode > 1))
+                        && (myplayer.gm & MODE_GAME))
                     {
-                        if (!VOLUMEALL)
-                        {
-                            G_DoOrderScreen();
-                        }
-                        g_player[myconnectindex].ps->gm = MODE_MENU;
-                        ChangeToMenu(0);
-                        probey = 0;
-                        goto MAIN_LOOP_RESTART;
+                        G_MoveLoop();
                     }
-                    else
-                    {
-                        ud.m_level_number = 0;
-                        ud.level_number = 0;
-                    }
-                }
-            }
-            ud.display_bonus_screen = 1;
-            ready2send = 0;
-            waitforeverybody();
-            if (numplayers > 1) g_player[myconnectindex].ps->gm = MODE_GAME;
-            if (G_EnterLevel(g_player[myconnectindex].ps->gm))
-            {
-                G_BackToMenu();
-                goto MAIN_LOOP_RESTART;
-            }
-            continue;
+                } while (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int)(totalclock - ototalclock) >= (TICSPERFRAME << 1));
+
+                //gameUpdate = true;
+                //g_gameUpdateTime = timerGetHiTicks() - gameUpdateStartTime;
+
+                //if (g_gameUpdateAvgTime <= 0.0)
+                //    g_gameUpdateAvgTime = g_gameUpdateTime;
+
+                //g_gameUpdateAvgTime = ((GAMEUPDATEAVGTIMENUMSAMPLES - 1.f) * g_gameUpdateAvgTime + g_gameUpdateTime) / ((float)GAMEUPDATEAVGTIMENUMSAMPLES);
+            } while (0);
         }
 
         G_DoCheats();
-        G_HandleLocalKeys();
 
-        if ((ud.show_help == 0 && ud.multimode < 2 && !(g_player[myconnectindex].ps->gm & MODE_MENU)) || ud.multimode > 1 || ud.recstat == 2)
-            i = calc_smoothratio((int32_t)totalclock, ototalclock);
-        else
-            i = 65536;
-
-        if (ud.statusbarmode == 1 && (ud.statusbarscale == 100 || !videoGetRenderMode()))
+        if (myplayer.gm & (MODE_EOL | MODE_RESTART))
         {
-            ud.statusbarmode = 0;
-            G_UpdateScreenArea();
-        }
-
-        {
-            static unsigned int nextrender = 0;
-            unsigned int j = timerGetTicks();
-
-            if (j > nextrender+g_frameDelay)
-                nextrender = j;
-
-            if (r_maxfps == 0 || j >= nextrender)
+            switch (G_EndOfLevel())
             {
-                nextrender += g_frameDelay;
-
-                G_DrawRooms(screenpeek,i);
-                if (videoGetRenderMode() >= 3)
-                    G_DrawBackground();
-                G_DisplayRest(i);
-
-                if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
-                {
-                    Bsprintf(tempbuf,"%s^00 HAS CALLED A VOTE FOR MAP",g_player[voting].user_name);
-                    gametext(160,40,tempbuf,0,2+8+16);
-                    Bsprintf(tempbuf,"%s (E%dL%d)",MapInfo[vote_episode*MAXLEVELS + vote_map].name,vote_episode+1,vote_map+1);
-                    gametext(160,48,tempbuf,0,2+8+16);
-                    gametext(160,70,"PRESS F1 TO ACCEPT, F2 TO DECLINE",0,2+8+16);
-                }
-
-                if (BUTTON(gamefunc_Show_DukeMatch_Scores)) G_ShowScores();
-
-                if (debug_on) G_ShowCacheLocks();
-
-//                checksync();
-                Net_DisplaySyncMsg();
-
-                if (VOLUMEONE)
-                {
-                    if (ud.show_help == 0 && g_showShareware > 0 && (g_player[myconnectindex].ps->gm&MODE_MENU) == 0)
-                        rotatesprite((320-50)<<16,9<<16,65536L,0,BETAVERSION,0,0,2+8+16+128,0,0,xdim-1,ydim-1);
-                }
-
-                videoNextPage();
-                S_Update();
+            case 1: continue;
+            case 2: goto MAIN_LOOP_RESTART;
             }
         }
 
-        if (g_player[myconnectindex].ps->gm&MODE_DEMO)
-            goto MAIN_LOOP_RESTART;
+        if (engineFPSLimit())
+        {
+            G_DrawFrame();
 
-        while ((!(g_player[myconnectindex].ps->gm&MODE_MENU) || ud.multimode > 1) && ready2send && totalclock >= ototalclock+TICSPERFRAME)
-            Net_HandleInput();
-    }
+            //if (gameUpdate)
+            //    g_gameUpdateAndDrawTime = timerGetHiTicks() - gameUpdateStartTime;
+
+            frameJustDrawn = true;
+        }
+
+        // KEEP THIS AT THE END OF THIS WHILE LOOP
+        if (myplayer.gm & MODE_DEMO)
+            goto MAIN_LOOP_RESTART;
+    } while (1);
 
     G_GameExit(" ");
 
@@ -11783,16 +11837,17 @@ static int G_MoveLoop()
     int i;
 
     if (numplayers > 1)
-        while (predictfifoplc < g_player[myconnectindex].movefifoend) Net_DoPrediction();
-
-    Net_GetPackets();
+    {
+        while (predictfifoplc < g_player[myconnectindex].movefifoend)
+            Net_DoPrediction();
+    }
 
     if (numplayers < 2) bufferjitter = 0;
     while (g_player[myconnectindex].movefifoend-movefifoplc > bufferjitter)
     {
         TRAVERSE_CONNECT(i)
         {
-            if ((movefifoplc == g_player[i].movefifoend) && g_player[i].connected)
+            if (movefifoplc == g_player[i].movefifoend)
                 break;
         }
 
@@ -11888,6 +11943,7 @@ static int G_DoMoveThings(void)
 
     everyothertime++;
 
+    // Copy input FIFO bits into player's own inputBits struct, and advance our place in the FIFO.
     TRAVERSE_CONNECT(i)
     copybufbyte(&inputfifo[movefifoplc&(MOVEFIFOSIZ-1)][i],g_player[i].inputBits,sizeof(input_t));
     movefifoplc++;
@@ -11905,7 +11961,11 @@ static int G_DoMoveThings(void)
 
         G_CloseDemoWrite();
 
-        if (i == myconnectindex) G_GameExit(" ");
+        if (i == myconnectindex)
+            G_GameExit(" ");
+
+        if (i == connecthead && g_networkBroadcastMode == NETMODE_MASTERSLAVE)
+            G_GameExit("Host has terminated the game.");
 
         if (screenpeek == i)
         {
@@ -11946,9 +12006,6 @@ static int G_DoMoveThings(void)
         }
 
         g_player[myconnectindex].ps->ftq = 116, g_player[myconnectindex].ps->fta = 180;
-
-        if (j < 0 && g_networkBroadcastMode == 0)
-            G_GameExit("Server terminated");
     }
 
     Net_GetSyncStat();

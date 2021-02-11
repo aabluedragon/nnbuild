@@ -31,6 +31,14 @@ int pingTime;
 
 void Net_GetPackets(void)
 {
+#if 1
+    if ((totalclock > quittimer) && (g_gameQuit == 1))
+    {
+        OSD_Printf("Timeout: Didn't get quit packet in time, exiting.\n");
+        G_GameExit(" ");
+    }
+#endif
+
     Net_ParsePackets();
 }
 
@@ -105,11 +113,6 @@ static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, inp
 
     packbuf[inputFlagsPos] = 0;
     packbuf[extFlagsPos] = 0;
-
-    if (g_player[playerNum].connected == 0) // HACK
-    {
-        nsyn[playerNum].bits |= (1 << SK_GAMEQUIT);
-    }
 
     if (nsyn[playerNum].fvel != osyn[playerNum].fvel)
     {
@@ -245,21 +248,14 @@ void Net_HandleInput(void)
 
     //timerUpdateClock();
     //MUSIC_Update();
-
-    if ((totalclock < ototalclock+TICSPERFRAME) || (ready2send == 0))
-        return;
-
-    ototalclock += TICSPERFRAME;
-
     Net_GetPackets();
 
     if (g_player[myconnectindex].movefifoend - movefifoplc >= 100)
         return;
 
-    getinput(myconnectindex);
-
     nsyn = &inputfifo[g_player[myconnectindex].movefifoend&(MOVEFIFOSIZ-1)][myconnectindex];
     copybufbyte(&loc, nsyn, sizeof(input_t));
+    //loc = { };
 
     g_player[myconnectindex].movefifoend++;
 
@@ -429,7 +425,6 @@ void Net_HandleInput(void)
         nsyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-1)&(MOVEFIFOSIZ-1)][myconnectindex];
 
         Net_AddPlayerInputToPacket(&j, 0, osyn, nsyn);
-
         Net_AddSyncInfoToPacket(&j);
 
         mmulti_sendpacket(connecthead, (unsigned char*)packbuf,j);
@@ -474,11 +469,6 @@ void Net_HandleInput(void)
             mmulti_sendpacket(i, (unsigned char*)packbuf, j);
         }
 
-        if (TEST_SYNC_KEY(nsyn[myconnectindex].bits, SK_GAMEQUIT) && g_player[myconnectindex].connected)
-        {
-            g_player[myconnectindex].connected = 0;
-        }
-
         movefifosendplc++;
     }
 }
@@ -521,17 +511,6 @@ void Net_ParsePackets(void)
                     otherminlag = temp;
 
                 Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
-
-                if (TEST_SYNC_KEY(nsyn[playerNum].bits, SK_GAMEQUIT) && g_player[playerNum].connected)
-                {
-                    OSD_Printf("Player %d disconnected.\n", i + 1);
-                    g_player[playerNum].connected = 0;
-                    if (playerNum == myconnectindex)
-                    {
-                        ready2send = 0;
-                        G_GameExit("");
-                    }
-                }
             }
 
             Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
@@ -549,12 +528,6 @@ void Net_ParsePackets(void)
 
             Net_GetPlayerInputFromPacket(&j, other, osyn, nsyn);
             Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
-
-            if (TEST_SYNC_KEY(nsyn[other].bits, SK_GAMEQUIT) && g_player[other].connected)
-            {
-                OSD_Printf("Player %d disconnected.\n", other + 1);
-                g_player[other].connected = 0;
-            }
             break;
         }
         case PACKET_TYPE_BROADCAST:

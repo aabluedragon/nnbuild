@@ -83,7 +83,7 @@ extern int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite);
 extern int A_Shoot(int i,int atwith);
 extern void P_DisplayScubaMask(int snum);
 extern void P_DisplayWeapon(int snum);
-extern void getinput(int snum);
+extern void P_GetInput(int snum);
 extern void P_DropWeapon(DukePlayer_t *p);
 extern void P_ProcessInput(int snum);
 extern void ChangeToMenu(int cm);
