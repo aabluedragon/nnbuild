@@ -11949,6 +11949,7 @@ static int G_DoMoveThings(void)
     movefifoplc++;
 
     G_UpdateInterpolations();
+    Net_GetSyncStat();
 
     j = -1; // TODO: Move to Net_CheckPlayerQuit
     TRAVERSE_CONNECT(i)
@@ -11960,6 +11961,8 @@ static int G_DoMoveThings(void)
         }
 
         G_CloseDemoWrite();
+
+        g_player[i].connected = 0;
 
         if (i == myconnectindex)
             G_GameExit(" ");
@@ -12008,7 +12011,6 @@ static int G_DoMoveThings(void)
         g_player[myconnectindex].ps->ftq = 116, g_player[myconnectindex].ps->fta = 180;
     }
 
-    Net_GetSyncStat();
 
     g_moveThingsCount++;
 
