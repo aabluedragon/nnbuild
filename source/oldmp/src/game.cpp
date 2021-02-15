@@ -11963,6 +11963,10 @@ static int G_DoMoveThings(void)
 
         g_player[i].connected = 0;
 
+        // If we're the master, keep executing until all slaves can get the packet.
+        if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (i == connecthead))
+            break;
+
         if (i == myconnectindex)
             G_GameExit(" ");
 

@@ -475,11 +475,17 @@ void Net_HandleInput(void)
         Net_AddSyncInfoToPacket(&j);
 
         TRAVERSE_CONNECT(i)
-        {
             mmulti_sendpacket(i, (unsigned char*)packbuf, j);
-        }
 
         movefifosendplc++;
+
+        // We're the host, terminate the match after sending the packet.
+        if (TEST_SYNC_KEY(nsyn[myconnectindex].bits, SK_GAMEQUIT) &&
+            (g_networkBroadcastMode == NETMODE_MASTERSLAVE) &&
+            (myconnectindex == connecthead))
+        {
+            G_GameExit(" ");
+        }
     }
 }
 

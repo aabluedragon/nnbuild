@@ -234,8 +234,6 @@ void Net_GetSyncStat(void)
 {
     int i;
     playerdata_t *pp = &g_player[myconnectindex];
-    unsigned int val;
-    static unsigned int count;
 
     if (numplayers < 2)
         return;
@@ -244,9 +242,6 @@ void Net_GetSyncStat(void)
     {
         pp->syncval[pp->syncvalhead & (SYNCFIFOSIZ - 1)][i] = (*SyncFunc[i])();
     }
-
-    val = pp->syncval[pp->syncvalhead & (SYNCFIFOSIZ - 1)][0];
-    count += val;
 
     pp->syncvalhead++;
 }
@@ -264,9 +259,6 @@ void Net_DisplaySyncMsg(void)
     int i, j;
     static unsigned int moveCount = 0;
     extern unsigned int g_moveThingsCount;
-
-//    if (!SyncPrintMode)
-//        return;
 
     if (numplayers < 2)
         return;
@@ -331,9 +323,6 @@ void Net_DisplaySyncMsg(void)
             }
         }
     }
-
-//    if (syncstate != 0)
-//        printext256(68L, 92L, 1, 31, "Missed Network packet!", 0);
 }
 
 
@@ -357,29 +346,13 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
     int sb, i;
     playerdata_t *ppo = &g_player[otherconnectindex];
 
-    // have had problems with this routine crashing when players quit
-    // games.
-
-    // if ready2send is not set then don't try to get sync info
+    // if ready2send is not set, or player is disconnected then don't try to get sync info
 #if 1
-    if (!ready2send)
-        return;
-
-    // Suspect that its trying to traverse the connect list
-    // for a player that does not exist.  This tries to take care of that
-    char found = 0;
-    TRAVERSE_CONNECT(i)
-    {
-        if (otherconnectindex == i && g_player[i].connected)
-            found = 1;
-    }
-
-    if (!found)
+    if (!ready2send || !g_player[otherconnectindex].connected)
         return;
 #endif
 
-    // sync testing
-    //while ((*j) != packbufleng) // changed this on Kens suggestion
+    // Grab sync info from packet buffer
     while ((*j) < packbufleng)
     {
         for (sb = 0; sb < g_numSyncBytes; sb++)
@@ -389,17 +362,14 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
         ppo->syncvalhead++;
     }
 
-    // update syncstat
-    // if any of the syncstat vars is non-0 then there is a problem
     TRAVERSE_CONNECT(i)
     {
         if (g_player[i].syncvalhead == syncvaltottail)
             return;
     }
 
-    //for (sb = 0; sb < g_numSyncBytes; sb++)
-    //    syncstat[sb] = 0;
-
+    // update syncstat
+    // if any of the syncstat vars is non-0 then there is a problem
     while (1)
     {
         TRAVERSE_CONNECT(i)
