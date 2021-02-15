@@ -11966,9 +11966,6 @@ static int G_DoMoveThings(void)
         if (i == myconnectindex)
             G_GameExit(" ");
 
-        if (i == connecthead && g_networkBroadcastMode == NETMODE_MASTERSLAVE)
-            G_GameExit("Host has terminated the game.");
-
         if (screenpeek == i)
         {
             screenpeek = connectpoint2[i];

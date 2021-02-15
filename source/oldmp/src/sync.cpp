@@ -356,19 +356,18 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
 {
     int sb, i;
     playerdata_t *ppo = &g_player[otherconnectindex];
-    char found = 0;
 
     // have had problems with this routine crashing when players quit
     // games.
 
     // if ready2send is not set then don't try to get sync info
-
+#if 1
     if (!ready2send)
         return;
 
     // Suspect that its trying to traverse the connect list
     // for a player that does not exist.  This tries to take care of that
-
+    char found = 0;
     TRAVERSE_CONNECT(i)
     {
         if (otherconnectindex == i && g_player[i].connected)
@@ -377,6 +376,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
 
     if (!found)
         return;
+#endif
 
     // sync testing
     //while ((*j) != packbufleng) // changed this on Kens suggestion
@@ -404,23 +404,27 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
     {
         TRAVERSE_CONNECT(i)
         {
+            if (g_player[i].syncvalhead == syncvaltottail)
+                return;
+
             for (sb = 0; sb < g_numSyncBytes; sb++)
             {
-                if (g_player[i].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb] != g_player[connecthead].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb])
+                char head_sync = g_player[connecthead].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
+                char player_sync = g_player[i].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
+                if (player_sync != head_sync)
                 {
-                    syncstat[sb] = 1;
+                    if (!syncstat[sb])
+                    {
+                        OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d (syncvalhead: %d), Player CRC: %d (syncvalhead: %d). syncvaltottail: %d\n", i, SyncNames[sb], head_sync, g_player[connecthead].syncvalhead, player_sync, g_player[i].syncvalhead, syncvaltottail);
+                        syncstat[sb] = 1;
+                    }
+
                     desynched_players[i] = 1;
                 }
             }
         }
 
         syncvaltottail++;
-
-        TRAVERSE_CONNECT(i)
-        {
-            if (g_player[i].syncvalhead == syncvaltottail)
-                return;
-        }
     }
 }
 

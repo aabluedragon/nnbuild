@@ -230,6 +230,14 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
                     if (l&2048) nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0x00ffffff)|((int)packbuf[(*j)++])<<24); */
 
     g_player[playerNum].movefifoend++;
+
+    if (TEST_SYNC_KEY(nsyn[playerNum].bits, SK_GAMEQUIT) &&
+        (g_networkBroadcastMode == NETMODE_MASTERSLAVE) &&
+        (playerNum == connecthead) && 
+        (playerNum != myconnectindex))
+    {
+        G_GameExit("Host has terminated the game.");
+    }
 }
 
 void faketimerhandler(void) { ; };
@@ -303,7 +311,9 @@ void Net_HandleInput(void)
     if (g_networkBroadcastMode == NETMODE_P2P)
     {
         packbuf[0] = SERVER_GENERATED_BROADCAST;
-        if ((g_player[myconnectindex].movefifoend-1) == 0) packbuf[0] = PACKET_TYPE_BROADCAST;
+        if ((g_player[myconnectindex].movefifoend-1) == 0)
+            packbuf[0] = PACKET_TYPE_BROADCAST;
+
         j = 1;
 
         //Fix timers and buffer/jitter value
