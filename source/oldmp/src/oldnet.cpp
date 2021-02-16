@@ -1586,9 +1586,9 @@ void waitforeverybody(void)
                 gametext(8, ypos, g_player[i].user_name, -127, 2);
 
                 if (g_player[i].playerreadyflag >= g_player[myconnectindex].playerreadyflag)
-                    gametext(89, ypos, "^7- ^8Ready!", -127, 2);
+                    gametext(107, ypos, "^7- ^8Ready!", -127, 2);
                 else
-                    gametext(89, ypos, "^7- ^2Loading", -127, 2);
+                    gametext(107, ypos, "^7- ^2Loading", -127, 2);
             }
         }
 
