@@ -139,7 +139,7 @@ G_EXTERN char szPlayerName[32];
 G_EXTERN char ready2send;
 G_EXTERN char g_numPlayerSprites;
 G_EXTERN signed char multiwho, multipos, multiwhat, multiflag;
-G_EXTERN input_t loc;
+G_EXTERN input_t localInput;
 G_EXTERN input_t recsync[RECSYNCBUFSIZ];
 G_EXTERN input_t inputfifo[MOVEFIFOSIZ][MAXPLAYERS];
 #ifdef __cplusplus

@@ -3048,9 +3048,9 @@ void P_GetInput(int snum)
             CONTROL_GetInput(&info[0]);
         memset(&info[1], 0, sizeof(info[1]));
 
-        loc = {};
-        loc.bits = (((int32_t)g_gameQuit) << SK_GAMEQUIT);
-        loc.extbits |= (1 << 7);
+        localInput = {};
+        localInput.bits = (((int32_t)g_gameQuit) << SK_GAMEQUIT);
+        localInput.extbits |= (1 << 7);
 
         dyaw = 0;
         return;
@@ -3105,9 +3105,9 @@ void P_GetInput(int snum)
 
     if (multiflag == 1)
     {
-        loc.bits =   1<<SK_MULTIFLAG;
-        loc.bits |=   multiwhat<<(SK_MULTIFLAG+1);
-        loc.bits |=   multipos<<(SK_MULTIFLAG+2);
+        localInput.bits =   1<<SK_MULTIFLAG;
+        localInput.bits |=   multiwhat<<(SK_MULTIFLAG+1);
+        localInput.bits |=   multipos<<(SK_MULTIFLAG+2);
         multiflag = 0;
         return;
     }
@@ -3115,15 +3115,15 @@ void P_GetInput(int snum)
     if (BUTTON(gamefunc_Jump) && p->on_ground)
         jump_input = 4;
 
-    loc.bits = (jump_input > 0 || BUTTON(gamefunc_Jump))<<SK_JUMP;   //BUTTON(gamefunc_Jump);
-    loc.bits |=   BUTTON(gamefunc_Crouch)<<SK_CROUCH;
-    loc.bits |=   BUTTON(gamefunc_Fire)<<SK_FIRE;
-    loc.bits |=   BUTTON(gamefunc_Aim_Up)<<SK_AIM_UP;
-    loc.bits |=   BUTTON(gamefunc_Aim_Down)<<SK_AIM_DOWN;
-    if (ud.runkey_mode) loc.bits |= (ud.auto_run | BUTTON(gamefunc_Run))<<SK_RUN;
-    else loc.bits |= (BUTTON(gamefunc_Run) ^ ud.auto_run)<<SK_RUN;
-    loc.bits |=   BUTTON(gamefunc_Look_Left)<<SK_LOOK_LEFT;
-    loc.bits |=   BUTTON(gamefunc_Look_Right)<<SK_LOOK_RIGHT;
+    localInput.bits = (jump_input > 0 || BUTTON(gamefunc_Jump))<<SK_JUMP;   //BUTTON(gamefunc_Jump);
+    localInput.bits |=   BUTTON(gamefunc_Crouch)<<SK_CROUCH;
+    localInput.bits |=   BUTTON(gamefunc_Fire)<<SK_FIRE;
+    localInput.bits |=   BUTTON(gamefunc_Aim_Up)<<SK_AIM_UP;
+    localInput.bits |=   BUTTON(gamefunc_Aim_Down)<<SK_AIM_DOWN;
+    if (ud.runkey_mode) localInput.bits |= (ud.auto_run | BUTTON(gamefunc_Run))<<SK_RUN;
+    else localInput.bits |= (BUTTON(gamefunc_Run) ^ ud.auto_run)<<SK_RUN;
+    localInput.bits |=   BUTTON(gamefunc_Look_Left)<<SK_LOOK_LEFT;
+    localInput.bits |=   BUTTON(gamefunc_Look_Right)<<SK_LOOK_RIGHT;
 
     if (aplWeaponFlags[g_player[snum].ps->curr_weapon][snum] & WEAPON_SEMIAUTO && BUTTON(gamefunc_Fire))
         CONTROL_ClearButton(gamefunc_Fire);
@@ -3162,26 +3162,26 @@ void P_GetInput(int snum)
     if (BUTTON(gamefunc_Last_Weapon))
         j = 14;
 
-    loc.bits |=   j<<SK_WEAPON_BITS;
-    loc.bits |=   BUTTON(gamefunc_Steroids)<<SK_STEROIDS;
-    loc.bits |=   BUTTON(gamefunc_Look_Up)<<SK_LOOK_UP;
-    loc.bits |=   BUTTON(gamefunc_Look_Down)<<SK_LOOK_DOWN;
-    loc.bits |=   BUTTON(gamefunc_NightVision)<<SK_NIGHTVISION;
-    loc.bits |=   BUTTON(gamefunc_MedKit)<<SK_MEDKIT;
-    loc.bits |=   BUTTON(gamefunc_Center_View)<<SK_CENTER_VIEW;
-    loc.bits |=   BUTTON(gamefunc_Holster_Weapon)<<SK_HOLSTER;
-    loc.bits |=   BUTTON(gamefunc_Inventory_Left)<<SK_INV_LEFT;
-    loc.bits |=   KB_KeyPressed(sc_Pause)<<SK_PAUSE;
-    loc.bits |=   BUTTON(gamefunc_Quick_Kick)<<SK_QUICK_KICK;
-    loc.bits |=   g_myAimMode<<SK_AIMMODE;
-    loc.bits |=   BUTTON(gamefunc_Holo_Duke)<<SK_HOLODUKE;
-    loc.bits |=   BUTTON(gamefunc_Jetpack)<<SK_JETPACK;
-    loc.bits |= (((int)g_gameQuit)<<SK_GAMEQUIT);
-    loc.bits |=   BUTTON(gamefunc_Inventory_Right)<<SK_INV_RIGHT;
-    loc.bits |=   BUTTON(gamefunc_TurnAround)<<SK_TURNAROUND;
-    loc.bits |=   BUTTON(gamefunc_Open)<<SK_OPEN;
-    loc.bits |=   BUTTON(gamefunc_Inventory)<<SK_INVENTORY;
-    loc.bits |=   KB_KeyPressed(sc_Escape)<<SK_ESCAPE;
+    localInput.bits |=   j<<SK_WEAPON_BITS;
+    localInput.bits |=   BUTTON(gamefunc_Steroids)<<SK_STEROIDS;
+    localInput.bits |=   BUTTON(gamefunc_Look_Up)<<SK_LOOK_UP;
+    localInput.bits |=   BUTTON(gamefunc_Look_Down)<<SK_LOOK_DOWN;
+    localInput.bits |=   BUTTON(gamefunc_NightVision)<<SK_NIGHTVISION;
+    localInput.bits |=   BUTTON(gamefunc_MedKit)<<SK_MEDKIT;
+    localInput.bits |=   BUTTON(gamefunc_Center_View)<<SK_CENTER_VIEW;
+    localInput.bits |=   BUTTON(gamefunc_Holster_Weapon)<<SK_HOLSTER;
+    localInput.bits |=   BUTTON(gamefunc_Inventory_Left)<<SK_INV_LEFT;
+    localInput.bits |=   KB_KeyPressed(sc_Pause)<<SK_PAUSE;
+    localInput.bits |=   BUTTON(gamefunc_Quick_Kick)<<SK_QUICK_KICK;
+    localInput.bits |=   g_myAimMode<<SK_AIMMODE;
+    localInput.bits |=   BUTTON(gamefunc_Holo_Duke)<<SK_HOLODUKE;
+    localInput.bits |=   BUTTON(gamefunc_Jetpack)<<SK_JETPACK;
+    localInput.bits |= (((int)g_gameQuit)<<SK_GAMEQUIT);
+    localInput.bits |=   BUTTON(gamefunc_Inventory_Right)<<SK_INV_RIGHT;
+    localInput.bits |=   BUTTON(gamefunc_TurnAround)<<SK_TURNAROUND;
+    localInput.bits |=   BUTTON(gamefunc_Open)<<SK_OPEN;
+    localInput.bits |=   BUTTON(gamefunc_Inventory)<<SK_INVENTORY;
+    localInput.bits |=   KB_KeyPressed(sc_Escape)<<SK_ESCAPE;
 
     int const sectorLotag = p->cursectnum != -1 ? sector[p->cursectnum].lotag : 0;
     int const crouchable = sectorLotag != 2 && (sectorLotag != 1 || p->spritebridge) && !p->jetpack_on;
@@ -3202,7 +3202,7 @@ void P_GetInput(int snum)
 
         int const crouching = BUTTON(gamefunc_Crouch) || BUTTON(gamefunc_Toggle_Crouch) || crouch_toggle;
 
-        loc.bits |= (crouching << SK_CROUCH);
+        localInput.bits |= (crouching << SK_CROUCH);
     }
 
     //    running = BUTTON(gamefunc_Run)|ud.auto_run;
@@ -3290,32 +3290,32 @@ void P_GetInput(int snum)
     //q16angvel = fix16_clamp(q16angvel, F16(-MAXANGVEL), F16(MAXANGVEL));
     //q16horiz = fix16_clamp(q16horiz, F16(-MAXHORIZ), F16(MAXHORIZ));
 
-    loc.extbits = 0;
+    localInput.extbits = 0;
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_MOVEFORWARD])
-        loc.extbits |= BUTTON(gamefunc_Move_Forward) || (vel > 0);
+        localInput.extbits |= BUTTON(gamefunc_Move_Forward) || (vel > 0);
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_MOVEBACKWARD])
-        loc.extbits |= (BUTTON(gamefunc_Move_Backward) || (vel < 0))<<1;
+        localInput.extbits |= (BUTTON(gamefunc_Move_Backward) || (vel < 0))<<1;
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_STRAFELEFT])
-        loc.extbits |= (BUTTON(gamefunc_Strafe_Left) || (svel > 0))<<2;
+        localInput.extbits |= (BUTTON(gamefunc_Strafe_Left) || (svel > 0))<<2;
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_STRAFERIGHT])
-        loc.extbits |= (BUTTON(gamefunc_Strafe_Right) || (svel < 0))<<3;
+        localInput.extbits |= (BUTTON(gamefunc_Strafe_Right) || (svel < 0))<<3;
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_TURNLEFT])
-        loc.extbits |= BUTTON(gamefunc_Turn_Left)<<4;
+        localInput.extbits |= BUTTON(gamefunc_Turn_Left)<<4;
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_TURNRIGHT])
-        loc.extbits |= BUTTON(gamefunc_Turn_Right)<<5;
+        localInput.extbits |= BUTTON(gamefunc_Turn_Right)<<5;
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_ALTFIRE])
-        loc.extbits |= BUTTON(gamefunc_Alt_Fire) << 6;
+        localInput.extbits |= BUTTON(gamefunc_Alt_Fire) << 6;
     // used for changing team
-    loc.extbits |= (g_player[snum].pteam != g_player[snum].ps->team)<<6;
+    localInput.extbits |= (g_player[snum].pteam != g_player[snum].ps->team)<<6;
 
     if (ud.scrollmode && ud.overhead_on)
     {
         ud.folfvel = vel;
         ud.folavel = fix16_to_int(q16angvel);
-        loc.fvel = 0;
-        loc.svel = 0;
-        loc.q16avel = 0;
-        loc.q16horz = 0;
+        localInput.fvel = 0;
+        localInput.svel = 0;
+        localInput.q16avel = 0;
+        localInput.q16horz = 0;
         return;
     }
 
@@ -3323,16 +3323,16 @@ void P_GetInput(int snum)
         daang = fix16_to_int(predictedPlayer.q16ang);
     else daang = fix16_to_int(p->q16ang);
 
-    loc.fvel = mulscale9(vel, sintable[(daang + 2560) & 2047]) +
+    localInput.fvel = mulscale9(vel, sintable[(daang + 2560) & 2047]) +
                mulscale9(svel, sintable[(daang + 2048) & 2047]);
-    loc.svel = mulscale9(vel, sintable[(daang + 2048) & 2047]) +
+    localInput.svel = mulscale9(vel, sintable[(daang + 2048) & 2047]) +
                mulscale9(svel, sintable[(daang + 1536) & 2047]);
 
-    loc.fvel += fricxv;
-    loc.svel += fricyv;
+    localInput.fvel += fricxv;
+    localInput.svel += fricyv;
 
-    loc.q16avel = q16angvel;
-    loc.q16horz = q16horiz;
+    localInput.q16avel = q16angvel;
+    localInput.q16horz = q16horiz;
 }
 
 static int P_DoCounters(DukePlayer_t *p)

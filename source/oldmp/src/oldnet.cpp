@@ -262,7 +262,7 @@ void Net_HandleInput(void)
         return;
 
     nsyn = &inputfifo[g_player[myconnectindex].movefifoend&(MOVEFIFOSIZ-1)][myconnectindex];
-    copybufbyte(&loc, nsyn, sizeof(input_t));
+    copybufbyte(&localInput, nsyn, sizeof(input_t));
     //loc = { };
 
     g_player[myconnectindex].movefifoend++;

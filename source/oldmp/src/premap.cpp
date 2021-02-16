@@ -1517,7 +1517,7 @@ void clearfifo(void)
 
     jump_input = 0;
 
-    clearbufbyte(&loc,sizeof(input_t),0L);
+    clearbufbyte(&localInput,sizeof(input_t),0L);
     clearbufbyte(&inputfifo,sizeof(input_t)*MOVEFIFOSIZ*MAXPLAYERS,0L);
 
     for (;i<MAXPLAYERS;i++)
