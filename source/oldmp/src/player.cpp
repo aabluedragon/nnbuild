@@ -3035,8 +3035,11 @@ void P_GetInput(int snum)
     bool running;
     int32_t turnamount;
     int32_t keymove;
-    int32_t momx = 0,momy = 0;
     DukePlayer_t *p = g_player[snum].ps;
+
+    int vel, svel;
+    fix16_t q16horiz;
+    fix16_t q16angvel;
 
     if ((p->gm&MODE_MENU) || (p->gm&MODE_TYPE) || (ud.pause_on && !KB_KeyPressed(sc_Pause)) || (numplayers > 1 && (int32_t)totalclock < 10))
         // HACK: kill P_GetInput() for the first 10 tics of a new map in multi
@@ -3044,13 +3047,11 @@ void P_GetInput(int snum)
         if (!(p->gm&MODE_MENU))
             CONTROL_GetInput(&info[0]);
         memset(&info[1], 0, sizeof(info[1]));
-        loc.fvel = vel = 0;
-        loc.svel = svel = 0;
-        loc.q16avel = q16angvel = 0;
-        loc.q16horz = q16horiz = 0;
-        loc.bits = (((int)g_gameQuit)<<SK_GAMEQUIT);
-        loc.extbits = (g_player[snum].pteam != g_player[snum].ps->team)<<6;
-        loc.extbits |= (1<<7);
+
+        loc = {};
+        loc.bits = (((int32_t)g_gameQuit) << SK_GAMEQUIT);
+        loc.extbits |= (1 << 7);
+
         dyaw = 0;
         return;
     }
@@ -3322,17 +3323,13 @@ void P_GetInput(int snum)
         daang = fix16_to_int(predictedPlayer.q16ang);
     else daang = fix16_to_int(p->q16ang);
 
-    momx = mulscale9(vel,sintable[(daang+2560)&2047]);
-    momy = mulscale9(vel,sintable[(daang+2048)&2047]);
+    loc.fvel = mulscale9(vel, sintable[(daang + 2560) & 2047]) +
+               mulscale9(svel, sintable[(daang + 2048) & 2047]);
+    loc.svel = mulscale9(vel, sintable[(daang + 2048) & 2047]) +
+               mulscale9(svel, sintable[(daang + 1536) & 2047]);
 
-    momx += mulscale9(svel,sintable[(daang+2048)&2047]);
-    momy += mulscale9(svel,sintable[(daang+1536)&2047]);
-
-    momx += fricxv;
-    momy += fricyv;
-
-    loc.fvel = momx;
-    loc.svel = momy;
+    loc.fvel += fricxv;
+    loc.svel += fricyv;
 
     loc.q16avel = q16angvel;
     loc.q16horz = q16horiz;

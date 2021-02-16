@@ -1501,12 +1501,7 @@ static inline void clearteams(void)
 
 void G_ResetTimers(void)
 {
-    vel = svel = q16angvel = q16horiz = 0;
-
-    totalclock = 0L;
-    cloudtotalclock = 0L;
-    ototalclock = 0L;
-    lockclock = 0L;
+    totalclock = cloudtotalclock = ototalclock = lockclock = 0L;
     ready2send = 1;
     g_levelTextTime = 85;
     g_moveThingsCount = 0;

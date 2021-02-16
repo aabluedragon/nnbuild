@@ -135,13 +135,10 @@ G_EXTERN spriteinterpolate sprpos[MAXSPRITES];
 // Multiplayer/Demos
 G_EXTERN int playerswhenstarted;
 G_EXTERN int screenpeek;
-G_EXTERN int vel, svel;
 G_EXTERN char szPlayerName[32];
 G_EXTERN char ready2send;
 G_EXTERN char g_numPlayerSprites;
 G_EXTERN signed char multiwho, multipos, multiwhat, multiflag;
-G_EXTERN fix16_t q16horiz;
-G_EXTERN fix16_t q16angvel;
 G_EXTERN input_t loc;
 G_EXTERN input_t recsync[RECSYNCBUFSIZ];
 G_EXTERN input_t inputfifo[MOVEFIFOSIZ][MAXPLAYERS];
