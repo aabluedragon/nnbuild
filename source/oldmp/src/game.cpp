@@ -4108,7 +4108,6 @@ void G_DrawRooms(int snum,int smoothratio)
     }
 
 //    smoothratio = min(max(smoothratio,0),65536);
-    smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
 
     g_visibility = (int)(p->visibility * ((numplayers > 1 && !ud.allow_visibility) ? 1.f : r_ambientlightrecip)); // Do not allow visibility changes in online play.
 
