@@ -3649,6 +3649,22 @@ static void P_ProcessWeapon(int playerNum)
         X_OnEvent(EVENT_HOLSTER, p->i, playerNum, -1);
         if (Gv_GetVar(g_iReturnVarID, p->i, playerNum) == 0)
         {
+            if (PWEAPON(playerNum, p->curr_weapon, WorksLike) != KNEE_WEAPON)
+            {
+                if (p->holster_weapon == 0 && p->weapon_pos == 0)
+                {
+                    p->holster_weapon = 1;
+                    p->weapon_pos = -1;
+                    P_DoQuote(73, p);
+                }
+                else if (p->holster_weapon == 1 && p->weapon_pos == -9)
+                {
+                    p->holster_weapon = 0;
+                    p->weapon_pos = 10;
+                    P_DoQuote(74, p);
+                }
+            }
+
             if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_HOLSTER_CLEARS_CLIP)
             {
                 if (p->ammo_amount[p->curr_weapon] > aplWeaponClip[p->curr_weapon][playerNum]

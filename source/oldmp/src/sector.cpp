@@ -3059,24 +3059,6 @@ CHECKINV1:
                 }
 
             }
-            if (TEST_SYNC_KEY(sb_snum, SK_HOLSTER))
-            {
-                if (p->curr_weapon > KNEE_WEAPON)
-                {
-                    if (p->holster_weapon == 0 && p->weapon_pos == 0)
-                    {
-                        p->holster_weapon = 1;
-                        p->weapon_pos = -1;
-                        P_DoQuote(73,p);
-                    }
-                    else if (p->holster_weapon == 1 && p->weapon_pos == -9)
-                    {
-                        p->holster_weapon = 0;
-                        p->weapon_pos = 10;
-                        P_DoQuote(74,p);
-                    }
-                }
-            }
         }
 
         if (TEST_SYNC_KEY(sb_snum, SK_HOLODUKE) && p->newowner == -1)
