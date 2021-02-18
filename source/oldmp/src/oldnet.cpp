@@ -44,35 +44,25 @@ void Net_GetPackets(void)
 
 static void Net_AddPingTimeToPacket(int* j)
 {
-    packbuf[(*j)++] = (char)((pingTime) & 255);
-    packbuf[(*j)++] = (char)((pingTime >> 8) & 255);
-    packbuf[(*j)++] = (char)((pingTime >> 16) & 255);
-    packbuf[(*j)++] = (char)((pingTime >> 24) & 255);
+    B_BUF32(&packbuf[(*j)], pingTime);
+    (*j) += 4;
 }
 
 static void Net_GetPingTimeFromPacket(int* j)
 {
-    pingTime = (int32_t)packbuf[(*j)];
-    pingTime += (int32_t)packbuf[(*j) + 1] << 8;
-    pingTime += (int32_t)packbuf[(*j) + 2] << 16;
-    pingTime += (int32_t)packbuf[(*j) + 3] << 24;
+    pingTime = (int32_t)B_UNBUF32(&packbuf[(*j)]);
     (*j) += 4;
 }
 
 static void Net_AddPlayerPingToPacket(int* j, int playerNum)
 {
-    packbuf[(*j)++] = (char)((g_player[playerNum].ping) & 255);
-    packbuf[(*j)++] = (char)((g_player[playerNum].ping >> 8) & 255);
-    packbuf[(*j)++] = (char)((g_player[playerNum].ping >> 16) & 255);
-    packbuf[(*j)++] = (char)((g_player[playerNum].ping >> 24) & 255);
+    B_BUF32(&packbuf[(*j)], g_player[playerNum].ping);
+    (*j) += 4;
 }
 
 static void Net_GetPlayerPingFromPacket(int* j, int playerNum)
 {
-    g_player[playerNum].ping = (uint32_t)packbuf[(*j)];
-    g_player[playerNum].ping += (uint32_t)packbuf[(*j) + 1] << 8;
-    g_player[playerNum].ping += (uint32_t)packbuf[(*j) + 2] << 16;
-    g_player[playerNum].ping += (uint32_t)packbuf[(*j) + 3] << 24;
+    g_player[playerNum].ping = (uint32_t)B_UNBUF32(&packbuf[(*j)]);
     (*j) += 4;
 }
 
@@ -116,22 +106,20 @@ static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, inp
 
     if (nsyn[playerNum].fvel != osyn[playerNum].fvel)
     {
-        packbuf[(*j)++] = (char)nsyn[playerNum].fvel;
-        packbuf[(*j)++] = (char)(nsyn[playerNum].fvel >> 8);
+        B_BUF16(&packbuf[(*j)], nsyn[playerNum].fvel);
+        (*j) += 2;
         packbuf[inputFlagsPos] |= 1;
     }
     if (nsyn[playerNum].svel != osyn[playerNum].svel)
     {
-        packbuf[(*j)++] = (char)nsyn[playerNum].svel;
-        packbuf[(*j)++] = (char)(nsyn[playerNum].svel >> 8);
+        B_BUF16(&packbuf[(*j)], nsyn[playerNum].svel);
+        (*j) += 2;
         packbuf[inputFlagsPos] |= 2;
     }
     if (nsyn[playerNum].q16avel != osyn[playerNum].q16avel)
     {
-        packbuf[(*j)++] = (char)((nsyn[playerNum].q16avel) & 255);
-        packbuf[(*j)++] = (char)((nsyn[playerNum].q16avel >> 8) & 255);
-        packbuf[(*j)++] = (char)((nsyn[playerNum].q16avel >> 16) & 255);
-        packbuf[(*j)++] = (char)((nsyn[playerNum].q16avel >> 24) & 255);
+        B_BUF32(&packbuf[(*j)], nsyn[playerNum].q16avel);
+        (*j) += 4;
         packbuf[inputFlagsPos] |= 4;
     }
 
@@ -142,10 +130,8 @@ static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, inp
 
     if (nsyn[playerNum].q16horz != osyn[playerNum].q16horz)
     {
-        packbuf[(*j)++] = (char)((nsyn[playerNum].q16horz) & 255);
-        packbuf[(*j)++] = (char)((nsyn[playerNum].q16horz >> 8) & 255);
-        packbuf[(*j)++] = (char)((nsyn[playerNum].q16horz >> 16) & 255);
-        packbuf[(*j)++] = (char)((nsyn[playerNum].q16horz >> 24) & 255);
+        B_BUF32(&packbuf[(*j)], nsyn[playerNum].q16horz);
+        (*j) += 4;
         packbuf[inputFlagsPos] |= 128;
     }
 
@@ -188,23 +174,20 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
     copybufbyte(&osyn[playerNum], &nsyn[playerNum], sizeof(input_t));
     if (inputFlags & 1)
     {
-        nsyn[playerNum].fvel = (short)packbuf[(*j)] + ((short)packbuf[(*j) + 1] << 8);
+        nsyn[playerNum].fvel = (short)B_UNBUF16(&packbuf[(*j)]);
         (*j) += 2;
     }
     if (inputFlags & 2)
     {
-        nsyn[playerNum].svel = (short)packbuf[(*j)] + ((short)packbuf[(*j) + 1] << 8);
+        nsyn[playerNum].svel = (short)B_UNBUF16(&packbuf[(*j)]);
         (*j) += 2;
     }
-
     if (inputFlags & 4)
     {
-        nsyn[playerNum].q16avel = (fix16_t)packbuf[(*j)];
-        nsyn[playerNum].q16avel += (fix16_t)packbuf[(*j) + 1] << 8;
-        nsyn[playerNum].q16avel += (fix16_t)packbuf[(*j) + 2] << 16;
-        nsyn[playerNum].q16avel += (fix16_t)packbuf[(*j) + 3] << 24;
+        nsyn[playerNum].q16avel = (fix16_t)B_UNBUF32(&packbuf[(*j)]);
         (*j) += 4;
     }
+
     if (inputFlags & 8)   nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffffff00) | ((int)packbuf[(*j)++]));
     if (inputFlags & 16)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffff00ff) | ((int)packbuf[(*j)++]) << 8);
     if (inputFlags & 32)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xff00ffff) | ((int)packbuf[(*j)++]) << 16);
@@ -212,10 +195,7 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
 
     if (inputFlags & 128)
     {
-        nsyn[playerNum].q16horz = (fix16_t)packbuf[(*j)];
-        nsyn[playerNum].q16horz += (fix16_t)packbuf[(*j) + 1] << 8;
-        nsyn[playerNum].q16horz += (fix16_t)packbuf[(*j) + 2] << 16;
-        nsyn[playerNum].q16horz += (fix16_t)packbuf[(*j) + 3] << 24;
+        nsyn[playerNum].q16horz = (fix16_t)B_UNBUF32(&packbuf[(*j)]);
         (*j) += 4;
     }
 
