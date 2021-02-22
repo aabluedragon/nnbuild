@@ -215,32 +215,30 @@ void P_QuickKill(DukePlayer_t *p)
     return;
 }
 
-static void A_DoWaterTracers(int x1,int y1,int z1,int x2,int y2,int z2,int n)
+static void Proj_DoWaterTracers(vec3_t startPos, vec3_t const* endPos, int n, int16_t ownerSpriteNum)
 {
-    int i, xv, yv, zv;
-    short sect = -1;
-
-    i = n+1;
-    xv = (x2-x1)/i;
-    yv = (y2-y1)/i;
-    zv = (z2-z1)/i;
-
-    if ((klabs(x1-x2)+klabs(y1-y2)) < 3084)
+    if ((klabs(startPos.x - endPos->x) + klabs(startPos.y - endPos->y)) < 3084)
         return;
 
-    for (i=n;i>0;i--)
+    vec3_t const v_inc = { tabledivide32_noinline(endPos->x - startPos.x, n + 1), tabledivide32_noinline(endPos->y - startPos.y, n + 1),
+                           tabledivide32_noinline(endPos->z - startPos.z, n + 1) };
+
+    int16_t sectNum = sprite[ownerSpriteNum].sectnum;
+    for (bssize_t i = n; i > 0; i--)
     {
-        x1 += xv;
-        y1 += yv;
-        z1 += zv;
-        updatesector(x1,y1,&sect);
-        if (sect >= 0)
-        {
-            if (sector[sect].lotag == ST_2_UNDERWATER)
-                A_InsertSprite(sect,x1,y1,z1,WATERBUBBLE,-32,4+(krand()&3),4+(krand()&3),krand()&2047,0,0,g_player[0].ps->i,5);
-            else
-                A_InsertSprite(sect,x1,y1,z1,SMALLSMOKE,-32,14,14,0,0,0,g_player[0].ps->i,5);
-        }
+        startPos.x += v_inc.x;
+        startPos.y += v_inc.y;
+        startPos.z += v_inc.z;
+
+        updatesector(startPos.x, startPos.y, &sectNum);
+
+        if (sectNum < 0)
+            break;
+
+        if(sector[sectNum].lotag == ST_2_UNDERWATER)
+            A_InsertSprite(sectNum, startPos.x, startPos.y, startPos.z, WATERBUBBLE, -32, 4 + (krand() & 3), 4 + (krand() & 3), krand() & 2047, 0, 0, ownerSpriteNum, 5);
+        else
+            A_InsertSprite(sectNum, startPos.x, startPos.y, startPos.z, SMALLSMOKE, -32, 14, 14, 0, 0, 0, ownerSpriteNum, 5);
     }
 }
 
@@ -537,6 +535,37 @@ static void P_PreFireHitscan(int spriteNum, int playerNum, int projecTile, vec3_
     srcVect->z -= ZOFFSET6;
 }
 
+// Hitscan weapon fired from actor (sprite s);
+static void A_PreFireHitscan(spritetype* pSprite, vec3_t* const srcVect, int32_t* const zvel, int* const shootAng, int const doSpread)
+{
+    int const  playerNum = A_FindPlayer(pSprite, NULL);
+    auto const pPlayer = g_player[playerNum].ps;
+    int const  playerDist = safeldist(pPlayer->i, pSprite);
+
+    *zvel = tabledivide32_noinline((pPlayer->pos.z - srcVect->z) << 8, playerDist);
+
+    srcVect->z -= ZOFFSET6;
+
+    if (pSprite->picnum == BOSS1)
+        *shootAng = getangle(pPlayer->pos.x - srcVect->x, pPlayer->pos.y - srcVect->y);
+
+    Proj_MaybeAddSpread(doSpread, zvel, shootAng, 256, 128 >> (uint8_t)(pSprite->picnum != BOSS1));
+}
+
+static int Proj_DoHitscan(int spriteNum, int32_t const cstatmask, const vec3_t* const srcVect, int zvel, int const shootAng, hitdata_t* const hitData)
+{
+    auto const pSprite = &sprite[spriteNum];
+
+    pSprite->cstat &= ~cstatmask;
+    zvel = A_GetShootZvel(zvel);
+    int16_t sectnum = pSprite->sectnum;
+    updatesector(srcVect->x, srcVect->y, &sectnum);
+    hitscan(srcVect, sectnum, sintable[(shootAng + 512) & 2047], sintable[shootAng & 2047], zvel << 6, hitData, CLIPMASK1);
+    pSprite->cstat |= cstatmask;
+
+    return (hitData->sect < 0);
+}
+
 int A_Shoot(int i,int atwith)
 {
     short l, p, j, k=-1, wh, scount;
@@ -781,48 +810,15 @@ int A_Shoot(int i,int atwith)
                 s->shade = pProj->shade;
 
             if (p >= 0)
-            { // P_PrefireHitscan
                 P_PreFireHitscan(i, p, atwith, &spos, &zvel, &shootAng,
                     pProj->workslike & PROJECTILE_ACCURATE_AUTOAIM, !(pProj->workslike & PROJECTILE_ACCURATE));
-            }
             else
-            { // A_PrefireHitscan
-                j = A_FindPlayer(s,&x);
-                spos.z -= (4<<8);
-                hit.pos.x = ldist(&sprite[g_player[j].ps->i], s);
-                if (hit.pos.x == 0)
-                    hit.pos.x++;
-                zvel = ((g_player[j].ps->pos.z-spos.z) <<8) / hit.pos.x;
-                if (s->picnum != BOSS1)
-                {
-                    zvel += 128-(krand()&255);
-                    shootAng += 32-(krand()&63);
-                }
-                else
-                {
-                    zvel += 128-(krand()&255);
-                    shootAng = getangle(g_player[j].ps->pos.x-spos.x,g_player[j].ps->pos.y-spos.y)+64-(krand()&127);
-                }
-            }
+                A_PreFireHitscan(s, &spos, &zvel, &shootAng, !(pProj->workslike & PROJECTILE_ACCURATE));
 
-            if (pProj->cstat >= 0) s->cstat &= ~pProj->cstat;
-            else s->cstat &= ~257;
+            if (Proj_DoHitscan(i, (pProj->cstat >= 0) ? pProj->cstat : 256 + 1, &spos, zvel, shootAng, &hit))
+                return -1;
 
-            if (ActorExtra[i].temp_data[9])
-                zvel = ActorExtra[i].temp_data[9];
-
-            hitscan(&spos, sect,
-                    sintable[(shootAng + 512) & 2047],
-                    sintable[shootAng & 2047],
-                    zvel << 6, &hit, CLIPMASK1);
-
-
-            if (pProj->cstat >= 0) s->cstat |= pProj->cstat;
-            else s->cstat |= 257;
-
-            if (hit.sect < 0) return -1;
-
-            if ((pProj->range > 0) && ((klabs(spos.x-hit.pos.x)+klabs(spos.y-hit.pos.y)) > pProj->range))
+            if (pProj->range > 0 && klabs(spos.x - hit.pos.x) + klabs(spos.y - hit.pos.y) > pProj->range)
                 return -1;
 
             if (pProj->trail >= 0)
@@ -830,8 +826,8 @@ int A_Shoot(int i,int atwith)
 
             if (pProj->workslike & PROJECTILE_WATERBUBBLES)
             {
-                if ((krand()&15) == 0 && sector[hit.sect].lotag == ST_2_UNDERWATER)
-                    A_DoWaterTracers(hit.pos.x,hit.pos.y,hit.pos.z, spos.x, spos.y, spos.z,8-(ud.multimode>>1));
+                if ((krand() & 15) == 0 && sector[hit.sect].lotag == ST_2_UNDERWATER)
+                    Proj_DoWaterTracers(hit.pos, &spos, 8 - (ud.multimode >> 1), i);
             }
 
             if (p >= 0)
@@ -1406,7 +1402,7 @@ DOSKIPBULLETHOLE:
             if (hit.sect < 0) return -1;
 
             if ((krand()&15) == 0 && sector[hit.sect].lotag == ST_2_UNDERWATER)
-                A_DoWaterTracers(hit.pos.x,hit.pos.y,hit.pos.z, spos.x, spos.y, spos.z,8-(ud.multimode>>1));
+                Proj_DoWaterTracers(hit.pos, &spos, 8-(ud.multimode>>1), i);
 
             if (p >= 0)
             {
