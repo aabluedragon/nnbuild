@@ -828,9 +828,9 @@ void Gv_ResetSystemDefaults(void)
     g_iReturnVarID=Gv_GetVarIndex("RETURN");
     g_iWeaponVarID=Gv_GetVarIndex("WEAPON");
     g_iWorksLikeVarID=Gv_GetVarIndex("WORKSLIKE");
-    g_iZRangeVarID=Gv_GetVarIndex("ZRANGE");
-    g_iAngRangeVarID=Gv_GetVarIndex("ANGRANGE");
-    g_iAimAngleVarID=Gv_GetVarIndex("AUTOAIMANGLE");
+    g_zRangeVarID=Gv_GetVarIndex("ZRANGE");
+    g_angRangeVarID=Gv_GetVarIndex("ANGRANGE");
+    g_aimAngleVarID=Gv_GetVarIndex("AUTOAIMANGLE");
     g_iLoTagID=Gv_GetVarIndex("LOTAG");
     g_iHiTagID=Gv_GetVarIndex("HITAG");
     g_iTextureID=Gv_GetVarIndex("TEXTURE");

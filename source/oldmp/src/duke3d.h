@@ -891,9 +891,6 @@ extern short SpriteCacheList[MAXTILES][3];
 extern int g_iReturnVarID;
 extern int g_iWeaponVarID;
 extern int g_iWorksLikeVarID;
-extern int g_iZRangeVarID;
-extern int g_iAngRangeVarID;
-extern int g_iAimAngleVarID;
 extern int g_iLoTagID;          // var ID of "LOTAG"
 extern int g_iHiTagID;          // ver ID of "HITAG"
 extern int g_iTextureID;        // ver ID of "TEXTURE"
@@ -957,25 +954,26 @@ enum WeaponFlags_t {
 // custom projectiles
 
 enum ProjectileFlags_t {
-    PROJECTILE_HITSCAN             = 1,
-    PROJECTILE_RPG                 = 2,
-    PROJECTILE_BOUNCESOFFWALLS     = 4,
-    PROJECTILE_BOUNCESOFFMIRRORS   = 8,
-    PROJECTILE_KNEE                = 16,
-    PROJECTILE_WATERBUBBLES        = 32,
-    PROJECTILE_TIMED               = 64,
-    PROJECTILE_BOUNCESOFFSPRITES   = 128,
-    PROJECTILE_SPIT                = 256,
-    PROJECTILE_COOLEXPLOSION1      = 512,
-    PROJECTILE_BLOOD               = 1024,
-    PROJECTILE_LOSESVELOCITY       = 2048,
-    PROJECTILE_NOAIM               = 4096,
-    PROJECTILE_RANDDECALSIZE       = 8192,
-    PROJECTILE_EXPLODEONTIMER      = 16384,
-    PROJECTILE_RPG_IMPACT          = 32768,
-    PROJECTILE_RADIUS_PICNUM       = 65536,
-    PROJECTILE_ACCURATE_AUTOAIM    = 131072,
-    PROJECTILE_FORCEIMPACT         = 262144
+    PROJECTILE_HITSCAN            = 0x00000001,
+    PROJECTILE_RPG                = 0x00000002,
+    PROJECTILE_BOUNCESOFFWALLS    = 0x00000004,
+    PROJECTILE_BOUNCESOFFMIRRORS  = 0x00000008,
+    PROJECTILE_KNEE               = 0x00000010,
+    PROJECTILE_WATERBUBBLES       = 0x00000020,
+    PROJECTILE_TIMED              = 0x00000040,
+    PROJECTILE_BOUNCESOFFSPRITES  = 0x00000080,
+    PROJECTILE_SPIT               = 0x00000100,
+    PROJECTILE_COOLEXPLOSION1     = 0x00000200,
+    PROJECTILE_BLOOD              = 0x00000400,
+    PROJECTILE_LOSESVELOCITY      = 0x00000800,
+    PROJECTILE_NOAIM              = 0x00001000,
+    PROJECTILE_RANDDECALSIZE      = 0x00002000,
+    PROJECTILE_EXPLODEONTIMER     = 0x00004000,
+    PROJECTILE_RPG_IMPACT         = 0x00008000,
+    PROJECTILE_RADIUS_PICNUM      = 0x00010000,
+    PROJECTILE_ACCURATE_AUTOAIM   = 0x00020000,
+    PROJECTILE_FORCEIMPACT        = 0x00040000,
+    PROJECTILE_ACCURATE           = 0x00100000,
 };
 
 extern projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
