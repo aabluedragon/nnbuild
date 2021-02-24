@@ -1098,64 +1098,81 @@ int A_Shoot(int i,int atwith)
             else
                 A_PreFireHitscan(s, &spos, &zvel, &shootAng, !(pProj->workslike & PROJECTILE_ACCURATE));
 
-            if (Proj_DoHitscan(i, (pProj->cstat >= 0) ? pProj->cstat : 256 + 1, &spos, zvel, shootAng, &hit))
-                return -1;
+            bool doesPenetrate = (pProj->workslike & PROJECTILE_PENETRATE);
 
-            if (pProj->range > 0 && klabs(spos.x - hit.pos.x) + klabs(spos.y - hit.pos.y) > pProj->range)
-                return -1;
+            #define MAX_PENETRATIONS 16
 
+            hitdata_t hits[MAX_PENETRATIONS];
+            uint16_t hitCstats[MAX_PENETRATIONS];
+            vec3_t nextStartPos = spos;
+
+            int hitCount;
+            for (hitCount = 0; hitCount < MAX_PENETRATIONS; hitCount++)
+            {
+                auto curHit = &hits[hitCount];
+                int hitVoid = Proj_DoHitscan(i, (pProj->cstat >= 0) ? pProj->cstat : 256 + 1, &nextStartPos, zvel, shootAng, curHit);
+
+                // Use spos so hitting something doesn't keep extending it's range.
+                if (hitVoid || (pProj->range > 0 && (klabs(spos.x - curHit->pos.x) + klabs(spos.y - curHit->pos.y)) > pProj->range))
+                    return -1;
+
+                nextStartPos = curHit->pos;
+
+                bool shouldStop = false;
+
+                if (curHit->sprite > -1) // Make this sprite unhittable so we don't hit it multiple times.
+                {
+                    hitCstats[hitCount] = sprite[curHit->sprite].cstat;
+                    sprite[curHit->sprite].cstat &= ~CSTAT_SPRITE_BLOCK_HITSCAN;
+
+                    shouldStop = ((sprite[curHit->sprite].cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR) || (sprite[curHit->sprite].cstat & CSTAT_SPRITE_ALIGNMENT_WALL));
+
+                    // Perhaps an EVENT_DOPENETRATE here? (THISACTOR = Target, RETURN = Projectile Tilenum)
+                    // So people can determine whether or not the thing we hit should override shouldStop.
+                }
+                else break; // No sprite hit? We're done.
+
+                if (!doesPenetrate || shouldStop) // No penetration, so stop.
+                    break;
+            }
+
+            // Use the last hit point for the endPos and sector.
             if (pProj->trail >= 0)
-                A_HitscanProjTrail(&spos, &hit.pos, shootAng, atwith, i);
+                A_HitscanProjTrail(&spos, &hits[hitCount].pos, shootAng, atwith, i);
 
             if (pProj->workslike & PROJECTILE_WATERBUBBLES)
             {
-                if ((krand() & 15) == 0 && sector[hit.sect].lotag == ST_2_UNDERWATER)
-                    Proj_DoWaterTracers(hit.pos, &spos, 8 - (ud.multimode >> 1), i);
+                if ((krand() & 15) == 0 && sector[hits[hitCount].sect].lotag == ST_2_UNDERWATER)
+                    Proj_DoWaterTracers(hits[hitCount].pos, &spos, 8 - (ud.multimode >> 1), i);
             }
 
-            if (p >= 0)
+            // Restore cstat, spawn shotsparks and do damage at every point we hit.
+            for (int count = 0; count <= hitCount; count++)
             {
-                k = Proj_InsertShotspark(&hit, i, atwith, 10, shootAng, Proj_GetDamage(pProj));
+                auto curHit = &hits[count];
 
-                if (P_PostFireHitscan(p, k, &hit, i, atwith, zvel, atwith, pProj->decal,
-                    atwith, 1 + 2) < 0)
-                    return -1;
-            }
-            else
-            { // A_PostFireHitscan
-                k = A_InsertSprite(hit.sect,hit.pos.x,hit.pos.y,hit.pos.z,SHOTSPARK1,-15,24,24,shootAng,0,0,i,4);
-                sprite[k].extra = pProj->extra;
-                if (pProj->extra_rand > 0)
-                    sprite[k].extra += (krand()%pProj->extra_rand);
-                sprite[k].yvel = atwith; // this is a hack to allow you to detect which weapon spawned a SHOTSPARK1
-                ActorExtra[k].temp_data[6] = hit.wall;
-                ActorExtra[k].temp_data[7] = hit.sect;
-                ActorExtra[k].temp_data[8] = hit.sprite;
-
-                if (hit.sprite >= 0)
+                if (curHit->sprite > -1)
                 {
-                    A_DamageObject(hit.sprite,k);
-                    if (sprite[hit.sprite].picnum != APLAYER)
-                    {
-                        if (pProj->spawns >= 0)
-                        {
-                            wh=A_Spawn(k,pProj->spawns);
-                            if (pProj->sxrepeat > 4) sprite[wh].xrepeat=pProj->sxrepeat;
-                            if (pProj->syrepeat > 4) sprite[wh].yrepeat=pProj->syrepeat;
-                            ActorExtra[wh].temp_data[6] = hit.wall;
-                            ActorExtra[wh].temp_data[7] = hit.sect;
-                            ActorExtra[wh].temp_data[8] = hit.sprite;
-                        }
-                    }
-                    else sprite[k].xrepeat = sprite[k].yrepeat = 0;
+                    sprite[curHit->sprite].cstat = hitCstats[count];
                 }
-                else if (hit.wall >= 0)
-                    A_DamageWall(k,hit.wall,hit.pos,atwith);
-            }
 
-            if ((krand()&255) < 4)
-                if (pProj->isound >= 0)
-                    S_PlaySoundXYZ(pProj->isound,k,hit.pos.x,hit.pos.y,hit.pos.z);
+                if (p >= 0)
+                {
+                    k = Proj_InsertShotspark(curHit, i, atwith, 10, shootAng, Proj_GetDamage(pProj));
+
+                    if (P_PostFireHitscan(p, k, curHit, i, atwith, zvel, atwith, pProj->decal,
+                        atwith, 1 + 2) < 0)
+                        continue;
+                }
+                else
+                {
+                    k = A_PostFireHitscan(curHit, i, atwith, zvel, shootAng, Proj_GetDamage(pProj), atwith, atwith);
+                }
+
+                if ((krand() & 255) < 4)
+                    if (pProj->isound >= 0)
+                        S_PlaySound3D(pProj->isound, k, &curHit->pos);
+            }
 
             return -1;
         }

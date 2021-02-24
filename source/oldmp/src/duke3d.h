@@ -977,6 +977,7 @@ enum ProjectileFlags_t {
     PROJECTILE_ACCURATE_AUTOAIM   = 0x00020000,
     PROJECTILE_FORCEIMPACT        = 0x00040000,
     PROJECTILE_ACCURATE           = 0x00100000,
+    PROJECTILE_PENETRATE          = 0x00800000, // TODO: Implement & port to mainline
 };
 
 extern projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
