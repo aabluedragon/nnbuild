@@ -795,6 +795,9 @@ enum GameEvent_t {
     EVENT_PRELEVEL,
     EVENT_DAMAGESPRITE,
     EVENT_POSTDAMAGESPRITE,
+    EVENT_DAMAGEFLOOR,
+    EVENT_DAMAGECEILING,
+    EVENT_DAMAGEWALL,
     EVENT_ALTWEAPON,
     EVENT_LASTWEAPON,
     EVENT_ALTFIRE,
@@ -1119,6 +1122,16 @@ extern hashtable_t gamefuncH;
 #include "global.h"
 #include "screens.h"
 #include "oldnet.h"
+
+static inline int32_t G_TileHasActor(int const tileNum)
+{
+    return actorscrptr[tileNum] != NULL;
+}
+
+static inline int32_t G_DefaultActorHealthForTile(int const tileNum)
+{
+    return G_TileHasActor(tileNum) ? *actorscrptr[tileNum] : 0;
+}
 
 #endif
 

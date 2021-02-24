@@ -221,11 +221,22 @@ int CheckPlayerInSector(int sect)
     return -1;
 }
 
+static inline int32_t A_FP_ManhattanDist(const DukePlayer_t* pPlayer, const spritetype* pSprite)
+{
+    return klabs(pPlayer->opos.x - pSprite->x)
+        + klabs(pPlayer->opos.y - pSprite->y)
+        + ((klabs(pPlayer->opos.z - pSprite->z + (28 << 8))) >> 4);
+}
+
 int __fastcall A_FindPlayer(spritetype *s, int *d)
 {
     if (ud.multimode < 2)
     {
-        *d = klabs(g_player[myconnectindex].ps->opos.x-s->x) + klabs(g_player[myconnectindex].ps->opos.y-s->y) + ((klabs(g_player[myconnectindex].ps->opos.z-s->z+(28<<8)))>>4);
+        auto const pPlayer = g_player[myconnectindex].ps;
+
+        if(d)
+            *d = A_FP_ManhattanDist(pPlayer, s);
+
         return myconnectindex;
     }
 
@@ -235,15 +246,18 @@ int __fastcall A_FindPlayer(spritetype *s, int *d)
 
         TRAVERSE_CONNECT(j)
         {
-            x = klabs(g_player[j].ps->opos.x-s->x) + klabs(g_player[j].ps->opos.y-s->y) + ((klabs(g_player[j].ps->opos.z-s->z+(28<<8)))>>4);
-            if (x < closest && sprite[g_player[j].ps->i].extra > 0)
+            auto const pPlayer = g_player[j].ps;
+            x = A_FP_ManhattanDist(pPlayer, s);
+            if (x < closest && sprite[pPlayer->i].extra > 0)
             {
                 closest_player = j;
                 closest = x;
             }
         }
 
-        *d = closest;
+        if(d)
+            *d = closest;
+
         return closest_player;
     }
 }
@@ -1601,137 +1615,168 @@ void activatebysector(int sect,int j)
         G_OperateSectors(sect,j);
 }
 
-static void BreakWall(int newpn,int spr,int dawallnum)
+// Returns W_FORCEFIELD if wall has a forcefield overpicnum, its overpicnum else.
+static FORCE_INLINE int G_GetForcefieldPicnum(int const wallNum)
 {
-    wall[dawallnum].picnum = newpn;
-    A_PlaySound(VENT_BUST,spr);
-    A_PlaySound(GLASS_HEAVYBREAK,spr);
-    A_SpawnWallGlass(spr,dawallnum,10);
+    int const tileNum = wall[wallNum].overpicnum;
+    return tileNum == W_FORCEFIELD + 1 ? W_FORCEFIELD : tileNum;
 }
 
-void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith)
-{
-    short sn = -1;
-    int j, i, darkestwall;
-    walltype *wal = &wall[dawallnum];
 
-    if (wal->overpicnum == MIRROR && wal->pal != 4 && A_CheckSpriteTileFlags(atwith,SPRITE_PROJECTILE) && (ActorExtra[spr].projectile.workslike & PROJECTILE_RPG))
+static void G_BreakWall(int tileNum, int spriteNum, int wallNum)
+{
+    wall[wallNum].picnum = tileNum;
+    A_PlaySound(VENT_BUST, spriteNum);
+    A_PlaySound(GLASS_HEAVYBREAK, spriteNum);
+    A_SpawnWallGlass(spriteNum, wallNum, 10);
+}
+
+void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum)
+{
+    int16_t sectNum = -1;
+    walltype* pWall = &wall[wallNum];
+
+    if ((SpriteFlags[pWall->overpicnum] & SPRITE_DAMAGEEVENT) || (SpriteFlags[pWall->picnum] & SPRITE_DAMAGEEVENT))
     {
-        if (wal->nextwall == -1 || wall[wal->nextwall].pal != 4)
+        if (X_OnEventWithReturn(EVENT_DAMAGEWALL, spriteNum, -1, wallNum) < 0)
+            return;
+    }
+
+    if (pWall->overpicnum == MIRROR && pWall->pal != 4 &&
+        A_CheckSpriteFlags(spriteNum, SPRITE_PROJECTILE) &&
+        (ProjectileData[spriteNum].workslike & PROJECTILE_RPG))
+    {
+        if (pWall->nextwall == -1 || wall[pWall->nextwall].pal != 4)
         {
-            A_SpawnWallGlass(spr,dawallnum,70);
-            wal->cstat &= ~16;
-            wal->overpicnum = MIRRORBROKE;
-            A_PlaySound(GLASS_HEAVYBREAK,spr);
+#ifndef EDUKE32_STANDALONE
+            A_SpawnWallGlass(spriteNum, wallNum, 70);
+            A_PlaySound(GLASS_HEAVYBREAK, spriteNum);
+#endif
+            pWall->cstat &= ~16;
+            pWall->overpicnum = MIRRORBROKE;
             return;
         }
     }
 
-    if (wal->overpicnum == MIRROR && wal->pal != 4)
+    if (pWall->overpicnum == MIRROR && pWall->pal != 4)
     {
-        switch (DynamicTileMap[atwith])
+        switch (DynamicTileMap[weaponNum])
         {
-        case HEAVYHBOMB__STATIC:
         case RADIUSEXPLOSION__STATIC:
+        case SEENINE__STATIC:
+#ifndef EDUKE32_STANDALONE
+        case HEAVYHBOMB__STATIC:
         case RPG__STATIC:
         case HYDRENT__STATIC:
-        case SEENINE__STATIC:
         case OOZFILTER__STATIC:
         case EXPLODINGBARREL__STATIC:
-            if (wal->nextwall == -1 || wall[wal->nextwall].pal != 4)
+#endif
+            if (pWall->nextwall == -1 || wall[pWall->nextwall].pal != 4)
             {
-                A_SpawnWallGlass(spr,dawallnum,70);
-                wal->cstat &= ~16;
-                wal->overpicnum = MIRRORBROKE;
-                A_PlaySound(GLASS_HEAVYBREAK,spr);
+#ifndef EDUKE32_STANDALONE
+                A_SpawnWallGlass(spriteNum, wallNum, 70);
+                A_PlaySound(GLASS_HEAVYBREAK, spriteNum);
+#endif
+                pWall->cstat &= ~16;
+                pWall->overpicnum = MIRRORBROKE;
                 return;
             }
         }
     }
 
-    if (((wal->cstat&16) || wal->overpicnum == BIGFORCE) && wal->nextsector >= 0)
-        if (sector[wal->nextsector].floorz > z)
-            if (sector[wal->nextsector].floorz-sector[wal->nextsector].ceilingz)
+    if ((((pWall->cstat & 16) || pWall->overpicnum == BIGFORCE) && pWall->nextsector >= 0) &&
+        (sector[pWall->nextsector].floorz > vPos.z) &&
+        (sector[pWall->nextsector].floorz != sector[pWall->nextsector].ceilingz))
+    {
+        int const switchPic = G_GetForcefieldPicnum(wallNum);
+
+        switch (DynamicTileMap[switchPic])
+        {
+        case FANSPRITE__STATIC:
+            pWall->overpicnum = FANSPRITEBROKE;
+            pWall->cstat &= 65535 - 65;
+            if (pWall->nextwall >= 0)
             {
-                int switchpicnum = wal->overpicnum;
-                if ((switchpicnum > W_FORCEFIELD)&&(switchpicnum <= W_FORCEFIELD+2))
-                    switchpicnum = W_FORCEFIELD;
-                switch (DynamicTileMap[switchpicnum])
-                {
-                case W_FORCEFIELD__STATIC:
-                    //case W_FORCEFIELD+1:
-                    //case W_FORCEFIELD+2:
-                    wal->extra = 1; // tell the forces to animate
-                    fallthrough__;
+                wall[pWall->nextwall].overpicnum = FANSPRITEBROKE;
+                wall[pWall->nextwall].cstat &= 65535 - 65;
+            }
+            A_PlaySound(VENT_BUST, spriteNum);
+            A_PlaySound(GLASS_BREAKING, spriteNum);
+            return;
 
-                case BIGFORCE__STATIC:
-                    updatesector(x,y,&sn);
-                    if (sn < 0) return;
+#ifndef EDUKE32_STANDALONE
+        case W_FORCEFIELD__STATIC:
+            pWall->extra = 1;  // tell the forces to animate
+            fallthrough__;
+        case BIGFORCE__STATIC:
+        {
+            updatesector(vPos.x, vPos.y, &sectNum);
+            if (sectNum < 0)
+                return;
 
-                    if (atwith == -1)
-                        i = A_InsertSprite(sn,x,y,z,FORCERIPPLE,-127,8,8,0,0,0,spr,5);
-                    else
-                    {
-                        if (atwith == CHAINGUN)
-                            i = A_InsertSprite(sn,x,y,z,FORCERIPPLE,-127,16+sprite[spr].xrepeat,16+sprite[spr].yrepeat,0,0,0,spr,5);
-                        else i = A_InsertSprite(sn,x,y,z,FORCERIPPLE,-127,32,32,0,0,0,spr,5);
-                    }
+            int xRepeat = 32;
+            int yRepeat = 32;
 
-                    CS(i) |= 18+128;
-                    SA(i) = getangle(wal->x-wall[wal->point2].x,
-                                  wal->y-wall[wal->point2].y)-512;
-
-                    A_PlaySound(SOMETHINGHITFORCE,i);
-
-                    return;
-
-                case FANSPRITE__STATIC:
-                    wal->overpicnum = FANSPRITEBROKE;
-                    wal->cstat &= 65535-65;
-                    if (wal->nextwall >= 0)
-                    {
-                        wall[wal->nextwall].overpicnum = FANSPRITEBROKE;
-                        wall[wal->nextwall].cstat &= 65535-65;
-                    }
-                    A_PlaySound(VENT_BUST,spr);
-                    A_PlaySound(GLASS_BREAKING,spr);
-                    return;
-
-                case GLASS__STATIC:
-                    updatesector(x,y,&sn);
-                    if (sn < 0) return;
-                    wal->overpicnum=GLASS2;
-                    A_SpawnWallGlass(spr,dawallnum,10);
-                    wal->cstat = 0;
-
-                    if (wal->nextwall >= 0)
-                        wall[wal->nextwall].cstat = 0;
-
-                    i = A_InsertSprite(sn,x,y,z,SECTOREFFECTOR,0,0,0,fix16_to_int(g_player[0].ps->q16ang),0,0,spr,3);
-                    SLT(i) = 128;
-                    T2(i) = 5;
-                    T3(i) = dawallnum;
-                    A_PlaySound(GLASS_BREAKING,i);
-                    return;
-                case STAINGLASS1__STATIC:
-                    updatesector(x,y,&sn);
-                    if (sn < 0) return;
-                    A_SpawnRandomGlass(spr,dawallnum,80);
-                    wal->cstat = 0;
-                    if (wal->nextwall >= 0)
-                        wall[wal->nextwall].cstat = 0;
-                    A_PlaySound(VENT_BUST,spr);
-                    A_PlaySound(GLASS_BREAKING,spr);
-                    return;
-                }
+            if (weaponNum == -1)
+                xRepeat = yRepeat = 8;
+            else if (weaponNum == CHAINGUN)
+            {
+                xRepeat = 16 + sprite[spriteNum].xrepeat;
+                yRepeat = 16 + sprite[spriteNum].yrepeat;
             }
 
-    switch (DynamicTileMap[wal->picnum])
+            int const i = A_InsertSprite(sectNum, vPos.x, vPos.y, vPos.z, FORCERIPPLE, -127, xRepeat, yRepeat, 0,
+                0, 0, spriteNum, 5);
+
+            CS(i) |= 18 + 128;
+            SA(i) = getangle(pWall->x - wall[pWall->point2].x, pWall->y - wall[pWall->point2].y) - 512;
+
+            A_PlaySound(SOMETHINGHITFORCE, i);
+        }
+        return;
+
+        case GLASS__STATIC:
+            updatesector(vPos.x, vPos.y, &sectNum);
+            if (sectNum < 0)
+                return;
+            pWall->overpicnum = GLASS2;
+            A_SpawnWallGlass(spriteNum, wallNum, 10);
+            pWall->cstat = 0;
+
+            if (pWall->nextwall >= 0)
+                wall[pWall->nextwall].cstat = 0;
+
+            {
+                int const i = A_InsertSprite(sectNum, vPos.x, vPos.y, vPos.z, SECTOREFFECTOR, 0, 0, 0,
+                    fix16_to_int(g_player[0].ps->q16ang), 0, 0, spriteNum, 3);
+                SLT(i) = 128;
+                T2(i) = 5;
+                T3(i) = wallNum;
+                A_PlaySound(GLASS_BREAKING, i);
+            }
+            return;
+
+        case STAINGLASS1__STATIC:
+            updatesector(vPos.x, vPos.y, &sectNum);
+            if (sectNum < 0)
+                return;
+            A_SpawnRandomGlass(spriteNum, wallNum, 80);
+            pWall->cstat = 0;
+            if (pWall->nextwall >= 0)
+                wall[pWall->nextwall].cstat = 0;
+            A_PlaySound(VENT_BUST, spriteNum);
+            A_PlaySound(GLASS_BREAKING, spriteNum);
+            return;
+#endif
+        }
+    }
+
+    switch (DynamicTileMap[pWall->picnum])
     {
     case COLAMACHINE__STATIC:
     case VENDMACHINE__STATIC:
-        BreakWall(wal->picnum+2,spr,dawallnum);
-        A_PlaySound(VENT_BUST,spr);
+        G_BreakWall(pWall->picnum + 2, spriteNum, wallNum);
+        A_PlaySound(VENT_BUST, spriteNum);
         return;
 
     case OJ__STATIC:
@@ -1760,10 +1805,11 @@ void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith)
     case SCREENBREAK18__STATIC:
     case SCREENBREAK19__STATIC:
     case BORNTOBEWILDSCREEN__STATIC:
-
-        A_SpawnWallGlass(spr,dawallnum,30);
-        wal->picnum=W_SCREENBREAK+(krand()%3);
-        A_PlaySound(GLASS_HEAVYBREAK,spr);
+#ifndef EDUKE32_STANDALONE
+        A_SpawnWallGlass(spriteNum, wallNum, 30);
+        A_PlaySound(GLASS_HEAVYBREAK, spriteNum);
+#endif
+        pWall->picnum = W_SCREENBREAK + (krand() % 3);
         return;
 
     case W_TECHWALL5__STATIC:
@@ -1771,14 +1817,15 @@ void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith)
     case W_TECHWALL7__STATIC:
     case W_TECHWALL8__STATIC:
     case W_TECHWALL9__STATIC:
-        BreakWall(wal->picnum+1,spr,dawallnum);
+        G_BreakWall(pWall->picnum + 1, spriteNum, wallNum);
         return;
+
     case W_MILKSHELF__STATIC:
-        BreakWall(W_MILKSHELFBROKE,spr,dawallnum);
+        G_BreakWall(W_MILKSHELFBROKE, spriteNum, wallNum);
         return;
 
     case W_TECHWALL10__STATIC:
-        BreakWall(W_HITTECHWALL10,spr,dawallnum);
+        G_BreakWall(W_HITTECHWALL10, spriteNum, wallNum);
         return;
 
     case W_TECHWALL1__STATIC:
@@ -1786,33 +1833,33 @@ void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith)
     case W_TECHWALL12__STATIC:
     case W_TECHWALL13__STATIC:
     case W_TECHWALL14__STATIC:
-        BreakWall(W_HITTECHWALL1,spr,dawallnum);
+        G_BreakWall(W_HITTECHWALL1, spriteNum, wallNum);
         return;
 
     case W_TECHWALL15__STATIC:
-        BreakWall(W_HITTECHWALL15,spr,dawallnum);
+        G_BreakWall(W_HITTECHWALL15, spriteNum, wallNum);
         return;
 
     case W_TECHWALL16__STATIC:
-        BreakWall(W_HITTECHWALL16,spr,dawallnum);
+        G_BreakWall(W_HITTECHWALL16, spriteNum, wallNum);
         return;
 
     case W_TECHWALL2__STATIC:
-        BreakWall(W_HITTECHWALL2,spr,dawallnum);
+        G_BreakWall(W_HITTECHWALL2, spriteNum, wallNum);
         return;
 
     case W_TECHWALL3__STATIC:
-        BreakWall(W_HITTECHWALL3,spr,dawallnum);
+        G_BreakWall(W_HITTECHWALL3, spriteNum, wallNum);
         return;
 
     case W_TECHWALL4__STATIC:
-        BreakWall(W_HITTECHWALL4,spr,dawallnum);
+        G_BreakWall(W_HITTECHWALL4, spriteNum, wallNum);
         return;
 
     case ATM__STATIC:
-        wal->picnum = ATMBROKE;
-        A_SpawnMultiple(spr, MONEY, 1+(krand()&7));
-        A_PlaySound(GLASS_HEAVYBREAK,spr);
+        pWall->picnum = ATMBROKE;
+        A_SpawnMultiple(spriteNum, MONEY, 1 + (krand() & 7));
+        A_PlaySound(GLASS_HEAVYBREAK, spriteNum);
         break;
 
     case WALLLIGHT1__STATIC:
@@ -1821,55 +1868,65 @@ void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith)
     case WALLLIGHT4__STATIC:
     case TECHLIGHT2__STATIC:
     case TECHLIGHT4__STATIC:
+    {
+#ifndef EDUKE32_STANDALONE
+        A_PlaySound(rnd(128) ? GLASS_HEAVYBREAK : GLASS_BREAKING, spriteNum);
+        A_SpawnWallGlass(spriteNum, wallNum, 30);
+#endif
 
-        if (rnd(128))
-            A_PlaySound(GLASS_HEAVYBREAK,spr);
-        else A_PlaySound(GLASS_BREAKING,spr);
-        A_SpawnWallGlass(spr,dawallnum,30);
+        if (pWall->picnum == WALLLIGHT1)
+            pWall->picnum = WALLLIGHTBUST1;
 
-        if (wal->picnum == WALLLIGHT1)
-            wal->picnum = WALLLIGHTBUST1;
+        if (pWall->picnum == WALLLIGHT2)
+            pWall->picnum = WALLLIGHTBUST2;
 
-        if (wal->picnum == WALLLIGHT2)
-            wal->picnum = WALLLIGHTBUST2;
+        if (pWall->picnum == WALLLIGHT3)
+            pWall->picnum = WALLLIGHTBUST3;
 
-        if (wal->picnum == WALLLIGHT3)
-            wal->picnum = WALLLIGHTBUST3;
+        if (pWall->picnum == WALLLIGHT4)
+            pWall->picnum = WALLLIGHTBUST4;
 
-        if (wal->picnum == WALLLIGHT4)
-            wal->picnum = WALLLIGHTBUST4;
+        if (pWall->picnum == TECHLIGHT2)
+            pWall->picnum = TECHLIGHTBUST2;
 
-        if (wal->picnum == TECHLIGHT2)
-            wal->picnum = TECHLIGHTBUST2;
+        if (pWall->picnum == TECHLIGHT4)
+            pWall->picnum = TECHLIGHTBUST4;
 
-        if (wal->picnum == TECHLIGHT4)
-            wal->picnum = TECHLIGHTBUST4;
+        if (pWall->lotag == 0)
+            return;
 
-        if (!wal->lotag) return;
+        sectNum = pWall->nextsector;
 
-        sn = wal->nextsector;
-        if (sn < 0) return;
-        darkestwall = 0;
+        if (sectNum < 0)
+            return;
 
-        wal = &wall[sector[sn].wallptr];
-        for (i=sector[sn].wallnum;i > 0;i--,wal++)
-            if (wal->shade > darkestwall)
-                darkestwall=wal->shade;
+        int darkestWall = 0;
 
-        j = krand()&1;
-        i= headspritestat[STAT_EFFECTOR];
-        while (i >= 0)
-        {
-            if (SHT(i) == wall[dawallnum].lotag && SLT(i) == 3)
+        pWall = &wall[sector[sectNum].wallptr];
+
+        for (bssize_t i = sector[sectNum].wallnum; i > 0; i--, pWall++)
+            if (pWall->shade > darkestWall)
+                darkestWall = pWall->shade;
+
+        int const random = krand() & 1;
+
+        for (bssize_t SPRITES_OF(STAT_EFFECTOR, i))
+            if (SHT(i) == wall[wallNum].lotag && SLT(i) == SE_3_RANDOM_LIGHTS_AFTER_SHOT_OUT)
             {
-                T3(i) = j;
-                T4(i) = darkestwall;
+                T3(i) = random;
+                T4(i) = darkestWall;
                 T5(i) = 1;
             }
-            i = nextspritestat[i];
-        }
+
         break;
     }
+    }
+}
+
+void A_DamageWall(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum)
+{
+    ud.returnvar[0] = -1;
+    A_DamageWall_Internal(spriteNum, wallNum, vPos, weaponNum);
 }
 
 void P_CheckTouchDamage(DukePlayer_t *p,int j)
@@ -1925,95 +1982,102 @@ void P_CheckTouchDamage(DukePlayer_t *p,int j)
             A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
 
             A_DamageWall(p->i,j,
-                         p->pos.x+(sintable[(fix16_to_int(p->q16ang)+512)&2047]>>9),
-                         p->pos.y+(sintable[fix16_to_int(p->q16ang)&2047]>>9),
-                         p->pos.z,-1);
+                { p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 9),
+                  p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 9),
+                  p->pos.z }, -1);
 
             break;
 
         case BIGFORCE__STATIC:
             p->hurt_delay = 26;
             A_DamageWall(p->i,j,
-                         p->pos.x+(sintable[(fix16_to_int(p->q16ang)+512)&2047]>>9),
-                         p->pos.y+(sintable[fix16_to_int(p->q16ang)&2047]>>9),
-                         p->pos.z,-1);
+                { p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 9),
+                  p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 9),
+                  p->pos.z }, -1);
             break;
 
         }
     }
 }
 
-int Sect_DamageCeiling(int sn)
+void Sect_DamageFloor_Internal(int const spriteNum, int const sectNum)
 {
-    int i, j;
-
-    switch (DynamicTileMap[sector[sn].ceilingpicnum])
+    int16_t tileNum = sector[sectNum].floorpicnum;
+    if (SpriteFlags[tileNum] & SPRITE_DAMAGEEVENT)
     {
-    case WALLLIGHT1__STATIC:
-    case WALLLIGHT2__STATIC:
-    case WALLLIGHT3__STATIC:
-    case WALLLIGHT4__STATIC:
-    case TECHLIGHT2__STATIC:
-    case TECHLIGHT4__STATIC:
+        if (X_OnEventWithReturn(EVENT_DAMAGEFLOOR, spriteNum, -1, sectNum) < 0)
+            return;
+    }
+}
 
-        A_SpawnCeilingGlass(g_player[myconnectindex].ps->i,sn,10);
-        A_PlaySound(GLASS_BREAKING,g_player[screenpeek].ps->i);
+void Sect_DamageFloor(int const spriteNum, int const sectNum)
+{
+    ud.returnvar[0] = -1;
+    Sect_DamageFloor_Internal(spriteNum, sectNum);
+}
 
-        if (sector[sn].ceilingpicnum == WALLLIGHT1)
-            sector[sn].ceilingpicnum = WALLLIGHTBUST1;
+void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
+{
+    int16_t tileNum = sector[sectNum].ceilingpicnum;
+    if (SpriteFlags[tileNum] & SPRITE_DAMAGEEVENT)
+    {
+        if (X_OnEventWithReturn(EVENT_DAMAGECEILING, spriteNum, -1, sectNum) < 0)
+            return;
+    }
 
-        if (sector[sn].ceilingpicnum == WALLLIGHT2)
-            sector[sn].ceilingpicnum = WALLLIGHTBUST2;
+#ifndef EDUKE32_STANDALONE
+    int16_t* const pPicnum = &sector[sectNum].ceilingpicnum;
+#endif
 
-        if (sector[sn].ceilingpicnum == WALLLIGHT3)
-            sector[sn].ceilingpicnum = WALLLIGHTBUST3;
-
-        if (sector[sn].ceilingpicnum == WALLLIGHT4)
-            sector[sn].ceilingpicnum = WALLLIGHTBUST4;
-
-        if (sector[sn].ceilingpicnum == TECHLIGHT2)
-            sector[sn].ceilingpicnum = TECHLIGHTBUST2;
-
-        if (sector[sn].ceilingpicnum == TECHLIGHT4)
-            sector[sn].ceilingpicnum = TECHLIGHTBUST4;
-
-
-        if (!sector[sn].hitag)
+#ifndef EDUKE32_STANDALONE
+    switch (DynamicTileMap[*pPicnum])
+    {
+    case WALLLIGHT1__STATIC: *pPicnum = WALLLIGHTBUST1; goto GLASSBREAK_CODE;
+    case WALLLIGHT2__STATIC: *pPicnum = WALLLIGHTBUST2; goto GLASSBREAK_CODE;
+    case WALLLIGHT3__STATIC: *pPicnum = WALLLIGHTBUST3; goto GLASSBREAK_CODE;
+    case WALLLIGHT4__STATIC: *pPicnum = WALLLIGHTBUST4; goto GLASSBREAK_CODE;
+    case TECHLIGHT2__STATIC: *pPicnum = TECHLIGHTBUST2; goto GLASSBREAK_CODE;
+    case TECHLIGHT4__STATIC: *pPicnum = TECHLIGHTBUST4;
+#else
+    if (0)
+    {
+#endif
+    GLASSBREAK_CODE:
+#ifndef EDUKE32_STANDALONE
+        A_SpawnCeilingGlass(g_player[myconnectindex].ps->i, sectNum, 10);
+        A_PlaySound(GLASS_BREAKING, g_player[screenpeek].ps->i);
+#endif
+        if (sector[sectNum].hitag == 0)
         {
-            i = headspritesect[sn];
-            while (i >= 0)
+            for (bssize_t SPRITES_OF_SECT(sectNum, i))
             {
-                if (PN(i) == SECTOREFFECTOR && SLT(i) == 12)
+                if (PN(i) == SECTOREFFECTOR && SLT(i) == SE_12_LIGHT_SWITCH)
                 {
-                    j = headspritestat[STAT_EFFECTOR];
-                    while (j >= 0)
-                    {
+                    for (bssize_t SPRITES_OF(STAT_EFFECTOR, j))
                         if (sprite[j].hitag == SHT(i))
                             ActorExtra[j].temp_data[3] = 1;
-                        j = nextspritestat[j];
-                    }
                     break;
                 }
-                i = nextspritesect[i];
             }
         }
 
-        i = headspritestat[STAT_EFFECTOR];
-        j = krand()&1;
-        while (i >= 0)
+        int j = krand() & 1;
+
+        for (bssize_t SPRITES_OF(STAT_EFFECTOR, i))
         {
-            if (SHT(i) == (sector[sn].hitag) && SLT(i) == 3)
+            if (SHT(i) == sector[sectNum].hitag && SLT(i) == SE_3_RANDOM_LIGHTS_AFTER_SHOT_OUT)
             {
                 T3(i) = j;
                 T5(i) = 1;
             }
-            i = nextspritestat[i];
         }
-
-        return 1;
     }
+}
 
-    return 0;
+void Sect_DamageCeiling(int const spriteNum, int const sectNum)
+{
+    ud.returnvar[0] = -1;
+    Sect_DamageCeiling_Internal(spriteNum, sectNum);
 }
 
 // hard coded props... :(

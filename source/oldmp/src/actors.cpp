@@ -350,12 +350,12 @@ void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
             {
                 d = klabs(wall[sector[dasect].wallptr].x-s->x)+klabs(wall[sector[dasect].wallptr].y-s->y);
                 if (d < r)
-                    Sect_DamageCeiling(dasect);
+                    Sect_DamageCeiling(i, dasect);
                 else
                 {
                     d = klabs(wall[wall[wall[sector[dasect].wallptr].point2].point2].x-s->x)+klabs(wall[wall[wall[sector[dasect].wallptr].point2].point2].y-s->y);
                     if (d < r)
-                        Sect_DamageCeiling(dasect);
+                        Sect_DamageCeiling(i, dasect);
                 }
             }
 
@@ -375,7 +375,7 @@ void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
                     y1 = (((wal->y+wall[wal->point2].y)>>1)+s->y)>>1;
                     updatesector(x1,y1,&sect);
                     if (sect >= 0 && cansee(x1,y1,s->z,sect,s->x,s->y,s->z,s->sectnum))
-                        A_DamageWall(i,x,wal->x,wal->y,s->z,s->picnum);
+                        A_DamageWall(i, x, { wal->x, wal->y, s->z }, s->picnum);
                 }
         }
         while (sectcnt < sectend);
@@ -2751,7 +2751,7 @@ static void G_MoveWeapons(void)
                         else
                         {
                             setspritez_old(i,dax,day,daz);
-                            A_DamageWall(i,j,s->x,s->y,s->z,s->picnum);
+                            A_DamageWall(i,j,s->pos,s->picnum);
 
                             if (ActorExtra[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
                             {
@@ -2784,7 +2784,7 @@ static void G_MoveWeapons(void)
                             if (sector[s->sectnum].ceilingstat&1 && sector[s->sectnum].ceilingpal == 0)
                                 KILLIT(i);
 
-                            Sect_DamageCeiling(s->sectnum);
+                            Sect_DamageCeiling(i, s->sectnum);
                         }
 
                         if (ActorExtra[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
@@ -3042,7 +3042,7 @@ static void G_MoveWeapons(void)
                         else
                         {
                             setspritez_old(i,dax,day,daz);
-                            A_DamageWall(i,j,s->x,s->y,s->z,s->picnum);
+                            A_DamageWall(i,j,s->pos,s->picnum);
 
                             if (s->picnum == FREEZEBLAST)
                             {
@@ -3070,7 +3070,7 @@ static void G_MoveWeapons(void)
                                 if (sector[s->sectnum].ceilingpal == 0)
                                     KILLIT(i);
 
-                            Sect_DamageCeiling(s->sectnum);
+                            Sect_DamageCeiling(i, s->sectnum);
                         }
 
                         if (s->picnum == FREEZEBLAST)
@@ -4537,7 +4537,7 @@ static void G_MoveActors(void)
             {
                 j &= (MAXWALLS-1);
 
-                A_DamageWall(i,j,s->x,s->y,s->z,s->picnum);
+                A_DamageWall(i,j,s->pos,s->picnum);
 
                 k = getangle(
                         wall[wall[j].point2].x-wall[j].x,

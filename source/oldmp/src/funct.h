@@ -57,9 +57,16 @@ extern void G_OperateMasterSwitches(int low);
 extern void G_OperateForceFields(int s,int low);
 extern int P_ActivateSwitch(int snum,int w,int switchtype);
 extern void activatebysector(int sect,int j);
-extern void A_DamageWall(int spr,int dawallnum,int x,int y,int z,int atwith);
 extern void P_CheckTouchDamage(DukePlayer_t *p,int j);
-extern int Sect_DamageCeiling(int sn);
+
+// [JM] I should make a sector.h
+extern void A_DamageWall(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum);
+extern void Sect_DamageFloor(int const spriteNum, int const sectNum);
+extern void Sect_DamageFloor_Internal(int const spriteNum, int const sectNum);
+extern void Sect_DamageCeiling(int const spriteNum, int const sectNum);
+extern void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum);
+
+
 extern void A_DamageObject_Internal(int i,int sn);
 extern void A_DamageObject(int i, int sn);
 extern void allignwarpelevators(void);
