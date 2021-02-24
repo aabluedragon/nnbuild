@@ -1192,7 +1192,6 @@ int A_Shoot(int i,int atwith)
 
             if (p >= 0)
             {
-                //            j = A_FindTargetSprite( s, AUTO_AIM_ANGLE ); // 48
                 Gv_SetVar(g_aimAngleVarID,AUTO_AIM_ANGLE,i,p);
                 X_OnEvent(EVENT_GETAUTOAIMANGLE, i, p, -1);
                 j=-1;
@@ -1213,7 +1212,6 @@ int A_Shoot(int i,int atwith)
                     if (sprite[j].picnum != RECON)
                         shootAng = getangle(sprite[j].x-spos.x,sprite[j].y-spos.y);
                 }
-                //                else zvel = (100-g_player[p].ps->q16horiz-g_player[p].ps->q16horizoff)*81;
                 else zvel = fix16_to_int(F16(100)-g_player[p].ps->q16horiz-g_player[p].ps->q16horizoff)*(pProj->vel/8);
 
                 if (pProj->sound >= 0)
@@ -1242,10 +1240,6 @@ int A_Shoot(int i,int atwith)
                 l = j;
             else l = -1;
 
-            /*                        j = A_InsertSprite(sect,
-                                            sx+(sintable[(348+shootAng+512)&2047]/448),
-                                            sy+(sintable[(shootAng+348)&2047]/448),
-                                            sz-(1<<8),atwith,0,14,14,shootAng,vel,zvel,i,4);*/
             if (ActorExtra[i].temp_data[9]) zvel = ActorExtra[i].temp_data[9];
             j = A_InsertSprite(sect,
                                spos.x+(sintable[(348+shootAng+512)&2047]/pProj->offset),
@@ -1258,27 +1252,19 @@ int A_Shoot(int i,int atwith)
 
             if (pProj->extra_rand > 0)
                 sprite[j].extra += (krand()&pProj->extra_rand);
+
             if (!(pProj->workslike & PROJECTILE_BOUNCESOFFWALLS))
                 sprite[j].yvel = l;
             else
             {
-                if (pProj->bounces >= 1) sprite[j].yvel = pProj->bounces;
-                else sprite[j].yvel = g_numFreezeBounces;
-                //                sprite[j].xrepeat >>= 1;
-                //                sprite[j].yrepeat >>= 1;
+                if (pProj->bounces >= 1)
+                    sprite[j].yvel = pProj->bounces;
+                else
+                    sprite[j].yvel = g_numFreezeBounces;
+
                 sprite[j].zvel -= (2<<4);
             }
-            /*
-                        if(p == -1)
-                        {
-                            if(!(pProj->workslike & PROJECTILE_BOUNCESOFFWALLS))
-                            {
-                                sprite[j].xrepeat = pProj->xrepeat; // 30
-                                sprite[j].yrepeat = pProj->yrepeat;
-                                sprite[j].extra >>= 2;
-                            }
-                        }
-            */
+
             if (pProj->cstat >= 0) sprite[j].cstat = pProj->cstat;
             else sprite[j].cstat = 128;
             if (pProj->clipdist >= 0) sprite[j].clipdist = pProj->clipdist;
