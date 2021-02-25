@@ -3584,16 +3584,10 @@ static int X_DoExecute(void)
             // syntax [gs]etuserdef.xxx <VAR>
             //  <xxxid> <varid>
             int lLabelID = *insptr++;
-            int lParm2, lVar2;
+            int lParm2 = 0, lVar2;
 
             if (UserdefsLabels[lLabelID].flags & LABEL_HASPARM2)
-            {
                 lParm2 = Gv_GetVarX(*insptr++);
-            }
-            else
-            {
-                lParm2 = 0;
-            }
 
             lVar2=*insptr++;
 

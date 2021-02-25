@@ -3404,7 +3404,7 @@ static int C_ParseCommand(void)
         }
 
         bitptr[(g_scriptPtr - script) >> 3] &= ~(1 << ((g_scriptPtr - script) & 7));
-        *g_scriptPtr++ = InputLabels[lLabelID].lId;
+        *g_scriptPtr++ = TileDataLabels[lLabelID].lId;
 
         // now at target VAR...
 
@@ -3445,17 +3445,19 @@ static int C_ParseCommand(void)
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
 
-        lLabelID=GetLabelNameid(UserdefsLabels,&userdefH,Bstrtolower(label+(g_numLabels<<6)));
-
+        lLabelID = C_GetLabelNameOffset(&userdefH, Bstrtolower(label + (g_numLabels << 6)));
+        //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
             g_numCompilerErrors++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
-        *g_scriptPtr++=lLabelID;
 
+        bitptr[(g_scriptPtr - script) >> 3] &= ~(1 << ((g_scriptPtr - script) & 7));
+        *g_scriptPtr++ = UserdefsLabels[lLabelID].lId;
+
+        //printf("member's flags are: %02Xh\n",UserdefsLabels[lLabelID].flags);
         if (UserdefsLabels[lLabelID].flags & LABEL_HASPARM2)
         {
             //printf("Member has PARM2\n");
@@ -3471,7 +3473,7 @@ static int C_ParseCommand(void)
         // now at target VAR...
 
         // get the ID of the DEF
-        if (tw==CON_GETUSERDEF)
+        if (tw == CON_GETUSERDEF)
             C_GetNextVarType(GAMEVAR_READONLY);
         else
             C_GetNextVar();

@@ -122,14 +122,6 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
 {
     int lValue=0;
 
-    if (g_p != myconnectindex)
-    {
-//        if (lVar2 == MAXGAMEVARS)
-//            insptr++;
-        insptr += (lVar2 == MAXGAMEVARS);
-        return;
-    }
-
     if ((UserdefsLabels[lLabelID].flags & LABEL_HASPARM2 && (lParm2 < 0 || lParm2 >= UserdefsLabels[lLabelID].maxParm2)) && g_scriptSanityChecks)
     {
         OSD_Printf(CON_ERROR "tried to %s invalid %s position %d from spr %d\n", g_errorLineNum, keyw[g_tw],
@@ -1005,6 +997,7 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
         return;
 
     case USERDEFS_RETURN:
+        OSD_Printf("ReturnVar lParm2: %d Set: %d\n", lParm2, iSet);
         if (lParm2 == 0)
         {
             if (iSet)
