@@ -328,6 +328,12 @@ void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
                       };
     short *tempshort = (short *)tempbuf;
 
+    bool additiveDamage = false;
+    if (r < 0)
+        additiveDamage = true;
+
+    r = klabs(r);
+
     ud.returnvar[0] = r; // Allow checking for radius damage in EVENT_DAMAGE(SPRITE/WALL/FLOOR/CEILING) events.
     ud.returnvar[1] = hp1;
     ud.returnvar[2] = hp2;
@@ -447,21 +453,28 @@ SKIPWALLCHECK:
                     if (s->picnum != SHRINKSPARK)
                     {
                         k = (r/3);
+                        int16_t damage = 0;
+
                         if (d < k)
                         {
                             if (hp4 == hp3) hp4++;
-                            ActorExtra[j].extra = hp3 + (krand()%(hp4-hp3));
+                            damage = hp3 + (krand()%(hp4-hp3));
                         }
                         else if (d < (k*2))
                         {
                             if (hp3 == hp2) hp3++;
-                            ActorExtra[j].extra = hp2 + (krand()%(hp3-hp2));
+                            damage = hp2 + (krand()%(hp3-hp2));
                         }
                         else if (d < r)
                         {
                             if (hp2 == hp1) hp2++;
-                            ActorExtra[j].extra = hp1 + (krand()%(hp2-hp1));
+                            damage = hp1 + (krand()%(hp2-hp1));
                         }
+
+                        if (additiveDamage)
+                            ActorExtra[j].extra += damage;
+                        else
+                            ActorExtra[j].extra = damage;
 
                         if (sprite[j].picnum != TANK && sprite[j].picnum != ROTATEGUN && sprite[j].picnum != RECON && sprite[j].picnum != BOSS1 && sprite[j].picnum != BOSS2 && sprite[j].picnum != BOSS3 && sprite[j].picnum != BOSS4)
                         {
