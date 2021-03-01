@@ -474,7 +474,7 @@ static int GetAutoAimAng(int spriteNum, int playerNum, int projecTile, int zAdju
 static int Proj_InsertShotspark(const hitdata_t* hitData, int spriteNum, int projecTile, int sparkSize, int sparkAng, int damage)
 {
     int returnSprite = A_InsertSprite(hitData->sect, hitData->pos.x, hitData->pos.y, hitData->pos.z, SHOTSPARK1, -15,
-        sparkSize, sparkSize, sparkAng, 0, 0, spriteNum, 4);
+        sparkSize, sparkSize, sparkAng, 0, 0, spriteNum, STAT_PROJECTILE);
 
     sprite[returnSprite].extra = damage;
     sprite[returnSprite].yvel = projecTile;  // This is a hack to allow you to detect which weapon spawned a SHOTSPARK1
@@ -484,7 +484,7 @@ static int Proj_InsertShotspark(const hitdata_t* hitData, int spriteNum, int pro
     return returnSprite;
 }
 
-static int Proj_GetDamage(projectile_t* pProj)
+int Proj_GetDamage(projectile_t* pProj)
 {
     Bassert(pProj);
 
@@ -1179,105 +1179,58 @@ int A_Shoot(int i,int atwith)
 
         if (pProj->workslike & PROJECTILE_RPG)
         {
-
-            /*            if(pProj->workslike & PROJECTILE_FREEZEBLAST)
-                            sz += (3<<8);*/
-
-            if (s->extra >= 0) s->shade = pProj->shade;
-
-            scount = 1;
-            vel = pProj->vel;
-
-            j = -1;
+            if (s->extra >= 0)
+                s->shade = pProj->shade;
 
             if (p >= 0)
             {
-                Gv_SetVar(g_aimAngleVarID,AUTO_AIM_ANGLE,i,p);
-                X_OnEvent(EVENT_GETAUTOAIMANGLE, i, p, -1);
-                j=-1;
-                if (Gv_GetVar(g_aimAngleVarID,i,p) > 0)
-                {
-                    j = A_FindTargetSprite(s, Gv_GetVar(g_aimAngleVarID,i,p),atwith);
-                }
-                if (j >= 0)
-                {
-                    dal = ((sprite[j].yrepeat*tilesiz[sprite[j].picnum].y)<<1)+(8<<8);
-                    hit.pos.x = ldist(&sprite[g_player[p].ps->i], &sprite[j]);
+                // NOTE: j is a SPRITE_INDEX
+                j = GetAutoAimAng(i, p, atwith, 8 << 8, 0 + 2, &spos, pProj->vel, &zvel, &shootAng);
 
-                    if (hit.pos.x == 0)
-                        hit.pos.x++;
-
-                    zvel = ((sprite[j].z-spos.z-dal)*vel) / hit.pos.x;
-
-                    if (sprite[j].picnum != RECON)
-                        shootAng = getangle(sprite[j].x-spos.x,sprite[j].y-spos.y);
-                }
-                else zvel = fix16_to_int(F16(100)-g_player[p].ps->q16horiz-g_player[p].ps->q16horizoff)*(pProj->vel/8);
+                if (j < 0)
+                    zvel = fix16_to_int(F16(100) - g_player[p].ps->q16horiz - g_player[p].ps->q16horizoff) * (pProj->vel / 8);
 
                 if (pProj->sound >= 0)
-                    A_PlaySound(pProj->sound,i);
+                    A_PlaySound(pProj->sound, i);
             }
             else
             {
                 if (!(pProj->workslike & PROJECTILE_NOAIM))
                 {
-                    j = A_FindPlayer(s,&x);
-                    shootAng = getangle(g_player[j].ps->opos.x-spos.x,g_player[j].ps->opos.y-spos.y);
+                    int const otherPlayer = A_FindPlayer(s, NULL);
+                    int const otherPlayerDist = safeldist(g_player[otherPlayer].ps->i, s);
 
-                    l = ldist(&sprite[g_player[j].ps->i],s);
-                    if (l == 0)
-                        l++;
-                    zvel = ((g_player[j].ps->opos.z-spos.z)*vel) / l;
+                    shootAng = getangle(g_player[otherPlayer].ps->opos.x - spos.x,
+                        g_player[otherPlayer].ps->opos.y - spos.y);
 
-                    if (A_CheckEnemySprite(s) && (s->hitag&face_player_smart))
-                        shootAng = s->ang+(krand()&31)-16;
+                    zvel = tabledivide32_noinline((g_player[otherPlayer].ps->opos.z - spos.z) * pProj->vel, otherPlayerDist);
+
+                    if (A_CheckEnemySprite(s) && (s->hitag & face_player_smart))
+                        shootAng = s->ang + (krand() & 31) - 16;
                 }
             }
 
+            // l may be a SPRITE_INDEX, see above
+            int const l = (p >= 0 && j >= 0) ? j : -1;
 
+            zvel = A_GetShootZvel(zvel);
+            j = A_InsertSprite(s->sectnum,
+                spos.x + tabledivide32_noinline(sintable[(348 + shootAng + 512) & 2047], pProj->offset),
+                spos.y + tabledivide32_noinline(sintable[(shootAng + 348) & 2047], pProj->offset),
+                spos.z - (1 << 8), atwith, 0, pProj->xrepeat, pProj->yrepeat, shootAng, pProj->vel, zvel, i, 4);
 
-            if (p >= 0 && j >= 0)
-                l = j;
-            else l = -1;
-
-            if (ActorExtra[i].temp_data[9]) zvel = ActorExtra[i].temp_data[9];
-            j = A_InsertSprite(sect,
-                               spos.x+(sintable[(348+shootAng+512)&2047]/pProj->offset),
-                               spos.y+(sintable[(shootAng+348)&2047]/pProj->offset),
-                               spos.z-(1<<8),atwith,0,14,14,shootAng,vel,zvel,i,4);
-
-            sprite[j].xrepeat=pProj->xrepeat;
-            sprite[j].yrepeat=pProj->yrepeat;
-
-
-            if (pProj->extra_rand > 0)
-                sprite[j].extra += (krand()&pProj->extra_rand);
+            sprite[j].extra = Proj_GetDamage(pProj);
 
             if (!(pProj->workslike & PROJECTILE_BOUNCESOFFWALLS))
-                sprite[j].yvel = l;
+                sprite[j].yvel = l;  // NOT_BOUNCESOFFWALLS_YVEL
             else
             {
-                if (pProj->bounces >= 1)
-                    sprite[j].yvel = pProj->bounces;
-                else
-                    sprite[j].yvel = g_numFreezeBounces;
-
-                sprite[j].zvel -= (2<<4);
+                sprite[j].yvel = (pProj->bounces >= 1) ? pProj->bounces : g_numFreezeBounces;
+                sprite[j].zvel -= (2 << 4);
             }
-
-            if (pProj->cstat >= 0) sprite[j].cstat = pProj->cstat;
-            else sprite[j].cstat = 128;
-            if (pProj->clipdist >= 0) sprite[j].clipdist = pProj->clipdist;
-            else sprite[j].clipdist = 40;
-
-            Bmemcpy(&ActorExtra[j].projectile, &ProjectileData[sprite[j].picnum], sizeof(ProjectileData[sprite[j].picnum]));
-
-            //            shootAng = s->ang+32-(krand()&63);
-            //            zvel = oldzvel+512-(krand()&1023);
 
             return j;
         }
-
     }
     else
     {

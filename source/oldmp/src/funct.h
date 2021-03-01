@@ -176,6 +176,7 @@ extern uint8_t playerColor_getPreviousColor(uint8_t palnum, uint8_t useauto);
 
 extern void P_SetWeaponGamevars(int playerNum, const DukePlayer_t* const pPlayer);
 extern void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer);
+extern int Proj_GetDamage(projectile_t* pProj);
 
 // game.cpp
 extern int mpgametext(int y, const char *t, int s, int dabits);

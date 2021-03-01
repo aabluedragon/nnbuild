@@ -2476,12 +2476,64 @@ static void G_WeaponHitCeilingOrFloor(int32_t i, spritetype* s, int* j)
     }
 }
 
+static void P_HandleBeingSpitOn(DukePlayer_t* const ps)
+{
+    ps->q16horiz += F16(32);
+    ps->return_to_center = 8;
+
+    if (ps->loogcnt)
+        return;
+
+    if (!A_CheckSoundPlaying(ps->i, DUKE_LONGTERM_PAIN))
+        A_PlaySound(DUKE_LONGTERM_PAIN, ps->i);
+
+    int j = 3 + (krand() & 3);
+    ps->numloogs = j;
+    ps->loogcnt = 24 * 4;
+    for (bssize_t x = 0; x < j; x++)
+    {
+        ps->loogiex[x] = krand() % xdim;
+        ps->loogiey[x] = krand() % ydim;
+    }
+}
+
+static void A_DoProjectileEffects(int spriteNum, const vec3_t* davect, int radiusDamage)
+{
+    auto const pProj = &ActorExtra[spriteNum].projectile;
+
+    if (pProj->spawns >= 0)
+    {
+        int const newSpr = A_Spawn(spriteNum, pProj->spawns);
+
+        if (davect)
+            Bmemcpy(&sprite[newSpr].pos, davect, sizeof(vec3_t));
+
+        if (pProj->sxrepeat > 4)
+            sprite[newSpr].xrepeat = pProj->sxrepeat;
+        if (pProj->syrepeat > 4)
+            sprite[newSpr].yrepeat = pProj->syrepeat;
+    }
+
+    if (pProj->isound >= 0)
+        A_PlaySound(pProj->isound, spriteNum);
+
+    if (!radiusDamage)
+        return;
+
+    auto const pSprite = &sprite[spriteNum];
+    pSprite->extra = Proj_GetDamage(pProj);
+    int const dmg = pSprite->extra;
+    A_RadiusDamage(spriteNum, pProj->hitradius, dmg >> 2, dmg >> 1, dmg - (dmg >> 2), dmg);
+}
+
 static void G_MoveWeapons(void)
 {
     int i = headspritestat[STAT_PROJECTILE], j=0, k, f, nexti, p, q;
-    int dax,day,daz, x, ll;
+    int x, ll;
     unsigned int qq;
     spritetype *s;
+
+    vec3_t davect;
 
     while (i >= 0)
     {
@@ -2533,9 +2585,7 @@ static void G_MoveWeapons(void)
                     ll = s->zvel>>1;
                 }
 
-                dax = s->x;
-                day = s->y;
-                daz = s->z;
+                davect = s->pos;
 
                 A_GetZLimits(i);
                 qq = CLIPMASK1;
@@ -2556,9 +2606,7 @@ static void G_MoveWeapons(void)
 
                 for (f=1;f<=ActorExtra[i].projectile.velmult;f++)
                 {
-                    dax = s->x;
-                    day = s->y;
-                    daz = s->z;
+                    davect = s->pos;
                     j = A_MoveSprite(i,
                                      (k*(sintable[(s->ang+512)&2047]))>>14,
                                      (k*(sintable[s->ang&2047]))>>14,ll,qq);
@@ -2588,30 +2636,8 @@ static void G_MoveWeapons(void)
                     if (ActorExtra[i].temp_data[8] > ActorExtra[i].projectile.range)
                     {
                         if (ActorExtra[i].projectile.workslike & PROJECTILE_EXPLODEONTIMER)
-                        {
-                            if (ActorExtra[i].projectile.spawns >= 0)
-                            {
-                                k = A_Spawn(i,ActorExtra[i].projectile.spawns);
-                                sprite[k].x = dax;
-                                sprite[k].y = day;
-                                sprite[k].z = daz;
+                            A_DoProjectileEffects(i, &davect, 1);
 
-                                if (ActorExtra[i].projectile.sxrepeat > 4)
-                                    sprite[k].xrepeat=ActorExtra[i].projectile.sxrepeat;
-                                if (ActorExtra[i].projectile.syrepeat > 4)
-                                    sprite[k].yrepeat=ActorExtra[i].projectile.syrepeat;
-                            }
-                            if (ActorExtra[i].projectile.isound >= 0)
-                                A_PlaySound(ActorExtra[i].projectile.isound,i);
-
-                            s->extra=ActorExtra[i].projectile.extra;
-
-                            if (ActorExtra[i].projectile.extra_rand > 0)
-                                s->extra += (krand()&ActorExtra[i].projectile.extra_rand);
-
-                            x = s->extra;
-                            A_RadiusDamage(i,ActorExtra[i].projectile.hitradius, x>>2,x>>1,x-(x>>2),x);
-                        }
                         KILLIT(i);
                     }
                 }
@@ -2622,30 +2648,7 @@ static void G_MoveWeapons(void)
                                 Did this cause the bug with prematurely exploding projectiles? */
                     if (s->yvel < 1)
                     {
-
-                        if (ActorExtra[i].projectile.spawns >= 0)
-                        {
-                            k = A_Spawn(i,ActorExtra[i].projectile.spawns);
-                            sprite[k].x = dax;
-                            sprite[k].y = day;
-                            sprite[k].z = daz;
-
-                            if (ActorExtra[i].projectile.sxrepeat > 4)
-                                sprite[k].xrepeat=ActorExtra[i].projectile.sxrepeat;
-                            if (ActorExtra[i].projectile.syrepeat > 4)
-                                sprite[k].yrepeat=ActorExtra[i].projectile.syrepeat;
-                        }
-                        if (ActorExtra[i].projectile.isound >= 0)
-                            A_PlaySound(ActorExtra[i].projectile.isound,i);
-
-                        s->extra=ActorExtra[i].projectile.extra;
-
-                        if (ActorExtra[i].projectile.extra_rand > 0)
-                            s->extra += (krand()&ActorExtra[i].projectile.extra_rand);
-
-                        x = s->extra;
-                        A_RadiusDamage(i,ActorExtra[i].projectile.hitradius, x>>2,x>>1,x-(x>>2),x);
-
+                        A_DoProjectileEffects(i, &davect, 1);
                         KILLIT(i);
                     }
 
@@ -2685,7 +2688,8 @@ static void G_MoveWeapons(void)
                                 s->xvel=s->xvel>>1;
                                 s->zvel=s->zvel>>1;
                             }
-                            if (!(ActorExtra[i].projectile.workslike & PROJECTILE_FORCEIMPACT))goto BOLT;
+                            if (!(ActorExtra[i].projectile.workslike & PROJECTILE_FORCEIMPACT))
+                                goto BOLT;
                         }
 
                         A_DamageObject(j,i);
@@ -2696,54 +2700,23 @@ static void G_MoveWeapons(void)
                             A_PlaySound(PISTOL_BODYHIT,j);
 
                             if (ActorExtra[i].projectile.workslike & PROJECTILE_SPIT)
-                            {
-                                g_player[p].ps->q16horiz += F16(32);
-                                g_player[p].ps->return_to_center = 8;
-
-                                if (g_player[p].ps->loogcnt == 0)
-                                {
-                                    if (!A_CheckSoundPlaying(g_player[p].ps->i, DUKE_LONGTERM_PAIN))
-                                        A_PlaySound(DUKE_LONGTERM_PAIN,g_player[p].ps->i);
-
-                                    j = 3+(krand()&3);
-                                    g_player[p].ps->numloogs = j;
-                                    g_player[p].ps->loogcnt = 24*4;
-                                    for (x=0;x < j;x++)
-                                    {
-                                        g_player[p].ps->loogiex[x] = krand()%xdim;
-                                        g_player[p].ps->loogiey[x] = krand()%ydim;
-                                    }
-                                }
-                            }
+                                P_HandleBeingSpitOn(g_player[p].ps);
                         }
 
                         if (ActorExtra[i].projectile.workslike & PROJECTILE_RPG_IMPACT)
                         {
-
                             ActorExtra[j].owner = s->owner;
                             ActorExtra[j].picnum = s->picnum;
-                            ActorExtra[j].extra += ActorExtra[i].projectile.extra;
+                            //ActorExtra[j].extra += ActorExtra[i].projectile.extra;
 
-                            if (ActorExtra[i].projectile.spawns >= 0)
-                            {
-                                k = A_Spawn(i,ActorExtra[i].projectile.spawns);
-                                sprite[k].x = dax;
-                                sprite[k].y = day;
-                                sprite[k].z = daz;
+                            A_DoProjectileEffects(i, &davect, 0);
 
-                                if (ActorExtra[i].projectile.sxrepeat > 4)
-                                    sprite[k].xrepeat=ActorExtra[i].projectile.sxrepeat;
-                                if (ActorExtra[i].projectile.syrepeat > 4)
-                                    sprite[k].yrepeat=ActorExtra[i].projectile.syrepeat;
-                            }
-
-                            if (ActorExtra[i].projectile.isound >= 0)
-                                A_PlaySound(ActorExtra[i].projectile.isound,i);
-
-                            if (!(ActorExtra[i].projectile.workslike & PROJECTILE_FORCEIMPACT))KILLIT(i);
-
+                            if (!(ActorExtra[i].projectile.workslike & PROJECTILE_FORCEIMPACT))
+                                KILLIT(i);
                         }
-                        if (ActorExtra[i].projectile.workslike & PROJECTILE_FORCEIMPACT)goto BOLT;
+
+                        if (ActorExtra[i].projectile.workslike & PROJECTILE_FORCEIMPACT)
+                            goto BOLT;
 
                     }
                     else if ((j&49152) == 32768)
@@ -2763,7 +2736,7 @@ static void G_MoveWeapons(void)
                         }
                         else
                         {
-                            setspritez_old(i,dax,day,daz);
+                            setspritez(i,&davect);
                             A_DamageWall(i,j,s->pos,s->picnum);
 
                             if (ActorExtra[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
@@ -2790,7 +2763,7 @@ static void G_MoveWeapons(void)
                     }
                     else if ((j&49152) == 16384)
                     {
-                        setspritez_old(i,dax,day,daz);
+                        setspritez(i,&davect);
 
                         if (s->zvel < 0)
                         {
@@ -2820,20 +2793,6 @@ static void G_MoveWeapons(void)
                         }
                     }
 
-                    if (ActorExtra[i].projectile.workslike & PROJECTILE_RPG && ActorExtra[i].projectile.spawns > 0)
-                    {
-                        k = A_Spawn(i,ActorExtra[i].projectile.spawns);
-                        sprite[k].x = dax;
-                        sprite[k].y = day;
-                        sprite[k].z = daz;
-
-                        if (ActorExtra[i].projectile.sxrepeat > 4)
-                            sprite[k].xrepeat=ActorExtra[i].projectile.sxrepeat;
-                        if (ActorExtra[i].projectile.syrepeat > 4)
-                            sprite[k].yrepeat=ActorExtra[i].projectile.syrepeat;
-                    }
-
-
                     if (ActorExtra[i].projectile.workslike & PROJECTILE_HITSCAN)
                     {
                         if (!actorscrptr[sprite[i].picnum])
@@ -2843,19 +2802,8 @@ static void G_MoveWeapons(void)
                         goto BOLT;
                     }
 
-                    if (ActorExtra[i].projectile.workslike & PROJECTILE_RPG)
-                    {
-                        if (ActorExtra[i].projectile.isound >= 0)
-                            A_PlaySound(ActorExtra[i].projectile.isound,i);
-
-                        s->extra=ActorExtra[i].projectile.extra;
-                        if (ActorExtra[i].projectile.extra_rand > 0)
-                            s->extra += (krand()&ActorExtra[i].projectile.extra_rand);
-
-                        A_RadiusDamage(i,ActorExtra[i].projectile.hitradius,
-                                       s->extra>>2,s->extra>>1,s->extra-(s->extra>>2),s->extra);
-                        KILLIT(i);
-                    }
+                    A_DoProjectileEffects(i, &davect, 1);
+                    KILLIT(i);
                 }
                 goto BOLT;
             }
@@ -2935,9 +2883,7 @@ static void G_MoveWeapons(void)
                     ll = s->zvel>>1;
                 }
 
-                dax = s->x;
-                day = s->y;
-                daz = s->z;
+                davect = s->pos;
 
                 A_GetZLimits(i);
                 qq = CLIPMASK1;
@@ -3017,25 +2963,7 @@ static void G_MoveWeapons(void)
                             A_PlaySound(PISTOL_BODYHIT,j);
 
                             if (s->picnum == SPIT)
-                            {
-                                g_player[p].ps->q16horiz += F16(32);
-                                g_player[p].ps->return_to_center = 8;
-
-                                if (g_player[p].ps->loogcnt == 0)
-                                {
-                                    if (!A_CheckSoundPlaying(g_player[p].ps->i, DUKE_LONGTERM_PAIN))
-                                        A_PlaySound(DUKE_LONGTERM_PAIN,g_player[p].ps->i);
-
-                                    j = 3+(krand()&3);
-                                    g_player[p].ps->numloogs = j;
-                                    g_player[p].ps->loogcnt = 24*4;
-                                    for (x=0;x < j;x++)
-                                    {
-                                        g_player[p].ps->loogiex[x] = krand()%xdim;
-                                        g_player[p].ps->loogiey[x] = krand()%ydim;
-                                    }
-                                }
-                            }
+                                P_HandleBeingSpitOn(g_player[p].ps);
                         }
                     }
                     else if ((j&49152) == 32768)
@@ -3054,7 +2982,7 @@ static void G_MoveWeapons(void)
                         }
                         else
                         {
-                            setspritez_old(i,dax,day,daz);
+                            setspritez(i, &davect);
                             A_DamageWall(i,j,s->pos,s->picnum);
 
                             if (s->picnum == FREEZEBLAST)
@@ -3075,7 +3003,7 @@ static void G_MoveWeapons(void)
                     }
                     else if ((j&49152) == 16384)
                     {
-                        setspritez_old(i,dax,day,daz);
+                        setspritez(i, &davect);
 
                         if (s->zvel < 0)
                         {
@@ -3105,9 +3033,7 @@ static void G_MoveWeapons(void)
                         if (s->picnum == RPG)
                         {
                             k = A_Spawn(i,EXPLOSION2);
-                            sprite[k].x = dax;
-                            sprite[k].y = day;
-                            sprite[k].z = daz;
+                            sprite[k].pos = davect;
 
                             if (s->xrepeat < 10)
                             {

@@ -2463,11 +2463,12 @@ void A_DamageObject_Internal(int i,int sn)
         if ((sprite[i].cstat&16) && SHT(i) == 0 && SLT(i) == 0 && sprite[i].statnum == 0)
             break;
 
-        if ((sprite[sn].picnum == FREEZEBLAST || sprite[sn].owner != i) && sprite[i].statnum != 4)
+        if ((sprite[sn].picnum == FREEZEBLAST || sprite[sn].owner != i) && sprite[i].statnum != STAT_PROJECTILE)
         {
             if (A_CheckEnemySprite(&sprite[i]) == 1)
             {
-                if (sprite[sn].picnum == RPG) sprite[sn].extra <<= 1;
+                if (sprite[sn].picnum == RPG) // This is what doubles RPG damage on direct hit.
+                    sprite[sn].extra <<= 1;
 
                 if ((PN(i) != DRONE) && (PN(i) != ROTATEGUN) && (PN(i) != COMMANDER) && (PN(i) < GREENSLIME || PN(i) > GREENSLIME+7))
                     if (sprite[sn].picnum != FREEZEBLAST)

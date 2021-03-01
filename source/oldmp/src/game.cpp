@@ -4570,6 +4570,17 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
     A_ResetVars(i);
     ActorExtra[i].flags = 0;
 
+    if (s_ss == STAT_PROJECTILE) // Moved from PROJECTILE_RPG to here, so we can maniuplate these in EVENT_EGS.
+    {
+        auto pProj = &ProjectileData[s_pn];
+
+        sprite[i].pal = (pProj->pal >= 0) ? pProj->pal : 0;
+        sprite[i].cstat = (pProj->cstat >= 0) ? pProj->cstat : 128;
+        sprite[i].clipdist = (pProj->clipdist != 255) ? pProj->clipdist : 40;
+
+        ActorExtra[i].projectile = ProjectileData[s_pn];
+    }
+
     if (apScriptGameEvent[EVENT_EGS])
     {
         extern int block_deletesprite;
