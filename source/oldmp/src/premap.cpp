@@ -1554,14 +1554,18 @@ int G_EnterLevel(int g)
 //    mmulti_flushpackets();
 //    waitforeverybody();
 
+    // G_ApplyMenuToGameFlags?
+    // ---------------------------------
     vote_map = vote_episode = voting = -1;
 
-    if ((g&MODE_DEMO) != MODE_DEMO) ud.recstat = ud.m_recstat;
+    if ((g & MODE_DEMO) != MODE_DEMO)
+    {
+        ud.recstat = (ud.m_recstat == 2) ? 0 : ud.m_recstat;
+    }
 
-    ud.monsters_off = ud.m_monsters_off;
     ud.coop = ud.m_coop;
-
     ud.ffire = ud.m_ffire;
+    ud.monsters_off = ud.m_monsters_off;
     ud.respawn_monsters = (ud.player_skill > 3) ? 1 : ud.m_respawn_monsters;
     ud.noexits = (GTFLAGS(GAMETYPE_COOP)) ? 0 : ud.m_noexits;
     ud.marker = (GTFLAGS(GAMETYPE_MARKEROPTION)) ? ud.m_marker : 0;
@@ -1577,18 +1581,12 @@ int G_EnterLevel(int g)
     }
 
     if (ud.m_weaponstay)
-    {
         GametypeFlags[ud.coop] |= GAMETYPE_WEAPSTAY;
-    }
     else
-    {
         GametypeFlags[ud.coop] &= ~(GAMETYPE_WEAPSTAY);
-    }
-
-    if ((g&MODE_DEMO) == 0 && ud.recstat == 2)
-        ud.recstat = 0;
 
     Gv_RefreshPointers();
+    // ---------------------------------
 
     FX_StopAllSounds();
     S_ClearSoundLocks();

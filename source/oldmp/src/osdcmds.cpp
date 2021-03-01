@@ -102,7 +102,9 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
     if (numplayers > 1)
     {
         if (myconnectindex == connecthead && (g_networkBroadcastMode == NETMODE_MASTERSLAVE))
-            Net_NewGame(volume,level);
+        {
+            Net_NewGame(volume, level);
+        }
         else if (voting == -1)
         {
             ud.m_volume_number = volume;
@@ -141,6 +143,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
         }
         return OSDCMD_OK;
     }
+
     if (g_player[myconnectindex].ps->gm & MODE_GAME)
     {
         // in-game behave like a cheat
@@ -156,10 +159,13 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
         ud.m_volume_number = volume;
         ud.m_level_number = level;
 
-        ud.m_monsters_off = ud.monsters_off = 0;
+        ud.m_monsters_off = 0;
 
         ud.m_respawn_items = 0;
         ud.m_respawn_inventory = 0;
+        //ud.m_respawn_monsters = 0;
+
+        ud.m_coop = 1;
 
         ud.multimode = 1;
 
@@ -297,6 +303,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
             g_player[myconnectindex].ps->gm |= MODE_MENU;
             ChangeToMenu(603);
         }
+
         return OSDCMD_OK;
     }
 
@@ -304,10 +311,13 @@ static int osdcmd_map(const osdfuncparm_t *parm)
     ud.m_volume_number = 0;
     ud.m_level_number = 7;
 
-    ud.m_monsters_off = ud.monsters_off = 0;
+    ud.m_monsters_off = 0;
 
     ud.m_respawn_items = 0;
     ud.m_respawn_inventory = 0;
+    //ud.m_respawn_monsters = 0;
+
+    ud.m_coop = 1;
 
     ud.multimode = 1;
 
