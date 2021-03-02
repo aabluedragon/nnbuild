@@ -328,7 +328,7 @@ void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
                       };
     short *tempshort = (short *)tempbuf;
 
-    bool additiveDamage = (r < 0);
+    bool const additiveDamage = (r < 0);
 
     r = klabs(r);
 
