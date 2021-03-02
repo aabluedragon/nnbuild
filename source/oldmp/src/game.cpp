@@ -3140,6 +3140,19 @@ int GetDistance2D(int x1, int y1, int x2, int y2)
 #define KILLID_TIME (TICRATE*3)
 #define KILLID_FADETIME (TICRATE*2)
 
+#define WITHIN_TIME(starttime, totaltime) ((starttime - (int32_t)totalclock) > 0 && (starttime - (int32_t)totalclock) <= totaltime)
+
+static int32_t get_xdim(int32_t x)
+{
+    const int32_t screenwidth = scale(240 << 16, xdim, ydim);
+    return scale((x << 16) + (screenwidth >> 1) - (160 << 16), xdim, screenwidth);
+}
+static int32_t get_ydim(int32_t y)
+{
+    y = mulscale16((y << 16) + rotatesprite_y_offset - (200 << 15), rotatesprite_yxaspect) + (200 << 15);
+    return scale(y, ydim, 200 << 16);
+}
+
 void G_DisplayPlayerId(void)
 {
     int idalpha;
@@ -3178,10 +3191,10 @@ void G_DisplayPlayerId(void)
         }
         // End segment
 
-        if ((ud.playerid_time - (int32_t)totalclock) > 0 && (ud.playerid_time - (int32_t)totalclock) <= ID_TIME)
+        if (WITHIN_TIME(ud.playerid_time, ID_TIME))
         {
             idalpha = ID_ALPHA;
-            if ((ud.playerid_time - (int32_t)totalclock) <= ID_FADETIME)
+            if (WITHIN_TIME(ud.playerid_time, ID_FADETIME))
             {
                 idalpha += ID_ALPHA_RANGE - scale(ud.playerid_time - (int32_t)totalclock, ID_ALPHA_RANGE, ID_FADETIME);
             }
@@ -3204,30 +3217,49 @@ void G_DisplayPlayerId(void)
 
     if (ud.multimode > 1)
     {
-        if ((g_player[screenpeek].fragged_time - (int32_t)totalclock) > 0 && (g_player[screenpeek].fragged_time - (int32_t)totalclock) <= KILLID_TIME)
+        if (WITHIN_TIME(g_player[screenpeek].fragged_time, KILLID_TIME))
         {
             idalpha = ID_ALPHA;
-            if ((g_player[screenpeek].fragged_time - (int32_t)totalclock) <= KILLID_FADETIME)
+            if (WITHIN_TIME(g_player[screenpeek].fragged_time, KILLID_FADETIME))
             {
                 idalpha += ID_ALPHA_RANGE - scale(g_player[screenpeek].fragged_time - (int32_t)totalclock, ID_ALPHA_RANGE, KILLID_FADETIME);
             }
 
-            // HACK: Modulo palookup to keep under 3 digits. ScreenText really needs 3 digit support for ^ color codes.
+            // HACK: Modulo palookup to keep under 3 digits. ScreenText really needs a 3-digit form of color code.
             Bsprintf(tempbuf, "KILLED ^%02d%s", g_player[g_player[screenpeek].fragged_id].ps->palookup % 100, g_player[g_player[screenpeek].fragged_id].user_name);
             G_ScreenText(STARTALPHANUM, 160, ID_YPOS - 9, 65536, 0, 0, tempbuf, -127, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, idalpha, 4, 8, 0, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
         }
 
-        if ((g_player[screenpeek].fraggedby_time - (int32_t)totalclock) > 0 && (g_player[screenpeek].fraggedby_time - (int32_t)totalclock) <= KILLID_TIME)
+        if (WITHIN_TIME(g_player[screenpeek].fraggedby_time, KILLID_TIME))
         {
             idalpha = ID_ALPHA;
-            if ((g_player[screenpeek].fraggedby_time - (int32_t)totalclock) <= KILLID_FADETIME)
+            if (WITHIN_TIME(g_player[screenpeek].fraggedby_time, KILLID_FADETIME))
             {
                 idalpha += ID_ALPHA_RANGE - scale(g_player[screenpeek].fraggedby_time - (int32_t)totalclock, ID_ALPHA_RANGE, KILLID_FADETIME);
             }
 
-            // HACK: Modulo palookup to keep under 3 digits. ScreenText really needs 3 digit support for ^ color codes.
+            // HACK: Modulo palookup to keep under 3 digits. ScreenText really needs a 3-digit form of color code.
             Bsprintf(tempbuf, "KILLED BY ^%02d%s", g_player[g_player[screenpeek].fraggedby_id].ps->palookup % 100, g_player[g_player[screenpeek].fraggedby_id].user_name);
             G_ScreenText(STARTALPHANUM, 160, ID_YPOS - 18, 65536, 0, 0, tempbuf, -127, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, idalpha, 4, 8, 0, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
+        }
+
+        if (ud.limit_hit == 1)
+        {
+            int pal = 0;
+            rotatesprite_(0, 0, 65536L, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT, 128, 0, get_xdim(160-120), get_ydim(ID_YPOS - 37), get_xdim(160+120), get_ydim(ID_YPOS - 28));
+
+            if (GTFLAGS(GAMETYPE_TDM))
+            {
+                pal = teams[ud.winner].palnum;
+                Bsprintf(tempbuf, "%s Team ^8Wins!", teams[ud.winner].name);
+            }
+            else
+            {
+                pal = g_player[ud.winner].ps->palookup;
+                Bsprintf(tempbuf, "%s ^8Wins!", g_player[ud.winner].user_name);
+            }
+
+            G_ScreenText(STARTALPHANUM, 160, ID_YPOS - 36, 65536, 0, 0, tempbuf, -127, pal, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, 0, 4, 8, 0, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
         }
     }
 }

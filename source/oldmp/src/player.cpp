@@ -2868,7 +2868,7 @@ void P_GetInput(int snum)
     fix16_t q16horiz;
     fix16_t q16angvel;
 
-    if ((p->gm&MODE_MENU) || (p->gm&MODE_TYPE) || (ud.pause_on && !KB_KeyPressed(sc_Pause)) || (numplayers > 1 && (int32_t)totalclock < 10))
+    if ((p->gm&MODE_MENU) || ud.limit_hit || (p->gm&MODE_TYPE) || (ud.pause_on && !KB_KeyPressed(sc_Pause)) || (numplayers > 1 && (int32_t)totalclock < 10))
         // HACK: kill P_GetInput() for the first 10 tics of a new map in multi
     {
         if (!(p->gm&MODE_MENU))
@@ -3989,7 +3989,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
     if (p->timebeforeexit > 1 && ((p->last_extra > 0) || ud.limit_hit == 1))
     {
         p->timebeforeexit--;
-        if (p->timebeforeexit == 26 * 5 && (ud.limit_hit == 0))
+        if (p->timebeforeexit == GAMETICSPERSEC * 5 && (ud.limit_hit == 0))
         {
             FX_StopAllSounds();
             S_ClearSoundLocks();
@@ -4099,7 +4099,10 @@ static void P_HandleFragged(int snum)
     DukePlayer_t* frag_p = g_player[p->frag_ps].ps;
     int playerSprite = g_player[snum].ps->i;
 
-    if ((p->frag_ps != snum) && ud.limit_hit != 1)
+    if (ud.limit_hit == 1)
+        return;
+
+    if (p->frag_ps != snum)
     {
         if (GTFLAGS(GAMETYPE_TDM) && frag_p->team == g_player[snum].ps->team)
         {
@@ -4134,7 +4137,7 @@ static void P_HandleFragged(int snum)
             if ((teams[fraggedbyteam].frags - teams[fraggedbyteam].suicides) >= ud.fraglimit && ud.fraglimit != 0)
             {
                 // Fraglimit hit
-                Bsprintf(tempbuf, "^%d%s^08 team wins!", teams[fraggedbyteam].palnum, teams[fraggedbyteam].name);
+                Bsprintf(tempbuf, "^%02d%s team ^08wins!", teams[fraggedbyteam].palnum % 100, teams[fraggedbyteam].name);
                 G_AddUserQuote(tempbuf);
 
                 S_PlaySound(PIPEBOMB_EXPLODE);
@@ -4155,13 +4158,14 @@ static void P_HandleFragged(int snum)
 
                 ud.from_bonus = 0;
                 ud.limit_hit = 1;
-                frag_p->timebeforeexit = 26 * 4;
+                ud.winner = fraggedbyteam;
+                frag_p->timebeforeexit = GAMETICSPERSEC * 8;
             }
         }
         else if ((frag_p->frag - frag_p->fraggedself) >= ud.fraglimit && ud.fraglimit != 0)
         {
             // Fraglimit hit
-            Bsprintf(tempbuf, "^08%s^08 wins!", &g_player[p->frag_ps].user_name[0]);
+            Bsprintf(tempbuf, "^08%s ^08wins!", &g_player[p->frag_ps].user_name[0]);
             G_AddUserQuote(tempbuf);
 
             S_PlaySound(PIPEBOMB_EXPLODE);
@@ -4172,10 +4176,11 @@ static void P_HandleFragged(int snum)
 
             ud.from_bonus = 0;
             ud.limit_hit = 1;
-            frag_p->timebeforeexit = 26 * 4;
+            ud.winner = p->frag_ps;
+            frag_p->timebeforeexit = GAMETICSPERSEC * 8;
         }
     }
-    else if (ud.limit_hit != 1)
+    else
     {
         if (ActorExtra[playerSprite].picnum != APLAYERTOP)
         {
@@ -4195,7 +4200,7 @@ static void P_HandleFragged(int snum)
                 Bsprintf(tempbuf, ScriptQuotes[FIRST_SUICIDE_QUOTE + (krand() % g_numSelfObituaries)], &g_player[snum].user_name[0]);
             }
         }
-        else Bsprintf(tempbuf, "^02%s^02 switched to team %d", &g_player[snum].user_name[0], p->team + 1);
+        else Bsprintf(tempbuf, "^02%s^02 switched to team ^%02d%s", &g_player[snum].user_name[0], teams[p->team].palnum % 100, teams[p->team].name);
 
         if (ud.obituaries)
         {

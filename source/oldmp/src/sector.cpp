@@ -3329,7 +3329,7 @@ void checksectors(int snum)
             return;
         case -2:
             sector[p->cursectnum].lotag = 0;
-            p->timebeforeexit = 26*8;
+            p->timebeforeexit = GAMETICSPERSEC*8;
             p->customexitsound = sector[p->cursectnum].hitag;
             return;
         default:

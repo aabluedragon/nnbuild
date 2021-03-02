@@ -474,7 +474,7 @@ typedef struct {
     char display_bonus_screen;
     char show_level_text;
     char wchoice[MAX_WEAPONS];
-    char limit_hit;
+    char limit_hit, winner;
     char allow_visibility;
 
     int32_t returnvar[MAX_RETURN_VALUES - 1];
@@ -1093,8 +1093,6 @@ typedef struct {
     char user_name[32];
     char syncval[SYNCFIFOSIZ][MAXSYNCBYTES];
 } playerdata_t;
-
-extern char *team_names[];
 
 // key bindings stuff
 typedef struct {
