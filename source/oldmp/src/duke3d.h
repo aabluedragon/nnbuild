@@ -344,11 +344,23 @@ enum DukeWeapon_t {
 #define deletesprite A_DeleteSprite
 void A_DeleteSprite(int s);
 
+enum
+{
+    EXTBIT_MOVEFORWARD  = (1),
+    EXTBIT_MOVEBACKWARD = (1 << 1),
+    EXTBIT_STRAFELEFT   = (1 << 2),
+    EXTBIT_STRAFERIGHT  = (1 << 3),
+    EXTBIT_TURNLEFT     = (1 << 4),
+    EXTBIT_TURNRIGHT    = (1 << 5),
+    EXTBIT_ALTFIRE      = (1 << 6),
+    EXTBIT_CHAT         = (1 << 7),
+    EXTBIT_CHANGETEAM   = (1 << 8),
+};
+
 typedef struct {
-    uint32_t bits;
+    uint32_t bits, extbits;
     short fvel, svel;
     fix16_t q16avel, q16horz;
-    unsigned char extbits;
 } input_t;
 
 extern input_t recsync[RECSYNCBUFSIZ];

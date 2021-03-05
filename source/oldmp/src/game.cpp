@@ -7057,7 +7057,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     spritesortcnt++;
                 }
 
-                if (g_player[p].inputBits->extbits & (1<<7) && !ud.pause_on)
+                if (g_player[p].inputBits->extbits & (EXTBIT_CHAT) && !ud.pause_on)
                 {
                     memcpy((spritetype *)&tsprite[spritesortcnt],(spritetype *)t,sizeof(spritetype));
 
@@ -12067,7 +12067,7 @@ static int G_DoMoveThings(void)
 
     TRAVERSE_CONNECT(i)
     {
-        if (g_player[i].inputBits->extbits&(1<<6))
+        if (g_player[i].inputBits->extbits&(EXTBIT_CHANGETEAM))
         {
             g_player[i].ps->team = g_player[i].pteam;
             if (GametypeFlags[ud.coop] & GAMETYPE_TDM)

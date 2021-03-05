@@ -122,30 +122,22 @@ static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, inp
         (*j) += 4;
         packbuf[inputFlagsPos] |= 4;
     }
-
-    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x000000ff) packbuf[(*j)++] = (nsyn[playerNum].bits & 255), packbuf[inputFlagsPos] |= 8;
-    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x0000ff00) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 8) & 255), packbuf[inputFlagsPos] |= 16;
-    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x00ff0000) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 16) & 255), packbuf[inputFlagsPos] |= 32;
-    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0xff000000) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 24) & 255), packbuf[inputFlagsPos] |= 64;
-
     if (nsyn[playerNum].q16horz != osyn[playerNum].q16horz)
     {
         B_BUF32(&packbuf[(*j)], nsyn[playerNum].q16horz);
         (*j) += 4;
-        packbuf[inputFlagsPos] |= 128;
+        packbuf[inputFlagsPos] |= 8;
     }
 
-    if (nsyn[playerNum].extbits != osyn[playerNum].extbits)
-    {
-        packbuf[(*j)++] = nsyn[playerNum].extbits;
-        packbuf[extFlagsPos] |= 1;
-    }
+    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x000000ff) packbuf[(*j)++] = (nsyn[playerNum].bits & 255), packbuf[inputFlagsPos] |= 16;
+    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x0000ff00) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 8) & 255), packbuf[inputFlagsPos] |= 32;
+    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0x00ff0000) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 16) & 255), packbuf[inputFlagsPos] |= 64;
+    if ((nsyn[playerNum].bits ^ osyn[playerNum].bits) & 0xff000000) packbuf[(*j)++] = ((nsyn[playerNum].bits >> 24) & 255), packbuf[inputFlagsPos] |= 128;
 
-    /*
-    if ((nsyn[playerNum].extbits^osyn[playerNum].extbits)&0x000000ff) packbuf[(*j)++] = (nsyn[playerNum].extbits&255), packbuf[k] |= 1;
-    if ((nsyn[playerNum].extbits^osyn[playerNum].extbits)&0x0000ff00) packbuf[(*j)++] = ((nsyn[playerNum].extbits>>8)&255), packbuf[k] |= 2;
-    if ((nsyn[playerNum].extbits^osyn[playerNum].extbits)&0x00ff0000) packbuf[(*j)++] = ((nsyn[playerNum].extbits>>16)&255), packbuf[k] |= 4;
-    if ((nsyn[playerNum].extbits^osyn[playerNum].extbits)&0xff000000) packbuf[(*j)++] = ((nsyn[playerNum].extbits>>24)&255), packbuf[k] |= 8; */
+    if ((nsyn[playerNum].extbits ^ osyn[playerNum].extbits) & 0x000000ff) packbuf[(*j)++] = (nsyn[playerNum].extbits & 255), packbuf[extFlagsPos] |= 1;
+    if ((nsyn[playerNum].extbits ^ osyn[playerNum].extbits) & 0x0000ff00) packbuf[(*j)++] = ((nsyn[playerNum].extbits >> 8) & 255), packbuf[extFlagsPos] |= 2;
+    if ((nsyn[playerNum].extbits ^ osyn[playerNum].extbits) & 0x00ff0000) packbuf[(*j)++] = ((nsyn[playerNum].extbits >> 16) & 255), packbuf[extFlagsPos] |= 4;
+    if ((nsyn[playerNum].extbits ^ osyn[playerNum].extbits) & 0xff000000) packbuf[(*j)++] = ((nsyn[playerNum].extbits >> 24) & 255), packbuf[extFlagsPos] |= 8;
 }
 
 static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
@@ -155,18 +147,20 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
 
     if (playerNum == myconnectindex)
     {
-        //(*j) += ((l&1)<<1)+(l&2)+((l&4)>>2)+((l&8)>>3)+((l&16)>>4)+((l&32)>>5)+((l&64)>>6)+((l&128)>>7)+((l&256)>>8)/*+((l&512)>>9)+((l&1024)>>10)+((l&2048)>>11)*/;
-
         if (inputFlags & 1) (*j) += 2;
         if (inputFlags & 2) (*j) += 2;
         if (inputFlags & 4) (*j) += 4;
-        if (inputFlags & 8) (*j)++;
+        if (inputFlags & 8) (*j) += 4;
+
         if (inputFlags & 16) (*j)++;
         if (inputFlags & 32) (*j)++;
         if (inputFlags & 64) (*j)++;
-        if (inputFlags & 128) (*j) += 4;
+        if (inputFlags & 128) (*j)++;
 
         if (extFlags & 1) (*j)++;
+        if (extFlags & 2) (*j)++;
+        if (extFlags & 4) (*j)++;
+        if (extFlags & 8) (*j)++;
 
         return;
     }
@@ -187,27 +181,21 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
         nsyn[playerNum].q16avel = (fix16_t)B_UNBUF32(&packbuf[(*j)]);
         (*j) += 4;
     }
-
-    if (inputFlags & 8)   nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffffff00) | ((int)packbuf[(*j)++]));
-    if (inputFlags & 16)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffff00ff) | ((int)packbuf[(*j)++]) << 8);
-    if (inputFlags & 32)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xff00ffff) | ((int)packbuf[(*j)++]) << 16);
-    if (inputFlags & 64)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0x00ffffff) | ((int)packbuf[(*j)++]) << 24);
-
-    if (inputFlags & 128)
+    if (inputFlags & 8)
     {
         nsyn[playerNum].q16horz = (fix16_t)B_UNBUF32(&packbuf[(*j)]);
         (*j) += 4;
     }
 
-    if (extFlags & 1)
-    {
-        nsyn[playerNum].extbits = (unsigned char)packbuf[(*j)++];
-    }
+    if (inputFlags & 16)   nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffffff00) | ((int)packbuf[(*j)++]));
+    if (inputFlags & 32)   nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffff00ff) | ((int)packbuf[(*j)++]) << 8);
+    if (inputFlags & 64)   nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xff00ffff) | ((int)packbuf[(*j)++]) << 16);
+    if (inputFlags & 128)  nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0x00ffffff) | ((int)packbuf[(*j)++]) << 24);
 
-    /*                if (l&256)  nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0xffffff00)|((int)packbuf[(*j)++]));
-                    if (l&512)  nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0xffff00ff)|((int)packbuf[(*j)++])<<8);
-                    if (l&1024) nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0xff00ffff)|((int)packbuf[(*j)++])<<16);
-                    if (l&2048) nsyn[playerNum].extbits = ((nsyn[playerNum].extbits&0x00ffffff)|((int)packbuf[(*j)++])<<24); */
+    if (extFlags & 1)      nsyn[playerNum].extbits = ((nsyn[playerNum].extbits & 0xffffff00) | ((int)packbuf[(*j)++]));
+    if (extFlags & 2)      nsyn[playerNum].extbits = ((nsyn[playerNum].extbits & 0xffff00ff) | ((int)packbuf[(*j)++]) << 8);
+    if (extFlags & 4)      nsyn[playerNum].extbits = ((nsyn[playerNum].extbits & 0xff00ffff) | ((int)packbuf[(*j)++]) << 16);
+    if (extFlags & 8)      nsyn[playerNum].extbits = ((nsyn[playerNum].extbits & 0x00ffffff) | ((int)packbuf[(*j)++]) << 24);
 
     g_player[playerNum].movefifoend++;
 

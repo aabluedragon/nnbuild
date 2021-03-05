@@ -2877,7 +2877,7 @@ void P_GetInput(int snum)
 
         localInput = {};
         localInput.bits = (((int32_t)g_gameQuit) << SK_GAMEQUIT);
-        localInput.extbits |= (1 << 7);
+        localInput.extbits |= (EXTBIT_CHAT);
 
         dyaw = 0;
         return;
@@ -3119,21 +3119,28 @@ void P_GetInput(int snum)
 
     localInput.extbits = 0;
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_MOVEFORWARD])
-        localInput.extbits |= BUTTON(gamefunc_Move_Forward) || (vel > 0);
+        localInput.extbits |= (BUTTON(gamefunc_Move_Forward) || (vel > 0)) ? EXTBIT_MOVEFORWARD : 0;
+
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_MOVEBACKWARD])
-        localInput.extbits |= (BUTTON(gamefunc_Move_Backward) || (vel < 0))<<1;
+        localInput.extbits |= (BUTTON(gamefunc_Move_Backward) || (vel < 0)) ? EXTBIT_MOVEBACKWARD : 0;
+
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_STRAFELEFT])
-        localInput.extbits |= (BUTTON(gamefunc_Strafe_Left) || (svel > 0))<<2;
+        localInput.extbits |= (BUTTON(gamefunc_Strafe_Left) || (svel > 0)) ? EXTBIT_STRAFELEFT : 0;
+
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_STRAFERIGHT])
-        localInput.extbits |= (BUTTON(gamefunc_Strafe_Right) || (svel < 0))<<3;
+        localInput.extbits |= (BUTTON(gamefunc_Strafe_Right) || (svel < 0)) ? EXTBIT_STRAFERIGHT : 0;
+
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_TURNLEFT])
-        localInput.extbits |= BUTTON(gamefunc_Turn_Left)<<4;
+        localInput.extbits |= BUTTON(gamefunc_Turn_Left) ? EXTBIT_TURNLEFT : 0;
+
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_TURNRIGHT])
-        localInput.extbits |= BUTTON(gamefunc_Turn_Right)<<5;
+        localInput.extbits |= BUTTON(gamefunc_Turn_Right) ? EXTBIT_TURNRIGHT : 0;
+
     if (apScriptGameEvent[EVENT_PROCESSINPUT] || apScriptGameEvent[EVENT_ALTFIRE])
-        localInput.extbits |= BUTTON(gamefunc_Alt_Fire) << 6;
+        localInput.extbits |= BUTTON(gamefunc_Alt_Fire) ? EXTBIT_ALTFIRE : 0;
+
     // used for changing team
-    localInput.extbits |= (g_player[snum].pteam != g_player[snum].ps->team)<<6;
+    localInput.extbits |= (g_player[snum].pteam != g_player[snum].ps->team) ? EXTBIT_CHANGETEAM : 0;
 
     if (ud.scrollmode && ud.overhead_on)
     {
@@ -3151,9 +3158,9 @@ void P_GetInput(int snum)
     else daang = fix16_to_int(p->q16ang);
 
     localInput.fvel = mulscale9(vel, sintable[(daang + 2560) & 2047]) +
-               mulscale9(svel, sintable[(daang + 2048) & 2047]);
+                      mulscale9(svel, sintable[(daang + 2048) & 2047]);
     localInput.svel = mulscale9(vel, sintable[(daang + 2048) & 2047]) +
-               mulscale9(svel, sintable[(daang + 1536) & 2047]);
+                      mulscale9(svel, sintable[(daang + 1536) & 2047]);
 
     localInput.fvel += fricxv;
     localInput.svel += fricyv;
@@ -3540,7 +3547,7 @@ static void P_ProcessWeapon(int playerNum)
     }
 
     bool const doFire = (sb_snum & BIT(SK_FIRE) && (*kb) == 0);
-    bool const doAltFire = g_player[playerNum].inputBits->extbits & (1 << 6);
+    bool const doAltFire = g_player[playerNum].inputBits->extbits & (EXTBIT_ALTFIRE);
 
     if (doAltFire)
     {
@@ -5081,22 +5088,22 @@ void P_ProcessInput(int snum)
         P_HandleDamagingFloors(snum);
     }
 
-    if (syn->extbits & (1))
+    if (syn->extbits & (EXTBIT_MOVEFORWARD))
         X_OnEvent(EVENT_MOVEFORWARD, playerSprite, snum, -1);
 
-    if (syn->extbits & (1 << 1))
+    if (syn->extbits & (EXTBIT_MOVEBACKWARD))
         X_OnEvent(EVENT_MOVEBACKWARD, playerSprite, snum, -1);
 
-    if (syn->extbits & (1 << 2))
+    if (syn->extbits & (EXTBIT_STRAFELEFT))
         X_OnEvent(EVENT_STRAFELEFT, playerSprite, snum, -1);
 
-    if (syn->extbits & (1 << 3))
+    if (syn->extbits & (EXTBIT_STRAFERIGHT))
         X_OnEvent(EVENT_STRAFERIGHT, playerSprite, snum, -1);
 
-    if (syn->extbits & (1 << 4) || syn->q16avel < 0)
+    if (syn->extbits & (EXTBIT_TURNLEFT) || syn->q16avel < 0)
         X_OnEvent(EVENT_TURNLEFT, playerSprite, snum, -1);
 
-    if (syn->extbits & (1 << 5) || syn->q16avel > 0)
+    if (syn->extbits & (EXTBIT_TURNRIGHT) || syn->q16avel > 0)
         X_OnEvent(EVENT_TURNRIGHT, playerSprite, snum, -1);
 
     if (p->vel.x || p->vel.y || syn->fvel || syn->svel)
