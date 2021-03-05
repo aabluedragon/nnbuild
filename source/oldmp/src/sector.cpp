@@ -2862,7 +2862,7 @@ CHECKINV1:
                 }
             }
 
-        weaponNum = ((sb_snum&(15<<SK_WEAPON_BITS))>>SK_WEAPON_BITS) - 1;
+        weaponNum = ((sb_snum & SK_WEAPON_MASK) >> SK_WEAPON_BITS) - 1;
 
         Gv_SetVar(g_iReturnVarID, weaponNum,p->i,snum);
 

@@ -33,11 +33,14 @@
 #define SK_RUN          5
 #define SK_LOOK_LEFT    6
 #define SK_LOOK_RIGHT   7
+
 // weapons take up 4 bits...
 #define SK_WEAPON_BITS  8
 #define SK_WEAPON_BITS1 9
 #define SK_WEAPON_BITS2 10
 #define SK_WEAPON_BITS3 11
+#define SK_WEAPON_MASK ((1 << SK_WEAPON_BITS) | (1 << SK_WEAPON_BITS1) | (1 << SK_WEAPON_BITS2) | (1 << SK_WEAPON_BITS3))
+
 #define SK_STEROIDS     12
 #define SK_LOOK_UP      13
 #define SK_LOOK_DOWN    14

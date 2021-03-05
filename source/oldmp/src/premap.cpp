@@ -1504,23 +1504,20 @@ void G_ResetTimers(void)
     g_moveThingsCount = 0;
 }
 
-extern int jump_input;
-
 void clearfifo(void)
 {
     int i = 0;
 
     Net_ClearFIFO();
 
-    jump_input = 0;
-
-    clearbufbyte(&localInput,sizeof(input_t),0L);
+    localInput = {};
     clearbufbyte(&inputfifo,sizeof(input_t)*MOVEFIFOSIZ*MAXPLAYERS,0L);
 
     for (;i<MAXPLAYERS;i++)
     {
         if (g_player[i].inputBits != NULL)
             Bmemset(g_player[i].inputBits,0,sizeof(input_t));
+
         g_player[i].vote = 0;
         g_player[i].gotvote = 0;
     }

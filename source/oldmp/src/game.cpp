@@ -10635,6 +10635,8 @@ static void G_DrawFrame()
     CONTROL_BindsEnabled = (g_player[myconnectindex].ps->gm == MODE_GAME || g_player[myconnectindex].ps->gm == MODE_DEMO);
     G_HandleLocalKeys();
     OSD_DispatchQueued();
+   
+    //P_GetInput(myconnectindex, true); // [JM] We're not ready for uncapped input yet.
 
     int smoothRatio = calc_smoothratio((int32_t)totalclock, ototalclock);
 
@@ -11416,8 +11418,10 @@ MAIN_LOOP_RESTART:
                     break;
 
                 frameJustDrawn = false;
-                P_GetInput(myconnectindex);
+                P_GetInput(myconnectindex, false);
                 
+                // The while condition in this loop is a duplicate of the if condition above. Why?
+                // Why not check for readytosend in the above "if" and cut this out?
                 do
                 {
                     if (ready2send == 0)
@@ -11426,6 +11430,7 @@ MAIN_LOOP_RESTART:
                     ototalclock += TICSPERFRAME;
 
                     Net_HandleInput();
+                    localInput = {}; // Input has been processed, flush.
 
                     if (((ud.show_help == 0 && (myplayer.gm & MODE_MENU) != MODE_MENU) || ud.recstat == 2 || (ud.multimode > 1))
                         && (myplayer.gm & MODE_GAME))
@@ -11972,7 +11977,7 @@ static int G_DoMoveThings(void)
 
     // Copy input FIFO bits into player's own inputBits struct, and advance our place in the FIFO.
     TRAVERSE_CONNECT(i)
-    copybufbyte(&inputfifo[movefifoplc&(MOVEFIFOSIZ-1)][i],g_player[i].inputBits,sizeof(input_t));
+    *g_player[i].inputBits = inputfifo[movefifoplc & (MOVEFIFOSIZ - 1)][i];
     movefifoplc++;
 
     G_UpdateInterpolations();

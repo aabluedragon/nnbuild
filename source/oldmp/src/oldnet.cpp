@@ -29,19 +29,6 @@ extern void computergetinput(int snum, input_t *syn);
 
 int pingTime;
 
-void Net_GetPackets(void)
-{
-#if 1
-    if ((totalclock > quittimer) && (g_gameQuit == 1))
-    {
-        OSD_Printf("Timeout: Didn't get quit packet in time, exiting.\n");
-        G_GameExit(" ");
-    }
-#endif
-
-    Net_ParsePackets();
-}
-
 static void Net_AddPingTimeToPacket(int* j)
 {
     B_BUF32(&packbuf[(*j)], pingTime);
@@ -94,6 +81,20 @@ static void Net_SendPing(void)
                 mmulti_sendpacket(i, (unsigned char*)packbuf, j);
         }
     }
+}
+
+void Net_GetPackets(void)
+{
+#if 1
+    if ((totalclock > quittimer) && (g_gameQuit == 1))
+    {
+        OSD_Printf("Timeout: Didn't get quit packet in time, exiting.\n");
+        G_GameExit(" ");
+    }
+#endif
+
+    Net_SendPing();
+    Net_ParsePackets();
 }
 
 static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
@@ -229,9 +230,9 @@ void Net_HandleInput(void)
     if (g_player[myconnectindex].movefifoend - movefifoplc >= 100)
         return;
 
+    // Put our local input into the FIFO to be processed by P_ProcessInput and such.
     nsyn = &inputfifo[g_player[myconnectindex].movefifoend&(MOVEFIFOSIZ-1)][myconnectindex];
-    copybufbyte(&localInput, nsyn, sizeof(input_t));
-    //loc = { };
+    *nsyn = localInput;
 
     g_player[myconnectindex].movefifoend++;
 
@@ -408,8 +409,6 @@ void Net_HandleInput(void)
         mmulti_sendpacket(connecthead, (unsigned char*)packbuf,j);
         return;
     }
-
-    Net_SendPing();
 
     while (1)  //Master
     {
