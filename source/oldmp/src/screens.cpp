@@ -226,7 +226,7 @@ void G_FadePalette(int r, int g, int b, int e)
     if ((e & 128) == 0)
     {
         videoNextPage();
-        for (tc = (int32_t)totalclock; totalclock < tc + 4; handleevents(), Net_GetPackets());
+        for (tc = (int32_t)totalclock; totalclock < tc + 4; gameHandleEvents());
     }
 }
 
@@ -247,41 +247,33 @@ void G_DoOrderScreen(void)
     KB_FlushKeyboardQueue();
     rotatesprite(0, 0, 65536L, 0, ORDERING, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
     fadepal(0, 0, 0, 63, 0, -7);
+
     while (!KB_KeyWaiting())
-    {
-        handleevents();
-        Net_GetPackets();
-    }
+        gameHandleEvents();
 
     fadepal(0, 0, 0, 0, 63, 7);
     KB_FlushKeyboardQueue();
     rotatesprite(0, 0, 65536L, 0, ORDERING + 1, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
     fadepal(0, 0, 0, 63, 0, -7);
+
     while (!KB_KeyWaiting())
-    {
-        handleevents();
-        Net_GetPackets();
-    }
+        gameHandleEvents();
 
     fadepal(0, 0, 0, 0, 63, 7);
     KB_FlushKeyboardQueue();
     rotatesprite(0, 0, 65536L, 0, ORDERING + 2, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
     fadepal(0, 0, 0, 63, 0, -7);
+
     while (!KB_KeyWaiting())
-    {
-        handleevents();
-        Net_GetPackets();
-    }
+        gameHandleEvents();
 
     fadepal(0, 0, 0, 0, 63, 7);
     KB_FlushKeyboardQueue();
     rotatesprite(0, 0, 65536L, 0, ORDERING + 3, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
     fadepal(0, 0, 0, 63, 0, -7);
+
     while (!KB_KeyWaiting())
-    {
-        handleevents();
-        Net_GetPackets();
-    }
+        gameHandleEvents();
 }
 
 // Keep on bottom
@@ -396,10 +388,11 @@ void G_BonusScreen(int bonusonly)
                                 rotatesprite(breathe[t + 3] << 16, breathe[t + 4] << 16, 65536L, 0, breathe[t + 2], 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
                             }
                     }
-                    handleevents();
-                    Net_GetPackets();
+
+                    gameHandleEvents();
                     videoNextPage();
-                    if (KB_KeyWaiting()) break;
+                    if (KB_KeyWaiting())
+                        break;
                 }
             }
 
@@ -412,11 +405,10 @@ void G_BonusScreen(int bonusonly)
             rotatesprite(0, 0, 65536L, 0, 3292, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
             IFISSOFTMODE fadepal(0, 0, 0, 63, 0, -1);
             else videoNextPage();
+
             while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
-            {
-                handleevents();
-                Net_GetPackets();
-            }
+                gameHandleEvents();
+
             fadepal(0, 0, 0, 0, 64, 1);
             S_StopMusic();
             FX_StopAllSounds();
@@ -445,11 +437,10 @@ void G_BonusScreen(int bonusonly)
             rotatesprite(0, 0, 65536L, 0, 3293, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
             IFISSOFTMODE fadepal(0, 0, 0, 63, 0, -1);
             else videoNextPage();
+
             while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
-            {
-                handleevents();
-                Net_GetPackets();
-            }
+                gameHandleEvents();
+
             IFISSOFTMODE fadepal(0, 0, 0, 0, 64, 1);
 
             break;
@@ -493,12 +484,11 @@ void G_BonusScreen(int bonusonly)
             videoNextPage();
 
             fadepal(0, 0, 0, 63, 0, -3);
+
             KB_FlushKeyboardQueue();
             while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
-            {
-                handleevents();
-                Net_GetPackets();
-            }
+                gameHandleEvents();
+
             fadepal(0, 0, 0, 0, 64, 3);
 
             videoClearViewableArea(0L);
@@ -509,10 +499,7 @@ void G_BonusScreen(int bonusonly)
 
             KB_FlushKeyboardQueue();
             while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
-            {
-                handleevents();
-                Net_GetPackets();
-            }
+                gameHandleEvents();
 
             videoClearViewableArea(0L);
             videoNextPage();
@@ -536,11 +523,10 @@ void G_BonusScreen(int bonusonly)
                 G_PlayAnim("cineov3.anm", 2);
                 KB_FlushKeyboardQueue();
                 ototalclock = (int32_t)totalclock + 200;
+
                 while (totalclock < ototalclock)
-                {
-                    handleevents();
-                    Net_GetPackets();
-                }
+                    gameHandleEvents();
+
                 videoClearViewableArea(0L);
                 videoNextPage();
 
@@ -554,48 +540,39 @@ void G_BonusScreen(int bonusonly)
             {
                 S_PlaySound(ENDSEQVOL3SND5);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND5))
-                {
-                    handleevents();
-                    Net_GetPackets();
-                }
+                    gameHandleEvents();
+
                 if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
+
                 S_PlaySound(ENDSEQVOL3SND6);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND6))
-                {
-                    handleevents();
-                    Net_GetPackets();
-                }
+                    gameHandleEvents();
+
                 if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
+
                 S_PlaySound(ENDSEQVOL3SND7);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND7))
-                {
-                    handleevents();
-                    Net_GetPackets();
-                }
+                    gameHandleEvents();
+
                 if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
+
                 S_PlaySound(ENDSEQVOL3SND8);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND8))
-                {
-                    handleevents();
-                    Net_GetPackets();
-                }
+                    gameHandleEvents();
+
                 if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
+
                 S_PlaySound(ENDSEQVOL3SND9);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND9))
-                {
-                    handleevents();
-                    Net_GetPackets();
-                }
-
+                    gameHandleEvents();
             }
+
             MOUSE_ClearButton(LEFT_MOUSE);
+
             KB_FlushKeyboardQueue();
             totalclock = 0;
             while (!KB_KeyWaiting() && totalclock < 120 && !MOUSE_GetButtons() & LEFT_MOUSE)
-            {
-                handleevents();
-                Net_GetPackets();
-            }
+                gameHandleEvents();
 
         ENDANM:
             MOUSE_ClearButton(LEFT_MOUSE);
@@ -705,9 +682,10 @@ FRAGBONUS:
             while (KB_KeyWaiting() == 0)
             {
                 // continue after 10 seconds...
-                if (totalclock > tc + (120 * 10)) break;
-                handleevents();
-                Net_GetPackets();
+                if (totalclock > tc + (120 * 10))
+                    break;
+
+                gameHandleEvents();
             }
         }
 
@@ -776,8 +754,7 @@ FRAGBONUS:
     {
         int yy = 0, zz;
 
-        Net_GetPackets();
-        handleevents();
+        gameHandleEvents();
         MUSIC_Update();
 
         if (g_player[myconnectindex].ps->gm & MODE_EOL)

@@ -410,11 +410,10 @@ void S_PrecacheSounds(void)
         if (g_sounds[i].ptr == 0)
         {
             j++;
+
             if ((j & 7) == 0)
-            {
-                handleevents();
-                Net_GetPackets();
-            }
+                gameHandleEvents();
+
             S_LoadSound(i);
         }
     }

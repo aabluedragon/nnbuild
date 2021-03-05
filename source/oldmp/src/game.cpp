@@ -2635,22 +2635,18 @@ static void G_DisplayExtraScreens(void)
         rotatesprite(0,0,65536L,0,3291,0,0,2+8+16+64, 0,0,xdim-1,ydim-1);
         IFISSOFTMODE fadepal(0,0,0, 63,0,-7);
         else videoNextPage();
+
         while (!KB_KeyWaiting())
-        {
-            handleevents();
-            Net_GetPackets();
-        }
+            gameHandleEvents();
 
         fadepal(0,0,0, 0,64,7);
         KB_FlushKeyboardQueue();
         rotatesprite(0,0,65536L,0,3290,0,0,2+8+16+64, 0,0,xdim-1,ydim-1);
         IFISSOFTMODE fadepal(0,0,0, 63,0,-7);
         else videoNextPage();
+
         while (!KB_KeyWaiting())
-        {
-            handleevents();
-            Net_GetPackets();
-        }
+            gameHandleEvents();
     }
 
     if (flags & LOGO_TENSCREEN)
@@ -2664,11 +2660,9 @@ static void G_DisplayExtraScreens(void)
         rotatesprite(0,0,65536L,0,TENSCREEN,0,0,2+8+16+64, 0,0,xdim-1,ydim-1);
         IFISSOFTMODE fadepal(0,0,0, 63,0,-7);
         else videoNextPage();
+
         while (!KB_KeyWaiting() && totalclock < 2400)
-        {
-            handleevents();
-            Net_GetPackets();
-        }
+            gameHandleEvents();
     }
 }
 
@@ -9940,10 +9934,9 @@ static void G_DisplayLogo(void)
                 videoNextPage();
                 fadepal(0,0,0, 63,0,-7);
                 totalclock = 0;
-                while (totalclock < (120*7) && !KB_KeyWaiting() && !MOUSE_GetButtons()&LEFT_MOUSE)
+                while (totalclock < (TICRATE*7) && !KB_KeyWaiting() && !MOUSE_GetButtons()&LEFT_MOUSE)
                 {
-                    handleevents();
-                    Net_GetPackets();
+                    gameHandleEvents();
                     if (g_restorePalette)
                     {
                         P_SetGamePalette(g_player[myconnectindex].ps,g_player[myconnectindex].ps->palette,0);
@@ -10025,9 +10018,11 @@ static void G_DisplayLogo(void)
                         rotatesprite(160<<16,(151)<<16,30<<11,0,PLUTOPAKSPRITE+1,0,0,2+8,0,0,xdim-1,ydim-1);
                     }
                 }
+
                 X_OnEvent(EVENT_LOGO, -1, screenpeek, -1);
-                handleevents();
-                Net_GetPackets();
+
+                gameHandleEvents();
+
                 if (g_restorePalette)
                 {
                     P_SetGamePalette(g_player[myconnectindex].ps,g_player[myconnectindex].ps->palette,0);
@@ -11192,17 +11187,7 @@ CLEAN_DIRECTORY:
     // getnames();
 
     if (ud.multimode > 1)
-    {
         playerswhenstarted = ud.multimode;
-
-        /*
-        if (ud.warp_on == 0)
-        {
-            ud.m_monsters_off = 1;
-            ud.m_player_skill = 0;
-        }
-        */
-    }
 
     ud.last_level = -1;
 
@@ -11412,7 +11397,7 @@ MAIN_LOOP_RESTART:
 
     do // main loop
     {
-        if (handleevents() && quitevent)
+        if (gameHandleEvents() && quitevent)
         {
             // JBF
             KB_KeyDown[sc_Escape] = 1;
@@ -11780,9 +11765,9 @@ RECHECK:
         {
             G_HandleLocalKeys();
 
-            j = min(max(((int32_t)totalclock-lockclock)*(65536/TICSPERFRAME),0),65536);
-            G_DrawRooms(screenpeek,j);
-            G_DisplayRest(j);
+            int smoothRatio = calc_smoothratio((int32_t)totalclock, lockclock);
+            G_DrawRooms(screenpeek,smoothRatio);
+            G_DisplayRest(smoothRatio);
 
             if (ud.multimode > 1 && g_player[myconnectindex].ps->gm)
                 Net_GetPackets();
@@ -11842,8 +11827,8 @@ RECHECK:
             if (ud.show_help == 0 && (g_player[myconnectindex].ps->gm&MODE_MENU) == 0)
                 rotatesprite((320-50)<<16,9<<16,65536L,0,BETAVERSION,0,0,2+8+16+128,0,0,xdim-1,ydim-1);
         }
-        handleevents();
-        Net_GetPackets();
+
+        gameHandleEvents();
         videoNextPage();
 
         if (g_player[myconnectindex].ps->gm==MODE_END || g_player[myconnectindex].ps->gm==MODE_GAME)
@@ -11884,14 +11869,14 @@ static int G_MoveLoop()
             Net_DoPrediction();
     }
 
-    if (numplayers < 2) bufferjitter = 0;
+    if (numplayers < 2)
+        bufferjitter = 0;
+
     while (g_player[myconnectindex].movefifoend-movefifoplc > bufferjitter)
     {
         TRAVERSE_CONNECT(i)
-        {
             if ((movefifoplc == g_player[i].movefifoend) && !g_gameQuit)
                 break;
-        }
 
         //i is >= 0 only if last loop was broken, meaning a player wasn't caught up
         if (i >= 0)

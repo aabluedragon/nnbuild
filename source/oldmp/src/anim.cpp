@@ -265,8 +265,7 @@ void G_PlayAnim(const char *fn, char t)
 
         while (totalclock < ototalclock)
         {
-            handleevents();
-            Net_GetPackets();
+            gameHandleEvents();
 
             if (KB_KeyWaiting() || MOUSE_GetButtons()&LEFT_MOUSE)
                 goto ENDOFANIMLOOP;

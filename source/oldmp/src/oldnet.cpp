@@ -1532,9 +1532,7 @@ void waitforeverybody(void)
     {
         //if (quitevent) G_GameExit(""); // This sucks
 
-        handleevents();
-        Net_GetPackets();
-
+        gameHandleEvents();
         videoClearScreen(0);
 
         rotatesprite(0, 0, 65536L, 0, BETASCREEN, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
@@ -1610,11 +1608,10 @@ void allowtimetocorrecterrorswhenquitting(void)
         oldtotalclock = (int32_t)totalclock;
 
         while (totalclock < oldtotalclock+TICSPERFRAME)
-        {
-            handleevents();
-            Net_GetPackets();
-        }
-        if (KB_KeyPressed(sc_Escape)) return;
+            gameHandleEvents();
+
+        if (KB_KeyPressed(sc_Escape))
+            return;
 
         packbuf[0] = PACKET_TYPE_NULL_PACKET;
         TRAVERSE_CONNECT(i)

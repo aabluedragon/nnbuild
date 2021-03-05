@@ -1134,6 +1134,12 @@ extern hashtable_t gamefuncH;
 #include "screens.h"
 #include "oldnet.h"
 
+static inline int32_t gameHandleEvents(void)
+{
+    Net_GetPackets();
+    return handleevents();
+}
+
 static inline int32_t G_TileHasActor(int const tileNum)
 {
     return actorscrptr[tileNum] != NULL;

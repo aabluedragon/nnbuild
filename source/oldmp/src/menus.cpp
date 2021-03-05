@@ -552,24 +552,21 @@ void M_DisplayMenus(void)
     int l,m;
     const char *p = NULL;
 
-    Net_GetPackets();
-
+    if (buttonstat != 0 && !onbar)
     {
-        if (buttonstat != 0 && !onbar)
-        {
-            x = MOUSE_GetButtons()<<3;
-            if (x) buttonstat = x<<3;
-            else buttonstat = 0;
-        }
-        else
-            buttonstat = MOUSE_GetButtons();
+        x = MOUSE_GetButtons()<<3;
+        if (x) buttonstat = x<<3;
+        else buttonstat = 0;
     }
+    else
+        buttonstat = MOUSE_GetButtons();
 
     if ((g_player[myconnectindex].ps->gm&MODE_MENU) == 0)
     {
         walock[TILE_LOADSHOT] = 1;
         return;
     }
+
     X_OnEvent(EVENT_DISPLAYMENU, g_player[screenpeek].ps->i, screenpeek, -1);
 
     g_player[myconnectindex].ps->gm &= (0xff-MODE_TYPE);
@@ -1258,6 +1255,7 @@ void M_DisplayMenus(void)
                             if (x != myconnectindex) mmulti_sendpacket(x, (unsigned char*)tempbuf, 3);
                             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                         }
+
                         Net_GetPackets();
 
                         G_LoadPlayer(g_lastSaveSlot);
