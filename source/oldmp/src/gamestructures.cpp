@@ -997,7 +997,6 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
         return;
 
     case USERDEFS_RETURN:
-        OSD_Printf("ReturnVar lParm2: %d Set: %d\n", lParm2, iSet);
         if (lParm2 == 0)
         {
             if (iSet)
