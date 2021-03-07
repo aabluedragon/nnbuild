@@ -61,6 +61,7 @@ extern void P_CheckTouchDamage(DukePlayer_t *p,int j);
 
 // [JM] I should make a sector.h
 extern void A_DamageWall(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum);
+extern void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum);
 extern void Sect_DamageFloor(int const spriteNum, int const sectNum);
 extern void Sect_DamageFloor_Internal(int const spriteNum, int const sectNum);
 extern void Sect_DamageCeiling(int const spriteNum, int const sectNum);

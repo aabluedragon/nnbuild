@@ -354,12 +354,12 @@ void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
             {
                 d = klabs(wall[sector[dasect].wallptr].x-s->x)+klabs(wall[sector[dasect].wallptr].y-s->y);
                 if (d < r)
-                    Sect_DamageCeiling(i, dasect);
+                    Sect_DamageCeiling_Internal(i, dasect);
                 else
                 {
                     d = klabs(wall[wall[wall[sector[dasect].wallptr].point2].point2].x-s->x)+klabs(wall[wall[wall[sector[dasect].wallptr].point2].point2].y-s->y);
                     if (d < r)
-                        Sect_DamageCeiling(i, dasect);
+                        Sect_DamageCeiling_Internal(i, dasect);
                 }
             }
 
@@ -379,7 +379,7 @@ void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
                     y1 = (((wal->y+wall[wal->point2].y)>>1)+s->y)>>1;
                     updatesector(x1,y1,&sect);
                     if (sect >= 0 && cansee(x1,y1,s->z,sect,s->x,s->y,s->z,s->sectnum))
-                        A_DamageWall(i, x, { wal->x, wal->y, s->z }, s->picnum);
+                        A_DamageWall_Internal(i, x, { wal->x, wal->y, s->z }, s->picnum);
                 }
         }
         while (sectcnt < sectend);
