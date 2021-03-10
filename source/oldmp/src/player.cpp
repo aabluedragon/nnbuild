@@ -4597,9 +4597,9 @@ void P_ProcessInput(int snum)
 
     if (!oldnet_predicting)
     {
-        s->xvel =
-            ksqrt((p->pos.x - p->bobposx) * (p->pos.x - p->bobposx) + (p->pos.y - p->bobposy) * (p->pos.y - p->bobposy));
-        if (p->on_ground) p->bobcounter += sprite[playerSprite].xvel >> 1;
+        s->xvel = ksqrt((p->pos.x - p->bobposx) * (p->pos.x - p->bobposx) + (p->pos.y - p->bobposy) * (p->pos.y - p->bobposy));
+        if (p->on_ground)
+            p->bobcounter += sprite[playerSprite].xvel >> 1;
     }
 
     if (ud.clipping == 0 && (sector[p->cursectnum].floorpicnum == MIRROR || p->cursectnum < 0 || p->cursectnum >= MAXSECTORS))
