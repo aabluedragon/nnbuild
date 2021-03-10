@@ -474,7 +474,7 @@ SKIPWALLCHECK:
                         else
                             ActorExtra[j].extra = damage;
 
-                        if (sprite[j].picnum != TANK && sprite[j].picnum != ROTATEGUN && sprite[j].picnum != RECON && sprite[j].picnum != BOSS1 && sprite[j].picnum != BOSS2 && sprite[j].picnum != BOSS3 && sprite[j].picnum != BOSS4)
+                        if (!A_CheckSpriteFlags(j, SPRITE_NODAMAGEPUSH))
                         {
                             if (sj->xvel < 0) sj->xvel = 0;
                             sj->xvel += (s->extra<<2);
@@ -4203,12 +4203,8 @@ static void G_MoveActors(void)
                 j = headspritesect[sect];
                 while (j>=0)
                 {
-                    switch (DynamicTileMap[sprite[j].picnum])
+                    if (A_CheckSpriteFlags(j, SPRITE_GREENSLIMEFOOD))
                     {
-                    case LIZTROOP__STATIC:
-                    case LIZMAN__STATIC:
-                    case PIGCOP__STATIC:
-                    case NEWBEAST__STATIC:
                         if (ldist(s,&sprite[j]) < 768 && (klabs(s->z-sprite[j].z)<8192))   //Gulp them
                         {
                             t[5] = j;
@@ -7663,56 +7659,7 @@ int A_CheckSpriteTileFlags(int iPicnum, int iType)
 
 int A_CheckEnemyTile(int pn)
 {
-    //this case can't be handled by the dynamictostatic system because it adds
-    //stuff to the value from names.h so handling separately
-    if ((pn >= GREENSLIME) && (pn <= GREENSLIME+7)) return 1;
-
-    if (A_CheckSpriteTileFlags(pn,SPRITE_BADGUY)) return 1;
-
-    if (ActorType[pn]) return 1;
-
-    switch (DynamicTileMap[pn])
-    {
-    case SHARK__STATIC:
-    case RECON__STATIC:
-    case DRONE__STATIC:
-    case LIZTROOPONTOILET__STATIC:
-    case LIZTROOPJUSTSIT__STATIC:
-    case LIZTROOPSTAYPUT__STATIC:
-    case LIZTROOPSHOOT__STATIC:
-    case LIZTROOPJETPACK__STATIC:
-    case LIZTROOPDUCKING__STATIC:
-    case LIZTROOPRUNNING__STATIC:
-    case LIZTROOP__STATIC:
-    case OCTABRAIN__STATIC:
-    case COMMANDER__STATIC:
-    case COMMANDERSTAYPUT__STATIC:
-    case PIGCOP__STATIC:
-    case EGG__STATIC:
-    case PIGCOPSTAYPUT__STATIC:
-    case PIGCOPDIVE__STATIC:
-    case LIZMAN__STATIC:
-    case LIZMANSPITTING__STATIC:
-    case LIZMANFEEDING__STATIC:
-    case LIZMANJUMP__STATIC:
-    case ORGANTIC__STATIC:
-    case BOSS1__STATIC:
-    case BOSS2__STATIC:
-    case BOSS3__STATIC:
-    case BOSS4__STATIC:
-        //case GREENSLIME:
-        //case GREENSLIME+1:
-        //case GREENSLIME+2:
-        //case GREENSLIME+3:
-        //case GREENSLIME+4:
-        //case GREENSLIME+5:
-        //case GREENSLIME+6:
-        //case GREENSLIME+7:
-    case RAT__STATIC:
-    case ROTATEGUN__STATIC:
-        return 1;
-    }
-    return 0;
+    return ((SpriteFlags[pn] & (SPRITE_HARDCODED_BADGUY | SPRITE_BADGUY)) != 0);
 }
 
 int A_CheckEnemySprite(const void *s)

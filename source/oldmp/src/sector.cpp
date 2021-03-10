@@ -2472,7 +2472,7 @@ void A_DamageObject_Internal(int i,int sn)
 
                 if ((PN(i) != DRONE) && (PN(i) != ROTATEGUN) && (PN(i) != COMMANDER) && (PN(i) < GREENSLIME || PN(i) > GREENSLIME+7))
                     if (sprite[sn].picnum != FREEZEBLAST)
-                        if (ActorType[PN(i)] == 0)
+                        if (!A_CheckSpriteFlags(i, SPRITE_BADGUY) || A_CheckSpriteFlags(i, SPRITE_HURTSPAWNBLOOD))
                         {
                             j = A_Spawn(sn,JIBS6);
                             if (sprite[sn].pal == 6)
@@ -2494,7 +2494,7 @@ void A_DamageObject_Internal(int i,int sn)
                         A_Shoot(i,BLOODSPLAT4);
                     }
 
-                if (PN(i) != TANK && PN(i) != BOSS1 && PN(i) != BOSS4 && PN(i) != BOSS2 && PN(i) != BOSS3 && PN(i) != RECON && PN(i) != ROTATEGUN)
+                if (!A_CheckSpriteFlags(i, SPRITE_NODAMAGEPUSH))
                 {
                     if (sprite[i].extra > 0)
                     {

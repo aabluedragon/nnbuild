@@ -10331,6 +10331,44 @@ void G_InitMultiPsky(int CLOUDYOCEAN__DYN, int MOONSKY1__DYN, int BIGORBIT1__DYN
 extern int startwin_run(void);
 static void G_SetupGameButtons(void);
 
+#define SETFLAG(Tilenum, Flag) SpriteFlags[Tilenum] |= Flag
+// Has to be after setting the dynamic names (e.g. SHARK).
+static void A_InitEnemyFlags(void)
+{
+    int DukeEnemies[] = {
+        SHARK, RECON, DRONE,
+        LIZTROOPONTOILET, LIZTROOPJUSTSIT, LIZTROOPSTAYPUT, LIZTROOPSHOOT,
+        LIZTROOPJETPACK, LIZTROOPSHOOT, LIZTROOPDUCKING, LIZTROOPRUNNING, LIZTROOP,
+        OCTABRAIN, COMMANDER, COMMANDERSTAYPUT, PIGCOP, PIGCOPSTAYPUT, PIGCOPDIVE, EGG,
+        LIZMAN, LIZMANSPITTING, LIZMANJUMP, ORGANTIC,
+        BOSS1, BOSS2, BOSS3, BOSS4, RAT, ROTATEGUN };
+
+    int SolidEnemies[] = { TANK, BOSS1, BOSS2, BOSS3, BOSS4, RECON, ROTATEGUN };
+    int NoWaterDipEnemies[] = { OCTABRAIN, COMMANDER, DRONE };
+    int GreenSlimeFoodEnemies[] = { LIZTROOP, LIZMAN, PIGCOP, NEWBEAST };
+
+    for (bssize_t i = GREENSLIME; i <= GREENSLIME + 7; i++)
+        SETFLAG(i, SPRITE_HARDCODED_BADGUY);
+
+    for (bssize_t i = ARRAY_SIZE(DukeEnemies) - 1; i >= 0; i--)
+        SETFLAG(DukeEnemies[i], SPRITE_HARDCODED_BADGUY);
+
+    for (bssize_t i = ARRAY_SIZE(SolidEnemies) - 1; i >= 0; i--)
+        SETFLAG(SolidEnemies[i], SPRITE_NODAMAGEPUSH);
+
+    for (bssize_t i = ARRAY_SIZE(NoWaterDipEnemies) - 1; i >= 0; i--)
+        SETFLAG(NoWaterDipEnemies[i], SPRITE_NOWATERDIP);
+
+    for (bssize_t i = ARRAY_SIZE(GreenSlimeFoodEnemies) - 1; i >= 0; i--)
+        SETFLAG(GreenSlimeFoodEnemies[i], SPRITE_GREENSLIMEFOOD);
+}
+#undef SETFLAG
+
+static void G_PostCreateGameState(void)
+{
+    A_InitEnemyFlags();
+}
+
 static void G_Startup(void)
 {
     int i;
@@ -10350,6 +10388,7 @@ static void G_Startup(void)
 
     G_InitDynamicTiles();
     G_InitMultiPsky(CLOUDYOCEAN, MOONSKY1, BIGORBIT1, LA);
+    G_PostCreateGameState();
 
     if (ud.multimode > 1) G_CheckGametype();
 

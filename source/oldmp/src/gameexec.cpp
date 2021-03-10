@@ -1299,22 +1299,15 @@ static int X_DoExecute(void)
             else if (sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER)
             {
                 intptr_t* moveptr = (intptr_t*)g_t[1];
-                switch (DynamicTileMap[g_sp->picnum])
+
+                if(!A_CheckSpriteFlags(g_i, SPRITE_NOWATERDIP))
                 {
-                default:
                     // fix for flying/jumping monsters getting stuck in water
-                    if (g_sp->hitag & jumptoplayer || (actorscrptr[g_sp->picnum] &&
-                        moveptr >= &script[0] && moveptr <= (&script[0] + g_scriptSize) && *(moveptr + 1)))
+                    if (!(g_sp->hitag & jumptoplayer ||
+                        (actorscrptr[g_sp->picnum] && moveptr >= &script[0] && moveptr <= (&script[0] + g_scriptSize) && *(moveptr + 1))))
                     {
-                        //                    OSD_Printf("%d\n",*(moveptr+1));
-                        break;
+                        g_sp->z += (24 << 8);
                     }
-                    //                OSD_Printf("hitag: %d\n",g_sp->hitag);
-                    g_sp->z += (24 << 8);
-                case OCTABRAIN__STATIC:
-                case COMMANDER__STATIC:
-                case DRONE__STATIC:
-                    break;
                 }
                 break;
             }
