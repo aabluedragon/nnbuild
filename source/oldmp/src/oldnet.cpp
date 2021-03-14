@@ -1442,31 +1442,26 @@ void Net_CorrectPrediction(void)
 
 void Net_ResetPrediction(void)
 {
-    predictedPlayer.pos = predictedPlayer.opos = g_player[myconnectindex].ps->pos;
-    predictedPlayer.vel = { 0, 0, 0 };
-    predictedPlayer.q16ang = predictedPlayer.oq16ang = g_player[myconnectindex].ps->q16ang;
-    predictedPlayer.q16horiz = predictedPlayer.oq16horiz = g_player[myconnectindex].ps->q16horiz;
-    predictedPlayer.q16horizoff = predictedPlayer.oq16horizoff = g_player[myconnectindex].ps->q16horizoff;
-    predictedPlayer.cursectnum = g_player[myconnectindex].ps->cursectnum;
-    predictedPlayer.jumping_counter = g_player[myconnectindex].ps->jumping_counter;
-    predictedPlayer.jumping_toggle = g_player[myconnectindex].ps->jumping_toggle;
-    predictedPlayer.on_ground = g_player[myconnectindex].ps->on_ground;
-    predictedPlayer.hard_landing = g_player[myconnectindex].ps->hard_landing;
-    predictedPlayer.return_to_center = g_player[myconnectindex].ps->return_to_center;
+    if (g_player[myconnectindex].ps == NULL)
+        return;
+
+    predictedPlayer = *g_player[myconnectindex].ps;
 }
 
 void Net_DoPrediction(void)
 {
-    short backcstat;
-
     DukePlayer_t* p = g_player[myconnectindex].ps;
-
-    backcstat = sprite[p->i].cstat;
-    sprite[p->i].cstat &= ~257;
+    spritetype backupSprite = sprite[p->i];
+    int32_t backupSeed = randomseed;
 
     oldnet_predicting = 1;
+    sprite[p->i].cstat &= ~257;
+
     X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
     P_ProcessInput(myconnectindex);
+
+    sprite[p->i] = backupSprite;
+    randomseed = backupSeed;
     oldnet_predicting = 0;
 
     myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].x = predictedPlayer.pos.x;
@@ -1475,8 +1470,6 @@ void Net_DoPrediction(void)
     myangbak[predictfifoplc&(MOVEFIFOSIZ-1)] = predictedPlayer.q16ang;
     myhorizbak[predictfifoplc&(MOVEFIFOSIZ-1)] = predictedPlayer.q16horiz;
     predictfifoplc++;
-
-    sprite[p->i].cstat = backcstat;
 }
 
 void Net_ClearFIFO(void)
