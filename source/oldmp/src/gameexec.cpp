@@ -312,7 +312,7 @@ void A_GetZLimits(int iActor)
 {
     spritetype *s = &sprite[iActor];
 
-    if (s->statnum == 10 || s->statnum == 6 || s->statnum == 2 || s->statnum == 1 || s->statnum == 4)
+    if (s->statnum == STAT_PLAYER || s->statnum == STAT_STANDABLE || s->statnum == STAT_ZOMBIEACTOR || s->statnum == STAT_ACTOR || s->statnum == STAT_PROJECTILE)
     {
         int hz,lz,zr = 127L;
         int32_t cstat = s->cstat;
@@ -344,7 +344,7 @@ void A_GetZLimits(int iActor)
                 s->xvel = -256;
                 A_SetSprite(iActor,CLIPMASK0);
             }
-            else if (s->statnum == 4 && sprite[lz].picnum == APLAYER)
+            else if (s->statnum == STAT_PROJECTILE && sprite[lz].picnum == APLAYER)
                 if (s->owner == lz)
                 {
                     ActorExtra[iActor].ceilingz = sector[s->sectnum].ceilingz;

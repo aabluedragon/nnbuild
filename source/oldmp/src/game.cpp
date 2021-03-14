@@ -7288,7 +7288,7 @@ PALONLY:
                     {
                         int daz,xrep,yrep;
 
-                        if ((sector[sect].lotag&0xff) > 2 || s->statnum == 4 || s->statnum == 5 || s->picnum == DRONE || s->picnum == COMMANDER)
+                        if ((sector[sect].lotag&0xff) > 2 || s->statnum == STAT_PROJECTILE || s->statnum == STAT_MISC || s->picnum == DRONE || s->picnum == COMMANDER)
                             daz = sector[sect].floorz;
                         else
                             daz = ActorExtra[i].floorz;
