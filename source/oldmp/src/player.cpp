@@ -3224,7 +3224,7 @@ static int P_DoCounters(DukePlayer_t *p)
         if (p->access_incs == 12)
         {
             char keyname[7];
-            int keypal;
+            int keypal = 0;
 
             if (p->access_spritenum >= 0)
             {
