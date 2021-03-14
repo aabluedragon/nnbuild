@@ -5411,7 +5411,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
                     if (playerNum == myconnectindex)
                     {
                         predictedPlayer.pos.z += zChange;
-                        myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))].z = g_player[playerNum].ps->pos.z;
+                        predictBackup[PREDICT_LASTPOS].pos.z = g_player[playerNum].ps->pos.z;
                     }
                 }
             }
@@ -6647,7 +6647,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     {
                         //omyz = myz;
                         predictedPlayer.pos.z += q;
-                        myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))].z = g_player[p].ps->pos.z;
+                        predictBackup[PREDICT_LASTPOS].pos.z = g_player[p].ps->pos.z;
                     }
                 }
 
@@ -6735,7 +6735,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             predictedPlayer.opos.vec2 = predictedPlayer.pos.vec2;
 
                             predictedPlayer.cursectnum = sprite[j].sectnum;
-                            myposbak[((movefifoplc - 1)&(MOVEFIFOSIZ - 1))] = g_player[p].ps->pos;
+                            predictBackup[PREDICT_LASTPOS].pos = g_player[p].ps->pos;
                         }
                     }
                     else if (sprite[k].statnum != 3)

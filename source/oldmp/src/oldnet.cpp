@@ -16,9 +16,7 @@ int predictfifoplc;
 
 int oldnet_predicting;
 DukePlayer_t predictedPlayer;
-
-vec3_t myposbak[MOVEFIFOSIZ];
-fix16_t myhorizbak[MOVEFIFOSIZ], myangbak[MOVEFIFOSIZ];
+PredictBackup_t predictBackup[MOVEFIFOSIZ];
 
 static int g_chatPlayer = -1;
 static char recbuf[180];
@@ -1382,38 +1380,42 @@ void Net_CorrectPrediction(void)
 
     if (numplayers < 2) return;
 
-    i = ((movefifoplc-1)&(MOVEFIFOSIZ-1));
+    i = PREDICT_LASTPOS;
     p = g_player[myconnectindex].ps;
 
     // HACK: Don't correct prediction if we're dead. Fixes "wackedbyactor" cam.
     if (p->wackedbyactor >= 0 || sprite[p->i].extra <= 0)
         return;
 
-    if (p->pos.x == myposbak[i].x && p->pos.y == myposbak[i].y && p->pos.z == myposbak[i].z
-            && p->q16horiz == myhorizbak[i] && p->q16ang == myangbak[i]) return;
+    if (p->pos.x == predictBackup[i].pos.x &&
+        p->pos.y == predictBackup[i].pos.y &&
+        p->pos.z == predictBackup[i].pos.z &&
+        p->q16horiz == predictBackup[i].q16horiz &&
+        p->q16ang == predictBackup[i].q16ang)
+        return;
 
     if (ud.config.PredictionDebug)
     {
         initprintf("Prediction Mismatch - ");
-        if (p->pos.x != myposbak[i].x)
+        if (p->pos.x != predictBackup[i].pos.x)
         {
-            initprintf("^01xpos^12(^02%d^12/^08%d^12) ", myposbak[i].x, p->pos.x);
+            initprintf("^01xpos^12(^02%d^12/^08%d^12) ", predictBackup[i].pos.x, p->pos.x);
         }
-        if (p->pos.y != myposbak[i].y)
+        if (p->pos.y != predictBackup[i].pos.y)
         {
-            initprintf("^01ypos^12(^02%d^12/^08%d^12) ", myposbak[i].y, p->pos.y);
+            initprintf("^01ypos^12(^02%d^12/^08%d^12) ", predictBackup[i].pos.y, p->pos.y);
         }
-        if (p->pos.z != myposbak[i].z)
+        if (p->pos.z != predictBackup[i].pos.z)
         {
-            initprintf("^01zpos^12(^02%d^12/^08%d^12) ", myposbak[i].z, p->pos.z);
+            initprintf("^01zpos^12(^02%d^12/^08%d^12) ", predictBackup[i].pos.z, p->pos.z);
         }
-        if (p->q16horiz != myhorizbak[i])
+        if (p->q16horiz != predictBackup[i].q16horiz)
         {
-            initprintf("^01q16horiz^12(^02%d^12/^08%d^12) ", myhorizbak[i], p->q16horiz);
+            initprintf("^01q16horiz^12(^02%d^12/^08%d^12) ", predictBackup[i].q16horiz, p->q16horiz);
         }
-        if (p->q16ang != myangbak[i])
+        if (p->q16ang != predictBackup[i].q16ang)
         {
-            initprintf("^01q16ang^12(^02%d^12/^08%d^12) ", myangbak[i], p->q16ang);
+            initprintf("^01q16ang^12(^02%d^12/^08%d^12) ", predictBackup[i].q16ang, p->q16ang);
         }
         initprintf("\n");
     }
@@ -1464,11 +1466,9 @@ void Net_DoPrediction(void)
     randomseed = backupSeed;
     oldnet_predicting = 0;
 
-    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].x = predictedPlayer.pos.x;
-    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].y = predictedPlayer.pos.y;
-    myposbak[predictfifoplc&(MOVEFIFOSIZ-1)].z = predictedPlayer.pos.z;
-    myangbak[predictfifoplc&(MOVEFIFOSIZ-1)] = predictedPlayer.q16ang;
-    myhorizbak[predictfifoplc&(MOVEFIFOSIZ-1)] = predictedPlayer.q16horiz;
+    predictBackup[PREDICT_CURPOS].pos = predictedPlayer.pos;
+    predictBackup[PREDICT_CURPOS].q16ang = predictedPlayer.q16ang;
+    predictBackup[PREDICT_CURPOS].q16horiz = predictedPlayer.q16horiz;
     predictfifoplc++;
 }
 

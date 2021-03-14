@@ -342,7 +342,7 @@ void G_DoSectorAnimations(void)
                         {
                             predictedPlayer.pos.z += v;
                             predictedPlayer.vel.z = 0;
-                            myposbak[((movefifoplc-1)&(MOVEFIFOSIZ-1))].z = g_player[p].ps->pos.z;
+                            predictBackup[PREDICT_LASTPOS].pos.z = g_player[p].ps->pos.z;
                         }
                     }
 

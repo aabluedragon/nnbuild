@@ -4,6 +4,12 @@
 #include "duke3d.h"
 #include "sync.h"
 
+typedef struct
+{
+    vec3_t pos;
+    fix16_t q16horiz, q16ang;
+} PredictBackup_t;
+
 extern int quittimer;
 extern int lastpackettime;
 extern int mymaxlag, otherminlag, bufferjitter;
@@ -16,8 +22,10 @@ extern int predictfifoplc;
 
 extern int oldnet_predicting;
 extern DukePlayer_t predictedPlayer;
-extern vec3_t myposbak[MOVEFIFOSIZ];
-extern fix16_t myhorizbak[MOVEFIFOSIZ], myangbak[MOVEFIFOSIZ];
+extern PredictBackup_t predictBackup[MOVEFIFOSIZ];
+
+#define PREDICT_CURPOS (predictfifoplc & (MOVEFIFOSIZ - 1))
+#define PREDICT_LASTPOS ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
 
 enum DukePacket_t
 {
