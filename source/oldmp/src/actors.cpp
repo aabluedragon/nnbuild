@@ -5055,13 +5055,14 @@ static void G_MoveMisc(void)  // STATNUM 5
                 if (++t[5] == (30*10))
                     KILLIT(i);
 
-                if (s->zvel > 1024 && s->zvel < 1280)
+                if ((s->zvel > 1024 && s->zvel < 1280) ||
+                    ((yax_getbunch(s->sectnum, (s->zvel > 0)) >= 0) && ((SECTORFLD(s->sectnum, stat, (s->zvel > 0)) & 512) == 0)))
                 {
-                    setspritez_old(i,s->x,s->y,s->z);
+                    setspritez(i,&s->pos);
                     sect = s->sectnum;
                 }
 
-                getzsofslope(sect,s->x,s->y,&x,&l);
+                yax_getzsofslope(sect,s->x,s->y,&x,&l);
                 if (x == l || sect < 0 || sect >= MAXSECTORS) KILLIT(i);
 
                 if (s->z < l-(2<<8))
@@ -5097,7 +5098,6 @@ static void G_MoveMisc(void)  // STATNUM 5
                     s->x += (s->xvel*sintable[(s->ang+512)&2047])>>14;
                     s->y += (s->xvel*sintable[s->ang&2047])>>14;
                     s->z += s->zvel;
-
                 }
                 else
                 {
@@ -5107,6 +5107,8 @@ static void G_MoveMisc(void)  // STATNUM 5
                         {
                             KILLIT(i);
                         }
+                        // [JM] This code is a fuck. I suggest removing it.
+                        // Causes gibs to not splatter on slopes.
                         if ((sector[s->sectnum].floorstat&2))
                         {
                             KILLIT(i);
