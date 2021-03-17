@@ -1375,67 +1375,55 @@ void Net_EnterMessage(void)
 
 void Net_CorrectPrediction(void)
 {
-    int i;
-    DukePlayer_t *p;
-
-    if (numplayers < 2) return;
-
-    i = PREDICT_LASTPOS;
-    p = g_player[myconnectindex].ps;
-
-    // HACK: Don't correct prediction if we're dead. Fixes "wackedbyactor" cam.
-    if (p->wackedbyactor >= 0 || sprite[p->i].extra <= 0)
+    if (numplayers < 2)
         return;
 
-    if (p->pos.x == predictBackup[i].pos.x &&
-        p->pos.y == predictBackup[i].pos.y &&
-        p->pos.z == predictBackup[i].pos.z &&
-        p->q16horiz == predictBackup[i].q16horiz &&
-        p->q16ang == predictBackup[i].q16ang)
+    DukePlayer_t* p = g_player[myconnectindex].ps;
+
+#if 1 // HACK: Don't correct prediction if we're dead. Fixes "wackedbyactor" cam.
+    if (p->wackedbyactor >= 0 || sprite[p->i].extra <= 0)
+        return;
+#endif
+
+    if (predict_check(pos.x) &&
+        predict_check(pos.y) &&
+        predict_check(pos.z) &&
+        predict_check(q16horiz) &&
+        predict_check(q16ang))
         return;
 
     if (ud.config.PredictionDebug)
     {
         initprintf("Prediction Mismatch - ");
-        if (p->pos.x != predictBackup[i].pos.x)
-        {
-            initprintf("^01xpos^12(^02%d^12/^08%d^12) ", predictBackup[i].pos.x, p->pos.x);
-        }
-        if (p->pos.y != predictBackup[i].pos.y)
-        {
-            initprintf("^01ypos^12(^02%d^12/^08%d^12) ", predictBackup[i].pos.y, p->pos.y);
-        }
-        if (p->pos.z != predictBackup[i].pos.z)
-        {
-            initprintf("^01zpos^12(^02%d^12/^08%d^12) ", predictBackup[i].pos.z, p->pos.z);
-        }
-        if (p->q16horiz != predictBackup[i].q16horiz)
-        {
-            initprintf("^01q16horiz^12(^02%d^12/^08%d^12) ", predictBackup[i].q16horiz, p->q16horiz);
-        }
-        if (p->q16ang != predictBackup[i].q16ang)
-        {
-            initprintf("^01q16ang^12(^02%d^12/^08%d^12) ", predictBackup[i].q16ang, p->q16ang);
-        }
+        predict_debug_print(pos.x);
+        predict_debug_print(pos.y);
+        predict_debug_print(pos.z);
+        predict_debug_print(q16horiz);
+        predict_debug_print(q16ang);
         initprintf("\n");
     }
 
-    predictedPlayer.pos = p->pos;
-    predictedPlayer.opos = p->opos;
-    predictedPlayer.vel = p->vel;
+#if 0
+    predict_reset(pos);
+    predict_reset(q16ang);
+    predict_reset(q16horiz);
+    predict_reset(q16horizoff);
 
-    predictedPlayer.q16ang = p->q16ang;
-    predictedPlayer.oq16ang = p->oq16ang;
-    predictedPlayer.cursectnum = p->cursectnum;
-    predictedPlayer.q16horiz = p->q16horiz;
-    predictedPlayer.oq16horiz = p->oq16horiz;
-    predictedPlayer.q16horizoff = p->q16horizoff;
-    predictedPlayer.oq16horizoff = p->oq16horizoff;
-    predictedPlayer.jumping_counter = p->jumping_counter;
-    predictedPlayer.jumping_toggle = p->jumping_toggle;
-    predictedPlayer.on_ground = p->on_ground;
-    predictedPlayer.hard_landing = p->hard_landing;
-    predictedPlayer.return_to_center = p->return_to_center;
+    predict_reset(opos);
+    predict_reset(oq16ang);
+    predict_reset(oq16horiz); 
+    predict_reset(oq16horizoff);
+
+    predict_reset(vel);
+    predict_reset(cursectnum);
+    predict_reset(jumping_counter);
+    predict_reset(jumping_toggle);
+    predict_reset(on_ground);
+    predict_reset(hard_landing);
+    predict_reset(return_to_center);
+#else
+    predictedPlayer = *p; // Tad excessive? Could be useful for debugging.
+#endif
 
     predictfifoplc = movefifoplc;
     while (predictfifoplc < g_player[myconnectindex].movefifoend)

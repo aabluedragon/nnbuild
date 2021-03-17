@@ -4,6 +4,15 @@
 #include "duke3d.h"
 #include "sync.h"
 
+#define PREDICT_CURPOS (predictfifoplc & (MOVEFIFOSIZ - 1))
+#define PREDICT_LASTPOS ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
+
+#define predict_debug_print(memb) if(g_player[myconnectindex].ps->memb != predictBackup[PREDICT_LASTPOS].memb) \
+                                  OSD_Printf("^01" #memb "^12(^02%d^12/^08%d^12) ", predictBackup[PREDICT_LASTPOS].memb, g_player[myconnectindex].ps->memb)
+
+#define predict_check(memb) (g_player[myconnectindex].ps->memb == predictBackup[PREDICT_LASTPOS].memb)
+#define predict_reset(memb) predictedPlayer.memb = g_player[myconnectindex].ps->memb
+
 typedef struct
 {
     vec3_t pos;
@@ -23,9 +32,6 @@ extern int predictfifoplc;
 extern int oldnet_predicting;
 extern DukePlayer_t predictedPlayer;
 extern PredictBackup_t predictBackup[MOVEFIFOSIZ];
-
-#define PREDICT_CURPOS (predictfifoplc & (MOVEFIFOSIZ - 1))
-#define PREDICT_LASTPOS ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
 
 enum DukePacket_t
 {
