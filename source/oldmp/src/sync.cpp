@@ -68,6 +68,7 @@ char Net_PlayerSync(void)
         updatecrc(crc, pp->pos.y & 255);
         updatecrc(crc, pp->pos.z & 255);
         updatecrc(crc, pp->q16ang & 255);
+        updatecrc(crc, pp->q16horiz & 255);
     }
 
     return ((char) crc & 255);
@@ -85,7 +86,8 @@ char Net_PlayerSync2(void)
     {
         pp = g_player[i].ps;
 
-        updatecrc(crc, pp->q16horiz & 255);
+        updatecrc(crc, pp->curr_weapon & 255);
+        updatecrc(crc, pp->kickback_pic & 255);
         updatecrc(crc, sprite[pp->i].extra & 255);
         updatecrc(crc, pp->bobcounter & 255);
     }
