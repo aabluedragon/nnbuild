@@ -4305,7 +4305,7 @@ void G_DrawRooms(int snum,int smoothratio)
 
             // Looking through viewscreen
             ud.camerapos = camVect;
-            ud.cameraq16ang = p->q16ang + fix16_from_int(p->look_ang);
+            ud.cameraq16ang = fix16_from_int(sprite[p->newowner].ang) + fix16_from_int(p->look_ang);
             ud.cameraq16horiz = fix16_from_int(100 + sprite[p->newowner].shade);
             ud.camerasect = sprite[p->newowner].sectnum;
         }
