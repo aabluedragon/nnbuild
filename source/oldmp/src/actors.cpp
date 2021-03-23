@@ -6284,7 +6284,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if (ActorExtra[spriteNum].temp_data[4] > 8) KILLIT(spriteNum);
                 j = 1;
             }
-            else j = GetAnimationGoal(pSprite->sectnum, SECTANIM_CEILING);
+            else j = ((pSector->lotag & 0xff) == ST_21_FLOOR_DOOR) ? GetAnimationGoal(pSprite->sectnum, SECTANIM_FLOOR) : GetAnimationGoal(pSprite->sectnum, SECTANIM_CEILING);
 
             if (j >= 0)
             {
