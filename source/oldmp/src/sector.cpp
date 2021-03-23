@@ -349,10 +349,14 @@ void G_DoSectorAnimations(void)
                 if (sector[datarget].lotag == ST_18_ELEVATOR_DOWN || sector[datarget].lotag == ST_19_ELEVATOR_UP)
                     if (ptr == &sector[datarget].ceilingz)
                         continue;
-
-                if ((sector[datarget].lotag & 0xff) != ST_22_SPLITTING_DOOR)
-                    A_CallSound(datarget, -1);
             }
+            else
+            {
+                datarget = sectorofwall(datarget);
+            }
+
+            if (datarget != -1 && ((sector[datarget].lotag & 0xff) != ST_22_SPLITTING_DOOR))
+                A_CallSound(datarget, -1);
 
             continue;
         }
