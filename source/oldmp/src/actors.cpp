@@ -6284,7 +6284,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if (ActorExtra[spriteNum].temp_data[4] > 8) KILLIT(spriteNum);
                 j = 1;
             }
-            else j = GetAnimationGoal(&pSector->ceilingz);
+            else j = GetAnimationGoal(pSprite->sectnum, SECTANIM_CEILING);
 
             if (j >= 0)
             {
@@ -6363,7 +6363,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         case ST_21_FLOOR_DOOR:
                         case ST_22_SPLITTING_DOOR:
                         case ST_26_SPLITTING_ST_DOOR:
-                            if (GetAnimationGoal(&sector[pSprite->sectnum].ceilingz) >= 0)
+                            if (GetAnimationGoal(pSprite->sectnum, SECTANIM_CEILING) >= 0)
                                 break;
                             fallthrough__;
                         default:
@@ -7035,7 +7035,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             if (pData[1])
             {
-                if (GetAnimationGoal(&sector[pData[0]].ceilingz) >= 0)
+                if (GetAnimationGoal(pData[0], SECTANIM_CEILING) >= 0)
                     pSector->ceilingz += pSector->extra*9;
                 else pData[1] = 0;
             }

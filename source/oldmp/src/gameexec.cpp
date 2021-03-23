@@ -4665,13 +4665,9 @@ void G_SaveMapState(mapstate_t *save)
         //Bmemcpy(&save->pskyoff[0],&pskyoff[0],sizeof(pskyoff));
         //Bmemcpy(&save->pskybits,&pskybits,sizeof(pskybits));
 
-        Bmemcpy(&save->animategoal[0],&animategoal[0],sizeof(animategoal));
-        Bmemcpy(&save->animatevel[0],&animatevel[0],sizeof(animatevel));
-        Bmemcpy(&save->g_animateCount,&g_animateCount,sizeof(g_animateCount));
-        Bmemcpy(&save->animatesect[0],&animatesect[0],sizeof(animatesect));
-        for (i = g_animateCount-1;i>=0;i--) animateptr[i] = (int *)((intptr_t)animateptr[i]-(intptr_t)(&sector[0]));
-        Bmemcpy(&save->animateptr[0],&animateptr[0],sizeof(animateptr));
-        for (i = g_animateCount-1;i>=0;i--) animateptr[i] = (int *)((intptr_t)animateptr[i]+(intptr_t)(&sector[0]));
+        Bmemcpy(&save->g_animateCount, &g_animateCount, sizeof(g_animateCount));
+        Bmemcpy(&save->sectorAnims[0], &sectorAnims[0], sizeof(sectorAnims));
+
         Bmemcpy(&save->g_numPlayerSprites,&g_numPlayerSprites,sizeof(g_numPlayerSprites));
         Bmemcpy(&save->g_earthquakeTime,&g_earthquakeTime,sizeof(g_earthquakeTime));
         Bmemcpy(&save->lockclock,&lockclock,sizeof(lockclock));
@@ -4763,12 +4759,9 @@ void G_RestoreMapState(mapstate_t *save)
         //Bmemcpy(&pskyoff[0],&save->pskyoff[0],sizeof(pskyoff));
         //Bmemcpy(&pskybits,&save->pskybits,sizeof(pskybits));
 
-        Bmemcpy(&animategoal[0],&save->animategoal[0],sizeof(animategoal));
-        Bmemcpy(&animatevel[0],&save->animatevel[0],sizeof(animatevel));
-        Bmemcpy(&g_animateCount,&save->g_animateCount,sizeof(g_animateCount));
-        Bmemcpy(&animatesect[0],&save->animatesect[0],sizeof(animatesect));
-        Bmemcpy(&animateptr[0],&save->animateptr[0],sizeof(animateptr));
-        for (i = g_animateCount-1;i>=0;i--) animateptr[i] = (int *)((intptr_t)animateptr[i]+(intptr_t)(&sector[0]));
+        Bmemcpy(&g_animateCount, &save->g_animateCount, sizeof(g_animateCount));
+        Bmemcpy(&sectorAnims[0], &save->sectorAnims[0], sizeof(sectorAnims));
+
         Bmemcpy(&g_numPlayerSprites,&save->g_numPlayerSprites,sizeof(g_numPlayerSprites));
         Bmemcpy(&g_earthquakeTime,&save->g_earthquakeTime,sizeof(g_earthquakeTime));
         Bmemcpy(&lockclock,&save->lockclock,sizeof(lockclock));
@@ -4860,7 +4853,7 @@ void G_RestoreMapState(mapstate_t *save)
 
         for (i=g_interpolationCnt-1;i>=0;i--) bakipos[i] = *curipos[i];
         for (i = g_animateCount-1;i>=0;i--)
-            G_SetInterpolation(animateptr[i]);
+            G_SetInterpolation(G_GetAnimationPointer(i));
 
         Net_ResetPrediction();
 

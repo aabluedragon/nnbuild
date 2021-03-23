@@ -88,9 +88,8 @@ G_EXTERN vec2_t g_origins[2048];
 G_EXTERN animwalltype animwall[MAXANIMWALLS];
 G_EXTERN short g_numAnimWalls;
 
-G_EXTERN int *animateptr[MAXANIMATES];
-G_EXTERN int animategoal[MAXANIMATES], animatevel[MAXANIMATES], g_animateCount;
-G_EXTERN short animatesect[MAXANIMATES];
+G_EXTERN sectanim_t sectorAnims[MAXANIMATES];
+G_EXTERN int g_animateCount;
 
 G_EXTERN int startofdynamicinterpolations;
 

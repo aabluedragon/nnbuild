@@ -113,7 +113,7 @@ int check_activator_motion(int lotag)
             s = &sprite[i];
 
             for (j = g_animateCount-1; j >= 0; j--)
-                if (s->sectnum == animatesect[j])
+                if (s->sectnum == sectorAnims[j].target)
                     return(1);
 
             j = headspritestat[STAT_EFFECTOR];
@@ -283,120 +283,158 @@ int P_FindOtherPlayer(int p,int *d)
     return closest_player;
 }
 
+int32_t* G_GetAnimationPointer(int32_t index)
+{
+    int32_t target = sectorAnims[index].target;
+    switch (sectorAnims[index].type)
+    {
+    case SECTANIM_FLOOR:    return &sector[target].floorz;
+    case SECTANIM_CEILING:  return &sector[target].ceilingz;
+    case SECTANIM_WALLX:    return &wall[target].x;
+    case SECTANIM_WALLY:    return &wall[target].y;
+    }
+    
+    return NULL;
+}
+
+static bool G_IsAnimatingSector(int32_t index)
+{
+    switch (sectorAnims[index].type)
+    {
+    case SECTANIM_FLOOR:
+    case SECTANIM_CEILING:
+        return true;
+    case SECTANIM_WALLX:
+    case SECTANIM_WALLY:
+        return false;
+    }
+
+    return false;
+}
+
 void G_DoSectorAnimations(void)
 {
-    int i, j, a, p, v, dasect;
+    int i, j, a, p, v, datarget;
 
     for (i=g_animateCount-1;i>=0;i--)
     {
-        a = *animateptr[i];
-        v = animatevel[i]*TICSPERFRAME;
-        dasect = animatesect[i];
+        datarget = sectorAnims[i].target;
+        int32_t* ptr = G_GetAnimationPointer(i);
 
-        if (a == animategoal[i])
+        assert(ptr != NULL);
+
+        a = *ptr;
+        v = sectorAnims[i].vel*TICSPERFRAME;
+
+        if (a == sectorAnims[i].goal)
         {
-            G_StopInterpolation(animateptr[i]);
-
-            // This fixes a bug where wall or floor sprites contained in
-            // elevator sectors (ST 16-19) would jitter vertically after the
-            // elevator had stopped.
-            if (animateptr[i] == &sector[animatesect[i]].floorz)
-                for (j=headspritesect[dasect];j>=0;j=nextspritesect[j])
-                    if (sprite[j].statnum != 3)
-                        ActorExtra[j].bpos.z = sprite[j].z;
+            G_StopInterpolation(ptr);
 
             g_animateCount--;
-            animateptr[i] = animateptr[g_animateCount];
-            animategoal[i] = animategoal[g_animateCount];
-            animatevel[i] = animatevel[g_animateCount];
-            animatesect[i] = animatesect[g_animateCount];
-            if (sector[animatesect[i]].lotag == ST_18_ELEVATOR_DOWN || sector[animatesect[i]].lotag == ST_19_ELEVATOR_UP)
-                if (animateptr[i] == &sector[animatesect[i]].ceilingz)
-                    continue;
+            sectorAnims[i].type = sectorAnims[g_animateCount].type; //animateptr[i] = animateptr[g_animateCount];
+            sectorAnims[i].goal = sectorAnims[g_animateCount].goal; //animategoal[i] = animategoal[g_animateCount];
+            sectorAnims[i].vel = sectorAnims[g_animateCount].vel; //animatevel[i] = animatevel[g_animateCount];
+            sectorAnims[i].target = sectorAnims[g_animateCount].target; //animatesect[i] = animatesect[g_animateCount];
 
-            if ((sector[dasect].lotag&0xff) != ST_22_SPLITTING_DOOR)
-                A_CallSound(dasect,-1);
+            if(G_IsAnimatingSector(i)) // Only do this on sectors, not walls.
+            {
+                // This fixes a bug where wall or floor sprites contained in
+                // elevator sectors (ST 16-19) would jitter vertically after the
+                // elevator had stopped.
+                if (ptr == &sector[datarget].floorz)
+                    for (j = headspritesect[datarget]; j >= 0; j = nextspritesect[j])
+                        if (sprite[j].statnum != 3)
+                            ActorExtra[j].bpos.z = sprite[j].z;
+
+                if (sector[datarget].lotag == ST_18_ELEVATOR_DOWN || sector[datarget].lotag == ST_19_ELEVATOR_UP)
+                    if (ptr == &sector[datarget].ceilingz)
+                        continue;
+
+                if ((sector[datarget].lotag & 0xff) != ST_22_SPLITTING_DOOR)
+                    A_CallSound(datarget, -1);
+            }
 
             continue;
         }
 
         if (v > 0)
         {
-            a = min(a+v,animategoal[i]);
+            a = min(a+v, sectorAnims[i].goal);
         }
         else
         {
-            a = max(a+v,animategoal[i]);
+            a = max(a+v, sectorAnims[i].goal);
         }
 
-        if (animateptr[i] == &sector[animatesect[i]].floorz)
+        if (G_IsAnimatingSector(i)) // Only do this on sectors, not walls.
         {
-            TRAVERSE_CONNECT(p)
-            if (g_player[p].ps->cursectnum == dasect)
-                if ((sector[dasect].floorz-g_player[p].ps->pos.z) < (64<<8))
-                    if (sprite[g_player[p].ps->i].owner >= 0)
-                    {
-                        g_player[p].ps->pos.z += v;
-                        g_player[p].ps->vel.z = 0;
-                        if (p == myconnectindex)
-                        {
-                            predictedPlayer.pos.z += v;
-                            predictedPlayer.vel.z = 0;
-                            predictBackup[PREDICT_LASTPOS].pos.z = g_player[p].ps->pos.z;
-                        }
-                    }
+            if (ptr == &sector[datarget].floorz)
+            {
+                TRAVERSE_CONNECT(p)
+                    if (g_player[p].ps->cursectnum == datarget)
+                        if ((sector[datarget].floorz - g_player[p].ps->pos.z) < (64 << 8))
+                            if (sprite[g_player[p].ps->i].owner >= 0)
+                            {
+                                g_player[p].ps->pos.z += v;
+                                g_player[p].ps->vel.z = 0;
+                            }
 
-            for (j=headspritesect[dasect];j>=0;j=nextspritesect[j])
-                if (sprite[j].statnum != 3)
-                {
-                    ActorExtra[j].bpos.z = sprite[j].z;
-                    sprite[j].z += v;
-                    ActorExtra[j].floorz = sector[dasect].floorz+v;
-                }
+                for (j = headspritesect[datarget]; j >= 0; j = nextspritesect[j])
+                    if (sprite[j].statnum != 3)
+                    {
+                        ActorExtra[j].bpos.z = sprite[j].z;
+                        sprite[j].z += v;
+                        ActorExtra[j].floorz = sector[datarget].floorz + v;
+                    }
+            }
         }
 
-        *animateptr[i] = a;
+        *ptr = a;
     }
 }
 
-int GetAnimationGoal(int *animptr)
+int GetAnimationGoal(int16_t target, int8_t type)
 {
     int i = g_animateCount-1, j = -1;
 
-    for (;i>=0;i--)
-        if (animptr == (int *)animateptr[i])
+    for (; i >= 0; i--)
+        if ((target == sectorAnims[i].target) && (type == sectorAnims[i].type))
         {
             j = i;
             break;
         }
+
     return(j);
 }
 
-int SetAnimation(int animsect,int *animptr, int thegoal, int thevel)
+int SetAnimation(int16_t target, int8_t type, int thegoal, int thevel)
 {
     int i = 0, j = g_animateCount;
 
     if (g_animateCount >= MAXANIMATES-1)
         return(-1);
 
-    for (;i<g_animateCount;i++)
-        if (animptr == animateptr[i])
+    for (;i < g_animateCount; i++)
+        if ((target == sectorAnims[i].target) && (type == sectorAnims[i].type))
         {
             j = i;
             break;
         }
 
-    animatesect[j] = animsect;
-    animateptr[j] = animptr;
-    animategoal[j] = thegoal;
-    if (thegoal >= *animptr)
-        animatevel[j] = thevel;
+    sectorAnims[j].target = target;
+    sectorAnims[j].type = type;
+    sectorAnims[j].goal = thegoal;
+
+    int32_t* ptr = G_GetAnimationPointer(j);
+
+    if (thegoal >= *ptr)
+        sectorAnims[j].vel = thevel;
     else
-        animatevel[j] = -thevel;
+        sectorAnims[j].vel = -thevel;
 
     if (j == g_animateCount) g_animateCount++;
 
-    G_SetInterpolation(animptr);
+    G_SetInterpolation(ptr);
 
     return(j);
 }
@@ -590,7 +628,7 @@ void G_OperateSectors(int sn,int ii)
         break;
 
     case ST_26_SPLITTING_ST_DOOR: //The split doors
-        i = GetAnimationGoal(&sptr->ceilingz);
+        i = GetAnimationGoal(sn, SECTANIM_CEILING);
         if (i == -1) //if the door has stopped
         {
             haltsoundhack = 1;
@@ -651,18 +689,22 @@ void G_OperateSectors(int sn,int ii)
                 {
                     dax2 = wall[wall[wall[wallfind[j]].point2].point2].x;
                     dax2 -= wall[wall[wallfind[j]].point2].x;
-                    SetAnimation(sn,&wall[wallfind[j]].x,wall[wallfind[j]].x+dax2,sp);
-                    SetAnimation(sn,&wall[i].x,wall[i].x+dax2,sp);
-                    SetAnimation(sn,&wall[wall[wallfind[j]].point2].x,wall[wall[wallfind[j]].point2].x+dax2,sp);
+
+                    SetAnimation(wallfind[j], SECTANIM_WALLX, wall[wallfind[j]].x + dax2, sp);
+                    SetAnimation(i, SECTANIM_WALLX, wall[i].x + dax2, sp);
+                    SetAnimation(wall[wallfind[j]].point2, SECTANIM_WALLX, wall[wall[wallfind[j]].point2].x + dax2, sp);
+
                     A_CallSound(sn,ii);
                 }
                 else if (day2 != 0)
                 {
                     day2 = wall[wall[wall[wallfind[j]].point2].point2].y;
                     day2 -= wall[wall[wallfind[j]].point2].y;
-                    SetAnimation(sn,&wall[wallfind[j]].y,wall[wallfind[j]].y+day2,sp);
-                    SetAnimation(sn,&wall[i].y,wall[i].y+day2,sp);
-                    SetAnimation(sn,&wall[wall[wallfind[j]].point2].y,wall[wall[wallfind[j]].point2].y+day2,sp);
+
+                    SetAnimation(wallfind[j], SECTANIM_WALLY, wall[wallfind[j]].y + day2, sp);
+                    SetAnimation(i, SECTANIM_WALLY, wall[i].y + day2, sp);
+                    SetAnimation(wall[wallfind[j]].point2, SECTANIM_WALLY, wall[wall[wallfind[j]].point2].y + day2, sp);
+
                     A_CallSound(sn,ii);
                 }
             }
@@ -674,16 +716,18 @@ void G_OperateSectors(int sn,int ii)
                 day2 = ((wall[i].y+wall[wall[wallfind[j]].point2].y)>>1)-wall[wallfind[j]].y;
                 if (dax2 != 0)
                 {
-                    SetAnimation(sn,&wall[wallfind[j]].x,dax,sp);
-                    SetAnimation(sn,&wall[i].x,dax+dax2,sp);
-                    SetAnimation(sn,&wall[wall[wallfind[j]].point2].x,dax+dax2,sp);
+                    SetAnimation(wallfind[j], SECTANIM_WALLX, dax, sp);
+                    SetAnimation(i, SECTANIM_WALLX, dax + dax2, sp);
+                    SetAnimation(wall[wallfind[j]].point2, SECTANIM_WALLX, dax + dax2, sp);
+
                     A_CallSound(sn,ii);
                 }
                 else if (day2 != 0)
                 {
-                    SetAnimation(sn,&wall[wallfind[j]].y,day,sp);
-                    SetAnimation(sn,&wall[i].y,day+day2,sp);
-                    SetAnimation(sn,&wall[wall[wallfind[j]].point2].y,day+day2,sp);
+                    SetAnimation(wallfind[j], SECTANIM_WALLY, day, sp);
+                    SetAnimation(i, SECTANIM_WALLY, day + day2, sp);
+                    SetAnimation(wall[wallfind[j]].point2, SECTANIM_WALLY, day + day2, sp);
+
                     A_CallSound(sn,ii);
                 }
             }
@@ -725,7 +769,7 @@ void G_OperateSectors(int sn,int ii)
     case ST_16_PLATFORM_DOWN:
     case ST_17_PLATFORM_UP:
 
-        i = GetAnimationGoal(&sptr->floorz);
+        i = GetAnimationGoal(sn, SECTANIM_FLOOR);
 
         if (i == -1)
         {
@@ -735,12 +779,12 @@ void G_OperateSectors(int sn,int ii)
                 i = nextsectorneighborz(sn,sptr->floorz,1,-1);
                 if (i == -1) return;
                 j = sector[i].floorz;
-                SetAnimation(sn,&sptr->floorz,j,sptr->extra);
+                SetAnimation(sn, SECTANIM_FLOOR,j,sptr->extra);
             }
             else
             {
                 j = sector[i].floorz;
-                SetAnimation(sn,&sptr->floorz,j,sptr->extra);
+                SetAnimation(sn, SECTANIM_FLOOR,j,sptr->extra);
             }
             A_CallSound(sn,ii);
         }
@@ -750,7 +794,7 @@ void G_OperateSectors(int sn,int ii)
     case ST_18_ELEVATOR_DOWN:
     case ST_19_ELEVATOR_UP:
 
-        i = GetAnimationGoal(&sptr->floorz);
+        i = GetAnimationGoal(sn, SECTANIM_FLOOR);
 
         if (i==-1)
         {
@@ -760,8 +804,8 @@ void G_OperateSectors(int sn,int ii)
             j = sector[i].floorz;
             q = sptr->extra;
             l = sptr->ceilingz-sptr->floorz;
-            SetAnimation(sn,&sptr->floorz,j,q);
-            SetAnimation(sn,&sptr->ceilingz,j+l,q);
+            SetAnimation(sn, SECTANIM_FLOOR,j,q);
+            SetAnimation(sn, SECTANIM_CEILING,j+l,q);
             A_CallSound(sn,ii);
         }
         return;
@@ -789,7 +833,7 @@ void G_OperateSectors(int sn,int ii)
 
         sptr->lotag ^= 0x8000;
 
-        SetAnimation(sn,&sptr->ceilingz,j,sptr->extra);
+        SetAnimation(sn, SECTANIM_CEILING,j,sptr->extra);
 
         A_CallSound(sn,ii);
 
@@ -828,19 +872,19 @@ REDODOOR:
 
         sptr->lotag ^= 0x8000;
 
-        SetAnimation(sn,&sptr->ceilingz,j,sptr->extra);
+        SetAnimation(sn, SECTANIM_CEILING,j,sptr->extra);
         A_CallSound(sn,ii);
 
         return;
 
     case ST_21_FLOOR_DOOR:
-        i = GetAnimationGoal(&sptr->floorz);
+        i = GetAnimationGoal(sn, SECTANIM_FLOOR);
         if (i >= 0)
         {
-            if (animategoal[sn] == sptr->ceilingz)
-                animategoal[i] = sector[nextsectorneighborz(sn,sptr->ceilingz,1,1)].floorz;
-            else animategoal[i] = sptr->ceilingz;
-            j = animategoal[i];
+            if (sectorAnims[i].goal == sptr->ceilingz)
+                sectorAnims[i].goal = sector[nextsectorneighborz(sn,sptr->ceilingz,1,1)].floorz;
+            else sectorAnims[i].goal = sptr->ceilingz;
+            j = sectorAnims[i].goal;
         }
         else
         {
@@ -850,7 +894,7 @@ REDODOOR:
 
             sptr->lotag ^= 0x8000;
 
-            if (SetAnimation(sn,&sptr->floorz,j,sptr->extra) >= 0)
+            if (SetAnimation(sn, SECTANIM_FLOOR,j,sptr->extra) >= 0)
                 A_CallSound(sn,ii);
         }
         return;
@@ -862,15 +906,15 @@ REDODOOR:
         if ((sptr->lotag&0x8000))
         {
             q = (sptr->ceilingz+sptr->floorz)>>1;
-            j = SetAnimation(sn,&sptr->floorz,q,sptr->extra);
-            j = SetAnimation(sn,&sptr->ceilingz,q,sptr->extra);
+            j = SetAnimation(sn, SECTANIM_FLOOR,q,sptr->extra);
+            j = SetAnimation(sn, SECTANIM_CEILING,q,sptr->extra);
         }
         else
         {
             q = sector[nextsectorneighborz(sn,sptr->floorz,1,1)].floorz;
-            j = SetAnimation(sn,&sptr->floorz,q,sptr->extra);
+            j = SetAnimation(sn, SECTANIM_FLOOR,q,sptr->extra);
             q = sector[nextsectorneighborz(sn,sptr->ceilingz,-1,-1)].ceilingz;
-            j = SetAnimation(sn,&sptr->ceilingz,q,sptr->extra);
+            j = SetAnimation(sn, SECTANIM_CEILING,q,sptr->extra);
         }
 
         sptr->lotag ^= 0x8000;

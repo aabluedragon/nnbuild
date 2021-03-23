@@ -3000,22 +3000,22 @@ static inline void X_AccessSector(int iSet, int lVar1, int lLabelID, int lVar2)
         if (iSet)
         {
             s->extra = lValue;
-            if ((lValue = GetAnimationGoal(&s->ceilingz)) != -1)
+            if ((lValue = GetAnimationGoal(iSector, SECTANIM_CEILING)) != -1)
             {
-                SetAnimation(iSector, &s->ceilingz, lValue, s->extra);
+                SetAnimation(iSector, SECTANIM_CEILING, lValue, s->extra);
             }
             return;
         }
-        Gv_SetVar(lVar2, (GetAnimationGoal(&s->ceilingz) == -1) ? 0 : s->extra, g_i, g_p);
+        Gv_SetVar(lVar2, (GetAnimationGoal(iSector, SECTANIM_CEILING) == -1) ? 0 : s->extra, g_i, g_p);
         return;
 
     case SECTOR_CEILINGZGOAL:
         if (iSet)
         {
-            SetAnimation(iSector, &s->ceilingz, lValue, s->extra);
+            SetAnimation(iSector, SECTANIM_CEILING, lValue, s->extra);
             return;
         }
-        Gv_SetVar(lVar2, GetAnimationGoal(&s->ceilingz), g_i, g_p);
+        Gv_SetVar(lVar2, GetAnimationGoal(iSector, SECTANIM_CEILING), g_i, g_p);
         return;
 
     case SECTOR_FLOORZ:
@@ -3031,22 +3031,22 @@ static inline void X_AccessSector(int iSet, int lVar1, int lLabelID, int lVar2)
         if (iSet)
         {
             s->extra = lValue;
-            if ((lValue = GetAnimationGoal(&s->floorz)) != -1)
+            if ((lValue = GetAnimationGoal(iSector, SECTANIM_FLOOR)) != -1)
             {
-                SetAnimation(iSector, &s->floorz, lValue, s->extra);
+                SetAnimation(iSector, SECTANIM_FLOOR, lValue, s->extra);
             }
             return;
         }
-        Gv_SetVar(lVar2, (GetAnimationGoal(&s->floorz) == -1) ? 0 : s->extra, g_i, g_p);
+        Gv_SetVar(lVar2, (GetAnimationGoal(iSector, SECTANIM_FLOOR) == -1) ? 0 : s->extra, g_i, g_p);
         return;
 
     case SECTOR_FLOORZGOAL:
         if (iSet)
         {
-            SetAnimation(iSector, &s->floorz, lValue, s->extra);
+            SetAnimation(iSector, SECTANIM_FLOOR, lValue, s->extra);
             return;
         }
-        Gv_SetVar(lVar2, GetAnimationGoal(&s->floorz), g_i, g_p);
+        Gv_SetVar(lVar2, GetAnimationGoal(iSector, SECTANIM_FLOOR), g_i, g_p);
         return;
 
     case SECTOR_CEILINGSTAT:

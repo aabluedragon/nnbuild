@@ -331,11 +331,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_pskyidx,sizeof(g_pskyidx),1,fil) != 1) goto corrupt;
 
     if (kdfread(&g_animateCount,sizeof(g_animateCount),1,fil) != 1) goto corrupt;
-    if (kdfread(&animatesect[0],sizeof(animatesect[0]),MAXANIMATES,fil) != MAXANIMATES) goto corrupt;
-    if (kdfread(&animateptr[0],sizeof(animateptr[0]),MAXANIMATES,fil) != MAXANIMATES) goto corrupt;
-    for (i = g_animateCount-1; i>=0; i--) animateptr[i] = (int32_t*)((intptr_t)animateptr[i]+(intptr_t)(&sector[0]));
-    if (kdfread(&animategoal[0],sizeof(animategoal[0]),MAXANIMATES,fil) != MAXANIMATES) goto corrupt;
-    if (kdfread(&animatevel[0],sizeof(animatevel[0]),MAXANIMATES,fil) != MAXANIMATES) goto corrupt;
+    if (kdfread(&sectorAnims[0], sizeof(sectorAnims[0]), MAXANIMATES, fil) != MAXANIMATES) goto corrupt;
 
     if (kdfread(&g_earthquakeTime,sizeof(g_earthquakeTime),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.from_bonus,sizeof(ud.from_bonus),1,fil) != 1) goto corrupt;
@@ -567,7 +563,7 @@ int32_t G_LoadPlayer(int32_t spot)
 
     for (i=g_interpolationCnt-1; i>=0; i--) bakipos[i] = *curipos[i];
     for (i = g_animateCount-1; i>=0; i--)
-        G_SetInterpolation(animateptr[i]);
+        G_SetInterpolation(G_GetAnimationPointer(i));
 
     g_showShareware = 0;
     everyothertime = 0;
@@ -838,12 +834,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&lockclock,sizeof(lockclock),1,fil);
     dfwrite(&g_pskyidx,sizeof(g_pskyidx),1,fil);
     dfwrite(&g_animateCount,sizeof(g_animateCount),1,fil);
-    dfwrite(&animatesect[0],sizeof(animatesect[0]),MAXANIMATES,fil);
-    for (i = g_animateCount-1; i>=0; i--) animateptr[i] = (int32_t *)((intptr_t)animateptr[i]-(intptr_t)(&sector[0]));
-    dfwrite(&animateptr[0],sizeof(animateptr[0]),MAXANIMATES,fil);
-    for (i = g_animateCount-1; i>=0; i--) animateptr[i] = (int32_t *)((intptr_t)animateptr[i]+(intptr_t)(&sector[0]));
-    dfwrite(&animategoal[0],sizeof(animategoal[0]),MAXANIMATES,fil);
-    dfwrite(&animatevel[0],sizeof(animatevel[0]),MAXANIMATES,fil);
+    dfwrite(&sectorAnims[0],sizeof(sectorAnims[0]),MAXANIMATES,fil);
 
     dfwrite(&g_earthquakeTime,sizeof(g_earthquakeTime),1,fil);
     dfwrite(&ud.from_bonus,sizeof(ud.from_bonus),1,fil);

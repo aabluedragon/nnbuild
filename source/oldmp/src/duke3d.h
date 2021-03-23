@@ -365,6 +365,21 @@ typedef struct {
 
 extern input_t recsync[RECSYNCBUFSIZ];
 
+enum
+{
+    SECTANIM_FLOOR,
+    SECTANIM_CEILING,
+    SECTANIM_WALLX,
+    SECTANIM_WALLY,
+};
+
+typedef struct
+{
+    int32_t goal, vel;
+    int16_t target;
+    int8_t type;
+} sectanim_t;
+
 typedef struct {
     int wallnum, tag;
 } animwalltype;
@@ -1080,9 +1095,9 @@ typedef struct {
     ActorData_t ActorExtra[MAXSPRITES];
     short pskyoff[MAXPSKYTILES], pskybits;
 
-    int animategoal[MAXANIMATES], animatevel[MAXANIMATES], g_animateCount;
-    short animatesect[MAXANIMATES];
-    int animateptr[MAXANIMATES];
+    int g_animateCount;
+    sectanim_t sectorAnims[MAXANIMATES];
+
     char g_numPlayerSprites;
     char g_earthquakeTime;
     int lockclock;

@@ -44,9 +44,12 @@ extern int isanearoperator(int lotag);
 extern int CheckPlayerInSector(int sect);
 extern int __fastcall A_FindPlayer(spritetype *s,int *d);
 extern int P_FindOtherPlayer(int p,int *d);
+
 extern void G_DoSectorAnimations(void);
-extern int GetAnimationGoal(int *animptr);
-extern int SetAnimation(int animsect,int *animptr,int thegoal,int thevel);
+extern int32_t* G_GetAnimationPointer(int32_t index);
+extern int GetAnimationGoal(int16_t target, int8_t type);
+extern int SetAnimation(int16_t target, int8_t type, int thegoal, int thevel);
+
 extern void G_AnimateCamSprite(void);
 extern void G_AnimateWalls(void);
 extern int G_ActivateWarpElevators(int s,int d);
