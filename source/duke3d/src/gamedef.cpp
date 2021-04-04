@@ -5273,6 +5273,7 @@ repeatcase:
                 {
                     initprintf("%s:%d: warning: truncating volume name to %d characters.\n",
                         g_scriptFileName,g_lineNumber,(int32_t)sizeof(g_volumeNames[j])-1);
+                    i--;
                     g_warningCnt++;
                     scriptSkipLine();
                     break;
@@ -5327,18 +5328,19 @@ repeatcase:
             {
                 gamefunctions[j][i] = *textptr;
                 textptr++,i++;
-                if (EDUKE32_PREDICT_FALSE(*textptr != 0x0a && *textptr != 0x0d && ispecial(*textptr)))
-                {
-                    initprintf("%s:%d: warning: invalid character in function name.\n",
-                        g_scriptFileName,g_lineNumber);
-                    g_warningCnt++;
-                    scriptSkipLine();
-                    break;
-                }
                 if (EDUKE32_PREDICT_FALSE(i >= MAXGAMEFUNCLEN))
                 {
                     initprintf("%s:%d: warning: truncating function name to %d characters.\n",
                         g_scriptFileName,g_lineNumber, MAXGAMEFUNCLEN-1);
+                    i--;
+                    g_warningCnt++;
+                    scriptSkipLine();
+                    break;
+                }
+                if (EDUKE32_PREDICT_FALSE(*textptr != 0x0a && *textptr != 0x0d && ispecial(*textptr)))
+                {
+                    initprintf("%s:%d: warning: invalid character in function name.\n",
+                        g_scriptFileName,g_lineNumber);
                     g_warningCnt++;
                     scriptSkipLine();
                     break;
@@ -5398,10 +5400,18 @@ repeatcase:
                 {
                     initprintf("%s:%d: warning: truncating skill name to %d characters.\n",
                         g_scriptFileName,g_lineNumber,(int32_t)sizeof(g_skillNames[j])-1);
+                    i--;
                     g_warningCnt++;
                     scriptSkipLine();
                     break;
                 }
+            }
+
+            if (EDUKE32_PREDICT_FALSE(i == 0))
+            {
+                initprintf("%s:%d: warning: empty skill name.\n",
+                    g_scriptFileName,g_lineNumber);
+                g_skillNames[j][i++] = ' ';
             }
 
             g_skillNames[j][i] = '\0';
@@ -5430,6 +5440,7 @@ repeatcase:
                     {
                         initprintf("%s:%d: warning: truncating game name to %d characters.\n",
                             g_scriptFileName,g_lineNumber,(int32_t)sizeof(gamename)-1);
+                        i--;
                         g_warningCnt++;
                         scriptSkipLine();
                         break;
@@ -5506,6 +5517,7 @@ repeatcase:
                 {
                     initprintf("%s:%d: warning: truncating gametype name to %d characters.\n",
                         g_scriptFileName,g_lineNumber,(int32_t)sizeof(g_gametypeNames[j])-1);
+                    i--;
                     g_warningCnt++;
                     scriptSkipLine();
                     break;
@@ -5597,6 +5609,7 @@ repeatcase:
                 {
                     initprintf("%s:%d: warning: truncating level name to %d characters.\n",
                         g_scriptFileName,g_lineNumber,31);
+                    i--;
                     g_warningCnt++;
                     scriptSkipLine();
                     break;
@@ -5671,6 +5684,7 @@ repeatcase:
                 if (EDUKE32_PREDICT_FALSE(i >= MAXQUOTELEN))
                 {
                     initprintf("%s:%d: warning: truncating quote text to %d characters.\n",g_scriptFileName,g_lineNumber,MAXQUOTELEN-1);
+                    i--;
                     g_warningCnt++;
                     scriptSkipLine();
                     break;
@@ -5717,6 +5731,7 @@ repeatcase:
                 if (EDUKE32_PREDICT_FALSE(i >= MAXCHEATDESC))
                 {
                     initprintf("%s:%d: warning: truncating cheat text to %d characters.\n",g_scriptFileName,g_lineNumber,MAXCHEATDESC-1);
+                    i--;
                     g_warningCnt++;
                     scriptSkipLine();
                     break;
@@ -5776,6 +5791,7 @@ repeatcase:
                 {
                     initprintf("%s:%d: warning: truncating cheat string to %d characters.\n",
                         g_scriptFileName,g_lineNumber,(signed)sizeof(CheatStrings[k])-1);
+                    i--;
                     g_warningCnt++;
                     scriptSkipLine();
                     break;
@@ -5785,23 +5801,24 @@ repeatcase:
             continue;
 
         case CON_DEFINESOUND:
+        {
             g_scriptPtr--;
             C_GetNextValue(LABEL_DEFINE);
 
             // Ideally we could keep the value of i from C_GetNextValue() instead of having to hash_find() again.
             // This depends on tempbuf remaining in place after C_GetNextValue():
-            j = hash_find(&h_labels,tempbuf);
+            j = hash_find(&h_labels, tempbuf);
 
             k = g_scriptPtr[-1];
-            if (EDUKE32_PREDICT_FALSE((unsigned)k >= MAXSOUNDS-1))
+            if (EDUKE32_PREDICT_FALSE((unsigned)k >= MAXSOUNDS - 1))
             {
-                initprintf("%s:%d: error: sound index exceeds limit of %d.\n",g_scriptFileName,g_lineNumber, MAXSOUNDS-1);
+                initprintf("%s:%d: error: sound index exceeds limit of %d.\n", g_scriptFileName, g_lineNumber, MAXSOUNDS - 1);
                 g_errorCnt++;
-                k = MAXSOUNDS-1;
+                k = MAXSOUNDS - 1;
             }
             else if (EDUKE32_PREDICT_FALSE(g_sounds[k].filename != NULL))
             {
-                initprintf("%s:%d: warning: sound %d already defined (%s)\n",g_scriptFileName,g_lineNumber,k,g_sounds[k].filename);
+                initprintf("%s:%d: warning: sound %d already defined (%s)\n", g_scriptFileName, g_lineNumber, k, g_sounds[k].filename);
                 g_warningCnt++;
             }
 
@@ -5809,18 +5826,17 @@ repeatcase:
             i = 0;
             C_SkipComments();
 
-            if (g_sounds[k].filename == NULL)
-                g_sounds[k].filename = (char *)Xcalloc(BMAX_PATH,sizeof(uint8_t));
+            char filename[BMAX_PATH];
 
             if (*textptr == '\"')
             {
                 textptr++;
                 while (*textptr && *textptr != '\"')
                 {
-                    g_sounds[k].filename[i++] = *textptr++;
-                    if (EDUKE32_PREDICT_FALSE(i >= BMAX_PATH-1))
+                    filename[i++] = *textptr++;
+                    if (EDUKE32_PREDICT_FALSE(i >= BMAX_PATH - 1))
                     {
-                        initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,BMAX_PATH-1);
+                        initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n", g_scriptFileName, g_lineNumber, BMAX_PATH - 1);
                         g_errorCnt++;
                         C_SkipComments();
                         break;
@@ -5830,43 +5846,44 @@ repeatcase:
             }
             else while (*textptr != ' ' && *textptr != '\t' && *textptr != '\r' && *textptr != '\n')
             {
-                g_sounds[k].filename[i++] = *textptr++;
-                if (EDUKE32_PREDICT_FALSE(i >= BMAX_PATH-1))
+                filename[i++] = *textptr++;
+                if (EDUKE32_PREDICT_FALSE(i >= BMAX_PATH - 1))
                 {
-                    initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,BMAX_PATH-1);
+                    initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n", g_scriptFileName, g_lineNumber, BMAX_PATH - 1);
                     g_errorCnt++;
                     C_SkipComments();
                     break;
                 }
             }
-            g_sounds[k].filename[i] = '\0';
+            filename[i] = '\0';
 
-            check_filename_case(g_sounds[k].filename);
-
-            C_GetNextValue(LABEL_DEFINE);
-            g_sounds[k].ps = g_scriptPtr[-1];
-            C_GetNextValue(LABEL_DEFINE);
-            g_sounds[k].pe = g_scriptPtr[-1];
-            C_GetNextValue(LABEL_DEFINE);
-            g_sounds[k].pr = g_scriptPtr[-1];
+            check_filename_case(filename);
 
             C_GetNextValue(LABEL_DEFINE);
-            g_sounds[k].m = g_scriptPtr[-1] & ~SF_ONEINST_INTERNAL;
-            if (g_scriptPtr[-1] & SF_LOOP)
-                g_sounds[k].m |= SF_ONEINST_INTERNAL;
+            int minpitch = g_scriptPtr[-1];
+            C_GetNextValue(LABEL_DEFINE);
+            int maxpitch = g_scriptPtr[-1];
+            C_GetNextValue(LABEL_DEFINE);
+            int priority = g_scriptPtr[-1];
 
             C_GetNextValue(LABEL_DEFINE);
-            g_sounds[k].vo = g_scriptPtr[-1];
+            int type = g_scriptPtr[-1];
+
+            C_GetNextValue(LABEL_DEFINE);
+            int distance = g_scriptPtr[-1];
             g_scriptPtr -= 5;
 
-            g_sounds[k].volume = fix16_one;
+            float volume = 1.0;
+
+            S_DefineSound(k, filename, minpitch, maxpitch, priority, type, distance, volume);
 
             if (k > g_highestSoundIdx)
                 g_highestSoundIdx = k;
 
             if (g_dynamicSoundMapping && j >= 0 && (labeltype[j] & LABEL_DEFINE))
-                G_ProcessDynamicSoundMapping(label+(j<<6), k);
+                G_ProcessDynamicSoundMapping(label + (j << 6), k);
             continue;
+        }
 
         case CON_ENDEVENT:
 
