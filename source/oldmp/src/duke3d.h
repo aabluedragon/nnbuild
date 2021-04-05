@@ -384,6 +384,13 @@ typedef struct {
     int wallnum, tag;
 } animwalltype;
 
+typedef struct
+{
+    int32_t global, animwall;
+    int32_t player, damage;
+    int32_t sprite, vm;
+} randomseed_t;
+
 extern int probey;
 
 struct savehead {

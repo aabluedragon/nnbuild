@@ -47,7 +47,10 @@ extern int g_networkBroadcastMode; // 0: master/slave, 1: peer-to-peer
 #ifdef __cplusplus
 extern "C" {
 #endif
+// RNG
 G_EXTERN short g_globalRandom;
+G_EXTERN randomseed_t g_random;
+
 G_EXTERN short neartagsector, neartagwall, neartagsprite;
 G_EXTERN short SpriteDeletionQueue[1024], g_spriteDeleteQueuePos;
 

@@ -468,10 +468,15 @@ void G_AnimateCamSprite(void)
 
 void G_AnimateWalls(void)
 {
-    int i, j, p = g_numAnimWalls-1, t;
+    int i, j, t;
 
-    for (;p>=0;p--)
-        //    for(p=g_numAnimWalls-1;p>=0;p--)
+    if (ud.pause_on) // Halt anims on pause.
+        return;
+
+    // Use randomseed to contribute randomness to our anims, but let's not cycle it.
+    g_random.animwall += randomseed;
+
+    for (int p = g_numAnimWalls - 1; p >= 0; p--)
     {
         i = animwall[p].wallnum;
         j = wall[i].picnum;
@@ -496,7 +501,7 @@ void G_AnimateWalls(void)
         case SCREENBREAK18__STATIC:
         case SCREENBREAK19__STATIC:
 
-            if ((krand()&255) < 16)
+            if ((seed_krand(&g_random.animwall)&255) < 16)
             {
                 animwall[p].tag = wall[i].picnum;
                 wall[i].picnum = SCREENBREAK6;
@@ -547,8 +552,8 @@ void G_AnimateWalls(void)
                     }
                     else
                     {
-                        if ((krand()&255) < 32)
-                            animwall[p].tag = 128<<(krand()&3);
+                        if ((seed_krand(&g_random.animwall)&255) < 32)
+                            animwall[p].tag = 128<<(_krand()&3);
                         else wall[i].overpicnum = W_FORCEFIELD+1;
                     }
                 }
