@@ -365,7 +365,7 @@ typedef struct {
 
 extern input_t recsync[RECSYNCBUFSIZ];
 
-enum
+enum SectAnimType_t
 {
     SECTANIM_FLOOR,
     SECTANIM_CEILING,
