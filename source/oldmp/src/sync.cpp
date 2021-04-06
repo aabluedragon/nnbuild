@@ -107,10 +107,10 @@ char Net_PlayerSync2(void)
 char Net_ActorSync(void)
 {
     unsigned short crc = 0;
-    int j, nextj;
+    int j;
     spritetype *spr;
 
-    TRAVERSE_SPRITE_STAT(headspritestat[STAT_ACTOR], j, nextj)
+    for (SPRITES_OF(STAT_ACTOR, j))
     {
         spr = &sprite[j];
         updatecrc(crc, (spr->x) & 255);
@@ -121,7 +121,7 @@ char Net_ActorSync(void)
         updatecrc(crc, (spr->ang) & 255);
     }
 
-    TRAVERSE_SPRITE_STAT(headspritestat[STAT_ZOMBIEACTOR], j, nextj)
+    for (SPRITES_OF(STAT_ZOMBIEACTOR, j))
     {
         spr = &sprite[j];
         updatecrc(crc, (spr->x) & 255);
@@ -138,10 +138,10 @@ char Net_ActorSync(void)
 char Net_WeaponSync(void)
 {
     unsigned short crc = 0;
-    int j, nextj;
+    int j;
     spritetype *spr;
 
-    TRAVERSE_SPRITE_STAT(headspritestat[STAT_PROJECTILE], j, nextj)
+    for (SPRITES_OF(STAT_PROJECTILE, j))
     {
         spr = &sprite[j];
         updatecrc(crc, (spr->x) & 255);
@@ -156,12 +156,12 @@ char Net_WeaponSync(void)
 char Net_MapSync(void)
 {
     unsigned short crc = 0;
-    int j, nextj;
+    int j;
     spritetype *spr;
     walltype *wal;
     sectortype *sect;
 
-    TRAVERSE_SPRITE_STAT(headspritestat[STAT_EFFECTOR], j, nextj)
+    for (SPRITES_OF(STAT_EFFECTOR, j))
     {
         spr = &sprite[j];
         updatecrc(crc, (spr->x) & 255);
