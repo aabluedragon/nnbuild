@@ -2163,7 +2163,7 @@ void A_DamageObject_Internal(int i,int sn)
     case OCEANSPRITE4__STATIC:
     case OCEANSPRITE5__STATIC:
         A_Spawn(i,SMALLSMOKE);
-        deletesprite(i);
+        A_DeleteSprite(i);
         break;
     case QUEBALL__STATIC:
     case STRIPEBALL__STATIC:
@@ -2185,7 +2185,7 @@ void A_DamageObject_Internal(int i,int sn)
             else
             {
                 A_SpawnWallGlass(i,-1,3);
-                deletesprite(i);
+                A_DeleteSprite(i);
             }
         }
         break;
@@ -2244,7 +2244,7 @@ void A_DamageObject_Internal(int i,int sn)
             if (PN(i) == CACTUS)
                 PN(i) = CACTUSBROKE;
             CS(i) &= ~257;
-            //       else deletesprite(i);
+            //       else A_DeleteSprite(i);
             break;
         }
         break;
@@ -2254,7 +2254,7 @@ void A_DamageObject_Internal(int i,int sn)
         for (k=6;k>0;k--)
             A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(8<<8),SCRAP1+(krand()&15),-8,48,48,krand()&2047,(krand()&63)+64,-(krand()&4095)-(sprite[i].zvel>>2),i,5);
         A_PlaySound(GLASS_HEAVYBREAK,i);
-        deletesprite(i);
+        A_DeleteSprite(i);
         break;
 
 
@@ -2286,7 +2286,7 @@ void A_DamageObject_Internal(int i,int sn)
                 A_InsertSprite(SECT(i),SX(i),SY(i),sector[SECT(i)].floorz-(12<<8)-(j<<9),SCRAP1+(krand()&15),-8,64,64,
                                krand()&2047,(krand()&127)+64,-(krand()&511)-256,i,5);
             A_Spawn(i,EXPLOSION2);
-            deletesprite(i);
+            A_DeleteSprite(i);
         }
         break;
     case BOTTLE1__STATIC:
@@ -2330,7 +2330,7 @@ void A_DamageObject_Internal(int i,int sn)
         A_PlaySound(GLASS_BREAKING,i);
         SA(i) = krand()&2047;
         A_SpawnWallGlass(i,-1,8);
-        deletesprite(i);
+        A_DeleteSprite(i);
         break;
     case FETUS__STATIC:
         PN(i) = FETUSBROKE;
@@ -2349,7 +2349,7 @@ void A_DamageObject_Internal(int i,int sn)
     case BOTTLE7__STATIC:
         A_PlaySound(GLASS_BREAKING,i);
         A_SpawnWallGlass(i,-1,10);
-        deletesprite(i);
+        A_DeleteSprite(i);
         break;
     case HYDROPLANT__STATIC:
         PN(i) = BROKEHYDROPLANT;
@@ -2368,7 +2368,7 @@ void A_DamageObject_Internal(int i,int sn)
     case BROKEHYDROPLANT__STATIC:
         A_PlaySound(GLASS_BREAKING, i);
         A_SpawnWallGlass(i, -1, 5);
-        deletesprite(i);
+        A_DeleteSprite(i);
         break;
 
     case TOILET__STATIC:
@@ -2487,7 +2487,7 @@ void A_DamageObject_Internal(int i,int sn)
         A_DoGuts(i,JIBS5,1);
         A_DoGuts(i,JIBS3,6);
         S_PlaySound(SQUISHED);
-        deletesprite(i);
+        A_DeleteSprite(i);
         break;
     case CHAIR1__STATIC:
     case CHAIR2__STATIC:
@@ -2507,7 +2507,7 @@ void A_DamageObject_Internal(int i,int sn)
         A_PlaySound(GLASS_HEAVYBREAK,i);
         s = &sprite[i];
         for (j=16;j>0;j--) RANDOMSCRAP(s, i);
-        deletesprite(i);
+        A_DeleteSprite(i);
         break;
     case PLAYERONWATER__STATIC:
         i = OW(i);

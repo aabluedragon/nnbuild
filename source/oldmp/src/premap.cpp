@@ -913,7 +913,7 @@ static void prelevel(char g)
             {
             case GPSPEED__STATIC:
                 sector[SECT(i)].extra = SLT(i);
-                deletesprite(i);
+                A_DeleteSprite(i);
                 break;
 
             case CYCLER__STATIC:
@@ -929,7 +929,7 @@ static void prelevel(char g)
                 cyclers[g_numCyclers][4] = SHT(i);
                 cyclers[g_numCyclers][5] = (SA(i) == 1536);
                 g_numCyclers++;
-                deletesprite(i);
+                A_DeleteSprite(i);
                 break;
 
             case SECTOREFFECTOR__STATIC:
@@ -1316,7 +1316,7 @@ static void prepare_spawns(void)
         g_playerSpawnPoints[(unsigned char)g_numPlayerSprites].os = s->sectnum;
         g_numPlayerSprites++;
 
-        deletesprite(i); // Purge with great prejudice
+        A_DeleteSprite(i); // Purge with great prejudice
         i = nexti;
     }
 }

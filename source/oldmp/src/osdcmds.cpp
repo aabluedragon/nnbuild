@@ -645,7 +645,7 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
         if (setspritez_old(idx, x,y,z) < 0)
         {
             OSD_Printf("spawn: Sprite can't be spawned into null space\n");
-            deletesprite(idx);
+            A_DeleteSprite(idx);
         }
     }
 

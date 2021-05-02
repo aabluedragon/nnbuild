@@ -341,7 +341,6 @@ enum DukeWeapon_t {
     MAX_WEAPONS
 };
 
-#define deletesprite A_DeleteSprite
 void A_DeleteSprite(int s);
 
 enum

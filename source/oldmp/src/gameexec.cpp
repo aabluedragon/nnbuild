@@ -119,7 +119,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
                 if (g_player[g_p].ps->actorsqu == g_i)
                     g_player[g_p].ps->actorsqu = -1;
             }
-            deletesprite(g_i);
+            A_DeleteSprite(g_i);
         }
 
         // restore old values...
@@ -679,7 +679,7 @@ static void X_Move(void)
         else g_sp->shade += (sector[g_sp->sectnum].floorshade-g_sp->shade)>>1;
 
         if (sector[g_sp->sectnum].floorpicnum == MIRROR)
-            deletesprite(g_i);
+            A_DeleteSprite(g_i);
     }
 }
 
@@ -4464,14 +4464,14 @@ void A_LoadActor(int iActor)
     {
         //      if(A_CheckEnemySprite(g_sp))
         //          g_player[g_p].ps->actors_killed++;
-        deletesprite(g_i);
+        A_DeleteSprite(g_i);
         return;
     }
 
     while (!X_DoExecute());
 
     if (g_killitFlag == 1)
-        deletesprite(g_i);
+        A_DeleteSprite(g_i);
 }
 
 void A_Execute(int iActor,int iPlayer,int lDist)
@@ -4494,7 +4494,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     {
         if (A_CheckEnemySprite(g_sp))
             g_player[g_p].ps->actors_killed++;
-        deletesprite(g_i);
+        A_DeleteSprite(g_i);
         return;
     }
 
@@ -4523,7 +4523,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
         // if player was set to squish, first stop that...
         if (g_player[g_p].ps->actorsqu == g_i)
             g_player[g_p].ps->actorsqu = -1;
-        deletesprite(g_i);
+        A_DeleteSprite(g_i);
         return;
     }
 

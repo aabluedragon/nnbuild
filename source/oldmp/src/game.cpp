@@ -12063,7 +12063,7 @@ static int G_DoMoveThings(void)
         G_UpdateScreenArea();
 
         P_QuickKill(g_player[i].ps);
-        deletesprite(g_player[i].ps->i);
+        A_DeleteSprite(g_player[i].ps->i);
 
         Bsprintf(buf,"%s^00 is history!",g_player[i].user_name);
         G_AddUserQuote(buf);

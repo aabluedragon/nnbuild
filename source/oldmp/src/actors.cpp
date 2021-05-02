@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "gamedef.h"
 #include "compat.h"
 
-#define KILLIT(KX) {deletesprite(KX);goto BOLT;}
+#define KILLIT(KX) {A_DeleteSprite(KX);goto BOLT;}
 
 extern int g_numEnvSoundsPlaying;
 extern int g_noEnemies;
@@ -624,8 +624,6 @@ int A_SetSprite(int i,unsigned int cliptype) //The set sprite function
                          cliptype)==0);
 }
 
-#undef deletesprite
-
 int block_deletesprite = 0;
 
 void A_DeleteSprite(int s)
@@ -653,13 +651,12 @@ void A_DeleteSprite(int s)
 
     deletesprite(s);
 }
-#define deletesprite A_DeleteSprite
 
 void A_AddToDeleteQueue(int i)
 {
     if (g_spriteDeleteQueueSize == 0)
     {
-        deletesprite(i);
+        A_DeleteSprite(i);
         return;
     }
 
@@ -4940,7 +4937,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                     t[1]++;
                 }
                 if (t[1] == 5)
-                    deletesprite(i);
+                    A_DeleteSprite(i);
                 goto BOLT;
             case FRAMEEFFECT1_13__STATIC:
                 if (PLUTOPAK) goto BOLT;	// JBF: ideally this should never happen...
@@ -5835,7 +5832,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             {
                                 A_DoGutsDir(j,JIBS6,72);
                                 A_PlaySound(SQUISHED, spriteNum);
-                                deletesprite(j);
+                                A_DeleteSprite(j);
                             }
                         }
                         j = l;
@@ -6013,7 +6010,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                                 {
                                     A_DoGutsDir(j,JIBS6,24);
                                     A_PlaySound(SQUISHED,j);
-                                    deletesprite(j);
+                                    A_DeleteSprite(j);
                                 }
                             }
 

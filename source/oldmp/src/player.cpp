@@ -5393,10 +5393,10 @@ HORIZONLY:
                 }
                 else if (A_CheckEnemySprite(&sprite[p->actorsqu]))
                 {
-                    deletesprite(p->actorsqu);
+                    A_DeleteSprite(p->actorsqu);
                     p->actors_killed++;
                 }
-                else deletesprite(p->actorsqu);
+                else A_DeleteSprite(p->actorsqu);
             }
             p->actorsqu = -1;
         }
