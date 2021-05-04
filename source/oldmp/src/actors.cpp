@@ -4716,7 +4716,7 @@ DETONATEB:
 
                         if (j != i)
                         {
-                            deletesprite(j);
+                            A_DeleteSprite(j);
                             break;
                         }
                         j = l;
