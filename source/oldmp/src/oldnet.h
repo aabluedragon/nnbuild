@@ -94,6 +94,7 @@ void Net_CorrectPrediction(void);
 void Net_ResetPrediction(void);
 void Net_DoPrediction(void);
 void Net_ClearFIFO(void);
+void Net_CheckPlayerQuit(int i);
 void waitforeverybody(void);
 void allowtimetocorrecterrorswhenquitting(void);
 

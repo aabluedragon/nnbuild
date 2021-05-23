@@ -12012,82 +12012,24 @@ static int G_DoMoveThings(void)
         }
     }
 
-    everyothertime++;
-
     // Copy input FIFO bits into player's own inputBits struct, and advance our place in the FIFO.
     TRAVERSE_CONNECT(i)
-    *g_player[i].inputBits = inputfifo[movefifoplc & (MOVEFIFOSIZ - 1)][i];
-    movefifoplc++;
-
-    G_UpdateInterpolations();
-
-    j = -1; // TODO: Move to Net_CheckPlayerQuit
-    TRAVERSE_CONNECT(i)
     {
-        if (TEST_SYNC_KEY(g_player[i].inputBits->bits, SK_GAMEQUIT) == 0)
-        {
-            j = i;
-            continue;
-        }
-
-        G_CloseDemoWrite();
-
-        g_player[i].connected = 0;
-
-        // If we're the master, keep executing until all slaves can get the packet.
-        if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (i == connecthead))
-            break;
-
-        if (i == myconnectindex)
-            G_GameExit(" ");
-
-        if (screenpeek == i)
-        {
-            screenpeek = connectpoint2[i];
-            if (screenpeek < 0) screenpeek = connecthead;
-        }
-
-        if (i == connecthead)
-            connecthead = connectpoint2[connecthead];
-        else
-            connectpoint2[j] = connectpoint2[i];
-
-        numplayers--;
-        ud.multimode--;
-
-        if (numplayers < 2)
-            S_PlaySound(GENERIC_AMBIENCE17);
-
-        pub = NUMPAGES;
-        pus = NUMPAGES;
-        G_UpdateScreenArea();
-
-        P_QuickKill(g_player[i].ps);
-        A_DeleteSprite(g_player[i].ps->i);
-
-        Bsprintf(buf,"%s^00 is history!",g_player[i].user_name);
-        G_AddUserQuote(buf);
-        Bstrcpy(ScriptQuotes[116],buf);
-
-        if (voting == i)
-        {
-            for (i=0;i<MAXPLAYERS;i++)
-            {
-                g_player[i].vote = 0;
-                g_player[i].gotvote = 0;
-            }
-            voting = -1;
-        }
-
-        g_player[myconnectindex].ps->ftq = 116, g_player[myconnectindex].ps->fta = 180;
+        *g_player[i].inputBits = inputfifo[movefifoplc & (MOVEFIFOSIZ - 1)][i];
+        Net_CheckPlayerQuit(i);
     }
+    movefifoplc++;
 
     Net_GetSyncStat();
 
+    G_UpdateInterpolations();
+
+    everyothertime++;
     g_moveThingsCount++;
 
     if (ud.recstat == 1) G_DemoRecord();
 
+    // G_DoWorldSim() -------------------------
     if (ud.pause_on == 0)
     {
         g_globalRandom = krand();
@@ -12096,6 +12038,7 @@ static int G_DoMoveThings(void)
 
     TRAVERSE_CONNECT(i)
     {
+        // P_HandlePlayerColor
         if (g_player[i].inputBits->extbits&(EXTBIT_CHANGETEAM))
         {
             g_player[i].ps->team = g_player[i].pteam;
@@ -12110,6 +12053,7 @@ static int G_DoMoveThings(void)
 
         if (sprite[g_player[i].ps->i].pal != 1)
             sprite[g_player[i].ps->i].pal = g_player[i].pcolor;
+        // P_HandlePlayerColor
 
         G_HandleSharedKeys(i);
 
@@ -12122,6 +12066,7 @@ static int G_DoMoveThings(void)
 
     if (ud.pause_on == 0)
         G_MoveWorld();
+    // G_DoWorldSim() -------------------------
 
     Net_CorrectPrediction();
 

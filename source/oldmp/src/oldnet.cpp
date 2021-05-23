@@ -1482,6 +1482,70 @@ void Net_ClearFIFO(void)
     }
 }
 
+void Net_CheckPlayerQuit(int i)
+{
+    if (TEST_SYNC_KEY(g_player[i].inputBits->bits, SK_GAMEQUIT) == 0)
+        return;
+
+    g_player[i].connected = 0;
+
+    G_CloseDemoWrite();
+
+    // If we're the master, keep executing until all slaves can get the packet.
+    if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (i == connecthead))
+        return;
+
+    if (i == myconnectindex)
+        G_GameExit(" ");
+
+    if (screenpeek == i)
+    {
+        screenpeek = connectpoint2[i];
+        if (screenpeek < 0) screenpeek = connecthead;
+    }
+
+    if (i == connecthead)
+        connecthead = connectpoint2[connecthead];
+    else
+    {
+        int j;
+        TRAVERSE_CONNECT(j)
+        {
+            if (connectpoint2[j] == i)
+                connectpoint2[j] = connectpoint2[i];
+        }
+    }
+
+    numplayers--;
+    ud.multimode--;
+
+    if (numplayers < 2)
+        S_PlaySound(GENERIC_AMBIENCE17);
+
+    pub = NUMPAGES;
+    pus = NUMPAGES;
+    G_UpdateScreenArea();
+
+    P_QuickKill(g_player[i].ps);
+    A_DeleteSprite(g_player[i].ps->i);
+
+    Bsprintf(buf, "%s^00 is history!", g_player[i].user_name);
+    G_AddUserQuote(buf);
+    Bstrcpy(ScriptQuotes[116], buf);
+
+    if (voting == i)
+    {
+        for (i = 0; i < MAXPLAYERS; i++)
+        {
+            g_player[i].vote = 0;
+            g_player[i].gotvote = 0;
+        }
+        voting = -1;
+    }
+
+    g_player[myconnectindex].ps->ftq = 116, g_player[myconnectindex].ps->fta = 180;
+}
+
 void waitforeverybody(void)
 {
     int i;
