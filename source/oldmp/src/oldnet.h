@@ -4,6 +4,12 @@
 #include "duke3d.h"
 #include "sync.h"
 
+#ifdef OLDNET_CPP_
+#define OLDNET_EXTERN
+#else
+#define OLDNET_EXTERN extern
+#endif
+
 #define PREDICT_CURPOS (predictfifoplc & (MOVEFIFOSIZ - 1))
 #define PREDICT_LASTPOS ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
 
@@ -27,11 +33,15 @@ extern int voting, vote_map, vote_episode;
 extern int movefifosendplc;
 extern int movefifoplc;
 
-extern int predictfifoplc;
+// Check if oldnet_predicting is true and return in code branches
+// you want to avoid going into during prediction.
+OLDNET_EXTERN bool oldnet_predicting;
 
-extern int oldnet_predicting;
-extern DukePlayer_t predictedPlayer;
-extern PredictBackup_t predictBackup[MOVEFIFOSIZ];
+OLDNET_EXTERN int predictfifoplc;
+
+OLDNET_EXTERN DukePlayer_t predictedPlayer;
+
+OLDNET_EXTERN PredictBackup_t predictBackup[MOVEFIFOSIZ];
 
 enum DukePacket_t
 {

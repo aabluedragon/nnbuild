@@ -1,3 +1,5 @@
+#define OLDNET_CPP_
+
 #include "duke3d.h"
 //#include "oldnet.h"
 
@@ -10,13 +12,6 @@ int voting = -1, vote_map = -1, vote_episode = -1;
 
 int movefifosendplc;
 int movefifoplc;
-
-// Prediction Vars
-int predictfifoplc;
-
-int oldnet_predicting;
-DukePlayer_t predictedPlayer;
-PredictBackup_t predictBackup[MOVEFIFOSIZ];
 
 static int g_chatPlayer = -1;
 static char recbuf[180];
