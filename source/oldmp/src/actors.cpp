@@ -6631,7 +6631,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             j = headspritesect[pSprite->sectnum];
             while (j >= 0)
             {
-                if (sprite[j].statnum == 10 && sprite[j].owner >= 0)
+                if (sprite[j].statnum == STAT_PLAYER && sprite[j].owner >= 0)
                 {
                     p = sprite[j].yvel;
                     //g_player[p].ps->opos.z = g_player[p].ps->pos.z;
@@ -6648,7 +6648,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     }
                 }
 
-                if (sprite[j].statnum != 3)
+                if (sprite[j].statnum != STAT_EFFECTOR)
                 {
                     ActorExtra[j].bpos.z = sprite[j].z;
                     sprite[j].z += q;
@@ -6735,7 +6735,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             predictBackup[PREDICT_LASTPOS].pos = g_player[p].ps->pos;
                         }
                     }
-                    else if (sprite[k].statnum != 3)
+                    else if (sprite[k].statnum != STAT_EFFECTOR)
                     {
                         sprite[k].x += sprite[j].x-pSprite->x;
                         sprite[k].y += sprite[j].y-pSprite->y;
