@@ -1995,8 +1995,6 @@ static int P_DisplayKnuckleAnim(int gs,int snum)
     return 1;
 }
 
-int lastvisinc;
-
 void P_SetWeaponGamevars(int playerNum, const DukePlayer_t* const pPlayer)
 {
     Gv_SetVar(g_iWeaponVarID, pPlayer->curr_weapon, pPlayer->i, playerNum);
@@ -2048,7 +2046,6 @@ void P_FireWeapon(DukePlayer_t *p)
 
         if (!(aplWeaponFlags[p->curr_weapon][snum] & WEAPON_NOVISIBLE))
         {
-            lastvisinc = (int32_t)totalclock+32;
             p->visibility = 0;
         }
 
@@ -3757,7 +3754,6 @@ static void P_ProcessWeapon(int playerNum)
                 {
                     if (!(aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_NOVISIBLE))
                     {
-                        lastvisinc = (int32_t)totalclock + 32;
                         p->visibility = 0;
                     }
 

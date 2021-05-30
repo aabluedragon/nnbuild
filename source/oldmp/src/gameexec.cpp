@@ -3068,7 +3068,6 @@ static int X_DoExecute(void)
         insptr++;
         sprite[g_i].shade = -127;
         g_player[g_p].ps->visibility = -127;
-        lastvisinc = (int32_t)totalclock+32;
         return 0;
 
     case CON_SAVEMAPSTATE:

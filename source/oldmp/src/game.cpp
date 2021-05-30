@@ -117,7 +117,6 @@ char mod_dir[BMAX_PATH] = "/";
 #if defined(USE_OPENGL)
 extern char TEXCACHEFILE[BMAX_PATH];
 #endif
-extern int lastvisinc;
 
 int g_Shareware = 0;
 int g_gameType = 0;
@@ -4414,12 +4413,33 @@ void G_DrawRooms(int snum,int smoothratio)
 
     G_RestoreInterpolations();
 
-    if (totalclock < lastvisinc)
     {
-        if (klabs(p->visibility-ud.const_visibility) > 8)
-            p->visibility += (ud.const_visibility-p->visibility)>>2;
+        // Totalclock count of last step of p->visibility converging towards
+        // ud.const_visibility.
+        static int32_t lastvist;
+        const int32_t visdif = ud.const_visibility - p->visibility;
+
+        // Check if totalclock was cleared (e.g. restarted game).
+        if (totalclock < lastvist)
+            lastvist = 0;
+
+        // Every 2nd totalclock increment (each 1/60th second), ...
+        while (totalclock >= lastvist + 2)
+        {
+            // ... approximately three-quarter the difference between
+            // p->visibility and ud.const_visibility.
+            const int32_t visinc = visdif >> 2;
+
+            if (klabs(visinc) == 0)
+            {
+                p->visibility = ud.const_visibility;
+                break;
+            }
+
+            p->visibility += visinc;
+            lastvist = (int32_t)totalclock;
+        }
     }
-    else p->visibility = ud.const_visibility;
 
     if (r_usenewaspect)
     {
@@ -7360,7 +7380,6 @@ PALONLY:
             if (t->picnum == EXPLOSION2)
             {
                 g_player[screenpeek].ps->visibility = -127;
-                lastvisinc = (int32_t)totalclock+32;
                 //g_restorePalette = 1;   // JBF 20040101: why?
             }
             t->shade = -127;

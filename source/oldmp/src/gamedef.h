@@ -53,7 +53,6 @@ extern int g_weapon_xoffset;
 extern int g_gs;
 extern int g_kb;
 extern int g_looking_angSR1;
-extern int lastvisinc;
 extern char g_szScriptFileName[BMAX_PATH];
 extern int g_totalLines,g_lineNumber;
 extern int g_numCompilerErrors,g_numCompilerWarnings;

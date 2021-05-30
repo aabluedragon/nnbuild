@@ -1350,7 +1350,7 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("windowy1",(intptr_t)&windowxy1.y, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("windowy2",(intptr_t)&windowxy2.y, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("totalclock",(intptr_t)&totalclock, GAMEVAR_INTPTR | GAMEVAR_SYSTEM | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("lastvisinc",(intptr_t)&lastvisinc, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    //Gv_NewVar("lastvisinc",(intptr_t)&lastvisinc, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("numsectors",(intptr_t)&numsectors, GAMEVAR_SYSTEM | GAMEVAR_SHORTPTR | GAMEVAR_READONLY);
 
     Gv_NewVar("current_menu",(intptr_t)&g_currentMenu, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_READONLY);
@@ -1517,7 +1517,7 @@ void Gv_RefreshPointers(void)
     aGameVars[Gv_GetVarIndex("windowy1")].val.lValue = (intptr_t)&windowxy1.y;
     aGameVars[Gv_GetVarIndex("windowy2")].val.lValue = (intptr_t)&windowxy2.y;
     aGameVars[Gv_GetVarIndex("totalclock")].val.lValue = (intptr_t)&totalclock;
-    aGameVars[Gv_GetVarIndex("lastvisinc")].val.lValue = (intptr_t)&lastvisinc;
+    //aGameVars[Gv_GetVarIndex("lastvisinc")].val.lValue = (intptr_t)&lastvisinc;
     aGameVars[Gv_GetVarIndex("numsectors")].val.lValue = (intptr_t)&numsectors;
     aGameVars[Gv_GetVarIndex("numplayers")].val.lValue = (intptr_t)&numplayers;
     aGameVars[Gv_GetVarIndex("current_menu")].val.lValue = (intptr_t)&g_currentMenu;
