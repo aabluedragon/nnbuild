@@ -552,8 +552,8 @@ void G_AnimateWalls(void)
                     }
                     else
                     {
-                        if ((seed_krand(&g_random.animwall)&255) < 32)
-                            animwall[p].tag = 128<<(_krand()&3);
+                        if ((seed_krand(&g_random.animwall) & 255) < 32)
+                            animwall[p].tag = 128 << (seed_krand(&g_random.animwall) & 3);
                         else wall[i].overpicnum = W_FORCEFIELD+1;
                     }
                 }
