@@ -383,12 +383,15 @@ typedef struct {
     int wallnum, tag;
 } animwalltype;
 
-typedef struct
+struct randomseed_t
 {
-    int32_t global, animwall;
-    int32_t player, damage;
-    int32_t sprite, vm;
-} randomseed_t;
+    int32_t global, animwall, player;
+
+    randomseed_t()
+    {
+        global = animwall = player = 1996;
+    }
+};
 
 extern int probey;
 

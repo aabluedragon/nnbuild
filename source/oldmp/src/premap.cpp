@@ -757,9 +757,11 @@ static void resetpremapglobals(void)
 {
     int i;
 
+    randomseed = 1996;
+    g_random = randomseed_t();
+
     screenpeek = myconnectindex;
     parallaxtype = 0;
-    randomseed = 1996;
     tempwallptr = 0;
     camsprite = -1;
 
