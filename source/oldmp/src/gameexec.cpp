@@ -4528,21 +4528,6 @@ void A_Execute(int iActor,int iPlayer,int lDist)
 
     X_Move();
 
-    /*        if (ud.angleinterpolation)
-            {
-                temp = (g_sp->ang & 2047) - sprpos[g_i].ang;
-                sprpos[g_i].oldang = sprpos[g_i].ang;
-                if (temp)
-                {
-                    temp2 = temp/klabs(temp);
-                    if (klabs(temp) > 1024) temp2 = -(temp2);
-                    sprpos[g_i].angdir = temp2;
-                    sprpos[g_i].angdif = min(ud.angleinterpolation,klabs(temp));
-                    sprpos[g_i].ang += sprpos[g_i].angdif * sprpos[g_i].angdir;
-                    sprpos[g_i].ang &= 2047;
-                }
-            }
-      */
     if (g_sp->statnum == 6)
         switch (DynamicTileMap[g_sp->picnum])
         {

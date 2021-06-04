@@ -132,7 +132,6 @@ G_EXTERN PlayerSpawn_t g_playerSpawnPoints[MAXSPAWNPOINTS];
 G_EXTERN user_defs ud;
 G_EXTERN projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
 G_EXTERN STATUSBARTYPE sbar;
-G_EXTERN spriteinterpolate sprpos[MAXSPRITES];
 
 // Multiplayer/Demos
 G_EXTERN int playerswhenstarted;

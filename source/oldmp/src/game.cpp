@@ -4584,8 +4584,6 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
 
     ActorExtra[i].flags = 0;
 
-    sprpos[i].ang = sprpos[i].oldang = sprite[i].ang;
-
     if (actorscrptr[s_pn])
     {
         s->extra = *actorscrptr[s_pn];
@@ -4676,8 +4674,6 @@ int A_Spawn(int j, int pn)
         T1(i) = T2(i) = T3(i) = T4(i) = T5(i) = T6(i) = T7(i) = T8(i) = T9(i) = 0;
 
         ActorExtra[i].flags = 0;
-
-        sprpos[i].ang = sprpos[i].oldang = sprite[i].ang;
 
         if (PN(i) != SPEAKER && PN(i) != LETTER && PN(i) != DUCK && PN(i) != TARGET && PN(i) != TRIPBOMB && PN(i) != VIEWSCREEN && PN(i) != VIEWSCREEN2 && (CS(i)&48))
             if (!(PN(i) >= CRACK1 && PN(i) <= CRACK4))
