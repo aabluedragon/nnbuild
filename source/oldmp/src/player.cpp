@@ -3375,7 +3375,7 @@ void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer)
     if (oldnet_predicting)
         return;
 
-    int const newOwner = pPlayer->newowner;
+    //int const newOwner = pPlayer->newowner;
     //pPlayer->pos = sprite[newOwner].pos;
     //pPlayer->q16ang = fix16_from_int(sprite[newOwner].ang);
     pPlayer->vel.x = 0;
