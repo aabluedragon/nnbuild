@@ -12004,8 +12004,7 @@ static int G_DoMoveThings(void)
 
     ud.camerasprite = -1;
     lockclock += TICSPERFRAME;
-
-    if (g_earthquakeTime > 0) g_earthquakeTime--;
+    
     if (g_RTSPlaying > 0) g_RTSPlaying--;
 
     for (i=0;i<MAXUSERQUOTES;i++)
@@ -12047,6 +12046,10 @@ static int G_DoMoveThings(void)
     // G_DoWorldSim() -------------------------
     if (ud.pause_on == 0)
     {
+        // Moved to pause check since this can desync the game if someone pauses during a quake
+        if (g_earthquakeTime > 0)
+            g_earthquakeTime--;
+
         g_globalRandom = krand();
         A_MoveDummyPlayers();//ST 13
     }
