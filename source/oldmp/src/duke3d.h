@@ -875,6 +875,7 @@ enum GamevarFlags_t {
     GAMEVAR_CHARPTR    = 0x00010000, // plValues is a pointer to a char
     GAMEVAR_NORESET    = 0x00020000, // var values are not reset when restoring map state
     GAMEVAR_SPECIAL    = 0x00040000, // flag for structure member shortcut vars
+    GAMEVAR_NOMULTI    = 0x00080000, // don't attach to multiplayer packets
     GAMEVAR_Q16PTR     = 0x00100000,
 
     GAMEVAR_RAWQ16PTR = GAMEVAR_Q16PTR | GAMEVAR_SPECIAL,
