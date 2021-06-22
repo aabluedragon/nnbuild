@@ -1826,8 +1826,6 @@ int G_EnterLevel(int g)
 
     //PREMAP.C - replace near the my's at the end of the file
 
-    Net_ResetPrediction();
-
     //g_player[myconnectindex].ps->palette = palette;
     //G_FadePalette(0,0,0,0);
     P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 0);    // JBF 20040308
@@ -1840,11 +1838,14 @@ int G_EnterLevel(int g)
 
     ud.last_level = ud.level_number+1;
 
-    clearfifo();
-
     for (i=g_interpolationCnt-1;i>=0;i--) bakipos[i] = *curipos[i];
 
     g_restorePalette = 1;
+
+    // NEED these just before starting, after setting up everything else.
+    clearfifo();
+    clearfrags();
+    clearteams();
 
     waitforeverybody();
     mmulti_flushpackets();
@@ -1856,9 +1857,6 @@ int G_EnterLevel(int g)
     G_DrawRooms(myconnectindex,65536);
 
     g_player[myconnectindex].ps->over_shoulder_on = 0;
-
-    clearfrags();
-    clearteams();
 
     G_ResetTimers();  // Here we go
 

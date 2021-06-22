@@ -4839,8 +4839,6 @@ void G_RestoreMapState(mapstate_t *save)
         for (i = g_animateCount-1;i>=0;i--)
             G_SetInterpolation(G_GetAnimationPointer(i));
 
-        Net_ResetPrediction();
-
         waitforeverybody();
         mmulti_flushpackets();
         clearfifo();

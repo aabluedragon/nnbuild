@@ -570,8 +570,6 @@ int32_t G_LoadPlayer(int32_t spot)
 
 //    clearbufbyte(connected,MAXPLAYERS,0x01010101);
 
-    Net_ResetPrediction();
-
     ready2send = 1;
 
     mmulti_flushpackets();

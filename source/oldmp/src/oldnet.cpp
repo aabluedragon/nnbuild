@@ -1425,7 +1425,7 @@ void Net_CorrectPrediction(void)
         Net_DoPrediction();
 }
 
-void Net_ResetPrediction(void)
+void Net_InitializePrediction(void)
 {
     if (g_player[myconnectindex].ps == NULL)
         return;
@@ -1468,6 +1468,8 @@ void Net_ClearFIFO(void)
     bufferjitter = 1;
     mymaxlag = otherminlag = 0;
     movefifoplc = movefifosendplc = predictfifoplc = 0;
+
+    Net_InitializePrediction();
 
     for (; i < MAXPLAYERS; i++)
     {

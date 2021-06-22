@@ -100,9 +100,11 @@ void Net_SendInitialSettings(void);
 void Net_NewGame(int volume, int level);
 void Net_EndOfLevel(void);
 void Net_EnterMessage(void);
+
 void Net_CorrectPrediction(void);
-void Net_ResetPrediction(void);
+void Net_InitializePrediction(void);
 void Net_DoPrediction(void);
+
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
 void waitforeverybody(void);
