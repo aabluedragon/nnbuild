@@ -7205,16 +7205,6 @@ PALONLY:
 
         if (actorscrptr[s->picnum])
         {
-            /*
-            if (ud.angleinterpolation)
-            {
-                if (sprpos[i].ang != sprpos[i].oldang)
-                    t->ang = (sprpos[i].oldang + (mulscale16((int)(sprpos[i].angdif),smoothratio) * sprpos[i].angdir)) & 2047;
-                else
-                    t->ang = sprpos[i].ang;
-            }
-            */
-
             if ((intptr_t *)t4 >= &script[0] && (intptr_t *)t4 <= (&script[0] + g_scriptSize))
             {
                 l = *(((intptr_t *)t4)+2); //For TerminX: was *(int *)(t4+8)
