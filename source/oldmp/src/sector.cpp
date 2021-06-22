@@ -2693,9 +2693,10 @@ void G_HandleSharedKeys(int snum)
     // 1<<30 = !inventory
     // 1<<31 = !escape
 
-    i = p->aim_mode;
-    p->aim_mode = (sb_snum>>SK_AIMMODE)&1;
-    if (p->aim_mode < i)
+    int const aimMode = p->aim_mode;
+
+    p->aim_mode = (sb_snum >> SK_AIMMODE) & 1;
+    if (p->aim_mode < aimMode)
         p->return_to_center = 9;
 
     if (TEST_SYNC_KEY(sb_snum, SK_QUICK_KICK) && p->quick_kick == 0)
