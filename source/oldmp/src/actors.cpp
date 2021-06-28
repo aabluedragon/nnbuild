@@ -132,47 +132,10 @@ void P_AddWeaponNoSwitch(DukePlayer_t *p, int weapon)
             p->gotweapon[GROW_WEAPON] = 1;
     }
 
-#if 1
     if (aplWeaponSelectSound[p->curr_weapon][snum])
         S_StopEnvSound(aplWeaponSelectSound[p->curr_weapon][snum],p->i);
     if (aplWeaponSelectSound[weapon][snum])
         A_PlaySound(aplWeaponSelectSound[weapon][snum],p->i);
-#else
-    switch (p->curr_weapon)
-    {
-    case KNEE_WEAPON:
-    case TRIPBOMB_WEAPON:
-    case HANDREMOTE_WEAPON:
-    case HANDBOMB_WEAPON:
-        break;
-    case SHOTGUN_WEAPON:
-        S_StopEnvSound(SHOTGUN_COCK,p->i);
-        break;
-    case PISTOL_WEAPON:
-        S_StopEnvSound(INSERT_CLIP,p->i);
-        break;
-    default:
-        S_StopEnvSound(SELECT_WEAPON,p->i);
-        break;
-    }
-    switch (weapon)
-    {
-    case KNEE_WEAPON:
-    case TRIPBOMB_WEAPON:
-    case HANDREMOTE_WEAPON:
-    case HANDBOMB_WEAPON:
-        break;
-    case SHOTGUN_WEAPON:
-        A_PlaySound(SHOTGUN_COCK,p->i);
-        break;
-    case PISTOL_WEAPON:
-        A_PlaySound(INSERT_CLIP,p->i);
-        break;
-    default:
-        A_PlaySound(SELECT_WEAPON,p->i);
-        break;
-    }
-#endif
 }
 
 void P_SelectNextInvItem(DukePlayer_t *p)
