@@ -45,6 +45,10 @@ extern int CheckPlayerInSector(int sect);
 extern int __fastcall A_FindPlayer(spritetype *s,int *d);
 extern int P_FindOtherPlayer(int p,int *d);
 
+// actors.c
+void G_MovePlayerSprite(int playerNum);
+// --------
+
 extern void G_DoSectorAnimations(void);
 extern int32_t* G_GetAnimationPointer(int32_t index);
 extern int GetAnimationGoal(int16_t target, int8_t type);

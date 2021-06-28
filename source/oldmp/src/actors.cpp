@@ -1052,154 +1052,182 @@ BOLT:
     }
 }
 
+static void G_ShadePlayerSprite(int spriteNum)
+{
+    spritetype* s = &sprite[spriteNum];
+
+    if (sector[s->sectnum].ceilingstat & 1)
+        s->shade += (sector[s->sectnum].ceilingshade - s->shade) >> 1;
+    else
+        s->shade += (sector[s->sectnum].floorshade - s->shade) >> 1;
+}
+
+static void G_MoveHoloDuke(int spriteNum)
+{
+    spritetype* s = &sprite[spriteNum];
+    DukePlayer_t* p = g_player[s->yvel].ps;
+    // Holodukes
+    if (p->holoduke_on == -1)
+    {
+        A_DeleteSprite(spriteNum);
+        return;
+    }
+
+    ActorExtra[spriteNum].bpos.x = s->x;
+    ActorExtra[spriteNum].bpos.y = s->y;
+    ActorExtra[spriteNum].bpos.z = s->z;
+
+    s->cstat = 0;
+
+    if (s->xrepeat < 42)
+    {
+        s->xrepeat += 4;
+        s->cstat |= 2;
+    }
+    else s->xrepeat = 42;
+    if (s->yrepeat < 36)
+        s->yrepeat += 4;
+    else
+    {
+        s->yrepeat = 36;
+        if (sector[s->sectnum].lotag != ST_2_UNDERWATER)
+            A_Fall(spriteNum);
+        if (s->zvel == 0 && sector[s->sectnum].lotag == ST_1_ABOVE_WATER)
+            s->z += (32 << 8);
+    }
+
+    if (s->extra < 8)
+    {
+        s->xvel = 128;
+        s->ang = fix16_to_int(p->q16ang);
+        s->extra++;
+        A_SetSprite(spriteNum, CLIPMASK0);
+    }
+    else
+    {
+        s->ang = 2047 - fix16_to_int(p->q16ang);
+        setspritez_old(spriteNum, s->x, s->y, s->z);
+    }
+
+    G_ShadePlayerSprite(spriteNum);
+}
+
 int otherp;
+void G_MovePlayerSprite(int playerNum)
+{
+    DukePlayer_t* p = g_player[playerNum].ps;
+    spritetype *s = &sprite[p->i];
+
+    int otherx;
+
+    if (p->newowner >= 0)  //Looking thru the camera
+    {
+        s->pos.vec2 = p->opos.vec2;
+
+        ActorExtra[p->i].bpos.z = s->z = p->opos.z + PHEIGHT;
+        s->ang = fix16_to_int(p->oq16ang);
+        setspritez_old(p->i, s->x, s->y, s->z);
+    }
+    else
+    {
+        if (ud.multimode > 1)
+            otherp = P_FindOtherPlayer(s->yvel, &otherx);
+        else
+        {
+            otherp = s->yvel;
+            otherx = 0;
+        }
+
+        if (!oldnet_predicting && actorscrptr[sprite[p->i].picnum])
+            A_Execute(p->i, s->yvel, otherx);
+
+        if (ud.multimode > 1)
+            if (sprite[g_player[otherp].ps->i].extra > 0)
+            {
+                if (s->yrepeat > 32 && sprite[g_player[otherp].ps->i].yrepeat < 32)
+                {
+                    if (otherx < 1400 && p->knee_incs == 0)
+                    {
+                        // Don't stomp teammates.
+                        if (
+                            ((GametypeFlags[ud.coop] & GAMETYPE_TDM) && p->team != g_player[otherp].ps->team) ||
+                            (!(GametypeFlags[ud.coop] & GAMETYPE_PLAYERSFRIENDLY) && !(GametypeFlags[ud.coop] & GAMETYPE_TDM))
+                            )
+                        {
+                            p->knee_incs = 1;
+                            p->weapon_pos = -1;
+                            p->actorsqu = g_player[otherp].ps->i;
+                        }
+                    }
+                }
+            }
+
+        if (ud.god)
+        {
+            s->extra = p->max_player_health;
+            s->cstat = 257;
+            p->dead_flag = 0; // Fix for player sprite clipping into floor if resurrecting
+            p->jetpack_amount = 1599;
+        }
+
+        if (s->extra > 0)
+        {
+            ActorExtra[p->i].owner = p->i;
+
+            if (ud.god == 0)
+                if (G_CheckForSpaceCeiling(s->sectnum) || G_CheckForSpaceFloor(s->sectnum))
+                    P_QuickKill(p);
+        }
+        else
+        {
+            // Set corpse position
+            p->pos.x = s->x;
+            p->pos.y = s->y;
+            p->pos.z = s->z - (20 << 8);
+
+            p->newowner = -1;
+
+            if (p->wackedbyactor >= 0 && sprite[p->wackedbyactor].statnum < MAXSTATUS)
+            {
+                p->q16ang += fix16_from_int(G_GetAngleDelta(fix16_to_int(p->q16ang), getangle(sprite[p->wackedbyactor].x - p->pos.x, sprite[p->wackedbyactor].y - p->pos.y)) >> 1);
+                p->q16ang &= 0x7FFFFFF;
+#if 0
+                // HACK: This is so the camera will remain smooth in online play.
+                if ((s->yvel == myconnectindex) && (screenpeek == myconnectindex))
+                {
+                    predictedPlayer.q16ang = p->q16ang;
+                }
+#endif
+            }
+
+        }
+
+        s->ang = fix16_to_int(p->q16ang);
+    }
+
+    G_ShadePlayerSprite(p->i);
+}
 
 static void G_MovePlayers(void) //Players
 {
     int i = headspritestat[STAT_PLAYER], nexti;
-    int otherx;
     spritetype *s;
-    DukePlayer_t *p;
 
     while (i >= 0)
     {
         nexti = nextspritestat[i];
 
         s = &sprite[i];
-        p = g_player[s->yvel].ps;
-        if (s->owner >= 0)
+
+        if (s->owner >= 0) // Players
         {
-            if (p->newowner >= 0)  //Looking thru the camera
-            {
-                s->pos.vec2 = p->opos.vec2;
-
-                ActorExtra[i].bpos.z = s->z = p->opos.z+PHEIGHT;
-                s->ang = fix16_to_int(p->oq16ang);
-                setspritez_old(i,s->x,s->y,s->z);
-            }
-            else
-            {
-                if (ud.multimode > 1)
-                    otherp = P_FindOtherPlayer(s->yvel,&otherx);
-                else
-                {
-                    otherp = s->yvel;
-                    otherx = 0;
-                }
-
-                if (actorscrptr[sprite[i].picnum])
-                    A_Execute(i,s->yvel,otherx);
-
-                if (ud.multimode > 1)
-                    if (sprite[g_player[otherp].ps->i].extra > 0)
-                    {
-                        if (s->yrepeat > 32 && sprite[g_player[otherp].ps->i].yrepeat < 32)
-                        {
-                            if (otherx < 1400 && p->knee_incs == 0)
-                            {
-                                // Don't stomp teammates.
-                                if (
-                                    ((GametypeFlags[ud.coop] & GAMETYPE_TDM) && p->team != g_player[otherp].ps->team) ||
-                                    (!(GametypeFlags[ud.coop] & GAMETYPE_PLAYERSFRIENDLY) && !(GametypeFlags[ud.coop] & GAMETYPE_TDM))
-                                    )
-                                {
-                                    p->knee_incs = 1;
-                                    p->weapon_pos = -1;
-                                    p->actorsqu = g_player[otherp].ps->i;
-                                }
-                            }
-                        }
-                    }
-
-                if (ud.god)
-                {
-                    s->extra = p->max_player_health;
-                    s->cstat = 257;
-                    p->dead_flag = 0; // Fix for player sprite clipping into floor if resurrecting
-                    p->jetpack_amount =     1599;
-                }
-
-                if (s->extra > 0)
-                {
-                    ActorExtra[i].owner = i;
-
-                    if (ud.god == 0)
-                        if (G_CheckForSpaceCeiling(s->sectnum) || G_CheckForSpaceFloor(s->sectnum))
-                            P_QuickKill(p);
-                }
-                else
-                {
-
-                    p->pos.x = s->x;
-                    p->pos.y = s->y;
-                    p->pos.z = s->z-(20<<8);
-
-                    p->newowner = -1;
-
-                    if (p->wackedbyactor >= 0 && sprite[p->wackedbyactor].statnum < MAXSTATUS)
-                    {
-                        p->q16ang += fix16_from_int(G_GetAngleDelta(fix16_to_int(p->q16ang),getangle(sprite[p->wackedbyactor].x-p->pos.x,sprite[p->wackedbyactor].y-p->pos.y))>>1);
-                        p->q16ang &= 0x7FFFFFF;
-
-                        // HACK: This is so the camera will remain smooth in online play.
-                        if ((s->yvel == myconnectindex) && (screenpeek == myconnectindex))
-                        {
-                            predictedPlayer.q16ang = p->q16ang;
-                        }
-                    }
-
-                }
-                s->ang = fix16_to_int(p->q16ang);
-            }
+            G_MovePlayerSprite(s->yvel);
         }
-        else
+        else // HoloDukes
         {
-            if (p->holoduke_on == -1)
-                KILLIT(i);
-
-            ActorExtra[i].bpos.x = s->x;
-            ActorExtra[i].bpos.y = s->y;
-            ActorExtra[i].bpos.z = s->z;
-
-            s->cstat = 0;
-
-            if (s->xrepeat < 42)
-            {
-                s->xrepeat += 4;
-                s->cstat |= 2;
-            }
-            else s->xrepeat = 42;
-            if (s->yrepeat < 36)
-                s->yrepeat += 4;
-            else
-            {
-                s->yrepeat = 36;
-                if (sector[s->sectnum].lotag != ST_2_UNDERWATER)
-                    A_Fall(i);
-                if (s->zvel == 0 && sector[s->sectnum].lotag == ST_1_ABOVE_WATER)
-                    s->z += (32<<8);
-            }
-
-            if (s->extra < 8)
-            {
-                s->xvel = 128;
-                s->ang = fix16_to_int(p->q16ang);
-                s->extra++;
-                A_SetSprite(i,CLIPMASK0);
-            }
-            else
-            {
-                s->ang = 2047-fix16_to_int(p->q16ang);
-                setspritez_old(i,s->x,s->y,s->z);
-            }
+            G_MoveHoloDuke(i);
         }
 
-        if (sector[s->sectnum].ceilingstat&1)
-            s->shade += (sector[s->sectnum].ceilingshade-s->shade)>>1;
-        else
-            s->shade += (sector[s->sectnum].floorshade-s->shade)>>1;
-
-BOLT:
         i = nexti;
     }
 }
