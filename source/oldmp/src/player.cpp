@@ -1122,7 +1122,7 @@ int A_Shoot(int i,int atwith)
                     hitCstats[hitCount] = sprite[curHit->sprite].cstat;
                     sprite[curHit->sprite].cstat &= ~CSTAT_SPRITE_BLOCK_HITSCAN;
 
-                    shouldStop = ((sprite[curHit->sprite].cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR) || (sprite[curHit->sprite].cstat & CSTAT_SPRITE_ALIGNMENT_WALL));
+                    shouldStop = (sprite[curHit->sprite].cstat & (CSTAT_SPRITE_ALIGNMENT_FLOOR | CSTAT_SPRITE_ALIGNMENT_WALL));
 
                     // Perhaps an EVENT_DOPENETRATE here? (THISACTOR = Target, RETURN = Projectile Tilenum)
                     // So people can determine whether or not the thing we hit should override shouldStop.
