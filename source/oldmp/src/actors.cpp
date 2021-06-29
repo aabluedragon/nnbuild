@@ -1073,9 +1073,7 @@ static void G_MoveHoloDuke(int spriteNum)
         return;
     }
 
-    ActorExtra[spriteNum].bpos.x = s->x;
-    ActorExtra[spriteNum].bpos.y = s->y;
-    ActorExtra[spriteNum].bpos.z = s->z;
+    ActorExtra[spriteNum].bpos = s->pos;
 
     s->cstat = 0;
 
