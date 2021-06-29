@@ -3180,9 +3180,8 @@ CHECKINV1:
             }
         }
 
-        if (TEST_SYNC_KEY(sb_snum, SK_HOLODUKE) && p->newowner == -1)
+        if (TEST_SYNC_KEY(sb_snum, SK_HOLODUKE) && (p->newowner == -1) && !oldnet_predicting)
         {
-
             if (p->holoduke_on == -1)
             {
                 Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
@@ -3195,8 +3194,7 @@ CHECKINV1:
 
                         if (p->cursectnum > -1)
                         {
-                            p->holoduke_on = i =
-                                                 A_InsertSprite(p->cursectnum,
+                            p->holoduke_on = i = A_InsertSprite(p->cursectnum,
                                                                 p->pos.x,
                                                                 p->pos.y,
                                                                 p->pos.z+(30<<8),APLAYER,-64,0,0,fix16_to_int(p->q16ang),0,0,-1,10);
