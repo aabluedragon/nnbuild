@@ -37,6 +37,9 @@ extern int movefifoplc;
 // you want to avoid going into during prediction.
 OLDNET_EXTERN bool oldnet_predicting;
 
+// Must enable this on code branches that are able to predict sounds
+OLDNET_EXTERN bool sounds_predictable;
+
 OLDNET_EXTERN int predictfifoplc;
 
 OLDNET_EXTERN DukePlayer_t predictedPlayer;

@@ -527,6 +527,28 @@ static int S_CalcDistAndAng(int spriteNum, int soundNum, int camSect, int camAng
     return explosion;
 }
 
+static bool S_PredictionCheck(int spriteNum)
+{
+    if (numplayers > 1)
+    {
+        // Do not predict during correction phase, lest we annihilate our ears.
+        if (oldnet_predicting == PREDICTSTATE_CORRECT)
+            return true;
+
+        // Predictable, but we're not predicting, so block.
+        if (sounds_predictable && !oldnet_predicting)
+        {
+            if (spriteNum < 0)
+                return true;
+
+            if (sprite[spriteNum].picnum == APLAYER && sprite[spriteNum].yvel == myconnectindex)
+                return true;
+        }
+    }
+
+    return false;
+}
+
 int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z)
 {
     vec3_t pos;
@@ -539,6 +561,9 @@ int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z)
 
 int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos)
 {
+    if (S_PredictionCheck(spriteNum))
+        return -1;
+
     int32_t j = X_OnEventWithReturn(EVENT_SOUND, spriteNum, screenpeek, num);
 
     if ((j == -1 && num != -1) || !ud.config.SoundToggle) // check that the user returned -1, but only if -1 wasn't playing already (in which case, warn)
@@ -679,6 +704,9 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos)
 
 int S_PlaySound(int num)
 {
+    if (S_PredictionCheck(-1))
+        return -1;
+
     int sndnum = X_OnEventWithReturn(EVENT_SOUND, g_player[screenpeek].ps->i, screenpeek, num);
 
     if ((sndnum == -1 && num != -1) || !ud.config.SoundToggle) // check that the user returned -1, but only if -1 wasn't playing already (in which case, warn)
@@ -744,6 +772,9 @@ int A_PlaySound(int soundNum, int spriteNum)
 
 void S_StopEnvSound(int sndNum, int sprNum)
 {
+    if (S_PredictionCheck(sprNum))
+        return;
+
     if (EDUKE32_PREDICT_FALSE((unsigned)sndNum > (unsigned)g_highestSoundIdx) || g_sounds[sndNum].num <= 0)
         return;
 
@@ -777,6 +808,9 @@ void S_StopEnvSound(int sndNum, int sprNum)
 
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
 {
+    if (S_PredictionCheck(spriteNum))
+        return;
+
     if ((unsigned)soundNum > (unsigned)g_highestSoundIdx || g_sounds[soundNum].num <= 0)
         return;
 
@@ -912,6 +946,8 @@ int S_CheckSoundPlaying(int soundNum)
 
 void S_DetachSoundsFromSprite(int spriteNum)
 {
+    if (oldnet_predicting) return;
+
     for (int i = 0; i <= g_highestSoundIdx; ++i)
     {
         if (g_sounds[i].num == 0)
