@@ -113,8 +113,7 @@ G_EXTERN int g_numLabels, g_numDefaultLabels;
 G_EXTERN char *label;
 
 G_EXTERN char EnvMusicFilename[MAXVOLUMES + 1][BMAX_PATH];
-G_EXTERN char ActorType[MAXTILES];
-G_EXTERN int SpriteFlags[MAXTILES];
+G_EXTERN int32_t SpriteFlags[MAXTILES];
 
 // Sound
 G_EXTERN sound_t g_sounds[MAXSOUNDS];

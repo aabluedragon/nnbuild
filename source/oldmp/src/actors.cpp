@@ -526,7 +526,7 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
         {
             if (sprite[spritenum].picnum == LIZMAN)
                 cd = 292L;
-            else if ((ActorType[sprite[spritenum].picnum]&3))
+            else if (A_CheckSpriteFlags(spritenum, SPRITE_BADGUY))
                 cd = sprite[spritenum].clipdist<<2;
             else
                 cd = 192L;

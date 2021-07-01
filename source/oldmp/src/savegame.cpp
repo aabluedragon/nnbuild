@@ -275,7 +275,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_mirrorWall[0],sizeof(int16_t),64,fil) != 64) goto corrupt;
     if (kdfread(&g_mirrorSector[0],sizeof(int16_t),64,fil) != 64) goto corrupt;
     if (kdfread(&show2dsector[0],sizeof(uint8_t),MAXSECTORS>>3,fil) != (MAXSECTORS>>3)) goto corrupt;
-    if (kdfread(&ActorType[0],sizeof(uint8_t),MAXTILES,fil) != MAXTILES) goto corrupt;
+    if (kdfread(&SpriteFlags[0],sizeof(int32_t),MAXTILES,fil) != MAXTILES) goto corrupt;
 
     if (kdfread(&g_numClouds,sizeof(g_numClouds),1,fil) != 1) goto corrupt;
     if (kdfread(&clouds[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
@@ -726,7 +726,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&g_mirrorWall[0],sizeof(int16_t),64,fil);
     dfwrite(&g_mirrorSector[0],sizeof(int16_t),64,fil);
     dfwrite(&show2dsector[0],sizeof(uint8_t),MAXSECTORS>>3,fil);
-    dfwrite(&ActorType[0],sizeof(uint8_t),MAXTILES,fil);
+    dfwrite(&SpriteFlags[0],sizeof(int32_t),MAXTILES,fil);
 
     dfwrite(&g_numClouds,sizeof(g_numClouds),1,fil);
     dfwrite(&clouds[0],sizeof(int16_t)<<7,1,fil);

@@ -4772,7 +4772,7 @@ int A_Spawn(int j, int pn)
                 if (sp->xrepeat == 0 || sp->yrepeat == 0)
                     sp->xrepeat = sp->yrepeat = 1;
 
-                if (ActorType[sp->picnum] & 3)
+                if (A_CheckSpriteFlags(i, SPRITE_BADGUY))
                 {
                     if (ud.monsters_off == 1)
                     {
@@ -4783,7 +4783,7 @@ int A_Spawn(int j, int pn)
 
                     A_Fall(i);
 
-                    if (ActorType[sp->picnum] & 2)
+                    if (A_CheckSpriteFlags(i, SPRITE_BADGUYSTAYPUT))
                         ActorExtra[i].actorstayput = sp->sectnum;
 
                     g_player[myconnectindex].ps->max_actors_killed++;

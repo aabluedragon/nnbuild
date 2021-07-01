@@ -2797,7 +2797,13 @@ static int C_ParseCommand(void)
         C_GetNextValue(LABEL_DEFINE);
         g_scriptPtr--;
         actorscrptr[*g_scriptPtr] = g_parsingActorPtr;
-        ActorType[*g_scriptPtr] = j;
+
+        if (tw == CON_USERACTOR)
+        {
+            if (j & 1) SpriteFlags[*g_scriptPtr] |= SPRITE_BADGUY;
+            if (j & 2) SpriteFlags[*g_scriptPtr] |= (SPRITE_BADGUY | SPRITE_BADGUYSTAYPUT);
+            if (j & 4) SpriteFlags[*g_scriptPtr] |= SPRITE_ROTFIXED;
+        }
 
         for (j=0;j<4;j++)
         {
