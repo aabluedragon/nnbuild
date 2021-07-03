@@ -5928,7 +5928,6 @@ void C_Compile(const char *filenam)
 
     Bmemset(actorscrptr, 0, sizeof(actorscrptr));
     Bmemset(actorLoadEventScrptr, 0, sizeof(actorLoadEventScrptr));
-    Bmemset(ActorType, 0, sizeof(ActorType));
 
 //    clearbufbyte(script,sizeof(script),0l); // JBF 20040531: yes? no?
     if (script != NULL)
