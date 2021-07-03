@@ -4398,12 +4398,12 @@ void G_DrawRooms(int snum,int smoothratio)
             g_screenCapture = 0;
             //            walock[TILE_SAVESHOT] = 1;
         }
-        else if (videoGetRenderMode() == 0 && ((ud.screen_tilting && p->rotscrnang) || ud.detail==0))
+        else if (videoGetRenderMode() == REND_CLASSIC && ((ud.screen_tilting && p->rotscrnang) || ud.detail==0))
         {
             if (ud.screen_tilting) tang = p->rotscrnang;
             else tang = 0;
 
-            if (videoGetRenderMode() == 0)
+            if (videoGetRenderMode() == REND_CLASSIC)
             {
                 renderRestoreTarget();
                 picanm[TILE_TILT].xofs = picanm[TILE_TILT].yofs = 0;
