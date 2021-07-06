@@ -3144,7 +3144,7 @@ static void G_MoveTransports(void)
 
                     if (g_player[p].ps->transporter_hold == 0 && g_player[p].ps->jumping_counter == 0)
                     {
-                        if (g_player[p].ps->on_ground && sectlotag == 0 && onfloorz && g_player[p].ps->jetpack_on == 0)
+                        if (g_player[p].ps->on_ground && sectlotag == ST_0_NO_EFFECT && onfloorz && g_player[p].ps->jetpack_on == 0)
                         {
                             if (sprite[i].pal == 0)
                             {
@@ -3193,7 +3193,7 @@ static void G_MoveTransports(void)
                             break;
                         }
                     }
-                    else if (!(sectlotag == 1 && g_player[p].ps->on_ground == 1)) break;
+                    else if (!(sectlotag == ST_1_ABOVE_WATER && g_player[p].ps->on_ground == 1)) break;
 
                     if (onfloorz == 0 && klabs(SZ(i) -g_player[p].ps->pos.z) < 6144)
                         if ((g_player[p].ps->jetpack_on == 0) || (g_player[p].ps->jetpack_on && TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_JUMP)) ||
@@ -3216,7 +3216,7 @@ static void G_MoveTransports(void)
 
                     k = 0;
 
-                    if (onfloorz && sectlotag == 1 && g_player[p].ps->on_ground &&
+                    if (onfloorz && sectlotag == ST_1_ABOVE_WATER && g_player[p].ps->on_ground &&
                             g_player[p].ps->pos.z > (sector[sect].floorz-1080) &&
                             (TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_CROUCH) || g_player[p].ps->vel.z > 2048))
                         //                        if( onfloorz && sectlotag == 1 && g_player[p].ps->pos.z > (sector[sect].floorz-(6<<8)) )
@@ -3237,7 +3237,7 @@ static void G_MoveTransports(void)
                         //          g_player[p].ps->vel.z += 1080;
                     }
 
-                    if (onfloorz && sectlotag == 2 && g_player[p].ps->pos.z < (sector[sect].ceilingz+1080) && g_player[p].ps->vel.z == 0)
+                    if (onfloorz && sectlotag == ST_2_UNDERWATER && g_player[p].ps->pos.z < (sector[sect].ceilingz+1080) && g_player[p].ps->vel.z == 0)
                     {
                         k = 1;
                         //                            if( sprite[j].extra <= 0) break;
@@ -3273,7 +3273,7 @@ static void G_MoveTransports(void)
                         if ((krand()&255) < 32)
                             A_Spawn(j,WATERSPLASH2);
 
-                        if (sectlotag == 1)
+                        if (sectlotag == ST_1_ABOVE_WATER)
                             for (l = 0;l < 9;l++)
                             {
                                 q = A_Spawn(g_player[p].ps->i,WATERBUBBLE);
@@ -3343,7 +3343,7 @@ static void G_MoveTransports(void)
 
                         default:
                         {
-                            if (sprite[j].statnum == 5 && !(sectlotag == 1 || sectlotag == 2))
+                            if (sprite[j].statnum == STAT_MISC && !(sectlotag == ST_1_ABOVE_WATER || sectlotag == ST_2_UNDERWATER))
                                 break;
                         }
                         fallthrough__;
