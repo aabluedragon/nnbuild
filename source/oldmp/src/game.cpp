@@ -4278,13 +4278,23 @@ void G_DrawRooms(int snum,int smoothratio)
                 renderSetAspect(mulscale16(oviewingrange, vRange >> 1), yxaspect);
             }
         }
-        else if (videoGetRenderMode() > 0 && ud.screen_tilting /*&& (p->rotscrnang || p->orotscrnang)*/)
+        else if (videoGetRenderMode() >= REND_POLYMOST && ud.screen_tilting)
         {
 #ifdef USE_OPENGL
-            renderSetRollAngle(p->orotscrnang + mulscale16(((p->rotscrnang - p->orotscrnang + 1024)&2047)-1024,smoothratio));
+            // This screen rotation interp is crapola (doesn't look better than 30fps most of the time)
+            // and, it just breaks all of the time in a jittery mess. Need to reimplement.
+            //renderSetRollAngle(p->orotscrnang + mulscale16(((p->rotscrnang - p->orotscrnang + 1024)&2047)-1024,smoothratio));
+            //p->orotscrnang = p->rotscrnang; // JBF: save it for next time
+
+            renderSetRollAngle((p->rotscrnang & 2047));
 #endif
-            p->orotscrnang = p->rotscrnang; // JBF: save it for next time
         }
+#ifdef USE_OPENGL
+        else
+        {
+            renderSetRollAngle(0);
+        }
+#endif
 
         if (p->newowner < 0)
         {
