@@ -3094,12 +3094,22 @@ BOLT:
     }
 }
 
+// Check prevention of teleportation *when alive*. For example, commanders and
+// octabrains would be transported by SE7 (both water and normal) only if dead.
+static int A_CheckNonTeleporting(int const spriteNum)
+{
+    int const tileNum = sprite[spriteNum].picnum;
+    return !!(A_CheckSpriteFlags(spriteNum, SPRITE_NOTELEPORT) || tileNum == SHARK || tileNum == COMMANDER || tileNum == OCTABRAIN
+        || (tileNum >= GREENSLIME && tileNum <= GREENSLIME + 7));
+}
+
 static void G_MoveTransports(void)
 {
     int warpspriteto;
-    int i = headspritestat[STAT_TRANSPORT], j, k, l, p, sect, sectlotag, nexti, nextj;
+    int j, k, l, p, sect, sectlotag, nexti, nextj;
     int ll,onfloorz,q;
 
+    int i = headspritestat[STAT_TRANSPORT];
     while (i >= 0)
     {
         sect = SECT(i);
@@ -3277,12 +3287,8 @@ static void G_MoveTransports(void)
                 // comment out to make RPGs pass through water: (r1450 breaks this)
                 //if (sectlotag != 0) goto JBOLT;
             case STAT_ACTOR:
-                if ((sprite[j].picnum == SHARK) || (sprite[j].picnum == COMMANDER) || (sprite[j].picnum == OCTABRAIN)
-                        || ((sprite[j].picnum >= GREENSLIME) && (sprite[j].picnum <= GREENSLIME+7)))
-                {
-                    if (sprite[j].extra > 0)
+                if (sprite[j].extra > 0 && A_CheckNonTeleporting(j))
                         goto JBOLT;
-                }
                 fallthrough__;
             case STAT_MISC:
             case STAT_FALLER:
