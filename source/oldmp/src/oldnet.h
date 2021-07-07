@@ -20,12 +20,6 @@ enum
 #define PREDICT_CURPOS (predictfifoplc & (MOVEFIFOSIZ - 1))
 #define PREDICT_LASTPOS ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
 
-#define predict_debug_print(memb) if(g_player[myconnectindex].ps->memb != predictBackup[PREDICT_LASTPOS].memb) \
-                                  OSD_Printf("^01" #memb "^12(^02%d^12/^08%d^12) ", predictBackup[PREDICT_LASTPOS].memb, g_player[myconnectindex].ps->memb)
-
-#define predict_check(memb) (g_player[myconnectindex].ps->memb == predictBackup[PREDICT_LASTPOS].memb)
-#define predict_reset(memb) predictedPlayer.memb = g_player[myconnectindex].ps->memb
-
 #define CREATE_PREDICTED_LINKED_LIST(name) decltype(head##name) predicted_head##name; \
                                            decltype(prev##name) predicted_prev##name; \
                                            decltype(next##name) predicted_next##name
@@ -38,11 +32,14 @@ enum
                                           memcpy(predicted_prev##name, prev##name, sizeof(predicted_prev##name)), \
                                           memcpy(predicted_next##name, next##name, sizeof(predicted_next##name))
 
+#if 0
 typedef struct
 {
-    vec3_t pos;
-    fix16_t q16horiz, q16ang;
+    //vec3_t pos;
+    //fix16_t q16horiz, q16ang;
+    char playerHash;
 } PredictBackup_t;
+#endif
 
 extern int quittimer;
 extern int lastpackettime;

@@ -1443,44 +1443,11 @@ void Net_CorrectPrediction(void)
         return;
 
     DukePlayer_t* p = g_player[myconnectindex].ps;
-#if 0
-    // got_weapon
-    // ammo_amount
-    predictedPlayer.subweapon = p->subweapon;
-    predictedPlayer.reloading = p->reloading;
-    predictedPlayer.last_weapon = p->last_weapon;
-    predictedPlayer.last_used_weapon = p->last_used_weapon;
-    predictedPlayer.last_full_weapon = p->last_full_weapon;
-    predictedPlayer.curr_weapon = p->curr_weapon;
-    predictedPlayer.wantweaponfire = p->wantweaponfire;
-    predictedPlayer.weaponswitch = p->weaponswitch;
-    predictedPlayer.weapon_pos = p->weapon_pos;
-    predictedPlayer.weapon_sway = p->weapon_sway;
-    predictedPlayer.bobcounter = p->bobcounter;
-#endif
-
-#if 0 // HACK: Don't correct prediction if we're dead. Fixes "wackedbyactor" cam.
-    if (p->wackedbyactor >= 0 || sprite[p->i].extra <= 0)
-        return;
-#endif
 
 #if 0
-    if (predict_check(pos.x) &&
-        predict_check(pos.y) &&
-        predict_check(pos.z) &&
-        predict_check(q16horiz) &&
-        predict_check(q16ang))
-        return;
-
     if (ud.config.PredictionDebug)
     {
-        initprintf("Prediction Mismatch - ");
-        predict_debug_print(pos.x);
-        predict_debug_print(pos.y);
-        predict_debug_print(pos.z);
-        predict_debug_print(q16horiz);
-        predict_debug_print(q16ang);
-        initprintf("\n");
+        // Print mismatched data here.
     }
 #endif
 
