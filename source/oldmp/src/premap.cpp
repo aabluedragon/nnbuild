@@ -1634,9 +1634,9 @@ int G_EnterLevel(int g)
     if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
     {
         Bstrcpy(levname, boardfilename);
-        Bsprintf(apptitle,"%s - %s - " APPNAME,levname,duke3dgrpstring);
+        Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - " APPNAME, g_player[myconnectindex].user_name, levname, duke3dgrpstring);
     }
-    else Bsprintf(apptitle,"%s - %s - " APPNAME,MapInfo[mii].name,duke3dgrpstring);
+    else Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - " APPNAME, g_player[myconnectindex].user_name, MapInfo[mii].name, duke3dgrpstring);
 
     Bstrcpy(tempbuf,apptitle);
     wm_setapptitle(tempbuf);
