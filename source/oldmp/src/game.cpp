@@ -2472,6 +2472,9 @@ static void G_PrintCoords(int snum)
 
     Bsprintf(tempbuf,"THOLD= %d",g_player[snum].ps->transporter_hold);
     printext256(250L, y += 18,31,-1,tempbuf,0);
+
+    Bsprintf(tempbuf, "ONWARP= %d", g_player[snum].ps->on_warping_sector);
+    printext256(250L, y += 9, 31, -1, tempbuf, 0);
 }
 
 // this handles both multiplayer and item pickup message type text
