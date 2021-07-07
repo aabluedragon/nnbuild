@@ -11297,6 +11297,8 @@ CLEAN_DIRECTORY:
     }
 
     // [JM] This right here is a buggy piece of shit.
+    // Overwrites several command lines, like -name
+    // and screws with color selection, iirc.
     //CONFIG_WriteSetup(1);
     //CONFIG_ReadSetup();
 
@@ -11970,6 +11972,7 @@ static int G_MoveLoop()
         if (G_DoMoveThings())
             return 1;
     }
+
     return 0;
 }
 
