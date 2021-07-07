@@ -805,7 +805,7 @@ static void resetprestat(int snum,int g)
     p->last_pissed_time = 0;
 
     p->one_parallax_sectnum = -1;
-    p->visibility = ud.const_visibility;
+    g_player[snum].display.visibility = ud.const_visibility;
 
     if (((g&MODE_EOL) != MODE_EOL && ud.multimode < 2) || (!(GametypeFlags[ud.coop]&GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1))
     {

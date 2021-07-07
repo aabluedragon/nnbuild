@@ -1614,10 +1614,10 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_VISIBILITY:
         if (iSet)
         {
-            g_player[iPlayer].ps->visibility=lValue;
+            g_player[iPlayer].display.visibility=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->visibility, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].display.visibility, g_i, g_p);
         return;
 
     case PLAYER_BOBCOUNTER:

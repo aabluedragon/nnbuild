@@ -2586,6 +2586,9 @@ static void G_PrintGameQuotes(void)
 
 void P_DoQuote(int q, DukePlayer_t *p)
 {
+    if (oldnet_predicting)
+        return;
+
     int cq = 0;
 
     if (q & MAXQUOTES)
@@ -3408,7 +3411,10 @@ void G_DisplayRest(int smoothratio)
                 G_DrawCameraText(pp->newowner);
             else
             {
+                Net_UsePredictedPointers();
                 P_DisplayWeapon(screenpeek);
+                Net_UseOriginalPointers();
+
                 if (pp->over_shoulder_on == 0)
                     P_DisplayScubaMask(screenpeek);
             }
@@ -4116,7 +4122,8 @@ void G_DrawRooms(int snum,int smoothratio)
 {
     int floorZ, ceilZ;
     int i;
-    DukePlayer_t *p = g_player[snum].ps;
+    DukePlayer_t *p = (screenpeek == myconnectindex && numplayers > 1) ? &predictedPlayer :  g_player[snum].ps;
+    PlayerDisplay_t* pDisp = &g_player[snum].display;
     short tang;
     int tiltcx,tiltcy,tiltcs=0;    // JBF 20030807
 
@@ -4142,7 +4149,7 @@ void G_DrawRooms(int snum,int smoothratio)
 
 //    smoothratio = min(max(smoothratio,0),65536);
 
-    g_visibility = (int)(p->visibility * ((numplayers > 1 && !ud.allow_visibility) ? 1.f : r_ambientlightrecip)); // Do not allow visibility changes in online play.
+    g_visibility = (int)(pDisp->visibility * ((numplayers > 1 && !ud.allow_visibility) ? 1.f : r_ambientlightrecip)); // Do not allow visibility changes in online play.
 
     if (ud.pause_on || g_player[snum].ps->on_crane > -1) smoothratio = 65536;
 
@@ -4312,7 +4319,7 @@ void G_DrawRooms(int snum,int smoothratio)
             if (p->over_shoulder_on == 0)
             {
                 if (ud.viewbob)
-                    ud.camerapos.z += p->opyoff + mulscale16((int)(p->pyoff - p->opyoff), smoothratio);
+                    ud.camerapos.z += camPlayer->opyoff + mulscale16((int)(camPlayer->pyoff - camPlayer->opyoff), smoothratio);
             }
             else G_DoThirdPerson(p, &ud.camerapos, &ud.camerasect, fix16_to_int(ud.cameraq16ang), fix16_to_int(ud.cameraq16horiz));
         } 
@@ -4435,7 +4442,7 @@ void G_DrawRooms(int snum,int smoothratio)
         // Totalclock count of last step of p->visibility converging towards
         // ud.const_visibility.
         static int32_t lastvist;
-        const int32_t visdif = ud.const_visibility - p->visibility;
+        const int32_t visdif = ud.const_visibility - pDisp->visibility;
 
         // Check if totalclock was cleared (e.g. restarted game).
         if (totalclock < lastvist)
@@ -4450,11 +4457,11 @@ void G_DrawRooms(int snum,int smoothratio)
 
             if (klabs(visinc) == 0)
             {
-                p->visibility = ud.const_visibility;
+                pDisp->visibility = ud.const_visibility;
                 break;
             }
 
-            p->visibility += visinc;
+            pDisp->visibility += visinc;
             lastvist = (int32_t)totalclock;
         }
     }
@@ -4545,6 +4552,12 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
     int i = insertsprite(whatsect,s_ss);
     int p;
     spritetype *s = &sprite[i];
+
+    if (oldnet_predicting)
+    {
+        OSD_Printf("^08A_InsertSprite^12: ^02ATTEMPTING TO SPAWN ACTOR FROM PREDICTING STATE! FAIL.\n");
+        return -1;
+    }
 
     if (i < 0)
     {
@@ -7383,7 +7396,7 @@ PALONLY:
         case FLOORFLAME__STATIC:
             if (t->picnum == EXPLOSION2)
             {
-                g_player[screenpeek].ps->visibility = -127;
+                g_player[screenpeek].display.visibility = -127;
                 //g_restorePalette = 1;   // JBF 20040101: why?
             }
             t->shade = -127;
@@ -11932,8 +11945,7 @@ static int G_MoveLoop()
 
     if (numplayers > 1)
     {
-        while (predictfifoplc < g_player[myconnectindex].movefifoend)
-            Net_DoPrediction();
+        Net_DoPrediction(PREDICTSTATE_PROCESS);
     }
 
     if (numplayers < 2)
@@ -12058,7 +12070,8 @@ static int G_DoMoveThings(void)
         if (g_earthquakeTime > 0)
             g_earthquakeTime--;
 
-        g_globalRandom = krand();
+        //g_random.global += randomseed;
+        g_globalRandom = seed_krand(&g_random.global);
         A_MoveDummyPlayers();//ST 13
     }
 
@@ -12081,11 +12094,15 @@ static int G_DoMoveThings(void)
             sprite[g_player[i].ps->i].pal = g_player[i].pcolor;
         // P_HandlePlayerColor
 
+        sounds_predictable = true;
         G_HandleSharedKeys(i);
+        sounds_predictable = false;
 
         if (ud.pause_on == 0)
         {
+            sounds_predictable = true;
             P_ProcessInput(i);
+            sounds_predictable = false;
             checksectors(i);
         }
     }

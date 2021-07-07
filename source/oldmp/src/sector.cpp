@@ -1197,6 +1197,9 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
     int i, x, lotag,hitag,picnum,correctdips = 1, numdips = 0;
     int sx,sy;
 
+    if (oldnet_predicting)
+        return 0;
+
     if (w < 0) return 0;
 
     if (switchtype == 1) // A wall sprite
@@ -1653,6 +1656,9 @@ void activatebysector(int sect,int j)
     int i = headspritesect[sect];
     int didit = 0;
 
+    if (oldnet_predicting)
+        return;
+
     while (i >= 0)
     {
         if (PN(i) == ACTIVATOR)
@@ -1984,6 +1990,9 @@ void A_DamageWall(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum)
 
 void P_CheckTouchDamage(DukePlayer_t *p,int j)
 {
+    if (oldnet_predicting)
+        return;
+
     if ((j&49152) == 49152)
     {
         j &= (MAXSPRITES-1);

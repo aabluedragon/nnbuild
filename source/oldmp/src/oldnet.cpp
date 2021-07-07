@@ -1180,7 +1180,7 @@ void Net_EndOfLevel(void)
 {
     int i;
 
-    if (myconnectindex != connecthead)
+    if ((myconnectindex != connecthead) || oldnet_predicting)
         return;
 
     g_player[myconnectindex].ps->gm = MODE_EOL;
@@ -1368,18 +1368,103 @@ void Net_EnterMessage(void)
     }
 }
 
+CREATE_PREDICTED_LINKED_LIST(spritesect);
+static spritetype backupSprite;
+static ActorData_t backupActor;
+static int32_t backupSeed;
+static randomseed_t backupRandom;
+
+static void Net_ProcessPrediction(void)
+{
+    input_t backupInput = *g_player[myconnectindex].inputBits;
+
+    *g_player[myconnectindex].inputBits = inputfifo[PREDICT_CURPOS][myconnectindex];
+
+    // Clear bits that could cause trouble
+    g_player[myconnectindex].inputBits->bits &= ~(BIT(SK_PAUSE) | BIT(SK_MULTIFLAG) | BIT(SK_GAMEQUIT));
+
+    g_player[myconnectindex].ps = &predictedPlayer;
+
+    sounds_predictable = true;
+    G_HandleSharedKeys(myconnectindex);
+    sounds_predictable = false;
+
+    if (ud.pause_on == 0)
+    {
+        //X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
+        sounds_predictable = true;
+        P_ProcessInput(myconnectindex);
+        sounds_predictable = false;
+        G_MovePlayerSprite(myconnectindex);
+    }
+
+    *g_player[myconnectindex].inputBits = backupInput;
+
+#if 0
+    predictBackup[PREDICT_CURPOS].pos = predictedPlayer.pos;
+    predictBackup[PREDICT_CURPOS].q16ang = predictedPlayer.q16ang;
+    predictBackup[PREDICT_CURPOS].q16horiz = predictedPlayer.q16horiz;
+#endif
+
+    predictfifoplc++;
+}
+
+static void Net_ResetPredictionData(void)
+{
+    DukePlayer_t* p = g_player[myconnectindex].ps;
+    predictedPlayer = *p;
+    predicted_pSprite = sprite[p->i];
+    predicted_pActor = ActorExtra[p->i];
+
+    reset_predicted_linked_list(spritesect);
+    //reset_predicted_linked_list(spritestat);
+
+    for (int i = g_gameVarCount - 1; i >= 0; i--)
+    {
+        if (aGameVars[i].dwFlags & (/*GAMEVAR_SYSTEM | GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+            continue;
+
+        if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
+        {
+            //Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * MAXPLAYERS);
+            predicted_plValues[i][myconnectindex] = original_plValues[i][myconnectindex];
+        }
+        else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
+        {
+            Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * Numsprites);
+        }
+        //else predicted_lValue[i] = aGameVars[i].val.lValue;
+    }
+}
+
 void Net_CorrectPrediction(void)
 {
     if (numplayers < 2)
         return;
 
     DukePlayer_t* p = g_player[myconnectindex].ps;
+#if 0
+    // got_weapon
+    // ammo_amount
+    predictedPlayer.subweapon = p->subweapon;
+    predictedPlayer.reloading = p->reloading;
+    predictedPlayer.last_weapon = p->last_weapon;
+    predictedPlayer.last_used_weapon = p->last_used_weapon;
+    predictedPlayer.last_full_weapon = p->last_full_weapon;
+    predictedPlayer.curr_weapon = p->curr_weapon;
+    predictedPlayer.wantweaponfire = p->wantweaponfire;
+    predictedPlayer.weaponswitch = p->weaponswitch;
+    predictedPlayer.weapon_pos = p->weapon_pos;
+    predictedPlayer.weapon_sway = p->weapon_sway;
+    predictedPlayer.bobcounter = p->bobcounter;
+#endif
 
-#if 1 // HACK: Don't correct prediction if we're dead. Fixes "wackedbyactor" cam.
+#if 0 // HACK: Don't correct prediction if we're dead. Fixes "wackedbyactor" cam.
     if (p->wackedbyactor >= 0 || sprite[p->i].extra <= 0)
         return;
 #endif
 
+#if 0
     if (predict_check(pos.x) &&
         predict_check(pos.y) &&
         predict_check(pos.z) &&
@@ -1397,62 +1482,173 @@ void Net_CorrectPrediction(void)
         predict_debug_print(q16ang);
         initprintf("\n");
     }
-
-#if 0
-    predict_reset(pos);
-    predict_reset(q16ang);
-    predict_reset(q16horiz);
-    predict_reset(q16horizoff);
-
-    predict_reset(opos);
-    predict_reset(oq16ang);
-    predict_reset(oq16horiz); 
-    predict_reset(oq16horizoff);
-
-    predict_reset(vel);
-    predict_reset(cursectnum);
-    predict_reset(jumping_counter);
-    predict_reset(jumping_toggle);
-    predict_reset(on_ground);
-    predict_reset(hard_landing);
-    predict_reset(return_to_center);
-#else
-    predictedPlayer = *p; // Tad excessive? Could be useful for debugging.
 #endif
 
+    auto oq16ang = predictedPlayer.oq16ang;
+    auto oq16horiz = predictedPlayer.oq16horiz;
+    auto oq16horizoff = predictedPlayer.oq16horizoff;
+    auto opos = predictedPlayer.opos;
+    auto scream_voice = predictedPlayer.scream_voice;
+
+    Net_ResetPredictionData();
     predictfifoplc = movefifoplc;
-    while (predictfifoplc < g_player[myconnectindex].movefifoend)
-        Net_DoPrediction();
+    Net_DoPrediction(PREDICTSTATE_CORRECT);
+
+    // Annoying Hacks to stop clobbering. Will need to figure out better ways to fix these.
+    // If that's even possible given this mess. May just be the poison we need.
+    predictedPlayer.scream_voice = scream_voice;
+
+    // Check if pos is different from opos, if so, restore predicted opos.
+    // This is to prevent jitter from moving sectors & corrected mispredictions,
+    // while preventing teleports from being interp'd.
+    if ((p->opos.x != p->pos.x) ||
+        (p->opos.y != p->pos.y) ||
+        (p->opos.z != p->pos.z)
+        )
+    {
+        predictedPlayer.opos = opos;
+    }
+    
+    if(p->oq16ang != p->q16ang)
+        predictedPlayer.oq16ang = oq16ang;
+
+    if(p->oq16horiz != p->q16horiz)
+        predictedPlayer.oq16horiz = oq16horiz;
+
+    if(p->oq16horizoff != p->q16horizoff)
+        predictedPlayer.oq16horizoff = oq16horizoff;
+}
+
+static void Net_InitializeGameVarPointers(void)
+{
+    // Init GameVar original pointers here
+    for (int i = g_gameVarCount - 1; i >= 0; i--)
+    {
+        if (aGameVars[i].dwFlags & (/*GAMEVAR_SYSTEM | GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+            continue;
+
+        // Store original addresses
+        if (aGameVars[i].dwFlags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
+        {
+            original_plValues[i] = aGameVars[i].val.plValues;
+        }
+
+        // Allocate memory for predicted values
+        if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
+        {
+            if (!predicted_plValues[i])
+                predicted_plValues[i] = (intptr_t*)Bcalloc(MAXPLAYERS, sizeof(intptr_t));
+        }
+        else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
+        {
+            if (!predicted_plValues[i])
+                predicted_plValues[i] = (intptr_t*)Bcalloc(MAXSPRITES, sizeof(intptr_t));
+        }
+    }
 }
 
 void Net_InitializePrediction(void)
 {
-    if (g_player[myconnectindex].ps == NULL)
+    if ((numplayers < 2) || (g_player[myconnectindex].ps == NULL))
         return;
 
-    predictedPlayer = *g_player[myconnectindex].ps;
+    originalPlayer = g_player[myconnectindex].ps;
+    Net_InitializeGameVarPointers();
+    Net_ResetPredictionData();
 }
 
-void Net_DoPrediction(void)
+void Net_UsePredictedPointers(void)
 {
-    DukePlayer_t* p = g_player[myconnectindex].ps;
-    spritetype backupSprite = sprite[p->i];
-    int32_t backupSeed = randomseed;
+    if (numplayers < 2)
+        return;
 
-    oldnet_predicting = 1;
-    sprite[p->i].cstat &= ~257;
+    g_player[myconnectindex].ps = &predictedPlayer;
 
-    X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    P_ProcessInput(myconnectindex);
+    for (int i = g_gameVarCount - 1; i >= 0; i--)
+    {
+        if (aGameVars[i].dwFlags & (/*GAMEVAR_SYSTEM | GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+            continue;
 
-    sprite[p->i] = backupSprite;
+        if (aGameVars[i].dwFlags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
+        {
+            aGameVars[i].val.plValues = predicted_plValues[i];
+        }
+    }
+}
+
+void Net_UseOriginalPointers(void)
+{
+    if (numplayers < 2)
+        return;
+
+    g_player[myconnectindex].ps = originalPlayer;
+
+    // Switch to Original GameVars here
+    for (int i = g_gameVarCount - 1; i >= 0; i--)
+    {
+        if (aGameVars[i].dwFlags & (/*GAMEVAR_SYSTEM | GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+            continue;
+
+        if (aGameVars[i].dwFlags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
+        {
+            aGameVars[i].val.plValues = original_plValues[i];
+        }
+    }
+}
+
+static void Net_SwapPredictedLinkedLists()
+{
+    swap_predicted_linked_list(spritesect);
+    //swap_predicted_linked_list(spritestat);
+}
+
+void Net_DoPrediction(int state)
+{
+    if (numplayers < 2)
+        return;
+
+    oldnet_predicting = state;
+
+    int16_t pSpriteNum = g_player[myconnectindex].ps->i;
+
+    Net_UsePredictedPointers();
+    
+    // Backup data
+    backupSprite = sprite[pSpriteNum];
+    backupActor = ActorExtra[pSpriteNum];
+    backupSeed = randomseed;
+    backupRandom = g_random;
+
+    // Change to predicted sprite/actor
+    sprite[pSpriteNum] = predicted_pSprite;
+    sprite[pSpriteNum].cstat &= ~257;
+    ActorExtra[pSpriteNum] = predicted_pActor;
+
+    Net_SwapPredictedLinkedLists();
+
+    // Process
+    while (predictfifoplc < g_player[myconnectindex].movefifoend)
+    {
+        Net_ProcessPrediction();
+    }
+    // -------
+
+    Net_SwapPredictedLinkedLists();
+
+    // Save modifications to predicted sprite/actor
+    predicted_pSprite = sprite[pSpriteNum];
+    predicted_pActor = ActorExtra[pSpriteNum];
+
+    Net_UseOriginalPointers();
+    
+    // Restore from backup
+    sprite[pSpriteNum] = backupSprite;
+    ActorExtra[pSpriteNum] = backupActor;
+
     randomseed = backupSeed;
-    oldnet_predicting = 0;
+    g_random = backupRandom;
 
-    predictBackup[PREDICT_CURPOS].pos = predictedPlayer.pos;
-    predictBackup[PREDICT_CURPOS].q16ang = predictedPlayer.q16ang;
-    predictBackup[PREDICT_CURPOS].q16horiz = predictedPlayer.q16horiz;
-    predictfifoplc++;
+    oldnet_predicting = PREDICTSTATE_OFF;
 }
 
 void Net_ClearFIFO(void)

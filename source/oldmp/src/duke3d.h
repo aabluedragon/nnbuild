@@ -385,11 +385,11 @@ typedef struct {
 
 struct randomseed_t
 {
-    int32_t global, animwall, player;
+    int32_t global, animwall, player, playerweapon;
 
     randomseed_t()
     {
-        global = animwall = player = 1996;
+        global = animwall = player = playerweapon = 1996;
     }
 };
 
@@ -563,7 +563,7 @@ typedef struct {
     int invdisptime;
     int bobposx, bobposy, pyoff, opyoff;
     int last_pissed_time, truefz, truecz;
-    int player_par, visibility;
+    int player_par;
     int bobcounter, weapon_sway;
     int pals_time, randomflamex, crack_time;
 
@@ -1126,8 +1126,15 @@ typedef struct {
     mapstate_t *savedstate;
 } map_t;
 
+
+typedef struct
+{
+    int32_t visibility;
+} PlayerDisplay_t;
+
 typedef struct {
     DukePlayer_t *ps;
+    PlayerDisplay_t display;
     input_t *inputBits;
 
     int32_t movefifoend, syncvalhead, myminlag;

@@ -201,6 +201,9 @@ static void P_IncurDamage(DukePlayer_t *p)
 
 void P_QuickKill(DukePlayer_t *p)
 {
+    if (oldnet_predicting)
+        return;
+
     p->pals[0] = 48;
     p->pals[1] = 48;
     p->pals[2] = 48;
@@ -860,6 +863,44 @@ int A_Shoot(int i,int atwith)
     vec3_t spos;
     hitdata_t hit;
 
+    // Do flashes first, in case we need to block the rest for prediction.
+    if (A_CheckSpriteTileFlags(atwith, SPRITE_PROJECTILE) && (pProj->workslike & (PROJECTILE_HITSCAN | PROJECTILE_RPG)))
+    {
+        if (s->extra >= 0)
+            s->shade = pProj->shade;
+
+        if ((pProj->sound >= 0) && (pProj->workslike & PROJECTILE_RPG))
+            A_PlaySound(pProj->sound, i);
+    }
+    else
+    {
+        switch (DynamicTileMap[atwith])
+        {
+            case SHOTSPARK1__STATIC:
+            case SHOTGUN__STATIC:
+            case CHAINGUN__STATIC:
+            case FIRELASER__STATIC:
+            case SPIT__STATIC:
+            case COOLEXPLOSION1__STATIC:
+            case RPG__STATIC:
+            case BOUNCEMINE__STATIC:
+            case MORTER__STATIC:
+            case SHRINKER__STATIC:
+            {
+                if (s->extra >= 0)
+                    s->shade = -96;
+
+                if (atwith == RPG)
+                    A_PlaySound(RPG_SHOOT, i);
+            }
+        }
+    }
+
+    if (oldnet_predicting)
+    {
+        return -1;
+    }
+
     if (s->picnum == APLAYER)
     {
         p = s->yvel;
@@ -1086,9 +1127,6 @@ int A_Shoot(int i,int atwith)
 
         if (pProj->workslike & PROJECTILE_HITSCAN)
         {
-            if (s->extra >= 0)
-                s->shade = pProj->shade;
-
             if (p >= 0)
                 P_PreFireHitscan(i, p, atwith, &spos, &zvel, &shootAng,
                     pProj->workslike & PROJECTILE_ACCURATE_AUTOAIM, !(pProj->workslike & PROJECTILE_ACCURATE));
@@ -1176,9 +1214,6 @@ int A_Shoot(int i,int atwith)
 
         if (pProj->workslike & PROJECTILE_RPG)
         {
-            if (s->extra >= 0)
-                s->shade = pProj->shade;
-
             if (p >= 0)
             {
                 // NOTE: j is a SPRITE_INDEX
@@ -1186,9 +1221,6 @@ int A_Shoot(int i,int atwith)
 
                 if (j < 0)
                     zvel = fix16_to_int(F16(100) - g_player[p].ps->q16horiz - g_player[p].ps->q16horizoff) * (pProj->vel / 8);
-
-                if (pProj->sound >= 0)
-                    A_PlaySound(pProj->sound, i);
             }
             else
             {
@@ -1373,9 +1405,6 @@ int A_Shoot(int i,int atwith)
         case SHOTGUN__STATIC:
         case CHAINGUN__STATIC:
         {
-            if (s->extra >= 0)
-                s->shade = -96;
-
             if (p >= 0)
                 P_PreFireHitscan(i, p, atwith, &spos, &zvel, &shootAng,
                     atwith == SHOTSPARK1__STATIC && !WW2GI, 1);
@@ -1412,8 +1441,6 @@ int A_Shoot(int i,int atwith)
         case FIRELASER__STATIC:
         case SPIT__STATIC:
         case COOLEXPLOSION1__STATIC:
-
-            if (s->extra >= 0) s->shade = -96;
 
             scount = 1;
             if (atwith == SPIT) vel = 292;
@@ -1530,9 +1557,6 @@ int A_Shoot(int i,int atwith)
             fallthrough__;
 
         case RPG__STATIC:
-
-            if (s->extra >= 0) s->shade = -96;
-
             scount = 1;
             vel = 644;
 
@@ -1559,8 +1583,6 @@ int A_Shoot(int i,int atwith)
                         shootAng = getangle(sprite[j].x-spos.x,sprite[j].y-spos.y);
                 }
                 else zvel = fix16_to_int(F16(100)-g_player[p].ps->q16horiz-g_player[p].ps->q16horizoff)*81;
-                if (atwith == RPG)
-                    A_PlaySound(RPG_SHOOT,i);
             }
             else
             {
@@ -1711,24 +1733,19 @@ int A_Shoot(int i,int atwith)
                                                - lLifetimeVar;
                     ActorExtra[k].temp_data[6]=1;
                 }
-                else
+                else sprite[k].hitag = k;
 
-                    sprite[k].hitag = k;
                 A_PlaySound(LASERTRIP_ONWALL,k);
                 sprite[k].xvel = -20;
                 A_SetSprite(k,CLIPMASK0);
                 sprite[k].cstat = 16;
                 ActorExtra[k].temp_data[5] = sprite[k].ang = getangle(wall[hit.wall].x-wall[wall[hit.wall].point2].x,wall[hit.wall].y-wall[wall[hit.wall].point2].y)-512;
 
-
             }
             return j?k:-1;
 
         case BOUNCEMINE__STATIC:
         case MORTER__STATIC:
-
-            if (s->extra >= 0) s->shade = -96;
-
             j = g_player[A_FindPlayer(s,&x)].ps->i;
             x = ldist(&sprite[j],s);
 
@@ -1774,7 +1791,6 @@ int A_Shoot(int i,int atwith)
         break;
 
         case SHRINKER__STATIC:
-            if (s->extra >= 0) s->shade = -96;
             if (p >= 0)
             {
                 //            j = A_FindTargetSprite( s, AUTO_AIM_ANGLE );
@@ -2030,7 +2046,7 @@ void P_FireWeapon(DukePlayer_t *p)
             if (aplWeaponFlags[p->curr_weapon][snum] & WEAPON_FIREEVERYOTHER)
             {
                 // this makes the projectiles fire on a delay from player code
-                ActorExtra[p->i].temp_data[7] = (aplWeaponShotsPerBurst[p->curr_weapon][snum])<<1;
+                if(!oldnet_predicting) ActorExtra[p->i].temp_data[7] = (aplWeaponShotsPerBurst[p->curr_weapon][snum])<<1;
             }
             else
             {
@@ -2046,22 +2062,17 @@ void P_FireWeapon(DukePlayer_t *p)
 
         if (!(aplWeaponFlags[p->curr_weapon][snum] & WEAPON_NOVISIBLE))
         {
-            p->visibility = 0;
+            if((numplayers < 2) || (oldnet_predicting == PREDICTSTATE_PROCESS))
+                g_player[snum].display.visibility = 0;
         }
-
-        /*        if( //!(aplWeaponFlags[p->curr_weapon][snum] & WEAPON_CHECKATRELOAD) &&
-                    aplWeaponReload[p->curr_weapon][snum] > aplWeaponTotalTime[p->curr_weapon][snum]
-                    && p->ammo_amount[p->curr_weapon] > 0
-                    && (aplWeaponClip[p->curr_weapon][snum])
-                    && ((p->ammo_amount[p->curr_weapon]%(aplWeaponClip[p->curr_weapon][snum]))==0))
-                {
-                    p->kickback_pic=aplWeaponTotalTime[p->curr_weapon][snum];
-                } */
     }
 }
 
 void P_DoWeaponSpawn(DukePlayer_t *p)
 {
+    if (oldnet_predicting)
+        return;
+
     int j, snum = sprite[p->i].yvel;
 
     if (!aplWeaponSpawn[p->curr_weapon][snum])
@@ -2177,12 +2188,13 @@ void P_DisplayWeapon(int snum)
     int weapon_xoffset, i, j;
     int o = 0,pal = 0;
     DukePlayer_t *p = g_player[snum].ps;
+    spritetype *pSprite = ((snum == myconnectindex) && (numplayers > 1)) ? &predicted_pSprite : &sprite[p->i];
     short *kb = &p->kickback_pic;
     int gs;
 
     looking_arc = klabs(p->look_ang)/9;
 
-    gs = sprite[p->i].shade;
+    gs = pSprite->shade;
     if (gs > 24) gs = 24;
 
     if (p->newowner >= 0 || ud.camerasprite >= 0 || p->over_shoulder_on > 0 || (sprite[p->i].pal != 1 && sprite[p->i].extra <= 0) || P_DisplayFistAnim(gs,snum) || P_DisplayKnuckleAnim(gs,snum) || P_DisplayTip(gs,snum) || P_DisplayAccessAnim(gs,snum))
@@ -2854,8 +2866,10 @@ void P_GetInput(int snum, bool uncapped)
     int32_t keymove;
     DukePlayer_t *p = g_player[snum].ps;
 
-    if ((p->gm&MODE_MENU) || ud.limit_hit || (p->gm&MODE_TYPE) || (ud.pause_on && !KB_KeyPressed(sc_Pause)) || (numplayers > 1 && (int32_t)totalclock < 10))
-        // HACK: kill P_GetInput() for the first 10 tics of a new map in multi
+    if ((p->gm&MODE_MENU) || ud.limit_hit || (p->gm&MODE_TYPE)
+        || (ud.pause_on && !KB_KeyPressed(sc_Pause))
+        //|| (numplayers > 1 && (int32_t)totalclock < 10) // HACK: kill P_GetInput() for the first 10 tics of a new map in multi
+        )   
     {
         if (!(p->gm&MODE_MENU))
             CONTROL_GetInput(&info);
@@ -3115,11 +3129,41 @@ void P_GetInput(int snum, bool uncapped)
     }
 }
 
-static int P_DoCounters(DukePlayer_t *p)
+static void P_ConsumeKeycard(int32_t playerNum, int32_t keypal)
 {
     if (oldnet_predicting)
-        return 0;
+        return;
 
+    char keyname[7];
+
+    if (ud.multimode < 2 || (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART)))
+    {
+        switch (keypal)
+        {
+        case 0:
+            Bsprintf(keyname, "Blue");
+            ud.got_access &= (0xffff - 0x1);
+            break;
+        case 21:
+            Bsprintf(keyname, "Red");
+            ud.got_access &= (0xffff - 0x2);
+            break;
+        case 23:
+            Bsprintf(keyname, "Yellow");
+            ud.got_access &= (0xffff - 0x4);
+            break;
+        }
+    }
+
+    if (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+    {
+        Bsprintf(tempbuf, "^12%s^12 has used a ^%d%s^12 key.", &g_player[playerNum].user_name[0], keypal, keyname);
+        G_AddUserQuote(tempbuf);
+    }
+}
+
+static int P_DoCounters(DukePlayer_t *p)
+{
     int snum = sprite[p->i].yvel;
 
     //    j = g_player[snum].inputBits->avel;
@@ -3220,64 +3264,16 @@ static int P_DoCounters(DukePlayer_t *p)
             p->access_incs = 12;
         if (p->access_incs == 12)
         {
-            char keyname[7];
-            int keypal = 0;
-
             if (p->access_spritenum >= 0)
             {
-                P_ActivateSwitch(snum,p->access_spritenum,1);
-
-                if (ud.multimode < 2 || (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART)))
-                {
-                    keypal = sprite[p->access_spritenum].pal;
-                    switch (keypal)
-                    {
-                    case 0:
-                        Bsprintf(keyname, "Blue");
-                        ud.got_access &= (0xffff - 0x1);
-                        break;
-                    case 21:
-                        Bsprintf(keyname, "Red");
-                        ud.got_access &= (0xffff - 0x2);
-                        break;
-                    case 23:
-                        Bsprintf(keyname, "Yellow");
-                        ud.got_access &= (0xffff - 0x4);
-                        break;
-                    }
-                }
-
+                P_ActivateSwitch(snum, p->access_spritenum,1);
+                P_ConsumeKeycard(snum, sprite[p->access_spritenum].pal);
                 p->access_spritenum = -1;
             }
             else
             {
-                P_ActivateSwitch(snum,p->access_wallnum,0);
-
-                if (ud.multimode < 2 || (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART)))
-                {
-                    keypal = wall[p->access_wallnum].pal;
-                    switch (keypal)
-                    {
-                    case 0:
-                        Bsprintf(keyname, "Blue");
-                        ud.got_access &= (0xffff - 0x1);
-                        break;
-                    case 21:
-                        Bsprintf(keyname, "Red");
-                        ud.got_access &= (0xffff - 0x2);
-                        break;
-                    case 23:
-                        Bsprintf(keyname, "Yellow");
-                        ud.got_access &= (0xffff - 0x4);
-                        break;
-                    }
-                }
-            }
-
-            if (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
-            {
-                Bsprintf(tempbuf, "^12%s^12 has used a ^%d%s^12 key.", &g_player[snum].user_name[0], keypal, keyname);
-                G_AddUserQuote(tempbuf);
+                P_ActivateSwitch(snum, p->access_wallnum,0);
+                P_ConsumeKeycard(snum, wall[p->access_wallnum].pal);
             }
         }
 
@@ -3385,11 +3381,65 @@ void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer)
     pPlayer->rotscrnang = 0;
 }
 
-static void P_ProcessWeapon(int playerNum)
+static void P_TossPipebomb(int playerNum)
 {
     if (oldnet_predicting)
         return;
 
+    DukePlayer_t* p = g_player[playerNum].ps;
+    unsigned int sb_snum = g_player[playerNum].inputBits->bits;
+
+    int lPipeBombControl;
+    int pipeBombZvel;
+    int pipeBombFwdVel;
+
+    if (p->on_ground && TEST_SYNC_KEY(sb_snum, SK_CROUCH))
+    {
+        pipeBombFwdVel = 15;
+        pipeBombZvel = (fix16_to_int(p->q16horiz + p->q16horizoff - F16(100)) * 20);
+    }
+    else
+    {
+        pipeBombFwdVel = 140;
+        pipeBombZvel = -512 - (fix16_to_int(p->q16horiz + p->q16horizoff - F16(100)) * 20);
+    }
+
+    int pipeSpriteNum = A_InsertSprite(p->cursectnum,
+        p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 6),
+        p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 6),
+        p->pos.z, aplWeaponShoots[p->curr_weapon][playerNum], -16, 9, 9,
+        fix16_to_int(p->q16ang), (pipeBombFwdVel + (p->hbomb_hold_delay << 5)), pipeBombZvel, p->i, 1);
+
+    lPipeBombControl = Gv_GetVarByLabel("PIPEBOMB_CONTROL", PIPEBOMB_REMOTE, -1, playerNum);
+
+    if (lPipeBombControl & PIPEBOMB_TIMER)
+    {
+        int lGrenadeLifetime = Gv_GetVarByLabel("GRENADE_LIFETIME", NAM_GRENADE_LIFETIME, -1, playerNum);
+        int lGrenadeLifetimeVar = Gv_GetVarByLabel("GRENADE_LIFETIME_VAR", NAM_GRENADE_LIFETIME_VAR, -1, playerNum);
+        ActorExtra[pipeSpriteNum].temp_data[7] = lGrenadeLifetime
+            + mulscale(krand(), lGrenadeLifetimeVar, 14)
+            - lGrenadeLifetimeVar;
+        ActorExtra[pipeSpriteNum].temp_data[6] = 1;
+    }
+    else
+        ActorExtra[pipeSpriteNum].temp_data[6] = 2;
+
+    if (pipeBombFwdVel == 15)
+    {
+        sprite[pipeSpriteNum].yvel = 3;
+        sprite[pipeSpriteNum].z += (8 << 8);
+    }
+
+    if (A_GetHitscanRange(p->i) < 512)
+    {
+        sprite[pipeSpriteNum].ang += 1024;
+        sprite[pipeSpriteNum].zvel /= 3;
+        sprite[pipeSpriteNum].xvel /= 3;
+    }
+}
+
+static void P_ProcessWeapon(int playerNum)
+{
     DukePlayer_t* p = g_player[playerNum].ps;
     unsigned int sb_snum = g_player[playerNum].inputBits->bits;
     short* kb = &p->kickback_pic;
@@ -3464,7 +3514,7 @@ static void P_ProcessWeapon(int playerNum)
         p->random_club_frame += 64; // Glowing
 
     // this is a hack for WEAPON_FIREEVERYOTHER
-    if (ActorExtra[p->i].temp_data[7])
+    if (ActorExtra[p->i].temp_data[7] && !oldnet_predicting)
     {
         ActorExtra[p->i].temp_data[7]--;
         if (p->last_weapon == -1 && ActorExtra[p->i].temp_data[7] != 0 && ((ActorExtra[p->i].temp_data[7] & 1) == 0))
@@ -3502,7 +3552,9 @@ static void P_ProcessWeapon(int playerNum)
     }
 
     if (shrunk || p->tipincs || p->access_incs)
+    {
         sb_snum &= ~BIT(SK_FIRE);
+    }
     else if (shrunk == 0 && doFire && p->fist_incs == 0 &&
         p->last_weapon == -1 && (p->weapon_pos == 0 || p->holster_weapon == 1))
     {
@@ -3662,58 +3714,15 @@ static void P_ProcessWeapon(int playerNum)
                 p->rapid_fire_hold = 1;
                 return;
             }
-            (*kb)++;
+
+            (*kb)++; // Increment Kickback Pic
+
             if ((*kb) == aplWeaponHoldDelay[p->curr_weapon][playerNum])
             {
-                int lPipeBombControl;
-                int pipeBombZvel;
-                int pipeBombFwdVel;
-
                 p->ammo_amount[p->curr_weapon]--;
 
-                if (p->on_ground && TEST_SYNC_KEY(sb_snum, SK_CROUCH))
-                {
-                    pipeBombFwdVel = 15;
-                    pipeBombZvel = (fix16_to_int(p->q16horiz + p->q16horizoff - F16(100)) * 20);
-                }
-                else
-                {
-                    pipeBombFwdVel = 140;
-                    pipeBombZvel = -512 - (fix16_to_int(p->q16horiz + p->q16horizoff - F16(100)) * 20);
-                }
+                P_TossPipebomb(playerNum);
 
-                int pipeSpriteNum = A_InsertSprite(p->cursectnum,
-                    p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 6),
-                    p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 6),
-                    p->pos.z, aplWeaponShoots[p->curr_weapon][playerNum], -16, 9, 9,
-                    fix16_to_int(p->q16ang), (pipeBombFwdVel + (p->hbomb_hold_delay << 5)), pipeBombZvel, p->i, 1);
-
-                lPipeBombControl = Gv_GetVarByLabel("PIPEBOMB_CONTROL", PIPEBOMB_REMOTE, -1, playerNum);
-
-                if (lPipeBombControl & PIPEBOMB_TIMER)
-                {
-                    int lGrenadeLifetime = Gv_GetVarByLabel("GRENADE_LIFETIME", NAM_GRENADE_LIFETIME, -1, playerNum);
-                    int lGrenadeLifetimeVar = Gv_GetVarByLabel("GRENADE_LIFETIME_VAR", NAM_GRENADE_LIFETIME_VAR, -1, playerNum);
-                    ActorExtra[pipeSpriteNum].temp_data[7] = lGrenadeLifetime
-                        + mulscale(krand(), lGrenadeLifetimeVar, 14)
-                        - lGrenadeLifetimeVar;
-                    ActorExtra[pipeSpriteNum].temp_data[6] = 1;
-                }
-                else
-                    ActorExtra[pipeSpriteNum].temp_data[6] = 2;
-
-                if (pipeBombFwdVel == 15)
-                {
-                    sprite[pipeSpriteNum].yvel = 3;
-                    sprite[pipeSpriteNum].z += (8 << 8);
-                }
-
-                if (A_GetHitscanRange(p->i) < 512)
-                {
-                    sprite[pipeSpriteNum].ang += 1024;
-                    sprite[pipeSpriteNum].zvel /= 3;
-                    sprite[pipeSpriteNum].xvel /= 3;
-                }
                 p->hbomb_on = 1;
             }
             else if ((*kb) < aplWeaponHoldDelay[p->curr_weapon][playerNum] && TEST_SYNC_KEY(sb_snum, SK_FIRE))
@@ -3742,7 +3751,7 @@ static void P_ProcessWeapon(int playerNum)
         }
         else if (aplWeaponWorksLike[p->curr_weapon][playerNum] == HANDREMOTE_WEAPON)
         {
-            (*kb)++;
+            (*kb)++; // Increment Kickback Pic
 
             if ((*kb) == aplWeaponFireDelay[p->curr_weapon][playerNum])
             {
@@ -3754,7 +3763,8 @@ static void P_ProcessWeapon(int playerNum)
                 {
                     if (!(aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_NOVISIBLE))
                     {
-                        p->visibility = 0;
+                        if ((numplayers < 2) || (oldnet_predicting == PREDICTSTATE_PROCESS))
+                            g_player[playerNum].display.visibility = 0;
                     }
 
                     P_SetWeaponGamevars(playerNum, p);
@@ -3776,7 +3786,7 @@ static void P_ProcessWeapon(int playerNum)
         else
         {
             // the basic weapon...
-            (*kb)++;
+            (*kb)++; // Increment Kickback Pic
 
             if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_CHECKATRELOAD)
             {
@@ -3849,7 +3859,7 @@ static void P_ProcessWeapon(int playerNum)
                         if (TEST_SYNC_KEY(sb_snum, SK_FIRE))
                         {
                             if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_RANDOMRESTART)
-                                *kb = 1 + (krand() & 3);
+                                *kb = 1 + (seed_krand(&g_random.playerweapon) & 3);
                             else *kb = 1;
                         }
                         else *kb = 0;
@@ -3943,6 +3953,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
         p->timebeforeexit--;
         if (p->timebeforeexit == GAMETICSPERSEC * 5 && (ud.limit_hit == 0))
         {
+            sounds_predictable = false;
             FX_StopAllSounds();
             S_ClearSoundLocks();
             if (p->customexitsound >= 0)
@@ -3950,6 +3961,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
                 S_PlaySound(p->customexitsound);
                 P_DoQuote(102, p);
             }
+            sounds_predictable = true;
         }
         else if (p->timebeforeexit == 1)
         {
@@ -3996,7 +4008,9 @@ static int P_HandleFist(int playerNum)
         if (p->fist_incs == 28)
         {
             if (ud.recstat == 1) G_CloseDemoWrite();
+            sounds_predictable = false;
             S_PlaySound(PIPEBOMB_EXPLODE);
+            sounds_predictable = true;
             p->pals[0] = 64;
             p->pals[1] = 64;
             p->pals[2] = 64;
@@ -4205,6 +4219,7 @@ static void P_HandleDeath(int snum)
         p->jetpack_on = 0;
         p->holoduke_on = -1;
 
+        sounds_predictable = false;
         S_StopEnvSound(DUKE_JETPACK_IDLE, playerSprite);
         if (p->scream_voice > FX_Ok)
         {
@@ -4213,6 +4228,7 @@ static void P_HandleDeath(int snum)
             // S_TestSoundCallback(DUKE_SCREAM);
             p->scream_voice = FX_Ok;
         }
+        sounds_predictable = true;
 
         if (s->pal != 1 && (s->cstat & 32768) == 0) s->cstat = 0;
 
@@ -4330,14 +4346,13 @@ static void P_HandleDamagingFloors(int snum)
 
 void P_ProcessInput(int snum)
 {
-    DukePlayer_t* p;
-    DukePlayer_t* p_nopredict = g_player[snum].ps;
-    input_t* syn;
+    DukePlayer_t* p = g_player[snum].ps;
+    input_t* syn = g_player[snum].inputBits;
 
     int playerSprite = g_player[snum].ps->i;
     spritetype* s = &sprite[playerSprite];
 
-    unsigned int sb_snum;
+    unsigned int sb_snum = syn->bits;
     int psect;
     int psectlotag;
     int shrunk = (s->yrepeat < 32);
@@ -4351,28 +4366,16 @@ void P_ProcessInput(int snum)
 
     int doubvel;
 
-    if (oldnet_predicting)
-    {
-        syn = (input_t*)&inputfifo[predictfifoplc & (MOVEFIFOSIZ - 1)][myconnectindex];
-        p = &predictedPlayer;
-    }
-    else
-    {
-        syn = g_player[snum].inputBits;
-        p = g_player[snum].ps;
-        X_OnEvent(EVENT_PROCESSINPUT, playerSprite, snum, -1);
-    }
+    X_OnEvent(EVENT_PROCESSINPUT, playerSprite, snum, -1);
 
-    sb_snum = syn->bits;
-
-    if (p_nopredict->cheat_phase > 0)
+    if (p->cheat_phase > 0)
         sb_snum = 0;
 
     psect = p->cursectnum;
 
     if (psect == -1)
     {
-        if (!oldnet_predicting && s->extra > 0 && ud.clipping == 0)
+        if (s->extra > 0 && ud.clipping == 0)
         {
             P_QuickKill(p);
             A_PlaySound(SQUISHED, playerSprite);
@@ -4394,16 +4397,13 @@ void P_ProcessInput(int snum)
     if ((lz & 49152) == 16384 && psectlotag == ST_1_ABOVE_WATER && truefdist > PHEIGHT + (16 << 8))
         psectlotag = 0;
 
-    if (!oldnet_predicting)
-    {
-        ActorExtra[playerSprite].floorz = fz;
-        ActorExtra[playerSprite].ceilingz = cz;
-    }
+    ActorExtra[playerSprite].floorz = fz;
+    ActorExtra[playerSprite].ceilingz = cz;
 
     p->oq16horiz = p->q16horiz;
     p->oq16horizoff = p->q16horizoff;
 
-    if (p_nopredict->aim_mode == 0 && p->on_ground && psectlotag != ST_2_UNDERWATER && (sector[psect].floorstat & 2))
+    if (p->aim_mode == 0 && p->on_ground && psectlotag != ST_2_UNDERWATER && (sector[psect].floorstat & 2))
     {
         x = p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 5);
         y = p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 5);
@@ -4447,8 +4447,7 @@ void P_ProcessInput(int snum)
 
         if ((sprite[spr].cstat & 33) == 33)
         {
-            if (!oldnet_predicting)
-                p->footprintcount = 0;
+            p->footprintcount = 0;
 
             psectlotag = 0;
             p->spritebridge = 1;
@@ -4462,17 +4461,14 @@ void P_ProcessInput(int snum)
         }
     }
 
-    if (!oldnet_predicting)
+    if (s->extra > 0) P_IncurDamage(p);
+    else
     {
-        if (s->extra > 0) P_IncurDamage(p);
-        else
-        {
-            s->extra = 0;
-            p->shield_amount = 0;
-        }
-
-        p->last_extra = s->extra;
+        s->extra = 0;
+        p->shield_amount = 0;
     }
+
+    p->last_extra = s->extra;
 
     if (P_HandleFist(snum))
         return;
@@ -4486,12 +4482,12 @@ void P_ProcessInput(int snum)
 
         if (psectlotag == ST_2_UNDERWATER)
         {
-            if (p_nopredict->on_warping_sector == 0)
+            if (p->on_warping_sector == 0)
             {
                 if (klabs(p->pos.z - fz) > (PHEIGHT >> 1))
                     p->pos.z += 348;
             }
-            else if (!oldnet_predicting)
+            else
             {
                 s->z -= 512;
                 s->zvel = -348;
@@ -4507,6 +4503,7 @@ void P_ProcessInput(int snum)
         p->opos.z = p->pos.z;
         p->oq16ang = p->q16ang;
         p->opyoff = p->pyoff;
+        //p->orotscrnang = p->rotscrnang;
 
         p->q16horiz = F16(100);
         p->q16horizoff = 0;
@@ -4523,25 +4520,22 @@ void P_ProcessInput(int snum)
         return;
     }
 
-    if (!oldnet_predicting)
+    if (p->transporter_hold > 0)
     {
-        if (p->transporter_hold > 0)
-        {
-            p->transporter_hold--;
-            if (p->transporter_hold == 0 && p->on_warping_sector)
-                p->transporter_hold = 2;
-        }
-        if (p->transporter_hold < 0)
-            p->transporter_hold++;
+        p->transporter_hold--;
+        if (p->transporter_hold == 0 && p->on_warping_sector)
+            p->transporter_hold = 2;
     }
+    if (p->transporter_hold < 0)
+        p->transporter_hold++;
 
-    if (p_nopredict->newowner >= 0) // Using viewscreen
+    if (p->newowner >= 0) // Using viewscreen
     {
         P_UpdatePosWhenViewingCam(p);
 
         P_DoCounters(p);
 
-        if (*aplWeaponWorksLike[p_nopredict->curr_weapon] == HANDREMOTE_WEAPON)
+        if (*aplWeaponWorksLike[p->curr_weapon] == HANDREMOTE_WEAPON)
             P_ProcessWeapon(snum);
 
         return;
@@ -4549,10 +4543,15 @@ void P_ProcessInput(int snum)
 
     doubvel = TICSPERFRAME;
 
-    if (p->rotscrnang > 0) p->rotscrnang -= ((p->rotscrnang >> 1) + 1);
-    else if (p->rotscrnang < 0) p->rotscrnang += (((-p->rotscrnang) >> 1) + 1);
+    p->rotscrnang -= (p->rotscrnang >> 1);
+
+    if (p->rotscrnang && !(p->rotscrnang >> 1))
+        p->rotscrnang -= ksgn(p->rotscrnang);
 
     p->look_ang -= (p->look_ang >> 2);
+
+    if (p->look_ang && !(p->look_ang >> 2))
+        p->look_ang -= ksgn(p->look_ang);
 
     if (TEST_SYNC_KEY(sb_snum, SK_LOOK_LEFT))
     {
@@ -4578,7 +4577,7 @@ void P_ProcessInput(int snum)
         }
     }
 
-    if (p_nopredict->on_crane >= 0)
+    if (p->on_crane >= 0)
         goto HORIZONLY;
 
     if (s->xvel < 32 || p->on_ground == 0 || p->bobcounter == 1024)
@@ -4591,12 +4590,9 @@ void P_ProcessInput(int snum)
     }
     else p->weapon_sway = p->bobcounter;
 
-    if (!oldnet_predicting)
-    {
-        s->xvel = ksqrt((p->pos.x - p->bobposx) * (p->pos.x - p->bobposx) + (p->pos.y - p->bobposy) * (p->pos.y - p->bobposy));
-        if (p->on_ground)
-            p->bobcounter += sprite[playerSprite].xvel >> 1;
-    }
+    s->xvel = ksqrt((p->pos.x - p->bobposx) * (p->pos.x - p->bobposx) + (p->pos.y - p->bobposy) * (p->pos.y - p->bobposy));
+    if (p->on_ground)
+        p->bobcounter += sprite[playerSprite].xvel >> 1;
 
     if (ud.clipping == 0 && (sector[p->cursectnum].floorpicnum == MIRROR || p->cursectnum < 0 || p->cursectnum >= MAXSECTORS))
     {
@@ -4615,8 +4611,9 @@ void P_ProcessInput(int snum)
     p->opos.z = p->pos.z;
     p->opyoff = p->pyoff;
     p->oq16ang = p->q16ang;
+    //p->orotscrnang = p->rotscrnang;
 
-    if (p_nopredict->one_eighty_count < 0)
+    if (p->one_eighty_count < 0)
     {
         p->one_eighty_count += 128;
         p->q16ang += F16(128);
@@ -4635,7 +4632,7 @@ void P_ProcessInput(int snum)
         p->pycount &= 2047;
         p->pyoff = sintable[p->pycount] >> 7;
 
-        if (!oldnet_predicting && !A_CheckSoundPlaying(playerSprite, DUKE_UNDERWATER))
+        if (!A_CheckSoundPlaying(playerSprite, DUKE_UNDERWATER))
             A_PlaySound(DUKE_UNDERWATER, playerSprite);
 
         if (TEST_SYNC_KEY(sb_snum, SK_JUMP))
@@ -4693,22 +4690,19 @@ void P_ProcessInput(int snum)
             p->vel.z = 0;
         }
 
-        if (!oldnet_predicting)
+        if (!oldnet_predicting && p->scuba_on && (krand() & 255) < 8)
         {
-            if (p->scuba_on && (krand() & 255) < 8)
-            {
-                int spr = A_Spawn(playerSprite, WATERBUBBLE);
-                sprite[spr].x +=
-                    sintable[(fix16_to_int(p->q16ang) + 512 + 64 - (g_globalRandom & 128)) & 2047] >> 6;
-                sprite[spr].y +=
-                    sintable[(fix16_to_int(p->q16ang) + 64 - (g_globalRandom & 128)) & 2047] >> 6;
-                sprite[spr].xrepeat = 3;
-                sprite[spr].yrepeat = 2;
-                sprite[spr].z = p->pos.z + (8 << 8);
-            }
+            int spr = A_Spawn(playerSprite, WATERBUBBLE);
+            sprite[spr].x +=
+                sintable[(fix16_to_int(p->q16ang) + 512 + 64 - (g_globalRandom & 128)) & 2047] >> 6;
+            sprite[spr].y +=
+                sintable[(fix16_to_int(p->q16ang) + 64 - (g_globalRandom & 128)) & 2047] >> 6;
+            sprite[spr].xrepeat = 3;
+            sprite[spr].yrepeat = 2;
+            sprite[spr].z = p->pos.z + (8 << 8);
         }
     }
-    else if (p_nopredict->jetpack_on)
+    else if (p->jetpack_on)
     {
         p->on_ground = 0;
         p->jumping_counter = 0;
@@ -4719,12 +4713,12 @@ void P_ProcessInput(int snum)
         p->pycount &= 2047;
         p->pyoff = sintable[p->pycount] >> 7;
 
-        if (p_nopredict->jetpack_on < 11)
+        if (p->jetpack_on < 11)
         {
             p->jetpack_on++;
-            p->pos.z -= (p_nopredict->jetpack_on << 7); //Goin up
+            p->pos.z -= (p->jetpack_on << 7); //Goin up
         }
-        else if (!oldnet_predicting && p->jetpack_on == 11 && !A_CheckSoundPlaying(playerSprite, DUKE_JETPACK_IDLE))
+        else if (p->jetpack_on == 11 && !A_CheckSoundPlaying(playerSprite, DUKE_JETPACK_IDLE))
             A_PlaySound(DUKE_JETPACK_IDLE, playerSprite);
 
         int const zAdjust = shrunk ? 512 : 2048;
@@ -4766,14 +4760,11 @@ void P_ProcessInput(int snum)
     }
     else if (psectlotag != ST_2_UNDERWATER)
     {
-        if (!oldnet_predicting)
-        {
-            if (p->airleft != 15 * 26)
-                p->airleft = 15 * 26; //Aprox twenty seconds.
+        if (p->airleft != 15 * 26)
+            p->airleft = 15 * 26; //Aprox twenty seconds.
 
-            if (p->scuba_on == 1)
-                p->scuba_on = 0;
-        }
+        if (p->scuba_on == 1)
+            p->scuba_on = 0;
 
         if (psectlotag == ST_1_ABOVE_WATER && p->spritebridge == 0)
         {
@@ -4786,7 +4777,7 @@ void P_ProcessInput(int snum)
             }
             else floorZOffset = 12;
 
-            if (!oldnet_predicting && shrunk == 0 && truefdist <= PHEIGHT)
+            if (shrunk == 0 && truefdist <= PHEIGHT && !oldnet_predicting)
             {
                 if (p->on_ground == 1)
                 {
@@ -4804,23 +4795,26 @@ void P_ProcessInput(int snum)
                 }
             }
         }
-        else if (!oldnet_predicting)
+        else
         {
-            if (p->footprintcount > 0 && p->on_ground)
+            if (p->footprintcount > 0 && p->on_ground && !oldnet_predicting)
+            {
                 if (p->cursectnum >= 0 && (sector[p->cursectnum].floorstat & 2) != 2)
                 {
                     int spr;
 
                     for (spr = headspritesect[psect]; spr >= 0; spr = nextspritesect[spr])
+                    {
                         if (sprite[spr].picnum == FOOTPRINTS || sprite[spr].picnum == FOOTPRINTS2 || sprite[spr].picnum == FOOTPRINTS3 || sprite[spr].picnum == FOOTPRINTS4)
                             if (klabs(sprite[spr].x - p->pos.x) < 384)
                                 if (klabs(sprite[spr].y - p->pos.y) < 384)
                                     break;
+                    }
+
                     if (spr < 0)
                     {
-                        if (sector[p->cursectnum].lotag == ST_0_NO_EFFECT &&
-                            sector[p->cursectnum].hitag == 0)
-
+                        if (sector[p->cursectnum].lotag == ST_0_NO_EFFECT && sector[p->cursectnum].hitag == 0)
+                        {
                             if (yax_getbunch(p->cursectnum, YAX_FLOOR) < 0 || (sector[p->cursectnum].floorstat & 512))
                             {
                                 switch (krand() & 3)
@@ -4834,8 +4828,10 @@ void P_ProcessInput(int snum)
                                 sprite[spr].shade = p->footprintshade;
                                 p->footprintcount--;
                             }
+                        }
                     }
                 }
+            }
         }
 
         if (p->pos.z < (fz - (floorZOffset << 8)))  //falling
@@ -4851,45 +4847,42 @@ void P_ProcessInput(int snum)
                 if (p->vel.z >= (4096 + 2048))
                     p->vel.z = (4096 + 2048);
 
-                if (!oldnet_predicting)
+                if (p->vel.z > 2400 && p->falling_counter < 255)
                 {
-                    if (p->vel.z > 2400 && p->falling_counter < 255)
-                    {
-                        p->falling_counter++;
-                        if (p->falling_counter == 38)
-                            p->scream_voice = A_PlaySound(DUKE_SCREAM, playerSprite);
-                    }
+                    p->falling_counter++;
+                    if (p->falling_counter == 38)
+                        p->scream_voice = A_PlaySound(DUKE_SCREAM, playerSprite);
+                }
 
-                    if ((p->pos.z + p->vel.z) >= (fz - (floorZOffset << 8)) && p->cursectnum >= 0)   // hit the ground
+                if ((p->pos.z + p->vel.z) >= (fz - (floorZOffset << 8)) && p->cursectnum >= 0)   // hit the ground
+                {
+                    if (sector[p->cursectnum].lotag != ST_1_ABOVE_WATER)
                     {
-                        if (sector[p->cursectnum].lotag != ST_1_ABOVE_WATER)
+                        if (p->falling_counter > 62) P_QuickKill(p);
+
+                        else if (p->falling_counter > 9)
                         {
-                            if (p->falling_counter > 62) P_QuickKill(p);
-
-                            else if (p->falling_counter > 9)
+                            s->extra -= p->falling_counter - (krand() & 3);
+                            if (s->extra <= 0)
                             {
-                                s->extra -= p->falling_counter - (krand() & 3);
-                                if (s->extra <= 0)
-                                {
-                                    A_PlaySound(SQUISHED, playerSprite);
-                                    p->pals[0] = 63;
-                                    p->pals[1] = 0;
-                                    p->pals[2] = 0;
-                                    p->pals_time = 63;
-                                }
-                                else
-                                {
-                                    A_PlaySound(DUKE_LAND, playerSprite);
-                                    A_PlaySound(DUKE_LAND_HURT, playerSprite);
-                                }
-
-                                p->pals[0] = 16;
+                                A_PlaySound(SQUISHED, playerSprite);
+                                p->pals[0] = 63;
                                 p->pals[1] = 0;
                                 p->pals[2] = 0;
-                                p->pals_time = 32;
+                                p->pals_time = 63;
                             }
-                            else if (p->vel.z > 2048) A_PlaySound(DUKE_LAND, playerSprite);
+                            else
+                            {
+                                A_PlaySound(DUKE_LAND, playerSprite);
+                                A_PlaySound(DUKE_LAND_HURT, playerSprite);
+                            }
+
+                            p->pals[0] = 16;
+                            p->pals[1] = 0;
+                            p->pals[2] = 0;
+                            p->pals_time = 32;
                         }
+                        else if (p->vel.z > 2048) A_PlaySound(DUKE_LAND, playerSprite);
                     }
                 }
             }
@@ -4921,14 +4914,12 @@ void P_ProcessInput(int snum)
             else if (p->jumping_counter == 0)
             {
                 p->pos.z += ((fz - (floorZOffset << 7)) - p->pos.z) >> 1; //Smooth on the water
-                if (p_nopredict->on_warping_sector == 0 && p->pos.z > fz - (16 << 8))
+                if (p->on_warping_sector == 0 && p->pos.z > fz - (16 << 8))
                 {
                     p->pos.z = fz - (16 << 8);
                     p->vel.z >>= 1;
                 }
             }
-
-            p->on_warping_sector = 0;
 
             if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
             {
@@ -5003,14 +4994,14 @@ void P_ProcessInput(int snum)
     }
 
     // Halt on Kicking/Tripmines/Nukebuttons
-    if (p_nopredict->fist_incs ||
-        p_nopredict->transporter_hold > 2 ||
+    if (p->fist_incs ||
+        p->transporter_hold > 2 ||
         p->hard_landing ||
-        p_nopredict->access_incs > 0 ||
-        p_nopredict->knee_incs > 0 ||
-        (*aplWeaponWorksLike[p_nopredict->curr_weapon] == TRIPBOMB_WEAPON &&
-            p_nopredict->kickback_pic > 1 &&
-            p_nopredict->kickback_pic < 4))
+        p->access_incs > 0 ||
+        p->knee_incs > 0 ||
+        (*aplWeaponWorksLike[p->curr_weapon] == TRIPBOMB_WEAPON &&
+            p->kickback_pic > 1 &&
+            p->kickback_pic < 4))
     {
         doubvel = 0;
         p->vel.x = 0;
@@ -5030,7 +5021,9 @@ void P_ProcessInput(int snum)
 
     if (p->spritebridge == 0)
     {
+        sounds_predictable = false;
         P_HandleDamagingFloors(snum);
+        sounds_predictable = true;
     }
 
     if (syn->extbits & (EXTBIT_MOVEFORWARD))
@@ -5053,68 +5046,65 @@ void P_ProcessInput(int snum)
 
     if (p->vel.x || p->vel.y || syn->fvel || syn->svel)
     {
-        if (!oldnet_predicting)
+        p->crack_time = 777;
+
+        int const checkWalkSound = sintable[p->bobcounter & 2047] >> 12;
+
+        if ((truefdist < PHEIGHT + (8 << 8)) && (checkWalkSound == 1 || checkWalkSound == 3))
         {
-            p->crack_time = 777;
-
-            int const checkWalkSound = sintable[p->bobcounter & 2047] >> 12;
-
-            if ((truefdist < PHEIGHT + (8 << 8)) && (checkWalkSound == 1 || checkWalkSound == 3))
+            if (p->spritebridge == 0 && p->walking_snd_toggle == 0 && p->on_ground)
             {
-                if (p->spritebridge == 0 && p->walking_snd_toggle == 0 && p->on_ground)
+                int floorPic;
+                switch (psectlotag)
                 {
-                    int floorPic;
-                    switch (psectlotag)
+                case ST_0_NO_EFFECT:
+
+                    floorPic = (lz >= 0 && (lz & 49152) == 49152)
+                        ? TrackerCast(sprite[lz & (MAXSPRITES - 1)].picnum)
+                        : TrackerCast(sector[psect].floorpicnum);
+
+                    switch (DynamicTileMap[floorPic])
                     {
-                    case ST_0_NO_EFFECT:
-
-                        floorPic = (lz >= 0 && (lz & 49152) == 49152)
-                            ? TrackerCast(sprite[lz & (MAXSPRITES - 1)].picnum)
-                            : TrackerCast(sector[psect].floorpicnum);
-
-                        switch (DynamicTileMap[floorPic])
-                        {
-                        case PANNEL1__STATIC:
-                        case PANNEL2__STATIC:
-                            A_PlaySound(DUKE_WALKINDUCTS, playerSprite);
-                            p->walking_snd_toggle = 1;
-                            break;
-                        }
-                        break;
-                    case ST_1_ABOVE_WATER:
-                        if ((krand() & 1) == 0)
-                            A_PlaySound(DUKE_ONWATER, playerSprite);
+                    case PANNEL1__STATIC:
+                    case PANNEL2__STATIC:
+                        A_PlaySound(DUKE_WALKINDUCTS, playerSprite);
                         p->walking_snd_toggle = 1;
                         break;
                     }
+                    break;
+                case ST_1_ABOVE_WATER:
+                    if ((krand() & 1) == 0)
+                        A_PlaySound(DUKE_ONWATER, playerSprite);
+                    p->walking_snd_toggle = 1;
+                    break;
                 }
             }
-            else if (p->walking_snd_toggle > 0)
-                p->walking_snd_toggle--;
         }
+        else if (p->walking_snd_toggle > 0)
+            p->walking_snd_toggle--;
 
-        if (p_nopredict->jetpack_on == 0 && p_nopredict->steroids_amount > 0 && p_nopredict->steroids_amount < 400)
+        if (p->jetpack_on == 0 && p->steroids_amount > 0 && p->steroids_amount < 400)
             doubvel <<= 1;
 
         p->vel.x += ((syn->fvel * doubvel) << 6);
         p->vel.y += ((syn->svel * doubvel) << 6);
 
-        if ((aplWeaponWorksLike[p_nopredict->curr_weapon][snum] == KNEE_WEAPON && p_nopredict->kickback_pic > 10 && p->on_ground) || (p->on_ground && TEST_SYNC_KEY(sb_snum, SK_CROUCH)))
+        if ((aplWeaponWorksLike[p->curr_weapon][snum] == KNEE_WEAPON && p->kickback_pic > 10 && p->on_ground) || (p->on_ground && TEST_SYNC_KEY(sb_snum, SK_CROUCH)))
         {
-            p->vel.x = mulscale(p->vel.x, p_nopredict->runspeed - 0x2000, 16);
-            p->vel.y = mulscale(p->vel.y, p_nopredict->runspeed - 0x2000, 16);
+            p->vel.x = mulscale(p->vel.x, p->runspeed - 0x2000, 16);
+            p->vel.y = mulscale(p->vel.y, p->runspeed - 0x2000, 16);
         }
         else
         {
             if (psectlotag == ST_2_UNDERWATER)
             {
-                p->vel.x = mulscale(p->vel.x, p_nopredict->runspeed - 0x1400, 16);
-                p->vel.y = mulscale(p->vel.y, p_nopredict->runspeed - 0x1400, 16);
+                p->vel.x = mulscale(p->vel.x, p->runspeed - 0x1400, 16);
+                p->vel.y = mulscale(p->vel.y, p->runspeed - 0x1400, 16);
             }
             else
             {
-                p->vel.x = mulscale(p->vel.x, p_nopredict->runspeed, 16);
-                p->vel.y = mulscale(p->vel.y, p_nopredict->runspeed, 16);
+                p->vel.x = mulscale(p->vel.x, p->runspeed, 16);
+                p->vel.y = mulscale(p->vel.y, p->runspeed, 16);
             }
         }
 
@@ -5124,9 +5114,9 @@ void P_ProcessInput(int snum)
         if (shrunk)
         {
             p->vel.x =
-                mulscale16(p->vel.x, p_nopredict->runspeed - (p_nopredict->runspeed >> 1) + (p_nopredict->runspeed >> 2));
+                mulscale16(p->vel.x, p->runspeed - (p->runspeed >> 1) + (p->runspeed >> 2));
             p->vel.y =
-                mulscale16(p->vel.y, p_nopredict->runspeed - (p_nopredict->runspeed >> 1) + (p_nopredict->runspeed >> 2));
+                mulscale16(p->vel.y, p->runspeed - (p->runspeed >> 1) + (p->runspeed >> 2));
         }
     }
 
@@ -5140,11 +5130,7 @@ HORIZONLY:
         p->pos.x += p->vel.x >> 14;
         p->pos.y += p->vel.y >> 14;
         updatesector(p->pos.x, p->pos.y, &p->cursectnum);
-
-        if (!oldnet_predicting)
-        {
-            changespritesect(playerSprite, p->cursectnum);
-        }
+        changespritesect(playerSprite, p->cursectnum);
     }
     else
     {
@@ -5170,14 +5156,16 @@ HORIZONLY:
             &p->pos.z, &p->cursectnum,
             p->vel.x, p->vel.y, 164L, (4L << 8), (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : (20L << 8), CLIPMASK0);
 
-        if (p_nopredict->jetpack_on == 0 && psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER && shrunk)
+        if (p->jetpack_on == 0 && psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
 
-        if (!oldnet_predicting && moveResult)
+        sounds_predictable = false;
+        if (moveResult)
             P_CheckTouchDamage(p, moveResult);
+        sounds_predictable = true;
     }
 
-    if (p_nopredict->jetpack_on == 0)
+    if (p->jetpack_on == 0)
     {
         if (s->xvel > 16)
         {
@@ -5193,43 +5181,43 @@ HORIZONLY:
             p->pyoff = 0;
     }
 
-    if (!oldnet_predicting)
-    {
-        // RBG***
-        setspritez_old(playerSprite, p->pos.x, p->pos.y, p->pos.z + PHEIGHT);
+    // RBG***
+    setspritez_old(playerSprite, p->pos.x, p->pos.y, p->pos.z + PHEIGHT);
 
-        if (psectlotag < 3)
+    if (psectlotag < 3)
+    {
+        psect = s->sectnum;
+        if (ud.clipping == 0 && sector[psect].lotag == ST_31_TWO_WAY_TRAIN)
         {
-            psect = s->sectnum;
-            if (ud.clipping == 0 && sector[psect].lotag == ST_31_TWO_WAY_TRAIN)
+            if (sprite[sector[psect].hitag].xvel && ActorExtra[sector[psect].hitag].temp_data[0] == 0)
             {
-                if (sprite[sector[psect].hitag].xvel && ActorExtra[sector[psect].hitag].temp_data[0] == 0)
-                {
-                    P_QuickKill(p);
-                    return;
-                }
+                P_QuickKill(p);
+                return;
             }
         }
-
-        if (p->cursectnum >= 0 && truefdist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
-            if (!A_CheckSoundPlaying(playerSprite, DUKE_ONWATER))
-                A_PlaySound(DUKE_ONWATER, playerSprite);
-
-        if (p->cursectnum != s->sectnum)
-            changespritesect(playerSprite, p->cursectnum);
     }
+
+    if (p->cursectnum >= 0 && truefdist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
+        if (!A_CheckSoundPlaying(playerSprite, DUKE_ONWATER))
+            A_PlaySound(DUKE_ONWATER, playerSprite);
+
+    if (p->cursectnum != s->sectnum)
+        changespritesect(playerSprite, p->cursectnum);
+
+    p->on_warping_sector = 0;
 
     int mashedPotato = 0;
     if (ud.clipping == 0)
         mashedPotato = ((pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 164L, (4L << 8), (4L << 8), CLIPMASK0) < 0) && (A_GetFurthestAngle(p->i, 8) < 512));
 
-    if (!oldnet_predicting && ud.clipping == 0)
+    if (ud.clipping == 0)
     {
         if (klabs(ActorExtra[playerSprite].floorz - ActorExtra[playerSprite].ceilingz) < (48 << 8) || mashedPotato)
         {
             if (!(sector[s->sectnum].lotag & 0x8000) && (isanunderoperator(sector[s->sectnum].lotag) ||
                 isanearoperator(sector[s->sectnum].lotag)))
                 activatebysector(s->sectnum, playerSprite);
+
             if (mashedPotato)
             {
                 P_QuickKill(p);
@@ -5241,7 +5229,9 @@ HORIZONLY:
     }
 
     // center_view
-    int center_view = 0;
+    if (p->return_to_center > 0)
+        p->return_to_center--;
+
     if (TEST_SYNC_KEY(sb_snum, SK_CENTER_VIEW) || p->hard_landing)
     {
         Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
@@ -5262,10 +5252,9 @@ HORIZONLY:
             p->return_to_center = 9;
             if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz += fix16_from_int(12);     // running
             p->q16horiz += fix16_from_int(12);
-            center_view++;
+            // horizRecenter here?
         }
     }
-
     else if (TEST_SYNC_KEY(sb_snum, SK_LOOK_DOWN))
     {
         // look_down
@@ -5276,10 +5265,9 @@ HORIZONLY:
             p->return_to_center = 9;
             if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz -= fix16_from_int(12);
             p->q16horiz -= fix16_from_int(12);
-            center_view++;
+            // horizRecenter here?
         }
     }
-
     else if (TEST_SYNC_KEY(sb_snum, SK_AIM_UP))
     {
         // aim_up
@@ -5290,10 +5278,9 @@ HORIZONLY:
             // running
             if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz += fix16_from_int(6);
             p->q16horiz += fix16_from_int(6);
-            center_view++;
+            // horizRecenter here?
         }
     }
-
     else if (TEST_SYNC_KEY(sb_snum, SK_AIM_DOWN))
     {
         // aim_down
@@ -5304,15 +5291,15 @@ HORIZONLY:
             // running
             if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz -= fix16_from_int(6);
             p->q16horiz -= fix16_from_int(6);
-            center_view++;
+            // horizRecenter here?
         }
     }
+
     if (p->return_to_center > 0)
         if (TEST_SYNC_KEY(sb_snum, SK_LOOK_UP) == 0 && TEST_SYNC_KEY(sb_snum, SK_LOOK_DOWN) == 0)
         {
-            p->return_to_center--;
             p->q16horiz += F16(33) - fix16_div(p->q16horiz, F16(3));
-            center_view++;
+            // horizRecenter here?
         }
 
     if (p->hard_landing > 0)
@@ -5321,18 +5308,13 @@ HORIZONLY:
         p->q16horiz -= fix16_from_int(p->hard_landing << 4);
     }
 
-    if (center_view)
-    {
-        if (p->q16horiz > F16(95) && p->q16horiz < F16(105)) p->q16horiz = F16(100);
-        if (p->q16horizoff > F16(-5) && p->q16horizoff < F16(5)) p->q16horizoff = 0;
-    }
-
     p->q16horiz += syn->q16horz;
     p->q16horiz = fix16_clamp(p->q16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
+    p->q16horizoff = fix16_clamp(p->q16horizoff, F16(HORIZ_MIN), F16(HORIZ_MAX));
 
     //Shooting code/changes
 
-    if (!oldnet_predicting && p->show_empty_weapon > 0)
+    if (p->show_empty_weapon > 0)
     {
         p->show_empty_weapon--;
         if (p->show_empty_weapon == 0 && (p->weaponswitch & 2) && p->ammo_amount[p->curr_weapon] <= 0)
@@ -5346,19 +5328,21 @@ HORIZONLY:
         }
     }
 
-    if (p_nopredict->knee_incs > 0)
+    if (p->knee_incs > 0)
     {
-        p->knee_incs++;
         p->q16horiz -= F16(48);
         p->return_to_center = 9;
-        if (!oldnet_predicting && p->knee_incs > 15)
+        // horizRecenter here?
+        if (++p->knee_incs > 15)
         {
             p->knee_incs = 0;
             p->holster_weapon = 0;
             if (p->weapon_pos < 0)
                 p->weapon_pos = -p->weapon_pos;
-            if (p->actorsqu >= 0 && dist(&sprite[playerSprite], &sprite[p->actorsqu]) < 1400 && sprite[p->actorsqu].statnum != MAXSTATUS)
+            
+            if (!oldnet_predicting && p->actorsqu >= 0 && dist(&sprite[playerSprite], &sprite[p->actorsqu]) < 1400 && sprite[p->actorsqu].statnum != MAXSTATUS)
             {
+                // P_StompEnemy
                 A_DoGuts(p->actorsqu, JIBS6, 7);
                 A_Spawn(p->actorsqu, BLOODPOOL);
                 A_PlaySound(SQUISHED, p->actorsqu);
@@ -5394,6 +5378,7 @@ HORIZONLY:
                 }
                 else A_DeleteSprite(p->actorsqu);
             }
+
             p->actorsqu = -1;
         }
         else if (p->actorsqu >= 0)

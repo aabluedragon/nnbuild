@@ -3067,7 +3067,7 @@ static int X_DoExecute(void)
     case CON_FLASH:
         insptr++;
         sprite[g_i].shade = -127;
-        g_player[g_p].ps->visibility = -127;
+        g_player[g_p].display.visibility = -127;
         return 0;
 
     case CON_SAVEMAPSTATE:

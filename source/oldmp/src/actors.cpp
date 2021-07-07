@@ -591,6 +591,12 @@ int block_deletesprite = 0;
 
 void A_DeleteSprite(int s)
 {
+    if (oldnet_predicting)
+    {
+        OSD_Printf("^08A_DeleteSprite^12: ^02ATTEMPTING TO DELETE ACTOR FROM PREDICTING STATE! FAIL.\n");
+        return;
+    }
+
     if (block_deletesprite)
     {
         OSD_Printf(OSD_ERROR "A_DeleteSprite(): tried to remove sprite %d in EVENT_EGS\n",s);
@@ -5403,12 +5409,6 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
                 if (g_player[playerNum].ps->on_ground == 1)
                 {
                     g_player[playerNum].ps->pos.z += zChange;
-
-                    if (playerNum == myconnectindex)
-                    {
-                        predictedPlayer.pos.z += zChange;
-                        predictBackup[PREDICT_LASTPOS].pos.z = g_player[playerNum].ps->pos.z;
-                    }
                 }
             }
 
@@ -5545,7 +5545,6 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 {
                     if (g_player[p].ps->cursectnum == pSprite->sectnum && g_player[p].ps->on_ground == 1)
                     {
-
                         g_player[p].ps->q16ang += fix16_from_int(l*q);
                         g_player[p].ps->q16ang &= 0x7FFFFFF;
 
@@ -6633,18 +6632,9 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if (sprite[j].statnum == STAT_PLAYER && sprite[j].owner >= 0)
                 {
                     p = sprite[j].yvel;
-                    //g_player[p].ps->opos.z = g_player[p].ps->pos.z;
                     g_player[p].ps->pos.z += q;
                     g_player[p].ps->truefz += q;
                     g_player[p].ps->truecz += q;
-
-                    // Correct prediction
-                    if (p == myconnectindex)
-                    {
-                        //omyz = myz;
-                        predictedPlayer.pos.z += q;
-                        predictBackup[PREDICT_LASTPOS].pos.z = g_player[p].ps->pos.z;
-                    }
                 }
 
                 if (sprite[j].statnum != STAT_EFFECTOR)
@@ -6702,9 +6692,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         g_player[p].ps->pos.x += sprite[j].x-pSprite->x;
                         g_player[p].ps->pos.y += sprite[j].y-pSprite->y;
 
-                        //g_player[p].ps->opos.z -= g_player[p].ps->pos.z;
                         g_player[p].ps->pos.z = sector[sprite[j].sectnum].floorz-(pSector->floorz-g_player[p].ps->pos.z);
-                        //g_player[p].ps->opos.z += g_player[p].ps->pos.z;
 
                         ActorExtra[k].floorz = sector[sprite[j].sectnum].floorz;
                         ActorExtra[k].ceilingz = sector[sprite[j].sectnum].ceilingz;
@@ -6718,21 +6706,6 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                         changespritesect(k,sprite[j].sectnum);
                         g_player[p].ps->cursectnum = sprite[j].sectnum;
-
-                        if (p == myconnectindex)
-                        {
-                            predictedPlayer.pos.x += sprite[j].x - pSprite->x;
-                            predictedPlayer.pos.y += sprite[j].y - pSprite->y;
-
-                            //omyz -= myz;
-                            predictedPlayer.pos.z = sector[sprite[j].sectnum].floorz - (pSector->floorz - predictedPlayer.pos.z);
-                            //omyz += myz;
-
-                            predictedPlayer.opos.vec2 = predictedPlayer.pos.vec2;
-
-                            predictedPlayer.cursectnum = sprite[j].sectnum;
-                            predictBackup[PREDICT_LASTPOS].pos = g_player[p].ps->pos;
-                        }
                     }
                     else if (sprite[k].statnum != STAT_EFFECTOR)
                     {
@@ -7309,7 +7282,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if (T3(spriteNum) > T2(spriteNum))
                 {
                     T1(spriteNum) = 0;
-                    g_player[screenpeek].ps->visibility = ud.const_visibility;
+                    g_player[screenpeek].display.visibility = ud.const_visibility;
                     break;
                 }
                 else if (T3(spriteNum) == (T2(spriteNum)>>1))
@@ -7335,10 +7308,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     if (rnd(192) && (T3(spriteNum)&1))
                     {
                         if (j)
-                            g_player[screenpeek].ps->visibility = 0;
+                            g_player[screenpeek].display.visibility = 0;
                     }
                     else if (j)
-                        g_player[screenpeek].ps->visibility = ud.const_visibility;
+                        g_player[screenpeek].display.visibility = ud.const_visibility;
 
                     j = headspritestat[STAT_DEFAULT];
                     while (j >= 0)

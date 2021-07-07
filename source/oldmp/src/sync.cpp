@@ -193,10 +193,17 @@ char Net_RandomSync(void)
 {
     unsigned short crc = 0;
 
-    updatecrc(crc, randomseed & 255);
-    updatecrc(crc, (randomseed >> 8) & 255);
-    updatecrc(crc, g_globalRandom & 255);
-    updatecrc(crc, (g_globalRandom >> 8) & 255);
+    updatecrc(crc, randomseed);
+    updatecrc(crc, (randomseed >> 8));
+
+    updatecrc(crc, g_globalRandom);
+    updatecrc(crc, (g_globalRandom >> 8));
+
+    updatecrc(crc, g_random.global);
+    updatecrc(crc, (g_random.global >> 8));
+
+    updatecrc(crc, g_random.playerweapon);
+    updatecrc(crc, (g_random.playerweapon >> 8));
 
     if (g_numSyncBytes == 1)
     {

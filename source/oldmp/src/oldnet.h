@@ -10,6 +10,13 @@
 #define OLDNET_EXTERN extern
 #endif
 
+enum
+{
+    PREDICTSTATE_OFF = 0,
+    PREDICTSTATE_PROCESS = 1,
+    PREDICTSTATE_CORRECT = 2,
+};
+
 #define PREDICT_CURPOS (predictfifoplc & (MOVEFIFOSIZ - 1))
 #define PREDICT_LASTPOS ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
 
@@ -18,6 +25,18 @@
 
 #define predict_check(memb) (g_player[myconnectindex].ps->memb == predictBackup[PREDICT_LASTPOS].memb)
 #define predict_reset(memb) predictedPlayer.memb = g_player[myconnectindex].ps->memb
+
+#define CREATE_PREDICTED_LINKED_LIST(name) decltype(head##name) predicted_head##name; \
+                                           decltype(prev##name) predicted_prev##name; \
+                                           decltype(next##name) predicted_next##name
+
+#define swap_predicted_linked_list(name) std::swap(head##name, predicted_head##name), \
+                                         std::swap(prev##name, predicted_prev##name), \
+                                         std::swap(next##name, predicted_next##name)
+
+#define reset_predicted_linked_list(name) memcpy(predicted_head##name, head##name, sizeof(predicted_head##name)), \
+                                          memcpy(predicted_prev##name, prev##name, sizeof(predicted_prev##name)), \
+                                          memcpy(predicted_next##name, next##name, sizeof(predicted_next##name))
 
 typedef struct
 {
@@ -35,14 +54,20 @@ extern int movefifoplc;
 
 // Check if oldnet_predicting is true and return in code branches
 // you want to avoid going into during prediction.
-OLDNET_EXTERN bool oldnet_predicting;
+OLDNET_EXTERN int32_t oldnet_predicting;
 
 // Must enable this on code branches that are able to predict sounds
 OLDNET_EXTERN bool sounds_predictable;
 
 OLDNET_EXTERN int predictfifoplc;
 
+OLDNET_EXTERN DukePlayer_t* originalPlayer;
 OLDNET_EXTERN DukePlayer_t predictedPlayer;
+OLDNET_EXTERN spritetype predicted_pSprite;
+OLDNET_EXTERN ActorData_t predicted_pActor;
+
+OLDNET_EXTERN intptr_t* original_plValues[MAXGAMEVARS];
+OLDNET_EXTERN intptr_t* predicted_plValues[MAXGAMEVARS];
 
 OLDNET_EXTERN PredictBackup_t predictBackup[MOVEFIFOSIZ];
 
@@ -106,7 +131,9 @@ void Net_EnterMessage(void);
 
 void Net_CorrectPrediction(void);
 void Net_InitializePrediction(void);
-void Net_DoPrediction(void);
+void Net_DoPrediction(int state);
+void Net_UsePredictedPointers(void);
+void Net_UseOriginalPointers(void);
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
