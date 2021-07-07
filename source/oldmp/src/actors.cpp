@@ -615,18 +615,22 @@ void A_DeleteSprite(int s)
     deletesprite(s);
 }
 
-void A_AddToDeleteQueue(int i)
+void A_AddToDeleteQueue(int spriteNum)
 {
     if (g_spriteDeleteQueueSize == 0)
     {
-        A_DeleteSprite(i);
+        A_DeleteSprite(spriteNum);
         return;
     }
 
-    if (SpriteDeletionQueue[g_spriteDeleteQueuePos] >= 0)
-        sprite[SpriteDeletionQueue[g_spriteDeleteQueuePos]].xrepeat = 0;
-    SpriteDeletionQueue[g_spriteDeleteQueuePos] = i;
-    g_spriteDeleteQueuePos = (g_spriteDeleteQueuePos+1)%g_spriteDeleteQueueSize;
+    auto& deleteSpriteNum = SpriteDeletionQueue[g_spriteDeleteQueuePos];
+
+    if (deleteSpriteNum >= 0 && ActorExtra[deleteSpriteNum].flags & SPRITE_QUEUEDFORDELETE)
+        A_DeleteSprite(deleteSpriteNum);
+
+    deleteSpriteNum = spriteNum;
+    ActorExtra[spriteNum].flags |= SPRITE_QUEUEDFORDELETE;
+    g_spriteDeleteQueuePos = (g_spriteDeleteQueuePos + 1) % g_spriteDeleteQueueSize;
 }
 
 void A_SpawnMultiple(int sp, int pic, int n)
