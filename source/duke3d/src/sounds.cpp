@@ -712,9 +712,9 @@ boost:
     {
         switch (DYNAMICSOUNDMAP(soundNum))
         {
-            case PIPEBOMB_EXPLODE__STATIC:
-            case LASERTRIP_EXPLODE__STATIC:
-            case RPG_EXPLODE__STATIC:
+            case PIPEBOMB_EXPLODE__:
+            case LASERTRIP_EXPLODE__:
+            case RPG_EXPLODE__:
                 goto boost;
         }
     }
@@ -815,8 +815,10 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t *pos)
     }
     else
     {
+#if 0
         if (sndist > 32767 && PN(spriteNum) != MUSICANDSFX && (snd.m & (SF_LOOP|SF_MSFX)) == 0)
             return -1;
+#endif
 
         if (pOther->cursectnum > -1 && sector[pOther->cursectnum].lotag == ST_2_UNDERWATER
             && (snd.m & SF_TALK) == 0)
