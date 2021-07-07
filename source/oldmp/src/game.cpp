@@ -7114,6 +7114,9 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
                     tsprite[spritesortcnt].picnum = RESPAWNMARKERGREEN;
 
+                    // Code for spinning voxel logos
+                    tsprite[spritesortcnt].ang -= ((int32_t)totalclock << 6);
+
                     if (s->owner >= 0)
                         tsprite[spritesortcnt].z = g_player[p].ps->pos.z-(20<<8);
                     else tsprite[spritesortcnt].z = s->z-(96<<8);
