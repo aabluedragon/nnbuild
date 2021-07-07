@@ -3626,11 +3626,7 @@ static int C_ParseCommand(void)
     }
 
     case CON_SETACTOR:
-        if (!C_CheckEventSync(g_currentEvent))
-        {
-            C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
-        }
+        // Event sync check moved below, so we can check if we're setting a sync-safe value.
         fallthrough__;
     case CON_GETACTOR:
     {
@@ -3679,6 +3675,19 @@ static int C_ParseCommand(void)
             g_numCompilerErrors++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
+        }
+
+        // Check if were setting something that isn't sync safe in a local event
+        if (tw == CON_SETACTOR && !C_CheckEventSync(g_currentEvent))
+        {
+            switch (lLabelID)
+            {
+            case ACTOR_ALPHA: break;
+            default:
+                C_ReportError(WARNING_EVENTSYNC);
+                g_numCompilerWarnings++;
+                break;
+            }
         }
 
         bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
