@@ -11191,9 +11191,6 @@ CLEAN_DIRECTORY:
     if (g_scriptDebug)
         initprintf("CON debugging activated (level %d).\n",g_scriptDebug);
 
-    // OLDMP MERGE CHECKME
-    //RegisterShutdownFunction(G_Shutdown);
-
     if (VOLUMEONE)
     {
         initprintf("Distribution of shareware Duke Nukem 3D is restricted in certain ways.\n");
