@@ -4277,11 +4277,15 @@ static int X_DoExecute(void)
         if (g_player[g_p].ps->knee_incs == 0 && sprite[g_player[g_p].ps->i].xrepeat >= 40)
             if (cansee(g_sp->x,g_sp->y,g_sp->z-(4<<8),g_sp->sectnum,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z+(16<<8),sprite[g_player[g_p].ps->i].sectnum))
             {
-                for (j=ud.multimode-1;j>=0;j--) // [JM] REWRITE THIS!
+                for (j=MAXPLAYERS-1; j >= 0; j--) // Anyone already stomping this guy?
                 {
-                    if (g_player[j].ps->actorsqu == g_i)
+                    if (g_player[j].ps == NULL || !g_player[j].connected)
+                        continue;
+
+                    if (g_player[j].ps->actorsqu == g_i) // Yes. Don't try.
                         break;
                 }
+
                 if (j == -1)
                 {
                     g_player[g_p].ps->knee_incs = 1;
