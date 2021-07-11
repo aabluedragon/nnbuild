@@ -10794,7 +10794,7 @@ int app_main(int32_t argc, char const* const* argv)
     strcat(root,"/");
 #endif
 
-    OSD_SetLogFile("eduke32-oldmp.log");
+    OSD_SetLogFile(APPBASENAME ".log");
     OSD_SetParameters(0, 0, 0, 12, 2, 12, OSD_ERROR, OSDTEXT_RED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
     OSD_SetFunctions(
         GAME_drawosdchar,
