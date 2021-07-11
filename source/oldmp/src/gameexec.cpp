@@ -657,7 +657,7 @@ static void X_Move(void)
                 if(g_player[g_p].ps->actorsqu == g_i)
                     return;
 
-                if (!A_CheckSpriteFlags(g_i, SPRITE_SMOOTHMOVE))
+                if (!A_CheckSpriteFlags(g_i, SFLAG_SMOOTHMOVE))
                 {
                     if (g_t[0]&1)
                         return;
@@ -1300,7 +1300,7 @@ static int X_DoExecute(void)
             {
                 intptr_t* moveptr = (intptr_t*)g_t[1];
 
-                if(!A_CheckSpriteFlags(g_i, SPRITE_NOWATERDIP))
+                if(!A_CheckSpriteFlags(g_i, SFLAG_NOWATERDIP))
                 {
                     // fix for flying/jumping monsters getting stuck in water
                     if (!(g_sp->hitag & jumptoplayer ||

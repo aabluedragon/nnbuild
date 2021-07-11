@@ -4810,7 +4810,7 @@ int A_Spawn(int j, int pn)
                 if (sp->xrepeat == 0 || sp->yrepeat == 0)
                     sp->xrepeat = sp->yrepeat = 1;
 
-                if (A_CheckSpriteFlags(i, SPRITE_BADGUY))
+                if (A_CheckSpriteFlags(i, SFLAG_BADGUY))
                 {
                     if (ud.monsters_off == 1)
                     {
@@ -4821,7 +4821,7 @@ int A_Spawn(int j, int pn)
 
                     A_Fall(i);
 
-                    if (A_CheckSpriteFlags(i, SPRITE_BADGUYSTAYPUT))
+                    if (A_CheckSpriteFlags(i, SFLAG_BADGUYSTAYPUT))
                         ActorExtra[i].actorstayput = sp->sectnum;
 
                     g_player[myconnectindex].ps->max_actors_killed++;
@@ -6638,7 +6638,7 @@ static int32_t G_MaybeTakeOnFloorPal(tspriteptr_t datspr, int32_t sect)
     int32_t dapal = sector[sect].floorpal;
 
     if (dapal && !g_noFloorPal[dapal]
-        && !A_CheckSpriteFlags(datspr->owner, SPRITE_NOPAL))
+        && !A_CheckSpriteFlags(datspr->owner, SFLAG_NOPAL))
     {
         datspr->pal = dapal;
         return 1;
@@ -6782,7 +6782,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     continue;
             }
 
-        if (A_CheckSpriteFlags(t->owner,SPRITE_NOSHADE))
+        if (A_CheckSpriteFlags(t->owner,SFLAG_NOSHADE))
             l = sprite[t->owner].shade;
         else
         {
@@ -7316,13 +7316,13 @@ PALONLY:
                 t->cstat |= 4;
         }
 
-        if (g_player[screenpeek].ps->heat_amount > 0 && g_player[screenpeek].ps->heat_on && (A_CheckEnemySprite(s) || A_CheckSpriteFlags(t->owner,SPRITE_NVG) || s->picnum == APLAYER || s->statnum == 13))
+        if (g_player[screenpeek].ps->heat_amount > 0 && g_player[screenpeek].ps->heat_on && (A_CheckEnemySprite(s) || A_CheckSpriteFlags(t->owner,SFLAG_NVG) || s->picnum == APLAYER || s->statnum == 13))
         {
             t->pal = 6;
             t->shade = 0;
         }
 
-        if (s->statnum == 13 || A_CheckEnemySprite(s) || A_CheckSpriteFlags(t->owner,SPRITE_SHADOW) || (s->picnum == APLAYER && s->owner >= 0))
+        if (s->statnum == 13 || A_CheckEnemySprite(s) || A_CheckSpriteFlags(t->owner,SFLAG_SHADOW) || (s->picnum == APLAYER && s->owner >= 0))
             if (t->statnum != TSPR_TEMP && s->picnum != EXPLOSION2 && s->picnum != HANGLIGHT && s->picnum != DOMELITE)
                 if (s->picnum != HOTMEAT)
                 {
@@ -10394,19 +10394,19 @@ static void A_InitEnemyFlags(void)
     int GreenSlimeFoodEnemies[] = { LIZTROOP, LIZMAN, PIGCOP, NEWBEAST };
 
     for (bssize_t i = GREENSLIME; i <= GREENSLIME + 7; i++)
-        SETFLAG(i, SPRITE_HARDCODED_BADGUY);
+        SETFLAG(i, SFLAG_HARDCODED_BADGUY);
 
     for (bssize_t i = ARRAY_SIZE(DukeEnemies) - 1; i >= 0; i--)
-        SETFLAG(DukeEnemies[i], SPRITE_HARDCODED_BADGUY);
+        SETFLAG(DukeEnemies[i], SFLAG_HARDCODED_BADGUY);
 
     for (bssize_t i = ARRAY_SIZE(SolidEnemies) - 1; i >= 0; i--)
-        SETFLAG(SolidEnemies[i], SPRITE_NODAMAGEPUSH);
+        SETFLAG(SolidEnemies[i], SFLAG_NODAMAGEPUSH);
 
     for (bssize_t i = ARRAY_SIZE(NoWaterDipEnemies) - 1; i >= 0; i--)
-        SETFLAG(NoWaterDipEnemies[i], SPRITE_NOWATERDIP);
+        SETFLAG(NoWaterDipEnemies[i], SFLAG_NOWATERDIP);
 
     for (bssize_t i = ARRAY_SIZE(GreenSlimeFoodEnemies) - 1; i >= 0; i--)
-        SETFLAG(GreenSlimeFoodEnemies[i], SPRITE_GREENSLIMEFOOD);
+        SETFLAG(GreenSlimeFoodEnemies[i], SFLAG_GREENSLIMEFOOD);
 }
 #undef SETFLAG
 

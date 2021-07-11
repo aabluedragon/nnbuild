@@ -211,7 +211,7 @@ static void G_PrecacheSprites(void)
 
     for (i=0;i<MAXTILES;i++)
     {
-        if (SpriteFlags[i] & SPRITE_PROJECTILE)
+        if (SpriteFlags[i] & SFLAG_PROJECTILE)
             tloadtile(i,1);
         if (SpriteCacheList[i][0] == i && SpriteCacheList[i][2])
             for (j = i; j <= SpriteCacheList[i][1]; j++)
@@ -965,7 +965,7 @@ static void prelevel(char g)
                 A_Spawn(-1,i);
 
             if (sprite[i].cstat & 2048)
-                ActorExtra[i].flags |= SPRITE_NOSHADE;
+                ActorExtra[i].flags |= SFLAG_NOSHADE;
         }
 
     lotaglist = 0;

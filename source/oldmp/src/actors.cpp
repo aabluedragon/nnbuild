@@ -389,7 +389,7 @@ SKIPWALLCHECK:
 
                 if (d < r && cansee(sj->x, sj->y, sj->z-(8<<8), sj->sectnum, s->x, s->y, s->z-(12<<8), s->sectnum))
                 {
-                    if (A_CheckSpriteFlags(j, SPRITE_DAMAGEEVENT))
+                    if (A_CheckSpriteFlags(j, SFLAG_DAMAGEEVENT))
                     {
                         Gv_SetVar(g_iReturnVarID, j, i, -1);
                         X_OnEvent(EVENT_DAMAGESPRITE, i, -1, -1);
@@ -402,7 +402,7 @@ SKIPWALLCHECK:
 
                     if (s->picnum == RPG && sj->extra > 0)
                         ActorExtra[j].picnum = RPG;
-                    else if (A_CheckSpriteFlags(i,SPRITE_PROJECTILE) && ActorExtra[i].projectile.workslike & PROJECTILE_RADIUS_PICNUM && sj->extra > 0)
+                    else if (A_CheckSpriteFlags(i,SFLAG_PROJECTILE) && ActorExtra[i].projectile.workslike & PROJECTILE_RADIUS_PICNUM && sj->extra > 0)
                         ActorExtra[j].picnum = s->picnum;
                     else
                     {
@@ -437,13 +437,13 @@ SKIPWALLCHECK:
                         else
                             ActorExtra[j].extra = damage;
 
-                        if (!A_CheckSpriteFlags(j, SPRITE_NODAMAGEPUSH))
+                        if (!A_CheckSpriteFlags(j, SFLAG_NODAMAGEPUSH))
                         {
                             if (sj->xvel < 0) sj->xvel = 0;
                             sj->xvel += (s->extra<<2);
                         }
 
-                        if (A_CheckSpriteFlags(j, SPRITE_DAMAGEEVENT))
+                        if (A_CheckSpriteFlags(j, SFLAG_DAMAGEEVENT))
                         {
                             Gv_SetVar(g_iReturnVarID, j, i, -1);
                             X_OnEvent(EVENT_POSTDAMAGESPRITE, i, -1, -1);
@@ -526,7 +526,7 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
         {
             if (sprite[spritenum].picnum == LIZMAN)
                 cd = 292L;
-            else if (A_CheckSpriteFlags(spritenum, SPRITE_BADGUY))
+            else if (A_CheckSpriteFlags(spritenum, SFLAG_BADGUY))
                 cd = sprite[spritenum].clipdist<<2;
             else
                 cd = 192L;
@@ -631,11 +631,11 @@ void A_AddToDeleteQueue(int spriteNum)
 
     auto& deleteSpriteNum = SpriteDeletionQueue[g_spriteDeleteQueuePos];
 
-    if (deleteSpriteNum >= 0 && ActorExtra[deleteSpriteNum].flags & SPRITE_QUEUEDFORDELETE)
+    if (deleteSpriteNum >= 0 && ActorExtra[deleteSpriteNum].flags & SFLAG_QUEUEDFORDELETE)
         A_DeleteSprite(deleteSpriteNum);
 
     deleteSpriteNum = spriteNum;
-    ActorExtra[spriteNum].flags |= SPRITE_QUEUEDFORDELETE;
+    ActorExtra[spriteNum].flags |= SFLAG_QUEUEDFORDELETE;
     g_spriteDeleteQueuePos = (g_spriteDeleteQueuePos + 1) % g_spriteDeleteQueueSize;
 }
 
@@ -842,7 +842,7 @@ static void G_MoveZombieActors(void)
                         case NUKEBARRELDENTED__STATIC:
                         case NUKEBARRELLEAKED__STATIC:
                         case TRIPBOMB__STATIC:
-                            if (sector[s->sectnum].ceilingstat & 1 && A_CheckSpriteFlags(j, SPRITE_NOSHADE) == 0)
+                            if (sector[s->sectnum].ceilingstat & 1 && A_CheckSpriteFlags(j, SFLAG_NOSHADE) == 0)
                                 s->shade = sector[s->sectnum].ceilingshade;
                             else s->shade = sector[s->sectnum].floorshade;
 
@@ -859,7 +859,7 @@ static void G_MoveZombieActors(void)
                     else ActorExtra[i].timetosleep = 0;
                 }
             }
-            if (A_CheckEnemySprite(s) && A_CheckSpriteFlags(i,SPRITE_NOSHADE) == 0)
+            if (A_CheckEnemySprite(s) && A_CheckSpriteFlags(i,SFLAG_NOSHADE) == 0)
             {
                 if (sector[s->sectnum].ceilingstat&1)
                     s->shade = sector[s->sectnum].ceilingshade;
@@ -925,14 +925,14 @@ int A_IncurDamage(int sn)
                     }
                 }
 
-                if (A_CheckSpriteTileFlags(ActorExtra[sn].picnum,SPRITE_PROJECTILE) && (ActorExtra[sn].projectile.workslike & PROJECTILE_RPG))
+                if (A_CheckSpriteTileFlags(ActorExtra[sn].picnum,SFLAG_PROJECTILE) && (ActorExtra[sn].projectile.workslike & PROJECTILE_RPG))
                 {
                     g_player[p].ps->vel.x +=
                         ActorExtra[sn].extra*(sintable[(ActorExtra[sn].ang+512)&2047])<<2;
                     g_player[p].ps->vel.y +=
                         ActorExtra[sn].extra*(sintable[ActorExtra[sn].ang&2047])<<2;
                 }
-                else if (A_CheckSpriteTileFlags(ActorExtra[sn].picnum,SPRITE_PROJECTILE))
+                else if (A_CheckSpriteTileFlags(ActorExtra[sn].picnum,SFLAG_PROJECTILE))
                 {
                     g_player[p].ps->vel.x +=
                         ActorExtra[sn].extra*(sintable[(ActorExtra[sn].ang+512)&2047])<<1;
@@ -2539,7 +2539,7 @@ static void G_MoveWeapons(void)
         ActorExtra[i].bpos = s->pos;
         // here
 
-        if (A_CheckSpriteFlags(i,SPRITE_PROJECTILE))
+        if (A_CheckSpriteFlags(i,SFLAG_PROJECTILE))
         {
             /* Custom projectiles.  This is a big hack. */
 
@@ -3109,7 +3109,7 @@ BOLT:
 static int A_CheckNonTeleporting(int const spriteNum)
 {
     int const tileNum = sprite[spriteNum].picnum;
-    return !!(A_CheckSpriteFlags(spriteNum, SPRITE_NOTELEPORT) || tileNum == SHARK || tileNum == COMMANDER || tileNum == OCTABRAIN
+    return !!(A_CheckSpriteFlags(spriteNum, SFLAG_NOTELEPORT) || tileNum == SHARK || tileNum == COMMANDER || tileNum == OCTABRAIN
         || (tileNum >= GREENSLIME && tileNum <= GREENSLIME + 7));
 }
 
@@ -3324,7 +3324,7 @@ static void G_MoveTransports(void)
                         warpspriteto = 1;
                     }
 
-                    if (warpspriteto && A_CheckSpriteFlags(j,SPRITE_DECAL)) goto JBOLT;
+                    if (warpspriteto && A_CheckSpriteFlags(j,SFLAG_DECAL)) goto JBOLT;
 
                     if (warpspriteto) switch (DynamicTileMap[sprite[j].picnum])
                     {
@@ -4205,7 +4205,7 @@ static void G_MoveActors(void)
                 j = headspritesect[sect];
                 while (j>=0)
                 {
-                    if (A_CheckSpriteFlags(j, SPRITE_GREENSLIMEFOOD))
+                    if (A_CheckSpriteFlags(j, SFLAG_GREENSLIMEFOOD))
                     {
                         if (ldist(s,&sprite[j]) < 768 && (klabs(s->z-sprite[j].z)<8192))   //Gulp them
                         {
@@ -6171,7 +6171,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             j = headspritesect[SECT(spriteNum)];
             while (j >= 0)
             {
-                if (sprite[j].cstat&16 && A_CheckSpriteFlags(j,SPRITE_NOSHADE) == 0)
+                if (sprite[j].cstat&16 && A_CheckSpriteFlags(j,SFLAG_NOSHADE) == 0)
                 {
                     if (pSector->ceilingstat&1)
                         sprite[j].shade = pSector->ceilingshade;
@@ -6441,7 +6441,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 j = headspritesect[SECT(spriteNum)];
                 while (j >= 0)
                 {
-                    if (sprite[j].cstat&16 && A_CheckSpriteFlags(j,SPRITE_NOSHADE) == 0)
+                    if (sprite[j].cstat&16 && A_CheckSpriteFlags(j,SFLAG_NOSHADE) == 0)
                     {
                         if (pSector->ceilingstat&1)
                             sprite[j].shade = pSector->ceilingshade;
@@ -6478,7 +6478,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 {
                     if (sprite[j].cstat&16)
                     {
-                        if (pSector->ceilingstat&1 && A_CheckSpriteFlags(j,SPRITE_NOSHADE) == 0)
+                        if (pSector->ceilingstat&1 && A_CheckSpriteFlags(j,SFLAG_NOSHADE) == 0)
                             sprite[j].shade = pSector->ceilingshade;
                         else sprite[j].shade = pSector->floorshade;
                     }
@@ -7630,7 +7630,7 @@ int A_CheckSpriteTileFlags(int iPicnum, int iType)
 
 int A_CheckEnemyTile(int pn)
 {
-    return ((SpriteFlags[pn] & (SPRITE_HARDCODED_BADGUY | SPRITE_BADGUY)) != 0);
+    return ((SpriteFlags[pn] & (SFLAG_HARDCODED_BADGUY | SFLAG_BADGUY)) != 0);
 }
 
 int A_CheckEnemySprite(const void *s)
@@ -7727,7 +7727,7 @@ void G_MoveWorld(void)
             {
                 j = nextspritestat[i];
 
-                if (A_CheckSpriteFlags(i, SPRITE_NOEVENTCODE))
+                if (A_CheckSpriteFlags(i, SFLAG_NOEVENTCODE))
                 {
                     i = j;
                     continue;
@@ -7767,7 +7767,7 @@ void G_MoveWorld(void)
             {
                 j = nextspritestat[i];
 
-                if (A_CheckSpriteFlags(i, SPRITE_NOEVENTCODE))
+                if (A_CheckSpriteFlags(i, SFLAG_NOEVENTCODE))
                 {
                     i = j;
                     continue;

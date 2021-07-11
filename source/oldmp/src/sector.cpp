@@ -1695,14 +1695,14 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
     int16_t sectNum = -1;
     walltype* pWall = &wall[wallNum];
 
-    if ((SpriteFlags[pWall->overpicnum] & SPRITE_DAMAGEEVENT) || (SpriteFlags[pWall->picnum] & SPRITE_DAMAGEEVENT))
+    if ((SpriteFlags[pWall->overpicnum] & SFLAG_DAMAGEEVENT) || (SpriteFlags[pWall->picnum] & SFLAG_DAMAGEEVENT))
     {
         if (X_OnEventWithReturn(EVENT_DAMAGEWALL, spriteNum, -1, wallNum) < 0)
             return;
     }
 
     if (pWall->overpicnum == MIRROR && pWall->pal != 4 &&
-        A_CheckSpriteFlags(spriteNum, SPRITE_PROJECTILE) &&
+        A_CheckSpriteFlags(spriteNum, SFLAG_PROJECTILE) &&
         (ProjectileData[spriteNum].workslike & PROJECTILE_RPG))
     {
         if (pWall->nextwall == -1 || wall[pWall->nextwall].pal != 4)
@@ -2065,7 +2065,7 @@ void P_CheckTouchDamage(DukePlayer_t *p,int j)
 void Sect_DamageFloor_Internal(int const spriteNum, int const sectNum)
 {
     int16_t tileNum = sector[sectNum].floorpicnum;
-    if (SpriteFlags[tileNum] & SPRITE_DAMAGEEVENT)
+    if (SpriteFlags[tileNum] & SFLAG_DAMAGEEVENT)
     {
         if (X_OnEventWithReturn(EVENT_DAMAGEFLOOR, spriteNum, -1, sectNum) < 0)
             return;
@@ -2081,7 +2081,7 @@ void Sect_DamageFloor(int const spriteNum, int const sectNum)
 void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
 {
     int16_t tileNum = sector[sectNum].ceilingpicnum;
-    if (SpriteFlags[tileNum] & SPRITE_DAMAGEEVENT)
+    if (SpriteFlags[tileNum] & SFLAG_DAMAGEEVENT)
     {
         if (X_OnEventWithReturn(EVENT_DAMAGECEILING, spriteNum, -1, sectNum) < 0)
             return;
@@ -2151,7 +2151,7 @@ void A_DamageObject_Internal(int i,int sn)
 
     i &= (MAXSPRITES-1);
 
-    if (A_CheckSpriteFlags(i, SPRITE_DAMAGEEVENT))
+    if (A_CheckSpriteFlags(i, SFLAG_DAMAGEEVENT))
     {
         Gv_SetVar(g_iReturnVarID, i, sn, -1);
         X_OnEvent(EVENT_DAMAGESPRITE, sn, -1, -1);
@@ -2160,7 +2160,7 @@ void A_DamageObject_Internal(int i,int sn)
             return;
     }
 
-    if (A_CheckSpriteFlags(sn,SPRITE_PROJECTILE))
+    if (A_CheckSpriteFlags(sn,SFLAG_PROJECTILE))
         if (ActorExtra[sn].projectile.workslike & PROJECTILE_RPG)
             rpg = 1;
 
@@ -2534,7 +2534,7 @@ void A_DamageObject_Internal(int i,int sn)
 
                 if ((PN(i) != DRONE) && (PN(i) != ROTATEGUN) && (PN(i) != COMMANDER) && (PN(i) < GREENSLIME || PN(i) > GREENSLIME+7))
                     if (sprite[sn].picnum != FREEZEBLAST)
-                        if (!A_CheckSpriteFlags(i, SPRITE_BADGUY) || A_CheckSpriteFlags(i, SPRITE_HURTSPAWNBLOOD))
+                        if (!A_CheckSpriteFlags(i, SFLAG_BADGUY) || A_CheckSpriteFlags(i, SFLAG_HURTSPAWNBLOOD))
                         {
                             j = A_Spawn(sn,JIBS6);
                             if (sprite[sn].pal == 6)
@@ -2556,7 +2556,7 @@ void A_DamageObject_Internal(int i,int sn)
                         A_Shoot(i,BLOODSPLAT4);
                     }
 
-                if (!A_CheckSpriteFlags(i, SPRITE_NODAMAGEPUSH))
+                if (!A_CheckSpriteFlags(i, SFLAG_NODAMAGEPUSH))
                 {
                     if (sprite[i].extra > 0)
                     {
@@ -2588,7 +2588,7 @@ void A_DamageObject_Internal(int i,int sn)
                 ActorExtra[i].ang = sprite[sn].ang;
                 ActorExtra[i].owner = sprite[sn].owner;
 
-                if (A_CheckSpriteFlags(i, SPRITE_DAMAGEEVENT))
+                if (A_CheckSpriteFlags(i, SFLAG_DAMAGEEVENT))
                 {
                     Gv_SetVar(g_iReturnVarID, i, sn, -1);
                     X_OnEvent(EVENT_POSTDAMAGESPRITE, sn, -1, -1);

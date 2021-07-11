@@ -319,7 +319,7 @@ static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
             return -1;
         if (g_player[s->yvel].ps->auto_aim == 2)
         {
-            if (A_CheckSpriteTileFlags(atwith,SPRITE_PROJECTILE) && (ProjectileData[atwith].workslike & PROJECTILE_RPG))
+            if (A_CheckSpriteTileFlags(atwith,SFLAG_PROJECTILE) && (ProjectileData[atwith].workslike & PROJECTILE_RPG))
                 return -1;
             else switch (DynamicTileMap[atwith])
                 {
@@ -784,8 +784,8 @@ static int P_PostFireHitscan(int playerNum, int const spriteNum, hitdata_t* cons
 
                 A_SetHitData(decalSprite, hitData);
 
-                if (!A_CheckSpriteFlags(decalSprite, SPRITE_DECAL))
-                    ActorExtra[decalSprite].flags |= SPRITE_DECAL;
+                if (!A_CheckSpriteFlags(decalSprite, SFLAG_DECAL))
+                    ActorExtra[decalSprite].flags |= SFLAG_DECAL;
 
                 int32_t diffZ;
                 spriteheightofs(decalSprite, &diffZ, 0);
@@ -864,7 +864,7 @@ int A_Shoot(int i,int atwith)
     hitdata_t hit;
 
     // Do flashes first, in case we need to block the rest for prediction.
-    if (A_CheckSpriteTileFlags(atwith, SPRITE_PROJECTILE) && (pProj->workslike & (PROJECTILE_HITSCAN | PROJECTILE_RPG)))
+    if (A_CheckSpriteTileFlags(atwith, SFLAG_PROJECTILE) && (pProj->workslike & (PROJECTILE_HITSCAN | PROJECTILE_RPG)))
     {
         if (s->extra >= 0)
             s->shade = pProj->shade;
@@ -930,7 +930,7 @@ int A_Shoot(int i,int atwith)
         }
     }
 
-    if (A_CheckSpriteTileFlags(atwith,SPRITE_PROJECTILE))
+    if (A_CheckSpriteTileFlags(atwith,SFLAG_PROJECTILE))
     {
         /* Custom projectiles.  This is a big hack. */
 
@@ -1006,8 +1006,8 @@ int A_Shoot(int i,int atwith)
                                         {
                                             k = A_Spawn(i,pProj->decal);
 
-                                            if (!(SpriteFlags[pProj->decal] & SPRITE_DECAL))
-                                                SpriteFlags[pProj->decal] |= SPRITE_DECAL;
+                                            if (!(SpriteFlags[pProj->decal] & SFLAG_DECAL))
+                                                SpriteFlags[pProj->decal] |= SFLAG_DECAL;
 
                                             k = A_Spawn(i,pProj->decal);
                                             sprite[k].xvel = -1;

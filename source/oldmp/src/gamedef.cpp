@@ -2800,9 +2800,9 @@ static int C_ParseCommand(void)
 
         if (tw == CON_USERACTOR)
         {
-            if (j & 1) SpriteFlags[*g_scriptPtr] |= SPRITE_BADGUY;
-            if (j & 2) SpriteFlags[*g_scriptPtr] |= (SPRITE_BADGUY | SPRITE_BADGUYSTAYPUT);
-            if (j & 4) SpriteFlags[*g_scriptPtr] |= SPRITE_ROTFIXED;
+            if (j & 1) SpriteFlags[*g_scriptPtr] |= SFLAG_BADGUY;
+            if (j & 2) SpriteFlags[*g_scriptPtr] |= (SFLAG_BADGUY | SFLAG_BADGUYSTAYPUT);
+            if (j & 4) SpriteFlags[*g_scriptPtr] |= SFLAG_ROTFIXED;
         }
 
         for (j=0;j<4;j++)
@@ -4062,7 +4062,7 @@ static int C_ParseCommand(void)
         z = *(g_scriptPtr-1);
 
         C_SetProjectile(j,y,z);
-        SpriteFlags[j] |= SPRITE_PROJECTILE;
+        SpriteFlags[j] |= SFLAG_PROJECTILE;
         return 0;
     }
 
@@ -4086,7 +4086,7 @@ static int C_ParseCommand(void)
             return 0;
         }
 
-        SpriteFlags[j] |= SPRITE_DAMAGEEVENT;
+        SpriteFlags[j] |= SFLAG_DAMAGEEVENT;
 
         return 0;
     }
@@ -4115,7 +4115,7 @@ static int C_ParseCommand(void)
 
         for (; i <= j; i++)
         {
-            SpriteFlags[i] |= SPRITE_DAMAGEEVENT;
+            SpriteFlags[i] |= SFLAG_DAMAGEEVENT;
         }
 
         return 0;
@@ -4179,16 +4179,16 @@ static int C_ParseCommand(void)
         switch (tw)
         {
         case CON_SPRITESHADOW:
-            SpriteFlags[*g_scriptPtr] |= SPRITE_SHADOW;
+            SpriteFlags[*g_scriptPtr] |= SFLAG_SHADOW;
             break;
         case CON_SPRITENVG:
-            SpriteFlags[*g_scriptPtr] |= SPRITE_NVG;
+            SpriteFlags[*g_scriptPtr] |= SFLAG_NVG;
             break;
         case CON_SPRITENOSHADE:
-            SpriteFlags[*g_scriptPtr] |= SPRITE_NOSHADE;
+            SpriteFlags[*g_scriptPtr] |= SFLAG_NOSHADE;
             break;
         case CON_SPRITENOPAL:
-            SpriteFlags[*g_scriptPtr] |= SPRITE_NOPAL;
+            SpriteFlags[*g_scriptPtr] |= SFLAG_NOPAL;
             break;
         case CON_PRECACHE:
             SpriteCacheList[*g_scriptPtr][0] = j;
