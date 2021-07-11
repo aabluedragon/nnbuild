@@ -61,13 +61,13 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "FileDescription", "EDuke32"
+            VALUE "FileDescription", "NetDuke32"
             VALUE "FileVersion", STRFILEVER
-            VALUE "InternalName", "EDuke32"
+            VALUE "InternalName", "NetDuke32"
             VALUE "LegalCopyright", "Copyright © 1996, 2003 3D Realms Entertainment, 2004-2008 EDuke32 Team"
             VALUE "LegalTrademarks", "Duke Nukem® is a Registered Trademark of Apogee Software, Ltd."
-            VALUE "OriginalFilename", "eduke32-oldmp.exe"
-            VALUE "ProductName", "EDuke32"
+            VALUE "OriginalFilename", "netduke32.exe"
+            VALUE "ProductName", "NetDuke32"
             VALUE "ProductVersion", STRPRODUCTVER
         END
     END

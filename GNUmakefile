@@ -779,7 +779,7 @@ ifeq ($(PLATFORM),DARWIN)
     endif
 endif
 
-#### EDuke32-OldMP
+#### NetDuke32
 
 oldmp := oldmp
 
@@ -801,13 +801,13 @@ ifeq ($(USE_DISCORDRPC), 1)
     oldmp_cflags += -DDISCORD_RPC
 endif
 
-oldmp_game := eduke32-oldmp
+oldmp_game := netduke32
 
 ifneq (,$(APPBASENAME))
     oldmp_game := $(APPBASENAME)
 endif
 
-oldmp_game_proper := EDuke32-OldMP
+oldmp_game_proper := NetDuke32
 
 oldmp_game_objs := \
     actors.cpp \

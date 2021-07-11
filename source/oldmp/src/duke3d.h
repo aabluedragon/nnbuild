@@ -26,12 +26,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 # define _duke3d_h_
 
 #ifndef APPNAME
-#define APPNAME "EDuke32-OldMP"
+#define APPNAME "NetDuke32"
 #endif
 #ifndef APPBASENAME
-#define APPBASENAME "eduke32-oldmp"
+#define APPBASENAME "netduke32"
 #endif
-#define VERSION "Release 34"
+#define VERSION "v1"
 
 #define HEAD2 APPNAME " " VERSION
 
