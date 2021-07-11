@@ -1838,78 +1838,71 @@ int A_Shoot(int i,int atwith)
     return -1;
 }
 
-static void P_DisplaySpitAnim(int snum)
+static vec2_t P_GetDisplayBaseXY(DukePlayer_t const* const pPlayer)
 {
-    int i, a, x, y, z;
-
-    if (g_player[snum].ps->loogcnt == 0) return;
-
-    y = (g_player[snum].ps->loogcnt<<2);
-    for (i=0;i<g_player[snum].ps->numloogs;i++)
+    return vec2_t
     {
-        a = klabs(sintable[((g_player[snum].ps->loogcnt+i)<<5)&2047])>>5;
-        z = 4096+((g_player[snum].ps->loogcnt+i)<<9);
-        x = (-fix16_to_int(g_player[snum].inputBits->q16avel)) + (sintable[((g_player[snum].ps->loogcnt+i)<<6)&2047]>>10);
-
-        rotatesprite(
-            (g_player[snum].ps->loogiex[i]+x)<<16,(200+g_player[snum].ps->loogiey[i]-y)<<16,z-(i<<8),256-a,
-            LOOGIE,0,0,2,0,0,xdim-1,ydim-1);
-    }
+        (fix16_to_int(g_player[screenpeek].inputBits->q16avel) >> 5) - (pPlayer->look_ang >> 1),
+        (klabs(pPlayer->look_ang) / 9) - (pPlayer->hard_landing << 3) - (fix16_to_int(pPlayer->q16horiz - pPlayer->q16horizoff) >> 4),
+    };
 }
 
-static int P_GetHudPal(const DukePlayer_t* p)
+static void P_DisplaySpitAnim(int snum)
 {
-    if (sprite[p->i].pal == 1)
-        return 1;
+    auto const pPlayer = g_player[snum].ps;
+    int const  loogCounter = pPlayer->loogcnt;
 
-    if (p->cursectnum >= 0)
+    if (loogCounter == 0)
+        return;
+
+    int const rotY = loogCounter << 2;
+    for (int i = 0; i < pPlayer->numloogs; i++)
     {
-        int const hudPal = sector[p->cursectnum].floorpal;
-        if (!g_noFloorPal[hudPal])
-            return hudPal;
-    }
+        int const rotAng = klabs(sintable[((loogCounter + i) << 5) & 2047]) >> 5;
+        int const rotZoom = 4096 + ((loogCounter + i) << 9);
+        int const rotX = (-fix16_to_int(g_player[snum].inputBits->q16avel) >> 1) + (sintable[((loogCounter + i) << 6) & 2047] >> 10);
 
-    return 0;
+        rotatesprite_fs_id((pPlayer->loogiex[i] + rotX) << 16, (200 + pPlayer->loogiey[i] - rotY) << 16, rotZoom - (i << 8),
+            256 - rotAng, LOOGIE, 0, 0, 2, 16 + i);
+    }
 }
 
 static int P_DisplayFistAnim(int gs,int snum)
 {
-    int looking_arc,fisti,fistpal;
-    int fistzoom, fistz;
+    DukePlayer_t const* const pPlayer = g_player[snum].ps;
+    int fistInc = pPlayer->fist_incs;
 
-    fisti = g_player[snum].ps->fist_incs;
-    if (fisti > 32) fisti = 32;
-    if (fisti <= 0) return 0;
+    if (fistInc > 32)
+        fistInc = 32;
 
-    looking_arc = klabs(g_player[snum].ps->look_ang)/9;
+    if (fistInc <= 0)
+        return 0;
 
-    fistzoom = 65536L - (sintable[(512+(fisti<<6))&2047]<<2);
-    if (fistzoom > 90612L)
-        fistzoom = 90612L;
-    if (fistzoom < 40920)
-        fistzoom = 40290;
-    fistz = 194 + (sintable[((6+fisti)<<7)&2047]>>9);
+    auto const base = P_GetDisplayBaseXY(pPlayer);
+    int const fistX = 222 + base.x - fistInc;
+    int const fistY = 194 + base.y + (sintable[((6 + fistInc) << 7) & 2047] >> 9);
+    int const fistZoom = clamp(65536 - (sintable[(512 + (fistInc << 6)) & 2047] << 2), 40920, 90612);
+    int const fistPal = P_GetHudPal(pPlayer);
+    int       wx[2] = { windowxy1.x, windowxy2.x };
+    int const wy[2] = { windowxy1.y, windowxy2.y };
 
-    if (sprite[g_player[snum].ps->i].pal == 1)
-        fistpal = 1;
-    else if (g_player[snum].ps->cursectnum >= 0)
-        fistpal = sector[g_player[snum].ps->cursectnum].floorpal;
-    else fistpal = 0;
-
-    rotatesprite(
-        (-fisti+222+(fix16_to_int(g_player[snum].inputBits->q16avel)>>4))<<16,
-        (looking_arc+fistz)<<16,
-        fistzoom,0,FIST,gs,fistpal,2,0,0,xdim-1,ydim-1);
+    guniqhudid = W_FIST;
+    rotatesprite(fistX << 16, fistY << 16, fistZoom, 0, FIST, gs, fistPal, RS_AUTO | RS_LERP, wx[0], wy[0], wx[1], wy[1]);
+    guniqhudid = 0;
 
     return 1;
 }
 
+#define DRAWEAP_CENTER 262144
 #define weapsc(sc) scale(sc,ud.weaponscale,100)
 
-static void G_DrawTileScaled(int x, int y, int tilenum, int shade, int orientation, int p)
+static void G_DrawTileScaled(int x, int y, int tilenum, int shade, int orientation, int p, int uniqueID = 0)
 {
     int a = 0;
     int xoff = 192;
+    int const restoreid = guniqhudid;
+
+    guniqhudid = uniqueID;
 
     switch (g_currentweapon)
     {
@@ -1935,15 +1928,17 @@ static void G_DrawTileScaled(int x, int y, int tilenum, int shade, int orientati
 #endif
     rotatesprite(weapsc((orientation & 1024) ? x : (x << 16)) + ((xoff - weapsc(xoff)) << 16),
         weapsc((orientation & 1024) ? y : (y << 16)) + ((200 - weapsc(200)) << 16),
-        weapsc(65536L), a, tilenum, shade, p, (2 | orientation), windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+        weapsc(65536L), a, tilenum, shade, p, (RS_AUTO | orientation), windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+
+    guniqhudid = restoreid;
 }
 
-static void G_DrawWeaponTile(int x, int y, int tilenum, int shade, int orientation, int p)
+static void G_DrawWeaponTile(int x, int y, int tilenum, int shade, int orientation, int p, int uniqueID = 0)
 {
     if (!ud.drawweapon)
         return;
     else if (ud.drawweapon == 1)
-        G_DrawTileScaled(x,y,tilenum,shade,orientation,p);
+        G_DrawTileScaled(x,y,tilenum,shade,orientation,p,uniqueID);
     else if (ud.drawweapon == 2)
     {
         switch (g_currentweapon)
@@ -1959,54 +1954,79 @@ static void G_DrawWeaponTile(int x, int y, int tilenum, int shade, int orientati
         case HANDREMOTE_WEAPON:
         case HANDBOMB_WEAPON:
         case SHOTGUN_WEAPON:
-            rotatesprite(160<<16,(180+(g_player[screenpeek].ps->weapon_pos*g_player[screenpeek].ps->weapon_pos))<<16,scale(65536,ud.statusbarscale,100),0,g_currentweapon==GROW_WEAPON?GROWSPRITEICON:WeaponPickupSprites[g_currentweapon],0,0,2,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);
+            rotatesprite(160<<16,(180+(g_player[screenpeek].ps->weapon_pos*g_player[screenpeek].ps->weapon_pos))<<16,scale(65536,ud.statusbarscale,100),0,g_currentweapon==GROW_WEAPON?GROWSPRITEICON:WeaponPickupSprites[g_currentweapon],0,0,RS_AUTO,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);
             break;
         }
     }
 }
 
-static int P_DisplayKneeAnim(int gs,int snum)
+static inline void G_DrawWeaponTileUnfaded(int weaponX, int weaponY, int weaponTile, int weaponShade, int weaponBits, int p, int uniqueID = 0)
 {
-    static signed char knee_y[] = {0,-8,-16,-32,-64,-84,-108,-108,-108,-72,-32,-8};
-    int looking_arc, pal = g_player[snum].ps->palookup;
+    G_DrawTileScaled(weaponX, weaponY, weaponTile, weaponShade, weaponBits, p, uniqueID); // skip G_DrawWeaponTile
+}
 
-    if (g_player[snum].ps->knee_incs > 11 || g_player[snum].ps->knee_incs == 0 || sprite[g_player[snum].ps->i].extra <= 0) return 0;
+int P_GetHudPal(const DukePlayer_t* pPlayer)
+{
+    if (sprite[pPlayer->i].pal == 1)
+        return 1;
 
-    looking_arc = knee_y[g_player[snum].ps->knee_incs] + klabs(g_player[snum].ps->look_ang)/9;
-
-    looking_arc -= (g_player[snum].ps->hard_landing<<3);
-
-    if (sprite[g_player[snum].ps->i].pal == 1)
-        pal = 1;
-    else if (g_player[snum].ps->cursectnum >= 0)
+    if (pPlayer->cursectnum >= 0)
     {
-        pal = sector[g_player[snum].ps->cursectnum].floorpal;
-        if (pal == 0)
-            pal = g_player[snum].ps->palookup;
+        int const hudPal = sector[pPlayer->cursectnum].floorpal;
+        if (!g_noFloorPal[hudPal])
+            return hudPal;
     }
 
-    G_DrawTileScaled(105+(fix16_to_int(g_player[snum].inputBits->q16avel)>>4)-(g_player[snum].ps->look_ang>>1)+(knee_y[g_player[snum].ps->knee_incs]>>2),looking_arc+280-(fix16_to_int(g_player[snum].ps->q16horiz-g_player[snum].ps->q16horizoff)>>4),KNEE,gs,4+262144,pal);
+    return 0;
+}
+
+int P_GetKneePal(DukePlayer_t const* pPlayer)
+{
+    int hudPal = P_GetHudPal(pPlayer);
+    return hudPal == 0 ? pPlayer->palookup : hudPal;
+}
+
+static int P_DisplayKneeAnim(int gs,int snum)
+{
+    static int8_t const knee_y[] = {0,-8,-16,-32,-64,-84,-108,-108,-108,-72,-32,-8};
+    auto const ps = g_player[snum].ps;
+
+    if (ps->knee_incs == 0)
+        return 0;
+
+    // Event
+
+    if (ps->knee_incs >= ARRAY_SIZE(knee_y) || sprite[ps->i].extra <= 0)
+        return 0;
+
+    auto const base = P_GetDisplayBaseXY(ps);
+    int const kneeX = 105 + base.x + (knee_y[ps->knee_incs] >> 2);
+    int const kneeY = 280 + base.y + knee_y[ps->knee_incs];
+    int const kneePal = P_GetKneePal(ps);
+
+    G_DrawTileScaled(kneeX, kneeY, KNEE, gs, 4 | DRAWEAP_CENTER | RS_LERP, kneePal, W_KNEE);
 
     return 1;
 }
 
 static int P_DisplayKnuckleAnim(int gs,int snum)
 {
-    static char knuckle_frames[] = {0,1,2,2,3,3,3,2,2,1,0};
-    int looking_arc, pal = 0;
+    static char knuckleFrames[] = {0,1,2,2,3,3,3,2,2,1,0};
+    auto const pPlayer = g_player[snum].ps;
 
-    if (g_player[snum].ps->knuckle_incs == 0 || sprite[g_player[snum].ps->i].extra <= 0) return 0;
+    if (pPlayer->knuckle_incs == 0)
+        return 0;
 
-    looking_arc = klabs(g_player[snum].ps->look_ang)/9;
+    if ((unsigned)(pPlayer->knuckle_incs >> 1) >= ARRAY_SIZE(knuckleFrames) || sprite[pPlayer->i].extra <= 0)
+        return 0;
 
-    looking_arc -= (g_player[snum].ps->hard_landing<<3);
+    auto const base = P_GetDisplayBaseXY(pPlayer);
+    int const knuckleX = 160 + base.x;
+    int const knuckleY = 180 + base.y;
+    int const knuckleTile = CRACKKNUCKLES + knuckleFrames[pPlayer->knuckle_incs >> 1];
+    int const knucklePal = P_GetHudPal(pPlayer);
 
-    if (sprite[g_player[snum].ps->i].pal == 1)
-        pal = 1;
-    else if (g_player[snum].ps->cursectnum >= 0)
-        pal = sector[g_player[snum].ps->cursectnum].floorpal;
-
-    G_DrawTileScaled(160+(fix16_to_int(g_player[snum].inputBits->q16avel)>>4)-(g_player[snum].ps->look_ang>>1),looking_arc+180-(fix16_to_int(g_player[snum].ps->q16horiz-g_player[snum].ps->q16horizoff)>>4),CRACKKNUCKLES+knuckle_frames[g_player[snum].ps->knuckle_incs>>1],gs,4+262144,pal);
+    G_DrawTileScaled(knuckleX, knuckleY, knuckleTile, gs, RS_YFLIP | DRAWEAP_CENTER | RS_LERP, knucklePal, W_KNUCKLES);
 
     return 1;
 }
@@ -2139,17 +2159,13 @@ static int P_DisplayTip(int tipShade, int playerNum)
     if ((unsigned)pPlayer->tipincs >= ARRAY_SIZE(tip_y_offsets))
         return 1;
 
-    int const tipY = (klabs(pPlayer->look_ang) / 9) - (pPlayer->hard_landing << 3);
+    auto const base = P_GetDisplayBaseXY(pPlayer);
+    int const tipX = 170 + base.x;
+    int const tipY = 240 + base.y + (tip_y_offsets[pPlayer->tipincs] >> 1);
+    int const tipTile = TIP + ((26 - pPlayer->tipincs) >> 4);
     int const tipPal = P_GetHudPal(pPlayer);
-    int const tipYOffset = tip_y_offsets[pPlayer->tipincs] >> 1;
 
-    guniqhudid = 201;
-
-    G_DrawTileScaled(170 + (fix16_to_int(g_player[playerNum].inputBits->q16avel) >> 5) - (pPlayer->look_ang >> 1),
-        tipYOffset + tipY + 240 - (fix16_to_int(pPlayer->q16horiz - pPlayer->q16horizoff) >> 4),
-        TIP + ((26 - pPlayer->tipincs) >> 4), tipShade, 262144, tipPal);
-
-    guniqhudid = 0;
+    G_DrawTileScaled(tipX, tipY, tipTile, tipShade, DRAWEAP_CENTER | RS_LERP, tipPal, W_TIP);
 
     return 1;
 }
@@ -2157,321 +2173,296 @@ static int P_DisplayTip(int tipShade, int playerNum)
 static int P_DisplayAccessAnim(int gs,int snum)
 {
     static short access_y[] = {0,-8,-16,-32,-64,-84,-108,-108,-108,-108,-108,-108,-108,-108,-108,-108,-96,-72,-64,-32,-16};
-    int looking_arc;
-    int p;
 
-    if (g_player[snum].ps->access_incs == 0 || sprite[g_player[snum].ps->i].extra <= 0) return 0;
+    auto const pSprite = g_player[snum].ps;
 
-    looking_arc = access_y[g_player[snum].ps->access_incs] + klabs(g_player[snum].ps->look_ang)/9;
-    looking_arc -= (g_player[snum].ps->hard_landing<<3);
+    if (pSprite->access_incs == 0)
+        return 0;
 
-    if (g_player[snum].ps->access_spritenum >= 0)
-        p = sprite[g_player[snum].ps->access_spritenum].pal;
-    else p = 0;
-    //    else
-    //        p = wall[g_player[snum].ps->access_wallnum].pal;
+    if ((unsigned)pSprite->access_incs >= ARRAY_SIZE(access_y) - 4 || sprite[pSprite->i].extra <= 0)
+        return 1;
 
-    if ((g_player[snum].ps->access_incs-3) > 0 && (g_player[snum].ps->access_incs-3)>>3)
-        G_DrawTileScaled(170+(fix16_to_int(g_player[snum].inputBits->q16avel)>>4)-(g_player[snum].ps->look_ang>>1)+(access_y[g_player[snum].ps->access_incs]>>2),looking_arc+266-(fix16_to_int(g_player[snum].ps->q16horiz-g_player[snum].ps->q16horizoff)>>4),HANDHOLDINGLASER+(g_player[snum].ps->access_incs>>3),gs,262144,p);
-    else
-        G_DrawTileScaled(170+(fix16_to_int(g_player[snum].inputBits->q16avel)>>4)-(g_player[snum].ps->look_ang>>1)+(access_y[g_player[snum].ps->access_incs]>>2),looking_arc+266-(fix16_to_int(g_player[snum].ps->q16horiz-g_player[snum].ps->q16horizoff)>>4),HANDHOLDINGACCESS,gs,4+262144,p);
+    auto const base = P_GetDisplayBaseXY(pSprite);
+    int const accessX = 170 + base.x + (access_y[pSprite->access_incs] >> 2);
+    int const accessY = 266 + base.y + access_y[pSprite->access_incs];
+    int const accessPal = (pSprite->access_spritenum >= 0) ? sprite[pSprite->access_spritenum].pal : 0;
+
+    auto const accessMode = pSprite->access_incs > 3 && (pSprite->access_incs - 3) >> 3;
+    int  const accessTile = accessMode ? HANDHOLDINGLASER + (pSprite->access_incs >> 3) : HANDHOLDINGACCESS;
+    int  const accessBits = accessMode ? DRAWEAP_CENTER : (4 | DRAWEAP_CENTER);
+
+    G_DrawTileScaled(accessX, accessY, accessTile, gs, accessBits | RS_LERP | RS_FORCELERP, accessPal, W_ACCESSCARD);
 
     return 1;
 }
 
-
-static int fistsign;
-
 void P_DisplayWeapon(int snum)
 {
-    int gun_pos, looking_arc, cw;
-    int weapon_xoffset, i, j;
-    int o = 0,pal = 0;
-    DukePlayer_t *p = g_player[snum].ps;
-    spritetype *pSprite = ((snum == myconnectindex) && (numplayers > 1)) ? &predicted_pSprite : &sprite[p->i];
-    short *kb = &p->kickback_pic;
-    int gs;
+    auto const pPlayer = g_player[snum].ps;
+    auto const pSprite = ((snum == myconnectindex) && (numplayers > 1)) ? &predicted_pSprite : &sprite[pPlayer->i];
+    auto const weaponFrame = &pPlayer->kickback_pic;
+    int currentWeapon;
 
-    looking_arc = klabs(p->look_ang)/9;
-
-    gs = pSprite->shade;
-    if (gs > 24) gs = 24;
-
-    if (p->newowner >= 0 || ud.camerasprite >= 0 || p->over_shoulder_on > 0 || (sprite[p->i].pal != 1 && sprite[p->i].extra <= 0) || P_DisplayFistAnim(gs,snum) || P_DisplayKnuckleAnim(gs,snum) || P_DisplayTip(gs,snum) || P_DisplayAccessAnim(gs,snum))
+    if (pPlayer->newowner >= 0 || ud.camerasprite >= 0 || pPlayer->over_shoulder_on > 0 || (sprite[pPlayer->i].pal != 1 && sprite[pPlayer->i].extra <= 0))
         return;
 
-    P_DisplayKneeAnim(gs,snum);
+    int32_t weaponX = (160) - 90;
+    int32_t weaponY = klabs(pPlayer->look_ang)/9;
+    int32_t weaponYOffset = 80 - (pPlayer->weapon_pos * pPlayer->weapon_pos);
+    int32_t weaponShade = pSprite->shade <= 24 ? pSprite->shade : 24;
+    int32_t weaponBits = pPlayer->weapon_pos == -9 || pPlayer->weapon_pos >= 10 - 1 ? 0 : RS_LERP;
 
-    gun_pos = 80-(p->weapon_pos*p->weapon_pos);
+    if (P_DisplayFistAnim(weaponShade,snum) || P_DisplayKnuckleAnim(weaponShade,snum) || P_DisplayTip(weaponShade,snum) || P_DisplayAccessAnim(weaponShade,snum))
+        return;
 
-    weapon_xoffset = (160)-90;
+    P_DisplayKneeAnim(weaponShade,snum);
 
     if (ud.weaponsway)
     {
-        weapon_xoffset -= (sintable[((p->weapon_sway>>1)+512)&2047]/(1024+512));
-
-        if (sprite[p->i].xrepeat < 32)
-            gun_pos -= klabs(sintable[(p->weapon_sway<<2)&2047]>>9);
-        else gun_pos -= klabs(sintable[(p->weapon_sway>>1)&2047]>>10);
+        weaponX -= (sintable[((pPlayer->weapon_sway>>1)+512)&2047]/(1024+512));
+        weaponYOffset -= (sprite[pPlayer->i].xrepeat < 32) ? klabs(sintable[(pPlayer->weapon_sway << 2) & 2047] >> 9)
+                                               : klabs(sintable[(pPlayer->weapon_sway >> 1) & 2047] >> 10);
     }
-    else gun_pos -= 16;
+    else weaponYOffset -= 16;
 
-    weapon_xoffset -= 58 + p->weapon_ang;
-    gun_pos -= (p->hard_landing<<3);
+    weaponX -= 58 + pPlayer->weapon_ang;
+    weaponYOffset -= (pPlayer->hard_landing<<3);
 
-    if (p->last_weapon >= 0)
-        cw = aplWeaponWorksLike[p->last_weapon][snum];
-    else
-        cw = aplWeaponWorksLike[p->curr_weapon][snum];
+    currentWeapon = PWEAPON(screenpeek, (pPlayer->last_weapon >= 0) ? pPlayer->last_weapon : pPlayer->curr_weapon, WorksLike);
+    g_gun_pos=weaponYOffset;
+    g_looking_arc=weaponY;
+    g_currentweapon=currentWeapon;
+    g_weapon_xoffset=weaponX;
+    g_gs=weaponShade;
+    g_kb=*weaponFrame;
+    g_looking_angSR1=pPlayer->look_ang>>1;
 
-    g_gun_pos=gun_pos;
-    g_looking_arc=looking_arc;
-    g_currentweapon=cw;
-    g_weapon_xoffset=weapon_xoffset;
-    g_gs=gs;
-    g_kb=*kb;
-    g_looking_angSR1=p->look_ang>>1;
+    Gv_SetVar(g_iReturnVarID,0,pPlayer->i,snum);
+    X_OnEvent(EVENT_DISPLAYWEAPON, pPlayer->i, screenpeek, -1);
 
-    Gv_SetVar(g_iReturnVarID,0,p->i,snum);
-    X_OnEvent(EVENT_DISPLAYWEAPON, p->i, screenpeek, -1);
-
-    if (Gv_GetVar(g_iReturnVarID,p->i,snum) == 0)
+    if (Gv_GetVar(g_iReturnVarID,pPlayer->i,snum) == 0)
     {
-        j = 14-p->quick_kick;
-        if (j != 14 || p->last_quick_kick)
+        int const quickKickFrame = 14-pPlayer->quick_kick;
+        if (quickKickFrame != 14 || pPlayer->last_quick_kick)
         {
-            if (sprite[p->i].pal == 1)
-                pal = 1;
+            int const weaponPal = P_GetKneePal(pPlayer);
+
+            if (quickKickFrame < 6 || quickKickFrame > 12)
+                G_DrawTileScaled(weaponX + 80 - (pPlayer->look_ang >> 1), weaponY + 250 - weaponYOffset, KNEE, weaponShade,
+                    weaponBits | 4 | DRAWEAP_CENTER, weaponPal, W_KNEE2);
             else
-            {
-                if (p->cursectnum >= 0)
-                    pal = sector[p->cursectnum].floorpal;
-                if (pal == 0)
-                    pal = p->palookup;
-            }
-
-            guniqhudid = 100;
-            if (j < 6 || j > 12)
-                G_DrawTileScaled(weapon_xoffset+80-(p->look_ang>>1),
-                                 looking_arc+250-gun_pos,KNEE,gs,o|4|262144,pal);
-            else G_DrawTileScaled(weapon_xoffset+160-16-(p->look_ang>>1),
-                                      looking_arc+214-gun_pos,KNEE+1,gs,o|4|262144,pal);
-            guniqhudid = 0;
+                G_DrawTileScaled(weaponX + 160 - 16 - (pPlayer->look_ang >> 1), weaponY + 214 - weaponYOffset, KNEE + 1,
+                    weaponShade, weaponBits | 4 | DRAWEAP_CENTER, weaponPal, W_KNEE2);
         }
 
-        if (sprite[p->i].xrepeat < 40)
+        if (sprite[pPlayer->i].xrepeat < 40)
         {
-            if (p->jetpack_on == 0)
-            {
-                i = sprite[p->i].xvel;
-                looking_arc += 32-(i>>1);
-                fistsign += i>>1;
-            }
-            cw = weapon_xoffset;
-            weapon_xoffset += sintable[(fistsign)&2047]>>10;
-            G_DrawTile(weapon_xoffset+250-(p->look_ang>>1),
-                       looking_arc+258-(klabs(sintable[(fistsign)&2047]>>8)),
-                       FIST,gs,o);
-            weapon_xoffset = cw;
-            weapon_xoffset -= sintable[(fistsign)&2047]>>10;
-            G_DrawTile(weapon_xoffset+40-(p->look_ang>>1),
-                       looking_arc+200+(klabs(sintable[(fistsign)&2047]>>8)),
-                       FIST,gs,o|4);
-        }
-        else switch (cw)
+            static int32_t fistPos;
 
+            int const weaponPal = P_GetHudPal(pPlayer);
+
+            if (pPlayer->jetpack_on == 0)
+            {
+                int const playerXvel = sprite[pPlayer->i].xvel;
+                weaponY += 32 - (playerXvel >> 3);
+                fistPos += playerXvel >> 3;
+            }
+
+            currentWeapon = weaponX;
+            weaponX += sintable[(fistPos) & 2047] >> 10;
+            G_DrawTileScaled(weaponX + 250 - (pPlayer->look_ang >> 1), weaponY + 258 - (klabs(sintable[(fistPos) & 2047] >> 8)),
+                FIST, weaponShade, weaponBits, weaponPal, W_FIST);
+            weaponX = currentWeapon - (sintable[(fistPos) & 2047] >> 10);
+            G_DrawTileScaled(weaponX + 40 - (pPlayer->look_ang >> 1), weaponY + 200 + (klabs(sintable[(fistPos) & 2047] >> 8)), FIST,
+                weaponShade, weaponBits | 4, weaponPal, W_FIST2);
+        }
+        else
+        {
+            int const doAnim = !(sprite[pPlayer->i].pal == 1 || ud.pause_on || g_player[myconnectindex].ps->gm & MODE_MENU);
+            int const halfLookAng = pPlayer->look_ang >> 1;
+            int const weaponPal = P_GetHudPal(pPlayer);
+
+            switch (currentWeapon)
             {
 
             case KNEE_WEAPON:
 
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if ((*kb) > 0)
+                    if (*weaponFrame > 0)
                     {
-                        if (sprite[p->i].pal == 1)
-                            pal = 1;
+                        int const kneePal = P_GetKneePal(pPlayer);
+
+                        if (*weaponFrame < 5 || *weaponFrame > 9)
+                            G_DrawTileScaled(weaponX + 220 - halfLookAng, weaponY + 250 - weaponYOffset, KNEE,
+                                weaponShade, weaponBits, kneePal, W_KNEE);
                         else
-                        {
-                            if (p->cursectnum >= 0)
-                                pal = sector[p->cursectnum].floorpal;
-                            if (pal == 0)
-                                pal = p->palookup;
-                        }
-                        guniqhudid = cw;
-                        if ((*kb) < 5 || (*kb) > 9)
-                            G_DrawTileScaled(weapon_xoffset+220-(p->look_ang>>1),
-                                             looking_arc+250-gun_pos,KNEE,gs,o,pal);
-                        else
-                            G_DrawTileScaled(weapon_xoffset+160-(p->look_ang>>1),
-                                             looking_arc+214-gun_pos,KNEE+1,gs,o,pal);
-                        guniqhudid = 0;
+                            G_DrawTileScaled(weaponX + 160 - halfLookAng, weaponY + 214 - weaponYOffset, KNEE + 1,
+                                weaponShade, weaponBits, kneePal, W_KNEE);
                     }
                 }
                 break;
 
             case TRIPBOMB_WEAPON:
 
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
+                    weaponX += 8;
+                    weaponYOffset -= 10;
 
-                    weapon_xoffset += 8;
-                    gun_pos -= 10;
+                    if ((*weaponFrame) > 6)
+                        weaponY += ((*weaponFrame) << 3);
+                    else if ((*weaponFrame) < 4)
+                        G_DrawWeaponTile(weaponX + 142 - halfLookAng, weaponY + 234 - weaponYOffset, TRIPBOMB, weaponShade, weaponBits, weaponPal, W_TRIPBOMB);
 
-                    if ((*kb) > 6)
-                        looking_arc += ((*kb)<<3);
-                    else if ((*kb) < 4)
-                    {
-                        guniqhudid = cw<<2;
-                        G_DrawWeaponTile(weapon_xoffset+142-(p->look_ang>>1),
-                                         looking_arc+234-gun_pos,HANDHOLDINGLASER+3,gs,o,pal);
-                    }
+                    G_DrawWeaponTile(weaponX + 130 - halfLookAng, weaponY + 249 - weaponYOffset, HANDHOLDINGLASER + ((*weaponFrame) >> 2), weaponShade, weaponBits,
+                        weaponPal, W_TRIPBOMB_LEFTHAND);
 
-                    guniqhudid = cw;
-                    G_DrawWeaponTile(weapon_xoffset+130-(p->look_ang>>1),
-                                     looking_arc+249-gun_pos,
-                                     HANDHOLDINGLASER+((*kb)>>2),gs,o,pal);
-
-                    guniqhudid = cw<<1;
-                    G_DrawWeaponTile(weapon_xoffset+152-(p->look_ang>>1),
-                                     looking_arc+249-gun_pos,
-                                     HANDHOLDINGLASER+((*kb)>>2),gs,o|4,pal);
-                    guniqhudid = 0;
+                    G_DrawWeaponTile(weaponX + 152 - halfLookAng, weaponY + 249 - weaponYOffset, HANDHOLDINGLASER + ((*weaponFrame) >> 2), weaponShade, weaponBits | 4,
+                        weaponPal, W_TRIPBOMB_RIGHTHAND);
                 }
                 break;
 
             case RPG_WEAPON:
 
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
+                    weaponX -= sintable[(768 + ((*weaponFrame) << 7)) & 2047] >> 11;
+                    weaponYOffset += sintable[(768 + ((*weaponFrame) << 7)) & 2047] >> 11;
 
-                    weapon_xoffset -= sintable[(768+((*kb)<<7))&2047]>>11;
-                    gun_pos += sintable[(768+((*kb)<<7))&2047]>>11;
-
-                    if (*kb > 0)
+                    if (*weaponFrame > 0)
                     {
-                        if (*kb < 8)
+                        int totalTime;
+                        if (*weaponFrame < (WW2GI ? (totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime)) : 8))
+                            G_DrawWeaponTile(weaponX + 164, (weaponY << 1) + 176 - weaponYOffset, RPGGUN + ((*weaponFrame) >> 1), weaponShade, weaponBits, weaponPal,
+                                W_RPG_MUZZLE);
+                        else if (WW2GI)
                         {
-                            G_DrawWeaponTile(weapon_xoffset+164,(looking_arc<<1)+176-gun_pos,
-                                             RPGGUN+((*kb)>>1),gs,o,pal);
+                            totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
+                            int const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
+
+                            weaponYOffset -= (*weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
+                                ? 10 * ((*weaponFrame) - totalTime)   // down
+                                : 10 * (reloadTime - (*weaponFrame)); // up
                         }
                     }
 
-                    G_DrawWeaponTile(weapon_xoffset+164,(looking_arc<<1)+176-gun_pos,
-                                     RPGGUN,gs,o,pal);
+                    G_DrawWeaponTile(weaponX + 164, (weaponY << 1) + 176 - weaponYOffset, RPGGUN, weaponShade, weaponBits, weaponPal, W_RPG);
                 }
                 break;
 
             case SHOTGUN_WEAPON:
 
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
+                    weaponX -= 8;
 
+                    if (WW2GI)
+                    {
+                        int const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
+                        int const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
 
-                    weapon_xoffset -= 8;
+                        if (*weaponFrame > 0)
+                            weaponYOffset -= sintable[(*weaponFrame) << 7] >> 12;
 
-                    switch (*kb)
+                        if (*weaponFrame > 0 && doAnim)
+                            weaponX += 1 - (krand() & 3);
+
+                        if (*weaponFrame == 0)
+                        {
+                            G_DrawWeaponTile(weaponX + 146 - halfLookAng, weaponY + 202 - weaponYOffset, SHOTGUN, weaponShade, weaponBits | RS_FORCELERP,
+                                weaponPal, W_SHOTGUN);
+                        }
+                        else if (*weaponFrame <= totalTime)
+                        {
+                            G_DrawWeaponTile(weaponX + 146 - halfLookAng, weaponY + 202 - weaponYOffset, SHOTGUN + 1, weaponShade, weaponBits | RS_FORCELERP,
+                                weaponPal, W_SHOTGUN);
+                        }
+                        // else we are in 'reload time'
+                        else
+                        {
+                            weaponYOffset -= (*weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
+                                ? 10 * ((*weaponFrame) - totalTime)    // D
+                                : 10 * (reloadTime - (*weaponFrame));  // U
+
+                            G_DrawWeaponTile(weaponX + 146 - halfLookAng, weaponY + 202 - weaponYOffset, SHOTGUN, weaponShade, weaponBits | RS_FORCELERP,
+                                weaponPal, W_SHOTGUN);
+                        }
+
+                        break;
+                    }
+
+                    switch (*weaponFrame)
                     {
                     case 1:
                     case 2:
-                        guniqhudid = cw<<1;
-                        G_DrawWeaponTile(weapon_xoffset+168-(p->look_ang>>1),looking_arc+201-gun_pos,
-                                         SHOTGUN+2,-128,o,pal);
+                        G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 201 - weaponYOffset, SHOTGUN + 2, -128, weaponBits | RS_FORCELERP, weaponPal,
+                            W_SHOTGUN_MUZZLE);
                         fallthrough__;
                     case 0:
                     case 6:
                     case 7:
                     case 8:
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(weapon_xoffset+146-(p->look_ang>>1),looking_arc+202-gun_pos,
-                                         SHOTGUN,gs,o,pal);
-                        guniqhudid = 0;
+                        G_DrawWeaponTile(weaponX + 146 - halfLookAng, weaponY + 202 - weaponYOffset, SHOTGUN, weaponShade, weaponBits, weaponPal, W_SHOTGUN);
                         break;
+
                     case 3:
                     case 4:
+                        weaponYOffset -= 40;
+                        weaponX += 20;
+
+                        G_DrawWeaponTile(weaponX + 178 - halfLookAng, weaponY + 194 - weaponYOffset, SHOTGUN + 1 + ((*(weaponFrame)-1) >> 1), -128, weaponBits,
+                            weaponPal, W_SHOTGUN_MUZZLE);
+                        fallthrough__;
                     case 5:
                     case 9:
                     case 10:
                     case 11:
                     case 12:
-                        if (*kb > 1 && *kb < 5)
-                        {
-                            gun_pos -= 40;
-                            weapon_xoffset += 20;
-
-                            guniqhudid = cw<<1;
-                            G_DrawWeaponTile(weapon_xoffset+178-(p->look_ang>>1),looking_arc+194-gun_pos,
-                                             SHOTGUN+1+((*(kb)-1)>>1),-128,o,pal);
-                        }
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(weapon_xoffset+158-(p->look_ang>>1),looking_arc+220-gun_pos,
-                                         SHOTGUN+3,gs,o,pal);
-                        guniqhudid = 0;
+                        G_DrawWeaponTile(weaponX + 158 - halfLookAng, weaponY + 220 - weaponYOffset, SHOTGUN + 3, weaponShade, weaponBits, weaponPal, W_SHOTGUN);
                         break;
+
                     case 13:
                     case 14:
                     case 15:
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(32+weapon_xoffset+166-(p->look_ang>>1),looking_arc+210-gun_pos,
-                                         SHOTGUN+4,gs,o,pal);
-                        guniqhudid = 0;
+                        G_DrawWeaponTile(32 + weaponX + 166 - halfLookAng, weaponY + 210 - weaponYOffset, SHOTGUN + 4, weaponShade, weaponBits & ~RS_LERP, weaponPal,
+                            W_SHOTGUN);
                         break;
+
                     case 16:
                     case 17:
                     case 18:
                     case 19:
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(64+weapon_xoffset+170-(p->look_ang>>1),looking_arc+196-gun_pos,
-                                         SHOTGUN+5,gs,o,pal);
-                        guniqhudid = 0;
-                        break;
-                    case 20:
-                    case 21:
-                    case 22:
-                    case 23:
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(64+weapon_xoffset+176-(p->look_ang>>1),looking_arc+196-gun_pos,
-                                         SHOTGUN+6,gs,o,pal);
-                        guniqhudid = 0;
-                        break;
                     case 24:
                     case 25:
                     case 26:
                     case 27:
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(64+weapon_xoffset+170-(p->look_ang>>1),looking_arc+196-gun_pos,
-                                         SHOTGUN+5,gs,o,pal);
-                        guniqhudid = 0;
+                        G_DrawWeaponTile(64 + weaponX + 170 - halfLookAng, weaponY + 196 - weaponYOffset, SHOTGUN + 5, weaponShade, weaponBits, weaponPal,
+                            W_SHOTGUN);
                         break;
+
+                    case 20:
+                    case 21:
+                    case 22:
+                    case 23:
+                        G_DrawWeaponTile(64 + weaponX + 176 - halfLookAng, weaponY + 196 - weaponYOffset, SHOTGUN + 6, weaponShade, weaponBits, weaponPal,
+                            W_SHOTGUN);
+                        break;
+
+
                     case 28:
                     case 29:
                     case 30:
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(32+weapon_xoffset+156-(p->look_ang>>1),looking_arc+206-gun_pos,
-                                         SHOTGUN+4,gs,o,pal);
-                        guniqhudid = 0;
+                        G_DrawWeaponTile(32 + weaponX + 156 - halfLookAng, weaponY + 206 - weaponYOffset, SHOTGUN + 4, weaponShade, weaponBits, weaponPal,
+                            W_SHOTGUN);
                         break;
                     }
                 }
@@ -2480,50 +2471,133 @@ void P_DisplayWeapon(int snum)
 
             case CHAINGUN_WEAPON:
 
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
+                    if (*weaponFrame > 0)
+                    {
+                        weaponYOffset -= sintable[(*weaponFrame) << 7] >> 12;
 
-                    if (*kb > 0)
-                        gun_pos -= sintable[(*kb)<<7]>>12;
+                        if (doAnim)
+                            weaponX += 1 - (rand() & 3);
+                    }
 
-                    if (*kb > 0 && sprite[p->i].pal != 1) weapon_xoffset += 1-(rand()&3);
+                    if (WW2GI)
+                    {
+                        int const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
+                        int const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
 
-                    G_DrawWeaponTile(weapon_xoffset+168-(p->look_ang>>1),looking_arc+260-gun_pos,
-                                     CHAINGUN,gs,o,pal);
-                    switch (*kb)
+                        if (*weaponFrame == 0)
+                        {
+                            G_DrawWeaponTile(weaponX + 178 - halfLookAng, weaponY + 233 - weaponYOffset, CHAINGUN + 1, weaponShade, weaponBits | RS_FORCELERP,
+                                weaponPal, W_CHAINGUN_BOTTOM);
+                        }
+                        else if (*weaponFrame <= totalTime)
+                        {
+                            G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 243 - weaponYOffset, CHAINGUN + 2, weaponShade, weaponBits | RS_FORCELERP,
+                                weaponPal, W_CHAINGUN_BOTTOM);
+                        }
+                        // else we are in 'reload time'
+                        // divide reload time into fifths..
+                        // 1) move weapon up/right, hand on clip (CHAINGUN - 17)
+                        // 2) move weapon up/right, hand removing clip (CHAINGUN - 18)
+                        // 3) hold weapon up/right, hand removed clip (CHAINGUN - 19)
+                        // 4) hold weapon up/right, hand inserting clip (CHAINGUN - 18)
+                        // 5) move weapon down/left, clip inserted (CHAINGUN - 17)
+                        else
+                        {
+                            int iFifths = (reloadTime - totalTime) / 5;
+                            if (iFifths < 1)
+                                iFifths = 1;
+
+                            if (*weaponFrame < iFifths + totalTime)
+                            {
+                                // first segment
+                                int const weaponOffset = 80 - 10 * (totalTime + iFifths - (*weaponFrame));
+                                weaponYOffset += weaponOffset;
+                                weaponX += weaponOffset;
+                                G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 17, weaponShade,
+                                    weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_BOTTOM);
+                            }
+                            else if (*weaponFrame < (iFifths * 2 + totalTime))
+                            {
+                                // second segment
+                                weaponYOffset += 80; // D
+                                weaponX += 80;
+                                G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 18, weaponShade,
+                                    weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_BOTTOM);
+                            }
+                            else if (*weaponFrame < (iFifths * 3 + totalTime))
+                            {
+                                // third segment
+                                // up
+                                weaponYOffset += 80;
+                                weaponX += 80;
+                                G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 19, weaponShade,
+                                    weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_BOTTOM);
+                            }
+                            else if (*weaponFrame < (iFifths * 4 + totalTime))
+                            {
+                                // fourth segment
+                                // down
+                                weaponYOffset += 80; // D
+                                weaponX += 80;
+                                G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 18, weaponShade,
+                                    weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_BOTTOM);
+                            }
+                            else
+                            {
+                                // up and left
+                                int const weaponOffset = 10 * (reloadTime - (*weaponFrame));
+                                weaponYOffset += weaponOffset; // U
+                                weaponX += weaponOffset;
+                                G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 17, weaponShade,
+                                    weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_BOTTOM);
+                            }
+                        }
+
+                        break;
+                    }
+
+                    switch (*weaponFrame)
                     {
                     case 0:
-                        G_DrawWeaponTile(weapon_xoffset+178-(p->look_ang>>1),looking_arc+233-gun_pos,
-                                         CHAINGUN+1,gs,o,pal);
+                        G_DrawWeaponTile(weaponX + 178 - (pPlayer->look_ang >> 1), weaponY + 233 - weaponYOffset, CHAINGUN + 1, weaponShade,
+                            weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_TOP);
+                        G_DrawWeaponTile(weaponX + 168 - (pPlayer->look_ang >> 1), weaponY + 260 - weaponYOffset, CHAINGUN, weaponShade, weaponBits, weaponPal,
+                            W_CHAINGUN_BOTTOM);
                         break;
+
                     default:
-                        if (*kb > *aplWeaponFireDelay[CHAINGUN_WEAPON] && *kb < *aplWeaponTotalTime[CHAINGUN_WEAPON])
+                        if (*weaponFrame > PWEAPON(screenpeek, CHAINGUN_WEAPON, FireDelay) && *weaponFrame < PWEAPON(screenpeek, CHAINGUN_WEAPON, TotalTime))
                         {
-                            i = 0;
-                            if (sprite[p->i].pal != 1) i = rand()&7;
-                            G_DrawWeaponTile(i+weapon_xoffset-4+140-(p->look_ang>>1),i+looking_arc-((*kb)>>1)+208-gun_pos,
-                                             CHAINGUN+5+((*kb-4)/5),gs,o,pal);
-                            if (sprite[p->i].pal != 1) i = rand()&7;
-                            G_DrawWeaponTile(i+weapon_xoffset-4+184-(p->look_ang>>1),i+looking_arc-((*kb)>>1)+208-gun_pos,
-                                             CHAINGUN+5+((*kb-4)/5),gs,o,pal);
+                            int randomOffset = doAnim ? rand() & 7 : 0;
+                            G_DrawWeaponTile(randomOffset + weaponX - 4 + 140 - (pPlayer->look_ang >> 1),
+                                randomOffset + weaponY - ((*weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((*weaponFrame - 4) / 5),
+                                weaponShade, weaponBits, weaponPal);
+                            if (doAnim)
+                                randomOffset = rand() & 7;
+                            G_DrawWeaponTile(randomOffset + weaponX - 4 + 184 - (pPlayer->look_ang >> 1),
+                                randomOffset + weaponY - ((*weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((*weaponFrame - 4) / 5),
+                                weaponShade, weaponBits, weaponPal);
                         }
-                        if (*kb < *aplWeaponTotalTime[CHAINGUN_WEAPON]-4)
+
+                        if (*weaponFrame < PWEAPON(screenpeek, CHAINGUN_WEAPON, TotalTime) - 4)
                         {
-                            i = rand()&7;
-                            G_DrawWeaponTile(i+weapon_xoffset-4+162-(p->look_ang>>1),i+looking_arc-((*kb)>>1)+208-gun_pos,
-                                             CHAINGUN+5+((*kb-2)/5),gs,o,pal);
-                            G_DrawWeaponTile(weapon_xoffset+178-(p->look_ang>>1),looking_arc+233-gun_pos,
-                                             CHAINGUN+1+((*kb)>>1),gs,o,pal);
+                            int const randomOffset = doAnim ? rand() & 7 : 0;
+                            G_DrawWeaponTile(randomOffset + weaponX - 4 + 162 - (pPlayer->look_ang >> 1),
+                                randomOffset + weaponY - ((*weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((*weaponFrame - 2) / 5),
+                                weaponShade, weaponBits, weaponPal);
+                            G_DrawWeaponTile(weaponX + 178 - (pPlayer->look_ang >> 1), weaponY + 233 - weaponYOffset, CHAINGUN + 1 + ((*weaponFrame) >> 1),
+                                weaponShade, weaponBits & ~RS_LERP, weaponPal, W_CHAINGUN_TOP);
                         }
-                        else G_DrawWeaponTile(weapon_xoffset+178-(p->look_ang>>1),looking_arc+233-gun_pos,
-                                                  CHAINGUN+1,gs,o,pal);
+                        else
+                            G_DrawWeaponTile(weaponX + 178 - (pPlayer->look_ang >> 1), weaponY + 233 - weaponYOffset, CHAINGUN + 1, weaponShade,
+                                weaponBits & ~RS_LERP, weaponPal, W_CHAINGUN_TOP);
+
+                        G_DrawWeaponTile(weaponX + 168 - (pPlayer->look_ang >> 1), weaponY + 260 - weaponYOffset, CHAINGUN, weaponShade, weaponBits & ~RS_LERP,
+                            weaponPal, W_CHAINGUN_BOTTOM);
                         break;
                     }
                 }
@@ -2531,315 +2605,343 @@ void P_DisplayWeapon(int snum)
 
             case PISTOL_WEAPON:
 
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
-
-                    if ((*kb) < *aplWeaponTotalTime[PISTOL_WEAPON]+1)
+                    if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, TotalTime) + 1)
                     {
-                        static short kb_frames[] = {0,1,2};
-                        int l = 195-12+weapon_xoffset;
+                        static uint8_t pistolFrames[] = { 0, 1, 2 };
+                        int            pistolOffset = 195 - 12 + weaponX;
 
-                        if ((*kb) == *aplWeaponFireDelay[PISTOL_WEAPON])
-                            l -= 3;
+                        if ((*weaponFrame) == PWEAPON(screenpeek, PISTOL_WEAPON, FireDelay))
+                            pistolOffset -= 3;
 
-                        guniqhudid = cw;
-                        G_DrawWeaponTile((l-(p->look_ang>>1)),(looking_arc+244-gun_pos),FIRSTGUN+kb_frames[*kb>2?0:*kb],gs,2,pal);
-                        guniqhudid = 0;
+                        G_DrawWeaponTile((pistolOffset - (pPlayer->look_ang >> 1)), (weaponY + 244 - weaponYOffset),
+                            FIRSTGUN + pistolFrames[*weaponFrame > 2 ? 0 : *weaponFrame], weaponShade, weaponBits, weaponPal, W_PISTOL);
+
+                        break;
                     }
-                    else
+
+                    int32_t const FIRSTGUN_5 = FIRSTGUN + 5;
+
+                    if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 40 : 17))
+                        G_DrawWeaponTile(194 - (pPlayer->look_ang >> 1), weaponY + 230 - weaponYOffset, FIRSTGUN + 4, weaponShade, weaponBits & ~RS_LERP,
+                            weaponPal, W_PISTOL);
+                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 35 : 12))
                     {
-
-                        if ((*kb) < *aplWeaponReload[PISTOL_WEAPON]-17)
-                        {
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(194-(p->look_ang>>1),looking_arc+230-gun_pos,FIRSTGUN+4,gs,o,pal);
-                            guniqhudid = 0;
-                        }
-                        else if ((*kb) < *aplWeaponReload[PISTOL_WEAPON]-12)
-                        {
-                            G_DrawWeaponTile(244-((*kb)<<3)-(p->look_ang>>1),looking_arc+130-gun_pos+((*kb)<<4),FIRSTGUN+6,gs,o,pal);
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(224-(p->look_ang>>1),looking_arc+220-gun_pos,FIRSTGUN+5,gs,o,pal);
-                            guniqhudid = 0;
-                        }
-                        else if ((*kb) < *aplWeaponReload[PISTOL_WEAPON]-7)
-                        {
-                            G_DrawWeaponTile(124+((*kb)<<1)-(p->look_ang>>1),looking_arc+430-gun_pos-((*kb)<<3),FIRSTGUN+6,gs,o,pal);
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(224-(p->look_ang>>1),looking_arc+220-gun_pos,FIRSTGUN+5,gs,o,pal);
-                            guniqhudid = 0;
-                        }
-
-                        else if ((*kb) < *aplWeaponReload[PISTOL_WEAPON]-4)
-                        {
-                            G_DrawWeaponTile(184-(p->look_ang>>1),looking_arc+235-gun_pos,FIRSTGUN+8,gs,o,pal);
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(224-(p->look_ang>>1),looking_arc+210-gun_pos,FIRSTGUN+5,gs,o,pal);
-                            guniqhudid = 0;
-                        }
-                        else if ((*kb) < *aplWeaponReload[PISTOL_WEAPON]-2)
-                        {
-                            G_DrawWeaponTile(164-(p->look_ang>>1),looking_arc+245-gun_pos,FIRSTGUN+8,gs,o,pal);
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(224-(p->look_ang>>1),looking_arc+220-gun_pos,FIRSTGUN+5,gs,o,pal);
-                            guniqhudid = 0;
-                        }
-                        else if ((*kb) < *aplWeaponReload[PISTOL_WEAPON])
-                        {
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(194-(p->look_ang>>1),looking_arc+235-gun_pos,FIRSTGUN+5,gs,o,pal);
-                            guniqhudid = 0;
-                        }
-
+                        G_DrawWeaponTile(244 - ((*weaponFrame) << 3) - (pPlayer->look_ang >> 1), weaponY + 130 - weaponYOffset + ((*weaponFrame) << 4), FIRSTGUN + 6,
+                            weaponShade, weaponBits, weaponPal, W_PISTOL_CLIP);
+                        G_DrawWeaponTile(224 - (pPlayer->look_ang >> 1), weaponY + 220 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
                     }
+                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 30 : 7))
+                    {
+                        G_DrawWeaponTile(124 + ((*weaponFrame) << 1) - (pPlayer->look_ang >> 1), weaponY + 430 - weaponYOffset - ((*weaponFrame) << 3), FIRSTGUN + 6,
+                            weaponShade, weaponBits, weaponPal, W_PISTOL_CLIP);
+                        G_DrawWeaponTile(224 - (pPlayer->look_ang >> 1), weaponY + 220 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
+                    }
+
+                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 12 : 4))
+                    {
+                        G_DrawWeaponTile(184 - (pPlayer->look_ang >> 1), weaponY + 235 - weaponYOffset, FIRSTGUN + 8, weaponShade, weaponBits, weaponPal,
+                            W_PISTOL_HAND);
+                        G_DrawWeaponTile(224 - (pPlayer->look_ang >> 1), weaponY + 210 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
+                    }
+                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 6 : 2))
+                    {
+                        G_DrawWeaponTile(164 - (pPlayer->look_ang >> 1), weaponY + 245 - weaponYOffset, FIRSTGUN + 8, weaponShade, weaponBits, weaponPal,
+                            W_PISTOL_HAND);
+                        G_DrawWeaponTile(224 - (pPlayer->look_ang >> 1), weaponY + 220 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
+                    }
+                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload))
+                        G_DrawWeaponTile(194 - (pPlayer->look_ang >> 1), weaponY + 235 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
                 }
 
                 break;
             case HANDBOMB_WEAPON:
             {
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
-                    guniqhudid = cw;
-                    if ((*kb))
+                    static uint8_t pipebombFrames[] = { 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2 };
+
+                    if (*weaponFrame >= PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) || *weaponFrame >= ARRAY_SIZE(pipebombFrames))
+                        break;
+
+                    if (*weaponFrame)
                     {
-                        if ((*kb) < (*aplWeaponTotalTime[p->curr_weapon]))
+                        if (WW2GI)
                         {
+                            int const fireDelay = PWEAPON(screenpeek, pPlayer->curr_weapon, FireDelay);
+                            int const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
 
-                            static char throw_frames[]
-                            = {0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2};
-
-                            if ((*kb) < 7)
-                                gun_pos -= 10*(*kb);        //D
-                            else if ((*kb) < 12)
-                                gun_pos += 20*((*kb)-10); //U
-                            else if ((*kb) < 20)
-                                gun_pos -= 9*((*kb)-14);  //D
-
-                            G_DrawWeaponTile(weapon_xoffset+190-(p->look_ang>>1),looking_arc+250-gun_pos,HANDTHROW+throw_frames[(*kb)],gs,o,pal);
+                            if (*weaponFrame <= fireDelay)
+                            {
+                                // it holds here
+                                weaponYOffset -= 5 * (*weaponFrame);  // D
+                            }
+                            else if (*weaponFrame < ((totalTime - fireDelay) / 2 + fireDelay))
+                            {
+                                // up and left
+                                int const weaponOffset = (*weaponFrame) - fireDelay;
+                                weaponYOffset += 10 * weaponOffset;  // U
+                                weaponX += 80 * weaponOffset;
+                            }
+                            else if (*weaponFrame < totalTime)
+                            {
+                                // start high
+                                weaponYOffset += 240;
+                                weaponYOffset -= 12 * ((*weaponFrame) - fireDelay);  // D
+                                // move left
+                                weaponX += 90 - 5 * (totalTime - (*weaponFrame));
+                            }
                         }
+                        else
+                        {
+                            if (*weaponFrame < 7)       weaponYOffset -= 10 * (*weaponFrame);  // D
+                            else if (*weaponFrame < 12) weaponYOffset += 20 * ((*weaponFrame) - 10);  // U
+                            else if (*weaponFrame < 20) weaponYOffset -= 9 * ((*weaponFrame) - 14);  // D
+                        }
+
+                        weaponYOffset += 10;
                     }
-                    else
-                        G_DrawWeaponTile(weapon_xoffset+190-(p->look_ang>>1),looking_arc+260-gun_pos,HANDTHROW,gs,o,pal);
-                    guniqhudid = 0;
+
+                    G_DrawWeaponTile(weaponX + 190 - halfLookAng, weaponY + 260 - weaponYOffset, HANDTHROW + pipebombFrames[(*weaponFrame)], weaponShade,
+                        weaponBits, weaponPal, W_HANDBOMB);
                 }
             }
             break;
 
             case HANDREMOTE_WEAPON:
             {
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    static char remote_frames[] = {0,1,1,2,1,1,0,0,0,0,0};
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
+                    static uint8_t remoteFrames[] = { 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0 };
 
-                    weapon_xoffset = -48;
-                    guniqhudid = cw;
-                    if ((*kb))
-                        G_DrawWeaponTile(weapon_xoffset+150-(p->look_ang>>1),looking_arc+258-gun_pos,HANDREMOTE+remote_frames[(*kb)],gs,o,pal);
-                    else
-                        G_DrawWeaponTile(weapon_xoffset+150-(p->look_ang>>1),looking_arc+258-gun_pos,HANDREMOTE,gs,o,pal);
-                    guniqhudid = 0;
+                    if (*weaponFrame >= ARRAY_SIZE(remoteFrames))
+                        break;
+
+                    weaponX = -48;
+                    G_DrawWeaponTile(weaponX + 150 - halfLookAng, weaponY + 258 - weaponYOffset, HANDREMOTE + remoteFrames[(*weaponFrame)], weaponShade,
+                        weaponBits | RS_FORCELERP, weaponPal, W_HANDREMOTE);
                 }
             }
             break;
 
             case DEVISTATOR_WEAPON:
 
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
-
-                    if ((*kb) < (*aplWeaponTotalTime[DEVISTATOR_WEAPON]+1) && (*kb) > 0)
+                    if (WW2GI)
                     {
-                        static char cycloidy[] = {0,4,12,24,12,4,0};
-
-                        i = ksgn((*kb)>>2);
-
-                        if (p->hbomb_hold_delay)
+                        if (*weaponFrame)
                         {
-                            guniqhudid = cw;
-                            G_DrawWeaponTile((cycloidy[*kb]>>1)+weapon_xoffset+268-(p->look_ang>>1),cycloidy[*kb]+looking_arc+238-gun_pos,DEVISTATOR+i,-32,o,pal);
-                            guniqhudid = cw<<1;
-                            G_DrawWeaponTile(weapon_xoffset+30-(p->look_ang>>1),looking_arc+240-gun_pos,DEVISTATOR,gs,o|4,pal);
-                            guniqhudid = 0;
+                            int32_t const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
+                            int32_t const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
+
+                            if (*weaponFrame < totalTime)
+                            {
+                                int const tileOffset = ksgn((*weaponFrame) >> 2);
+
+                                if (pPlayer->ammo_amount[pPlayer->curr_weapon] & 1)
+                                {
+                                    G_DrawWeaponTile(weaponX + 30 - halfLookAng, weaponY + 240 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits | 4, weaponPal,
+                                        W_DEVISTATOR_LEFT);
+                                    G_DrawWeaponTile(weaponX + 268 - halfLookAng, weaponY + 238 - weaponYOffset, DEVISTATOR + tileOffset, -32, weaponBits, weaponPal,
+                                        W_DEVISTATOR_RIGHT);
+                                }
+                                else
+                                {
+                                    G_DrawWeaponTile(weaponX + 30 - halfLookAng, weaponY + 240 - weaponYOffset, DEVISTATOR + tileOffset, -32, weaponBits | 4, weaponPal,
+                                        W_DEVISTATOR_LEFT);
+                                    G_DrawWeaponTile(weaponX + 268 - halfLookAng, weaponY + 238 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits, weaponPal,
+                                        W_DEVISTATOR_RIGHT);
+                                }
+                            }
+                            // else we are in 'reload time'
+                            else
+                            {
+                                weaponYOffset
+                                    -= (*weaponFrame < ((reloadTime - totalTime) / 2 + totalTime)) ? 10 * ((*weaponFrame) - totalTime) : 10 * (reloadTime - (*weaponFrame));
+
+                                G_DrawWeaponTile(weaponX + 30 - halfLookAng, weaponY + 240 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits | 4, weaponPal,
+                                    W_DEVISTATOR_LEFT);
+                                G_DrawWeaponTile(weaponX + 268 - halfLookAng, weaponY + 238 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits, weaponPal,
+                                    W_DEVISTATOR_RIGHT);
+                            }
                         }
                         else
                         {
-                            guniqhudid = cw<<1;
-                            G_DrawWeaponTile(-(cycloidy[*kb]>>1)+weapon_xoffset+30-(p->look_ang>>1),cycloidy[*kb]+looking_arc+240-gun_pos,DEVISTATOR+i,-32,o|4,pal);
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(weapon_xoffset+268-(p->look_ang>>1),looking_arc+238-gun_pos,DEVISTATOR,gs,o,pal);
-                            guniqhudid = 0;
+                            G_DrawWeaponTile(weaponX + 30 - halfLookAng, weaponY + 240 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits | 4, weaponPal,
+                                W_DEVISTATOR_LEFT);
+                            G_DrawWeaponTile(weaponX + 268 - halfLookAng, weaponY + 238 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits, weaponPal,
+                                W_DEVISTATOR_RIGHT);
+                        }
+                        break;
+                    }
+
+                    if (*weaponFrame <= PWEAPON(screenpeek, DEVISTATOR_WEAPON, TotalTime) && *weaponFrame > 0)
+                    {
+                        static uint8_t const devastatorFrames[] = { 0, 4, 12, 24, 12, 4, 0 };
+
+                        if (*weaponFrame >= ARRAY_SIZE(devastatorFrames))
+                            break;
+
+                        int const tileOffset = ksgn((*weaponFrame) >> 2);
+
+                        if (pPlayer->hbomb_hold_delay)
+                        {
+                            G_DrawWeaponTile(weaponX + 30 - halfLookAng, weaponY + 240 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits | 4, weaponPal,
+                                W_DEVISTATOR_LEFT);
+                            G_DrawWeaponTile((devastatorFrames[*weaponFrame] >> 1) + weaponX + 268 - halfLookAng,
+                                devastatorFrames[*weaponFrame] + weaponY + 238 - weaponYOffset, DEVISTATOR + tileOffset, -32, weaponBits, weaponPal,
+                                W_DEVISTATOR_RIGHT);
+                        }
+                        else
+                        {
+                            G_DrawWeaponTile(-(devastatorFrames[*weaponFrame] >> 1) + weaponX + 30 - halfLookAng,
+                                devastatorFrames[*weaponFrame] + weaponY + 240 - weaponYOffset, DEVISTATOR + tileOffset, -32, weaponBits | 4, weaponPal,
+                                W_DEVISTATOR_LEFT);
+                            G_DrawWeaponTile(weaponX + 268 - halfLookAng, weaponY + 238 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits, weaponPal,
+                                W_DEVISTATOR_RIGHT);
                         }
                     }
                     else
                     {
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(weapon_xoffset+268-(p->look_ang>>1),looking_arc+238-gun_pos,DEVISTATOR,gs,o,pal);
-                        guniqhudid = cw<<1;
-                        G_DrawWeaponTile(weapon_xoffset+30-(p->look_ang>>1),looking_arc+240-gun_pos,DEVISTATOR,gs,o|4,pal);
-                        guniqhudid = 0;
+                        G_DrawWeaponTile(weaponX + 30 - halfLookAng, weaponY + 240 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits | 4, weaponPal,
+                            W_DEVISTATOR_LEFT);
+                        G_DrawWeaponTile(weaponX + 268 - halfLookAng, weaponY + 238 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits, weaponPal, W_DEVISTATOR_RIGHT);
                     }
                 }
                 break;
 
             case FREEZE_WEAPON:
 
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
-                    if ((*kb) < (aplWeaponTotalTime[p->curr_weapon][snum]+1) && (*kb) > 0)
+                    if ((*weaponFrame) < (PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) + 1) && (*weaponFrame) > 0)
                     {
-                        static char cat_frames[] = { 0,0,1,1,2,2 };
+                        static uint8_t freezerFrames[] = { 0, 0, 1, 1, 2, 2 };
 
-                        if (sprite[p->i].pal != 1)
+                        if (doAnim)
                         {
-                            weapon_xoffset += rand()&3;
-                            looking_arc += rand()&3;
+                            weaponX += rand() & 3;
+                            weaponY += rand() & 3;
                         }
-                        gun_pos -= 16;
-                        guniqhudid = 0;
-                        G_DrawWeaponTile(weapon_xoffset+210-(p->look_ang>>1),looking_arc+261-gun_pos,FREEZE+2,-32,o,pal);
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(weapon_xoffset+210-(p->look_ang>>1),looking_arc+235-gun_pos,FREEZE+3+cat_frames[*kb%6],-32,o,pal);
-                        guniqhudid = 0;
+                        weaponYOffset -= 16;
+                        G_DrawWeaponTile(weaponX + 210 - (pPlayer->look_ang >> 1), weaponY + 261 - weaponYOffset, FREEZE + 2, -32,
+                            weaponBits & ~RS_LERP, weaponPal, W_FREEZE_BASE);
+                        G_DrawWeaponTile(weaponX + 210 - (pPlayer->look_ang >> 1), weaponY + 235 - weaponYOffset, FREEZE + 3 + freezerFrames[*weaponFrame % 6], -32,
+                            weaponBits & ~RS_LERP, weaponPal, W_FREEZE_TOP);
                     }
                     else
-                    {
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(weapon_xoffset+210-(p->look_ang>>1),looking_arc+261-gun_pos,FREEZE,gs,o,pal);
-                        guniqhudid = 0;
-                    }
+                        G_DrawWeaponTile(weaponX + 210 - (pPlayer->look_ang >> 1), weaponY + 261 - weaponYOffset, FREEZE, weaponShade, weaponBits, weaponPal,
+                            W_FREEZE_BASE);
                 }
                 break;
 
             case GROW_WEAPON:
-
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+            case SHRINKER_WEAPON:
+                Gv_SetVar(g_iReturnVarID, 0, g_player[screenpeek].ps->i, screenpeek);
+                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
+                if (Gv_GetVar(g_iReturnVarID, g_player[screenpeek].ps->i, screenpeek) == 0)
                 {
-                    weapon_xoffset += 28;
-                    looking_arc += 18;
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
+                    bool const isExpander = currentWeapon == GROW_WEAPON;
+
+                    weaponX += 28;
+                    weaponY += 18;
+
+                    if (WW2GI)
                     {
-                        if ((*kb) < aplWeaponTotalTime[p->curr_weapon][snum] && (*kb) > 0)
+                        if (*weaponFrame == 0)
                         {
-                            if (sprite[p->i].pal != 1)
+                            // the 'at rest' display
+                            if (isExpander)
                             {
-                                weapon_xoffset += rand()&3;
-                                gun_pos += (rand()&3);
+                                G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER - 2, weaponShade, weaponBits, weaponPal,
+                                    W_SHRINKER);
+                                break;
                             }
-
-                            guniqhudid = cw<<1;
-                            G_DrawWeaponTile(weapon_xoffset+184-(p->look_ang>>1),
-                                             looking_arc+240-gun_pos,SHRINKER+3+((*kb)&3),-32,
-                                             o,2);
-
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(weapon_xoffset+188-(p->look_ang>>1),
-                                             looking_arc+240-gun_pos,SHRINKER-1,gs,o,pal);
-                            guniqhudid = 0;
+                            else if (pPlayer->ammo_amount[currentWeapon] > 0)
+                            {
+                                G_DrawWeaponTileUnfaded(weaponX + 184 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + 2,
+                                    16 - (sintable[pPlayer->random_club_frame & 2047] >> 10), weaponBits, 0, W_SHRINKER_CRYSTAL);
+                                G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER, weaponShade, weaponBits, weaponPal,
+                                    W_SHRINKER);
+                                break;
+                            }
                         }
                         else
                         {
-                            guniqhudid = cw<<1;
-                            G_DrawWeaponTile(weapon_xoffset+184-(p->look_ang>>1),
-                                             looking_arc+240-gun_pos,SHRINKER+2,
-                                             16-(sintable[p->random_club_frame&2047]>>10),
-                                             o,2);
+                            // the 'active' display.
+                            if (doAnim)
+                            {
+                                weaponX += rand() & 3;
+                                weaponYOffset += rand() & 3;
+                            }
 
-                            guniqhudid = cw;
-                            G_DrawWeaponTile(weapon_xoffset+188-(p->look_ang>>1),
-                                             looking_arc+240-gun_pos,SHRINKER-2,gs,o,pal);
-                            guniqhudid = 0;
+                            int const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
+                            int const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
+
+                            if (*weaponFrame < totalTime)
+                            {
+                                if (*weaponFrame >= PWEAPON(screenpeek, pPlayer->curr_weapon, FireDelay))
+                                {
+                                    // after fire time.
+                                    // lower weapon to reload cartridge (not clip)
+                                    weaponYOffset -= (isExpander ? 15 : 10) * (totalTime - (*weaponFrame));
+                                }
+                            }
+                            // else we are in 'reload time'
+                            else
+                            {
+                                weaponYOffset -= (*weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
+                                    ? (isExpander ? 5 : 10) * ((*weaponFrame) - totalTime) // D
+                                    : 10 * (reloadTime - (*weaponFrame)); // U
+                            }
                         }
+
+                        G_DrawWeaponTileUnfaded(weaponX + 184 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + 3 + ((*weaponFrame) & 3), -32, weaponBits,
+                            isExpander ? 2 : 0, 0 /*W_SHRINKER_CRYSTAL*/);
+
+                        G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + (isExpander ? -1 : 1), weaponShade,
+                            weaponBits, weaponPal, 0 /*W_SHRINKER*/);
+
+                        break;
                     }
-                }
-                break;
 
-            case SHRINKER_WEAPON:
-
-                Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON,g_player[screenpeek].ps->i,screenpeek, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
-                {
-                    weapon_xoffset += 28;
-                    looking_arc += 18;
-                    if (sprite[p->i].pal == 1)
-                        pal = 1;
-                    else if (p->cursectnum >= 0)
-                        pal = sector[p->cursectnum].floorpal;
-                    else pal = 0;
-                    if (((*kb) > 0) && ((*kb) < aplWeaponTotalTime[p->curr_weapon][snum]))
+                    if ((*weaponFrame) < PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) && (*weaponFrame) > 0)
                     {
-                        if (sprite[p->i].pal != 1)
+                        if (doAnim)
                         {
-                            weapon_xoffset += rand()&3;
-                            gun_pos += (rand()&3);
+                            weaponX += rand() & 3;
+                            weaponYOffset += (rand() & 3);
                         }
-                        guniqhudid = cw<<1;
-                        G_DrawWeaponTile(weapon_xoffset+184-(p->look_ang>>1),
-                                         looking_arc+240-gun_pos,SHRINKER+3+((*kb)&3),-32,
-                                         o,0);
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(weapon_xoffset+188-(p->look_ang>>1),
-                                         looking_arc+240-gun_pos,SHRINKER+1,gs,o,pal);
-                        guniqhudid = 0;
 
+                        G_DrawWeaponTileUnfaded(weaponX + 184 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + 3 + ((*weaponFrame) & 3), -32,
+                            weaponBits & ~RS_LERP, isExpander ? 2 : 0, W_SHRINKER_CRYSTAL);
+                        G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + (isExpander ? -1 : 1), weaponShade,
+                            weaponBits & ~RS_LERP, weaponPal, W_SHRINKER);
                     }
                     else
                     {
-                        guniqhudid = cw<<1;
-                        G_DrawWeaponTile(weapon_xoffset+184-(p->look_ang>>1),
-                                         looking_arc+240-gun_pos,SHRINKER+2,
-                                         16-(sintable[p->random_club_frame&2047]>>10),
-                                         o,0);
-                        guniqhudid = cw;
-                        G_DrawWeaponTile(weapon_xoffset+188-(p->look_ang>>1),
-                                         looking_arc+240-gun_pos,SHRINKER,gs,o,pal);
-                        guniqhudid = 0;
+                        G_DrawWeaponTileUnfaded(weaponX + 184 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + 2,
+                            16 - (sintable[pPlayer->random_club_frame & 2047] >> 10), weaponBits | RS_FORCELERP,
+                            isExpander ? 2 : 0, W_SHRINKER_CRYSTAL);
+                        G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + (isExpander ? -2 : 0), weaponShade,
+                            weaponBits, weaponPal, W_SHRINKER);
                     }
                 }
                 break;
-
             }
+        }
     }
     P_DisplaySpitAnim(snum);
 
@@ -3442,7 +3544,7 @@ static void P_ProcessWeapon(int playerNum)
 {
     DukePlayer_t* p = g_player[playerNum].ps;
     unsigned int sb_snum = g_player[playerNum].inputBits->bits;
-    short* kb = &p->kickback_pic;
+    auto const kb = &p->kickback_pic;
     bool shrunk = (sprite[p->i].yrepeat < 32);
 
     if (p->weapon_pos != 0)

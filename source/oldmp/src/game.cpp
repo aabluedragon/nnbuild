@@ -3326,6 +3326,9 @@ void G_DisplayRest(int smoothratio)
 #endif
     }
 #endif /* USE_OPENGL && POLYMOST */
+
+    rotatespritesmoothratio = smoothratio;
+
     // this does pain tinting etc from the CON
     if (pp->pals_time >= 0 && pp->loogcnt == 0) // JBF 20040101: pals_time > 0 now >= 0
     {
@@ -4131,6 +4134,7 @@ void G_DrawRooms(int snum,int smoothratio)
     int tiltcx,tiltcy,tiltcs=0;    // JBF 20030807
 
     int const viewingRange = viewingrange;
+    rotatespritesmoothratio = smoothratio;
 
     if (pub > 0 || videoGetRenderMode() >= 3) // JBF 20040101: redraw background always
     {

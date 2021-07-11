@@ -45,8 +45,29 @@ extern int CheckPlayerInSector(int sect);
 extern int __fastcall A_FindPlayer(spritetype *s,int *d);
 extern int P_FindOtherPlayer(int p,int *d);
 
-// actors.c
+// actors.h
 void G_MovePlayerSprite(int playerNum);
+// --------
+
+// player.h
+void playerColor_init(void);
+void playerColor_add(const char* name, int palnum);
+void playerColor_delete(int palnum);
+uint8_t playerColor_getNextColor(uint8_t palnum, uint8_t useauto);
+uint8_t playerColor_getPreviousColor(uint8_t palnum, uint8_t useauto);
+
+void P_SetWeaponGamevars(int playerNum, const DukePlayer_t* const pPlayer);
+void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer);
+int Proj_GetDamage(projectile_t* pProj);
+
+int P_GetHudPal(const DukePlayer_t *pPlayer);
+int P_GetKneePal(const DukePlayer_t* pPlayer);
+
+void P_DisplayScubaMask(int snum);
+void P_DisplayWeapon(int snum);
+void P_GetInput(int snum, bool uncapped);
+void P_DropWeapon(DukePlayer_t* p);
+void P_ProcessInput(int snum);
 // --------
 
 extern void G_DoSectorAnimations(void);
@@ -73,6 +94,7 @@ extern void Sect_DamageFloor(int const spriteNum, int const sectNum);
 extern void Sect_DamageFloor_Internal(int const spriteNum, int const sectNum);
 extern void Sect_DamageCeiling(int const spriteNum, int const sectNum);
 extern void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum);
+// -----------------------------
 
 
 extern void A_DamageObject_Internal(int i,int sn);
@@ -96,11 +118,6 @@ extern void P_QuickKill(DukePlayer_t *p);
 extern int A_GetHitscanRange(int i);
 extern int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite);
 extern int A_Shoot(int i,int atwith);
-extern void P_DisplayScubaMask(int snum);
-extern void P_DisplayWeapon(int snum);
-extern void P_GetInput(int snum, bool uncapped);
-extern void P_DropWeapon(DukePlayer_t *p);
-extern void P_ProcessInput(int snum);
 extern void ChangeToMenu(int cm);
 // extern void savetemp(const char *fn,int daptr,int dasiz);
 // extern int G_LoadSaveHeader(char spot,int32_t *vn,int32_t *ln,int32_t *psk,int32_t *numplr);
@@ -174,17 +191,6 @@ extern void A_MoveDummyPlayers(void);
 
 // premap.c
 extern void G_SetupGlobalPsky(void);
-
-// player.c
-extern void playerColor_init(void);
-extern void playerColor_add(const char *name, int palnum);
-extern void playerColor_delete(int palnum);
-extern uint8_t playerColor_getNextColor(uint8_t palnum, uint8_t useauto);
-extern uint8_t playerColor_getPreviousColor(uint8_t palnum, uint8_t useauto);
-
-extern void P_SetWeaponGamevars(int playerNum, const DukePlayer_t* const pPlayer);
-extern void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer);
-extern int Proj_GetDamage(projectile_t* pProj);
 
 // game.cpp
 extern int mpgametext(int y, const char *t, int s, int dabits);

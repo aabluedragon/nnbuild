@@ -173,6 +173,45 @@ enum
     // left: ST 32767, 65534, 65535
 };
 
+enum weaponuniqhudid_t
+{
+    W_ACCESSCARD,
+    W_CHAINGUN_BOTTOM,
+    W_CHAINGUN_HACK,
+    W_CHAINGUN_TOP,
+    W_DEVISTATOR_LEFT,
+    W_DEVISTATOR_RIGHT,
+    W_DUKENUKEM,
+    W_FIST,
+    W_FIST2,
+    W_FREEZE_BASE,
+    W_FREEZE_TOP,
+    W_HANDBOMB,
+    W_HANDREMOTE,
+    W_KNEE,
+    W_KNEE2,
+    W_KNUCKLES,
+    W_LOOGIE,
+    W_LOOGIE_END = W_LOOGIE + 63,
+    W_PISTOL,
+    W_PISTOL_CLIP,
+    W_PISTOL_HAND,
+    W_PLUTOPAK,
+    W_RPG,
+    W_RPG_MUZZLE,
+    W_SHOTGUN,
+    W_SHOTGUN_MUZZLE,
+    W_SHRINKER,
+    W_SHRINKER_CRYSTAL,
+    W_THREEDEE,
+    W_TIP,
+    W_TRIPBOMB,
+    W_TRIPBOMB_LEFTHAND,
+    W_TRIPBOMB_RIGHTHAND,
+
+    W_END,
+};
+
 #include "compat.h"
 #include "a.h"
 #include "build.h"
@@ -552,10 +591,6 @@ static inline int32_t calc_smoothratio(int32_t totalclk, int32_t ototalclk)
 
 extern int fricxv,fricyv;
 
-// TODO: make a dummy player struct for interpolation and sort the first members
-// of this struct into the same order so we can just memcpy it and get rid of the
-// mywhatever type globals
-
 typedef struct {
     vec3_t pos, opos, vel;
 
@@ -587,13 +622,13 @@ typedef struct {
     short cursectnum, look_ang, last_extra, subweapon;
     short ammo_amount[MAX_WEAPONS], wackedbyactor, frag, fraggedself;
 
-    short curr_weapon, last_weapon, last_used_weapon, tipincs, wantweaponfire;
+    short curr_weapon, last_weapon, last_used_weapon, wantweaponfire;
     short holoduke_amount, newowner, hurt_delay, hbomb_hold_delay;
-    short jumping_counter, airleft, knee_incs, access_incs;
+    short jumping_counter, airleft;
     short fta, ftq, access_wallnum, access_spritenum;
-    short kickback_pic, weapon_ang, firstaid_amount;
+    short weapon_ang, firstaid_amount;
     short somethingonplayer, on_crane, i, one_parallax_sectnum;
-    short over_shoulder_on, random_club_frame, fist_incs;
+    short over_shoulder_on, random_club_frame;
     short one_eighty_count, cheat_phase;
     short dummyplayersprite, extra_extra8, quick_kick, last_quick_kick;
     short heat_amount, actorsqu, timebeforeexit, customexitsound;
@@ -605,6 +640,9 @@ typedef struct {
     short scuba_amount, jetpack_amount, steroids_amount, shield_amount;
     short holoduke_on, pycount, weapon_pos, frag_ps;
     short transporter_hold, last_full_weapon, footprintshade, boot_amount;
+
+    uint8_t toggle_key_flag;
+    uint8_t kickback_pic, knuckle_incs, knee_incs, access_incs, fist_incs, tipincs;
 
     char aim_mode, auto_aim, weaponswitch;
 
@@ -618,7 +656,6 @@ typedef struct {
     char  holster_weapon, falling_counter;
     char  gotweapon[MAX_WEAPONS], refresh_inventory;
 
-    char toggle_key_flag, knuckle_incs; // , select_dir;
     char walking_snd_toggle, palookup, hard_landing;
     char /*fire_flag, */pals[3];
     char return_to_center, reloading, name[32];
