@@ -2107,7 +2107,7 @@ void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
     GLASSBREAK_CODE:
 #ifndef EDUKE32_STANDALONE
         A_SpawnCeilingGlass(g_player[myconnectindex].ps->i, sectNum, 10);
-        A_PlaySound(GLASS_BREAKING, g_player[screenpeek].ps->i);
+        A_PlaySound(GLASS_BREAKING, spriteNum);
 #endif
         if (sector[sectNum].hitag == 0)
         {
