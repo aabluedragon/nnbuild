@@ -6388,7 +6388,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     k = headspritestat[STAT_ACTOR];
                     while (k >= 0)
                     {
-                        if (sprite[k].extra > 0 && A_CheckEnemySprite(&sprite[k]) && clipinsidebox(&sprite[k].pos.vec2,j,256L) == 1)
+                        if (sprite[k].extra > 0 && A_CheckEnemySprite(&sprite[k]) && clipinsidebox(sprite[k].pos.vec2,j,256L) == 1)
                             goto BOLT;
                         k = nextspritestat[k];
                     }
@@ -6397,7 +6397,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     while (k >= 0)
                     {
                         p = A_FindPlayer(pSprite, &x);
-                        if (sprite[k].owner >= 0 && clipinsidebox(&sprite[k].pos.vec2,j, sprite[g_player[p].ps->i].clipdist << 1) == 1)
+                        if (sprite[k].owner >= 0 && clipinsidebox(sprite[k].pos.vec2,j, sprite[g_player[p].ps->i].clipdist << 1) == 1)
                         {
                             pData[5] = 8; // Delay
                             goto BOLT;
