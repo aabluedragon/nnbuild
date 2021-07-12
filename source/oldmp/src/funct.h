@@ -35,7 +35,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
   #endif
 #endif
 
-extern void sendscore(const char *s);
 extern int A_CallSound(int sn,int whatsprite);
 extern int check_activator_motion(int lotag);
 extern int CheckDoorTile(int dapic);

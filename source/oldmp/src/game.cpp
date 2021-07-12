@@ -10587,13 +10587,6 @@ static void G_Startup(void)
         g_networkBroadcastMode = NETMODE_P2P;
 }
 
-void sendscore(const char *s)
-{
-    UNREFERENCED_PARAMETER(s);
-//    if (numplayers > 1)
-//        mmulti_generic(-1,(char *)s,strlen(s)+1,5);
-}
-
 void G_UpdatePlayerFromMenu(void)
 {
     if (ud.recstat != 0)

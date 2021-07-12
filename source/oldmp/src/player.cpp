@@ -4276,12 +4276,6 @@ static void P_HandleFragged(int snum)
         }
     }
 
-    if (myconnectindex == connecthead)
-    {
-        Bsprintf(tempbuf, "frag %d killed %d\n", p->frag_ps + 1, snum + 1);
-        sendscore(tempbuf);
-    }
-
     p->frag_ps = snum;
     pus = NUMPAGES;
 }

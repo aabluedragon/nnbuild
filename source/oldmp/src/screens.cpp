@@ -643,12 +643,6 @@ FRAGBONUS:
                     minitext(92 + (y * 23), 90 + t, tempbuf, 0, 2 + 8 + 16 + 128);
                     xfragtotal += g_player[i].frags[y];
                 }
-
-                if (myconnectindex == connecthead)
-                {
-                    Bsprintf(tempbuf, "stats %d killed %d %d\n", i + 1, y + 1, g_player[i].frags[y]);
-                    sendscore(tempbuf);
-                }
             }
 
             Bsprintf(tempbuf, "%-4d", xfragtotal);
