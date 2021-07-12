@@ -10742,7 +10742,7 @@ static void G_DrawFrame()
     }
 
     if (BUTTON(gamefunc_Show_DukeMatch_Scores))
-        G_ShowScores();
+        G_ShowScores(false);
 
     if (debug_on)
         G_ShowCacheLocks();

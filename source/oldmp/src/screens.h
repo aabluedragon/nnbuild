@@ -27,7 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set);
 
-void G_ShowScores(void);
+void G_ShowScores(bool bonus);
 
 void G_FadePalette(int32_t r, int32_t g, int32_t b, int32_t e);
 void fadepal(int r, int g, int b, int start, int end, int step);

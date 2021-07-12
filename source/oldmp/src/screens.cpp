@@ -128,18 +128,33 @@ void G_SetCrosshairColor(int32_t r, int32_t g, int32_t b)
     tileInvalidate(CROSSHAIR, -1, -1);
 }
 
-void G_ShowScores(void)
+void G_ShowScores(bool bonus)
 {
-    int t, i, y, deaths, nemesis_kills, nemesis;
+    int i, y, deaths, nemesis_kills, nemesis;
+
+    // NetDuke32 To-Do: Sort list by rank, mark leader. Probably want an inline struct here.
 
     if (playerswhenstarted > 1 && (GametypeFlags[ud.coop] & GAMETYPE_SCORESHEET))
     {
-        rotatesprite(160 << 16, 34 << 16, 65536L, 0, INGAMEDUKETHREEDEE, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
-        if (PLUTOPAK)   // JBF 20030804
-            rotatesprite((260) << 16, 36 << 16, 65536L, 0, PLUTOPAKSPRITE + 2, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-        gametext(160, 58 + 2, MapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
+        int yoff = 34;
 
-        //        gametext(160,165,"PRESS ANY KEY TO CONTINUE",0,2+8+16);
+        if (playerswhenstarted >= 16) // Move board up a bit if we're at 16 players or more.
+            yoff -= 4;
+
+        if (bonus)
+        {
+            rotatesprite(0, 0, 65536L, 0, MENUSCREEN, 16, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
+
+            if(playerswhenstarted < 14)
+                gametext(160, 176, "PRESS ANY KEY TO CONTINUE", 0, 2 + 8 + 16);
+        }
+
+        rotatesprite(160 << 16, yoff << 16, 65536L, 0, INGAMEDUKETHREEDEE, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
+        if (PLUTOPAK)   // JBF 20030804
+            rotatesprite((260) << 16, (yoff+2) << 16, 65536L, 0, PLUTOPAKSPRITE + 2, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+        gametext(160, yoff+26, MapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
+
+        yoff += 36;
 
         int start_x = 64;
         int name_x = start_x + 12;
@@ -148,24 +163,25 @@ void G_ShowScores(void)
         int nemesis_x = start_x + 134;
         int ping_x = start_x + 180;
 
-        t = 0;
-        minitext(start_x, 70, "#", 8, 2 + 8 + 16 + 128);
-        minitext(name_x, 70, "NAME", 8, 2 + 8 + 16 + 128);
-        minitext(frags_x, 70, "FRAGS", 8, 2 + 8 + 16 + 128);
-        minitext(deaths_x, 70, "DEATHS", 8, 2 + 8 + 16 + 128);
-        minitext(nemesis_x, 70, "NEMESIS", 8, 2 + 8 + 16 + 128);
-        minitext(ping_x, 70, "PING", 8, 2 + 8 + 16 + 128);
+        minitext(start_x, yoff, "#", 8, 2 + 8 + 16 + 128);
+        minitext(name_x, yoff, "NAME", 8, 2 + 8 + 16 + 128);
+        minitext(frags_x, yoff, "FRAGS", 8, 2 + 8 + 16 + 128);
+        minitext(deaths_x, yoff, "DEATHS", 8, 2 + 8 + 16 + 128);
+        minitext(nemesis_x, yoff, "NEMESIS", 8, 2 + 8 + 16 + 128);
+        minitext(ping_x, yoff, "PING", 8, 2 + 8 + 16 + 128);
+
+        yoff += 10;
 
         for (i = 0; i < playerswhenstarted; i++)
         {
             Bsprintf(tempbuf, "%d", i + 1);
 
-            minitext(start_x, 80 + t, tempbuf, 0, 2 + 8 + 16 + 128);
+            minitext(start_x, yoff, tempbuf, 0, 2 + 8 + 16 + 128);
 
-            minitext(name_x, 80 + t, g_player[i].user_name, g_player[i].ps->palookup, 2 + 8 + 16 + 128);
+            minitext(name_x, yoff, g_player[i].user_name, g_player[i].ps->palookup, 2 + 8 + 16 + 128);
 
             Bsprintf(tempbuf, "%-4d", g_player[i].ps->frag - g_player[i].ps->fraggedself);
-            minitext(frags_x, 80 + t, tempbuf, 2, 2 + 8 + 16 + 128);
+            minitext(frags_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
             deaths = 0;
             nemesis = -1;
@@ -175,6 +191,7 @@ void G_ShowScores(void)
                 int killer_frags = g_player[y].frags[i];
                 deaths += killer_frags;
 
+                // If this killer has more frags on this player than last nemesis, make them the new nemesis.
                 if (killer_frags > nemesis_kills)
                 {
                     nemesis_kills = killer_frags;
@@ -183,36 +200,36 @@ void G_ShowScores(void)
             }
 
             Bsprintf(tempbuf, "%-4d", deaths + g_player[i].ps->fraggedself);
-            minitext(deaths_x, 80 + t, tempbuf, 2, 2 + 8 + 16 + 128);
+            minitext(deaths_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
             if (nemesis > -1)
             {
-                minitext(nemesis_x, 80 + t, g_player[nemesis].user_name, g_player[nemesis].ps->palookup, 2 + 8 + 16 + 128);
+                minitext(nemesis_x, yoff, g_player[nemesis].user_name, g_player[nemesis].ps->palookup, 2 + 8 + 16 + 128);
             }
             else if (g_player[i].ps->fraggedself > nemesis_kills)
             {
-                minitext(nemesis_x, 80 + t, "Themself!", 6, 2 + 8 + 16 + 128);
+                minitext(nemesis_x, yoff, "Themself!", 6, 2 + 8 + 16 + 128);
             }
             else
             {
-                minitext(nemesis_x, 80 + t, "Nobody", 12, 2 + 8 + 16 + 128);
+                minitext(nemesis_x, yoff, "Nobody", 12, 2 + 8 + 16 + 128);
             }
 
             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && i == connecthead)
             {
-                minitext(ping_x, 80 + t, "Master", 8, 2 + 8 + 16 + 128);
+                minitext(ping_x, yoff, "Master", 8, 2 + 8 + 16 + 128);
             }
             else if ((g_networkBroadcastMode == NETMODE_P2P) || !g_player[i].connected)
             {
-                minitext(ping_x, 80 + t, "N/A", 2, 2 + 8 + 16 + 128);
+                minitext(ping_x, yoff, "N/A", 2, 2 + 8 + 16 + 128);
             }
             else
             {
                 Bsprintf(tempbuf, "%d", g_player[i].ping);
-                minitext(ping_x, 80 + t, tempbuf, 12, 2 + 8 + 16 + 128);
+                minitext(ping_x, yoff, tempbuf, 12, 2 + 8 + 16 + 128);
             }
 
-            t += 7;
+            yoff += 7;
         }
     }
 }
@@ -280,7 +297,6 @@ void G_DoOrderScreen(void)
 void G_BonusScreen(int bonusonly)
 {
     int t, gfx_offset;
-    int i, y, xfragtotal, yfragtotal;
     int bonuscnt;
     int clockpad = 2;
     char* lastmapname;
@@ -601,89 +617,35 @@ FRAGBONUS:
 
     if (playerswhenstarted > 1 && (GametypeFlags[ud.coop] & GAMETYPE_SCORESHEET))
     {
+        videoClearScreen(0L);
+
+        G_ShowScores(true);
+
         if (!(ud.config.MusicToggle == 0 || ud.config.MusicDevice < 0))
             S_PlaySound(BONUSMUSIC);
 
-        rotatesprite(0, 0, 65536L, 0, MENUSCREEN, 16, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
-        rotatesprite(160 << 16, 34 << 16, 65536L, 0, INGAMEDUKETHREEDEE, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
-        if (PLUTOPAK)   // JBF 20030804
-            rotatesprite((260) << 16, 36 << 16, 65536L, 0, PLUTOPAKSPRITE + 2, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-        gametext(160, 58 + 2, "MULTIPLAYER TOTALS", 0, 2 + 8 + 16);
-        gametext(160, 58 + 10, MapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
-
-        gametext(160, 165, "PRESS ANY KEY TO CONTINUE", 0, 2 + 8 + 16);
-
-        t = 0;
-        minitext(23, 80, "   NAME                                           KILLS", 8, 2 + 8 + 16 + 128);
-        for (i = 0; i < playerswhenstarted; i++)
-        {
-            Bsprintf(tempbuf, "%-4d", i + 1);
-            minitext(92 + (i * 23), 80, tempbuf, 3, 2 + 8 + 16 + 128);
-        }
-
-        for (i = 0; i < playerswhenstarted; i++)
-        {
-            xfragtotal = 0;
-            Bsprintf(tempbuf, "%d", i + 1);
-
-            minitext(30, 90 + t, tempbuf, 0, 2 + 8 + 16 + 128);
-            minitext(38, 90 + t, g_player[i].user_name, g_player[i].ps->palookup, 2 + 8 + 16 + 128);
-
-            for (y = 0; y < playerswhenstarted; y++)
-            {
-                if (i == y)
-                {
-                    Bsprintf(tempbuf, "%-4d", g_player[y].ps->fraggedself);
-                    minitext(92 + (y * 23), 90 + t, tempbuf, 2, 2 + 8 + 16 + 128);
-                    xfragtotal -= g_player[y].ps->fraggedself;
-                }
-                else
-                {
-                    Bsprintf(tempbuf, "%-4d", g_player[i].frags[y]);
-                    minitext(92 + (y * 23), 90 + t, tempbuf, 0, 2 + 8 + 16 + 128);
-                    xfragtotal += g_player[i].frags[y];
-                }
-            }
-
-            Bsprintf(tempbuf, "%-4d", xfragtotal);
-            minitext(101 + (8 * 23), 90 + t, tempbuf, 2, 2 + 8 + 16 + 128);
-
-            t += 7;
-        }
-
-        for (y = 0; y < playerswhenstarted; y++)
-        {
-            yfragtotal = 0;
-            for (i = 0; i < playerswhenstarted; i++)
-            {
-                if (i == y)
-                    yfragtotal += g_player[i].ps->fraggedself;
-                yfragtotal += g_player[i].frags[y];
-            }
-            Bsprintf(tempbuf, "%-4d", yfragtotal);
-            minitext(92 + (y * 23), 96 + (8 * 7), tempbuf, 2, 2 + 8 + 16 + 128);
-        }
-
-        minitext(45, 96 + (8 * 7), "DEATHS", 8, 2 + 8 + 16 + 128);
         videoNextPage();
-
+        KB_FlushKeyboardQueue();
         fadepal(0, 0, 0, 63, 0, -7);
 
-        KB_FlushKeyboardQueue();
-
+        while (totalclock < TICRATE * 10)
         {
-            int tc = (int32_t)totalclock;
-            while (KB_KeyWaiting() == 0)
-            {
-                // continue after 10 seconds...
-                if (totalclock > tc + (120 * 10))
-                    break;
+            gameHandleEvents();
+            MUSIC_Update();
 
-                gameHandleEvents();
+            if (engineFPSLimit())
+            {
+                videoClearScreen(0);
+                G_ShowScores(true);
+                videoNextPage();
+            }
+
+            if (KB_KeyWaiting())
+            {
+                KB_FlushKeyboardQueue();
+                break;
             }
         }
-
-        if (bonusonly || ud.multimode > 1) return;
 
         fadepal(0, 0, 0, 0, 64, 7);
     }
