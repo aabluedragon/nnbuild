@@ -11368,12 +11368,6 @@ CLEAN_DIRECTORY:
         ud.config.ScreenBPP = bpp[i];
     }
 
-    /*    if (VOLUMEONE)
-        {
-            if (numplayers > 4 || ud.multimode > 4)
-                G_GameExit(" The full version of Duke Nukem 3D supports 5 or more players.");
-        } */
-
     videoSetPalette(ud.brightness >> 2, g_player[myconnectindex].ps->palette, 0);
 
     //    if(KB_KeyPressed( sc_Escape ) ) G_GameExit(" ");
