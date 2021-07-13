@@ -100,7 +100,7 @@ extern void A_DamageObject_Internal(int i,int sn);
 extern void A_DamageObject(int i, int sn);
 extern void allignwarpelevators(void);
 extern void G_HandleSharedKeys(int snum);
-extern void checksectors(int snum);
+extern void P_CheckSectors(int snum);
 extern void G_CacheMapData(void);
 extern void xyzmirror(int i,int wn);
 extern void G_UpdateScreenArea(void);

@@ -12092,7 +12092,7 @@ static int G_DoMoveThings(void)
             sounds_predictable = true;
             P_ProcessInput(i);
             sounds_predictable = false;
-            checksectors(i);
+            P_CheckSectors(i);
         }
     }
 

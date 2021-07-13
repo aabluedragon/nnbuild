@@ -3331,7 +3331,7 @@ int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite)
     return FindDistance2D(hitData.pos.x - sprite[spriteNum].x, hitData.pos.y - sprite[spriteNum].y);
 }
 
-static int hitawall(DukePlayer_t *p,int16_t *hitw)
+static int P_FindWall(DukePlayer_t *p,int16_t *hitw)
 {
     hitdata_t hit;
     hitscan(&p->pos,p->cursectnum,
@@ -3355,24 +3355,27 @@ static void G_ClearCameras(DukePlayer_t* p)
         KB_ClearKeyDown(sc_Escape);
 }
 
-void checksectors(int snum)
+static void P_DoSectorInteractions(int playerNum)
 {
-    int i = -1,oldz;
-    DukePlayer_t *p = g_player[snum].ps;
-    short j,hitscanwall;
+    if (oldnet_predicting)
+        return;
+
+    int i = 0;
+    DukePlayer_t* p = g_player[playerNum].ps;
 
     if (p->cursectnum > -1)
+    {
         switch (sector[p->cursectnum].lotag)
         {
 
         case 32767:
             sector[p->cursectnum].lotag = 0;
-            P_DoQuote(9,p);
+            P_DoQuote(9, p);
             p->secret_rooms++;
             return;
         case -1:
             TRAVERSE_CONNECT(i)
-            g_player[i].ps->gm = MODE_EOL;
+                g_player[i].ps->gm = MODE_EOL;
             sector[p->cursectnum].lotag = 0;
             if (ud.from_bonus)
             {
@@ -3383,26 +3386,36 @@ void checksectors(int snum)
             else
             {
                 ud.level_number++;
-                if (ud.level_number > MAXLEVELS-1)
+                if (ud.level_number > MAXLEVELS - 1)
                     ud.level_number = 0;
                 ud.m_level_number = ud.level_number;
             }
             return;
         case -2:
             sector[p->cursectnum].lotag = 0;
-            p->timebeforeexit = GAMETICSPERSEC*8;
+            p->timebeforeexit = GAMETICSPERSEC * 8;
             p->customexitsound = sector[p->cursectnum].hitag;
             return;
         default:
             if (sector[p->cursectnum].lotag >= 10000 && sector[p->cursectnum].lotag < 16383)
             {
-                if (snum == screenpeek || (GametypeFlags[ud.coop]&GAMETYPE_COOPSOUND))
-                    A_PlaySound(sector[p->cursectnum].lotag-10000,p->i);
+                if (playerNum == screenpeek || (GametypeFlags[ud.coop] & GAMETYPE_COOPSOUND))
+                    A_PlaySound(sector[p->cursectnum].lotag - 10000, p->i);
                 sector[p->cursectnum].lotag = 0;
             }
             break;
 
         }
+    }
+}
+
+void P_CheckSectors(int snum)
+{
+    int i = -1,oldz;
+    DukePlayer_t *p = g_player[snum].ps;
+    short j,hitscanwall;
+
+    P_DoSectorInteractions(snum);
 
     //After this point the the player effects the map with space
 
@@ -3429,8 +3442,9 @@ void checksectors(int snum)
     }
 
     if (!TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_OPEN) && !TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_ESCAPE))
+    {
         p->toggle_key_flag = 0;
-
+    }
     else if (!p->toggle_key_flag)
     {
 
@@ -3448,7 +3462,7 @@ void checksectors(int snum)
         p->toggle_key_flag = 1;
         hitscanwall = -1;
 
-        i = hitawall(p,&hitscanwall);
+        i = P_FindWall(p,&hitscanwall);
 
         if (i < 1280 && hitscanwall >= 0 && wall[hitscanwall].overpicnum == MIRROR)
             if (wall[hitscanwall].lotag > 0 && !A_CheckSoundPlaying(p->i,wall[hitscanwall].lotag) && snum == screenpeek)
@@ -3470,10 +3484,13 @@ void checksectors(int snum)
         else
         {
             neartag(p->pos.x,p->pos.y,p->pos.z,sprite[p->i].sectnum,fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1, NULL);
+
             if (neartagsprite == -1 && neartagwall == -1 && neartagsector == -1)
                 neartag(p->pos.x,p->pos.y,p->pos.z+(8<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1, NULL);
+
             if (neartagsprite == -1 && neartagwall == -1 && neartagsector == -1)
                 neartag(p->pos.x,p->pos.y,p->pos.z+(16<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,1, NULL);
+
             if (neartagsprite == -1 && neartagwall == -1 && neartagsector == -1)
             {
                 neartag(p->pos.x,p->pos.y,p->pos.z+(16<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,3, NULL);
@@ -3552,7 +3569,7 @@ void checksectors(int snum)
 
                 case NUKEBUTTON__STATIC:
 
-                    hitawall(p,&j);
+                    P_FindWall(p,&j);
                     if (j >= 0 && wall[j].overpicnum == 0)
                         if (ActorExtra[neartagsprite].temp_data[0] == 0)
                         {
@@ -3632,14 +3649,17 @@ void checksectors(int snum)
             return;
         }
 
+        // OOF... OOF... WHERE IS IT?!
         if (neartagwall == -1 && neartagsector == -1 && neartagsprite == -1)
+        {
             if (klabs(A_GetHitscanRange(p->i)) < 512)
             {
-                if ((krand()&255) < 16)
-                    A_PlaySound(DUKE_SEARCH2,p->i);
-                else A_PlaySound(DUKE_SEARCH,p->i);
+                if ((krand() & 255) < 16)
+                    A_PlaySound(DUKE_SEARCH2, p->i);
+                else A_PlaySound(DUKE_SEARCH, p->i);
                 return;
             }
+        }
 
         if (neartagwall >= 0)
         {
