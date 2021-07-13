@@ -11473,7 +11473,7 @@ MAIN_LOOP_RESTART:
         //bool gameUpdate = false;
         //double gameUpdateStartTime = timerGetHiTicks();
 
-        if (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && totalclock >= ototalclock + TICSPERFRAME)
+        if (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME)
         {
             do
             {
@@ -11500,7 +11500,7 @@ MAIN_LOOP_RESTART:
                     {
                         G_MoveLoop();
                     }
-                } while (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int)(totalclock - ototalclock) >= (TICSPERFRAME << 1));
+                } while (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME + 1);
 
                 //gameUpdate = true;
                 //g_gameUpdateTime = timerGetHiTicks() - gameUpdateStartTime;
