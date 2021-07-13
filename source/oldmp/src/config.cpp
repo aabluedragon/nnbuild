@@ -721,8 +721,26 @@ int32_t CONFIG_ReadSetup(void)
 ===================
 */
 
+void CONFIG_ReadSettings(void)
+{
+    char* const setupFileName = Xstrdup(setupfilename);
+    char* const p = strtok(setupFileName, ".");
+
+    Bsprintf(tempbuf, "%s_settings.cfg", p);
+
+    Xfree(setupFileName);
+
+    OSD_Exec(tempbuf);
+
+    ud.config.setupread = 2;
+
+    return;
+}
+
 void CONFIG_WriteSettings(void) // save binds and aliases to <cfgname>_settings.cfg
 {
+    if (ud.config.setupread != 2) return;
+
     char filename[BMAX_PATH];
 
     {

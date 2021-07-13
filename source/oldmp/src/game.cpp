@@ -11370,15 +11370,7 @@ CLEAN_DIRECTORY:
 
     videoSetPalette(ud.brightness >> 2, g_player[myconnectindex].ps->palette, 0);
 
-    //    if(KB_KeyPressed( sc_Escape ) ) G_GameExit(" ");
-
-    {
-        char* ptr = Bstrdup(setupfilename);
-        Bsprintf(tempbuf, "%s_settings.cfg", strtok(ptr, "."));
-        Bfree(ptr);
-    }
-
-    OSD_Exec(tempbuf);
+    CONFIG_ReadSettings();
     OSD_Exec("autoexec.cfg");
 
     CONFIG_SetDefaultKeys(keydefaults, true);
