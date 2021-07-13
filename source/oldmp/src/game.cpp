@@ -75,8 +75,10 @@ int g_noSetup = 0;
 int g_noAutoLoad = 0;
 static int g_noSound = 0;
 static int g_noMusic = 0;
+
+// NetDuke32 TO-DO: Move to cmdline.h when I get a chance.
 static const char *CommandMap = NULL;
-static const char *CommandName = NULL;
+const char *CommandName = NULL;
 #ifndef RANCID_NETWORKING
 static const char *CommandNet = NULL;
 #endif
@@ -11290,11 +11292,9 @@ CLEAN_DIRECTORY:
         }
     }
 
-    // [JM] This right here is a buggy piece of shit.
-    // Overwrites several command lines, like -name
-    // and screws with color selection, iirc.
-    //CONFIG_WriteSetup(1);
-    //CONFIG_ReadSetup();
+    // [JM] I'll need to make sure this doesn't fuck up a few command lines.
+    CONFIG_WriteSetup(1);
+    CONFIG_ReadSetup();
 
     RTS_Init(ud.rtsname);
     if (rts_numlumps) initprintf("Using .RTS file '%s'\n",ud.rtsname);

@@ -212,6 +212,9 @@ enum weaponuniqhudid_t
     W_END,
 };
 
+// NetDuke32 TO-DO: Move to cmdline.h when I get a chance.
+extern const char* CommandName;
+
 #include "compat.h"
 #include "a.h"
 #include "build.h"
