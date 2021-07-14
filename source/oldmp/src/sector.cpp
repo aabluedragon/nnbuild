@@ -3355,7 +3355,7 @@ static void G_ClearCameras(DukePlayer_t* p)
         KB_ClearKeyDown(sc_Escape);
 }
 
-static void P_DoSectorInteractions(int playerNum)
+static void P_DoSectorInteractions(int32_t playerNum)
 {
     if (oldnet_predicting)
         return;
@@ -3409,6 +3409,36 @@ static void P_DoSectorInteractions(int playerNum)
     }
 }
 
+static void P_CycleCameras(int32_t playerNum, int32_t viewscreenSprite)
+{
+    DukePlayer_t* p = g_player[playerNum].ps;
+
+    // Try to find a camera sprite for the viewscreen.
+    for (bssize_t SPRITES_OF(STAT_ACTOR, i))
+    {
+        if (PN(i) == CAMERA1 && SP(i) == 0 && sprite[viewscreenSprite].hitag == SLT(i))
+        {
+            sprite[i].yvel = 1;  // Using this camera
+            A_PlaySound(MONITOR_ACTIVE, p->i);
+            sprite[viewscreenSprite].owner = i;
+            sprite[viewscreenSprite].yvel = 1;  // VIEWSCREEN_YVEL
+            //g_curViewscreen          = neartagsprite;
+
+            int const playerSectnum = p->cursectnum;
+            p->cursectnum = SECT(i);
+            P_UpdateScreenPal(p);
+            p->cursectnum = playerSectnum;
+            p->newowner = i;
+
+            P_UpdatePosWhenViewingCam(p);
+
+            return;
+        }
+    }
+
+    G_ClearCameras(p);
+}
+
 void P_CheckSectors(int snum)
 {
     int i = -1,oldz;
@@ -3419,7 +3449,8 @@ void P_CheckSectors(int snum)
 
     //After this point the the player effects the map with space
 
-    if (p->gm&MODE_TYPE || sprite[p->i].extra <= 0) return;
+    if (p->gm&MODE_TYPE || sprite[p->i].extra <= 0)
+        return;
 
     if (TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_OPEN))
     {
@@ -3432,6 +3463,7 @@ void P_CheckSectors(int snum)
     if (ud.cashman && TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_OPEN))
         A_SpawnMultiple(p->i, MONEY, 2);
 
+    // Clear viewscreen if we try to move.
     if (p->newowner >= 0)
     {
         if (klabs(g_player[snum].inputBits->svel) > 768 || klabs(g_player[snum].inputBits->fvel) > 768)
@@ -3471,7 +3503,7 @@ void P_CheckSectors(int snum)
                 return;
             }
 
-        if (hitscanwall >= 0 && (wall[hitscanwall].cstat&16))
+        if (hitscanwall >= 0 && (wall[hitscanwall].cstat & CSTAT_WALL_MASKED))
             switch (wall[hitscanwall].overpicnum)
             {
             default:
@@ -3612,30 +3644,7 @@ void P_CheckSectors(int snum)
                     break;
                 case VIEWSCREEN__STATIC:
                 case VIEWSCREEN2__STATIC:
-                    // Try to find a camera sprite for the viewscreen.
-                    for (bssize_t SPRITES_OF(STAT_ACTOR, i))
-                    {
-                        if (PN(i) == CAMERA1 && SP(i) == 0 && sprite[neartagsprite].hitag == SLT(i))
-                        {
-                            sprite[i].yvel   = 1;  // Using this camera
-                            A_PlaySound(MONITOR_ACTIVE, p->i);
-                            sprite[neartagsprite].owner = i;
-                            sprite[neartagsprite].yvel  = 1;  // VIEWSCREEN_YVEL
-                            //g_curViewscreen          = neartagsprite;
-
-                            int const playerSectnum = p->cursectnum;
-                            p->cursectnum     = SECT(i);
-                            P_UpdateScreenPal(p);
-                            p->cursectnum     = playerSectnum;
-                            p->newowner       = i;
-
-                            P_UpdatePosWhenViewingCam(p);
-
-                            return;
-                        }
-                    }
-
-                    G_ClearCameras(p);
+                    P_CycleCameras(snum, neartagsprite);
                     return;
             }
         }
