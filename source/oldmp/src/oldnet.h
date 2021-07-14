@@ -49,6 +49,8 @@ extern int voting, vote_map, vote_episode;
 extern int movefifosendplc;
 extern int movefifoplc;
 
+OLDNET_EXTERN input_t netInput;
+
 // Check if oldnet_predicting is true and return in code branches
 // you want to avoid going into during prediction.
 OLDNET_EXTERN int32_t oldnet_predicting;

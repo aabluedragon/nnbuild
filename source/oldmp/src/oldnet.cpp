@@ -225,7 +225,7 @@ void Net_HandleInput(void)
 
     // Put our local input into the FIFO to be processed by P_ProcessInput and such.
     nsyn = &inputfifo[g_player[myconnectindex].movefifoend&(MOVEFIFOSIZ-1)][myconnectindex];
-    *nsyn = localInput;
+    *nsyn = netInput;
 
     g_player[myconnectindex].movefifoend++;
 

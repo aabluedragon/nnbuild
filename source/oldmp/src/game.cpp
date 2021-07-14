@@ -11482,6 +11482,8 @@ MAIN_LOOP_RESTART:
 
                 frameJustDrawn = false;
                 P_GetInput(myconnectindex, false);
+                netInput = localInput;
+                localInput = {}; // Input has been processed, flush.
                 
                 // The while condition in this loop is a duplicate of the if condition above. Why?
                 // Why not check for readytosend in the above "if" and cut this out?
@@ -11493,7 +11495,6 @@ MAIN_LOOP_RESTART:
                     ototalclock += TICSPERFRAME;
 
                     Net_HandleInput();
-                    localInput = {}; // Input has been processed, flush.
 
                     if (((ud.show_help == 0 && (myplayer.gm & MODE_MENU) != MODE_MENU) || ud.recstat == 2 || (ud.multimode > 1))
                         && (myplayer.gm & MODE_GAME))
