@@ -1552,6 +1552,8 @@ static int osdcmd_inittimer(const osdfuncparm_t *parm)
 
 int registerosdcommands(void)
 {
+    FX_InitCvars();
+
     unsigned int i;
 
     osdcmd_cheatsinfo_stat.cheatnum = -1;
