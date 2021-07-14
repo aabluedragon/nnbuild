@@ -51,7 +51,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "kenbuild", "kenbuild.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "voidwrap", "voidwrap.vcxproj", "{01230AD2-3746-418F-84D8-189E7CBC16C9}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "eduke32-oldmp", "eduke32-oldmp.vcxproj", "{A36D57BF-05F1-40D2-9D43-625AC28EBB7F}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netduke32", "netduke32.vcxproj", "{A36D57BF-05F1-40D2-9D43-625AC28EBB7F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
