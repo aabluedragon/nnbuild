@@ -7060,11 +7060,14 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
             p = s->yvel;
 
-            if (t->pal == 1) t->z -= (18<<8);
+            if (t->pal == 1) // Frozen?
+                t->z -= (18<<8);
 
-            if (g_player[p].ps->over_shoulder_on > 0 && g_player[p].ps->newowner < 0)
+            if (g_player[p].ps->over_shoulder_on > 0 && g_player[p].ps->newowner < 0 && s->owner != -1)
             {
-                t->cstat |= 2;
+                if(p == screenpeek) // Let's only make the player we're peeking transparent.
+                    t->cstat |= 2;
+
                 if (screenpeek == myconnectindex && numplayers >= 2)
                 {
                     t->x = predictedPlayer.opos.x+mulscale16((int)(predictedPlayer.pos.x - predictedPlayer.opos.x),smoothratio);
@@ -7082,19 +7085,11 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     memcpy((spritetype *)&tsprite[spritesortcnt],(spritetype *)t,sizeof(spritetype));
 
                     tsprite[spritesortcnt].statnum = TSPR_TEMP;
-
-                    /*                    tsprite[spritesortcnt].yrepeat = (t->yrepeat>>3);
-                                        if (t->yrepeat < 4) t->yrepeat = 4; */
-
                     tsprite[spritesortcnt].shade = t->shade;
                     tsprite[spritesortcnt].cstat = 0;
                     tsprite[spritesortcnt].pal = 0;
-
                     tsprite[spritesortcnt].picnum = (g_player[p].ps->curr_weapon==GROW_WEAPON?GROWSPRITEICON:WeaponPickupSprites[g_player[p].ps->curr_weapon]);
-
-                    if (s->owner >= 0)
-                        tsprite[spritesortcnt].z = g_player[p].ps->pos.z-(12<<8);
-                    else tsprite[spritesortcnt].z = s->z-(51<<8);
+                    tsprite[spritesortcnt].z -= (51<<8);
 
                     if (tsprite[spritesortcnt].picnum == HEAVYHBOMB)
                     {
@@ -7125,9 +7120,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     // Code for spinning voxel logos
                     tsprite[spritesortcnt].ang -= ((int32_t)totalclock << 6);
 
-                    if (s->owner >= 0)
-                        tsprite[spritesortcnt].z = g_player[p].ps->pos.z-(20<<8);
-                    else tsprite[spritesortcnt].z = s->z-(96<<8);
+                    tsprite[spritesortcnt].z -= (60<<8);
                     tsprite[spritesortcnt].xrepeat = 32;
                     tsprite[spritesortcnt].yrepeat = 32;
                     tsprite[spritesortcnt].pal = 20;
