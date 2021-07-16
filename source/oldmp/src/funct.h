@@ -44,10 +44,6 @@ extern int CheckPlayerInSector(int sect);
 extern int __fastcall A_FindPlayer(spritetype *s,int *d);
 extern int P_FindOtherPlayer(int p,int *d);
 
-// actors.h
-void G_MovePlayerSprite(int playerNum);
-// --------
-
 // player.h
 void playerColor_init(void);
 void playerColor_add(const char* name, int palnum);
@@ -135,10 +131,7 @@ extern void A_Execute(int iActor,int iPlayer,int lDist);
 extern void overwritesprite(int thex,int they,int tilenum,int shade,int stat,int dapalnum);
 extern void gamenumber(int x,int y,int n,int s);
 extern void G_Shutdown(void);
-extern void A_PlayAlertSound(int i);
-extern int A_CheckInventorySprite(spritetype *s);
-extern int A_CheckEnemySprite(void const* s);
-extern int A_CheckEnemyTile(int pn);
+
 extern void G_DrawTile(int x,int y,int tilenum,int shade,int orientation);
 extern void G_DrawTilePal(int x,int y,int tilenum,int shade,int orientation,int p);
 extern void G_DrawFrags(void);
@@ -149,7 +142,6 @@ extern void updatesectorz(int x,int y,int z,short *sectnum);
 extern void G_DrawBackground(void);
 extern void G_DrawRooms(int snum,int smoothratio);
 extern int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_xr,int s_yr,int s_a,int s_ve,int s_zv,int s_ow,int s_ss);
-extern int A_CheckSwitchTile(int i);
 extern int A_Spawn(int j,int pn);
 extern void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t smoothratio);
 extern int main(int argc,char **argv);
@@ -163,30 +155,6 @@ extern int GetTime(void);
 extern void CONFIG_SetDefaults(void);
 extern void CONFIG_ReadKeys(void);
 extern void ReadSaveGameHeaders(void);
-extern void G_UpdateInterpolations(void);
-extern void G_SetInterpolation(int *posptr);
-extern void G_StopInterpolation(int *posptr);
-extern void G_DoInterpolations(int smoothratio);
-extern void G_RestoreInterpolations(void);
-extern int G_CheckForSpaceCeiling(int sectnum);
-extern int G_CheckForSpaceFloor(int sectnum);
-extern void P_AddAmmo(int weapon,DukePlayer_t *p,int amount);
-extern void P_AddWeaponNoSwitch(DukePlayer_t *p,int weapon);
-extern void P_AddWeapon(DukePlayer_t* pPlayer, int weaponNum, int switchWeapon);
-extern void P_SelectNextInvItem(DukePlayer_t *p);
-extern void P_CheckWeapon(DukePlayer_t *p);
-extern void A_RadiusDamage(int i,int r,int hp1,int hp2,int hp3,int hp4);
-extern int A_MoveSprite(int spritenum,int xchange,int ychange,int zchange,unsigned int cliptype);
-extern int A_SetSprite(int i,unsigned int cliptype);
-extern void A_AddToDeleteQueue(int i);
-extern void A_SpawnMultiple(int sp,int pic,int n);
-extern void A_DoGuts(int sp,int gtype,int n);
-extern void Sect_SetInterpolation(int i);
-extern void Sect_ClearInterpolation(int i);
-extern int A_IncurDamage(int sn);
-extern void G_MoveWorld(void);
-extern void A_MoveCyclers(void);
-extern void A_MoveDummyPlayers(void);
 
 // premap.c
 extern void G_SetupGlobalPsky(void);
@@ -261,15 +229,10 @@ extern void G_UpdatePlayerFromMenu(void);
 
 extern void G_AddUserQuote(const char *daquote);
 
-extern int A_CheckSpriteFlags(int iActor, int iType);
-extern int A_CheckSpriteTileFlags(int iPicnum, int iType);
-
 extern void se40code(int x,int y,int z,int a,int h, int smoothratio);
 
 extern void G_FreeMapState(int mapnum);
 extern int32_t G_FindLevelByFile(const char *fn);
-
-extern void G_ClearCameraView(DukePlayer_t* ps);
 
 extern int _EnterText(int small,int x,int y,char *t,int dalen,int c);
 

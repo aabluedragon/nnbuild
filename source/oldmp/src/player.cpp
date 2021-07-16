@@ -3521,10 +3521,10 @@ static void P_TossPipebomb(int playerNum)
         ActorExtra[pipeSpriteNum].temp_data[7] = lGrenadeLifetime
             + mulscale(krand(), lGrenadeLifetimeVar, 14)
             - lGrenadeLifetimeVar;
-        ActorExtra[pipeSpriteNum].temp_data[6] = 1;
+        ActorExtra[pipeSpriteNum].temp_data[PIPEBOMB_FUSETYPE] = FUSE_TIMED;
     }
     else
-        ActorExtra[pipeSpriteNum].temp_data[6] = 2;
+        ActorExtra[pipeSpriteNum].temp_data[PIPEBOMB_FUSETYPE] = FUSE_REMOTE;
 
     if (pipeBombFwdVel == 15)
     {

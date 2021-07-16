@@ -179,6 +179,7 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\source\oldmp\src\actors.h" />
     <ClInclude Include="..\..\source\oldmp\src\config.h" />
     <ClInclude Include="..\..\source\oldmp\src\discord.h" />
     <ClInclude Include="..\..\source\oldmp\src\duke3d.h" />

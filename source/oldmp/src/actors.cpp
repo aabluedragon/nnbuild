@@ -113,7 +113,7 @@ int G_CheckForSpaceFloor(int sectnum)
     return ((sector[sectnum].floorstat&1) && sector[sectnum].ceilingpal == 0 && ((sector[sectnum].floorpicnum==MOONSKY1)||(sector[sectnum].floorpicnum==BIGORBIT1))?1:0);
 }
 
-void P_AddAmmo(int weapon,DukePlayer_t *p,int amount)
+void P_AddAmmo(int weapon, DukePlayer_t* p, int amount)
 {
     p->ammo_amount[weapon] += amount;
 
@@ -3467,6 +3467,20 @@ static short A_FindLocator(int n,int sn)
     return -1;
 }
 
+// Took this out of G_MoveActors so I can move the slimer's tsprite with the predicted player.
+void G_MoveGreenslimeWithPlayer(DukePlayer_t* p, int32_t spriteNum, int32_t* x, int32_t* y, int32_t* z)
+{
+    intptr_t *t = &ActorExtra[spriteNum].temp_data[0];
+
+    if (t[0] != GREENSLIME_ONPLAYER)
+        return;
+
+    *x = p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 7);
+    *y = p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 7);
+    *z = p->pos.z + p->pyoff - t[2] + (8 << 8);
+    *z += fix16_to_int(F16(100) - p->q16horiz) << 4;
+}
+
 static void G_MoveActors(void)
 {
     int x, m, l;
@@ -3965,19 +3979,6 @@ static void G_MoveActors(void)
                 }
             }
 
-            enum
-            {
-                GREENSLIME_FROZEN = -5,
-                GREENSLIME_ONPLAYER,
-                GREENSLIME_DEAD,  // set but not checked anywhere...
-                GREENSLIME_EATINGACTOR,
-                GREENSLIME_DONEEATING,
-                GREENSLIME_ONFLOOR,
-                GREENSLIME_TOCEILING,
-                GREENSLIME_ONCEILING,
-                GREENSLIME_TOFLOOR,
-            };
-
             if (t[0] == GREENSLIME_FROZEN) // FROZEN
             {
                 t[3]++;
@@ -4052,9 +4053,7 @@ static void G_MoveActors(void)
                         KILLIT(i);
                     }
 
-                s->z = g_player[p].ps->pos.z+g_player[p].ps->pyoff-t[2]+(8<<8);
-
-                s->z += fix16_to_int(F16(100)-g_player[p].ps->q16horiz)<<4;
+                G_MoveGreenslimeWithPlayer(g_player[p].ps, i, &s->x, &s->y, &s->z);
 
                 if (t[2] > 512)
                     t[2] -= 128;
@@ -4090,9 +4089,6 @@ static void G_MoveActors(void)
 
                 s->xrepeat = 20+(sintable[t[1]&2047]>>13);
                 s->yrepeat = 15+(sintable[t[1]&2047]>>13);
-
-                s->x = g_player[p].ps->pos.x + (sintable[(fix16_to_int(g_player[p].ps->q16ang) + 512) & 2047]>>7);
-                s->y = g_player[p].ps->pos.y + (sintable[fix16_to_int(g_player[p].ps->q16ang)&2047]>>7);
 
                 goto BOLT;
             }
@@ -4327,27 +4323,6 @@ static void G_MoveActors(void)
 
         case HEAVYHBOMB__STATIC:
         {
-            enum
-            {
-                PIPEBOMB_PICKUPTIMER = 0,
-                PIPEBOMB_ORIGINALOWNER,
-                PIPEBOMB_RESPAWNTIME,
-                PIPEBOMB_WASHIT,
-                PIPEBOMB_EXPLOSIONTIMER,
-                PIPEBOMB_INWATER,
-                PIPEBOMB_FUSETYPE,
-                PIPEBOMB_FUSETIME,
-                PIPEBOMB_INITIALZ,
-                PIPEBOMB_INITIALSECT,
-            };
-
-            enum
-            {
-                FUSE_TIMED = 1,
-                FUSE_REMOTE,
-                FUSE_EXPLODE,
-            };
-
             if ((s->cstat & 32768))
             {
                 t[PIPEBOMB_RESPAWNTIME]--;
@@ -4683,22 +4658,7 @@ DETONATEB:
                                    g_impactDamage<<2,
                                    g_impactDamage<<2,
                                    g_impactDamage<<2);
-                    /*
-                                                j = headspritestat[STAT_EFFECTOR];
-                                                while(j>=0)
-                                                {
-                                                    if( sprite[j].lotag  == 3 )
-                                                        ActorExtra[j].temp_data[4]=1;
-                                                    else if(sprite[j].lotag == 12)
-                                                    {
-                                                        ActorExtra[j].temp_data[4] = 1;
-                                                        sprite[j].lotag = 3;
-                                                        sprite[j].owner = 0;
-                                                        ActorExtra[j].temp_data[0] = s->shade;
-                                                    }
-                                                    j = nextspritestat[j];
-                                                }
-                    */
+
                     j = headspritestat[STAT_STANDABLE];
                     while (j >= 0)
                     {

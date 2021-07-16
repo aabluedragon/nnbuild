@@ -6718,7 +6718,9 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
         //greenslime can't be handled through the dynamictostatic system due to addition on constant
         if ((t->picnum >= GREENSLIME)&&(t->picnum <= GREENSLIME+7))
-            {}
+        {
+            
+        }
         else switch (DynamicTileMap[t->picnum])
             {
             case BLOODPOOL__STATIC:

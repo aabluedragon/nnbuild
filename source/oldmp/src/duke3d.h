@@ -383,8 +383,6 @@ enum DukeWeapon_t {
     MAX_WEAPONS
 };
 
-void A_DeleteSprite(int s);
-
 enum
 {
     EXTBIT_MOVEFORWARD  = (1),
@@ -1214,6 +1212,7 @@ extern hashtable_t gamefuncH;
 #include "global.h"
 #include "screens.h"
 #include "oldnet.h"
+#include "actors.h"
 
 static inline int32_t gameHandleEvents(void)
 {
