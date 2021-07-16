@@ -4019,13 +4019,6 @@ static void G_MoveActors(void)
 
             if (t[0] == GREENSLIME_ONPLAYER) //On the player
             {
-                if (sprite[g_player[p].ps->i].extra < 1 && g_player[p].ps->somethingonplayer == i)
-                {
-                    g_player[p].ps->somethingonplayer = -1;
-                    t[0] = GREENSLIME_TOFLOOR;
-                    goto BOLT;
-                }
-
                 setspritez_old(i,s->x,s->y,s->z);
 
                 s->ang = fix16_to_int(g_player[p].ps->q16ang);
@@ -4087,12 +4080,18 @@ static void G_MoveActors(void)
                         t[3] = 1;
                 }
 
+                if (sprite[g_player[p].ps->i].extra < 1 && g_player[p].ps->somethingonplayer == i)
+                {
+                    g_player[p].ps->somethingonplayer = -1;
+                    t[0] = GREENSLIME_TOFLOOR;
+                    goto BOLT;
+                }
+
                 s->xrepeat = 20+(sintable[t[1]&2047]>>13);
                 s->yrepeat = 15+(sintable[t[1]&2047]>>13);
 
                 goto BOLT;
             }
-
             else if (s->xvel < 64 && x < 768)
             {
                 if (g_player[p].ps->somethingonplayer == -1)
