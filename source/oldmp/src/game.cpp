@@ -4126,6 +4126,23 @@ static inline vec3_t G_GetCameraPosition(int32_t const i, int32_t const smoothra
              ca->bpos.z + mulscale16(cs->z - ca->bpos.z, smoothratio) };
 }
 
+static void G_CalculateCameraInterpolation(DukePlayer_t *p, vec3_t* pos, fix16_t* q16ang, fix16_t* q16horiz, int16_t* sectnum, int32_t smoothratio)
+{
+    pos->x = p->opos.x + mulscale16((int)(p->pos.x - p->opos.x), smoothratio);
+    pos->y = p->opos.y + mulscale16((int)(p->pos.y - p->opos.y), smoothratio);
+    pos->z = p->opos.z + mulscale16((int)(p->pos.z - p->opos.z), smoothratio);
+    *q16ang = p->oq16ang + mulscale16(((p->q16ang + F16(1024) - p->oq16ang) & 0x7FFFFFF) - F16(1024), smoothratio);
+    *q16horiz = p->oq16horiz + p->oq16horizoff + mulscale16((p->q16horiz + p->q16horizoff - p->oq16horiz - p->oq16horizoff), smoothratio);
+    *sectnum = p->cursectnum;
+    *q16ang += fix16_from_int(p->look_ang);
+
+    if (p->over_shoulder_on == 0)
+    {
+        if (ud.viewbob)
+            pos->z += p->opyoff + mulscale16((int)(p->pyoff - p->opyoff), smoothratio);
+    }
+}
+
 void G_DrawRooms(int snum,int smoothratio)
 {
     int floorZ, ceilZ;
@@ -4316,21 +4333,10 @@ void G_DrawRooms(int snum,int smoothratio)
         {
             DukePlayer_t* camPlayer = (snum == myconnectindex) && (numplayers > 1) ? &predictedPlayer : p;
 
-            ud.camerapos.x = camPlayer->opos.x + mulscale16((int)(camPlayer->pos.x - camPlayer->opos.x), smoothratio);
-            ud.camerapos.y = camPlayer->opos.y + mulscale16((int)(camPlayer->pos.y - camPlayer->opos.y), smoothratio);
-            ud.camerapos.z = camPlayer->opos.z + mulscale16((int)(camPlayer->pos.z - camPlayer->opos.z), smoothratio);
-            ud.cameraq16ang = camPlayer->oq16ang + mulscale16(((camPlayer->q16ang + F16(1024) - camPlayer->oq16ang) & 0x7FFFFFF) - F16(1024), smoothratio);
-            ud.cameraq16horiz = camPlayer->oq16horiz + camPlayer->oq16horizoff + mulscale16((camPlayer->q16horiz + camPlayer->q16horizoff - camPlayer->oq16horiz - camPlayer->oq16horizoff), smoothratio);
-            ud.camerasect = camPlayer->cursectnum;
+            G_CalculateCameraInterpolation(camPlayer, &ud.camerapos, &ud.cameraq16ang, &ud.cameraq16horiz, &ud.camerasect, smoothratio);
 
-            ud.cameraq16ang += fix16_from_int(p->look_ang);
-
-            if (p->over_shoulder_on == 0)
-            {
-                if (ud.viewbob)
-                    ud.camerapos.z += camPlayer->opyoff + mulscale16((int)(camPlayer->pyoff - camPlayer->opyoff), smoothratio);
-            }
-            else G_DoThirdPerson(p, &ud.camerapos, &ud.camerasect, fix16_to_int(ud.cameraq16ang), fix16_to_int(ud.cameraq16horiz));
+            if (p->over_shoulder_on > 0)
+                G_DoThirdPerson(p, &ud.camerapos, &ud.camerasect, fix16_to_int(ud.cameraq16ang), fix16_to_int(ud.cameraq16horiz));
         } 
         else
         {
