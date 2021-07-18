@@ -6725,7 +6725,10 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         //greenslime can't be handled through the dynamictostatic system due to addition on constant
         if ((t->picnum >= GREENSLIME)&&(t->picnum <= GREENSLIME+7))
         {
-            
+            if ((screenpeek == myconnectindex) && (g_player[myconnectindex].ps->somethingonplayer == i))
+            {
+                t->statnum = TSPR_TEMP;
+            }
         }
         else switch (DynamicTileMap[t->picnum])
             {
@@ -10728,7 +10731,56 @@ static void G_DrawFrame()
         G_UpdateScreenArea();
     }
 
-    G_DrawRooms(screenpeek, smoothRatio);
+    // Hideous hack to get players to not trail behind in mirrors or look fucky in third person.
+    if (numplayers > 1 && (screenpeek == myconnectindex))
+    {
+        Net_SwapPredictedLinkedLists();
+        g_player[myconnectindex].ps = &predictedPlayer;
+        auto pSprite = originalPlayer->i;
+        auto oldSprite = sprite[pSprite];
+        sprite[pSprite] = predicted_pSprite;
+
+        // And an even worse hack to get slimers to attach to your face.
+        // Get rid of this once we have full actor prediction again.
+        // And retarget slimer sprite to it's predicted version.
+        auto slimerSprite = g_player[myconnectindex].ps->somethingonplayer;
+        vec3_t slimerPos;
+        int16_t slimerSect;
+        if (slimerSprite > -1)
+        {
+            slimerPos = sprite[slimerSprite].pos;
+            slimerSect = sprite[slimerSprite].sectnum;
+            auto tData = ActorExtra[slimerSprite].temp_data[2];
+
+            vec3_t pos;
+            fix16_t q16ang, q16horiz;
+            int16_t sectnum;
+            G_CalculateCameraInterpolation(&predictedPlayer, &pos, &q16ang, &q16horiz, &sectnum, smoothRatio);
+
+            sprite[slimerSprite].x = pos.x + (sintable[(fix16_to_int(q16ang) + 512) & 2047] >> 7);
+            sprite[slimerSprite].y = pos.y + (sintable[fix16_to_int(q16ang) & 2047] >> 7);
+            sprite[slimerSprite].z = pos.z - tData + (8 << 8);
+            sprite[slimerSprite].z += fix16_to_int(F16(100) - q16horiz) << 4;
+            changespritesect(slimerSprite, sectnum);
+        }
+
+        G_DrawRooms(screenpeek, smoothRatio);
+
+        if (slimerSprite > -1)
+        {
+            sprite[slimerSprite].pos = slimerPos;
+            changespritesect(slimerSprite, slimerSect);
+        }
+
+        g_player[myconnectindex].ps = originalPlayer;
+        sprite[pSprite] = oldSprite;
+        Net_SwapPredictedLinkedLists();
+    }
+    else
+    {
+        G_DrawRooms(screenpeek, smoothRatio);
+    }
+
     if (videoGetRenderMode() >= REND_POLYMOST)
         G_DrawBackground();
     G_DisplayRest(smoothRatio);

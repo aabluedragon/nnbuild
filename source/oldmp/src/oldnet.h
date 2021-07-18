@@ -130,6 +130,7 @@ void Net_EnterMessage(void);
 
 void Net_CorrectPrediction(void);
 void Net_InitializePrediction(void);
+void Net_SwapPredictedLinkedLists(void);
 void Net_DoPrediction(int state);
 void Net_UsePredictedPointers(void);
 void Net_UseOriginalPointers(void);

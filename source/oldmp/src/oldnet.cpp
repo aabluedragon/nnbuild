@@ -202,7 +202,7 @@ static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, i
     }
 }
 
-void faketimerhandler(void) { ; };
+void faketimerhandler(void) { };
 
 void Net_HandleInput(void)
 {
@@ -1563,7 +1563,7 @@ void Net_UseOriginalPointers(void)
     }
 }
 
-static void Net_SwapPredictedLinkedLists()
+void Net_SwapPredictedLinkedLists(void)
 {
     swap_predicted_linked_list(spritesect);
     //swap_predicted_linked_list(spritestat);
