@@ -47,7 +47,6 @@ int A_CheckEnemyTile(int pn);
 int A_CheckEnemySprite(void const* s);
 int A_CheckSwitchTile(int i);
 
-void G_MoveGreenslimeWithPlayer(DukePlayer_t* p, int32_t spriteNum, int32_t* x, int32_t* y, int32_t* z);
 void G_MovePlayerSprite(int playerNum);
 void G_MoveWorld(void);
 

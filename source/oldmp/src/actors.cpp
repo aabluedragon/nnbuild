@@ -3467,20 +3467,6 @@ static short A_FindLocator(int n,int sn)
     return -1;
 }
 
-// Took this out of G_MoveActors so I can move the slimer's tsprite with the predicted player.
-void G_MoveGreenslimeWithPlayer(DukePlayer_t* p, int32_t spriteNum, int32_t* x, int32_t* y, int32_t* z)
-{
-    intptr_t *t = &ActorExtra[spriteNum].temp_data[0];
-
-    if (t[0] != GREENSLIME_ONPLAYER)
-        return;
-
-    *x = p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 7);
-    *y = p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 7);
-    *z = p->pos.z + p->pyoff - t[2] + (8 << 8);
-    *z += fix16_to_int(F16(100) - p->q16horiz) << 4;
-}
-
 static void G_MoveActors(void)
 {
     int x, m, l;
@@ -4046,7 +4032,10 @@ static void G_MoveActors(void)
                         KILLIT(i);
                     }
 
-                G_MoveGreenslimeWithPlayer(g_player[p].ps, i, &s->x, &s->y, &s->z);
+                s->x = g_player[p].ps->pos.x + (sintable[(fix16_to_int(g_player[p].ps->q16ang) + 512) & 2047] >> 7);
+                s->y = g_player[p].ps->pos.y + (sintable[fix16_to_int(g_player[p].ps->q16ang) & 2047] >> 7);
+                s->z = g_player[p].ps->pos.z + g_player[p].ps->pyoff - t[2] + (8 << 8);
+                s->z += fix16_to_int(F16(100) - g_player[p].ps->q16horiz) << 4;
 
                 if (t[2] > 512)
                     t[2] -= 128;
