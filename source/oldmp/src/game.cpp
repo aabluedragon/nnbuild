@@ -116,9 +116,6 @@ static char *confilename = defaultconfilename;
 const char *duke3ddef = "duke3d.def";
 const char *eduke32def = "eduke32.def";
 char mod_dir[BMAX_PATH] = "/";
-#if defined(USE_OPENGL)
-extern char TEXCACHEFILE[BMAX_PATH];
-#endif
 
 int g_Shareware = 0;
 int g_gameType = 0;
@@ -11050,86 +11047,6 @@ int app_main(int32_t argc, char const* const* argv)
         Bstrcpy(TEXCACHEFILE,tempbuf);
 #endif
     }
-
-    // shitcan the old cache directory
-#if defined(USE_OPENGL)
-    {
-        struct stat st;
-        char dir[BMAX_PATH];
-
-        if (mod_dir[0] != '/')
-            Bsprintf(dir,"%s/",mod_dir);
-        else dir[0] = '\0';
-
-        Bsprintf(tempbuf,"%stexcache",dir);
-        if (stat(tempbuf, &st) >= 0)
-        {
-            if ((st.st_mode & S_IFDIR) == S_IFDIR)
-            {
-                Bsprintf(tempbuf,"EDuke32 has located an obsolete texture cache in the \"%stexcache\" directory.\n\n"
-                         "Would you like EDuke32 to purge the contents of this directory?",dir);
-
-                if (wm_ynbox("Obsolete Texture Cache Detected","%s",tempbuf))
-                {
-                    int recursion = 0;
-
-                    Bsprintf(tempbuf,"%stexcache",dir);
-                    getfilenames(tempbuf,"*");
-CLEAN_DIRECTORY:
-                    // initprintf("Cleaning '%s'\n",tempbuf);
-                    while (fnlist.findfiles)
-                    {
-                        Bsprintf(g_szBuf,"%s/%s",tempbuf, fnlist.findfiles->name);
-                        if (unlink(g_szBuf))
-                            initprintf("ERROR: couldn't remove '%s': %s\n",g_szBuf,strerror(errno));
-                        fnlist.findfiles = fnlist.findfiles->next;
-                    }
-                    while (fnlist.finddirs)
-                    {
-                        if (!Bstrcmp(fnlist.finddirs->name, ".") || !Bstrcmp(fnlist.finddirs->name, ".."))
-                        {
-                            fnlist.finddirs = fnlist.finddirs->next;
-                            continue;
-                        }
-                        Bsprintf(g_szBuf,"%s/%s",tempbuf, fnlist.finddirs->name);
-                        if (rmdir(g_szBuf))
-                        {
-                            if (errno == EEXIST || errno == ENOTEMPTY)
-                            {
-                                recursion = 1;
-                                Bstrcpy(tempbuf,g_szBuf);
-                                getfilenames(tempbuf,"*");
-                                goto CLEAN_DIRECTORY;
-                            }
-                            else
-                            {
-                                initprintf("ERROR: couldn't remove '%s': %s\n",g_szBuf,strerror(errno));
-                            }
-                        }
-                        else
-                        {
-                            initprintf("Removed '%s'\n",g_szBuf);
-                            fnlist.finddirs = fnlist.finddirs->next;
-                        }
-                    }
-
-                    if (recursion)
-                    {
-                        Bsprintf(tempbuf,"%stexcache",dir);
-                        getfilenames(tempbuf,"*");
-                        recursion = 0;
-                        goto CLEAN_DIRECTORY;
-                    }
-
-                    Bsprintf(tempbuf,"%stexcache",dir);
-                    if (rmdir(tempbuf))
-                        initprintf("ERROR: couldn't remove '%s': %s\n",tempbuf,strerror(errno));
-                    else initprintf("Removed '%s'\n",tempbuf);
-                }
-            }
-        }
-    }
-#endif
 
     i = initgroupfile(eduke32dat);
 
