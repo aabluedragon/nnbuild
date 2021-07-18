@@ -1197,9 +1197,6 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
     int i, x, lotag,hitag,picnum,correctdips = 1, numdips = 0;
     int sx,sy;
 
-    if (oldnet_predicting)
-        return 0;
-
     if (w < 0) return 0;
 
     if (switchtype == 1) // A wall sprite
@@ -1331,6 +1328,9 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         if (CheckDoorTile(picnum) == 0) return 0;
         break;
     }
+
+    if (oldnet_predicting)
+        return 0;
 
     i = headspritestat[STAT_DEFAULT];
     while (i >= 0)
