@@ -2005,10 +2005,8 @@ void P_CheckTouchDamage(DukePlayer_t *p,int j)
                 sprite[p->i].extra -= 5;
 
                 p->hurt_delay = 16;
-                p->pals_time = 32;
-                p->pals[0] = 32;
-                p->pals[1] = 0;
-                p->pals[2] = 0;
+
+                P_PalFrom(p, 32, 32, 0, 0);
                 A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
             }
 
@@ -2034,10 +2032,8 @@ void P_CheckTouchDamage(DukePlayer_t *p,int j)
             sprite[p->i].extra -= 5;
 
             p->hurt_delay = 16;
-            p->pals_time = 32;
-            p->pals[0] = 32;
-            p->pals[1] = 0;
-            p->pals[2] = 0;
+
+            P_PalFrom(p, 32, 32, 0, 0);
 
             p->vel.x = -(sintable[(fix16_to_int(p->q16ang)+512)&2047]<<8);
             p->vel.y = -(sintable[fix16_to_int(p->q16ang)&2047]<<8);
@@ -3637,10 +3633,7 @@ void P_CheckSectors(int snum)
                 case PLUG__STATIC:
                     A_PlaySound(SHORT_CIRCUIT,p->i);
                     sprite[p->i].extra -= 2+(krand()&3);
-                    p->pals[0] = 48;
-                    p->pals[1] = 48;
-                    p->pals[2] = 64;
-                    p->pals_time = 32;
+                    P_PalFrom(p, 32, 48, 48, 64);
                     break;
                 case VIEWSCREEN__STATIC:
                 case VIEWSCREEN2__STATIC:

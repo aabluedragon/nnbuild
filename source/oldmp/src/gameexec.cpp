@@ -2832,7 +2832,7 @@ static int X_DoExecute(void)
             g_player[g_p].ps->wackedbyactor = -1;
             g_player[g_p].ps->shield_amount = g_startArmorAmount;
             g_player[g_p].ps->dead_flag = 0;
-            g_player[g_p].ps->pals_time = 0;
+            g_player[g_p].ps->pals.f = 0;
             g_player[g_p].ps->footprintcount = 0;
             g_player[g_p].ps->weapreccnt = 0;
             g_player[g_p].ps->fta = 0;
@@ -3184,9 +3184,11 @@ static int X_DoExecute(void)
 
     case CON_PALFROM:
         insptr++;
-        g_player[g_p].ps->pals_time = *insptr++;
-        for (j=2;j>=0;j--)
-            g_player[g_p].ps->pals[2-j] = *insptr++;
+        {
+            palette_t const pal = { uint8_t(insptr[1]), uint8_t(insptr[2]), uint8_t(insptr[3]), uint8_t(insptr[0]) };
+            insptr += 4;
+            P_PalFrom(g_player[g_p].ps, pal.f, pal.r, pal.g, pal.b);
+        }
         break;
 
     case CON_QSPRINTF:

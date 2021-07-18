@@ -788,7 +788,7 @@ static void resetprestat(int snum,int g)
 
     p->hbomb_on          = 0;
     p->cheat_phase       = 0;
-    p->pals_time         = 0;
+    p->pals.f            = 0;
     p->toggle_key_flag   = 0;
     p->secret_rooms      = 0;
     p->max_secret_rooms  = 0;

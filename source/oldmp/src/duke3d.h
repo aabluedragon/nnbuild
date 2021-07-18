@@ -601,12 +601,14 @@ typedef struct {
     int last_pissed_time, truefz, truecz;
     int player_par;
     int bobcounter, weapon_sway;
-    int pals_time, randomflamex, crack_time;
+    int randomflamex, crack_time;
 
     fix16_t q16horiz, q16horizoff, oq16horiz, oq16horizoff;
     fix16_t q16ang, oq16ang, q16angvel;
 
     unsigned int interface_toggle_flag;
+
+    palette_t pals;
 
     int max_secret_rooms, secret_rooms, max_actors_killed, actors_killed;
     int runspeed, movement_lock, team;
@@ -658,11 +660,18 @@ typedef struct {
     char  gotweapon[MAX_WEAPONS], refresh_inventory;
 
     char walking_snd_toggle, palookup, hard_landing;
-    char /*fire_flag, */pals[3];
     char return_to_center, reloading, name[32];
 
     int8_t padding_[1];
 } DukePlayer_t;
+
+static inline void P_PalFrom(DukePlayer_t* pPlayer, uint8_t f, uint8_t r, uint8_t g, uint8_t b)
+{
+    pPlayer->pals.f = f;
+    pPlayer->pals.r = r;
+    pPlayer->pals.g = g;
+    pPlayer->pals.b = b;
+}
 
 #define MAXQUOTELEN 128
 #define MAXUSERQUOTES 6

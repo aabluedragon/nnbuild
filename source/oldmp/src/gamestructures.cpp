@@ -1641,10 +1641,10 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_PALS_TIME:
         if (iSet)
         {
-            g_player[iPlayer].ps->pals_time=lValue;
+            g_player[iPlayer].ps->pals.f=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->pals_time, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->pals.f, g_i, g_p);
         return;
 
     case PLAYER_RANDOMFLAMEX:
@@ -2539,14 +2539,29 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
         return;
 
     case PLAYER_PALS:
+    {
         if (iSet)
         {
-            g_player[iPlayer].ps->pals[lParm2]=lValue;
+            switch (lParm2)
+            {
+                case 0: g_player[iPlayer].ps->pals.r = lValue; break;
+                case 1: g_player[iPlayer].ps->pals.g = lValue; break;
+                case 2: g_player[iPlayer].ps->pals.b = lValue; break;
+            }
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->pals[lParm2], g_i, g_p);
-        return;
 
+        int val = 0;
+        switch (lParm2)
+        {
+            case 0: val = g_player[iPlayer].ps->pals.r; break;
+            case 1: val = g_player[iPlayer].ps->pals.g; break;
+            case 2: val = g_player[iPlayer].ps->pals.b; break;
+        }
+
+        Gv_SetVar(lVar2, val, g_i, g_p);
+        return;
+    }
     case PLAYER_MAX_ACTORS_KILLED:
         if (iSet)
         {

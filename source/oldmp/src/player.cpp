@@ -204,10 +204,7 @@ void P_QuickKill(DukePlayer_t *p)
     if (oldnet_predicting)
         return;
 
-    p->pals[0] = 48;
-    p->pals[1] = 48;
-    p->pals[2] = 48;
-    p->pals_time = 48;
+    P_PalFrom(p, 48, 48, 48, 48);
 
     sprite[p->i].extra = 0;
     sprite[p->i].cstat |= 32768;
@@ -4075,8 +4072,8 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
     if (p->loogcnt > 0) p->loogcnt--;
     else p->loogcnt = 0;
 
-    if (p->pals_time >= 0)
-        p->pals_time--;
+    if (p->pals.f > 0)
+        p->pals.f--;
 
     if (p->fta > 0)
     {
@@ -4113,10 +4110,7 @@ static int P_HandleFist(int playerNum)
             sounds_predictable = false;
             S_PlaySound(PIPEBOMB_EXPLODE);
             sounds_predictable = true;
-            p->pals[0] = 64;
-            p->pals[1] = 64;
-            p->pals[2] = 64;
-            p->pals_time = 48;
+            P_PalFrom(p, 48, 64, 64, 64);
         }
         if (p->fist_incs > 42)
         {
@@ -4217,10 +4211,7 @@ static void P_HandleFragged(int snum)
 
                     if (g_player[i].ps->team == fraggedbyteam) // Flash screens of all winning players
                     {
-                        g_player[i].ps->pals[0] = 64;
-                        g_player[i].ps->pals[1] = 64;
-                        g_player[i].ps->pals[2] = 64;
-                        g_player[i].ps->pals_time = 48;
+                        P_PalFrom(g_player[i].ps, 48, 64, 64, 64);
                     }
                 }
 
@@ -4237,10 +4228,7 @@ static void P_HandleFragged(int snum)
             G_AddUserQuote(tempbuf);
 
             S_PlaySound(PIPEBOMB_EXPLODE);
-            frag_p->pals[0] = 64;
-            frag_p->pals[1] = 64;
-            frag_p->pals[2] = 64;
-            frag_p->pals_time = 48;
+            P_PalFrom(frag_p, 48, 64, 64, 64);
 
             ud.from_bonus = 0;
             ud.limit_hit = 1;
@@ -4294,10 +4282,7 @@ static void P_HandleDeath(int snum)
     {
         if (s->pal != 1)
         {
-            p->pals[0] = 63;
-            p->pals[1] = 0;
-            p->pals[2] = 0;
-            p->pals_time = 63;
+            P_PalFrom(p, 63, 63, 0, 0);
             p->pos.z -= (16 << 8);
             s->z -= (16 << 8);
         }
@@ -4362,10 +4347,8 @@ static void P_HandleDamagingFloors(int snum)
         {
             if (!A_CheckSoundPlaying(playerSprite, DUKE_LONGTERM_PAIN))
                 A_PlaySound(DUKE_LONGTERM_PAIN, playerSprite);
-            p->pals[0] = 0;
-            p->pals[1] = 8;
-            p->pals[2] = 0;
-            p->pals_time = 32;
+
+            P_PalFrom(p, 32, 0, 8, 0);
             s->extra--;
         }
     }
@@ -4383,10 +4366,8 @@ static void P_HandleDamagingFloors(int snum)
                 {
                     if (!A_CheckSoundPlaying(playerSprite, DUKE_LONGTERM_PAIN))
                         A_PlaySound(DUKE_LONGTERM_PAIN, playerSprite);
-                    p->pals[0] = 64;
-                    p->pals[1] = 64;
-                    p->pals[2] = 64;
-                    p->pals_time = 32;
+
+                    P_PalFrom(p, 32, 64, 64, 64);
                     s->extra -= 1 + (krand() & 3);
                     if (!A_CheckSoundPlaying(playerSprite, SHORT_CIRCUIT))
                         A_PlaySound(SHORT_CIRCUIT, playerSprite);
@@ -4403,10 +4384,7 @@ static void P_HandleDamagingFloors(int snum)
                     if (!A_CheckSoundPlaying(playerSprite, DUKE_LONGTERM_PAIN))
                         A_PlaySound(DUKE_LONGTERM_PAIN, playerSprite);
 
-                    p->pals[0] = 0;
-                    p->pals[1] = 8;
-                    p->pals[2] = 0;
-                    p->pals_time = 32;
+                    P_PalFrom(p, 32, 0, 8, 0);
                     s->extra -= 1 + (krand() & 3);
                 }
             }
@@ -4420,10 +4398,8 @@ static void P_HandleDamagingFloors(int snum)
                 {
                     if (!A_CheckSoundPlaying(playerSprite, DUKE_LONGTERM_PAIN))
                         A_PlaySound(DUKE_LONGTERM_PAIN, playerSprite);
-                    p->pals[0] = 8;
-                    p->pals[1] = 0;
-                    p->pals[2] = 0;
-                    p->pals_time = 32;
+
+                    P_PalFrom(p, 32, 8, 0, 0);
                     s->extra -= 1 + (krand() & 3);
                 }
             }
@@ -4962,10 +4938,7 @@ void P_ProcessInput(int snum)
                             if (s->extra <= 0)
                             {
                                 A_PlaySound(SQUISHED, playerSprite);
-                                p->pals[0] = 63;
-                                p->pals[1] = 0;
-                                p->pals[2] = 0;
-                                p->pals_time = 63;
+                                P_PalFrom(p, 63, 63, 0, 0);
                             }
                             else
                             {
@@ -4973,10 +4946,7 @@ void P_ProcessInput(int snum)
                                 A_PlaySound(DUKE_LAND_HURT, playerSprite);
                             }
 
-                            p->pals[0] = 16;
-                            p->pals[1] = 0;
-                            p->pals[2] = 0;
-                            p->pals_time = 32;
+                            P_PalFrom(p, 32, 16, 0, 0);
                         }
                         else if (p->vel.z > 2048) A_PlaySound(DUKE_LAND, playerSprite);
                     }

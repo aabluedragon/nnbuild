@@ -3277,12 +3277,55 @@ void G_AddKillToFeed(int victim, int attacker)
     g_player[attacker].fragged_id = victim;
 }
 
+////////// TINT ACCUMULATOR //////////
+
+typedef struct {
+    int32_t r, g, b;
+    // f: 0-63 scale
+    int32_t maxf, sumf;
+} palaccum_t;
+
+#define PALACCUM_INITIALIZER { 0, 0, 0, 0, 0 }
+
+/* For a picture frame F and n tints C_1, C_2, ... C_n weighted a_1, a_2,
+* ... a_n (on a 0-1 scale), the faded frame is calculated as
+*
+*    F_new := (1-max_i(a_i))*F + d*sum_i(a_i), where
+*
+*    d := max_i(a_i)/sum_i(a_i).
+*
+* This means that
+*  1) tint application is independent of their order.
+*  2) going from n+1 to n tints is continuous when the leaving one has faded.
+*
+* But note that for more than one tint, the composite tint will in general
+* change its hue as the ratio of the weights of the individual ones changes.
+*/
+static void palaccum_add(palaccum_t* pa, const palette_t* pal, int32_t f)
+{
+    f = clamp(f, 0, 63);
+    if (f == 0)
+        return;
+
+    pa->maxf = max(pa->maxf, f);
+    pa->sumf += f;
+
+    pa->r += f * clamp(pal->r, 0, 63);
+    pa->g += f * clamp(pal->g, 0, 63);
+    pa->b += f * clamp(pal->b, 0, 63);
+}
+
+static void G_FadePalaccum(const palaccum_t* pa)
+{
+    videoFadePalette(tabledivide32_noinline(pa->r, pa->sumf) << 2,
+        tabledivide32_noinline(pa->g, pa->sumf) << 2,
+        tabledivide32_noinline(pa->b, pa->sumf) << 2, pa->maxf << 2);
+}
+
 void G_DisplayRest(int smoothratio)
 {
     int a, i, j;
-    int applyTint=0;
-    palette_t tempFade = { 0, 0, 0, 0 };
-    palette_t tempTint = { 0, 0, 0, 0 };
+    palaccum_t tint = PALACCUM_INITIALIZER;
 
     DukePlayer_t *pp = g_player[screenpeek].ps;
     walltype *wal;
@@ -3292,75 +3335,45 @@ void G_DisplayRest(int smoothratio)
     // this takes care of fullscreen tint for OpenGL
     if (videoGetRenderMode() >= 3)
     {
-#if 0
-        if (pp->palette == waterpal) tintr=0,tintg=0,tintb=63,tintf=8;
-        else if (pp->palette == slimepal) tintr=20,tintg=63,tintb=20,tintf=8;
-#else
+        polytint_t& fstint = hictinting[MAXPALOOKUPS - 1];
         if (pp->palette == WATERPAL)
         {
-            if (hictinting[MAXPALOOKUPS-2].r == 255 && hictinting[MAXPALOOKUPS-2].g == 255 && hictinting[MAXPALOOKUPS-2].b == 255)
-            {
-                hictinting[MAXPALOOKUPS-1].r = 192;
-                hictinting[MAXPALOOKUPS-1].g = 192;
-                hictinting[MAXPALOOKUPS-1].b = 255;
-            }
-            else Bmemcpy(&hictinting[MAXPALOOKUPS-1],&hictinting[MAXPALOOKUPS-2],sizeof(hictinting[0]));
+            fstint.r = 224;
+            fstint.g = 192;
+            fstint.b = 255;
+            fstint.f = 0;
         }
         else if (pp->palette == SLIMEPAL)
         {
-            if (hictinting[MAXPALOOKUPS-3].r == 255 && hictinting[MAXPALOOKUPS-3].g == 255 && hictinting[MAXPALOOKUPS-3].b == 255)
-            {
-                hictinting[MAXPALOOKUPS-1].r = 208;
-                hictinting[MAXPALOOKUPS-1].g = 255;
-                hictinting[MAXPALOOKUPS-1].b = 192;
-            }
-            else Bmemcpy(&hictinting[MAXPALOOKUPS-1],&hictinting[MAXPALOOKUPS-3],sizeof(hictinting[0]));
+            fstint.r = 208;
+            fstint.g = 255;
+            fstint.b = 192;
+            fstint.f = 0;
         }
         else
         {
-            hictinting[MAXPALOOKUPS-1].r = 255;
-            hictinting[MAXPALOOKUPS-1].g = 255;
-            hictinting[MAXPALOOKUPS-1].b = 255;
+            fstint.r = 255;
+            fstint.g = 255;
+            fstint.b = 255;
+            fstint.f = 0;
         }
-#endif
     }
 #endif /* USE_OPENGL && POLYMOST */
 
     rotatespritesmoothratio = smoothratio;
 
     // this does pain tinting etc from the CON
-    if (pp->pals_time >= 0 && pp->loogcnt == 0) // JBF 20040101: pals_time > 0 now >= 0
-    {
-        tempFade.r = pp->pals[0];
-        tempFade.g = pp->pals[1];
-        tempFade.b = pp->pals[2];
-        tempFade.f = pp->pals_time;
-        g_restorePalette = 1;     // JBF 20040101
-        applyTint = 1;
-    }
+    palaccum_add(&tint, &pp->pals, pp->pals.f);
+
+    static const palette_t loogiepal = { 0, 63, 0, 0 };
+    palaccum_add(&tint, &loogiepal, pp->loogcnt >> 1);
+
     // reset a normal palette
-    else if (g_restorePalette)
+    if (g_restorePalette)
     {
         //videoSetPalette(ud.brightness>>2,&pp->palette[0],0);
         P_SetGamePalette(pp,pp->palette,2);
         g_restorePalette = 0;
-    }
-    // loogies courtesy of being snotted on
-    else if (pp->loogcnt > 0)
-    {
-        //G_FadePalette(0,64,0,(pp->loogcnt>>1)+128);
-        tempFade.r = 0;
-        tempFade.g = 64;
-        tempFade.b = 0;
-        tempFade.f = pp->loogcnt>>1;
-        applyTint = 1;
-    }
-    if (tempFade.f > tempTint.f)
-    {
-        tempTint.r = tempFade.r;
-        tempTint.g = tempFade.g;
-        tempTint.b = tempFade.b;
-        tempTint.f = tempFade.f;
     }
 
     if (ud.show_help)
@@ -3387,7 +3400,6 @@ void G_DisplayRest(int smoothratio)
             }
             G_UpdateScreenArea();
         }
-        if (tempTint.f > 0 || applyTint) G_FadePalette(tempTint.r,tempTint.g,tempTint.b,tempTint.f|128);
         return;
     }
 
@@ -3640,8 +3652,21 @@ void G_DisplayRest(int smoothratio)
     else
         M_DisplayMenus();
 
-    if (tempTint.f > 0 || applyTint)
-        G_FadePalette(tempTint.r,tempTint.g,tempTint.b,tempTint.f|128);
+    {
+        static int32_t applied = 0;
+
+        if (tint.maxf)
+        {
+            G_FadePalaccum(&tint);
+            applied = 1;
+        }
+        else if (applied)
+        {
+            // be sure to always un-apply a tint.
+            videoFadePalette(0, 0, 0, 0);
+            applied = 0;
+        }
+    }
 }
 
 static void G_DoThirdPerson(DukePlayer_t *pp, vec3_t *vect, short *vsectnum, int16_t ang, int16_t horiz)
