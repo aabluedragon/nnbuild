@@ -306,7 +306,7 @@ static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
 {
     int gotshrinker,gotfreezer;
     int i, j, a, k, cans;
-    static int aimstats[] = {10,13,1,2};
+    static int aimstats[] = { STAT_PLAYER, STAT_DUMMYPLAYER, STAT_ACTOR, STAT_ZOMBIEACTOR};
     int dx1, dy1, dx2, dy2, dx3, dy3, smax, sdist;
     int xv, yv;
 
@@ -3618,19 +3618,25 @@ static void P_ProcessWeapon(int playerNum)
         actor[p->i].temp_data[7]--;
         if (p->last_weapon == -1 && actor[p->i].temp_data[7] != 0 && ((actor[p->i].temp_data[7] & 1) == 0))
         {
-            if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_AMMOPERSHOT)
+            Gv_SetVar(g_iReturnVarID, 0, p->i, playerNum);
+            X_OnEvent(EVENT_FIREEVERYOTHER, p->i, playerNum, -1);
+            if (Gv_GetVar(g_iReturnVarID, p->i, playerNum) == 0)
             {
-                if (p->ammo_amount[p->curr_weapon] > 0)
-                    p->ammo_amount[p->curr_weapon]--;
-                else
+                if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_AMMOPERSHOT)
                 {
-                    actor[p->i].temp_data[7] = 0;
-                    P_CheckWeapon(p);
+                    if (p->ammo_amount[p->curr_weapon] > 0)
+                        p->ammo_amount[p->curr_weapon]--;
+                    else
+                    {
+                        actor[p->i].temp_data[7] = 0;
+                        P_CheckWeapon(p);
+                    }
                 }
-            }
-            if (actor[p->i].temp_data[7] != 0)
-            {
-                A_Shoot(p->i, aplWeaponShoots[p->curr_weapon][playerNum]);
+
+                if (actor[p->i].temp_data[7] != 0)
+                {
+                    A_Shoot(p->i, aplWeaponShoots[p->curr_weapon][playerNum]);
+                }
             }
         }
     }
