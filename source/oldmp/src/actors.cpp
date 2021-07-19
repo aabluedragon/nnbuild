@@ -2695,8 +2695,8 @@ static void G_MoveWeapons(void)
 
                         if (actor[i].projectile.workslike & PROJECTILE_RPG_IMPACT)
                         {
-                            actor[j].owner = s->owner;
-                            actor[j].picnum = s->picnum;
+                            //actor[j].owner = s->owner;
+                            //actor[j].picnum = s->picnum;
                             //actor[j].extra += actor[i].projectile.extra;
 
                             A_DoProjectileEffects(i, &davect, 0);
