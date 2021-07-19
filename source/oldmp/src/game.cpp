@@ -4689,6 +4689,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         sprite[i].pal = (pProj->pal >= 0) ? pProj->pal : 0;
         sprite[i].cstat = (pProj->cstat >= 0) ? pProj->cstat : 128;
         sprite[i].clipdist = (pProj->clipdist != 255) ? pProj->clipdist : 40;
+        sprite[i].shade = clamp(pProj->shade, -128, 127);
 
         ActorExtra[i].projectile = ProjectileData[s_pn];
     }

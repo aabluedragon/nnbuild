@@ -1243,7 +1243,7 @@ int A_Shoot(int i,int atwith)
             j = A_InsertSprite(s->sectnum,
                 spos.x + tabledivide32_noinline(sintable[(348 + shootAng + 512) & 2047], pProj->offset),
                 spos.y + tabledivide32_noinline(sintable[(shootAng + 348) & 2047], pProj->offset),
-                spos.z - (1 << 8), atwith, 0, pProj->xrepeat, pProj->yrepeat, shootAng, pProj->vel, zvel, i, 4);
+                spos.z - (1 << 8), atwith, 0, pProj->xrepeat, pProj->yrepeat, shootAng, pProj->vel, zvel, i, STAT_PROJECTILE);
 
             sprite[j].extra = Proj_GetDamage(pProj);
 
