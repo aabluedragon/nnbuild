@@ -2063,7 +2063,7 @@ void P_FireWeapon(DukePlayer_t *p)
             if (aplWeaponFlags[p->curr_weapon][snum] & WEAPON_FIREEVERYOTHER)
             {
                 // this makes the projectiles fire on a delay from player code
-                if(!oldnet_predicting) actor[p->i].temp_data[7] = (aplWeaponShotsPerBurst[p->curr_weapon][snum])<<1;
+                actor[p->i].temp_data[7] = (aplWeaponShotsPerBurst[p->curr_weapon][snum])<<1;
             }
             else
             {
@@ -3613,7 +3613,7 @@ static void P_ProcessWeapon(int playerNum)
         p->random_club_frame += 64; // Glowing
 
     // this is a hack for WEAPON_FIREEVERYOTHER
-    if (actor[p->i].temp_data[7] && !oldnet_predicting)
+    if (actor[p->i].temp_data[7])
     {
         actor[p->i].temp_data[7]--;
         if (p->last_weapon == -1 && actor[p->i].temp_data[7] != 0 && ((actor[p->i].temp_data[7] & 1) == 0))
