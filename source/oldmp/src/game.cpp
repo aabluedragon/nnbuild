@@ -3900,7 +3900,7 @@ static void G_OROR_DupeSprites(const spritetype *sp)
 
             tsprite[spritesortcnt].x += (refsp->x - sp->x);
             tsprite[spritesortcnt].y += (refsp->y - sp->y);
-            tsprite[spritesortcnt].z = tsprite[spritesortcnt].z - sp->z + ActorExtra[sp->yvel].ceilingz;
+            tsprite[spritesortcnt].z = tsprite[spritesortcnt].z - sp->z + actor[sp->yvel].ceilingz;
             tsprite[spritesortcnt].sectnum = refsp->sectnum;
             tsprite[spritesortcnt].owner = k;
 
@@ -4141,7 +4141,7 @@ static void G_ClearGotMirror()
 static inline vec3_t G_GetCameraPosition(int32_t const i, int32_t const smoothratio)
 {
     auto const cs = (uspriteptr_t)&sprite[i];
-    const ActorData_t* const ca = &ActorExtra[i];
+    const ActorData_t* const ca = &actor[i];
 
     return { ca->bpos.x + mulscale16(cs->x - ca->bpos.x, smoothratio),
              ca->bpos.y + mulscale16(cs->y - ca->bpos.y, smoothratio),
@@ -4216,8 +4216,8 @@ void G_DrawRooms(int snum,int smoothratio)
         if (pSprite->yvel < 0) pSprite->yvel = -100;
         else if (pSprite->yvel > 199) pSprite->yvel = 300;
 
-        ud.cameraq16ang = fix16_from_int(ActorExtra[ud.camerasprite].tempang
-            +mulscale16(((pSprite->ang+1024-ActorExtra[ud.camerasprite].tempang)&2047)-1024,smoothratio));
+        ud.cameraq16ang = fix16_from_int(actor[ud.camerasprite].tempang
+            +mulscale16(((pSprite->ang+1024-actor[ud.camerasprite].tempang)&2047)-1024,smoothratio));
 
 #if 0//POLYMER
         if (videoGetRenderMode() == 4)
@@ -4371,8 +4371,8 @@ void G_DrawRooms(int snum,int smoothratio)
             ud.camerasect = sprite[p->newowner].sectnum;
         }
         
-        ceilZ = ActorExtra[p->i].ceilingz;
-        floorZ = ActorExtra[p->i].floorz;
+        ceilZ = actor[p->i].ceilingz;
+        floorZ = actor[p->i].floorz;
 
         if (g_earthquakeTime > 0 && p->on_ground == 1)
         {
@@ -4603,9 +4603,9 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         G_GameExit("Too many sprites spawned.");
     }
 
-    ActorExtra[i].bpos.x = s_x;
-    ActorExtra[i].bpos.y = s_y;
-    ActorExtra[i].bpos.z = s_z;
+    actor[i].bpos.x = s_x;
+    actor[i].bpos.y = s_y;
+    actor[i].bpos.z = s_z;
 
     s->x = s_x;
     s->y = s_y;
@@ -4631,26 +4631,26 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
 
     if (s_ow > -1 && s_ow < MAXSPRITES)
     {
-        ActorExtra[i].picnum = sprite[s_ow].picnum;
-        ActorExtra[i].floorz = ActorExtra[s_ow].floorz;
-        ActorExtra[i].ceilingz = ActorExtra[s_ow].ceilingz;
+        actor[i].picnum = sprite[s_ow].picnum;
+        actor[i].floorz = actor[s_ow].floorz;
+        actor[i].ceilingz = actor[s_ow].ceilingz;
     }
 
-    ActorExtra[i].lastvx = 0;
-    ActorExtra[i].lastvy = 0;
+    actor[i].lastvx = 0;
+    actor[i].lastvy = 0;
 
-    ActorExtra[i].timetosleep = 0;
-    ActorExtra[i].actorstayput = -1;
-    ActorExtra[i].extra = -1;
-    ActorExtra[i].owner = s_ow;
-    ActorExtra[i].cgg = 0;
-    ActorExtra[i].movflag = 0;
-    ActorExtra[i].tempang = 0;
-    ActorExtra[i].dispicnum = 0;
+    actor[i].timetosleep = 0;
+    actor[i].actorstayput = -1;
+    actor[i].extra = -1;
+    actor[i].owner = s_ow;
+    actor[i].cgg = 0;
+    actor[i].movflag = 0;
+    actor[i].tempang = 0;
+    actor[i].dispicnum = 0;
 
     T1(i)=T3(i)=T4(i)=T6(i)=T7(i)=T8(i)=T9(i)=0;
 
-    ActorExtra[i].flags = 0;
+    actor[i].flags = 0;
 
     if (actorscrptr[s_pn])
     {
@@ -4680,7 +4680,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         }
     */
     A_ResetVars(i);
-    ActorExtra[i].flags = 0;
+    actor[i].flags = 0;
 
     if (s_ss == STAT_PROJECTILE) // Moved from PROJECTILE_RPG to here, so we can maniuplate these in EVENT_EGS.
     {
@@ -4691,7 +4691,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         sprite[i].clipdist = (pProj->clipdist != 255) ? pProj->clipdist : 40;
         sprite[i].shade = clamp(pProj->shade, -128, 127);
 
-        ActorExtra[i].projectile = ProjectileData[s_pn];
+        actor[i].projectile = ProjectileData[s_pn];
     }
 
     if (apScriptGameEvent[EVENT_EGS])
@@ -4717,32 +4717,32 @@ int A_Spawn(int j, int pn)
     {
         i = A_InsertSprite(sprite[j].sectnum,sprite[j].x,sprite[j].y,sprite[j].z
                            ,pn,0,0,0,0,0,0,j,0);
-        ActorExtra[i].picnum = sprite[j].picnum;
+        actor[i].picnum = sprite[j].picnum;
     }
     else
     {
         i = pn;
-        ActorExtra[i].picnum = PN(i);
-        ActorExtra[i].timetosleep = 0;
-        ActorExtra[i].extra = -1;
+        actor[i].picnum = PN(i);
+        actor[i].timetosleep = 0;
+        actor[i].extra = -1;
 
-        ActorExtra[i].bpos = sprite[i].pos;
+        actor[i].bpos = sprite[i].pos;
 
-        OW(i) = ActorExtra[i].owner = i;
-        ActorExtra[i].cgg = 0;
-        ActorExtra[i].movflag = 0;
-        ActorExtra[i].tempang = 0;
-        ActorExtra[i].dispicnum = 0;
-        ActorExtra[i].floorz = sector[SECT(i)].floorz;
-        ActorExtra[i].ceilingz = sector[SECT(i)].ceilingz;
+        OW(i) = actor[i].owner = i;
+        actor[i].cgg = 0;
+        actor[i].movflag = 0;
+        actor[i].tempang = 0;
+        actor[i].dispicnum = 0;
+        actor[i].floorz = sector[SECT(i)].floorz;
+        actor[i].ceilingz = sector[SECT(i)].ceilingz;
 
-        ActorExtra[i].lastvx = 0;
-        ActorExtra[i].lastvy = 0;
-        ActorExtra[i].actorstayput = -1;
+        actor[i].lastvx = 0;
+        actor[i].lastvy = 0;
+        actor[i].actorstayput = -1;
 
         T1(i) = T2(i) = T3(i) = T4(i) = T5(i) = T6(i) = T7(i) = T8(i) = T9(i) = 0;
 
-        ActorExtra[i].flags = 0;
+        actor[i].flags = 0;
 
         if (PN(i) != SPEAKER && PN(i) != LETTER && PN(i) != DUCK && PN(i) != TARGET && PN(i) != TRIPBOMB && PN(i) != VIEWSCREEN && PN(i) != VIEWSCREEN2 && (CS(i)&48))
             if (!(PN(i) >= CRACK1 && PN(i) <= CRACK4))
@@ -4853,14 +4853,14 @@ int A_Spawn(int j, int pn)
                     A_Fall(i);
 
                     if (A_CheckSpriteFlags(i, SFLAG_BADGUYSTAYPUT))
-                        ActorExtra[i].actorstayput = sp->sectnum;
+                        actor[i].actorstayput = sp->sectnum;
 
                     g_player[myconnectindex].ps->max_actors_killed++;
                     sp->clipdist = 80;
                     if (j >= 0)
                     {
                         if (sprite[j].picnum == RESPAWN)
-                            ActorExtra[i].tempang = sprite[i].pal = sprite[j].pal;
+                            actor[i].tempang = sprite[i].pal = sprite[j].pal;
                         changespritestat(i, STAT_ACTOR);
                     }
                     else changespritestat(i, STAT_ZOMBIEACTOR);
@@ -4872,7 +4872,7 @@ int A_Spawn(int j, int pn)
                     changespritestat(i, STAT_ACTOR);
                 }
 
-                ActorExtra[i].timetosleep = 0;
+                actor[i].timetosleep = 0;
 
                 if (j >= 0)
                     sp->ang = sprite[j].ang;
@@ -5015,7 +5015,7 @@ int A_Spawn(int j, int pn)
                 sp->yrepeat = 0;
             }
 
-            if (j >= 0) sp->ang = ActorExtra[j].temp_data[5]+512;
+            if (j >= 0) sp->ang = actor[j].temp_data[5]+512;
             changespritestat(i, STAT_MISC);
             break;
 
@@ -5149,9 +5149,9 @@ int A_Spawn(int j, int pn)
 
             sp->xvel = 16;
             A_SetSprite(i,CLIPMASK0);
-            ActorExtra[i].temp_data[0] = 17;
-            ActorExtra[i].temp_data[2] = 0;
-            ActorExtra[i].temp_data[5] = sp->ang;
+            actor[i].temp_data[0] = 17;
+            actor[i].temp_data[2] = 0;
+            actor[i].temp_data[5] = sp->ang;
             changespritestat(i, 2);
             break;
 
@@ -5388,7 +5388,7 @@ int A_Spawn(int j, int pn)
             if (sp->picnum == RESPAWNMARKERRED)
             {
                 sp->xrepeat = sp->yrepeat = 24;
-                if (j >= 0) sp->z = ActorExtra[j].floorz; // -(1<<4);
+                if (j >= 0) sp->z = actor[j].floorz; // -(1<<4);
             }
             else
             {
@@ -5420,7 +5420,7 @@ int A_Spawn(int j, int pn)
         case MONEY__STATIC:
         case MAIL__STATIC:
         case PAPER__STATIC:
-            ActorExtra[i].temp_data[0] = krand()&2047;
+            actor[i].temp_data[0] = krand()&2047;
             sp->cstat = krand()&12;
             sp->xrepeat = sp->yrepeat = 8;
             sp->ang = krand()&2047;
@@ -5724,7 +5724,7 @@ int A_Spawn(int j, int pn)
         case PIGCOPDIVE__STATIC:
         case COMMANDERSTAYPUT__STATIC:
         case BOSS4STAYPUT__STATIC:
-            ActorExtra[i].actorstayput = sp->sectnum;
+            actor[i].actorstayput = sp->sectnum;
             fallthrough__;
         case BOSS1__STATIC:
         case BOSS2__STATIC:
@@ -5834,7 +5834,7 @@ int A_Spawn(int j, int pn)
 
                 if (j >= 0)
                 {
-                    ActorExtra[i].timetosleep = 0;
+                    actor[i].timetosleep = 0;
                     A_PlayAlertSound(i);
                     changespritestat(i, STAT_ACTOR);
                 }
@@ -5880,7 +5880,7 @@ int A_Spawn(int j, int pn)
 
             A_GetZLimits(i);
 
-            j = (ActorExtra[i].floorz-ActorExtra[i].ceilingz)>>9;
+            j = (actor[i].floorz-actor[i].ceilingz)>>9;
 
             sp->yrepeat = j;
             sp->xrepeat = 25-(j>>1);
@@ -5909,7 +5909,7 @@ int A_Spawn(int j, int pn)
                     return i;
                 }
                 g_player[myconnectindex].ps->max_actors_killed++;
-                ActorExtra[i].temp_data[5] = 0;
+                actor[i].temp_data[5] = 0;
                 if (ud.monsters_off == 1)
                 {
                     sp->xrepeat = sp->yrepeat = 0;
@@ -6532,7 +6532,7 @@ int A_Spawn(int j, int pn)
             case SE_14_SUBWAY_CAR:
                 j = A_CallSound(sect,i);
                 if (j == -1) j = SUBWAY;
-                ActorExtra[i].lastvx = j;
+                actor[i].lastvx = j;
                 fallthrough__;
             case SE_30_TWO_WAY_TRAIN:
                 if (numplayers > 1) break;
@@ -6933,9 +6933,9 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         }
         else if (s->picnum != CRANEPOLE)
         {
-            t->x -= mulscale16(65536-smoothratio,s->x-ActorExtra[i].bpos.x);
-            t->y -= mulscale16(65536-smoothratio,s->y-ActorExtra[i].bpos.y);
-            t->z -= mulscale16(65536-smoothratio,s->z-ActorExtra[i].bpos.z);
+            t->x -= mulscale16(65536-smoothratio,s->x-actor[i].bpos.x);
+            t->y -= mulscale16(65536-smoothratio,s->y-actor[i].bpos.y);
+            t->z -= mulscale16(65536-smoothratio,s->z-actor[i].bpos.z);
         }
 
         sect = s->sectnum;
@@ -7021,7 +7021,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             continue;
         case VIEWSCREEN__STATIC:
         case VIEWSCREEN2__STATIC:
-            if (camsprite >= 0 && ActorExtra[OW(i)].temp_data[0] == 1)
+            if (camsprite >= 0 && actor[OW(i)].temp_data[0] == 1)
             {
                 t->picnum = STATIC;
                 t->cstat |= (rand()&12);
@@ -7182,7 +7182,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 }
 
                 if (sector[t->sectnum].lotag == ST_2_UNDERWATER) k += 1795-1405;
-                else if ((ActorExtra[i].floorz-s->z) > (64<<8)) k += 60;
+                else if ((actor[i].floorz-s->z) > (64<<8)) k += 60;
 
                 t->picnum += k;
                 t->pal = g_player[p].ps->palookup;
@@ -7193,7 +7193,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             // CLAMP PLAYER SPRITE Y TO FLOOR
             if (g_player[p].ps->on_crane == -1 && ((sector[s->sectnum].lotag&0x7ff) != 1) && !HEAD_ABOVE_TROR_WATER(p))
             {
-                l = s->z-ActorExtra[g_player[p].ps->i].floorz+(3<<8);
+                l = s->z-actor[g_player[p].ps->i].floorz+(3<<8);
                 if (l > 1024 && s->yrepeat > 32 && s->extra > 0)
                     s->yoffset = (signed char)(l/(s->yrepeat<<2));
                 else s->yoffset=0;
@@ -7221,8 +7221,8 @@ PALONLY:
 
             if (s->owner == -1) continue;
 
-            if (t->z > ActorExtra[i].floorz && t->xrepeat < 32)
-                t->z = ActorExtra[i].floorz;
+            if (t->z > actor[i].floorz && t->xrepeat < 32)
+                t->z = actor[i].floorz;
 
             break;
 
@@ -7253,7 +7253,7 @@ PALONLY:
         case SCRAP3__STATIC:
         case SCRAP4__STATIC:
         case SCRAP5__STATIC:
-            if (ActorExtra[i].picnum == BLIMP && t->picnum == SCRAP1 && s->yvel >= 0)
+            if (actor[i].picnum == BLIMP && t->picnum == SCRAP1 && s->yvel >= 0)
                 t->picnum = s->yvel;
             else t->picnum += T1(i);
             t->shade -= 6;
@@ -7338,8 +7338,8 @@ PALONLY:
                 if (l > 0) while (tilesiz[t->picnum].x == 0 && t->picnum > 0)
                         t->picnum -= l;       //Hack, for actors
 
-                if (ActorExtra[i].dispicnum >= 0)
-                    ActorExtra[i].dispicnum = t->picnum;
+                if (actor[i].dispicnum >= 0)
+                    actor[i].dispicnum = t->picnum;
             }
             else if (display_mirror == 1)
                 t->cstat |= 4;
@@ -7355,9 +7355,9 @@ PALONLY:
             if (t->statnum != TSPR_TEMP && s->picnum != EXPLOSION2 && s->picnum != HANGLIGHT && s->picnum != DOMELITE)
                 if (s->picnum != HOTMEAT)
                 {
-                    if (ActorExtra[i].dispicnum < 0)
+                    if (actor[i].dispicnum < 0)
                     {
-                        ActorExtra[i].dispicnum++;
+                        actor[i].dispicnum++;
                         continue;
                     }
                     else if (ud.shadows && spritesortcnt < (MAXSPRITESONSCREEN-2))
@@ -7367,7 +7367,7 @@ PALONLY:
                         if ((sector[sect].lotag&0xff) > 2 || s->statnum == STAT_PROJECTILE || s->statnum == STAT_MISC || s->picnum == DRONE || s->picnum == COMMANDER)
                             daz = sector[sect].floorz;
                         else
-                            daz = ActorExtra[i].floorz;
+                            daz = actor[i].floorz;
 
                         if ((s->z-daz) < (8<<8))
                             if (g_player[screenpeek].ps->pos.z < daz)
@@ -7502,9 +7502,9 @@ PALONLY:
                         }
                 if ((sprite[s->owner].cstat&32768) == 0)
                 {
-                    if (!ActorExtra[s->owner].dispicnum)
-                        t->picnum = ActorExtra[i].temp_data[1];
-                    else t->picnum = ActorExtra[s->owner].dispicnum;
+                    if (!actor[s->owner].dispicnum)
+                        t->picnum = actor[i].temp_data[1];
+                    else t->picnum = actor[s->owner].dispicnum;
                     
                     if (!G_MaybeTakeOnFloorPal(t, sect))
                         t->pal = sprite[s->owner].pal;
@@ -7538,7 +7538,7 @@ PALONLY:
             break;
         }
 
-        ActorExtra[i].dispicnum = t->picnum;
+        actor[i].dispicnum = t->picnum;
         if (sector[t->sectnum].floorpicnum == MIRROR)
             t->xrepeat = t->yrepeat = 0;
     }
@@ -7829,12 +7829,12 @@ FOUNDCHEAT:
                         pub = 1;
                         sprite[g_player[myconnectindex].ps->i].cstat = 257;
 
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[0] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[1] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[2] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[3] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[4] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[5] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[0] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[1] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[2] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[3] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[4] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[5] = 0;
 
                         sprite[g_player[myconnectindex].ps->i].hitag = 0;
                         sprite[g_player[myconnectindex].ps->i].lotag = 0;
@@ -7846,13 +7846,13 @@ FOUNDCHEAT:
                     {
                         ud.god = 0;
                         sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                        ActorExtra[g_player[myconnectindex].ps->i].extra = -1;
+                        actor[g_player[myconnectindex].ps->i].extra = -1;
                         g_player[myconnectindex].ps->last_extra = g_player[myconnectindex].ps->max_player_health;
                         P_DoQuote(18,g_player[myconnectindex].ps);
                     }
 
                     sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                    ActorExtra[g_player[myconnectindex].ps->i].extra = 0;
+                    actor[g_player[myconnectindex].ps->i].extra = 0;
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -7866,12 +7866,12 @@ FOUNDCHEAT:
                         pub = 1;
                         sprite[g_player[myconnectindex].ps->i].cstat = 257;
 
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[0] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[1] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[2] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[3] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[4] = 0;
-                        ActorExtra[g_player[myconnectindex].ps->i].temp_data[5] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[0] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[1] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[2] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[3] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[4] = 0;
+                        actor[g_player[myconnectindex].ps->i].temp_data[5] = 0;
 
                         sprite[g_player[myconnectindex].ps->i].hitag = 0;
                         sprite[g_player[myconnectindex].ps->i].lotag = 0;
@@ -7891,13 +7891,13 @@ FOUNDCHEAT:
                     else
                     {
                         sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                        ActorExtra[g_player[myconnectindex].ps->i].extra = -1;
+                        actor[g_player[myconnectindex].ps->i].extra = -1;
                         g_player[myconnectindex].ps->last_extra = g_player[myconnectindex].ps->max_player_health;
                         P_DoQuote(18,g_player[myconnectindex].ps);
                     }
 
                     sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                    ActorExtra[g_player[myconnectindex].ps->i].extra = 0;
+                    actor[g_player[myconnectindex].ps->i].extra = 0;
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -10773,7 +10773,7 @@ static void G_DrawFrame()
         {
             slimerPos = sprite[slimerSprite].pos;
             slimerSect = sprite[slimerSprite].sectnum;
-            auto tData = ActorExtra[slimerSprite].temp_data[2];
+            auto tData = actor[slimerSprite].temp_data[2];
 
             vec3_t pos;
             fix16_t q16ang, q16horiz;
@@ -12069,7 +12069,7 @@ static int G_DoMoveThings(void)
             g_player[i].ps->team = g_player[i].pteam;
             if (GametypeFlags[ud.coop] & GAMETYPE_TDM)
             {
-                ActorExtra[g_player[i].ps->i].picnum = APLAYERTOP;
+                actor[g_player[i].ps->i].picnum = APLAYERTOP;
                 P_QuickKill(g_player[i].ps);
             }
         }

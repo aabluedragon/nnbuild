@@ -965,7 +965,7 @@ static void prelevel(char g)
                 A_Spawn(-1,i);
 
             if (sprite[i].cstat & 2048)
-                ActorExtra[i].flags |= SFLAG_NOSHADE;
+                actor[i].flags |= SFLAG_NOSHADE;
         }
 
     lotaglist = 0;
@@ -1003,7 +1003,7 @@ static void prelevel(char g)
                 while (j >= 0)
                 {
                     if (sprite[j].lotag == SE_12_LIGHT_SWITCH && sprite[j].hitag == SLT(i))
-                        ActorExtra[j].temp_data[0] = 1;
+                        actor[j].temp_data[0] = 1;
                     j = nextspritestat[j];
                 }
             }
@@ -1416,11 +1416,11 @@ static void insert_player_sprite(int p)
 
     g_player[p].ps->i = spriteIndex;
     g_player[p].ps->frag_ps = p;
-    ActorExtra[spriteIndex].owner = spriteIndex;
+    actor[spriteIndex].owner = spriteIndex;
 
-    ActorExtra[spriteIndex].bpos.x = g_player[p].ps->bobposx = g_player[p].ps->opos.x = g_player[p].ps->pos.x = s->x;
-    ActorExtra[spriteIndex].bpos.y = g_player[p].ps->bobposy = g_player[p].ps->opos.y = g_player[p].ps->pos.y = s->y;
-    ActorExtra[spriteIndex].bpos.z = g_player[p].ps->opos.z = g_player[p].ps->pos.z = s->z;
+    actor[spriteIndex].bpos.x = g_player[p].ps->bobposx = g_player[p].ps->opos.x = g_player[p].ps->pos.x = s->x;
+    actor[spriteIndex].bpos.y = g_player[p].ps->bobposy = g_player[p].ps->opos.y = g_player[p].ps->pos.y = s->y;
+    actor[spriteIndex].bpos.z = g_player[p].ps->opos.z = g_player[p].ps->pos.z = s->z;
     g_player[p].ps->oq16ang = g_player[p].ps->q16ang = fix16_from_int(s->ang);
 
     g_player[p].ps->cursectnum = s->sectnum;
@@ -1772,7 +1772,7 @@ int G_EnterLevel(int g)
     g_precacheCount = 0;
     clearbufbyte(gotpic,sizeof(gotpic),0L);
     clearbufbyte(precachehightile, sizeof(precachehightile), 0l);
-    //clearbufbyte(ActorExtra,sizeof(ActorExtra),0l); // JBF 20040531: yes? no?
+    //clearbufbyte(actor,sizeof(actor),0l); // JBF 20040531: yes? no?
 
     prelevel(g);
 

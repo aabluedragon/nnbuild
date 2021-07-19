@@ -1074,253 +1074,253 @@ static inline void X_AccessActiveProjectile(int iSet, int lVar1, int lLabelID, i
     case PROJ_WORKSLIKE:
         if (iSet)
         {
-            ActorExtra[proj].projectile.workslike=lValue;
+            actor[proj].projectile.workslike=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.workslike, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.workslike, g_i, g_p);
         return;
 
     case PROJ_SPAWNS:
         if (iSet)
         {
-            ActorExtra[proj].projectile.spawns=lValue;
+            actor[proj].projectile.spawns=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.spawns, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.spawns, g_i, g_p);
         return;
 
     case PROJ_SXREPEAT:
         if (iSet)
         {
-            ActorExtra[proj].projectile.sxrepeat=lValue;
+            actor[proj].projectile.sxrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.sxrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.sxrepeat, g_i, g_p);
         return;
 
     case PROJ_SYREPEAT:
         if (iSet)
         {
-            ActorExtra[proj].projectile.syrepeat=lValue;
+            actor[proj].projectile.syrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.syrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.syrepeat, g_i, g_p);
         return;
 
     case PROJ_SOUND:
         if (iSet)
         {
-            ActorExtra[proj].projectile.sound=lValue;
+            actor[proj].projectile.sound=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.sound, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.sound, g_i, g_p);
         return;
 
     case PROJ_ISOUND:
         if (iSet)
         {
-            ActorExtra[proj].projectile.isound=lValue;
+            actor[proj].projectile.isound=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.isound, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.isound, g_i, g_p);
         return;
 
     case PROJ_VEL:
         if (iSet)
         {
-            ActorExtra[proj].projectile.vel=lValue;
+            actor[proj].projectile.vel=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.vel, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.vel, g_i, g_p);
         return;
 
     case PROJ_EXTRA:
         if (iSet)
         {
-            ActorExtra[proj].projectile.extra=lValue;
+            actor[proj].projectile.extra=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.extra, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.extra, g_i, g_p);
         return;
 
     case PROJ_DECAL:
         if (iSet)
         {
-            ActorExtra[proj].projectile.decal=lValue;
+            actor[proj].projectile.decal=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.decal, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.decal, g_i, g_p);
         return;
 
     case PROJ_TRAIL:
         if (iSet)
         {
-            ActorExtra[proj].projectile.trail=lValue;
+            actor[proj].projectile.trail=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.trail, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.trail, g_i, g_p);
         return;
 
     case PROJ_TXREPEAT:
         if (iSet)
         {
-            ActorExtra[proj].projectile.txrepeat=lValue;
+            actor[proj].projectile.txrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.txrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.txrepeat, g_i, g_p);
         return;
 
     case PROJ_TYREPEAT:
         if (iSet)
         {
-            ActorExtra[proj].projectile.tyrepeat=lValue;
+            actor[proj].projectile.tyrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.tyrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.tyrepeat, g_i, g_p);
         return;
 
     case PROJ_TOFFSET:
         if (iSet)
         {
-            ActorExtra[proj].projectile.toffset=lValue;
+            actor[proj].projectile.toffset=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.toffset, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.toffset, g_i, g_p);
         return;
 
     case PROJ_TNUM:
         if (iSet)
         {
-            ActorExtra[proj].projectile.tnum=lValue;
+            actor[proj].projectile.tnum=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.tnum, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.tnum, g_i, g_p);
         return;
 
     case PROJ_DROP:
         if (iSet)
         {
-            ActorExtra[proj].projectile.drop=lValue;
+            actor[proj].projectile.drop=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.drop, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.drop, g_i, g_p);
         return;
 
     case PROJ_CSTAT:
         if (iSet)
         {
-            ActorExtra[proj].projectile.cstat=lValue;
+            actor[proj].projectile.cstat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.cstat, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.cstat, g_i, g_p);
         return;
 
     case PROJ_CLIPDIST:
         if (iSet)
         {
-            ActorExtra[proj].projectile.clipdist=lValue;
+            actor[proj].projectile.clipdist=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.clipdist, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.clipdist, g_i, g_p);
         return;
 
     case PROJ_SHADE:
         if (iSet)
         {
-            ActorExtra[proj].projectile.shade=lValue;
+            actor[proj].projectile.shade=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.shade, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.shade, g_i, g_p);
         return;
 
     case PROJ_XREPEAT:
         if (iSet)
         {
-            ActorExtra[proj].projectile.xrepeat=lValue;
+            actor[proj].projectile.xrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.xrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.xrepeat, g_i, g_p);
         return;
 
     case PROJ_YREPEAT:
         if (iSet)
         {
-            ActorExtra[proj].projectile.yrepeat=lValue;
+            actor[proj].projectile.yrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.yrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.yrepeat, g_i, g_p);
         return;
 
     case PROJ_PAL:
         if (iSet)
         {
-            ActorExtra[proj].projectile.pal=lValue;
+            actor[proj].projectile.pal=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.pal, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.pal, g_i, g_p);
         return;
 
     case PROJ_EXTRA_RAND:
         if (iSet)
         {
-            ActorExtra[proj].projectile.extra_rand=lValue;
+            actor[proj].projectile.extra_rand=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.extra_rand, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.extra_rand, g_i, g_p);
         return;
 
     case PROJ_HITRADIUS:
         if (iSet)
         {
-            ActorExtra[proj].projectile.hitradius=lValue;
+            actor[proj].projectile.hitradius=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.hitradius, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.hitradius, g_i, g_p);
         return;
 
     case PROJ_VEL_MULT:
         if (iSet)
         {
-            ActorExtra[proj].projectile.velmult=lValue;
+            actor[proj].projectile.velmult=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.velmult, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.velmult, g_i, g_p);
         return;
 
     case PROJ_OFFSET:
         if (iSet)
         {
-            ActorExtra[proj].projectile.offset=lValue;
+            actor[proj].projectile.offset=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.offset, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.offset, g_i, g_p);
         return;
 
     case PROJ_BOUNCES:
         if (iSet)
         {
-            ActorExtra[proj].projectile.bounces=lValue;
+            actor[proj].projectile.bounces=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.bounces, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.bounces, g_i, g_p);
         return;
 
     case PROJ_BSOUND:
         if (iSet)
         {
-            ActorExtra[proj].projectile.bsound=lValue;
+            actor[proj].projectile.bsound=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.bsound, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.bsound, g_i, g_p);
         return;
 
     case PROJ_RANGE:
         if (iSet)
         {
-            ActorExtra[proj].projectile.range=lValue;
+            actor[proj].projectile.range=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[proj].projectile.range, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.range, g_i, g_p);
         return;
 
     default:
@@ -3481,163 +3481,163 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     case ACTOR_HTCGG:
         if (iSet)
         {
-            ActorExtra[iActor].cgg=lValue;
+            actor[iActor].cgg=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[iActor].cgg, g_i, g_p);
+        Gv_SetVar(lVar2, actor[iActor].cgg, g_i, g_p);
         return;
 
     case ACTOR_HTPICNUM :
         if (iSet)
         {
-            ActorExtra[iActor].picnum=lValue;
+            actor[iActor].picnum=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[iActor].picnum, g_i, g_p);
+        Gv_SetVar(lVar2, actor[iActor].picnum, g_i, g_p);
         return;
 
     case ACTOR_HTANG:
         if (iSet)
         {
-            ActorExtra[iActor].ang=lValue;
+            actor[iActor].ang=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[iActor].ang, g_i, g_p);
+        Gv_SetVar(lVar2, actor[iActor].ang, g_i, g_p);
         return;
 
     case ACTOR_HTEXTRA:
         if (iSet)
         {
-            ActorExtra[iActor].extra=lValue;
+            actor[iActor].extra=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].extra, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].extra, g_i, g_p);
         return;
 
     case ACTOR_HTOWNER:
         if (iSet)
         {
-            ActorExtra[iActor].owner=lValue;
+            actor[iActor].owner=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].owner, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].owner, g_i, g_p);
         return;
 
     case ACTOR_HTMOVFLAG:
         if (iSet)
         {
-            ActorExtra[iActor].movflag=lValue;
+            actor[iActor].movflag=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].movflag, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].movflag, g_i, g_p);
         return;
 
     case ACTOR_HTTEMPANG:
         if (iSet)
         {
-            ActorExtra[iActor].tempang=lValue;
+            actor[iActor].tempang=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].tempang, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].tempang, g_i, g_p);
         return;
 
     case ACTOR_HTACTORSTAYPUT:
         if (iSet)
         {
-            ActorExtra[iActor].actorstayput=lValue;
+            actor[iActor].actorstayput=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].actorstayput, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].actorstayput, g_i, g_p);
         return;
 
     case ACTOR_HTDISPICNUM:
         if (iSet)
         {
-            ActorExtra[iActor].dispicnum=lValue;
+            actor[iActor].dispicnum=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].dispicnum, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].dispicnum, g_i, g_p);
         return;
 
     case ACTOR_HTTIMETOSLEEP:
         if (iSet)
         {
-            ActorExtra[iActor].timetosleep=lValue;
+            actor[iActor].timetosleep=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].timetosleep, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].timetosleep, g_i, g_p);
         return;
 
     case ACTOR_HTFLOORZ:
         if (iSet)
         {
-            ActorExtra[iActor].floorz=lValue;
+            actor[iActor].floorz=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].floorz, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].floorz, g_i, g_p);
         return;
 
     case ACTOR_HTCEILINGZ:
         if (iSet)
         {
-            ActorExtra[iActor].ceilingz=lValue;
+            actor[iActor].ceilingz=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].ceilingz, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].ceilingz, g_i, g_p);
         return;
 
     case ACTOR_HTLASTVX:
         if (iSet)
         {
-            ActorExtra[iActor].lastvx=lValue;
+            actor[iActor].lastvx=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].lastvx, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].lastvx, g_i, g_p);
         return;
 
     case ACTOR_HTLASTVY:
         if (iSet)
         {
-            ActorExtra[iActor].lastvy=lValue;
+            actor[iActor].lastvy=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].lastvy, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].lastvy, g_i, g_p);
         return;
 
     case ACTOR_HTBPOSX:
         if (iSet)
         {
-            ActorExtra[iActor].bpos.x=lValue;
+            actor[iActor].bpos.x=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].bpos.x, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].bpos.x, g_i, g_p);
         return;
 
     case ACTOR_HTBPOSY:
         if (iSet)
         {
-            ActorExtra[iActor].bpos.y=lValue;
+            actor[iActor].bpos.y=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].bpos.y, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].bpos.y, g_i, g_p);
         return;
 
     case ACTOR_HTBPOSZ:
         if (iSet)
         {
-            ActorExtra[iActor].bpos.z=lValue;
+            actor[iActor].bpos.z=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].bpos.z, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].bpos.z, g_i, g_p);
         return;
 
     case ACTOR_HTG_T:
         if (iSet)
         {
-            ActorExtra[iActor].temp_data[lParm2]=lValue;
+            actor[iActor].temp_data[lParm2]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ActorExtra[iActor].temp_data[lParm2], g_i, g_p);
+        Gv_SetVar(lVar2, actor[iActor].temp_data[lParm2], g_i, g_p);
         return;
 
     case ACTOR_ANGOFF:
@@ -3724,10 +3724,10 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     case ACTOR_HTFLAGS:
         if (iSet)
         {
-            ActorExtra[iActor].flags=lValue;
+            actor[iActor].flags=lValue;
             return;
         }
-        Gv_SetVar(lVar2,ActorExtra[iActor].flags, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].flags, g_i, g_p);
         return;
 
     case ACTOR_ALPHA:

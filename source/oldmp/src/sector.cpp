@@ -124,14 +124,14 @@ int check_activator_motion(int lotag)
                     {
                     case 11:
                     case 30:
-                        if (ActorExtra[j].temp_data[4])
+                        if (actor[j].temp_data[4])
                             return(1);
                         break;
                     case 20:
                     case 31:
                     case 32:
                     case 18:
-                        if (ActorExtra[j].temp_data[0])
+                        if (actor[j].temp_data[0])
                             return(1);
                         break;
                     }
@@ -344,7 +344,7 @@ void G_DoSectorAnimations(void)
                 if (ptr == &sector[datarget].floorz)
                     for (j = headspritesect[datarget]; j >= 0; j = nextspritesect[j])
                         if (sprite[j].statnum != 3)
-                            ActorExtra[j].bpos.z = sprite[j].z;
+                            actor[j].bpos.z = sprite[j].z;
 
                 if (sector[datarget].lotag == ST_18_ELEVATOR_DOWN || sector[datarget].lotag == ST_19_ELEVATOR_UP)
                     if (ptr == &sector[datarget].ceilingz)
@@ -386,9 +386,9 @@ void G_DoSectorAnimations(void)
                 for (j = headspritesect[datarget]; j >= 0; j = nextspritesect[j])
                     if (sprite[j].statnum != 3)
                     {
-                        ActorExtra[j].bpos.z = sprite[j].z;
+                        actor[j].bpos.z = sprite[j].z;
                         sprite[j].z += v;
-                        ActorExtra[j].floorz = sector[datarget].floorz + v;
+                        actor[j].floorz = sector[datarget].floorz + v;
                     }
             }
         }
@@ -570,7 +570,7 @@ int G_ActivateWarpElevators(int s,int d) //Parm = sectoreffectornum
     {
         if (SLT(i) == 17)
             if (SHT(i) == sprite[s].hitag)
-                if ((klabs(sector[sn].floorz-ActorExtra[s].temp_data[2]) > SP(i)) ||
+                if ((klabs(sector[sn].floorz-actor[s].temp_data[2]) > SP(i)) ||
                         (sector[SECT(i)].hitag == (sector[sn].hitag-d)))
                     break;
         i = nextspritestat[i];
@@ -621,7 +621,7 @@ void G_OperateSectors(int sn,int ii)
 
         if (E_SpriteIsValid(j))
         {
-            if (ActorExtra[j].tempang == 0 || ActorExtra[j].tempang == 256)
+            if (actor[j].tempang == 0 || actor[j].tempang == 256)
                 A_CallSound(sn, ii);
             sprite[j].extra = (sprite[j].extra == 1) ? 3 : 1;
         }
@@ -630,8 +630,8 @@ void G_OperateSectors(int sn,int ii)
     case ST_31_TWO_WAY_TRAIN:
 
         j = sector[sn].hitag;
-        if (ActorExtra[j].temp_data[4] == 0)
-            ActorExtra[j].temp_data[4] = 1;
+        if (actor[j].temp_data[4] == 0)
+            actor[j].temp_data[4] = 1;
 
         A_CallSound(sn,ii);
         break;
@@ -1017,8 +1017,8 @@ REDODOOR:
 
                 sector[sn].lotag ^= 0x8000;
                 if (sector[sn].lotag&0x8000) //OPENING
-                    ActorExtra[j].temp_data[0] = 1;
-                else ActorExtra[j].temp_data[0] = 2;
+                    actor[j].temp_data[0] = 1;
+                else actor[j].temp_data[0] = 2;
                 A_CallSound(sn,ii);
                 break;
             }
@@ -1043,9 +1043,9 @@ REDODOOR:
         l = headspritestat[STAT_EFFECTOR];
         while (l >= 0)
         {
-            if ((sprite[l].lotag&0xff)==21 && !ActorExtra[l].temp_data[0] &&
+            if ((sprite[l].lotag&0xff)==21 && !actor[l].temp_data[0] &&
                     (sprite[l].hitag) == j)
-                ActorExtra[l].temp_data[0] = 1;
+                actor[l].temp_data[0] = 1;
             l = nextspritestat[l];
         }
         A_CallSound(sn,ii);
@@ -1132,7 +1132,7 @@ void G_OperateActivators(int lotag, int playerNum)
                             case SE_31_FLOOR_RISE_FALL:
                             case SE_32_CEILING_RISE_FALL:
                             case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
-                                ActorExtra[foundSprite].temp_data[0] = 1 - ActorExtra[foundSprite].temp_data[0];
+                                actor[foundSprite].temp_data[0] = 1 - actor[foundSprite].temp_data[0];
                                 A_CallSound(SECT(spriteNum), foundSprite);
                                 break;
                             }
@@ -1603,16 +1603,16 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                 {
                 case 12:
                     sector[sprite[x].sectnum].floorpal = 0;
-                    ActorExtra[x].temp_data[0]++;
-                    if (ActorExtra[x].temp_data[0] == 2)
-                        ActorExtra[x].temp_data[0]++;
+                    actor[x].temp_data[0]++;
+                    if (actor[x].temp_data[0] == 2)
+                        actor[x].temp_data[0]++;
 
                     break;
                 case 24:
                 case 34:
                 case 25:
-                    ActorExtra[x].temp_data[4] = !ActorExtra[x].temp_data[4];
-                    if (ActorExtra[x].temp_data[4])
+                    actor[x].temp_data[4] = !actor[x].temp_data[4];
+                    if (actor[x].temp_data[4])
                         P_DoQuote(15,g_player[snum].ps);
                     else P_DoQuote(2,g_player[snum].ps);
                     break;
@@ -2113,7 +2113,7 @@ void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
                 {
                     for (bssize_t SPRITES_OF(STAT_EFFECTOR, j))
                         if (sprite[j].hitag == SHT(i))
-                            ActorExtra[j].temp_data[3] = 1;
+                            actor[j].temp_data[3] = 1;
                     break;
                 }
             }
@@ -2157,7 +2157,7 @@ void A_DamageObject_Internal(int i,int sn)
     }
 
     if (A_CheckSpriteFlags(sn,SFLAG_PROJECTILE))
-        if (ActorExtra[sn].projectile.workslike & PROJECTILE_RPG)
+        if (actor[sn].projectile.workslike & PROJECTILE_RPG)
             rpg = 1;
 
     switch (DynamicTileMap[PN(i)])
@@ -2364,9 +2364,9 @@ void A_DamageObject_Internal(int i,int sn)
 
     case FORCESPHERE__STATIC:
         sprite[i].xrepeat = 0;
-        ActorExtra[OW(i)].temp_data[0] = 32;
-        ActorExtra[OW(i)].temp_data[1] = !ActorExtra[OW(i)].temp_data[1];
-        ActorExtra[OW(i)].temp_data[2] ++;
+        actor[OW(i)].temp_data[0] = 32;
+        actor[OW(i)].temp_data[1] = !actor[OW(i)].temp_data[1];
+        actor[OW(i)].temp_data[2] ++;
         A_Spawn(i,EXPLOSION2);
         break;
 
@@ -2569,7 +2569,7 @@ void A_DamageObject_Internal(int i,int sn)
                 if (sprite[i].statnum == STAT_ZOMBIEACTOR)
                 {
                     changespritestat(i, STAT_ACTOR);
-                    ActorExtra[i].timetosleep = SLEEPTIME;
+                    actor[i].timetosleep = SLEEPTIME;
                 }
                 if ((sprite[i].xrepeat < 24 || PN(i) == SHARK) && sprite[sn].picnum == SHRINKSPARK) return;
             }
@@ -2579,10 +2579,10 @@ void A_DamageObject_Internal(int i,int sn)
                 if (sprite[sn].picnum == FREEZEBLAST && ((PN(i) == APLAYER && sprite[i].pal == 1) || (g_freezerSelfDamage == 0 && sprite[sn].owner == i)))
                     return;
 
-                ActorExtra[i].picnum = sprite[sn].picnum;
-                ActorExtra[i].extra += sprite[sn].extra;
-                ActorExtra[i].ang = sprite[sn].ang;
-                ActorExtra[i].owner = sprite[sn].owner;
+                actor[i].picnum = sprite[sn].picnum;
+                actor[i].extra += sprite[sn].extra;
+                actor[i].ang = sprite[sn].ang;
+                actor[i].owner = sprite[sn].owner;
 
                 if (A_CheckSpriteFlags(i, SFLAG_DAMAGEEVENT))
                 {
@@ -2602,7 +2602,7 @@ void A_DamageObject_Internal(int i,int sn)
                 if (sprite[i].xrepeat < 24 && sprite[sn].picnum == SHRINKSPARK)
                     return;
 
-                if (sprite[ActorExtra[i].owner].picnum != APLAYER)
+                if (sprite[actor[i].owner].picnum != APLAYER)
                     if (ud.player_skill >= 3)
                         sprite[sn].extra += (sprite[sn].extra>>1);
             }
@@ -3599,16 +3599,16 @@ void P_CheckSectors(int snum)
 
                     P_FindWall(p,&j);
                     if (j >= 0 && wall[j].overpicnum == 0)
-                        if (ActorExtra[neartagsprite].temp_data[0] == 0)
+                        if (actor[neartagsprite].temp_data[0] == 0)
                         {
                             if (ud.noexits && ud.multimode > 1)
                             {
-                                ActorExtra[p->i].picnum = NUKEBUTTON;
-                                ActorExtra[p->i].extra = 250;
+                                actor[p->i].picnum = NUKEBUTTON;
+                                actor[p->i].extra = 250;
                             }
                             else
                             {
-                                ActorExtra[neartagsprite].temp_data[0] = 1;
+                                actor[neartagsprite].temp_data[0] = 1;
                                 sprite[neartagsprite].owner = p->i;
                                 p->buttonpalette = sprite[neartagsprite].pal;
                                 if (p->buttonpalette)
@@ -3618,9 +3618,9 @@ void P_CheckSectors(int snum)
                         }
                     return;
                 case WATERFOUNTAIN__STATIC:
-                    if (ActorExtra[neartagsprite].temp_data[0] != 1)
+                    if (actor[neartagsprite].temp_data[0] != 1)
                     {
-                        ActorExtra[neartagsprite].temp_data[0] = 1;
+                        actor[neartagsprite].temp_data[0] = 1;
                         sprite[neartagsprite].owner = p->i;
 
                         if (sprite[p->i].extra < p->max_player_health)

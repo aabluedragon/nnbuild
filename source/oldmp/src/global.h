@@ -125,7 +125,7 @@ G_EXTERN int cloudtotalclock;
 
 // Structs
 G_EXTERN map_t MapInfo[(MAXVOLUMES + 1) * MAXLEVELS]; // +1 volume for "intro", "briefing" music
-G_EXTERN ActorData_t ActorExtra[MAXSPRITES];
+G_EXTERN ActorData_t actor[MAXSPRITES];
 G_EXTERN playerdata_t g_player[MAXPLAYERS];
 G_EXTERN PlayerSpawn_t g_playerSpawnPoints[MAXSPAWNPOINTS];
 G_EXTERN user_defs ud;

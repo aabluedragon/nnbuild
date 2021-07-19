@@ -317,7 +317,7 @@ int32_t G_LoadPlayer(int32_t spot)
     scriptptrs = (char*)Brealloc(scriptptrs, MAXSPRITES * sizeof(scriptptrs));
 
     if (kdfread(&scriptptrs[0],sizeof(scriptptrs),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
-    if (kdfread(&ActorExtra[0],sizeof(ActorData_t),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
+    if (kdfread(&actor[0],sizeof(ActorData_t),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
 
     for (i=0; i<MAXSPRITES; i++)
     {
@@ -586,11 +586,11 @@ int32_t G_LoadPlayer(int32_t spot)
         polymer_loadboard();
         while (i < MAXSPRITES)
         {
-            if (ActorExtra[i].lightptr)
+            if (actor[i].lightptr)
             {
-                polymer_deletelight(ActorExtra[i].lightId);
-                ActorExtra[i].lightptr = NULL;
-                ActorExtra[i].lightId = -1;
+                polymer_deletelight(actor[i].lightId);
+                actor[i].lightptr = NULL;
+                actor[i].lightId = -1;
             }
             i++;
         }
@@ -814,7 +814,7 @@ int32_t G_SavePlayer(int32_t spot)
     }
 
     dfwrite(&scriptptrs[0],sizeof(scriptptrs),MAXSPRITES,fil);
-    dfwrite(&ActorExtra[0],sizeof(ActorData_t),MAXSPRITES,fil);
+    dfwrite(&actor[0],sizeof(ActorData_t),MAXSPRITES,fil);
 
     for (i=0; i<MAXSPRITES; i++)
     {

@@ -1153,7 +1153,7 @@ typedef struct {
     char show2dsector[(MAXSECTORS+7)>>3];
     short g_numClouds,clouds[128],cloudx[128],cloudy[128];
     int g_pskyidx;
-    ActorData_t ActorExtra[MAXSPRITES];
+    ActorData_t actor[MAXSPRITES];
     short pskyoff[MAXPSKYTILES], pskybits;
 
     int g_animateCount;

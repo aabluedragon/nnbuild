@@ -1414,7 +1414,7 @@ static void Net_ResetPredictionData(void)
     DukePlayer_t* p = g_player[myconnectindex].ps;
     predictedPlayer = *p;
     predicted_pSprite = sprite[p->i];
-    predicted_pActor = ActorExtra[p->i];
+    predicted_pActor = actor[p->i];
 
     reset_predicted_linked_list(spritesect);
     //reset_predicted_linked_list(spritestat);
@@ -1582,14 +1582,14 @@ void Net_DoPrediction(int state)
     
     // Backup data
     backupSprite = sprite[pSpriteNum];
-    backupActor = ActorExtra[pSpriteNum];
+    backupActor = actor[pSpriteNum];
     backupSeed = randomseed;
     backupRandom = g_random;
 
     // Change to predicted sprite/actor
     sprite[pSpriteNum] = predicted_pSprite;
     sprite[pSpriteNum].cstat &= ~257;
-    ActorExtra[pSpriteNum] = predicted_pActor;
+    actor[pSpriteNum] = predicted_pActor;
 
     Net_SwapPredictedLinkedLists();
 
@@ -1604,13 +1604,13 @@ void Net_DoPrediction(int state)
 
     // Save modifications to predicted sprite/actor
     predicted_pSprite = sprite[pSpriteNum];
-    predicted_pActor = ActorExtra[pSpriteNum];
+    predicted_pActor = actor[pSpriteNum];
 
     Net_UseOriginalPointers();
     
     // Restore from backup
     sprite[pSpriteNum] = backupSprite;
-    ActorExtra[pSpriteNum] = backupActor;
+    actor[pSpriteNum] = backupActor;
 
     randomseed = backupSeed;
     g_random = backupRandom;

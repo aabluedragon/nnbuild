@@ -172,13 +172,13 @@
 #define SHT(i)  sprite[i].hitag
 #define SECT(i) sprite[i].sectnum
 
-#define T1(i)  ActorExtra[i].temp_data[0]
-#define T2(i)  ActorExtra[i].temp_data[1]
-#define T3(i)  ActorExtra[i].temp_data[2]
-#define T4(i)  ActorExtra[i].temp_data[3]
-#define T5(i)  ActorExtra[i].temp_data[4]
-#define T6(i)  ActorExtra[i].temp_data[5]
-#define T7(i)  ActorExtra[i].temp_data[6]
-#define T8(i)  ActorExtra[i].temp_data[7]
-#define T9(i)  ActorExtra[i].temp_data[8]
+#define T1(i)  actor[i].temp_data[0]
+#define T2(i)  actor[i].temp_data[1]
+#define T3(i)  actor[i].temp_data[2]
+#define T4(i)  actor[i].temp_data[3]
+#define T5(i)  actor[i].temp_data[4]
+#define T6(i)  actor[i].temp_data[5]
+#define T7(i)  actor[i].temp_data[6]
+#define T8(i)  actor[i].temp_data[7]
+#define T9(i)  actor[i].temp_data[8]
 

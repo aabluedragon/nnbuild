@@ -580,7 +580,7 @@ const memberlabel_t ActorLabels[]=
     { "hitag", ACTOR_HITAG, 0, 0 },
     { "extra", ACTOR_EXTRA, 0, 0 },
 
-    // ActorExtra labels...
+    // actor labels...
     { "htcgg", ACTOR_HTCGG, 0, 0 },
     { "htpicnum", ACTOR_HTPICNUM, 0, 0 },
     { "htang", ACTOR_HTANG, 0, 0 },
@@ -5679,8 +5679,8 @@ void copydefaultcons(void)
 
         fs = kfilelength(fpi);
 
-        kread(fpi,&ActorExtra[0],fs);
-        if (fwrite(&ActorExtra[0],fs,1,fpo)==0)initprintf("Failed to restore default CONs.\n");
+        kread(fpi,&actor[0],fs);
+        if (fwrite(&actor[0],fs,1,fpo)==0)initprintf("Failed to restore default CONs.\n");
 
         kclose(fpi);
         fclose(fpo);

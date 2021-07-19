@@ -103,7 +103,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         g_p = iPlayer;    // current player ID
         g_x = lDist;    // ?
         g_sp = &sprite[g_i];
-        g_t = &ActorExtra[g_i].temp_data[0];
+        g_t = &actor[g_i].temp_data[0];
 
         insptr = apScriptGameEvent[iEventID];
 
@@ -159,7 +159,7 @@ static int A_CheckSquished(int i, int p)
 {
     auto const pSector = (usectorptr_t)&sector[SECT(i)];
     auto const pSprite = &sprite[i];
-    auto const pActor = &ActorExtra[i];
+    auto const pActor = &actor[i];
 
     if (pSector->lotag == ST_23_SWINGING_DOOR || (pSprite->picnum == APLAYER && ud.clipping) /*||
         (pSector->lotag == ST_1_ABOVE_WATER && !A_CheckNoSE7Water(vm.pUSprite, pSprite->sectnum, pSector->lotag, NULL))*/)
@@ -246,7 +246,7 @@ int A_GetFurthestAngle(int const spriteNum, int const angDiv)
 {
     auto const pSprite = (uspriteptr_t)&sprite[spriteNum];
 
-    if (pSprite->picnum != APLAYER && ((ActorExtra[spriteNum].temp_data[0] & 63) > 2))
+    if (pSprite->picnum != APLAYER && ((actor[spriteNum].temp_data[0] & 63) > 2))
         return (pSprite->ang + 1024) & 2047;
 
     int       furthestAngle = 0;
@@ -274,7 +274,7 @@ int A_GetFurthestAngle(int const spriteNum, int const angDiv)
 
 int A_FurthestVisiblePoint(int iActor,spritetype *ts,int *dax,int *day)
 {
-    if ((ActorExtra[iActor].temp_data[0]&63)) return -1;
+    if ((actor[iActor].temp_data[0]&63)) return -1;
     {
         short angincs;
         int d, da;//, d, cd, ca,tempx,tempy,cx,cy;
@@ -322,7 +322,7 @@ void A_GetZLimits(int iActor)
         if (s->statnum == 4)
             zr = 4L;
 
-        getzrange_old(s->x,s->y,s->z-(ACTOR_FLOOR_OFFSET),s->sectnum,&ActorExtra[iActor].ceilingz,&hz,&ActorExtra[iActor].floorz,&lz,zr,CLIPMASK0);
+        getzrange_old(s->x,s->y,s->z-(ACTOR_FLOOR_OFFSET),s->sectnum,&actor[iActor].ceilingz,&hz,&actor[iActor].floorz,&lz,zr,CLIPMASK0);
 
         s->cstat = cstat;
 
@@ -333,29 +333,29 @@ void A_GetZLimits(int iActor)
             {
                 if (s->statnum != 4)
                 {
-                    ActorExtra[iActor].dispicnum = -4; // No shadows on actors
+                    actor[iActor].dispicnum = -4; // No shadows on actors
                     s->xvel = -256;
                     A_SetSprite(iActor,CLIPMASK0);
                 }
             }
             else if (sprite[lz].picnum == APLAYER && A_CheckEnemySprite(s))
             {
-                ActorExtra[iActor].dispicnum = -4; // No shadows on actors
+                actor[iActor].dispicnum = -4; // No shadows on actors
                 s->xvel = -256;
                 A_SetSprite(iActor,CLIPMASK0);
             }
             else if (s->statnum == STAT_PROJECTILE && sprite[lz].picnum == APLAYER)
                 if (s->owner == lz)
                 {
-                    ActorExtra[iActor].ceilingz = sector[s->sectnum].ceilingz;
-                    ActorExtra[iActor].floorz   = sector[s->sectnum].floorz;
+                    actor[iActor].ceilingz = sector[s->sectnum].ceilingz;
+                    actor[iActor].floorz   = sector[s->sectnum].floorz;
                 }
         }
     }
     else
     {
-        ActorExtra[iActor].ceilingz = sector[s->sectnum].ceilingz;
-        ActorExtra[iActor].floorz   = sector[s->sectnum].floorz;
+        actor[iActor].ceilingz = sector[s->sectnum].ceilingz;
+        actor[iActor].floorz   = sector[s->sectnum].floorz;
     }
 }
 
@@ -377,18 +377,18 @@ void A_Fall(int iActor)
     {
         cstat = s->cstat;
         s->cstat = 0;
-        getzrange_old(s->x, s->y, s->z - (ACTOR_FLOOR_OFFSET), s->sectnum, &ActorExtra[iActor].ceilingz, &hz, &ActorExtra[iActor].floorz, &lz, 127L, CLIPMASK0);
+        getzrange_old(s->x, s->y, s->z - (ACTOR_FLOOR_OFFSET), s->sectnum, &actor[iActor].ceilingz, &hz, &actor[iActor].floorz, &lz, 127L, CLIPMASK0);
         s->cstat = cstat;
     }
     else
     {
-        ActorExtra[iActor].ceilingz = sector[s->sectnum].ceilingz;
-        ActorExtra[iActor].floorz   = sector[s->sectnum].floorz;
+        actor[iActor].ceilingz = sector[s->sectnum].ceilingz;
+        actor[iActor].floorz   = sector[s->sectnum].floorz;
     }
 
     int fbunch = (sector[s->sectnum].floorstat & 512) ? -1 : yax_getbunch(s->sectnum, YAX_FLOOR);
 
-    if (s->z < ActorExtra[iActor].floorz-(ACTOR_FLOOR_OFFSET) || fbunch >= 0)
+    if (s->z < actor[iActor].floorz-(ACTOR_FLOOR_OFFSET) || fbunch >= 0)
     {
         if (sector[s->sectnum].lotag == ST_2_UNDERWATER && s->zvel > 3122)
             s->zvel = 3144;
@@ -398,9 +398,9 @@ void A_Fall(int iActor)
 
     if (fbunch >= 0)
         setspritez(iActor, &s->pos);
-    else if (s->z >= ActorExtra[iActor].floorz-(ACTOR_FLOOR_OFFSET))
+    else if (s->z >= actor[iActor].floorz-(ACTOR_FLOOR_OFFSET))
     {
-        s->z = ActorExtra[iActor].floorz - ACTOR_FLOOR_OFFSET;
+        s->z = actor[iActor].floorz - ACTOR_FLOOR_OFFSET;
         s->zvel = 0;
     }
 }
@@ -448,7 +448,7 @@ static inline void X_AlterAng(int a)
         else g_sp->owner = g_player[g_p].ps->i;
 
         if (sprite[g_sp->owner].picnum == APLAYER)
-            goalang = getangle(ActorExtra[g_i].lastvx-g_sp->x,ActorExtra[g_i].lastvy-g_sp->y);
+            goalang = getangle(actor[g_i].lastvx-g_sp->x,actor[g_i].lastvy-g_sp->y);
         else
             goalang = getangle(sprite[g_sp->owner].x-g_sp->x,sprite[g_sp->owner].y-g_sp->y);
 
@@ -505,7 +505,7 @@ static void X_Move(void)
 
     if (g_t[1] == 0 || a == 0)
     {
-        if (deadflag || (ActorExtra[g_i].bpos.x != g_sp->x) || (ActorExtra[g_i].bpos.y != g_sp->y))
+        if (deadflag || (actor[g_i].bpos.x != g_sp->x) || (actor[g_i].bpos.y != g_sp->y))
         {
             setspritez_old(g_i,g_sp->x,g_sp->y,g_sp->z);
         }
@@ -578,14 +578,14 @@ static void X_Move(void)
             {
                 if (g_sp->picnum == COMMANDER)
                 {
-                    ActorExtra[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                    actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->pos.vec2);
                     if (g_sp->z > (l-(8<<8)))
                     {
                         if (g_sp->z > (l-(8<<8))) g_sp->z = l-(8<<8);
                         g_sp->zvel = 0;
                     }
 
-                    ActorExtra[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                    actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
                     if ((g_sp->z-l) < (80<<8))
                     {
                         g_sp->z = l+(80<<8);
@@ -596,13 +596,13 @@ static void X_Move(void)
                 {
                     if (g_sp->zvel > 0)
                     {
-                        ActorExtra[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                        actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->pos.vec2);
                         if (g_sp->z > (l-(30<<8)))
                             g_sp->z = l-(30<<8);
                     }
                     else
                     {
-                        ActorExtra[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                        actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
                         if ((g_sp->z-l) < (50<<8))
                         {
                             g_sp->z = l+(50<<8);
@@ -613,8 +613,8 @@ static void X_Move(void)
             }
             else if (g_sp->picnum != ORGANTIC)
             {
-                if (g_sp->zvel > 0 && ActorExtra[g_i].floorz < g_sp->z)
-                    g_sp->z = ActorExtra[g_i].floorz;
+                if (g_sp->zvel > 0 && actor[g_i].floorz < g_sp->z)
+                    g_sp->z = actor[g_i].floorz;
                 if (g_sp->zvel < 0)
                 {
                     l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
@@ -627,8 +627,8 @@ static void X_Move(void)
             }
         }
         else if (g_sp->picnum == APLAYER)
-            if ((g_sp->z-ActorExtra[g_i].ceilingz) < (32<<8))
-                g_sp->z = ActorExtra[g_i].ceilingz+(32<<8);
+            if ((g_sp->z-actor[g_i].ceilingz) < (32<<8))
+                g_sp->z = actor[g_i].ceilingz+(32<<8);
 
         daxvel = g_sp->xvel;
         angdif = g_sp->ang;
@@ -667,7 +667,7 @@ static void X_Move(void)
             }
         }
 
-        ActorExtra[g_i].movflag = A_MoveSprite(g_i,
+        actor[g_i].movflag = A_MoveSprite(g_i,
                                                (daxvel*(sintable[(angdif+512)&2047]))>>14,
                                                (daxvel*(sintable[angdif&2047]))>>14,g_sp->zvel,CLIPMASK0);
     }
@@ -911,11 +911,11 @@ static int X_DoExecute(void)
     case CON_IFCANSEETARGET:
         j = cansee(g_sp->x,g_sp->y,g_sp->z-((krand()&41)<<8),g_sp->sectnum,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z/*-((krand()&41)<<8)*/,sprite[g_player[g_p].ps->i].sectnum);
         X_DoConditional(j);
-        if (j) ActorExtra[g_i].timetosleep = SLEEPTIME;
+        if (j) actor[g_i].timetosleep = SLEEPTIME;
         break;
 
     case CON_IFACTORNOTSTAYPUT:
-        X_DoConditional(ActorExtra[g_i].actorstayput == -1);
+        X_DoConditional(actor[g_i].actorstayput == -1);
         break;
 
     case CON_IFCANSEE:
@@ -949,8 +949,8 @@ static int X_DoExecute(void)
 
             // Huh?.  This does nothing....
             // (the result is always j==0....)
-//            if ((klabs(ActorExtra[g_i].lastvx-g_sp->x)+klabs(ActorExtra[g_i].lastvy-g_sp->y)) <
-//                    (klabs(ActorExtra[g_i].lastvx-s->x)+klabs(ActorExtra[g_i].lastvy-s->y)))
+//            if ((klabs(actor[g_i].lastvx-g_sp->x)+klabs(actor[g_i].lastvy-g_sp->y)) <
+//                    (klabs(actor[g_i].lastvx-s->x)+klabs(actor[g_i].lastvy-s->y)))
             //              j = 0;
 
             // um yeah, this if() will always fire....
@@ -961,7 +961,7 @@ static int X_DoExecute(void)
                 // also modifies 'target' x&y if found..
 
                 j = 1;
-                if (A_FurthestVisiblePoint(g_i,s,&ActorExtra[g_i].lastvx,&ActorExtra[g_i].lastvy) == -1)
+                if (A_FurthestVisiblePoint(g_i,s,&actor[g_i].lastvx,&actor[g_i].lastvy) == -1)
                     j = 0;
             }
         }
@@ -969,12 +969,12 @@ static int X_DoExecute(void)
         {
             // else, they did see it.
             // save where we were looking...
-            ActorExtra[g_i].lastvx = s->x;
-            ActorExtra[g_i].lastvy = s->y;
+            actor[g_i].lastvx = s->x;
+            actor[g_i].lastvy = s->y;
         }
 
         if (j && (g_sp->statnum == 1 || g_sp->statnum == 6))
-            ActorExtra[g_i].timetosleep = SLEEPTIME;
+            actor[g_i].timetosleep = SLEEPTIME;
 
         X_DoConditional(j);
         break;
@@ -1018,15 +1018,15 @@ static int X_DoExecute(void)
     case CON_IFPDISTL:
         insptr++;
         X_DoConditional(g_x < *insptr);
-        if (g_x > MAXSLEEPDIST && ActorExtra[g_i].timetosleep == 0)
-            ActorExtra[g_i].timetosleep = SLEEPTIME;
+        if (g_x > MAXSLEEPDIST && actor[g_i].timetosleep == 0)
+            actor[g_i].timetosleep = SLEEPTIME;
         break;
 
     case CON_IFPDISTG:
         insptr++;
         X_DoConditional(g_x > *insptr);
-        if (g_x > MAXSLEEPDIST && ActorExtra[g_i].timetosleep == 0)
-            ActorExtra[g_i].timetosleep = SLEEPTIME;
+        if (g_x > MAXSLEEPDIST && actor[g_i].timetosleep == 0)
+            actor[g_i].timetosleep = SLEEPTIME;
         break;
 
     case CON_ELSE:
@@ -1090,9 +1090,9 @@ static int X_DoExecute(void)
         {
             if (g_sp->pal == 1 && g_sp->extra == 0) // hack for frozen
                 g_sp->extra++;
-            g_sp->pal = ActorExtra[g_i].tempang;
+            g_sp->pal = actor[g_i].tempang;
         }
-        ActorExtra[g_i].tempang = 0;
+        actor[g_i].tempang = 0;
         break;
 
     case CON_TOSSWEAPON:
@@ -1134,7 +1134,7 @@ static int X_DoExecute(void)
         j = (*insptr++-g_sp->xrepeat)<<1;
         g_sp->xrepeat += ksgn(j);
 
-        if ((g_sp->picnum == APLAYER && g_sp->yrepeat < 36) || *insptr < g_sp->yrepeat || ((g_sp->yrepeat*(tilesiz[g_sp->picnum].y+8))<<2) < (ActorExtra[g_i].floorz - ActorExtra[g_i].ceilingz))
+        if ((g_sp->picnum == APLAYER && g_sp->yrepeat < 36) || *insptr < g_sp->yrepeat || ((g_sp->yrepeat*(tilesiz[g_sp->picnum].y+8))<<2) < (actor[g_i].floorz - actor[g_i].ceilingz))
         {
             j = ((*insptr)-g_sp->yrepeat)<<1;
             if (klabs(j)) g_sp->yrepeat += ksgn(j);
@@ -1243,27 +1243,27 @@ static int X_DoExecute(void)
             else if (G_CheckForSpaceFloor(g_sp->sectnum))
                 j = 0;
 
-            if (!ActorExtra[g_i].cgg-- || (sector[g_sp->sectnum].floorstat & 2))
+            if (!actor[g_i].cgg-- || (sector[g_sp->sectnum].floorstat & 2))
             {
                 A_GetZLimits(g_i);
-                ActorExtra[g_i].cgg = 3;
+                actor[g_i].cgg = 3;
             }
 
-            if (g_sp->z < (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
+            if (g_sp->z < (actor[g_i].floorz - ACTOR_FLOOR_OFFSET))
             {
                 g_sp->zvel = min(6144, g_sp->zvel + j);
                 int newZ = g_sp->z + g_sp->zvel;
 
                 if (yax_getbunch(g_sp->sectnum, YAX_FLOOR) >= 0 && (sector[g_sp->sectnum].floorstat & 512) == 0)
                     setspritez(g_i, &g_sp->pos);
-                else if (newZ > (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
-                    newZ = (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET);
+                else if (newZ > (actor[g_i].floorz - ACTOR_FLOOR_OFFSET))
+                    newZ = (actor[g_i].floorz - ACTOR_FLOOR_OFFSET);
 
                 g_sp->z = newZ;
                 break;
             }
 
-            g_sp->z = ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET;
+            g_sp->z = actor[g_i].floorz - ACTOR_FLOOR_OFFSET;
 
             if (A_CheckEnemySprite(g_sp) || (g_sp->picnum == APLAYER && g_sp->owner >= 0))
             {
@@ -1275,8 +1275,8 @@ static int X_DoExecute(void)
                         A_PlaySound(SQUISHED, g_i);
                         A_Spawn(g_i, BLOODPOOL);
                     }
-                    ActorExtra[g_i].picnum = SHOTSPARK1;
-                    ActorExtra[g_i].extra = 1;
+                    actor[g_i].picnum = SHOTSPARK1;
+                    actor[g_i].extra = 1;
                     g_sp->zvel = 0;
                 }
                 else if (g_sp->zvel > 2048 && sector[g_sp->sectnum].lotag != ST_1_ABOVE_WATER)
@@ -1289,11 +1289,11 @@ static int X_DoExecute(void)
                 }
             }
 
-            if (g_sp->z > (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET))
+            if (g_sp->z > (actor[g_i].floorz - ACTOR_FLOOR_OFFSET))
             {
                 A_GetZLimits(g_i);
-                if (ActorExtra[g_i].floorz != sector[g_sp->sectnum].floorz)
-                    g_sp->z = (ActorExtra[g_i].floorz - ACTOR_FLOOR_OFFSET);
+                if (actor[g_i].floorz != sector[g_sp->sectnum].floorz)
+                    g_sp->z = (actor[g_i].floorz - ACTOR_FLOOR_OFFSET);
                 break;
             }
             else if (sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER)
@@ -1360,7 +1360,7 @@ static int X_DoExecute(void)
 
     case CON_SLEEPTIME:
         insptr++;
-        ActorExtra[g_i].timetosleep = (short)*insptr++;
+        actor[g_i].timetosleep = (short)*insptr++;
         break;
 
     case CON_PAPER:
@@ -1371,7 +1371,7 @@ static int X_DoExecute(void)
     case CON_ADDKILLS:
         insptr++;
         g_player[g_p].ps->actors_killed += *insptr++;
-        ActorExtra[g_i].actorstayput = -1;
+        actor[g_i].actorstayput = -1;
         break;
 
     case CON_LOTSOFGLASS:
@@ -1880,15 +1880,15 @@ static int X_DoExecute(void)
 
                 if (sprite[i].statnum > STAT_ZOMBIEACTOR && (j == STAT_ACTOR || j == STAT_ZOMBIEACTOR))
                 {
-                    ActorExtra[i].lastvx = 0;
-                    ActorExtra[i].lastvy = 0;
-                    ActorExtra[i].timetosleep = 0;
-                    ActorExtra[i].cgg = 0;
-                    ActorExtra[i].movflag = 0;
-                    ActorExtra[i].tempang = 0;
-                    ActorExtra[i].dispicnum = 0;
+                    actor[i].lastvx = 0;
+                    actor[i].lastvy = 0;
+                    actor[i].timetosleep = 0;
+                    actor[i].cgg = 0;
+                    actor[i].movflag = 0;
+                    actor[i].tempang = 0;
+                    actor[i].dispicnum = 0;
                     T1(i)=T2(i)=T3(i)=T4(i)=T5(i)=T6(i)=T7(i)=T8(i)=T9(i)=0;
-                    ActorExtra[i].flags = 0;
+                    actor[i].flags = 0;
                     sprite[i].hitag = 0;
 
                     // pointers
@@ -2187,16 +2187,16 @@ static int X_DoExecute(void)
 
         if (tw == CON_ZSHOOT || tw == CON_EZSHOOT)
         {
-            ActorExtra[g_i].temp_data[9] = Gv_GetVarX(*insptr++);
-            if (ActorExtra[g_i].temp_data[9] == 0)
-                ActorExtra[g_i].temp_data[9] = 1;
+            actor[g_i].temp_data[9] = Gv_GetVarX(*insptr++);
+            if (actor[g_i].temp_data[9] == 0)
+                actor[g_i].temp_data[9] = 1;
         }
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
             insptr++;
-            ActorExtra[g_i].temp_data[9]=0;
+            actor[g_i].temp_data[9]=0;
             break;
         }
 
@@ -2205,7 +2205,7 @@ static int X_DoExecute(void)
         if (tw == CON_EZSHOOT || tw == CON_ESHOOT)
             Gv_SetVarX(g_iReturnVarID, j);
 
-        ActorExtra[g_i].temp_data[9]=0;
+        actor[g_i].temp_data[9]=0;
         break;
 
     case CON_SHOOTVAR:
@@ -2219,23 +2219,23 @@ static int X_DoExecute(void)
 
         if (tw == CON_ZSHOOTVAR || tw == CON_EZSHOOTVAR)
         {
-            ActorExtra[g_i].temp_data[9] = Gv_GetVarX(*insptr++);
-            if (ActorExtra[g_i].temp_data[9] == 0)
-                ActorExtra[g_i].temp_data[9] = 1;
+            actor[g_i].temp_data[9] = Gv_GetVarX(*insptr++);
+            if (actor[g_i].temp_data[9] == 0)
+                actor[g_i].temp_data[9] = 1;
         }
         j=Gv_GetVarX(*insptr++);
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
-            ActorExtra[g_i].temp_data[9]=0;
+            actor[g_i].temp_data[9]=0;
             break;
         }
 
         lReturn = A_Shoot(g_i, j);
         if (tw == CON_ESHOOTVAR || tw == CON_EZSHOOTVAR)
             Gv_SetVarX(g_iReturnVarID, lReturn);
-        ActorExtra[g_i].temp_data[9]=0;
+        actor[g_i].temp_data[9]=0;
         break;
     }
 
@@ -2674,7 +2674,7 @@ static int X_DoExecute(void)
 
     case CON_IFWASWEAPON:
         insptr++;
-        X_DoConditional(ActorExtra[g_i].picnum == *insptr);
+        X_DoConditional(actor[g_i].picnum == *insptr);
         break;
 
     case CON_IFAI:
@@ -2808,9 +2808,9 @@ static int X_DoExecute(void)
         else
         {
             P_RandomSpawnPoint(g_p);
-            g_sp->x = ActorExtra[g_i].bpos.x = g_player[g_p].ps->bobposx = g_player[g_p].ps->opos.x = g_player[g_p].ps->pos.x;
-            g_sp->y = ActorExtra[g_i].bpos.y = g_player[g_p].ps->bobposy = g_player[g_p].ps->opos.y =g_player[g_p].ps->pos.y;
-            g_sp->z = ActorExtra[g_i].bpos.z = g_player[g_p].ps->opos.z = g_player[g_p].ps->pos.z;
+            g_sp->x = actor[g_i].bpos.x = g_player[g_p].ps->bobposx = g_player[g_p].ps->opos.x = g_player[g_p].ps->pos.x;
+            g_sp->y = actor[g_i].bpos.y = g_player[g_p].ps->bobposy = g_player[g_p].ps->opos.y =g_player[g_p].ps->pos.y;
+            g_sp->z = actor[g_i].bpos.z = g_player[g_p].ps->opos.z = g_player[g_p].ps->pos.z;
             setspritez_old(g_player[g_p].ps->i,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z+PHEIGHT);
             g_sp->cstat = 257;
 
@@ -2842,15 +2842,15 @@ static int X_DoExecute(void)
             g_player[g_p].ps->runspeed = g_playerFriction;
             g_player[g_p].ps->falling_counter = 0;
 
-            ActorExtra[g_i].extra = -1;
-            ActorExtra[g_i].owner = g_i;
+            actor[g_i].extra = -1;
+            actor[g_i].owner = g_i;
 
-            ActorExtra[g_i].cgg = 0;
-            ActorExtra[g_i].movflag = 0;
-            ActorExtra[g_i].tempang = 0;
-            ActorExtra[g_i].actorstayput = -1;
-            ActorExtra[g_i].dispicnum = 0;
-            ActorExtra[g_i].owner = g_player[g_p].ps->i;
+            actor[g_i].cgg = 0;
+            actor[g_i].movflag = 0;
+            actor[g_i].tempang = 0;
+            actor[g_i].actorstayput = -1;
+            actor[g_i].dispicnum = 0;
+            actor[g_i].owner = g_player[g_p].ps->i;
 
             P_ResetInventory(g_p);
             P_ResetWeapons(g_p);
@@ -3056,7 +3056,7 @@ static int X_DoExecute(void)
 
     case CON_IFSPAWNEDBY:
         insptr++;
-        X_DoConditional(ActorExtra[g_i].picnum == *insptr);
+        X_DoConditional(actor[g_i].picnum == *insptr);
         break;
 
     case CON_WACKPLAYER:
@@ -3103,7 +3103,7 @@ static int X_DoExecute(void)
 
     case CON_IFGAPZL:
         insptr++;
-        X_DoConditional(((ActorExtra[g_i].floorz - ActorExtra[g_i].ceilingz) >> 8) < *insptr);
+        X_DoConditional(((actor[g_i].floorz - actor[g_i].ceilingz) >> 8) < *insptr);
         break;
 
     case CON_IFHITSPACE:
@@ -3148,7 +3148,7 @@ static int X_DoExecute(void)
     case CON_SPRITEPAL:
         insptr++;
         if (g_sp->picnum != APLAYER)
-            ActorExtra[g_i].tempang = g_sp->pal;
+            actor[g_i].tempang = g_sp->pal;
         g_sp->pal = *insptr++;
         break;
 
@@ -3174,12 +3174,12 @@ static int X_DoExecute(void)
 
     case CON_IFFLOORDISTL:
         insptr++;
-        X_DoConditional((ActorExtra[g_i].floorz - g_sp->z) <= ((*insptr)<<8));
+        X_DoConditional((actor[g_i].floorz - g_sp->z) <= ((*insptr)<<8));
         break;
 
     case CON_IFCEILINGDISTL:
         insptr++;
-        X_DoConditional((g_sp->z - ActorExtra[g_i].ceilingz) <= ((*insptr)<<8));
+        X_DoConditional((g_sp->z - actor[g_i].ceilingz) <= ((*insptr)<<8));
         break;
 
     case CON_PALFROM:
@@ -3705,8 +3705,8 @@ static int X_DoExecute(void)
 
     case CON_GETANGLETOTARGET:
         insptr++;
-        // ActorExtra[g_i].lastvx and lastvy are last known location of target.
-        Gv_SetVarX(*insptr++, getangle(ActorExtra[g_i].lastvx-g_sp->x,ActorExtra[g_i].lastvy-g_sp->y));
+        // actor[g_i].lastvx and lastvy are last known location of target.
+        Gv_SetVarX(*insptr++, getangle(actor[g_i].lastvx-g_sp->x,actor[g_i].lastvy-g_sp->y));
         break;
 
     case CON_ANGOFFVAR:
@@ -4362,7 +4362,7 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFNOTMOVING:
-        X_DoConditional((ActorExtra[g_i].movflag&49152) > 16384);
+        X_DoConditional((actor[g_i].movflag&49152) > 16384);
         break;
 
     case CON_RESPAWNHITAG:
@@ -4411,7 +4411,7 @@ static int X_DoExecute(void)
 
     case CON_SPRITEFLAGS:
         insptr++;
-        ActorExtra[g_i].flags = Gv_GetVarX(*insptr++);
+        actor[g_i].flags = Gv_GetVarX(*insptr++);
         break;
 
     case CON_GETTICKS:
@@ -4457,7 +4457,7 @@ void A_LoadActor(int iActor)
     g_p = -1; // iPlayer;    // Player ID
     g_x = -1; // lDist;    // ??
     g_sp = &sprite[g_i];    // Pointer to sprite structure
-    g_t = &ActorExtra[g_i].temp_data[0];   // Sprite's 'extra' data
+    g_t = &actor[g_i].temp_data[0];   // Sprite's 'extra' data
 
     if (actorLoadEventScrptr[g_sp->picnum] == 0) return;
 
@@ -4489,7 +4489,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     g_p = iPlayer;   // Player ID
     g_x = lDist;     // ??
     g_sp = &sprite[g_i];    // Pointer to sprite structure
-    g_t = &ActorExtra[g_i].temp_data[0];   // Sprite's 'extra' data
+    g_t = &actor[g_i].temp_data[0];   // Sprite's 'extra' data
 
     insptr = 4 + (actorscrptr[g_sp->picnum]);
 
@@ -4548,9 +4548,9 @@ void A_Execute(int iActor,int iPlayer,int lDist)
         case NUKEBARRELLEAKED__STATIC:
         case TRIPBOMB__STATIC:
         case EGG__STATIC:
-            if (ActorExtra[g_i].timetosleep > 1)
-                ActorExtra[g_i].timetosleep--;
-            else if (ActorExtra[g_i].timetosleep == 1)
+            if (actor[g_i].timetosleep > 1)
+                actor[g_i].timetosleep--;
+            else if (actor[g_i].timetosleep == 1)
                 changespritestat(g_i, STAT_ZOMBIEACTOR);
         default:
             return;
@@ -4566,9 +4566,9 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     }
     else if (ud.respawn_items == 1 && (g_sp->cstat&32768)) return;
 
-    if (ActorExtra[g_i].timetosleep > 1)
-        ActorExtra[g_i].timetosleep--;
-    else if (ActorExtra[g_i].timetosleep == 1)
+    if (actor[g_i].timetosleep > 1)
+        actor[g_i].timetosleep--;
+    else if (actor[g_i].timetosleep == 1)
         changespritestat(g_i, STAT_ZOMBIEACTOR);
 }
 
@@ -4618,7 +4618,7 @@ void G_SaveMapState(mapstate_t *save)
             }
         }
 
-        Bmemcpy(&save->ActorExtra[0],&ActorExtra[0],sizeof(ActorData_t)*MAXSPRITES);
+        Bmemcpy(&save->actor[0],&actor[0],sizeof(ActorData_t)*MAXSPRITES);
 
         for (i=MAXSPRITES-1;i>=0;i--)
         {
@@ -4716,7 +4716,7 @@ void G_RestoreMapState(mapstate_t *save)
         Bmemcpy(&headspritestat[STAT_DEFAULT],&save->headspritestat[STAT_DEFAULT],sizeof(headspritestat));
         Bmemcpy(&prevspritestat[STAT_DEFAULT],&save->prevspritestat[STAT_DEFAULT],sizeof(prevspritestat));
         Bmemcpy(&nextspritestat[STAT_DEFAULT],&save->nextspritestat[STAT_DEFAULT],sizeof(nextspritestat));
-        Bmemcpy(&ActorExtra[0],&save->ActorExtra[0],sizeof(ActorData_t)*MAXSPRITES);
+        Bmemcpy(&actor[0],&save->actor[0],sizeof(ActorData_t)*MAXSPRITES);
 
         for (i=MAXSPRITES-1;i>=0;i--)
         {
