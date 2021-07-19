@@ -2551,10 +2551,6 @@ static void G_MoveWeapons(void)
 
             if (ActorExtra[i].projectile.workslike & PROJECTILE_RPG)
             {
-                //  if (ActorExtra[i].projectile.workslike & COOLEXPLOSION1)
-                //                if( g_sounds[WIERDSHOT_FLY].num == 0 )
-                //                    A_PlaySound(WIERDSHOT_FLY,i);
-
                 p = -1;
 
                 if (ActorExtra[i].projectile.workslike & PROJECTILE_COOLEXPLOSION1)
