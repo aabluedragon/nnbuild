@@ -5249,10 +5249,9 @@ static void G_MoveMisc(void)  // STATNUM 5
             if (s->zvel > 1024 && s->zvel < 1280)
             {
                 setspritez_old(i,s->x,s->y,s->z);
-                sect = s->sectnum;
             }
 
-            if (s->z < sector[sect].floorz-(2<<8))
+            if (s->z < sector[s->sectnum].floorz-(2<<8))
             {
                 if (t[1] < 1) t[1]++;
                 else
@@ -5272,9 +5271,30 @@ static void G_MoveMisc(void)  // STATNUM 5
                         else t[0]++;
                     }
                 }
-                if (s->zvel < 4096) s->zvel += g_spriteGravity-50;
-                s->x += (s->xvel*sintable[(s->ang+512)&2047])>>14;
-                s->y += (s->xvel*sintable[s->ang&2047])>>14;
+
+                if (s->zvel < 4096)
+                    s->zvel += g_spriteGravity-50;
+
+                int32_t xchange = (s->xvel * sintable[(s->ang + 512) & 2047]);
+                int32_t ychange = (s->xvel * sintable[s->ang & 2047]);
+
+                // Item from blimp. Prevent items from escaping map boundaries.
+                if (s->picnum == SCRAP1 && s->yvel > 0)
+                {
+                    auto retVal = clipmove(&s->pos, &sect, xchange, ychange, (64 << 2), (4 << 8), (4 << 8), CLIPMASK1);
+                    if((retVal & 49152) == 32768 || (retVal & 49152) == 49152)
+                        s->xvel = 0;
+
+                    if (sect >= 0)
+                        if ((sect != s->sectnum))
+                            changespritesect(i, sect);
+                }
+                else
+                {
+                    s->x += xchange >> 14;
+                    s->y += ychange >> 14;
+                }
+
                 s->z += s->zvel;
             }
             else
