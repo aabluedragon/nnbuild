@@ -1369,10 +1369,13 @@ void Net_EnterMessage(void)
 }
 
 CREATE_PREDICTED_LINKED_LIST(spritesect);
-static spritetype backupSprite;
-static ActorData_t backupActor;
-static int32_t backupSeed;
-static randomseed_t backupRandom;
+CREATE_PREDICTED_LINKED_LIST(spritestat);
+int32_t predicted_Numsprites;
+int16_t predicted_tailspritefree;
+
+ActorData_t backupActor;
+int32_t backupSeed;
+randomseed_t backupRandom;
 
 static void Net_ProcessPrediction(void)
 {
@@ -1413,11 +1416,14 @@ static void Net_ResetPredictionData(void)
 {
     DukePlayer_t* p = g_player[myconnectindex].ps;
     predictedPlayer = *p;
-    predicted_pSprite = sprite[p->i];
     predicted_pActor = actor[p->i];
 
+    memcpy(predicted_sprite, original_sprite, sizeof(predicted_sprite));
+
     reset_predicted_linked_list(spritesect);
-    //reset_predicted_linked_list(spritestat);
+    reset_predicted_linked_list(spritestat);
+    predicted_Numsprites = Numsprites;
+    predicted_tailspritefree = tailspritefree;
 
     for (int i = g_gameVarCount - 1; i >= 0; i--)
     {
@@ -1431,7 +1437,7 @@ static void Net_ResetPredictionData(void)
         }
         else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
         {
-            Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * Numsprites);
+            Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * MAXSPRITES);
         }
         //else predicted_lValue[i] = aGameVars[i].val.lValue;
     }
@@ -1486,6 +1492,11 @@ void Net_CorrectPrediction(void)
         predictedPlayer.oq16horizoff = oq16horizoff;
 }
 
+void Net_InitializeStructPointers(void)
+{
+    original_sprite = sprite;
+}
+
 static void Net_InitializeGameVarPointers(void)
 {
     // Init GameVar original pointers here
@@ -1514,13 +1525,18 @@ static void Net_InitializeGameVarPointers(void)
     }
 }
 
+static bool using_predicted_pointers;
 void Net_InitializePrediction(void)
 {
     if ((numplayers < 2) || (g_player[myconnectindex].ps == NULL))
         return;
 
+    if (using_predicted_pointers)
+        OSD_Printf("^02Prediction Code Error! Tried to init prediction while currently using predicted pointers!\n");
+
     originalPlayer = g_player[myconnectindex].ps;
     Net_InitializeGameVarPointers();
+    Net_UseOriginalPointers();
     Net_ResetPredictionData();
 }
 
@@ -1530,6 +1546,8 @@ void Net_UsePredictedPointers(void)
         return;
 
     g_player[myconnectindex].ps = &predictedPlayer;
+
+    sprite = predicted_sprite;
 
     for (int i = g_gameVarCount - 1; i >= 0; i--)
     {
@@ -1541,6 +1559,8 @@ void Net_UsePredictedPointers(void)
             aGameVars[i].val.plValues = predicted_plValues[i];
         }
     }
+
+    using_predicted_pointers = true;
 }
 
 void Net_UseOriginalPointers(void)
@@ -1549,6 +1569,8 @@ void Net_UseOriginalPointers(void)
         return;
 
     g_player[myconnectindex].ps = originalPlayer;
+
+    sprite = original_sprite;
 
     // Switch to Original GameVars here
     for (int i = g_gameVarCount - 1; i >= 0; i--)
@@ -1561,12 +1583,16 @@ void Net_UseOriginalPointers(void)
             aGameVars[i].val.plValues = original_plValues[i];
         }
     }
+
+    using_predicted_pointers = false;
 }
 
 void Net_SwapPredictedLinkedLists(void)
 {
     swap_predicted_linked_list(spritesect);
-    //swap_predicted_linked_list(spritestat);
+    swap_predicted_linked_list(spritestat);
+    std::swap(Numsprites, predicted_Numsprites);
+    std::swap(tailspritefree, predicted_tailspritefree);
 }
 
 void Net_DoPrediction(int state)
@@ -1581,13 +1607,11 @@ void Net_DoPrediction(int state)
     Net_UsePredictedPointers();
     
     // Backup data
-    backupSprite = sprite[pSpriteNum];
     backupActor = actor[pSpriteNum];
     backupSeed = randomseed;
     backupRandom = g_random;
 
     // Change to predicted sprite/actor
-    sprite[pSpriteNum] = predicted_pSprite;
     sprite[pSpriteNum].cstat &= ~257;
     actor[pSpriteNum] = predicted_pActor;
 
@@ -1602,14 +1626,12 @@ void Net_DoPrediction(int state)
 
     Net_SwapPredictedLinkedLists();
 
-    // Save modifications to predicted sprite/actor
-    predicted_pSprite = sprite[pSpriteNum];
+    // Save modifications to predicted actor
     predicted_pActor = actor[pSpriteNum];
 
     Net_UseOriginalPointers();
     
     // Restore from backup
-    sprite[pSpriteNum] = backupSprite;
     actor[pSpriteNum] = backupActor;
 
     randomseed = backupSeed;

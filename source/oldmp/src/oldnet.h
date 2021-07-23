@@ -62,7 +62,10 @@ OLDNET_EXTERN int predictfifoplc;
 
 OLDNET_EXTERN DukePlayer_t* originalPlayer;
 OLDNET_EXTERN DukePlayer_t predictedPlayer;
-OLDNET_EXTERN spritetype predicted_pSprite;
+
+OLDNET_EXTERN spritetype predicted_sprite[MAXSPRITES];
+OLDNET_EXTERN spritetype* original_sprite;
+
 OLDNET_EXTERN ActorData_t predicted_pActor;
 
 OLDNET_EXTERN intptr_t* original_plValues[MAXGAMEVARS];
@@ -128,6 +131,7 @@ void Net_NewGame(int volume, int level);
 void Net_EndOfLevel(void);
 void Net_EnterMessage(void);
 
+void Net_InitializeStructPointers(void);
 void Net_CorrectPrediction(void);
 void Net_InitializePrediction(void);
 void Net_SwapPredictedLinkedLists(void);

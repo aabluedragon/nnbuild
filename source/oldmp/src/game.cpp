@@ -10447,6 +10447,7 @@ static void A_InitEnemyFlags(void)
 static void G_PostCreateGameState(void)
 {
     A_InitEnemyFlags();
+    Net_InitializeStructPointers();
 }
 
 static void G_Startup(void)
@@ -10766,7 +10767,7 @@ static void G_DrawFrame()
         g_player[myconnectindex].ps = &predictedPlayer;
         auto pSprite = originalPlayer->i;
         auto oldSprite = sprite[pSprite];
-        sprite[pSprite] = predicted_pSprite;
+        sprite[pSprite] = predicted_sprite[pSprite];
 
         // And an even worse hack to get slimers to attach to your face.
         // Get rid of this once we have full actor prediction again.

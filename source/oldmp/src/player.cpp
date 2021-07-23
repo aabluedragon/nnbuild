@@ -2196,7 +2196,7 @@ static int P_DisplayAccessAnim(int gs,int snum)
 void P_DisplayWeapon(int snum)
 {
     auto const pPlayer = g_player[snum].ps;
-    auto const pSprite = ((snum == myconnectindex) && (numplayers > 1)) ? &predicted_pSprite : &sprite[pPlayer->i];
+    auto const pSprite = ((snum == myconnectindex) && (numplayers > 1)) ? &predicted_sprite[pPlayer->i] : &sprite[pPlayer->i];
     auto const weaponFrame = &pPlayer->kickback_pic;
     int currentWeapon;
 
