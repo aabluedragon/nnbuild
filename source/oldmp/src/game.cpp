@@ -4593,6 +4593,11 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
     if (oldnet_predicting)
     {
         OSD_Printf("^08A_InsertSprite^12: ^02ATTEMPTING TO SPAWN ACTOR FROM PREDICTING STATE! FAIL.\n");
+        OSD_Printf("^12Owner SpriteNum:^07 %d, ^12Owner PicNum:^07 %d\n", s_ow, TrackerCast(sprite[s_ow].picnum));
+        OSD_Printf("^12Spawnee SpriteNum:^07 %d, ^12Spawnee PicNum:^07 %d\n", i, s_pn);
+
+        sprintf(tempbuf, "^02Critical Error in A_InsertSprite! See logs.");
+        G_AddUserQuote(tempbuf);
         return -1;
     }
 
