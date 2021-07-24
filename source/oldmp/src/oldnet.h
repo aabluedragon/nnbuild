@@ -70,6 +70,7 @@ OLDNET_EXTERN ActorData_t predicted_pActor;
 
 OLDNET_EXTERN intptr_t* original_plValues[MAXGAMEVARS];
 OLDNET_EXTERN intptr_t* predicted_plValues[MAXGAMEVARS];
+OLDNET_EXTERN intptr_t predicted_lValue[MAXGAMEVARS];
 
 //OLDNET_EXTERN PredictBackup_t predictBackup[MOVEFIFOSIZ];
 
