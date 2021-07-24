@@ -794,7 +794,7 @@ static int P_PostFireHitscan(int playerNum, int const spriteNum, hitdata_t* cons
                     Proj_DoRandDecalSize(decalSprite, projecTile);
 
                 if (decalFlags & 2)
-                    decal->cstat = 16 + (krand() & (8 + 4));
+                    decal->cstat = 16 + 128 + (krand() & (8 + 4));
 
                 A_SetSprite(decalSprite, CLIPMASK0);
 
