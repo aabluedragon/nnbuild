@@ -1179,7 +1179,7 @@ int A_Shoot(int i,int atwith)
             }
 
             // Restore cstat, spawn shotsparks and do damage at every point we hit.
-            for (int count = 0; count <= hitCount; count++)
+            for (int count = 0; count < hitCount; count++)
             {
                 auto curHit = &hits[count];
 
