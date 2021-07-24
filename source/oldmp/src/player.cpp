@@ -1179,14 +1179,17 @@ int A_Shoot(int i,int atwith)
             }
 
             // Restore cstat, spawn shotsparks and do damage at every point we hit.
-            for (int count = 0; count < hitCount; count++)
+            int dmgCount = 0;
+            do
             {
-                auto curHit = &hits[count];
+                auto curHit = &hits[dmgCount];
 
                 if (curHit->sprite > -1)
                 {
-                    sprite[curHit->sprite].cstat = hitCstats[count];
+                    sprite[curHit->sprite].cstat = hitCstats[dmgCount];
                 }
+
+                dmgCount++;
 
                 if (p >= 0)
                 {
@@ -1204,7 +1207,7 @@ int A_Shoot(int i,int atwith)
                 if ((krand() & 255) < 4)
                     if (pProj->isound >= 0)
                         S_PlaySound3D(pProj->isound, k, &curHit->pos);
-            }
+            } while (dmgCount < hitCount);
 
             return -1;
         }
