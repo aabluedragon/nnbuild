@@ -6753,7 +6753,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         //greenslime can't be handled through the dynamictostatic system due to addition on constant
         if ((t->picnum >= GREENSLIME)&&(t->picnum <= GREENSLIME+7))
         {
-            if ((screenpeek == myconnectindex) && (g_player[myconnectindex].ps->somethingonplayer == i))
+            if ((numplayers > 1) && (screenpeek == myconnectindex) && (g_player[myconnectindex].ps->somethingonplayer == i))
             {
                 t->statnum = TSPR_TEMP;
             }
