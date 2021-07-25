@@ -315,7 +315,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
 
     ud.m_respawn_items = 0;
     ud.m_respawn_inventory = 0;
-    //ud.m_respawn_monsters = 0;
+    ud.m_respawn_monsters = 0;
 
     ud.m_coop = 1;
 
