@@ -1399,7 +1399,7 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("myhardlanding",(intptr_t)&predictedPlayer.hard_landing, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("myreturntocenter",(intptr_t)&predictedPlayer.return_to_center, GAMEVAR_SYSTEM | GAMEVAR_CHARPTR | GAMEVAR_SYNCCHECK);
 
-    Gv_NewVar("predicting", (intptr_t)&oldnet_predicting, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("predicting", (intptr_t)&oldnet_predicting, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_INTPTR);
     // ---
 
     Gv_NewVar("display_mirror",(intptr_t)&display_mirror, GAMEVAR_SYSTEM | GAMEVAR_INTPTR | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
