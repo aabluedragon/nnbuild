@@ -128,61 +128,95 @@ void G_SetCrosshairColor(int32_t r, int32_t g, int32_t b)
     tileInvalidate(CROSSHAIR, -1, -1);
 }
 
+#define score_inventory(x, y, picnum, cond) rotatesprite_((x) << 16, (y) << 16, 24576, 0, picnum, 0, (cond) ? 0 : 4, RS_AUTO | RS_TOPLEFT, (cond) ? 0 : 128, 0, 0, 0, xdim, ydim)
 void G_ShowScores(bool bonus)
 {
     int i, y, deaths, nemesis_kills, nemesis;
 
+    if (playerswhenstarted < 2 || !(GametypeFlags[ud.coop] & (GAMETYPE_COOP | GAMETYPE_SCORESHEET)))
+        return;
+
+#if 0
+    static struct score_t
+    {
+        int32_t frags;
+        int32_t deaths;
+        uint8_t id;
+    } scores[MAXPLAYERS];
+#endif
+
     // NetDuke32 To-Do: Sort list by rank, mark leader. Probably want an inline struct here.
 
-    if (playerswhenstarted > 1 && (GametypeFlags[ud.coop] & GAMETYPE_SCORESHEET))
+    int yoff = 34;
+
+    if (playerswhenstarted >= 16) // Move board up a bit if we're at 16 players or more.
+        yoff -= 4;
+
+    if (bonus)
     {
-        int yoff = 34;
+        rotatesprite(0, 0, 65536L, 0, MENUSCREEN, 16, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
 
-        if (playerswhenstarted >= 16) // Move board up a bit if we're at 16 players or more.
-            yoff -= 4;
+        if (playerswhenstarted < 14)
+            gametext(160, 176, "PRESS ANY KEY TO CONTINUE", 0, 2 + 8 + 16);
+    }
 
-        if (bonus)
+    rotatesprite(160 << 16, yoff << 16, 65536L, 0, INGAMEDUKETHREEDEE, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
+    if (PLUTOPAK)   // JBF 20030804
+        rotatesprite((260) << 16, (yoff + 2) << 16, 65536L, 0, PLUTOPAKSPRITE + 2, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+    gametext(160, yoff + 26, MapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
+
+    yoff += 36;
+    int start_x = 64;
+    int name_x = start_x + 12;
+    int frags_hp_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 54 : 66);
+    int deaths_x = start_x + 98;
+    int misc_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 128 : 134);
+    int ping_x = start_x + 180;
+
+    minitext(start_x, yoff, "#", 8, 2 + 8 + 16 + 128);
+    minitext(name_x, yoff, "NAME", 8, 2 + 8 + 16 + 128);
+    minitext(frags_hp_x, yoff, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "HP/ARMOR" : "FRAGS", 8, 2 + 8 + 16 + 128);
+    minitext(deaths_x, yoff, "DEATHS", 8, 2 + 8 + 16 + 128);
+    minitext(misc_x, yoff, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "INVENTORY" : "NEMESIS", 8, 2 + 8 + 16 + 128);
+    minitext(ping_x, yoff, "PING", 8, 2 + 8 + 16 + 128);
+
+    yoff += 10;
+
+    for (i = 0; i < playerswhenstarted; i++)
+    {
+        DukePlayer_t* p = g_player[i].ps;
+
+        Bsprintf(tempbuf, "%d", i + 1);
+        minitext(start_x, yoff, tempbuf, 0, 2 + 8 + 16 + 128);
+
+        minitext(name_x, yoff, g_player[i].user_name, p->palookup, 2 + 8 + 16 + 128);
+
+        if (GametypeFlags[ud.coop] & GAMETYPE_COOP)
         {
-            rotatesprite(0, 0, 65536L, 0, MENUSCREEN, 16, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
+            if (g_player[i].connected)
+            {
+                Bsprintf(tempbuf, "^02%d^12/^06%d", TrackerCast(sprite[p->i].extra), p->shield_amount);
+            }
+            else
+            {
+                Bsprintf(tempbuf, "^10N/A");
+            }
 
-            if(playerswhenstarted < 14)
-                gametext(160, 176, "PRESS ANY KEY TO CONTINUE", 0, 2 + 8 + 16);
+            minitext(frags_hp_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
+
+            Bsprintf(tempbuf, "%-4d", p->fraggedself);
+            minitext(deaths_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
+
+            score_inventory(misc_x, yoff, FIRSTAID_ICON, p->firstaid_amount > 0);
+            score_inventory(misc_x + 8, yoff, STEROIDS_ICON, p->steroids_amount >= 400);
+            score_inventory(misc_x + 14, yoff, HOLODUKE_ICON, p->holoduke_amount > 0);
+            score_inventory(misc_x + 19, yoff, JETPACK_ICON, p->jetpack_amount > 0);
+            score_inventory(misc_x + 25, yoff, HEAT_ICON, p->heat_amount > 0);
+            score_inventory(misc_x + 32, yoff, AIRTANK_ICON, p->scuba_amount > 0);
+            score_inventory(misc_x + 39, yoff, BOOT_ICON, p->boot_amount > 0);
         }
-
-        rotatesprite(160 << 16, yoff << 16, 65536L, 0, INGAMEDUKETHREEDEE, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
-        if (PLUTOPAK)   // JBF 20030804
-            rotatesprite((260) << 16, (yoff+2) << 16, 65536L, 0, PLUTOPAKSPRITE + 2, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-        gametext(160, yoff+26, MapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
-
-        yoff += 36;
-
-        int start_x = 64;
-        int name_x = start_x + 12;
-        int frags_x = start_x + 66;
-        int deaths_x = start_x + 98;
-        int nemesis_x = start_x + 134;
-        int ping_x = start_x + 180;
-
-        minitext(start_x, yoff, "#", 8, 2 + 8 + 16 + 128);
-        minitext(name_x, yoff, "NAME", 8, 2 + 8 + 16 + 128);
-        minitext(frags_x, yoff, "FRAGS", 8, 2 + 8 + 16 + 128);
-        minitext(deaths_x, yoff, "DEATHS", 8, 2 + 8 + 16 + 128);
-        minitext(nemesis_x, yoff, "NEMESIS", 8, 2 + 8 + 16 + 128);
-        minitext(ping_x, yoff, "PING", 8, 2 + 8 + 16 + 128);
-
-        yoff += 10;
-
-        for (i = 0; i < playerswhenstarted; i++)
+        else
         {
-            Bsprintf(tempbuf, "%d", i + 1);
-
-            minitext(start_x, yoff, tempbuf, 0, 2 + 8 + 16 + 128);
-
-            minitext(name_x, yoff, g_player[i].user_name, g_player[i].ps->palookup, 2 + 8 + 16 + 128);
-
-            Bsprintf(tempbuf, "%-4d", g_player[i].ps->frag - g_player[i].ps->fraggedself);
-            minitext(frags_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
-
             deaths = 0;
             nemesis = -1;
             nemesis_kills = 0;
@@ -199,38 +233,41 @@ void G_ShowScores(bool bonus)
                 }
             }
 
+            Bsprintf(tempbuf, "%-4d", g_player[i].ps->frag - g_player[i].ps->fraggedself);
+            minitext(frags_hp_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
+
             Bsprintf(tempbuf, "%-4d", deaths + g_player[i].ps->fraggedself);
             minitext(deaths_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
             if (nemesis > -1)
             {
-                minitext(nemesis_x, yoff, g_player[nemesis].user_name, g_player[nemesis].ps->palookup, 2 + 8 + 16 + 128);
+                minitext(misc_x, yoff, g_player[nemesis].user_name, g_player[nemesis].ps->palookup, 2 + 8 + 16 + 128);
             }
             else if (g_player[i].ps->fraggedself > nemesis_kills)
             {
-                minitext(nemesis_x, yoff, "Themself!", 6, 2 + 8 + 16 + 128);
+                minitext(misc_x, yoff, "Themself!", 6, 2 + 8 + 16 + 128);
             }
             else
             {
-                minitext(nemesis_x, yoff, "Nobody", 12, 2 + 8 + 16 + 128);
+                minitext(misc_x, yoff, "Nobody", 12, 2 + 8 + 16 + 128);
             }
-
-            if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && i == connecthead)
-            {
-                minitext(ping_x, yoff, "Master", 8, 2 + 8 + 16 + 128);
-            }
-            else if ((g_networkBroadcastMode == NETMODE_P2P) || !g_player[i].connected)
-            {
-                minitext(ping_x, yoff, "N/A", 2, 2 + 8 + 16 + 128);
-            }
-            else
-            {
-                Bsprintf(tempbuf, "%d", g_player[i].ping);
-                minitext(ping_x, yoff, tempbuf, 12, 2 + 8 + 16 + 128);
-            }
-
-            yoff += 7;
         }
+
+        if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && i == connecthead)
+        {
+            minitext(ping_x, yoff, "Master", 8, 2 + 8 + 16 + 128);
+        }
+        else if ((g_networkBroadcastMode == NETMODE_P2P) || !g_player[i].connected)
+        {
+            minitext(ping_x, yoff, "N/A", 2, 2 + 8 + 16 + 128);
+        }
+        else
+        {
+            Bsprintf(tempbuf, "%d", g_player[i].ping);
+            minitext(ping_x, yoff, tempbuf, 12, 2 + 8 + 16 + 128);
+        }
+
+        yoff += 7;
     }
 }
 
