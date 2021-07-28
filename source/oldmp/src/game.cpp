@@ -10831,7 +10831,6 @@ static void G_DrawFrame()
     if (debug_on)
         G_ShowCacheLocks();
 
-    //                checksync();
     Net_DisplaySyncMsg();
 
     if (VOLUMEONE)
