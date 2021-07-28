@@ -3891,7 +3891,7 @@ static void G_OROR_DupeSprites(const spritetype *sp)
 
     for (k = headspritesect[sp->sectnum]; k != -1; k = nextspritesect[k])
     {
-        if (spritesortcnt >= MAXSPRITESONSCREEN)
+        if (spritesortcnt >= maxspritesonscreen)
             break;
 
         if (sprite[k].picnum != SECTOREFFECTOR && (sprite[k].z >= sp->z) && !(sprite[k].cstat & 32768))
@@ -7117,7 +7117,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
             if (ud.multimode > 1 && (display_mirror || screenpeek != p || s->owner == -1))
             {
-                if (ud.showweapons && sprite[g_player[p].ps->i].extra > 0 && g_player[p].ps->curr_weapon > 0)
+                if (ud.showweapons && sprite[g_player[p].ps->i].extra > 0 && g_player[p].ps->curr_weapon > 0 && (spritesortcnt < maxspritesonscreen))
                 {
                     memcpy((spritetype *)&tsprite[spritesortcnt],(spritetype *)t,sizeof(spritetype));
 
@@ -7141,7 +7141,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     spritesortcnt++;
                 }
 
-                if (g_player[p].inputBits->extbits & (EXTBIT_CHAT) && !ud.pause_on)
+                if (g_player[p].inputBits->extbits & (EXTBIT_CHAT) && !ud.pause_on && (spritesortcnt < maxspritesonscreen))
                 {
                     memcpy((spritetype *)&tsprite[spritesortcnt],(spritetype *)t,sizeof(spritetype));
 
@@ -7365,7 +7365,7 @@ PALONLY:
                         actor[i].dispicnum++;
                         continue;
                     }
-                    else if (ud.shadows && spritesortcnt < (MAXSPRITESONSCREEN-2))
+                    else if (ud.shadows && spritesortcnt < (maxspritesonscreen-2))
                     {
                         int daz,xrep,yrep;
 
