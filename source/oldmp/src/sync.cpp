@@ -26,7 +26,6 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 #include "duke3d.h"
 
-int g_numSyncBytes = 1;
 char g_szfirstSyncMsg[MAXSYNCBYTES][60];
 int g_foundSyncError = 0;
 
@@ -55,7 +54,7 @@ void initsynccrc(void)
     }
 }
 
-char Net_PlayerSync(void)
+static char Sync_PlayerPos(void)
 {
     short i;
     unsigned short crc = 0;
@@ -74,7 +73,7 @@ char Net_PlayerSync(void)
     return ((char) crc & 255);
 }
 
-char Net_PlayerSync2(void)
+static char Sync_PlayerData(void)
 {
     int i;
     int j, nextj;
@@ -104,7 +103,7 @@ char Net_PlayerSync2(void)
     return ((char) crc & 255);
 }
 
-char Net_ActorSync(void)
+static char Sync_Actors(void)
 {
     unsigned short crc = 0;
     int j;
@@ -135,7 +134,7 @@ char Net_ActorSync(void)
     return ((char) crc & 255);
 }
 
-char Net_WeaponSync(void)
+static char Sync_Projectiles(void)
 {
     unsigned short crc = 0;
     int j;
@@ -153,7 +152,7 @@ char Net_WeaponSync(void)
     return ((char) crc & 255);
 }
 
-char Net_MapSync(void)
+static char Sync_Map(void)
 {
     unsigned short crc = 0;
     int j;
@@ -189,7 +188,7 @@ char Net_MapSync(void)
     return ((char) crc & 255);
 }
 
-char Net_RandomSync(void)
+static char Sync_Random(void)
 {
     unsigned short crc = 0;
 
@@ -205,51 +204,50 @@ char Net_RandomSync(void)
     updatecrc(crc, g_random.playerweapon);
     updatecrc(crc, (g_random.playerweapon >> 8));
 
-    if (g_numSyncBytes == 1)
-    {
-        updatecrc(crc,Net_PlayerSync() & 255);
-        updatecrc(crc,Net_PlayerSync2() & 255);
-        updatecrc(crc,Net_WeaponSync() & 255);
-        updatecrc(crc,Net_ActorSync() & 255);
-        updatecrc(crc,Net_MapSync() & 255);
-    }
-
     return ((char) crc & 255);
 }
 
-const char *SyncNames[] =
+static char Sync_Engine(void)
 {
-    "Net_CheckRandomSync",
-    "Net_CheckPlayerSync",
-    "Net_CheckPlayerSync2",
-    "Net_CheckWeaponSync",
-    "Net_CheckActorSync",
-    "Net_CheckMapSync",
-    NULL
-};
+    unsigned short crc = 0;
 
-static char(*SyncFunc[MAXSYNCBYTES + 1])(void) =
-{
-    Net_RandomSync,
-    Net_PlayerSync,
-    Net_PlayerSync2,
-    Net_WeaponSync,
-    Net_ActorSync,
-    Net_MapSync,
-    NULL
+    updatecrc(crc, Numsprites);
+    updatecrc(crc, (Numsprites >> 8));
+
+    updatecrc(crc, tailspritefree);
+    updatecrc(crc, (tailspritefree >> 8));
+
+    updatecrc(crc, numwalls);
+    updatecrc(crc, (numwalls >> 8));
+
+    updatecrc(crc, numsectors);
+    updatecrc(crc, (numsectors >> 8));
+
+    return ((char)crc & 255);
+}
+
+// This must not exceed MAXSYNCBYTES
+static SyncType_t syncType[] = {
+    DEFINE_SYNCFUNC(Sync_Engine),
+    DEFINE_SYNCFUNC(Sync_Random),
+    DEFINE_SYNCFUNC(Sync_PlayerPos),
+    DEFINE_SYNCFUNC(Sync_PlayerData),
+    DEFINE_SYNCFUNC(Sync_Projectiles),
+    DEFINE_SYNCFUNC(Sync_Actors),
+    DEFINE_SYNCFUNC(Sync_Map),
 };
+#define NUM_SYNC_TYPES (sizeof(syncType) / sizeof(syncType[0]))
 
 void Net_GetSyncStat(void)
 {
-    int i;
     playerdata_t *pp = &g_player[myconnectindex];
 
     if (numplayers < 2)
         return;
 
-    for (i = 0; SyncFunc[i]; i++)
+    for (size_t i = 0; i < NUM_SYNC_TYPES; i++)
     {
-        pp->syncval[pp->syncvalhead & (SYNCFIFOSIZ - 1)][i] = (*SyncFunc[i])();
+        pp->syncval[pp->syncvalhead & (SYNCFIFOSIZ - 1)][i] = syncType[i].func();
     }
 
     pp->syncvalhead++;
@@ -265,23 +263,19 @@ int desynched_players[MAXPLAYERS];
 
 void Net_DisplaySyncMsg(void)
 {
-    int i, j;
     static unsigned int moveCount = 0;
     extern unsigned int g_moveThingsCount;
 
     if (numplayers < 2)
         return;
 
-    for (i = 0; i < g_numSyncBytes; i++)
+    for (size_t i = 0; i < NUM_SYNC_TYPES; i++)
     {
         // syncstat is NON 0 - out of sync
         if (syncstat[i] != 0)
         {
-            if (g_numSyncBytes > 1)
-            {
-                sprintf(tempbuf, "Out Of Sync - %s", SyncNames[i]);
-                printext256(4, 100 + (i * 8), 31, 1, tempbuf, 0);
-            }
+            sprintf(tempbuf, "Out Of Sync - %s", syncType[i].name);
+            printext256(4, 100 + (i * 8), 31, 1, tempbuf, 0);
 
             if (!g_foundSyncError && g_szfirstSyncMsg[i][0] == '\0')
             {
@@ -291,11 +285,11 @@ void Net_DisplaySyncMsg(void)
                 // save off loop count
                 moveCount = g_moveThingsCount;
 
-                for (j = 0; j < g_numSyncBytes; j++)
+                for (size_t j = 0; j < NUM_SYNC_TYPES; j++)
                 {
                     if (syncstat[j] != 0 && g_szfirstSyncMsg[j][0] == '\0')
                     {
-                        sprintf(tempbuf, "Out Of Sync - %s", SyncNames[j]);
+                        sprintf(tempbuf, "Out Of Sync - %s", syncType[j].name);
                         strcpy(g_szfirstSyncMsg[j], tempbuf);
                     }
                 }
@@ -304,21 +298,14 @@ void Net_DisplaySyncMsg(void)
     }
 
     // print out the g_szfirstSyncMsg message you got
-    for (i = 0; i < g_numSyncBytes; i++)
+    for (size_t i = 0; i < NUM_SYNC_TYPES; i++)
     {
         if (g_szfirstSyncMsg[i][0] != '\0')
         {
-            if (g_numSyncBytes > 1)
-            {
-                sprintf(tempbuf, "FIRST %s", g_szfirstSyncMsg[i]);
-                printext256(4, 44 + (i * 8), 31, 1, tempbuf, 0);
-                sprintf(tempbuf, "moveCount %d",moveCount);
-                printext256(4, 52 + (i * 8), 31, 1, tempbuf, 0);
-            }
-            else
-            {
-                printext256(4,100,31,0, "Out Of Sync - Please Restart Game",0);
-            }
+            sprintf(tempbuf, "FIRST %s", g_szfirstSyncMsg[i]);
+            printext256(4, 44 + (i * 8), 31, 1, tempbuf, 0);
+            sprintf(tempbuf, "moveCount %d",moveCount);
+            printext256(4, 52 + (i * 8), 31, 1, tempbuf, 0);
 
             int ypos = 180;
             for (i = 0; i < MAXPLAYERS; i++)
@@ -334,16 +321,14 @@ void Net_DisplaySyncMsg(void)
     }
 }
 
-
 void  Net_AddSyncInfoToPacket(int *j)
 {
-    int sb;
     int count = 0;
 
     // sync testing
     while (g_player[myconnectindex].syncvalhead != syncvaltail && count++ < 4)
     {
-        for (sb = 0; sb < g_numSyncBytes; sb++)
+        for (size_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
             packbuf[(*j)++] = g_player[myconnectindex].syncval[syncvaltail & (SYNCFIFOSIZ - 1)][sb];
 
         syncvaltail++;
@@ -352,7 +337,7 @@ void  Net_AddSyncInfoToPacket(int *j)
 
 void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int otherconnectindex)
 {
-    int sb, i;
+    int i;
     playerdata_t *ppo = &g_player[otherconnectindex];
 
     // if ready2send is not set, or player is disconnected then don't try to get sync info
@@ -364,7 +349,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
     // Grab sync info from packet buffer
     while ((*j) < packbufleng)
     {
-        for (sb = 0; sb < g_numSyncBytes; sb++)
+        for (size_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
         {
             ppo->syncval[ppo->syncvalhead & (SYNCFIFOSIZ - 1)][sb] = packbuf[(*j)++];
         }
@@ -386,7 +371,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
             if (g_player[i].syncvalhead == syncvaltottail)
                 return;
 
-            for (sb = 0; sb < g_numSyncBytes; sb++)
+            for (size_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
             {
                 char head_sync = g_player[connecthead].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
                 char player_sync = g_player[i].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
@@ -394,7 +379,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
                 {
                     if (!syncstat[sb])
                     {
-                        OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d (syncvalhead: %d), Player CRC: %d (syncvalhead: %d). syncvaltottail: %d\n", i, SyncNames[sb], head_sync, g_player[connecthead].syncvalhead, player_sync, g_player[i].syncvalhead, syncvaltottail);
+                        OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d (syncvalhead: %d), Player CRC: %d (syncvalhead: %d). syncvaltottail: %d\n", i, syncType[sb].name, head_sync, g_player[connecthead].syncvalhead, player_sync, g_player[i].syncvalhead, syncvaltottail);
                         syncstat[sb] = 1;
                     }
 

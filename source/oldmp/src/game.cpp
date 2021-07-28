@@ -8766,7 +8766,6 @@ static void G_ShowDebugHelp(void)
               "\n"
               "-a\t\tUse fake player AI (fake multiplayer only)\n"
               "-cachesize #\tSets cache size, in Kb\n"
-              "-debugsync \tEnables network synchronization debugging.\n"
               "-fNUM\t\tSend fewer packets in multiplayer (1, 2, 4) (deprecated)\n"
               "-game_dir [dir]\tDuke3d_w32 compatibility option, see -j\n"
               "-gamegrp   \tSelects which file to use as main grp\n"
@@ -9521,12 +9520,6 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     continue;
                 }
 #endif
-                if (!Bstrcasecmp(c+1,"debugsync"))
-                {
-                    g_numSyncBytes = 6;
-                    i++;
-                    continue;
-                }
 #ifndef RANCID_NETWORKING
                 if (!Bstrcasecmp(c+1,"rmnet"))
                 {

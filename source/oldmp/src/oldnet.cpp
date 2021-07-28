@@ -725,11 +725,6 @@ void Net_ParsePackets(void)
                     initprintf("Player has version %d, expecting %d (%d, %d, %d)\n",packbuf[3],BYTEVERSION, BYTEVERSION_JF, PLUTOPAK, VOLUMEONE);
                     G_GameExit("You cannot play Duke with different versions!");
                 }
-                if (packbuf[4] > g_numSyncBytes)
-                {
-                    initprintf("Sync debugging enabled\n");
-                    g_numSyncBytes = packbuf[4];
-                }
 
                 break;
 
@@ -1021,11 +1016,10 @@ void Net_SendVersion(void)
     buf[1] = myconnectindex;
     buf[2] = (char)atoi(s_buildRev);
     buf[3] = BYTEVERSION;
-    buf[4] = g_numSyncBytes;
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)&buf[0],5);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)&buf[0],4);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
     waitforeverybody();
