@@ -168,7 +168,7 @@ void G_ShowScores(bool bonus)
     yoff += 36;
     int start_x = 64;
     int name_x = start_x + 12;
-    int frags_hp_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 54 : 66);
+    int frags_hp_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 57 : 66);
     int deaths_x = start_x + 98;
     int misc_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 128 : 134);
     int ping_x = start_x + 180;
