@@ -1762,8 +1762,11 @@ void waitforeverybody(void)
     while (1)
     {
         //if (quitevent) G_GameExit(""); // This sucks
-
         gameHandleEvents();
+
+        if (!engineFPSLimit())
+            continue;
+
         videoClearScreen(0);
 
         rotatesprite(0, 0, 65536L, 0, BETASCREEN, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
