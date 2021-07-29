@@ -1237,7 +1237,7 @@ void G_NewGame(int vn,int ln,int sk)
     for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
         if (MapInfo[i].savedstate)
         {
-            Bfree(MapInfo[i].savedstate);
+            Xfree(MapInfo[i].savedstate);
             MapInfo[i].savedstate = NULL;
         }
 
@@ -1614,9 +1614,9 @@ int G_EnterLevel(int g)
         if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
         {
             if (MapInfo[mii].filename == NULL)
-                MapInfo[mii].filename = (char*)Bcalloc(BMAX_PATH, sizeof(uint8_t));
+                MapInfo[mii].filename = (char*)Xcalloc(BMAX_PATH, sizeof(uint8_t));
             if (MapInfo[mii].name == NULL)
-                MapInfo[mii].name = Bstrdup("User Map");
+                MapInfo[mii].name = Xstrdup("User Map");
         }
         else
         {
@@ -1685,14 +1685,14 @@ int G_EnterLevel(int g)
                     {
                         kclose(fil);
                         if (MapInfo[ud.m_level_number].alt_musicfn == NULL)
-                            MapInfo[ud.m_level_number].alt_musicfn = (char*)Bcalloc(Bstrlen(levname)+1,sizeof(char));
+                            MapInfo[ud.m_level_number].alt_musicfn = (char*)Xcalloc(Bstrlen(levname)+1,sizeof(char));
                         else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.m_level_number].alt_musicfn))
-                            MapInfo[ud.m_level_number].alt_musicfn = (char*)Brealloc(MapInfo[ud.m_level_number].alt_musicfn,(Bstrlen(levname)+1));
+                            MapInfo[ud.m_level_number].alt_musicfn = (char*)Xrealloc(MapInfo[ud.m_level_number].alt_musicfn,(Bstrlen(levname)+1));
                         Bstrcpy(MapInfo[ud.m_level_number].alt_musicfn,levname);
                     }
                     else if (MapInfo[ud.m_level_number].alt_musicfn != NULL)
                     {
-                        Bfree(MapInfo[ud.m_level_number].alt_musicfn);
+                        Xfree(MapInfo[ud.m_level_number].alt_musicfn);
                         MapInfo[ud.m_level_number].alt_musicfn = NULL;
                     }
 
@@ -1708,9 +1708,9 @@ int G_EnterLevel(int g)
                     else kclose(fil);
 
                     if (MapInfo[ud.m_level_number].musicfn == NULL)
-                        MapInfo[ud.m_level_number].musicfn = (char*)Bcalloc(Bstrlen(levname)+1,sizeof(char));
+                        MapInfo[ud.m_level_number].musicfn = (char*)Xcalloc(Bstrlen(levname)+1,sizeof(char));
                     else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.m_level_number].musicfn))
-                        MapInfo[ud.m_level_number].musicfn = (char*)Brealloc(MapInfo[ud.m_level_number].musicfn,(Bstrlen(levname)+1));
+                        MapInfo[ud.m_level_number].musicfn = (char*)Xrealloc(MapInfo[ud.m_level_number].musicfn,(Bstrlen(levname)+1));
                     Bstrcpy(MapInfo[ud.m_level_number].musicfn,levname);
                 }
             }
@@ -1881,15 +1881,15 @@ void G_FreeMapState(int mapnum)
         if (aGameVars[j].dwFlags & GAMEVAR_PERPLAYER)
         {
             if (MapInfo[mapnum].savedstate->vars[j])
-                Bfree(MapInfo[mapnum].savedstate->vars[j]);
+                Xfree(MapInfo[mapnum].savedstate->vars[j]);
         }
         else if (aGameVars[j].dwFlags & GAMEVAR_PERACTOR)
         {
             if (MapInfo[mapnum].savedstate->vars[j])
-                Bfree(MapInfo[mapnum].savedstate->vars[j]);
+                Xfree(MapInfo[mapnum].savedstate->vars[j]);
         }
     }
-    Bfree(MapInfo[mapnum].savedstate);
+    Xfree(MapInfo[mapnum].savedstate);
     MapInfo[mapnum].savedstate = NULL;
 }
 

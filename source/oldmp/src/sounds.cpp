@@ -215,7 +215,7 @@ int32_t S_PlayMusic(const char *fn, const int32_t sel)
     if (MapInfo[sel].alt_musicfn != NULL)
         alt = fn = MapInfo[sel].alt_musicfn;
 
-    testfn = (char *) Bmalloc(strlen(fn) + 5);
+    testfn = (char *) Xmalloc(strlen(fn) + 5);
     strcpy(testfn, fn);
     extension = strrchr(testfn, '.');
 
@@ -229,12 +229,12 @@ int32_t S_PlayMusic(const char *fn, const int32_t sel)
             fp = kopen4loadfrommod(testfn, 0);
             if (fp >= 0)
             {
-                Bfree(testfn);
+                Xfree(testfn);
                 break;
             }
         }
 
-        Bfree(testfn);
+        Xfree(testfn);
 
         // just use what we've been given
         fp = kopen4loadfrommod(fn, 0);
@@ -252,7 +252,7 @@ int32_t S_PlayMusic(const char *fn, const int32_t sel)
 
     S_StopMusic();
 
-    MusicPtr = (char *) Bmalloc((MusicLen = kfilelength(fp)));
+    MusicPtr = (char *) Xmalloc((MusicLen = kfilelength(fp)));
 
     if ((g_musicSize = kread(fp, (char *)MusicPtr, MusicLen)) != MusicLen)
     {
@@ -294,7 +294,7 @@ void S_StopMusic(void)
 
     if (MusicPtr)
     {
-        Bfree(MusicPtr);
+        Xfree(MusicPtr);
         MusicPtr = NULL;
         g_musicSize = MusicLen = 0;
     }

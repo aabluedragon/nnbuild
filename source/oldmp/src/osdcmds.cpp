@@ -1478,7 +1478,7 @@ static int osdcmd_savestate(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
     if (MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate == NULL)
-        MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = Bcalloc(1,sizeof(mapstate_t));
+        MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = Xcalloc(1,sizeof(mapstate_t));
     G_SaveMapState(MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
     return OSDCMD_OK;
 }
@@ -1599,11 +1599,11 @@ int registerosdcommands(void)
         if (!Bstrcmp(gamefunctions[i],"Show_Console")) continue;
 
         Bsprintf(tempbuf,"gamefunc_%s",gamefunctions[i]);
-        t = Bstrdup(tempbuf);
+        t = Xstrdup(tempbuf);
         for (j=Bstrlen(t);j>=0;j--)
             t[j] = Btolower(t[j]);
         Bstrcat(tempbuf,": game button");
-        OSD_RegisterFunction(t,Bstrdup(tempbuf),osdcmd_button);
+        OSD_RegisterFunction(t,Xstrdup(tempbuf),osdcmd_button);
     }
 
 //    OSD_RegisterFunction("setbrightness","setbrightness <value>: changes brightness (obsolete)", osdcmd_setbrightness);

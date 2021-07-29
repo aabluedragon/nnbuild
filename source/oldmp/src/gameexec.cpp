@@ -3072,7 +3072,7 @@ static int X_DoExecute(void)
 
     case CON_SAVEMAPSTATE:
         if (MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate == NULL)
-            MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = (mapstate_t*)Bcalloc(1,sizeof(mapstate_t));
+            MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = (mapstate_t*)Xcalloc(1,sizeof(mapstate_t));
         G_SaveMapState(MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
         insptr++;
         return 0;
@@ -3798,7 +3798,7 @@ static int X_DoExecute(void)
             if (asize > 0)
             {
                 OSD_Printf(OSDTEXT_GREEN "CON_RESIZEARRAY: resizing array %s from %d to %d\n", aGameArrays[j].szLabel, aGameArrays[j].size, asize);
-                aGameArrays[j].plValues=(intptr_t*)Brealloc(aGameArrays[j].plValues, sizeof(intptr_t) * asize);
+                aGameArrays[j].plValues=(intptr_t*)Xrealloc(aGameArrays[j].plValues, sizeof(intptr_t) * asize);
                 aGameArrays[j].size = asize;
             }
             break;
@@ -4670,13 +4670,13 @@ void G_SaveMapState(mapstate_t *save)
             if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
             {
                 if (!save->vars[i])
-                    save->vars[i] = (intptr_t*)Bcalloc(MAXPLAYERS,sizeof(intptr_t));
+                    save->vars[i] = (intptr_t*)Xcalloc(MAXPLAYERS,sizeof(intptr_t));
                 Bmemcpy(&save->vars[i][0],&aGameVars[i].val.plValues[0],sizeof(intptr_t) * MAXPLAYERS);
             }
             else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
             {
                 if (!save->vars[i])
-                    save->vars[i] = (intptr_t*)Bcalloc(MAXSPRITES,sizeof(intptr_t));
+                    save->vars[i] = (intptr_t*)Xcalloc(MAXSPRITES,sizeof(intptr_t));
                 Bmemcpy(&save->vars[i][0],&aGameVars[i].val.plValues[0],sizeof(intptr_t) * MAXSPRITES);
             }
             else save->vars[i] = (intptr_t *)aGameVars[i].val.lValue;

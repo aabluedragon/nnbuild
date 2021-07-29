@@ -744,9 +744,9 @@ void CONFIG_WriteSettings(void) // save binds and aliases to <cfgname>_settings.
     char filename[BMAX_PATH];
 
     {
-        char* ptr = Bstrdup(setupfilename);
+        char* ptr = Xstrdup(setupfilename);
         Bsprintf(filename, "%s_settings.cfg", strtok(ptr, "."));
-        Bfree(ptr);
+        Xfree(ptr);
     }
 
     buildvfs_FILE fp = buildvfs_fopen_write(filename);

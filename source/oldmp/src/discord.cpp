@@ -140,10 +140,10 @@ static char *get_base_name(char *name)
     char *div, *basename;
 
     if ((div = strrchr(name, '/'))) {
-        basename = strdup(div + 1);
+        basename = Xstrdup(div + 1);
     }
     else {
-        basename = strdup(name);
+        basename = Xstrdup(name);
     }
 
     return basename;

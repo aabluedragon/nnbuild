@@ -52,7 +52,7 @@ static int LoadGroupsCache(void)
         if (scriptfile_getnumber(script, &fmtime)) break;	// modification time
         if (scriptfile_getnumber(script, &fcrcval)) break;	// crc checksum
 
-        fg = (grpcache*)Bcalloc(1, sizeof(struct grpcache));
+        fg = (grpcache*)Xcalloc(1, sizeof(struct grpcache));
         fg->next = grp_cache;
         grp_cache = fg;
 
@@ -110,14 +110,14 @@ int ScanGroups(void)
             free(fn);
             if (fg->size == st.st_size && fg->mtime == st.st_mtime)
             {
-                grp = (struct grpfile *)Bcalloc(1, sizeof(struct grpfile));
-                grp->name = strdup(sidx->name);
+                grp = (struct grpfile *)Xcalloc(1, sizeof(struct grpfile));
+                grp->name = Xstrdup(sidx->name);
                 grp->crcval = fg->crcval;
                 grp->size = fg->size;
                 grp->next = foundgrps;
                 foundgrps = grp;
 
-                fgg = (struct grpcache *)Bcalloc(1, sizeof(struct grpcache));
+                fgg = (struct grpcache *)Xcalloc(1, sizeof(struct grpcache));
                 strcpy(fgg->name, fg->name);
                 fgg->size = fg->size;
                 fgg->mtime = fg->mtime;
@@ -147,14 +147,14 @@ int ScanGroups(void)
             close(fh);
             initprintf(" Done\n");
 
-            grp = (struct grpfile *)Bcalloc(1, sizeof(struct grpfile));
-            grp->name = strdup(sidx->name);
+            grp = (struct grpfile *)Xcalloc(1, sizeof(struct grpfile));
+            grp->name = Xstrdup(sidx->name);
             grp->crcval = crcval;
             grp->size = st.st_size;
             grp->next = foundgrps;
             foundgrps = grp;
 
-            fgg = (struct grpcache *)Bcalloc(1, sizeof(struct grpcache));
+            fgg = (struct grpcache *)Xcalloc(1, sizeof(struct grpcache));
             strncpy(fgg->name, sidx->name, BMAX_PATH);
             fgg->size = st.st_size;
             fgg->mtime = st.st_mtime;

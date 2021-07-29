@@ -292,7 +292,7 @@ int32_t G_GetStringNumLines(const char *text, const char *end, const int32_t ite
 // This function requires you to Bfree() the returned char*.
 char* G_GetSubString(const char *text, const char *end, const int32_t iter, const int32_t length)
 {
-    char *line = (char*)Bmalloc((length + 1) * sizeof(char));
+    char *line = (char*)Xmalloc((length + 1) * sizeof(char));
     int32_t counter = 0;
 
     while (counter < length && text != end)
@@ -753,7 +753,7 @@ vec2_t G_ScreenText(const int32_t font,
 
                 linewidth = G_ScreenTextSize(font, x, y, z, blockangle, line, o | ROTATESPRITE_FULL16, xspace, yline, 0, 0, f & ~(TEXT_XJUSTIFY | TEXT_YJUSTIFY | TEXT_BACKWARDS), x1, y1, x2, y2).x;
 
-                Bfree(line);
+                Xfree(line);
             }
 
             if (f & TEXT_XJUSTIFY)
@@ -943,7 +943,7 @@ vec2_t G_ScreenText(const int32_t font,
 
                 int32_t linewidth = G_ScreenTextSize(font, x, y, z, blockangle, line, o | ROTATESPRITE_FULL16, xspace, yline, 0, 0, f & ~(TEXT_XJUSTIFY | TEXT_YJUSTIFY | TEXT_BACKWARDS), x1, y1, x2, y2).x;
 
-                Bfree(line);
+                Xfree(line);
 
                 if (f & TEXT_XJUSTIFY)
                 {
@@ -8961,7 +8961,7 @@ static void setup_rancid_net(const char *fn)
         netparamcount = rancid_players;
         if (rancid_local_port_string[0] == '-')
             netparamcount++;
-        netparam = (char **)Bcalloc(netparamcount, sizeof(char **));
+        netparam = (char **)Xcalloc(netparamcount, sizeof(char **));
 
         for (i=0;i<rancid_players;i++)
         {
@@ -9030,8 +9030,8 @@ static char *makename(char *destname, char *OGGname, char *origname)
         return destname;
 
     if (destname)
-        Bfree(destname);
-    destname = (char*)Bcalloc(Bstrlen(OGGname) + Bstrlen(origname) + 1, sizeof(char));
+        Xfree(destname);
+    destname = (char*)Xcalloc(Bstrlen(OGGname) + Bstrlen(origname) + 1, sizeof(char));
     if (!destname)
         return NULL;
 
@@ -9225,7 +9225,7 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
                         break;
                     }
                 }
-                else Bfree(tfn);
+                else Xfree(tfn);
                 pathsearchmode = i;
 
                 if (AL_DefineMusic(ID,fn))
@@ -9279,7 +9279,7 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
                         break;
                     }
                 }
-                else Bfree(tfn);
+                else Xfree(tfn);
                 pathsearchmode = i;
 
                 if (AL_DefineSound(num,fn))
@@ -9337,8 +9337,8 @@ static int loaddefinitions_game(const char *fn, int preload)
 void G_AddGroup(const char *buffer)
 {
     struct strllist *s;
-    s = (struct strllist *)Bcalloc(1,sizeof(struct strllist));
-    s->str = Bstrdup(buffer);
+    s = (struct strllist *)Xcalloc(1,sizeof(struct strllist));
+    s->str = Xstrdup(buffer);
     if (Bstrchr(s->str,'.') == 0)
         Bstrcat(s->str,".grp");
 
@@ -9355,8 +9355,8 @@ void G_AddGroup(const char *buffer)
 void G_AddPath(const char *buffer)
 {
     struct strllist *s;
-    s = (struct strllist *)Bcalloc(1,sizeof(struct strllist));
-    s->str = strdup(buffer);
+    s = (struct strllist *)Xcalloc(1,sizeof(struct strllist));
+    s->str = Xstrdup(buffer);
 
     if (CommandPaths)
     {
@@ -9365,6 +9365,7 @@ void G_AddPath(const char *buffer)
         t->next = s;
         return;
     }
+
     CommandPaths = s;
 }
 
@@ -9543,7 +9544,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     g_noSetup = TRUE;
                     firstnet = i;
                     netparamcount = argc - i - 1;
-                    netparam = (char **)Bcalloc(netparamcount, sizeof(char**));
+                    netparam = (char **)Xcalloc(netparamcount, sizeof(char**));
                     i++;
                     continue;
                 }
@@ -10130,48 +10131,48 @@ static void G_FreeCONMem(void)
 
     for (i=(MAXLEVELS*(MAXVOLUMES+1))-1;i>=0;i--) // +1 volume for "intro", "briefing" music
     {
-        if (MapInfo[i].name != NULL) Bfree(MapInfo[i].name);
-        if (MapInfo[i].filename != NULL) Bfree(MapInfo[i].filename);
-        if (MapInfo[i].musicfn != NULL) Bfree(MapInfo[i].musicfn);
-        if (MapInfo[i].alt_musicfn != NULL) Bfree(MapInfo[i].alt_musicfn);
+        if (MapInfo[i].name != NULL) Xfree(MapInfo[i].name);
+        if (MapInfo[i].filename != NULL) Xfree(MapInfo[i].filename);
+        if (MapInfo[i].musicfn != NULL) Xfree(MapInfo[i].musicfn);
+        if (MapInfo[i].alt_musicfn != NULL) Xfree(MapInfo[i].alt_musicfn);
         if (MapInfo[i].savedstate != NULL) G_FreeMapState(i);
     }
 
     for (i=MAXQUOTES-1;i>=0;i--)
     {
-        if (ScriptQuotes[i] != NULL) Bfree(ScriptQuotes[i]);
-        if (ScriptQuoteRedefinitions[i] != NULL) Bfree(ScriptQuoteRedefinitions[i]);
+        if (ScriptQuotes[i] != NULL) Xfree(ScriptQuotes[i]);
+        if (ScriptQuoteRedefinitions[i] != NULL) Xfree(ScriptQuoteRedefinitions[i]);
     }
 
     for (i=g_gameVarCount-1;i>=0;i--)
     {
-        if (aGameVars[i].szLabel != NULL) Bfree(aGameVars[i].szLabel);
+        if (aGameVars[i].szLabel != NULL) Xfree(aGameVars[i].szLabel);
         if (aGameVars[i].dwFlags & (GAMEVAR_USER_MASK) && aGameVars[i].val.plValues != NULL)
-            Bfree(aGameVars[i].val.plValues);
+            Xfree(aGameVars[i].val.plValues);
     }
 
     for (i=g_gameArrayCount-1;i>=0;i--)
     {
-        if (aGameArrays[i].szLabel != NULL) Bfree(aGameArrays[i].szLabel);
-        if (aGameArrays[i].plValues != NULL) Bfree(aGameArrays[i].plValues);
+        if (aGameArrays[i].szLabel != NULL) Xfree(aGameArrays[i].szLabel);
+        if (aGameArrays[i].plValues != NULL) Xfree(aGameArrays[i].plValues);
     }
 
     for (i=MAXPLAYERS-1;i>=0;i--)
     {
-        if (g_player[i].ps != NULL) Bfree(g_player[i].ps);
-        if (g_player[i].inputBits != NULL) Bfree(g_player[i].inputBits);
+        if (g_player[i].ps != NULL) Xfree(g_player[i].ps);
+        if (g_player[i].inputBits != NULL) Xfree(g_player[i].inputBits);
     }
 
     for (i=MAXSOUNDS-1;i>=0;i--)
     {
-        if (g_sounds[i].filename != NULL) Bfree(g_sounds[i].filename);
-        if (g_sounds[i].filename1 != NULL) Bfree(g_sounds[i].filename1);
+        if (g_sounds[i].filename != NULL) Xfree(g_sounds[i].filename);
+        if (g_sounds[i].filename1 != NULL) Xfree(g_sounds[i].filename1);
     }
 
-    if (label != NULL) Bfree(label);
-    if (labelcode != NULL) Bfree(labelcode);
-    if (script != NULL) Bfree(script);
-    if (bitptr != NULL) Bfree(bitptr);
+    if (label != NULL) Xfree(label);
+    if (labelcode != NULL) Xfree(labelcode);
+    if (script != NULL) Xfree(script);
+    if (bitptr != NULL) Xfree(bitptr);
 
     freehash();
     hash_free(&gamefuncH);
@@ -10249,8 +10250,8 @@ static void G_CompileScripts(void)
         char *newlabel;
         intptr_t *newlabelcode;
 
-        newlabel     = (char *)malloc(g_numLabels<<6);
-        newlabelcode = (intptr_t *)malloc(g_numLabels*sizeof(intptr_t));
+        newlabel     = (char *)Xmalloc(g_numLabels<<6);
+        newlabelcode = (intptr_t *)Xmalloc(g_numLabels*sizeof(intptr_t));
 
         if (!newlabel || !newlabelcode)
         {
@@ -10571,7 +10572,7 @@ static void G_Startup(void)
     }
 #endif
 
-    if (netparam) Bfree(netparam);
+    if (netparam) Xfree(netparam);
     netparam = NULL;
     netparamcount = 0;
 
@@ -10906,8 +10907,8 @@ int app_main(int32_t argc, char const* const* argv)
 #endif
 
     playerColor_init();
-    g_player[0].ps = (DukePlayer_t *) Bcalloc(1, sizeof(DukePlayer_t));
-    g_player[0].inputBits = (input_t *) Bcalloc(1, sizeof(input_t));
+    g_player[0].ps = (DukePlayer_t *) Xcalloc(1, sizeof(DukePlayer_t));
+    g_player[0].inputBits = (input_t *) Xcalloc(1, sizeof(input_t));
     g_player[0].connected = 1;
 
     if (getcwd(cwd,BMAX_PATH))
@@ -10929,8 +10930,8 @@ int app_main(int32_t argc, char const* const* argv)
             s = CommandPaths->next;
             addsearchpath(CommandPaths->str);
 
-            free(CommandPaths->str);
-            free(CommandPaths);
+            Xfree(CommandPaths->str);
+            Xfree(CommandPaths);
             CommandPaths = s;
         }
     }
@@ -10963,17 +10964,17 @@ int app_main(int32_t argc, char const* const* argv)
             }
             if (asperr == 0)
                 chdir(cwd);
-            Bfree(homedir);
+            Xfree(homedir);
         }
     }
 
     hash_init(&gamefuncH);
     for (i=NUMGAMEFUNCTIONS-1;i>=0;i--)
     {
-        char *str = Bstrtolower(Bstrdup(gamefunctions[i]));
+        char *str = Bstrtolower(Xstrdup(gamefunctions[i]));
         hash_add(&gamefuncH,gamefunctions[i],i, 0);
         hash_add(&gamefuncH,str,i, 0);
-        Bfree(str);
+        Xfree(str);
     }
 
     i = CONFIG_ReadSetup();
@@ -11196,8 +11197,8 @@ int app_main(int32_t argc, char const* const* argv)
     
     for (i=1;i<ud.multimode;i++)
     {
-        g_player[i].ps = (DukePlayer_t *) Bcalloc(1,sizeof(DukePlayer_t));
-        g_player[i].inputBits = (input_t *) Bcalloc(1,sizeof(input_t));
+        g_player[i].ps = (DukePlayer_t *) Xcalloc(1,sizeof(DukePlayer_t));
+        g_player[i].inputBits = (input_t *) Xcalloc(1,sizeof(input_t));
         g_player[i].connected = 1;
 
         // Propagate initial settings for player to all.
@@ -11620,9 +11621,9 @@ static int G_OpenDemoRead(int g_whichDemo) // 0 = mine
     for (i=0;i<ud.multimode;i++)
     {
         if (!g_player[i].ps)
-            g_player[i].ps = (DukePlayer_t *) Bcalloc(1,sizeof(DukePlayer_t));
+            g_player[i].ps = (DukePlayer_t *) Xcalloc(1,sizeof(DukePlayer_t));
         if (!g_player[i].inputBits)
-            g_player[i].inputBits = (input_t *) Bcalloc(1,sizeof(input_t));
+            g_player[i].inputBits = (input_t *) Xcalloc(1,sizeof(input_t));
 
         if (kread(recfilep,(char *)g_player[i].user_name,sizeof(g_player[i].user_name)) != sizeof(g_player[i].user_name)) goto corrupt;
         OSD_Printf("ud.user_name: %s\n",g_player[i].user_name);

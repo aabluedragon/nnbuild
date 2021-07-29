@@ -284,13 +284,13 @@ int32_t G_LoadPlayer(int32_t spot)
 
     if (kdfread(&g_scriptSize,sizeof(g_scriptSize),1,fil) != 1) goto corrupt;
     if (!g_scriptSize) goto corrupt;
-    scriptptrs = (char*)Bcalloc(1,g_scriptSize * sizeof(scriptptrs));
-    Bfree(bitptr);
-    bitptr = (char*)Bcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(uint8_t));
+    scriptptrs = (char*)Xcalloc(1,g_scriptSize * sizeof(scriptptrs));
+    Xfree(bitptr);
+    bitptr = (char*)Xcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(uint8_t));
     if (kdfread(&bitptr[0],sizeof(uint8_t),(g_scriptSize+7)>>3,fil) != ((g_scriptSize+7)>>3)) goto corrupt;
     if (script != NULL)
-        Bfree(script);
-    script = (intptr_t*)Bcalloc(1,g_scriptSize * sizeof(intptr_t));
+        Xfree(script);
+    script = (intptr_t*)Xcalloc(1,g_scriptSize * sizeof(intptr_t));
     if (kdfread(&script[0],sizeof(script),g_scriptSize,fil) != g_scriptSize) goto corrupt;
     for (i=0; i<g_scriptSize; i++)
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)))
@@ -314,7 +314,7 @@ int32_t G_LoadPlayer(int32_t spot)
             actorLoadEventScrptr[i] = (intptr_t *)j;
         }
 
-    scriptptrs = (char*)Brealloc(scriptptrs, MAXSPRITES * sizeof(scriptptrs));
+    scriptptrs = (char*)Xrealloc(scriptptrs, MAXSPRITES * sizeof(scriptptrs));
 
     if (kdfread(&scriptptrs[0],sizeof(scriptptrs),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
     if (kdfread(&actor[0],sizeof(ActorData_t),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
@@ -383,9 +383,9 @@ int32_t G_LoadPlayer(int32_t spot)
     while (i != MAXQUOTES)
     {
         if (ScriptQuotes[i] != NULL)
-            Bfree(ScriptQuotes[i]);
+            Xfree(ScriptQuotes[i]);
 
-        ScriptQuotes[i] = (char*)Bcalloc(MAXQUOTELEN,sizeof(uint8_t));
+        ScriptQuotes[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(uint8_t));
 
         if (kdfread((char *)ScriptQuotes[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
         if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
@@ -396,9 +396,9 @@ int32_t G_LoadPlayer(int32_t spot)
     for (i=0; i<g_numQuoteRedefinitions; i++)
     {
         if (ScriptQuoteRedefinitions[i] != NULL)
-            Bfree(ScriptQuoteRedefinitions[i]);
+            Xfree(ScriptQuoteRedefinitions[i]);
 
-        ScriptQuoteRedefinitions[i] = (char*)Bcalloc(MAXQUOTELEN,sizeof(uint8_t));
+        ScriptQuoteRedefinitions[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(uint8_t));
 
         if (kdfread((char *)ScriptQuoteRedefinitions[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
     }
@@ -454,14 +454,14 @@ int32_t G_LoadPlayer(int32_t spot)
         {
             kclose(fil);
             if (MapInfo[ud.level_number].alt_musicfn == NULL)
-                MapInfo[ud.level_number].alt_musicfn = (char*)Bcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
+                MapInfo[ud.level_number].alt_musicfn = (char*)Xcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
             else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.level_number].alt_musicfn))
-                MapInfo[ud.level_number].alt_musicfn = (char*)Brealloc(MapInfo[ud.level_number].alt_musicfn,(Bstrlen(levname)+1));
+                MapInfo[ud.level_number].alt_musicfn = (char*)Xrealloc(MapInfo[ud.level_number].alt_musicfn,(Bstrlen(levname)+1));
             Bstrcpy(MapInfo[ud.level_number].alt_musicfn,levname);
         }
         else if (MapInfo[ud.level_number].alt_musicfn != NULL)
         {
-            Bfree(MapInfo[ud.level_number].alt_musicfn);
+            Xfree(MapInfo[ud.level_number].alt_musicfn);
             MapInfo[ud.level_number].alt_musicfn = NULL;
         }
 
@@ -477,9 +477,9 @@ int32_t G_LoadPlayer(int32_t spot)
         else kclose(fil);
 
         if (MapInfo[ud.level_number].musicfn == NULL)
-            MapInfo[ud.level_number].musicfn = (char*)Bcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
+            MapInfo[ud.level_number].musicfn = (char*)Xcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
         else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.level_number].musicfn))
-            MapInfo[ud.level_number].musicfn = (char*)Brealloc(MapInfo[ud.level_number].musicfn,(Bstrlen(levname)+1));
+            MapInfo[ud.level_number].musicfn = (char*)Xrealloc(MapInfo[ud.level_number].musicfn,(Bstrlen(levname)+1));
         Bstrcpy(MapInfo[ud.level_number].musicfn,levname);
     }
 
@@ -734,7 +734,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&cloudy[0],sizeof(int16_t)<<7,1,fil);
 
     dfwrite(&g_scriptSize,sizeof(g_scriptSize),1,fil);
-    scriptptrs = (char*)Bcalloc(1, g_scriptSize * sizeof(scriptptrs));
+    scriptptrs = (char*)Xcalloc(1, g_scriptSize * sizeof(scriptptrs));
     for (i=0; i<g_scriptSize; i++)
     {
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)))
@@ -785,8 +785,8 @@ int32_t G_SavePlayer(int32_t spot)
             actorLoadEventScrptr[i] = (intptr_t *)j;
         }
 
-    Bfree(scriptptrs);
-    scriptptrs = (char*)Bcalloc(1, MAXSPRITES * sizeof(scriptptrs));
+    Xfree(scriptptrs);
+    scriptptrs = (char*)Xcalloc(1, MAXSPRITES * sizeof(scriptptrs));
 
     for (i=0; i<MAXSPRITES; i++)
     {

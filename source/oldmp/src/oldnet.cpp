@@ -1509,12 +1509,12 @@ static void Net_InitializeGameVarPointers(void)
         if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
         {
             if (!predicted_plValues[i])
-                predicted_plValues[i] = (intptr_t*)Bcalloc(MAXPLAYERS, sizeof(intptr_t));
+                predicted_plValues[i] = (intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
         }
         else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
         {
             if (!predicted_plValues[i])
-                predicted_plValues[i] = (intptr_t*)Bcalloc(MAXSPRITES, sizeof(intptr_t));
+                predicted_plValues[i] = (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
         }
     }
 }
