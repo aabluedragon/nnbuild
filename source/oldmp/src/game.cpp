@@ -7199,9 +7199,9 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             if (g_player[p].ps->on_crane == -1 && ((sector[s->sectnum].lotag&0x7ff) != 1) && !HEAD_ABOVE_TROR_WATER(p))
             {
                 l = s->z-actor[g_player[p].ps->i].floorz+(3<<8);
-                if (l > 1024 && s->yrepeat > 32 && s->extra > 0)
-                    s->yoffset = (signed char)(l/(s->yrepeat<<2));
-                else s->yoffset=0;
+                if (l > 1024 && t->yrepeat > 32 && s->extra > 0)
+                    t->yoffset = (signed char)(l/(t->yrepeat<<2));
+                else t->yoffset=0;
             }
 
             if (g_player[p].ps->newowner > -1)
