@@ -1631,12 +1631,13 @@ int G_EnterLevel(int g)
     G_UpdateScreenArea();
     ud.screen_size = i;
 
+    OSD_StripColors(tempbuf, g_player[myconnectindex].user_name);
     if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
     {
         Bstrcpy(levname, boardfilename);
-        Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - " APPNAME, g_player[myconnectindex].user_name, levname, duke3dgrpstring);
+        Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - " APPNAME, tempbuf, levname, duke3dgrpstring);
     }
-    else Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - " APPNAME, g_player[myconnectindex].user_name, MapInfo[mii].name, duke3dgrpstring);
+    else Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - " APPNAME, tempbuf, MapInfo[mii].name, duke3dgrpstring);
 
     Bstrcpy(tempbuf,apptitle);
     wm_setapptitle(tempbuf);
