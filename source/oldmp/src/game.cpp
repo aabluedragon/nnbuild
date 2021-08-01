@@ -3247,7 +3247,7 @@ void G_DisplayPlayerId(void)
             G_ScreenText(STARTALPHANUM, 160, ID_YPOS - 18, 65536, 0, 0, tempbuf, -127, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, idalpha, 4, 8, 0, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
         }
 
-        if (ud.limit_hit == 1)
+        if (ud.limit_hit == 1) // Someone won!
         {
             int pal = 0;
             rotatesprite_(0, 0, 65536L, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT, 128, 0, get_xdim(160-120), get_ydim(ID_YPOS - 37), get_xdim(160+120), get_ydim(ID_YPOS - 28));
@@ -3264,6 +3264,12 @@ void G_DisplayPlayerId(void)
             }
 
             G_ScreenText(STARTALPHANUM, 160, ID_YPOS - 36, 65536, 0, 0, tempbuf, -127, pal, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, 0, 4, 8, 0, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
+        }
+
+        if (screenpeek != myconnectindex)
+        {
+            G_ScreenText(MINIFONT, 160, 16, 65536, 0, 0, "Following", -127, 6, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, 64, 3, 5, 1, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
+            G_ScreenText(STARTALPHANUM, 160, 16+7, 65536, 0, 0, g_player[screenpeek].user_name, -127, g_player[screenpeek].ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, 64, 4, 8, 0, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
         }
     }
 }
