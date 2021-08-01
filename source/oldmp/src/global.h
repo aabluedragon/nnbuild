@@ -12,6 +12,8 @@
 #define G_EXTERN extern
 #endif
 
+G_EXTERN int quickExit;
+
 #define MAXINTERPOLATIONS MAXSPRITES
 G_EXTERN int32_t g_interpolationLock;
 G_EXTERN int g_interpolationCnt;

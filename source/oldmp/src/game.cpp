@@ -69,7 +69,6 @@ const char* AppProperName = APPNAME;
 const char* AppTechnicalName = APPBASENAME;
 
 int g_cameraDistance = 0, g_cameraClock = 0;
-int qe, cp;
 static int g_commandSetup = 0;
 int g_noSetup = 0;
 int g_noAutoLoad = 0;
@@ -1317,9 +1316,9 @@ void G_HandleSpecialKeys(void)
         OSD_DispatchQueued();
     }
 
-    if (qe == 0 && KB_KeyPressed(sc_LeftControl) && KB_KeyPressed(sc_LeftAlt) && (KB_KeyPressed(sc_Delete)||KB_KeyPressed(sc_End)))
+    if (quickExit == 0 && KB_KeyPressed(sc_LeftControl) && KB_KeyPressed(sc_LeftAlt) && (KB_KeyPressed(sc_Delete)||KB_KeyPressed(sc_End)))
     {
-        qe = 1;
+        quickExit = 1;
         G_GameExit("Quick Exit.");
     }
 }
@@ -2695,7 +2694,7 @@ void G_GameExit(const char *t)
         if (frecfilep) fclose(frecfilep);
     } // JBF: fixes crash on demo playback
 
-    if (!qe && !cp)
+    if (!quickExit)
     {
         if (playerswhenstarted > 1 && g_player[myconnectindex].ps->gm&MODE_GAME && GTFLAGS(GAMETYPE_SCORESHEET) && *t == ' ')
         {

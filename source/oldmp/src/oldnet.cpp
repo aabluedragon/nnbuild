@@ -16,7 +16,6 @@ int movefifoplc;
 static int g_chatPlayer = -1;
 static char recbuf[180];
 
-extern int qe,cp;
 extern char *rtsptr; // game.c
 extern void computergetinput(int snum, input_t *syn);
 
@@ -210,9 +209,9 @@ void Net_HandleInput(void)
     //    short who;
     input_t *osyn, *nsyn;
 
-    if (qe == 0 && KB_KeyPressed(sc_LeftControl) && KB_KeyPressed(sc_LeftAlt) && KB_KeyPressed(sc_Delete))
+    if (quickExit == 0 && KB_KeyPressed(sc_LeftControl) && KB_KeyPressed(sc_LeftAlt) && KB_KeyPressed(sc_Delete))
     {
-        qe = 1;
+        quickExit = 1;
         G_GameExit("Quick Exit.");
     }
 
