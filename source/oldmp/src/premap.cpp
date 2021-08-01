@@ -1560,7 +1560,7 @@ int G_EnterLevel(int g)
     }
 
     ud.coop = ud.m_coop;
-    ud.ffire = ud.m_ffire;
+    ud.ffire = (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY | GAMETYPE_TDM)) ? ud.m_ffire : 0;
     ud.monsters_off = ud.m_monsters_off;
     ud.respawn_monsters = (ud.player_skill > 3) ? 1 : ud.m_respawn_monsters;
     ud.noexits = (GTFLAGS(GAMETYPE_COOP)) ? 0 : ud.m_noexits;

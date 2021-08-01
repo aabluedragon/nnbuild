@@ -718,10 +718,7 @@ static int P_PostFireHitscan(int playerNum, int const spriteNum, hitdata_t* cons
     else if (hitData->sprite >= 0)
     {
         A_DamageObject(hitData->sprite, spriteNum);
-
-        if (sprite[hitData->sprite].picnum == APLAYER &&
-            (ud.ffire == 1 || (!GTFLAGS(GAMETYPE_PLAYERSFRIENDLY) && GTFLAGS(GAMETYPE_TDM) &&
-                g_player[sprite[hitData->sprite].yvel].ps->team != g_player[sprite[spriteOwner].yvel].ps->team)))
+        if (sprite[hitData->sprite].picnum == APLAYER && !FFIRE_CHECK(sprite[hitData->sprite].yvel, sprite[spriteOwner].yvel))
         {
             int jibSprite = A_Spawn(spriteNum, JIBS6);
 
