@@ -2687,9 +2687,7 @@ void G_GameExit(const char *t)
         g_player[myconnectindex].ps->palette = BASEPAL;
 
     if (numplayers > 1)
-        allowtimetocorrecterrorswhenquitting();
-
-    mmulti_uninitmultiplayers();
+        Net_Disconnect();
 
     if (ud.recstat == 1) G_CloseDemoWrite();
     else if (ud.recstat == 2)

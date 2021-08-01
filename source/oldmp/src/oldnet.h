@@ -142,7 +142,7 @@ void Net_UseOriginalPointers(void);
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
+void Net_Disconnect();
 void waitforeverybody(void);
-void allowtimetocorrecterrorswhenquitting(void);
 
 #endif

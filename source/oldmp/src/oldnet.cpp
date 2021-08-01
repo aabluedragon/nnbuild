@@ -457,7 +457,9 @@ void Net_ParsePackets(void)
 
     input_t *osyn, *nsyn;
     
-    if (numplayers < 2) return;
+    if (numplayers < 2 || (g_networkBroadcastMode == NETMODE_OFFLINE))
+        return;
+
     while ((packbufleng = mmulti_getpacket(&other, (unsigned char*)packbuf)) > 0)
     {
         lastpackettime = (int32_t)totalclock;
@@ -1831,7 +1833,7 @@ void waitforeverybody(void)
     }
 }
 
-void allowtimetocorrecterrorswhenquitting(void)
+static void allowtimetocorrecterrorswhenquitting(void)
 {
     int i, j, oldtotalclock;
 
@@ -1854,4 +1856,12 @@ void allowtimetocorrecterrorswhenquitting(void)
             if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
         }
     }
+}
+
+void Net_Disconnect(void)
+{
+    allowtimetocorrecterrorswhenquitting();
+    mmulti_uninitmultiplayers();
+
+    g_networkBroadcastMode = NETMODE_OFFLINE;
 }
