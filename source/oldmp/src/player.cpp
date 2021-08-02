@@ -1185,9 +1185,7 @@ int A_Shoot(int i,int atwith)
                 auto curHit = &hits[dmgCount];
 
                 if (curHit->sprite > -1)
-                {
                     sprite[curHit->sprite].cstat = hitCstats[dmgCount];
-                }
 
                 // We got all we need, increment before we do anything else so continue doesn't infinite loop us.
                 dmgCount++;
