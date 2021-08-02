@@ -4241,7 +4241,7 @@ void G_DrawRooms(int snum,int smoothratio)
         int screenTilting = (videoGetRenderMode() == REND_CLASSIC
             && ((ud.screen_tilting && p->rotscrnang)));
 
-        //vr = Blrintf(float(vr) * tanf(ud.fov * (fPI / 360.f))); // OLDMP FIXME: FOV Calc
+        vr = Blrintf(float(vr) * tanf(ud.fov * (fPI / 360.f)));
 
         if (!r_usenewaspect)
             renderSetAspect(vr, yxaspect);

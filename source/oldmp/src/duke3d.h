@@ -507,33 +507,35 @@ typedef struct {
 
 typedef struct {
     vec3_t camerapos;
-    int const_visibility,uw_framerate;
-    int camera_time,folfvel,folavel,folx,foly,fola;
-    int reccnt,crosshairscale;
+    int32_t const_visibility,uw_framerate;
+    int32_t camera_time,folfvel,folavel,folx,foly,fola;
+    int32_t reccnt,crosshairscale;
 
-    int runkey_mode,statusbarscale,mouseaiming,weaponswitch,drawweapon;   // JBF 20031125
-    int democams,color,m_color,msgdisptime,statusbarmode;
-    int m_noexits,noexits,autovote,automsg,idplayers, showweapons;
-    int team, viewbob, weaponsway, althud, weaponscale, textscale;
+    int32_t runkey_mode,statusbarscale,mouseaiming,weaponswitch,drawweapon;   // JBF 20031125
+    int32_t democams,color,m_color,msgdisptime,statusbarmode;
+    int32_t m_noexits,noexits,autovote,automsg,idplayers, showweapons;
+    int32_t team, viewbob, weaponsway, althud, weaponscale, textscale;
 
-    int entered_name,screen_tilting,shadows,fta_on,executions,auto_run;
-    int coords,tickrate,levelstats,m_coop,coop,screen_size,lockout,crosshair;
-    int playerai,angleinterpolation,obituaries;
+    int32_t entered_name,screen_tilting,shadows,fta_on,executions,auto_run;
+    int32_t coords,tickrate,levelstats,m_coop,coop,screen_size,lockout,crosshair;
+    int32_t playerai,angleinterpolation,obituaries;
 
-    int respawn_monsters,respawn_items,respawn_inventory,recstat,monsters_off,brightness;
-    int m_respawn_items,m_respawn_monsters,m_respawn_inventory,m_recstat,m_monsters_off,detail;
-    int m_ffire,ffire,m_player_skill,m_level_number,m_volume_number,multimode;
-    int player_skill,level_number,volume_number,m_marker,marker,mouseflip;
-    int m_weaponstay;
+    int32_t respawn_monsters,respawn_items,respawn_inventory,recstat,monsters_off,brightness;
+    int32_t m_respawn_items,m_respawn_monsters,m_respawn_inventory,m_recstat,m_monsters_off,detail;
+    int32_t m_ffire,ffire,m_player_skill,m_level_number,m_volume_number,multimode;
+    int32_t player_skill,level_number,volume_number,m_marker,marker,mouseflip;
+    int32_t m_weaponstay;
 
-    int configversion;
+    int32_t configversion;
+
+    int32_t fov;
     
-    int fraglimit;
+    int32_t fraglimit;
 
-    int got_access;
+    int32_t got_access;
 
-    int playerid_time;
-    char playerid_num;
+    int32_t playerid_time;
+    int8_t playerid_num;
 
     short camerasect;
     fix16_t cameraq16ang, cameraq16horiz;
