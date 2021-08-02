@@ -1212,7 +1212,7 @@ int A_Shoot(int i,int atwith)
                 if ((krand() & 255) < 4)
                     if (pProj->isound >= 0)
                         S_PlaySound3D(pProj->isound, k, &curHit->pos);
-            } while (dmgCount < hitCount);
+            } while (dmgCount <= hitCount);
 
             return -1;
         }
