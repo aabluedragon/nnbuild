@@ -235,7 +235,7 @@ static void Proj_DoWaterTracers(vec3_t startPos, vec3_t const* endPos, int n, in
         if(sector[sectNum].lotag == ST_2_UNDERWATER)
             A_InsertSprite(sectNum, startPos.x, startPos.y, startPos.z, WATERBUBBLE, -32, 4 + (krand() & 3), 4 + (krand() & 3), krand() & 2047, 0, 0, ownerSpriteNum, 5);
         else
-            A_InsertSprite(sectNum, startPos.x, startPos.y, startPos.z, SMALLSMOKE, -32, 14, 14, 0, 0, 0, ownerSpriteNum, 5);
+            A_InsertSprite(sectNum, startPos.x, startPos.y, startPos.z, SMALLSMOKE, -32, 14, 14, 0, 0, 0, ownerSpriteNum, STAT_MISC);
     }
 }
 
@@ -280,8 +280,7 @@ static void A_HitscanProjTrail(const vec3_t *startPos, const vec3_t *endPos, int
             break;
 
         int trailSprite = A_InsertSprite(sectNum, spawnPos.x, spawnPos.y, spawnPos.z, pProj->trail, -32,
-                           pProj->txrepeat, pProj->tyrepeat, projAng, 0, 0, ownerSpriteNum, 0);
-        changespritestat(trailSprite, STAT_ACTOR);
+                           pProj->txrepeat, pProj->tyrepeat, projAng, 0, 0, ownerSpriteNum, STAT_ACTOR);
     }
 }
 
