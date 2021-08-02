@@ -267,6 +267,8 @@ static void A_HitscanProjTrail(const vec3_t *startPos, const vec3_t *endPos, int
         spawnPos.y += increment.y;
         spawnPos.z += increment.z;
 
+        // To-do: Add range check so we stop if we're beyond pProj->range.
+
         updatesectorz(spawnPos.x, spawnPos.y, spawnPos.z, &sectNum);
 
         if (sectNum < 0)
@@ -1141,8 +1143,8 @@ int A_Shoot(int i,int atwith)
                 auto curHit = &hits[hitCount];
                 int hitVoid = Proj_DoHitscan(i, (pProj->cstat >= 0) ? pProj->cstat : 256 + 1, &nextStartPos, zvel, shootAng, curHit);
 
-                // Use spos so hitting something doesn't keep extending it's range.
-                if (hitVoid || (pProj->range > 0 && (klabs(spos.x - curHit->pos.x) + klabs(spos.y - curHit->pos.y)) > pProj->range))
+                // Hit void space, bail.
+                if (hitVoid)
                     return -1;
 
                 nextStartPos = curHit->pos;
@@ -1186,7 +1188,12 @@ int A_Shoot(int i,int atwith)
                     sprite[curHit->sprite].cstat = hitCstats[dmgCount];
                 }
 
+                // We got all we need, increment before we do anything else so continue doesn't infinite loop us.
                 dmgCount++;
+
+                // This hit point is out of range, skip damage/effect spawning and impact sounds.
+                if (pProj->range > 0 && (klabs(spos.x - curHit->pos.x) + klabs(spos.y - curHit->pos.y)) > pProj->range)
+                    continue;
 
                 if (p >= 0)
                 {
