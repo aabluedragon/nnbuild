@@ -281,6 +281,8 @@ static void A_HitscanProjTrail(const vec3_t *startPos, const vec3_t *endPos, int
 
         int trailSprite = A_InsertSprite(sectNum, spawnPos.x, spawnPos.y, spawnPos.z, pProj->trail, -32,
                            pProj->txrepeat, pProj->tyrepeat, projAng, 0, 0, ownerSpriteNum, STAT_ACTOR);
+
+        UNREFERENCED_PARAMETER(trailSprite);
     }
 }
 
