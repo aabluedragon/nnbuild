@@ -1857,10 +1857,21 @@ static void allowtimetocorrecterrorswhenquitting(void)
     }
 }
 
-void Net_Disconnect(void)
+void Net_Disconnect(bool showScores)
 {
     allowtimetocorrecterrorswhenquitting();
     mmulti_uninitmultiplayers();
 
     g_networkBroadcastMode = NETMODE_OFFLINE;
+
+    if (!quickExit)
+    {
+        if (playerswhenstarted > 1 && g_player[myconnectindex].ps->gm & MODE_GAME && GTFLAGS(GAMETYPE_SCORESHEET))
+        {
+            G_BonusScreen(1);
+            videoSetGameMode(ud.config.ScreenMode, ud.config.ScreenWidth, ud.config.ScreenHeight, ud.config.ScreenBPP, ud.detail);
+        }
+    }
+
+    numplayers = ud.multimode = playerswhenstarted = 1;
 }

@@ -2685,23 +2685,17 @@ void G_GameExit(const char *t)
     if (*t != 0 && g_player[myconnectindex].ps != NULL)
         g_player[myconnectindex].ps->palette = BASEPAL;
 
-    if (numplayers > 1)
-        Net_Disconnect();
-
     if (ud.recstat == 1) G_CloseDemoWrite();
     else if (ud.recstat == 2)
     {
         if (frecfilep) fclose(frecfilep);
     } // JBF: fixes crash on demo playback
 
+    if (numplayers > 1)
+        Net_Disconnect((*t == ' '));
+
     if (!quickExit)
     {
-        if (playerswhenstarted > 1 && g_player[myconnectindex].ps->gm&MODE_GAME && GTFLAGS(GAMETYPE_SCORESHEET) && *t == ' ')
-        {
-            G_BonusScreen(1);
-            videoSetGameMode(ud.config.ScreenMode,ud.config.ScreenWidth,ud.config.ScreenHeight,ud.config.ScreenBPP, ud.detail);
-        }
-
         if (*t != 0 && *(t+1) != 'V' && *(t+1) != 'Y')
             G_DisplayExtraScreens();
     }
