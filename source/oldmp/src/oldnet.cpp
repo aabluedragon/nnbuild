@@ -1864,7 +1864,7 @@ void Net_Disconnect(bool showScores)
 
     g_networkBroadcastMode = NETMODE_OFFLINE;
 
-    if (!quickExit)
+    if (!quickExit && showScores)
     {
         if (playerswhenstarted > 1 && g_player[myconnectindex].ps->gm & MODE_GAME && GTFLAGS(GAMETYPE_SCORESHEET))
         {
@@ -1874,4 +1874,7 @@ void Net_Disconnect(bool showScores)
     }
 
     numplayers = ud.multimode = playerswhenstarted = 1;
+    myconnectindex = screenpeek = 0;
+
+    G_BackToMenu();
 }
