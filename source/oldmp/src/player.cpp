@@ -1146,7 +1146,10 @@ int A_Shoot(int i,int atwith)
 
                 // Hit void space, bail.
                 if (hitVoid)
-                    return -1;
+                {
+                    hitCount--;
+                    break;
+                }
 
                 nextStartPos = curHit->pos;
 
@@ -1167,6 +1170,9 @@ int A_Shoot(int i,int atwith)
                 if (!doesPenetrate || shouldStop) // No penetration, so stop.
                     break;
             }
+
+            if (hitCount < 0) // Hit nothing, not even a sector. GTFO.
+                return -1;
 
             // Use the last hit point for the endPos and sector.
             if (pProj->trail >= 0)
