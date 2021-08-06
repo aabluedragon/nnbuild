@@ -11239,7 +11239,6 @@ int app_main(int32_t argc, char const* const* argv)
 
     if (numplayers > 1)
     {
-        mmulti_sendlogon(); // Does nothing
         Net_SendPlayerOptions();
         Net_SendWeaponChoice();
         Net_SendUserMapName();
