@@ -5823,6 +5823,9 @@ void computergetinput(int snum, input_t *syn)
 
             syn->fvel += ((sintable[(daang + 1024) & 2047] * strafeVal) >> 17);
             syn->svel += ((sintable[(daang + 512) & 2047] * strafeVal) >> 17);
+
+            if (!(rand() % 200)) // Randomly jump around a bit in battle.
+                syn->bits |= BIT(SK_JUMP);
         }
 
         syn->q16avel = min(max(fix16_from_int((((daang+1024-damyang)&2047)-1024)>>1),F16(-127)),F16(127));
