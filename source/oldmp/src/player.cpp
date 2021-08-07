@@ -308,8 +308,8 @@ int A_GetHitscanRange(int i)
 static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
 {
     int gotshrinker,gotfreezer;
-    int i, j, a, k, cans;
-    static int aimstats[] = { STAT_PLAYER, STAT_DUMMYPLAYER, STAT_ACTOR, STAT_ZOMBIEACTOR};
+    int i, j, a;
+    static int aimstats[] = { STAT_PLAYER, STAT_DUMMYPLAYER, STAT_ACTOR, STAT_ZOMBIEACTOR };
     int dx1, dy1, dx2, dy2, dx3, dy3, smax, sdist;
     int xv, yv;
 
@@ -317,7 +317,7 @@ static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
     {
         if (!g_player[s->yvel].ps->auto_aim)
             return -1;
-        if (g_player[s->yvel].ps->auto_aim == 2)
+        if (g_player[s->yvel].ps->auto_aim == 2) // Hitscan only, don't autoaim projectiles.
         {
             if (A_CheckSpriteTileFlags(atwith,SFLAG_PROJECTILE) && (ProjectileData[atwith].workslike & PROJECTILE_RPG))
                 return -1;
@@ -355,61 +355,72 @@ static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
     dx3 = sintable[(a+512)&2047];
     dy3 = sintable[a&2047];
 
-    for (k=0;k<4;k++)
+    for (size_t k = 0; k < ARRAY_SIZE(aimstats); k++)
     {
         if (j >= 0)
             break;
-        for (i=headspritestat[aimstats[k]];i >= 0;i=nextspritestat[i])
-            if (sprite[i].xrepeat > 0 && sprite[i].extra >= 0 && (sprite[i].cstat&(257+32768)) == 257)
+
+        for (i = headspritestat[aimstats[k]]; i >= 0; i = nextspritestat[i])
+        {
+            if (sprite[i].xrepeat > 0 && sprite[i].extra >= 0 && (sprite[i].cstat & (257 + 32768)) == 257)
+            {
                 if (A_CheckEnemySprite(&sprite[i]) || k < 2)
                 {
                     if (A_CheckEnemySprite(&sprite[i]) || PN(i) == APLAYER || PN(i) == SHARK)
                     {
                         if (PN(i) == APLAYER &&
-                                // ud.ffire == 0 &&
-                                (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY) || (GTFLAGS(GAMETYPE_TDM) && g_player[sprite[i].yvel].ps->team == g_player[s->yvel].ps->team)) &&
-                                s->picnum == APLAYER &&
-                                s != &sprite[i])
+                            // ud.ffire == 0 && // DON'T DO THIS, THAT'S YOUR BUDDY, GUY!
+                            (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY) || (GTFLAGS(GAMETYPE_TDM) && g_player[sprite[i].yvel].ps->team == g_player[s->yvel].ps->team)) &&
+                            s->picnum == APLAYER &&
+                            s != &sprite[i])
                             continue;
 
                         if (gotshrinker && sprite[i].xrepeat < 30)
                         {
                             if (PN(i) == SHARK)
-                            {
-                                if (sprite[i].xrepeat < 20) continue;
                                 continue;
-                            }
-                            else if (!(PN(i) >= GREENSLIME && PN(i) <= GREENSLIME+7))
+                            else if (!(PN(i) >= GREENSLIME && PN(i) <= GREENSLIME + 7))
                                 continue;
                         }
-                        if (gotfreezer && sprite[i].pal == 1) continue;
+
+                        if (gotfreezer && sprite[i].pal == 1)
+                            continue;
                     }
 
-                    xv = (SX(i)-s->x);
-                    yv = (SY(i)-s->y);
+                    xv = (SX(i) - s->x);
+                    yv = (SY(i) - s->y);
 
-                    if ((dy1*xv) <= (dx1*yv))
-                        if ((dy2*xv) >= (dx2*yv))
+                    if ((dy1 * xv) <= (dx1 * yv))
+                    {
+                        if ((dy2 * xv) >= (dx2 * yv))
                         {
-                            sdist = mulscale(dx3,xv,14) + mulscale(dy3,yv,14);
+                            sdist = mulscale(dx3, xv, 14) + mulscale(dy3, yv, 14);
                             if (sdist > 512 && sdist < smax)
                             {
                                 if (s->picnum == APLAYER)
-                                    a = (klabs(scale(SZ(i)-s->z,10,sdist)-fix16_to_int(g_player[s->yvel].ps->q16horiz+g_player[s->yvel].ps->q16horizoff-F16(100))) < 100);
+                                    a = (klabs(scale(SZ(i) - s->z, 10, sdist) - fix16_to_int(g_player[s->yvel].ps->q16horiz + g_player[s->yvel].ps->q16horizoff - F16(100))) < 100);
                                 else a = 1;
 
+                                int32_t can_see;
                                 if (PN(i) == ORGANTIC || PN(i) == ROTATEGUN)
-                                    cans = cansee(SX(i),SY(i),SZ(i),SECT(i),s->x,s->y,s->z-(32<<8),s->sectnum);
-                                else cans = cansee(SX(i),SY(i),SZ(i)-(32<<8),SECT(i),s->x,s->y,s->z-(32<<8),s->sectnum);
+                                    can_see = cansee(SX(i), SY(i), SZ(i), SECT(i), s->x, s->y, s->z - (32 << 8), s->sectnum);
+                                else
+                                    can_see = cansee(SX(i), SY(i), SZ(i) - (32 << 8), SECT(i), s->x, s->y, s->z - (32 << 8), s->sectnum);
 
-                                if (a && cans)
+                                if (PN(i) == GREENSLIME && sdist < 1596) // Slimer is at our feet, don't autoaim.
+                                    can_see = 0;
+
+                                if (a && can_see)
                                 {
                                     smax = sdist;
                                     j = i;
                                 }
                             }
                         }
+                    }
                 }
+            }
+        }
     }
 
     return j;

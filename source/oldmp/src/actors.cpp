@@ -3935,9 +3935,9 @@ static void G_MoveActors(void)
             }
             // #endif
 
-            t[1]+=128;
+            t[1] += 128;
 
-            if (sector[sect].floorstat&1)
+            if (sector[sect].floorstat & FLOOR_STAT_PLAX)
                 KILLIT(i);
 
             p = A_FindPlayer(s,&x);
@@ -3989,10 +3989,12 @@ static void G_MoveActors(void)
                 goto BOLT;
             }
 
-            s->cstat = (x < 1596) ? 0 : 257;
+            // If we're close, block hitscans but not objects.
+            s->cstat = (x < 1596) ? (CSTAT_SPRITE_BLOCK_HITSCAN) : (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
 
             if (t[0] == GREENSLIME_ONPLAYER) //On the player
             {
+                s->cstat = 0; // Don't block anything if on player.
                 setspritez_old(i,s->x,s->y,s->z);
 
                 s->ang = fix16_to_int(g_player[p].ps->q16ang);
