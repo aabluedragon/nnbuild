@@ -5493,87 +5493,92 @@ HORIZONLY:
 // Determines the priority of pickups for a bot.
 static int getspritescore(int snum, int dapicnum)
 {
+    DukePlayer_t* p = g_player[snum].ps;
+
     switch (DynamicTileMap[dapicnum])
     {
+    // If the weapon is already had, prioritize like ammo.
     case FIRSTGUNSPRITE__STATIC:
-        return(20);
+        return (!p->gotweapon[PISTOL_WEAPON]) ? 20 : 10;
     case RPGSPRITE__STATIC:
-        return(200);
+        return (!p->gotweapon[RPG_WEAPON]) ? 200 : 50;
     case FREEZESPRITE__STATIC:
-        return(25);
+        return (!p->gotweapon[FREEZE_WEAPON]) ? 25 : 10;
     case SHRINKERSPRITE__STATIC:
-        return(80);
+        return (!p->gotweapon[SHRINKER_WEAPON]) ? 80 : 10;
     case HEAVYHBOMB__STATIC:
-        return(60);
+        return (!p->gotweapon[HANDBOMB_WEAPON]) ? 60 : 30;
     case CHAINGUNSPRITE__STATIC:
+        return (!p->gotweapon[CHAINGUN_WEAPON]) ? 50 : 20;
     case TRIPBOMBSPRITE__STATIC:
-        return(50);
+        return (!p->gotweapon[TRIPBOMB_WEAPON] || (p->ammo_amount[TRIPBOMB_WEAPON] < p->max_ammo_amount[TRIPBOMB_WEAPON])) ? 50 : 10;
     case SHOTGUNSPRITE__STATIC:
+        return (!p->gotweapon[SHOTGUN_WEAPON]) ? 120 : 25;
     case DEVISTATORSPRITE__STATIC:
-        return(120);
+        return (!p->gotweapon[DEVISTATOR_WEAPON]) ? 120 : 25;
 
     case FREEZEAMMO__STATIC:
-        if (g_player[snum].ps->ammo_amount[FREEZE_WEAPON] < g_player[snum].ps->max_ammo_amount[FREEZE_WEAPON]) return(10);
-        return(1);
+        if (p->ammo_amount[FREEZE_WEAPON] < p->max_ammo_amount[FREEZE_WEAPON]) return 10;
+        return 1;
     case AMMO__STATIC:
-        if (g_player[snum].ps->ammo_amount[PISTOL_WEAPON] < g_player[snum].ps->max_ammo_amount[PISTOL_WEAPON]) return(10);
-        return(1);
+        if (p->ammo_amount[PISTOL_WEAPON] < p->max_ammo_amount[PISTOL_WEAPON]) return 10;
+        return 1;
     case BATTERYAMMO__STATIC:
-        if (g_player[snum].ps->ammo_amount[CHAINGUN_WEAPON] < g_player[snum].ps->max_ammo_amount[CHAINGUN_WEAPON]) return(20);
-        return(1);
+        if (p->ammo_amount[CHAINGUN_WEAPON] < p->max_ammo_amount[CHAINGUN_WEAPON]) return 20;
+        return 1;
     case DEVISTATORAMMO__STATIC:
-        if (g_player[snum].ps->ammo_amount[DEVISTATOR_WEAPON] < g_player[snum].ps->max_ammo_amount[DEVISTATOR_WEAPON]) return(25);
-        return(1);
+        if (p->ammo_amount[DEVISTATOR_WEAPON] < p->max_ammo_amount[DEVISTATOR_WEAPON]) return 25;
+        return 1;
     case RPGAMMO__STATIC:
-        if (g_player[snum].ps->ammo_amount[RPG_WEAPON] < g_player[snum].ps->max_ammo_amount[RPG_WEAPON]) return(50);
-        return(1);
+        if (p->ammo_amount[RPG_WEAPON] < p->max_ammo_amount[RPG_WEAPON]) return 50;
+        return 1;
     case CRYSTALAMMO__STATIC:
-        if (g_player[snum].ps->ammo_amount[SHRINKER_WEAPON] < g_player[snum].ps->max_ammo_amount[SHRINKER_WEAPON]) return(10);
-        return(1);
+        if (p->ammo_amount[SHRINKER_WEAPON] < p->max_ammo_amount[SHRINKER_WEAPON]) return 10;
+        return 1;
     case HBOMBAMMO__STATIC:
-        if (g_player[snum].ps->ammo_amount[HANDBOMB_WEAPON] < g_player[snum].ps->max_ammo_amount[HANDBOMB_WEAPON]) return(30);
-        return(1);
+        if (p->ammo_amount[HANDBOMB_WEAPON] < p->max_ammo_amount[HANDBOMB_WEAPON]) return 30;
+        return 1;
     case SHOTGUNAMMO__STATIC:
-        if (g_player[snum].ps->ammo_amount[SHOTGUN_WEAPON] < g_player[snum].ps->max_ammo_amount[SHOTGUN_WEAPON]) return(25);
-        return(1);
+        if (p->ammo_amount[SHOTGUN_WEAPON] < p->max_ammo_amount[SHOTGUN_WEAPON]) return 25;
+        return 1;
 
     case COLA__STATIC:
-        if (sprite[g_player[snum].ps->i].extra < g_player[snum].ps->max_player_health) return(10);
-        return(1);
+        if (sprite[p->i].extra < p->max_player_health) return 10;
+        return 1;
     case SIXPAK__STATIC:
-        if (sprite[g_player[snum].ps->i].extra < g_player[snum].ps->max_player_health) return(30);
-        return(1);
+        if (sprite[p->i].extra < p->max_player_health) return 30;
+        return 1;
     case FIRSTAID__STATIC:
-        if (g_player[snum].ps->firstaid_amount < g_player[snum].ps->max_player_health) return(100);
-        return(1);
+        if (p->firstaid_amount < p->max_player_health) return 100;
+        return 1;
     case SHIELD__STATIC:
-        if (g_player[snum].ps->shield_amount < g_player[snum].ps->max_shield_amount) return(50);
-        return(1);
+        if (p->shield_amount < p->max_shield_amount) return 50;
+        return 1;
     case STEROIDS__STATIC:
-        if (g_player[snum].ps->steroids_amount < 400) return(30);
-        return(1);
+        if (p->steroids_amount < 400) return 30;
+        return 1;
     case AIRTANK__STATIC:
-        if (g_player[snum].ps->scuba_amount < 6400) return(30);
-        return(1);
+        if (p->scuba_amount < 6400) return 30;
+        return 1;
     case JETPACK__STATIC:
-        if (g_player[snum].ps->jetpack_amount < 1600) return(100);
-        return(1);
+        if (p->jetpack_amount < 1600) return 100;
+        return 1;
     case HEATSENSOR__STATIC:
-        if (g_player[snum].ps->heat_amount < 1200) return(5);
-        return(1);
+        if (p->heat_amount < 1200) return 5;
+        return 1;
     case ACCESSCARD__STATIC:
-        return(1);
+        return 1;
     case BOOTS__STATIC:
-        if (g_player[snum].ps->boot_amount < 200) return(15);
-        return(1);
+        if (p->boot_amount < 200) return 15;
+        return 1;
     case ATOMICHEALTH__STATIC:
-        if (sprite[g_player[snum].ps->i].extra < g_player[snum].ps->max_player_health<<1) return(50);
-        return(1);
+        if (sprite[p->i].extra < p->max_player_health<<1) return 50;
+        return 1;
     case HOLODUKE__STATIC:
-        if (g_player[snum].ps->holoduke_amount < 2400) return(5);
-        return(1);
+        if (p->holoduke_amount < 2400) return 5;
+        return 1;
     case MUSICANDSFX__STATIC:
-        return(1);
+        return 1;
     }
     return(0);
 }
@@ -5613,7 +5618,7 @@ void computergetinput(int snum, input_t *syn)
     walltype *wal;
 
     vec3_t pos1, pos2, pos3;
-    hitdata_t hit;
+    //hitdata_t hit; // [JM] Unused
 
     syn->fvel = 0;
     syn->svel = 0;
@@ -5621,6 +5626,9 @@ void computergetinput(int snum, input_t *syn)
     syn->q16horz = 0;
     syn->bits = 0;
     syn->extbits = 0;
+
+    if (ud.limit_hit)
+        return;
 
     pos1 = sprite[p->i].pos;
     damyang = sprite[p->i].ang;
@@ -5748,14 +5756,19 @@ void computergetinput(int snum, input_t *syn)
 
         if (p->curr_weapon == RPG_WEAPON)
         {
+            // [JM] Doesn't do anything... hit var isn't used anywhere.
+            // Guessing this may have been to check for obstructions so bots don't
+            // commit seppuku with RPGs?
+#if 0
             pos1.z -= PHEIGHT;
             hitscan(&pos1,damysect,sintable[(damyang+512)&2047],sintable[damyang&2047],
                     fix16_to_int(F16(100)-p->q16horiz-p->q16horizoff)*32,&hit,CLIPMASK1);
             pos1.z += PHEIGHT;
+#endif
 
-            if ((pos3.x - pos1.x)*(pos3.x - pos1.x)+(pos3.y - pos1.y)*(pos3.y - pos1.y) < 2560*2560) syn->bits &= ~BIT(SK_FIRE);
+            if ((pos3.x - pos1.x)*(pos3.x - pos1.x)+(pos3.y - pos1.y)*(pos3.y - pos1.y) < 2560*2560)
+                syn->bits &= ~BIT(SK_FIRE);
         }
-
 
         fightdist = fdmatrix[p->curr_weapon][goalp->curr_weapon];
         if (fightdist < 128) fightdist = 128;
@@ -5776,7 +5789,8 @@ void computergetinput(int snum, input_t *syn)
             syn->bits &= ~BIT(SK_FIRE);
         }
 
-        if (dist < 256) syn->bits |= BIT(SK_QUICK_KICK);
+        if (dist < 256) // We're close, give 'em the boot.
+            syn->bits |= BIT(SK_QUICK_KICK);
 
         pos3.x = pos2.x+((pos1.x-pos2.x)*fightdist/dist);
         pos3.y = pos2.y+((pos1.y- pos2.y)*fightdist/dist);
