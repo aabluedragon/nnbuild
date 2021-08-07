@@ -3418,7 +3418,7 @@ static void P_CycleCameras(int32_t playerNum, int32_t viewscreenSprite)
             A_PlaySound(MONITOR_ACTIVE, p->i);
             sprite[viewscreenSprite].owner = i;
             sprite[viewscreenSprite].yvel = 1;  // VIEWSCREEN_YVEL
-            //g_curViewscreen          = neartagsprite;
+            camsprite = viewscreenSprite; // g_curViewScreen
 
             int const playerSectnum = p->cursectnum;
             p->cursectnum = SECT(i);
