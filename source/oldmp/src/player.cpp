@@ -5757,6 +5757,9 @@ void computergetinput(int snum, input_t *syn)
         if (p->curr_weapon == TRIPBOMB_WEAPON)
             syn->bits |= ((rand()%MAX_WEAPONS)<<SK_WEAPON_BITS);
 
+        if((p->steroids_amount >= 400) && !(rand() % 100))
+            syn->bits |= BIT(SK_STEROIDS);
+
         if (p->curr_weapon == RPG_WEAPON)
         {
             // [JM] Doesn't do anything... hit var isn't used anywhere.
@@ -6090,8 +6093,11 @@ void computergetinput(int snum, input_t *syn)
         syn->fvel += ((sintable[(daang + 1024) & 2047] * strafeVal) >> 17);
         syn->svel += ((sintable[(daang + 512) & 2047] * strafeVal) >> 17);
 
-        if ((clipmovecount[snum]&31) == 2) syn->bits |= BIT(SK_OPEN);
-        if ((clipmovecount[snum]&31) == 17) syn->bits |= BIT(SK_QUICK_KICK);
+        if ((clipmovecount[snum]&31) == 2)
+            syn->bits |= BIT(SK_OPEN);
+        if ((clipmovecount[snum]&31) == 17)
+            syn->bits |= BIT(SK_QUICK_KICK);
+
         if (clipmovecount[snum] > 32)
         {
             goalsect[snum] = -1;
