@@ -5731,11 +5731,14 @@ void computergetinput(int snum, input_t *syn)
                 }
                 else
                 {
+                    // [JM] Doesn't do anything... hit var isn't used anywhere. Leftover crud?
+#if 0
                     hitscan(&sprite[spr].pos, sprite[spr].sectnum,
                             mulscale14(sprite[spr].xvel, sintable[(sprite[spr].ang + 512) & 2047]),
                             mulscale14(sprite[spr].xvel, sintable[sprite[spr].ang & 2047]),
                             (int)sprite[spr].zvel,
                             &hit, CLIPMASK1);
+#endif
                 }
             }
         }
