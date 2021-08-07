@@ -5488,15 +5488,15 @@ HORIZONLY:
     P_ProcessWeapon(snum);
 }
 
-//UPDATE THIS FILE OVER THE OLD GETSPRITESCORE/COMPUTERGETINPUT FUNCTIONS
-int getspritescore(int snum, int dapicnum)
+// Move to dukebot.cpp
+
+// Determines the priority of pickups for a bot.
+static int getspritescore(int snum, int dapicnum)
 {
     switch (DynamicTileMap[dapicnum])
     {
     case FIRSTGUNSPRITE__STATIC:
         return(20);
-    case CHAINGUNSPRITE__STATIC:
-        return(50);
     case RPGSPRITE__STATIC:
         return(200);
     case FREEZESPRITE__STATIC:
@@ -5505,10 +5505,10 @@ int getspritescore(int snum, int dapicnum)
         return(80);
     case HEAVYHBOMB__STATIC:
         return(60);
+    case CHAINGUNSPRITE__STATIC:
     case TRIPBOMBSPRITE__STATIC:
         return(50);
     case SHOTGUNSPRITE__STATIC:
-        return(120);
     case DEVISTATORSPRITE__STATIC:
         return(120);
 
@@ -5578,7 +5578,9 @@ int getspritescore(int snum, int dapicnum)
     return(0);
 }
 
-static int fdmatrix[12][12] =
+// This matrix is used to determine how far a dukebot will engage another player
+// based on what weapon they're carrying, and what weapon their opponent is using.
+static int fdmatrix[MAX_WEAPONS][MAX_WEAPONS] =
 {
     //KNEE PIST SHOT CHAIN RPG PIPE SHRI DEVI WALL FREE HAND EXPA
     {  128,  -1,  -1,  -1, 128,  -1,  -1,  -1, 128,  -1, 128,  -1 },   //KNEE
@@ -5602,11 +5604,12 @@ short searchsect[MAXSECTORS], searchparent[MAXSECTORS];
 char dashow2dsector[(MAXSECTORS+7)>>3];
 void computergetinput(int snum, input_t *syn)
 {
-    int i, j, k, l, dx, dy;
+    int dx, dy;
     int dist, daang, zang, fightdist, damyang, damysect;
     int startsect, endsect, splc, send, startwall, endwall;
 
     DukePlayer_t *p = g_player[snum].ps;
+    DukePlayer_t *goalp = g_player[goalplayer[snum]].ps;
     walltype *wal;
 
     vec3_t pos1, pos2, pos3;
@@ -5619,119 +5622,121 @@ void computergetinput(int snum, input_t *syn)
     syn->bits = 0;
     syn->extbits = 0;
 
-    pos1.x = sprite[p->i].x;
-    pos1.y = sprite[p->i].y;
-    pos1.z = sprite[p->i].z;
+    pos1 = sprite[p->i].pos;
     damyang = sprite[p->i].ang;
     damysect = sprite[p->i].sectnum;
     if ((numplayers >= 2) && (snum == myconnectindex))
     {
-        pos1.x = predictedPlayer.pos.x;
-        pos1.y = predictedPlayer.pos.y;
-        pos1.z = predictedPlayer.pos.z+PHEIGHT;
+        pos1 = predictedPlayer.pos;
+        pos1.z += PHEIGHT;
         damyang = fix16_to_int(predictedPlayer.q16ang);
         damysect = predictedPlayer.cursectnum;
     }
 
     if (!(numframes&7))
     {
-        pos2.x = sprite[g_player[goalplayer[snum]].ps->i].x;
-        pos2.y = sprite[g_player[goalplayer[snum]].ps->i].y;
-        pos2.z = sprite[g_player[goalplayer[snum]].ps->i].z;
+        pos2 = sprite[goalp->i].pos;
 
-        if (!cansee(pos1.x,pos1.y,pos1.z-(48<<8),damysect, pos2.x, pos2.y, pos2.z-(48<<8),sprite[g_player[goalplayer[snum]].ps->i].sectnum))
+        if (!cansee(pos1.x,pos1.y,pos1.z-(48<<8),damysect, pos2.x, pos2.y, pos2.z-(48<<8),sprite[goalp->i].sectnum))
             goalplayer[snum] = snum;
     }
 
-    if ((goalplayer[snum] == snum) || (g_player[goalplayer[snum]].ps->dead_flag != 0))
+    if ((goalplayer[snum] == snum) || (goalp->dead_flag != 0))
     {
-        j = 0x7fffffff;
-        TRAVERSE_CONNECT(i)
-        if (i != snum && !(GTFLAGS(GAMETYPE_TDM) && g_player[snum].ps->team == g_player[i].ps->team))
+        int32_t lastDist = 0x7fffffff;
+
+        int otherPlayer;
+        TRAVERSE_CONNECT(otherPlayer)
         {
-            dist = ksqrt((sprite[g_player[i].ps->i].x-pos1.x)*(sprite[g_player[i].ps->i].x-pos1.x)+(sprite[g_player[i].ps->i].y-pos1.y)*(sprite[g_player[i].ps->i].y-pos1.y));
-
-            pos2.x = sprite[g_player[i].ps->i].x;
-            pos2.y = sprite[g_player[i].ps->i].y;
-            pos2.z = sprite[g_player[i].ps->i].z;
-            if (!cansee(pos1.x,pos1.y,pos1.z-(48<<8),damysect, pos2.x, pos2.y, pos2.z-(48<<8),sprite[g_player[i].ps->i].sectnum))
-                dist <<= 1;
-
-            if (dist < j)
+            auto pOther = g_player[otherPlayer].ps;
+            if (otherPlayer != snum && !(GTFLAGS(GAMETYPE_TDM) && p->team == pOther->team))
             {
-                j = dist;
-                goalplayer[snum] = i;
-            }
+                dist = ksqrt((sprite[pOther->i].x - pos1.x) * (sprite[pOther->i].x - pos1.x) + (sprite[pOther->i].y - pos1.y) * (sprite[pOther->i].y - pos1.y));
 
+                pos2 = sprite[pOther->i].pos;
+                if (!cansee(pos1.x, pos1.y, pos1.z - (48 << 8), damysect, pos2.x, pos2.y, pos2.z - (48 << 8), sprite[pOther->i].sectnum))
+                    dist <<= 1;
+
+                if (dist < lastDist)
+                {
+                    lastDist = dist;
+                    goalplayer[snum] = otherPlayer;
+                }
+            }
         }
     }
 
-    pos2.x = sprite[g_player[goalplayer[snum]].ps->i].x;
-    pos2.y = sprite[g_player[goalplayer[snum]].ps->i].y;
-    pos2.z = sprite[g_player[goalplayer[snum]].ps->i].z;
+    pos2 = sprite[goalp->i].pos;
 
     if (p->dead_flag) syn->bits |= BIT(SK_OPEN);
     if ((p->firstaid_amount > 0) && (p->last_extra < 100))
         syn->bits |= BIT(SK_MEDKIT);
 
-    for (j=headspritestat[STAT_PROJECTILE];j>=0;j=nextspritestat[j])
+    // Dodge incoming projectiles. Dukebots are a real bastard when it comes to this.
+    for (int spr = headspritestat[STAT_PROJECTILE]; spr >= 0; spr = nextspritestat[spr])
     {
-        switch (DynamicTileMap[sprite[j].picnum])
+        int dodgeSpeed = 0;
+        switch (DynamicTileMap[sprite[spr].picnum])
         {
         case TONGUE__STATIC:
-            k = 4;
+            dodgeSpeed = 4;
             break;
         case FREEZEBLAST__STATIC:
-            k = 4;
+            dodgeSpeed = 4;
             break;
         case SHRINKSPARK__STATIC:
-            k = 16;
+            dodgeSpeed = 16;
             break;
         case RPG__STATIC:
-            k = 16;
+            dodgeSpeed = 16;
             break;
         default:
-            k = 0;
+            dodgeSpeed = 0;
             break;
         }
-        if (k)
+
+        if (dodgeSpeed)
         {
-            pos3.x = sprite[j].x;
-            pos3.y = sprite[j].y;
-            pos3.z = sprite[j].z;
-            for (l=0;l<=8;l++)
+            pos3 = sprite[spr].pos;
+            for (int32_t dodgeCnt = 0; dodgeCnt <= 8; dodgeCnt++)
             {
                 if (tmulscale11(pos3.x-pos1.x, pos3.x-pos1.x, pos3.y-pos1.y, pos3.y-pos1.y,(pos3.z-pos1.z)>>4,(pos3.z-pos1.z)>>4) < 3072)
                 {
-                    dx = sintable[(sprite[j].ang+512)&2047];
-                    dy = sintable[sprite[j].ang&2047];
-                    if ((pos1.x - pos3.x)*dy > (pos1.y - pos3.y)*dx) i = -k*512;
-                    else i = k*512;
-                    syn->fvel -= mulscale17(dy,i);
-                    syn->svel += mulscale17(dx,i);
+                    dx = sintable[(sprite[spr].ang + 512) & 2047];
+                    dy = sintable[sprite[spr].ang & 2047];
+                    
+                    int32_t dodgeDir;
+                    if ((pos1.x - pos3.x) * dy > (pos1.y - pos3.y) * dx)
+                        dodgeDir = -dodgeSpeed * 512;
+                    else
+                        dodgeDir = dodgeSpeed * 512;
+
+                    syn->fvel -= mulscale17(dy, dodgeDir);
+                    syn->svel += mulscale17(dx, dodgeDir);
                 }
-                if (l < 7)
+
+                if (dodgeCnt < 7)
                 {
-                    pos3.x += (mulscale14(sprite[j].xvel,sintable[(sprite[j].ang+512)&2047])<<2);
-                    pos3.y += (mulscale14(sprite[j].xvel,sintable[sprite[j].ang&2047])<<2);
-                    pos3.z += (sprite[j].zvel<<2);
+                    pos3.x += (mulscale14(sprite[spr].xvel, sintable[(sprite[spr].ang + 512) & 2047]) << 2);
+                    pos3.y += (mulscale14(sprite[spr].xvel, sintable[sprite[spr].ang & 2047]) << 2);
+                    pos3.z += (sprite[spr].zvel << 2);
                 }
                 else
                 {
-                    hitscan(&sprite[j].pos,sprite[j].sectnum,
-                            mulscale14(sprite[j].xvel,sintable[(sprite[j].ang+512)&2047]),
-                            mulscale14(sprite[j].xvel,sintable[sprite[j].ang&2047]),
-                            (int)sprite[j].zvel,
-                            &hit,CLIPMASK1);
+                    hitscan(&sprite[spr].pos, sprite[spr].sectnum,
+                            mulscale14(sprite[spr].xvel, sintable[(sprite[spr].ang + 512) & 2047]),
+                            mulscale14(sprite[spr].xvel, sintable[sprite[spr].ang & 2047]),
+                            (int)sprite[spr].zvel,
+                            &hit, CLIPMASK1);
                 }
             }
         }
     }
 
-    if ((g_player[goalplayer[snum]].ps->dead_flag == 0) &&
-            ((cansee(pos1.x, pos1.y, pos1.z,damysect,pos2.x, pos2.y, pos2.z,sprite[g_player[goalplayer[snum]].ps->i].sectnum)) ||
-             (cansee(pos1.x, pos1.y, pos1.z-(24<<8),damysect, pos2.x, pos2.y, pos2.z-(24<<8),sprite[g_player[goalplayer[snum]].ps->i].sectnum)) ||
-             (cansee(pos1.x, pos1.y, pos1.z-(48<<8),damysect, pos2.x, pos2.y, pos2.z-(48<<8),sprite[g_player[goalplayer[snum]].ps->i].sectnum))))
+    if ((goalp->dead_flag == 0) &&
+            ((cansee(pos1.x, pos1.y, pos1.z,damysect,pos2.x, pos2.y, pos2.z, sprite[goalp->i].sectnum)) ||
+             (cansee(pos1.x, pos1.y, pos1.z-(24<<8),damysect, pos2.x, pos2.y, pos2.z-(24<<8), sprite[goalp->i].sectnum)) ||
+             (cansee(pos1.x, pos1.y, pos1.z-(48<<8),damysect, pos2.x, pos2.y, pos2.z-(48<<8), sprite[goalp->i].sectnum))))
     {
         syn->bits |= BIT(SK_FIRE);
 
@@ -5752,20 +5757,20 @@ void computergetinput(int snum, input_t *syn)
         }
 
 
-        fightdist = fdmatrix[p->curr_weapon][g_player[goalplayer[snum]].ps->curr_weapon];
+        fightdist = fdmatrix[p->curr_weapon][goalp->curr_weapon];
         if (fightdist < 128) fightdist = 128;
         dist = ksqrt((pos2.x - pos1.x)*(pos2.x - pos1.x)+(pos2.y - pos1.y)*(pos2.y - pos1.y));
         if (dist == 0) dist = 1;
-        daang = getangle(pos2.x+(g_player[goalplayer[snum]].ps->vel.x>>14)- pos1.x, pos2.y+(g_player[goalplayer[snum]].ps->vel.y>>14)-pos1.y);
+        daang = getangle(pos2.x+(goalp->vel.x>>14)- pos1.x, pos2.y+(goalp->vel.y>>14)-pos1.y);
         zang = 100-((pos2.z-pos1.z)*8)/dist;
         fightdist = max(fightdist,(klabs(pos2.z-pos1.z)>>4));
 
-        if (sprite[g_player[goalplayer[snum]].ps->i].yrepeat < 32)
+        if (sprite[goalp->i].yrepeat < 32) // Target shrunk?
         {
             fightdist = 0;
             syn->bits &= ~BIT(SK_FIRE);
         }
-        if (sprite[g_player[goalplayer[snum]].ps->i].pal == 1)
+        if (sprite[goalp->i].pal == 1) // Target frozen?
         {
             fightdist = 0;
             syn->bits &= ~BIT(SK_FIRE);
@@ -5781,17 +5786,23 @@ void computergetinput(int snum, input_t *syn)
         //Strafe attack
         if (fightdist)
         {
-            j = (int32_t)totalclock+snum*13468;
-            i = sintable[(j<<6)&2047];
-            i += sintable[((j+4245)<<5)&2047];
-            i += sintable[((j+6745)<<4)&2047];
-            i += sintable[((j+15685)<<3)&2047];
-            dx = sintable[(sprite[g_player[goalplayer[snum]].ps->i].ang+512)&2047];
-            dy = sintable[sprite[g_player[goalplayer[snum]].ps->i].ang&2047];
-            if ((pos1.x - pos2.x)*dy > (pos1.y - pos2.y)*dx) i += 8192;
-            else i -= 8192;
-            syn->fvel += ((sintable[(daang+1024)&2047]*i)>>17);
-            syn->svel += ((sintable[(daang+512)&2047]*i)>>17);
+            int32_t strafeClock = (int32_t)totalclock + snum * 13468;
+            int32_t strafeVal = sintable[(strafeClock << 6) & 2047];
+            
+            strafeVal += sintable[((strafeClock + 4245) << 5) & 2047];
+            strafeVal += sintable[((strafeClock + 6745) << 4) & 2047];
+            strafeVal += sintable[((strafeClock + 15685) << 3) & 2047];
+
+            dx = sintable[(sprite[goalp->i].ang + 512) & 2047];
+            dy = sintable[sprite[goalp->i].ang & 2047];
+
+            if ((pos1.x - pos2.x) * dy > (pos1.y - pos2.y) * dx)
+                strafeVal += 8192;
+            else
+                strafeVal -= 8192;
+
+            syn->fvel += ((sintable[(daang + 1024) & 2047] * strafeVal) >> 17);
+            syn->svel += ((sintable[(daang + 512) & 2047] * strafeVal) >> 17);
         }
 
         syn->q16avel = min(max(fix16_from_int((((daang+1024-damyang)&2047)-1024)>>1),F16(-127)),F16(127));
@@ -5805,164 +5816,182 @@ void computergetinput(int snum, input_t *syn)
     {
         goalwall[snum] = -1;
         startsect = sprite[p->i].sectnum;
-        endsect = sprite[g_player[goalplayer[snum]].ps->i].sectnum;
+        endsect = sprite[goalp->i].sectnum;
 
         clearbufbyte(dashow2dsector,(MAXSECTORS+7)>>3,0L);
         searchsect[0] = startsect;
         searchparent[0] = -1;
         dashow2dsector[startsect>>3] |= (1<<(startsect&7));
-        for (splc=0,send=1;splc<send;splc++)
+        for (splc = 0, send = 1; splc < send; splc++)
         {
             startwall = sector[searchsect[splc]].wallptr;
             endwall = startwall + sector[searchsect[splc]].wallnum;
-            for (i=startwall,wal=&wall[startwall];i<endwall;i++,wal++)
+
+            int32_t wNum = 0;
+            for (wNum = startwall, wal = &wall[startwall]; wNum < endwall; wNum++, wal++)
             {
-                j = wal->nextsector;
-                if (j < 0) continue;
+                int16_t sect = wal->nextsector;
+                if (sect < 0)
+                    continue;
 
                 dx = ((wall[wal->point2].x+wal->x)>>1);
                 dy = ((wall[wal->point2].y+wal->y)>>1);
-                if ((getceilzofslope(j,dx,dy) > getflorzofslope(j,dx,dy)-(28<<8)) && ((sector[j].lotag < 15) || (sector[j].lotag > 22)))
+
+                if ((getceilzofslope(sect,dx,dy) > getflorzofslope(sect,dx,dy)-(28<<8)) && ((sector[sect].lotag < 15) || (sector[sect].lotag > 22)))
                     continue;
-                if (getflorzofslope(j,dx,dy) < getflorzofslope(searchsect[splc],dx,dy)-(72<<8))
+
+                if (getflorzofslope(sect,dx,dy) < getflorzofslope(searchsect[splc],dx,dy)-(72<<8))
                     continue;
-                if ((dashow2dsector[j>>3]&(1<<(j&7))) == 0)
+
+                if ((dashow2dsector[sect >> 3]&(1<<(sect &7))) == 0)
                 {
-                    dashow2dsector[j>>3] |= (1<<(j&7));
-                    searchsect[send] = (short)j;
+                    dashow2dsector[sect >>3] |= (1<<(sect &7));
+                    searchsect[send] = (short)sect;
                     searchparent[send] = (short)splc;
                     send++;
-                    if (j == endsect)
+                    if (sect == endsect)
                     {
                         clearbufbyte(dashow2dsector,(MAXSECTORS+7)>>3,0L);
-                        for (k=send-1;k>=0;k=searchparent[k])
-                            dashow2dsector[searchsect[k]>>3] |= (1<<(searchsect[k]&7));
 
-                        for (k=send-1;k>=0;k=searchparent[k])
-                            if (!searchparent[k]) break;
+                        int16_t targetSect;
+                        for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
+                            dashow2dsector[searchsect[targetSect] >> 3] |= (1 << (searchsect[targetSect] & 7));
 
-                        goalsect[snum] = searchsect[k];
+                        for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
+                            if (!searchparent[targetSect]) break;
+
+                        goalsect[snum] = searchsect[targetSect];
                         startwall = sector[goalsect[snum]].wallptr;
                         endwall = startwall+sector[goalsect[snum]].wallnum;
                         pos3.x = pos3.y = 0;
-                        for (i=startwall;i<endwall;i++)
+
+                        // CHECKME: Does this break the parent loop?
+                        for (wNum = startwall; wNum < endwall; wNum++)
                         {
-                            pos3.x += wall[i].x;
-                            pos3.y += wall[i].y;
+                            pos3.x += wall[wNum].x;
+                            pos3.y += wall[wNum].y;
                         }
                         pos3.x /= (endwall-startwall);
                         pos3.y /= (endwall-startwall);
 
                         startwall = sector[startsect].wallptr;
                         endwall = startwall+sector[startsect].wallnum;
-                        l = 0;
-                        k = startwall;
-                        for (i=startwall;i<endwall;i++)
+                        int32_t lastDist = 0;
+                        int32_t targetWall = startwall;
+                        // CHECKME: Does this break the parent loop?
+                        for (wNum = startwall; wNum < endwall; wNum++)
                         {
-                            if (wall[i].nextsector != goalsect[snum]) continue;
-                            dx = wall[wall[i].point2].x-wall[i].x;
-                            dy = wall[wall[i].point2].y-wall[i].y;
+                            if (wall[wNum].nextsector != goalsect[snum]) continue;
+                            dx = wall[wall[wNum].point2].x-wall[wNum].x;
+                            dy = wall[wall[wNum].point2].y-wall[wNum].y;
 
                             //if (dx*(y1-wall[i].y) <= dy*(x1-wall[i].x))
                             //   if (dx*(y2-wall[i].y) >= dy*(x2-wall[i].x))
-                            if ((pos3.x-pos1.x)*(wall[i].y- pos1.y) <= (pos3.y - pos1.y)*(wall[i].x- pos1.x))
-                                if ((pos3.x - pos1.x)*(wall[wall[i].point2].y - pos1.y) >= (pos3.y - pos1.y)*(wall[wall[i].point2].x - pos1.x))
+                            if ((pos3.x-pos1.x)*(wall[wNum].y- pos1.y) <= (pos3.y - pos1.y)*(wall[wNum].x- pos1.x))
+                                if ((pos3.x - pos1.x)*(wall[wall[wNum].point2].y - pos1.y) >= (pos3.y - pos1.y)*(wall[wall[wNum].point2].x - pos1.x))
                                 {
-                                    k = i;
+                                    targetWall = wNum;
                                     break;
                                 }
 
                             dist = ksqrt(dx*dx+dy*dy);
-                            if (dist > l)
+                            if (dist > lastDist)
                             {
-                                l = dist;
-                                k = i;
+                                lastDist = dist;
+                                targetWall = wNum;
                             }
 
                         }
-                        goalwall[snum] = k;
-                        daang = ((getangle(wall[wall[k].point2].x-wall[k].x,wall[wall[k].point2].y-wall[k].y)+1536)&2047);
-                        goalx[snum] = ((wall[k].x+wall[wall[k].point2].x)>>1)+(sintable[(daang+512)&2047]>>8);
-                        goaly[snum] = ((wall[k].y+wall[wall[k].point2].y)>>1)+(sintable[daang&2047]>>8);
+                        goalwall[snum] = targetWall;
+                        daang = ((getangle(wall[wall[targetWall].point2].x-wall[targetWall].x,wall[wall[targetWall].point2].y-wall[targetWall].y)+1536)&2047);
+                        goalx[snum] = ((wall[targetWall].x+wall[wall[targetWall].point2].x)>>1)+(sintable[(daang+512)&2047]>>8);
+                        goaly[snum] = ((wall[targetWall].y+wall[wall[targetWall].point2].y)>>1)+(sintable[daang&2047]>>8);
                         goalz[snum] = sector[goalsect[snum]].floorz-(32<<8);
                         break;
                     }
                 }
             }
 
-            for (i=headspritesect[searchsect[splc]];i>=0;i=nextspritesect[i])
-                if (sprite[i].lotag == 7)
+            for (int32_t spr = headspritesect[searchsect[splc]]; spr >= 0; spr = nextspritesect[spr])
+            {
+                if (sprite[spr].lotag == 7)
                 {
-                    j = sprite[sprite[i].owner].sectnum;
-                    if ((dashow2dsector[j>>3]&(1<<(j&7))) == 0)
+                    int16_t sect = sprite[sprite[spr].owner].sectnum;
+                    if ((dashow2dsector[sect >> 3] & (1 << (sect & 7))) == 0)
                     {
-                        dashow2dsector[j>>3] |= (1<<(j&7));
-                        searchsect[send] = (short)j;
+                        dashow2dsector[sect >> 3] |= (1 << (sect & 7));
+                        searchsect[send] = (short)sect;
                         searchparent[send] = (short)splc;
                         send++;
-                        if (j == endsect)
+                        if (sect == endsect)
                         {
-                            clearbufbyte(dashow2dsector,(MAXSECTORS+7)>>3,0L);
-                            for (k=send-1;k>=0;k=searchparent[k])
-                                dashow2dsector[searchsect[k]>>3] |= (1<<(searchsect[k]&7));
+                            int16_t targetSect;
+                            clearbufbyte(dashow2dsector, (MAXSECTORS + 7) >> 3, 0L);
+                            for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
+                                dashow2dsector[searchsect[targetSect] >> 3] |= (1 << (searchsect[targetSect] & 7));
 
-                            for (k=send-1;k>=0;k=searchparent[k])
-                                if (!searchparent[k]) break;
+                            for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
+                                if (!searchparent[targetSect]) break;
 
-                            goalsect[snum] = searchsect[k];
+                            goalsect[snum] = searchsect[targetSect];
                             startwall = sector[startsect].wallptr;
-                            endwall = startwall+sector[startsect].wallnum;
-                            l = 0;
-                            k = startwall;
-                            for (i=startwall;i<endwall;i++)
+                            endwall = startwall + sector[startsect].wallnum;
+                            int32_t lastDist = 0;
+                            int32_t targetWall = startwall;
+                            for (int32_t wNum = startwall; wNum < endwall; wNum++)
                             {
-                                dx = wall[wall[i].point2].x-wall[i].x;
-                                dy = wall[wall[i].point2].y-wall[i].y;
-                                dist = ksqrt(dx*dx+dy*dy);
-                                if ((wall[i].nextsector == goalsect[snum]) && (dist > l))
+                                dx = wall[wall[wNum].point2].x - wall[wNum].x;
+                                dy = wall[wall[wNum].point2].y - wall[wNum].y;
+                                dist = ksqrt(dx * dx + dy * dy);
+                                if ((wall[wNum].nextsector == goalsect[snum]) && (dist > lastDist))
                                 {
-                                    l = dist;
-                                    k = i;
+                                    lastDist = dist;
+                                    targetWall = wNum;
                                 }
 
                             }
-                            goalwall[snum] = k;
-                            daang = ((getangle(wall[wall[k].point2].x-wall[k].x,wall[wall[k].point2].y-wall[k].y)+1536)&2047);
-                            goalx[snum] = ((wall[k].x+wall[wall[k].point2].x)>>1)+(sintable[(daang+512)&2047]>>8);
-                            goaly[snum] = ((wall[k].y+wall[wall[k].point2].y)>>1)+(sintable[daang&2047]>>8);
-                            goalz[snum] = sector[goalsect[snum]].floorz-(32<<8);
+                            goalwall[snum] = targetWall;
+                            daang = ((getangle(wall[wall[targetWall].point2].x - wall[targetWall].x, wall[wall[targetWall].point2].y - wall[targetWall].y) + 1536) & 2047);
+                            goalx[snum] = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(daang + 512) & 2047] >> 8);
+                            goaly[snum] = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[daang & 2047] >> 8);
+                            goalz[snum] = sector[goalsect[snum]].floorz - (32 << 8);
                             break;
                         }
                     }
                 }
+            }
             if (goalwall[snum] >= 0) break;
         }
     }
 
     if ((goalsect[snum] < 0) || (goalwall[snum] < 0))
     {
-        if (goalsprite[snum] < 0 || !cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8),i))
+        if (goalsprite[snum] < 0 || !cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8), sprite[goalsprite[snum]].sectnum))
         {
             int bestsprite = -1, spritescore = 0;
 
-            for (k=0;k<16;k++)
+            for (int searchCnt = 0; searchCnt < 16; searchCnt++)
             {
-                i = (rand()%numsectors);
-                for (j=headspritesect[i];j>=0;j=nextspritesect[j])
+                int16_t sect = (rand() % numsectors);
+                for (int32_t spr = headspritesect[sect]; spr >= 0; spr = nextspritesect[spr])
                 {
-                    if ((sprite[j].xrepeat <= 0) || (sprite[j].yrepeat <= 0)) continue;
-                    if (getspritescore(snum,sprite[j].picnum) <= 0) continue;
-                    if (cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[j].x,sprite[j].y,sprite[j].z-(4<<8),i))
+                    if ((sprite[spr].xrepeat <= 0) || (sprite[spr].yrepeat <= 0))
+                        continue;
+
+                    if (getspritescore(snum, sprite[spr].picnum) <= 0)
+                        continue;
+
+                    if (cansee(pos1.x, pos1.y, pos1.z - (32 << 8), damysect, sprite[spr].x, sprite[spr].y, sprite[spr].z - (4 << 8), sect))
                     {
-                        if (getspritescore(snum,sprite[j].picnum) > spritescore)
+                        if (getspritescore(snum, sprite[spr].picnum) > spritescore)
                         {
-                            spritescore = getspritescore(snum,sprite[j].picnum);
-                            bestsprite = j;
+                            spritescore = getspritescore(snum, sprite[spr].picnum);
+                            bestsprite = spr;
                         }
-//                        break;
                     }
                 }
             }
+
             if (bestsprite != -1 && (goalsprite[snum] < 0 || spritescore > goalspritescore[snum]))
             {
                 goalx[snum] = sprite[bestsprite].x;
@@ -5983,52 +6012,66 @@ void computergetinput(int snum, input_t *syn)
     }
     else if (goalsprite[snum] != -1)
     {
-        if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8),i))
+        if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8), sprite[goalsprite[snum]].sectnum))
         {
             goalspritescore[snum] = 0;
             goalsprite[snum] = -1;
         }
     }
 
-    pos3.x = p->pos.x;
-    pos3.y = p->pos.y;
-    pos3.z = p->pos.z;
+    pos3 = p->pos;
     int16_t dasect = p->cursectnum;
-    i = clipmove_old(&pos3.x,&pos3.y,&pos3.z,&dasect,p->vel.x,p->vel.y,164L,4L<<8,4L<<8,CLIPMASK0);
-    if (!i)
+    
+    int32_t moveResult = clipmove(&pos3, &dasect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
+
+    if (!moveResult)
     {
-        pos3.x = p->pos.x;
-        pos3.y = p->pos.y;
-        pos3.z = p->pos.z+(24<<8);
+        pos3 = p->pos;
+        pos3.z += (24 << 8);
         dasect = p->cursectnum;
-        i = clipmove_old(&pos3.x,&pos3.y,&pos3.z,&dasect,p->vel.x,p->vel.y,164L,4L<<8,4L<<8,CLIPMASK0);
+        moveResult = clipmove(&pos3, &dasect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
     }
-    if (i)
+
+    if (moveResult)
     {
         clipmovecount[snum]++;
 
-        j = 0;
-        if ((i&0xc000) == 32768)  //Hit a wall (49152 for sprite)
-            if (wall[i&(MAXWALLS-1)].nextsector >= 0)
+        // Avoiding obstructions. (Jumping/crouching)
+        int32_t moveType = 0;
+        if ((moveResult & 0xc000) == 32768)  //Hit a wall (49152 for sprite)
+        {
+            if (wall[moveResult & (MAXWALLS - 1)].nextsector >= 0)
             {
-                if (getflorzofslope(wall[i&(MAXWALLS-1)].nextsector,p->pos.x,p->pos.y) <= p->pos.z+(24<<8)) j |= 1;
-                if (getceilzofslope(wall[i&(MAXWALLS-1)].nextsector,p->pos.x,p->pos.y) >= p->pos.z-(24<<8)) j |= 2;
+                if (getflorzofslope(wall[moveResult & (MAXWALLS - 1)].nextsector, p->pos.x, p->pos.y) <= p->pos.z + (24 << 8))
+                    moveType |= 1;
+
+                if (getceilzofslope(wall[moveResult & (MAXWALLS - 1)].nextsector, p->pos.x, p->pos.y) >= p->pos.z - (24 << 8))
+                    moveType |= 2;
             }
-        if ((i&0xc000) == 49152) j = 1;
-        if (j&1) if (clipmovecount[snum] == 4) syn->bits |= BIT(SK_JUMP);
-        if (j&2) syn->bits |= BIT(SK_CROUCH);
+        }
+
+        if ((moveResult&0xc000) == 49152)
+            moveType |= 1;
+
+        if (moveType & 1)
+        {
+            if (clipmovecount[snum] == 4)
+                syn->bits |= BIT(SK_JUMP);
+        }
+        if (moveType & 2)
+            syn->bits |= BIT(SK_CROUCH);
 
         //Strafe attack
         daang = getangle(pos2.x - pos1.x, pos2.y - pos1.y);
-        if ((i&0xc000) == 32768)
-            daang = getangle(wall[wall[i&(MAXWALLS-1)].point2].x-wall[i&(MAXWALLS-1)].x,wall[wall[i&(MAXWALLS-1)].point2].y-wall[i&(MAXWALLS-1)].y);
-        j = (int32_t)totalclock+snum*13468;
-        i = sintable[(j<<6)&2047];
-        i += sintable[((j+4245)<<5)&2047];
-        i += sintable[((j+6745)<<4)&2047];
-        i += sintable[((j+15685)<<3)&2047];
-        syn->fvel += ((sintable[(daang+1024)&2047]*i)>>17);
-        syn->svel += ((sintable[(daang+512)&2047]*i)>>17);
+        if ((moveResult&0xc000) == 32768)
+            daang = getangle(wall[wall[moveResult&(MAXWALLS-1)].point2].x-wall[moveResult&(MAXWALLS-1)].x,wall[wall[moveResult&(MAXWALLS-1)].point2].y-wall[moveResult&(MAXWALLS-1)].y);
+        int32_t strafeClock = (int32_t)totalclock + snum * 13468;
+        int32_t strafeVal = sintable[(strafeClock << 6) & 2047];
+        strafeVal += sintable[((strafeClock + 4245) << 5) & 2047];
+        strafeVal += sintable[((strafeClock + 6745) << 4) & 2047];
+        strafeVal += sintable[((strafeClock + 15685) << 3) & 2047];
+        syn->fvel += ((sintable[(daang + 1024) & 2047] * strafeVal) >> 17);
+        syn->svel += ((sintable[(daang + 512) & 2047] * strafeVal) >> 17);
 
         if ((clipmovecount[snum]&31) == 2) syn->bits |= BIT(SK_OPEN);
         if ((clipmovecount[snum]&31) == 17) syn->bits |= BIT(SK_QUICK_KICK);
@@ -6041,7 +6084,7 @@ void computergetinput(int snum, input_t *syn)
 
         if (goalsprite[snum] != -1)
         {
-            if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8),i))
+            if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8), sprite[goalsprite[snum]].sectnum))
             {
                 goalsprite[snum] = -1;
                 goalspritescore[snum] = 0;
