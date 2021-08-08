@@ -566,18 +566,18 @@ void P_RandomSpawnPoint(int snum)
 
     if (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_FIXEDRESPAWN))
     {
-        i = krand()%g_numPlayerSprites;
+        i = krand() % g_numPlayerSprites;
         if (GametypeFlags[ud.coop] & GAMETYPE_TDMSPAWN)
         {
-            for (j=0;j<MAXPLAYERS;j++)
+            for (j = 0; j < MAXPLAYERS; j++)
             {
                 if (g_player[j].ps == NULL || !g_player[j].connected) continue;
 
                 if (j != snum && g_player[j].ps->team == p->team && sprite[g_player[j].ps->i].extra > 0)
                 {
-                    for (k=0;k<g_numPlayerSprites;k++)
+                    for (k = 0; k < g_numPlayerSprites; k++)
                     {
-                        dist = FindDistance2D(g_player[j].ps->pos.x-g_playerSpawnPoints[k].ox,g_player[j].ps->pos.y-g_playerSpawnPoints[k].oy);
+                        dist = FindDistance2D(g_player[j].ps->pos.x - g_playerSpawnPoints[k].ox, g_player[j].ps->pos.y - g_playerSpawnPoints[k].oy);
                         if (dist < pdist)
                             i = k, pdist = dist;
                     }
@@ -586,6 +586,10 @@ void P_RandomSpawnPoint(int snum)
             }
         }
     }
+
+    // We don't have a spawn for this player in co-op, so use the default!
+    if (i >= g_numPlayerSprites)
+        i = 0;
 
     p->bobposx = p->opos.x = p->pos.x = g_playerSpawnPoints[i].ox;
     p->bobposy = p->opos.y = p->pos.y = g_playerSpawnPoints[i].oy;
