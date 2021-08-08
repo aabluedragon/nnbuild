@@ -2565,10 +2565,10 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_MAX_ACTORS_KILLED:
         if (iSet)
         {
-            g_player[iPlayer].ps->max_actors_killed=lValue;
+            ud.total_monsters = lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->max_actors_killed, g_i, g_p);
+        Gv_SetVar(lVar2, ud.total_monsters, g_i, g_p);
         return;
 
     case PLAYER_ACTORS_KILLED:

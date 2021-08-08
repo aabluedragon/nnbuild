@@ -769,6 +769,8 @@ static void resetpremapglobals(void)
     tempwallptr = 0;
     camsprite = -1;
 
+    ud.total_monsters = 0;
+    ud.monsters_killed = 0;
     ud.limit_hit = 0;
     ud.pause_on = 0;
     ud.camerasprite = -1;
@@ -797,7 +799,6 @@ static void resetprestat(int snum,int g)
     p->secret_rooms      = 0;
     p->max_secret_rooms  = 0;
     p->actors_killed     = 0;
-    p->max_actors_killed = 0;
     p->lastrandomspot = 0;
     p->weapon_pos = 6;
     p->kickback_pic = 5;

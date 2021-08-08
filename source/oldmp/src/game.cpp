@@ -3624,17 +3624,20 @@ void G_DisplayRest(int smoothratio)
         G_PrintGameText(13,STARTALPHANUM, j,scale(200-i,ud.config.ScreenHeight,200)-textsc(21),tempbuf,0,10,26,0, 0, xdim-1, ydim-1, 65536);
 
         if (ud.player_skill > 3 || (ud.multimode > 1 && !GTFLAGS(GAMETYPE_PLAYERSFRIENDLY)))
-            Bsprintf(tempbuf,"K:^15%d",(ud.multimode>1 &&!GTFLAGS(GAMETYPE_PLAYERSFRIENDLY))?g_player[myconnectindex].ps->frag-g_player[myconnectindex].ps->fraggedself:g_player[myconnectindex].ps->actors_killed);
+        {
+            Bsprintf(tempbuf, "K:^15%d", (ud.multimode > 1 && !GTFLAGS(GAMETYPE_PLAYERSFRIENDLY)) ?
+                     g_player[myconnectindex].ps->frag - g_player[myconnectindex].ps->fraggedself : ud.monsters_killed);
+        }
         else
         {
-            if (g_player[myconnectindex].ps->actors_killed >= g_player[myconnectindex].ps->max_actors_killed)
-                Bsprintf(tempbuf,"K:%d/%d",g_player[myconnectindex].ps->actors_killed,
-                         g_player[myconnectindex].ps->max_actors_killed>g_player[myconnectindex].ps->actors_killed?
-                         g_player[myconnectindex].ps->max_actors_killed:g_player[myconnectindex].ps->actors_killed);
+            if (ud.monsters_killed >= ud.total_monsters)
+                Bsprintf(tempbuf,"K:%d/%d", ud.monsters_killed,
+                         ud.total_monsters > ud.monsters_killed ?
+                         ud.total_monsters : ud.monsters_killed);
             else
-                Bsprintf(tempbuf,"K:^15%d/%d",g_player[myconnectindex].ps->actors_killed,
-                         g_player[myconnectindex].ps->max_actors_killed>g_player[myconnectindex].ps->actors_killed?
-                         g_player[myconnectindex].ps->max_actors_killed:g_player[myconnectindex].ps->actors_killed);
+                Bsprintf(tempbuf,"K:^15%d/%d", ud.monsters_killed,
+                         ud.total_monsters > ud.monsters_killed ?
+                         ud.total_monsters : ud.monsters_killed);
         }
         G_PrintGameText(13,STARTALPHANUM, j,scale(200-i,ud.config.ScreenHeight,200)-textsc(14),tempbuf,0,10,26,0, 0, xdim-1, ydim-1, 65536);
 
@@ -4857,7 +4860,7 @@ int A_Spawn(int j, int pn)
                     if (A_CheckSpriteFlags(i, SFLAG_BADGUYSTAYPUT))
                         actor[i].actorstayput = sp->sectnum;
 
-                    g_player[myconnectindex].ps->max_actors_killed++;
+                    ud.total_monsters++;
                     sp->clipdist = 80;
                     if (j >= 0)
                     {
@@ -5829,7 +5832,7 @@ int A_Spawn(int j, int pn)
                     sp->cstat |= 257;
 
                     if (sp->picnum != SHARK)
-                        g_player[myconnectindex].ps->max_actors_killed++;
+                        ud.total_monsters++;
                 }
 
                 if (sp->picnum == ORGANTIC) sp->cstat |= 128;
@@ -5910,7 +5913,7 @@ int A_Spawn(int j, int pn)
                     changespritestat(i, STAT_MISC);
                     return i;
                 }
-                g_player[myconnectindex].ps->max_actors_killed++;
+                ud.total_monsters++;
                 actor[i].temp_data[5] = 0;
                 if (ud.monsters_off == 1)
                 {

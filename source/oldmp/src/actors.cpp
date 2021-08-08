@@ -113,6 +113,33 @@ int G_CheckForSpaceFloor(int sectnum)
     return ((sector[sectnum].floorstat&1) && sector[sectnum].ceilingpal == 0 && ((sector[sectnum].floorpicnum==MOONSKY1)||(sector[sectnum].floorpicnum==BIGORBIT1))?1:0);
 }
 
+void G_AddMonsterKills(int32_t spriteNum, int32_t amount)
+{
+    if (oldnet_predicting || (uint32_t)spriteNum >= MAXSPRITES)
+        return;
+
+    auto pActor = &actor[spriteNum];
+
+    ud.monsters_killed += amount;
+
+    if (pActor->owner >= 0)
+    {
+        auto killerSprite = &sprite[pActor->owner];
+        if (killerSprite->picnum == APLAYER)
+        {
+            int32_t playerNum = killerSprite->yvel;
+            if ((playerNum >= 0) && (playerNum < MAXPLAYERS))
+            {
+                g_player[playerNum].ps->actors_killed += amount;
+                OSD_Printf("%s has killed a monster with a picnum of %d\n", g_player[playerNum].user_name, TrackerCast(sprite[spriteNum].picnum));
+                return;
+            }
+        }
+    }
+
+    OSD_Printf("A monster with a picnum of %d was killed by a non-player.\n", TrackerCast(sprite[spriteNum].picnum));
+}
+
 void P_AddAmmo(int weapon, DukePlayer_t* p, int amount)
 {
     p->ammo_amount[weapon] += amount;
@@ -3764,7 +3791,7 @@ static void G_MoveActors(void)
                         RANDOMSCRAP(s, i);
                     A_PlaySound(LASERTRIP_EXPLODE,i);
                     A_Spawn(i,PIGCOP);
-                    g_player[myconnectindex].ps->actors_killed++;
+                    G_AddMonsterKills(i, 1);
                     KILLIT(i);
                 }
                 goto BOLT;
@@ -4015,7 +4042,10 @@ static void G_MoveActors(void)
                             j = A_Spawn(i,BLOODPOOL);
                             sprite[j].pal = 0;
                         }
-                        g_player[p].ps->actors_killed ++;
+
+                        actor[i].owner = g_player[p].ps->i;
+                        G_AddMonsterKills(i, 1);
+
                         t[0] = GREENSLIME_DEAD;
                         if (g_player[p].ps->somethingonplayer == i)
                             g_player[p].ps->somethingonplayer = -1;
@@ -4086,8 +4116,8 @@ static void G_MoveActors(void)
             IFHIT(i)
             {
                 A_PlaySound(SLIM_DYING,i);
+                G_AddMonsterKills(i, 1);
 
-                g_player[p].ps->actors_killed ++;
                 if (g_player[p].ps->somethingonplayer == i)
                     g_player[p].ps->somethingonplayer = -1;
 
@@ -4165,7 +4195,10 @@ static void G_MoveActors(void)
 
                             // JBF 20041129: a slimer eating another enemy really ought
                             // to decrease the maximum kill count by one.
-                            if (sprite[t[5]].extra > 0) g_player[myconnectindex].ps->max_actors_killed--;
+
+                            // [JM] Wouldn't it be a better idea to just fucking add them as killed like everything else?
+                            if (sprite[t[5]].extra > 0)
+                                ud.total_monsters--;
                         }
                     }
                 }

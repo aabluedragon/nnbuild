@@ -91,7 +91,7 @@ void CheckDiscord()
     {
         if (ud.multimode <= 1 || GTFLAGS(GAMETYPE_COOP))
         {
-            if ((last_kill_count != ps->actors_killed) || (last_max_kills != ps->max_actors_killed))
+            if ((last_kill_count != ud.monsters_killed) || (last_max_kills != ud.total_monsters))
             {
                 UpdateDiscord();
             }
@@ -161,8 +161,8 @@ void UpdateDiscord()
     if (ps == NULL)
         return;
 
-    last_kill_count = ps->actors_killed;
-    last_max_kills = ps->max_actors_killed;
+    last_kill_count = ud.monsters_killed;
+    last_max_kills = ud.total_monsters;
     last_secret_count = ps->secret_rooms;
     last_max_secrets = ps->max_secret_rooms;
     last_frag_count = ps->frag - ps->fraggedself;

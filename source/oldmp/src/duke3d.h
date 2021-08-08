@@ -526,6 +526,8 @@ typedef struct {
     int32_t player_skill,level_number,volume_number,m_marker,marker,mouseflip;
     int32_t m_weaponstay;
 
+    int32_t monsters_killed, total_monsters;
+
     int32_t configversion;
 
     int32_t fov;
@@ -612,7 +614,7 @@ typedef struct {
 
     palette_t pals;
 
-    int max_secret_rooms, secret_rooms, max_actors_killed, actors_killed;
+    int max_secret_rooms, secret_rooms, actors_killed;
     int runspeed, movement_lock, team;
     int max_player_health, max_shield_amount, max_ammo_amount[MAX_WEAPONS];
 

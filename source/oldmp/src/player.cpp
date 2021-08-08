@@ -5468,8 +5468,9 @@ HORIZONLY:
                 }
                 else if (A_CheckEnemySprite(&sprite[p->actorsqu]))
                 {
+                    actor[p->actorsqu].owner = p->i;
+                    G_AddMonsterKills(p->actorsqu, 1);
                     A_DeleteSprite(p->actorsqu);
-                    p->actors_killed++;
                 }
                 else A_DeleteSprite(p->actorsqu);
             }

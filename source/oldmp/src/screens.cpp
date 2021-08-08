@@ -909,7 +909,7 @@ FRAGBONUS:
                         bonuscnt++;
                         S_PlaySound(PIPEBOMB_EXPLODE);
                     }
-                    sprintf(tempbuf, "%-3d", g_player[myconnectindex].ps->actors_killed);
+                    sprintf(tempbuf, "%-3d", ud.monsters_killed);
                     gametext((320 >> 2) + 70, yy + 9, tempbuf, 0, 2 + 8 + 16);
                     yy += 10;
                     if (ud.player_skill > 3)
@@ -920,9 +920,9 @@ FRAGBONUS:
                     }
                     else
                     {
-                        if ((g_player[myconnectindex].ps->max_actors_killed - g_player[myconnectindex].ps->actors_killed) < 0)
+                        if ((ud.total_monsters - ud.monsters_killed) < 0)
                             sprintf(tempbuf, "%-3d", 0);
-                        else sprintf(tempbuf, "%-3d", g_player[myconnectindex].ps->max_actors_killed - g_player[myconnectindex].ps->actors_killed);
+                        else sprintf(tempbuf, "%-3d", ud.total_monsters - ud.monsters_killed);
                         gametext((320 >> 2) + 70, yy + 9, tempbuf, 0, 2 + 8 + 16);
                         yy += 10;
                     }

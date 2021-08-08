@@ -12,6 +12,8 @@ void G_ClearCameraView(DukePlayer_t* ps);
 int G_CheckForSpaceCeiling(int sectnum);
 int G_CheckForSpaceFloor(int sectnum);
 
+void G_AddMonsterKills(int32_t spriteNum, int32_t amount);
+
 // I think these should be moved to player.cpp/h
 void P_AddAmmo(int weapon, DukePlayer_t* p, int amount);
 void P_AddWeaponNoSwitch(DukePlayer_t* p, int weapon);

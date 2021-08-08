@@ -1370,7 +1370,7 @@ static int X_DoExecute(void)
 
     case CON_ADDKILLS:
         insptr++;
-        g_player[g_p].ps->actors_killed += *insptr++;
+        G_AddMonsterKills(g_i, *insptr++);
         actor[g_i].actorstayput = -1;
         break;
 
@@ -4498,7 +4498,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     if (g_sp->sectnum < 0 || g_sp->sectnum >= MAXSECTORS)
     {
         if (A_CheckEnemySprite(g_sp))
-            g_player[g_p].ps->actors_killed++;
+            G_AddMonsterKills(g_i, 1);
         A_DeleteSprite(g_i);
         return;
     }
