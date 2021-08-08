@@ -5645,8 +5645,11 @@ void computergetinput(int snum, input_t *syn)
     {
         pos2 = sprite[goalp->i].pos;
 
-        if (!cansee(pos1.x,pos1.y,pos1.z-(48<<8),damysect, pos2.x, pos2.y, pos2.z-(48<<8),sprite[goalp->i].sectnum))
+        if (!cansee(pos1.x, pos1.y, pos1.z - (48 << 8), damysect, pos2.x, pos2.y, pos2.z - (48 << 8), sprite[goalp->i].sectnum))
+        {
             goalplayer[snum] = snum;
+            goalp = g_player[snum].ps;
+        }
     }
 
     if ((goalplayer[snum] == snum) || (goalp->dead_flag != 0))
@@ -5669,6 +5672,7 @@ void computergetinput(int snum, input_t *syn)
                 {
                     lastDist = dist;
                     goalplayer[snum] = otherPlayer;
+                    goalp = g_player[otherPlayer].ps;
                 }
             }
         }
@@ -5777,9 +5781,13 @@ void computergetinput(int snum, input_t *syn)
         }
 
         fightdist = fdmatrix[p->curr_weapon][goalp->curr_weapon];
-        if (fightdist < 128) fightdist = 128;
+        if (fightdist < 128)
+            fightdist = 128;
+
         dist = ksqrt((pos2.x - pos1.x)*(pos2.x - pos1.x)+(pos2.y - pos1.y)*(pos2.y - pos1.y));
-        if (dist == 0) dist = 1;
+        if (dist == 0)
+            dist = 1;
+
         daang = getangle(pos2.x+(goalp->vel.x>>14)- pos1.x, pos2.y+(goalp->vel.y>>14)-pos1.y);
         zang = 100-((pos2.z-pos1.z)*8)/dist;
         fightdist = max(fightdist,(klabs(pos2.z-pos1.z)>>4));
@@ -5901,10 +5909,13 @@ void computergetinput(int snum, input_t *syn)
                         endwall = startwall+sector[startsect].wallnum;
                         int32_t lastDist = 0;
                         int32_t targetWall = startwall;
+
                         // CHECKME: Does this break the parent loop?
                         for (wNum = startwall; wNum < endwall; wNum++)
                         {
-                            if (wall[wNum].nextsector != goalsect[snum]) continue;
+                            if (wall[wNum].nextsector != goalsect[snum])
+                                continue;
+
                             dx = wall[wall[wNum].point2].x-wall[wNum].x;
                             dy = wall[wall[wNum].point2].y-wall[wNum].y;
 
@@ -5923,7 +5934,6 @@ void computergetinput(int snum, input_t *syn)
                                 lastDist = dist;
                                 targetWall = wNum;
                             }
-
                         }
                         goalwall[snum] = targetWall;
                         daang = ((getangle(wall[wall[targetWall].point2].x-wall[targetWall].x,wall[wall[targetWall].point2].y-wall[targetWall].y)+1536)&2047);
@@ -5998,7 +6008,7 @@ void computergetinput(int snum, input_t *syn)
                 int16_t sect = (rand() % numsectors);
                 for (int32_t spr = headspritesect[sect]; spr >= 0; spr = nextspritesect[spr])
                 {
-                    if ((sprite[spr].xrepeat <= 0) || (sprite[spr].yrepeat <= 0))
+                    if ((sprite[spr].xrepeat <= 0) || (sprite[spr].yrepeat <= 0) || ((sprite[spr].cstat & 32768) == 32768))
                         continue;
 
                     if (getspritescore(snum, sprite[spr].picnum) <= 0)
@@ -6027,7 +6037,8 @@ void computergetinput(int snum, input_t *syn)
         pos2.x = goalx[snum];
         pos2.y = goaly[snum];
         dist = ksqrt((pos2.x - pos1.x)*(pos2.x - pos1.x)+(pos2.y - pos1.y)*(pos2.y - pos1.y));
-        if (!dist) return;
+        if (!dist)
+            return;
         daang = getangle(pos2.x - pos1.x, pos2.y - pos1.y);
         syn->fvel += (pos2.x - pos1.x)*2047/dist;
         syn->svel += (pos2.y - pos1.y)*2047/dist;
@@ -6125,7 +6136,8 @@ void computergetinput(int snum, input_t *syn)
         pos2.x = goalx[snum];
         pos2.y = goaly[snum];
         dist = ksqrt((pos2.x - pos1.x)*(pos2.x - pos1.x)+(pos2.y - pos1.y)*(pos2.y - pos1.y));
-        if (!dist) return;
+        if (!dist)
+            return;
         daang = getangle(pos2.x - pos1.x, pos2.y - pos1.y);
         if ((goalwall[snum] >= 0) && (dist < 4096))
             daang = ((getangle(wall[wall[goalwall[snum]].point2].x-wall[goalwall[snum]].x,wall[wall[goalwall[snum]].point2].y-wall[goalwall[snum]].y)+1536)&2047);
