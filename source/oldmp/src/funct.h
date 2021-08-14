@@ -35,6 +35,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
   #endif
 #endif
 
+void G_UpdateAppTitle(char const* const name = nullptr);
+
 extern int A_CallSound(int sn,int whatsprite);
 extern int check_activator_motion(int lotag);
 extern int CheckDoorTile(int dapic);
@@ -155,9 +157,6 @@ extern int GetTime(void);
 extern void CONFIG_SetDefaults(void);
 extern void CONFIG_ReadKeys(void);
 extern void ReadSaveGameHeaders(void);
-
-// premap.c
-extern void G_SetupGlobalPsky(void);
 
 // game.cpp
 extern int mpgametext(int y, const char *t, int s, int dabits);

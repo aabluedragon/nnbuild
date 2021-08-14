@@ -647,8 +647,8 @@ int32_t G_SavePlayer(int32_t spot)
 
     {
         char temp[BMAX_PATH];
-        if (mod_dir[0] != '/')
-            Bsprintf(temp,"%s/%s",mod_dir,fnptr);
+        if (g_modDir[0] != '/')
+            Bsprintf(temp,"%s/%s", g_modDir,fnptr);
         else Bsprintf(temp,"%s",fnptr);
         if ((fil = fopen(temp,"wb")) == 0) return(-1);
     }

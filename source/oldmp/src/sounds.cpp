@@ -366,29 +366,24 @@ void S_Cleanup(void)
 // returns number of bytes read
 int32_t S_LoadSound(uint32_t num)
 {
-    int32_t   fp = -1, l;
+    if ((unsigned)num > (unsigned)g_highestSoundIdx || EDUKE32_PREDICT_FALSE(g_sounds[num].filename == NULL))
+        return 0;
 
-    if (num > (unsigned)g_highestSoundIdx || ud.config.SoundToggle == 0 || ud.config.FXDevice < 0) return 0;
+    auto& snd = g_sounds[num];
 
-    if (g_sounds[num].filename == NULL && g_sounds[num].filename1 == NULL)
+    buildvfs_kfd fp = S_OpenAudio(snd.filename, g_loadFromGroupOnly, 0);
+
+    if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
     {
+        OSD_Printf(OSDTEXT_RED "Sound %s(#%d) not found!\n", snd.filename, num);
         return 0;
     }
 
-    if (g_sounds[num].filename1) fp = kopen4loadfrommod(g_sounds[num].filename1,g_loadFromGroupOnly);
-    if (fp == -1) fp = kopen4loadfrommod(g_sounds[num].filename,g_loadFromGroupOnly);
-    if (fp == -1)
-    {
-        OSD_Printf(OSDTEXT_RED "Sound %s(#%d) not found!\n",g_sounds[num].filename,num);
-        return 0;
-    }
-
-    g_sounds[num].siz = l = kfilelength(fp);
-
+    int32_t l = kfilelength(fp);
     g_soundlocks[num] = CACHE1D_PERMANENT;
-
-    g_cache.allocateBlock((intptr_t *)&g_sounds[num].ptr, l, (char *)&g_soundlocks[num]);
-    l = kread(fp, g_sounds[num].ptr, l);
+    snd.siz = l;
+    g_cache.allocateBlock((intptr_t*)&snd.ptr, l, (char*)&g_soundlocks[num]);
+    l = kread(fp, snd.ptr, l);
     kclose(fp);
 
     return l;

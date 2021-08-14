@@ -65,7 +65,6 @@ G_EXTERN int g_currentMenu;
 G_EXTERN int g_currentFrameRate;
 G_EXTERN int g_impactDamage;
 G_EXTERN int g_scriptDebug;
-G_EXTERN int g_groupFileHandle;
 G_EXTERN int g_showShareware;
 G_EXTERN int g_damageCameras;
 G_EXTERN int g_freezerSelfDamage;

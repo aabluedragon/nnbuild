@@ -265,7 +265,7 @@ void CONFIG_SetDefaults(void)
     ud.weaponscale = 100;
     ud.textscale = 200;
 
-    Bstrcpy(ud.rtsname, "DUKE.RTS");
+    Bstrcpy(ud.rtsname, G_DefaultRtsFile());
     Bstrcpy(szPlayerName, "Duke");
 
     Bstrcpy(ud.ridecule[0], "An inspiration for birth control.");
@@ -544,8 +544,6 @@ void CONFIG_SetupJoystick(void)
 =
 ===================
 */
-extern char *duke3dgrp;
-extern char mod_dir[BMAX_PATH];
 extern int g_noSetup;
 
 int32_t CONFIG_ReadSetup(void)
@@ -613,26 +611,27 @@ int32_t CONFIG_ReadSetup(void)
         SCRIPT_GetNumber(ud.config.scripthandle, "Setup","ForceSetup",&ud.config.ForceSetup);
 
 #ifdef STARTUP_SETUP_WINDOW
-        if (g_noSetup == 0 && mod_dir[0] == '/')
+        if (g_noSetup == 0 && g_modDir[0] == '/')
         {
             struct stat st;
-            SCRIPT_GetString(ud.config.scripthandle, "Setup","ModDir",&mod_dir[0]);
+            SCRIPT_GetString(ud.config.scripthandle, "Setup","ModDir",&g_modDir[0]);
 
-            if (stat(mod_dir, &st) >= 0)
+            if (stat(g_modDir, &st) >= 0)
             {
                 if ((st.st_mode & S_IFDIR) != S_IFDIR)
                 {
                     initprintf("Invalid mod dir in cfg!\n");
-                    Bsprintf(mod_dir,"/");
+                    Bsprintf(g_modDir,"/");
                 }
             }
         }
 #endif
 
+        if (g_grpNamePtr == NULL && g_addonNum == 0)
         {
-            extern char defaultduke3dgrp[BMAX_PATH];
-            if (!Bstrcmp(defaultduke3dgrp,"duke3d.grp"))
-                SCRIPT_GetString(ud.config.scripthandle, "Setup","SelectedGRP",&duke3dgrp[0]);
+            SCRIPT_GetStringPtr(ud.config.scripthandle, "Setup", "SelectedGRP", &g_grpNamePtr);
+            if (g_grpNamePtr && !Bstrlen(g_grpNamePtr))
+                g_grpNamePtr = dup_filename(G_DefaultGrpFile());
         }
 
         {
@@ -825,11 +824,11 @@ void CONFIG_WriteSetup(uint32_t flags)
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "ScreenHeight", ud.config.ScreenHeight, false, false);    // JBF 20031206
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "ScreenMode", ud.config.ScreenMode, false, false);    // JBF 20031206
 
-    SCRIPT_PutString(ud.config.scripthandle, "Setup", "SelectedGRP", &duke3dgrp[0]);
+    SCRIPT_PutString(ud.config.scripthandle, "Setup", "SelectedGRP", g_grpNamePtr);
 
 #ifdef STARTUP_SETUP_WINDOW
     if (g_noSetup == 0)
-        SCRIPT_PutString(ud.config.scripthandle, "Setup", "ModDir", &mod_dir[0]);
+        SCRIPT_PutString(ud.config.scripthandle, "Setup", "ModDir", &g_modDir[0]);
 #endif
 
     // exit early after only updating the values that can be changed from the startup window

@@ -93,9 +93,6 @@ extern int qsetmode;
 char *textptr;
 int g_numCompilerErrors,g_numCompilerWarnings;
 
-extern const char *duke3dgrpstring;
-extern const char *duke3ddef;
-
 enum ScriptLabel_t
 {
     LABEL_ANY    = -1,
@@ -1264,6 +1261,14 @@ static int32_t C_SkipComments(void)
     } while (1);
 }
 
+static int32_t C_SetDefName(const char* name)
+{
+    clearDefNamePtr();
+    g_defNamePtr = dup_filename(name);
+    if (g_defNamePtr)
+        initprintf("Using DEF file: %s.\n", g_defNamePtr);
+    return (g_defNamePtr == NULL);
+}
 
 static void C_SetProjectile(int lVar1, int lLabelID, int lVar2)
 {
@@ -5045,9 +5050,8 @@ repeatcase:
             }
         }
         gamename[i] = '\0';
-        duke3dgrpstring = Xstrdup(gamename);
-        Bsprintf(tempbuf,"%s - " APPNAME,duke3dgrpstring);
-        wm_setapptitle(tempbuf);
+        g_gameNamePtr = Xstrdup(gamename);
+        G_UpdateAppTitle();
     }
     return 0;
 
@@ -5067,8 +5071,7 @@ repeatcase:
             j++;
         }
         tempbuf[j] = '\0';
-        duke3ddef = Xstrdup(tempbuf);
-        initprintf("Using DEF file: %s.\n",duke3ddef);
+        C_SetDefName(tempbuf);
     }
     return 0;
 
@@ -5092,16 +5095,16 @@ repeatcase:
         {
             char temp[BMAX_PATH];
             struct stat st;
-            if (stat(mod_dir, &st) < 0)
+            if (stat(g_modDir, &st) < 0)
             {
                 if (errno == ENOENT)     // path doesn't exist
                 {
-                    if (Bmkdir(mod_dir, S_IRWXU) < 0)
+                    if (Bmkdir(g_modDir, S_IRWXU) < 0)
                     {
-                        OSD_Printf("Failed to create configuration file directory %s\n", mod_dir);
+                        OSD_Printf("Failed to create configuration file directory %s\n", g_modDir);
                         return 0;
                     }
-                    else OSD_Printf("Created configuration file directory %s\n", mod_dir);
+                    else OSD_Printf("Created configuration file directory %s\n", g_modDir);
                 }
                 else
                 {
@@ -5116,7 +5119,7 @@ repeatcase:
             }
             Bstrcpy(temp,tempbuf);
             CONFIG_WriteSetup(0);
-            Bsprintf(setupfilename,"%s/",mod_dir);
+            Bsprintf(setupfilename,"%s/", g_modDir);
             Bstrcat(setupfilename,temp);
             CONFIG_ReadSetup();
         }
@@ -5868,7 +5871,6 @@ void C_Compile(const char *filenam)
 {
     char *mptr;
     int i;
-    int fs,fp;
     int startcompiletime;
 
     clearbuf(apScriptGameEvent,MAXGAMEEVENTS,0L);
@@ -5894,47 +5896,49 @@ void C_Compile(const char *filenam)
         }
     }
     */
-    fp = kopen4loadfrommod(filenam,g_loadFromGroupOnly);
-    if (fp == -1) // JBF: was 0
-    {
-        extern int numgroupfiles;
+    buildvfs_kfd kFile = kopen4loadfrommod(filenam, g_loadFromGroupOnly);
 
-        if (g_loadFromGroupOnly == 1)
+    if (kFile == buildvfs_kfd_invalid) // JBF: was 0
+    {
+        if (g_loadFromGroupOnly == 1 || numgroupfiles == 0)
         {
-            Bsprintf(tempbuf,"'%s' missing CON files, reinstall Duke Nukem 3D.",duke3dgrp);
+#ifndef EDUKE32_STANDALONE
+            char const* gf = G_GrpFile();
+            Bsprintf(tempbuf, "Required game data was not found.  A valid copy of \"%s\" or other compatible data is needed to run EDuke32.\n\n"
+                "You must copy \"%s\" to your game directory before continuing!", gf, gf);
+            G_GameExit(tempbuf);
+#else
+            G_GameExit(" ");
+#endif
         }
-        else if (numgroupfiles == 0)
+        else
         {
-            Bsprintf(tempbuf,"Duke Nukem 3D game data was not found.  A copy of '%s' or other compatible data is needed to run EDuke32.\n"
-                     "You can find '%s' in the \"DN3DINST\" or \"ATOMINST\" directory on your Duke Nukem 3D installation CD-ROM.\n\n"
-                     "EDuke32 will now close.",
-                     duke3dgrp,duke3dgrp);
+            Bsprintf(tempbuf, "CON file `%s' missing.", filenam);
+            G_GameExit(tempbuf);
         }
-        else Bsprintf(tempbuf,"CON file `%s' missing.", filenam);
-        G_GameExit(tempbuf);
 
         //g_loadFromGroupOnly = 1;
         return; //Not there
     }
 
-    fs = kfilelength(fp);
+    int const kFileLen = kfilelength(kFile);
 
-    initprintf("Compiling: %s (%d bytes)\n",filenam,fs);
+    initprintf("Compiling: %s (%d bytes)\n",filenam, kFileLen);
 
     startcompiletime = timerGetTicks();
 
-    mptr = (char *)Xmalloc(fs+1);
+    mptr = (char *)Xmalloc(kFileLen+1);
     if (!mptr)
     {
-        Bsprintf(tempbuf,"Failed allocating %d byte CON text buffer.", fs+1);
+        Bsprintf(tempbuf,"Failed allocating %d byte CON text buffer.", kFileLen+1);
         G_GameExit(tempbuf);
     }
 
-    mptr[fs] = 0;
+    mptr[kFileLen] = 0;
 
     textptr = (char *) mptr;
-    kread(fp,(char *)textptr,fs);
-    kclose(fp);
+    kread(kFile,(char *)textptr, kFileLen);
+    kclose(kFile);
 
     Bmemset(actorscrptr, 0, sizeof(actorscrptr));
     Bmemset(actorLoadEventScrptr, 0, sizeof(actorLoadEventScrptr));

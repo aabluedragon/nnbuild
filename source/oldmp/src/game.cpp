@@ -84,8 +84,6 @@ static const char *CommandNet = NULL;
 static int g_keepAddr = 0;
 int CommandWeaponChoice = 0;
 
-static strllist *CommandPaths = NULL, *CommandGrps = NULL;
-
 char boardfilename[BMAX_PATH] = {0}, currentboardfilename[BMAX_PATH] = {0};
 char root[BMAX_PATH];
 
@@ -107,17 +105,10 @@ static int g_noLogoAnim = 0;
 static int g_noLogo = 0;
 
 char eduke32dat[BMAX_PATH] = "eduke32.dat";
-char defaultduke3dgrp[BMAX_PATH] = "duke3d.grp";
-char *duke3dgrp = defaultduke3dgrp;
-const char *duke3dgrpstring = NULL;
-static char defaultconfilename[BMAX_PATH] = {"EDUKE.CON"};
-static char *confilename = defaultconfilename;
-const char *duke3ddef = "duke3d.def";
 const char *eduke32def = "eduke32.def";
-char mod_dir[BMAX_PATH] = "/";
+static const char* defaultrtsfilename[GAMECOUNT] = { "DUKE.RTS", "NAM.RTS", "NAPALM.RTS", "WW2GI.RTS" };
 
 int g_Shareware = 0;
-int g_gameType = 0;
 
 int quotebot, quotebotgoal;
 int user_quote_time[MAXUSERQUOTES];
@@ -143,18 +134,6 @@ int hud_glowingquotes = 1;
 int hud_showmapname = 1;
 
 int g_levelTextTime = 0;
-
-int kopen4loadfrommod(char *filename, char searchfirst)
-{
-    static char fn[BMAX_PATH];
-    int r;
-
-    Bsprintf(fn,"%s/%s",mod_dir,filename);
-    r = kopen4load(fn,searchfirst);
-    if (r < 0)
-        r = kopen4load(filename,searchfirst);
-    return r;
-}
 
 enum
 {
@@ -8734,6 +8713,7 @@ static void G_ShowParameterHelp(void)
               "-net /n0 192.168.0.1\tJoin specified IP in master/slave mode.\n"
               "\n"
               "-noffire\t\tDisable friendly fire\n"
+              "-rts [file.rts]\tLoad a custom Remote Ridicule sound bank\n"
               "-r\t\tRecord demo\n"
               "-s#\t\tSet skill level (1-4)\n"
 #if STARTUP_WINDOW
@@ -8976,53 +8956,6 @@ static void setup_rancid_net(const char *fn)
 #endif
 
 #endif
-
-// OLDMP MERGE CHECKME
-static BUILDVFS_FIND_REC* finddirshigh = NULL, * findfileshigh = NULL;
-static int32_t currentlist = 0;
-static fnlist_t fnlist;
-
-#if 0
-static void clearfilenames(void)
-{
-    klistfree(fnlist.finddirs);
-    klistfree(fnlist.findfiles);
-    fnlist.finddirs = fnlist.findfiles = NULL;
-    fnlist.numfiles = fnlist.numdirs = 0;
-}
-#endif
-
-static int32_t getfilenames(const char* path, const char* kind)
-{
-    fnlist_getnames(&fnlist, path, kind, BUILDVFS_FIND_DRIVE, 0);
-
-    finddirshigh = fnlist.finddirs;
-    findfileshigh = fnlist.findfiles;
-    currentlist = (findfileshigh != NULL);
-
-    return 0;
-}
-
-static const char *autoloadmasks[] = { "*.grp", "*.zip", "*.pk3" };
-#define NUMAUTOLOADMASKS 3
-
-static void G_DoAutoload(const char *fn)
-{
-    int i;
-
-    for (i=0;i<NUMAUTOLOADMASKS;i++)
-    {
-        Bsprintf(tempbuf,"autoload/%s",fn);
-        getfilenames(tempbuf,autoloadmasks[i]);
-        while (fnlist.findfiles)
-        {
-            Bsprintf(tempbuf,"autoload/%s/%s",fn,fnlist.findfiles->name);
-            initprintf("Using group file '%s'.\n",tempbuf);
-            initgroupfile(tempbuf);
-            fnlist.findfiles = fnlist.findfiles->next;
-        }
-    }
-}
 
 static char *makename(char *destname, char *OGGname, char *origname)
 {
@@ -9319,57 +9252,6 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
     return 0;
 }
 
-static int loaddefinitions_game(const char *fn, int preload)
-{
-    scriptfile *script;
-
-    script = scriptfile_fromfile(fn);
-    if (!script) return -1;
-
-    parsedefinitions_game(script, preload);
-
-    scriptfile_close(script);
-    scriptfile_clearsymbols();
-
-    return 0;
-}
-
-void G_AddGroup(const char *buffer)
-{
-    struct strllist *s;
-    s = (struct strllist *)Xcalloc(1,sizeof(struct strllist));
-    s->str = Xstrdup(buffer);
-    if (Bstrchr(s->str,'.') == 0)
-        Bstrcat(s->str,".grp");
-
-    if (CommandGrps)
-    {
-        struct strllist *t;
-        for (t = CommandGrps; t->next; t=t->next) ;
-        t->next = s;
-        return;
-    }
-    CommandGrps = s;
-}
-
-void G_AddPath(const char *buffer)
-{
-    struct strllist *s;
-    s = (struct strllist *)Xcalloc(1,sizeof(struct strllist));
-    s->str = Xstrdup(buffer);
-
-    if (CommandPaths)
-    {
-        struct strllist *t;
-        for (t = CommandPaths; t->next; t=t->next) ;
-        t->next = s;
-        return;
-    }
-
-    CommandPaths = s;
-}
-
-
 static void G_CheckCommandLine(int argc, char const* const* argv)
 {
     short i, j;
@@ -9438,7 +9320,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     if (argc > i+1)
                     {
-                        Bstrcpy(mod_dir,argv[i+1]);
+                        Bstrcpy(g_modDir,argv[i+1]);
                         G_AddPath(argv[i+1]);
                         i++;
                     }
@@ -9455,29 +9337,32 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c+1,"gamegrp"))
+                if (!Bstrcasecmp(c + 1, "gamegrp"))
                 {
-                    if (argc > i+1)
+                    if (argc > i + 1)
                     {
-                        Bstrcpy(defaultduke3dgrp,argv[i+1]);
+                        clearGrpNamePtr();
+                        g_grpNamePtr = dup_filename(argv[i + 1]);
                         i++;
                     }
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c+1,"nam"))
+                if (!Bstrcasecmp(c + 1, "nam"))
                 {
-                    strcpy(defaultduke3dgrp, "nam.grp");
-                    strcpy(defaultconfilename, "nam.con");
-                    g_gameType = GAMENAM;
+                    g_gameType = GAMEFLAG_NAM;
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c+1,"ww2gi"))
+                if (!Bstrcasecmp(c + 1, "napalm"))
                 {
-                    strcpy(defaultduke3dgrp, "ww2gi.grp");
-                    strcpy(defaultconfilename, "ww2gi.con");
-                    g_gameType = GAMEWW2;
+                    g_gameType = GAMEFLAG_NAM | GAMEFLAG_NAPALM;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "ww2gi"))
+                {
+                    g_gameType = GAMEFLAG_WW2GI;
                     i++;
                     continue;
                 }
@@ -9563,6 +9448,18 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     if (argc > i+1)
                     {
                         CommandMap = argv[i+1];
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "rts"))
+                {
+                    if (argc > i + 1)
+                    {
+                        Bfree(g_rtsNamePtr);
+                        g_rtsNamePtr = dup_filename(argv[i + 1]);
+                        initprintf("Using RTS file \"%s\".\n", g_rtsNamePtr);
                         i++;
                     }
                     i++;
@@ -9709,8 +9606,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     c++;
                     if (*c)
                     {
-                        duke3ddef = c;
-                        initprintf("Using DEF file: %s.\n",duke3ddef);
+                        G_AddDef(c);
                     }
                     break;
                 case 'i':
@@ -9883,9 +9779,8 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     c++;
                     if (*c)
                     {
-                        confilename = c;
+                        G_AddCon(c);
                         userconfiles = 1;
-                        initprintf("Using CON file '%s'.\n",confilename);
                     }
                     break;
                 case 'y':
@@ -9931,15 +9826,20 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     }
                     if (!Bstrcasecmp(k,".con"))
                     {
-                        confilename = const_cast<char*>(argv[i++]);
+                        G_AddCon(const_cast<char*>(argv[i++]));
                         userconfiles = 1;
-                        initprintf("Using CON file '%s'.\n",confilename);
                         continue;
                     }
                     if (!Bstrcasecmp(k,".def"))
                     {
-                        duke3ddef = argv[i++];
-                        initprintf("Using DEF file: %s.\n",duke3ddef);
+                        G_AddDef(argv[i++]);
+                        continue;
+                    }
+                    if (!Bstrcasecmp(k, ".rts"))
+                    {
+                        Bfree(g_rtsNamePtr);
+                        g_rtsNamePtr = dup_filename(argv[i++]);
+                        initprintf("Using RTS file \"%s\".\n", g_rtsNamePtr);
                         continue;
                     }
                 }
@@ -9947,6 +9847,101 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
             i++;
         }
     }
+}
+
+const char* G_DefaultRtsFile(void)
+{
+#ifndef EDUKE32_STANDALONE
+    if (DUKE)
+        return defaultrtsfilename[GAME_DUKE];
+    else if (WW2GI)
+        return defaultrtsfilename[GAME_WW2GI];
+    else if (NAPALM)
+    {
+        if (!testkopen(defaultrtsfilename[GAME_NAPALM], 0) && testkopen(defaultrtsfilename[GAME_NAM], 0))
+            return defaultrtsfilename[GAME_NAM]; // NAM/NAPALM Sharing
+        else
+            return defaultrtsfilename[GAME_NAPALM];
+    }
+    else if (NAM)
+    {
+        if (!testkopen(defaultrtsfilename[GAME_NAM], 0) && testkopen(defaultrtsfilename[GAME_NAPALM], 0))
+            return defaultrtsfilename[GAME_NAPALM]; // NAM/NAPALM Sharing
+        else
+            return defaultrtsfilename[GAME_NAM];
+    }
+#endif
+
+    return "";
+}
+
+static void parsedefinitions_game_include(const char* fileName, scriptfile* pScript, const char* cmdtokptr, int const firstPass)
+{
+    scriptfile* included = scriptfile_fromfile(fileName);
+
+    if (!included)
+    {
+        if (!Bstrcasecmp(cmdtokptr, "null") || pScript == NULL) // this is a bit overboard to prevent unused parameter warnings
+        {
+            // initprintf("Warning: Failed including %s as module\n", fn);
+        }
+        /*
+                else
+                    {
+                    initprintf("Warning: Failed including %s on line %s:%d\n",
+                               fn, script->filename,scriptfile_getlinum(script,cmdtokptr));
+                    }
+        */
+    }
+    else
+    {
+        parsedefinitions_game(included, firstPass);
+        scriptfile_close(included);
+    }
+}
+
+int loaddefinitions_game(const char* fileName, int32_t firstPass)
+{
+    scriptfile* pScript = scriptfile_fromfile(fileName);
+
+    if (pScript)
+        parsedefinitions_game(pScript, firstPass);
+
+    for (char const* m : g_defModules)
+        parsedefinitions_game_include(m, NULL, "null", firstPass);
+
+    if (pScript)
+        scriptfile_close(pScript);
+
+    scriptfile_clearsymbols();
+
+    return 0;
+}
+
+void G_UpdateAppTitle(char const* const name /*= nullptr*/)
+{
+    Bsprintf(tempbuf, APPNAME " " VERSION " (%s)", s_buildRev);
+
+    if (name != nullptr)
+    {
+        char user_name[32];
+        OSD_StripColors(user_name, g_player[myconnectindex].user_name);
+
+        if (g_gameNamePtr)
+            Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - %s", user_name, name, g_gameNamePtr, tempbuf);
+        else
+            Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s", user_name, name, tempbuf);
+    }
+    else if (g_gameNamePtr)
+    {
+        Bsnprintf(apptitle, sizeof(apptitle), "%s - %s", g_gameNamePtr, tempbuf);
+    }
+    else
+    {
+        Bstrncpyz(apptitle, tempbuf, sizeof(apptitle));
+    }
+
+    wm_setapptitle(apptitle);
 }
 
 static void G_DisplayLogo(void)
@@ -9966,8 +9961,7 @@ static void G_DisplayLogo(void)
     renderFlushPerms();
     videoNextPage();
 
-    Bsprintf(tempbuf,"%s - " APPNAME,duke3dgrpstring);
-    wm_setapptitle(tempbuf);
+    G_UpdateAppTitle();
 
     S_StopMusic();
     FX_StopAllSounds(); // JBF 20031228
@@ -10144,19 +10138,6 @@ static void G_FreeCONMem(void)
         if (ScriptQuoteRedefinitions[i] != NULL) Xfree(ScriptQuoteRedefinitions[i]);
     }
 
-    for (i=g_gameVarCount-1;i>=0;i--)
-    {
-        if (aGameVars[i].szLabel != NULL) Xfree(aGameVars[i].szLabel);
-        if (aGameVars[i].dwFlags & (GAMEVAR_USER_MASK) && aGameVars[i].val.plValues != NULL)
-            Xfree(aGameVars[i].val.plValues);
-    }
-
-    for (i=g_gameArrayCount-1;i>=0;i--)
-    {
-        if (aGameArrays[i].szLabel != NULL) Xfree(aGameArrays[i].szLabel);
-        if (aGameArrays[i].plValues != NULL) Xfree(aGameArrays[i].plValues);
-    }
-
     for (i=MAXPLAYERS-1;i>=0;i--)
     {
         if (g_player[i].ps != NULL) Xfree(g_player[i].ps);
@@ -10169,6 +10150,8 @@ static void G_FreeCONMem(void)
         if (g_sounds[i].filename1 != NULL) Xfree(g_sounds[i].filename1);
     }
 
+    Gv_Clear();
+
     if (label != NULL) Xfree(label);
     if (labelcode != NULL) Xfree(labelcode);
     if (script != NULL) Xfree(script);
@@ -10176,6 +10159,8 @@ static void G_FreeCONMem(void)
 
     freehash();
     hash_free(&gamefuncH);
+
+    Duke_CommonCleanup();
 }
 
 /*
@@ -10211,59 +10196,42 @@ void G_Shutdown(void)
 
 static void G_CompileScripts(void)
 {
-    int i, psm = pathsearchmode;
+    int psm = pathsearchmode;
     label     = (char *)&sprite[0]; // V8: 16384*44/64 = 11264  V7: 4096*44/64 = 2816
     labelcode = (intptr_t *)&sector[0]; // V8: 4096*40/4 = 40960    V7: 1024*40/4 = 10240
     labeltype = (intptr_t *)&wall[0];   // V8: 16384*32/4 = 131072  V7: 8192*32/4 = 65536
 
-    Bcorrectfilename(confilename,0);
+    if (g_scriptNamePtr != NULL)
+        Bcorrectfilename(g_scriptNamePtr, 0);
+
     // if we compile for a V7 engine wall[] should be used for label names since it's bigger
     pathsearchmode = 1;
-    if (userconfiles == 0)
-    {
-        i = kopen4loadfrommod(confilename,0);
-        if (i!=-1)
-            kclose(i);
-        else Bsprintf(confilename,"GAME.CON");
-    }
-    C_Compile(confilename);
+    C_Compile(G_ConFile());
 
-    if (g_loadFromGroupOnly)
-    {
-        if (userconfiles == 0)
-        {
-            i = kopen4loadfrommod("EDUKE.CON",1);
-            if (i!=-1)
-            {
-                Bsprintf(confilename,"EDUKE.CON");
-                kclose(i);
-            }
-            else Bsprintf(confilename,"GAME.CON");
-        }
-        C_Compile(confilename);
-    }
+    if (g_loadFromGroupOnly) // g_loadFromGroupOnly is true only when compiling fails and internal defaults are utilized
+        C_Compile(G_ConFile());
 
+    // [JM] Update to use MAXLABELS like mainline
     if ((unsigned int)g_numLabels > MAXSPRITES*sizeof(spritetype)/64)   // see the arithmetic above for why
         G_GameExit("Error: too many labels defined!");
-    else
+
+    char *newlabel;
+    intptr_t *newlabelcode;
+
+    newlabel     = (char *)Xmalloc(g_numLabels<<6);
+    newlabelcode = (intptr_t *)Xmalloc(g_numLabels*sizeof(intptr_t));
+
+    if (!newlabel || !newlabelcode)
     {
-        char *newlabel;
-        intptr_t *newlabelcode;
-
-        newlabel     = (char *)Xmalloc(g_numLabels<<6);
-        newlabelcode = (intptr_t *)Xmalloc(g_numLabels*sizeof(intptr_t));
-
-        if (!newlabel || !newlabelcode)
-        {
-            G_GameExit("Error: out of memory retaining labels\n");
-        }
-
-        copybuf(label,     newlabel, (g_numLabels*64)/4);
-        copybuf(labelcode, newlabelcode, (g_numLabels*sizeof(intptr_t))/4);
-
-        label = newlabel;
-        labelcode = newlabelcode;
+        G_GameExit("Error: out of memory retaining labels\n");
     }
+
+    copybuf(label,     newlabel, (g_numLabels*64)/4);
+    copybuf(labelcode, newlabelcode, (g_numLabels*sizeof(intptr_t))/4);
+
+    label = newlabel;
+    labelcode = newlabelcode;
+    // ******************
 
     Bmemset(sprite, 0, MAXSPRITES * sizeof(spritetype));
     Bmemset(sector, 0, MAXSECTORS * sizeof(sectortype));
@@ -10280,44 +10248,6 @@ static void G_CheckGametype(void)
     Bsprintf(tempbuf,"%s\n",GametypeNames[ud.m_coop]);
     initprintf("%s", tempbuf);
     //     initprintf("ud.m_coop=%i after sanitisation\n",ud.m_coop);
-}
-
-void G_LoadLookups(void)
-{
-    int32_t j;
-    buildvfs_kfd fp;
-
-    if ((fp = kopen4loadfrommod("lookup.dat", 0)) == buildvfs_kfd_invalid)
-        if ((fp = kopen4loadfrommod("lookup.dat", 1)) == buildvfs_kfd_invalid)
-            return;
-
-    j = paletteLoadLookupTable(fp);
-
-    if (j < 0)
-    {
-        if (j == -1)
-            initprintf("ERROR loading \"lookup.dat\": failed reading enough data.\n");
-
-        return kclose(fp);
-}
-
-    uint8_t paldata[768];
-
-    for (j = 1; j <= 5; j++)
-    {
-        // Account for TITLE and REALMS swap between basepal number and on-disk order.
-        int32_t basepalnum = (j == 3 || j == 4) ? 4 + 3 - j : j;
-
-        if (kread_and_test(fp, paldata, 768))
-            return kclose(fp);
-
-        for (unsigned char& k : paldata)
-            k <<= 2;
-
-        paletteSetColorTable(basepalnum, paldata);
-    }
-
-    kclose(fp);
 }
 
 static void G_PostLoadPalette(void)
@@ -10340,66 +10270,6 @@ static void G_PostLoadPalette(void)
         paletteFixTranslucencyMask();
 
     palettePostLoadLookups();
-}
-
-// Set up new-style multi-psky handling.
-void G_InitMultiPsky(int CLOUDYOCEAN__DYN, int MOONSKY1__DYN, int BIGORBIT1__DYN, int LA__DYN)
-{
-    // When adding other multi-skies, take care that the tileofs[] values are
-    // <= PSKYOFF_MAX. (It can be increased up to MAXPSKYTILES, but should be
-    // set as tight as possible.)
-
-    // The default sky properties (all others are implicitly zero):
-    psky_t* sky = tileSetupSky(DEFAULTPSKY);
-    sky->lognumtiles = 3;
-    sky->horizfrac = 32768;
-
-    // CLOUDYOCEAN
-    // Aligns with the drawn scene horizon because it has one itself.
-    sky = tileSetupSky(CLOUDYOCEAN__DYN);
-    sky->lognumtiles = 3;
-    sky->horizfrac = 65536;
-
-    // MOONSKY1
-    //        earth          mountain   mountain         sun
-    sky = tileSetupSky(MOONSKY1__DYN);
-    sky->lognumtiles = 3;
-    sky->horizfrac = 32768;
-    sky->tileofs[6] = 1;
-    sky->tileofs[1] = 2;
-    sky->tileofs[4] = 2;
-    sky->tileofs[2] = 3;
-
-    // BIGORBIT1   // orbit
-    //       earth1         2           3           moon/sun
-    sky = tileSetupSky(BIGORBIT1__DYN);
-    sky->lognumtiles = 3;
-    sky->horizfrac = 32768;
-    sky->tileofs[5] = 1;
-    sky->tileofs[6] = 2;
-    sky->tileofs[7] = 3;
-    sky->tileofs[2] = 4;
-
-    // LA // la city
-    //       earth1         2           3           moon/sun
-    sky = tileSetupSky(LA__DYN);
-    sky->lognumtiles = 3;
-    sky->horizfrac = 16384 + 1024;
-    sky->tileofs[0] = 1;
-    sky->tileofs[1] = 2;
-    sky->tileofs[2] = 1;
-    sky->tileofs[3] = 3;
-    sky->tileofs[4] = 4;
-    sky->tileofs[5] = 0;
-    sky->tileofs[6] = 2;
-    sky->tileofs[7] = 3;
-
-#if 0
-    // This assertion should hold. See note above.
-    for (bssize_t i = 0; i < pskynummultis; ++i)
-        for (bssize_t j = 0; j < (1 << multipsky[i].lognumtiles); ++j)
-            Bassert(multipsky[i].tileofs[j] <= PSKYOFF_MAX);
-#endif
 }
 
 extern int startwin_run(void);
@@ -10582,24 +10452,8 @@ static void G_Startup(void)
     //initprintf("* Hold Esc to Abort. *\n");
 //    initprintf("Loading art header...\n");
 
-    {
-        char cwd[BMAX_PATH];
-
-        if (getcwd(cwd,BMAX_PATH) && mod_dir[0] != '/')
-        {
-            chdir(mod_dir);
-//            initprintf("root '%s'\nmod '%s'\ncwd '%s'\n",root,mod_dir,cwd);
-            if (artLoadFiles("tiles000.art",MAXCACHE1DSIZE) < 0)
-            {
-                chdir(cwd);
-                if (artLoadFiles("tiles000.art",MAXCACHE1DSIZE) < 0)
-                    G_GameExit("Failed loading art.");
-            }
-            chdir(cwd);
-        }
-        else if (artLoadFiles("tiles000.art",MAXCACHE1DSIZE) < 0)
-            G_GameExit("Failed loading art.");
-    }
+    if (artLoadFiles("tiles000.art", MAXCACHE1DSIZE) < 0)
+        G_GameExit("Failed loading art.");
 
     S_PrecacheSounds();
 
@@ -10648,8 +10502,7 @@ void G_BackToMenu(void)
     g_player[myconnectindex].ps->gm = MODE_MENU;
     ChangeToMenu(0);
     KB_FlushKeyboardQueue();
-    Bsprintf(tempbuf,APPNAME " - %s",duke3dgrpstring);
-    wm_setapptitle(tempbuf);
+    G_UpdateAppTitle();
 }
 
 void app_crashhandler(void)
@@ -10876,10 +10729,12 @@ int app_main(int32_t argc, char const* const* argv)
         (int(*)(void))GetTime,
         GAME_onshowosd
     );
-    Bsprintf(tempbuf,HEAD2 " (%s)",s_buildTimestamp);
-    wm_setapptitle(tempbuf);
 
-    initprintf("%s\n",apptitle);
+    G_UpdateAppTitle();
+
+    initprintf(HEAD2 " %s\n", s_buildRev);
+    PrintBuildInfo();
+
 //    initprintf("Compiled %s\n",datetimestring);
 //    initprintf("Copyright (c) 1996, 2003 3D Realms Entertainment\n");
 //    initprintf("Copyright (c) 2008 EDuke32 team and contributors\n");
@@ -10902,6 +10757,10 @@ int app_main(int32_t argc, char const* const* argv)
 
     G_CheckCommandLine(argc,argv);
 
+    // This needs to happen afterwards, as G_CheckCommandLine() is where we set
+    // up the command-line-provided search paths (duh).
+    G_ExtInit();
+
 #if defined(RENDERTYPEWIN) && defined(USE_OPENGL)
     if (forcegl) initprintf("GL driver blacklist disabled.\n");
 #endif
@@ -10920,20 +10779,6 @@ int app_main(int32_t argc, char const* const* argv)
         Bsnprintf(seekinappcontainer,sizeof(seekinappcontainer),"%s/EDuke32.app/", cwd);
         addsearchpath(seekinappcontainer);
 #endif
-    }
-
-    if (CommandPaths)
-    {
-        struct strllist *s;
-        while (CommandPaths)
-        {
-            s = CommandPaths->next;
-            addsearchpath(CommandPaths->str);
-
-            Xfree(CommandPaths->str);
-            Xfree(CommandPaths);
-            CommandPaths = s;
-        }
     }
 
 #if defined(_WIN32)
@@ -10978,7 +10823,6 @@ int app_main(int32_t argc, char const* const* argv)
     }
 
     i = CONFIG_ReadSetup();
-    if (getenv("DUKE3DGRP")) duke3dgrp = getenv("DUKE3DGRP");
 
 #ifdef _WIN32
 //    initprintf("build %d\n",(char)atoi(BUILDDATE));
@@ -10996,34 +10840,7 @@ int app_main(int32_t argc, char const* const* argv)
     InitDiscord();
 #endif
 
-    ScanGroups();
-    {
-        // try and identify the 'defaultduke3dgrp' in the set of GRPs.
-        // if it is found, set up the environment accordingly for the game it represents.
-        // if it is not found, choose the first GRP from the list of
-        struct grpfile *fg, *first = NULL;
-        int i;
-        for (fg = foundgrps; fg; fg=fg->next)
-        {
-            for (i = 0; i<numgrpfiles; i++) if (fg->crcval == grpfiles[i].crcval) break;
-            if (i == numgrpfiles) continue; // unrecognised grp file
-            fg->game = grpfiles[i].game;
-            if (!first) first = fg;
-            if (!Bstrcasecmp(fg->name, defaultduke3dgrp))
-            {
-                g_gameType = grpfiles[i].game;
-                duke3dgrpstring = grpfiles[i].name;
-                break;
-            }
-        }
-        if (!fg && first)
-        {
-            Bstrcpy(defaultduke3dgrp, first->name);
-            g_gameType = first->game;
-            duke3dgrpstring = grpfiles[0].name;
-        }
-        else if (!fg) duke3dgrpstring = "Unknown GRP";
-    }
+    G_ScanGroups();
 
 // OLDMP MERGE CHECKME
 #ifdef STARTUP_SETUP_WINDOW
@@ -11041,37 +10858,7 @@ int app_main(int32_t argc, char const* const* argv)
     }
 #endif
 
-    FreeGroups();
-
-    if (WW2GI || NAM)
-    {
-        // overwrite the default GRP and CON so that if the user chooses
-        // something different, they get what they asked for
-        if (WW2GI)
-        {
-            Bsprintf(defaultduke3dgrp,"ww2gi.grp");
-            Bsprintf(defaultconfilename, "ww2gi.con");
-        }
-        else
-        {
-            Bsprintf(defaultduke3dgrp,"nam.grp");
-            Bsprintf(defaultconfilename, "nam.con");
-        }
-
-        Bsprintf(GametypeNames[0],"GRUNTMATCH (SPAWN)");
-        Bsprintf(GametypeNames[2],"GRUNTMATCH (NO SPAWN)");
-    }
-
-    if (mod_dir[0] != '/')
-    {
-        Bstrcat(root,mod_dir);
-        addsearchpath(root);
-//        addsearchpath(mod_dir);
-#if defined(USE_OPENGL)
-        Bsprintf(tempbuf,"%s/%s",mod_dir,TEXCACHEFILE);
-        Bstrcpy(TEXCACHEFILE,tempbuf);
-#endif
-    }
+    G_LoadGroups(!g_noAutoLoad);
 
     i = initgroupfile(eduke32dat);
 
@@ -11082,83 +10869,28 @@ int app_main(int32_t argc, char const* const* argv)
 
     i = -1;
 
-    i = initgroupfile(duke3dgrp);
+    if (!g_useCwd)
+        G_CleanupSearchPaths();
 
-    if (i == -1)
-        initprintf("Warning: could not find group file '%s'!\n",duke3dgrp);
-    else
-        initprintf("Using group file '%s' as main group file.\n", duke3dgrp);
-
-    if (!g_noAutoLoad)
+    if (WW2GI || NAM)
     {
-        int ii;
-
-        for (ii=0;ii<NUMAUTOLOADMASKS;ii++)
-        {
-            getfilenames("autoload",autoloadmasks[ii]);
-            while (fnlist.findfiles)
-            {
-                Bsprintf(tempbuf,"autoload/%s", fnlist.findfiles->name);
-                initprintf("Using group file '%s'.\n",tempbuf);
-                initgroupfile(tempbuf);
-                fnlist.findfiles = fnlist.findfiles->next;
-            }
-        }
-
-        if (i != -1)
-            G_DoAutoload(duke3dgrp);
+        Bsprintf(GametypeNames[0], "GRUNTMATCH (SPAWN)");
+        Bsprintf(GametypeNames[2], "GRUNTMATCH (NO SPAWN)");
     }
 
-    if (mod_dir[0] != '/')
-    {
-        int ii;
+    //G_SetupCheats();
 
-        for (ii=0;ii<NUMAUTOLOADMASKS;ii++)
-        {
-            Bsprintf(tempbuf,"%s/",mod_dir);
-            getfilenames(tempbuf,autoloadmasks[ii]);
-            while (fnlist.findfiles)
-            {
-                Bsprintf(tempbuf,"%s/%s",mod_dir, fnlist.findfiles->name);
-                initprintf("Using group file '%s'.\n",tempbuf);
-                initgroupfile(tempbuf);
-                fnlist.findfiles = fnlist.findfiles->next;
-            }
-        }
-    }
-
-    //loaddefinitions_game(eduke32def, TRUE);
-    loaddefinitions_game(duke3ddef, TRUE);
-
-    {
-        struct strllist *s;
-
-        pathsearchmode = 1;
-        while (CommandGrps)
-        {
-            s = CommandGrps->next;
-            j = initgroupfile(CommandGrps->str);
-            if (j == -1) initprintf("Could not find group file '%s'.\n",CommandGrps->str);
-            else
-            {
-                g_groupFileHandle = j;
-                initprintf("Using group file '%s'.\n",CommandGrps->str);
-                if (!g_noAutoLoad)
-                    G_DoAutoload(CommandGrps->str);
-            }
-
-            free(CommandGrps->str);
-            free(CommandGrps);
-            CommandGrps = s;
-        }
-        pathsearchmode = 0;
-    }
-
-    i = kopen4load("DUKESW.BIN",1); // JBF 20030810
-    if (i!=-1)
-    {
+    if (SHAREWARE)
         g_Shareware = 1;
-        kclose(i);
+    else
+    {
+        buildvfs_kfd const kFile = kopen4load("DUKESW.BIN", 1); // JBF 20030810
+
+        if (kFile != buildvfs_kfd_invalid)
+        {
+            g_Shareware = 1;
+            kclose(kFile);
+        }
     }
 
 #if 0
@@ -11171,12 +10903,7 @@ int app_main(int32_t argc, char const* const* argv)
 #endif
 
     // gotta set the proper title after we compile the CONs if this is the full version
-
-    Bsprintf(tempbuf,"%s - " APPNAME,duke3dgrpstring);
-    wm_setapptitle(tempbuf);
-
-
-//    initprintf("\n");
+    G_UpdateAppTitle();
 
     if (g_scriptDebug)
         initprintf("CON debugging activated (level %d).\n",g_scriptDebug);
@@ -11225,12 +10952,14 @@ int app_main(int32_t argc, char const* const* argv)
         loaddefinitions_game(eduke32def, FALSE);
     }
 
-    if (!loaddefinitionsfile(duke3ddef))
+    const char* defsfile = G_DefFile();
+    uint32_t stime = timerGetTicks();
+    if (!loaddefinitionsfile(defsfile))
     {
-        initprintf("Definitions file '%s' loaded.\n",duke3ddef);
-        loaddefinitions_game(duke3ddef, FALSE);
+        uint32_t etime = timerGetTicks();
+        initprintf("Definitions file \"%s\" loaded in %d ms.\n", defsfile, etime - stime);
     }
-    //     initprintf("numplayers=%i\n",numplayers);
+    loaddefinitions_game(defsfile, FALSE);
 
     if (enginePostInit())
         G_FatalEngineInitError();
@@ -11262,42 +10991,14 @@ int app_main(int32_t argc, char const* const* argv)
     if (ud.multimode > 1)
         playerswhenstarted = ud.multimode;
 
-    ud.last_level = -1;
-
-    if (Bstrcasecmp(ud.rtsname,"DUKE.RTS") == 0 ||
-            Bstrcasecmp(ud.rtsname,"WW2GI.RTS") == 0 ||
-            Bstrcasecmp(ud.rtsname,"NAM.RTS") == 0)
-    {
-        // ud.last_level is used as a flag here to reset the string to DUKE.RTS after load
-        if (WW2GI)
-        {
-            ud.last_level = 1;
-            Bstrcpy(ud.rtsname, "WW2GI.RTS");
-        }
-        else if (NAM)
-        {
-            ud.last_level = 1;
-            Bstrcpy(ud.rtsname, "NAM.RTS");
-        }
-        else
-        {
-            ud.last_level = 1;
-            Bstrcpy(ud.rtsname, "DUKE.RTS");
-        }
-    }
-
     // [JM] I'll need to make sure this doesn't fuck up a few command lines.
     CONFIG_WriteSetup(1);
     CONFIG_ReadSetup();
 
-    RTS_Init(ud.rtsname);
-    if (rts_numlumps) initprintf("Using .RTS file '%s'\n",ud.rtsname);
+    char const* rtsname = g_rtsNamePtr ? g_rtsNamePtr : ud.rtsname;
+    RTS_Init(rtsname);
 
-    if (ud.last_level == 1)
-    {
-        ud.last_level = -1;
-        Bstrcpy(ud.rtsname, "DUKE.RTS");
-    }
+    ud.last_level = -1;
 
     initprintf("Initializing OSD...\n");
 
@@ -12342,10 +12043,6 @@ static void G_SetupGameButtons(void)
 // [JM] Needed for build linkage
 void M32RunScript(const char* s) { UNREFERENCED_PARAMETER(s); }
 void G_Polymer_UnInit(void) { }
-const char* G_DefaultDefFile(void)
-{
-    return duke3ddef;
-}
 
 /*
 ===================

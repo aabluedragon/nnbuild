@@ -830,7 +830,7 @@ int32_t startwin_run(void)
     settings.usejoystick = ud.config.UseJoystick;
 //    settings.game = g_gameType;
     settings.noautoload = g_noAutoLoad;
-    settings.gamedir = mod_dir;
+    settings.gamedir = g_modDir;
     strncpy(settings.selectedgrp, duke3dgrp, BMAX_PATH);
     PopulateForm(ALL);
 
@@ -851,8 +851,8 @@ int32_t startwin_run(void)
         g_noAutoLoad = settings.noautoload;
 
         if (g_noSetup == 0 && settings.gamedir != NULL)
-            Bstrcpy(mod_dir,settings.gamedir);
-        else Bsprintf(mod_dir,"/");
+            Bstrcpy(g_modDir,settings.gamedir);
+        else Bsprintf(g_modDir,"/");
 
         duke3dgrp = settings.selectedgrp;
 

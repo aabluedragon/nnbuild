@@ -36,8 +36,6 @@ static int  g_precacheCount;
 //extern const char *duke3dgrpstring;
 extern int g_levelTextTime;
 
-void G_SetupGlobalPsky(void);
-
 static void flag_precache(int32_t tile, int32_t type)
 {
     if (!(gotpic[tile >> 3] & pow2char[tile & 7]))
@@ -537,25 +535,6 @@ void G_UpdateScreenArea(void)
 
     pub = NUMPAGES;
     pus = NUMPAGES;
-}
-
-void G_SetupGlobalPsky(void)
-{
-    int skyIdx = 0;
-
-    // NOTE: Loop must be running backwards for the same behavior as the game
-    // (greatest sector index with matching parallaxed sky takes precedence).
-    for (int i = numsectors - 1; i >= 0; i--)
-    {
-        if (sector[i].ceilingstat & 1)
-        {
-            skyIdx = getpskyidx(sector[i].ceilingpicnum);
-            if (skyIdx > 0)
-                break;
-        }
-    }
-
-    g_pskyidx = skyIdx;
 }
 
 void P_RandomSpawnPoint(int snum)
@@ -1636,16 +1615,7 @@ int G_EnterLevel(int g)
     G_UpdateScreenArea();
     ud.screen_size = i;
 
-    OSD_StripColors(tempbuf, g_player[myconnectindex].user_name);
-    if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
-    {
-        Bstrcpy(levname, boardfilename);
-        Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - " APPNAME, tempbuf, levname, duke3dgrpstring);
-    }
-    else Bsnprintf(apptitle, sizeof(apptitle), "%s: %s - %s - " APPNAME, tempbuf, MapInfo[mii].name, duke3dgrpstring);
-
-    Bstrcpy(tempbuf,apptitle);
-    wm_setapptitle(tempbuf);
+    G_UpdateAppTitle((boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0) ? boardfilename : MapInfo[mii].name);
 
     if (!VOLUMEONE)
     {

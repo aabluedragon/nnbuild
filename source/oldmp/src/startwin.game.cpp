@@ -30,11 +30,11 @@ static struct audioenumdrv *wavedevs = NULL;
 
 static struct
 {
+    struct grpfile_t const* grp;
     int fullscreen;
     int xdim, ydim, bpp;
     int forcesetup;
     int usemouse, usejoy;
-    char selectedgrp[BMAX_PATH+1];
     int game;
     uint32_t crcval; // for finding the grp in the list again
     char *gamedir;
@@ -162,20 +162,15 @@ static void PopulateForm(int pgs)
 
     if (pgs & POPULATE_GAME)
     {
-        struct grpfile *fg;
-        int i, j;
-        char buf[128+BMAX_PATH];
+        HWND hwnd = GetDlgItem(pages[TAB_CONFIG], IDCDATA);
 
-        hwnd = GetDlgItem(pages[TAB_CONFIG], IDCDATA);
-
-        for (fg = foundgrps; fg; fg=fg->next)
+        for (auto fg = foundgrps; fg; fg = fg->next)
         {
-            for (i = 0; i<numgrpfiles; i++) if (fg->crcval == grpfiles[i].crcval) break;
-            if (i == numgrpfiles) continue;	// unrecognised grp file
-            Bsprintf(buf, "%s\t%s", grpfiles[i].name, fg->name);
-            j = ListBox_AddString(hwnd, buf);
+            Bsprintf(buf, "%s\t%s", fg->type->name, fg->filename);
+            int const j = ListBox_AddString(hwnd, buf);
             (void)ListBox_SetItemData(hwnd, j, (LPARAM)fg);
-            if (!Bstrcasecmp(fg->name, settings.selectedgrp))(void)ListBox_SetCurSel(hwnd, j);
+            if (settings.grp == fg)
+                (void)ListBox_SetCurSel(hwnd, j);
         }
     }
 
@@ -262,15 +257,12 @@ static INT_PTR CALLBACK ConfigPageProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
             return TRUE;
         case IDCDATA:
         {
-            int i;
             if (HIWORD(wParam) != LBN_SELCHANGE) break;
-            i = ListBox_GetCurSel((HWND)lParam);
+            intptr_t i = ListBox_GetCurSel((HWND)lParam);
             if (i != CB_ERR) i = ListBox_GetItemData((HWND)lParam, i);
             if (i != CB_ERR)
             {
-                strcpy(settings.selectedgrp, ((struct grpfile*)i)->name);
-                settings.game = ((struct grpfile*)i)->game;
-                settings.crcval = ((struct grpfile*)i)->crcval;
+                settings.grp = (grpfile_t const*)i;
             }
             return TRUE;
         }
@@ -637,8 +629,8 @@ int startwin_run(void)
     settings.usejoy = ud.config.UseJoystick;
     settings.game = g_gameType;
 //    settings.crcval = 0;
-    strncpy(settings.selectedgrp, duke3dgrp, BMAX_PATH);
-    settings.gamedir = mod_dir;
+    settings.grp = g_selectedGrp;
+    settings.gamedir = g_modDir;
     PopulateForm(-1);
 
     while (done < 0)
@@ -662,8 +654,6 @@ int startwin_run(void)
     EnableConfig(0);
     if (done)
     {
-        int i;
-
         ud.config.ScreenMode = settings.fullscreen;
         ud.config.ScreenWidth = settings.xdim;
         ud.config.ScreenHeight = settings.ydim;
@@ -671,16 +661,11 @@ int startwin_run(void)
         ud.config.ForceSetup = settings.forcesetup;
         ud.config.UseMouse = settings.usemouse;
         ud.config.UseJoystick = settings.usejoy;
-        duke3dgrp = settings.selectedgrp;
+        g_selectedGrp = settings.grp;
         g_gameType = settings.game;
 
-        if (g_noSetup == 0 && settings.gamedir != NULL)
-            Bstrcpy(mod_dir,settings.gamedir);
-        else Bsprintf(mod_dir,"/");
-
-        for (i = 0; i<numgrpfiles; i++) if (settings.crcval == grpfiles[i].crcval) break;
-        if (i != numgrpfiles)
-            duke3dgrpstring = grpfiles[i].name;
+        if (g_modDir != settings.gamedir)
+            Bstrcpy(g_modDir, (g_noSetup == 0 && settings.gamedir != NULL) ? settings.gamedir : "/");
     }
 
     if (wavedevs)

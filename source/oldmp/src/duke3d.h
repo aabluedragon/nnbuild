@@ -58,8 +58,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define VOLUMEALL (g_Shareware==0)
 #define PLUTOPAK (g_scriptVersion==14)
 #define VOLUMEONE (g_Shareware==1)
-#define NAM (g_gameType&1)
-#define WW2GI (g_gameType&2)
 
 #define MAXSLEEPDIST  16384
 #define SLEEPTIME 24*64
@@ -749,17 +747,6 @@ enum GametypeFlags_t {
 extern int g_lastSaveSlot;
 extern int g_restorePalette;
 
-typedef enum basepal_ {
-    BASEPAL = 0,
-    WATERPAL,
-    SLIMEPAL,
-    DREALMSPAL,
-    TITLEPAL,
-    ENDINGPAL,  // 5
-    ANIMPAL,
-    BASEPALCOUNT
-} basepal_t;
-
 extern int cachecount;
 extern char boardfilename[BMAX_PATH];
 extern char currentboardfilename[BMAX_PATH];
@@ -936,6 +923,14 @@ enum GamevarFlags_t {
     GAMEVAR_RAWQ16PTR = GAMEVAR_Q16PTR | GAMEVAR_SPECIAL,
     GAMEVAR_PTR_MASK = GAMEVAR_INTPTR | GAMEVAR_SHORTPTR | GAMEVAR_CHARPTR | GAMEVAR_Q16PTR | GAMEVAR_RAWQ16PTR,
 };
+
+// Alignments for per-player and per-actor variables.
+#define PLAYER_VAR_ALIGNMENT (sizeof(intptr_t))
+#define ACTOR_VAR_ALIGNMENT 16
+
+#define ARRAY_ALIGNMENT 16
+
+extern void Gv_Clear(void);
 
 enum GamearrayFlags_t {
     MAXGAMEARRAYS      = (MAXGAMEVARS>>2), // must be lower than MAXGAMEVARS
@@ -1211,10 +1206,6 @@ typedef struct {
 extern keydef_t keynames[];
 extern const char *mousenames[];
 
-extern char* duke3dgrp;
-extern const char* duke3dgrpstring;
-extern char mod_dir[BMAX_PATH];
-
 extern hashtable_t gamevarH;
 extern hashtable_t arrayH;
 extern hashtable_t keywH;
@@ -1226,7 +1217,9 @@ extern hashtable_t gamefuncH;
 }
 #endif
 
+#include "common_game.h"
 #include "global.h"
+#include "game.h"
 #include "screens.h"
 #include "oldnet.h"
 #include "actors.h"

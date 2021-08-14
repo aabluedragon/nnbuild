@@ -358,8 +358,7 @@ void G_BonusScreen(int bonusonly)
         350, 380,VICTORY1 + 8,86,59 // duplicate row to alleviate overflow in the for loop below "boss"
     };
 
-    Bsprintf(tempbuf, "%s - " APPNAME, duke3dgrpstring);
-    wm_setapptitle(tempbuf);
+    G_UpdateAppTitle();
 
     if (ud.volume_number == 0 && ud.last_level == 8 && boardfilename[0])
     {
