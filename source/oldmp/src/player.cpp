@@ -1150,7 +1150,7 @@ int A_Shoot(int i,int atwith)
             vec3_t nextStartPos = spos;
 
             int hitCount;
-            for (hitCount = 0; hitCount < MAX_PENETRATIONS; hitCount++)
+            for (hitCount = 0; hitCount < MAX_PENETRATIONS-1; hitCount++)
             {
                 auto curHit = &hits[hitCount];
                 int hitVoid = Proj_DoHitscan(i, (pProj->cstat >= 0) ? pProj->cstat : 256 + 1, &nextStartPos, zvel, shootAng, curHit);
