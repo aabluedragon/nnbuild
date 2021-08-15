@@ -10735,6 +10735,9 @@ int app_main(int32_t argc, char const* const* argv)
     initprintf(HEAD2 " %s\n", s_buildRev);
     PrintBuildInfo();
 
+    if (!g_useCwd)
+        G_AddSearchPaths();
+
 //    initprintf("Compiled %s\n",datetimestring);
 //    initprintf("Copyright (c) 1996, 2003 3D Realms Entertainment\n");
 //    initprintf("Copyright (c) 2008 EDuke32 team and contributors\n");
