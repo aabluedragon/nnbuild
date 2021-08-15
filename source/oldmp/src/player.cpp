@@ -1149,8 +1149,8 @@ int A_Shoot(int i,int atwith)
             uint16_t hitCstats[MAX_PENETRATIONS];
             vec3_t nextStartPos = spos;
 
-            int hitCount;
-            for (hitCount = 0; hitCount < MAX_PENETRATIONS-1; hitCount++)
+            int hitCount = 0;
+            do
             {
                 auto curHit = &hits[hitCount];
                 int hitVoid = Proj_DoHitscan(i, (pProj->cstat >= 0) ? pProj->cstat : 256 + 1, &nextStartPos, zvel, shootAng, curHit);
@@ -1180,7 +1180,12 @@ int A_Shoot(int i,int atwith)
 
                 if (!doesPenetrate || shouldStop) // No penetration, so stop.
                     break;
-            }
+
+                if (hitCount >= MAX_PENETRATIONS - 1) // Don't increment past array bounds
+                    break;
+                
+                hitCount++;
+            } while (1);
 
             if (hitCount < 0) // Hit nothing, not even a sector. GTFO.
                 return -1;
@@ -1196,16 +1201,12 @@ int A_Shoot(int i,int atwith)
             }
 
             // Restore cstat, spawn shotsparks and do damage at every point we hit.
-            int dmgCount = 0;
-            do
+            for(int dmgCount = 0; dmgCount <= hitCount; dmgCount++)
             {
                 auto curHit = &hits[dmgCount];
 
                 if (curHit->sprite > -1)
                     sprite[curHit->sprite].cstat = hitCstats[dmgCount];
-
-                // We got all we need, increment before we do anything else so continue doesn't infinite loop us.
-                dmgCount++;
 
                 // This hit point is out of range, skip damage/effect spawning and impact sounds.
                 if (pProj->range > 0 && (klabs(spos.x - curHit->pos.x) + klabs(spos.y - curHit->pos.y)) > pProj->range)
@@ -1227,7 +1228,7 @@ int A_Shoot(int i,int atwith)
                 if ((krand() & 255) < 4)
                     if (pProj->isound >= 0)
                         S_PlaySound3D(pProj->isound, k, &curHit->pos);
-            } while (dmgCount <= hitCount);
+            }
 
             return -1;
         }
