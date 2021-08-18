@@ -1527,7 +1527,7 @@ int32_t G_FindLevelByFile(const char *fn)
 
 int G_EnterLevel(int g)
 {
-    int i, mii;
+    int i;
     char levname[BMAX_PATH];
     int16_t lbang;
 
@@ -1591,16 +1591,16 @@ int G_EnterLevel(int g)
         }
     }
 
-    mii = (ud.volume_number*MAXLEVELS)+ud.level_number;
+    int const mapidx = (ud.volume_number*MAXLEVELS)+ud.level_number;
 
-    if (MapInfo[mii].name == NULL || MapInfo[mii].filename == NULL)
+    if (MapInfo[mapidx].name == NULL || MapInfo[mapidx].filename == NULL)
     {
         if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
         {
-            if (MapInfo[mii].filename == NULL)
-                MapInfo[mii].filename = (char*)Xcalloc(BMAX_PATH, sizeof(uint8_t));
-            if (MapInfo[mii].name == NULL)
-                MapInfo[mii].name = Xstrdup("User Map");
+            if (MapInfo[mapidx].filename == NULL)
+                MapInfo[mapidx].filename = (char*)Xcalloc(BMAX_PATH, sizeof(uint8_t));
+            if (MapInfo[mapidx].name == NULL)
+                MapInfo[mapidx].name = Xstrdup("User Map");
         }
         else
         {
@@ -1615,7 +1615,7 @@ int G_EnterLevel(int g)
     G_UpdateScreenArea();
     ud.screen_size = i;
 
-    G_UpdateAppTitle((boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0) ? boardfilename : MapInfo[mii].name);
+    G_UpdateAppTitle((boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0) ? boardfilename : MapInfo[mapidx].name);
 
     if (!VOLUMEONE)
     {
@@ -1691,16 +1691,16 @@ int G_EnterLevel(int g)
                 }
             }
         }
-        else if (engineLoadBoard(MapInfo[mii].filename,0,&g_player[0].ps->pos, &lbang, &g_player[0].ps->cursectnum) == -1)
+        else if (engineLoadBoard(MapInfo[mapidx].filename,0,&g_player[0].ps->pos, &lbang, &g_player[0].ps->cursectnum) == -1)
         {
-            OSD_Printf(OSD_ERROR "Map %s not found!\n",MapInfo[mii].filename);
+            OSD_Printf(OSD_ERROR "Map %s not found!\n",MapInfo[mapidx].filename);
             //G_GameExit(tempbuf);
             return 1;
         }
         else
         {
             char *p;
-            strcpy(levname, MapInfo[mii].filename);
+            strcpy(levname, MapInfo[mapidx].filename);
             p = Bstrrchr(levname,'.');
             if (!p) strcat(levname,".mhk");
             else
@@ -1716,14 +1716,14 @@ int G_EnterLevel(int g)
     else
     {
 
-        i = strlen(MapInfo[mii].filename);
-        copybufbyte(MapInfo[mii].filename,&levname[0],i);
+        i = strlen(MapInfo[mapidx].filename);
+        copybufbyte(MapInfo[mapidx].filename,&levname[0],i);
         levname[i] = 255;
         levname[i+1] = 0;
 
         if (engineLoadBoard(levname,1,&g_player[0].ps->pos, &lbang, &g_player[0].ps->cursectnum) == -1)
         {
-            OSD_Printf(OSD_ERROR "Map '%s' not found!\n",MapInfo[mii].filename);
+            OSD_Printf(OSD_ERROR "Map '%s' not found!\n",MapInfo[mapidx].filename);
             //G_GameExit(tempbuf);
             return 1;
         }
@@ -1843,7 +1843,7 @@ int G_EnterLevel(int g)
     Bmemcpy(&currentboardfilename[0],&boardfilename[0],BMAX_PATH);
 
     X_OnEvent(EVENT_ENTERLEVEL, -1, -1, -1);
-    OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,MapInfo[mii].name);
+    OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,MapInfo[mapidx].name);
     return 0;
 }
 
