@@ -1219,6 +1219,7 @@ extern hashtable_t gamefuncH;
 
 #include "common_game.h"
 #include "global.h"
+#include "quotes.h"
 #include "game.h"
 #include "screens.h"
 #include "oldnet.h"
