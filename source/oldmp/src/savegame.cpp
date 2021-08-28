@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //-------------------------------------------------------------------------
 
 #include "duke3d.h"
+#include "md4.h"
 
 extern char *bitptr;
 
@@ -93,12 +94,6 @@ int32_t G_LoadSaveHeader(char spot,struct savehead *saveh)
     //    AddLog(g_szBuf);
 
     if (kdfread(&bv,sizeof(bv),1,fil) != 1) goto corrupt;
-    /*    if (bv != BYTEVERSION)
-        {
-            P_DoQuote(114,g_player[myconnectindex].ps);
-            kclose(fil);
-            return 1;
-        }*/
 
     if (kdfread(&saveh->numplr,sizeof(int32_t),1,fil) != 1) goto corrupt;
 
@@ -121,6 +116,49 @@ corrupt:
     kclose(fil);
     return 1;
 }
+
+static int32_t sv_loadBoardMD4(char* const fn)
+{
+    buildvfs_kfd fil;
+    if ((fil = kopen4load(fn, 0)) == buildvfs_kfd_invalid)
+        return -1;
+
+    klseek(fil, 0, SEEK_SET);
+    int32_t boardsize = kfilelength(fil);
+    uint8_t* fullboard = (uint8_t*)Xmalloc(boardsize);
+    if (kread_and_test(fil, fullboard, boardsize))
+    {
+        Xfree(fullboard);
+        return -1;
+    }
+
+    md4once(fullboard, boardsize, g_loadedMapHack.md4);
+    Xfree(fullboard);
+    return 0;
+}
+
+static void sv_loadMhk(char* currentboardfilename)
+{
+    bool loadedMhk = false;
+    if (sv_loadBoardMD4(currentboardfilename) == 0)
+    {
+        auto mhkInfo = (usermaphack_t*)bsearch(&g_loadedMapHack, usermaphacks, num_usermaphacks,
+            sizeof(usermaphack_t), compare_usermaphacks);
+
+        if (mhkInfo && (loadedMhk = (engineLoadMHK(mhkInfo->mhkfile) == 0)))
+            initprintf("Loaded map hack file \"%s\"\n", mhkInfo->mhkfile);
+    }
+
+    if (!loadedMhk)
+    {
+        append_ext_UNSAFE(currentboardfilename, ".mhk");
+        if (engineLoadMHK(currentboardfilename) == 0)
+            initprintf("Loaded map hack file \"%s\"\n", currentboardfilename);
+    }
+}
+
+// hack
+static int different_user_map;
 
 int32_t G_LoadPlayer(int32_t spot)
 {
@@ -173,7 +211,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&bv,sizeof(bv),1,fil) != 1) return -1;
     if (bv != BYTEVERSION)
     {
-        P_DoQuote(114,g_player[myconnectindex].ps);
+        P_DoQuote(QUOTE_SAVE_BAD_VERSION,g_player[myconnectindex].ps);
         kclose(fil);
         ototalclock = (int32_t)totalclock;
         ready2send = 1;
@@ -186,7 +224,7 @@ int32_t G_LoadPlayer(int32_t spot)
         kclose(fil);
         ototalclock = (int32_t)totalclock;
         ready2send = 1;
-        P_DoQuote(124,g_player[myconnectindex].ps);
+        P_DoQuote(QUOTE_SAVE_BAD_PLAYERS,g_player[myconnectindex].ps);
         return 1;
     }
     else ud.multimode = nump;
@@ -219,12 +257,40 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&ud.volume_number,sizeof(ud.volume_number),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.level_number,sizeof(ud.level_number),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.player_skill,sizeof(ud.player_skill),1,fil) != 1) goto corrupt;
-    if (kdfread(&boardfilename[0],BMAX_PATH,1,fil) != 1) goto corrupt;
-    Bmemcpy(&currentboardfilename[0],&boardfilename[0],BMAX_PATH);
+    if (kdfread(&ud.music_episode, sizeof(ud.music_episode), 1, fil) != 1) goto corrupt;
+    if (kdfread(&ud.music_level, sizeof(ud.music_level), 1, fil) != 1) goto corrupt;
 
     ud.m_level_number = ud.level_number;
     ud.m_volume_number = ud.volume_number;
     ud.m_player_skill = ud.player_skill;
+
+    char boardName[BMAX_PATH];
+    if (kdfread(&boardName[0], BMAX_PATH, 1, fil) != 1) goto corrupt;
+    different_user_map = Bstrncmp(boardfilename, boardName, sizeof(boardName));
+    Bmemcpy(&boardfilename[0], &boardName[0], BMAX_PATH);
+
+    {
+        int const mapIdx = ud.volume_number * MAXLEVELS + ud.level_number;
+
+        if (boardfilename[0])
+            Bstrcpy(currentboardfilename, boardfilename);
+        else if (MapInfo[mapIdx].filename)
+            Bstrcpy(currentboardfilename, MapInfo[mapIdx].filename);
+
+        if (currentboardfilename[0])
+        {
+            // only setup art if map differs from previous
+            if (different_user_map)
+            {
+                artSetupMapArt(currentboardfilename);
+            }
+
+            sv_loadMhk(currentboardfilename);
+        }
+
+        Bmemcpy(currentboardfilename, boardfilename, BMAX_PATH);
+    }
+
 
     //Fake read because lseek won't work with compression
     walock[TILE_LOADSHOT] = 1;
@@ -426,176 +492,115 @@ int32_t G_LoadPlayer(int32_t spot)
     S_ClearSoundLocks();
     G_CacheMapData();
 
-    i = g_musicIndex;
-    g_musicIndex = (ud.volume_number*MAXLEVELS) + ud.level_number;
-
-    if (boardfilename[0] != 0 && ud.level_number == 7 && ud.volume_number == 0)
     {
-        char *p;
-        char levname[BMAX_PATH];
-        int32_t fil;
+        int32_t musicIdx = (ud.music_episode * MAXLEVELS) + ud.music_level;
 
-        strcpy(levname, boardfilename);
-        // usermap music based on map filename
-        Bcorrectfilename(levname,0);
-        p = Bstrrchr(levname,'.');
-        if (!p) strcat(levname,".ogg");
+        if (G_HaveUserMap() && ud.music_level == USERMAPMUSICFAKELEVEL && ud.music_episode == USERMAPMUSICFAKEVOLUME)
+        {
+            char levname[BMAX_PATH];
+            G_SetupFilenameBasedMusic(levname, boardfilename);
+        }
+
+        if (MapInfo[musicIdx].musicfn != NULL && (musicIdx != g_musicIndex || different_user_map))
+        {
+            ud.music_episode = g_musicIndex / MAXLEVELS;
+            ud.music_level = g_musicIndex % MAXLEVELS;
+            S_PlayLevelMusicOrNothing(musicIdx);
+        }
+        else
+            S_ContinueLevelMusic();
+
+        if (ud.config.MusicToggle)
+            S_PauseMusic(false);
+
+        g_player[myconnectindex].ps->gm = MODE_GAME;
+        ud.recstat = 0;
+
+        if (g_player[myconnectindex].ps->jetpack_on)
+            A_PlaySound(DUKE_JETPACK_IDLE, g_player[myconnectindex].ps->i);
+
+        g_restorePalette = 1;
+        P_UpdateScreenPal(g_player[myconnectindex].ps);
+        G_UpdateScreenArea();
+
+        FX_SetReverb(0);
+
+        if (ud.lockout == 0)
+        {
+            for (x = 0; x < g_numAnimWalls; x++)
+                if (wall[animwall[x].wallnum].extra >= 0)
+                    wall[animwall[x].wallnum].picnum = wall[animwall[x].wallnum].extra;
+        }
         else
         {
-            p[1]='o';
-            p[2]='g';
-            p[3]='g';
-            p[4]=0;
+            for (x = 0; x < g_numAnimWalls; x++)
+                switch (DynamicTileMap[wall[animwall[x].wallnum].picnum])
+                {
+                case FEMPIC1__STATIC:
+                    wall[animwall[x].wallnum].picnum = BLANKSCREEN;
+                    break;
+                case FEMPIC2__STATIC:
+                case FEMPIC3__STATIC:
+                    wall[animwall[x].wallnum].picnum = SCREENBREAK6;
+                    break;
+                }
         }
 
-        fil = kopen4loadfrommod(levname,0);
+        g_interpolationCnt = 0;
+        startofdynamicinterpolations = 0;
 
-        if (fil > -1)
+        k = headspritestat[STAT_EFFECTOR];
+        while (k >= 0)
         {
-            kclose(fil);
-            if (MapInfo[ud.level_number].alt_musicfn == NULL)
-                MapInfo[ud.level_number].alt_musicfn = (char*)Xcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
-            else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.level_number].alt_musicfn))
-                MapInfo[ud.level_number].alt_musicfn = (char*)Xrealloc(MapInfo[ud.level_number].alt_musicfn,(Bstrlen(levname)+1));
-            Bstrcpy(MapInfo[ud.level_number].alt_musicfn,levname);
-        }
-        else if (MapInfo[ud.level_number].alt_musicfn != NULL)
-        {
-            Xfree(MapInfo[ud.level_number].alt_musicfn);
-            MapInfo[ud.level_number].alt_musicfn = NULL;
-        }
-
-        p[1]='m';
-        p[2]='i';
-        p[3]='d';
-        p[4]=0;
-
-        fil = kopen4loadfrommod(levname,0);
-
-        if (fil == -1)
-            Bsprintf(levname,"dethtoll.mid");
-        else kclose(fil);
-
-        if (MapInfo[ud.level_number].musicfn == NULL)
-            MapInfo[ud.level_number].musicfn = (char*)Xcalloc(Bstrlen(levname)+1,sizeof(uint8_t));
-        else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.level_number].musicfn))
-            MapInfo[ud.level_number].musicfn = (char*)Xrealloc(MapInfo[ud.level_number].musicfn,(Bstrlen(levname)+1));
-        Bstrcpy(MapInfo[ud.level_number].musicfn,levname);
-    }
-
-    if (MapInfo[g_musicIndex].musicfn != NULL && (i != g_musicIndex || MapInfo[MAXVOLUMES*MAXLEVELS+2].alt_musicfn))
-    {
-        S_StopMusic();
-        S_PlayMusic(&MapInfo[g_musicIndex].musicfn[0],g_musicIndex);
-    }
-    S_PauseMusic(0);
-
-    g_player[myconnectindex].ps->gm = MODE_GAME;
-    ud.recstat = 0;
-
-    if (g_player[myconnectindex].ps->jetpack_on)
-        A_PlaySound(DUKE_JETPACK_IDLE,g_player[myconnectindex].ps->i);
-
-    g_restorePalette = 1;
-    P_UpdateScreenPal(g_player[myconnectindex].ps);
-    G_UpdateScreenArea();
-
-    FX_SetReverb(0);
-
-    if (ud.lockout == 0)
-    {
-        for (x=0; x<g_numAnimWalls; x++)
-            if (wall[animwall[x].wallnum].extra >= 0)
-                wall[animwall[x].wallnum].picnum = wall[animwall[x].wallnum].extra;
-    }
-    else
-    {
-        for (x=0; x<g_numAnimWalls; x++)
-            switch (DynamicTileMap[wall[animwall[x].wallnum].picnum])
+            switch (sprite[k].lotag)
             {
-            case FEMPIC1__STATIC:
-                wall[animwall[x].wallnum].picnum = BLANKSCREEN;
+            case 31:
+                G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
                 break;
-            case FEMPIC2__STATIC:
-            case FEMPIC3__STATIC:
-                wall[animwall[x].wallnum].picnum = SCREENBREAK6;
+            case 32:
+                G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
+                break;
+            case 25:
+                G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
+                G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
+                break;
+            case 17:
+                G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
+                G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
+                break;
+            case 0:
+            case 5:
+            case 6:
+            case 11:
+            case 14:
+            case 15:
+            case 16:
+            case 26:
+            case 30:
+                Sect_SetInterpolation(k);
                 break;
             }
-    }
 
-    g_interpolationCnt = 0;
-    startofdynamicinterpolations = 0;
-
-    k = headspritestat[STAT_EFFECTOR];
-    while (k >= 0)
-    {
-        switch (sprite[k].lotag)
-        {
-        case 31:
-            G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
-            break;
-        case 32:
-            G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
-            break;
-        case 25:
-            G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
-            G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
-            break;
-        case 17:
-            G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
-            G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
-            break;
-        case 0:
-        case 5:
-        case 6:
-        case 11:
-        case 14:
-        case 15:
-        case 16:
-        case 26:
-        case 30:
-            Sect_SetInterpolation(k);
-            break;
+            k = nextspritestat[k];
         }
 
-        k = nextspritestat[k];
+        for (i = g_interpolationCnt - 1; i >= 0; i--) bakipos[i] = *curipos[i];
+        for (i = g_animateCount - 1; i >= 0; i--)
+            G_SetInterpolation(G_GetAnimationPointer(i));
+
+        g_showShareware = 0;
+        everyothertime = 0;
+
+        //    clearbufbyte(connected,MAXPLAYERS,0x01010101);
+
+        ready2send = 1;
+
+        mmulti_flushpackets();
+        clearfifo();
+        waitforeverybody();
+
+        G_ResetTimers();
     }
-
-    for (i=g_interpolationCnt-1; i>=0; i--) bakipos[i] = *curipos[i];
-    for (i = g_animateCount-1; i>=0; i--)
-        G_SetInterpolation(G_GetAnimationPointer(i));
-
-    g_showShareware = 0;
-    everyothertime = 0;
-
-//    clearbufbyte(connected,MAXPLAYERS,0x01010101);
-
-    ready2send = 1;
-
-    mmulti_flushpackets();
-    clearfifo();
-    waitforeverybody();
-
-    G_ResetTimers();
-
-#if 0 //POLYMER
-    if (getrendermode() == 4)
-    {
-        int32_t i = 0;
-
-        polymer_loadboard();
-        while (i < MAXSPRITES)
-        {
-            if (actor[i].lightptr)
-            {
-                polymer_deletelight(actor[i].lightId);
-                actor[i].lightptr = NULL;
-                actor[i].lightId = -1;
-            }
-            i++;
-        }
-    }
-#endif
 
     return(0);
 corrupt:
@@ -648,8 +653,8 @@ int32_t G_SavePlayer(int32_t spot)
     {
         char temp[BMAX_PATH];
         if (g_modDir[0] != '/')
-            Bsprintf(temp,"%s/%s", g_modDir,fnptr);
-        else Bsprintf(temp,"%s",fnptr);
+            Bsnprintf(temp, sizeof(temp), "%s/%s", g_modDir,fnptr);
+        else Bsnprintf(temp, sizeof(temp), "%s",fnptr);
         if ((fil = fopen(temp,"wb")) == 0) return(-1);
     }
 
@@ -667,6 +672,8 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&ud.volume_number,sizeof(ud.volume_number),1,fil);
     dfwrite(&ud.level_number,sizeof(ud.level_number),1,fil);
     dfwrite(&ud.player_skill,sizeof(ud.player_skill),1,fil);
+    dfwrite(&ud.music_episode, sizeof(ud.music_episode), 1, fil);
+    dfwrite(&ud.music_level, sizeof(ud.music_level), 1, fil);
     dfwrite(&currentboardfilename[0],BMAX_PATH,1,fil);
     if (!waloff[TILE_SAVESHOT])
     {
@@ -896,8 +903,8 @@ int32_t G_SavePlayer(int32_t spot)
 
     if (ud.multimode < 2)
     {
-        strcpy(ScriptQuotes[122],"GAME SAVED");
-        P_DoQuote(122,g_player[myconnectindex].ps);
+        strcpy(ScriptQuotes[QUOTE_RESERVED4],"GAME SAVED");
+        P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
     }
 
     ready2send = 1;

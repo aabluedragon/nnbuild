@@ -176,6 +176,18 @@ void S_MusicVolume(int32_t volume)
     MUSIC_SetVolume(volume);
 }
 
+void S_RestartMusic(void)
+{
+    if (ud.recstat != 2 && g_player[myconnectindex].ps->gm & MODE_GAME)
+    {
+        S_PlayLevelMusicOrNothing(g_musicIndex);
+    }
+    else if (G_GetLogoFlags() & LOGO_PLAYMUSIC)
+    {
+        S_PlaySpecialMusicOrNothing(MUS_INTRO);
+    }
+}
+
 void S_MenuSound(void)
 {
     static int32_t SoundNum=0;
@@ -203,80 +215,162 @@ void S_MenuSound(void)
     S_PlaySound(menusnds[SoundNum++ % ARRAY_SIZE(menusnds)]);
 }
 
-int32_t S_PlayMusic(const char *fn, const int32_t sel)
+static int S_PlayMusic(const char* fn)
 {
-    char *ofn = const_cast<char *>(fn), *testfn, *extension;
-    int32_t fp;
-    const char *alt = 0;
-
-    if (ud.config.MusicToggle == 0) return 0;
-    if (ud.config.MusicDevice < 0) return 0;
-
-    if (MapInfo[sel].alt_musicfn != NULL)
-        alt = fn = MapInfo[sel].alt_musicfn;
-
-    testfn = (char *) Xmalloc(strlen(fn) + 5);
-    strcpy(testfn, fn);
-    extension = strrchr(testfn, '.');
-
-    do
-    {
-        if (extension && !Bstrcasecmp(extension, ".mid"))
-        {
-            // we've been asked to load a .mid file, but first let's see
-            // if there's an ogg with the same base name lying around
-            strcpy(extension, ".ogg");
-            fp = kopen4loadfrommod(testfn, 0);
-            if (fp >= 0)
-            {
-                Xfree(testfn);
-                break;
-            }
-        }
-
-        Xfree(testfn);
-
-        // just use what we've been given
-        fp = kopen4loadfrommod(fn, 0);
-
-        if (alt && fp < 0)
-            fp = kopen4loadfrommod(ofn, 0);
-    }
-    while (0);
-
-    if (fp < 0)
-    {
-        OSD_Printf(OSD_ERROR "S_PlayMusic(): error: can't open \"%s\" for playback!\n",fn);
+    if (!ud.config.MusicToggle)
         return 0;
+
+    if (fn == NULL)
+        return 1;
+
+    buildvfs_kfd fp = S_OpenAudio(fn, 0, 1);
+    if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
+    {
+        OSD_Printf(OSD_ERROR "S_PlayMusic(): error: can't open \"%s\" for playback!\n", fn);
+        return 2;
     }
 
-    S_StopMusic();
+    int32_t MusicLen = kfilelength(fp);
 
-    MusicPtr = (char *) Xmalloc((MusicLen = kfilelength(fp)));
-
-    if ((g_musicSize = kread(fp, (char *)MusicPtr, MusicLen)) != MusicLen)
+    if (EDUKE32_PREDICT_FALSE(MusicLen < 4))
     {
-        OSD_Printf(OSD_ERROR "S_PlayMusic(): error: read %d bytes from \"%s\", expected %d\n",g_musicSize, fn, MusicLen);
+        OSD_Printf(OSD_ERROR "S_PlayMusic(): error: empty music file \"%s\"\n", fn);
         kclose(fp);
-        g_musicSize = 0;
-        return 0;
+        return 3;
+    }
+
+    char* MyMusicPtr = (char*)Xaligned_alloc(16, MusicLen);
+    int MyMusicSize = kread(fp, MyMusicPtr, MusicLen);
+
+    if (EDUKE32_PREDICT_FALSE(MyMusicSize != MusicLen))
+    {
+        OSD_Printf(OSD_ERROR "S_PlayMusic(): error: read %d bytes from \"%s\", expected %d\n",
+            MyMusicSize, fn, MusicLen);
+        kclose(fp);
+        ALIGNED_FREE_AND_NULL(MyMusicPtr);
+        return 4;
     }
 
     kclose(fp);
 
-    if (!Bmemcmp(MusicPtr, "MThd", 4))
+    if (!Bmemcmp(MyMusicPtr, "MThd", 4))
     {
-        MUSIC_PlaySong(MusicPtr, MusicLen, MUSIC_LoopSong, fn);
+        int32_t retval = MUSIC_PlaySong(MyMusicPtr, MyMusicSize, MUSIC_LoopSong, fn);
+
+        if (retval != MUSIC_Ok)
+        {
+            ALIGNED_FREE_AND_NULL(MyMusicPtr);
+            return 5;
+        }
+
+        if (MusicIsWaveform && MusicVoice >= 0)
+        {
+            FX_StopSound(MusicVoice);
+            MusicVoice = -1;
+        }
+
         MusicIsWaveform = 0;
+        ALIGNED_FREE_AND_NULL(MusicPtr);
+        MusicPtr = MyMusicPtr;
+        g_musicSize = MyMusicSize;
     }
     else
     {
-        if ((MusicVoice = FX_Play(MusicPtr, MusicLen, 0, 0, 0, ud.config.MusicVolume, ud.config.MusicVolume, ud.config.MusicVolume,
-            FX_MUSIC_PRIORITY, fix16_one, MUSIC_ID)) > FX_Ok)
+        int MyMusicVoice = FX_Play(MyMusicPtr, MusicLen, 0, 0, 0, ud.config.MusicVolume, ud.config.MusicVolume, ud.config.MusicVolume,
+            FX_MUSIC_PRIORITY, fix16_one, MUSIC_ID);
 
-            MusicIsWaveform = 1;
+        if (MyMusicVoice <= FX_Ok)
+        {
+            ALIGNED_FREE_AND_NULL(MyMusicPtr);
+            return 5;
+        }
+
+        if (MusicIsWaveform && MusicVoice >= 0)
+            FX_StopSound(MusicVoice);
+
+        MUSIC_StopSong();
+
+        MusicVoice = MyMusicVoice;
+        MusicIsWaveform = 1;
+        ALIGNED_FREE_AND_NULL(MusicPtr);
+        MusicPtr = MyMusicPtr;
+        g_musicSize = MyMusicSize;
     }
-    return (alt != 0);
+
+    return 0;
+}
+
+static void S_SetMusicIndex(unsigned int m)
+{
+    g_musicIndex = m;
+    ud.music_episode = m / MAXLEVELS;
+    ud.music_level = m % MAXLEVELS;
+}
+
+bool S_TryPlayLevelMusic(unsigned int m)
+{
+#if 0
+    ud.returnvar[0] = m / MAXLEVELS;
+    ud.returnvar[1] = m % MAXLEVELS;
+
+    int retval = VM_OnEvent(EVENT_PLAYLEVELMUSICSLOT, g_player[myconnectindex].ps->i, myconnectindex);
+
+    if (retval < 0)
+        return false;
+#endif
+
+    char const* musicfn = MapInfo[m].musicfn;
+
+    if (musicfn != NULL)
+    {
+        if (!S_PlayMusic(musicfn))
+        {
+            S_SetMusicIndex(m);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void S_PlayLevelMusicOrNothing(unsigned int m)
+{
+    if (S_TryPlayLevelMusic(m))
+    {
+        S_StopMusic();
+        S_SetMusicIndex(m);
+    }
+}
+
+int S_TryPlaySpecialMusic(unsigned int m)
+{
+    char const* musicfn = MapInfo[m].musicfn;
+    if (musicfn != NULL)
+    {
+        if (!S_PlayMusic(musicfn))
+        {
+            S_SetMusicIndex(m);
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+void S_PlaySpecialMusicOrNothing(unsigned int m)
+{
+    if (S_TryPlaySpecialMusic(m))
+    {
+        S_StopMusic();
+        S_SetMusicIndex(m);
+    }
+}
+
+void S_ContinueLevelMusic(void)
+{
+#if 0
+    VM_OnEvent(EVENT_CONTINUELEVELMUSICSLOT, g_player[myconnectindex].ps->i, myconnectindex);
+#endif
 }
 
 void S_StopMusic(void)
@@ -292,12 +386,8 @@ void S_StopMusic(void)
 
     MUSIC_StopSong();
 
-    if (MusicPtr)
-    {
-        Xfree(MusicPtr);
-        MusicPtr = NULL;
-        g_musicSize = MusicLen = 0;
-    }
+    ALIGNED_FREE_AND_NULL(MusicPtr);
+    g_musicSize = 0;
 }
 
 void S_Cleanup(void)

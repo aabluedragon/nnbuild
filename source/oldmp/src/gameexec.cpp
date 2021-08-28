@@ -741,6 +741,29 @@ static int32_t VM_AddWeapon(int32_t weap, int32_t amount, DukePlayer_t *ps)
     return 0;
 }
 
+static int G_StartTrackSlot(int const volumeNum, int const levelNum)
+{
+    if ((unsigned)volumeNum <= MAXVOLUMES && (unsigned)levelNum < MAXLEVELS)
+    {
+        int trackNum = MAXLEVELS * volumeNum + levelNum;
+
+        return S_TryPlaySpecialMusic(trackNum);
+    }
+
+    return 1;
+}
+
+static int G_StartTrackSlotWrap(int const volumeNum, int const levelNum)
+{
+    if (EDUKE32_PREDICT_FALSE(G_StartTrackSlot(volumeNum, levelNum)))
+    {
+        CON_ERRPRINTF("invalid level %d or null music for volume %d level %d\n", levelNum, volumeNum, levelNum);
+        return 1;
+    }
+
+    return 0;
+}
+
 static void G_ShowView(vec3_t vec, fix16_t a, fix16_t horiz, int sect, int ix1, int iy1, int ix2, int iy2, int unbiasedp)
 {
     int x1 = min(ix1, ix2);
@@ -4054,15 +4077,7 @@ static int X_DoExecute(void)
     case CON_STARTTRACK:
     case CON_STARTTRACKVAR:
         insptr++;
-        if (tw == CON_STARTTRACK) g_musicIndex=(ud.volume_number*MAXLEVELS)+(*(insptr++));
-        else g_musicIndex=(ud.volume_number*MAXLEVELS)+(Gv_GetVarX(*(insptr++)));
-        if (MapInfo[g_musicIndex].musicfn == NULL)
-        {
-            OSD_Printf(CON_ERROR "null music for map %d\n",g_errorLineNum,keyw[g_tw],g_musicIndex);
-            insptr++;
-            break;
-        }
-        S_PlayMusic(&MapInfo[g_musicIndex].musicfn[0],g_musicIndex);
+        G_StartTrackSlotWrap(ud.volume_number, Gv_GetVarX(*(insptr++)));
         break;
 
     case CON_ACTIVATECHEAT:

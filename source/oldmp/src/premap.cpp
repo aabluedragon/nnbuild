@@ -381,12 +381,7 @@ void G_CacheMapData(void)
     if (ud.recstat == 2)
         return;
 
-    S_PauseMusic(1);
-    if (MapInfo[MAXVOLUMES*MAXLEVELS+2].alt_musicfn)
-    {
-        S_StopMusic();
-        S_PlayMusic(&EnvMusicFilename[2][0],MAXVOLUMES*MAXLEVELS+2); // loadmus
-    }
+    S_TryPlaySpecialMusic(MUS_LOADING);
 
     starttime = timerGetTicks();
 
@@ -1178,7 +1173,7 @@ void G_NewGame(int vn,int ln,int sk)
 
     if (ln == 0 && vn == 3 && ud.multimode < 2 && ud.lockout == 0)
     {
-        S_PlayMusic(&EnvMusicFilename[1][0],MAXVOLUMES*MAXLEVELS+1);
+        S_PlaySpecialMusicOrNothing(MUS_BRIEFING);
 
         renderFlushPerms();
         videoSetViewableArea(0,0,xdim-1,ydim-1);
@@ -1525,11 +1520,96 @@ int32_t G_FindLevelByFile(const char *fn)
     return MAXLEVELS*MAXVOLUMES;
 }
 
+static int G_TryMapHack(const char* mhkfile)
+{
+    int const failure = engineLoadMHK(mhkfile);
+
+    if (!failure)
+        initprintf("Loaded map hack file \"%s\"\n", mhkfile);
+
+    return failure;
+}
+
+static void G_LoadMapHack(char* outbuf, const char* filename)
+{
+    if (filename != NULL)
+        Bstrcpy(outbuf, filename);
+
+    append_ext_UNSAFE(outbuf, ".mhk");
+
+    if (G_TryMapHack(outbuf) && usermaphacks != NULL)
+    {
+        auto pMapInfo = (usermaphack_t*)bsearch(&g_loadedMapHack, usermaphacks, num_usermaphacks,
+            sizeof(usermaphack_t), compare_usermaphacks);
+        if (pMapInfo)
+            G_TryMapHack(pMapInfo->mhkfile);
+    }
+}
+
+// levnamebuf should have at least size BMAX_PATH
+void G_SetupFilenameBasedMusic(char* nameBuf, const char* fileName)
+{
+    char* p;
+    char const* exts[] = {
+#ifdef HAVE_FLAC
+        "flac",
+#endif
+#ifdef HAVE_VORBIS
+        "ogg",
+#endif
+#ifdef HAVE_XMP
+        "xm",
+        "mod",
+        "it",
+        "s3m",
+        "mtm",
+#endif
+        "mid"
+    };
+
+    Bstrncpy(nameBuf, fileName, BMAX_PATH);
+
+    Bcorrectfilename(nameBuf, 0);
+
+    if (NULL == (p = Bstrrchr(nameBuf, '.')))
+    {
+        p = nameBuf + Bstrlen(nameBuf);
+        p[0] = '.';
+    }
+
+    for (auto& ext : exts)
+    {
+        buildvfs_kfd kFile;
+
+        Bmemcpy(p + 1, ext, Bstrlen(ext) + 1);
+
+        if ((kFile = kopen4loadfrommod(nameBuf, 0)) != buildvfs_kfd_invalid)
+        {
+            kclose(kFile);
+            realloc_copy(&MapInfo[USERMAPMUSICFAKESLOT].musicfn, nameBuf);
+            return;
+        }
+    }
+
+    char const* usermapMusic = MapInfo[MUS_USERMAP].musicfn;
+    if (usermapMusic != nullptr)
+    {
+        realloc_copy(&MapInfo[USERMAPMUSICFAKESLOT].musicfn, usermapMusic);
+        return;
+    }
+
+    char const* e1l8 = MapInfo[7].musicfn;
+    if (e1l8 != nullptr)
+    {
+        realloc_copy(&MapInfo[USERMAPMUSICFAKESLOT].musicfn, e1l8);
+        return;
+    }
+}
+
 int G_EnterLevel(int g)
 {
     int i;
     char levname[BMAX_PATH];
-    int16_t lbang;
 
 //    mmulti_flushpackets();
 //    waitforeverybody();
@@ -1593,18 +1673,15 @@ int G_EnterLevel(int g)
 
     int const mapidx = (ud.volume_number*MAXLEVELS)+ud.level_number;
 
-    if (MapInfo[mapidx].name == NULL || MapInfo[mapidx].filename == NULL)
+    Bassert((unsigned)mapidx < ARRAY_SIZE(MapInfo));
+
+    auto& m = MapInfo[mapidx];
+
+    if (VOLUMEONE || !Menu_HaveUserMap())
     {
-        if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
+        if (m.name == NULL || m.filename == NULL)
         {
-            if (MapInfo[mapidx].filename == NULL)
-                MapInfo[mapidx].filename = (char*)Xcalloc(BMAX_PATH, sizeof(uint8_t));
-            if (MapInfo[mapidx].name == NULL)
-                MapInfo[mapidx].name = Xstrdup("User Map");
-        }
-        else
-        {
-            OSD_Printf(OSDTEXT_RED "Map E%dL%d not defined!\n", ud.volume_number+1, ud.level_number+1);
+            OSD_Printf(OSDTEXT_RED "Map E%dL%d not defined!\n", ud.volume_number + 1, ud.level_number + 1);
             return 1;
         }
     }
@@ -1615,135 +1692,35 @@ int G_EnterLevel(int g)
     G_UpdateScreenArea();
     ud.screen_size = i;
 
-    G_UpdateAppTitle((boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0) ? boardfilename : MapInfo[mapidx].name);
+    G_UpdateAppTitle(Menu_HaveUserMap() ? boardfilename : m.name);
 
-    if (!VOLUMEONE)
+    auto& p0 = *g_player[0].ps;
+    int16_t playerAngle;
+
+    char levelName[BMAX_PATH];
+
+    if (!VOLUMEONE && G_HaveUserMap())
     {
-        if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)
+        if (engineLoadBoard(boardfilename, 0, &p0.pos, &playerAngle, &p0.cursectnum) < 0)
         {
-            if (engineLoadBoard(boardfilename,0,&g_player[0].ps->pos, &lbang ,&g_player[0].ps->cursectnum) == -1)
-            {
-                OSD_Printf(OSD_ERROR "Map '%s' not found!\n",boardfilename);
-                //G_GameExit(tempbuf);
-                return 1;
-            }
-
-            {
-                char *p;
-
-                strcpy(levname, boardfilename);
-                p = Bstrrchr(levname,'.');
-                if (!p) strcat(levname,".mhk");
-                else
-                {
-                    p[1]='m';
-                    p[2]='h';
-                    p[3]='k';
-                    p[4]=0;
-                }
-                if (!engineLoadMHK(levname)) initprintf("Loaded map hack file '%s'\n",levname);
-
-                // usermap music based on map filename
-                Bcorrectfilename(levname,0);
-                p = Bstrrchr(levname,'.');
-                if (p)
-                {
-                    int fil;
-
-                    p[1]='o';
-                    p[2]='g';
-                    p[3]='g';
-                    p[4]=0;
-
-                    fil = kopen4loadfrommod(levname,0);
-
-                    if (fil > -1)
-                    {
-                        kclose(fil);
-                        if (MapInfo[ud.m_level_number].alt_musicfn == NULL)
-                            MapInfo[ud.m_level_number].alt_musicfn = (char*)Xcalloc(Bstrlen(levname)+1,sizeof(char));
-                        else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.m_level_number].alt_musicfn))
-                            MapInfo[ud.m_level_number].alt_musicfn = (char*)Xrealloc(MapInfo[ud.m_level_number].alt_musicfn,(Bstrlen(levname)+1));
-                        Bstrcpy(MapInfo[ud.m_level_number].alt_musicfn,levname);
-                    }
-                    else if (MapInfo[ud.m_level_number].alt_musicfn != NULL)
-                    {
-                        Xfree(MapInfo[ud.m_level_number].alt_musicfn);
-                        MapInfo[ud.m_level_number].alt_musicfn = NULL;
-                    }
-
-                    p[1]='m';
-                    p[2]='i';
-                    p[3]='d';
-                    p[4]=0;
-
-                    fil = kopen4loadfrommod(levname,0);
-
-                    if (fil == -1)
-                        Bsprintf(levname,"dethtoll.mid");
-                    else kclose(fil);
-
-                    if (MapInfo[ud.m_level_number].musicfn == NULL)
-                        MapInfo[ud.m_level_number].musicfn = (char*)Xcalloc(Bstrlen(levname)+1,sizeof(char));
-                    else if ((Bstrlen(levname)+1) > sizeof(MapInfo[ud.m_level_number].musicfn))
-                        MapInfo[ud.m_level_number].musicfn = (char*)Xrealloc(MapInfo[ud.m_level_number].musicfn,(Bstrlen(levname)+1));
-                    Bstrcpy(MapInfo[ud.m_level_number].musicfn,levname);
-                }
-            }
-        }
-        else if (engineLoadBoard(MapInfo[mapidx].filename,0,&g_player[0].ps->pos, &lbang, &g_player[0].ps->cursectnum) == -1)
-        {
-            OSD_Printf(OSD_ERROR "Map %s not found!\n",MapInfo[mapidx].filename);
-            //G_GameExit(tempbuf);
+            OSD_Printf(OSD_ERROR "Map \"%s\" not found or invalid map version!\n", boardfilename);
             return 1;
         }
-        else
-        {
-            char *p;
-            strcpy(levname, MapInfo[mapidx].filename);
-            p = Bstrrchr(levname,'.');
-            if (!p) strcat(levname,".mhk");
-            else
-            {
-                p[1]='m';
-                p[2]='h';
-                p[3]='k';
-                p[4]=0;
-            }
-            if (!engineLoadMHK(levname)) initprintf("Loaded map hack file '%s'\n",levname);
-        }
+
+        G_LoadMapHack(levelName, boardfilename);
+        G_SetupFilenameBasedMusic(levelName, boardfilename);
+    }
+    else if (engineLoadBoard(m.filename, VOLUMEONE, &p0.pos, &playerAngle, &p0.cursectnum) < 0)
+    {
+        OSD_Printf(OSD_ERROR "Map \"%s\" not found or invalid map version!\n", m.filename);
+        return 1;
     }
     else
     {
-
-        i = strlen(MapInfo[mapidx].filename);
-        copybufbyte(MapInfo[mapidx].filename,&levname[0],i);
-        levname[i] = 255;
-        levname[i+1] = 0;
-
-        if (engineLoadBoard(levname,1,&g_player[0].ps->pos, &lbang, &g_player[0].ps->cursectnum) == -1)
-        {
-            OSD_Printf(OSD_ERROR "Map '%s' not found!\n",MapInfo[mapidx].filename);
-            //G_GameExit(tempbuf);
-            return 1;
-        }
-        else
-        {
-            char *p;
-            p = Bstrrchr(levname,'.');
-            if (!p) strcat(levname,".mhk");
-            else
-            {
-                p[1]='m';
-                p[2]='h';
-                p[3]='k';
-                p[4]=0;
-            }
-            if (!engineLoadMHK(levname)) initprintf("Loaded map hack file '%s'\n",levname);
-        }
+        G_LoadMapHack(levelName, m.filename);
     }
 
-    g_player[0].ps->q16ang = fix16_from_int(lbang);
+    g_player[0].ps->q16ang = fix16_from_int(playerAngle);
 
     g_precacheCount = 0;
     clearbufbyte(gotpic,sizeof(gotpic),0L);
@@ -1762,9 +1739,19 @@ int G_EnterLevel(int g)
 
     if (ud.recstat != 2)
     {
-        g_musicIndex = (ud.volume_number*MAXLEVELS) + ud.level_number;
-        if (MapInfo[g_musicIndex].musicfn != NULL)
-            S_PlayMusic(&MapInfo[g_musicIndex].musicfn[0],g_musicIndex);
+        if (Menu_HaveUserMap())
+        {
+            S_PlayLevelMusicOrNothing(USERMAPMUSICFAKESLOT);
+        }
+        else if (MapInfo[g_musicIndex].musicfn == NULL || m.musicfn == NULL ||
+            strcmp(MapInfo[g_musicIndex].musicfn, m.musicfn) || g_musicSize == 0 || ud.last_level == -1)
+        {
+            S_PlayLevelMusicOrNothing(mapidx);
+        }
+        else
+        {
+            S_ContinueLevelMusic();
+        }
     }
 
     if ((g&MODE_GAME) || (g&MODE_EOL))
@@ -1843,7 +1830,7 @@ int G_EnterLevel(int g)
     Bmemcpy(&currentboardfilename[0],&boardfilename[0],BMAX_PATH);
 
     X_OnEvent(EVENT_ENTERLEVEL, -1, -1, -1);
-    OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,MapInfo[mapidx].name);
+    OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
     return 0;
 }
 

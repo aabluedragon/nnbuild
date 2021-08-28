@@ -93,6 +93,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define FIRST_OBITUARY_QUOTE MAXQUOTES-128
 #define FIRST_SUICIDE_QUOTE MAXQUOTES-32
 
+enum {
+    MUS_FIRST_SPECIAL = MAXVOLUMES * MAXLEVELS,
+
+    MUS_INTRO = MUS_FIRST_SPECIAL,
+    MUS_BRIEFING = MUS_FIRST_SPECIAL + 1,
+    MUS_LOADING = MUS_FIRST_SPECIAL + 2,
+    MUS_USERMAP = MUS_FIRST_SPECIAL + 3,
+};
+
 // sector effector lotags
 enum
 {
@@ -524,6 +533,8 @@ typedef struct {
     int32_t player_skill,level_number,volume_number,m_marker,marker,mouseflip;
     int32_t m_weaponstay;
 
+    int32_t music_episode, music_level;
+
     int32_t monsters_killed, total_monsters;
 
     int32_t configversion;
@@ -748,8 +759,6 @@ extern int g_lastSaveSlot;
 extern int g_restorePalette;
 
 extern int cachecount;
-extern char boardfilename[BMAX_PATH];
-extern char currentboardfilename[BMAX_PATH];
 
 //DUKE3D.H:
 typedef struct {
@@ -1219,6 +1228,7 @@ extern hashtable_t gamefuncH;
 
 #include "common_game.h"
 #include "global.h"
+#include "premap.h"
 #include "quotes.h"
 #include "game.h"
 #include "screens.h"

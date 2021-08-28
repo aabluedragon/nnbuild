@@ -96,18 +96,25 @@ void S_ClearSoundLocks(void);
 int32_t S_LoadSound(uint32_t num);
 void S_PrecacheSounds(void);
 void S_MenuSound(void);
+
 void S_MusicShutdown(void);
 void S_MusicStartup(void);
 void S_MusicVolume(int32_t volume);
 void S_PauseMusic(int32_t onf);
-int32_t S_PlayMusic(const char* fn, const int32_t sel);
+bool S_TryPlayLevelMusic(unsigned int m);
+void S_PlayLevelMusicOrNothing(unsigned int m);
+int S_TryPlaySpecialMusic(unsigned int m);
+void S_PlaySpecialMusicOrNothing(unsigned int m);
+void S_ContinueLevelMusic(void);
+void S_RestartMusic(void);
+void S_StopMusic(void);
+
 int S_PlaySound(int num);
 int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z);
 int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos);
 void S_SoundShutdown(void);
 void S_SoundStartup(void);
 void S_StopEnvSound(int sndNum, int sprNum);
-void S_StopMusic(void);
 void S_Update(void);
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
 void S_DetachSoundsFromSprite(int spriteNum);

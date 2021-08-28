@@ -8137,6 +8137,12 @@ FOUNDCHEAT:
     }
 }
 
+static void G_PrintCurrentMusic(void)
+{
+    Bsnprintf(ScriptQuotes[QUOTE_MUSIC], MAXQUOTELEN, "Playing %s", MapInfo[g_musicIndex].musicfn);
+    P_DoQuote(QUOTE_MUSIC, g_player[myconnectindex].ps);
+}
+
 static void G_HandleLocalKeys(void)
 {
     int i,ch;
@@ -8258,96 +8264,54 @@ static void G_HandleLocalKeys(void)
 
     if (SHIFTS_IS_PRESSED || ALT_IS_PRESSED)
     {
-        i = 0;
-        if (KB_UnBoundKeyPressed(sc_F1))
-        {
-            KB_ClearKeyDown(sc_F1);
-            i = 1;
-        }
-        if (KB_UnBoundKeyPressed(sc_F2))
-        {
-            KB_ClearKeyDown(sc_F2);
-            i = 2;
-        }
-        if (KB_UnBoundKeyPressed(sc_F3))
-        {
-            KB_ClearKeyDown(sc_F3);
-            i = 3;
-        }
-        if (KB_UnBoundKeyPressed(sc_F4))
-        {
-            KB_ClearKeyDown(sc_F4);
-            i = 4;
-        }
-        if (KB_UnBoundKeyPressed(sc_F5))
-        {
-            KB_ClearKeyDown(sc_F5);
-            i = 5;
-        }
-        if (KB_UnBoundKeyPressed(sc_F6))
-        {
-            KB_ClearKeyDown(sc_F6);
-            i = 6;
-        }
-        if (KB_UnBoundKeyPressed(sc_F7))
-        {
-            KB_ClearKeyDown(sc_F7);
-            i = 7;
-        }
-        if (KB_UnBoundKeyPressed(sc_F8))
-        {
-            KB_ClearKeyDown(sc_F8);
-            i = 8;
-        }
-        if (KB_UnBoundKeyPressed(sc_F9))
-        {
-            KB_ClearKeyDown(sc_F9);
-            i = 9;
-        }
-        if (KB_UnBoundKeyPressed(sc_F10))
-        {
-            KB_ClearKeyDown(sc_F10);
-            i = 10;
-        }
+        int ridiculeNum = 0;
 
-        if (i)
+        // NOTE: sc_F1 .. sc_F10 are contiguous. sc_F11 is not sc_F10+1.
+        for (bssize_t j = sc_F1; j <= sc_F10; j++)
+            if (KB_UnBoundKeyPressed(j))
+            {
+                KB_ClearKeyDown(j);
+                ridiculeNum = j - sc_F1 + 1;
+                break;
+            }
+
+        if (ridiculeNum)
         {
             if (SHIFTS_IS_PRESSED)
             {
-                if (i == 5 && g_player[myconnectindex].ps->fta > 0 && g_player[myconnectindex].ps->ftq == 26)
+                if (ridiculeNum == 5 && g_player[myconnectindex].ps->fta > 0 && g_player[myconnectindex].ps->ftq == QUOTE_MUSIC)
                 {
-                    i = (VOLUMEALL?MAXVOLUMES*MAXLEVELS:6);
-                    g_musicIndex++;
-                    while ((MapInfo[g_musicIndex].musicfn == NULL) && g_musicIndex < i)
-                        g_musicIndex++;
-                    if (g_musicIndex == i)
-                        g_musicIndex = 0;
-                    if (MapInfo[g_musicIndex].musicfn != NULL)
+                    const unsigned int maxi = VOLUMEALL ? MUS_FIRST_SPECIAL : 6;
+
+                    unsigned int const oldMusicIndex = g_musicIndex;
+                    unsigned int MyMusicIndex = g_musicIndex;
+                    do
                     {
-                        if (S_PlayMusic(&MapInfo[g_musicIndex].musicfn[0],g_musicIndex))
-                            Bsprintf(ScriptQuotes[26],"PLAYING %s",&MapInfo[g_musicIndex].alt_musicfn[0]);
-                        else
-                            Bsprintf(ScriptQuotes[26],"PLAYING %s",&MapInfo[g_musicIndex].musicfn[0]);
-                        P_DoQuote(26,g_player[myconnectindex].ps);
-                    }
+                        ++MyMusicIndex;
+                        if (MyMusicIndex >= maxi)
+                            MyMusicIndex = 0;
+                    } while (S_TryPlayLevelMusic(MyMusicIndex) && MyMusicIndex != oldMusicIndex);
+
+                    G_PrintCurrentMusic();
+
                     return;
                 }
 
-                G_AddUserQuote(ud.ridecule[i-1]);
+                G_AddUserQuote(ud.ridecule[ridiculeNum - 1]);
 
                 ch = 0;
 
                 tempbuf[ch] = PACKET_TYPE_MESSAGE;
                 tempbuf[ch+1] = 255;
                 tempbuf[ch+2] = 0;
-                Bstrcat(tempbuf+2,ud.ridecule[i-1]);
+                Bstrcat(tempbuf+2,ud.ridecule[ridiculeNum -1]);
 
-                i = 2+strlen(ud.ridecule[i-1]);
+                int packetLength = 2+strlen(ud.ridecule[ridiculeNum-1]);
 
                 if (ud.multimode > 1)
                     TRAVERSE_CONNECT(ch)
                 {
-                    if (ch != myconnectindex) mmulti_sendpacket(ch,(unsigned char*)tempbuf,i);
+                    if (ch != myconnectindex) mmulti_sendpacket(ch,(unsigned char*)tempbuf, packetLength);
                     if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                 }
 
@@ -8361,15 +8325,15 @@ static void G_HandleLocalKeys(void)
             if (ud.lockout == 0)
                 if (ud.config.SoundToggle && ALT_IS_PRESSED && (RTS_NumSounds() > 0) && g_RTSPlaying == 0 && (ud.config.VoiceToggle & 1))
                 {
-                    rtsptr = (char *)RTS_GetSound(i-1);
-                    FX_Play3D(rtsptr,RTS_SoundLength(i-1), FX_ONESHOT, 0,0,0,255, fix16_one, -i);
+                    rtsptr = (char *)RTS_GetSound(ridiculeNum-1);
+                    FX_Play3D(rtsptr,RTS_SoundLength(ridiculeNum-1), FX_ONESHOT, 0,0,0,255, fix16_one, -ridiculeNum);
 
                     g_RTSPlaying = 7;
 
                     if (ud.multimode > 1)
                     {
                         tempbuf[0] = PACKET_TYPE_RTS;
-                        tempbuf[1] = i;
+                        tempbuf[1] = ridiculeNum;
 
                         TRAVERSE_CONNECT(ch)
                         {
@@ -8539,14 +8503,14 @@ FAKE_F3:
         {
             KB_ClearKeyDown(sc_F5);
             if (MapInfo[g_musicIndex].alt_musicfn != NULL)
-                Bstrcpy(ScriptQuotes[26],&MapInfo[g_musicIndex].alt_musicfn[0]);
+                Bstrcpy(ScriptQuotes[QUOTE_MUSIC],&MapInfo[g_musicIndex].alt_musicfn[0]);
             else if (MapInfo[g_musicIndex].musicfn != NULL)
             {
-                Bstrcpy(ScriptQuotes[26],&MapInfo[g_musicIndex].musicfn[0]);
-                Bstrcat(ScriptQuotes[26],".  USE SHIFT-F5 TO CHANGE.");
+                Bstrcpy(ScriptQuotes[QUOTE_MUSIC],&MapInfo[g_musicIndex].musicfn[0]);
+                Bstrcat(ScriptQuotes[QUOTE_MUSIC],".  USE SHIFT-F5 TO CHANGE.");
             }
-            else ScriptQuotes[26][0] = '\0';
-            P_DoQuote(26,g_player[myconnectindex].ps);
+            else ScriptQuotes[QUOTE_MUSIC][0] = '\0';
+            P_DoQuote(QUOTE_MUSIC,g_player[myconnectindex].ps);
         }
 
         if (KB_UnBoundKeyPressed(sc_F8))
@@ -8654,23 +8618,7 @@ FAKE_F3:
         g_restorePalette = 1;
         G_UpdateScreenArea();
     }
-    /*
-        if (KB_UnBoundKeyPressed(sc_F11))
-        {
-            KB_ClearKeyDown(sc_F11);
-            ud.brightness+=8;
-            if (SHIFTS_IS_PRESSED) ud.brightness-=16;
 
-            if (ud.brightness > (7<<3))
-                ud.brightness = 0;
-            else if (ud.brightness < 0)
-                ud.brightness = (7<<3);
-
-            videoSetPalette(ud.brightness>>2,&g_player[myconnectindex].ps->palette[0],0);
-            if (ud.brightness < 40) P_DoQuote(29 + (ud.brightness>>3) ,g_player[myconnectindex].ps);
-            else if (ud.brightness < 80) P_DoQuote(96 + (ud.brightness>>3) - 5,g_player[myconnectindex].ps);
-        }
-    */
     if (KB_UnBoundKeyPressed(sc_F11))
     {
         KB_ClearKeyDown(sc_F11);
@@ -9983,10 +9931,7 @@ static void G_DisplayLogo(void)
         }
 
         if (logoflags & LOGO_PLAYMUSIC)
-        {
-            g_musicIndex = -1; // hack
-            S_PlayMusic(&EnvMusicFilename[0][0],MAXVOLUMES*MAXLEVELS);
-        }
+            S_PlaySpecialMusicOrNothing(MUS_INTRO);
 
         if (!NAM)
         {
