@@ -68,6 +68,7 @@ static bool g_dynamicTileMapping;
 static bool g_labelsOnly;
 static bool g_processingState;
 static bool g_skipBranch;
+static bool g_switchCountPhase = false;
 
 static int g_checkingIfElse;
 static int g_checkingSwitch;
@@ -1940,15 +1941,19 @@ static bool C_CheckEmptyBranch(int tw, intptr_t lastScriptPtr)
 
 static int C_CountCaseStatements()
 {
-    char *const    temptextptr      = textptr;
-    int const      backupLineNumber = g_lineNumber;
-    int const      backupNumCases   = g_numCases;
-    intptr_t const casePtrOffset    = g_caseTablePtr - apScript;
-    intptr_t const scriptPtrOffset  = g_scriptPtr - apScript;
+    char *const    temptextptr       = textptr;
+    int const      backupLineNumber  = g_lineNumber;
+    int const      backupNumCases    = g_numCases;
+    intptr_t const casePtrOffset     = g_caseTablePtr - apScript;
+    intptr_t const scriptPtrOffset   = g_scriptPtr - apScript;
+    bool const     backupSwitchCount = g_switchCountPhase;
 
     g_numCases = 0;
     g_caseTablePtr = NULL;
+
+    g_switchCountPhase = true;
     C_ParseCommand(true);
+    g_switchCountPhase  = backupSwitchCount;
 
     // since we processed the endswitch, we need to re-increment g_checkingSwitch
     g_checkingSwitch++;
@@ -2148,12 +2153,12 @@ void C_UndefineSkill(int32_t skill)
 
     g_skillNames[skill][0] = '\0';
 
-    g_skillCnt = 0;
+    g_maxDefinedSkill = 0;
     for (bssize_t i = MAXSKILLS-1; i >= 0; i--)
     {
         if (g_skillNames[i][0])
         {
-            g_skillCnt = i+1;
+            g_maxDefinedSkill = i + 1;
             break;
         }
     }
@@ -3660,9 +3665,9 @@ DO_DEFSTATE:
                 continue;
             }
         case CON_ADDLOGVAR:
-            g_labelsOnly = 1;
+            //g_labelsOnly = 1;
             C_GetNextVar();
-            g_labelsOnly = 0;
+            //g_labelsOnly = 0;
             continue;
 
         case CON_COS:
@@ -5416,10 +5421,15 @@ repeatcase:
 
             g_skillNames[j][i] = '\0';
 
-            for (i=0; i<MAXSKILLS; i++)
-                if (g_skillNames[i][0] == 0)
+            g_maxDefinedSkill = 0;
+            for (bssize_t i = MAXSKILLS-1; i >= 0; i--)
+            {
+                if (g_skillNames[i][0])
+                {
+                    g_maxDefinedSkill = i + 1;
                     break;
-            g_skillCnt = i;
+                }
+            }
 
             continue;
 
@@ -5631,6 +5641,7 @@ repeatcase:
 
         case CON_DEFINEQUOTE:
         case CON_REDEFINEQUOTE:
+
             if (tw == CON_DEFINEQUOTE)
             {
                 g_scriptPtr--;
@@ -5659,7 +5670,7 @@ repeatcase:
 
             scriptSkipSpaces();
 
-            if (tw == CON_REDEFINEQUOTE)
+            if (tw == CON_REDEFINEQUOTE && !g_switchCountPhase)
             {
                 if (apXStrings[g_numXStrings] == NULL)
                     apXStrings[g_numXStrings] = (char *)Xcalloc(MAXQUOTELEN,sizeof(uint8_t));
@@ -5676,10 +5687,14 @@ repeatcase:
                 break;
                 }
                 */
-                if (tw == CON_DEFINEQUOTE)
-                    *(apStrings[k]+i) = *textptr;
-                else
-                    *(apXStrings[g_numXStrings]+i) = *textptr;
+                if (!g_switchCountPhase)
+                {
+                    if (tw == CON_DEFINEQUOTE)
+                        *(apStrings[k]+i) = *textptr;
+                    else
+                        *(apXStrings[g_numXStrings]+i) = *textptr;
+                }
+
                 textptr++,i++;
                 if (EDUKE32_PREDICT_FALSE(i >= MAXQUOTELEN))
                 {
@@ -5691,15 +5706,18 @@ repeatcase:
                 }
             }
 
-            if (tw == CON_DEFINEQUOTE)
+            if (!g_switchCountPhase)
             {
-                if ((unsigned)k < MAXQUOTES)
-                    *(apStrings[k]+i) = '\0';
-            }
-            else
-            {
-                *(apXStrings[g_numXStrings]+i) = '\0';
-                scriptWriteValue(g_numXStrings++);
+                if (tw == CON_DEFINEQUOTE)
+                {
+                    if ((unsigned)k < MAXQUOTES)
+                        *(apStrings[k]+i) = '\0';
+                }
+                else
+                {
+                    *(apXStrings[g_numXStrings]+i) = '\0';
+                    scriptWriteValue(g_numXStrings++);
+                }
             }
             continue;
 
