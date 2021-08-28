@@ -3045,7 +3045,7 @@ void P_GetInput(int snum, bool uncapped)
         if (g_myAimStat > g_oldAimStat)
         {
             g_myAimMode ^= 1;
-            P_DoQuote(44+g_myAimMode,p);
+            P_DoQuote(QUOTE_MOUSE_AIMING_OFF+g_myAimMode,p);
         }
     } 
 
@@ -3414,7 +3414,7 @@ static int P_DoCounters(DukePlayer_t *p)
         {
             p->scuba_on = 1;
             p->inven_icon = 6;
-            P_DoQuote(76,p);
+            P_DoQuote(QUOTE_SCUBA_ON,p);
         }
         else
         {
@@ -3608,13 +3608,13 @@ static void P_ProcessWeapon(int playerNum)
                 {
                     p->holster_weapon = 1;
                     p->weapon_pos = -1;
-                    P_DoQuote(73, p);
+                    P_DoQuote(QUOTE_WEAPON_LOWERED, p);
                 }
                 else if (p->holster_weapon == 1 && p->weapon_pos == -9)
                 {
                     p->holster_weapon = 0;
                     p->weapon_pos = 10;
-                    P_DoQuote(74, p);
+                    P_DoQuote(QUOTE_WEAPON_RAISED, p);
                 }
             }
 
@@ -3695,7 +3695,7 @@ static void P_ProcessWeapon(int playerNum)
             {
                 p->holster_weapon = 0;
                 p->weapon_pos = 10;
-                P_DoQuote(74, p);
+                P_DoQuote(QUOTE_WEAPON_RAISED, p);
             }
         }
         else
@@ -4088,7 +4088,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
             if (p->customexitsound >= 0)
             {
                 S_PlaySound(p->customexitsound);
-                P_DoQuote(102, p);
+                P_DoQuote(QUOTE_WEREGONNAFRYYOURASS, p);
             }
             sounds_predictable = true;
         }
@@ -4439,7 +4439,7 @@ static void P_HandleDamagingFloors(int snum)
 
     if (useBoot)
     {
-        P_DoQuote(75, p);
+        P_DoQuote(QUOTE_BOOTS_ON, p);
         p->boot_amount -= 2;
         if (p->boot_amount <= 0)
             P_SelectNextInvItem(p);

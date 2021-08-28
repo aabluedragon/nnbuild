@@ -1781,7 +1781,7 @@ int G_EnterLevel(int g)
 
     if (VOLUMEONE)
     {
-        if (ud.level_number == 0 && ud.recstat != 2) P_DoQuote(40,g_player[myconnectindex].ps);
+        if (ud.level_number == 0 && ud.recstat != 2) P_DoQuote(QUOTE_F1HELP,g_player[myconnectindex].ps);
     }
 
     TRAVERSE_CONNECT(i)

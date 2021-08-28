@@ -1103,7 +1103,7 @@ void G_OperateActivators(int lotag, int playerNum)
                 sector[SECT(spriteNum)].lotag ^= 16384;
 
                 if (playerNum >= 0 && playerNum < ud.multimode)
-                    P_DoQuote((sector[SECT(spriteNum)].lotag & 16384) ? 4 : 8, g_player[playerNum].ps);
+                    P_DoQuote((sector[SECT(spriteNum)].lotag & 16384) ? QUOTE_LOCKED : QUOTE_UNLOCKED, g_player[playerNum].ps);
             }
             else
             {
@@ -1264,21 +1264,21 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
             {
                 if ((ud.got_access&1))
                     g_player[snum].ps->access_incs = 1;
-                else P_DoQuote(70,g_player[snum].ps);
+                else P_DoQuote(QUOTE_NEED_BLUE_KEY,g_player[snum].ps);
             }
 
             else if (switchpal == 21)
             {
                 if (ud.got_access&2)
                     g_player[snum].ps->access_incs = 1;
-                else P_DoQuote(71,g_player[snum].ps);
+                else P_DoQuote(QUOTE_NEED_RED_KEY,g_player[snum].ps);
             }
 
             else if (switchpal == 23)
             {
                 if (ud.got_access&4)
                     g_player[snum].ps->access_incs = 1;
-                else P_DoQuote(72,g_player[snum].ps);
+                else P_DoQuote(QUOTE_NEED_YELLOW_KEY,g_player[snum].ps);
             }
 
             if (g_player[snum].ps->access_incs == 1)
@@ -1613,11 +1613,11 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                 case 25:
                     actor[x].temp_data[4] = !actor[x].temp_data[4];
                     if (actor[x].temp_data[4])
-                        P_DoQuote(15,g_player[snum].ps);
-                    else P_DoQuote(2,g_player[snum].ps);
+                        P_DoQuote(QUOTE_DEACTIVATED,g_player[snum].ps);
+                    else P_DoQuote(QUOTE_ACTIVATED,g_player[snum].ps);
                     break;
                 case 21:
-                    P_DoQuote(2,g_player[screenpeek].ps);
+                    P_DoQuote(QUOTE_ACTIVATED,g_player[screenpeek].ps);
                     break;
                 }
             }
@@ -2712,8 +2712,8 @@ void G_HandleSharedKeys(int snum)
             if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0)
             {
                 p->quick_kick = 14;
-                if (p->fta == 0 || p->ftq == 80)
-                    P_DoQuote(80,p);
+                if (p->fta == 0 || p->ftq == QUOTE_MIGHTY_FOOT)
+                    P_DoQuote(QUOTE_MIGHTY_FOOT,p);
             }
         }
 
@@ -2788,7 +2788,7 @@ void G_HandleSharedKeys(int snum)
                 P_UpdateScreenPal(p);
                 p->inven_icon = 5;
                 A_PlaySound(NITEVISION_ONOFF,p->i);
-                P_DoQuote(106+(!p->heat_on),p);
+                P_DoQuote(QUOTE_NVG_OFF-(p->heat_on),p);
             }
         }
 
@@ -2802,7 +2802,7 @@ void G_HandleSharedKeys(int snum)
                 {
                     p->steroids_amount--;
                     A_PlaySound(DUKE_TAKEPILLS,p->i);
-                    P_DoQuote(12,p);
+                    P_DoQuote(QUOTE_USED_STEROIDS,p);
                 }
                 if (p->steroids_amount > 0)
                     p->inven_icon = 2;
@@ -2895,30 +2895,11 @@ CHECKINV1:
 
                 p->inven_icon = dainv;
 
-                switch (dainv)
-                {
-                case 1:
-                    P_DoQuote(3,p);
-                    break;
-                case 2:
-                    P_DoQuote(90,p);
-                    break;
-                case 3:
-                    P_DoQuote(91,p);
-                    break;
-                case 4:
-                    P_DoQuote(88,p);
-                    break;
-                case 5:
-                    P_DoQuote(101,p);
-                    break;
-                case 6:
-                    P_DoQuote(89,p);
-                    break;
-                case 7:
-                    P_DoQuote(6,p);
-                    break;
-                }
+                static const int32_t invQuotes[8] = { QUOTE_MEDKIT, QUOTE_STEROIDS, QUOTE_HOLODUKE,
+                    QUOTE_JETPACK, QUOTE_NVG, QUOTE_SCUBA, QUOTE_BOOTS, 0 };
+
+                if (dainv - 1 < ARRAY_SSIZE(invQuotes))
+                    P_DoQuote(invQuotes[dainv - 1], p);
             }
 
         weaponNum = ((sb_snum & SK_WEAPON_MASK) >> SK_WEAPON_BITS) - 1;
@@ -3206,11 +3187,11 @@ CHECKINV1:
                             T4(i) = T5(i) = 0;
                             SP(i) = snum;
                             sprite[i].extra = 0;
-                            P_DoQuote(47,p);
+                            P_DoQuote(QUOTE_HOLODUKE_ON,p);
                             A_PlaySound(TELEPORTER,p->holoduke_on);
                         }
                     }
-                    else P_DoQuote(49,p);
+                    else P_DoQuote(QUOTE_HOLODUKE_NOT_FOUND,p);
                 }
             }
             else
@@ -3221,7 +3202,7 @@ CHECKINV1:
                 {
                     A_PlaySound(TELEPORTER,p->holoduke_on);
                     p->holoduke_on = -1;
-                    P_DoQuote(48,p);
+                    P_DoQuote(QUOTE_HOLODUKE_OFF,p);
                 }
             }
         }
@@ -3275,7 +3256,7 @@ CHECKINV1:
 
                         A_PlaySound(DUKE_JETPACK_ON,p->i);
 
-                        P_DoQuote(52,p);
+                        P_DoQuote(QUOTE_JETPACK_ON,p);
                     }
                     else
                     {
@@ -3284,10 +3265,10 @@ CHECKINV1:
                         A_PlaySound(DUKE_JETPACK_OFF,p->i);
                         S_StopEnvSound(DUKE_JETPACK_IDLE,p->i);
                         S_StopEnvSound(DUKE_JETPACK_ON,p->i);
-                        P_DoQuote(53,p);
+                        P_DoQuote(QUOTE_JETPACK_OFF,p);
                     }
                 }
-                else P_DoQuote(50,p);
+                else P_DoQuote(QUOTE_JETPACK_NOT_FOUND,p);
             }
         }
 
@@ -3366,7 +3347,7 @@ static void P_DoSectorInteractions(int32_t playerNum)
 
         case 32767:
             sector[p->cursectnum].lotag = 0;
-            P_DoQuote(9, p);
+            P_DoQuote(QUOTE_FOUND_SECRET, p);
             p->secret_rooms++;
             return;
         case -1:

@@ -1731,7 +1731,7 @@ void Net_CheckPlayerQuit(int i)
         voting = -1;
     }
 
-    g_player[myconnectindex].ps->ftq = 116, g_player[myconnectindex].ps->fta = 180;
+    g_player[myconnectindex].ps->ftq = QUOTE_RESERVED2, g_player[myconnectindex].ps->fta = 180;
 }
 
 void waitforeverybody(void)

@@ -1286,7 +1286,7 @@ void G_HandleSpecialKeys(void)
     {
         KB_ClearKeyDown(sc_F12);
         videoCaptureScreen("duke0000.tga",0);
-        P_DoQuote(103, myplayer);
+        P_DoQuote(QUOTE_SCREEN_SAVED, myplayer);
     }
 
     // only dispatch commands here when not in a game
@@ -2474,7 +2474,7 @@ static void G_PrintGameQuotes(void)
         else if (j > 12) k += 24;
     }
 
-    if (g_player[screenpeek].ps->fta > 1 && (g_player[screenpeek].ps->ftq < 115 || g_player[screenpeek].ps->ftq > 117))
+    if (g_player[screenpeek].ps->fta > 1 && (g_player[screenpeek].ps->ftq < QUOTE_RESERVED || g_player[screenpeek].ps->ftq > QUOTE_RESERVED3))
     {
         if (g_player[screenpeek].ps->fta > 6)
             k += 7;
@@ -2535,7 +2535,7 @@ static void G_PrintGameQuotes(void)
 
     k = 0;
 
-    if (g_player[screenpeek].ps->ftq == 115 || g_player[screenpeek].ps->ftq == 116)
+    if (g_player[screenpeek].ps->ftq == QUOTE_RESERVED || g_player[screenpeek].ps->ftq == QUOTE_RESERVED2)
     {
         k = 140;//quotebot-8-4;
     }
@@ -2586,8 +2586,8 @@ void P_DoQuote(int q, DukePlayer_t *p)
     if (ud.fta_on == 0)
         return;
 
-    if (p->fta > 0 && q != 115 && q != 116)
-        if (p->ftq == 115 || p->ftq == 116) return;
+    if (p->fta > 0 && q != QUOTE_RESERVED && q != QUOTE_RESERVED2)
+        if (p->ftq == QUOTE_RESERVED || p->ftq == QUOTE_RESERVED2) return;
 
     p->fta = 100;
 
@@ -7754,14 +7754,14 @@ FOUNDCHEAT:
 
                     KB_FlushKeyboardQueue();
                     g_player[myconnectindex].ps->cheat_phase = 0;
-                    P_DoQuote(119,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_ALL_WEAPONS,g_player[myconnectindex].ps);
                     return;
 
                 case CHEAT_INVENTORY:
                     KB_FlushKeyboardQueue();
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     G_CheatGetInv();
-                    P_DoQuote(120,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_ALL_INV,g_player[myconnectindex].ps);
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     return;
 
@@ -7769,7 +7769,7 @@ FOUNDCHEAT:
                     ud.got_access =  7;
                     KB_FlushKeyboardQueue();
                     g_player[myconnectindex].ps->cheat_phase = 0;
-                    P_DoQuote(121,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_ALL_KEYS,g_player[myconnectindex].ps);
                     return;
 
                 case CHEAT_DEBUG:
@@ -7788,7 +7788,7 @@ FOUNDCHEAT:
                     ud.clipping = 1-ud.clipping;
                     KB_FlushKeyboardQueue();
                     g_player[myconnectindex].ps->cheat_phase = 0;
-                    P_DoQuote(112+ud.clipping,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_NOCLIP-!ud.clipping,g_player[myconnectindex].ps);
                     return;
 
                 case CHEAT_RESERVED2:
@@ -7798,7 +7798,7 @@ FOUNDCHEAT:
                     return;
 
                 case CHEAT_ALLEN:
-                    P_DoQuote(79,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_ALLEN,g_player[myconnectindex].ps);
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_ClearKeyDown(sc_N);
                     return;
@@ -7824,7 +7824,7 @@ FOUNDCHEAT:
                         sprite[g_player[myconnectindex].ps->i].lotag = 0;
                         sprite[g_player[myconnectindex].ps->i].pal = g_player[myconnectindex].ps->palookup;
 
-                        P_DoQuote(17,g_player[myconnectindex].ps);
+                        P_DoQuote(QUOTE_CHEAT_GODMODE_ON,g_player[myconnectindex].ps);
                     }
                     else
                     {
@@ -7832,7 +7832,7 @@ FOUNDCHEAT:
                         sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
                         actor[g_player[myconnectindex].ps->i].extra = -1;
                         g_player[myconnectindex].ps->last_extra = g_player[myconnectindex].ps->max_player_health;
-                        P_DoQuote(18,g_player[myconnectindex].ps);
+                        P_DoQuote(QUOTE_CHEAT_GODMODE_OFF,g_player[myconnectindex].ps);
                     }
 
                     sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
@@ -7860,8 +7860,8 @@ FOUNDCHEAT:
                         sprite[g_player[myconnectindex].ps->i].hitag = 0;
                         sprite[g_player[myconnectindex].ps->i].lotag = 0;
                         sprite[g_player[myconnectindex].ps->i].pal = g_player[myconnectindex].ps->palookup;
-                        Bstrcpy(ScriptQuotes[122],"Scream for me, Long Beach!");
-                        P_DoQuote(122,g_player[myconnectindex].ps);
+                        Bstrcpy(ScriptQuotes[QUOTE_RESERVED4],"Scream for me, Long Beach!");
+                        P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
                         G_CheatGetInv();
                         for (weapon = PISTOL_WEAPON;weapon < MAX_WEAPONS;weapon++)
                             g_player[myconnectindex].ps->gotweapon[weapon]  = 1;
@@ -7877,7 +7877,7 @@ FOUNDCHEAT:
                         sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
                         actor[g_player[myconnectindex].ps->i].extra = -1;
                         g_player[myconnectindex].ps->last_extra = g_player[myconnectindex].ps->max_player_health;
-                        P_DoQuote(18,g_player[myconnectindex].ps);
+                        P_DoQuote(QUOTE_CHEAT_GODMODE_OFF,g_player[myconnectindex].ps);
                     }
 
                     sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
@@ -7902,7 +7902,7 @@ FOUNDCHEAT:
                         P_AddAmmo(weapon, g_player[myconnectindex].ps, g_player[myconnectindex].ps->max_ammo_amount[weapon]);
                     G_CheatGetInv();
                     ud.got_access =              7;
-                    P_DoQuote(5,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_EVERYTHING,g_player[myconnectindex].ps);
                     g_player[myconnectindex].ps->cheat_phase = 0;
 
                     //                        P_DoQuote(21,g_player[myconnectindex].ps);
@@ -8008,7 +8008,7 @@ FOUNDCHEAT:
                     }
                     G_OperateForceFields(g_player[myconnectindex].ps->i,-1);
 
-                    P_DoQuote(100,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_UNLOCK,g_player[myconnectindex].ps);
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -8022,7 +8022,7 @@ FOUNDCHEAT:
                 case CHEAT_ITEMS:
                     G_CheatGetInv();
                     ud.got_access =              7;
-                    P_DoQuote(5,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_EVERYTHING,g_player[myconnectindex].ps);
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -8035,7 +8035,7 @@ FOUNDCHEAT:
                             show2dsector[i] = 255;
                         for (i=0;i<(MAXWALLS>>3);i++)
                             show2dwall[i] = 255;
-                        P_DoQuote(111,g_player[myconnectindex].ps);
+                        P_DoQuote(QUOTE_SHOW_MAP_ON,g_player[myconnectindex].ps);
                     }
                     else
                     {
@@ -8043,14 +8043,14 @@ FOUNDCHEAT:
                             show2dsector[i] = 0;
                         for (i=0;i<(MAXWALLS>>3);i++)
                             show2dwall[i] = 0;
-                        P_DoQuote(1,g_player[myconnectindex].ps);
+                        P_DoQuote(QUOTE_SHOW_MAP_OFF,g_player[myconnectindex].ps);
                     }
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
 
                 case CHEAT_TODD:
-                    P_DoQuote(99,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_TODD,g_player[myconnectindex].ps);
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -8062,7 +8062,7 @@ FOUNDCHEAT:
                     return;
 
                 case CHEAT_BETA:
-                    P_DoQuote(105,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_BETA,g_player[myconnectindex].ps);
                     KB_ClearKeyDown(sc_H);
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
@@ -8072,7 +8072,7 @@ FOUNDCHEAT:
                     g_player[myconnectindex].ps->steroids_amount = 399;
                     g_player[myconnectindex].ps->heat_amount = 1200;
                     g_player[myconnectindex].ps->cheat_phase = 0;
-                    P_DoQuote(37,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_STEROIDS,g_player[myconnectindex].ps);
                     KB_FlushKeyboardQueue();
                     return;
 
@@ -8083,8 +8083,8 @@ FOUNDCHEAT:
                     g_noEnemies++;
                     if (g_noEnemies == 3) g_noEnemies = 0;
                     g_player[screenpeek].ps->cheat_phase = 0;
-                    Bsprintf(ScriptQuotes[122],"MONSTERS: %s",s[(unsigned char)g_noEnemies]);
-                    P_DoQuote(122,g_player[myconnectindex].ps);
+                    Bsprintf(ScriptQuotes[QUOTE_RESERVED4],"MONSTERS: %s",s[(unsigned char)g_noEnemies]);
+                    P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
                     KB_FlushKeyboardQueue();
                     return;
                 }
@@ -8116,7 +8116,7 @@ FOUNDCHEAT:
             {
                 if (ud.player_skill == 4)
                 {
-                    P_DoQuote(22,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEATS_DISABLED,g_player[myconnectindex].ps);
                     g_player[myconnectindex].ps->cheat_phase = 0;
                 }
                 else
@@ -8233,16 +8233,14 @@ static void G_HandleLocalKeys(void)
     {
         CONTROL_ClearButton(gamefunc_Show_Opponents_Weapon);
         ud.showweapons = 1-ud.showweapons;
-        P_DoQuote(82-ud.showweapons,g_player[screenpeek].ps);
+        P_DoQuote(QUOTE_WEAPON_MODE_OFF-ud.showweapons,g_player[screenpeek].ps);
     }
 
     if (BUTTON(gamefunc_Toggle_Crosshair))
     {
         CONTROL_ClearButton(gamefunc_Toggle_Crosshair);
         ud.crosshair = !ud.crosshair;
-        if (ud.crosshair)
-            P_DoQuote(20,g_player[screenpeek].ps);
-        else P_DoQuote(21,g_player[screenpeek].ps);
+        P_DoQuote(QUOTE_CROSSHAIR_OFF-ud.crosshair,g_player[screenpeek].ps);
     }
 
     if (ud.overhead_on && BUTTON(gamefunc_Map_Follow_Mode))
@@ -8255,7 +8253,7 @@ static void G_HandleLocalKeys(void)
             ud.foly = g_player[screenpeek].ps->opos.y;
             ud.fola = fix16_to_int(g_player[screenpeek].ps->oq16ang);
         }
-        P_DoQuote(83+ud.scrollmode,g_player[myconnectindex].ps);
+        P_DoQuote(QUOTE_MAP_FOLLOW_OFF+ud.scrollmode,g_player[myconnectindex].ps);
     }
 
     if (SHIFTS_IS_PRESSED || ALT_IS_PRESSED)
@@ -8435,7 +8433,7 @@ static void G_HandleLocalKeys(void)
 FAKE_F2:
                 if (sprite[g_player[myconnectindex].ps->i].extra <= 0)
                 {
-                    P_DoQuote(118,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_SAVE_DEAD,g_player[myconnectindex].ps);
                     return;
                 }
                 ChangeToMenu(350);
@@ -8504,7 +8502,7 @@ FAKE_F3:
 
             if (sprite[g_player[myconnectindex].ps->i].extra <= 0)
             {
-                P_DoQuote(118,g_player[myconnectindex].ps);
+                P_DoQuote(QUOTE_SAVE_DEAD,g_player[myconnectindex].ps);
                 return;
             }
             g_screenCapture = 1;
@@ -8534,7 +8532,7 @@ FAKE_F3:
                 g_cameraDistance = 0;
                 g_cameraClock = (int32_t)totalclock;
             }
-            P_DoQuote(109 + g_player[myconnectindex].ps->over_shoulder_on, g_player[myconnectindex].ps);
+            P_DoQuote(QUOTE_VIEW_MODE_OFF + g_player[myconnectindex].ps->over_shoulder_on, g_player[myconnectindex].ps);
         }
 
         if (KB_UnBoundKeyPressed(sc_F5) && ud.config.MusicDevice >= 0)
@@ -8555,11 +8553,11 @@ FAKE_F3:
         {
             KB_ClearKeyDown(sc_F8);
             ud.fta_on = !ud.fta_on;
-            if (ud.fta_on) P_DoQuote(23,g_player[myconnectindex].ps);
+            if (ud.fta_on) P_DoQuote(QUOTE_MESSAGES_ON,g_player[myconnectindex].ps);
             else
             {
                 ud.fta_on = 1;
-                P_DoQuote(24,g_player[myconnectindex].ps);
+                P_DoQuote(QUOTE_MESSAGES_OFF,g_player[myconnectindex].ps);
                 ud.fta_on = 0;
             }
         }
@@ -11675,13 +11673,13 @@ static int G_DoMoveThings(void)
 
             if (multiwho != myconnectindex)
             {
-                Bsprintf(ScriptQuotes[122],"%s^00 SAVED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
-                P_DoQuote(122,g_player[myconnectindex].ps);
+                Bsprintf(ScriptQuotes[QUOTE_RESERVED4],"%s^00 SAVED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
+                P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
             }
             else
             {
-                Bstrcpy(ScriptQuotes[122],"MULTIPLAYER GAME SAVED");
-                P_DoQuote(122,g_player[myconnectindex].ps);
+                Bstrcpy(ScriptQuotes[QUOTE_RESERVED4],"MULTIPLAYER GAME SAVED");
+                P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
             }
             break;
         }
@@ -11697,13 +11695,13 @@ static int G_DoMoveThings(void)
             {
                 if (multiwho != myconnectindex)
                 {
-                    Bsprintf(ScriptQuotes[122],"%s^00 LOADED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
-                    P_DoQuote(122,g_player[myconnectindex].ps);
+                    Bsprintf(ScriptQuotes[QUOTE_RESERVED4],"%s^00 LOADED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
+                    P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
                 }
                 else
                 {
-                    Bstrcpy(ScriptQuotes[122],"MULTIPLAYER GAME LOADED");
-                    P_DoQuote(122,g_player[myconnectindex].ps);
+                    Bstrcpy(ScriptQuotes[QUOTE_RESERVED4],"MULTIPLAYER GAME LOADED");
+                    P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
                 }
                 return 1;
             }

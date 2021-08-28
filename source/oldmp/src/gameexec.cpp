@@ -181,7 +181,7 @@ static int A_CheckSquished(int i, int p)
     if (pSprite->pal == 1 ? (floorZ - ceilZ >= ZOFFSET5 || (pSector->lotag & 32768u)) : (floorZ - ceilZ >= ZOFFSET4))
         return 0;
 
-    P_DoQuote(10, g_player[p].ps);
+    P_DoQuote(QUOTE_SQUISHED, g_player[p].ps);
 
     if (A_CheckEnemySprite(pSprite))
         pSprite->xvel = 0;

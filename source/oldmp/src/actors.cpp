@@ -6233,7 +6233,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if (pData[3] == 5)
                 {
                     pSprite->zvel += 1024;
-                    P_DoQuote(7,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_WASTED,g_player[myconnectindex].ps);
                 }
             }
 
@@ -6843,7 +6843,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
             {
                 if (G_FindExplosionInSector(pSprite->sectnum) >= 0)
                 {
-                    P_DoQuote(8,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_UNLOCKED,g_player[myconnectindex].ps);
 
                     l = headspritestat[STAT_EFFECTOR];
                     while (l >= 0)
