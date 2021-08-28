@@ -813,6 +813,7 @@ oldmp_game_objs := \
     actors.cpp \
     anim.cpp \
     config.cpp \
+    common.cpp \
     discord.cpp \
     game.cpp \
     gamedef.cpp \
