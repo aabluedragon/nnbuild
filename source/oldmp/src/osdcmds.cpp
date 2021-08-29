@@ -836,7 +836,7 @@ osdcvardata_t cvar[] =
     { "osdhightile", "osdhightile: enable/disable hires art replacements for console text", (void*)&osdhightile, CVAR_BOOL, 0, 1 },
     { "osdscale", "console text size", (void*)&osdscale, CVAR_FLOAT | CVAR_FUNCPTR, 1, 4 },
 
-    { "r_showfps", "r_showfps: show the frame rate counter", (void*)&ud.tickrate, CVAR_INT, 0, 2 },
+    { "r_showfps", "r_showfps: show the frame rate counter", (void*)&ud.showfps, CVAR_INT, 0, 2 },
     { "r_shadows", "r_shadows: enable/disable sprite and model shadows", (void*)&ud.shadows, CVAR_BOOL, 0, 1 },
     { "r_precache", "r_precache: enable/disable the pre-level caching routine", (void*)&ud.config.useprecache, CVAR_BOOL, 0, 1 },
 

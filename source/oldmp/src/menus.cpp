@@ -2655,9 +2655,9 @@ cheat_for_port_credits:
                         mgametextpal(d,yy, ud.screen_tilting ? "On" : "Off", MENUHIGHLIGHT(io), 0);
                         break;  // original had a 'full' option
                     case 10:
-                        if (x==io) ud.tickrate = 1-ud.tickrate;
-                        modval(0,1,(int *)&ud.tickrate,1,probey==io);
-                        mgametextpal(d,yy, ud.tickrate ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
+                        if (x==io) ud.showfps = 1-ud.showfps;
+                        modval(0,1,(int *)&ud.showfps,1,probey==io);
+                        mgametextpal(d,yy, ud.showfps ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
                         break;
                     case 11:
                         if (x==io)

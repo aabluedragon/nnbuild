@@ -2373,43 +2373,46 @@ static void G_DrawStatusBar(int snum)
 
 static void G_PrintFPS(void)
 {
-    // adapted from ZDoom because I like it better than what we had
-    // applicable ZDoom code available under GPL from csDoom
-    static int FrameCount = 0;
-    static int LastCount = 0;
-    static int LastSec = 0;
-    static int LastMS = 0;
-    int ms = timerGetTicks();
-    int howlong = ms - LastMS;
-    if (howlong >= 0)
+    static int32_t frameCount;
+
+    static double cumulativeFrameDelay;
+    static double lastFrameTime;
+    static float lastFPS;
+
+    double frameTime = timerGetFractionalTicks();
+    double frameDelay = frameTime - lastFrameTime;
+    cumulativeFrameDelay += frameDelay;
+
+    if (frameDelay >= 0)
     {
-        int thisSec = ms/1000;
         int x = (xdim <= 640);
-        if (ud.tickrate)
+        if (ud.showfps)
         {
-            int chars = Bsprintf(tempbuf, "%2u ms (%3u fps)", howlong, LastCount);
+            int32_t chars = Bsprintf(tempbuf, "%.1f ms, %5.1f fps", frameDelay, lastFPS);
 
             printext256(windowxy2.x-(chars<<(3-x))+1,windowxy1.y+2,0,-1,tempbuf,x);
             printext256(windowxy2.x-(chars<<(3-x)),windowxy1.y+1,
-                        (LastCount < LOW_FPS) ? COLOR_RED : COLOR_WHITE,-1,tempbuf,x);
+                        (lastFPS < LOW_FPS) ? COLOR_RED : COLOR_WHITE,-1,tempbuf,x);
 
             // lag meter
             if (numplayers > 1 && (totalclock - lastpackettime) > 1)
             {
-                for (howlong = ((int32_t)totalclock - lastpackettime);howlong>0 && howlong<(xdim>>2);howlong--)
-                    printext256(4L*howlong,0,COLOR_WHITE,-1,".",0);
+                for (frameDelay = ((int32_t)totalclock - lastpackettime); frameDelay > 0 && frameDelay<(xdim>>2); frameDelay--)
+                    printext256(4L*frameDelay,0,COLOR_WHITE,-1,".",0);
             }
         }
 
-        if (LastSec < thisSec)
+        if (cumulativeFrameDelay >= 1000.0)
         {
-            g_currentFrameRate = LastCount = FrameCount / (thisSec - LastSec);
-            LastSec = thisSec;
-            FrameCount = 0;
+            lastFPS = 1000.f * frameCount / cumulativeFrameDelay;
+            g_currentFrameRate = Blrintf(lastFPS);
+            frameCount = 0;
+            cumulativeFrameDelay = 0.0;
         }
-        FrameCount++;
+        frameCount++;
     }
-    LastMS = ms;
+
+    lastFrameTime = frameTime;
 }
 
 static void G_PrintCoords(int snum)

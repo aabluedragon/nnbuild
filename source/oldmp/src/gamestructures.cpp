@@ -480,10 +480,10 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_TICKRATE:
         if (iSet)
         {
-            ud.tickrate = lValue;
+            ud.showfps = lValue;
             return;
         }
-        Gv_SetVar(lVar2, ud.tickrate, g_i, g_p);
+        Gv_SetVar(lVar2, ud.showfps, g_i, g_p);
         return;
 
     case USERDEFS_M_COOP:

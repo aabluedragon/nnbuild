@@ -52,11 +52,10 @@ extern "C" {
 // RNG
 G_EXTERN short g_globalRandom;
 G_EXTERN randomseed_t g_random;
+G_EXTERN ClockTicks ototalclock, lockclock;
 
 G_EXTERN short neartagsector, neartagwall, neartagsprite;
 G_EXTERN short SpriteDeletionQueue[1024], g_spriteDeleteQueuePos;
-
-G_EXTERN int ototalclock, lockclock;
 G_EXTERN int neartaghitdist;
 G_EXTERN int g_startArmorAmount;
 G_EXTERN int g_musicSize;
@@ -122,7 +121,7 @@ G_EXTERN char g_soundlocks[MAXSOUNDS];
 
 // Clouds
 G_EXTERN short g_numClouds, clouds[128], cloudx[128], cloudy[128];
-G_EXTERN int cloudtotalclock;
+G_EXTERN ClockTicks cloudtotalclock;
 
 // Structs
 G_EXTERN map_t MapInfo[(MAXVOLUMES + 1) * MAXLEVELS]; // +1 volume for "intro", "briefing" music
