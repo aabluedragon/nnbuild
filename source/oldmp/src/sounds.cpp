@@ -38,7 +38,6 @@ int32_t g_numEnvSoundsPlaying,g_highestSoundIdx = 0;
 
 static int32_t MusicIsWaveform = 0;
 static char *MusicPtr = 0;
-static int32_t MusicLen = 0;
 static int32_t MusicVoice = -1;
 static int32_t MusicPaused = 0;
 

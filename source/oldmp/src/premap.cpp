@@ -1609,7 +1609,6 @@ void G_SetupFilenameBasedMusic(char* nameBuf, const char* fileName)
 int G_EnterLevel(int g)
 {
     int i;
-    char levname[BMAX_PATH];
 
 //    mmulti_flushpackets();
 //    waitforeverybody();
