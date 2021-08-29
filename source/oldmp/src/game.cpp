@@ -3420,7 +3420,7 @@ void G_DisplayRest(int smoothratio)
         if (ud.overhead_on > 0)
         {
             // smoothratio = min(max(smoothratio,0),65536);
-            smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
+            smoothratio = calc_smoothratio(totalclock, ototalclock);
             G_DoInterpolations(smoothratio);
             if (ud.scrollmode == 0)
             {
@@ -8059,7 +8059,7 @@ FOUNDCHEAT:
                     return;
 
                 case CHEAT_RATE:
-                    ud.tickrate = !ud.tickrate;
+                    ud.showfps = !ud.showfps;
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -10544,7 +10544,7 @@ static void G_DrawFrame()
    
     //P_GetInput(myconnectindex, true); // [JM] We're not ready for uncapped input yet.
 
-    int smoothRatio = calc_smoothratio((int32_t)totalclock, ototalclock);
+    int smoothRatio = calc_smoothratio(totalclock, ototalclock);
 
     // Necessary anymore?
     if (ud.statusbarmode == 1 && (ud.statusbarscale == 100 || !videoGetRenderMode()))
@@ -11478,7 +11478,7 @@ RECHECK:
         {
             G_HandleLocalKeys();
 
-            int smoothRatio = calc_smoothratio((int32_t)totalclock, lockclock);
+            int smoothRatio = calc_smoothratio(totalclock, lockclock);
             G_DrawRooms(screenpeek,smoothRatio);
             G_DisplayRest(smoothRatio);
 

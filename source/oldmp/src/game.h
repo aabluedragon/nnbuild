@@ -24,4 +24,12 @@ static inline int32_t G_GetLogoFlags(void)
     return Gv_GetVarByLabel("LOGO_FLAGS", 255, -1, -1);
 }
 
+static inline int32_t calc_smoothratio(ClockTicks const totalclk, ClockTicks const ototalclk)
+{
+    if (ud.pause_on || ud.show_help || g_player[myconnectindex].ps->gm & MODE_MENU)
+        return 65536;
+
+    return calc_smoothratio(totalclk, ototalclk, REALGAMETICSPERSEC);
+}
+
 #endif

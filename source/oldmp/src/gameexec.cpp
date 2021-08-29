@@ -798,7 +798,7 @@ static void G_ShowView(vec3_t vec, fix16_t a, fix16_t horiz, int sect, int ix1, 
 
     videoSetViewableArea(x1, y1, x2, y2);
     renderSetAspect(viewingRange, yxAspect);
-    int const smoothratio = calc_smoothratio((int32_t)totalclock, ototalclock);
+    int const smoothratio = calc_smoothratio(totalclock, ototalclock);
     G_DoInterpolations(smoothratio);
     if (!display_mirror)
         G_HandleMirror(vec.x, vec.y, vec.z, a, horiz, smoothratio);
@@ -4675,7 +4675,7 @@ void G_SaveMapState(mapstate_t *save)
 
         Bmemcpy(&save->g_numPlayerSprites,&g_numPlayerSprites,sizeof(g_numPlayerSprites));
         Bmemcpy(&save->g_earthquakeTime,&g_earthquakeTime,sizeof(g_earthquakeTime));
-        Bmemcpy(&save->lockclock,&lockclock,sizeof(lockclock));
+        save->lockclock = lockclock;
         Bmemcpy(&save->randomseed,&randomseed,sizeof(randomseed));
         Bmemcpy(&save->g_globalRandom,&g_globalRandom,sizeof(g_globalRandom));
 
@@ -4769,7 +4769,9 @@ void G_RestoreMapState(mapstate_t *save)
 
         Bmemcpy(&g_numPlayerSprites,&save->g_numPlayerSprites,sizeof(g_numPlayerSprites));
         Bmemcpy(&g_earthquakeTime,&save->g_earthquakeTime,sizeof(g_earthquakeTime));
-        Bmemcpy(&lockclock,&save->lockclock,sizeof(lockclock));
+
+        lockclock = save->lockclock;
+
         Bmemcpy(&randomseed,&save->randomseed,sizeof(randomseed));
         Bmemcpy(&g_globalRandom,&save->g_globalRandom,sizeof(g_globalRandom));
 

@@ -598,11 +598,6 @@ extern char pColorNames[MAXPALOOKUPS][32];
 
 static inline uint8_t playerColor_getValidPal(int palnum) { return TEST_ALLOWEDCOLOR(palnum) ? palnum : 0; }
 
-static inline int32_t calc_smoothratio(int32_t totalclk, int32_t ototalclk)
-{
-    return clamp((totalclk - ototalclk) * (65536 / TICSPERFRAME), 0, 65536);
-}
-
 extern int fricxv,fricyv;
 
 typedef struct {
@@ -1173,7 +1168,7 @@ typedef struct {
 
     char g_numPlayerSprites;
     char g_earthquakeTime;
-    int lockclock;
+    ClockTicks lockclock;
     int randomseed, g_globalRandom;
     char scriptptrs[MAXSPRITES];
     intptr_t *vars[MAXGAMEVARS];

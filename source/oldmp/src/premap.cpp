@@ -1479,7 +1479,7 @@ static inline void clearteams(void)
 
 void G_ResetTimers(void)
 {
-    totalclock = cloudtotalclock = ototalclock = lockclock = 0L;
+    totalclock = cloudtotalclock = ototalclock = lockclock = 0;
     ready2send = 1;
     g_levelTextTime = 85;
     g_moveThingsCount = 0;
