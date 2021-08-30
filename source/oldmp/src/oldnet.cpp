@@ -897,7 +897,7 @@ void Net_ParsePackets(void)
 
                     Bsprintf(tempbuf,"%s^00 HAS CALLED A VOTE TO CHANGE MAP TO %s (E%dL%d)",
                              g_player[(unsigned char)packbuf[1]].user_name,
-                             MapInfo[(unsigned char)(packbuf[2]*MAXLEVELS + packbuf[3])].name,
+                             g_mapInfo[(unsigned char)(packbuf[2]*MAXLEVELS + packbuf[3])].name,
                              packbuf[2]+1,packbuf[3]+1);
                     G_AddUserQuote(tempbuf);
 

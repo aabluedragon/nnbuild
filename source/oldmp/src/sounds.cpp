@@ -318,7 +318,7 @@ bool S_TryPlayLevelMusic(unsigned int m)
         return false;
 #endif
 
-    char const* musicfn = MapInfo[m].musicfn;
+    char const* musicfn = g_mapInfo[m].musicfn;
 
     if (musicfn != NULL)
     {
@@ -343,7 +343,7 @@ void S_PlayLevelMusicOrNothing(unsigned int m)
 
 int S_TryPlaySpecialMusic(unsigned int m)
 {
-    char const* musicfn = MapInfo[m].musicfn;
+    char const* musicfn = g_mapInfo[m].musicfn;
     if (musicfn != NULL)
     {
         if (!S_PlayMusic(musicfn))

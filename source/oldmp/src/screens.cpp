@@ -163,7 +163,7 @@ void G_ShowScores(bool bonus)
     rotatesprite(160 << 16, yoff << 16, 65536L, 0, INGAMEDUKETHREEDEE, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
     if (PLUTOPAK)   // JBF 20030804
         rotatesprite((260) << 16, (yoff + 2) << 16, 65536L, 0, PLUTOPAKSPRITE + 2, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-    gametext(160, yoff + 26, MapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
+    gametext(160, yoff + 26, g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
 
     yoff += 36;
     int start_x = 64;
@@ -366,7 +366,7 @@ void G_BonusScreen(int bonusonly)
         if (!lastmapname) lastmapname = Bstrrchr(boardfilename, '/');
         if (!lastmapname) lastmapname = boardfilename;
     }
-    else lastmapname = MapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name;
+    else lastmapname = g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name;
 
     bonuscnt = 0;
 
@@ -714,11 +714,11 @@ FRAGBONUS:
     bonuscnt = 0;
     totalclock = 0;
 
-    playerbest = CONFIG_GetMapBestTime(MapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].filename);
+    playerbest = CONFIG_GetMapBestTime(g_mapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].filename);
 
     if (g_player[myconnectindex].ps->player_par < playerbest || playerbest < 0)
     {
-        CONFIG_SetMapBestTime(MapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].filename, g_player[myconnectindex].ps->player_par);
+        CONFIG_SetMapBestTime(g_mapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].filename, g_player[myconnectindex].ps->player_par);
         //        if(playerbest != -1)
         //            playerbest = g_player[myconnectindex].ps->player_par;
     }
@@ -730,11 +730,11 @@ FRAGBONUS:
         clockpad = max(clockpad, ij);
         if (!(ud.volume_number == 0 && ud.last_level - 1 == 7))
         {
-            for (ii = MapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].partime / (26 * 60), ij = 1; ii > 9; ii /= 10, ij++);
+            for (ii = g_mapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].partime / (26 * 60), ij = 1; ii > 9; ii /= 10, ij++);
             clockpad = max(clockpad, ij);
             if (!NAM)
             {
-                for (ii = MapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].designertime / (26 * 60), ij = 1; ii > 9; ii /= 10, ij++);
+                for (ii = g_mapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].designertime / (26 * 60), ij = 1; ii > 9; ii /= 10, ij++);
                 clockpad = max(clockpad, ij);
             }
         }
@@ -857,16 +857,16 @@ FRAGBONUS:
                     if (!(ud.volume_number == 0 && ud.last_level - 1 == 7))
                     {
                         Bsprintf(tempbuf, "%0*d:%02d", clockpad,
-                            (MapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].partime / (26 * 60)),
-                            (MapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].partime / 26) % 60);
+                            (g_mapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].partime / (26 * 60)),
+                            (g_mapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].partime / 26) % 60);
                         gametext((320 >> 2) + 71, yy + 9, tempbuf, 0, 2 + 8 + 16);
                         yy += 10;
 
                         if (!NAM)
                         {
                             Bsprintf(tempbuf, "%0*d:%02d", clockpad,
-                                (MapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].designertime / (26 * 60)),
-                                (MapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].designertime / 26) % 60);
+                                (g_mapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].designertime / (26 * 60)),
+                                (g_mapInfo[ud.volume_number * MAXLEVELS + ud.last_level - 1].designertime / 26) % 60);
                             gametext((320 >> 2) + 71, yy + 9, tempbuf, 0, 2 + 8 + 16);
                             yy += 10;
                         }

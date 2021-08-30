@@ -124,7 +124,7 @@ G_EXTERN short g_numClouds, clouds[128], cloudx[128], cloudy[128];
 G_EXTERN ClockTicks cloudtotalclock;
 
 // Structs
-G_EXTERN map_t MapInfo[(MAXVOLUMES + 1) * MAXLEVELS]; // +1 volume for "intro", "briefing" music
+G_EXTERN map_t g_mapInfo[(MAXVOLUMES + 1) * MAXLEVELS]; // +1 volume for "intro", "briefing" music
 G_EXTERN ActorData_t actor[MAXSPRITES];
 G_EXTERN playerdata_t g_player[MAXPLAYERS];
 G_EXTERN PlayerSpawn_t g_playerSpawnPoints[MAXSPAWNPOINTS];

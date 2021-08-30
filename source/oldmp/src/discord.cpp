@@ -197,7 +197,7 @@ void UpdateDiscord()
             }
         }
 
-        if (MapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name != NULL)
+        if (g_mapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name != NULL)
         {
             if (currentboardfilename[0] != 0 && ud.volume_number == 0 && ud.level_number == 7)
             {
@@ -205,7 +205,7 @@ void UpdateDiscord()
             }
             else
             {
-                Bsprintf(buffer[1], "%s", MapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name);
+                Bsprintf(buffer[1], "%s", g_mapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name);
             }
         }
     }

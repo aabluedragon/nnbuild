@@ -1836,10 +1836,10 @@ static int X_DoExecute(void)
                 switch (j)
                 {
                 case STR_MAPNAME:
-                    Bstrcpy(ScriptQuotes[i],MapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name);
+                    Bstrcpy(ScriptQuotes[i],g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name);
                     break;
                 case STR_MAPFILENAME:
-                    Bstrcpy(ScriptQuotes[i],MapInfo[ud.volume_number*MAXLEVELS + ud.level_number].filename);
+                    Bstrcpy(ScriptQuotes[i],g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].filename);
                     break;
                 case STR_PLAYERNAME:
                     Bstrcpy(ScriptQuotes[i],g_player[g_p].user_name);
@@ -3094,15 +3094,15 @@ static int X_DoExecute(void)
         return 0;
 
     case CON_SAVEMAPSTATE:
-        if (MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate == NULL)
-            MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = (mapstate_t*)Xcalloc(1,sizeof(mapstate_t));
-        G_SaveMapState(MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
+        if (g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate == NULL)
+            g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = (mapstate_t*)Xcalloc(1,sizeof(mapstate_t));
+        G_SaveMapState(g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
         insptr++;
         return 0;
 
     case CON_LOADMAPSTATE:
-        if (MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate)
-            G_RestoreMapState(MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
+        if (g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate)
+            G_RestoreMapState(g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
         insptr++;
         return 0;
 
@@ -3114,7 +3114,7 @@ static int X_DoExecute(void)
             OSD_Printf(CON_ERROR "Invalid map number: %d\n",g_errorLineNum,keyw[g_tw],j);
             return 0;
         }
-        if (MapInfo[j].savedstate)
+        if (g_mapInfo[j].savedstate)
             G_FreeMapState(j);
         return 0;
 

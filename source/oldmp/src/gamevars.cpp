@@ -144,27 +144,27 @@ int Gv_ReadSave(int fil)
     {
         if (savedstate[i])
         {
-            if (MapInfo[i].savedstate == NULL)
-                MapInfo[i].savedstate = (mapstate_t*)Xcalloc(1,sizeof(mapstate_t));
-            if (kdfread(MapInfo[i].savedstate,sizeof(mapstate_t),1,fil) != sizeof(mapstate_t)) goto corrupt;
+            if (g_mapInfo[i].savedstate == NULL)
+                g_mapInfo[i].savedstate = (mapstate_t*)Xcalloc(1,sizeof(mapstate_t));
+            if (kdfread(g_mapInfo[i].savedstate,sizeof(mapstate_t),1,fil) != sizeof(mapstate_t)) goto corrupt;
             for (j=0;j<g_gameVarCount;j++)
             {
                 if (aGameVars[j].dwFlags & GAMEVAR_NORESET) continue;
                 if (aGameVars[j].dwFlags & GAMEVAR_PERPLAYER)
                 {
-                    if (!MapInfo[i].savedstate->vars[j])
-                        MapInfo[i].savedstate->vars[j] = (intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
-                    if (kdfread(&MapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXPLAYERS, 1, fil) != 1) goto corrupt;
+                    if (!g_mapInfo[i].savedstate->vars[j])
+                        g_mapInfo[i].savedstate->vars[j] = (intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
+                    if (kdfread(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXPLAYERS, 1, fil) != 1) goto corrupt;
                 }
                 else if (aGameVars[j].dwFlags & GAMEVAR_PERACTOR)
                 {
-                    if (!MapInfo[i].savedstate->vars[j])
-                        MapInfo[i].savedstate->vars[j] = (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
-                    if (kdfread(&MapInfo[i].savedstate->vars[j][0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
+                    if (!g_mapInfo[i].savedstate->vars[j])
+                        g_mapInfo[i].savedstate->vars[j] = (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
+                    if (kdfread(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
                 }
             }
         }
-        else if (MapInfo[i].savedstate)
+        else if (g_mapInfo[i].savedstate)
         {
             G_FreeMapState(i);
         }
@@ -247,25 +247,25 @@ void Gv_WriteSave(FILE *fil)
         }
 
     for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
-        if (MapInfo[i].savedstate != NULL)
+        if (g_mapInfo[i].savedstate != NULL)
             savedstate[i] = 1;
 
     dfwrite(&savedstate[0],sizeof(savedstate),1,fil);
 
     for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
-        if (MapInfo[i].savedstate)
+        if (g_mapInfo[i].savedstate)
         {
-            dfwrite(MapInfo[i].savedstate,sizeof(mapstate_t),1,fil);
+            dfwrite(g_mapInfo[i].savedstate,sizeof(mapstate_t),1,fil);
             for (j=0;j<g_gameVarCount;j++)
             {
                 if (aGameVars[j].dwFlags & GAMEVAR_NORESET) continue;
                 if (aGameVars[j].dwFlags & GAMEVAR_PERPLAYER)
                 {
-                    dfwrite(&MapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXPLAYERS, 1, fil);
+                    dfwrite(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXPLAYERS, 1, fil);
                 }
                 else if (aGameVars[j].dwFlags & GAMEVAR_PERACTOR)
                 {
-                    dfwrite(&MapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXSPRITES, 1, fil);
+                    dfwrite(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXSPRITES, 1, fil);
                 }
             }
         }

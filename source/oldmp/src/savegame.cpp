@@ -274,8 +274,8 @@ int32_t G_LoadPlayer(int32_t spot)
 
         if (boardfilename[0])
             Bstrcpy(currentboardfilename, boardfilename);
-        else if (MapInfo[mapIdx].filename)
-            Bstrcpy(currentboardfilename, MapInfo[mapIdx].filename);
+        else if (g_mapInfo[mapIdx].filename)
+            Bstrcpy(currentboardfilename, g_mapInfo[mapIdx].filename);
 
         if (currentboardfilename[0])
         {
@@ -501,7 +501,7 @@ int32_t G_LoadPlayer(int32_t spot)
             G_SetupFilenameBasedMusic(levname, boardfilename);
         }
 
-        if (MapInfo[musicIdx].musicfn != NULL && (musicIdx != g_musicIndex || different_user_map))
+        if (g_mapInfo[musicIdx].musicfn != NULL && (musicIdx != g_musicIndex || different_user_map))
         {
             ud.music_episode = g_musicIndex / MAXLEVELS;
             ud.music_level = g_musicIndex % MAXLEVELS;

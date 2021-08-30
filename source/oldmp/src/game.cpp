@@ -3466,7 +3466,7 @@ void G_DisplayRest(int smoothratio)
                 if (ud.screen_size > 0) a = 147;
                 else a = 179;
                 minitext(5,a+6,EpisodeNames[ud.volume_number],0,2+8+16);
-                minitext(5,a+6+6,MapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name,0,2+8+16);
+                minitext(5,a+6+6,g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name,0,2+8+16);
             }
         }
     }
@@ -3489,11 +3489,11 @@ void G_DisplayRest(int smoothratio)
         else if (g_levelTextTime > 2)
             bits |= 1;
         else bits |= 1+32;
-        if (MapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name != NULL)
+        if (g_mapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name != NULL)
         {
             if (currentboardfilename[0] != 0 && ud.volume_number == 0 && ud.level_number == 7)
                 menutext_(160,75,-g_levelTextTime+22/*(sintable[(totalclock<<5)&2047]>>11)*/,0,currentboardfilename,bits);
-            else menutext_(160,75,-g_levelTextTime+22/*(sintable[(totalclock<<5)&2047]>>11)*/,0,MapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name,bits);
+            else menutext_(160,75,-g_levelTextTime+22/*(sintable[(totalclock<<5)&2047]>>11)*/,0,g_mapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name,bits);
         }
     }
 
@@ -7938,7 +7938,7 @@ FOUNDCHEAT:
                             levnume--;
 
                             if ((VOLUMEONE && volnume > 0) || volnume > g_numVolumes-1 ||
-                                    levnume >= MAXLEVELS || MapInfo[volnume*MAXLEVELS+levnume].filename == NULL)
+                                    levnume >= MAXLEVELS || g_mapInfo[volnume*MAXLEVELS+levnume].filename == NULL)
                             {
                                 g_player[myconnectindex].ps->cheat_phase = 0;
                                 KB_FlushKeyboardQueue();
@@ -8142,7 +8142,7 @@ FOUNDCHEAT:
 
 static void G_PrintCurrentMusic(void)
 {
-    Bsnprintf(ScriptQuotes[QUOTE_MUSIC], MAXQUOTELEN, "Playing %s", MapInfo[g_musicIndex].musicfn);
+    Bsnprintf(ScriptQuotes[QUOTE_MUSIC], MAXQUOTELEN, "Playing %s", g_mapInfo[g_musicIndex].musicfn);
     P_DoQuote(QUOTE_MUSIC, g_player[myconnectindex].ps);
 }
 
@@ -8505,11 +8505,11 @@ FAKE_F3:
         if (KB_UnBoundKeyPressed(sc_F5) && ud.config.MusicDevice >= 0)
         {
             KB_ClearKeyDown(sc_F5);
-            if (MapInfo[g_musicIndex].alt_musicfn != NULL)
-                Bstrcpy(ScriptQuotes[QUOTE_MUSIC],&MapInfo[g_musicIndex].alt_musicfn[0]);
-            else if (MapInfo[g_musicIndex].musicfn != NULL)
+            if (g_mapInfo[g_musicIndex].alt_musicfn != NULL)
+                Bstrcpy(ScriptQuotes[QUOTE_MUSIC],&g_mapInfo[g_musicIndex].alt_musicfn[0]);
+            else if (g_mapInfo[g_musicIndex].musicfn != NULL)
             {
-                Bstrcpy(ScriptQuotes[QUOTE_MUSIC],&MapInfo[g_musicIndex].musicfn[0]);
+                Bstrcpy(ScriptQuotes[QUOTE_MUSIC],&g_mapInfo[g_musicIndex].musicfn[0]);
                 Bstrcat(ScriptQuotes[QUOTE_MUSIC],".  USE SHIFT-F5 TO CHANGE.");
             }
             else ScriptQuotes[QUOTE_MUSIC][0] = '\0';
@@ -8972,12 +8972,12 @@ static int AL_DefineMusic(char *ID,char *name)
         if (toupper(b1)!='E'||toupper(b2)!='L'||lev>=MAXLEVELS||ep>=MAXVOLUMES)
             return 1;
         sel=(ep*MAXLEVELS)+lev;
-        ID=MapInfo[sel].musicfn;
+        ID=g_mapInfo[sel].musicfn;
     }
 
-    MapInfo[sel].alt_musicfn=makename(MapInfo[sel].alt_musicfn,name,ID);
+    g_mapInfo[sel].alt_musicfn=makename(g_mapInfo[sel].alt_musicfn,name,ID);
 //    initprintf("%-15s | ",ID);
-//    initprintf("%3d %2d %2d | %s\n",sel,ep,lev,MapInfo[sel].alt_musicfn);
+//    initprintf("%3d %2d %2d | %s\n",sel,ep,lev,g_mapInfo[sel].alt_musicfn);
 //    S_PlayMusic(ID,sel);
     return 0;
 }
@@ -10071,11 +10071,11 @@ static void G_FreeCONMem(void)
 
     for (i=(MAXLEVELS*(MAXVOLUMES+1))-1;i>=0;i--) // +1 volume for "intro", "briefing" music
     {
-        if (MapInfo[i].name != NULL) Xfree(MapInfo[i].name);
-        if (MapInfo[i].filename != NULL) Xfree(MapInfo[i].filename);
-        if (MapInfo[i].musicfn != NULL) Xfree(MapInfo[i].musicfn);
-        if (MapInfo[i].alt_musicfn != NULL) Xfree(MapInfo[i].alt_musicfn);
-        if (MapInfo[i].savedstate != NULL) G_FreeMapState(i);
+        if (g_mapInfo[i].name != NULL) Xfree(g_mapInfo[i].name);
+        if (g_mapInfo[i].filename != NULL) Xfree(g_mapInfo[i].filename);
+        if (g_mapInfo[i].musicfn != NULL) Xfree(g_mapInfo[i].musicfn);
+        if (g_mapInfo[i].alt_musicfn != NULL) Xfree(g_mapInfo[i].alt_musicfn);
+        if (g_mapInfo[i].savedstate != NULL) G_FreeMapState(i);
     }
 
     for (i=MAXQUOTES-1;i>=0;i--)
@@ -10613,7 +10613,7 @@ static void G_DrawFrame()
     {
         Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE FOR MAP", g_player[voting].user_name);
         gametext(160, 40, tempbuf, 0, 2 + 8 + 16);
-        Bsprintf(tempbuf, "%s (E%dL%d)", MapInfo[vote_episode * MAXLEVELS + vote_map].name, vote_episode + 1, vote_map + 1);
+        Bsprintf(tempbuf, "%s (E%dL%d)", g_mapInfo[vote_episode * MAXLEVELS + vote_map].name, vote_episode + 1, vote_map + 1);
         gametext(160, 48, tempbuf, 0, 2 + 8 + 16);
         gametext(160, 70, "PRESS F1 TO ACCEPT, F2 TO DECLINE", 0, 2 + 8 + 16);
     }

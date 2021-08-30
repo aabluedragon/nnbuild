@@ -2357,12 +2357,12 @@ static int C_ParseCommand(void)
                 }
                 tempbuf[j+1] = '\0';
 
-                if (MapInfo[(k*MAXLEVELS)+i].musicfn == NULL)
-                    MapInfo[(k*MAXLEVELS)+i].musicfn = (char*)Xcalloc(Bstrlen(tempbuf)+1,sizeof(char));
-                else if ((Bstrlen(tempbuf)+1) > sizeof(MapInfo[(k*MAXLEVELS)+i].musicfn))
-                    MapInfo[(k*MAXLEVELS)+i].musicfn = (char*)Xrealloc(MapInfo[(k*MAXLEVELS)+i].musicfn,(Bstrlen(tempbuf)+1));
+                if (g_mapInfo[(k*MAXLEVELS)+i].musicfn == NULL)
+                    g_mapInfo[(k*MAXLEVELS)+i].musicfn = (char*)Xcalloc(Bstrlen(tempbuf)+1,sizeof(char));
+                else if ((Bstrlen(tempbuf)+1) > sizeof(g_mapInfo[(k*MAXLEVELS)+i].musicfn))
+                    g_mapInfo[(k*MAXLEVELS)+i].musicfn = (char*)Xrealloc(g_mapInfo[(k*MAXLEVELS)+i].musicfn,(Bstrlen(tempbuf)+1));
 
-                Bstrcpy(MapInfo[(k*MAXLEVELS)+i].musicfn,tempbuf);
+                Bstrcpy(g_mapInfo[(k*MAXLEVELS)+i].musicfn,tempbuf);
 
                 textptr += j;
                 if (i > MAXLEVELS-1) break;
@@ -5210,25 +5210,25 @@ repeatcase:
 
         Bcorrectfilename(tempbuf,0);
 
-        if (MapInfo[j*MAXLEVELS+k].filename == NULL)
-            MapInfo[j*MAXLEVELS+k].filename = (char*)Xcalloc(Bstrlen(tempbuf)+1,sizeof(char));
-        else if ((Bstrlen(tempbuf)+1) > sizeof(MapInfo[j*MAXLEVELS+k].filename))
-            MapInfo[j*MAXLEVELS+k].filename = (char*)Xrealloc(MapInfo[j*MAXLEVELS+k].filename,(Bstrlen(tempbuf)+1));
+        if (g_mapInfo[j*MAXLEVELS+k].filename == NULL)
+            g_mapInfo[j*MAXLEVELS+k].filename = (char*)Xcalloc(Bstrlen(tempbuf)+1,sizeof(char));
+        else if ((Bstrlen(tempbuf)+1) > sizeof(g_mapInfo[j*MAXLEVELS+k].filename))
+            g_mapInfo[j*MAXLEVELS+k].filename = (char*)Xrealloc(g_mapInfo[j*MAXLEVELS+k].filename,(Bstrlen(tempbuf)+1));
 
         /*         initprintf("level file name string len: %d\n",Bstrlen(tempbuf)); */
 
-        Bstrcpy(MapInfo[j*MAXLEVELS+k].filename,tempbuf);
+        Bstrcpy(g_mapInfo[j*MAXLEVELS+k].filename,tempbuf);
 
         C_SkipComments();
 
-        MapInfo[j*MAXLEVELS+k].partime =
+        g_mapInfo[j*MAXLEVELS+k].partime =
             (((*(textptr+0)-'0')*10+(*(textptr+1)-'0'))*26*60)+
             (((*(textptr+3)-'0')*10+(*(textptr+4)-'0'))*26);
 
         textptr += 5;
         while (*textptr == ' '  || *textptr == '\t') textptr++;
 
-        MapInfo[j*MAXLEVELS+k].designertime =
+        g_mapInfo[j*MAXLEVELS+k].designertime =
             (((*(textptr+0)-'0')*10+(*(textptr+1)-'0'))*26*60)+
             (((*(textptr+3)-'0')*10+(*(textptr+4)-'0'))*26);
 
@@ -5252,14 +5252,14 @@ repeatcase:
 
         tempbuf[i] = '\0';
 
-        if (MapInfo[j*MAXLEVELS+k].name == NULL)
-            MapInfo[j*MAXLEVELS+k].name = (char*)Xcalloc(Bstrlen(tempbuf)+1,sizeof(char));
-        else if ((Bstrlen(tempbuf)+1) > sizeof(MapInfo[j*MAXLEVELS+k].name))
-            MapInfo[j*MAXLEVELS+k].name = (char*)Xrealloc(MapInfo[j*MAXLEVELS+k].name,(Bstrlen(tempbuf)+1));
+        if (g_mapInfo[j*MAXLEVELS+k].name == NULL)
+            g_mapInfo[j*MAXLEVELS+k].name = (char*)Xcalloc(Bstrlen(tempbuf)+1,sizeof(char));
+        else if ((Bstrlen(tempbuf)+1) > sizeof(g_mapInfo[j*MAXLEVELS+k].name))
+            g_mapInfo[j*MAXLEVELS+k].name = (char*)Xrealloc(g_mapInfo[j*MAXLEVELS+k].name,(Bstrlen(tempbuf)+1));
 
         /*         initprintf("level name string len: %d\n",Bstrlen(tempbuf)); */
 
-        Bstrcpy(MapInfo[j*MAXLEVELS+k].name,tempbuf);
+        Bstrcpy(g_mapInfo[j*MAXLEVELS+k].name,tempbuf);
 
         return 0;
 

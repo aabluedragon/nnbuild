@@ -4999,7 +4999,7 @@ VOLUME_ALL_40x:
                 if (ud.m_volume_number == 0 && ud.m_level_number > 6+(boardfilename[0]!=0))
                     ud.m_level_number = 0;
 
-            while (MapInfo[(ud.m_volume_number*MAXLEVELS)+ud.m_level_number].name == NULL)
+            while (g_mapInfo[(ud.m_volume_number*MAXLEVELS)+ud.m_level_number].name == NULL)
             {
                 if (ud.m_level_number < i || i == 0)
                     ud.m_level_number--;
@@ -5121,7 +5121,7 @@ VOLUME_ALL_40x:
                 mgametext(c+70,57+16-7-9,EpisodeNames[ud.m_volume_number],MENUHIGHLIGHT(1),2+8+16);
             }
 
-            mgametext(c+70,57+16+16-7-9,&MapInfo[MAXLEVELS*ud.m_volume_number+ud.m_level_number].name[0],MENUHIGHLIGHT(2),2+8+16);
+            mgametext(c+70,57+16+16-7-9,&g_mapInfo[MAXLEVELS*ud.m_volume_number+ud.m_level_number].name[0],MENUHIGHLIGHT(2),2+8+16);
 
             mgametext(c+70,57+16+16+16-7-9, ud.m_player_skill > 0 ? SkillNames[ud.m_player_skill-1] : "NONE",MENUHIGHLIGHT(3),2+8+16);
 

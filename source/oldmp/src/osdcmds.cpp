@@ -93,7 +93,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
         }
     }
 
-    if (level > MAXLEVELS || MapInfo[volume*MAXLEVELS+level].filename == NULL)
+    if (level > MAXLEVELS || g_mapInfo[volume*MAXLEVELS+level].filename == NULL)
     {
         OSD_Printf("changelevel: invalid level number\n");
         return OSDCMD_SHOWHELP;
@@ -1472,17 +1472,17 @@ extern void G_RestoreMapState(mapstate_t *save);
 static int osdcmd_savestate(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
-    if (MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate == NULL)
-        MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = Xcalloc(1,sizeof(mapstate_t));
-    G_SaveMapState(MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
+    if (g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate == NULL)
+        g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate = Xcalloc(1,sizeof(mapstate_t));
+    G_SaveMapState(g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
     return OSDCMD_OK;
 }
 
 static int osdcmd_restorestate(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
-    if (MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate)
-        G_RestoreMapState(MapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
+    if (g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate)
+        G_RestoreMapState(g_mapInfo[ud.volume_number*MAXLEVELS+ud.level_number].savedstate);
     return OSDCMD_OK;
 }
 */

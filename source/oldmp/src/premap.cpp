@@ -339,8 +339,8 @@ static void G_DoLoadScreen(const char* statustext, int percent)
     {
         menutext(160, 90, 0, 0, "LOADING");
 
-        if (MapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name != NULL)
-            menutext(160, 90 + 16 + 8, 0, 0, MapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name);
+        if (g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name != NULL)
+            menutext(160, 90 + 16 + 8, 0, 0, g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name);
     }
 
 #ifndef EDUKE32_TOUCH_DEVICES
@@ -1214,10 +1214,10 @@ void G_NewGame(int vn,int ln,int sk)
     Gv_ResetSystemDefaults();
 
     for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
-        if (MapInfo[i].savedstate)
+        if (g_mapInfo[i].savedstate)
         {
-            Xfree(MapInfo[i].savedstate);
-            MapInfo[i].savedstate = NULL;
+            Xfree(g_mapInfo[i].savedstate);
+            g_mapInfo[i].savedstate = NULL;
         }
 
     // Set up some player-specific info
@@ -1512,8 +1512,8 @@ int32_t G_FindLevelByFile(const char *fn)
     {
         for (level=0; level<MAXLEVELS; level++)
         {
-            if (MapInfo[(volume*MAXLEVELS)+level].filename != NULL)
-                if (!Bstrcasecmp(fn, MapInfo[(volume*MAXLEVELS)+level].filename))
+            if (g_mapInfo[(volume*MAXLEVELS)+level].filename != NULL)
+                if (!Bstrcasecmp(fn, g_mapInfo[(volume*MAXLEVELS)+level].filename))
                     return ((volume * MAXLEVELS) + level);
         }
     }
@@ -1586,22 +1586,22 @@ void G_SetupFilenameBasedMusic(char* nameBuf, const char* fileName)
         if ((kFile = kopen4loadfrommod(nameBuf, 0)) != buildvfs_kfd_invalid)
         {
             kclose(kFile);
-            realloc_copy(&MapInfo[USERMAPMUSICFAKESLOT].musicfn, nameBuf);
+            realloc_copy(&g_mapInfo[USERMAPMUSICFAKESLOT].musicfn, nameBuf);
             return;
         }
     }
 
-    char const* usermapMusic = MapInfo[MUS_USERMAP].musicfn;
+    char const* usermapMusic = g_mapInfo[MUS_USERMAP].musicfn;
     if (usermapMusic != nullptr)
     {
-        realloc_copy(&MapInfo[USERMAPMUSICFAKESLOT].musicfn, usermapMusic);
+        realloc_copy(&g_mapInfo[USERMAPMUSICFAKESLOT].musicfn, usermapMusic);
         return;
     }
 
-    char const* e1l8 = MapInfo[7].musicfn;
+    char const* e1l8 = g_mapInfo[7].musicfn;
     if (e1l8 != nullptr)
     {
-        realloc_copy(&MapInfo[USERMAPMUSICFAKESLOT].musicfn, e1l8);
+        realloc_copy(&g_mapInfo[USERMAPMUSICFAKESLOT].musicfn, e1l8);
         return;
     }
 }
@@ -1672,9 +1672,9 @@ int G_EnterLevel(int g)
 
     int const mapidx = (ud.volume_number*MAXLEVELS)+ud.level_number;
 
-    Bassert((unsigned)mapidx < ARRAY_SIZE(MapInfo));
+    Bassert((unsigned)mapidx < ARRAY_SIZE(g_mapInfo));
 
-    auto& m = MapInfo[mapidx];
+    auto& m = g_mapInfo[mapidx];
 
     if (VOLUMEONE || !Menu_HaveUserMap())
     {
@@ -1742,8 +1742,8 @@ int G_EnterLevel(int g)
         {
             S_PlayLevelMusicOrNothing(USERMAPMUSICFAKESLOT);
         }
-        else if (MapInfo[g_musicIndex].musicfn == NULL || m.musicfn == NULL ||
-            strcmp(MapInfo[g_musicIndex].musicfn, m.musicfn) || g_musicSize == 0 || ud.last_level == -1)
+        else if (g_mapInfo[g_musicIndex].musicfn == NULL || m.musicfn == NULL ||
+            strcmp(g_mapInfo[g_musicIndex].musicfn, m.musicfn) || g_musicSize == 0 || ud.last_level == -1)
         {
             S_PlayLevelMusicOrNothing(mapidx);
         }
@@ -1842,16 +1842,16 @@ void G_FreeMapState(int mapnum)
         if (aGameVars[j].dwFlags & GAMEVAR_NORESET) continue;
         if (aGameVars[j].dwFlags & GAMEVAR_PERPLAYER)
         {
-            if (MapInfo[mapnum].savedstate->vars[j])
-                Xfree(MapInfo[mapnum].savedstate->vars[j]);
+            if (g_mapInfo[mapnum].savedstate->vars[j])
+                Xfree(g_mapInfo[mapnum].savedstate->vars[j]);
         }
         else if (aGameVars[j].dwFlags & GAMEVAR_PERACTOR)
         {
-            if (MapInfo[mapnum].savedstate->vars[j])
-                Xfree(MapInfo[mapnum].savedstate->vars[j]);
+            if (g_mapInfo[mapnum].savedstate->vars[j])
+                Xfree(g_mapInfo[mapnum].savedstate->vars[j]);
         }
     }
-    Xfree(MapInfo[mapnum].savedstate);
-    MapInfo[mapnum].savedstate = NULL;
+    Xfree(g_mapInfo[mapnum].savedstate);
+    g_mapInfo[mapnum].savedstate = NULL;
 }
 
