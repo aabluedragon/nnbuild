@@ -5280,11 +5280,11 @@ repeatcase:
             g_numCompilerErrors++;
         }
 
-        if (ScriptQuotes[k] == NULL)
-            ScriptQuotes[k] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
-        if (!ScriptQuotes[k])
+        if (apStrings[k] == NULL)
+            apStrings[k] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
+        if (!apStrings[k])
         {
-            ScriptQuotes[k] = NULL;
+            apStrings[k] = NULL;
             Bsprintf(tempbuf,"Failed allocating %" PRIdPTR " byte quote text buffer.",sizeof(char) * MAXQUOTELEN);
             G_GameExit(tempbuf);
         }
@@ -5299,11 +5299,11 @@ repeatcase:
 
         if (tw == CON_REDEFINEQUOTE)
         {
-            if (ScriptQuoteRedefinitions[g_numQuoteRedefinitions] == NULL)
-                ScriptQuoteRedefinitions[g_numQuoteRedefinitions] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
-            if (!ScriptQuoteRedefinitions[g_numQuoteRedefinitions])
+            if (apXStrings[g_numQuoteRedefinitions] == NULL)
+                apXStrings[g_numQuoteRedefinitions] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
+            if (!apXStrings[g_numQuoteRedefinitions])
             {
-                ScriptQuoteRedefinitions[g_numQuoteRedefinitions] = NULL;
+                apXStrings[g_numQuoteRedefinitions] = NULL;
                 Bsprintf(tempbuf,"Failed allocating %" PRIdPTR " byte quote text buffer.",sizeof(char) * MAXQUOTELEN);
                 G_GameExit(tempbuf);
             }
@@ -5319,9 +5319,9 @@ repeatcase:
                 break;
             }
             if (tw == CON_DEFINEQUOTE)
-                *(ScriptQuotes[k]+i) = *textptr;
+                *(apStrings[k]+i) = *textptr;
             else
-                *(ScriptQuoteRedefinitions[g_numQuoteRedefinitions]+i) = *textptr;
+                *(apXStrings[g_numQuoteRedefinitions]+i) = *textptr;
             textptr++,i++;
             if (i >= MAXQUOTELEN-1)
             {
@@ -5332,10 +5332,10 @@ repeatcase:
             }
         }
         if (tw == CON_DEFINEQUOTE)
-            *(ScriptQuotes[k]+i) = '\0';
+            *(apStrings[k]+i) = '\0';
         else
         {
-            *(ScriptQuoteRedefinitions[g_numQuoteRedefinitions]+i) = '\0';
+            *(apXStrings[g_numQuoteRedefinitions]+i) = '\0';
             bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
             *g_scriptPtr++=g_numQuoteRedefinitions;
             g_numQuoteRedefinitions++;
@@ -6055,7 +6055,7 @@ void C_Compile(const char *filenam)
         initprintf("%d/%d labels, %d/%d variables\n",g_numLabels,(int32_t)min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
 
         for (i=MAXQUOTES-1;i>=0;i--)
-            if (ScriptQuotes[i])
+            if (apStrings[i])
                 j++;
 
         initprintf("%d/%d quotes, %d quote redefinitions\n",j,MAXQUOTES,g_numQuoteRedefinitions);
@@ -6071,20 +6071,20 @@ void C_Compile(const char *filenam)
         initprintf("%d/%d event definitions, %d defined actors\n",j,MAXEVENTS,k);
 
         for (i=127;i>=0;i--)
-            if (ScriptQuotes[i] == NULL)
-                ScriptQuotes[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
+            if (apStrings[i] == NULL)
+                apStrings[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
 
-//        if (!Bstrcmp(ScriptQuotes[13],"PRESS SPACE TO RESTART LEVEL"))
-//            Bstrcpy(ScriptQuotes[13],"PRESS USE TO RESTART LEVEL");
+//        if (!Bstrcmp(apStrings[13],"PRESS SPACE TO RESTART LEVEL"))
+//            Bstrcpy(apStrings[13],"PRESS USE TO RESTART LEVEL");
 
         for (i=MAXQUOTELEN-7;i>=0;i--)
-            if (Bstrncmp(&ScriptQuotes[13][i],"SPACE",5) == 0)
+            if (Bstrncmp(&apStrings[13][i],"SPACE",5) == 0)
             {
                 Bmemset(tempbuf,0,sizeof(tempbuf));
-                Bstrncpy(tempbuf,ScriptQuotes[13],i);
+                Bstrncpy(tempbuf,apStrings[13],i);
                 Bstrcat(tempbuf,"OPEN");
-                Bstrcat(tempbuf,&ScriptQuotes[13][i+5]);
-                Bstrncpy(ScriptQuotes[13],tempbuf,MAXQUOTELEN-1);
+                Bstrcat(tempbuf,&apStrings[13][i+5]);
+                Bstrncpy(apStrings[13],tempbuf,MAXQUOTELEN-1);
                 i = MAXQUOTELEN-7;
             }
 
@@ -6153,20 +6153,20 @@ void C_Compile(const char *filenam)
             g_numObituaries = (sizeof(PlayerObituaries)/sizeof(PlayerObituaries[0]));
             for (i=g_numObituaries-1;i>=0;i--)
             {
-                if (ScriptQuotes[i+FIRST_OBITUARY_QUOTE] == NULL)
+                if (apStrings[i+FIRST_OBITUARY_QUOTE] == NULL)
                 {
-                    ScriptQuotes[i+FIRST_OBITUARY_QUOTE] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
-                    Bstrcpy(ScriptQuotes[i+FIRST_OBITUARY_QUOTE],PlayerObituaries[i]);
+                    apStrings[i+FIRST_OBITUARY_QUOTE] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
+                    Bstrcpy(apStrings[i+FIRST_OBITUARY_QUOTE],PlayerObituaries[i]);
                 }
             }
 
             g_numSelfObituaries = (sizeof(PlayerSelfObituaries)/sizeof(PlayerSelfObituaries[0]));
             for (i=g_numSelfObituaries-1;i>=0;i--)
             {
-                if (ScriptQuotes[i+FIRST_SUICIDE_QUOTE] == NULL)
+                if (apStrings[i+FIRST_SUICIDE_QUOTE] == NULL)
                 {
-                    ScriptQuotes[i+FIRST_SUICIDE_QUOTE] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
-                    Bstrcpy(ScriptQuotes[i+FIRST_SUICIDE_QUOTE],PlayerSelfObituaries[i]);
+                    apStrings[i+FIRST_SUICIDE_QUOTE] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
+                    Bstrcpy(apStrings[i+FIRST_SUICIDE_QUOTE],PlayerSelfObituaries[i]);
                 }
             }
         }

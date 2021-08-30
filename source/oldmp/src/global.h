@@ -102,18 +102,18 @@ G_EXTERN short g_mirrorWall[64], g_mirrorSector[64], g_mirrorCount;
 G_EXTERN char buf[1024], tempbuf[2048], packbuf[576], menutextbuf[128];
 G_EXTERN char typebuflen, typebuf[141];
 
-G_EXTERN char *ScriptQuotes[MAXQUOTES], *ScriptQuoteRedefinitions[MAXQUOTES];
-
 G_EXTERN short cyclers[MAXCYCLERS][6], g_numCyclers;
 
+G_EXTERN char EnvMusicFilename[MAXVOLUMES + 1][BMAX_PATH];
+G_EXTERN int32_t SpriteFlags[MAXTILES];
+
+// CON VM
+G_EXTERN char *apStrings[MAXQUOTES], *apXStrings[MAXQUOTES];
 G_EXTERN intptr_t *g_scriptPtr, *insptr, *labelcode, *labeltype;
 G_EXTERN intptr_t *actorscrptr[MAXTILES], *g_parsingActorPtr;
 G_EXTERN intptr_t *script;
 G_EXTERN int g_numLabels, g_numDefaultLabels;
 G_EXTERN char *label;
-
-G_EXTERN char EnvMusicFilename[MAXVOLUMES + 1][BMAX_PATH];
-G_EXTERN int32_t SpriteFlags[MAXTILES];
 
 // Sound
 G_EXTERN sound_t g_sounds[MAXSOUNDS];

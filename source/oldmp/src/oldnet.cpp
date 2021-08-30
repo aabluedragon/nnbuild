@@ -1719,7 +1719,7 @@ void Net_CheckPlayerQuit(int i)
 
     Bsprintf(buf, "%s^00 is history!", g_player[i].user_name);
     G_AddUserQuote(buf);
-    Bstrcpy(ScriptQuotes[116], buf);
+    Bstrcpy(apStrings[116], buf);
 
     if (voting == i)
     {

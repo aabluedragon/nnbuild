@@ -852,12 +852,12 @@ static int X_DoExecute(void)
         insptr++;
         {
             int q = *insptr++, i = *insptr++;
-            if ((ScriptQuotes[q] == NULL || ScriptQuoteRedefinitions[i] == NULL) && g_scriptSanityChecks)
+            if ((apStrings[q] == NULL || apXStrings[i] == NULL) && g_scriptSanityChecks)
             {
                 OSD_Printf(CON_ERROR "%d %d null quote\n",g_errorLineNum,keyw[g_tw],q,i);
                 break;
             }
-            Bstrcpy(ScriptQuotes[q],ScriptQuoteRedefinitions[i]);
+            Bstrcpy(apStrings[q],apXStrings[i]);
             break;
         }
 
@@ -1602,13 +1602,13 @@ static int X_DoExecute(void)
         {
             int i=*insptr++;
             j=Gv_GetVarX(*insptr++);
-            if ((ScriptQuotes[j] == NULL) && g_scriptSanityChecks)
+            if ((apStrings[j] == NULL) && g_scriptSanityChecks)
             {
                 OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],j);
                 Gv_SetVarX(i,-1);
                 break;
             }
-            Gv_SetVarX(i,Bstrlen(ScriptQuotes[j]));
+            Gv_SetVarX(i,Bstrlen(apStrings[j]));
             break;
         }
 
@@ -1637,10 +1637,10 @@ static int X_DoExecute(void)
                 CON_ERRPRINTF("invalid base tilenum %d\n", tilenum);
             else if ((unsigned)q >= MAXQUOTES)
                 CON_ERRPRINTF("invalid quote ID %d\n", q);
-            else if ((ScriptQuotes[q] == NULL))
+            else if ((apStrings[q] == NULL))
                 CON_ERRPRINTF("null quote %d\n", q);
             else
-                dim = G_ScreenTextSize(tilenum, x, y, z, blockangle, ScriptQuotes[q], orientation, xspace, yline, xbetween, ybetween, f, x1, y1, x2, y2);
+                dim = G_ScreenTextSize(tilenum, x, y, z, blockangle, apStrings[q], orientation, xspace, yline, xbetween, ybetween, f, x1, y1, x2, y2);
 
             Gv_SetVarX(w, dim.x);
             Gv_SetVarX(h, dim.y);
@@ -1739,7 +1739,7 @@ static int X_DoExecute(void)
             j=Gv_GetVarX(*insptr++);
             if ((i<0 || i>=MAXQUOTES) && g_scriptSanityChecks)
                 OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw],i);
-            else if ((ScriptQuotes[i] == NULL) && g_scriptSanityChecks)
+            else if ((apStrings[i] == NULL) && g_scriptSanityChecks)
                 OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],i);
             else if ((f<0 || f>=NUMGAMEFUNCTIONS) && g_scriptSanityChecks)
                 OSD_Printf(CON_ERROR "invalid function %d\n",g_errorLineNum,keyw[g_tw],f);
@@ -1756,7 +1756,7 @@ static int X_DoExecute(void)
             }
 
             if (*tempbuf)
-                Bstrcpy(ScriptQuotes[i],tempbuf);
+                Bstrcpy(apStrings[i],tempbuf);
             break;
         }
     case CON_QSUBSTR:
@@ -1771,13 +1771,13 @@ static int X_DoExecute(void)
             ln = Gv_GetVarX(*insptr++);
 
             if ((q1<0 || q1>=MAXQUOTES) && g_scriptSanityChecks)       OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw],q1);
-            else if ((ScriptQuotes[q1] == NULL) && g_scriptSanityChecks) OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q1);
+            else if ((apStrings[q1] == NULL) && g_scriptSanityChecks) OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q1);
             else if ((q2<0 || q2>=MAXQUOTES) && g_scriptSanityChecks)  OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw],q2);
-            else if ((ScriptQuotes[q2] == NULL) && g_scriptSanityChecks) OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q2);
+            else if ((apStrings[q2] == NULL) && g_scriptSanityChecks) OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q2);
             else
             {
-                s1=ScriptQuotes[q1];
-                s2=ScriptQuotes[q2];
+                s1=apStrings[q1];
+                s2=apStrings[q2];
                 while (*s2&&st--)s2++;
                 while ((*s1=*s2)&&ln--) {s1++;s2++;}
                 *s1=0;
@@ -1808,27 +1808,27 @@ static int X_DoExecute(void)
             switch (tw)
             {
             case CON_GETPNAME:
-                if ((ScriptQuotes[i] == NULL) && g_scriptSanityChecks)
+                if ((apStrings[i] == NULL) && g_scriptSanityChecks)
                 {
                     OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],i);
                     break;
                 }
                 if (g_player[j].user_name[0])
-                    Bstrcpy(ScriptQuotes[i],g_player[j].user_name);
-                else Bsprintf(ScriptQuotes[i],"%d",j);
+                    Bstrcpy(apStrings[i],g_player[j].user_name);
+                else Bsprintf(apStrings[i],"%d",j);
                 break;
             case CON_GETTEAMNAME:
-                if ((ScriptQuotes[i] == NULL) && g_scriptSanityChecks)
+                if ((apStrings[i] == NULL) && g_scriptSanityChecks)
                 {
                     OSD_Printf(CON_ERROR "null quote %d\n", g_errorLineNum, keyw[g_tw], i);
                     break;
                 }
                 if (teams[j].name[0])
-                    Bstrcpy(ScriptQuotes[i], teams[j].name);
-                else Bsprintf(ScriptQuotes[i], "Team %d", j);
+                    Bstrcpy(apStrings[i], teams[j].name);
+                else Bsprintf(apStrings[i], "Team %d", j);
                 break;
             case CON_QGETSYSSTR:
-                if ((ScriptQuotes[i] == NULL) && g_scriptSanityChecks)
+                if ((apStrings[i] == NULL) && g_scriptSanityChecks)
                 {
                     OSD_Printf(CON_ERROR "null quote %d %d\n",g_errorLineNum,keyw[g_tw],i,j);
                     break;
@@ -1836,40 +1836,40 @@ static int X_DoExecute(void)
                 switch (j)
                 {
                 case STR_MAPNAME:
-                    Bstrcpy(ScriptQuotes[i],g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name);
+                    Bstrcpy(apStrings[i],g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name);
                     break;
                 case STR_MAPFILENAME:
-                    Bstrcpy(ScriptQuotes[i],g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].filename);
+                    Bstrcpy(apStrings[i],g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].filename);
                     break;
                 case STR_PLAYERNAME:
-                    Bstrcpy(ScriptQuotes[i],g_player[g_p].user_name);
+                    Bstrcpy(apStrings[i],g_player[g_p].user_name);
                     break;
                 case STR_VERSION:
                     Bsprintf(tempbuf,HEAD2 " %s",s_buildRev);
-                    Bstrcpy(ScriptQuotes[i],tempbuf);
+                    Bstrcpy(apStrings[i],tempbuf);
                     break;
                 case STR_GAMETYPE:
-                    Bstrcpy(ScriptQuotes[i],GametypeNames[ud.coop]);
+                    Bstrcpy(apStrings[i],GametypeNames[ud.coop]);
                     break;
                 default:
                     OSD_Printf(CON_ERROR "unknown str ID %d %d\n",g_errorLineNum,keyw[g_tw],i,j);
                 }
                 break;
             case CON_QSTRCAT:
-                if ((ScriptQuotes[i] == NULL || ScriptQuotes[j] == NULL) && g_scriptSanityChecks)
+                if ((apStrings[i] == NULL || apStrings[j] == NULL) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],ScriptQuotes[i] ? j : i);
+                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],apStrings[i] ? j : i);
                     break;
                 }
-                Bstrncat(ScriptQuotes[i],ScriptQuotes[j],(MAXQUOTELEN-1)-Bstrlen(ScriptQuotes[i]));
+                Bstrncat(apStrings[i],apStrings[j],(MAXQUOTELEN-1)-Bstrlen(apStrings[i]));
                 break;
             case CON_QSTRCPY:
-                if ((ScriptQuotes[i] == NULL || ScriptQuotes[j] == NULL) && g_scriptSanityChecks)
+                if ((apStrings[i] == NULL || apStrings[j] == NULL) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],ScriptQuotes[i] ? j : i);
+                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],apStrings[i] ? j : i);
                     break;
                 }
-                Bstrcpy(ScriptQuotes[i],ScriptQuotes[j]);
+                Bstrcpy(apStrings[i],apStrings[j]);
                 break;
             case CON_CHANGESPRITESECT:
                 if ((i<0 || i>=MAXSPRITES) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sprite %d\n",g_errorLineNum,keyw[g_tw],i);break;}
@@ -2393,7 +2393,7 @@ static int X_DoExecute(void)
                 if (tw == CON_GAMETEXT || tw == CON_GAMETEXTZ)
                 {
                     int z=65536;
-                    if ((ScriptQuotes[q] == NULL) && g_scriptSanityChecks)
+                    if ((apStrings[q] == NULL) && g_scriptSanityChecks)
                     {
                         OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q);
                         if (tw == CON_GAMETEXTZ)
@@ -2402,7 +2402,7 @@ static int X_DoExecute(void)
                     }
                     if (tw == CON_GAMETEXTZ)
                         z = Gv_GetVarX(*insptr++);
-                    G_PrintGameText(0,tilenum,x>>1,y,ScriptQuotes[q],shade,pal,orientation,x1,y1,x2,y2,z);
+                    G_PrintGameText(0,tilenum,x>>1,y,apStrings[q],shade,pal,orientation,x1,y1,x2,y2,z);
                     break;
                 }
                 if (tw == CON_DIGITALNUMBERZ)
@@ -2411,12 +2411,12 @@ static int X_DoExecute(void)
                 break;
             }
 
-            if ((ScriptQuotes[q] == NULL) && g_scriptSanityChecks)
+            if ((apStrings[q] == NULL) && g_scriptSanityChecks)
             {
                 OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q);
                 break;
             }
-            minitextshade(x,y,ScriptQuotes[q],shade,pal,26);
+            minitextshade(x,y,apStrings[q],shade,pal,26);
             break;
         }
 
@@ -2448,7 +2448,7 @@ static int X_DoExecute(void)
                 break;
             }
 
-            if ((ScriptQuotes[q] == NULL))
+            if ((apStrings[q] == NULL))
             {
                 CON_ERRPRINTF("null quote %d\n", q);
                 break;
@@ -2456,7 +2456,7 @@ static int X_DoExecute(void)
 
             orientation &= (ROTATESPRITE_MAX - 1);
 
-            G_ScreenText(tilenum, x, y, z, blockangle, charangle, ScriptQuotes[q], shade, pal, orientation, alpha, xspace, yline, xbetween, ybetween, f, x1, y1, x2, y2);
+            G_ScreenText(tilenum, x, y, z, blockangle, charangle, apStrings[q], shade, pal, orientation, alpha, xspace, yline, xbetween, ybetween, f, x1, y1, x2, y2);
             break;
         }
 
@@ -3218,9 +3218,9 @@ static int X_DoExecute(void)
         insptr++;
         {
             int dq = *insptr++, sq = *insptr++;
-            if ((ScriptQuotes[sq] == NULL || ScriptQuotes[dq] == NULL) && g_scriptSanityChecks)
+            if ((apStrings[sq] == NULL || apStrings[dq] == NULL) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],ScriptQuotes[sq] ? dq : sq);
+                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],apStrings[sq] ? dq : sq);
                 insptr += 4;
                 break;
             }
@@ -3228,8 +3228,8 @@ static int X_DoExecute(void)
             {
                 int var1 = Gv_GetVarX(*insptr++), var2 = Gv_GetVarX(*insptr++);
                 int var3 = Gv_GetVarX(*insptr++), var4 = Gv_GetVarX(*insptr++);
-                Bstrcpy(tempbuf,ScriptQuotes[sq]);
-                Bsprintf(ScriptQuotes[dq],tempbuf,var1,var2,var3,var4);
+                Bstrcpy(tempbuf,apStrings[sq]);
+                Bsprintf(apStrings[dq],tempbuf,var1,var2,var3,var4);
                 break;
             }
         }
@@ -4341,7 +4341,7 @@ static int X_DoExecute(void)
     case CON_QUOTE:
         insptr++;
 
-        if ((ScriptQuotes[*insptr] == NULL) && g_scriptSanityChecks)
+        if ((apStrings[*insptr] == NULL) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;
@@ -4363,12 +4363,12 @@ static int X_DoExecute(void)
         {
             int i=Gv_GetVarX(*insptr++);
 
-            if ((ScriptQuotes[i] == NULL) && g_scriptSanityChecks)
+            if ((apStrings[i] == NULL) && g_scriptSanityChecks)
             {
                 OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],i);
                 break;
             }
-            G_AddUserQuote(ScriptQuotes[i]);
+            G_AddUserQuote(apStrings[i]);
         }
         break;
 

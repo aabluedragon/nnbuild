@@ -2530,7 +2530,7 @@ static void G_PrintGameQuotes(void)
 
     if (g_player[screenpeek].ps->fta <= 1) return;
 
-    if (ScriptQuotes[g_player[screenpeek].ps->ftq] == NULL)
+    if (apStrings[g_player[screenpeek].ps->ftq] == NULL)
     {
         OSD_Printf(OSD_ERROR "%s %d null quote %d\n",__FILE__,__LINE__,g_player[screenpeek].ps->ftq);
         return;
@@ -2557,14 +2557,14 @@ static void G_PrintGameQuotes(void)
     j = g_player[screenpeek].ps->fta;
     if (!hud_glowingquotes)
     {
-        if (j > 4) gametext(320>>1,k,ScriptQuotes[g_player[screenpeek].ps->ftq],0,2+8+16);
-        else if (j > 2) gametext(320>>1,k,ScriptQuotes[g_player[screenpeek].ps->ftq],0,2+8+16+1);
-        else gametext(320>>1,k,ScriptQuotes[g_player[screenpeek].ps->ftq],0,2+8+16+1+32);
+        if (j > 4) gametext(320>>1,k,apStrings[g_player[screenpeek].ps->ftq],0,2+8+16);
+        else if (j > 2) gametext(320>>1,k,apStrings[g_player[screenpeek].ps->ftq],0,2+8+16+1);
+        else gametext(320>>1,k,apStrings[g_player[screenpeek].ps->ftq],0,2+8+16+1+32);
         return;
     }
-    if (j > 4) gametext(320>>1,k,ScriptQuotes[g_player[screenpeek].ps->ftq],(sintable[((int32_t)totalclock<<5)&2047]>>11),2+8+16);
-    else if (j > 2) gametext(320>>1,k,ScriptQuotes[g_player[screenpeek].ps->ftq],(sintable[((int32_t)totalclock<<5)&2047]>>11),2+8+16+1);
-    else gametext(320>>1,k,ScriptQuotes[g_player[screenpeek].ps->ftq],(sintable[((int32_t)totalclock<<5)&2047]>>11),2+8+16+1+32);
+    if (j > 4) gametext(320>>1,k,apStrings[g_player[screenpeek].ps->ftq],(sintable[((int32_t)totalclock<<5)&2047]>>11),2+8+16);
+    else if (j > 2) gametext(320>>1,k,apStrings[g_player[screenpeek].ps->ftq],(sintable[((int32_t)totalclock<<5)&2047]>>11),2+8+16+1);
+    else gametext(320>>1,k,apStrings[g_player[screenpeek].ps->ftq],(sintable[((int32_t)totalclock<<5)&2047]>>11),2+8+16+1+32);
 }
 
 void P_DoQuote(int q, DukePlayer_t *p)
@@ -2580,7 +2580,7 @@ void P_DoQuote(int q, DukePlayer_t *p)
         q &= ~MAXQUOTES;
     }
 
-    if (ScriptQuotes[q] == NULL)
+    if (apStrings[q] == NULL)
     {
         OSD_Printf(OSD_ERROR "%s %d null quote %d\n",__FILE__,__LINE__,q);
         return;
@@ -2600,8 +2600,8 @@ void P_DoQuote(int q, DukePlayer_t *p)
         if (p->ftq != q)
             if (p == g_player[screenpeek].ps)
             {
-                if (cq) OSD_Printf(OSDTEXT_BLUE "%s\n",ScriptQuotes[q]);
-                else OSD_Printf("%s\n",ScriptQuotes[q]);
+                if (cq) OSD_Printf(OSDTEXT_BLUE "%s\n",apStrings[q]);
+                else OSD_Printf("%s\n",apStrings[q]);
             }
 
         p->ftq = q;
@@ -7863,7 +7863,7 @@ FOUNDCHEAT:
                         sprite[g_player[myconnectindex].ps->i].hitag = 0;
                         sprite[g_player[myconnectindex].ps->i].lotag = 0;
                         sprite[g_player[myconnectindex].ps->i].pal = g_player[myconnectindex].ps->palookup;
-                        Bstrcpy(ScriptQuotes[QUOTE_RESERVED4],"Scream for me, Long Beach!");
+                        Bstrcpy(apStrings[QUOTE_RESERVED4],"Scream for me, Long Beach!");
                         P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
                         G_CheatGetInv();
                         for (weapon = PISTOL_WEAPON;weapon < MAX_WEAPONS;weapon++)
@@ -8086,7 +8086,7 @@ FOUNDCHEAT:
                     g_noEnemies++;
                     if (g_noEnemies == 3) g_noEnemies = 0;
                     g_player[screenpeek].ps->cheat_phase = 0;
-                    Bsprintf(ScriptQuotes[QUOTE_RESERVED4],"MONSTERS: %s",s[(unsigned char)g_noEnemies]);
+                    Bsprintf(apStrings[QUOTE_RESERVED4],"MONSTERS: %s",s[(unsigned char)g_noEnemies]);
                     P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
                     KB_FlushKeyboardQueue();
                     return;
@@ -8142,7 +8142,7 @@ FOUNDCHEAT:
 
 static void G_PrintCurrentMusic(void)
 {
-    Bsnprintf(ScriptQuotes[QUOTE_MUSIC], MAXQUOTELEN, "Playing %s", g_mapInfo[g_musicIndex].musicfn);
+    Bsnprintf(apStrings[QUOTE_MUSIC], MAXQUOTELEN, "Playing %s", g_mapInfo[g_musicIndex].musicfn);
     P_DoQuote(QUOTE_MUSIC, g_player[myconnectindex].ps);
 }
 
@@ -8506,13 +8506,13 @@ FAKE_F3:
         {
             KB_ClearKeyDown(sc_F5);
             if (g_mapInfo[g_musicIndex].alt_musicfn != NULL)
-                Bstrcpy(ScriptQuotes[QUOTE_MUSIC],&g_mapInfo[g_musicIndex].alt_musicfn[0]);
+                Bstrcpy(apStrings[QUOTE_MUSIC],&g_mapInfo[g_musicIndex].alt_musicfn[0]);
             else if (g_mapInfo[g_musicIndex].musicfn != NULL)
             {
-                Bstrcpy(ScriptQuotes[QUOTE_MUSIC],&g_mapInfo[g_musicIndex].musicfn[0]);
-                Bstrcat(ScriptQuotes[QUOTE_MUSIC],".  USE SHIFT-F5 TO CHANGE.");
+                Bstrcpy(apStrings[QUOTE_MUSIC],&g_mapInfo[g_musicIndex].musicfn[0]);
+                Bstrcat(apStrings[QUOTE_MUSIC],".  USE SHIFT-F5 TO CHANGE.");
             }
-            else ScriptQuotes[QUOTE_MUSIC][0] = '\0';
+            else apStrings[QUOTE_MUSIC][0] = '\0';
             P_DoQuote(QUOTE_MUSIC,g_player[myconnectindex].ps);
         }
 
@@ -10080,8 +10080,8 @@ static void G_FreeCONMem(void)
 
     for (i=MAXQUOTES-1;i>=0;i--)
     {
-        if (ScriptQuotes[i] != NULL) Xfree(ScriptQuotes[i]);
-        if (ScriptQuoteRedefinitions[i] != NULL) Xfree(ScriptQuoteRedefinitions[i]);
+        if (apStrings[i] != NULL) Xfree(apStrings[i]);
+        if (apXStrings[i] != NULL) Xfree(apXStrings[i]);
     }
 
     for (i=MAXPLAYERS-1;i>=0;i--)
@@ -11621,12 +11621,12 @@ static int G_DoMoveThings(void)
 
             if (multiwho != myconnectindex)
             {
-                Bsprintf(ScriptQuotes[QUOTE_RESERVED4],"%s^00 SAVED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
+                Bsprintf(apStrings[QUOTE_RESERVED4],"%s^00 SAVED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
                 P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
             }
             else
             {
-                Bstrcpy(ScriptQuotes[QUOTE_RESERVED4],"MULTIPLAYER GAME SAVED");
+                Bstrcpy(apStrings[QUOTE_RESERVED4],"MULTIPLAYER GAME SAVED");
                 P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
             }
             break;
@@ -11643,12 +11643,12 @@ static int G_DoMoveThings(void)
             {
                 if (multiwho != myconnectindex)
                 {
-                    Bsprintf(ScriptQuotes[QUOTE_RESERVED4],"%s^00 LOADED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
+                    Bsprintf(apStrings[QUOTE_RESERVED4],"%s^00 LOADED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
                     P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
                 }
                 else
                 {
-                    Bstrcpy(ScriptQuotes[QUOTE_RESERVED4],"MULTIPLAYER GAME LOADED");
+                    Bstrcpy(apStrings[QUOTE_RESERVED4],"MULTIPLAYER GAME LOADED");
                     P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
                 }
                 return 1;

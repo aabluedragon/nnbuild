@@ -448,12 +448,12 @@ int32_t G_LoadPlayer(int32_t spot)
 
     while (i != MAXQUOTES)
     {
-        if (ScriptQuotes[i] != NULL)
-            Xfree(ScriptQuotes[i]);
+        if (apStrings[i] != NULL)
+            Xfree(apStrings[i]);
 
-        ScriptQuotes[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(uint8_t));
+        apStrings[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(uint8_t));
 
-        if (kdfread((char *)ScriptQuotes[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
+        if (kdfread((char *)apStrings[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
         if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
     }
 
@@ -461,12 +461,12 @@ int32_t G_LoadPlayer(int32_t spot)
 
     for (i=0; i<g_numQuoteRedefinitions; i++)
     {
-        if (ScriptQuoteRedefinitions[i] != NULL)
-            Xfree(ScriptQuoteRedefinitions[i]);
+        if (apXStrings[i] != NULL)
+            Xfree(apXStrings[i]);
 
-        ScriptQuoteRedefinitions[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(uint8_t));
+        apXStrings[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(uint8_t));
 
-        if (kdfread((char *)ScriptQuoteRedefinitions[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
+        if (kdfread((char *)apXStrings[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
     }
 
     if (kdfread(&DynamicTileMap[0],sizeof(DynamicTileMap[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
@@ -878,10 +878,10 @@ int32_t G_SavePlayer(int32_t spot)
 
     for (i=0; i<MAXQUOTES; i++)
     {
-        if (ScriptQuotes[i] != NULL)
+        if (apStrings[i] != NULL)
         {
             dfwrite(&i,sizeof(int32_t),1,fil);
-            dfwrite(ScriptQuotes[i],MAXQUOTELEN, 1, fil);
+            dfwrite(apStrings[i],MAXQUOTELEN, 1, fil);
         }
     }
     dfwrite(&i,sizeof(int32_t),1,fil);
@@ -889,8 +889,8 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&g_numQuoteRedefinitions,sizeof(g_numQuoteRedefinitions),1,fil);
     for (i=0; i<g_numQuoteRedefinitions; i++)
     {
-        if (ScriptQuoteRedefinitions[i] != NULL)
-            dfwrite(ScriptQuoteRedefinitions[i],MAXQUOTELEN, 1, fil);
+        if (apXStrings[i] != NULL)
+            dfwrite(apXStrings[i],MAXQUOTELEN, 1, fil);
     }
 
     dfwrite(&DynamicTileMap[0],sizeof(DynamicTileMap[0]),MAXTILES,fil);
@@ -903,7 +903,7 @@ int32_t G_SavePlayer(int32_t spot)
 
     if (ud.multimode < 2)
     {
-        strcpy(ScriptQuotes[QUOTE_RESERVED4],"GAME SAVED");
+        strcpy(apStrings[QUOTE_RESERVED4],"GAME SAVED");
         P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
     }
 

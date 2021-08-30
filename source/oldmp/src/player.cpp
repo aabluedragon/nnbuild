@@ -4214,7 +4214,7 @@ static void P_HandleFragged(int snum)
         if (ud.obituaries)
         {
             //DynamicTileMap[actor[p->i].picnum]
-            Bsprintf(tempbuf, ScriptQuotes[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)],
+            Bsprintf(tempbuf, apStrings[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)],
                 &g_player[p->frag_ps].user_name[0],
                 &g_player[snum].user_name[0]);
 
@@ -4277,13 +4277,13 @@ static void P_HandleFragged(int snum)
 
             p->fraggedself++;
             if ((unsigned)p->wackedbyactor < MAXSPRITES && A_CheckEnemyTile(sprite[p->wackedbyactor].picnum))
-                Bsprintf(tempbuf, ScriptQuotes[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)], "A monster", &g_player[snum].user_name[0]);
+                Bsprintf(tempbuf, apStrings[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)], "A monster", &g_player[snum].user_name[0]);
             else if (actor[playerSprite].picnum == NUKEBUTTON)
                 Bsprintf(tempbuf, "^02%s^02 tried to leave", &g_player[snum].user_name[0]);
             else
             {
                 // random suicide death string
-                Bsprintf(tempbuf, ScriptQuotes[FIRST_SUICIDE_QUOTE + (krand() % g_numSelfObituaries)], &g_player[snum].user_name[0]);
+                Bsprintf(tempbuf, apStrings[FIRST_SUICIDE_QUOTE + (krand() % g_numSelfObituaries)], &g_player[snum].user_name[0]);
             }
         }
         else Bsprintf(tempbuf, "^02%s^02 switched to team ^%02d%s", &g_player[snum].user_name[0], teams[p->team].palnum % 100, teams[p->team].name);

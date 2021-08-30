@@ -4965,7 +4965,7 @@ VOLUME_ALL_40x:
                         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                     }
 
-                    Bsprintf(ScriptQuotes[QUOTE_RESERVED2],"VOTE FAILED");
+                    Bsprintf(apStrings[QUOTE_RESERVED2],"VOTE FAILED");
                     P_DoQuote(QUOTE_RESERVED2,g_player[myconnectindex].ps);
                     g_player[myconnectindex].ps->gm &= ~MODE_MENU;
                 }
