@@ -5119,7 +5119,7 @@ repeatcase:
             }
             Bstrcpy(temp,tempbuf);
             CONFIG_WriteSetup(0);
-            Bsprintf(setupfilename,"%s/", g_modDir);
+            Bsnprintf(setupfilename, sizeof(setupfilename), "%s/", g_modDir);
             Bstrcat(setupfilename,temp);
             CONFIG_ReadSetup();
         }
