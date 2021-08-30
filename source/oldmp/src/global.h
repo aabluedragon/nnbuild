@@ -105,16 +105,21 @@ G_EXTERN char typebuflen, typebuf[141];
 G_EXTERN short cyclers[MAXCYCLERS][6], g_numCyclers;
 
 G_EXTERN char EnvMusicFilename[MAXVOLUMES + 1][BMAX_PATH];
-G_EXTERN int32_t SpriteFlags[MAXTILES];
 
 // CON VM
 G_EXTERN char *apStrings[MAXQUOTES], *apXStrings[MAXQUOTES];
 G_EXTERN intptr_t *insptr, *labelcode, *labeltype;
-G_EXTERN intptr_t *actorscrptr[MAXTILES], *g_parsingActorPtr;
+G_EXTERN intptr_t *g_parsingActorPtr;
 G_EXTERN intptr_t *apScript;
 G_EXTERN intptr_t *g_scriptPtr;
 G_EXTERN int g_numLabels, g_numDefaultLabels;
 G_EXTERN char *label;
+
+// Tile Data
+G_EXTERN int32_t SpriteFlags[MAXTILES];
+G_EXTERN intptr_t* actorscrptr[MAXTILES];
+G_EXTERN projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
+G_EXTERN short SpriteCacheList[MAXTILES][3];
 
 // Sound
 G_EXTERN sound_t g_sounds[MAXSOUNDS];
@@ -130,7 +135,6 @@ G_EXTERN ActorData_t actor[MAXSPRITES];
 G_EXTERN playerdata_t g_player[MAXPLAYERS];
 G_EXTERN PlayerSpawn_t g_playerSpawnPoints[MAXSPAWNPOINTS];
 G_EXTERN user_defs ud;
-G_EXTERN projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
 G_EXTERN STATUSBARTYPE sbar;
 
 // Multiplayer/Demos

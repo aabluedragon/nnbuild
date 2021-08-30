@@ -989,8 +989,6 @@ enum SpriteFlags_t {
     SFLAG_QUEUEDFORDELETE  = 0x10000000,
 };
 
-extern short SpriteCacheList[MAXTILES][3];
-
 extern int g_iReturnVarID;
 extern int g_iWeaponVarID;
 extern int g_iWorksLikeVarID;

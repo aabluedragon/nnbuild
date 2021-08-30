@@ -28,7 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern int everyothertime;
 static int g_lastPlayerPal = 0;
 int g_numRealPalettes;
-short SpriteCacheList[MAXTILES][3];
 
 static char precachehightile[2][MAXTILES>>3];
 static int  g_precacheCount;
