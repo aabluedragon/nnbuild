@@ -354,29 +354,29 @@ int32_t G_LoadPlayer(int32_t spot)
     Xfree(bitptr);
     bitptr = (char*)Xcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(uint8_t));
     if (kdfread(&bitptr[0],sizeof(uint8_t),(g_scriptSize+7)>>3,fil) != ((g_scriptSize+7)>>3)) goto corrupt;
-    if (script != NULL)
-        Xfree(script);
-    script = (intptr_t*)Xcalloc(1,g_scriptSize * sizeof(intptr_t));
-    if (kdfread(&script[0],sizeof(script),g_scriptSize,fil) != g_scriptSize) goto corrupt;
+    if (apScript != NULL)
+        Xfree(apScript);
+    apScript = (intptr_t*)Xcalloc(1,g_scriptSize * sizeof(intptr_t));
+    if (kdfread(&apScript[0],sizeof(apScript),g_scriptSize,fil) != g_scriptSize) goto corrupt;
     for (i=0; i<g_scriptSize; i++)
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)))
         {
-            j = (intptr_t)script[i]+(intptr_t)&script[0];
-            script[i] = j;
+            j = (intptr_t)apScript[i]+(intptr_t)&apScript[0];
+            apScript[i] = j;
         }
 
     if (kdfread(&actorscrptr[0],sizeof(actorscrptr[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
     for (i=0; i<MAXTILES; i++)
         if (actorscrptr[i])
         {
-            j = (intptr_t)actorscrptr[i]+(intptr_t)&script[0];
+            j = (intptr_t)actorscrptr[i]+(intptr_t)&apScript[0];
             actorscrptr[i] = (intptr_t *)j;
         }
     if (kdfread(&actorLoadEventScrptr[0],sizeof(&actorLoadEventScrptr[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
     for (i=0; i<MAXTILES; i++)
         if (actorLoadEventScrptr[i])
         {
-            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&script[0];
+            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&apScript[0];
             actorLoadEventScrptr[i] = (intptr_t *)j;
         }
 
@@ -387,7 +387,7 @@ int32_t G_LoadPlayer(int32_t spot)
 
     for (i=0; i<MAXSPRITES; i++)
     {
-        j = (intptr_t)(&script[0]);
+        j = (intptr_t)(&apScript[0]);
         if (scriptptrs[i]&1) T2(i) += j;
         if (scriptptrs[i]&2) T5(i) += j;
         if (scriptptrs[i]&4) T6(i) += j;
@@ -747,48 +747,48 @@ int32_t G_SavePlayer(int32_t spot)
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)))
         {
 //            scriptptrs[i] = 1;
-            j = (intptr_t)script[i] - (intptr_t)&script[0];
-            script[i] = j;
+            j = (intptr_t)apScript[i] - (intptr_t)&apScript[0];
+            apScript[i] = j;
         }
         //      else scriptptrs[i] = 0;
     }
 
 //    dfwrite(&scriptptrs[0],sizeof(scriptptrs),g_scriptSize,fil);
     dfwrite(&bitptr[0],sizeof(bitptr[0]),(g_scriptSize+7)>>3,fil);
-    dfwrite(&script[0],sizeof(script[0]),g_scriptSize,fil);
+    dfwrite(&apScript[0],sizeof(apScript[0]),g_scriptSize,fil);
 
     for (i=0; i<g_scriptSize; i++)
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)))
         {
-            j = script[i]+(intptr_t)&script[0];
-            script[i] = j;
+            j = apScript[i]+(intptr_t)&apScript[0];
+            apScript[i] = j;
         }
 
     for (i=0; i<MAXTILES; i++)
         if (actorscrptr[i])
         {
-            j = (intptr_t)actorscrptr[i]-(intptr_t)&script[0];
+            j = (intptr_t)actorscrptr[i]-(intptr_t)&apScript[0];
             actorscrptr[i] = (intptr_t *)j;
         }
     dfwrite(&actorscrptr[0],sizeof(actorscrptr[0]),MAXTILES,fil);
     for (i=0; i<MAXTILES; i++)
         if (actorscrptr[i])
         {
-            j = (intptr_t)actorscrptr[i]+(intptr_t)&script[0];
+            j = (intptr_t)actorscrptr[i]+(intptr_t)&apScript[0];
             actorscrptr[i] = (intptr_t *)j;
         }
 
     for (i=0; i<MAXTILES; i++)
         if (actorLoadEventScrptr[i])
         {
-            j = (intptr_t)actorLoadEventScrptr[i]-(intptr_t)&script[0];
+            j = (intptr_t)actorLoadEventScrptr[i]-(intptr_t)&apScript[0];
             actorLoadEventScrptr[i] = (intptr_t *)j;
         }
     dfwrite(&actorLoadEventScrptr[0],sizeof(actorLoadEventScrptr[0]),MAXTILES,fil);
     for (i=0; i<MAXTILES; i++)
         if (actorLoadEventScrptr[i])
         {
-            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&script[0];
+            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&apScript[0];
             actorLoadEventScrptr[i] = (intptr_t *)j;
         }
 
@@ -801,19 +801,19 @@ int32_t G_SavePlayer(int32_t spot)
 
         if (actorscrptr[PN(i)] == 0) continue;
 
-        j = (intptr_t)&script[0];
+        j = (intptr_t)&apScript[0];
 
-        if (T2(i) >= j && T2(i) < (intptr_t)(&script[g_scriptSize]))
+        if (T2(i) >= j && T2(i) < (intptr_t)(&apScript[g_scriptSize]))
         {
             scriptptrs[i] |= 1;
             T2(i) -= j;
         }
-        if (T5(i) >= j && T5(i) < (intptr_t)(&script[g_scriptSize]))
+        if (T5(i) >= j && T5(i) < (intptr_t)(&apScript[g_scriptSize]))
         {
             scriptptrs[i] |= 2;
             T5(i) -= j;
         }
-        if (T6(i) >= j && T6(i) < (intptr_t)(&script[g_scriptSize]))
+        if (T6(i) >= j && T6(i) < (intptr_t)(&apScript[g_scriptSize]))
         {
             scriptptrs[i] |= 4;
             T6(i) -= j;
@@ -826,7 +826,7 @@ int32_t G_SavePlayer(int32_t spot)
     for (i=0; i<MAXSPRITES; i++)
     {
         if (actorscrptr[PN(i)] == 0) continue;
-        j = (intptr_t)&script[0];
+        j = (intptr_t)&apScript[0];
 
         if (scriptptrs[i]&1)
             T2(i) += j;

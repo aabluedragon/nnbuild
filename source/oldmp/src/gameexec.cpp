@@ -50,7 +50,7 @@ void X_ScriptInfo(void)
 {
     intptr_t *p;
 
-    if (!script)
+    if (!apScript)
         return;
 
     if (insptr)
@@ -59,7 +59,7 @@ void X_ScriptInfo(void)
 
         for (p=insptr-20; p<insptr+20; p++)
         {
-            initprintf("%5d: %3d: ",(int32_t)(p - script),(int32_t)(p - insptr));
+            initprintf("%5d: %3d: ",(int32_t)(p - apScript),(int32_t)(p - insptr));
 
             if (*p>>12&&(*p&0xFFF)<CON_END)
                 initprintf("%5d %s",(int32_t)(*p>>12),keyw[*p&0xFFF]);
@@ -1327,7 +1327,7 @@ static int X_DoExecute(void)
                 {
                     // fix for flying/jumping monsters getting stuck in water
                     if (!(g_sp->hitag & jumptoplayer ||
-                        (actorscrptr[g_sp->picnum] && moveptr >= &script[0] && moveptr <= (&script[0] + g_scriptSize) && *(moveptr + 1))))
+                        (actorscrptr[g_sp->picnum] && moveptr >= &apScript[0] && moveptr <= (&apScript[0] + g_scriptSize) && *(moveptr + 1))))
                     {
                         g_sp->z += (24 << 8);
                     }
@@ -2025,11 +2025,11 @@ static int X_DoExecute(void)
                 else if (lpCases[lCheckCase*2] == lValue)
                 {
                     //AddLog("Found Case Match");
-                    //Bsprintf(g_szBuf,"insptr=%d. lCheckCase=%d, offset=%d, &script[0]=%d",
-                    //            (int)insptr,(int)lCheckCase,lpCases[lCheckCase*2+1],(int)&script[0]);
+                    //Bsprintf(g_szBuf,"insptr=%d. lCheckCase=%d, offset=%d, &apScript[0]=%d",
+                    //            (int)insptr,(int)lCheckCase,lpCases[lCheckCase*2+1],(int)&apScript[0]);
                     //AddLog(g_szBuf);
                     // fake a 2-d Array
-                    insptr=(intptr_t*)(lpCases[lCheckCase*2+1] + &script[0]);
+                    insptr=(intptr_t*)(lpCases[lCheckCase*2+1] + &apScript[0]);
                     //Bsprintf(g_szBuf,"insptr=%d. ",     (int)insptr);
                     //AddLog(g_szBuf);
                     while (!X_DoExecute());
@@ -2044,7 +2044,7 @@ static int X_DoExecute(void)
                 if (*lpDefault)
                 {
                     //AddLog("No Matching Case: Using Default");
-                    insptr=(intptr_t*)(*lpDefault + &script[0]);
+                    insptr=(intptr_t*)(*lpDefault + &apScript[0]);
                     while (!X_DoExecute());
                 }
                 else
@@ -2052,7 +2052,7 @@ static int X_DoExecute(void)
                     //AddLog("No Matching Case: No Default to use");
                 }
             }
-            insptr=(intptr_t *)(lEnd + (intptr_t)&script[0]);
+            insptr=(intptr_t *)(lEnd + (intptr_t)&apScript[0]);
             //Bsprintf(g_szBuf,"insptr=%d. ",     (int)insptr);
             //AddLog(g_szBuf);
             //AddLog("Done Processing Switch");
@@ -4438,13 +4438,13 @@ static int X_DoExecute(void)
     case CON_GETCURRADDRESS:
         insptr++;
         j=*insptr++;
-        Gv_SetVarX(j, (intptr_t)(insptr-script));
+        Gv_SetVarX(j, (intptr_t)(insptr-apScript));
         break;
 
     case CON_JUMP:
         insptr++;
         j = Gv_GetVarX(*insptr++);
-        insptr = (intptr_t *)(j+script);
+        insptr = (intptr_t *)(j+apScript);
         break;
 
     default:
@@ -4614,19 +4614,19 @@ void G_SaveMapState(mapstate_t *save)
 
             if (actorscrptr[PN(i)] == 0) continue;
 
-            j = (intptr_t)&script[0];
+            j = (intptr_t)&apScript[0];
 
-            if (T2(i) >= j && T2(i) < (intptr_t)(&script[g_scriptSize]))
+            if (T2(i) >= j && T2(i) < (intptr_t)(&apScript[g_scriptSize]))
             {
                 save->scriptptrs[i] |= 1;
                 T2(i) -= j;
             }
-            if (T5(i) >= j && T5(i) < (intptr_t)(&script[g_scriptSize]))
+            if (T5(i) >= j && T5(i) < (intptr_t)(&apScript[g_scriptSize]))
             {
                 save->scriptptrs[i] |= 2;
                 T5(i) -= j;
             }
-            if (T6(i) >= j && T6(i) < (intptr_t)(&script[g_scriptSize]))
+            if (T6(i) >= j && T6(i) < (intptr_t)(&apScript[g_scriptSize]))
             {
                 save->scriptptrs[i] |= 4;
                 T6(i) -= j;
@@ -4638,7 +4638,7 @@ void G_SaveMapState(mapstate_t *save)
         for (i=MAXSPRITES-1;i>=0;i--)
         {
             if (actorscrptr[PN(i)] == 0) continue;
-            j = (intptr_t)&script[0];
+            j = (intptr_t)&apScript[0];
 
             if (save->scriptptrs[i]&1)
                 T2(i) += j;
@@ -4735,7 +4735,7 @@ void G_RestoreMapState(mapstate_t *save)
 
         for (i=MAXSPRITES-1;i>=0;i--)
         {
-            j = (intptr_t)(&script[0]);
+            j = (intptr_t)(&apScript[0]);
             if (save->scriptptrs[i]&1) T2(i) += j;
             if (save->scriptptrs[i]&2) T5(i) += j;
             if (save->scriptptrs[i]&4) T6(i) += j;

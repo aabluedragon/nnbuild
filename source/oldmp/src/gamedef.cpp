@@ -1035,10 +1035,10 @@ void freehash()
 
 static int C_SetScriptSize(int size)
 {
-    intptr_t oscriptPtr = (unsigned)(g_scriptPtr-script);
-    intptr_t ocaseScriptPtr = (unsigned)(g_caseScriptPtr-script);
-    intptr_t oparsingEventPtr = (unsigned)(g_parsingEventPtr-script);
-    intptr_t oparsingActorPtr = (unsigned)(g_parsingActorPtr-script);
+    intptr_t oscriptPtr = (unsigned)(g_scriptPtr-apScript);
+    intptr_t ocaseScriptPtr = (unsigned)(g_caseScriptPtr-apScript);
+    intptr_t oparsingEventPtr = (unsigned)(g_parsingEventPtr-apScript);
+    intptr_t oparsingActorPtr = (unsigned)(g_parsingActorPtr-apScript);
     char *scriptptrs;
     intptr_t *newscript;
     intptr_t i, j;
@@ -1049,7 +1049,7 @@ static int C_SetScriptSize(int size)
     {
         if (labelcode[i] && labeltype[i] != LABEL_DEFINE)
         {
-            labelcode[i] -= (intptr_t)&script[0];
+            labelcode[i] -= (intptr_t)&apScript[0];
         }
     }
 
@@ -1057,17 +1057,17 @@ static int C_SetScriptSize(int size)
     for (i=g_scriptSize-1;i>=0;i--)
     {
 //            initprintf("%d\n",i);
-        if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)) && !((intptr_t)script[i] >= (intptr_t)(&script[0]) && (intptr_t)script[i] < (intptr_t)(&script[g_scriptSize])))
+        if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)) && !((intptr_t)apScript[i] >= (intptr_t)(&apScript[0]) && (intptr_t)apScript[i] < (intptr_t)(&apScript[g_scriptSize])))
         {
             g_numCompilerErrors++;
             initprintf("Internal compiler error at %d (0x%x)\n",(int32_t)i,(uint32_t)i);
         }
-//        if (bitptr[i] == 0 && ((intptr_t)script[i] >= (intptr_t)(&script[0]) && (intptr_t)script[i] < (intptr_t)(&script[g_scriptSize])))
+//        if (bitptr[i] == 0 && ((intptr_t)apScript[i] >= (intptr_t)(&apScript[0]) && (intptr_t)apScript[i] < (intptr_t)(&apScript[g_scriptSize])))
 //            initprintf("oh no!\n");
-        if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)) /*&& ((intptr_t)script[i] >= (intptr_t)(&script[0]) && (intptr_t)script[i] < (intptr_t)(&script[g_scriptSize]))*/)
+        if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)) /*&& ((intptr_t)apScript[i] >= (intptr_t)(&apScript[0]) && (intptr_t)apScript[i] < (intptr_t)(&apScript[g_scriptSize]))*/)
         {
             scriptptrs[i] = 1;
-            script[i] -= (intptr_t)&script[0];
+            apScript[i] -= (intptr_t)&apScript[0];
         }
         else scriptptrs[i] = 0;
     }
@@ -1076,12 +1076,12 @@ static int C_SetScriptSize(int size)
     {
         if (actorscrptr[i])
         {
-            j = (intptr_t)actorscrptr[i]-(intptr_t)&script[0];
+            j = (intptr_t)actorscrptr[i]-(intptr_t)&apScript[0];
             actorscrptr[i] = (intptr_t *)j;
         }
         if (actorLoadEventScrptr[i])
         {
-            j = (intptr_t)actorLoadEventScrptr[i]-(intptr_t)&script[0];
+            j = (intptr_t)actorLoadEventScrptr[i]-(intptr_t)&apScript[0];
             actorLoadEventScrptr[i] = (intptr_t *)j;
         }
     }
@@ -1089,15 +1089,15 @@ static int C_SetScriptSize(int size)
     for (i=MAXGAMEEVENTS-1;i>=0;i--)
         if (apScriptGameEvent[i])
         {
-            j = (intptr_t)apScriptGameEvent[i]-(intptr_t)&script[0];
+            j = (intptr_t)apScriptGameEvent[i]-(intptr_t)&apScript[0];
             apScriptGameEvent[i] = (intptr_t *)j;
         }
 
-    //initprintf("offset: %d\n",(unsigned)(g_scriptPtr-script));
+    //initprintf("offset: %d\n",(unsigned)(g_scriptPtr-apScript));
     g_scriptSize = size;
     initprintf("Resizing code buffer to %d*%d bytes\n",g_scriptSize, (int32_t)sizeof(intptr_t));
 
-    newscript = (intptr_t *)Xrealloc(script, g_scriptSize * sizeof(intptr_t));
+    newscript = (intptr_t *)Xrealloc(apScript, g_scriptSize * sizeof(intptr_t));
 
 //    bitptr = (char *)Xrealloc(bitptr, g_scriptSize * sizeof(char));
     newbitptr = (char*)Xcalloc(1,(((size+7)>>3)+1) * sizeof(char));
@@ -1105,7 +1105,7 @@ static int C_SetScriptSize(int size)
     if (newscript == NULL || newbitptr == NULL)
     {
         C_ReportError(-1);
-        initprintf("%s:%d: out of memory: Aborted (%ud)\n",g_szScriptFileName,g_lineNumber,(unsigned)(g_scriptPtr-script));
+        initprintf("%s:%d: out of memory: Aborted (%ud)\n",g_szScriptFileName,g_lineNumber,(unsigned)(g_scriptPtr-apScript));
         initprintf("%s", tempbuf);
         g_numCompilerErrors++;
         return 1;
@@ -1122,23 +1122,23 @@ static int C_SetScriptSize(int size)
 
     Xfree(bitptr);
     bitptr = newbitptr;
-    script = newscript;
-    g_scriptPtr = (intptr_t *)(script+oscriptPtr);
-//    initprintf("script: %d, bitptr: %d\n",script,bitptr);
+    apScript = newscript;
+    g_scriptPtr = (intptr_t *)(apScript+oscriptPtr);
+//    initprintf("apScript: %d, bitptr: %d\n",apScript,bitptr);
 
-    //initprintf("offset: %d\n",(unsigned)(g_scriptPtr-script));
+    //initprintf("offset: %d\n",(unsigned)(g_scriptPtr-apScript));
     if (g_caseScriptPtr != NULL)
-        g_caseScriptPtr = (intptr_t *)(script+ocaseScriptPtr);
+        g_caseScriptPtr = (intptr_t *)(apScript+ocaseScriptPtr);
     if (g_parsingEventPtr != NULL)
-        g_parsingEventPtr = (intptr_t *)(script+oparsingEventPtr);
+        g_parsingEventPtr = (intptr_t *)(apScript+oparsingEventPtr);
     if (g_parsingActorPtr != NULL)
-        g_parsingActorPtr = (intptr_t *)(script+oparsingActorPtr);
+        g_parsingActorPtr = (intptr_t *)(apScript+oparsingActorPtr);
 
     for (i=MAXSECTORS-1;i>=0;i--)
     {
         if (labelcode[i] && labeltype[i] != LABEL_DEFINE)
         {
-            labelcode[i] += (intptr_t)&script[0];
+            labelcode[i] += (intptr_t)&apScript[0];
         }
     }
 
@@ -1147,8 +1147,8 @@ static int C_SetScriptSize(int size)
         for (i=g_scriptSize-(size-osize)-1;i>=0;i--)
             if (scriptptrs[i])
             {
-                j = (intptr_t)script[i]+(intptr_t)&script[0];
-                script[i] = j;
+                j = (intptr_t)apScript[i]+(intptr_t)&apScript[0];
+                apScript[i] = j;
             }
     }
     else
@@ -1156,8 +1156,8 @@ static int C_SetScriptSize(int size)
         for (i=g_scriptSize-1;i>=0;i--)
             if (scriptptrs[i])
             {
-                j = (intptr_t)script[i]+(intptr_t)&script[0];
-                script[i] = j;
+                j = (intptr_t)apScript[i]+(intptr_t)&apScript[0];
+                apScript[i] = j;
             }
     }
 
@@ -1165,12 +1165,12 @@ static int C_SetScriptSize(int size)
     {
         if (actorscrptr[i])
         {
-            j = (intptr_t)actorscrptr[i]+(intptr_t)&script[0];
+            j = (intptr_t)actorscrptr[i]+(intptr_t)&apScript[0];
             actorscrptr[i] = (intptr_t *)j;
         }
         if (actorLoadEventScrptr[i])
         {
-            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&script[0];
+            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&apScript[0];
             actorLoadEventScrptr[i] = (intptr_t *)j;
         }
     }
@@ -1178,7 +1178,7 @@ static int C_SetScriptSize(int size)
     for (i=MAXGAMEEVENTS-1;i>=0;i--)
         if (apScriptGameEvent[i])
         {
-            j = (intptr_t)apScriptGameEvent[i]+(intptr_t)&script[0];
+            j = (intptr_t)apScriptGameEvent[i]+(intptr_t)&apScript[0];
             apScriptGameEvent[i] = (intptr_t *)j;
         }
     Xfree(scriptptrs);
@@ -1256,7 +1256,7 @@ static int32_t C_SkipComments(void)
             }
             fallthrough__;
         case 0: // EOF
-            return ((g_scriptPtr - script) > (g_scriptSize - 32)) ? C_SetScriptSize(g_scriptSize << 1) : 0;
+            return ((g_scriptPtr - apScript) > (g_scriptSize - 32)) ? C_SetScriptSize(g_scriptSize << 1) : 0;
         }
     } while (1);
 }
@@ -1564,7 +1564,7 @@ static int C_GetNextKeyword(void) //Returns its code #
     if (i>=0)
     {
         *g_scriptPtr = i + (g_lineNumber<<12);
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         textptr += l;
         g_scriptPtr++;
         if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
@@ -1598,13 +1598,13 @@ static void C_GetNextVarType(int type)
     {
         if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
             initprintf("%s:%d: debug: accepted constant %d in place of gamevar.\n",g_szScriptFileName,g_lineNumber,Batoi(textptr));
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=MAXGAMEVARS;
         if (tolower(textptr[1])=='x')
             sscanf(textptr+2,"%" PRIxPTR "",g_scriptPtr);
         else
             *g_scriptPtr=atol(textptr);
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         g_scriptPtr++;
         C_GetNextLabelName();
         return;
@@ -1648,7 +1648,7 @@ static void C_GetNextVarType(int type)
             return;
         }
 
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=(i|f);
         C_GetNextVarType(0);
         C_SkipComments(); //skip comments and whitespace
@@ -1683,9 +1683,9 @@ static void C_GetNextVarType(int type)
                 {
                     if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
                         initprintf("%s:%d: debug: accepted defined label `%s' instead of gamevar.\n",g_szScriptFileName,g_lineNumber,label+(i<<6));
-                    bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                    bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                     *g_scriptPtr++=MAXGAMEVARS;
-                    bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                    bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                     *g_scriptPtr++=labelcode[i];
                     return;
                 }
@@ -1721,7 +1721,7 @@ static void C_GetNextVarType(int type)
     if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
         initprintf("%s:%d: debug: accepted gamevar `%s'.\n",g_szScriptFileName,g_lineNumber,label+(g_numLabels<<6));
 
-    bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+    bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
     *g_scriptPtr++=(i|f);
 }
 
@@ -1784,14 +1784,14 @@ static int C_GetNextValue(int type)
                 initprintf("%s:%d: debug: accepted %s label `%s'.\n",g_szScriptFileName,g_lineNumber,gl,label+(i<<6));
                 //Bfree(gl);
             }
-            if (labeltype[i] != LABEL_DEFINE && labelcode[i] >= (intptr_t)&script[0] && labelcode[i] < (intptr_t)&script[g_scriptSize])
-                bitptr[(g_scriptPtr-script)>>3] |= (BITPTR_POINTER<<((g_scriptPtr-script)&7));
-            else bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            if (labeltype[i] != LABEL_DEFINE && labelcode[i] >= (intptr_t)&apScript[0] && labelcode[i] < (intptr_t)&apScript[g_scriptSize])
+                bitptr[(g_scriptPtr-apScript)>>3] |= (BITPTR_POINTER<<((g_scriptPtr-apScript)&7));
+            else bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *(g_scriptPtr++) = labelcode[i];
             textptr += l;
             return labeltype[i];
         }
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *(g_scriptPtr++) = 0;
         textptr += l;
         el = C_GetLabelType(type);
@@ -1808,7 +1808,7 @@ static int C_GetNextValue(int type)
     {
         C_ReportError(ERROR_PARAMUNDEFINED);
         g_numCompilerErrors++;
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr = 0;
         g_scriptPtr++;
         textptr+=l;
@@ -1837,7 +1837,7 @@ static int C_GetNextValue(int type)
 
     if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
         initprintf("%s:%d: debug: accepted constant %d.\n",g_szScriptFileName,g_lineNumber,atoi(textptr));
-    bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+    bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
 
     if (tolower(textptr[1])=='x')
         sscanf(textptr+2,"%" PRIxPTR "",g_scriptPtr);
@@ -1858,8 +1858,8 @@ static int C_CountCaseStatements()
     int lCount;
     char *temptextptr = textptr;
     int temp_ScriptLineNumber = g_lineNumber;
-    intptr_t scriptoffset = (unsigned)(g_scriptPtr-script);
-    intptr_t caseoffset = (unsigned)(g_caseScriptPtr-script);
+    intptr_t scriptoffset = (unsigned)(g_scriptPtr-apScript);
+    intptr_t caseoffset = (unsigned)(g_caseScriptPtr-apScript);
 //    int i;
 
     g_numCases=0;
@@ -1876,13 +1876,13 @@ static int C_CountCaseStatements()
     g_checkingSwitch++;
 
     textptr=temptextptr;
-    g_scriptPtr = (intptr_t *)(script+scriptoffset);
+    g_scriptPtr = (intptr_t *)(apScript+scriptoffset);
 
     g_lineNumber = temp_ScriptLineNumber;
 
     lCount=g_numCases;
     g_numCases=0;
-    g_caseScriptPtr = (intptr_t *)(script+caseoffset);
+    g_caseScriptPtr = (intptr_t *)(apScript+caseoffset);
     g_numCases = 0;
     return lCount;
 }
@@ -1960,9 +1960,9 @@ static int C_ParseCommand(void)
                 if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
                     initprintf("%s:%d: debug: accepted state label `%s'.\n",g_szScriptFileName,g_lineNumber,label+(j<<6));
                 *g_scriptPtr = labelcode[j];
-                if (labelcode[j] >= (intptr_t)&script[0] && labelcode[j] < (intptr_t)&script[g_scriptSize])
-                    bitptr[(g_scriptPtr-script)>>3] |= (BITPTR_POINTER<<((g_scriptPtr-script)&7));
-                else bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                if (labelcode[j] >= (intptr_t)&apScript[0] && labelcode[j] < (intptr_t)&apScript[g_scriptSize])
+                    bitptr[(g_scriptPtr-apScript)>>3] |= (BITPTR_POINTER<<((g_scriptPtr-apScript)&7));
+                else bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                 g_scriptPtr++;
                 return 0;
             }
@@ -1974,7 +1974,7 @@ static int C_ParseCommand(void)
                 g_numCompilerWarnings++;
                 //Bfree(gl);
                 *(g_scriptPtr-1) = CON_NULLOP; // get rid of the state, leaving a nullop to satisfy if conditions
-                bitptr[(g_scriptPtr-script-1)>>3] &= ~(1<<((g_scriptPtr-script-1)&7));
+                bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                 return 0;  // valid label name, but wrong type
             }
         }
@@ -2075,7 +2075,7 @@ static int C_ParseCommand(void)
             return 0;
         }
 
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=ProjectileLabels[lLabelID].lId;
 
         //printf("member's flags are: %02Xh\n",PlayerLabels[lLabelID].flags);
@@ -2241,7 +2241,7 @@ static int C_ParseCommand(void)
 
         while (j>-1)
         {
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr = 0;
             g_scriptPtr++;
             j--;
@@ -2260,7 +2260,7 @@ static int C_ParseCommand(void)
             if ((C_GetNextValue(LABEL_MOVE|LABEL_DEFINE) == 0) && (*(g_scriptPtr-1) != 0) && (*(g_scriptPtr-1) != 1))
             {
                 C_ReportError(-1);
-                bitptr[(g_scriptPtr-script-1)>>3] &= ~(1<<((g_scriptPtr-script-1)&7));
+                bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                 *(g_scriptPtr-1) = 0;
                 initprintf("%s:%d: warning: expected a move, found a constant.\n",g_szScriptFileName,g_lineNumber);
                 g_numCompilerWarnings++;
@@ -2273,7 +2273,7 @@ static int C_ParseCommand(void)
                 g_scriptPtr--;
                 j |= *g_scriptPtr;
             }
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr = j;
 
             g_scriptPtr++;
@@ -2317,7 +2317,7 @@ static int C_ParseCommand(void)
             }
             for (k=j;k>=0;k--)
             {
-                bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                 *g_scriptPtr = 0;
                 g_scriptPtr++;
             }
@@ -2524,7 +2524,7 @@ static int C_ParseCommand(void)
                     if ((C_GetNextValue(LABEL_MOVE|LABEL_DEFINE) == 0) && (*(g_scriptPtr-1) != 0) && (*(g_scriptPtr-1) != 1))
                     {
                         C_ReportError(-1);
-                        bitptr[(g_scriptPtr-script-1)>>3] &= ~(1<<((g_scriptPtr-script-1)&7));
+                        bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                         *(g_scriptPtr-1) = 0;
                         initprintf("%s:%d: warning: expected a move, found a constant.\n",g_szScriptFileName,g_lineNumber);
                         g_numCompilerWarnings++;
@@ -2536,7 +2536,7 @@ static int C_ParseCommand(void)
                         g_scriptPtr--;
                         k |= *g_scriptPtr;
                     }
-                    bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                    bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                     *g_scriptPtr = k;
                     g_scriptPtr++;
                     return 0;
@@ -2544,7 +2544,7 @@ static int C_ParseCommand(void)
             }
             for (k=j;k<3;k++)
             {
-                bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                 *g_scriptPtr = 0;
                 g_scriptPtr++;
             }
@@ -2603,7 +2603,7 @@ static int C_ParseCommand(void)
             }
             for (k=j;k>=0;k--)
             {
-                bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                 *(g_scriptPtr++) = 0;
             }
         }
@@ -2635,7 +2635,7 @@ static int C_ParseCommand(void)
 
         for (j=0;j<4;j++)
         {
-            bitptr[(g_parsingActorPtr+j-script)>>3] &= ~(1<<((g_parsingActorPtr+j-script)&7));
+            bitptr[(g_parsingActorPtr+j-apScript)>>3] &= ~(1<<((g_parsingActorPtr+j-apScript)&7));
             *(g_parsingActorPtr+j) = 0;
             if (j == 3)
             {
@@ -2646,7 +2646,7 @@ static int C_ParseCommand(void)
                     g_scriptPtr--;
                     j |= *g_scriptPtr;
                 }
-                bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                 *g_scriptPtr = j;
                 g_scriptPtr++;
                 break;
@@ -2657,7 +2657,7 @@ static int C_ParseCommand(void)
                 {
                     for (i=4-j; i; i--)
                     {
-                        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                         *(g_scriptPtr++) = 0;
                     }
                     break;
@@ -2674,16 +2674,16 @@ static int C_ParseCommand(void)
                     if ((C_GetNextValue(LABEL_MOVE|LABEL_DEFINE) == 0) && (*(g_scriptPtr-1) != 0) && (*(g_scriptPtr-1) != 1))
                     {
                         C_ReportError(-1);
-                        bitptr[(g_scriptPtr-script-1)>>3] &= ~(1<<((g_scriptPtr-script-1)&7));
+                        bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                         *(g_scriptPtr-1) = 0;
                         initprintf("%s:%d: warning: expected a move, found a constant.\n",g_szScriptFileName,g_lineNumber);
                         g_numCompilerWarnings++;
                     }
                     break;
                 }
-                if (*(g_scriptPtr-1) >= (intptr_t)&script[0] && *(g_scriptPtr-1) < (intptr_t)&script[g_scriptSize])
-                    bitptr[(g_parsingActorPtr+j-script)>>3] |= (BITPTR_POINTER<<((g_parsingActorPtr+j-script)&7));
-                else bitptr[(g_parsingActorPtr+j-script)>>3] &= ~(1<<((g_parsingActorPtr+j-script)&7));
+                if (*(g_scriptPtr-1) >= (intptr_t)&apScript[0] && *(g_scriptPtr-1) < (intptr_t)&apScript[g_scriptSize])
+                    bitptr[(g_parsingActorPtr+j-apScript)>>3] |= (BITPTR_POINTER<<((g_parsingActorPtr+j-apScript)&7));
+                else bitptr[(g_parsingActorPtr+j-apScript)>>3] &= ~(1<<((g_parsingActorPtr+j-apScript)&7));
                 *(g_parsingActorPtr+j) = *(g_scriptPtr-1);
             }
         }
@@ -2812,7 +2812,7 @@ static int C_ParseCommand(void)
 
         for (j=0;j<4;j++)
         {
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *(g_parsingActorPtr+j) = 0;
             if (j == 3)
             {
@@ -2823,7 +2823,7 @@ static int C_ParseCommand(void)
                     g_scriptPtr--;
                     j |= *g_scriptPtr;
                 }
-                bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                 *g_scriptPtr = j;
                 g_scriptPtr++;
                 break;
@@ -2834,7 +2834,7 @@ static int C_ParseCommand(void)
                 {
                     for (i=4-j; i; i--)
                     {
-                        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+                        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                         *(g_scriptPtr++) = 0;
                     }
                     break;
@@ -2851,16 +2851,16 @@ static int C_ParseCommand(void)
                     if ((C_GetNextValue(LABEL_MOVE|LABEL_DEFINE) == 0) && (*(g_scriptPtr-1) != 0) && (*(g_scriptPtr-1) != 1))
                     {
                         C_ReportError(-1);
-                        bitptr[(g_scriptPtr-script-1)>>3] &= ~(1<<((g_scriptPtr-script-1)&7));
+                        bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                         *(g_scriptPtr-1) = 0;
                         initprintf("%s:%d: warning: expected a move, found a constant.\n",g_szScriptFileName,g_lineNumber);
                         g_numCompilerWarnings++;
                     }
                     break;
                 }
-                if (*(g_scriptPtr-1) >= (intptr_t)&script[0] && *(g_scriptPtr-1) < (intptr_t)&script[g_scriptSize])
-                    bitptr[(g_parsingActorPtr+j-script)>>3] |= (BITPTR_POINTER<<((g_parsingActorPtr+j-script)&7));
-                else bitptr[(g_parsingActorPtr+j-script)>>3] &= ~(1<<((g_parsingActorPtr+j-script)&7));
+                if (*(g_scriptPtr-1) >= (intptr_t)&apScript[0] && *(g_scriptPtr-1) < (intptr_t)&apScript[g_scriptSize])
+                    bitptr[(g_parsingActorPtr+j-apScript)>>3] |= (BITPTR_POINTER<<((g_parsingActorPtr+j-apScript)&7));
+                else bitptr[(g_parsingActorPtr+j-apScript)>>3] &= ~(1<<((g_parsingActorPtr+j-apScript)&7));
                 *(g_parsingActorPtr+j) = *(g_scriptPtr-1);
             }
         }
@@ -2887,7 +2887,7 @@ static int C_ParseCommand(void)
 
         while (j > -1)
         {
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr = 0;
             g_scriptPtr++;
             j--;
@@ -2987,12 +2987,12 @@ static int C_ParseCommand(void)
             intptr_t offset;
             g_checkingIfElse--;
             tempscrptr = g_scriptPtr;
-            offset = (unsigned)(tempscrptr-script);
+            offset = (unsigned)(tempscrptr-apScript);
             g_scriptPtr++; //Leave a spot for the fail location
             C_ParseCommand();
-            tempscrptr = (intptr_t *)script+offset;
+            tempscrptr = (intptr_t *)apScript+offset;
             *tempscrptr = (intptr_t) g_scriptPtr;
-            bitptr[(tempscrptr-script)>>3] |= (BITPTR_POINTER<<((tempscrptr-script)&7));
+            bitptr[(tempscrptr-apScript)>>3] |= (BITPTR_POINTER<<((tempscrptr-apScript)&7));
         }
         else
         {
@@ -3058,7 +3058,7 @@ static int C_ParseCommand(void)
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=lLabelID;
 
         // now at target VAR...
@@ -3194,7 +3194,7 @@ static int C_ParseCommand(void)
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=lLabelID;
 
         // now at target VAR...
@@ -3263,7 +3263,7 @@ static int C_ParseCommand(void)
             return 0;
         }
 
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=PlayerLabels[lLabelID].lId;
 
         //printf("member's flags are: %02Xh\n",PlayerLabels[lLabelID].flags);
@@ -3345,7 +3345,7 @@ static int C_ParseCommand(void)
             return 0;
         }
 
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=InputLabels[lLabelID].lId;
 
         // now at target VAR...
@@ -3414,7 +3414,7 @@ static int C_ParseCommand(void)
             return 0;
         }
 
-        bitptr[(g_scriptPtr - script) >> 3] &= ~(1 << ((g_scriptPtr - script) & 7));
+        bitptr[(g_scriptPtr - apScript) >> 3] &= ~(1 << ((g_scriptPtr - apScript) & 7));
         *g_scriptPtr++ = TileDataLabels[lLabelID].lId;
 
         // now at target VAR...
@@ -3465,7 +3465,7 @@ static int C_ParseCommand(void)
             return 0;
         }
 
-        bitptr[(g_scriptPtr - script) >> 3] &= ~(1 << ((g_scriptPtr - script) & 7));
+        bitptr[(g_scriptPtr - apScript) >> 3] &= ~(1 << ((g_scriptPtr - apScript) & 7));
         *g_scriptPtr++ = UserdefsLabels[lLabelID].lId;
 
         //printf("member's flags are: %02Xh\n",UserdefsLabels[lLabelID].flags);
@@ -3614,7 +3614,7 @@ static int C_ParseCommand(void)
         }
         }
 
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=i; // the ID of the DEF (offset into array...)
 
         switch (tw)
@@ -3695,7 +3695,7 @@ static int C_ParseCommand(void)
             }
         }
 
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=ActorLabels[lLabelID].lId;
 
         //printf("member's flags are: %02Xh\n",ActorLabels[lLabelID].flags);
@@ -3778,7 +3778,7 @@ static int C_ParseCommand(void)
             return 0;
         }
 
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=TsprLabels[lLabelID].lId;
 
         //printf("member's flags are: %02Xh\n",ActorLabels[lLabelID].flags);
@@ -3908,7 +3908,7 @@ static int C_ParseCommand(void)
         i=GetADefID(label+(g_numLabels<<6));
         if (i > (-1))
         {
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr++=i;
         }
         else
@@ -3938,7 +3938,7 @@ static int C_ParseCommand(void)
         i=GetADefID(label+(g_numLabels<<6));
         if (i > (-1))
         {
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr++=i;
         }
         else
@@ -4229,15 +4229,15 @@ static int C_ParseCommand(void)
 
         C_GetManyVars(2);
         tempscrptr = g_scriptPtr;
-        offset = (unsigned)(g_scriptPtr-script);
+        offset = (unsigned)(g_scriptPtr-apScript);
         g_scriptPtr++; // Leave a spot for the fail location
 
         j = C_GetKeyword();
         C_ParseCommand();
 
-        tempscrptr = (intptr_t *)script+offset;
+        tempscrptr = (intptr_t *)apScript+offset;
         *tempscrptr = (intptr_t) g_scriptPtr;
-        bitptr[(tempscrptr-script)>>3] |= (BITPTR_POINTER<<((tempscrptr-script)&7));
+        bitptr[(tempscrptr-apScript)>>3] |= (BITPTR_POINTER<<((tempscrptr-apScript)&7));
 
         if (tw != CON_WHILEVARVARN) g_checkingIfElse++;
         return 0;
@@ -4274,15 +4274,15 @@ static int C_ParseCommand(void)
         C_GetNextValue(LABEL_DEFINE); // the number to check against...
 
         tempscrptr = g_scriptPtr;
-        offset = (unsigned)(tempscrptr-script);
+        offset = (unsigned)(tempscrptr-apScript);
         g_scriptPtr++; //Leave a spot for the fail location
 
         j = C_GetKeyword();
         C_ParseCommand();
 
-        tempscrptr = (intptr_t *)script+offset;
+        tempscrptr = (intptr_t *)apScript+offset;
         *tempscrptr = (intptr_t) g_scriptPtr;
-        bitptr[(tempscrptr-script)>>3] |= (BITPTR_POINTER<<((tempscrptr-script)&7));
+        bitptr[(tempscrptr-apScript)>>3] |= (BITPTR_POINTER<<((tempscrptr-apScript)&7));
 
         if (tw != CON_WHILEVARN) g_checkingIfElse++;
         return 0;
@@ -4475,13 +4475,13 @@ static int C_ParseCommand(void)
         C_GetNextVar();
 
         tempscrptr= g_scriptPtr;
-        tempoffset = (unsigned)(tempscrptr-script);
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        tempoffset = (unsigned)(tempscrptr-apScript);
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=0; // leave spot for end location (for after processing)
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=0; // count of case statements
         g_caseScriptPtr=g_scriptPtr;        // the first case's pointer.
-        bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+        bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=0; // leave spot for 'default' location (null if none)
 
         j = C_GetKeyword();
@@ -4494,7 +4494,7 @@ static int C_ParseCommand(void)
         g_scriptPtr+=j*2;
         C_SkipComments();
         g_scriptPtr-=j*2; // allocate buffer for the table
-        tempscrptr = (intptr_t *)(script+tempoffset);
+        tempscrptr = (intptr_t *)(apScript+tempoffset);
 
         //AddLog(g_szBuf);
         if (g_checkingSwitch>1)
@@ -4519,9 +4519,9 @@ static int C_ParseCommand(void)
         while (j--)
         {
             // leave room for statements
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr++=0; // value check
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr++=0; // code offset
             C_SkipComments();
         }
@@ -4535,7 +4535,7 @@ static int C_ParseCommand(void)
             //Bsprintf(g_szBuf,"SWITCH2: '%.22s'",textptr);
             //AddLog(g_szBuf);
         }
-        tempscrptr = (intptr_t *)(script+tempoffset);
+        tempscrptr = (intptr_t *)(apScript+tempoffset);
 
         //Bsprintf(g_szBuf,"SWITCHXX: '%.22s'",textptr);
         //AddLog(g_szBuf);
@@ -4561,8 +4561,8 @@ static int C_ParseCommand(void)
                 }
             }
 //            for (j=3;j<3+tempscrptr[1]*2;j+=2)initprintf("%5d %8x\n",tempscrptr[j],tempscrptr[j+1]);
-            tempscrptr[0]= (intptr_t)g_scriptPtr - (intptr_t)&script[0];    // save 'end' location
-//            bitptr[(tempscrptr-script)>>3] |= (BITPTR_POINTER<<((tempscrptr-script)&7));
+            tempscrptr[0]= (intptr_t)g_scriptPtr - (intptr_t)&apScript[0];    // save 'end' location
+//            bitptr[(tempscrptr-apScript)>>3] |= (BITPTR_POINTER<<((tempscrptr-apScript)&7));
         }
         else
         {
@@ -4618,7 +4618,7 @@ repeatcase:
                 }
             //AddLog("Adding value to script");
             g_caseScriptPtr[g_numCases++]=j;   // save value
-            g_caseScriptPtr[g_numCases]=(intptr_t)((intptr_t*)g_scriptPtr-&script[0]);   // save offset
+            g_caseScriptPtr[g_numCases]=(intptr_t)((intptr_t*)g_scriptPtr-&apScript[0]);   // save offset
         }
         //      j = C_GetKeyword();
         //Bsprintf(g_szBuf,"case3: %.12s",textptr);
@@ -4633,7 +4633,7 @@ repeatcase:
         }
         //Bsprintf(g_szBuf,"case4: '%.12s'",textptr);
         //AddLog(g_szBuf);
-        tempoffset = (unsigned)(tempscrptr-script);
+        tempoffset = (unsigned)(tempscrptr-apScript);
         while (C_ParseCommand() == 0)
         {
             //Bsprintf(g_szBuf,"case5 '%.25s'",textptr);
@@ -4643,11 +4643,11 @@ repeatcase:
             {
                 //AddLog("Found Repeat Case");
                 C_GetNextKeyword();    // eat 'case'
-                tempscrptr = (intptr_t *)(script+tempoffset);
+                tempscrptr = (intptr_t *)(apScript+tempoffset);
                 goto repeatcase;
             }
         }
-        tempscrptr = (intptr_t *)(script+tempoffset);
+        tempscrptr = (intptr_t *)(apScript+tempoffset);
         //AddLog("End Case");
         return 0;
         //      break;
@@ -4670,8 +4670,8 @@ repeatcase:
         }
         if (g_caseScriptPtr)
         {
-            g_caseScriptPtr[0]=(intptr_t)(g_scriptPtr-&script[0]);   // save offset
-//            bitptr[(g_caseScriptPtr-script)>>3] |= (BITPTR_POINTER<<((g_caseScriptPtr-script)&7));
+            g_caseScriptPtr[0]=(intptr_t)(g_scriptPtr-&apScript[0]);   // save offset
+//            bitptr[(g_caseScriptPtr-apScript)>>3] |= (BITPTR_POINTER<<((g_caseScriptPtr-apScript)&7));
         }
         //Bsprintf(g_szBuf,"default: '%.22s'",textptr);
         //AddLog(g_szBuf);
@@ -4847,21 +4847,21 @@ repeatcase:
                 j |= *g_scriptPtr;
             }
             while (C_GetKeyword() == -1);
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr = j;
             g_scriptPtr++;
         }
 
         tempscrptr = g_scriptPtr;
-        offset = (unsigned)(tempscrptr-script);
+        offset = (unsigned)(tempscrptr-apScript);
 
         g_scriptPtr++; //Leave a spot for the fail location
 
         j = C_GetKeyword();
         C_ParseCommand();
-        tempscrptr = (intptr_t *)script+offset;
+        tempscrptr = (intptr_t *)apScript+offset;
         *tempscrptr = (intptr_t) g_scriptPtr;
-        bitptr[(tempscrptr-script)>>3] |= (BITPTR_POINTER<<((tempscrptr-script)&7));
+        bitptr[(tempscrptr-apScript)>>3] |= (BITPTR_POINTER<<((tempscrptr-apScript)&7));
 
         g_checkingIfElse++;
         return 0;
@@ -5336,7 +5336,7 @@ repeatcase:
         else
         {
             *(apXStrings[g_numQuoteRedefinitions]+i) = '\0';
-            bitptr[(g_scriptPtr-script)>>3] &= ~(1<<((g_scriptPtr-script)&7));
+            bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
             *g_scriptPtr++=g_numQuoteRedefinitions;
             g_numQuoteRedefinitions++;
         }
@@ -5943,16 +5943,16 @@ void C_Compile(const char *filenam)
     Bmemset(actorscrptr, 0, sizeof(actorscrptr));
     Bmemset(actorLoadEventScrptr, 0, sizeof(actorLoadEventScrptr));
 
-//    clearbufbyte(script,sizeof(script),0l); // JBF 20040531: yes? no?
-    if (script != NULL)
-        Xfree(script);
+//    clearbufbyte(apScript,sizeof(apScript),0l); // JBF 20040531: yes? no?
+    if (apScript != NULL)
+        Xfree(apScript);
 
-    script = (intptr_t*)Xcalloc(1,g_scriptSize * sizeof(intptr_t));
+    apScript = (intptr_t*)Xcalloc(1,g_scriptSize * sizeof(intptr_t));
     bitptr = (char*)Xcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(char));
-//    initprintf("script: %d, bitptr: %d\n",script,bitptr);
+//    initprintf("apScript: %d, bitptr: %d\n",apScript,bitptr);
 
     g_numLabels = g_numDefaultLabels = 0;
-    g_scriptPtr = script+1;
+    g_scriptPtr = apScript+1;
     g_numCompilerWarnings = 0;
     g_numCompilerErrors = 0;
     g_lineNumber = 1;
@@ -5967,7 +5967,7 @@ void C_Compile(const char *filenam)
     if (g_numCompilerErrors > 63)
         initprintf("fatal error: too many errors: Aborted\n");
 
-    //*script = (intptr_t) g_scriptPtr;
+    //*apScript = (intptr_t) g_scriptPtr;
 
     Xfree(mptr);
     mptr = NULL;
@@ -6046,11 +6046,11 @@ void C_Compile(const char *filenam)
 
         g_totalLines += g_lineNumber;
 
-        C_SetScriptSize(g_scriptPtr-script+8);
+        C_SetScriptSize(g_scriptPtr-apScript+8);
 
         initprintf("Script compiled in %dms\n",timerGetTicks()-startcompiletime);
 
-        initprintf("Compiled code size: %d*%d bytes, version %s\n",(unsigned)(g_scriptPtr-script),(int32_t)sizeof(intptr_t),(g_scriptVersion == 14?"1.4+":"1.3D"));
+        initprintf("Compiled code size: %d*%d bytes, version %s\n",(unsigned)(g_scriptPtr-apScript),(int32_t)sizeof(intptr_t),(g_scriptVersion == 14?"1.4+":"1.3D"));
         initprintf("Pointer bitmap size: %d bytes\n",(g_scriptSize+7)>>3);
         initprintf("%d/%d labels, %d/%d variables\n",g_numLabels,(int32_t)min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
 

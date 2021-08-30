@@ -7262,7 +7262,7 @@ PALONLY:
 
         if (actorscrptr[s->picnum])
         {
-            if ((intptr_t *)t4 >= &script[0] && (intptr_t *)t4 <= (&script[0] + g_scriptSize))
+            if ((intptr_t *)t4 >= &apScript[0] && (intptr_t *)t4 <= (&apScript[0] + g_scriptSize))
             {
                 l = *(((intptr_t *)t4)+2); //For TerminX: was *(int *)(t4+8)
 
@@ -10100,7 +10100,7 @@ static void G_FreeCONMem(void)
 
     if (label != NULL) Xfree(label);
     if (labelcode != NULL) Xfree(labelcode);
-    if (script != NULL) Xfree(script);
+    if (apScript != NULL) Xfree(apScript);
     if (bitptr != NULL) Xfree(bitptr);
 
     freehash();

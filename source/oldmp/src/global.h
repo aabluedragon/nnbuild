@@ -109,9 +109,10 @@ G_EXTERN int32_t SpriteFlags[MAXTILES];
 
 // CON VM
 G_EXTERN char *apStrings[MAXQUOTES], *apXStrings[MAXQUOTES];
-G_EXTERN intptr_t *g_scriptPtr, *insptr, *labelcode, *labeltype;
+G_EXTERN intptr_t *insptr, *labelcode, *labeltype;
 G_EXTERN intptr_t *actorscrptr[MAXTILES], *g_parsingActorPtr;
-G_EXTERN intptr_t *script;
+G_EXTERN intptr_t *apScript;
+G_EXTERN intptr_t *g_scriptPtr;
 G_EXTERN int g_numLabels, g_numDefaultLabels;
 G_EXTERN char *label;
 
