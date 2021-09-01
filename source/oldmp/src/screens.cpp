@@ -166,17 +166,17 @@ void G_ShowScores(bool bonus)
     gametext(160, yoff + 26, g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
 
     yoff += 36;
-    int start_x = 64;
-    int name_x = start_x + 12;
-    int frags_hp_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 57 : 66);
-    int deaths_x = start_x + 98;
-    int misc_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 128 : 134);
-    int ping_x = start_x + 180;
+    const int start_x = 64;
+    const int name_x = start_x + 12;
+    const int frags_hp_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 57 : 66);
+    const int deaths_kd_x = start_x + 98;
+    const int misc_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 128 : 134);
+    const int ping_x = start_x + 180;
 
     minitext(start_x, yoff, "#", 8, 2 + 8 + 16 + 128);
     minitext(name_x, yoff, "NAME", 8, 2 + 8 + 16 + 128);
     minitext(frags_hp_x, yoff, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "HP/ARMOR" : "FRAGS", 8, 2 + 8 + 16 + 128);
-    minitext(deaths_x, yoff, "DEATHS", 8, 2 + 8 + 16 + 128);
+    minitext(deaths_kd_x, yoff, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "K/D" : "DEATHS", 8, 2 + 8 + 16 + 128);
     minitext(misc_x, yoff, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "INVENTORY" : "NEMESIS", 8, 2 + 8 + 16 + 128);
     minitext(ping_x, yoff, "PING", 8, 2 + 8 + 16 + 128);
 
@@ -204,8 +204,8 @@ void G_ShowScores(bool bonus)
 
             minitext(frags_hp_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
-            Bsprintf(tempbuf, "%-4d", p->fraggedself);
-            minitext(deaths_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
+            Bsprintf(tempbuf, "%d^12/^02%d", p->actors_killed, p->fraggedself);
+            minitext(deaths_kd_x, yoff, tempbuf, 0, 2 + 8 + 16 + 128);
 
             score_inventory(misc_x, yoff, FIRSTAID_ICON, p->firstaid_amount > 0);
             score_inventory(misc_x + 8, yoff, STEROIDS_ICON, p->steroids_amount >= 400);
@@ -237,7 +237,7 @@ void G_ShowScores(bool bonus)
             minitext(frags_hp_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
             Bsprintf(tempbuf, "%-4d", deaths + g_player[i].ps->fraggedself);
-            minitext(deaths_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
+            minitext(deaths_kd_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
             if (nemesis > -1)
             {

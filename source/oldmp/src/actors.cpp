@@ -131,13 +131,13 @@ void G_AddMonsterKills(int32_t spriteNum, int32_t amount)
             if ((playerNum >= 0) && (playerNum < MAXPLAYERS))
             {
                 g_player[playerNum].ps->actors_killed += amount;
-                OSD_Printf("%s has killed a monster with a picnum of %d\n", g_player[playerNum].user_name, TrackerCast(sprite[spriteNum].picnum));
+                //OSD_Printf("%s has killed a monster with a picnum of %d\n", g_player[playerNum].user_name, TrackerCast(sprite[spriteNum].picnum));
                 return;
             }
         }
     }
 
-    OSD_Printf("A monster with a picnum of %d was killed by a non-player.\n", TrackerCast(sprite[spriteNum].picnum));
+    //OSD_Printf("A monster with a picnum of %d was killed by a non-player.\n", TrackerCast(sprite[spriteNum].picnum));
 }
 
 void P_AddAmmo(int weapon, DukePlayer_t* p, int amount)
