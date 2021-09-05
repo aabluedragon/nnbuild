@@ -160,9 +160,12 @@ void G_ShowScores(bool bonus)
             gametext(160, 176, "PRESS ANY KEY TO CONTINUE", 0, 2 + 8 + 16);
     }
 
+    // Duke3D + Atomic Edition logos
     rotatesprite(160 << 16, yoff << 16, 65536L, 0, INGAMEDUKETHREEDEE, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
     if (PLUTOPAK)   // JBF 20030804
         rotatesprite((260) << 16, (yoff + 2) << 16, 65536L, 0, PLUTOPAKSPRITE + 2, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+
+    // Level name
     gametext(160, yoff + 26, g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
 
     yoff += 36;
@@ -205,7 +208,7 @@ void G_ShowScores(bool bonus)
             }
             else
             {
-                Bsprintf(tempbuf, "^10N/A");
+                Bsprintf(tempbuf, "^10N/A"); // Don't show health for a disconnected player.
             }
 
             minitext(frags_hp_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
