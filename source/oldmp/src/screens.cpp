@@ -166,21 +166,27 @@ void G_ShowScores(bool bonus)
     gametext(160, yoff + 26, g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.last_level - 1].name, 0, 2 + 8 + 16);
 
     yoff += 36;
-    const int start_x = 64;
+    const int start_x = 63;
     const int name_x = start_x + 12;
     const int frags_hp_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 57 : 66);
     const int deaths_kd_x = start_x + 98;
     const int misc_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 128 : 134);
     const int ping_x = start_x + 180;
 
-    minitext(start_x, yoff, "#", 8, 2 + 8 + 16 + 128);
-    minitext(name_x, yoff, "NAME", 8, 2 + 8 + 16 + 128);
-    minitext(frags_hp_x, yoff, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "HP/ARMOR" : "FRAGS", 8, 2 + 8 + 16 + 128);
-    minitext(deaths_kd_x, yoff, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "K/D" : "DEATHS", 8, 2 + 8 + 16 + 128);
-    minitext(misc_x, yoff, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "INVENTORY" : "NEMESIS", 8, 2 + 8 + 16 + 128);
-    minitext(ping_x, yoff, "PING", 8, 2 + 8 + 16 + 128);
+    int score_start_y = yoff; // Store Y so we can draw the headers on top of the transparent background.
 
     yoff += 10;
+
+    // Background
+    rotatesprite_(0, 0, 65536L, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT, 128, 0, get_xdim(start_x - 6), get_ydim(score_start_y-2), get_xdim(ping_x + 21), get_ydim(yoff+(7*playerswhenstarted)));
+
+    // Headers
+    minitext(start_x, score_start_y, "#", 8, 2 + 8 + 16 + 128);
+    minitext(name_x, score_start_y, "NAME", 8, 2 + 8 + 16 + 128);
+    minitext(frags_hp_x, score_start_y, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "HP/ARMOR" : "FRAGS", 8, 2 + 8 + 16 + 128);
+    minitext(deaths_kd_x, score_start_y, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "K/D" : "DEATHS", 8, 2 + 8 + 16 + 128);
+    minitext(misc_x, score_start_y, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "INVENTORY" : "NEMESIS", 8, 2 + 8 + 16 + 128);
+    minitext(ping_x, score_start_y, "PING", 8, 2 + 8 + 16 + 128);
 
     for (i = 0; i < playerswhenstarted; i++)
     {

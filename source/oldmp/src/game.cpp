@@ -3121,17 +3121,6 @@ int GetDistance2D(int x1, int y1, int x2, int y2)
 
 #define WITHIN_TIME(starttime, totaltime) ((starttime - (int32_t)totalclock) > 0 && (starttime - (int32_t)totalclock) <= totaltime)
 
-static int32_t get_xdim(int32_t x)
-{
-    const int32_t screenwidth = scale(240 << 16, xdim, ydim);
-    return scale((x << 16) + (screenwidth >> 1) - (160 << 16), xdim, screenwidth);
-}
-static int32_t get_ydim(int32_t y)
-{
-    y = mulscale16((y << 16) + rotatesprite_y_offset - (200 << 15), rotatesprite_yxaspect) + (200 << 15);
-    return scale(y, ydim, 200 << 16);
-}
-
 void G_DisplayPlayerId(void)
 {
     int idalpha;

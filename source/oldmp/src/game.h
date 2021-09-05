@@ -32,4 +32,15 @@ static inline int32_t calc_smoothratio(ClockTicks const totalclk, ClockTicks con
     return calc_smoothratio(totalclk, ototalclk, REALGAMETICSPERSEC);
 }
 
+static inline int32_t get_xdim(int32_t x)
+{
+    const int32_t screenwidth = scale(240 << 16, xdim, ydim);
+    return scale((x << 16) + (screenwidth >> 1) - (160 << 16), xdim, screenwidth);
+}
+static inline int32_t get_ydim(int32_t y)
+{
+    y = mulscale16((y << 16) + rotatesprite_y_offset - (200 << 15), rotatesprite_yxaspect) + (200 << 15);
+    return scale(y, ydim, 200 << 16);
+}
+
 #endif
