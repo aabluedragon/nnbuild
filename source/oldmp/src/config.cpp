@@ -558,12 +558,12 @@ int32_t CONFIG_ReadSetup(void)
     ud.config.setupread = 1;
 
     pathsearchmode = 1;
-    if (buildvfs_exists(setupfilename) && ud.config.scripthandle < 0)  // JBF 20031211
-        ud.config.scripthandle = SCRIPT_Load(setupfilename);
+    if (buildvfs_exists(g_setupFileName) && ud.config.scripthandle < 0)  // JBF 20031211
+        ud.config.scripthandle = SCRIPT_Load(g_setupFileName);
     else if (buildvfs_exists(SETUPFILENAME) && ud.config.scripthandle < 0)
     {
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
-                 "Import configuration data from \"%s\"?",setupfilename,SETUPFILENAME);
+                 "Import configuration data from \"%s\"?",g_setupFileName,SETUPFILENAME);
 
         i = wm_ynbox("Import Configuration Settings", "%s", tempbuf);
         if (i) ud.config.scripthandle = SCRIPT_Load(SETUPFILENAME);
@@ -571,7 +571,7 @@ int32_t CONFIG_ReadSetup(void)
     else if (buildvfs_exists("eduke32.cfg") && ud.config.scripthandle < 0)
     {
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
-                 "Import configuration data from \"eduke32.cfg\"?",setupfilename);
+                 "Import configuration data from \"eduke32.cfg\"?",g_setupFileName);
 
         i = wm_ynbox("Import Configuration Settings", "%s", tempbuf);
         if (i) ud.config.scripthandle = SCRIPT_Load("eduke32.cfg");
@@ -579,7 +579,7 @@ int32_t CONFIG_ReadSetup(void)
     else if (buildvfs_exists("duke3d.cfg") && ud.config.scripthandle < 0)
     {
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "
-                 "Import configuration data from \"duke3d.cfg\"?",setupfilename);
+                 "Import configuration data from \"duke3d.cfg\"?",g_setupFileName);
 
         i = wm_ynbox("Import Configuration Settings", "%s", tempbuf);
         if (i) ud.config.scripthandle = SCRIPT_Load("duke3d.cfg");
@@ -723,7 +723,7 @@ int32_t CONFIG_ReadSetup(void)
 
 void CONFIG_ReadSettings(void)
 {
-    char* const setupFileName = Xstrdup(setupfilename);
+    char* const setupFileName = Xstrdup(g_setupFileName);
     char* const p = strtok(setupFileName, ".");
 
     Bsprintf(tempbuf, "%s_settings.cfg", p);
@@ -744,7 +744,7 @@ void CONFIG_WriteSettings(void) // save binds and aliases to <cfgname>_settings.
     char filename[BMAX_PATH];
 
     {
-        char* ptr = Xstrdup(setupfilename);
+        char* ptr = Xstrdup(g_setupFileName);
         Bsprintf(filename, "%s_settings.cfg", strtok(ptr, "."));
         Xfree(ptr);
     }
@@ -813,7 +813,7 @@ void CONFIG_WriteSetup(uint32_t flags)
     if (!ud.config.setupread) return;
 
     if (ud.config.scripthandle < 0)
-        ud.config.scripthandle = SCRIPT_Init(setupfilename);
+        ud.config.scripthandle = SCRIPT_Init(g_setupFileName);
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Executions", ++ud.executions, false, false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Setup", "ConfigVersion", BYTEVERSION_JF, false, false);
@@ -834,7 +834,7 @@ void CONFIG_WriteSetup(uint32_t flags)
     // exit early after only updating the values that can be changed from the startup window
     if (flags & 1)
     {
-        SCRIPT_Save(ud.config.scripthandle, setupfilename);
+        SCRIPT_Save(ud.config.scripthandle, g_setupFileName);
         SCRIPT_Free(ud.config.scripthandle);
         return;
     }
@@ -987,9 +987,9 @@ void CONFIG_WriteSetup(uint32_t flags)
         }
     }
 
-    SCRIPT_Save(ud.config.scripthandle, setupfilename);
+    SCRIPT_Save(ud.config.scripthandle, g_setupFileName);
     SCRIPT_Free(ud.config.scripthandle);
-    OSD_Printf("Wrote %s\n",setupfilename);
+    OSD_Printf("Wrote %s\n",g_setupFileName);
     CONFIG_WriteSettings();
     Bfflush(NULL);
 }

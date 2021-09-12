@@ -73,5 +73,5 @@ short BlimpSpawnSprites[15] =
 };
 
 char CheatKeys[2] = { sc_D, sc_N };
-char setupfilename[BMAX_PATH] = SETUPFILENAME;
+char g_setupFileName[BMAX_PATH] = SETUPFILENAME;
 

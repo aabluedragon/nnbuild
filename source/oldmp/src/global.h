@@ -40,7 +40,7 @@ extern char GametypeNames[MAXGAMETYPES][33];
 extern int GametypeFlags[MAXGAMETYPES];
 extern short BlimpSpawnSprites[15];
 extern char CheatKeys[2];
-extern char setupfilename[BMAX_PATH];
+extern char g_setupFileName[BMAX_PATH];
 
 // Multiplayer
 extern int g_networkBroadcastMode; // 0: master/slave, 1: peer-to-peer

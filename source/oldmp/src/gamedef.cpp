@@ -5091,7 +5091,7 @@ repeatcase:
             j++;
         }
         tempbuf[j] = '\0';
-        if (Bstrcmp(setupfilename,SETUPFILENAME) == 0) // not set to something else via -cfg
+        if (Bstrcmp(g_setupFileName,SETUPFILENAME) == 0) // not set to something else via -cfg
         {
             char temp[BMAX_PATH];
             struct stat st;
@@ -5119,11 +5119,11 @@ repeatcase:
             }
             Bstrcpy(temp,tempbuf);
             CONFIG_WriteSetup(0);
-            Bsnprintf(setupfilename, sizeof(setupfilename), "%s/", g_modDir);
-            Bstrcat(setupfilename,temp);
+            Bsnprintf(g_setupFileName, sizeof(g_setupFileName), "%s/", g_modDir);
+            Bstrcat(g_setupFileName,temp);
             CONFIG_ReadSetup();
         }
-        initprintf("Using config file '%s'.\n",setupfilename);
+        initprintf("Using config file '%s'.\n",g_setupFileName);
     }
     return 0;
 

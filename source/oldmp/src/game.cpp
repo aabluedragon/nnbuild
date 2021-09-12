@@ -9269,7 +9269,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     if (argc > i+1)
                     {
-                        Bstrcpy(setupfilename,argv[i+1]);
+                        Bstrcpy(g_setupFileName,argv[i+1]);
                         i++;
                     }
                     i++;
@@ -10772,7 +10772,7 @@ int app_main(int32_t argc, char const* const* argv)
         exit(1);
     }
 
-    initprintf("Using config file '%s'.\n",setupfilename);
+    initprintf("Using config file '%s'.\n",g_setupFileName);
 
 #ifdef DISCORD_RPC
     InitDiscord();
