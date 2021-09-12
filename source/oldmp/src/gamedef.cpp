@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "duke3d.h"
 #include "gamedef.h"
+#include "kplib.h"
 
 #include "osd.h"
 
@@ -1887,6 +1888,41 @@ static int C_CountCaseStatements()
     return lCount;
 }
 
+#ifdef _WIN32
+static void check_filename_case(const char* fn)
+{
+    static char buf[BMAX_PATH];
+
+    // .zip isn't case sensitive, and calling kopen4load on files in .zips is slow
+    Bstrcpy(buf, fn);
+    kzfindfilestart(buf);
+
+    if (!kzfindfile(buf))
+    {
+        buildvfs_kfd fp;
+        if ((fp = kopen4loadfrommod(fn, g_loadFromGroupOnly)) != buildvfs_kfd_invalid)
+            kclose(fp);
+    }
+}
+#else
+static void check_filename_case(const char* fn) { UNREFERENCED_PARAMETER(fn); }
+#endif
+
+static void C_DefineMusic(int volumeNum, int levelNum, const char* fileName)
+{
+    Bassert((unsigned)volumeNum < MAXVOLUMES + 1);
+    Bassert((unsigned)levelNum < MAXLEVELS);
+
+    if (strcmp(fileName, "/.") == 0)
+        return;
+
+    map_t* const pMapInfo = &g_mapInfo[(MAXLEVELS * volumeNum) + levelNum];
+
+    Xfree(pMapInfo->musicfn);
+    pMapInfo->musicfn = dup_filename(fileName);
+    check_filename_case(pMapInfo->musicfn);
+}
+
 static int C_ParseCommand(void)
 {
     int i, j=0, k=0, done, tw;
@@ -2334,65 +2370,41 @@ static int C_ParseCommand(void)
         C_GetNextValue(LABEL_DEFINE); // Volume Number (0/4)
         g_scriptPtr--;
 
-        k = *g_scriptPtr-1;
+        k = *g_scriptPtr - 1;  // 0-based volume number. -1 or MAXVOLUMES: "special"
+        if (k == -1)
+            k = MAXVOLUMES;
 
-        if (k >= 0) // if it's background music
+        if (EDUKE32_PREDICT_FALSE((unsigned)k >= MAXVOLUMES + 1)) // if it's not background or special music
         {
-            i = 0;
-            // get the file name...
-            while (C_GetKeyword() == -1)
-            {
-                while (isaltok(*textptr) == 0)
-                {
-                    if (*textptr == 0x0a) g_lineNumber++;
-                    textptr++;
-                    if (*textptr == 0) break;
-                }
-                j = 0;
-                tempbuf[j] = '/';
-                while (isaltok(*(textptr+j)))
-                {
-                    tempbuf[j+1] = textptr[j];
-                    j++;
-                }
-                tempbuf[j+1] = '\0';
-
-                if (g_mapInfo[(k*MAXLEVELS)+i].musicfn == NULL)
-                    g_mapInfo[(k*MAXLEVELS)+i].musicfn = (char*)Xcalloc(Bstrlen(tempbuf)+1,sizeof(char));
-                else if ((Bstrlen(tempbuf)+1) > sizeof(g_mapInfo[(k*MAXLEVELS)+i].musicfn))
-                    g_mapInfo[(k*MAXLEVELS)+i].musicfn = (char*)Xrealloc(g_mapInfo[(k*MAXLEVELS)+i].musicfn,(Bstrlen(tempbuf)+1));
-
-                Bstrcpy(g_mapInfo[(k*MAXLEVELS)+i].musicfn,tempbuf);
-
-                textptr += j;
-                if (i > MAXLEVELS-1) break;
-                i++;
-            }
+            g_numCompilerErrors++;
+            C_ReportError(-1);
+            initprintf("%s:%d: error: volume number must be between 0 and MAXVOLUMES+1=%d.\n",
+                g_szScriptFileName, g_lineNumber, MAXVOLUMES + 1);
+            break;
         }
-        else
+
+        i = 0;
+        // get the file name...
+        while (C_GetKeyword() == -1)
         {
-            i = 0;
-            while (C_GetKeyword() == -1)
+            C_SkipComments();
+
+            j = 0;
+            tempbuf[j] = '/';
+            while (isaltok(*(textptr + j)))
             {
-                while (isaltok(*textptr) == 0)
-                {
-                    if (*textptr == 0x0a) g_lineNumber++;
-                    textptr++;
-                    if (*textptr == 0) break;
-                }
-                j = 0;
-
-                while (isaltok(*(textptr+j)))
-                {
-                    EnvMusicFilename[i][j] = textptr[j];
-                    j++;
-                }
-                EnvMusicFilename[i][j] = '\0';
-
-                textptr += j;
-                if (i > MAXVOLUMES-1) break;
-                i++;
+                tempbuf[j + 1] = textptr[j];
+                j++;
             }
+            tempbuf[j + 1] = '\0';
+
+            C_DefineMusic(k, i, tempbuf);
+
+            textptr += j;
+
+            if (i >= MAXLEVELS)
+                break;
+            i++;
         }
     }
     return 0;
@@ -5383,35 +5395,42 @@ repeatcase:
         return 0;
 
     case CON_DEFINESOUND:
+    {
         g_scriptPtr--;
         C_GetNextValue(LABEL_DEFINE);
-        k = *(g_scriptPtr-1);
-        if (k >= MAXSOUNDS)
+
+        // Ideally we could keep the value of i from C_GetNextValue() instead of having to hash_find() again.
+        // This depends on tempbuf remaining in place after C_GetNextValue():
+        j = hash_find(&labelH, tempbuf);
+
+        k = g_scriptPtr[-1];
+        if (EDUKE32_PREDICT_FALSE((unsigned)k >= MAXSOUNDS - 1))
         {
-            initprintf("%s:%d: error: exceeded sound limit of %d.\n",g_szScriptFileName,g_lineNumber,MAXSOUNDS);
+            initprintf("%s:%d: error: sound index exceeds limit of %d.\n", g_szScriptFileName, g_lineNumber, MAXSOUNDS - 1);
             g_numCompilerErrors++;
+            k = MAXSOUNDS - 1;
         }
+        else if (EDUKE32_PREDICT_FALSE(g_sounds[k].filename != NULL))
+        {
+            initprintf("%s:%d: warning: sound %d already defined (%s)\n", g_szScriptFileName, g_lineNumber, k, g_sounds[k].filename);
+            g_numCompilerWarnings++;
+        }
+
         g_scriptPtr--;
         i = 0;
         C_SkipComments();
 
-        if (g_sounds[k].filename == NULL)
-            g_sounds[k].filename = (char*)Xcalloc(BMAX_PATH,sizeof(char));
-        if (!g_sounds[k].filename)
-        {
-            Bsprintf(tempbuf,"Failed allocating %" PRIdPTR " byte buffer.",sizeof(char) * BMAX_PATH);
-            G_GameExit(tempbuf);
-        }
+        char filename[BMAX_PATH];
 
         if (*textptr == '\"')
         {
             textptr++;
             while (*textptr && *textptr != '\"')
             {
-                g_sounds[k].filename[i++] = *textptr++;
-                if (i >= BMAX_PATH)
+                filename[i++] = *textptr++;
+                if (EDUKE32_PREDICT_FALSE(i >= BMAX_PATH - 1))
                 {
-                    initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n", g_szScriptFileName, g_lineNumber, BMAX_PATH);
+                    initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n", g_szScriptFileName, g_lineNumber, BMAX_PATH - 1);
                     g_numCompilerErrors++;
                     C_SkipComments();
                     break;
@@ -5421,41 +5440,41 @@ repeatcase:
         }
         else while (*textptr != ' ' && *textptr != '\t' && *textptr != '\r' && *textptr != '\n')
         {
-            g_sounds[k].filename[i++] = *textptr++;
-            if (i >= BMAX_PATH)
+            filename[i++] = *textptr++;
+            if (EDUKE32_PREDICT_FALSE(i >= BMAX_PATH - 1))
             {
-                initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n", g_szScriptFileName, g_lineNumber, BMAX_PATH);
+                initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n", g_szScriptFileName, g_lineNumber, BMAX_PATH - 1);
                 g_numCompilerErrors++;
                 C_SkipComments();
                 break;
             }
         }
-        g_sounds[k].filename[i] = '\0';
+        filename[i] = '\0';
+
+        check_filename_case(filename);
 
         C_GetNextValue(LABEL_DEFINE);
-        g_sounds[k].ps = *(g_scriptPtr-1);
-        g_scriptPtr--;
+        int minpitch = g_scriptPtr[-1];
         C_GetNextValue(LABEL_DEFINE);
-        g_sounds[k].pe = *(g_scriptPtr-1);
-        g_scriptPtr--;
+        int maxpitch = g_scriptPtr[-1];
         C_GetNextValue(LABEL_DEFINE);
-        g_sounds[k].pr = *(g_scriptPtr-1);
-        g_scriptPtr--;
-        C_GetNextValue(LABEL_DEFINE);
-        g_sounds[k].m = *(g_scriptPtr-1) & ~SF_ONEINST_INTERNAL;
-        if (*(g_scriptPtr - 1) & SF_LOOP)
-            g_sounds[k].m |= SF_ONEINST_INTERNAL;
-        g_scriptPtr--;
-        C_GetNextValue(LABEL_DEFINE);
-        g_sounds[k].vo = *(g_scriptPtr-1);
-        g_scriptPtr--;
+        int priority = g_scriptPtr[-1];
 
-        g_sounds[k].volume = fix16_one;
+        C_GetNextValue(LABEL_DEFINE);
+        int type = g_scriptPtr[-1];
+
+        C_GetNextValue(LABEL_DEFINE);
+        int distance = g_scriptPtr[-1];
+        g_scriptPtr -= 5;
+
+        float volume = 1.0;
+
+        S_DefineSound(k, filename, minpitch, maxpitch, priority, type, distance, volume);
 
         if (k > g_highestSoundIdx)
             g_highestSoundIdx = k;
-
-        return 0;
+    }
+    return 0;
 
     case CON_ENDEVENT:
 

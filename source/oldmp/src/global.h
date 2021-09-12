@@ -104,8 +104,6 @@ G_EXTERN char typebuflen, typebuf[141];
 
 G_EXTERN short cyclers[MAXCYCLERS][6], g_numCyclers;
 
-G_EXTERN char EnvMusicFilename[MAXVOLUMES + 1][BMAX_PATH];
-
 // CON VM
 G_EXTERN char *apStrings[MAXQUOTES], *apXStrings[MAXQUOTES];
 G_EXTERN intptr_t *insptr, *labelcode, *labeltype;

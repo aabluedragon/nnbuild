@@ -87,16 +87,37 @@ typedef struct
 extern int16_t g_skillSoundID;
 extern int32_t g_numEnvSoundsPlaying,g_highestSoundIdx;
 
-int A_CheckSoundPlaying(int spriteNum, int soundNum);
-int A_PlaySound(int soundNum, int spriteNum);
-void S_Callback(intptr_t num);
-int S_CheckSoundPlaying(int soundNum);
-void S_Cleanup(void);
-void S_ClearSoundLocks(void);
+// Definitions
+int32_t S_DefineSound(int sndidx, const char* name, int minpitch, int maxpitch, int priority, int type, int distance, float volume);
+int32_t S_DefineMusic(const char* ID, const char* name);
+
+// Loading
 int32_t S_LoadSound(uint32_t num);
 void S_PrecacheSounds(void);
-void S_MenuSound(void);
 
+// Sound state checking
+int A_CheckSoundPlaying(int spriteNum, int soundNum);
+int S_CheckSoundPlaying(int soundNum);
+
+// Sound Playback
+int A_PlaySound(int soundNum, int spriteNum);
+int S_PlaySound(int num);
+int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos);
+int32_t S_PlaySoundXYZ(int32_t num, int32_t i, int32_t x, int32_t y, int32_t z);
+void S_MenuSound(void);
+void S_StopEnvSound(int sndNum, int sprNum);
+void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
+
+// Startup, shutdown, callbacks, updating, and cleanup
+void S_SoundStartup(void);
+void S_SoundShutdown(void);
+void S_Callback(intptr_t num);
+void S_Cleanup(void);
+void S_ClearSoundLocks(void);
+void S_Update(void);
+void S_DetachSoundsFromSprite(int spriteNum);
+
+// Music Playback
 void S_MusicShutdown(void);
 void S_MusicStartup(void);
 void S_MusicVolume(int32_t volume);
@@ -109,16 +130,7 @@ void S_ContinueLevelMusic(void);
 void S_RestartMusic(void);
 void S_StopMusic(void);
 
-int S_PlaySound(int num);
-int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z);
-int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos);
-void S_SoundShutdown(void);
-void S_SoundStartup(void);
-void S_StopEnvSound(int sndNum, int sprNum);
-void S_Update(void);
-void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
-void S_DetachSoundsFromSprite(int spriteNum);
-
+// Inline functions
 static inline bool S_IsAmbientSFX(int spriteNum)
 {
     return (sprite[spriteNum].picnum == MUSICANDSFX && sprite[spriteNum].lotag < 999);

@@ -135,7 +135,7 @@ int hud_showmapname = 1;
 
 int g_levelTextTime = 0;
 
-enum
+enum gametokens
 {
     T_INCLUDE = 0,
     T_INTERFACE = 0,
@@ -149,25 +149,14 @@ enum
     T_FILE,
     T_ADDPLAYERCOL,
     T_DELPLAYERCOL,
-    T_ID
+    T_ID,
+    T_MINPITCH,
+    T_MAXPITCH,
+    T_PRIORITY,
+    T_TYPE,
+    T_DISTANCE,
+    T_VOLUME,
 };
-
-static int getatoken(scriptfile *sf, tokenlist *tl, int ntokens)
-{
-    char *tok;
-    int i;
-
-    if (!sf) return T_ERROR;
-    tok = scriptfile_gettoken(sf);
-    if (!tok) return T_EOF;
-
-    for (i=ntokens-1;i>=0;i--)
-    {
-        if (!Bstrcasecmp(tok, tl[i].text))
-            return tl[i].tokenid;
-    }
-    return T_ERROR;
-}
 
 void SetIfGreater(int32_t *variable, int32_t potentialValue)
 {
@@ -8895,87 +8884,11 @@ static void setup_rancid_net(const char *fn)
 
 #endif
 
-static char *makename(char *destname, char *OGGname, char *origname)
-{
-    if (!origname)
-        return destname;
-
-    if (destname)
-        Xfree(destname);
-    destname = (char*)Xcalloc(Bstrlen(OGGname) + Bstrlen(origname) + 1, sizeof(char));
-    if (!destname)
-        return NULL;
-
-    Bstrcpy(destname,(*OGGname)?OGGname:origname);
-
-    if (*OGGname&&OGGname[Bstrlen(OGGname)-1]=='/')
-    {
-        while (*origname=='/')
-            origname++;
-        Bstrcat(destname,origname);
-    }
-
-    OGGname=Bstrchr(destname,'.');
-    if (OGGname)
-        Bstrcpy(OGGname,".ogg");
-    else Bstrcat(destname,".ogg");
-
-    return destname;
-}
-
-static int AL_DefineSound(int ID,char *name)
-{
-    if (ID>=MAXSOUNDS)
-        return 1;
-    g_sounds[ID].filename1=makename(g_sounds[ID].filename1,name,g_sounds[ID].filename);
-//    initprintf("(%s)(%s)(%s)\n",g_sounds[ID].filename1,name,g_sounds[ID].filename);
-//    S_LoadSound(ID);
-    return 0;
-}
-
-static int AL_DefineMusic(char *ID,char *name)
-{
-    int lev,ep,sel;char b1,b2;
-
-    if (!ID)
-        return 1;
-    if (!Bstrcmp(ID,"intro"))
-    {
-        sel=MAXVOLUMES*MAXLEVELS;  ID=EnvMusicFilename[0];
-    }
-    else if (!Bstrcmp(ID,"briefing"))
-    {
-        sel=MAXVOLUMES*MAXLEVELS+1;
-        ID=EnvMusicFilename[1];
-    }
-    else if (!Bstrcmp(ID,"loading"))
-    {
-        sel=MAXVOLUMES*MAXLEVELS+2;
-        ID=EnvMusicFilename[2];
-    }
-    else
-    {
-        sscanf(ID,"%c%d%c%d",&b1,&ep,&b2,&lev);
-        lev--;
-        ep--;
-        if (toupper(b1)!='E'||toupper(b2)!='L'||lev>=MAXLEVELS||ep>=MAXVOLUMES)
-            return 1;
-        sel=(ep*MAXLEVELS)+lev;
-        ID=g_mapInfo[sel].musicfn;
-    }
-
-    g_mapInfo[sel].alt_musicfn=makename(g_mapInfo[sel].alt_musicfn,name,ID);
-//    initprintf("%-15s | ",ID);
-//    initprintf("%3d %2d %2d | %s\n",sel,ep,lev,g_mapInfo[sel].alt_musicfn);
-//    S_PlayMusic(ID,sel);
-    return 0;
-}
-
-static int parsedefinitions_game(scriptfile *script, const int preload)
+static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 {
     int tokn;
 
-    tokenlist tokens[] =
+    static const tokenlist tokens[] =
     {
         { "include",           T_INCLUDE          },
         { "#include",          T_INCLUDE          },
@@ -8988,15 +8901,21 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
         { "delplayercolor",    T_DELPLAYERCOL     },
     };
 
-    tokenlist sound_musictokens[] =
+    static const tokenlist soundTokens[] =
     {
-        { "id",   T_ID  },
-        { "file", T_FILE },
+        { "id",       T_ID },
+        { "file",     T_FILE },
+        { "minpitch", T_MINPITCH },
+        { "maxpitch", T_MAXPITCH },
+        { "priority", T_PRIORITY },
+        { "type",     T_TYPE },
+        { "distance", T_DISTANCE },
+        { "volume",   T_VOLUME },
     };
 
     while (1)
     {
-        tokn = getatoken(script,tokens,sizeof(tokens)/sizeof(tokenlist));
+        tokn = getatoken(pScript,tokens,sizeof(tokens)/sizeof(tokenlist));
         switch (tokn)
         {
         case T_LOADGRP:
@@ -9004,7 +8923,7 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
             char *fn;
 
             pathsearchmode = 1;
-            if (!scriptfile_getstring(script,&fn) && preload)
+            if (!scriptfile_getstring(pScript,&fn) && firstPass)
             {
                 int j = initgroupfile(fn);
 
@@ -9024,7 +8943,7 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
         case T_CACHESIZE:
         {
             int j;
-            if (scriptfile_getnumber(script,&j) || !preload) break;
+            if (scriptfile_getnumber(pScript,&j) || !firstPass) break;
 
             if (j > 0) MAXCACHE1DSIZE = j<<10;
         }
@@ -9032,52 +8951,52 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
         case T_INCLUDE:
         {
             char *fn;
-            if (!scriptfile_getstring(script,&fn))
+            if (!scriptfile_getstring(pScript,&fn))
             {
                 scriptfile *included = scriptfile_fromfile(fn);
 
                 if (!included)
                 {
 //                    initprintf("Warning: Failed including %s on line %s:%d\n",
-//                               fn, script->filename,scriptfile_getlinum(script,cmdtokptr));
+//                               fn, pScript->filename,scriptfile_getlinum(pScript,cmdtokptr));
                 }
                 else
                 {
-                    parsedefinitions_game(included, preload);
+                    parsedefinitions_game(included, firstPass);
                     scriptfile_close(included);
                 }
             }
             break;
         }
         case T_NOAUTOLOAD:
-            if (preload)
+            if (firstPass)
                 g_noAutoLoad = 1;
             break;
         case T_MUSIC:
         {
-            char *tinttokptr = script->ltextptr;
+            char *tinttokptr = pScript->ltextptr;
             char *ID=NULL,*fn,*tfn = NULL;
             char *musicend;
 
-            if (scriptfile_getbraces(script,&musicend)) break;
-            while (script->textptr < musicend)
+            if (scriptfile_getbraces(pScript,&musicend)) break;
+            while (pScript->textptr < musicend)
             {
-                switch (getatoken(script,sound_musictokens,sizeof(sound_musictokens)/sizeof(tokenlist)))
+                switch (getatoken(pScript,soundTokens,sizeof(soundTokens)/sizeof(tokenlist)))
                 {
                 case T_ID:
-                    scriptfile_getstring(script,&ID);
+                    scriptfile_getstring(pScript,&ID);
                     break;
                 case T_FILE:
-                    scriptfile_getstring(script,&fn);
+                    scriptfile_getstring(pScript,&fn);
                     break;
                 }
             }
-            if (!preload)
+            if (!firstPass)
             {
                 int i;
                 if (ID==NULL)
                 {
-                    initprintf("Error: missing ID for music definition near line %s:%d\n", script->filename, scriptfile_getlinum(script,tinttokptr));
+                    initprintf("Error: missing ID for music definition near line %s:%d\n", pScript->filename, scriptfile_getlinum(pScript,tinttokptr));
                     break;
                 }
 
@@ -9099,62 +9018,59 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
                 else Xfree(tfn);
                 pathsearchmode = i;
 
-                if (AL_DefineMusic(ID,fn))
-                    initprintf("Error: invalid music ID on line %s:%d\n", script->filename, scriptfile_getlinum(script,tinttokptr));
+                if (S_DefineMusic(ID,fn))
+                    initprintf("Error: invalid music ID on line %s:%d\n", pScript->filename, scriptfile_getlinum(pScript,tinttokptr));
             }
         }
         break;
 
         case T_SOUND:
         {
-            char *tinttokptr = script->ltextptr;
-            char *fn, *tfn = NULL;
-            int num=-1;
-            char *musicend;
+            char* tokenPtr = pScript->ltextptr;
+            char* fileName = NULL;
+            char* soundEnd;
 
-            if (scriptfile_getbraces(script,&musicend)) break;
-            while (script->textptr < musicend)
+            double volume = 1.0;
+
+            int32_t soundNum = -1;
+            int32_t maxpitch = 0;
+            int32_t minpitch = 0;
+            int32_t priority = 0;
+            int32_t type = 0;
+            int32_t distance = 0;
+
+            if (scriptfile_getbraces(pScript, &soundEnd))
+                break;
+
+            while (pScript->textptr < soundEnd)
             {
-                switch (getatoken(script,sound_musictokens,sizeof(sound_musictokens)/sizeof(tokenlist)))
+                switch (getatoken(pScript, soundTokens, ARRAY_SIZE(soundTokens)))
                 {
-                case T_ID:
-                    scriptfile_getsymbol(script,&num);
-                    break;
-                case T_FILE:
-                    scriptfile_getstring(script,&fn);
-                    break;
+                case T_ID:       scriptfile_getsymbol(pScript, &soundNum); break;
+                case T_FILE:     scriptfile_getstring(pScript, &fileName); break;
+                case T_MINPITCH: scriptfile_getsymbol(pScript, &minpitch); break;
+                case T_MAXPITCH: scriptfile_getsymbol(pScript, &maxpitch); break;
+                case T_PRIORITY: scriptfile_getsymbol(pScript, &priority); break;
+                case T_TYPE:     scriptfile_getsymbol(pScript, &type);     break;
+                case T_DISTANCE: scriptfile_getsymbol(pScript, &distance); break;
+                case T_VOLUME:   scriptfile_getdouble(pScript, &volume);   break;
                 }
             }
-            if (!preload)
-            {
-                int i;
 
-                if (num==-1)
+            if (!firstPass)
+            {
+                if (soundNum == -1)
                 {
-                    initprintf("Error: missing ID for sound definition near line %s:%d\n", script->filename, scriptfile_getlinum(script,tinttokptr));
+                    initprintf("Error: missing ID for sound definition near line %s:%d\n", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
                     break;
                 }
 
-                i = pathsearchmode;
-                pathsearchmode = 1;
-                if (findfrompath(fn,&tfn) < 0)
-                {
-                    char buf[BMAX_PATH];
+                if (fileName == NULL || check_file_exist(fileName))
+                    break;
 
-                    Bstrcpy(buf,fn);
-                    kzfindfilestart(buf);
-                    if (!kzfindfile(buf))
-                    {
-                        initprintf("Error: file '%s' does not exist\n",fn);
-                        pathsearchmode = i;
-                        break;
-                    }
-                }
-                else Xfree(tfn);
-                pathsearchmode = i;
-
-                if (AL_DefineSound(num,fn))
-                    initprintf("Error: invalid sound ID on line %s:%d\n", script->filename, scriptfile_getlinum(script,tinttokptr));
+                // maybe I should have just packed this into a sound_t and passed a reference...
+                if (S_DefineSound(soundNum, fileName, minpitch, maxpitch, priority, type, distance, volume) == -1)
+                    initprintf("Error: invalid sound ID on line %s:%d\n", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
             }
         }
         break;
@@ -9164,8 +9080,8 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
             int palnum;
             char* palname;
 
-            if (scriptfile_getsymbol(script, &palnum)) break;
-            if (scriptfile_getstring(script, &palname)) break;
+            if (scriptfile_getsymbol(pScript, &palnum)) break;
+            if (scriptfile_getstring(pScript, &palname)) break;
 
             playerColor_add(palname, palnum);
         }
@@ -9175,7 +9091,7 @@ static int parsedefinitions_game(scriptfile *script, const int preload)
         {
             int palnum;
 
-            if (scriptfile_getsymbol(script, &palnum)) break;
+            if (scriptfile_getsymbol(pScript, &palnum)) break;
             
             playerColor_delete(palnum);
         }
@@ -9827,7 +9743,7 @@ static void parsedefinitions_game_include(const char* fileName, scriptfile* pScr
                 else
                     {
                     initprintf("Warning: Failed including %s on line %s:%d\n",
-                               fn, script->filename,scriptfile_getlinum(script,cmdtokptr));
+                               fn, pScript->filename,scriptfile_getlinum(pScript,cmdtokptr));
                     }
         */
     }
@@ -9885,7 +9801,7 @@ void G_UpdateAppTitle(char const* const name /*= nullptr*/)
 static void G_DisplayLogo(void)
 {
     int soundanm = 0;
-    int logoflags=Gv_GetVarByLabel("LOGO_FLAGS",255, -1, -1);
+    int32_t logoflags = G_GetLogoFlags();
 
     ready2send = 0;
 
