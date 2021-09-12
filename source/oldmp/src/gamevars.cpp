@@ -340,7 +340,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
     {
         g_numCompilerErrors++;
         C_ReportError(-1);
-        initprintf("%s:%d: error: too many arrays!\n",g_szScriptFileName,g_lineNumber);
+        initprintf("%s:%d: error: too many arrays!\n",g_scriptFileName,g_lineNumber);
         return 0;
     }
 
@@ -348,7 +348,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
     {
         g_numCompilerErrors++;
         C_ReportError(-1);
-        initprintf("%s:%d: error: array name `%s' exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,pszLabel, MAXARRAYLABEL);
+        initprintf("%s:%d: error: array name `%s' exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,pszLabel, MAXARRAYLABEL);
         return 0;
     }
     i = hash_find(&arrayH,pszLabel);
@@ -385,7 +385,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
     {
         g_numCompilerErrors++;
         C_ReportError(-1);
-        initprintf("%s:%d: error: too many gamevars!\n",g_szScriptFileName,g_lineNumber);
+        initprintf("%s:%d: error: too many gamevars!\n",g_scriptFileName,g_lineNumber);
         return 0;
     }
 
@@ -393,7 +393,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
     {
         g_numCompilerErrors++;
         C_ReportError(-1);
-        initprintf("%s:%d: error: variable name `%s' exceeds limit of %d characters.\n",g_szScriptFileName,g_lineNumber,pszLabel, MAXVARLABEL);
+        initprintf("%s:%d: error: variable name `%s' exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,pszLabel, MAXVARLABEL);
         return 0;
     }
 
@@ -405,9 +405,9 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
         if (aGameVars[i].dwFlags & (GAMEVAR_INTPTR|GAMEVAR_SHORTPTR|GAMEVAR_CHARPTR))
         {
             //  			   warning++;
-            //  			   initprintf("%s:%d: warning: Internal gamevar '%s' cannot be redefined.\n",g_szScriptFileName,g_lineNumber,label+(g_numLabels<<6));
+            //  			   initprintf("%s:%d: warning: Internal gamevar '%s' cannot be redefined.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
             C_ReportError(-1);
-            initprintf("%s:%d: warning: cannot redefine internal gamevar `%s'.\n",g_szScriptFileName,g_lineNumber,label+(g_numLabels<<6));
+            initprintf("%s:%d: warning: cannot redefine internal gamevar `%s'.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
             return 0;
         }
         else if (!(aGameVars[i].dwFlags & GAMEVAR_DEFAULT) && !(aGameVars[i].dwFlags & GAMEVAR_SYSTEM))
