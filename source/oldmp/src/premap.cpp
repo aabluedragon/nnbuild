@@ -1733,6 +1733,8 @@ int G_EnterLevel(int g)
     //cachedebug = 0;
     automapping = 0;
 
+    ud.playerbest = CONFIG_GetMapBestTime(Menu_HaveUserMap() ? boardfilename : m.filename, g_loadedMapHack.md4);
+
     G_CacheMapData();
 
     if (ud.recstat != 2)

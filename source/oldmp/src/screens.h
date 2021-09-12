@@ -25,6 +25,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #define CROSSHAIR_PAL (MAXPALOOKUPS-RESERVEDPALS-1)
 
+static inline int G_LastMapInfoIndex(void)
+{
+    Bassert(ud.last_level >= 1);  // NOTE: last_level is 1-based
+    return ud.volume_number * MAXLEVELS + ud.last_level - 1;
+}
+
 void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set);
 
 void G_ShowScores(bool bonus);

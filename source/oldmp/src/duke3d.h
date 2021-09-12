@@ -536,6 +536,7 @@ typedef struct {
     int32_t music_episode, music_level;
 
     int32_t monsters_killed, total_monsters;
+    int32_t playerbest;
 
     int32_t configversion;
 

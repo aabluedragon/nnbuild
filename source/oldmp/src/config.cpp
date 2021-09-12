@@ -994,46 +994,61 @@ void CONFIG_WriteSetup(uint32_t flags)
     Bfflush(NULL);
 }
 
-int32_t CONFIG_GetMapBestTime(char *mapname)
+static const char* CONFIG_GetMapEntryName(char m[], char const* const mapname)
 {
-    int32_t t = -1;
-    char m[BMAX_PATH], *p;
-
     strcpy(m, mapname);
-    p = strrchr(m, '/');
+
+    char* p = strrchr(m, '/');
     if (!p) p = strrchr(m, '\\');
-    if (p) strcpy(m, p);
-    for (p=m;*p;p++) *p = tolower(*p);
+    if (p) Bmemmove(m, p, Bstrlen(p) + 1);
+    for (p = m; *p; p++) *p = tolower(*p);
 
     // cheap hack because SCRIPT_GetNumber doesn't like the slashes
     p = m;
     while (*p == '/') p++;
 
-    if (!ud.config.setupread) return -1;
-    if (ud.config.scripthandle < 0) return -1;
+    return p;
+}
 
-    SCRIPT_GetNumber(ud.config.scripthandle, "MapTimes", p, &t);
+static void CONFIG_GetMD4EntryName(char m[], uint8_t const* const md4)
+{
+    sprintf(m, "MD4_%08x%08x%08x%08x",
+        B_BIG32(B_UNBUF32(&md4[0])), B_BIG32(B_UNBUF32(&md4[4])),
+        B_BIG32(B_UNBUF32(&md4[8])), B_BIG32(B_UNBUF32(&md4[12])));
+}
+
+int32_t CONFIG_GetMapBestTime(char const* const mapname, uint8_t const* const mapmd4)
+{
+    if (!ud.config.setupread || ud.config.scripthandle < 0)
+        return -1;
+
+    char m[37];
+
+    CONFIG_GetMD4EntryName(m, mapmd4);
+
+    int32_t t = -1;
+    if (SCRIPT_GetNumber(ud.config.scripthandle, "MapTimes", m, &t))
+    {
+        // fall back to map filenames
+        char m2[BMAX_PATH];
+        auto p = CONFIG_GetMapEntryName(m2, mapname);
+
+        SCRIPT_GetNumber(ud.config.scripthandle, "MapTimes", p, &t);
+    }
+
     return t;
 }
 
-int32_t CONFIG_SetMapBestTime(char *mapname, int32_t tm)
+int32_t CONFIG_SetMapBestTime(uint8_t const* const mapmd4, int32_t tm)
 {
-    char m[BMAX_PATH], *p;
+    if (ud.config.scripthandle < 0 && (ud.config.scripthandle = SCRIPT_Init(g_setupFileName)) < 0)
+        return -1;
 
-    strcpy(m, mapname);
-    p = strrchr(m, '/');
-    if (!p) p = strrchr(m, '\\');
-    if (p) strcpy(m, p);
-    for (p=m;*p;p++) *p = tolower(*p);
+    char m[37];
 
-    // cheap hack because SCRIPT_GetNumber doesn't like the slashes
-    p = m;
-    while (*p == '/') p++;
+    CONFIG_GetMD4EntryName(m, mapmd4);
+    SCRIPT_PutNumber(ud.config.scripthandle, "MapTimes", m, tm, FALSE, FALSE);
 
-    if (ud.config.scripthandle < 0) ud.config.scripthandle = SCRIPT_Init(setupfilename);
-    if (ud.config.scripthandle < 0) return -1;
-
-    SCRIPT_PutNumber(ud.config.scripthandle, "MapTimes", p, tm, false, false);
     return 0;
 }
 

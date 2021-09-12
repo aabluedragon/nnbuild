@@ -10473,6 +10473,9 @@ static int G_EndOfLevel(void)
 
         ready2send = 0;
 
+        if (p.player_par > 0 && (p.player_par < ud.playerbest || ud.playerbest < 0) && ud.display_bonus_screen == 1)
+            CONFIG_SetMapBestTime(g_loadedMapHack.md4, p.player_par);
+
         if (ud.display_bonus_screen == 1)
         {
             int const ssize = ud.screen_size;
