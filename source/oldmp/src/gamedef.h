@@ -55,7 +55,7 @@ extern int g_kb;
 extern int g_looking_angSR1;
 extern char g_scriptFileName[BMAX_PATH];
 extern int g_totalLines,g_lineNumber;
-extern int g_numCompilerErrors,g_numCompilerWarnings;
+extern int g_errorCnt,g_warningCnt;
 
 typedef struct
 {

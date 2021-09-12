@@ -92,7 +92,7 @@ int g_gameArrayCount=0;
 extern int qsetmode;
 
 char *textptr;
-int g_numCompilerErrors,g_numCompilerWarnings;
+int g_errorCnt,g_warningCnt;
 
 enum ScriptLabel_t
 {
@@ -1060,7 +1060,7 @@ static int C_SetScriptSize(int size)
 //            initprintf("%d\n",i);
         if (bitptr[i>>3]&(BITPTR_POINTER<<(i&7)) && !((intptr_t)apScript[i] >= (intptr_t)(&apScript[0]) && (intptr_t)apScript[i] < (intptr_t)(&apScript[g_scriptSize])))
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             initprintf("Internal compiler error at %d (0x%x)\n",(int32_t)i,(uint32_t)i);
         }
 //        if (bitptr[i] == 0 && ((intptr_t)apScript[i] >= (intptr_t)(&apScript[0]) && (intptr_t)apScript[i] < (intptr_t)(&apScript[g_scriptSize])))
@@ -1108,7 +1108,7 @@ static int C_SetScriptSize(int size)
         C_ReportError(-1);
         initprintf("%s:%d: out of memory: Aborted (%ud)\n",g_scriptFileName,g_lineNumber,(unsigned)(g_scriptPtr-apScript));
         initprintf("%s", tempbuf);
-        g_numCompilerErrors++;
+        g_errorCnt++;
         return 1;
     }
 
@@ -1215,12 +1215,12 @@ static int32_t C_SkipComments(void)
             switch (textptr[1])
             {
             case '/': // C++ style comment
-                if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
+                if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
                     initprintf("%s:%d: debug: got comment.\n", g_scriptFileName, g_lineNumber);
                 C_NextLine();
                 break;
             case '*': // beginning of a C style comment
-                if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
+                if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
                     initprintf("%s:%d: debug: got start of comment block.\n", g_scriptFileName, g_lineNumber);
                 do
                 {
@@ -1231,17 +1231,17 @@ static int32_t C_SkipComments(void)
 
                 if (!*textptr)
                 {
-                    if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
+                    if (!(g_errorCnt || g_warningCnt) && g_scriptDebug)
                         initprintf("%s:%d: debug: EOF in comment!\n", g_scriptFileName, g_lineNumber);
                     C_ReportError(-1);
                     initprintf("%s:%d: error: found `/*' with no `*/'.\n", g_scriptFileName, g_lineNumber);
                     g_parsingActorPtr = 0;
                     g_processingState = g_numBraces = 0;
-                    g_numCompilerErrors++;
+                    g_errorCnt++;
                     break;
                 }
 
-                if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
+                if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
                     initprintf("%s:%d: debug: got end of comment block.\n", g_scriptFileName, g_lineNumber);
 
                 textptr += 2;
@@ -1504,7 +1504,7 @@ static void C_GetNextLabelName(void)
         label[(g_numLabels<<6)+(i++)] = *(textptr++);
 
     label[(g_numLabels<<6)+i] = 0;
-    if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
+    if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
         initprintf("%s:%d: debug: got label `%s'.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
 }
 
@@ -1568,7 +1568,7 @@ static int C_GetNextKeyword(void) //Returns its code #
         bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         textptr += l;
         g_scriptPtr++;
-        if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
+        if (!(g_errorCnt || g_warningCnt) && g_scriptDebug)
             initprintf("%s:%d: debug: translating keyword `%s'.\n",g_scriptFileName,g_lineNumber,keyw[i]);
         return i;
     }
@@ -1586,7 +1586,7 @@ static int C_GetNextKeyword(void) //Returns its code #
         initprintf("%s:%d: error: expected a SPACE or CR between `}' and `%s'.\n",g_scriptFileName,g_lineNumber,tempbuf+1);
     }
     else C_ReportError(ERROR_EXPECTEDKEYWORD);
-    g_numCompilerErrors++;
+    g_errorCnt++;
     return -1;
 }
 
@@ -1597,7 +1597,7 @@ static void C_GetNextVarType(int type)
     C_SkipComments();
     if (!type && !g_labelsOnly && (isdigit(*textptr) || ((*textptr == '-') && (isdigit(*(textptr+1))))))
     {
-        if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
+        if (!(g_errorCnt || g_warningCnt) && g_scriptDebug)
             initprintf("%s:%d: debug: accepted constant %d in place of gamevar.\n",g_scriptFileName,g_lineNumber,Batoi(textptr));
         bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr++=MAXGAMEVARS;
@@ -1614,13 +1614,13 @@ static void C_GetNextVarType(int type)
     {
         if (!type)
         {
-            if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
+            if (!(g_errorCnt || g_warningCnt) && g_scriptDebug)
                 initprintf("%s:%d: debug: flagging gamevar as negative. (%d)\n",g_scriptFileName,g_lineNumber,atoi(textptr));
             f = (MAXGAMEVARS<<1);
         }
         else
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             C_GetNextLabelName();
             return;
@@ -1630,7 +1630,7 @@ static void C_GetNextVarType(int type)
 
     if (!g_skipKeywordCheck && hash_find(&keywH,label+(g_numLabels<<6))>=0)
     {
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(ERROR_ISAKEYWORD);
         return;
     }
@@ -1644,7 +1644,7 @@ static void C_GetNextVarType(int type)
         i=GetADefID(label+(g_numLabels<<6));
         if (i < 0)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_NOTAGAMEARRAY);
             return;
         }
@@ -1656,14 +1656,14 @@ static void C_GetNextVarType(int type)
 
         if (*textptr != ']')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_GAMEARRAYBNC);
             return;
         }
         textptr++;
         if (type)   //writing arrays in this way is not supported because it would require too many changes to other code
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_INVALIDARRAYWRITE);
             return;
         }
@@ -1682,7 +1682,7 @@ static void C_GetNextVarType(int type)
             {
                 if (labeltype[i] & LABEL_DEFINE)
                 {
-                    if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug)
+                    if (!(g_errorCnt || g_warningCnt) && g_scriptDebug)
                         initprintf("%s:%d: debug: accepted defined label `%s' instead of gamevar.\n",g_scriptFileName,g_lineNumber,label+(i<<6));
                     bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
                     *g_scriptPtr++=MAXGAMEVARS;
@@ -1691,11 +1691,11 @@ static void C_GetNextVarType(int type)
                     return;
                 }
             }
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_NOTAGAMEVAR);
             return;
         }
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(ERROR_NOTAGAMEVAR);
         textptr++;
         return;
@@ -1703,13 +1703,13 @@ static void C_GetNextVarType(int type)
     }
     if (type == GAMEVAR_READONLY && aGameVars[i].dwFlags & GAMEVAR_READONLY)
     {
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(ERROR_VARREADONLY);
         return;
     }
     else if (aGameVars[i].dwFlags & type)
     {
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(ERROR_VARTYPEMISMATCH);
         return;
     }
@@ -1717,9 +1717,9 @@ static void C_GetNextVarType(int type)
     {
         C_ReportError(-1);
         initprintf("%s:%d: warning: found local gamevar `%s' used within %s; expect multiplayer synchronization issues.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6),g_parsingEventPtr?"a synced event":"an actor");
-        g_numCompilerWarnings++;
+        g_warningCnt++;
     }
-    if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
+    if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
         initprintf("%s:%d: debug: accepted gamevar `%s'.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
 
     bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
@@ -1767,7 +1767,7 @@ static int C_GetNextValue(int type)
 
     if (!g_skipKeywordCheck && hash_find(&keywH,label+(g_numLabels<<6))>=0)
     {
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(ERROR_ISAKEYWORD);
         textptr+=l;
     }
@@ -1779,7 +1779,7 @@ static int C_GetNextValue(int type)
 
         if (labeltype[i] & type)
         {
-            if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
+            if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
             {
                 gl = C_GetLabelType(labeltype[i]);
                 initprintf("%s:%d: debug: accepted %s label `%s'.\n",g_scriptFileName,g_lineNumber,gl,label+(i<<6));
@@ -1799,7 +1799,7 @@ static int C_GetNextValue(int type)
         gl = C_GetLabelType(labeltype[i]);
         C_ReportError(-1);
         initprintf("%s:%d: warning: expected a %s, found a %s.\n",g_scriptFileName,g_lineNumber,el,gl);
-        g_numCompilerWarnings++;
+        g_warningCnt++;
         //Bfree(el);
         //Bfree(gl);
         return -1;  // valid label name, but wrong type
@@ -1808,7 +1808,7 @@ static int C_GetNextValue(int type)
     if (isdigit(*textptr) == 0 && *textptr != '-')
     {
         C_ReportError(ERROR_PARAMUNDEFINED);
-        g_numCompilerErrors++;
+        g_errorCnt++;
         bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
         *g_scriptPtr = 0;
         g_scriptPtr++;
@@ -1819,7 +1819,7 @@ static int C_GetNextValue(int type)
     if (isdigit(*textptr) && g_labelsOnly)
     {
         C_ReportError(WARNING_LABELSONLY);
-        g_numCompilerWarnings++;
+        g_warningCnt++;
     }
 
     i = l-1;
@@ -1830,13 +1830,13 @@ static int C_GetNextValue(int type)
         {
             C_ReportError(-1);
             initprintf("%s:%d: warning: invalid character in definition: '%c'!\n",g_scriptFileName,g_lineNumber,textptr[i+1]);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             break;
         }
     }
     while (i > 0);
 
-    if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
+    if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
         initprintf("%s:%d: debug: accepted constant %d.\n",g_scriptFileName,g_lineNumber,atoi(textptr));
     bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
 
@@ -1935,7 +1935,7 @@ static int C_ParseCommand(void)
         exit(0);
     }
 
-    if (g_numCompilerErrors > 63 || (*textptr == '\0') || (*(textptr+1) == '\0')) return 1;
+    if (g_errorCnt > 63 || (*textptr == '\0') || (*(textptr+1) == '\0')) return 1;
 
     if (g_scriptDebug)
         C_ReportError(-1);
@@ -1976,7 +1976,7 @@ static int C_ParseCommand(void)
 
         if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
@@ -1984,7 +1984,7 @@ static int C_ParseCommand(void)
         i = hash_find(&gamevarH,label+(g_numLabels<<6));
         if (i>=0)
         {
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
@@ -1993,7 +1993,7 @@ static int C_ParseCommand(void)
         {
             if (labeltype[j] & LABEL_STATE)
             {
-                if (!(g_numCompilerErrors || g_numCompilerWarnings) && g_scriptDebug > 1)
+                if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
                     initprintf("%s:%d: debug: accepted state label `%s'.\n",g_scriptFileName,g_lineNumber,label+(j<<6));
                 *g_scriptPtr = labelcode[j];
                 if (labelcode[j] >= (intptr_t)&apScript[0] && labelcode[j] < (intptr_t)&apScript[g_scriptSize])
@@ -2007,7 +2007,7 @@ static int C_ParseCommand(void)
                 const char *gl = C_GetLabelType(labeltype[j]);
                 C_ReportError(-1);
                 initprintf("%s:%d: warning: expected a state, found a %s.\n",g_scriptFileName,g_lineNumber,gl);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 //Bfree(gl);
                 *(g_scriptPtr-1) = CON_NULLOP; // get rid of the state, leaving a nullop to satisfy if conditions
                 bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
@@ -2018,7 +2018,7 @@ static int C_ParseCommand(void)
         {
             C_ReportError(-1);
             initprintf("%s:%d: error: state `%s' not found.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         g_scriptPtr++;
         return 0;
@@ -2028,24 +2028,24 @@ static int C_ParseCommand(void)
         {
             C_ReportError(-1);
             initprintf("%s:%d: error: found `ends' without open `state'.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         //            else
         {
             if (g_numBraces > 0)
             {
                 C_ReportError(ERROR_OPENBRACKET);
-                g_numCompilerErrors++;
+                g_errorCnt++;
             }
             if (g_numBraces < 0)
             {
                 C_ReportError(ERROR_CLOSEBRACKET);
-                g_numCompilerErrors++;
+                g_errorCnt++;
             }
             if (g_checkingSwitch > 0)
             {
                 C_ReportError(ERROR_NOENDSWITCH);
-                g_numCompilerErrors++;
+                g_errorCnt++;
 
                 g_checkingSwitch = 0; // can't be checking anymore...
             }
@@ -2093,7 +2093,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -2106,7 +2106,7 @@ static int C_ParseCommand(void)
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -2142,7 +2142,7 @@ static int C_ParseCommand(void)
         if (isdigit(*textptr) || (*textptr == '-'))
         {
             C_GetNextLabelName();
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             C_GetNextValue(LABEL_DEFINE);
             C_GetNextValue(LABEL_DEFINE);
@@ -2156,7 +2156,7 @@ static int C_ParseCommand(void)
 
         if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
@@ -2171,7 +2171,7 @@ static int C_ParseCommand(void)
         //AddLog(g_szBuf);
         if ((*(g_scriptPtr-1)&GAMEVAR_USER_MASK)==3)
         {
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             *(g_scriptPtr-1)^=GAMEVAR_PERPLAYER;
             C_ReportError(WARNING_BADGAMEVAR);
         }
@@ -2188,7 +2188,7 @@ static int C_ParseCommand(void)
         if (isdigit(*textptr) || (*textptr == '-'))
         {
             C_GetNextLabelName();
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             C_GetNextValue(LABEL_DEFINE);
             C_GetNextValue(LABEL_DEFINE);
@@ -2201,7 +2201,7 @@ static int C_ParseCommand(void)
 
         if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
@@ -2209,7 +2209,7 @@ static int C_ParseCommand(void)
         i = hash_find(&gamevarH,label+(g_numLabels<<6));
         if (i>=0)
         {
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
@@ -2229,7 +2229,7 @@ static int C_ParseCommand(void)
 
         if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
@@ -2237,7 +2237,7 @@ static int C_ParseCommand(void)
         i = hash_find(&gamevarH,label+(g_numLabels<<6));
         if (i>=0)
         {
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
@@ -2246,7 +2246,7 @@ static int C_ParseCommand(void)
         {
             /*            if (i >= g_numDefaultLabels)
                         {
-                            g_numCompilerWarnings++;
+                            g_warningCnt++;
                             C_ReportError(WARNING_DUPLICATEDEFINITION);
                         } */
         }
@@ -2289,7 +2289,7 @@ static int C_ParseCommand(void)
         {
             if (!C_CheckEventSync(g_currentEvent))
             {
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 C_ReportError(WARNING_EVENTSYNC);
             }
 
@@ -2299,7 +2299,7 @@ static int C_ParseCommand(void)
                 bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                 *(g_scriptPtr-1) = 0;
                 initprintf("%s:%d: warning: expected a move, found a constant.\n",g_scriptFileName,g_lineNumber);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
             }
 
             j = 0;
@@ -2322,7 +2322,7 @@ static int C_ParseCommand(void)
 
             if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
             {
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
@@ -2330,14 +2330,14 @@ static int C_ParseCommand(void)
             i = hash_find(&gamevarH,label+(g_numLabels<<6));
             if (i>=0)
             {
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
             i = hash_find(&labelH,label+(g_numLabels<<6));
             if (i>=0)
             {
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 initprintf("%s:%d: warning: duplicate move `%s' ignored.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
             }
             if (i == -1)
@@ -2376,7 +2376,7 @@ static int C_ParseCommand(void)
 
         if (EDUKE32_PREDICT_FALSE((unsigned)k >= MAXVOLUMES + 1)) // if it's not background or special music
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(-1);
             initprintf("%s:%d: error: volume number must be between 0 and MAXVOLUMES+1=%d.\n",
                 g_scriptFileName, g_lineNumber, MAXVOLUMES + 1);
@@ -2435,7 +2435,7 @@ static int C_ParseCommand(void)
             fp = kopen4loadfrommod(tempbuf,g_loadFromGroupOnly);
             if (fp < 0)
             {
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 initprintf("%s:%d: error: could not find file `%s'.\n",g_scriptFileName,g_lineNumber,tempbuf);
                 return 0;
             }
@@ -2446,7 +2446,7 @@ static int C_ParseCommand(void)
             if (!mptr)
             {
                 kclose(fp);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 initprintf("%s:%d: error: could not allocate %d bytes to include `%s'.\n",
                            g_scriptFileName,g_lineNumber,j,tempbuf);
                 return 0;
@@ -2489,7 +2489,7 @@ static int C_ParseCommand(void)
             if (!C_CheckEventSync(g_currentEvent))
             {
                 C_ReportError(WARNING_EVENTSYNC);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
             }
             C_GetNextValue(LABEL_AI);
         }
@@ -2500,7 +2500,7 @@ static int C_ParseCommand(void)
 
             if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
             {
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
@@ -2508,14 +2508,14 @@ static int C_ParseCommand(void)
             i = hash_find(&gamevarH,label+(g_numLabels<<6));
             if (i>=0)
             {
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
             i = hash_find(&labelH,label+(g_numLabels<<6));
             if (i>=0)
             {
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 initprintf("%s:%d: warning: duplicate ai `%s' ignored.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
             }
 
@@ -2539,7 +2539,7 @@ static int C_ParseCommand(void)
                         bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                         *(g_scriptPtr-1) = 0;
                         initprintf("%s:%d: warning: expected a move, found a constant.\n",g_scriptFileName,g_lineNumber);
-                        g_numCompilerWarnings++;
+                        g_warningCnt++;
                     }
                     k = 0;
                     while (C_GetKeyword() == -1)
@@ -2569,7 +2569,7 @@ static int C_ParseCommand(void)
             if (!C_CheckEventSync(g_currentEvent))
             {
                 C_ReportError(WARNING_EVENTSYNC);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
             }
             C_GetNextValue(LABEL_ACTION);
         }
@@ -2581,7 +2581,7 @@ static int C_ParseCommand(void)
 
             if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
             {
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
@@ -2589,14 +2589,14 @@ static int C_ParseCommand(void)
             i = hash_find(&gamevarH,label+(g_numLabels<<6));
             if (i>=0)
             {
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
             i = hash_find(&labelH,label+(g_numLabels<<6));
             if (i>=0)
             {
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 initprintf("%s:%d: warning: duplicate action `%s' ignored.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
             }
 
@@ -2625,7 +2625,7 @@ static int C_ParseCommand(void)
         if (g_processingState || g_parsingActorPtr)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         g_numBraces = 0;
@@ -2689,7 +2689,7 @@ static int C_ParseCommand(void)
                         bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                         *(g_scriptPtr-1) = 0;
                         initprintf("%s:%d: warning: expected a move, found a constant.\n",g_scriptFileName,g_lineNumber);
-                        g_numCompilerWarnings++;
+                        g_warningCnt++;
                     }
                     break;
                 }
@@ -2706,7 +2706,7 @@ static int C_ParseCommand(void)
         if (g_processingState || g_parsingActorPtr)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         g_numBraces = 0;
@@ -2733,7 +2733,7 @@ static int C_ParseCommand(void)
         if (j > MAXGAMEEVENTS-1 || j < 0)
         {
             initprintf("%s:%d: error: invalid event ID.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             return 0;
         }
 
@@ -2744,7 +2744,7 @@ static int C_ParseCommand(void)
             C_ReportError(-1);
             g_parsingEventPtr = g_parsingActorPtr = tempscrptr;
             initprintf("%s:%d: warning: duplicate event `%s'.\n",g_scriptFileName,g_lineNumber,g_szCurrentBlockName);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         else apScriptGameEvent[j]=g_parsingEventPtr;
 
@@ -2756,7 +2756,7 @@ static int C_ParseCommand(void)
         if (g_processingState || g_parsingActorPtr)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         g_numBraces = 0;
@@ -2782,7 +2782,7 @@ static int C_ParseCommand(void)
         if (g_processingState || g_parsingActorPtr)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         g_numBraces = 0;
@@ -2807,7 +2807,7 @@ static int C_ParseCommand(void)
         {
             C_ReportError(-1);
             initprintf("%s:%d: warning: invalid useractor type.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             j = 0;
         }
 
@@ -2866,7 +2866,7 @@ static int C_ParseCommand(void)
                         bitptr[(g_scriptPtr-apScript-1)>>3] &= ~(1<<((g_scriptPtr-apScript-1)&7));
                         *(g_scriptPtr-1) = 0;
                         initprintf("%s:%d: warning: expected a move, found a constant.\n",g_scriptFileName,g_lineNumber);
-                        g_numCompilerWarnings++;
+                        g_warningCnt++;
                     }
                     break;
                 }
@@ -2883,7 +2883,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         return 0;
 
@@ -2934,7 +2934,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_ANGOFF:
@@ -2951,7 +2951,7 @@ static int C_ParseCommand(void)
                 *(g_scriptPtr-1) = 32768;
                 C_ReportError(-1);
                 initprintf("%s:%d: warning: tried to set cstat 32767, using 32768 instead.\n",g_scriptFileName,g_lineNumber);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
             }
             else if ((*(g_scriptPtr-1) & 32) && (*(g_scriptPtr-1) & 16))
             {
@@ -2959,7 +2959,7 @@ static int C_ParseCommand(void)
                 *(g_scriptPtr-1) ^= 48;
                 C_ReportError(-1);
                 initprintf("%s:%d: warning: tried to set cstat %d, using %d instead.\n",g_scriptFileName,g_lineNumber,i,(int32_t)*(g_scriptPtr-1));
-                g_numCompilerWarnings++;
+                g_warningCnt++;
             }
         }
         return 0;
@@ -2968,7 +2968,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         C_GetManyVars(5);
         break;
@@ -2987,7 +2987,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         C_GetNextValue(LABEL_DEFINE);
         C_GetNextValue(LABEL_DEFINE);
@@ -3009,7 +3009,7 @@ static int C_ParseCommand(void)
         else
         {
             g_scriptPtr--;
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(-1);
             initprintf("%s:%d: error: found `else' with no `if'.\n",g_scriptFileName,g_lineNumber);
         }
@@ -3019,7 +3019,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_GETSECTOR:
@@ -3053,7 +3053,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3066,7 +3066,7 @@ static int C_ParseCommand(void)
 
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -3155,7 +3155,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_GETWALL:
@@ -3189,7 +3189,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3202,7 +3202,7 @@ static int C_ParseCommand(void)
 
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -3223,7 +3223,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_GETPLAYER:
@@ -3257,7 +3257,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3270,7 +3270,7 @@ static int C_ParseCommand(void)
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -3305,7 +3305,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_GETINPUT:
@@ -3339,7 +3339,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3352,7 +3352,7 @@ static int C_ParseCommand(void)
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -3374,7 +3374,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_GETTILEDATA:
@@ -3408,7 +3408,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr != '.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3421,7 +3421,7 @@ static int C_ParseCommand(void)
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -3459,7 +3459,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3472,7 +3472,7 @@ static int C_ParseCommand(void)
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -3508,7 +3508,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_GETACTORVAR:
@@ -3541,7 +3541,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3576,7 +3576,7 @@ static int C_ParseCommand(void)
         // Check to see if it's a keyword
         if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
@@ -3586,13 +3586,13 @@ static int C_ParseCommand(void)
         if (i<0)
         {
             // not a defined DEF
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_NOTAGAMEVAR);
             return 0;
         }
         if (aGameVars[i].dwFlags & GAMEVAR_READONLY)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_VARREADONLY);
             return 0;
 
@@ -3604,7 +3604,7 @@ static int C_ParseCommand(void)
         {
             if (!(aGameVars[i].dwFlags & GAMEVAR_PERACTOR))
             {
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_ReportError(-1);
                 initprintf("%s:%d: error: variable `%s' is not per-actor.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
                 return 0;
@@ -3616,7 +3616,7 @@ static int C_ParseCommand(void)
         {
             if (!(aGameVars[i].dwFlags & GAMEVAR_PERPLAYER))
             {
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_ReportError(-1);
                 initprintf("%s:%d: error: variable `%s' is not per-player.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
                 return 0;
@@ -3676,7 +3676,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3689,7 +3689,7 @@ static int C_ParseCommand(void)
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -3702,7 +3702,7 @@ static int C_ParseCommand(void)
             case ACTOR_ALPHA: break;
             default:
                 C_ReportError(WARNING_EVENTSYNC);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 break;
             }
         }
@@ -3742,7 +3742,7 @@ static int C_ParseCommand(void)
         {
             C_ReportError(-1);
             initprintf("%s:%d: warning: found `%s' outside of EVENT_ANIMATESPRITES\n",g_scriptFileName,g_lineNumber,tempbuf);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
 
         // syntax getwall[<var>].x <VAR>
@@ -3772,7 +3772,7 @@ static int C_ParseCommand(void)
         }
         if (*textptr!='.')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
             return 0;
         }
@@ -3785,7 +3785,7 @@ static int C_ParseCommand(void)
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYMBOLNOTRECOGNIZED);
             return 0;
         }
@@ -3809,7 +3809,7 @@ static int C_ParseCommand(void)
         if (C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_REVEVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_GETCURRADDRESS:
@@ -3831,7 +3831,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_JUMP:
@@ -3863,7 +3863,7 @@ static int C_ParseCommand(void)
         g_scriptPtr--;
         if (*g_scriptPtr > BYTEVERSION_JF)
         {
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             initprintf("%s:%d: warning: need build %d, found build %d\n",g_scriptFileName,g_lineNumber,k,BYTEVERSION_JF);
         }
         break;
@@ -3875,7 +3875,7 @@ static int C_ParseCommand(void)
         if (g_dynamicTileMapping++)
         {
             initprintf("%s:%d: warning: duplicate g_dynamicTileMapping statement\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         else initprintf("Using dynamic tile remapping\n");
         break;
@@ -3887,7 +3887,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_SETVAR:
@@ -3928,7 +3928,7 @@ static int C_ParseCommand(void)
         C_SkipComments();// skip comments and whitespace
         if (*textptr != '[')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_GAMEARRAYBNO);
             return 1;
         }
@@ -3937,7 +3937,7 @@ static int C_ParseCommand(void)
         C_SkipComments();// skip comments and whitespace
         if (*textptr != ']')
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_GAMEARRAYBNC);
             return 1;
         }
@@ -3962,7 +3962,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_SETVARVAR:
@@ -3992,7 +3992,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_GMAXAMMO:
@@ -4059,7 +4059,7 @@ static int C_ParseCommand(void)
         if (g_processingState || g_parsingActorPtr)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         g_scriptPtr--;
@@ -4070,7 +4070,7 @@ static int C_ParseCommand(void)
         if (j > MAXTILES-1)
         {
             C_ReportError(ERROR_EXCEEDSMAXTILES);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         C_GetNextValue(LABEL_DEFINE);
@@ -4088,7 +4088,7 @@ static int C_ParseCommand(void)
         if (g_processingState || g_parsingActorPtr)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         g_scriptPtr--;
@@ -4099,7 +4099,7 @@ static int C_ParseCommand(void)
         if (j >= MAXTILES)
         {
             C_ReportError(ERROR_EXCEEDSMAXTILES);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             return 0;
         }
 
@@ -4113,7 +4113,7 @@ static int C_ParseCommand(void)
         if (g_processingState || g_parsingActorPtr)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         g_scriptPtr--;
@@ -4126,7 +4126,7 @@ static int C_ParseCommand(void)
         if (i >= MAXTILES || j >= MAXTILES)
         {
             C_ReportError(ERROR_EXCEEDSMAXTILES);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             return 0;
         }
 
@@ -4151,7 +4151,7 @@ static int C_ParseCommand(void)
             if (j > MAXTILES-1)
             {
                 C_ReportError(ERROR_EXCEEDSMAXTILES);
-                g_numCompilerErrors++;
+                g_errorCnt++;
             }
 
             C_GetNextValue(LABEL_DEFINE);
@@ -4163,7 +4163,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         C_GetNextVar();
         return 0;
@@ -4178,7 +4178,7 @@ static int C_ParseCommand(void)
         if (g_processingState || g_parsingActorPtr)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         g_scriptPtr--;
@@ -4190,7 +4190,7 @@ static int C_ParseCommand(void)
         if (j > MAXTILES-1)
         {
             C_ReportError(ERROR_EXCEEDSMAXTILES);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         switch (tw)
@@ -4215,7 +4215,7 @@ static int C_ParseCommand(void)
             if (i > MAXTILES-1)
             {
                 C_ReportError(ERROR_EXCEEDSMAXTILES);
-                g_numCompilerErrors++;
+                g_errorCnt++;
             }
             SpriteCacheList[j][1] = i;
             C_GetNextValue(LABEL_DEFINE);
@@ -4316,7 +4316,7 @@ static int C_ParseCommand(void)
         if (g_parsingEventPtr == 0 && g_processingState == 0)
         {
             C_ReportError(ERROR_EVENTONLY);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         // syntax:
@@ -4332,7 +4332,7 @@ static int C_ParseCommand(void)
         if (g_parsingEventPtr == NULL && g_processingState == 0)
         {
             C_ReportError(ERROR_EVENTONLY);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         C_GetManyVars(13);
@@ -4342,7 +4342,7 @@ static int C_ParseCommand(void)
         if (g_parsingEventPtr == 0 && g_processingState == 0)
         {
             C_ReportError(ERROR_EVENTONLY);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         C_GetManyVars(10);
@@ -4387,7 +4387,7 @@ static int C_ParseCommand(void)
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         C_GetManyVars(4);
         if (tw == CON_MOVESPRITE)
@@ -4406,7 +4406,7 @@ static int C_ParseCommand(void)
         if (g_parsingEventPtr == 0 && g_processingState == 0)
         {
             C_ReportError(ERROR_EVENTONLY);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         switch (tw)
@@ -4443,7 +4443,7 @@ static int C_ParseCommand(void)
         if (g_parsingEventPtr == 0 && g_processingState == 0)
         {
             C_ReportError(ERROR_EVENTONLY);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         // syntax:
@@ -4602,7 +4602,7 @@ repeatcase:
         g_scriptPtr--; // don't save in code
         if (g_checkingSwitch<1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(-1);
             initprintf("%s:%d: error: found `case' statement when not in switch\n",g_scriptFileName,g_lineNumber);
             return 1;
@@ -4624,7 +4624,7 @@ repeatcase:
             for (i=(g_numCases/2)-1;i>=0;i--)
                 if (g_caseScriptPtr[i*2+1]==j)
                 {
-                    g_numCompilerWarnings++;
+                    g_warningCnt++;
                     C_ReportError(WARNING_DUPLICATECASE);
                     break;
                 }
@@ -4668,7 +4668,7 @@ repeatcase:
         g_scriptPtr--;    // don't save
         if (g_checkingSwitch<1)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(-1);
             initprintf("%s:%d: error: found `default' statement when not in switch\n",g_scriptFileName,g_lineNumber);
             return 1;
@@ -4676,7 +4676,7 @@ repeatcase:
         if (g_caseScriptPtr && g_caseScriptPtr[0]!=0)
         {
             // duplicate default statement
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(-1);
             initprintf("%s:%d: error: multiple `default' statements found in switch\n",g_scriptFileName,g_lineNumber);
         }
@@ -4700,7 +4700,7 @@ repeatcase:
         g_checkingSwitch--;
         if (g_checkingSwitch < 0)
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(-1);
             initprintf("%s:%d: error: found `endswitch' without matching `switch'\n",g_scriptFileName,g_lineNumber);
         }
@@ -4713,7 +4713,7 @@ repeatcase:
     case CON_EZSHOOTVAR:
         if (!C_CheckEventSync(g_currentEvent))
         {
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             C_ReportError(WARNING_EVENTSYNC);
         }
         fallthrough__;
@@ -4745,7 +4745,7 @@ repeatcase:
     case CON_SETPLAYERANGLE:
         if (!C_CheckEventSync(g_currentEvent))
         {
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             C_ReportError(WARNING_EVENTSYNC);
         }
         fallthrough__;
@@ -4771,7 +4771,7 @@ repeatcase:
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_IFPDISTL:
@@ -4808,7 +4808,7 @@ repeatcase:
                 C_ReportError(-1);
                 *(g_scriptPtr-1) = 0;
                 initprintf("%s:%d: warning: expected a move, found a constant.\n",g_scriptFileName,g_lineNumber);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
             }
             break;
         case CON_IFPINVENTORY:
@@ -4819,7 +4819,7 @@ repeatcase:
             if (C_CheckEventSync(g_currentEvent))
             {
                 C_ReportError(WARNING_REVEVENTSYNC);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
             }
             fallthrough__;
         default:
@@ -4881,7 +4881,7 @@ repeatcase:
     case CON_LEFTBRACE:
         if (!(g_processingState || g_parsingActorPtr || g_parsingEventPtr))
         {
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
         }
         if (C_GetKeyword() == CON_NULLOP)
@@ -4916,7 +4916,7 @@ repeatcase:
 
             C_ReportError(-1);
             initprintf("%s:%d: error: found more `}' than `{'.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         return 1;
 
@@ -4937,7 +4937,7 @@ repeatcase:
         if (j < 0 || j > MAXVOLUMES-1)
         {
             initprintf("%s:%d: error: volume number exceeds maximum volume count.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_NextLine();
             break;
         }
@@ -4951,7 +4951,7 @@ repeatcase:
             if (i >= (signed)sizeof(EpisodeNames[j])-1)
             {
                 initprintf("%s:%d: error: volume name exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,(int32_t)sizeof(EpisodeNames[j])-1);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_NextLine();
                 break;
             }
@@ -4972,7 +4972,7 @@ repeatcase:
         {
             initprintf("%s:%d: error: function number exceeds number of game functions.\n",
                 g_scriptFileName, g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_NextLine();
             break;
         }
@@ -4989,7 +4989,7 @@ repeatcase:
             {
                 initprintf("%s:%d: warning: invalid character in function name.\n",
                     g_scriptFileName, g_lineNumber);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 C_NextLine();
                 break;
             }
@@ -4997,7 +4997,7 @@ repeatcase:
             {
                 initprintf("%s:%d: warning: truncating function name to %d characters.\n",
                     g_scriptFileName, g_lineNumber, MAXGAMEFUNCLEN - 1);
-                g_numCompilerWarnings++;
+                g_warningCnt++;
                 C_NextLine();
                 break;
             }
@@ -5018,7 +5018,7 @@ repeatcase:
         if (j < 0 || j > 4)
         {
             initprintf("%s:%d: error: skill number exceeds maximum skill count.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_NextLine();
             break;
         }
@@ -5032,7 +5032,7 @@ repeatcase:
             if (i >= (signed)sizeof(SkillNames[j])-1)
             {
                 initprintf("%s:%d: error: skill name exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,(int32_t)sizeof(SkillNames[j])-1);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_NextLine();
                 break;
             }
@@ -5056,7 +5056,7 @@ repeatcase:
             if (i >= (signed)sizeof(gamename)-1)
             {
                 initprintf("%s:%d: error: game name exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,(int32_t)sizeof(gamename)-1);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_NextLine();
                 break;
             }
@@ -5154,7 +5154,7 @@ repeatcase:
         if (j < 0 || j > MAXGAMETYPES-1)
         {
             initprintf("%s:%d: error: gametype number exceeds maximum gametype count.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_NextLine();
             break;
         }
@@ -5169,7 +5169,7 @@ repeatcase:
             if (i >= (signed)sizeof(GametypeNames[j])-1)
             {
                 initprintf("%s:%d: error: gametype name exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,(int32_t)sizeof(GametypeNames[j])-1);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_NextLine();
                 break;
             }
@@ -5190,14 +5190,14 @@ repeatcase:
         if (j < 0 || j > MAXVOLUMES-1)
         {
             initprintf("%s:%d: error: volume number exceeds maximum volume count.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_NextLine();
             break;
         }
         if (k < 0 || k > MAXLEVELS-1)
         {
             initprintf("%s:%d: error: level number exceeds maximum number of levels per episode.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_NextLine();
             break;
         }
@@ -5213,7 +5213,7 @@ repeatcase:
             if (i >= BMAX_PATH)
             {
                 initprintf("%s:%d: error: level file name exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,BMAX_PATH);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 while (*textptr != ' ' && *textptr != '\t') textptr++;
                 break;
             }
@@ -5256,7 +5256,7 @@ repeatcase:
             if (i >= 32)
             {
                 initprintf("%s:%d: error: level name exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,32);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_NextLine();
                 break;
             }
@@ -5289,7 +5289,7 @@ repeatcase:
         if (k >= MAXQUOTES)
         {
             initprintf("%s:%d: error: quote number exceeds limit of %d.\n",g_scriptFileName,g_lineNumber,MAXQUOTES);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
 
         if (apStrings[k] == NULL)
@@ -5326,7 +5326,7 @@ repeatcase:
             if (*textptr == '%' && *(textptr+1) == 's')
             {
                 initprintf("%s:%d: error: quote text contains string identifier.\n",g_scriptFileName,g_lineNumber);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0) textptr++;
                 break;
             }
@@ -5338,7 +5338,7 @@ repeatcase:
             if (i >= MAXQUOTELEN-1)
             {
                 initprintf("%s:%d: error: quote text exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,MAXQUOTELEN-1);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_NextLine();
                 break;
             }
@@ -5371,7 +5371,7 @@ repeatcase:
         if (k > 25)
         {
             initprintf("%s:%d: error: cheat redefinition attempts to redefine nonexistant cheat.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             C_NextLine();
             break;
         }
@@ -5386,7 +5386,7 @@ repeatcase:
             if (i >= (signed)sizeof(CheatStrings[k])-1)
             {
                 initprintf("%s:%d: error: cheat exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,MAXCHEATLEN);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_NextLine();
                 break;
             }
@@ -5407,13 +5407,13 @@ repeatcase:
         if (EDUKE32_PREDICT_FALSE((unsigned)k >= MAXSOUNDS - 1))
         {
             initprintf("%s:%d: error: sound index exceeds limit of %d.\n", g_scriptFileName, g_lineNumber, MAXSOUNDS - 1);
-            g_numCompilerErrors++;
+            g_errorCnt++;
             k = MAXSOUNDS - 1;
         }
         else if (EDUKE32_PREDICT_FALSE(g_sounds[k].filename != NULL))
         {
             initprintf("%s:%d: warning: sound %d already defined (%s)\n", g_scriptFileName, g_lineNumber, k, g_sounds[k].filename);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
 
         g_scriptPtr--;
@@ -5431,7 +5431,7 @@ repeatcase:
                 if (EDUKE32_PREDICT_FALSE(i >= BMAX_PATH - 1))
                 {
                     initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n", g_scriptFileName, g_lineNumber, BMAX_PATH - 1);
-                    g_numCompilerErrors++;
+                    g_errorCnt++;
                     C_SkipComments();
                     break;
                 }
@@ -5444,7 +5444,7 @@ repeatcase:
             if (EDUKE32_PREDICT_FALSE(i >= BMAX_PATH - 1))
             {
                 initprintf("%s:%d: error: sound filename exceeds limit of %d characters.\n", g_scriptFileName, g_lineNumber, BMAX_PATH - 1);
-                g_numCompilerErrors++;
+                g_errorCnt++;
                 C_SkipComments();
                 break;
             }
@@ -5482,17 +5482,17 @@ repeatcase:
         {
             C_ReportError(-1);
             initprintf("%s:%d: error: found `endevent' without open `onevent'.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         if (g_numBraces > 0)
         {
             C_ReportError(ERROR_OPENBRACKET);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         if (g_numBraces < 0)
         {
             C_ReportError(ERROR_CLOSEBRACKET);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         g_parsingEventPtr = 0;
         g_parsingActorPtr = 0;
@@ -5505,17 +5505,17 @@ repeatcase:
         {
             C_ReportError(-1);
             initprintf("%s:%d: error: found `enda' without open `actor'.\n",g_scriptFileName,g_lineNumber);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         if (g_numBraces > 0)
         {
             C_ReportError(ERROR_OPENBRACKET);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         if (g_numBraces < 0)
         {
             C_ReportError(ERROR_CLOSEBRACKET);
-            g_numCompilerErrors++;
+            g_errorCnt++;
         }
         g_parsingActorPtr = 0;
         Bsprintf(g_szCurrentBlockName,"(none)");
@@ -5557,7 +5557,7 @@ repeatcase:
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
-            g_numCompilerWarnings++;
+            g_warningCnt++;
         }
         fallthrough__;
     case CON_NULLOP:
@@ -5972,8 +5972,8 @@ void C_Compile(const char *filenam)
 
     g_numLabels = g_numDefaultLabels = 0;
     g_scriptPtr = apScript+1;
-    g_numCompilerWarnings = 0;
-    g_numCompilerErrors = 0;
+    g_warningCnt = 0;
+    g_errorCnt = 0;
     g_lineNumber = 1;
     g_totalLines = 0;
 
@@ -5983,7 +5983,7 @@ void C_Compile(const char *filenam)
 
     while (C_ParseCommand() == 0);
 
-    if (g_numCompilerErrors > 63)
+    if (g_errorCnt > 63)
         initprintf("fatal error: too many errors: Aborted\n");
 
     //*apScript = (intptr_t) g_scriptPtr;
@@ -5991,8 +5991,8 @@ void C_Compile(const char *filenam)
     Xfree(mptr);
     mptr = NULL;
 
-    if (g_numCompilerWarnings|g_numCompilerErrors)
-        initprintf("Found %d warning(s), %d error(s).\n",g_numCompilerWarnings,g_numCompilerErrors);
+    if (g_warningCnt|g_errorCnt)
+        initprintf("Found %d warning(s), %d error(s).\n",g_warningCnt,g_errorCnt);
 
     /*    if (error == 0 && warning != 0)
         {
@@ -6012,7 +6012,7 @@ void C_Compile(const char *filenam)
             }
         } */
 
-    if (g_numCompilerErrors)
+    if (g_errorCnt)
     {
         if (g_loadFromGroupOnly)
         {

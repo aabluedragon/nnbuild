@@ -338,7 +338,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
 
     if (g_gameArrayCount >= MAXGAMEARRAYS)
     {
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(-1);
         initprintf("%s:%d: error: too many arrays!\n",g_scriptFileName,g_lineNumber);
         return 0;
@@ -346,7 +346,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
 
     if (Bstrlen(pszLabel) > (MAXARRAYLABEL-1))
     {
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(-1);
         initprintf("%s:%d: error: array name `%s' exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,pszLabel, MAXARRAYLABEL);
         return 0;
@@ -355,7 +355,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
     if (i >=0 && !aGameArrays[i].bReset)
     {
         // found it it's a duplicate in error
-        g_numCompilerWarnings++;
+        g_warningCnt++;
         C_ReportError(WARNING_DUPLICATEDEFINITION);
         return 0;
     }
@@ -383,7 +383,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
 
     if (g_gameVarCount >= MAXGAMEVARS)
     {
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(-1);
         initprintf("%s:%d: error: too many gamevars!\n",g_scriptFileName,g_lineNumber);
         return 0;
@@ -391,7 +391,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
 
     if (Bstrlen(pszLabel) > (MAXVARLABEL-1))
     {
-        g_numCompilerErrors++;
+        g_errorCnt++;
         C_ReportError(-1);
         initprintf("%s:%d: error: variable name `%s' exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,pszLabel, MAXVARLABEL);
         return 0;
@@ -413,7 +413,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
         else if (!(aGameVars[i].dwFlags & GAMEVAR_DEFAULT) && !(aGameVars[i].dwFlags & GAMEVAR_SYSTEM))
         {
             // it's a duplicate in error
-            g_numCompilerWarnings++;
+            g_warningCnt++;
             C_ReportError(WARNING_DUPLICATEDEFINITION);
             return 0;
         }
