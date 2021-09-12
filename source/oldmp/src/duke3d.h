@@ -772,8 +772,8 @@ extern int stereomode, stereowidth, stereopixelwidth;
 
 extern int g_myAimMode, g_myAimStat, g_oldAimStat;
 
-#define IFISGLMODE if (videoGetRenderMode() >= 3)
-#define IFISSOFTMODE if (videoGetRenderMode() < 3)
+#define IFISGLMODE if (videoGetRenderMode() >= REND_POLYMOST)
+#define IFISSOFTMODE if (videoGetRenderMode() < REND_POLYMOST)
 
 #define TILE_SAVESHOT (MAXTILES-1)
 #define TILE_LOADSHOT (MAXTILES-3)
