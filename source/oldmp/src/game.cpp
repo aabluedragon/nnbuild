@@ -9969,44 +9969,49 @@ static void G_DisplayLogo(void)
 }
 
 void freehash();
-static void G_FreeCONMem(void)
+static void G_Cleanup(void)
 {
     int i;
     extern char *bitptr;
 
     for (i=(MAXLEVELS*(MAXVOLUMES+1))-1;i>=0;i--) // +1 volume for "intro", "briefing" music
     {
-        if (g_mapInfo[i].name != NULL) Xfree(g_mapInfo[i].name);
-        if (g_mapInfo[i].filename != NULL) Xfree(g_mapInfo[i].filename);
-        if (g_mapInfo[i].musicfn != NULL) Xfree(g_mapInfo[i].musicfn);
-        if (g_mapInfo[i].alt_musicfn != NULL) Xfree(g_mapInfo[i].alt_musicfn);
-        if (g_mapInfo[i].savedstate != NULL) G_FreeMapState(i);
+        Xfree(g_mapInfo[i].name);
+        Xfree(g_mapInfo[i].filename);
+        Xfree(g_mapInfo[i].musicfn);
+        Xfree(g_mapInfo[i].alt_musicfn);
+
+        if (g_mapInfo[i].savedstate != NULL)
+            G_FreeMapState(i);
     }
 
     for (i=MAXQUOTES-1;i>=0;i--)
     {
-        if (apStrings[i] != NULL) Xfree(apStrings[i]);
-        if (apXStrings[i] != NULL) Xfree(apXStrings[i]);
+        Xfree(apStrings[i]);
+        Xfree(apXStrings[i]);
     }
 
     for (i=MAXPLAYERS-1;i>=0;i--)
     {
-        if (g_player[i].ps != NULL) Xfree(g_player[i].ps);
-        if (g_player[i].inputBits != NULL) Xfree(g_player[i].inputBits);
+        if (g_player[i].ps != NULL)
+            Xfree(g_player[i].ps);
+
+        if (g_player[i].inputBits != NULL)
+            Xfree(g_player[i].inputBits);
     }
 
     for (i=MAXSOUNDS-1;i>=0;i--)
     {
-        if (g_sounds[i].filename != NULL) Xfree(g_sounds[i].filename);
-        if (g_sounds[i].filename1 != NULL) Xfree(g_sounds[i].filename1);
+        Xfree(g_sounds[i].filename);
+        Xfree(g_sounds[i].filename1);
     }
 
-    Gv_Clear();
+    Xfree(label);
+    Xfree(labelcode);
+    Xfree(apScript);
+    Xfree(bitptr);
 
-    if (label != NULL) Xfree(label);
-    if (labelcode != NULL) Xfree(labelcode);
-    if (apScript != NULL) Xfree(apScript);
-    if (bitptr != NULL) Xfree(bitptr);
+    Gv_Clear();
 
     freehash();
     hash_free(&gamefuncH);
@@ -10030,7 +10035,7 @@ void G_Shutdown(void)
     timerUninit();
     CONTROL_Shutdown();
     KB_Shutdown();
-    G_FreeCONMem();
+    G_Cleanup();
 #ifdef DISCORC_RPC
     Discord_Shutdown();
 #endif
@@ -10178,7 +10183,7 @@ static void G_Startup(void)
     {
         wm_msgbox("Build Engine Initialization Error",
                   "There was a problem initializing the Build engine: %s", engineerrstr);
-        G_FreeCONMem();
+        G_Cleanup();
         exit(1);
     }
 

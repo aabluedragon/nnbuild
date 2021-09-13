@@ -1026,7 +1026,6 @@ void inithash()
     for (i = 0; TileDataLabels[i].lId >= 0; i++) hash_add(&tileDataH, TileDataLabels[i].name, i, 0);
 }
 
-
 void freehash()
 {
     hash_free(&gamevarH);
