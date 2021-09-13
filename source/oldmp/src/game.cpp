@@ -10014,7 +10014,9 @@ static void G_Cleanup(void)
     Gv_Clear();
 
     freehash();
+
     hash_free(&gamefuncH);
+    // NetDuke32: Clear dukeanim and dynamictilemap hashes here once backported.
 
     Duke_CommonCleanup();
 }
