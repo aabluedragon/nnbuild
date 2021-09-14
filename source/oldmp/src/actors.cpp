@@ -7677,6 +7677,13 @@ static void G_RecordOldSpritePos(void)
     int statNum = 0;
     do
     {
+        // Delay until a later point. Fixes a problem where SE7 and Touchplates cannot be activated concurrently.
+        if (statNum == STAT_PLAYER)
+        {
+            statNum++;
+            continue;
+        }
+
         int spriteNum = headspritestat[statNum++];
 
         while (spriteNum >= 0)
@@ -7687,6 +7694,20 @@ static void G_RecordOldSpritePos(void)
             spriteNum = nextSprite;
         }
     } while (statNum < MAXSTATUS);
+}
+
+// Remainder of G_RecordOldSpritePos()
+static void G_RecordOldPlayerPos(void)
+{
+    int spriteNum = headspritestat[STAT_PLAYER];
+
+    while (spriteNum >= 0)
+    {
+        int const nextSprite = nextspritestat[spriteNum];
+        actor[spriteNum].bpos = sprite[spriteNum].pos;
+
+        spriteNum = nextSprite;
+    }
 }
 
 void G_MoveWorld(void)
@@ -7723,6 +7744,8 @@ void G_MoveWorld(void)
     G_MoveTransports();       //ST 9
 
     G_MovePlayers();          //ST 10
+    G_RecordOldPlayerPos();
+
     G_MoveFallers();          //ST 12
     G_MoveMisc();             //ST 5
 
