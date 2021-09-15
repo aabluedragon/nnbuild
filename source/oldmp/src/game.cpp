@@ -5208,7 +5208,7 @@ int A_Spawn(int j, int pn)
         case DUKETAG__STATIC:
         case SIGN1__STATIC:
         case SIGN2__STATIC:
-            if (ud.multimode < 2 && sp->pal)
+            if ((ud.multimode < 2 || GTFLAGS(GAMETYPE_COOP)) && sp->pal != 0)
             {
                 sp->xrepeat = sp->yrepeat = 0;
                 changespritestat(i, STAT_MISC);
