@@ -6548,7 +6548,7 @@ int A_Spawn(int j, int pn)
                 sp->extra = 1;
             }
 
-            if (ud.multimode < 2 && sp->pal != 0)
+            if ((ud.multimode < 2 || GTFLAGS(GAMETYPE_COOP)) && sp->pal != 0)
             {
                 sp->xrepeat = sp->yrepeat = 0;
                 changespritestat(i, STAT_MISC);
