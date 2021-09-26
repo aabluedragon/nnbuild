@@ -267,7 +267,9 @@ static void A_HitscanProjTrail(const vec3_t *startPos, const vec3_t *endPos, int
         spawnPos.y += increment.y;
         spawnPos.z += increment.z;
 
-        // To-do: Add range check so we stop if we're beyond pProj->range.
+        // Range check so we stop if we're beyond pProj->range.
+        if (pProj->range > 0 && (klabs(startPos->x - spawnPos.x) + klabs(startPos->y - spawnPos.y)) > pProj->range)
+            break;
 
         updatesectorz(spawnPos.x, spawnPos.y, spawnPos.z, &sectNum);
 
