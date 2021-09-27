@@ -98,7 +98,7 @@ static struct
 
 static struct
 {
-    char selectedgrp[BMAX_PATH+1];
+    grpfile_t const * grp;
     char *gamedir;
     int fullscreen;
     int xdim, ydim, bpp;
@@ -203,12 +203,9 @@ static void on_gamelist_selection_changed(GtkTreeSelection *selection, gpointer 
 
     if (gtk_tree_selection_get_selected(selection, &model, &iter))
     {
-        struct grpfile const *fg;
+        grpfile_t const *fg;
         gtk_tree_model_get(model, &iter, 2, (gpointer)&fg, -1);
-        strcpy(settings.selectedgrp, fg->name);
-// TODO add these
-//        settings.game = fg->game;
-//        settings.crcval = fg->crcval;
+        settings.grp = fg;
     }
 }
 
@@ -402,9 +399,8 @@ static void PopulateForm(unsigned char pgs)
 
     if ((pgs == ALL) || (pgs == POPULATE_GAME))
     {
-        struct grpfile *fg;
-    int i;
-    GtkListStore *list;
+        int i;
+        GtkListStore *list;
         GtkTreeIter iter;
         GtkTreeView *gamelist;
 
@@ -412,15 +408,11 @@ static void PopulateForm(unsigned char pgs)
         list = GTK_LIST_STORE(gtk_tree_view_get_model(gamelist));
         gtk_list_store_clear(list);
 
-        for (fg = foundgrps; fg; fg=fg->next)
+        for (grpfile_t const * fg = foundgrps; fg; fg=fg->next)
         {
-            for (i = 0; i<numgrpfiles; i++)
-                if (fg->crcval == grpfiles[i].crcval) break;
-            if (i == numgrpfiles) continue;	// unrecognised grp file
-
             gtk_list_store_append(list, &iter);
-            gtk_list_store_set(list, &iter, 0, grpfiles[i].name, 1, fg->name, 2, (gpointer)fg, -1);
-            if (!Bstrcasecmp(fg->name, settings.selectedgrp))
+            gtk_list_store_set(list, &iter, 0, fg->type->name, 1, fg->filename, 2, (void const *)fg, -1);
+            if (settings.grp == fg)
             {
                 GtkTreeSelection *sel = gtk_tree_view_get_selection(gamelist);
                 g_signal_handlers_block_by_func(sel, (gpointer)on_gamelist_selection_changed, NULL);
@@ -831,7 +823,7 @@ int32_t startwin_run(void)
 //    settings.game = g_gameType;
     settings.noautoload = g_noAutoLoad;
     settings.gamedir = g_modDir;
-    strncpy(settings.selectedgrp, duke3dgrp, BMAX_PATH);
+    settings.grp = g_selectedGrp;
     PopulateForm(ALL);
 
     gtk_main();
@@ -847,14 +839,13 @@ int32_t startwin_run(void)
         ud.config.UseMouse = settings.usemouse;
         ud.config.UseJoystick = settings.usejoystick;
 //        g_gameType = settings.game;
-        duke3dgrp = settings.selectedgrp;
         g_noAutoLoad = settings.noautoload;
 
         if (g_noSetup == 0 && settings.gamedir != NULL)
             Bstrcpy(g_modDir,settings.gamedir);
         else Bsprintf(g_modDir,"/");
 
-        duke3dgrp = settings.selectedgrp;
+        g_selectedGrp = settings.grp;
 
         Bstrcpy(g_modDir, (g_noSetup == 0 && settings.gamedir != NULL) ? settings.gamedir : "/");
     }
