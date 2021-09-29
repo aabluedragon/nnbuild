@@ -46,6 +46,30 @@ static inline int G_GetMusicIdx(const char* str)
     return (ep * MAXLEVELS) + lev;
 }
 
+static inline bool G_CheckFemSprite(int32_t spriteNum)
+{
+    switch (DynamicTileMap[sprite[spriteNum].picnum])
+    {
+        case FEM1__STATIC:
+        case FEM2__STATIC:
+        case FEM3__STATIC:
+        case FEM4__STATIC:
+        case FEM5__STATIC:
+        case FEM6__STATIC:
+        case FEM7__STATIC:
+        case FEM8__STATIC:
+        case FEM9__STATIC:
+        case FEM10__STATIC:
+        case PODFEM1__STATIC:
+        case NAKED1__STATIC:
+        case STATUE__STATIC:
+        case TOUGHGAL__STATIC:
+            return true;
+    }
+
+    return false;
+}
+
 static inline int32_t calc_smoothratio(ClockTicks const totalclk, ClockTicks const ototalclk)
 {
     if (ud.pause_on || ud.show_help /*|| g_player[myconnectindex].ps->gm & MODE_MENU*/)

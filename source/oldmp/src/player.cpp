@@ -5444,24 +5444,11 @@ HORIZONLY:
                 A_DoGuts(p->actorsqu, JIBS6, 7);
                 A_Spawn(p->actorsqu, BLOODPOOL);
                 A_PlaySound(SQUISHED, p->actorsqu);
-                switch (DynamicTileMap[sprite[p->actorsqu].picnum])
+
+                if (G_CheckFemSprite(p->actorsqu))
                 {
-                case FEM1__STATIC:
-                case FEM2__STATIC:
-                case FEM3__STATIC:
-                case FEM4__STATIC:
-                case FEM5__STATIC:
-                case FEM6__STATIC:
-                case FEM7__STATIC:
-                case FEM8__STATIC:
-                case FEM9__STATIC:
-                case FEM10__STATIC:
-                case PODFEM1__STATIC:
-                case NAKED1__STATIC:
-                case STATUE__STATIC:
                     if (sprite[p->actorsqu].yvel)
                         G_OperateRespawns(sprite[p->actorsqu].yvel);
-                    break;
                 }
 
                 if (sprite[p->actorsqu].picnum == APLAYER)

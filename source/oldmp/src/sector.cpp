@@ -3456,7 +3456,6 @@ void P_CheckSectors(int snum)
     }
     else if (!p->toggle_key_flag)
     {
-
         if (TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_ESCAPE))
         {
             if (p->newowner >= 0)
@@ -3505,24 +3504,8 @@ void P_CheckSectors(int snum)
                 neartag(p->pos.x,p->pos.y,p->pos.z+(16<<8),sprite[p->i].sectnum, fix16_to_int(p->oq16ang),&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,1280L,3, NULL);
                 if (neartagsprite >= 0)
                 {
-                    switch (DynamicTileMap[sprite[neartagsprite].picnum])
-                    {
-                    case FEM1__STATIC:
-                    case FEM2__STATIC:
-                    case FEM3__STATIC:
-                    case FEM4__STATIC:
-                    case FEM5__STATIC:
-                    case FEM6__STATIC:
-                    case FEM7__STATIC:
-                    case FEM8__STATIC:
-                    case FEM9__STATIC:
-                    case FEM10__STATIC:
-                    case PODFEM1__STATIC:
-                    case NAKED1__STATIC:
-                    case STATUE__STATIC:
-                    case TOUGHGAL__STATIC:
+                    if (G_CheckFemSprite(neartagsprite))
                         return;
-                    }
                 }
 
                 neartagsprite = -1;
