@@ -10637,44 +10637,6 @@ int app_main(int32_t argc, char const* const* argv)
     if (getcwd(cwd,BMAX_PATH))
     {
         addsearchpath(cwd);
-#if defined(__APPLE__)
-        /* Dirty hack on OS X to also look for gamedata inside the application bundle - rhoenie 08/08 */
-        char seekinappcontainer[BMAX_PATH];
-        Bsnprintf(seekinappcontainer,sizeof(seekinappcontainer),"%s/EDuke32.app/", cwd);
-        addsearchpath(seekinappcontainer);
-#endif
-    }
-
-#if defined(_WIN32)
-    if (!access("user_profiles_enabled", F_OK))
-#else
-    if (usecwd == 0 && access("user_profiles_disabled", F_OK))
-#endif
-    {
-        char *homedir;
-        int asperr;
-
-        if ((homedir = Bgethomedir()))
-        {
-            Bsnprintf(cwd,sizeof(cwd),"%s/"
-#if defined(_WIN32)
-                      "EDuke32 Settings"
-#elif defined(__APPLE__)
-                      "Library/Application Support/EDuke32"
-#else
-                      ".eduke32"
-#endif
-                      ,homedir);
-            asperr = addsearchpath(cwd);
-            if (asperr == -2)
-            {
-                if (Bmkdir(cwd,S_IRWXU) == 0) asperr = addsearchpath(cwd);
-                else asperr = -1;
-            }
-            if (asperr == 0)
-                chdir(cwd);
-            Xfree(homedir);
-        }
     }
 
     hash_init(&gamefuncH);
