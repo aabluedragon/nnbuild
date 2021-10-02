@@ -716,10 +716,10 @@ void Net_ParsePackets(void)
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                         if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
-                if (packbuf[2] != (char)atoi(s_buildRev))
+                if (packbuf[2] != (char)atoi(VERSION))
                 {
-                    initprintf("Player has version %d, expecting %d\n",packbuf[2],(char)atoi(s_buildRev));
-                    G_GameExit("You cannot play with different versions of EDuke32!");
+                    initprintf("Player has version %d, expecting %d\n",packbuf[2],(char)atoi(VERSION));
+                    G_GameExit("You cannot play with different versions of NetDuke32!");
                 }
                 if (packbuf[3] != (char)BYTEVERSION)
                 {
