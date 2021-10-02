@@ -42,16 +42,6 @@ extern "C" {
 //
 //****************************************************************************
 
-//
-// Setup program defines
-//
-#define SETUPFILENAME APPBASENAME ".cfg"
-
-// Max number of players
-
-#define MAXPLAYERS 16
-#define MAXSPAWNPOINTS 64
-
 // KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
 #define MAXJOYBUTTONS 32
 #define MAXJOYBUTTONSANDHATS (MAXJOYBUTTONS+4)

@@ -21,12 +21,14 @@ extern "C" {
 extern int g_useCwd;
 
 #ifndef APPNAME
-#define APPNAME             "EDuke32"
+#define APPNAME             "NetDuke32"
 #endif
 
 #ifndef APPBASENAME
-#define APPBASENAME         "eduke32"
+#define APPBASENAME         "netduke32"
 #endif
+
+#define SETUPFILENAME APPBASENAME ".cfg"
 
 #define GAMEFLAG_DUKE       0x00000001
 #define GAMEFLAG_NAM        0x00000002

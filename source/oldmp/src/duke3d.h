@@ -25,14 +25,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef _duke3d_h_
 # define _duke3d_h_
 
-#ifndef APPNAME
-#define APPNAME "NetDuke32"
-#endif
-#ifndef APPBASENAME
-#define APPBASENAME "netduke32"
-#endif
-#define VERSION "v1"
+// Max number of players & spawns
+#define MAXPLAYERS 16
+#define MAXSPAWNPOINTS 64
 
+#define VERSION "v1.1"
 #define HEAD2 APPNAME " " VERSION
 
 #define MOVEFIFOSIZ 256
@@ -241,11 +238,11 @@ extern const char* CommandName;
 #include "macros.h"
 //#include "types.h"
 //#include "file_lib.h"
+#include "common.h"
 #include "gamedefs.h"
 #include "keyboard.h"
 //#include "util_lib.h"
 //#include "mathutil.h"
-#include "common.h"
 #include "function.h"
 #include "fx_man.h"
 #include "config.h"
