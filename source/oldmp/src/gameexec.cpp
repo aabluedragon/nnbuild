@@ -507,7 +507,7 @@ static void X_Move(void)
     {
         if (deadflag || (actor[g_i].bpos.x != g_sp->x) || (actor[g_i].bpos.y != g_sp->y))
         {
-            setspritez_old(g_i,g_sp->x,g_sp->y,g_sp->z);
+            setsprite(g_i, &g_sp->pos);
         }
         return;
     }
