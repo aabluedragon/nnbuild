@@ -1210,8 +1210,13 @@ void G_MovePlayerSprite(int playerNum)
             actor[p->i].owner = p->i;
 
             if (ud.god == 0)
+            {
                 if (G_CheckForSpaceCeiling(s->sectnum) || G_CheckForSpaceFloor(s->sectnum))
+                {
                     P_QuickKill(p);
+                    OSD_Printf(OSD_ERROR "%s: player killed by space sector!\n", EDUKE32_FUNCTION);
+                }
+            }
         }
         else
         {
