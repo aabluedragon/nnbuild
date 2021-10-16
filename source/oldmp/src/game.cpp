@@ -1255,7 +1255,7 @@ void G_HandleSpecialKeys(void)
     if (myplayer == NULL)
         return;
 
-    CONTROL_ProcessBinds();
+    //CONTROL_ProcessBinds();
 
     if (ALT_IS_PRESSED && KB_KeyPressed(sc_Enter))
     {
@@ -8127,18 +8127,9 @@ static void G_PrintCurrentMusic(void)
     P_DoQuote(QUOTE_MUSIC, g_player[myconnectindex].ps);
 }
 
-static void G_HandleLocalKeys(void)
+static void G_HandleVoteKeys(void)
 {
-    int i,ch;
-    int j;
-
-    CONTROL_ProcessBinds();
-
-    if (ud.recstat == 2)
-    {
-        ControlInfo noshareinfo;
-        CONTROL_GetInput(&noshareinfo);
-    }
+    int i;
 
     if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
     {
@@ -8146,11 +8137,11 @@ static void G_HandleLocalKeys(void)
         {
             tempbuf[0] = PACKET_TYPE_MAP_VOTE;
             tempbuf[1] = myconnectindex;
-            tempbuf[2] = (KB_UnBoundKeyPressed(sc_F1) || ud.autovote?ud.autovote-1:0);
+            tempbuf[2] = (KB_UnBoundKeyPressed(sc_F1) || ud.autovote ? ud.autovote - 1 : 0);
 
             TRAVERSE_CONNECT(i)
             {
-                if (i != myconnectindex) mmulti_sendpacket(i,(unsigned char*)tempbuf,3);
+                if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf, 3);
                 if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
             }
             G_AddUserQuote("VOTE CAST");
@@ -8160,6 +8151,22 @@ static void G_HandleLocalKeys(void)
             voting = -1;
         }
     }
+}
+
+static void G_HandleLocalKeys(void)
+{
+    int i,ch;
+    int j;
+
+    //CONTROL_ProcessBinds();
+
+    if (ud.recstat == 2)
+    {
+        ControlInfo noshareinfo;
+        CONTROL_GetInput(&noshareinfo);
+    }
+
+    G_HandleVoteKeys();
 
     if (!ALT_IS_PRESSED && ud.overhead_on == 0 && (g_player[myconnectindex].ps->gm & MODE_TYPE) == 0)
     {
@@ -10358,7 +10365,10 @@ void G_UpdatePlayerFromMenu(void)
 void G_BackToMenu(void)
 {
     boardfilename[0] = 0;
-    if (ud.recstat == 1) G_CloseDemoWrite();
+
+    if (ud.recstat == 1)
+        G_CloseDemoWrite();
+
     ud.warp_on = 0;
     g_player[myconnectindex].ps->gm = MODE_MENU;
     ChangeToMenu(0);
@@ -10525,16 +10535,7 @@ static void G_DrawFrame()
         G_DrawBackground();
     G_DisplayRest(smoothRatio);
 
-    // Shoud this go into DisplayRest?
-    // ---------
-    if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
-    {
-        Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE FOR MAP", g_player[voting].user_name);
-        gametext(160, 40, tempbuf, 0, 2 + 8 + 16);
-        Bsprintf(tempbuf, "%s (E%dL%d)", g_mapInfo[vote_episode * MAXLEVELS + vote_map].name, vote_episode + 1, vote_map + 1);
-        gametext(160, 48, tempbuf, 0, 2 + 8 + 16);
-        gametext(160, 70, "PRESS F1 TO ACCEPT, F2 TO DECLINE", 0, 2 + 8 + 16);
-    }
+    G_ShowVote();
 
     if (BUTTON(gamefunc_Show_DukeMatch_Scores))
         G_ShowScores(false);
@@ -11284,7 +11285,8 @@ RECHECK:
 
     renderFlushPerms();
 
-    if (ud.multimode < 2) foundemo = G_OpenDemoRead(g_whichDemo);
+    if (ud.multimode < 2)
+        foundemo = G_OpenDemoRead(g_whichDemo);
 
     if (foundemo == 0)
     {
@@ -11293,10 +11295,13 @@ RECHECK:
             g_whichDemo = 1;
             goto RECHECK;
         }
+
         fadepal(0,0,0, 0,63,7);
         P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 1);    // JBF 20040308
+
         G_DrawBackground();
         M_DisplayMenus();
+
         //g_player[myconnectindex].ps->palette = palette;
         videoNextPage();
         fadepal(0,0,0, 63,0,-7);
@@ -11306,8 +11311,12 @@ RECHECK:
     {
         ud.recstat = 2;
         g_whichDemo++;
-        if (g_whichDemo == 10) g_whichDemo = 1;
-        if (G_EnterLevel(MODE_DEMO)) ud.recstat = foundemo = 0;
+
+        if (g_whichDemo == 10)
+            g_whichDemo = 1;
+
+        if (G_EnterLevel(MODE_DEMO))
+            ud.recstat = foundemo = 0;
     }
 
     if (foundemo == 0 || in_menu || KB_KeyWaiting() || numplayers > 1)
@@ -11324,6 +11333,8 @@ RECHECK:
 
     while (ud.reccnt > 0 || foundemo == 0)
     {
+        bool in_vote = (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex);
+
         if (foundemo)
             while (totalclock >= (lockclock+TICSPERFRAME))
             {
@@ -11352,77 +11363,96 @@ RECHECK:
                 G_DoMoveThings();
             }
 
-        if (foundemo == 0)
-            G_DrawBackground();
-        else
+        if (engineFPSLimit())
         {
-            G_HandleLocalKeys();
-
-            int smoothRatio = calc_smoothratio(totalclock, lockclock);
-            G_DrawRooms(screenpeek,smoothRatio);
-            G_DisplayRest(smoothRatio);
-
-            if (ud.multimode > 1 && g_player[myconnectindex].ps->gm)
-                Net_GetPackets();
-
-            if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
-                gametext(160,60,"PRESS F1 TO ACCEPT, F2 TO DECLINE",0,2+8+16);
-        }
-
-        if ((g_player[myconnectindex].ps->gm&MODE_MENU) && (g_player[myconnectindex].ps->gm&MODE_EOL))
-            goto RECHECK;
-
-        if (KB_KeyPressed(sc_Escape) && (g_player[myconnectindex].ps->gm&MODE_MENU) == 0 && (g_player[myconnectindex].ps->gm&MODE_TYPE) == 0)
-        {
-            KB_ClearKeyDown(sc_Escape);
-            FX_StopAllSounds();
-            S_ClearSoundLocks();
-            g_player[myconnectindex].ps->gm |= MODE_MENU;
-            ChangeToMenu(0);
-            S_MenuSound();
-        }
-
-        if (g_player[myconnectindex].ps->gm&MODE_TYPE)
-        {
-            Net_EnterMessage();
-            if ((g_player[myconnectindex].ps->gm&MODE_TYPE) != MODE_TYPE)
-                g_player[myconnectindex].ps->gm = MODE_MENU;
-        }
-        else
-        {
-            if (ud.recstat != 2)
-                M_DisplayMenus();
-            if (ud.multimode > 1  && g_currentMenu != 20003 && g_currentMenu != 20005 && g_currentMenu != 210)
+            if (foundemo == 0)
             {
-                ControlInfo noshareinfo;
-                CONTROL_GetInput(&noshareinfo);
-                if (BUTTON(gamefunc_SendMessage))
+                videoClearScreen(0);
+                G_DrawBackground();
+
+                if (numplayers > 1) // [JM] Handle F1/F2 keys in menu.
+                    G_HandleVoteKeys();
+            }
+            else
+            {
+                G_HandleLocalKeys();
+
+                int smoothRatio = calc_smoothratio(totalclock, lockclock);
+                G_DrawRooms(screenpeek, smoothRatio);
+                G_DisplayRest(smoothRatio);
+
+                if (ud.multimode > 1 && g_player[myconnectindex].ps->gm)
+                    Net_GetPackets();
+            }
+
+            // Loop back and re-check for a demo if we're just coming out of a level.
+            if ((g_player[myconnectindex].ps->gm & MODE_MENU) && (g_player[myconnectindex].ps->gm & MODE_EOL))
+                goto RECHECK;
+
+            // Open menu if escape key is pressed.
+            if (KB_KeyPressed(sc_Escape) && (g_player[myconnectindex].ps->gm & MODE_MENU) == 0 && (g_player[myconnectindex].ps->gm & MODE_TYPE) == 0)
+            {
+                KB_ClearKeyDown(sc_Escape);
+                FX_StopAllSounds();
+                S_ClearSoundLocks();
+                g_player[myconnectindex].ps->gm |= MODE_MENU;
+                ChangeToMenu(0);
+                S_MenuSound();
+            }
+
+            if (in_vote)
+                G_ShowVote();
+
+            if (g_player[myconnectindex].ps->gm & MODE_TYPE)
+            {
+                Net_EnterMessage();
+
+                if ((g_player[myconnectindex].ps->gm & MODE_TYPE) != MODE_TYPE)
+                    g_player[myconnectindex].ps->gm |= MODE_MENU;
+            }
+            else
+            {
+                if (ud.recstat != 2 && !in_vote)
                 {
-                    KB_FlushKeyboardQueue();
-                    CONTROL_ClearButton(gamefunc_SendMessage);
-                    g_player[myconnectindex].ps->gm = MODE_TYPE;
-                    typebuf[0] = 0;
-                    inputloc = 0;
+                    M_DisplayMenus();
+                    if(numplayers > 1)
+                        gametextpalbits(160, 184, "WAITING FOR MAP CHANGE OR VOTE", 0, 7, 2 + 8 + 16);
+                }
+
+                CONTROL_ProcessBinds(); // [JM] Not sure why I need this, but I do with engineFPSLimit. The fuck?
+                if (ud.multimode > 1 && g_currentMenu != 20003 && g_currentMenu != 20005 && g_currentMenu != 210)
+                {
+                    ControlInfo noshareinfo;
+                    CONTROL_GetInput(&noshareinfo);
+                    if (BUTTON(gamefunc_SendMessage))
+                    {
+                        KB_FlushKeyboardQueue();
+                        CONTROL_ClearButton(gamefunc_SendMessage);
+                        g_player[myconnectindex].ps->gm |= MODE_TYPE;
+                        typebuf[0] = 0;
+                        inputloc = 0;
+                    }
                 }
             }
-        }
 
-        G_PrintGameQuotes();
+            G_PrintGameQuotes();
 
-        if (ud.last_camsprite != ud.camerasprite)
-        {
-            ud.last_camsprite = ud.camerasprite;
-            ud.camera_time = (int32_t)totalclock+(TICRATE*2);
-        }
+            if (ud.last_camsprite != ud.camerasprite)
+            {
+                ud.last_camsprite = ud.camerasprite;
+                ud.camera_time = (int32_t)totalclock + (TICRATE * 2);
+            }
 
-        if (VOLUMEONE)
-        {
-            if (ud.show_help == 0 && (g_player[myconnectindex].ps->gm&MODE_MENU) == 0)
-                rotatesprite((320-50)<<16,9<<16,65536L,0,BETAVERSION,0,0,2+8+16+128,0,0,xdim-1,ydim-1);
+            if (VOLUMEONE)
+            {
+                if (ud.show_help == 0 && (g_player[myconnectindex].ps->gm & MODE_MENU) == 0)
+                    rotatesprite((320 - 50) << 16, 9 << 16, 65536L, 0, BETAVERSION, 0, 0, 2 + 8 + 16 + 128, 0, 0, xdim - 1, ydim - 1);
+            }
+
+            videoNextPage();
         }
 
         gameHandleEvents();
-        videoNextPage();
 
         if (g_player[myconnectindex].ps->gm==MODE_END || g_player[myconnectindex].ps->gm==MODE_GAME)
         {
@@ -11541,6 +11571,7 @@ static int G_DoMoveThings(void)
     
     if (g_RTSPlaying > 0) g_RTSPlaying--;
 
+    // TO-DO: Move this somewhere that it can tick down while in menus.
     for (i=0;i<MAXUSERQUOTES;i++)
         if (user_quote_time[i])
         {

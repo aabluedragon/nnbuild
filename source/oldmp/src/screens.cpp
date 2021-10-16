@@ -128,6 +128,18 @@ void G_SetCrosshairColor(int32_t r, int32_t g, int32_t b)
     tileInvalidate(CROSSHAIR, -1, -1);
 }
 
+void G_ShowVote(void)
+{
+    if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
+    {
+        Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE FOR MAP", g_player[voting].user_name);
+        gametext(160, 40, tempbuf, 0, 2 + 8 + 16);
+        Bsprintf(tempbuf, "%s (E%dL%d)", g_mapInfo[vote_episode * MAXLEVELS + vote_map].name, vote_episode + 1, vote_map + 1);
+        gametext(160, 48, tempbuf, 0, 2 + 8 + 16);
+        gametext(160, 70, "PRESS F1 TO ACCEPT, F2 TO DECLINE", 0, 2 + 8 + 16);
+    }
+}
+
 #define score_inventory(x, y, picnum, cond) rotatesprite_((x) << 16, (y) << 16, 24576, 0, picnum, 0, (cond) ? 0 : 4, RS_AUTO | RS_TOPLEFT, (cond) ? 0 : 128, 0, 0, 0, xdim, ydim)
 void G_ShowScores(bool bonus)
 {

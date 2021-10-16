@@ -33,6 +33,8 @@ static inline int G_LastMapInfoIndex(void)
 
 void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set);
 
+void G_ShowVote(void);
+
 void G_ShowScores(bool bonus);
 
 void G_FadePalette(int32_t r, int32_t g, int32_t b, int32_t e);
