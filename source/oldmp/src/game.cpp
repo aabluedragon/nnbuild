@@ -3114,6 +3114,9 @@ void G_DisplayPlayerId(void)
 {
     int idalpha;
 
+    if (g_player[myconnectindex].ps->gm & MODE_MENU)
+        return;
+
     if (ud.idplayers && (ud.multimode > 1))
     {
         // TODO: (Optimization) Consider moving this segment to a point in the code that operates at 120hz.
@@ -3138,7 +3141,7 @@ void G_DisplayPlayerId(void)
                 sprite[g_player[i].ps->holoduke_on].cstat ^= 256;
         }
 
-        if ((hit.sprite >= 0) && !(g_player[myconnectindex].ps->gm & MODE_MENU) && sprite[hit.sprite].picnum == APLAYER && sprite[hit.sprite].yvel != screenpeek && g_player[sprite[hit.sprite].yvel].ps->dead_flag == 0)
+        if ((hit.sprite >= 0) && sprite[hit.sprite].picnum == APLAYER && sprite[hit.sprite].yvel != screenpeek && g_player[sprite[hit.sprite].yvel].ps->dead_flag == 0)
         {
             if (GetDistance2D(ud.camerapos.x, ud.camerapos.y, sprite[hit.sprite].x, sprite[hit.sprite].y) < 9216)
             {
