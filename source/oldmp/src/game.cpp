@@ -2704,7 +2704,7 @@ int _EnterText(int small,int x,int y,char *t,int dalen,int c)
     char ch;
     int i;
 
-    while ((ch = KB_GetCh()) != 0 || (g_player[myconnectindex].ps->gm&MODE_MENU && MOUSE_GetButtons()&RIGHT_MOUSE))
+    while ((ch = KB_GetCh()) != 0 || (g_player[myconnectindex].ps->gm&MODE_MENU && (MOUSE_GetButtons()&M_RIGHTBUTTON)))
     {
         if (ch == asc_BackSpace)
         {
@@ -2722,10 +2722,10 @@ int _EnterText(int small,int x,int y,char *t,int dalen,int c)
                 KB_ClearKeyDown(sc_kpad_Enter);
                 return (1);
             }
-            else if (ch == asc_Escape || (g_player[myconnectindex].ps->gm&MODE_MENU && MOUSE_GetButtons()&RIGHT_MOUSE))
+            else if (ch == asc_Escape || (g_player[myconnectindex].ps->gm&MODE_MENU && (MOUSE_GetButtons()&M_RIGHTBUTTON)))
             {
                 KB_ClearKeyDown(sc_Escape);
-                MOUSE_ClearButton(RIGHT_MOUSE);
+                MOUSE_ClearButton(M_RIGHTBUTTON);
                 return (-1);
             }
             else if (ch >= 32 && inputloc < dalen && ch < 127)
@@ -3348,10 +3348,10 @@ void G_DisplayRest(int smoothratio)
             break;
         }
 
-        if (KB_KeyPressed(sc_Escape) || MOUSE_GetButtons()&RIGHT_MOUSE)
+        if (KB_KeyPressed(sc_Escape) || (MOUSE_GetButtons()&M_RIGHTBUTTON))
         {
             KB_ClearKeyDown(sc_Escape);
-            MOUSE_ClearButton(RIGHT_MOUSE);
+            MOUSE_ClearButton(M_RIGHTBUTTON);
             ud.show_help = 0;
             if (ud.multimode < 2 && ud.recstat != 2)
             {
@@ -3656,8 +3656,8 @@ static void G_DoThirdPerson(DukePlayer_t *pp, vec3_t *vect, short *vsectnum, int
         return;
     }
 
-    hx = hit.pos.x - (vect->x);
-    hy = hit.pos.y - (vect->y);
+    hx = hit.x - (vect->x);
+    hy = hit.y - (vect->y);
 
     if (klabs(nx)+klabs(ny) > klabs(hx)+klabs(hy))
     {
@@ -4683,7 +4683,7 @@ int A_Spawn(int j, int pn)
         actor[i].timetosleep = 0;
         actor[i].extra = -1;
 
-        actor[i].bpos = sprite[i].pos;
+        actor[i].bpos = sprite[i].xyz;
 
         OW(i) = actor[i].owner = i;
         actor[i].cgg = 0;
@@ -5493,7 +5493,7 @@ int A_Spawn(int j, int pn)
 
             if (j >= 0)
             {
-                x = yax_getflorzofslope(sp->sectnum,sp->pos.vec2);
+                x = yax_getflorzofslope(sp->sectnum,sp->xy);
                 if (sp->z > x-(12<<8))
                     sp->z = x-(12<<8);
             }
@@ -8366,13 +8366,13 @@ static void G_HandleLocalKeys(void)
             inputloc = 0;
         }
 
-        if (KB_UnBoundKeyPressed(sc_F1) || (ud.show_help && (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || MOUSE_GetButtons()&LEFT_MOUSE)))
+        if (KB_UnBoundKeyPressed(sc_F1) || (ud.show_help && (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || (MOUSE_GetButtons()&M_LEFTBUTTON))))
         {
             KB_ClearKeyDown(sc_F1);
             KB_ClearKeyDown(sc_Space);
             KB_ClearKeyDown(sc_kpad_Enter);
             KB_ClearKeyDown(sc_Enter);
-            MOUSE_ClearButton(LEFT_MOUSE);
+            MOUSE_ClearButton(M_LEFTBUTTON);
             ud.show_help ++;
 
             if (ud.show_help > 2)
@@ -9876,7 +9876,7 @@ static void G_DisplayLogo(void)
                 videoNextPage();
                 fadepal(0,0,0, 63,0,-7);
                 totalclock = 0;
-                while (totalclock < (TICRATE*7) && !KB_KeyWaiting() && !MOUSE_GetButtons()&LEFT_MOUSE)
+                while (totalclock < (TICRATE*7) && !KB_KeyWaiting() && !(MOUSE_GetButtons()&M_LEFTBUTTON))
                 {
                     gameHandleEvents();
                     if (g_restorePalette)
@@ -9887,7 +9887,7 @@ static void G_DisplayLogo(void)
                 }
             }
             KB_ClearKeysDown(); // JBF
-            MOUSE_ClearButton(LEFT_MOUSE);
+            MOUSE_ClearButton(M_LEFTBUTTON);
         }
 
         fadepal(0,0,0, 0,64,7);
@@ -9903,7 +9903,7 @@ static void G_DisplayLogo(void)
             fadepal(0,0,0, 63,0,-7);
             totalclock = 0;
 
-            while (totalclock < (860+120) && !KB_KeyWaiting() && !MOUSE_GetButtons()&LEFT_MOUSE)
+            while (totalclock < (860+120) && !KB_KeyWaiting() && !(MOUSE_GetButtons()&M_LEFTBUTTON))
             {
                 rotatesprite(0,0,65536L,0,BETASCREEN,0,0,2+8+16+64,0,0,xdim-1,ydim-1);
                 if (logoflags & LOGO_DUKENUKEM)
@@ -9974,7 +9974,7 @@ static void G_DisplayLogo(void)
             }
         }
         KB_ClearKeysDown(); // JBF
-        MOUSE_ClearButton(LEFT_MOUSE);
+        MOUSE_ClearButton(M_LEFTBUTTON);
     }
 
     waitforeverybody();
@@ -10511,7 +10511,7 @@ static void G_DrawFrame()
         int16_t slimerSect;
         if (slimerSprite > -1)
         {
-            slimerPos = sprite[slimerSprite].pos;
+            slimerPos = sprite[slimerSprite].xyz;
             slimerSect = sprite[slimerSprite].sectnum;
             auto tData = actor[slimerSprite].temp_data[2];
 
@@ -10531,7 +10531,7 @@ static void G_DrawFrame()
 
         if (slimerSprite > -1)
         {
-            sprite[slimerSprite].pos = slimerPos;
+            sprite[slimerSprite].xyz = slimerPos;
             changespritesect(slimerSprite, slimerSect);
         }
 
@@ -10863,10 +10863,6 @@ int app_main(int32_t argc, char const* const* argv)
 
     CONTROL_JoystickEnabled = (ud.config.UseJoystick && CONTROL_JoyPresent);
     CONTROL_MouseEnabled = (ud.config.UseMouse && CONTROL_MousePresent);
-
-    // JBF 20040215: evil and nasty place to do this, but joysticks are evil and nasty too
-    for (i=0; i < joystick.numAxes; i++)
-        joySetDeadZone(i,ud.config.JoystickAnalogueDead[i],ud.config.JoystickAnalogueSaturate[i]);
 
     if (videoSetGameMode(ud.config.ScreenMode,ud.config.ScreenWidth,ud.config.ScreenHeight,ud.config.ScreenBPP, ud.detail) < 0)
     {

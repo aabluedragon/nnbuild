@@ -154,7 +154,7 @@ static int probe_(int type,int x,int y,int i,int numItems)
             KB_ClearKeyDown(sc_UpArrow);
             KB_ClearKeyDown(sc_kpad_8);
             KB_ClearKeyDown(sc_PgUp);
-            MOUSE_ClearButton(WHEELUP_MOUSE);
+            MOUSE_ClearButton(M_WHEELUP);
             S_PlaySound(KICK_HIT);
 
             probey--;
@@ -166,7 +166,7 @@ static int probe_(int type,int x,int y,int i,int numItems)
             KB_ClearKeyDown(sc_DownArrow);
             KB_ClearKeyDown(sc_kpad_2);
             KB_ClearKeyDown(sc_PgDn);
-            MOUSE_ClearButton(WHEELDOWN_MOUSE);
+            MOUSE_ClearButton(M_WHEELDOWN);
             S_PlaySound(KICK_HIT);
             probey++;
         }
@@ -193,7 +193,7 @@ static int probe_(int type,int x,int y,int i,int numItems)
         KB_ClearKeyDown(sc_Enter);
         KB_ClearKeyDown(sc_Space);
         KB_ClearKeyDown(sc_kpad_Enter);
-        MOUSE_ClearButton(LEFT_MOUSE);
+        MOUSE_ClearButton(M_LEFTBUTTON);
         return(probey);
     }
     else if (KB_KeyPressed(sc_Escape) || (RMB))
@@ -201,7 +201,7 @@ static int probe_(int type,int x,int y,int i,int numItems)
         onbar = 0;
         KB_ClearKeyDown(sc_Escape);
         S_PlaySound(EXITMENUSOUND);
-        MOUSE_ClearButton(RIGHT_MOUSE);
+        MOUSE_ClearButton(M_RIGHTBUTTON);
         return(-1);
     }
     else
@@ -366,7 +366,7 @@ static void _bar(int type, int x,int y,int *p,int dainc,int damodify,int s, int 
         {
             KB_ClearKeyDown(sc_LeftArrow);
             KB_ClearKeyDown(sc_kpad_4);
-            MOUSE_ClearButton(WHEELUP_MOUSE);
+            MOUSE_ClearButton(M_WHEELUP);
             mii = 0;
             if (!rev)
                 *p -= dainc;
@@ -381,7 +381,7 @@ static void _bar(int type, int x,int y,int *p,int dainc,int damodify,int s, int 
         {
             KB_ClearKeyDown(sc_RightArrow);
             KB_ClearKeyDown(sc_kpad_6);
-            MOUSE_ClearButton(WHEELDOWN_MOUSE);
+            MOUSE_ClearButton(M_WHEELDOWN);
             mii = 0;
             if (!rev)
                 *p += dainc;
@@ -3608,7 +3608,7 @@ cheat_for_port_credits:
                 else if (function == 1)
                 {
                     ud.config.MouseDigitalFunctions[whichkey>>1][whichkey&1] = x;
-                    CONTROL_MapDigitalAxis(whichkey>>1, x, whichkey&1, controldevice_mouse);
+                    //CONTROL_MapDigitalAxis(whichkey>>1, x, whichkey&1, controldevice_mouse);
                     ChangeToMenu(212);
                     probey = 2+(whichkey^2); // Keep in sync with advanced mouse menu axis start index
                 }
@@ -3630,7 +3630,7 @@ cheat_for_port_credits:
                 else if (function == 3)
                 {
                     ud.config.JoystickDigitalFunctions[whichkey>>1][whichkey&1] = x;
-                    CONTROL_MapDigitalAxis(whichkey>>1, x, whichkey&1, controldevice_joystick);
+                    CONTROL_MapDigitalAxis(whichkey>>1, x, whichkey&1);
                     ChangeToMenu((whichkey>>2)+208);
                     probey = 1+((whichkey>>1)&1)*4+(whichkey&1);
                 }
@@ -3778,25 +3778,31 @@ cheat_for_port_credits:
             }
 
             menutext(c,46,MENUHIGHLIGHT(0),0,"X-AXIS SCALE");
-            l = (CONTROL_MouseAxesScale[0]+262144) >> 13;
-            bar(c+160+40,46,&l,1,x==0,MENUHIGHLIGHT(0),0);
-            l = (l<<13)-262144;
-            if (l != CONTROL_MouseAxesScale[0])
+
+            l = fix16_from_float(CONTROL_MouseAxesSensitivity[0]);
+            _bar(0, c + 160 + 40, 46, &l, fix16_from_float(0.1), x == 0, MENUHIGHLIGHT(0), 0, 0, fix16_from_float(25.0));
+
+            if (fix16_to_float(l) != CONTROL_MouseAxesSensitivity[0])
             {
-                CONTROL_SetAnalogAxisScale(0, l, controldevice_mouse);
+                CONTROL_MouseAxesSensitivity[0] = fix16_to_float(l);
+                //CONTROL_SetAnalogAxisScale(0, fix16_to_float(l), controldevice_mouse);
             }
-            Bsprintf(tempbuf,"%s%.2f",l>=0?" ":"",(float)l/65536.0);
+
+            Bsprintf(tempbuf,"%s%.2f",l>=0?" ":"", fix16_to_float(l));
             mgametext(c+160-16,46-8,tempbuf,MENUHIGHLIGHT(0),2+8+16);
 
             menutext(c,46+16,MENUHIGHLIGHT(1),0,"Y-AXIS SCALE");
-            l = (CONTROL_MouseAxesScale[1]+262144) >> 13;
-            bar(c+160+40,46+16,&l,1,x==1,MENUHIGHLIGHT(1),0);
-            l = (l<<13)-262144;
-            if (l != CONTROL_MouseAxesScale[1])
+
+            l = fix16_from_float(CONTROL_MouseAxesSensitivity[1]);
+            _bar(0, c + 160 + 40, 46 + 16, &l, fix16_from_float(0.1), x == 1, MENUHIGHLIGHT(1), 0, 0, fix16_from_float(25.0));
+
+            if (fix16_to_float(l) != CONTROL_MouseAxesSensitivity[1])
             {
-                CONTROL_SetAnalogAxisScale(1, l, controldevice_mouse);
+                CONTROL_MouseAxesSensitivity[1] = fix16_to_float(l);
+                //CONTROL_SetAnalogAxisScale(1, fix16_to_float(l), controldevice_mouse);
             }
-            Bsprintf(tempbuf,"%s%.2f",l>=0?" ":"",(float)l/65536.0);
+
+            Bsprintf(tempbuf,"%s%.2f",l>=0?" ":"", fix16_to_float(l));
             mgametext(c+160-16,46+16-8,tempbuf,MENUHIGHLIGHT(1),2+8+16);
 
             // Digital Axes
@@ -4012,7 +4018,7 @@ cheat_for_port_credits:
                 else if (l == analog_moving) l = -1;
                 else l = analog_turning;
                 ud.config.JoystickAnalogueAxes[thispage*2+(x==7)] = l;
-                CONTROL_MapAnalogAxis(thispage*2+(x==7),l,controldevice_joystick);
+                CONTROL_MapAnalogAxis(thispage*2+(x==7),l);
                 {
                     extern int32_t mouseyaxismode;	// player.c
                     mouseyaxismode = -1;
@@ -4171,7 +4177,7 @@ cheat_for_port_credits:
                 if (dx != odx) ud.config.JoystickAnalogueDead[m]     = 10000l*dx/64l;
                 if (dy != ody) ud.config.JoystickAnalogueSaturate[m] = 10000l*dy/64l;
                 if (dx != odx || dy != ody)
-                    joySetDeadZone(m,ud.config.JoystickAnalogueDead[m],ud.config.JoystickAnalogueSaturate[m]);
+                    JOYSTICK_SetDeadZone(m,ud.config.JoystickAnalogueDead[m],ud.config.JoystickAnalogueSaturate[m]);
             }
             //mgametext(160,158,"DEAD = DEAD ZONE, SAT. = SATURATION",0,2+8+16);
             if (joystick.numAxes>4)

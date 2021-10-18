@@ -260,7 +260,7 @@ int A_GetFurthestAngle(int const spriteNum, int const angDiv)
         origin.z -= (8 << 8);//ZOFFSET3;
         hitscan(&origin, pSprite->sectnum, sintable[(j + 512) & 2047], sintable[j & 2047], 0, &hit, CLIPMASK1);
 
-        int const hitDist = klabs(hit.pos.x - pSprite->x) + klabs(hit.pos.y - pSprite->y);
+        int const hitDist = klabs(hit.x - pSprite->x) + klabs(hit.y - pSprite->y);
 
         if (hitDist > greatestDist)
         {
@@ -288,19 +288,19 @@ int A_FurthestVisiblePoint(int iActor,spritetype *ts,int *dax,int *day)
 
         for (j=ts->ang;j<(2048+ts->ang);j+=(angincs-(krand()&511)))
         {
-            vec3_t origin = ts->pos;
+            vec3_t origin = ts->xyz;
             origin.z -= (16 << 8);//ZOFFSET2;
 
             hitscan(&origin, ts->sectnum, sintable[(j + 512) & 2047], sintable[j & 2047], 16384 - (krand() & 32767), &hit, CLIPMASK1);
 
-            d = klabs(hit.pos.x-ts->x)+klabs(hit.pos.y-ts->y);
-            da = klabs(hit.pos.x-s->x)+klabs(hit.pos.y-s->y);
+            d = klabs(hit.x-ts->x)+klabs(hit.y-ts->y);
+            da = klabs(hit.x-s->x)+klabs(hit.y-s->y);
 
             if (d < da && hit.sect > -1)
-                if (cansee(hit.pos.x, hit.pos.y, hit.pos.z,hit.sect,s->x,s->y,s->z-(16<<8),s->sectnum))
+                if (cansee(hit.x, hit.y, hit.z,hit.sect,s->x,s->y,s->z-(16<<8),s->sectnum))
                 {
-                    *dax = hit.pos.x;
-                    *day = hit.pos.y;
+                    *dax = hit.x;
+                    *day = hit.y;
                     return hit.sect;
                 }
         }
@@ -397,7 +397,7 @@ void A_Fall(int iActor)
     }
 
     if (fbunch >= 0)
-        setspritez(iActor, &s->pos);
+        setspritez(iActor, &s->xyz);
     else if (s->z >= actor[iActor].floorz-(ACTOR_FLOOR_OFFSET))
     {
         s->z = actor[iActor].floorz - ACTOR_FLOOR_OFFSET;
@@ -507,7 +507,7 @@ static void X_Move(void)
     {
         if (deadflag || (actor[g_i].bpos.x != g_sp->x) || (actor[g_i].bpos.y != g_sp->y))
         {
-            setsprite(g_i, &g_sp->pos);
+            setsprite(g_i, &g_sp->xyz);
         }
         return;
     }
@@ -578,14 +578,14 @@ static void X_Move(void)
             {
                 if (g_sp->picnum == COMMANDER)
                 {
-                    actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                    actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->xy);
                     if (g_sp->z > (l-(8<<8)))
                     {
                         if (g_sp->z > (l-(8<<8))) g_sp->z = l-(8<<8);
                         g_sp->zvel = 0;
                     }
 
-                    actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                    actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
                     if ((g_sp->z-l) < (80<<8))
                     {
                         g_sp->z = l+(80<<8);
@@ -596,13 +596,13 @@ static void X_Move(void)
                 {
                     if (g_sp->zvel > 0)
                     {
-                        actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                        actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->xy);
                         if (g_sp->z > (l-(30<<8)))
                             g_sp->z = l-(30<<8);
                     }
                     else
                     {
-                        actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                        actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
                         if ((g_sp->z-l) < (50<<8))
                         {
                             g_sp->z = l+(50<<8);
@@ -617,7 +617,7 @@ static void X_Move(void)
                     g_sp->z = actor[g_i].floorz;
                 if (g_sp->zvel < 0)
                 {
-                    l = yax_getceilzofslope(g_sp->sectnum, g_sp->pos.vec2);
+                    l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
                     if ((g_sp->z-l) < (66<<8))
                     {
                         g_sp->z = l+(66<<8);
@@ -1278,7 +1278,7 @@ static int X_DoExecute(void)
                 int newZ = g_sp->z + g_sp->zvel;
 
                 if (yax_getbunch(g_sp->sectnum, YAX_FLOOR) >= 0 && (sector[g_sp->sectnum].floorstat & 512) == 0)
-                    setspritez(g_i, &g_sp->pos);
+                    setspritez(g_i, &g_sp->xyz);
                 else if (newZ > (actor[g_i].floorz - ACTOR_FLOOR_OFFSET))
                     newZ = (actor[g_i].floorz - ACTOR_FLOOR_OFFSET);
 
@@ -2519,9 +2519,9 @@ static int X_DoExecute(void)
             Gv_SetVarX(hitsectvar, hit.sect);
             Gv_SetVarX(hitwallvar, hit.wall);
             Gv_SetVarX(hitspritevar, hit.sprite);
-            Gv_SetVarX(hitxvar, hit.pos.x);
-            Gv_SetVarX(hityvar, hit.pos.y);
-            Gv_SetVarX(hitzvar, hit.pos.z);
+            Gv_SetVarX(hitxvar, hit.x);
+            Gv_SetVarX(hityvar, hit.y);
+            Gv_SetVarX(hitzvar, hit.z);
             break;
         }
 

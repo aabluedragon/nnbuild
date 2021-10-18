@@ -267,7 +267,7 @@ void G_PlayAnim(const char *fn, char t)
         {
             gameHandleEvents();
 
-            if (KB_KeyWaiting() || MOUSE_GetButtons()&LEFT_MOUSE)
+            if (KB_KeyWaiting() || MOUSE_GetButtons()&M_LEFTBUTTON)
                 goto ENDOFANIMLOOP;
 
             if (g_restorePalette == 1)
@@ -305,7 +305,7 @@ ENDOFANIMLOOP:
     gltexfiltermode = ogltexfiltermode;
     gltexapplyprops();
 #endif
-    MOUSE_ClearButton(LEFT_MOUSE);
+    MOUSE_ClearButton(M_LEFTBUTTON);
     ANIM_FreeAnim();
     walock[TILE_ANIM] = 1;
 }

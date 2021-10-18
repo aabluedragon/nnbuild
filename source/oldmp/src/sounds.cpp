@@ -923,7 +923,7 @@ int A_PlaySound(int soundNum, int spriteNum)
         return -1;
 
     return (unsigned)spriteNum >= MAXSPRITES ? S_PlaySound(soundNum) :
-        S_PlaySound3D(soundNum, spriteNum, &sprite[spriteNum].pos);
+        S_PlaySound3D(soundNum, spriteNum, &sprite[spriteNum].xyz);
 }
 
 void S_StopEnvSound(int sndNum, int sprNum)
@@ -1011,7 +1011,7 @@ void S_Update(void)
     }
     else
     {
-        c = &sprite[ud.camerasprite].pos;
+        c = &sprite[ud.camerasprite].xyz;
         cs = sprite[ud.camerasprite].sectnum;
         ca = sprite[ud.camerasprite].ang;
     }
@@ -1037,7 +1037,7 @@ void S_Update(void)
             if(voice.detached)
                 S_CalcDistAndAng(-1, sndnum, cs, ca, c, &voice.last_pos, voice.last_sect, &sndist, &sndang);
             else
-                S_CalcDistAndAng(spriteNum, sndnum, cs, ca, c, &sprite[spriteNum].pos, sprite[spriteNum].sectnum, &sndist, &sndang);
+                S_CalcDistAndAng(spriteNum, sndnum, cs, ca, c, &sprite[spriteNum].xyz, sprite[spriteNum].sectnum, &sndist, &sndang);
 
             if (S_IsAmbientSFX(spriteNum))
                 g_numEnvSoundsPlaying++;
@@ -1118,7 +1118,7 @@ void S_DetachSoundsFromSprite(int spriteNum)
             {
                 g_sounds[i].voices[voice].detached = 1;
                 g_sounds[i].voices[voice].last_sect = sprite[spriteNum].sectnum;
-                g_sounds[i].voices[voice].last_pos = sprite[spriteNum].pos;
+                g_sounds[i].voices[voice].last_pos = sprite[spriteNum].xyz;
             }
         }
     }

@@ -3356,7 +3356,7 @@ int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite)
     if (hitData.wall >= 0 && (wall[hitData.wall].cstat & 16) && A_CheckEnemySprite(&sprite[spriteNum]))
         return 1 << 30;
 
-    return FindDistance2D(hitData.pos.x - sprite[spriteNum].x, hitData.pos.y - sprite[spriteNum].y);
+    return FindDistance2D(hitData.x - sprite[spriteNum].x, hitData.y - sprite[spriteNum].y);
 }
 
 static int P_FindWall(DukePlayer_t *p,int16_t *hitw)
@@ -3372,7 +3372,7 @@ static int P_FindWall(DukePlayer_t *p,int16_t *hitw)
     if (hit.wall < 0)
         return INT32_MAX;
 
-    return (FindDistance2D(hit.pos.x-p->pos.x,hit.pos.y-p->pos.y));
+    return (FindDistance2D(hit.x-p->pos.x,hit.y-p->pos.y));
 }
 
 static void G_ClearCameras(DukePlayer_t* p)

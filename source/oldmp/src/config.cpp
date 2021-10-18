@@ -300,15 +300,12 @@ void CONFIG_SetDefaults(void)
 
     for (int i = 0; i < MAXMOUSEAXES; i++)
     {
-        CONTROL_SetAnalogAxisScale(i, DEFAULTMOUSEANALOGUESCALE, controldevice_mouse);
-
         ud.config.MouseDigitalFunctions[i][0] = CONFIG_FunctionNameToNum(mousedigitaldefaults[i * 2]);
         ud.config.MouseDigitalFunctions[i][1] = CONFIG_FunctionNameToNum(mousedigitaldefaults[i * 2 + 1]);
-        CONTROL_MapDigitalAxis(i, ud.config.MouseDigitalFunctions[i][0], 0, controldevice_mouse);
-        CONTROL_MapDigitalAxis(i, ud.config.MouseDigitalFunctions[i][1], 1, controldevice_mouse);
-
+        //CONTROL_MapDigitalAxis(i, ud.config.MouseDigitalFunctions[i][0], 0, controldevice_mouse);
+        //CONTROL_MapDigitalAxis(i, ud.config.MouseDigitalFunctions[i][1], 1, controldevice_mouse);
         ud.config.MouseAnalogueAxes[i] = CONFIG_AnalogNameToNum(mouseanalogdefaults[i]);
-        CONTROL_MapAnalogAxis(i, ud.config.MouseAnalogueAxes[i], controldevice_mouse);
+        //CONTROL_MapAnalogAxis(i, ud.config.MouseAnalogueAxes[i], controldevice_mouse);
     }
 
 #if !defined GEKKO
@@ -444,6 +441,8 @@ void CONFIG_SetupMouse(void)
         CONTROL_MapButton(ud.config.MouseFunctions[i][0], i, 0, controldevice_mouse);
         CONTROL_MapButton(ud.config.MouseFunctions[i][1], i, 1, controldevice_mouse);
     }
+
+    /*
     for (int i = 0; i < MAXMOUSEAXES; i++)
     {
         CONTROL_MapAnalogAxis(i, ud.config.MouseAnalogueAxes[i], controldevice_mouse);
@@ -451,6 +450,7 @@ void CONFIG_SetupMouse(void)
         CONTROL_MapDigitalAxis(i, ud.config.MouseDigitalFunctions[i][0], 0, controldevice_mouse);
         CONTROL_MapDigitalAxis(i, ud.config.MouseDigitalFunctions[i][1], 1, controldevice_mouse);
     }
+    */
 }
 
 /*
@@ -529,11 +529,11 @@ void CONFIG_SetupJoystick(void)
     }
     for (i = 0; i < MAXJOYAXES; i++)
     {
-        CONTROL_MapAnalogAxis(i, ud.config.JoystickAnalogueAxes[i], controldevice_joystick);
-        CONTROL_MapDigitalAxis(i, ud.config.JoystickDigitalFunctions[i][0], 0, controldevice_joystick);
-        CONTROL_MapDigitalAxis(i, ud.config.JoystickDigitalFunctions[i][1], 1, controldevice_joystick);
+        CONTROL_MapAnalogAxis(i, ud.config.JoystickAnalogueAxes[i]);
+        CONTROL_MapDigitalAxis(i, ud.config.JoystickDigitalFunctions[i][0], 0);
+        CONTROL_MapDigitalAxis(i, ud.config.JoystickDigitalFunctions[i][1], 1);
         CONTROL_SetAnalogAxisScale(i, ud.config.JoystickAnalogueScale[i], controldevice_joystick);
-        CONTROL_SetAnalogAxisInvert(i, ud.config.JoystickAnalogueInvert[i], controldevice_joystick);
+        CONTROL_SetAnalogAxisInvert(i, ud.config.JoystickAnalogueInvert[i]);
     }
 }
 

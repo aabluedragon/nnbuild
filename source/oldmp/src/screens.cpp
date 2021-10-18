@@ -533,7 +533,7 @@ void G_BonusScreen(int bonusonly)
             IFISSOFTMODE fadepal(0, 0, 0, 63, 0, -1);
             else videoNextPage();
 
-            while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
+            while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
                 gameHandleEvents();
 
             fadepal(0, 0, 0, 0, 64, 1);
@@ -565,7 +565,7 @@ void G_BonusScreen(int bonusonly)
             IFISSOFTMODE fadepal(0, 0, 0, 63, 0, -1);
             else videoNextPage();
 
-            while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
+            while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
                 gameHandleEvents();
 
             IFISSOFTMODE fadepal(0, 0, 0, 0, 64, 1);
@@ -613,19 +613,19 @@ void G_BonusScreen(int bonusonly)
             fadepal(0, 0, 0, 63, 0, -3);
 
             KB_FlushKeyboardQueue();
-            while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
+            while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
                 gameHandleEvents();
 
             fadepal(0, 0, 0, 0, 64, 3);
 
             videoClearViewableArea(0L);
             videoNextPage();
-            MOUSE_ClearButton(LEFT_MOUSE);
+            MOUSE_ClearButton(M_LEFTBUTTON);
 
             G_PlayAnim("DUKETEAM.ANM", 4);
 
             KB_FlushKeyboardQueue();
-            while (!KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
+            while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
                 gameHandleEvents();
 
             videoClearViewableArea(0L);
@@ -635,7 +635,7 @@ void G_BonusScreen(int bonusonly)
             FX_StopAllSounds();
             S_ClearSoundLocks();
             KB_FlushKeyboardQueue();
-            MOUSE_ClearButton(LEFT_MOUSE);
+            MOUSE_ClearButton(M_LEFTBUTTON);
 
             break;
 
@@ -663,46 +663,46 @@ void G_BonusScreen(int bonusonly)
 
             G_PlayAnim("RADLOGO.ANM", 3);
 
-            if (ud.lockout == 0 && !KB_KeyWaiting() && !MOUSE_GetButtons() & LEFT_MOUSE)
+            if (ud.lockout == 0 && !KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
             {
                 S_PlaySound(ENDSEQVOL3SND5);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND5))
                     gameHandleEvents();
 
-                if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
+                if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON)) goto ENDANM;
 
                 S_PlaySound(ENDSEQVOL3SND6);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND6))
                     gameHandleEvents();
 
-                if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
+                if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON)) goto ENDANM;
 
                 S_PlaySound(ENDSEQVOL3SND7);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND7))
                     gameHandleEvents();
 
-                if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
+                if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON)) goto ENDANM;
 
                 S_PlaySound(ENDSEQVOL3SND8);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND8))
                     gameHandleEvents();
 
-                if (KB_KeyWaiting() || MOUSE_GetButtons() & LEFT_MOUSE) goto ENDANM;
+                if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON)) goto ENDANM;
 
                 S_PlaySound(ENDSEQVOL3SND9);
                 while (S_CheckSoundPlaying(ENDSEQVOL3SND9))
                     gameHandleEvents();
             }
 
-            MOUSE_ClearButton(LEFT_MOUSE);
+            MOUSE_ClearButton(M_LEFTBUTTON);
 
             KB_FlushKeyboardQueue();
             totalclock = 0;
-            while (!KB_KeyWaiting() && totalclock < 120 && !MOUSE_GetButtons() & LEFT_MOUSE)
+            while (!KB_KeyWaiting() && totalclock < 120 && !(MOUSE_GetButtons() & M_LEFTBUTTON))
                 gameHandleEvents();
 
         ENDANM:
-            MOUSE_ClearButton(LEFT_MOUSE);
+            MOUSE_ClearButton(M_LEFTBUTTON);
             FX_StopAllSounds();
             S_ClearSoundLocks();
 

@@ -19,6 +19,17 @@ const char* G_DefaultRtsFile(void);
 # define VIEWSCREENFACTOR 2
 #endif
 
+// Forward declarations
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void M32RunScript(const char* s); // Needed, because reasons.
+
+#ifdef __cplusplus
+}
+#endif
+
 static inline int G_HaveUserMap(void)
 {
     return (boardfilename[0] != 0 && ud.level_number == 7 && ud.volume_number == 0);
