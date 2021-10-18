@@ -424,7 +424,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&ud.ffire,sizeof(ud.ffire),1,fil) != 1) goto corrupt;
     ud.m_ffire = ud.ffire;
 
-    if (kdfread(&camsprite,sizeof(camsprite),1,fil) != 1) goto corrupt;
+    if (kdfread(&g_curViewscreen,sizeof(g_curViewscreen),1,fil) != 1) goto corrupt;
     if (kdfread(&connecthead,sizeof(connecthead),1,fil) != 1) goto corrupt;
     if (kdfread(connectpoint2,sizeof(connectpoint2),1,fil) != 1) goto corrupt;
     if (kdfread(&g_numPlayerSprites,sizeof(g_numPlayerSprites),1,fil) != 1) goto corrupt;
@@ -856,7 +856,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&ud.coop,sizeof(ud.coop),1,fil);
     dfwrite(&ud.marker,sizeof(ud.marker),1,fil);
     dfwrite(&ud.ffire,sizeof(ud.ffire),1,fil);
-    dfwrite(&camsprite,sizeof(camsprite),1,fil);
+    dfwrite(&g_curViewscreen,sizeof(g_curViewscreen),1,fil);
     dfwrite(&connecthead,sizeof(connecthead),1,fil);
     dfwrite(connectpoint2,sizeof(connectpoint2),1,fil);
     dfwrite(&g_numPlayerSprites,sizeof(g_numPlayerSprites),1,fil);

@@ -2144,22 +2144,54 @@ DETONATE:
         case VIEWSCREEN__STATIC:
         case VIEWSCREEN2__STATIC:
 
-            if (s->xrepeat == 0) KILLIT(i);
+            if (s->xrepeat == 0)
+                KILLIT(i);
 
-            p = A_FindPlayer(s, &x);
+            {
+                int32_t    playerDist;
+                int const  p = A_FindPlayer(s, &playerDist);
+                auto const ps = g_player[p].ps;
 
-            if (x < 2048)
-            {
-                if (SP(i) == 1)
-                    camsprite = i;
-            }
-            else if (camsprite != -1 && T1(i) == 1)
-            {
-                camsprite = -1;
-                T1(i) = 0;
-                //loadtile(s->picnum);
-                //invalidatetile(s->picnum,-1,255);
-                walock[TILE_VIEWSCR] = 199;
+                // EDuke32 extension: xvel of viewscreen determines active distance
+                int const activeDist = s->xvel > 0 ? s->xvel : VIEWSCREEN_ACTIVE_DISTANCE;
+
+                if (dist(&sprite[ps->i], s) < activeDist)
+                {
+                    // DOS behavior: yvel of 1 activates screen if player approaches
+                    if (g_curViewscreen == -1 && s->yvel & 1)
+                    {
+                        g_curViewscreen = i;
+
+                        // EDuke32 extension: for remote activation, check for connected camera and display its image
+                        if (sprite[i].hitag)
+                        {
+                            for (bssize_t SPRITES_OF(STAT_ACTOR, otherSprite))
+                            {
+                                if (PN(otherSprite) == CAMERA1 && sprite[i].hitag == SLT(otherSprite))
+                                {
+                                    sprite[i].owner = otherSprite;
+                                    break;
+                                }
+                            }
+                        }
+                    } // deactivate viewscreen in valid range if yvel is 0
+                    else if (g_curViewscreen == i && !(s->yvel & 3))
+                    {
+                        g_curViewscreen = -1;
+                        T1(i) = 0;
+                        for (bssize_t ii = 0; ii < VIEWSCREENFACTOR; ii++)
+                            walock[TILE_VIEWSCR - ii] = CACHE1D_UNLOCKED;
+                    }
+                }
+                else if (g_curViewscreen == i /*&& T1 == 1*/)
+                {
+                    g_curViewscreen = -1;
+                    s->yvel &= ~2; // VIEWSCREEN YVEL
+                    T1(i) = 0;
+
+                    for (bssize_t ii = 0; ii < VIEWSCREENFACTOR; ii++)
+                        walock[TILE_VIEWSCR - ii] = CACHE1D_UNLOCKED;
+                }
             }
 
             goto BOLT;

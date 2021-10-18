@@ -443,27 +443,78 @@ int SetAnimation(int16_t target, int8_t type, int thegoal, int thevel)
     return(j);
 }
 
-void G_AnimateCamSprite(void)
+static void G_SetupCamTile(int spriteNum, int tileNum, int smoothRatio)
 {
-    int i = camsprite;
+    vec3_t const camera = G_GetCameraPosition(spriteNum, smoothRatio);
+    int const    saveMirror = display_mirror;
 
-    if (camsprite <= 0) return;
+    //if (waloff[wn] == 0) loadtile(wn);
+    renderSetTarget(tileNum, tilesiz[tileNum].y, tilesiz[tileNum].x);
 
-    if (T1(i) >= 11)
+#if 0
+    int const playerNum = screenpeek;
+    int const noDraw = VM_OnEventWithReturn(EVENT_DISPLAYROOMSCAMERATILE, spriteNum, playerNum, 0);
+
+    if (noDraw == 1)
+        goto finishTileSetup;
+#ifdef DEBUGGINGAIDS
+    else if (EDUKE32_PREDICT_FALSE(noDraw != 0)) // event return values other than 0 and 1 are reserved
+        OSD_Printf(OSD_ERROR "ERROR: EVENT_DISPLAYROOMSCAMERATILE return value must be 0 or 1, "
+            "other values are reserved.\n");
+#endif
+#endif
+
+    yax_preparedrawrooms();
+    drawrooms(camera.x, camera.y, camera.z, SA(spriteNum), 100 + sprite[spriteNum].shade, SECT(spriteNum));
+    yax_drawrooms(G_DoSpriteAnimations, SECT(spriteNum), 0, smoothRatio);
+
+    display_mirror = 3;
+    G_DoSpriteAnimations(camera.x, camera.y, camera.z, SA(spriteNum), smoothRatio);
+    display_mirror = saveMirror;
+    renderDrawMasks();
+
+//finishTileSetup:
+    renderRestoreTarget();
+    squarerotatetile(tileNum);
+    tileInvalidate(tileNum, -1, 255);
+}
+
+void G_AnimateCamSprite(int smoothRatio)
+{
+#ifdef DEBUG_VALGRIND_NO_SMC
+    return;
+#endif
+
+    if (g_curViewscreen < 0)
+        return;
+
+    int const spriteNum = g_curViewscreen;
+
+    if (totalclock >= T1(spriteNum) + ud.camera_time)
     {
-        T1(i) = 0;
+        auto const pPlayer = g_player[screenpeek].ps;
 
-        if (g_player[screenpeek].ps->newowner >= 0)
-            OW(i) = g_player[screenpeek].ps->newowner;
-        else if (OW(i) >= 0 && dist(&sprite[g_player[screenpeek].ps->i],&sprite[i]) < 2048)
+        if (pPlayer->newowner >= 0)
+            OW(spriteNum) = pPlayer->newowner;
+
+        // EDuke32 extension: xvel of viewscreen determines active distance
+        int const activeDist = sprite[spriteNum].xvel > 0 ? sprite[spriteNum].xvel : VIEWSCREEN_ACTIVE_DISTANCE;
+
+        if (OW(spriteNum) >= 0 && dist(&sprite[pPlayer->i], &sprite[spriteNum]) < activeDist)
         {
-            if (waloff[TILE_VIEWSCR] == 0)
-                tileCreate(TILE_VIEWSCR,tilesiz[PN(i)].x,tilesiz[PN(i)].y);
-            else walock[TILE_VIEWSCR] = 255;
-            xyzmirror(OW(i),/*PN(i)*/TILE_VIEWSCR);
+            int const viewscrShift = G_GetViewscreenSizeShift((uspriteptr_t)&sprite[spriteNum]);
+            int const viewscrTile = TILE_VIEWSCR - viewscrShift;
+
+            if (waloff[viewscrTile] == 0)
+                tileCreate(viewscrTile, tilesiz[PN(spriteNum)].x << viewscrShift, tilesiz[PN(spriteNum)].y << viewscrShift);
+            else
+                walock[viewscrTile] = CACHE1D_UNLOCKED;
+
+            G_SetupCamTile(OW(spriteNum), viewscrTile, smoothRatio);
         }
+
+        T1(spriteNum) = (int32_t)totalclock;
     }
-    else T1(i)++;
 }
 
 void G_AnimateWalls(void)
@@ -3399,7 +3450,7 @@ static void P_CycleCameras(int32_t playerNum, int32_t viewscreenSprite)
             A_PlaySound(MONITOR_ACTIVE, p->i);
             sprite[viewscreenSprite].owner = i;
             sprite[viewscreenSprite].yvel = 1;  // VIEWSCREEN_YVEL
-            camsprite = viewscreenSprite; // g_curViewScreen
+            g_curViewscreen = viewscreenSprite; // g_curViewScreen
 
             int const playerSectnum = p->cursectnum;
             p->cursectnum = SECT(i);

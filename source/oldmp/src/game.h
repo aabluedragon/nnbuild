@@ -9,6 +9,16 @@ const char* G_DefaultRtsFile(void);
 #define USERMAPMUSICFAKELEVEL (MAXLEVELS-1)
 #define USERMAPMUSICFAKESLOT ((USERMAPMUSICFAKEVOLUME * MAXLEVELS) + USERMAPMUSICFAKELEVEL)
 
+#define VIEWSCREEN_ACTIVE_DISTANCE 2048
+
+#if defined(GEKKO) || defined(__OPENDINGUX__)
+# define VIEWSCREENFACTOR 0
+#elif defined(__ANDROID__)
+# define VIEWSCREENFACTOR 1
+#else
+# define VIEWSCREENFACTOR 2
+#endif
+
 static inline int G_HaveUserMap(void)
 {
     return (boardfilename[0] != 0 && ud.level_number == 7 && ud.volume_number == 0);
@@ -68,6 +78,34 @@ static inline bool G_CheckFemSprite(int32_t spriteNum)
     }
 
     return false;
+}
+
+static inline vec3_t G_GetCameraPosition(int32_t const i, int32_t const smoothratio)
+{
+    auto const cs = (uspriteptr_t)&sprite[i];
+    const ActorData_t* const ca = &actor[i];
+
+    return { ca->bpos.x + mulscale16(cs->x - ca->bpos.x, smoothratio),
+             ca->bpos.y + mulscale16(cs->y - ca->bpos.y, smoothratio),
+             ca->bpos.z + mulscale16(cs->z - ca->bpos.z, smoothratio) };
+}
+
+template <typename T>
+static inline int G_GetViewscreenSizeShift(T const* spr)
+{
+#if VIEWSCREENFACTOR == 0
+    UNREFERENCED_PARAMETER(spr);
+    return VIEWSCREENFACTOR;
+#else
+    static CONSTEXPR int const mask = (1 << VIEWSCREENFACTOR) - 1;
+    const int rem = (spr->xrepeat & mask) | (spr->yrepeat & mask);
+
+    for (int i = 0; i < VIEWSCREENFACTOR; i++)
+        if (rem & (1 << i))
+            return i;
+
+    return VIEWSCREENFACTOR;
+#endif
 }
 
 static inline int32_t calc_smoothratio(ClockTicks const totalclk, ClockTicks const ototalclk)

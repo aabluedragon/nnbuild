@@ -72,7 +72,7 @@ extern int32_t* G_GetAnimationPointer(int32_t index);
 extern int GetAnimationGoal(int16_t target, int8_t type);
 extern int SetAnimation(int16_t target, int8_t type, int thegoal, int thevel);
 
-extern void G_AnimateCamSprite(void);
+extern void G_AnimateCamSprite(int smoothRatio);
 extern void G_AnimateWalls(void);
 extern int G_ActivateWarpElevators(int s,int d);
 extern void G_OperateSectors(int sn,int ii);
@@ -100,7 +100,6 @@ extern void allignwarpelevators(void);
 extern void G_HandleSharedKeys(int snum);
 extern void P_CheckSectors(int snum);
 extern void G_CacheMapData(void);
-extern void xyzmirror(int i,int wn);
 extern void G_UpdateScreenArea(void);
 extern void P_RandomSpawnPoint(int snum);
 extern void P_ResetWeapons(int snum);

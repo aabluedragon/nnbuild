@@ -469,24 +469,6 @@ void G_CacheMapData(void)
     OSD_Printf("Cache time: %dms\n", endtime-starttime);
 }
 
-void xyzmirror(int i,int wn)
-{
-    //if (waloff[wn] == 0) tileLoad(wn);
-    renderSetTarget(wn,tilesiz[wn].y,tilesiz[wn].x);
-
-    drawrooms(SX(i),SY(i),SZ(i),SA(i),100+sprite[i].shade,SECT(i));
-    display_mirror = 1;
-    G_DoSpriteAnimations(SX(i),SY(i),SZ(i),SA(i),65536L);
-    display_mirror = 0;
-    renderDrawMasks();
-
-    initprintf("%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i\n",i,wn,tilesiz[wn].y,tilesiz[wn].x,TrackerCast(SX(i)),TrackerCast(SY(i)),TrackerCast(SZ(i)),TrackerCast(SA(i)),100+TrackerCast(SS(i)),TrackerCast(SECT(i)),TrackerCast(PN(i)));
-
-    renderRestoreTarget();
-    squarerotatetile(wn);
-    tileInvalidate(wn,-1,255);
-}
-
 void G_UpdateScreenArea(void)
 {
     int i, j, ss, x1, x2, y1, y2;
@@ -740,7 +722,7 @@ static void resetpremapglobals(void)
     screenpeek = myconnectindex;
     parallaxtype = 0;
     tempwallptr = 0;
-    camsprite = -1;
+    g_curViewscreen = -1;
 
     ud.total_monsters = 0;
     ud.monsters_killed = 0;

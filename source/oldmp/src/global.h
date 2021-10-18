@@ -96,7 +96,7 @@ G_EXTERN int g_animateCount;
 
 G_EXTERN int startofdynamicinterpolations;
 
-G_EXTERN short camsprite;
+G_EXTERN short g_curViewscreen;
 G_EXTERN short g_mirrorWall[64], g_mirrorSector[64], g_mirrorCount;
 
 G_EXTERN char buf[1024], tempbuf[2048], packbuf[576], menutextbuf[128];

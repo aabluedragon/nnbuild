@@ -4101,16 +4101,6 @@ static void G_ClearGotMirror()
     gotpic[MIRROR >> 3] &= ~pow2char[MIRROR & 7];
 }
 
-static inline vec3_t G_GetCameraPosition(int32_t const i, int32_t const smoothratio)
-{
-    auto const cs = (uspriteptr_t)&sprite[i];
-    const ActorData_t* const ca = &actor[i];
-
-    return { ca->bpos.x + mulscale16(cs->x - ca->bpos.x, smoothratio),
-             ca->bpos.y + mulscale16(cs->y - ca->bpos.y, smoothratio),
-             ca->bpos.z + mulscale16(cs->z - ca->bpos.z, smoothratio) };
-}
-
 static void G_CalculateCameraInterpolation(DukePlayer_t *p, vec3_t* pos, fix16_t* q16ang, fix16_t* q16horiz, int16_t* sectnum, int32_t smoothratio)
 {
     pos->x = p->opos.x + mulscale16((int)(p->pos.x - p->opos.x), smoothratio);
@@ -4169,8 +4159,7 @@ void G_DrawRooms(int snum,int smoothratio)
     if (videoGetRenderMode() < 3 && (ud.camerasect < 0 || ud.camerasect >= MAXSECTORS)) return;
 
     G_DoInterpolations(smoothratio);
-
-    G_AnimateCamSprite();
+    G_AnimateCamSprite(smoothratio);
 
     if (ud.camerasprite >= 0)
     {
@@ -6989,18 +6978,42 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             continue;
         case VIEWSCREEN__STATIC:
         case VIEWSCREEN2__STATIC:
-            if (camsprite >= 0 && actor[OW(i)].temp_data[0] == 1)
+        {
+            int const viewscrShift = G_GetViewscreenSizeShift(t);
+            int const viewscrTile = TILE_VIEWSCR - viewscrShift;
+
+            if (g_curViewscreen >= 0 && actor[OW(i)].temp_data[0] == 1)
             {
                 t->picnum = STATIC;
-                t->cstat |= (rand()&12);
-                t->xrepeat += 8;
-                t->yrepeat += 8;
+                t->cstat |= (rand() & 12);
+                t->xrepeat += 10;
+                t->yrepeat += 9;
             }
-            else if (camsprite >= 0 && waloff[TILE_VIEWSCR] && walock[TILE_VIEWSCR] > 200)
+            else if (g_curViewscreen == i && display_mirror != 3 && waloff[viewscrTile])
             {
-                t->picnum = TILE_VIEWSCR;
+                // this exposes a sprite sorting issue which needs to be debugged further...
+#if 0
+                if (spritesortcnt < maxspritesonscreen)
+                {
+                    auto const newt = &tsprite[spritesortcnt++];
+
+                    *newt = *t;
+
+                    newt->cstat |= 2 | 512;
+                    newt->x += (sintable[(newt->ang + 512) & 2047] >> 12);
+                    newt->y += (sintable[newt->ang & 2047] >> 12);
+                    updatesector(newt->x, newt->y, &newt->sectnum);
+                }
+#endif
+                t->picnum = viewscrTile;
+#if VIEWSCREENFACTOR > 0
+                t->xrepeat >>= viewscrShift;
+                t->yrepeat >>= viewscrShift;
+#endif
             }
+
             break;
+        }
 
         case SHRINKSPARK__STATIC:
             t->picnum = SHRINKSPARK+(((int32_t)totalclock>>4)&3);
