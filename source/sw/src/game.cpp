@@ -1793,7 +1793,7 @@ LogoLevel(void)
 
     int fin;
     unsigned char pal[PAL_SIZE];
-    UserInput uinfo = { FALSE, FALSE, dir_None };
+    UserInput uinfo = { FALSE, FALSE, FALSE, dir_None };
 
 
     DSPRINTF(ds,"LogoLevel...");
@@ -2506,7 +2506,7 @@ BonusScreen(void)
     int Tics = 0;
     int line = 0;
     SWBOOL BonusDone;
-    UserInput uinfo = { FALSE, FALSE, dir_None };
+    UserInput uinfo = { FALSE, FALSE, FALSE, dir_None };
 
     if (Level < 0) Level = 0;
 
@@ -5957,14 +5957,14 @@ StdRandomRange(int range)
 
     rand_num = STD_RANDOM();
 
-    if (rand_num == RAND_MAX)
+    if (rand_num == WRAND_MAX)
         rand_num--;
 
     // shift values to give more precision
-#if (RAND_MAX > 0x7fff)
-    value = rand_num / (((int)RAND_MAX) / range);
+#if (WRAND_MAX > 0x7fff)
+    value = rand_num / (((int)WRAND_MAX) / range);
 #else
-    value = (rand_num << 14) / ((((int)RAND_MAX) << 14) / range);
+    value = (rand_num << 14) / ((((int)WRAND_MAX) << 14) / range);
 #endif
 
     if (value >= (uint32_t)range)
@@ -5974,7 +5974,7 @@ StdRandomRange(int range)
 }
 
 // [JM] Probably will need some doing over. !CHECKME!
-void M32RunScript(const char *s) { UNREFERENCED_PARAMETER(s); }
+extern "C" void M32RunScript(const char *s) { UNREFERENCED_PARAMETER(s); }
 void G_Polymer_UnInit(void) { }
 void app_crashhandler(void) { }
 

@@ -251,9 +251,9 @@ int32_t S_PlaySound3D(int32_t const num, int32_t i, const vec3_t *pos)
     if (cx)
     {
         if (pitchs < pitche)
-            pitch = pitchs + (rand()%cx);
+            pitch = pitchs + (wrand()%cx);
         else
-            pitch = pitche + (rand()%cx);
+            pitch = pitche + (wrand()%cx);
     }
     else
         pitch = pitchs;
@@ -360,9 +360,9 @@ void S_PlaySound(int32_t const num)
     if (cx)
     {
         if (pitchs < pitche)
-            pitch = pitchs + (rand()%cx);
+            pitch = pitchs + (wrand()%cx);
         else
-            pitch = pitche + (rand()%cx);
+            pitch = pitche + (wrand()%cx);
     }
     else
         pitch = pitchs;
@@ -410,7 +410,7 @@ int32_t A_PlaySound(uint32_t num, int32_t i)
         return 0;
     }
 
-    return S_PlaySound3D(num,i, &sprite[i].pos);
+    return S_PlaySound3D(num,i, &sprite[i].xyz);
 }
 
 void S_StopSound(int32_t num)

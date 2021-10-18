@@ -2204,7 +2204,7 @@ void tagcode(void)
                             //swingangopendir is -1 if forwards, 1 is backwards
                             l = (swingangopendir[i] > 0);
                             for (k=l+3; k>=l; k--)
-                                if (clipinsidebox(pos[p].vec2,swingwall[i][k],128L) != 0)
+                                if (clipinsidebox(pos[p].xy,swingwall[i][k],128L) != 0)
                                 {
                                     good = 0;
                                     break;
@@ -5094,8 +5094,8 @@ void movelava(char *dapic)
 
     for (z=min(LAVAMAXDROPS-lavanumdrops-1,3); z>=0; z--)
     {
-        lavadropx[lavanumdrops] = (Brand()&(LAVASIZ-1));
-        lavadropy[lavanumdrops] = (Brand()&(LAVASIZ-1));
+        lavadropx[lavanumdrops] = (wrand()&(LAVASIZ-1));
+        lavadropy[lavanumdrops] = (wrand()&(LAVASIZ-1));
         lavadropsiz[lavanumdrops] = 1;
         lavanumdrops++;
     }
@@ -5919,7 +5919,7 @@ void getpackets(void)
     }
     if ((networkmode == 0) && (myconnectindex != connecthead) && ((movecnt&1) == 0))
     {
-        if (rand()&1) ototalclock += (TICSPERFRAME>>1);
+        if (wrand()&1) ototalclock += (TICSPERFRAME>>1);
         else ototalclock -= (TICSPERFRAME>>1);
     }
 }
