@@ -1255,7 +1255,7 @@ void G_HandleSpecialKeys(void)
     if (myplayer == NULL)
         return;
 
-    //CONTROL_ProcessBinds();
+    CONTROL_ProcessBinds();
 
     if (ALT_IS_PRESSED && KB_KeyPressed(sc_Enter))
     {
@@ -8171,7 +8171,7 @@ static void G_HandleLocalKeys(void)
     int i,ch;
     int j;
 
-    //CONTROL_ProcessBinds();
+    CONTROL_ProcessBinds();
 
     if (ud.recstat == 2)
     {
