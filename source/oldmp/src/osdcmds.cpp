@@ -1525,20 +1525,13 @@ static int osdcmd_maxfps(const osdfuncparm_t *parm)
 
 static int osdcmd_inittimer(const osdfuncparm_t *parm)
 {
-    int j;
-
     if (parm->numparms != 1)
     {
         OSD_Printf("%dHz timer\n",g_timerTicsPerSecond);
         return OSDCMD_SHOWHELP;
     }
 
-    j = atol(parm->parms[0]);
-    if (g_timerTicsPerSecond == j)
-        return OSDCMD_OK;
-    timerUninit();
-    timerInit(j);
-    g_timerTicsPerSecond = j;
+    G_InitTimer(Batol(parm->parms[0]));
 
     OSD_Printf("%s\n",parm->raw);
     return OSDCMD_OK;

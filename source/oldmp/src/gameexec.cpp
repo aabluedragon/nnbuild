@@ -2132,12 +2132,7 @@ static int X_DoExecute(void)
 
     case CON_INITTIMER:
         insptr++;
-        j = Gv_GetVarX(*insptr++);
-        if (g_timerTicsPerSecond == j)
-            break;
-        timerUninit();
-        timerInit(j);
-        g_timerTicsPerSecond = j;
+        G_InitTimer(Gv_GetVarX(*insptr++));
         break;
 
     case CON_TIME:

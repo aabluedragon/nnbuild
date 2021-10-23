@@ -25,6 +25,7 @@ extern "C" {
 #endif
 
 void M32RunScript(const char* s); // Needed, because reasons.
+void G_InitTimer(int32_t ticspersec);
 
 #ifdef __cplusplus
 }

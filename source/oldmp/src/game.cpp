@@ -1291,6 +1291,7 @@ void G_HandleSpecialKeys(void)
     }
 }
 
+
 static void gameTimerHandler(void)
 {
     MUSIC_Update();
@@ -1298,6 +1299,17 @@ static void gameTimerHandler(void)
 #ifdef DISCORD_RPC
     CheckDiscord();
 #endif
+}
+
+void G_InitTimer(int32_t ticspersec)
+{
+    if (g_timerTicsPerSecond != ticspersec)
+    {
+        timerUninit();
+        timerInit(ticspersec);
+        timerSetCallback(gameTimerHandler);
+        g_timerTicsPerSecond = ticspersec;
+    }
 }
 
 static void G_ShowCacheLocks(void)
