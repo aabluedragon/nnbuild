@@ -1314,18 +1314,18 @@ static void G_MoveFX(void)
                     T1(spriteNum) = 0;
                 }
             }
-            else if (pSprite->lotag < 999 && (unsigned)sector[pSprite->sectnum].lotag < 9 &&  // ST_9_SLIDING_ST_DOOR
+            else if (pSprite->lotag < 999 && S_SoundIsValid(pSprite->lotag) && (unsigned)sector[pSprite->sectnum].lotag < 9 &&  // ST_9_SLIDING_ST_DOOR
                 ud.config.AmbienceToggle && sector[SECT(spriteNum)].floorz != sector[SECT(spriteNum)].ceilingz)
             {
-                if (g_sounds[pSprite->lotag].m & SF_MSFX)
+                if (g_sounds[pSprite->lotag]->flags & SF_MSFX)
                 {
                     int playerDist = dist(&sprite[pPlayer->i], pSprite);
 
-                    if (playerDist < spriteHitag && T1(spriteNum) == 0 && FX_VoiceAvailable(g_sounds[pSprite->lotag].pr - 1))
+                    if (playerDist < spriteHitag && T1(spriteNum) == 0 && FX_VoiceAvailable(g_sounds[pSprite->lotag]->priority - 1))
                     {
                         // Start playing an ambience sound.
 
-                        char om = g_sounds[pSprite->lotag].m;
+                        auto oldFlags = g_sounds[pSprite->lotag]->flags;
                         if (g_numEnvSoundsPlaying == ud.config.NumVoices)
                         {
                             int32_t j;
@@ -1342,9 +1342,9 @@ static void G_MoveFX(void)
                                 goto BOLT;
                         }
 
-                        g_sounds[pSprite->lotag].m |= SF_LOOP;
+                        g_sounds[pSprite->lotag]->flags |= SF_LOOP;
                         A_PlaySound(pSprite->lotag, spriteNum);
-                        g_sounds[pSprite->lotag].m = om;
+                        g_sounds[pSprite->lotag]->flags = oldFlags;
                         T1(spriteNum) = 1;  // AMBIENT_SFX_PLAYING
                     }
                     else if (playerDist >= spriteHitag && T1(spriteNum) == 1)
@@ -1357,7 +1357,7 @@ static void G_MoveFX(void)
                     }
                 }
 
-                if ((g_sounds[pSprite->lotag].m & (SF_GLOBAL | SF_DTAG)) == SF_GLOBAL)
+                if ((g_sounds[pSprite->lotag]->flags & (SF_GLOBAL | SF_DTAG)) == SF_GLOBAL)
                 {
                     // Randomly playing global sounds (flyby of planes, screams, ...)
 

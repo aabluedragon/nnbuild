@@ -119,10 +119,6 @@ G_EXTERN intptr_t* actorscrptr[MAXTILES];
 G_EXTERN projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
 G_EXTERN short SpriteCacheList[MAXTILES][3];
 
-// Sound
-G_EXTERN sound_t g_sounds[MAXSOUNDS];
-G_EXTERN char g_soundlocks[MAXSOUNDS];
-
 // Clouds
 G_EXTERN short g_numClouds, clouds[128], cloudx[128], cloudy[128];
 G_EXTERN ClockTicks cloudtotalclock;

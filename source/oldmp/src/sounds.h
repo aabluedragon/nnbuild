@@ -29,62 +29,49 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef _sounds_public_
 #define _sounds_public_
 
-#define MAXSOUNDS           4096
+#include "build.h"
+#include "compat.h"
+#include "sounds_common.h"
+#include "namesdyn.h"
+
+#define MAXSOUNDS           16384
 #define MAXSOUNDINSTANCES   8
-#define LOUDESTVOLUME       150
+#define LOUDESTVOLUME       111
 #define MUSIC_ID            -65536
 #define MAXVOICES           128
 
-// Sound flags
-enum {
-    SF_LOOP = 1,
-    SF_MSFX = 2,
-    SF_TALK = 4,
-    SF_ADULT = 8,
-    SF_GLOBAL = 16,
-    SF_ONEINST_INTERNAL = 32,
-
-    SF_DTAG = 128,
-};
-
-struct audioenumdev
-{
-    char *def;
-    char **devs;
-    struct audioenumdev *next;
-};
-struct audioenumdrv
-{
-    char *def;
-    char **drvs;
-    struct audioenumdev *devs;
-};
-int32_t EnumAudioDevs(struct audioenumdrv **wave, struct audioenumdev **midi, struct audioenumdev **cda);
-
 typedef struct
 {
-    int16_t id;
     int16_t owner;
+    int16_t handle;
     uint16_t dist;
-    uint16_t clock;
 
     int16_t detached;
     int16_t last_sect;
     vec3_t last_pos;
-} assvoice_t;
-
+} voiceinfo_t;
 
 typedef struct
 {
-    int32_t  length, num, siz; // 12b
-    float     volume;                        // 4b
-    char *filename, *ptr, *filename1; // 12b/24b
-    assvoice_t voices[MAXSOUNDINSTANCES]; // 32b
-    int16_t ps,pe,vo; // 6b
-    char pr,m; // 2b
+    voiceinfo_t* voices;
+
+    char* ptr;
+    char* filename;
+    int32_t len;
+    fix16_t volume;
+    int16_t minpitch, maxpitch, distOffset;
+    uint8_t  playing;
+    uint8_t flags;
+    char    priority;
+    char    lock;
 } sound_t;
 
-extern int16_t g_skillSoundID;
+EDUKE32_STATIC_ASSERT(MAXSOUNDINSTANCES <= sizeof(((sound_t*)0)->playing) << 3);
+
+extern voiceinfo_t nullvoice;
+extern sound_t nullsound;
+extern sound_t** g_sounds;
+extern int16_t g_skillSoundID; // [JM] Maybe remove in the future?
 extern int32_t g_numEnvSoundsPlaying,g_highestSoundIdx;
 
 // Definitions
@@ -102,13 +89,14 @@ int S_CheckSoundPlaying(int soundNum);
 // Sound Playback
 int A_PlaySound(int soundNum, int spriteNum);
 int S_PlaySound(int num);
-int S_PlaySound3D(int num, int spriteNum, const vec3_t* pos);
+int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos);
 int32_t S_PlaySoundXYZ(int32_t num, int32_t i, int32_t x, int32_t y, int32_t z);
 void S_MenuSound(void);
-void S_StopEnvSound(int sndNum, int sprNum);
+void S_StopEnvSound(int soundNum, int spriteNum);
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
 
-// Startup, shutdown, callbacks, updating, and cleanup
+// Startup, shutdown, allocation, callbacks, updating, and cleanup
+void S_AllocIndexes(int sndidx);
 void S_SoundStartup(void);
 void S_SoundShutdown(void);
 void S_Callback(intptr_t num);
@@ -130,9 +118,11 @@ void S_RestartMusic(void);
 void S_StopMusic(void);
 
 // Inline functions
-static inline bool S_IsAmbientSFX(int spriteNum)
+static FORCE_INLINE bool S_SoundIsValid(int soundNum)
 {
-    return (sprite[spriteNum].picnum == MUSICANDSFX && sprite[spriteNum].lotag < 999);
+    return soundNum <= g_highestSoundIdx && g_sounds[soundNum] && g_sounds[soundNum] != &nullsound && g_sounds[soundNum]->ptr;
 }
+
+static FORCE_INLINE bool S_IsAmbientSFX(int const spriteNum) { return (sprite[spriteNum].picnum == MUSICANDSFX && sprite[spriteNum].lotag < 999); }
 
 #endif

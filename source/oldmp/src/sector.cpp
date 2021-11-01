@@ -36,7 +36,7 @@ int S_FindMusicSFX(int sectNum, int* sndptr)
         const int32_t snd = sprite[spriteNum].lotag;
         EDUKE32_STATIC_ASSERT(MAXSOUNDS >= 1000);
 
-        if (PN(spriteNum) == MUSICANDSFX && (unsigned)snd < 1000)  // XXX: in other places, 999
+        if (PN(spriteNum) == MUSICANDSFX && (unsigned)snd < 1000 && S_SoundIsValid(snd))  // XXX: in other places, 999
         {
             *sndptr = snd;
             return spriteNum;
@@ -66,13 +66,13 @@ int A_CallSound(int sectNum, int spriteNum)
 
         if (T1(SFXsprite) == 0)
         {
-            if ((g_sounds[soundNum].m & (SF_GLOBAL | SF_DTAG)) != SF_GLOBAL)
+            if ((g_sounds[soundNum]->flags & (SF_GLOBAL | SF_DTAG)) != SF_GLOBAL)
             {
                 if (soundNum)
                 {
                     A_PlaySound(soundNum, spriteNum);
 
-                    if (SHT(SFXsprite) && soundNum != SHT(SFXsprite) && SHT(SFXsprite) < MAXSOUNDS)
+                    if (SHT(SFXsprite) && soundNum != SHT(SFXsprite) && SHT(SFXsprite) <= g_highestSoundIdx)
                         S_StopEnvSound(SHT(SFXsprite), T6(SFXsprite));
 
                     T6(SFXsprite) = spriteNum;
@@ -82,12 +82,12 @@ int A_CallSound(int sectNum, int spriteNum)
                     T1(SFXsprite) = 1;
             }
         }
-        else if (SHT(SFXsprite) < MAXSOUNDS)
+        else if (SHT(SFXsprite) <= g_highestSoundIdx)
         {
             if (SHT(SFXsprite))
                 A_PlaySound(SHT(SFXsprite), spriteNum);
 
-            if ((g_sounds[soundNum].m & SF_LOOP) || (SHT(SFXsprite) && SHT(SFXsprite) != soundNum))
+            if ((g_sounds[soundNum]->flags & SF_LOOP) || (SHT(SFXsprite) && SHT(SFXsprite) != soundNum))
                 S_StopEnvSound(soundNum, T6(SFXsprite));
 
             T6(SFXsprite) = spriteNum;
@@ -1683,17 +1683,18 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                 picnum == ALIENSWITCH || picnum == ALIENSWITCH+1 ||
                 picnum == TECHSWITCH || picnum == TECHSWITCH+1) return 1;
 
-        if (hitag == 0 && CheckDoorTile(picnum) == 0)
+        if (!hitag && CheckDoorTile(picnum) == 0)
         {
             if (switchtype == 1)
                 S_PlaySoundXYZ(SWITCH_ON,w,sx,sy,g_player[snum].ps->pos.z);
             else S_PlaySoundXYZ(SWITCH_ON,g_player[snum].ps->i,sx,sy,g_player[snum].ps->pos.z);
         }
-        else if (hitag != 0)
+        else if (S_SoundIsValid(hitag))
         {
-            if (switchtype == 1 && (g_sounds[hitag].m & SF_TALK) == 0)
+            if (switchtype == 1 && (g_sounds[hitag]->flags & SF_TALK) == 0)
                 S_PlaySoundXYZ(hitag,w,sx,sy,g_player[snum].ps->pos.z);
-            else A_PlaySound(hitag,g_player[snum].ps->i);
+            else
+                A_PlaySound(hitag,g_player[snum].ps->i);
         }
 
         return 1;
@@ -2228,7 +2229,7 @@ void A_DamageObject_Internal(int i,int sn)
             sprite[sn].xvel = (sprite[i].xvel>>1)+(sprite[i].xvel>>2);
             sprite[sn].ang -= (SA(i)<<1)+1024;
             SA(i) = getangle(SX(i)-sprite[sn].x,SY(i)-sprite[sn].y)-512;
-            if (g_sounds[POOLBALLHIT].num < 2)
+            if (g_sounds[POOLBALLHIT]->playing < 2)
                 A_PlaySound(POOLBALLHIT,i);
         }
         else

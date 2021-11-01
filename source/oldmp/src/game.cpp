@@ -10030,11 +10030,20 @@ static void G_Cleanup(void)
             Xfree(g_player[i].inputBits);
     }
 
-    for (i=MAXSOUNDS-1;i>=0;i--)
+    for (i = 0; i <= g_highestSoundIdx; i++)
     {
-        Xfree(g_sounds[i].filename);
-        Xfree(g_sounds[i].filename1);
+        if (g_sounds[i] != &nullsound)
+        {
+            DO_FREE_AND_NULL(g_sounds[i]->filename);
+
+            if (g_sounds[i]->voices != &nullvoice)
+                DO_FREE_AND_NULL(g_sounds[i]->voices);
+
+            DO_FREE_AND_NULL(g_sounds[i]);
+        }
     }
+
+    DO_FREE_AND_NULL(g_sounds);
 
     Xfree(label);
     Xfree(labelcode);

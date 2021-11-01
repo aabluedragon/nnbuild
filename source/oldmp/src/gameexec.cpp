@@ -1129,7 +1129,7 @@ static int X_DoExecute(void)
 
     case CON_MIKESND:
         insptr++;
-        if ((g_sp->yvel<0 || g_sp->yvel>=MAXSOUNDS) && g_scriptSanityChecks)
+        if ((g_sp->yvel < 0 || (unsigned)g_sp->yvel >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->yvel));
             insptr++;
@@ -1179,7 +1179,7 @@ static int X_DoExecute(void)
 
     case CON_SOUNDONCE:
         insptr++;
-        if ((*insptr<0 || *insptr>=MAXSOUNDS) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr++);
             break;
@@ -1190,7 +1190,7 @@ static int X_DoExecute(void)
 
     case CON_IFSOUND:
         insptr++;
-        if ((*insptr<0 || *insptr>=MAXSOUNDS) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
@@ -1201,7 +1201,7 @@ static int X_DoExecute(void)
 
     case CON_STOPSOUND:
         insptr++;
-        if ((*insptr<0 || *insptr>=MAXSOUNDS) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
@@ -1229,7 +1229,7 @@ static int X_DoExecute(void)
 
     case CON_GLOBALSOUND:
         insptr++;
-        if ((*insptr<0 || *insptr>=MAXSOUNDS) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
@@ -1241,7 +1241,7 @@ static int X_DoExecute(void)
 
     case CON_SOUND:
         insptr++;
-        if ((*insptr<0 || *insptr>=MAXSOUNDS) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
@@ -2270,24 +2270,26 @@ static int X_DoExecute(void)
         insptr++;
         j=Gv_GetVarX(*insptr++);
 
+        if ((j < 0 || (unsigned)j >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        {
+            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, keyw[g_tw], j);
+            break;
+        }
+
         switch (tw)
         {
         case CON_SOUNDONCEVAR:
-            if ((j<0 || j>=MAXSOUNDS) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],j);break;}
             if (!A_CheckSoundPlaying(g_i,j))
                 A_PlaySound((short)j,g_i);
             break;
         case CON_GLOBALSOUNDVAR:
-            if ((j<0 || j>=MAXSOUNDS) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],j);break;}
             A_PlaySound((short)j,g_player[screenpeek].ps->i);
             break;
         case CON_STOPSOUNDVAR:
-            if ((j<0 || j>=MAXSOUNDS) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],j);break;}
             if (A_CheckSoundPlaying(g_i,j))
                 S_StopEnvSound((short)j,g_i);
             break;
         case CON_SOUNDVAR:
-            if ((j<0 || j>=MAXSOUNDS) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],j);break;}
             A_PlaySound((short)j,g_i);
             break;
         }
@@ -4405,7 +4407,7 @@ static int X_DoExecute(void)
 
     case CON_IFNOSOUNDS:
         for (j=MAXSOUNDS-1;j>=0;j--)
-            if (g_sounds[j].voices[0].owner == g_i)
+            if (g_sounds[j]->voices[0].owner == g_i)
                 break;
 
         X_DoConditional(j < 0);

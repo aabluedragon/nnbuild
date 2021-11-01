@@ -26,8 +26,6 @@
 // #define TAB_GAME 1
 #define TAB_MESSAGES 1
 
-static struct audioenumdrv *wavedevs = NULL;
-
 static struct
 {
     struct grpfile_t const* grp;
@@ -125,34 +123,8 @@ static void PopulateForm(int pgs)
 
     if (pgs & POPULATE_CONFIG)
     {
-        struct audioenumdev *d;
-        char *n;
-
         hwnd = GetDlgItem(pages[TAB_CONFIG], IDCSOUNDDRV);
         (void)ComboBox_ResetContent(hwnd);
-        if (wavedevs)
-        {
-            d = wavedevs->devs;
-            for (i=0; wavedevs->drvs[i]; i++)
-            {
-                strcpy(buf, wavedevs->drvs[i]);
-                if (d->devs)
-                {
-                    strcat(buf, ":");
-                    n = buf + strlen(buf);
-                    for (j=0; d->devs[j]; j++)
-                    {
-                        strcpy(n, d->devs[j]);
-                        (void)ComboBox_AddString(hwnd, buf);
-                    }
-                }
-                else
-                {
-                    (void)ComboBox_AddString(hwnd, buf);
-                }
-                d = d->next;
-            }
-        }
 
         Button_SetCheck(GetDlgItem(pages[TAB_CONFIG], IDCALWAYSSHOW), (settings.forcesetup ? BST_CHECKED : BST_UNCHECKED));
 
@@ -666,19 +638,6 @@ int startwin_run(void)
 
         if (g_modDir != settings.gamedir)
             Bstrcpy(g_modDir, (g_noSetup == 0 && settings.gamedir != NULL) ? settings.gamedir : "/");
-    }
-
-    if (wavedevs)
-    {
-        struct audioenumdev *d, *e;
-        free(wavedevs->drvs);
-        for (e=wavedevs->devs; e; e=d)
-        {
-            d = e->next;
-            if (e->devs) free(e->devs);
-            free(e);
-        }
-        free(wavedevs);
     }
 
     return done;

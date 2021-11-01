@@ -1229,7 +1229,7 @@ int A_Shoot(int i,int atwith)
 
                 if ((krand() & 255) < 4)
                     if (pProj->isound >= 0)
-                        S_PlaySound3D(pProj->isound, k, &curHit->xyz);
+                        S_PlaySound3D(pProj->isound, k, curHit->xyz);
             }
 
             return -1;
@@ -1456,7 +1456,7 @@ int A_Shoot(int i,int atwith)
             }
 
             if ((krand() & 255) < 4)
-                S_PlaySound3D(PISTOL_RICOCHET, spawnedSprite, &hit.xyz);
+                S_PlaySound3D(PISTOL_RICOCHET, spawnedSprite, hit.xyz);
 
             return -1;
         }
