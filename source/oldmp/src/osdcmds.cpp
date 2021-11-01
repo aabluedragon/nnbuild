@@ -495,7 +495,6 @@ static int osdcmd_restartsound(const osdfuncparm_t *parm)
     S_SoundStartup();
 
     FX_StopAllSounds();
-    S_ClearSoundLocks();
 
     if (ud.config.MusicToggle)
         S_RestartMusic();

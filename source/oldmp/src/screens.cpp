@@ -452,7 +452,6 @@ void G_BonusScreen(int bonusonly)
     renderFlushPerms();
 
     FX_StopAllSounds();
-    S_ClearSoundLocks();
     FX_SetReverb(0L);
     CONTROL_BindsEnabled = 1; // so you can use your screenshot bind on the score screens
 
@@ -539,7 +538,6 @@ void G_BonusScreen(int bonusonly)
             fadepal(0, 0, 0, 0, 64, 1);
             S_StopMusic();
             FX_StopAllSounds();
-            S_ClearSoundLocks();
             break;
         case 1:
             S_StopMusic();
@@ -595,7 +593,6 @@ void G_BonusScreen(int bonusonly)
             }
 
             FX_StopAllSounds();
-            S_ClearSoundLocks();
             S_PlaySound(ENDSEQVOL3SND4);
             KB_FlushKeyboardQueue();
 
@@ -633,7 +630,6 @@ void G_BonusScreen(int bonusonly)
             IFISSOFTMODE G_FadePalette(0, 0, 0, 63);
 
             FX_StopAllSounds();
-            S_ClearSoundLocks();
             KB_FlushKeyboardQueue();
             MOUSE_ClearButton(M_LEFTBUTTON);
 
@@ -658,7 +654,6 @@ void G_BonusScreen(int bonusonly)
                 videoNextPage();
 
                 FX_StopAllSounds();
-                S_ClearSoundLocks();
             }
 
             G_PlayAnim("RADLOGO.ANM", 3);
@@ -704,7 +699,6 @@ void G_BonusScreen(int bonusonly)
         ENDANM:
             MOUSE_ClearButton(M_LEFTBUTTON);
             FX_StopAllSounds();
-            S_ClearSoundLocks();
 
             KB_FlushKeyboardQueue();
 
@@ -724,7 +718,6 @@ FRAGBONUS:
 
     S_StopMusic();
     FX_StopAllSounds();
-    S_ClearSoundLocks();
 
     if (playerswhenstarted > 1 && (GametypeFlags[ud.coop] & (GAMETYPE_COOP | GAMETYPE_SCORESHEET)))
     {

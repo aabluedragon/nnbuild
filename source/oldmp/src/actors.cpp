@@ -3287,7 +3287,6 @@ static void G_MoveTransports(void)
                         if (screenpeek == p)
                         {
                             FX_StopAllSounds();
-                            S_ClearSoundLocks();
                         }
                         if (sprite[g_player[p].ps->i].extra > 0)
                             A_PlaySound(DUKE_UNDERWATER,j);
@@ -3306,7 +3305,6 @@ static void G_MoveTransports(void)
                         if (screenpeek == p)
                         {
                             FX_StopAllSounds();
-                            S_ClearSoundLocks();
                         }
                         A_PlaySound(DUKE_GASP,j);
 

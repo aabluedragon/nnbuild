@@ -2787,7 +2787,6 @@ void G_HandleSharedKeys(int snum)
             {
                 S_PauseMusic(1);
                 FX_StopAllSounds();
-                S_ClearSoundLocks();
             }
             else
             {

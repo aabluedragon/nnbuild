@@ -1062,24 +1062,6 @@ void S_Callback(intptr_t num)
     freeSlotsPendingCnt++;
 }
 
-void S_ClearSoundLocks(void)
-{
-#ifdef CACHING_DOESNT_SUCK
-    int32_t i;
-    int32_t const msp = g_highestSoundIdx;
-
-    for (native_t i = 0; i < 11; ++i)
-        if (rts_lumplockbyte[i] >= CACHE1D_LOCKED)
-            rts_lumplockbyte[i] = CACHE1D_UNLOCKED;
-
-    int32_t const msp = g_highestSoundIdx;
-
-    for (native_t i = 0; i <= msp; ++i)
-        if (g_soundlocks[i] >= CACHE1D_LOCKED)
-            g_soundlocks[i] = CACHE1D_UNLOCKED;
-#endif
-}
-
 int A_CheckSoundPlaying(int spriteNum, int soundNum)
 {
     if (EDUKE32_PREDICT_FALSE((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return 0;

@@ -113,7 +113,6 @@ void S_SoundStartup(void);
 void S_SoundShutdown(void);
 void S_Callback(intptr_t num);
 void S_Cleanup(void);
-void S_ClearSoundLocks(void);
 void S_Update(void);
 void S_DetachSoundsFromSprite(int spriteNum);
 

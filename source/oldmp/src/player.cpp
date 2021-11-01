@@ -4086,7 +4086,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
         {
             sounds_predictable = false;
             FX_StopAllSounds();
-            S_ClearSoundLocks();
+
             if (p->customexitsound >= 0)
             {
                 S_PlaySound(p->customexitsound);

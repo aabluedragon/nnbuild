@@ -242,7 +242,6 @@ int32_t G_LoadPlayer(int32_t spot)
     waitforeverybody();
 
     FX_StopAllSounds();
-    S_ClearSoundLocks();
 
     if (numplayers > 1)
     {
@@ -489,7 +488,6 @@ int32_t G_LoadPlayer(int32_t spot)
     screenpeek = myconnectindex;
 
     clearbufbyte(gotpic,sizeof(gotpic),0L);
-    S_ClearSoundLocks();
     G_CacheMapData();
 
     {

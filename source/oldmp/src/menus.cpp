@@ -4294,7 +4294,6 @@ cheat_for_port_credits:
                                 if (ud.config.SoundToggle == 0)
                                 {
                                     FX_StopAllSounds();
-                                    S_ClearSoundLocks();
                                 }
                             }
                         }
@@ -4433,7 +4432,6 @@ cheat_for_port_credits:
                             S_SoundStartup();
 
                             FX_StopAllSounds();
-                            S_ClearSoundLocks();
 
                             S_RestartMusic();
 

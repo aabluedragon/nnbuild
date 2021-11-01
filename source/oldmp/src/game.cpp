@@ -3514,7 +3514,6 @@ void G_DisplayRest(int smoothratio)
         {
             KB_ClearKeyDown(sc_Escape);
             FX_StopAllSounds();
-            S_ClearSoundLocks();
 
             S_MenuSound();
 
@@ -8422,7 +8421,6 @@ FAKE_F2:
                 //savetemp("duke3d.tmp",waloff[TILE_SAVESHOT],160*100);
                 g_screenCapture = 0;
                 FX_StopAllSounds();
-                S_ClearSoundLocks();
 
                 //                videoSetViewableArea(0,0,xdim-1,ydim-1);
                 g_player[myconnectindex].ps->gm |= MODE_MENU;
@@ -8442,7 +8440,6 @@ FAKE_F2:
 FAKE_F3:
                 ChangeToMenu(300);
                 FX_StopAllSounds();
-                S_ClearSoundLocks();
 
                 //                videoSetViewableArea(0,0,xdim-1,ydim-1);
                 g_player[myconnectindex].ps->gm |= MODE_MENU;
@@ -8459,7 +8456,6 @@ FAKE_F3:
         {
             KB_ClearKeyDown(sc_F4);
             FX_StopAllSounds();
-            S_ClearSoundLocks();
 
             g_player[myconnectindex].ps->gm |= MODE_MENU;
             if (ud.multimode < 2 && ud.recstat != 2)
@@ -8574,7 +8570,6 @@ FAKE_F3:
             KB_ClearKeyDown(sc_F10);
             ChangeToMenu(500);
             FX_StopAllSounds();
-            S_ClearSoundLocks();
             g_player[myconnectindex].ps->gm |= MODE_MENU;
             if (ud.multimode < 2 && ud.recstat != 2)
             {
@@ -8640,7 +8635,7 @@ FAKE_F3:
         KB_ClearKeyDown(sc_F11);
         ChangeToMenu(232);
         FX_StopAllSounds();
-        S_ClearSoundLocks();
+
         g_player[myconnectindex].ps->gm |= MODE_MENU;
         if (ud.multimode < 2 && ud.recstat != 2)
         {
@@ -9854,7 +9849,7 @@ static void G_DisplayLogo(void)
 
     S_StopMusic();
     FX_StopAllSounds(); // JBF 20031228
-    S_ClearSoundLocks();  // JBF 20031228
+
     if (ud.multimode < 2 && (logoflags & LOGO_ENABLED) && !g_noLogo)
     {
         if (VOLUMEALL && (logoflags & LOGO_PLAYANIM))
@@ -10929,7 +10924,6 @@ int app_main(int32_t argc, char const* const* argv)
     S_SoundStartup();
 
     FX_StopAllSounds();
-    S_ClearSoundLocks();
 
     if (ud.warp_on > 1 && ud.multimode < 2)
     {
@@ -10985,7 +10979,7 @@ MAIN_LOOP_RESTART:
     if (ud.warp_on == 0 && G_PlaybackDemo())
     {
         FX_StopAllSounds();
-        S_ClearSoundLocks();
+
         g_noLogoAnim = 1;
         goto MAIN_LOOP_RESTART;
     }
@@ -11343,7 +11337,7 @@ RECHECK:
     if (foundemo == 0 || in_menu || KB_KeyWaiting() || numplayers > 1)
     {
         FX_StopAllSounds();
-        S_ClearSoundLocks();
+
         g_player[myconnectindex].ps->gm |= MODE_MENU;
     }
 
@@ -11415,7 +11409,7 @@ RECHECK:
             {
                 KB_ClearKeyDown(sc_Escape);
                 FX_StopAllSounds();
-                S_ClearSoundLocks();
+
                 g_player[myconnectindex].ps->gm |= MODE_MENU;
                 ChangeToMenu(0);
                 S_MenuSound();
