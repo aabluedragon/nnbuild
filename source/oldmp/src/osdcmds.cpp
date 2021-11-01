@@ -812,14 +812,11 @@ osdcvardata_t cvar[] =
     { "color", "player palette", (void*)&ud.m_color, CVAR_INT | CVAR_MULTI, 0, MAXPALOOKUPS - 1 },
 
     // Mouse
-    { "sensitivity","changes the mouse sensitivity", (void*)&CONTROL_MouseSensitivity, CVAR_FLOAT | CVAR_FUNCPTR, 0, 25 },
     { "in_aimmode", "hold button for mouse aim" CVAR_BOOL_OPTSTR, (void*)&ud.mouseaiming, CVAR_BOOL, 0, 1 },
     { "in_mouse", "use mouse input" CVAR_BOOL_OPTSTR,(void*)&ud.config.UseMouse, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },
     { "in_mousemode", "vertical mouse aiming" CVAR_BOOL_OPTSTR, (void*)&g_myAimMode, CVAR_BOOL, 0, 1 },
     { "in_mouseflip", "invert vertical mouse movement" CVAR_BOOL_OPTSTR, (void*)&ud.mouseflip, CVAR_BOOL, 0, 1 },
     { "in_mousebias", "in_mousebias: emulates the original mouse code's weighting of input towards whichever axis is moving the most at any given time", (void*)&ud.config.MouseBias, CVAR_INT, 0, 32 },
-    { "in_mousexsensitivity", "horizontal mouse sensitivity", (void*)&CONTROL_MouseAxesSensitivity[0], CVAR_FLOAT, 0, 25 },
-    { "in_mouseysensitivity", "vertical mouse sensitivity",   (void*)&CONTROL_MouseAxesSensitivity[1], CVAR_FLOAT, 0, 25 },
 
     // Joystick
     { "in_joystick","use joystick or controller input" CVAR_BOOL_OPTSTR,(void*)&ud.config.UseJoystick, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },

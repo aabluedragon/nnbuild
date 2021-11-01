@@ -3520,7 +3520,7 @@ cheat_for_port_credits:
             {
                 int sense;
                 sense = (int)CONTROL_MouseSensitivity-1;
-                _bar(1, 248, 126, &sense, 1, x == (MAXMOUSEBUTTONS - 2) * 2 + 2, MENUHIGHLIGHT((MAXMOUSEBUTTONS - 2) * 2 + 2), PHX(-7), 0, 10);
+                _bar(1, 248, 126, &sense, 1, x == (MAXMOUSEBUTTONS - 2) * 2 + 2, MENUHIGHLIGHT((MAXMOUSEBUTTONS - 2) * 2 + 2), PHX(-7), 0, 100);
                 CONTROL_MouseSensitivity=sense+1;
             }
 
@@ -3780,7 +3780,7 @@ cheat_for_port_credits:
             menutext(c,46,MENUHIGHLIGHT(0),0,"X-AXIS SCALE");
 
             l = fix16_from_float(CONTROL_MouseAxesSensitivity[0]);
-            _bar(0, c + 160 + 40, 46, &l, fix16_from_float(0.1), x == 0, MENUHIGHLIGHT(0), 0, 0, fix16_from_float(25.0));
+            _bar(0, c + 160 + 40, 46, &l, fix16_from_float(0.1), x == 0, MENUHIGHLIGHT(0), 0, 0, fix16_from_float(100.0));
 
             if (fix16_to_float(l) != CONTROL_MouseAxesSensitivity[0])
             {
@@ -3794,7 +3794,7 @@ cheat_for_port_credits:
             menutext(c,46+16,MENUHIGHLIGHT(1),0,"Y-AXIS SCALE");
 
             l = fix16_from_float(CONTROL_MouseAxesSensitivity[1]);
-            _bar(0, c + 160 + 40, 46 + 16, &l, fix16_from_float(0.1), x == 1, MENUHIGHLIGHT(1), 0, 0, fix16_from_float(25.0));
+            _bar(0, c + 160 + 40, 46 + 16, &l, fix16_from_float(0.1), x == 1, MENUHIGHLIGHT(1), 0, 0, fix16_from_float(100.0));
 
             if (fix16_to_float(l) != CONTROL_MouseAxesSensitivity[1])
             {
