@@ -312,8 +312,6 @@ void yax_updategrays(int32_t posze)
                 graywallbitmap[j>>3] |= pow2char[j&7];
         }
     }
-
-    calc_sector_reachability();
 }
 
 
@@ -10276,11 +10274,19 @@ int sectorsareconnected(int const sect1, int const sect2)
 
 void calc_sector_reachability(void)
 {
-    Bmemset(yax_updown, -1, sizeof(yax_updown));
-    Bmemset(wallsect, -1, sizeof(wallsect));
-
     if (!numsectors)
         return;
+
+    static uint32_t sectcrc = 0;
+    uint16_t crc = getcrc16(sector, sizeof(sectortype) * numsectors, 0x1337);
+
+    if (sectcrc == crc)
+        return;
+
+    sectcrc = crc;
+
+    Bmemset(yax_updown, -1, sizeof(yax_updown));
+    Bmemset(wallsect, -1, sizeof(wallsect));
 
     DO_FREE_AND_NULL(reachablesectors);
     reachablesectors = (uint8_t*)Xcalloc(1, getreachabilitybitmapsize());
@@ -10294,8 +10300,8 @@ void calc_sector_reachability(void)
 
         for (int listidx=0; listidx<nsecs; listidx++)
         {
-            Bassert((unsigned)listidx < numsectors);
-            Bassert((unsigned)sectlist[listidx] < numsectors);
+            Bassert((unsigned)listidx < (unsigned)numsectors);
+            Bassert((unsigned)sectlist[listidx] < (unsigned)numsectors);
 
             auto sec = (usectorptr_t)&sector[sectlist[listidx]];
 
