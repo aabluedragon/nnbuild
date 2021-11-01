@@ -1146,6 +1146,10 @@ void G_NewGame(int vn,int ln,int sk)
 
     g_skillSoundID = -1;
 
+    S_PauseSounds(false);
+    S_StopAllSounds();
+    S_Cleanup();
+
     waitforeverybody();
     ready2send = 0;
 
@@ -1628,6 +1632,7 @@ int G_EnterLevel(int g)
     Gv_RefreshPointers();
     // ---------------------------------
 
+    S_PauseSounds(false);
     FX_StopAllSounds();
     FX_SetReverb(0);
 

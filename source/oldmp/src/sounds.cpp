@@ -993,6 +993,24 @@ void S_StopEnvSound(int soundNum, int spriteNum)
     } while (j < MAXSOUNDINSTANCES);
 }
 
+void S_StopAllSounds(void)
+{
+    FX_StopAllSounds();
+    S_Cleanup();
+
+    for (int i = 0; i <= g_highestSoundIdx; ++i)
+    {
+        if (g_sounds[i] == &nullsound)
+            continue;
+
+        g_sounds[i]->playing = 0;
+
+        if (g_sounds[i]->voices != &nullvoice)
+            for (int j = 0; j < MAXSOUNDINSTANCES; ++j)
+                g_sounds[i]->voices[j] = nullvoice;
+    }
+}
+
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
 {
     if (S_PredictionCheck(spriteNum))

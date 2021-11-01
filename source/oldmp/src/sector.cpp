@@ -2787,11 +2787,12 @@ void G_HandleSharedKeys(int snum)
             if (ud.pause_on)
             {
                 S_PauseMusic(1);
-                FX_StopAllSounds();
+                S_PauseSounds(true);
             }
             else
             {
                 if (ud.config.MusicToggle) S_PauseMusic(0);
+                S_PauseSounds(false);
                 pub = NUMPAGES;
                 pus = NUMPAGES;
             }

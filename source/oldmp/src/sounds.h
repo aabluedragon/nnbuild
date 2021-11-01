@@ -93,6 +93,8 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos);
 int32_t S_PlaySoundXYZ(int32_t num, int32_t i, int32_t x, int32_t y, int32_t z);
 void S_MenuSound(void);
 void S_StopEnvSound(int soundNum, int spriteNum);
+void S_StopAllSounds(void);
+void S_PauseSounds(bool paused);
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
 
 // Startup, shutdown, allocation, callbacks, updating, and cleanup
