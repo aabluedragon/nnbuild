@@ -1370,6 +1370,7 @@ int32_t   __fastcall ksqrtasm_old(uint32_t n);
 int32_t   __fastcall ksqrt(uint32_t num);
 int32_t   __fastcall getangle(int32_t xvect, int32_t yvect);
 fix16_t   __fastcall gethiq16angle(int32_t xvect, int32_t yvect);
+fix16_t   __fastcall getq16angledelta(fix16_t first, fix16_t second);
 
 static FORCE_INLINE fix16_t __fastcall getq16angle(int32_t xvect, int32_t yvect)
 {
@@ -1583,7 +1584,6 @@ extern int32_t r_glowmapping;
 
 extern int32_t r_vertexarrays;
 # ifdef USE_GLEXT
-extern int32_t r_vbos;
 extern int32_t r_vbocount;
 # endif
 extern int32_t r_animsmoothing;
@@ -1732,6 +1732,13 @@ static FORCE_INLINE int inside_z_p(int32_t const x, int32_t const y, int32_t con
     int32_t cz, fz;
     getzsofslope(sectnum, x, y, &cz, &fz);
     return (z >= cz && z <= fz && inside_p(x, y, sectnum));
+}
+
+static FORCE_INLINE int inside_exclude_z_p(int32_t const x, int32_t const y, int32_t const z, int const sectnum, const uint8_t *excludesectbitmap)
+{
+    int32_t cz, fz;
+    getzsofslope(sectnum, x, y, &cz, &fz);
+    return (z >= cz && z <= fz && inside_exclude_p(x, y, sectnum, excludesectbitmap));
 }
 
 #define SET_AND_RETURN(Lval, Rval) \
