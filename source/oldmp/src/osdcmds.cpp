@@ -486,6 +486,9 @@ static int osdcmd_debugplayer(const osdfuncparm_t *parm)
 static int osdcmd_restartsound(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
+
+    FX_StopAllSounds();
+
     S_SoundShutdown();
     S_MusicShutdown();
 
@@ -493,8 +496,6 @@ static int osdcmd_restartsound(const osdfuncparm_t *parm)
     S_MusicStartup();
     initprintf("Initializing sound...\n");
     S_SoundStartup();
-
-    FX_StopAllSounds();
 
     if (ud.config.MusicToggle)
         S_RestartMusic();
