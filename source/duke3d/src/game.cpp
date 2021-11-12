@@ -34,6 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "input.h"
 #include "menus.h"
 #include "microprofile.h"
+#include "minicoro.h"
 #include "network.h"
 #include "osdcmds.h"
 #include "osdfuncs.h"
@@ -278,8 +279,34 @@ int32_t A_CheckInventorySprite(spritetype *s)
 
 void app_exit(int returnCode) ATTRIBUTE((noreturn));
 
+static int g_programExitCode = INT_MIN;
+
+void g_switchRoutine(mco_coro *co)
+{
+    mco_result res = mco_resume(co);
+    Bassert(res == MCO_SUCCESS);
+
+    if (g_programExitCode != INT_MIN)
+    {
+        if (mco_running() == nullptr)
+            Bexit(g_programExitCode);
+
+        res = mco_yield(mco_running());
+        Bassert(res == MCO_SUCCESS);
+    }
+
+    if (res != MCO_SUCCESS)
+        fatal_exit(mco_result_description(res));
+}
+
 void app_exit(int returnCode)
 {
+    if (mco_running())
+    {
+        g_programExitCode = returnCode;
+        mco_yield(mco_running());
+    }
+
 #ifndef NETCODE_DISABLE
     enet_deinitialize();
 #endif
@@ -798,6 +825,7 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
 
     G_DoInterpolations(smoothRatio);
     G_AnimateCamSprite(smoothRatio);
+    G_InterpolateLights(smoothRatio);
 
     if (ud.camerasprite >= 0)
     {
@@ -2673,7 +2701,7 @@ int A_Spawn(int spriteNum, int tileNum)
 #ifdef POLYMER
             if (pSprite->yrepeat > 32)
             {
-                G_AddGameLight(0, newSprite, ((pSprite->yrepeat*tilesiz[pSprite->picnum].y)<<1), 32768, 255+(95<<8),PR_LIGHT_PRIO_MAX_GAME);
+                G_AddGameLight(newSprite, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, 32768, 0, 100,255+(95<<8), PR_LIGHT_PRIO_MAX_GAME);
                 practor[newSprite].lightcount = 2;
             }
             fallthrough__;
@@ -6328,46 +6356,107 @@ void Net_DedicatedServerStdin(void)
 }
 #endif
 
-void G_DrawFrame(void)
+static void drawframe_entry(mco_coro *co)
 {
-    MICROPROFILE_SCOPEI("Game", EDUKE32_FUNCTION, MP_YELLOWGREEN);
-
-    if (!g_saveRequested)
+    do
     {
-        // only allow binds to function if the player is actually in a game (not in a menu, typing, et cetera) or demo
-        CONTROL_BindsEnabled = !!(g_player[myconnectindex].ps->gm & (MODE_GAME|MODE_DEMO));
+        MICROPROFILE_SCOPEI("Game", EDUKE32_FUNCTION, MP_YELLOWGREEN);
 
-        G_HandleLocalKeys();
-        OSD_DispatchQueued();
-        P_GetInput(myconnectindex);
-    }
+        g_lastFrameStartTime = timerGetNanoTicks();
 
-    int const smoothRatio = calc_smoothratio(totalclock, ototalclock);
+        if (!g_saveRequested)
+        {
+            // only allow binds to function if the player is actually in a game (not in a menu, typing, et cetera) or demo
+            CONTROL_BindsEnabled = !!(g_player[myconnectindex].ps->gm & (MODE_GAME|MODE_DEMO));
 
-    G_DrawRooms(screenpeek, smoothRatio);
-    if (videoGetRenderMode() >= REND_POLYMOST)
-        G_DrawBackground();
-    G_DisplayRest(smoothRatio);
+            G_HandleLocalKeys();
+            OSD_DispatchQueued();
+            P_GetInput(myconnectindex);
+        }
+
+        int const smoothratio = calc_smoothratio(totalclock, ototalclock);
+
+        G_DrawRooms(screenpeek, smoothratio);
+
+        if (videoGetRenderMode() >= REND_POLYMOST)
+            G_DrawBackground();
+
+        G_DisplayRest(smoothratio);
 
 #if MICROPROFILE_ENABLED != 0
-    for (auto &gv : aGameVars)
-    {
-        if ((gv.flags & (GAMEVAR_USER_MASK|GAMEVAR_PTR_MASK)) == 0)
-        {            
-            MICROPROFILE_COUNTER_SET(gv.szLabel, gv.global);
+        for (auto &gv : aGameVars)
+        {
+            if ((gv.flags & (GAMEVAR_USER_MASK|GAMEVAR_PTR_MASK)) == 0)
+            {            
+                MICROPROFILE_COUNTER_SET(gv.szLabel, gv.global);
+            }
         }
-    }
 #endif
+        g_frameJustDrawn = true;
+        g_lastFrameEndTime = timerGetNanoTicks();
+        g_lastFrameDuration = g_lastFrameEndTime - g_lastFrameStartTime;
+        g_frameCounter++;
 
-    videoNextPage();
-    S_Update();
+        videoNextPage();
+        S_Update();
+        g_lastFrameEndTime2 = timerGetNanoTicks();
+        g_lastFrameDuration2 = g_lastFrameEndTime2 - g_lastFrameStartTime;
+        mco_yield(co);
+    } while (1);
+}
+
+void dukeFillInputForTic(void)
+{
+    // this is where we fill the input_t struct that is actually processed by P_ProcessInput()
+    auto const pPlayer = g_player[myconnectindex].ps;
+    auto const q16ang  = fix16_to_int(pPlayer->q16ang);
+    auto& input   = inputfifo[0][myconnectindex];
+
+    input = localInput;
+    input.fvel = mulscale9(localInput.fvel, sintable[(q16ang + 2560) & 2047]) +
+        mulscale9(localInput.svel, sintable[(q16ang + 2048) & 2047]);
+    input.svel = mulscale9(localInput.fvel, sintable[(q16ang + 2048) & 2047]) +
+        mulscale9(localInput.svel, sintable[(q16ang + 1536) & 2047]);
+
+    if (!FURY)
+    {
+        input.fvel += pPlayer->fric.x;
+        input.svel += pPlayer->fric.y;
+    }
+
+    localInput ={};
+}
+
+void dukeCreateFrameRoutine(void)
+{
+    static mco_desc co_drawframe_desc;
+    mco_result res;
+
+    if (co_drawframe)
+    {
+        res = mco_destroy(co_drawframe);
+        Bassert(res == MCO_SUCCESS);
+        if (res != MCO_SUCCESS)
+            fatal_exit(mco_result_description(res));
+    }
+
+    co_drawframe_desc = mco_desc_init(drawframe_entry, g_frameStackSize);
+    co_drawframe_desc.user_data = NULL;
+
+    res = mco_create(&co_drawframe, &co_drawframe_desc);
+    Bassert(res == MCO_SUCCESS);
+    if (res != MCO_SUCCESS)
+        fatal_exit(mco_result_description(res));
+
+    if (g_frameStackSize != DRAWFRAME_DEFAULT_STACK_SIZE)
+        OSD_Printf("Draw routine created with %d byte stack.\n", g_frameStackSize);
 }
 
 int app_main(int argc, char const* const* argv)
 {
 #ifndef NETCODE_DISABLE
     if (enet_initialize() != 0)
-        initprintf("An error occurred while initializing ENet.\n");
+        initputs("An error occurred while initializing ENet.\n");
 #endif
 
 #ifdef _WIN32
@@ -6785,6 +6874,7 @@ int app_main(int argc, char const* const* argv)
     S_ClearSoundLocks();
 
     //    getpackets();
+    dukeCreateFrameRoutine();
 
     VM_OnEvent(EVENT_INITCOMPLETE);
 
@@ -6813,45 +6903,52 @@ MAIN_LOOP_RESTART:
         G_SetCrosshairColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b);
     }
 
-    if (ud.warp_on == 1)
+    if (myplayer.gm & MODE_NEWGAME)
     {
-        G_NewGame_EnterLevel();
-        // may change ud.warp_on in an error condition
+        G_NewGame(ud.m_volume_number, ud.m_level_number, ud.m_player_skill);
+        myplayer.gm = MODE_RESTART;
     }
-
-    if (ud.warp_on == 0)
+    else
     {
-        if ((g_netServer || ud.multimode > 1) && boardfilename[0] != 0)
+        if (ud.warp_on == 1)
         {
-            ud.m_level_number     = 7;
-            ud.m_volume_number    = 0;
-            ud.m_respawn_monsters = !!(ud.m_player_skill == 4);
-
-            for (int TRAVERSE_CONNECT(i))
-            {
-                P_ResetWeapons(i);
-                P_ResetInventory(i);
-            }
-
             G_NewGame_EnterLevel();
-
-            Net_WaitForServer();
+            // may change ud.warp_on in an error condition
         }
-        else if (g_networkMode != NET_DEDICATED_SERVER)
-            G_DisplayLogo();
 
-        if (g_networkMode != NET_DEDICATED_SERVER)
+        if (ud.warp_on == 0)
         {
-            if (G_PlaybackDemo())
+            if ((g_netServer || ud.multimode > 1) && boardfilename[0] != 0)
             {
-                FX_StopAllSounds();
-                g_noLogoAnim = 1;
-                goto MAIN_LOOP_RESTART;
+                ud.m_level_number = 7;
+                ud.m_volume_number = 0;
+                ud.m_respawn_monsters = !!(ud.m_player_skill == 4);
+
+                for (int TRAVERSE_CONNECT(i))
+                {
+                    P_ResetWeapons(i);
+                    P_ResetInventory(i);
+                }
+
+                G_NewGame_EnterLevel();
+
+                Net_WaitForServer();
+            }
+            else if (g_networkMode != NET_DEDICATED_SERVER)
+                G_DisplayLogo();
+
+            if (g_networkMode != NET_DEDICATED_SERVER)
+            {
+                if (G_PlaybackDemo())
+                {
+                    FX_StopAllSounds();
+                    g_noLogoAnim = 1;
+                    goto MAIN_LOOP_RESTART;
+                }
             }
         }
+        else G_UpdateScreenArea();
     }
-    else G_UpdateScreenArea();
-
 //    G_GameExit(" "); ///
 
 //    ud.auto_run = ud.config.RunMode;
@@ -6883,9 +6980,15 @@ MAIN_LOOP_RESTART:
             quitevent = 0;
         }
 
-        static bool frameJustDrawn;
+        if (g_restartFrameRoutine)
+        {
+            dukeCreateFrameRoutine();
+            g_restartFrameRoutine = 0;
+        }
+
         bool gameUpdate = false;
         double gameUpdateStartTime = timerGetFractionalTicks();
+        auto framecnt = g_frameCounter;
 
         if (((g_netClient || g_netServer) || (myplayer.gm & (MODE_MENU|MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME)
         {
@@ -6893,29 +6996,10 @@ MAIN_LOOP_RESTART:
             {
                 if (g_networkMode != NET_DEDICATED_SERVER && (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0)
                 {
-                    if (!frameJustDrawn)
+                    if (!g_frameJustDrawn)
                         break;
-
-                    frameJustDrawn = false;
-
-                    // this is where we fill the input_t struct that is actually processed by P_ProcessInput()
-                    auto const pPlayer = g_player[myconnectindex].ps;
-                    auto const q16ang  = fix16_to_int(pPlayer->q16ang);
-                    auto &     input   = inputfifo[0][myconnectindex];
-
-                    input = localInput;
-                    input.fvel = mulscale9(localInput.fvel, sintable[(q16ang + 2560) & 2047]) +
-                                 mulscale9(localInput.svel, sintable[(q16ang + 2048) & 2047]);
-                    input.svel = mulscale9(localInput.fvel, sintable[(q16ang + 2048) & 2047]) +
-                                 mulscale9(localInput.svel, sintable[(q16ang + 1536) & 2047]);
-
-                    if (!FURY)
-                    {
-                        input.fvel += pPlayer->fric.x;
-                        input.svel += pPlayer->fric.y;
-                    }
-
-                    localInput = {};
+                    g_frameJustDrawn = false;
+                    dukeFillInputForTic();
                 }
 
                 do
@@ -6937,15 +7021,24 @@ MAIN_LOOP_RESTART:
                 gameUpdate = true;
                 g_gameUpdateTime = timerGetFractionalTicks() - gameUpdateStartTime;
 
+                if (g_frameCounter != framecnt)
+                    g_gameUpdateTime -= (double)g_lastFrameDuration * 1000.0 / (double)timerGetNanoTickRate();
+
                 if (g_gameUpdateAvgTime <= 0.0)
                     g_gameUpdateAvgTime = g_gameUpdateTime;
 
                 g_gameUpdateAvgTime
                 = ((GAMEUPDATEAVGTIMENUMSAMPLES - 1.f) * g_gameUpdateAvgTime + g_gameUpdateTime) / ((float)GAMEUPDATEAVGTIMENUMSAMPLES);
             } while (0);
+
+            if (gameUpdate)
+                g_gameUpdateAndDrawTime = g_gameUpdateTime + (double)g_lastFrameDuration * 1000.0 / (double)timerGetNanoTickRate();
         }
 
         G_DoCheats();
+
+        if (myplayer.gm & MODE_NEWGAME)
+            goto MAIN_LOOP_RESTART;
 
         if (myplayer.gm & (MODE_EOL|MODE_RESTART))
         {
@@ -6971,12 +7064,7 @@ MAIN_LOOP_RESTART:
 #endif
             }
 
-            G_DrawFrame();
-
-            if (gameUpdate)
-                g_gameUpdateAndDrawTime = timerGetFractionalTicks()-gameUpdateStartTime;
-
-            frameJustDrawn = true;
+            g_switchRoutine(co_drawframe);
         }
 
         // handle CON_SAVE and CON_SAVENN

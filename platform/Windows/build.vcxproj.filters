@@ -489,6 +489,15 @@
     </ClInclude>
     <ClInclude Include="..\..\source\build\include\libasync_config.h">
       <Filter>Header Files</Filter>
+    </ClInclude>    
+    <ClInclude Include="..\..\source\build\include\minicoro.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\build\include\libtess2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\build\include\vectormath.hpp">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

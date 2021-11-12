@@ -458,6 +458,7 @@
     <ClInclude Include="..\..\source\build\include\libasync_config.h" />
     <ClInclude Include="..\..\source\build\include\libdivide.h" />
     <ClInclude Include="..\..\source\build\include\libdivide_config.h" />
+    <ClInclude Include="..\..\source\build\include\libtess2.h" />
     <ClInclude Include="..\..\source\build\include\linklist.h" />
     <ClInclude Include="..\..\source\build\include\lru.h" />
     <ClInclude Include="..\..\source\build\include\lz4.h" />
@@ -465,6 +466,7 @@
     <ClInclude Include="..\..\source\build\include\mdsprite.h" />
     <ClInclude Include="..\..\source\build\include\microprofile.h" />
     <ClInclude Include="..\..\source\build\include\microprofilehtml.h" />
+    <ClInclude Include="..\..\source\build\include\minicoro.h" />
     <ClInclude Include="..\..\source\build\include\miniz.h" />
     <ClInclude Include="..\..\source\build\include\miniz_common.h" />
     <ClInclude Include="..\..\source\build\include\miniz_export.h" />
@@ -505,6 +507,7 @@
     <ClInclude Include="..\..\source\build\include\timer.h" />
     <ClInclude Include="..\..\source\build\include\tracker.hpp" />
     <ClInclude Include="..\..\source\build\include\vec.h" />
+    <ClInclude Include="..\..\source\build\include\vectormath.hpp" />
     <ClInclude Include="..\..\source\build\include\vfs.h" />
     <ClInclude Include="..\..\source\build\include\winbits.h" />
     <ClInclude Include="..\..\source\build\include\windows_inc.h" />

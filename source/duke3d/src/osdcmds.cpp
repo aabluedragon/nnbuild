@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "demo.h"  // g_firstDemoFile[]
 #include "duke3d.h"
 #include "menus.h"
+#include "minicoro.h"
 #include "osdfuncs.h"
 #include "savegame.h"
 #include "sbar.h"
@@ -39,6 +40,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 struct osdcmd_cheatsinfo osdcmd_cheatsinfo_stat;
 float r_ambientlight = 1.0, r_ambientlightrecip = 1.0;
+int32_t r_pr_defaultlights = 1;
 
 uint32_t cl_cheatmask;
 
@@ -268,10 +270,7 @@ static int osdcmd_map(osdcmdptr_t parm)
     ud.multimode = 1;
 
     if (g_player[myconnectindex].ps->gm & MODE_GAME)
-    {
-        G_NewGame(ud.m_volume_number, ud.m_level_number, ud.m_player_skill);
-        g_player[myconnectindex].ps->gm = MODE_RESTART;
-    }
+        g_player[myconnectindex].ps->gm = MODE_RESTART|MODE_NEWGAME;
     else G_NewGame_EnterLevel();
 
     return OSDCMD_OK;
@@ -384,14 +383,14 @@ static int osdcmd_restartsound(osdcmdptr_t UNUSED(parm))
 {
     UNREFERENCED_CONST_PARAMETER(parm);
 
+    S_StopAllSounds();
+    S_ClearSoundLocks();
+
     S_SoundShutdown();
     S_MusicShutdown();
 
     S_SoundStartup();
     S_MusicStartup();
-
-    FX_StopAllSounds();
-    S_ClearSoundLocks();
 
     if (ud.config.MusicToggle)
         S_RestartMusic();
@@ -1356,6 +1355,15 @@ static int osdcmd_cvar_set_game(osdcmdptr_t parm)
         ud.statusbarmode = (ud.screen_size < 8);
         G_UpdateScreenArea();
     }
+    else if (!Bstrcasecmp(parm->name, "r_stacksize"))
+    {
+        if (g_frameStackSize % 65536 == 0)
+        {
+            OSD_Printf("Warning: stack size specified is a multiple of 64K. Adjusting...\n");
+            g_frameStackSize = (g_frameStackSize >> 4) * 17;
+        }
+        g_restartFrameRoutine = 1;
+    }
     else if (!Bstrcasecmp(parm->name, "r_ambientlight"))
     {
         if (r_ambientlight == 0)
@@ -1679,11 +1687,14 @@ int32_t registerosdcommands(void)
         { "r_showfpsperiod", "time in seconds before averaging min and max stats for r_showfps 2+", (void *)&ud.frameperiod, CVAR_INT, 0, 5 },
         { "r_shadows", "in-game entities cast simple shadows" CVAR_BOOL_OPTSTR, (void *)&ud.shadows, CVAR_BOOL, 0, 1 },
         { "r_size", "change size of viewable area", (void *)&ud.screen_size, CVAR_INT|CVAR_FUNCPTR, 0, 64 },
+        { "r_stacksize", "change frame drawing routine stack size", (void *)&g_frameStackSize, CVAR_INT|CVAR_FUNCPTR, DRAWFRAME_MIN_STACK_SIZE, DRAWFRAME_MAX_STACK_SIZE },
         { "r_rotatespritenowidescreen", "pass bit 1024 to all CON rotatesprite calls", (void *)&g_rotatespriteNoWidescreen, CVAR_BOOL|CVAR_FUNCPTR, 0, 1 },
         { "r_upscalefactor", "increase performance by rendering at upscalefactor less than the screen resolution and upscale to the full resolution in the software renderer", (void *)&ud.detail, CVAR_INT|CVAR_FUNCPTR, 1, 16 },
         { "r_precache", "precache art assets during level load" CVAR_BOOL_OPTSTR, (void *)&ud.config.useprecache, CVAR_BOOL, 0, 1 },
 
         { "r_ambientlight", "sets the global map light level",(void *)&r_ambientlight, CVAR_FLOAT|CVAR_FUNCPTR, 0, 10 },
+
+        { "r_pr_defaultlights", "default polymer lights:\n 0: off\n 1: on",(void *)&r_pr_defaultlights, CVAR_BOOL, 0, 1 },
 
         { "skill","changes the game skill setting", (void *)&ud.m_player_skill, CVAR_INT|CVAR_FUNCPTR|CVAR_NOSAVE/*|CVAR_NOMULTI*/, 0, 5 },
 

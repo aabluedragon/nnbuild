@@ -3760,7 +3760,7 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
         songposition pos = {};
 
         if (MusicIsWaveform)
-            FX_GetPosition(MusicVoice, (int *)&pos.tick);
+            MV_GetPosition(MusicVoice, (int *)&pos.tick);
         else
             MUSIC_GetSongPosition(&pos);
 
@@ -3809,7 +3809,7 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
             S_RestartMusic();
 
             if (MusicIsWaveform)
-                FX_SetPosition(MusicVoice, (int)pos.tick);
+                MV_SetPosition(MusicVoice, (int)pos.tick);
             else
                 MUSIC_SetSongPosition(pos.measure, pos.beat, pos.tick);
         }
@@ -7645,7 +7645,7 @@ static void Menu_RunInput(Menu_t *cm)
                     if (ch >= 'a')
                         ch -= ('a' - 'A');
 
-                    if (ch2 != ch || ch <= 0 || (ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9'))
+                    if (ch2 != ch || ch <= 0 || ((ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9')))
                         break;
 
                     int index = 0;
