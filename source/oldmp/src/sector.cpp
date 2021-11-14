@@ -1689,7 +1689,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                 S_PlaySoundXYZ(SWITCH_ON,w,sx,sy,g_player[snum].ps->pos.z);
             else S_PlaySoundXYZ(SWITCH_ON,g_player[snum].ps->i,sx,sy,g_player[snum].ps->pos.z);
         }
-        else if (S_SoundIsValid(hitag))
+        else if (hitag && S_SoundIsValid(hitag))
         {
             if (switchtype == 1 && (g_sounds[hitag]->flags & SF_TALK) == 0)
                 S_PlaySoundXYZ(hitag,w,sx,sy,g_player[snum].ps->pos.z);
