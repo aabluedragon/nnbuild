@@ -890,12 +890,15 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
 
     int const voice = FX_Play3D(snd->ptr, snd->len, repeatp ? FX_LOOP : FX_ONESHOT, pitch, sndang >> 4, sndist >> 6,
         snd->priority, snd->volume, (sndNum * MAXSOUNDINSTANCES) + sndSlot);
-    snd->voices[sndSlot].handle = voice;
 
     if (voice <= FX_Ok)
     {
+        OSD_Printf("S_PlaySound3D(): error playing %s\n", snd->filename);
+        bitmap_clear(&snd->playing, sndSlot);
         return -1;
     }
+
+    snd->voices[sndSlot].handle = voice;
 
     return voice;
 }
@@ -944,12 +947,15 @@ int S_PlaySound(int num)
         LOUDESTVOLUME, snd->len, snd->volume, (num * MAXSOUNDINSTANCES) + sndnum)
         : FX_Play3D(snd->ptr, snd->len, FX_ONESHOT, pitch, 0, 255 - LOUDESTVOLUME, snd->priority, snd->volume,
             (num * MAXSOUNDINSTANCES) + sndnum);
-    snd->voices[sndnum].handle = voice;
 
     if (voice <= FX_Ok)
     {
+        OSD_Printf("S_PlaySound(): error playing %s\n", snd->filename);
+        bitmap_clear(&snd->playing, sndnum);
         return -1;
     }
+
+    snd->voices[sndnum].handle = voice;
 
     return voice;
 }
