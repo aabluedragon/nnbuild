@@ -218,6 +218,16 @@ void buildgl_resetSamplerObjects(void)
     glSamplerParameteri(s, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glSamplerParameteri(s, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
 
+    s = samplerObjectIDs[SAMPLER_LINEAR_CLAMP];
+    glSamplerParameteri(s, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glSamplerParameteri(s, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glSamplerParameteri(s, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glSamplerParameteri(s, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    s = samplerObjectIDs[SAMPLER_LINEAR_WRAP];
+    glSamplerParameteri(s, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glSamplerParameteri(s, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
     s = samplerObjectIDs[SAMPLER_DEPTH];
     glSamplerParameteri(s, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
     glSamplerParameteri(s, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);    
@@ -234,7 +244,7 @@ void buildgl_bindSamplerObject(int texunit, int32_t pth_method)
 
     glsamplertype samplerid = SAMPLER_NEAREST_WRAP;
 
-    switch (pth_method & (PTH_INDEXED|PTH_CLAMPED|PTH_HIGHTILE|PTH_TEMP_SKY_HACK|PTH_DEPTH_SAMPLER))
+    switch (pth_method & (PTH_INDEXED|PTH_CLAMPED|PTH_HIGHTILE|PTH_FORCEFILTER|PTH_TEMP_SKY_HACK|PTH_DEPTH_SAMPLER))
     {
         case PTH_DEPTH_SAMPLER:
             samplerid = SAMPLER_DEPTH;
@@ -255,6 +265,12 @@ void buildgl_bindSamplerObject(int texunit, int32_t pth_method)
         case PTH_HIGHTILE|PTH_CLAMPED:
             samplerid = SAMPLER_CLAMP;
             break;
+        case PTH_HIGHTILE|PTH_FORCEFILTER:
+            samplerid = SAMPLER_LINEAR_WRAP;
+            break;
+        case PTH_HIGHTILE|PTH_FORCEFILTER|PTH_CLAMPED:
+            samplerid = SAMPLER_LINEAR_CLAMP;
+            break;
         case 0:
             samplerid = SAMPLER_NONE;
             break;
@@ -273,11 +289,11 @@ static inline void buildgl_multMatrix4f(const float *a, const float *b, float *r
     {
         for (j=0; j<4; j++)
         {
-	        r[(i<<2)+j] = a[(i<<2)+0] * b[j]
-		                + a[(i<<2)+1] * b[4+j]
- 		                + a[(i<<2)+2] * b[8+j]
-		                + a[(i<<2)+3] * b[12+j];
-	    }
+            r[(i<<2)+j] = a[(i<<2)+0] * b[j]
+                        + a[(i<<2)+1] * b[4+j]
+                        + a[(i<<2)+2] * b[8+j]
+                        + a[(i<<2)+3] * b[12+j];
+        }
     }
 }
 
@@ -334,9 +350,9 @@ static inline void buildgl_multMatrixVec4f(const float *matrix, const float *in,
     for (int i=0; i<4; i++)
     {
         out[i] = in[0] * matrix[0*4+i]
-	           + in[1] * matrix[1*4+i]
-	           + in[2] * matrix[2*4+i]
-	           + in[3] * matrix[3*4+i];
+               + in[1] * matrix[1*4+i]
+               + in[2] * matrix[2*4+i]
+               + in[3] * matrix[3*4+i];
     }
 }
 

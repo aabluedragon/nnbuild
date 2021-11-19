@@ -3307,7 +3307,7 @@ static void ceilspritehline(int32_t x2, int32_t y)
 
     x1 = lastx[y]; if (x2 < x1) return;
 
-    v = mulscale20(globalzd,horizlookup[y-globalhoriz+horizycent]);
+    v = int32_t((globalzd*int64_t(horizlookup[y-globalhoriz+horizycent]))>>20);
     bx = (uint32_t)mulscale14(globalx2*x1+globalx1,v) + globalxpanning;
     by = (uint32_t)mulscale14(globaly2*x1+globaly1,v) + globalypanning;
     asm1 = mulscale14(globalx2,v);
@@ -5955,9 +5955,9 @@ draw_as_face_sprite:
             globaly2 = divscale18(day,bot);
 
             //Calculate globals for hline texture mapping function
-            globalxpanning = (rxi[z]<<12);
-            globalypanning = (rzi[z]<<12);
-            globalzd = decltype(globalzd)(ryi[z])<<12;
+            globalxpanning = rxi[z];
+            globalypanning = rzi[z];
+            globalzd = decltype(globalzd)(ryi[z]);
 
             rzi[0] = mulscale16(rzi[0],viewingrange);
             rzi[1] = mulscale16(rzi[1],viewingrange);
@@ -6466,12 +6466,12 @@ next_most:
             }
 #endif
             dax = globalxpanning; day = globalypanning;
-            globalxpanning = -dmulscale6(globalx1,day,globalx2,dax);
-            globalypanning = -dmulscale6(globaly1,day,globaly2,dax);
+            globalxpanning = -((globalx1*day+globalx2*dax)<<6);
+            globalypanning = -((globaly1*day+globaly2*dax)<<6);
 
             globalx2 = mulscale16(globalx2,viewingrange);
             globaly2 = mulscale16(globaly2,viewingrange);
-            globalzd = mulscale16(globalzd,viewingrangerecip);
+            globalzd = decltype(globalzd)((globalzd*int64_t(viewingrangerecip))>>4);
 
             globalx1 = (globalx1-globalx2)*halfxdimen;
             globaly1 = (globaly1-globaly2)*halfxdimen;
@@ -10430,6 +10430,8 @@ static int32_t engineFinishLoadBoard(const vec3_t* dapos, int16_t* dacursectnum,
     guniqhudid = 0;
 
     Bmemset(tilecols, 0, sizeof(tilecols));
+
+    calc_sector_reachability();
 
     return numremoved;
 }
