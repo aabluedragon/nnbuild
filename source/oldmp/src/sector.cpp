@@ -36,7 +36,7 @@ int S_FindMusicSFX(int sectNum, int* sndptr)
         const int32_t snd = sprite[spriteNum].lotag;
         EDUKE32_STATIC_ASSERT(MAXSOUNDS >= 1000);
 
-        if (PN(spriteNum) == MUSICANDSFX && (unsigned)snd < 1000 && S_SoundIsValid(snd))  // XXX: in other places, 999
+        if (PN(spriteNum) == MUSICANDSFX && snd && (unsigned)snd < 1000 && S_SoundIsValid(snd))  // XXX: in other places, 999
         {
             *sndptr = snd;
             return spriteNum;
