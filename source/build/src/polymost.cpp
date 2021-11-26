@@ -1858,7 +1858,7 @@ void uploadtextureindexed(int32_t doalloc, vec2_t offset, vec2_t siz, intptr_t t
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, siz.y, siz.x, 0, GL_RED, GL_UNSIGNED_BYTE, (void*) tile);
@@ -3201,8 +3201,9 @@ static void polymost_drawpoly(vec2f_t const * const dpxy, int32_t const n, int32
             detailpth->hicr && detailpth->hicr->palnum == DETAILPAL)
         {
             polymost_useDetailMapping(true);
-            polymost_setupdetailtexture(videoGetRenderMode() == REND_POLYMOST ? GL_TEXTURE3 : ++texunits, detailpth->glpic);
-
+            int const unit = videoGetRenderMode() == REND_POLYMOST ? GL_TEXTURE3 : ++texunits;
+            polymost_setupdetailtexture(unit, detailpth->glpic);
+            buildgl_bindSamplerObject(unit, detailpth->flags);
             glMatrixMode(GL_TEXTURE);
             glLoadIdentity();
 
@@ -3227,7 +3228,9 @@ static void polymost_drawpoly(vec2f_t const * const dpxy, int32_t const n, int32
             glowpth->hicr && (glowpth->hicr->palnum == GLOWPAL))
         {
             polymost_useGlowMapping(true);
-            polymost_setupglowtexture(videoGetRenderMode() == REND_POLYMOST ? GL_TEXTURE4 : ++texunits, glowpth->glpic);
+            int const unit = videoGetRenderMode() == REND_POLYMOST ? GL_TEXTURE4 : ++texunits;
+            polymost_setupglowtexture(unit, glowpth->glpic);
+            buildgl_bindSamplerObject(unit, glowpth->flags);
             buildgl_activeTexture(GL_TEXTURE0);
         }
     }
@@ -9651,7 +9654,7 @@ int32_t polymost_printtext256(int32_t xpos, int32_t ypos, int16_t col, int16_t b
 
     polymostSet2dView();	// disables blending, texturing, and depth testing
 
-    buildgl_bindSamplerObject(0, PTH_INDEXED|PTH_CLAMPED);
+    buildgl_bindSamplerObject(0, 0);
     buildgl_setDisabled(GL_ALPHA_TEST);
     glDepthMask(GL_FALSE);	// disable writing to the z-buffer
 
@@ -9825,7 +9828,7 @@ static int osdcmd_cvar_set_polymost(osdcmdptr_t parm)
 
             r_downsizevar = r_downsize;
         }
-        else if (!Bstrcasecmp(parm->name, "r_anisotropy"))
+        else if (!Bstrcasecmp(parm->name, "r_anisotropy") || !Bstrcasecmp(parm->name, "r_usesamplerobjects"))
             gltexapplyprops();
         else if (!Bstrcasecmp(parm->name, "r_texfilter"))
             gltexturemode(parm);
@@ -9943,7 +9946,7 @@ void polymost_initosdfuncs(void)
         { "r_pr_parallaxbias", "overriden parallax mapping offset bias", (void *) &pr_parallaxbias, CVAR_FLOAT | CVAR_NOSAVE, -10, 10 },
         { "r_pr_parallaxscale", "overriden parallax mapping offset scale", (void *) &pr_parallaxscale, CVAR_FLOAT | CVAR_NOSAVE, -10, 10 },
         { "r_pr_shadowcount", "maximal amount of shadow emitting lights on screen - you need to restart the renderer for it to take effect", (void *) &pr_shadowcount, CVAR_INT, 0, 64 },
-        { "r_pr_shadowdetail", "sets the shadow map resolution - you need to restart the renderer for it to take effect", (void *) &pr_shadowdetail, CVAR_INT, 0, 5 },
+        { "r_pr_shadowdetail", "sets the shadow map resolution - you need to restart the renderer for it to take effect", (void *) &pr_shadowdetail, CVAR_INT, 0, 6 },
         { "r_pr_shadowfiltering", "enable/disable shadow edges filtering - you need to restart the renderer for it to take effect", (void *) &pr_shadowfiltering, CVAR_BOOL, 0, 1 },
         { "r_pr_shadows", "enable/disable dynamic shadows", (void *) &pr_shadows, CVAR_BOOL, 0, 1 },
         { "r_pr_specularfactor", "overriden specular material factor", (void *) &pr_specularfactor, CVAR_FLOAT | CVAR_NOSAVE, -10, 1000 },
