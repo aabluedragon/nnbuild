@@ -1129,7 +1129,7 @@ static int X_DoExecute(void)
 
     case CON_MIKESND:
         insptr++;
-        if ((g_sp->yvel < 0 || (unsigned)g_sp->yvel >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        if ((g_sp->yvel < 0 || (unsigned)g_sp->yvel > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->yvel));
             insptr++;
@@ -1179,7 +1179,7 @@ static int X_DoExecute(void)
 
     case CON_SOUNDONCE:
         insptr++;
-        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr++);
             break;
@@ -1190,7 +1190,7 @@ static int X_DoExecute(void)
 
     case CON_IFSOUND:
         insptr++;
-        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
@@ -1201,7 +1201,7 @@ static int X_DoExecute(void)
 
     case CON_STOPSOUND:
         insptr++;
-        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
@@ -1229,7 +1229,7 @@ static int X_DoExecute(void)
 
     case CON_GLOBALSOUND:
         insptr++;
-        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
@@ -1241,7 +1241,7 @@ static int X_DoExecute(void)
 
     case CON_SOUND:
         insptr++;
-        if ((*insptr < 0 || (unsigned)*insptr >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
@@ -2270,7 +2270,7 @@ static int X_DoExecute(void)
         insptr++;
         j=Gv_GetVarX(*insptr++);
 
-        if ((j < 0 || (unsigned)j >= (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        if ((j < 0 || (unsigned)j > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, keyw[g_tw], j);
             break;
