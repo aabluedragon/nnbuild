@@ -1941,9 +1941,12 @@ static void G_MoveStandables(void)
             j = A_IncurDamage(i);
             if (j == -1) goto BOLT;
 
-            for (k=0;k<16;k++)
+            for (int k = 0; k < 16; k++)
             {
-                j = A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(krand()%(48<<8)),SCRAP3+(krand()&3),-8,48,48,krand()&2047,(krand()&63)+64,-(krand()&4095)-(sprite[i].zvel>>2),i,5);
+                j = A_InsertSprite(SECT(i), SX(i), SY(i), SZ(i) - (krand() % (48 << 8)),
+                    SCRAP3 + (krand() & 3), -8, 48, 48, krand() & 2047, (krand() & 63) + 64,
+                    -(krand() & 4095) - (sprite[i].zvel >> 2), i, 5);
+
                 sprite[j].pal = 2;
             }
 
@@ -1953,13 +1956,11 @@ static void G_MoveStandables(void)
 
             if (s->hitag > 0)
             {
-                j = headspritestat[STAT_STANDABLE];
-                while (j >= 0)
+                for (SPRITES_OF(STAT_STANDABLE, j))
                 {
                     if (s->hitag == sprite[j].hitag && (sprite[j].picnum == OOZFILTER || sprite[j].picnum == SEENINE))
                         if (sprite[j].shade != -32)
                             sprite[j].shade = -32;
-                    j = nextspritestat[j];
                 }
 
                 x = s->extra;
