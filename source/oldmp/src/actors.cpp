@@ -1433,10 +1433,10 @@ static void G_MoveFallers(void)
         }
         else if (T1(i) == 1)
         {
-            if (s->lotag > 0)
+            if ((int16_t)s->lotag > 0)
             {
                 s->lotag-=3;
-                if (s->lotag <= 0)
+                if ((int16_t)s->lotag <= 0)
                 {
                     s->xvel = (32+(krand()&63));
                     s->zvel = -(1024+(krand()&1023));
@@ -1950,11 +1950,11 @@ static void G_MoveStandables(void)
                 sprite[j].pal = 2;
             }
 
-            A_Spawn(i,EXPLOSION2);
-            A_PlaySound(PIPEBOMB_EXPLODE,i);
-            A_PlaySound(GLASS_HEAVYBREAK,i);
+            j = A_Spawn(i, EXPLOSION2);
+            A_PlaySound(PIPEBOMB_EXPLODE, j);
+            A_PlaySound(GLASS_HEAVYBREAK, j);
 
-            if (s->hitag > 0)
+            if ((int16_t)s->hitag > 0)
             {
                 for (SPRITES_OF(STAT_STANDABLE, j))
                 {
@@ -1964,9 +1964,9 @@ static void G_MoveStandables(void)
                 }
 
                 x = s->extra;
-                A_Spawn(i,EXPLOSION2);
                 A_RadiusDamage(i, g_pipebombBlastRadius,x>>2, x-(x>>1),x-(x>>2), x);
-                A_PlaySound(PIPEBOMB_EXPLODE,i);
+                j = A_Spawn(i, EXPLOSION2);
+                A_PlaySound(PIPEBOMB_EXPLODE, j);
 
                 goto DETONATE;
             }

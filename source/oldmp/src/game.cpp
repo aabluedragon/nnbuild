@@ -6560,8 +6560,9 @@ int A_Spawn(int j, int pn)
 
             sp->pal = 0;
             sp->owner = i;
-            changespritestat(i, STAT_STANDABLE);
             sp->xvel = 8;
+
+            changespritestat(i, STAT_STANDABLE);
             A_SetSprite(i,CLIPMASK0);
             break;
 
