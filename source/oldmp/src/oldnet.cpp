@@ -1384,7 +1384,7 @@ static void Net_ProcessPrediction(void)
     g_player[myconnectindex].ps = &predictedPlayer;
 
     sounds_predictable = true;
-    G_HandleSharedKeys(myconnectindex);
+    P_HandleSharedKeys(myconnectindex);
     sounds_predictable = false;
 
     if (ud.pause_on == 0)

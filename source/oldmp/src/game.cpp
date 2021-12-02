@@ -11665,7 +11665,7 @@ static int G_DoMoveThings(void)
         // P_HandlePlayerColor
 
         sounds_predictable = true;
-        G_HandleSharedKeys(i);
+        P_HandleSharedKeys(i);
         sounds_predictable = false;
 
         if (ud.pause_on == 0)

@@ -2712,7 +2712,7 @@ static int P_CheckDetonatorSpecialCase(DukePlayer_t* const pPlayer, int weaponNu
     return 0;
 }
 
-void G_HandleSharedKeys(int snum)
+void P_HandleSharedKeys(int snum)
 {
     int i, k, dainv;
     unsigned int sb_snum = g_player[snum].inputBits->bits;// , j;
