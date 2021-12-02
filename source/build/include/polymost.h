@@ -300,7 +300,7 @@ EDUKE32_STATIC_ASSERT(TO_PTH_INDEXED(DAMETH_INDEXED) == PTH_INDEXED);
 
 extern void gloadtile_art(int32_t,int32_t,int32_t,int32_t,int32_t,pthtyp *,int32_t);
 extern int32_t gloadtile_hi(int32_t,int32_t,int32_t,hicreplctyp *,int32_t,pthtyp *,int32_t,polytintflags_t);
-
+extern coltype *gloadtile_mdloadskin_shared(char* fn, int32_t picfillen, vec2_t * tsiz, vec2_t * siz, char * onebitalpha, polytintflags_t effect, int32_t dapalnum, char* al);
 extern int32_t drawingskybox;
 extern int32_t hicprecaching;
 extern float fcosglobalang, fsinglobalang;
@@ -336,8 +336,8 @@ static FORCE_INLINE bool polymost_testintersection(vec3_t const &pos, vec2_t con
         || polymost_lintersect(pos.x - v.x, pos.y - v.y, pos.x + v.x, pos.y + v.y, wall[wallnum].x, wall[wallnum].y, POINT2(wallnum).x, POINT2(wallnum).y);
 }
 
-extern void polymost_setupglowtexture(int32_t texunits, int32_t tex);
-extern void polymost_setupdetailtexture(int32_t texunits, int32_t tex);
+extern void polymost_setupglowtexture(const int32_t texunit, const int32_t glpic, const int32_t flags);
+extern void polymost_setupdetailtexture(const int32_t texunit, const int32_t glpic, const int32_t flags);
 
 #endif
 

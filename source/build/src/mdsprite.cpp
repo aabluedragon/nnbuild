@@ -716,128 +716,13 @@ int32_t mdloadskin(md2model_t *m, int32_t number, int32_t pal, int32_t surf)
     else
     {
         // CODEDUP: gloadtile_hi
-
-        int32_t isart = 0;
-
         gotcache = 0;	// the compressed version will be saved to disk
-
-        int32_t const length = kpzbufload(fn);
-        if (length == 0)
-            return mdloadskin_notfound(skinfile, fn);
-
-        // tsizx/y = replacement texture's natural size
-        // xsiz/y = 2^x size of replacement
-
-#ifdef WITHKPLIB
-        kpgetdim(kpzbuf,picfillen,&tsiz.x,&tsiz.y);
-#endif
-
-        if (tsiz.x == 0 || tsiz.y == 0)
-        {
-            if (artCheckUnitFileHeader((uint8_t *)kpzbuf, picfillen))
-                return mdloadskin_failed(skinfile, fn);
-
-            tsiz.x = B_LITTLE16(B_UNBUF16(&kpzbuf[16]));
-            tsiz.y = B_LITTLE16(B_UNBUF16(&kpzbuf[18]));
-
-            if (tsiz.x == 0 || tsiz.y == 0)
-                return mdloadskin_failed(skinfile, fn);
-
-            isart = 1;
-        }
-
-        if (!glinfo.texnpot)
-        {
-            for (siz.x=1; siz.x<tsiz.x; siz.x+=siz.x) { }
-            for (siz.y=1; siz.y<tsiz.y; siz.y+=siz.y) { }
-        }
-        else
-            siz = tsiz;
-
-        if (isart)
-        {
-            if (tsiz.x * tsiz.y + ARTv1_UNITOFFSET > picfillen)
-                return mdloadskin_failed(skinfile, fn);
-        }
-
-        int32_t const bytesperline = siz.x * sizeof(coltype);
-        coltype *pic = (coltype *)Xcalloc(siz.y, bytesperline);
-
-        static coltype *lastpic = NULL;
-        static char *lastfn = NULL;
-        static int32_t lastsize = 0;
-
-        if (lastpic && lastfn && !Bstrcmp(lastfn,fn))
-        {
-            willprint=1;
-            Bmemcpy(pic, lastpic, siz.x*siz.y*sizeof(coltype));
-        }
-        else
-        {
-            if (isart)
-            {
-                artConvertRGB((palette_t *)pic, (uint8_t *)&kpzbuf[ARTv1_UNITOFFSET], siz.x, tsiz.x, tsiz.y);
-            }
-#ifdef WITHKPLIB
-            else
-            {
-                if (kprender(kpzbuf,picfillen,(intptr_t)pic,bytesperline,siz.x,siz.y))
-                {
-                    Xfree(pic);
-                    return mdloadskin_failed(skinfile, fn);
-                }
-            }
-#endif
-
-            willprint=2;
-
-            if (hicprecaching)
-            {
-                lastfn = fn;  // careful...
-                if (!lastpic)
-                {
-                    lastpic = (coltype *)Xmalloc(siz.x*siz.y*sizeof(coltype));
-                    lastsize = siz.x*siz.y;
-                }
-                else if (lastsize < siz.x*siz.y)
-                {
-                    Xfree(lastpic);
-                    lastpic = (coltype *)Xmalloc(siz.x*siz.y*sizeof(coltype));
-                }
-                if (lastpic)
-                    Bmemcpy(lastpic, pic, siz.x*siz.y*sizeof(coltype));
-            }
-            else if (lastpic)
-            {
-                DO_FREE_AND_NULL(lastpic);
-                lastfn = NULL;
-                lastsize = 0;
-            }
-        }
-
-        char *cptr = britable[gammabrightness ? 0 : curbrightness];
 
         char al = 255;
         char onebitalpha = 1;
 
-        for (bssize_t y = 0, j = 0; y < tsiz.y; ++y, j += siz.x)
-        {
-            coltype tcol, *rpptr = &pic[j];
-
-            for (bssize_t x = 0; x < tsiz.x; ++x)
-            {
-                tcol.b = cptr[rpptr[x].b];
-                tcol.g = cptr[rpptr[x].g];
-                tcol.r = cptr[rpptr[x].r];
-                al &= tcol.a = rpptr[x].a;
-                onebitalpha &= tcol.a == 0 || tcol.a == 255;
-
-                hictinting_applypixcolor(&tcol, pal, false);
-
-                rpptr[x] = tcol;
-            }
-        }
-
+        auto pic = gloadtile_mdloadskin_shared(fn, picfillen, &tsiz, &siz, &onebitalpha, hicfxmask(pal), pal, &al);
+        if (!pic) return mdloadskin_failed(skinfile, fn);
         hasalpha = (al != 255);
 
         // mdloadskin doesn't duplicate npow2 texture pixels
@@ -908,12 +793,10 @@ int32_t mdloadskin(md2model_t *m, int32_t number, int32_t pal, int32_t surf)
 
     int32_t const filter = (sk->flags & HICR_FORCEFILTER) ? TEXFILTER_ON : gltexfiltermode;
 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,glfiltermodes[filter].mag);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,glfiltermodes[filter].min);
-#ifdef USE_GLEXT
-    if (glinfo.maxanisotropy > 1.0)
-        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_ANISOTROPY_EXT,glanisotropy);
-#endif
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_ANISOTROPY_EXT,glanisotropy);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
 
@@ -2241,7 +2124,7 @@ static int32_t polymost_md3draw(md3model_t *m, tspriteptr_t tspr)
         float al = 0.0;
         if (alphahackarray[globalpicnum] != 0)
             al=alphahackarray[globalpicnum] * (1.f/255.f);
-        buildgl_setDisabled(GL_BLEND);
+        buildgl_setEnabled(GL_BLEND);
         // buildgl_setEnabled(GL_ALPHA_TEST);
         buildgl_setAlphaFunc(GL_GREATER,al);
     }
@@ -2402,15 +2285,10 @@ static int32_t polymost_md3draw(md3model_t *m, tspriteptr_t tspr)
             if (i)
             {
                 polymost_useDetailMapping(true);
-                polymost_setupdetailtexture(GL_TEXTURE3, i);
 
                 auto sk = mdgetskinmap(m, DETAILPAL, skinNum, surfi);
-
-                if (sk)
-                {
-                    f = sk->param;
-                    buildgl_bindSamplerObject(GL_TEXTURE3, (sk->flags & HICR_FORCEFILTER) ? (PTH_HIGHTILE | PTH_FORCEFILTER) : PTH_HIGHTILE);
-                }
+                f = sk->param;
+                polymost_setupdetailtexture(GL_TEXTURE3, i, (sk->flags& HICR_FORCEFILTER) ? (PTH_HIGHTILE | PTH_FORCEFILTER) : PTH_HIGHTILE);
 
                 glMatrixMode(GL_TEXTURE);
                 glLoadIdentity();
@@ -2423,13 +2301,9 @@ static int32_t polymost_md3draw(md3model_t *m, tspriteptr_t tspr)
 
             if (i)
             {
-                auto sk = mdgetskinmap(m, GLOWPAL, skinNum, surfi);
-
-                if (sk)
-                    buildgl_bindSamplerObject(GL_TEXTURE4, (sk->flags& HICR_FORCEFILTER) ? (PTH_HIGHTILE | PTH_FORCEFILTER) : PTH_HIGHTILE);
-
                 polymost_useGlowMapping(true);
-                polymost_setupglowtexture(GL_TEXTURE4, i);
+                auto sk = mdgetskinmap(m, GLOWPAL, skinNum, surfi);
+                polymost_setupglowtexture(GL_TEXTURE4, i, (sk->flags& HICR_FORCEFILTER) ? (PTH_HIGHTILE | PTH_FORCEFILTER) : PTH_HIGHTILE);
                 glMatrixMode(GL_TEXTURE);
                 glLoadIdentity();
                 glTranslatef(xpanning, ypanning, 1.0f);
@@ -2558,7 +2432,7 @@ static int32_t polymost_md3draw(md3model_t *m, tspriteptr_t tspr)
                 glLoadIdentity();
                 glMatrixMode(GL_MODELVIEW);
                 glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
-                buildgl_setEnabled(GL_TEXTURE_2D);
+                buildgl_setDisabled(GL_TEXTURE_2D);
                 buildgl_activeTexture(--texunits);
             }
         } // r_vertexarrays
@@ -2571,7 +2445,7 @@ static int32_t polymost_md3draw(md3model_t *m, tspriteptr_t tspr)
 
     // if (m->usesalpha) glDisable(GL_ALPHA_TEST);
 
-    buildgl_setEnabled(GL_CULL_FACE);
+    buildgl_setDisabled(GL_CULL_FACE);
 //    glPopAttrib();
 
     glMatrixMode(GL_TEXTURE);
