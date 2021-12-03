@@ -1483,7 +1483,7 @@ BOLT:
 
 static void G_MoveStandables(void)
 {
-    int i = headspritestat[STAT_STANDABLE], j, k, nexti, nextj, p=0, sect, switchpicnum;
+    int i = headspritestat[STAT_STANDABLE], j, nexti, nextj, p=0, sect, switchpicnum;
     int l=0, x;
     intptr_t *t;
     spritetype *s;
@@ -1828,8 +1828,6 @@ static void G_MoveStandables(void)
                 actor[i].lastvx = x;
 
                 s->ang = l;
-
-                k = 0;
 
                 //                if(lTripBombControl & TRIPBOMB_TRIPWIRE)
                 if (actor[i].temp_data[6] != 1)
