@@ -1089,6 +1089,91 @@ BOLT:
     }
 }
 
+static int P_Submerge(int const playerNum, DukePlayer_t* const pPlayer, int const sectNum, int const otherSect)
+{
+    if (pPlayer->on_ground && pPlayer->pos.z >= sector[sectNum].floorz
+        && (TEST_SYNC_KEY(g_player[playerNum].inputBits->bits, SK_CROUCH) || pPlayer->vel.z > 2048))
+        //        if( onfloorz && sectlotag == 1 && ps->pos.z > (sector[sect].floorz-(6<<8)) )
+    {
+        if (screenpeek == playerNum)
+        {
+            FX_StopAllSounds();
+        }
+
+#ifndef EDUKE32_STANDALONE
+        if (!FURY && sprite[pPlayer->i].extra > 0)
+            A_PlaySound(DUKE_UNDERWATER, pPlayer->i);
+#endif
+
+        pPlayer->opos.z = pPlayer->pos.z = sector[otherSect].ceilingz;
+
+        if (TEST_SYNC_KEY(g_player[playerNum].inputBits->bits, SK_CROUCH))
+            pPlayer->vel.z += 512;
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static int P_Emerge(int const playerNum, DukePlayer_t* const pPlayer, int const sectNum, int const otherSect)
+{
+    // r1449-:
+    if (pPlayer->pos.z < (sector[sectNum].ceilingz + 1080) && pPlayer->vel.z <= 0)
+        // r1450+, breaks submergible slime in bobsp2:
+//        if (onfloorz && sectlotag == 2 && ps->pos.z <= sector[sect].ceilingz /*&& ps->vel.z == 0*/)
+    {
+        //        if( sprite[j].extra <= 0) break;
+        if (screenpeek == playerNum)
+        {
+            FX_StopAllSounds();
+        }
+
+#ifndef EDUKE32_STANDALONE
+        if (!FURY)
+            A_PlaySound(DUKE_GASP, pPlayer->i);
+#endif
+
+        pPlayer->opos.z = pPlayer->pos.z = sector[otherSect].floorz;
+        pPlayer->vel.z = 0;
+        //        ps->vel.z += 1024;
+
+        pPlayer->jumping_toggle = 1;
+        pPlayer->jumping_counter = 0;
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static void P_FinishWaterChange(int const playerNum, DukePlayer_t* const pPlayer, int const sectLotag, int const spriteOwner, int const newSector)
+{
+    pPlayer->bobposx = pPlayer->opos.x = pPlayer->pos.x;
+    pPlayer->bobposy = pPlayer->opos.y = pPlayer->pos.y;
+
+    if (spriteOwner < 0 || sprite[spriteOwner].owner != spriteOwner)
+        pPlayer->transporter_hold = -2;
+
+    pPlayer->cursectnum = newSector;
+    changespritesect(playerNum, newSector);
+
+    vec3_t vect = pPlayer->pos;
+    vect.z += PHEIGHT;//pPlayer->spritezoffset;
+    setsprite(pPlayer->i, &vect);
+
+    P_UpdateScreenPal(pPlayer);
+
+    if ((krand() & 255) < 32)
+        A_Spawn(playerNum, WATERSPLASH2);
+
+    if (sectLotag == ST_1_ABOVE_WATER)
+    {
+        for (bssize_t l = 0; l < 9; l++)
+            sprite[A_Spawn(pPlayer->i, WATERBUBBLE)].z += krand() & 16383;
+    }
+}
+
 static void G_ShadePlayerSprite(int spriteNum)
 {
     spritetype* s = &sprite[spriteNum];
@@ -3167,8 +3252,8 @@ static int A_CheckNonTeleporting(int const spriteNum)
 static void G_MoveTransports(void)
 {
     int warpspriteto;
-    int j, k, l, p, sect, sectlotag, nexti, nextj;
-    int ll,onfloorz,q;
+    int j, k, sect, sectlotag, nexti, nextj;
+    int onfloorz;
 
     int i = headspritestat[STAT_TRANSPORT];
     while (i >= 0)
@@ -3196,171 +3281,133 @@ static void G_MoveTransports(void)
             switch (sprite[j].statnum)
             {
                 case STAT_PLAYER:    // Player
-
-                if (sprite[j].owner != -1)
                 {
-                    p = sprite[j].yvel;
-
-                    g_player[p].ps->on_warping_sector = 1;
-
-                    if (g_player[p].ps->transporter_hold == 0 && g_player[p].ps->jumping_counter == 0)
+                    if (sprite[j].owner != -1)
                     {
-                        if (g_player[p].ps->on_ground && sectlotag == ST_0_NO_EFFECT && onfloorz && g_player[p].ps->jetpack_on == 0)
+                        int const  playerNum = sprite[j].yvel;
+                        auto& thisPlayer = g_player[playerNum];
+                        auto const pPlayer = thisPlayer.ps;
+
+                        pPlayer->on_warping_sector = 1;
+
+                        if (pPlayer->transporter_hold == 0 && pPlayer->jumping_counter == 0)
                         {
-                            if (sprite[i].pal == 0)
+                            if (pPlayer->on_ground && sectlotag == ST_0_NO_EFFECT && onfloorz && pPlayer->jetpack_on == 0)
                             {
-                                A_Spawn(i,TRANSPORTERBEAM);
-                                A_PlaySound(TELEPORTER,i);
+                                if (sprite[i].pal == 0)
+                                {
+                                    A_Spawn(i, TRANSPORTERBEAM);
+                                    A_PlaySound(TELEPORTER, i);
+                                }
+
+                                int otherPnum;
+                                TRAVERSE_CONNECT(otherPnum)
+                                {
+                                    auto otherPlayer = g_player[otherPnum].ps;
+                                    if (otherPlayer->cursectnum == sprite[OW(i)].sectnum)
+                                    {
+                                        otherPlayer->frag_ps = playerNum;
+                                        sprite[otherPlayer->i].extra = 0;
+                                    }
+                                }
+
+                                pPlayer->q16ang = fix16_from_int(sprite[OW(i)].ang);
+
+                                if (sprite[OW(i)].owner != OW(i))
+                                {
+                                    T1(i) = 13;
+                                    actor[OW(i)].temp_data[0] = 13;
+                                    pPlayer->transporter_hold = 13;
+                                }
+
+                                pPlayer->bobposx = pPlayer->opos.x = pPlayer->pos.x = sprite[OW(i)].x;
+                                pPlayer->bobposy = pPlayer->opos.y = pPlayer->pos.y = sprite[OW(i)].y;
+                                pPlayer->opos.z = pPlayer->pos.z = sprite[OW(i)].z - PHEIGHT;
+
+                                changespritesect(j, sprite[OW(i)].sectnum);
+                                pPlayer->cursectnum = sprite[j].sectnum;
+
+                                if (playerNum == screenpeek)
+                                {
+                                    ud.camerapos.x = pPlayer->pos.x;
+                                    ud.camerapos.y = pPlayer->pos.y;
+                                    ud.camerapos.z = pPlayer->pos.z;
+                                    ud.cameraq16ang = pPlayer->q16ang;
+                                    ud.camerasect = pPlayer->cursectnum;
+                                }
+
+                                if (sprite[i].pal == 0)
+                                {
+                                    k = A_Spawn(OW(i), TRANSPORTERBEAM);
+                                    A_PlaySound(TELEPORTER, k);
+                                }
+
+                                break;
                             }
 
-                            TRAVERSE_CONNECT(k)
-                            if (g_player[k].ps->cursectnum == sprite[OW(i)].sectnum)
+                            if (onfloorz == 0 && klabs(SZ(i) - pPlayer->pos.z) < 6144)
                             {
-                                g_player[k].ps->frag_ps = p;
-                                sprite[g_player[k].ps->i].extra = 0;
+                                if (!pPlayer->jetpack_on || TEST_SYNC_KEY(thisPlayer.inputBits->bits, SK_JUMP)
+                                    || TEST_SYNC_KEY(thisPlayer.inputBits->bits, SK_CROUCH))
+                                {
+                                    pPlayer->bobposx = pPlayer->pos.x += sprite[OW(i)].x - SX(i);
+                                    pPlayer->bobposy = pPlayer->pos.y += sprite[OW(i)].y - SY(i);
+                                    pPlayer->pos.z = (pPlayer->jetpack_on && (TEST_SYNC_KEY(thisPlayer.inputBits->bits, SK_JUMP)
+                                        || pPlayer->jetpack_on < 11))
+                                        ? sprite[OW(i)].z - 6144
+                                        : sprite[OW(i)].z + 6144;
+
+                                    actor[j].bpos = pPlayer->opos = pPlayer->pos;
+
+                                    changespritesect(j, sprite[OW(i)].sectnum);
+                                    pPlayer->cursectnum = sprite[OW(i)].sectnum;
+
+                                    break;
+                                }
                             }
 
-                            g_player[p].ps->q16ang = fix16_from_int(sprite[OW(i)].ang);
+                            int doWater = 0;
 
-                            if (sprite[OW(i)].owner != OW(i))
+                            if (onfloorz)
                             {
-                                T1(i) = 13;
-                                actor[OW(i)].temp_data[0] = 13;
-                                g_player[p].ps->transporter_hold = 13;
+                                if (sectlotag == ST_1_ABOVE_WATER)
+                                    doWater = P_Submerge(playerNum, pPlayer, sect, sprite[OW(i)].sectnum);
+                                else if (sectlotag == ST_2_UNDERWATER)
+                                    doWater = P_Emerge(playerNum, pPlayer, sect, sprite[OW(i)].sectnum);
+
+                                if (doWater == 1)
+                                {
+                                    pPlayer->pos.x += sprite[OW(i)].x - SX(i);
+                                    pPlayer->pos.y += sprite[OW(i)].y - SY(i);
+
+                                    P_FinishWaterChange(j, pPlayer, sect, OW(i), sprite[OW(i)].sectnum);
+                                }
                             }
-
-                            g_player[p].ps->bobposx = g_player[p].ps->opos.x = g_player[p].ps->pos.x = sprite[OW(i)].x;
-                            g_player[p].ps->bobposy = g_player[p].ps->opos.y = g_player[p].ps->pos.y = sprite[OW(i)].y;
-                            g_player[p].ps->opos.z = g_player[p].ps->pos.z = sprite[OW(i)].z-PHEIGHT;
-
-                            changespritesect(j,sprite[OW(i)].sectnum);
-                            g_player[p].ps->cursectnum = sprite[j].sectnum;
-
-                            if (p == screenpeek)
-                            {
-                                ud.camerapos.x = g_player[p].ps->pos.x;
-                                ud.camerapos.y = g_player[p].ps->pos.y;
-                                ud.camerapos.z = g_player[p].ps->pos.z;
-                                ud.cameraq16ang = g_player[p].ps->q16ang;
-                                ud.camerasect = g_player[p].ps->cursectnum;
-                            }
-
-                            if (sprite[i].pal == 0)
-                            {
-                                k = A_Spawn(OW(i),TRANSPORTERBEAM);
-                                A_PlaySound(TELEPORTER,k);
-                            }
-
+                        }
+                        else if (!(sectlotag == ST_1_ABOVE_WATER && pPlayer->on_ground == 1))
                             break;
-                        }
-                    }
-                    else if (!(sectlotag == ST_1_ABOVE_WATER && g_player[p].ps->on_ground == 1)) break;
-
-                    if (onfloorz == 0 && klabs(SZ(i) -g_player[p].ps->pos.z) < 6144)
-                        if ((g_player[p].ps->jetpack_on == 0) || (g_player[p].ps->jetpack_on && TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_JUMP)) ||
-                                (g_player[p].ps->jetpack_on && TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_CROUCH)))
-                        {
-                            g_player[p].ps->bobposx = g_player[p].ps->pos.x += sprite[OW(i)].x-SX(i);
-                            g_player[p].ps->bobposy = g_player[p].ps->pos.y += sprite[OW(i)].y-SY(i);
-
-                            if (g_player[p].ps->jetpack_on && (TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_JUMP) || g_player[p].ps->jetpack_on < 11))
-                                g_player[p].ps->pos.z = sprite[OW(i)].z-6144;
-                            else g_player[p].ps->pos.z = sprite[OW(i)].z+6144;
-
-                            actor[j].bpos = g_player[p].ps->opos = g_player[p].ps->pos;
-
-                            changespritesect(j,sprite[OW(i)].sectnum);
-                            g_player[p].ps->cursectnum = sprite[OW(i)].sectnum;
-
-                            break;
-                        }
-
-                    k = 0;
-
-                    if (onfloorz && sectlotag == ST_1_ABOVE_WATER && g_player[p].ps->on_ground &&
-                            g_player[p].ps->pos.z > (sector[sect].floorz-1080) &&
-                            (TEST_SYNC_KEY(g_player[p].inputBits->bits, SK_CROUCH) || g_player[p].ps->vel.z > 2048))
-                        //                        if( onfloorz && sectlotag == 1 && g_player[p].ps->pos.z > (sector[sect].floorz-(6<<8)) )
-                    {
-                        k = 1;
-                        if (screenpeek == p)
-                        {
-                            FX_StopAllSounds();
-                        }
-                        if (sprite[g_player[p].ps->i].extra > 0)
-                            A_PlaySound(DUKE_UNDERWATER,j);
-                        g_player[p].ps->opos.z = g_player[p].ps->pos.z =
-                                                    sector[sprite[OW(i)].sectnum].ceilingz;
-
-                        g_player[p].ps->vel.x = 4096-(krand()&8192);
-                        g_player[p].ps->vel.y = 4096-(krand()&8192);
-                        //          g_player[p].ps->vel.z += 1080;
-                    }
-
-                    if (onfloorz && sectlotag == ST_2_UNDERWATER && g_player[p].ps->pos.z < (sector[sect].ceilingz+1080) && g_player[p].ps->vel.z == 0)
-                    {
-                        k = 1;
-                        //                            if( sprite[j].extra <= 0) break;
-                        if (screenpeek == p)
-                        {
-                            FX_StopAllSounds();
-                        }
-                        A_PlaySound(DUKE_GASP,j);
-
-                        g_player[p].ps->opos.z = g_player[p].ps->pos.z =
-                                                    sector[sprite[OW(i)].sectnum].floorz;
-
-                        g_player[p].ps->jumping_toggle = 1;
-                        g_player[p].ps->jumping_counter = 0;
-                        //                        g_player[p].ps->vel.z += 1024;
-                    }
-
-                    if (k == 1)
-                    {
-                        g_player[p].ps->opos.x = g_player[p].ps->pos.x += sprite[OW(i)].x-SX(i);
-                        g_player[p].ps->opos.y = g_player[p].ps->pos.y += sprite[OW(i)].y-SY(i);
-
-                        if (sprite[OW(i)].owner != OW(i))
-                            g_player[p].ps->transporter_hold = -2;
-                        g_player[p].ps->cursectnum = sprite[OW(i)].sectnum;
-
-                        changespritesect(j,sprite[OW(i)].sectnum);
-                        setspritez_old(g_player[p].ps->i,g_player[p].ps->pos.x,g_player[p].ps->pos.y,g_player[p].ps->pos.z+PHEIGHT);
-
-                        P_UpdateScreenPal(g_player[p].ps);
-
-                        if ((krand()&255) < 32)
-                            A_Spawn(j,WATERSPLASH2);
-
-                        if (sectlotag == ST_1_ABOVE_WATER)
-                            for (l = 0;l < 9;l++)
-                            {
-                                q = A_Spawn(g_player[p].ps->i,WATERBUBBLE);
-                                sprite[q].z += krand()&16383;
-                            }
                     }
                 }
                 break;
 
-            case STAT_PROJECTILE:
-                // comment out to make RPGs pass through water: (r1450 breaks this)
-                //if (sectlotag != 0) goto JBOLT;
-            case STAT_ACTOR:
-                if (sprite[j].extra > 0 && A_CheckNonTeleporting(j))
-                        goto JBOLT;
-                fallthrough__;
-            case STAT_MISC:
-            case STAT_FALLER:
-            case STAT_DUMMYPLAYER:
-
-                ll = klabs(sprite[j].zvel);
-
+                case STAT_PROJECTILE:
+                    // comment out to make RPGs pass through water: (r1450 breaks this)
+                    //if (sectlotag != 0) goto JBOLT;
+                case STAT_ACTOR:
+                    if (sprite[j].extra > 0 && A_CheckNonTeleporting(j))
+                            goto JBOLT;
+                    fallthrough__;
+                case STAT_MISC:
+                case STAT_FALLER:
+                case STAT_DUMMYPLAYER:
                 {
+                    int const absZvel = klabs(sprite[j].zvel);
+
                     warpspriteto = 0;
-                    if (ll && sectlotag == 2 && sprite[j].z < (sector[sect].ceilingz+ll))
+                    if (absZvel && sectlotag == ST_2_UNDERWATER && sprite[j].z < (sector[sect].ceilingz + absZvel))
                         warpspriteto = 1;
 
-                    if (ll && sectlotag == 1 && sprite[j].z > (sector[sect].floorz-ll))
+                    if (absZvel && sectlotag == ST_1_ABOVE_WATER && sprite[j].z > (sector[sect].floorz - absZvel))
                         warpspriteto = 1;
 
                     if (sectlotag == 0 && (onfloorz || klabs(sprite[j].z-SZ(i)) < 4096))
@@ -3392,7 +3439,7 @@ static void G_MoveTransports(void)
 
                         case PLAYERONWATER__STATIC:
                         {
-                            if (sectlotag == 2)
+                            if (sectlotag == ST_2_UNDERWATER)
                             {
                                 sprite[j].cstat &= 32767;
                                 break;
@@ -3469,7 +3516,7 @@ static void G_MoveTransports(void)
                             case ST_1_ABOVE_WATER:
                                 sprite[j].x += (sprite[OW(i)].x - SX(i));
                                 sprite[j].y += (sprite[OW(i)].y - SY(i));
-                                sprite[j].z = sector[sprite[OW(i)].sectnum].ceilingz + ll;
+                                sprite[j].z = sector[sprite[OW(i)].sectnum].ceilingz + absZvel;
 
                                 actor[j].bpos = sprite[j].xyz;
 
@@ -3479,7 +3526,7 @@ static void G_MoveTransports(void)
                             case ST_2_UNDERWATER:
                                 sprite[j].x += (sprite[OW(i)].x - SX(i));
                                 sprite[j].y += (sprite[OW(i)].y - SY(i));
-                                sprite[j].z = sector[sprite[OW(i)].sectnum].floorz - ll;
+                                sprite[j].z = sector[sprite[OW(i)].sectnum].floorz - absZvel;
 
                                 actor[j].bpos = sprite[j].xyz;
 
