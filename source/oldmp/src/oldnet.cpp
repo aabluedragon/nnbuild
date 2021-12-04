@@ -1219,7 +1219,6 @@ void Net_EnterMessage(void)
 
             if (typebuf[0] == '/' && Btoupper(typebuf[1]) == 'M' && Btoupper(typebuf[2]) == 'E')
             {
-                Bstrcat(recbuf,"* ");
                 i = 3, j = Bstrlen(typebuf);
                 Bstrcpy(tempbuf,typebuf);
                 while (i < j)
@@ -1228,15 +1227,13 @@ void Net_EnterMessage(void)
                     i++;
                 }
                 typebuf[i-3] = '\0';
-                Bstrcat(recbuf,g_player[myconnectindex].user_name);
+                Bsprintf(recbuf, "^07* %s^07", g_player[myconnectindex].user_name);
             }
             else
             {
-                Bstrcat(recbuf,g_player[myconnectindex].user_name);
-                Bstrcat(recbuf,": ");
+                Bsprintf(recbuf, "%s^07: ", g_player[myconnectindex].user_name);
             }
 
-            Bstrcat(recbuf,"^00");
             Bstrcat(recbuf,typebuf);
             j = Bstrlen(recbuf);
             recbuf[j] = 0;
