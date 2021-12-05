@@ -4460,10 +4460,9 @@ void P_ProcessInput(int snum)
     int psect;
     int psectlotag;
     int shrunk = (s->yrepeat < 32);
-    int truefdist;
     int floorZOffset;
 
-    int cz, hz, fz, lz;
+    int ceilZ, highZhit, floorZ, lowZhit;
 
     int x, y;
     short tempsect;
@@ -4491,18 +4490,17 @@ void P_ProcessInput(int snum)
     p->spritebridge = 0;
     p->sbs = 0;
 
-    getzrange_old(p->pos.x, p->pos.y, p->pos.z, psect, &cz, &hz, &fz, &lz, 163L, CLIPMASK0);
-
+    getzrange(&p->pos, psect, &ceilZ, &highZhit, &floorZ, &lowZhit, 163L, CLIPMASK0);
     yax_getzsofslope(psect, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
 
-    truefdist = klabs(p->pos.z - p->truefz);
+    int const trueFloorDist = klabs(p->pos.z - p->truefz);
 
     /* wtf is this supposed to do? */
-    if ((lz & 49152) == 16384 && psectlotag == ST_1_ABOVE_WATER && truefdist > PHEIGHT + (16 << 8))
+    if ((lowZhit & 49152) == 16384 && psectlotag == ST_1_ABOVE_WATER && trueFloorDist > PHEIGHT + (16 << 8))
         psectlotag = 0;
 
-    actor[playerSprite].floorz = fz;
-    actor[playerSprite].ceilingz = cz;
+    actor[playerSprite].floorz = floorZ;
+    actor[playerSprite].ceilingz = ceilZ;
 
     p->oq16horiz = p->q16horiz;
     p->oq16horizoff = p->q16horizoff;
@@ -4534,20 +4532,20 @@ void P_ProcessInput(int snum)
         p->q16horizoff = min(p->q16horizoff, 0);
     }
 
-    if (hz >= 0 && (hz & 49152) == 49152)
+    if (highZhit >= 0 && (highZhit & 49152) == 49152)
     {
-        hz &= (MAXSPRITES - 1);
+        highZhit &= (MAXSPRITES - 1);
 
-        if (sprite[hz].statnum == 1 && sprite[hz].extra >= 0)
+        if (sprite[highZhit].statnum == STAT_ACTOR && sprite[highZhit].extra >= 0)
         {
-            hz = 0;
-            cz = p->truecz;
+            highZhit = 0;
+            ceilZ = p->truecz;
         }
     }
 
-    if (lz >= 0 && (lz & 49152) == 49152)
+    if (lowZhit >= 0 && (lowZhit & 49152) == 49152)
     {
-        int spr = lz & (MAXSPRITES - 1);
+        int spr = lowZhit & (MAXSPRITES - 1);
 
         if ((sprite[spr].cstat & 33) == 33)
         {
@@ -4588,7 +4586,7 @@ void P_ProcessInput(int snum)
         {
             if (p->on_warping_sector == 0)
             {
-                if (klabs(p->pos.z - fz) > (PHEIGHT >> 1))
+                if (klabs(p->pos.z - floorZ) > (PHEIGHT >> 1))
                     p->pos.z += 348;
             }
             else
@@ -4616,8 +4614,8 @@ void P_ProcessInput(int snum)
 
         pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 128L, (4L << 8), (20L << 8), CLIPMASK0);
 
-        if (fz > cz + (16 << 8) && s->pal != 1)
-            p->rotscrnang = (p->dead_flag + ((fz + p->pos.z) >> 7)) & 2047;
+        if (floorZ > ceilZ + (16 << 8) && s->pal != 1)
+            p->rotscrnang = (p->dead_flag + ((floorZ + p->pos.z) >> 7)) & 2047;
 
         p->on_warping_sector = 0;
 
@@ -4746,9 +4744,13 @@ void P_ProcessInput(int snum)
             if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
             {
                 // jump
-                if (p->vel.z > 0) p->vel.z = 0;
+                if (p->vel.z > 0)
+                    p->vel.z = 0;
+
                 p->vel.z -= 348;
-                if (p->vel.z < -(256 * 6)) p->vel.z = -(256 * 6);
+
+                if (p->vel.z < -(256 * 6))
+                    p->vel.z = -(256 * 6);
             }
         }
         else if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
@@ -4758,26 +4760,23 @@ void P_ProcessInput(int snum)
             if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
             {
                 // crouch
-                if (p->vel.z < 0) p->vel.z = 0;
+                if (p->vel.z < 0)
+                    p->vel.z = 0;
+
                 p->vel.z += 348;
-                if (p->vel.z > (256 * 6)) p->vel.z = (256 * 6);
+
+                if (p->vel.z > (256 * 6))
+                    p->vel.z = (256 * 6);
             }
         }
         else
         {
             // normal view
             if (p->vel.z < 0)
-            {
-                p->vel.z += 256;
-                if (p->vel.z > 0)
-                    p->vel.z = 0;
-            }
+                p->vel.z = min(0, p->vel.z + 256);
+
             if (p->vel.z > 0)
-            {
-                p->vel.z -= 256;
-                if (p->vel.z < 0)
-                    p->vel.z = 0;
-            }
+                p->vel.z = max(0, p->vel.z - 256);
         }
 
         if (p->vel.z > 2048)
@@ -4785,12 +4784,18 @@ void P_ProcessInput(int snum)
 
         p->pos.z += p->vel.z;
 
-        if (p->pos.z > (fz - (15 << 8)))
-            p->pos.z += ((fz - (15 << 8)) - p->pos.z) >> 1;
+        if (p->pos.z > (floorZ - (15 << 8)))
+            p->pos.z += ((floorZ - (15 << 8)) - p->pos.z) >> 1;
 
-        if (p->pos.z < (cz + (4 << 8)))
+        if (p->pos.z < ceilZ)
         {
-            p->pos.z = cz + (4 << 8);
+            p->pos.z = ceilZ;
+            p->vel.z = 0;
+        }
+
+        if ((p->on_warping_sector == 0 || ceilZ != p->truecz) && p->pos.z < ceilZ + 1024)
+        {
+            p->pos.z = ceilZ + 1024;
             p->vel.z = 0;
         }
 
@@ -4856,10 +4861,10 @@ void P_ProcessInput(int snum)
         if (psectlotag != ST_2_UNDERWATER && p->scuba_on == 1)
             p->scuba_on = 0;
 
-        if (p->pos.z > (fz - (Zdiff << 8)))
-            p->pos.z += ((fz - (Zdiff << 8)) - p->pos.z) >> 1;
-        if (p->pos.z < (cz + (18 << 8)))
-            p->pos.z = cz + (18 << 8);
+        if (p->pos.z > (floorZ - (Zdiff << 8)))
+            p->pos.z += ((floorZ - (Zdiff << 8)) - p->pos.z) >> 1;
+        if (p->pos.z < (ceilZ + (18 << 8)))
+            p->pos.z = ceilZ + (18 << 8);
 
     }
     else if (psectlotag != ST_2_UNDERWATER)
@@ -4881,7 +4886,7 @@ void P_ProcessInput(int snum)
             }
             else floorZOffset = 12;
 
-            if (shrunk == 0 && truefdist <= PHEIGHT && !oldnet_predicting)
+            if (shrunk == 0 && trueFloorDist <= PHEIGHT && !oldnet_predicting)
             {
                 if (p->on_ground == 1)
                 {
@@ -4938,11 +4943,11 @@ void P_ProcessInput(int snum)
             }
         }
 
-        if (p->pos.z < (fz - (floorZOffset << 8)))  //falling
+        if (p->pos.z < (floorZ - (floorZOffset << 8)))  //falling
         {
             // not jumping or crouching
-            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && p->on_ground && (sector[psect].floorstat & 2) && p->pos.z >= (fz - (floorZOffset << 8) - (16 << 8)))
-                p->pos.z = fz - (floorZOffset << 8);
+            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && p->on_ground && (sector[psect].floorstat & 2) && p->pos.z >= (floorZ - (floorZOffset << 8) - (16 << 8)))
+                p->pos.z = floorZ - (floorZOffset << 8);
             else
             {
                 p->on_ground = 0;
@@ -4958,7 +4963,7 @@ void P_ProcessInput(int snum)
                         p->scream_voice = A_PlaySound(DUKE_SCREAM, playerSprite);
                 }
 
-                if ((p->pos.z + p->vel.z) >= (fz - (floorZOffset << 8)) && p->cursectnum >= 0)   // hit the ground
+                if ((p->pos.z + p->vel.z) >= (floorZ - (floorZOffset << 8)) && p->cursectnum >= 0)   // hit the ground
                 {
                     if (sector[p->cursectnum].lotag != ST_1_ABOVE_WATER)
                     {
@@ -5003,7 +5008,7 @@ void P_ProcessInput(int snum)
             {
                 //Smooth on the ground
 
-                floorZOffset = ((fz - (floorZOffset << 8)) - p->pos.z) >> 1;
+                floorZOffset = ((floorZ - (floorZOffset << 8)) - p->pos.z) >> 1;
                 if (klabs(floorZOffset) < 256) floorZOffset = 0;
                 p->pos.z += floorZOffset;
                 p->vel.z -= 768;
@@ -5011,10 +5016,10 @@ void P_ProcessInput(int snum)
             }
             else if (p->jumping_counter == 0)
             {
-                p->pos.z += ((fz - (floorZOffset << 7)) - p->pos.z) >> 1; //Smooth on the water
-                if (p->on_warping_sector == 0 && p->pos.z > fz - (16 << 8))
+                p->pos.z += ((floorZ - (floorZOffset << 7)) - p->pos.z) >> 1; //Smooth on the water
+                if (p->on_warping_sector == 0 && p->pos.z > floorZ - (16 << 8))
                 {
-                    p->pos.z = fz - (16 << 8);
+                    p->pos.z = floorZ - (16 << 8);
                     p->vel.z >>= 1;
                 }
             }
@@ -5037,7 +5042,7 @@ void P_ProcessInput(int snum)
             else if (TEST_SYNC_KEY(sb_snum, SK_JUMP) && p->jumping_toggle == 0)
             {
                 if (p->jumping_counter == 0)
-                    if ((fz - cz) > (56 << 8))
+                    if ((floorZ - ceilZ) > (56 << 8))
                     {
                         Gv_SetVar(g_iReturnVarID, 0, playerSprite, snum);
                         X_OnEvent(EVENT_JUMP, playerSprite, snum, -1);
@@ -5081,13 +5086,13 @@ void P_ProcessInput(int snum)
 
         p->pos.z += p->vel.z;
 
-        if (p->pos.z < (cz + (4 << 8)))
+        if (p->pos.z < (ceilZ + (4 << 8)))
         {
             p->jumping_counter = 0;
             if (p->vel.z < 0)
                 p->vel.x = p->vel.y = 0;
             p->vel.z = 128;
-            p->pos.z = cz + (4 << 8);
+            p->pos.z = ceilZ + (4 << 8);
         }
     }
 
@@ -5148,7 +5153,7 @@ void P_ProcessInput(int snum)
 
         int const checkWalkSound = sintable[p->bobcounter & 2047] >> 12;
 
-        if ((truefdist < PHEIGHT + (8 << 8)) && (checkWalkSound == 1 || checkWalkSound == 3))
+        if ((trueFloorDist < PHEIGHT + (8 << 8)) && (checkWalkSound == 1 || checkWalkSound == 3))
         {
             if (p->spritebridge == 0 && p->walking_snd_toggle == 0 && p->on_ground)
             {
@@ -5157,8 +5162,8 @@ void P_ProcessInput(int snum)
                 {
                 case ST_0_NO_EFFECT:
 
-                    floorPic = (lz >= 0 && (lz & 49152) == 49152)
-                        ? TrackerCast(sprite[lz & (MAXSPRITES - 1)].picnum)
+                    floorPic = (lowZhit >= 0 && (lowZhit & 49152) == 49152)
+                        ? TrackerCast(sprite[lowZhit & (MAXSPRITES - 1)].picnum)
                         : TrackerCast(sector[psect].floorpicnum);
 
                     switch (DynamicTileMap[floorPic])
@@ -5295,7 +5300,7 @@ HORIZONLY:
         }
     }
 
-    if (p->cursectnum >= 0 && truefdist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
+    if (p->cursectnum >= 0 && trueFloorDist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
         if (!A_CheckSoundPlaying(playerSprite, DUKE_ONWATER))
             A_PlaySound(DUKE_ONWATER, playerSprite);
 
@@ -5322,7 +5327,7 @@ HORIZONLY:
                 return;
             }
         }
-        else if (klabs(fz - cz) < (32 << 8) && isanunderoperator(sector[psect].lotag))
+        else if (klabs(floorZ - ceilZ) < (32 << 8) && isanunderoperator(sector[psect].lotag))
             activatebysector(psect, playerSprite);
     }
 

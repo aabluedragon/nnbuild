@@ -1174,6 +1174,31 @@ static void P_FinishWaterChange(int const playerNum, DukePlayer_t* const pPlayer
     }
 }
 
+// Check whether sprite <s> is on/in a non-SE7 water sector.
+// <othersectptr>: if not NULL, the sector on the other side.
+int A_CheckNoSE7Water(uspriteptr_t const pSprite, int sectNum, int sectLotag, int32_t* pOther)
+{
+    if (sectLotag == ST_1_ABOVE_WATER || sectLotag == ST_2_UNDERWATER)
+    {
+        int const otherSect =
+            yax_getneighborsect(pSprite->x, pSprite->y, sectNum, sectLotag == ST_1_ABOVE_WATER ? YAX_FLOOR : YAX_CEILING);
+        int const otherLotag = (sectLotag == ST_1_ABOVE_WATER) ? ST_2_UNDERWATER : ST_1_ABOVE_WATER;
+
+        // If submerging, the lower sector MUST have lotag 2.
+        // If emerging, the upper sector MUST have lotag 1.
+        // This way, the x/y coordinates where above/below water
+        // changes can happen are the same.
+        if (otherSect >= 0 && sector[otherSect].lotag == otherLotag)
+        {
+            if (pOther)
+                *pOther = otherSect;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static void G_ShadePlayerSprite(int spriteNum)
 {
     spritetype* s = &sprite[spriteNum];
@@ -1250,6 +1275,24 @@ void G_MovePlayerSprite(int playerNum)
     }
     else
     {
+#ifdef YAX_ENABLE
+        // TROR water submerge/emerge
+        int const playerSectnum = s->sectnum;
+        int const sectorLotag = sector[playerSectnum].lotag;
+        int32_t   otherSector;
+
+        if (A_CheckNoSE7Water((uspriteptr_t)s, playerSectnum, sectorLotag, &otherSector))
+        {
+            // NOTE: Compare with G_MoveTransports().
+            p->on_warping_sector = 1;
+
+            if ((sectorLotag == ST_1_ABOVE_WATER ?
+                P_Submerge(playerNum, p, playerSectnum, otherSector) :
+                P_Emerge(playerNum, p, playerSectnum, otherSector)) == 1)
+                P_FinishWaterChange(playerNum, p, sectorLotag, -1, otherSector);
+        }
+#endif
+
         if (ud.multimode > 1)
             otherp = P_FindOtherPlayer(s->yvel, &otherx);
         else
