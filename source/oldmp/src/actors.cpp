@@ -1166,7 +1166,7 @@ static int P_Emerge(int const playerNum, DukePlayer_t* const pPlayer, int const 
     return 0;
 }
 
-static void P_FinishWaterChange(int const playerNum, DukePlayer_t* const pPlayer, int const sectLotag, int const spriteOwner, int const newSector)
+static void P_FinishWaterChange(int const spriteNum, DukePlayer_t* const pPlayer, int const sectLotag, int const spriteOwner, int const newSector)
 {
     pPlayer->bobposx = pPlayer->opos.x = pPlayer->pos.x;
     pPlayer->bobposy = pPlayer->opos.y = pPlayer->pos.y;
@@ -1175,7 +1175,7 @@ static void P_FinishWaterChange(int const playerNum, DukePlayer_t* const pPlayer
         pPlayer->transporter_hold = -2;
 
     pPlayer->cursectnum = newSector;
-    changespritesect(playerNum, newSector);
+    changespritesect(spriteNum, newSector);
 
     vec3_t vect = pPlayer->pos;
     vect.z += PHEIGHT;//pPlayer->spritezoffset;
@@ -1187,7 +1187,7 @@ static void P_FinishWaterChange(int const playerNum, DukePlayer_t* const pPlayer
         return;
 
     if ((krand() & 255) < 32)
-        A_Spawn(playerNum, WATERSPLASH2);
+        A_Spawn(spriteNum, WATERSPLASH2);
 
     if (sectLotag == ST_1_ABOVE_WATER)
     {
@@ -1311,7 +1311,7 @@ void G_MovePlayerSprite(int playerNum)
             if ((sectorLotag == ST_1_ABOVE_WATER ?
                 P_Submerge(playerNum, p, playerSectnum, otherSector) :
                 P_Emerge(playerNum, p, playerSectnum, otherSector)) == 1)
-                P_FinishWaterChange(playerNum, p, sectorLotag, -1, otherSector);
+                P_FinishWaterChange(p->i, p, sectorLotag, -1, otherSector);
         }
 #endif
 
