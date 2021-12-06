@@ -524,12 +524,13 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
         sprite[spritenum].z += (zchange*TICSPERFRAME)>>2;
 
         if (isEnemy)
-            setspritez_old(spritenum, sprite[spritenum].x, sprite[spritenum].y, sprite[spritenum].z);
+            setsprite(spritenum, &sprite[spritenum].xyz);
 
         return 0;
     }
 
     dasectnum = sprite[spritenum].sectnum;
+    auto sectLotag = sector[dasectnum].lotag;
 
     oldpos.x = sprite[spritenum].x;
     oldpos.y = sprite[spritenum].y;
@@ -578,7 +579,7 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
                             sprite[spritenum].ang = (krand()&2047); */
 
             oldpos.z = sprite[spritenum].z;
-            setspritez_old(spritenum, oldpos.x, oldpos.y, oldpos.z);
+            setspritez(spritenum, &oldpos);
 
             if (dasectnum < 0) dasectnum = 0;
             return (16384+dasectnum);
@@ -598,7 +599,25 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
     if (dasectnum >= 0)
         if ((dasectnum != sprite[spritenum].sectnum))
             changespritesect(spritenum,dasectnum);
-    daz = sprite[spritenum].z + ((zchange*TICSPERFRAME)>>3);
+
+    daz = sprite[spritenum].z + ((zchange * TICSPERFRAME) >> 3);
+
+    if ((zchange < 0 && sectLotag == ST_2_UNDERWATER) || (zchange > 0 && sectLotag == ST_1_ABOVE_WATER))
+    {
+        int32_t otherSect;
+        if (A_CheckNoSE7Water((uspriteptr_t)&sprite[spritenum], dasectnum, sectLotag, &otherSect))
+        {
+            if (((daz < actor[spritenum].ceilingz) && sectLotag == ST_2_UNDERWATER) ||
+                (daz > actor[spritenum].floorz && sectLotag == ST_1_ABOVE_WATER))
+            {
+                A_Spawn(spritenum, WATERSPLASH2);
+                changespritesect(spritenum, otherSect);
+                sprite[spritenum].z = daz;
+                return 0;
+            }
+        }
+    }
+    
     if ((daz > actor[spritenum].ceilingz) && (daz <= actor[spritenum].floorz))
         sprite[spritenum].z = daz;
     else if (retval == 0)
@@ -2631,13 +2650,8 @@ static void A_DoProjectileBounce(int i)
 
 static void G_WeaponHitCeilingOrFloor(int32_t i, spritetype* s, int* j)
 {
-#if 0
-    if (actor[i].flags & SFLAG_DIDNOSE7WATER)
-    {
-        actor[i].flags &= ~SFLAG_DIDNOSE7WATER;
+    if (*j == 0)
         return;
-    }
-#endif
 
     if (s->z < actor[i].ceilingz)
     {
