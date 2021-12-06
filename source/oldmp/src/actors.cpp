@@ -1183,6 +1183,9 @@ static void P_FinishWaterChange(int const playerNum, DukePlayer_t* const pPlayer
 
     P_UpdateScreenPal(pPlayer);
 
+    if (oldnet_predicting) // No effect spawns if we're predicting, please.
+        return;
+
     if ((krand() & 255) < 32)
         A_Spawn(playerNum, WATERSPLASH2);
 
