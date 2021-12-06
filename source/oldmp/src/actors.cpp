@@ -3437,7 +3437,7 @@ static void G_MoveTransports(void)
                                     pPlayer->pos.x += sprite[OW(i)].x - SX(i);
                                     pPlayer->pos.y += sprite[OW(i)].y - SY(i);
 
-                                    P_FinishWaterChange(j, pPlayer, sect, OW(i), sprite[OW(i)].sectnum);
+                                    P_FinishWaterChange(j, pPlayer, sectlotag, OW(i), sprite[OW(i)].sectnum);
                                 }
                             }
                         }
