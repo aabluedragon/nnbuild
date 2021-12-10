@@ -253,6 +253,7 @@ extern const char* CommandName;
 #include "sounds.h"
 #include "soundefs.h"
 #include "music.h"
+#include "player.h"
 
 #ifdef __cplusplus
 extern "C" {

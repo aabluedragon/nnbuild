@@ -200,6 +200,7 @@
     <ClInclude Include="..\..\source\oldmp\src\oldnet.h" />
     <ClInclude Include="..\..\source\oldmp\src\osdcmds.h" />
     <ClInclude Include="..\..\source\oldmp\src\osdfuncs.h" />
+    <ClInclude Include="..\..\source\oldmp\src\player.h" />
     <ClInclude Include="..\..\source\oldmp\src\premap.h" />
     <ClInclude Include="..\..\source\oldmp\src\quotes.h" />
     <ClInclude Include="..\..\source\oldmp\src\rts.h" />

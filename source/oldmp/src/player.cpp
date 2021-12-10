@@ -4723,7 +4723,7 @@ void P_ProcessInput(int snum)
 
     // Shrinking code
 
-    floorZOffset = 40;
+    floorZOffset = PLAYER_ZOFF_NORMAL;
 
     if (psectlotag == ST_2_UNDERWATER)
     {
@@ -4877,14 +4877,15 @@ void P_ProcessInput(int snum)
 
         if (psectlotag == ST_1_ABOVE_WATER && p->spritebridge == 0)
         {
+            // Sinking into water
             if (shrunk == 0)
             {
-                floorZOffset = 34;
+                floorZOffset = PLAYER_ZOFF_WATER;
                 p->pycount += 32;
                 p->pycount &= 2047;
                 p->pyoff = sintable[p->pycount] >> 6;
             }
-            else floorZOffset = 12;
+            else floorZOffset = PLAYER_ZOFF_SHRUNK;
 
             if (shrunk == 0 && trueFloorDist <= PHEIGHT && !oldnet_predicting)
             {
@@ -4943,11 +4944,11 @@ void P_ProcessInput(int snum)
             }
         }
 
-        if (p->pos.z < (floorZ - (floorZOffset << 8)))  //falling
+        if (p->pos.z < (floorZ - floorZOffset))  //falling
         {
             // not jumping or crouching
-            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && p->on_ground && (sector[psect].floorstat & 2) && p->pos.z >= (floorZ - (floorZOffset << 8) - (16 << 8)))
-                p->pos.z = floorZ - (floorZOffset << 8);
+            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && p->on_ground && (sector[psect].floorstat & 2) && p->pos.z >= (floorZ - floorZOffset - ZOFFSET2))
+                p->pos.z = floorZ - floorZOffset;
             else
             {
                 p->on_ground = 0;
@@ -4963,7 +4964,7 @@ void P_ProcessInput(int snum)
                         p->scream_voice = A_PlaySound(DUKE_SCREAM, playerSprite);
                 }
 
-                if ((p->pos.z + p->vel.z) >= (floorZ - (floorZOffset << 8)) && p->cursectnum >= 0)   // hit the ground
+                if ((p->pos.z + p->vel.z) >= (floorZ - floorZOffset) && p->cursectnum >= 0)   // hit the ground
                 {
                     if (sector[p->cursectnum].lotag != ST_1_ABOVE_WATER)
                     {
@@ -5004,22 +5005,27 @@ void P_ProcessInput(int snum)
 
             p->on_ground = 1;
 
-            if (floorZOffset == 40)
+            if (floorZOffset == PLAYER_ZOFF_NORMAL)
             {
                 //Smooth on the ground
+                int Zdiff = ((floorZ - floorZOffset) - p->pos.z) >> 1;
 
-                floorZOffset = ((floorZ - (floorZOffset << 8)) - p->pos.z) >> 1;
-                if (klabs(floorZOffset) < 256) floorZOffset = 0;
-                p->pos.z += floorZOffset;
+                if (klabs(Zdiff) < 256)
+                    Zdiff = 0;
+                else if (!shrunk)
+                    p->pos.z += Zdiff;
+
                 p->vel.z -= 768;
-                if (p->vel.z < 0) p->vel.z = 0;
+
+                if (p->vel.z < 0)
+                    p->vel.z = 0;
             }
             else if (p->jumping_counter == 0)
             {
-                p->pos.z += ((floorZ - (floorZOffset << 7)) - p->pos.z) >> 1; //Smooth on the water
+                p->pos.z += ((floorZ - (floorZOffset >> 1)) - p->pos.z) >> 1; //Smooth on the water
                 if (p->on_warping_sector == 0 && p->pos.z > floorZ - (16 << 8))
                 {
-                    p->pos.z = floorZ - (16 << 8);
+                    p->pos.z = floorZ - PLAYER_MINWATERZDIST;
                     p->vel.z >>= 1;
                 }
             }
