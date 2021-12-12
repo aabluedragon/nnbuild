@@ -191,6 +191,7 @@
     <ClInclude Include="..\..\source\oldmp\src\gamedefs.h" />
     <ClInclude Include="..\..\source\oldmp\src\global.h" />
     <ClInclude Include="..\..\source\oldmp\src\grpscan.h" />
+    <ClInclude Include="..\..\source\oldmp\src\inv.h" />
     <ClInclude Include="..\..\source\oldmp\src\keys.h" />
     <ClInclude Include="..\..\source\oldmp\src\macros.h" />
     <ClInclude Include="..\..\source\oldmp\src\mapster32.h" />

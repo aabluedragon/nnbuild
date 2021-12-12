@@ -46,27 +46,6 @@ extern int CheckPlayerInSector(int sect);
 extern int __fastcall A_FindPlayer(spritetype *s,int *d);
 extern int P_FindOtherPlayer(int p,int *d);
 
-// player.h
-void playerColor_init(void);
-void playerColor_add(const char* name, int palnum);
-void playerColor_delete(int palnum);
-uint8_t playerColor_getNextColor(uint8_t palnum, uint8_t useauto);
-uint8_t playerColor_getPreviousColor(uint8_t palnum, uint8_t useauto);
-
-void P_SetWeaponGamevars(int playerNum, const DukePlayer_t* const pPlayer);
-void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer);
-int Proj_GetDamage(projectile_t* pProj);
-
-int P_GetHudPal(const DukePlayer_t *pPlayer);
-int P_GetKneePal(const DukePlayer_t* pPlayer);
-
-void P_DisplayScubaMask(int snum);
-void P_DisplayWeapon(int snum);
-void P_GetInput(int snum, bool uncapped);
-void P_DropWeapon(DukePlayer_t* p);
-void P_ProcessInput(int snum);
-// --------
-
 extern void G_DoSectorAnimations(void);
 extern int32_t* G_GetAnimationPointer(int32_t index);
 extern int GetAnimationGoal(int16_t target, int8_t type);

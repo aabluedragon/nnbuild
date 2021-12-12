@@ -4612,7 +4612,7 @@ void P_ProcessInput(int snum)
 
         updatesector(p->pos.x, p->pos.y, &p->cursectnum);
 
-        pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 128L, (4L << 8), (20L << 8), CLIPMASK0);
+        pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 128L, (4L << 8), PLAYER_STEP_HEIGHT, CLIPMASK0);
 
         if (floorZ > ceilZ + (16 << 8) && s->pal != 1)
             p->rotscrnang = (p->dead_flag + ((floorZ + p->pos.z) >> 7)) & 2047;
@@ -5263,7 +5263,7 @@ HORIZONLY:
 
         int moveResult = clipmove_old(&p->pos.x, &p->pos.y,
             &p->pos.z, &p->cursectnum,
-            p->vel.x, p->vel.y, 164L, (4L << 8), (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : (20L << 8), CLIPMASK0);
+            p->vel.x, p->vel.y, 164L, (4L << 8), (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : PLAYER_STEP_HEIGHT, CLIPMASK0);
 
         if (p->jetpack_on == 0 && psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
@@ -5282,8 +5282,7 @@ HORIZONLY:
             {
                 p->pycount += 52;
                 p->pycount &= 2047;
-                p->pyoff =
-                    klabs(s->xvel * sintable[p->pycount]) / 1596;
+                p->pyoff = klabs(s->xvel * sintable[p->pycount]) / 1596;
             }
         }
         else if (psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER)

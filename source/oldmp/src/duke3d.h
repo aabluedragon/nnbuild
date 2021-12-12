@@ -253,6 +253,7 @@ extern const char* CommandName;
 #include "sounds.h"
 #include "soundefs.h"
 #include "music.h"
+#include "inv.h"
 #include "player.h"
 
 #ifdef __cplusplus
@@ -295,8 +296,6 @@ extern int g_scriptVersion, g_Shareware, g_gameType;
 #define    ALT_IS_PRESSED ( KB_KeyPressed( sc_RightAlt ) || KB_KeyPressed( sc_LeftAlt ) )
 #define    SHIFTS_IS_PRESSED ( KB_KeyPressed( sc_RightShift ) || KB_KeyPressed( sc_LeftShift ) )
 #define    RANDOMSCRAP(s, i) A_InsertSprite(s->sectnum,s->x+(krand()&255)-128,s->y+(krand()&255)-128,s->z-(8<<8)-(krand()&8191),SCRAP6+(krand()&15),-8,48,48,krand()&2047,(krand()&63)+64,-512-(krand()&2047),i,5)
-
-#define    PHEIGHT (38<<8)
 
 enum GameMode_t {
     MODE_MENU       = 1,
@@ -358,34 +357,6 @@ enum PlayerActionFlags_t {
     palive          = 16384,
     pdead           = 32768,
     pfacing         = 65536
-};
-
-enum InventoryItem_t {
-    GET_STEROIDS,
-    GET_SHIELD,
-    GET_SCUBA,
-    GET_HOLODUKE,
-    GET_JETPACK,
-    GET_ACCESS   = 6,
-    GET_HEATS,
-    GET_FIRSTAID = 9,
-    GET_BOOTS
-};
-
-enum DukeWeapon_t {
-    KNEE_WEAPON,
-    PISTOL_WEAPON,
-    SHOTGUN_WEAPON,
-    CHAINGUN_WEAPON,
-    RPG_WEAPON,
-    HANDBOMB_WEAPON,
-    SHRINKER_WEAPON,
-    DEVISTATOR_WEAPON,
-    TRIPBOMB_WEAPON,
-    FREEZE_WEAPON,
-    HANDREMOTE_WEAPON,
-    GROW_WEAPON,
-    MAX_WEAPONS
 };
 
 enum
@@ -587,99 +558,6 @@ typedef struct {
 extern Team_t teams[MAXPLAYERS];
 extern int numTeams;
 
-extern uint8_t numPlayerColors;
-extern uint8_t allowedColors[(MAXPALOOKUPS + CHAR_BIT - 1) / CHAR_BIT];
-extern char pColorNames[MAXPALOOKUPS][32];
-
-#define TEST_ALLOWEDCOLOR(pal) (TEST(allowedColors[(pal) >> 3], 1 << ((pal) & 7)))
-#define RESET_ALLOWEDCOLOR(pal) (RESET(allowedColors[(pal) >> 3], 1 << ((pal) & 7)))
-#define SET_ALLOWEDCOLOR(pal) (SET(allowedColors[(pal) >> 3], 1 << ((pal) & 7)))
-
-static inline uint8_t playerColor_getValidPal(int palnum) { return TEST_ALLOWEDCOLOR(palnum) ? palnum : 0; }
-
-extern int fricxv,fricyv;
-
-typedef struct {
-    vec3_t pos, opos, vel;
-
-    int zoom, exitx, exity;
-    int invdisptime;
-    int bobposx, bobposy, pyoff, opyoff;
-    int last_pissed_time, truefz, truecz;
-    int player_par;
-    int bobcounter, weapon_sway;
-    int randomflamex, crack_time;
-
-    fix16_t q16horiz, q16horizoff, oq16horiz, oq16horizoff;
-    fix16_t q16ang, oq16ang, q16angvel;
-
-    unsigned int interface_toggle_flag;
-
-    palette_t pals;
-
-    int max_secret_rooms, secret_rooms, actors_killed;
-    int runspeed, movement_lock, team;
-    int max_player_health, max_shield_amount, max_ammo_amount[MAX_WEAPONS];
-
-    int scream_voice;
-
-    int loogiex[64], loogiey[64], numloogs, loogcnt;
-
-    char palette;
-
-    short sbs, sound_pitch;
-
-    short cursectnum, look_ang, last_extra, subweapon;
-    short ammo_amount[MAX_WEAPONS], wackedbyactor, frag, fraggedself;
-
-    short curr_weapon, last_weapon, last_used_weapon, wantweaponfire;
-    short holoduke_amount, newowner, hurt_delay, hbomb_hold_delay;
-    short jumping_counter, airleft;
-    short fta, ftq, access_wallnum, access_spritenum;
-    short weapon_ang, firstaid_amount;
-    short somethingonplayer, on_crane, i, one_parallax_sectnum;
-    short over_shoulder_on, random_club_frame;
-    short one_eighty_count, cheat_phase;
-    short dummyplayersprite, extra_extra8, quick_kick, last_quick_kick;
-    short heat_amount, actorsqu, timebeforeexit, customexitsound;
-
-    short weaprecs[16], weapreccnt;
-
-
-    short orotscrnang, rotscrnang, dead_flag, show_empty_weapon;   // JBF 20031220: added orotscrnang
-    short scuba_amount, jetpack_amount, steroids_amount, shield_amount;
-    short holoduke_on, pycount, weapon_pos, frag_ps;
-    short transporter_hold, last_full_weapon, footprintshade, boot_amount;
-
-    uint8_t toggle_key_flag;
-    uint8_t kickback_pic, knuckle_incs, knee_incs, access_incs, fist_incs, tipincs;
-
-    char aim_mode, auto_aim, weaponswitch;
-
-    char gm, on_warping_sector, footprintcount;
-    char hbomb_on, jumping_toggle, rapid_fire_hold, on_ground;
-    char inven_icon, buttonpalette;
-
-    char jetpack_on, spritebridge, lastrandomspot;
-    char scuba_on, footprintpal, heat_on;
-
-    char  holster_weapon, falling_counter;
-    char  gotweapon[MAX_WEAPONS], refresh_inventory;
-
-    char walking_snd_toggle, palookup, hard_landing;
-    char return_to_center, reloading, name[32];
-
-    int8_t padding_[1];
-} DukePlayer_t;
-
-static inline void P_PalFrom(DukePlayer_t* pPlayer, uint8_t f, uint8_t r, uint8_t g, uint8_t b)
-{
-    pPlayer->pals.f = f;
-    pPlayer->pals.r = r;
-    pPlayer->pals.g = g;
-    pPlayer->pals.b = b;
-}
-
 #define MAXQUOTELEN 128
 #define MAXUSERQUOTES 6
 #define USERQUOTE_LEFTOFFSET 5
@@ -688,12 +566,6 @@ extern int quotebot, quotebotgoal; // game.c
 
 void X_ScriptInfo(void);
 extern intptr_t *actorLoadEventScrptr[MAXTILES];
-
-typedef struct {
-    int workslike, extra, cstat, extra_rand, hitradius, range;
-    short spawns, sound, isound, vel, decal, trail, tnum, drop, clipdist, offset, bounces, bsound, toffset;
-    signed char sxrepeat, syrepeat, txrepeat, tyrepeat, shade, xrepeat, yrepeat, pal, velmult;
-} projectile_t;
 
 typedef struct {
 /*    int x;
