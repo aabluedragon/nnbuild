@@ -1320,6 +1320,10 @@ static void prelevel(int g)
     P_PrepForNewLevel(0, g);
     G_SetupGlobalPsky();
 
+    // Reset actor vars for all sprites, regardless of statnum.
+    for (int i = 0; i < Numsprites; i++)
+        A_ResetVars(i);
+
     VM_OnEvent(EVENT_PRELEVEL);
 
     int missedCloudSectors = 0;
@@ -1368,7 +1372,6 @@ static void prelevel(int g)
     // NOTE: must be safe loop because callbacks could delete sprites.
     for (int nextSprite, SPRITES_OF_STAT_SAFE(STAT_DEFAULT, i, nextSprite))
     {
-        A_ResetVars(i);
         A_LoadActor(i);
         VM_OnEvent(EVENT_LOADACTOR, i);
 
@@ -2064,7 +2067,6 @@ int G_EnterLevel(int gameMode)
     G_ResetTimers(0);  // Here we go
 
     Bmemcpy(currentboardfilename, boardfilename, BMAX_PATH);
-    Bmemcpy(previousboardfilename, boardfilename, BMAX_PATH);
 
     G_CheckIfStateless();
 
