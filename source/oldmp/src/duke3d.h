@@ -619,8 +619,6 @@ enum GametypeFlags_t {
 // Returns true if attacking a friendly while friendly fire is disabled.
 #define FFIRE_CHECK(p1,p2) (!ud.ffire && (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY) || (GTFLAGS(GAMETYPE_TDM) && (g_player[p1].ps->team == g_player[p2].ps->team))))
 
-#define HEAD_ABOVE_TROR_WATER(x) ((yax_getbunch(g_player[x].ps->cursectnum, YAX_FLOOR) != -1) && (sector[g_player[x].ps->cursectnum].lotag & 0x7ff) == 1)
-
 extern int g_lastSaveSlot;
 extern int g_restorePalette;
 

@@ -7184,12 +7184,19 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             }
 
             // CLAMP PLAYER SPRITE Y TO FLOOR
-            if (g_player[p].ps->on_crane == -1 && ((sector[s->sectnum].lotag&0x7ff) != 1) && !HEAD_ABOVE_TROR_WATER(p))
+            if (g_player[p].ps->on_crane == -1)
             {
-                l = s->z-actor[g_player[p].ps->i].floorz+(3<<8);
-                if (l > 1024 && t->yrepeat > 32 && s->extra > 0)
-                    t->yoffset = (signed char)(l/(t->yrepeat<<2));
-                else t->yoffset=0;
+                int16_t lotag = (sector[s->sectnum].lotag & 0x7ff);
+                int32_t floorZ = actor[g_player[p].ps->i].floorz;
+                bool noSE7water = ((lotag == ST_1_ABOVE_WATER) && A_CheckNoSE7Water((uspriteptr_t)s, s->sectnum, lotag, NULL));
+
+                if (noSE7water || lotag != ST_1_ABOVE_WATER)
+                {
+                    int offset = s->z - floorZ + (3 << 8);
+                    if (offset > 1024 && t->yrepeat > 32 && s->extra > 0)
+                        t->yoffset = (int8_t)tabledivide32_noinline(offset, t->yrepeat << 2);
+                    else t->yoffset = 0;
+                }
             }
 
             if (g_player[p].ps->newowner > -1)

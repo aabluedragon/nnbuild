@@ -4448,6 +4448,25 @@ static void P_HandleDamagingFloors(int snum)
     }
 }
 
+static bool P_DoSpriteBridge(int32_t spriteNum, DukePlayer_t* pPlayer)
+{
+    if ((sprite[spriteNum].cstat & 33) == 33)
+    {
+        pPlayer->footprintcount = 0;
+        pPlayer->spritebridge = 1;
+        pPlayer->sbs = spriteNum;
+        return true;
+    }
+    else if (A_CheckEnemySprite(&sprite[spriteNum]) && sprite[spriteNum].xrepeat > 24 && klabs(sprite[pPlayer->i].z - sprite[spriteNum].z) < (84 << 8))
+    {
+        int ang = getangle(sprite[spriteNum].x - pPlayer->pos.x, sprite[spriteNum].y - pPlayer->pos.y);
+        pPlayer->vel.x -= sintable[(ang + 512) & 2047] << 4;
+        pPlayer->vel.y -= sintable[ang & 2047] << 4;
+    }
+
+    return false;
+}
+
 void P_ProcessInput(int snum)
 {
     DukePlayer_t* p = g_player[snum].ps;
@@ -4468,6 +4487,7 @@ void P_ProcessInput(int snum)
     short tempsect;
 
     int doubvel;
+    bool doFloatbob = false;
 
     X_OnEvent(EVENT_PROCESSINPUT, playerSprite, snum, -1);
 
@@ -4499,7 +4519,23 @@ void P_ProcessInput(int snum)
     if ((lowZhit & 49152) == 16384 && psectlotag == ST_1_ABOVE_WATER && trueFloorDist > PHEIGHT + (16 << 8))
         psectlotag = 0;
 
-    actor[playerSprite].floorz = floorZ;
+    // HACK HACK HACK: Big brutal hack to adjust player z if TROR water is too shallow.
+    bool noSE7Water = false;
+    int32_t waterFloor = 0;
+    int32_t waterZhit = 0;
+    int32_t otherSect;
+    if ((psectlotag == ST_1_ABOVE_WATER) && A_CheckNoSE7Water((uspriteptr_t)s, p->cursectnum, psectlotag, &otherSect))
+    {
+        int32_t dummy;
+        getzrange(&p->pos, otherSect, &dummy, &dummy, &waterFloor, &waterZhit, 163L, CLIPMASK0);
+
+        // HACK: Force truefz to the floor of the other sector. Need this to prevent camera bullshit.
+        yax_getzsofslope(otherSect, p->pos.x, p->pos.y, &dummy, &p->truefz);
+        noSE7Water = true;
+    }
+
+    // HACK: Force actor floorz to waterFloor in TROR water to prevent sprite fuckery.
+    actor[playerSprite].floorz = (noSE7Water) ? waterFloor : floorZ;
     actor[playerSprite].ceilingz = ceilZ;
 
     p->oq16horiz = p->q16horiz;
@@ -4546,21 +4582,24 @@ void P_ProcessInput(int snum)
     if (lowZhit >= 0 && (lowZhit & 49152) == 49152)
     {
         int spr = lowZhit & (MAXSPRITES - 1);
-
-        if ((sprite[spr].cstat & 33) == 33)
+        if (P_DoSpriteBridge(spr, p))
         {
-            p->footprintcount = 0;
-
-            psectlotag = 0;
-            p->spritebridge = 1;
-            p->sbs = spr;
+            auto spr_sect_lotag = sector[sprite[spr].sectnum].lotag;
+            if (spr_sect_lotag != ST_2_UNDERWATER) // Underwater sprite bridges shouldn't clear tag.
+            {
+                psectlotag = 0;
+                if (noSE7Water) // HACK: If we're on a sprite bridge, we're not doing TROR water, so bail out of that, shall we?
+                {
+                    noSE7Water = false;
+                    actor[playerSprite].floorz = floorZ;
+                }
+            }
         }
-        else if (A_CheckEnemySprite(&sprite[spr]) && sprite[spr].xrepeat > 24 && klabs(s->z - sprite[spr].z) < (84 << 8))
-        {
-            int ang = getangle(sprite[spr].x - p->pos.x, sprite[spr].y - p->pos.y);
-            p->vel.x -= sintable[(ang + 512) & 2047] << 4;
-            p->vel.y -= sintable[ang & 2047] << 4;
-        }
+    }
+    else if (waterZhit >= 0 && (waterZhit & 49152) == 49152)
+    {
+        int spr = waterZhit & (MAXSPRITES - 1);
+        P_DoSpriteBridge(spr, p);
     }
 
     if (s->extra > 0) P_IncurDamage(p);
@@ -4729,10 +4768,7 @@ void P_ProcessInput(int snum)
     {
         // under water
         p->jumping_counter = 0;
-
-        p->pycount += 32;
-        p->pycount &= 2047;
-        p->pyoff = sintable[p->pycount] >> 7;
+        doFloatbob = true;
 
         if (!A_CheckSoundPlaying(playerSprite, DUKE_UNDERWATER))
             A_PlaySound(DUKE_UNDERWATER, playerSprite);
@@ -4818,9 +4854,7 @@ void P_ProcessInput(int snum)
         p->hard_landing = 0;
         p->falling_counter = 0;
 
-        p->pycount += 32;
-        p->pycount &= 2047;
-        p->pyoff = sintable[p->pycount] >> 7;
+        doFloatbob = true;
 
         if (p->jetpack_on < 11)
         {
@@ -4875,19 +4909,17 @@ void P_ProcessInput(int snum)
         if (p->scuba_on == 1)
             p->scuba_on = 0;
 
-        if (psectlotag == ST_1_ABOVE_WATER && p->spritebridge == 0)
+        if (psectlotag == ST_1_ABOVE_WATER) //&& p->spritebridge == 0)
         {
             // Sinking into water
             if (shrunk == 0)
             {
                 floorZOffset = PLAYER_ZOFF_WATER;
-                p->pycount += 32;
-                p->pycount &= 2047;
-                p->pyoff = sintable[p->pycount] >> 6;
+                doFloatbob = true;
             }
             else floorZOffset = PLAYER_ZOFF_SHRUNK;
 
-            if (shrunk == 0 && trueFloorDist <= PHEIGHT && !oldnet_predicting)
+            if (shrunk == 0 && (noSE7Water || (trueFloorDist <= PHEIGHT)) && !oldnet_predicting)
             {
                 if (p->on_ground == 1)
                 {
@@ -5030,6 +5062,13 @@ void P_ProcessInput(int snum)
                 }
             }
 
+            // HACK: If we're in TROR water, and the water is too shallow, clamp and prevent floating bob.
+            if (noSE7Water && (p->pos.z > (waterFloor - PLAYER_ZOFF_NORMAL)))
+            {
+                p->pos.z = waterFloor - PLAYER_ZOFF_NORMAL;
+                doFloatbob = false;
+            }
+
             if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
             {
                 // crouching
@@ -5079,6 +5118,11 @@ void P_ProcessInput(int snum)
                 else
                 {
                     p->vel.z -= (sintable[(2048 - 128 + p->jumping_counter) & 2047]) / 12;
+
+                    // HACK: Prevent eyes from going below TROR water when we try jumping.
+                    if (noSE7Water && (p->pos.z + p->vel.z) > floorZ)
+                        p->vel.z = 0;
+
                     p->jumping_counter += 180;
                     p->on_ground = 0;
                 }
@@ -5100,6 +5144,13 @@ void P_ProcessInput(int snum)
             p->vel.z = 128;
             p->pos.z = ceilZ + (4 << 8);
         }
+    }
+
+    if (doFloatbob)
+    {
+        p->pycount += 32;
+        p->pycount &= 2047;
+        p->pyoff = sintable[p->pycount] >> 7;
     }
 
     // Halt on Kicking/Tripmines/Nukebuttons
@@ -5159,9 +5210,9 @@ void P_ProcessInput(int snum)
 
         int const checkWalkSound = sintable[p->bobcounter & 2047] >> 12;
 
-        if ((trueFloorDist < PHEIGHT + (8 << 8)) && (checkWalkSound == 1 || checkWalkSound == 3))
+        if ((trueFloorDist < PHEIGHT + (8 << 8) || p->spritebridge) && (checkWalkSound == 1 || checkWalkSound == 3))
         {
-            if (p->spritebridge == 0 && p->walking_snd_toggle == 0 && p->on_ground)
+            if (/*p->spritebridge == 0 &&*/ p->walking_snd_toggle == 0 && p->on_ground)
             {
                 int floorPic;
                 switch (psectlotag)
