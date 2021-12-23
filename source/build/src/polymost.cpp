@@ -340,7 +340,7 @@ void gltexapplyprops(void)
 
     gltexfiltermode = clamp(gltexfiltermode, 0, NUMGLFILTERMODES-1);
     buildgl_resetSamplerObjects();
-return;
+
     for (bssize_t i=0; i<=GLTEXCACHEADSIZ-1; i++)
     {
         for (pthtyp *pth=texcache.list[i]; pth; pth=pth->next)
@@ -2456,7 +2456,7 @@ int32_t gloadtile_hi(int32_t dapic, int32_t dapalnum, int32_t facen, hicreplctyp
     int32_t picfillen = kfilelength(filh);
     kclose(filh);	// FIXME: shouldn't have to do this. bug in cache1d.c
 
-    int32_t startticks = timerGetTicks(), gloadtile_willprint = 0;
+    int32_t startticks = timerGetTicks();
 
     char onebitalpha = 1;
     char hasalpha;
@@ -5006,7 +5006,7 @@ float fgetceilzofslope(usectorptr_t sec, float dax, float day)
     auto const wal  = (uwallptr_t)&wall[sec->wallptr];
     auto const wal2 = (uwallptr_t)&wall[wal->point2];
 
-    vec2_t const w = *(vec2_t const *)wal;
+    vec2_t const w = wal->xy;
     vec2_t const d = { wal2->x - w.x, wal2->y - w.y };
 
     int const i = nsqrtasm(uhypsq(d.x,d.y))<<5;
@@ -5024,7 +5024,7 @@ float fgetflorzofslope(usectorptr_t sec, float dax, float day)
     auto const wal  = (uwallptr_t)&wall[sec->wallptr];
     auto const wal2 = (uwallptr_t)&wall[wal->point2];
 
-    vec2_t const w = *(vec2_t const *)wal;
+    vec2_t const w = wal->xy;
     vec2_t const d = { wal2->x - w.x, wal2->y - w.y };
 
     int const i = nsqrtasm(uhypsq(d.x,d.y))<<5;
@@ -8865,7 +8865,8 @@ void polymost_dorotatespritemodel(int32_t sx, int32_t sy, int32_t z, int16_t a, 
         vec3f_t const vec2 = { fglobalposx + (gcosang * vec1.z - gsinang * vec1.x) * 2560.f,
                                fglobalposy + (gsinang * vec1.z + gcosang * vec1.x) * 2560.f,
                                fglobalposz + (vec1.y * (2560.f * 0.8f)) };
-        *(vec3f_t *)&tspr = vec2;
+        // XXX.....
+        *(vec3f_t *)&tspr.xyz = vec2;
         tspr.xrepeat = tspr.yrepeat = 5;
     }
     else
@@ -8978,6 +8979,7 @@ void polymost_dorotatespritemodel(int32_t sx, int32_t sy, int32_t z, int16_t a, 
 
         spriteext[tspr.owner].mdpivot_offset.z = 0;
         spriteext[tspr.owner].mdroll = 0;
+        tspriteptr[maxspritesonscreen] = nullptr;
 
         buildgl_setDisabled(GL_ALPHA_TEST);
         buildgl_setDisabled(GL_BLEND);
@@ -9473,10 +9475,11 @@ void polymost_fillpolygon(int32_t npoints)
 
         if (!(pth->flags & PTH_INDEXED))
             polymost_usePaletteIndexing(false);
+
+        buildgl_bindSamplerObject(0, pth->flags);
     }
 
     polymost_updatePalette();
-    buildgl_bindSamplerObject(0, pth->flags);
     float const f = getshadefactor(globalshade);
 
     uint8_t const maskprops = (globalorientation>>7)&DAMETH_MASKPROPS;

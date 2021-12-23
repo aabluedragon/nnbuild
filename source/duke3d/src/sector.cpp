@@ -3036,7 +3036,7 @@ CHECKINV1:
                         playerBits |= BIT(SK_HOLSTER);
                         pPlayer->weapon_pos = WEAPON_POS_LOWER;
                     }
-                    else if ((uint32_t)weaponNum < MAX_WEAPONS && (pPlayer->gotweapon & (1<<weaponNum)) && (uint32_t)pPlayer->curr_weapon != weaponNum)
+                    else if ((pPlayer->gotweapon & (1<<weaponNum)) && (uint32_t)pPlayer->curr_weapon != weaponNum)
                         switch (weaponNum)
                         {
                         case PISTOL_WEAPON:
@@ -3195,7 +3195,7 @@ int32_t A_CheckHitSprite(int spriteNum, int16_t *hitSprite)
         zOffset = (39 << 8);
 
     SZ(spriteNum) -= zOffset;
-    hitscan((const vec3_t *)&sprite[spriteNum], SECT(spriteNum), sintable[(SA(spriteNum) + 512) & 2047],
+    hitscan(&sprite[spriteNum].xyz, SECT(spriteNum), sintable[(SA(spriteNum) + 512) & 2047],
             sintable[SA(spriteNum) & 2047], 0, &hitData, CLIPMASK1);
     SZ(spriteNum) += zOffset;
 

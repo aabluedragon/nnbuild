@@ -2028,7 +2028,7 @@ static void M32_MoveFX(void)
             {
                 if ((g_sounds[s->lotag].m & SF_MSFX))
                 {
-                    x = dist((spritetype *)&pos,s);
+                    x = dist(&pos,s);
                     if (x < ht && !testbit(g_ambiencePlaying, i) && FX_VoiceAvailable(g_sounds[s->lotag].pr-1))
                     {
                         char om = g_sounds[s->lotag].m;
@@ -2037,7 +2037,7 @@ static void M32_MoveFX(void)
                             for (j = headspritestat[0]; j >= 0; j = nextspritestat[j])
                             {
                                 if (s->picnum == MUSICANDSFX && j != i && sprite[j].lotag < 999 &&
-                                        testbit(g_ambiencePlaying, j) && dist(&sprite[j],(spritetype *)&pos) > x)
+                                        testbit(g_ambiencePlaying, j) && dist(&sprite[j],&pos) > x)
                                 {
                                     S_StopEnvSound(sprite[j].lotag,j);
                                     break;
@@ -8493,7 +8493,10 @@ static int osdcmd_artdump(osdcmdptr_t parm)
         last = Batol(parm->parms[1]);
 
     if (first >= MAXUSERTILES || last >= MAXUSERTILES)
+    {
+        Bfclose(f);
         return OSDCMD_SHOWHELP;
+    }
 
     for (uint32_t i = last; i > first; --i)
         if (tileLoad(i))

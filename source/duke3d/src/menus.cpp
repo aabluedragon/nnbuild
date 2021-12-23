@@ -1294,6 +1294,10 @@ static MenuEntry_t ME_SOUND_SAMPLINGRATE = MAKE_MENUENTRY( "Sample rate:", &MF_R
 static MenuOption_t MEO_SOUND_OPL3STEREO = MAKE_MENUOPTION(&MF_Redfont, &MEOS_NoYes, &opl3stereo);
 static MenuEntry_t ME_SOUND_OPL3STEREO = MAKE_MENUENTRY( "OPL3 stereo mode:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_SOUND_OPL3STEREO, Option );
 
+static MenuRangeFloat_t MEO_SOUND_OPL3AMP
+= MAKE_MENURANGE(&AL_PostAmp, &MF_Redfont, 1.f, 6.f, 6.f, 21, DisplayTypeInteger | EnforceIntervals);
+static MenuEntry_t ME_SOUND_OPL3AMP = MAKE_MENUENTRY("OPL3 boost:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_SOUND_OPL3AMP, RangeFloat);
+
 #ifdef FORMAT_UPGRADE_ELIGIBLE
 static MenuOption_t MEO_SOUND_EXTMUSIC = MAKE_MENUOPTION(&MF_Redfont, &MEOS_NoYes, &extmusic);
 static MenuEntry_t  ME_SOUND_EXTMUSIC  = MAKE_MENUENTRY("Load OGG/FLAC music:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_SOUND_EXTMUSIC, Option);
@@ -1362,6 +1366,7 @@ static MenuEntry_t *MEL_SOUND_DEVSETUP[] = {
 #ifdef __linux__
     &ME_SOUND_ALSADEVICE,
 #endif
+    &ME_SOUND_OPL3AMP,
     &ME_SOUND_OPL3STEREO,
     &ME_SOUND_SF2,
 #ifdef FORMAT_UPGRADE_ELIGIBLE
@@ -2507,11 +2512,13 @@ static void Menu_Pre(MenuID_t cm)
         MenuEntry_HideOnCondition(&ME_SOUND_ALSADEVICE, musicdevice != ASS_ALSA);
 #endif
         MenuEntry_DisableOnCondition(&ME_SOUND_OPL3STEREO, !ud.config.MusicToggle);
+        MenuEntry_DisableOnCondition(&ME_SOUND_OPL3AMP, !ud.config.MusicToggle);
         MenuEntry_DisableOnCondition(&ME_SOUND_SF2, !ud.config.MusicToggle);
 #ifdef FORMAT_UPGRADE_ELIGIBLE
         MenuEntry_DisableOnCondition(&ME_SOUND_EXTMUSIC, !ud.config.MusicToggle);
 #endif
         MenuEntry_HideOnCondition(&ME_SOUND_OPL3STEREO, musicdevice != ASS_OPL3);
+        MenuEntry_HideOnCondition(&ME_SOUND_OPL3AMP, musicdevice != ASS_OPL3);
         MenuEntry_HideOnCondition(&ME_SOUND_SF2, musicdevice != ASS_SF2);
 #endif
         MenuEntry_DisableOnCondition(&ME_SOUND_RESTART, soundrate == ud.config.MixRate &&
@@ -3323,6 +3330,7 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t* entry, const vec2_t origin)
                 "Marcus Herbert",    // "rhoenie" - OS X compatibility work
                 "Matthew Palmer",    // "Usurper" - testing and eduke32.com domain
                 "Matt Saettler",     // "Matteus" - NAM, WWII GI, DOS EDuke 2.0 enhancements
+                "Mitchell Richters", // "mjr4077au" - audiolib ALSA improvements
                 "NY00123",           // Linux / SDL patches, engine version compatibility
                 "Ozkan Sezer",       // SDL/GTK version checking improvements
                 "Peter Green",       // "Plugwash" - dynamic remapping, custom gametypes
@@ -3331,7 +3339,6 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t* entry, const vec2_t origin)
                 "Ryan Gordon",       // "icculus" - icculus.org Duke3D port sound code
                 "Stephen Anthony",   // early 64-bit porting work
                 "tueidj",            // Wii port
-                nullptr,
             };
             EDUKE32_STATIC_ASSERT(ARRAY_SIZE(body) % 3 == 0);
             static const char *footer[] =

@@ -202,7 +202,7 @@ int32_t A_GetHitscanRange(int spriteNum)
     hitdata_t hitData;
 
     SZ(spriteNum) -= zOffset;
-    hitscan((const vec3_t *)&sprite[spriteNum], SECT(spriteNum), sintable[(SA(spriteNum) + 512) & 2047],
+    hitscan(&sprite[spriteNum].xyz, SECT(spriteNum), sintable[(SA(spriteNum) + 512) & 2047],
             sintable[SA(spriteNum) & 2047], 0, &hitData, CLIPMASK1);
     SZ(spriteNum) += zOffset;
 
@@ -374,12 +374,8 @@ static int GetAutoAimAng(int spriteNum, int playerNum, int projecTile, int zAdju
         auto const pSprite = (uspriteptr_t)&sprite[returnSprite];
         int        zCenter = 2 * (pSprite->yrepeat * tilesiz[pSprite->picnum].y) + zAdjust;
 
-#ifndef EDUKE32_STANDALONE
-        if (!FURY && aimFlags &&
-            ((pSprite->picnum >= GREENSLIME && pSprite->picnum <= GREENSLIME + 7) || pSprite->picnum == ROTATEGUN || pSprite->cstat & CSTAT_SPRITE_YCENTER))
-#else
-        if (aimFlags && pSprite->cstat & CSTAT_SPRITE_YCENTER)
-#endif
+        if (aimFlags &&
+            (STANDALONE_EVAL(false, (pSprite->picnum >= GREENSLIME && pSprite->picnum <= GREENSLIME + 7) || pSprite->picnum == ROTATEGUN) || pSprite->cstat & CSTAT_SPRITE_YCENTER))
             zCenter -= ZOFFSET3;
 
         int spriteDist = safeldist(g_player[playerNum].ps->i, &sprite[returnSprite]);
@@ -3270,10 +3266,10 @@ void P_GetInput(int const playerNum)
     {
         if (!localInput.svel)
         {
-            if (BUTTON(gamefunc_Turn_Left) && !(pPlayer->movement_lock & 4) && !localInput.svel)
+            if (BUTTON(gamefunc_Turn_Left) && !(pPlayer->movement_lock & 4))
                 input.svel = keyMove;
 
-            if (BUTTON(gamefunc_Turn_Right) && !(pPlayer->movement_lock & 8) && !localInput.svel)
+            if (BUTTON(gamefunc_Turn_Right) && !(pPlayer->movement_lock & 8))
                 input.svel = -keyMove;
         }
     }
@@ -4324,9 +4320,9 @@ static void P_ProcessWeapon(int playerNum)
                         if (pPlayer->ammo_amount[pPlayer->curr_weapon] > 0)
                         {
                             hitdata_t hitData;
-
-                            hitscan((const vec3_t *)pPlayer, pPlayer->cursectnum, sintable[(fix16_to_int(pPlayer->q16ang) + 512) & 2047],
-                                    sintable[fix16_to_int(pPlayer->q16ang) & 2047], fix16_to_int(F16(100) - pPlayer->q16horiz - pPlayer->q16horizoff) * 32, &hitData,
+                            int const pq16ang = fix16_to_int(pPlayer->q16ang);
+                            hitscan((const vec3_t *)pPlayer, pPlayer->cursectnum, sintable[(pq16ang + 512) & 2047],
+                                    sintable[pq16ang & 2047], fix16_to_int(F16(100) - pPlayer->q16horiz - pPlayer->q16horizoff) * 32, &hitData,
                                     CLIPMASK1);
 
                             if ((hitData.sect < 0 || hitData.sprite >= 0) ||
@@ -4448,12 +4444,12 @@ static void P_ProcessWeapon(int playerNum)
                         pipeBombFwdVel = 140;
                         pipeBombZvel   = -512 - (fix16_to_int(pPlayer->q16horiz + pPlayer->q16horizoff - F16(100)) * 20);
                     }
-
+                    int const pq16ang = fix16_to_int(pPlayer->q16ang);
                     int pipeSpriteNum = A_InsertSprite(pPlayer->cursectnum,
-                                       pPlayer->pos.x+(sintable[(fix16_to_int(pPlayer->q16ang)+512)&2047]>>6),
-                                       pPlayer->pos.y+(sintable[fix16_to_int(pPlayer->q16ang)&2047]>>6),
+                                       pPlayer->pos.x+(sintable[(pq16ang +512)&2047]>>6),
+                                       pPlayer->pos.y+(sintable[pq16ang &2047]>>6),
                                        pPlayer->pos.z,PWEAPON(playerNum, pPlayer->curr_weapon, Shoots),-16,9,9,
-                                       fix16_to_int(pPlayer->q16ang),(pipeBombFwdVel+(pPlayer->hbomb_hold_delay<<5)),pipeBombZvel,pPlayer->i,1);
+                                       pq16ang,(pipeBombFwdVel+(pPlayer->hbomb_hold_delay<<5)),pipeBombZvel,pPlayer->i,1);
 
                     pipeBombType = PIPEBOMB_CONTROL(playerNum);
 
@@ -5390,7 +5386,7 @@ void P_ProcessInput(int playerNum)
                 pPlayer->scream_voice = -1;
             }
 
-            if ((sectorLotag != ST_1_ABOVE_WATER && sectorLotag != ST_2_UNDERWATER) &&
+            if (sectorLotag != ST_1_ABOVE_WATER &&
                 (pPlayer->on_ground == 0 && pPlayer->vel.z > (ACTOR_MAXFALLINGZVEL >> 1)))
             {
                 pPlayer->hard_landing = pPlayer->vel.z >> 10;
@@ -5494,7 +5490,7 @@ void P_ProcessInput(int playerNum)
             }
         }
 
-        if ((sectorLotag != ST_2_UNDERWATER || ceilZ != pPlayer->truecz) && pPlayer->jumping_counter && pPlayer->pos.z <= (ceilZ + PMINHEIGHT + 128))
+        if (ceilZ != pPlayer->truecz && pPlayer->jumping_counter && pPlayer->pos.z <= (ceilZ + PMINHEIGHT + 128))
         {
             pPlayer->jumping_counter = 0;
             if (pPlayer->vel.z < 0)

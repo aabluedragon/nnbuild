@@ -1033,6 +1033,7 @@ const char *EventNames[MAXEVENTS] =
     "EVENT_CAPIR",
     "EVENT_PREUPDATEANGLES",
     "EVENT_POSTUPDATEANGLES",
+    "EVENT_GETBONUSTILE",
 };
 
 uint8_t *bitptr; // pointer to bitmap of which bytecode positions contain pointers
@@ -1425,7 +1426,7 @@ static int32_t parse_hex_constant(const char *hexnum)
 
     if (EDUKE32_PREDICT_FALSE(x > UINT32_MAX))
     {
-        initprintf(g_scriptFileName, ":", g_lineNumber, ": warning: number 0x", hex(x), " truncated to 32 bits.\n");
+        buildprint(g_scriptFileName, ":", g_lineNumber, ": warning: number 0x", hex(x), " truncated to 32 bits.\n");
         g_warningCnt++;
     }
 
