@@ -287,12 +287,13 @@ static MenuOptionSet_t MEOS_NoYes = MAKE_MENUOPTIONSET( MEOSN_NoYes, NULL, 0x3 )
 static char const *MEOSN_YesNo[] = { "Yes", "No", };
 static MenuOptionSet_t MEOS_YesNo = MAKE_MENUOPTIONSET( MEOSN_YesNo, NULL, 0x3 );
 
-
 static char MenuGameFuncs[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN];
 static char const *MenuGameFuncNone = "  -None-";
 static char const *MEOSN_Gamefuncs[NUMGAMEFUNCTIONS+1];
 static int32_t MEOSV_Gamefuncs[NUMGAMEFUNCTIONS+1];
 static MenuOptionSet_t MEOS_Gamefuncs = MAKE_MENUOPTIONSET( MEOSN_Gamefuncs, MEOSV_Gamefuncs, 0x1 );
+
+int32_t kbo_type_cvar = 1;
 
 static int g_lookAxis = -1;
 static int g_turnAxis = -1;
@@ -873,7 +874,7 @@ static MenuEntry_t *MEL_DISPLAYSETUP_GL_POLYMER[] = {
 static char const MenuKeyNone[] = "  -";
 static char const *MEOSN_Keys[NUMKEYS];
 
-static MenuCustom2Col_t MEO_KEYBOARDSETUPFUNCS_TEMPLATE = { { NULL, NULL, }, MEOSN_Keys, &MF_Minifont, NUMKEYS, 54<<16, 0 };
+static MenuCustom2Col_t MEO_KEYBOARDSETUPFUNCS_TEMPLATE = { { NULL, NULL, }, MEOSN_Keys, &MF_Minifont, NUMKEYS, 54<<16, 0, -1 };
 static MenuCustom2Col_t MEO_KEYBOARDSETUPFUNCS[NUMGAMEFUNCTIONS];
 static MenuEntry_t ME_KEYBOARDSETUPFUNCS_TEMPLATE = MAKE_MENUENTRY( NULL, &MF_Minifont, &MEF_KBFuncList, &MEO_KEYBOARDSETUPFUNCS_TEMPLATE, Custom2Col );
 static MenuEntry_t ME_KEYBOARDSETUPFUNCS[NUMGAMEFUNCTIONS];
@@ -1931,6 +1932,21 @@ It also initializes some data in loops rather than statically at compile time.
 void Menu_Init(void)
 {
     int32_t i, j, k;
+    int32_t const *init_keybind_order = NULL;
+
+    // always prefer custom order, defined by DEF script
+    if (keybind_order_custom[0] >= 0)
+        init_keybind_order = keybind_order_custom;
+    else
+    {
+        // else, change based on cvar
+        if (kbo_type_cvar == 1)
+            init_keybind_order = keybind_order_modern;
+        else
+            init_keybind_order = keybind_order_classic;
+    }
+
+    bool do_reorder_keys = (init_keybind_order && init_keybind_order[0] >= 0);
 
     if (FURY)
     {
@@ -1952,6 +1968,7 @@ void Menu_Init(void)
     // prepare gamefuncs and keys
     MEOSN_Gamefuncs[0] = MenuGameFuncNone;
     MEOSV_Gamefuncs[0] = -1;
+
     k = 1;
     for (i = 0; i < NUMGAMEFUNCTIONS; ++i)
     {
@@ -1961,13 +1978,18 @@ void Menu_Init(void)
             if (MenuGameFuncs[i][j] == '_')
                 MenuGameFuncs[i][j] = ' ';
 
-        if (gamefunctions[i][0] != '\0')
+        j = (do_reorder_keys) ? init_keybind_order[i] : i;
+
+        if (j >= 0 && gamefunctions[j][0] != '\0')
         {
-            MEOSN_Gamefuncs[k] = MenuGameFuncs[i];
-            MEOSV_Gamefuncs[k] = i;
+            MEOSN_Gamefuncs[k] = MenuGameFuncs[j];
+            MEOSV_Gamefuncs[k] = j;
             ++k;
         }
     }
+
+    // 4 -- unsorted list
+    MEOS_Gamefuncs.features |= (do_reorder_keys) ? 4 : 0;
     MEOS_Gamefuncs.numOptions = k;
 
     for (i = 1; i < NUMKEYS-1; ++i)
@@ -2198,7 +2220,23 @@ void Menu_Init(void)
         MEO_KEYBOARDSETUPFUNCS[i] = MEO_KEYBOARDSETUPFUNCS_TEMPLATE;
         MEO_KEYBOARDSETUPFUNCS[i].column[0] = &ud.config.KeyboardKeys[i][0];
         MEO_KEYBOARDSETUPFUNCS[i].column[1] = &ud.config.KeyboardKeys[i][1];
+        MEO_KEYBOARDSETUPFUNCS[i].linkIndex = i;
     }
+
+    //reorder entries if defined
+    if (do_reorder_keys)
+    {
+        MenuEntry_t* tempkeyboardfuncs[NUMGAMEFUNCTIONS];
+        for (i = 0; i < NUMGAMEFUNCTIONS; ++i)
+        {
+            if (init_keybind_order[i] >= 0)
+                tempkeyboardfuncs[i] = MEL_KEYBOARDSETUPFUNCS[init_keybind_order[i]];
+            else
+                tempkeyboardfuncs[i] = NULL;
+        }
+        Bmemcpy(MEL_KEYBOARDSETUPFUNCS, tempkeyboardfuncs, NUMGAMEFUNCTIONS * sizeof(MenuEntry_t*));
+    }
+
     M_KEYBOARDKEYS.numEntries = NUMGAMEFUNCTIONS;
     for (i = 0; i < ARRAY_SSIZE(MenuMouseData); ++i)
     {
@@ -3412,10 +3450,13 @@ static void Menu_PreInput(MenuEntry_t *entry)
         {
             auto column = (MenuCustom2Col_t*)entry->entry;
             char key[2];
-            key[0] = ud.config.KeyboardKeys[M_KEYBOARDKEYS.currentEntry][0];
-            key[1] = ud.config.KeyboardKeys[M_KEYBOARDKEYS.currentEntry][1];
+
+            Bassert(column->linkIndex >= 0);
+
+            key[0] = ud.config.KeyboardKeys[column->linkIndex][0];
+            key[1] = ud.config.KeyboardKeys[column->linkIndex][1];
             *column->column[M_KEYBOARDKEYS.currentColumn] = 0xff;
-            CONFIG_MapKey(M_KEYBOARDKEYS.currentEntry, ud.config.KeyboardKeys[M_KEYBOARDKEYS.currentEntry][0], key[0], ud.config.KeyboardKeys[M_KEYBOARDKEYS.currentEntry][1], key[1]);
+            CONFIG_MapKey(column->linkIndex, ud.config.KeyboardKeys[column->linkIndex][0], key[0], ud.config.KeyboardKeys[column->linkIndex][1], key[1]);
             S_PlaySound(KICK_HIT);
             KB_ClearKeyDown(sc_Delete);
         }
@@ -3467,18 +3508,20 @@ static int32_t Menu_PreCustom2ColScreen(MenuEntry_t *entry)
     {
         auto column = (MenuCustom2Col_t*)entry->entry;
 
+        Bassert(column->linkIndex >= 0);
+
         int32_t sc = KB_GetLastScanCode();
         if (sc != sc_None)
         {
             char key[2];
-            key[0] = ud.config.KeyboardKeys[M_KEYBOARDKEYS.currentEntry][0];
-            key[1] = ud.config.KeyboardKeys[M_KEYBOARDKEYS.currentEntry][1];
+            key[0] = ud.config.KeyboardKeys[column->linkIndex][0];
+            key[1] = ud.config.KeyboardKeys[column->linkIndex][1];
 
             S_PlaySound(PISTOL_BODYHIT);
 
             *column->column[M_KEYBOARDKEYS.currentColumn] = sc;
 
-            CONFIG_MapKey(M_KEYBOARDKEYS.currentEntry, ud.config.KeyboardKeys[M_KEYBOARDKEYS.currentEntry][0], key[0], ud.config.KeyboardKeys[M_KEYBOARDKEYS.currentEntry][1], key[1]);
+            CONFIG_MapKey(column->linkIndex, ud.config.KeyboardKeys[column->linkIndex][0], key[0], ud.config.KeyboardKeys[column->linkIndex][1], key[1]);
 
             KB_ClearKeyDown(sc);
 
@@ -5381,6 +5424,15 @@ static vec2_t Menu_TextSize(int32_t x, int32_t y, const MenuFont_t *font, const 
 }
 #endif
 
+static int32_t Menu_FindOptionLinearSearch(MenuOption_t *object, const int32_t query, uint16_t searchstart, uint16_t searchend)
+{
+    for (int i = searchstart; i < searchend; ++i)
+        if (object->options->optionValues[i] == query)
+            return i;
+
+    return -1;
+}
+
 static int32_t Menu_FindOptionBinarySearch(MenuOption_t *object, const int32_t query, uint16_t searchstart, uint16_t searchend)
 {
     const uint16_t thissearch    = (searchstart + searchend) / 2;
@@ -5689,8 +5741,12 @@ static int32_t M_RunMenu_Menu(Menu_t *cm, MenuMenu_t *menu, MenuEntry_t *current
                         break;
                     case Option:
                     {
+                        int32_t currentOption;
                         auto object = (MenuOption_t*)entry->entry;
-                        int32_t currentOption = Menu_FindOptionBinarySearch(object, object->data == NULL ? Menu_EntryOptionSource(entry, object->currentOption) : *object->data, 0, object->options->numOptions);
+
+                        // if unsorted, use linear search; otherwise use binary search
+                        auto searchFunc = object->options->features & 4 ? Menu_FindOptionLinearSearch : Menu_FindOptionBinarySearch;
+                        currentOption = searchFunc(object, object->data == NULL ? Menu_EntryOptionSource(entry, object->currentOption) : *object->data, 0, object->options->numOptions);
 
                         if (currentOption >= 0)
                             object->currentOption = currentOption;
