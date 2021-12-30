@@ -30,10 +30,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //#include "sbar.h"
 #include "screens.h"
 
-palette_t CrosshairColors = { 255, 255, 0, 0 };
-palette_t DefaultCrosshairColors = { 0, 0, 0, 0 };
-int g_crosshairSum = 0;
-
 void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set)
 {
     if (palid >= MAXBASEPALS)
@@ -45,87 +41,6 @@ void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set)
         return;
 
     videoSetPalette(ud.brightness >> 2, palid, set);
-}
-
-void G_GetCrosshairColor(void)
-{
-    if (DefaultCrosshairColors.f)
-        return;
-
-    tileLoad(CROSSHAIR);
-
-    if (!waloff[CROSSHAIR])
-        return;
-
-    char const* ptr = (char const*)waloff[CROSSHAIR];
-
-    // find the brightest color in the original 8-bit tile
-    int32_t ii = tilesiz[CROSSHAIR].x * tilesiz[CROSSHAIR].y;
-    int32_t bri = 0, j = 0, i;
-
-    Bassert(ii > 0);
-
-    do
-    {
-        if (*ptr != 255)
-        {
-            i = curpalette[(int32_t)*ptr].r + curpalette[(int32_t)*ptr].g + curpalette[(int32_t)*ptr].b;
-            if (i > j) { j = i; bri = *ptr; }
-        }
-        ptr++;
-    } while (--ii);
-
-    Bmemcpy(&CrosshairColors, &curpalette[bri], sizeof(palette_t));
-    Bmemcpy(&DefaultCrosshairColors, &curpalette[bri], sizeof(palette_t));
-    DefaultCrosshairColors.f = 1; // this flag signifies that the color has been detected
-}
-
-void G_SetCrosshairColor(int32_t r, int32_t g, int32_t b)
-{
-    if (g_crosshairSum == r + (g << 8) + (b << 16))
-        return;
-
-    tileLoad(CROSSHAIR);
-
-    if (!waloff[CROSSHAIR])
-        return;
-
-    if (!DefaultCrosshairColors.f)
-        G_GetCrosshairColor();
-
-    g_crosshairSum = r + (g << 8) + (b << 16);
-    CrosshairColors.r = r;
-    CrosshairColors.g = g;
-    CrosshairColors.b = b;
-
-    char* ptr = (char*)waloff[CROSSHAIR];
-
-    int32_t ii = tilesiz[CROSSHAIR].x * tilesiz[CROSSHAIR].y;
-
-    Bassert(ii > 0);
-
-    int32_t i = (videoGetRenderMode() == REND_CLASSIC)
-        ? paletteGetClosestColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b)
-        : paletteGetClosestColor(255, 255, 255);  // use white in GL so we can tint it to the right color
-
-    do
-    {
-        if (*ptr != 255)
-            *ptr = i;
-        ptr++;
-    } while (--ii);
-
-    paletteMakeLookupTable(CROSSHAIR_PAL, NULL, CrosshairColors.r, CrosshairColors.g, CrosshairColors.b, 1);
-
-#ifdef USE_OPENGL
-    // XXX: this makes us also load all hightile textures tinted with the crosshair color!
-    polytint_t& crosshairtint = hictinting[CROSSHAIR_PAL];
-    crosshairtint.r = CrosshairColors.r;
-    crosshairtint.g = CrosshairColors.g;
-    crosshairtint.b = CrosshairColors.b;
-    crosshairtint.f = HICTINT_USEONART | HICTINT_GRAYSCALE;
-#endif
-    tileInvalidate(CROSSHAIR, -1, -1);
 }
 
 void G_ShowVote(void)

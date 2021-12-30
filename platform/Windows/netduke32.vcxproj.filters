@@ -117,6 +117,9 @@
     <ClInclude Include="..\..\source\oldmp\src\inv.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\oldmp\src\hud.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\duke3d\rsrc\eduke32_icon.c">
@@ -207,6 +210,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\oldmp\src\common.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\oldmp\src\hud.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

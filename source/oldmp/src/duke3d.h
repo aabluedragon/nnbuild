@@ -1093,6 +1093,7 @@ extern hashtable_t gamefuncH;
 #include "premap.h"
 #include "quotes.h"
 #include "game.h"
+#include "hud.h"
 #include "screens.h"
 #include "oldnet.h"
 #include "actors.h"

@@ -23,8 +23,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #ifndef SCREENS_H
 #define SCREENS_H
 
-#define CROSSHAIR_PAL (MAXPALOOKUPS-RESERVEDPALS-1)
-
 static inline int G_LastMapInfoIndex(void)
 {
     Bassert(ud.last_level >= 1);  // NOTE: last_level is 1-based
@@ -43,12 +41,5 @@ void fadepal(int r, int g, int b, int start, int end, int step);
 void G_DoOrderScreen(void);
 
 void G_BonusScreen(int bonusonly);
-
-void G_GetCrosshairColor(void);
-void G_SetCrosshairColor(int32_t r, int32_t g, int32_t b);
-
-extern palette_t CrosshairColors;
-extern palette_t DefaultCrosshairColors;
-extern int32_t g_crosshairSum;
 
 #endif

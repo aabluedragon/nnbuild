@@ -849,6 +849,7 @@ oldmp_game_objs := \
     gamevars.cpp \
     global.cpp \
     grpscan.cpp \
+    hud.cpp \
     menus.cpp \
     namesdyn.cpp \
     oldnet.cpp \

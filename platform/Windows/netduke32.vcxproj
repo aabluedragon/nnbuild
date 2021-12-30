@@ -205,6 +205,7 @@
     <ClInclude Include="..\..\source\oldmp\src\premap.h" />
     <ClInclude Include="..\..\source\oldmp\src\quotes.h" />
     <ClInclude Include="..\..\source\oldmp\src\rts.h" />
+    <ClInclude Include="..\..\source\oldmp\src\hud.h" />
     <ClInclude Include="..\..\source\oldmp\src\screens.h" />
     <ClInclude Include="..\..\source\oldmp\src\soundefs.h" />
     <ClInclude Include="..\..\source\oldmp\src\sounds.h" />
@@ -239,6 +240,7 @@
     <ClCompile Include="..\..\source\oldmp\src\premap.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\rts.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\savegame.cpp" />
+    <ClCompile Include="..\..\source\oldmp\src\hud.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\screens.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\sector.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\sounds.cpp" />

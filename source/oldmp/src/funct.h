@@ -114,7 +114,6 @@ extern void G_Shutdown(void);
 
 extern void G_DrawTile(int x,int y,int tilenum,int shade,int orientation);
 extern void G_DrawTilePal(int x,int y,int tilenum,int shade,int orientation,int p);
-extern void G_DrawFrags(void);
 extern void P_DoQuote(int q,DukePlayer_t *p);
 extern void G_GameExit(const char *t);
 extern void G_DisplayRest(int smoothratio);
@@ -138,7 +137,6 @@ extern void ReadSaveGameHeaders(void);
 
 // game.cpp
 extern int mpgametext(int y, const char *t, int s, int dabits);
-extern void G_SetStatusBarScale(int sc);
 
 extern void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q16horiz, int32_t smoothratio);
 extern int G_GameTextLen(int x, const char *t);
@@ -148,7 +146,6 @@ extern void G_DrawTileSmall(int x,int y,int tilenum,int shade,int orientation);
 extern void G_DrawTilePalSmall(int x,int y,int tilenum,int shade,int orientation,int p);
 extern void Gv_ResetVars(void);
 extern void A_ResetVars(int iActor);
-extern void G_AddKillToFeed(int victim, int attacker);
 
 extern int minitext_(int x,int y,const char *t,int s,int p,int sb);
 
