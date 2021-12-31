@@ -49,8 +49,6 @@ Team_t teams[MAXPLAYERS] = {
 uint8_t allowedColors[(MAXPALOOKUPS + CHAR_BIT - 1) / CHAR_BIT];
 char pColorNames[MAXPALOOKUPS][32] = { "Auto" };
 
-extern int g_levelTextTime;
-
 void playerColor_init(void)
 {
     initprintf("Player Color INIT:\n");

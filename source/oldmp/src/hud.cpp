@@ -11,7 +11,9 @@ int hud_showmapname = 1;
 
 palette_t CrosshairColors = { 255, 255, 0, 0 };
 palette_t DefaultCrosshairColors = { 0, 0, 0, 0 };
-int g_crosshairSum = 0;
+int32_t g_crosshairSum = 0;
+
+int32_t g_levelTextTime = 0;
 
 static void G_PatchStatusBar(int32_t x1, int32_t y1, int32_t x2, int32_t y2)
 {
@@ -1216,4 +1218,27 @@ void G_AddKillToFeed(int victim, int attacker)
     g_player[victim].fraggedby_id = attacker;
     g_player[victim].fraggedby_time = g_player[attacker].fragged_time = (int32_t)totalclock + KILLID_TIME;
     g_player[attacker].fragged_id = victim;
+}
+
+// Level Name
+void G_PrintLevelName(void)
+{
+    if (!ud.show_level_text || !hud_showmapname || !g_levelTextTime)
+        return;
+
+    int bits = 10 + 16;
+
+    if (g_levelTextTime > 4)
+        bits = bits;
+    else if (g_levelTextTime > 2)
+        bits |= 1;
+    else bits |= 1 + 32;
+
+    if (g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name != NULL)
+    {
+        if (currentboardfilename[0] != 0 && ud.volume_number == 0 && ud.level_number == 7)
+            menutext_(160, 75, -g_levelTextTime + 22, 0, currentboardfilename, bits);
+        else
+            menutext_(160, 75, -g_levelTextTime + 22, 0, g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name, bits);
+    }
 }

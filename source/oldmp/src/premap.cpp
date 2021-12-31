@@ -32,9 +32,6 @@ int g_numRealPalettes;
 static char precachehightile[2][MAXTILES>>3];
 static int  g_precacheCount;
 
-//extern const char *duke3dgrpstring;
-extern int g_levelTextTime;
-
 static void flag_precache(int32_t tile, int32_t type)
 {
     if (!(gotpic[tile >> 3] & pow2char[tile & 7]))

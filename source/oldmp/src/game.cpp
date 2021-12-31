@@ -126,8 +126,6 @@ static int G_MoveLoop(void);
 static int G_DoMoveThings(void);
 static int G_PlaybackDemo(void);
 
-int g_levelTextTime = 0;
-
 enum gametokens
 {
     T_INCLUDE = 0,
@@ -2299,7 +2297,8 @@ void G_DisplayRest(int smoothratio)
         }
     }
 
-    if (pp->invdisptime > 0) G_DrawInventory(pp);
+    if (pp->invdisptime > 0)
+        G_DrawInventory(pp);
 
     Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
     X_OnEvent(EVENT_DISPLAYSBAR, g_player[screenpeek].ps->i, screenpeek, -1);
@@ -2307,23 +2306,7 @@ void G_DisplayRest(int smoothratio)
         G_DrawStatusBar(screenpeek);
 
     G_PrintGameQuotes();
-
-    if (ud.show_level_text && hud_showmapname && g_levelTextTime > 1)
-    {
-        int bits = 10+16;
-
-        if (g_levelTextTime > 4)
-            bits = bits;
-        else if (g_levelTextTime > 2)
-            bits |= 1;
-        else bits |= 1+32;
-        if (g_mapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name != NULL)
-        {
-            if (currentboardfilename[0] != 0 && ud.volume_number == 0 && ud.level_number == 7)
-                menutext_(160,75,-g_levelTextTime+22/*(sintable[(totalclock<<5)&2047]>>11)*/,0,currentboardfilename,bits);
-            else menutext_(160,75,-g_levelTextTime+22/*(sintable[(totalclock<<5)&2047]>>11)*/,0,g_mapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name,bits);
-        }
-    }
+    G_PrintLevelName();
 
     if (KB_KeyPressed(sc_Escape) && ud.overhead_on == 0
             && ud.show_help == 0

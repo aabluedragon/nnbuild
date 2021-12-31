@@ -19,6 +19,8 @@ extern palette_t CrosshairColors;
 extern palette_t DefaultCrosshairColors;
 extern int32_t g_crosshairSum;
 
+extern int32_t g_levelTextTime;
+
 // Forward Declarations
 void G_SetStatusBarScale(int sc);
 void G_DrawFrags(void);
@@ -31,6 +33,8 @@ void G_DrawCrosshair(void);
 
 void G_DisplayPlayerId(void);
 void G_AddKillToFeed(int victim, int attacker);
+
+void G_PrintLevelName(void);
 
 // Inline Functions
 static inline int32_t sbarx(int32_t x)
