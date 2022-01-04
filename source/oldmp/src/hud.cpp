@@ -36,21 +36,31 @@ void G_SetStatusBarScale(int sc)
 
 void G_DrawFrags(void)
 {
-    int i, j = 0;
-    const int32_t orient = 2 + 8 + 16 + 64;
     int32_t const xpos = (320 << 15) - (tilesiz[FRAGBAR].x << 15);
+    int32_t const numFragbarRows = (playerswhenstarted-1) >> 2; // Divide by 4
 
-    TRAVERSE_CONNECT(i)
-    if (i > j) j = i;
-
-    for (i = 0; i <= (j >> 2); i++)
-        rotatesprite_fs(xpos, (8 * i) << 16, 65600, 0, FRAGBAR, 0, 0, orient);
-
-    TRAVERSE_CONNECT(i)
+    int32_t pNum = 0;
+    for (int32_t row = 0; row <= numFragbarRows; row++)
     {
-        minitext(21+(73*(i&3)),2+((i&28)<<1),&g_player[i].user_name[0],/*sprite[g_player[i].ps->i].pal*/g_player[i].ps->palookup,2+8+16);
-        Bsprintf(tempbuf,"%d",g_player[i].ps->frag-g_player[i].ps->fraggedself);
-        minitext(17+50+(73*(i&3)),2+((i&28)<<1),tempbuf,/*sprite[g_player[i].ps->i].pal*/g_player[i].ps->palookup,2+8+16);
+        rotatesprite_fs(xpos, (8 * row) << 16, 65600, 0, FRAGBAR, 0, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_NOMASK);
+
+        for (int32_t column = 0; column < 4; column++, pNum++)
+        {
+            if (!g_player[pNum].connected)
+                continue;
+
+            if (pNum >= MAXPLAYERS)
+                break;
+
+            auto const ps = g_player[pNum].ps;
+
+            // Name
+            minitext(21 + (73 * column), 2 + (8 * row), &g_player[pNum].user_name[0], ps->palookup, 2 + 8 + 16);
+
+            // Frag Count
+            Bsprintf(tempbuf, "%d", ps->frag - ps->fraggedself);
+            minitext(67 + (73 * column), 2 + (8 * row), tempbuf, ps->palookup, 2 + 8 + 16);
+        }
     }
 }
 
@@ -823,14 +833,18 @@ void G_DrawStatusBar(int snum)
     if (u == -1)
     {
         G_PatchStatusBar(0, 0, 320, 200);
+
         if (ud.multimode > 1 && (GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR))
             rotatesprite(sbarx(277 + 1), sbary(SBY + 7 - 1), sbarsc(65536L), 0, KILLSICON, 0, 0, 10 + 16, 0, 0, xdim - 1, ydim - 1);
     }
+
     if (ud.multimode > 1 && (GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR))
     {
         if (u & 32768)
         {
-            if (u != -1) G_PatchStatusBar(276, SBY + 17, 299, SBY + 17 + 10);
+            if (u != -1)
+                G_PatchStatusBar(276, SBY + 17, 299, SBY + 17 + 10);
+
             G_DrawDigiNum(287, SBY + 17, max(p->frag - p->fraggedself, 0), -16, 10 + 16);
         }
     }
