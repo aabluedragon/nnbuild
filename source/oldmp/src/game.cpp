@@ -1402,44 +1402,39 @@ static void G_PrintFPS(void)
 
 static void G_PrintCoords(int snum)
 {
-    int y = 16;
+    int const x = windowxy1.x + 2;
+    int y = windowxy1.y + 2;
     char ang[16], horiz[16], horizoff[16];
 
-    if ((GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR))
-    {
-        if (ud.multimode > 4)
-            y = 32;
-        else if (ud.multimode > 1)
-            y = 24;
-    }
     sprintf(tempbuf,"XYZ= (%d,%d,%d)",g_player[snum].ps->pos.x,g_player[snum].ps->pos.y,g_player[snum].ps->pos.z);
-    printext256(250L,y,31,-1,tempbuf,0);
+    printext256(x,y,31,-1,tempbuf,0);
+
     fix16_to_str(g_player[snum].ps->q16horiz, horiz, 2);
     fix16_to_str(g_player[snum].ps->q16horizoff, horizoff, 2);
     fix16_to_str(g_player[snum].ps->q16ang, ang, 2);
     Bsprintf(tempbuf, "A/H/HO= %s, %s, %s", ang, horiz, horizoff);
-    printext256(250L, y += 9,31,-1,tempbuf,0);
+    printext256(x, y += 9,31,-1,tempbuf,0);
 
     Bsprintf(tempbuf,"ZV= %d",g_player[snum].ps->vel.z);
-    printext256(250L, y += 9,31,-1,tempbuf,0);
+    printext256(x, y += 9,31,-1,tempbuf,0);
 
     Bsprintf(tempbuf,"OG= %d",g_player[snum].ps->on_ground);
-    printext256(250L, y += 9,31,-1,tempbuf,0);
+    printext256(x, y += 9,31,-1,tempbuf,0);
 
     Bsprintf(tempbuf,"SECTL= %d",TrackerCast(sector[g_player[snum].ps->cursectnum].lotag));
-    printext256(250L, y += 9,31,-1,tempbuf,0);
+    printext256(x, y += 9,31,-1,tempbuf,0);
 
     Bsprintf(tempbuf,"RANDOMSEED= %d",randomseed);
-    printext256(250L, y += 9,31,-1,tempbuf,0);
+    printext256(x, y += 9,31,-1,tempbuf,0);
 
     Bsprintf(tempbuf, "G_RANDOM.GLOBAL= %d", g_random.global);
-    printext256(250L, y += 9, 31, -1, tempbuf, 0);
+    printext256(x, y += 9, 31, -1, tempbuf, 0);
 
     Bsprintf(tempbuf,"THOLD= %d",g_player[snum].ps->transporter_hold);
-    printext256(250L, y += 18,31,-1,tempbuf,0);
+    printext256(x, y += 18,31,-1,tempbuf,0);
 
     Bsprintf(tempbuf, "ONWARP= %d", g_player[snum].ps->on_warping_sector);
-    printext256(250L, y += 9, 31, -1, tempbuf, 0);
+    printext256(x, y += 9, 31, -1, tempbuf, 0);
 }
 
 // this handles both multiplayer and item pickup message type text
