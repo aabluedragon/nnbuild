@@ -37,29 +37,26 @@ void G_SetStatusBarScale(int sc)
 void G_DrawFrags(void)
 {
     int32_t const xpos = (320 << 15) - (tilesiz[FRAGBAR].x << 15);
-    int32_t const numFragbarRows = (playerswhenstarted-1) >> 2; // Divide by 4
-
+    int32_t const numFragbarRows = (playerswhenstarted-1) >> 2;
     int32_t pNum = 0;
+
     for (int32_t row = 0; row <= numFragbarRows; row++)
     {
         rotatesprite_fs(xpos, (8 * row) << 16, 65600, 0, FRAGBAR, 0, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_NOMASK);
 
         for (int32_t column = 0; column < 4; column++, pNum++)
         {
-            if (!g_player[pNum].connected)
-                continue;
+            auto const plr = &g_player[pNum];
 
-            if (pNum >= MAXPLAYERS)
-                break;
-
-            auto const ps = g_player[pNum].ps;
-
+            if (pNum >= MAXPLAYERS) break;
+            if (!plr->connected) continue;
+            
             // Name
-            minitext(21 + (73 * column), 2 + (8 * row), &g_player[pNum].user_name[0], ps->palookup, 2 + 8 + 16);
+            minitext(21 + (73 * column), 2 + (8 * row), &plr->user_name[0], plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT);
 
             // Frag Count
-            Bsprintf(tempbuf, "%d", ps->frag - ps->fraggedself);
-            minitext(67 + (73 * column), 2 + (8 * row), tempbuf, ps->palookup, 2 + 8 + 16);
+            Bsprintf(tempbuf, "%d", plr->ps->frag - plr->ps->fraggedself);
+            minitext(67 + (73 * column), 2 + (8 * row), tempbuf, plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT);
         }
     }
 }
