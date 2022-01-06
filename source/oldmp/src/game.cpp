@@ -1444,22 +1444,9 @@ static void G_PrintGameQuotes(void)
 {
     int i, j, k, l;
 
+    
     k = 1;
-    if (GTFLAGS(GAMETYPE_FRAGBAR) && ud.screen_size > 0 && ud.multimode > 1)
-    {
-        j = 0;
-        k += 8;
-
-        TRAVERSE_CONNECT(i)
-            if (i > j) j = i;
-
-        if (j >= 4 && j <= 8)
-            k += 8;
-        else if (j > 8 && j <= 12)
-            k += 16;
-        else if (j > 12)
-            k += 24;
-    }
+    k += G_GetFragbarOffset();
 
     if (g_player[screenpeek].ps->fta > 1 && (g_player[screenpeek].ps->ftq < QUOTE_RESERVED || g_player[screenpeek].ps->ftq > QUOTE_RESERVED3))
     {
@@ -1522,23 +1509,11 @@ static void G_PrintGameQuotes(void)
 
     k = 0;
 
+    k += G_GetFragbarOffset();
+
     if (g_player[screenpeek].ps->ftq == QUOTE_RESERVED || g_player[screenpeek].ps->ftq == QUOTE_RESERVED2)
     {
         k = 140;//quotebot-8-4;
-    }
-    else if (GTFLAGS(GAMETYPE_FRAGBAR) && ud.screen_size > 0 && ud.multimode > 1)
-    {
-        j = 0;
-        k = 8;
-        TRAVERSE_CONNECT(i)
-            if (i > j) j = i;
-
-        if (j >= 4 && j <= 8)
-            k += 8;
-        else if (j > 8 && j <= 12)
-            k += 16;
-        else if (j > 12)
-            k += 24;
     }
 
     j = g_player[screenpeek].ps->fta;
@@ -2630,11 +2605,7 @@ void G_DrawBackground(void)
     if (ud.screen_size > 8)
     {
         y = 0;
-        if (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR)
-        {
-            if (ud.multimode > 1) y += 8;
-            if (ud.multimode > 4) y += 8;
-        }
+        y += G_GetFragbarOffset();
 
         x1 = max(windowxy1.x-4,0);
         y1 = max(windowxy1.y-4,y);
