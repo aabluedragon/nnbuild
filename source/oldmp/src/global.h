@@ -1,9 +1,12 @@
 #ifndef global_h_
 #define global_h_
+
 #include "build.h"
 #include "compat.h"
 #include "duke3d.h"
 #include "mmulti.h"
+#include "quotes.h"
+#include "sector.h"
 #include "sounds.h"
 
 #ifdef global_c_
@@ -32,12 +35,9 @@ extern int g_playerFriction;
 extern int g_numFreezeBounces;
 extern short g_spriteDeleteQueueSize;
 extern char g_numVolumes;
-extern char g_numGametypes;
 
 extern char EpisodeNames[MAXVOLUMES][33];
 extern char SkillNames[5][33];
-extern char GametypeNames[MAXGAMETYPES][33];
-extern int GametypeFlags[MAXGAMETYPES];
 extern short BlimpSpawnSprites[15];
 extern char CheatKeys[2];
 extern char g_setupFileName[BMAX_PATH];
@@ -115,7 +115,6 @@ G_EXTERN char *label;
 
 // Tile Data
 G_EXTERN int32_t SpriteFlags[MAXTILES];
-G_EXTERN intptr_t* actorscrptr[MAXTILES];
 G_EXTERN projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
 G_EXTERN short SpriteCacheList[MAXTILES][3];
 
@@ -125,14 +124,10 @@ G_EXTERN ClockTicks cloudtotalclock;
 
 // Structs
 G_EXTERN map_t g_mapInfo[(MAXVOLUMES + 1) * MAXLEVELS]; // +1 volume for "intro", "briefing" music
-G_EXTERN ActorData_t actor[MAXSPRITES];
-G_EXTERN playerdata_t g_player[MAXPLAYERS];
 G_EXTERN PlayerSpawn_t g_playerSpawnPoints[MAXSPAWNPOINTS];
-G_EXTERN user_defs ud;
-G_EXTERN STATUSBARTYPE sbar;
+G_EXTERN DukeStatus_t sbar;
 
 // Multiplayer/Demos
-G_EXTERN int playerswhenstarted;
 G_EXTERN int screenpeek;
 G_EXTERN char szPlayerName[32];
 G_EXTERN char ready2send;

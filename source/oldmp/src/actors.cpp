@@ -27,6 +27,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define KILLIT(KX) {A_DeleteSprite(KX);goto BOLT;}
 
+ActorData_t actor[MAXSPRITES];
+intptr_t* actorscrptr[MAXTILES];
+
 extern int g_numEnvSoundsPlaying;
 extern int g_noEnemies;
 
@@ -945,7 +948,7 @@ int A_IncurDamage(int sn)
 
                 if (j >= 0 && (sprite[j].picnum == APLAYER))
                 {
-                    if ((sn != j) && FFIRE_CHECK(p, sprite[j].yvel)) // Check if hitting ally and not damaging self.
+                    if ((sn != j) && G_BlockFriendlyFire(p, sprite[j].yvel)) // Check if hitting ally and not damaging self.
                     {
                         // Nullify damage and cancel.
                         actor[sn].owner = -1;
@@ -1335,8 +1338,8 @@ void G_MovePlayerSprite(int playerNum)
                     {
                         // Don't stomp teammates.
                         if (
-                            ((GametypeFlags[ud.coop] & GAMETYPE_TDM) && p->team != g_player[otherp].ps->team) ||
-                            (!(GametypeFlags[ud.coop] & GAMETYPE_PLAYERSFRIENDLY) && !(GametypeFlags[ud.coop] & GAMETYPE_TDM))
+                            ((Gametypes[ud.coop].flags & GAMETYPE_TDM) && p->team != g_player[otherp].ps->team) ||
+                            (!(Gametypes[ud.coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.coop].flags & GAMETYPE_TDM))
                             )
                         {
                             p->knee_incs = 1;

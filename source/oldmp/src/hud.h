@@ -1,7 +1,8 @@
 #ifndef HUD_H
 #define HUD_H
 
-#include "duke3d.h"
+#include "gametypes.h"
+#include "player.h"
 
 // Definitions
 #define CROSSHAIR_PAL (MAXPALOOKUPS-RESERVEDPALS-1)
@@ -78,6 +79,14 @@ static inline int32_t textsc(int sc)
     else if (xdim <= 800) return scale(sc, min(300, ud.textscale), 100);
     else if (xdim <= 1024) return scale(sc, min(350, ud.textscale), 100);
     return scale(sc, ud.textscale, 100);
+}
+
+static inline int32_t G_GetFragbarOffset()
+{
+    if (!GTFLAGS(GAMETYPE_FRAGBAR) || ud.screen_size <= 0 || ud.multimode <= 1)
+        return 0;
+
+    return 8 + (8 * ((playerswhenstarted - 1) >> 2));
 }
 
 #endif // HUD_H

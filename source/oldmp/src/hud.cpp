@@ -1,3 +1,4 @@
+#include "duke3d.h"
 #include "hud.h"
 #include "colmatch.h"
 
@@ -8,6 +9,7 @@ int althud_flashing = 1;
 
 int hud_glowingquotes = 1;
 int hud_showmapname = 1;
+//int hud_fragbarstyle = 2;
 
 palette_t CrosshairColors = { 255, 255, 0, 0 };
 palette_t DefaultCrosshairColors = { 0, 0, 0, 0 };
@@ -417,7 +419,7 @@ void G_DrawStatusBar(int snum)
 
     if (videoGetRenderMode() >= 3) pus = NUMPAGES;   // JBF 20040101: always redraw in GL
 
-    if (ud.multimode > 1 && (GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR))
+    if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR))
     {
         if (pus)
         {
@@ -831,11 +833,11 @@ void G_DrawStatusBar(int snum)
     {
         G_PatchStatusBar(0, 0, 320, 200);
 
-        if (ud.multimode > 1 && (GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR))
+        if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR))
             rotatesprite(sbarx(277 + 1), sbary(SBY + 7 - 1), sbarsc(65536L), 0, KILLSICON, 0, 0, 10 + 16, 0, 0, xdim - 1, ydim - 1);
     }
 
-    if (ud.multimode > 1 && (GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR))
+    if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR))
     {
         if (u & 32768)
         {

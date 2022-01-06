@@ -846,6 +846,7 @@ oldmp_game_objs := \
     gamedef.cpp \
     gameexec.cpp \
     gamestructures.cpp \
+    gametypes.cpp \
     gamevars.cpp \
     global.cpp \
     grpscan.cpp \

@@ -1,3 +1,6 @@
+#ifndef MACROS_H
+#define MACROS_H
+
 // Macros, some from SW source
 
 #define TRAVERSE_SPRITE_SECT(l, o, n)    for ((o) = (l); (n) = nextspritesect[o], (o) != -1; (o) = (n))
@@ -133,21 +136,6 @@
 //       bit 13: reserved
 //       bit 14: reserved
 //       bit 15: 1 = Invisible sprite, 0 = not invisible
-
-#define CSTAT_SPRITE_BLOCK          BIT(0)
-#define CSTAT_SPRITE_TRANSLUCENT    BIT(1)
-#define CSTAT_SPRITE_XFLIP          BIT(2)
-#define CSTAT_SPRITE_YFLIP          BIT(3)
-#define CSTAT_SPRITE_WALL           BIT(4)
-#define CSTAT_SPRITE_FLOOR          BIT(5)
-#define CSTAT_SPRITE_SLAB           (BIT(4)|BIT(5))
-#define CSTAT_SPRITE_ONE_SIDE       BIT(6)
-#define CSTAT_SPRITE_YCENTER        BIT(7)
-#define CSTAT_SPRITE_BLOCK_HITSCAN  BIT(8)
-#define CSTAT_SPRITE_TRANS_FLIP     BIT(9)
-
-#define CSTAT_SPRITE_INVISIBLE      BIT(15)
-
 #define CSTAT_SPRITE_BREAKABLE (CSTAT_SPRITE_BLOCK_HITSCAN)
 
 #define SP(i)  sprite[i].yvel
@@ -182,3 +170,4 @@
 #define T8(i)  actor[i].temp_data[7]
 #define T9(i)  actor[i].temp_data[8]
 
+#endif // MACROS_H

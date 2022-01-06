@@ -21,9 +21,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 //-------------------------------------------------------------------------
+
 #define global_c_
-#include "duke3d.h"
 #include "global.h"
+#include "duke3d.h"
 
 // Pre-initialized globals, the rest is in global.h
 int g_spriteGravity = 176; // JBF: g_spriteGravity modified to default to Atomic ed. default when using 1.3d CONs
@@ -40,18 +41,6 @@ char EpisodeNames[MAXVOLUMES][33] = { "L.A. MELTDOWN", "LUNAR APOCALYPSE", "SHRA
 char g_numVolumes = 3;
 
 char SkillNames[5][33] = { "PIECE OF CAKE", "LET'S ROCK", "COME GET SOME", "DAMN I'M GOOD" };
-
-char GametypeNames[MAXGAMETYPES][33] = { "DUKEMATCH","COOPERATIVE PLAY","TEAM DUKEMATCH" };
-int GametypeFlags[MAXGAMETYPES] =
-{
-    // DUKEMATCH (0)
-    GAMETYPE_FRAGBAR | GAMETYPE_SCORESHEET | GAMETYPE_DMSWITCHES | GAMETYPE_ALLOWITEMRESPAWN | GAMETYPE_MARKEROPTION | GAMETYPE_ACCESSATSTART,
-    // COOPERATIVE PLAY (1)
-    GAMETYPE_COOP | GAMETYPE_WEAPSTAY | GAMETYPE_COOPSPAWN | GAMETYPE_ACCESSCARDSPRITES | GAMETYPE_COOPVIEW | GAMETYPE_COOPSOUND | GAMETYPE_OTHERPLAYERSINMAP | GAMETYPE_ALLOWITEMRESPAWN | GAMETYPE_PLAYERSFRIENDLY | GAMETYPE_FIXEDRESPAWN | GAMETYPE_PRESERVEINVENTORYDEATH,
-    // TEAM DUKEMATCH (2)
-    GAMETYPE_FRAGBAR | GAMETYPE_SCORESHEET | GAMETYPE_DMSWITCHES | GAMETYPE_ALLOWITEMRESPAWN | GAMETYPE_MARKEROPTION | GAMETYPE_ACCESSATSTART | GAMETYPE_TDM | GAMETYPE_TDMSPAWN,
-};
-char g_numGametypes = 3;
 
 short BlimpSpawnSprites[15] =
 {

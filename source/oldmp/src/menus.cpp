@@ -5115,7 +5115,7 @@ VOLUME_ALL_40x:
             //if(ud.m_coop==1) mgametext(c+70,57-7-9,"COOPERATIVE PLAY",0,2+8+16);
             //else if(ud.m_coop==2) mgametext(c+70,57-7-9,"DUKEMATCH (NO SPAWN)",0,2+8+16);
             //else mgametext(c+70,57-7-9,"DUKEMATCH (SPAWN)",0,2+8+16);
-            mgametext(c+70,57-7-9,GametypeNames[ud.m_coop],MENUHIGHLIGHT(0),2+8+16);
+            mgametext(c+70,57-7-9,Gametypes[ud.m_coop].name,MENUHIGHLIGHT(0),2+8+16);
             if (VOLUMEONE)
             {
                 mgametext(c+70,57+16-7-9,EpisodeNames[ud.m_volume_number],MENUHIGHLIGHT(1),2+8+16);
@@ -5225,7 +5225,7 @@ VOLUME_ALL_40x:
                     {
                         case 0:
                         {
-                            if (!(GametypeFlags[ud.m_coop] & GAMETYPE_PLAYERSFRIENDLY) && !(GametypeFlags[ud.m_coop] & GAMETYPE_TDM)) { enabled = 0; break; }
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM)) { enabled = 0; break; }
 
                             if (x == io) ud.m_ffire = !ud.m_ffire;
                             modval(0, 1, (int *)&ud.m_ffire, 1, probey == io);
@@ -5234,7 +5234,7 @@ VOLUME_ALL_40x:
                         }
                         case 1:
                         {
-                            if ((GametypeFlags[ud.m_coop] & GAMETYPE_COOP)) { enabled = 0; break; }
+                            if ((Gametypes[ud.m_coop].flags & GAMETYPE_COOP)) { enabled = 0; break; }
 
                             if (x == io) ud.m_noexits = !ud.m_noexits;
                             modval(0, 1, (int *)&ud.m_noexits, 1, probey == io);
@@ -5243,7 +5243,7 @@ VOLUME_ALL_40x:
                         }
                         case 2:
                         {
-                            if (!(GametypeFlags[ud.m_coop] & GAMETYPE_MARKEROPTION)) { enabled = 0; break; }
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_MARKEROPTION)) { enabled = 0; break; }
 
                             if (x == io) ud.m_marker = !ud.m_marker;
                             modval(0, 1, (int *)&ud.m_marker, 1, probey == io);
@@ -5266,7 +5266,7 @@ VOLUME_ALL_40x:
                         }
                         case 5:
                         {
-                            if (!(GametypeFlags[ud.m_coop] & GAMETYPE_ALLOWITEMRESPAWN)) { enabled = 0; break; }
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_ALLOWITEMRESPAWN)) { enabled = 0; break; }
 
                             if (x == io) ud.m_respawn_inventory = !ud.m_respawn_inventory;
                             modval(0, 1, (int *)&ud.m_respawn_inventory, 1, probey == io);
@@ -5275,7 +5275,7 @@ VOLUME_ALL_40x:
                         }
                         case 6:
                         {
-                            if (!(GametypeFlags[ud.m_coop] & GAMETYPE_ALLOWITEMRESPAWN)) { enabled = 0; break; }
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_ALLOWITEMRESPAWN)) { enabled = 0; break; }
 
                             if (x == io) ud.m_respawn_items = !ud.m_respawn_items;
                             modval(0, 1, (int *)&ud.m_respawn_items, 1, probey == io);

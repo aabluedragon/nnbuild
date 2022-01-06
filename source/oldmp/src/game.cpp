@@ -62,8 +62,8 @@ static int usecwd = 0;
 #endif /* _WIN32 */
 int g_scriptSanityChecks = 1;
 
-#define IDFSIZE 479985668
-#define IDFILENAME "DUKE3D.IDF"
+user_defs ud;
+int32_t playerswhenstarted;
 
 const char* AppProperName = APPNAME;
 const char* AppTechnicalName = APPBASENAME;
@@ -1449,12 +1449,16 @@ static void G_PrintGameQuotes(void)
     {
         j = 0;
         k += 8;
-        TRAVERSE_CONNECT(i)
-        if (i > j) j = i;
 
-        if (j >= 4 && j <= 8) k += 8;
-        else if (j > 8 && j <= 12) k += 16;
-        else if (j > 12) k += 24;
+        TRAVERSE_CONNECT(i)
+            if (i > j) j = i;
+
+        if (j >= 4 && j <= 8)
+            k += 8;
+        else if (j > 8 && j <= 12)
+            k += 16;
+        else if (j > 12)
+            k += 24;
     }
 
     if (g_player[screenpeek].ps->fta > 1 && (g_player[screenpeek].ps->ftq < QUOTE_RESERVED || g_player[screenpeek].ps->ftq > QUOTE_RESERVED3))
@@ -1527,11 +1531,14 @@ static void G_PrintGameQuotes(void)
         j = 0;
         k = 8;
         TRAVERSE_CONNECT(i)
-        if (i > j) j = i;
+            if (i > j) j = i;
 
-        if (j >= 4 && j <= 8) k += 8;
-        else if (j > 8 && j <= 12) k += 16;
-        else if (j > 12) k += 24;
+        if (j >= 4 && j <= 8)
+            k += 8;
+        else if (j > 8 && j <= 12)
+            k += 16;
+        else if (j > 12)
+            k += 24;
     }
 
     j = g_player[screenpeek].ps->fta;
@@ -2346,7 +2353,7 @@ void G_DisplayRest(int smoothratio)
 
     G_DrawCrosshair();
 #if 0
-    if (GametypeFlags[ud.coop] & GAMETYPE_TDM)
+    if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
     {
         for (i=0;i<ud.multimode;i++)
         {
@@ -2544,7 +2551,7 @@ void G_DrawBackground(void)
         //if (ud.recstat == 0 || ud.recstat == 1 || (ud.recstat == 2 && ud.reccnt > 0)) // JBF 20040717
     {
         /*
-        if (GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR)
+        if (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR)
         {
             if (ud.multimode > 1) y1 += scale(ydim,8,200);
             if (ud.multimode > 4) y1 += scale(ydim,8,200);
@@ -2569,7 +2576,7 @@ void G_DrawBackground(void)
 
     y2 = scale(ydim,200-scale(tilesiz[BOTTOMSTATUSBAR].y,ud.statusbarscale,100),200);
 
-    if ((ud.screen_size > 8) || ((GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR) && ud.screen_size >= 4))
+    if ((ud.screen_size > 8) || ((Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR) && ud.screen_size >= 4))
     {
         // across top
         for (y = 0; y<windowxy1.y; y += tilesiz[dapicnum].y)
@@ -2623,7 +2630,7 @@ void G_DrawBackground(void)
     if (ud.screen_size > 8)
     {
         y = 0;
-        if (GametypeFlags[ud.coop] & GAMETYPE_FRAGBAR)
+        if (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR)
         {
             if (ud.multimode > 1) y += 8;
             if (ud.multimode > 4) y += 8;
@@ -4336,7 +4343,7 @@ int A_Spawn(int j, int pn)
             sp->xrepeat = sp->yrepeat = 0;
             //j = ud.coop;
             //if(j == 2) j = 0;
-            j=(GametypeFlags[ud.coop] & GAMETYPE_COOPSPAWN) / GAMETYPE_COOPSPAWN ;
+            j=(Gametypes[ud.coop].flags & GAMETYPE_COOPSPAWN) / GAMETYPE_COOPSPAWN ;
             if (ud.multimode < 2 || (ud.multimode > 1 && j != sp->lotag))
                 changespritestat(i, STAT_MISC);
             else
@@ -8281,7 +8288,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     ud.m_coop--;
 
                     // Make sure that COOP still defaults to weapon stay ON.
-                    if (GametypeFlags[ud.m_coop] & GAMETYPE_WEAPSTAY)
+                    if (Gametypes[ud.m_coop].flags & GAMETYPE_WEAPSTAY)
                     {
                         ud.m_weaponstay = 1;
                     }
@@ -8957,7 +8964,7 @@ static void G_CheckGametype(void)
 {
     //    initprintf("ud.m_coop=%i before sanitization\n",ud.m_coop);
     ud.m_coop = clamp(ud.m_coop, 0, g_numGametypes-1);
-    Bsprintf(tempbuf,"%s\n",GametypeNames[ud.m_coop]);
+    Bsprintf(tempbuf,"%s\n",Gametypes[ud.m_coop].name);
     initprintf("%s", tempbuf);
     //     initprintf("ud.m_coop=%i after sanitisation\n",ud.m_coop);
 }
@@ -9548,8 +9555,8 @@ int app_main(int32_t argc, char const* const* argv)
 
     if (WW2GI || NAM)
     {
-        Bsprintf(GametypeNames[0], "GRUNTMATCH (SPAWN)");
-        Bsprintf(GametypeNames[2], "GRUNTMATCH (NO SPAWN)");
+        Bsprintf(Gametypes[0].name, "GRUNTMATCH");
+        Bsprintf(Gametypes[2].name, "TEAM GRUNTMATCH");
     }
 
     //G_SetupCheats();
@@ -9813,7 +9820,7 @@ MAIN_LOOP_RESTART:
     myplayer.weaponswitch = ud.weaponswitch;
     g_player[myconnectindex].pteam = ud.team;
 
-    if (GametypeFlags[ud.coop] & GAMETYPE_TDM)
+    if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
         myplayer.palookup = g_player[myconnectindex].pcolor = teams[g_player[myconnectindex].pteam].palnum;
     else
     {
@@ -10465,13 +10472,13 @@ static int G_DoMoveThings(void)
         if (g_player[i].inputBits->extbits&(EXTBIT_CHANGETEAM))
         {
             g_player[i].ps->team = g_player[i].pteam;
-            if (GametypeFlags[ud.coop] & GAMETYPE_TDM)
+            if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
             {
                 actor[g_player[i].ps->i].picnum = APLAYERTOP;
                 P_QuickKill(g_player[i].ps);
             }
         }
-        if (GametypeFlags[ud.coop] & GAMETYPE_TDM)
+        if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
             g_player[i].ps->palookup = g_player[i].pcolor = teams[g_player[i].ps->team].palnum;
 
         if (sprite[g_player[i].ps->i].pal != 1)

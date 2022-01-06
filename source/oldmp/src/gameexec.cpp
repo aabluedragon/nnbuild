@@ -1070,7 +1070,7 @@ static int X_DoExecute(void)
         insptr++;
 
         // [JM] I fucking hate this code.
-        if ((GametypeFlags[ud.coop]&GAMETYPE_WEAPSTAY) && ud.multimode > 1)
+        if ((Gametypes[ud.coop].flags & GAMETYPE_WEAPSTAY) && ud.multimode > 1)
         {
             // HACK: Don't do this for pipebombs and tripmines, the weapon is also ammo.
             if (g_sp->picnum == HBOMBAMMO || g_sp->picnum == TRIPBOMBSPRITE)
@@ -1234,7 +1234,7 @@ static int X_DoExecute(void)
             OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
             insptr++;break;
         }
-        if (g_p == screenpeek || (GametypeFlags[ud.coop]&GAMETYPE_COOPSOUND))
+        if (g_p == screenpeek || (Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND))
             A_PlaySound((short) *insptr,g_player[screenpeek].ps->i);
         insptr++;
         break;
@@ -1849,7 +1849,7 @@ static int X_DoExecute(void)
                     Bstrcpy(apStrings[i],tempbuf);
                     break;
                 case STR_GAMETYPE:
-                    Bstrcpy(apStrings[i],GametypeNames[ud.coop]);
+                    Bstrcpy(apStrings[i],Gametypes[ud.coop].name);
                     break;
                 default:
                     OSD_Printf(CON_ERROR "unknown str ID %d %d\n",g_errorLineNum,keyw[g_tw],i,j);

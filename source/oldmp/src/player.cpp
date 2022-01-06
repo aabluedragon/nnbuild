@@ -37,14 +37,7 @@ int g_kb;
 int g_looking_angSR1;
 int g_weapon_xoffset;
 
-int numTeams = 4;
-// No sense having more teams than you can have players.
-Team_t teams[MAXPLAYERS] = {
-    { "Blue", 9, 0, 0, 0 },
-    { "Red", 10, 0, 0, 0 },
-    { "Green", 11, 0, 0, 0 },
-    { "Gray", 12, 0, 0, 0 },
-};
+playerdata_t g_player[MAXPLAYERS];
 
 uint8_t allowedColors[(MAXPALOOKUPS + CHAR_BIT - 1) / CHAR_BIT];
 char pColorNames[MAXPALOOKUPS][32] = { "Auto" };
@@ -732,7 +725,7 @@ static int P_PostFireHitscan(int playerNum, int const spriteNum, hitdata_t* cons
     else if (hitData->sprite >= 0)
     {
         A_DamageObject(hitData->sprite, spriteNum);
-        if (sprite[hitData->sprite].picnum == APLAYER && !FFIRE_CHECK(sprite[hitData->sprite].yvel, sprite[spriteOwner].yvel))
+        if (sprite[hitData->sprite].picnum == APLAYER && !G_BlockFriendlyFire(sprite[hitData->sprite].yvel, sprite[spriteOwner].yvel))
         {
             int jibSprite = A_Spawn(spriteNum, JIBS6);
 
@@ -3259,7 +3252,7 @@ static void P_ConsumeKeycard(int32_t playerNum, int32_t keypal)
 
     char keyname[7];
 
-    if (ud.multimode < 2 || (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART)))
+    if (ud.multimode < 2 || (ud.multimode > 1 && !(Gametypes[ud.coop].flags & GAMETYPE_ACCESSATSTART)))
     {
         switch (keypal)
         {
@@ -3278,7 +3271,7 @@ static void P_ConsumeKeycard(int32_t playerNum, int32_t keypal)
         }
     }
 
-    if (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+    if (ud.multimode > 1 && !(Gametypes[ud.coop].flags & GAMETYPE_ACCESSATSTART))
     {
         Bsprintf(tempbuf, "^12%s^12 has used a ^%d%s^12 key.", &g_player[playerNum].user_name[0], keypal, keyname);
         G_AddUserQuote(tempbuf);
@@ -3464,7 +3457,7 @@ static int P_DoCounters(DukePlayer_t *p)
     return 0;
 }
 
-short WeaponPickupSprites[MAX_WEAPONS] = { KNEE__STATIC, FIRSTGUNSPRITE__STATIC, SHOTGUNSPRITE__STATIC,
+int16_t WeaponPickupSprites[MAX_WEAPONS] = { KNEE__STATIC, FIRSTGUNSPRITE__STATIC, SHOTGUNSPRITE__STATIC,
         CHAINGUNSPRITE__STATIC, RPGSPRITE__STATIC, HEAVYHBOMB__STATIC, SHRINKERSPRITE__STATIC, DEVISTATORSPRITE__STATIC,
         TRIPBOMBSPRITE__STATIC, FREEZESPRITE__STATIC, HEAVYHBOMB__STATIC, SHRINKERSPRITE__STATIC
                                          };
@@ -4463,6 +4456,76 @@ static bool P_DoSpriteBridge(int32_t spriteNum, DukePlayer_t* pPlayer)
     }
 
     return false;
+}
+
+static void P_CheckTouchDamage(DukePlayer_t* p, int j)
+{
+    if (oldnet_predicting)
+        return;
+
+    if ((j & 49152) == 49152)
+    {
+        j &= (MAXSPRITES - 1);
+
+        if (sprite[j].picnum == CACTUS)
+        {
+
+            if (p->hurt_delay < 8)
+            {
+                sprite[p->i].extra -= 5;
+
+                p->hurt_delay = 16;
+
+                P_PalFrom(p, 32, 32, 0, 0);
+                A_PlaySound(DUKE_LONGTERM_PAIN, p->i);
+            }
+
+        }
+        return;
+    }
+
+    if ((j & 49152) != 32768) return;
+    j &= (MAXWALLS - 1);
+
+    if (p->hurt_delay > 0) p->hurt_delay--;
+    else if (wall[j].cstat & 85)
+    {
+        int switchpicnum = wall[j].overpicnum;
+        if ((switchpicnum > W_FORCEFIELD) && (switchpicnum <= W_FORCEFIELD + 2))
+            switchpicnum = W_FORCEFIELD;
+
+        switch (DynamicTileMap[switchpicnum])
+        {
+        case W_FORCEFIELD__STATIC:
+            //        case W_FORCEFIELD+1:
+            //        case W_FORCEFIELD+2:
+            sprite[p->i].extra -= 5;
+
+            p->hurt_delay = 16;
+
+            P_PalFrom(p, 32, 32, 0, 0);
+
+            p->vel.x = -(sintable[(fix16_to_int(p->q16ang) + 512) & 2047] << 8);
+            p->vel.y = -(sintable[fix16_to_int(p->q16ang) & 2047] << 8);
+            A_PlaySound(DUKE_LONGTERM_PAIN, p->i);
+
+            A_DamageWall(p->i, j,
+                { p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 9),
+                  p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 9),
+                  p->pos.z }, -1);
+
+            break;
+
+        case BIGFORCE__STATIC:
+            p->hurt_delay = 26;
+            A_DamageWall(p->i, j,
+                { p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 9),
+                  p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 9),
+                  p->pos.z }, -1);
+            break;
+
+        }
+    }
 }
 
 void P_ProcessInput(int snum)

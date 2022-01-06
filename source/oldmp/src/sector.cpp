@@ -2040,76 +2040,6 @@ void A_DamageWall(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum)
     A_DamageWall_Internal(spriteNum, wallNum, vPos, weaponNum);
 }
 
-void P_CheckTouchDamage(DukePlayer_t *p,int j)
-{
-    if (oldnet_predicting)
-        return;
-
-    if ((j&49152) == 49152)
-    {
-        j &= (MAXSPRITES-1);
-
-        if (sprite[j].picnum==CACTUS)
-        {
-
-            if (p->hurt_delay < 8)
-            {
-                sprite[p->i].extra -= 5;
-
-                p->hurt_delay = 16;
-
-                P_PalFrom(p, 32, 32, 0, 0);
-                A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
-            }
-
-        }
-        return;
-    }
-
-    if ((j&49152) != 32768) return;
-    j &= (MAXWALLS-1);
-
-    if (p->hurt_delay > 0) p->hurt_delay--;
-    else if (wall[j].cstat&85)
-    {
-        int switchpicnum = wall[j].overpicnum;
-        if ((switchpicnum>W_FORCEFIELD)&&(switchpicnum<=W_FORCEFIELD+2))
-            switchpicnum=W_FORCEFIELD;
-
-        switch (DynamicTileMap[switchpicnum])
-        {
-        case W_FORCEFIELD__STATIC:
-            //        case W_FORCEFIELD+1:
-            //        case W_FORCEFIELD+2:
-            sprite[p->i].extra -= 5;
-
-            p->hurt_delay = 16;
-
-            P_PalFrom(p, 32, 32, 0, 0);
-
-            p->vel.x = -(sintable[(fix16_to_int(p->q16ang)+512)&2047]<<8);
-            p->vel.y = -(sintable[fix16_to_int(p->q16ang)&2047]<<8);
-            A_PlaySound(DUKE_LONGTERM_PAIN,p->i);
-
-            A_DamageWall(p->i,j,
-                { p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 9),
-                  p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 9),
-                  p->pos.z }, -1);
-
-            break;
-
-        case BIGFORCE__STATIC:
-            p->hurt_delay = 26;
-            A_DamageWall(p->i,j,
-                { p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 9),
-                  p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 9),
-                  p->pos.z }, -1);
-            break;
-
-        }
-    }
-}
-
 void Sect_DamageFloor_Internal(int const spriteNum, int const sectNum)
 {
     int16_t tileNum = sector[sectNum].floorpicnum;
@@ -3428,7 +3358,7 @@ static void P_DoSectorInteractions(int32_t playerNum)
         default:
             if (sector[p->cursectnum].lotag >= 10000 && sector[p->cursectnum].lotag < 16383)
             {
-                if (playerNum == screenpeek || (GametypeFlags[ud.coop] & GAMETYPE_COOPSOUND))
+                if (playerNum == screenpeek || (Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND))
                     A_PlaySound(sector[p->cursectnum].lotag - 10000, p->i);
                 sector[p->cursectnum].lotag = 0;
             }

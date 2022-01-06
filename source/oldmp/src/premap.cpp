@@ -481,17 +481,8 @@ void G_UpdateScreenArea(void)
 
     y1 = ss;
     y2 = 200;
-    if (ud.screen_size > 0 && (GametypeFlags[ud.coop]&GAMETYPE_FRAGBAR) && ud.multimode > 1)
-    {
-        j = 0;
-        TRAVERSE_CONNECT(i)
-        if (i > j) j = i;
 
-        if (j >= 1) y1 += 8;
-        if (j >= 4) y1 += 8;
-        if (j >= 8) y1 += 8;
-        if (j >= 12) y1 += 8;
-    }
+    y1 += G_GetFragbarOffset();
 
     if (ud.screen_size >= 8 && !(videoGetRenderMode() >= 3 && ud.screen_size == 8 && ud.statusbarmode))
         y2 -= (ss+scale(tilesiz[BOTTOMSTATUSBAR].y,ud.statusbarscale,100));
@@ -516,10 +507,10 @@ void P_RandomSpawnPoint(int snum)
     int i=snum,j,k;
     unsigned int dist,pdist = -1;
 
-    if (ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_FIXEDRESPAWN))
+    if (ud.multimode > 1 && !(Gametypes[ud.coop].flags & GAMETYPE_FIXEDRESPAWN))
     {
         i = krand() % g_numPlayerSprites;
-        if (GametypeFlags[ud.coop] & GAMETYPE_TDMSPAWN)
+        if (Gametypes[ud.coop].flags & GAMETYPE_TDMSPAWN)
         {
             for (j = 0; j < MAXPLAYERS; j++)
             {
@@ -602,7 +593,7 @@ static void P_ResetStatus(int snum)
     p->rapid_fire_hold  = 0;
     p->toggle_key_flag  = 0;
     p->access_spritenum = -1;
-    if (ud.multimode > 1 && (GametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+    if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_ACCESSATSTART))
         ud.got_access = 7;
     else ud.got_access      = 0;
     p->random_club_frame= 0;
@@ -764,7 +755,7 @@ static void resetprestat(int snum,int g)
     p->one_parallax_sectnum = -1;
     g_player[snum].display.visibility = ud.const_visibility;
 
-    if (((g&MODE_EOL) != MODE_EOL && ud.multimode < 2) || (!(GametypeFlags[ud.coop]&GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1))
+    if (((g&MODE_EOL) != MODE_EOL && ud.multimode < 2) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1))
     {
         P_ResetWeapons(snum);
         P_ResetInventory(snum);
@@ -1208,7 +1199,7 @@ void G_NewGame(int vn,int ln,int sk)
         DukePlayer_t *p = g_player[j].ps;
         p->zoom = 768;
         p->gm = 0;
-        if (!(GametypeFlags[ud.m_coop] & GAMETYPE_COOP)) // If gametype isn't coop
+        if (!(Gametypes[ud.m_coop].flags & GAMETYPE_COOP)) // If gametype isn't coop
         {
             // Give starting weapons.
             for (i = 0; i < MAX_WEAPONS; i++)
@@ -1304,7 +1295,7 @@ static void insert_player_sprite(int p)
     s->clipdist = 64;
 
     // Either reset health to max if starting an episode, inventory is to be preserved, or was dead in the last level.
-    if ((ud.last_level == -1) || (!(GametypeFlags[ud.coop] & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1) || g_player[p].ps->last_extra <= 0)
+    if ((ud.last_level == -1) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1) || g_player[p].ps->last_extra <= 0)
     {
         g_player[p].ps->last_extra = g_player[p].ps->max_player_health;
         s->extra = g_player[p].ps->max_player_health;
@@ -1316,7 +1307,7 @@ static void insert_player_sprite(int p)
     s->yvel = p;
 
     // Find a palette that doesn't match another player if color set to auto and not in TDM.
-    if (!g_player[p].pcolor && ud.multimode > 1 && !(GametypeFlags[ud.coop] & GAMETYPE_TDM))
+    if (!g_player[p].pcolor && ud.multimode > 1 && !(Gametypes[ud.coop].flags & GAMETYPE_TDM))
     {
         if (s->pal == 0) // Pal is 0, meaning "auto".
         {
@@ -1367,7 +1358,7 @@ static void insert_player_sprite(int p)
     {
         int k = g_player[p].pcolor;
 
-        if (GametypeFlags[ud.coop] & GAMETYPE_TDM)
+        if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
         {
             k = teams[g_player[p].pteam].palnum;
             g_player[p].ps->team = g_player[p].pteam;
@@ -1390,7 +1381,7 @@ static void insert_player_sprite(int p)
 static void resetpspritevars(char g)
 {
     short i;
-    STATUSBARTYPE tsbar[MAXPLAYERS];
+    DukeStatus_t tsbar[MAXPLAYERS];
 
     UNREFERENCED_PARAMETER(g);
 
@@ -1401,7 +1392,7 @@ static void resetpspritevars(char g)
             if (g_player[i].ps == NULL || !g_player[i].connected) continue;
 
             // Kept to keep old behavior. Rest of the block that was here was useless.
-            if (ud.multimode > 1 && (GametypeFlags[ud.coop] & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
+            if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
             {
                 tsbar[i].inven_icon = g_player[i].ps->inven_icon;
                 tsbar[i].steroids_amount = g_player[i].ps->steroids_amount;
@@ -1411,7 +1402,7 @@ static void resetpspritevars(char g)
             P_ResetStatus(i);
 
             // Kept to keep old behavior. Rest of the block that was here was useless.
-            if (ud.multimode > 1 && (GametypeFlags[ud.coop] & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
+            if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
             {
                 g_player[i].ps->inven_icon = tsbar[i].inven_icon;
                 g_player[i].ps->steroids_amount = tsbar[i].steroids_amount;
@@ -1428,34 +1419,6 @@ static void resetpspritevars(char g)
         if (g_player[i].ps == NULL || !g_player[i].connected) continue;
 
         insert_player_sprite(i);
-    }
-}
-
-static inline void clearfrags(void)
-{
-    int32_t i;
-    playerdata_t *p;
-
-    for (i = 0; i < MAXPLAYERS; i++)
-    {
-        p = &g_player[i];
-
-        if (p->ps != NULL)
-        {
-            p->ps->frag = p->ps->fraggedself = 0;
-            Bmemset(p->frags, 0, sizeof(p->frags));
-        }
-    }
-}
-
-static inline void clearteams(void)
-{
-    int8_t i;
-    for (i = 0; i < numTeams; i++)
-    {
-        teams[i].frags = 0;
-        teams[i].suicides = 0;
-        teams[i].blocked = 0;
     }
 }
 
@@ -1622,9 +1585,9 @@ int G_EnterLevel(int g)
     }
 
     if (ud.m_weaponstay)
-        GametypeFlags[ud.coop] |= GAMETYPE_WEAPSTAY;
+        Gametypes[ud.coop].flags |= GAMETYPE_WEAPSTAY;
     else
-        GametypeFlags[ud.coop] &= ~(GAMETYPE_WEAPSTAY);
+        Gametypes[ud.coop].flags &= ~(GAMETYPE_WEAPSTAY);
 
     Gv_RefreshPointers();
     // ---------------------------------
@@ -1790,8 +1753,7 @@ int G_EnterLevel(int g)
 
     // NEED these just before starting, after setting up everything else.
     clearfifo();
-    clearfrags();
-    clearteams();
+    G_ClearGametypeStats();
 
     waitforeverybody();
     mmulti_flushpackets();

@@ -185,7 +185,7 @@ void UpdateDiscord()
         }
         else
         {
-            squeegee(GametypeNames[ud.coop], gametypename);
+            squeegee(Gametypes[ud.coop].name, gametypename);
 
             if (!GTFLAGS(GAMETYPE_COOP))
             {

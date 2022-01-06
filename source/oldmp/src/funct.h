@@ -61,7 +61,6 @@ extern void G_OperateMasterSwitches(int low);
 extern void G_OperateForceFields(int s,int low);
 extern int P_ActivateSwitch(int snum,int w,int switchtype);
 extern void activatebysector(int sect,int j);
-extern void P_CheckTouchDamage(DukePlayer_t *p,int j);
 
 // [JM] I should make a sector.h
 extern void A_DamageWall(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum);
@@ -88,8 +87,6 @@ extern void G_ResetTimers(void);
 extern void clearfifo(void);
 extern int  G_EnterLevel(int g);
 extern void G_BackToMenu(void);
-extern void P_UpdateScreenPal(DukePlayer_t *p);
-extern void P_QuickKill(DukePlayer_t *p);
 extern int A_GetHitscanRange(int i);
 extern int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite);
 extern int A_Shoot(int i,int atwith);
@@ -114,7 +111,6 @@ extern void G_Shutdown(void);
 
 extern void G_DrawTile(int x,int y,int tilenum,int shade,int orientation);
 extern void G_DrawTilePal(int x,int y,int tilenum,int shade,int orientation,int p);
-extern void P_DoQuote(int q,DukePlayer_t *p);
 extern void G_GameExit(const char *t);
 extern void G_DisplayRest(int smoothratio);
 extern void updatesectorz(int x,int y,int z,short *sectnum);

@@ -60,7 +60,7 @@ void G_ShowScores(bool bonus)
 {
     int i, y, deaths, nemesis_kills, nemesis;
 
-    if (playerswhenstarted < 2 || !(GametypeFlags[ud.coop] & (GAMETYPE_COOP | GAMETYPE_SCORESHEET)))
+    if (playerswhenstarted < 2 || !(Gametypes[ud.coop].flags & (GAMETYPE_COOP | GAMETYPE_SCORESHEET)))
         return;
 
 #if 0
@@ -98,9 +98,9 @@ void G_ShowScores(bool bonus)
     yoff += 36;
     const int start_x = 63;
     const int name_x = start_x + 12;
-    const int frags_hp_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 57 : 66);
+    const int frags_hp_x = start_x + ((Gametypes[ud.coop].flags & GAMETYPE_COOP) ? 57 : 66);
     const int deaths_kd_x = start_x + 98;
-    const int misc_x = start_x + ((GametypeFlags[ud.coop] & GAMETYPE_COOP) ? 128 : 134);
+    const int misc_x = start_x + ((Gametypes[ud.coop].flags & GAMETYPE_COOP) ? 128 : 134);
     const int ping_x = start_x + 180;
 
     int score_start_y = yoff; // Store Y so we can draw the headers on top of the transparent background.
@@ -113,9 +113,9 @@ void G_ShowScores(bool bonus)
     // Headers
     minitext(start_x, score_start_y, "#", 8, 2 + 8 + 16 + 128);
     minitext(name_x, score_start_y, "NAME", 8, 2 + 8 + 16 + 128);
-    minitext(frags_hp_x, score_start_y, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "HP/ARMOR" : "FRAGS", 8, 2 + 8 + 16 + 128);
-    minitext(deaths_kd_x, score_start_y, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "K/D" : "DEATHS", 8, 2 + 8 + 16 + 128);
-    minitext(misc_x, score_start_y, (GametypeFlags[ud.coop] & GAMETYPE_COOP) ? "INVENTORY" : "NEMESIS", 8, 2 + 8 + 16 + 128);
+    minitext(frags_hp_x, score_start_y, (Gametypes[ud.coop].flags & GAMETYPE_COOP) ? "HP/ARMOR" : "FRAGS", 8, 2 + 8 + 16 + 128);
+    minitext(deaths_kd_x, score_start_y, (Gametypes[ud.coop].flags & GAMETYPE_COOP) ? "K/D" : "DEATHS", 8, 2 + 8 + 16 + 128);
+    minitext(misc_x, score_start_y, (Gametypes[ud.coop].flags & GAMETYPE_COOP) ? "INVENTORY" : "NEMESIS", 8, 2 + 8 + 16 + 128);
     minitext(ping_x, score_start_y, "PING", 8, 2 + 8 + 16 + 128);
 
     for (i = 0; i < playerswhenstarted; i++)
@@ -127,7 +127,7 @@ void G_ShowScores(bool bonus)
 
         minitext(name_x, yoff, g_player[i].user_name, p->palookup, 2 + 8 + 16 + 128);
 
-        if (GametypeFlags[ud.coop] & GAMETYPE_COOP)
+        if (Gametypes[ud.coop].flags & GAMETYPE_COOP)
         {
             if (g_player[i].connected)
             {
@@ -634,7 +634,7 @@ FRAGBONUS:
     S_StopMusic();
     FX_StopAllSounds();
 
-    if (playerswhenstarted > 1 && (GametypeFlags[ud.coop] & (GAMETYPE_COOP | GAMETYPE_SCORESHEET)))
+    if (playerswhenstarted > 1 && (Gametypes[ud.coop].flags & (GAMETYPE_COOP | GAMETYPE_SCORESHEET)))
     {
         videoClearScreen(0L);
 

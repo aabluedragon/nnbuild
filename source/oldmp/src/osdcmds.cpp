@@ -135,7 +135,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
                     if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                 }
             }
-            if ((GametypeFlags[ud.m_coop] & GAMETYPE_PLAYERSFRIENDLY) && !(GametypeFlags[ud.m_coop] & GAMETYPE_TDM))
+            if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
                 ud.m_noexits = 0;
 
             g_player[myconnectindex].ps->gm |= MODE_MENU;
@@ -297,7 +297,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
                     if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
                 }
             }
-            if ((GametypeFlags[ud.m_coop] & GAMETYPE_PLAYERSFRIENDLY) && !(GametypeFlags[ud.m_coop] & GAMETYPE_TDM))
+            if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
                 ud.m_noexits = 0;
 
             g_player[myconnectindex].ps->gm |= MODE_MENU;
@@ -477,6 +477,7 @@ static int osdcmd_debugplayer(const osdfuncparm_t *parm)
         OSD_Printf("dead_flag: %d\n", g_player[i].ps->dead_flag);
         OSD_Printf("weapreccnt: %d\n", g_player[i].ps->weapreccnt);
         OSD_Printf("cursectnum/sprsect: %d/%d\n", g_player[i].ps->cursectnum, TrackerCast(sprite[g_player[i].ps->i].sectnum));
+        OSD_Printf("playerswhenstarted: %d", playerswhenstarted);
     }
     else OSD_Printf("debugplayer: invalid player!\n");
     UNREFERENCED_PARAMETER(parm);

@@ -189,6 +189,7 @@
     <ClInclude Include="..\..\source\oldmp\src\game.h" />
     <ClInclude Include="..\..\source\oldmp\src\gamedef.h" />
     <ClInclude Include="..\..\source\oldmp\src\gamedefs.h" />
+    <ClInclude Include="..\..\source\oldmp\src\gametypes.h" />
     <ClInclude Include="..\..\source\oldmp\src\global.h" />
     <ClInclude Include="..\..\source\oldmp\src\grpscan.h" />
     <ClInclude Include="..\..\source\oldmp\src\inv.h" />
@@ -207,6 +208,7 @@
     <ClInclude Include="..\..\source\oldmp\src\rts.h" />
     <ClInclude Include="..\..\source\oldmp\src\hud.h" />
     <ClInclude Include="..\..\source\oldmp\src\screens.h" />
+    <ClInclude Include="..\..\source\oldmp\src\sector.h" />
     <ClInclude Include="..\..\source\oldmp\src\soundefs.h" />
     <ClInclude Include="..\..\source\oldmp\src\sounds.h" />
     <ClInclude Include="..\..\source\oldmp\src\standard.h" />
@@ -227,6 +229,7 @@
     <ClCompile Include="..\..\source\oldmp\src\gamedef.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\gameexec.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\gamestructures.cpp" />
+    <ClCompile Include="..\..\source\oldmp\src\gametypes.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\gamevars.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\global.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\grpscan.cpp" />

@@ -82,7 +82,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAXVOLUMES 14
 #define MAXLEVELS 64
-#define MAXGAMETYPES 16
 #define MAXANIMWALLS 512
 #define MAXANIMATES 1024
 #define MAXCYCLERS 1024
@@ -231,11 +230,8 @@ extern const char* CommandName;
 #include "mmulti.h"
 #endif
 
-#include "sync.h"
-
 #include "baselayer.h"
 #include "function.h"
-#include "macros.h"
 //#include "types.h"
 //#include "file_lib.h"
 #include "common.h"
@@ -247,14 +243,7 @@ extern const char* CommandName;
 #include "fx_man.h"
 #include "config.h"
 #include "control.h"
-#include "_rts.h"
-#include "rts.h"
 #include "namesdyn.h"
-#include "sounds.h"
-#include "soundefs.h"
-#include "music.h"
-#include "inv.h"
-#include "player.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -418,145 +407,11 @@ struct savehead {
 };
 
 typedef struct {
-    int UseJoystick;
-    int UseMouse;
-    int AutoAim;
-    int MouseBias;
-    //int SmoothInput;
-
-    // JBF 20031211: Store the input settings because
-    // (currently) jmact can't regurgitate them
-    int MouseFunctions[MAXMOUSEBUTTONS][2];
-    int MouseDigitalFunctions[MAXMOUSEAXES][2];
-    int MouseAnalogueAxes[MAXMOUSEAXES];
-    int JoystickFunctions[MAXJOYBUTTONSANDHATS][2];
-    int JoystickDigitalFunctions[MAXJOYAXES][2];
-    int JoystickAnalogueAxes[MAXJOYAXES];
-    int JoystickAnalogueScale[MAXJOYAXES];
-    int JoystickAnalogueInvert[MAXJOYAXES];
-    int JoystickAnalogueDead[MAXJOYAXES];
-    int JoystickAnalogueSaturate[MAXJOYAXES];
-    uint8_t KeyboardKeys[NUMGAMEFUNCTIONS][2];
-
-    //
-    // Sound variables
-    //
-    int FXDevice;
-    int MusicDevice;
-    int FXVolume;
-    int MusicVolume;
-    int SoundToggle;
-    int MusicToggle;
-    int VoiceToggle;
-    int AmbienceToggle;
-
-    int NumVoices;
-    int NumChannels;
-    int NumBits;
-    int MixRate;
-    
-    //int ReverseStereo;
-
-    //
-    // Screen variables
-    //
-
-    int ScreenMode;
-
-    int ScreenWidth;
-    int ScreenHeight;
-    int ScreenBPP;
-
-    int ForceSetup;
-
-    int scripthandle;
-    int setupread;
-
-    // Misc
-    //int CheckForUpdates;
-    int LastUpdateCheck;
-    int useprecache;
-    int PredictionDebug;
-} config_t;
-
-#define MAX_RETURN_VALUES 6
-
-typedef struct {
-    vec3_t camerapos;
-    int32_t const_visibility,uw_framerate;
-    int32_t camera_time,folfvel,folavel,folx,foly,fola;
-    int32_t reccnt,crosshairscale;
-
-    int32_t runkey_mode,statusbarscale,mouseaiming,weaponswitch,drawweapon;   // JBF 20031125
-    int32_t democams,color,m_color,msgdisptime,statusbarmode;
-    int32_t m_noexits,noexits,autovote,automsg,idplayers, showweapons;
-    int32_t team, viewbob, weaponsway, althud, weaponscale, textscale;
-
-    int32_t entered_name,screen_tilting,shadows,fta_on,executions,auto_run;
-    int32_t coords,showfps,levelstats,m_coop,coop,screen_size,lockout,crosshair;
-    int32_t playerai,angleinterpolation,obituaries;
-
-    int32_t respawn_monsters,respawn_items,respawn_inventory,recstat,monsters_off,brightness;
-    int32_t m_respawn_items,m_respawn_monsters,m_respawn_inventory,m_recstat,m_monsters_off,detail;
-    int32_t m_ffire,ffire,m_player_skill,m_level_number,m_volume_number,multimode;
-    int32_t player_skill,level_number,volume_number,m_marker,marker,mouseflip;
-    int32_t m_weaponstay;
-
-    int32_t music_episode, music_level;
-
-    int32_t monsters_killed, total_monsters;
-    int32_t playerbest;
-
-    int32_t configversion;
-
-    int32_t fov;
-    
-    int32_t fraglimit;
-
-    int32_t got_access;
-
-    int32_t playerid_time;
-    int8_t playerid_num;
-
-    short camerasect;
-    fix16_t cameraq16ang, cameraq16horiz;
-    short pause_on,from_bonus;
-    short camerasprite,last_camsprite;
-    short last_level,secretlevel;
-
-    char overhead_on,last_overhead;
-    char god,warp_on,cashman,eog,showallmap;
-    char show_help,scrollmode,clipping;
-    char ridecule[10][40];
-    char savegame[10][22];
-    char pwlockout[128],rtsname[128];
-    char display_bonus_screen;
-    char show_level_text;
-    char wchoice[MAX_WEAPONS];
-    char limit_hit, winner;
-    char allow_visibility;
-
-    int32_t returnvar[MAX_RETURN_VALUES - 1];
-
-    config_t config;
-} user_defs;
-
-typedef struct {
     int ox,oy,oz;
     short oa,os;
 } PlayerSpawn_t;
 
 extern char g_numPlayerSprites;
-
-typedef struct {
-    char name[32];
-    uint8_t palnum;
-    int16_t frags;
-    int16_t suicides;
-    int8_t blocked;
-} Team_t;
-extern Team_t teams[MAXPLAYERS];
-extern int numTeams;
 
 #define MAXQUOTELEN 128
 #define MAXUSERQUOTES 6
@@ -574,50 +429,10 @@ typedef struct {
     short ang, oldang, angdir, angdif;
 } spriteinterpolate;
 
-typedef struct {
-    int floorz,ceilingz,lastvx,lastvy;
-    vec3_t bpos;
-    int flags;
-    intptr_t temp_data[10]; // sometimes used to hold pointers to con code
-    short picnum,ang,extra,owner,movflag;
-    short tempang,actorstayput,dispicnum;
-    short timetosleep;
-    char cgg;
-    char filler;
-    projectile_t projectile;
-} ActorData_t;
-
 extern int tempwallptr;
 extern intptr_t frameplace;
 
 extern int g_screenCapture;
-
-
-enum GametypeFlags_t {
-    GAMETYPE_COOP                   = 1,
-    GAMETYPE_WEAPSTAY               = 2,
-    GAMETYPE_FRAGBAR                = 4,
-    GAMETYPE_SCORESHEET             = 8,
-    GAMETYPE_DMSWITCHES             = 16,
-    GAMETYPE_COOPSPAWN              = 32,
-    GAMETYPE_ACCESSCARDSPRITES      = 64,
-    GAMETYPE_COOPVIEW               = 128,
-    GAMETYPE_COOPSOUND              = 256,
-    GAMETYPE_OTHERPLAYERSINMAP      = 512,
-    GAMETYPE_ALLOWITEMRESPAWN       = 1024,
-    GAMETYPE_MARKEROPTION           = 2048,
-    GAMETYPE_PLAYERSFRIENDLY        = 4096,
-    GAMETYPE_FIXEDRESPAWN           = 8192,
-    GAMETYPE_ACCESSATSTART          = 16384,
-    GAMETYPE_PRESERVEINVENTORYDEATH = 32768,
-    GAMETYPE_TDM                    = 65536,
-    GAMETYPE_TDMSPAWN               = 131072
-};
-
-#define GTFLAGS(x) (GametypeFlags[ud.coop] & (x))
-
-// Returns true if attacking a friendly while friendly fire is disabled.
-#define FFIRE_CHECK(p1,p2) (!ud.ffire && (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY) || (GTFLAGS(GAMETYPE_TDM) && (g_player[p1].ps->team == g_player[p2].ps->team))))
 
 extern int g_lastSaveSlot;
 extern int g_restorePalette;
@@ -625,15 +440,6 @@ extern int g_restorePalette;
 extern int cachecount;
 
 //DUKE3D.H:
-typedef struct {
-    short got_access, last_extra, shield_amount, curr_weapon, holoduke_on;
-    short firstaid_amount, steroids_amount, holoduke_amount, jetpack_amount;
-    short heat_amount, scuba_amount, boot_amount;
-    short last_weapon, weapon_pos, kickback_pic;
-    short ammo_amount[MAX_WEAPONS], frag[MAXPLAYERS];
-    char inven_icon, jetpack_on, heat_on, gotweapon[MAX_WEAPONS];
-} STATUSBARTYPE;
-
 extern int g_cameraDistance, g_cameraClock;
 
 extern int stereomode, stereowidth, stereopixelwidth;
@@ -872,48 +678,7 @@ extern char g_szBuf[1024];
 #define NAM_GRENADE_LIFETIME       120
 #define NAM_GRENADE_LIFETIME_VAR    30
 
-#define PWEAPON(Player, Weapon, Wmember) (aplWeapon ## Wmember [Weapon][Player])
-extern intptr_t *aplWeaponClip[MAX_WEAPONS];            // number of items in clip
-extern intptr_t *aplWeaponReload[MAX_WEAPONS];          // delay to reload (include fire)
-extern intptr_t *aplWeaponFireDelay[MAX_WEAPONS];       // delay to fire
-extern intptr_t *aplWeaponHoldDelay[MAX_WEAPONS];       // delay after release fire button to fire (0 for none)
-extern intptr_t *aplWeaponTotalTime[MAX_WEAPONS];       // The total time the weapon is cycling before next fire.
-extern intptr_t *aplWeaponFlags[MAX_WEAPONS];           // Flags for weapon
-extern intptr_t *aplWeaponShoots[MAX_WEAPONS];          // what the weapon shoots
-extern intptr_t *aplWeaponSpawnTime[MAX_WEAPONS];       // the frame at which to spawn an item
-extern intptr_t *aplWeaponSpawn[MAX_WEAPONS];           // the item to spawn
-extern intptr_t *aplWeaponShotsPerBurst[MAX_WEAPONS];   // number of shots per 'burst' (one ammo per 'burst'
-extern intptr_t *aplWeaponWorksLike[MAX_WEAPONS];       // What original the weapon works like
-extern intptr_t *aplWeaponInitialSound[MAX_WEAPONS];    // Sound made when initialy firing. zero for no sound
-extern intptr_t *aplWeaponFireSound[MAX_WEAPONS];       // Sound made when firing (each time for automatic)
-extern intptr_t *aplWeaponSound2Time[MAX_WEAPONS];      // Alternate sound time
-extern intptr_t *aplWeaponSound2Sound[MAX_WEAPONS];     // Alternate sound sound ID
-extern intptr_t *aplWeaponReloadSound1[MAX_WEAPONS];    // Sound of magazine being removed
-extern intptr_t *aplWeaponReloadSound2[MAX_WEAPONS];    // Sound of magazine being inserted
-extern intptr_t *aplWeaponSelectSound[MAX_WEAPONS];     // Sound for weapon selection
-
 extern int g_timerTicsPerSecond;
-
-enum WeaponFlags_t {
-    WEAPON_HOLSTER_CLEARS_CLIP = 1,     // 'holstering' clears the current clip
-    WEAPON_GLOWS               = 2,     // weapon 'glows' (shrinker and grower)
-    WEAPON_AUTOMATIC           = 4,     // automatic fire (continues while 'fire' is held down
-    WEAPON_FIREEVERYOTHER      = 8,     // during 'hold time' fire every frame
-    WEAPON_FIREEVERYTHIRD      = 16,    // during 'hold time' fire every third frame
-    WEAPON_RANDOMRESTART       = 32,    // restart for automatic is 'randomized' by RND 3
-    WEAPON_AMMOPERSHOT         = 64,    // uses ammo for each shot (for automatic)
-    WEAPON_BOMB_TRIGGER        = 128,   // weapon is the 'bomb' trigger
-    WEAPON_NOVISIBLE           = 256,   // weapon use does not cause user to become 'visible'
-    WEAPON_THROWIT             = 512,   // weapon 'throws' the 'shoots' item...
-    WEAPON_CHECKATRELOAD       = 1024,  // check weapon availability at 'reload' time
-    WEAPON_STANDSTILL          = 2048,  // player stops jumping before actual fire (like tripbomb in duke)
-    WEAPON_SPAWNTYPE1          = 0,     // just spawn
-    WEAPON_SPAWNTYPE2          = 4096,  // spawn like shotgun shells
-    WEAPON_SPAWNTYPE3          = 8192,  // spawn like chaingun shells
-    WEAPON_SEMIAUTO            = 16384, // cancel button press after each shot
-    WEAPON_RELOAD_TIMING       = 32768, // special casing for pistol reload sounds
-    WEAPON_RESET               = 65536  // cycle weapon back to frame 1 if fire is held, 0 if not
-};
 
 #define TRIPBOMB_TRIPWIRE           1
 #define TRIPBOMB_TIMER              2
@@ -946,8 +711,6 @@ enum ProjectileFlags_t {
     PROJECTILE_ACCURATE           = 0x00100000,
     PROJECTILE_PENETRATE          = 0x00800000, // TODO: Implement & port to mainline
 };
-
-extern projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
 
 // logo control
 
@@ -996,77 +759,7 @@ extern int g_numRealPalettes;
 
 extern char CheatStrings[][MAXCHEATLEN];
 
-extern short WeaponPickupSprites[MAX_WEAPONS];
-
 extern int g_numQuoteRedefinitions;
-
-typedef struct {
-// this needs to have a copy of everything related to the map/actor state
-// see savegame.c
-    short numwalls;
-    walltype wall[MAXWALLS];
-    short numsectors;
-    sectortype sector[MAXSECTORS];
-    spritetype sprite[MAXSPRITES];
-    spriteext_t spriteext[MAXSPRITES];
-    short tailspritefree;
-    short headspritesect[MAXSECTORS+1];
-    short prevspritesect[MAXSPRITES];
-    short nextspritesect[MAXSPRITES];
-    short headspritestat[MAXSTATUS+1];
-    short prevspritestat[MAXSPRITES];
-    short nextspritestat[MAXSPRITES];
-    short g_numCyclers;
-    short cyclers[MAXCYCLERS][6];
-    PlayerSpawn_t g_playerSpawnPoints[MAXSPAWNPOINTS];
-    short g_numAnimWalls;
-    short SpriteDeletionQueue[1024],g_spriteDeleteQueuePos;
-    animwalltype animwall[MAXANIMWALLS];
-    vec2_t origins[2048];
-    short g_mirrorWall[64], g_mirrorSector[64], g_mirrorCount;
-    char show2dsector[(MAXSECTORS+7)>>3];
-    short g_numClouds,clouds[128],cloudx[128],cloudy[128];
-    int g_pskyidx;
-    ActorData_t actor[MAXSPRITES];
-    short pskyoff[MAXPSKYTILES], pskybits;
-
-    int g_animateCount;
-    sectanim_t sectorAnims[MAXANIMATES];
-
-    char g_numPlayerSprites;
-    char g_earthquakeTime;
-    ClockTicks lockclock;
-    int randomseed, g_globalRandom;
-    char scriptptrs[MAXSPRITES];
-    intptr_t *vars[MAXGAMEVARS];
-} mapstate_t;
-
-typedef struct {
-    int partime, designertime;
-    char *name, *filename, *musicfn, *alt_musicfn;
-    mapstate_t *savedstate;
-} map_t;
-
-
-typedef struct
-{
-    int32_t visibility;
-} PlayerDisplay_t;
-
-typedef struct {
-    DukePlayer_t *ps;
-    PlayerDisplay_t display;
-    input_t *inputBits;
-
-    int32_t movefifoend, syncvalhead, myminlag;
-    int32_t pcolor, pteam, frags[MAXPLAYERS], wchoice[MAX_WEAPONS];
-    int32_t fraggedby_time, fraggedby_id, fragged_time, fragged_id;
-    uint32_t ping;
-
-    char vote, gotvote, playerreadyflag, connected;
-    char user_name[32];
-    char syncval[SYNCFIFOSIZ][MAXSYNCBYTES];
-} playerdata_t;
 
 // key bindings stuff
 typedef struct {
@@ -1088,15 +781,26 @@ extern hashtable_t gamefuncH;
 }
 #endif
 
+#include "_rts.h"
+#include "actors.h"
 #include "common_game.h"
+#include "game.h"
+#include "gametypes.h"
 #include "global.h"
+#include "hud.h"
+#include "inv.h"
+#include "macros.h"
+#include "music.h"
+#include "player.h"
 #include "premap.h"
 #include "quotes.h"
-#include "game.h"
-#include "hud.h"
+#include "rts.h"
 #include "screens.h"
+#include "sector.h"
+#include "sounds.h"
+#include "soundefs.h"
+#include "sync.h"
 #include "oldnet.h"
-#include "actors.h"
 
 static inline int32_t gameHandleEvents(void)
 {

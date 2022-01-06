@@ -5146,7 +5146,7 @@ repeatcase:
 
         C_GetNextValue(LABEL_DEFINE);
         g_scriptPtr--;
-        GametypeFlags[j] = *g_scriptPtr;
+        Gametypes[j].flags = *g_scriptPtr;
 
         C_SkipComments();
 
@@ -5163,17 +5163,17 @@ repeatcase:
 
         while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
         {
-            GametypeNames[j][i] = toupper(*textptr);
+            Gametypes[j].name[i] = toupper(*textptr);
             textptr++,i++;
-            if (i >= (signed)sizeof(GametypeNames[j])-1)
+            if (i >= (signed)sizeof(Gametypes[j].name)-1)
             {
-                initprintf("%s:%d: error: gametype name exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,(int32_t)sizeof(GametypeNames[j])-1);
+                initprintf("%s:%d: error: gametype name exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,(int32_t)sizeof(Gametypes[j].name)-1);
                 g_errorCnt++;
                 C_NextLine();
                 break;
             }
         }
-        GametypeNames[j][i] = '\0';
+        Gametypes[j].name[i] = '\0';
         return 0;
 
     case CON_DEFINELEVELNAME:

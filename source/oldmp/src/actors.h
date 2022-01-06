@@ -1,6 +1,25 @@
 #ifndef ACTORS_H
 #define ACTORS_H
 
+#include "player.h"
+#include "namesdyn.h"
+
+typedef struct {
+    int floorz, ceilingz, lastvx, lastvy;
+    vec3_t bpos;
+    int flags;
+    intptr_t temp_data[10]; // sometimes used to hold pointers to con code
+    short picnum, ang, extra, owner, movflag;
+    short tempang, actorstayput, dispicnum;
+    short timetosleep;
+    char cgg;
+    char filler;
+    projectile_t projectile;
+} ActorData_t;
+extern ActorData_t actor[MAXSPRITES];
+
+extern intptr_t* actorscrptr[MAXTILES];
+
 void G_UpdateInterpolations(void);
 void G_SetInterpolation(int* posptr);
 void G_StopInterpolation(int* posptr);
