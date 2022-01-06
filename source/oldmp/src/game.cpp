@@ -2551,7 +2551,7 @@ void G_DrawBackground(void)
 
     y2 = scale(ydim,200-scale(tilesiz[BOTTOMSTATUSBAR].y,ud.statusbarscale,100),200);
 
-    if ((ud.screen_size > 8) || ((Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR) && ud.screen_size >= 4))
+    if ((ud.screen_size > 8) || ((G_GetFragbarOffset() != 0) && ud.screen_size >= 4))
     {
         // across top
         for (y = 0; y<windowxy1.y; y += tilesiz[dapicnum].y)
