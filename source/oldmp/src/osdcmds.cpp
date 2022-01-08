@@ -35,8 +35,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern int voting, g_doQuickSave;
 struct osdcmd_cheatsinfo osdcmd_cheatsinfo_stat;
 float r_ambientlight = 1.0, r_ambientlightrecip = 1.0;
-extern int althud_numbertile, althud_numberpal, althud_shadows, althud_flashing, hud_glowingquotes;
-extern int hud_showmapname;
+extern int hud_glowingquotes;
 extern int r_maxfps;
 
 static inline int osdcmd_quit(const osdfuncparm_t *parm)
@@ -784,6 +783,7 @@ osdcvardata_t cvar[] =
     { "hud_statusbarmode", "status bar draws over player view" CVAR_BOOL_OPTSTR, (void*)&ud.statusbarmode, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },
     { "hud_textscale", "hud_textscale: sets multiplayer chat message size", (void*)&ud.textscale, CVAR_INT, 100, 400 },
     { "hud_weaponscale","weapon scale", (void*)&ud.weaponscale, CVAR_INT, 10, 100 },
+    { "hud_fragbarstyle", "Sets frag bar style:\n 0: None\n 1: Classic\n 2: StrikerDM (Compact)", (void*)&hud_fragbarstyle, CVAR_INT, 0, 2 },
 
     { "cl_autoaim", "cl_autoaim: enable/disable weapon autoaim", (void*)&ud.config.AutoAim, CVAR_INT|CVAR_MULTI, 0, 2 },
     { "cl_autorun", "player autorun" CVAR_BOOL_OPTSTR, (void*)&ud.auto_run, CVAR_BOOL, 0, 1 },

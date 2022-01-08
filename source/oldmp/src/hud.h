@@ -13,8 +13,14 @@
 #define POLYMOSTTRANS2 (1|32)
 
 // Externals
-extern int hud_glowingquotes;
-extern int hud_showmapname;
+extern int32_t althud_numbertile;
+extern int32_t althud_numberpal;
+extern int32_t althud_shadows;
+extern int32_t althud_flashing;
+
+extern int32_t hud_glowingquotes;
+extern int32_t hud_showmapname;
+extern int32_t hud_fragbarstyle;
 
 extern palette_t CrosshairColors;
 extern palette_t DefaultCrosshairColors;
@@ -83,7 +89,7 @@ static inline int32_t textsc(int sc)
 
 static inline int32_t G_GetFragbarOffset()
 {
-    if (!GTFLAGS(GAMETYPE_FRAGBAR) || ud.screen_size <= 0 || ud.multimode <= 1)
+    if (!GTFLAGS(GAMETYPE_FRAGBAR) || hud_fragbarstyle != 1 || ud.screen_size <= 0 || ud.multimode <= 1)
         return 0;
 
     return 8 + (8 * ((playerswhenstarted - 1) >> 2));

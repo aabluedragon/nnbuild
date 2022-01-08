@@ -2,14 +2,14 @@
 #include "hud.h"
 #include "colmatch.h"
 
-int althud_numbertile = 2930;
-int althud_numberpal = 0;
-int althud_shadows = 1;
-int althud_flashing = 1;
+int32_t althud_numbertile = 2930;
+int32_t althud_numberpal = 0;
+int32_t althud_shadows = 1;
+int32_t althud_flashing = 1;
 
-int hud_glowingquotes = 1;
-int hud_showmapname = 1;
-//int hud_fragbarstyle = 2;
+int32_t hud_glowingquotes = 1;
+int32_t hud_showmapname = 1;
+int32_t hud_fragbarstyle = 2;
 
 palette_t CrosshairColors = { 255, 255, 0, 0 };
 palette_t DefaultCrosshairColors = { 0, 0, 0, 0 };
@@ -38,27 +38,52 @@ void G_SetStatusBarScale(int sc)
 
 void G_DrawFrags(void)
 {
-    int32_t const xpos = (320 << 15) - (tilesiz[FRAGBAR].x << 15);
-    int32_t const numFragbarRows = (playerswhenstarted-1) >> 2;
-    int32_t pNum = 0;
-
-    for (int32_t row = 0; row <= numFragbarRows; row++)
+    if (hud_fragbarstyle == 1) // Classic Fragbar
     {
-        rotatesprite_fs(xpos, (8 * row) << 16, 65600, 0, FRAGBAR, 0, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_NOMASK);
+        int32_t const xpos = (320 << 15) - (tilesiz[FRAGBAR].x << 15);
+        int32_t const numFragbarRows = (playerswhenstarted - 1) >> 2;
+        int32_t pNum = 0;
 
-        for (int32_t column = 0; column < 4; column++, pNum++)
+        for (int32_t row = 0; row <= numFragbarRows; row++)
+        {
+            rotatesprite_fs(xpos, (8 * row) << 16, 65600, 0, FRAGBAR, 0, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_NOMASK);
+
+            for (int32_t column = 0; column < 4; column++, pNum++)
+            {
+                auto const plr = &g_player[pNum];
+
+                if (pNum >= MAXPLAYERS) break;
+                if (!plr->connected) continue;
+
+                // Name
+                minitext(21 + (73 * column), 2 + (8 * row), &plr->user_name[0], plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT);
+
+                // Frag Count
+                Bsprintf(tempbuf, "%d", plr->ps->frag - plr->ps->fraggedself);
+                minitext(67 + (73 * column), 2 + (8 * row), tempbuf, plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT);
+            }
+        }
+    }
+    else if (hud_fragbarstyle == 2) // StrikerDM Fraglist
+    {
+        int32_t const xpos = 267;
+        int32_t const x_offset = scale(120, xdim, ydim) - (160); // Widescreen offset
+        vec2_t const dim = { 52, 5 };
+
+        int32_t ypos = 8;
+        for (int32_t pNum = 0; pNum < MAXPLAYERS; pNum++)
         {
             auto const plr = &g_player[pNum];
+            if (!plr->connected)
+                continue;
 
-            if (pNum >= MAXPLAYERS) break;
-            if (!plr->connected) continue;
+            rotatesprite_(0, 0, 65536, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT | RS_STRETCH | RS_TRANS1 | RS_TRANS2, 0, 0, get_xdim(xpos + x_offset), get_ydim(ypos), get_xdim(xpos + x_offset + dim.x), get_ydim(ypos + dim.y));
+            G_ScreenText(MINIFONT, xpos + 1, ypos, 65536, 0, 0, plr->user_name, -127, plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_ALIGN_R, 0, 3, 5, 1, 1, TEXT_UPPERCASE, 0, 0, xdim, ydim);
             
-            // Name
-            minitext(21 + (73 * column), 2 + (8 * row), &plr->user_name[0], plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT);
-
-            // Frag Count
             Bsprintf(tempbuf, "%d", plr->ps->frag - plr->ps->fraggedself);
-            minitext(67 + (73 * column), 2 + (8 * row), tempbuf, plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT);
+            G_ScreenText(MINIFONT, xpos + (dim.x-1), ypos, 65536, 0, 0, tempbuf, -127, plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_ALIGN_R, 0, 3, 5, 1, 1, TEXT_UPPERCASE | TEXT_XRIGHT, 0, 0, xdim, ydim);
+            
+            ypos += 6;
         }
     }
 }
