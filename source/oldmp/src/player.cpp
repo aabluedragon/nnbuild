@@ -5133,8 +5133,7 @@ void P_ProcessInput(int snum)
 
                 if (klabs(Zdiff) < 256)
                     Zdiff = 0;
-                else if (!shrunk)
-                    p->pos.z += Zdiff;
+                p->pos.z += Zdiff;
 
                 p->vel.z -= 768;
 
