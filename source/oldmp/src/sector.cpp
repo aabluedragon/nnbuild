@@ -262,27 +262,6 @@ int __fastcall A_FindPlayer(spritetype *s, int *d)
     }
 }
 
-int P_FindOtherPlayer(int p,int *d)
-{
-    int j, closest_player = p;
-    int x, closest = 0x7fffffff;
-
-    TRAVERSE_CONNECT(j)
-    if (p != j && sprite[g_player[j].ps->i].extra > 0)
-    {
-        x = klabs(g_player[j].ps->opos.x-g_player[p].ps->pos.x) + klabs(g_player[j].ps->opos.y-g_player[p].ps->pos.y) + (klabs(g_player[j].ps->opos.z-g_player[p].ps->pos.z)>>4);
-
-        if (x < closest)
-        {
-            closest_player = j;
-            closest = x;
-        }
-    }
-
-    *d = closest;
-    return closest_player;
-}
-
 int32_t* G_GetAnimationPointer(int32_t index)
 {
     int32_t target = sectorAnims[index].target;

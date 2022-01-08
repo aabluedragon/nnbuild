@@ -1288,7 +1288,7 @@ void G_MovePlayerSprite(int playerNum)
     DukePlayer_t* p = g_player[playerNum].ps;
     spritetype *s = &sprite[p->i];
 
-    int otherx;
+    int32_t otherx;
 
     if (p->newowner >= 0)  //Looking thru the camera
     {

@@ -44,7 +44,6 @@ extern int isanunderoperator(int lotag);
 extern int isanearoperator(int lotag);
 extern int CheckPlayerInSector(int sect);
 extern int __fastcall A_FindPlayer(spritetype *s,int *d);
-extern int P_FindOtherPlayer(int p,int *d);
 
 extern void G_DoSectorAnimations(void);
 extern int32_t* G_GetAnimationPointer(int32_t index);

@@ -203,6 +203,33 @@ void P_QuickKill(DukePlayer_t *p)
     return;
 }
 
+int P_FindOtherPlayer(int playerNum, int32_t* pDist)
+{
+    int otherPlayer;
+    int closestPlayer = playerNum;
+    int closestPlayerDist = INT32_MAX;
+
+    TRAVERSE_CONNECT(otherPlayer)
+    {
+        if (playerNum != otherPlayer && sprite[g_player[otherPlayer].ps->i].extra > 0)
+        {
+            int otherPlayerDist = klabs(g_player[otherPlayer].ps->opos.x - g_player[playerNum].ps->pos.x) +
+                klabs(g_player[otherPlayer].ps->opos.y - g_player[playerNum].ps->pos.y) +
+                (klabs(g_player[otherPlayer].ps->opos.z - g_player[playerNum].ps->pos.z) >> 4);
+
+            if (otherPlayerDist < closestPlayerDist)
+            {
+                closestPlayer = otherPlayer;
+                closestPlayerDist = otherPlayerDist;
+            }
+        }
+    }
+
+    *pDist = closestPlayerDist;
+
+    return closestPlayer;
+}
+
 static void Proj_DoWaterTracers(vec3_t startPos, vec3_t const* endPos, int n, int16_t ownerSpriteNum)
 {
     if ((klabs(startPos.x - endPos->x) + klabs(startPos.y - endPos->y)) < 3084)
@@ -4972,13 +4999,14 @@ void P_ProcessInput(int snum)
 
         if (psectlotag == ST_1_ABOVE_WATER) //&& p->spritebridge == 0)
         {
+            floorZOffset = PLAYER_ZOFF_SHRUNK;
+
             // Sinking into water
             if (shrunk == 0)
             {
                 floorZOffset = PLAYER_ZOFF_WATER;
                 doFloatbob = true;
             }
-            else floorZOffset = PLAYER_ZOFF_SHRUNK;
 
             if (shrunk == 0 && (noSE7Water || (trueFloorDist <= PHEIGHT)) && !oldnet_predicting)
             {
@@ -5116,7 +5144,7 @@ void P_ProcessInput(int snum)
             else if (p->jumping_counter == 0)
             {
                 p->pos.z += ((floorZ - (floorZOffset >> 1)) - p->pos.z) >> 1; //Smooth on the water
-                if (p->on_warping_sector == 0 && p->pos.z > floorZ - (16 << 8))
+                if (p->on_warping_sector == 0 && p->pos.z > floorZ - PLAYER_MINWATERZDIST)
                 {
                     p->pos.z = floorZ - PLAYER_MINWATERZDIST;
                     p->vel.z >>= 1;
@@ -5334,10 +5362,8 @@ void P_ProcessInput(int snum)
 
         if (shrunk)
         {
-            p->vel.x =
-                mulscale16(p->vel.x, p->runspeed - (p->runspeed >> 1) + (p->runspeed >> 2));
-            p->vel.y =
-                mulscale16(p->vel.y, p->runspeed - (p->runspeed >> 1) + (p->runspeed >> 2));
+            p->vel.x = mulscale16(p->vel.x, p->runspeed - (p->runspeed >> 1) + (p->runspeed >> 2));
+            p->vel.y = mulscale16(p->vel.y, p->runspeed - (p->runspeed >> 1) + (p->runspeed >> 2));
         }
     }
 

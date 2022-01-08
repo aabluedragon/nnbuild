@@ -187,6 +187,7 @@ void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer);
 
 int P_GetHudPal(const DukePlayer_t* pPlayer);
 int P_GetKneePal(const DukePlayer_t* pPlayer);
+int P_FindOtherPlayer(int playerNum, int32_t* pDist);
 
 void P_DisplayScubaMask(int snum);
 void P_DisplayWeapon(int snum);
