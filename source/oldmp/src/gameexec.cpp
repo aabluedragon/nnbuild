@@ -1229,15 +1229,21 @@ static int X_DoExecute(void)
 
     case CON_GLOBALSOUND:
         insptr++;
-        if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
-            insptr++;break;
+            int const soundNum = *insptr++;
+            if ((soundNum < 0 || (unsigned)soundNum > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, keyw[g_tw], soundNum);
+                break;
+            }
+
+            if ((Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND) && !A_CheckEnemySprite(g_sp))
+                A_PlaySound(soundNum, g_player[g_p].ps->i);
+            else if (g_p == screenpeek || (Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND))
+                A_PlaySound(soundNum, g_player[screenpeek].ps->i);
+
+            break;
         }
-        if (g_p == screenpeek || (Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND))
-            A_PlaySound((short) *insptr,g_player[screenpeek].ps->i);
-        insptr++;
-        break;
 
     case CON_SOUND:
         insptr++;
