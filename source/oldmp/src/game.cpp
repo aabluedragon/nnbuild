@@ -10439,8 +10439,8 @@ static int G_DoMoveThings(void)
     }
 
     TRAVERSE_CONNECT(i)
-    {
-        // P_HandlePlayerColor
+    { 
+        // P_HandleTeamChange
         if (g_player[i].inputBits->extbits&(EXTBIT_CHANGETEAM))
         {
             g_player[i].ps->team = g_player[i].pteam;
@@ -10450,12 +10450,15 @@ static int G_DoMoveThings(void)
                 P_QuickKill(g_player[i].ps);
             }
         }
+        // ---
+
+        // P_HandlePlayerColor
         if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
             g_player[i].ps->palookup = g_player[i].pcolor = teams[g_player[i].ps->team].palnum;
 
-        if (sprite[g_player[i].ps->i].pal != 1)
+        if (sprite[g_player[i].ps->i].pal != 1) // Frozen
             sprite[g_player[i].ps->i].pal = g_player[i].pcolor;
-        // P_HandlePlayerColor
+        // ---
 
         sounds_predictable = true;
         P_HandleSharedKeys(i);
