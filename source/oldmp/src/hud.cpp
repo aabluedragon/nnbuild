@@ -36,6 +36,20 @@ void G_SetStatusBarScale(int sc)
     G_UpdateScreenArea();
 }
 
+// For compact fragbar style.
+static void G_DrawFragbarCell(const char* text, uint8_t pal, int32_t ypos, int32_t value)
+{
+    int32_t const xpos = 267;
+    int32_t const x_offset = scale(120, xdim, ydim) - (160); // Widescreen offset
+    vec2_t const dim = { 52, 5 };
+
+    rotatesprite_(0, 0, 65536, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT | RS_STRETCH | RS_TRANS1 | RS_TRANS2, 0, 0, get_xdim(xpos + x_offset), get_ydim(ypos), get_xdim(xpos + x_offset + dim.x), get_ydim(ypos + dim.y));
+    G_ScreenText(MINIFONT, xpos + 1, ypos, 65536, 0, 0, text, -127, pal, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_ALIGN_R, 0, 3, 5, 1, 1, TEXT_UPPERCASE, 0, 0, xdim, ydim);
+
+    Bsprintf(tempbuf, "%d", value);
+    G_ScreenText(MINIFONT, xpos + (dim.x - 1), ypos, 65536, 0, 0, tempbuf, -127, pal, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_ALIGN_R, 0, 3, 5, 1, 1, TEXT_UPPERCASE | TEXT_XRIGHT, 0, 0, xdim, ydim);
+}
+
 void G_DrawFrags(void)
 {
     if (hud_fragbarstyle == 1) // Classic Fragbar
@@ -66,24 +80,52 @@ void G_DrawFrags(void)
     }
     else if (hud_fragbarstyle == 2) // StrikerDM Fraglist
     {
-        int32_t const xpos = 267;
-        int32_t const x_offset = scale(120, xdim, ydim) - (160); // Widescreen offset
-        vec2_t const dim = { 52, 5 };
-
         int32_t ypos = 8;
-        for (int32_t pNum = 0; pNum < MAXPLAYERS; pNum++)
-        {
-            auto const plr = &g_player[pNum];
-            if (!plr->connected)
-                continue;
 
-            rotatesprite_(0, 0, 65536, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT | RS_STRETCH | RS_TRANS1 | RS_TRANS2, 0, 0, get_xdim(xpos + x_offset), get_ydim(ypos), get_xdim(xpos + x_offset + dim.x), get_ydim(ypos + dim.y));
-            G_ScreenText(MINIFONT, xpos + 1, ypos, 65536, 0, 0, plr->user_name, -127, plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_ALIGN_R, 0, 3, 5, 1, 1, TEXT_UPPERCASE, 0, 0, xdim, ydim);
-            
-            Bsprintf(tempbuf, "%d", plr->ps->frag - plr->ps->fraggedself);
-            G_ScreenText(MINIFONT, xpos + (dim.x-1), ypos, 65536, 0, 0, tempbuf, -127, plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_ALIGN_R, 0, 3, 5, 1, 1, TEXT_UPPERCASE | TEXT_XRIGHT, 0, 0, xdim, ydim);
-            
-            ypos += 6;
+        if (GTFLAGS(GAMETYPE_TDM))
+        {
+            for (int32_t team = 0; team < numTeams; team++)
+            {
+                int32_t teamMembers[MAXPLAYERS];
+                int32_t numTeamMembers = 0;
+                for (int32_t pNum = 0; pNum < MAXPLAYERS; pNum++)
+                {
+                    auto const plr = &g_player[pNum];
+                    if (!plr->connected)
+                        continue;
+
+                    if (plr->pteam == team)
+                    {
+                        teamMembers[numTeamMembers++] = pNum;
+                    }
+                }
+
+                if (numTeamMembers > 0)
+                {
+                    G_DrawFragbarCell(teams[team].name, teams[team].palnum, ypos, teams[team].frags - teams[team].suicides);
+                    ypos += 6;
+
+                    for (int32_t i = 0; i < numTeamMembers; i++)
+                    {
+                        auto const plr = &g_player[teamMembers[i]];
+                        G_DrawFragbarCell(plr->user_name, plr->ps->palookup, ypos, plr->ps->frag - plr->ps->fraggedself);
+                        ypos += 6;
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int32_t pNum = 0; pNum < MAXPLAYERS; pNum++)
+            {
+                auto const plr = &g_player[pNum];
+                if (!plr->connected)
+                    continue;
+
+                G_DrawFragbarCell(plr->user_name, plr->ps->palookup, ypos, plr->ps->frag - plr->ps->fraggedself);
+
+                ypos += 6;
+            }
         }
     }
 }
