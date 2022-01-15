@@ -52,8 +52,28 @@ static void G_DrawFragbarCell(const char* text, uint8_t pal, int32_t ypos, int32
 
 void G_DrawFrags(void)
 {
+    if(ud.multimode <= 1 || !(GTFLAGS(GAMETYPE_FRAGBAR)) || ud.screen_size <= 0)
+        return;
+
     if (hud_fragbarstyle == 1) // Classic Fragbar
     {
+        if (!pus)
+        {
+            int i = 0;
+            bool redraw = false;
+
+            TRAVERSE_CONNECT(i)
+                if (g_player[i].ps->frag != sbar.frag[i])
+                    redraw = true;
+
+            if (!redraw)
+                return;
+
+            TRAVERSE_CONNECT(i)
+                if (i != myconnectindex)
+                    sbar.frag[i] = g_player[i].ps->frag;
+        }
+
         int32_t const xpos = (320 << 15) - (tilesiz[FRAGBAR].x << 15);
         int32_t const numFragbarRows = (playerswhenstarted - 1) >> 2;
         int32_t pNum = 0;
@@ -105,9 +125,9 @@ void G_DrawFrags(void)
                     G_DrawFragbarCell(teams[team].name, teams[team].palnum, ypos, teams[team].frags - teams[team].suicides);
                     ypos += 6;
 
-                    for (int32_t i = 0; i < numTeamMembers; i++)
+                    for (int32_t idx = 0; idx < numTeamMembers; idx++)
                     {
-                        auto const plr = &g_player[teamMembers[i]];
+                        auto const plr = &g_player[teamMembers[idx]];
                         G_DrawFragbarCell(plr->user_name, plr->ps->palookup, ypos, plr->ps->frag - plr->ps->fraggedself);
                         ypos += 6;
                     }
@@ -484,28 +504,8 @@ void G_DrawStatusBar(int snum)
         if ((g_currentMenu >= 400 && g_currentMenu <= 405))
             return;
 
-    if (videoGetRenderMode() >= 3) pus = NUMPAGES;   // JBF 20040101: always redraw in GL
-
-    if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR))
-    {
-        if (pus)
-        {
-            G_DrawFrags();
-        }
-        else
-        {
-            TRAVERSE_CONNECT(i)
-                if (g_player[i].ps->frag != sbar.frag[i])
-                {
-                    G_DrawFrags();
-                    break;
-                }
-
-        }
-        TRAVERSE_CONNECT(i)
-            if (i != myconnectindex)
-                sbar.frag[i] = g_player[i].ps->frag;
-    }
+    if (videoGetRenderMode() >= REND_POLYMOST)
+        pus = NUMPAGES;   // JBF 20040101: always redraw in GL
 
     if (ss == 4)   //DRAW MINI STATUS BAR:
     {

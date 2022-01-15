@@ -2278,6 +2278,8 @@ void G_DisplayRest(int smoothratio)
     if (pp->invdisptime > 0)
         G_DrawInventory(pp);
 
+    G_DrawFrags();
+
     Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
     X_OnEvent(EVENT_DISPLAYSBAR, g_player[screenpeek].ps->i, screenpeek, -1);
     if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
