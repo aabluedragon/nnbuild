@@ -5740,19 +5740,26 @@ static int fdmatrix[MAX_WEAPONS][MAX_WEAPONS] =
     {  128, 128, 128, 128,2560, 128,2560,2560, 128, 128, 128, 128 }    //EXPA
 };
 
-static int goalx[MAXPLAYERS], goaly[MAXPLAYERS], goalz[MAXPLAYERS];
-static int goalsect[MAXPLAYERS], goalwall[MAXPLAYERS], goalsprite[MAXPLAYERS], goalspritescore[MAXPLAYERS];
-static int goalplayer[MAXPLAYERS], clipmovecount[MAXPLAYERS];
-short searchsect[MAXSECTORS], searchparent[MAXSECTORS];
-char dashow2dsector[(MAXSECTORS+7)>>3];
+typedef struct
+{
+    vec3_t goalPos;
+    int32_t moveCount;
+    int32_t goalSprite, goalSpriteScore, goalPlayer, goalWall;
+    int16_t goalSect;
+} DukeBotAI_t;
+static DukeBotAI_t botAI[MAXPLAYERS];
+
+int16_t searchsect[MAXSECTORS], searchparent[MAXSECTORS];
+uint8_t dashow2dsector[(MAXSECTORS+7)>>3];
 void computergetinput(int snum, input_t *syn)
 {
     int dx, dy;
     int dist, daang, zang, fightdist, damyang, damysect;
     int startsect, endsect, splc, send, startwall, endwall;
 
+    DukeBotAI_t* bot = &botAI[snum];
     DukePlayer_t *p = g_player[snum].ps;
-    DukePlayer_t *goalp = g_player[goalplayer[snum]].ps;
+    DukePlayer_t *goalp = g_player[bot->goalPlayer].ps;
     walltype *wal;
 
     vec3_t pos1, pos2, pos3;
@@ -5785,12 +5792,12 @@ void computergetinput(int snum, input_t *syn)
 
         if (!cansee(pos1.x, pos1.y, pos1.z - (48 << 8), damysect, pos2.x, pos2.y, pos2.z - (48 << 8), sprite[goalp->i].sectnum))
         {
-            goalplayer[snum] = snum;
+            bot->goalPlayer = snum;
             goalp = g_player[snum].ps;
         }
     }
 
-    if ((goalplayer[snum] == snum) || (goalp->dead_flag != 0))
+    if ((bot->goalPlayer == snum) || (goalp->dead_flag != 0))
     {
         int32_t lastDist = 0x7fffffff;
 
@@ -5809,7 +5816,7 @@ void computergetinput(int snum, input_t *syn)
                 if (dist < lastDist)
                 {
                     lastDist = dist;
-                    goalplayer[snum] = otherPlayer;
+                    bot->goalPlayer = otherPlayer;
                     goalp = g_player[otherPlayer].ps;
                 }
             }
@@ -5980,10 +5987,10 @@ void computergetinput(int snum, input_t *syn)
         return;
     }
 
-    goalsect[snum] = -1;
-    if (goalsect[snum] < 0)
+    bot->goalSect = -1;
+    if (bot->goalSect < 0)
     {
-        goalwall[snum] = -1;
+        bot->goalWall = -1;
         startsect = sprite[p->i].sectnum;
         endsect = sprite[goalp->i].sectnum;
 
@@ -6029,9 +6036,9 @@ void computergetinput(int snum, input_t *syn)
                         for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
                             if (!searchparent[targetSect]) break;
 
-                        goalsect[snum] = searchsect[targetSect];
-                        startwall = sector[goalsect[snum]].wallptr;
-                        endwall = startwall+sector[goalsect[snum]].wallnum;
+                        bot->goalSect = searchsect[targetSect];
+                        startwall = sector[bot->goalSect].wallptr;
+                        endwall = startwall+sector[bot->goalSect].wallnum;
                         pos3.x = pos3.y = 0;
 
                         // CHECKME: Does this break the parent loop?
@@ -6051,7 +6058,7 @@ void computergetinput(int snum, input_t *syn)
                         // CHECKME: Does this break the parent loop?
                         for (wNum = startwall; wNum < endwall; wNum++)
                         {
-                            if (wall[wNum].nextsector != goalsect[snum])
+                            if (wall[wNum].nextsector != bot->goalSect)
                                 continue;
 
                             dx = wall[wall[wNum].point2].x-wall[wNum].x;
@@ -6073,11 +6080,11 @@ void computergetinput(int snum, input_t *syn)
                                 targetWall = wNum;
                             }
                         }
-                        goalwall[snum] = targetWall;
+                        bot->goalWall = targetWall;
                         daang = ((getangle(wall[wall[targetWall].point2].x-wall[targetWall].x,wall[wall[targetWall].point2].y-wall[targetWall].y)+1536)&2047);
-                        goalx[snum] = ((wall[targetWall].x+wall[wall[targetWall].point2].x)>>1)+(sintable[(daang+512)&2047]>>8);
-                        goaly[snum] = ((wall[targetWall].y+wall[wall[targetWall].point2].y)>>1)+(sintable[daang&2047]>>8);
-                        goalz[snum] = sector[goalsect[snum]].floorz-(32<<8);
+                        bot->goalPos.x = ((wall[targetWall].x+wall[wall[targetWall].point2].x)>>1)+(sintable[(daang+512)&2047]>>8);
+                        bot->goalPos.y = ((wall[targetWall].y+wall[wall[targetWall].point2].y)>>1)+(sintable[daang&2047]>>8);
+                        bot->goalPos.z = sector[bot->goalSect].floorz-(32<<8);
                         break;
                     }
                 }
@@ -6104,7 +6111,7 @@ void computergetinput(int snum, input_t *syn)
                             for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
                                 if (!searchparent[targetSect]) break;
 
-                            goalsect[snum] = searchsect[targetSect];
+                            bot->goalSect = searchsect[targetSect];
                             startwall = sector[startsect].wallptr;
                             endwall = startwall + sector[startsect].wallnum;
                             int32_t lastDist = 0;
@@ -6114,30 +6121,31 @@ void computergetinput(int snum, input_t *syn)
                                 dx = wall[wall[wNum].point2].x - wall[wNum].x;
                                 dy = wall[wall[wNum].point2].y - wall[wNum].y;
                                 dist = ksqrt(dx * dx + dy * dy);
-                                if ((wall[wNum].nextsector == goalsect[snum]) && (dist > lastDist))
+                                if ((wall[wNum].nextsector == bot->goalSect) && (dist > lastDist))
                                 {
                                     lastDist = dist;
                                     targetWall = wNum;
                                 }
 
                             }
-                            goalwall[snum] = targetWall;
+                            bot->goalWall = targetWall;
                             daang = ((getangle(wall[wall[targetWall].point2].x - wall[targetWall].x, wall[wall[targetWall].point2].y - wall[targetWall].y) + 1536) & 2047);
-                            goalx[snum] = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(daang + 512) & 2047] >> 8);
-                            goaly[snum] = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[daang & 2047] >> 8);
-                            goalz[snum] = sector[goalsect[snum]].floorz - (32 << 8);
+                            bot->goalPos.x = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(daang + 512) & 2047] >> 8);
+                            bot->goalPos.y = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[daang & 2047] >> 8);
+                            bot->goalPos.z = sector[bot->goalSect].floorz - (32 << 8);
                             break;
                         }
                     }
                 }
             }
-            if (goalwall[snum] >= 0) break;
+            if (bot->goalWall >= 0)
+                break;
         }
     }
 
-    if ((goalsect[snum] < 0) || (goalwall[snum] < 0))
+    if ((bot->goalSect < 0) || (bot->goalWall < 0))
     {
-        if (goalsprite[snum] < 0 || !cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8), sprite[goalsprite[snum]].sectnum))
+        if (bot->goalSprite < 0 || !cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[bot->goalSprite].x,sprite[bot->goalSprite].y,sprite[bot->goalSprite].z-(4<<8), sprite[bot->goalSprite].sectnum))
         {
             int bestsprite = -1, spritescore = 0;
 
@@ -6163,17 +6171,17 @@ void computergetinput(int snum, input_t *syn)
                 }
             }
 
-            if (bestsprite != -1 && (goalsprite[snum] < 0 || spritescore > goalspritescore[snum]))
+            if (bestsprite != -1 && (bot->goalSprite < 0 || spritescore > bot->goalSpriteScore))
             {
-                goalx[snum] = sprite[bestsprite].x;
-                goaly[snum] = sprite[bestsprite].y;
-                goalz[snum] = sprite[bestsprite].z;
-                goalsprite[snum] = bestsprite;
-                goalspritescore[snum] = spritescore;
+                bot->goalPos.x = sprite[bestsprite].x;
+                bot->goalPos.y = sprite[bestsprite].y;
+                bot->goalPos.z = sprite[bestsprite].z;
+                bot->goalSprite = bestsprite;
+                bot->goalSpriteScore = spritescore;
             }
         }
-        pos2.x = goalx[snum];
-        pos2.y = goaly[snum];
+        pos2.x = bot->goalPos.x;
+        pos2.y = bot->goalPos.y;
         dist = ksqrt((pos2.x - pos1.x)*(pos2.x - pos1.x)+(pos2.y - pos1.y)*(pos2.y - pos1.y));
         if (!dist)
             return;
@@ -6182,12 +6190,12 @@ void computergetinput(int snum, input_t *syn)
         syn->svel += (pos2.y - pos1.y)*2047/dist;
         syn->q16avel = min(max(fix16_from_int((((daang+1024-damyang)&2047)-1024)>>3), F16(-127)),F16(127));
     }
-    else if (goalsprite[snum] != -1)
+    else if (bot->goalSprite != -1)
     {
-        if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8), sprite[goalsprite[snum]].sectnum))
+        if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[bot->goalSprite].x,sprite[bot->goalSprite].y,sprite[bot->goalSprite].z-(4<<8), sprite[bot->goalSprite].sectnum))
         {
-            goalspritescore[snum] = 0;
-            goalsprite[snum] = -1;
+            bot->goalSpriteScore = 0;
+            bot->goalSprite = -1;
         }
     }
 
@@ -6206,7 +6214,7 @@ void computergetinput(int snum, input_t *syn)
 
     if (moveResult)
     {
-        clipmovecount[snum]++;
+        bot->moveCount++;
 
         // Avoiding obstructions. (Jumping/crouching)
         int32_t moveType = 0;
@@ -6227,7 +6235,7 @@ void computergetinput(int snum, input_t *syn)
 
         if (moveType & 1)
         {
-            if (clipmovecount[snum] == 4)
+            if (bot->moveCount == 4)
                 syn->bits |= BIT(SK_JUMP);
         }
         if (moveType & 2)
@@ -6245,40 +6253,40 @@ void computergetinput(int snum, input_t *syn)
         syn->fvel += ((sintable[(daang + 1024) & 2047] * strafeVal) >> 17);
         syn->svel += ((sintable[(daang + 512) & 2047] * strafeVal) >> 17);
 
-        if ((clipmovecount[snum]&31) == 2)
+        if ((bot->moveCount&31) == 2)
             syn->bits |= BIT(SK_OPEN);
-        if ((clipmovecount[snum]&31) == 17)
+        if ((bot->moveCount&31) == 17)
             syn->bits |= BIT(SK_QUICK_KICK);
 
-        if (clipmovecount[snum] > 32)
+        if (bot->moveCount > 32)
         {
-            goalsect[snum] = -1;
-            goalwall[snum] = -1;
-            clipmovecount[snum] = 0;
+            bot->goalSect = -1;
+            bot->goalWall = -1;
+            bot->moveCount = 0;
         }
 
-        if (goalsprite[snum] != -1)
+        if (bot->goalSprite != -1)
         {
-            if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[goalsprite[snum]].x,sprite[goalsprite[snum]].y,sprite[goalsprite[snum]].z-(4<<8), sprite[goalsprite[snum]].sectnum))
+            if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[bot->goalSprite].x,sprite[bot->goalSprite].y,sprite[bot->goalSprite].z-(4<<8), sprite[bot->goalSprite].sectnum))
             {
-                goalsprite[snum] = -1;
-                goalspritescore[snum] = 0;
+                bot->goalSprite = -1;
+                bot->goalSpriteScore = 0;
             }
         }
     }
     else
-        clipmovecount[snum] = 0;
+        bot->moveCount = 0;
 
-    if ((goalsect[snum] >= 0) && (goalwall[snum] >= 0))
+    if ((bot->goalSect >= 0) && (bot->goalWall >= 0))
     {
-        pos2.x = goalx[snum];
-        pos2.y = goaly[snum];
+        pos2.x = bot->goalPos.x;
+        pos2.y = bot->goalPos.y;
         dist = ksqrt((pos2.x - pos1.x)*(pos2.x - pos1.x)+(pos2.y - pos1.y)*(pos2.y - pos1.y));
         if (!dist)
             return;
         daang = getangle(pos2.x - pos1.x, pos2.y - pos1.y);
-        if ((goalwall[snum] >= 0) && (dist < 4096))
-            daang = ((getangle(wall[wall[goalwall[snum]].point2].x-wall[goalwall[snum]].x,wall[wall[goalwall[snum]].point2].y-wall[goalwall[snum]].y)+1536)&2047);
+        if ((bot->goalWall >= 0) && (dist < 4096))
+            daang = ((getangle(wall[wall[bot->goalWall].point2].x-wall[bot->goalWall].x,wall[wall[bot->goalWall].point2].y-wall[bot->goalWall].y)+1536)&2047);
         syn->fvel += (pos2.x - pos1.x)*2047/dist;
         syn->svel += (pos2.y - pos1.y)*2047/dist;
         syn->q16avel = min(max(fix16_from_int((((daang+1024-damyang)&2047)-1024)>>3),-127),127);
