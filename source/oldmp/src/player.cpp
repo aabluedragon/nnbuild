@@ -5805,7 +5805,7 @@ void computergetinput(int snum, input_t *syn)
         TRAVERSE_CONNECT(otherPlayer)
         {
             auto pOther = g_player[otherPlayer].ps;
-            if (otherPlayer != snum && !(GTFLAGS(GAMETYPE_TDM) && p->team == pOther->team))
+            if (otherPlayer != snum && !(GTFLAGS(GAMETYPE_TDM) && p->team == pOther->team) && !pOther->dead_flag)
             {
                 dist = ksqrt((sprite[pOther->i].x - pos1.x) * (sprite[pOther->i].x - pos1.x) + (sprite[pOther->i].y - pos1.y) * (sprite[pOther->i].y - pos1.y));
 
