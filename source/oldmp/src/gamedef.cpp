@@ -6172,6 +6172,7 @@ void C_Compile(const char *filenam)
                 "^02%s^02 volunteered for population control",
                 "^02%s^02 has suicided",
                 "^02%s^02 bled out",
+                "^02%s^02 died of ligma",
             };
 
             g_numObituaries = (sizeof(PlayerObituaries)/sizeof(PlayerObituaries[0]));
