@@ -6092,7 +6092,7 @@ void computergetinput(int snum, input_t *syn)
 
             for (int32_t spr = headspritesect[searchsect[splc]]; spr >= 0; spr = nextspritesect[spr])
             {
-                if (sprite[spr].lotag == 7)
+                if (sprite[spr].lotag == SE_7_TELEPORT)
                 {
                     int16_t sect = sprite[sprite[spr].owner].sectnum;
                     if ((dashow2dsector[sect >> 3] & (1 << (sect & 7))) == 0)
@@ -6192,7 +6192,8 @@ void computergetinput(int snum, input_t *syn)
     }
     else if (bot->goalSprite != -1)
     {
-        if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[bot->goalSprite].x,sprite[bot->goalSprite].y,sprite[bot->goalSprite].z-(4<<8), sprite[bot->goalSprite].sectnum))
+        auto const gSpr = &sprite[bot->goalSprite];
+        if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,gSpr->x,gSpr->y,gSpr->z-(4<<8), gSpr->sectnum))
         {
             bot->goalSpriteScore = 0;
             bot->goalSprite = -1;
@@ -6267,7 +6268,8 @@ void computergetinput(int snum, input_t *syn)
 
         if (bot->goalSprite != -1)
         {
-            if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[bot->goalSprite].x,sprite[bot->goalSprite].y,sprite[bot->goalSprite].z-(4<<8), sprite[bot->goalSprite].sectnum))
+            auto const gSpr = &sprite[bot->goalSprite];
+            if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,gSpr->x, gSpr->y, gSpr->z-(4<<8), gSpr->sectnum))
             {
                 bot->goalSprite = -1;
                 bot->goalSpriteScore = 0;
