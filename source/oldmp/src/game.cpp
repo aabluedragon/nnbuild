@@ -9362,7 +9362,7 @@ static void G_DrawFrame()
 
     G_ShowVote();
 
-    if (BUTTON(gamefunc_Show_DukeMatch_Scores))
+    if (BUTTON(gamefunc_Show_Scoreboard))
         G_ShowScores(false);
 
     if (debug_on)

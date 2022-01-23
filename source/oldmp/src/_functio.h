@@ -103,11 +103,7 @@ char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "Next_Weapon",
    "Previous_Weapon",
    "Show_Console",
-#ifndef EDUKE32_STANDALONE
-   "Show_DukeMatch_Scores",
-#else
-   "Show_Multiplayer_Scores",
-#endif
+   "Show_Scoreboard",
    "Dpad_Select",
    "Dpad_Aiming",
    "AutoRun",
