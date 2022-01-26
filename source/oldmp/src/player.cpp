@@ -5797,7 +5797,7 @@ void computergetinput(int snum, input_t *syn)
         }
     }
 
-    if ((bot->goalPlayer == snum) || (goalp->dead_flag != 0))
+    if ((bot->goalPlayer == snum) || goalp->dead_flag)
     {
         int32_t lastDist = 0x7fffffff;
 
@@ -5832,7 +5832,7 @@ void computergetinput(int snum, input_t *syn)
     // Dodge incoming projectiles. Dukebots are a real bastard when it comes to this.
     for (int spr = headspritestat[STAT_PROJECTILE]; spr >= 0; spr = nextspritestat[spr])
     {
-        int dodgeSpeed = 0;
+        int32_t dodgeSpeed = 0;
         switch (DynamicTileMap[sprite[spr].picnum])
         {
         case TONGUE__STATIC:
@@ -5893,7 +5893,7 @@ void computergetinput(int snum, input_t *syn)
         }
     }
 
-    if ((goalp->dead_flag == 0) &&
+    if (!goalp->dead_flag &&
             ((cansee(pos1.x, pos1.y, pos1.z,damysect,pos2.x, pos2.y, pos2.z, sprite[goalp->i].sectnum)) ||
              (cansee(pos1.x, pos1.y, pos1.z-(24<<8),damysect, pos2.x, pos2.y, pos2.z-(24<<8), sprite[goalp->i].sectnum)) ||
              (cansee(pos1.x, pos1.y, pos1.z-(48<<8),damysect, pos2.x, pos2.y, pos2.z-(48<<8), sprite[goalp->i].sectnum))))
@@ -6147,7 +6147,7 @@ void computergetinput(int snum, input_t *syn)
     {
         if (bot->goalSprite < 0 || !cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,sprite[bot->goalSprite].x,sprite[bot->goalSprite].y,sprite[bot->goalSprite].z-(4<<8), sprite[bot->goalSprite].sectnum))
         {
-            int bestsprite = -1, spritescore = 0;
+            int bestSprite = -1, bestScore = 0;
 
             for (int searchCnt = 0; searchCnt < 16; searchCnt++)
             {
@@ -6157,27 +6157,28 @@ void computergetinput(int snum, input_t *syn)
                     if ((sprite[spr].xrepeat <= 0) || (sprite[spr].yrepeat <= 0) || ((sprite[spr].cstat & 32768) == 32768))
                         continue;
 
-                    if (getspritescore(snum, sprite[spr].picnum) <= 0)
+                    int32_t curScore = getspritescore(snum, sprite[spr].picnum);
+                    if (curScore <= 0)
                         continue;
 
                     if (cansee(pos1.x, pos1.y, pos1.z - (32 << 8), damysect, sprite[spr].x, sprite[spr].y, sprite[spr].z - (4 << 8), sect))
                     {
-                        if (getspritescore(snum, sprite[spr].picnum) > spritescore)
+                        if (curScore > bestScore)
                         {
-                            spritescore = getspritescore(snum, sprite[spr].picnum);
-                            bestsprite = spr;
+                            bestScore = curScore;
+                            bestSprite = spr;
                         }
                     }
                 }
             }
 
-            if (bestsprite != -1 && (bot->goalSprite < 0 || spritescore > bot->goalSpriteScore))
+            if (bestSprite != -1 && (bot->goalSprite < 0 || bestScore > bot->goalSpriteScore))
             {
-                bot->goalPos.x = sprite[bestsprite].x;
-                bot->goalPos.y = sprite[bestsprite].y;
-                bot->goalPos.z = sprite[bestsprite].z;
-                bot->goalSprite = bestsprite;
-                bot->goalSpriteScore = spritescore;
+                bot->goalPos.x = sprite[bestSprite].x;
+                bot->goalPos.y = sprite[bestSprite].y;
+                bot->goalPos.z = sprite[bestSprite].z;
+                bot->goalSprite = bestSprite;
+                bot->goalSpriteScore = bestScore;
             }
         }
         pos2.x = bot->goalPos.x;
@@ -6193,7 +6194,7 @@ void computergetinput(int snum, input_t *syn)
     else if (bot->goalSprite != -1)
     {
         auto const gSpr = &sprite[bot->goalSprite];
-        if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,gSpr->x,gSpr->y,gSpr->z-(4<<8), gSpr->sectnum))
+        if (((gSpr->cstat & 32768) == 32768) || !cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,gSpr->x,gSpr->y,gSpr->z-(4<<8), gSpr->sectnum))
         {
             bot->goalSpriteScore = 0;
             bot->goalSprite = -1;
@@ -6269,10 +6270,10 @@ void computergetinput(int snum, input_t *syn)
         if (bot->goalSprite != -1)
         {
             auto const gSpr = &sprite[bot->goalSprite];
-            if (!cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,gSpr->x, gSpr->y, gSpr->z-(4<<8), gSpr->sectnum))
+            if (((gSpr->cstat & 32768) == 32768) || !cansee(pos1.x, pos1.y, pos1.z-(32<<8),damysect,gSpr->x, gSpr->y, gSpr->z-(4<<8), gSpr->sectnum))
             {
-                bot->goalSprite = -1;
                 bot->goalSpriteScore = 0;
+                bot->goalSprite = -1;
             }
         }
     }
