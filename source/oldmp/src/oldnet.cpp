@@ -17,7 +17,6 @@ static int g_chatPlayer = -1;
 static char recbuf[180];
 
 extern char *rtsptr; // game.c
-extern void computergetinput(int snum, input_t *syn);
 
 int pingTime;
 
@@ -238,7 +237,7 @@ void Net_HandleInput(void)
                 {
                     if (ud.playerai /*&& g_player[i].isBot*/) // To-do: Add per-player variable.
                     {
-                        computergetinput(i, &inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i]);
+                        DukeBot_GetInput(i, &inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i]);
                         inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i].svel++;
                         inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i].fvel++;
                     }

@@ -784,6 +784,7 @@ extern hashtable_t gamefuncH;
 #include "_rts.h"
 #include "actors.h"
 #include "common_game.h"
+#include "dukebot.h"
 #include "game.h"
 #include "gametypes.h"
 #include "global.h"

@@ -842,6 +842,7 @@ oldmp_game_objs := \
     config.cpp \
     common.cpp \
     discord.cpp \
+    dukebot.cpp \
     game.cpp \
     gamedef.cpp \
     gameexec.cpp \

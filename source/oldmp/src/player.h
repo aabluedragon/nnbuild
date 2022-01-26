@@ -15,6 +15,16 @@
 #define PLAYER_MINWATERZDIST (16 << 8)
 #define PLAYER_STEP_HEIGHT (20 << 8)
 
+#define TURBOTURNTIME (TICRATE/8) // 7
+#define NORMALTURN   15
+#define PREAMBLETURN 5
+#define NORMALKEYMOVE 40
+#define MAXVEL       ((NORMALKEYMOVE*2)+10)
+#define MAXSVEL      ((NORMALKEYMOVE*2)+10)
+#define MAXANGVEL    1024
+#define MAXHORIZ     127
+#define DIGITALAXISDEADZONE 1024
+
 #define TEST_ALLOWEDCOLOR(pal) (TEST(allowedColors[(pal) >> 3], 1 << ((pal) & 7)))
 #define RESET_ALLOWEDCOLOR(pal) (RESET(allowedColors[(pal) >> 3], 1 << ((pal) & 7)))
 #define SET_ALLOWEDCOLOR(pal) (SET(allowedColors[(pal) >> 3], 1 << ((pal) & 7)))
