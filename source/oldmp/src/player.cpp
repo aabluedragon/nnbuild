@@ -5751,6 +5751,14 @@ static DukeBotAI_t botAI[MAXPLAYERS];
 
 int16_t searchsect[MAXSECTORS], searchparent[MAXSECTORS];
 uint8_t dashow2dsector[(MAXSECTORS+7)>>3];
+
+static bool DukeBot_CanSee(vec3_t pos1, int16_t sect1, vec3_t pos2, int16_t sect2)
+{
+    return ((cansee(pos1.x, pos1.y, pos1.z, sect1, pos2.x, pos2.y, pos2.z, sect2)) ||
+            (cansee(pos1.x, pos1.y, pos1.z - (24 << 8), sect1, pos2.x, pos2.y, pos2.z - (24 << 8), sect2)) ||
+            (cansee(pos1.x, pos1.y, pos1.z - (48 << 8), sect1, pos2.x, pos2.y, pos2.z - (48 << 8), sect2)));
+}
+
 void computergetinput(int snum, input_t *syn)
 {
     int dx, dy;
@@ -5809,8 +5817,8 @@ void computergetinput(int snum, input_t *syn)
             {
                 dist = ksqrt((sprite[pOther->i].x - pos1.x) * (sprite[pOther->i].x - pos1.x) + (sprite[pOther->i].y - pos1.y) * (sprite[pOther->i].y - pos1.y));
 
-                pos2 = sprite[pOther->i].xyz;
-                if (!cansee(pos1.x, pos1.y, pos1.z - (48 << 8), damysect, pos2.x, pos2.y, pos2.z - (48 << 8), sprite[pOther->i].sectnum))
+                vec3_t testPos = sprite[pOther->i].xyz;
+                if(!DukeBot_CanSee(pos1, damysect, testPos, sprite[pOther->i].sectnum))
                     dist <<= 1;
 
                 if (dist < lastDist)
@@ -5893,10 +5901,7 @@ void computergetinput(int snum, input_t *syn)
         }
     }
 
-    if (!goalp->dead_flag &&
-            ((cansee(pos1.x, pos1.y, pos1.z,damysect,pos2.x, pos2.y, pos2.z, sprite[goalp->i].sectnum)) ||
-             (cansee(pos1.x, pos1.y, pos1.z-(24<<8),damysect, pos2.x, pos2.y, pos2.z-(24<<8), sprite[goalp->i].sectnum)) ||
-             (cansee(pos1.x, pos1.y, pos1.z-(48<<8),damysect, pos2.x, pos2.y, pos2.z-(48<<8), sprite[goalp->i].sectnum))))
+    if (bot->goalPlayer != snum && !goalp->dead_flag && DukeBot_CanSee(pos1, damysect, pos2, sprite[goalp->i].sectnum))
     {
         syn->bits |= BIT(SK_FIRE);
 
