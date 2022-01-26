@@ -163,9 +163,8 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
     if (!(numframes & 7))
     {
-        pos2 = sprite[goalp->i].xyz;
-
-        if (!cansee(pos1.x, pos1.y, pos1.z - (48 << 8), damysect, pos2.x, pos2.y, pos2.z - (48 << 8), sprite[goalp->i].sectnum))
+        vec3_t testPos = sprite[goalp->i].xyz;
+        if(!DukeBot_CanSee(pos1, damysect, testPos, sprite[goalp->i].sectnum))
         {
             bot->goalPlayer = snum;
             goalp = g_player[snum].ps;
