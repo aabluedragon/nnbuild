@@ -273,8 +273,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
         }
     }
 
-    vec3_t pos2 = sprite[goalp->i].xyz;
-    if (bot->goalPlayer != snum && !goalp->dead_flag && DukeBot_CanSee(pSpr->xyz, damysect, pos2, sprite[goalp->i].sectnum))
+    vec3_t gpPos = sprite[goalp->i].xyz; // Goal Player's Position
+
+    if (bot->goalPlayer != snum && !goalp->dead_flag && DukeBot_CanSee(pSpr->xyz, damysect, gpPos, sprite[goalp->i].sectnum))
     {
         syn->bits |= BIT(SK_FIRE);
 
@@ -305,13 +306,13 @@ void DukeBot_GetInput(int snum, input_t* syn)
         if (fightdist < 128)
             fightdist = 128;
 
-        dist = ksqrt((pos2.x - pSpr->x) * (pos2.x - pSpr->x) + (pos2.y - pSpr->y) * (pos2.y - pSpr->y));
+        dist = ksqrt((gpPos.x - pSpr->x) * (gpPos.x - pSpr->x) + (gpPos.y - pSpr->y) * (gpPos.y - pSpr->y));
         if (dist == 0)
             dist = 1;
 
-        daang = getangle(pos2.x + (goalp->vel.x >> 14) - pSpr->x, pos2.y + (goalp->vel.y >> 14) - pSpr->y);
-        zang = 100 - ((pos2.z - pSpr->z) * 8) / dist;
-        fightdist = max(fightdist, (klabs(pos2.z - pSpr->z) >> 4));
+        daang = getangle(gpPos.x + (goalp->vel.x >> 14) - pSpr->x, gpPos.y + (goalp->vel.y >> 14) - pSpr->y);
+        zang = 100 - ((gpPos.z - pSpr->z) * 8) / dist;
+        fightdist = max(fightdist, (klabs(gpPos.z - pSpr->z) >> 4));
 
         if (sprite[goalp->i].yrepeat < 32) // Target shrunk?
         {
@@ -327,8 +328,8 @@ void DukeBot_GetInput(int snum, input_t* syn)
         if (dist < 256) // We're close, give 'em the boot.
             syn->bits |= BIT(SK_QUICK_KICK);
 
-        vec2_t fightPos = { (pos2.x + ((pSpr->x - pos2.x) * fightdist / dist)),
-                            (pos2.y + ((pSpr->y - pos2.y) * fightdist / dist)) };
+        vec2_t fightPos = { (gpPos.x + ((pSpr->x - gpPos.x) * fightdist / dist)),
+                            (gpPos.y + ((pSpr->y - gpPos.y) * fightdist / dist)) };
         syn->fvel += (fightPos.x - pSpr->x) * 2047 / dist;
         syn->svel += (fightPos.y - pSpr->y) * 2047 / dist;
 
@@ -345,7 +346,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
             dx = sintable[(sprite[goalp->i].ang + 512) & 2047];
             dy = sintable[sprite[goalp->i].ang & 2047];
 
-            if ((pSpr->x - pos2.x) * dy > (pSpr->y - pos2.y) * dx)
+            if ((pSpr->x - gpPos.x) * dy > (pSpr->y - gpPos.y) * dx)
                 strafeVal += 8192;
             else
                 strafeVal -= 8192;
@@ -622,7 +623,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
             syn->bits |= BIT(SK_CROUCH);
 
         //Strafe attack
-        daang = getangle(pos2.x - pSpr->x, pos2.y - pSpr->y);
+        daang = getangle(gpPos.x - pSpr->x, gpPos.y - pSpr->y);
         if ((moveResult & 0xc000) == 32768)
             daang = getangle(wall[wall[moveResult & (MAXWALLS - 1)].point2].x - wall[moveResult & (MAXWALLS - 1)].x, wall[wall[moveResult & (MAXWALLS - 1)].point2].y - wall[moveResult & (MAXWALLS - 1)].y);
         
