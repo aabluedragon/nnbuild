@@ -671,7 +671,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
             daang = ((getangle(wall[wall[bot->goalWall].point2].x - wall[bot->goalWall].x, wall[wall[bot->goalWall].point2].y - wall[bot->goalWall].y) + 1536) & 2047);
         
         syn->fvel += (bot->goalPos.x - pSpr->x) * 2047 / dist;
-        syn->svel += (bot->goalPos.y - pSpr->y) * 2047 / dist;
-        syn->q16avel = min(max(fix16_from_int((((daang + 1024 - damyang) & 2047) - 1024) >> 3), -127), 127);
+        syn->svel += (bot->goalPos.y - pSpr->y) * 2047 / dist;  
+        syn->q16avel = min(max(fix16_from_int((((daang + 1024 - damyang) & 2047) - 1024) >> 3), F16(-127)), F16(127));
     }
 }
