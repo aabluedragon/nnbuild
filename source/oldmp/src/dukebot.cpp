@@ -136,6 +136,17 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
     return(0);
 }
 
+static inline int32_t DukeBot_GetAngleForWall(int16_t wNum)
+{
+    if ((uint16_t)wNum >= MAXWALLS)
+        return 0;
+
+    auto wall1 = &wall[wNum];
+    auto wall2 = &wall[wall1->point2];
+
+    return (getangle(wall2->x - wall1->x, wall2->y - wall1->y) + 1536) & 2047;
+}
+
 void DukeBot_GetInput(int snum, input_t* syn)
 {
     int dx, dy;
@@ -459,8 +470,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
                                 targetWall = wNum;
                             }
                         }
+
                         bot->goalWall = targetWall;
-                        daang = ((getangle(wall[wall[targetWall].point2].x - wall[targetWall].x, wall[wall[targetWall].point2].y - wall[targetWall].y) + 1536) & 2047);
+                        daang = DukeBot_GetAngleForWall(targetWall);
                         bot->goalPos.x = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(daang + 512) & 2047] >> 8);
                         bot->goalPos.y = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[daang & 2047] >> 8);
                         bot->goalPos.z = sector[bot->goalSect].floorz - (32 << 8);
@@ -508,7 +520,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
                             }
                             bot->goalWall = targetWall;
-                            daang = ((getangle(wall[wall[targetWall].point2].x - wall[targetWall].x, wall[wall[targetWall].point2].y - wall[targetWall].y) + 1536) & 2047);
+                            daang = DukeBot_GetAngleForWall(targetWall);
                             bot->goalPos.x = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(daang + 512) & 2047] >> 8);
                             bot->goalPos.y = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[daang & 2047] >> 8);
                             bot->goalPos.z = sector[bot->goalSect].floorz - (32 << 8);
@@ -625,7 +637,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         //Strafe attack
         daang = getangle(gpPos.x - pSpr->x, gpPos.y - pSpr->y);
         if ((moveResult & 0xc000) == 32768)
-            daang = getangle(wall[wall[moveResult & (MAXWALLS - 1)].point2].x - wall[moveResult & (MAXWALLS - 1)].x, wall[wall[moveResult & (MAXWALLS - 1)].point2].y - wall[moveResult & (MAXWALLS - 1)].y);
+            daang = DukeBot_GetAngleForWall(moveResult & (MAXWALLS - 1));
         
         int32_t strafeClock = (int32_t)totalclock + snum * 13468;
         int32_t strafeVal = sintable[(strafeClock << 6) & 2047];
@@ -668,7 +680,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
         daang = getangle(bot->goalPos.x - pSpr->x, bot->goalPos.y - pSpr->y);
         if ((bot->goalWall >= 0) && (dist < 4096))
-            daang = ((getangle(wall[wall[bot->goalWall].point2].x - wall[bot->goalWall].x, wall[wall[bot->goalWall].point2].y - wall[bot->goalWall].y) + 1536) & 2047);
+            daang = DukeBot_GetAngleForWall(bot->goalWall);
         
         syn->fvel += (bot->goalPos.x - pSpr->x) * 2047 / dist;
         syn->svel += (bot->goalPos.y - pSpr->y) * 2047 / dist;  
