@@ -156,7 +156,6 @@ void DukeBot_GetInput(int snum, input_t* syn)
     DukeBotAI_t* bot = &botAI[snum];
     DukePlayer_t* p = g_player[snum].ps;
     DukePlayer_t* goalp = g_player[bot->goalPlayer].ps;
-    walltype* wal;
 
     auto pSpr = &sprite[p->i];
 
@@ -365,7 +364,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
             syn->fvel += ((sintable[(daang + 1024) & 2047] * strafeVal) >> 17);
             syn->svel += ((sintable[(daang + 512) & 2047] * strafeVal) >> 17);
 
-            if (!(rand() % 200)) // Randomly jump around a bit in battle.
+            if ((dist > 256) && !(rand() % 200)) // Randomly jump around a bit in battle.
                 syn->bits |= BIT(SK_JUMP);
         }
 
@@ -382,16 +381,22 @@ void DukeBot_GetInput(int snum, input_t* syn)
         startsect = sprite[p->i].sectnum;
         endsect = sprite[goalp->i].sectnum;
 
+        // [JM] I think this needs better documentation.
+        // Still having a hard time figuring out everything this does.
+
         clearbufbyte(dashow2dsector, (MAXSECTORS + 7) >> 3, 0L);
         searchsect[0] = startsect;
         searchparent[0] = -1;
         dashow2dsector[startsect >> 3] |= (1 << (startsect & 7));
+
         for (splc = 0, send = 1; splc < send; splc++)
         {
             startwall = sector[searchsect[splc]].wallptr;
             endwall = startwall + sector[searchsect[splc]].wallnum;
 
             int32_t wNum = 0;
+            walltype* wal;
+
             for (wNum = startwall, wal = &wall[startwall]; wNum < endwall; wNum++, wal++)
             {
                 int16_t sect = wal->nextsector;
