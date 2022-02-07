@@ -1263,30 +1263,30 @@ static void prepare_spawns(void)
         }
 
         // Get position
-        g_playerSpawnPoints[(unsigned char)g_numPlayerSprites].ox = s->x;
-        g_playerSpawnPoints[(unsigned char)g_numPlayerSprites].oy = s->y;
-        g_playerSpawnPoints[(unsigned char)g_numPlayerSprites].oz = s->z;
-        g_playerSpawnPoints[(unsigned char)g_numPlayerSprites].oa = s->ang;
-        g_playerSpawnPoints[(unsigned char)g_numPlayerSprites].os = s->sectnum;
+        g_playerSpawnPoints[g_numPlayerSprites].ox = s->x;
+        g_playerSpawnPoints[g_numPlayerSprites].oy = s->y;
+        g_playerSpawnPoints[g_numPlayerSprites].oz = s->z;
+        g_playerSpawnPoints[g_numPlayerSprites].oa = s->ang;
+        g_playerSpawnPoints[g_numPlayerSprites].os = s->sectnum;
+        g_playerSpawnPoints[g_numPlayerSprites].pal = s->pal;
         g_numPlayerSprites++;
 
-        A_DeleteSprite(i); // Purge with great prejudice
+        A_DeleteSprite(i); // Purge the APLAYER sprite, we don't need it anymore.
         i = nexti;
     }
 }
 
-static void insert_player_sprite(int p)
+static void insert_player_sprite(int pNum)
 {
-    int spriteIndex;
-    int sp; // Spawn point number
-    spritetype *s;
+    int32_t spawnPoint = pNum % g_numPlayerSprites; // Wrap spawn point index if more players than spawns.
+    int32_t spriteIndex = A_InsertSprite(g_playerSpawnPoints[spawnPoint].os, g_playerSpawnPoints[spawnPoint].ox, g_playerSpawnPoints[spawnPoint].oy, g_playerSpawnPoints[spawnPoint].oz,
+        APLAYER, 0, 0, 0, g_playerSpawnPoints[spawnPoint].oa, 0, 0, 0, 10);
 
-    sp = p % g_numPlayerSprites; // Wrap spawn point index if more players than spawns.
-    spriteIndex = A_InsertSprite(g_playerSpawnPoints[sp].os, g_playerSpawnPoints[sp].ox, g_playerSpawnPoints[sp].oy, g_playerSpawnPoints[sp].oz,
-        APLAYER, 0, 0, 0, g_playerSpawnPoints[sp].oa, 0, 0, 0, 10);
-    s = &sprite[spriteIndex];
+    spritetype* s = &sprite[spriteIndex];
+    auto p = g_player[pNum].ps;
 
     s->owner = spriteIndex;
+    s->pal = g_playerSpawnPoints[spawnPoint].pal;
     s->shade = 0;
     s->xrepeat = 42;
     s->yrepeat = 36;
@@ -1295,21 +1295,21 @@ static void insert_player_sprite(int p)
     s->clipdist = 64;
 
     // Either reset health to max if starting an episode, inventory is to be preserved, or was dead in the last level.
-    if ((ud.last_level == -1) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1) || g_player[p].ps->last_extra <= 0)
+    if ((ud.last_level == -1) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1) || p->last_extra <= 0)
     {
-        g_player[p].ps->last_extra = g_player[p].ps->max_player_health;
-        s->extra = g_player[p].ps->max_player_health;
-        g_player[p].ps->runspeed = g_playerFriction;
+        p->last_extra = p->max_player_health;
+        s->extra = p->max_player_health;
+        p->runspeed = g_playerFriction;
     }
-    else s->extra = g_player[p].ps->last_extra; // Use health from previous level.
+    else s->extra = p->last_extra; // Use health from previous level.
 
     // Set sprite yvel to player index
-    s->yvel = p;
+    s->yvel = pNum;
 
-    // Find a palette that doesn't match another player if color set to auto and not in TDM.
-    if (!g_player[p].pcolor && ud.multimode > 1 && !(Gametypes[ud.coop].flags & GAMETYPE_TDM))
+    // Find a palette that doesn't match another player if color set to auto (0) and not in TDM.
+    if ((g_player[pNum].pcolor == 0) && ud.multimode > 1 && !(Gametypes[ud.coop].flags & GAMETYPE_TDM))
     {
-        if (s->pal == 0) // Pal is 0, meaning "auto".
+        if (s->pal == 0) // Spawn point isn't colored.
         {
             int colorfound = 0;
             int currentpal = playerColor_getNextColor(0, 1);
@@ -1347,35 +1347,35 @@ static void insert_player_sprite(int p)
                 g_lastPlayerPal = currentpal;
             }
             
-            g_player[p].pcolor = s->pal = g_player[p].ps->palookup = currentpal;
+            s->pal = p->palookup = currentpal;
         }
         else
         {
-            g_player[p].pcolor = g_player[p].ps->palookup = s->pal;
+            p->palookup = s->pal; // Take on color of spawn point.
         }
     }
     else
     {
-        int k = g_player[p].pcolor;
+        int k = g_player[pNum].pcolor;
 
         if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
         {
-            k = teams[g_player[p].pteam].palnum;
-            g_player[p].ps->team = g_player[p].pteam;
+            k = teams[g_player[pNum].pteam].palnum;
+            p->team = g_player[pNum].pteam;
         }
-        s->pal = g_player[p].ps->palookup = k;
+        s->pal = p->palookup = k;
     }
 
-    g_player[p].ps->i = spriteIndex;
-    g_player[p].ps->frag_ps = p;
+    p->i = spriteIndex;
+    p->frag_ps = pNum;
     actor[spriteIndex].owner = spriteIndex;
 
-    actor[spriteIndex].bpos.x = g_player[p].ps->bobposx = g_player[p].ps->opos.x = g_player[p].ps->pos.x = s->x;
-    actor[spriteIndex].bpos.y = g_player[p].ps->bobposy = g_player[p].ps->opos.y = g_player[p].ps->pos.y = s->y;
-    actor[spriteIndex].bpos.z = g_player[p].ps->opos.z = g_player[p].ps->pos.z = s->z;
-    g_player[p].ps->oq16ang = g_player[p].ps->q16ang = fix16_from_int(s->ang);
+    actor[spriteIndex].bpos.x = p->bobposx = p->opos.x = p->pos.x = s->x;
+    actor[spriteIndex].bpos.y = p->bobposy = p->opos.y = p->pos.y = s->y;
+    actor[spriteIndex].bpos.z = p->opos.z = p->pos.z = s->z;
+    p->oq16ang = p->q16ang = fix16_from_int(s->ang);
 
-    g_player[p].ps->cursectnum = s->sectnum;
+    p->cursectnum = s->sectnum;
 }
 
 static void resetpspritevars(char g)

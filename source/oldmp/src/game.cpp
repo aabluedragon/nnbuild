@@ -10456,10 +10456,12 @@ static int G_DoMoveThings(void)
 
         // P_HandlePlayerColor
         if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
-            g_player[i].ps->palookup = g_player[i].pcolor = teams[g_player[i].ps->team].palnum;
+            g_player[i].ps->palookup = teams[g_player[i].ps->team].palnum;
 
         if (sprite[g_player[i].ps->i].pal != 1) // Frozen
-            sprite[g_player[i].ps->i].pal = g_player[i].pcolor;
+        {
+            sprite[g_player[i].ps->i].pal = g_player[i].ps->palookup;
+        }
         // ---
 
         sounds_predictable = true;

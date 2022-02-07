@@ -407,8 +407,9 @@ struct savehead {
 };
 
 typedef struct {
-    int ox,oy,oz;
-    short oa,os;
+    int32_t ox,oy,oz;
+    int16_t oa,os;
+    uint8_t pal;
 } PlayerSpawn_t;
 
 extern char g_numPlayerSprites;
