@@ -494,7 +494,7 @@ void S_Cleanup(void)
 
         int const spriteNum = voice.owner;
 
-        Bassert(bitmap_test(&snd->playing, voiceindex));
+        //Bassert(bitmap_test(&snd->playing, voiceindex)); // [JM] Temporarily disable this assert on TX's suggestion.
         bitmap_clear(&snd->playing, voiceindex);
 
         if (snd->flags & SF_TALK && g_dukeTalk)
