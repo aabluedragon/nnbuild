@@ -1416,7 +1416,10 @@ static void G_PrintCoords(int snum)
     Bsprintf(tempbuf, "A/H/HO= %s, %s, %s", ang, horiz, horizoff);
     printext256(x, y += 9, 31, -1, tempbuf, tsize);
 
-    Bsprintf(tempbuf, "ZV= %d", g_player[snum].ps->vel.z);
+    Bsprintf(tempbuf, "XYZ Vel= (%d,%d,%d)", g_player[snum].ps->vel.x, g_player[snum].ps->vel.y, g_player[snum].ps->vel.z);
+    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+
+    Bsprintf(tempbuf, "F/S Vel= (%d,%d)", g_player[myconnectindex].inputBits->fvel, g_player[myconnectindex].inputBits->svel);
     printext256(x, y += 9, 31, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "OG= %d", g_player[snum].ps->on_ground);
