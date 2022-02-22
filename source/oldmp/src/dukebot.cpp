@@ -27,6 +27,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "dukebot.h"
 #include "namesdyn.h"
 
+//#define BOT_DEBUG
+
 static DukeBotAI_t botAI[MAXPLAYERS];
 
 int16_t searchsect[MAXSECTORS], searchparent[MAXSECTORS];
@@ -435,7 +437,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
     {
         if (bot->seekSpriteFailCount > BOT_SEEK_GIVEUP || !DukeBot_IsSpriteValid(bot->goalSprite)) // Can't see or reach, abandon.
         {
+#ifdef BOT_DEBUG
             OSD_Printf("^06DukeBot %d (%s)^15: Goal sprite unreachable for too long, or is gone. Abandoning.\n", snum, g_player[snum].user_name);
+#endif
             bot->lastGoalSprite = bot->goalSprite;
             bot->goalSprite = -1;
             bot->goalSpriteScore = 0;
@@ -450,10 +454,12 @@ void DukeBot_GetInput(int snum, input_t* syn)
         // No goal sprite, or haven't seen existing goal sprite for a while.
         if (bot->goalSprite == -1 || (bot->seekSpriteFailCount > BOT_SEEK_LOOKFORBETTER))
         {
+#ifdef BOT_DEBUG
             if (bot->goalSprite != -1)
                 OSD_Printf("^06DukeBot %d (%s)^15: Looking for higher scoring sprite.\n", snum, g_player[snum].user_name);
             else
                 OSD_Printf("^06DukeBot %d (%s)^15: Looking for new goal sprite.\n", snum, g_player[snum].user_name);
+#endif
 
             static int32_t stat_list[] = { STAT_ACTOR, STAT_ZOMBIEACTOR };
             int32_t bestSprite = -1, bestScore = 0;
@@ -493,7 +499,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
             if (bestSprite != -1 && (bot->goalSprite == -1 || (bestScore > bot->goalSpriteScore)))
             {
+#ifdef BOT_DEBUG
                 OSD_Printf("^06DukeBot %d (%s)^15: New sprite acquired.\n", snum, g_player[snum].user_name);
+#endif
                 bot->goalSprite = bestSprite;
                 bot->goalSpriteScore = bestScore;
                 bot->seekSpriteFailCount = 0;
@@ -501,7 +509,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
             }
             else if (closestSprite != -1 && (closestScore >= bot->goalSpriteScore))
             {
+#ifdef BOT_DEBUG
                 OSD_Printf("^06DukeBot %d (%s)^15: Fell back to closest unseen sprite.\n", snum, g_player[snum].user_name);
+#endif
                 bot->goalSprite = closestSprite;
                 bot->goalSpriteScore = closestScore;
                 //bot->seekSpriteFailCount = 0;
@@ -509,7 +519,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
             }
             else
             {
+#ifdef BOT_DEBUG
                 OSD_Printf("^06DukeBot %d (%s)^15: No sprite found.\n", snum, g_player[snum].user_name);
+#endif
                 bot->seekSpriteCooldown = 60;
             }
         }
@@ -821,7 +833,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
         syn->fvel += ((lsPos->x - pSpr->x) * 2047) / lastSeenDist;
         syn->svel += ((lsPos->y - pSpr->y) * 2047) / lastSeenDist;
 
+#ifdef BOT_DEBUG
         OSD_Printf("DukeBot #%d (%s): ^02Cannot see player %d, heading to XYZ: %d, %d, %d (Dist: %d)\n", snum, g_player[snum].user_name, bot->goalPlayer, lsPos->x, lsPos->y, lsPos->z, lastSeenDist);
+#endif
     }
 
     if (seeSprite)
@@ -834,8 +848,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
         syn->fvel += ((gSpr->x - pSpr->x) * 2047) / sprDist;
         syn->svel += ((gSpr->y - pSpr->y) * 2047) / sprDist;
-
+#ifdef BOT_DEBUG
         //OSD_Printf("DukeBot #%d (%s): Sprite seen. Pursuing. (Dist: %d)\n", snum, g_player[snum].user_name, sprDist);
+#endif
     }
     else bot->seekSpriteFailCount++;
 
