@@ -1754,6 +1754,7 @@ int G_EnterLevel(int g)
     // NEED these just before starting, after setting up everything else.
     clearfifo();
     G_ClearGametypeStats();
+    DukeBot_ResetAll();
 
     waitforeverybody();
     mmulti_flushpackets();

@@ -8349,15 +8349,22 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     break;
                 case 'q':
                 case 'Q':
+                {
                     initprintf("Fake multiplayer mode.\n");
+
                     if (*(++c) == 0) ud.multimode = 1;
-                    else ud.multimode = atoi(c)%17;
+                    else ud.multimode = atoi(c) % (MAXPLAYERS + 1);
+
+                    for (int pNum = 1; pNum < ud.multimode; pNum++)
+                        g_player[pNum].isBot = 1;
+
                     ud.m_coop = ud.coop = 0;
                     ud.m_marker = ud.marker = 1;
                     ud.m_respawn_monsters = ud.respawn_monsters = 1;
                     ud.m_respawn_items = ud.respawn_items = 1;
                     ud.m_respawn_inventory = ud.respawn_inventory = 1;
                     break;
+                }
                 case 'r':
                 case 'R':
                     ud.m_recstat = 1;

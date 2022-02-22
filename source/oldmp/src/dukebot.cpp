@@ -1,3 +1,28 @@
+//-------------------------------------------------------------------------
+/*
+Copyright (C) 1996, 2003 - 3D Realms Entertainment
+Copyright (C) 2000, 2003 - Matt Saettler (EDuke Enhancements)
+Copyright (C) 2004, 2007 - EDuke32 developers
+Copyright (C) 2022, 2022 - Jordon Moss (Aka. StrikerTheHedgefox)
+
+This file is part of EDuke32 / NetDuke32
+
+EDuke32 is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License version 2
+as published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+*/
+//-------------------------------------------------------------------------
+
 #include "duke3d.h"
 #include "dukebot.h"
 #include "namesdyn.h"
@@ -6,6 +31,41 @@ static DukeBotAI_t botAI[MAXPLAYERS];
 
 int16_t searchsect[MAXSECTORS], searchparent[MAXSECTORS];
 uint8_t dashow2dsector[(MAXSECTORS + 7) >> 3];
+
+// Keep these 10 chars or under.
+const char* bot_names[] = {
+    "Bweebol",      "Chubbs",       "DickKikem",    "Balzac",
+    "2Phat",        "Dookie",       "Manhandlr",    "MurderBot",
+    "Lo Wang",      "Caleb",        "Bombshell",    "Scrotal",
+    "Arnie",        "Termin8r",     "SteelBalz",    "BotMcBot",
+    "Aimbot",       "DodgyMF",      "Devast8r",     "Overlord",
+    "Cycloid",      "Lenoman",      "BotHausen",    "CrazyJoe",
+    "BoSchitt",     "Duke4.bot",    "AliensSuk",    "Protozoid",
+    "Sgt.Farts",    "LigmaBot",     "Zuckerbrg",    "BogosBint",
+    "Dr.Proton",    "Rigelatin",    "Deez Nuts",    "GrsyMagic",
+    "Aniki",        "Darkholme",    "Ricardo",      "Gachi",
+    "CV-96",        "DEADBEEF",     "DukeBurgr",    "Mr. Ass",
+    "SukItDown",    "FISTOSHIT",    "Trash Man",    "DethKlok",
+    "Pickles",      "Skwisgaar",    "Wartooth",     "MurdrFace",
+    "Explosion",    "X2P1158",      "HAL 9000",     "DNCASHMAN",
+    "Zilla",        "Chernobog",    "Cerberus",     "PIZOFCHET",
+    "Dreemurr",     "Homer",        "Liztroop",     "Enforcer",
+    "Pigcop",       "MaknBacon",    "IcedPenis",    "Bazinga",
+    "Tile 2200",    "Dylan",        "Taradino",     "Lorelei",
+    "Thi",          "Doug",         "Ian",          "El Oscuro",
+    "Yogi",         "Yuri",         "Vinny",        "Ringo",
+    "Hank",         "Quintin",      "Orion",        "Phobos",
+    "Electric6",    "Carnage",      "Marvin",       "P. Dood",
+    "Covfefe",      "Gorefield",    "Zardoz",       "SEENINE",
+    "OOZFILTER",    "Meat",         "Sponge",       "Pretzel",
+    "Booti",        "Capussi",      "Scoot",        "Fromage",
+    "DankyKang",    "Wicket",       "HeThicc",      "V-Dub",
+    "Robotnik",     "WollSmoth",    "AAAAAAAAA",    "PlzHelp",
+    "Dio",          "VargFren",     "Pantherk",     "Luigo",
+    "JankOClok",    "CancrMaus",    "H4MMER",       "Gideon",
+    "BOTYOT",       "DUKEYOT",      "ABADBABE",     "BEEFBABE",
+    "DEADC0DE",     "DEFEC8ED",     "D0D0CACA",     "1337C0D3",
+};
 
 // This matrix is used to determine how far a dukebot will engage another player
 // based on what weapon they're carrying, and what weapon their opponent is using.
@@ -26,11 +86,19 @@ static int32_t fdmatrix[MAX_WEAPONS][MAX_WEAPONS] =
     {  128, 128, 128, 128,2560, 128,2560,2560, 128, 128, 128, 128 }    //EXPA
 };
 
-static bool DukeBot_CanSee(vec3_t pos1, int16_t sect1, vec3_t pos2, int16_t sect2)
+static bool DukeBot_CanSee(vec3_t* pos1, int16_t sect1, vec3_t* pos2, int16_t sect2)
 {
-    return ((cansee(pos1.x, pos1.y, pos1.z, sect1, pos2.x, pos2.y, pos2.z, sect2)) ||
-            (cansee(pos1.x, pos1.y, pos1.z - (24 << 8), sect1, pos2.x, pos2.y, pos2.z - (24 << 8), sect2)) ||
-            (cansee(pos1.x, pos1.y, pos1.z - (48 << 8), sect1, pos2.x, pos2.y, pos2.z - (48 << 8), sect2)));
+    return (cansee(pos1->x, pos1->y, pos1->z, sect1, pos2->x, pos2->y, pos2->z, sect2) ||
+            cansee(pos1->x, pos1->y, pos1->z - (24 << 8), sect1, pos2->x, pos2->y, pos2->z - (24 << 8), sect2) ||
+            cansee(pos1->x, pos1->y, pos1->z - (48 << 8), sect1, pos2->x, pos2->y, pos2->z - (48 << 8), sect2));
+}
+
+static bool DukeBot_CanSeeItem(vec3_t* pos1, int16_t sect1, int32_t spriteNum)
+{
+    auto spr = &sprite[spriteNum];
+    return (cansee(pos1->x, pos1->y, pos1->z - (24 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum) ||
+            cansee(pos1->x, pos1->y, pos1->z - (48 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum) ||
+            cansee(pos1->x, pos1->y, pos1->z - (72 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum));
 }
 
 static int32_t weapScore[MAX_WEAPONS][2] =
@@ -97,43 +165,53 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
 
         case COLA__STATIC:
             if (sprite[p->i].extra < p->max_player_health) return 10;
-            return 1;
+            return 0;
         case SIXPAK__STATIC:
             if (sprite[p->i].extra < p->max_player_health) return 30;
-            return 1;
+            return 0;
         case FIRSTAID__STATIC:
             if (p->firstaid_amount < p->max_player_health) return 100;
-            return 1;
+            return 0;
         case SHIELD__STATIC:
             if (p->shield_amount < p->max_shield_amount) return 50;
-            return 1;
+            return 0;
         case STEROIDS__STATIC:
             if (p->steroids_amount < 400) return 30;
-            return 1;
+            return 0;
         case AIRTANK__STATIC:
             if (p->scuba_amount < 6400) return 30;
-            return 1;
+            return 0;
         case JETPACK__STATIC:
             if (p->jetpack_amount < 1600) return 100;
-            return 1;
+            return 0;
         case HEATSENSOR__STATIC:
             if (p->heat_amount < 1200) return 5;
-            return 1;
+            return 0;
         case ACCESSCARD__STATIC:
             return 1;
         case BOOTS__STATIC:
             if (p->boot_amount < 200) return 15;
-            return 1;
+            return 0;
         case ATOMICHEALTH__STATIC:
             if (sprite[p->i].extra < p->max_player_health << 1) return 50;
-            return 1;
+            return 0;
         case HOLODUKE__STATIC:
             if (p->holoduke_amount < 2400) return 5;
-            return 1;
-        case MUSICANDSFX__STATIC: // Why?
+            return 0;
+        case RESPAWNMARKERGREEN__STATIC:
             return 1;
     }
+
     return(0);
+}
+
+static inline bool DukeBot_IsSpriteValid(int32_t spriteNum)
+{
+    auto spr = &sprite[spriteNum];
+    if ((uint32_t)spriteNum >= MAXSPRITES)
+        return false;
+
+    return !((spr->xrepeat <= 0) || (spr->yrepeat <= 0) || ((spr->cstat & 32768) == 32768) || (spr->statnum == MAXSTATUS));
 }
 
 static inline int32_t DukeBot_GetAngleForWall(int16_t wNum)
@@ -147,17 +225,98 @@ static inline int32_t DukeBot_GetAngleForWall(int16_t wNum)
     return (getangle(wall2->x - wall1->x, wall2->y - wall1->y) + 1536) & 2047;
 }
 
+static inline bool DukeBot_CheckUsableSector(int16_t sectNum)
+{
+    if ((uint16_t)sectNum >= MAXSECTORS)
+        return false;
+
+    switch (sector[sectNum].lotag)
+    {
+        case ST_15_WARP_ELEVATOR:
+        case ST_16_PLATFORM_DOWN:
+        case ST_17_PLATFORM_UP:
+        case ST_18_ELEVATOR_DOWN:
+        case ST_19_ELEVATOR_UP:
+        case ST_21_FLOOR_DOOR:
+        case ST_28_DROP_FLOOR:
+        case ST_30_ROTATE_RISE_BRIDGE:
+        {
+            if (GetAnimationGoal(sectNum, SECTANIM_FLOOR) == -1)
+                return true;
+
+            break;
+        }
+        case ST_20_CEILING_DOOR:
+        case ST_22_SPLITTING_DOOR:
+        case ST_29_TEETH_DOOR:
+        {
+            if (GetAnimationGoal(sectNum, SECTANIM_CEILING) == -1)
+                return true;
+
+            break;
+        }
+        case ST_23_SWINGING_DOOR:
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void DukeBot_Init(int32_t playerNum)
+{
+    DukeBotAI_t* bot = &botAI[playerNum];
+
+    bot->goalWall = -1;
+    bot->goalSprite = -1;
+    bot->goalSpriteScore = 0;
+    bot->lastGoalSprite = -1;
+
+    bot->goalPlayer = playerNum;
+
+    bot->moveCount = 0;
+    bot->seekSpriteCooldown = 0;
+    bot->seekSpriteFailCount = 0;
+}
+
+void DukeBot_Activate(int32_t playerNum)
+{
+    DukeBotAI_t* bot = &botAI[playerNum];
+    if (bot->active || !g_player[playerNum].isBot)
+        return;
+
+    DukeBot_Init(playerNum);
+
+    int32_t botRand = time(0) + playerNum;
+    snprintf(g_player[playerNum].user_name, sizeof(g_player[0].user_name), "*%s", bot_names[seed_krand(&botRand) % ARRAY_SIZE(bot_names)]);
+
+    bot->active = 1;
+}
+
+void DukeBot_ResetAll()
+{
+    for (int32_t playerNum = 1; playerNum < ud.multimode; playerNum++)
+    {
+        DukeBotAI_t* bot = &botAI[playerNum];
+
+        if (bot->active)
+            DukeBot_Init(playerNum);
+        else if (ud.playerai)
+            DukeBot_Activate(playerNum);
+    }
+}
+
 void DukeBot_GetInput(int snum, input_t* syn)
 {
-    int dx, dy;
-    int dist, daang, zang, fightdist, damyang, damysect;
-    int startsect, endsect, splc, send, startwall, endwall;
-
     DukeBotAI_t* bot = &botAI[snum];
     DukePlayer_t* p = g_player[snum].ps;
     DukePlayer_t* goalp = g_player[bot->goalPlayer].ps;
 
     auto pSpr = &sprite[p->i];
+
+    if (!bot->active || ud.limit_hit || ud.pause_on)
+        return; 
 
     syn->fvel = 0;
     syn->svel = 0;
@@ -166,23 +325,12 @@ void DukeBot_GetInput(int snum, input_t* syn)
     syn->bits = 0;
     syn->extbits = 0;
 
-    if (ud.limit_hit)
-        return;
+    bool doStrafe = false;
 
-    damyang = sprite[p->i].ang;
-    damysect = sprite[p->i].sectnum;
-    if ((numplayers >= 2) && (snum == myconnectindex))
-    {
-        //pos1 = predictedPlayer.pos;
-        //pos1.z += PHEIGHT;
-        damyang = fix16_to_int(predictedPlayer.q16ang);
-        damysect = predictedPlayer.cursectnum;
-    }
-
-    if (!(numframes & 7))
+    if ((bot->cycleCount & 7) == 0)
     {
         vec3_t testPos = sprite[goalp->i].xyz;
-        if(!DukeBot_CanSee(pSpr->xyz, damysect, testPos, sprite[goalp->i].sectnum))
+        if(!DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &testPos, sprite[goalp->i].sectnum))
         {
             bot->goalPlayer = snum;
             goalp = g_player[snum].ps;
@@ -191,33 +339,30 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
     if ((bot->goalPlayer == snum) || goalp->dead_flag)
     {
-        int32_t lastDist = 0x7fffffff;
+        int32_t lastDist = INT32_MAX;
 
-        int otherPlayer;
+        int32_t otherPlayer;
         TRAVERSE_CONNECT(otherPlayer)
         {
             auto pOther = g_player[otherPlayer].ps;
             if (otherPlayer != snum && !(GTFLAGS(GAMETYPE_TDM) && p->team == pOther->team) && !pOther->dead_flag)
             {
-                dist = ksqrt((sprite[pOther->i].x - pSpr->x) * (sprite[pOther->i].x - pSpr->x) + (sprite[pOther->i].y - pSpr->y) * (sprite[pOther->i].y - pSpr->y));
+                int32_t curDist = dist(&pSpr->xyz, &sprite[pOther->i].xyz);
 
-                vec3_t testPos = sprite[pOther->i].xyz;
-                if (!DukeBot_CanSee(pSpr->xyz, damysect, testPos, sprite[pOther->i].sectnum))
-                    dist <<= 1;
+                if (!DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &sprite[pOther->i].xyz, sprite[pOther->i].sectnum))
+                    curDist <<= 1;
+                else
+                    bot->lastSeenPlayerPos[otherPlayer] = sprite[pOther->i].xyz;
 
-                if (dist < lastDist)
+                if (curDist < lastDist)
                 {
-                    lastDist = dist;
+                    lastDist = curDist;
                     bot->goalPlayer = otherPlayer;
                     goalp = g_player[otherPlayer].ps;
                 }
             }
         }
     }
-
-    if (p->dead_flag) syn->bits |= BIT(SK_OPEN);
-    if ((p->firstaid_amount > 0) && (p->last_extra < 100))
-        syn->bits |= BIT(SK_MEDKIT);
 
     // Dodge incoming projectiles. Dukebots are a real bastard when it comes to this.
     for (int spr = headspritestat[STAT_PROJECTILE]; spr >= 0; spr = nextspritestat[spr])
@@ -249,17 +394,17 @@ void DukeBot_GetInput(int snum, input_t* syn)
             {
                 if (tmulscale11(projPos.x - pSpr->x, projPos.x - pSpr->x, projPos.y - pSpr->y, projPos.y - pSpr->y, (projPos.z - pSpr->z) >> 4, (projPos.z - pSpr->z) >> 4) < 3072)
                 {
-                    dx = sintable[(sprite[spr].ang + 512) & 2047];
-                    dy = sintable[sprite[spr].ang & 2047];
+                    vec2_t d = { sintable[(sprite[spr].ang + 512) & 2047],
+                                 sintable[sprite[spr].ang & 2047] };
 
                     int32_t dodgeDir;
-                    if ((pSpr->x - projPos.x) * dy > (pSpr->y - projPos.y) * dx)
+                    if ((pSpr->x - projPos.x) * d.y > (pSpr->y - projPos.y) * d.x)
                         dodgeDir = -dodgeSpeed * 512;
                     else
                         dodgeDir = dodgeSpeed * 512;
 
-                    syn->fvel -= mulscale17(dy, dodgeDir);
-                    syn->svel += mulscale17(dx, dodgeDir);
+                    syn->fvel -= mulscale17(d.y, dodgeDir);
+                    syn->svel += mulscale17(d.x, dodgeDir);
                 }
 
                 if (dodgeCnt < 7)
@@ -283,144 +428,173 @@ void DukeBot_GetInput(int snum, input_t* syn)
         }
     }
 
-    vec3_t gpPos = sprite[goalp->i].xyz; // Goal Player's Position
+    if (bot->seekSpriteCooldown > 0)
+        bot->seekSpriteCooldown--;
 
-    if (bot->goalPlayer != snum && !goalp->dead_flag && DukeBot_CanSee(pSpr->xyz, damysect, gpPos, sprite[goalp->i].sectnum))
+    if (bot->goalSprite != -1)
     {
-        syn->bits |= BIT(SK_FIRE);
-
-        if ((p->curr_weapon == HANDBOMB_WEAPON) && (!(rand() & 7)))
-            syn->bits &= ~BIT(SK_FIRE);
-
-        if (p->curr_weapon == TRIPBOMB_WEAPON)
-            syn->bits |= ((rand() % MAX_WEAPONS) << SK_WEAPON_BITS);
-
-        if ((p->steroids_amount >= 400) && !(rand() % 100))
-            syn->bits |= BIT(SK_STEROIDS);
-
-        if (p->curr_weapon == RPG_WEAPON)
+        if (bot->seekSpriteFailCount > BOT_SEEK_GIVEUP || !DukeBot_IsSpriteValid(bot->goalSprite)) // Can't see or reach, abandon.
         {
-            hitdata_t hit;
-            vec3_t testPos = pSpr->xyz;
-
-            // Let's not commit seppuku with rockets.
-            testPos.z -= PHEIGHT;
-            hitscan(&testPos, damysect, sintable[(damyang + 512) & 2047], sintable[damyang & 2047],
-                fix16_to_int(F16(100) - p->q16horiz - p->q16horizoff) * 32, &hit, CLIPMASK1);
-
-            if ((hit.x - pSpr->x) * (hit.x - pSpr->x) + (hit.y - pSpr->y) * (hit.y - pSpr->y) < 2560 * 2560)
-                syn->bits &= ~BIT(SK_FIRE);
-        }
-
-        fightdist = fdmatrix[p->curr_weapon][goalp->curr_weapon];
-        if (fightdist < 128)
-            fightdist = 128;
-
-        dist = ksqrt((gpPos.x - pSpr->x) * (gpPos.x - pSpr->x) + (gpPos.y - pSpr->y) * (gpPos.y - pSpr->y));
-        if (dist == 0)
-            dist = 1;
-
-        daang = getangle(gpPos.x + (goalp->vel.x >> 14) - pSpr->x, gpPos.y + (goalp->vel.y >> 14) - pSpr->y);
-        zang = 100 - ((gpPos.z - pSpr->z) * 8) / dist;
-        fightdist = max(fightdist, (klabs(gpPos.z - pSpr->z) >> 4));
-
-        if (sprite[goalp->i].yrepeat < 32) // Target shrunk?
-        {
-            fightdist = 0;
-            syn->bits &= ~BIT(SK_FIRE);
-        }
-        if (sprite[goalp->i].pal == 1) // Target frozen?
-        {
-            fightdist = 0;
-            syn->bits &= ~BIT(SK_FIRE);
-        }
-
-        if (dist < 256) // We're close, give 'em the boot.
-            syn->bits |= BIT(SK_QUICK_KICK);
-
-        vec2_t fightPos = { (gpPos.x + ((pSpr->x - gpPos.x) * fightdist / dist)),
-                            (gpPos.y + ((pSpr->y - gpPos.y) * fightdist / dist)) };
-        syn->fvel += (fightPos.x - pSpr->x) * 2047 / dist;
-        syn->svel += (fightPos.y - pSpr->y) * 2047 / dist;
-
-        //Strafe attack
-        if (fightdist)
-        {
-            int32_t strafeClock = (int32_t)totalclock + snum * 13468;
-            int32_t strafeVal = sintable[(strafeClock << 6) & 2047];
-
-            strafeVal += sintable[((strafeClock + 4245) << 5) & 2047];
-            strafeVal += sintable[((strafeClock + 6745) << 4) & 2047];
-            strafeVal += sintable[((strafeClock + 15685) << 3) & 2047];
-
-            dx = sintable[(sprite[goalp->i].ang + 512) & 2047];
-            dy = sintable[sprite[goalp->i].ang & 2047];
-
-            if ((pSpr->x - gpPos.x) * dy > (pSpr->y - gpPos.y) * dx)
-                strafeVal += 8192;
-            else
-                strafeVal -= 8192;
-
-            syn->fvel += ((sintable[(daang + 1024) & 2047] * strafeVal) >> 17);
-            syn->svel += ((sintable[(daang + 512) & 2047] * strafeVal) >> 17);
-
-            if ((dist > 256) && !(rand() % 200)) // Randomly jump around a bit in battle.
-                syn->bits |= BIT(SK_JUMP);
-        }
-
-        syn->q16avel = min(max(fix16_from_int((((daang + 1024 - damyang) & 2047) - 1024) >> 1), F16(-127)), F16(127));
-        syn->q16horz = min(max(fix16_from_int(zang) - p->q16horiz, F16(-MAXHORIZ)), F16(MAXHORIZ));
-        syn->bits |= BIT(SK_AIMMODE);
-        return;
+            OSD_Printf("^06DukeBot %d (%s)^15: Goal sprite unreachable for too long, or is gone. Abandoning.\n", snum, g_player[snum].user_name);
+            bot->lastGoalSprite = bot->goalSprite;
+            bot->goalSprite = -1;
+            bot->goalSpriteScore = 0;
+            bot->seekSpriteFailCount = 0;
+            bot->seekSpriteCooldown = 60;
+        }      
     }
 
-    bot->goalSect = -1;
-    if (bot->goalSect < 0)
+    //if ((bot->goalSect < 0) || (bot->goalWall < 0))
+    if (!bot->seekSpriteCooldown)
+    {
+        // No goal sprite, or haven't seen existing goal sprite for a while.
+        if (bot->goalSprite == -1 || (bot->seekSpriteFailCount > BOT_SEEK_LOOKFORBETTER))
+        {
+            if (bot->goalSprite != -1)
+                OSD_Printf("^06DukeBot %d (%s)^15: Looking for higher scoring sprite.\n", snum, g_player[snum].user_name);
+            else
+                OSD_Printf("^06DukeBot %d (%s)^15: Looking for new goal sprite.\n", snum, g_player[snum].user_name);
+
+            static int32_t stat_list[] = { STAT_ACTOR, STAT_ZOMBIEACTOR };
+            int32_t bestSprite = -1, bestScore = 0;
+            int32_t closestSprite = -1, closestScore = 0, closestDist = INT32_MAX;
+
+            for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(stat_list); i++)
+            {
+                int32_t spriteNum;
+                for (SPRITES_OF(stat_list[i], spriteNum))
+                {
+                    auto spr = &sprite[spriteNum];
+                    if ((spriteNum == bot->lastGoalSprite) || !DukeBot_IsSpriteValid(spriteNum))
+                        continue;
+
+                    int32_t curScore = DukeBot_GetSpriteScore(snum, spriteNum);
+                    if (curScore <= 0)
+                        continue;
+
+                    int32_t curDist = ldist(&pSpr->xyz, &spr->xyz);
+                    if (curDist < closestDist) // Which is closer?
+                    {
+                        closestSprite = spriteNum;
+                        closestScore = curScore;
+                        closestDist = curDist;
+                    }
+
+                    if (!DukeBot_CanSeeItem(&pSpr->xyz, pSpr->sectnum, spriteNum))
+                        continue;
+                    
+                    if (curScore > bestScore)
+                    {
+                        bestScore = curScore;
+                        bestSprite = spriteNum;
+                    }
+                }
+            }
+
+            if (bestSprite != -1 && (bot->goalSprite == -1 || (bestScore > bot->goalSpriteScore)))
+            {
+                OSD_Printf("^06DukeBot %d (%s)^15: New sprite acquired.\n", snum, g_player[snum].user_name);
+                bot->goalSprite = bestSprite;
+                bot->goalSpriteScore = bestScore;
+                bot->seekSpriteFailCount = 0;
+                //bot->seekSpriteCooldown = 60;
+            }
+            else if (closestSprite != -1 && (closestScore >= bot->goalSpriteScore))
+            {
+                OSD_Printf("^06DukeBot %d (%s)^15: Fell back to closest unseen sprite.\n", snum, g_player[snum].user_name);
+                bot->goalSprite = closestSprite;
+                bot->goalSpriteScore = closestScore;
+                //bot->seekSpriteFailCount = 0;
+                bot->seekSpriteCooldown = 30;
+            }
+            else
+            {
+                OSD_Printf("^06DukeBot %d (%s)^15: No sprite found.\n", snum, g_player[snum].user_name);
+                bot->seekSpriteCooldown = 60;
+            }
+        }
+    }
+
+    auto gpSpr = &sprite[goalp->i];
+    bool seePlayer = (!goalp->dead_flag && DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &gpSpr->xyz, gpSpr->sectnum));
+    bool seeSprite = (bot->goalSprite != -1) ? DukeBot_CanSeeItem(&pSpr->xyz, pSpr->sectnum, bot->goalSprite) : false;
+    bool prioritizeItems = ((pSpr->extra <= 50) || (p->curr_weapon == KNEE_WEAPON) || (p->ammo_amount[p->curr_weapon] <= (p->max_ammo_amount[p->curr_weapon] >> 3)));
+
+    int32_t gpDist = max(ldist(&pSpr->xyz, &gpSpr->xyz), 1);
+    int32_t sprDist = (bot->goalSprite != -1) ? max(ldist(&pSpr->xyz, &sprite[bot->goalSprite].xyz), 1) : INT32_MAX;
+
+    // Search sectors.
+    int splc, send, startwall, endwall;
+
     {
         bot->goalWall = -1;
-        startsect = sprite[p->i].sectnum;
-        endsect = sprite[goalp->i].sectnum;
+        int32_t startsect = sprite[p->i].sectnum; // Player's current sector.
+        int32_t endsect = sprite[goalp->i].sectnum;
+
+        if (bot->goalSprite != -1)
+        {
+            if (!seeSprite)
+                sprDist <<= 8;
+
+            if (prioritizeItems)
+                sprDist = 0;
+            
+            if (sprDist < gpDist)
+                endsect = sprite[bot->goalSprite].sectnum;
+        }
 
         // [JM] I think this needs better documentation.
         // Still having a hard time figuring out everything this does.
 
-        clearbufbyte(dashow2dsector, (MAXSECTORS + 7) >> 3, 0L);
+        clearbufbyte(dashow2dsector, sizeof(dashow2dsector), 0);
         searchsect[0] = startsect;
         searchparent[0] = -1;
         dashow2dsector[startsect >> 3] |= (1 << (startsect & 7));
 
         for (splc = 0, send = 1; splc < send; splc++)
         {
-            startwall = sector[searchsect[splc]].wallptr;
-            endwall = startwall + sector[searchsect[splc]].wallnum;
+            int16_t curSectNum = searchsect[splc];
+            startwall = sector[curSectNum].wallptr;
+            endwall = startwall + sector[curSectNum].wallnum;
 
             int32_t wNum = 0;
             walltype* wal;
 
             for (wNum = startwall, wal = &wall[startwall]; wNum < endwall; wNum++, wal++)
             {
-                int16_t sect = wal->nextsector;
-                if (sect < 0)
+                int16_t nextSect = wal->nextsector;
+                if (nextSect < 0)
                     continue;
 
-                dx = ((wall[wal->point2].x + wal->x) >> 1);
-                dy = ((wall[wal->point2].y + wal->y) >> 1);
+                vec2_t d = { ((wall[wal->point2].x + wal->x) >> 1),
+                             ((wall[wal->point2].y + wal->y) >> 1) };
 
-                if ((getceilzofslope(sect, dx, dy) > getflorzofslope(sect, dx, dy) - (28 << 8)) && ((sector[sect].lotag < 15) || (sector[sect].lotag > 22)))
+                int32_t curFloorZ = yax_getflorzofslope(curSectNum, d);
+                int32_t nextFloorZ = yax_getflorzofslope(nextSect, d);
+                int32_t nextCeilZ = yax_getceilzofslope(nextSect, d);
+
+                int32_t curLotag = sector[curSectNum].lotag;
+                int32_t nextLotag = sector[nextSect].lotag;
+
+                // Ceiling too low, and not a usable sector.
+                if ((nextCeilZ > nextFloorZ - (28 << 8)) && ((nextLotag < ST_15_WARP_ELEVATOR) || (nextLotag > ST_22_SPLITTING_DOOR)))
                     continue;
 
-                if (getflorzofslope(sect, dx, dy) < getflorzofslope(searchsect[splc], dx, dy) - (72 << 8))
+                // Floor too high for sector we're searching from?
+                if (nextFloorZ < curFloorZ - (72 << 8) &&
+                    !((nextLotag >= ST_15_WARP_ELEVATOR && nextLotag <= ST_19_ELEVATOR_UP) || nextLotag == ST_21_FLOOR_DOOR) &&
+                    !(curLotag >= ST_15_WARP_ELEVATOR && curLotag <= ST_19_ELEVATOR_UP))
                     continue;
 
-                if ((dashow2dsector[sect >> 3] & (1 << (sect & 7))) == 0)
+                if ((dashow2dsector[nextSect >> 3] & (1 << (nextSect & 7))) == 0)
                 {
-                    dashow2dsector[sect >> 3] |= (1 << (sect & 7));
-                    searchsect[send] = (short)sect;
-                    searchparent[send] = (short)splc;
+                    dashow2dsector[nextSect >> 3] |= (1 << (nextSect & 7));
+                    searchsect[send] = (int16_t)nextSect;
+                    searchparent[send] = (int16_t)splc;
                     send++;
-                    if (sect == endsect)
+                    if (nextSect == endsect)
                     {
-                        clearbufbyte(dashow2dsector, (MAXSECTORS + 7) >> 3, 0L);
+                        clearbufbyte(dashow2dsector, sizeof(dashow2dsector), 0);
 
                         int16_t targetSect;
                         for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
@@ -429,9 +603,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
                         for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
                             if (!searchparent[targetSect]) break;
 
-                        bot->goalSect = searchsect[targetSect];
-                        startwall = sector[bot->goalSect].wallptr;
-                        endwall = startwall + sector[bot->goalSect].wallnum;
+                        int32_t searchingSect = searchsect[targetSect];
+                        startwall = sector[searchingSect].wallptr;
+                        endwall = startwall + sector[searchingSect].wallnum;
 
                         vec2_t wPos = { 0, 0 };
                         // CHECKME: Does this break the parent loop?
@@ -451,11 +625,11 @@ void DukeBot_GetInput(int snum, input_t* syn)
                         // CHECKME: Does this break the parent loop?
                         for (wNum = startwall; wNum < endwall; wNum++)
                         {
-                            if (wall[wNum].nextsector != bot->goalSect)
+                            if (wall[wNum].nextsector != searchingSect)
                                 continue;
 
-                            dx = wall[wall[wNum].point2].x - wall[wNum].x;
-                            dy = wall[wall[wNum].point2].y - wall[wNum].y;
+                            vec2_t d = { wall[wall[wNum].point2].x - wall[wNum].x,
+                                         wall[wall[wNum].point2].y - wall[wNum].y };
 
                             //if (dx*(y1-wall[i].y) <= dy*(x1-wall[i].x))
                             //   if (dx*(y2-wall[i].y) >= dy*(x2-wall[i].x))
@@ -468,24 +642,25 @@ void DukeBot_GetInput(int snum, input_t* syn)
                                 }
                             }
 
-                            dist = ksqrt(dx * dx + dy * dy);
-                            if (dist > lastDist)
+                            int32_t wallDist = ksqrt(d.x * d.x + d.y * d.y);
+                            if (wallDist > lastDist)
                             {
-                                lastDist = dist;
+                                lastDist = wallDist;
                                 targetWall = wNum;
                             }
                         }
 
                         bot->goalWall = targetWall;
-                        daang = DukeBot_GetAngleForWall(targetWall);
-                        bot->goalPos.x = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(daang + 512) & 2047] >> 8);
-                        bot->goalPos.y = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[daang & 2047] >> 8);
-                        bot->goalPos.z = sector[bot->goalSect].floorz - (32 << 8);
+                        int32_t wallAng = DukeBot_GetAngleForWall(targetWall);
+                        bot->goalPos.x = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(wallAng + 512) & 2047] >> 8);
+                        bot->goalPos.y = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[wallAng & 2047] >> 8);
+                        bot->goalPos.z = sector[searchingSect].floorz - (32 << 8);
                         break;
                     }
                 }
             }
 
+            // Propagate search through teleporters? I think?
             for (int32_t spr = headspritesect[searchsect[splc]]; spr >= 0; spr = nextspritesect[spr])
             {
                 if (sprite[spr].lotag == SE_7_TELEPORT)
@@ -494,8 +669,8 @@ void DukeBot_GetInput(int snum, input_t* syn)
                     if ((dashow2dsector[sect >> 3] & (1 << (sect & 7))) == 0)
                     {
                         dashow2dsector[sect >> 3] |= (1 << (sect & 7));
-                        searchsect[send] = (short)sect;
-                        searchparent[send] = (short)splc;
+                        searchsect[send] = (int16_t)sect;
+                        searchparent[send] = (int16_t)splc;
                         send++;
                         if (sect == endsect)
                         {
@@ -507,188 +682,287 @@ void DukeBot_GetInput(int snum, input_t* syn)
                             for (targetSect = send - 1; targetSect >= 0; targetSect = searchparent[targetSect])
                                 if (!searchparent[targetSect]) break;
 
-                            bot->goalSect = searchsect[targetSect];
+                            int32_t searchingSect = searchsect[targetSect];
                             startwall = sector[startsect].wallptr;
                             endwall = startwall + sector[startsect].wallnum;
+
                             int32_t lastDist = 0;
                             int32_t targetWall = startwall;
                             for (int32_t wNum = startwall; wNum < endwall; wNum++)
                             {
-                                dx = wall[wall[wNum].point2].x - wall[wNum].x;
-                                dy = wall[wall[wNum].point2].y - wall[wNum].y;
-                                dist = ksqrt(dx * dx + dy * dy);
-                                if ((wall[wNum].nextsector == bot->goalSect) && (dist > lastDist))
+                                vec2_t d = { wall[wall[wNum].point2].x - wall[wNum].x,
+                                             wall[wall[wNum].point2].y - wall[wNum].y };
+
+                                int32_t wallDist = ksqrt(d.x * d.x + d.y * d.y);
+                                if ((wall[wNum].nextsector == searchingSect) && (wallDist > lastDist))
                                 {
-                                    lastDist = dist;
+                                    lastDist = wallDist;
                                     targetWall = wNum;
                                 }
 
                             }
+
                             bot->goalWall = targetWall;
-                            daang = DukeBot_GetAngleForWall(targetWall);
-                            bot->goalPos.x = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(daang + 512) & 2047] >> 8);
-                            bot->goalPos.y = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[daang & 2047] >> 8);
-                            bot->goalPos.z = sector[bot->goalSect].floorz - (32 << 8);
+                            int32_t wallAng = DukeBot_GetAngleForWall(targetWall);
+                            bot->goalPos.x = ((wall[targetWall].x + wall[wall[targetWall].point2].x) >> 1) + (sintable[(wallAng + 512) & 2047] >> 8);
+                            bot->goalPos.y = ((wall[targetWall].y + wall[wall[targetWall].point2].y) >> 1) + (sintable[wallAng & 2047] >> 8);
+                            bot->goalPos.z = sector[searchingSect].floorz - (32 << 8);
                             break;
                         }
                     }
                 }
             }
+
             if (bot->goalWall >= 0)
                 break;
         }
     }
 
-    if ((bot->goalSect < 0) || (bot->goalWall < 0))
-    {
-        if (bot->goalSprite < 0 || !cansee(pSpr->x, pSpr->y, pSpr->z - (32 << 8), damysect, sprite[bot->goalSprite].x, sprite[bot->goalSprite].y, sprite[bot->goalSprite].z - (4 << 8), sprite[bot->goalSprite].sectnum))
-        {
-            int bestSprite = -1, bestScore = 0;
-
-            for (int searchCnt = 0; searchCnt < 16; searchCnt++)
-            {
-                int16_t sect = (rand() % numsectors);
-                for (int32_t spr = headspritesect[sect]; spr >= 0; spr = nextspritesect[spr])
-                {
-                    if ((sprite[spr].xrepeat <= 0) || (sprite[spr].yrepeat <= 0) || ((sprite[spr].cstat & 32768) == 32768))
-                        continue;
-
-                    int32_t curScore = DukeBot_GetSpriteScore(snum, spr);
-                    if (curScore <= 0)
-                        continue;
-
-                    if (cansee(pSpr->x, pSpr->y, pSpr->z - (32 << 8), damysect, sprite[spr].x, sprite[spr].y, sprite[spr].z - (4 << 8), sect))
-                    {
-                        if (curScore > bestScore)
-                        {
-                            bestScore = curScore;
-                            bestSprite = spr;
-                        }
-                    }
-                }
-            }
-
-            if (bestSprite != -1 && (bot->goalSprite < 0 || bestScore > bot->goalSpriteScore))
-            {
-                bot->goalPos.x = sprite[bestSprite].x;
-                bot->goalPos.y = sprite[bestSprite].y;
-                bot->goalPos.z = sprite[bestSprite].z;
-                bot->goalSprite = bestSprite;
-                bot->goalSpriteScore = bestScore;
-            }
-        }
-
-        dist = ksqrt((bot->goalPos.x - pSpr->x) * (bot->goalPos.x - pSpr->x) + (bot->goalPos.y - pSpr->y) * (bot->goalPos.y - pSpr->y));
-        if (!dist)
-            return;
-
-        daang = getangle(bot->goalPos.x - pSpr->x, bot->goalPos.y - pSpr->y);
-        syn->fvel += (bot->goalPos.x - pSpr->x) * 2047 / dist;
-        syn->svel += (bot->goalPos.y - pSpr->y) * 2047 / dist;
-        syn->q16avel = min(max(fix16_from_int((((daang + 1024 - damyang) & 2047) - 1024) >> 3), F16(-127)), F16(127));
-    }
-    else if (bot->goalSprite != -1)
-    {
-        auto const gSpr = &sprite[bot->goalSprite];
-        if (((gSpr->cstat & 32768) == 32768) || !cansee(pSpr->x, pSpr->y, pSpr->z - (32 << 8), damysect, gSpr->x, gSpr->y, gSpr->z - (4 << 8), gSpr->sectnum))
-        {
-            bot->goalSpriteScore = 0;
-            bot->goalSprite = -1;
-        }
-    }
-
     vec3_t curPos = p->pos;
-    int16_t dasect = p->cursectnum;
+    int16_t curSect = p->cursectnum;
 
-    int32_t moveResult = clipmove(&curPos, &dasect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
+    int32_t moveResult = clipmove(&curPos, &curSect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
+    int32_t moveType = 0;
+
+    // Get Angle
+    int32_t faceAngle = getangle(bot->goalPos.x - pSpr->x, bot->goalPos.y - pSpr->y);
+
+    if (seePlayer)
+        faceAngle = getangle(gpSpr->x - pSpr->x, gpSpr->y - pSpr->y);
+    else if (seeSprite)
+    {
+        auto gSpr = &sprite[bot->goalSprite];
+        faceAngle = getangle(gSpr->x - pSpr->x, gSpr->y - pSpr->y);
+    }
 
     if (!moveResult)
     {
         curPos = p->pos;
         curPos.z += (24 << 8);
-        dasect = p->cursectnum;
-        moveResult = clipmove(&curPos, &dasect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
+        curSect = p->cursectnum;
+        moveResult = clipmove(&curPos, &curSect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
     }
 
     if (moveResult)
     {
         bot->moveCount++;
 
-        // Avoiding obstructions. (Jumping/crouching)
-        int32_t moveType = 0;
-        if ((moveResult & 0xc000) == 32768)  //Hit a wall (49152 for sprite)
+        // Avoiding obstructions. (Jumping/crouching) 
+        if ((moveResult & 49152) == 32768)  //Hit a wall (49152 for sprite)
         {
-            if (wall[moveResult & (MAXWALLS - 1)].nextsector >= 0)
+            int32_t wallNum = moveResult & (MAXWALLS - 1);
+            int16_t nextSect = wall[wallNum].nextsector;
+            if (nextSect == -1) // No sector, so let's try seeking through TROR.
             {
-                if (getflorzofslope(wall[moveResult & (MAXWALLS - 1)].nextsector, p->pos.x, p->pos.y) <= p->pos.z + (24 << 8))
-                    moveType |= 1;
+                wallNum = yax_getnextwall(wallNum, YAX_CEILING);
+                if (wallNum != -1)
+                    nextSect = wall[wallNum].nextsector;
+            }
 
-                if (getceilzofslope(wall[moveResult & (MAXWALLS - 1)].nextsector, p->pos.x, p->pos.y) >= p->pos.z - (24 << 8))
-                    moveType |= 2;
+            if (nextSect >= 0)
+            {
+                int32_t floorZ = yax_getflorzofslope(nextSect, p->pos.xy);
+                int32_t ceilZ = yax_getceilzofslope(nextSect, p->pos.xy);
+
+                if (floorZ <= p->pos.z + (24 << 8))
+                    moveType |= BOT_MOVETYPE_JUMP;
+
+                if (ceilZ >= p->pos.z - (24 << 8))
+                    moveType |= BOT_MOVETYPE_CROUCH;
+
+                if (DukeBot_CheckUsableSector(nextSect) || DukeBot_CheckUsableSector(pSpr->sectnum))
+                {
+                    moveType |= BOT_MOVETYPE_USE;
+                    faceAngle = DukeBot_GetAngleForWall(wallNum); // Face the wall.
+                }
+                else if (floorZ == ceilZ) // Sector's closed up. Potentially a door? Try it.
+                    moveType |= BOT_MOVETYPE_USE;
             }
         }
 
-        if ((moveResult & 0xc000) == 49152)
-            moveType |= 1;
+        if ((moveResult & 49152) == 49152) // Bumped into a sprite.
+            moveType |= BOT_MOVETYPE_JUMP;
 
-        if (moveType & 1)
-        {
-            if (bot->moveCount == 4)
-                syn->bits |= BIT(SK_JUMP);
-        }
-        if (moveType & 2)
-            syn->bits |= BIT(SK_CROUCH);
+        doStrafe = true;
 
-        //Strafe attack
-        daang = getangle(gpPos.x - pSpr->x, gpPos.y - pSpr->y);
-        if ((moveResult & 0xc000) == 32768)
-            daang = DukeBot_GetAngleForWall(moveResult & (MAXWALLS - 1));
-        
-        int32_t strafeClock = (int32_t)totalclock + snum * 13468;
-        int32_t strafeVal = sintable[(strafeClock << 6) & 2047];
-        strafeVal += sintable[((strafeClock + 4245) << 5) & 2047];
-        strafeVal += sintable[((strafeClock + 6745) << 4) & 2047];
-        strafeVal += sintable[((strafeClock + 15685) << 3) & 2047];
-        syn->fvel += ((sintable[(daang + 1024) & 2047] * strafeVal) >> 17);
-        syn->svel += ((sintable[(daang + 512) & 2047] * strafeVal) >> 17);
-
-        if ((bot->moveCount & 31) == 2)
-            syn->bits |= BIT(SK_OPEN);
         if ((bot->moveCount & 31) == 17)
             syn->bits |= BIT(SK_QUICK_KICK);
 
         if (bot->moveCount > 32)
         {
-            bot->goalSect = -1;
             bot->goalWall = -1;
             bot->moveCount = 0;
-        }
-
-        if (bot->goalSprite != -1)
-        {
-            auto const gSpr = &sprite[bot->goalSprite];
-            if (((gSpr->cstat & 32768) == 32768) || !cansee(pSpr->x, pSpr->y, pSpr->z - (32 << 8), damysect, gSpr->x, gSpr->y, gSpr->z - (4 << 8), gSpr->sectnum))
-            {
-                bot->goalSpriteScore = 0;
-                bot->goalSprite = -1;
-            }
         }
     }
     else
         bot->moveCount = 0;
 
-    if ((bot->goalSect >= 0) && (bot->goalWall >= 0))
+    // Move, (or override angle if need be).
+    if (bot->goalWall >= 0)
     {
-        dist = ksqrt((bot->goalPos.x - pSpr->x) * (bot->goalPos.x - pSpr->x) + (bot->goalPos.y - pSpr->y) * (bot->goalPos.y - pSpr->y));
-        if (!dist)
-            return;
+        int32_t goalDist = max(ldist(&pSpr->xyz, &bot->goalPos), 1);
 
-        daang = getangle(bot->goalPos.x - pSpr->x, bot->goalPos.y - pSpr->y);
-        if ((bot->goalWall >= 0) && (dist < 4096))
-            daang = DukeBot_GetAngleForWall(bot->goalWall);
-        
-        syn->fvel += (bot->goalPos.x - pSpr->x) * 2047 / dist;
-        syn->svel += (bot->goalPos.y - pSpr->y) * 2047 / dist;  
-        syn->q16avel = min(max(fix16_from_int((((daang + 1024 - damyang) & 2047) - 1024) >> 3), F16(-127)), F16(127));
+        if (!seePlayer && (bot->goalWall >= 0) && (goalDist < 4096)) // Face wall if we're close and we're targeting one.
+            faceAngle = DukeBot_GetAngleForWall(bot->goalWall);
+
+        if (!seeSprite)
+        {
+            syn->fvel += ((bot->goalPos.x - pSpr->x) * 2047) / goalDist;
+            syn->svel += ((bot->goalPos.y - pSpr->y) * 2047) / goalDist;
+        }
     }
+    else if(!seeSprite && !seePlayer)
+    {
+        auto lsPos = &bot->lastSeenPlayerPos[bot->goalPlayer];
+
+        faceAngle = getangle(lsPos->x - pSpr->x, lsPos->y - pSpr->y);
+
+        int32_t lastSeenDist = max(ldist(&pSpr->xyz, lsPos), 1);
+        syn->fvel += ((lsPos->x - pSpr->x) * 2047) / lastSeenDist;
+        syn->svel += ((lsPos->y - pSpr->y) * 2047) / lastSeenDist;
+
+        OSD_Printf("DukeBot #%d (%s): ^02Cannot see player %d, heading to XYZ: %d, %d, %d (Dist: %d)\n", snum, g_player[snum].user_name, bot->goalPlayer, lsPos->x, lsPos->y, lsPos->z, lastSeenDist);
+    }
+
+    if (seeSprite)
+    {
+        auto gSpr = &sprite[bot->goalSprite];
+        int32_t sprDist = max(ldist(&pSpr->xyz, &gSpr->xyz), 1);
+
+        if (sprDist < 96) // Pretty much on top of it, so let it go.
+            bot->seekSpriteFailCount += 30;
+
+        syn->fvel += ((gSpr->x - pSpr->x) * 2047) / sprDist;
+        syn->svel += ((gSpr->y - pSpr->y) * 2047) / sprDist;
+
+        //OSD_Printf("DukeBot #%d (%s): Sprite seen. Pursuing. (Dist: %d)\n", snum, g_player[snum].user_name, sprDist);
+    }
+    else bot->seekSpriteFailCount++;
+
+    if (seePlayer)
+    {
+        int32_t fightDist = fdmatrix[p->curr_weapon][goalp->curr_weapon];
+        int32_t zAngle = 100 - ((gpSpr->z - pSpr->z) * 8) / gpDist;
+
+        hitdata_t hit;
+        hitscan(&p->pos, p->cursectnum, sintable[(pSpr->ang + 512) & 2047], sintable[pSpr->ang & 2047],
+            fix16_to_int(F16(100) - p->q16horiz - p->q16horizoff) * 32, &hit, CLIPMASK1);
+
+        bot->lastSeenPlayerPos[bot->goalPlayer] = gpSpr->xyz;
+
+        syn->bits |= BIT(SK_FIRE);
+        if (gpDist < 256) // We're close, give 'em the boot.
+            syn->bits |= BIT(SK_QUICK_KICK);
+
+        // Handle special weapon cases.
+        if (p->curr_weapon == RPG_WEAPON)
+        {
+            if (ldist(&pSpr->xyz, &hit.xyz) < (g_rpgBlastRadius + 512))
+                syn->bits &= ~BIT(SK_FIRE);
+        }
+
+        if ((p->curr_weapon == HANDBOMB_WEAPON) && (!(rand() & 7)))
+            syn->bits &= ~BIT(SK_FIRE);
+
+        if (p->curr_weapon == TRIPBOMB_WEAPON)
+            syn->bits |= ((rand() % MAX_WEAPONS) << SK_WEAPON_BITS);
+
+        // Handle Inventory
+        if ((p->steroids_amount >= 400) && !(rand() % 100))
+            syn->bits |= BIT(SK_STEROIDS);
+
+        if (fightDist < 128)
+            fightDist = 128;
+
+        fightDist = max(fightDist, (klabs(gpSpr->z - pSpr->z) >> 4));
+
+        if ((gpSpr->yrepeat < 32) || (gpSpr->pal == 1)) // Target shrunk or frozen?
+        {
+            fightDist = 0;
+            syn->bits &= ~BIT(SK_FIRE);
+        }
+
+        if (fightDist)
+            doStrafe = true;
+
+        if (!prioritizeItems || !fightDist || (gpDist <= sprDist))
+        {
+            vec2_t fightPos = { (gpSpr->x + ((pSpr->x - gpSpr->x) * fightDist / gpDist)),
+                                (gpSpr->y + ((pSpr->y - gpSpr->y) * fightDist / gpDist)) };
+
+            syn->fvel += (fightPos.x - pSpr->x) * 2047 / gpDist;
+            syn->svel += (fightPos.y - pSpr->y) * 2047 / gpDist;
+        }
+
+#if 0
+        syn->bits &= ~BIT(SK_FIRE); // DEBUG: PREVENT SHOOTING
+#endif
+
+        syn->q16horz = min(max(fix16_from_int(zAngle) - p->q16horiz, F16(-MAXHORIZ)), F16(MAXHORIZ));
+        syn->bits |= BIT(SK_AIMMODE);
+    }
+
+    if (doStrafe)
+    {
+        //Strafe attack
+        int32_t strafeClock = (int32_t)totalclock + snum * 13468;
+        int32_t strafeVal = sintable[(strafeClock << 6) & 2047];
+
+        strafeVal += sintable[((strafeClock + 4245) << 5) & 2047];
+        strafeVal += sintable[((strafeClock + 6745) << 4) & 2047];
+        strafeVal += sintable[((strafeClock + 15685) << 3) & 2047];
+
+        if (seePlayer && !prioritizeItems)
+        {
+            int32_t dx = sintable[(sprite[goalp->i].ang + 512) & 2047];
+            int32_t dy = sintable[sprite[goalp->i].ang & 2047];
+
+            if ((pSpr->x - gpSpr->x) * dy > (pSpr->y - gpSpr->y) * dx)
+                strafeVal += 8192;
+            else
+                strafeVal -= 8192;
+
+            if ((gpDist > 256) && !(rand() % 200)) // Randomly jump around a bit in battle.
+                syn->bits |= BIT(SK_JUMP);
+        }
+
+        syn->fvel += ((sintable[(faceAngle + 1024) & 2047] * strafeVal) >> 17);
+        syn->svel += ((sintable[(faceAngle + 512) & 2047] * strafeVal) >> 17);
+    }
+
+    // Process move types
+    if (moveType & BOT_MOVETYPE_JUMP)
+    {
+        if (((bot->moveCount & 31) == 4) || ((bot->moveCount & 31) == 8))
+            syn->bits |= BIT(SK_JUMP);
+
+        if (bot->goalSprite != -1) // Give up faster if we have to attempt jumping at a sprite.
+            bot->seekSpriteFailCount++;
+    }
+
+    if (moveType & BOT_MOVETYPE_CROUCH)
+        syn->bits |= BIT(SK_CROUCH);
+
+    if (moveType & BOT_MOVETYPE_USE)
+        syn->bits |= BIT(SK_OPEN);
+
+    if (p->dead_flag)
+        syn->bits |= BIT(SK_OPEN);
+
+    if ((p->firstaid_amount > 0) && (p->last_extra < 100))
+        syn->bits |= BIT(SK_MEDKIT);
+
+    if((klabs(syn->fvel) > BOT_MAXSPEED>>2) || (klabs(syn->svel) > BOT_MAXSPEED>>2))
+        syn->bits |= BIT(SK_RUN);
+
+    // Instigate a bit of randomness, which may help to get unstuck in some situations.
+    syn->fvel += (rand() % 512)-256;
+    syn->svel += (rand() % 512)-256;
+
+    // Cap velocity, so we're not inhumanly fast.
+    syn->fvel = clamp(syn->fvel, -BOT_MAXSPEED, BOT_MAXSPEED);
+    syn->svel = clamp(syn->svel, -BOT_MAXSPEED, BOT_MAXSPEED);
+
+    syn->q16avel = min(max(fix16_from_int((((faceAngle + 1024 - pSpr->ang) & 2047) - 1024) >> 1), F16(-127)), F16(127));
+    bot->cycleCount++;
 }

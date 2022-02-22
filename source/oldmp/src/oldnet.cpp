@@ -227,27 +227,22 @@ void Net_HandleInput(void)
 
     g_player[myconnectindex].movefifoend++;
 
-    if (numplayers < 2)
+    if (ud.multimode > 1 && (myconnectindex == connecthead))
     {
-        if (ud.multimode > 1)
+        TRAVERSE_CONNECT(i)
         {
-            TRAVERSE_CONNECT(i)
+            if (g_player[i].isBot)
             {
-                if (i != myconnectindex)
-                {
-                    if (ud.playerai /*&& g_player[i].isBot*/) // To-do: Add per-player variable.
-                    {
-                        DukeBot_GetInput(i, &inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i]);
-                        inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i].svel++;
-                        inputfifo[g_player[i].movefifoend&(MOVEFIFOSIZ - 1)][i].fvel++;
-                    }
-
-                    g_player[i].movefifoend++;
-                }
+                DukeBot_GetInput(i, &inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i]);
+                //inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i].svel++;
+                //inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i].fvel++;
+                g_player[i].movefifoend++;
             }
         }
-        return;
     }
+
+    if (numplayers < 2)
+        return;
 
     TRAVERSE_CONNECT(i)
     if (i != myconnectindex)
@@ -1068,6 +1063,7 @@ void Net_SendFragLimit(void)
     }
 }
 
+// TODO: Give player number parameter. (Useful for sending bot names)
 void Net_SendPlayerName(void)
 {
     int i,l;
