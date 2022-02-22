@@ -9315,6 +9315,10 @@ static void G_DrawFrame()
         ud.statusbarmode = 0;
         G_UpdateScreenArea();
     }
+    
+    // [JM] Probably a vain attempt at preventing screenpeek manipulation with CE.
+    if ((numplayers > 1) && !GTFLAGS(GAMETYPE_COOPVIEW) && (screenpeek != myconnectindex))
+        screenpeek = myconnectindex;
 
     // Hideous hack to get players to not trail behind in mirrors or look fucky in third person.
     if (numplayers > 1 && (screenpeek == myconnectindex))
