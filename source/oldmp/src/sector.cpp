@@ -963,48 +963,48 @@ REDODOOR:
         return;
 
     case ST_23_SWINGING_DOOR: //Swingdoor
-
+    {
         j = -1;
-        q = 0;
 
-        i = headspritestat[STAT_EFFECTOR];
-        while (i >= 0)
-        {
-            if (SLT(i) == 11 && SECT(i) == sn && !T5(i))
+        for (SPRITES_OF(STAT_EFFECTOR, i))
+            if (SLT(i) == SE_11_SWINGING_DOOR && SECT(i) == sn && !T5(i))
             {
                 j = i;
                 break;
             }
-            i = nextspritestat[i];
-        }
-        if (i<0)
-        {
+
+        if (i < 0)
             return;
-        }    // JBF
-        l = sector[SECT(i)].lotag&0x8000;
+
+        uint16_t const tag = sector[SECT(i)].lotag & 0x8000u;
 
         if (j >= 0)
         {
-            i = headspritestat[STAT_EFFECTOR];
-            while (i >= 0)
+            for (SPRITES_OF(STAT_EFFECTOR, i))
+                if (tag == (sector[SECT(i)].lotag & 0x8000u) && SLT(i) == SE_11_SWINGING_DOOR && sprite[j].hitag == SHT(i) && (T5(i) || T6(i)))
+                    return;
+
+            bool soundPlayed = false;
+            for (SPRITES_OF(STAT_EFFECTOR, i))
             {
-                if (l == (sector[SECT(i)].lotag&0x8000) && SLT(i) == 11 && sprite[j].hitag == SHT(i) && !T5(i))
+                if (tag == (sector[SECT(i)].lotag & 0x8000u) && SLT(i) == SE_11_SWINGING_DOOR && sprite[j].hitag == SHT(i))
                 {
-                    if (sector[SECT(i)].lotag&0x8000) sector[SECT(i)].lotag &= 0x7fff;
-                    else sector[SECT(i)].lotag |= 0x8000;
+                    if (sector[SECT(i)].lotag & 0x8000u) sector[SECT(i)].lotag &= 0x7fff;
+                    else sector[SECT(i)].lotag |= 0x8000u;
+
                     T5(i) = 1;
                     T4(i) = -T4(i);
-                    if (q == 0)
+
+                    if (!soundPlayed)
                     {
-                        A_CallSound(sn,i);
-                        q = 1;
+                        A_CallSound(sn, i);
+                        soundPlayed = true;
                     }
                 }
-                i = nextspritestat[i];
             }
         }
         return;
-
+    }
     case ST_25_SLIDING_DOOR: //Subway type sliding doors
 
         j = headspritestat[STAT_EFFECTOR];
