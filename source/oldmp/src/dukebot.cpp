@@ -950,7 +950,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         if (moveType & BOT_MOVETYPE_CROUCH)
             syn->bits |= BIT(SK_CROUCH);
 
-        if (moveType & BOT_MOVETYPE_USE && !(rand() % 2))
+        if (moveType & BOT_MOVETYPE_USE && !(bot->moveCount % 2))
             syn->bits |= BIT(SK_OPEN);
 
         if ((bot->moveCount & 31) == 17)
