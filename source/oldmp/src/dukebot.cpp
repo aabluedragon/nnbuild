@@ -163,9 +163,11 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
         case SHOTGUNAMMO__STATIC:       return DukeBot_GetWeaponScore(pNum, spriteNum, SHOTGUN_WEAPON, true);
 
         case COLA__STATIC:
+            if (sprite[p->i].extra < 50) return 20;
             if (sprite[p->i].extra < p->max_player_health) return 10;
             return 0;
         case SIXPAK__STATIC:
+            if (sprite[p->i].extra < 50) return 60;
             if (sprite[p->i].extra < p->max_player_health) return 30;
             return 0;
         case FIRSTAID__STATIC:
@@ -192,6 +194,7 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
             if (p->boot_amount < 200) return 15;
             return 0;
         case ATOMICHEALTH__STATIC:
+            if (sprite[p->i].extra < 50) return 100;
             if (sprite[p->i].extra < p->max_player_health << 1) return 50;
             return 0;
         case HOLODUKE__STATIC:
@@ -947,7 +950,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         if (moveType & BOT_MOVETYPE_CROUCH)
             syn->bits |= BIT(SK_CROUCH);
 
-        if (moveType & BOT_MOVETYPE_USE)
+        if (moveType & BOT_MOVETYPE_USE && !(rand() % 2))
             syn->bits |= BIT(SK_OPEN);
 
         if ((bot->moveCount & 31) == 17)
