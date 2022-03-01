@@ -8,20 +8,20 @@
 #define BOT_SEEK_GIVEUP 150
 #define BOT_SEEK_LOOKFORBETTER 30
 
-enum
+enum BotMoveFlags
 {
-    BOT_MOVE_STRAFE     = (1 << 0),
-    BOT_MOVE_JUMP       = (1 << 1),
-    BOT_MOVE_CROUCH     = (1 << 2),
-    BOT_MOVE_USE        = (1 << 3),
-    BOT_MOVE_ASCEND     = (1 << 4),
-    BOT_MOVE_DESCEND    = (1 << 5),
+    BOT_MOVE_STRAFE     = (1 << 0), // Strafing back and forth.
+    BOT_MOVE_JUMP       = (1 << 1), // Jump. Self-explanatory.
+    BOT_MOVE_CROUCH     = (1 << 2), // Crouch. Also self-explanatory.
+    BOT_MOVE_USE        = (1 << 3), // Press open/use on walls/sectors.
+    BOT_MOVE_ASCEND     = (1 << 4), // Ascend with jetpack, or in water.
+    BOT_MOVE_DESCEND    = (1 << 5), // Descend with jetpack, or in water.
 };
 
-enum
+enum BotCombatFlags
 {
-    BOT_COMBAT_MELEE    = (1 << 0),
-    BOT_COMBAT_STOMP    = (1 << 1),
+    BOT_COMBAT_MELEE    = (1 << 0), // Melee, ignore walls, & items farther than target. Don't dodge or jump if touching target.
+    BOT_COMBAT_STOMP    = (1 << 1), // Stomping shrunken or frozen target, ignore everything else.
 };
 
 typedef struct

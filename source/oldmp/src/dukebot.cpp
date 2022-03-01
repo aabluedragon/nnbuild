@@ -830,7 +830,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         if (sprDist < 96) // Pretty much on top of it, so let it go.
             bot->seekSpriteFailCount += 30;
 
-        if (!((combatFlags & BOT_COMBAT_MELEE) && (gpDist < sprDist) || combatFlags & (BOT_COMBAT_STOMP)))
+        if (!((combatFlags & BOT_COMBAT_MELEE && (gpDist < sprDist)) || combatFlags & BOT_COMBAT_STOMP))
         {
             auto gSpr = &sprite[bot->goalSprite];
             syn->fvel += ((gSpr->x - pSpr->x) * 2047) / sprDist;
