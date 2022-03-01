@@ -232,6 +232,9 @@ static inline bool DukeBot_CheckUsableSector(int16_t sectNum)
     if ((uint16_t)sectNum >= MAXSECTORS)
         return false;
 
+    if (sector[sectNum].lotag & 16384) // Sector's locked.
+        return false;
+
     switch (sector[sectNum].lotag)
     {
         case ST_15_WARP_ELEVATOR:
