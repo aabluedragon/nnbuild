@@ -10,11 +10,18 @@
 
 enum
 {
-    BOT_MOVETYPE_JUMP = (1 << 0),
-    BOT_MOVETYPE_CROUCH = (1 << 1),
-    BOT_MOVETYPE_USE = (1 << 2),
-    BOT_MOVETYPE_ASCEND = (1 << 3),
-    BOT_MOVETYPE_DESCEND = (1 << 4),
+    BOT_MOVE_STRAFE     = (1 << 0),
+    BOT_MOVE_JUMP       = (1 << 1),
+    BOT_MOVE_CROUCH     = (1 << 2),
+    BOT_MOVE_USE        = (1 << 3),
+    BOT_MOVE_ASCEND     = (1 << 4),
+    BOT_MOVE_DESCEND    = (1 << 5),
+};
+
+enum
+{
+    BOT_COMBAT_MELEE    = (1 << 0),
+    BOT_COMBAT_STOMP    = (1 << 1),
 };
 
 typedef struct

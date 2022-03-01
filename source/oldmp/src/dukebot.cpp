@@ -733,8 +733,8 @@ void DukeBot_GetInput(int snum, input_t* syn)
     bool const seePlayer = (!goalp->dead_flag && DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &gpSpr->xyz, gpSpr->sectnum));
     bool const seeSprite = (bot->goalSprite != -1) ? DukeBot_CanSeeItem(&pSpr->xyz, pSpr->sectnum, bot->goalSprite) : false;
     bool const prioritizeItems = ((pSpr->extra <= 50) || (p->curr_weapon == KNEE_WEAPON) || (p->ammo_amount[p->curr_weapon] <= (p->max_ammo_amount[p->curr_weapon] >> 3)));
-    bool doStrafe = false;
-    bool closeCombat = false;
+    int32_t moveFlags = 0;
+    int32_t combatFlags = 0;
 
     int32_t const gpDist = max(ldist(&pSpr->xyz, &gpSpr->xyz), 1);
     int32_t const sprDist = (bot->goalSprite != -1) ? max(ldist(&pSpr->xyz, &sprite[bot->goalSprite].xyz), 1) : INT32_MAX;
@@ -796,17 +796,18 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
         if ((gpSpr->yrepeat < 32) || (gpSpr->pal == 1)) // Target shrunk or frozen?
         {
-            fightDist = 0;
+            combatFlags |= BOT_COMBAT_STOMP;
             syn->bits &= ~BIT(SK_FIRE);
+            fightDist = 0;
         }
 
         if (fightDist > 0)
-            doStrafe = true;
+            moveFlags |= BOT_MOVE_STRAFE;
 
         if (fightDist <= 128)
-            closeCombat = true;
+            combatFlags |= BOT_COMBAT_MELEE;
 
-        if (!prioritizeItems || closeCombat)
+        if (!prioritizeItems || (combatFlags & (BOT_COMBAT_MELEE | BOT_COMBAT_STOMP)))
         {
             vec2_t fightPos = { (gpSpr->x + ((pSpr->x - gpSpr->x) * fightDist / gpDist)),
                                 (gpSpr->y + ((pSpr->y - gpSpr->y) * fightDist / gpDist)) };
@@ -817,7 +818,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
 #if 0
         syn->bits &= ~BIT(SK_FIRE); // DEBUG: STOP SHOOTING, AND HOLD STILL, DAMNIT.
-        doStrafe = false;
+        moveFlags &= ~BOT_MOVE_STRAFE;
 #endif
 
         syn->q16horz = min(max(fix16_from_int(zAngle) - p->q16horiz, F16(-MAXHORIZ)), F16(MAXHORIZ));
@@ -829,7 +830,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         if (sprDist < 96) // Pretty much on top of it, so let it go.
             bot->seekSpriteFailCount += 30;
 
-        if (!(closeCombat && (gpDist < sprDist)))
+        if (!((combatFlags & BOT_COMBAT_MELEE) && (gpDist < sprDist) || combatFlags & (BOT_COMBAT_STOMP)))
         {
             auto gSpr = &sprite[bot->goalSprite];
             syn->fvel += ((gSpr->x - pSpr->x) * 2047) / sprDist;
@@ -856,7 +857,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
             bot->goalWall = -1;
 #endif
 
-        if (!seeSprite && !closeCombat)
+        if (!seeSprite && !(combatFlags & BOT_COMBAT_MELEE))
         {
             syn->fvel += ((bot->goalPos.x - pSpr->x) * 2047) / goalDist;
             syn->svel += ((bot->goalPos.y - pSpr->y) * 2047) / goalDist;
@@ -881,7 +882,6 @@ void DukeBot_GetInput(int snum, input_t* syn)
     int16_t curSect = p->cursectnum;
 
     int32_t moveResult = clipmove(&curPos, &curSect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
-    int32_t moveType = 0;
 
     if (!moveResult)
     {
@@ -894,7 +894,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     if (moveResult)
     {
         bot->moveCount++;
-        doStrafe = true;
+        moveFlags |= BOT_MOVE_STRAFE;
 
         // Avoiding obstructions. (Jumping/crouching, etc) 
         if ((moveResult & 49152) == 32768)  //Hit a wall (49152 for sprite)
@@ -914,18 +914,18 @@ void DukeBot_GetInput(int snum, input_t* syn)
                 int32_t ceilZ = yax_getceilzofslope(nextSect, p->pos.xy);
 
                 if (floorZ <= p->pos.z + (24 << 8))
-                    moveType |= BOT_MOVETYPE_JUMP;
+                    moveFlags |= BOT_MOVE_JUMP;
 
                 if (ceilZ >= p->pos.z - (24 << 8))
-                    moveType |= BOT_MOVETYPE_CROUCH;
+                    moveFlags |= BOT_MOVE_CROUCH;
 
                 if (DukeBot_CheckUsableSector(nextSect) || DukeBot_CheckUsableSector(pSpr->sectnum))
                 {
-                    moveType |= BOT_MOVETYPE_USE;
+                    moveFlags |= BOT_MOVE_USE;
                     faceAngle = DukeBot_GetAngleForWall(wallNum); // Face the wall.
                 }
                 else if (floorZ == ceilZ) // Sector's closed up. Potentially a door? Try it.
-                    moveType |= BOT_MOVETYPE_USE;
+                    moveFlags |= BOT_MOVE_USE;
             }
         }
 
@@ -933,12 +933,12 @@ void DukeBot_GetInput(int snum, input_t* syn)
         {
             int32_t spriteNum = moveResult & (MAXSPRITES - 1);
 
-            if(!(closeCombat && (spriteNum == goalp->i))) // Not touching target in close combat mode.
-                moveType |= BOT_MOVETYPE_JUMP;
+            if(!((combatFlags & BOT_COMBAT_MELEE) && (spriteNum == goalp->i))) // Not touching target in melee mode.
+                moveFlags |= BOT_MOVE_JUMP;
         }
 
         // Process move types
-        if (moveType & BOT_MOVETYPE_JUMP)
+        if (moveFlags & BOT_MOVE_JUMP)
         {
             if (((bot->moveCount & 31) == 4) || ((bot->moveCount & 31) == 8))
                 syn->bits |= BIT(SK_JUMP);
@@ -947,10 +947,10 @@ void DukeBot_GetInput(int snum, input_t* syn)
                 bot->seekSpriteFailCount++;
         }
 
-        if (moveType & BOT_MOVETYPE_CROUCH)
+        if (moveFlags & BOT_MOVE_CROUCH)
             syn->bits |= BIT(SK_CROUCH);
 
-        if (moveType & BOT_MOVETYPE_USE && !(bot->moveCount % 2))
+        if (moveFlags & BOT_MOVE_USE && !(bot->moveCount % 2))
             syn->bits |= BIT(SK_OPEN);
 
         if ((bot->moveCount & 31) == 17)
@@ -965,7 +965,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     else
         bot->moveCount = 0;
 
-    if (doStrafe)
+    if (moveFlags & BOT_MOVE_STRAFE)
     {
         //Strafe attack
         int32_t strafeClock = (int32_t)totalclock + snum * 13468;
@@ -975,7 +975,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         strafeVal += sintable[((strafeClock + 6745) << 4) & 2047];
         strafeVal += sintable[((strafeClock + 15685) << 3) & 2047];
 
-        if (seePlayer && !prioritizeItems && !closeCombat)
+        if (seePlayer && !prioritizeItems && !(combatFlags & BOT_COMBAT_MELEE))
         {
             int32_t dx = sintable[(sprite[goalp->i].ang + 512) & 2047];
             int32_t dy = sintable[sprite[goalp->i].ang & 2047];
