@@ -64,6 +64,7 @@ const char* bot_names[] = {
     "JankOClok",    "CancrMaus",    "H4MMER",       "Gideon",
     "BOTYOT",       "DUKEYOT",      "ABADBABE",     "BEEFBABE",
     "DEADC0DE",     "DEFEC8ED",     "D0D0CACA",     "1337C0D3",
+    "Heskel",       "Bort",         "Kirk",         "Picard",
 };
 
 // This matrix is used to determine how far a dukebot will engage another player
@@ -280,7 +281,7 @@ static void DukeBot_GetNextWallForPath(int32_t playerNum, int32_t endsect)
     auto const pSpr = &sprite[p->i];
 
     int32_t startsect = pSpr->sectnum; // Player's current sector.
-    if (startsect == -1)
+    if (startsect == -1 || endsect == -1)
         return;
 
     // Optimization: If we have a wall, and our start/end sects haven't changed, no point in updating.
@@ -312,6 +313,9 @@ static void DukeBot_GetNextWallForPath(int32_t playerNum, int32_t endsect)
             if (nextSectNum < 0)
                 continue;
 
+            if (wal->cstat & CSTAT_WALL_BLOCK) // Avoid blocking walls.
+                continue;
+
             auto nSect = &sector[nextSectNum];
 
             vec2_t d = { ((wall[wal->point2].x + wal->x) >> 1),
@@ -329,7 +333,7 @@ static void DukeBot_GetNextWallForPath(int32_t playerNum, int32_t endsect)
                 continue;
 
             // Floor too high for sector we're searching from?
-            if (nextFloorZ < curFloorZ - (72 << 8) &&
+            if ((curSect->lotag != ST_2_UNDERWATER && p->jetpack_amount < 106) && (nextFloorZ < curFloorZ - (72 << 8)) &&
                 !((nSect->lotag >= ST_15_WARP_ELEVATOR && nSect->lotag <= ST_19_ELEVATOR_UP) || nSect->lotag == ST_21_FLOOR_DOOR) &&
                 !(curSect->lotag >= ST_15_WARP_ELEVATOR && curSect->lotag <= ST_19_ELEVATOR_UP))
                 continue;
@@ -534,10 +538,17 @@ void DukeBot_GetInput(int snum, input_t* syn)
     syn->bits = 0;
     syn->extbits = 0;
 
-    if ((bot->cycleCount & 7) == 0)
+    if (p->dead_flag)
+        syn->bits |= BIT(SK_OPEN);
+
+    if (pSpr->sectnum == -1) // If we're in void, there's nothing else we can do. Bail.
+        return;
+
+    // If we can't see our target, or, given a small random chance, find someone else.
+    if ((bot->cycleCount % 8) == 0)
     {
         vec3_t testPos = sprite[goalp->i].xyz;
-        if(!DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &testPos, sprite[goalp->i].sectnum))
+        if(!DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &testPos, sprite[goalp->i].sectnum) || !(rand() % 512))
         {
             bot->goalPlayer = snum;
             goalp = g_player[snum].ps;
@@ -561,6 +572,30 @@ void DukeBot_GetInput(int snum, input_t* syn)
                 else
                     bot->lastSeenPlayerPos[otherPlayer] = sprite[pOther->i].xyz;
 
+                if (p->dummyplayersprite != -1)
+                {
+                    auto pDummySpr = &sprite[p->dummyplayersprite];
+                    int32_t dummyDist = dist(&pDummySpr->xyz, &sprite[pOther->i].xyz);
+
+                    if (!DukeBot_CanSee(&pDummySpr->xyz, pDummySpr->sectnum, &sprite[pOther->i].xyz, sprite[pOther->i].sectnum))
+                        dummyDist <<= 1;
+
+                    if (dummyDist < curDist)
+                        curDist = dummyDist;
+                }
+
+                if (pOther->dummyplayersprite != -1)
+                {
+                    auto pOtherDummySpr = &sprite[pOther->dummyplayersprite];
+                    int32_t dummyDist = dist(&pSpr->xyz, &pOtherDummySpr->xyz);
+
+                    if (!DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &pOtherDummySpr->xyz, pOtherDummySpr->sectnum))
+                        dummyDist <<= 1;
+
+                    if (dummyDist < curDist)
+                        curDist = dummyDist;
+                }
+
                 if (curDist < lastDist)
                 {
                     lastDist = curDist;
@@ -571,70 +606,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         }
     }
 
-    // Dodge incoming projectiles. Dukebots are a real bastard when it comes to this.
-    for (int spr = headspritestat[STAT_PROJECTILE]; spr >= 0; spr = nextspritestat[spr])
-    {
-        int32_t dodgeSpeed = 0;
-        switch (DynamicTileMap[sprite[spr].picnum])
-        {
-        case TONGUE__STATIC:
-            dodgeSpeed = 4;
-            break;
-        case FREEZEBLAST__STATIC:
-            dodgeSpeed = 4;
-            break;
-        case SHRINKSPARK__STATIC:
-            dodgeSpeed = 16;
-            break;
-        case RPG__STATIC:
-            dodgeSpeed = 16;
-            break;
-        default:
-            dodgeSpeed = 0;
-            break;
-        }
-
-        if (dodgeSpeed)
-        {
-            vec3_t projPos = sprite[spr].xyz;
-            for (int32_t dodgeCnt = 0; dodgeCnt <= 8; dodgeCnt++)
-            {
-                if (tmulscale11(projPos.x - pSpr->x, projPos.x - pSpr->x, projPos.y - pSpr->y, projPos.y - pSpr->y, (projPos.z - pSpr->z) >> 4, (projPos.z - pSpr->z) >> 4) < 3072)
-                {
-                    vec2_t d = { sintable[(sprite[spr].ang + 512) & 2047],
-                                 sintable[sprite[spr].ang & 2047] };
-
-                    int32_t dodgeDir;
-                    if ((pSpr->x - projPos.x) * d.y > (pSpr->y - projPos.y) * d.x)
-                        dodgeDir = -dodgeSpeed * 512;
-                    else
-                        dodgeDir = dodgeSpeed * 512;
-
-                    syn->fvel -= mulscale17(d.y, dodgeDir);
-                    syn->svel += mulscale17(d.x, dodgeDir);
-                }
-
-                if (dodgeCnt < 7)
-                {
-                    projPos.x += (mulscale14(sprite[spr].xvel, sintable[(sprite[spr].ang + 512) & 2047]) << 2);
-                    projPos.y += (mulscale14(sprite[spr].xvel, sintable[sprite[spr].ang & 2047]) << 2);
-                    projPos.z += (sprite[spr].zvel << 2);
-                }
-                else
-                {
-                    // [JM] Doesn't do anything... hit var isn't used anywhere. Leftover crud?
-#if 0
-                    hitscan(&sprite[spr].pos, sprite[spr].sectnum,
-                        mulscale14(sprite[spr].xvel, sintable[(sprite[spr].ang + 512) & 2047]),
-                        mulscale14(sprite[spr].xvel, sintable[sprite[spr].ang & 2047]),
-                        (int)sprite[spr].zvel,
-                        &hit, CLIPMASK1);
-#endif
-                }
-            }
-        }
-    }
-
+    // Look for items to pick up.
     if (bot->seekSpriteCooldown > 0)
         bot->seekSpriteCooldown--;
 
@@ -653,7 +625,6 @@ void DukeBot_GetInput(int snum, input_t* syn)
         }      
     }
 
-    //if ((bot->goalSect < 0) || (bot->goalWall < 0))
     if (!bot->seekSpriteCooldown)
     {
         // No goal sprite, or haven't seen existing goal sprite for a while.
@@ -702,6 +673,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
                 }
             }
 
+            // Already have a sprite, or can't find best sprite, but found something close of equal or greater value.
             if ((bot->goalSprite != -1 || bestSprite == -1) && (closestSprite != -1) && (closestScore >= bot->goalSpriteScore))
             {
 #ifdef BOT_DEBUG
@@ -712,7 +684,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
                 //bot->seekSpriteFailCount = 0;
                 bot->seekSpriteCooldown = 30;
             }
-            else if (bestSprite != -1 && (bot->goalSprite == -1 || (bestScore > bot->goalSpriteScore)))
+            else if (bestSprite != -1 && (bot->goalSprite == -1 || (bestScore > bot->goalSpriteScore))) // Found best sprite in sight, or didn't have one.
             {
 #ifdef BOT_DEBUG
                 OSD_Printf("^06DukeBot %d (%s)^15: New best sprite acquired.\n", snum, g_player[snum].user_name);
@@ -732,22 +704,42 @@ void DukeBot_GetInput(int snum, input_t* syn)
         }
     }
 
+    // Test for collisions
+    vec3_t curPos = p->pos;
+    int16_t curSect = p->cursectnum;
+    int32_t moveResult = clipmove(&curPos, &curSect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
+
+    if (!moveResult)
+    {
+        curPos = p->pos;
+        curPos.z += (24 << 8);
+        curSect = p->cursectnum;
+        moveResult = clipmove(&curPos, &curSect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
+    }
+
+    // Now that we have all the info we need, let's put it all together.
+    auto const pSect = &sector[pSpr->sectnum];
     auto const gpSpr = &sprite[goalp->i];
+    auto const gItemSpr = (bot->goalSprite != -1) ? &sprite[bot->goalSprite] : NULL;
+
+    bool const touchingWall = ((moveResult & 49152) == 32768);
+    bool const touchingSprite = ((moveResult & 49152) == 49152);
     bool const seePlayer = (!goalp->dead_flag && DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &gpSpr->xyz, gpSpr->sectnum));
-    bool const seeSprite = (bot->goalSprite != -1) ? DukeBot_CanSeeItem(&pSpr->xyz, pSpr->sectnum, bot->goalSprite) : false;
-    bool const prioritizeItems = ((pSpr->extra <= 50) || (p->curr_weapon == KNEE_WEAPON) || (p->ammo_amount[p->curr_weapon] <= (p->max_ammo_amount[p->curr_weapon] >> 3)));
-    int32_t moveFlags = 0;
-    int32_t combatFlags = 0;
+    bool const seeSprite = (gItemSpr) ? DukeBot_CanSeeItem(&pSpr->xyz, pSpr->sectnum, bot->goalSprite) : false;
+    bool const prioritizeItems = ((pSpr->extra <= 50) || (p->curr_weapon == KNEE_WEAPON && p->steroids_amount == 0) || (p->ammo_amount[p->curr_weapon] <= (p->max_ammo_amount[p->curr_weapon] >> 3)));
 
     int32_t const gpDist = max(ldist(&pSpr->xyz, &gpSpr->xyz), 1);
     int32_t const sprDist = (bot->goalSprite != -1) ? max(ldist(&pSpr->xyz, &sprite[bot->goalSprite].xyz), 1) : INT32_MAX;
 
+    int32_t moveFlags = 0;
+    int32_t combatFlags = 0;
+
     // Search sectors.
-    int32_t endsect = sprite[goalp->i].sectnum;
-    if (bot->goalSprite != -1)
+    int32_t endsect = gpSpr->sectnum;
+    if (gItemSpr)
     {
         if (prioritizeItems || (seeSprite && (sprDist < gpDist)) || (!seeSprite && (sprDist<<4 < gpDist)))
-            endsect = sprite[bot->goalSprite].sectnum;
+            endsect = gItemSpr->sectnum;
     }
     
     DukeBot_GetNextWallForPath(snum, endsect);
@@ -755,25 +747,17 @@ void DukeBot_GetInput(int snum, input_t* syn)
     // Get Angle
     int32_t faceAngle = getangle(bot->goalPos.x - pSpr->x, bot->goalPos.y - pSpr->y);
 
-    if (seePlayer)
-        faceAngle = getangle(gpSpr->x - pSpr->x, gpSpr->y - pSpr->y);
-    else if (seeSprite)
-    {
-        auto gSpr = &sprite[bot->goalSprite];
-        faceAngle = getangle(gSpr->x - pSpr->x, gSpr->y - pSpr->y);
-    }
-
     // Move, do stuff. (or override angle if need be).
     if (seePlayer)
     {
         int32_t fightDist = max(fdmatrix[p->curr_weapon][goalp->curr_weapon], 128);
-        fightDist = max(fightDist, (klabs(gpSpr->z - pSpr->z) >> 4));
         int32_t zAngle = 100 - ((gpSpr->z - pSpr->z) * 8) / gpDist;
 
         hitdata_t hit;
         hitscan(&p->pos, p->cursectnum, sintable[(pSpr->ang + 512) & 2047], sintable[pSpr->ang & 2047],
             fix16_to_int(F16(100) - p->q16horiz - p->q16horizoff) * 32, &hit, CLIPMASK1);
 
+        faceAngle = getangle(gpSpr->x - pSpr->x, gpSpr->y - pSpr->y);
         bot->lastSeenPlayerPos[bot->goalPlayer] = gpSpr->xyz;
 
         syn->bits |= BIT(SK_FIRE);
@@ -793,10 +777,6 @@ void DukeBot_GetInput(int snum, input_t* syn)
         if (p->curr_weapon == TRIPBOMB_WEAPON)
             syn->bits |= ((rand() % MAX_WEAPONS) << SK_WEAPON_BITS);
 
-        // Handle Inventory
-        if ((p->steroids_amount >= 400) && !(rand() % 100))
-            syn->bits |= BIT(SK_STEROIDS);
-
         if ((gpSpr->yrepeat < 32) || (gpSpr->pal == 1)) // Target shrunk or frozen?
         {
             combatFlags |= BOT_COMBAT_STOMP;
@@ -809,6 +789,10 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
         if (fightDist <= 128)
             combatFlags |= BOT_COMBAT_MELEE;
+
+        // Back up for targets too far above us.
+        if(!(combatFlags & (BOT_COMBAT_MELEE | BOT_COMBAT_STOMP)))
+            fightDist = max(fightDist, (klabs(gpSpr->z - pSpr->z) >> 4));
 
         if (!prioritizeItems || (combatFlags & (BOT_COMBAT_MELEE | BOT_COMBAT_STOMP)))
         {
@@ -828,22 +812,25 @@ void DukeBot_GetInput(int snum, input_t* syn)
         syn->bits |= BIT(SK_AIMMODE);
     }
 
-    if (seeSprite)
+    bool const goForItem = seeSprite && !((combatFlags & BOT_COMBAT_MELEE && (gpDist < (prioritizeItems) ? sprDist : sprDist << 1)) || combatFlags & BOT_COMBAT_STOMP);
+
+    if (goForItem)
     {
+        if(!seePlayer)
+            faceAngle = getangle(gItemSpr->x - pSpr->x, gItemSpr->y - pSpr->y);
+
         if (sprDist < 96) // Pretty much on top of it, so let it go.
             bot->seekSpriteFailCount += 30;
 
-        if (!((combatFlags & BOT_COMBAT_MELEE && (gpDist < sprDist)) || combatFlags & BOT_COMBAT_STOMP))
-        {
-            auto gSpr = &sprite[bot->goalSprite];
-            syn->fvel += ((gSpr->x - pSpr->x) * 2047) / sprDist;
-            syn->svel += ((gSpr->y - pSpr->y) * 2047) / sprDist;
-        }
+        syn->fvel += ((gItemSpr->x - pSpr->x) * 2047) / sprDist;
+        syn->svel += ((gItemSpr->y - pSpr->y) * 2047) / sprDist;
+
 #ifdef BOT_DEBUG
-        //OSD_Printf("DukeBot #%d (%s): Sprite seen. Pursuing. (Dist: %d)\n", snum, g_player[snum].user_name, sprDist);
+        //OSD_Printf("DukeBot #%d (%s): Pursuing sprite (Dist: %d)\n", snum, g_player[snum].user_name, sprDist);
 #endif
     }
-    else bot->seekSpriteFailCount++;
+    else if(!seeSprite)
+        bot->seekSpriteFailCount++;
 
     if (bot->goalWall >= 0)
     {
@@ -881,93 +868,197 @@ void DukeBot_GetInput(int snum, input_t* syn)
 #endif
     }
 
-    vec3_t curPos = p->pos;
-    int16_t curSect = p->cursectnum;
-
-    int32_t moveResult = clipmove(&curPos, &curSect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
-
-    if (!moveResult)
+    // Dodge incoming projectiles.
+    for (int spr = headspritestat[STAT_PROJECTILE]; spr >= 0; spr = nextspritestat[spr])
     {
-        curPos = p->pos;
-        curPos.z += (24 << 8);
-        curSect = p->cursectnum;
-        moveResult = clipmove(&curPos, &curSect, p->vel.x, p->vel.y, 164L, 4L << 8, 4L << 8, CLIPMASK0);
+        int32_t dodgeSpeed = 0;
+        switch (DynamicTileMap[sprite[spr].picnum])
+        {
+        case TONGUE__STATIC:      dodgeSpeed = 4;  break;
+        case FREEZEBLAST__STATIC: dodgeSpeed = 4;  break;
+        case SHRINKSPARK__STATIC: dodgeSpeed = 16; break;
+        case RPG__STATIC:         dodgeSpeed = 16; break;
+        default:                  dodgeSpeed = 0;  break;
+        }
+
+        if (dodgeSpeed)
+        {
+            vec3_t projPos = sprite[spr].xyz;
+            for (int32_t dodgeCnt = 0; dodgeCnt <= 8; dodgeCnt++)
+            {
+                if (tmulscale11(projPos.x - pSpr->x, projPos.x - pSpr->x, projPos.y - pSpr->y, projPos.y - pSpr->y, (projPos.z - pSpr->z) >> 4, (projPos.z - pSpr->z) >> 4) < 3072)
+                {
+                    vec2_t d = { sintable[(sprite[spr].ang + 512) & 2047],
+                                 sintable[sprite[spr].ang & 2047] };
+
+                    int32_t dodgeDir;
+                    if ((pSpr->x - projPos.x) * d.y > (pSpr->y - projPos.y) * d.x)
+                        dodgeDir = -dodgeSpeed * 512;
+                    else
+                        dodgeDir = dodgeSpeed * 512;
+
+                    syn->fvel -= mulscale17(d.y, dodgeDir);
+                    syn->svel += mulscale17(d.x, dodgeDir);
+                }
+
+                if (dodgeCnt < 7)
+                {
+                    projPos.x += (mulscale14(sprite[spr].xvel, sintable[(sprite[spr].ang + 512) & 2047]) << 2);
+                    projPos.y += (mulscale14(sprite[spr].xvel, sintable[sprite[spr].ang & 2047]) << 2);
+                    projPos.z += (sprite[spr].zvel << 2);
+                }
+                else
+                {
+                    // [JM] Doesn't do anything... hit var isn't used anywhere. Leftover crud?
+#if 0
+                    hitscan(&sprite[spr].pos, sprite[spr].sectnum,
+                        mulscale14(sprite[spr].xvel, sintable[(sprite[spr].ang + 512) & 2047]),
+                        mulscale14(sprite[spr].xvel, sintable[sprite[spr].ang & 2047]),
+                        (int)sprite[spr].zvel,
+                        &hit, CLIPMASK1);
+#endif
+                }
+            }
+        }
     }
 
+    // We're bumping into something.
     if (moveResult)
     {
         bot->moveCount++;
-        moveFlags |= BOT_MOVE_STRAFE;
-
-        // Avoiding obstructions. (Jumping/crouching, etc) 
-        if ((moveResult & 49152) == 32768)  //Hit a wall (49152 for sprite)
+         
+        if (touchingWall) // Avoid obstructions. (By jumping/crouching, using jetpack, etc)
         {
             int32_t wallNum = moveResult & (MAXWALLS - 1);
             int16_t nextSect = wall[wallNum].nextsector;
+
             if (nextSect == -1) // No sector, so let's try seeking through TROR.
             {
-                wallNum = yax_getnextwall(wallNum, YAX_CEILING);
-                if (wallNum != -1)
-                    nextSect = wall[wallNum].nextsector;
+                int32_t nextWallNum = yax_getnextwall(wallNum, YAX_CEILING);
+                if (nextWallNum != -1)
+                {
+                    nextSect = wall[nextWallNum].nextsector;
+                    wallNum = nextWallNum;
+                }
             }
 
-            if (nextSect >= 0)
+            // Only strafe if we're not touching the goal wall.
+            // Should make it easier for bots to get up crate stacks and into vents.
+            if (wallNum == bot->goalWall)
+                moveFlags &= ~BOT_MOVE_STRAFE;
+            else
+                moveFlags |= BOT_MOVE_STRAFE;
+
+            if (nextSect >= 0 && !(wall[wallNum].cstat & CSTAT_WALL_BLOCK))
             {
                 int32_t floorZ = yax_getflorzofslope(nextSect, p->pos.xy);
                 int32_t ceilZ = yax_getceilzofslope(nextSect, p->pos.xy);
 
-                if (floorZ <= p->pos.z + (24 << 8))
-                    moveFlags |= BOT_MOVE_JUMP;
+                if (floorZ != ceilZ)
+                {
+                    if (pSect->lotag != ST_2_UNDERWATER && !p->jetpack_on)
+                    {
+                        if (floorZ <= p->pos.z + PLAYER_STEP_HEIGHT)
+                            moveFlags |= BOT_MOVE_JUMP;
 
-                if (ceilZ >= p->pos.z - (24 << 8))
-                    moveFlags |= BOT_MOVE_CROUCH;
+                        if (ceilZ >= p->pos.z - (24 << 8))
+                            moveFlags |= BOT_MOVE_CROUCH;
+                    }
+
+                    if ((p->jetpack_on || pSect->lotag == ST_2_UNDERWATER) && floorZ <= p->pos.z + PHEIGHT)
+                        moveFlags |= BOT_MOVE_ASCEND;
+                    else if ((p->jetpack_on || pSect->lotag == ST_2_UNDERWATER) && ceilZ >= p->pos.z - PHEIGHT)
+                        moveFlags |= BOT_MOVE_DESCEND;
+                    else if ((p->jetpack_amount > 106 && pSect->lotag != ST_2_UNDERWATER) && floorZ <= p->pos.z - (72 << 8))
+                        moveFlags |= BOT_MOVE_ASCEND;
+                }
 
                 if (DukeBot_CheckUsableSector(nextSect) || DukeBot_CheckUsableSector(pSpr->sectnum))
                 {
                     moveFlags |= BOT_MOVE_USE;
                     faceAngle = DukeBot_GetAngleForWall(wallNum); // Face the wall.
                 }
-                else if (floorZ == ceilZ) // Sector's closed up. Potentially a door? Try it.
+                else if (floorZ == ceilZ) // Sector's closed up. Potentially an unknown door type? Try it.
                     moveFlags |= BOT_MOVE_USE;
             }
         }
-
-        if ((moveResult & 49152) == 49152) // Bumped into a sprite.
+        else if (touchingSprite) // Bumped into a sprite.
         {
             int32_t spriteNum = moveResult & (MAXSPRITES - 1);
 
-            if(!((combatFlags & BOT_COMBAT_MELEE) && (spriteNum == goalp->i))) // Not touching target in melee mode.
+            // Not touching target in melee mode.
+            if(!((combatFlags & BOT_COMBAT_MELEE) && spriteNum == goalp->i))
                 moveFlags |= BOT_MOVE_JUMP;
+
+            moveFlags |= BOT_MOVE_STRAFE;
         }
-
-        // Process move types
-        if (moveFlags & BOT_MOVE_JUMP)
-        {
-            if (((bot->moveCount & 31) == 4) || ((bot->moveCount & 31) == 8))
-                syn->bits |= BIT(SK_JUMP);
-
-            if (bot->goalSprite != -1) // Give up faster if we have to attempt jumping at a sprite.
-                bot->seekSpriteFailCount++;
-        }
-
-        if (moveFlags & BOT_MOVE_CROUCH)
-            syn->bits |= BIT(SK_CROUCH);
-
-        if (moveFlags & BOT_MOVE_USE && !(bot->moveCount % 2))
-            syn->bits |= BIT(SK_OPEN);
 
         if ((bot->moveCount & 31) == 17)
             syn->bits |= BIT(SK_QUICK_KICK);
 
+        // Obstructed too many times in a row, give up on this path.
         if (bot->moveCount > 32)
         {
             bot->goalWall = -1;
             bot->moveCount = 0;
         }
     }
-    else
-        bot->moveCount = 0;
+    else bot->moveCount = 0;
 
+    // Handle jetpack and underwater behavior.
+    if (pSect->lotag == ST_1_ABOVE_WATER)
+    {
+        if ((p->on_warping_sector && !seePlayer && sector[gpSpr->sectnum].lotag == ST_2_UNDERWATER) ||
+            (p->on_warping_sector && !seePlayer && gItemSpr && sector[gItemSpr->sectnum].lotag == ST_2_UNDERWATER))
+            bot->waterSubmergeTime = 6;
+    }
+
+    if (bot->waterSubmergeTime > 0)
+    {
+        moveFlags &= ~(BOT_MOVE_ASCEND | BOT_MOVE_JUMP);
+        moveFlags |= BOT_MOVE_DESCEND;
+        bot->waterSubmergeTime--;
+    }
+    else if (pSect->lotag == ST_2_UNDERWATER)
+    {
+        if ((p->on_warping_sector && p->airleft < 5) ||
+            (p->on_warping_sector && !seePlayer && sector[gpSpr->sectnum].lotag == ST_1_ABOVE_WATER) ||
+            (p->on_warping_sector && !seePlayer && gItemSpr && sector[gItemSpr->sectnum].lotag == ST_1_ABOVE_WATER) ||
+            (!touchingWall && !touchingSprite && !goForItem && seePlayer && pSpr->z > gpSpr->z + (48 << 8)) ||
+            (!touchingWall && !touchingSprite && goForItem && pSpr->z > gItemSpr->z + (4 << 8)))
+        {
+            moveFlags &= ~(BOT_MOVE_DESCEND | BOT_MOVE_CROUCH);
+            moveFlags |= BOT_MOVE_ASCEND;
+        }
+        else if ((!touchingWall && !touchingSprite && !goForItem && seePlayer && pSpr->z < gpSpr->z - (48 << 8)) ||
+                 (!touchingWall && !touchingSprite && goForItem && pSpr->z < gItemSpr->z - (4 << 8)))
+        {
+            moveFlags &= ~(BOT_MOVE_ASCEND | BOT_MOVE_JUMP);
+            moveFlags |= BOT_MOVE_DESCEND;
+        }
+    }
+    else
+    {
+        if (p->jetpack_on)
+        {
+            if ((p->jetpack_amount < 106) ||
+                ((p->truefz - p->truecz) <= (72 << 8)) ||
+                (!touchingWall && !touchingSprite && !goForItem && seePlayer && (pSpr->z < gpSpr->z - (48 << 8))) ||
+                (!touchingWall && !touchingSprite && goForItem && pSpr->z < gItemSpr->z - (4 << 8)))
+            {
+                moveFlags &= ~(BOT_MOVE_ASCEND | BOT_MOVE_JUMP);
+                moveFlags |= BOT_MOVE_DESCEND;
+            }
+            else if ((!touchingWall && !touchingSprite && !goForItem && seePlayer && pSpr->z > gpSpr->z + (48 << 8)) ||
+                     (!touchingWall && !touchingSprite && goForItem && pSpr->z > gItemSpr->z + (4 << 8)))
+            {
+                moveFlags &= ~(BOT_MOVE_DESCEND | BOT_MOVE_CROUCH);
+                moveFlags |= BOT_MOVE_ASCEND;
+            }
+        }
+    }
+
+    // Process movement flags
     if (moveFlags & BOT_MOVE_STRAFE)
     {
         //Strafe attack
@@ -988,7 +1079,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
             else
                 strafeVal -= 8192;
 
-            if ((gpDist > 256) && !(rand() % 200)) // Randomly jump around a bit in battle.
+            if ((gpDist > 256) && !(rand() % 200) && pSect->lotag != ST_2_UNDERWATER) // Randomly jump around a bit in battle.
                 syn->bits |= BIT(SK_JUMP);
         }
 
@@ -996,16 +1087,59 @@ void DukeBot_GetInput(int snum, input_t* syn)
         syn->svel += ((sintable[(faceAngle + 512) & 2047] * strafeVal) >> 17);
     }
 
-    if (p->dead_flag)
+    if (moveFlags & BOT_MOVE_JUMP)
+    {
+        if (((bot->moveCount & 31) == 4) || ((bot->moveCount & 31) == 8))
+            syn->bits |= BIT(SK_JUMP);
+
+        if (gItemSpr) // Give up faster if we have to attempt jumping at an item.
+            bot->seekSpriteFailCount++;
+    }
+
+    if (moveFlags & BOT_MOVE_CROUCH)
+        syn->bits |= BIT(SK_CROUCH);
+
+    if (moveFlags & BOT_MOVE_USE && !(bot->moveCount % 2))
         syn->bits |= BIT(SK_OPEN);
 
-    if ((p->firstaid_amount > 0) && (p->last_extra < 100))
+    if (moveFlags & BOT_MOVE_DESCEND)
+    {
+        // Descending, and we're close to the floor.
+        if ((pSect->lotag != ST_2_UNDERWATER && p->jetpack_on) && (p->truefz <= p->pos.z + (72 << 8)))
+            syn->bits |= BIT(SK_JETPACK);
+
+        syn->bits &= ~BIT(SK_JUMP);
+        syn->bits |= BIT(SK_CROUCH);
+    }
+    else if ((moveFlags & BOT_MOVE_ASCEND))
+    {
+        if (pSect->lotag != ST_2_UNDERWATER && !p->jetpack_on)
+            syn->bits |= BIT(SK_JETPACK);
+
+        syn->bits &= ~BIT(SK_CROUCH);
+        syn->bits |= BIT(SK_JUMP);
+    }
+
+    // Handle weapons and inventory.
+    if ((p->curr_weapon <= PISTOL_WEAPON) && (bot->moveCount % 30) == 0)
+    {
+        for (int32_t i = MAX_WEAPONS - 1; i > 0; i--)
+        {
+            if (p->gotweapon[i] && p->ammo_amount[i])
+            {
+                syn->bits |= (i+1) << SK_WEAPON_BITS;
+                break;
+            }
+        }
+    }
+
+    if ((p->firstaid_amount > 0) && (p->last_extra < 100) && ((rand() % 25) == 0))
         syn->bits |= BIT(SK_MEDKIT);
 
-    if((klabs(syn->fvel) > BOT_MAXSPEED>>2) || (klabs(syn->svel) > BOT_MAXSPEED>>2))
-        syn->bits |= BIT(SK_RUN);
+    if (seePlayer && (p->steroids_amount >= 400) && (!(rand() % 100) || p->curr_weapon == KNEE_WEAPON))
+        syn->bits |= BIT(SK_STEROIDS);
 
-    // Instigate a bit of randomness, which may help to get unstuck in some situations.
+    // Impart a bit of randomness, which may help to get unstuck in some situations.
     syn->fvel += (rand() % 512)-256;
     syn->svel += (rand() % 512)-256;
 
@@ -1013,6 +1147,11 @@ void DukeBot_GetInput(int snum, input_t* syn)
     syn->fvel = clamp(syn->fvel, -BOT_MAXSPEED, BOT_MAXSPEED);
     syn->svel = clamp(syn->svel, -BOT_MAXSPEED, BOT_MAXSPEED);
 
+    // Hold run key if we're moving fast enough. Looks nicer.
+    if ((klabs(syn->fvel) > BOT_MAXSPEED >> 2) || (klabs(syn->svel) > BOT_MAXSPEED >> 2))
+        syn->bits |= BIT(SK_RUN);
+
     syn->q16avel = min(max(fix16_from_int((((faceAngle + 1024 - pSpr->ang) & 2047) - 1024) >> 1), F16(-127)), F16(127));
+
     bot->cycleCount++;
 }

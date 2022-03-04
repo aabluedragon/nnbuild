@@ -27,7 +27,7 @@ enum BotCombatFlags
 typedef struct
 {
     vec3_t goalPos, lastSeenPlayerPos[MAXPLAYERS];
-    int32_t moveCount, cycleCount, seekSpriteFailCount, seekSpriteCooldown;
+    int32_t moveCount, cycleCount, seekSpriteFailCount, seekSpriteCooldown, waterSubmergeTime;
     int32_t goalSprite, goalSpriteScore, lastGoalSprite;
     int32_t goalPlayer, goalWall;
     int16_t lastStartSect, lastEndSect;
