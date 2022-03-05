@@ -208,7 +208,7 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
     return(0);
 }
 
-static inline bool DukeBot_IsSpriteValid(int32_t spriteNum)
+static bool DukeBot_IsSpriteValid(int32_t spriteNum)
 {
     auto const spr = &sprite[spriteNum];
     if ((uint32_t)spriteNum >= MAXSPRITES)
@@ -217,7 +217,7 @@ static inline bool DukeBot_IsSpriteValid(int32_t spriteNum)
     return !((spr->xrepeat <= 0) || (spr->yrepeat <= 0) || ((spr->cstat & 32768) == 32768) || (spr->statnum == MAXSTATUS));
 }
 
-static inline int32_t DukeBot_GetAngleForWall(int16_t wNum)
+static int32_t DukeBot_GetAngleForWall(int16_t wNum)
 {
     if ((uint16_t)wNum >= MAXWALLS)
         return 0;
@@ -228,7 +228,7 @@ static inline int32_t DukeBot_GetAngleForWall(int16_t wNum)
     return (getangle(wall2->x - wall1->x, wall2->y - wall1->y) + 1536) & 2047;
 }
 
-static inline bool DukeBot_CheckUsableSector(int16_t sectNum)
+static bool DukeBot_CheckUsableSector(int16_t sectNum)
 {
     if ((uint16_t)sectNum >= MAXSECTORS)
         return false;
@@ -270,6 +270,24 @@ static inline bool DukeBot_CheckUsableSector(int16_t sectNum)
     return false;
 }
 
+static int32_t DukeBot_GetDistWithDummy(int32_t playerNum, vec3_t* pos)
+{
+    auto const p = g_player[playerNum].ps;
+    auto pSpr = &sprite[p->i];
+
+    int32_t dist1 = dist(&pSpr->xyz, pos);
+
+    if (p->dummyplayersprite != -1)
+    {
+        pSpr = &sprite[p->dummyplayersprite];
+        int32_t dist2 = dist(&pSpr->xyz, pos);
+        if (dist2 < dist1)
+            return dist2;
+    }
+
+    return dist1;
+}
+
 // [JM] I think this needs better documentation.
 // Still having a hard time figuring out everything this does.
 int16_t searchsect[MAXSECTORS], searchparent[MAXSECTORS];
@@ -304,12 +322,11 @@ static void DukeBot_GetNextWallForPath(int32_t playerNum, int32_t endsect)
         int32_t startwall = curSect->wallptr;
         int32_t endwall = startwall + curSect->wallnum;
 
-        int32_t wNum = 0;
-        walltype* wal;
-
-        for (wNum = startwall, wal = &wall[startwall]; wNum < endwall; wNum++, wal++)
+        for (int32_t wallNum = startwall; wallNum < endwall; wallNum++)
         {
+            auto wal = &wall[wallNum];
             int16_t nextSectNum = wal->nextsector;
+
             if (nextSectNum < 0)
                 continue;
 
@@ -372,7 +389,7 @@ static void DukeBot_GetNextWallForPath(int32_t playerNum, int32_t endsect)
 
                     vec2_t wPos = { 0, 0 };
                     // CHECKME: Does this break the parent loop?
-                    for (wNum = startwall; wNum < endwall; wNum++)
+                    for (int32_t wNum = startwall; wNum < endwall; wNum++)
                     {
                         wPos.x += wall[wNum].x;
                         wPos.y += wall[wNum].y;
@@ -386,7 +403,7 @@ static void DukeBot_GetNextWallForPath(int32_t playerNum, int32_t endsect)
                     int32_t targetWall = startwall;
 
                     // CHECKME: Does this break the parent loop?
-                    for (wNum = startwall; wNum < endwall; wNum++)
+                    for (int32_t wNum = startwall; wNum < endwall; wNum++)
                     {
                         if (wall[wNum].nextsector != desiredSect)
                             continue;
@@ -576,24 +593,12 @@ void DukeBot_GetInput(int snum, input_t* syn)
             auto pOther = g_player[otherPlayer].ps;
             if (otherPlayer != snum && !(GTFLAGS(GAMETYPE_TDM) && p->team == pOther->team) && !pOther->dead_flag)
             {
-                int32_t curDist = dist(&pSpr->xyz, &sprite[pOther->i].xyz);
+                int32_t curDist = DukeBot_GetDistWithDummy(snum, &sprite[pOther->i].xyz);
 
                 if (!DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &sprite[pOther->i].xyz, sprite[pOther->i].sectnum))
                     curDist <<= 1;
                 else
                     bot->lastSeenPlayerPos[otherPlayer] = sprite[pOther->i].xyz;
-
-                if (p->dummyplayersprite != -1)
-                {
-                    auto pDummySpr = &sprite[p->dummyplayersprite];
-                    int32_t dummyDist = dist(&pDummySpr->xyz, &sprite[pOther->i].xyz);
-
-                    if (!DukeBot_CanSee(&pDummySpr->xyz, pDummySpr->sectnum, &sprite[pOther->i].xyz, sprite[pOther->i].sectnum))
-                        dummyDist <<= 1;
-
-                    if (dummyDist < curDist)
-                        curDist = dummyDist;
-                }
 
                 if (pOther->dummyplayersprite != -1)
                 {
@@ -665,7 +670,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
                     if (curScore <= 0)
                         continue;
 
-                    int32_t curDist = ldist(&pSpr->xyz, &spr->xyz);
+                    int32_t curDist = DukeBot_GetDistWithDummy(snum, &spr->xyz);
                     if (curDist < closestDist) // Which is closer?
                     {
                         closestSprite = spriteNum;
@@ -735,7 +740,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
     bool const touchingWall = ((moveResult & 49152) == 32768);
     bool const touchingSprite = ((moveResult & 49152) == 49152);
-    bool const seePlayer = (!goalp->dead_flag && DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &gpSpr->xyz, gpSpr->sectnum));
+    bool const seePlayer = ((bot->goalPlayer != snum) && !goalp->dead_flag && DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &gpSpr->xyz, gpSpr->sectnum));
     bool const seeSprite = (gItemSpr) ? DukeBot_CanSeeItem(&pSpr->xyz, pSpr->sectnum, bot->goalSprite) : false;
     bool const prioritizeItems = ((pSpr->extra <= 50) || (p->curr_weapon == KNEE_WEAPON && p->steroids_amount == 0) || (p->ammo_amount[p->curr_weapon] <= (p->max_ammo_amount[p->curr_weapon] >> 3)));
 
