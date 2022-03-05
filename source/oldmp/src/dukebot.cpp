@@ -328,15 +328,23 @@ static void DukeBot_GetNextWallForPath(int32_t playerNum, int32_t endsect)
             if ((nSect->floorstat | nSect->ceilingstat) & FLOOR_STAT_SLOPE)
                 yax_getzsofslope(nextSectNum, d.x, d.y, &nextCeilZ, &nextFloorZ);
 
-            // Ceiling too low, and not a usable sector.
-            if ((nextCeilZ > nextFloorZ - (28 << 8)) && ((nSect->lotag < ST_15_WARP_ELEVATOR) || (nSect->lotag > ST_22_SPLITTING_DOOR)))
+            // Ceiling too low, and sector is locked or not usable.
+            if ((nextCeilZ > nextFloorZ - (28 << 8)) && ((nSect->lotag & 16384) || (nSect->lotag < ST_15_WARP_ELEVATOR) || (nSect->lotag > ST_22_SPLITTING_DOOR)))
                 continue;
-
-            // Floor too high for sector we're searching from?
-            if ((curSect->lotag != ST_2_UNDERWATER && p->jetpack_amount < 106) && (nextFloorZ < curFloorZ - (72 << 8)) &&
-                !((nSect->lotag >= ST_15_WARP_ELEVATOR && nSect->lotag <= ST_19_ELEVATOR_UP) || nSect->lotag == ST_21_FLOOR_DOOR) &&
-                !(curSect->lotag >= ST_15_WARP_ELEVATOR && curSect->lotag <= ST_19_ELEVATOR_UP))
-                continue;
+           
+            // Can't float or fly?
+            if (curSect->lotag != ST_2_UNDERWATER && p->jetpack_amount < 106)
+            {
+                if (nextFloorZ < curFloorZ - (72 << 8)) // Floor too high for sector we're searching from?
+                {
+                    // Locked, or not a usable sector.
+                    if ((nSect->lotag & 16384) || !((nSect->lotag >= ST_15_WARP_ELEVATOR && nSect->lotag <= ST_19_ELEVATOR_UP) || nSect->lotag == ST_21_FLOOR_DOOR))
+                    {
+                        if((curSect->lotag & 16384) || !(curSect->lotag >= ST_15_WARP_ELEVATOR && curSect->lotag <= ST_19_ELEVATOR_UP))
+                            continue;
+                    }
+                }
+            }
 
             if(!bitmap_test(dashow2dsector, nextSectNum))
             {
