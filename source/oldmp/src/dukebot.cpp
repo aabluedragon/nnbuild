@@ -59,12 +59,13 @@ const char* bot_names[] = {
     "OOZFILTER",    "Meat",         "Sponge",       "Pretzel",
     "Booti",        "Capussi",      "Scoot",        "Fromage",
     "DankyKang",    "Wicket",       "HeThicc",      "V-Dub",
-    "Robotnik",     "WollSmoth",    "AAAAAAAAA",    "PlzHelp",
+    "Robotnik",     "WollSmoth",    "AAAAAAAAA",    "PlzHelpMe",
     "Dio",          "VargFren",     "Pantherk",     "Luigo",
     "JankOClok",    "CancrMaus",    "H4MMER",       "Gideon",
     "BOTYOT",       "DUKEYOT",      "ABADBABE",     "BEEFBABE",
     "DEADC0DE",     "DEFEC8ED",     "D0D0CACA",     "1337C0D3",
     "Heskel",       "Bort",         "Kirk",         "Picard",
+    "Gnorts",       "FatComm&r",    "NEWBEAST",     "BATTLORD",
 };
 
 // This matrix is used to determine how far a dukebot will engage another player
@@ -567,7 +568,12 @@ void DukeBot_GetInput(int snum, input_t* syn)
     syn->extbits = 0;
 
     if (p->dead_flag)
-        syn->bits |= BIT(SK_OPEN);
+    {
+        if(!(rand() % 128))
+            syn->bits |= BIT(SK_OPEN);
+
+        return;
+    }
 
     if (pSpr->sectnum == -1) // If we're in void, there's nothing else we can do. Bail.
         return;
@@ -777,8 +783,6 @@ void DukeBot_GetInput(int snum, input_t* syn)
         bot->lastSeenPlayerPos[bot->goalPlayer] = gpSpr->xyz;
 
         syn->bits |= BIT(SK_FIRE);
-        if (gpDist < 256) // We're close, give 'em the boot.
-            syn->bits |= BIT(SK_QUICK_KICK);
 
         // Handle special weapon cases.
         if (p->curr_weapon == RPG_WEAPON)
@@ -789,9 +793,6 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
         if ((p->curr_weapon == HANDBOMB_WEAPON) && (!(rand() & 7)))
             syn->bits &= ~BIT(SK_FIRE);
-
-        if (p->curr_weapon == TRIPBOMB_WEAPON)
-            syn->bits |= ((rand() % MAX_WEAPONS) << SK_WEAPON_BITS);
 
         if ((gpSpr->yrepeat < 32) || (gpSpr->pal == 1)) // Target shrunk or frozen?
         {
@@ -818,6 +819,11 @@ void DukeBot_GetInput(int snum, input_t* syn)
             syn->fvel += (fightPos.x - pSpr->x) * 2047 / gpDist;
             syn->svel += (fightPos.y - pSpr->y) * 2047 / gpDist;
         }
+
+        if (gpDist > 980 && p->curr_weapon == KNEE_WEAPON) // Don't kick if target is too far. Prevents boot slowdown.
+            syn->bits &= ~BIT(SK_FIRE);
+        else if (gpDist < 980 && p->curr_weapon != KNEE_WEAPON) // We're close, give 'em the boot.
+            syn->bits |= BIT(SK_QUICK_KICK);
 
 #if 0
         syn->bits &= ~BIT(SK_FIRE); // DEBUG: STOP SHOOTING, AND HOLD STILL, DAMNIT.
@@ -1137,10 +1143,13 @@ void DukeBot_GetInput(int snum, input_t* syn)
     }
 
     // Handle weapons and inventory.
-    if ((p->curr_weapon <= PISTOL_WEAPON) && (bot->moveCount % 30) == 0)
+    if (((p->curr_weapon <= PISTOL_WEAPON) || (p->curr_weapon == TRIPBOMB_WEAPON)) && !(bot->moveCount % 30))
     {
         for (int32_t i = MAX_WEAPONS - 1; i > 0; i--)
         {
+            if (i == TRIPBOMB_WEAPON)
+                continue;
+
             if (p->gotweapon[i] && p->ammo_amount[i])
             {
                 syn->bits |= (i+1) << SK_WEAPON_BITS;
