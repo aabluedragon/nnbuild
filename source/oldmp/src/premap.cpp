@@ -512,9 +512,8 @@ void P_RandomSpawnPoint(int snum)
         i = krand() % g_numPlayerSprites;
         if (Gametypes[ud.coop].flags & GAMETYPE_TDMSPAWN)
         {
-            for (j = 0; j < MAXPLAYERS; j++)
+            for(ALL_PLAYERS(j))
             {
-                if (g_player[j].ps == NULL || !g_player[j].connected) continue;
 
                 if (j != snum && g_player[j].ps->team == p->team && sprite[g_player[j].ps->i].extra > 0)
                 {
@@ -789,7 +788,7 @@ static void prelevel(char g)
 
     resetpremapglobals();
 
-    TRAVERSE_CONNECT(j)
+    for (ALL_PLAYERS(j))
     {
         resetprestat(j, g);
     }
@@ -817,7 +816,7 @@ static void prelevel(char g)
             if (sector[i].ceilingpicnum == CLOUDYSKIES && g_numClouds < 127)
                 clouds[g_numClouds++] = i;
 
-            TRAVERSE_CONNECT(j)
+            for (ALL_PLAYERS(j))
             {
                 if (g_player[j].ps->one_parallax_sectnum == -1)
                     g_player[j].ps->one_parallax_sectnum = i;
@@ -826,7 +825,7 @@ static void prelevel(char g)
 
         if (sector[i].lotag == 32767) //Found a secret room
         {
-            TRAVERSE_CONNECT(j)
+            for (ALL_PLAYERS(j))
             {
                 g_player[j].ps->max_secret_rooms++;
             }
@@ -835,7 +834,7 @@ static void prelevel(char g)
 
         if (sector[i].lotag == -1)
         {
-            TRAVERSE_CONNECT(j)
+            for (ALL_PLAYERS(j))
             {
                 g_player[j].ps->exitx = wall[sector[i].wallptr].x;
                 g_player[j].ps->exity = wall[sector[i].wallptr].y;
@@ -853,7 +852,7 @@ static void prelevel(char g)
         X_OnEvent(EVENT_LOADACTOR, i, -1, -1);
         if (sprite[i].lotag == -1 && (sprite[i].cstat&16))
         {
-            TRAVERSE_CONNECT(j)
+            for (ALL_PLAYERS(j))
             {
                 g_player[j].ps->exitx = SX(i);
                 g_player[j].ps->exity = SY(i);
@@ -1194,7 +1193,7 @@ void G_NewGame(int vn,int ln,int sk)
         }
 
     // Set up some player-specific info
-    TRAVERSE_CONNECT(j)
+    for (ALL_PLAYERS(j))
     {
         DukePlayer_t *p = g_player[j].ps;
         p->zoom = 768;
@@ -1387,10 +1386,8 @@ static void resetpspritevars(char g)
 
     if (ud.recstat != 2)
     {
-        for (i = 0; i < MAXPLAYERS; i++)
+        for(ALL_PLAYERS(i))
         {
-            if (g_player[i].ps == NULL || !g_player[i].connected) continue;
-
             // Kept to keep old behavior. Rest of the block that was here was useless.
             if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
             {
@@ -1414,10 +1411,8 @@ static void resetpspritevars(char g)
     prepare_spawns();
     
     g_lastPlayerPal = 0;
-    for (i = 0; i < MAXPLAYERS; i++)
+    for(ALL_PLAYERS(i))
     {
-        if (g_player[i].ps == NULL || !g_player[i].connected) continue;
-
         insert_player_sprite(i);
     }
 }
@@ -1717,7 +1712,7 @@ int G_EnterLevel(int g)
         if (ud.level_number == 0 && ud.recstat != 2) P_DoQuote(QUOTE_F1HELP,g_player[myconnectindex].ps);
     }
 
-    TRAVERSE_CONNECT(i)
+    for (ALL_PLAYERS(i))
     switch (DynamicTileMap[sector[sprite[g_player[i].ps->i].sectnum].floorpicnum])
     {
     case HURTRAIL__STATIC:

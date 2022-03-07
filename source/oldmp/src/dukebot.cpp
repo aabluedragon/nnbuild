@@ -514,11 +514,8 @@ static void DukeBot_Init(int32_t playerNum)
     bot->seekSpriteCooldown = 0;
     bot->seekSpriteFailCount = 0;
 
-    for (int32_t i = 0; i < MAXPLAYERS; i++)
+    for(int32_t ALL_PLAYERS(i))
     {
-        if (g_player[i].ps == NULL || !g_player[i].connected)
-            continue;
-
         bot->lastSeenPlayerPos[i] = g_player[i].ps->pos;
     }
 }

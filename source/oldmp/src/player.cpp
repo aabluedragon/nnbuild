@@ -4179,7 +4179,7 @@ static int P_HandleFist(int playerNum)
                 }
             }
 
-            TRAVERSE_CONNECT(i)
+            for (ALL_PLAYERS(i))
                 g_player[i].ps->gm = MODE_EOL;
 
             p->fist_incs = 0;
@@ -4243,11 +4243,8 @@ static void P_HandleFragged(int snum)
 
                 S_PlaySound(PIPEBOMB_EXPLODE);
 
-                for (int i = 0; i < MAXPLAYERS; i++)
+                for (int32_t ALL_PLAYERS(i))
                 {
-                    if (g_player[i].ps == NULL || !g_player[i].connected)
-                        continue;
-
                     if (g_player[i].ps->team == fraggedbyteam) // Flash screens of all winning players
                     {
                         P_PalFrom(g_player[i].ps, 48, 64, 64, 64);
