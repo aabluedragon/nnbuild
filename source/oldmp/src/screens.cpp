@@ -189,9 +189,13 @@ void G_ShowScores(bool bonus)
             }
         }
 
-        if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && i == connecthead)
+        if (i == connecthead)
         {
             minitext(ping_x, yoff, "HOST", 8, 2 + 8 + 16 + 128);
+        }
+        else if (g_player[i].isBot)
+        {
+            minitext(ping_x, yoff, "BOT", 2, 2 + 8 + 16 + 128);
         }
         else if ((g_networkBroadcastMode == NETMODE_P2P) || !g_player[i].connected)
         {
