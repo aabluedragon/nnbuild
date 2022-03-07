@@ -2027,7 +2027,7 @@ static void G_DrawOverheadMap(int cposx, int cposy, int czoom, short cang)
 
     videoSetCorrectedAspect();
 
-    TRAVERSE_CONNECT(p)
+    for(ALL_PLAYERS(p))
     {
         if (ud.scrollmode && p == screenpeek) continue;
 
@@ -9775,7 +9775,7 @@ MAIN_LOOP_RESTART:
 
             waitforeverybody();
 
-            TRAVERSE_CONNECT(i)
+            for (ALL_PLAYERS(i))
             {
                 P_ResetWeapons(i);
                 P_ResetInventory(i);
@@ -10068,9 +10068,7 @@ void G_OpenDemoWrite(void)
 
 static void G_DemoRecord(void)
 {
-    short i;
-
-    TRAVERSE_CONNECT(i)
+    for (int16_t ALL_PLAYERS(i))
     {
         copybufbyte(g_player[i].inputBits,&recsync[ud.reccnt],sizeof(input_t));
         ud.reccnt++;
@@ -10187,7 +10185,7 @@ RECHECK:
                     }
                 }
 
-                TRAVERSE_CONNECT(j)
+                for (ALL_PLAYERS(j))
                 {
                     copybufbyte(&recsync[i],&inputfifo[g_player[j].movefifoend&(MOVEFIFOSIZ-1)][j],sizeof(input_t));
                     g_player[j].movefifoend++;
@@ -10426,7 +10424,7 @@ static int G_DoMoveThings(void)
     }
 
     // Copy input FIFO bits into player's own inputBits struct, and advance our place in the FIFO.
-    TRAVERSE_CONNECT(i)
+    for (ALL_PLAYERS(i))
     {
         *g_player[i].inputBits = inputfifo[movefifoplc & (MOVEFIFOSIZ - 1)][i];
         Net_CheckPlayerQuit(i);
@@ -10454,7 +10452,7 @@ static int G_DoMoveThings(void)
         A_MoveDummyPlayers();//ST 13
     }
 
-    TRAVERSE_CONNECT(i)
+    for (ALL_PLAYERS(i))
     { 
         // P_HandleTeamChange
         if (g_player[i].inputBits->extbits&(EXTBIT_CHANGETEAM))

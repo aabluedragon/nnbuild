@@ -229,7 +229,7 @@ void Net_HandleInput(void)
 
     if (ud.multimode > 1 && (myconnectindex == connecthead))
     {
-        TRAVERSE_CONNECT(i)
+        for (ALL_PLAYERS(i))
         {
             if (g_player[i].isBot)
             {
@@ -411,7 +411,7 @@ void Net_HandleInput(void)
         packbuf[0] = PACKET_TYPE_MASTER_TO_SLAVE;
         j = 1;
 
-        TRAVERSE_CONNECT(i)
+        for (ALL_PLAYERS(i))
         {
             packbuf[j++] = i; // Player Index
 
@@ -471,7 +471,7 @@ void Net_ParsePackets(void)
 
             osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)][0];
             nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)][0];
-            TRAVERSE_CONNECT(i)
+            for (ALL_PLAYERS(i))
             {
                 int playerNum = packbuf[j++];
 
@@ -662,7 +662,7 @@ void Net_ParsePackets(void)
                 ud.m_noexits = packbuf[11];
                 ud.m_weaponstay = packbuf[12];
 
-                TRAVERSE_CONNECT(i)
+                for (ALL_PLAYERS(i))
                 {
                     P_ResetWeapons(i);
                     P_ResetInventory(i);
@@ -759,7 +759,7 @@ void Net_ParsePackets(void)
                     for (i=connectpoint2[connecthead];i>=0;i=connectpoint2[i])
                         if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf,packbufleng);
 
-                TRAVERSE_CONNECT(i)
+                for (ALL_PLAYERS(i))
                 g_player[i].ps->gm = MODE_EOL;
 
                 ud.level_number = packbuf[1];

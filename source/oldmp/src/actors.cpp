@@ -1518,8 +1518,7 @@ static void G_MoveFX(void)
                         T5(spriteNum)--;
                     else
                     {
-                        int playerNum;
-                        TRAVERSE_CONNECT(playerNum)
+                        for(int32_t ALL_PLAYERS(playerNum))
                             if (playerNum == myconnectindex && g_player[playerNum].ps->cursectnum == pSprite->sectnum)
                             {
                                 S_PlaySound(pSprite->lotag + (unsigned)g_globalRandom % (pSprite->hitag + 1));
@@ -3363,8 +3362,7 @@ static void G_MoveTransports(void)
                                     A_PlaySound(TELEPORTER, i);
                                 }
 
-                                int otherPnum;
-                                TRAVERSE_CONNECT(otherPnum)
+                                for (int32_t ALL_PLAYERS(otherPnum))
                                 {
                                     auto otherPlayer = g_player[otherPnum].ps;
                                     if (otherPlayer->cursectnum == sprite[OW(i)].sectnum)
@@ -5664,7 +5662,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             if (l && (pSector->floorstat&64))
             {
-                TRAVERSE_CONNECT(p)
+                for (ALL_PLAYERS(p))
                 {
                     if (g_player[p].ps->cursectnum == pSprite->sectnum && g_player[p].ps->on_ground == 1)
                     {
@@ -5838,7 +5836,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                 {
                     if (ud.clipping == 0 && pSprite->xvel >= 192)
-                        TRAVERSE_CONNECT(p)
+                        for (ALL_PLAYERS(p))
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
@@ -5925,7 +5923,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                 {
                     if (ud.clipping == 0 && pSprite->xvel >= 192)
-                        TRAVERSE_CONNECT(p)
+                        for (ALL_PLAYERS(p))
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
@@ -6024,7 +6022,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                     if (ud.clipping == 0)
-                        TRAVERSE_CONNECT(p)
+                        for (ALL_PLAYERS(p))
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
@@ -6097,7 +6095,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                 {
                     if (ud.clipping == 0)
-                        TRAVERSE_CONNECT(p)
+                        for (ALL_PLAYERS(p))
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
@@ -6181,7 +6179,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 x = (pSprite->xvel*sintable[pSprite->ang&2047])>>14;
 
 
-                TRAVERSE_CONNECT(p)
+                for (ALL_PLAYERS(p))
                 if (g_player[p].ps->cursectnum == pSprite->sectnum && g_player[p].ps->on_ground)
                 {
                     g_player[p].ps->pos.x += m;
@@ -6467,7 +6465,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 j = 1;
 
                 if ((pSector->lotag&0xff) != ST_27_STRETCH_BRIDGE)
-                    TRAVERSE_CONNECT(p)
+                    for (ALL_PLAYERS(p))
                     if (pSector->lotag != ST_30_ROTATE_RISE_BRIDGE && pSector->lotag != ST_31_TWO_WAY_TRAIN && pSector->lotag != ST_0_NO_EFFECT)
                         if (pSprite->sectnum == sprite[g_player[p].ps->i].sectnum)
                             j = 0;
@@ -7074,7 +7072,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 dragpoint((short)pData[1],wall[pData[1]].x+x,wall[pData[1]].y+l, 0);
                 dragpoint((short)pData[2],wall[pData[2]].x+x,wall[pData[2]].y+l, 0);
 
-                TRAVERSE_CONNECT(p)
+                for (ALL_PLAYERS(p))
                 if (g_player[p].ps->cursectnum == pSprite->sectnum && g_player[p].ps->on_ground)
                 {
                     g_player[p].ps->pos.x += x;

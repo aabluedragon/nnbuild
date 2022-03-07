@@ -593,8 +593,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     {
         int32_t lastDist = INT32_MAX;
 
-        int32_t otherPlayer;
-        TRAVERSE_CONNECT(otherPlayer)
+        for (int32_t ALL_PLAYERS(otherPlayer))
         {
             auto pOther = g_player[otherPlayer].ps;
             if (otherPlayer != snum && !(GTFLAGS(GAMETYPE_TDM) && p->team == pOther->team) && !pOther->dead_flag)

@@ -62,14 +62,14 @@ void G_DrawFrags(void)
             int i = 0;
             bool redraw = false;
 
-            TRAVERSE_CONNECT(i)
+            for (ALL_PLAYERS(i))
                 if (g_player[i].ps->frag != sbar.frag[i])
                     redraw = true;
 
             if (!redraw)
                 return;
 
-            TRAVERSE_CONNECT(i)
+            for (ALL_PLAYERS(i))
                 if (i != myconnectindex)
                     sbar.frag[i] = g_player[i].ps->frag;
         }
@@ -1187,7 +1187,7 @@ void G_DisplayPlayerId(void)
 
         hitdata_t hit;
 
-        TRAVERSE_CONNECT(i)
+        for (ALL_PLAYERS(i))
         {
             if (g_player[i].ps->holoduke_on != -1)
                 sprite[g_player[i].ps->holoduke_on].cstat ^= 256;
@@ -1198,7 +1198,7 @@ void G_DisplayPlayerId(void)
             sintable[fix16_to_int(ud.cameraq16ang) & 2047],
             fix16_to_int(F16(100) - ud.cameraq16horiz) << 11, &hit, 0xffff0030);
 
-        TRAVERSE_CONNECT(i)
+        for (ALL_PLAYERS(i))
         {
             if (g_player[i].ps->holoduke_on != -1)
                 sprite[g_player[i].ps->holoduke_on].cstat ^= 256;

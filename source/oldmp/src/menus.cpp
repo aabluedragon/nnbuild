@@ -4933,7 +4933,7 @@ VOLUME_ALL_40x:
             {
                 if (plrvotes > (numplayers>>1) || !g_player[myconnectindex].ps->i || ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && myconnectindex == connecthead))
                 {
-                    TRAVERSE_CONNECT(c)
+                    for (ALL_PLAYERS(c))
                     {
                         P_ResetWeapons(c);
                         P_ResetInventory(c);

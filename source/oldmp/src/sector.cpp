@@ -244,7 +244,7 @@ int __fastcall A_FindPlayer(spritetype *s, int *d)
         int j, closest_player = 0;
         int x, closest = 0x7fffffff;
 
-        TRAVERSE_CONNECT(j)
+        for (ALL_PLAYERS(j))
         {
             auto const pPlayer = g_player[j].ps;
             x = A_FP_ManhattanDist(pPlayer, s);
@@ -353,7 +353,7 @@ void G_DoSectorAnimations(void)
         {
             if (ptr == &sector[datarget].floorz)
             {
-                TRAVERSE_CONNECT(p)
+                for (ALL_PLAYERS(p))
                     if (g_player[p].ps->cursectnum == datarget)
                         if ((sector[datarget].floorz - g_player[p].ps->pos.z) < (64 << 8))
                             if (sprite[g_player[p].ps->i].owner >= 0)
@@ -3312,7 +3312,7 @@ static void P_DoSectorInteractions(int32_t playerNum)
             p->secret_rooms++;
             return;
         case -1:
-            TRAVERSE_CONNECT(i)
+            for (ALL_PLAYERS(i))
                 g_player[i].ps->gm = MODE_EOL;
             sector[p->cursectnum].lotag = 0;
             if (ud.from_bonus)

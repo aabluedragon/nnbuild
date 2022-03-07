@@ -268,4 +268,19 @@ static inline int32_t get_ydim(int32_t y)
     return scale(y, ydim, 200 << 16);
 }
 
+static inline int32_t G_GetNextPlayer(int32_t pNum)
+{
+    for (int32_t i = pNum+1; i < MAXPLAYERS; i++)
+    {
+        if ((g_player[i].ps != NULL) && g_player[i].connected)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+#define ALL_PLAYERS(i) i = 0; i != -1; i = G_GetNextPlayer(i)
+
 #endif

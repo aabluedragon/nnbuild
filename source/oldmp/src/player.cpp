@@ -205,11 +205,10 @@ void P_QuickKill(DukePlayer_t *p)
 
 int P_FindOtherPlayer(int playerNum, int32_t* pDist)
 {
-    int otherPlayer;
     int closestPlayer = playerNum;
     int closestPlayerDist = INT32_MAX;
 
-    TRAVERSE_CONNECT(otherPlayer)
+    for (int32_t ALL_PLAYERS(otherPlayer))
     {
         if (playerNum != otherPlayer && sprite[g_player[otherPlayer].ps->i].extra > 0)
         {
