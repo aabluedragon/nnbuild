@@ -785,7 +785,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         syn->bits |= BIT(SK_FIRE);
 
         // Handle special weapon cases.
-        if (p->curr_weapon == RPG_WEAPON)
+        if (p->curr_weapon == RPG_WEAPON || p->curr_weapon == DEVISTATOR_WEAPON)
         {
             if (ldist(&pSpr->xyz, &hit.xyz) < (g_rpgBlastRadius + 512))
                 syn->bits &= ~BIT(SK_FIRE);
