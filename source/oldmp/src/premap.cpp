@@ -1285,7 +1285,7 @@ static void insert_player_sprite(int pNum)
     auto p = g_player[pNum].ps;
 
     s->owner = spriteIndex;
-    s->pal = g_playerSpawnPoints[spawnPoint].pal;
+    s->pal = p->palookup = g_playerSpawnPoints[spawnPoint].pal;
     s->shade = 0;
     s->xrepeat = 42;
     s->yrepeat = 36;
