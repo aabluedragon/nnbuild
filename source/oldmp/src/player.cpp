@@ -4219,7 +4219,6 @@ static void P_HandleFragged(int snum)
 
         G_AddKillToFeed(snum, p->frag_ps);
 
-
         if (ud.obituaries)
         {
             //DynamicTileMap[actor[p->i].picnum]
@@ -4316,22 +4315,22 @@ static void P_HandleDeath(int snum)
 
     if (p->dead_flag == 0)
     {
-        if (s->pal != 1)
+        if (s->pal != 1) // Not frozen
         {
             P_PalFrom(p, 63, 63, 0, 0);
             p->pos.z -= (16 << 8);
             s->z -= (16 << 8);
+
+            p->dead_flag = (512 - ((krand() & 1) << 10) + (krand() & 255) - 512) & 2047;
+            if (p->dead_flag == 0)
+                p->dead_flag++;
+
+            if((s->cstat & 32768) == 0)
+                s->cstat = 0;
         }
 
         if (ud.recstat == 1 && ud.multimode < 2)
             G_CloseDemoWrite();
-
-        if (s->pal != 1)
-        {
-            p->dead_flag = (512 - ((krand() & 1) << 10) + (krand() & 255) - 512) & 2047;
-            if (p->dead_flag == 0)
-                p->dead_flag++;
-        }
 
         p->jetpack_on = 0;
         p->holoduke_on = -1;
@@ -4346,8 +4345,6 @@ static void P_HandleDeath(int snum)
             p->scream_voice = FX_Ok;
         }
         sounds_predictable = true;
-
-        if (s->pal != 1 && (s->cstat & 32768) == 0) s->cstat = 0;
 
         if (ud.multimode > 1 && (s->pal != 1 || (s->cstat & 32768)))
         {
