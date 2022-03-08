@@ -84,6 +84,9 @@ void Net_GetPackets(void)
     }
 #endif
 
+    if (numplayers < 2)
+        return;
+
     Net_SendPing();
     Net_ParsePackets();
 }
@@ -697,6 +700,7 @@ void Net_ParsePackets(void)
                 ud.m_weaponstay = packbuf[12];
                 ud.warp_on = packbuf[13];
                 ud.allow_visibility = packbuf[14];
+                ud.multimode = packbuf[15];
 
                 if(ud.allow_visibility)
                     initprintf("Visibility adjustment enabled for multiplayer.\n");
@@ -1133,10 +1137,11 @@ void Net_SendInitialSettings(void)
     packbuf[12] = ud.m_weaponstay;
     packbuf[13] = ud.warp_on;
     packbuf[14] = ud.allow_visibility;
+    packbuf[15] = ud.multimode;
 
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 15);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 16);
         if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
     }
 }

@@ -7526,193 +7526,6 @@ static void G_ShowDebugHelp(void)
 #endif
 }
 
-#ifndef RANCID_NETWORKING
-#if 0
-static signed int rancid_players = 0;
-static char rancid_ip_strings[MAXPLAYERS][32], rancid_local_port_string[8];
-
-extern int getexternaladdress(char *buffer, const char *host, int port);
-
-static int load_rancid_net(const char *fn)
-{
-    int tokn;
-
-    tokenlist rancidtokens[] =
-    {
-        { "interface",       T_INTERFACE       },
-        { "mode",            T_MODE            },
-        { "allow",           T_ALLOW           },
-    };
-
-    scriptfile *script;
-
-    script = scriptfile_fromfile(fn);
-    if (!script) return -1;
-
-    while (1)
-    {
-        tokn = getatoken(script,rancidtokens,sizeof(rancidtokens)/sizeof(tokenlist));
-        switch (tokn)
-        {
-        case T_INTERFACE:
-        {
-            char *ip;
-
-            if (scriptfile_getstring(script,&ip)) break;
-            Bstrcpy(rancid_ip_strings[MAXPLAYERS-1],ip);
-            Bstrcpy(rancid_ip_strings[rancid_players++],ip);
-            if (strtok(ip,":"))
-            {
-                char *p = strtok(NULL,":");
-
-                if (p != NULL)
-                {
-                    if (atoi(p) > 1024)
-                        Bsprintf(rancid_local_port_string,"-p %s",p);
-                }
-            }
-        }
-        break;
-        case T_MODE:
-        {
-            char *mode;
-
-            if (scriptfile_getstring(script,&mode)) break;
-        }
-        break;
-        case T_ALLOW:
-        {
-            char *ip;
-
-            if (scriptfile_getstring(script,&ip)) break;
-            Bstrcpy(rancid_ip_strings[rancid_players++],ip);
-        }
-        break;
-        case T_EOF:
-            return(0);
-        default:
-            break;
-        }
-    }
-
-    scriptfile_close(script);
-    scriptfile_clearsymbols();
-
-    return 0;
-}
-
-static inline int stringsort(const char *p1, const char *p2)
-{
-    return Bstrcmp(&p1[0],&p2[0]);
-}
-
-// Not supported with the enet network backend currently
-static void setup_rancid_net(const char *fn)
-{
-    int i;
-
-    if (load_rancid_net(fn) != -1)
-    {
-        char tmp[32];
-
-        if (!Bstrlen(rancid_ip_strings[MAXPLAYERS-1])||!Bstrlen(rancid_ip_strings[1]))
-        {
-            if (!Bstrlen(rancid_ip_strings[MAXPLAYERS-1]))
-                initprintf("rmnet: Interface not defined!\n");
-            if (!Bstrlen(rancid_ip_strings[1]))
-                initprintf("rmnet: No peers configured!\n");
-            G_GameExit("Malformed network configuration file!");
-            return;
-        }
-
-        if (g_keepAddr == 0)
-        {
-            for (i=0;i<rancid_players;i++)
-            {
-                if (Bstrcmp(rancid_ip_strings[i],rancid_ip_strings[MAXPLAYERS-1]))
-                {
-                    Bstrncpy(tempbuf,rancid_ip_strings[i], 8);
-                    Bstrcpy(tmp,strtok(tempbuf,"."));
-                    if (Bstrcmp(tmp,"10") == 0)
-                    {
-                        i = 0;
-                        break;
-                    }
-                    else if (Bstrcmp(tmp,"192") == 0)
-                    {
-                        Bstrcpy(tmp,strtok(NULL,"."));
-                        if (Bstrcmp(tmp,"168") == 0)
-                        {
-                            i = 0;
-                            break;
-                        }
-                    }
-                    else if (Bstrcmp(tmp,"172") == 0)
-                    {
-                        Bstrcpy(tmp,strtok(NULL,"."));
-                        if (Bstrcmp(tmp,"16") == 0)
-                        {
-                            i = 0;
-                            break;
-                        }
-                    }
-                    else if (Bstrcmp(tmp,"169") == 0)
-                    {
-                        Bstrcpy(tmp,strtok(NULL,"."));
-                        if (Bstrcmp(tmp,"254") == 0)
-                        {
-                            i = 0;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            Bstrcpy(tempbuf,rancid_ip_strings[MAXPLAYERS-1]);
-            Bstrcpy(tmp,strtok(tempbuf,"."));
-            if (i == rancid_players && ((Bstrcmp(tmp,"192") == 0) || (Bstrcmp(tmp,"172") == 0) || (Bstrcmp(tmp,"169") == 0) || (Bstrcmp(tmp,"10") == 0)))
-            {
-                int ii = getexternaladdress(tempbuf, "checkip.dyndns.org", 8245);
-                if (!ii) ii = getexternaladdress(tempbuf, "checkip.dyndns.org", 80);
-                if (ii)
-                {
-                    if (tempbuf[0])
-                    {
-                        for (i=0;i<rancid_players;i++)
-                        {
-                            if (Bstrcmp(rancid_ip_strings[i],rancid_ip_strings[MAXPLAYERS-1]) == 0)
-                            {
-                                Bstrcpy(rancid_ip_strings[MAXPLAYERS-1],tempbuf);
-                                Bstrcpy(rancid_ip_strings[i],tempbuf);
-                            }
-                        }
-                    }
-                }
-                else initprintf("rmnet: Unable to get external interface address!  Expect problems...\n");
-            }
-        }
-        qsort((char *)rancid_ip_strings, rancid_players, sizeof(rancid_ip_strings[0]), (int(*)(const void*,const void*))stringsort);
-
-        g_networkBroadcastMode = NETMODE_P2P;
-        netparamcount = rancid_players;
-        if (rancid_local_port_string[0] == '-')
-            netparamcount++;
-        netparam = (char **)Xcalloc(netparamcount, sizeof(char **));
-
-        for (i=0;i<rancid_players;i++)
-        {
-            if (Bstrcmp(rancid_ip_strings[i],rancid_ip_strings[MAXPLAYERS-1]) == 0)
-                Bsprintf(rancid_ip_strings[i],"/n1");
-            netparam[i] = (char *)&rancid_ip_strings[i];
-        }
-        if (i != netparamcount)
-            netparam[i] = (char *)&rancid_local_port_string;
-    }
-}
-#endif
-
-#endif
-
 static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 {
     int tokn;
@@ -8355,9 +8168,6 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     if (*(++c) == 0) ud.multimode = 1;
                     else ud.multimode = atoi(c) % (MAXPLAYERS + 1);
 
-                    for (int pNum = 1; pNum < ud.multimode; pNum++)
-                        g_player[pNum].isBot = 1;
-
                     ud.m_coop = ud.coop = 0;
                     ud.m_marker = ud.marker = 1;
                     ud.m_respawn_monsters = ud.respawn_monsters = 1;
@@ -8944,15 +8754,6 @@ static void G_CompileScripts(void)
     pathsearchmode = psm;
 }
 
-static void G_CheckGametype(void)
-{
-    //    initprintf("ud.m_coop=%i before sanitization\n",ud.m_coop);
-    ud.m_coop = clamp(ud.m_coop, 0, g_numGametypes-1);
-    Bsprintf(tempbuf,"%s\n",Gametypes[ud.m_coop].name);
-    initprintf("%s", tempbuf);
-    //     initprintf("ud.m_coop=%i after sanitisation\n",ud.m_coop);
-}
-
 static void G_PostLoadPalette(void)
 {
     //if (!(duke3d_globalflags & DUKE3D_NO_PALETTE_CHANGES))
@@ -9038,8 +8839,6 @@ static void G_Startup(void)
     G_InitMultiPsky(CLOUDYOCEAN, MOONSKY1, BIGORBIT1, LA);
     G_PostCreateGameState();
 
-    if (ud.multimode > 1) G_CheckGametype();
-
     if (g_noSound) ud.config.SoundToggle = 0;
     if (g_noMusic) ud.config.MusicToggle = 0;
 
@@ -9100,58 +8899,6 @@ static void G_Startup(void)
         if (ud.executions >= 50) initprintf("IT IS NOW TIME TO UPGRADE TO THE COMPLETE VERSION!!!\n");
     }
 
-    for (i=0;i<MAXPLAYERS;i++)
-        g_player[i].playerreadyflag = 0;
-
-#if 0
-#ifndef RANCID_NETWORKING
-    if (CommandNet)
-    {
-        setup_rancid_net(CommandNet);
-        if (Bstrlen(rancid_ip_strings[MAXPLAYERS-1]))
-        {
-            initprintf("rmnet: Using %s as sort IP\n",rancid_ip_strings[MAXPLAYERS-1]);
-            initprintf("rmnet: %d players\n",rancid_players);
-        }
-        CommandNet = NULL;
-    }
-#endif
-#endif
-
-#ifdef RANCID_NETWORKING
-    // TODO: split this up in the same fine-grained manner as eduke32 network backend, to
-    // allow for event handling
-    mmulti_initmultiplayers(netparamcount,netparam);
-
-    if (quitevent)
-    {
-        G_Shutdown();
-        return;
-    }
-
-#else
-    if (initmultiplayersparms(netparamcount,netparam))
-    {
-        initprintf("Waiting for players...\n");
-        while (initmultiplayerscycle())
-        {
-            handleevents();
-            if (quitevent)
-            {
-                G_Shutdown();
-                return;
-            }
-        }
-    }
-#endif
-
-    if (netparam) Xfree(netparam);
-    netparam = NULL;
-    netparamcount = 0;
-
-    if (numplayers > 1)
-        initprintf("Multiplayer initialized.\n");
-
     //initprintf("* Hold Esc to Abort. *\n");
 //    initprintf("Loading art header...\n");
 
@@ -9159,8 +8906,6 @@ static void G_Startup(void)
         G_GameExit("Failed loading art.");
 
     S_PrecacheSounds();
-
-//    initprintf("Loading palette/lookups...\n");
     G_LoadLookups();
 
     ReadSaveGameHeaders();
@@ -9168,9 +8913,6 @@ static void G_Startup(void)
     tilesiz[MIRROR].x = tilesiz[MIRROR].y = 0;
 
     screenpeek = myconnectindex;
-
-    if (g_networkBroadcastMode == 255)
-        g_networkBroadcastMode = NETMODE_P2P;
 }
 
 void G_UpdatePlayerFromMenu(void)
@@ -9395,9 +9137,105 @@ static void G_DrawFrame()
     S_Update();
 }
 
+static void G_CheckGametype(void)
+{
+    // initprintf("ud.m_coop=%i before sanitization\n",ud.m_coop);
+    ud.m_coop = clamp(ud.m_coop, 0, g_numGametypes - 1);
+    Bsprintf(tempbuf, "%s\n", Gametypes[ud.m_coop].name);
+    initprintf("%s", tempbuf);
+    // initprintf("ud.m_coop=%i after sanitisation\n",ud.m_coop);
+}
+
+bool G_InitMultiplayer()
+{
+    for (int32_t i = 0; i < MAXPLAYERS; i++)
+        g_player[i].playerreadyflag = 0;
+
+    if (initmultiplayersparms(netparamcount, netparam))
+    {
+        initprintf("Waiting for players...\n");
+        while (initmultiplayerscycle())
+        {
+            handleevents();
+            if (quitevent)
+            {
+                G_Shutdown();
+                return false;
+            }
+        }
+    }
+
+    if (netparam)
+        Xfree(netparam);
+
+    netparam = NULL;
+    netparamcount = 0;
+
+    if (numplayers > 1)
+    {
+        initprintf("Multiplayer initialized.\n");
+
+        // Make sure real players aren't set as bots. Allows player/bot mix.
+        for (int32_t i = 0; i < numplayers; i++)
+            g_player[i].isBot = 0;
+
+        if (numplayers > ud.multimode)
+            ud.multimode = numplayers;
+    }
+
+    // Init players
+    for (int32_t i = 1; i < ud.multimode; i++)
+    {
+        g_player[i].ps = (DukePlayer_t*)Xcalloc(1, sizeof(DukePlayer_t));
+        g_player[i].inputBits = (input_t*)Xcalloc(1, sizeof(input_t));
+        g_player[i].connected = 1;
+
+        // Propagate initial settings for player to all.
+        memcpy(g_player[i].ps, g_player[0].ps, sizeof(DukePlayer_t));
+    }
+
+    // Fill in base stats for bots. To-do: Move some of this into the bot init code.
+    int32_t teamToggle = 1;
+    for (int32_t i = numplayers; i < ud.multimode; i++)
+    {
+        Bsprintf(g_player[i].user_name, "PLAYER %d", i + 1);
+        g_player[i].isBot = 1;
+        g_player[i].ps->team = g_player[i].pteam = teamToggle;
+        g_player[i].ps->weaponswitch = 3;
+        g_player[i].ps->auto_aim = 0;
+        teamToggle = (!teamToggle);
+    }
+
+    if (ud.multimode > 1)
+    {
+        playerswhenstarted = ud.multimode;
+        G_CheckGametype();
+    }
+
+    Net_SendVersion();
+    Net_SendPlayerName();
+
+    if (numplayers > 1)
+    {
+        if (myconnectindex == connecthead) // Host
+        {
+            Net_SendInitialSettings();
+        }
+
+        Net_SendPlayerOptions();
+        Net_SendWeaponChoice();
+        Net_SendUserMapName();
+        Net_SendFragLimit();
+        waitforeverybody();
+        return true;
+    }
+
+    return false;
+}
+
 int app_main(int32_t argc, char const* const* argv)
 {
-    int i = 0, j;
+    int i = 0;
     char cwd[BMAX_PATH];
 //    extern char datetimestring[];
 
@@ -9463,6 +9301,9 @@ int app_main(int32_t argc, char const* const* argv)
     enginecompatibilitymode = ENGINE_19961112;
 
     G_CheckCommandLine(argc,argv);
+#if 0 // OLDMP MERGE CHECKME
+    if (netparamcount > 0) _buildargc = (argc -= netparamcount + 1);  // crop off the net parameters
+#endif
 
     // This needs to happen afterwards, as G_CheckCommandLine() is where we set
     // up the command-line-provided search paths (duh).
@@ -9567,10 +9408,6 @@ int app_main(int32_t argc, char const* const* argv)
     if (cp) return;
 #endif
 
-#if 0 // OLDMP MERGE CHECKME
-    if (netparamcount > 0) _buildargc = (argc -= netparamcount+1);  // crop off the net parameters
-#endif
-
     // gotta set the proper title after we compile the CONs if this is the full version
     G_UpdateAppTitle();
 
@@ -9587,32 +9424,6 @@ int app_main(int32_t argc, char const* const* argv)
 
     ud.color = playerColor_getValidPal(ud.m_color);
     g_player[0].ps->palookup = g_player[0].pcolor = ud.color;
-
-    if (numplayers > 1)
-        ud.multimode = numplayers;
-    
-    for (i=1;i<ud.multimode;i++)
-    {
-        g_player[i].ps = (DukePlayer_t *) Xcalloc(1,sizeof(DukePlayer_t));
-        g_player[i].inputBits = (input_t *) Xcalloc(1,sizeof(input_t));
-        g_player[i].connected = 1;
-
-        // Propagate initial settings for player to all.
-        memcpy(g_player[i].ps, g_player[0].ps, sizeof(DukePlayer_t));
-    }
-
-    auto& myplayer = *g_player[myconnectindex].ps;
-    myplayer.palette = BASEPAL;
-
-    i = 1;
-    for (j=numplayers;j<ud.multimode;j++)
-    {
-        Bsprintf(g_player[j].user_name,"PLAYER %d",j+1);
-        g_player[j].ps->team = g_player[j].pteam = i;
-        g_player[j].ps->weaponswitch = 3;
-        g_player[j].ps->auto_aim = 0;
-        i = 1-i;
-    }
 
     if (quitevent) return 4;
     if (!loaddefinitionsfile(eduke32def))
@@ -9635,30 +9446,18 @@ int app_main(int32_t argc, char const* const* argv)
 
     G_PostLoadPalette();
 
-    Net_SendVersion();
-    Net_SendPlayerName();
-
-    if (numplayers > 1)
+    if (!G_InitMultiplayer())
     {
-        Net_SendPlayerOptions();
-        Net_SendWeaponChoice();
-        Net_SendUserMapName();
-        Net_SendFragLimit();
-        Net_SendInitialSettings();
-        Net_GetPackets();
-        waitforeverybody();
-    }
-    else if (boardfilename[0] != 0)
-    {
-        ud.m_level_number = 7;
-        ud.m_volume_number = 0;
-        ud.warp_on = 1;
+        if (boardfilename[0] != 0)
+        {
+            ud.m_level_number = 7;
+            ud.m_volume_number = 0;
+            ud.warp_on = 1;
+        }
     }
 
-    // getnames();
-
-    if (ud.multimode > 1)
-        playerswhenstarted = ud.multimode;
+    auto& myplayer = *g_player[myconnectindex].ps;
+    myplayer.palette = BASEPAL;
 
     // [JM] I'll need to make sure this doesn't fuck up a few command lines.
     CONFIG_WriteSetup(1);
@@ -9808,13 +9607,17 @@ MAIN_LOOP_RESTART:
     myplayer.weaponswitch = ud.weaponswitch;
     g_player[myconnectindex].pteam = ud.team;
 
+#if 0 // This should probably be removed now. Causes problems with player color.
     if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
         myplayer.palookup = g_player[myconnectindex].pcolor = teams[g_player[myconnectindex].pteam].palnum;
     else
     {
-        if (ud.color) myplayer.palookup = g_player[myconnectindex].pcolor = playerColor_getValidPal(ud.color);
-        else myplayer.palookup = g_player[myconnectindex].pcolor;
+        if (ud.color)
+            myplayer.palookup = g_player[myconnectindex].pcolor = playerColor_getValidPal(ud.color);
+        else
+            myplayer.palookup = g_player[myconnectindex].pcolor;
     }
+#endif
 
     ud.warp_on = 0;
     KB_KeyDown[sc_Pause] = 0;   // JBF: I hate the pause key
