@@ -4318,10 +4318,11 @@ static void P_HandleDeath(int snum)
         if (s->pal != 1) // Not frozen
         {
             P_PalFrom(p, 63, 63, 0, 0);
+
             p->pos.z -= (16 << 8);
             s->z -= (16 << 8);
 
-            p->dead_flag = (512 - ((krand() & 1) << 10) + (krand() & 255) - 512) & 2047;
+            p->dead_flag = (512 - ((seed_krand(&g_random.player) & 1) << 10) + (seed_krand(&g_random.player) & 255) - 512) & 2047;
             if (p->dead_flag == 0)
                 p->dead_flag++;
 
@@ -4347,9 +4348,7 @@ static void P_HandleDeath(int snum)
         sounds_predictable = true;
 
         if (ud.multimode > 1 && (s->pal != 1 || (s->cstat & 32768)))
-        {
             P_HandleFragged(snum);
-        }
     }
 }
 
