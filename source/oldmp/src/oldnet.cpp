@@ -91,7 +91,7 @@ void Net_GetPackets(void)
     Net_ParsePackets();
 }
 
-static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
+void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
 {
     int inputFlagsPos = (*j)++;
     int extFlagsPos = (*j)++;
@@ -135,7 +135,7 @@ static void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, inp
     if ((nsyn[playerNum].extbits ^ osyn[playerNum].extbits) & 0xff000000) packbuf[(*j)++] = ((nsyn[playerNum].extbits >> 24) & 255), packbuf[extFlagsPos] |= 8;
 }
 
-static void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
+void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t* nsyn)
 {
     char inputFlags = packbuf[(*j)++];
     char extFlags = packbuf[(*j)++];
@@ -270,6 +270,7 @@ void Net_HandleInput(void)
         //Fix timers and buffer/jitter value
         if (((g_player[myconnectindex].movefifoend-1)&(TIMERUPDATESIZ-1)) == 0)
         {
+            // [JM] I wish this wasn't so fucking cryptic.
             i = g_player[connecthead].myminlag - otherminlag;
             if (klabs(i) > 2)
             {
@@ -373,414 +374,364 @@ void Net_ParsePackets(void)
 #endif
         switch (packbuf[0])
         {
-        case PACKET_TYPE_MASTER_TO_SLAVE:  //[0] (receive master sync buffer)
-        {
-            j = 1;
-            if (myconnectindex == connecthead)
+            // ****** Base master/slave packets ******
+            case PACKET_TYPE_MASTER_TO_SLAVE:  //[0] (receive master sync buffer)
             {
-                OSD_Printf("PACKET_TYPE_MASTER_TO_SLAVE: MASTER SHOULDN'T GET THIS PACKET!\n");
-            }
-
-            osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)][0];
-            nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)][0];
-            for (ALL_PLAYERS(i))
-            {
-                int playerNum = packbuf[j++];
-
-                //Fix timers and buffer/jitter value 
-                int temp = (int)((signed char)packbuf[j++]);
-
-                if (((g_player[other].movefifoend & (TIMERUPDATESIZ - 1)) == 0) && (playerNum == myconnectindex))
-                    otherminlag = temp;
-
-                Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
-            }
-
-            Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
-
-            movefifosendplc++;
-
-            break;
-        }
-        case PACKET_TYPE_SLAVE_TO_MASTER:  //[1] (receive slave sync buffer)
-        {
-            j = 1;
-
-            osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)][0];
-            nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)][0];
-
-            Net_GetPlayerInputFromPacket(&j, other, osyn, nsyn);
-            Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
-            break;
-        }
-
-        // *** THE REST ***
-
-        case PACKET_TYPE_NULL_PACKET:
-            break;
-
-        case PACKET_TYPE_PLAYER_READY:
-            if (g_player[other].playerreadyflag == 0)
-                initprintf("Player %d is ready\n", other);
-            g_player[other].playerreadyflag++;
-            return;
-        case PACKET_TYPE_QUIT:
-            G_GameExit(" ");
-            break;
-        
-        case PACKET_TYPE_PING:
-        {
-            j = 1;
-            if (myconnectindex == connecthead) // We're the master, recieving from the client
-            {
-                Net_GetPingTimeFromPacket(&j);
-                uint32_t tics = timerGetTicks();
-                g_player[other].ping = tics - pingTime;
-            }
-            else
-            {
-                Net_GetPingTimeFromPacket(&j);
-                TRAVERSE_CONNECT(i)
-                {
-                    Net_GetPlayerPingFromPacket(&j, i);
-                }
-
-                // Send ping time we got from master back to it, to calculate how long it took.
                 j = 1;
-                Net_AddPingTimeToPacket(&j);
-                mmulti_sendpacket(connecthead, (unsigned char*)packbuf, j);
-            }
-            break;
-        }
-
-        case PACKET_TYPE_MESSAGE:
-        {
-            //slaves in M/S mode only send to master
-            if (myconnectindex == connecthead)
-            {
-                if (packbuf[1] == 255)
+                if (myconnectindex == connecthead)
                 {
-                    //Master re-transmits message to all others
-                    for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                        if (i != other)
-                            mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
+                    OSD_Printf("PACKET_TYPE_MASTER_TO_SLAVE: MASTER SHOULDN'T GET THIS PACKET!\n");
                 }
-                else if (((int)packbuf[1]) != myconnectindex)
+
+                osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)][0];
+                nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)][0];
+                for (ALL_PLAYERS(i))
                 {
-                    //Master re-transmits message not intended for master
-                    mmulti_sendpacket((int)packbuf[1], (unsigned char*)packbuf, packbufleng);
-                    break;
+                    int playerNum = packbuf[j++];
+
+                    //Fix timers and buffer/jitter value 
+                    int temp = (int)((signed char)packbuf[j++]);
+
+                    if (((g_player[other].movefifoend & (TIMERUPDATESIZ - 1)) == 0) && (playerNum == myconnectindex))
+                        otherminlag = temp;
+
+                    Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
                 }
-            }
 
-            Bstrcpy(recbuf, packbuf + 2);
-            recbuf[packbufleng - 2] = 0;
+                Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
 
-            G_AddUserQuote(recbuf);
-            S_PlaySound(EXITMENUSOUND);
+                movefifosendplc++;
 
-            pus = NUMPAGES;
-            pub = NUMPAGES;
-
-            break;
-        }
-
-        case PACKET_TYPE_NEW_GAME:
-        {
-            //Slaves in M/S mode only send to master
-            //Master re-transmits message to all others
-            if (myconnectindex == connecthead)
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
-            if (vote_map != -1 || vote_episode != -1 || voting != -1)
-                G_AddUserQuote("VOTE SUCCEEDED");
-
-            ud.m_level_number = ud.level_number = packbuf[1];
-            ud.m_volume_number = ud.volume_number = packbuf[2];
-            ud.m_player_skill = ud.player_skill = packbuf[3];
-
-            // Non-menu variables handled by G_EnterLevel
-            ud.m_monsters_off = packbuf[4];
-            ud.m_respawn_monsters = packbuf[5];
-            ud.m_respawn_items = packbuf[6];
-            ud.m_respawn_inventory = packbuf[7];
-            ud.m_coop = packbuf[8];
-            ud.m_marker = packbuf[9];
-            ud.m_ffire = packbuf[10];
-            ud.m_noexits = packbuf[11];
-            ud.m_weaponstay = packbuf[12];
-
-            for (ALL_PLAYERS(i))
-            {
-                P_ResetWeapons(i);
-                P_ResetInventory(i);
-            }
-
-            G_NewGame(ud.volume_number, ud.level_number, ud.player_skill);
-
-            if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
-
-            break;
-        }
-
-        case PACKET_TYPE_INIT_SETTINGS:
-        {
-            ud.m_level_number = ud.level_number = packbuf[1];
-            ud.m_volume_number = ud.volume_number = packbuf[2];
-            ud.m_player_skill = ud.player_skill = packbuf[3];
-
-            // Non-menu variables handled by G_EnterLevel
-            ud.m_monsters_off = packbuf[4];
-            ud.m_respawn_monsters = packbuf[5];
-            ud.m_respawn_items = packbuf[6];
-            ud.m_respawn_inventory = packbuf[7];
-            ud.m_coop = packbuf[8];
-            ud.m_marker = packbuf[9];
-            ud.m_ffire = packbuf[10];
-            ud.m_noexits = packbuf[11];
-            ud.m_weaponstay = packbuf[12];
-            ud.warp_on = packbuf[13];
-            ud.allow_visibility = packbuf[14];
-            ud.multimode = packbuf[15];
-
-            if (ud.allow_visibility)
-                initprintf("Visibility adjustment enabled for multiplayer.\n");
-
-            break;
-        }
-
-        case PACKET_TYPE_VERSION:
-        {
-            //slaves in M/S mode only send to master
-            //Master re-transmits message to all others
-            if (myconnectindex == connecthead)
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
-            if (packbuf[2] != (char)atoi(VERSION))
-            {
-                initprintf("Player has version %d, expecting %d\n", packbuf[2], (char)atoi(VERSION));
-                G_GameExit("You cannot play with different versions of NetDuke32!");
-            }
-            if (packbuf[3] != (char)BYTEVERSION)
-            {
-                initprintf("Player has version %d, expecting %d (%d, %d, %d)\n", packbuf[3], BYTEVERSION, BYTEVERSION_JF, PLUTOPAK, VOLUMEONE);
-                G_GameExit("You cannot play Duke with different versions!");
-            }
-
-            break;
-        }
-
-        case PACKET_TYPE_PLAYER_OPTIONS:
-            //slaves in M/S mode only send to master
-            //Master re-transmits message to all others
-            if (myconnectindex == connecthead)
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
-            other = packbuf[1];
-            i = 2;
-
-            g_player[other].ps->auto_aim = packbuf[i++];
-            g_player[other].ps->weaponswitch = packbuf[i++];
-            g_player[other].ps->palookup = g_player[other].pcolor = playerColor_getValidPal(packbuf[i++]);
-            g_player[other].pteam = packbuf[i++];
-
-            break;
-
-        case PACKET_TYPE_FRAGLIMIT_CHANGED:
-            ud.fraglimit = packbuf[1];
-            Bsprintf(tempbuf, "FRAGLIMIT CHANGED TO %d", ud.fraglimit);
-            G_AddUserQuote(tempbuf);
-            break;
-
-        case PACKET_TYPE_EOL:
-            if (myconnectindex == connecthead)
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
-            for (ALL_PLAYERS(i))
-                g_player[i].ps->gm = MODE_EOL;
-
-            ud.level_number = packbuf[1];
-            ud.m_level_number = ud.level_number;
-            ud.from_bonus = packbuf[2];
-            break;
-
-        case PACKET_TYPE_PLAYER_NAME:
-            //slaves in M/S mode only send to master
-            //Master re-transmits message to all others
-            if (myconnectindex == connecthead)
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
-            other = packbuf[1];
-
-            for (i = 2; packbuf[i]; i++)
-                g_player[other].user_name[i - 2] = packbuf[i];
-            g_player[other].user_name[i - 2] = 0;
-            i++;
-
-            initprintf("Player %d's name is now %s\n", other, g_player[other].user_name);
-
-            break;
-
-        case PACKET_TYPE_WEAPON_CHOICE:
-            //slaves in M/S mode only send to master
-            //Master re-transmits message to all others
-            if (myconnectindex == connecthead)
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
-            other = packbuf[1];
-
-            i = 2;
-
-            j = i; //This used to be Duke packet #9... now concatenated with Duke packet #6
-            for (; i - j < 10; i++) g_player[other].wchoice[i - j] = packbuf[i];
-
-            break;
-        case PACKET_TYPE_RTS:
-            //slaves in M/S mode only send to master
-            //Master re-transmits message to all others
-            if (myconnectindex == connecthead)
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
-            if (rts_numlumps == 0) break;
-
-            if (ud.config.SoundToggle == 0 || ud.lockout == 1 || ud.config.FXDevice < 0 || !(ud.config.VoiceToggle & 4))
                 break;
-            rtsptr = (char*)RTS_GetSound(packbuf[1] - 1);
-            FX_Play3D(rtsptr, RTS_SoundLength(packbuf[1] - 1), FX_ONESHOT, 0, 0, 1, 255, fix16_one, -packbuf[1]);
-            g_RTSPlaying = 7;
-            break;
-
-        case PACKET_TYPE_MENU_LEVEL_QUIT:
-            //slaves in M/S mode only send to master
-            if (myconnectindex == connecthead)
-            {
-                //Master re-transmits message to all others
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other)
-                        mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
             }
-
-            G_GameExit("Game aborted from menu; disconnected.");
-
-            break;
-
-        case PACKET_TYPE_USER_MAP:
-            //slaves in M/S mode only send to master
-            if (myconnectindex == connecthead)
+            case PACKET_TYPE_SLAVE_TO_MASTER:  //[1] (receive slave sync buffer)
             {
-                //Master re-transmits message to all others
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other)
-                        mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-            }
+                j = 1;
 
-            Bstrcpy(boardfilename, packbuf + 1);
-            boardfilename[packbufleng - 1] = 0;
-            Bcorrectfilename(boardfilename, 0);
-            if (boardfilename[0] != 0)
-            {
-                if ((i = kopen4loadfrommod(boardfilename, 0)) < 0)
-                {
-                    Bmemset(boardfilename, 0, sizeof(boardfilename));
-                    Net_SendUserMapName();
-                }
-                else kclose(i);
-            }
+                osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)][0];
+                nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)][0];
 
-            if (ud.m_level_number == 7 && ud.m_volume_number == 0 && boardfilename[0] == 0)
-                ud.m_level_number = 0;
-
-            break;
-
-        case PACKET_TYPE_MAP_VOTE:
-        case PACKET_TYPE_MAP_VOTE_INITIATE:
-        case PACKET_TYPE_MAP_VOTE_CANCEL:
-
-            if (myconnectindex == connecthead)
-            {
-                //Master re-transmits message to all others
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other)
-                        mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-            }
-
-            switch (packbuf[0])
-            {
-            case PACKET_TYPE_MAP_VOTE:
-                if (voting == myconnectindex && g_player[(unsigned char)packbuf[1]].gotvote == 0)
-                {
-                    g_player[(unsigned char)packbuf[1]].gotvote = 1;
-                    g_player[(unsigned char)packbuf[1]].vote = packbuf[2];
-                    Bsprintf(tempbuf, "CONFIRMED VOTE FROM %s", g_player[(unsigned char)packbuf[1]].user_name);
-                    G_AddUserQuote(tempbuf);
-                }
+                Net_GetPlayerInputFromPacket(&j, other, osyn, nsyn);
+                Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
                 break;
+            }
 
-            case PACKET_TYPE_MAP_VOTE_INITIATE: // call map vote
-                voting = packbuf[1];
-                vote_episode = packbuf[2];
-                vote_map = packbuf[3];
+            // ****** Misc packets ******
+            case PACKET_TYPE_INIT_SETTINGS:
+            {
+                ud.m_level_number = ud.level_number = packbuf[1];
+                ud.m_volume_number = ud.volume_number = packbuf[2];
+                ud.m_player_skill = ud.player_skill = packbuf[3];
 
-                Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE TO CHANGE MAP TO %s (E%dL%d)",
-                    g_player[(unsigned char)packbuf[1]].user_name,
-                    g_mapInfo[(unsigned char)(packbuf[2] * MAXLEVELS + packbuf[3])].name,
-                    packbuf[2] + 1, packbuf[3] + 1);
-                G_AddUserQuote(tempbuf);
+                // Non-menu variables handled by G_EnterLevel
+                ud.m_monsters_off = packbuf[4];
+                ud.m_respawn_monsters = packbuf[5];
+                ud.m_respawn_items = packbuf[6];
+                ud.m_respawn_inventory = packbuf[7];
+                ud.m_coop = packbuf[8];
+                ud.m_marker = packbuf[9];
+                ud.m_ffire = packbuf[10];
+                ud.m_noexits = packbuf[11];
+                ud.m_weaponstay = packbuf[12];
+                ud.warp_on = packbuf[13];
+                ud.allow_visibility = packbuf[14];
+                ud.multimode = packbuf[15];
 
-                Bsprintf(tempbuf, "PRESS F1 TO ACCEPT, F2 TO DECLINE");
-                G_AddUserQuote(tempbuf);
+                if (ud.allow_visibility)
+                    initprintf("Visibility adjustment enabled for multiplayer.\n");
 
-                for (i = MAXPLAYERS - 1; i >= 0; i--)
-                {
-                    g_player[i].vote = 0;
-                    g_player[i].gotvote = 0;
-                }
-                g_player[voting].gotvote = g_player[voting].vote = 1;
                 break;
-
-            case PACKET_TYPE_MAP_VOTE_CANCEL: // cancel map vote
-                if (voting == packbuf[1])
+            }
+            case PACKET_TYPE_NULL_PACKET:
+            {
+                break;
+            }
+            case PACKET_TYPE_PLAYER_READY:
+            {
+                if (g_player[other].playerreadyflag == 0)
+                    initprintf("Player %d is ready\n", other);
+                g_player[other].playerreadyflag++;
+                return;
+            }
+            case PACKET_TYPE_QUIT:
+            {
+                G_GameExit(" ");
+                break;
+            }
+            case PACKET_TYPE_PING:
+            {
+                j = 1;
+                if (myconnectindex == connecthead) // We're the master, recieving from the client
                 {
-                    voting = -1;
-                    i = 0;
-                    for (j = MAXPLAYERS - 1; j >= 0; j--)
-                        i += g_player[j].gotvote;
-
-                    if (i != numplayers)
-                        Bsprintf(tempbuf, "%s^00 HAS CANCELED THE VOTE", g_player[(unsigned char)packbuf[1]].user_name);
-                    else Bsprintf(tempbuf, "VOTE FAILED");
-                    for (i = MAXPLAYERS - 1; i >= 0; i--)
+                    Net_GetPingTimeFromPacket(&j);
+                    uint32_t tics = timerGetTicks();
+                    g_player[other].ping = tics - pingTime;
+                }
+                else
+                {
+                    Net_GetPingTimeFromPacket(&j);
+                    TRAVERSE_CONNECT(i)
                     {
-                        g_player[i].vote = 0;
-                        g_player[i].gotvote = 0;
+                        Net_GetPlayerPingFromPacket(&j, i);
                     }
-                    G_AddUserQuote(tempbuf);
+
+                    // Send ping time we got from master back to it, to calculate how long it took.
+                    j = 1;
+                    Net_AddPingTimeToPacket(&j);
+                    mmulti_sendpacket(connecthead, (unsigned char*)packbuf, j);
                 }
                 break;
             }
-            break;
+            case PACKET_TYPE_MESSAGE:
+            {
+                //slaves in M/S mode only send to master
+                if (myconnectindex == connecthead)
+                {
+                    if (packbuf[1] == 255)
+                    {
+                        //Master re-transmits message to all others
+                        for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
+                            if (i != other)
+                                mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
+                    }
+                    else if (((int)packbuf[1]) != myconnectindex)
+                    {
+                        //Master re-transmits message not intended for master
+                        mmulti_sendpacket((int)packbuf[1], (unsigned char*)packbuf, packbufleng);
+                        break;
+                    }
+                }
 
-        case PACKET_TYPE_LOAD_GAME:
-            //Slaves in M/S mode only send to master
-            //Master re-transmits message to all others
-            if (myconnectindex == connecthead)
-                for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                    if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
+                Bstrcpy(recbuf, packbuf + 2);
+                recbuf[packbufleng - 2] = 0;
 
-            multiflag = 2;
-            multiwhat = 0;
-            multiwho = packbuf[2]; //other: need to send in m/s mode because of possible re-transmit
-            multipos = packbuf[1];
-            G_LoadPlayer(multipos);
-            multiflag = 0;
-            break;
+                G_AddUserQuote(recbuf);
+                S_PlaySound(EXITMENUSOUND);
+
+                pus = NUMPAGES;
+                pub = NUMPAGES;
+
+                break;
+            }
+            case PACKET_TYPE_FRAGLIMIT_CHANGED:
+            {
+                ud.fraglimit = packbuf[1];
+                Bsprintf(tempbuf, "FRAGLIMIT CHANGED TO %d", ud.fraglimit);
+                G_AddUserQuote(tempbuf);
+                break;
+            }
+            case PACKET_TYPE_EOL:
+            {
+                for (ALL_PLAYERS(i))
+                    g_player[i].ps->gm = MODE_EOL;
+
+                ud.level_number = packbuf[1];
+                ud.m_level_number = ud.level_number;
+                ud.from_bonus = packbuf[2];
+                break;
+            }
+
+            // ****** Re-transmittable packets ******
+            default:
+            {
+                if (packbuf[0] >= PACKET_END)
+                    break;
+
+                //Slaves in M/S mode only send to master
+                //Master re-transmits message to all others
+                if (myconnectindex == connecthead)
+                    for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
+
+                switch (packbuf[0])
+                {
+                    case PACKET_TYPE_NEW_GAME:
+                    {
+                        if (vote_map != -1 || vote_episode != -1 || voting != -1)
+                            G_AddUserQuote("VOTE SUCCEEDED");
+
+                        ud.m_level_number = ud.level_number = packbuf[1];
+                        ud.m_volume_number = ud.volume_number = packbuf[2];
+                        ud.m_player_skill = ud.player_skill = packbuf[3];
+
+                        // Non-menu variables handled by G_EnterLevel
+                        ud.m_monsters_off = packbuf[4];
+                        ud.m_respawn_monsters = packbuf[5];
+                        ud.m_respawn_items = packbuf[6];
+                        ud.m_respawn_inventory = packbuf[7];
+                        ud.m_coop = packbuf[8];
+                        ud.m_marker = packbuf[9];
+                        ud.m_ffire = packbuf[10];
+                        ud.m_noexits = packbuf[11];
+                        ud.m_weaponstay = packbuf[12];
+
+                        for (ALL_PLAYERS(i))
+                        {
+                            P_ResetWeapons(i);
+                            P_ResetInventory(i);
+                        }
+
+                        G_NewGame(ud.volume_number, ud.level_number, ud.player_skill);
+
+                        if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
+
+                        break;
+                    }
+                    case PACKET_TYPE_VERSION:
+                    {
+                        if (packbuf[2] != (char)atoi(VERSION))
+                        {
+                            initprintf("Player has version %d, expecting %d\n", packbuf[2], (char)atoi(VERSION));
+                            G_GameExit("You cannot play with different versions of NetDuke32!");
+                        }
+                        if (packbuf[3] != (char)BYTEVERSION)
+                        {
+                            initprintf("Player has version %d, expecting %d (%d, %d, %d)\n", packbuf[3], BYTEVERSION, BYTEVERSION_JF, PLUTOPAK, VOLUMEONE);
+                            G_GameExit("You cannot play Duke with different versions!");
+                        }
+
+                        break;
+                    }
+                    case PACKET_TYPE_PLAYER_OPTIONS:
+                    {
+                        other = packbuf[1];
+                        i = 2;
+
+                        g_player[other].ps->auto_aim = packbuf[i++];
+                        g_player[other].ps->weaponswitch = packbuf[i++];
+                        g_player[other].ps->palookup = g_player[other].pcolor = playerColor_getValidPal(packbuf[i++]);
+                        g_player[other].pteam = packbuf[i++];
+
+                        break;
+                    }
+                    case PACKET_TYPE_PLAYER_NAME:
+                    {
+                        other = packbuf[1];
+
+                        for (i = 2; packbuf[i]; i++)
+                            g_player[other].user_name[i - 2] = packbuf[i];
+                        g_player[other].user_name[i - 2] = 0;
+                        i++;
+
+                        initprintf("Player %d's name is now %s\n", other, g_player[other].user_name);
+
+                        break;
+                    }
+                    case PACKET_TYPE_WEAPON_CHOICE:
+                    {
+                        other = packbuf[1];
+
+                        i = 2;
+
+                        j = i; //This used to be Duke packet #9... now concatenated with Duke packet #6
+                        for (; i - j < 10; i++) g_player[other].wchoice[i - j] = packbuf[i];
+
+                        break;
+                    }
+                    case PACKET_TYPE_RTS:
+                    {
+                        if (rts_numlumps == 0) break;
+
+                        if (ud.config.SoundToggle == 0 || ud.lockout == 1 || ud.config.FXDevice < 0 || !(ud.config.VoiceToggle & 4))
+                            break;
+                        rtsptr = (char*)RTS_GetSound(packbuf[1] - 1);
+                        FX_Play3D(rtsptr, RTS_SoundLength(packbuf[1] - 1), FX_ONESHOT, 0, 0, 1, 255, fix16_one, -packbuf[1]);
+                        g_RTSPlaying = 7;
+                        break;
+                    }
+                    case PACKET_TYPE_MENU_LEVEL_QUIT:
+                    {
+                        G_GameExit("Game aborted from menu; disconnected.");
+                        break;
+                    }
+                    case PACKET_TYPE_USER_MAP:
+                    {
+                        Bstrcpy(boardfilename, packbuf + 1);
+                        boardfilename[packbufleng - 1] = 0;
+                        Bcorrectfilename(boardfilename, 0);
+                        if (boardfilename[0] != 0)
+                        {
+                            if ((i = kopen4loadfrommod(boardfilename, 0)) < 0)
+                            {
+                                Bmemset(boardfilename, 0, sizeof(boardfilename));
+                                Net_SendUserMapName();
+                            }
+                            else kclose(i);
+                        }
+
+                        if (ud.m_level_number == 7 && ud.m_volume_number == 0 && boardfilename[0] == 0)
+                            ud.m_level_number = 0;
+
+                        break;
+                    }
+                    case PACKET_TYPE_MAP_VOTE:
+                    {
+                        if (voting == myconnectindex && g_player[(unsigned char)packbuf[1]].gotvote == 0)
+                        {
+                            g_player[(unsigned char)packbuf[1]].gotvote = 1;
+                            g_player[(unsigned char)packbuf[1]].vote = packbuf[2];
+                            Bsprintf(tempbuf, "CONFIRMED VOTE FROM %s", g_player[(unsigned char)packbuf[1]].user_name);
+                            G_AddUserQuote(tempbuf);
+                        }
+                        break;
+                    }
+                    case PACKET_TYPE_MAP_VOTE_INITIATE: // call map vote
+                    {
+                        voting = packbuf[1];
+                        vote_episode = packbuf[2];
+                        vote_map = packbuf[3];
+
+                        Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE TO CHANGE MAP TO %s (E%dL%d)",
+                            g_player[(unsigned char)packbuf[1]].user_name,
+                            g_mapInfo[(unsigned char)(packbuf[2] * MAXLEVELS + packbuf[3])].name,
+                            packbuf[2] + 1, packbuf[3] + 1);
+                        G_AddUserQuote(tempbuf);
+
+                        Bsprintf(tempbuf, "PRESS F1 TO ACCEPT, F2 TO DECLINE");
+                        G_AddUserQuote(tempbuf);
+
+                        for (i = MAXPLAYERS - 1; i >= 0; i--)
+                        {
+                            g_player[i].vote = 0;
+                            g_player[i].gotvote = 0;
+                        }
+                        g_player[voting].gotvote = g_player[voting].vote = 1;
+                        break;
+                    }
+                    case PACKET_TYPE_MAP_VOTE_CANCEL: // cancel map vote
+                    {
+                        if (voting == packbuf[1])
+                        {
+                            voting = -1;
+                            i = 0;
+                            for (j = MAXPLAYERS - 1; j >= 0; j--)
+                                i += g_player[j].gotvote;
+
+                            if (i != numplayers)
+                                Bsprintf(tempbuf, "%s^00 HAS CANCELED THE VOTE", g_player[(unsigned char)packbuf[1]].user_name);
+                            else Bsprintf(tempbuf, "VOTE FAILED");
+                            for (i = MAXPLAYERS - 1; i >= 0; i--)
+                            {
+                                g_player[i].vote = 0;
+                                g_player[i].gotvote = 0;
+                            }
+                            G_AddUserQuote(tempbuf);
+                        }
+                        break;
+                    }
+                    case PACKET_TYPE_LOAD_GAME:
+                    {
+                        multiflag = 2;
+                        multiwhat = 0;
+                        multiwho = packbuf[2]; //other: need to send in m/s mode because of possible re-transmit
+                        multipos = packbuf[1];
+                        G_LoadPlayer(multipos);
+                        multiflag = 0;
+                        break;
+                    }
+                }
+                break;
+            }
         }
     }
 }
@@ -947,9 +898,8 @@ void Net_SendUserMapName(void)
 
 void Net_SendInitialSettings(void)
 {
-    int i;
-
-    if (myconnectindex != connecthead) return; // First player dictates initial settings.
+    if (myconnectindex != connecthead) // First player dictates initial settings.
+        return;
 
     packbuf[0] = PACKET_TYPE_INIT_SETTINGS;
     packbuf[1] = ud.m_level_number;
@@ -968,6 +918,7 @@ void Net_SendInitialSettings(void)
     packbuf[14] = ud.allow_visibility;
     packbuf[15] = ud.multimode;
 
+    int i;
     TRAVERSE_CONNECT(i)
     {
         if (i != myconnectindex)
@@ -978,8 +929,6 @@ void Net_SendInitialSettings(void)
 
 void Net_NewGame(int volume, int level)
 {
-    int i;
-
     packbuf[0] = PACKET_TYPE_NEW_GAME;
     packbuf[1] = ud.m_level_number = level;
     packbuf[2] = ud.m_volume_number = volume;
@@ -994,6 +943,7 @@ void Net_NewGame(int volume, int level)
     packbuf[11] = ud.m_noexits;
     packbuf[12] = ud.m_weaponstay;
 
+    int i;
     TRAVERSE_CONNECT(i)
     {
         if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf,13);
@@ -1003,8 +953,6 @@ void Net_NewGame(int volume, int level)
 
 void Net_EndOfLevel(void)
 {
-    int i;
-
     if ((myconnectindex != connecthead) || oldnet_predicting)
         return;
 
@@ -1025,6 +973,7 @@ void Net_EndOfLevel(void)
     packbuf[1] = ud.level_number;
     packbuf[2] = ud.from_bonus;
 
+    int i;
     TRAVERSE_CONNECT(i)
     {
         if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 3);
