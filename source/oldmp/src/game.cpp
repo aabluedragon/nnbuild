@@ -1419,14 +1419,8 @@ static void G_PrintCoords(int snum)
     Bsprintf(tempbuf, "F/S Vel= (%d,%d)", g_player[myconnectindex].inputBits->fvel, g_player[myconnectindex].inputBits->svel);
     printext256(x, y += 9, 31, -1, tempbuf, tsize);
 
-    Bsprintf(tempbuf, "OG= %d", g_player[snum].ps->on_ground);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
-
-    Bsprintf(tempbuf, "SECTL= %d", TrackerCast(sector[g_player[snum].ps->cursectnum].lotag));
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
-
     Bsprintf(tempbuf, "RANDOMSEED= %d", randomseed);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 18, 31, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "G_RANDOM.GLOBAL= %d", g_random.global);
     printext256(x, y += 9, 31, -1, tempbuf, tsize);
@@ -1442,6 +1436,19 @@ static void G_PrintCoords(int snum)
 
     Bsprintf(tempbuf, "ONWARP= %d", g_player[snum].ps->on_warping_sector);
     printext256(x, y += 9, 31, -1, tempbuf, tsize);
+
+    Bsprintf(tempbuf, "OG= %d", g_player[snum].ps->on_ground);
+    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+
+    Bsprintf(tempbuf, "SECTL= %d", TrackerCast(sector[g_player[snum].ps->cursectnum].lotag));
+    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+
+    Bsprintf(tempbuf, "MOVEFIFOPLC= %d", movefifoplc);
+    printext256(x, y += 18, 31, -1, tempbuf, tsize);
+    Bsprintf(tempbuf, "MOVEFIFOEND= %d", g_player[snum].movefifoend);
+    printext256(x, y += 8, 31, -1, tempbuf, tsize);
+    Bsprintf(tempbuf, "MOVEFIFOSENDPLC= %d", movefifosendplc);
+    printext256(x, y += 8, 31, -1, tempbuf, tsize);
 }
 
 // this handles both multiplayer and item pickup message type text
