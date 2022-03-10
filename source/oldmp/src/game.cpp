@@ -1434,6 +1434,12 @@ static void G_PrintCoords(int snum)
     Bsprintf(tempbuf, "G_RANDOM.GLOBAL= %d", g_random.global);
     printext256(x, y += 9, 31, -1, tempbuf, tsize);
 
+    Bsprintf(tempbuf, "G_RANDOM.PLAYER= %d", g_random.player);
+    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+
+    Bsprintf(tempbuf, "G_RANDOM.PLAYERWEAPON= %d", g_random.playerweapon);
+    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+
     Bsprintf(tempbuf, "THOLD= %d", g_player[snum].ps->transporter_hold);
     printext256(x, y += 18, 31, -1, tempbuf, tsize);
 
