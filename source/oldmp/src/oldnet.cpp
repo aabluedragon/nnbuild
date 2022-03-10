@@ -84,7 +84,7 @@ void Net_GetPackets(void)
     }
 #endif
 
-    if (numplayers < 2)
+    if (numplayers < 2 || g_networkBroadcastMode == NETMODE_OFFLINE)
         return;
 
     Net_SendPing();
@@ -356,7 +356,7 @@ void Net_HandleInput(void)
 
 void Net_ParsePackets(void)
 {
-    int i, j, k;
+    int i, j;
     int other;
     int packbufleng;
 
@@ -1662,7 +1662,7 @@ void waitforeverybody(void)
     }
 }
 
-static void allowtimetocorrecterrorswhenquitting(void)
+void allowtimetocorrecterrorswhenquitting(void)
 {
     int i, j, oldtotalclock;
 
