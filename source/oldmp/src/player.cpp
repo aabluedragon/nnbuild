@@ -4305,9 +4305,6 @@ static void P_HandleFragged(int snum)
 
 static void P_HandleDeath(int snum)
 {
-    if (oldnet_predicting)
-        return;
-
     DukePlayer_t* p = g_player[snum].ps;
     int playerSprite = g_player[snum].ps->i;
 
@@ -4317,7 +4314,8 @@ static void P_HandleDeath(int snum)
     {
         if (s->pal != 1) // Not frozen
         {
-            P_PalFrom(p, 63, 63, 0, 0);
+            if (!oldnet_predicting)
+                P_PalFrom(p, 63, 63, 0, 0);
 
             p->pos.z -= (16 << 8);
             s->z -= (16 << 8);
@@ -4336,7 +4334,6 @@ static void P_HandleDeath(int snum)
         p->jetpack_on = 0;
         p->holoduke_on = -1;
 
-        sounds_predictable = false;
         S_StopEnvSound(DUKE_JETPACK_IDLE, playerSprite);
         if (p->scream_voice > FX_Ok)
         {
@@ -4345,7 +4342,6 @@ static void P_HandleDeath(int snum)
             // S_TestSoundCallback(DUKE_SCREAM);
             p->scream_voice = FX_Ok;
         }
-        sounds_predictable = true;
 
         if (ud.multimode > 1 && (s->pal != 1 || (s->cstat & 32768)))
             P_HandleFragged(snum);
