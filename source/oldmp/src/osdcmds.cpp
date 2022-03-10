@@ -441,15 +441,7 @@ static int osdcmd_fraglimit(const osdfuncparm_t *parm)
         ud.fraglimit = i;
         OSD_Printf("fraglimit set to %d\n", ud.fraglimit);
 
-        tempbuf[0] = PACKET_TYPE_FRAGLIMIT_CHANGED;
-        tempbuf[1] = myconnectindex;
-        tempbuf[2] = ud.fraglimit;
-
-        TRAVERSE_CONNECT(i)
-        {
-            if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf, 3);
-            if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
-        }
+        Net_SendFragLimit();
     }
     else OSD_Printf("fraglimit: must be different than current value!\n");
     UNREFERENCED_PARAMETER(parm);
