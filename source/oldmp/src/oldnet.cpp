@@ -737,7 +737,6 @@ void Net_ParsePackets(void)
                 other = packbuf[1];
                 i = 2;
 
-                g_player[other].ps->aim_mode = packbuf[i++];
                 g_player[other].ps->auto_aim = packbuf[i++];
                 g_player[other].ps->weaponswitch = packbuf[i++];
                 g_player[other].ps->palookup = g_player[other].pcolor = playerColor_getValidPal(packbuf[i++]);
@@ -1036,11 +1035,9 @@ void Net_SendPlayerOptions(void)
 //    for (i=0;szPlayerName[i];i++) buf[l++] = Btoupper(szPlayerName[i]);
 //    buf[l++] = 0;
 
-    buf[l++] = g_player[myconnectindex].ps->aim_mode = ud.mouseaiming;
     buf[l++] = g_player[myconnectindex].ps->auto_aim = ud.config.AutoAim;
     buf[l++] = g_player[myconnectindex].ps->weaponswitch = ud.weaponswitch;
     buf[l++] = g_player[myconnectindex].ps->palookup = g_player[myconnectindex].pcolor = playerColor_getValidPal(ud.color);
-
     buf[l++] = g_player[myconnectindex].pteam = ud.team;
 
     TRAVERSE_CONNECT(i)

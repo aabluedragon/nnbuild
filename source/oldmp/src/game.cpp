@@ -8928,7 +8928,6 @@ void G_UpdatePlayerFromMenu(void)
     }
     else
     {
-        g_player[myconnectindex].ps->aim_mode = ud.mouseaiming;
         g_player[myconnectindex].ps->auto_aim = ud.config.AutoAim;
         g_player[myconnectindex].ps->weaponswitch = ud.weaponswitch;
         g_player[myconnectindex].ps->palookup = g_player[myconnectindex].pcolor = ud.color;
@@ -9602,7 +9601,6 @@ MAIN_LOOP_RESTART:
         goto MAIN_LOOP_RESTART;
     }
 
-    myplayer.aim_mode = ud.mouseaiming;
     myplayer.auto_aim = ud.config.AutoAim;
     myplayer.weaponswitch = ud.weaponswitch;
     g_player[myconnectindex].pteam = ud.team;
