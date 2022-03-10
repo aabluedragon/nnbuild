@@ -678,12 +678,6 @@ void Net_ParsePackets(void)
                 break;
 
             case PACKET_TYPE_INIT_SETTINGS:
-                //Slaves in M/S mode only send to master
-                //Master re-transmits message to all others
-                if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex == connecthead))
-                    for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
                 ud.m_level_number = ud.level_number = packbuf[1];
                 ud.m_volume_number = ud.volume_number = packbuf[2];
                 ud.m_player_skill = ud.player_skill = packbuf[3];
