@@ -1253,7 +1253,7 @@ void M_DisplayMenus(void)
                         TRAVERSE_CONNECT(x)
                         {
                             if (x != myconnectindex) mmulti_sendpacket(x, (unsigned char*)tempbuf, 3);
-                            if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                            if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                         }
 
                         Net_GetPackets();
@@ -4917,7 +4917,7 @@ VOLUME_ALL_40x:
                     TRAVERSE_CONNECT(c)
                     {
                         if (c != myconnectindex) mmulti_sendpacket(c,(unsigned char*)tempbuf,2);
-                        if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                        if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                     }
                     voting = -1;
                 }
@@ -4929,9 +4929,9 @@ VOLUME_ALL_40x:
                 plrvotes += g_player[i].vote;
                 j += g_player[i].gotvote;
             }
-            if (j == numplayers || !g_player[myconnectindex].ps->i || (plrvotes > (numplayers>>1)) || ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && myconnectindex == connecthead))
+            if (j == numplayers || !g_player[myconnectindex].ps->i || (plrvotes > (numplayers>>1)) || (myconnectindex == connecthead))
             {
-                if (plrvotes > (numplayers>>1) || !g_player[myconnectindex].ps->i || ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && myconnectindex == connecthead))
+                if (plrvotes > (numplayers>>1) || !g_player[myconnectindex].ps->i || (myconnectindex == connecthead))
                 {
                     for (ALL_PLAYERS(c))
                     {
@@ -4941,7 +4941,7 @@ VOLUME_ALL_40x:
 
                     Net_NewGame(ud.m_volume_number,ud.m_level_number);
 
-                    if (voting == myconnectindex && !((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && myconnectindex == connecthead))
+                    if (voting == myconnectindex && myconnectindex != connecthead)
                         G_AddUserQuote("VOTE SUCCEEDED");
 
                     G_NewGame(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
@@ -4966,7 +4966,7 @@ VOLUME_ALL_40x:
                     TRAVERSE_CONNECT(c)
                     {
                         if (c != myconnectindex) mmulti_sendpacket(c,(unsigned char*)tempbuf,3);
-                        if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                        if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                     }
 
                     Bsprintf(apStrings[QUOTE_RESERVED2],"VOTE FAILED");
@@ -5076,7 +5076,7 @@ VOLUME_ALL_40x:
                 break;
             case 6:
                 // master does whatever it wants
-                if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && myconnectindex == connecthead)
+                if (myconnectindex == connecthead)
                 {
                     ChangeToMenu(603);
                     break;
@@ -5101,7 +5101,7 @@ VOLUME_ALL_40x:
                         TRAVERSE_CONNECT(c)
                         {
                             if (c != myconnectindex) mmulti_sendpacket(c,(unsigned char*)tempbuf,4);
-                            if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                            if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                         }
                     }
 

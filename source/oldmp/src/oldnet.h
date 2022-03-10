@@ -32,7 +32,7 @@ enum
                                           memcpy(predicted_prev##name, prev##name, sizeof(predicted_prev##name)), \
                                           memcpy(predicted_next##name, next##name, sizeof(predicted_next##name))
 
-#if 0
+#if 0 // Do not remove this code. I need to use this in the future.
 typedef struct
 {
     //vec3_t pos;
@@ -112,7 +112,7 @@ enum DukePacket_t
 enum NetMode_t
 {
     NETMODE_MASTERSLAVE,
-    NETMODE_P2P,
+    NETMODE_P2P, // UNSUPPORTED.
     NETMODE_OFFLINE = 255
 };
 

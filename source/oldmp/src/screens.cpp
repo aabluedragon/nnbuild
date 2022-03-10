@@ -197,7 +197,7 @@ void G_ShowScores(bool bonus)
         {
             minitext(ping_x, yoff, "BOT", 2, 2 + 8 + 16 + 128);
         }
-        else if ((g_networkBroadcastMode == NETMODE_P2P) || !g_player[i].connected)
+        else if (!g_player[i].connected)
         {
             minitext(ping_x, yoff, "N/A", 2, 2 + 8 + 16 + 128);
         }

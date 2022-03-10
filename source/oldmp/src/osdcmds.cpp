@@ -100,7 +100,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
 
     if (numplayers > 1)
     {
-        if (myconnectindex == connecthead && (g_networkBroadcastMode == NETMODE_MASTERSLAVE))
+        if (myconnectindex == connecthead)
         {
             Net_NewGame(volume, level);
         }
@@ -131,7 +131,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
                 TRAVERSE_CONNECT(i)
                 {
                     if (i != myconnectindex) mmulti_sendpacket(i,(unsigned char*)tempbuf,4);
-                    if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                    if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                 }
             }
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
@@ -258,7 +258,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
 
     if (numplayers > 1)
     {
-        if (myconnectindex == connecthead && (g_networkBroadcastMode == NETMODE_MASTERSLAVE))
+        if (myconnectindex == connecthead)
         {
             Net_SendUserMapName();
             ud.m_volume_number = 0;
@@ -293,7 +293,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
                 TRAVERSE_CONNECT(i)
                 {
                     if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf,4);
-                    if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                    if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                 }
             }
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
@@ -448,7 +448,7 @@ static int osdcmd_fraglimit(const osdfuncparm_t *parm)
         TRAVERSE_CONNECT(i)
         {
             if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf, 3);
-            if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+            if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
         }
     }
     else OSD_Printf("fraglimit: must be different than current value!\n");

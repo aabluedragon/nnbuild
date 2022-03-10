@@ -78,9 +78,6 @@ static int g_noMusic = 0;
 // NetDuke32 TO-DO: Move to cmdline.h when I get a chance.
 static const char *CommandMap = NULL;
 const char *CommandName = NULL;
-#ifndef RANCID_NETWORKING
-static const char *CommandNet = NULL;
-#endif
 static int g_keepAddr = 0;
 int CommandWeaponChoice = 0;
 
@@ -6971,7 +6968,7 @@ static void G_HandleVoteKeys(void)
             TRAVERSE_CONNECT(i)
             {
                 if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf, 3);
-                if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
             }
             G_AddUserQuote("VOTE CAST");
             g_player[myconnectindex].gotvote = 1;
@@ -7132,7 +7129,7 @@ static void G_HandleLocalKeys(void)
                     TRAVERSE_CONNECT(ch)
                 {
                     if (ch != myconnectindex) mmulti_sendpacket(ch,(unsigned char*)tempbuf, packetLength);
-                    if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                    if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                 }
 
                 pus = NUMPAGES;
@@ -7158,7 +7155,7 @@ static void G_HandleLocalKeys(void)
                         TRAVERSE_CONNECT(ch)
                         {
                             if (ch != myconnectindex) mmulti_sendpacket(ch,(unsigned char*)tempbuf,2);
-                            if ((g_networkBroadcastMode == NETMODE_MASTERSLAVE) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+                            if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                         }
                     }
 
@@ -7511,14 +7508,12 @@ static void G_ShowDebugHelp(void)
               "-fNUM\t\tSend fewer packets in multiplayer (1, 2, 4) (deprecated)\n"
               "-game_dir [dir]\tDuke3d_w32 compatibility option, see -j\n"
               "-gamegrp   \tSelects which file to use as main grp\n"
-              "-i#\t\tUse networking mode (1/0)\n"
               "-name [name]\tPlayer name in multiplay\n"
               "-nD\t\tDump default gamevars to gamevars.txt\n"
               "-noautoload\tDisable loading content from autoload dir\n"
               "-nologo\t\tSkip the logo anim\n"
               "-ns/-nm\t\tDisable sound or music\n"
               "-q#\t\tFake multiplayer with # (2-8) players\n"
-              "-rmnet\t\tUse network config file (OBSOLETE, see -net)\n"
               "-stun\t\tUse UDP hole punching for multiplayer connections\n"
               "-unstable   \tForce EDuke32 to execute unsafe CON commands (and crash)\n"
               "-w\t\tShow coordinates\n"
@@ -7908,25 +7903,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     continue;
                 }
 #endif
-#ifndef RANCID_NETWORKING
-                if (!Bstrcasecmp(c+1,"rmnet"))
-                {
-                    if (argc > i+1)
-                    {
-                        g_noSetup = TRUE;
-                        g_networkBroadcastMode = NETMODE_P2P;
-                        CommandNet = argv[i+1];
-                        i++;
-                    }
-                    i++;
-                    continue;
-                }
-#endif
-                if (!Bstrcasecmp(c+1,"net")
-#ifdef RANCID_NETWORKING
-                        || !Bstrcasecmp(c+1,"rmnet")
-#endif
-                   )
+                if (!Bstrcasecmp(c+1,"net"))
                 {
                     g_noSetup = TRUE;
                     firstnet = i;
@@ -8051,8 +8028,9 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     }
                     else if (((c[0] == 'n') || (c[0] == 'N')) && (c[1] == '1'))
                     {
-                        g_networkBroadcastMode = NETMODE_P2P;
+                        //g_networkBroadcastMode = NETMODE_P2P;
                         initprintf("Network mode: peer-to-peer\n");
+                        G_GameExit("Peer-To-Peer networking is no longer supported! Use master/slave.");
                     }
 
                 }
@@ -8110,13 +8088,6 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     {
                         G_AddDef(c);
                     }
-                    break;
-                case 'i':
-                case 'I':
-                    c++;
-                    if (*c == '0') g_networkBroadcastMode = NETMODE_MASTERSLAVE;
-                    if (*c == '1') g_networkBroadcastMode = NETMODE_P2P;
-                    initprintf("Network Mode %d\n",g_networkBroadcastMode);
                     break;
                 case 'j':
                 case 'J':
