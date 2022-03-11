@@ -97,6 +97,38 @@ void G_RestoreInterpolations(void)  //Stick at end of drawscreen
         *interps[i].curpos = interps[i].bakpos;
 }
 
+void G_DoConveyorInterp(int32_t smoothratio)
+{
+    for (int32_t SPRITES_OF(STAT_EFFECTOR, i))
+    {
+        auto s = &sprite[i];
+        auto sect = &sector[s->sectnum];
+        if (s->picnum != SECTOREFFECTOR)
+            continue;
+
+        if (s->lotag == SE_24_CONVEYOR || s->lotag == SE_34)
+        {
+            sect->floorxpanning -= (uint8_t)mulscale16(65536 - smoothratio, sect->floorxpanning - (sect->floorxpanning - (s->yvel >> 7)));
+        }
+    }
+}
+
+void G_ResetConveyorInterp(void)
+{
+    for (int32_t SPRITES_OF(STAT_EFFECTOR, i))
+    {
+        auto s = &sprite[i];
+        auto sect = &sector[s->sectnum];
+        if (s->picnum != SECTOREFFECTOR)
+            continue;
+
+        if (s->lotag == SE_24_CONVEYOR || s->lotag == SE_34)
+        {
+            sect->floorxpanning = (uint8_t)actor[i].bpos.x;
+        }
+    }
+}
+
 void G_ClearCameraView(DukePlayer_t* ps)
 {
     ps->newowner = -1;
@@ -7224,6 +7256,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
 
             pSector->floorxpanning += SP(spriteNum)>>7;
+            actor[spriteNum].bpos.x = pSector->floorxpanning;
 
             break;
 

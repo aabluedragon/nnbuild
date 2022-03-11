@@ -26,6 +26,9 @@ void G_StopInterpolation(const int32_t* const posptr);
 void G_DoInterpolations(int smoothratio);
 void G_RestoreInterpolations(void);
 
+void G_DoConveyorInterp(int32_t smoothratio);
+void G_ResetConveyorInterp(void);
+
 void G_ClearCameraView(DukePlayer_t* ps);
 
 int G_CheckForSpaceCeiling(int sectnum);

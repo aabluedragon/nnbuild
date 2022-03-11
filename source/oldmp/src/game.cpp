@@ -2973,6 +2973,8 @@ void G_DrawRooms(int snum,int smoothratio)
     G_DoInterpolations(smoothratio);
     G_AnimateCamSprite(smoothratio);
 
+    G_DoConveyorInterp(smoothratio);
+
     if (ud.camerasprite >= 0)
     {
         spritetype *pSprite = &sprite[ud.camerasprite];
@@ -3238,6 +3240,7 @@ void G_DrawRooms(int snum,int smoothratio)
     }
 
     G_RestoreInterpolations();
+    G_ResetConveyorInterp();
 
     {
         // Totalclock count of last step of p->visibility converging towards
@@ -5025,9 +5028,14 @@ int A_Spawn(int j, int pn)
                 break;
 
             case SE_24_CONVEYOR:
+            {
                 sp->yvel <<= 1;
-            case SE_36_PROJ_SHOOTER:
                 break;
+            }
+            case SE_36_PROJ_SHOOTER:
+            {
+                break;
+            }
 
             case SE_20_STRETCH_BRIDGE:
             {
