@@ -18,11 +18,16 @@
 G_EXTERN int quickExit;
 
 #define MAXINTERPOLATIONS MAXSPRITES
+
+typedef struct
+{
+    int32_t* curpos;
+    int32_t oldpos, bakpos;
+} interp_int32_t;
+
+G_EXTERN int32_t g_interpolationCnt;
 G_EXTERN int32_t g_interpolationLock;
-G_EXTERN int g_interpolationCnt;
-G_EXTERN int oldipos[MAXINTERPOLATIONS];
-G_EXTERN int bakipos[MAXINTERPOLATIONS];
-G_EXTERN int *curipos[MAXINTERPOLATIONS];
+G_EXTERN interp_int32_t interps[MAXINTERPOLATIONS];
 
 // Pre-initialized
 #ifndef global_c_

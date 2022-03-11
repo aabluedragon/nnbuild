@@ -35,32 +35,34 @@ extern int g_noEnemies;
 
 void G_UpdateInterpolations(void)  //Stick at beginning of G_DoMoveThings
 {
-    for (bssize_t i = g_interpolationCnt - 1; i >= 0; i--) oldipos[i] = *curipos[i];
+    for (bssize_t i = g_interpolationCnt - 1; i >= 0; i--)
+        interps[i].oldpos = *interps[i].curpos;
 }
 
-void G_SetInterpolation(int *posptr)
+int G_SetInterpolation(int32_t* const posptr)
 {
-    int i=g_interpolationCnt-1;
+    if (g_interpolationCnt >= MAXINTERPOLATIONS)
+        return 1;
 
-    if (g_interpolationCnt >= MAXINTERPOLATIONS) return;
-    for (;i>=0;i--)
-        if (curipos[i] == posptr) return;
-    curipos[g_interpolationCnt] = posptr;
-    oldipos[g_interpolationCnt] = *posptr;
+    for (bssize_t i = 0; i < g_interpolationCnt; ++i)
+        if (interps[i].curpos == posptr)
+            return 0;
+
+    interps[g_interpolationCnt].curpos = posptr;
+    interps[g_interpolationCnt].oldpos = *posptr;
     g_interpolationCnt++;
+    return 0;
 }
 
-void G_StopInterpolation(int *posptr)
+void G_StopInterpolation(const int32_t* const posptr)
 {
-    int i=g_interpolationCnt-1;
-
-    for (;i>=startofdynamicinterpolations;i--)
-        if (curipos[i] == posptr)
+    for (bssize_t i = 0; i < g_interpolationCnt; ++i)
+        if (interps[i].curpos == posptr)
         {
             g_interpolationCnt--;
-            oldipos[i] = oldipos[g_interpolationCnt];
-            bakipos[i] = bakipos[g_interpolationCnt];
-            curipos[i] = curipos[g_interpolationCnt];
+            interps[i].oldpos = interps[g_interpolationCnt].oldpos;
+            interps[i].bakpos = interps[g_interpolationCnt].bakpos;
+            interps[i].curpos = interps[g_interpolationCnt].curpos;
         }
 }
 
@@ -74,22 +76,25 @@ void G_DoInterpolations(int smoothRatio)
     for (bssize_t i = 0, j = 0; i < g_interpolationCnt; ++i)
     {
         int32_t const odelta = ndelta;
-        bakipos[i] = *curipos[i];
-        ndelta = (*curipos[i]) - oldipos[i];
+        auto const lerp = &interps[i];
+
+        lerp->bakpos = *lerp->curpos;
+        ndelta = (*lerp->curpos) - lerp->oldpos;
+
         if (odelta != ndelta)
             j = mulscale16(ndelta, smoothRatio);
-        *curipos[i] = oldipos[i] + j;
+
+        *lerp->curpos = lerp->oldpos + j;
     }
 }
 
 void G_RestoreInterpolations(void)  //Stick at end of drawscreen
 {
-    int32_t i = g_interpolationCnt - 1;
-
     if (--g_interpolationLock)
         return;
 
-    for (; i >= 0; i--)* curipos[i] = bakipos[i];
+    for (int32_t i = g_interpolationCnt - 1; i >= 0; i--)
+        *interps[i].curpos = interps[i].bakpos;
 }
 
 void G_ClearCameraView(DukePlayer_t* ps)

@@ -21,8 +21,8 @@ extern ActorData_t actor[MAXSPRITES];
 extern intptr_t* actorscrptr[MAXTILES];
 
 void G_UpdateInterpolations(void);
-void G_SetInterpolation(int* posptr);
-void G_StopInterpolation(int* posptr);
+int G_SetInterpolation(int32_t* const posptr);
+void G_StopInterpolation(const int32_t* const posptr);
 void G_DoInterpolations(int smoothratio);
 void G_RestoreInterpolations(void);
 
