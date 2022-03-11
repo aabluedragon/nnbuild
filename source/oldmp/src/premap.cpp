@@ -1742,7 +1742,7 @@ int G_EnterLevel(int g)
 
     ud.last_level = ud.level_number+1;
 
-    for (i=g_interpolationCnt-1;i>=0;i--) bakipos[i] = *curipos[i];
+    G_UpdateInterpolations();
 
     g_restorePalette = 1;
 

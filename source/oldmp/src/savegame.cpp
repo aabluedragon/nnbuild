@@ -582,7 +582,7 @@ int32_t G_LoadPlayer(int32_t spot)
             k = nextspritestat[k];
         }
 
-        for (i = g_interpolationCnt - 1; i >= 0; i--) bakipos[i] = *curipos[i];
+        G_UpdateInterpolations();
         for (i = g_animateCount - 1; i >= 0; i--)
             G_SetInterpolation(G_GetAnimationPointer(i));
 
