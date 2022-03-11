@@ -107,7 +107,6 @@ enum DukePacket_t
     PACKET_TYPE_EOL,
     PACKET_TYPE_PING,
     PACKET_END, // Should remain last in list.
-    PACKET_TYPE_QUIT = 255 // should match mmulti I think
 };
 
 enum NetMode_t

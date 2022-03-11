@@ -372,6 +372,10 @@ void Net_ParsePackets(void)
 #if 0
         initprintf("RECEIVED PACKET: type: %d : len %d\n", packbuf[0], packbufleng);
 #endif
+        // If we're a client, reject any packets that don't come from the server.
+        if ((myconnectindex != connecthead) && other != connecthead)
+            continue;
+
         switch (packbuf[0])
         {
             // ****** Base master/slave packets ******
@@ -381,6 +385,7 @@ void Net_ParsePackets(void)
                 if (myconnectindex == connecthead)
                 {
                     OSD_Printf("PACKET_TYPE_MASTER_TO_SLAVE: MASTER SHOULDN'T GET THIS PACKET!\n");
+                    break;
                 }
 
                 osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)][0];
@@ -419,6 +424,9 @@ void Net_ParsePackets(void)
             // ****** Misc packets ******
             case PACKET_TYPE_INIT_SETTINGS:
             {
+                if (other != connecthead)
+                    break;
+
                 ud.m_level_number = ud.level_number = packbuf[1];
                 ud.m_volume_number = ud.volume_number = packbuf[2];
                 ud.m_player_skill = ud.player_skill = packbuf[3];
@@ -452,11 +460,6 @@ void Net_ParsePackets(void)
                     initprintf("Player %d is ready\n", other);
                 g_player[other].playerreadyflag++;
                 return;
-            }
-            case PACKET_TYPE_QUIT:
-            {
-                G_GameExit(" ");
-                break;
             }
             case PACKET_TYPE_PING:
             {
@@ -537,12 +540,6 @@ void Net_ParsePackets(void)
                 if (packbuf[0] >= PACKET_END)
                     break;
 
-                //Slaves in M/S mode only send to master
-                //Master re-transmits message to all others
-                if (myconnectindex == connecthead)
-                    for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
-                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
-
                 switch (packbuf[0])
                 {
                     case PACKET_TYPE_NEW_GAME:
@@ -594,37 +591,55 @@ void Net_ParsePackets(void)
                     }
                     case PACKET_TYPE_PLAYER_OPTIONS:
                     {
-                        other = packbuf[1];
+                        int32_t playerNum = packbuf[1];
+                        if ((myconnectindex == connecthead) && playerNum != other)
+                        {
+                            OSD_Printf("PACKET_TYPE_PLAYER_OPTIONS: Player index doesn't match client index!\n");
+                            packbuf[1] = other; // Sanitize before re-transmit.
+                        }
+
                         i = 2;
 
-                        g_player[other].ps->auto_aim = packbuf[i++];
-                        g_player[other].ps->weaponswitch = packbuf[i++];
-                        g_player[other].ps->palookup = g_player[other].pcolor = playerColor_getValidPal(packbuf[i++]);
-                        g_player[other].pteam = packbuf[i++];
+                        g_player[playerNum].ps->auto_aim = packbuf[i++];
+                        g_player[playerNum].ps->weaponswitch = packbuf[i++];
+                        g_player[playerNum].ps->palookup = g_player[playerNum].pcolor = playerColor_getValidPal(packbuf[i++]);
+                        g_player[playerNum].pteam = packbuf[i++];
 
                         break;
                     }
                     case PACKET_TYPE_PLAYER_NAME:
                     {
-                        other = packbuf[1];
+                        int32_t playerNum = packbuf[1];
+                        if ((myconnectindex == connecthead) && playerNum != other)
+                        {
+                            OSD_Printf("PACKET_TYPE_PLAYER_NAME: Player index doesn't match client index!\n");
+                            packbuf[1] = other; // Sanitize before re-transmit.
+                        }
 
-                        for (i = 2; packbuf[i]; i++)
-                            g_player[other].user_name[i - 2] = packbuf[i];
-                        g_player[other].user_name[i - 2] = 0;
+                        for (i = 2; packbuf[i] && i < (int32_t)sizeof(g_player[0].user_name); i++)
+                        {
+                            g_player[playerNum].user_name[i - 2] = packbuf[i];
+                        }
+                        g_player[playerNum].user_name[i - 2] = 0;
                         i++;
 
-                        initprintf("Player %d's name is now %s\n", other, g_player[other].user_name);
+                        initprintf("Player %d's name is now %s\n", playerNum, g_player[playerNum].user_name);
 
                         break;
                     }
                     case PACKET_TYPE_WEAPON_CHOICE:
                     {
-                        other = packbuf[1];
+                        int32_t playerNum = packbuf[1];
+                        if ((myconnectindex == connecthead) && playerNum != other)
+                        {
+                            OSD_Printf("PACKET_TYPE_WEAPON_CHOICE: Player index doesn't match client index!\n");
+                            packbuf[1] = other; // Sanitize before re-transmit.
+                        }
 
                         i = 2;
 
                         j = i; //This used to be Duke packet #9... now concatenated with Duke packet #6
-                        for (; i - j < 10; i++) g_player[other].wchoice[i - j] = packbuf[i];
+                        for (; i - j < 10; i++) g_player[playerNum].wchoice[i - j] = packbuf[i];
 
                         break;
                     }
@@ -730,6 +745,12 @@ void Net_ParsePackets(void)
                         break;
                     }
                 }
+
+                //Slaves in M/S mode only send to master
+                //Master re-transmits message to all others
+                if (myconnectindex == connecthead)
+                    for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
+                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
                 break;
             }
         }
