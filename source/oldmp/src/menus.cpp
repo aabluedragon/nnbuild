@@ -53,8 +53,6 @@ static int soundbits, soundvoices, soundrate;
 #define MAXMOUSEBUTTONS 6 // FIXME: menu needs an update for extra buttons
 static const char *mousebuttonnames[] = { "Mouse1", "Mouse2", "Mouse3", "Mouse4", "Wheel Up", "Wheel Down", "Mouse5", "Mouse6", "Mouse7", "Mouse8"};
 
-extern int voting;
-
 #define USERMAPENTRYLENGTH 25
 
 #define mgametext(x,y,t,s,dabits) G_PrintGameText(2,STARTALPHANUM, x,y,t,s,0,dabits,0, 0, xdim-1, ydim-1, 65536)
@@ -2154,8 +2152,7 @@ cheat_for_port_credits:
                     videoNextPage();
                 }
 
-                G_NewGame(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
-                if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
+                G_BeginNewGame();
             }
             else if (x == -1)
             {
@@ -4894,90 +4891,17 @@ VOLUME_ALL_40x:
 
         case 603:
         {
-            int plrvotes = 0, j = 0;
-
             x = M_Probe(186,124,0,0);
-
-            if (voting != myconnectindex)
-                g_player[myconnectindex].ps->gm &= ~MODE_MENU;
 
             if (x == -1)
             {
-                if (voting == myconnectindex)
-                {
-                    for (i=0;i<MAXPLAYERS;i++)
-                    {
-                        g_player[i].vote = 0;
-                        g_player[i].gotvote = 0;
-                    }
+                if (vote.starter == myconnectindex)
+                    Net_CancelVote();
 
-                    tempbuf[0] = PACKET_TYPE_MAP_VOTE_CANCEL;
-                    tempbuf[1] = myconnectindex;
-
-                    TRAVERSE_CONNECT(c)
-                    {
-                        if (c != myconnectindex) mmulti_sendpacket(c,(unsigned char*)tempbuf,2);
-                        if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
-                    }
-                    voting = -1;
-                }
                 ChangeToMenu(0);
             }
 
-            for (i=0;i<MAXPLAYERS;i++)
-            {
-                plrvotes += g_player[i].vote;
-                j += g_player[i].gotvote;
-            }
-            if (j == numplayers || !g_player[myconnectindex].ps->i || (plrvotes > (numplayers>>1)) || (myconnectindex == connecthead))
-            {
-                if (plrvotes > (numplayers>>1) || !g_player[myconnectindex].ps->i || (myconnectindex == connecthead))
-                {
-                    for (ALL_PLAYERS(c))
-                    {
-                        P_ResetWeapons(c);
-                        P_ResetInventory(c);
-                    }
-
-                    Net_NewGame(ud.m_volume_number,ud.m_level_number);
-
-                    if (voting == myconnectindex && myconnectindex != connecthead)
-                        G_AddUserQuote("VOTE SUCCEEDED");
-
-                    G_NewGame(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
-                    if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
-
-                    return;
-                }
-                else if (j == numplayers)
-                {
-                    for (i=0;i<MAXPLAYERS;i++)
-                    {
-                        g_player[i].vote = 0;
-                        g_player[i].gotvote = 0;
-                    }
-
-                    voting = -1;
-
-                    tempbuf[0] = PACKET_TYPE_MAP_VOTE_CANCEL;
-                    tempbuf[1] = myconnectindex;
-                    tempbuf[2] = 1;
-
-                    TRAVERSE_CONNECT(c)
-                    {
-                        if (c != myconnectindex) mmulti_sendpacket(c,(unsigned char*)tempbuf,3);
-                        if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
-                    }
-
-                    Bsprintf(apStrings[QUOTE_RESERVED2],"VOTE FAILED");
-                    P_DoQuote(QUOTE_RESERVED2,g_player[myconnectindex].ps);
-                    g_player[myconnectindex].ps->gm &= ~MODE_MENU;
-                }
-            }
-            else
-            {
-                mgametext(160,90,"WAITING FOR VOTES",0,2);
-            }
+            mgametext(160,90,"WAITING FOR VOTES",0,2);
             break;
         }
 
@@ -5078,32 +5002,13 @@ VOLUME_ALL_40x:
                 // master does whatever it wants
                 if (myconnectindex == connecthead)
                 {
-                    ChangeToMenu(603);
+                    G_BeginNewGame();
                     break;
                 }
-                if (voting == -1)
+                else if (vote.starter == -1)
                 {
-                    if (g_player[myconnectindex].ps->i)
-                    {
-                        for (i=0;i<MAXPLAYERS;i++)
-                        {
-                            g_player[i].vote = 0;
-                            g_player[i].gotvote = 0;
-                        }
-                        g_player[myconnectindex].vote = g_player[myconnectindex].gotvote = 1;
-                        voting = myconnectindex;
-
-                        tempbuf[0] = PACKET_TYPE_MAP_VOTE_INITIATE;
-                        tempbuf[1] = myconnectindex;
-                        tempbuf[2] = ud.m_volume_number;
-                        tempbuf[3] = ud.m_level_number;
-
-                        TRAVERSE_CONNECT(c)
-                        {
-                            if (c != myconnectindex) mmulti_sendpacket(c,(unsigned char*)tempbuf,4);
-                            if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
-                        }
-                    }
+                    if (myconnectindex != connecthead)
+                        Net_InitiateVote();
 
                     ChangeToMenu(603);
                 }
@@ -5162,7 +5067,7 @@ VOLUME_ALL_40x:
                 menutext(c,57+16+16+16+16+16-9,MENUHIGHLIGHT(5),1,"USER MAP");
             }
 
-            menutext(c,57+16+16+16+16+16+16-9,MENUHIGHLIGHT(6),voting!=-1,"START GAME");
+            menutext(c,57+16+16+16+16+16+16-9,MENUHIGHLIGHT(6),vote.starter!=-1,"START GAME");
 
             break;
         }

@@ -6971,25 +6971,83 @@ static void G_PrintCurrentMusic(void)
 static void G_HandleVoteKeys(void)
 {
     int i;
-
-    if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
+    auto player = &g_player[myconnectindex];
+    if (!player->gotvote && vote.starter != -1 && vote.starter != myconnectindex)
     {
         if (KB_UnBoundKeyPressed(sc_F1) || KB_UnBoundKeyPressed(sc_F2) || ud.autovote)
         {
+            bool vote_yes = (KB_UnBoundKeyPressed(sc_F1) || (ud.autovote ? ud.autovote - 1 : 0));
+
+            if(vote_yes)
+                vote.yes_votes++;
+
             tempbuf[0] = PACKET_TYPE_MAP_VOTE;
             tempbuf[1] = myconnectindex;
-            tempbuf[2] = (KB_UnBoundKeyPressed(sc_F1) || ud.autovote ? ud.autovote - 1 : 0);
+            tempbuf[2] = vote_yes;
+            
+            player->gotvote = 1;
+            G_AddUserQuote("VOTE CAST");
 
             TRAVERSE_CONNECT(i)
             {
                 if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf, 3);
                 if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
             }
-            G_AddUserQuote("VOTE CAST");
-            g_player[myconnectindex].gotvote = 1;
+    
             KB_ClearKeyDown(sc_F1);
             KB_ClearKeyDown(sc_F2);
-            voting = -1;
+        }
+    }
+
+    if (vote.starter != -1)
+    {
+        if (!player->gotvote && vote.starter != myconnectindex)
+            g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+
+        if (myconnectindex == connecthead)
+        {
+            int32_t numVotesSubmitted = 0;
+            for (ALL_PLAYERS(i))
+            {
+                numVotesSubmitted += g_player[i].gotvote;
+            }
+
+            if (numVotesSubmitted == numplayers || (vote.yes_votes > (numplayers >> 1)))
+            {
+                if (vote.yes_votes > (numplayers >> 1))
+                {
+                    // Copy vote members to ud.m_* members.
+                    ud.m_volume_number      = vote.episode;
+                    ud.m_level_number       = vote.level;
+                    ud.m_player_skill       = vote.skill;
+                    ud.m_monsters_off       = vote.monsters_off;
+                    ud.m_respawn_monsters   = vote.respawn_monsters;
+                    ud.m_respawn_items      = vote.respawn_items;
+                    ud.m_respawn_inventory  = vote.respawn_inventory;
+                    ud.m_coop               = vote.gametype;
+                    ud.m_marker             = vote.marker;
+                    ud.m_ffire              = vote.ffire;
+                    ud.m_noexits            = vote.noexits;
+                    ud.m_weaponstay         = vote.weaponstay;
+
+                    G_BeginNewGame();
+
+                    if (vote.starter == myconnectindex || myconnectindex == connecthead)
+                        G_AddUserQuote("VOTE SUCCEEDED");
+
+                    vote = votedata_t();
+
+                    return;
+                }
+                else if (numVotesSubmitted == numplayers)
+                {
+                    Net_CancelVote();
+
+                    Bsprintf(apStrings[QUOTE_RESERVED2], "VOTE FAILED");
+                    P_DoQuote(QUOTE_RESERVED2, g_player[myconnectindex].ps);
+                    g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                }
+            }
         }
     }
 }
@@ -9571,7 +9629,7 @@ MAIN_LOOP_RESTART:
                 P_ResetInventory(i);
             }
 
-            G_NewGame(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
+            G_MakeNewGamePreparations(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
 
             if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
         }
@@ -9579,7 +9637,7 @@ MAIN_LOOP_RESTART:
     }
     else if (ud.warp_on == 1)
     {
-        G_NewGame(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
+        G_MakeNewGamePreparations(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
 
         if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
     }
@@ -9798,7 +9856,7 @@ static int G_OpenDemoRead(int g_whichDemo) // 0 = mine
     ud.god = ud.cashman = ud.eog = ud.showallmap = 0;
     ud.clipping = ud.scrollmode = ud.overhead_on = ud.pause_on = 0;
 
-    G_NewGame(ud.volume_number,ud.level_number,ud.player_skill);
+    G_MakeNewGamePreparations(ud.volume_number,ud.level_number,ud.player_skill);
     return(1);
 corrupt:
     OSD_Printf(OSD_ERROR "Demo %d header is corrupt.\n",g_whichDemo);
@@ -9958,7 +10016,7 @@ RECHECK:
 
     while (ud.reccnt > 0 || foundemo == 0)
     {
-        bool in_vote = (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex);
+        bool in_vote = (g_player[myconnectindex].gotvote == 0 && vote.starter != -1 && vote.starter != myconnectindex);
 
         if (foundemo)
             while (totalclock >= (lockclock+TICSPERFRAME))

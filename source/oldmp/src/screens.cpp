@@ -45,12 +45,14 @@ void P_SetGamePalette(DukePlayer_t* player, uint32_t palid, int32_t set)
 
 void G_ShowVote(void)
 {
-    if (g_player[myconnectindex].gotvote == 0 && voting != -1 && voting != myconnectindex)
+    if (g_player[myconnectindex].gotvote == 0 && vote.starter != -1 && vote.starter != myconnectindex)
     {
-        Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE FOR MAP", g_player[voting].user_name);
+        Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE FOR MAP", g_player[vote.starter].user_name);
         gametext(160, 40, tempbuf, 0, 2 + 8 + 16);
-        Bsprintf(tempbuf, "%s (E%dL%d)", g_mapInfo[vote_episode * MAXLEVELS + vote_map].name, vote_episode + 1, vote_map + 1);
+
+        Bsprintf(tempbuf, "%s (E%dL%d)", g_mapInfo[vote.episode * MAXLEVELS + vote.level].name, vote.episode + 1, vote.level + 1);
         gametext(160, 48, tempbuf, 0, 2 + 8 + 16);
+
         gametext(160, 70, "PRESS F1 TO ACCEPT, F2 TO DECLINE", 0, 2 + 8 + 16);
     }
 }

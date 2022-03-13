@@ -81,7 +81,6 @@ extern void G_UpdateScreenArea(void);
 extern void P_RandomSpawnPoint(int snum);
 extern void P_ResetWeapons(int snum);
 extern void P_ResetInventory(int snum);
-extern void G_NewGame(int vn,int ln,int sk);
 extern void G_ResetTimers(void);
 extern void clearfifo(void);
 extern int  G_EnterLevel(int g);

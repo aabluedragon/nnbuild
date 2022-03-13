@@ -8,7 +8,6 @@
 int quittimer = 0;
 int lastpackettime = 0;
 int mymaxlag, otherminlag, bufferjitter = 1;
-int voting = -1, vote_map = -1, vote_episode = -1;
 
 int movefifosendplc;
 int movefifoplc;
@@ -376,6 +375,9 @@ void Net_ParsePackets(void)
         if ((myconnectindex != connecthead) && other != connecthead)
             continue;
 
+        if (packbuf[0] >= PACKET_END) // Don't accept anything that isn't in our range of defined packets.
+            continue;
+
         switch (packbuf[0])
         {
             // ****** Base master/slave packets ******
@@ -385,7 +387,7 @@ void Net_ParsePackets(void)
                 if (myconnectindex == connecthead)
                 {
                     OSD_Printf("PACKET_TYPE_MASTER_TO_SLAVE: MASTER SHOULDN'T GET THIS PACKET!\n");
-                    break;
+                    continue;
                 }
 
                 osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)][0];
@@ -425,7 +427,7 @@ void Net_ParsePackets(void)
             case PACKET_TYPE_INIT_SETTINGS:
             {
                 if (other != connecthead)
-                    break;
+                    continue;
 
                 ud.m_level_number = ud.level_number = packbuf[1];
                 ud.m_volume_number = ud.volume_number = packbuf[2];
@@ -447,6 +449,30 @@ void Net_ParsePackets(void)
 
                 if (ud.allow_visibility)
                     initprintf("Visibility adjustment enabled for multiplayer.\n");
+
+                break;
+            }
+            case PACKET_TYPE_NEW_GAME:
+            {
+                if (vote.level != -1 || vote.episode != -1 || vote.starter != -1)
+                    G_AddUserQuote("VOTE SUCCEEDED");
+
+                ud.m_level_number = ud.level_number = packbuf[1];
+                ud.m_volume_number = ud.volume_number = packbuf[2];
+                ud.m_player_skill = ud.player_skill = packbuf[3];
+
+                // Non-menu variables handled by G_EnterLevel
+                ud.m_monsters_off = packbuf[4];
+                ud.m_respawn_monsters = packbuf[5];
+                ud.m_respawn_items = packbuf[6];
+                ud.m_respawn_inventory = packbuf[7];
+                ud.m_coop = packbuf[8];
+                ud.m_marker = packbuf[9];
+                ud.m_ffire = packbuf[10];
+                ud.m_noexits = packbuf[11];
+                ud.m_weaponstay = packbuf[12];
+
+                G_BeginNewGame();
 
                 break;
             }
@@ -537,43 +563,8 @@ void Net_ParsePackets(void)
             // ****** Re-transmittable packets ******
             default:
             {
-                if (packbuf[0] >= PACKET_END)
-                    break;
-
                 switch (packbuf[0])
                 {
-                    case PACKET_TYPE_NEW_GAME:
-                    {
-                        if (vote_map != -1 || vote_episode != -1 || voting != -1)
-                            G_AddUserQuote("VOTE SUCCEEDED");
-
-                        ud.m_level_number = ud.level_number = packbuf[1];
-                        ud.m_volume_number = ud.volume_number = packbuf[2];
-                        ud.m_player_skill = ud.player_skill = packbuf[3];
-
-                        // Non-menu variables handled by G_EnterLevel
-                        ud.m_monsters_off = packbuf[4];
-                        ud.m_respawn_monsters = packbuf[5];
-                        ud.m_respawn_items = packbuf[6];
-                        ud.m_respawn_inventory = packbuf[7];
-                        ud.m_coop = packbuf[8];
-                        ud.m_marker = packbuf[9];
-                        ud.m_ffire = packbuf[10];
-                        ud.m_noexits = packbuf[11];
-                        ud.m_weaponstay = packbuf[12];
-
-                        for (ALL_PLAYERS(i))
-                        {
-                            P_ResetWeapons(i);
-                            P_ResetInventory(i);
-                        }
-
-                        G_NewGame(ud.volume_number, ud.level_number, ud.player_skill);
-
-                        if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
-
-                        break;
-                    }
                     case PACKET_TYPE_VERSION:
                     {
                         if (packbuf[2] != (char)atoi(VERSION))
@@ -595,7 +586,7 @@ void Net_ParsePackets(void)
                         if ((myconnectindex == connecthead) && playerNum != other)
                         {
                             OSD_Printf("PACKET_TYPE_PLAYER_OPTIONS: Player index doesn't match client index!\n");
-                            packbuf[1] = other; // Sanitize before re-transmit.
+                            playerNum = packbuf[1] = other; // Sanitize before re-transmit.
                         }
 
                         i = 2;
@@ -613,7 +604,7 @@ void Net_ParsePackets(void)
                         if ((myconnectindex == connecthead) && playerNum != other)
                         {
                             OSD_Printf("PACKET_TYPE_PLAYER_NAME: Player index doesn't match client index!\n");
-                            packbuf[1] = other; // Sanitize before re-transmit.
+                            playerNum = packbuf[1] = other; // Sanitize before re-transmit.
                         }
 
                         for (i = 2; packbuf[i] && i < (int32_t)sizeof(g_player[0].user_name); i++)
@@ -633,7 +624,7 @@ void Net_ParsePackets(void)
                         if ((myconnectindex == connecthead) && playerNum != other)
                         {
                             OSD_Printf("PACKET_TYPE_WEAPON_CHOICE: Player index doesn't match client index!\n");
-                            packbuf[1] = other; // Sanitize before re-transmit.
+                            playerNum = packbuf[1] = other; // Sanitize before re-transmit.
                         }
 
                         i = 2;
@@ -645,10 +636,12 @@ void Net_ParsePackets(void)
                     }
                     case PACKET_TYPE_RTS:
                     {
-                        if (rts_numlumps == 0) break;
+                        if (rts_numlumps == 0)
+                            continue;
 
                         if (ud.config.SoundToggle == 0 || ud.lockout == 1 || ud.config.FXDevice < 0 || !(ud.config.VoiceToggle & 4))
                             break;
+
                         rtsptr = (char*)RTS_GetSound(packbuf[1] - 1);
                         FX_Play3D(rtsptr, RTS_SoundLength(packbuf[1] - 1), FX_ONESHOT, 0, 0, 1, 255, fix16_one, -packbuf[1]);
                         g_RTSPlaying = 7;
@@ -681,56 +674,93 @@ void Net_ParsePackets(void)
                     }
                     case PACKET_TYPE_MAP_VOTE:
                     {
-                        if (voting == myconnectindex && g_player[(unsigned char)packbuf[1]].gotvote == 0)
+                        int32_t playerNum = packbuf[1];
+                        if ((myconnectindex == connecthead) && playerNum != other)
                         {
-                            g_player[(unsigned char)packbuf[1]].gotvote = 1;
-                            g_player[(unsigned char)packbuf[1]].vote = packbuf[2];
-                            Bsprintf(tempbuf, "CONFIRMED VOTE FROM %s", g_player[(unsigned char)packbuf[1]].user_name);
+                            OSD_Printf("PACKET_TYPE_MAP_VOTE: Player index doesn't match client index!\n");
+                            playerNum = packbuf[1] = other; // Sanitize before re-transmit.
+                        }
+
+                        if ((vote.starter == myconnectindex || myconnectindex == connecthead) && g_player[playerNum].gotvote == 0)
+                        {
+                            g_player[playerNum].gotvote = 1;
+                            if (packbuf[2])
+                                vote.yes_votes++;
+
+                            Bsprintf(tempbuf, "CONFIRMED VOTE FROM %s", g_player[playerNum].user_name);
                             G_AddUserQuote(tempbuf);
                         }
                         break;
                     }
                     case PACKET_TYPE_MAP_VOTE_INITIATE: // call map vote
                     {
-                        voting = packbuf[1];
-                        vote_episode = packbuf[2];
-                        vote_map = packbuf[3];
+                        int32_t playerNum = packbuf[1];
+                        if ((myconnectindex == connecthead) && playerNum != other)
+                        {
+                            OSD_Printf("PACKET_TYPE_MAP_VOTE_INITIATE: Player index doesn't match client index!\n");
+                            playerNum = packbuf[1] = other; // Sanitize before re-transmit.
+                        }
+
+                        vote.starter = playerNum;
+                        vote.episode = packbuf[2];
+                        vote.level = packbuf[3];
+                        vote.skill = packbuf[4];
+                        vote.monsters_off = packbuf[5];
+                        vote.respawn_monsters = packbuf[6];
+                        vote.respawn_items = packbuf[7];
+                        vote.respawn_inventory = packbuf[8];
+                        vote.gametype = packbuf[9];
+                        vote.marker = packbuf[10];
+                        vote.ffire = packbuf[11];
+                        vote.noexits = packbuf[12];
+                        vote.weaponstay = packbuf[13];
 
                         Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE TO CHANGE MAP TO %s (E%dL%d)",
-                            g_player[(unsigned char)packbuf[1]].user_name,
-                            g_mapInfo[(unsigned char)(packbuf[2] * MAXLEVELS + packbuf[3])].name,
-                            packbuf[2] + 1, packbuf[3] + 1);
+                            g_player[playerNum].user_name,
+                            g_mapInfo[vote.episode * MAXLEVELS + vote.level].name,
+                            vote.episode + 1, vote.level + 1);
                         G_AddUserQuote(tempbuf);
 
                         Bsprintf(tempbuf, "PRESS F1 TO ACCEPT, F2 TO DECLINE");
                         G_AddUserQuote(tempbuf);
 
-                        for (i = MAXPLAYERS - 1; i >= 0; i--)
+                        for (ALL_PLAYERS(i))
                         {
-                            g_player[i].vote = 0;
                             g_player[i].gotvote = 0;
                         }
-                        g_player[voting].gotvote = g_player[voting].vote = 1;
+
+                        g_player[vote.starter].gotvote = vote.yes_votes = 1;
                         break;
                     }
                     case PACKET_TYPE_MAP_VOTE_CANCEL: // cancel map vote
                     {
-                        if (voting == packbuf[1])
+                        int32_t playerNum = packbuf[1];
+                        if ((myconnectindex == connecthead) && playerNum != other)
                         {
-                            voting = -1;
-                            i = 0;
-                            for (j = MAXPLAYERS - 1; j >= 0; j--)
-                                i += g_player[j].gotvote;
+                            OSD_Printf("PACKET_TYPE_MAP_VOTE_CANCEL: Player index doesn't match client index!\n");
+                            playerNum = packbuf[1] = other; // Sanitize before re-transmit.
+                        }
 
-                            if (i != numplayers)
-                                Bsprintf(tempbuf, "%s^00 HAS CANCELED THE VOTE", g_player[(unsigned char)packbuf[1]].user_name);
-                            else Bsprintf(tempbuf, "VOTE FAILED");
-                            for (i = MAXPLAYERS - 1; i >= 0; i--)
+                        if (vote.starter == playerNum)
+                        {
+                            vote = votedata_t();
+                            int32_t numVotes = 0;
+
+                            for(ALL_PLAYERS(i))
+                                numVotes += g_player[i].gotvote;
+
+                            if (numVotes != numplayers)
+                                Bsprintf(tempbuf, "%s^00 HAS CANCELED THE VOTE", g_player[playerNum].user_name);
+                            else
+                                Bsprintf(tempbuf, "VOTE FAILED");
+
+                            G_AddUserQuote(tempbuf);
+
+                            for (ALL_PLAYERS(i))
                             {
-                                g_player[i].vote = 0;
                                 g_player[i].gotvote = 0;
                             }
-                            G_AddUserQuote(tempbuf);
+                            
                         }
                         break;
                     }
@@ -950,6 +980,9 @@ void Net_SendInitialSettings(void)
 
 void Net_NewGame(int volume, int level)
 {
+    if (numplayers < 2 || myconnectindex != connecthead) // Only hosts should be allowed to do this.
+        return;
+
     packbuf[0] = PACKET_TYPE_NEW_GAME;
     packbuf[1] = ud.m_level_number = level;
     packbuf[2] = ud.m_volume_number = volume;
@@ -1518,14 +1551,14 @@ void Net_CheckPlayerQuit(int i)
     G_AddUserQuote(buf);
     Bstrcpy(apStrings[116], buf);
 
-    if (voting == i)
+    if (vote.starter == i)
     {
-        for (i = 0; i < MAXPLAYERS; i++)
+        for (ALL_PLAYERS(i))
         {
-            g_player[i].vote = 0;
             g_player[i].gotvote = 0;
         }
-        voting = -1;
+
+        vote = votedata_t();
     }
 
     g_player[myconnectindex].ps->ftq = QUOTE_RESERVED2, g_player[myconnectindex].ps->fta = 180;
@@ -1668,4 +1701,57 @@ void Net_Disconnect(bool showScores)
     myconnectindex = screenpeek = 0;
 
     G_BackToMenu();
+}
+
+void Net_InitiateVote()
+{
+    for (int32_t ALL_PLAYERS(i))
+    {
+        g_player[i].gotvote = 0;
+    }
+
+    g_player[myconnectindex].gotvote = vote.yes_votes = 1;
+    
+    packbuf[0] = PACKET_TYPE_MAP_VOTE_INITIATE;
+    packbuf[1] = vote.starter = myconnectindex;
+    packbuf[2] = vote.episode = ud.m_volume_number;
+    packbuf[3] = vote.level = ud.m_level_number;
+    packbuf[4] = vote.skill = ud.m_player_skill;
+    packbuf[5] = vote.monsters_off = ud.m_monsters_off;
+    packbuf[6] = vote.respawn_monsters = ud.m_respawn_monsters;
+    packbuf[7] = vote.respawn_items = ud.m_respawn_items;
+    packbuf[8] = vote.respawn_inventory = ud.m_respawn_inventory;
+    packbuf[9] = vote.gametype = ud.m_coop;
+    packbuf[10] = vote.marker = ud.m_marker;
+    packbuf[11] = vote.ffire = ud.m_ffire;
+    packbuf[12] = vote.noexits = ud.m_noexits;
+    packbuf[13] = vote.weaponstay = ud.m_weaponstay;
+
+    int32_t c = 0;
+    TRAVERSE_CONNECT(c)
+    {
+        if (c != myconnectindex) mmulti_sendpacket(c, (unsigned char*)packbuf, 14);
+        if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
+    }
+}
+
+void Net_CancelVote()
+{
+    OSD_Printf("Canceling vote.\n");
+
+    vote = votedata_t();
+    for (int32_t ALL_PLAYERS(i))
+    {
+        g_player[i].gotvote = 0;
+    }
+
+    packbuf[0] = PACKET_TYPE_MAP_VOTE_CANCEL;
+    packbuf[1] = myconnectindex;
+
+    int32_t c = 0;
+    TRAVERSE_CONNECT(c)
+    {
+        if (c != myconnectindex) mmulti_sendpacket(c, (unsigned char*)packbuf, 2);
+        if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
+    }
 }

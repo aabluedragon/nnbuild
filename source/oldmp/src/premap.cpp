@@ -1116,7 +1116,24 @@ static void prelevel(char g)
     }
 }
 
-void G_NewGame(int vn,int ln,int sk)
+// Resets the game completely, wiping player inventory.
+void G_BeginNewGame()
+{
+    for (int32_t ALL_PLAYERS(i))
+    {
+        P_ResetWeapons(i);
+        P_ResetInventory(i);
+    }
+
+    Net_NewGame(ud.m_volume_number, ud.m_level_number);
+
+    G_MakeNewGamePreparations(ud.m_volume_number, ud.m_level_number, ud.m_player_skill);
+    if (G_EnterLevel(MODE_GAME))
+        G_BackToMenu(); // Failed to enter map, back to menu.
+}
+
+// Sets necessary game variables when starting a new game, or advancing to a new map.
+void G_MakeNewGamePreparations(int vn, int ln, int sk)
 {
     int i,j;
 
@@ -1200,6 +1217,8 @@ void G_NewGame(int vn,int ln,int sk)
         p->gm = 0;
         if (!(Gametypes[ud.m_coop].flags & GAMETYPE_COOP)) // If gametype isn't coop
         {
+            // [JM] Maybe do a P_ResetWeapons here instead?
+
             // Give starting weapons.
             for (i = 0; i < MAX_WEAPONS; i++)
             {
@@ -1434,12 +1453,11 @@ void clearfifo(void)
     localInput = {};
     clearbufbyte(&inputfifo,sizeof(input_t)*MOVEFIFOSIZ*MAXPLAYERS,0L);
 
-    for (;i<MAXPLAYERS;i++)
+    for (ALL_PLAYERS(i))
     {
         if (g_player[i].inputBits != NULL)
             Bmemset(g_player[i].inputBits,0,sizeof(input_t));
 
-        g_player[i].vote = 0;
         g_player[i].gotvote = 0;
     }
 }
@@ -1555,7 +1573,7 @@ int G_EnterLevel(int g)
 
     // G_ApplyMenuToGameFlags?
     // ---------------------------------
-    vote_map = vote_episode = voting = -1;
+    vote = votedata_t();
 
     if ((g & MODE_DEMO) != MODE_DEMO)
     {

@@ -160,6 +160,18 @@ void G_InitTimer(int32_t ticspersec);
 #endif
 
 // Inline Functions
+static inline int32_t G_GetNextPlayer(int32_t pNum)
+{
+    for (int32_t i = pNum + 1; i < MAXPLAYERS; i++)
+    {
+        if ((g_player[i].ps != NULL) && g_player[i].connected)
+            return i;
+    }
+
+    return -1;
+}
+#define ALL_PLAYERS(i) i = 0; i != -1; i = G_GetNextPlayer(i)
+
 static inline int G_HaveUserMap(void)
 {
     return (boardfilename[0] != 0 && ud.level_number == 7 && ud.volume_number == 0);
@@ -267,18 +279,5 @@ static inline int32_t get_ydim(int32_t y)
     y = mulscale16((y << 16) + rotatesprite_y_offset - (200 << 15), rotatesprite_yxaspect) + (200 << 15);
     return scale(y, ydim, 200 << 16);
 }
-
-static inline int32_t G_GetNextPlayer(int32_t pNum)
-{
-    for (int32_t i = pNum+1; i < MAXPLAYERS; i++)
-    {
-        if ((g_player[i].ps != NULL) && g_player[i].connected)
-            return i;
-    }
-
-    return -1;
-}
-
-#define ALL_PLAYERS(i) i = 0; i != -1; i = G_GetNextPlayer(i)
 
 #endif

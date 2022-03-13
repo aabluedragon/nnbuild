@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <ctype.h>
 #include <limits.h>
 
-extern int voting, g_doQuickSave;
+extern int g_doQuickSave;
 struct osdcmd_cheatsinfo osdcmd_cheatsinfo_stat;
 float r_ambientlight = 1.0, r_ambientlightrecip = 1.0;
 extern int hud_glowingquotes;
@@ -104,38 +104,15 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
         {
             Net_NewGame(volume, level);
         }
-        else if (voting == -1)
+        else if (vote.starter == -1)
         {
             ud.m_volume_number = volume;
             ud.m_level_number = level;
 
-            if (g_player[myconnectindex].ps->i)
-            {
-                int i;
-
-                for (i=0;i<MAXPLAYERS;i++)
-                {
-                    g_player[i].vote = 0;
-                    g_player[i].gotvote = 0;
-                }
-
-                g_player[myconnectindex].vote = g_player[myconnectindex].gotvote = 1;
-
-                voting = myconnectindex;
-
-                tempbuf[0] = PACKET_TYPE_MAP_VOTE_INITIATE;
-                tempbuf[1] = myconnectindex;
-                tempbuf[2] = ud.m_volume_number;
-                tempbuf[3] = ud.m_level_number;
-
-                TRAVERSE_CONNECT(i)
-                {
-                    if (i != myconnectindex) mmulti_sendpacket(i,(unsigned char*)tempbuf,4);
-                    if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
-                }
-            }
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
                 ud.m_noexits = 0;
+
+            Net_InitiateVote();
 
             g_player[myconnectindex].ps->gm |= MODE_MENU;
             ChangeToMenu(603);
@@ -168,7 +145,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
 
         ud.multimode = 1;
 
-        G_NewGame(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
+        G_MakeNewGamePreparations(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
         if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
     }
 
@@ -265,39 +242,17 @@ static int osdcmd_map(const osdfuncparm_t *parm)
             ud.m_level_number = 7;
             Net_NewGame(ud.m_volume_number, ud.m_level_number);
         }
-        else if (voting == -1)
+        else if (vote.starter == -1)
         {
             Net_SendUserMapName();
 
             ud.m_volume_number = 0;
             ud.m_level_number = 7;
 
-            if (g_player[myconnectindex].ps->i)
-            {
-                int i;
-
-                for (i=0;i<MAXPLAYERS;i++)
-                {
-                    g_player[i].vote = 0;
-                    g_player[i].gotvote = 0;
-                }
-
-                g_player[myconnectindex].vote = g_player[myconnectindex].gotvote = 1;
-                voting = myconnectindex;
-
-                tempbuf[0] = PACKET_TYPE_MAP_VOTE_INITIATE;
-                tempbuf[1] = myconnectindex;
-                tempbuf[2] = ud.m_volume_number;
-                tempbuf[3] = ud.m_level_number;
-
-                TRAVERSE_CONNECT(i)
-                {
-                    if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)tempbuf,4);
-                    if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
-                }
-            }
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
                 ud.m_noexits = 0;
+
+            Net_InitiateVote();
 
             g_player[myconnectindex].ps->gm |= MODE_MENU;
             ChangeToMenu(603);
@@ -320,7 +275,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
 
     ud.multimode = 1;
 
-    G_NewGame(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
+    G_MakeNewGamePreparations(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
     if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
 
     return OSDCMD_OK;

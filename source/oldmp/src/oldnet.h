@@ -10,13 +10,6 @@
 #define OLDNET_EXTERN extern
 #endif
 
-enum
-{
-    PREDICTSTATE_OFF = 0,
-    PREDICTSTATE_PROCESS = 1,
-    PREDICTSTATE_CORRECT = 2,
-};
-
 #define PREDICT_CURPOS (predictfifoplc & (MOVEFIFOSIZ - 1))
 #define PREDICT_LASTPOS ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
 
@@ -41,10 +34,19 @@ typedef struct
 } PredictBackup_t;
 #endif
 
+struct votedata_t
+{
+    int8_t starter = -1, level = -1, episode = -1;
+    int8_t yes_votes;
+    int8_t gametype, skill, monsters_off;
+    int8_t respawn_monsters, respawn_items, respawn_inventory;
+    int8_t marker, ffire, noexits, weaponstay;
+};
+OLDNET_EXTERN votedata_t vote;
+
 extern int quittimer;
 extern int lastpackettime;
 extern int mymaxlag, otherminlag, bufferjitter;
-extern int voting, vote_map, vote_episode;
 
 extern int movefifosendplc;
 extern int movefifoplc;
@@ -109,6 +111,13 @@ enum DukePacket_t
     PACKET_END, // Should remain last in list.
 };
 
+enum
+{
+    PREDICTSTATE_OFF = 0,
+    PREDICTSTATE_PROCESS = 1,
+    PREDICTSTATE_CORRECT = 2,
+};
+
 enum NetMode_t
 {
     NETMODE_MASTERSLAVE,
@@ -139,6 +148,9 @@ void Net_SwapPredictedLinkedLists(void);
 void Net_DoPrediction(int state);
 void Net_UsePredictedPointers(void);
 void Net_UseOriginalPointers(void);
+
+void Net_InitiateVote();
+void Net_CancelVote();
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
