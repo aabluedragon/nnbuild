@@ -1405,50 +1405,56 @@ static void G_PrintCoords(int snum)
     char ang[16], horiz[16], horizoff[16];
 
     sprintf(tempbuf, "XYZ= (%d,%d,%d)", g_player[snum].ps->pos.x, g_player[snum].ps->pos.y, g_player[snum].ps->pos.z);
-    printext256(x, y, 31, -1, tempbuf, tsize);
+    printext256(x, y, COLOR_WHITE, -1, tempbuf, tsize);
 
     fix16_to_str(g_player[snum].ps->q16horiz, horiz, 2);
     fix16_to_str(g_player[snum].ps->q16horizoff, horizoff, 2);
     fix16_to_str(g_player[snum].ps->q16ang, ang, 2);
     Bsprintf(tempbuf, "A/H/HO= %s, %s, %s", ang, horiz, horizoff);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "XYZ Vel= (%d,%d,%d)", g_player[snum].ps->vel.x, g_player[snum].ps->vel.y, g_player[snum].ps->vel.z);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "F/S Vel= (%d,%d)", g_player[myconnectindex].inputBits->fvel, g_player[myconnectindex].inputBits->svel);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "RANDOMSEED= %d", randomseed);
-    printext256(x, y += 18, 31, -1, tempbuf, tsize);
+    printext256(x, y += 18, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "G_RANDOM.GLOBAL= %d", g_random.global);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "G_RANDOM.PLAYER= %d", g_random.player);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "G_RANDOM.PLAYERWEAPON= %d", g_random.playerweapon);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "THOLD= %d", g_player[snum].ps->transporter_hold);
-    printext256(x, y += 18, 31, -1, tempbuf, tsize);
+    printext256(x, y += 18, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "ONWARP= %d", g_player[snum].ps->on_warping_sector);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "OG= %d", g_player[snum].ps->on_ground);
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "SECTL= %d", TrackerCast(sector[g_player[snum].ps->cursectnum].lotag));
-    printext256(x, y += 9, 31, -1, tempbuf, tsize);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "MOVEFIFOPLC= %d", movefifoplc);
-    printext256(x, y += 18, 31, -1, tempbuf, tsize);
+    printext256(x, y += 18, COLOR_WHITE, -1, tempbuf, tsize);
     Bsprintf(tempbuf, "MOVEFIFOEND= %d", g_player[snum].movefifoend);
-    printext256(x, y += 8, 31, -1, tempbuf, tsize);
+    printext256(x, y += 8, COLOR_WHITE, -1, tempbuf, tsize);
     Bsprintf(tempbuf, "MOVEFIFOSENDPLC= %d", movefifosendplc);
-    printext256(x, y += 8, 31, -1, tempbuf, tsize);
+    printext256(x, y += 8, COLOR_WHITE, -1, tempbuf, tsize);
+
+    Bsprintf(tempbuf, "TOTALCLOCK= %d", (int32_t)totalclock);
+    printext256(x, y += 18, COLOR_WHITE, -1, tempbuf, tsize);
+
+    Bsprintf(tempbuf, "OTOTALCLOCK= %d", (int32_t)ototalclock);
+    printext256(x, y += 8, (ototalclock > totalclock) ? COLOR_RED : COLOR_WHITE, -1, tempbuf, tsize);
 }
 
 // this handles both multiplayer and item pickup message type text
