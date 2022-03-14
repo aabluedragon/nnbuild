@@ -1,7 +1,7 @@
 #define OLDNET_CPP_
 
 #include "duke3d.h"
-//#include "oldnet.h"
+#include "oldnet.h"
 
 #define TIMERUPDATESIZ 32
 

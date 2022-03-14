@@ -1,7 +1,8 @@
 #ifndef OLDNET_H
 #define OLDNET_H
 
-#include "duke3d.h"
+#include "build.h"
+#include "player.h"
 #include "sync.h"
 
 #ifdef OLDNET_CPP_
