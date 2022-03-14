@@ -426,8 +426,11 @@ void Net_ParsePackets(void)
             // ****** Misc packets ******
             case PACKET_TYPE_INIT_SETTINGS:
             {
-                if (other != connecthead)
+                if (myconnectindex == connecthead)
+                {
+                    OSD_Printf("PACKET_TYPE_INIT_SETTINGS: MASTER SHOULDN'T GET THIS PACKET!\n");
                     continue;
+                }
 
                 ud.m_level_number = ud.level_number = packbuf[1];
                 ud.m_volume_number = ud.volume_number = packbuf[2];
@@ -445,15 +448,24 @@ void Net_ParsePackets(void)
                 ud.m_weaponstay = packbuf[12];
                 ud.warp_on = packbuf[13];
                 ud.allow_visibility = packbuf[14];
-                ud.multimode = packbuf[15];
+                ud.fraglimit = packbuf[15];
+                ud.multimode = packbuf[16];
 
                 if (ud.allow_visibility)
                     initprintf("Visibility adjustment enabled for multiplayer.\n");
+
+                oldnet_gotinitialsettings = true;
 
                 break;
             }
             case PACKET_TYPE_NEW_GAME:
             {
+                if (myconnectindex == connecthead)
+                {
+                    OSD_Printf("PACKET_TYPE_NEW_GAME: MASTER SHOULDN'T GET THIS PACKET!\n");
+                    continue;
+                }
+
                 if (vote.level != -1 || vote.episode != -1 || vote.starter != -1)
                     G_AddUserQuote("VOTE SUCCEEDED");
 
@@ -544,6 +556,12 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_FRAGLIMIT_CHANGED:
             {
+                if (myconnectindex == connecthead)
+                {
+                    OSD_Printf("PACKET_TYPE_FRAGLIMIT_CHANGED: MASTER SHOULDN'T GET THIS PACKET!\n");
+                    continue;
+                }
+
                 ud.fraglimit = packbuf[1];
                 Bsprintf(tempbuf, "FRAGLIMIT CHANGED TO %d", ud.fraglimit);
                 G_AddUserQuote(tempbuf);
@@ -855,6 +873,7 @@ void Net_SendVersion(void)
         if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)&buf[0],4);
         if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
+
     waitforeverybody();
 }
 
@@ -884,17 +903,17 @@ void Net_SendPlayerOptions(void)
 
 void Net_SendFragLimit(void)
 {
-    int i;
-    if (myconnectindex == connecthead)
-    {
-        buf[0] = PACKET_TYPE_FRAGLIMIT_CHANGED;
-        buf[1] = ud.fraglimit;
+    if (myconnectindex != connecthead)
+        return;
 
-        TRAVERSE_CONNECT(i)
-        {
-            if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)buf, 2);
-            if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
-        }
+    packbuf[0] = PACKET_TYPE_FRAGLIMIT_CHANGED;
+    packbuf[1] = ud.fraglimit;
+
+    int32_t i;
+    TRAVERSE_CONNECT(i)
+    {
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 2);
+        if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
 }
 
@@ -967,13 +986,14 @@ void Net_SendInitialSettings(void)
     packbuf[12] = ud.m_weaponstay;
     packbuf[13] = ud.warp_on;
     packbuf[14] = ud.allow_visibility;
-    packbuf[15] = ud.multimode;
+    packbuf[15] = ud.fraglimit;
+    packbuf[16] = ud.multimode;
 
     int i;
     TRAVERSE_CONNECT(i)
     {
         if (i != myconnectindex)
-            mmulti_sendpacket(i, (unsigned char*)packbuf, 16);
+            mmulti_sendpacket(i, (unsigned char*)packbuf, 17);
         if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
 }
@@ -1564,22 +1584,17 @@ void Net_CheckPlayerQuit(int i)
     g_player[myconnectindex].ps->ftq = QUOTE_RESERVED2, g_player[myconnectindex].ps->fta = 180;
 }
 
-void waitforeverybody(void)
+void waitforeverybody()
 {
     int i;
 
     if (numplayers < 2)
         return;
 
-    packbuf[0] = PACKET_TYPE_PLAYER_READY;
-
     g_player[myconnectindex].playerreadyflag++;
-
-    // 
+    packbuf[0] = PACKET_TYPE_PLAYER_READY;
     if (myconnectindex != connecthead)
-    {
         mmulti_sendpacket(connecthead, (unsigned char*)packbuf, 1);
-    }
 
     P_SetGamePalette(g_player[myconnectindex].ps, TITLEPAL, 11);
 
@@ -1699,6 +1714,7 @@ void Net_Disconnect(bool showScores)
 
     numplayers = ud.multimode = playerswhenstarted = 1;
     myconnectindex = screenpeek = 0;
+    oldnet_gotinitialsettings = 0;
 
     G_BackToMenu();
 }

@@ -9276,11 +9276,15 @@ bool G_InitMultiplayer()
         {
             Net_SendInitialSettings();
         }
+        else
+        {
+            while (!oldnet_gotinitialsettings)
+                gameHandleEvents();
+        }
 
         Net_SendPlayerOptions();
         Net_SendWeaponChoice();
         Net_SendUserMapName();
-        Net_SendFragLimit();
         waitforeverybody();
         return true;
     }
