@@ -53,12 +53,8 @@ extern int movefifoplc;
 
 OLDNET_EXTERN input_t netInput;
 
-// Check if oldnet_predicting is true and return in code branches
-// you want to avoid going into during prediction.
-OLDNET_EXTERN int32_t oldnet_predicting;
-
-// Must enable this on code branches that are able to predict sounds
-OLDNET_EXTERN bool sounds_predictable;
+OLDNET_EXTERN bool oldnet_predictablestate; // Must enable this on code branches that are able to predict sounds and other effects.
+OLDNET_EXTERN int32_t oldnet_predicting; // Check if oldnet_predicting is true and return in code branches you want to avoid going into during prediction.
 
 OLDNET_EXTERN int predictfifoplc;
 

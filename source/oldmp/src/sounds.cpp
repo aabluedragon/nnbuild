@@ -757,11 +757,12 @@ static bool S_PredictionCheck(int spriteNum)
             return true;
 
         // Predictable, but we're not predicting, so block.
-        if (sounds_predictable && !oldnet_predicting)
+        if (oldnet_predictablestate && !oldnet_predicting)
         {
             if (spriteNum < 0)
                 return true;
 
+            // Make sure the sound is coming from the local player.
             if (sprite[spriteNum].picnum == APLAYER && sprite[spriteNum].yvel == myconnectindex)
                 return true;
         }

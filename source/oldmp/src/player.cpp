@@ -4091,7 +4091,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
         p->timebeforeexit--;
         if (p->timebeforeexit == GAMETICSPERSEC * 5 && (ud.limit_hit == 0))
         {
-            sounds_predictable = false;
+            oldnet_predictablestate = false;
             FX_StopAllSounds();
 
             if (p->customexitsound >= 0)
@@ -4099,7 +4099,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
                 S_PlaySound(p->customexitsound);
                 P_DoQuote(QUOTE_WEREGONNAFRYYOURASS, p);
             }
-            sounds_predictable = true;
+            oldnet_predictablestate = true;
         }
         else if (p->timebeforeexit == 1)
         {
@@ -4146,9 +4146,9 @@ static int P_HandleFist(int playerNum)
         if (p->fist_incs == 28)
         {
             if (ud.recstat == 1) G_CloseDemoWrite();
-            sounds_predictable = false;
+            oldnet_predictablestate = false;
             S_PlaySound(PIPEBOMB_EXPLODE);
-            sounds_predictable = true;
+            oldnet_predictablestate = true;
             P_PalFrom(p, 48, 64, 64, 64);
         }
         if (p->fist_incs > 42)
@@ -5247,9 +5247,9 @@ void P_ProcessInput(int snum)
 
     if (p->spritebridge == 0)
     {
-        sounds_predictable = false;
+        oldnet_predictablestate = false;
         P_HandleDamagingFloors(snum);
-        sounds_predictable = true;
+        oldnet_predictablestate = true;
     }
 
     if (syn->extbits & (EXTBIT_MOVEFORWARD))
@@ -5383,10 +5383,10 @@ HORIZONLY:
         if (p->jetpack_on == 0 && psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
 
-        sounds_predictable = false;
+        oldnet_predictablestate = false;
         if (moveResult)
             P_CheckTouchDamage(p, moveResult);
-        sounds_predictable = true;
+        oldnet_predictablestate = true;
     }
 
     if (p->jetpack_on == 0)

@@ -1213,16 +1213,16 @@ static void Net_ProcessPrediction(void)
 
     g_player[myconnectindex].ps = &predictedPlayer;
 
-    sounds_predictable = true;
+    oldnet_predictablestate = true;
     P_HandleSharedKeys(myconnectindex);
-    sounds_predictable = false;
+    oldnet_predictablestate = false;
 
     if (ud.pause_on == 0)
     {
         //X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
-        sounds_predictable = true;
+        oldnet_predictablestate = true;
         P_ProcessInput(myconnectindex);
-        sounds_predictable = false;
+        oldnet_predictablestate = false;
         G_MovePlayerSprite(myconnectindex);
     }
 

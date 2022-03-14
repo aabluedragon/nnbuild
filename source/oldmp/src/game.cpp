@@ -10327,15 +10327,15 @@ static int G_DoMoveThings(void)
         }
         // ---
 
-        sounds_predictable = true;
+        oldnet_predictablestate = true;
         P_HandleSharedKeys(i);
-        sounds_predictable = false;
+        oldnet_predictablestate = false;
 
         if (ud.pause_on == 0)
         {
-            sounds_predictable = true;
+            oldnet_predictablestate = true;
             P_ProcessInput(i);
-            sounds_predictable = false;
+            oldnet_predictablestate = false;
             P_CheckSectors(i);
         }
     }
