@@ -9717,7 +9717,7 @@ MAIN_LOOP_RESTART:
                     {
                         G_MoveLoop();
                     }
-                } while (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME + 1);
+                } while (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME);
 
                 //gameUpdate = true;
                 //g_gameUpdateTime = timerGetHiTicks() - gameUpdateStartTime;
