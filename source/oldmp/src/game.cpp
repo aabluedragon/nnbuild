@@ -2352,7 +2352,7 @@ void G_DisplayRest(int smoothratio)
 #if 0
     if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
     {
-        for (i=0;i<ud.multimode;i++)
+        for (ALL_PLAYERS(i))
         {
             if (g_player[i].ps->team == g_player[myconnectindex].ps->team)
             {
@@ -7126,7 +7126,7 @@ static void G_HandleLocalKeys(void)
     if (BUTTON(gamefunc_See_Coop_View) && (GTFLAGS(GAMETYPE_COOPVIEW) || ud.recstat == 2))
     {
         CONTROL_ClearButton(gamefunc_See_Coop_View);
-        screenpeek = connectpoint2[screenpeek];
+        screenpeek = G_GetNextPlayer(screenpeek);
         if (screenpeek == -1) screenpeek = connecthead;
         g_restorePalette = 1;
     }

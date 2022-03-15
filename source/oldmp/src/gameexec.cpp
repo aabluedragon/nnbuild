@@ -4706,7 +4706,7 @@ void G_RestoreMapState(mapstate_t *save)
         intptr_t j;
         char phealth[MAXPLAYERS];
 
-        for (i=0;i<ud.multimode;i++) // [JM] REWRITE THIS!
+        for (ALL_PLAYERS(i))
             phealth[i] = sprite[g_player[i].ps->i].extra;
 
         pub = NUMPAGES;
@@ -4782,7 +4782,7 @@ void G_RestoreMapState(mapstate_t *save)
 
         Gv_RefreshPointers();
 
-        for (i=0;i<ud.multimode;i++) // [JM] REWRITE THIS!
+        for (ALL_PLAYERS(i)) // [JM] REWRITE THIS!
             sprite[g_player[i].ps->i].extra = phealth[i];
 
         if (g_player[myconnectindex].ps->over_shoulder_on != 0)

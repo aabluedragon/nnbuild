@@ -215,8 +215,7 @@ int isanearoperator(int lotag)
 
 int CheckPlayerInSector(int sect)
 {
-    int i = connecthead;
-    for (;i>=0;i=connectpoint2[i])
+    for (int32_t ALL_PLAYERS(i))
         if (sprite[g_player[i].ps->i].sectnum == sect) return i;
     return -1;
 }

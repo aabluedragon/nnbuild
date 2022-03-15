@@ -5903,7 +5903,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     }
                 }
 
-                for (p = connecthead; p >= 0; p = connectpoint2[p])
+                for (ALL_PLAYERS(p))
                 {
                     if (sector[g_player[p].ps->cursectnum].lotag != ST_2_UNDERWATER)
                     {
@@ -6075,7 +6075,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                             }
                         }
 
-                for (p = connecthead;p >= 0;p = connectpoint2[p])
+                for (ALL_PLAYERS(p))
                 {
                     if (sprite[g_player[p].ps->i].sectnum == pSprite->sectnum)
                     {
@@ -7359,7 +7359,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 fricyv += x<<5;
             }
 
-            for (p = connecthead;p >= 0;p = connectpoint2[p])
+            for (ALL_PLAYERS(p))
                 if (sprite[g_player[p].ps->i].sectnum == pSprite->sectnum && g_player[p].ps->on_ground)
                     g_player[p].ps->pos.z += pSprite->zvel;
 

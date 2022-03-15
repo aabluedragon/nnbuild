@@ -367,7 +367,6 @@ void Net_ParsePackets(void)
 
     while ((packbufleng = mmulti_getpacket(&other, (unsigned char*)packbuf)) > 0)
     {
-        lastpackettime = (int32_t)totalclock;
 #if 0
         initprintf("RECEIVED PACKET: type: %d : len %d\n", packbuf[0], packbufleng);
 #endif
@@ -377,6 +376,8 @@ void Net_ParsePackets(void)
 
         if (packbuf[0] >= PACKET_END) // Don't accept anything that isn't in our range of defined packets.
             continue;
+
+        lastpackettime = (int32_t)totalclock;
 
         switch (packbuf[0])
         {
@@ -531,7 +532,7 @@ void Net_ParsePackets(void)
                     if (packbuf[1] == 255)
                     {
                         //Master re-transmits message to all others
-                        for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
+                        TRAVERSE_CONNECT(i)
                             if (i != other)
                                 mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
                     }
@@ -797,7 +798,7 @@ void Net_ParsePackets(void)
                 //Slaves in M/S mode only send to master
                 //Master re-transmits message to all others
                 if (myconnectindex == connecthead)
-                    for (i = connectpoint2[connecthead]; i >= 0; i = connectpoint2[i])
+                    TRAVERSE_CONNECT(i)
                         if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
                 break;
             }
@@ -1538,8 +1539,9 @@ void Net_CheckPlayerQuit(int i)
 
     if (screenpeek == i)
     {
-        screenpeek = connectpoint2[i];
-        if (screenpeek < 0) screenpeek = connecthead;
+        screenpeek = G_GetNextPlayer(i);
+        if (screenpeek < 0)
+            screenpeek = connecthead;
     }
 
     if (i == connecthead)
