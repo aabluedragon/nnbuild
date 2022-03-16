@@ -504,7 +504,7 @@ static void DukeBot_Init(int32_t playerNum)
     bot->goalSprite = -1;
     bot->goalSpriteScore = 0;
     bot->lastGoalSprite = -1;
-    bot->lastEndSect = -1;
+    bot->lastStartSect = bot->lastEndSect = -1;
 
     bot->goalPlayer = playerNum;
 
@@ -513,6 +513,9 @@ static void DukeBot_Init(int32_t playerNum)
     
     bot->seekSpriteCooldown = 0;
     bot->seekSpriteFailCount = 0;
+    bot->waterSubmergeTime = 0;
+
+    bot->rand = 1996 + playerNum;
 
     for(int32_t ALL_PLAYERS(i))
     {
@@ -528,8 +531,8 @@ void DukeBot_Activate(int32_t playerNum)
 
     DukeBot_Init(playerNum);
 
-    int32_t botRand = time(0) + playerNum;
-    snprintf(g_player[playerNum].user_name, sizeof(g_player[0].user_name), "*%s", bot_names[seed_krand(&botRand) % ARRAY_SIZE(bot_names)]);
+    int32_t nameRand = time(0) + playerNum;
+    snprintf(g_player[playerNum].user_name, sizeof(g_player[0].user_name), "*%s", bot_names[seed_krand(&nameRand) % ARRAY_SIZE(bot_names)]);
 
     bot->active = 1;
 }
@@ -554,9 +557,6 @@ void DukeBot_GetInput(int snum, input_t* syn)
     auto const pSpr = &sprite[p->i];
     auto goalp = g_player[bot->goalPlayer].ps;
 
-    if (!bot->active || ud.limit_hit || ud.pause_on)
-        return; 
-
     syn->fvel = 0;
     syn->svel = 0;
     syn->q16avel = 0;
@@ -564,9 +564,12 @@ void DukeBot_GetInput(int snum, input_t* syn)
     syn->bits = 0;
     syn->extbits = 0;
 
+    if (!bot->active || ud.limit_hit || ud.pause_on)
+        return;
+
     if (p->dead_flag)
     {
-        if(!(rand() % 128))
+        if(!(seed_krand(&bot->rand) % 128))
             syn->bits |= BIT(SK_OPEN);
 
         return;
@@ -579,7 +582,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     if ((bot->cycleCount % 8) == 0)
     {
         vec3_t testPos = sprite[goalp->i].xyz;
-        if(!DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &testPos, sprite[goalp->i].sectnum) || !(rand() % 512))
+        if(!DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &testPos, sprite[goalp->i].sectnum) || !(seed_krand(&bot->rand) % 512))
         {
             bot->goalPlayer = snum;
             goalp = g_player[snum].ps;
@@ -787,7 +790,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
                 syn->bits &= ~BIT(SK_FIRE);
         }
 
-        if ((p->curr_weapon == HANDBOMB_WEAPON) && (!(rand() & 7)))
+        if ((p->curr_weapon == HANDBOMB_WEAPON) && (!(seed_krand(&bot->rand) & 7)))
             syn->bits &= ~BIT(SK_FIRE);
 
         if ((gpSpr->yrepeat < 32) || (gpSpr->pal == 1)) // Target shrunk or frozen?
@@ -1080,7 +1083,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     if (moveFlags & BOT_MOVE_STRAFE)
     {
         //Strafe attack
-        int32_t strafeClock = (int32_t)totalclock + snum * 13468;
+        int32_t strafeClock = (int32_t)bot->cycleCount + snum * 13468;
         int32_t strafeVal = sintable[(strafeClock << 6) & 2047];
 
         strafeVal += sintable[((strafeClock + 4245) << 5) & 2047];
@@ -1097,7 +1100,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
             else
                 strafeVal -= 8192;
 
-            if ((gpDist > 256) && !(rand() % 200) && pSect->lotag != ST_2_UNDERWATER) // Randomly jump around a bit in battle.
+            if ((gpDist > 256) && !(seed_krand(&bot->rand) % 200) && pSect->lotag != ST_2_UNDERWATER) // Randomly jump around a bit in battle.
                 syn->bits |= BIT(SK_JUMP);
         }
 
@@ -1154,15 +1157,15 @@ void DukeBot_GetInput(int snum, input_t* syn)
         }
     }
 
-    if ((p->firstaid_amount > 0) && (p->last_extra < 100) && ((rand() % 25) == 0))
+    if ((p->firstaid_amount > 0) && (p->last_extra < 100) && ((seed_krand(&bot->rand) % 25) == 0))
         syn->bits |= BIT(SK_MEDKIT);
 
-    if (seePlayer && (p->steroids_amount >= 400) && (!(rand() % 100) || p->curr_weapon == KNEE_WEAPON))
+    if (seePlayer && (p->steroids_amount >= 400) && (!(seed_krand(&bot->rand) % 100) || p->curr_weapon == KNEE_WEAPON))
         syn->bits |= BIT(SK_STEROIDS);
 
     // Impart a bit of randomness, which may help to get unstuck in some situations.
-    syn->fvel += (rand() % 512)-256;
-    syn->svel += (rand() % 512)-256;
+    syn->fvel += (seed_krand(&bot->rand) % 512)-256;
+    syn->svel += (seed_krand(&bot->rand) % 512)-256;
 
     // Cap velocity, so we're not inhumanly fast.
     syn->fvel = clamp(syn->fvel, -BOT_MAXSPEED, BOT_MAXSPEED);

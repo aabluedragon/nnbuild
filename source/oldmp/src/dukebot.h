@@ -30,6 +30,7 @@ typedef struct
     int32_t moveCount, cycleCount, seekSpriteFailCount, seekSpriteCooldown, waterSubmergeTime;
     int32_t goalSprite, goalSpriteScore, lastGoalSprite;
     int32_t goalPlayer, goalWall;
+    int32_t rand;
     int16_t lastStartSect, lastEndSect;
     uint8_t active;
 } DukeBotAI_t;
