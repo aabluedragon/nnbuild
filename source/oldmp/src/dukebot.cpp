@@ -1083,7 +1083,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     if (moveFlags & BOT_MOVE_STRAFE)
     {
         //Strafe attack
-        int32_t strafeClock = (int32_t)bot->cycleCount + snum * 13468;
+        int32_t strafeClock = (int32_t)(bot->cycleCount * TICSPERFRAME) + snum * 13468;
         int32_t strafeVal = sintable[(strafeClock << 6) & 2047];
 
         strafeVal += sintable[((strafeClock + 4245) << 5) & 2047];
