@@ -317,8 +317,8 @@ void Net_HandleInput(void)
                 return;
         }
 
-        osyn = (input_t *)&inputfifo[(movefifosendplc-1)&(MOVEFIFOSIZ-1)][0];
-        nsyn = (input_t *)&inputfifo[(movefifosendplc)&(MOVEFIFOSIZ-1)][0];
+        osyn = (input_t *)&inputfifo[(movefifosendplc-1)&(MOVEFIFOSIZ-1)];
+        nsyn = (input_t *)&inputfifo[(movefifosendplc)&(MOVEFIFOSIZ-1)];
 
         //MASTER -> SLAVE packet
         packbuf[0] = PACKET_TYPE_MASTER_TO_SLAVE;
@@ -391,8 +391,9 @@ void Net_ParsePackets(void)
                     continue;
                 }
 
-                osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)][0];
-                nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)][0];
+                osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)];
+                nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)];
+
                 for (ALL_PLAYERS(i))
                 {
                     int playerNum = packbuf[j++];
