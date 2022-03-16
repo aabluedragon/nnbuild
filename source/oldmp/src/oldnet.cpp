@@ -228,19 +228,20 @@ void Net_HandleInput(void)
 
     g_player[myconnectindex].movefifoend++;
 
+#if 0
     if (ud.multimode > 1 && (myconnectindex == connecthead))
     {
         for (ALL_PLAYERS(i))
         {
             if (g_player[i].isBot)
             {
-                DukeBot_GetInput(i, &inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i]);
-                //inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i].svel++;
-                //inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i].fvel++;
+                nsyn = &inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i];
+                DukeBot_GetInput(i, nsyn);
                 g_player[i].movefifoend++;
             }
         }
     }
+#endif
 
     if (numplayers < 2)
         return;
@@ -324,7 +325,7 @@ void Net_HandleInput(void)
         packbuf[0] = PACKET_TYPE_MASTER_TO_SLAVE;
         j = 1;
 
-        for (ALL_PLAYERS(i))
+        TRAVERSE_CONNECT(i)
         {
             packbuf[j++] = i; // Player Index
 
@@ -394,7 +395,7 @@ void Net_ParsePackets(void)
                 osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)];
                 nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)];
 
-                for (ALL_PLAYERS(i))
+                TRAVERSE_CONNECT(i)
                 {
                     int playerNum = packbuf[j++];
 
@@ -434,24 +435,26 @@ void Net_ParsePackets(void)
                     continue;
                 }
 
-                ud.m_level_number = ud.level_number = packbuf[1];
-                ud.m_volume_number = ud.volume_number = packbuf[2];
-                ud.m_player_skill = ud.player_skill = packbuf[3];
+                j = 1;
+                ud.m_level_number = ud.level_number     = packbuf[j++];
+                ud.m_volume_number = ud.volume_number   = packbuf[j++];
+                ud.m_player_skill = ud.player_skill     = packbuf[j++];
 
                 // Non-menu variables handled by G_EnterLevel
-                ud.m_monsters_off = packbuf[4];
-                ud.m_respawn_monsters = packbuf[5];
-                ud.m_respawn_items = packbuf[6];
-                ud.m_respawn_inventory = packbuf[7];
-                ud.m_coop = packbuf[8];
-                ud.m_marker = packbuf[9];
-                ud.m_ffire = packbuf[10];
-                ud.m_noexits = packbuf[11];
-                ud.m_weaponstay = packbuf[12];
-                ud.warp_on = packbuf[13];
-                ud.allow_visibility = packbuf[14];
-                ud.fraglimit = packbuf[15];
-                ud.multimode = packbuf[16];
+                ud.m_monsters_off       = packbuf[j++];
+                ud.m_respawn_monsters   = packbuf[j++];
+                ud.m_respawn_items      = packbuf[j++];
+                ud.m_respawn_inventory  = packbuf[j++];
+                ud.m_coop               = packbuf[j++];
+                ud.m_marker             = packbuf[j++];
+                ud.m_ffire              = packbuf[j++];
+                ud.m_noexits            = packbuf[j++];
+                ud.m_weaponstay         = packbuf[j++];
+                ud.warp_on              = packbuf[j++];
+                ud.allow_visibility     = packbuf[j++];
+                ud.fraglimit            = packbuf[j++];
+                ud.multimode            = packbuf[j++];
+                ud.playerai             = packbuf[j++];
 
                 if (ud.allow_visibility)
                     initprintf("Visibility adjustment enabled for multiplayer.\n");
@@ -974,28 +977,31 @@ void Net_SendInitialSettings(void)
         return;
 
     packbuf[0] = PACKET_TYPE_INIT_SETTINGS;
-    packbuf[1] = ud.m_level_number;
-    packbuf[2] = ud.m_volume_number;
-    packbuf[3] = ud.m_player_skill;
-    packbuf[4] = ud.m_monsters_off;
-    packbuf[5] = ud.m_respawn_monsters;
-    packbuf[6] = ud.m_respawn_items;
-    packbuf[7] = ud.m_respawn_inventory;
-    packbuf[8] = ud.m_coop;
-    packbuf[9] = ud.m_marker;
-    packbuf[10] = ud.m_ffire;
-    packbuf[11] = ud.m_noexits;
-    packbuf[12] = ud.m_weaponstay;
-    packbuf[13] = ud.warp_on;
-    packbuf[14] = ud.allow_visibility;
-    packbuf[15] = ud.fraglimit;
-    packbuf[16] = ud.multimode;
+
+    int32_t j = 1;
+    packbuf[j++] = ud.m_level_number;
+    packbuf[j++] = ud.m_volume_number;
+    packbuf[j++] = ud.m_player_skill;
+    packbuf[j++] = ud.m_monsters_off;
+    packbuf[j++] = ud.m_respawn_monsters;
+    packbuf[j++] = ud.m_respawn_items;
+    packbuf[j++] = ud.m_respawn_inventory;
+    packbuf[j++] = ud.m_coop;
+    packbuf[j++] = ud.m_marker;
+    packbuf[j++] = ud.m_ffire;
+    packbuf[j++] = ud.m_noexits;
+    packbuf[j++] = ud.m_weaponstay;
+    packbuf[j++] = ud.warp_on;
+    packbuf[j++] = ud.allow_visibility;
+    packbuf[j++] = ud.fraglimit;
+    packbuf[j++] = ud.multimode;
+    packbuf[j++] = ud.playerai;
 
     int i;
     TRAVERSE_CONNECT(i)
     {
         if (i != myconnectindex)
-            mmulti_sendpacket(i, (unsigned char*)packbuf, 17);
+            mmulti_sendpacket(i, (unsigned char*)packbuf, j);
         if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
 }
@@ -1304,6 +1310,7 @@ void Net_CorrectPrediction(void)
     }
 #endif
 
+    // Save some crap for interpolation or bugfixing purposes.
     auto oq16ang = predictedPlayer.oq16ang;
     auto oq16horiz = predictedPlayer.oq16horiz;
     auto oq16horizoff = predictedPlayer.oq16horizoff;

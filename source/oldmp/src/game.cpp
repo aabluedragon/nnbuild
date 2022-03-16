@@ -9265,6 +9265,7 @@ bool G_InitMultiplayer()
 
     Net_SendVersion();
     Net_SendPlayerName();
+    DukeBot_ResetAll();
 
     if (numplayers > 1)
     {
@@ -10185,7 +10186,7 @@ static int G_MoveLoop()
     while (g_player[myconnectindex].movefifoend-movefifoplc > bufferjitter)
     {
         TRAVERSE_CONNECT(i)
-            if ((movefifoplc == g_player[i].movefifoend) && !g_gameQuit)
+            if ((movefifoplc >= g_player[i].movefifoend) && !g_gameQuit)
                 break;
 
         //i is >= 0 only if last loop was broken, meaning a player wasn't caught up
@@ -10282,7 +10283,11 @@ static int G_DoMoveThings(void)
     // Copy input FIFO bits into player's own inputBits struct, and advance our place in the FIFO.
     for (ALL_PLAYERS(i))
     {
-        *g_player[i].inputBits = inputfifo[movefifoplc & (MOVEFIFOSIZ - 1)][i];
+        auto newInputs = &inputfifo[movefifoplc & (MOVEFIFOSIZ - 1)][i];
+        if (g_player[i].isBot)
+            DukeBot_GetInput(i, newInputs);
+
+        *g_player[i].inputBits = *newInputs;
         Net_CheckPlayerQuit(i);
     }
     movefifoplc++;

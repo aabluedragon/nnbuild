@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#define BOT_DEBUG
 
 static DukeBotAI_t botAI[MAXPLAYERS];
+//input_t DukeBotInput[MAXPLAYERS];
 
 // Keep these 10 chars or under.
 const char* bot_names[] = {
