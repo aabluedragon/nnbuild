@@ -418,8 +418,8 @@ void Net_ParsePackets(void)
             {
                 j = 1;
 
-                osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)][0];
-                nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)][0];
+                osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)];
+                nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)];
 
                 Net_GetPlayerInputFromPacket(&j, other, osyn, nsyn);
                 Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
