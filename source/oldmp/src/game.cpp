@@ -9241,12 +9241,8 @@ bool G_InitMultiplayer()
     // Init players
     for (int32_t i = 1; i < ud.multimode; i++)
     {
-        g_player[i].ps = (DukePlayer_t*)Xcalloc(1, sizeof(DukePlayer_t));
-        g_player[i].inputBits = (input_t*)Xcalloc(1, sizeof(input_t));
+        G_MaybeAllocPlayer(i);
         g_player[i].connected = 1;
-
-        // Propagate initial settings for player to all.
-        memcpy(g_player[i].ps, g_player[0].ps, sizeof(DukePlayer_t));
     }
 
     // Fill in base stats for bots. To-do: Move some of this into the bot init code.
@@ -9373,8 +9369,7 @@ int app_main(int32_t argc, char const* const* argv)
 #endif
 
     playerColor_init();
-    g_player[0].ps = (DukePlayer_t *) Xcalloc(1, sizeof(DukePlayer_t));
-    g_player[0].inputBits = (input_t *) Xcalloc(1, sizeof(input_t));
+    G_MaybeAllocPlayer(0);
     g_player[0].connected = 1;
 
     if (getcwd(cwd,BMAX_PATH))

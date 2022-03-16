@@ -160,6 +160,19 @@ void G_InitTimer(int32_t ticspersec);
 #endif
 
 // Inline Functions
+static inline void G_MaybeAllocPlayer(int32_t playerNum)
+{
+    if (g_player[playerNum].ps != NULL)
+        return;
+
+    g_player[playerNum].ps = (DukePlayer_t*)Xcalloc(1, sizeof(DukePlayer_t));
+    g_player[playerNum].inputBits = (input_t*)Xcalloc(1, sizeof(input_t));
+
+    // Propagate initial settings for player to all.
+    if(playerNum != 0)
+        memcpy(g_player[playerNum].ps, g_player[0].ps, sizeof(DukePlayer_t));
+}
+
 static inline int32_t G_GetNextPlayer(int32_t pNum)
 {
     for (int32_t i = pNum + 1; i < MAXPLAYERS; i++)
