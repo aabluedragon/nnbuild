@@ -1238,15 +1238,15 @@ void G_MakeNewGamePreparations(int vn, int ln, int sk)
         }
     }
 
-    display_mirror =        0;
+    display_mirror = 0;
 
     if (ud.multimode > 1)
     {
         if (numplayers < 2)
         {
             connecthead = 0;
-            for (i=0;i<MAXPLAYERS;i++) connectpoint2[i] = i+1;
-            connectpoint2[ud.multimode-1] = -1;
+            for (i = 0; i < MAXPLAYERS; i++)
+                connectpoint2[i] = G_GetNextPlayer(i);
         }
     }
     else

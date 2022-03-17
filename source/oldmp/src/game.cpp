@@ -10176,22 +10176,18 @@ static int G_MoveLoop()
     int i;
 
     if (numplayers > 1)
-    {
         Net_DoPrediction(PREDICTSTATE_PROCESS);
-    }
-
-    if (numplayers < 2)
+    else
         bufferjitter = 0;
 
-    while (g_player[myconnectindex].movefifoend-movefifoplc > bufferjitter)
+    while ((g_player[myconnectindex].movefifoend-movefifoplc) > bufferjitter)
     {
-        TRAVERSE_CONNECT(i)
-            if ((movefifoplc >= g_player[i].movefifoend) && !g_gameQuit)
-                break;
-
-        //i is >= 0 only if last loop was broken, meaning a player wasn't caught up
-        if (i >= 0)
-            break;
+        if (numplayers > 1)
+        {
+            TRAVERSE_CONNECT(i)
+                if ((movefifoplc >= g_player[i].movefifoend) && !g_gameQuit)
+                    return 0; // Player hasn't caught up yet, don't process the next tic.
+        }
 
         if (G_DoMoveThings())
             return 1;
