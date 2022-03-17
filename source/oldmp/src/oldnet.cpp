@@ -1523,6 +1523,7 @@ void Net_ClearFIFO(void)
         g_player[i].movefifoend = 0;
         g_player[i].syncvalhead = 0;
         g_player[i].myminlag = 0;
+        memset(g_player[i].syncval, 0, SYNCFIFOSIZ * MAXSYNCBYTES);
     }
 }
 
