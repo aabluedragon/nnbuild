@@ -215,8 +215,6 @@ void Net_HandleInput(void)
         G_GameExit("Quick Exit.");
     }
 
-    //timerUpdateClock();
-    //MUSIC_Update();
     Net_GetPackets();
 
     if (g_player[myconnectindex].movefifoend - movefifoplc >= 100)
@@ -803,7 +801,8 @@ void Net_ParsePackets(void)
                 //Master re-transmits message to all others
                 if (myconnectindex == connecthead)
                     TRAVERSE_CONNECT(i)
-                        if (i != other) mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
+                        if (i != other)
+                            mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
                 break;
             }
         }
@@ -1507,8 +1506,6 @@ void Net_DoPrediction(int state)
 
 void Net_ClearFIFO(void)
 {
-    int i = 0;
-
     syncvaltail = 0L;
     syncvaltottail = 0L;
     memset(&syncstat, 0, sizeof(syncstat));
@@ -1521,11 +1518,11 @@ void Net_ClearFIFO(void)
 
     Net_InitializePrediction();
 
-    for (; i < MAXPLAYERS; i++)
+    for (int32_t i = 0; i < MAXPLAYERS; i++)
     {
-        Bmemset(&g_player[i].movefifoend, 0, sizeof(g_player[i].movefifoend));
-        Bmemset(&g_player[i].syncvalhead, 0, sizeof(g_player[i].syncvalhead));
-        Bmemset(&g_player[i].myminlag, 0, sizeof(g_player[i].myminlag));
+        g_player[i].movefifoend = 0;
+        g_player[i].syncvalhead = 0;
+        g_player[i].myminlag = 0;
     }
 }
 
@@ -1732,9 +1729,7 @@ void Net_Disconnect(bool showScores)
 void Net_InitiateVote()
 {
     for (int32_t ALL_PLAYERS(i))
-    {
         g_player[i].gotvote = 0;
-    }
 
     g_player[myconnectindex].gotvote = vote.yes_votes = 1;
     
