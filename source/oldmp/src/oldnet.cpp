@@ -321,8 +321,9 @@ void Net_HandleInput(void)
 
         //MASTER -> SLAVE packet
         packbuf[0] = PACKET_TYPE_MASTER_TO_SLAVE;
-        j = 1;
 
+        j = 2;
+        char playerCount = 0;
         TRAVERSE_CONNECT(i)
         {
             packbuf[j++] = i; // Player Index
@@ -330,14 +331,14 @@ void Net_HandleInput(void)
             //Fix timers and buffer/jitter value 
             packbuf[j++] = min(max(g_player[i].myminlag, -128), 127);
             if ((movefifosendplc & (TIMERUPDATESIZ - 1)) == 0)
-            {
                 g_player[i].myminlag = 0x7fffffff;
-            }
 
             Net_AddPlayerInputToPacket(&j, i, osyn, nsyn);
+            playerCount++;
         }
+        packbuf[1] = playerCount;
 
-        Net_AddSyncInfoToPacket(&j);
+        Net_AddSyncInfoToPacket(&j); // Must always be at the end of the packet.
 
         TRAVERSE_CONNECT(i)
             mmulti_sendpacket(i, (unsigned char*)packbuf, j);
@@ -383,7 +384,6 @@ void Net_ParsePackets(void)
             // ****** Base master/slave packets ******
             case PACKET_TYPE_MASTER_TO_SLAVE:  //[0] (receive master sync buffer)
             {
-                j = 1;
                 if (myconnectindex == connecthead)
                 {
                     OSD_Printf("PACKET_TYPE_MASTER_TO_SLAVE: MASTER SHOULDN'T GET THIS PACKET!\n");
@@ -393,15 +393,17 @@ void Net_ParsePackets(void)
                 osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)];
                 nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)];
 
-                TRAVERSE_CONNECT(i)
+                char playerCount = packbuf[1];
+                j = 2;
+                for(int32_t i = 0; i < playerCount; i++)
                 {
-                    int playerNum = packbuf[j++];
+                    int32_t playerNum = packbuf[j++];
 
                     //Fix timers and buffer/jitter value 
-                    int temp = (int)((signed char)packbuf[j++]);
+                    int32_t minlag = (int32_t)((signed char)packbuf[j++]);
 
                     if (((g_player[other].movefifoend & (TIMERUPDATESIZ - 1)) == 0) && (playerNum == myconnectindex))
-                        otherminlag = temp;
+                        otherminlag = minlag;
 
                     Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
                 }
