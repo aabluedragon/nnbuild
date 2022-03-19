@@ -502,27 +502,23 @@ static void DukeBot_Init(int32_t playerNum)
 {
     auto const bot = &botAI[playerNum];
 
+    bot->goalPlayer = playerNum;
     bot->goalWall = -1;
     bot->goalSprite = -1;
     bot->goalSpriteScore = 0;
     bot->lastGoalSprite = -1;
     bot->lastStartSect = bot->lastEndSect = -1;
 
-    bot->goalPlayer = playerNum;
-
-    bot->moveCount = 0;
-    bot->cycleCount = 0;
+    bot->moveCount = bot->cycleCount = 0;
     
-    bot->seekSpriteCooldown = 0;
-    bot->seekSpriteFailCount = 0;
+    bot->seekSpriteCooldown = bot->seekSpriteFailCount = 0;
     bot->waterSubmergeTime = 0;
 
     bot->rand = 1996 + playerNum;
 
+    bot->goalPos = g_player[playerNum].ps->pos;
     for(int32_t ALL_PLAYERS(i))
-    {
         bot->lastSeenPlayerPos[i] = g_player[i].ps->pos;
-    }
 }
 
 void DukeBot_Activate(int32_t playerNum)
