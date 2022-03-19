@@ -540,9 +540,11 @@ void DukeBot_Activate(int32_t playerNum)
 
 void DukeBot_ResetAll()
 {
-    for (int32_t playerNum = 1; playerNum < ud.multimode; playerNum++)
+    for(int32_t ALL_PLAYERS(playerNum))
     {
         DukeBotAI_t* bot = &botAI[playerNum];
+        if (!g_player[playerNum].isBot)
+            continue;
 
         if (bot->active)
             DukeBot_Init(playerNum);
