@@ -1509,8 +1509,7 @@ void Net_DoPrediction(int state)
 
 void Net_ClearFIFO(void)
 {
-    syncvaltail = 0L;
-    syncvaltottail = 0L;
+    syncvaltail = syncvaltottail = 0;
     memset(&syncstat, 0, sizeof(syncstat));
     memset(&g_szfirstSyncMsg, 0, sizeof(g_szfirstSyncMsg));
     g_foundSyncError = 0;
@@ -1585,9 +1584,7 @@ void Net_CheckPlayerQuit(int i)
     if (vote.starter == i)
     {
         for (ALL_PLAYERS(i))
-        {
             g_player[i].gotvote = 0;
-        }
 
         vote = votedata_t();
     }
