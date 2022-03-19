@@ -4,6 +4,7 @@
 #include "build.h"
 #include "player.h"
 
+#define BOT_DEBUG 0
 #define BOT_MAXSPEED 2560
 #define BOT_SEEK_GIVEUP 150
 #define BOT_SEEK_LOOKFORBETTER 30
@@ -36,6 +37,7 @@ typedef struct
 } DukeBotAI_t;
 
 extern int32_t botNameSeed;
+extern DukeBotAI_t botAI[MAXPLAYERS];
 //extern input_t botInput[MAXPLAYERS];
 
 void DukeBot_ResetAll();
