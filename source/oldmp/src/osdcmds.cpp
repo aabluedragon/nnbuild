@@ -416,6 +416,9 @@ static int osdcmd_debugplayer(const osdfuncparm_t *parm)
 
     i = Batol(parm->parms[0]);
 
+    if (i >= MAXPLAYERS)
+        return OSDCMD_OK;
+
     if (g_player[i].connected == 1 || g_player[i].ps != NULL)
     {
         OSD_Printf("Name: %s\n", g_player[i].user_name);
