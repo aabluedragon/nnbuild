@@ -56,18 +56,16 @@ void initsynccrc(void)
 
 static char Sync_PlayerPos(void)
 {
-    short i;
     unsigned short crc = 0;
-    DukePlayer_t *pp;
 
-    TRAVERSE_CONNECT(i)
+    for (int32_t ALL_PLAYERS(i))
     {
-        pp = g_player[i].ps;
-        updatecrc(crc, pp->pos.x & 255);
-        updatecrc(crc, pp->pos.y & 255);
-        updatecrc(crc, pp->pos.z & 255);
-        updatecrc(crc, pp->q16ang & 255);
-        updatecrc(crc, pp->q16horiz & 255);
+        auto pp = g_player[i].ps;
+        updatecrc(crc, pp->pos.x);
+        updatecrc(crc, pp->pos.y);
+        updatecrc(crc, pp->pos.z);
+        updatecrc(crc, pp->q16ang);
+        updatecrc(crc, pp->q16horiz);
     }
 
     return ((char) crc & 255);
@@ -75,32 +73,34 @@ static char Sync_PlayerPos(void)
 
 static char Sync_PlayerData(void)
 {
-    int i;
-    int j, nextj;
     unsigned short crc = 0;
-    DukePlayer_t *pp;
-    spritetype *spr;
 
-    TRAVERSE_CONNECT(i)
+    for(int32_t ALL_PLAYERS(i))
     {
-        pp = g_player[i].ps;
-
-        updatecrc(crc, pp->curr_weapon & 255);
-        updatecrc(crc, pp->kickback_pic & 255);
-        updatecrc(crc, sprite[pp->i].extra & 255);
-        updatecrc(crc, pp->bobcounter & 255);
-    }
-
-    TRAVERSE_SPRITE_STAT(headspritestat[STAT_PLAYER], j, nextj)
-    {
-        spr = &sprite[j];
-        updatecrc(crc, (spr->x) & 255);
-        updatecrc(crc, (spr->y) & 255);
-        updatecrc(crc, (spr->z) & 255);
-        updatecrc(crc, (spr->ang) & 255);
+        auto pp = g_player[i].ps;
+        updatecrc(crc, pp->curr_weapon);
+        updatecrc(crc, pp->kickback_pic);
+        updatecrc(crc, pp->bobcounter);
+        updatecrc(crc, pp->jetpack_on);
     }
 
     return ((char) crc & 255);
+}
+
+static char Sync_PlayerSprite(void)
+{
+    unsigned short crc = 0;
+    for (int32_t SPRITES_OF(STAT_PLAYER, j))
+    {
+        auto spr = &sprite[j];
+        updatecrc(crc, spr->x);
+        updatecrc(crc, spr->y);
+        updatecrc(crc, spr->z);
+        updatecrc(crc, spr->ang);
+        updatecrc(crc, spr->extra);
+    }
+
+    return ((char)crc & 255);
 }
 
 static char Sync_Actors(void)
@@ -112,23 +112,23 @@ static char Sync_Actors(void)
     for (SPRITES_OF(STAT_ACTOR, j))
     {
         spr = &sprite[j];
-        updatecrc(crc, (spr->x) & 255);
-        updatecrc(crc, (spr->y) & 255);
-        updatecrc(crc, (spr->z) & 255);
-        updatecrc(crc, (spr->lotag) & 255);
-        updatecrc(crc, (spr->hitag) & 255);
-        updatecrc(crc, (spr->ang) & 255);
+        updatecrc(crc, spr->x);
+        updatecrc(crc, spr->y);
+        updatecrc(crc, spr->z);
+        updatecrc(crc, spr->lotag);
+        updatecrc(crc, spr->hitag);
+        updatecrc(crc, spr->ang);
     }
 
     for (SPRITES_OF(STAT_ZOMBIEACTOR, j))
     {
         spr = &sprite[j];
-        updatecrc(crc, (spr->x) & 255);
-        updatecrc(crc, (spr->y) & 255);
-        updatecrc(crc, (spr->z) & 255);
-        updatecrc(crc, (spr->lotag) & 255);
-        updatecrc(crc, (spr->hitag) & 255);
-        updatecrc(crc, (spr->ang) & 255);
+        updatecrc(crc, spr->x);
+        updatecrc(crc, spr->y);
+        updatecrc(crc, spr->z);
+        updatecrc(crc, spr->lotag);
+        updatecrc(crc, spr->hitag);
+        updatecrc(crc, spr->ang);
     }
 
     return ((char) crc & 255);
@@ -143,10 +143,10 @@ static char Sync_Projectiles(void)
     for (SPRITES_OF(STAT_PROJECTILE, j))
     {
         spr = &sprite[j];
-        updatecrc(crc, (spr->x) & 255);
-        updatecrc(crc, (spr->y) & 255);
-        updatecrc(crc, (spr->z) & 255);
-        updatecrc(crc, (spr->ang) & 255);
+        updatecrc(crc, spr->x);
+        updatecrc(crc, spr->y);
+        updatecrc(crc, spr->z);
+        updatecrc(crc, spr->ang);
     }
 
     return ((char) crc & 255);
@@ -163,26 +163,26 @@ static char Sync_Map(void)
     for (SPRITES_OF(STAT_EFFECTOR, j))
     {
         spr = &sprite[j];
-        updatecrc(crc, (spr->x) & 255);
-        updatecrc(crc, (spr->y) & 255);
-        updatecrc(crc, (spr->z) & 255);
-        updatecrc(crc, (spr->ang) & 255);
-        updatecrc(crc, (spr->lotag) & 255);
-        updatecrc(crc, (spr->hitag) & 255);
+        updatecrc(crc, spr->x);
+        updatecrc(crc, spr->y);
+        updatecrc(crc, spr->z);
+        updatecrc(crc, spr->ang);
+        updatecrc(crc, spr->lotag);
+        updatecrc(crc, spr->hitag);
     }
 
     for (j=numwalls;j>=0;j--)
     {
         wal = &wall[j];
-        updatecrc(crc, (wal->x) & 255);
-        updatecrc(crc, (wal->y) & 255);
+        updatecrc(crc, wal->x);
+        updatecrc(crc, wal->y);
     }
 
     for (j=numsectors;j>=0;j--)
     {
         sect = &sector[j];
-        updatecrc(crc, (sect->floorz) & 255);
-        updatecrc(crc, (sect->ceilingz) & 255);
+        updatecrc(crc, sect->floorz);
+        updatecrc(crc, sect->ceilingz);
     }
 
     return ((char) crc & 255);
@@ -226,17 +226,42 @@ static char Sync_Engine(void)
     return ((char)crc & 255);
 }
 
+#if BOT_DEBUG == 1
+static char Sync_Bots(void)
+{
+    unsigned short crc = 0;
+
+    for (int32_t ALL_PLAYERS(i))
+    {
+        updatecrc(crc, botAI[i].cycleCount);
+        updatecrc(crc, botAI[i].moveCount);
+        updatecrc(crc, botAI[i].goalPos.x);
+        updatecrc(crc, botAI[i].goalPos.y);
+        updatecrc(crc, botAI[i].goalPos.z);
+        updatecrc(crc, botAI[i].goalSprite);
+        updatecrc(crc, botAI[i].goalWall);
+        updatecrc(crc, botAI[i].rand);
+    }
+
+    return ((char)crc & 255);
+}
+#endif
+
 // This must not exceed MAXSYNCBYTES
 static SyncType_t syncType[] = {
     DEFINE_SYNCFUNC(Sync_Engine),
     DEFINE_SYNCFUNC(Sync_Random),
     DEFINE_SYNCFUNC(Sync_PlayerPos),
     DEFINE_SYNCFUNC(Sync_PlayerData),
+    DEFINE_SYNCFUNC(Sync_PlayerSprite),
     DEFINE_SYNCFUNC(Sync_Projectiles),
     DEFINE_SYNCFUNC(Sync_Actors),
     DEFINE_SYNCFUNC(Sync_Map),
+#if BOT_DEBUG == 1
+    DEFINE_SYNCFUNC(Sync_Bots),
+#endif
 };
-#define NUM_SYNC_TYPES (sizeof(syncType) / sizeof(syncType[0]))
+#define NUM_SYNC_TYPES (int32_t)(sizeof(syncType) / sizeof(syncType[0]))
 
 void Net_GetSyncStat(void)
 {
@@ -245,7 +270,7 @@ void Net_GetSyncStat(void)
     if (numplayers < 2)
         return;
 
-    for (size_t i = 0; i < NUM_SYNC_TYPES; i++)
+    for (int32_t i = 0; i < NUM_SYNC_TYPES; i++)
     {
         pp->syncval[pp->syncvalhead & (SYNCFIFOSIZ - 1)][i] = syncType[i].func();
     }
@@ -269,7 +294,7 @@ void Net_DisplaySyncMsg(void)
     if (numplayers < 2)
         return;
 
-    for (size_t i = 0; i < NUM_SYNC_TYPES; i++)
+    for (int32_t i = 0; i < NUM_SYNC_TYPES; i++)
     {
         // syncstat is NON 0 - out of sync
         if (syncstat[i] != 0)
@@ -285,7 +310,7 @@ void Net_DisplaySyncMsg(void)
                 // save off loop count
                 moveCount = g_moveThingsCount;
 
-                for (size_t j = 0; j < NUM_SYNC_TYPES; j++)
+                for (int32_t j = 0; j < NUM_SYNC_TYPES; j++)
                 {
                     if (syncstat[j] != 0 && g_szfirstSyncMsg[j][0] == '\0')
                     {
@@ -298,7 +323,7 @@ void Net_DisplaySyncMsg(void)
     }
 
     // print out the g_szfirstSyncMsg message you got
-    for (size_t i = 0; i < NUM_SYNC_TYPES; i++)
+    for (int32_t i = 0; i < NUM_SYNC_TYPES; i++)
     {
         if (g_szfirstSyncMsg[i][0] != '\0')
         {
@@ -328,7 +353,7 @@ void  Net_AddSyncInfoToPacket(int *j)
     // sync testing
     while (g_player[myconnectindex].syncvalhead != syncvaltail && count++ < 4)
     {
-        for (size_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
+        for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
             packbuf[(*j)++] = g_player[myconnectindex].syncval[syncvaltail & (SYNCFIFOSIZ - 1)][sb];
 
         syncvaltail++;
@@ -349,17 +374,12 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
     // Grab sync info from packet buffer
     while ((*j) < packbufleng)
     {
-        for (size_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
+        for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
         {
             ppo->syncval[ppo->syncvalhead & (SYNCFIFOSIZ - 1)][sb] = packbuf[(*j)++];
         }
-        ppo->syncvalhead++;
-    }
 
-    TRAVERSE_CONNECT(i)
-    {
-        if (g_player[i].syncvalhead == syncvaltottail)
-            return;
+        ppo->syncvalhead++;
     }
 
     // update syncstat
@@ -371,7 +391,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
             if (g_player[i].syncvalhead == syncvaltottail)
                 return;
 
-            for (size_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
+            for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
             {
                 char head_sync = g_player[connecthead].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
                 char player_sync = g_player[i].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
