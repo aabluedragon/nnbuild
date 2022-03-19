@@ -9225,24 +9225,37 @@ bool G_InitMultiplayer()
 
     netparam = NULL;
     netparamcount = 0;
+    botNameSeed = time(0);
+
+    Net_SendPlayerName();
 
     if (numplayers > 1)
     {
         initprintf("Multiplayer initialized.\n");
 
-        // Make sure real players aren't set as bots. Allows player/bot mix.
-        for (int32_t i = 0; i < numplayers; i++)
+        // Init real players, making sure they aren't set as bots. Allows player/bot mix.
+        for (int32_t i = 1; i < numplayers; i++)
+        {
+            G_MaybeAllocPlayer(i);
+            g_player[i].connected = 1;
             g_player[i].isBot = 0;
+        }
 
         if (numplayers > ud.multimode)
             ud.multimode = numplayers;
-    }
+        
+        Net_SendVersion();
 
-    // Init players
-    for (int32_t i = 1; i < ud.multimode; i++)
-    {
-        G_MaybeAllocPlayer(i);
-        g_player[i].connected = 1;
+        if (myconnectindex == connecthead) // Host
+            Net_SendInitialSettings();
+        else while (!oldnet_gotinitialsettings)
+            gameHandleEvents();
+
+        Net_SendPlayerOptions();
+        Net_SendWeaponChoice();
+        Net_SendUserMapName();
+
+        waitforeverybody();
     }
 
     // Fill in base stats for bots. To-do: Move some of this into the bot init code.
@@ -9250,6 +9263,9 @@ bool G_InitMultiplayer()
     for (int32_t i = numplayers; i < ud.multimode; i++)
     {
         Bsprintf(g_player[i].user_name, "PLAYER %d", i + 1);
+
+        G_MaybeAllocPlayer(i);
+        g_player[i].connected = 1;
         g_player[i].isBot = 1;
         g_player[i].ps->team = g_player[i].pteam = teamToggle;
         g_player[i].ps->weaponswitch = 3;
@@ -9257,34 +9273,16 @@ bool G_InitMultiplayer()
         teamToggle = (!teamToggle);
     }
 
+    DukeBot_ResetAll();
+
     if (ud.multimode > 1)
     {
         playerswhenstarted = ud.multimode;
         G_CheckGametype();
     }
 
-    Net_SendVersion();
-    Net_SendPlayerName();
-    DukeBot_ResetAll();
-
     if (numplayers > 1)
-    {
-        if (myconnectindex == connecthead) // Host
-        {
-            Net_SendInitialSettings();
-        }
-        else
-        {
-            while (!oldnet_gotinitialsettings)
-                gameHandleEvents();
-        }
-
-        Net_SendPlayerOptions();
-        Net_SendWeaponChoice();
-        Net_SendUserMapName();
-        waitforeverybody();
         return true;
-    }
 
     return false;
 }

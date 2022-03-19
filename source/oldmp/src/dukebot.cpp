@@ -30,7 +30,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#define BOT_DEBUG
 
 static DukeBotAI_t botAI[MAXPLAYERS];
-//input_t DukeBotInput[MAXPLAYERS];
+int32_t botNameSeed;
+//input_t botInput[MAXPLAYERS];
 
 // Keep these 10 chars or under.
 const char* bot_names[] = {
@@ -532,8 +533,7 @@ void DukeBot_Activate(int32_t playerNum)
 
     DukeBot_Init(playerNum);
 
-    int32_t nameRand = time(0) + playerNum;
-    snprintf(g_player[playerNum].user_name, sizeof(g_player[0].user_name), "*%s", bot_names[seed_krand(&nameRand) % ARRAY_SIZE(bot_names)]);
+    snprintf(g_player[playerNum].user_name, sizeof(g_player[0].user_name), "*%s", bot_names[(seed_krand(&botNameSeed)+playerNum) % ARRAY_SIZE(bot_names)]);
 
     bot->active = 1;
 }

@@ -455,6 +455,7 @@ void Net_ParsePackets(void)
                 ud.fraglimit            = packbuf[j++];
                 ud.multimode            = packbuf[j++];
                 ud.playerai             = packbuf[j++];
+                botNameSeed             = (int32_t)B_UNBUF32(&packbuf[j]); j += 4;
 
                 if (ud.allow_visibility)
                     initprintf("Visibility adjustment enabled for multiplayer.\n");
@@ -474,20 +475,20 @@ void Net_ParsePackets(void)
                 if (vote.level != -1 || vote.episode != -1 || vote.starter != -1)
                     G_AddUserQuote("VOTE SUCCEEDED");
 
-                ud.m_level_number = ud.level_number = packbuf[1];
-                ud.m_volume_number = ud.volume_number = packbuf[2];
-                ud.m_player_skill = ud.player_skill = packbuf[3];
+                ud.m_level_number = ud.level_number     = packbuf[1];
+                ud.m_volume_number = ud.volume_number   = packbuf[2];
+                ud.m_player_skill = ud.player_skill     = packbuf[3];
 
                 // Non-menu variables handled by G_EnterLevel
-                ud.m_monsters_off = packbuf[4];
-                ud.m_respawn_monsters = packbuf[5];
-                ud.m_respawn_items = packbuf[6];
-                ud.m_respawn_inventory = packbuf[7];
-                ud.m_coop = packbuf[8];
-                ud.m_marker = packbuf[9];
-                ud.m_ffire = packbuf[10];
-                ud.m_noexits = packbuf[11];
-                ud.m_weaponstay = packbuf[12];
+                ud.m_monsters_off       = packbuf[4];
+                ud.m_respawn_monsters   = packbuf[5];
+                ud.m_respawn_items      = packbuf[6];
+                ud.m_respawn_inventory  = packbuf[7];
+                ud.m_coop               = packbuf[8];
+                ud.m_marker             = packbuf[9];
+                ud.m_ffire              = packbuf[10];
+                ud.m_noexits            = packbuf[11];
+                ud.m_weaponstay         = packbuf[12];
 
                 G_BeginNewGame();
 
@@ -577,8 +578,7 @@ void Net_ParsePackets(void)
                 for (ALL_PLAYERS(i))
                     g_player[i].ps->gm = MODE_EOL;
 
-                ud.level_number = packbuf[1];
-                ud.m_level_number = ud.level_number;
+                ud.m_level_number = ud.level_number = packbuf[1];
                 ud.from_bonus = packbuf[2];
                 break;
             }
@@ -612,12 +612,11 @@ void Net_ParsePackets(void)
                             playerNum = packbuf[1] = other; // Sanitize before re-transmit.
                         }
 
-                        i = 2;
-
-                        g_player[playerNum].ps->auto_aim = packbuf[i++];
-                        g_player[playerNum].ps->weaponswitch = packbuf[i++];
-                        g_player[playerNum].ps->palookup = g_player[playerNum].pcolor = playerColor_getValidPal(packbuf[i++]);
-                        g_player[playerNum].pteam = packbuf[i++];
+                        j = 2;
+                        g_player[playerNum].ps->auto_aim = packbuf[j++];
+                        g_player[playerNum].ps->weaponswitch = packbuf[j++];
+                        g_player[playerNum].ps->palookup = g_player[playerNum].pcolor = playerColor_getValidPal(packbuf[j++]);
+                        g_player[playerNum].pteam = packbuf[j++];
 
                         break;
                     }
@@ -724,19 +723,19 @@ void Net_ParsePackets(void)
                             playerNum = packbuf[1] = other; // Sanitize before re-transmit.
                         }
 
-                        vote.starter = playerNum;
-                        vote.episode = packbuf[2];
-                        vote.level = packbuf[3];
-                        vote.skill = packbuf[4];
-                        vote.monsters_off = packbuf[5];
-                        vote.respawn_monsters = packbuf[6];
-                        vote.respawn_items = packbuf[7];
-                        vote.respawn_inventory = packbuf[8];
-                        vote.gametype = packbuf[9];
-                        vote.marker = packbuf[10];
-                        vote.ffire = packbuf[11];
-                        vote.noexits = packbuf[12];
-                        vote.weaponstay = packbuf[13];
+                        vote.starter            = playerNum;
+                        vote.episode            = packbuf[2];
+                        vote.level              = packbuf[3];
+                        vote.skill              = packbuf[4];
+                        vote.monsters_off       = packbuf[5];
+                        vote.respawn_monsters   = packbuf[6];
+                        vote.respawn_items      = packbuf[7];
+                        vote.respawn_inventory  = packbuf[8];
+                        vote.gametype           = packbuf[9];
+                        vote.marker             = packbuf[10];
+                        vote.ffire              = packbuf[11];
+                        vote.noexits            = packbuf[12];
+                        vote.weaponstay         = packbuf[13];
 
                         Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE TO CHANGE MAP TO %s (E%dL%d)",
                             g_player[playerNum].user_name,
@@ -931,7 +930,8 @@ void Net_SendPlayerName(void)
     for (l=0;(unsigned)l<sizeof(szPlayerName)-1;l++)
         g_player[myconnectindex].user_name[l] = Btoupper(szPlayerName[l]);
 
-    if (numplayers < 2) return;
+    if (numplayers < 2)
+        return;
 
     buf[0] = PACKET_TYPE_PLAYER_NAME;
     buf[1] = myconnectindex;
@@ -997,6 +997,7 @@ void Net_SendInitialSettings(void)
     packbuf[j++] = ud.fraglimit;
     packbuf[j++] = ud.multimode;
     packbuf[j++] = ud.playerai;
+    B_BUF32(&packbuf[j], botNameSeed); j += 4;
 
     int i;
     TRAVERSE_CONNECT(i)
@@ -1737,19 +1738,19 @@ void Net_InitiateVote()
     g_player[myconnectindex].gotvote = vote.yes_votes = 1;
     
     packbuf[0] = PACKET_TYPE_MAP_VOTE_INITIATE;
-    packbuf[1] = vote.starter = myconnectindex;
-    packbuf[2] = vote.episode = ud.m_volume_number;
-    packbuf[3] = vote.level = ud.m_level_number;
-    packbuf[4] = vote.skill = ud.m_player_skill;
-    packbuf[5] = vote.monsters_off = ud.m_monsters_off;
-    packbuf[6] = vote.respawn_monsters = ud.m_respawn_monsters;
-    packbuf[7] = vote.respawn_items = ud.m_respawn_items;
+    packbuf[1] = vote.starter           = myconnectindex;
+    packbuf[2] = vote.episode           = ud.m_volume_number;
+    packbuf[3] = vote.level             = ud.m_level_number;
+    packbuf[4] = vote.skill             = ud.m_player_skill;
+    packbuf[5] = vote.monsters_off      = ud.m_monsters_off;
+    packbuf[6] = vote.respawn_monsters  = ud.m_respawn_monsters;
+    packbuf[7] = vote.respawn_items     = ud.m_respawn_items;
     packbuf[8] = vote.respawn_inventory = ud.m_respawn_inventory;
-    packbuf[9] = vote.gametype = ud.m_coop;
-    packbuf[10] = vote.marker = ud.m_marker;
-    packbuf[11] = vote.ffire = ud.m_ffire;
-    packbuf[12] = vote.noexits = ud.m_noexits;
-    packbuf[13] = vote.weaponstay = ud.m_weaponstay;
+    packbuf[9] = vote.gametype          = ud.m_coop;
+    packbuf[10] = vote.marker           = ud.m_marker;
+    packbuf[11] = vote.ffire            = ud.m_ffire;
+    packbuf[12] = vote.noexits          = ud.m_noexits;
+    packbuf[13] = vote.weaponstay       = ud.m_weaponstay;
 
     int32_t c = 0;
     TRAVERSE_CONNECT(c)

@@ -35,7 +35,8 @@ typedef struct
     uint8_t active;
 } DukeBotAI_t;
 
-//extern input_t DukeBotInput[MAXPLAYERS];
+extern int32_t botNameSeed;
+//extern input_t botInput[MAXPLAYERS];
 
 void DukeBot_ResetAll();
 void DukeBot_Activate(int32_t playerNum);
