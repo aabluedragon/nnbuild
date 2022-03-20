@@ -407,8 +407,8 @@ struct savehead {
 };
 
 typedef struct {
-    int32_t ox,oy,oz;
-    int16_t oa,os;
+    vec3_t pos;
+    int16_t ang,sectnum;
     uint8_t pal;
 } PlayerSpawn_t;
 

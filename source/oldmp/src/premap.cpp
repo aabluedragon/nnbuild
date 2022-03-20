@@ -504,7 +504,7 @@ void G_UpdateScreenArea(void)
 void P_RandomSpawnPoint(int snum)
 {
     DukePlayer_t *p = g_player[snum].ps;
-    int i=snum,j,k;
+    int i = snum;
     unsigned int dist,pdist = -1;
 
     if (ud.multimode > 1 && !(Gametypes[ud.coop].flags & GAMETYPE_FIXEDRESPAWN))
@@ -512,16 +512,17 @@ void P_RandomSpawnPoint(int snum)
         i = krand() % g_numPlayerSprites;
         if (Gametypes[ud.coop].flags & GAMETYPE_TDMSPAWN)
         {
-            for(ALL_PLAYERS(j))
+            for(int32_t ALL_PLAYERS(playerNum))
             {
-
-                if (j != snum && g_player[j].ps->team == p->team && sprite[g_player[j].ps->i].extra > 0)
+                auto otherp = g_player[playerNum].ps;
+                if (playerNum != snum && otherp->team == p->team && sprite[otherp->i].extra > 0)
                 {
-                    for (k = 0; k < g_numPlayerSprites; k++)
+                    for (int32_t pointNum = 0; pointNum < g_numPlayerSprites; pointNum++)
                     {
-                        dist = FindDistance2D(g_player[j].ps->pos.x - g_playerSpawnPoints[k].ox, g_player[j].ps->pos.y - g_playerSpawnPoints[k].oy);
+                        auto spawnPoint = &g_playerSpawnPoints[pointNum];
+                        dist = FindDistance2D(otherp->pos.x - spawnPoint->pos.x, otherp->pos.y - spawnPoint->pos.y);
                         if (dist < pdist)
-                            i = k, pdist = dist;
+                            i = pointNum, pdist = dist;
                     }
                     break;
                 }
@@ -532,13 +533,15 @@ void P_RandomSpawnPoint(int snum)
     // We don't have a spawn for this player in co-op, so use the default!
     if (i >= g_numPlayerSprites)
         i = 0;
+ 
+    sprite[p->i].xyz = actor[p->i].bpos = p->opos = p->pos = g_playerSpawnPoints[i].pos;
+    p->bobposx = p->pos.x;
+    p->bobposy = p->pos.y;
 
-    p->bobposx = p->opos.x = p->pos.x = g_playerSpawnPoints[i].ox;
-    p->bobposy = p->opos.y = p->pos.y = g_playerSpawnPoints[i].oy;
-    p->opos.z = p->pos.z = g_playerSpawnPoints[i].oz;
-    p->q16ang = fix16_from_int(g_playerSpawnPoints[i].oa);
-    p->cursectnum = g_playerSpawnPoints[i].os;
-    // [JM] Need to prevent perpetual gibbing after being killed by a space sector.
+    p->q16ang = fix16_from_int(g_playerSpawnPoints[i].ang);
+    p->cursectnum = g_playerSpawnPoints[i].sectnum;
+
+    // [JM] Needed to prevent perpetual gibbing after being killed by a space sector.
     changespritesect(p->i, p->cursectnum);
 }
 
@@ -567,16 +570,16 @@ static void P_ResetStatus(int snum)
     p->pyoff            = 0;
     p->opyoff           = 0;
     p->loogcnt          = 0;
-    p->q16angvel           = 0;
+    p->q16angvel        = 0;
     p->weapon_sway      = 0;
-    //    p->select_dir       = 0;
+    //p->select_dir     = 0;
     p->extra_extra8     = 0;
     p->show_empty_weapon= 0;
     p->dummyplayersprite=-1;
     p->crack_time       = 0;
     p->hbomb_hold_delay = 0;
     p->transporter_hold = 0;
-    p->wantweaponfire  = -1;
+    p->wantweaponfire   = -1;
     p->hurt_delay       = 0;
     p->footprintcount   = 0;
     p->footprintpal     = 0;
@@ -592,9 +595,11 @@ static void P_ResetStatus(int snum)
     p->rapid_fire_hold  = 0;
     p->toggle_key_flag  = 0;
     p->access_spritenum = -1;
+
     if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_ACCESSATSTART))
-        ud.got_access = 7;
-    else ud.got_access      = 0;
+        ud.got_access   = 7;
+    else ud.got_access  = 0;
+
     p->random_club_frame= 0;
     pus = 1;
     p->on_warping_sector = 0;
@@ -734,24 +739,23 @@ static void resetprestat(int snum,int g)
 {
     DukePlayer_t *p = g_player[snum].ps;
 
-    p->hbomb_on          = 0;
-    p->cheat_phase       = 0;
-    p->pals.f            = 0;
-    p->toggle_key_flag   = 0;
-    p->secret_rooms      = 0;
-    p->max_secret_rooms  = 0;
-    p->actors_killed     = 0;
-    p->lastrandomspot = 0;
-    p->weapon_pos = 6;
-    p->kickback_pic = 5;
-    p->last_weapon = -1;
-    p->weapreccnt = 0;
-    p->interface_toggle_flag = 0;
-    p->show_empty_weapon= 0;
-    p->holster_weapon = 0;
-    p->last_pissed_time = 0;
-
-    p->one_parallax_sectnum = -1;
+    p->hbomb_on                 = 0;
+    p->cheat_phase              = 0;
+    p->pals.f                   = 0;
+    p->toggle_key_flag          = 0;
+    p->secret_rooms             = 0;
+    p->max_secret_rooms         = 0;
+    p->actors_killed            = 0;
+    p->lastrandomspot           = 0;
+    p->weapon_pos               = 6;
+    p->kickback_pic             = 5;
+    p->last_weapon              = -1;
+    p->weapreccnt               = 0;
+    p->interface_toggle_flag    = 0;
+    p->show_empty_weapon        = 0;
+    p->holster_weapon           = 0;
+    p->last_pissed_time         = 0;
+    p->one_parallax_sectnum     = -1;
     g_player[snum].display.visibility = ud.const_visibility;
 
     if (((g&MODE_EOL) != MODE_EOL && ud.multimode < 2) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1))
@@ -1281,12 +1285,11 @@ static void prepare_spawns(void)
         }
 
         // Get position
-        g_playerSpawnPoints[g_numPlayerSprites].ox = s->x;
-        g_playerSpawnPoints[g_numPlayerSprites].oy = s->y;
-        g_playerSpawnPoints[g_numPlayerSprites].oz = s->z;
-        g_playerSpawnPoints[g_numPlayerSprites].oa = s->ang;
-        g_playerSpawnPoints[g_numPlayerSprites].os = s->sectnum;
-        g_playerSpawnPoints[g_numPlayerSprites].pal = s->pal;
+        auto spawnPoint = &g_playerSpawnPoints[g_numPlayerSprites];
+        spawnPoint->pos = s->xyz;
+        spawnPoint->ang = s->ang;
+        spawnPoint->sectnum = s->sectnum;
+        spawnPoint->pal = s->pal;
         g_numPlayerSprites++;
 
         A_DeleteSprite(i); // Purge the APLAYER sprite, we don't need it anymore.
@@ -1296,15 +1299,16 @@ static void prepare_spawns(void)
 
 static void insert_player_sprite(int pNum)
 {
-    int32_t spawnPoint = pNum % g_numPlayerSprites; // Wrap spawn point index if more players than spawns.
-    int32_t spriteIndex = A_InsertSprite(g_playerSpawnPoints[spawnPoint].os, g_playerSpawnPoints[spawnPoint].ox, g_playerSpawnPoints[spawnPoint].oy, g_playerSpawnPoints[spawnPoint].oz,
-        APLAYER, 0, 0, 0, g_playerSpawnPoints[spawnPoint].oa, 0, 0, 0, 10);
+    auto const spawnPoint = &g_playerSpawnPoints[pNum % g_numPlayerSprites]; // Wrap spawn point index if more players than spawns.
+
+    int32_t spriteIndex = A_InsertSprite(spawnPoint->sectnum, spawnPoint->pos.x, spawnPoint->pos.y, spawnPoint->pos.z,
+        APLAYER, 0, 0, 0, spawnPoint->ang, 0, 0, 0, 10);
 
     spritetype* s = &sprite[spriteIndex];
     auto p = g_player[pNum].ps;
 
     s->owner = spriteIndex;
-    s->pal = p->palookup = g_playerSpawnPoints[spawnPoint].pal;
+    s->pal = p->palookup = spawnPoint->pal;
     s->shade = 0;
     s->xrepeat = 42;
     s->yrepeat = 36;

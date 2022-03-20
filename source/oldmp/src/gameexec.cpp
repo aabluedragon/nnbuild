@@ -2836,11 +2836,9 @@ static int X_DoExecute(void)
         }
         else
         {
+            auto const p = g_player[g_p].ps;
             P_RandomSpawnPoint(g_p);
-            g_sp->x = actor[g_i].bpos.x = g_player[g_p].ps->bobposx = g_player[g_p].ps->opos.x = g_player[g_p].ps->pos.x;
-            g_sp->y = actor[g_i].bpos.y = g_player[g_p].ps->bobposy = g_player[g_p].ps->opos.y =g_player[g_p].ps->pos.y;
-            g_sp->z = actor[g_i].bpos.z = g_player[g_p].ps->opos.z = g_player[g_p].ps->pos.z;
-            setspritez_old(g_player[g_p].ps->i,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z+PHEIGHT);
+            setspritez_old(p->i, p->pos.x, p->pos.y, p->pos.z + PHEIGHT);
             g_sp->cstat = 257;
 
             g_sp->shade = -12;
@@ -2851,25 +2849,27 @@ static int X_DoExecute(void)
             g_sp->xoffset = 0;
             g_sp->pal = g_player[g_p].ps->palookup;
 
-            g_player[g_p].ps->last_extra = g_sp->extra = g_player[g_p].ps->max_player_health;
-            g_player[g_p].ps->wantweaponfire = -1;
-            g_player[g_p].ps->q16horiz = F16(100);
-            g_player[g_p].ps->on_crane = -1;
-            g_player[g_p].ps->frag_ps = g_p;
-            g_player[g_p].ps->q16horizoff = 0;
-            g_player[g_p].ps->opyoff = 0;
-            g_player[g_p].ps->wackedbyactor = -1;
-            g_player[g_p].ps->shield_amount = g_startArmorAmount;
-            g_player[g_p].ps->dead_flag = 0;
-            g_player[g_p].ps->pals.f = 0;
-            g_player[g_p].ps->footprintcount = 0;
-            g_player[g_p].ps->weapreccnt = 0;
-            g_player[g_p].ps->fta = 0;
-            g_player[g_p].ps->ftq = 0;
-            g_player[g_p].ps->vel.x = g_player[g_p].ps->vel.y = 0;
-            g_player[g_p].ps->rotscrnang = 0;
-            g_player[g_p].ps->runspeed = g_playerFriction;
-            g_player[g_p].ps->falling_counter = 0;
+            p->last_extra = g_sp->extra = p->max_player_health;
+            p->wantweaponfire = -1;
+            p->q16horiz = F16(100);
+            p->on_crane = -1;
+            p->frag_ps = g_p;
+            p->q16horizoff = 0;
+            p->opyoff = 0;
+            p->wackedbyactor = -1;
+            p->shield_amount = g_startArmorAmount;
+            p->dead_flag = 0;
+            p->pals.f = 0;
+            p->footprintcount = 0;
+            p->weapreccnt = 0;
+            p->fta = 0;
+            p->ftq = 0;
+            p->vel.x = p->vel.y = 0;
+            p->rotscrnang = 0;
+            p->runspeed = g_playerFriction;
+            p->falling_counter = 0;
+            p->knee_incs = 0;
+            p->actorsqu = -1;
 
             actor[g_i].extra = -1;
             actor[g_i].owner = g_i;
@@ -2888,7 +2888,7 @@ static int X_DoExecute(void)
 
             g_player[g_p].ps->movement_lock = 0;
 
-            X_OnEvent(EVENT_RESETPLAYER, g_player[g_p].ps->i, g_p, -1);
+            X_OnEvent(EVENT_RESETPLAYER, p->i, g_p, -1);
             g_cameraDistance = 0;
             g_cameraClock = (int32_t)totalclock;
         }

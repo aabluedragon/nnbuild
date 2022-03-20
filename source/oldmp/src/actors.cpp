@@ -5896,10 +5896,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 // Move player spawns with sector
                 for (p = 0; p < g_numPlayerSprites; p++)
                 {
-                    if (g_playerSpawnPoints[p].os == pSprite->sectnum)
+                    if (g_playerSpawnPoints[p].sectnum == pSprite->sectnum)
                     {
-                        g_playerSpawnPoints[p].ox += m;
-                        g_playerSpawnPoints[p].oy += x;
+                        g_playerSpawnPoints[p].pos.x += m;
+                        g_playerSpawnPoints[p].pos.y += x;
                     }
                 }
 
@@ -6096,10 +6096,10 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 // Move player spawns with sector
                 for (p = 0; p < g_numPlayerSprites; p++)
                 {
-                    if (g_playerSpawnPoints[p].os == pSprite->sectnum)
+                    if (g_playerSpawnPoints[p].sectnum == pSprite->sectnum)
                     {
-                        g_playerSpawnPoints[p].ox += l;
-                        g_playerSpawnPoints[p].oy += x;
+                        g_playerSpawnPoints[p].pos.x += l;
+                        g_playerSpawnPoints[p].pos.y += x;
                     }
                 }
 
