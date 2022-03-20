@@ -382,33 +382,41 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
         ppo->syncvalhead++;
     }
 
-    // update syncstat
-    // if any of the syncstat vars is non-0 then there is a problem
-    while (1)
+    // Temporary hack: Only the server will detect desyncs for now, since it seems to be royally bunged the fuck up on clients.
+    if (myconnectindex == connecthead)
     {
         TRAVERSE_CONNECT(i)
-        {
             if (g_player[i].syncvalhead == syncvaltottail)
                 return;
 
-            for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
+        // update syncstat
+        // if any of the syncstat vars is non-0 then there is a problem
+        while (1)
+        {
+            TRAVERSE_CONNECT(i)
             {
-                char head_sync = g_player[connecthead].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
-                char player_sync = g_player[i].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
-                if (player_sync != head_sync)
-                {
-                    if (!syncstat[sb])
-                    {
-                        OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d (syncvalhead: %d), Player CRC: %d (syncvalhead: %d). syncvaltottail: %d\n", i, syncType[sb].name, head_sync, g_player[connecthead].syncvalhead, player_sync, g_player[i].syncvalhead, syncvaltottail);
-                        syncstat[sb] = 1;
-                    }
+                if (g_player[i].syncvalhead == syncvaltottail)
+                    return;
 
-                    desynched_players[i] = 1;
+                for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
+                {
+                    char head_sync = g_player[connecthead].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
+                    char player_sync = g_player[i].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
+                    if (player_sync != head_sync)
+                    {
+                        if (!syncstat[sb])
+                        {
+                            OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d (syncvalhead: %d), Player CRC: %d (syncvalhead: %d). syncvaltottail: %d\n", i, syncType[sb].name, head_sync, g_player[connecthead].syncvalhead, player_sync, g_player[i].syncvalhead, syncvaltottail);
+                            syncstat[sb] = 1;
+                        }
+
+                        desynched_players[i] = 1;
+                    }
                 }
             }
-        }
 
-        syncvaltottail++;
+            syncvaltottail++;
+        }
     }
 }
 
