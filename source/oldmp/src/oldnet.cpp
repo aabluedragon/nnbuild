@@ -408,7 +408,7 @@ void Net_ParsePackets(void)
                     Net_GetPlayerInputFromPacket(&j, playerNum, osyn, nsyn);
                 }
 
-                Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
+                Net_GetSyncInfoFromPacket(packbuf, &j, other);
 
                 movefifosendplc++;
 
@@ -422,7 +422,7 @@ void Net_ParsePackets(void)
                 nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)];
 
                 Net_GetPlayerInputFromPacket(&j, other, osyn, nsyn);
-                Net_GetSyncInfoFromPacket(packbuf, packbufleng, &j, other);
+                Net_GetSyncInfoFromPacket(packbuf, &j, other);
                 break;
             }
 

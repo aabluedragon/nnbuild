@@ -27,6 +27,6 @@ void initsynccrc(void);
 void Net_GetSyncStat(void);
 void Net_DisplaySyncMsg(void);
 void Net_AddSyncInfoToPacket(int *j);
-void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int otherconnectindex);
+void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex);
 
 #endif

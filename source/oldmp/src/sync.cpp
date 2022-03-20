@@ -348,19 +348,24 @@ void Net_DisplaySyncMsg(void)
 
 void  Net_AddSyncInfoToPacket(int *j)
 {
-    int count = 0;
-
+    int32_t syncSizePos = (*j)++;
+    uint8_t syncSize = 0;
     // sync testing
-    while (g_player[myconnectindex].syncvalhead != syncvaltail && count++ < 4)
+    while (g_player[myconnectindex].syncvalhead != syncvaltail && syncSize < 4)
     {
         for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
+        {
             packbuf[(*j)++] = g_player[myconnectindex].syncval[syncvaltail & (SYNCFIFOSIZ - 1)][sb];
+        }
 
         syncvaltail++;
+        syncSize++;
     }
+    
+    packbuf[syncSizePos] = syncSize;
 }
 
-void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int otherconnectindex)
+void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
 {
     int i;
     playerdata_t *ppo = &g_player[otherconnectindex];
@@ -371,8 +376,9 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int packbufleng, int *j, int other
         return;
 #endif
 
+    uint8_t syncSize = (uint8_t)packbuf[(*j)++];
     // Grab sync info from packet buffer
-    while ((*j) < packbufleng)
+    for(int32_t i = 0; i < syncSize; i++)
     {
         for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
         {
