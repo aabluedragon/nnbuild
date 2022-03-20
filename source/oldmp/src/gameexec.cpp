@@ -2873,13 +2873,13 @@ static int X_DoExecute(void)
 
             actor[g_i].extra = -1;
             actor[g_i].owner = g_i;
+            actor[g_i].picnum = g_sp->picnum;
 
             actor[g_i].cgg = 0;
             actor[g_i].movflag = 0;
             actor[g_i].tempang = 0;
             actor[g_i].actorstayput = -1;
             actor[g_i].dispicnum = 0;
-            actor[g_i].owner = g_player[g_p].ps->i;
 
             P_ResetInventory(g_p);
             P_ResetWeapons(g_p);
