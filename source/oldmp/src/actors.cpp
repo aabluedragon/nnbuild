@@ -990,6 +990,7 @@ int A_IncurDamage(int sn)
                         // Nullify damage and cancel.
                         actor[sn].owner = -1;
                         actor[sn].extra = -1;
+                        actor[sn].picnum = APLAYER;
                         return -1;
                     }
                 }
