@@ -392,7 +392,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
     {
         int32_t i = 0;
         TRAVERSE_CONNECT(i)
-            if (g_player[i].syncvalhead == syncvaltottail)
+            if (syncvaltottail >= g_player[i].syncvalhead)
                 return;
 
         // update syncstat
@@ -401,7 +401,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
         {
             TRAVERSE_CONNECT(i)
             {
-                if (g_player[i].syncvalhead == syncvaltottail)
+                if (syncvaltottail >= g_player[i].syncvalhead)
                     return;
 
                 for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
