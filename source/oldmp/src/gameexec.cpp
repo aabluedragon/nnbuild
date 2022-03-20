@@ -4296,11 +4296,13 @@ static int X_DoExecute(void)
     }
 
     case CON_PSTOMP:
+    {
         insptr++;
         if (g_player[g_p].ps->knee_incs == 0 && sprite[g_player[g_p].ps->i].xrepeat >= 40)
-            if (cansee(g_sp->x,g_sp->y,g_sp->z-(4<<8),g_sp->sectnum,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z+(16<<8),sprite[g_player[g_p].ps->i].sectnum))
+        {
+            if (cansee(g_sp->x, g_sp->y, g_sp->z - (4 << 8), g_sp->sectnum, g_player[g_p].ps->pos.x, g_player[g_p].ps->pos.y, g_player[g_p].ps->pos.z + (16 << 8), sprite[g_player[g_p].ps->i].sectnum))
             {
-                for (j=MAXPLAYERS-1; j >= 0; j--) // Anyone already stomping this guy?
+                for (j = MAXPLAYERS - 1; j >= 0; j--) // Anyone already stomping this guy?
                 {
                     if (g_player[j].ps == NULL || !g_player[j].connected)
                         continue;
@@ -4312,12 +4314,16 @@ static int X_DoExecute(void)
                 if (j == -1)
                 {
                     g_player[g_p].ps->knee_incs = 1;
+
                     if (g_player[g_p].ps->weapon_pos == 0)
                         g_player[g_p].ps->weapon_pos = -1;
+
                     g_player[g_p].ps->actorsqu = g_i;
                 }
             }
+        }
         break;
+    }
 
     case CON_IFAWAYFROMWALL:
     {
