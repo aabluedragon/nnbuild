@@ -189,8 +189,8 @@ static int A_CheckSquished(int i, int p)
 #ifndef EDUKE32_STANDALONE
     if (EDUKE32_PREDICT_FALSE(pSprite->pal == 1)) // frozen
     {
-        pActor->picnum = SHOTSPARK1;
-        pActor->extra = 1;
+        pActor->htpicnum = SHOTSPARK1;
+        pActor->htextra = 1;
         return 0;
     }
 #endif
@@ -1304,8 +1304,8 @@ static int X_DoExecute(void)
                         A_PlaySound(SQUISHED, g_i);
                         A_Spawn(g_i, BLOODPOOL);
                     }
-                    actor[g_i].picnum = SHOTSPARK1;
-                    actor[g_i].extra = 1;
+                    actor[g_i].htpicnum = SHOTSPARK1;
+                    actor[g_i].htextra = 1;
                     g_sp->zvel = 0;
                 }
                 else if (g_sp->zvel > 2048 && sector[g_sp->sectnum].lotag != ST_1_ABOVE_WATER)
@@ -2703,7 +2703,7 @@ static int X_DoExecute(void)
 
     case CON_IFWASWEAPON:
         insptr++;
-        X_DoConditional(actor[g_i].picnum == *insptr);
+        X_DoConditional(actor[g_i].htpicnum == *insptr);
         break;
 
     case CON_IFAI:
@@ -2871,9 +2871,9 @@ static int X_DoExecute(void)
             p->knee_incs = 0;
             p->actorsqu = -1;
 
-            actor[g_i].extra = -1;
-            actor[g_i].owner = g_i;
-            actor[g_i].picnum = g_sp->picnum;
+            actor[g_i].htextra = -1;
+            actor[g_i].htowner = g_i;
+            actor[g_i].htpicnum = g_sp->picnum;
 
             actor[g_i].cgg = 0;
             actor[g_i].movflag = 0;
@@ -3085,7 +3085,7 @@ static int X_DoExecute(void)
 
     case CON_IFSPAWNEDBY:
         insptr++;
-        X_DoConditional(actor[g_i].picnum == *insptr);
+        X_DoConditional(actor[g_i].htpicnum == *insptr);
         break;
 
     case CON_WACKPLAYER:

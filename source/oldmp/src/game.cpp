@@ -3409,7 +3409,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
 
     if (s_ow > -1 && s_ow < MAXSPRITES)
     {
-        actor[i].picnum = sprite[s_ow].picnum;
+        actor[i].htpicnum = sprite[s_ow].picnum;
         actor[i].floorz = actor[s_ow].floorz;
         actor[i].ceilingz = actor[s_ow].ceilingz;
     }
@@ -3419,8 +3419,8 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
 
     actor[i].timetosleep = 0;
     actor[i].actorstayput = -1;
-    actor[i].extra = -1;
-    actor[i].owner = s_ow;
+    actor[i].htextra = -1;
+    actor[i].htowner = s_ow;
     actor[i].cgg = 0;
     actor[i].movflag = 0;
     actor[i].tempang = 0;
@@ -3495,18 +3495,18 @@ int A_Spawn(int j, int pn)
     {
         i = A_InsertSprite(sprite[j].sectnum,sprite[j].x,sprite[j].y,sprite[j].z
                            ,pn,0,0,0,0,0,0,j,0);
-        actor[i].picnum = sprite[j].picnum;
+        actor[i].htpicnum = sprite[j].picnum;
     }
     else
     {
         i = pn;
-        actor[i].picnum = PN(i);
+        actor[i].htpicnum = PN(i);
         actor[i].timetosleep = 0;
-        actor[i].extra = -1;
+        actor[i].htextra = -1;
 
         actor[i].bpos = sprite[i].xyz;
 
-        OW(i) = actor[i].owner = i;
+        OW(i) = actor[i].htowner = i;
         actor[i].cgg = 0;
         actor[i].movflag = 0;
         actor[i].tempang = 0;
@@ -6068,7 +6068,7 @@ PALONLY:
         case SCRAP3__STATIC:
         case SCRAP4__STATIC:
         case SCRAP5__STATIC:
-            if (actor[i].picnum == BLIMP && t->picnum == SCRAP1 && s->yvel >= 0)
+            if (actor[i].htpicnum == BLIMP && t->picnum == SCRAP1 && s->yvel >= 0)
                 t->picnum = s->yvel;
             else t->picnum += T1(i);
             t->shade -= 6;
@@ -6661,13 +6661,13 @@ FOUNDCHEAT:
                     {
                         ud.god = 0;
                         sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                        actor[g_player[myconnectindex].ps->i].extra = -1;
+                        actor[g_player[myconnectindex].ps->i].htextra = -1;
                         g_player[myconnectindex].ps->last_extra = g_player[myconnectindex].ps->max_player_health;
                         P_DoQuote(QUOTE_CHEAT_GODMODE_OFF,g_player[myconnectindex].ps);
                     }
 
                     sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                    actor[g_player[myconnectindex].ps->i].extra = 0;
+                    actor[g_player[myconnectindex].ps->i].htextra = 0;
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -6706,13 +6706,13 @@ FOUNDCHEAT:
                     else
                     {
                         sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                        actor[g_player[myconnectindex].ps->i].extra = -1;
+                        actor[g_player[myconnectindex].ps->i].htextra = -1;
                         g_player[myconnectindex].ps->last_extra = g_player[myconnectindex].ps->max_player_health;
                         P_DoQuote(QUOTE_CHEAT_GODMODE_OFF,g_player[myconnectindex].ps);
                     }
 
                     sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                    actor[g_player[myconnectindex].ps->i].extra = 0;
+                    actor[g_player[myconnectindex].ps->i].htextra = 0;
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -10315,7 +10315,7 @@ static int G_DoMoveThings(void)
             g_player[i].ps->team = g_player[i].pteam;
             if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
             {
-                actor[g_player[i].ps->i].picnum = APLAYERTOP;
+                actor[g_player[i].ps->i].htpicnum = APLAYERTOP;
                 P_QuickKill(g_player[i].ps);
             }
         }

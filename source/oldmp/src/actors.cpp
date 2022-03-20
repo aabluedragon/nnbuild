@@ -162,9 +162,9 @@ void G_AddMonsterKills(int32_t spriteNum, int32_t amount)
 
     ud.monsters_killed += amount;
 
-    if (pActor->owner >= 0)
+    if (pActor->htowner >= 0)
     {
-        auto killerSprite = &sprite[pActor->owner];
+        auto killerSprite = &sprite[pActor->htowner];
         if (killerSprite->picnum == APLAYER)
         {
             int32_t playerNum = killerSprite->yvel;
@@ -465,17 +465,17 @@ SKIPWALLCHECK:
                             goto BOLT;
                     }
 
-                    actor[j].ang = getangle(sj->x-s->x,sj->y-s->y);
+                    actor[j].htang = getangle(sj->x-s->x,sj->y-s->y);
 
                     if (s->picnum == RPG && sj->extra > 0)
-                        actor[j].picnum = RPG;
+                        actor[j].htpicnum = RPG;
                     else if (A_CheckSpriteFlags(i,SFLAG_PROJECTILE) && actor[i].projectile.workslike & PROJECTILE_RADIUS_PICNUM && sj->extra > 0)
-                        actor[j].picnum = s->picnum;
+                        actor[j].htpicnum = s->picnum;
                     else
                     {
                         if (s->picnum == SHRINKSPARK)
-                            actor[j].picnum = SHRINKSPARK;
-                        else actor[j].picnum = RADIUSEXPLOSION;
+                            actor[j].htpicnum = SHRINKSPARK;
+                        else actor[j].htpicnum = RADIUSEXPLOSION;
                     }
 
                     if (s->picnum != SHRINKSPARK)
@@ -500,9 +500,9 @@ SKIPWALLCHECK:
                         }
 
                         if (additiveDamage)
-                            actor[j].extra += damage;
+                            actor[j].htextra += damage;
                         else
-                            actor[j].extra = damage;
+                            actor[j].htextra = damage;
 
                         if (!A_CheckSpriteFlags(j, SFLAG_NODAMAGEPUSH))
                         {
@@ -525,7 +525,7 @@ SKIPWALLCHECK:
                                 sj->picnum == STATUEFLASH || sj->picnum == SPACEMARINE || sj->picnum == QUEBALL || sj->picnum == STRIPEBALL)
                             A_DamageObject_Internal(j, i);
                     }
-                    else if (s->extra == 0) actor[j].extra = 0;
+                    else if (s->extra == 0) actor[j].htextra = 0;
 
                     if (sj->picnum != RADIUSEXPLOSION &&
                             s->owner >= 0 && sprite[s->owner].statnum < MAXSTATUS)
@@ -538,7 +538,7 @@ SKIPWALLCHECK:
                                 G_ClearCameraView(g_player[p].ps);
                             }
                         }
-                        actor[j].owner = s->owner;
+                        actor[j].htowner = s->owner;
                     }
                 }
             }
@@ -970,7 +970,7 @@ int A_IncurDamage(int sn)
     int j,p;
     spritetype *npc;
 
-    if (actor[sn].extra >= 0)
+    if (actor[sn].htextra >= 0)
     {
         if (sprite[sn].extra >= 0)
         {
@@ -978,56 +978,56 @@ int A_IncurDamage(int sn)
 
             if (npc->picnum == APLAYER)
             {
-                if (ud.god && actor[sn].picnum != SHRINKSPARK) return -1;
+                if (ud.god && actor[sn].htpicnum != SHRINKSPARK) return -1;
 
                 p = npc->yvel;
-                j = actor[sn].owner;
+                j = actor[sn].htowner;
 
                 if (j >= 0 && (sprite[j].picnum == APLAYER))
                 {
                     if ((sn != j) && G_BlockFriendlyFire(p, sprite[j].yvel)) // Check if hitting ally and not damaging self.
                     {
                         // Nullify damage and cancel.
-                        actor[sn].owner = -1;
-                        actor[sn].extra = -1;
-                        actor[sn].picnum = APLAYER;
+                        actor[sn].htowner = -1;
+                        actor[sn].htextra = -1;
+                        actor[sn].htpicnum = APLAYER;
                         return -1;
                     }
                 }
 
-                npc->extra -= actor[sn].extra;
+                npc->extra -= actor[sn].htextra;
 
                 if (j >= 0)
                 {
-                    if (npc->extra <= 0 && actor[sn].picnum != FREEZEBLAST)
+                    if (npc->extra <= 0 && actor[sn].htpicnum != FREEZEBLAST)
                     {
                         npc->extra = 0;
 
                         g_player[p].ps->wackedbyactor = j;
 
-                        if (sprite[actor[sn].owner].picnum == APLAYER && p != sprite[actor[sn].owner].yvel)
+                        if (sprite[actor[sn].htowner].picnum == APLAYER && p != sprite[actor[sn].htowner].yvel)
                             g_player[p].ps->frag_ps = sprite[j].yvel;
 
-                        actor[sn].owner = g_player[p].ps->i;
+                        actor[sn].htowner = g_player[p].ps->i;
                     }
                 }
 
-                if (A_CheckSpriteTileFlags(actor[sn].picnum,SFLAG_PROJECTILE) && (actor[sn].projectile.workslike & PROJECTILE_RPG))
+                if (A_CheckSpriteTileFlags(actor[sn].htpicnum,SFLAG_PROJECTILE) && (actor[sn].projectile.workslike & PROJECTILE_RPG))
                 {
                     g_player[p].ps->vel.x +=
-                        actor[sn].extra*(sintable[(actor[sn].ang+512)&2047])<<2;
+                        actor[sn].htextra*(sintable[(actor[sn].htang+512)&2047])<<2;
                     g_player[p].ps->vel.y +=
-                        actor[sn].extra*(sintable[actor[sn].ang&2047])<<2;
+                        actor[sn].htextra*(sintable[actor[sn].htang&2047])<<2;
                 }
-                else if (A_CheckSpriteTileFlags(actor[sn].picnum,SFLAG_PROJECTILE))
+                else if (A_CheckSpriteTileFlags(actor[sn].htpicnum,SFLAG_PROJECTILE))
                 {
                     g_player[p].ps->vel.x +=
-                        actor[sn].extra*(sintable[(actor[sn].ang+512)&2047])<<1;
+                        actor[sn].htextra*(sintable[(actor[sn].htang+512)&2047])<<1;
                     g_player[p].ps->vel.y +=
-                        actor[sn].extra*(sintable[actor[sn].ang&2047])<<1;
+                        actor[sn].htextra*(sintable[actor[sn].htang&2047])<<1;
                 }
 
-                switch (DynamicTileMap[actor[sn].picnum])
+                switch (DynamicTileMap[actor[sn].htpicnum])
                 {
                 case RADIUSEXPLOSION__STATIC:
                 case RPG__STATIC:
@@ -1037,35 +1037,35 @@ int A_IncurDamage(int sn)
                 case OOZFILTER__STATIC:
                 case EXPLODINGBARREL__STATIC:
                     g_player[p].ps->vel.x +=
-                        actor[sn].extra*(sintable[(actor[sn].ang+512)&2047])<<2;
+                        actor[sn].htextra*(sintable[(actor[sn].htang+512)&2047])<<2;
                     g_player[p].ps->vel.y +=
-                        actor[sn].extra*(sintable[actor[sn].ang&2047])<<2;
+                        actor[sn].htextra*(sintable[actor[sn].htang&2047])<<2;
                     break;
                 default:
                     g_player[p].ps->vel.x +=
-                        actor[sn].extra*(sintable[(actor[sn].ang+512)&2047])<<1;
+                        actor[sn].htextra*(sintable[(actor[sn].htang+512)&2047])<<1;
                     g_player[p].ps->vel.y +=
-                        actor[sn].extra*(sintable[actor[sn].ang&2047])<<1;
+                        actor[sn].htextra*(sintable[actor[sn].htang&2047])<<1;
                     break;
                 }
             }
             else
             {
-                if (actor[sn].extra == 0)
-                    if (actor[sn].picnum == SHRINKSPARK && npc->xrepeat < 24)
+                if (actor[sn].htextra == 0)
+                    if (actor[sn].htpicnum == SHRINKSPARK && npc->xrepeat < 24)
                         return -1;
 
-                npc->extra -= actor[sn].extra;
+                npc->extra -= actor[sn].htextra;
                 if (npc->picnum != RECON && npc->owner >= 0 && sprite[npc->owner].statnum < MAXSTATUS)
-                    npc->owner = actor[sn].owner;
+                    npc->owner = actor[sn].htowner;
             }
 
-            actor[sn].extra = -1;
-            return actor[sn].picnum;
+            actor[sn].htextra = -1;
+            return actor[sn].htpicnum;
         }
     }
 
-    actor[sn].extra = -1;
+    actor[sn].htextra = -1;
     return -1;
 }
 
@@ -1398,7 +1398,7 @@ void G_MovePlayerSprite(int playerNum)
 
         if (s->extra > 0)
         {
-            actor[p->i].owner = p->i;
+            actor[p->i].htowner = p->i;
 
             if (ud.god == 0)
             {
@@ -1614,7 +1614,7 @@ static void G_MoveFallers(void)
                 }
                 else
                 {
-                    actor[i].extra = 0;
+                    actor[i].htextra = 0;
                     s->extra = x;
                 }
             }
@@ -2935,9 +2935,9 @@ static void G_MoveWeapons(void)
 
                         if (actor[i].projectile.workslike & PROJECTILE_RPG_IMPACT)
                         {
-                            //actor[j].owner = s->owner;
-                            //actor[j].picnum = s->picnum;
-                            //actor[j].extra += actor[i].projectile.extra;
+                            //actor[j].htowner = s->owner;
+                            //actor[j].htpicnum = s->picnum;
+                            //actor[j].htextra += actor[i].projectile.extra;
 
                             A_DoProjectileEffects(i, &davect, 0);
 
@@ -3121,7 +3121,7 @@ static void G_MoveWeapons(void)
                 switch (DynamicTileMap[s->picnum])
                 {
                 case RPG__STATIC:
-                    if (actor[i].picnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != ST_2_UNDERWATER)
+                    if (actor[i].htpicnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != ST_2_UNDERWATER)
                     {
                         j = A_Spawn(i,SMALLSMOKE);
                         sprite[j].z += (1<<8);
@@ -4223,7 +4223,7 @@ static void G_MoveActors(void)
                             sprite[j].pal = 0;
                         }
 
-                        actor[i].owner = g_player[p].ps->i;
+                        actor[i].htowner = g_player[p].ps->i;
                         G_AddMonsterKills(i, 1);
 
                         t[0] = GREENSLIME_DEAD;
@@ -4535,9 +4535,9 @@ static void G_MoveActors(void)
                     s->extra = *actorscrptr[s->picnum];
                     s->cstat = 257;
 
-                    actor[i].extra = -1;
-                    actor[i].owner = i;
-                    actor[i].picnum = s->picnum;
+                    actor[i].htextra = -1;
+                    actor[i].htowner = i;
+                    actor[i].htpicnum = s->picnum;
                 }
                 goto BOLT;
             }
@@ -5303,7 +5303,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 if (t[2] < 32)
                 {
                     t[2]++;
-                    if (actor[i].picnum == TIRE)
+                    if (actor[i].htpicnum == TIRE)
                     {
                         if (s->xrepeat < 64 && s->yrepeat < 64)
                         {
@@ -5339,7 +5339,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                     if (t[1] == 1) goto BOLT;
                     t[1] = 1;
 
-                    if (actor[i].picnum == TIRE)
+                    if (actor[i].htpicnum == TIRE)
                         g_player[p].ps->footprintcount = 10;
                     else g_player[p].ps->footprintcount = 3;
 

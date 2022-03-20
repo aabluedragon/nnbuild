@@ -3490,37 +3490,37 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     case ACTOR_HTPICNUM :
         if (iSet)
         {
-            actor[iActor].picnum=lValue;
+            actor[iActor].htpicnum=lValue;
             return;
         }
-        Gv_SetVar(lVar2, actor[iActor].picnum, g_i, g_p);
+        Gv_SetVar(lVar2, actor[iActor].htpicnum, g_i, g_p);
         return;
 
     case ACTOR_HTANG:
         if (iSet)
         {
-            actor[iActor].ang=lValue;
+            actor[iActor].htang=lValue;
             return;
         }
-        Gv_SetVar(lVar2, actor[iActor].ang, g_i, g_p);
+        Gv_SetVar(lVar2, actor[iActor].htang, g_i, g_p);
         return;
 
     case ACTOR_HTEXTRA:
         if (iSet)
         {
-            actor[iActor].extra=lValue;
+            actor[iActor].htextra=lValue;
             return;
         }
-        Gv_SetVar(lVar2,actor[iActor].extra, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].htextra, g_i, g_p);
         return;
 
     case ACTOR_HTOWNER:
         if (iSet)
         {
-            actor[iActor].owner=lValue;
+            actor[iActor].htowner=lValue;
             return;
         }
-        Gv_SetVar(lVar2,actor[iActor].owner, g_i, g_p);
+        Gv_SetVar(lVar2,actor[iActor].htowner, g_i, g_p);
         return;
 
     case ACTOR_HTMOVFLAG:

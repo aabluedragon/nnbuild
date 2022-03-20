@@ -4273,7 +4273,7 @@ static void P_HandleFragged(int snum)
     }
     else
     {
-        if (actor[playerSprite].picnum != APLAYERTOP)
+        if (actor[playerSprite].htpicnum != APLAYERTOP)
         {
             if (GTFLAGS(GAMETYPE_TDM))
             {
@@ -4283,7 +4283,7 @@ static void P_HandleFragged(int snum)
             p->fraggedself++;
             if ((unsigned)p->wackedbyactor < MAXSPRITES && A_CheckEnemyTile(sprite[p->wackedbyactor].picnum))
                 Bsprintf(tempbuf, apStrings[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)], "A monster", &g_player[snum].user_name[0]);
-            else if (actor[playerSprite].picnum == NUKEBUTTON)
+            else if (actor[playerSprite].htpicnum == NUKEBUTTON)
                 Bsprintf(tempbuf, "^02%s^02 tried to leave", &g_player[snum].user_name[0]);
             else
             {
@@ -5583,7 +5583,7 @@ HORIZONLY:
                 }
                 else if (A_CheckEnemySprite(&sprite[p->actorsqu]))
                 {
-                    actor[p->actorsqu].owner = p->i;
+                    actor[p->actorsqu].htowner = p->i;
                     G_AddMonsterKills(p->actorsqu, 1);
                     A_DeleteSprite(p->actorsqu);
                 }

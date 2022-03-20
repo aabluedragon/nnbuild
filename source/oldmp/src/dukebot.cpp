@@ -127,7 +127,7 @@ static int32_t DukeBot_GetWeaponScore(int32_t pNum, int32_t spriteNum, int32_t w
         return (p->ammo_amount[weapon] < p->max_ammo_amount[weapon]) ? weapScore[weapon][1] : 0;
 
     // Weapon stay on, we got this weapon, and it's map-spawned? Ignore.
-    if (GTFLAGS(GAMETYPE_WEAPSTAY) && p->gotweapon[weapon] && (actor[spriteNum].picnum == sprite[spriteNum].picnum))
+    if (GTFLAGS(GAMETYPE_WEAPSTAY) && p->gotweapon[weapon] && (actor[spriteNum].htpicnum == sprite[spriteNum].picnum))
         return 0;
 
     if (p->gotweapon[weapon] && (p->ammo_amount[weapon] >= p->max_ammo_amount[weapon]))

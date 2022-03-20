@@ -1390,7 +1390,7 @@ static void insert_player_sprite(int pNum)
 
     p->i = spriteIndex;
     p->frag_ps = pNum;
-    actor[spriteIndex].owner = spriteIndex;
+    actor[spriteIndex].htowner = spriteIndex;
 
     actor[spriteIndex].bpos.x = p->bobposx = p->opos.x = p->pos.x = s->x;
     actor[spriteIndex].bpos.y = p->bobposy = p->opos.y = p->pos.y = s->y;

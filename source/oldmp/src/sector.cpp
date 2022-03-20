@@ -2539,10 +2539,10 @@ void A_DamageObject_Internal(int i,int sn)
                 if (sprite[sn].picnum == FREEZEBLAST && ((PN(i) == APLAYER && sprite[i].pal == 1) || (g_freezerSelfDamage == 0 && sprite[sn].owner == i)))
                     return;
 
-                actor[i].picnum = sprite[sn].picnum;
-                actor[i].extra += sprite[sn].extra;
-                actor[i].ang = sprite[sn].ang;
-                actor[i].owner = sprite[sn].owner;
+                actor[i].htpicnum = sprite[sn].picnum;
+                actor[i].htextra += sprite[sn].extra;
+                actor[i].htang = sprite[sn].ang;
+                actor[i].htowner = sprite[sn].owner;
 
                 if (A_CheckSpriteFlags(i, SFLAG_DAMAGEEVENT))
                 {
@@ -2562,7 +2562,7 @@ void A_DamageObject_Internal(int i,int sn)
                 if (sprite[i].xrepeat < 24 && sprite[sn].picnum == SHRINKSPARK)
                     return;
 
-                if (sprite[actor[i].owner].picnum != APLAYER)
+                if (sprite[actor[i].htowner].picnum != APLAYER)
                     if (ud.player_skill >= 3)
                         sprite[sn].extra += (sprite[sn].extra>>1);
             }
@@ -3527,8 +3527,8 @@ void P_CheckSectors(int snum)
                         {
                             if (ud.noexits && ud.multimode > 1)
                             {
-                                actor[p->i].picnum = NUKEBUTTON;
-                                actor[p->i].extra = 250;
+                                actor[p->i].htpicnum = NUKEBUTTON;
+                                actor[p->i].htextra = 250;
                             }
                             else
                             {

@@ -9,7 +9,7 @@ typedef struct {
     vec3_t bpos;
     int flags;
     intptr_t temp_data[10]; // sometimes used to hold pointers to con code
-    short picnum, ang, extra, owner, movflag;
+    short htpicnum, htang, htextra, htowner, movflag;
     short tempang, actorstayput, dispicnum;
     short timetosleep;
     char cgg;
