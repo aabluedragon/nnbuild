@@ -367,7 +367,6 @@ void  Net_AddSyncInfoToPacket(int *j)
 
 void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
 {
-    int i;
     playerdata_t *ppo = &g_player[otherconnectindex];
 
     // if ready2send is not set, or player is disconnected then don't try to get sync info
@@ -391,6 +390,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
     // Temporary hack: Only the server will detect desyncs for now, since it seems to be royally bunged the fuck up on clients.
     if (myconnectindex == connecthead)
     {
+        int32_t i = 0;
         TRAVERSE_CONNECT(i)
             if (g_player[i].syncvalhead == syncvaltottail)
                 return;
