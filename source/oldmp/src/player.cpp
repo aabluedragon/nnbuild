@@ -5142,7 +5142,7 @@ void P_ProcessInput(int snum)
                 X_OnEvent(EVENT_CROUCH, playerSprite, snum, -1);
                 if (Gv_GetVar(g_iReturnVarID, playerSprite, snum) == 0)
                 {
-                    p->pos.z += (2048 + 768);
+                    p->pos.z += PLAYER_CROUCH_INC;
                     p->crack_time = 777;
                 }
             }

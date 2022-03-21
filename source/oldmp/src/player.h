@@ -8,7 +8,7 @@
 
 // Definitions
 #define PHEIGHT (38<<8)
-
+#define PLAYER_CROUCH_INC (11 << 8)
 #define PLAYER_ZOFF_NORMAL (40 << 8)
 #define PLAYER_ZOFF_WATER (34 << 8)
 #define PLAYER_ZOFF_SHRUNK (12 << 8)
