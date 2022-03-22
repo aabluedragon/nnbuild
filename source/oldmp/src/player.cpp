@@ -199,7 +199,8 @@ void P_QuickKill(DukePlayer_t *p)
 
     sprite[p->i].extra = 0;
     sprite[p->i].cstat |= 32768;
-    if (ud.god == 0) A_DoGuts(p->i,JIBS6,8);
+    if (ud.god == 0)
+        A_DoGuts(p->i,JIBS6,8);
     return;
 }
 
@@ -4895,9 +4896,9 @@ void P_ProcessInput(int snum)
             p->vel.z = 0;
         }
 
-        if ((p->on_warping_sector == 0 || ceilZ != p->truecz) && p->pos.z < ceilZ + 1024)
+        if ((p->on_warping_sector == 0 || ceilZ != p->truecz) && p->pos.z < ceilZ + PMINHEIGHT)
         {
-            p->pos.z = ceilZ + 1024;
+            p->pos.z = ceilZ + PMINHEIGHT;
             p->vel.z = 0;
         }
 
@@ -5378,7 +5379,7 @@ HORIZONLY:
 
         int moveResult = clipmove_old(&p->pos.x, &p->pos.y,
             &p->pos.z, &p->cursectnum,
-            p->vel.x, p->vel.y, 164L, (4L << 8), (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : PLAYER_STEP_HEIGHT, CLIPMASK0);
+            p->vel.x, p->vel.y, 164L, PMINHEIGHT, (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : PLAYER_STEP_HEIGHT, CLIPMASK0);
 
         if (p->jetpack_on == 0 && psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;

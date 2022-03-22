@@ -983,9 +983,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
                             moveFlags |= BOT_MOVE_CROUCH;
                     }
 
-                    if ((p->jetpack_on || pSect->lotag == ST_2_UNDERWATER) && floorZ <= p->pos.z + PHEIGHT)
+                    if ((p->jetpack_on || pSect->lotag == ST_2_UNDERWATER) && floorZ <= p->pos.z + PLAYER_STEP_HEIGHT)
                         moveFlags |= BOT_MOVE_ASCEND;
-                    else if ((p->jetpack_on || pSect->lotag == ST_2_UNDERWATER) && ceilZ >= p->pos.z - PHEIGHT)
+                    else if ((p->jetpack_on || pSect->lotag == ST_2_UNDERWATER) && ceilZ >= p->pos.z - PMINHEIGHT)
                         moveFlags |= BOT_MOVE_DESCEND;
                     else if ((p->jetpack_amount > 106 && pSect->lotag != ST_2_UNDERWATER) && floorZ <= p->pos.z - (72 << 8))
                         moveFlags |= BOT_MOVE_ASCEND;
