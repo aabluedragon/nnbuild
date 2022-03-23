@@ -137,17 +137,15 @@ void playerColor_delete(int palnum)
 
 void P_UpdateScreenPal(DukePlayer_t *p)
 {
-    if (p->heat_on) p->palette = SLIMEPAL;
-    else if (p->cursectnum < 0) p->palette = BASEPAL;
-    else if ((sector[p->cursectnum].ceilingpicnum >= FLOORSLIME) && (sector[p->cursectnum].ceilingpicnum <= FLOORSLIME + 2))
-    {
+    if (p->heat_on)
         p->palette = SLIMEPAL;
-    }
+    else if (p->cursectnum < 0)
+        p->palette = BASEPAL;
+    else if ((sector[p->cursectnum].ceilingpicnum >= FLOORSLIME) && (sector[p->cursectnum].ceilingpicnum <= FLOORSLIME + 2))
+        p->palette = SLIMEPAL;
     else
-    {
-        if (sector[p->cursectnum].lotag == ST_2_UNDERWATER) p->palette = WATERPAL;
-        else p->palette = BASEPAL;
-    }
+        p->palette = (sector[p->cursectnum].lotag == ST_2_UNDERWATER) ? WATERPAL : BASEPAL;
+
     g_restorePalette = 1;
 }
 
