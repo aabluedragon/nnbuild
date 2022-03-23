@@ -289,7 +289,7 @@ int A_FurthestVisiblePoint(int iActor,spritetype *ts,int *dax,int *day)
         for (j=ts->ang;j<(2048+ts->ang);j+=(angincs-(krand()&511)))
         {
             vec3_t origin = ts->xyz;
-            origin.z -= (16 << 8);//ZOFFSET2;
+            origin.z -= ZOFFSET2;
 
             hitscan(&origin, ts->sectnum, sintable[(j + 512) & 2047], sintable[j & 2047], 16384 - (krand() & 32767), &hit, CLIPMASK1);
 
@@ -947,47 +947,20 @@ static int X_DoExecute(void)
 
         // select sprite for monster to target
         // if holoduke is on, let them target holoduke first.
-        //
         if (g_player[g_p].ps->holoduke_on >= 0)
         {
             s = &sprite[g_player[g_p].ps->holoduke_on];
-            j = cansee(g_sp->x,g_sp->y,g_sp->z-(krand()&((32<<8)-1)),g_sp->sectnum,
-                       s->x,s->y,s->z,s->sectnum);
 
-            if (j == 0)
-            {
-                // they can't see player's holoduke
-                // check for player...
-                s = &sprite[g_player[g_p].ps->i];
-            }
+            if (!cansee(g_sp->x, g_sp->y, g_sp->z - (krand() & ((32 << 8) - 1)), g_sp->sectnum, s->x, s->y, s->z, s->sectnum))
+                s = &sprite[g_player[g_p].ps->i]; // they can't see player's holoduke, check for player...
         }
 
         // can they see player, (or player's holoduke)
-        j = cansee(g_sp->x,g_sp->y,g_sp->z-(krand()&((47<<8))),g_sp->sectnum,
-                   s->x,s->y,s->z-(24<<8),s->sectnum);
+        int32_t canSee = cansee(g_sp->x, g_sp->y, g_sp->z - (krand() & ((47 << 8))), g_sp->sectnum, s->x, s->y, s->z - (24 << 8), s->sectnum);
 
-        if (j == 0)
-        {
-            // they can't see it.
-
-            // Huh?.  This does nothing....
-            // (the result is always j==0....)
-//            if ((klabs(actor[g_i].lastvx-g_sp->x)+klabs(actor[g_i].lastvy-g_sp->y)) <
-//                    (klabs(actor[g_i].lastvx-s->x)+klabs(actor[g_i].lastvy-s->y)))
-            //              j = 0;
-
-            // um yeah, this if() will always fire....
-            //        if (j == 0)
-            {
-                // search around for target player
-
-                // also modifies 'target' x&y if found..
-
-                j = 1;
-                if (A_FurthestVisiblePoint(g_i,s,&actor[g_i].lastvx,&actor[g_i].lastvy) == -1)
-                    j = 0;
-            }
-        }
+        // search around for target player, also modifies 'target' x&y if found..
+        if (!canSee && A_FurthestVisiblePoint(g_i,s,&actor[g_i].lastvx,&actor[g_i].lastvy) != -1)
+            canSee = 1;
         else
         {
             // else, they did see it.
@@ -996,7 +969,7 @@ static int X_DoExecute(void)
             actor[g_i].lastvy = s->y;
         }
 
-        if (j && (g_sp->statnum == 1 || g_sp->statnum == 6))
+        if (canSee && (g_sp->statnum == STAT_ACTOR || g_sp->statnum == STAT_STANDABLE))
             actor[g_i].timetosleep = SLEEPTIME;
 
         X_DoConditional(j);
