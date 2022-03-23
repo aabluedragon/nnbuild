@@ -684,6 +684,12 @@ int32_t CONFIG_ReadSetup(void)
             SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "UseModels",&dummy);
             usemodels = dummy != 0;
         }
+
+#ifdef POLYMER
+        int32_t rendmode = 0;
+        SCRIPT_GetNumber(ud.config.scripthandle, "Screen Setup", "Polymer", &rendmode);
+        glrendmode = (rendmode > 0) ? REND_POLYMER : REND_POLYMOST;
+#endif
 #endif
 
         SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Executions",&ud.executions);
@@ -823,6 +829,10 @@ void CONFIG_WriteSetup(uint32_t flags)
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "ScreenWidth", ud.config.ScreenWidth, false, false);  // JBF 20031206
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "ScreenHeight", ud.config.ScreenHeight, false, false);    // JBF 20031206
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "ScreenMode", ud.config.ScreenMode, false, false);    // JBF 20031206
+
+#ifdef POLYMER
+    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "Polymer", glrendmode == REND_POLYMER, FALSE, FALSE);
+#endif
 
     SCRIPT_PutString(ud.config.scripthandle, "Setup", "SelectedGRP", g_grpNamePtr);
 
