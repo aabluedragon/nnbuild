@@ -20,6 +20,28 @@ extern ActorData_t actor[MAXSPRITES];
 
 extern intptr_t* actorscrptr[MAXTILES];
 
+#ifdef POLYMER
+typedef struct
+{
+    _prlight* lightptr;              // 4b/8b  aligned on 96 bytes
+    vec3_t lightoffset;
+    int16_t lightId, lightmaxrange;  // 4b
+    int16_t lightrange, olightrange;
+    int16_t lightang, olightang;
+    uint8_t lightcount, lightcolidx;   // 4b
+} practor_t;
+
+// NOTE: T5 is AC_ACTION_ID
+#define LIGHTRAD_PICOFS(i) (T5(i) ? *(apScript + T5(i)) + (*(apScript + T5(i) + 2)) * AC_CURFRAME(actor[i].t_data) : 0)
+
+// this is the same crap as in game.c's tspr manipulation.  puke.
+// XXX: may access tilesizy out-of-bounds by bad user code.
+#define LIGHTRAD(s) (sprite[s].yrepeat * tilesiz[sprite[s].picnum + LIGHTRAD_PICOFS(s)].y)
+#define LIGHTRAD2(s) ((sprite[s].yrepeat + ((rand() % sprite[s].yrepeat)>>2)) * tilesiz[sprite[s].picnum + LIGHTRAD_PICOFS(s)].y)
+#define LIGHTRAD3(s) (sprite[s].yrepeat * tilesiz[sprite[s].picnum].y)
+#define LIGHTZOFF(s) ((sprite[s].yrepeat*tilesiz[sprite[s].picnum].y)<<1)
+#endif
+
 void G_UpdateInterpolations(void);
 int G_SetInterpolation(int32_t* const posptr);
 void G_StopInterpolation(const int32_t* const posptr);

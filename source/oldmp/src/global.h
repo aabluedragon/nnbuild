@@ -131,6 +131,9 @@ G_EXTERN ClockTicks cloudtotalclock;
 G_EXTERN map_t g_mapInfo[(MAXVOLUMES + 1) * MAXLEVELS]; // +1 volume for "intro", "briefing" music
 G_EXTERN PlayerSpawn_t g_playerSpawnPoints[MAXSPAWNPOINTS];
 G_EXTERN DukeStatus_t sbar;
+#ifdef POLYMER
+G_EXTERN practor_t practor[MAXSPRITES];
+#endif
 
 // Multiplayer/Demos
 G_EXTERN int screenpeek;
