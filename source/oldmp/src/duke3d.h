@@ -281,6 +281,7 @@ extern int g_scriptVersion, g_Shareware, g_gameType;
 #define STAT_FX             11
 #define STAT_FALLER         12
 #define STAT_DUMMYPLAYER    13
+#define STAT_LIGHT          14
 
 #define    ALT_IS_PRESSED ( KB_KeyPressed( sc_RightAlt ) || KB_KeyPressed( sc_LeftAlt ) )
 #define    SHIFTS_IS_PRESSED ( KB_KeyPressed( sc_RightShift ) || KB_KeyPressed( sc_LeftShift ) )

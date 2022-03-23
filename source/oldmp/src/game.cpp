@@ -4874,10 +4874,12 @@ int A_Spawn(int j, int pn)
                 break;
             case SE_46_ROR_PROTECTED:
                 ror_protectedsectors[sp->sectnum] = 1;
-                fallthrough__;
+                changespritestat(i, STAT_EFFECTOR);
+                goto SPAWN_END;
+                break;
             case SE_49_POINT_LIGHT:
             case SE_50_SPOT_LIGHT:
-                changespritestat(i, STAT_EFFECTOR);
+                changespritestat(i, STAT_LIGHT);
                 goto SPAWN_END;
                 break;
             }
