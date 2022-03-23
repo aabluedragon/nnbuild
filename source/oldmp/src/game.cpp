@@ -2174,7 +2174,7 @@ void G_DisplayRest(int smoothratio)
     if (g_restorePalette)
     {
         //videoSetPalette(ud.brightness>>2,&pp->palette[0],0);
-        P_SetGamePalette(pp,pp->palette,2);
+        P_SetGamePalette(pp, pp->palette, 2);
         g_restorePalette = 0;
     }
 
@@ -2775,6 +2775,10 @@ static void G_SE40(int32_t smoothratio)
                 }
             }
 
+#ifdef POLYMER
+            if (videoGetRenderMode() == REND_POLYMER)
+                polymer_setanimatesprites(G_DoSpriteAnimations, CAMERA(pos.x), CAMERA(pos.y), CAMERA(pos.z), fix16_to_int(CAMERA(q16ang)), smoothratio);
+#endif
             renderDrawRoomsQ16(sprite[sprite2].x + x, sprite[sprite2].y + y,
                 z + renderz, ud.cameraq16ang, ud.cameraq16horiz, sect);
             drawing_ror = 1 + level;
@@ -2810,6 +2814,10 @@ static void G_SE40(int32_t smoothratio)
 
 void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q16horiz, int32_t smoothratio)
 {
+#ifdef POLYMER
+    if (videoGetRenderMode() == REND_POLYMER)
+        return;
+#endif
     if ((gotpic[MIRROR >> 3] & pow2char[MIRROR & 7]))
     {
         if (g_mirrorCount == 0)
@@ -2991,15 +2999,15 @@ void G_DrawRooms(int snum,int smoothratio)
         ud.cameraq16ang = fix16_from_int(actor[ud.camerasprite].tempang
             +mulscale16(((pSprite->ang+1024-actor[ud.camerasprite].tempang)&2047)-1024,smoothratio));
 
-#if 0//POLYMER
-        if (videoGetRenderMode() == 4)
-            polymer_setanimatesprites(G_DoSpriteAnimations, s->x, s->y, ud.cameraang, smoothratio);
-#endif
-
         G_SE40(smoothratio);
 
+#ifdef POLYMER
+        if (videoGetRenderMode() == REND_POLYMER)
+            polymer_setanimatesprites(G_DoSpriteAnimations, pSprite->x, pSprite->y, pSprite->z - ZOFFSET6, fix16_to_int(CAMERA(q16ang)), smoothratio);
+#endif
+
         yax_preparedrawrooms();
-        renderDrawRoomsQ16(pSprite->x, pSprite->y, pSprite->z-(4<<8),ud.cameraq16ang, pSprite->yvel, pSprite->sectnum);
+        renderDrawRoomsQ16(pSprite->x, pSprite->y, pSprite->z - ZOFFSET6, ud.cameraq16ang, pSprite->yvel, pSprite->sectnum);
         yax_drawrooms(G_DoSpriteAnimations, pSprite->sectnum, 0, smoothratio);
         G_DoSpriteAnimations(pSprite->x, pSprite->y, pSprite->z, fix16_to_int(ud.cameraq16ang),smoothratio);
         renderDrawMasks();
@@ -3200,11 +3208,12 @@ void G_DrawRooms(int snum,int smoothratio)
         G_HandleMirror(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, ud.cameraq16ang, ud.cameraq16horiz, smoothratio);
         G_ClearGotMirror();
 
-#if 0//POLYMER
-        if (videoGetRenderMode() == 4)
-            polymer_setanimatesprites(G_DoSpriteAnimations, ud.camerapos.x,ud.camerapos.y,ud.cameraang,smoothratio);
-#endif
         G_SE40(smoothratio);
+
+#ifdef POLYMER
+        if (videoGetRenderMode() == REND_POLYMER)
+            polymer_setanimatesprites(G_DoSpriteAnimations, CAMERA(pos.x), CAMERA(pos.y), CAMERA(pos.z), fix16_to_int(CAMERA(q16ang)), smoothratio);
+#endif
 
         yax_preparedrawrooms();
         renderDrawRoomsQ16(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,ud.camerasect);
