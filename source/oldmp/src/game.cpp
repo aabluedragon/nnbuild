@@ -3113,7 +3113,7 @@ void G_DrawRooms(int snum,int smoothratio)
             //renderSetRollAngle(p->orotscrnang + mulscale16(((p->rotscrnang - p->orotscrnang + 1024)&2047)-1024,smoothratio));
             //p->orotscrnang = p->rotscrnang; // JBF: save it for next time
 
-            renderSetRollAngle((p->rotscrnang & 2047));
+            renderSetRollAngle(((p->rotscrnang+1024) & 2047)-1024);
 #endif
         }
 #ifdef USE_OPENGL
