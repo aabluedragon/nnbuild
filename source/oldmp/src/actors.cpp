@@ -2935,6 +2935,7 @@ static void G_MoveWeapons(void)
 
                         if (actor[i].projectile.workslike & PROJECTILE_RPG_IMPACT)
                         {
+                            // [JM] Commented out because the A_DamageObject above does this now, allowing it to be modified by EVENT_DAMAGESPRITE.
                             //actor[j].htowner = s->owner;
                             //actor[j].htpicnum = s->picnum;
                             //actor[j].htextra += actor[i].projectile.extra;

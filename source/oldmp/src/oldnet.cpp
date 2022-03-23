@@ -1509,7 +1509,7 @@ void Net_DoPrediction(int state)
 
 void Net_ClearFIFO(void)
 {
-    syncvaltail = syncvaltottail = 0;
+    syncvalsendtail = syncvalchecktail = 0;
     memset(&syncstat, 0, sizeof(syncstat));
     memset(&g_szfirstSyncMsg, 0, sizeof(g_szfirstSyncMsg));
     g_foundSyncError = 0;

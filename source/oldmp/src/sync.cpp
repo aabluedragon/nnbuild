@@ -30,7 +30,7 @@ char g_szfirstSyncMsg[MAXSYNCBYTES][60];
 int g_foundSyncError = 0;
 
 char syncstat[MAXSYNCBYTES];
-int syncvaltail, syncvaltottail;
+int syncvalsendtail, syncvalchecktail;
 
 static int crctable[256];
 #define updatecrc(dcrc,xz) (dcrc = (crctable[((dcrc)>>8)^((xz)&255)]^((dcrc)<<8)))
@@ -351,18 +351,45 @@ void  Net_AddSyncInfoToPacket(int *j)
     int32_t syncSizePos = (*j)++;
     uint8_t syncSize = 0;
     // sync testing
-    while (g_player[myconnectindex].syncvalhead != syncvaltail && syncSize < 4)
+    while (g_player[myconnectindex].syncvalhead > syncvalsendtail && syncSize < 4)
     {
         for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
         {
-            packbuf[(*j)++] = g_player[myconnectindex].syncval[syncvaltail & (SYNCFIFOSIZ - 1)][sb];
+            packbuf[(*j)++] = g_player[myconnectindex].syncval[syncvalsendtail & (SYNCFIFOSIZ - 1)][sb];
         }
 
-        syncvaltail++;
+        syncvalsendtail++;
         syncSize++;
     }
     
     packbuf[syncSizePos] = syncSize;
+}
+
+// Returns false if host's sync check tail has caught up to a client's sync head.
+// Or, if we're a client, and our check tail has caught up to the host's sync head.
+// (In which we need to wait until the host has caught up so we don't get a totally fake, bullshit out-of-sync).
+bool Sync_CheckSyncStat(int32_t playerNum)
+{
+    if ((syncvalchecktail >= g_player[playerNum].syncvalhead) || (syncvalchecktail >= g_player[connecthead].syncvalhead))
+        return false;
+
+    for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
+    {
+        char head_sync = g_player[connecthead].syncval[syncvalchecktail & (SYNCFIFOSIZ - 1)][sb];
+        char player_sync = g_player[playerNum].syncval[syncvalchecktail & (SYNCFIFOSIZ - 1)][sb];
+        if (player_sync != head_sync)
+        {
+            if (!syncstat[sb])
+            {
+                OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d (syncvalhead: %d), Player CRC: %d (syncvalhead: %d). syncvalchecktail: %d\n", playerNum, syncType[sb].name, head_sync, g_player[connecthead].syncvalhead, player_sync, g_player[playerNum].syncvalhead, syncvalchecktail);
+                syncstat[sb] = 1;
+            }
+
+            desynched_players[playerNum] = 1;
+        }
+    }
+
+    return true;
 }
 
 void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
@@ -387,42 +414,26 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
         ppo->syncvalhead++;
     }
 
-    // Temporary hack: Only the server will detect desyncs for now, since it seems to be royally bunged the fuck up on clients.
-    if (myconnectindex == connecthead)
+    // update syncstat
+    // if any of the syncstat vars is non-0 then there is a problem
+    while (1)
     {
-        int32_t i = 0;
-        TRAVERSE_CONNECT(i)
-            if (syncvaltottail >= g_player[i].syncvalhead)
-                return;
-
-        // update syncstat
-        // if any of the syncstat vars is non-0 then there is a problem
-        while (1)
+        if (myconnectindex == connecthead)
         {
+            int32_t i = 0;
             TRAVERSE_CONNECT(i)
             {
-                if (syncvaltottail >= g_player[i].syncvalhead)
+                if (!Sync_CheckSyncStat(i))
                     return;
-
-                for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
-                {
-                    char head_sync = g_player[connecthead].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
-                    char player_sync = g_player[i].syncval[syncvaltottail & (SYNCFIFOSIZ - 1)][sb];
-                    if (player_sync != head_sync)
-                    {
-                        if (!syncstat[sb])
-                        {
-                            OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d (syncvalhead: %d), Player CRC: %d (syncvalhead: %d). syncvaltottail: %d\n", i, syncType[sb].name, head_sync, g_player[connecthead].syncvalhead, player_sync, g_player[i].syncvalhead, syncvaltottail);
-                            syncstat[sb] = 1;
-                        }
-
-                        desynched_players[i] = 1;
-                    }
-                }
             }
-
-            syncvaltottail++;
         }
+        else
+        {
+            if (!Sync_CheckSyncStat(myconnectindex))
+                return;
+        }
+
+        syncvalchecktail++;
     }
 }
 

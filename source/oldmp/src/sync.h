@@ -21,7 +21,7 @@ extern char syncstat[MAXSYNCBYTES];
 extern char g_szfirstSyncMsg[MAXSYNCBYTES][60];
 
 extern int g_foundSyncError;
-extern int syncvaltail, syncvaltottail;
+extern int syncvalsendtail, syncvalchecktail;
 
 void initsynccrc(void);
 void Net_GetSyncStat(void);
