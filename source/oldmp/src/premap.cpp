@@ -1647,6 +1647,10 @@ int G_EnterLevel(int g)
         }
     }
 
+#ifdef POLYMER
+    G_DeleteAllLights();
+#endif
+
     i = ud.screen_size;
     ud.screen_size = 0;
     G_DoLoadScreen(NULL, -1);

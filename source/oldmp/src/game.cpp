@@ -3390,6 +3390,10 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         G_GameExit("Too many sprites spawned.");
     }
 
+#ifdef POLYMER
+    practor[i].lightId = -1;
+#endif
+
     actor[i].bpos.x = s_x;
     actor[i].bpos.y = s_y;
     actor[i].bpos.z = s_z;
@@ -4879,9 +4883,15 @@ int A_Spawn(int j, int pn)
                 break;
             case SE_49_POINT_LIGHT:
             case SE_50_SPOT_LIGHT:
+            {
+                for (SPRITES_OF_SECT(sp->sectnum, j))
+                    if (sprite[j].picnum == ACTIVATOR || sprite[j].picnum == ACTIVATORLOCKED)
+                        actor[i].flags |= SFLAG_USEACTIVATOR;
+
                 changespritestat(i, STAT_LIGHT);
                 goto SPAWN_END;
                 break;
+            }
             }
 
             sp->yvel = sector[sect].extra;
@@ -10605,7 +10615,7 @@ static void G_SetupGameButtons(void)
 
 // [JM] Needed for build linkage
 void M32RunScript(const char* s) { UNREFERENCED_PARAMETER(s); }
-void G_Polymer_UnInit(void) { }
+//void G_Polymer_UnInit(void) { }
 
 /*
 ===================
