@@ -1604,6 +1604,7 @@ void waitforeverybody()
     if (myconnectindex != connecthead)
         mmulti_sendpacket(connecthead, (unsigned char*)packbuf, 1);
 
+    auto oldPal = g_player[myconnectindex].ps->palette;
     P_SetGamePalette(g_player[myconnectindex].ps, TITLEPAL, 11);
 
     while (1)
@@ -1671,7 +1672,7 @@ void waitforeverybody()
                 }
             }
 
-            P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);
+            P_SetGamePalette(g_player[myconnectindex].ps, oldPal, 11);
             return;
         }
     }
