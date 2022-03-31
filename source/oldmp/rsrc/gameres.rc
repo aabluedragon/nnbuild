@@ -75,7 +75,7 @@ BEGIN
 			"- LittleTijn\r\n"
 			"\r\n"
 			"(If I've missed you on this list, please DM me on Ko-Fi with your preferred name and proof of donation!)\r\n"
-			, -1, "EDIT", ES_LEFT | ES_MULTILINE | ES_READONLY | WS_CHILD | WS_VISIBLE | WS_VSCROLL, 0, 0, 244, 127
+			, -1, "EDIT", ES_LEFT | ES_MULTILINE | ES_READONLY | WS_CHILD | WS_VISIBLE | WS_VSCROLL, 0, 0, 246, 127
 END
 
 #define FILEVER        1,4,9,9
