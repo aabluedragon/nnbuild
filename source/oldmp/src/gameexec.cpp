@@ -947,20 +947,38 @@ static int X_DoExecute(void)
 
         // select sprite for monster to target
         // if holoduke is on, let them target holoduke first.
+        //
         if (g_player[g_p].ps->holoduke_on >= 0)
         {
             s = &sprite[g_player[g_p].ps->holoduke_on];
+            j = cansee(g_sp->x,g_sp->y,g_sp->z-(krand()&((32<<8)-1)),g_sp->sectnum,
+                       s->x,s->y,s->z,s->sectnum);
 
-            if (!cansee(g_sp->x, g_sp->y, g_sp->z - (krand() & ((32 << 8) - 1)), g_sp->sectnum, s->x, s->y, s->z, s->sectnum))
-                s = &sprite[g_player[g_p].ps->i]; // they can't see player's holoduke, check for player...
+            if (j == 0)
+            {
+                // they can't see player's holoduke
+                // check for player...
+                s = &sprite[g_player[g_p].ps->i];
+            }
         }
 
         // can they see player, (or player's holoduke)
-        int32_t canSee = cansee(g_sp->x, g_sp->y, g_sp->z - (krand() & ((47 << 8))), g_sp->sectnum, s->x, s->y, s->z - (24 << 8), s->sectnum);
+        j = cansee(g_sp->x,g_sp->y,g_sp->z-(krand()&((47<<8))),g_sp->sectnum,
+                   s->x,s->y,s->z-(24<<8),s->sectnum);
 
-        // search around for target player, also modifies 'target' x&y if found..
-        if (!canSee && A_FurthestVisiblePoint(g_i,s,&actor[g_i].lastvx,&actor[g_i].lastvy) != -1)
-            canSee = 1;
+        if (j == 0)
+        {
+            // they can't see it.
+
+            {
+                // search around for target player
+                // also modifies 'target' x&y if found..
+
+                j = 1;
+                if (A_FurthestVisiblePoint(g_i,s,&actor[g_i].lastvx,&actor[g_i].lastvy) == -1)
+                    j = 0;
+            }
+        }
         else
         {
             // else, they did see it.
@@ -969,7 +987,7 @@ static int X_DoExecute(void)
             actor[g_i].lastvy = s->y;
         }
 
-        if (canSee && (g_sp->statnum == STAT_ACTOR || g_sp->statnum == STAT_STANDABLE))
+        if (j && (g_sp->statnum == STAT_ACTOR || g_sp->statnum == STAT_STANDABLE))
             actor[g_i].timetosleep = SLEEPTIME;
 
         X_DoConditional(j);
