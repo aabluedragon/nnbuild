@@ -22,9 +22,13 @@
 
 #include "startwin.game.h"
 
-#define TAB_CONFIG 0
-// #define TAB_GAME 1
-#define TAB_MESSAGES 1
+enum
+{
+    TAB_CONFIG,
+    TAB_MESSAGES,
+    TAB_ABOUT,
+    TAB_NUM,
+};
 
 static struct
 {
@@ -40,7 +44,7 @@ static struct
 settings;
 
 static HWND startupdlg = NULL;
-static HWND pages[3] =
+static HWND pages[TAB_NUM] =
 {
     NULL, NULL, NULL
 };
@@ -248,7 +252,6 @@ static INT_PTR CALLBACK ConfigPageProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
     return FALSE;
 }
 
-
 static void SetPage(int n)
 {
     HWND tab;
@@ -358,20 +361,24 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
 
         // Add tabs to the tab control
         {
-            static char textSetup[] = TEXT("Setup");
-            static char textMessageLog[] = TEXT("Message Log");
+            static char tabText[][32] = {
+                TEXT("Setup"),
+                TEXT("Message Log"),
+                TEXT("About NetDuke32"),
+            };
 
             TCITEM tab;
 
             hwnd = GetDlgItem(hwndDlg, WIN_STARTWIN_TABCTL);
 
+#define SETUP_TAB(tabstruct, tabId) tabstruct.mask = TCIF_TEXT;         \
+                                    tabstruct.pszText = tabText[tabId]; \
+                                    SendMessage(hwnd, TCM_INSERTITEM, (WPARAM)tabId, (LPARAM)&tabstruct);
+
             ZeroMemory(&tab, sizeof(tab));
-            tab.mask = TCIF_TEXT;
-            tab.pszText = textSetup;
-            SendMessage(hwnd, TCM_INSERTITEM, (WPARAM)TAB_CONFIG, (LPARAM)&tab);
-            tab.mask = TCIF_TEXT;
-            tab.pszText = textMessageLog;
-            SendMessage(hwnd, TCM_INSERTITEM, (WPARAM)TAB_MESSAGES, (LPARAM)&tab);
+            SETUP_TAB(tab, TAB_CONFIG);
+            SETUP_TAB(tab, TAB_MESSAGES);
+            SETUP_TAB(tab, TAB_ABOUT);
 
             // Work out the position and size of the area inside the tab control for the pages
             ZeroMemory(&r, sizeof(r));
@@ -386,14 +393,18 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
             pages[TAB_CONFIG] = CreateDialog((HINSTANCE)win_gethinstance(),
                                              MAKEINTRESOURCE(WIN_STARTWINPAGE_CONFIG), hwndDlg, ConfigPageProc);
             pages[TAB_MESSAGES] = GetDlgItem(hwndDlg, WIN_STARTWIN_MESSAGES);
-            SetWindowPos(pages[TAB_CONFIG], hwnd,r.left,r.top,r.right,r.bottom,SWP_HIDEWINDOW);
-            SetWindowPos(pages[TAB_MESSAGES], hwnd,r.left,r.top,r.right,r.bottom,SWP_HIDEWINDOW);
+            pages[TAB_ABOUT] = CreateDialog((HINSTANCE)win_gethinstance(),
+                                             MAKEINTRESOURCE(WIN_STARTWINPAGE_ABOUT), hwndDlg, NULL);
+            SetWindowPos(pages[TAB_CONFIG], hwnd, r.left, r.top, r.right, r.bottom, SWP_HIDEWINDOW);
+            SetWindowPos(pages[TAB_MESSAGES], hwnd, r.left, r.top, r.right, r.bottom, SWP_HIDEWINDOW);
+            SetWindowPos(pages[TAB_ABOUT], hwnd, r.left, r.top, r.right, r.bottom, SWP_HIDEWINDOW);
 
             // Tell the editfield acting as the console to exclude the width of the scrollbar
             GetClientRect(pages[TAB_MESSAGES],&r);
             r.right -= GetSystemMetrics(SM_CXVSCROLL)+4;
             r.left = r.top = 0;
             SendMessage(pages[TAB_MESSAGES], EM_SETRECTNP,0,(LPARAM)&r);
+            SendMessage(pages[TAB_ABOUT], EM_SETRECTNP, 0, (LPARAM)&r);
 
             // Set a tab stop in the game data listbox
             {
