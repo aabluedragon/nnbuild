@@ -592,17 +592,17 @@ enum GamevarFlags_t {
     GAMEVAR_NODEFAULT  = 0x00000400, // don't reset on actor spawn
     GAMEVAR_SYSTEM     = 0x00000800, // cannot change mode flags...(only default value)
     GAMEVAR_READONLY   = 0x00001000, // values are read-only (no setvar allowed)
-    GAMEVAR_INTPTR     = 0x00002000, // plValues is a pointer to an int
+    GAMEVAR_INT32PTR   = 0x00002000, // plValues is a pointer to a 32-bit integer
     GAMEVAR_SYNCCHECK  = 0x00004000, // throw warnings during compile if used in local event
-    GAMEVAR_SHORTPTR   = 0x00008000, // plValues is a pointer to a short
-    GAMEVAR_CHARPTR    = 0x00010000, // plValues is a pointer to a char
+    GAMEVAR_INT16PTR   = 0x00008000, // plValues is a pointer to a 16-bit integer
+    GAMEVAR_INT8PTR    = 0x00010000, // plValues is a pointer to an 8-bit integer
     GAMEVAR_NORESET    = 0x00020000, // var values are not reset when restoring map state
     GAMEVAR_SPECIAL    = 0x00040000, // flag for structure member shortcut vars
     GAMEVAR_NOMULTI    = 0x00080000, // don't attach to multiplayer packets
     GAMEVAR_Q16PTR     = 0x00100000,
 
     GAMEVAR_RAWQ16PTR = GAMEVAR_Q16PTR | GAMEVAR_SPECIAL,
-    GAMEVAR_PTR_MASK = GAMEVAR_INTPTR | GAMEVAR_SHORTPTR | GAMEVAR_CHARPTR | GAMEVAR_Q16PTR | GAMEVAR_RAWQ16PTR,
+    GAMEVAR_PTR_MASK = GAMEVAR_INT32PTR | GAMEVAR_INT16PTR | GAMEVAR_INT8PTR | GAMEVAR_Q16PTR | GAMEVAR_RAWQ16PTR,
 };
 
 // Alignments for per-player and per-actor variables.

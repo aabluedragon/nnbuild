@@ -59,11 +59,11 @@ typedef struct {
     int32_t playerid_time;
     int8_t playerid_num;
 
-    short camerasect;
     fix16_t cameraq16ang, cameraq16horiz;
-    short pause_on, from_bonus;
-    short camerasprite, last_camsprite;
-    short last_level, secretlevel;
+    int16_t camerasect;
+    int16_t pause_on, from_bonus;
+    int16_t camerasprite, last_camsprite;
+    int16_t last_level, secretlevel;
 
     char overhead_on, last_overhead;
     char god, warp_on, cashman, eog, showallmap;
