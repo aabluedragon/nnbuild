@@ -3014,40 +3014,40 @@ static int X_DoExecute(void)
 
         s = sprite[g_player[g_p].ps->i].xvel;
 
-        if ((l&8) && g_player[g_p].ps->on_ground && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_CROUCH))
+        if ((l & pducking) && g_player[g_p].ps->on_ground && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_CROUCH))
             j = 1;
-        else if ((l&16) && g_player[g_p].ps->jumping_counter == 0 && !g_player[g_p].ps->on_ground &&
+        else if ((l & pfalling) && g_player[g_p].ps->jumping_counter == 0 && !g_player[g_p].ps->on_ground &&
                  g_player[g_p].ps->vel.z > 2048)
             j = 1;
-        else if ((l&32) && g_player[g_p].ps->jumping_counter > 348)
+        else if ((l & pjumping) && g_player[g_p].ps->jumping_counter > 348)
             j = 1;
-        else if ((l&1) && s >= 0 && s < 8)
+        else if ((l & pstanding) && s >= 0 && s < 8)
             j = 1;
-        else if ((l&2) && s >= 8 && !TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
+        else if ((l & pwalking) && s >= 8 && !TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l&4) && s >= 8 && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
+        else if ((l & prunning) && s >= 8 && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l&64) && g_player[g_p].ps->pos.z < (g_sp->z-(48<<8)))
+        else if ((l & phigher) && g_player[g_p].ps->pos.z < (g_sp->z-(48<<8)))
             j = 1;
-        else if ((l&128) && s <= -8 && !TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
+        else if ((l & pwalkingback) && s <= -8 && !TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l&256) && s <= -8 && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
+        else if ((l & prunningback) && s <= -8 && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l&512) && (g_player[g_p].ps->quick_kick > 0 || (g_player[g_p].ps->curr_weapon == KNEE_WEAPON && g_player[g_p].ps->kickback_pic > 0)))
+        else if ((l & pkicking) && (g_player[g_p].ps->quick_kick > 0 || (g_player[g_p].ps->curr_weapon == KNEE_WEAPON && g_player[g_p].ps->kickback_pic > 0)))
             j = 1;
-        else if ((l&1024) && sprite[g_player[g_p].ps->i].xrepeat < 32)
+        else if ((l & pshrunk) && sprite[g_player[g_p].ps->i].xrepeat < 32)
             j = 1;
-        else if ((l&2048) && g_player[g_p].ps->jetpack_on)
+        else if ((l & pjetpack) && g_player[g_p].ps->jetpack_on)
             j = 1;
-        else if ((l&4096) && g_player[g_p].ps->steroids_amount > 0 && g_player[g_p].ps->steroids_amount < 400)
+        else if ((l & ponsteroids) && g_player[g_p].ps->steroids_amount > 0 && g_player[g_p].ps->steroids_amount < 400)
             j = 1;
-        else if ((l&8192) && g_player[g_p].ps->on_ground)
+        else if ((l & ponground) && g_player[g_p].ps->on_ground)
             j = 1;
-        else if ((l&16384) && sprite[g_player[g_p].ps->i].xrepeat > 32 && sprite[g_player[g_p].ps->i].extra > 0 && g_player[g_p].ps->timebeforeexit == 0)
+        else if ((l & palive) && sprite[g_player[g_p].ps->i].xrepeat > 32 && sprite[g_player[g_p].ps->i].extra > 0 && g_player[g_p].ps->timebeforeexit == 0)
             j = 1;
-        else if ((l&32768) && sprite[g_player[g_p].ps->i].extra <= 0)
+        else if ((l & pdead) && sprite[g_player[g_p].ps->i].extra <= 0)
             j = 1;
-        else if ((l&65536L))
+        else if ((l & pfacing))
         {
             if (g_sp->picnum == APLAYER && ud.multimode > 1)
                 j = G_GetAngleDelta(fix16_to_int(g_player[otherp].ps->q16ang),getangle(g_player[g_p].ps->pos.x-g_player[otherp].ps->pos.x,g_player[g_p].ps->pos.y-g_player[otherp].ps->pos.y));
