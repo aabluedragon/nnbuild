@@ -1704,23 +1704,6 @@ int G_EnterLevel(int g)
 
     G_CacheMapData();
 
-    if (ud.recstat != 2)
-    {
-        if (Menu_HaveUserMap())
-        {
-            S_PlayLevelMusicOrNothing(USERMAPMUSICFAKESLOT);
-        }
-        else if (g_mapInfo[g_musicIndex].musicfn == NULL || m.musicfn == NULL ||
-            strcmp(g_mapInfo[g_musicIndex].musicfn, m.musicfn) || g_musicSize == 0 || ud.last_level == -1)
-        {
-            S_PlayLevelMusicOrNothing(mapidx);
-        }
-        else
-        {
-            S_ContinueLevelMusic();
-        }
-    }
-
     if ((g&MODE_GAME) || (g&MODE_EOL))
         g_player[myconnectindex].ps->gm = MODE_GAME;
     else if (g&MODE_RESTART)
@@ -1789,6 +1772,23 @@ int G_EnterLevel(int g)
     g_player[myconnectindex].ps->over_shoulder_on = 0;
 
     G_ResetTimers();  // Here we go
+
+    if (ud.recstat != 2)
+    {
+        if (Menu_HaveUserMap())
+        {
+            S_PlayLevelMusicOrNothing(USERMAPMUSICFAKESLOT);
+        }
+        else if (g_mapInfo[g_musicIndex].musicfn == NULL || m.musicfn == NULL ||
+            strcmp(g_mapInfo[g_musicIndex].musicfn, m.musicfn) || g_musicSize == 0 || ud.last_level == -1)
+        {
+            S_PlayLevelMusicOrNothing(mapidx);
+        }
+        else
+        {
+            S_ContinueLevelMusic();
+        }
+    }
 
     //Bsprintf(g_szBuf,"G_EnterLevel L=%d V=%d",ud.level_number, ud.volume_number);
     //AddLog(g_szBuf);
