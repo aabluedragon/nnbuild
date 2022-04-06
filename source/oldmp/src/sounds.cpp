@@ -684,7 +684,7 @@ static int S_GetSlot(int soundNum)
                 bestslot = slot;
             }
         }
-    }     while (++slot < MAXSOUNDINSTANCES);
+    } while (++slot < MAXSOUNDINSTANCES);
 
     if (!FX_SoundValidAndActive(snd->voices[bestslot].handle))
         return MAXSOUNDINSTANCES;
