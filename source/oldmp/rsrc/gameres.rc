@@ -48,7 +48,7 @@ BEGIN
 	CONTROL	"Developed by: Jordon ""Striker The Hedgefox"" Moss.\r\n\r\n"
 			"NetDuke32 is a multiplayer-centric port based on EDuke32. "
 			"Started late 2015 as a series of maintenance builds of EDuke32-OldMP, it has since "
-			"evolved. NetDuke32 brings new features, QoL and Netcode improvements, and tries "
+			"evolved. NetDuke32 brings new features, QoL and netcode improvements, and tries "
 			"to improve the overall multiplayer experience.\r\n\r\n"
 			"This is a labour of love, and would be impossible without support.\r\n"
 			"If you like my work, help me out Ko-Fi! (If you're able to, of course.)\r\n"
