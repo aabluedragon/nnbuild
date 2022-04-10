@@ -1454,7 +1454,7 @@ void clearfifo(void)
 
     Net_ClearFIFO();
 
-    localInput = {};
+    localInput = netInput = {};
     clearbufbyte(&inputfifo,sizeof(input_t)*MOVEFIFOSIZ*MAXPLAYERS,0L);
 
     for (ALL_PLAYERS(i))
