@@ -143,14 +143,14 @@ int X_OnEventWithReturn(int iEventID, int iActor, int iPlayer, int nReturn)
         return nReturn;
     }
 
-    int oldReturn = Gv_GetVar(g_iReturnVarID, iActor, iPlayer);
+    int oldReturn = Gv_GetVar(sysVarIDs.RETURN, iActor, iPlayer);
 
-    Gv_SetVar(g_iReturnVarID, nReturn, iActor, iPlayer);
+    Gv_SetVar(sysVarIDs.RETURN, nReturn, iActor, iPlayer);
     X_OnEvent(iEventID, iActor, iPlayer, -1);
 
-    int newReturn = Gv_GetVar(g_iReturnVarID, iActor, iPlayer);
+    int newReturn = Gv_GetVar(sysVarIDs.RETURN, iActor, iPlayer);
 
-    Gv_SetVar(g_iReturnVarID, oldReturn, iActor, iPlayer);
+    Gv_SetVar(sysVarIDs.RETURN, oldReturn, iActor, iPlayer);
 
     return newReturn;
 }
@@ -1205,7 +1205,7 @@ static int X_DoExecute(void)
     case CON_ACTORSOUND:
         insptr++;
         {
-            int const spriteNum = (*insptr++ != g_iThisActorID) ? Gv_GetVarX(*(insptr - 1)) : g_i;
+            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(*(insptr - 1)) : g_i;
             int const soundNum = Gv_GetVarX(*insptr++);
 
             if ((unsigned)soundNum >= MAXSOUNDS)
@@ -1518,7 +1518,7 @@ static int X_DoExecute(void)
         insptr++;
         {
             int var1 = Gv_GetVarX(*insptr++), var2;
-            if (tw == CON_OPERATEACTIVATORS && *insptr == g_iThisActorID)
+            if (tw == CON_OPERATEACTIVATORS && *insptr == sysVarIDs.THISACTOR)
             {
                 var2 = g_p;
                 insptr++;
@@ -1583,7 +1583,7 @@ static int X_DoExecute(void)
                 G_OperateMasterSwitches(var1);
                 break;
             case CON_CHECKACTIVATORMOTION:
-                Gv_SetVarX(g_iReturnVarID, check_activator_motion(var1));
+                Gv_SetVarX(sysVarIDs.RETURN, check_activator_motion(var1));
                 break;
             }
             break;
@@ -1790,12 +1790,12 @@ static int X_DoExecute(void)
         insptr++;
         {
             int i = Gv_GetVarX(*insptr++), j;
-            if (tw == CON_GETPNAME && *insptr == g_iThisActorID)
+            if (tw == CON_GETPNAME && *insptr == sysVarIDs.THISACTOR)
             {
                 j = g_p;
                 insptr++;
             }
-            else if (tw == CON_GETTEAMNAME && *insptr == g_iThisActorID)
+            else if (tw == CON_GETTEAMNAME && *insptr == sysVarIDs.THISACTOR)
             {
                 j = g_player[g_p].ps->team;
                 insptr++;
@@ -2155,7 +2155,7 @@ static int X_DoExecute(void)
                     A_AddToDeleteQueue(j);
                 fallthrough__;
             case CON_ESPAWNVAR:
-                Gv_SetVarX(g_iReturnVarID, j);
+                Gv_SetVarX(sysVarIDs.RETURN, j);
                 break;
             case CON_QSPAWNVAR:
                 if (j != -1)
@@ -2186,7 +2186,7 @@ static int X_DoExecute(void)
                 A_AddToDeleteQueue(j);
             fallthrough__;
         case CON_ESPAWN:
-            Gv_SetVarX(g_iReturnVarID, j);
+            Gv_SetVarX(sysVarIDs.RETURN, j);
             break;
         case CON_QSPAWN:
             if (j != -1)
@@ -2218,7 +2218,7 @@ static int X_DoExecute(void)
         j = A_Shoot(g_i,*insptr++);
 
         if (tw == CON_EZSHOOT || tw == CON_ESHOOT)
-            Gv_SetVarX(g_iReturnVarID, j);
+            Gv_SetVarX(sysVarIDs.RETURN, j);
 
         actor[g_i].temp_data[9]=0;
         break;
@@ -2249,7 +2249,7 @@ static int X_DoExecute(void)
 
         lReturn = A_Shoot(g_i, j);
         if (tw == CON_ESHOOTVAR || tw == CON_EZSHOOTVAR)
-            Gv_SetVarX(g_iReturnVarID, lReturn);
+            Gv_SetVarX(sysVarIDs.RETURN, lReturn);
         actor[g_i].temp_data[9]=0;
         break;
     }
@@ -3183,13 +3183,13 @@ static int X_DoExecute(void)
 
     case CON_IFRESPAWN:
         if (A_CheckEnemySprite(g_sp))
-            X_DoConditional(ud.respawn_monsters);
+            X_DoConditional(DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS));
         else if (A_CheckInventorySprite(g_sp))
-            X_DoConditional(ud.respawn_inventory);
+            X_DoConditional(DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY));
         else if (DynamicTileMap[g_sp->picnum] == ACCESSCARD__STATIC) // Shim for poorly-concieved CON code. Keys should never respawn.
             X_DoConditional(0);
         else
-            X_DoConditional(ud.respawn_items);
+            X_DoConditional(DMFLAGS_TEST(DMFLAG_RESPAWNITEMS));
         break;
 
     case CON_IFFLOORDISTL:
@@ -3540,13 +3540,13 @@ static int X_DoExecute(void)
 
     case CON_FINDPLAYER:
         insptr++;
-        Gv_SetVarX(g_iReturnVarID, A_FindPlayer(&sprite[g_i],&j));
+        Gv_SetVarX(sysVarIDs.RETURN, A_FindPlayer(&sprite[g_i],&j));
         Gv_SetVarX(*insptr++, j);
         break;
 
     case CON_FINDOTHERPLAYER:
         insptr++;
-        Gv_SetVarX(g_iReturnVarID, P_FindOtherPlayer(g_p,&j));
+        Gv_SetVarX(sysVarIDs.RETURN, P_FindOtherPlayer(g_p,&j));
         Gv_SetVarX(*insptr++, j);
         break;
 
@@ -3666,7 +3666,7 @@ static int X_DoExecute(void)
         {
             int iPlayer;
 
-            if (*insptr != g_iThisActorID)
+            if (*insptr != sysVarIDs.THISACTOR)
                 iPlayer=Gv_GetVarX(*insptr);
             else iPlayer = g_p;
 
@@ -3744,7 +3744,7 @@ static int X_DoExecute(void)
         insptr++;
         j = g_p;
 
-        if (*insptr != g_iThisActorID)
+        if (*insptr != sysVarIDs.THISACTOR)
             j=Gv_GetVarX(*insptr);
 
         insptr++;
@@ -4048,27 +4048,27 @@ static int X_DoExecute(void)
 
     case CON_SPGETLOTAG:
         insptr++;
-        Gv_SetVarX(g_iLoTagID, g_sp->lotag);
+        Gv_SetVarX(sysVarIDs.LOTAG, g_sp->lotag);
         break;
 
     case CON_SPGETHITAG:
         insptr++;
-        Gv_SetVarX(g_iHiTagID, g_sp->hitag);
+        Gv_SetVarX(sysVarIDs.HITAG, g_sp->hitag);
         break;
 
     case CON_SECTGETLOTAG:
         insptr++;
-        Gv_SetVarX(g_iLoTagID, sector[g_sp->sectnum].lotag);
+        Gv_SetVarX(sysVarIDs.LOTAG, sector[g_sp->sectnum].lotag);
         break;
 
     case CON_SECTGETHITAG:
         insptr++;
-        Gv_SetVarX(g_iHiTagID, sector[g_sp->sectnum].hitag);
+        Gv_SetVarX(sysVarIDs.HITAG, sector[g_sp->sectnum].hitag);
         break;
 
     case CON_GETTEXTUREFLOOR:
         insptr++;
-        Gv_SetVarX(g_iTextureID, sector[g_sp->sectnum].floorpicnum);
+        Gv_SetVarX(sysVarIDs.TEXTURE, sector[g_sp->sectnum].floorpicnum);
         break;
 
     case CON_STARTTRACK:
@@ -4095,7 +4095,7 @@ static int X_DoExecute(void)
 
     case CON_GETTEXTURECEILING:
         insptr++;
-        Gv_SetVarX(g_iTextureID, sector[g_sp->sectnum].ceilingpicnum);
+        Gv_SetVarX(sysVarIDs.TEXTURE, sector[g_sp->sectnum].ceilingpicnum);
         break;
 
     case CON_IFVARVARAND:
@@ -4569,9 +4569,9 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     if (A_CheckEnemySprite(g_sp))
     {
         if (g_sp->xrepeat > 60) return;
-        if (ud.respawn_monsters == 1 && g_sp->extra <= 0) return;
+        if (DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS) && g_sp->extra <= 0) return;
     }
-    else if (ud.respawn_items == 1 && (g_sp->cstat&32768)) return;
+    else if (DMFLAGS_TEST(DMFLAG_RESPAWNITEMS) && (g_sp->cstat&32768)) return;
 
     if (actor[g_i].timetosleep > 1)
         actor[g_i].timetosleep--;
@@ -4779,7 +4779,7 @@ void G_RestoreMapState(mapstate_t *save)
 
         Gv_RefreshPointers();
 
-        for (ALL_PLAYERS(i)) // [JM] REWRITE THIS!
+        for (ALL_PLAYERS(i))
             sprite[g_player[i].ps->i].extra = phealth[i];
 
         if (g_player[myconnectindex].ps->over_shoulder_on != 0)

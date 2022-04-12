@@ -668,15 +668,6 @@ enum SpriteFlags_t {
     SFLAG_QUEUEDFORDELETE  = 0x10000000,
 };
 
-extern int g_iReturnVarID;
-extern int g_iWeaponVarID;
-extern int g_iWorksLikeVarID;
-extern int g_iLoTagID;          // var ID of "LOTAG"
-extern int g_iHiTagID;          // ver ID of "HITAG"
-extern int g_iTextureID;        // ver ID of "TEXTURE"
-
-extern char g_bEnhanced;    // are we 'enhanced' (more minerals, etc)
-
 extern char g_szBuf[1024];
 
 #define NAM_GRENADE_LIFETIME       120
@@ -790,6 +781,7 @@ extern hashtable_t gamefuncH;
 #include "common_game.h"
 #include "dukebot.h"
 #include "game.h"
+#include "gamedef.h"
 #include "gametypes.h"
 #include "global.h"
 #include "hud.h"

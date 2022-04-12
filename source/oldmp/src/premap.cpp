@@ -65,7 +65,7 @@ static void G_CacheSpriteNum(int i)
     char maxc;
     int j;
 
-    if (ud.monsters_off && A_CheckEnemySprite(&sprite[i])) return;
+    if (DMFLAGS_TEST(DMFLAG_NOMONSTERS) && A_CheckEnemySprite(&sprite[i])) return;
 
     maxc = 1;
 
@@ -287,16 +287,16 @@ static void G_DemoLoadScreen(const char* statustext, int const loadScreenTile, i
     if (statustext)
         gametext(160, 180, statustext, 0, 2 + 8 + 16);
 
-    Gv_SetVar(g_iReturnVarID, percent , -1, -1);
+    Gv_SetVar(sysVarIDs.RETURN, percent , -1, -1);
     X_OnEvent(EVENT_DISPLAYLOADINGSCREEN, g_player[screenpeek].ps->i, screenpeek, -1);
     videoNextPage();
 }
 
 static void G_DoLoadScreen(const char* statustext, int percent)
 {
-    Gv_SetVar(g_iReturnVarID, LOADSCREEN, -1, -1);
+    Gv_SetVar(sysVarIDs.RETURN, LOADSCREEN, -1, -1);
     X_OnEvent(EVENT_GETLOADTILE, -1, myconnectindex, -1);
-    int const loadScreenTile = Gv_GetVar(g_iReturnVarID, -1, -1);
+    int const loadScreenTile = Gv_GetVar(sysVarIDs.RETURN, -1, -1);
 
     if (ud.recstat == 2)
     {
@@ -357,7 +357,7 @@ static void G_DoLoadScreen(const char* statustext, int percent)
         rotatesprite(158 << 16, 144 << 16, 65536, 0, tile, 0, 0, bits, 0, 0, width, ydim - 1);
     }
 
-    Gv_SetVar(g_iReturnVarID, percent, -1, -1);
+    Gv_SetVar(sysVarIDs.RETURN, percent, -1, -1);
     X_OnEvent(EVENT_DISPLAYLOADINGSCREEN, g_player[screenpeek].ps->i, screenpeek, -1);
     videoNextPage();
 
@@ -679,7 +679,7 @@ void P_ResetWeapons(int snum)
     p->last_pissed_time = 0;
     p->holster_weapon = 0;
 
-    Gv_SetVar(g_iWeaponVarID, p->curr_weapon, p->i, snum);
+    Gv_SetVar(sysVarIDs.WEAPON, p->curr_weapon, p->i, snum);
     X_OnEvent(EVENT_RESETWEAPONS, p->i, snum, -1);
 }
 
@@ -767,7 +767,7 @@ static void resetprestat(int snum,int g)
     {
         p->ammo_amount[HANDBOMB_WEAPON]++;
         p->curr_weapon = HANDBOMB_WEAPON;
-        Gv_SetVar(g_iWeaponVarID, p->curr_weapon, p->i, snum);
+        Gv_SetVar(sysVarIDs.WEAPON, p->curr_weapon, p->i, snum);
     }
 
     p->timebeforeexit   = 0;
@@ -1231,7 +1231,7 @@ void G_MakeNewGamePreparations(int vn, int ln, int sk)
                     p->curr_weapon = i;
                     p->gotweapon[i] = 1;
                     p->ammo_amount[i] = 48;
-                    Gv_SetVar(g_iWeaponVarID, p->curr_weapon, p->i, 0);
+                    Gv_SetVar(sysVarIDs.WEAPON, p->curr_weapon, p->i, 0);
                 }
                 else if (aplWeaponWorksLike[i][0] == KNEE_WEAPON)
                     p->gotweapon[i] = 1;
@@ -1585,23 +1585,24 @@ int G_EnterLevel(int g)
     }
 
     ud.coop = ud.m_coop;
-    ud.ffire = (GTFLAGS(GAMETYPE_PLAYERSFRIENDLY | GAMETYPE_TDM)) ? ud.m_ffire : 0;
-    ud.monsters_off = ud.m_monsters_off;
-    ud.respawn_monsters = (ud.player_skill > 3) ? 1 : ud.m_respawn_monsters;
-    ud.noexits = (GTFLAGS(GAMETYPE_COOP)) ? 0 : ud.m_noexits;
-    ud.marker = (GTFLAGS(GAMETYPE_MARKEROPTION)) ? ud.m_marker : 0;
+    ud.dmflags = ud.m_dmflags;
 
-    if (GTFLAGS(GAMETYPE_ALLOWITEMRESPAWN))
-    {
-        ud.respawn_items = ud.m_respawn_items;
-        ud.respawn_inventory = ud.m_respawn_inventory;
-    }
-    else
-    {
-        ud.respawn_items = ud.respawn_inventory = 0;
-    }
+    if (ud.player_skill > 3)
+        DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, true);
 
-    if (ud.m_weaponstay)
+    if (!GTFLAGS(GAMETYPE_PLAYERSFRIENDLY | GAMETYPE_TDM))
+        DMFLAGS_SET(DMFLAG_FRIENDLYFIRE, false);
+
+    if (!GTFLAGS(GAMETYPE_ALLOWITEMRESPAWN))
+        DMFLAGS_SET(DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNINVENTORY, false);
+
+    if (!GTFLAGS(GAMETYPE_MARKEROPTION))
+        DMFLAGS_SET(DMFLAG_MARKERS, false);
+
+    if(GTFLAGS(GAMETYPE_COOP))
+        DMFLAGS_SET(DMFLAG_NOEXITS, false);
+
+    if (DMFLAGS_TEST(DMFLAG_WEAPONSTAY)) // [JM] Needed this hack for backwards compat.
         Gametypes[ud.coop].flags |= GAMETYPE_WEAPSTAY;
     else
         Gametypes[ud.coop].flags &= ~(GAMETYPE_WEAPSTAY);
@@ -1733,7 +1734,7 @@ int G_EnterLevel(int g)
         g_player[i].ps->ammo_amount[PISTOL_WEAPON] = 0;
         g_player[i].ps->curr_weapon = KNEE_WEAPON;
         g_player[i].ps->kickback_pic = 0;
-        Gv_SetVar(g_iWeaponVarID, g_player[i].ps->curr_weapon, g_player[i].ps->i, i);
+        Gv_SetVar(sysVarIDs.WEAPON, g_player[i].ps->curr_weapon, g_player[i].ps->i, i);
         break;
     }
 

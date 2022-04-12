@@ -2137,10 +2137,7 @@ cheat_for_port_credits:
 
                 ud.m_player_skill = x+1;
 
-                ud.m_monsters_off = ud.monsters_off = 0;
-
-                ud.m_respawn_items = 0;
-                ud.m_respawn_inventory = 0;
+                M_DMFLAGS_SET(DMFLAG_NOMONSTERS | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNINVENTORY, false);
 
                 ud.multimode = 1;
 
@@ -4983,7 +4980,7 @@ VOLUME_ALL_40x:
                     ud.m_player_skill = 0;
                 }
 
-                ud.m_monsters_off = (ud.m_player_skill == 0) ? 1 : 0;
+                M_DMFLAGS_SET(DMFLAG_NOMONSTERS, (ud.m_player_skill == 0) ? 1 : 0);
                 break;
 
             case 4:
@@ -5080,31 +5077,42 @@ VOLUME_ALL_40x:
             c = (320 >> 1) - 120;
 
             {
-                int io, ii, yy, d = c + 160 + 40, enabled;
-                const char *opts[] =
+                int io, ii, yy, d = c + 160 + 40;
+
+                struct
                 {
-                    "Friendly Fire",
-                    "Disable Exits",
-                    "Enable Markers",
-                    "Weapons Stay",
-                    "-",
-                    "Respawn Monsters",
-                    "Respawn Inventory",
-                    "Respawn Items",
-                    "-",
-                    "Accept",
-                    NULL
+                    const char* name;
+                    int32_t dmflag;
+                } opts[] = {
+                    { "Friendly Fire",              DMFLAG_FRIENDLYFIRE },
+                    { "Disable Exits",              DMFLAG_NOEXITS },
+                    { "Enable Markers",             DMFLAG_MARKERS },
+                    { "Weapons Stay",               DMFLAG_WEAPONSTAY },
+                    { "-",                          0 },
+                    { "Respawn Monsters",           DMFLAG_RESPAWNMONSTERS },
+                    { "Respawn Inventory",          DMFLAG_RESPAWNINVENTORY },
+                    { "Respawn Items",              DMFLAG_RESPAWNITEMS },
+                    { "-",                          0 },
+                    { "Enable Visibility Changes",  DMFLAG_ALLOWVISIBILITYCHANGE },
+                    { "Disable FOV Changes",        DMFLAG_NOFOVCHANGE },
+                    { "Disable Player IDs",         DMFLAG_NOPLAYERID },
+                    { "-",                          0 },
+                    { "Accept",                     0 },
                 };
 
                 yy = 37;
-                for (ii = io = 0; opts[ii]; ii++)
+                for (ii = io = 0; ii < (int32_t)ARRAY_SIZE(opts); ii++)
                 {
-                    if (opts[ii][0] == '-' && !opts[ii][1])
+                    if (opts[ii].name[0] == '-' && !opts[ii].dmflag)
                     {
-                        if (io <= probey) yy += 4;
+                        if (io <= probey)
+                            yy += 4;
+
                         continue;
                     }
-                    if (io < probey) yy += 8;
+                    if (io < probey)
+                        yy += 8;
+
                     io++;
                 }
 
@@ -5118,86 +5126,73 @@ VOLUME_ALL_40x:
                 }
 
                 yy = 37;
-                for (ii = io = 0; opts[ii]; ii++)
+                for (ii = io = 0; ii < (int32_t)ARRAY_SIZE(opts); ii++)
                 {
-                    if (opts[ii][0] == '-' && !opts[ii][1])
+                    if (opts[ii].name[0] == '-' && !opts[ii].dmflag)
                     {
                         yy += 4;
                         continue;
                     }
-                    enabled = 1;
+
+                    bool enabled = true;
                     switch (io)
                     {
                         case 0:
                         {
-                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM)) { enabled = 0; break; }
-
-                            if (x == io) ud.m_ffire = !ud.m_ffire;
-                            modval(0, 1, (int *)&ud.m_ffire, 1, probey == io);
-                            mgametextpal(d, yy, ud.m_ffire ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
+                                enabled = false;
                             break;
                         }
                         case 1:
                         {
-                            if ((Gametypes[ud.m_coop].flags & GAMETYPE_COOP)) { enabled = 0; break; }
-
-                            if (x == io) ud.m_noexits = !ud.m_noexits;
-                            modval(0, 1, (int *)&ud.m_noexits, 1, probey == io);
-                            mgametextpal(d, yy, ud.m_noexits ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
+                            if ((Gametypes[ud.m_coop].flags & GAMETYPE_COOP))
+                                enabled = false;
                             break;
                         }
                         case 2:
                         {
-                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_MARKEROPTION)) { enabled = 0; break; }
-
-                            if (x == io) ud.m_marker = !ud.m_marker;
-                            modval(0, 1, (int *)&ud.m_marker, 1, probey == io);
-                            mgametextpal(d, yy, ud.m_marker ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
-                            break;
-                        }
-                        case 3:
-                        {
-                            if (x == io) ud.m_weaponstay = !ud.m_weaponstay;
-                            modval(0, 1, (int *)&ud.m_weaponstay, 1, probey == io);
-                            mgametextpal(d, yy, ud.m_weaponstay ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
-                            break;
-                        }
-                        case 4:
-                        {
-                            if (x == io) ud.m_respawn_monsters = !ud.m_respawn_monsters;
-                            modval(0, 1, (int *)&ud.m_respawn_monsters, 1, probey == io);
-                            mgametextpal(d, yy, ud.m_respawn_monsters ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_MARKEROPTION))
+                                enabled = false;
                             break;
                         }
                         case 5:
                         {
-                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_ALLOWITEMRESPAWN)) { enabled = 0; break; }
-
-                            if (x == io) ud.m_respawn_inventory = !ud.m_respawn_inventory;
-                            modval(0, 1, (int *)&ud.m_respawn_inventory, 1, probey == io);
-                            mgametextpal(d, yy, ud.m_respawn_inventory ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_ALLOWITEMRESPAWN))
+                                enabled = false;
                             break;
                         }
                         case 6:
                         {
-                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_ALLOWITEMRESPAWN)) { enabled = 0; break; }
-
-                            if (x == io) ud.m_respawn_items = !ud.m_respawn_items;
-                            modval(0, 1, (int *)&ud.m_respawn_items, 1, probey == io);
-                            mgametextpal(d, yy, ud.m_respawn_items ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
-                            break;
-                        }
-                        case 7:
-                        {
-                            if (x == io) ChangeToMenu(600);
-                            break;
-                        }
-                        default:
-                        {
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_ALLOWITEMRESPAWN))
+                                enabled = false;
                             break;
                         }
                     }
-                    mgametextpal(c, yy, opts[ii], enabled ? MENUHIGHLIGHT(io) : DISABLEDMENUSHADE, 10);
+
+                    if (ii == (int32_t)ARRAY_SIZE(opts) - 1)
+                    {
+                        if (x == io)
+                            ChangeToMenu(600);
+                    }
+
+                    if (enabled && opts[ii].dmflag)
+                    {
+                        int32_t state = M_DMFLAGS_TEST(opts[ii].dmflag);
+                        int32_t old_state = state;
+
+                        if (x == io)
+                            state = (bool)!state;
+
+                        modval(0, 1, (int*)&state, 1, probey == io);
+
+                        if(state != old_state)
+                            M_DMFLAGS_SET(opts[ii].dmflag, state);
+
+                        mgametextpal(d, yy, state ? "Yes" : "No", MENUHIGHLIGHT(io), 0);
+                    }
+
+                    mgametextpal(c, yy, opts[ii].name, enabled ? MENUHIGHLIGHT(io) : DISABLEDMENUSHADE, 10);
+
                     io++;
                     yy += 8;
                 }

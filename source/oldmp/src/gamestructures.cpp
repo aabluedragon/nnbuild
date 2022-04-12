@@ -33,7 +33,7 @@ static inline void X_AccessTileData(int iSet, int lVar1, int lLabelID, int lVar2
 {
     int lValue = 0, tile = g_i;
 
-    if (lVar1 != g_iThisActorID)
+    if (lVar1 != sysVarIDs.THISACTOR)
         tile = Gv_GetVar(lVar1, g_i, g_p);
 
     if ((tile < 0 || tile >= MAXTILES) && g_scriptSanityChecks)
@@ -558,28 +558,28 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_RESPAWN_MONSTERS:
         if (iSet)
         {
-            ud.respawn_monsters = lValue;
+            DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.respawn_monsters, g_i, g_p);
+        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS), g_i, g_p);
         return;
 
     case USERDEFS_RESPAWN_ITEMS:
         if (iSet)
         {
-            ud.respawn_items = lValue;
+            DMFLAGS_SET(DMFLAG_RESPAWNITEMS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.respawn_items, g_i, g_p);
+        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_RESPAWNITEMS), g_i, g_p);
         return;
 
     case USERDEFS_RESPAWN_INVENTORY:
         if (iSet)
         {
-            ud.respawn_inventory = lValue;
+            DMFLAGS_SET(DMFLAG_RESPAWNINVENTORY, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.respawn_inventory, g_i, g_p);
+        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY), g_i, g_p);
         return;
 
     case USERDEFS_RECSTAT:
@@ -594,10 +594,10 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_MONSTERS_OFF:
         if (iSet)
         {
-            ud.monsters_off = lValue;
+            DMFLAGS_SET(DMFLAG_NOMONSTERS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.monsters_off, g_i, g_p);
+        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_NOMONSTERS), g_i, g_p);
         return;
 
     case USERDEFS_BRIGHTNESS:
@@ -612,28 +612,28 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_M_RESPAWN_ITEMS:
         if (iSet)
         {
-            ud.m_respawn_items = lValue;
+            M_DMFLAGS_SET(DMFLAG_RESPAWNITEMS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.m_respawn_items, g_i, g_p);
+        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_RESPAWNITEMS), g_i, g_p);
         return;
 
     case USERDEFS_M_RESPAWN_MONSTERS:
         if (iSet)
         {
-            ud.m_respawn_monsters = lValue;
+            M_DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.m_respawn_monsters, g_i, g_p);
+        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS), g_i, g_p);
         return;
 
     case USERDEFS_M_RESPAWN_INVENTORY:
         if (iSet)
         {
-            ud.m_respawn_inventory = lValue;
+            M_DMFLAGS_SET(DMFLAG_RESPAWNINVENTORY, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.m_respawn_inventory, g_i, g_p);
+        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY), g_i, g_p);
         return;
 
     case USERDEFS_M_RECSTAT:
@@ -648,10 +648,10 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_M_MONSTERS_OFF:
         if (iSet)
         {
-            ud.m_monsters_off = lValue;
+            M_DMFLAGS_SET(DMFLAG_NOMONSTERS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.m_monsters_off, g_i, g_p);
+        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_NOMONSTERS), g_i, g_p);
         return;
 
     case USERDEFS_DETAIL:
@@ -666,19 +666,19 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_M_FFIRE:
         if (iSet)
         {
-            ud.m_ffire = lValue;
+            M_DMFLAGS_SET(DMFLAG_FRIENDLYFIRE, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.m_ffire, g_i, g_p);
+        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_FRIENDLYFIRE), g_i, g_p);
         return;
 
     case USERDEFS_FFIRE:
         if (iSet)
         {
-            ud.ffire = lValue;
+            DMFLAGS_SET(DMFLAG_FRIENDLYFIRE, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.ffire, g_i, g_p);
+        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_FRIENDLYFIRE), g_i, g_p);
         return;
 
     case USERDEFS_M_PLAYER_SKILL:
@@ -747,19 +747,19 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_M_MARKER:
         if (iSet)
         {
-            ud.m_marker = lValue;
+            M_DMFLAGS_SET(DMFLAG_MARKERS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.m_marker, g_i, g_p);
+        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_MARKERS), g_i, g_p);
         return;
 
     case USERDEFS_MARKER:
         if (iSet)
         {
-            ud.marker = lValue;
+            DMFLAGS_SET(DMFLAG_MARKERS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.marker, g_i, g_p);
+        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_MARKERS), g_i, g_p);
         return;
 
     case USERDEFS_MOUSEFLIP:
@@ -846,19 +846,19 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_M_NOEXITS:
         if (iSet)
         {
-            ud.m_noexits = lValue;
+            M_DMFLAGS_SET(DMFLAG_NOEXITS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.m_noexits, g_i, g_p);
+        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_NOEXITS), g_i, g_p);
         return;
 
     case USERDEFS_NOEXITS:
         if (iSet)
         {
-            ud.noexits = lValue;
+            DMFLAGS_SET(DMFLAG_NOEXITS, lValue);
             return;
         }
-        Gv_SetVar(lVar2, ud.noexits, g_i, g_p);
+        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_NOEXITS), g_i, g_p);
         return;
 
     case USERDEFS_AUTOVOTE:
@@ -1001,10 +1001,10 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
         {
             if (iSet)
             {
-                Gv_SetVarX(g_iReturnVarID, lValue);
+                Gv_SetVarX(sysVarIDs.RETURN, lValue);
                 return;
             }
-            Gv_SetVar(lVar2, Gv_GetVarX(g_iReturnVarID), g_i, g_p);
+            Gv_SetVar(lVar2, Gv_GetVarX(sysVarIDs.RETURN), g_i, g_p);
         }
         else
         {
@@ -1044,6 +1044,24 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
         Gv_SetVar(lVar2, teams[lParm2].suicides, g_i, g_p);
         return;
 
+    case USERDEFS_DMFLAGS:
+        if (iSet)
+        {
+            ud.dmflags = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, ud.dmflags, g_i, g_p);
+        return;
+
+    case USERDEFS_M_DMFLAGS:
+        if (iSet)
+        {
+            ud.m_dmflags = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, ud.m_dmflags, g_i, g_p);
+        return;
+
     default:
         return;
     }
@@ -1053,7 +1071,7 @@ static inline void X_AccessActiveProjectile(int iSet, int lVar1, int lLabelID, i
 {
     int lValue=0,proj=g_i;
 
-    if (lVar1 != g_iThisActorID)
+    if (lVar1 != sysVarIDs.THISACTOR)
         proj=Gv_GetVar(lVar1, g_i, g_p);
 
     if ((proj < 0 || proj >= MAXSPRITES) && g_scriptSanityChecks)
@@ -1333,7 +1351,7 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     int lValue=0;
     int iPlayer=g_p;
 
-    if (lVar1 != g_iThisActorID)
+    if (lVar1 != sysVarIDs.THISACTOR)
         iPlayer=Gv_GetVar(lVar1, g_i, g_p);
 
     if (((unsigned)iPlayer >= MAXPLAYERS || (g_player[iPlayer].ps == NULL && lLabelID != PLAYER_CONNECTED)) && g_scriptSanityChecks)
@@ -1777,7 +1795,7 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
         if (iSet)
         {
             g_player[iPlayer].ps->curr_weapon=lValue;
-            Gv_SetVar(g_iWeaponVarID, g_player[iPlayer].ps->curr_weapon, g_player[iPlayer].ps->i, iPlayer);
+            Gv_SetVar(sysVarIDs.WEAPON, g_player[iPlayer].ps->curr_weapon, g_player[iPlayer].ps->i, iPlayer);
             return;
         }
         Gv_SetVar(lVar2, g_player[iPlayer].ps->curr_weapon, g_i, g_p);
@@ -2715,7 +2733,7 @@ static inline void X_AccessPlayerInput(int iSet, int lVar1, int lLabelID, int lV
     int lValue=0;
     int iPlayer=g_p;
 
-    if (lVar1 != g_iThisActorID)
+    if (lVar1 != sysVarIDs.THISACTOR)
         iPlayer=Gv_GetVar(lVar1, g_i, g_p);
 
     if (((unsigned)iPlayer >= MAXPLAYERS || g_player[iPlayer].ps == NULL) && g_scriptSanityChecks)
@@ -2967,7 +2985,7 @@ static inline void X_AccessSector(int iSet, int lVar1, int lLabelID, int lVar2)
     int lValue=0;
     int iSector=sprite[g_i].sectnum;
 
-    if (lVar1 != g_iThisActorID)
+    if (lVar1 != sysVarIDs.THISACTOR)
         iSector=Gv_GetVar(lVar1, g_i, g_p);
 
     if ((iSector<0 || iSector >= numsectors) && g_scriptSanityChecks)
@@ -3245,7 +3263,7 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     int lValue=0;
     int iActor=g_i;
 
-    if (lVar1 != g_iThisActorID)
+    if (lVar1 != sysVarIDs.THISACTOR)
         iActor=Gv_GetVar(lVar1, g_i, g_p);
 
     if ((iActor < 0 || iActor >= MAXSPRITES) && g_scriptSanityChecks)
@@ -3749,7 +3767,7 @@ static inline void X_AccessTsprite(int iSet, int lVar1, int lLabelID, int lVar2)
     int lValue=0;
     int iActor=g_i;
 
-    if (lVar1 != g_iThisActorID)
+    if (lVar1 != sysVarIDs.THISACTOR)
         iActor=Gv_GetVar(lVar1, g_i, g_p);
 
     if ((iActor < 0 || iActor >= MAXSPRITES) && g_scriptSanityChecks)

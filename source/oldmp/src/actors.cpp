@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 //-------------------------------------------------------------------------
 #include "duke3d.h"
-#include "gamedef.h"
 #include "compat.h"
 
 #define KILLIT(KX) {A_DeleteSprite(KX);goto BOLT;}
@@ -236,9 +235,9 @@ static void P_ChangeWeapon(DukePlayer_t* const pPlayer, int const weaponNum)
 
     if (pPlayer->curr_weapon != weaponNum)
     {
-        Gv_SetVar(g_iReturnVarID, weaponNum, pPlayer->i, playerNum);
+        Gv_SetVar(sysVarIDs.RETURN, weaponNum, pPlayer->i, playerNum);
         X_OnEvent(EVENT_CHANGEWEAPON, pPlayer->i, playerNum, -1);
-        eventReturn = Gv_GetVar(g_iReturnVarID, pPlayer->i, playerNum);
+        eventReturn = Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, playerNum);
     }
 
     if (eventReturn == -1)
@@ -458,10 +457,10 @@ SKIPWALLCHECK:
                 {
                     if (A_CheckSpriteFlags(j, SFLAG_DAMAGEEVENT))
                     {
-                        Gv_SetVar(g_iReturnVarID, j, i, -1);
+                        Gv_SetVar(sysVarIDs.RETURN, j, i, -1);
                         X_OnEvent(EVENT_DAMAGESPRITE, i, -1, -1);
 
-                        if (Gv_GetVar(g_iReturnVarID, i, -1) < 0)
+                        if (Gv_GetVar(sysVarIDs.RETURN, i, -1) < 0)
                             goto BOLT;
                     }
 
@@ -512,7 +511,7 @@ SKIPWALLCHECK:
 
                         if (A_CheckSpriteFlags(j, SFLAG_DAMAGEEVENT))
                         {
-                            Gv_SetVar(g_iReturnVarID, j, i, -1);
+                            Gv_SetVar(sysVarIDs.RETURN, j, i, -1);
                             X_OnEvent(EVENT_POSTDAMAGESPRITE, i, -1, -1);
                         }
 
@@ -692,9 +691,9 @@ void A_DeleteSprite(int s)
     {
         int p, pl=A_FindPlayer(&sprite[s],&p);
 
-        Gv_SetVar(g_iReturnVarID,0, -1, -1);
+        Gv_SetVar(sysVarIDs.RETURN,0, -1, -1);
         X_OnEvent(EVENT_KILLIT, s, pl, p);
-        if (Gv_GetVar(g_iReturnVarID, -1, -1))
+        if (Gv_GetVar(sysVarIDs.RETURN, -1, -1))
             return;
     }
 
@@ -4704,7 +4703,7 @@ DETONATEB:
 
                 if (t[PIPEBOMB_EXPLOSIONTIMER] > 20)
                 {
-                    if (s->owner != i || ud.respawn_items == 0 || s->picnum == MORTER || s->picnum == BOUNCEMINE)
+                    if (s->owner != i || !DMFLAGS_TEST(DMFLAG_RESPAWNITEMS) || s->picnum == MORTER || s->picnum == BOUNCEMINE)
                     {
                         KILLIT(i);
                     }
@@ -4745,7 +4744,7 @@ DETONATEB:
                             P_PalFrom(g_player[p].ps, 32, 0, 32, 0);
                         }
 
-                        if (s->owner != i || ud.respawn_items == 0)
+                        if (s->owner != i || !DMFLAGS_TEST(DMFLAG_RESPAWNITEMS))
                         {
                             KILLIT(i);
                         }
@@ -5865,7 +5864,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         if (!A_CheckSoundPlaying(spriteNum,actor[spriteNum].lastvx))
                             A_PlaySound(actor[spriteNum].lastvx, spriteNum);
                     }
-                    else if (ud.monsters_off == 0 && pSector->floorpal == 0 && (pSector->floorstat&1) && rnd(8))
+                    else if (!DMFLAGS_TEST(DMFLAG_NOMONSTERS) && pSector->floorpal == 0 && (pSector->floorstat & 1) && rnd(8))
                     {
                         p = A_FindPlayer(pSprite,&x);
                         if (x < 20480)

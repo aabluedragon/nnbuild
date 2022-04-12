@@ -29,16 +29,26 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define LABEL_HASPARM2  1
 #define LABEL_ISSTRING  2
 
-extern int g_iReturnVarID;      // var ID of "RETURN"
-extern int g_iWeaponVarID;      // var ID of "WEAPON"
-extern int g_iWorksLikeVarID;   // var ID of "WORKSLIKE"
-extern int g_zRangeVarID;      // var ID of "ZRANGE"
-extern int g_angRangeVarID;    // var ID of "ANGRANGE"
-extern int g_aimAngleVarID;    // var ID of "AUTOAIMANGLE"
-extern int g_iLoTagID;          // var ID of "LOTAG"
-extern int g_iHiTagID;          // var ID of "HITAG"
-extern int g_iTextureID;        // var ID of "TEXTURE"
-extern int g_iThisActorID;      // var ID of "THISACTOR"
+typedef struct {
+    int32_t RETURN          = -1;
+    int32_t WEAPON          = -1;
+    int32_t WORKSLIKE       = -1;
+    int32_t ZRANGE          = -1;
+    int32_t ANGRANGE        = -1;
+    int32_t AUTOAIMANGLE    = -1;
+    int32_t LOTAG           = -1;
+    int32_t HITAG           = -1;
+    int32_t TEXTURE         = -1;
+    int32_t THISACTOR       = -1;
+
+    int32_t RESPAWN_MONSTERS    = -1;
+    int32_t RESPAWN_ITEMS       = -1;
+    int32_t RESPAWN_INVENTORY   = -1;
+    int32_t MONSTERS_OFF        = -1;
+    int32_t MARKER              = -1;
+    int32_t FFIRE               = -1;
+} SystemVarID_t;
+extern SystemVarID_t sysVarIDs;
 
 extern intptr_t *actorLoadEventScrptr[MAXTILES];
 
@@ -381,6 +391,8 @@ enum UserdefsLabel_t
     USERDEFS_TEAMPAL,
     USERDEFS_TEAMFRAGS,
     USERDEFS_TEAMSUICIDES,
+    USERDEFS_DMFLAGS,
+    USERDEFS_M_DMFLAGS,
     USERDEFS_END
 };
 

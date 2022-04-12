@@ -493,8 +493,15 @@ int __fastcall Gv_GetVar(int id, int iActor, int iPlayer)
     if (id == MAXGAMEVARS)
         return(*insptr++);
 
-    if (id == g_iThisActorID)
+    if (id == sysVarIDs.THISACTOR)
         return iActor;
+
+    if (id == sysVarIDs.RESPAWN_MONSTERS)   return DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS);
+    if (id == sysVarIDs.RESPAWN_ITEMS)      return DMFLAGS_TEST(DMFLAG_RESPAWNITEMS);
+    if (id == sysVarIDs.RESPAWN_INVENTORY)  return DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY);
+    if (id == sysVarIDs.MONSTERS_OFF)       return DMFLAGS_TEST(DMFLAG_NOMONSTERS);
+    if (id == sysVarIDs.MARKER)             return DMFLAGS_TEST(DMFLAG_MARKERS);
+    if (id == sysVarIDs.FFIRE)              return DMFLAGS_TEST(DMFLAG_FRIENDLYFIRE);
 
     {
         int neg = 0;
@@ -528,43 +535,23 @@ int __fastcall Gv_GetVar(int id, int iActor, int iPlayer)
             id &= ~(MAXGAMEVARS<<1);
         }
 
-        switch (aGameVars[id].dwFlags & (GAMEVAR_USER_MASK|GAMEVAR_PTR_MASK))
+        auto const& var = aGameVars[id & (MAXGAMEVARS - 1)];
+
+        int returnValue = 0;
+
+        switch (var.dwFlags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK))
         {
-        default:
-            if (neg) return (-aGameVars[id].val.lValue);
-            return (aGameVars[id].val.lValue);
-        case GAMEVAR_PERPLAYER:
-            if (iPlayer < 0 || iPlayer >= MAXPLAYERS)
-            {
-                OSD_Printf(CON_ERROR "Gv_GetVar(): invalid player ID (%d)\n",g_errorLineNum,keyw[g_tw],iPlayer);
-                return -1;
-            }
-            if (neg) return (-aGameVars[id].val.plValues[iPlayer]);
-            return (aGameVars[id].val.plValues[iPlayer]);
-        case GAMEVAR_PERACTOR:
-            if (iActor < 0 || iActor >= MAXSPRITES)
-            {
-                OSD_Printf(CON_ERROR "Gv_GetVar(): invalid sprite ID (%d)\n",g_errorLineNum,keyw[g_tw],iActor);
-                return -1;
-            }
-            if (neg) return (-aGameVars[id].val.plValues[iActor]);
-            return (aGameVars[id].val.plValues[iActor]);
-        case GAMEVAR_RAWQ16PTR:
-        case GAMEVAR_INT32PTR:
-            if (neg) return (-(*((int*)aGameVars[id].val.lValue)));
-            return ((*((int*)aGameVars[id].val.lValue)));
-        case GAMEVAR_INT16PTR:
-            if (neg) return (-(*((short*)aGameVars[id].val.lValue)));
-            return ((*((short*)aGameVars[id].val.lValue)));
-        case GAMEVAR_INT8PTR:
-            if (neg) return (-(*((char*)aGameVars[id].val.lValue)));
-            return ((*((char*)aGameVars[id].val.lValue)));
-        case GAMEVAR_Q16PTR:
-            if (neg) return (-(fix16_to_int(*(fix16_t *)aGameVars[id].val.lValue)));
-            return fix16_to_int(*(fix16_t *)aGameVars[id].val.lValue);
-            break;
+            default: returnValue = var.val.lValue; break;
+            case GAMEVAR_PERACTOR:  returnValue = var.val.plValues[iActor & (MAXSPRITES - 1)]; break;
+            case GAMEVAR_PERPLAYER: returnValue = var.val.plValues[iPlayer & (MAXPLAYERS - 1)]; break;
+            case GAMEVAR_RAWQ16PTR:
+            case GAMEVAR_INT32PTR: returnValue = *(int32_t*)var.val.lValue; break;
+            case GAMEVAR_INT16PTR: returnValue = *(int16_t*)var.val.lValue; break;
+            case GAMEVAR_INT8PTR: returnValue = *(uint8_t*)var.val.lValue; break;
+            case GAMEVAR_Q16PTR:   returnValue = fix16_to_int(*(fix16_t*)var.val.lValue); break;
         }
 
+        return NEGATE_ON_CONDITION(returnValue, neg);
     }
 }
 
@@ -618,63 +605,7 @@ void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
 
 int __fastcall Gv_GetVarX(int id)
 {
-    if (id == MAXGAMEVARS)
-        return(*insptr++);
-
-    if (id == g_iThisActorID)
-        return g_i;
-
-    {
-        int neg = 0;
-
-        if (id >= g_gameVarCount || id < 0)
-        {
-            if (id&(MAXGAMEVARS<<2)) // array
-            {
-                int index=Gv_GetVarX(*insptr++);
-
-                if (id&(MAXGAMEVARS<<1)) // negative array access
-                    neg = 1;
-
-                id &= ~((MAXGAMEVARS<<2)|(MAXGAMEVARS<<1));
-
-                if (index >= aGameArrays[id].size || index < 0)
-                {
-                    OSD_Printf(CON_ERROR "Gv_GetVar(): invalid array index (%s[%d])\n",g_errorLineNum,keyw[g_tw],aGameArrays[id].szLabel,index);
-                    return -1;
-                }
-                if (neg) return (-aGameArrays[id].plValues[index]);
-                return (aGameArrays[id].plValues[index]);
-            }
-
-            if ((id&(MAXGAMEVARS<<1)) == 0)
-            {
-                OSD_Printf(CON_ERROR "Gv_GetVar(): invalid gamevar ID (%d)\n",g_errorLineNum,keyw[g_tw],id);
-                return -1;
-            }
-
-            neg = 1;
-            id &= ~(MAXGAMEVARS<<1);
-        }
-
-        auto const& var = aGameVars[id & (MAXGAMEVARS - 1)];
-
-        int returnValue = 0;
-
-        switch (var.dwFlags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK))
-        {
-        default: returnValue = var.val.lValue; break;
-        case GAMEVAR_PERACTOR:  returnValue = var.val.plValues[g_i & (MAXSPRITES - 1)]; break;
-        case GAMEVAR_PERPLAYER: returnValue = var.val.plValues[g_p & (MAXPLAYERS - 1)]; break;
-        case GAMEVAR_RAWQ16PTR:
-        case GAMEVAR_INT32PTR: returnValue = *(int32_t*)var.val.lValue; break;
-        case GAMEVAR_INT16PTR: returnValue = *(int16_t*)var.val.lValue; break;
-        case GAMEVAR_INT8PTR: returnValue = *(uint8_t*)var.val.lValue; break;
-        case GAMEVAR_Q16PTR:   returnValue = fix16_to_int(*(fix16_t*)var.val.lValue); break;
-        }
-
-        return NEGATE_ON_CONDITION(returnValue, neg);
-    }
+    return Gv_GetVar(id, g_i, g_p);
 }
 
 void __fastcall Gv_SetVarX(int id, int lValue)
@@ -761,16 +692,23 @@ void Gv_ResetSystemDefaults(void)
         }
     }
 
-    g_iReturnVarID=Gv_GetVarIndex("RETURN");
-    g_iWeaponVarID=Gv_GetVarIndex("WEAPON");
-    g_iWorksLikeVarID=Gv_GetVarIndex("WORKSLIKE");
-    g_zRangeVarID=Gv_GetVarIndex("ZRANGE");
-    g_angRangeVarID=Gv_GetVarIndex("ANGRANGE");
-    g_aimAngleVarID=Gv_GetVarIndex("AUTOAIMANGLE");
-    g_iLoTagID=Gv_GetVarIndex("LOTAG");
-    g_iHiTagID=Gv_GetVarIndex("HITAG");
-    g_iTextureID=Gv_GetVarIndex("TEXTURE");
-    g_iThisActorID=Gv_GetVarIndex("THISACTOR");
+    sysVarIDs.RETURN = Gv_GetVarIndex("RETURN");
+    sysVarIDs.WEAPON = Gv_GetVarIndex("WEAPON");
+    sysVarIDs.WORKSLIKE = Gv_GetVarIndex("WORKSLIKE");
+    sysVarIDs.ZRANGE = Gv_GetVarIndex("ZRANGE");
+    sysVarIDs.ANGRANGE = Gv_GetVarIndex("ANGRANGE");
+    sysVarIDs.AUTOAIMANGLE = Gv_GetVarIndex("AUTOAIMANGLE");
+    sysVarIDs.LOTAG = Gv_GetVarIndex("LOTAG");
+    sysVarIDs.HITAG = Gv_GetVarIndex("HITAG");
+    sysVarIDs.TEXTURE = Gv_GetVarIndex("TEXTURE");
+    sysVarIDs.THISACTOR = Gv_GetVarIndex("THISACTOR");
+
+    sysVarIDs.RESPAWN_MONSTERS = Gv_GetVarIndex("RESPAWN_MONSTERS");
+    sysVarIDs.RESPAWN_ITEMS = Gv_GetVarIndex("RESPAWN_ITEMS");
+    sysVarIDs.RESPAWN_INVENTORY = Gv_GetVarIndex("RESPAWN_INVENTORY");
+    sysVarIDs.MONSTERS_OFF = Gv_GetVarIndex("MONSTERS_OFF");
+    sysVarIDs.MARKER = Gv_GetVarIndex("MARKER");
+    sysVarIDs.FFIRE = Gv_GetVarIndex("FFIRE");
 
     Bmemcpy(&ProjectileData,&DefaultProjectileData,sizeof(ProjectileData));
 
@@ -1248,12 +1186,14 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("TRIPBOMB_CONTROL", TRIPBOMB_TRIPWIRE, GAMEVAR_PERPLAYER | GAMEVAR_SYSTEM);
     Gv_NewVar("PIPEBOMB_CONTROL", NAM?PIPEBOMB_TIMER:PIPEBOMB_REMOTE, GAMEVAR_PERPLAYER | GAMEVAR_SYSTEM);
 
-    Gv_NewVar("RESPAWN_MONSTERS", (intptr_t)&ud.respawn_monsters,GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
-    Gv_NewVar("RESPAWN_ITEMS",(intptr_t)&ud.respawn_items, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
-    Gv_NewVar("RESPAWN_INVENTORY",(intptr_t)&ud.respawn_inventory, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
-    Gv_NewVar("MONSTERS_OFF",(intptr_t)&ud.monsters_off, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
-    Gv_NewVar("MARKER",(intptr_t)&ud.marker, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
-    Gv_NewVar("FFIRE",(intptr_t)&ud.ffire, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
+    Gv_NewVar("DMFLAGS", (intptr_t)&ud.dmflags, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
+    Gv_NewVar("RESPAWN_MONSTERS", 0, GAMEVAR_SYSTEM | GAMEVAR_READONLY);
+    Gv_NewVar("RESPAWN_ITEMS", 0, GAMEVAR_SYSTEM | GAMEVAR_READONLY);
+    Gv_NewVar("RESPAWN_INVENTORY", 0, GAMEVAR_SYSTEM | GAMEVAR_READONLY);
+    Gv_NewVar("MONSTERS_OFF", 0, GAMEVAR_SYSTEM | GAMEVAR_READONLY);
+    Gv_NewVar("MARKER", 0, GAMEVAR_SYSTEM | GAMEVAR_READONLY);
+    Gv_NewVar("FFIRE", 0, GAMEVAR_SYSTEM | GAMEVAR_READONLY);
+
     Gv_NewVar("LEVEL",(intptr_t)&ud.level_number, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY);
     Gv_NewVar("VOLUME",(intptr_t)&ud.volume_number, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY);
 
@@ -1426,12 +1366,6 @@ void Gv_InitWeaponPointers(void)
 
 void Gv_RefreshPointers(void)
 {
-    aGameVars[Gv_GetVarIndex("RESPAWN_MONSTERS")].val.lValue = (intptr_t)&ud.respawn_monsters;
-    aGameVars[Gv_GetVarIndex("RESPAWN_ITEMS")].val.lValue = (intptr_t)&ud.respawn_items;
-    aGameVars[Gv_GetVarIndex("RESPAWN_INVENTORY")].val.lValue = (intptr_t)&ud.respawn_inventory;
-    aGameVars[Gv_GetVarIndex("MONSTERS_OFF")].val.lValue = (intptr_t)&ud.monsters_off;
-    aGameVars[Gv_GetVarIndex("MARKER")].val.lValue = (intptr_t)&ud.marker;
-    aGameVars[Gv_GetVarIndex("FFIRE")].val.lValue = (intptr_t)&ud.ffire;
     aGameVars[Gv_GetVarIndex("LEVEL")].val.lValue = (intptr_t)&ud.level_number;
     aGameVars[Gv_GetVarIndex("VOLUME")].val.lValue = (intptr_t)&ud.volume_number;
 

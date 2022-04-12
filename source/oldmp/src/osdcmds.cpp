@@ -110,7 +110,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
             ud.m_level_number = level;
 
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
-                ud.m_noexits = 0;
+                M_DMFLAGS_SET(DMFLAG_NOEXITS, false);
 
             Net_InitiateVote();
 
@@ -135,11 +135,7 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
         ud.m_volume_number = volume;
         ud.m_level_number = level;
 
-        ud.m_monsters_off = 0;
-
-        ud.m_respawn_items = 0;
-        ud.m_respawn_inventory = 0;
-        //ud.m_respawn_monsters = 0;
+        M_DMFLAGS_SET(DMFLAG_NOMONSTERS | DMFLAG_RESPAWNINVENTORY | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNMONSTERS, false);
 
         ud.m_coop = 1;
 
@@ -250,7 +246,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
             ud.m_level_number = 7;
 
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
-                ud.m_noexits = 0;
+                M_DMFLAGS_SET(DMFLAG_NOEXITS, false);
 
             Net_InitiateVote();
 
@@ -265,11 +261,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
     ud.m_volume_number = 0;
     ud.m_level_number = 7;
 
-    ud.m_monsters_off = 0;
-
-    ud.m_respawn_items = 0;
-    ud.m_respawn_inventory = 0;
-    ud.m_respawn_monsters = 0;
+    M_DMFLAGS_SET(DMFLAG_NOMONSTERS | DMFLAG_RESPAWNINVENTORY | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNMONSTERS, false);
 
     ud.m_coop = 1;
 

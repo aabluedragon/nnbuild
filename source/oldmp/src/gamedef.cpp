@@ -68,16 +68,8 @@ intptr_t *aplWeaponReloadSound1[MAX_WEAPONS];    // Sound of magazine being remo
 intptr_t *aplWeaponReloadSound2[MAX_WEAPONS];    // Sound of magazine being inserted
 intptr_t *aplWeaponSelectSound[MAX_WEAPONS];     // Sound of weapon being selected
 
-int g_iReturnVarID=-1;      // var ID of "RETURN"
-int g_iWeaponVarID=-1;      // var ID of "WEAPON"
-int g_iWorksLikeVarID=-1;   // var ID of "WORKSLIKE"
-int g_zRangeVarID=-1;      // var ID of "ZRANGE"
-int g_angRangeVarID=-1;    // var ID of "ANGRANGE"
-int g_aimAngleVarID=-1;    // var ID of "AUTOAIMANGLE"
-int g_iLoTagID=-1;          // var ID of "LOTAG"
-int g_iHiTagID=-1;          // var ID of "HITAG"
-int g_iTextureID=-1;        // var ID of "TEXTURE"
-int g_iThisActorID=-1;      // var ID of "THISACTOR"
+// Stores the IDs of system vars.
+SystemVarID_t sysVarIDs;
 
 intptr_t *actorLoadEventScrptr[MAXTILES];
 
@@ -940,6 +932,8 @@ const memberlabel_t UserdefsLabels[]=
     { "teampal", USERDEFS_TEAMPAL, LABEL_HASPARM2, MAXPLAYERS },
     { "teamfrags", USERDEFS_TEAMFRAGS, LABEL_HASPARM2, MAXPLAYERS },
     { "teamsuicides", USERDEFS_TEAMSUICIDES, LABEL_HASPARM2, MAXPLAYERS },
+    { "dmflags", USERDEFS_DMFLAGS, 0, 0 },
+    { "m_dmflags", USERDEFS_M_DMFLAGS, 0, 0 },
     { "", -1, 0, 0  }     // END OF LIST
 };
 
@@ -3546,7 +3540,7 @@ static int C_ParseCommand(void)
         }
         textptr++;
 
-        if (g_scriptPtr[-1] == g_iThisActorID) // convert to "setvarvar"
+        if (g_scriptPtr[-1] == sysVarIDs.THISACTOR) // convert to "setvarvar"
         {
             g_scriptPtr--;
             g_scriptPtr[-1]=CON_SETVARVAR;

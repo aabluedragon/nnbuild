@@ -239,7 +239,6 @@ void CONFIG_SetDefaults(void)
     ud.idplayers = 1;
     ud.levelstats = 0;
     ud.lockout = 0;
-    ud.m_marker = 1;
     ud.mouseaiming = 0;
     ud.mouseflip = 1;
     ud.msgdisptime = 120;

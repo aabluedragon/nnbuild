@@ -401,27 +401,17 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_earthquakeTime,sizeof(g_earthquakeTime),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.from_bonus,sizeof(ud.from_bonus),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.secretlevel,sizeof(ud.secretlevel),1,fil) != 1) goto corrupt;
-    if (kdfread(&ud.respawn_monsters,sizeof(ud.respawn_monsters),1,fil) != 1) goto corrupt;
-    ud.m_respawn_monsters = ud.respawn_monsters;
-    if (kdfread(&ud.respawn_items,sizeof(ud.respawn_items),1,fil) != 1) goto corrupt;
-    ud.m_respawn_items = ud.respawn_items;
-    if (kdfread(&ud.respawn_inventory,sizeof(ud.respawn_inventory),1,fil) != 1) goto corrupt;
-    ud.m_respawn_inventory = ud.respawn_inventory;
+    if (kdfread(&ud.dmflags,sizeof(ud.dmflags),1,fil) != 1) goto corrupt;
+    ud.m_dmflags = ud.dmflags;
 
     if (kdfread(&ud.god,sizeof(ud.god),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.auto_run,sizeof(ud.auto_run),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.crosshair,sizeof(ud.crosshair),1,fil) != 1) goto corrupt;
-    if (kdfread(&ud.monsters_off,sizeof(ud.monsters_off),1,fil) != 1) goto corrupt;
-    ud.m_monsters_off = ud.monsters_off;
     if (kdfread(&ud.last_level,sizeof(ud.last_level),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.eog,sizeof(ud.eog),1,fil) != 1) goto corrupt;
 
     if (kdfread(&ud.coop,sizeof(ud.coop),1,fil) != 1) goto corrupt;
     ud.m_coop = ud.coop;
-    if (kdfread(&ud.marker,sizeof(ud.marker),1,fil) != 1) goto corrupt;
-    ud.m_marker = ud.marker;
-    if (kdfread(&ud.ffire,sizeof(ud.ffire),1,fil) != 1) goto corrupt;
-    ud.m_ffire = ud.ffire;
 
     if (kdfread(&g_curViewscreen,sizeof(g_curViewscreen),1,fil) != 1) goto corrupt;
     if (kdfread(&connecthead,sizeof(connecthead),1,fil) != 1) goto corrupt;
@@ -469,10 +459,6 @@ int32_t G_LoadPlayer(int32_t spot)
     }
 
     if (kdfread(&DynamicTileMap[0],sizeof(DynamicTileMap[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
-
-    if (kdfread(&ud.noexits,sizeof(ud.noexits),1,fil) != 1) goto corrupt;
-    ud.m_noexits = ud.noexits;
-
 
     if (Gv_ReadSave(fil)) goto corrupt;
 
@@ -842,18 +828,13 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&g_earthquakeTime,sizeof(g_earthquakeTime),1,fil);
     dfwrite(&ud.from_bonus,sizeof(ud.from_bonus),1,fil);
     dfwrite(&ud.secretlevel,sizeof(ud.secretlevel),1,fil);
-    dfwrite(&ud.respawn_monsters,sizeof(ud.respawn_monsters),1,fil);
-    dfwrite(&ud.respawn_items,sizeof(ud.respawn_items),1,fil);
-    dfwrite(&ud.respawn_inventory,sizeof(ud.respawn_inventory),1,fil);
+    dfwrite(&ud.dmflags,sizeof(ud.dmflags),1,fil);
     dfwrite(&ud.god,sizeof(ud.god),1,fil);
     dfwrite(&ud.auto_run,sizeof(ud.auto_run),1,fil);
     dfwrite(&ud.crosshair,sizeof(ud.crosshair),1,fil);
-    dfwrite(&ud.monsters_off,sizeof(ud.monsters_off),1,fil);
     dfwrite(&ud.last_level,sizeof(ud.last_level),1,fil);
     dfwrite(&ud.eog,sizeof(ud.eog),1,fil);
     dfwrite(&ud.coop,sizeof(ud.coop),1,fil);
-    dfwrite(&ud.marker,sizeof(ud.marker),1,fil);
-    dfwrite(&ud.ffire,sizeof(ud.ffire),1,fil);
     dfwrite(&g_curViewscreen,sizeof(g_curViewscreen),1,fil);
     dfwrite(&connecthead,sizeof(connecthead),1,fil);
     dfwrite(connectpoint2,sizeof(connectpoint2),1,fil);
@@ -892,8 +873,6 @@ int32_t G_SavePlayer(int32_t spot)
     }
 
     dfwrite(&DynamicTileMap[0],sizeof(DynamicTileMap[0]),MAXTILES,fil);
-
-    dfwrite(&ud.noexits,sizeof(ud.noexits),1,fil);
 
     Gv_WriteSave(fil);
 

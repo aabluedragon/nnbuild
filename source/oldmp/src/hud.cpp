@@ -1142,10 +1142,10 @@ void G_DrawCrosshair(void)
     if (pPlayer->newowner != -1 || ud.overhead_on || !ud.crosshair || ud.camerasprite != -1)
         return;
 
-    Gv_SetVar(g_iReturnVarID, 0, pPlayer->i, screenpeek);
+    Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, screenpeek);
     X_OnEvent(EVENT_DISPLAYCROSSHAIR, g_player[screenpeek].ps->i, screenpeek, -1);
 
-    if (Gv_GetVar(g_iReturnVarID, pPlayer->i, screenpeek) == 0)
+    if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, screenpeek) == 0)
         rotatesprite((160L - (pPlayer->look_ang >> 1)) << 16, 100L << 16, scale(65536, ud.crosshairscale, 100), 0, CROSSHAIR, 0, CROSSHAIR_PAL, 2 + 1, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
 }
 
@@ -1180,7 +1180,7 @@ void G_DisplayPlayerId(void)
     if (g_player[myconnectindex].ps->gm & MODE_MENU)
         return;
 
-    if (ud.idplayers && (ud.multimode > 1))
+    if (ud.idplayers && (ud.multimode > 1) && !DMFLAGS_TEST(DMFLAG_NOPLAYERID))
     {
         // TODO: (Optimization) Consider moving this segment to a point in the code that operates at 120hz.
         int i;

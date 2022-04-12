@@ -30,18 +30,17 @@ typedef struct {
 
     int32_t runkey_mode, statusbarscale, mouseaiming, weaponswitch, drawweapon;   // JBF 20031125
     int32_t democams, color, m_color, msgdisptime, statusbarmode;
-    int32_t m_noexits, noexits, autovote, automsg, idplayers, showweapons;
+    int32_t autovote, automsg, idplayers, showweapons;
     int32_t team, viewbob, weaponsway, althud, weaponscale, textscale;
 
     int32_t entered_name, screen_tilting, shadows, fta_on, executions, auto_run;
     int32_t coords, showfps, levelstats, m_coop, coop, screen_size, lockout, crosshair;
     int32_t playerai, angleinterpolation, obituaries;
 
-    int32_t respawn_monsters, respawn_items, respawn_inventory, recstat, monsters_off, brightness;
-    int32_t m_respawn_items, m_respawn_monsters, m_respawn_inventory, m_recstat, m_monsters_off, detail;
-    int32_t m_ffire, ffire, m_player_skill, m_level_number, m_volume_number, multimode;
-    int32_t player_skill, level_number, volume_number, m_marker, marker, mouseflip;
-    int32_t m_weaponstay;
+    int32_t recstat, brightness;
+    int32_t m_recstat, detail;
+    int32_t m_player_skill, m_level_number, m_volume_number, multimode;
+    int32_t player_skill, level_number, volume_number, mouseflip;
 
     int32_t music_episode, music_level;
 
@@ -55,6 +54,8 @@ typedef struct {
     int32_t fraglimit;
 
     int32_t got_access;
+
+    int32_t m_dmflags, dmflags;
 
     int32_t playerid_time;
     int8_t playerid_num;
@@ -75,7 +76,6 @@ typedef struct {
     char show_level_text;
     char wchoice[MAX_WEAPONS];
     char limit_hit, winner;
-    char allow_visibility;
 
     int32_t returnvar[MAX_RETURN_VALUES - 1];
 

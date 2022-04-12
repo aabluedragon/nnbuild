@@ -40,7 +40,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osdcmds.h"
 #include "scriptfile.h"
 #include "grpscan.h"
-#include "gamedef.h"
 #include "kplib.h"
 //#include "crc32.h"
 //#include "util_lib.h"
@@ -2299,9 +2298,9 @@ void G_DisplayRest(int smoothratio)
 
     G_DrawFrags();
 
-    Gv_SetVar(g_iReturnVarID,0,g_player[screenpeek].ps->i,screenpeek);
+    Gv_SetVar(sysVarIDs.RETURN,0,g_player[screenpeek].ps->i,screenpeek);
     X_OnEvent(EVENT_DISPLAYSBAR, g_player[screenpeek].ps->i, screenpeek, -1);
-    if (Gv_GetVar(g_iReturnVarID,g_player[screenpeek].ps->i,screenpeek) == 0)
+    if (Gv_GetVar(sysVarIDs.RETURN,g_player[screenpeek].ps->i,screenpeek) == 0)
         G_DrawStatusBar(screenpeek);
 
     G_PrintGameQuotes();
@@ -2559,15 +2558,15 @@ void G_DrawBackground(void)
     {
         // when not rendering a game, fullscreen wipe
 #define MENUTILE (!videoGetRenderMode()?MENUSCREEN:LOADSCREEN)
-        Gv_SetVar(g_iReturnVarID,tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?MENUTILE:BIGHOLE, -1, -1);
+        Gv_SetVar(sysVarIDs.RETURN,tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?MENUTILE:BIGHOLE, -1, -1);
         X_OnEvent(EVENT_GETMENUTILE, -1, myconnectindex, -1);
         if (Gv_GetVarByLabel("MENU_TILE", tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?0:1, -1, -1))
         {
-            for (y=y1;y<y2;y+=tilesiz[Gv_GetVar(g_iReturnVarID, -1, -1)].y)
-                for (x=0;x<xdim;x+=tilesiz[Gv_GetVar(g_iReturnVarID, -1, -1)].x)
-                    rotatesprite(x<<16,y<<16,65536L,0,Gv_GetVar(g_iReturnVarID, -1, -1),bpp==8?16:8,0,8+16+64,0,0,xdim-1,ydim-1);
+            for (y=y1;y<y2;y+=tilesiz[Gv_GetVar(sysVarIDs.RETURN, -1, -1)].y)
+                for (x=0;x<xdim;x+=tilesiz[Gv_GetVar(sysVarIDs.RETURN, -1, -1)].x)
+                    rotatesprite(x<<16,y<<16,65536L,0,Gv_GetVar(sysVarIDs.RETURN, -1, -1),bpp==8?16:8,0,8+16+64,0,0,xdim-1,ydim-1);
         }
-        else rotatesprite(320<<15,200<<15,65536L,0,Gv_GetVar(g_iReturnVarID, -1, -1),bpp==8?16:8,0,2+8+64,0,0,xdim-1,ydim-1);
+        else rotatesprite(320<<15,200<<15,65536L,0,Gv_GetVar(sysVarIDs.RETURN, -1, -1),bpp==8?16:8,0,2+8+64,0,0,xdim-1,ydim-1);
         return;
     }
 
@@ -2976,7 +2975,7 @@ void G_DrawRooms(int snum,int smoothratio)
 
 //    smoothratio = min(max(smoothratio,0),65536);
 
-    g_visibility = (int)(pDisp->visibility * ((numplayers > 1 && !ud.allow_visibility) ? 1.f : r_ambientlightrecip)); // Do not allow visibility changes in online play.
+    g_visibility = (int)(pDisp->visibility * ((numplayers > 1 && !DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE)) ? 1.f : r_ambientlightrecip)); // Do not allow visibility changes in online play.
 
     if (ud.pause_on || g_player[snum].ps->on_crane > -1) smoothratio = 65536;
 
@@ -3018,7 +3017,7 @@ void G_DrawRooms(int snum,int smoothratio)
         int screenTilting = (videoGetRenderMode() == REND_CLASSIC
             && ((ud.screen_tilting && p->rotscrnang)));
 
-        vr = Blrintf(float(vr) * tanf(ud.fov * (fPI / 360.f)));
+        vr = Blrintf(float(vr) * tanf((DMFLAGS_TEST(DMFLAG_NOFOVCHANGE) ? 90 : ud.fov) * (fPI / 360.f)));
 
         if (!r_usenewaspect)
             renderSetAspect(vr, yxaspect);
@@ -3634,7 +3633,7 @@ int A_Spawn(int j, int pn)
 
                 if (A_CheckSpriteFlags(i, SFLAG_BADGUY))
                 {
-                    if (ud.monsters_off == 1)
+                    if (DMFLAGS_TEST(DMFLAG_NOMONSTERS))
                     {
                         sp->xrepeat=sp->yrepeat=0;
                         changespritestat(i, STAT_MISC);
@@ -4597,7 +4596,7 @@ int A_Spawn(int j, int pn)
 
             if (j >= 0) sp->lotag = 0;
 
-            if ((sp->lotag > ud.player_skill) || ud.monsters_off == 1)
+            if ((sp->lotag > ud.player_skill) || DMFLAGS_TEST(DMFLAG_NOMONSTERS))
             {
                 sp->xrepeat=sp->yrepeat=0;
                 changespritestat(i, STAT_MISC);
@@ -4701,7 +4700,7 @@ int A_Spawn(int j, int pn)
                 }
                 ud.total_monsters++;
                 actor[i].temp_data[5] = 0;
-                if (ud.monsters_off == 1)
+                if (DMFLAGS_TEST(DMFLAG_NOMONSTERS))
                 {
                     sp->xrepeat = sp->yrepeat = 0;
                     changespritestat(i, STAT_MISC);
@@ -5437,7 +5436,7 @@ int A_Spawn(int j, int pn)
             fallthrough__;
 
         case EGG__STATIC:
-            if (ud.monsters_off == 1 && sp->picnum == EGG)
+            if (DMFLAGS_TEST(DMFLAG_NOMONSTERS) && sp->picnum == EGG)
             {
                 sp->xrepeat = sp->yrepeat = 0;
                 changespritestat(i, STAT_MISC);
@@ -5571,7 +5570,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             case RESPAWNMARKERRED__STATIC:
             case RESPAWNMARKERYELLOW__STATIC:
             case RESPAWNMARKERGREEN__STATIC:
-                if (ud.marker == 0)
+                if (!DMFLAGS_TEST(DMFLAG_MARKERS))
                     t->xrepeat = t->yrepeat = 0;
                 continue;
             case CHAIR3__STATIC:
@@ -6454,68 +6453,68 @@ enum cheats
 
 void G_CheatGetInv(void)
 {
-    Gv_SetVar(g_iReturnVarID, 400, g_player[myconnectindex].ps->i, myconnectindex);
+    Gv_SetVar(sysVarIDs.RETURN, 400, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETSTEROIDS, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    if (Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex) >=0)
+    if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
         g_player[myconnectindex].ps->steroids_amount =
-            Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex);
+            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
-    Gv_SetVar(g_iReturnVarID, 1200, g_player[myconnectindex].ps->i, myconnectindex);
+    Gv_SetVar(sysVarIDs.RETURN, 1200, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETHEAT, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    if (Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex) >=0)
+    if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
         g_player[myconnectindex].ps->heat_amount     =
-            Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex);
+            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
-    Gv_SetVar(g_iReturnVarID, 200, g_player[myconnectindex].ps->i, myconnectindex);
+    Gv_SetVar(sysVarIDs.RETURN, 200, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETBOOT, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    if (Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex) >=0)
+    if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
         g_player[myconnectindex].ps->boot_amount          =
-            Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex);
+            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
-    Gv_SetVar(g_iReturnVarID, 100, g_player[myconnectindex].ps->i, myconnectindex);
+    Gv_SetVar(sysVarIDs.RETURN, 100, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETSHIELD, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    if (Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex) >=0)
+    if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
         g_player[myconnectindex].ps->shield_amount =
-            Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex);
+            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
-    Gv_SetVar(g_iReturnVarID, 6400, g_player[myconnectindex].ps->i, myconnectindex);
+    Gv_SetVar(sysVarIDs.RETURN, 6400, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETSCUBA, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    if (Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex) >=0)
+    if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
         g_player[myconnectindex].ps->scuba_amount =
-            Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex);
+            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
-    Gv_SetVar(g_iReturnVarID, 2400, g_player[myconnectindex].ps->i, myconnectindex);
+    Gv_SetVar(sysVarIDs.RETURN, 2400, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETHOLODUKE, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    if (Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex) >=0)
+    if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
         g_player[myconnectindex].ps->holoduke_amount =
-            Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex);
+            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
-    Gv_SetVar(g_iReturnVarID, 1600, g_player[myconnectindex].ps->i, myconnectindex);
+    Gv_SetVar(sysVarIDs.RETURN, 1600, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETJETPACK, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    if (Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex) >=0)
+    if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
         g_player[myconnectindex].ps->jetpack_amount =
-            Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex);
+            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
-    Gv_SetVar(g_iReturnVarID, g_player[myconnectindex].ps->max_player_health, g_player[myconnectindex].ps->i, myconnectindex);
+    Gv_SetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->max_player_health, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETFIRSTAID, g_player[myconnectindex].ps->i, myconnectindex, -1);
-    if (Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex) >=0)
+    if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
         g_player[myconnectindex].ps->firstaid_amount =
-            Gv_GetVar(g_iReturnVarID, g_player[myconnectindex].ps->i, myconnectindex);
+            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 }
 
@@ -7047,15 +7046,8 @@ static void G_HandleVoteKeys(void)
                     ud.m_volume_number      = vote.episode;
                     ud.m_level_number       = vote.level;
                     ud.m_player_skill       = vote.skill;
-                    ud.m_monsters_off       = vote.monsters_off;
-                    ud.m_respawn_monsters   = vote.respawn_monsters;
-                    ud.m_respawn_items      = vote.respawn_items;
-                    ud.m_respawn_inventory  = vote.respawn_inventory;
                     ud.m_coop               = vote.gametype;
-                    ud.m_marker             = vote.marker;
-                    ud.m_ffire              = vote.ffire;
-                    ud.m_noexits            = vote.noexits;
-                    ud.m_weaponstay         = vote.weaponstay;
+                    ud.m_dmflags            = vote.dmflags;
 
                     G_BeginNewGame();
 
@@ -7860,14 +7852,10 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
 
     ud.fta_on = 1;
     ud.god = 0;
-    ud.m_respawn_items = 0;
-    ud.m_respawn_monsters = 0;
-    ud.m_respawn_inventory = 0;
-    ud.m_weaponstay = 0;
-    ud.m_ffire = 1;
     ud.warp_on = 0;
     ud.cashman = 0;
     ud.m_player_skill = ud.player_skill = 2;
+    ud.m_dmflags = DEFAULT_DMFLAGS;
     g_player[0].wchoice[0] = 3;
     g_player[0].wchoice[1] = 4;
     g_player[0].wchoice[2] = 5;
@@ -7965,7 +7953,8 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 }
                 if (!Bstrcasecmp(c+1, "wstay"))
                 {
-                    ud.m_weaponstay = 1;
+                    //ud.m_weaponstay = 1;
+                    M_DMFLAGS_SET(DMFLAG_WEAPONSTAY, true);
                     i++;
                     continue;
                 }
@@ -8046,13 +8035,14 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 }
                 if (!Bstrcasecmp(c + 1, "noffire"))
                 {
-                    ud.m_ffire = 0;
+                    //ud.m_ffire = 0;
+                    M_DMFLAGS_SET(DMFLAG_FRIENDLYFIRE, false);
                     i++;
                     continue;
                 }
                 if (!Bstrcasecmp(c + 1, "allowvisibility"))
                 {
-                    ud.allow_visibility = 1;
+                    M_DMFLAGS_SET(DMFLAG_ALLOWVISIBILITYCHANGE, true);
                     initprintf("Visibility adjustment enabled for multiplayer.\n");
                     i++;
                     continue;
@@ -8164,7 +8154,8 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     // Make sure that COOP still defaults to weapon stay ON.
                     if (Gametypes[ud.m_coop].flags & GAMETYPE_WEAPSTAY)
                     {
-                        ud.m_weaponstay = 1;
+                        //ud.m_weaponstay = 1;
+                        M_DMFLAGS_SET(DMFLAG_WEAPONSTAY, true);
                     }
                     break;
                 case 'd':
@@ -8205,7 +8196,8 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 case 'M':
                     if (*(c+1) != 'a' && *(c+1) != 'A')
                     {
-                        ud.m_monsters_off = 1;
+                        //ud.m_monsters_off = 1;
+                        M_DMFLAGS_SET(DMFLAG_NOMONSTERS, true);
                         ud.m_player_skill = ud.player_skill = 0;
                         initprintf("Monsters off.\n");
                     }
@@ -8246,10 +8238,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     else ud.multimode = atoi(c) % (MAXPLAYERS + 1);
 
                     ud.m_coop = ud.coop = 0;
-                    ud.m_marker = ud.marker = 1;
-                    ud.m_respawn_monsters = ud.respawn_monsters = 1;
-                    ud.m_respawn_items = ud.respawn_items = 1;
-                    ud.m_respawn_inventory = ud.respawn_inventory = 1;
+                    M_DMFLAGS_SET(DMFLAG_MARKERS | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNINVENTORY, true);
                     break;
                 }
                 case 'r':
@@ -8268,28 +8257,26 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     if (Bstrstr(c, "x") != NULL)
                     {
                         initprintf("Respawn All (Items/Inventory/Monsters).\n");
-                        ud.m_respawn_monsters = 1;
-                        ud.m_respawn_items = 1;
-                        ud.m_respawn_inventory = 1;
+                        M_DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNINVENTORY, true);
                     }
                     else
                     {
                         if (Bstrstr(c, "1") != NULL)
                         {
                             initprintf("Respawn Monsters.\n");
-                            ud.m_respawn_monsters = 1;
+                            M_DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, true);
                         }
 
                         if (Bstrstr(c, "2") != NULL)
                         {
                             initprintf("Respawn Items.\n");
-                            ud.m_respawn_items = 1;
+                            M_DMFLAGS_SET(DMFLAG_RESPAWNITEMS, true);
                         }
 
                         if (Bstrstr(c, "3") != NULL)
                         {
                             initprintf("Respawn Inventory.\n");
-                            ud.m_respawn_inventory = 1;
+                            M_DMFLAGS_SET(DMFLAG_RESPAWNINVENTORY, true);
                         }
                     }
 
@@ -9832,18 +9819,10 @@ static int G_OpenDemoRead(int g_whichDemo) // 0 = mine
     OSD_Printf("ud.player_skill: %d\n",ud.player_skill);
     if (kread(recfilep,(char *)&ud.m_coop,sizeof(char)) != sizeof(char)) goto corrupt;
     OSD_Printf("ud.m_coop: %d\n",ud.m_coop);
-    if (kread(recfilep,(char *)&ud.m_ffire,sizeof(char)) != sizeof(char)) goto corrupt;
-    OSD_Printf("ud.m_ffire: %d\n",ud.m_ffire);
     if (kread(recfilep,(short *)&ud.multimode,sizeof(short)) != sizeof(short)) goto corrupt;
     OSD_Printf("ud.multimode: %d\n",ud.multimode);
-    if (kread(recfilep,(short *)&ud.m_monsters_off,sizeof(short)) != sizeof(short)) goto corrupt;
-    OSD_Printf("ud.m_monsters_off: %d\n",ud.m_monsters_off);
-    if (kread(recfilep,(int *)&ud.m_respawn_monsters,sizeof(int)) != sizeof(int)) goto corrupt;
-    OSD_Printf("ud.m_respawn_monsters: %d\n",ud.m_respawn_monsters);
-    if (kread(recfilep,(int *)&ud.m_respawn_items,sizeof(int)) != sizeof(int)) goto corrupt;
-    OSD_Printf("ud.m_respawn_items: %d\n",ud.m_respawn_items);
-    if (kread(recfilep,(int *)&ud.m_respawn_inventory,sizeof(int)) != sizeof(int)) goto corrupt;
-    OSD_Printf("ud.m_respawn_inventory: %d\n",ud.m_respawn_inventory);
+    if (kread(recfilep,(int *)&ud.m_dmflags,sizeof(int)) != sizeof(int)) goto corrupt;
+    OSD_Printf("ud.m_dmflags: %d\n",ud.m_dmflags);
     if (kread(recfilep,(int *)&ud.playerai,sizeof(int)) != sizeof(int)) goto corrupt;
     OSD_Printf("ud.playerai: %d\n",ud.playerai);
     if (kread(recfilep,(int *)&i,sizeof(int)) != sizeof(int)) goto corrupt;
@@ -9855,8 +9834,6 @@ static int G_OpenDemoRead(int g_whichDemo) // 0 = mine
         ud.m_level_number = 7;
         ud.m_volume_number = 0;
     }
-
-    if (kread(recfilep,(int *)&ud.m_noexits,sizeof(int)) != sizeof(int)) goto corrupt;
 
     for (i=0;i<ud.multimode;i++)
     {
@@ -9917,16 +9894,11 @@ void G_OpenDemoWrite(void)
     fwrite((char *)&ud.level_number,sizeof(char),1,frecfilep);
     fwrite((char *)&ud.player_skill,sizeof(char),1,frecfilep);
     fwrite((char *)&ud.m_coop,sizeof(char),1,frecfilep);
-    fwrite((char *)&ud.m_ffire,sizeof(char),1,frecfilep);
     fwrite((short *)&ud.multimode,sizeof(short),1,frecfilep);
-    fwrite((short *)&ud.m_monsters_off,sizeof(short),1,frecfilep);
-    fwrite((int *)&ud.m_respawn_monsters,sizeof(int),1,frecfilep);
-    fwrite((int *)&ud.m_respawn_items,sizeof(int),1,frecfilep);
-    fwrite((int *)&ud.m_respawn_inventory,sizeof(int),1,frecfilep);
+    fwrite((int *)&ud.m_dmflags,sizeof(int),1,frecfilep);
     fwrite((int *)&ud.playerai,sizeof(int),1,frecfilep);
     fwrite((int *)&ud.auto_run,sizeof(int),1,frecfilep);
     fwrite((char *)boardfilename,sizeof(boardfilename),1,frecfilep);
-    fwrite((int *)&ud.m_noexits,sizeof(int),1,frecfilep);
 
     for (i=0;i<ud.multimode;i++)
     {

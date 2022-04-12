@@ -37,11 +37,10 @@ typedef struct
 
 struct votedata_t
 {
+    int32_t dmflags;
     int8_t starter = -1, level = -1, episode = -1;
     int8_t yes_votes;
-    int8_t gametype, skill, monsters_off;
-    int8_t respawn_monsters, respawn_items, respawn_inventory;
-    int8_t marker, ffire, noexits, weaponstay;
+    int8_t gametype, skill;
 };
 OLDNET_EXTERN votedata_t vote;
 

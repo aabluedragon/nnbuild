@@ -1092,7 +1092,7 @@ void G_OperateRespawns(int low)
         nexti = nextspritestat[i];
         if ((SLT(i) == low) && (PN(i) == RESPAWN))
         {
-            if (A_CheckEnemyTile(SHT(i)) && ud.monsters_off) break;
+            if (A_CheckEnemyTile(SHT(i)) && DMFLAGS_TEST(DMFLAG_NOMONSTERS)) break;
 
             j = A_Spawn(i,TRANSPORTERSTAR);
             sprite[j].z -= (32<<8);
@@ -2109,10 +2109,10 @@ void A_DamageObject_Internal(int i,int sn)
 
     if (A_CheckSpriteFlags(i, SFLAG_DAMAGEEVENT))
     {
-        Gv_SetVar(g_iReturnVarID, i, sn, -1);
+        Gv_SetVar(sysVarIDs.RETURN, i, sn, -1);
         X_OnEvent(EVENT_DAMAGESPRITE, sn, -1, -1);
 
-        if (Gv_GetVar(g_iReturnVarID, sn, -1) < 0)
+        if (Gv_GetVar(sysVarIDs.RETURN, sn, -1) < 0)
             return;
     }
 
@@ -2546,7 +2546,7 @@ void A_DamageObject_Internal(int i,int sn)
 
                 if (A_CheckSpriteFlags(i, SFLAG_DAMAGEEVENT))
                 {
-                    Gv_SetVar(g_iReturnVarID, i, sn, -1);
+                    Gv_SetVar(sysVarIDs.RETURN, i, sn, -1);
                     X_OnEvent(EVENT_POSTDAMAGESPRITE, sn, -1, -1);
                 }
             }
@@ -2667,9 +2667,9 @@ void P_HandleSharedKeys(int snum)
     if (TEST_SYNC_KEY(sb_snum, SK_QUICK_KICK) && p->quick_kick == 0)
         if (p->curr_weapon != KNEE_WEAPON || p->kickback_pic == 0)
         {
-            Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
+            Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
             X_OnEvent(EVENT_QUICKKICK,g_player[snum].ps->i,snum, -1);
-            if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0)
+            if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0)
             {
                 p->quick_kick = 14;
                 if (p->fta == 0 || p->ftq == QUOTE_MIGHTY_FOOT)
@@ -2712,9 +2712,9 @@ void P_HandleSharedKeys(int snum)
 
         if (TEST_SYNC_KEY(sb_snum, SK_INVENTORY) && p->newowner == -1)	// inventory button generates event for selected item
         {
-            Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
+            Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
             X_OnEvent(EVENT_INVENTORY,g_player[snum].ps->i,snum, -1);
-            if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0)
+            if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0)
             {
                 switch (p->inven_icon)
                 {
@@ -2739,9 +2739,9 @@ void P_HandleSharedKeys(int snum)
 
         if (TEST_SYNC_KEY(sb_snum, SK_NIGHTVISION))
         {
-            Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
+            Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
             X_OnEvent(EVENT_USENIGHTVISION,g_player[snum].ps->i,snum, -1);
-            if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0
+            if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0
                     &&  p->heat_amount > 0)
             {
                 p->heat_on = !p->heat_on;
@@ -2754,9 +2754,9 @@ void P_HandleSharedKeys(int snum)
 
         if (TEST_SYNC_KEY(sb_snum, SK_STEROIDS))
         {
-            Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
+            Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
             X_OnEvent(EVENT_USESTEROIDS,g_player[snum].ps->i,snum, -1);
-            if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0)
+            if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0)
             {
                 if (p->steroids_amount == 400)
                 {
@@ -2842,15 +2842,15 @@ CHECKINV1:
 
                 if (TEST_SYNC_KEY(sb_snum, SK_INV_LEFT))   // Inventory_Left
                 {
-                    Gv_SetVar(g_iReturnVarID,dainv,g_player[snum].ps->i,snum);
+                    Gv_SetVar(sysVarIDs.RETURN,dainv,g_player[snum].ps->i,snum);
                     X_OnEvent(EVENT_INVENTORYLEFT,g_player[snum].ps->i,snum, -1);
-                    dainv=Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum);
+                    dainv=Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum);
                 }
                 if (TEST_SYNC_KEY(sb_snum, SK_INV_RIGHT))   // Inventory_Right
                 {
-                    Gv_SetVar(g_iReturnVarID,dainv,g_player[snum].ps->i,snum);
+                    Gv_SetVar(sysVarIDs.RETURN,dainv,g_player[snum].ps->i,snum);
                     X_OnEvent(EVENT_INVENTORYRIGHT,g_player[snum].ps->i,snum, -1);
-                    dainv=Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum);
+                    dainv=Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum);
                 }
 
                 p->inven_icon = dainv;
@@ -2864,7 +2864,7 @@ CHECKINV1:
 
         weaponNum = ((sb_snum & SK_WEAPON_MASK) >> SK_WEAPON_BITS) - 1;
 
-        Gv_SetVar(g_iReturnVarID, weaponNum,p->i,snum);
+        Gv_SetVar(sysVarIDs.RETURN, weaponNum,p->i,snum);
 
         switch ((int32_t)weaponNum)
         {
@@ -2887,8 +2887,8 @@ CHECKINV1:
             break;
         }
 
-        if ((unsigned int) Gv_GetVar(g_iReturnVarID,p->i,snum) != weaponNum)
-            weaponNum = (unsigned int) Gv_GetVar(g_iReturnVarID,p->i,snum);
+        if ((unsigned int) Gv_GetVar(sysVarIDs.RETURN,p->i,snum) != weaponNum)
+            weaponNum = (unsigned int) Gv_GetVar(sysVarIDs.RETURN,p->i,snum);
 
         // NOTE: it is assumed that the above events return either -1 or a
         // valid weapon index. Presumably, neither other negative numbers nor
@@ -3039,9 +3039,9 @@ CHECKINV1:
 
                 P_SetWeaponGamevars(snum, p);
 
-                Gv_SetVar(g_iReturnVarID, weaponNum,p->i,snum);
+                Gv_SetVar(sysVarIDs.RETURN, weaponNum,p->i,snum);
                 X_OnEvent(EVENT_SELECTWEAPON,p->i,snum, -1);
-                weaponNum = Gv_GetVar(g_iReturnVarID, p->i, snum);
+                weaponNum = Gv_GetVar(sysVarIDs.RETURN, p->i, snum);
 
                 if ((int32_t)weaponNum != -1 && weaponNum <= MAX_WEAPONS)
                 {
@@ -3111,7 +3111,7 @@ CHECKINV1:
                                 p->curr_weapon = HANDREMOTE_WEAPON;
                                 p->last_weapon = -1;
                                 p->weapon_pos = 10;
-                                Gv_SetVar(g_iWeaponVarID, p->curr_weapon, p->i, snum);
+                                Gv_SetVar(sysVarIDs.WEAPON, p->curr_weapon, p->i, snum);
                             }
                             break;
 
@@ -3130,9 +3130,9 @@ CHECKINV1:
         {
             if (p->holoduke_on == -1)
             {
-                Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
+                Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
                 X_OnEvent(EVENT_HOLODUKEON,g_player[snum].ps->i,snum, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0)
+                if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0)
                 {
                     if (p->holoduke_amount > 0)
                     {
@@ -3156,9 +3156,9 @@ CHECKINV1:
             }
             else
             {
-                Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
+                Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
                 X_OnEvent(EVENT_HOLODUKEOFF,g_player[snum].ps->i,snum, -1);
-                if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0)
+                if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0)
                 {
                     A_PlaySound(TELEPORTER,p->holoduke_on);
                     p->holoduke_on = -1;
@@ -3169,9 +3169,9 @@ CHECKINV1:
 
         if (TEST_SYNC_KEY(sb_snum, SK_MEDKIT))
         {
-            Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
+            Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
             X_OnEvent(EVENT_USEMEDKIT,g_player[snum].ps->i,snum, -1);
-            if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0)
+            if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0)
             {
                 if (p->firstaid_amount > 0 && sprite[p->i].extra < p->max_player_health)
                 {
@@ -3196,9 +3196,9 @@ CHECKINV1:
 
         if (TEST_SYNC_KEY(sb_snum, SK_JETPACK) && p->newowner == -1)
         {
-            Gv_SetVar(g_iReturnVarID,0,g_player[snum].ps->i,snum);
+            Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
             X_OnEvent(EVENT_USEJETPACK,g_player[snum].ps->i,snum, -1);
-            if (Gv_GetVar(g_iReturnVarID,g_player[snum].ps->i,snum) == 0)
+            if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0)
             {
                 if (p->jetpack_amount > 0)
                 {
@@ -3234,9 +3234,9 @@ CHECKINV1:
 
         if (TEST_SYNC_KEY(sb_snum, SK_TURNAROUND) && p->one_eighty_count == 0)
         {
-            Gv_SetVar(g_iReturnVarID,0,p->i,snum);
+            Gv_SetVar(sysVarIDs.RETURN,0,p->i,snum);
             X_OnEvent(EVENT_TURNAROUND,p->i,snum, -1);
-            if (Gv_GetVar(g_iReturnVarID,p->i,snum) == 0)
+            if (Gv_GetVar(sysVarIDs.RETURN,p->i,snum) == 0)
             {
                 p->one_eighty_count = -1024;
             }
@@ -3391,9 +3391,9 @@ void P_CheckSectors(int snum)
 
     if (TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_OPEN))
     {
-        Gv_SetVar(g_iReturnVarID,0,p->i,snum);
+        Gv_SetVar(sysVarIDs.RETURN,0,p->i,snum);
         X_OnEvent(EVENT_USE, p->i, snum, -1);
-        if (Gv_GetVar(g_iReturnVarID,p->i,snum) != 0)
+        if (Gv_GetVar(sysVarIDs.RETURN,p->i,snum) != 0)
             g_player[snum].inputBits->bits &= ~BIT(SK_OPEN);
     }
 
@@ -3525,7 +3525,7 @@ void P_CheckSectors(int snum)
                     if (j >= 0 && wall[j].overpicnum == 0)
                         if (actor[neartagsprite].temp_data[0] == 0)
                         {
-                            if (ud.noexits && ud.multimode > 1)
+                            if (DMFLAGS_TEST(DMFLAG_NOEXITS) && ud.multimode > 1)
                             {
                                 actor[p->i].htpicnum = NUKEBUTTON;
                                 actor[p->i].htextra = 250;
