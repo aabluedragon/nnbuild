@@ -779,12 +779,11 @@ void M_DisplayMenus(void)
                                 {
                                     ud.m_color = playerColor_getPreviousColor(i, 1);
                                 }
+
+                                ud.color = playerColor_getValidPal(ud.m_color);
+                                G_UpdatePlayerFromMenu();
                             }
 
-                            ud.color = playerColor_getValidPal(ud.m_color);
-
-                            if (ud.color != i)
-                                G_UpdatePlayerFromMenu();
                             break;
 
                         case 2:
