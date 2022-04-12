@@ -266,7 +266,9 @@ void CONFIG_SetDefaults(void)
     ud.textscale = 200;
 
     Bstrcpy(ud.rtsname, G_DefaultRtsFile());
-    Bstrcpy(szPlayerName, "Duke");
+
+    if(!CommandName)
+        Bstrcpy(szPlayerName, "Duke");
 
     Bstrcpy(ud.ridecule[0], "An inspiration for birth control.");
     Bstrcpy(ud.ridecule[1], "You're gonna die for that!");
@@ -598,12 +600,15 @@ int32_t CONFIG_ReadSetup(void)
             SCRIPT_GetString(ud.config.scripthandle, "Comm Setup",commmacro,&ud.ridecule[dummy][0]);
         }
 
-        SCRIPT_GetString(ud.config.scripthandle, "Comm Setup","PlayerName",&tempbuf[0]);
+        if (!CommandName)
+        {
+            SCRIPT_GetString(ud.config.scripthandle, "Comm Setup", "PlayerName", &tempbuf[0]);
 
-        while (Bstrlen(OSD_StripColors(dummybuf,tempbuf)) > 10)
-            tempbuf[Bstrlen(tempbuf)-1] = '\0';
+            while (Bstrlen(OSD_StripColors(dummybuf, tempbuf)) > 10)
+                tempbuf[Bstrlen(tempbuf) - 1] = '\0';
 
-        if(CommandName == NULL) Bstrncpyz(szPlayerName, tempbuf, sizeof(szPlayerName));
+            Bstrncpyz(szPlayerName, tempbuf, sizeof(szPlayerName));
+        }
 
         SCRIPT_GetString(ud.config.scripthandle, "Comm Setup","RTSName",&ud.rtsname[0]);
 
@@ -984,7 +989,9 @@ void CONFIG_WriteSetup(uint32_t flags)
         SCRIPT_PutNumber(ud.config.scripthandle, "Controls", buf, ud.config.JoystickAnalogueSaturate[dummy], FALSE, FALSE);
     }
 
-    SCRIPT_PutString(ud.config.scripthandle, "Comm Setup","PlayerName",&szPlayerName[0]);
+    if(!CommandName && szPlayerName[0] != '\0')
+        SCRIPT_PutString(ud.config.scripthandle, "Comm Setup","PlayerName",&szPlayerName[0]);
+
     SCRIPT_PutString(ud.config.scripthandle, "Comm Setup","RTSName",&ud.rtsname[0]);
 
     {
