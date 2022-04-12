@@ -5193,24 +5193,31 @@ static void G_MoveMisc(void)  // STATNUM 5
             case DUKETORSO__STATIC:
             case DUKEGUN__STATIC:
             case DUKELEG__STATIC:
+            {
+                int32_t ceilZ, floorZ;
 
                 if (s->xvel > 0) s->xvel--;
                 else s->xvel = 0;
 
-                if (++t[5] == (30*10))
+                if (++t[5] == (REALGAMETICSPERSEC * 10))
                     KILLIT(i);
 
-                if ((s->zvel > 1024 && s->zvel < 1280) ||
-                    ((yax_getbunch(s->sectnum, (s->zvel > 0)) >= 0) && ((SECTORFLD(s->sectnum, stat, (s->zvel > 0)) & 512) == 0)))
+                // Done so we can check sector's real Z's in case we passed over a TROR layer.
+                getzsofslope(s->sectnum, s->x, s->y, &ceilZ, &floorZ);
+
+                if ((s->zvel > 1024 && s->zvel < 1280) || s->z > floorZ || s->z < ceilZ)
                 {
-                    setspritez(i,&s->xyz);
+                    setspritez(i, &s->xyz);
                     sect = s->sectnum;
                 }
+                
+                // Update Z's for TROR.
+                yax_getzsofslope(sect, s->x, s->y, &ceilZ, &floorZ);
 
-                yax_getzsofslope(sect,s->x,s->y,&x,&l);
-                if (x == l || sect < 0 || sect >= MAXSECTORS) KILLIT(i);
+                if (ceilZ == floorZ || sect < 0 || sect >= MAXSECTORS)
+                    KILLIT(i);
 
-                if (s->z < l-(2<<8))
+                if (s->z < floorZ - (2 << 8))
                 {
                     if (t[1] < 2) t[1]++;
                     else if (sector[sect].lotag != ST_2_UNDERWATER)
@@ -5237,11 +5244,11 @@ static void G_MoveMisc(void)  // STATNUM 5
                                 s->zvel += 48;
                             else s->zvel = 1024;
                         }
-                        else s->zvel += g_spriteGravity-50;
+                        else s->zvel += g_spriteGravity - 50;
                     }
 
-                    s->x += (s->xvel*sintable[(s->ang+512)&2047])>>14;
-                    s->y += (s->xvel*sintable[s->ang&2047])>>14;
+                    s->x += (s->xvel * sintable[(s->ang + 512) & 2047]) >> 14;
+                    s->y += (s->xvel * sintable[s->ang & 2047]) >> 14;
                     s->z += s->zvel;
                 }
                 else
@@ -5252,23 +5259,24 @@ static void G_MoveMisc(void)  // STATNUM 5
                         {
                             KILLIT(i);
                         }
+#if 0
                         // [JM] This code is a fuck. I suggest removing it.
                         // Causes gibs to not splatter on slopes.
-                        if ((sector[s->sectnum].floorstat&2))
+                        if ((sector[s->sectnum].floorstat & FLOOR_STAT_SLOPE))
                         {
                             KILLIT(i);
                         }
+#endif
                         t[2]++;
                     }
-                    l = yax_getflorzofslope(s->sectnum,s->xy);
 
-                    s->z = l-(2<<8);
+                    s->z = floorZ - (2 << 8);
                     s->xvel = 0;
 
                     if (s->picnum == JIBS6)
                     {
                         t[1]++;
-                        if ((t[1]&3) == 0 && t[0] < 7)
+                        if ((t[1] & 3) == 0 && t[0] < 7)
                             t[0]++;
                         if (t[1] > 20) KILLIT(i);
                     }
@@ -5281,6 +5289,7 @@ static void G_MoveMisc(void)  // STATNUM 5
 
                 }
                 goto BOLT;
+            }
 
             case BLOODPOOL__STATIC:
             case PUKE__STATIC:
