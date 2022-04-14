@@ -1402,20 +1402,23 @@ static void G_PrintCoords(int snum)
     int const x = windowxy1.x + 2;
     int y = windowxy1.y + 2;
     char ang[16], horiz[16], horizoff[16];
+    auto const p = g_player[snum].ps;
 
-    sprintf(tempbuf, "XYZ= (%d,%d,%d)", g_player[snum].ps->pos.x, g_player[snum].ps->pos.y, g_player[snum].ps->pos.z);
+    sprintf(tempbuf, "XYZ= (%d,%d,%d)", p->pos.x, p->pos.y, p->pos.z);
     printext256(x, y, COLOR_WHITE, -1, tempbuf, tsize);
+    Bsprintf(tempbuf, "SPR Z= %d", TrackerCast(sprite[p->i].z));
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
-    fix16_to_str(g_player[snum].ps->q16horiz, horiz, 2);
-    fix16_to_str(g_player[snum].ps->q16horizoff, horizoff, 2);
-    fix16_to_str(g_player[snum].ps->q16ang, ang, 2);
+    fix16_to_str(p->q16horiz, horiz, 2);
+    fix16_to_str(p->q16horizoff, horizoff, 2);
+    fix16_to_str(p->q16ang, ang, 2);
     Bsprintf(tempbuf, "A/H/HO= %s, %s, %s", ang, horiz, horizoff);
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
-    Bsprintf(tempbuf, "XYZ Vel= (%d,%d,%d)", g_player[snum].ps->vel.x, g_player[snum].ps->vel.y, g_player[snum].ps->vel.z);
+    Bsprintf(tempbuf, "XYZ Vel= (%d,%d,%d)", p->vel.x, p->vel.y, p->vel.z);
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
-    Bsprintf(tempbuf, "F/S Vel= (%d,%d)", g_player[myconnectindex].inputBits->fvel, g_player[myconnectindex].inputBits->svel);
+    Bsprintf(tempbuf, "F/S Vel= (%d,%d)", g_player[snum].inputBits->fvel, g_player[snum].inputBits->svel);
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "RANDOMSEED= %d", randomseed);
@@ -1430,16 +1433,16 @@ static void G_PrintCoords(int snum)
     Bsprintf(tempbuf, "G_RANDOM.PLAYERWEAPON= %d", g_random.playerweapon);
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
-    Bsprintf(tempbuf, "THOLD= %d", g_player[snum].ps->transporter_hold);
+    Bsprintf(tempbuf, "THOLD= %d", p->transporter_hold);
     printext256(x, y += 18, COLOR_WHITE, -1, tempbuf, tsize);
 
-    Bsprintf(tempbuf, "ONWARP= %d", g_player[snum].ps->on_warping_sector);
+    Bsprintf(tempbuf, "ONWARP= %d", p->on_warping_sector);
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
-    Bsprintf(tempbuf, "OG= %d", g_player[snum].ps->on_ground);
+    Bsprintf(tempbuf, "OG= %d", p->on_ground);
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
-    Bsprintf(tempbuf, "SECTL= %d", TrackerCast(sector[g_player[snum].ps->cursectnum].lotag));
+    Bsprintf(tempbuf, "SECTL= %d", TrackerCast(sector[p->cursectnum].lotag));
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
     Bsprintf(tempbuf, "MOVEFIFOPLC= %d", movefifoplc);
