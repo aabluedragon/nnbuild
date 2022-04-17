@@ -1666,7 +1666,7 @@ void G_GameExit(const char *t)
             G_DisplayExtraScreens();
     }
 
-    if (*t != 0) initprintf("%s\n",t);
+    if (*t != 0) LOG_F(INFO, "%s",t);
 
     if (qsetmode == 200)
         G_Shutdown();
@@ -2724,7 +2724,7 @@ static void G_SE40(int32_t smoothratio)
             int32_t backupz[MAXSECTORS];
             int32_t i;
             int32_t pix_diff, newz;
-            //                initprintf("drawing ror\n");
+            //                LOG_F("drawing ror\n");
 
             if (level)
             {
@@ -4872,7 +4872,7 @@ int A_Spawn(int j, int pn)
                     if (sprite[j].picnum == SECTOREFFECTOR && (sprite[j].lotag == SE_40_ROR_UPPER || sprite[j].lotag == SE_41_ROR_LOWER) &&
                         sprite[j].hitag == sp->hitag && i != j)
                     {
-                        //                        initprintf("found ror match\n");
+                        //                        LOG_F("found ror match\n");
                         sp->yvel = j;
                         break;
                     }
@@ -7590,7 +7590,7 @@ static void G_ShowParameterHelp(void)
     Bsprintf(tempbuf,HEAD2 " (%s)", s_buildTimestamp);
     wm_msgbox(tempbuf,s);
 #else
-    initprintf("%s\n",s);
+    LOG_F(INFO, "%s",s);
 #endif
 }
 
@@ -7618,7 +7618,7 @@ static void G_ShowDebugHelp(void)
     Bsprintf(tempbuf,HEAD2 " (%s)",s_buildTimestamp);
     wm_msgbox(tempbuf,s);
 #else
-    initprintf("%s\n",s);
+    LOG_F(INFO, "%s",s);
 #endif
 }
 
@@ -7666,10 +7666,10 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                 int j = initgroupfile(fn);
 
                 if (j == -1)
-                    initprintf("Could not find group file '%s'.\n",fn);
+                    LOG_F(ERROR, "Could not find group file '%s'.",fn);
                 else
                 {
-                    initprintf("Using group file '%s'.\n",fn);
+                    LOG_F(INFO, "Using group file '%s'.",fn);
                     if (!g_noAutoLoad)
                         G_DoAutoload(fn);
                 }
@@ -7695,7 +7695,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
                 if (!included)
                 {
-//                    initprintf("Warning: Failed including %s on line %s:%d\n",
+//                    LOG_F("Warning: Failed including %s on line %s:%d\n",
 //                               fn, pScript->filename,scriptfile_getlinum(pScript,cmdtokptr));
                 }
                 else
@@ -7734,7 +7734,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                 int i;
                 if (ID==NULL)
                 {
-                    initprintf("Error: missing ID for music definition near line %s:%d\n", pScript->filename, scriptfile_getlinum(pScript,tinttokptr));
+                    LOG_F(ERROR, "Missing ID for music definition near line %s:%d", pScript->filename, scriptfile_getlinum(pScript,tinttokptr));
                     break;
                 }
 
@@ -7748,7 +7748,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                     kzfindfilestart(buf);
                     if (!kzfindfile(buf))
                     {
-                        initprintf("Error: file '%s' does not exist\n",fn);
+                        LOG_F(ERROR, "File '%s' does not exist",fn);
                         pathsearchmode = i;
                         break;
                     }
@@ -7757,7 +7757,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                 pathsearchmode = i;
 
                 if (S_DefineMusic(ID,fn))
-                    initprintf("Error: invalid music ID on line %s:%d\n", pScript->filename, scriptfile_getlinum(pScript,tinttokptr));
+                    LOG_F(ERROR, "Invalid music ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript,tinttokptr));
             }
         }
         break;
@@ -7799,7 +7799,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
             {
                 if (soundNum == -1)
                 {
-                    initprintf("Error: missing ID for sound definition near line %s:%d\n", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
+                    LOG_F(ERROR, "Missing ID for sound definition near line %s:%d", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
                     break;
                 }
 
@@ -7808,7 +7808,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
                 // maybe I should have just packed this into a sound_t and passed a reference...
                 if (S_DefineSound(soundNum, fileName, minpitch, maxpitch, priority, type, distance, volume) == -1)
-                    initprintf("Error: invalid sound ID on line %s:%d\n", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
+                    LOG_F(ERROR, "Invalid sound ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
             }
         }
         break;
@@ -7873,10 +7873,15 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
 
     if (argc > 1)
     {
-        initprintf("Application parameters: ");
+        Bstrcpy(tempbuf, "Application parameters: ");
+
         while (i < argc)
-            initprintf("%s ",argv[i++]);
-        initprintf("\n");
+        {
+            Bstrcat(tempbuf, argv[i++]);
+            Bstrcat(tempbuf, " ");
+        }
+
+        LOG_F(INFO, "%s", tempbuf);
 
         i = 1;
         while (i < argc)
@@ -7976,7 +7981,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 }
                 if (!Bstrcasecmp(c+1,"noautoload"))
                 {
-                    initprintf("Autoload disabled\n");
+                    LOG_F(INFO, "Autoload disabled");
                     g_noAutoLoad = 1;
                     i++;
                     continue;
@@ -8030,7 +8035,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     {
                         Bfree(g_rtsNamePtr);
                         g_rtsNamePtr = dup_filename(argv[i + 1]);
-                        initprintf("Using RTS file \"%s\".\n", g_rtsNamePtr);
+                        LOG_F(INFO, "Using RTS file \"%s\".", g_rtsNamePtr);
                         i++;
                     }
                     i++;
@@ -8046,7 +8051,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 if (!Bstrcasecmp(c + 1, "allowvisibility"))
                 {
                     M_DMFLAGS_SET(DMFLAG_ALLOWVISIBILITYCHANGE, true);
-                    initprintf("Visibility adjustment enabled for multiplayer.\n");
+                    LOG_F(INFO, "Visibility adjustment enabled for multiplayer.");
                     i++;
                     continue;
                 }
@@ -8072,7 +8077,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
 #endif
                 if (!Bstrcasecmp(c+1,"unstable"))
                 {
-                    initprintf("WARNING WARNING WARNING WARNING\n"
+                    LOG_F(WARNING, "WARNING WARNING WARNING\n"
                                "EDuke32's runtime script error detection has been disabled via "
                                "the '-unstable' command line parameter.  Bug reports from this "
                                "mode are NOT welcome and you should expect crashes in certain "
@@ -8088,7 +8093,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     {
                         unsigned int j = atol(argv[i+1]);
                         MAXCACHE1DSIZE = j<<10;
-                        initprintf("Cache size: %dkB\n",j);
+                        LOG_F(INFO, "Cache size: %dkB",j);
                         i++;
                     }
                     i++;
@@ -8117,12 +8122,12 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     if (((c[0] == 'n') || (c[0] == 'N')) && (c[1] == '0'))
                     {
                         g_networkBroadcastMode = NETMODE_MASTERSLAVE;
-                        initprintf("Network mode: master/slave\n");
+                        LOG_F(INFO, "Network mode: master/slave");
                     }
                     else if (((c[0] == 'n') || (c[0] == 'N')) && (c[1] == '1'))
                     {
                         //g_networkBroadcastMode = NETMODE_P2P;
-                        initprintf("Network mode: peer-to-peer\n");
+                        LOG_F(INFO, "Network mode: peer-to-peer");
                         G_GameExit("Peer-To-Peer networking is no longer supported! Use master/slave.");
                     }
 
@@ -8140,7 +8145,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 case 'a':
                 case 'A':
                     ud.playerai = 1;
-                    initprintf("Other player AI.\n");
+                    LOG_F(INFO, "Other player AI.");
                     break;
                 case 'c':
                 case 'C':
@@ -8166,7 +8171,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     c++;
                     if (strchr(c,'.') == 0)
                         Bstrcat(c,".dmo");
-                    initprintf("Play demo %s.\n",c);
+                    LOG_F(INFO, "Play demo %s.",c);
                     Bstrcpy(firstdemofile,c);
                     break;
                 case 'g':
@@ -8202,7 +8207,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                         //ud.m_monsters_off = 1;
                         M_DMFLAGS_SET(DMFLAG_NOMONSTERS, true);
                         ud.m_player_skill = ud.player_skill = 0;
-                        initprintf("Monsters off.\n");
+                        LOG_F(INFO, "Monsters off.");
                     }
                     break;
                 case 'n':
@@ -8211,12 +8216,12 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     if (*c == 's' || *c == 'S')
                     {
                         g_noSound = 2;
-                        initprintf("Sound off.\n");
+                        LOG_F(INFO, "Sound off.");
                     }
                     else if (*c == 'm' || *c == 'M')
                     {
                         g_noMusic = 1;
-                        initprintf("Music off.\n");
+                        LOG_F(INFO, "Music off.");
                     }
                     else if (*c == 'd' || *c == 'D')
                     {
@@ -8224,7 +8229,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                         Gv_Init();
                         Gv_DumpValues();
                        // fclose(fp);
-                        initprintf("Game variables saved.\n");
+                        LOG_F(INFO, "Game variables saved.");
                     }
                     else
                     {
@@ -8235,7 +8240,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 case 'q':
                 case 'Q':
                 {
-                    initprintf("Fake multiplayer mode.\n");
+                    LOG_F(INFO, "Fake multiplayer mode.");
 
                     if (*(++c) == 0) ud.multimode = 1;
                     else ud.multimode = atoi(c) % (MAXPLAYERS + 1);
@@ -8247,7 +8252,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 case 'r':
                 case 'R':
                     ud.m_recstat = 1;
-                    initprintf("Demo record mode on.\n");
+                    LOG_F(INFO, "Demo record mode on.");
                     break;
                 case 's':
                 case 'S':
@@ -8259,26 +8264,26 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     c++;
                     if (Bstrstr(c, "x") != NULL)
                     {
-                        initprintf("Respawn All (Items/Inventory/Monsters).\n");
+                        LOG_F(INFO, "Respawn All (Items/Inventory/Monsters).");
                         M_DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNINVENTORY, true);
                     }
                     else
                     {
                         if (Bstrstr(c, "1") != NULL)
                         {
-                            initprintf("Respawn Monsters.\n");
+                            LOG_F(INFO, "Respawn Monsters.");
                             M_DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, true);
                         }
 
                         if (Bstrstr(c, "2") != NULL)
                         {
-                            initprintf("Respawn Items.\n");
+                            LOG_F(INFO, "Respawn Items.");
                             M_DMFLAGS_SET(DMFLAG_RESPAWNITEMS, true);
                         }
 
                         if (Bstrstr(c, "3") != NULL)
                         {
-                            initprintf("Respawn Inventory.\n");
+                            LOG_F(INFO, "Respawn Inventory.");
                             M_DMFLAGS_SET(DMFLAG_RESPAWNINVENTORY, true);
                         }
                     }
@@ -8291,7 +8296,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     j = 0;
                     if (*c)
                     {
-                        initprintf("Using favorite weapon order(s).\n");
+                        LOG_F(INFO, "Using favorite weapon order(s).");
                         while (*c)
                         {
                             g_player[0].wchoice[j] = *c-'0';
@@ -8317,7 +8322,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     }
                     else
                     {
-                        initprintf("Using default weapon orders.\n");
+                        LOG_F(INFO, "Using default weapon orders.");
                         g_player[0].wchoice[0] = 3;
                         g_player[0].wchoice[1] = 4;
                         g_player[0].wchoice[2] = 5;
@@ -8406,7 +8411,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     {
                         Bfree(g_rtsNamePtr);
                         g_rtsNamePtr = dup_filename(argv[i++]);
-                        initprintf("Using RTS file \"%s\".\n", g_rtsNamePtr);
+                        LOG_F(INFO, "Using RTS file \"%s\".", g_rtsNamePtr);
                         continue;
                     }
                 }
@@ -8450,12 +8455,12 @@ static void parsedefinitions_game_include(const char* fileName, scriptfile* pScr
     {
         if (!Bstrcasecmp(cmdtokptr, "null") || pScript == NULL) // this is a bit overboard to prevent unused parameter warnings
         {
-            // initprintf("Warning: Failed including %s as module\n", fn);
+            // LOG_F("Warning: Failed including %s as module\n", fn);
         }
         /*
                 else
                     {
-                    initprintf("Warning: Failed including %s on line %s:%d\n",
+                    LOG_F(WARNING, "Failed including %s on line %s:%d",
                                fn, pScript->filename,scriptfile_getlinum(pScript,cmdtokptr));
                     }
         */
@@ -8926,7 +8931,7 @@ static void G_Startup(void)
     {
         if (VOLUMEONE)
         {
-            initprintf("The -map option is available in the registered version only!\n");
+            LOG_F(ERROR, "The -map option is available in the registered version only!");
             boardfilename[0] = 0;
         }
         else
@@ -8949,12 +8954,12 @@ static void G_Startup(void)
             i = kopen4loadfrommod(boardfilename,0);
             if (i!=-1)
             {
-                initprintf("Using level: '%s'.\n",boardfilename);
+                LOG_F(INFO, "Using level: '%s'.",boardfilename);
                 kclose(i);
             }
             else
             {
-                initprintf("Level '%s' not found.\n",boardfilename);
+                LOG_F(ERROR, "Level '%s' not found.",boardfilename);
                 boardfilename[0] = 0;
             }
         }
@@ -8962,12 +8967,12 @@ static void G_Startup(void)
 
     if (VOLUMEONE)
     {
-        initprintf("*** You have run Duke Nukem 3D %d times. ***\n\n",ud.executions);
-        if (ud.executions >= 50) initprintf("IT IS NOW TIME TO UPGRADE TO THE COMPLETE VERSION!!!\n");
+        LOG_F(INFO, "*** You have run Duke Nukem 3D %d times. ***",ud.executions);
+        if (ud.executions >= 50) LOG_F(INFO, "IT IS NOW TIME TO UPGRADE TO THE COMPLETE VERSION!!!");
     }
 
-    //initprintf("* Hold Esc to Abort. *\n");
-//    initprintf("Loading art header...\n");
+    //LOG_F("* Hold Esc to Abort. *\n");
+    //LOG_F("Loading art header...\n");
 
     if (artLoadFiles("tiles000.art", MAXCACHE1DSIZE) < 0)
         G_GameExit("Failed loading art.");
@@ -9205,11 +9210,11 @@ static void G_DrawFrame()
 
 static void G_CheckGametype(void)
 {
-    // initprintf("ud.m_coop=%i before sanitization\n",ud.m_coop);
+    // LOG_F("ud.m_coop=%i before sanitization\n",ud.m_coop);
     ud.m_coop = clamp(ud.m_coop, 0, g_numGametypes - 1);
     Bsprintf(tempbuf, "%s\n", Gametypes[ud.m_coop].name);
-    initprintf("%s", tempbuf);
-    // initprintf("ud.m_coop=%i after sanitisation\n",ud.m_coop);
+    LOG_F(INFO, "%s", tempbuf);
+    // LOG_F("ud.m_coop=%i after sanitisation\n",ud.m_coop);
 }
 
 bool G_InitMultiplayer()
@@ -9219,7 +9224,7 @@ bool G_InitMultiplayer()
 
     if (initmultiplayersparms(netparamcount, netparam))
     {
-        initprintf("Waiting for players...\n");
+        LOG_F(INFO, "Waiting for players...");
         while (initmultiplayerscycle())
         {
             handleevents();
@@ -9242,7 +9247,7 @@ bool G_InitMultiplayer()
 
     if (numplayers > 1)
     {
-        initprintf("Multiplayer initialized.\n");
+        LOG_F(INFO, "Multiplayer initialized.");
 
         // Init real players, making sure they aren't set as bots. Allows player/bot mix.
         for (int32_t i = 1; i < numplayers; i++)
@@ -9298,11 +9303,23 @@ bool G_InitMultiplayer()
     return false;
 }
 
+static const char* dukeVerbosityCallback(loguru::Verbosity verbosity)
+{
+    switch (verbosity)
+    {
+        default: return nullptr;
+        case LOG_VM: return "VM";
+        case LOG_CON: return "CON";
+    }
+}
+
 int app_main(int32_t argc, char const* const* argv)
 {
     int i = 0;
     char cwd[BMAX_PATH];
-//    extern char datetimestring[];
+
+    engineSetLogFile(APPBASENAME ".log", LOG_GAME_MAX);
+    engineSetLogVerbosityCallback(dukeVerbosityCallback);
 
 #ifdef _WIN32
 #ifndef DEBUGGINGAIDS
@@ -9315,39 +9332,33 @@ int app_main(int32_t argc, char const* const* argv)
 #endif
 #endif
 
-#ifdef _WIN32
-    tempbuf[GetModuleFileName(NULL,root,BMAX_PATH)] = 0;
-    Bcorrectfilename(root,1);
-    chdir(root);
-#else
-    getcwd(root,BMAX_PATH);
-    strcat(root,"/");
-#endif
+    G_ExtPreInit(argc, argv);
+    
+    //OSD_SetLogFile(APPBASENAME ".log");
+    OSD_SetParameters(0, 0, 0, 12, 2, 12, OSD_ERROR, OSDTEXT_RED, OSDTEXT_DARKRED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
 
-    OSD_SetLogFile(APPBASENAME ".log");
-    OSD_SetParameters(0, 0, 0, 12, 2, 12, OSD_ERROR, OSDTEXT_RED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
-    OSD_SetFunctions(
-        GAME_drawosdchar,
-        GAME_drawosdstr,
-        GAME_drawosdcursor,
-        GAME_getcolumnwidth,
-        GAME_getrowheight,
-        GAME_clearbackground,
-        (int(*)(void))GetTime,
-        GAME_onshowosd
-    );
+    osdcallbacks_t callbacks = {};
+    callbacks.drawchar          = GAME_drawosdchar;
+    callbacks.drawstr           = GAME_drawosdstr;
+    callbacks.drawcursor        = GAME_drawosdcursor;
+    callbacks.getcolumnwidth    = GAME_getcolumnwidth;
+    callbacks.getrowheight      = GAME_getrowheight;
+    callbacks.clear             = GAME_clearbackground;
+    callbacks.gettime           = BGetTime;
+    callbacks.onshowosd         = GAME_onshowosd;
+    OSD_SetCallbacks(callbacks);
 
     G_UpdateAppTitle();
 
-    initprintf(HEAD2 " %s\n", s_buildRev);
+    LOG_F(INFO, HEAD2 " %s", s_buildRev);
     PrintBuildInfo();
 
     if (!g_useCwd)
         G_AddSearchPaths();
 
-//    initprintf("Compiled %s\n",datetimestring);
-//    initprintf("Copyright (c) 1996, 2003 3D Realms Entertainment\n");
-//    initprintf("Copyright (c) 2008 EDuke32 team and contributors\n");
+//    LOG_F("Compiled %s\n",datetimestring);
+//    LOG_F("Copyright (c) 1996, 2003 3D Realms Entertainment\n");
+//    LOG_F("Copyright (c) 2008 EDuke32 team and contributors\n");
 
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     addsearchpath("/usr/share/games/jfduke3d");
@@ -9374,10 +9385,6 @@ int app_main(int32_t argc, char const* const* argv)
     // up the command-line-provided search paths (duh).
     G_ExtInit();
 
-#if defined(RENDERTYPEWIN) && defined(USE_OPENGL)
-    if (forcegl) initprintf("GL driver blacklist disabled.\n");
-#endif
-
     playerColor_init();
     G_MaybeAllocPlayer(0);
     g_player[0].connected = 1;
@@ -9396,10 +9403,10 @@ int app_main(int32_t argc, char const* const* argv)
         Xfree(str);
     }
 
-    i = CONFIG_ReadSetup();
+    int32_t const readSetup = CONFIG_ReadSetup();
 
 #ifdef _WIN32
-//    initprintf("build %d\n",(char)atoi(BUILDDATE));
+//    LOG_F(INFO, "build %d",(char)atoi(BUILDDATE));
 #endif
     if (enginePreInit())
     {
@@ -9408,7 +9415,7 @@ int app_main(int32_t argc, char const* const* argv)
         exit(1);
     }
 
-    initprintf("Using config file '%s'.\n",g_setupFileName);
+    LOG_F(INFO, "Using config file '%s'.",g_setupFileName);
 
 #ifdef DISCORD_RPC
     InitDiscord();
@@ -9418,7 +9425,7 @@ int app_main(int32_t argc, char const* const* argv)
 
 // OLDMP MERGE CHECKME
 #ifdef STARTUP_SETUP_WINDOW
-    if (i < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_JF || ud.config.ForceSetup)) || g_commandSetup)
+    if (readSetup < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_JF || ud.config.ForceSetup)) || g_commandSetup)
     {
         if (quitevent || !startwin_run())
         {
@@ -9437,9 +9444,9 @@ int app_main(int32_t argc, char const* const* argv)
     i = initgroupfile(eduke32dat);
 
     if (i == -1)
-        initprintf("Warning: could not find internal data file '%s'!\n", eduke32dat);
+        LOG_F(WARNING, "Could not find internal data file '%s'!", eduke32dat);
     else 
-        initprintf("Using '%s' for internal data.\n", eduke32dat);
+        LOG_F(INFO, "Using '%s' for internal data.", eduke32dat);
 
     i = -1;
 
@@ -9476,12 +9483,12 @@ int app_main(int32_t argc, char const* const* argv)
     G_UpdateAppTitle();
 
     if (g_scriptDebug)
-        initprintf("CON debugging activated (level %d).\n",g_scriptDebug);
+        LOG_F(INFO, "CON debugging activated (level %d).",g_scriptDebug);
 
     if (VOLUMEONE)
     {
-        initprintf("Distribution of shareware Duke Nukem 3D is restricted in certain ways.\n");
-        initprintf("Please read LICENSE.DOC for more details.\n");
+        LOG_F(INFO, "Distribution of shareware Duke Nukem 3D is restricted in certain ways.");
+        LOG_F(INFO, "Please read LICENSE.DOC for more details.");
     }
 
     G_Startup(); // a bunch of stuff including compiling cons
@@ -9492,7 +9499,7 @@ int app_main(int32_t argc, char const* const* argv)
     if (quitevent) return 4;
     if (!loaddefinitionsfile(eduke32def))
     {
-        initprintf("Internal def file '%s' loaded.\n", eduke32def);
+        LOG_F(INFO, "Internal def file '%s' loaded.", eduke32def);
         loaddefinitions_game(eduke32def, FALSE);
     }
 
@@ -9501,7 +9508,7 @@ int app_main(int32_t argc, char const* const* argv)
     if (!loaddefinitionsfile(defsfile))
     {
         uint32_t etime = timerGetTicks();
-        initprintf("Definitions file \"%s\" loaded in %d ms.\n", defsfile, etime - stime);
+        LOG_F(INFO, "Definitions file \"%s\" loaded in %d ms.", defsfile, etime - stime);
     }
     loaddefinitions_game(defsfile, FALSE);
 
@@ -9532,7 +9539,7 @@ int app_main(int32_t argc, char const* const* argv)
 
     ud.last_level = -1;
 
-    initprintf("Initializing OSD...\n");
+    LOG_F(INFO, "Initializing OSD...");
 
     Bsprintf(tempbuf,HEAD2 " - %s (%s)",s_buildRev, s_buildTimestamp);
     OSD_SetVersion(tempbuf, 10, 0);
@@ -9560,7 +9567,7 @@ int app_main(int32_t argc, char const* const* argv)
         int yres[] = {ud.config.ScreenHeight,600,480,240};
         int bpp[] = {32,16,8};
 
-        initprintf("Failure setting video mode %dx%dx%d %s! Attempting safer mode...\n",
+        LOG_F(ERROR, "Failure setting video mode %dx%dx%d %s! Attempting safer mode...",
                    ud.config.ScreenWidth,ud.config.ScreenHeight,ud.config.ScreenBPP,ud.config.ScreenMode?"fullscreen":"windowed");
 
 #if defined(USE_OPENGL)
@@ -9568,7 +9575,7 @@ int app_main(int32_t argc, char const* const* argv)
             int j = 0;
             while (videoSetGameMode(0,xres[i],yres[i],bpp[j], ud.detail) < 0)
             {
-                initprintf("Failure setting video mode %dx%dx%d windowed! Attempting safer mode...\n",xres[i],yres[i],bpp[i]);
+                LOG_F(ERROR, "Failure setting video mode %dx%dx%d windowed! Attempting safer mode...",xres[i],yres[i],bpp[i]);
                 j++;
                 if (j == 3)
                 {
@@ -9582,7 +9589,7 @@ int app_main(int32_t argc, char const* const* argv)
 #else
         while (videoSetGameMode(0,xres[i],yres[i],8) < 0)
         {
-            initprintf("Failure setting video mode %dx%dx%d windowed! Attempting safer mode...\n",xres[i],yres[i],8);
+            LOG_F(ERROR, "Failure setting video mode %dx%dx%d windowed! Attempting safer mode...",xres[i],yres[i],8);
             i++;
         }
 #endif
@@ -9600,9 +9607,9 @@ int app_main(int32_t argc, char const* const* argv)
 
     system_getcvars();
 
-    initprintf("Initializing music...\n");
+    LOG_F(INFO, "Initializing music...");
     S_MusicStartup();
-    initprintf("Initializing sound...\n");
+    LOG_F(INFO, "Initializing sound...");
     S_SoundStartup();
 
     FX_StopAllSounds();
@@ -9799,9 +9806,9 @@ static int G_OpenDemoRead(int g_whichDemo) // 0 = mine
     if (ver != BYTEVERSION /*&& ver != 116 && ver != 117*/)
     {
         /* old demo playback */
-        if (ver == BYTEVERSION_JF)   initprintf("Demo %s is for Regular edition.\n", d);
-        else if (ver == BYTEVERSION_JF+1) initprintf("Demo %s is for Atomic edition.\n", d);
-        else if (ver == BYTEVERSION_JF+2) initprintf("Demo %s is for Shareware version.\n", d);
+        if (ver == BYTEVERSION_JF)   LOG_F(ERROR, "Demo %s is for Regular edition.", d);
+        else if (ver == BYTEVERSION_JF+1) LOG_F(ERROR, "Demo %s is for Atomic edition.", d);
+        else if (ver == BYTEVERSION_JF+2) LOG_F(ERROR, "Demo %s is for Shareware version.", d);
 //        else OSD_Printf("Demo %s is of an incompatible version (%d).\n", d, ver);
         kclose(recfilep);
         ud.reccnt=0;
@@ -10157,7 +10164,7 @@ RECHECK:
         crc32block(&crcv, (unsigned char *)sector, sizeof(sector));
         crc32block(&crcv, (unsigned char *)sprite, sizeof(sprite));
         crc32finish(&crcv);
-        initprintf("Checksum = %08X\n",crcv);
+        LOG_F(INFO, "Checksum = %08X",crcv);
     }
 #endif
 

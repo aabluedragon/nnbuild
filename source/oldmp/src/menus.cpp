@@ -4419,9 +4419,9 @@ cheat_for_port_credits:
                             S_SoundShutdown();
                             S_MusicShutdown();
 
-                            initprintf("Initializing music...\n");
+                            LOG_F(INFO, "Initializing music...");
                             S_MusicStartup();
-                            initprintf("Initializing sound...\n");
+                            LOG_F(INFO, "Initializing sound...");
                             S_SoundStartup();
 
                             FX_StopAllSounds();

@@ -368,7 +368,7 @@ void Net_ParsePackets(void)
     while ((packbufleng = mmulti_getpacket(&other, (unsigned char*)packbuf)) > 0)
     {
 #if 0
-        initprintf("RECEIVED PACKET: type: %d : len %d\n", packbuf[0], packbufleng);
+        LOG_F(INFO, "RECEIVED PACKET: type: %d : len %d", packbuf[0], packbufleng);
 #endif
         // If we're a client, reject any packets that don't come from the server.
         if ((myconnectindex != connecthead) && other != connecthead)
@@ -450,7 +450,7 @@ void Net_ParsePackets(void)
                 botNameSeed             = (int32_t)B_UNBUF32(&packbuf[j]); j += 4;
 
                 if (M_DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE))
-                    initprintf("Visibility adjustment enabled for multiplayer.\n");
+                    LOG_F(INFO, "Visibility adjustment enabled for multiplayer.");
 
                 oldnet_gotinitialsettings = true;
 
@@ -487,7 +487,7 @@ void Net_ParsePackets(void)
             case PACKET_TYPE_PLAYER_READY:
             {
                 if (g_player[other].playerreadyflag == 0)
-                    initprintf("Player %d is ready\n", other);
+                    LOG_F(INFO, "Player %d is ready", other);
                 g_player[other].playerreadyflag++;
                 return;
             }
@@ -578,12 +578,12 @@ void Net_ParsePackets(void)
                     {
                         if (packbuf[2] != (char)atoi(VERSION))
                         {
-                            initprintf("Player has version %d, expecting %d\n", packbuf[2], (char)atoi(VERSION));
+                            LOG_F(ERROR, "Player has version %d, expecting %d", packbuf[2], (char)atoi(VERSION));
                             G_GameExit("You cannot play with different versions of NetDuke32!");
                         }
                         if (packbuf[3] != (char)BYTEVERSION)
                         {
-                            initprintf("Player has version %d, expecting %d (%d, %d, %d)\n", packbuf[3], BYTEVERSION, BYTEVERSION_JF, PLUTOPAK, VOLUMEONE);
+                            LOG_F(ERROR, "Player has version %d, expecting %d (%d, %d, %d)", packbuf[3], BYTEVERSION, BYTEVERSION_JF, PLUTOPAK, VOLUMEONE);
                             G_GameExit("You cannot play Duke with different versions!");
                         }
 
@@ -622,7 +622,7 @@ void Net_ParsePackets(void)
                         g_player[playerNum].user_name[i - 2] = 0;
                         i++;
 
-                        initprintf("Player %d's name is now %s\n", playerNum, g_player[playerNum].user_name);
+                        LOG_F(INFO, "Player %d's name is now %s", playerNum, g_player[playerNum].user_name);
 
                         break;
                     }

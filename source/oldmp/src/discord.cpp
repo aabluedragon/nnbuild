@@ -19,30 +19,30 @@ int64_t time_started;
 
 static void handleDiscordReady(const DiscordUser* user)
 {
-    initprintf("Discord: Ready! Welcome, %s#%s.\n", user->username, user->discriminator);
+    LOG_F(INFO, "Discord: Ready! Welcome, %s#%s.", user->username, user->discriminator);
     discord_status = DISCORD_READY;
 }
 
  static void handleDiscordDisconnected(int errcode, const char* message)
 {
-    initprintf("Discord: disconnected (%d: %s)\n", errcode, message);
+    LOG_F(INFO, "Discord: disconnected (%d: %s)", errcode, message);
     discord_status = DISCORD_DISCONNECTED;
 }
     
 static void handleDiscordError(int errcode, const char* message)
 {
-    initprintf("Discord: error (%d: %s)\n", errcode, message);
+    LOG_F(ERROR, "Discord: error (%d: %s)", errcode, message);
     discord_status = DISCORD_ERROR;
 }
     
 static void handleDiscordJoin(const char* secret)
 {
-    initprintf("Discord: join (%s)\n", secret);
+    LOG_F(INFO, "Discord: join (%s)", secret);
 }
 
 static void handleDiscordSpectate(const char* secret)
 {
-    initprintf("Discord: spectate (%s)\n", secret);
+    LOG_F(INFO, "Discord: spectate (%s)", secret);
 }
 
 static void handleDiscordJoinRequest(const DiscordUser* request)
@@ -52,7 +52,7 @@ static void handleDiscordJoinRequest(const DiscordUser* request)
 
 void InitDiscord()
 {
-    initprintf("Initializing Discord Rich Presence...\n");
+    LOG_F(INFO, "Initializing Discord Rich Presence...");
     DiscordEventHandlers handlers;
     memset(&handlers, 0, sizeof(handlers));
     handlers.ready = handleDiscordReady;
@@ -156,10 +156,10 @@ void UpdateDiscord()
 
     DukePlayer_t *ps = g_player[myconnectindex].ps;
 
-    memset(&discordPresence, 0, sizeof(discordPresence));
-
-    if (ps == NULL)
+    if (ps == NULL || discord_status != DISCORD_READY)
         return;
+
+    memset(&discordPresence, 0, sizeof(discordPresence));
 
     last_kill_count = ud.monsters_killed;
     last_max_kills = ud.total_monsters;

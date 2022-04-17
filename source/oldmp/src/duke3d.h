@@ -86,8 +86,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAXANIMATES 1024
 #define MAXCYCLERS 1024
 #define MAXQUOTES 16384
-#define FIRST_OBITUARY_QUOTE MAXQUOTES-128
-#define FIRST_SUICIDE_QUOTE MAXQUOTES-32
 
 enum {
     MUS_FIRST_SPECIAL = MAXVOLUMES * MAXLEVELS,
@@ -775,6 +773,13 @@ extern hashtable_t gamefuncH;
 #ifdef __cplusplus
 }
 #endif
+
+enum loguru_verbosities_game
+{
+    LOG_VM = LOG_ENGINE_MAX,
+    LOG_CON,
+    LOG_GAME_MAX,
+};
 
 #include "_rts.h"
 #include "actors.h"

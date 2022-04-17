@@ -44,7 +44,7 @@ char pColorNames[MAXPALOOKUPS][32] = { "Auto" };
 
 void playerColor_init(void)
 {
-    initprintf("Player Color INIT:\n");
+    LOG_F(INFO, "Player Color INIT:\n");
     playerColor_add("Blue", 9);
     playerColor_add("Red", 10);
     playerColor_add("Green", 11);
@@ -101,14 +101,14 @@ void playerColor_add(const char *name, int palnum)
 {
     if (palnum <= 0 || palnum >= MAXPALOOKUPS)
     {
-        initprintf("Tried to add an invalid player pal: %d\n", palnum);
+        LOG_F(ERROR, "Tried to add an invalid player pal: %d", palnum);
         return;
     }
 
     Bsprintf(pColorNames[palnum], "%s", name);
     SET_ALLOWEDCOLOR(palnum);
 
-    initprintf("Added color %s (%d)\n", name, palnum);
+    LOG_F(INFO, "Added color %s (%d)", name, palnum);
 }
 
 void playerColor_delete(int palnum)
@@ -117,7 +117,7 @@ void playerColor_delete(int palnum)
 
     if (palnum == 0 || palnum >= MAXPALOOKUPS)
     {
-        initprintf("Tried to delete an invalid player pal: %d\n", palnum);
+        LOG_F(ERROR, "Tried to delete an invalid player pal: %d", palnum);
         return;
     }
 
@@ -4220,7 +4220,7 @@ static void P_HandleFragged(int snum)
         if (ud.obituaries)
         {
             //DynamicTileMap[actor[p->i].picnum]
-            Bsprintf(tempbuf, apStrings[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)],
+            Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand() % g_numObituaries)],
                 &g_player[p->frag_ps].user_name[0],
                 &g_player[snum].user_name[0]);
 
@@ -4280,13 +4280,13 @@ static void P_HandleFragged(int snum)
 
             p->fraggedself++;
             if ((unsigned)p->wackedbyactor < MAXSPRITES && A_CheckEnemyTile(sprite[p->wackedbyactor].picnum))
-                Bsprintf(tempbuf, apStrings[FIRST_OBITUARY_QUOTE + (krand() % g_numObituaries)], "A monster", &g_player[snum].user_name[0]);
+                Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand() % g_numObituaries)], "A monster", &g_player[snum].user_name[0]);
             else if (actor[playerSprite].htpicnum == NUKEBUTTON)
                 Bsprintf(tempbuf, "^02%s^02 tried to leave", &g_player[snum].user_name[0]);
             else
             {
                 // random suicide death string
-                Bsprintf(tempbuf, apStrings[FIRST_SUICIDE_QUOTE + (krand() % g_numSelfObituaries)], &g_player[snum].user_name[0]);
+                Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand() % g_numSelfObituaries)], &g_player[snum].user_name[0]);
             }
         }
         else Bsprintf(tempbuf, "^02%s^02 switched to team ^%02d%s", &g_player[snum].user_name[0], teams[p->team].palnum % 100, teams[p->team].name);

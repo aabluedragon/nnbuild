@@ -340,7 +340,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
     {
         g_errorCnt++;
         C_ReportError(-1);
-        initprintf("%s:%d: error: too many arrays!\n",g_scriptFileName,g_lineNumber);
+        LOG_F(ERROR, "%s:%d: too many arrays!",g_scriptFileName,g_lineNumber);
         return 0;
     }
 
@@ -348,7 +348,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
     {
         g_errorCnt++;
         C_ReportError(-1);
-        initprintf("%s:%d: error: array name `%s' exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,pszLabel, MAXARRAYLABEL);
+        LOG_F(ERROR, "%s:%d: array name `%s' exceeds limit of %d characters.",g_scriptFileName,g_lineNumber,pszLabel, MAXARRAYLABEL);
         return 0;
     }
     i = hash_find(&arrayH,pszLabel);
@@ -385,7 +385,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
     {
         g_errorCnt++;
         C_ReportError(-1);
-        initprintf("%s:%d: error: too many gamevars!\n",g_scriptFileName,g_lineNumber);
+        LOG_F(ERROR, "%s:%d: too many gamevars!",g_scriptFileName,g_lineNumber);
         return 0;
     }
 
@@ -393,7 +393,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
     {
         g_errorCnt++;
         C_ReportError(-1);
-        initprintf("%s:%d: error: variable name `%s' exceeds limit of %d characters.\n",g_scriptFileName,g_lineNumber,pszLabel, MAXVARLABEL);
+        LOG_F(ERROR, "%s:%d: variable name `%s' exceeds limit of %d characters.",g_scriptFileName,g_lineNumber,pszLabel, MAXVARLABEL);
         return 0;
     }
 
@@ -405,9 +405,9 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
         if (aGameVars[i].dwFlags & (GAMEVAR_INT32PTR|GAMEVAR_INT16PTR|GAMEVAR_INT8PTR))
         {
             //  			   warning++;
-            //  			   initprintf("%s:%d: warning: Internal gamevar '%s' cannot be redefined.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+            //  			   LOG_F("%s:%d: warning: Internal gamevar '%s' cannot be redefined.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
             C_ReportError(-1);
-            initprintf("%s:%d: warning: cannot redefine internal gamevar `%s'.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+            LOG_F(WARNING, "%s:%d: cannot redefine internal gamevar `%s'.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
             return 0;
         }
         else if (!(aGameVars[i].dwFlags & GAMEVAR_DEFAULT) && !(aGameVars[i].dwFlags & GAMEVAR_SYSTEM))
@@ -1300,7 +1300,7 @@ void Gv_Init(void)
 {
     // only call ONCE
 
-    //  initprintf("Initializing game variables\n");
+    //  LOG_F("Initializing game variables\n");
     //AddLog("Gv_Init");
 
     Gv_Clear();
@@ -1323,7 +1323,7 @@ void Gv_InitWeaponPointers(void)
         aplWeaponClip[i]=Gv_GetVarDataPtr(aszBuf);
         if (!aplWeaponClip[i])
         {
-            initprintf("ERROR: NULL weapon!  WTF?!\n");
+            LOG_F(ERROR, "NULL weapon!  WTF?!");
             // exit(0);
             G_Shutdown();
         }

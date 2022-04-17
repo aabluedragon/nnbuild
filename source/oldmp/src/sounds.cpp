@@ -122,7 +122,7 @@ void S_SoundStartup(void)
     FX_SetReverseStereo(ud.config.ReverseStereo);
 #endif
     FX_SetCallBack(S_Callback);
-    FX_SetPrintf(OSD_Printf);
+    //FX_SetPrintf(OSD_Printf);
 }
 
 void S_SoundShutdown(void)
@@ -152,7 +152,7 @@ void S_MusicStartup(void)
     }
     else
     {
-        initprintf("S_MusicStartup(): failed initializing: %s\n", MUSIC_ErrorString(status));
+        LOG_F(ERROR, "S_MusicStartup(): failed initializing: %s", MUSIC_ErrorString(status));
         return;
     }
 
@@ -179,7 +179,7 @@ void S_MusicShutdown(void)
     S_StopMusic();
 
     if (MUSIC_Shutdown() != MUSIC_Ok)
-        initprintf("%s", MUSIC_ErrorString(MUSIC_ErrorCode));
+        LOG_F(ERROR, "%s", MUSIC_ErrorString(MUSIC_ErrorCode));
 }
 
 void S_PauseMusic(int32_t onf)
@@ -542,7 +542,7 @@ void S_PrecacheSounds(void)
 
     int precachestart = timerGetTicks();
 
-    initprintf("Precaching sounds...\n");
+    LOG_F(INFO, "Precaching sounds...");
 
     for (int i = 0, j = 0; i <= g_highestSoundIdx; ++i)
     {
@@ -555,7 +555,7 @@ void S_PrecacheSounds(void)
         }
     }
 
-    initprintf("Sound precache finished in %dms\n", timerGetTicks() - precachestart);
+    LOG_F(INFO, "Sound precache finished in %dms", timerGetTicks() - precachestart);
 }
 
 static int32_t S_DefineAudioIfSupported(char** fn, const char* name)
@@ -1008,7 +1008,7 @@ void S_StopEnvSound(int soundNum, int spriteNum)
             {
                 Bassert(spriteNum == -1 || voice.handle > FX_Ok);
                 if (EDUKE32_PREDICT_FALSE(spriteNum >= 0 && voice.handle <= FX_Ok))
-                    initprintf(OSD_ERROR "S_StopEnvSound(): bad voice %d for sound ID %d index %d!\n", voice.handle, soundNum, j);
+                    LOG_F(ERROR, "S_StopEnvSound(): bad voice %d for sound ID %d index %d!\n", voice.handle, soundNum, j);
                 else if (FX_SoundValidAndActive(voice.handle))
                     FX_StopSound(voice.handle);
                 else S_Cleanup();
@@ -1055,7 +1055,7 @@ void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
         {
             Bassert(spriteNum == -1 || voice.handle > FX_Ok);
             if (EDUKE32_PREDICT_FALSE(spriteNum >= 0 && voice.handle <= FX_Ok))
-                initprintf(OSD_ERROR "S_ChangeSoundPitch(): bad voice %d for sound ID %d index %d!\n", voice.handle, soundNum, j);
+                LOG_F(ERROR, "S_ChangeSoundPitch(): bad voice %d for sound ID %d index %d!\n", voice.handle, soundNum, j);
             else
                 FX_SetPitch(voice.handle, pitchoffset);
         }

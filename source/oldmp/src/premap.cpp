@@ -1280,7 +1280,7 @@ static void prepare_spawns(void)
 
         if (g_numPlayerSprites == MAXSPAWNPOINTS)
         {
-            initprintf("WARNING: Too many player sprites! (max %d.) Ignoring the rest.", MAXSPAWNPOINTS);
+            LOG_F(WARNING, "Too many player sprites! (max %d.) Ignoring the rest.", MAXSPAWNPOINTS);
             break;
         }
 
@@ -1487,7 +1487,7 @@ static int G_TryMapHack(const char* mhkfile)
     int const failure = engineLoadMHK(mhkfile);
 
     if (!failure)
-        initprintf("Loaded map hack file \"%s\"\n", mhkfile);
+        LOG_F(INFO, "Loaded map hack file \"%s\"", mhkfile);
 
     return failure;
 }

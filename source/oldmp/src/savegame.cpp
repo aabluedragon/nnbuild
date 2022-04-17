@@ -146,14 +146,14 @@ static void sv_loadMhk(char* currentboardfilename)
             sizeof(usermaphack_t), compare_usermaphacks);
 
         if (mhkInfo && (loadedMhk = (engineLoadMHK(mhkInfo->mhkfile) == 0)))
-            initprintf("Loaded map hack file \"%s\"\n", mhkInfo->mhkfile);
+            LOG_F(INFO, "Loaded map hack file \"%s\"", mhkInfo->mhkfile);
     }
 
     if (!loadedMhk)
     {
         append_ext_UNSAFE(currentboardfilename, ".mhk");
         if (engineLoadMHK(currentboardfilename) == 0)
-            initprintf("Loaded map hack file \"%s\"\n", currentboardfilename);
+            LOG_F(INFO, "Loaded map hack file \"%s\"", currentboardfilename);
     }
 }
 

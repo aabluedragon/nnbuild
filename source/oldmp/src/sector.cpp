@@ -1248,7 +1248,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         picnum = wall[w].picnum;
         switchpal = wall[w].pal;
     }
-    //     initprintf("P_ActivateSwitch called picnum=%i switchtype=%i\n",picnum,switchtype);
+    //     LOG_F("P_ActivateSwitch called picnum=%i switchtype=%i\n",picnum,switchtype);
     switchpicnum = picnum;
     if ((picnum==DIPSWITCH+1)
             || (picnum==TECHSWITCH+1)

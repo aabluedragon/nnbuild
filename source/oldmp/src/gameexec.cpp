@@ -55,27 +55,21 @@ void X_ScriptInfo(void)
 
     if (insptr)
     {
-        initprintf("\n");
-
         for (p=insptr-20; p<insptr+20; p++)
         {
-            initprintf("%5d: %3d: ",(int32_t)(p - apScript),(int32_t)(p - insptr));
+            VLOG_F(LOG_VM, "%5d: %3d: ",(int32_t)(p - apScript),(int32_t)(p - insptr));
 
             if (*p>>12&&(*p&0xFFF)<CON_END)
-                initprintf("%5d %s",(int32_t)(*p>>12),keyw[*p&0xFFF]);
+                VLOG_F(LOG_VM, "%5d %s",(int32_t)(*p>>12),keyw[*p&0xFFF]);
             else
-                initprintf("%d",(int32_t)*p);
-
-            initprintf("\n");
+                VLOG_F(LOG_VM, "%d",(int32_t)*p);
         }
-
-        initprintf("\n");
     }
 
     if (g_i)
-        initprintf("current actor: %d (%d)\n",g_i,TrackerCast(g_sp->picnum));
+        VLOG_F(LOG_VM, "current actor: %d (%d)",g_i,TrackerCast(g_sp->picnum));
 
-    initprintf("g_errorLineNum: %d, g_tw: %d\n",g_errorLineNum,g_tw);
+    VLOG_F(LOG_VM, "g_errorLineNum: %d, g_tw: %d",g_errorLineNum,g_tw);
 }
 
 void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
@@ -1414,7 +1408,7 @@ static int X_DoExecute(void)
 
     case CON_DEBUG:
         insptr++;
-        initprintf("%d\n",*insptr++);
+        VLOG_F(LOG_VM, "%d",*insptr++);
         break;
 
     case CON_ENDOFGAME:
@@ -2014,7 +2008,7 @@ static int X_DoExecute(void)
                 //Bsprintf(g_szBuf,"Checking #%d Value= %d",lCheckCase, lpCases[lCheckCase*2]);
                 //AddLog(g_szBuf);
                 lCheckCase=(left+right)/2;
-//                initprintf("(%2d..%2d..%2d) [%2d..%2d..%2d]==%2d\n",left,lCheckCase,right,lpCases[left*2],lpCases[lCheckCase*2],lpCases[right*2],lValue);
+//                LOG_F("(%2d..%2d..%2d) [%2d..%2d..%2d]==%2d\n",left,lCheckCase,right,lpCases[left*2],lpCases[lCheckCase*2],lpCases[right*2],lValue);
                 if (lpCases[lCheckCase*2] > lValue)
                     right=lCheckCase-1;
                 else if (lpCases[lCheckCase*2] < lValue)
@@ -2601,7 +2595,7 @@ static int X_DoExecute(void)
 
             time(&rawtime);
             ti=localtime(&rawtime);
-            // initprintf("Time&date: %s\n",asctime (ti));
+            // LOG_F("Time&date: %s\n",asctime (ti));
 
             Gv_SetVarX(v1, ti->tm_sec);
             Gv_SetVarX(v2, ti->tm_min);

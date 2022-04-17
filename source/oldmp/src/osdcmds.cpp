@@ -434,9 +434,9 @@ static int osdcmd_restartsound(const osdfuncparm_t *parm)
     S_SoundShutdown();
     S_MusicShutdown();
 
-    initprintf("Initializing music...\n");
+    LOG_F(INFO, "Initializing music...\n");
     S_MusicStartup();
-    initprintf("Initializing sound...\n");
+    LOG_F(INFO, "Initializing sound...\n");
     S_SoundStartup();
 
     if (ud.config.MusicToggle)
@@ -484,7 +484,7 @@ static int osdcmd_vidmode(const osdfuncparm_t *parm)
 
     if (videoSetGameMode(newfs,newwidth,newheight,newbpp,ud.detail))
     {
-        initprintf("vidmode: Mode change failed!\n");
+        LOG_F(ERROR, "vidmode: Mode change failed!\n");
         if (videoSetGameMode(ud.config.ScreenMode, ud.config.ScreenWidth, ud.config.ScreenHeight, ud.config.ScreenBPP, ud.detail))
             G_GameExit("vidmode: Reset failed!\n");
     }
