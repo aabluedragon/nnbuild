@@ -102,11 +102,7 @@ char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "Next_Weapon",
    "Previous_Weapon",
    "Show_Console",
-#ifndef EDUKE32_STANDALONE
-   "Show_DukeMatch_Scores",
-#else
-   "Show_Multiplayer_Scores",
-#endif
+   "Show_Scoreboard",
    "Dpad_Select",
    "Dpad_Aiming",
    "AutoRun",
@@ -159,10 +155,10 @@ const char internal_gamefunction_names[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "gamefunc_NightVision",
    "gamefunc_MedKit",
 #else
-   "gamefunc_Inventory_Hotkey_1",
-   "gamefunc_Inventory_Hotkey_2",
-   "gamefunc_Inventory_Hotkey_3",
-   "gamefunc_Inventory_Hotkey_4",
+   "gamefunc_Item_1",
+   "gamefunc_Item_2",
+   "gamefunc_Item_3",
+   "gamefunc_Item_4",
 #endif
    "gamefunc_TurnAround",
    "gamefunc_SendMessage",
@@ -180,17 +176,13 @@ const char internal_gamefunction_names[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "gamefunc_Steroids",
    "gamefunc_Quick_Kick",
 #else
-   "gamefunc_Inventory_Hotkey_5",
-   "gamefunc_Melee_Hotkey",
+   "gamefunc_Item_5",
+   "gamefunc_Melee",
 #endif
    "gamefunc_Next_Weapon",
    "gamefunc_Previous_Weapon",
    "gamefunc_Show_Console",
-#ifndef EDUKE32_STANDALONE
-   "gamefunc_Show_DukeMatch_Scores",
-#else
-   "gamefunc_Show_Multiplayer_Scores",
-#endif
+   "gamefunc_Show_Scoreboard",
    "gamefunc_Dpad_Select",
    "gamefunc_Dpad_Aiming",
    "gamefunc_AutoRun",
@@ -220,21 +212,20 @@ const int32_t keybind_order_modern[NUMGAMEFUNCTIONS] =
    gamefunc_Jump,
    gamefunc_Crouch,
    gamefunc_Toggle_Crouch,
+   gamefunc_Run,
    // inventory
    gamefunc_Inventory,
    gamefunc_Inventory_Left,
    gamefunc_Inventory_Right,
-   gamefunc_Holo_Duke,
-   gamefunc_Jetpack,
-   gamefunc_NightVision,
    gamefunc_MedKit,
+   gamefunc_Jetpack,
    gamefunc_Steroids,
+   gamefunc_NightVision,
+   gamefunc_Holo_Duke,
    // weapon selection
    gamefunc_Next_Weapon,
    gamefunc_Previous_Weapon,
    gamefunc_Last_Weapon,
-   gamefunc_Alt_Weapon,
-   gamefunc_Holster_Weapon,
    gamefunc_Weapon_1,
    gamefunc_Weapon_2,
    gamefunc_Weapon_3,
@@ -249,19 +240,16 @@ const int32_t keybind_order_modern[NUMGAMEFUNCTIONS] =
    gamefunc_Map,
    gamefunc_Map_Follow_Mode,
    gamefunc_Third_Person_View,
-   gamefunc_Shrink_Screen,
-   gamefunc_Enlarge_Screen,
    gamefunc_Quick_Save,
    gamefunc_Quick_Load,
-   gamefunc_Show_Console,
    // rarely used or usually replaced
-   gamefunc_Run,
-   gamefunc_Strafe,
+   gamefunc_Holster_Weapon,
+   gamefunc_Alt_Weapon,
    gamefunc_Aim_Up,
    gamefunc_Aim_Down,
-   gamefunc_Center_View,
    gamefunc_Turn_Left,
    gamefunc_Turn_Right,
+   gamefunc_Center_View,
    gamefunc_Look_Up,
    gamefunc_Look_Down,
    gamefunc_Look_Left,
@@ -269,6 +257,9 @@ const int32_t keybind_order_modern[NUMGAMEFUNCTIONS] =
    gamefunc_TurnAround,
    gamefunc_Dpad_Select,
    gamefunc_Dpad_Aiming,
+   gamefunc_Shrink_Screen,
+   gamefunc_Enlarge_Screen,
+   gamefunc_Strafe,
    // toggles that have corresponding menu options
    gamefunc_Mouse_Aiming,
    gamefunc_Toggle_Crosshair,
@@ -277,7 +268,8 @@ const int32_t keybind_order_modern[NUMGAMEFUNCTIONS] =
    gamefunc_SendMessage,
    gamefunc_Show_Opponents_Weapon,
    gamefunc_See_Coop_View,
-   gamefunc_Show_DukeMatch_Scores,
+   gamefunc_Show_Scoreboard,
+   gamefunc_Show_Console,
    };
 
 int32_t keybind_order_custom[NUMGAMEFUNCTIONS] = {-1};

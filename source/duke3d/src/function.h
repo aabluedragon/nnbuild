@@ -91,7 +91,7 @@ enum GameFunction_t
    gamefunc_Next_Weapon,
    gamefunc_Previous_Weapon,
    gamefunc_Show_Console,
-   gamefunc_Show_DukeMatch_Scores,
+   gamefunc_Show_Scoreboard,
    gamefunc_Dpad_Select,
    gamefunc_Dpad_Aiming,
    gamefunc_AutoRun,
@@ -103,6 +103,8 @@ enum GameFunction_t
    gamefunc_Toggle_Crouch,
    NUMGAMEFUNCTIONS
    };
+
+EDUKE32_STATIC_ASSERT(NUMGAMEFUNCTIONS <= 64); // CONTROL_ButtonState and CONTROL_ButtonHeldState are uint64_t
 
 extern char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN];
 extern const char internal_gamefunction_names[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN];

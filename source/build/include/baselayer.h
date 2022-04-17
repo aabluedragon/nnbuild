@@ -8,6 +8,7 @@
 #define baselayer_h_
 
 #include "compat.h"
+#include "log.h"
 #include "osd.h"
 #include "timer.h"
 
@@ -19,8 +20,7 @@ extern int app_main(int argc, char const * const * argv);
 extern const char* AppProperName;
 extern const char* AppTechnicalName;
 
-void engineCreateAllocator(void);
-void engineDestroyAllocator(void);
+void engineSetupAllocator(void);
 
 #ifdef DEBUGGINGAIDS
 # define DEBUG_MASK_DRAWING
@@ -28,7 +28,7 @@ extern int32_t g_maskDrawMode;
 #endif
 
 #define PRINTF_INITIAL_BUFFER_SIZE 32
-#define MSGBOX_PRINTF_MAX          1024
+#define MSGBOX_PRINTF_MAX          1536
 
 extern char quitevent, appactive;
 extern char modechange;
@@ -50,6 +50,7 @@ extern int32_t startwin_puts(const char *);
 extern int32_t startwin_settitle(const char *);
 extern int32_t startwin_idle(void *);
 extern int32_t startwin_run(void);
+extern bool startwin_isopen(void);
 
 // video
 extern int32_t r_rotatespriteinterp;
@@ -66,6 +67,13 @@ extern int32_t nofog;
 extern int32_t r_maxfps;
 extern int32_t g_numdisplays;
 extern int32_t g_displayindex;
+
+extern bool g_ImGuiCaptureInput;
+extern bool g_ImGuiFrameActive;
+extern uint8_t g_ImGuiCapturedDevices;
+extern void engineBeginImGuiFrame(void);
+extern void engineEndImGuiInput(void);
+extern void engineBeginImGuiInput(void);
 
 void calc_ylookup(int32_t bpl, int32_t lastyidx);
 
@@ -116,6 +124,8 @@ struct glinfo_t {
     const char *extensions;
 
     float maxanisotropy;
+
+    int maxTextureSize;
 
     int filled;
 
@@ -233,8 +243,8 @@ typedef struct
         uint8_t flags;
         struct
         {
-            int isGameController : 1;
-            int hasRumble        : 1;
+            unsigned int isGameController : 1;
+            unsigned int hasRumble        : 1;
         };
     };
 } controllerinput_t;
@@ -255,7 +265,6 @@ int32_t initsystem(void);
 void uninitsystem(void);
 void system_getcvars(void);
 
-extern int32_t g_logFlushWindow;
 void initputs(const char *);
 #define buildputs initputs
 int initprintf(const char *, ...) ATTRIBUTE((format(printf,1,2)));
@@ -321,17 +330,16 @@ void maybe_redirect_outputs(void);
 extern uint64_t g_frameDelay;
 static inline uint64_t calcFrameDelay(int maxFPS)
 {
-    uint64_t perfFreq = timerGetNanoTickRate();
-
     switch (maxFPS)
     {
+        case -2: return 0;
         case -1: maxFPS = refreshfreq; break;
-        case 0: perfFreq = 0; break;
+        case 0: maxFPS = 1000; break;
     }
 
-    return tabledivide64(perfFreq, maxFPS);
+    return tabledivide64(timerGetNanoTickRate(), maxFPS);
 }
-extern int engineFPSLimit(void);
+extern int engineFPSLimit(bool const throttle = false);
 #ifdef __cplusplus
 }
 #endif
@@ -343,11 +351,32 @@ static inline int32_t calc_smoothratio(ClockTicks const totalclk, ClockTicks con
     float const tics  = clk * tfreq * (1.f / (65536.f * 120));
     int const   ratio = tabledivide32_noinline((int)(65536 * tics * gameTicRate), tfreq);
 
-#if 0 //ndef NDEBUG
     if ((unsigned)ratio > 66048)
-        OSD_Printf("calc_smoothratio: ratio: %d\n", ratio);
-#endif
+        DVLOG_F(LOG_DEBUG+1, "calc_smoothratio: ratio: %d", ratio);
+
     return clamp(ratio, 0, 65536);
+}
+
+static inline void debugThreadName(char const *name)
+{
+    loguru::set_thread_name(name);
+
+#if defined _WIN32 && !defined NDEBUG
+    if (IsDebuggerPresent())
+    {
+#pragma pack(push, 8)
+        typedef struct tagTHREADNAME_INFO
+        {
+            DWORD  dwType;     /* must be 0x1000 */
+            LPCSTR szName;     /* pointer to name (in user addr space) */
+            DWORD  dwThreadID; /* thread ID (-1=caller thread) */
+            DWORD  dwFlags;    /* reserved for future use, must be zero */
+        } THREADNAME_INFO;
+#pragma pack(pop)
+        THREADNAME_INFO wtf = { 0x1000, name, (DWORD)-1, 0 };
+        RaiseException(0x406D1388, 0, sizeof(wtf) / sizeof(ULONG_PTR), (const ULONG_PTR *)&wtf);
+    }
+#endif
 }
 
 #include "print.h"

@@ -219,8 +219,6 @@ static int32_t setgammaramp(LPDDGAMMARAMP gt);
 //
 static void SignalHandler(int32_t signum)
 {
-    OSD_FlushLog();
-
     switch (signum)
     {
     case SIGSEGV:
@@ -281,7 +279,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
     _CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF);
 #endif
 
-    engineCreateAllocator();
+    engineSetupAllocator();
 
     mutex_init(&m_initprintf);
 

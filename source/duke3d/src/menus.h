@@ -38,7 +38,8 @@ extern "C" {
 # define EDUKE32_ANDROID_MENU
 #endif
 
-extern int32_t kbo_type_cvar;
+extern int32_t cvar_kbo_type;
+extern int32_t cvar_kbconfirm;
 
 // #define EDUKE32_SIMPLE_MENU
 
@@ -70,7 +71,7 @@ enum MenuIndex_t {
     MENU_TOUCHSENS      = 215,
     MENU_TOUCHBUTTONS   = 216,
     MENU_CONTROLS       = 220,
-    MENU_POLYMOST       = 230,
+    MENU_RENDERER       = 230,
     MENU_COLCORR        = 231,
     MENU_COLCORR_INGAME = 232,
     MENU_SCREENSETUP    = 233,
@@ -111,6 +112,7 @@ enum MenuIndex_t {
     MENU_KEYSRESETVERIFY = 2201,
     MENU_KEYSCLASSICVERIFY = 2202,
     MENU_JOYDEFAULTVERIFY = 2203,
+    MENU_KEYOVERRIDEVERIFY = 2204,
     MENU_ADULTPASSWORD  = 10001,
     MENU_RESETPLAYER    = 15000,
     MENU_BUYDUKE        = 20000,

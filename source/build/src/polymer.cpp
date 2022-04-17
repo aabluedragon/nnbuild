@@ -227,7 +227,7 @@ static const GLfloat  shadowBias[] =
 // MATERIALS
 static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
     {
-        1 << PR_BIT_HEADER,
+        //1 << PR_BIT_HEADER,
         // vert_def
         "#version 120\n"
         "#extension GL_ARB_texture_rectangle : enable\n"
@@ -242,7 +242,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "",
     },
     {
-        1 << PR_BIT_ANIM_INTERPOLATION,
+        //1 << PR_BIT_ANIM_INTERPOLATION,
         // vert_def
         "attribute vec4 nextFrameData;\n"
         "attribute vec4 nextFrameNormal;\n"
@@ -266,7 +266,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "",
     },
     {
-        1 << PR_BIT_LIGHTING_PASS,
+        //1 << PR_BIT_LIGHTING_PASS,
         // vert_def
         "",
         // vert_prog
@@ -279,7 +279,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_NORMAL_MAP,
+        //1 << PR_BIT_NORMAL_MAP,
         // vert_def
         "attribute vec3 T;\n"
         "attribute vec3 B;\n"
@@ -317,7 +317,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_ART_MAP,
+        //1 << PR_BIT_ART_MAP,
         // vert_def
         "varying vec3 horizDistance;\n"
         "\n",
@@ -356,7 +356,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_DIFFUSE_MAP,
+        //1 << PR_BIT_DIFFUSE_MAP,
         // vert_def
         "uniform vec2 diffuseScale;\n"
         "\n",
@@ -371,7 +371,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_DIFFUSE_DETAIL_MAP,
+        //1 << PR_BIT_DIFFUSE_DETAIL_MAP,
         // vert_def
         "uniform vec2 detailScale;\n"
         "varying vec2 fragDetailScale;\n"
@@ -394,7 +394,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_DIFFUSE_MODULATION,
+        //1 << PR_BIT_DIFFUSE_MODULATION,
         // vert_def
         "",
         // vert_prog
@@ -408,7 +408,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_DIFFUSE_MAP2,
+        //1 << PR_BIT_DIFFUSE_MAP2,
         // vert_def
         "",
         // vert_prog
@@ -421,7 +421,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_HIGHPALOOKUP_MAP,
+        //1 << PR_BIT_HIGHPALOOKUP_MAP,
         // vert_def
         "",
         // vert_prog
@@ -439,7 +439,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_SPECULAR_MAP,
+        //1 << PR_BIT_SPECULAR_MAP,
         // vert_def
         "",
         // vert_prog
@@ -454,7 +454,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_SPECULAR_MATERIAL,
+        //1 << PR_BIT_SPECULAR_MATERIAL,
         // vert_def
         "",
         // vert_prog
@@ -467,7 +467,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_MIRROR_MAP,
+        //1 << PR_BIT_MIRROR_MAP,
         // vert_def
         "",
         // vert_prog
@@ -488,7 +488,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_FOG,
+        //1 << PR_BIT_FOG,
         // vert_def
         "",
         // vert_prog
@@ -518,7 +518,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_GLOW_MAP,
+        //1 << PR_BIT_GLOW_MAP,
         // vert_def
         "",
         // vert_prog
@@ -534,7 +534,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_PROJECTION_MAP,
+        //1 << PR_BIT_PROJECTION_MAP,
         // vert_def
         "uniform mat4 shadowProjMatrix;\n"
         "\n",
@@ -547,7 +547,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "",
     },
     {
-        1 << PR_BIT_SHADOW_MAP,
+        //1 << PR_BIT_SHADOW_MAP,
         // vert_def
         "",
         // vert_prog
@@ -560,7 +560,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_LIGHT_MAP,
+        //1 << PR_BIT_LIGHT_MAP,
         // vert_def
         "",
         // vert_prog
@@ -573,7 +573,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_SPOT_LIGHT,
+        //1 << PR_BIT_SPOT_LIGHT,
         // vert_def
         "",
         // vert_prog
@@ -589,7 +589,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_POINT_LIGHT,
+        //1 << PR_BIT_POINT_LIGHT,
         // vert_def
         "varying vec3 vertexNormal;\n"
         "varying vec3 eyeVector;\n"
@@ -661,7 +661,7 @@ static const _prprogrambit   prprogrambits[PR_BIT_COUNT] = {
         "\n",
     },
     {
-        1 << PR_BIT_FOOTER,
+        //1 << PR_BIT_FOOTER,
         // vert_def
         "void main(void)\n"
         "{\n"
@@ -747,7 +747,7 @@ int32_t             polymer_init(void)
 {
     int32_t         i, j, t = timerGetTicks();
 
-    if (pr_verbosity >= 1) OSD_Printf("Initializing Polymer subsystem...\n");
+    if (pr_verbosity >= 1) VLOG_F(LOG_PR, "Initializing Polymer subsystem...");
 
     if (!glinfo.texnpot ||
         !glinfo.depthtex ||
@@ -758,8 +758,8 @@ int32_t             polymer_init(void)
         !glinfo.occlusionqueries ||
         !glinfo.glsl)
     {
-        OSD_Printf("PR : Your video card driver/combo doesn't support the necessary features!\n");
-        OSD_Printf("PR : Disabling Polymer...\n");
+        VLOG_F(LOG_PR, "Your video card driver/combo doesn't support the necessary features!");
+        VLOG_F(LOG_PR, "Disabling Polymer...");
         return 0;
     }
 
@@ -774,7 +774,7 @@ int32_t             polymer_init(void)
 
     if (prtess == 0)
     {
-        OSD_Printf("PR : Tessellation object initialization failed!\n");
+        VLOG_F(LOG_PR, "Tessellation object initialization failed!");
         return 0;
     }
 
@@ -849,7 +849,7 @@ int32_t             polymer_init(void)
     buildgl_resetSamplerObjects();
     polymost_initdrawpoly();
 
-    if (pr_verbosity >= 1) OSD_Printf("PR : Initialization complete in %d ms.\n", timerGetTicks()-t);
+    if (pr_verbosity >= 1) VLOG_F(LOG_PR, "Initialization complete in %d ms.", timerGetTicks()-t);
 
     return 1;
 }
@@ -910,7 +910,7 @@ void                polymer_uninit(void)
     }
 
     if (pr_verbosity >= 3)
-        OSD_Printf("PR: freed %d planelists\n", i);
+        VLOG_F(LOG_PR, "freed %d planelists", i);
 
     inthash_free(&prprogramtable);
 
@@ -921,7 +921,7 @@ void                polymer_uninit(void)
     }
 
     if (pr_verbosity >= 2)
-        OSD_Printf("PR: freed %" PRIiPTR " programs\n", prprogramptrs.size());
+        VLOG_F(LOG_PR, "freed %" PRIiPTR " programs", prprogramptrs.size());
 
     prprogramptrs.clear();
 }
@@ -1030,7 +1030,7 @@ void                polymer_resetlights(void)
     lightcount = 0;
 
     if (!engineLoadMHK(NULL))
-        OSD_Printf("polymer_resetlights: reloaded maphack\n");
+        VLOG_F(LOG_PR, "Refreshed maphack data");
 }
 
 void                polymer_loadboard(void)
@@ -1080,7 +1080,7 @@ void                polymer_loadboard(void)
 
     polymer_resetlights();
 
-    if (pr_verbosity >= 1 && numsectors) OSD_Printf("PR : Board loaded.\n");
+    if (pr_verbosity >= 1 && numsectors) VLOG_F(LOG_PR, "Board loaded.");
 }
 
 int32_t polymer_printtext256(int32_t xpos, int32_t ypos, int16_t col, int16_t backcol, const char *name, char fontsize)
@@ -1118,7 +1118,7 @@ void polymer_drawrooms(int32_t daposx, int32_t daposy, int32_t daposz, fix16_t d
     // TODO: support for screen resizing
     // frameoffset = frameplace + windowxy1.y*bytesperline + windowxy1.x;
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Drawing rooms...\n");
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Drawing rooms...");
 
     // fogcalc_old needs this
     gvisibility = ((float)globalvisibility)*FOGSCALE;
@@ -1189,7 +1189,7 @@ void polymer_drawrooms(int32_t daposx, int32_t daposy, int32_t daposz, fix16_t d
     if (cursectnum >= 0 && cursectnum < numsectors)
         dacursectnum = cursectnum;
     else if (pr_verbosity>=2)
-        OSD_Printf("PR : got sector %d after update!\n", cursectnum);
+        VLOG_F(LOG_PR, "got sector %d after update!", cursectnum);
 
     // unflag all sectors
     i = numsectors-1;
@@ -1210,8 +1210,8 @@ void polymer_drawrooms(int32_t daposx, int32_t daposy, int32_t daposz, fix16_t d
     if (searchit == 2 && !polymersearching)
     {
         globaloldoverridematerial = overridematerial;
-        overridematerial = prprogrambits[PR_BIT_DIFFUSE_MODULATION].bit;
-        overridematerial |= prprogrambits[PR_BIT_DIFFUSE_MAP2].bit;
+        overridematerial = (1 << PR_BIT_DIFFUSE_MODULATION);
+        overridematerial |= (1 << PR_BIT_DIFFUSE_MAP2);
         polymersearching = TRUE;
     }
     if (!searchit && polymersearching) {
@@ -1232,9 +1232,9 @@ void polymer_drawrooms(int32_t daposx, int32_t daposy, int32_t daposz, fix16_t d
         if (!editstatus && pr_verbosity>=1)
         {
             if ((unsigned)dacursectnum < (unsigned)numsectors)
-                OSD_Printf("PR : EXT sec=%d  z=%d (%d, %d)\n", dacursectnum, daposz, cursectflorz, cursectceilz);
+                VLOG_F(LOG_PR, "EXT sec=%d  z=%d (%d, %d)", dacursectnum, daposz, cursectflorz, cursectceilz);
             else
-                OSD_Printf("PR : EXT sec=%d  z=%d\n", dacursectnum, daposz);
+                VLOG_F(LOG_PR, "EXT sec=%d  z=%d", dacursectnum, daposz);
         }
 
         curmodelviewmatrix = rootmodelviewmatrix;
@@ -1277,7 +1277,7 @@ void polymer_drawrooms(int32_t daposx, int32_t daposy, int32_t daposz, fix16_t d
     gcosang2 = gcosang*fviewingrange*(1./65536.f);
     gsinang2 = gsinang*fviewingrange*(1./65536.f);
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Rooms drawn.\n");
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Rooms drawn.");
     videoEndDrawing();
 }
 
@@ -1376,7 +1376,7 @@ void                polymer_editorpick(void)
 
             if (prsectors[searchsector]==NULL)
             {
-                //OSD_Printf("polymer_editorpick: prsectors[searchsector]==NULL !!!\n");
+                //OSD_Printf("polymer_editorpick: prsectors[searchsector]==NULL !!!");
                 searchwall = sector[num].wallptr;
             }
             else
@@ -1455,7 +1455,7 @@ void                polymer_inb4rotatesprite(int16_t tilenum, char pal, int8_t s
 
     polymer_getbuildmaterial(&rotatespritematerial, tilenum, pal, shade, 0, method);
     rotatespritematerialbits = polymer_bindmaterial(&rotatespritematerial, NULL, 0);
-    buildgl_bindSamplerObject(0, PTH_CLAMPED | ((rotatespritematerialbits & prprogrambits[PR_BIT_ART_MAP].bit) ? PTH_INDEXED : 0));
+    buildgl_bindSamplerObject(0, PTH_CLAMPED | ((rotatespritematerialbits & (1 << PR_BIT_ART_MAP)) ? PTH_INDEXED : PTH_HIGHTILE));
     buildgl_bindBuffer(GL_ARRAY_BUFFER, drawpolyVertsID);
 
     glVertexPointer(3, GL_FLOAT, 5*sizeof(float), 0);
@@ -1494,7 +1494,7 @@ void                polymer_drawmaskwall(int32_t damaskwallcnt)
     _prwall         *w;
     GLubyte         oldcolor[4];
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Masked wall %i...\n", damaskwallcnt);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Masked wall %i", damaskwallcnt);
 
     sec = (usectorptr_t)&sector[wallsect[maskwall[damaskwallcnt]]];
     wal = &wall[maskwall[damaskwallcnt]];
@@ -1520,7 +1520,7 @@ void                polymer_drawsprite(int32_t snum)
     auto const tspr = tspriteptr[snum];
     usectorptr_t sec;
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Sprite %i...\n", snum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Sprite %i", snum);
 
     if (bad_tspr(tspr))
         return;
@@ -1722,7 +1722,7 @@ void                polymer_deletelight(int16_t lighti)
     {
 #ifdef DEBUGGINGAIDS
         if (pr_verbosity >= 2)
-            OSD_Printf("PR : Called polymer_deletelight on inactive light\n");
+            VLOG_F(LOG_PR, "Called polymer_deletelight on inactive light");
         // currently known cases: when reloading maphack lights (didn't set maphacklightcnt=0
         // but did loadmaphack()->delete_maphack_lights() after polymer_resetlights())
 #endif
@@ -1900,7 +1900,7 @@ static void         polymer_displayrooms(const int16_t dacursectnum)
                         localmaskwall[localmaskwallcnt++] = sec->wallptr + i;
                 }
 
-                if (!depth && (overridematerial & prprogrambits[PR_BIT_MIRROR_MAP].bit) &&
+                if (!depth && (overridematerial & (1 << PR_BIT_MIRROR_MAP)) &&
                      wall[sec->wallptr + i].overpicnum == 560 &&
                      wall[sec->wallptr + i].cstat & 32)
                 {
@@ -2405,7 +2405,7 @@ static void         polymer_drawplane(_prplane* plane)
         materialbits = polymer_bindmaterial(&plane->material, plane->lights, plane->lightcount);
         auto &prprogram = *polymer_getprogram(materialbits);
 
-        if (materialbits & prprogrambits[PR_BIT_NORMAL_MAP].bit)
+        if (materialbits & (1 << PR_BIT_NORMAL_MAP))
         {
             glVertexAttrib3fv(prprogram.attrib_T, &plane->tbn[0][0]);
             glVertexAttrib3fv(prprogram.attrib_B, &plane->tbn[1][0]);
@@ -2578,7 +2578,7 @@ static int32_t      polymer_initsector(int16_t sectnum)
     usectorptr_t sec;
     _prsector*      s;
 
-    if (pr_verbosity >= 2) OSD_Printf("PR : Initializing sector %i...\n", sectnum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Initializing sector %i", sectnum);
 
     sec = (usectorptr_t)&sector[sectnum];
     s = (_prsector *)Xcalloc(1, sizeof(_prsector));
@@ -2606,7 +2606,7 @@ static int32_t      polymer_initsector(int16_t sectnum)
 
     prsectors[sectnum] = s;
 
-    if (pr_verbosity >= 2) OSD_Printf("PR : Initialized sector %i.\n", sectnum);
+    if (pr_verbosity >= 2) VLOG_F(LOG_PR, "Initialized sector %i.", sectnum);
 
     return 1;
 }
@@ -2619,7 +2619,7 @@ static int32_t      polymer_updatesector(int16_t sectnum)
 
     if (s == NULL)
     {
-        if (pr_verbosity >= 1) OSD_Printf("PR : Can't update uninitialized sector %i.\n", sectnum);
+        if (pr_verbosity >= 1) VLOG_F(LOG_PR, "Can't update uninitialized sector %i.", sectnum);
         return -1;
     }
     auto sec = (usectorptr_t)&sector[sectnum];
@@ -2937,7 +2937,7 @@ finish:
     s->flags.empty = 0;
     s->flags.uptodate = 1;
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Updated sector %i.\n", sectnum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Updated sector %i.", sectnum);
 
     return 0;
 }
@@ -2945,7 +2945,7 @@ finish:
 static int32_t      polymer_buildfloor(int16_t sectnum)
 {
     // This function tesselates the floor/ceiling of a sector and stores the triangles in a display list.
-    if (pr_verbosity >= 2) OSD_Printf("PR : Tesselating floor of sector %i...\n", sectnum);
+    if (pr_verbosity >= 2) VLOG_F(LOG_PR, "Tessellating floor of sector %i", sectnum);
 
     _prsector *s = prsectors[sectnum];
     auto sec = (usectorptr_t)&sector[sectnum];
@@ -3011,7 +3011,7 @@ static int32_t      polymer_buildfloor(int16_t sectnum)
 
         if (index[elements[j]] == TESS_UNDEF)
         {
-            OSD_Printf("sector %d is a very sad sector\n", sectnum);
+            LOG_F(WARNING, "sector %d is a very sad sector", sectnum);
             s->ceil.indices[j] = 0;
         }
         s->floor.indices[s->indicescount-j-1] = s->ceil.indices[j];
@@ -3019,14 +3019,14 @@ static int32_t      polymer_buildfloor(int16_t sectnum)
 
     s->floor.indicescount = s->ceil.indicescount = s->indicescount;
 
-    if (pr_verbosity >= 2) OSD_Printf("PR : Tesselated floor of sector %i.\n", sectnum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Tessellated floor of sector %i.", sectnum);
 
     return 1;
 }
 
 static void polymer_drawsector(int16_t sectnum, int32_t domasks)
 {
-    if (pr_verbosity >= 3) OSD_Printf("PR : Drawing sector %i...\n", sectnum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Drawing sector %i", sectnum);
 
     if (automapping)
         show2dsector[sectnum>>3] |= pow2char[sectnum&7];
@@ -3110,7 +3110,7 @@ static void polymer_drawsector(int16_t sectnum, int32_t domasks)
         }
     }
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Finished drawing sector %i...\n", sectnum);
+    if (pr_verbosity >= 4) VLOG_F(LOG_PR, "Finished drawing sector %i.", sectnum);
 }
 
 // WALLS
@@ -3118,7 +3118,7 @@ static int32_t      polymer_initwall(int16_t wallnum)
 {
     _prwall         *w;
 
-    if (pr_verbosity >= 2) OSD_Printf("PR : Initializing wall %i...\n", wallnum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Initializing wall %i", wallnum);
 
     w = (_prwall *)Xcalloc(1, sizeof(_prwall));
 
@@ -3154,7 +3154,7 @@ static int32_t      polymer_initwall(int16_t wallnum)
 
     prwalls[wallnum] = w;
 
-    if (pr_verbosity >= 2) OSD_Printf("PR : Initialized wall %i.\n", wallnum);
+    if (pr_verbosity >= 2) VLOG_F(LOG_PR, "Initialized wall %i.", wallnum);
 
     return 1;
 }
@@ -3220,8 +3220,8 @@ static void         polymer_updatewall(int16_t wallnum)
 
     if (sec->floorz == sec->ceilingz)
     {
-        if (pr_verbosity >= 3)
-            OSD_Printf("PR : Skipped wall %i.\n", wallnum);
+        if (pr_verbosity >= 2)
+            VLOG_F(LOG_PR, "Skipped wall %i.", wallnum);
         return;
     }
 
@@ -3608,7 +3608,7 @@ static void         polymer_updatewall(int16_t wallnum)
     w->flags.uptodate = 1;
     w->flags.invalidtex = 0;
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Updated wall %i.\n", wallnum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Updated wall %i.", wallnum);
 }
 
 static void         polymer_drawwall(int16_t sectnum, int16_t wallnum)
@@ -3619,7 +3619,7 @@ static void         polymer_drawwall(int16_t sectnum, int16_t wallnum)
     GLubyte         oldcolor[4];
     int32_t         parallaxedfloor = 0, parallaxedceiling = 0;
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Drawing wall %i...\n", wallnum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Drawing wall %i", wallnum);
 
     sec = (usectorptr_t)&sector[sectnum];
     wal = &wall[wallnum];
@@ -3681,7 +3681,7 @@ static void         polymer_drawwall(int16_t sectnum, int16_t wallnum)
     if (automapping)
         show2dwall[wallnum>>3] |= pow2char[wallnum&7];
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Finished drawing wall %i...\n", wallnum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Finished drawing wall %i.", wallnum);
 }
 
 // HSR
@@ -3833,7 +3833,7 @@ static void         polymer_extractfrustum(GLfloat* modelview, GLfloat* projecti
     }
     while (++i < 4);
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Frustum extracted.\n");
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Frustum extracted.");
 }
 
 static inline int polymer_planeinfrustum(_prplane const &plane, const float* frustum)
@@ -3895,7 +3895,7 @@ void                polymer_updatesprite(int32_t snum)
 
     if (pr_nullrender >= 3) return;
 
-    if (pr_verbosity >= 3) OSD_Printf("PR : Updating sprite %i...\n", snum);
+    if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Updating sprite %i", snum);
 
     int32_t const curpicnum = tspr->picnum;
 
@@ -4995,7 +4995,7 @@ static _prbucket*   polymer_getbuildmaterial(_prmaterial* material, int16_t tile
     int32_t usinghighpal = 0;
 
     // Lazily fill in all the textures we need, move this to precaching later
-    if (pr_artmapping && !(globalflags & GLOBAL_NO_GL_TILESHADES) && polymer_eligible_for_artmap(tilenum, pth))
+    if (polymer_useartmapping() && !(globalflags & GLOBAL_NO_GL_TILESHADES) && polymer_eligible_for_artmap(tilenum, pth))
     {
         polytintflags_t const tintflags = hictinting[pal].f;
 
@@ -5123,74 +5123,74 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
 
     // PR_BIT_ANIM_INTERPOLATION
     if (material->nextframedata != ((float*)-1))
-        programbits |= prprogrambits[PR_BIT_ANIM_INTERPOLATION].bit;
+        programbits |= (1 << PR_BIT_ANIM_INTERPOLATION);
 
     // PR_BIT_LIGHTING_PASS
     if (curlight && matlightcount)
-        programbits |= prprogrambits[PR_BIT_LIGHTING_PASS].bit;
+        programbits |= (1 << PR_BIT_LIGHTING_PASS);
 
     // PR_BIT_NORMAL_MAP
     if (pr_normalmapping && material->normalmap)
-        programbits |= prprogrambits[PR_BIT_NORMAL_MAP].bit;
+        programbits |= (1 << PR_BIT_NORMAL_MAP);
 
     // PR_BIT_ART_MAP
-    if (pr_artmapping && material->artmap &&
+    if (polymer_useartmapping() && material->artmap &&
         !(globalflags & GLOBAL_NO_GL_TILESHADES) &&
-        (overridematerial & prprogrambits[PR_BIT_ART_MAP].bit)) {
-        programbits |= prprogrambits[PR_BIT_ART_MAP].bit;
+        (overridematerial & (1 << PR_BIT_ART_MAP))) {
+        programbits |= (1 << PR_BIT_ART_MAP);
     } else
     // PR_BIT_DIFFUSE_MAP
     if (material->diffusemap) {
-        programbits |= prprogrambits[PR_BIT_DIFFUSE_MAP].bit;
-        programbits |= prprogrambits[PR_BIT_DIFFUSE_MAP2].bit;
+        programbits |= (1 << PR_BIT_DIFFUSE_MAP);
+        programbits |= (1 << PR_BIT_DIFFUSE_MAP2);
     }
 
     // PR_BIT_HIGHPALOOKUP_MAP
     if (material->highpalookupmap)
-        programbits |= prprogrambits[PR_BIT_HIGHPALOOKUP_MAP].bit;
+        programbits |= (1 << PR_BIT_HIGHPALOOKUP_MAP);
 
     // PR_BIT_DIFFUSE_DETAIL_MAP
     if (r_detailmapping && material->detailmap)
-        programbits |= prprogrambits[PR_BIT_DIFFUSE_DETAIL_MAP].bit;
+        programbits |= (1 << PR_BIT_DIFFUSE_DETAIL_MAP);
 
     // PR_BIT_DIFFUSE_MODULATION
-    programbits |= prprogrambits[PR_BIT_DIFFUSE_MODULATION].bit;
+    programbits |= (1 << PR_BIT_DIFFUSE_MODULATION);
 
     // PR_BIT_SPECULAR_MAP
     if (pr_specularmapping && material->specmap)
-        programbits |= prprogrambits[PR_BIT_SPECULAR_MAP].bit;
+        programbits |= (1 << PR_BIT_SPECULAR_MAP);
 
     // PR_BIT_SPECULAR_MATERIAL
     if ((material->specmaterial[0] != 15.0) || (material->specmaterial[1] != 1.0) || pr_overridespecular)
-        programbits |= prprogrambits[PR_BIT_SPECULAR_MATERIAL].bit;
+        programbits |= (1 << PR_BIT_SPECULAR_MATERIAL);
 
     // PR_BIT_MIRROR_MAP
     if (!curlight && material->mirrormap)
-        programbits |= prprogrambits[PR_BIT_MIRROR_MAP].bit;
+        programbits |= (1 << PR_BIT_MIRROR_MAP);
 
     // PR_BIT_FOG
     if (!material->artmap && !curlight && !material->mirrormap)
-        programbits |= prprogrambits[PR_BIT_FOG].bit;
+        programbits |= (1 << PR_BIT_FOG);
 
     // PR_BIT_GLOW_MAP
     if (!curlight && r_glowmapping && material->glowmap)
-        programbits |= prprogrambits[PR_BIT_GLOW_MAP].bit;
+        programbits |= (1 << PR_BIT_GLOW_MAP);
 
     // PR_BIT_POINT_LIGHT
     if (matlightcount) {
-        programbits |= prprogrambits[PR_BIT_POINT_LIGHT].bit;
+        programbits |= (1 << PR_BIT_POINT_LIGHT);
         // PR_BIT_SPOT_LIGHT
         if (prlights[lights[curlight]].radius) {
-            programbits |= prprogrambits[PR_BIT_SPOT_LIGHT].bit;
+            programbits |= (1 << PR_BIT_SPOT_LIGHT);
             // PR_BIT_SHADOW_MAP
             if (prlights[lights[curlight]].rtindex != -1) {
-                programbits |= prprogrambits[PR_BIT_SHADOW_MAP].bit;
-                programbits |= prprogrambits[PR_BIT_PROJECTION_MAP].bit;
+                programbits |= (1 << PR_BIT_SHADOW_MAP);
+                programbits |= (1 << PR_BIT_PROJECTION_MAP);
             }
             // PR_BIT_LIGHT_MAP
             if (prlights[lights[curlight]].lightmap) {
-                programbits |= prprogrambits[PR_BIT_LIGHT_MAP].bit;
-                programbits |= prprogrambits[PR_BIT_PROJECTION_MAP].bit;
+                programbits |= (1 << PR_BIT_LIGHT_MAP);
+                programbits |= (1 << PR_BIT_PROJECTION_MAP);
             }
         }
     }
@@ -5198,8 +5198,8 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     // material override
     programbits &= overridematerial;
 
-    programbits |= prprogrambits[PR_BIT_HEADER].bit;
-    programbits |= prprogrambits[PR_BIT_FOOTER].bit;
+    programbits |= (1 << PR_BIT_HEADER);
+    programbits |= (1 << PR_BIT_FOOTER);
 
     // --------- program compiling
     auto &prprogram = *polymer_getprogram(programbits);
@@ -5209,10 +5209,10 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     // --------- bit setup
 
     texunit = 0;
-    buildgl_bindSamplerObject(texunit, programbits & prprogrambits[PR_BIT_ART_MAP].bit ? PTH_INDEXED : PTH_HIGHTILE);
+    buildgl_bindSamplerObject(texunit, (programbits & (1 << PR_BIT_ART_MAP)) ? PTH_INDEXED : PTH_HIGHTILE);
 
     // PR_BIT_ANIM_INTERPOLATION
-    if (programbits & prprogrambits[PR_BIT_ANIM_INTERPOLATION].bit)
+    if (programbits & (1 << PR_BIT_ANIM_INTERPOLATION))
     {
         glEnableVertexAttribArray(prprogram.attrib_nextFrameData);
         if (prprogram.attrib_nextFrameNormal != -1)
@@ -5231,7 +5231,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_LIGHTING_PASS
-    if (programbits & prprogrambits[PR_BIT_LIGHTING_PASS].bit)
+    if (programbits & (1 << PR_BIT_LIGHTING_PASS))
     {
         glPushAttrib(GL_COLOR_BUFFER_BIT);
         glEnable(GL_BLEND);
@@ -5243,7 +5243,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_NORMAL_MAP
-    if (programbits & prprogrambits[PR_BIT_NORMAL_MAP].bit)
+    if (programbits & (1 << PR_BIT_NORMAL_MAP))
     {
         float pos[3], bias[2];
 
@@ -5252,7 +5252,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
         pos[2] = -fglobalposx;
 
         buildgl_activeTexture(texunit + GL_TEXTURE0);
-        buildgl_bindSamplerObject(texunit, programbits & prprogrambits[PR_BIT_ART_MAP].bit ? PTH_INDEXED : PTH_HIGHTILE);
+        buildgl_bindSamplerObject(texunit, (programbits & (1 << PR_BIT_ART_MAP)) ? PTH_INDEXED : PTH_HIGHTILE);
 
         buildgl_bindTexture(GL_TEXTURE_2D, material->normalmap);
 
@@ -5293,7 +5293,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_ART_MAP
-    if (programbits & prprogrambits[PR_BIT_ART_MAP].bit)
+    if (programbits & (1 << PR_BIT_ART_MAP))
     {
         buildgl_activeTexture(texunit + GL_TEXTURE0);
         buildgl_bindSamplerObject(texunit, PTH_INDEXED);
@@ -5342,10 +5342,10 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_DIFFUSE_MAP
-    if (programbits & prprogrambits[PR_BIT_DIFFUSE_MAP].bit)
+    if (programbits & (1 << PR_BIT_DIFFUSE_MAP))
     {
         buildgl_activeTexture(texunit + GL_TEXTURE0);
-        buildgl_bindSamplerObject(texunit,programbits & prprogrambits[PR_BIT_ART_MAP].bit ? PTH_INDEXED : PTH_HIGHTILE);
+        buildgl_bindSamplerObject(texunit, (programbits & (1 << PR_BIT_ART_MAP)) ? PTH_INDEXED : PTH_HIGHTILE);
         buildgl_bindTexture(GL_TEXTURE_2D, material->diffusemap);
 
         glUniform1i(prprogram.uniform_diffuseMap, texunit);
@@ -5355,7 +5355,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_HIGHPALOOKUP_MAP
-    if (programbits & prprogrambits[PR_BIT_HIGHPALOOKUP_MAP].bit)
+    if (programbits & (1 << PR_BIT_HIGHPALOOKUP_MAP))
     {
         buildgl_activeTexture(texunit + GL_TEXTURE0);
         buildgl_bindSamplerObject(texunit, PTH_CLAMPED);
@@ -5367,12 +5367,12 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_DIFFUSE_DETAIL_MAP
-    if (programbits & prprogrambits[PR_BIT_DIFFUSE_DETAIL_MAP].bit)
+    if (programbits & (1 << PR_BIT_DIFFUSE_DETAIL_MAP))
     {
         float scale[2];
 
         // scale by the diffuse map scale if we're not doing normal mapping
-        if (!(programbits & prprogrambits[PR_BIT_NORMAL_MAP].bit))
+        if (!(programbits & (1 << PR_BIT_NORMAL_MAP)))
         {
             scale[0] = material->diffusescale[0] * material->detailscale[0];
             scale[1] = material->diffusescale[1] * material->detailscale[1];
@@ -5392,7 +5392,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_DIFFUSE_MODULATION
-    if (programbits & prprogrambits[PR_BIT_DIFFUSE_MODULATION].bit)
+    if (programbits & (1 << PR_BIT_DIFFUSE_MODULATION))
     {
             glColor4ub(material->diffusemodulation[0],
                         material->diffusemodulation[1],
@@ -5401,10 +5401,10 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_SPECULAR_MAP
-    if (programbits & prprogrambits[PR_BIT_SPECULAR_MAP].bit)
+    if (programbits & (1 << PR_BIT_SPECULAR_MAP))
     {
         buildgl_activeTexture(texunit + GL_TEXTURE0);
-        buildgl_bindSamplerObject(texunit, programbits & prprogrambits[PR_BIT_ART_MAP].bit ? PTH_INDEXED : PTH_HIGHTILE);
+        buildgl_bindSamplerObject(texunit, (programbits & (1 << PR_BIT_ART_MAP)) ? PTH_INDEXED : PTH_HIGHTILE);
         buildgl_bindTexture(GL_TEXTURE_2D, material->specmap);
 
         glUniform1i(prprogram.uniform_specMap, texunit);
@@ -5413,7 +5413,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_SPECULAR_MATERIAL
-    if (programbits & prprogrambits[PR_BIT_SPECULAR_MATERIAL].bit)
+    if (programbits & (1 << PR_BIT_SPECULAR_MATERIAL))
     {
         float specmaterial[2];
 
@@ -5426,7 +5426,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_MIRROR_MAP
-    if (programbits & prprogrambits[PR_BIT_MIRROR_MAP].bit)
+    if (programbits & (1 << PR_BIT_MIRROR_MAP))
     {
         buildgl_activeTexture(texunit + GL_TEXTURE0);
         buildgl_bindSamplerObject(texunit, PTH_CLAMPED);
@@ -5437,13 +5437,13 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
         texunit++;
     }
 #ifdef PR_LINEAR_FOG
-    if (programbits & prprogrambits[PR_BIT_FOG].bit)
+    if (programbits & (1 << PR_BIT_FOG))
     {
         glUniform1i(prprogram.uniform_linearFog, r_usenewshading >= 2);
     }
 #endif
     // PR_BIT_GLOW_MAP
-    if (programbits & prprogrambits[PR_BIT_GLOW_MAP].bit)
+    if (programbits & (1 << PR_BIT_GLOW_MAP))
     {
         buildgl_activeTexture(texunit + GL_TEXTURE0);
         buildgl_bindSamplerObject(texunit, PTH_HIGHTILE|PTH_CLAMPED);
@@ -5455,7 +5455,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     }
 
     // PR_BIT_POINT_LIGHT
-    if (programbits & prprogrambits[PR_BIT_POINT_LIGHT].bit)
+    if (programbits & (1 << PR_BIT_POINT_LIGHT))
     {
         float inpos[4], pos[4];
         float range[2];
@@ -5468,7 +5468,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
         polymer_transformpoint(inpos, pos, curmodelviewmatrix);
 
         // PR_BIT_SPOT_LIGHT
-        if (programbits & prprogrambits[PR_BIT_SPOT_LIGHT].bit)
+        if (programbits & (1 << PR_BIT_SPOT_LIGHT))
         {
             float sinang, cosang, sinhorizang, coshorizangs;
             float indir[3], dir[3];
@@ -5496,7 +5496,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
             glUniform2fv(prprogram.uniform_spotRadius, 1, indir);
 
             // PR_BIT_PROJECTION_MAP
-            if (programbits & prprogrambits[PR_BIT_PROJECTION_MAP].bit)
+            if (programbits & (1 << PR_BIT_PROJECTION_MAP))
             {
                 GLfloat matrix[16];
 
@@ -5513,7 +5513,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
                 glUniformMatrix4fv(prprogram.uniform_shadowProjMatrix, 1, GL_FALSE, matrix);
 
                 // PR_BIT_SHADOW_MAP
-                if (programbits & prprogrambits[PR_BIT_SHADOW_MAP].bit)
+                if (programbits & (1 << PR_BIT_SHADOW_MAP))
                 {
                     buildgl_activeTexture(texunit + GL_TEXTURE0);
                     buildgl_bindSamplerObject(texunit, PTH_DEPTH_SAMPLER);
@@ -5525,7 +5525,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
                 }
 
                 // PR_BIT_LIGHT_MAP
-                if (programbits & prprogrambits[PR_BIT_LIGHT_MAP].bit)
+                if (programbits & (1 << PR_BIT_LIGHT_MAP))
                 {
                     buildgl_activeTexture(texunit + GL_TEXTURE0);
                     buildgl_bindSamplerObject(texunit, PTH_CLAMPED);
@@ -5575,7 +5575,7 @@ static void         polymer_unbindmaterial(int32_t programbits)
     // repair any dirty GL state here
 
     // PR_BIT_ANIM_INTERPOLATION
-    if (programbits & prprogrambits[PR_BIT_ANIM_INTERPOLATION].bit)
+    if (programbits & (1 << PR_BIT_ANIM_INTERPOLATION))
     {
         if (prprogram.attrib_nextFrameNormal != -1)
             glDisableVertexAttribArray(prprogram.attrib_nextFrameNormal);
@@ -5583,13 +5583,13 @@ static void         polymer_unbindmaterial(int32_t programbits)
     }
 
     // PR_BIT_LIGHTING_PASS
-    if (programbits & prprogrambits[PR_BIT_LIGHTING_PASS].bit)
+    if (programbits & (1 << PR_BIT_LIGHTING_PASS))
     {
         glPopAttrib();
     }
 
     // PR_BIT_NORMAL_MAP
-    if (programbits & prprogrambits[PR_BIT_NORMAL_MAP].bit)
+    if (programbits & (1 << PR_BIT_NORMAL_MAP))
     {
         glDisableVertexAttribArray(prprogram.attrib_T);
         glDisableVertexAttribArray(prprogram.attrib_B);
@@ -5613,14 +5613,14 @@ static _prprograminfo *polymer_compileprogram(int32_t programbits)
     enabledbits = i = 0;
     while (i < PR_BIT_COUNT)
     {
-        if (programbits & prprogrambits[i].bit)
+        if (programbits & (1 << i))
             source[enabledbits++] = prprogrambits[i].vert_def;
         i++;
     }
     i = 0;
     while (i < PR_BIT_COUNT)
     {
-        if (programbits & prprogrambits[i].bit)
+        if (programbits & (1 << i))
             source[enabledbits++] = prprogrambits[i].vert_prog;
         i++;
     }
@@ -5635,14 +5635,14 @@ static _prprograminfo *polymer_compileprogram(int32_t programbits)
     enabledbits = i = 0;
     while (i < PR_BIT_COUNT)
     {
-        if (programbits & prprogrambits[i].bit)
+        if (programbits & (1 << i))
             source[enabledbits++] = prprogrambits[i].frag_def;
         i++;
     }
     i = 0;
     while (i < PR_BIT_COUNT)
     {
-        if (programbits & prprogrambits[i].bit)
+        if (programbits & (1 << i))
             source[enabledbits++] = prprogrambits[i].frag_prog;
         i++;
     }
@@ -5672,128 +5672,82 @@ static _prprograminfo *polymer_compileprogram(int32_t programbits)
 #else
     if (pr_verbosity >= 2)
 #endif
-        OSD_Printf("PR : Compiling GPU program with bits (octal) %o...\n", (unsigned)programbits);
+        VLOG_F(LOG_PR, "Compiling program with bits (octal) %o", (unsigned)programbits);
     if (!linkstatus) {
-        OSD_Printf("PR : Failed to compile GPU program with bits (octal) %o!\n", (unsigned)programbits);
+        VLOG_F(LOG_PR, "Failed to compile program with bits (octal) %o!", (unsigned)programbits);
         if (pr_verbosity >= 1)
         {
             glGetProgramInfoLog(program, PR_INFO_LOG_BUFFER_SIZE, NULL, infobuffer);
-            OSD_Printf("PR : Linking log:\n%s\n", infobuffer);
+            VLOG_F(LOG_PR, "Linking log:\n%s", infobuffer);
 
             glGetShaderInfoLog(vert, PR_INFO_LOG_BUFFER_SIZE, NULL, infobuffer);
-            OSD_Printf("PR : Vertex compile log:\n%s\n", infobuffer);
+            VLOG_F(LOG_PR, "Vertex compile log:\n%s", infobuffer);
 
             glGetShaderInfoLog(frag, PR_INFO_LOG_BUFFER_SIZE, NULL, infobuffer);
-            OSD_Printf("PR : Fragment compile log:\n%s\n", infobuffer);
+            VLOG_F(LOG_PR, "Fragment compile log:\n%s", infobuffer);
 
             glGetShaderSource(vert, PR_INFO_LOG_BUFFER_SIZE, NULL, infobuffer);
-            OSD_Printf("PR : Vertex source dump:\n%s\n", infobuffer);
+            VLOG_F(LOG_PR, "Vertex source dump:\n%s", infobuffer);
 
             glGetShaderSource(frag, PR_INFO_LOG_BUFFER_SIZE, NULL, infobuffer);
-            OSD_Printf("PR : Fragment source dump:\n%s\n", infobuffer);
+            VLOG_F(LOG_PR, "Fragment source dump:\n%s", infobuffer);
         }
     }
 
     // --------- ATTRIBUTE/UNIFORM LOCATIONS
 
-    // PR_BIT_ANIM_INTERPOLATION
-    if (programbits & prprogrambits[PR_BIT_ANIM_INTERPOLATION].bit)
+    if (programbits & (1 << PR_BIT_ANIM_INTERPOLATION))
     {
-        prprogram.attrib_nextFrameData = glGetAttribLocation(program, "nextFrameData");
+        prprogram.attrib_nextFrameData   = glGetAttribLocation(program, "nextFrameData");
         prprogram.attrib_nextFrameNormal = glGetAttribLocation(program, "nextFrameNormal");
-        prprogram.uniform_frameProgress = glGetUniformLocation(program, "frameProgress");
+        prprogram.uniform_frameProgress  = glGetUniformLocation(program, "frameProgress");
     }
 
-    // PR_BIT_NORMAL_MAP
-    if (programbits & prprogrambits[PR_BIT_NORMAL_MAP].bit)
+    if (programbits & (1 << PR_BIT_NORMAL_MAP))
     {
         prprogram.attrib_T = glGetAttribLocation(program, "T");
         prprogram.attrib_B = glGetAttribLocation(program, "B");
         prprogram.attrib_N = glGetAttribLocation(program, "N");
         prprogram.uniform_eyePosition = glGetUniformLocation(program, "eyePosition");
         prprogram.uniform_normalMap = glGetUniformLocation(program, "normalMap");
-        prprogram.uniform_normalBias = glGetUniformLocation(program, "normalBias");
+        prprogram.uniform_normalBias  = glGetUniformLocation(program, "normalBias");
     }
 
-    // PR_BIT_ART_MAP
-    if (programbits & prprogrambits[PR_BIT_ART_MAP].bit)
+    if (programbits & (1 << PR_BIT_ART_MAP))
     {
-        prprogram.uniform_artMap = glGetUniformLocation(program, "artMap");
+        prprogram.uniform_artMap      = glGetUniformLocation(program, "artMap");
         prprogram.uniform_basePalMap = glGetUniformLocation(program, "basePalMap");
         prprogram.uniform_lookupMap = glGetUniformLocation(program, "lookupMap");
         prprogram.uniform_shadeOffset = glGetUniformLocation(program, "shadeOffset");
-        prprogram.uniform_visibility = glGetUniformLocation(program, "visibility");
+        prprogram.uniform_visibility  = glGetUniformLocation(program, "visibility");
     }
 
-    // PR_BIT_DIFFUSE_MAP
-    if (programbits & prprogrambits[PR_BIT_DIFFUSE_MAP].bit)
+    if (programbits & (1 << PR_BIT_DIFFUSE_MAP))
     {
-        prprogram.uniform_diffuseMap = glGetUniformLocation(program, "diffuseMap");
+        prprogram.uniform_diffuseMap   = glGetUniformLocation(program, "diffuseMap");
         prprogram.uniform_diffuseScale = glGetUniformLocation(program, "diffuseScale");
     }
 
-    // PR_BIT_HIGHPALOOKUP_MAP
-    if (programbits & prprogrambits[PR_BIT_HIGHPALOOKUP_MAP].bit)
-    {
-        prprogram.uniform_highPalookupMap = glGetUniformLocation(program, "highPalookupMap");
-    }
+    if (programbits & (1 << PR_BIT_HIGHPALOOKUP_MAP)) prprogram.uniform_highPalookupMap = glGetUniformLocation(program, "highPalookupMap");
 
-    // PR_BIT_DIFFUSE_DETAIL_MAP
-    if (programbits & prprogrambits[PR_BIT_DIFFUSE_DETAIL_MAP].bit)
+    if (programbits & (1 << PR_BIT_DIFFUSE_DETAIL_MAP))
     {
-        prprogram.uniform_detailMap = glGetUniformLocation(program, "detailMap");
+        prprogram.uniform_detailMap   = glGetUniformLocation(program, "detailMap");
         prprogram.uniform_detailScale = glGetUniformLocation(program, "detailScale");
     }
 
-    // PR_BIT_SPECULAR_MAP
-    if (programbits & prprogrambits[PR_BIT_SPECULAR_MAP].bit)
-    {
-        prprogram.uniform_specMap = glGetUniformLocation(program, "specMap");
-    }
-
-    // PR_BIT_SPECULAR_MATERIAL
-    if (programbits & prprogrambits[PR_BIT_SPECULAR_MATERIAL].bit)
-    {
-        prprogram.uniform_specMaterial = glGetUniformLocation(program, "specMaterial");
-    }
-
-    // PR_BIT_MIRROR_MAP
-    if (programbits & prprogrambits[PR_BIT_MIRROR_MAP].bit)
-    {
-        prprogram.uniform_mirrorMap = glGetUniformLocation(program, "mirrorMap");
-    }
+    if (programbits & (1 << PR_BIT_SPECULAR_MAP))      prprogram.uniform_specMap          = glGetUniformLocation(program, "specMap");
+    if (programbits & (1 << PR_BIT_SPECULAR_MATERIAL)) prprogram.uniform_specMaterial     = glGetUniformLocation(program, "specMaterial");
+    if (programbits & (1 << PR_BIT_MIRROR_MAP))        prprogram.uniform_mirrorMap        = glGetUniformLocation(program, "mirrorMap");
 #ifdef PR_LINEAR_FOG
-    if (programbits & prprogrambits[PR_BIT_FOG].bit)
-    {
-        prprogram.uniform_linearFog = glGetUniformLocation(program, "linearFog");
-    }
+    if (programbits & (1 << PR_BIT_FOG))               prprogram.uniform_linearFog        = glGetUniformLocation(program, "linearFog");
 #endif
-    // PR_BIT_GLOW_MAP
-    if (programbits & prprogrambits[PR_BIT_GLOW_MAP].bit)
-    {
-        prprogram.uniform_glowMap = glGetUniformLocation(program, "glowMap");
-    }
+    if (programbits & (1 << PR_BIT_GLOW_MAP))          prprogram.uniform_glowMap          = glGetUniformLocation(program, "glowMap");
+    if (programbits & (1 << PR_BIT_PROJECTION_MAP))    prprogram.uniform_shadowProjMatrix = glGetUniformLocation(program, "shadowProjMatrix");
+    if (programbits & (1 << PR_BIT_SHADOW_MAP))        prprogram.uniform_shadowMap        = glGetUniformLocation(program, "shadowMap");
+    if (programbits & (1 << PR_BIT_LIGHT_MAP))         prprogram.uniform_lightMap         = glGetUniformLocation(program, "lightMap");
 
-    // PR_BIT_PROJECTION_MAP
-    if (programbits & prprogrambits[PR_BIT_PROJECTION_MAP].bit)
-    {
-        prprogram.uniform_shadowProjMatrix = glGetUniformLocation(program, "shadowProjMatrix");
-    }
-
-    // PR_BIT_SHADOW_MAP
-    if (programbits & prprogrambits[PR_BIT_SHADOW_MAP].bit)
-    {
-        prprogram.uniform_shadowMap = glGetUniformLocation(program, "shadowMap");
-    }
-
-    // PR_BIT_LIGHT_MAP
-    if (programbits & prprogrambits[PR_BIT_LIGHT_MAP].bit)
-    {
-        prprogram.uniform_lightMap = glGetUniformLocation(program, "lightMap");
-    }
-
-    // PR_BIT_SPOT_LIGHT
-    if (programbits & prprogrambits[PR_BIT_SPOT_LIGHT].bit)
+    if (programbits & (1 << PR_BIT_SPOT_LIGHT))
     {
         prprogram.uniform_spotDir = glGetUniformLocation(program, "spotDir");
         prprogram.uniform_spotRadius = glGetUniformLocation(program, "spotRadius");
@@ -6230,7 +6184,7 @@ static void         polymer_prepareshadows(void)
         {
             prlights[i].flags.isinview = 0;
             prlights[i].rtindex = j + 1;
-            if (pr_verbosity >= 3) OSD_Printf("PR : Drawing shadow %i...\n", i);
+            if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Drawing shadow %i", i);
 
             glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, prrts[prlights[i].rtindex].fbo);
             glPushAttrib(GL_VIEWPORT_BIT);
@@ -6255,10 +6209,10 @@ static void         polymer_prepareshadows(void)
 
             int32_t oldoverridematerial = overridematerial;
             // smooth model shadows
-            overridematerial = prprogrambits[PR_BIT_ANIM_INTERPOLATION].bit;
+            overridematerial = (1 << PR_BIT_ANIM_INTERPOLATION);
             // used by alpha-testing for sprite silhouette
-            overridematerial |= prprogrambits[PR_BIT_DIFFUSE_MAP].bit;
-            overridematerial |= prprogrambits[PR_BIT_DIFFUSE_MAP2].bit;
+            overridematerial |= (1 << PR_BIT_DIFFUSE_MAP);
+            overridematerial |= (1 << PR_BIT_DIFFUSE_MAP2);
 
             // to force sprite drawing
             mirrors[depth++].plane = NULL;
@@ -6386,7 +6340,7 @@ static void         polymer_initrendertargets(int32_t count)
 
         if (glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT) != GL_FRAMEBUFFER_COMPLETE_EXT)
         {
-            OSD_Printf("PR : FBO #%d initialization failed.\n", i);
+            VLOG_F(LOG_PR, "FBO #%d initialization failed.", i);
         }
 
         buildgl_bindTexture(prrts[i].target, 0);

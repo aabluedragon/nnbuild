@@ -84,7 +84,7 @@ void Net_GetPackets(void)
         g_netDisconnect = 0;
 
         if (g_gameQuit)
-            G_GameExit(" ");
+            G_GameExit();
 
         return;
     }
@@ -4681,7 +4681,7 @@ void Net_WaitForServer(void)
         if (quitevent || keystatus[1])
             G_GameExit("");
 
-        if (engineFPSLimit())
+        if (engineFPSLimit(true))
         {
             display_betascreen();
             gametext_center_shade(170, "Waiting for server", 14);

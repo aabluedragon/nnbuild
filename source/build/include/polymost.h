@@ -119,22 +119,41 @@ extern int32_t r_persistentStreamBuffer;
 extern int32_t polymostcenterhoriz;
 extern GLuint drawpolyVertsID;
 
+enum tileshademodes
+{
+    TS_NONE,
+    TS_SHADETABLE,
+    TS_TEXTURE
+};
+
 // Compare with polymer_eligible_for_artmap()
 static FORCE_INLINE int32_t eligible_for_tileshades(int32_t const picnum, int32_t const pal)
 {
     return !usehightile || !hicfindsubst(picnum, pal, hictinting[pal].f & HICTINT_ALWAYSUSEART);
 }
 
+static FORCE_INLINE int polymost_useindexedtextures(void)
+{
+    return videoGetRenderMode() == REND_POLYMOST && r_useindexedcolortextures && gltexfiltermode == 0;
+}
+
 static FORCE_INLINE int polymost_usetileshades(void)
 {
-    return r_useindexedcolortextures && r_usetileshades && !(globalflags & GLOBAL_NO_GL_TILESHADES);
+    int const idx = polymost_useindexedtextures();
+    int const shd = idx || (r_usetileshades && !(globalflags & GLOBAL_NO_GL_TILESHADES));
+    return idx && shd ? TS_SHADETABLE : shd ? TS_TEXTURE : TS_NONE;
+}
+
+static FORCE_INLINE float polymost_getanisotropy(int filtered = 0)
+{
+    return filtered == 0 && polymost_useindexedtextures() ? 1.f : clamp<float>(glanisotropy, 1.f, glinfo.maxanisotropy);
 }
 
 static inline float getshadefactor(int32_t const shade)
 {
     // 8-bit tiles, i.e. non-hightiles and non-models, don't get additional
     // glColor() shading with r_usetileshades!
-    if (videoGetRenderMode() == REND_POLYMOST && polymost_usetileshades() && eligible_for_tileshades(globalpicnum, globalpal))
+    if (videoGetRenderMode() == REND_POLYMOST && polymost_usetileshades() != TS_NONE && eligible_for_tileshades(globalpicnum, globalpal))
         return 1.f;
 
     float const fshade = (float)shade;
@@ -239,6 +258,8 @@ EDUKE32_STATIC_ASSERT(TO_DAMETH_NODOWNSIZE(HICR_NODOWNSIZE) == DAMETH_NODOWNSIZE
 EDUKE32_STATIC_ASSERT(TO_DAMETH_NOTEXCOMPRESS(HICR_NOTEXCOMPRESS) == DAMETH_NOTEXCOMPRESS);
 #define TO_DAMETH_ARTIMMUNITY(hicr_flags) (((hicr_flags)&HICR_ARTIMMUNITY)<<13)
 EDUKE32_STATIC_ASSERT(TO_DAMETH_ARTIMMUNITY(HICR_ARTIMMUNITY) == DAMETH_ARTIMMUNITY);
+#define TO_DAMETH_INDEXED(hicr_flags) (((hicr_flags)&HICR_INDEXED)<<3)
+EDUKE32_STATIC_ASSERT(TO_DAMETH_INDEXED(HICR_INDEXED) == DAMETH_INDEXED);
 
 // Do we want a NPOT-y-as-classic texture for this <dameth> and <ysiz>?
 static FORCE_INLINE int polymost_want_npotytex(int32_t dameth, int32_t ysiz)
@@ -300,7 +321,7 @@ EDUKE32_STATIC_ASSERT(TO_PTH_INDEXED(DAMETH_INDEXED) == PTH_INDEXED);
 
 extern void gloadtile_art(int32_t,int32_t,int32_t,int32_t,int32_t,pthtyp *,int32_t);
 extern int32_t gloadtile_hi(int32_t,int32_t,int32_t,hicreplctyp *,int32_t,pthtyp *,int32_t,polytintflags_t);
-extern coltype *gloadtile_mdloadskin_shared(char* fn, int32_t picfillen, vec2_t * tsiz, vec2_t * siz, char * onebitalpha, polytintflags_t effect, int32_t dapalnum, char* al);
+extern coltype *gloadtruecolortile_mdloadskin_shared(char* fn, int32_t picfillen, vec2_t * tsiz, vec2_t * siz, char * onebitalpha, polytintflags_t effect, int32_t dapalnum, char* al);
 extern int32_t drawingskybox;
 extern int32_t hicprecaching;
 extern float fcosglobalang, fsinglobalang;

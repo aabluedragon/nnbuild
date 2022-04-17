@@ -354,7 +354,7 @@ void A_RadiusDamage(int const spriteNum, int const blastRadius, int const dmg1, 
 
                 if (numSectors == MAXDAMAGESECTORS)
                 {
-                    OSD_Printf("Sprite %d tried to damage more than %d sectors!\n", spriteNum, MAXDAMAGESECTORS);
+                    LOG_F(WARNING, "Sprite %d tried to damage more than %d sectors!", spriteNum, MAXDAMAGESECTORS);
                     goto wallsfinished;
                 }
             }
@@ -728,7 +728,7 @@ void A_DeleteSprite(int spriteNum)
 {
     if (EDUKE32_PREDICT_FALSE(block_deletesprite))
     {
-        OSD_Printf(OSD_ERROR "A_DeleteSprite(): tried to remove sprite %d in EVENT_EGS\n", spriteNum);
+        LOG_F(ERROR, "A_DeleteSprite(): tried to remove sprite %d in EVENT_EGS!", spriteNum);
         return;
     }
 
@@ -1249,14 +1249,28 @@ int A_IncurDamage(int const spriteNum)
         return -1;
     }
 
-    if (pSprite->picnum == APLAYER)
+    if (pSprite->picnum != APLAYER)
     {
-        if (ud.god && pActor->htpicnum != SHRINKSPARK)
+        if (pActor->htextra == 0 && STANDALONE_EVAL(false, pActor->htpicnum == SHRINKSPARK) && pSprite->xrepeat < 24)
+            return -1;
+
+        pSprite->extra -= pActor->htextra;
+
+        if ((unsigned)pSprite->owner < MAXSPRITES && sprite[pSprite->owner].statnum < MAXSTATUS && STANDALONE_EVAL(true, pSprite->picnum != RECON))
+            pSprite->owner = pActor->htowner;
+
+        pActor->htextra = -1;
+        return pActor->htpicnum;
+    }
+    else
+    {
+        if (ud.god && STANDALONE_EVAL(true, pActor->htpicnum != SHRINKSPARK))
             return -1;
 
         int const playerNum = P_GetP(pSprite);
 
-        if (pActor->htowner >= 0 && (sprite[pActor->htowner].picnum == APLAYER))
+#ifndef EDUKE32_STANDALONE
+        if (!FURY && pActor->htowner >= 0 && (sprite[pActor->htowner].picnum == APLAYER))
         {
             if (
                 (ud.ffire == 0) &&
@@ -1271,10 +1285,10 @@ int A_IncurDamage(int const spriteNum)
                     return -1;
                 }
         }
-
+#endif
         pSprite->extra -= pActor->htextra;
 
-        if (pActor->htowner >= 0 && pSprite->extra <= 0 && pActor->htpicnum != FREEZEBLAST)
+        if (pActor->htowner >= 0 && pSprite->extra <= 0 && STANDALONE_EVAL(true, pActor->htpicnum != FREEZEBLAST))
         {
             int const damageOwner = pActor->htowner;
             pSprite->extra        = 0;
@@ -1302,28 +1316,16 @@ int A_IncurDamage(int const spriteNum)
                 break;
 
             default:
-                P_Nudge(playerNum, spriteNum, (A_CheckSpriteFlags(pActor->htowner, SFLAG_PROJECTILE) &&
-                                       (SpriteProjectile[pActor->htowner].workslike & PROJECTILE_RPG))
-                                      ? 2
-                                      : 1);
+            {
+                int const isRPG = (A_CheckSpriteTileFlags(pActor->htpicnum, SFLAG_PROJECTILE) && (g_tile[pActor->htpicnum].proj->workslike & PROJECTILE_RPG));
+                P_Nudge(playerNum, spriteNum, 1 << isRPG);
                 break;
+            }
         }
 
         pActor->htextra = -1;
         return pActor->htpicnum;
     }
-
-    if (pActor->htextra == 0 && pActor->htpicnum == SHRINKSPARK && pSprite->xrepeat < 24)
-        return -1;
-
-    pSprite->extra -= pActor->htextra;
-
-    if (pSprite->picnum != RECON && pSprite->owner >= 0 && sprite[pSprite->owner].statnum < MAXSTATUS)
-        pSprite->owner = pActor->htowner;
-
-    pActor->htextra = -1;
-
-    return pActor->htpicnum;
 }
 
 void A_MoveCyclers(void)
@@ -1536,7 +1538,7 @@ ACTOR_STATIC void G_MovePlayers(void)
                         if (ud.god == 0)
                             if (G_CheckForSpaceCeiling(pSprite->sectnum) || G_CheckForSpaceFloor(pSprite->sectnum))
                             {
-                                OSD_Printf(OSD_ERROR "%s: player killed by space sector!\n", EDUKE32_FUNCTION);
+                                LOG_F(WARNING, "%s: player killed by space sector!", EDUKE32_FUNCTION);
                                 P_QuickKill(pPlayer);
                             }
                     }
@@ -2636,6 +2638,8 @@ DETONATE:
 
                     {
                         int32_t    playerDist;
+                        // T2(spriteNum) contains index of viewscreen in g_activeViewscreenSprite
+                        int const  curVscrIndex = T2(spriteNum);
                         int const  p  = A_FindPlayer(pSprite, &playerDist);
                         auto const ps = g_player[p].ps;
 
@@ -2645,39 +2649,61 @@ DETONATE:
                         if (dist(&sprite[ps->i], pSprite) < activeDist)
                         {
                             // DOS behavior: yvel of 1 activates screen if player approaches
-                            if (g_curViewscreen == -1 && pSprite->yvel & 1)
+                            if (curVscrIndex == -1 && pSprite->yvel & 1)
                             {
-                                g_curViewscreen = spriteNum;
+                                int newVscrIndex = 0;
+                                while (newVscrIndex < MAX_ACTIVE_VIEWSCREENS && g_activeVscrSprite[newVscrIndex] >= 0)
+                                    newVscrIndex++;
 
-                                // EDuke32 extension: for remote activation, check for connected camera and display its image
-                                if (sprite[spriteNum].hitag)
+                                T2(spriteNum) = newVscrIndex;
+                                if (newVscrIndex < MAX_ACTIVE_VIEWSCREENS)
                                 {
-                                    for (bssize_t SPRITES_OF(STAT_ACTOR, otherSprite))
+                                    g_activeVscrSprite[newVscrIndex] = spriteNum;
+
+                                    // EDuke32 extension: for remote activation, check for connected camera and display its image
+                                    if (sprite[spriteNum].hitag)
                                     {
-                                        if (PN(otherSprite) == CAMERA1 && sprite[spriteNum].hitag == SLT(otherSprite))
+                                        for (bssize_t SPRITES_OF(STAT_ACTOR, otherSprite))
                                         {
-                                            sprite[spriteNum].owner = otherSprite;
-                                            break;
+                                            if (PN(otherSprite) == CAMERA1 && sprite[spriteNum].hitag == SLT(otherSprite))
+                                            {
+                                                sprite[spriteNum].owner = otherSprite;
+                                                break;
+                                            }
                                         }
                                     }
                                 }
-                            } // deactivate viewscreen in valid range if yvel is 0
-                            else if (g_curViewscreen == spriteNum && !(pSprite->yvel & 3))
+                            }
+                            // deactivate viewscreen in valid range if yvel is set to 0
+                            else if (curVscrIndex != -1 && !(pSprite->yvel & 3))
                             {
-                                g_curViewscreen    = -1;
-                                T1(spriteNum)      =  0;
-                                for (bssize_t ii = 0; ii < VIEWSCREENFACTOR; ii++)
-                                    walock[TILE_VIEWSCR - ii] = CACHE1D_UNLOCKED;
+                                T1(spriteNum) = 0;
+                                T2(spriteNum) = -1;
+
+                                if (curVscrIndex < MAX_ACTIVE_VIEWSCREENS)
+                                {
+                                    if (g_activeVscrTile[curVscrIndex] >= 0)
+                                        walock[g_activeVscrTile[curVscrIndex]] = CACHE1D_UNLOCKED;
+
+                                    g_activeVscrSprite[curVscrIndex] = -1;
+                                    g_activeVscrTile[curVscrIndex] = -1;
+                                }
                             }
                         }
-                        else if (g_curViewscreen == spriteNum /*&& T1 == 1*/)
+                        else if (curVscrIndex != -1)
                         {
-                            g_curViewscreen    = -1;
-                            pSprite->yvel     &= ~2; // VIEWSCREEN YVEL
-                            T1(spriteNum)      =  0;
+                            T1(spriteNum) = 0;
+                            T2(spriteNum) = -1;
+                            pSprite->yvel &= ~2; // yvel bit 2 is temp activation
 
-                            for (bssize_t ii = 0; ii < VIEWSCREENFACTOR; ii++)
-                                walock[TILE_VIEWSCR - ii] = CACHE1D_UNLOCKED;
+                            if (curVscrIndex < MAX_ACTIVE_VIEWSCREENS)
+                            {
+                                if (g_activeVscrTile[curVscrIndex] >= 0)
+                                    walock[g_activeVscrTile[curVscrIndex]] = CACHE1D_UNLOCKED;
+
+                                g_activeVscrSprite[curVscrIndex] = -1;
+                                g_activeVscrTile[curVscrIndex] = -1;
+                            }
                         }
                     }
 
@@ -3084,12 +3110,16 @@ ACTOR_STATIC void Proj_MoveCustom(int const spriteNum)
  0, 100,
                                pProj->flashcolor, PR_LIGHT_PRIO_LOW_GAME);
 
-            if ((pProj->workslike & (PROJECTILE_BOUNCESOFFWALLS | PROJECTILE_EXPLODEONTIMER)) == PROJECTILE_BOUNCESOFFWALLS
-                && pSprite->yvel < 1)
+            if (pProj->workslike & (PROJECTILE_BOUNCESOFFWALLS|PROJECTILE_BOUNCESOFFSPRITES) && pSprite->yvel < 1)
             {
-                A_DoProjectileEffects(spriteNum);
-                A_DeleteSprite(spriteNum);
-                return;
+                if ((pProj->workslike & PROJECTILE_EXPLODEONTIMER) == 0)
+                {
+                    A_DoProjectileEffects(spriteNum);
+                    A_DeleteSprite(spriteNum);
+                    return;
+                }
+                else if (pProj->workslike & PROJECTILE_LOSESVELOCITY)
+                    PROJ_DECAYVELOCITY(pSprite);
             }
 
             if (pProj->workslike & PROJECTILE_COOLEXPLOSION1 && ++pSprite->shade >= 40)
@@ -3191,7 +3221,7 @@ ACTOR_STATIC void Proj_MoveCustom(int const spriteNum)
                     case 49152:
                         otherSprite &= (MAXSPRITES - 1);
 
-                        if (pProj->workslike & PROJECTILE_BOUNCESOFFSPRITES)
+                        if (pProj->workslike & PROJECTILE_BOUNCESOFFSPRITES && pSprite->yvel > 0)
                         {
                             pSprite->yvel--;
 
@@ -3266,7 +3296,7 @@ ACTOR_STATIC void Proj_MoveCustom(int const spriteNum)
 
                             A_DamageWall(spriteNum, otherSprite, pSprite->xyz, pSprite->picnum);
 
-                            if (pProj->workslike & PROJECTILE_BOUNCESOFFWALLS)
+                            if (pProj->workslike & PROJECTILE_BOUNCESOFFWALLS && pSprite->yvel > 0)
                             {
                                 if (wall[otherSprite].overpicnum != MIRROR)
                                     pSprite->yvel--;
@@ -3293,7 +3323,7 @@ ACTOR_STATIC void Proj_MoveCustom(int const spriteNum)
                             return;
                         }
 
-                        if (pProj->workslike & PROJECTILE_BOUNCESOFFWALLS)
+                        if (pProj->workslike & PROJECTILE_BOUNCESOFFWALLS && pSprite->yvel > 0)
                         {
                             A_DoProjectileBounce(spriteNum);
                             A_SetSprite(spriteNum, CLIPMASK1);
@@ -3487,7 +3517,7 @@ ACTOR_STATIC void G_MoveWeapons(void)
                         int const newSprite
                             = A_InsertSprite(pSprite->sectnum, pSprite->x + ((k * sintable[(pSprite->ang + 512) & 2047]) >> 9),
                                 pSprite->y + ((k * sintable[pSprite->ang & 2047]) >> 9),
-                                pSprite->z + ((k * ksgn(pSprite->zvel)) * klabs(pSprite->zvel / 24)), FIRELASER, -40 + (k << 2),
+                                pSprite->z + ((k * ksgn(pSprite->zvel)) * klabs(pSprite->zvel / 24)), FIRELASER, -40 + ksgn(k) * (klabs(k) << 2),
                                 pSprite->xrepeat, pSprite->yrepeat, 0, 0, 0, pSprite->owner, 5);
 
                         sprite[newSprite].cstat = 128;
@@ -8757,10 +8787,11 @@ in:
     lasti = -1;
 }
 
+int savedFires = 0;
+
 static void A_DoLight(int spriteNum)
 {
     auto const pSprite = &sprite[spriteNum];
-    int savedFires = 0;
 
     if (pSprite->statnum == STAT_PLAYER)
     {
@@ -9146,23 +9177,25 @@ int A_CheckSwitchTile(int spriteNum)
 void G_RefreshLights(void)
 {
 #ifdef POLYMER
-    if (Numsprites && videoGetRenderMode() == REND_POLYMER)
+    if (!Numsprites || videoGetRenderMode() != REND_POLYMER)
+        return;
+
+    int statNum = 0;
+    savedFires = 0;
+    do
     {
-        int statNum = 0;
-
-        do
-        {
-            int spriteNum = headspritestat[statNum++];
-
-            while (spriteNum >= 0)
-            {
-                A_DoLight(spriteNum);
-                spriteNum = nextspritestat[spriteNum];
-            }
-        }
-        while (statNum < MAXSTATUS);
+        for (int SPRITES_OF(statNum++, spriteNum))
+            A_DoLight(spriteNum);
     }
+    while (statNum < MAXSTATUS);
 #endif
+}
+
+// Remainder of G_RecordOldSpritePos()
+static FORCE_INLINE void G_RecordOldSpritePosForStatnum(int const statNum)
+{
+    for (int SPRITES_OF(statNum, spriteNum))
+        actor[spriteNum].bpos = sprite[spriteNum].xyz;
 }
 
 static void G_RecordOldSpritePos(void)
@@ -9177,63 +9210,33 @@ static void G_RecordOldSpritePos(void)
             continue;
         }
 
-        int spriteNum = headspritestat[statNum++];
-
-        while (spriteNum >= 0)
-        {
-            int const nextSprite = nextspritestat[spriteNum];
-            actor[spriteNum].bpos = sprite[spriteNum].xyz;
-
-            spriteNum = nextSprite;
-        }
+        G_RecordOldSpritePosForStatnum(statNum++);
     }
     while (statNum < MAXSTATUS);
 }
 
-// Remainder of G_RecordOldSpritePos()
-static void G_RecordOldPlayerPos(void)
+static void G_DoEventGame(int const nEventID, bool const allowDrawing = true)
 {
-    int spriteNum = headspritestat[STAT_PLAYER];
+    if (!VM_HaveEvent(nEventID))
+        return;
 
-    while (spriteNum >= 0)
+    int statNum = 0;
+    do
     {
-        int const nextSprite = nextspritestat[spriteNum];
-        actor[spriteNum].bpos = sprite[spriteNum].xyz;
-
-        spriteNum = nextSprite;
-    }
-}
-
-static void G_DoEventGame(int const nEventID)
-{
-    if (VM_HaveEvent(nEventID))
-    {
-        int statNum = 0;
-
-        do
+        for (int nextSprite, SPRITES_OF_STAT_SAFE(statNum++, spriteNum, nextSprite))
         {
-            int spriteNum = headspritestat[statNum++];
+            if (A_CheckSpriteFlags(spriteNum, SFLAG_NOEVENTCODE))
+                continue;
 
-            while (spriteNum >= 0)
-            {
-                int const nextSprite = nextspritestat[spriteNum];
+            int32_t   playerDist;
+            int const playerNum = A_FindPlayer(&sprite[spriteNum], &playerDist);
+            VM_ExecuteEvent(nEventID, spriteNum, playerNum, playerDist);
 
-                if (A_CheckSpriteFlags(spriteNum, SFLAG_NOEVENTCODE))
-                {
-                    spriteNum = nextSprite;
-                    continue;
-                }
-
-                int32_t   playerDist;
-                int const playerNum = A_FindPlayer(&sprite[spriteNum], &playerDist);
-                VM_ExecuteEvent(nEventID, spriteNum, playerNum, playerDist);
-                spriteNum = nextSprite;
-
+            if (allowDrawing)
                 dukeMaybeDrawFrame();
-            }
         }
-        while (statNum < MAXSTATUS);
     }
+    while (statNum < MAXSTATUS);
 }
 
 void G_MoveWorld(void)
@@ -9246,7 +9249,7 @@ void G_MoveWorld(void)
     MICROPROFILE_SCOPEI("Game", "MoveWorld", MP_YELLOW);
 
     VM_OnEvent(EVENT_PREWORLD);
-    G_DoEventGame(EVENT_PREGAME);
+    G_DoEventGame(EVENT_PREGAME, false);
     G_RecordOldSpritePos();
 
     {
@@ -9270,7 +9273,7 @@ void G_MoveWorld(void)
     }
 
     // Must be called here to fix a problem where SE7 Transports and Touchplates do not activate concurrently
-    G_RecordOldPlayerPos();
+    G_RecordOldSpritePosForStatnum(STAT_PLAYER);
 
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveFallers", MP_YELLOW2);
@@ -9283,7 +9286,7 @@ void G_MoveWorld(void)
     }
 
     double actorsTime = timerGetFractionalTicks();
-    auto framecnt2 = framecnt;
+    auto framecnt2 = g_frameCounter;
 
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveActors", MP_YELLOW4);
@@ -9292,7 +9295,7 @@ void G_MoveWorld(void)
 
     actorsTime = timerGetFractionalTicks() - actorsTime;
 
-    if (framecnt2 != framecnt)
+    if (framecnt2 != g_frameCounter)
         actorsTime -= (double)g_lastFrameDuration2 * 1000.0 / (double)timerGetNanoTickRate();
 
     g_moveActorsTime = (1-0.033)*g_moveActorsTime + 0.033*actorsTime;

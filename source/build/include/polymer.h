@@ -184,7 +184,6 @@ typedef struct      s_prrograminfo {
                                                    PR_HIGHPALOOKUP_DIM)
 
 typedef struct      s_prprogrambit {
-    int32_t         bit;
     const char*           vert_def;
     const char*           vert_prog;
     const char*           frag_def;
@@ -388,6 +387,7 @@ static inline void polymer_invalidateartmap(int32_t tilenum)
 
 // Compare with eligible_for_tileshades()
 static FORCE_INLINE int32_t polymer_eligible_for_artmap(int32_t tilenum, const pthtyp *pth) { return ((!pth || !pth->hicr) && tilenum < MAXUSERTILES); }
+static FORCE_INLINE int     polymer_useartmapping(void) { return pr_artmapping && gltexfiltermode == 0; }
 
 # ifdef POLYMER_C
 

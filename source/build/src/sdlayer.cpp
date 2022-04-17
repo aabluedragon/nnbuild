@@ -15,10 +15,15 @@
 #include "sdl_inc.h"
 #include "softsurface.h"
 
+
+# include "imgui.h"
+# include "imgui_impl_sdl.h"
+
 #ifdef USE_OPENGL
 # include "glad/glad.h"
 # include "glbuild.h"
 # include "glsurface.h"
+# include "imgui_impl_opengl3.h"
 #endif
 
 #if defined HAVE_GTK2
@@ -58,6 +63,7 @@ int32_t startwin_puts(const char *s) { UNREFERENCED_PARAMETER(s); return 0; }
 int32_t startwin_idle(void *s) { UNREFERENCED_PARAMETER(s); return 0; }
 int32_t startwin_settitle(const char *s) { UNREFERENCED_PARAMETER(s); return 0; }
 int32_t startwin_run(void) { return 0; }
+bool startwin_isopen(void) { return false; }
 #endif
 
 /// These can be useful for debugging sometimes...
@@ -116,6 +122,10 @@ static SDL_Surface *loadappicon(void);
 
 static mutex_t m_initprintf;
 
+static ImGuiIO *g_ImGui_IO;
+bool g_ImGuiCaptureInput = true;
+uint8_t g_ImGuiCapturedDevices;
+
 #ifdef _WIN32
 # if SDL_MAJOR_VERSION >= 2
 //
@@ -132,7 +142,7 @@ HWND win_gethwnd(void)
     if (wmInfo.subsystem == SDL_SYSWM_WINDOWS)
         return wmInfo.info.win.window;
 
-    initprintf("win_gethwnd: Unknown WM subsystem?!\n");
+    LOG_F(ERROR, "Unknown WM subsystem?!");
 
     return 0;
 }
@@ -165,7 +175,7 @@ int32_t wm_msgbox(const char *name, const char *fmt, ...)
     MessageBox(win_gethwnd(),buf,name,MB_OK|MB_TASKMODAL);
     return 0;
 #elif defined EDUKE32_TOUCH_DEVICES
-    initprintf("wm_msgbox called. Message: %s: %s",name,buf);
+    LOG_F(INFO, "wm_msgbox called. Message: %s: %s",name,buf);
     return 0;
 #elif defined GEKKO
     puts(buf);
@@ -212,8 +222,8 @@ int32_t wm_ynbox(const char *name, const char *fmt, ...)
     auto result = MessageBox(win_gethwnd(),buf,name,MB_YESNO|MB_ICONQUESTION|MB_TASKMODAL);
     return result == IDYES;
 #elif defined EDUKE32_TOUCH_DEVICES
-    initprintf("wm_ynbox called, this is bad! Message: %s: %s",name,buf);
-    initprintf("Returning false..");
+    LOG_F(WARNING, "wm_ynbox called, this is bad! Message: %s: %s",name,buf);
+    LOG_F(INFO, "Returning false..");
     return 0;
 #elif defined GEKKO
     puts(buf);
@@ -332,7 +342,6 @@ static void sighandler(int signum)
     //    if (signum==SIGSEGV)
     {
         grabmouse_low(0);
-        OSD_FlushLog();
 
 #if PRINTSTACKONSEGV
         {
@@ -452,9 +461,32 @@ int SDL_main(int argc, char *argv[])
 int main(int argc, char *argv[])
 #endif
 {
-    engineCreateAllocator();
+#ifdef _WIN32
+    char * argvbuf;
+    int    argc = windowsGetCommandLine(&argvbuf);
+    char * wp   = argvbuf;
+    char **argv = (char **)Bmalloc(sizeof(char *)*(argc+1));
 
-#if SDL_MAJOR_VERSION >= 2 && (SDL_MINOR_VERSION > 0 || SDL_PATCHLEVEL >= 8)
+    for (int i = 0; i < argc; i++, wp++)
+    {
+        argv[i] = wp;
+        while (*wp) wp++;
+    }
+    argv[argc] = NULL;
+#endif
+
+    engineSetupAllocator();
+
+#ifndef __ANDROID__
+    signal(SIGSEGV, sighandler);
+    signal(SIGILL, sighandler);  /* clang -fcatch-undefined-behavior uses an ill. insn */
+    signal(SIGABRT, sighandler);
+    signal(SIGFPE, sighandler);
+#endif
+
+    engineSetupLogging(argc, argv);
+    
+#if SDL_VERSION_ATLEAST(2, 0, 8)
     if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 8))
         SDL_SetMemoryFunctions(_xmalloc, _xcalloc, _xrealloc, _xfree);
 #endif
@@ -493,12 +525,7 @@ int main(int argc, char *argv[])
 
     buildkeytranslationtable();
 
-#ifndef __ANDROID__
-    signal(SIGSEGV, sighandler);
-    signal(SIGILL, sighandler);  /* clang -fcatch-undefined-behavior uses an ill. insn */
-    signal(SIGABRT, sighandler);
-    signal(SIGFPE, sighandler);
-#else
+#ifdef __ANDROID__
     SDL_SetEventFilter(sdlayer_mobilefilter, NULL);
 #endif
 
@@ -531,32 +558,12 @@ int main(int argc, char *argv[])
 #endif
     maybe_redirect_outputs();
 
-#ifdef _WIN32
-    char *argvbuf;
-    int buildargc = windowsGetCommandLine(&argvbuf);
-    const char **buildargv = (const char **) Xmalloc(sizeof(char *)*(buildargc+1));
-    char *wp = argvbuf;
-
-    for (bssize_t i=0; i<buildargc; i++, wp++)
-    {
-        buildargv[i] = wp;
-        while (*wp) wp++;
-    }
-    buildargv[buildargc] = NULL;
-
-#ifdef USE_PHYSFS
-    PHYSFS_init(buildargv[0]);
-    PHYSFS_setWriteDir(PHYSFS_getBaseDir());
-#endif
-    int const r = app_main(buildargc, (const char **)buildargv);
-#else
 #ifdef USE_PHYSFS
     int pfsi = PHYSFS_init(argv[0]);
-    assert(pfsi != 0);
+    Bassert(pfsi != 0);
     PHYSFS_setWriteDir(PHYSFS_getUserDir());
 #endif
-    int const r = app_main(argc, (char const * const *)argv);
-#endif
+    int const r = app_main(argc, argv);
 
     startwin_close();
 
@@ -582,7 +589,7 @@ static int sdlayer_checkvsync(int checkSync)
     int const actualSync = SDL_GL_GetSwapInterval();
     if (actualSync != sdlayer_getswapinterval(checkSync))
     {
-        OSD_Printf("GL: driver enforcing SwapInterval %d, unable to configure VSync!\n", actualSync);
+        LOG_F(WARNING, "Video driver enforcing SwapInterval %d, unable to configure VSync!", actualSync);
         checkSync = actualSync;
         vsync_unsupported = true;
     }
@@ -594,7 +601,7 @@ int32_t videoSetVsync(int32_t newSync)
 {
     if (newSync != 0 && vsync_unsupported)
     {
-        OSD_Printf("GL: VSync configuration locked by driver.\n");
+        LOG_F(WARNING, "VSync configuration locked by video driver.");
         return vsync_renderlayer;
     }
 
@@ -610,15 +617,14 @@ int32_t videoSetVsync(int32_t newSync)
         {
             if (newSync == -1)
             {
-                OSD_Printf("GL: driver rejected SwapInterval %d, unable to configure adaptive VSync!\n", sdlayer_getswapinterval(newSync));
-
+                LOG_F(WARNING, "Video driver rejected SwapInterval %d, unable to configure adaptive VSync!", sdlayer_getswapinterval(newSync));
                 newSync = 1;
                 result  = SDL_GL_SetSwapInterval(sdlayer_getswapinterval(newSync));
             }
 
             if (result == -1)
             {
-                OSD_Printf("GL: driver rejected SwapInterval %d, unable to configure VSync!\n", sdlayer_getswapinterval(newSync));
+                LOG_F(WARNING, "Video driver rejected SwapInterval %d, unable to configure VSync!", sdlayer_getswapinterval(newSync));
                 newSync = 0;
             }
         }
@@ -633,7 +639,7 @@ int32_t videoSetVsync(int32_t newSync)
         videoResetMode();
 
         if (videoSetGameMode(fullscreen, xres, yres, bpp, upscalefactor))
-            OSD_Printf("restartvid: Reset failed...\n");
+            LOG_F(ERROR, "Failed to set video mode!");
     }
 
     return newSync;
@@ -645,41 +651,43 @@ int32_t sdlayer_checkversion(void);
 int32_t sdlayer_checkversion(void)
 {
     SDL_version compiled;
+    auto str = (char*)Balloca(128);
+    str[0] = 0;
 
     SDL_GetVersion(&linked);
-    SDL_VERSION(&compiled);
-
-    if (!Bmemcmp(&compiled, &linked, sizeof(SDL_version)))
-        initprintf("Initializing SDL %d.%d.%d",
-            compiled.major, compiled.minor, compiled.patch);
-    else
-    initprintf("Initializing SDL %d.%d.%d"
-               " (built against SDL version %d.%d.%d)",
-               linked.major, linked.minor, linked.patch, compiled.major, compiled.minor, compiled.patch);
 
     // odd-numbered SDL patch levels are dev snapshots, even-numbered are proper releases
     // string is in the format "https://github.com/libsdl-org/SDL.git@bfd2f8993f173535efe436f8e60827cc44351bea"
-    if (linked.patch & 1)
+    char const *rev;
+
+    if (linked.patch & 1 && (rev = SDL_GetRevision()))
     {
-        auto rev = SDL_GetRevision();
-        if (rev)
-        {
-            int len = Bstrlen(rev);
-            if (len > 40 && rev[len-41] == '@')
-            {
-                char buf[10] = {};
-                Bmemcpy(buf, &rev[len-40], 9);
-                initprintf(" (%s)", buf);
-            }
-        }
+        char buf[10] = {};
+
+        int len = Bstrlen(rev);
+
+        if (len > 49 && rev[len-41] == '@')
+            Bmemcpy(buf, &rev[len-40], 9);
+
+        Bsnprintf(str, 128, "Initializing SDL %s (%d.%d.%d snapshot)", buf, linked.major, linked.minor, linked.patch);
+    }
+    else
+    {
+        SDL_VERSION(&compiled);
+
+        if (!Bmemcmp(&compiled, &linked, sizeof(SDL_version)))
+            Bsnprintf(str, 128, "Initializing SDL %d.%d.%d", compiled.major, compiled.minor, compiled.patch);
+        else
+            Bsnprintf(str, 128, "Initializing SDL %d.%d.%d (built against version %d.%d.%d)",
+                linked.major, linked.minor, linked.patch, compiled.major, compiled.minor, compiled.patch);
     }
 
-    initputs("\n");
+    LOG_F(INFO, str);
 
     if (SDL_VERSIONNUM(linked.major, linked.minor, linked.patch) < SDL2_REQUIREDVERSION)
     {
         /*reject running under SDL versions older than what is stated in sdl_inc.h */
-        initprintf("You need SDL %d.%d.%d or newer to run %s.\n",SDL2_MIN_X,SDL2_MIN_Y,SDL2_MIN_Z,apptitle);
+        LOG_F(ERROR, "You need SDL %d.%d.%d or newer to run %s.",SDL2_MIN_X,SDL2_MIN_Y,SDL2_MIN_Z,apptitle);
         return -1;
     }
 
@@ -708,7 +716,10 @@ int32_t initsystem(void)
 
     if (err)
     {
-        initprintf("SDL initialization failed! (%s)\nNon-interactive mode enabled.  This is probably not what you want.\n", SDL_GetError());
+        LOG_F(ERROR, "SDL initialization failed: %s.", SDL_GetError());
+        LOG_F(WARNING, "Non-interactive mode enabled; this is probably not what you want.");
+        VLOG_F(LOG_GFX, "Video output disabled.");
+
         novideo = 1;
 #ifdef USE_OPENGL
         nogl = 1;
@@ -730,7 +741,7 @@ int32_t initsystem(void)
 #ifdef USE_OPENGL
         if (SDL_GL_LoadLibrary(0))
         {
-            initprintf("Failed loading OpenGL Driver.  GL modes will be unavailable. Error: %s\n", SDL_GetError());
+            LOG_F(ERROR, "Failed loading OpenGL driver: %s; all OpenGL modes are unavailable.", SDL_GetError());
             nogl = 1;
         }
 #endif
@@ -739,7 +750,7 @@ int32_t initsystem(void)
         const char *drvname = SDL_GetVideoDriver(0);
 
         if (drvname)
-            initprintf("Using \"%s\" video driver\n", drvname);
+            LOG_F(INFO, "Using '%s' video driver.", drvname);
 #endif
         wm_setapptitle(apptitle);
         g_numdisplays = SDL_GetNumVideoDisplays();
@@ -822,9 +833,13 @@ int debugprintf(const char *f, ...)
 static SDL_Joystick *joydev = NULL;
 #if SDL_MAJOR_VERSION >= 2
 static SDL_GameController *controller = NULL;
+static bool gameControllerDBLoaded;
 
 static void LoadSDLControllerDB()
 {
+    if (gameControllerDBLoaded)
+        return;
+
     buildvfs_kfd fh = kopen4load("gamecontrollerdb.txt", 0);
     if (fh == buildvfs_kfd_invalid)
         return;
@@ -853,9 +868,11 @@ static void LoadSDLControllerDB()
     dbuf[flen] = '\0';
     kclose(fh);
 
-    SDL_RWops * rwops = SDL_RWFromConstMem(dbuf, flen);
+    auto rwops = SDL_RWFromConstMem(dbuf, flen);
     if (!rwops)
     {
+error:
+        LOG_F(ERROR, "Failed loading game controller database: %s.", SDL_GetError());
         Xaligned_free(dbuf);
         return;
     }
@@ -863,11 +880,13 @@ static void LoadSDLControllerDB()
     int i = SDL_GameControllerAddMappingsFromRW(rwops, 1);
 
     if (i == -1)
-        buildprintf("Failed loading game controller database: %s\n", SDL_GetError());
+        goto error;
     else
-        buildputs("Loaded game controller database\n");
+        VLOG_F(LOG_INPUT, "Loaded game controller database.");
 
     Xaligned_free(dbuf);
+
+    gameControllerDBLoaded = true;
 }
 #endif
 
@@ -893,12 +912,10 @@ void joyScanDevices()
     numjoysticks = SDL_NumJoysticks();
 
     if (numjoysticks < 1)
-    {
-        buildprintf("No game controllers found\n");
-    }
+        VLOG_F(LOG_INPUT, "No game controllers found.");
     else
     {
-        buildprintf("Game controllers:\n");
+        VLOG_F(LOG_INPUT, "Game controllers:");
 
         char name[128];
 
@@ -911,21 +928,21 @@ void joyScanDevices()
 #endif
                 Bstrncpyz(name, SDL_JoystickNameForIndex(i), sizeof(name));
                 
-            buildprintf("  %d. %s\n", i + 1, name);
+            VLOG_F(LOG_INPUT, "  %d. %s", i + 1, name);
         }
 #if SDL_MAJOR_VERSION >= 2
         for (int i = 0; i < numjoysticks; i++)
         {
             if ((controller = SDL_GameControllerOpen(i)))
             {
-#if SDL_MINOR_VERSION > 0 || SDL_PATCHLEVEL >= 14
+#if SDL_VERSION_ATLEAST(2, 0, 14)
                 if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 14))
                     Bsnprintf(name, sizeof(name), "%s [%s]", SDL_GameControllerName(controller), SDL_GameControllerGetSerial(controller));
                 else
 #endif
                     Bsnprintf(name, sizeof(name), "%s", SDL_GameControllerName(controller));
 
-                buildprintf("Using controller: %s\n", name);
+                VLOG_F(LOG_INPUT, "Using controller: %s.", name);
 
                 joystick.flags      = 0;
                 joystick.numBalls   = 0;
@@ -934,7 +951,7 @@ void joyScanDevices()
                 joystick.numButtons = SDL_CONTROLLER_BUTTON_MAX;
 
                 joystick.validButtons = UINT32_MAX;
-#if SDL_MINOR_VERSION > 0 || SDL_PATCHLEVEL >= 14
+#if SDL_VERSION_ATLEAST(2, 0, 14)
                 if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 14))
                 {
                     joystick.numAxes = 0;
@@ -954,18 +971,21 @@ void joyScanDevices()
 #endif
                 joystick.isGameController = 1;
 
+                if (gameControllerDBLoaded == false)
+                    LoadSDLControllerDB();
+
                 Xfree(joystick.pAxis);
                 joystick.pAxis = (int32_t *)Xcalloc(joystick.numAxes, sizeof(int32_t));
                 DO_FREE_AND_NULL(joystick.pHat);
 
                 inputdevices |= DEV_JOYSTICK;
 
-#if SDL_MINOR_VERSION > 0 || SDL_PATCHLEVEL >= 9
+#if SDL_VERSION_ATLEAST(2, 0, 9)
                 if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
                 {
                     if (!SDL_GameControllerRumble(controller, 0xc000, 0xc000, 10))
                         joystick.hasRumble = 1;
-                    else buildprintf("%s\n", SDL_GetError());
+                    else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
                 }
 #endif
                 return;
@@ -977,7 +997,7 @@ void joyScanDevices()
         {
             if ((joydev = SDL_JoystickOpen(i)))
             {
-                buildprintf("Using joystick: %s\n", SDL_JoystickNameForIndex(i));
+                VLOG_F(LOG_INPUT, "Using joystick: %s", SDL_JoystickNameForIndex(i));
 
                 // KEEPINSYNC duke3d/src/gamedefs.h, mact/include/_control.h
                 joystick.flags      = 0;
@@ -989,11 +1009,7 @@ void joyScanDevices()
                 joystick.validButtons = UINT32_MAX;
                 joystick.isGameController = 0;
 
-                buildprint("Joystick ", i+1, " has ", joystick.numAxes, " axes, ", joystick.numButtons, " buttons, ");
-                if (joystick.numHats) buildprint(joystick.numHats); else buildprint("no");
-                buildprint(" hats, and ");
-                if (joystick.numBalls) buildprint(joystick.numBalls); else buildprint("no");
-                buildprint(" balls.\n");
+                VLOG_F(LOG_INPUT, "Joystick %d has %d axes, %d buttons, %d hats, and %d balls.", i+1, joystick.numAxes, joystick.numButtons, joystick.numHats, joystick.numBalls);
 
                 Xfree(joystick.pAxis);
                 joystick.pAxis = (int32_t *)Xcalloc(joystick.numAxes, sizeof(int32_t));
@@ -1010,19 +1026,19 @@ void joyScanDevices()
                 SDL_JoystickEventState(SDL_ENABLE);
                 inputdevices |= DEV_JOYSTICK;
 
-#if SDL_MAJOR_VERSION >= 2 && (SDL_MINOR_VERSION > 0 || SDL_PATCHLEVEL >= 9)
+#if SDL_VERSION_ATLEAST(2, 0, 9)
                 if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
                 {
                     if (!SDL_JoystickRumble(joydev, 0xffff, 0xffff, 200))
                         joystick.hasRumble = 1;
-                    else buildprintf("%s\n", SDL_GetError());
+                    else DVLOG_F(LOG_INPUT, "Couldn't init joystick rumble: %s.", SDL_GetError());
                 }
 #endif
                 return;
             }
         }
 
-        buildprintf("No controllers are usable\n");
+        VLOG_F(LOG_INPUT, "No controllers are usable.");
     }
 }
 
@@ -1058,7 +1074,7 @@ int32_t initinput(void(*hotplugCallback)(void) /*= nullptr*/)
 #define SDL_SCANCODE_TO_KEYCODE(x) (SDLKey)(x)
 #define SDL_NUM_SCANCODES SDLK_LAST
     if (SDL_EnableKeyRepeat(250, 30))
-        initprintf("Error enabling keyboard repeat.\n");
+        LOG_F(ERROR, "Unable to configure keyboard repeat.");
     SDL_EnableUNICODE(1);  // let's hope this doesn't hit us too hard
 #endif
 
@@ -1075,24 +1091,17 @@ int32_t initinput(void(*hotplugCallback)(void) /*= nullptr*/)
 #else
     if (!SDL_InitSubSystem(SDL_INIT_JOYSTICK))
 #endif
-    {
-#if SDL_MAJOR_VERSION >= 2
-        LoadSDLControllerDB();
-#endif
         joyScanDevices();
-    }
 
-#if SDL_MAJOR_VERSION >= 2 && (SDL_MINOR_VERSION > 0 || SDL_PATCHLEVEL >= 9)
+#if SDL_VERSION_ATLEAST(2, 0, 9)
     if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
     {
         if (joystick.flags & JOY_RUMBLE)
         {
-            initputs("Controller supports ");
-
             switch (joystick.flags & JOY_RUMBLE)
             {
             case JOY_RUMBLE:
-                initputs("rumble.\n");
+                VLOG_F(LOG_INPUT, "Controller supports rumble.");
                 break;
             }
         }
@@ -1232,8 +1241,8 @@ void mouseUninit(void)
 //                    furthermore return 0 if successful.
 //
 
-#if defined _WIN32 && SDL_MINOR_VERSION == 0 && SDL_PATCHLEVEL < 13
-// bypass SDL_SetWindowGrab--see https://bugzilla.libsdl.org/show_bug.cgi?id=4748
+#if defined _WIN32 && !SDL_VERSION_ATLEAST(2, 0, 13)
+// bypass SDL_SetWindowGrab--see https://github.com/libsdl-org/SDL/issues/3353
 static void SetWindowGrab(SDL_Window *pWindow, int const clipToWindow)
 {
     UNREFERENCED_PARAMETER(pWindow);
@@ -1280,13 +1289,24 @@ void mouseGrabInput(bool grab)
 
 void mouseLockToWindow(char a)
 {
+    if (!g_ImGui_IO || !g_ImGui_IO->WantCaptureMouse)
     if (!(a & 2))
     {
         mouseGrabInput(a);
         g_mouseLockedToWindow = g_mouseGrabbed;
     }
 
-    SDL_ShowCursor((osd && osd->flags & OSD_CAPTURE) ? SDL_ENABLE : SDL_DISABLE);
+    int newstate = (osd && ((osd->flags & OSD_CAPTURE) || (g_ImGuiCapturedDevices & DEV_MOUSE))) ? SDL_ENABLE : SDL_DISABLE;
+
+    SDL_ShowCursor(newstate);
+
+    if (g_ImGui_IO)
+    {
+        if (newstate)
+            g_ImGui_IO->ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+        else
+            g_ImGui_IO->ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+    }
 }
 
 
@@ -1335,7 +1355,7 @@ void videoGetModes(int display)
         return;
 
     validmodecnt = 0;
-    //    initprintf("Detecting video modes:\n");
+    VLOG_F(LOG_GFX, "Detecting video modes...");
 
     // do fullscreen modes first
     for (i = 0; i < SDL_GetNumDisplayModes(display); i++)
@@ -1462,6 +1482,12 @@ static void destroy_window_resources()
 #endif
 
 #if SDL_MAJOR_VERSION >= 2
+#ifdef USE_OPENGL
+    ImGui_ImplOpenGL3_Shutdown();
+#endif
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
+
     if (sdl_context)
         SDL_GL_DeleteContext(sdl_context);
     sdl_context = NULL;
@@ -1469,6 +1495,58 @@ static void destroy_window_resources()
         SDL_DestroyWindow(sdl_window);
     sdl_window = NULL;
 #endif
+}
+
+bool g_ImGuiFrameActive;
+
+void engineBeginImGuiFrame(void)
+{
+    Bassert(g_ImGuiFrameActive == false);
+#ifdef USE_OPENGL
+    ImGui_ImplOpenGL3_NewFrame();
+#endif
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+    g_ImGuiFrameActive = true;
+}
+
+void engineEndImGuiInput(void)
+{
+    keyFlushChars();
+    keyFlushScans();
+    ImGui::GetIO().ClearInputKeys();
+//    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+    SDL_StopTextInput();
+}
+
+void engineBeginImGuiInput(void)
+{
+    keyFlushChars();
+    keyFlushScans();
+    SDL_StartTextInput();
+//    ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+}
+
+void engineSetupImGui(void)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    g_ImGui_IO = &ImGui::GetIO();
+    g_ImGui_IO->IniFilename = nullptr;
+    g_ImGui_IO->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+    g_ImGui_IO->ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+    g_ImGui_IO->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+#ifdef USE_OPENGL
+    ImGui_ImplSDL2_InitForOpenGL(sdl_window, sdl_context);
+    ImGui_ImplOpenGL3_Init();
+#endif
+
+    g_ImGui_IO->Fonts->AddFontDefault();
+    //ImFont* font = g_ImGui_IO->Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 12.0f);
+    //IM_ASSERT(font != NULL);
 }
 
 #ifdef USE_OPENGL
@@ -1590,6 +1668,8 @@ void setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int
     SDL_DisplayMode desktopmode;
     SDL_GetDesktopDisplayMode(newdisplayindex, &desktopmode);
 
+    refreshfreq = desktopmode.refresh_rate;
+
     int const matchedResolution = (desktopmode.w == x && desktopmode.h == y);
     int const borderless = (r_borderless == 1 || (r_borderless == 2 && matchedResolution)) ? SDL_WINDOW_BORDERLESS : 0;
 
@@ -1610,9 +1690,9 @@ void setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int
         else
 #endif
             refreshfreq = newmode.refresh_rate;
-
-        initprintf("Refresh rate: %.2fHz\n", refreshfreq);
     }
+
+    VLOG_F(LOG_GFX, "Refresh rate: %.2fHz.", refreshfreq);
 
     SDL_SetWindowSize(sdl_window, x, y);
 
@@ -1656,8 +1736,7 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
         return ret;
     }
 
-    initprintf("Setting video mode %dx%d (%d-bpp %s)\n", x, y, c, ((fs & 1) ? "fullscreen" : "windowed"));
-
+    VLOG_F(LOG_GFX, "Setting video mode %dx%d (%d-bpp %s).", x, y, c, ((fs & 1) ? "fullscreen" : "windowed"));
 
     if (sdl_window)
     {
@@ -1718,7 +1797,7 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
 
         if (!sdl_window || !sdl_context)
         {
-            initprintf("Unable to set video mode: %s failed: %s\n", sdl_window ? "SDL_GL_CreateContext" : "SDL_GL_CreateWindow",  SDL_GetError());
+            LOG_F(ERROR, "Unable to set video mode: %s failed: %s.", sdl_window ? "SDL_GL_CreateContext" : "SDL_GL_CreateWindow",  SDL_GetError());
             nogl = 1;
             destroy_window_resources();
             return -1;
@@ -1727,7 +1806,7 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
         gladLoadGLLoader(SDL_GL_GetProcAddress);
         if (GLVersion.major < 2)
         {
-            initprintf("Your computer does not support OpenGL version 2 or greater. GL modes are unavailable.\n");
+            LOG_F(ERROR, "Video driver does not support OpenGL version 2 or greater; all OpenGL modes are unavailable.");
             nogl = 1;
             destroy_window_resources();
             return -1;
@@ -1735,6 +1814,8 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
 
         SDL_GL_SetSwapInterval(sdlayer_getswapinterval(vsync_renderlayer));
         vsync_renderlayer = sdlayer_checkvsync(vsync_renderlayer);
+
+        engineSetupImGui();
     }
     else
 #endif  // defined USE_OPENGL
@@ -1904,6 +1985,13 @@ void videoShowFrame(int32_t w)
             glsurface_blitBuffer();
         }
 
+        if (g_ImGuiFrameActive)
+        {
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            g_ImGuiFrameActive = false;
+        }
+
         if ((r_glfinish == 1 && r_finishbeforeswap == 1) || vsync_renderlayer == 2)
         {
             MICROPROFILE_SCOPEI("Engine", "glFinish", MP_GREEN);
@@ -1961,7 +2049,7 @@ void videoShowFrame(int32_t w)
 
     if (lockcount)
     {
-        OSD_Printf("Frame still locked %d times when showframe() called.\n", lockcount);
+        LOG_F(WARNING, "Frame was still locked at a depth of %d when videoShowFrame() was called!", lockcount);
         while (lockcount) videoEndDrawing();
     }
 
@@ -2053,7 +2141,7 @@ int32_t videoSetGamma(void)
     if (i < 0)
     {
         if (i != INT32_MIN)
-            OSD_Printf("videoSetGamma(): %s\n", SDL_GetError());
+            LOG_F(ERROR, "Failed setting window gamma ramp: %s.", SDL_GetError());
 
 #ifndef EDUKE32_GLES
 #if SDL_MAJOR_VERSION >= 2
@@ -2296,8 +2384,30 @@ int32_t handleevents_pollsdl(void)
     int32_t code, rv=0, j;
     SDL_Event ev;
 
+    g_ImGuiCapturedDevices = 0;
+
+    if (g_ImGui_IO)
+    {
+        if (g_ImGuiCaptureInput && g_ImGui_IO->WantCaptureKeyboard)
+            g_ImGuiCapturedDevices = DEV_KEYBOARD;
+
+        if (g_ImGui_IO->WantCaptureMouse)
+            g_ImGuiCapturedDevices |= DEV_MOUSE;
+    }
+
     while (SDL_PollEvent(&ev))
     {
+        if (g_ImGui_IO)
+        {
+            if (g_ImGui_IO->WantCaptureKeyboard && (ev.type == SDL_TEXTINPUT || ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP))
+                if (ImGui_ImplSDL2_ProcessEvent(&ev) && ev.type == SDL_TEXTINPUT)
+                    continue;
+
+            if (g_ImGui_IO->WantCaptureMouse && (ev.type == SDL_MOUSEMOTION || ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_MOUSEWHEEL))
+                if (ImGui_ImplSDL2_ProcessEvent(&ev))
+                    continue;
+        }
+
         switch (ev.type)
         {
             case SDL_TEXTINPUT:
@@ -2550,15 +2660,39 @@ int32_t handleevents(void)
 
     int32_t rv;
 
-#if SDL_MAJOR_VERSION >= 2 && (SDL_MINOR_VERSION > 0 || SDL_PATCHLEVEL >= 9)
+#if SDL_VERSION_ATLEAST(2, 0, 9)
+    if (g_ImGuiFrameActive)
+    {
+        ImGui::EndFrame();
+        g_ImGuiFrameActive = false;
+    }
+
     if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
     {
         if (joystick.hasRumble)
         {
-            if (joystick.rumbleLow || joystick.rumbleHigh)
-                SDL_GameControllerRumble(controller, joystick.rumbleLow, joystick.rumbleHigh, joystick.rumbleTime);
+            auto dorumble = [](uint16_t const low, uint16_t const high, uint32_t const time)
+            {
+                if (joystick.isGameController)
+                    SDL_GameControllerRumble(controller, low, high, time);
+                else
+                    SDL_JoystickRumble(joydev, low, high, time);
+            };
 
-            joystick.rumbleTime = joystick.rumbleLow = joystick.rumbleHigh = 0;
+            static uint32_t rumbleZeroTime;
+
+            if (joystick.rumbleLow || joystick.rumbleHigh)
+            {
+                rumbleZeroTime = timerGetTicks() + joystick.rumbleTime;
+
+                dorumble(joystick.rumbleLow, joystick.rumbleHigh, joystick.rumbleTime);
+                joystick.rumbleTime = joystick.rumbleLow = joystick.rumbleHigh = 0;
+            }
+            else if (rumbleZeroTime && timerGetTicks() >= rumbleZeroTime)
+            {
+                rumbleZeroTime = 0;
+                dorumble(0, 0, 0);
+            }
         }
     }
 #endif
@@ -2595,19 +2729,30 @@ int32_t handleevents(void)
     if (!nogl && glinfo.reset_notification)
     {
         static const auto glGetGraphicsReset = glGetGraphicsResetStatusKHR ? glGetGraphicsResetStatusKHR : glGetGraphicsResetStatus;
-
-        if (glGetGraphicsReset() != GL_NO_ERROR)
+        auto status = glGetGraphicsReset();
+        if (status != GL_NO_ERROR)
         {
             do
-            {
-                initputs("GL CONTEXT LOST!\n");
-            } while (glGetGraphicsReset() != GL_NO_ERROR);
+            { 
+                switch (status)
+                {
+                    case GL_GUILTY_CONTEXT_RESET:
+                        LOG_F(ERROR, "OPENGL CONTEXT LOST: GUILTY!");
+                        break;
+                    case GL_INNOCENT_CONTEXT_RESET:
+                        LOG_F(ERROR, "OPENGL CONTEXT LOST: INNOCENT!");
+                        break;
+                    case GL_UNKNOWN_CONTEXT_RESET:
+                        LOG_F(ERROR, "OPENGL CONTEXT LOST!");
+                        break;
+                }
+            } while ((status = glGetGraphicsReset()) != GL_NO_ERROR);
 
             videoResetMode();
 
             if (videoSetGameMode(fullscreen,xres,yres,bpp,upscalefactor))
             {
-                initputs("Video reset failed. Terminating.\n");
+                LOG_F(ERROR, "Failed to reset video mode after lost OpenGL context; terminating.");
                 Bexit(EXIT_FAILURE);
             }
         }
@@ -2634,3 +2779,4 @@ int32_t handleevents(void)
 #if SDL_MAJOR_VERSION < 2
 # include "sdlayer12.cpp"
 #endif
+

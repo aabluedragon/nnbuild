@@ -49,7 +49,7 @@ void buildgl_outputDebugMessage(uint8_t severity, const char* format, ...)
         va_end(va);
     } while ((unsigned)len > size-1);
 
-    buf[size-1] = 0;
+    buf[len] = 0;
     glDebugMessageInsertARB(GL_DEBUG_SOURCE_APPLICATION_ARB,
                             GL_DEBUG_TYPE_OTHER_ARB,
                             0,
@@ -179,7 +179,10 @@ void buildgl_bindTexture(GLenum target, uint32_t textureID)
 
 void buildgl_resetSamplerObjects(void)
 {
-    auto &f = glfiltermodes[clamp(gltexfiltermode, 0, NUMGLFILTERMODES-1)];
+    glanisotropy    = clamp<int>(glanisotropy, 1, glinfo.maxanisotropy);
+    gltexfiltermode = clamp(gltexfiltermode, 0, NUMGLFILTERMODES-1);
+
+    auto &f = glfiltermodes[gltexfiltermode];
 
     if (!glIsSampler(samplerObjectIDs[1]))
         glGenSamplers(NUM_SAMPLERS-1, &samplerObjectIDs[1]);
@@ -193,7 +196,7 @@ void buildgl_resetSamplerObjects(void)
         glSamplerParameteri(s, GL_TEXTURE_MIN_FILTER, f.min);
         //glSamplerParameteri(s, GL_TEXTURE_BASE_LEVEL, 0);
         //glSamplerParameteri(s, GL_TEXTURE_MAX_LEVEL, 0);
-        glSamplerParameteri(s, GL_TEXTURE_MAX_ANISOTROPY_EXT, glanisotropy);
+        glSamplerParameterf(s, GL_TEXTURE_MAX_ANISOTROPY_EXT, polymost_getanisotropy());
     }
 
     GLuint s = samplerObjectIDs[SAMPLER_CLAMP];

@@ -235,6 +235,9 @@ static MenuMenuFormat_t MMF_Top_Skill =            { {  MENU_MARGIN_CENTER<<16, 
 static MenuMenuFormat_t MMF_Top_Options =          { {  MENU_MARGIN_CENTER<<16, 38<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_Top_Joystick_Network = { {  MENU_MARGIN_CENTER<<16, 70<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_BigOptions =           { {    MENU_MARGIN_WIDE<<16, 38<<16, }, -(190<<16) };
+#ifdef USE_OPENGL
+static MenuMenuFormat_t MMF_BigOptionsScrolling =  { {    MENU_MARGIN_WIDE<<16, 38<<16, },  (187<<16) };
+#endif
 static MenuMenuFormat_t MMF_SmallOptions =         { {    MENU_MARGIN_WIDE<<16, 37<<16, },    170<<16 };
 static MenuMenuFormat_t MMF_Macros =               { {                  26<<16, 40<<16, },    160<<16 };
 static MenuMenuFormat_t MMF_SmallOptionsNarrow  =  { { MENU_MARGIN_REGULAR<<16, 38<<16, }, -(190<<16) };
@@ -256,7 +259,7 @@ static MenuEntryFormat_t MEF_CenterMenu =       { 7<<16,      0,          0 };
 static MenuEntryFormat_t MEF_BigOptions_Apply = { 4<<16, 16<<16, -(260<<16) };
 static MenuEntryFormat_t MEF_BigOptionsRt =     { 4<<16,      0, -(260<<16) };
 static MenuEntryFormat_t MEF_BigOptionsRtSections = { 3<<16,      0, -(260<<16) };
-#if defined USE_OPENGL || !defined EDUKE32_ANDROID_MENU
+#if !defined EDUKE32_STANDALONE && !defined EDUKE32_ANDROID_MENU
 static MenuEntryFormat_t MEF_SmallOptions =     { 1<<16,      0, -(260<<16) };
 #endif
 static MenuEntryFormat_t MEF_BigCheats =        { 3<<16,      0, -(260<<16) };
@@ -293,7 +296,8 @@ static char const *MEOSN_Gamefuncs[NUMGAMEFUNCTIONS+1];
 static int32_t MEOSV_Gamefuncs[NUMGAMEFUNCTIONS+1];
 static MenuOptionSet_t MEOS_Gamefuncs = MAKE_MENUOPTIONSET( MEOSN_Gamefuncs, MEOSV_Gamefuncs, 0x1 );
 
-int32_t kbo_type_cvar = 1;
+int32_t cvar_kbo_type = 1;
+int32_t cvar_kbconfirm = 1;
 
 static int g_lookAxis = -1;
 static int g_turnAxis = -1;
@@ -570,8 +574,7 @@ static MenuOption_t MEO_VIDEOSETUP_FULLSCREEN = MAKE_MENUOPTION( &MF_Redfont, &M
 static MenuEntry_t ME_VIDEOSETUP_FULLSCREEN = MAKE_MENUENTRY( "Windowed:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_VIDEOSETUP_FULLSCREEN, Option );
 
 static char const *MEOSN_VIDEOSETUP_BORDERLESS [] = { "No", "Yes", "Auto", };
-static int32_t MEOSV_VIDEOSETUP_BORDERLESS [] = { 0, 1, 2, };
-static MenuOptionSet_t MEOS_VIDEOSETUP_BORDERLESS = MAKE_MENUOPTIONSET(MEOSN_VIDEOSETUP_BORDERLESS, MEOSV_VIDEOSETUP_BORDERLESS, 0x2);
+static MenuOptionSet_t MEOS_VIDEOSETUP_BORDERLESS = MAKE_MENUOPTIONSET(MEOSN_VIDEOSETUP_BORDERLESS, nullptr, 0x2);
 static MenuOption_t MEO_VIDEOSETUP_BORDERLESS = MAKE_MENUOPTION(&MF_Redfont, &MEOS_VIDEOSETUP_BORDERLESS, &newborderless);
 static MenuEntry_t ME_VIDEOSETUP_BORDERLESS = MAKE_MENUENTRY("Borderless:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_VIDEOSETUP_BORDERLESS, Option);
 
@@ -620,8 +623,7 @@ static MenuEntry_t ME_DISPLAYSETUP_UPSCALING = MAKE_MENUENTRY( "Upscaling:", &MF
 
 #ifndef EDUKE32_ANDROID_MENU
 static char const *MEOSN_DISPLAYSETUP_ASPECTRATIO[] = { "Stretched", "Auto" };
-static int32_t MEOSV_DISPLAYSETUP_ASPECTRATIO[] = { 0, 1 };
-static MenuOptionSet_t MEOS_DISPLAYSETUP_ASPECTRATIO = MAKE_MENUOPTIONSET( MEOSN_DISPLAYSETUP_ASPECTRATIO, MEOSV_DISPLAYSETUP_ASPECTRATIO, 0x0 );
+static MenuOptionSet_t MEOS_DISPLAYSETUP_ASPECTRATIO = MAKE_MENUOPTIONSET( MEOSN_DISPLAYSETUP_ASPECTRATIO, nullptr, 0x0 );
 static MenuOption_t MEO_DISPLAYSETUP_ASPECTRATIO = MAKE_MENUOPTION(&MF_Redfont, &MEOS_DISPLAYSETUP_ASPECTRATIO, &r_usenewaspect);
 static MenuEntry_t ME_DISPLAYSETUP_ASPECTRATIO = MAKE_MENUENTRY( "Aspect ratio:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_ASPECTRATIO, Option );
 #endif
@@ -635,19 +637,21 @@ static MenuEntry_t ME_DISPLAYSETUP_FOV = MAKE_MENUENTRY( "FOV:", &MF_Redfont, &M
 
 #ifdef USE_OPENGL
 # if !(defined EDUKE32_STANDALONE) || defined POLYMER
+#define TEXFILTER_MENU_OPTIONS
 //POGOTODO: allow filtering again in standalone once indexed colour textures support filtering
 #ifdef TEXFILTER_MENU_OPTIONS
-static char const *MEOSN_DISPLAYSETUP_TEXFILTER[] = { "Classic", "Filtered" };
+static char const *MEOSN_DISPLAYSETUP_TEXFILTER[][2]
+= { { "Nearest", "Bilinear" }, { "Nearest", "Smear filter" }, { "Nearest", "Terrible" }, { "Nearest", "Vaseline" }, { "Nearest", "Blurry" } };
 static int32_t MEOSV_DISPLAYSETUP_TEXFILTER[] = { TEXFILTER_OFF, TEXFILTER_ON };
-static MenuOptionSet_t MEOS_DISPLAYSETUP_TEXFILTER = MAKE_MENUOPTIONSET( MEOSN_DISPLAYSETUP_TEXFILTER, MEOSV_DISPLAYSETUP_TEXFILTER, 0x2 );
+static MenuOptionSet_t MEOS_DISPLAYSETUP_TEXFILTER = MAKE_MENUOPTIONSET( MEOSN_DISPLAYSETUP_TEXFILTER[0], MEOSV_DISPLAYSETUP_TEXFILTER, 0x2 );
 static MenuOption_t MEO_DISPLAYSETUP_TEXFILTER = MAKE_MENUOPTION( &MF_Redfont, &MEOS_DISPLAYSETUP_TEXFILTER, &gltexfiltermode );
-static MenuEntry_t ME_DISPLAYSETUP_TEXFILTER = MAKE_MENUENTRY( "Texture Mode:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_TEXFILTER, Option );
+static MenuEntry_t ME_RENDERERSETUP_TEXFILTER = MAKE_MENUENTRY( "Textures:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_TEXFILTER, Option );
 
-static char const *MEOSN_DISPLAYSETUP_ANISOTROPY[] = { "Max", "None", "2x", "4x", "8x", "16x", };
-static int32_t MEOSV_DISPLAYSETUP_ANISOTROPY[] = { 0, 1, 2, 4, 8, 16, };
+static char const *MEOSN_DISPLAYSETUP_ANISOTROPY[] = { "None", "2x", "4x", "8x", "16x", };
+static int32_t MEOSV_DISPLAYSETUP_ANISOTROPY[] = { 1, 2, 4, 8, 16, };
 static MenuOptionSet_t MEOS_DISPLAYSETUP_ANISOTROPY = MAKE_MENUOPTIONSET( MEOSN_DISPLAYSETUP_ANISOTROPY, MEOSV_DISPLAYSETUP_ANISOTROPY, 0x0 );
 static MenuOption_t MEO_DISPLAYSETUP_ANISOTROPY = MAKE_MENUOPTION(&MF_Redfont, &MEOS_DISPLAYSETUP_ANISOTROPY, &glanisotropy);
-static MenuEntry_t ME_DISPLAYSETUP_ANISOTROPY = MAKE_MENUENTRY( "Anisotropy:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_ANISOTROPY, Option );
+static MenuEntry_t ME_RENDERERSETUP_ANISOTROPY = MAKE_MENUENTRY( "Anisotropy:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_ANISOTROPY, Option );
 #endif
 # endif
 
@@ -670,7 +674,7 @@ static MenuEntry_t ME_SCREENSETUP_CROSSHAIRSIZE = MAKE_MENUENTRY( s_Scale, &MF_R
 
 static int32_t vpsize;
 static MenuRangeInt32_t MEO_SCREENSETUP_SCREENSIZE = MAKE_MENURANGE( &vpsize, &MF_Redfont, 0, 0, 0, 1, EnforceIntervals );
-#ifdef USE_OPENGL
+#if !defined EDUKE32_STANDALONE
 static MenuOption_t MEO_SCREENSETUP_SCREENSIZE_TWO = MAKE_MENUOPTION( &MF_Redfont, &MEOS_OffOn, &vpsize );
 #endif
 static MenuEntry_t ME_SCREENSETUP_SCREENSIZE = MAKE_MENUENTRY( "Status bar:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_SCREENSETUP_SCREENSIZE, RangeInt32 );
@@ -687,8 +691,7 @@ static MenuEntry_t ME_SCREENSETUP_SHOWPICKUPMESSAGES = MAKE_MENUENTRY( "Game mes
 
 #ifdef EDUKE32_ANDROID_MENU
 static char const *MEOSN_SCREENSETUP_STATUSBARONTOP[] = { "Bottom", "Top" };
-static int32_t MEOSV_SCREENSETUP_STATUSBARONTOP[] = { 0, 1 };
-static MenuOptionSet_t MEOS_SCREENSETUP_STATUSBARONTOP = MAKE_MENUOPTIONSET( MEOSN_SCREENSETUP_STATUSBARONTOP, MEOSV_SCREENSETUP_STATUSBARONTOP, 0x2 );
+static MenuOptionSet_t MEOS_SCREENSETUP_STATUSBARONTOP = MAKE_MENUOPTIONSET( MEOSN_SCREENSETUP_STATUSBARONTOP, nullptr, 0x2 );
 static MenuOption_t MEO_SCREENSETUP_STATUSBARONTOP = MAKE_MENUOPTION(&MF_Redfont, &MEOS_SCREENSETUP_STATUSBARONTOP, &ud.hudontop);
 static MenuEntry_t ME_SCREENSETUP_STATUSBARONTOP = MAKE_MENUENTRY( "Status bar:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_SCREENSETUP_STATUSBARONTOP, Option );
 #endif
@@ -703,13 +706,8 @@ static MenuEntry_t ME_DISPLAYSETUP_SCREENSETUP = MAKE_MENUENTRY( "HUD setup", &M
 
 #ifndef EDUKE32_RETAIL_MENU
 #ifdef USE_OPENGL
-static MenuLink_t MEO_DISPLAYSETUP_ADVANCED_GL_POLYMOST = { MENU_POLYMOST, MA_Advance, };
-static MenuEntry_t ME_DISPLAYSETUP_ADVANCED_GL_POLYMOST = MAKE_MENUENTRY( "Polymost setup", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_ADVANCED_GL_POLYMOST, Link );
-
-#ifdef POLYMER
-static MenuLink_t MEO_DISPLAYSETUP_ADVANCED_GL_POLYMER = { MENU_POLYMER, MA_Advance, };
-static MenuEntry_t ME_DISPLAYSETUP_ADVANCED_GL_POLYMER = MAKE_MENUENTRY("Polymer setup", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_ADVANCED_GL_POLYMER, Link);
-#endif
+static MenuLink_t MEO_DISPLAYSETUP_RENDERER = { MENU_RENDERER, MA_Advance, };
+static MenuEntry_t ME_DISPLAYSETUP_RENDERER = MAKE_MENUENTRY( "Renderer setup", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_RENDERER, Link );
 #endif
 #endif
 
@@ -718,6 +716,13 @@ static MenuLink_t MEO_DISPLAYSETUP_VIDEOSETUP = { MENU_VIDEOSETUP, MA_Advance, }
 static MenuEntry_t ME_DISPLAYSETUP_VIDEOSETUP = MAKE_MENUENTRY( "Video mode", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_VIDEOSETUP, Link );
 #endif
 
+#define MAXLANGUAGES 256
+static int32_t newlanguage = -1;
+
+static char const *MEOSN_DISPLAYSETUP_LANGUAGE[MAXLANGUAGES];
+static MenuOptionSet_t MEOS_DISPLAYSETUP_LANGUAGE = MAKE_MENUOPTIONSETDYN( MEOSN_DISPLAYSETUP_LANGUAGE, NULL, 0, 0x0 );
+static MenuOption_t MEO_DISPLAYSETUP_LANGUAGE  = MAKE_MENUOPTION( &MF_Redfont, &MEOS_DISPLAYSETUP_LANGUAGE, &newlanguage );
+static MenuEntry_t ME_DISPLAYSETUP_LANGUAGE = MAKE_MENUENTRY( "Language:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_DISPLAYSETUP_LANGUAGE, Option );
 
 static MenuLink_t MEO_ENTERCHEAT = { MENU_CHEATENTRY, MA_None, };
 static MenuEntry_t ME_ENTERCHEAT = MAKE_MENUENTRY( "Enter Cheat Code", &MF_Redfont, &MEF_BigCheats, &MEO_ENTERCHEAT, Link );
@@ -811,64 +816,19 @@ static MenuEntry_t *MEL_DISPLAYSETUP[] = {
     &ME_DISPLAYSETUP_COLORCORR,
 #ifndef EDUKE32_ANDROID_MENU
     &ME_DISPLAYSETUP_VIDEOSETUP,
+    &ME_DISPLAYSETUP_LANGUAGE,
     &ME_DISPLAYSETUP_ASPECTRATIO,
     &ME_DISPLAYSETUP_FOV,
     &ME_DISPLAYSETUP_VOXELS,
-#endif
-    &ME_DISPLAYSETUP_UPSCALING,
-};
-
-#ifdef USE_OPENGL
-static MenuEntry_t *MEL_DISPLAYSETUP_GL[] = {
-    &ME_DISPLAYSETUP_SCREENSETUP,
-    &ME_DISPLAYSETUP_COLORCORR,
-#ifndef EDUKE32_ANDROID_MENU
-    &ME_DISPLAYSETUP_VIDEOSETUP,
-    &ME_DISPLAYSETUP_ASPECTRATIO,
-    &ME_DISPLAYSETUP_FOV,
-    &ME_DISPLAYSETUP_VOXELS,
-#endif
-#ifndef EDUKE32_STANDALONE
-# ifdef TEXFILTER_MENU_OPTIONS
-    &ME_DISPLAYSETUP_TEXFILTER,
-# endif
-#endif
-#ifdef EDUKE32_ANDROID_MENU
+#else
     &ME_DISPLAYSETUP_HIDEDPAD,
     &ME_DISPLAYSETUP_TOUCHALPHA,
-#else
-# ifndef EDUKE32_STANDALONE
-#  ifdef TEXFILTER_MENU_OPTIONS
-    &ME_DISPLAYSETUP_ANISOTROPY,
-#  endif
-# endif
-# ifndef EDUKE32_RETAIL_MENU
-    &ME_DISPLAYSETUP_ADVANCED_GL_POLYMOST,
-# endif
+#endif
+    &ME_DISPLAYSETUP_UPSCALING,
+#if !defined EDUKE32_RETAIL_MENU && defined USE_OPENGL
+    &ME_DISPLAYSETUP_RENDERER,
 #endif
 };
-
-#ifdef POLYMER
-static MenuEntry_t *MEL_DISPLAYSETUP_GL_POLYMER[] = {
-    &ME_DISPLAYSETUP_SCREENSETUP,
-    &ME_DISPLAYSETUP_COLORCORR,
-#ifndef EDUKE32_ANDROID_MENU
-    &ME_DISPLAYSETUP_VIDEOSETUP,
-    &ME_DISPLAYSETUP_FOV,
-    &ME_DISPLAYSETUP_VOXELS,
-#endif
-#ifdef TEXFILTER_MENU_OPTIONS
-    &ME_DISPLAYSETUP_TEXFILTER,
-    &ME_DISPLAYSETUP_ANISOTROPY,
-#endif
-#ifndef EDUKE32_RETAIL_MENU
-    &ME_DISPLAYSETUP_ADVANCED_GL_POLYMER,
-#endif
-};
-
-#endif
-#endif
-
 
 
 static char const MenuKeyNone[] = "  -";
@@ -1107,85 +1067,86 @@ static MenuEntry_t *MEL_INTERNAL_JOYSTICKAXIS_DIGITAL[] = {
 };
 
 #ifdef USE_OPENGL
-static MenuOption_t MEO_RENDERERSETUP_HIGHTILE = MAKE_MENUOPTION( &MF_Bluefont, &MEOS_NoYes, &usehightile );
-static MenuEntry_t ME_RENDERERSETUP_HIGHTILE = MAKE_MENUENTRY( "True color textures:", &MF_Bluefont, &MEF_SmallOptions, &MEO_RENDERERSETUP_HIGHTILE, Option );
+static MenuOption_t MEO_RENDERERSETUP_HIGHTILE = MAKE_MENUOPTION( &MF_Redfont, &MEOS_NoYes, &usehightile );
+static MenuEntry_t ME_RENDERERSETUP_HIGHTILE = MAKE_MENUENTRY( "24-bit textures:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_RENDERERSETUP_HIGHTILE, Option );
 
 static char const *MEOSN_RENDERERSETUP_TEXQUALITY [] = { "Full", "Half", "Barf", };
 static MenuOptionSet_t MEOS_RENDERERSETUP_TEXQUALITY = MAKE_MENUOPTIONSET(MEOSN_RENDERERSETUP_TEXQUALITY, NULL, 0x2);
-static MenuOption_t MEO_RENDERERSETUP_TEXQUALITY = MAKE_MENUOPTION(&MF_Bluefont, &MEOS_RENDERERSETUP_TEXQUALITY, &r_downsize);
-static MenuEntry_t ME_RENDERERSETUP_TEXQUALITY = MAKE_MENUENTRY("GL texture quality:", &MF_Bluefont, &MEF_SmallOptions, &MEO_RENDERERSETUP_TEXQUALITY, Option);
+static MenuOption_t MEO_RENDERERSETUP_TEXQUALITY = MAKE_MENUOPTION(&MF_Redfont, &MEOS_RENDERERSETUP_TEXQUALITY, &r_downsize);
+static MenuEntry_t ME_RENDERERSETUP_TEXQUALITY = MAKE_MENUENTRY("GL texture quality:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_RENDERERSETUP_TEXQUALITY, Option);
 
 
-static MenuOption_t MEO_RENDERERSETUP_PRECACHE = MAKE_MENUOPTION( &MF_Bluefont, &MEOS_OffOn, &ud.config.useprecache );
-static MenuEntry_t ME_RENDERERSETUP_PRECACHE = MAKE_MENUENTRY( "Pre-load map textures:", &MF_Bluefont, &MEF_SmallOptions, &MEO_RENDERERSETUP_PRECACHE, Option );
+static MenuOption_t MEO_RENDERERSETUP_PRECACHE = MAKE_MENUOPTION( &MF_Redfont, &MEOS_OffOn, &ud.config.useprecache );
+static MenuEntry_t ME_RENDERERSETUP_PRECACHE = MAKE_MENUENTRY( "Cache whole map:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_RENDERERSETUP_PRECACHE, Option );
 # ifndef EDUKE32_GLES
 static char const *MEOSN_RENDERERSETUP_TEXCACHE[] = { "Off", "On", "Compr.", };
 static MenuOptionSet_t MEOS_RENDERERSETUP_TEXCACHE = MAKE_MENUOPTIONSET( MEOSN_RENDERERSETUP_TEXCACHE, NULL, 0x2 );
-static MenuOption_t MEO_RENDERERSETUP_TEXCACHE = MAKE_MENUOPTION( &MF_Bluefont, &MEOS_RENDERERSETUP_TEXCACHE, &glusetexcache );
-static MenuEntry_t ME_RENDERERSETUP_TEXCACHE = MAKE_MENUENTRY( "On-disk texture cache:", &MF_Bluefont, &MEF_SmallOptions, &MEO_RENDERERSETUP_TEXCACHE, Option );
+static MenuOption_t MEO_RENDERERSETUP_TEXCACHE = MAKE_MENUOPTION( &MF_Redfont, &MEOS_RENDERERSETUP_TEXCACHE, &glusetexcache );
+static MenuEntry_t ME_RENDERERSETUP_TEXCACHE = MAKE_MENUENTRY( "Disk cache:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_RENDERERSETUP_TEXCACHE, Option );
 # endif
-# ifdef USE_GLEXT
-static MenuOption_t MEO_RENDERERSETUP_DETAILTEX = MAKE_MENUOPTION( &MF_Bluefont, &MEOS_NoYes, &r_detailmapping );
-static MenuEntry_t ME_RENDERERSETUP_DETAILTEX = MAKE_MENUENTRY( "Detail textures:", &MF_Bluefont, &MEF_SmallOptions, &MEO_RENDERERSETUP_DETAILTEX, Option );
-static MenuOption_t MEO_RENDERERSETUP_GLOWTEX = MAKE_MENUOPTION(&MF_Bluefont, &MEOS_NoYes, &r_glowmapping);
-static MenuEntry_t ME_RENDERERSETUP_GLOWTEX = MAKE_MENUENTRY("Glow textures:", &MF_Bluefont, &MEF_SmallOptions, &MEO_RENDERERSETUP_GLOWTEX, Option);
-# endif
-static MenuOption_t MEO_RENDERERSETUP_MODELS = MAKE_MENUOPTION( &MF_Bluefont, &MEOS_NoYes, &usemodels );
-static MenuEntry_t ME_RENDERERSETUP_MODELS = MAKE_MENUENTRY( "3D models:", &MF_Bluefont, &MEF_SmallOptions, &MEO_RENDERERSETUP_MODELS, Option );
+//# ifdef USE_GLEXT
+//static MenuOption_t MEO_RENDERERSETUP_DETAILTEX = MAKE_MENUOPTION( &MF_Redfont, &MEOS_NoYes, &r_detailmapping );
+//static MenuEntry_t ME_RENDERERSETUP_DETAILTEX = MAKE_MENUENTRY( "Detail textures:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_RENDERERSETUP_DETAILTEX, Option );
+//static MenuOption_t MEO_RENDERERSETUP_GLOWTEX = MAKE_MENUOPTION(&MF_Redfont, &MEOS_NoYes, &r_glowmapping);
+//static MenuEntry_t ME_RENDERERSETUP_GLOWTEX = MAKE_MENUENTRY("Glow textures:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_RENDERERSETUP_GLOWTEX, Option);
+//# endif
+static MenuOption_t MEO_RENDERERSETUP_MODELS = MAKE_MENUOPTION( &MF_Redfont, &MEOS_NoYes, &usemodels );
+static MenuEntry_t ME_RENDERERSETUP_MODELS = MAKE_MENUENTRY( "3D models:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_RENDERERSETUP_MODELS, Option );
 #endif
 
 #ifdef POLYMER
+static MenuLink_t MEO_RENDERERSETUP_POLYMER = { MENU_POLYMER, MA_Advance, };
+static MenuEntry_t ME_RENDERERSETUP_POLYMER = MAKE_MENUENTRY( "Polymer Setup", &MF_Redfont, &MEF_BigOptionsRt, &MEO_RENDERERSETUP_POLYMER, Link );
+
 static char const *MEOSN_POLYMER_LIGHTS [] = { "Off", "Full", "Map only", };
 static MenuOptionSet_t MEOS_POLYMER_LIGHTS = MAKE_MENUOPTIONSET(MEOSN_POLYMER_LIGHTS, NULL, 0x2);
-static MenuOption_t MEO_POLYMER_LIGHTS = MAKE_MENUOPTION(&MF_Bluefont, &MEOS_POLYMER_LIGHTS, &pr_lighting);
-static MenuEntry_t ME_POLYMER_LIGHTS = MAKE_MENUENTRY("Dynamic lights:", &MF_Bluefont, &MEF_SmallOptions, &MEO_POLYMER_LIGHTS, Option);
+static MenuOption_t MEO_POLYMER_LIGHTS = MAKE_MENUOPTION(&MF_Redfont, &MEOS_POLYMER_LIGHTS, &pr_lighting);
+static MenuEntry_t ME_POLYMER_LIGHTS = MAKE_MENUENTRY("Dynamic lights:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_POLYMER_LIGHTS, Option);
 
-static MenuRangeInt32_t MEO_POLYMER_LIGHTPASSES = MAKE_MENURANGE(&r_pr_maxlightpasses, &MF_Bluefont, 1, 10, 1, 10, DisplayTypeInteger);
-static MenuEntry_t ME_POLYMER_LIGHTPASSES = MAKE_MENUENTRY("Lights per surface:", &MF_Bluefont, &MEF_SmallOptions, &MEO_POLYMER_LIGHTPASSES, RangeInt32);
+static MenuRangeInt32_t MEO_POLYMER_LIGHTPASSES = MAKE_MENURANGE(&r_pr_maxlightpasses, &MF_Redfont, 1, PR_MAXPLANELIGHTS, 1, PR_MAXPLANELIGHTS, DisplayTypeInteger);
+static MenuEntry_t ME_POLYMER_LIGHTPASSES = MAKE_MENUENTRY("Light cnt:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_POLYMER_LIGHTPASSES, RangeInt32);
 
-static MenuOption_t MEO_POLYMER_SHADOWS = MAKE_MENUOPTION(&MF_Bluefont, &MEOS_OffOn, &pr_shadows);
-static MenuEntry_t ME_POLYMER_SHADOWS = MAKE_MENUENTRY("Dynamic shadows:", &MF_Bluefont, &MEF_SmallOptions, &MEO_POLYMER_SHADOWS, Option);
+static MenuOption_t MEO_POLYMER_SHADOWS = MAKE_MENUOPTION(&MF_Redfont, &MEOS_OffOn, &pr_shadows);
+static MenuEntry_t ME_POLYMER_SHADOWS = MAKE_MENUENTRY("Dynamic shadows:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_POLYMER_SHADOWS, Option);
 
-static MenuRangeInt32_t MEO_POLYMER_SHADOWCOUNT = MAKE_MENURANGE(&pr_shadowcount, &MF_Bluefont, 1, 10, 1, 10, DisplayTypeInteger);
-static MenuEntry_t ME_POLYMER_SHADOWCOUNT = MAKE_MENUENTRY("Shadows per surface:", &MF_Bluefont, &MEF_SmallOptions, &MEO_POLYMER_SHADOWCOUNT, RangeInt32);
+static MenuRangeInt32_t MEO_POLYMER_SHADOWCOUNT = MAKE_MENURANGE(&pr_shadowcount, &MF_Redfont, 1, 64, 1, 64, DisplayTypeInteger);
+static MenuEntry_t ME_POLYMER_SHADOWCOUNT = MAKE_MENUENTRY("Shadow cnt:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_POLYMER_SHADOWCOUNT, RangeInt32);
 
+static char const *MEOSN_POLYMER_SHADOWDETAIL [] = { "128px", "256px", "512px", "1024px", "2048px", "4096px", "8192px" };
+static MenuOptionSet_t MEOS_POLYMER_SHADOWDETAIL = MAKE_MENUOPTIONSET(MEOSN_POLYMER_SHADOWDETAIL, NULL, 0x2);
+static MenuOption_t MEO_POLYMER_SHADOWDETAIL = MAKE_MENUOPTION(&MF_Redfont, &MEOS_POLYMER_SHADOWDETAIL, &pr_shadowdetail);
+static MenuEntry_t ME_POLYMER_SHADOWDETAIL = MAKE_MENUENTRY("Shadow res:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_POLYMER_SHADOWDETAIL, Option);
 #endif
 
 #ifdef USE_OPENGL
-static MenuEntry_t *MEL_RENDERERSETUP_POLYMOST[] = {
+static MenuEntry_t *MEL_RENDERERSETUP[] = {
+#ifdef TEXFILTER_MENU_OPTIONS
+    &ME_RENDERERSETUP_TEXFILTER,
+    &ME_RENDERERSETUP_ANISOTROPY,
+#endif
     &ME_RENDERERSETUP_HIGHTILE,
-    &ME_RENDERERSETUP_TEXQUALITY,
+//# ifdef USE_GLEXT
+//    &ME_RENDERERSETUP_DETAILTEX,
+//    &ME_RENDERERSETUP_GLOWTEX,
+//# endif
+    //&ME_RENDERERSETUP_TEXQUALITY,
     &ME_RENDERERSETUP_PRECACHE,
 # ifndef EDUKE32_GLES
     &ME_RENDERERSETUP_TEXCACHE,
 # endif
-# ifdef USE_GLEXT
-    &ME_RENDERERSETUP_DETAILTEX,
-    &ME_RENDERERSETUP_GLOWTEX,
-# endif
-    &ME_Space4_Bluefont,
     &ME_RENDERERSETUP_MODELS,
+#ifdef POLYMER
+    &ME_RENDERERSETUP_POLYMER,
+#endif
 };
 
 #ifdef POLYMER
 static MenuEntry_t *MEL_RENDERERSETUP_POLYMER [] = {
-    &ME_RENDERERSETUP_HIGHTILE,
-    &ME_RENDERERSETUP_TEXQUALITY,
-    &ME_RENDERERSETUP_PRECACHE,
-# ifndef EDUKE32_GLES
-    &ME_RENDERERSETUP_TEXCACHE,
-# endif
-# ifdef USE_GLEXT
-    &ME_RENDERERSETUP_DETAILTEX,
-    &ME_RENDERERSETUP_GLOWTEX,
-# endif
-    &ME_Space4_Bluefont,
-    &ME_RENDERERSETUP_MODELS,
-    &ME_Space4_Bluefont,
     &ME_POLYMER_LIGHTS,
     &ME_POLYMER_LIGHTPASSES,
     &ME_POLYMER_SHADOWS,
     &ME_POLYMER_SHADOWCOUNT,
+    &ME_POLYMER_SHADOWDETAIL,
 };
 #endif
 #endif
@@ -1319,20 +1280,20 @@ static char const *MEOSN_SOUND_MIDIDRIVER[] = {
 #ifdef _WIN32
     "Windows MME",
 #endif
+    ".sf2 synth",
 #ifdef __linux__
     "ALSA MIDI",
 #endif
-    ".sf2 synth",
 };
 static int32_t MEOSV_SOUND_MIDIDRIVER[] = {
     ASS_OPL3,
 #ifdef _WIN32
     ASS_WinMM,
 #endif
+    ASS_SF2,
 #ifdef __linux__
     ASS_ALSA,
 #endif
-    ASS_SF2,
 };
 
 static MenuOptionSet_t MEOS_SOUND_MIDIDRIVER = MAKE_MENUOPTIONSET( MEOSN_SOUND_MIDIDRIVER, MEOSV_SOUND_MIDIDRIVER, 0x2 );
@@ -1550,10 +1511,10 @@ static MenuMenu_t M_KEYBOARDKEYS = MAKE_MENUMENU( "Key Configuration", &MMF_Keyb
 static MenuMenu_t M_MOUSEBTNS = MAKE_MENUMENU( "Mouse Buttons", &MMF_MouseJoySetupBtns, MEL_MOUSESETUPBTNS );
 static MenuMenu_t M_JOYSTICKAXIS = MAKE_MENUMENU( NULL, &MMF_BigSliders, MEL_JOYSTICKAXIS );
 #ifdef USE_OPENGL
-static MenuMenu_t M_RENDERERSETUP_POLYMOST = MAKE_MENUMENU( "Polymost Setup", &MMF_SmallOptions, MEL_RENDERERSETUP_POLYMOST );
-# ifdef POLYMER
-static MenuMenu_t M_RENDERERSETUP_POLYMER = MAKE_MENUMENU("Polymer Setup", &MMF_SmallOptions, MEL_RENDERERSETUP_POLYMER );
-# endif
+static MenuMenu_t M_RENDERERSETUP = MAKE_MENUMENU( "Renderer Setup", &MMF_BigOptionsScrolling, MEL_RENDERERSETUP );
+#ifdef POLYMER
+static MenuMenu_t M_POLYMER = MAKE_MENUMENU( "Polymer Setup", &MMF_BigOptionsScrolling, MEL_RENDERERSETUP_POLYMER);
+#endif
 #endif
 static MenuMenu_t M_COLCORR = MAKE_MENUMENU( "Color Correction", &MMF_ColorCorrect, MEL_COLCORR );
 static MenuMenu_t M_SCREENSETUP = MAKE_MENUMENU( "HUD Setup", &MMF_BigOptions, MEL_SCREENSETUP );
@@ -1602,6 +1563,7 @@ static MenuVerify_t M_COLCORRRESETVERIFY = { CURSOR_CENTER_2LINE, MENU_COLCORR, 
 static MenuVerify_t M_KEYSRESETVERIFY = { CURSOR_CENTER_2LINE, MENU_KEYBOARDSETUP, MA_None, };
 static MenuVerify_t M_KEYSCLASSICVERIFY = { CURSOR_CENTER_2LINE, MENU_KEYBOARDSETUP, MA_None, };
 static MenuVerify_t M_JOYSTANDARDVERIFY = { CURSOR_CENTER_2LINE, MENU_JOYSTICKSETUP, MA_None, };
+static MenuVerify_t M_KEYOVERRIDEVERIFY = { CURSOR_BOTTOMRIGHT, MENU_KEYBOARDKEYS, MA_None, };
 
 static MenuMessage_t M_NETWAITMASTER = { CURSOR_BOTTOMRIGHT, MENU_NULL, MA_None, };
 static MenuMessage_t M_NETWAITVOTES = { CURSOR_BOTTOMRIGHT, MENU_NULL, MA_None, };
@@ -1653,14 +1615,14 @@ static Menu_t Menus[] = {
 #endif
     { &M_CONTROLS, MENU_CONTROLS, MENU_OPTIONS, MA_Return, Menu },
 #ifdef USE_OPENGL
-    { &M_RENDERERSETUP_POLYMOST, MENU_POLYMOST, MENU_DISPLAYSETUP, MA_Return, Menu },
+    { &M_RENDERERSETUP, MENU_RENDERER, MENU_DISPLAYSETUP, MA_Return, Menu },
 #endif
     { &M_COLCORR, MENU_COLCORR, MENU_DISPLAYSETUP, MA_Return, Menu },
     { &M_COLCORR, MENU_COLCORR_INGAME, MENU_CLOSE, MA_Return, Menu },
     { &M_SCREENSETUP, MENU_SCREENSETUP, MENU_DISPLAYSETUP, MA_Return, Menu },
     { &M_DISPLAYSETUP, MENU_DISPLAYSETUP, MENU_OPTIONS, MA_Return, Menu },
-#ifdef POLYMER
-    { &M_RENDERERSETUP_POLYMER, MENU_POLYMER, MENU_DISPLAYSETUP, MA_Return, Menu },
+#if defined POLYMER
+    { &M_POLYMER, MENU_POLYMER, MENU_RENDERER, MA_Return, Menu },
 #endif
     { &M_LOAD, MENU_LOAD, MENU_MAIN, MA_Return, List },
     { &M_SAVE, MENU_SAVE, MENU_MAIN, MA_Return, List },
@@ -1703,6 +1665,7 @@ static Menu_t Menus[] = {
     { &M_KEYSRESETVERIFY, MENU_KEYSRESETVERIFY, MENU_KEYBOARDSETUP, MA_None, Verify },
     { &M_KEYSCLASSICVERIFY, MENU_KEYSCLASSICVERIFY, MENU_KEYBOARDSETUP, MA_None, Verify },
     { &M_JOYSTANDARDVERIFY, MENU_JOYDEFAULTVERIFY, MENU_JOYSTICKSETUP, MA_None, Verify },
+    { &M_KEYOVERRIDEVERIFY, MENU_KEYOVERRIDEVERIFY, MENU_KEYBOARDKEYS, MA_None, Verify },
     { &M_ADULTPASSWORD, MENU_ADULTPASSWORD, MENU_GAMESETUP, MA_None, TextForm },
     { &M_RESETPLAYER, MENU_RESETPLAYER, MENU_CLOSE, MA_None, Verify },
     { &M_BUYDUKE, MENU_BUYDUKE, MENU_EPISODE, MA_Return, Message },
@@ -1925,6 +1888,88 @@ static void Menu_PopulateJoystick(void)
     M_JOYSTICKAXES.numEntries = joystick.numAxes;
 }
 
+#define MAXBNSTRINGLINES 8
+#define MAXBNLINELEN (MAXGAMEFUNCLEN + 3)
+
+// these values are used for the keybind override verification
+static MenuCustom2Col_t* s_saved_keycolumn = nullptr;
+static int32_t s_saved_scancode = 0xFF;
+static char* s_override_gfstring = nullptr;
+static int32_t s_gfstring_linecount = 0;
+
+static void Menu_RefreshBoundGamefuncNames(const int32_t sc)
+{
+    int const bbufsize = MAXBNSTRINGLINES * MAXBNLINELEN + 5;
+    s_override_gfstring = (char*) Xrealloc(s_override_gfstring, bbufsize);
+    s_override_gfstring[0] = '\0';
+
+    s_gfstring_linecount = 0;
+    for (int i = 0; i < M_KEYBOARDKEYS.numEntries && s_gfstring_linecount < MAXBNSTRINGLINES; i++)
+    {
+        if (i == M_KEYBOARDKEYS.currentEntry)
+            continue;
+
+        MenuEntry_t* entryPtr = M_KEYBOARDKEYS.entrylist[i];
+        if (entryPtr == nullptr)
+            continue;
+
+        auto iterCol = (MenuCustom2Col_t*) entryPtr->entry;
+        if ((*iterCol->column[0] == sc) | (*iterCol->column[1] == sc))
+        {
+            if (s_gfstring_linecount == MAXBNSTRINGLINES - 1)
+                Bstrncat(s_override_gfstring, "...\n", bbufsize);
+            else
+            {
+                Bsnprintf(tempbuf, MAXBNLINELEN, "\"%s\"\n", M_KEYBOARDKEYS.entrylist[i]->name);
+                Bstrncat(s_override_gfstring, tempbuf, bbufsize);
+            }
+            s_gfstring_linecount++;
+        }
+    }
+}
+
+static void Menu_EraseMatchingBinds(const int32_t sc)
+{
+    char key[2];
+    for (int i = 0; i < M_KEYBOARDKEYS.numEntries; i++)
+    {
+        if (i == M_KEYBOARDKEYS.currentEntry)
+            continue;
+
+        MenuEntry_t* entryPtr = M_KEYBOARDKEYS.entrylist[i];
+        if (entryPtr == nullptr)
+            continue;
+
+        auto iterCol = (MenuCustom2Col_t*) entryPtr->entry;
+        if ((*iterCol->column[0] != sc) && (*iterCol->column[1] != sc))
+            continue;
+
+        key[0] = ud.config.KeyboardKeys[iterCol->linkIndex][0];
+        key[1] = ud.config.KeyboardKeys[iterCol->linkIndex][1];
+
+        if (*iterCol->column[0] == sc) *iterCol->column[0] = 0xFF;
+        if (*iterCol->column[1] == sc) *iterCol->column[1] = 0xFF;
+
+        CONFIG_MapKey(iterCol->linkIndex,
+            ud.config.KeyboardKeys[iterCol->linkIndex][0], key[0],
+            ud.config.KeyboardKeys[iterCol->linkIndex][1], key[1]);
+    }
+}
+
+static void Menu_SetKeyboardScanCode(MenuCustom2Col_t* columnEntry, const int32_t colidx, const int32_t sc, const bool eraseBinds)
+{
+    char key[2];
+    key[0] = ud.config.KeyboardKeys[columnEntry->linkIndex][0];
+    key[1] = ud.config.KeyboardKeys[columnEntry->linkIndex][1];
+
+    if (eraseBinds) Menu_EraseMatchingBinds(sc);
+    *columnEntry->column[colidx] = sc;
+
+    CONFIG_MapKey(columnEntry->linkIndex,
+                    ud.config.KeyboardKeys[columnEntry->linkIndex][0], key[0],
+                    ud.config.KeyboardKeys[columnEntry->linkIndex][1], key[1]);
+}
+
 /*
 This function prepares data after ART and CON have been processed.
 It also initializes some data in loops rather than statically at compile time.
@@ -1940,7 +1985,7 @@ void Menu_Init(void)
     else
     {
         // else, change based on cvar
-        if (kbo_type_cvar == 1)
+        if (cvar_kbo_type == 1)
             init_keybind_order = keybind_order_modern;
         else
             init_keybind_order = keybind_order_classic;
@@ -2425,6 +2470,33 @@ static void Menu_PopulateVideoSetup()
     MenuEntry_DisableOnCondition(&ME_VIDEOSETUP_BORDERLESS, newfullscreen);
 }
 
+static void Menu_PopulateLanguages()
+{
+    int j, localeCount = 0;
+    const char ** locales = localeGetKeys(localeCount);
+    for (j = 0; j < localeCount; j++)
+        MEOSN_DISPLAYSETUP_LANGUAGE[j] = locales[j];
+    MEOS_DISPLAYSETUP_LANGUAGE.numOptions = localeCount;
+
+    if (newlanguage == -1)
+    {
+        const char * curKey = localeGetCurrent();
+        for (j = 0; j < localeCount; j++)
+        {
+            if (curKey == locales[j])
+            {
+                newlanguage = j;
+                break;
+            }
+        }
+    }
+
+    localeSetCurrent(locales[newlanguage]);
+    MenuEntry_DisableOnCondition(&ME_DISPLAYSETUP_LANGUAGE, localeCount <= 1);
+
+    Xfree(locales);
+}
+
 /*
 At present, no true difference is planned between Menu_Pre() and Menu_PreDraw().
 They are separate for purposes of organization.
@@ -2461,15 +2533,14 @@ static void Menu_Pre(MenuID_t cm)
 
     case MENU_DISPLAYSETUP:
         MenuEntry_HideOnCondition(&ME_DISPLAYSETUP_VOXELS, !g_haveVoxels);
+#ifndef EDUKE32_STANDALONE
 #ifdef USE_OPENGL
-        if (videoGetRenderMode() == REND_CLASSIC)
-            MenuMenu_ChangeEntryList(M_DISPLAYSETUP, MEL_DISPLAYSETUP);
-#ifdef POLYMER
-        else if (videoGetRenderMode() == REND_POLYMER)
-            MenuMenu_ChangeEntryList(M_DISPLAYSETUP, MEL_DISPLAYSETUP_GL_POLYMER);
+        MenuEntry_HideOnCondition(&ME_DISPLAYSETUP_UPSCALING, videoGetRenderMode() > REND_CLASSIC);
+        MenuEntry_HideOnCondition(&ME_DISPLAYSETUP_RENDERER, videoGetRenderMode() < REND_POLYMOST);
+#ifdef TEXFILTER_MENU_OPTIONS
+        MEO_DISPLAYSETUP_TEXFILTER.options->optionNames = MEOSN_DISPLAYSETUP_TEXFILTER[0];
 #endif
-        else
-            MenuMenu_ChangeEntryList(M_DISPLAYSETUP, MEL_DISPLAYSETUP_GL);
+#endif
 
         MEO_SCREENSETUP_SCREENSIZE.steps = !(ud.statusbarflags & STATUSBAR_NONONE) +
                                            !(ud.statusbarflags & STATUSBAR_NOMODERN) +
@@ -2498,10 +2569,23 @@ static void Menu_Pre(MenuID_t cm)
                  (ud.screen_size > 8 && !(ud.statusbarflags & STATUSBAR_NOSHRINK)) * ((ud.screen_size - 8) >> 2)
                  -1;
 
-#ifndef EDUKE32_STANDALONE
-#ifdef TEXFILTER_MENU_OPTIONS
+        Menu_PopulateLanguages();
+        break;
+
+    case MENU_RENDERER:
+#ifdef USE_OPENGL
         if (videoGetRenderMode() != REND_CLASSIC)
         {
+#ifdef POLYMER
+            MenuEntry_HideOnCondition(&ME_RENDERERSETUP_POLYMER, videoGetRenderMode() != REND_POLYMER);
+            MenuEntry_HideOnCondition(&ME_POLYMER_LIGHTPASSES, !pr_lighting);
+            MenuEntry_HideOnCondition(&ME_POLYMER_SHADOWCOUNT, !pr_shadows);
+            MenuEntry_HideOnCondition(&ME_POLYMER_SHADOWDETAIL, !pr_shadows);
+#endif
+#ifndef EDUKE32_STANDALONE
+#ifdef TEXFILTER_MENU_OPTIONS
+            MenuEntry_HideOnCondition(&ME_RENDERERSETUP_ANISOTROPY, !gltexfiltermode);
+
             for (i = (int32_t) ARRAY_SIZE(MEOSV_DISPLAYSETUP_ANISOTROPY) - 1; i >= 0; --i)
             {
                 if (MEOSV_DISPLAYSETUP_ANISOTROPY[i] <= glinfo.maxanisotropy)
@@ -2510,24 +2594,43 @@ static void Menu_Pre(MenuID_t cm)
                     break;
                 }
             }
+#endif
+#endif
         }
+
+        MenuEntry_HideOnCondition(&ME_RENDERERSETUP_TEXQUALITY, !usehightile);
+        MenuEntry_HideOnCondition(&ME_RENDERERSETUP_PRECACHE, !usehightile);
+# ifndef EDUKE32_GLES
+        MenuEntry_HideOnCondition(&ME_RENDERERSETUP_TEXCACHE, !(glusetexcompr && usehightile));
+# endif
+//# ifdef USE_GLEXT
+//        MenuEntry_HideOnCondition(&ME_RENDERERSETUP_DETAILTEX, !usehightile);
+//        MenuEntry_HideOnCondition(&ME_RENDERERSETUP_GLOWTEX, !usehightile);
+//# endif
 #endif
 #endif
         break;
 
+#ifdef POLYMER
     case MENU_POLYMER:
-    case MENU_POLYMOST:
-        MenuEntry_DisableOnCondition(&ME_RENDERERSETUP_TEXQUALITY, !usehightile);
-        MenuEntry_DisableOnCondition(&ME_RENDERERSETUP_PRECACHE, !usehightile);
-# ifndef EDUKE32_GLES
-        MenuEntry_DisableOnCondition(&ME_RENDERERSETUP_TEXCACHE, !(glusetexcompr && usehightile));
-# endif
-# ifdef USE_GLEXT
-        MenuEntry_DisableOnCondition(&ME_RENDERERSETUP_DETAILTEX, !usehightile);
-        MenuEntry_DisableOnCondition(&ME_RENDERERSETUP_GLOWTEX, !usehightile);
-# endif
-#endif
+        if (videoGetRenderMode() == REND_POLYMER)
+        {
+            MenuEntry_HideOnCondition(&ME_POLYMER_LIGHTPASSES, !pr_lighting);
+            MenuEntry_HideOnCondition(&ME_POLYMER_SHADOWCOUNT, !pr_shadows);
+            MenuEntry_HideOnCondition(&ME_POLYMER_SHADOWDETAIL, !pr_shadows);
+
+            for (i = (int32_t) ARRAY_SIZE(MEOSN_POLYMER_SHADOWDETAIL) - 1; i >= 0; --i)
+            {
+                if ((128 << i) <= glinfo.maxTextureSize)
+                {
+                    MEOS_POLYMER_SHADOWDETAIL.numOptions = i + 1;
+                    break;
+                }
+            }
+        }
+
         break;
+#endif
 
     case MENU_VIDEOSETUP:
     {
@@ -2779,7 +2882,7 @@ static void msaveloadtext(const vec2_t& origin, int level, int volume, int skill
 
     auto name = g_mapInfo[(volume * MAXLEVELS) + level].name;
     auto vname = g_volumeNames[volume];
-    
+
     Menu_BlackRectangle(origin.x + ((xoffset-2)<<16), origin.y + ((yoffset-2)<<16), 178<<16, (34-((!!FURY)<<1))<<16, 1);
 
     if (vname)
@@ -2803,7 +2906,7 @@ static void msaveloadtext(const vec2_t& origin, int level, int volume, int skill
         mminitext(origin.x + (xoffset2 << 16), origin.y + (yoffset << 16), localeLookup(name), MF_Minifont.pal_selected_right);
         yoffset += 8;
     }
-    
+
     mminitext(origin.x + (xoffset << 16), origin.y + (yoffset << 16), "Difficulty:", MF_Minifont.pal_deselected_right);
     mminitext(origin.x + (xoffset2 << 16), origin.y + (yoffset << 16), localeLookup(g_skillNames[skill-1]), MF_Minifont.pal_selected_right);
     yoffset += 8;
@@ -3132,6 +3235,14 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t* entry, const vec2_t origin)
     case MENU_JOYDEFAULTVERIFY:
         videoFadeToBlack(1);
         Menu_DrawVerifyPrompt(origin.x, origin.y, "Reset controller settings to default?");
+        break;
+    case MENU_KEYOVERRIDEVERIFY:
+        videoFadeToBlack(1);
+        if (s_override_gfstring)
+        {
+            Bsprintf(tempbuf, "Key already assigned to:\n\n%s\nClear existing binds?", s_override_gfstring);
+            Menu_DrawVerifyPrompt(origin.x, origin.y - (4<<16) - (s_gfstring_linecount * (3<<16)), tempbuf, s_gfstring_linecount + 4);
+        }
         break;
 
     case MENU_QUIT:
@@ -3502,6 +3613,7 @@ static void Menu_PreOptionListDraw(MenuEntry_t *entry, const vec2_t origin)
     }
 }
 
+
 static int32_t Menu_PreCustom2ColScreen(MenuEntry_t *entry)
 {
     if (g_currentMenu == MENU_KEYBOARDKEYS)
@@ -3513,18 +3625,48 @@ static int32_t Menu_PreCustom2ColScreen(MenuEntry_t *entry)
         int32_t sc = KB_GetLastScanCode();
         if (sc != sc_None)
         {
-            char key[2];
-            key[0] = ud.config.KeyboardKeys[column->linkIndex][0];
-            key[1] = ud.config.KeyboardKeys[column->linkIndex][1];
+            if (*column->column[M_KEYBOARDKEYS.currentColumn] != sc)
+            {
+                if (*column->column[M_KEYBOARDKEYS.currentColumn ^ 1] == sc)
+                {
+                    Menu_SetKeyboardScanCode(column, M_KEYBOARDKEYS.currentColumn ^ 1, 0xFF, false);
+                    Menu_SetKeyboardScanCode(column, M_KEYBOARDKEYS.currentColumn, sc, false);
+                }
+                else
+                {
+                    bool alreadyAssigned = false;
+                    for (int i = 0; i < M_KEYBOARDKEYS.numEntries; i++)
+                    {
+                        if (i == M_KEYBOARDKEYS.currentEntry)
+                            continue;
 
+                        MenuEntry_t* entryPtr = M_KEYBOARDKEYS.entrylist[i];
+                        if (entryPtr == nullptr)
+                            continue;
+
+                        auto iterCol = (MenuCustom2Col_t*) entryPtr->entry;
+                        if ((*iterCol->column[0] == sc) || (*iterCol->column[1] == sc))
+                        {
+                            alreadyAssigned = true;
+                            break;
+                        }
+                    }
+
+                    if (cvar_kbconfirm && alreadyAssigned)
+                    {
+                        s_saved_scancode = sc;
+                        s_saved_keycolumn = column;
+                        Menu_RefreshBoundGamefuncNames(sc);
+
+                        KB_ClearKeyDown(sc_N);
+                        KB_ClearKeyDown(sc_Y);
+                        Menu_Change(MENU_KEYOVERRIDEVERIFY);
+                    }
+                    else Menu_SetKeyboardScanCode(column, M_KEYBOARDKEYS.currentColumn, sc, false);
+                }
+            }
             S_PlaySound(PISTOL_BODYHIT);
-
-            *column->column[M_KEYBOARDKEYS.currentColumn] = sc;
-
-            CONFIG_MapKey(column->linkIndex, ud.config.KeyboardKeys[column->linkIndex][0], key[0], ud.config.KeyboardKeys[column->linkIndex][1], key[1]);
-
             KB_ClearKeyDown(sc);
-
             return -1;
         }
     }
@@ -4091,7 +4233,7 @@ static void Menu_EntryOptionDidModify(MenuEntry_t *entry)
 #ifdef USE_OPENGL
 #ifndef EDUKE32_STANDALONE
 #ifdef TEXFILTER_MENU_OPTIONS
-    else if (entry == &ME_DISPLAYSETUP_ANISOTROPY || entry == &ME_DISPLAYSETUP_TEXFILTER)
+    else if (entry == &ME_RENDERERSETUP_ANISOTROPY)
         gltexapplyprops();
 #endif
 #endif
@@ -4104,15 +4246,30 @@ static void Menu_EntryOptionDidModify(MenuEntry_t *entry)
 #ifdef POLYMER
     else if (entry == &ME_POLYMER_LIGHTS ||
              entry == &ME_POLYMER_LIGHTPASSES ||
-             entry == &ME_POLYMER_SHADOWCOUNT)
+             entry == &ME_POLYMER_SHADOWCOUNT ||
+             entry == &ME_POLYMER_SHADOWDETAIL)
         domodechange = 1;
+#endif
+#ifndef EDUKE32_STANDALONE
+#ifdef TEXFILTER_MENU_OPTIONS
+    else if (entry == &ME_RENDERERSETUP_TEXFILTER)
+    {
+        MEO_DISPLAYSETUP_TEXFILTER.options->optionNames = MEOSN_DISPLAYSETUP_TEXFILTER[wrand() % ARRAY_SIZE(MEOSN_DISPLAYSETUP_TEXFILTER)];
+        gltexinvalidatetype(INVALIDATE_ART);
+#ifdef POLYMER
+        if (videoGetRenderMode() == REND_POLYMER)
+            polymer_texinvalidate();
+#endif
+        gltexapplyprops();
+    }
+#endif
 #endif
 
     if (domodechange)
     {
         videoResetMode();
         if (videoSetGameMode(fullscreen, xres, yres, bpp, upscalefactor))
-            OSD_Printf("restartvid: Reset failed...\n");
+            LOG_F(ERROR, "Failed to set video mode!");
         onvideomodechange(ud.setup.bpp>8);
         G_RefreshLights();
     }
@@ -4415,6 +4572,12 @@ static void Menu_Verify(int32_t input)
     case MENU_JOYDEFAULTVERIFY:
         if (input)
             CONFIG_SetGameControllerDefaults();
+        break;
+    case MENU_KEYOVERRIDEVERIFY:
+        Bassert(s_saved_keycolumn != nullptr);
+        if (input)
+            Menu_SetKeyboardScanCode(s_saved_keycolumn, M_KEYBOARDKEYS.currentColumn, s_saved_scancode, input == 1);
+        DO_FREE_AND_NULL(s_override_gfstring);
         break;
 
     case MENU_QUIT:
@@ -5008,6 +5171,10 @@ static void Menu_AboutToStartDisplaying(Menu_t * m)
         Menu_PopulateJoystick();
         break;
 
+    case MENU_DISPLAYSETUP:
+        newlanguage = -1;
+        break;
+
     case MENU_VIDEOSETUP:
         newresolution = -1;
         newrendermode = videoGetRenderMode();
@@ -5325,8 +5492,11 @@ void Menu_Close(uint8_t playerID)
 
             // Reset next-viewscreen-redraw counter.
             // XXX: are there any other cases like that in need of handling?
-            if (g_curViewscreen >= 0)
-                actor[g_curViewscreen].t_data[0] = (int32_t) totalclock;
+            for (int vscrIndex = 0; vscrIndex < MAX_ACTIVE_VIEWSCREENS; vscrIndex++)
+            {
+                if (g_activeVscrSprite[vscrIndex] >= 0)
+                    actor[g_activeVscrSprite[vscrIndex]].t_data[0] = (int32_t) totalclock;
+            }
         }
 
         walock[TILE_SAVESHOT] = CACHE1D_FREE;
@@ -6434,6 +6604,7 @@ static void Menu_Recurse(MenuID_t cm, const vec2_t origin)
     case MENU_KEYSRESETVERIFY:
     case MENU_KEYSCLASSICVERIFY:
     case MENU_JOYDEFAULTVERIFY:
+    case MENU_KEYOVERRIDEVERIFY:
     case MENU_ADULTPASSWORD:
     case MENU_CHEATENTRY:
     case MENU_CHEAT_WARP:
@@ -7440,7 +7611,20 @@ static void Menu_RunInput(Menu_t *cm)
             break;
 
         case Verify:
-            if (I_ReturnTrigger() || KB_KeyPressed(sc_N) || Menu_RunInput_MouseReturn())
+            if (g_currentMenu == MENU_KEYOVERRIDEVERIFY && KB_KeyPressed(sc_N))
+            {
+                // special case -- N sets key, but doesn't override other keybinds
+                I_ReturnTriggerClear();
+                KB_ClearKeyDown(sc_N);
+                m_mousecaught = 1;
+
+                Menu_Verify(2);
+
+                Menu_AnimateChange(cm->parentID, cm->parentAnimation);
+
+                S_PlaySound(PISTOL_BODYHIT);
+            }
+            else if (I_ReturnTrigger() || KB_KeyPressed(sc_N) || Menu_RunInput_MouseReturn())
             {
                 I_ReturnTriggerClear();
                 KB_ClearKeyDown(sc_N);
@@ -7452,8 +7636,7 @@ static void Menu_RunInput(Menu_t *cm)
 
                 S_PlaySound(EXITMENUSOUND);
             }
-
-            if (I_AdvanceTrigger() || KB_KeyPressed(sc_Y) || Menu_RunInput_MouseAdvance())
+            else if (I_AdvanceTrigger() || KB_KeyPressed(sc_Y) || Menu_RunInput_MouseAdvance())
             {
                 auto verify = (MenuVerify_t*)cm->object;
 

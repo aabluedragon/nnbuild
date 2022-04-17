@@ -547,7 +547,7 @@ void G_CacheMapData(void)
 
     Bmemset(gotpic, 0, sizeof(gotpic));
 
-    OSD_Printf("Cache time: %dms\n", timerGetTicks() - cacheStartTime);
+    LOG_F(INFO, "Cache time: %dms.", timerGetTicks() - cacheStartTime);
 }
 
 int fragbarheight(void)
@@ -924,10 +924,12 @@ static void P_PrepForNewLevel(int playerNum, int gameMode)
 
     g_animWallCnt      = 0;
     g_animateCnt       = 0;
-    g_curViewscreen    = -1;
     g_cyclerCnt        = 0;
     g_earthquakeTime   = 0;
     g_interpolationCnt = 0;
+
+    for (int vscrIndex = 0; vscrIndex < MAX_ACTIVE_VIEWSCREENS; vscrIndex++)
+        g_activeVscrSprite[vscrIndex] = -1;
 
     randomseed  = 1996;
     screenpeek  = myconnectindex;
@@ -1103,7 +1105,7 @@ static void G_SetupSpecialWalls(void)
             {
                 if (g_mirrorCount > 63)
                 {
-                    G_GameExit("\nToo many mirrors (64 max.)");
+                    G_GameExit("Too many mirrors (64 max.)");
                 }
 
                 sector[nextSectnum].ceilingpicnum = MIRROR;
@@ -1117,7 +1119,7 @@ static void G_SetupSpecialWalls(void)
 
         if (g_animWallCnt >= MAXANIMWALLS)
         {
-            Bsprintf(tempbuf, "\nToo many 'anim' walls (%d max).", MAXANIMWALLS);
+            Bsprintf(tempbuf, "Too many 'anim' walls (%d max).", MAXANIMWALLS);
             G_GameExit(tempbuf);
         }
 
@@ -1365,7 +1367,7 @@ static void prelevel(int g)
     }
 
     if (missedCloudSectors > 0)
-        OSD_Printf(OSDTEXT_RED "Map warning: have %d unhandled CLOUDYSKIES ceilings.\n", missedCloudSectors);
+        LOG_F(WARNING, "Map has %d unhandled CLOUDYSKIES ceilings.", missedCloudSectors);
 
     // NOTE: must be safe loop because callbacks could delete sprites.
     for (int nextSprite, SPRITES_OF_STAT_SAFE(STAT_DEFAULT, i, nextSprite))
@@ -1425,8 +1427,9 @@ void G_NewGame(int volumeNum, int levelNum, int skillNum)
 
     if (ud.skill_voice > 0 && ud.config.SoundToggle)
     {
-        while (FX_SoundActive(ud.skill_voice))
-            gameHandleEvents();
+        // this is not an error
+        while (ud.skill_voice > 0 && !FX_SoundActive(ud.skill_voice)) gameHandleEvents();
+        while (ud.skill_voice > 0 && FX_SoundActive(ud.skill_voice)) gameHandleEvents();
     }
 
     S_PauseSounds(false);
@@ -1704,8 +1707,11 @@ void G_ResetTimers(bool saveMoveCnt)
     if (!saveMoveCnt)
         g_moveThingsCount = 0;
 
-    if (g_curViewscreen >= 0)
-        actor[g_curViewscreen].t_data[0] = 0;
+    for (int vscrIndex = 0; vscrIndex < MAX_ACTIVE_VIEWSCREENS; vscrIndex++)
+    {
+        if (g_activeVscrSprite[vscrIndex] >= 0)
+            actor[g_activeVscrSprite[vscrIndex]].t_data[0] = 0;
+    }
 }
 
 void G_ClearFIFO(void)
@@ -1776,7 +1782,7 @@ static int G_TryMapHack(const char *mhkfile)
     int const failure = engineLoadMHK(mhkfile);
 
     if (!failure)
-        initprintf("Loaded map hack file \"%s\"\n", mhkfile);
+        LOG_F(INFO, "Loaded %s", mhkfile);
 
     return failure;
 }
@@ -1900,7 +1906,7 @@ int G_EnterLevel(int gameMode)
     if (g_networkMode != NET_DEDICATED_SERVER)
     {
         S_PauseSounds(false);
-        FX_StopAllSounds();
+        S_StopAllSounds();
         S_ClearSoundLocks();
         FX_SetReverb(0);
         videoSetGameMode(ud.setup.fullscreen, ud.setup.xdim, ud.setup.ydim, ud.setup.bpp, upscalefactor);
@@ -1938,7 +1944,7 @@ int G_EnterLevel(int gameMode)
     {
         if (m.name == NULL || m.filename == NULL)
         {
-            OSD_Printf(OSDTEXT_RED "Map E%dL%d not defined!\n", ud.volume_number+1, ud.level_number+1);
+            LOG_F(ERROR, "Map E%dL%d not defined!", ud.volume_number+1, ud.level_number+1);
             return 1;
         }
     }
@@ -1967,7 +1973,7 @@ int G_EnterLevel(int gameMode)
     {
         if (engineLoadBoard(boardfilename, 0, &p0.pos, &playerAngle, &p0.cursectnum) < 0)
         {
-            OSD_Printf(OSD_ERROR "Map \"%s\" not found or invalid map version!\n", boardfilename);
+            LOG_F(ERROR, "Unable to load %s: file not found or has invalid version!", boardfilename);
             return 1;
         }
 
@@ -1976,7 +1982,7 @@ int G_EnterLevel(int gameMode)
     }
     else if (engineLoadBoard(m.filename, VOLUMEONE, &p0.pos, &playerAngle, &p0.cursectnum) < 0)
     {
-        OSD_Printf(OSD_ERROR "Map \"%s\" not found or invalid map version!\n", m.filename);
+        LOG_F(ERROR, "Unable to load %s: file not found or has invalid version!", m.filename);
         return 1;
     }
     else
