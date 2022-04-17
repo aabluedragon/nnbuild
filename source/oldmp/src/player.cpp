@@ -4286,7 +4286,7 @@ static void P_HandleFragged(int snum)
             else
             {
                 // random suicide death string
-                Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand() % g_numSelfObituaries)], &g_player[snum].user_name[0]);
+                Bsprintf(tempbuf, apStrings[SUICIDEQUOTEINDEX + (krand() % g_numSelfObituaries)], &g_player[snum].user_name[0]);
             }
         }
         else Bsprintf(tempbuf, "^02%s^02 switched to team ^%02d%s", &g_player[snum].user_name[0], teams[p->team].palnum % 100, teams[p->team].name);
