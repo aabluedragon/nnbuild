@@ -3147,13 +3147,18 @@ static void G_MoveWeapons(void)
                 {
                     for (k=-3;k<2;k++)
                     {
-                        x = A_InsertSprite(s->sectnum,
-                                           s->x+((k*sintable[(s->ang+512)&2047])>>9),
-                                           s->y+((k*sintable[s->ang&2047])>>9),
-                                           s->z+((k*ksgn(s->zvel))*klabs(s->zvel/24)),FIRELASER,-40+(k<<2),
-                                           s->xrepeat,s->yrepeat,0,0,0,s->owner,5);
+                        vec3_t const offset = { (k * sintable[(s->ang + 512) & 2047]) >> 9,
+                                                (k * sintable[s->ang & 2047]) >> 9,
+                                                (k * ksgn(s->zvel))* klabs(s->zvel / 24) };
 
-                        sprite[x].cstat = 128;
+                        x = A_InsertSprite(s->sectnum,
+                                           s->x+offset.x,
+                                           s->y+offset.y,
+                                           s->z+offset.z,FIRELASER,-40+(k<<2),
+                                           s->xrepeat,s->yrepeat,0,0,0,s->owner, STAT_MISC);
+
+                        actor[x].bpos = actor[i].bpos + offset;
+                        sprite[x].cstat |= 128;
                         sprite[x].pal = s->pal;
                     }
                 }
@@ -4970,7 +4975,6 @@ static void G_MoveMisc(void)  // STATNUM 5
 
         if (sect < 0 || s->xrepeat == 0) KILLIT(i);
 
-        actor[i].bpos = s->xyz;
         switchpicnum = s->picnum;
         if ((s->picnum > NUKEBUTTON)&&(s->picnum <= NUKEBUTTON+3))
         {

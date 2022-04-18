@@ -1579,7 +1579,7 @@ int A_Shoot(int i,int atwith)
                     }
                 }
 
-                sprite[j].cstat = 128;
+                sprite[j].cstat |= 128;
                 sprite[j].clipdist = 4;
 
                 shootAng = s->ang+32-(krand()&63);
