@@ -2761,9 +2761,7 @@ static void A_DoProjectileEffects(int spriteNum, const vec3_t* davect, int radiu
 
 static void G_MoveWeapons(void)
 {
-    int spriteNum = headspritestat[STAT_PROJECTILE], j=0, k, f, nexti, q;
-    int ll;
-    unsigned int qq;
+    int spriteNum = headspritestat[STAT_PROJECTILE], j=0, nexti;
     spritetype *s;
 
     vec3_t davect;
@@ -2803,40 +2801,40 @@ static void G_MoveWeapons(void)
                     if (s->zvel < 6144)
                         s->zvel += g_spriteGravity-112;
 
-                k = s->xvel;
-                ll = s->zvel;
+                int32_t projVel = s->xvel;
+                int32_t projZvel = s->zvel;
 
                 if (sector[s->sectnum].lotag == ST_2_UNDERWATER)
                 {
-                    k = s->xvel>>1;
-                    ll = s->zvel>>1;
+                    projVel = s->xvel>>1;
+                    projZvel = s->zvel>>1;
                 }
 
                 davect = s->xyz;
 
                 A_GetZLimits(spriteNum);
-                qq = CLIPMASK1;
 
                 if (actor[spriteNum].projectile.trail >= 0)
                 {
-                    for (f=0;f<=actor[spriteNum].projectile.tnum;f++)
+                    for (int32_t f = 0; f <= actor[spriteNum].projectile.tnum; f++)
                     {
-                        j = A_Spawn(spriteNum,actor[spriteNum].projectile.trail);
+                        j = A_Spawn(spriteNum, actor[spriteNum].projectile.trail);
                         if (actor[spriteNum].projectile.toffset != 0)
-                            sprite[j].z += (actor[spriteNum].projectile.toffset<<8);
+                            sprite[j].z += (actor[spriteNum].projectile.toffset << 8);
                         if (actor[spriteNum].projectile.txrepeat >= 0)
-                            sprite[j].xrepeat=actor[spriteNum].projectile.txrepeat;
+                            sprite[j].xrepeat = actor[spriteNum].projectile.txrepeat;
                         if (actor[spriteNum].projectile.tyrepeat >= 0)
-                            sprite[j].yrepeat=actor[spriteNum].projectile.tyrepeat;
+                            sprite[j].yrepeat = actor[spriteNum].projectile.tyrepeat;
                     }
                 }
 
-                for (f=1;f<=actor[spriteNum].projectile.velmult;f++)
+                for (int32_t projMoveCnt = 1; projMoveCnt <= actor[spriteNum].projectile.velmult; projMoveCnt++)
                 {
                     davect = s->xyz;
                     j = A_MoveSprite(spriteNum,
-                                     (k*(sintable[(s->ang+512)&2047]))>>14,
-                                     (k*(sintable[s->ang&2047]))>>14,ll,qq);
+                                     (projVel * (sintable[(s->ang + 512) & 2047])) >> 14,
+                                     (projVel * (sintable[s->ang & 2047])) >> 14, projZvel, CLIPMASK1);
+
                     if (j)
                         break;
                 }
@@ -2904,8 +2902,8 @@ static void G_MoveWeapons(void)
                         {
                             s->yvel--;
 
-                            k = getangle(sprite[j].x-s->x,sprite[j].y-s->y)+(sprite[j].cstat&16?0:512);
-                            s->ang = ((k<<1) - s->ang)&2047;
+                            int32_t const projAngle = getangle(sprite[j].x-s->x,sprite[j].y-s->y)+(sprite[j].cstat&16?0:512);
+                            s->ang = ((projAngle << 1) - s->ang)&2047;
 
                             if (actor[spriteNum].projectile.bsound >= 0)
                                 A_PlaySound(actor[spriteNum].projectile.bsound,spriteNum);
@@ -2954,10 +2952,10 @@ static void G_MoveWeapons(void)
                         if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFMIRRORS &&
                                 (wall[j].overpicnum == MIRROR || wall[j].picnum == MIRROR))
                         {
-                            k = getangle(
-                                    wall[wall[j].point2].x-wall[j].x,
-                                    wall[wall[j].point2].y-wall[j].y);
-                            s->ang = ((k<<1) - s->ang)&2047;
+                            int32_t const projAngle = getangle(wall[wall[j].point2].x-wall[j].x,
+                                                               wall[wall[j].point2].y-wall[j].y);
+                            
+                            s->ang = ((projAngle << 1) - s->ang) & 2047;
                             s->owner = spriteNum;
                             A_Spawn(spriteNum,TRANSPORTERSTAR);
                             goto BOLT;
@@ -2972,10 +2970,10 @@ static void G_MoveWeapons(void)
                                 if (wall[j].overpicnum != MIRROR && wall[j].picnum != MIRROR)
                                     s->yvel--;
 
-                                k = getangle(
-                                        wall[wall[j].point2].x-wall[j].x,
-                                        wall[wall[j].point2].y-wall[j].y);
-                                s->ang = ((k<<1) - s->ang)&2047;
+                                int32_t const projAngle = getangle(wall[wall[j].point2].x - wall[j].x,
+                                                                   wall[wall[j].point2].y - wall[j].y);
+
+                                s->ang = ((projAngle << 1) - s->ang) & 2047;
 
                                 if (actor[spriteNum].projectile.bsound >= 0)
                                     A_PlaySound(actor[spriteNum].projectile.bsound,spriteNum);
@@ -3004,7 +3002,7 @@ static void G_MoveWeapons(void)
                         if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
                         {
                             A_DoProjectileBounce(spriteNum);
-                            A_SetSprite(spriteNum,qq);
+                            A_SetSprite(spriteNum, CLIPMASK1);
 
                             s->yvel--;
 
@@ -3048,7 +3046,8 @@ static void G_MoveWeapons(void)
             case KNEE__STATIC:
                 KILLIT(spriteNum);
             case TONGUE__STATIC:
-                T1(spriteNum) = sintable[(T2(spriteNum))&2047]>>9;
+            {
+                T1(spriteNum) = sintable[(T2(spriteNum)) & 2047] >> 9;
                 T2(spriteNum) += 32;
                 if (T2(spriteNum) > 2047) KILLIT(spriteNum);
 
@@ -3060,28 +3059,32 @@ static void G_MoveWeapons(void)
                 s->x = sprite[s->owner].x;
                 s->y = sprite[s->owner].y;
                 if (sprite[s->owner].picnum == APLAYER)
-                    s->z = sprite[s->owner].z-(34<<8);
-                for (k=0;k<T1(spriteNum);k++)
+                    s->z = sprite[s->owner].z - (34 << 8);
+
+                int32_t segmentCnt;
+                for (segmentCnt = 0; segmentCnt < T1(spriteNum); segmentCnt++)
                 {
-                    q = A_InsertSprite(s->sectnum,
-                                       s->x+((k*sintable[(s->ang+512)&2047])>>9),
-                                       s->y+((k*sintable[s->ang&2047])>>9),
-                                       s->z+((k*ksgn(s->zvel))*klabs(s->zvel/12)),TONGUE,-40+(k<<1),
-                                       8,8,0,0,0,spriteNum,5);
-                    sprite[q].cstat = 128;
-                    sprite[q].pal = 8;
+                    int32_t const newSprite = A_InsertSprite(s->sectnum,
+                                              s->x + ((segmentCnt * sintable[(s->ang + 512) & 2047]) >> 9),
+                                              s->y + ((segmentCnt * sintable[s->ang & 2047]) >> 9),
+                                              s->z + ((segmentCnt * ksgn(s->zvel)) * klabs(s->zvel / 12)), TONGUE, -40 + (segmentCnt << 1),
+                                              8, 8, 0, 0, 0, spriteNum, STAT_MISC);
+
+                    sprite[newSprite].cstat = 128;
+                    sprite[newSprite].pal = 8;
                 }
-                q = A_InsertSprite(s->sectnum,
-                                   s->x+((k*sintable[(s->ang+512)&2047])>>9),
-                                   s->y+((k*sintable[s->ang&2047])>>9),
-                                   s->z+((k*ksgn(s->zvel))*klabs(s->zvel/12)),INNERJAW,-40,
-                                   32,32,0,0,0,spriteNum,5);
-                sprite[q].cstat = 128;
+                int32_t const newSprite = A_InsertSprite(s->sectnum,
+                                          s->x + ((segmentCnt * sintable[(s->ang + 512) & 2047]) >> 9),
+                                          s->y + ((segmentCnt * sintable[s->ang & 2047]) >> 9),
+                                          s->z + ((segmentCnt * ksgn(s->zvel)) * klabs(s->zvel / 12)), INNERJAW, -40,
+                                          32, 32, 0, 0, 0, spriteNum, STAT_MISC);
+
+                sprite[newSprite].cstat = 128;
                 if (T2(spriteNum) > 512 && T2(spriteNum) < (1024))
-                    sprite[q].picnum = INNERJAW+1;
+                    sprite[newSprite].picnum = INNERJAW + 1;
 
                 goto BOLT;
-
+            }
             case FREEZEBLAST__STATIC:
                 if (s->yvel < 1 || s->extra < 2 || (s->xvel|s->zvel) == 0)
                 {
@@ -3097,41 +3100,41 @@ static void G_MoveWeapons(void)
             case FIRELASER__STATIC:
             case SPIT__STATIC:
             case COOLEXPLOSION1__STATIC:
+            {
 
                 if (s->picnum == COOLEXPLOSION1)
                     if (!S_CheckSoundPlaying(WIERDSHOT_FLY))
-                        A_PlaySound(WIERDSHOT_FLY,spriteNum);
+                        A_PlaySound(WIERDSHOT_FLY, spriteNum);
 
-                k = s->xvel;
-                ll = s->zvel;
+                int32_t projVel = s->xvel;
+                int32_t projZvel = s->zvel;
 
                 if (s->picnum == RPG && sector[s->sectnum].lotag == ST_2_UNDERWATER)
                 {
-                    k = s->xvel>>1;
-                    ll = s->zvel>>1;
+                    projVel = s->xvel >> 1;
+                    projZvel = s->zvel >> 1;
                 }
 
                 davect = s->xyz;
 
                 A_GetZLimits(spriteNum);
-                qq = CLIPMASK1;
 
                 switch (DynamicTileMap[s->picnum])
                 {
-                case RPG__STATIC:
-                    if (actor[spriteNum].htpicnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != ST_2_UNDERWATER)
-                    {
-                        j = A_Spawn(spriteNum,SMALLSMOKE);
-                        sprite[j].z += (1<<8);
-                    }
-                    break;
+                    case RPG__STATIC:
+                        if (actor[spriteNum].htpicnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != ST_2_UNDERWATER)
+                        {
+                            j = A_Spawn(spriteNum, SMALLSMOKE);
+                            sprite[j].z += (1 << 8);
+                        }
+                        break;
                 }
 
-                j = A_MoveSprite(spriteNum,(k*(sintable[(s->ang+512)&2047]))>>14,(k*(sintable[s->ang&2047]))>>14,ll,qq);
+                j = A_MoveSprite(spriteNum, (projVel * (sintable[(s->ang + 512) & 2047])) >> 14, (projVel * (sintable[s->ang & 2047])) >> 14, projZvel, CLIPMASK1);
 
                 if (s->picnum == RPG && s->yvel >= 0 && sprite[s->yvel].sectnum < MAXSECTORS)
-                    if (FindDistance2D(s->x-sprite[s->yvel].x,s->y-sprite[s->yvel].y) < 256)
-                        j = 49152|s->yvel;
+                    if (FindDistance2D(s->x - sprite[s->yvel].x, s->y - sprite[s->yvel].y) < 256)
+                        j = 49152 | s->yvel;
 
                 actor[spriteNum].movflag = j;
 
@@ -3143,17 +3146,17 @@ static void G_MoveWeapons(void)
 
                 if (s->picnum == FIRELASER)
                 {
-                    for (k=-3;k<2;k++)
+                    for (int32_t segmentCnt = -3; segmentCnt < 2; segmentCnt++)
                     {
-                        vec3_t const offset = { (k * sintable[(s->ang + 512) & 2047]) >> 9,
-                                                (k * sintable[s->ang & 2047]) >> 9,
-                                                (k * ksgn(s->zvel))* klabs(s->zvel / 24) };
+                        vec3_t const offset = { (segmentCnt * sintable[(s->ang + 512) & 2047]) >> 9,
+                                                (segmentCnt * sintable[s->ang & 2047]) >> 9,
+                                                (segmentCnt * ksgn(s->zvel)) * klabs(s->zvel / 24) };
 
-                        int32_t newSprite = A_InsertSprite(s->sectnum,
-                                            s->x+offset.x,
-                                            s->y+offset.y,
-                                            s->z+offset.z,FIRELASER,-40+(k<<2),
-                                            s->xrepeat,s->yrepeat,0,0,0,s->owner, STAT_MISC);
+                        int32_t const newSprite = A_InsertSprite(s->sectnum,
+                                                  s->x + offset.x,
+                                                  s->y + offset.y,
+                                                  s->z + offset.z, FIRELASER, -40 + (segmentCnt << 2),
+                                                  s->xrepeat, s->yrepeat, 0, 0, 0, s->owner, STAT_MISC);
 
                         actor[newSprite].bpos = actor[spriteNum].bpos + offset;
                         sprite[newSprite].cstat |= 128;
@@ -3161,26 +3164,26 @@ static void G_MoveWeapons(void)
                     }
                 }
                 else if (s->picnum == SPIT) if (s->zvel < 6144)
-                        s->zvel += g_spriteGravity-112;
+                    s->zvel += g_spriteGravity - 112;
 
                 if (j != 0)
                 {
                     if (s->picnum == COOLEXPLOSION1)
                     {
-                        if ((j&49152) == 49152 && sprite[j&(MAXSPRITES-1)].picnum != APLAYER)
+                        if ((j & 49152) == 49152 && sprite[j & (MAXSPRITES - 1)].picnum != APLAYER)
                             goto BOLT;
                         s->xvel = 0;
                         s->zvel = 0;
                     }
 
-                    if ((j&49152) == 49152)
+                    if ((j & 49152) == 49152)
                     {
-                        j &= (MAXSPRITES-1);
+                        j &= (MAXSPRITES - 1);
 
                         if (s->picnum == FREEZEBLAST && sprite[j].pal == 1)
                             if (A_CheckEnemySprite(&sprite[j]) || sprite[j].picnum == APLAYER)
                             {
-                                j = A_Spawn(spriteNum,TRANSPORTERSTAR);
+                                j = A_Spawn(spriteNum, TRANSPORTERSTAR);
                                 sprite[j].pal = 1;
                                 sprite[j].xrepeat = 32;
                                 sprite[j].yrepeat = 32;
@@ -3188,35 +3191,35 @@ static void G_MoveWeapons(void)
                                 KILLIT(spriteNum);
                             }
 
-                        A_DamageObject(j,spriteNum);
+                        A_DamageObject(j, spriteNum);
 
                         if (sprite[j].picnum == APLAYER)
                         {
                             int32_t playerNum = sprite[j].yvel;
-                            A_PlaySound(PISTOL_BODYHIT,j);
+                            A_PlaySound(PISTOL_BODYHIT, j);
 
                             if (s->picnum == SPIT)
                                 P_HandleBeingSpitOn(g_player[playerNum].ps);
                         }
                     }
-                    else if ((j&49152) == 32768)
+                    else if ((j & 49152) == 32768)
                     {
-                        j &= (MAXWALLS-1);
+                        j &= (MAXWALLS - 1);
 
                         if (s->picnum != RPG && s->picnum != FREEZEBLAST && s->picnum != SPIT && (wall[j].overpicnum == MIRROR || wall[j].picnum == MIRROR))
                         {
-                            k = getangle(
-                                    wall[wall[j].point2].x-wall[j].x,
-                                    wall[wall[j].point2].y-wall[j].y);
-                            s->ang = ((k<<1) - s->ang)&2047;
+                            int32_t const projAngle = getangle(wall[wall[j].point2].x - wall[j].x,
+                                                               wall[wall[j].point2].y - wall[j].y);
+
+                            s->ang = ((projAngle << 1) - s->ang) & 2047;
                             s->owner = spriteNum;
-                            A_Spawn(spriteNum,TRANSPORTERSTAR);
+                            A_Spawn(spriteNum, TRANSPORTERSTAR);
                             goto BOLT;
                         }
                         else
                         {
                             setspritez(spriteNum, &davect);
-                            A_DamageWall(spriteNum,j,s->xyz,s->picnum);
+                            A_DamageWall(spriteNum, j, s->xyz, s->picnum);
 
                             if (s->picnum == FREEZEBLAST)
                             {
@@ -3226,21 +3229,21 @@ static void G_MoveWeapons(void)
                                     s->yvel--;
                                 }
 
-                                k = getangle(
-                                        wall[wall[j].point2].x-wall[j].x,
-                                        wall[wall[j].point2].y-wall[j].y);
-                                s->ang = ((k<<1) - s->ang)&2047;
+                                int32_t const projAngle = getangle(wall[wall[j].point2].x - wall[j].x,
+                                                                   wall[wall[j].point2].y - wall[j].y);
+
+                                s->ang = ((projAngle << 1) - s->ang) & 2047;
                                 goto BOLT;
                             }
                         }
                     }
-                    else if ((j&49152) == 16384)
+                    else if ((j & 49152) == 16384)
                     {
                         setspritez(spriteNum, &davect);
 
                         if (s->zvel < 0)
                         {
-                            if (sector[s->sectnum].ceilingstat&1)
+                            if (sector[s->sectnum].ceilingstat & 1)
                                 if (sector[s->sectnum].ceilingpal == 0)
                                     KILLIT(spriteNum);
 
@@ -3250,7 +3253,7 @@ static void G_MoveWeapons(void)
                         if (s->picnum == FREEZEBLAST)
                         {
                             A_DoProjectileBounce(spriteNum);
-                            A_SetSprite(spriteNum,qq);
+                            A_SetSprite(spriteNum, CLIPMASK1);
                             s->extra >>= 1;
                             if (s->xrepeat > 8)
                                 s->xrepeat -= 2;
@@ -3265,54 +3268,54 @@ static void G_MoveWeapons(void)
                     {
                         if (s->picnum == RPG)
                         {
-                            k = A_Spawn(spriteNum,EXPLOSION2);
-                            sprite[k].xyz = davect;
+                            int32_t const newSprite = A_Spawn(spriteNum, EXPLOSION2);
+                            sprite[newSprite].xyz = davect;
 
                             if (s->xrepeat < 10)
                             {
-                                sprite[k].xrepeat = 6;
-                                sprite[k].yrepeat = 6;
+                                sprite[newSprite].xrepeat = 6;
+                                sprite[newSprite].yrepeat = 6;
                             }
-                            else if ((j&49152) == 16384)
+                            else if ((j & 49152) == 16384)
                             {
                                 if (s->zvel > 0)
-                                    A_Spawn(spriteNum,EXPLOSION2BOT);
+                                    A_Spawn(spriteNum, EXPLOSION2BOT);
                                 else
                                 {
-                                    sprite[k].cstat |= 8;
-                                    sprite[k].z += (48<<8);
+                                    sprite[newSprite].cstat |= 8;
+                                    sprite[newSprite].z += (48 << 8);
                                 }
 
                             }
-                            A_PlaySound(RPG_EXPLODE,spriteNum);
+                            A_PlaySound(RPG_EXPLODE, spriteNum);
 
                             if (s->xrepeat >= 10)
                             {
                                 int16_t const x = s->extra;
-                                A_RadiusDamage(spriteNum,g_rpgBlastRadius, x>>2,x>>1,x-(x>>2),x);
+                                A_RadiusDamage(spriteNum, g_rpgBlastRadius, x >> 2, x >> 1, x - (x >> 2), x);
                             }
                             else
                             {
-                                int16_t const x = s->extra+(g_globalRandom&3);
-                                A_RadiusDamage(spriteNum,(g_rpgBlastRadius>>1),x>>2,x>>1,x-(x>>2),x);
+                                int16_t const x = s->extra + (g_globalRandom & 3);
+                                A_RadiusDamage(spriteNum, (g_rpgBlastRadius >> 1), x >> 2, x >> 1, x - (x >> 2), x);
                             }
                         }
                         else if (s->picnum == SHRINKSPARK)
                         {
-                            A_Spawn(spriteNum,SHRINKEREXPLOSION);
-                            A_PlaySound(SHRINKER_HIT,spriteNum);
-                            A_RadiusDamage(spriteNum,g_shrinkerBlastRadius,0,0,0,0);
+                            A_Spawn(spriteNum, SHRINKEREXPLOSION);
+                            A_PlaySound(SHRINKER_HIT, spriteNum);
+                            A_RadiusDamage(spriteNum, g_shrinkerBlastRadius, 0, 0, 0, 0);
                         }
                         else if (s->picnum != COOLEXPLOSION1 && s->picnum != FREEZEBLAST && s->picnum != FIRELASER)
                         {
-                            k = A_Spawn(spriteNum,EXPLOSION2);
-                            sprite[k].xrepeat = sprite[k].yrepeat = s->xrepeat>>1;
-                            if ((j&49152) == 16384)
+                            int32_t const newSprite = A_Spawn(spriteNum, EXPLOSION2);
+                            sprite[newSprite].xrepeat = sprite[newSprite].yrepeat = s->xrepeat >> 1;
+                            if ((j & 49152) == 16384)
                             {
                                 if (s->zvel < 0)
                                 {
-                                    sprite[k].cstat |= 8;
-                                    sprite[k].z += (72<<8);
+                                    sprite[newSprite].cstat |= 8;
+                                    sprite[newSprite].z += (72 << 8);
                                 }
 
                             }
@@ -3326,10 +3329,10 @@ static void G_MoveWeapons(void)
                     if (s->shade >= 40) KILLIT(spriteNum);
                 }
                 else if (s->picnum == RPG && sector[s->sectnum].lotag == ST_2_UNDERWATER && s->xrepeat >= 10 && rnd(140))
-                    A_Spawn(spriteNum,WATERBUBBLE);
+                    A_Spawn(spriteNum, WATERBUBBLE);
 
                 goto BOLT;
-
+            }
             case SHOTSPARK1__STATIC:
                 if (!actorscrptr[sprite[spriteNum].picnum])
                     goto BOLT;
