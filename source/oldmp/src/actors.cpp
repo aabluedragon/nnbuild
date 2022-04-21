@@ -1469,7 +1469,7 @@ static void G_MoveFX(void)
             if (pSprite->extra == 66)
             {
                 /*int32_t j =*/ A_Spawn(spriteNum, SHT(spriteNum));
-                //                    sprite[j].pal = sprite[i].pal;
+                //                    sprite[j].pal = sprite[spriteNum].pal;
                 KILLIT(spriteNum);
             }
             else if (pSprite->extra > (66 - 13))
@@ -2761,47 +2761,45 @@ static void A_DoProjectileEffects(int spriteNum, const vec3_t* davect, int radiu
 
 static void G_MoveWeapons(void)
 {
-    int i = headspritestat[STAT_PROJECTILE], j=0, k, f, nexti, p, q;
-    int x, ll;
+    int spriteNum = headspritestat[STAT_PROJECTILE], j=0, k, f, nexti, q;
+    int ll;
     unsigned int qq;
     spritetype *s;
 
     vec3_t davect;
 
-    while (i >= 0)
+    while (spriteNum >= 0)
     {
-        nexti = nextspritestat[i];
-        s = &sprite[i];
+        nexti = nextspritestat[spriteNum];
+        s = &sprite[spriteNum];
 
-        if (s->sectnum < 0) KILLIT(i);
+        if (s->sectnum < 0) KILLIT(spriteNum);
 
-        actor[i].bpos = s->xyz;
+        actor[spriteNum].bpos = s->xyz;
         // here
 
-        if (A_CheckSpriteFlags(i,SFLAG_PROJECTILE))
+        if (A_CheckSpriteFlags(spriteNum,SFLAG_PROJECTILE))
         {
             /* Custom projectiles.  This is a big hack. */
 
-            if (actor[i].projectile.pal >= 0)
-                s->pal=actor[i].projectile.pal;
+            if (actor[spriteNum].projectile.pal >= 0)
+                s->pal=actor[spriteNum].projectile.pal;
 
-            if (actor[i].projectile.workslike & PROJECTILE_KNEE)
-                KILLIT(i);
+            if (actor[spriteNum].projectile.workslike & PROJECTILE_KNEE)
+                KILLIT(spriteNum);
 
-            if (actor[i].projectile.workslike & PROJECTILE_RPG)
+            if (actor[spriteNum].projectile.workslike & PROJECTILE_RPG)
             {
-                p = -1;
-
-                if (actor[i].projectile.workslike & PROJECTILE_COOLEXPLOSION1)
+                if (actor[spriteNum].projectile.workslike & PROJECTILE_COOLEXPLOSION1)
                 {
                     s->shade++;
-                    if (s->shade >= 40) KILLIT(i);
+                    if (s->shade >= 40) KILLIT(spriteNum);
                 }
 
-                if (actor[i].projectile.drop)
-                    s->zvel -= actor[i].projectile.drop;
+                if (actor[spriteNum].projectile.drop)
+                    s->zvel -= actor[spriteNum].projectile.drop;
 
-                if (actor[i].projectile.workslike & PROJECTILE_SPIT)
+                if (actor[spriteNum].projectile.workslike & PROJECTILE_SPIT)
                     if (s->zvel < 6144)
                         s->zvel += g_spriteGravity-112;
 
@@ -2816,83 +2814,83 @@ static void G_MoveWeapons(void)
 
                 davect = s->xyz;
 
-                A_GetZLimits(i);
+                A_GetZLimits(spriteNum);
                 qq = CLIPMASK1;
 
-                if (actor[i].projectile.trail >= 0)
+                if (actor[spriteNum].projectile.trail >= 0)
                 {
-                    for (f=0;f<=actor[i].projectile.tnum;f++)
+                    for (f=0;f<=actor[spriteNum].projectile.tnum;f++)
                     {
-                        j = A_Spawn(i,actor[i].projectile.trail);
-                        if (actor[i].projectile.toffset != 0)
-                            sprite[j].z += (actor[i].projectile.toffset<<8);
-                        if (actor[i].projectile.txrepeat >= 0)
-                            sprite[j].xrepeat=actor[i].projectile.txrepeat;
-                        if (actor[i].projectile.tyrepeat >= 0)
-                            sprite[j].yrepeat=actor[i].projectile.tyrepeat;
+                        j = A_Spawn(spriteNum,actor[spriteNum].projectile.trail);
+                        if (actor[spriteNum].projectile.toffset != 0)
+                            sprite[j].z += (actor[spriteNum].projectile.toffset<<8);
+                        if (actor[spriteNum].projectile.txrepeat >= 0)
+                            sprite[j].xrepeat=actor[spriteNum].projectile.txrepeat;
+                        if (actor[spriteNum].projectile.tyrepeat >= 0)
+                            sprite[j].yrepeat=actor[spriteNum].projectile.tyrepeat;
                     }
                 }
 
-                for (f=1;f<=actor[i].projectile.velmult;f++)
+                for (f=1;f<=actor[spriteNum].projectile.velmult;f++)
                 {
                     davect = s->xyz;
-                    j = A_MoveSprite(i,
+                    j = A_MoveSprite(spriteNum,
                                      (k*(sintable[(s->ang+512)&2047]))>>14,
                                      (k*(sintable[s->ang&2047]))>>14,ll,qq);
                     if (j)
                         break;
                 }
 
-                if (!(actor[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS) &&
+                if (!(actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS) &&
                         s->yvel >= 0 && sprite[s->yvel].sectnum < MAXSECTORS)
                     if (FindDistance2D(s->x-sprite[s->yvel].x,s->y-sprite[s->yvel].y) < 256)
                         j = 49152|s->yvel;
 
-                actor[i].movflag = j;
+                actor[spriteNum].movflag = j;
 
                 if (s->sectnum < 0)
                 {
-                    KILLIT(i);
+                    KILLIT(spriteNum);
                 }
 
-                if (actor[i].projectile.workslike & PROJECTILE_TIMED && actor[i].projectile.range > 0)
+                if (actor[spriteNum].projectile.workslike & PROJECTILE_TIMED && actor[spriteNum].projectile.range > 0)
                 {
-                    if (!(actor[i].temp_data[8]))
-                        actor[i].temp_data[8] = 1;
+                    if (!(actor[spriteNum].temp_data[8]))
+                        actor[spriteNum].temp_data[8] = 1;
                     else
-                        actor[i].temp_data[8]++;
+                        actor[spriteNum].temp_data[8]++;
 
-                    if (actor[i].temp_data[8] > actor[i].projectile.range)
+                    if (actor[spriteNum].temp_data[8] > actor[spriteNum].projectile.range)
                     {
-                        if (actor[i].projectile.workslike & PROJECTILE_EXPLODEONTIMER)
-                            A_DoProjectileEffects(i, &davect, 1);
+                        if (actor[spriteNum].projectile.workslike & PROJECTILE_EXPLODEONTIMER)
+                            A_DoProjectileEffects(spriteNum, &davect, 1);
 
-                        KILLIT(i);
+                        KILLIT(spriteNum);
                     }
                 }
 
-                if (actor[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
+                if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
                 {
                     /*                    if(s->yvel < 1 || s->extra < 2 || (s->xvel|s->zvel) == 0)
                                 Did this cause the bug with prematurely exploding projectiles? */
                     if (s->yvel < 1)
                     {
-                        A_DoProjectileEffects(i, &davect, 1);
-                        KILLIT(i);
+                        A_DoProjectileEffects(spriteNum, &davect, 1);
+                        KILLIT(spriteNum);
                     }
 
                 }
 
-                if ((j & 49152) != 49152 && !(actor[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS))
-                    G_WeaponHitCeilingOrFloor(i, s, &j);
+                if ((j & 49152) != 49152 && !(actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS))
+                    G_WeaponHitCeilingOrFloor(spriteNum, s, &j);
 
-                if (actor[i].projectile.workslike & PROJECTILE_WATERBUBBLES &&
+                if (actor[spriteNum].projectile.workslike & PROJECTILE_WATERBUBBLES &&
                         sector[s->sectnum].lotag == ST_2_UNDERWATER && rnd(140))
-                    A_Spawn(i,WATERBUBBLE);
+                    A_Spawn(spriteNum,WATERBUBBLE);
 
                 if (j != 0)
                 {
-                    if (actor[i].projectile.workslike & PROJECTILE_COOLEXPLOSION1)
+                    if (actor[spriteNum].projectile.workslike & PROJECTILE_COOLEXPLOSION1)
                     {
                         s->xvel = 0;
                         s->zvel = 0;
@@ -2902,50 +2900,50 @@ static void G_MoveWeapons(void)
                     {
                         j &= (MAXSPRITES-1);
 
-                        if (actor[i].projectile.workslike & PROJECTILE_BOUNCESOFFSPRITES)
+                        if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFSPRITES)
                         {
                             s->yvel--;
 
                             k = getangle(sprite[j].x-s->x,sprite[j].y-s->y)+(sprite[j].cstat&16?0:512);
                             s->ang = ((k<<1) - s->ang)&2047;
 
-                            if (actor[i].projectile.bsound >= 0)
-                                A_PlaySound(actor[i].projectile.bsound,i);
+                            if (actor[spriteNum].projectile.bsound >= 0)
+                                A_PlaySound(actor[spriteNum].projectile.bsound,spriteNum);
 
-                            if (actor[i].projectile.workslike & PROJECTILE_LOSESVELOCITY)
+                            if (actor[spriteNum].projectile.workslike & PROJECTILE_LOSESVELOCITY)
                             {
                                 s->xvel=s->xvel>>1;
                                 s->zvel=s->zvel>>1;
                             }
-                            if (!(actor[i].projectile.workslike & PROJECTILE_FORCEIMPACT))
+                            if (!(actor[spriteNum].projectile.workslike & PROJECTILE_FORCEIMPACT))
                                 goto BOLT;
                         }
 
-                        A_DamageObject(j,i);
+                        A_DamageObject(j,spriteNum);
 
                         if (sprite[j].picnum == APLAYER)
                         {
-                            p = sprite[j].yvel;
+                            int32_t playerNum = sprite[j].yvel;
                             A_PlaySound(PISTOL_BODYHIT,j);
 
-                            if (actor[i].projectile.workslike & PROJECTILE_SPIT)
-                                P_HandleBeingSpitOn(g_player[p].ps);
+                            if (actor[spriteNum].projectile.workslike & PROJECTILE_SPIT)
+                                P_HandleBeingSpitOn(g_player[playerNum].ps);
                         }
 
-                        if (actor[i].projectile.workslike & PROJECTILE_RPG_IMPACT)
+                        if (actor[spriteNum].projectile.workslike & PROJECTILE_RPG_IMPACT)
                         {
                             // [JM] Commented out because the A_DamageObject above does this now, allowing it to be modified by EVENT_DAMAGESPRITE.
                             //actor[j].htowner = s->owner;
                             //actor[j].htpicnum = s->picnum;
-                            //actor[j].htextra += actor[i].projectile.extra;
+                            //actor[j].htextra += actor[spriteNum].projectile.extra;
 
-                            A_DoProjectileEffects(i, &davect, 0);
+                            A_DoProjectileEffects(spriteNum, &davect, 0);
 
-                            if (!(actor[i].projectile.workslike & PROJECTILE_FORCEIMPACT))
-                                KILLIT(i);
+                            if (!(actor[spriteNum].projectile.workslike & PROJECTILE_FORCEIMPACT))
+                                KILLIT(spriteNum);
                         }
 
-                        if (actor[i].projectile.workslike & PROJECTILE_FORCEIMPACT)
+                        if (actor[spriteNum].projectile.workslike & PROJECTILE_FORCEIMPACT)
                             goto BOLT;
 
                     }
@@ -2953,23 +2951,23 @@ static void G_MoveWeapons(void)
                     {
                         j &= (MAXWALLS-1);
 
-                        if (actor[i].projectile.workslike & PROJECTILE_BOUNCESOFFMIRRORS &&
+                        if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFMIRRORS &&
                                 (wall[j].overpicnum == MIRROR || wall[j].picnum == MIRROR))
                         {
                             k = getangle(
                                     wall[wall[j].point2].x-wall[j].x,
                                     wall[wall[j].point2].y-wall[j].y);
                             s->ang = ((k<<1) - s->ang)&2047;
-                            s->owner = i;
-                            A_Spawn(i,TRANSPORTERSTAR);
+                            s->owner = spriteNum;
+                            A_Spawn(spriteNum,TRANSPORTERSTAR);
                             goto BOLT;
                         }
                         else
                         {
-                            setspritez(i,&davect);
-                            A_DamageWall(i,j,s->xyz,s->picnum);
+                            setspritez(spriteNum,&davect);
+                            A_DamageWall(spriteNum,j,s->xyz,s->picnum);
 
-                            if (actor[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
+                            if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
                             {
                                 if (wall[j].overpicnum != MIRROR && wall[j].picnum != MIRROR)
                                     s->yvel--;
@@ -2979,10 +2977,10 @@ static void G_MoveWeapons(void)
                                         wall[wall[j].point2].y-wall[j].y);
                                 s->ang = ((k<<1) - s->ang)&2047;
 
-                                if (actor[i].projectile.bsound >= 0)
-                                    A_PlaySound(actor[i].projectile.bsound,i);
+                                if (actor[spriteNum].projectile.bsound >= 0)
+                                    A_PlaySound(actor[spriteNum].projectile.bsound,spriteNum);
 
-                                if (actor[i].projectile.workslike & PROJECTILE_LOSESVELOCITY)
+                                if (actor[spriteNum].projectile.workslike & PROJECTILE_LOSESVELOCITY)
                                 {
                                     s->xvel=s->xvel>>1;
                                     s->zvel=s->zvel>>1;
@@ -2993,27 +2991,27 @@ static void G_MoveWeapons(void)
                     }
                     else if ((j&49152) == 16384)
                     {
-                        setspritez(i,&davect);
+                        setspritez(spriteNum,&davect);
 
                         if (s->zvel < 0)
                         {
                             if (sector[s->sectnum].ceilingstat&1 && sector[s->sectnum].ceilingpal == 0)
-                                KILLIT(i);
+                                KILLIT(spriteNum);
 
-                            Sect_DamageCeiling(i, s->sectnum);
+                            Sect_DamageCeiling(spriteNum, s->sectnum);
                         }
 
-                        if (actor[i].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
+                        if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
                         {
-                            A_DoProjectileBounce(i);
-                            A_SetSprite(i,qq);
+                            A_DoProjectileBounce(spriteNum);
+                            A_SetSprite(spriteNum,qq);
 
                             s->yvel--;
 
-                            if (actor[i].projectile.bsound >= 0)
-                                A_PlaySound(actor[i].projectile.bsound,i);
+                            if (actor[spriteNum].projectile.bsound >= 0)
+                                A_PlaySound(actor[spriteNum].projectile.bsound,spriteNum);
 
-                            if (actor[i].projectile.workslike & PROJECTILE_LOSESVELOCITY)
+                            if (actor[spriteNum].projectile.workslike & PROJECTILE_LOSESVELOCITY)
                             {
                                 s->xvel=s->xvel>>1;
                                 s->zvel=s->zvel>>1;
@@ -3023,17 +3021,19 @@ static void G_MoveWeapons(void)
                         }
                     }
 
-                    if (actor[i].projectile.workslike & PROJECTILE_HITSCAN)
+                    if (actor[spriteNum].projectile.workslike & PROJECTILE_HITSCAN)
                     {
-                        if (!actorscrptr[sprite[i].picnum])
+                        if (!actorscrptr[sprite[spriteNum].picnum])
                             goto BOLT;
-                        p = A_FindPlayer(s,&x);
-                        A_Execute(i,p,x);
+
+                        int32_t playerDist;
+                        int32_t playerNum = A_FindPlayer(s,&playerDist);
+                        A_Execute(spriteNum, playerNum, playerDist);
                         goto BOLT;
                     }
 
-                    A_DoProjectileEffects(i, &davect, 1);
-                    KILLIT(i);
+                    A_DoProjectileEffects(spriteNum, &davect, 1);
+                    KILLIT(spriteNum);
                 }
                 goto BOLT;
             }
@@ -3046,28 +3046,28 @@ static void G_MoveWeapons(void)
             {
             case RADIUSEXPLOSION__STATIC:
             case KNEE__STATIC:
-                KILLIT(i);
+                KILLIT(spriteNum);
             case TONGUE__STATIC:
-                T1(i) = sintable[(T2(i))&2047]>>9;
-                T2(i) += 32;
-                if (T2(i) > 2047) KILLIT(i);
+                T1(spriteNum) = sintable[(T2(spriteNum))&2047]>>9;
+                T2(spriteNum) += 32;
+                if (T2(spriteNum) > 2047) KILLIT(spriteNum);
 
                 if (sprite[s->owner].statnum == MAXSTATUS)
                     if (A_CheckEnemySprite(&sprite[s->owner]) == 0)
-                        KILLIT(i);
+                        KILLIT(spriteNum);
 
                 s->ang = sprite[s->owner].ang;
                 s->x = sprite[s->owner].x;
                 s->y = sprite[s->owner].y;
                 if (sprite[s->owner].picnum == APLAYER)
                     s->z = sprite[s->owner].z-(34<<8);
-                for (k=0;k<T1(i);k++)
+                for (k=0;k<T1(spriteNum);k++)
                 {
                     q = A_InsertSprite(s->sectnum,
                                        s->x+((k*sintable[(s->ang+512)&2047])>>9),
                                        s->y+((k*sintable[s->ang&2047])>>9),
                                        s->z+((k*ksgn(s->zvel))*klabs(s->zvel/12)),TONGUE,-40+(k<<1),
-                                       8,8,0,0,0,i,5);
+                                       8,8,0,0,0,spriteNum,5);
                     sprite[q].cstat = 128;
                     sprite[q].pal = 8;
                 }
@@ -3075,9 +3075,9 @@ static void G_MoveWeapons(void)
                                    s->x+((k*sintable[(s->ang+512)&2047])>>9),
                                    s->y+((k*sintable[s->ang&2047])>>9),
                                    s->z+((k*ksgn(s->zvel))*klabs(s->zvel/12)),INNERJAW,-40,
-                                   32,32,0,0,0,i,5);
+                                   32,32,0,0,0,spriteNum,5);
                 sprite[q].cstat = 128;
-                if (T2(i) > 512 && T2(i) < (1024))
+                if (T2(spriteNum) > 512 && T2(spriteNum) < (1024))
                     sprite[q].picnum = INNERJAW+1;
 
                 goto BOLT;
@@ -3085,11 +3085,11 @@ static void G_MoveWeapons(void)
             case FREEZEBLAST__STATIC:
                 if (s->yvel < 1 || s->extra < 2 || (s->xvel|s->zvel) == 0)
                 {
-                    j = A_Spawn(i,TRANSPORTERSTAR);
+                    j = A_Spawn(spriteNum,TRANSPORTERSTAR);
                     sprite[j].pal = 1;
                     sprite[j].xrepeat = 32;
                     sprite[j].yrepeat = 32;
-                    KILLIT(i);
+                    KILLIT(spriteNum);
                 }
                 fallthrough__;
             case SHRINKSPARK__STATIC:
@@ -3100,9 +3100,7 @@ static void G_MoveWeapons(void)
 
                 if (s->picnum == COOLEXPLOSION1)
                     if (!S_CheckSoundPlaying(WIERDSHOT_FLY))
-                        A_PlaySound(WIERDSHOT_FLY,i);
-
-                p = -1;
+                        A_PlaySound(WIERDSHOT_FLY,spriteNum);
 
                 k = s->xvel;
                 ll = s->zvel;
@@ -3115,33 +3113,33 @@ static void G_MoveWeapons(void)
 
                 davect = s->xyz;
 
-                A_GetZLimits(i);
+                A_GetZLimits(spriteNum);
                 qq = CLIPMASK1;
 
                 switch (DynamicTileMap[s->picnum])
                 {
                 case RPG__STATIC:
-                    if (actor[i].htpicnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != ST_2_UNDERWATER)
+                    if (actor[spriteNum].htpicnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != ST_2_UNDERWATER)
                     {
-                        j = A_Spawn(i,SMALLSMOKE);
+                        j = A_Spawn(spriteNum,SMALLSMOKE);
                         sprite[j].z += (1<<8);
                     }
                     break;
                 }
 
-                j = A_MoveSprite(i,(k*(sintable[(s->ang+512)&2047]))>>14,(k*(sintable[s->ang&2047]))>>14,ll,qq);
+                j = A_MoveSprite(spriteNum,(k*(sintable[(s->ang+512)&2047]))>>14,(k*(sintable[s->ang&2047]))>>14,ll,qq);
 
                 if (s->picnum == RPG && s->yvel >= 0 && sprite[s->yvel].sectnum < MAXSECTORS)
                     if (FindDistance2D(s->x-sprite[s->yvel].x,s->y-sprite[s->yvel].y) < 256)
                         j = 49152|s->yvel;
 
-                actor[i].movflag = j;
+                actor[spriteNum].movflag = j;
 
                 if (s->sectnum < 0)
-                    KILLIT(i);
+                    KILLIT(spriteNum);
 
                 if ((j & 49152) != 49152 && (s->picnum != FREEZEBLAST))
-                    G_WeaponHitCeilingOrFloor(i, s, &j);
+                    G_WeaponHitCeilingOrFloor(spriteNum, s, &j);
 
                 if (s->picnum == FIRELASER)
                 {
@@ -3151,15 +3149,15 @@ static void G_MoveWeapons(void)
                                                 (k * sintable[s->ang & 2047]) >> 9,
                                                 (k * ksgn(s->zvel))* klabs(s->zvel / 24) };
 
-                        x = A_InsertSprite(s->sectnum,
-                                           s->x+offset.x,
-                                           s->y+offset.y,
-                                           s->z+offset.z,FIRELASER,-40+(k<<2),
-                                           s->xrepeat,s->yrepeat,0,0,0,s->owner, STAT_MISC);
+                        int32_t newSprite = A_InsertSprite(s->sectnum,
+                                            s->x+offset.x,
+                                            s->y+offset.y,
+                                            s->z+offset.z,FIRELASER,-40+(k<<2),
+                                            s->xrepeat,s->yrepeat,0,0,0,s->owner, STAT_MISC);
 
-                        actor[x].bpos = actor[i].bpos + offset;
-                        sprite[x].cstat |= 128;
-                        sprite[x].pal = s->pal;
+                        actor[newSprite].bpos = actor[spriteNum].bpos + offset;
+                        sprite[newSprite].cstat |= 128;
+                        sprite[newSprite].pal = s->pal;
                     }
                 }
                 else if (s->picnum == SPIT) if (s->zvel < 6144)
@@ -3182,23 +3180,23 @@ static void G_MoveWeapons(void)
                         if (s->picnum == FREEZEBLAST && sprite[j].pal == 1)
                             if (A_CheckEnemySprite(&sprite[j]) || sprite[j].picnum == APLAYER)
                             {
-                                j = A_Spawn(i,TRANSPORTERSTAR);
+                                j = A_Spawn(spriteNum,TRANSPORTERSTAR);
                                 sprite[j].pal = 1;
                                 sprite[j].xrepeat = 32;
                                 sprite[j].yrepeat = 32;
 
-                                KILLIT(i);
+                                KILLIT(spriteNum);
                             }
 
-                        A_DamageObject(j,i);
+                        A_DamageObject(j,spriteNum);
 
                         if (sprite[j].picnum == APLAYER)
                         {
-                            p = sprite[j].yvel;
+                            int32_t playerNum = sprite[j].yvel;
                             A_PlaySound(PISTOL_BODYHIT,j);
 
                             if (s->picnum == SPIT)
-                                P_HandleBeingSpitOn(g_player[p].ps);
+                                P_HandleBeingSpitOn(g_player[playerNum].ps);
                         }
                     }
                     else if ((j&49152) == 32768)
@@ -3211,14 +3209,14 @@ static void G_MoveWeapons(void)
                                     wall[wall[j].point2].x-wall[j].x,
                                     wall[wall[j].point2].y-wall[j].y);
                             s->ang = ((k<<1) - s->ang)&2047;
-                            s->owner = i;
-                            A_Spawn(i,TRANSPORTERSTAR);
+                            s->owner = spriteNum;
+                            A_Spawn(spriteNum,TRANSPORTERSTAR);
                             goto BOLT;
                         }
                         else
                         {
-                            setspritez(i, &davect);
-                            A_DamageWall(i,j,s->xyz,s->picnum);
+                            setspritez(spriteNum, &davect);
+                            A_DamageWall(spriteNum,j,s->xyz,s->picnum);
 
                             if (s->picnum == FREEZEBLAST)
                             {
@@ -3238,21 +3236,21 @@ static void G_MoveWeapons(void)
                     }
                     else if ((j&49152) == 16384)
                     {
-                        setspritez(i, &davect);
+                        setspritez(spriteNum, &davect);
 
                         if (s->zvel < 0)
                         {
                             if (sector[s->sectnum].ceilingstat&1)
                                 if (sector[s->sectnum].ceilingpal == 0)
-                                    KILLIT(i);
+                                    KILLIT(spriteNum);
 
-                            Sect_DamageCeiling(i, s->sectnum);
+                            Sect_DamageCeiling(spriteNum, s->sectnum);
                         }
 
                         if (s->picnum == FREEZEBLAST)
                         {
-                            A_DoProjectileBounce(i);
-                            A_SetSprite(i,qq);
+                            A_DoProjectileBounce(spriteNum);
+                            A_SetSprite(spriteNum,qq);
                             s->extra >>= 1;
                             if (s->xrepeat > 8)
                                 s->xrepeat -= 2;
@@ -3267,7 +3265,7 @@ static void G_MoveWeapons(void)
                     {
                         if (s->picnum == RPG)
                         {
-                            k = A_Spawn(i,EXPLOSION2);
+                            k = A_Spawn(spriteNum,EXPLOSION2);
                             sprite[k].xyz = davect;
 
                             if (s->xrepeat < 10)
@@ -3278,7 +3276,7 @@ static void G_MoveWeapons(void)
                             else if ((j&49152) == 16384)
                             {
                                 if (s->zvel > 0)
-                                    A_Spawn(i,EXPLOSION2BOT);
+                                    A_Spawn(spriteNum,EXPLOSION2BOT);
                                 else
                                 {
                                     sprite[k].cstat |= 8;
@@ -3286,28 +3284,28 @@ static void G_MoveWeapons(void)
                                 }
 
                             }
-                            A_PlaySound(RPG_EXPLODE,i);
+                            A_PlaySound(RPG_EXPLODE,spriteNum);
 
                             if (s->xrepeat >= 10)
                             {
-                                x = s->extra;
-                                A_RadiusDamage(i,g_rpgBlastRadius, x>>2,x>>1,x-(x>>2),x);
+                                int16_t const x = s->extra;
+                                A_RadiusDamage(spriteNum,g_rpgBlastRadius, x>>2,x>>1,x-(x>>2),x);
                             }
                             else
                             {
-                                x = s->extra+(g_globalRandom&3);
-                                A_RadiusDamage(i,(g_rpgBlastRadius>>1),x>>2,x>>1,x-(x>>2),x);
+                                int16_t const x = s->extra+(g_globalRandom&3);
+                                A_RadiusDamage(spriteNum,(g_rpgBlastRadius>>1),x>>2,x>>1,x-(x>>2),x);
                             }
                         }
                         else if (s->picnum == SHRINKSPARK)
                         {
-                            A_Spawn(i,SHRINKEREXPLOSION);
-                            A_PlaySound(SHRINKER_HIT,i);
-                            A_RadiusDamage(i,g_shrinkerBlastRadius,0,0,0,0);
+                            A_Spawn(spriteNum,SHRINKEREXPLOSION);
+                            A_PlaySound(SHRINKER_HIT,spriteNum);
+                            A_RadiusDamage(spriteNum,g_shrinkerBlastRadius,0,0,0,0);
                         }
                         else if (s->picnum != COOLEXPLOSION1 && s->picnum != FREEZEBLAST && s->picnum != FIRELASER)
                         {
-                            k = A_Spawn(i,EXPLOSION2);
+                            k = A_Spawn(spriteNum,EXPLOSION2);
                             sprite[k].xrepeat = sprite[k].yrepeat = s->xrepeat>>1;
                             if ((j&49152) == 16384)
                             {
@@ -3320,28 +3318,30 @@ static void G_MoveWeapons(void)
                             }
                         }
                     }
-                    if (s->picnum != COOLEXPLOSION1) KILLIT(i);
+                    if (s->picnum != COOLEXPLOSION1) KILLIT(spriteNum);
                 }
                 if (s->picnum == COOLEXPLOSION1)
                 {
                     s->shade++;
-                    if (s->shade >= 40) KILLIT(i);
+                    if (s->shade >= 40) KILLIT(spriteNum);
                 }
                 else if (s->picnum == RPG && sector[s->sectnum].lotag == ST_2_UNDERWATER && s->xrepeat >= 10 && rnd(140))
-                    A_Spawn(i,WATERBUBBLE);
+                    A_Spawn(spriteNum,WATERBUBBLE);
 
                 goto BOLT;
 
             case SHOTSPARK1__STATIC:
-                if (!actorscrptr[sprite[i].picnum])
+                if (!actorscrptr[sprite[spriteNum].picnum])
                     goto BOLT;
-                p = A_FindPlayer(s,&x);
-                A_Execute(i,p,x);
+
+                int32_t playerDist;
+                int32_t playerNum = A_FindPlayer(s,&playerDist);
+                A_Execute(spriteNum, playerNum, playerDist);
                 goto BOLT;
             }
         }
 BOLT:
-        i = nexti;
+        spriteNum = nexti;
     }
 }
 
@@ -5969,7 +5969,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
 
                 ms(spriteNum);
-                //setspritez_old(i,pSprite->x,pSprite->y,pSprite->z); // BREAKS
+                //setspritez_old(spriteNum,pSprite->x,pSprite->y,pSprite->z); // BREAKS
 
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                 {
@@ -6141,7 +6141,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
 
                 ms(spriteNum);
-                //setspritez_old(i,pSprite->x,pSprite->y,pSprite->z); // BREAKS
+                //setspritez_old(spriteNum,pSprite->x,pSprite->y,pSprite->z); // BREAKS
 
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                 {
