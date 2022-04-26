@@ -1180,7 +1180,7 @@ void G_DisplayPlayerId(void)
     if (g_player[myconnectindex].ps->gm & MODE_MENU)
         return;
 
-    if (ud.idplayers && (ud.multimode > 1) && !DMFLAGS_TEST(DMFLAG_NOPLAYERID))
+    if (ud.idplayers && (ud.multimode > 1) && !DMFLAGS_TEST(DMFLAG_NOPLAYERIDS))
     {
         // TODO: (Optimization) Consider moving this segment to a point in the code that operates at 120hz.
         int i;

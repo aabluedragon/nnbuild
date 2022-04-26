@@ -5943,7 +5943,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
             if (ud.multimode > 1 && (display_mirror || screenpeek != p || s->owner == -1))
             {
-                if (ud.showweapons && sprite[g_player[p].ps->i].extra > 0 && g_player[p].ps->curr_weapon > 0 && (spritesortcnt < maxspritesonscreen))
+                if (!DMFLAGS_TEST(DMFLAG_NOWEAPONICONS) && ud.showweapons && sprite[g_player[p].ps->i].extra > 0 && g_player[p].ps->curr_weapon > 0 && (spritesortcnt < maxspritesonscreen))
                 {
                     memcpy((spritetype *)&tsprite[spritesortcnt],(spritetype *)t,sizeof(spritetype));
 

@@ -5094,7 +5094,8 @@ VOLUME_ALL_40x:
                     { "-",                          0 },
                     { "Enable Visibility Changes",  DMFLAG_ALLOWVISIBILITYCHANGE },
                     { "Disable FOV Changes",        DMFLAG_NOFOVCHANGE },
-                    { "Disable Player IDs",         DMFLAG_NOPLAYERID },
+                    { "Disable Player IDs",         DMFLAG_NOPLAYERIDS },
+                    { "Disable Weapon Icons",       DMFLAG_NOWEAPONICONS },
                     { "-",                          0 },
                     { "Accept",                     0 },
                 };

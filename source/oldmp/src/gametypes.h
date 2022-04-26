@@ -36,9 +36,10 @@ enum DMFlags_t {
     DMFLAG_MARKERS                  = (1 << 5),
     DMFLAG_NOEXITS                  = (1 << 6),
     DMFLAG_WEAPONSTAY               = (1 << 7),
-    DMFLAG_NOPLAYERID               = (1 << 8),
+    DMFLAG_NOPLAYERIDS              = (1 << 8),
     DMFLAG_NOFOVCHANGE              = (1 << 9),
-    DMFLAG_ALLOWVISIBILITYCHANGE    = (1 << 10),
+    DMFLAG_NOWEAPONICONS            = (1 << 10),
+    DMFLAG_ALLOWVISIBILITYCHANGE    = (1 << 11),
 };
 
 #define DEFAULT_DMFLAGS (DMFLAG_FRIENDLYFIRE | DMFLAG_MARKERS)
