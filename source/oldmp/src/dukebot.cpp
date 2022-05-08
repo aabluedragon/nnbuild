@@ -566,11 +566,15 @@ void DukeBot_GetInput(int snum, input_t* syn)
 
     if (p->dead_flag)
     {
-        if(!(seed_krand(&bot->rand) % 128))
+        bot->respawnTime++;
+
+        if ((bot->respawnTime >= BOT_MAX_RESPAWN_TIME) || (bot->respawnTime >= BOT_MIN_RESPAWN_TIME && !(seed_krand(&bot->rand) % 64)))
             syn->bits |= BIT(SK_OPEN);
 
         return;
     }
+
+    bot->respawnTime = 0;
 
     if (pSpr->sectnum == -1) // If we're in void, there's nothing else we can do. Bail.
         return;
