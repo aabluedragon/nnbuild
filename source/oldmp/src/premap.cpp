@@ -1199,11 +1199,8 @@ void G_MakeNewGamePreparations(int vn, int ln, int sk)
 
     //AddLog("Newgame");
     Gv_ResetVars();
-
     Gv_InitWeaponPointers();
-
     Gv_RefreshPointers();
-
     Gv_ResetSystemDefaults();
 
     for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)

@@ -635,7 +635,7 @@ static int Proj_DoHitscan(int spriteNum, int32_t const cstatmask, const vec3_t* 
 
 static void Proj_MaybeSpawn(int spriteNum, int projecTile, const hitdata_t* hitData)
 {
-    // atwith < 0 is for hard-coded projectiles
+    // projecTile < 0 is for hard-coded projectiles
     projectile_t* const pProj = &ProjectileData[projecTile];
     int                 spawnTile = projecTile < 0 ? -projecTile : pProj->spawns;
 
