@@ -226,6 +226,17 @@ static char Sync_Engine(void)
     return ((char)crc & 255);
 }
 
+static char Sync_GameSettings(void)
+{
+    unsigned short crc = 0;
+
+    updatecrc(crc, ud.dmflags);
+    updatecrc(crc, (ud.dmflags >> 8));
+    updatecrc(crc, ud.limit_hit);
+
+    return ((char)crc & 255);
+}
+
 #if BOT_DEBUG == 1
 static char Sync_Bots(void)
 {
@@ -257,6 +268,7 @@ static SyncType_t syncType[] = {
     DEFINE_SYNCFUNC(Sync_Projectiles),
     DEFINE_SYNCFUNC(Sync_Actors),
     DEFINE_SYNCFUNC(Sync_Map),
+    DEFINE_SYNCFUNC(Sync_GameSettings),
 #if BOT_DEBUG == 1
     DEFINE_SYNCFUNC(Sync_Bots),
 #endif
