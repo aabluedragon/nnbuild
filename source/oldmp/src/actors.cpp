@@ -101,8 +101,10 @@ void G_DoConveyorInterp(int32_t smoothratio)
     for (int32_t SPRITES_OF(STAT_EFFECTOR, i))
     {
         auto s = &sprite[i];
+        auto a = &actor[i];
         auto sect = &sector[s->sectnum];
-        if (s->picnum != SECTOREFFECTOR)
+
+        if (s->picnum != SECTOREFFECTOR || a->temp_data[4])
             continue;
 
         if (s->lotag == SE_24_CONVEYOR || s->lotag == SE_34)
@@ -117,13 +119,15 @@ void G_ResetConveyorInterp(void)
     for (int32_t SPRITES_OF(STAT_EFFECTOR, i))
     {
         auto s = &sprite[i];
+        auto a = &actor[i];
         auto sect = &sector[s->sectnum];
-        if (s->picnum != SECTOREFFECTOR)
+
+        if (s->picnum != SECTOREFFECTOR || a->temp_data[4])
             continue;
 
         if (s->lotag == SE_24_CONVEYOR || s->lotag == SE_34)
         {
-            sect->floorxpanning = (uint8_t)actor[i].bpos.x;
+            sect->floorxpanning = (uint8_t)a->bpos.x;
         }
     }
 }
