@@ -123,11 +123,17 @@ static int osdfunc_bucketlist(osdcmdptr_t UNUSED(parm))
         uint32_t const missCount     = (uint32_t)stats->missCount.load();
         uint32_t const freeCount     = (uint32_t)stats->freeCount.load();
 
-        LOG_F(INFO, "%12s: %u", "cache hit", cacheHitCount);
-        LOG_F(INFO, "%12s: %u", "hit",       hitCount);
+        if (cacheHitCount)
+            LOG_F(INFO, "%12s: %u", "cache hit", cacheHitCount);
+
+        if (hitCount)
+            LOG_F(INFO, "%12s: %u", "hit",       hitCount);
+
         if (missCount)
             LOG_F(INFO, "%12s: %s%u","miss", osd->draw.errorfmt, missCount);
-        LOG_F(INFO, "%12s: %u",  "freed",     freeCount);
+        
+        if (freeCount)
+            LOG_F(INFO, "%12s: %u",  "freed",     freeCount);
 
         uint32_t const useCount        = cacheHitCount + hitCount + missCount - freeCount;
         uint32_t const bucketBytesUsed = useCount * elementSize;
@@ -150,7 +156,7 @@ static int osdfunc_heapinfo(osdcmdptr_t UNUSED(parm))
 }
 
 void engineSetupAllocator(void)
-{
+{    
     engineCreateAllocator();
 
 #ifdef SMMALLOC_STATS_SUPPORT
@@ -167,31 +173,18 @@ const char *engineVerbosityCallback(loguru::Verbosity verbosity)
     if (gameVerbosityCallback)
     {
         auto str = gameVerbosityCallback(verbosity);
+        
         if (str != nullptr)
             return str;
     }
 
-    switch (verbosity)
-    {
-        default:
-            return nullptr;
-        case LOG_ENGINE:
-            return "ENG";
-        case LOG_GFX:
-            return "GFX";
-        case LOG_GL:
-            return "GL";
-        case LOG_ASS:
-            return "ASS";
-        case LOG_INPUT:
-            return "INPT";
-        case LOG_NET:
-            return "NET";
-        case LOG_PR:
-            return "PR";
-        case LOG_DEBUG:
-            return "DBG";
-    }
+    char const *s[] = { nullptr, "ENG", "GFX", "GL", "ASS", "INPT", "NET", "PR", "MEM" };
+
+    if ((unsigned)verbosity < ARRAY_SIZE(s))
+        return s[verbosity];
+    else if (verbosity == LOG_DEBUG)
+        return "DBG";
+    else return nullptr;
 }
 
 bool g_useLogCallback = true;
