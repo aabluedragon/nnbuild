@@ -3505,7 +3505,7 @@ static void G_MoveTransports(void)
                     // comment out to make RPGs pass through water: (r1450 breaks this)
                     //if (sectlotag != 0) goto JBOLT;
                 case STAT_ACTOR:
-                    if (sprite[j].extra > 0 && A_CheckNonTeleporting(j))
+                    if (sprite[j].extra > 0 && A_CheckNonTeleporting(j)) // [JM] This is lame. If SFLAG_NOTELEPORT is on, it should NEVER teleport, regardless of health.
                             goto JBOLT;
                     fallthrough__;
                 case STAT_MISC:
