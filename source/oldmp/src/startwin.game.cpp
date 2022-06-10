@@ -10,6 +10,7 @@
 #include "compat.h"
 
 #include "grpscan.h"
+#include "texcache.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -21,6 +22,39 @@
 #include <stdio.h>
 
 #include "startwin.game.h"
+
+const char* credits = {
+    "Developed by: Jordon ""Striker The Hedgefox"" Moss.\r\n\r\n"
+    "NetDuke32 is a multiplayer-centric port based on EDuke32. "
+    "Started late 2015 as a series of maintenance builds of EDuke32-OldMP, it has since "
+    "evolved. NetDuke32 brings new features, QoL and netcode improvements, and tries "
+    "to improve the overall multiplayer experience.\r\n\r\n"
+    "This is a labour of love, and would be impossible without support.\r\n"
+    "If you like my work, help me out Ko-Fi! (If you're able to, of course.)\r\n"
+    "- https://ko-fi.com/StrikerTheHedgefox\r\n\r\n"
+    "-= Special Thanks =-\r\n"
+    "* The Shadow Mavericks Clan - For being my best (and sometimes only) friends since 2006, and the only reason I even get out of bed. I wouldn't be alive today without you guys.\r\n\r\n"
+    "* TerminX, Hendricks266, & Voidpoint - For making EDuke32, helping me during hard times, and giving me a chance to be a part of something as awesome as Ion Fury.\r\n\r\n"
+    "* Shotspark Studios - For helping promote this project, and giving me a home on Discord to share my work.\r\n\r\n"
+    "* The Build Bros Community - For playing and testing the absolute shit out of this thing, their impeccable work on StrikerDM's community maps, and supporting me over the years.\r\n\r\n"
+    "* NY00123 - For helping me with all kinds of cross-platform issues and bugs.\r\n\r\n"
+    "* Doom64hunter - For a ton of support and help with all sorts of issues.\r\n\r\n"
+    "-= Donator Hall of Fame =-\r\n"
+    "- Balls of Steel Forever\r\n"
+    "- Doom64hunter\r\n"
+    "- Replica\r\n"
+    "- KunaiKitsune\r\n"
+    "- Gosimer\r\n"
+    "- DatMaxNub\r\n"
+    "- Noldor Ranzou\r\n"
+    "- Fernando Márquez\r\n"
+    "- Marz\r\n"
+    "- Radar\r\n"
+    "- Vandclash\r\n"
+    "- LittleTijn\r\n"
+    "\r\n"
+    "(If I've missed you on this list, please DM me on Ko-Fi with your preferred name and proof of donation!)\r\n"
+};
 
 enum
 {
@@ -74,10 +108,6 @@ static int getfilenames(const char *path)
 #define POPULATE_CONFIG 2
 #define POPULATE_GAME 4
 #define POPULATE_GAMEDIRS 8
-
-#if defined(USE_OPENGL)
-extern char TEXCACHEFILE[];
-#endif
 
 extern int g_noSetup;
 
@@ -395,6 +425,7 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
             pages[TAB_MESSAGES] = GetDlgItem(hwndDlg, WIN_STARTWIN_MESSAGES);
             pages[TAB_ABOUT] = CreateDialog((HINSTANCE)win_gethinstance(),
                                              MAKEINTRESOURCE(WIN_STARTWINPAGE_ABOUT), hwndDlg, NULL);
+
             SetWindowPos(pages[TAB_CONFIG], hwnd, r.left, r.top, r.right, r.bottom, SWP_HIDEWINDOW);
             SetWindowPos(pages[TAB_MESSAGES], hwnd, r.left, r.top, r.right, r.bottom, SWP_HIDEWINDOW);
             SetWindowPos(pages[TAB_ABOUT], hwnd, r.left, r.top, r.right, r.bottom, SWP_HIDEWINDOW);
@@ -405,6 +436,7 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
             r.left = r.top = 0;
             SendMessage(pages[TAB_MESSAGES], EM_SETRECTNP,0,(LPARAM)&r);
             SendMessage(pages[TAB_ABOUT], EM_SETRECTNP, 0, (LPARAM)&r);
+            SetDlgItemText(pages[TAB_ABOUT], WIN_STARTWIN_CREDITS, credits);
 
             // Set a tab stop in the game data listbox
             {

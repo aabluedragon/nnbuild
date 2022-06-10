@@ -8,6 +8,7 @@
 #define WIN_STARTWIN_START	IDOK
 
 #define WIN_STARTWIN_MESSAGES	104	// output list box
+#define WIN_STARTWIN_CREDITS	120
 
 #define RSRC_ICON		100
 #define RSRC_BMP		200
