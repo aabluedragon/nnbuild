@@ -1285,6 +1285,7 @@ void Net_CorrectPrediction(void)
     auto oq16horiz = predictedPlayer.oq16horiz;
     auto oq16horizoff = predictedPlayer.oq16horizoff;
     auto opos = predictedPlayer.opos;
+    auto orotscrnang = predictedPlayer.orotscrnang;
     auto scream_voice = predictedPlayer.scream_voice;
 
     Net_ResetPredictionData();
@@ -1314,6 +1315,9 @@ void Net_CorrectPrediction(void)
 
     if(p->oq16horizoff != p->q16horizoff)
         predictedPlayer.oq16horizoff = oq16horizoff;
+
+    if(p->orotscrnang != p->rotscrnang)
+        predictedPlayer.orotscrnang = orotscrnang;
 }
 
 void Net_InitializeStructPointers(void)

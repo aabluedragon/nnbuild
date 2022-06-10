@@ -4708,7 +4708,6 @@ void P_ProcessInput(int snum)
         p->opos.z = p->pos.z;
         p->oq16ang = p->q16ang;
         p->opyoff = p->pyoff;
-        //p->orotscrnang = p->rotscrnang;
 
         p->q16horiz = F16(100);
         p->q16horizoff = 0;
@@ -4718,7 +4717,10 @@ void P_ProcessInput(int snum)
         pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 128L, (4L << 8), PLAYER_STEP_HEIGHT, CLIPMASK0);
 
         if (floorZ > ceilZ + (16 << 8) && s->pal != 1)
+        {
+            p->orotscrnang = p->rotscrnang;
             p->rotscrnang = (p->dead_flag + ((floorZ + p->pos.z) >> 7)) & 2047;
+        }
 
         p->on_warping_sector = 0;
 
@@ -4748,10 +4750,14 @@ void P_ProcessInput(int snum)
 
     doubvel = TICSPERFRAME;
 
-    p->rotscrnang -= (p->rotscrnang >> 1);
+    p->orotscrnang = p->rotscrnang;
+    if (p->rotscrnang)
+    {
+        p->rotscrnang -= (p->rotscrnang >> 1);
 
-    if (p->rotscrnang && !(p->rotscrnang >> 1))
-        p->rotscrnang -= ksgn(p->rotscrnang);
+        if (p->rotscrnang && !(p->rotscrnang >> 1))
+            p->rotscrnang -= ksgn(p->rotscrnang);
+    }
 
     p->look_ang -= (p->look_ang >> 2);
 
