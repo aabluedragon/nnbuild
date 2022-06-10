@@ -29,7 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define LABEL_HASPARM2  1
 #define LABEL_ISSTRING  2
 
-typedef struct {
+typedef struct SystemVarID_s {
     int32_t RETURN          = -1;
     int32_t WEAPON          = -1;
     int32_t WORKSLIKE       = -1;
