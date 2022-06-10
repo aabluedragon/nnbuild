@@ -1608,7 +1608,7 @@ int G_EnterLevel(int g)
     // ---------------------------------
 
     S_PauseSounds(false);
-    FX_StopAllSounds();
+    S_StopAllSounds();
     FX_SetReverb(0);
 
     if (boardfilename[0] != 0 && ud.m_level_number == 7 && ud.m_volume_number == 0)

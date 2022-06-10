@@ -454,9 +454,7 @@ void S_Cleanup(void)
         while (num == 0xdeadbeef)
         {
             num = freeSlotQueue[(localQueueIndex - 1) & (MAXVOICES - 1)];
-#ifndef NDEBUG
-            OSD_Puts("Unexpected magic beef!\n");
-#endif
+            LOG_F(ERROR, "Unexpected magic beef!");
     }
 
         freeSlotQueue[localQueueIndex & (MAXVOICES - 1)] = 0xdeadbeef;
@@ -803,7 +801,7 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
 
     if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(sndNum)))
     {
-        OSD_Printf("WARNING: invalid sound #%d\n", num);
+        LOG_F(WARNING, "Invalid sound #%d", sndNum);
         return -1;
     }
 
@@ -990,7 +988,7 @@ void S_StopEnvSound(int soundNum, int spriteNum)
     if (S_PredictionCheck(spriteNum))
         return;
 
-    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum) || g_sounds[soundNum] == &nullsound || g_sounds[soundNum]->playing == 0))
+    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum)) || g_sounds[soundNum]->playing == 0)
         return;
 
     int j;
@@ -1041,7 +1039,7 @@ void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
     if (S_PredictionCheck(spriteNum))
         return;
 
-    if (EDUKE32_PREDICT_FALSE(g_sounds[soundNum] == &nullsound || g_sounds[soundNum]->playing == 0))
+    if (EDUKE32_PREDICT_FALSE(g_sounds[soundNum] == &nullsound) || g_sounds[soundNum]->playing == 0)
         return;
 
     for (int j = 0; j < MAXSOUNDINSTANCES; ++j)
