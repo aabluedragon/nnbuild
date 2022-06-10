@@ -91,7 +91,10 @@ void S_SoundStartup(void)
     int status = FX_Init(ud.config.NumVoices, ud.config.NumChannels, ud.config.MixRate, initdata);
 
     if (status != FX_Ok)
+    {
+        LOG_F(ERROR, "Failed initializing sound subsystem: %s", FX_ErrorString(status));
         return;
+    }
 
     freeSlotReadIndex = freeSlotWriteIndex = localQueueIndex = 0;
 #ifndef NDEBUG
@@ -122,7 +125,6 @@ void S_SoundStartup(void)
     FX_SetReverseStereo(ud.config.ReverseStereo);
 #endif
     FX_SetCallBack(S_Callback);
-    //FX_SetPrintf(OSD_Printf);
 }
 
 void S_SoundShutdown(void)
@@ -133,7 +135,8 @@ void S_SoundShutdown(void)
     int status = FX_Shutdown();
     if (status != FX_Ok)
     {
-        Bsprintf(tempbuf, "S_SoundShutdown(): error: %s", FX_ErrorString(status));
+        Bsprintf(tempbuf, "Failed tearing down sound subsystem: %s", FX_ErrorString(status));
+        LOG_F(ERROR, "%s", tempbuf);
         G_GameExit(tempbuf);
     }
 }
@@ -152,7 +155,7 @@ void S_MusicStartup(void)
     }
     else
     {
-        LOG_F(ERROR, "S_MusicStartup(): failed initializing: %s", MUSIC_ErrorString(status));
+        LOG_F(ERROR, "Failed initializing music subsystem: %s", MUSIC_ErrorString(status));
         return;
     }
 
@@ -178,8 +181,9 @@ void S_MusicShutdown(void)
 
     S_StopMusic();
 
-    if (MUSIC_Shutdown() != MUSIC_Ok)
-        LOG_F(ERROR, "%s", MUSIC_ErrorString(MUSIC_ErrorCode));
+    int status = MUSIC_Shutdown();
+    if (status != MUSIC_Ok)
+        LOG_F(ERROR, "Failed tearing down music subsystem: %s", MUSIC_ErrorString(status));
 }
 
 void S_PauseMusic(int32_t onf)
@@ -280,7 +284,7 @@ static int S_PlayMusic(const char* fn)
     buildvfs_kfd fp = S_OpenAudio(fn, 0, 1);
     if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
     {
-        OSD_Printf(OSD_ERROR "S_PlayMusic(): error: can't open \"%s\" for playback!\n", fn);
+        LOG_F(ERROR, "Unable to play %s: file not found.",fn);
         return 2;
     }
 
@@ -288,7 +292,7 @@ static int S_PlayMusic(const char* fn)
 
     if (EDUKE32_PREDICT_FALSE(MusicLen < 4))
     {
-        OSD_Printf(OSD_ERROR "S_PlayMusic(): error: empty music file \"%s\"\n", fn);
+        LOG_F(ERROR, "Unable to play %s: no data.",fn);
         kclose(fp);
         return 3;
     }
@@ -298,8 +302,7 @@ static int S_PlayMusic(const char* fn)
 
     if (EDUKE32_PREDICT_FALSE(MyMusicSize != MusicLen))
     {
-        OSD_Printf(OSD_ERROR "S_PlayMusic(): error: read %d bytes from \"%s\", expected %d\n",
-            MyMusicSize, fn, MusicLen);
+        LOG_F(ERROR, "Unable to play %s: read %d of %d bytes expected.", fn, MyMusicSize, MusicLen);
         kclose(fp);
         ALIGNED_FREE_AND_NULL(MyMusicPtr);
         return 4;
@@ -455,7 +458,7 @@ void S_Cleanup(void)
         {
             num = freeSlotQueue[(localQueueIndex - 1) & (MAXVOICES - 1)];
             LOG_F(ERROR, "Unexpected magic beef!");
-    }
+        }
 
         freeSlotQueue[localQueueIndex & (MAXVOICES - 1)] = 0xdeadbeef;
 #ifndef NDEBUG
@@ -492,7 +495,7 @@ void S_Cleanup(void)
 
         int const spriteNum = voice.owner;
 
-        //Bassert(bitmap_test(&snd->playing, voiceindex)); // [JM] Temporarily disable this assert on TX's suggestion.
+        DVLOG_IF_F(LOG_DEBUG, !bitmap_test(&snd->playing, voiceindex), "Sound %d index %d is not playing", num, voiceindex);
         bitmap_clear(&snd->playing, voiceindex);
 
         if (snd->flags & SF_TALK && g_dukeTalk)
@@ -519,7 +522,7 @@ int32_t S_LoadSound(int num)
 
     if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
     {
-        OSD_Printf(OSDTEXT_RED "Sound %s(#%d) not found!\n", snd->filename, num);
+        DVLOG_F(LOG_DEBUG, "Unable to load sound #%d: file %s not found.", num, snd->filename);
         return 0;
     }
 
@@ -849,7 +852,13 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
         int slot = 0;
         while (slot < MAXSOUNDINSTANCES && snd->voices[slot].handle != voice)
             slot++;
-        Bassert(slot < MAXSOUNDINSTANCES);
+
+        if (EDUKE32_PREDICT_FALSE(slot >= MAXSOUNDINSTANCES))
+        {
+            LOG_F(WARNING, "S_PlaySound3D: slot >= MAXSOUNDINSTANCES!");
+            return -1;
+        }
+
         snd->voices[slot].owner = spriteNum;
 
         return voice;
@@ -887,17 +896,25 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
 
     if (sndSlot >= MAXSOUNDINSTANCES)
     {
+        LOG_F(WARNING, "S_PlaySound3D: sndSlot >= MAXSOUNDINSTANCES!");
+error:
+#ifdef CACHING_DOESNT_SUCK
+        g_soundlocks[sndNum]--;
+#endif
         return -1;
     }
 
     int const repeatp = (snd->flags & SF_LOOP);
 
     if (repeatp && (snd->flags & SF_ONEINST_INTERNAL) && snd->playing)
+        goto error; // OK, this one isn't actually an error
+
+    if (bitmap_test(&snd->playing, sndSlot))
     {
-        return -1;
+        LOG_F(WARNING, "S_PlaySound3D: slot %d for sound %d already filled", sndSlot, sndNum);
+        goto error;
     }
 
-    Bassert(bitmap_test(&snd->playing, sndSlot) == 0);
     bitmap_set(&snd->playing, sndSlot);
 
     S_FillVoiceInfo(&snd->voices[sndSlot], spriteNum, -1, sndist >> 6);
@@ -910,9 +927,9 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
 
     if (voice <= FX_Ok)
     {
-        OSD_Printf("S_PlaySound3D(): error playing %s\n", snd->filename);
+        LOG_F(ERROR, "Unable to play %s: unsupported format or file corrupt.", snd->filename);
         bitmap_clear(&snd->playing, sndSlot);
-        return -1;
+        goto error;
     }
 
     snd->voices[sndSlot].handle = voice;
@@ -932,7 +949,7 @@ int S_PlaySound(int num)
 
     if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(sndnum)))
     {
-        OSD_Printf("WARNING: invalid sound #%d\n", sndnum);
+        LOG_F(WARNING, "Invalid sound #%d", sndnum);
         return -1;
     }
 
@@ -951,10 +968,20 @@ int S_PlaySound(int num)
 
     if (sndnum >= MAXSOUNDINSTANCES)
     {
+        LOG_F(WARNING, "S_PlaySound: sndnum >= MAXSOUNDINSTANCES!");
+error:
+#ifdef CACHING_DOESNT_SUCK
+        g_soundlocks[num]--;
+#endif
         return -1;
     }
 
-    Bassert(bitmap_test(&snd->playing, sndnum) == 0);
+    if (bitmap_test(&snd->playing, sndnum))
+    {
+        LOG_F(WARNING, "S_PlaySound: slot %d for sound %d already filled", sndnum, num);
+        goto error;
+    }
+
     bitmap_set(&snd->playing, sndnum);
 
     if (snd->flags & SF_TALK)
@@ -967,9 +994,9 @@ int S_PlaySound(int num)
 
     if (voice <= FX_Ok)
     {
-        OSD_Printf("S_PlaySound(): error playing %s\n", snd->filename);
+        LOG_F(ERROR, "Error attempting to play %s", snd->filename);
         bitmap_clear(&snd->playing, sndnum);
-        return -1;
+        goto error;
     }
 
     snd->voices[sndnum].handle = voice;
@@ -1006,7 +1033,7 @@ void S_StopEnvSound(int soundNum, int spriteNum)
             {
                 Bassert(spriteNum == -1 || voice.handle > FX_Ok);
                 if (EDUKE32_PREDICT_FALSE(spriteNum >= 0 && voice.handle <= FX_Ok))
-                    LOG_F(ERROR, "S_StopEnvSound(): bad voice %d for sound ID %d index %d!\n", voice.handle, soundNum, j);
+                    LOG_F(ERROR, "Invalid voice for sound #%d index #%d! (%d)", soundNum, j, voice.handle);
                 else if (FX_SoundValidAndActive(voice.handle))
                     FX_StopSound(voice.handle);
                 else S_Cleanup();
@@ -1053,7 +1080,7 @@ void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
         {
             Bassert(spriteNum == -1 || voice.handle > FX_Ok);
             if (EDUKE32_PREDICT_FALSE(spriteNum >= 0 && voice.handle <= FX_Ok))
-                LOG_F(ERROR, "S_ChangeSoundPitch(): bad voice %d for sound ID %d index %d!\n", voice.handle, soundNum, j);
+                LOG_F(ERROR, "Invalid voice for sound #%d index #%d! (%d)", soundNum, j, voice.handle);
             else
                 FX_SetPitch(voice.handle, pitchoffset);
         }
@@ -1151,7 +1178,10 @@ void S_Callback(intptr_t num)
         int anum = (num - voiceindex) / MAXSOUNDINSTANCES;
 
         if (!bitmap_test(&g_sounds[anum]->playing, voiceindex))
+        {
+            LOG_F(WARNING, "Got callback for sound #%d index #%d that wasn't playing!", anum, voiceindex);
             return;
+        }
     }
 
 #ifndef NDEBUG
