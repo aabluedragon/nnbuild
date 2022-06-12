@@ -3151,7 +3151,7 @@ void G_DrawRooms(int snum,int smoothratio)
         ceilZ = actor[p->i].ceilingz;
         floorZ = actor[p->i].floorz;
 
-        if (g_earthquakeTime > 0 && p->on_ground == 1)
+        if ((X_OnEventWithReturn(EVENT_DOQUAKE, p->i, snum, g_earthquakeTime)) && g_earthquakeTime > 0 && p->on_ground == 1)
         {
             ud.camerapos.z += 256-(((g_earthquakeTime)&1)<<9);
             ud.cameraq16ang += fix16_from_int((2-((g_earthquakeTime)&2))<<2);

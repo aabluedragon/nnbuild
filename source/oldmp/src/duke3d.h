@@ -558,6 +558,7 @@ enum GameEvent_t {
     EVENT_ALTWEAPON,
     EVENT_LASTWEAPON,
     EVENT_ALTFIRE,
+    EVENT_DOQUAKE,
     MAXEVENTS
 };
 
