@@ -4680,9 +4680,21 @@ int A_Spawn(int j, int pn)
             if (j >= 0)
                 sp->owner = j;
             else sp->owner = i;
+
             sp->xrepeat = sp->yrepeat = 9;
             sp->yvel = 4;
-            fallthrough__;
+            sp->cstat |= 257;
+
+            if ((ud.multimode < 2 || DMFLAGS_TEST(DMFLAG_NODMWEAPONSPAWNS)) && sp->pal != 0)
+            {
+                sp->xrepeat = sp->yrepeat = 0;
+                changespritestat(i, STAT_MISC);
+                break;
+            }
+            sp->pal = 0;
+            sp->shade = -17;
+            changespritestat(i, STAT_ZOMBIEACTOR);
+            break;
 
         case REACTOR2__STATIC:
         case REACTOR__STATIC:
@@ -4712,7 +4724,7 @@ int A_Spawn(int j, int pn)
 
             CS(i) |= 257; // Make it hitable
 
-            if (ud.multimode < 2 && sp->pal != 0)
+            if ((ud.multimode < 2 || DMFLAGS_TEST(DMFLAG_NODMWEAPONSPAWNS)) && sp->pal != 0)
             {
                 sp->xrepeat = sp->yrepeat = 0;
                 changespritestat(i, STAT_MISC);
@@ -4770,7 +4782,7 @@ int A_Spawn(int j, int pn)
                 sp->cstat = 0;
             }
 
-            if ((ud.multimode < 2 && sp->pal != 0) || (sp->lotag > ud.player_skill))
+            if (((ud.multimode < 2 || DMFLAGS_TEST(DMFLAG_NODMWEAPONSPAWNS)) && sp->pal != 0) || (sp->lotag > ud.player_skill))
             {
                 sp->xrepeat = sp->yrepeat = 0;
                 changespritestat(i, STAT_MISC);

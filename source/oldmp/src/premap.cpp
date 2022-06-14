@@ -1599,6 +1599,9 @@ int G_EnterLevel(int g)
     if(GTFLAGS(GAMETYPE_COOP))
         DMFLAGS_SET(DMFLAG_NOEXITS, false);
 
+    if (!GTFLAGS(GAMETYPE_COOP))
+        DMFLAGS_SET(DMFLAG_NODMWEAPONSPAWNS, false);
+
     if (DMFLAGS_TEST(DMFLAG_WEAPONSTAY)) // [JM] Needed this hack for backwards compat.
         Gametypes[ud.coop].flags |= GAMETYPE_WEAPSTAY;
     else

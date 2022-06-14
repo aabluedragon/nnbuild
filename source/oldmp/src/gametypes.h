@@ -40,6 +40,7 @@ enum DMFlags_t {
     DMFLAG_NOFOVCHANGE              = (1 << 9),
     DMFLAG_NOWEAPONICONS            = (1 << 10),
     DMFLAG_ALLOWVISIBILITYCHANGE    = (1 << 11),
+    DMFLAG_NODMWEAPONSPAWNS         = (1 << 12),
 };
 
 #define DEFAULT_DMFLAGS (DMFLAG_FRIENDLYFIRE | DMFLAG_MARKERS)
