@@ -135,7 +135,7 @@ void Net_SendPlayerName(void);
 void Net_SendUserMapName(void);
 void Net_SendInitialSettings(void);
 void Net_NewGame(int volume, int level);
-void Net_EndOfLevel(void);
+void Net_EndOfLevel(bool secret);
 void Net_EnterMessage(void);
 
 void Net_InitializeStructPointers(void);

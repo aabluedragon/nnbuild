@@ -4101,7 +4101,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
         }
         else if (p->timebeforeexit == 1)
         {
-            Net_EndOfLevel();
+            Net_EndOfLevel(false);
             return 1;
         }
     }
@@ -4151,35 +4151,7 @@ static int P_HandleFist(int playerNum)
         }
         if (p->fist_incs > 42)
         {
-            if (p->buttonpalette && ud.from_bonus == 0)
-            {
-                ud.from_bonus = ud.level_number + 1;
-                if (ud.secretlevel > 0 && ud.secretlevel < MAXLEVELS) ud.level_number = ud.secretlevel - 1;
-                ud.m_level_number = ud.level_number;
-            }
-            else
-            {
-                if (ud.from_bonus)
-                {
-                    ud.level_number = ud.from_bonus;
-                    ud.m_level_number = ud.level_number;
-                    ud.from_bonus = 0;
-                }
-                else
-                {
-                    if (ud.level_number == ud.secretlevel && ud.from_bonus > 0)
-                        ud.level_number = ud.from_bonus;
-                    else ud.level_number++;
-
-                    if (ud.level_number > MAXLEVELS - 1)
-                        ud.level_number = 0;
-                    ud.m_level_number = ud.level_number;
-                }
-            }
-
-            for (ALL_PLAYERS(i))
-                g_player[i].ps->gm = MODE_EOL;
-
+            Net_EndOfLevel((p->buttonpalette && ud.from_bonus == 0));
             p->fist_incs = 0;
 
             return 1;

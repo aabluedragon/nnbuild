@@ -564,8 +564,10 @@ void Net_ParsePackets(void)
                 for (ALL_PLAYERS(i))
                     g_player[i].ps->gm = MODE_EOL;
 
-                ud.m_level_number = ud.level_number = packbuf[1];
+                ud.level_number = packbuf[1];
                 ud.from_bonus = packbuf[2];
+
+                G_RevertUnconfirmedGameSettings();
                 break;
             }
 
@@ -1003,23 +1005,40 @@ void Net_NewGame(int volume, int level)
     }
 }
 
-void Net_EndOfLevel(void)
+void Net_EndOfLevel(bool secret)
 {
     if ((myconnectindex != connecthead) || oldnet_predicting)
         return;
 
-    g_player[myconnectindex].ps->gm = MODE_EOL;
-    if (ud.from_bonus)
+    for (int32_t ALL_PLAYERS(i))
+        g_player[i].ps->gm = MODE_EOL;
+
+    if (secret)
     {
-        ud.level_number = ud.from_bonus;
+        ud.from_bonus = ud.level_number + 1;
+
+        if (ud.secretlevel > 0 && ud.secretlevel < MAXLEVELS)
+            ud.level_number = ud.secretlevel - 1;
+
         ud.m_level_number = ud.level_number;
-        ud.from_bonus = 0;
     }
     else
     {
-        ud.level_number++;
-        ud.m_level_number = ud.level_number;
+        if (ud.from_bonus)
+        {
+            ud.level_number = ud.from_bonus;
+            ud.from_bonus = 0;
+        }
+        else
+        {
+            ud.level_number++;
+
+            if (ud.level_number > MAXLEVELS - 1)
+                ud.level_number = 0;
+        }
     }
+
+    G_RevertUnconfirmedGameSettings();
 
     packbuf[0] = PACKET_TYPE_EOL;
     packbuf[1] = ud.level_number;

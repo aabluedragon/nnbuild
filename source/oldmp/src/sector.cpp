@@ -1506,25 +1506,10 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         }
     }
 
-    if (lotag == (short) 65535)
+    if ((lotag == (short)65535) && !DMFLAGS_TEST(DMFLAG_NOEXITS))
     {
-
-        g_player[myconnectindex].ps->gm = MODE_EOL;
-        if (ud.from_bonus)
-        {
-            ud.level_number = ud.from_bonus;
-            ud.m_level_number = ud.level_number;
-            ud.from_bonus = 0;
-        }
-        else
-        {
-            ud.level_number++;
-            if (ud.level_number > MAXLEVELS-1)
-                ud.level_number = 0;
-            ud.m_level_number = ud.level_number;
-        }
+        Net_EndOfLevel(false);
         return 1;
-
     }
 
     switchpicnum = picnum;
@@ -2488,6 +2473,7 @@ void A_DamageObject_Internal(int i,int sn)
                 if (sprite[sn].picnum == RPG) // This is what doubles RPG damage on direct hit.
                     sprite[sn].extra <<= 1;
 
+                // Spawns blood from the projectile doing the damage.
                 if ((PN(i) != DRONE) && (PN(i) != ROTATEGUN) && (PN(i) != COMMANDER) && (PN(i) < GREENSLIME || PN(i) > GREENSLIME+7))
                     if (sprite[sn].picnum != FREEZEBLAST)
                         if (!A_CheckSpriteFlags(i, SFLAG_BADGUY) || A_CheckSpriteFlags(i, SFLAG_HURTSPAWNBLOOD))

@@ -501,6 +501,15 @@ void G_UpdateScreenArea(void)
     pus = NUMPAGES;
 }
 
+void G_RevertUnconfirmedGameSettings()
+{
+    ud.m_level_number = ud.level_number;
+    ud.m_volume_number = ud.volume_number;
+    ud.m_player_skill = ud.player_skill;
+    ud.m_coop = ud.coop;
+    ud.m_dmflags = ud.dmflags;
+}
+
 void P_RandomSpawnPoint(int snum)
 {
     DukePlayer_t *p = g_player[snum].ps;
