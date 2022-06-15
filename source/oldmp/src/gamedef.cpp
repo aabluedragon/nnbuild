@@ -81,8 +81,6 @@ gamearray_t aGameArrays[MAXGAMEARRAYS];
 int g_gameVarCount=0;
 int g_gameArrayCount=0;
 
-extern int qsetmode;
-
 char *textptr;
 int g_errorCnt,g_warningCnt;
 

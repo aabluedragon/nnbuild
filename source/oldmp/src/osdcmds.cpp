@@ -781,19 +781,19 @@ osdcvardata_t cvar[] =
     { "r_precache", "r_precache: enable/disable the pre-level caching routine", (void*)&ud.config.useprecache, CVAR_BOOL, 0, 1 },
 
     // Music
-    { "mus_enabled", "music subsystem" CVAR_BOOL_OPTSTR, (void*)&ud.config.MusicToggle, CVAR_BOOL, 0, 1 },
-    { "mus_device", "music device", (void*)&ud.config.MusicDevice, CVAR_INT, 0, ASS_NumSoundCards },
-    { "mus_volume", "controls music volume", (void*)&ud.config.MusicVolume, CVAR_INT, 0, 255 },
+    { "mus_enabled", "music subsystem" CVAR_BOOL_OPTSTR, (void*)&ud.config.MusicToggle, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },
+    { "mus_device", "music device", (void*)&ud.config.MusicDevice, CVAR_INT | CVAR_FUNCPTR, 0, ASS_NumSoundCards },
+    { "mus_volume", "controls music volume", (void*)&ud.config.MusicVolume, CVAR_INT | CVAR_FUNCPTR, 0, 255 },
 
     // Sound
     { "snd_ambience", "snd_ambience: enables/disables ambient sounds", (void*)&ud.config.AmbienceToggle, CVAR_BOOL, 0, 1 },
-    { "snd_enabled", "sound effects" CVAR_BOOL_OPTSTR, (void*)&ud.config.SoundToggle, CVAR_BOOL, 0, 1 },
+    { "snd_enabled", "sound effects" CVAR_BOOL_OPTSTR, (void*)&ud.config.SoundToggle, CVAR_BOOL | CVAR_FUNCPTR, 0, 1 },
     { "snd_duketalk", "snd_duketalk: enables/disables Duke's speech", (void*)&ud.config.VoiceToggle, CVAR_INT, 0, 5 },
     { "snd_fxvolume", "snd_fxvolume: volume of sound effects", (void*)&ud.config.FXVolume, CVAR_INT, 0, 255 },
     { "snd_mixrate", "snd_mixrate: sound mixing rate", (void*)&ud.config.MixRate, CVAR_INT, 0, 48000 },
     { "snd_numbits", "snd_numbits: sound bits", (void*)&ud.config.NumBits, CVAR_INT, 8, 16 },
     { "snd_numchannels", "snd_numchannels: the number of sound channels", (void*)&ud.config.NumChannels, CVAR_INT, 0, 2 },
-    { "snd_numvoices", "snd_numvoices: the number of concurrent sounds", (void*)&ud.config.NumVoices, CVAR_INT, 0, 32 },
+    { "snd_numvoices", "snd_numvoices: the number of concurrent sounds", (void*)&ud.config.NumVoices, CVAR_INT | CVAR_FUNCPTR, 0, 32 },
     //{ "snd_reversestereo", "snd_reversestereo: reverses the stereo channels", (void*)&ud.config.ReverseStereo, CVAR_BOOL, 0, 16 },
 
     { "vid_gamma","gamma component of gamma ramp",(void*)&g_videoGamma, CVAR_FLOAT | CVAR_FUNCPTR, 0, 10 },
@@ -843,10 +843,6 @@ static int osdcmd_cvar_set_game(osdcmdptr_t parm)
     {
         G_UpdatePlayerFromMenu();
     }
-    else if (!Bstrcasecmp(parm->name, "snd_fxvolume"))
-    {
-        FX_SetVolume(ud.config.FXVolume);
-    }
     else if (!Bstrcasecmp(parm->name, "mus_volume"))
     {
         S_MusicVolume(ud.config.MusicVolume);
@@ -860,6 +856,14 @@ static int osdcmd_cvar_set_game(osdcmdptr_t parm)
     else if (!Bstrcasecmp(parm->name, "vid_brightness") || !Bstrcasecmp(parm->name, "vid_contrast"))
     {
         videoSetPalette(ud.brightness >> 2, g_player[myconnectindex].ps->palette, 0);
+    }
+    else if (!Bstrcasecmp(parm->name, "snd_enabled") || !Bstrcasecmp(parm->name, "snd_numvoices"))
+    {
+        if (!FX_WarmedUp())
+            return r;
+
+        S_SoundShutdown();
+        S_SoundStartup();
     }
     else if (!Bstrcasecmp(parm->name, "hud_scale")
         || !Bstrcasecmp(parm->name, "hud_statusbarmode")

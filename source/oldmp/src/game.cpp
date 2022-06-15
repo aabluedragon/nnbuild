@@ -1643,7 +1643,6 @@ static void G_DisplayExtraScreens(void)
     }
 }
 
-extern int qsetmode;
 extern int g_doQuickSave;
 
 void G_GameExit(const char *t)
@@ -1668,7 +1667,7 @@ void G_GameExit(const char *t)
 
     if (*t != 0) LOG_F(INFO, "%s",t);
 
-    if (qsetmode == 200)
+    if (in3dmode())
         G_Shutdown();
 
     if (*t != 0)
@@ -1684,8 +1683,6 @@ void G_GameExit(const char *t)
             wm_msgbox(titlebuf, "%s", t);
         }
     }
-
-    uninitgroupfile();
 
     //unlink("duke3d.tmp");
 
@@ -8771,11 +8768,13 @@ void G_Shutdown(void)
     timerUninit();
     CONTROL_Shutdown();
     KB_Shutdown();
+    engineUnInit();
     G_Cleanup();
 #ifdef DISCORC_RPC
     Discord_Shutdown();
 #endif
-    engineUnInit();
+    uninitgroupfile();
+    Bfflush(NULL);
 }
 
 /*
