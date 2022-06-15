@@ -10,6 +10,8 @@
 #define BOT_SEEK_LOOKFORBETTER 30
 #define BOT_MIN_RESPAWN_TIME 30
 #define BOT_MAX_RESPAWN_TIME 90
+#define BOT_MIN_REACTION_TIME 3
+#define BOT_MAX_REACTION_TIME 8
 
 enum BotMoveFlags
 {
@@ -30,7 +32,7 @@ enum BotCombatFlags
 typedef struct
 {
     vec3_t goalPos, lastSeenPlayerPos[MAXPLAYERS];
-    int32_t moveCount, cycleCount, seekSpriteFailCount, seekSpriteCooldown, waterSubmergeTime, respawnTime;
+    int32_t moveCount, cycleCount, seekSpriteFailCount, seekSpriteCooldown, waterSubmergeTime, respawnTime, reactionTime;
     int32_t goalSprite, goalSpriteScore, lastGoalSprite;
     int32_t goalPlayer, goalWall;
     int32_t rand;

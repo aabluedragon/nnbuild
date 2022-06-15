@@ -594,6 +594,9 @@ void DukeBot_GetInput(int snum, input_t* syn)
     {
         int32_t lastDist = INT32_MAX;
 
+        if (!bot->reactionTime)
+            bot->reactionTime = BOT_MIN_REACTION_TIME + (seed_krand(&bot->rand) % ((BOT_MAX_REACTION_TIME + 1) - BOT_MIN_REACTION_TIME));
+
         for (int32_t ALL_PLAYERS(otherPlayer))
         {
             auto pOther = g_player[otherPlayer].ps;
@@ -769,11 +772,15 @@ void DukeBot_GetInput(int snum, input_t* syn)
     // Get Angle
     int32_t faceAngle = getangle(bot->goalPos.x - pSpr->x, bot->goalPos.y - pSpr->y);
 
+    if (!seePlayer && !bot->reactionTime)
+        bot->reactionTime = BOT_MIN_REACTION_TIME+(seed_krand(&bot->rand) % ((BOT_MAX_REACTION_TIME+1)-BOT_MIN_REACTION_TIME));
+
     // Move, do stuff. (or override angle if need be).
     if (seePlayer)
     {
         int32_t fightDist = max(fdmatrix[p->curr_weapon][goalp->curr_weapon], 128);
         int32_t zAngle = 100 - ((gpSpr->z - pSpr->z) * 8) / gpDist;
+        int32_t angleDelta = G_GetAngleDelta(pSpr->ang, getangle(gpSpr->x - pSpr->x, gpSpr->y - pSpr->y));
 
         hitdata_t hit;
         hitscan(&p->pos, p->cursectnum, sintable[(pSpr->ang + 512) & 2047], sintable[pSpr->ang & 2047],
@@ -782,7 +789,10 @@ void DukeBot_GetInput(int snum, input_t* syn)
         faceAngle = getangle(gpSpr->x - pSpr->x, gpSpr->y - pSpr->y);
         bot->lastSeenPlayerPos[bot->goalPlayer] = gpSpr->xyz;
 
-        syn->bits |= BIT(SK_FIRE);
+        if (bot->reactionTime > 0) // We haven't had time to react yet.
+            bot->reactionTime--;
+        else if(klabs(angleDelta) < 1024) // Shoot when we're roughly facing our target.
+            syn->bits |= BIT(SK_FIRE);
 
         // Handle special weapon cases.
         if (p->curr_weapon == RPG_WEAPON || p->curr_weapon == DEVISTATOR_WEAPON)
@@ -829,9 +839,11 @@ void DukeBot_GetInput(int snum, input_t* syn)
         syn->bits &= ~BIT(SK_FIRE); // DEBUG: STOP SHOOTING, AND HOLD STILL, DAMNIT.
         moveFlags &= ~BOT_MOVE_STRAFE;
 #endif
-
-        syn->q16horz = min(max(fix16_from_int(zAngle) - p->q16horiz, F16(-MAXHORIZ)), F16(MAXHORIZ));
-        syn->bits |= BIT(SK_AIMMODE);
+        if (!bot->reactionTime) // If we've had time to react, start turning.
+        {
+            syn->q16horz = min(max(fix16_from_int(zAngle) - p->q16horiz, F16(-MAXHORIZ)), F16(MAXHORIZ));
+            syn->bits |= BIT(SK_AIMMODE);
+        }
     }
 
     bool const goForItem = seeSprite && !((combatFlags & BOT_COMBAT_MELEE && (gpDist < (prioritizeItems) ? sprDist : sprDist << 1)) || combatFlags & BOT_COMBAT_STOMP);
@@ -896,16 +908,21 @@ void DukeBot_GetInput(int snum, input_t* syn)
         int32_t dodgeSpeed = 0;
         switch (DynamicTileMap[sprite[spr].picnum])
         {
-        case TONGUE__STATIC:      dodgeSpeed = 4;  break;
-        case FREEZEBLAST__STATIC: dodgeSpeed = 4;  break;
-        case SHRINKSPARK__STATIC: dodgeSpeed = 16; break;
-        case RPG__STATIC:         dodgeSpeed = 16; break;
-        default:                  dodgeSpeed = 0;  break;
+            case TONGUE__STATIC:      dodgeSpeed = 4;  break;
+            case FREEZEBLAST__STATIC: dodgeSpeed = 4;  break;
+            case SHRINKSPARK__STATIC: dodgeSpeed = 16; break;
+            case RPG__STATIC:         dodgeSpeed = 16; break;
+            default:                  dodgeSpeed = 0;  break;
         }
 
         if (dodgeSpeed)
         {
             vec3_t projPos = sprite[spr].xyz;
+            int32_t angleDelta = G_GetAngleDelta(pSpr->ang, getangle(projPos.x - pSpr->x, projPos.y - pSpr->y));
+
+            if (klabs(angleDelta) > 1024) // Don't dodge projectiles we can't see.
+                continue;
+
             for (int32_t dodgeCnt = 0; dodgeCnt <= 8; dodgeCnt++)
             {
                 if (tmulscale11(projPos.x - pSpr->x, projPos.x - pSpr->x, projPos.y - pSpr->y, projPos.y - pSpr->y, (projPos.z - pSpr->z) >> 4, (projPos.z - pSpr->z) >> 4) < 3072)
