@@ -655,6 +655,16 @@ static inline int S_GetPitch(int num)
     return (range == 0) ? snd->minpitch : min(snd->minpitch, snd->maxpitch) + wrand() % range;
 }
 
+static void S_AllocVoiceInfo(sound_t* snd)
+{
+    if (snd->voices == &nullvoice)
+    {
+        snd->voices = (voiceinfo_t*)Xcalloc(MAXSOUNDINSTANCES, sizeof(voiceinfo_t));
+        for (int i = 0; i < MAXSOUNDINSTANCES; ++i)
+            snd->voices[i] = nullvoice;
+    }
+}
+
 static int S_GetSlot(int soundNum)
 {
     int slot = 0;
@@ -780,16 +790,6 @@ int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z)
     pos.z = z;
 
     return S_PlaySound3D(num, i, pos);
-}
-
-void S_AllocVoiceInfo(sound_t* snd)
-{
-    if (snd->voices == &nullvoice)
-    {
-        snd->voices = (voiceinfo_t*)Xcalloc(MAXSOUNDINSTANCES, sizeof(voiceinfo_t));
-        for (int i = 0; i < MAXSOUNDINSTANCES; ++i)
-            snd->voices[i] = nullvoice;
-    }
 }
 
 int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
