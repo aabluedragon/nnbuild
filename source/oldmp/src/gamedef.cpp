@@ -1425,6 +1425,7 @@ static int C_CheckEventSync(int iEventID)
         case EVENT_LOGO:
         case EVENT_SOUND:
         case EVENT_PRELEVEL:
+        case EVENT_DOQUAKE:
             return 0;
         default:
             return 1;
