@@ -927,6 +927,7 @@ enum ScriptKeywords_t
     CON_SHIFTVARVARR,       // 355
     CON_GETTILEDATA,        // 356
     CON_SETTILEDATA,        // 357
+    CON_DEFSTATE,           // 358
     CON_END
 };
 #endif

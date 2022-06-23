@@ -482,6 +482,7 @@ const char *keyw[] =
     "shiftvarvarr",             // 355
     "gettiledata",              // 356
     "settiledata",              // 357
+    "defstate"                  // 358
     "<null>"
 };
 
@@ -1951,9 +1952,18 @@ static int C_ParseCommand(void)
     default:
     case -1:
         return 0; //End
+    case CON_DEFSTATE:
+        if (EDUKE32_PREDICT_FALSE(g_processingState || g_parsingActorPtr))
+        {
+            C_ReportError(ERROR_FOUNDWITHIN);
+            g_errorCnt++;
+            return 0;
+        }
+        goto DO_DEFSTATE;
     case CON_STATE:
         if (g_parsingActorPtr == 0 && g_processingState == 0)
         {
+DO_DEFSTATE:
             C_GetNextLabelName();
             g_scriptPtr--;
             labelcode[g_numLabels] = (intptr_t) g_scriptPtr;
