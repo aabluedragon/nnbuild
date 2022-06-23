@@ -562,11 +562,11 @@ static void X_Move(void)
 
     if (g_sp->xvel > -6 && g_sp->xvel < 6) g_sp->xvel = 0;
 
-    a = A_CheckEnemySprite(g_sp);
+    int isEnemy = A_CheckEnemySprite(g_sp);
 
     if (g_sp->xvel || g_sp->zvel)
     {
-        if (a && g_sp->picnum != ROTATEGUN)
+        if (isEnemy && g_sp->picnum != ROTATEGUN)
         {
             if ((g_sp->picnum == DRONE || g_sp->picnum == COMMANDER) && g_sp->extra > 0)
             {
@@ -627,7 +627,7 @@ static void X_Move(void)
         daxvel = g_sp->xvel;
         angdif = g_sp->ang;
 
-        if (a && g_sp->picnum != ROTATEGUN)
+        if (isEnemy && g_sp->picnum != ROTATEGUN)
         {
             if (g_x < 960 && g_sp->xrepeat > 16)
             {
@@ -663,10 +663,10 @@ static void X_Move(void)
 
         actor[g_i].movflag = A_MoveSprite(g_i,
                                                (daxvel*(sintable[(angdif+512)&2047]))>>14,
-                                               (daxvel*(sintable[angdif&2047]))>>14,g_sp->zvel,CLIPMASK0);
+                                               (daxvel*(sintable[angdif&2047]))>>14,g_sp->zvel, (a & noclip) ? 0 : CLIPMASK0);
     }
 
-    if (a)
+    if (isEnemy)
     {
         if (sector[g_sp->sectnum].ceilingstat&1)
             g_sp->shade += (sector[g_sp->sectnum].ceilingshade-g_sp->shade)>>1;

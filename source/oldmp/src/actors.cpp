@@ -661,8 +661,11 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
         }
     }
     
-    if ((daz > actor[spritenum].ceilingz) && (daz <= actor[spritenum].floorz))
+    if (((daz > actor[spritenum].ceilingz) && (daz <= actor[spritenum].floorz))
+        || ((sprite[spritenum].statnum == STAT_ACTOR) && actor[spritenum].temp_data[1] && (sprite[spritenum].hitag & noclip)))
+    {
         sprite[spritenum].z = daz;
+    }
     else if (retval == 0)
         return(16384+dasectnum);
 

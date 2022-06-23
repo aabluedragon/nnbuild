@@ -310,7 +310,8 @@ enum ActorMoveFlags_t {
     jumptoplayer        = 257,
     seekplayer          = 512,
     furthestdir         = 1024,
-    dodgebullet         = 4096
+    dodgebullet         = 4096,
+    noclip              = 8192,
 };
 
 // Some misc #defines

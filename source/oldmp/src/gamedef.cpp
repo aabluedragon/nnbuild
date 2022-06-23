@@ -5829,6 +5829,8 @@ static void C_AddDefaultDefinitions(void)
     AddDefinition("STR_VERSION",STR_VERSION,LABEL_DEFINE);
     AddDefinition("STR_GAMETYPE",STR_GAMETYPE,LABEL_DEFINE);
 
+    AddDefinition("noclip", noclip, LABEL_DEFINE);
+
     AddDefinition("NO",0,LABEL_DEFINE|LABEL_ACTION|LABEL_AI|LABEL_MOVE);
 
     AddDefinition("PROJ_BOUNCES",PROJ_BOUNCES,LABEL_DEFINE);
