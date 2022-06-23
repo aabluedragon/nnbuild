@@ -4438,6 +4438,9 @@ static void P_CheckTouchDamage(DukePlayer_t* p, int j)
     if (oldnet_predicting)
         return;
 
+    if ((j = X_OnEventWithReturn(EVENT_CHECKTOUCHDAMAGE, p->i, sprite[p->i].yvel, j)) == -1)
+        return;
+
     if ((j & 49152) == 49152)
     {
         j &= (MAXSPRITES - 1);
