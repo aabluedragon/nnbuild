@@ -4545,6 +4545,8 @@ void P_ProcessInput(int snum)
     psectlotag = sector[psect].lotag;
     p->spritebridge = 0;
     p->sbs = 0;
+    p->lowsprite = -1;
+    p->highsprite = -1;
 
     getzrange(&p->pos, psect, &ceilZ, &highZhit, &floorZ, &lowZhit, 163L, CLIPMASK0);
     yax_getzsofslope(psect, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
@@ -4606,21 +4608,22 @@ void P_ProcessInput(int snum)
 
     if (highZhit >= 0 && (highZhit & 49152) == 49152)
     {
-        highZhit &= (MAXSPRITES - 1);
+        p->highsprite = highZhit & (MAXSPRITES - 1);
 
-        if (sprite[highZhit].statnum == STAT_ACTOR && sprite[highZhit].extra >= 0)
+        if (sprite[p->highsprite].statnum == STAT_ACTOR && sprite[p->highsprite].extra >= 0)
         {
-            highZhit = 0;
+            //highZhit = 0; // Not used later...
             ceilZ = p->truecz;
         }
     }
 
     if (lowZhit >= 0 && (lowZhit & 49152) == 49152)
     {
-        int spr = lowZhit & (MAXSPRITES - 1);
-        if (P_DoSpriteBridge(spr, p))
+        p->lowsprite = lowZhit & (MAXSPRITES - 1);
+
+        if (P_DoSpriteBridge(p->lowsprite, p))
         {
-            auto spr_sect_lotag = sector[sprite[spr].sectnum].lotag;
+            auto spr_sect_lotag = sector[sprite[p->lowsprite].sectnum].lotag;
             if (spr_sect_lotag != ST_2_UNDERWATER) // Underwater sprite bridges shouldn't clear tag.
             {
                 psectlotag = 0;
@@ -4634,8 +4637,8 @@ void P_ProcessInput(int snum)
     }
     else if (waterZhit >= 0 && (waterZhit & 49152) == 49152)
     {
-        int spr = waterZhit & (MAXSPRITES - 1);
-        P_DoSpriteBridge(spr, p);
+        p->lowsprite = waterZhit & (MAXSPRITES - 1);
+        P_DoSpriteBridge(p->lowsprite, p);
     }
 
     if (s->extra > 0) P_IncurDamage(p);

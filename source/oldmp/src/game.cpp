@@ -1442,6 +1442,9 @@ static void G_PrintCoords(int snum)
     Bsprintf(tempbuf, "OG= %d", p->on_ground);
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
+    Bsprintf(tempbuf, "SBS/LS/HS= %d,%d,%d", p->sbs, p->lowsprite, p->highsprite);
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
+
     Bsprintf(tempbuf, "SECTL= %d", TrackerCast(sector[p->cursectnum].lotag));
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 

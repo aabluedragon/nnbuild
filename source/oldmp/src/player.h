@@ -80,7 +80,7 @@ typedef struct {
 
     char palette;
 
-    short sbs, sound_pitch;
+    short sbs, lowsprite, highsprite, sound_pitch;
 
     short cursectnum, look_ang, last_extra, subweapon;
     short ammo_amount[MAX_WEAPONS], wackedbyactor, frag, fraggedself;

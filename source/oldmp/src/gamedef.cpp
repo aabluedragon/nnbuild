@@ -789,6 +789,8 @@ const memberlabel_t PlayerLabels[]=
     { "max_ammo_amount", PLAYER_MAX_AMMO_AMOUNT, LABEL_HASPARM2, MAX_WEAPONS },
     { "last_quick_kick", PLAYER_LAST_QUICK_KICK, 0, 0 },
     { "connected", PLAYER_CONNECTED, 0, 0 },
+    { "lowsprite", PLAYER_LOWSPRITE, 0, 0 },
+    { "highsprite", PLAYER_HIGHSPRITE, 0, 0 },
     { "", -1, 0, 0  }     // END OF LIST
 };
 
