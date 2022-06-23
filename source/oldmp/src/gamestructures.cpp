@@ -2723,6 +2723,22 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
         Gv_SetVar(lVar2, g_player[iPlayer].connected, g_i, g_p);
         return;
 
+    case PLAYER_LOWSPRITE: // [JM] Lowest sprite touching.
+        if (iSet)
+        {
+            return; // Read-only
+        }
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->lowsprite, g_i, g_p);
+        return;
+
+    case PLAYER_HIGHSPRITE: // [JM] Lowest sprite touching.
+        if (iSet)
+        {
+            return; // Read-only
+        }
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->highsprite, g_i, g_p);
+        return;
+
     default:
         return;
     }
