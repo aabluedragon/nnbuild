@@ -414,6 +414,7 @@ static int osdcmd_debugplayer(const osdfuncparm_t *parm)
     if (g_player[i].connected == 1 || g_player[i].ps != NULL)
     {
         OSD_Printf("Name: %s\n", g_player[i].user_name);
+        OSD_Printf("i: %d\n", g_player[i].ps->i);
         OSD_Printf("timebeforeexit: %d\n", g_player[i].ps->timebeforeexit);
         OSD_Printf("dead_flag: %d\n", g_player[i].ps->dead_flag);
         OSD_Printf("weapreccnt: %d\n", g_player[i].ps->weapreccnt);
