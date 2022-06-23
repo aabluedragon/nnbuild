@@ -1236,8 +1236,6 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("gravitationalconstant",(intptr_t)&g_spriteGravity, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
     Gv_NewVar("gametype_flags",(intptr_t)&Gametypes[ud.coop].flags, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
     Gv_NewVar("framerate",(intptr_t)&g_currentFrameRate, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("CLIPMASK0", CLIPMASK0, GAMEVAR_SYSTEM|GAMEVAR_READONLY);
-    Gv_NewVar("CLIPMASK1", CLIPMASK1, GAMEVAR_SYSTEM|GAMEVAR_READONLY);
 
     Gv_NewVar("camerax",(intptr_t)&ud.camerapos.x, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("cameray",(intptr_t)&ud.camerapos.y, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_SYNCCHECK);
