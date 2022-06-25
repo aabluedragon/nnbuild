@@ -482,7 +482,7 @@ const char *keyw[] =
     "shiftvarvarr",             // 355
     "gettiledata",              // 356
     "settiledata",              // 357
-    "defstate"                  // 358
+    "defstate",                 // 358
     "<null>"
 };
 
@@ -1940,14 +1940,14 @@ static int C_ParseCommand(void)
         //Bsprintf(g_szBuf,"PC(): '%.25s'",textptr);
         //AddLog(g_szBuf);
     }
-    tw = C_GetNextKeyword();
+    
     //    Bsprintf(tempbuf,"%s",keyw[tw]);
     //    AddLog(tempbuf);
 
     if (C_SkipComments())
         return 1;
 
-    switch (tw)
+    switch (tw = C_GetNextKeyword())
     {
     default:
     case -1:
