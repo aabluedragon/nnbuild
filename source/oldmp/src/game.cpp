@@ -9505,7 +9505,6 @@ int app_main(int32_t argc, char const* const* argv)
     ud.color = playerColor_getValidPal(ud.m_color);
     g_player[0].ps->palookup = g_player[0].pcolor = ud.color;
 
-    if (quitevent) return 4;
     if (!loaddefinitionsfile(eduke32def))
     {
         LOG_F(INFO, "Internal def file '%s' loaded.", eduke32def);
@@ -9525,6 +9524,9 @@ int app_main(int32_t argc, char const* const* argv)
         G_FatalEngineInitError();
 
     G_PostLoadPalette();
+
+    if (quitevent)
+        return 4;
 
     if (!G_InitMultiplayer())
     {
