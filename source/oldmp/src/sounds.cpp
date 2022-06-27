@@ -1090,7 +1090,6 @@ void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
 
 void S_ChangeAllSoundPitches(int pitchOffset)
 {
-    OSD_Printf("Setting pitch for all sounds...\n");
     for (int i = 0; i <= g_highestSoundIdx; ++i)
     {
         auto& snd = g_sounds[i];
