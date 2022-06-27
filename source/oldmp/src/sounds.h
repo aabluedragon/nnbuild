@@ -96,6 +96,7 @@ void S_StopEnvSound(int soundNum, int spriteNum);
 void S_StopAllSounds(void);
 void S_PauseSounds(bool paused);
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);
+void S_ChangeAllSoundPitches(int pitchOffset);
 
 // Startup, shutdown, allocation, callbacks, updating, and cleanup
 void S_AllocIndexes(int sndidx);

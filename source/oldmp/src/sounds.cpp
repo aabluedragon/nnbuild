@@ -1088,6 +1088,25 @@ void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
     }
 }
 
+void S_ChangeAllSoundPitches(int pitchOffset)
+{
+    OSD_Printf("Setting pitch for all sounds...\n");
+    for (int i = 0; i <= g_highestSoundIdx; ++i)
+    {
+        auto& snd = g_sounds[i];
+
+        for (int j = 0; j < MAXSOUNDINSTANCES; ++j)
+        {
+            if (!bitmap_test(&snd->playing, j))
+                continue;
+
+            auto& voice = snd->voices[j];
+
+            FX_SetPitch(voice.handle, pitchOffset);
+        }
+    }
+}
+
 void S_Update(void)
 {
     if ((g_player[myconnectindex].ps->gm & (MODE_GAME | MODE_DEMO)) == 0)
