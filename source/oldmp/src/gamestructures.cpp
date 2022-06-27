@@ -2656,7 +2656,8 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
         if (iSet)
         {
             g_player[iPlayer].ps->sound_pitch=lValue;
-            S_ChangeAllSoundPitches(lValue);
+            if(iPlayer == screenpeek)
+                S_ChangeAllSoundPitches(lValue);
             return;
         }
         Gv_SetVar(lVar2, g_player[iPlayer].ps->sound_pitch, g_i, g_p);
