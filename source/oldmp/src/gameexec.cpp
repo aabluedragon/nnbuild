@@ -2329,10 +2329,10 @@ static int X_DoExecute(void)
             fix16_t horiz = fix16_from_int(Gv_GetVarX(*insptr++));
 
             int sect=Gv_GetVarX(*insptr++);
-            int ix1=scale(Gv_GetVarX(*insptr++),xdim,320);
-            int iy1=scale(Gv_GetVarX(*insptr++),ydim,200);
-            int ix2=scale(Gv_GetVarX(*insptr++),xdim,320);
-            int iy2=scale(Gv_GetVarX(*insptr++),ydim,200);
+            int ix1=Gv_GetVarX(*insptr++);
+            int iy1=Gv_GetVarX(*insptr++);
+            int ix2=Gv_GetVarX(*insptr++);
+            int iy2=Gv_GetVarX(*insptr++);
 
             G_ShowView(vec, a, horiz, sect, ix1, iy1, ix2, iy2, 0);
             break;
