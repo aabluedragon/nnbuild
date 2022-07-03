@@ -89,17 +89,17 @@ static int32_t fdmatrix[MAX_WEAPONS][MAX_WEAPONS] =
 
 static bool DukeBot_CanSee(vec3_t* pos1, int16_t sect1, vec3_t* pos2, int16_t sect2)
 {
-    return (cansee(pos1->x, pos1->y, pos1->z, sect1, pos2->x, pos2->y, pos2->z, sect2) ||
-            cansee(pos1->x, pos1->y, pos1->z - (24 << 8), sect1, pos2->x, pos2->y, pos2->z - (24 << 8), sect2) ||
-            cansee(pos1->x, pos1->y, pos1->z - (48 << 8), sect1, pos2->x, pos2->y, pos2->z - (48 << 8), sect2));
+    return (cansee(pos1->x, pos1->y, pos1->z, sect1, pos2->x, pos2->y, pos2->z, sect2, CSTAT_WALL_1WAY | CSTAT_WALL_BLOCK_HITSCAN) ||
+            cansee(pos1->x, pos1->y, pos1->z - (24 << 8), sect1, pos2->x, pos2->y, pos2->z - (24 << 8), sect2, CSTAT_WALL_1WAY | CSTAT_WALL_BLOCK_HITSCAN) ||
+            cansee(pos1->x, pos1->y, pos1->z - (48 << 8), sect1, pos2->x, pos2->y, pos2->z - (48 << 8), sect2, CSTAT_WALL_1WAY | CSTAT_WALL_BLOCK_HITSCAN));
 }
 
 static bool DukeBot_CanSeeItem(vec3_t* pos1, int16_t sect1, int32_t spriteNum)
 {
     auto spr = &sprite[spriteNum];
-    return (cansee(pos1->x, pos1->y, pos1->z - (24 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum) ||
-            cansee(pos1->x, pos1->y, pos1->z - (48 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum) ||
-            cansee(pos1->x, pos1->y, pos1->z - (72 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum));
+    return (cansee(pos1->x, pos1->y, pos1->z - (24 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum, CSTAT_WALL_BLOCK) ||
+            cansee(pos1->x, pos1->y, pos1->z - (48 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum, CSTAT_WALL_BLOCK) ||
+            cansee(pos1->x, pos1->y, pos1->z - (72 << 8), sect1, spr->x, spr->y, spr->z - (4 << 8), spr->sectnum, CSTAT_WALL_BLOCK));
 }
 
 static int32_t weapScore[MAX_WEAPONS][2] =
