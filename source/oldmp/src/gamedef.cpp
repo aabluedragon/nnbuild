@@ -5850,6 +5850,8 @@ static void C_AddDefaultDefinitions(void)
     AddDefinition("MAXTILES", MAXTILES, LABEL_DEFINE);
     AddDefinition("MAXLEVELS", MAXLEVELS, LABEL_DEFINE);
     AddDefinition("MAXVOLUMES", MAXVOLUMES, LABEL_DEFINE);
+    AddDefinition("MAXSECTORS", MAXSECTORS, LABEL_DEFINE);
+
     AddDefinition("CLIPMASK0", CLIPMASK0, LABEL_DEFINE);
     AddDefinition("CLIPMASK1", CLIPMASK1, LABEL_DEFINE);
 
