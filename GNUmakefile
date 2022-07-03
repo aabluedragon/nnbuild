@@ -192,7 +192,7 @@ mimalloc_src := $(mimalloc_root)/src
 mimalloc_inc := $(mimalloc_root)/include
 mimalloc_obj := $(obj)/$(mimalloc)
 
-mimalloc_cflags := -D_WIN32_WINNT=0x0600 -DMI_USE_RTLGENRANDOM -DMI_SHOW_ERRORS -I$(mimalloc_inc) -fexceptions -Wno-cast-qual -Wno-class-memaccess -Wno-unknown-pragmas
+mimalloc_cflags := -D_WIN32_WINNT=0x0600 -DMI_USE_RTLGENRANDOM -DMI_SHOW_ERRORS -I$(mimalloc_inc) -fexceptions -Wno-cast-qual -Wno-class-memaccess -Wno-unknown-pragmas -Wno-array-bounds -Wno-null-dereference
 
 #### imgui
 
@@ -212,7 +212,7 @@ imgui_src := $(imgui_root)/src
 imgui_inc := $(imgui_root)/include
 imgui_obj := $(obj)/$(imgui)
 
-imgui_cflags := -I$(imgui_inc) -Wno-cast-qual -Wno-cast-function-type
+imgui_cflags := -I$(imgui_inc) -Wno-cast-qual -Wno-cast-function-type -Wno-null-dereference -Wno-stringop-overflow
 
 #### Voidwrap
 
@@ -1006,6 +1006,9 @@ $(games): $$(foreach i,$(roles),$$($$@_$$i)$(EXESUFFIX)) | start
 ebacktrace: $(ebacktrace_dll) | start
 	@$(call LL,$^)
 
+voidwrap: $(voidwrap_lib) | start
+	@$(call LL,$^)
+
 ifeq ($(PLATFORM),WII)
 ifneq ($(ELF2DOL),)
 %$(DOLSUFFIX): %$(EXESUFFIX)
@@ -1065,6 +1068,9 @@ getdxdidf$(EXESUFFIX): $(tools_obj)/getdxdidf.$o $(foreach i,tools $(tools_deps)
 $(voidwrap_lib): $(foreach i,$(voidwrap),$(call expandobjs,$i))
 	$(LINK_STATUS)
 	$(RECIPE_IF) $(LINKER) -shared -Wl,-soname,$@ -o $@ $^ $(LIBDIRS) $(voidwrap_root)/sdk/redistributable_bin/$(steamworks_lib) $(RECIPE_RESULT_LINK)
+ifneq ($(STRIP),)
+	$(STRIP) $@
+endif
 
 
 ### Main Rules

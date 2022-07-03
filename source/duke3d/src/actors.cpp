@@ -101,7 +101,7 @@ void G_DoConveyorInterp(int smoothratio)
         
         auto sect = &sector[s->sectnum];
 
-        if ((s->lotag == SE_24_CONVEYOR) | (s->lotag == SE_34_CONVEYOR2))
+        if ((int)(s->lotag == SE_24_CONVEYOR) | (int)(s->lotag == SE_34_CONVEYOR2))
             sect->floorxpanning -= (uint8_t)mulscale16(65536 - smoothratio, sect->floorxpanning - (sect->floorxpanning - (s->yvel >> 7)));
     }
 }
@@ -118,7 +118,7 @@ void G_ResetConveyorInterp(void)
         
         auto sect = &sector[s->sectnum];
 
-        if ((s->lotag == SE_24_CONVEYOR) | (s->lotag == SE_34_CONVEYOR2))
+        if ((int)(s->lotag == SE_24_CONVEYOR) | (int)(s->lotag == SE_34_CONVEYOR2))
             sect->floorxpanning = (uint8_t)actor[i].bpos.x;
     }
 }
@@ -234,7 +234,7 @@ void A_RadiusDamageObject_Internal(int const spriteNum, int const otherSprite, i
                 ++dmgFuzz;
 
             int dmgTotal = dmgBase + (krand()%(dmgFuzz-dmgBase));
-            if ((globalflags & DUKE3D_GLOBAL_ADDITIVE_HITRADIUS)
+            if ((duke3d_globalflags & DUKE3D_GLOBAL_ADDITIVE_HITRADIUS)
                     | (SpriteProjectile[spriteNum].workslike & PROJECTILE_HITRADIUS_ADDITIVE))
                 dmgActor.htextra += dmgTotal;
             else

@@ -19,6 +19,7 @@
 #include "crc32.h"
 #include "editor.h"
 #include "engine_priv.h"
+#include "hightile.h"
 #include "kplib.h"
 #include "lz4.h"
 #include "microprofile.h"
@@ -32,7 +33,6 @@
 #ifdef USE_OPENGL
 # include "glad/glad.h"
 # include "glsurface.h"
-# include "hightile.h"
 # include "mdsprite.h"
 # ifdef POLYMER
 #  include "polymer.h"
@@ -12184,7 +12184,7 @@ int32_t cansee_19950829(int32_t xs, int32_t ys, int32_t zs, int16_t sectnums, in
     return 0;
 }
 
-int32_t cansee(int32_t x1, int32_t y1, int32_t z1, int16_t sect1, int32_t x2, int32_t y2, int32_t z2, int16_t sect2)
+int32_t cansee(int32_t x1, int32_t y1, int32_t z1, int16_t sect1, int32_t x2, int32_t y2, int32_t z2, int16_t sect2, int32_t wallmask)
 {
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
 
@@ -12297,7 +12297,7 @@ restart_grand:
 #ifdef YAX_ENABLE
             if (bn[0]<0 && bn[1]<0)
 #endif
-                if (nexts < 0 || wal->cstat&32)
+                if (nexts < 0 || wal->cstat & wallmask)
                     return 0;
 
             t = divscale24(t,bot);
@@ -12339,7 +12339,7 @@ restart_grand:
             }
 
 #ifdef YAX_ENABLE
-            if (nexts < 0 || (wal->cstat&32))
+            if (nexts < 0 || (wal->cstat & wallmask))
                 return 0;
 #endif
             getzsofslope(nexts, x,y, &cfz[0],&cfz[1]);
@@ -14418,6 +14418,8 @@ int32_t videoSetRenderMode(int32_t renderer)
     UNREFERENCED_PARAMETER(renderer);
 
 #ifdef USE_OPENGL
+    buildgl_resetStateAccounting();
+
     if (bpp == 8)
     {
         buildgl_setDisabled(GL_BLEND);
@@ -14459,8 +14461,6 @@ int32_t videoSetRenderMode(int32_t renderer)
     {
         polymost_init();
     }
-
-    buildgl_resetStateAccounting();
 #endif
 
     return 0;

@@ -313,8 +313,12 @@ void cache1d::report(void)
         if (classicht[j].ptr)
             inthash_add(&h_blocktotile, classicht[j].ptr, j, true);
 
-        if (tiletovox[j] != -1 && voxoff[tiletovox[j]])
-            inthash_add(&h_blocktotile, (intptr_t)voxoff[tiletovox[j]], j, true);
+        if (tiletovox[j] != -1)
+        {
+            for (int i=0; i<MAXVOXMIPS; i++)
+                if (voxoff[tiletovox[j]][i])
+                    inthash_add(&h_blocktotile, (intptr_t)voxoff[tiletovox[j]][i], j, true);
+        }
     }
 
     LOG_F(INFO, "Block listing:");
@@ -334,7 +338,7 @@ void cache1d::report(void)
         else
         {
             Bstrcat(buf, "FREE");
-            LOG_F(INFO, buf);
+            LOG_F(INFO, "%s", buf);
             continue;
         }
 
@@ -361,7 +365,7 @@ void cache1d::report(void)
         {
             auto typestr = *m_index[i].hand == waloff[tile] ? "ART:%4d " :
                            *m_index[i].hand == classicht[tile].ptr ? "HI:%4d " :
-                           *m_index[i].hand == (intptr_t)voxoff[tile] ? "VOX:%4d " : "???";
+                           "VOX:%4d "; // needs to be last or else we have to loop through voxoff[tile][]
                 
             len += Bsnprintf(buf + len, reportLineSize - len, typestr, tile);
         }
@@ -369,7 +373,7 @@ void cache1d::report(void)
         if (len < reportLineSize)
             buf[len-1] = '\0';
         
-        LOG_F(INFO, buf);
+        LOG_F(INFO, "%s", buf);
     }
     
     LOG_F(INFO, "Cache size:  %dKB", m_totalSize >> 10);
