@@ -1173,10 +1173,6 @@ void S_Update(void)
             else
                 S_CalcDistAndAng(spriteNum, sndnum, cs, ca, *c, sprite[spriteNum].xyz, sprite[spriteNum].sectnum, &sndist, &sndang);
 
-            if (S_IsAmbientSFX(spriteNum))
-                g_numEnvSoundsPlaying++;
-
-            // AMBIENT_SOUND
             voice.dist = sndist >> 6;
             FX_Pan3D(voice.handle, sndang >> 4, sndist >> 6);
         }
