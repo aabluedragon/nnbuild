@@ -4135,7 +4135,6 @@ static int P_HandleFist(int playerNum)
         return 0;
 
     DukePlayer_t* p = g_player[playerNum].ps;
-    int i;
 
     if (p->fist_incs)
     {
