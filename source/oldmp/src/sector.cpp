@@ -2087,7 +2087,7 @@ void Sect_DamageCeiling(int const spriteNum, int const sectNum)
 void A_DamageObject_Internal(int i,int sn)
 {
     short j;
-    int k, p, rpg=0;
+    int k, p, radiusDamage=0;
     spritetype *s;
 
     i &= (MAXSPRITES-1);
@@ -2103,7 +2103,7 @@ void A_DamageObject_Internal(int i,int sn)
 
     if (A_CheckSpriteFlags(sn,SFLAG_PROJECTILE))
         if (actor[sn].projectile.workslike & PROJECTILE_RPG)
-            rpg = 1;
+            radiusDamage = 1;
 
     switch (DynamicTileMap[PN(i)])
     {
@@ -2145,7 +2145,7 @@ void A_DamageObject_Internal(int i,int sn)
     case CONE__STATIC:
     case BOX__STATIC:
     {
-        if (rpg == 1)
+        if (radiusDamage == 1)
             if (T1(i) == 0)
             {
                 CS(i) &= ~257;
@@ -2171,31 +2171,30 @@ void A_DamageObject_Internal(int i,int sn)
     }
     case CACTUS__STATIC:
     {
-        if (rpg == 1)
-            for (k=64;k>0;k--)
-            {
-                j = A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(krand()%(48<<8)),SCRAP3+(krand()&3),-8,48,48,krand()&2047,(krand()&63)+64,-(krand()&4095)-(sprite[i].zvel>>2),i,5);
-                sprite[j].pal = 8;
-            }
-        //        case CACTUSBROKE:
         switch (DynamicTileMap[sprite[sn].picnum])
         {
-        case RADIUSEXPLOSION__STATIC:
-        case RPG__STATIC:
-        case FIRELASER__STATIC:
-        case HYDRENT__STATIC:
-        case HEAVYHBOMB__STATIC:
-            for (k=64;k>0;k--)
-            {
-                j = A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(krand()%(48<<8)),SCRAP3+(krand()&3),-8,48,48,krand()&2047,(krand()&63)+64,-(krand()&4095)-(sprite[i].zvel>>2),i,5);
-                sprite[j].pal = 8;
-            }
+            case RADIUSEXPLOSION__STATIC:
+            case RPG__STATIC:
+            case FIRELASER__STATIC:
+            case HYDRENT__STATIC:
+            case HEAVYHBOMB__STATIC:
+                radiusDamage = 1;
+                break;
+        }
 
+        if (radiusDamage == 1)
+        {
+            for (bssize_t k = 64; k > 0; k--)
+            {
+                int newSprite =
+                    A_InsertSprite(SECT(i), SX(i), SY(i), SZ(i) - (krand() % (48 << 8)), SCRAP3 + (krand() & 3), -8, 48, 48,
+                        krand() & 2047, (krand() & 63) + 64, -(krand() & 4095) - (sprite[i].zvel >> 2), i, 5);
+                sprite[newSprite].pal = 8;
+            }
+            //        case CACTUSBROKE:
             if (PN(i) == CACTUS)
                 PN(i) = CACTUSBROKE;
             CS(i) &= ~257;
-            //       else A_DeleteSprite(i);
-            break;
         }
         break;
     }
