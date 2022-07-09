@@ -1540,6 +1540,7 @@ static void G_MoveFX(void)
                         }
 
                         g_sounds[pSprite->lotag]->flags |= SF_LOOP;
+                        g_sounds[pSprite->lotag]->flags &= ~SF_ONEINST_INTERNAL; // [JM] Workaround to allow more than one ambient sound.
                         A_PlaySound(pSprite->lotag, spriteNum);
                         g_sounds[pSprite->lotag]->flags = oldFlags;
                         T1(spriteNum) = 1;  // AMBIENT_SFX_PLAYING
