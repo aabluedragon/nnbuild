@@ -211,7 +211,7 @@ void CONFIG_SetDefaults(void)
     ud.config.MusicDevice = ASS_AutoDetect;
 #endif
     ud.config.MusicToggle = 1;
-    ud.config.MusicVolume = 200;
+    ud.config.MusicVolume = 195;
     g_myAimMode = g_player[0].ps->aim_mode = 1;
     ud.config.NumBits = 16;
     ud.config.NumChannels = 2;
