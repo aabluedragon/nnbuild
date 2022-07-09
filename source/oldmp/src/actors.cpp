@@ -1511,8 +1511,7 @@ static void G_MoveFX(void)
                     T1(spriteNum) = 0;
                 }
             }
-            else if (pSprite->lotag < 999 && pSprite->lotag && S_SoundIsValid(pSprite->lotag) && (unsigned)sector[pSprite->sectnum].lotag < 9 &&  // ST_9_SLIDING_ST_DOOR
-                ud.config.AmbienceToggle && sector[SECT(spriteNum)].floorz != sector[SECT(spriteNum)].ceilingz)
+            else if (pSprite->lotag < 999 && pSprite->lotag && S_SoundIsValid(pSprite->lotag) && (unsigned)sector[pSprite->sectnum].lotag < ST_9_SLIDING_ST_DOOR && ud.config.AmbienceToggle && sector[SECT(spriteNum)].floorz != sector[SECT(spriteNum)].ceilingz)
             {
                 if (g_sounds[pSprite->lotag]->flags & SF_MSFX)
                 {
@@ -1521,19 +1520,19 @@ static void G_MoveFX(void)
                     if (playerDist < spriteHitag && T1(spriteNum) == 0 && FX_VoiceAvailable(g_sounds[pSprite->lotag]->priority - 1))
                     {
                         // Start playing an ambience sound.
-
                         auto oldFlags = g_sounds[pSprite->lotag]->flags;
                         if (g_numEnvSoundsPlaying == ud.config.NumVoices)
                         {
                             int32_t j;
 
                             for (SPRITES_OF(STAT_FX, j))
-                                if (j != spriteNum && S_IsAmbientSFX(j) && actor[j].temp_data[0] == 1 &&
-                                    dist(&sprite[j], &sprite[pPlayer->i]) > playerDist)
+                            {
+                                if (j != spriteNum && S_IsAmbientSFX(j) && actor[j].temp_data[0] == 1 && dist(&sprite[j], &sprite[pPlayer->i]) > playerDist)
                                 {
                                     S_StopEnvSound(sprite[j].lotag, j);
                                     break;
                                 }
+                            }
 
                             if (j == -1)
                                 goto BOLT;
@@ -1563,12 +1562,14 @@ static void G_MoveFX(void)
                         T5(spriteNum)--;
                     else
                     {
-                        for(int32_t ALL_PLAYERS(playerNum))
+                        for (int32_t ALL_PLAYERS(playerNum))
+                        {
                             if (playerNum == myconnectindex && g_player[playerNum].ps->cursectnum == pSprite->sectnum)
                             {
                                 S_PlaySound(pSprite->lotag + (unsigned)g_globalRandom % (pSprite->hitag + 1));
                                 T5(spriteNum) = GAMETICSPERSEC * 40 + g_globalRandom % (GAMETICSPERSEC * 40);
                             }
+                        }
                     }
                 }
             }
