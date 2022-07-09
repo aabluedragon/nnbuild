@@ -445,9 +445,9 @@ static int A_FindTargetSprite(spritetype *s,int aang,int atwith)
 
 static void A_SetHitData(int spriteNum, const hitdata_t* hitData)
 {
-    actor[spriteNum].temp_data[6] = hitData->wall;
-    actor[spriteNum].temp_data[7] = hitData->sect;
-    actor[spriteNum].temp_data[8] = hitData->sprite;
+    actor[spriteNum].t_data[6] = hitData->wall;
+    actor[spriteNum].t_data[7] = hitData->sect;
+    actor[spriteNum].t_data[8] = hitData->sprite;
 }
 
 static int CheckShootSwitchTile(int tileNum)
@@ -988,7 +988,7 @@ int A_Shoot(int i,int atwith)
                 }
             }
 
-            if (actor[i].temp_data[9]) zvel = actor[i].temp_data[9];
+            if (actor[i].t_data[9]) zvel = actor[i].t_data[9];
             hitscan(&spos,sect,
                     sintable[(shootAng + 512) & 2047],
                     sintable[shootAng & 2047], zvel << 6,
@@ -1105,9 +1105,9 @@ int A_Shoot(int i,int atwith)
                         {
                             k = A_Spawn(j,pProj->spawns);
                             sprite[k].z -= (8<<8);
-                            actor[k].temp_data[6] = hit.wall;
-                            actor[k].temp_data[7] = hit.sect;
-                            actor[k].temp_data[8] = hit.sprite;
+                            actor[k].t_data[6] = hit.wall;
+                            actor[k].t_data[7] = hit.sect;
+                            actor[k].t_data[8] = hit.sprite;
                         }
                         if (pProj->sound >= 0) A_PlaySound(pProj->sound,j);
                     }
@@ -1331,7 +1331,7 @@ int A_Shoot(int i,int atwith)
                 }
             }
 
-            if (actor[i].temp_data[9]) zvel = actor[i].temp_data[9];
+            if (actor[i].t_data[9]) zvel = actor[i].t_data[9];
             hitscan(&spos,sect,
                     sintable[(shootAng+512)&2047],
                     sintable[shootAng&2047],zvel<<6,
@@ -1396,9 +1396,9 @@ int A_Shoot(int i,int atwith)
                         k = A_Spawn(j,SMALLSMOKE);
                         sprite[k].z -= (8<<8);
                         A_PlaySound(KICK_HIT,j);
-                        actor[k].temp_data[6] = hit.wall;
-                        actor[k].temp_data[7] = hit.sect;
-                        actor[k].temp_data[8] = hit.sprite;
+                        actor[k].t_data[6] = hit.wall;
+                        actor[k].t_data[7] = hit.sect;
+                        actor[k].t_data[8] = hit.sprite;
                     }
 
                     if (p >= 0 && g_player[p].ps->steroids_amount > 0 && g_player[p].ps->steroids_amount < 400)
@@ -1528,7 +1528,7 @@ int A_Shoot(int i,int atwith)
                 if (hit.x == 0) hit.x++;
                 zvel = ((g_player[j].ps->opos.z - spos.z + (3<<8))*vel) / hit.x;
             }
-            if (actor[i].temp_data[9]) zvel = actor[i].temp_data[9];
+            if (actor[i].t_data[9]) zvel = actor[i].t_data[9];
             oldzvel = zvel;
 
             if (atwith == SPIT)
@@ -1646,7 +1646,7 @@ int A_Shoot(int i,int atwith)
             if (p >= 0 && j >= 0)
                 l = j;
             else l = -1;
-            if (actor[i].temp_data[9]) zvel = actor[i].temp_data[9];
+            if (actor[i].t_data[9]) zvel = actor[i].t_data[9];
             j = A_InsertSprite(sect,
                                spos.x+(sintable[(348+shootAng+512)&2047]/448),
                                spos.y+(sintable[(shootAng+348)&2047]/448),
@@ -1731,7 +1731,7 @@ int A_Shoot(int i,int atwith)
             if (p >= 0)
                 zvel = fix16_to_int(F16(100)-g_player[p].ps->q16horiz-g_player[p].ps->q16horizoff)*32;
             else zvel = 0;
-            if (actor[i].temp_data[9]) zvel = actor[i].temp_data[9];
+            if (actor[i].t_data[9]) zvel = actor[i].t_data[9];
 
             spos.z -= g_player[p].ps->pyoff;
 
@@ -1766,10 +1766,10 @@ int A_Shoot(int i,int atwith)
                     int lLifetime=Gv_GetVarByLabel("STICKYBOMB_LIFETIME", NAM_GRENADE_LIFETIME, g_player[p].ps->i, p);
                     int lLifetimeVar=Gv_GetVarByLabel("STICKYBOMB_LIFETIME_VAR", NAM_GRENADE_LIFETIME_VAR, g_player[p].ps->i, p);
                     // set timer.  blows up when at zero....
-                    actor[k].temp_data[7]=lLifetime
+                    actor[k].t_data[7]=lLifetime
                                                + mulscale(krand(),lLifetimeVar, 14)
                                                - lLifetimeVar;
-                    actor[k].temp_data[6]=1;
+                    actor[k].t_data[6]=1;
                 }
                 else sprite[k].hitag = k;
 
@@ -1777,7 +1777,7 @@ int A_Shoot(int i,int atwith)
                 sprite[k].xvel = -20;
                 A_SetSprite(k,CLIPMASK0);
                 sprite[k].cstat = 16;
-                actor[k].temp_data[5] = sprite[k].ang = getangle(wall[hit.wall].x-wall[wall[hit.wall].point2].x,wall[hit.wall].y-wall[wall[hit.wall].point2].y)-512;
+                actor[k].t_data[5] = sprite[k].ang = getangle(wall[hit.wall].x-wall[wall[hit.wall].point2].x,wall[hit.wall].y-wall[wall[hit.wall].point2].y)-512;
 
             }
             return j?k:-1;
@@ -1792,7 +1792,7 @@ int A_Shoot(int i,int atwith)
             if (zvel < -4096)
                 zvel = -2048;
             vel = x>>4;
-            if (actor[i].temp_data[9]) zvel = actor[i].temp_data[9];
+            if (actor[i].t_data[9]) zvel = actor[i].t_data[9];
             A_InsertSprite(sect,
                            spos.x+(sintable[(512+shootAng+512)&2047]>>8),
                            spos.y+(sintable[(shootAng+512)&2047]>>8),
@@ -1860,7 +1860,7 @@ int A_Shoot(int i,int atwith)
                 zvel = ((g_player[j].ps->opos.z-spos.z)*512) / l ;
             }
             else zvel = 0;
-            if (actor[i].temp_data[9]) zvel = actor[i].temp_data[9];
+            if (actor[i].t_data[9]) zvel = actor[i].t_data[9];
             j = A_InsertSprite(sect,
                                spos.x+(sintable[(512+shootAng+512)&2047]>>12),
                                spos.y+(sintable[(shootAng+512)&2047]>>12),
@@ -2104,7 +2104,7 @@ void P_FireWeapon(DukePlayer_t *p)
             if (aplWeaponFlags[p->curr_weapon][snum] & WEAPON_FIREEVERYOTHER)
             {
                 // this makes the projectiles fire on a delay from player code
-                actor[p->i].temp_data[7] = (aplWeaponShotsPerBurst[p->curr_weapon][snum])<<1;
+                actor[p->i].t_data[7] = (aplWeaponShotsPerBurst[p->curr_weapon][snum])<<1;
             }
             else
             {
@@ -3546,13 +3546,13 @@ static void P_TossPipebomb(int playerNum)
     {
         int lGrenadeLifetime = Gv_GetVarByLabel("GRENADE_LIFETIME", NAM_GRENADE_LIFETIME, -1, playerNum);
         int lGrenadeLifetimeVar = Gv_GetVarByLabel("GRENADE_LIFETIME_VAR", NAM_GRENADE_LIFETIME_VAR, -1, playerNum);
-        actor[pipeSpriteNum].temp_data[7] = lGrenadeLifetime
+        actor[pipeSpriteNum].t_data[7] = lGrenadeLifetime
             + mulscale(krand(), lGrenadeLifetimeVar, 14)
             - lGrenadeLifetimeVar;
-        actor[pipeSpriteNum].temp_data[PIPEBOMB_FUSETYPE] = FUSE_TIMED;
+        actor[pipeSpriteNum].t_data[PIPEBOMB_FUSETYPE] = FUSE_TIMED;
     }
     else
-        actor[pipeSpriteNum].temp_data[PIPEBOMB_FUSETYPE] = FUSE_REMOTE;
+        actor[pipeSpriteNum].t_data[PIPEBOMB_FUSETYPE] = FUSE_REMOTE;
 
     if (pipeBombFwdVel == 15)
     {
@@ -3644,10 +3644,10 @@ static void P_ProcessWeapon(int playerNum)
         p->random_club_frame += 64; // Glowing
 
     // this is a hack for WEAPON_FIREEVERYOTHER
-    if (actor[p->i].temp_data[7])
+    if (actor[p->i].t_data[7])
     {
-        actor[p->i].temp_data[7]--;
-        if (p->last_weapon == -1 && actor[p->i].temp_data[7] != 0 && ((actor[p->i].temp_data[7] & 1) == 0))
+        actor[p->i].t_data[7]--;
+        if (p->last_weapon == -1 && actor[p->i].t_data[7] != 0 && ((actor[p->i].t_data[7] & 1) == 0))
         {
             Gv_SetVar(sysVarIDs.RETURN, 0, p->i, playerNum);
             X_OnEvent(EVENT_FIREEVERYOTHER, p->i, playerNum, -1);
@@ -3659,12 +3659,12 @@ static void P_ProcessWeapon(int playerNum)
                         p->ammo_amount[p->curr_weapon]--;
                     else
                     {
-                        actor[p->i].temp_data[7] = 0;
+                        actor[p->i].t_data[7] = 0;
                         P_CheckWeapon(p);
                     }
                 }
 
-                if (actor[p->i].temp_data[7] != 0)
+                if (actor[p->i].t_data[7] != 0)
                 {
                     A_Shoot(p->i, aplWeaponShoots[p->curr_weapon][playerNum]);
                 }
@@ -5393,7 +5393,7 @@ HORIZONLY:
         psect = s->sectnum;
         if (ud.clipping == 0 && sector[psect].lotag == ST_31_TWO_WAY_TRAIN)
         {
-            if (sprite[sector[psect].hitag].xvel && actor[sector[psect].hitag].temp_data[0] == 0)
+            if (sprite[sector[psect].hitag].xvel && actor[sector[psect].hitag].t_data[0] == 0)
             {
                 P_QuickKill(p);
                 return;

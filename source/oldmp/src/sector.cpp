@@ -124,14 +124,14 @@ int check_activator_motion(int lotag)
                     {
                     case 11:
                     case 30:
-                        if (actor[j].temp_data[4])
+                        if (actor[j].t_data[4])
                             return(1);
                         break;
                     case 20:
                     case 31:
                     case 32:
                     case 18:
-                        if (actor[j].temp_data[0])
+                        if (actor[j].t_data[0])
                             return(1);
                         break;
                     }
@@ -599,7 +599,7 @@ int G_ActivateWarpElevators(int s,int d) //Parm = sectoreffectornum
     {
         if (SLT(i) == 17)
             if (SHT(i) == sprite[s].hitag)
-                if ((klabs(sector[sn].floorz-actor[s].temp_data[2]) > SP(i)) ||
+                if ((klabs(sector[sn].floorz-actor[s].t_data[2]) > SP(i)) ||
                         (sector[SECT(i)].hitag == (sector[sn].hitag-d)))
                     break;
         i = nextspritestat[i];
@@ -659,8 +659,8 @@ void G_OperateSectors(int sn,int ii)
     case ST_31_TWO_WAY_TRAIN:
 
         j = sector[sn].hitag;
-        if (actor[j].temp_data[4] == 0)
-            actor[j].temp_data[4] = 1;
+        if (actor[j].t_data[4] == 0)
+            actor[j].t_data[4] = 1;
 
         A_CallSound(sn,ii);
         break;
@@ -1046,8 +1046,8 @@ REDODOOR:
 
                 sector[sn].lotag ^= 0x8000;
                 if (sector[sn].lotag&0x8000) //OPENING
-                    actor[j].temp_data[0] = 1;
-                else actor[j].temp_data[0] = 2;
+                    actor[j].t_data[0] = 1;
+                else actor[j].t_data[0] = 2;
                 A_CallSound(sn,ii);
                 break;
             }
@@ -1072,9 +1072,9 @@ REDODOOR:
         l = headspritestat[STAT_EFFECTOR];
         while (l >= 0)
         {
-            if ((sprite[l].lotag&0xff)==21 && !actor[l].temp_data[0] &&
+            if ((sprite[l].lotag&0xff)==21 && !actor[l].t_data[0] &&
                     (sprite[l].hitag) == j)
-                actor[l].temp_data[0] = 1;
+                actor[l].t_data[0] = 1;
             l = nextspritestat[l];
         }
         A_CallSound(sn,ii);
@@ -1161,7 +1161,7 @@ void G_OperateActivators(int lotag, int playerNum)
                             case SE_31_FLOOR_RISE_FALL:
                             case SE_32_CEILING_RISE_FALL:
                             case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
-                                actor[foundSprite].temp_data[0] = 1 - actor[foundSprite].temp_data[0];
+                                actor[foundSprite].t_data[0] = 1 - actor[foundSprite].t_data[0];
                                 A_CallSound(SECT(spriteNum), foundSprite);
                                 break;
                             }
@@ -1617,16 +1617,16 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                 {
                 case 12:
                     sector[sprite[x].sectnum].floorpal = 0;
-                    actor[x].temp_data[0]++;
-                    if (actor[x].temp_data[0] == 2)
-                        actor[x].temp_data[0]++;
+                    actor[x].t_data[0]++;
+                    if (actor[x].t_data[0] == 2)
+                        actor[x].t_data[0]++;
 
                     break;
                 case 24:
                 case 34:
                 case 25:
-                    actor[x].temp_data[4] = !actor[x].temp_data[4];
-                    if (actor[x].temp_data[4])
+                    actor[x].t_data[4] = !actor[x].t_data[4];
+                    if (actor[x].t_data[4])
                         P_DoQuote(QUOTE_DEACTIVATED,g_player[snum].ps);
                     else P_DoQuote(QUOTE_ACTIVATED,g_player[snum].ps);
                     break;
@@ -2058,7 +2058,7 @@ void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
                 {
                     for (bssize_t SPRITES_OF(STAT_EFFECTOR, j))
                         if (sprite[j].hitag == SHT(i))
-                            actor[j].temp_data[3] = 1;
+                            actor[j].t_data[3] = 1;
                     break;
                 }
             }
@@ -2309,9 +2309,9 @@ void A_DamageObject_Internal(int i,int sn)
 
     case FORCESPHERE__STATIC:
         sprite[i].xrepeat = 0;
-        actor[OW(i)].temp_data[0] = 32;
-        actor[OW(i)].temp_data[1] = !actor[OW(i)].temp_data[1];
-        actor[OW(i)].temp_data[2] ++;
+        actor[OW(i)].t_data[0] = 32;
+        actor[OW(i)].t_data[1] = !actor[OW(i)].t_data[1];
+        actor[OW(i)].t_data[2] ++;
         A_Spawn(i,EXPLOSION2);
         break;
 
@@ -3509,7 +3509,7 @@ void P_CheckSectors(int snum)
 
                     P_FindWall(p,&j);
                     if (j >= 0 && wall[j].overpicnum == 0)
-                        if (actor[neartagsprite].temp_data[0] == 0)
+                        if (actor[neartagsprite].t_data[0] == 0)
                         {
                             if (DMFLAGS_TEST(DMFLAG_NOEXITS) && ud.multimode > 1)
                             {
@@ -3518,7 +3518,7 @@ void P_CheckSectors(int snum)
                             }
                             else
                             {
-                                actor[neartagsprite].temp_data[0] = 1;
+                                actor[neartagsprite].t_data[0] = 1;
                                 sprite[neartagsprite].owner = p->i;
                                 p->buttonpalette = sprite[neartagsprite].pal;
                                 if (p->buttonpalette)
@@ -3528,9 +3528,9 @@ void P_CheckSectors(int snum)
                         }
                     return;
                 case WATERFOUNTAIN__STATIC:
-                    if (actor[neartagsprite].temp_data[0] != 1)
+                    if (actor[neartagsprite].t_data[0] != 1)
                     {
-                        actor[neartagsprite].temp_data[0] = 1;
+                        actor[neartagsprite].t_data[0] = 1;
                         sprite[neartagsprite].owner = p->i;
 
                         if (sprite[p->i].extra < p->max_player_health)

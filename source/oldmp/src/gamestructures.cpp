@@ -3670,10 +3670,10 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
     case ACTOR_HTG_T:
         if (iSet)
         {
-            actor[iActor].temp_data[lParm2]=lValue;
+            actor[iActor].t_data[lParm2]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, actor[iActor].temp_data[lParm2], g_i, g_p);
+        Gv_SetVar(lVar2, actor[iActor].t_data[lParm2], g_i, g_p);
         return;
 
     case ACTOR_ANGOFF:

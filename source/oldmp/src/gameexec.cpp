@@ -97,7 +97,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         g_p = iPlayer;    // current player ID
         g_x = lDist;    // ?
         g_sp = &sprite[g_i];
-        g_t = &actor[g_i].temp_data[0];
+        g_t = &actor[g_i].t_data[0];
 
         insptr = apScriptGameEvent[iEventID];
 
@@ -240,7 +240,7 @@ int A_GetFurthestAngle(int const spriteNum, int const angDiv)
 {
     auto const pSprite = (uspriteptr_t)&sprite[spriteNum];
 
-    if (pSprite->picnum != APLAYER && ((actor[spriteNum].temp_data[0] & 63) > 2))
+    if (pSprite->picnum != APLAYER && ((actor[spriteNum].t_data[0] & 63) > 2))
         return (pSprite->ang + 1024) & 2047;
 
     int       furthestAngle = 0;
@@ -268,7 +268,7 @@ int A_GetFurthestAngle(int const spriteNum, int const angDiv)
 
 int A_FurthestVisiblePoint(int iActor,spritetype *ts,int *dax,int *day)
 {
-    if ((actor[iActor].temp_data[0]&63)) return -1;
+    if ((actor[iActor].t_data[0]&63)) return -1;
     {
         short angincs;
         int d, da;//, d, cd, ca,tempx,tempy,cx,cy;
@@ -2196,16 +2196,16 @@ static int X_DoExecute(void)
 
         if (tw == CON_ZSHOOT || tw == CON_EZSHOOT)
         {
-            actor[g_i].temp_data[9] = Gv_GetVarX(*insptr++);
-            if (actor[g_i].temp_data[9] == 0)
-                actor[g_i].temp_data[9] = 1;
+            actor[g_i].t_data[9] = Gv_GetVarX(*insptr++);
+            if (actor[g_i].t_data[9] == 0)
+                actor[g_i].t_data[9] = 1;
         }
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
             insptr++;
-            actor[g_i].temp_data[9]=0;
+            actor[g_i].t_data[9]=0;
             break;
         }
 
@@ -2214,7 +2214,7 @@ static int X_DoExecute(void)
         if (tw == CON_EZSHOOT || tw == CON_ESHOOT)
             Gv_SetVarX(sysVarIDs.RETURN, j);
 
-        actor[g_i].temp_data[9]=0;
+        actor[g_i].t_data[9]=0;
         break;
 
     case CON_SHOOTVAR:
@@ -2228,23 +2228,23 @@ static int X_DoExecute(void)
 
         if (tw == CON_ZSHOOTVAR || tw == CON_EZSHOOTVAR)
         {
-            actor[g_i].temp_data[9] = Gv_GetVarX(*insptr++);
-            if (actor[g_i].temp_data[9] == 0)
-                actor[g_i].temp_data[9] = 1;
+            actor[g_i].t_data[9] = Gv_GetVarX(*insptr++);
+            if (actor[g_i].t_data[9] == 0)
+                actor[g_i].t_data[9] = 1;
         }
         j=Gv_GetVarX(*insptr++);
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
             OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
-            actor[g_i].temp_data[9]=0;
+            actor[g_i].t_data[9]=0;
             break;
         }
 
         lReturn = A_Shoot(g_i, j);
         if (tw == CON_ESHOOTVAR || tw == CON_EZSHOOTVAR)
             Gv_SetVarX(sysVarIDs.RETURN, lReturn);
-        actor[g_i].temp_data[9]=0;
+        actor[g_i].t_data[9]=0;
         break;
     }
 
@@ -4458,7 +4458,7 @@ void A_LoadActor(int iActor)
     g_p = -1; // iPlayer;    // Player ID
     g_x = -1; // lDist;    // ??
     g_sp = &sprite[g_i];    // Pointer to sprite structure
-    g_t = &actor[g_i].temp_data[0];   // Sprite's 'extra' data
+    g_t = &actor[g_i].t_data[0];   // Sprite's 'extra' data
 
     if (actorLoadEventScrptr[g_sp->picnum] == 0) return;
 
@@ -4490,7 +4490,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     g_p = iPlayer;   // Player ID
     g_x = lDist;     // ??
     g_sp = &sprite[g_i];    // Pointer to sprite structure
-    g_t = &actor[g_i].temp_data[0];   // Sprite's 'extra' data
+    g_t = &actor[g_i].t_data[0];   // Sprite's 'extra' data
 
     insptr = 4 + (actorscrptr[g_sp->picnum]);
 

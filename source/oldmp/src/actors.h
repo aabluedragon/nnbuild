@@ -8,7 +8,7 @@ typedef struct {
     int floorz, ceilingz, lastvx, lastvy;
     vec3_t bpos;
     int flags;
-    intptr_t temp_data[10]; // sometimes used to hold pointers to con code
+    intptr_t t_data[10]; // sometimes used to hold pointers to con code
     short htpicnum, htang, htextra, htowner, movflag;
     short tempang, actorstayput, dispicnum;
     short timetosleep;

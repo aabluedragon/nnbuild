@@ -963,7 +963,7 @@ static void prelevel(char g)
                 while (j >= 0)
                 {
                     if (sprite[j].lotag == SE_12_LIGHT_SWITCH && sprite[j].hitag == SLT(i))
-                        actor[j].temp_data[0] = 1;
+                        actor[j].t_data[0] = 1;
                     j = nextspritestat[j];
                 }
             }

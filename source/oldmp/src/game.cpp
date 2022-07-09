@@ -3808,7 +3808,7 @@ int A_Spawn(int j, int pn)
                 sp->yrepeat = 0;
             }
 
-            if (j >= 0) sp->ang = actor[j].temp_data[5]+512;
+            if (j >= 0) sp->ang = actor[j].t_data[5]+512;
             changespritestat(i, STAT_MISC);
             break;
 
@@ -3942,9 +3942,9 @@ int A_Spawn(int j, int pn)
 
             sp->xvel = 16;
             A_SetSprite(i,CLIPMASK0);
-            actor[i].temp_data[0] = 17;
-            actor[i].temp_data[2] = 0;
-            actor[i].temp_data[5] = sp->ang;
+            actor[i].t_data[0] = 17;
+            actor[i].t_data[2] = 0;
+            actor[i].t_data[5] = sp->ang;
             changespritestat(i, 2);
             break;
 
@@ -4213,7 +4213,7 @@ int A_Spawn(int j, int pn)
         case MONEY__STATIC:
         case MAIL__STATIC:
         case PAPER__STATIC:
-            actor[i].temp_data[0] = krand()&2047;
+            actor[i].t_data[0] = krand()&2047;
             sp->cstat = krand()&12;
             sp->xrepeat = sp->yrepeat = 8;
             sp->ang = krand()&2047;
@@ -4714,7 +4714,7 @@ int A_Spawn(int j, int pn)
                     return i;
                 }
                 ud.total_monsters++;
-                actor[i].temp_data[5] = 0;
+                actor[i].t_data[5] = 0;
                 if (DMFLAGS_TEST(DMFLAG_NOMONSTERS))
                 {
                     sp->xrepeat = sp->yrepeat = 0;
@@ -5844,7 +5844,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             int const viewscrShift = G_GetViewscreenSizeShift(t);
             int const viewscrTile = TILE_VIEWSCR - viewscrShift;
 
-            if (g_curViewscreen >= 0 && actor[OW(i)].temp_data[0] == 1)
+            if (g_curViewscreen >= 0 && actor[OW(i)].t_data[0] == 1)
             {
                 t->picnum = STATIC;
                 t->cstat |= (rand() & 12);
@@ -6353,7 +6353,7 @@ PALONLY:
                 if ((sprite[s->owner].cstat&32768) == 0)
                 {
                     if (!actor[s->owner].dispicnum)
-                        t->picnum = actor[i].temp_data[1];
+                        t->picnum = actor[i].t_data[1];
                     else t->picnum = actor[s->owner].dispicnum;
                     
                     if (!G_MaybeTakeOnFloorPal(t, sect))
@@ -6679,12 +6679,12 @@ FOUNDCHEAT:
                         pub = 1;
                         sprite[g_player[myconnectindex].ps->i].cstat = 257;
 
-                        actor[g_player[myconnectindex].ps->i].temp_data[0] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[1] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[2] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[3] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[4] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[5] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[0] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[1] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[2] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[3] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[4] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[5] = 0;
 
                         sprite[g_player[myconnectindex].ps->i].hitag = 0;
                         sprite[g_player[myconnectindex].ps->i].lotag = 0;
@@ -6716,12 +6716,12 @@ FOUNDCHEAT:
                         pub = 1;
                         sprite[g_player[myconnectindex].ps->i].cstat = 257;
 
-                        actor[g_player[myconnectindex].ps->i].temp_data[0] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[1] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[2] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[3] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[4] = 0;
-                        actor[g_player[myconnectindex].ps->i].temp_data[5] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[0] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[1] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[2] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[3] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[4] = 0;
+                        actor[g_player[myconnectindex].ps->i].t_data[5] = 0;
 
                         sprite[g_player[myconnectindex].ps->i].hitag = 0;
                         sprite[g_player[myconnectindex].ps->i].lotag = 0;
@@ -9166,7 +9166,7 @@ static void G_DrawFrame()
         {
             slimerPos = sprite[slimerSprite].xyz;
             slimerSect = sprite[slimerSprite].sectnum;
-            auto tData = actor[slimerSprite].temp_data[2];
+            auto tData = actor[slimerSprite].t_data[2];
 
             vec3_t pos;
             fix16_t q16ang, q16horiz;
