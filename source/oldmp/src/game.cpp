@@ -2316,6 +2316,7 @@ void G_DisplayRest(int smoothratio)
         if ((g_player[myconnectindex].ps->gm&MODE_MENU) == MODE_MENU && g_currentMenu < 51)
         {
             KB_ClearKeyDown(sc_Escape);
+            S_PlaySound(EXITMENUSOUND);
             g_player[myconnectindex].ps->gm &= ~MODE_MENU;
             if (ud.multimode < 2 && ud.recstat != 2)
             {
@@ -2338,10 +2339,14 @@ void G_DisplayRest(int smoothratio)
 
             g_player[myconnectindex].ps->gm |= MODE_MENU;
 
-            if (ud.multimode < 2 && ud.recstat != 2) ready2send = 0;
+            if (ud.multimode < 2 && ud.recstat != 2)
+                ready2send = 0;
 
-            if (g_player[myconnectindex].ps->gm&MODE_GAME) ChangeToMenu(50);
-            else ChangeToMenu(0);
+            if (g_player[myconnectindex].ps->gm&MODE_GAME)
+                ChangeToMenu(50);
+            else
+                ChangeToMenu(0);
+
             screenpeek = myconnectindex;
         }
     }
