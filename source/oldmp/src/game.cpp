@@ -8991,7 +8991,6 @@ static void G_Startup(void)
     if (artLoadFiles("tiles000.art", MAXCACHE1DSIZE) < 0)
         G_GameExit("Failed loading art.");
 
-    S_PrecacheSounds();
     G_LoadLookups();
 
     ReadSaveGameHeaders();
@@ -9524,6 +9523,8 @@ int app_main(int32_t argc, char const* const* argv)
         LOG_F(INFO, "Definitions file \"%s\" loaded in %d ms.", defsfile, etime - stime);
     }
     loaddefinitions_game(defsfile, FALSE);
+
+    S_PrecacheSounds();
 
     if (enginePostInit())
         G_FatalEngineInitError();
