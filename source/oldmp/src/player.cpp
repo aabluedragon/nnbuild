@@ -4677,7 +4677,7 @@ void P_ProcessInput(int snum)
 
             clipmove_old(&p->pos.x, &p->pos.y,
                 &p->pos.z, &p->cursectnum,
-                0, 0, 164L, (4L << 8), (4L << 8), CLIPMASK0);
+                0, 0, PLAYER_WALLDIST, (4L << 8), (4L << 8), CLIPMASK0);
         }
 
         p->opos.x = p->pos.x;
@@ -5359,7 +5359,7 @@ HORIZONLY:
 
         int moveResult = clipmove_old(&p->pos.x, &p->pos.y,
             &p->pos.z, &p->cursectnum,
-            p->vel.x, p->vel.y, 164L, PMINHEIGHT, (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : PLAYER_STEP_HEIGHT, CLIPMASK0);
+            p->vel.x, p->vel.y, PLAYER_WALLDIST, PMINHEIGHT, (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : PLAYER_STEP_HEIGHT, CLIPMASK0);
 
         if (p->jetpack_on == 0 && psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
@@ -5412,7 +5412,7 @@ HORIZONLY:
 
     int mashedPotato = 0;
     if (ud.clipping == 0)
-        mashedPotato = ((pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 164L, (4L << 8), (4L << 8), CLIPMASK0) < 0) && (A_GetFurthestAngle(p->i, 8) < 512));
+        mashedPotato = ((pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, PLAYER_WALLDIST, (4L << 8), (4L << 8), CLIPMASK0) < 0) && (A_GetFurthestAngle(p->i, 8) < 512));
 
     if (ud.clipping == 0)
     {

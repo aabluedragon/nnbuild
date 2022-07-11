@@ -3417,16 +3417,6 @@ static void G_MoveTransports(void)
                                     A_PlaySound(TELEPORTER, i);
                                 }
 
-                                for (int32_t ALL_PLAYERS(otherPnum))
-                                {
-                                    auto otherPlayer = g_player[otherPnum].ps;
-                                    if (otherPlayer->cursectnum == sprite[OW(i)].sectnum)
-                                    {
-                                        otherPlayer->frag_ps = playerNum;
-                                        sprite[otherPlayer->i].extra = 0;
-                                    }
-                                }
-
                                 pPlayer->q16ang = fix16_from_int(sprite[OW(i)].ang);
 
                                 if (sprite[OW(i)].owner != OW(i))
@@ -3443,7 +3433,24 @@ static void G_MoveTransports(void)
                                 changespritesect(j, sprite[OW(i)].sectnum);
                                 pPlayer->cursectnum = sprite[j].sectnum;
 
-                                if (playerNum == screenpeek)
+                                // Handle Telefragging.
+                                for (int32_t ALL_PLAYERS(otherPnum))
+                                {
+                                    if (otherPnum == playerNum)
+                                        continue;
+
+                                    auto const otherPlayer = g_player[otherPnum].ps;
+                                    if (otherPlayer->cursectnum == sprite[OW(i)].sectnum)
+                                    {
+                                        if (ldist(&pPlayer->pos, &otherPlayer->pos) <= (PLAYER_WALLDIST<<1))
+                                        {
+                                            otherPlayer->frag_ps = playerNum;
+                                            sprite[otherPlayer->i].extra = 0;
+                                        }
+                                    }
+                                }
+
+                                if (playerNum == screenpeek) // [JM] Hack to make sure sound positions update immediately.
                                 {
                                     ud.camerapos.x = pPlayer->pos.x;
                                     ud.camerapos.y = pPlayer->pos.y;
