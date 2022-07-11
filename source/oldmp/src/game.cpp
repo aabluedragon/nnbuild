@@ -130,6 +130,7 @@ enum gametokens
     T_MODE = 1,
     T_CACHESIZE = 2,
     T_ALLOW = 2,
+    T_DEFINE,
     T_NOAUTOLOAD,
     T_MUSIC,
     T_SOUND,
@@ -7634,14 +7635,44 @@ static void G_ShowDebugHelp(void)
 #endif
 }
 
+static int parsedefinitions_game(scriptfile*, int);
+
+static void parsedefinitions_game_include(const char* fileName, scriptfile* pScript, const char* cmdtokptr, int const firstPass)
+{
+    scriptfile* included = scriptfile_fromfile(fileName);
+
+    if (!included)
+    {
+        if (!Bstrcasecmp(cmdtokptr, "null") || pScript == NULL) // this is a bit overboard to prevent unused parameter warnings
+        {
+            // initprintf("Warning: Failed including %s as module\n", fn);
+        }
+        /*
+                else
+                    {
+                    initprintf("Warning: Failed including %s on line %s:%d\n",
+                               fn, script->filename,scriptfile_getlinum(script,cmdtokptr));
+                    }
+        */
+    }
+    else
+    {
+        parsedefinitions_game(included, firstPass);
+        scriptfile_close(included);
+    }
+}
+
 static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 {
     int tokn;
+    char* pToken;
 
     static const tokenlist tokens[] =
     {
         { "include",           T_INCLUDE          },
         { "#include",          T_INCLUDE          },
+        { "define",            T_DEFINE,          },
+        { "#define",           T_DEFINE,          },
         { "loadgrp",           T_LOADGRP          },
         { "cachesize",         T_CACHESIZE        },
         { "noautload",         T_NOAUTOLOAD       },
@@ -7665,7 +7696,9 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
     while (1)
     {
-        tokn = getatoken(pScript,tokens,sizeof(tokens)/sizeof(tokenlist));
+        tokn = getatoken(pScript, tokens, ARRAY_SIZE(tokens));
+        pToken = pScript->ltextptr;
+
         switch (tokn)
         {
         case T_LOADGRP:
@@ -7700,22 +7733,24 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         break;
         case T_INCLUDE:
         {
-            char *fn;
-            if (!scriptfile_getstring(pScript,&fn))
-            {
-                scriptfile *included = scriptfile_fromfile(fn);
+            char* fileName;
 
-                if (!included)
-                {
-//                    LOG_F("Warning: Failed including %s on line %s:%d\n",
-//                               fn, pScript->filename,scriptfile_getlinum(pScript,cmdtokptr));
-                }
-                else
-                {
-                    parsedefinitions_game(included, firstPass);
-                    scriptfile_close(included);
-                }
-            }
+            if (!scriptfile_getstring(pScript, &fileName))
+                parsedefinitions_game_include(fileName, pScript, pToken, firstPass);
+
+            break;
+        }
+        case T_DEFINE:
+        {
+            char* name;
+            int32_t number;
+
+            if (scriptfile_getstring(pScript, &name)) break;
+            if (scriptfile_getsymbol(pScript, &number)) break;
+
+            if (EDUKE32_PREDICT_FALSE(scriptfile_addsymbolvalue(name, number) < 0))
+                LOG_F(WARNING, "Symbol %s unable to be redefined to %d on line %s:%d",
+                    name, number, pScript->filename, scriptfile_getlinum(pScript, pToken));
             break;
         }
         case T_NOAUTOLOAD:
@@ -7724,7 +7759,6 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
             break;
         case T_MUSIC:
         {
-            char *tinttokptr = pScript->ltextptr;
             char *ID=NULL,*fn,*tfn = NULL;
             char *musicend;
 
@@ -7746,7 +7780,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                 int i;
                 if (ID==NULL)
                 {
-                    LOG_F(ERROR, "Missing ID for music definition near line %s:%d", pScript->filename, scriptfile_getlinum(pScript,tinttokptr));
+                    LOG_F(ERROR, "Missing ID for music definition near line %s:%d", pScript->filename, scriptfile_getlinum(pScript, pToken));
                     break;
                 }
 
@@ -7769,14 +7803,13 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                 pathsearchmode = i;
 
                 if (S_DefineMusic(ID,fn))
-                    LOG_F(ERROR, "Invalid music ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript,tinttokptr));
+                    LOG_F(ERROR, "Invalid music ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript, pToken));
             }
         }
         break;
 
         case T_SOUND:
         {
-            char* tokenPtr = pScript->ltextptr;
             char* fileName = NULL;
             char* soundEnd;
 
@@ -7811,7 +7844,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
             {
                 if (soundNum == -1)
                 {
-                    LOG_F(ERROR, "Missing ID for sound definition near line %s:%d", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
+                    LOG_F(ERROR, "Missing ID for sound definition near line %s:%d", pScript->filename, scriptfile_getlinum(pScript, pToken));
                     break;
                 }
 
@@ -7820,7 +7853,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
                 // maybe I should have just packed this into a sound_t and passed a reference...
                 if (S_DefineSound(soundNum, fileName, minpitch, maxpitch, priority, type, distance, volume) == -1)
-                    LOG_F(ERROR, "Invalid sound ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
+                    LOG_F(ERROR, "Invalid sound ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript, pToken));
             }
         }
         break;
@@ -8457,31 +8490,6 @@ const char* G_DefaultRtsFile(void)
 #endif
 
     return "";
-}
-
-static void parsedefinitions_game_include(const char* fileName, scriptfile* pScript, const char* cmdtokptr, int const firstPass)
-{
-    scriptfile* included = scriptfile_fromfile(fileName);
-
-    if (!included)
-    {
-        if (!Bstrcasecmp(cmdtokptr, "null") || pScript == NULL) // this is a bit overboard to prevent unused parameter warnings
-        {
-            // LOG_F("Warning: Failed including %s as module\n", fn);
-        }
-        /*
-                else
-                    {
-                    LOG_F(WARNING, "Failed including %s on line %s:%d",
-                               fn, pScript->filename,scriptfile_getlinum(pScript,cmdtokptr));
-                    }
-        */
-    }
-    else
-    {
-        parsedefinitions_game(included, firstPass);
-        scriptfile_close(included);
-    }
 }
 
 int loaddefinitions_game(const char* fileName, int32_t firstPass)
