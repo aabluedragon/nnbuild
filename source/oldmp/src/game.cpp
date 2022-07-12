@@ -9411,9 +9411,7 @@ int app_main(int32_t argc, char const* const* argv)
     g_player[0].connected = 1;
 
     if (getcwd(cwd,BMAX_PATH))
-    {
         addsearchpath(cwd);
-    }
 
     hash_init(&gamefuncH);
     for (i=NUMGAMEFUNCTIONS-1;i>=0;i--)
@@ -9578,6 +9576,7 @@ int app_main(int32_t argc, char const* const* argv)
         engineUnInit();
         exit(1);
     }
+
     G_SetupGameButtons();
     CONFIG_SetupMouse();
     CONFIG_SetupJoystick();
