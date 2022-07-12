@@ -29,7 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAXPLAYERS 16
 #define MAXSPAWNPOINTS 64
 
-#define VERSION "v1.1"
+#define VERSION "v1.2"
 #define HEAD2 APPNAME " " VERSION
 
 #define MOVEFIFOSIZ 256
