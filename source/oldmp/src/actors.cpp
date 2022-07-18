@@ -971,107 +971,95 @@ static FORCE_INLINE int G_FindExplosionInSector(int const sectNum)
     return -1;
 }
 
-int A_IncurDamage(int sn)
+static FORCE_INLINE void P_Nudge(int playerNum, int spriteNum, int shiftLeft)
 {
-    int j,p;
-    spritetype *npc;
+    g_player[playerNum].ps->vel.x += actor[spriteNum].htextra * (sintable[(actor[spriteNum].htang + 512) & 2047]) << shiftLeft;
+    g_player[playerNum].ps->vel.y += actor[spriteNum].htextra * (sintable[actor[spriteNum].htang & 2047]) << shiftLeft;
+}
 
-    if (actor[sn].htextra >= 0)
+int A_IncurDamage(int spriteNum)
+{
+    auto const pSprite = &sprite[spriteNum];
+    auto const pActor = &actor[spriteNum];
+
+    if (pActor->htextra >= 0)
     {
-        if (sprite[sn].extra >= 0)
+        if (sprite[spriteNum].extra >= 0)
         {
-            npc = &sprite[sn];
-
-            if (npc->picnum == APLAYER)
+            if (pSprite->picnum == APLAYER)
             {
-                if (ud.god && actor[sn].htpicnum != SHRINKSPARK) return -1;
+                if (ud.god && actor[spriteNum].htpicnum != SHRINKSPARK) return -1;
 
-                p = npc->yvel;
-                j = actor[sn].htowner;
+                int32_t playerNum = pSprite->yvel;
 
-                if (j >= 0 && (sprite[j].picnum == APLAYER))
+                if (pActor->htowner >= 0 && (sprite[pActor->htowner].picnum == APLAYER))
                 {
-                    if ((sn != j) && G_BlockFriendlyFire(p, sprite[j].yvel)) // Check if hitting ally and not damaging self.
+                    if ((spriteNum != pActor->htowner) && G_BlockFriendlyFire(playerNum, sprite[pActor->htowner].yvel)) // Check if hitting ally and not damaging self.
                     {
                         // Nullify damage and cancel.
-                        actor[sn].htowner = -1;
-                        actor[sn].htextra = -1;
-                        actor[sn].htpicnum = APLAYER;
+                        pActor->htowner = -1;
+                        pActor->htextra = -1;
+                        pActor->htpicnum = APLAYER;
                         return -1;
                     }
                 }
 
-                npc->extra -= actor[sn].htextra;
+                pSprite->extra -= pActor->htextra;
 
-                if (j >= 0)
+                if (pActor->htowner >= 0)
                 {
-                    if (npc->extra <= 0 && actor[sn].htpicnum != FREEZEBLAST)
+                    if (pSprite->extra <= 0 && actor[spriteNum].htpicnum != FREEZEBLAST)
                     {
-                        npc->extra = 0;
+                        pSprite->extra = 0;
 
-                        g_player[p].ps->wackedbyactor = j;
+                        g_player[playerNum].ps->wackedbyactor = pActor->htowner;
 
-                        if (sprite[actor[sn].htowner].picnum == APLAYER && p != sprite[actor[sn].htowner].yvel)
-                            g_player[p].ps->frag_ps = sprite[j].yvel;
+                        if (sprite[pActor->htowner].picnum == APLAYER && playerNum != sprite[pActor->htowner].yvel)
+                            g_player[playerNum].ps->frag_ps = sprite[pActor->htowner].yvel;
 
-                        actor[sn].htowner = g_player[p].ps->i;
+                        pActor->htowner = g_player[playerNum].ps->i;
                     }
                 }
 
-                if (A_CheckSpriteTileFlags(actor[sn].htpicnum,SFLAG_PROJECTILE) && (actor[sn].projectile.workslike & PROJECTILE_RPG))
+                if (!A_CheckSpriteTileFlags(pActor->htpicnum, SFLAG_NODAMAGEPUSH)) // Check if projectile can push.
                 {
-                    g_player[p].ps->vel.x +=
-                        actor[sn].htextra*(sintable[(actor[sn].htang+512)&2047])<<2;
-                    g_player[p].ps->vel.y +=
-                        actor[sn].htextra*(sintable[actor[sn].htang&2047])<<2;
-                }
-                else if (A_CheckSpriteTileFlags(actor[sn].htpicnum,SFLAG_PROJECTILE))
-                {
-                    g_player[p].ps->vel.x +=
-                        actor[sn].htextra*(sintable[(actor[sn].htang+512)&2047])<<1;
-                    g_player[p].ps->vel.y +=
-                        actor[sn].htextra*(sintable[actor[sn].htang&2047])<<1;
-                }
-
-                switch (DynamicTileMap[actor[sn].htpicnum])
-                {
-                case RADIUSEXPLOSION__STATIC:
-                case RPG__STATIC:
-                case HYDRENT__STATIC:
-                case HEAVYHBOMB__STATIC:
-                case SEENINE__STATIC:
-                case OOZFILTER__STATIC:
-                case EXPLODINGBARREL__STATIC:
-                    g_player[p].ps->vel.x +=
-                        actor[sn].htextra*(sintable[(actor[sn].htang+512)&2047])<<2;
-                    g_player[p].ps->vel.y +=
-                        actor[sn].htextra*(sintable[actor[sn].htang&2047])<<2;
-                    break;
-                default:
-                    g_player[p].ps->vel.x +=
-                        actor[sn].htextra*(sintable[(actor[sn].htang+512)&2047])<<1;
-                    g_player[p].ps->vel.y +=
-                        actor[sn].htextra*(sintable[actor[sn].htang&2047])<<1;
-                    break;
+                    switch (DynamicTileMap[pActor->htpicnum])
+                    {
+                        case RADIUSEXPLOSION__STATIC:
+                        case RPG__STATIC:
+                        case HYDRENT__STATIC:
+                        case HEAVYHBOMB__STATIC:
+                        case SEENINE__STATIC:
+                        case OOZFILTER__STATIC:
+                        case EXPLODINGBARREL__STATIC:
+                            P_Nudge(playerNum, spriteNum, 2);
+                            break;
+                        default:
+                        {
+                            int const isRPG = (A_CheckSpriteTileFlags(pActor->htpicnum, SFLAG_PROJECTILE) && (actor[spriteNum].projectile.workslike & PROJECTILE_RPG));
+                            P_Nudge(playerNum, spriteNum, 1 << isRPG);
+                            break;
+                        }
+                    }
                 }
             }
             else
             {
-                if (actor[sn].htextra == 0)
-                    if (actor[sn].htpicnum == SHRINKSPARK && npc->xrepeat < 24)
+                if (pActor->htextra == 0)
+                    if (pActor->htpicnum == SHRINKSPARK && pSprite->xrepeat < 24)
                         return -1;
 
-                npc->extra -= actor[sn].htextra;
-                if (npc->picnum != RECON && npc->owner >= 0 && sprite[npc->owner].statnum < MAXSTATUS)
-                    npc->owner = actor[sn].htowner;
+                pSprite->extra -= pActor->htextra;
+                if (pSprite->picnum != RECON && pSprite->owner >= 0 && sprite[pSprite->owner].statnum < MAXSTATUS)
+                    pSprite->owner = pActor->htowner;
             }
 
-            actor[sn].htextra = -1;
-            return actor[sn].htpicnum;
+            pActor->htextra = -1;
+            return pActor->htpicnum;
         }
     }
 
-    actor[sn].htextra = -1;
+    pActor->htextra = -1;
     return -1;
 }
 
