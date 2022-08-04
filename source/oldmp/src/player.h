@@ -33,24 +33,24 @@
 
 // Enums
 enum WeaponFlags_t {
-    WEAPON_HOLSTER_CLEARS_CLIP = 1,     // 'holstering' clears the current clip
-    WEAPON_GLOWS = 2,     // weapon 'glows' (shrinker and grower)
-    WEAPON_AUTOMATIC = 4,     // automatic fire (continues while 'fire' is held down
-    WEAPON_FIREEVERYOTHER = 8,     // during 'hold time' fire every frame
-    WEAPON_FIREEVERYTHIRD = 16,    // during 'hold time' fire every third frame
-    WEAPON_RANDOMRESTART = 32,    // restart for automatic is 'randomized' by RND 3
-    WEAPON_AMMOPERSHOT = 64,    // uses ammo for each shot (for automatic)
-    WEAPON_BOMB_TRIGGER = 128,   // weapon is the 'bomb' trigger
-    WEAPON_NOVISIBLE = 256,   // weapon use does not cause user to become 'visible'
-    WEAPON_THROWIT = 512,   // weapon 'throws' the 'shoots' item...
-    WEAPON_CHECKATRELOAD = 1024,  // check weapon availability at 'reload' time
-    WEAPON_STANDSTILL = 2048,  // player stops jumping before actual fire (like tripbomb in duke)
-    WEAPON_SPAWNTYPE1 = 0,     // just spawn
-    WEAPON_SPAWNTYPE2 = 4096,  // spawn like shotgun shells
-    WEAPON_SPAWNTYPE3 = 8192,  // spawn like chaingun shells
-    WEAPON_SEMIAUTO = 16384, // cancel button press after each shot
-    WEAPON_RELOAD_TIMING = 32768, // special casing for pistol reload sounds
-    WEAPON_RESET = 65536  // cycle weapon back to frame 1 if fire is held, 0 if not
+    WEAPON_HOLSTER_CLEARS_CLIP  = 1,     // 'holstering' clears the current clip
+    WEAPON_GLOWS                = 2,     // weapon 'glows' (shrinker and grower)
+    WEAPON_AUTOMATIC            = 4,     // automatic fire (continues while 'fire' is held down
+    WEAPON_FIREEVERYOTHER       = 8,     // during 'hold time' fire every frame
+    WEAPON_FIREEVERYTHIRD       = 16,    // during 'hold time' fire every third frame
+    WEAPON_RANDOMRESTART        = 32,    // restart for automatic is 'randomized' by RND 3
+    WEAPON_AMMOPERSHOT          = 64,    // uses ammo for each shot (for automatic)
+    WEAPON_BOMB_TRIGGER         = 128,   // weapon is the 'bomb' trigger
+    WEAPON_NOVISIBLE            = 256,   // weapon use does not cause user to become 'visible'
+    WEAPON_THROWIT              = 512,   // weapon 'throws' the 'shoots' item...
+    WEAPON_CHECKATRELOAD        = 1024,  // check weapon availability at 'reload' time
+    WEAPON_STANDSTILL           = 2048,  // player stops jumping before actual fire (like tripbomb in duke)
+    WEAPON_SPAWNTYPE1           = 0,     // just spawn
+    WEAPON_SPAWNTYPE2           = 4096,  // spawn like shotgun shells
+    WEAPON_SPAWNTYPE3           = 8192,  // spawn like chaingun shells
+    WEAPON_SEMIAUTO             = 16384, // cancel button press after each shot
+    WEAPON_RELOAD_TIMING        = 32768, // special casing for pistol reload sounds
+    WEAPON_RESET                = 65536  // cycle weapon back to frame 1 if fire is held, 0 if not
 };
 
 typedef struct {
