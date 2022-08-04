@@ -546,6 +546,7 @@ void P_RandomSpawnPoint(int snum)
     sprite[p->i].xyz = actor[p->i].bpos = p->opos = p->pos = g_playerSpawnPoints[i].pos;
     p->bobposx = p->pos.x;
     p->bobposy = p->pos.y;
+    //p->pos.z += PHEIGHT;
 
     p->q16ang = fix16_from_int(g_playerSpawnPoints[i].ang);
     p->cursectnum = g_playerSpawnPoints[i].sectnum;

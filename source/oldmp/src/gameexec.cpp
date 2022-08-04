@@ -2823,9 +2823,8 @@ static int X_DoExecute(void)
         {
             auto const p = g_player[g_p].ps;
             P_RandomSpawnPoint(g_p);
-            setspritez_old(p->i, p->pos.x, p->pos.y, p->pos.z + PHEIGHT);
-            g_sp->cstat = 257;
 
+            g_sp->cstat = 257;
             g_sp->shade = -12;
             g_sp->clipdist = 64;
             g_sp->xrepeat = 42;
@@ -2855,6 +2854,8 @@ static int X_DoExecute(void)
             p->falling_counter = 0;
             p->knee_incs = 0;
             p->actorsqu = -1;
+            p->lowsprite = -1;
+            p->highsprite = -1;
 
             actor[g_i].htextra = -1;
             actor[g_i].htowner = g_i;
@@ -2869,9 +2870,8 @@ static int X_DoExecute(void)
             P_ResetInventory(g_p);
             P_ResetWeapons(g_p);
 
-            g_player[g_p].ps->reloading = 0;
-
-            g_player[g_p].ps->movement_lock = 0;
+            p->reloading = 0;
+            p->movement_lock = 0;
 
             X_OnEvent(EVENT_RESETPLAYER, p->i, g_p, -1);
             g_cameraDistance = 0;
