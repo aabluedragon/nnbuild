@@ -1281,17 +1281,18 @@ static void G_MoveHoloDuke(int spriteNum)
 
     s->cstat = 0;
 
-    if (s->xrepeat < 42)
+    if (s->xrepeat < PLAYER_SPRITE_XREPEAT)
     {
         s->xrepeat += 4;
         s->cstat |= 2;
     }
-    else s->xrepeat = 42;
-    if (s->yrepeat < 36)
+    else s->xrepeat = PLAYER_SPRITE_XREPEAT;
+
+    if (s->yrepeat < PLAYER_SPRITE_YREPEAT)
         s->yrepeat += 4;
     else
     {
-        s->yrepeat = 36;
+        s->yrepeat = PLAYER_SPRITE_YREPEAT;
         if (sector[s->sectnum].lotag != ST_2_UNDERWATER)
             A_Fall(spriteNum);
         if (s->zvel == 0 && sector[s->sectnum].lotag == ST_1_ABOVE_WATER)

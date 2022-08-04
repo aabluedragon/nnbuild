@@ -1317,8 +1317,8 @@ static void insert_player_sprite(int pNum)
     s->owner = spriteIndex;
     s->pal = p->palookup = spawnPoint->pal;
     s->shade = 0;
-    s->xrepeat = 42;
-    s->yrepeat = 36;
+    s->xrepeat = PLAYER_SPRITE_XREPEAT;
+    s->yrepeat = PLAYER_SPRITE_YREPEAT;
     s->cstat = 1 + 256;
     s->xoffset = 0;
     s->clipdist = 64;

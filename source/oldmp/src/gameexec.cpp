@@ -2827,8 +2827,8 @@ static int X_DoExecute(void)
             g_sp->cstat = 257;
             g_sp->shade = -12;
             g_sp->clipdist = 64;
-            g_sp->xrepeat = 42;
-            g_sp->yrepeat = 36;
+            g_sp->xrepeat = PLAYER_SPRITE_XREPEAT;
+            g_sp->yrepeat = PLAYER_SPRITE_YREPEAT;
             g_sp->owner = g_i;
             g_sp->xoffset = 0;
             g_sp->pal = g_player[g_p].ps->palookup;
