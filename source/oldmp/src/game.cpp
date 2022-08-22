@@ -9611,7 +9611,7 @@ int app_main(int32_t argc, char const* const* argv)
             }
         }
 #else
-        while (videoSetGameMode(0,xres[i],yres[i],8) < 0)
+        while (videoSetGameMode(0,xres[i],yres[i],8, ud.detail) < 0)
         {
             LOG_F(ERROR, "Failure setting video mode %dx%dx%d windowed! Attempting safer mode...",xres[i],yres[i],8);
             i++;
