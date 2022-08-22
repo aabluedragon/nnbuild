@@ -2663,6 +2663,21 @@ static int X_DoExecute(void)
             break;
         }
 
+    case CON_GETINTERPOLATEDPOS:
+    {
+        insptr++;
+        
+        vec3_t pos = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
+        vec3_t opos = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
+
+        int32_t smoothRatio = calc_smoothratio(totalclock, ototalclock);
+
+        Gv_SetVarX(*insptr++, (opos.x + mulscale16((int)(pos.x - opos.x), smoothRatio)));
+        Gv_SetVarX(*insptr++, (opos.y + mulscale16((int)(pos.y - opos.y), smoothRatio)));
+        Gv_SetVarX(*insptr++, (opos.z + mulscale16((int)(pos.z - opos.z), smoothRatio)));
+        break;
+    }
+
     case CON_UPDATESECTOR:
     case CON_UPDATESECTORZ:
         insptr++;

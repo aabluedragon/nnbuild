@@ -483,6 +483,7 @@ const char *keyw[] =
     "gettiledata",              // 356
     "settiledata",              // 357
     "defstate",                 // 358
+    "getinterpolatedpos",       // 359
     "<null>"
 };
 
@@ -4053,6 +4054,11 @@ DO_DEFSTATE:
     case CON_GETCEILZOFSLOPE:
         C_GetManyVars(3);
         C_GetNextVarType(GAMEVAR_READONLY);
+        return 0;
+
+    case CON_GETINTERPOLATEDPOS:
+        C_GetManyVars(6);
+        C_GetManyVarsType(GAMEVAR_READONLY, 3);
         return 0;
 
     case CON_DEFINEPROJECTILE:
