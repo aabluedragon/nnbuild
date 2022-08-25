@@ -60,7 +60,7 @@ void X_ScriptInfo(void)
             VLOG_F(LOG_VM, "%5d: %3d: ",(int32_t)(p - apScript),(int32_t)(p - insptr));
 
             if (*p>>12&&(*p&0xFFF)<CON_END)
-                VLOG_F(LOG_VM, "%5d %s",(int32_t)(*p>>12),keyw[*p&0xFFF]);
+                VLOG_F(LOG_VM, "%5d %s",(int32_t)(*p>>12),keyw[*p&0xFFF].token);
             else
                 VLOG_F(LOG_VM, "%d",(int32_t)*p);
         }
@@ -76,7 +76,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
 {
     if (iEventID<0 || iEventID >= MAXGAMEEVENTS)
     {
-        OSD_Printf(CON_ERROR "invalid event ID",g_errorLineNum,keyw[g_tw]);
+        OSD_Printf(CON_ERROR "invalid event ID",g_errorLineNum,keyw[g_tw].token);
         return;
     }
 
@@ -133,7 +133,7 @@ int X_OnEventWithReturn(int iEventID, int iActor, int iPlayer, int nReturn)
 {
     if (iEventID < 0 || iEventID >= MAXGAMEEVENTS)
     {
-        OSD_Printf(CON_ERROR "invalid event ID", g_errorLineNum, keyw[g_tw]);
+        OSD_Printf(CON_ERROR "invalid event ID", g_errorLineNum, keyw[g_tw].token);
         return nReturn;
     }
 
@@ -848,7 +848,7 @@ static int X_DoExecute(void)
             int q = *insptr++, i = *insptr++;
             if ((apStrings[q] == NULL || apXStrings[i] == NULL) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "%d %d null quote\n",g_errorLineNum,keyw[g_tw],q,i);
+                OSD_Printf(CON_ERROR "%d %d null quote\n",g_errorLineNum,keyw[g_tw].token,q,i);
                 break;
             }
             Bstrcpy(apStrings[q],apXStrings[i]);
@@ -1116,7 +1116,7 @@ static int X_DoExecute(void)
         insptr++;
         if ((g_sp->yvel < 0 || (unsigned)g_sp->yvel > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->yvel));
+            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw].token,TrackerCast(g_sp->yvel));
             insptr++;
             break;
         }
@@ -1166,7 +1166,7 @@ static int X_DoExecute(void)
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr++);
+            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw].token,*insptr++);
             break;
         }
         if (!A_CheckSoundPlaying(g_i,*insptr++))
@@ -1177,7 +1177,7 @@ static int X_DoExecute(void)
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
+            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw].token,*insptr);
             insptr++;break;
         }
         X_DoConditional(A_CheckSoundPlaying(g_i,*insptr));
@@ -1188,7 +1188,7 @@ static int X_DoExecute(void)
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
+            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw].token,*insptr);
             insptr++;break;
         }
         if (A_CheckSoundPlaying(g_i,*insptr))
@@ -1218,7 +1218,7 @@ static int X_DoExecute(void)
             int const soundNum = *insptr++;
             if ((soundNum < 0 || (unsigned)soundNum > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, keyw[g_tw], soundNum);
+                OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, keyw[g_tw].token, soundNum);
                 break;
             }
 
@@ -1234,7 +1234,7 @@ static int X_DoExecute(void)
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw],*insptr);
+            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,keyw[g_tw].token,*insptr);
             insptr++;break;
         }
         A_PlaySound((short) *insptr++,g_i);
@@ -1522,22 +1522,22 @@ static int X_DoExecute(void)
             switch (tw)
             {
             case CON_ACTIVATEBYSECTOR:
-                if ((var1<0 || var1>=numsectors) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],var1);break;}
+                if ((var1<0 || var1>=numsectors) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,var1);break;}
                 activatebysector(var1, var2);
                 break;
             case CON_OPERATESECTORS:
-                if ((var1<0 || var1>=numsectors) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],var1);break;}
+                if ((var1<0 || var1>=numsectors) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,var1);break;}
                 G_OperateSectors(var1, var2);
                 break;
             case CON_OPERATEACTIVATORS:
-                if ((var2<0 || var2>=ud.multimode) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid player %d\n",g_errorLineNum,keyw[g_tw],var2);break;}
+                if ((var2<0 || var2>=ud.multimode) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid player %d\n",g_errorLineNum,keyw[g_tw].token,var2);break;}
                 G_OperateActivators(var1, var2);
                 break;
             case CON_SETASPECT:
                 renderSetAspect(var1, var2);
                 break;
             case CON_SSP:
-                if ((var1<0 || var1>=MAXSPRITES) && g_scriptSanityChecks) { OSD_Printf(CON_ERROR "Invalid sprite %d\n",g_errorLineNum,keyw[g_tw],var1);break;}
+                if ((var1<0 || var1>=MAXSPRITES) && g_scriptSanityChecks) { OSD_Printf(CON_ERROR "Invalid sprite %d\n",g_errorLineNum,keyw[g_tw].token,var1);break;}
                 A_SetSprite(var1, var2);
                 break;
             }
@@ -1551,7 +1551,7 @@ static int X_DoExecute(void)
 
             if ((lVar1<0 || lVar1>=MAXSPRITES || lVar2<0 || lVar2>=MAXSPRITES) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sprite %d\n",g_errorLineNum,keyw[g_tw],lVar1<0||lVar1>=MAXSPRITES?lVar1:lVar2);
+                OSD_Printf(CON_ERROR "Invalid sprite %d\n",g_errorLineNum,keyw[g_tw].token,lVar1<0||lVar1>=MAXSPRITES?lVar1:lVar2);
                 res=0;
             }
             else res=cansee(sprite[lVar1].x,sprite[lVar1].y,sprite[lVar1].z,sprite[lVar1].sectnum,
@@ -1595,7 +1595,7 @@ static int X_DoExecute(void)
             j=Gv_GetVarX(*insptr++);
             if ((apStrings[j] == NULL) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],j);
+                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,j);
                 Gv_SetVarX(i,-1);
                 break;
             }
@@ -1645,7 +1645,7 @@ static int X_DoExecute(void)
             j=Gv_GetVarX(*insptr++);
             if ((j < 0 || j > MAXSTATUS) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid status list %d\n",g_errorLineNum,keyw[g_tw],j);
+                OSD_Printf(CON_ERROR "invalid status list %d\n",g_errorLineNum,keyw[g_tw].token,j);
                 break;
             }
             Gv_SetVarX(i,headspritestat[j]);
@@ -1659,7 +1659,7 @@ static int X_DoExecute(void)
             j=Gv_GetVarX(*insptr++);
             if ((j < 0 || j >= MAXSPRITES) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],j);
+                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw].token,j);
                 break;
             }
             Gv_SetVarX(i,prevspritestat[j]);
@@ -1673,7 +1673,7 @@ static int X_DoExecute(void)
             j=Gv_GetVarX(*insptr++);
             if ((j < 0 || j >= MAXSPRITES) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],j);
+                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw].token,j);
                 break;
             }
             Gv_SetVarX(i,nextspritestat[j]);
@@ -1687,7 +1687,7 @@ static int X_DoExecute(void)
             j=Gv_GetVarX(*insptr++);
             if ((j < 0 || j > numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid sector %d\n",g_errorLineNum,keyw[g_tw],j);
+                OSD_Printf(CON_ERROR "invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,j);
                 break;
             }
             Gv_SetVarX(i,headspritesect[j]);
@@ -1701,7 +1701,7 @@ static int X_DoExecute(void)
             j=Gv_GetVarX(*insptr++);
             if ((j < 0 || j >= MAXSPRITES) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],j);
+                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw].token,j);
                 break;
             }
             Gv_SetVarX(i,prevspritesect[j]);
@@ -1715,7 +1715,7 @@ static int X_DoExecute(void)
             j=Gv_GetVarX(*insptr++);
             if ((j < 0 || j >= MAXSPRITES) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],j);
+                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw].token,j);
                 break;
             }
             Gv_SetVarX(i,nextspritesect[j]);
@@ -1729,11 +1729,11 @@ static int X_DoExecute(void)
                     f=Gv_GetVarX(*insptr++);
             j=Gv_GetVarX(*insptr++);
             if ((i<0 || i>=MAXQUOTES) && g_scriptSanityChecks)
-                OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw],i);
+                OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw].token,i);
             else if ((apStrings[i] == NULL) && g_scriptSanityChecks)
-                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],i);
+                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,i);
             else if ((f<0 || f>=NUMGAMEFUNCTIONS) && g_scriptSanityChecks)
-                OSD_Printf(CON_ERROR "invalid function %d\n",g_errorLineNum,keyw[g_tw],f);
+                OSD_Printf(CON_ERROR "invalid function %d\n",g_errorLineNum,keyw[g_tw].token,f);
             else
             {
                 if (j<2)
@@ -1761,10 +1761,10 @@ static int X_DoExecute(void)
             st = Gv_GetVarX(*insptr++);
             ln = Gv_GetVarX(*insptr++);
 
-            if ((q1<0 || q1>=MAXQUOTES) && g_scriptSanityChecks)       OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw],q1);
-            else if ((apStrings[q1] == NULL) && g_scriptSanityChecks) OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q1);
-            else if ((q2<0 || q2>=MAXQUOTES) && g_scriptSanityChecks)  OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw],q2);
-            else if ((apStrings[q2] == NULL) && g_scriptSanityChecks) OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q2);
+            if ((q1<0 || q1>=MAXQUOTES) && g_scriptSanityChecks)       OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw].token,q1);
+            else if ((apStrings[q1] == NULL) && g_scriptSanityChecks) OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,q1);
+            else if ((q2<0 || q2>=MAXQUOTES) && g_scriptSanityChecks)  OSD_Printf(CON_ERROR "invalid quote ID %d\n",g_errorLineNum,keyw[g_tw].token,q2);
+            else if ((apStrings[q2] == NULL) && g_scriptSanityChecks) OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,q2);
             else
             {
                 s1=apStrings[q1];
@@ -1801,7 +1801,7 @@ static int X_DoExecute(void)
             case CON_GETPNAME:
                 if ((apStrings[i] == NULL) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],i);
+                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,i);
                     break;
                 }
                 if (g_player[j].user_name[0])
@@ -1811,7 +1811,7 @@ static int X_DoExecute(void)
             case CON_GETTEAMNAME:
                 if ((apStrings[i] == NULL) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "null quote %d\n", g_errorLineNum, keyw[g_tw], i);
+                    OSD_Printf(CON_ERROR "null quote %d\n", g_errorLineNum, keyw[g_tw].token, i);
                     break;
                 }
                 if (teams[j].name[0])
@@ -1821,7 +1821,7 @@ static int X_DoExecute(void)
             case CON_QGETSYSSTR:
                 if ((apStrings[i] == NULL) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "null quote %d %d\n",g_errorLineNum,keyw[g_tw],i,j);
+                    OSD_Printf(CON_ERROR "null quote %d %d\n",g_errorLineNum,keyw[g_tw].token,i,j);
                     break;
                 }
                 switch (j)
@@ -1843,13 +1843,13 @@ static int X_DoExecute(void)
                     Bstrcpy(apStrings[i],Gametypes[ud.coop].name);
                     break;
                 default:
-                    OSD_Printf(CON_ERROR "unknown str ID %d %d\n",g_errorLineNum,keyw[g_tw],i,j);
+                    OSD_Printf(CON_ERROR "unknown str ID %d %d\n",g_errorLineNum,keyw[g_tw].token,i,j);
                 }
                 break;
             case CON_QSTRCAT:
                 if ((apStrings[i] == NULL || apStrings[j] == NULL) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],apStrings[i] ? j : i);
+                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,apStrings[i] ? j : i);
                     break;
                 }
                 Bstrncat(apStrings[i],apStrings[j],(MAXQUOTELEN-1)-Bstrlen(apStrings[i]));
@@ -1857,14 +1857,14 @@ static int X_DoExecute(void)
             case CON_QSTRCPY:
                 if ((apStrings[i] == NULL || apStrings[j] == NULL) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],apStrings[i] ? j : i);
+                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,apStrings[i] ? j : i);
                     break;
                 }
                 Bstrcpy(apStrings[i],apStrings[j]);
                 break;
             case CON_CHANGESPRITESECT:
-                if ((i<0 || i>=MAXSPRITES) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sprite %d\n",g_errorLineNum,keyw[g_tw],i);break;}
-                if ((j<0 || j>=numsectors) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],j);break;}
+                if ((i<0 || i>=MAXSPRITES) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sprite %d\n",g_errorLineNum,keyw[g_tw].token,i);break;}
+                if ((j<0 || j>=numsectors) && g_scriptSanityChecks) {OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,j);break;}
                 changespritesect(i,j);
                 break;
             }
@@ -1879,12 +1879,12 @@ static int X_DoExecute(void)
 
                 if ((i<0 || i>=MAXSPRITES) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "Invalid sprite: %d\n",g_errorLineNum,keyw[g_tw],i);
+                    OSD_Printf(CON_ERROR "Invalid sprite: %d\n",g_errorLineNum,keyw[g_tw].token,i);
                     break;
                 }
                 if ((j<0 || j>=MAXSTATUS) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "Invalid statnum: %d\n",g_errorLineNum,keyw[g_tw],j);
+                    OSD_Printf(CON_ERROR "Invalid statnum: %d\n",g_errorLineNum,keyw[g_tw].token,j);
                     break;
                 }
                 if (sprite[i].statnum == j) break;
@@ -1925,13 +1925,13 @@ static int X_DoExecute(void)
 
             if ((volnume > MAXVOLUMES-1 || volnume < 0) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid volume (%d)\n",g_errorLineNum,keyw[g_tw],volnume);
+                OSD_Printf(CON_ERROR "invalid volume (%d)\n",g_errorLineNum,keyw[g_tw].token,volnume);
                 break;
             }
 
             if ((levnume > MAXLEVELS-1 || levnume < 0) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid level (%d)\n",g_errorLineNum,keyw[g_tw],levnume);
+                OSD_Printf(CON_ERROR "invalid level (%d)\n",g_errorLineNum,keyw[g_tw].token,levnume);
                 break;
             }
 
@@ -2069,7 +2069,7 @@ static int X_DoExecute(void)
 
             if ((wallnum<0 || wallnum>=numwalls) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid wall %d\n",g_errorLineNum,keyw[g_tw],wallnum);
+                OSD_Printf(CON_ERROR "Invalid wall %d\n",g_errorLineNum,keyw[g_tw].token,wallnum);
                 break;
             }
             dragpoint(wallnum,newx,newy,0);
@@ -2084,7 +2084,7 @@ static int X_DoExecute(void)
 
             if ((xvar < 0 || yvar < 0 || xvar >= MAXSPRITES || yvar >= MAXSPRITES) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid sprite\n",g_errorLineNum,keyw[g_tw]);
+                OSD_Printf(CON_ERROR "invalid sprite\n",g_errorLineNum,keyw[g_tw].token);
                 break;
             }
             if (tw == CON_DIST) distx = dist(&sprite[xvar],&sprite[yvar]);
@@ -2138,7 +2138,7 @@ static int X_DoExecute(void)
             int lIn=Gv_GetVarX(*insptr++);
             if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
+                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,TrackerCast(g_sp->sectnum));
                 break;
             }
             j = A_Spawn(g_i, lIn);
@@ -2166,7 +2166,7 @@ static int X_DoExecute(void)
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
+            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,TrackerCast(g_sp->sectnum));
             insptr++;
             break;
         }
@@ -2203,7 +2203,7 @@ static int X_DoExecute(void)
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
+            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,TrackerCast(g_sp->sectnum));
             insptr++;
             actor[g_i].t_data[9]=0;
             break;
@@ -2236,7 +2236,7 @@ static int X_DoExecute(void)
 
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],TrackerCast(g_sp->sectnum));
+            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,TrackerCast(g_sp->sectnum));
             actor[g_i].t_data[9]=0;
             break;
         }
@@ -2263,7 +2263,7 @@ static int X_DoExecute(void)
 
         if ((j < 0 || (unsigned)j > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, keyw[g_tw], j);
+            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, keyw[g_tw].token, j);
             break;
         }
 
@@ -2293,7 +2293,7 @@ static int X_DoExecute(void)
             if (j >= 0 && j < MAXUNIQHUDID-1)
                 guniqhudid = j;
             else
-                OSD_Printf(CON_ERROR "Invalid ID %d\n",g_errorLineNum,keyw[g_tw],j);
+                OSD_Printf(CON_ERROR "Invalid ID %d\n",g_errorLineNum,keyw[g_tw].token,j);
             break;
         }
 
@@ -2386,7 +2386,7 @@ static int X_DoExecute(void)
                     int z=65536;
                     if ((apStrings[q] == NULL) && g_scriptSanityChecks)
                     {
-                        OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q);
+                        OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,q);
                         if (tw == CON_GAMETEXTZ)
                             insptr++;
                         break;
@@ -2404,7 +2404,7 @@ static int X_DoExecute(void)
 
             if ((apStrings[q] == NULL) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],q);
+                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,q);
                 break;
             }
             minitextshade(x,y,apStrings[q],shade,pal,26);
@@ -2467,7 +2467,7 @@ static int X_DoExecute(void)
 
             if ((sectnum<0 || sectnum>=numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],sectnum);
+                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,sectnum);
                 break;
             }
             getzrange_old(x, y, z, sectnum, &ceilz, &ceilhit, &florz, &florhit, walldist, clipmask);
@@ -2501,7 +2501,7 @@ static int X_DoExecute(void)
 
             if ((v.sectnum<0 || v.sectnum>=numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],v.sectnum);
+                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,v.sectnum);
                 break;
             }
 
@@ -2526,7 +2526,7 @@ static int X_DoExecute(void)
 
             if ((sect1<0 || sect1>=numsectors || sect2<0 || sect2>=numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector\n",g_errorLineNum,keyw[g_tw]);
+                OSD_Printf(CON_ERROR "Invalid sector\n",g_errorLineNum,keyw[g_tw].token);
                 Gv_SetVarX(rvar, 0);
             }
 
@@ -2574,7 +2574,7 @@ static int X_DoExecute(void)
 
             if ((sectnum<0 || sectnum>=numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],sectnum);
+                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,sectnum);
                 break;
             }
             neartag(x, y, z, sectnum, ang, &neartagsector, &neartagwall, &neartagsprite, &neartaghitdist, neartagrange, tagsearch, NULL);
@@ -2619,7 +2619,7 @@ static int X_DoExecute(void)
             {
                 if ((spritenum < 0 || spritenum >= MAXSPRITES) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],spritenum);
+                    OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw].token,spritenum);
                     break;
                 }
                 setspritez_old(spritenum, x, y, z);
@@ -2631,7 +2631,7 @@ static int X_DoExecute(void)
 
                 if ((spritenum < 0 || spritenum >= MAXSPRITES) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],spritenum);
+                    OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw].token,spritenum);
                     insptr++;
                     break;
                 }
@@ -2649,7 +2649,7 @@ static int X_DoExecute(void)
 
             if ((sectnum<0 || sectnum>=numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw],sectnum);
+                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,sectnum);
                 insptr++;
                 break;
             }
@@ -2994,7 +2994,7 @@ static int X_DoExecute(void)
             g_player[g_p].ps->boot_amount = *insptr;
             break;
         default:
-            OSD_Printf(CON_ERROR "Invalid inventory ID %d\n",g_errorLineNum,keyw[g_tw],*(insptr-1));
+            OSD_Printf(CON_ERROR "Invalid inventory ID %d\n",g_errorLineNum,keyw[g_tw].token,*(insptr-1));
             break;
         }
         insptr++;
@@ -3117,7 +3117,7 @@ static int X_DoExecute(void)
         j = Gv_GetVarX(*insptr++);
         if ((j < 0 || j >= MAXVOLUMES*MAXLEVELS) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid map number: %d\n",g_errorLineNum,keyw[g_tw],j);
+            OSD_Printf(CON_ERROR "Invalid map number: %d\n",g_errorLineNum,keyw[g_tw].token,j);
             return 0;
         }
         if (g_mapInfo[j].savedstate)
@@ -3226,7 +3226,7 @@ static int X_DoExecute(void)
             int dq = *insptr++, sq = *insptr++;
             if ((apStrings[sq] == NULL || apStrings[dq] == NULL) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],apStrings[sq] ? dq : sq);
+                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,apStrings[sq] ? dq : sq);
                 insptr += 4;
                 break;
             }
@@ -3277,13 +3277,13 @@ static int X_DoExecute(void)
                     index=Gv_GetVarX(*insptr++);
                     if ((index < aGameArrays[lVarID].size)&&(index>=0))
                     {
-                        OSD_Printf(OSDTEXT_GREEN "CONLOGVAR: Line %d, %s: %s[%d] =%d\n",g_errorLineNum,keyw[g_tw],
+                        OSD_Printf(OSDTEXT_GREEN "CONLOGVAR: Line %d, %s: %s[%d] =%d\n",g_errorLineNum,keyw[g_tw].token,
                                    aGameArrays[lVarID].szLabel,index,m*aGameArrays[lVarID].plValues[index]);
                         break;
                     }
                     else
                     {
-                        OSD_Printf(CON_ERROR "invalid array index\n",g_errorLineNum,keyw[g_tw]);
+                        OSD_Printf(CON_ERROR "invalid array index\n",g_errorLineNum,keyw[g_tw].token);
                         break;
                     }
                 }
@@ -3296,7 +3296,7 @@ static int X_DoExecute(void)
                 {
                     // invalid varID
                     insptr++;
-                    OSD_Printf(CON_ERROR "invalid variable\n",g_errorLineNum,keyw[g_tw]);
+                    OSD_Printf(CON_ERROR "invalid variable\n",g_errorLineNum,keyw[g_tw].token);
                     break;  // out of switch
                 }
             }
@@ -3654,7 +3654,7 @@ static int X_DoExecute(void)
 
             if ((lSprite < 0 || lSprite >= MAXSPRITES) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw],lSprite);
+                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,keyw[g_tw].token,lSprite);
                 if (lVar1 == MAXGAMEVARS) insptr++;
                 if (j == MAXGAMEVARS) insptr++;
                 break;
@@ -3685,7 +3685,7 @@ static int X_DoExecute(void)
 
                 if (((unsigned)iPlayer >= MAXPLAYERS || g_player[iPlayer].ps == NULL) && g_scriptSanityChecks)
                 {
-                    OSD_Printf(CON_ERROR "invalid player ID %d\n",g_errorLineNum,keyw[g_tw],iPlayer);
+                    OSD_Printf(CON_ERROR "invalid player ID %d\n",g_errorLineNum,keyw[g_tw].token,iPlayer);
                     break;
                 }
 
@@ -3760,7 +3760,7 @@ static int X_DoExecute(void)
 
         if ((j < 0 || j >= ud.multimode) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid player ID %d\n",g_errorLineNum,keyw[g_tw],j);
+            OSD_Printf(CON_ERROR "Invalid player ID %d\n",g_errorLineNum,keyw[g_tw].token,j);
             break;
         }
 
@@ -3855,7 +3855,7 @@ static int X_DoExecute(void)
         insptr++;
         if (*(insptr+1) == 0)
         {
-            OSD_Printf(CON_ERROR "Divide by zero.\n",g_errorLineNum,keyw[g_tw]);
+            OSD_Printf(CON_ERROR "Divide by zero.\n",g_errorLineNum,keyw[g_tw].token);
             insptr += 2;
             break;
         }
@@ -3867,7 +3867,7 @@ static int X_DoExecute(void)
         insptr++;
         if (*(insptr+1) == 0)
         {
-            OSD_Printf(CON_ERROR "Mod by zero.\n",g_errorLineNum,keyw[g_tw]);
+            OSD_Printf(CON_ERROR "Mod by zero.\n",g_errorLineNum,keyw[g_tw].token);
             insptr += 2;
             break;
         }
@@ -3916,7 +3916,7 @@ static int X_DoExecute(void)
         j=Gv_GetVarX(*insptr++);
         if ((j<0 || j>=MAX_WEAPONS) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid weapon ID %d\n",g_errorLineNum,keyw[g_tw],j);
+            OSD_Printf(CON_ERROR "Invalid weapon ID %d\n",g_errorLineNum,keyw[g_tw].token,j);
             insptr++;
             break;
         }
@@ -3928,7 +3928,7 @@ static int X_DoExecute(void)
         j=Gv_GetVarX(*insptr++);
         if ((j<0 || j>=MAX_WEAPONS) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid weapon ID %d\n",g_errorLineNum,keyw[g_tw],j);
+            OSD_Printf(CON_ERROR "Invalid weapon ID %d\n",g_errorLineNum,keyw[g_tw].token,j);
             insptr++;
             break;
         }
@@ -3949,7 +3949,7 @@ static int X_DoExecute(void)
 
             if (l2==0)
             {
-                OSD_Printf(CON_ERROR "Divide by zero.\n",g_errorLineNum,keyw[g_tw]);
+                OSD_Printf(CON_ERROR "Divide by zero.\n",g_errorLineNum,keyw[g_tw].token);
                 break;
             }
             Gv_SetVarX(j, Gv_GetVarX(j)/l2);
@@ -3964,7 +3964,7 @@ static int X_DoExecute(void)
 
             if (l2==0)
             {
-                OSD_Printf(CON_ERROR "Mod by zero.\n",g_errorLineNum,keyw[g_tw]);
+                OSD_Printf(CON_ERROR "Mod by zero.\n",g_errorLineNum,keyw[g_tw].token);
                 break;
             }
 
@@ -4091,7 +4091,7 @@ static int X_DoExecute(void)
         j=Gv_GetVarX(*(insptr++));
         if (numplayers != 1 || !(g_player[myconnectindex].ps->gm & MODE_GAME))
         {
-            OSD_Printf(CON_ERROR "not in a single-player game.\n",g_errorLineNum,keyw[g_tw]);
+            OSD_Printf(CON_ERROR "not in a single-player game.\n",g_errorLineNum,keyw[g_tw].token);
             break;
         }
         osdcmd_cheatsinfo_stat.cheatnum = j;
@@ -4288,7 +4288,7 @@ static int X_DoExecute(void)
             if (g_player[g_p].ps->boot_amount != *insptr) j = 1;
             break;
         default:
-            OSD_Printf(CON_ERROR "invalid inventory ID: %d\n",g_errorLineNum,keyw[g_tw],*(insptr-1));
+            OSD_Printf(CON_ERROR "invalid inventory ID: %d\n",g_errorLineNum,keyw[g_tw].token,*(insptr-1));
         }
 
         X_DoConditional(j);
@@ -4355,14 +4355,14 @@ static int X_DoExecute(void)
 
         if ((apStrings[*insptr] == NULL) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],*insptr);
+            OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,*insptr);
             insptr++;
             break;
         }
 
         if ((g_p < 0 || g_p >= MAXPLAYERS) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "bad player for quote %d: (%d)\n",g_errorLineNum,keyw[g_tw],*insptr,g_p);
+            OSD_Printf(CON_ERROR "bad player for quote %d: (%d)\n",g_errorLineNum,keyw[g_tw].token,*insptr,g_p);
             insptr++;
             break;
         }
@@ -4377,7 +4377,7 @@ static int X_DoExecute(void)
 
             if ((apStrings[i] == NULL) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw],i);
+                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,keyw[g_tw].token,i);
                 break;
             }
             G_AddUserQuote(apStrings[i]);

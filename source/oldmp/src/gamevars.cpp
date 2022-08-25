@@ -519,7 +519,7 @@ int __fastcall Gv_GetVar(int id, int iActor, int iPlayer)
 
                 if (index >= aGameArrays[id].size || index < 0)
                 {
-                    OSD_Printf(CON_ERROR "Gv_GetVar(): invalid array index (%s[%d])\n",g_errorLineNum,keyw[g_tw],aGameArrays[id].szLabel,index);
+                    OSD_Printf(CON_ERROR "Gv_GetVar(): invalid array index (%s[%d])\n",g_errorLineNum,keyw[g_tw].token,aGameArrays[id].szLabel,index);
                     return -1;
                 }
                 return(neg?-aGameArrays[id].plValues[index]:aGameArrays[id].plValues[index]);
@@ -527,7 +527,7 @@ int __fastcall Gv_GetVar(int id, int iActor, int iPlayer)
 
             if ((id&(MAXGAMEVARS<<1)) == 0)
             {
-                OSD_Printf(CON_ERROR "Gv_GetVar(): invalid gamevar ID (%d)\n",g_errorLineNum,keyw[g_tw],id);
+                OSD_Printf(CON_ERROR "Gv_GetVar(): invalid gamevar ID (%d)\n",g_errorLineNum,keyw[g_tw].token,id);
                 return -1;
             }
 
@@ -575,7 +575,7 @@ void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
 {
     if (id<0 || id >= g_gameVarCount)
     {
-        OSD_Printf(CON_ERROR "Gv_SetVar(): tried to set invalid gamevar ID (%d) from sprite %d (%d), player %d\n",g_errorLineNum,keyw[g_tw],id,g_i,TrackerCast(sprite[g_i].picnum),g_p);
+        OSD_Printf(CON_ERROR "Gv_SetVar(): tried to set invalid gamevar ID (%d) from sprite %d (%d), player %d\n",g_errorLineNum,keyw[g_tw].token,id,g_i,TrackerCast(sprite[g_i].picnum),g_p);
         return;
     }
     //Bsprintf(g_szBuf,"SGVI: %d ('%s') to %d for %d %d",id,aGameVars[id].szLabel,lValue,iActor,iPlayer);
@@ -586,14 +586,14 @@ void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
     case GAMEVAR_PERPLAYER:
         if (iPlayer < 0 || iPlayer > MAXPLAYERS-1)
         {
-            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid player (%d) for per-player gamevar %s from sprite %d, player %d\n",g_errorLineNum,keyw[g_tw],iPlayer,aGameVars[id].szLabel,g_i,g_p);
+            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid player (%d) for per-player gamevar %s from sprite %d, player %d\n",g_errorLineNum,keyw[g_tw].token,iPlayer,aGameVars[id].szLabel,g_i,g_p);
             return;
         }
         break;
     case GAMEVAR_PERACTOR:
         if (iActor < 0 || iActor > MAXSPRITES-1)
         {
-            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid sprite (%d) for per-actor gamevar %s from sprite %d (%d), player %d\n",g_errorLineNum,keyw[g_tw],iActor,aGameVars[id].szLabel,g_i,TrackerCast(sprite[g_i].picnum),g_p);
+            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid sprite (%d) for per-actor gamevar %s from sprite %d (%d), player %d\n",g_errorLineNum,keyw[g_tw].token,iActor,aGameVars[id].szLabel,g_i,TrackerCast(sprite[g_i].picnum),g_p);
             return;
         }
         break;
@@ -633,7 +633,7 @@ static intptr_t *Gv_GetVarDataPtr(const char *szGameLabel)
     if (aGameVars[i].dwFlags & (GAMEVAR_PERACTOR | GAMEVAR_PERPLAYER))
     {
         if (!aGameVars[i].val.plValues)
-            OSD_Printf(CON_ERROR "Gv_GetVarDataPtr(): INTERNAL ERROR: NULL array !!!\n",g_errorLineNum,keyw[g_tw]);
+            OSD_Printf(CON_ERROR "Gv_GetVarDataPtr(): INTERNAL ERROR: NULL array !!!\n",g_errorLineNum,keyw[g_tw].token);
         return aGameVars[i].val.plValues;
     }
 

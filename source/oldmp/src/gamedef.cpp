@@ -122,369 +122,366 @@ static const char *C_GetLabelType(int type)
 
 #define NUMKEYWORDS (signed int)(sizeof(keyw)/sizeof(keyw[0]))
 
-const char *keyw[] =
+const tokenmap_t keyw[] =
 {
-    "definelevelname",          // 0  defines level name
-    "actor",                    // 1  defines an actor
-    "addammo",                  // 2  adds ammo to a weapon
-    "ifrnd",                    // 3  checks against a randomizer
-    "enda",                     // 4  ends an actor definition
-    "ifcansee",                 // 5  checks if the player can see an object
-    "ifhitweapon",              // 6  checks if an object was hit by a weapon
-    "action",                   // 7  defines an action if used outside a state or actor, otherwise triggers actor to perform action
-    "ifpdistl",                 // 8  checks if player distance is less than value
-    "ifpdistg",                 // 9  checks if player distance is more than value
-    "else",                     // 10 used with if checks
-    "strength",                 // 11 sets health
-    "break",                    // 12 stops processing
-    "shoot",                    // 13 shoots a projectile
-    "palfrom",                  // 14 used for player screen shading effect, sets p->pals_time and p->pals[0-2]
-    "sound",                    // 15 plays a sound that was defined with definesound
-    "fall",                     // 16 causes actor to fall to sector floor height
-    "state",                    // 17 begins defining a state if used outside a state or actor, otherwise calls a state
-    "ends",                     // 18 ends defining a state
-    "define",                   // 19 defines a value
-    "<null>",                   // 20 was previously used to define a comment
-    "ifai",                     // 21 checks if actor is currently performing a specific ai function
-    "killit",                   // 22 kills an actor
-    "addweapon",                // 23 adds a weapon to the closest player
-    "ai",                       // 24 sets an ai function to be used by an actor
-    "addphealth",               // 25 adds health to the player
-    "ifdead",                   // 26 checks if actor is dead
-    "ifsquished",               // 27 checks if actor has been squished
-    "sizeto",                   // 28 gradually increases actor size until it matches parameters given
-    "{",                        // 29 used to indicate segments of code
-    "}",                        // 30 used to indicate segments of code
-    "spawn",                    // 31 spawns an actor
-    "move",                     // 32
-    "ifwasweapon",              // 33
-    "ifaction",                 // 34
-    "ifactioncount",            // 35
-    "resetactioncount",         // 36
-    "debris",                   // 37
-    "pstomp",                   // 38
-    "<null>",                   // 39 was previously used to define the start of a comment block
-    "cstat",                    // 40
-    "ifmove",                   // 41
-    "resetplayer",              // 42
-    "ifonwater",                // 43
-    "ifinwater",                // 44
-    "ifcanshoottarget",         // 45
-    "ifcount",                  // 46
-    "resetcount",               // 47
-    "addinventory",             // 48
-    "ifactornotstayput",        // 49
-    "hitradius",                // 50
-    "ifp",                      // 51
-    "count",                    // 52
-    "ifactor",                  // 53
-    "music",                    // 54
-    "include",                  // 55
-    "ifstrength",               // 56
-    "definesound",              // 57
-    "guts",                     // 58
-    "ifspawnedby",              // 59
-    "gamestartup",              // 60
-    "wackplayer",               // 61
-    "ifgapzl",                  // 62
-    "ifhitspace",               // 63
-    "ifoutside",                // 64
-    "ifmultiplayer",            // 65
-    "operate",                  // 66
-    "ifinspace",                // 67
-    "debug",                    // 68
-    "endofgame",                // 69
-    "ifbulletnear",             // 70
-    "ifrespawn",                // 71
-    "iffloordistl",             // 72
-    "ifceilingdistl",           // 73
-    "spritepal",                // 74
-    "ifpinventory",             // 75
-    "betaname",                 // 76
-    "cactor",                   // 77
-    "ifphealthl",               // 78
-    "definequote",              // 79
-    "quote",                    // 80
-    "ifinouterspace",           // 81
-    "ifnotmoving",              // 82
-    "respawnhitag",             // 83
-    "tip",                      // 84
-    "ifspritepal",              // 85
-    "money",                    // 86
-    "soundonce",                // 87
-    "addkills",                 // 88
-    "stopsound",                // 89
-    "ifawayfromwall",           // 90
-    "ifcanseetarget",           // 91
-    "globalsound",              // 92
-    "lotsofglass",              // 93
-    "ifgotweaponce",            // 94
-    "getlastpal",               // 95
-    "pkick",                    // 96
-    "mikesnd",                  // 97
-    "useractor",                // 98
-    "sizeat",                   // 99
-    "addstrength",              // 100  [#]
-    "cstator",                  // 101
-    "mail",                     // 102
-    "paper",                    // 103
-    "tossweapon",               // 104
-    "sleeptime",                // 105
-    "nullop",                   // 106
-    "definevolumename",         // 107
-    "defineskillname",          // 108
-    "ifnosounds",               // 109
-    "clipdist",                 // 110
-    "ifangdiffl",               // 111
-    "gamevar",                  // 112
-    "ifvarl",                   // 113
-    "ifvarg",                   // 114
-    "setvarvar",                // 115
-    "setvar",                   // 116
-    "addvarvar",                // 117
-    "addvar",                   // 118
-    "ifvarvarl",                // 119
-    "ifvarvarg",                // 120
-    "addlogvar",                // 121
-    "addlog",                   // 122
-    "onevent",                  // 123
-    "endevent",                 // 124
-    "ifvare",                   // 125
-    "ifvarvare",                // 126
-    "spgetlotag",               // 127
-    "spgethitag",               // 128
-    "sectgetlotag",             // 129
-    "sectgethitag",             // 130
-    "ifsound",                  // 131
-    "gettexturefloor",          // 132
-    "gettextureceiling",        // 133
-    "inittimer",                // 134
-    "starttrack",               // 135
-    "randvar",                  // 136
-    "enhanced",                 // 137
-    "getangletotarget",         // 138
-    "getactorangle",            // 139
-    "setactorangle",            // 140
-    "mulvar",                   // 141
-    "mulvarvar",                // 142
-    "divvar",                   // 143
-    "divvarvar",                // 144
-    "modvar",                   // 145
-    "modvarvar",                // 146
-    "andvar",                   // 147
-    "andvarvar",                // 148
-    "orvar",                    // 149
-    "orvarvar",                 // 150
-    "getplayerangle",           // 151
-    "setplayerangle",           // 152
-    "lockplayer",               // 153
-    "setsector",                // 154
-    "getsector",                // 155
-    "setactor",                 // 156
-    "getactor",                 // 157
-    "setwall",                  // 158
-    "getwall",                  // 159
-    "findnearactor",            // 160
-    "findnearactorvar",         // 161
-    "setactorvar",              // 162
-    "getactorvar",              // 163
-    "espawn",                   // 164
-    "getplayer",                // 165
-    "setplayer",                // 166
-    "sqrt",                     // 167
-    "eventloadactor",           // 168
-    "espawnvar",                // 169
-    "getuserdef",               // 170
-    "setuserdef",               // 171
-    "subvarvar",                // 172
-    "subvar",                   // 173
-    "ifvarn",                   // 174
-    "ifvarvarn",                // 175
-    "ifvarand",                 // 176
-    "ifvarvarand",              // 177
-    "myos",                     // 178
-    "myospal",                  // 179
-    "displayrand",              // 180
-    "sin",                      // 181
-    "xorvarvar",                // 182
-    "xorvar",                   // 183
-    "randvarvar",               // 184
-    "myosx",                    // 185
-    "myospalx",                 // 186
-    "gmaxammo",                 // 187
-    "smaxammo",                 // 188
-    "startlevel",               // 189
-    "eshoot",                   // 190
-    "qspawn",                   // 191
-    "rotatesprite",             // 192
-    "defineprojectile",         // 193
-    "spriteshadow",             // 194
-    "cos",                      // 195
-    "eshootvar",                // 196
-    "findnearactor3d",          // 197
-    "findnearactor3dvar",       // 198
-    "flash",                    // 199
-    "qspawnvar",                // 200
-    "eqspawn",                  // 201
-    "eqspawnvar",               // 202
-    "minitext",                 // 203
-    "gametext",                 // 204
-    "digitalnumber",            // 205
-    "addweaponvar",             // 206
-    "setprojectile",            // 207
-    "angoff",                   // 208
-    "updatesector",             // 209
-    "insertspriteq",            // 210
-    "angoffvar",                // 211
-    "whilevarn",                // 212
-    "switch",                   // 213
-    "case",                     // 214
-    "default",                  // 215
-    "endswitch",                // 216
-    "shootvar",                 // 217
-    "soundvar",                 // 218
-    "findplayer",               // 219
-    "findotherplayer",          // 220
-    "activatebysector",         // 221 sectnum, spriteid
-    "operatesectors",           // 222 sectnum, spriteid
-    "operaterespawns",          // 223 lotag
-    "operateactivators",        // 224 lotag, player index
-    "operatemasterswitches",    // 225 lotag
-    "checkactivatormotion",     // 226 lotag
-    "zshoot",                   // 227 zvar projnum
-    "dist",                     // 228 sprite1 sprite2
-    "ldist",                    // 229 sprite1 sprite2
-    "shiftvarl",                // 230
-    "shiftvarr",                // 231
-    "spritenvg",                // 232
-    "getangle",                 // 233
-    "whilevarvarn",             // 234
-    "hitscan",                  // 235
-    "time",                     // 236
-    "getplayervar",             // 237
-    "setplayervar",             // 238
-    "mulscale",                 // 239
-    "setaspect",                // 240
-    "ezshoot",                  // 241
-    "spritenoshade",            // 242
-    "movesprite",               // 243
-    "checkavailweapon",         // 244
-    "soundoncevar",             // 245
-    "updatesectorz",            // 246
-    "stopallsounds",            // 247
-    "ssp",                      // 248
-    "stopsoundvar",             // 249
-    "displayrandvar",           // 250
-    "displayrandvarvar",        // 251
-    "checkavailinven",          // 252
-    "globalsoundvar",           // 253
-    "guniqhudid",               // 254
-    "getprojectile",            // 255
-    "getthisprojectile",        // 256
-    "setthisprojectile",        // 257
-    "definecheat",              // 258
-    "cheatkeys",                // 259
-    "userquote",                // 260
-    "precache",                 // 261
-    "definegamefuncname",       // 262
-    "redefinequote",            // 263
-    "qsprintf",                 // 264
-    "getpname",                 // 265
-    "qstrcat",                  // 266
-    "qstrcpy",                  // 267
-    "setsprite",                // 268
-    "rotatepoint",              // 269
-    "dragpoint",                // 270
-    "getzrange",                // 271
-    "changespritestat",         // 272
-    "getceilzofslope",          // 273
-    "getflorzofslope",          // 274
-    "neartag",                  // 275
-    "definegametype",           // 276
-    "changespritesect",         // 277
-    "spriteflags",              // 278
-    "savegamevar",              // 279
-    "readgamevar",              // 280
-    "findnearsprite",           // 281
-    "findnearspritevar",        // 282
-    "findnearsprite3d",         // 283
-    "findnearsprite3dvar",      // 284
-    "dynamicremap",             // 285
-    "setinput",                 // 286
-    "getinput",                 // 287
-    "save",                     // 288
-    "cansee",                   // 289
-    "canseespr",                // 290
-    "findnearactorz",           // 291
-    "findnearactorzvar",        // 292
-    "findnearspritez",          // 293
-    "findnearspritezvar",       // 294
-    "zshootvar",                // 295
-    "ezshootvar",               // 296
-    "getcurraddress",           // 297
-    "jump",                     // 298
-    "qstrlen",                  // 299
-    "getincangle",              // 300
-    "quake",                    // 301
-    "showview",                 // 302
-    "headspritestat",           // 303
-    "prevspritestat",           // 304
-    "nextspritestat",           // 305
-    "headspritesect",           // 306
-    "prevspritesect",           // 307
-    "nextspritesect",           // 308
-    "getkeyname",               // 309
-    "qsubstr",                  // 310
-    "gametextz",                // 311
-    "digitalnumberz",           // 312
-    "spritenopal",              // 313
-    "hitradiusvar",             // 314
-    "rotatesprite16",           // 315
-    "gamearray",                // 316
-    "setarray",                 // 317
-    "resizearray",              // 318
-    "writearraytofile",         // 319
-    "readarrayfromfile",        // 320
-    "starttrackvar",            // 321
-    "qgetsysstr",               // 322
-    "getticks",                 // 323
-    "gettspr",                  // 324
-    "settspr",                  // 325
-    "savemapstate",             // 326
-    "loadmapstate",             // 327
-    "clearmapstate",            // 328
-    "scriptsize",               // 329
-    "setgamename",              // 330
-    "cmenu",                    // 331
-    "gettimedate",              // 332
-    "activatecheat",            // 333
-    "setgamepalette",           // 334
-    "setdefname",               // 335
-    "setcfgname",               // 336
-    "ifvaror",                  // 337
-    "ifvarvaror",               // 338
-    "ifvarxor",                 // 339
-    "ifvarvarxor",              // 340
-    "ifvareither",              // 341
-    "ifvarvareither",           // 342
-    "getarraysize",             // 343
-    "savenn",                   // 344
-    "qstrdim",                  // 345, was 369 in r3833
-    "screentext",               // 346, was 370 in r3833
-    "return",                   // 347
-    "actorsound",               // 348
-    "rotatespritea",            // 349, was 364 in r3610
-    "damageeventtile",          // 350, was 429 in r6771
-    "damageeventtilerange",     // 351, was 430 in r6771
-    "getteamname",              // 352
-    "abs",                      // 353
-    "shiftvarvarl",             // 354
-    "shiftvarvarr",             // 355
-    "gettiledata",              // 356
-    "settiledata",              // 357
-    "defstate",                 // 358
-    "getinterpolatedpos",       // 359
-    "<null>"
+    { "definelevelname",        CON_DEFINELEVELNAME },  // defines level name
+    { "actor",                  CON_ACTOR },            // defines an actor
+    { "addammo",                CON_ADDAMMO },          // adds ammo to a weapon
+    { "ifrnd",                  CON_IFRND },            // checks against a randomizer
+    { "enda",                   CON_ENDA },             // ends an actor definition
+    { "ifcansee",               CON_IFCANSEE },         // checks if the player can see an object
+    { "ifhitweapon",            CON_IFHITWEAPON },      // checks if an object was hit by a weapon
+    { "action",                 CON_ACTION },           // defines an action if used outside a state or actor, otherwise triggers actor to perform action
+    { "ifpdistl",               CON_IFPDISTL },         // checks if player distance is less than value
+    { "ifpdistg",               CON_IFPDISTG },         // checks if player distance is more than value
+    { "else",                   CON_ELSE },             // used with if checks
+    { "strength",               CON_STRENGTH },         // sets health
+    { "break",                  CON_BREAK },            // stops processing
+    { "shoot",                  CON_SHOOT },            // shoots a projectile
+    { "palfrom",                CON_PALFROM },          // used for player screen shading effect, sets p->pals_time and p->pals[0-2]
+    { "sound",                  CON_SOUND },            // plays a sound that was defined with definesound
+    { "fall",                   CON_FALL },             // causes actor to fall to sector floor height
+    { "state",                  CON_STATE },            // begins defining a state if used outside a state or actor, otherwise calls a state
+    { "ends",                   CON_ENDS },             // ends defining a state
+    { "define",                 CON_DEFINE },           // defines a value
+    { "ifai",                   CON_IFAI },             // checks if actor is currently performing a specific ai function
+    { "killit",                 CON_KILLIT },           // kills an actor
+    { "addweapon",              CON_ADDWEAPON },        // adds a weapon to the closest player
+    { "ai",                     CON_AI },               // sets an ai function to be used by an actor
+    { "addphealth",             CON_ADDPHEALTH },       // adds health to the player
+    { "ifdead",                 CON_IFDEAD },           // checks if actor is dead
+    { "ifsquished",             CON_IFSQUISHED },       // checks if actor has been squished
+    { "sizeto",                 CON_SIZETO },           // gradually increases actor size until it matches parameters given
+    { "{",                      CON_LEFTBRACE },        // used to indicate segments of code
+    { "}",                      CON_RIGHTBRACE },       // used to indicate segments of code
+    { "spawn",                  CON_SPAWN },            // spawns an actor
+    { "move",                   CON_MOVE },
+    { "ifwasweapon",            CON_IFWASWEAPON },
+    { "ifaction",               CON_IFACTION },
+    { "ifactioncount",          CON_IFACTIONCOUNT },
+    { "resetactioncount",       CON_RESETACTIONCOUNT },
+    { "debris",                 CON_DEBRIS },
+    { "pstomp",                 CON_PSTOMP },         
+    { "cstat",                  CON_CSTAT },
+    { "ifmove",                 CON_IFMOVE },
+    { "resetplayer",            CON_RESETPLAYER },
+    { "ifonwater",              CON_IFONWATER },
+    { "ifinwater",              CON_IFINWATER },
+    { "ifcanshoottarget",       CON_IFCANSHOOTTARGET },
+    { "ifcount",                CON_IFCOUNT },
+    { "resetcount",             CON_RESETCOUNT },
+    { "addinventory",           CON_ADDINVENTORY },
+    { "ifactornotstayput",      CON_IFACTORNOTSTAYPUT },
+    { "hitradius",              CON_HITRADIUS },
+    { "ifp",                    CON_IFP },
+    { "count",                  CON_COUNT },
+    { "ifactor",                CON_IFACTOR },
+    { "music",                  CON_MUSIC },
+    { "include",                CON_INCLUDE },
+    { "ifstrength",             CON_IFSTRENGTH },
+    { "definesound",            CON_DEFINESOUND },
+    { "guts",                   CON_GUTS },
+    { "ifspawnedby",            CON_IFSPAWNEDBY },
+    { "gamestartup",            CON_GAMESTARTUP },
+    { "wackplayer",             CON_WACKPLAYER },
+    { "ifgapzl",                CON_IFGAPZL },
+    { "ifhitspace",             CON_IFHITSPACE },
+    { "ifoutside",              CON_IFOUTSIDE },
+    { "ifmultiplayer",          CON_IFMULTIPLAYER },
+    { "operate",                CON_OPERATE },
+    { "ifinspace",              CON_IFINSPACE },
+    { "debug",                  CON_DEBUG },
+    { "endofgame",              CON_ENDOFGAME },
+    { "ifbulletnear",           CON_IFBULLETNEAR },
+    { "ifrespawn",              CON_IFRESPAWN },
+    { "iffloordistl",           CON_IFFLOORDISTL },
+    { "ifceilingdistl",         CON_IFCEILINGDISTL },
+    { "spritepal",              CON_SPRITEPAL },
+    { "ifpinventory",           CON_IFPINVENTORY },
+    { "betaname",               CON_BETANAME },
+    { "cactor",                 CON_CACTOR },
+    { "ifphealthl",             CON_IFPHEALTHL },
+    { "definequote",            CON_DEFINEQUOTE },
+    { "quote",                  CON_QUOTE },
+    { "ifinouterspace",         CON_IFINOUTERSPACE },
+    { "ifnotmoving",            CON_IFNOTMOVING },
+    { "respawnhitag",           CON_RESPAWNHITAG },
+    { "tip",                    CON_TIP },
+    { "ifspritepal",            CON_IFSPRITEPAL },
+    { "money",                  CON_MONEY },
+    { "soundonce",              CON_SOUNDONCE },
+    { "addkills",               CON_ADDKILLS },
+    { "stopsound",              CON_STOPSOUND },
+    { "ifawayfromwall",         CON_IFAWAYFROMWALL },
+    { "ifcanseetarget",         CON_IFCANSEETARGET },
+    { "globalsound",            CON_GLOBALSOUND },
+    { "lotsofglass",            CON_LOTSOFGLASS },
+    { "ifgotweaponce",          CON_IFGOTWEAPONCE },
+    { "getlastpal",             CON_GETLASTPAL },
+    { "pkick",                  CON_PKICK },
+    { "mikesnd",                CON_MIKESND },
+    { "useractor",              CON_USERACTOR },
+    { "sizeat",                 CON_SIZEAT },
+    { "addstrength",            CON_ADDSTRENGTH },
+    { "cstator",                CON_CSTATOR },
+    { "mail",                   CON_MAIL },
+    { "paper",                  CON_PAPER },
+    { "tossweapon",             CON_TOSSWEAPON },
+    { "sleeptime",              CON_SLEEPTIME },
+    { "nullop",                 CON_NULLOP },
+    { "definevolumename",       CON_DEFINEVOLUMENAME },
+    { "defineskillname",        CON_DEFINESKILLNAME },
+    { "ifnosounds",             CON_IFNOSOUNDS },
+    { "clipdist",               CON_CLIPDIST },
+    { "ifangdiffl",             CON_IFANGDIFFL },
+    { "gamevar",                CON_GAMEVAR },
+    { "ifvarl",                 CON_IFVARL },
+    { "ifvarg",                 CON_IFVARG },
+    { "setvarvar",              CON_SETVARVAR },
+    { "setvar",                 CON_SETVAR },
+    { "addvarvar",              CON_ADDVARVAR },
+    { "addvar",                 CON_ADDVAR },
+    { "ifvarvarl",              CON_IFVARVARL },
+    { "ifvarvarg",              CON_IFVARVARG },
+    { "addlogvar",              CON_ADDLOGVAR },
+    { "addlog",                 CON_ADDLOG },
+    { "onevent",                CON_ONEVENT },
+    { "endevent",               CON_ENDEVENT },
+    { "ifvare",                 CON_IFVARE },
+    { "ifvarvare",              CON_IFVARVARE },
+    { "spgetlotag",             CON_SPGETLOTAG },
+    { "spgethitag",             CON_SPGETHITAG },
+    { "sectgetlotag",           CON_SECTGETLOTAG },
+    { "sectgethitag",           CON_SECTGETHITAG },
+    { "ifsound",                CON_IFSOUND },
+    { "gettexturefloor",        CON_GETTEXTUREFLOOR },
+    { "gettextureceiling",      CON_GETTEXTURECEILING },
+    { "inittimer",              CON_INITTIMER },
+    { "starttrack",             CON_STARTTRACK },
+    { "randvar",                CON_RANDVAR },
+    { "enhanced",               CON_ENHANCED },
+    { "getangletotarget",       CON_GETANGLETOTARGET },
+    { "getactorangle",          CON_GETACTORANGLE },
+    { "setactorangle",          CON_SETACTORANGLE },
+    { "mulvar",                 CON_MULVAR },
+    { "mulvarvar",              CON_MULVARVAR },
+    { "divvar",                 CON_DIVVAR },
+    { "divvarvar",              CON_DIVVARVAR },
+    { "modvar",                 CON_MODVAR },
+    { "modvarvar",              CON_MODVARVAR },
+    { "andvar",                 CON_ANDVAR },
+    { "andvarvar",              CON_ANDVARVAR },
+    { "orvar",                  CON_ORVAR },
+    { "orvarvar",               CON_ORVARVAR },
+    { "getplayerangle",         CON_GETPLAYERANGLE },
+    { "setplayerangle",         CON_SETPLAYERANGLE },
+    { "lockplayer",             CON_LOCKPLAYER },
+    { "setsector",              CON_SETSECTOR },
+    { "getsector",              CON_GETSECTOR },
+    { "setactor",               CON_SETACTOR },
+    { "getactor",               CON_GETACTOR },
+    { "setwall",                CON_SETWALL },
+    { "getwall",                CON_GETWALL },
+    { "findnearactor",          CON_FINDNEARACTOR },
+    { "findnearactorvar",       CON_FINDNEARACTORVAR },
+    { "setactorvar",            CON_SETACTORVAR },
+    { "getactorvar",            CON_GETACTORVAR },
+    { "espawn",                 CON_ESPAWN },
+    { "getplayer",              CON_GETPLAYER },
+    { "setplayer",              CON_SETPLAYER },
+    { "sqrt",                   CON_SQRT },
+    { "eventloadactor",         CON_EVENTLOADACTOR },
+    { "espawnvar",              CON_ESPAWNVAR },
+    { "getuserdef",             CON_GETUSERDEF },
+    { "setuserdef",             CON_SETUSERDEF },
+    { "subvarvar",              CON_SUBVARVAR },
+    { "subvar",                 CON_SUBVAR },
+    { "ifvarn",                 CON_IFVARN },
+    { "ifvarvarn",              CON_IFVARVARN },
+    { "ifvarand",               CON_IFVARAND },
+    { "ifvarvarand",            CON_IFVARVARAND },
+    { "myos",                   CON_MYOS },
+    { "myospal",                CON_MYOSPAL },
+    { "displayrand",            CON_DISPLAYRAND },
+    { "sin",                    CON_SIN },
+    { "xorvarvar",              CON_XORVARVAR },
+    { "xorvar",                 CON_XORVAR },
+    { "randvarvar",             CON_RANDVARVAR },
+    { "myosx",                  CON_MYOSX },
+    { "myospalx",               CON_MYOSPALX },
+    { "gmaxammo",               CON_GMAXAMMO },
+    { "smaxammo",               CON_SMAXAMMO },
+    { "startlevel",             CON_STARTLEVEL },
+    { "eshoot",                 CON_ESHOOT },
+    { "qspawn",                 CON_QSPAWN },
+    { "rotatesprite",           CON_ROTATESPRITE },
+    { "defineprojectile",       CON_DEFINEPROJECTILE },
+    { "spriteshadow",           CON_SPRITESHADOW },
+    { "cos",                    CON_COS },
+    { "eshootvar",              CON_ESHOOTVAR },
+    { "findnearactor3d",        CON_FINDNEARACTOR3D },
+    { "findnearactor3dvar",     CON_FINDNEARACTOR3DVAR },
+    { "flash",                  CON_FLASH },
+    { "qspawnvar",              CON_QSPAWNVAR },
+    { "eqspawn",                CON_EQSPAWN },
+    { "eqspawnvar",             CON_EQSPAWNVAR },
+    { "minitext",               CON_MINITEXT },
+    { "gametext",               CON_GAMETEXT },
+    { "digitalnumber",          CON_DIGITALNUMBER },
+    { "addweaponvar",           CON_ADDWEAPONVAR },
+    { "setprojectile",          CON_SETPROJECTILE },
+    { "angoff",                 CON_ANGOFF },
+    { "updatesector",           CON_UPDATESECTOR },
+    { "insertspriteq",          CON_INSERTSPRITEQ },
+    { "angoffvar",              CON_ANGOFFVAR },
+    { "whilevarn",              CON_WHILEVARN },
+    { "switch",                 CON_SWITCH },
+    { "case",                   CON_CASE },
+    { "default",                CON_DEFAULT },
+    { "endswitch",              CON_ENDSWITCH },
+    { "shootvar",               CON_SHOOTVAR },
+    { "soundvar",               CON_SOUNDVAR },
+    { "findplayer",             CON_FINDPLAYER },
+    { "findotherplayer",        CON_FINDOTHERPLAYER },
+    { "activatebysector",       CON_ACTIVATEBYSECTOR },         // sectnum, spriteid
+    { "operatesectors",         CON_OPERATESECTORS },           // sectnum, spriteid
+    { "operaterespawns",        CON_OPERATERESPAWNS },          // lotag
+    { "operateactivators",      CON_OPERATEACTIVATORS },        // lotag, player index
+    { "operatemasterswitches",  CON_OPERATEMASTERSWITCHES },    // lotag
+    { "checkactivatormotion",   CON_CHECKACTIVATORMOTION },     // lotag
+    { "zshoot",                 CON_ZSHOOT },                   // 227 zvar projnum
+    { "dist",                   CON_DIST },                     // 228 sprite1 sprite2
+    { "ldist",                  CON_LDIST },                    // 229 sprite1 sprite2
+    { "shiftvarl",              CON_SHIFTVARL },
+    { "shiftvarr",              CON_SHIFTVARR },
+    { "spritenvg",              CON_SPRITENVG },
+    { "getangle",               CON_GETANGLE },
+    { "whilevarvarn",           CON_WHILEVARVARN },
+    { "hitscan",                CON_HITSCAN },
+    { "time",                   CON_TIME },
+    { "getplayervar",           CON_GETPLAYERVAR },
+    { "setplayervar",           CON_SETPLAYERVAR },
+    { "mulscale",               CON_MULSCALE },
+    { "setaspect",              CON_SETASPECT },
+    { "ezshoot",                CON_EZSHOOT },
+    { "spritenoshade",          CON_SPRITENOSHADE },
+    { "movesprite",             CON_MOVESPRITE },
+    { "checkavailweapon",       CON_CHECKAVAILWEAPON },
+    { "soundoncevar",           CON_SOUNDONCEVAR },
+    { "updatesectorz",          CON_UPDATESECTORZ },
+    { "stopallsounds",          CON_STOPALLSOUNDS },
+    { "ssp",                    CON_SSP },
+    { "stopsoundvar",           CON_STOPSOUNDVAR },
+    { "displayrandvar",         CON_DISPLAYRANDVAR },
+    { "displayrandvarvar",      CON_DISPLAYRANDVARVAR },
+    { "checkavailinven",        CON_CHECKAVAILINVEN },
+    { "globalsoundvar",         CON_GLOBALSOUNDVAR },
+    { "guniqhudid",             CON_GUNIQHUDID },
+    { "getprojectile",          CON_GETPROJECTILE },
+    { "getthisprojectile",      CON_GETTHISPROJECTILE },
+    { "setthisprojectile",      CON_SETTHISPROJECTILE },
+    { "definecheat",            CON_DEFINECHEAT },
+    { "cheatkeys",              CON_CHEATKEYS },
+    { "userquote",              CON_USERQUOTE },
+    { "precache",               CON_PRECACHE },
+    { "definegamefuncname",     CON_DEFINEGAMEFUNCNAME },
+    { "redefinequote",          CON_REDEFINEQUOTE },
+    { "qsprintf",               CON_QSPRINTF },
+    { "getpname",               CON_GETPNAME },
+    { "qstrcat",                CON_QSTRCAT },
+    { "qstrcpy",                CON_QSTRCPY },
+    { "setsprite",              CON_SETSPRITE },
+    { "rotatepoint",            CON_ROTATEPOINT },
+    { "dragpoint",              CON_DRAGPOINT },
+    { "getzrange",              CON_GETZRANGE },
+    { "changespritestat",       CON_CHANGESPRITESTAT },
+    { "getceilzofslope",        CON_GETCEILZOFSLOPE },
+    { "getflorzofslope",        CON_GETFLORZOFSLOPE },
+    { "neartag",                CON_NEARTAG },
+    { "definegametype",         CON_DEFINEGAMETYPE },
+    { "changespritesect",       CON_CHANGESPRITESECT },
+    { "spriteflags",            CON_SPRITEFLAGS },
+    { "savegamevar",            CON_SAVEGAMEVAR },
+    { "readgamevar",            CON_READGAMEVAR },
+    { "findnearsprite",         CON_FINDNEARSPRITE },
+    { "findnearspritevar",      CON_FINDNEARSPRITEVAR },
+    { "findnearsprite3d",       CON_FINDNEARSPRITE3D },
+    { "findnearsprite3dvar",    CON_FINDNEARSPRITE3DVAR },
+    { "dynamicremap",           CON_DYNAMICREMAP },
+    { "setinput",               CON_SETINPUT },
+    { "getinput",               CON_GETINPUT },
+    { "save",                   CON_SAVE },
+    { "cansee",                 CON_CANSEE },
+    { "canseespr",              CON_CANSEESPR },
+    { "findnearactorz",         CON_FINDNEARACTORZ },
+    { "findnearactorzvar",      CON_FINDNEARACTORZVAR },
+    { "findnearspritez",        CON_FINDNEARSPRITEZ },
+    { "findnearspritezvar",     CON_FINDNEARSPRITEZVAR },
+    { "zshootvar",              CON_ZSHOOTVAR },
+    { "ezshootvar",             CON_EZSHOOTVAR },
+    { "getcurraddress",         CON_GETCURRADDRESS },
+    { "jump",                   CON_JUMP },
+    { "qstrlen",                CON_QSTRLEN },
+    { "getincangle",            CON_GETINCANGLE },
+    { "quake",                  CON_QUAKE },
+    { "showview",               CON_SHOWVIEW },
+    { "headspritestat",         CON_HEADSPRITESTAT },
+    { "prevspritestat",         CON_PREVSPRITESTAT },
+    { "nextspritestat",         CON_NEXTSPRITESTAT },
+    { "headspritesect",         CON_HEADSPRITESECT },
+    { "prevspritesect",         CON_PREVSPRITESECT },
+    { "nextspritesect",         CON_NEXTSPRITESECT },
+    { "getkeyname",             CON_GETKEYNAME },
+    { "qsubstr",                CON_QSUBSTR },
+    { "gametextz",              CON_GAMETEXTZ },
+    { "digitalnumberz",         CON_DIGITALNUMBERZ },
+    { "spritenopal",            CON_SPRITENOPAL },
+    { "hitradiusvar",           CON_HITRADIUSVAR },
+    { "rotatesprite16",         CON_ROTATESPRITE16 },
+    { "gamearray",              CON_GAMEARRAY },
+    { "setarray",               CON_SETARRAY },
+    { "resizearray",            CON_RESIZEARRAY },
+    { "writearraytofile",       CON_WRITEARRAYTOFILE },
+    { "readarrayfromfile",      CON_READARRAYFROMFILE },
+    { "starttrackvar",          CON_STARTTRACKVAR },
+    { "qgetsysstr",             CON_QGETSYSSTR },
+    { "getticks",               CON_GETTICKS },
+    { "gettspr",                CON_GETTSPR },
+    { "settspr",                CON_SETTSPR },
+    { "savemapstate",           CON_SAVEMAPSTATE },
+    { "loadmapstate",           CON_LOADMAPSTATE },
+    { "clearmapstate",          CON_CLEARMAPSTATE },
+    { "scriptsize",             CON_SCRIPTSIZE },
+    { "setgamename",            CON_SETGAMENAME },
+    { "cmenu",                  CON_CMENU },
+    { "gettimedate",            CON_GETTIMEDATE },
+    { "activatecheat",          CON_ACTIVATECHEAT },
+    { "setgamepalette",         CON_SETGAMEPALETTE },
+    { "setdefname",             CON_SETDEFNAME },
+    { "setcfgname",             CON_SETCFGNAME },
+    { "ifvaror",                CON_IFVAROR },
+    { "ifvarvaror",             CON_IFVARVAROR },
+    { "ifvarxor",               CON_IFVARXOR },
+    { "ifvarvarxor",            CON_IFVARVARXOR },
+    { "ifvareither",            CON_IFVAREITHER },
+    { "ifvarvareither",         CON_IFVARVAREITHER },
+    { "getarraysize",           CON_GETARRAYSIZE },
+    { "savenn",                 CON_SAVENN },
+    { "qstrdim",                CON_QSTRDIM },
+    { "screentext",             CON_SCREENTEXT },
+    { "return",                 CON_RETURN },
+    { "actorsound",             CON_ACTORSOUND },
+    { "rotatespritea",          CON_ROTATESPRITEA },
+    { "damageeventtile",        CON_DAMAGEEVENTTILE },
+    { "damageeventtilerange",   CON_DAMAGEEVENTTILERANGE },
+    { "getteamname",            CON_GETTEAMNAME },
+    { "abs",                    CON_KLABS },
+    { "shiftvarvarl",           CON_SHIFTVARVARL },
+    { "shiftvarvarr",           CON_SHIFTVARVARR },
+    { "gettiledata",            CON_GETTILEDATA },
+    { "settiledata",            CON_SETTILEDATA },
+    { "defstate",               CON_DEFSTATE },
+    { "getinterpolatedpos",     CON_GETINTERPOLATEDPOS },
 };
 
 const memberlabel_t SectorLabels[]=
@@ -1010,7 +1007,9 @@ void inithash()
     hash_init(&tspriteH);
     hash_init(&tileDataH);
 
-    for (i = NUMKEYWORDS - 1; i >= 0; i--) hash_add(&keywH, keyw[i], i, 0);
+    for (auto& keyword : keyw)
+        hash_add(&keywH, keyword.token, keyword.val, 0);
+
     for (i = 0; SectorLabels[i].lId >= 0; i++) hash_add(&sectorH, SectorLabels[i].name, i, 0);
     for (i = 0; WallLabels[i].lId >= 0; i++) hash_add(&wallH, WallLabels[i].name, i, 0);
     for (i = 0; UserdefsLabels[i].lId >= 0; i++) hash_add(&userdefH, UserdefsLabels[i].name, i, 0);
@@ -1565,7 +1564,7 @@ static int C_GetNextKeyword(void) //Returns its code #
         textptr += l;
         g_scriptPtr++;
         if (!(g_errorCnt || g_warningCnt) && g_scriptDebug)
-            VLOG_F(LOG_CON, "%s:%d: debug: translating keyword `%s'.",g_scriptFileName,g_lineNumber,keyw[i]);
+            VLOG_F(LOG_CON, "%s:%d: debug: translating keyword `%s'.",g_scriptFileName,g_lineNumber,keyw[i].token);
         return i;
     }
 

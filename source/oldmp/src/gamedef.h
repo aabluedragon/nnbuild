@@ -85,6 +85,11 @@ extern const memberlabel_t InputLabels[];
 extern const memberlabel_t TsprLabels[];
 extern const memberlabel_t TileDataLabels[];
 
+typedef struct {
+    const char* token;
+    int32_t val;
+} tokenmap_t;
+
 /*
 extern void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2);
 extern void X_AccessActiveProjectile(int iSet, int lVar1, int lLabelID, int lVar2);
@@ -104,7 +109,7 @@ extern int g_scriptSanityChecks;
 
 extern int g_errorLineNum;
 extern int g_tw;
-extern const char *keyw[];
+extern const tokenmap_t keyw[];
 extern spritetype *g_sp;
 
 enum ScriptError_t
