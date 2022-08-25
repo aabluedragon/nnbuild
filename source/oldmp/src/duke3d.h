@@ -567,7 +567,7 @@ enum GameEvent_t {
 
 
 #define CON_ERRPRINTF(Text, ...) do { \
-        OSD_Printf("Line %d, %s: " Text, g_errorLineNum, vm_keywords[g_tw].token, ## __VA_ARGS__); \
+        OSD_Printf("Line %d, %s: " Text, g_errorLineNum, VM_GetKeywordForID(g_tw), ## __VA_ARGS__); \
     } while (0)
 
 enum SystemString_t {

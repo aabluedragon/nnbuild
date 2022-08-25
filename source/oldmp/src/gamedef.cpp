@@ -235,34 +235,30 @@ const tokenmap_t vm_keywords[] =
     { "clipdist",               CON_CLIPDIST },
     { "ifangdiffl",             CON_IFANGDIFFL },
     { "gamevar",                CON_GAMEVAR },
+
     { "ifvarl",                 CON_IFVARL },
     { "ifvarg",                 CON_IFVARG },
-    { "setvarvar",              CON_SETVARVAR },
-    { "setvar",                 CON_SETVAR },
-    { "addvarvar",              CON_ADDVARVAR },
-    { "addvar",                 CON_ADDVAR },
     { "ifvarvarl",              CON_IFVARVARL },
     { "ifvarvarg",              CON_IFVARVARG },
-    { "addlogvar",              CON_ADDLOGVAR },
-    { "addlog",                 CON_ADDLOG },
-    { "onevent",                CON_ONEVENT },
-    { "endevent",               CON_ENDEVENT },
     { "ifvare",                 CON_IFVARE },
     { "ifvarvare",              CON_IFVARVARE },
-    { "spgetlotag",             CON_SPGETLOTAG },
-    { "spgethitag",             CON_SPGETHITAG },
-    { "sectgetlotag",           CON_SECTGETLOTAG },
-    { "sectgethitag",           CON_SECTGETHITAG },
-    { "ifsound",                CON_IFSOUND },
-    { "gettexturefloor",        CON_GETTEXTUREFLOOR },
-    { "gettextureceiling",      CON_GETTEXTURECEILING },
-    { "inittimer",              CON_INITTIMER },
-    { "starttrack",             CON_STARTTRACK },
-    { "randvar",                CON_RANDVAR },
-    { "enhanced",               CON_ENHANCED },
-    { "getangletotarget",       CON_GETANGLETOTARGET },
-    { "getactorangle",          CON_GETACTORANGLE },
-    { "setactorangle",          CON_SETACTORANGLE },
+    { "ifvarn",                 CON_IFVARN },
+    { "ifvarvarn",              CON_IFVARVARN },
+    { "ifvarand",               CON_IFVARAND },
+    { "ifvarvarand",            CON_IFVARVARAND },
+    { "ifvaror",                CON_IFVAROR },
+    { "ifvarvaror",             CON_IFVARVAROR },
+    { "ifvarxor",               CON_IFVARXOR },
+    { "ifvarvarxor",            CON_IFVARVARXOR },
+    { "ifvareither",            CON_IFVAREITHER },
+    { "ifvarvareither",         CON_IFVARVAREITHER },
+
+    { "setvar",                 CON_SETVAR },
+    { "setvarvar",              CON_SETVARVAR },
+    { "addvar",                 CON_ADDVAR },
+    { "addvarvar",              CON_ADDVARVAR },
+    { "subvar",                 CON_SUBVAR },
+    { "subvarvar",              CON_SUBVARVAR },
     { "mulvar",                 CON_MULVAR },
     { "mulvarvar",              CON_MULVARVAR },
     { "divvar",                 CON_DIVVAR },
@@ -273,40 +269,70 @@ const tokenmap_t vm_keywords[] =
     { "andvarvar",              CON_ANDVARVAR },
     { "orvar",                  CON_ORVAR },
     { "orvarvar",               CON_ORVARVAR },
+    { "xorvar",                 CON_XORVAR },
+    { "xorvarvar",              CON_XORVARVAR },
+    { "shiftvarl",              CON_SHIFTVARL },
+    { "shiftvarvarl",           CON_SHIFTVARVARL },
+    { "shiftvarr",              CON_SHIFTVARR },
+    { "shiftvarvarr",           CON_SHIFTVARVARR },
+    { "randvar",                CON_RANDVAR },
+    { "randvarvar",             CON_RANDVARVAR },
+    { "displayrandvar",         CON_DISPLAYRANDVAR },
+    { "displayrandvarvar",      CON_DISPLAYRANDVARVAR },
+    
+    { "addlogvar",              CON_ADDLOGVAR },
+    { "addlog",                 CON_ADDLOG },
+    { "onevent",                CON_ONEVENT },
+    { "endevent",               CON_ENDEVENT },
+    
+    { "spgetlotag",             CON_SPGETLOTAG },
+    { "spgethitag",             CON_SPGETHITAG },
+    { "sectgetlotag",           CON_SECTGETLOTAG },
+    { "sectgethitag",           CON_SECTGETHITAG },
+    { "ifsound",                CON_IFSOUND },
+    { "gettexturefloor",        CON_GETTEXTUREFLOOR },
+    { "gettextureceiling",      CON_GETTEXTURECEILING },
+    { "inittimer",              CON_INITTIMER },
+    { "starttrack",             CON_STARTTRACK }, 
+    { "enhanced",               CON_ENHANCED },
+    { "getangletotarget",       CON_GETANGLETOTARGET },
+    { "getactorangle",          CON_GETACTORANGLE },
+    { "setactorangle",          CON_SETACTORANGLE },
     { "getplayerangle",         CON_GETPLAYERANGLE },
     { "setplayerangle",         CON_SETPLAYERANGLE },
     { "lockplayer",             CON_LOCKPLAYER },
+
     { "setsector",              CON_SETSECTOR },
     { "getsector",              CON_GETSECTOR },
     { "setactor",               CON_SETACTOR },
     { "getactor",               CON_GETACTOR },
-    { "setwall",                CON_SETWALL },
-    { "getwall",                CON_GETWALL },
-    { "findnearactor",          CON_FINDNEARACTOR },
-    { "findnearactorvar",       CON_FINDNEARACTORVAR },
     { "setactorvar",            CON_SETACTORVAR },
     { "getactorvar",            CON_GETACTORVAR },
-    { "espawn",                 CON_ESPAWN },
-    { "getplayer",              CON_GETPLAYER },
+    { "setwall",                CON_SETWALL },
+    { "getwall",                CON_GETWALL },
     { "setplayer",              CON_SETPLAYER },
+    { "getplayer",              CON_GETPLAYER },
+    { "setuserdef",             CON_SETUSERDEF },
+    { "getuserdef",             CON_GETUSERDEF },
+    { "settspr",                CON_SETTSPR },
+    { "gettspr",                CON_GETTSPR },
+    { "getinput",               CON_GETINPUT },
+    { "setinput",               CON_SETINPUT },
+    { "settiledata",            CON_SETTILEDATA },
+    { "gettiledata",            CON_GETTILEDATA },
+
+    { "findnearactor",          CON_FINDNEARACTOR },
+    { "findnearactorvar",       CON_FINDNEARACTORVAR },
+
+    { "espawn",                 CON_ESPAWN },
+    { "espawnvar",              CON_ESPAWNVAR },
+    
     { "sqrt",                   CON_SQRT },
     { "eventloadactor",         CON_EVENTLOADACTOR },
-    { "espawnvar",              CON_ESPAWNVAR },
-    { "getuserdef",             CON_GETUSERDEF },
-    { "setuserdef",             CON_SETUSERDEF },
-    { "subvarvar",              CON_SUBVARVAR },
-    { "subvar",                 CON_SUBVAR },
-    { "ifvarn",                 CON_IFVARN },
-    { "ifvarvarn",              CON_IFVARVARN },
-    { "ifvarand",               CON_IFVARAND },
-    { "ifvarvarand",            CON_IFVARVARAND },
     { "myos",                   CON_MYOS },
     { "myospal",                CON_MYOSPAL },
     { "displayrand",            CON_DISPLAYRAND },
     { "sin",                    CON_SIN },
-    { "xorvarvar",              CON_XORVARVAR },
-    { "xorvar",                 CON_XORVAR },
-    { "randvarvar",             CON_RANDVARVAR },
     { "myosx",                  CON_MYOSX },
     { "myospalx",               CON_MYOSPALX },
     { "gmaxammo",               CON_GMAXAMMO },
@@ -349,11 +375,9 @@ const tokenmap_t vm_keywords[] =
     { "operateactivators",      CON_OPERATEACTIVATORS },        // lotag, player index
     { "operatemasterswitches",  CON_OPERATEMASTERSWITCHES },    // lotag
     { "checkactivatormotion",   CON_CHECKACTIVATORMOTION },     // lotag
-    { "zshoot",                 CON_ZSHOOT },                   // 227 zvar projnum
-    { "dist",                   CON_DIST },                     // 228 sprite1 sprite2
-    { "ldist",                  CON_LDIST },                    // 229 sprite1 sprite2
-    { "shiftvarl",              CON_SHIFTVARL },
-    { "shiftvarr",              CON_SHIFTVARR },
+    { "zshoot",                 CON_ZSHOOT },                   // zvar projnum
+    { "dist",                   CON_DIST },                     // sprite1 sprite2
+    { "ldist",                  CON_LDIST },                    // sprite1 sprite2
     { "spritenvg",              CON_SPRITENVG },
     { "getangle",               CON_GETANGLE },
     { "whilevarvarn",           CON_WHILEVARVARN },
@@ -372,8 +396,6 @@ const tokenmap_t vm_keywords[] =
     { "stopallsounds",          CON_STOPALLSOUNDS },
     { "ssp",                    CON_SSP },
     { "stopsoundvar",           CON_STOPSOUNDVAR },
-    { "displayrandvar",         CON_DISPLAYRANDVAR },
-    { "displayrandvarvar",      CON_DISPLAYRANDVARVAR },
     { "checkavailinven",        CON_CHECKAVAILINVEN },
     { "globalsoundvar",         CON_GLOBALSOUNDVAR },
     { "guniqhudid",             CON_GUNIQHUDID },
@@ -408,8 +430,7 @@ const tokenmap_t vm_keywords[] =
     { "findnearsprite3d",       CON_FINDNEARSPRITE3D },
     { "findnearsprite3dvar",    CON_FINDNEARSPRITE3DVAR },
     { "dynamicremap",           CON_DYNAMICREMAP },
-    { "setinput",               CON_SETINPUT },
-    { "getinput",               CON_GETINPUT },
+
     { "save",                   CON_SAVE },
     { "cansee",                 CON_CANSEE },
     { "canseespr",              CON_CANSEESPR },
@@ -446,8 +467,6 @@ const tokenmap_t vm_keywords[] =
     { "starttrackvar",          CON_STARTTRACKVAR },
     { "qgetsysstr",             CON_QGETSYSSTR },
     { "getticks",               CON_GETTICKS },
-    { "gettspr",                CON_GETTSPR },
-    { "settspr",                CON_SETTSPR },
     { "savemapstate",           CON_SAVEMAPSTATE },
     { "loadmapstate",           CON_LOADMAPSTATE },
     { "clearmapstate",          CON_CLEARMAPSTATE },
@@ -459,12 +478,6 @@ const tokenmap_t vm_keywords[] =
     { "setgamepalette",         CON_SETGAMEPALETTE },
     { "setdefname",             CON_SETDEFNAME },
     { "setcfgname",             CON_SETCFGNAME },
-    { "ifvaror",                CON_IFVAROR },
-    { "ifvarvaror",             CON_IFVARVAROR },
-    { "ifvarxor",               CON_IFVARXOR },
-    { "ifvarvarxor",            CON_IFVARVARXOR },
-    { "ifvareither",            CON_IFVAREITHER },
-    { "ifvarvareither",         CON_IFVARVAREITHER },
     { "getarraysize",           CON_GETARRAYSIZE },
     { "savenn",                 CON_SAVENN },
     { "qstrdim",                CON_QSTRDIM },
@@ -476,10 +489,6 @@ const tokenmap_t vm_keywords[] =
     { "damageeventtilerange",   CON_DAMAGEEVENTTILERANGE },
     { "getteamname",            CON_GETTEAMNAME },
     { "abs",                    CON_KLABS },
-    { "shiftvarvarl",           CON_SHIFTVARVARL },
-    { "shiftvarvarr",           CON_SHIFTVARVARR },
-    { "gettiledata",            CON_GETTILEDATA },
-    { "settiledata",            CON_SETTILEDATA },
     { "defstate",               CON_DEFSTATE },
     { "getinterpolatedpos",     CON_GETINTERPOLATEDPOS },
 };
@@ -1026,6 +1035,22 @@ void freehash()
     hash_free(&gamevarH);
     hash_free(&arrayH);
     hash_free(&labelH);
+}
+
+char const* VM_GetKeywordForID(int32_t id)
+{
+    // could be better, but this is used strictly for diagnostic warning and error messages
+    for (tokenmap_t const& keyword : vm_keywords)
+        if (keyword.val == id)
+            return keyword.token;
+
+#if 0 // Not implemented yet.
+    for (tokenmap_t const& keyword : keywords_for_private_opcodes)
+        if (keyword.val == id)
+            return keyword.token;
+#endif
+
+    return "<unknown instruction>";
 }
 
 static int C_SetScriptSize(int size)

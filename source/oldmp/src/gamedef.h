@@ -112,6 +112,8 @@ extern int g_tw;
 extern const tokenmap_t vm_keywords[];
 extern spritetype *g_sp;
 
+char const* VM_GetKeywordForID(int32_t id);
+
 enum ScriptError_t
 {
     ERROR_CLOSEBRACKET,
