@@ -112,6 +112,7 @@ extern int g_tw;
 extern const tokenmap_t vm_keywords[];
 extern spritetype *g_sp;
 
+void C_Compile(const char* fn);
 char const* VM_GetKeywordForID(int32_t id);
 
 enum ScriptError_t

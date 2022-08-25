@@ -98,7 +98,6 @@ extern int menutext_(int x,int y,int s,int p,const char *t,int bits);
 extern void M_DisplayMenus(void);
 extern void G_PlayAnim(const char *fn,char);
 extern int G_GetAngleDelta(int a,int na);
-extern void C_Compile(const char *fn);
 extern void A_Execute(int iActor,int iPlayer,int lDist);
 extern void overwritesprite(int thex,int they,int tilenum,int shade,int stat,int dapalnum);
 extern void gamenumber(int x,int y,int n,int s);
