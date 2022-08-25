@@ -38,7 +38,7 @@ static inline void X_AccessTileData(int iSet, int lVar1, int lLabelID, int lVar2
 
     if ((tile < 0 || tile >= MAXTILES) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "tried to %s %s on invalid tile number (%d) from sprite id: %d, picnum: %d.\n", g_errorLineNum, keyw[g_tw].token,
+        OSD_Printf(CON_ERROR "tried to %s %s on invalid tile number (%d) from sprite id: %d, picnum: %d.\n", g_errorLineNum, vm_keywords[g_tw].token,
             iSet ? "set" : "get", TileDataLabels[lLabelID].name, tile, g_i, TrackerCast(g_sp->picnum));
         insptr += (lVar2 == MAXGAMEVARS);
         return;
@@ -124,7 +124,7 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
 
     if ((UserdefsLabels[lLabelID].flags & LABEL_HASPARM2 && (lParm2 < 0 || lParm2 >= UserdefsLabels[lLabelID].maxParm2)) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "tried to %s invalid %s position %d from spr %d\n", g_errorLineNum, keyw[g_tw].token,
+        OSD_Printf(CON_ERROR "tried to %s invalid %s position %d from spr %d\n", g_errorLineNum, vm_keywords[g_tw].token,
             iSet ? "set" : "get", UserdefsLabels[lLabelID].name, lParm2, g_i);
         insptr += (lVar2 == MAXGAMEVARS);
         return;
@@ -1077,7 +1077,7 @@ static inline void X_AccessActiveProjectile(int iSet, int lVar1, int lLabelID, i
     if ((proj < 0 || proj >= MAXSPRITES) && g_scriptSanityChecks)
     {
 //        OSD_Printf("X_AccessActiveProjectile(): invalid projectile (%d)\n",proj);
-        OSD_Printf(CON_ERROR "tried to %s %s on invalid target projectile (%d) %d %d from %s\n",g_errorLineNum,keyw[g_tw].token,
+        OSD_Printf(CON_ERROR "tried to %s %s on invalid target projectile (%d) %d %d from %s\n",g_errorLineNum,vm_keywords[g_tw].token,
                    iSet?"set":"get",ProjectileLabels[lLabelID].name,proj,g_i,TrackerCast(g_sp->picnum),
                    (lVar1<MAXGAMEVARS)?aGameVars[lVar1].szLabel:"extended");
         insptr += (lVar2 == MAXGAMEVARS);
@@ -1357,7 +1357,7 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     if (((unsigned)iPlayer >= MAXPLAYERS || (g_player[iPlayer].ps == NULL && lLabelID != PLAYER_CONNECTED)) && g_scriptSanityChecks)
     {
 //        OSD_Printf("X_AccessPlayer(): invalid target player (%d) %d\n",iPlayer,g_i);
-        OSD_Printf(CON_ERROR "tried to %s %s on invalid target player (%d) from spr %d gv %s\n",g_errorLineNum,keyw[g_tw].token,
+        OSD_Printf(CON_ERROR "tried to %s %s on invalid target player (%d) from spr %d gv %s\n",g_errorLineNum,vm_keywords[g_tw].token,
                    iSet?"set":"get",PlayerLabels[lLabelID].name,iPlayer,g_i,
                    (lVar1<MAXGAMEVARS)?aGameVars[lVar1].szLabel:"extended");
         insptr += (lVar2 == MAXGAMEVARS);
@@ -1366,7 +1366,7 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
 
     if ((PlayerLabels[lLabelID].flags & LABEL_HASPARM2 && (lParm2 < 0 || lParm2 >= PlayerLabels[lLabelID].maxParm2)) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "tried to %s invalid %s position %d on player (%d) from spr %d\n",g_errorLineNum,keyw[g_tw].token,
+        OSD_Printf(CON_ERROR "tried to %s invalid %s position %d on player (%d) from spr %d\n",g_errorLineNum,vm_keywords[g_tw].token,
                    iSet?"set":"get",PlayerLabels[lLabelID].name,lParm2,iPlayer,g_i);
         insptr += (lVar2 == MAXGAMEVARS);
         return;
@@ -2757,7 +2757,7 @@ static inline void X_AccessPlayerInput(int iSet, int lVar1, int lLabelID, int lV
     if (((unsigned)iPlayer >= MAXPLAYERS || g_player[iPlayer].ps == NULL) && g_scriptSanityChecks)
     {
         insptr += (lVar2 == MAXGAMEVARS);
-        OSD_Printf(CON_ERROR "invalid target player (%d) %d\n",g_errorLineNum,keyw[g_tw].token,iPlayer,g_i);
+        OSD_Printf(CON_ERROR "invalid target player (%d) %d\n",g_errorLineNum,vm_keywords[g_tw].token,iPlayer,g_i);
         return;
     }
 
@@ -2832,7 +2832,7 @@ static inline void X_AccessWall(int iSet, int lVar1, int lLabelID, int lVar2)
     if ((iWall<0 || iWall >= numwalls) && g_scriptSanityChecks)
     {
         insptr += (lVar2 == MAXGAMEVARS);
-        OSD_Printf(CON_ERROR "Invalid wall %d\n",g_errorLineNum,keyw[g_tw].token,iWall);
+        OSD_Printf(CON_ERROR "Invalid wall %d\n",g_errorLineNum,vm_keywords[g_tw].token,iWall);
         return;
     }
 
@@ -3008,7 +3008,7 @@ static inline void X_AccessSector(int iSet, int lVar1, int lLabelID, int lVar2)
 
     if ((iSector<0 || iSector >= numsectors) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,keyw[g_tw].token,iSector);
+        OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,vm_keywords[g_tw].token,iSector);
         insptr += (lVar2 == MAXGAMEVARS);
         return;
     }
@@ -3286,7 +3286,7 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
 
     if ((iActor < 0 || iActor >= MAXSPRITES) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "tried to %s %s on invalid target sprite (%d) from spr %d pic %d gv %s\n",g_errorLineNum,keyw[g_tw].token,
+        OSD_Printf(CON_ERROR "tried to %s %s on invalid target sprite (%d) from spr %d pic %d gv %s\n",g_errorLineNum,vm_keywords[g_tw].token,
                    iSet?"set":"get",ActorLabels[lLabelID].name,iActor,g_i,TrackerCast(g_sp->picnum),
                    (lVar1<MAXGAMEVARS)?aGameVars[lVar1].szLabel:"extended");
         insptr += (lVar2 == MAXGAMEVARS);
@@ -3295,7 +3295,7 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
 
     if ((ActorLabels[lLabelID].flags & LABEL_HASPARM2 && (lParm2 < 0 || lParm2 >= ActorLabels[lLabelID].maxParm2)) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "tried to %s invalid %s position %d on sprite (%d) from spr %d\n",g_errorLineNum,keyw[g_tw].token,
+        OSD_Printf(CON_ERROR "tried to %s invalid %s position %d on sprite (%d) from spr %d\n",g_errorLineNum,vm_keywords[g_tw].token,
                    iSet?"set":"get",ActorLabels[lLabelID].name,lParm2,iActor,g_i);
         insptr += (lVar2 == MAXGAMEVARS);
         return;
@@ -3790,7 +3790,7 @@ static inline void X_AccessTsprite(int iSet, int lVar1, int lLabelID, int lVar2)
 
     if ((iActor < 0 || iActor >= MAXSPRITES) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "invalid target sprite (%d) %d %d\n",g_errorLineNum,keyw[g_tw].token,iActor,g_i,TrackerCast(g_sp->picnum));
+        OSD_Printf(CON_ERROR "invalid target sprite (%d) %d %d\n",g_errorLineNum,vm_keywords[g_tw].token,iActor,g_i,TrackerCast(g_sp->picnum));
         insptr += (lVar2 == MAXGAMEVARS);
         return;
     }
@@ -3800,7 +3800,7 @@ static inline void X_AccessTsprite(int iSet, int lVar1, int lLabelID, int lVar2)
 
     if ((!spriteext[iActor].tspr) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "Internal bug, tsprite is unavailable\n",g_errorLineNum,keyw[g_tw].token);
+        OSD_Printf(CON_ERROR "Internal bug, tsprite is unavailable\n",g_errorLineNum,vm_keywords[g_tw].token);
         return;
     }
 
@@ -4027,7 +4027,7 @@ static inline void X_AccessProjectile(int iSet, int lVar1, int lLabelID, int lVa
 
     if ((lVar1 < 0 || lVar1 >= MAXTILES) && g_scriptSanityChecks)
     {
-        OSD_Printf(CON_ERROR "invalid tile (%d)\n",g_errorLineNum,keyw[g_tw].token,lVar1);
+        OSD_Printf(CON_ERROR "invalid tile (%d)\n",g_errorLineNum,vm_keywords[g_tw].token,lVar1);
         insptr += (lVar2 == MAXGAMEVARS);
         return;
     }

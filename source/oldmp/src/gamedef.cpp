@@ -120,9 +120,9 @@ static const char *C_GetLabelType(int type)
     return strdup(x);
 }
 
-#define NUMKEYWORDS (signed int)(sizeof(keyw)/sizeof(keyw[0]))
+#define NUMKEYWORDS (signed int)(sizeof(vm_keywords)/sizeof(vm_keywords[0]))
 
-const tokenmap_t keyw[] =
+const tokenmap_t vm_keywords[] =
 {
     { "definelevelname",        CON_DEFINELEVELNAME },  // defines level name
     { "actor",                  CON_ACTOR },            // defines an actor
@@ -1007,7 +1007,7 @@ void inithash()
     hash_init(&tspriteH);
     hash_init(&tileDataH);
 
-    for (auto& keyword : keyw)
+    for (auto& keyword : vm_keywords)
         hash_add(&keywH, keyword.token, keyword.val, 0);
 
     for (i = 0; SectorLabels[i].lId >= 0; i++) hash_add(&sectorH, SectorLabels[i].name, i, 0);
@@ -1564,7 +1564,7 @@ static int C_GetNextKeyword(void) //Returns its code #
         textptr += l;
         g_scriptPtr++;
         if (!(g_errorCnt || g_warningCnt) && g_scriptDebug)
-            VLOG_F(LOG_CON, "%s:%d: debug: translating keyword `%s'.",g_scriptFileName,g_lineNumber,keyw[i].token);
+            VLOG_F(LOG_CON, "%s:%d: debug: translating keyword `%s'.",g_scriptFileName,g_lineNumber,vm_keywords[i].token);
         return i;
     }
 
@@ -1941,7 +1941,7 @@ static int C_ParseCommand(void)
         //AddLog(g_szBuf);
     }
     
-    //    Bsprintf(tempbuf,"%s",keyw[tw]);
+    //    Bsprintf(tempbuf,"%s",vm_keywords[tw]);
     //    AddLog(tempbuf);
 
     if (C_SkipComments())

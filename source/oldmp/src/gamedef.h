@@ -109,7 +109,7 @@ extern int g_scriptSanityChecks;
 
 extern int g_errorLineNum;
 extern int g_tw;
-extern const tokenmap_t keyw[];
+extern const tokenmap_t vm_keywords[];
 extern spritetype *g_sp;
 
 enum ScriptError_t
