@@ -236,6 +236,7 @@ static int A_Dodge(spritetype *s)
     return 0;
 }
 
+// Also used in player.cpp
 int A_GetFurthestAngle(int const spriteNum, int const angDiv)
 {
     auto const pSprite = (uspriteptr_t)&sprite[spriteNum];
@@ -266,7 +267,7 @@ int A_GetFurthestAngle(int const spriteNum, int const angDiv)
     return furthestAngle & 2047;
 }
 
-int A_FurthestVisiblePoint(int iActor,spritetype *ts,int *dax,int *day)
+static int A_FurthestVisiblePoint(int iActor,spritetype *ts,int *dax,int *day)
 {
     if ((actor[iActor].t_data[0]&63)) return -1;
     {

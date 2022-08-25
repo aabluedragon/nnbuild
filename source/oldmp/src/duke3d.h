@@ -420,7 +420,6 @@ extern char g_numPlayerSprites;
 #define USERQUOTE_RIGHTOFFSET 14
 extern int quotebot, quotebotgoal; // game.c
 
-void X_ScriptInfo(void);
 extern intptr_t *actorLoadEventScrptr[MAXTILES];
 
 typedef struct {
