@@ -792,6 +792,7 @@ enum loguru_verbosities_game
 #include "dukebot.h"
 #include "game.h"
 #include "gamedef.h"
+#include "gameexec.h"
 #include "gametypes.h"
 #include "global.h"
 #include "hud.h"
