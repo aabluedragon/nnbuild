@@ -3488,7 +3488,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         actor[i].projectile = ProjectileData[s_pn];
     }
 
-    if (apScriptGameEvent[EVENT_EGS])
+    if (VM_HaveEvent(EVENT_EGS))
     {
         extern int block_deletesprite;
         int pl=A_FindPlayer(&sprite[i],&p);
@@ -5260,7 +5260,7 @@ int A_Spawn(int j, int pn)
 //                        G_GameExit(tempbuf);
                         OSD_Printf(OSD_ERROR "Found lonely Sector Effector (lotag 0) at (%d,%d)\n",TrackerCast(sp->x),TrackerCast(sp->y));
                         changespritestat(i, STAT_ACTOR);
-                        if (apScriptGameEvent[EVENT_SPAWN])
+                        if (VM_HaveEvent(EVENT_SPAWN))
                         {
                             int pl=A_FindPlayer(&sprite[i],&p);
                             X_OnEvent(EVENT_SPAWN,i, pl, p);
@@ -5474,7 +5474,7 @@ int A_Spawn(int j, int pn)
 
 SPAWN_END:
 
-    if (apScriptGameEvent[EVENT_SPAWN])
+    if (VM_HaveEvent(EVENT_SPAWN))
     {
         int pl=A_FindPlayer(&sprite[i],&p);
         X_OnEvent(EVENT_SPAWN,i, pl, p);
@@ -6394,7 +6394,7 @@ PALONLY:
             t->xrepeat = t->yrepeat = 0;
     }
 
-    if (apScriptGameEvent[EVENT_ANIMATESPRITES])
+    if (VM_HaveEvent(EVENT_ANIMATESPRITES))
     {
         for (j = spritesortcnt - 1; j >= 0; j--)
             G_DoEventAnimSprites(j);

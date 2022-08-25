@@ -694,7 +694,7 @@ void A_DeleteSprite(int s)
         OSD_Printf(OSD_ERROR "A_DeleteSprite(): tried to remove sprite %d in EVENT_EGS\n",s);
         return;
     }
-    if (apScriptGameEvent[EVENT_KILLIT])
+    if (VM_HaveEvent(EVENT_KILLIT))
     {
         int p, pl=A_FindPlayer(&sprite[s],&p);
 
@@ -8123,7 +8123,7 @@ static void G_RecordOldPlayerPos(void)
 
 void G_MoveWorld(void)
 {
-    if (apScriptGameEvent[EVENT_PREGAME])
+    if (VM_HaveEvent(EVENT_PREGAME))
     {
         int i, p, j, k = MAXSTATUS - 1, pl;
 
@@ -8169,7 +8169,7 @@ void G_MoveWorld(void)
 
     G_MoveStandables();       //ST 6
 
-    if (apScriptGameEvent[EVENT_GAME])
+    if (VM_HaveEvent(EVENT_GAME))
     {
         int i, p, j, k = MAXSTATUS-1, pl;
 

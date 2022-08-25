@@ -1107,7 +1107,7 @@ static int C_SetScriptSize(int size)
     }
 
     for (i=MAXGAMEEVENTS-1;i>=0;i--)
-        if (apScriptGameEvent[i])
+        if (VM_HaveEvent(i))
         {
             j = (intptr_t)apScriptGameEvent[i]-(intptr_t)&apScript[0];
             apScriptGameEvent[i] = (intptr_t *)j;
@@ -1196,7 +1196,7 @@ static int C_SetScriptSize(int size)
     }
 
     for (i=MAXGAMEEVENTS-1;i>=0;i--)
-        if (apScriptGameEvent[i])
+        if (VM_HaveEvent(i))
         {
             j = (intptr_t)apScriptGameEvent[i]+(intptr_t)&apScript[0];
             apScriptGameEvent[i] = (intptr_t *)j;
@@ -2766,7 +2766,7 @@ DO_DEFSTATE:
             return 0;
         }
 
-        if (apScriptGameEvent[j])
+        if (VM_HaveEvent(j))
         {
             tempscrptr = g_parsingEventPtr;
             g_parsingEventPtr = g_parsingActorPtr = 0;
@@ -6154,7 +6154,7 @@ void C_Compile(const char *filenam)
 
         j = 0;
         for (i=MAXGAMEEVENTS-1;i>=0;i--)
-            if (apScriptGameEvent[i])
+            if (VM_HaveEvent(i))
                 j++;
         for (i=MAXTILES-1;i>=0;i--)
             if (actorscrptr[i])

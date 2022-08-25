@@ -80,7 +80,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         return;
     }
 
-    if (apScriptGameEvent[iEventID] == 0)
+    if (!VM_HaveEvent(iEventID))
     {
         //Bsprintf(g_szBuf,"No event found for %d",iEventID);
         //AddLog(g_szBuf);

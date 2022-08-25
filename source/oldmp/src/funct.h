@@ -190,9 +190,6 @@ extern void C_ReportError(int iError);
 
 extern void onvideomodechange(int newmode);
 
-extern void X_OnEvent(int iEventID, int sActor, int sPlayer, int lDist);
-extern int X_OnEventWithReturn(int iEventID, int sActor, int sPlayer, int nReturn);
-
 extern void G_UpdatePlayerFromMenu(void);
 
 extern void G_AddUserQuote(const char *daquote);

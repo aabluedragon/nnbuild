@@ -129,7 +129,7 @@ int Gv_ReadSave(int fil)
     //  AddLog(g_szBuf);
     if (kdfread(apScriptGameEvent,sizeof(apScriptGameEvent),1,fil) != 1) goto corrupt;
     for (i=0;i<MAXGAMEEVENTS;i++)
-        if (apScriptGameEvent[i])
+        if (VM_HaveEvent(i))
         {
             l = (intptr_t)apScriptGameEvent[i]+(intptr_t)&apScript[0];
             apScriptGameEvent[i] = (intptr_t *)l;
@@ -233,14 +233,14 @@ void Gv_WriteSave(FILE *fil)
     }
 
     for (i=0;i<MAXGAMEEVENTS;i++)
-        if (apScriptGameEvent[i])
+        if (VM_HaveEvent(i))
         {
             l = (intptr_t)apScriptGameEvent[i]-(intptr_t)&apScript[0];
             apScriptGameEvent[i] = (intptr_t *)l;
         }
     dfwrite(apScriptGameEvent,sizeof(apScriptGameEvent),1,fil);
     for (i=0;i<MAXGAMEEVENTS;i++)
-        if (apScriptGameEvent[i])
+        if (VM_HaveEvent(i))
         {
             l = (intptr_t)apScriptGameEvent[i]+(intptr_t)&apScript[0];
             apScriptGameEvent[i] = (intptr_t *)l;
