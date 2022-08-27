@@ -937,6 +937,8 @@ enum ScriptKeywords_t
     CON_SETTILEDATA,        // 357
     CON_DEFSTATE,           // 358
     CON_GETINTERPOLATEDPOS, // 359
+    CON_LDISTVAR,
+    CON_DISTVAR,
     CON_END
 };
 #endif

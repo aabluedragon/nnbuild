@@ -2679,6 +2679,28 @@ static int X_DoExecute(void)
         break;
     }
 
+    case CON_LDISTVAR:
+    {
+        insptr++;
+
+        vec2_t pos1 = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
+        vec2_t pos2 = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
+
+        Gv_SetVarX(*insptr++, ldist(&pos1, &pos2));
+        break;
+    }
+
+    case CON_DISTVAR:
+    {
+        insptr++;
+
+        vec3_t pos1 = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
+        vec3_t pos2 = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
+
+        Gv_SetVarX(*insptr++, dist(&pos1, &pos2));
+        break;
+    }
+
     case CON_UPDATESECTOR:
     case CON_UPDATESECTORZ:
         insptr++;

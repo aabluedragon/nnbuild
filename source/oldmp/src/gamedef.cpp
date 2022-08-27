@@ -376,8 +376,12 @@ const tokenmap_t vm_keywords[] =
     { "operatemasterswitches",  CON_OPERATEMASTERSWITCHES },    // lotag
     { "checkactivatormotion",   CON_CHECKACTIVATORMOTION },     // lotag
     { "zshoot",                 CON_ZSHOOT },                   // zvar projnum
+
     { "dist",                   CON_DIST },                     // sprite1 sprite2
+    { "distvar",                CON_DISTVAR },
     { "ldist",                  CON_LDIST },                    // sprite1 sprite2
+    { "ldistvar",               CON_LDISTVAR },
+
     { "spritenvg",              CON_SPRITENVG },
     { "getangle",               CON_GETANGLE },
     { "whilevarvarn",           CON_WHILEVARVARN },
@@ -4083,6 +4087,16 @@ DO_DEFSTATE:
     case CON_GETINTERPOLATEDPOS:
         C_GetManyVars(6);
         C_GetManyVarsType(GAMEVAR_READONLY, 3);
+        return 0;
+
+    case CON_LDISTVAR:
+        C_GetManyVars(4);
+        C_GetNextVarType(GAMEVAR_READONLY);
+        return 0;
+
+    case CON_DISTVAR:
+        C_GetManyVars(6);
+        C_GetNextVarType(GAMEVAR_READONLY);
         return 0;
 
     case CON_DEFINEPROJECTILE:
