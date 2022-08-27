@@ -8037,7 +8037,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-#if 0 // OLDMP MERGE CHECKME
+#if 1 // OLDMP MERGE CHECKME
                 if (!Bstrcasecmp(c+1,"stun"))
                 {
                     natfree = 1; //Addfaz NatFree
