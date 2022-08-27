@@ -1504,9 +1504,10 @@ static void G_MoveFX(void)
             {
                 if (g_sounds[pSprite->lotag]->flags & SF_MSFX)
                 {
-                    int playerDist = dist(&sprite[pPlayer->i], pSprite);
+                    const int soundPlaying = A_CheckSoundPlaying(spriteNum, pSprite->lotag);
+                    const int playerDist = dist(&sprite[pPlayer->i], pSprite);
 
-                    if (playerDist < spriteHitag && T1(spriteNum) == 0 && FX_VoiceAvailable(g_sounds[pSprite->lotag]->priority - 1))
+                    if (playerDist < spriteHitag && !soundPlaying && FX_VoiceAvailable(g_sounds[pSprite->lotag]->priority - 1))
                     {
                         // Start playing an ambience sound.
                         auto oldFlags = g_sounds[pSprite->lotag]->flags;
@@ -1516,7 +1517,7 @@ static void G_MoveFX(void)
 
                             for (SPRITES_OF(STAT_FX, j))
                             {
-                                if (j != spriteNum && S_IsAmbientSFX(j) && actor[j].t_data[0] == 1 && dist(&sprite[j], &sprite[pPlayer->i]) > playerDist)
+                                if (j != spriteNum && S_IsAmbientSFX(j) && A_CheckSoundPlaying(j, sprite[j].lotag) && dist(&sprite[j], &sprite[pPlayer->i]) > playerDist)
                                 {
                                     S_StopEnvSound(sprite[j].lotag, j);
                                     break;
@@ -1533,7 +1534,7 @@ static void G_MoveFX(void)
                         g_sounds[pSprite->lotag]->flags = oldFlags;
                         T1(spriteNum) = 1;  // AMBIENT_SFX_PLAYING
                     }
-                    else if (playerDist >= spriteHitag && T1(spriteNum) == 1)
+                    else if (playerDist >= spriteHitag && soundPlaying)
                     {
                         // Stop playing ambience sound because we're out of its range.
 

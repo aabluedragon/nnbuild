@@ -491,20 +491,22 @@ void S_Cleanup(void)
         num = (num - voiceindex) / MAXSOUNDINSTANCES;
 
         auto& snd = g_sounds[num];
-        auto& voice = snd->voices[voiceindex];
-
-        int const spriteNum = voice.owner;
+        auto& voice = snd->voices[voiceindex];  
 
         DVLOG_IF_F(LOG_DEBUG, !bitmap_test(&snd->playing, voiceindex), "Sound %d index %d is not playing", num, voiceindex);
         bitmap_clear(&snd->playing, voiceindex);
 
-        if (snd->flags & SF_TALK && g_dukeTalk)
-            g_dukeTalk = false;
+#if 0
+        int const spriteNum = voice.owner;
 
         // MUSICANDSFX uses t_data[0] to control restarting the sound
         // CLEAR_SOUND_T0
         if (spriteNum != -1 && S_IsAmbientSFX(spriteNum) && sector[SECT(spriteNum)].lotag < 3)  // ST_2_UNDERWATER
             actor[spriteNum].t_data[0] = 0;
+#endif
+
+        if (snd->flags & SF_TALK && g_dukeTalk)
+            g_dukeTalk = false;
 
         S_FillVoiceInfo(&voice, -1, 0, UINT16_MAX);
     }
