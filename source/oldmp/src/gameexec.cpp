@@ -2614,7 +2614,7 @@ static int X_DoExecute(void)
         insptr++;
         {
             int spritenum = Gv_GetVarX(*insptr++);
-            int x = Gv_GetVarX(*insptr++), y = Gv_GetVarX(*insptr++), z = Gv_GetVarX(*insptr++);
+            vec3_t vect = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
 
             if (tw == CON_SETSPRITE)
             {
@@ -2623,7 +2623,7 @@ static int X_DoExecute(void)
                     OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),spritenum);
                     break;
                 }
-                setspritez_old(spritenum, x, y, z);
+                setspritez(spritenum, &vect);
                 break;
             }
 
@@ -2636,7 +2636,7 @@ static int X_DoExecute(void)
                     insptr++;
                     break;
                 }
-                Gv_SetVarX(*insptr++, A_MoveSprite(spritenum, x, y, z, cliptype));
+                Gv_SetVarX(*insptr++, A_MoveSprite(spritenum, vect.x, vect.y, vect.z, cliptype));
                 break;
             }
         }
