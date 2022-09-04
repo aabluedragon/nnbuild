@@ -4169,7 +4169,7 @@ static void P_HandleFragged(int snum)
     DukePlayer_t* frag_p = g_player[p->frag_ps].ps;
     int playerSprite = g_player[snum].ps->i;
 
-    if (ud.limit_hit == 1)
+    if (ud.limit_hit == 1 || (X_OnEventWithReturn(EVENT_FRAGGED, playerSprite, snum, frag_p->i) == -1))
         return;
 
     if (p->frag_ps != snum)
