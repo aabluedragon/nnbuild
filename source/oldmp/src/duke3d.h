@@ -176,6 +176,7 @@ enum
 
 enum weaponuniqhudid_t
 {
+    W_NONE,
     W_ACCESSCARD,
     W_CHAINGUN_BOTTOM,
     W_CHAINGUN_HACK,

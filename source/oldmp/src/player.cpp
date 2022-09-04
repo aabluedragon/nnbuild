@@ -2173,14 +2173,14 @@ void P_DisplayScubaMask(int snum)
     }
 }
 
-static int P_DisplayTip(int tipShade, int playerNum)
-{
-    static int8_t const tip_y_offsets[] = {
+static int8_t const access_tip_y[] = {
     0, -8, -16, -32, -64, -84, -108, -108, -108, -108, -108, -108, -108, -108, -108, -108, -96, -72, -64, -32, -16,
     /* EDuke32: */ 0, 16, 32, 48,
     // At y coord 64, the hand is already not shown.
-    };
+};
 
+static int P_DisplayTip(int tipShade, int playerNum)
+{
     auto const pPlayer = g_player[playerNum].ps;
 
     if (pPlayer->tipincs == 0)
@@ -2194,12 +2194,12 @@ static int P_DisplayTip(int tipShade, int playerNum)
 
     // Report that the tipping hand has been drawn so that the otherwise
     // selected weapon is not drawn.
-    if ((unsigned)pPlayer->tipincs >= ARRAY_SIZE(tip_y_offsets))
+    if ((unsigned)pPlayer->tipincs >= ARRAY_SIZE(access_tip_y))
         return 1;
 
     auto const base = P_GetDisplayBaseXY(pPlayer);
     int const tipX = 170 + base.x;
-    int const tipY = 240 + base.y + (tip_y_offsets[pPlayer->tipincs] >> 1);
+    int const tipY = 240 + base.y + (access_tip_y[pPlayer->tipincs] >> 1);
     int const tipTile = TIP + ((26 - pPlayer->tipincs) >> 4);
     int const tipPal = P_GetHudPal(pPlayer);
 
@@ -2210,24 +2210,22 @@ static int P_DisplayTip(int tipShade, int playerNum)
 
 static int P_DisplayAccessAnim(int gs,int snum)
 {
-    static short access_y[] = {0,-8,-16,-32,-64,-84,-108,-108,-108,-108,-108,-108,-108,-108,-108,-108,-96,-72,-64,-32,-16};
-
     auto const pSprite = g_player[snum].ps;
 
     if (pSprite->access_incs == 0)
         return 0;
 
-    if ((unsigned)pSprite->access_incs >= ARRAY_SIZE(access_y) - 4 || sprite[pSprite->i].extra <= 0)
+    if ((unsigned)pSprite->access_incs >= ARRAY_SIZE(access_tip_y) - 4 || sprite[pSprite->i].extra <= 0)
         return 1;
 
     auto const base = P_GetDisplayBaseXY(pSprite);
-    int const accessX = 170 + base.x + (access_y[pSprite->access_incs] >> 2);
-    int const accessY = 266 + base.y + access_y[pSprite->access_incs];
+    int const accessX = 170 + base.x + (access_tip_y[pSprite->access_incs] >> 2);
+    int const accessY = 266 + base.y + access_tip_y[pSprite->access_incs];
     int const accessPal = (pSprite->access_spritenum >= 0) ? sprite[pSprite->access_spritenum].pal : 0;
 
     auto const accessMode = pSprite->access_incs > 3 && (pSprite->access_incs - 3) >> 3;
     int  const accessTile = accessMode ? HANDHOLDINGLASER + (pSprite->access_incs >> 3) : HANDHOLDINGACCESS;
-    int  const accessBits = accessMode ? DRAWEAP_CENTER : (4 | DRAWEAP_CENTER);
+    int  const accessBits = accessMode ? DRAWEAP_CENTER : (RS_YFLIP | DRAWEAP_CENTER);
 
     G_DrawTileScaled(accessX, accessY, accessTile, gs, accessBits | RS_LERP | RS_FORCELERP, accessPal, W_ACCESSCARD);
 
