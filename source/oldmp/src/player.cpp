@@ -4508,21 +4508,19 @@ static void P_CheckTouchDamage(DukePlayer_t* p, int j)
 void P_ProcessInput(int snum)
 {
     DukePlayer_t* p = g_player[snum].ps;
-    input_t* syn = g_player[snum].inputBits;
 
-    int playerSprite = g_player[snum].ps->i;
+    input_t* pInput = g_player[snum].inputBits;
+    uint32_t playerBits = pInput->bits;
+
+    int playerSprite = p->i;
     spritetype* s = &sprite[playerSprite];
 
-    unsigned int sb_snum = syn->bits;
-    int psect;
-    int psectlotag;
     int shrunk = (s->yrepeat < 32);
     int floorZOffset;
 
     int ceilZ, highZhit, floorZ, lowZhit;
 
     int x, y;
-    short tempsect;
 
     int doubvel;
     bool doFloatbob = false;
@@ -4530,41 +4528,40 @@ void P_ProcessInput(int snum)
     X_OnEvent(EVENT_PROCESSINPUT, playerSprite, snum, -1);
 
     if (p->cheat_phase > 0)
-        sb_snum = 0;
+        playerBits = 0;
 
-    psect = p->cursectnum;
-
-    if (psect == -1)
+    if (p->cursectnum == -1)
     {
         if (s->extra > 0 && ud.clipping == 0)
         {
             P_QuickKill(p);
             A_PlaySound(SQUISHED, playerSprite);
         }
-        psect = 0;
+
+        p->cursectnum = 0;
     }
 
-    psectlotag = sector[psect].lotag;
+    int16_t sectorLotag = sector[p->cursectnum].lotag;
     p->spritebridge = 0;
     p->sbs = 0;
     p->lowsprite = -1;
     p->highsprite = -1;
 
-    getzrange(&p->pos, psect, &ceilZ, &highZhit, &floorZ, &lowZhit, 163L, CLIPMASK0);
-    yax_getzsofslope(psect, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
+    getzrange(&p->pos, p->cursectnum, &ceilZ, &highZhit, &floorZ, &lowZhit, 163L, CLIPMASK0);
+    yax_getzsofslope(p->cursectnum, p->pos.x, p->pos.y, &p->truecz, &p->truefz);
 
     int const trueFloorDist = klabs(p->pos.z - p->truefz);
 
     /* wtf is this supposed to do? */
-    if ((lowZhit & 49152) == 16384 && psectlotag == ST_1_ABOVE_WATER && trueFloorDist > PHEIGHT + (16 << 8))
-        psectlotag = 0;
+    if ((lowZhit & 49152) == 16384 && sectorLotag == ST_1_ABOVE_WATER && trueFloorDist > PHEIGHT + (16 << 8))
+        sectorLotag = 0;
 
     // HACK HACK HACK: Big brutal hack to adjust player z if TROR water is too shallow.
     bool noSE7Water = false;
     int32_t waterFloor = 0;
     int32_t waterZhit = 0;
     int32_t otherSect;
-    if ((psectlotag == ST_1_ABOVE_WATER) && A_CheckNoSE7Water((uspriteptr_t)s, p->cursectnum, psectlotag, &otherSect))
+    if ((sectorLotag == ST_1_ABOVE_WATER) && A_CheckNoSE7Water((uspriteptr_t)s, p->cursectnum, sectorLotag, &otherSect))
     {
         int32_t dummy;
         getzrange(&p->pos, otherSect, &dummy, &dummy, &waterFloor, &waterZhit, 163L, CLIPMASK0);
@@ -4581,16 +4578,17 @@ void P_ProcessInput(int snum)
     p->oq16horiz = p->q16horiz;
     p->oq16horizoff = p->q16horizoff;
 
-    if (p->aim_mode == 0 && p->on_ground && psectlotag != ST_2_UNDERWATER && (sector[psect].floorstat & 2))
+    // [JM] I feel like this behavior could be re-implemented in P_GetInput, and this horizoff shit could go bye-bye.
+    if (p->aim_mode == 0 && p->on_ground && sectorLotag != ST_2_UNDERWATER && (sector[p->cursectnum].floorstat & FLOOR_STAT_SLOPE))
     {
         x = p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 5);
         y = p->pos.y + (sintable[fix16_to_int(p->q16ang) & 2047] >> 5);
-        tempsect = psect;
+        auto tempsect = p->cursectnum;
         updatesector(x, y, &tempsect);
         if (tempsect >= 0)
         {
-            int florZOfSlope = getflorzofslope(psect, x, y);
-            if (psect == tempsect)
+            int florZOfSlope = getflorzofslope(p->cursectnum, x, y);
+            if (p->cursectnum == tempsect)
                 p->q16horizoff += fix16_from_int(mulscale16(p->truefz - florZOfSlope, 160));
             else if (klabs(getflorzofslope(tempsect, x, y) - florZOfSlope) <= (4 << 8))
                 p->q16horizoff += fix16_from_int(mulscale16(p->truefz - florZOfSlope, 160));
@@ -4628,7 +4626,7 @@ void P_ProcessInput(int snum)
             auto spr_sect_lotag = sector[sprite[p->lowsprite].sectnum].lotag;
             if (spr_sect_lotag != ST_2_UNDERWATER) // Underwater sprite bridges shouldn't clear tag.
             {
-                psectlotag = 0;
+                sectorLotag = 0;
                 if (noSE7Water) // HACK: If we're on a sprite bridge, we're not doing TROR water, so bail out of that, shall we?
                 {
                     noSE7Water = false;
@@ -4662,7 +4660,7 @@ void P_ProcessInput(int snum)
     {
         P_HandleDeath(snum);
 
-        if (psectlotag == ST_2_UNDERWATER)
+        if (sectorLotag == ST_2_UNDERWATER)
         {
             if (p->on_warping_sector == 0)
             {
@@ -4741,7 +4739,7 @@ void P_ProcessInput(int snum)
     if (p->look_ang && !(p->look_ang >> 2))
         p->look_ang -= ksgn(p->look_ang);
 
-    if (TEST_SYNC_KEY(sb_snum, SK_LOOK_LEFT))
+    if (TEST_SYNC_KEY(playerBits, SK_LOOK_LEFT))
     {
         // look_left
         Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -4753,7 +4751,7 @@ void P_ProcessInput(int snum)
         }
     }
 
-    if (TEST_SYNC_KEY(sb_snum, SK_LOOK_RIGHT))
+    if (TEST_SYNC_KEY(playerBits, SK_LOOK_RIGHT))
     {
         // look_right
         Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -4811,7 +4809,7 @@ void P_ProcessInput(int snum)
 
     floorZOffset = PLAYER_ZOFF_NORMAL;
 
-    if (psectlotag == ST_2_UNDERWATER)
+    if (sectorLotag == ST_2_UNDERWATER)
     {
         // under water
         p->jumping_counter = 0;
@@ -4820,7 +4818,7 @@ void P_ProcessInput(int snum)
         if (!A_CheckSoundPlaying(playerSprite, DUKE_UNDERWATER))
             A_PlaySound(DUKE_UNDERWATER, playerSprite);
 
-        if (TEST_SYNC_KEY(sb_snum, SK_JUMP))
+        if (TEST_SYNC_KEY(playerBits, SK_JUMP))
         {
             Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
             X_OnEvent(EVENT_SWIMUP, playerSprite, snum, -1);
@@ -4836,7 +4834,7 @@ void P_ProcessInput(int snum)
                     p->vel.z = -(256 * 6);
             }
         }
-        else if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
+        else if (TEST_SYNC_KEY(playerBits, SK_CROUCH))
         {
             Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
             X_OnEvent(EVENT_SWIMDOWN, playerSprite, snum, -1);
@@ -4913,7 +4911,7 @@ void P_ProcessInput(int snum)
 
         int const zAdjust = shrunk ? 512 : 2048;
 
-        if (TEST_SYNC_KEY(sb_snum, SK_JUMP))         //A (soar high)
+        if (TEST_SYNC_KEY(playerBits, SK_JUMP))         //A (soar high)
         {
             // jump
             Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -4925,7 +4923,7 @@ void P_ProcessInput(int snum)
             }
         }
 
-        if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))   //Z (soar low)
+        if (TEST_SYNC_KEY(playerBits, SK_CROUCH))   //Z (soar low)
         {
             // crouch
             Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -4937,9 +4935,9 @@ void P_ProcessInput(int snum)
             }
         }
 
-        int const Zdiff = (shrunk == 0 && (psectlotag == ST_0_NO_EFFECT || psectlotag == ST_2_UNDERWATER)) ? 32 : 16;
+        int const Zdiff = (shrunk == 0 && (sectorLotag == ST_0_NO_EFFECT || sectorLotag == ST_2_UNDERWATER)) ? 32 : 16;
 
-        if (psectlotag != ST_2_UNDERWATER && p->scuba_on == 1)
+        if (sectorLotag != ST_2_UNDERWATER && p->scuba_on == 1)
             p->scuba_on = 0;
 
         if (p->pos.z > (floorZ - (Zdiff << 8)))
@@ -4948,7 +4946,7 @@ void P_ProcessInput(int snum)
             p->pos.z = ceilZ + (18 << 8);
 
     }
-    else if (psectlotag != ST_2_UNDERWATER)
+    else if (sectorLotag != ST_2_UNDERWATER)
     {
         if (p->airleft != 15 * 26)
             p->airleft = 15 * 26; //Aprox twenty seconds.
@@ -4956,7 +4954,7 @@ void P_ProcessInput(int snum)
         if (p->scuba_on == 1)
             p->scuba_on = 0;
 
-        if (psectlotag == ST_1_ABOVE_WATER) //&& p->spritebridge == 0)
+        if (sectorLotag == ST_1_ABOVE_WATER) //&& p->spritebridge == 0)
         {
             floorZOffset = PLAYER_ZOFF_SHRUNK;
 
@@ -4993,7 +4991,7 @@ void P_ProcessInput(int snum)
                 {
                     int spr;
 
-                    for (spr = headspritesect[psect]; spr >= 0; spr = nextspritesect[spr])
+                    for (spr = headspritesect[p->cursectnum]; spr >= 0; spr = nextspritesect[spr])
                     {
                         if (sprite[spr].picnum == FOOTPRINTS || sprite[spr].picnum == FOOTPRINTS2 || sprite[spr].picnum == FOOTPRINTS3 || sprite[spr].picnum == FOOTPRINTS4)
                             if (klabs(sprite[spr].x - p->pos.x) < 384)
@@ -5027,7 +5025,7 @@ void P_ProcessInput(int snum)
         if (p->pos.z < (floorZ - floorZOffset))  //falling
         {
             // not jumping or crouching
-            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && !TEST_SYNC_KEY(sb_snum, SK_CROUCH) && p->on_ground && (sector[psect].floorstat & 2) && p->pos.z >= (floorZ - floorZOffset - ZOFFSET2))
+            if (!TEST_SYNC_KEY(playerBits, SK_JUMP) && !TEST_SYNC_KEY(playerBits, SK_CROUCH) && p->on_ground && (sector[p->cursectnum].floorstat & FLOOR_STAT_SLOPE) && p->pos.z >= (floorZ - floorZOffset - ZOFFSET2))
                 p->pos.z = floorZ - floorZOffset;
             else
             {
@@ -5080,7 +5078,7 @@ void P_ProcessInput(int snum)
                 p->scream_voice = FX_Ok;
             }
 
-            if (psectlotag != ST_1_ABOVE_WATER && psectlotag != ST_2_UNDERWATER && p->on_ground == 0 && p->vel.z > (6144 >> 1))
+            if (sectorLotag != ST_1_ABOVE_WATER && sectorLotag != ST_2_UNDERWATER && p->on_ground == 0 && p->vel.z > (6144 >> 1))
                 p->hard_landing = p->vel.z >> 10;
 
             p->on_ground = 1;
@@ -5116,7 +5114,7 @@ void P_ProcessInput(int snum)
                 doFloatbob = false;
             }
 
-            if (TEST_SYNC_KEY(sb_snum, SK_CROUCH))
+            if (TEST_SYNC_KEY(playerBits, SK_CROUCH))
             {
                 // crouching
                 Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -5129,9 +5127,9 @@ void P_ProcessInput(int snum)
             }
 
             // jumping
-            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && p->jumping_toggle == 1)
+            if (!TEST_SYNC_KEY(playerBits, SK_JUMP) && p->jumping_toggle == 1)
                 p->jumping_toggle = 0;
-            else if (TEST_SYNC_KEY(sb_snum, SK_JUMP) && p->jumping_toggle == 0)
+            else if (TEST_SYNC_KEY(playerBits, SK_JUMP) && p->jumping_toggle == 0)
             {
                 if (p->jumping_counter == 0)
                     if ((floorZ - ceilZ) > (56 << 8))
@@ -5146,18 +5144,18 @@ void P_ProcessInput(int snum)
                     }
             }
 
-            if (p->jumping_counter && !TEST_SYNC_KEY(sb_snum, SK_JUMP))
+            if (p->jumping_counter && !TEST_SYNC_KEY(playerBits, SK_JUMP))
                 p->jumping_toggle = 0;
         }
 
         if (p->jumping_counter)
         {
-            if (!TEST_SYNC_KEY(sb_snum, SK_JUMP) && p->jumping_toggle == 1)
+            if (!TEST_SYNC_KEY(playerBits, SK_JUMP) && p->jumping_toggle == 1)
                 p->jumping_toggle = 0;
 
             if (p->jumping_counter < (1024 + 256))
             {
-                if (psectlotag == ST_1_ABOVE_WATER && p->jumping_counter > 768)
+                if (sectorLotag == ST_1_ABOVE_WATER && p->jumping_counter > 768)
                 {
                     p->jumping_counter = 0;
                     p->vel.z = -512;
@@ -5214,12 +5212,12 @@ void P_ProcessInput(int snum)
         p->vel.x = 0;
         p->vel.y = 0;
     }
-    else if (syn->q16avel)            //p->ang += syncangvel * constant
+    else if (pInput->q16avel)            //p->ang += syncangvel * constant
     {
         //ENGINE calculates angvel for you
-        fix16_t inputAng = syn->q16avel;
+        fix16_t inputAng = pInput->q16avel;
 
-        p->q16angvel = (psectlotag == ST_2_UNDERWATER) ? fix16_mul(inputAng - (inputAng >> 3), fix16_from_int(ksgn(doubvel)))
+        p->q16angvel = (sectorLotag == ST_2_UNDERWATER) ? fix16_mul(inputAng - (inputAng >> 3), fix16_from_int(ksgn(doubvel)))
             : fix16_mul(inputAng, fix16_from_int(ksgn(doubvel)));
         p->q16ang += p->q16angvel;
         p->q16ang &= 0x7FFFFFF;
@@ -5233,25 +5231,25 @@ void P_ProcessInput(int snum)
         oldnet_predictablestate = true;
     }
 
-    if (syn->extbits & (EXTBIT_MOVEFORWARD))
+    if (pInput->extbits & (EXTBIT_MOVEFORWARD))
         X_OnEvent(EVENT_MOVEFORWARD, playerSprite, snum, -1);
 
-    if (syn->extbits & (EXTBIT_MOVEBACKWARD))
+    if (pInput->extbits & (EXTBIT_MOVEBACKWARD))
         X_OnEvent(EVENT_MOVEBACKWARD, playerSprite, snum, -1);
 
-    if (syn->extbits & (EXTBIT_STRAFELEFT))
+    if (pInput->extbits & (EXTBIT_STRAFELEFT))
         X_OnEvent(EVENT_STRAFELEFT, playerSprite, snum, -1);
 
-    if (syn->extbits & (EXTBIT_STRAFERIGHT))
+    if (pInput->extbits & (EXTBIT_STRAFERIGHT))
         X_OnEvent(EVENT_STRAFERIGHT, playerSprite, snum, -1);
 
-    if (syn->extbits & (EXTBIT_TURNLEFT) || syn->q16avel < 0)
+    if (pInput->extbits & (EXTBIT_TURNLEFT) || pInput->q16avel < 0)
         X_OnEvent(EVENT_TURNLEFT, playerSprite, snum, -1);
 
-    if (syn->extbits & (EXTBIT_TURNRIGHT) || syn->q16avel > 0)
+    if (pInput->extbits & (EXTBIT_TURNRIGHT) || pInput->q16avel > 0)
         X_OnEvent(EVENT_TURNRIGHT, playerSprite, snum, -1);
 
-    if (p->vel.x || p->vel.y || syn->fvel || syn->svel)
+    if (p->vel.x || p->vel.y || pInput->fvel || pInput->svel)
     {
         p->crack_time = 777;
 
@@ -5262,13 +5260,13 @@ void P_ProcessInput(int snum)
             if (/*p->spritebridge == 0 &&*/ p->walking_snd_toggle == 0 && p->on_ground)
             {
                 int floorPic;
-                switch (psectlotag)
+                switch (sectorLotag)
                 {
                 case ST_0_NO_EFFECT:
 
                     floorPic = (lowZhit >= 0 && (lowZhit & 49152) == 49152)
                         ? TrackerCast(sprite[lowZhit & (MAXSPRITES - 1)].picnum)
-                        : TrackerCast(sector[psect].floorpicnum);
+                        : TrackerCast(sector[p->cursectnum].floorpicnum);
 
                     switch (DynamicTileMap[floorPic])
                     {
@@ -5293,17 +5291,17 @@ void P_ProcessInput(int snum)
         if (p->jetpack_on == 0 && p->steroids_amount > 0 && p->steroids_amount < 400)
             doubvel <<= 1;
 
-        p->vel.x += ((syn->fvel * doubvel) << 6);
-        p->vel.y += ((syn->svel * doubvel) << 6);
+        p->vel.x += ((pInput->fvel * doubvel) << 6);
+        p->vel.y += ((pInput->svel * doubvel) << 6);
 
-        if ((aplWeaponWorksLike[p->curr_weapon][snum] == KNEE_WEAPON && p->kickback_pic > 10 && p->on_ground) || (p->on_ground && TEST_SYNC_KEY(sb_snum, SK_CROUCH)))
+        if ((aplWeaponWorksLike[p->curr_weapon][snum] == KNEE_WEAPON && p->kickback_pic > 10 && p->on_ground) || (p->on_ground && TEST_SYNC_KEY(playerBits, SK_CROUCH)))
         {
             p->vel.x = mulscale(p->vel.x, p->runspeed - 0x2000, 16);
             p->vel.y = mulscale(p->vel.y, p->runspeed - 0x2000, 16);
         }
         else
         {
-            if (psectlotag == ST_2_UNDERWATER)
+            if (sectorLotag == ST_2_UNDERWATER)
             {
                 p->vel.x = mulscale(p->vel.x, p->runspeed - 0x1400, 16);
                 p->vel.y = mulscale(p->vel.y, p->runspeed - 0x1400, 16);
@@ -5359,9 +5357,9 @@ HORIZONLY:
 
         int moveResult = clipmove_old(&p->pos.x, &p->pos.y,
             &p->pos.z, &p->cursectnum,
-            p->vel.x, p->vel.y, PLAYER_WALLDIST, PMINHEIGHT, (psectlotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : PLAYER_STEP_HEIGHT, CLIPMASK0);
+            p->vel.x, p->vel.y, PLAYER_WALLDIST, PMINHEIGHT, (sectorLotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : PLAYER_STEP_HEIGHT, CLIPMASK0);
 
-        if (p->jetpack_on == 0 && psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER && shrunk)
+        if (p->jetpack_on == 0 && sectorLotag != ST_2_UNDERWATER && sectorLotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
 
         oldnet_predictablestate = false;
@@ -5374,34 +5372,34 @@ HORIZONLY:
     {
         if (s->xvel > 16)
         {
-            if (psectlotag != ST_1_ABOVE_WATER && psectlotag != ST_2_UNDERWATER && p->on_ground)
+            if (sectorLotag != ST_1_ABOVE_WATER && sectorLotag != ST_2_UNDERWATER && p->on_ground)
             {
                 p->pycount += 52;
                 p->pycount &= 2047;
                 p->pyoff = klabs(s->xvel * sintable[p->pycount]) / 1596;
             }
         }
-        else if (psectlotag != ST_2_UNDERWATER && psectlotag != ST_1_ABOVE_WATER)
+        else if (sectorLotag != ST_2_UNDERWATER && sectorLotag != ST_1_ABOVE_WATER)
             p->pyoff = 0;
     }
 
     // RBG***
     setspritez_old(playerSprite, p->pos.x, p->pos.y, p->pos.z + PHEIGHT);
 
-    if (psectlotag < 3)
+    if (p->cursectnum >= 0 && sectorLotag < 3)
     {
-        psect = s->sectnum;
-        if (ud.clipping == 0 && sector[psect].lotag == ST_31_TWO_WAY_TRAIN)
+        auto const pSector = (usectorptr_t)&sector[p->cursectnum];
+
+        // TRAIN_SECTOR_TO_SE_INDEX
+        if ((!ud.clipping && pSector->lotag == ST_31_TWO_WAY_TRAIN) &&
+            ((unsigned)pSector->hitag < MAXSPRITES && sprite[pSector->hitag].xvel && actor[pSector->hitag].t_data[0] == 0))
         {
-            if (sprite[sector[psect].hitag].xvel && actor[sector[psect].hitag].t_data[0] == 0)
-            {
-                P_QuickKill(p);
-                return;
-            }
+            P_QuickKill(p);
+            return;
         }
     }
 
-    if (p->cursectnum >= 0 && trueFloorDist < PHEIGHT && p->on_ground && psectlotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
+    if (p->cursectnum >= 0 && trueFloorDist < PHEIGHT && p->on_ground && sectorLotag != 1 && shrunk == 0 && sector[p->cursectnum].lotag == ST_1_ABOVE_WATER)
         if (!A_CheckSoundPlaying(playerSprite, DUKE_ONWATER))
             A_PlaySound(DUKE_ONWATER, playerSprite);
 
@@ -5428,15 +5426,15 @@ HORIZONLY:
                 return;
             }
         }
-        else if (klabs(floorZ - ceilZ) < (32 << 8) && isanunderoperator(sector[psect].lotag))
-            activatebysector(psect, playerSprite);
+        else if (klabs(floorZ - ceilZ) < (32 << 8) && isanunderoperator(sector[p->cursectnum].lotag))
+            activatebysector(p->cursectnum, playerSprite);
     }
 
     // center_view
     if (p->return_to_center > 0)
         p->return_to_center--;
 
-    if (TEST_SYNC_KEY(sb_snum, SK_CENTER_VIEW) || p->hard_landing)
+    if (TEST_SYNC_KEY(playerBits, SK_CENTER_VIEW) || p->hard_landing)
     {
         Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
         X_OnEvent(EVENT_RETURNTOCENTER, playerSprite, snum, -1);
@@ -5446,7 +5444,7 @@ HORIZONLY:
         }
     }
 
-    if (TEST_SYNC_KEY(sb_snum, SK_LOOK_UP))
+    if (TEST_SYNC_KEY(playerBits, SK_LOOK_UP))
     {
         // look_up
         Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -5454,12 +5452,12 @@ HORIZONLY:
         if (Gv_GetVar(sysVarIDs.RETURN, playerSprite, snum) == 0)
         {
             p->return_to_center = 9;
-            if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz += fix16_from_int(12);     // running
+            if (TEST_SYNC_KEY(playerBits, SK_RUN)) p->q16horiz += fix16_from_int(12);     // running
             p->q16horiz += fix16_from_int(12);
             // horizRecenter here?
         }
     }
-    else if (TEST_SYNC_KEY(sb_snum, SK_LOOK_DOWN))
+    else if (TEST_SYNC_KEY(playerBits, SK_LOOK_DOWN))
     {
         // look_down
         Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -5467,12 +5465,12 @@ HORIZONLY:
         if (Gv_GetVar(sysVarIDs.RETURN, playerSprite, snum) == 0)
         {
             p->return_to_center = 9;
-            if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz -= fix16_from_int(12);
+            if (TEST_SYNC_KEY(playerBits, SK_RUN)) p->q16horiz -= fix16_from_int(12);
             p->q16horiz -= fix16_from_int(12);
             // horizRecenter here?
         }
     }
-    else if (TEST_SYNC_KEY(sb_snum, SK_AIM_UP))
+    else if (TEST_SYNC_KEY(playerBits, SK_AIM_UP))
     {
         // aim_up
         Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -5480,12 +5478,12 @@ HORIZONLY:
         if (Gv_GetVar(sysVarIDs.RETURN, playerSprite, snum) == 0)
         {
             // running
-            if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz += fix16_from_int(6);
+            if (TEST_SYNC_KEY(playerBits, SK_RUN)) p->q16horiz += fix16_from_int(6);
             p->q16horiz += fix16_from_int(6);
             // horizRecenter here?
         }
     }
-    else if (TEST_SYNC_KEY(sb_snum, SK_AIM_DOWN))
+    else if (TEST_SYNC_KEY(playerBits, SK_AIM_DOWN))
     {
         // aim_down
         Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
@@ -5493,14 +5491,14 @@ HORIZONLY:
         if (Gv_GetVar(sysVarIDs.RETURN, playerSprite, snum) == 0)
         {
             // running
-            if (TEST_SYNC_KEY(sb_snum, SK_RUN)) p->q16horiz -= fix16_from_int(6);
+            if (TEST_SYNC_KEY(playerBits, SK_RUN)) p->q16horiz -= fix16_from_int(6);
             p->q16horiz -= fix16_from_int(6);
             // horizRecenter here?
         }
     }
 
     if (p->return_to_center > 0)
-        if (TEST_SYNC_KEY(sb_snum, SK_LOOK_UP) == 0 && TEST_SYNC_KEY(sb_snum, SK_LOOK_DOWN) == 0)
+        if (TEST_SYNC_KEY(playerBits, SK_LOOK_UP) == 0 && TEST_SYNC_KEY(playerBits, SK_LOOK_DOWN) == 0)
         {
             p->q16horiz += F16(33) - fix16_div(p->q16horiz, F16(3));
             // horizRecenter here?
@@ -5512,7 +5510,7 @@ HORIZONLY:
         p->q16horiz -= fix16_from_int(p->hard_landing << 4);
     }
 
-    p->q16horiz += syn->q16horz;
+    p->q16horiz += pInput->q16horz;
     p->q16horiz = fix16_clamp(p->q16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
     p->q16horizoff = fix16_clamp(p->q16horizoff, F16(HORIZ_MIN), F16(HORIZ_MAX));
 
