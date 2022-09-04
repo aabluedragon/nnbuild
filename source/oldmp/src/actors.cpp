@@ -2809,10 +2809,6 @@ static void G_MoveWeapons(void)
                     projZvel = s->zvel>>1;
                 }
 
-                davect = s->xyz;
-
-                A_GetZLimits(spriteNum);
-
                 if (actor[spriteNum].projectile.trail >= 0)
                 {
                     for (int32_t f = 0; f <= actor[spriteNum].projectile.tnum; f++)
@@ -2830,6 +2826,8 @@ static void G_MoveWeapons(void)
                 for (int32_t projMoveCnt = 1; projMoveCnt <= actor[spriteNum].projectile.velmult; projMoveCnt++)
                 {
                     davect = s->xyz;
+                    A_GetZLimits(spriteNum);
+
                     j = A_MoveSprite(spriteNum,
                                      (projVel * (sintable[(s->ang + 512) & 2047])) >> 14,
                                      (projVel * (sintable[s->ang & 2047])) >> 14, projZvel, CLIPMASK1);
