@@ -1422,6 +1422,9 @@ static void G_PrintCoords(int snum)
     Bsprintf(tempbuf, "F/S Vel= (%d,%d)", g_player[snum].inputBits->fvel, g_player[snum].inputBits->svel);
     printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
 
+    Bsprintf(tempbuf, "SPR X/Zvel= (%d,%d)", TrackerCast(sprite[p->i].xvel), TrackerCast(sprite[p->i].zvel));
+    printext256(x, y += 9, COLOR_WHITE, -1, tempbuf, tsize);
+
     Bsprintf(tempbuf, "RANDOMSEED= %d", randomseed);
     printext256(x, y += 18, COLOR_WHITE, -1, tempbuf, tsize);
 
