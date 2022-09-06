@@ -86,7 +86,7 @@ typedef struct {
 
     short sbs, lowsprite, highsprite, sound_pitch;
 
-    short cursectnum, look_ang, last_extra, subweapon;
+    short cursectnum, look_ang, olook_ang, last_extra, subweapon;
     short ammo_amount[MAX_WEAPONS], wackedbyactor, frag, fraggedself;
 
     short curr_weapon, last_weapon, last_used_weapon, wantweaponfire;

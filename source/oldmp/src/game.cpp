@@ -2946,7 +2946,7 @@ static void G_CalculateCameraInterpolation(DukePlayer_t *p, vec3_t* pos, fix16_t
     *q16ang = p->oq16ang + mulscale16(((p->q16ang + F16(1024) - p->oq16ang) & 0x7FFFFFF) - F16(1024), smoothratio);
     *q16horiz = p->oq16horiz + p->oq16horizoff + mulscale16((p->q16horiz + p->q16horizoff - p->oq16horiz - p->oq16horizoff), smoothratio);
     *sectnum = p->cursectnum;
-    *q16ang += fix16_from_int(p->look_ang);
+    *q16ang += fix16_from_int(p->olook_ang) + mulscale16(fix16_from_int(((p->look_ang + 1024 - p->olook_ang) & 2047) - 1024), smoothratio);
 
     if (p->over_shoulder_on == 0)
     {

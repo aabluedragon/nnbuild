@@ -4732,10 +4732,15 @@ void P_ProcessInput(int snum)
             p->rotscrnang -= ksgn(p->rotscrnang);
     }
 
-    p->look_ang -= (p->look_ang >> 2);
+    p->olook_ang = p->look_ang;
 
-    if (p->look_ang && !(p->look_ang >> 2))
-        p->look_ang -= ksgn(p->look_ang);
+    if (p->look_ang)
+    {
+        p->look_ang -= (p->look_ang >> 2);
+
+        if (p->look_ang && !(p->look_ang >> 2))
+            p->look_ang -= ksgn(p->look_ang);
+    }
 
     if (TEST_SYNC_KEY(playerBits, SK_LOOK_LEFT))
     {
