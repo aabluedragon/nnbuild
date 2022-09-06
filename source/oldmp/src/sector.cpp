@@ -2650,17 +2650,19 @@ void P_HandleSharedKeys(int snum)
         p->return_to_center = 9;
 
     if (TEST_SYNC_KEY(sb_snum, SK_QUICK_KICK) && p->quick_kick == 0)
-        if (p->curr_weapon != KNEE_WEAPON || p->kickback_pic == 0)
+    {
+        if (p->curr_weapon != KNEE_WEAPON || p->kickback_pic == 0 || DMFLAGS_TEST(DMFLAG_ALLOWDOUBLEKICK))
         {
-            Gv_SetVar(sysVarIDs.RETURN,0,g_player[snum].ps->i,snum);
-            X_OnEvent(EVENT_QUICKKICK,g_player[snum].ps->i,snum, -1);
-            if (Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum) == 0)
+            Gv_SetVar(sysVarIDs.RETURN, 0, g_player[snum].ps->i, snum);
+            X_OnEvent(EVENT_QUICKKICK, g_player[snum].ps->i, snum, -1);
+            if (Gv_GetVar(sysVarIDs.RETURN, g_player[snum].ps->i, snum) == 0)
             {
                 p->quick_kick = 14;
                 if (p->fta == 0 || p->ftq == QUOTE_MIGHTY_FOOT)
-                    P_DoQuote(QUOTE_MIGHTY_FOOT,p);
+                    P_DoQuote(QUOTE_MIGHTY_FOOT, p);
             }
         }
+    }
 
     uint32_t weaponNum = sb_snum & ((15u << SK_WEAPON_BITS) | BIT(SK_STEROIDS) | BIT(SK_NIGHTVISION) | BIT(SK_MEDKIT) | BIT(SK_QUICK_KICK) | \
         BIT(SK_HOLSTER) | BIT(SK_INV_LEFT) | BIT(SK_PAUSE) | BIT(SK_HOLODUKE) | BIT(SK_JETPACK) | BIT(SK_INV_RIGHT) | \

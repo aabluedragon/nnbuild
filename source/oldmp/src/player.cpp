@@ -3826,7 +3826,7 @@ static void P_ProcessWeapon(int playerNum)
 
                 case KNEE_WEAPON:
                     X_OnEvent(EVENT_FIREWEAPON, p->i, playerNum, -1);
-                    if (p->quick_kick == 0)
+                    if (p->quick_kick == 0 || DMFLAGS_TEST(DMFLAG_ALLOWDOUBLEKICK))
                     {
                         (*kb) = 1;
                         if (aplWeaponInitialSound[p->curr_weapon][playerNum])

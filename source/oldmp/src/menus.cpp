@@ -5097,6 +5097,7 @@ VOLUME_ALL_40x:
                     { "Disable Player IDs",         DMFLAG_NOPLAYERIDS },
                     { "Disable Weapon Icons",       DMFLAG_NOWEAPONICONS },
                     { "Disable DM Weapon Spawns",   DMFLAG_NODMWEAPONSPAWNS },
+                    { "Enable V1.3D Double Kick",   DMFLAG_ALLOWDOUBLEKICK },
                     { "-",                          0 },
                     { "Accept",                     0 },
                 };
