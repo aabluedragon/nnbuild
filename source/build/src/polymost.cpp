@@ -108,7 +108,7 @@ static int32_t drawpoly_srepeat = 0, drawpoly_trepeat = 0;
 #define BUFFER_OFFSET(bytes) (GLintptr) ((GLubyte*) NULL + (bytes))
 // these cvars are never used directly in rendering -- only when glinit() is called/renderer reset
 // We do this because we don't want to accidentally overshoot our existing buffer's bounds
-static int32_t persistentStreamBuffer = r_persistentStreamBuffer;
+static bool persistentStreamBuffer = !!r_persistentStreamBuffer;
 static int32_t drawpolyVertsBufferLength = r_drawpolyVertsBufferLength;
 GLuint drawpolyVertsID = 0;
 static GLint drawpolyVertsOffset = 0;
@@ -197,7 +197,7 @@ static vec2f_t polymost1Clamp = { 0.f, 0.f };
 static GLint polymost1ShadeLoc = -1;
 static float polymost1Shade = 0.f;
 static GLint polymost1NumShadesLoc = -1;
-static float polymost1NumShades = 64.f;
+static vec2f_t polymost1NumShades = { 64.f, 1.f / 64.f };
 static GLint polymost1VisFactorLoc = -1;
 static float polymost1VisFactor = 128.f;
 static GLint polymost1FogEnabledLoc = -1;
@@ -211,11 +211,7 @@ static float polymost1UseDetailMapping = 0.f;
 static GLint polymost1UseGlowMappingLoc = -1;
 static float polymost1UseGlowMapping = 0.f;
 static GLint polymost1NPOTEmulationLoc = -1;
-static float polymost1NPOTEmulation = 0.f;
-static GLint polymost1NPOTEmulationFactorLoc = -1;
-static float polymost1NPOTEmulationFactor = 1.f;
-static GLint polymost1NPOTEmulationXOffsetLoc = -1;
-static float polymost1NPOTEmulationXOffset = 0.f;
+static vec4f_t polymost1NPOTEmulation = { 0.f, 1.f, 0.f, 1.f };
 static GLint polymost1RotMatrixLoc = -1;
 static float polymost1RotMatrix[16] = { 1.f, 0.f, 0.f, 0.f,
                                         0.f, 1.f, 0.f, 0.f,
@@ -223,6 +219,8 @@ static float polymost1RotMatrix[16] = { 1.f, 0.f, 0.f, 0.f,
                                         0.f, 0.f, 0.f, 1.f };
 static GLint polymost1ShadeInterpolateLoc = -1;
 static float polymost1ShadeInterpolate = 1.f;
+static GLint polymost1ColorCorrectionLoc = -1;
+vec4f_t g_glColorCorrection = { 1.f, 1.f, 1.f, 0.f };
 
 static inline float float_trans(uint32_t maskprops, uint8_t blend)
 {
@@ -344,7 +342,7 @@ void gltexapplyprops(void)
 
             bind_2d_texture(pth->glpic, filter);
 
-            if (r_fullbrights && pth->flags & PTH_HASFULLBRIGHT)
+            if (pth->flags & PTH_HASFULLBRIGHT)
                 bind_2d_texture(pth->ofb->glpic, filter);
         }
     }
@@ -555,27 +553,31 @@ static void Polymost_DetermineTextureFormatSupport(void);
 // reset vertex pointers to polymost default
 void polymost_resetVertexPointers()
 {
-    buildgl_outputDebugMessage(3, "polymost_resetVertexPointers()");
-    buildgl_resetStateAccounting();
     buildgl_bindBuffer(GL_ARRAY_BUFFER, drawpolyVertsID);
-
-    glVertexPointer(3, GL_FLOAT, 5*sizeof(float), 0);
-    glTexCoordPointer(2, GL_FLOAT, 5*sizeof(float), (GLvoid*) (3*sizeof(float)));
+    
+    glVertexPointer(3, GL_FLOAT, 5 * sizeof(float), 0);
+    glTexCoordPointer(2, GL_FLOAT, 5 * sizeof(float), (GLvoid*)(3 * sizeof(float)));
 
 #ifdef USE_GLEXT
     if (r_detailmapping)
     {
         glClientActiveTexture(GL_TEXTURE3);
-        glTexCoordPointer(2, GL_FLOAT, 5*sizeof(float), (GLvoid*) (3*sizeof(float)));
+        glTexCoordPointer(2, GL_FLOAT, 5 * sizeof(float), (GLvoid*)(3 * sizeof(float)));
     }
     if (r_glowmapping)
     {
         glClientActiveTexture(GL_TEXTURE4);
-        glTexCoordPointer(2, GL_FLOAT, 5*sizeof(float), (GLvoid*) (3*sizeof(float)));
+        glTexCoordPointer(2, GL_FLOAT, 5 * sizeof(float), (GLvoid*)(3 * sizeof(float)));
     }
     glClientActiveTexture(GL_TEXTURE0);
 #endif
+}
 
+void polymost_resetState()
+{
+    buildgl_outputDebugMessage(3, "polymost_resetState()");
+    buildgl_resetStateAccounting();
+    polymost_resetVertexPointers();
     polymost_resetProgram();
 }
 
@@ -640,10 +642,9 @@ static void polymost_setCurrentShaderProgram(uint32_t programID)
     polymost1UseDetailMappingLoc = glGetUniformLocation(polymost1CurrentShaderProgramID, "u_useDetailMapping");
     polymost1UseGlowMappingLoc = glGetUniformLocation(polymost1CurrentShaderProgramID, "u_useGlowMapping");
     polymost1NPOTEmulationLoc = glGetUniformLocation(polymost1CurrentShaderProgramID, "u_npotEmulation");
-    polymost1NPOTEmulationFactorLoc = glGetUniformLocation(polymost1CurrentShaderProgramID, "u_npotEmulationFactor");
-    polymost1NPOTEmulationXOffsetLoc = glGetUniformLocation(polymost1CurrentShaderProgramID, "u_npotEmulationXOffset");
     polymost1RotMatrixLoc = glGetUniformLocation(polymost1CurrentShaderProgramID, "u_rotMatrix");
     polymost1ShadeInterpolateLoc = glGetUniformLocation(polymost1CurrentShaderProgramID, "u_shadeInterpolate");
+    polymost1ColorCorrectionLoc = glGetUniformLocation(polymost1CurrentShaderProgramID, "u_colorCorrection");
 
     //set the uniforms to the current values
     glUniform4f(polymost1TexturePosSizeLoc, polymost1TexturePosSize.x, polymost1TexturePosSize.y, polymost1TexturePosSize.z, polymost1TexturePosSize.w);
@@ -652,18 +653,25 @@ static void polymost_setCurrentShaderProgram(uint32_t programID)
     glUniform2f(polymost1PalswapSizeLoc, polymost1PalswapInnerSize.x, polymost1PalswapInnerSize.y);
     glUniform2f(polymost1ClampLoc, polymost1Clamp.x, polymost1Clamp.y);
     glUniform1f(polymost1ShadeLoc, polymost1Shade);
-    glUniform1f(polymost1NumShadesLoc, polymost1NumShades);
+    glUniform2f(polymost1NumShadesLoc, polymost1NumShades.x, polymost1NumShades.y);
     glUniform1f(polymost1VisFactorLoc, polymost1VisFactor);
     glUniform1f(polymost1FogEnabledLoc, polymost1FogEnabled);
     glUniform1f(polymost1UseColorOnlyLoc, polymost1UseColorOnly);
     glUniform1f(polymost1UsePaletteLoc, polymost1UsePalette);
     glUniform1f(polymost1UseDetailMappingLoc, polymost1UseDetailMapping);
     glUniform1f(polymost1UseGlowMappingLoc, polymost1UseGlowMapping);
-    glUniform1f(polymost1NPOTEmulationLoc, polymost1NPOTEmulation);
-    glUniform1f(polymost1NPOTEmulationFactorLoc, polymost1NPOTEmulationFactor);
-    glUniform1f(polymost1NPOTEmulationXOffsetLoc, polymost1NPOTEmulationXOffset);
+    glUniform4f(polymost1NPOTEmulationLoc, polymost1NPOTEmulation.x, polymost1NPOTEmulation.y, polymost1NPOTEmulation.z, polymost1NPOTEmulation.w);
     glUniformMatrix4fv(polymost1RotMatrixLoc, 1, false, polymost1RotMatrix);
     glUniform1f(polymost1ShadeInterpolateLoc, polymost1ShadeInterpolate);
+    glUniform4f(polymost1ColorCorrectionLoc, g_glColorCorrection.x, g_glColorCorrection.y, g_glColorCorrection.z, g_glColorCorrection.w);
+}
+
+void polymost_setColorCorrection(vec4f_t const &colorCorrection)
+{
+    if (!gl.currentShaderProgramID || gl.currentShaderProgramID != polymost1CurrentShaderProgramID)
+        return;
+
+    glUniform4f(polymost1ColorCorrectionLoc, colorCorrection.x, colorCorrection.y, colorCorrection.z, colorCorrection.w);
 }
 
 void polymost_setTexturePosSize(vec4f_t const &texturePosSize)
@@ -720,14 +728,12 @@ char polymost_getClamp()
 
 void polymost_setClamp(char clamp)
 {
-    char clampx = clamp&1;
-    char clampy = clamp>>1;
-    if (gl.currentShaderProgramID != polymost1CurrentShaderProgramID ||
-        (clampx == polymost1Clamp.x && clampy == polymost1Clamp.y))
+    vec2f_t clampy = { float(clamp & 1), float(clamp >> 1) };
+    
+    if (gl.currentShaderProgramID != polymost1CurrentShaderProgramID || clampy == polymost1Clamp)
         return;
 
-    polymost1Clamp.x = clampx;
-    polymost1Clamp.y = clampy;
+    polymost1Clamp = clampy;
     glUniform2f(polymost1ClampLoc, polymost1Clamp.x, polymost1Clamp.y);
 }
 
@@ -752,8 +758,8 @@ static void polymost_setShade(int32_t shade)
     if (numshades != lastNumShades)
     {
         lastNumShades = numshades;
-        polymost1NumShades = numshades;
-        glUniform1f(polymost1NumShadesLoc, polymost1NumShades);
+        polymost1NumShades = { (float)numshades, 1.f / numshades };
+        glUniform2f(polymost1NumShadesLoc, polymost1NumShades.x, polymost1NumShades.y);
     }
 }
 
@@ -826,24 +832,20 @@ void polymost_useGlowMapping(char useGlowMapping)
 
 void polymost_npotEmulation(char npotEmulation, float factor, float xOffset)
 {
-    if (gl.currentShaderProgramID != polymost1CurrentShaderProgramID || npotEmulation == polymost1NPOTEmulation)
+    if (gl.currentShaderProgramID != polymost1CurrentShaderProgramID || npotEmulation == polymost1NPOTEmulation.z)
         return;
 
-    polymost1NPOTEmulation = npotEmulation;
-    glUniform1f(polymost1NPOTEmulationLoc, polymost1NPOTEmulation);
-    polymost1NPOTEmulationFactor = factor;
-    glUniform1f(polymost1NPOTEmulationFactorLoc, polymost1NPOTEmulationFactor);
-    polymost1NPOTEmulationXOffset = xOffset;
-    glUniform1f(polymost1NPOTEmulationXOffsetLoc, polymost1NPOTEmulationXOffset);
+    polymost1NPOTEmulation = { xOffset, factor, (float)npotEmulation, 1.f/factor };
+    glUniform4f(polymost1NPOTEmulationLoc, polymost1NPOTEmulation.x, polymost1NPOTEmulation.y, polymost1NPOTEmulation.z, polymost1NPOTEmulation.w);
 }
 
 void polymost_shadeInterpolate(int32_t shadeInterpolate)
 {
-    if (gl.currentShaderProgramID == polymost1CurrentShaderProgramID)
-    {
-        polymost1ShadeInterpolate = shadeInterpolate;
-        glUniform1f(polymost1ShadeInterpolateLoc, polymost1ShadeInterpolate);
-    }
+    if (gl.currentShaderProgramID != polymost1CurrentShaderProgramID || shadeInterpolate == polymost1ShadeInterpolate)
+        return;
+    
+    polymost1ShadeInterpolate = shadeInterpolate;
+    glUniform1f(polymost1ShadeInterpolateLoc, polymost1ShadeInterpolate);
 }
 
 static void polymost_bindPth(pthtyp const * const pPth)
@@ -889,7 +891,7 @@ void polymost_initdrawpoly(void)
 #endif
 
     drawpolyVertsBufferLength = r_drawpolyVertsBufferLength;
-    persistentStreamBuffer = r_persistentStreamBuffer;
+    persistentStreamBuffer = !!r_persistentStreamBuffer;
 
     drawpolyVertsOffset = 0;
     drawpolyVertsSubBufferIndex = 0;
@@ -1172,7 +1174,7 @@ void polymost_glinit()
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-    polymost_resetVertexPointers();
+    polymost_resetState();
 
     texcache_init();
     texcache_openfiles();
@@ -1191,7 +1193,7 @@ void polymost_glinit()
 void polymost_init()
 {
     lastbasepal = -1;
-    polymost_resetVertexPointers();
+    polymost_resetState();
 }
 
 ////////// VISIBILITY FOG ROUTINES //////////
@@ -2233,10 +2235,10 @@ void gloadtile_art(int32_t dapic, int32_t dapal, int32_t tintpalnum, int32_t das
         }
         uploadtexture(doalloc, siz, GL_BGRA, pic, tsiz,
                       dameth | DAMETH_ARTIMMUNITY |
-                      (dapic >= MAXUSERTILES ? (DAMETH_NOTEXCOMPRESS|DAMETH_NODOWNSIZE) : 0) | /* never process these short-lived tiles */
-                      (hasfullbright ? DAMETH_HASFULLBRIGHT : 0) |
-                      (npoty ? DAMETH_NPOTWALL : 0) |
-                      (hasalpha ? (DAMETH_HASALPHA|DAMETH_ONEBITALPHA) : 0));
+                      ((dapic >= MAXUSERTILES) * (DAMETH_NOTEXCOMPRESS|DAMETH_NODOWNSIZE)) | /* never process these short-lived tiles */
+                      (hasfullbright * DAMETH_HASFULLBRIGHT) |
+                      (npoty * DAMETH_NPOTWALL) |
+                      (hasalpha * (DAMETH_HASALPHA|DAMETH_ONEBITALPHA)));
 
         Xfree(pic);
     }
@@ -2597,8 +2599,8 @@ int32_t gloadtile_hi(int32_t dapic, int32_t dapalnum, int32_t facen, hicreplctyp
                           TO_DAMETH_NODOWNSIZE(hicr->flags) |
                           TO_DAMETH_NOTEXCOMPRESS(hicr->flags) |
                           TO_DAMETH_ARTIMMUNITY(hicr->flags) |
-                          (onebitalpha ? DAMETH_ONEBITALPHA : 0) |
-                          (hasalpha ? DAMETH_HASALPHA : 0));
+                          (onebitalpha * DAMETH_ONEBITALPHA) |
+                          (hasalpha * DAMETH_HASALPHA));
 
             Xfree(pic);
         }
@@ -2620,10 +2622,10 @@ int32_t gloadtile_hi(int32_t dapic, int32_t dapalnum, int32_t facen, hicreplctyp
     pth->effects = effect;
     pth->flags = TO_PTH_CLAMPED(dameth) | TO_PTH_NOTRANSFIX(dameth) |
                  PTH_HIGHTILE | ((facen>0) * PTH_SKYBOX) |
-                 (onebitalpha ? PTH_ONEBITALPHA : 0) |
-                 (hasalpha ? PTH_HASALPHA : 0) |
-                 ((hicr->flags & HICR_FORCEFILTER) ? PTH_FORCEFILTER : 0) |
-                 (indexed ? PTH_INDEXED : 0);
+                 (onebitalpha * PTH_ONEBITALPHA) |
+                 (hasalpha * PTH_HASALPHA) |
+                 ((!!(hicr->flags & HICR_FORCEFILTER)) * PTH_FORCEFILTER) |
+                 (indexed * PTH_INDEXED);
     pth->skyface = facen;
     pth->hicr = hicr;
     pth->siz = tsiz;
@@ -2753,7 +2755,7 @@ int32_t polymost_spriteHasTranslucency(tspritetype const * const tspr)
     if (!usehightile)
         return false;
 
-    uint8_t pal = tspr->shade;
+    uint8_t pal = tspr->pal;
     if (palookup[pal] == NULL)
         pal = 0;
 
@@ -3126,10 +3128,9 @@ void polymost_startBufferedDrawing(int nn)
 
 void polymost_bufferVert(vec3f_t const v, vec2f_t const t)
 {
-    uint32_t off = persistentStreamBuffer ? drawpolyVertsOffset : 0;
-    *(vec3f_t *)(&drawpolyVerts[(off + drawpolyVertsCnt) * 5]) = v;
-    *(vec2f_t*)(&drawpolyVerts[(off + drawpolyVertsCnt) * 5 + 3]) = t;
-    drawpolyVertsCnt++;
+    uint32_t const off = (persistentStreamBuffer * drawpolyVertsOffset + drawpolyVertsCnt++) * 5;
+    *(vec3f_t *)(&drawpolyVerts[off]) = v;
+    *(vec2f_t*)(&drawpolyVerts[off+3]) = t;
 }    
 
 void polymost_finishBufferedDrawing(int mode)
@@ -3671,12 +3672,12 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
 
         polymost_setFogEnabled(false);
 
-        buildgl_setDepthFunc(GL_EQUAL);
+        buildgl_setEnabled(GL_ALPHA_TEST);
 
         polymost_drawpoly(dpxy, n, method_);
 
-        buildgl_setDepthFunc(GL_LEQUAL);
-
+        buildgl_setDisabled(GL_ALPHA_TEST);
+        
         if (!nofog)
             polymost_setFogEnabled(true);
 
@@ -9753,7 +9754,6 @@ int32_t polymost_printtext256(int32_t xpos, int32_t ypos, int16_t col, int16_t b
     polymostSet2dView();	// disables blending, texturing, and depth testing
 
     buildgl_bindSamplerObject(0, 0);
-    buildgl_setDisabled(GL_ALPHA_TEST);
     glDepthMask(GL_FALSE);	// disable writing to the z-buffer
 
 //    glPushAttrib(GL_POLYGON_BIT|GL_ENABLE_BIT);
@@ -9763,31 +9763,32 @@ int32_t polymost_printtext256(int32_t xpos, int32_t ypos, int16_t col, int16_t b
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     lastglpolygonmode = 0;
 
-    int const namelen = Bstrlen(name);
-    
     if (backcol >= 0)
     {
+        int const c = Bstrlen(name);
+
         glColor4ub(b.r,b.g,b.b,255);
 
         glBegin(GL_QUADS);
 
         glVertex2i(xpos,ypos);
         glVertex2i(xpos,ypos+(fontsize?6:8));
-        glVertex2i(xpos+(namelen<<(3-fontsize)), ypos+(fontsize ? 6 : 8));
-        glVertex2i(xpos+(namelen<<(3-fontsize)), ypos);
+        glVertex2i(xpos+(c<<(3-fontsize)), ypos+(fontsize ? 6 : 8));
+        glVertex2i(xpos+(c<<(3-fontsize)), ypos);
 
         glEnd();
     }
 
+    buildgl_setEnabled(GL_ALPHA_TEST);
     buildgl_setEnabled(GL_BLEND);
     glColor4ub(p.r,p.g,p.b,255);
 
     vec2f_t const tc = { fontsize ? (4.f / 256.f) : (8.f / 256.f),
                          fontsize ? (6.f / 128.f) : (8.f / 128.f) };
 
-    polymost_startBufferedDrawing(namelen * 4);
+    glBegin(GL_QUADS);
 
-    for (bssize_t c = 0; name[c]; ++c)
+    for (bssize_t c=0; name[c]; ++c)
     {
         if (name[c] == '^' && isdigit(name[c + 1]))
         {
@@ -9820,14 +9821,22 @@ int32_t polymost_printtext256(int32_t xpos, int32_t ypos, int16_t col, int16_t b
         vec2f_t const t = { (float)(name[c] % 32) * (1.0f / 32.f),
                             (float)((name[c] / 32) + (fontsize * 8)) * (1.0f / 16.f) };
 
-        polymost_bufferVert(vec3f_t { (float)xpos, (float)ypos, 0.f }, t);
-        polymost_bufferVert(vec3f_t { (float)xpos + (8 >> fontsize), (float)ypos, 0.f }, { t.x + tc.x, t.y });
-        polymost_bufferVert(vec3f_t { (float)(xpos + (8 >> fontsize)), (float)(ypos + (fontsize ? 6 : 8)), 0.f }, { t.x + tc.x, t.y + tc.y });
-        polymost_bufferVert(vec3f_t { (float)xpos, (float)(ypos + (fontsize ? 6 : 8)), 0.f }, { t.x, t.y + tc.y });
+        glTexCoord2f(t.x, t.y);
+        glVertex2i(xpos, ypos);
+
+        glTexCoord2f(t.x + tc.x, t.y);
+        glVertex2i(xpos + (8 >> fontsize), ypos);
+
+        glTexCoord2f(t.x + tc.x, t.y + tc.y);
+        glVertex2i(xpos + (8 >> fontsize), ypos + (fontsize ? 6 : 8));
+
+        glTexCoord2f(t.x, t.y + tc.y);
+        glVertex2i(xpos, ypos + (fontsize ? 6 : 8));
+
         xpos += (8>>fontsize);
     }
 
-    polymost_finishBufferedDrawing(GL_QUADS);
+    glEnd();
 
     glDepthMask(GL_TRUE);	// re-enable writing to the z-buffer
 

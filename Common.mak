@@ -304,7 +304,7 @@ endif
 
 ##### Toggles
 
-#  CPLUSPLUS - 1 := enable C++ building
+#  CPLUSPLUS - 1 := enable building C source as C++
 #  RELEASE - 1 := no debugging
 #  FORCEDEBUG:
 #    1 := Include debug symbols even when generating release code.
@@ -458,7 +458,7 @@ endif
 ##### Instantiate variables
 
 COMMONFLAGS :=
-COMPILERFLAGS := -funsigned-char -frounding-math
+COMPILERFLAGS := -funsigned-char
 
 CSTD := -std=gnu11
 CXXSTD := -std=gnu++14
@@ -632,13 +632,11 @@ ifeq (0,$(FORCEDEBUG))
 else
     COMPILERFLAGS += -DDEBUGGINGAIDS=$(FORCEDEBUG)
 
-    ifeq (2,$(FORCEDEBUG))
-        ifneq (0,$(CLANG))
+    ifneq (0,$(CLANG))
+        COMMONFLAGS += $(ASAN_FLAGS)
+    else ifneq (,$(filter 1 2 3 4 5 6,$(GCC_MAJOR)))
+        ifneq (,$(filter 0 1,$(GCC_MINOR)))
             COMMONFLAGS += $(ASAN_FLAGS)
-        else ifneq (,$(filter 1 2 3 4 5 6,$(GCC_MAJOR)))
-            ifneq (,$(filter 0 1,$(GCC_MINOR)))
-                COMMONFLAGS += $(ASAN_FLAGS)
-            endif
         endif
     endif
 endif
@@ -687,6 +685,10 @@ endif
 
 ifneq (0,$(KRANDDEBUG))
     COMMONFLAGS += -fno-inline -fno-inline-functions -fno-inline-functions-called-once
+endif
+
+ifneq (0,$(CLANG))
+    COMMONFLAGS += -frounding-math
 endif
 
 COMMONFLAGS += -fno-strict-aliasing -fno-threadsafe-statics $(F_JUMP_TABLES) $(F_NO_STACK_PROTECTOR)
@@ -992,9 +994,9 @@ ifneq (,$(wildcard .git))
             VC_REV := $(VC_REV)[$(VC_BRANCH)]
         endif
     endif
-    ifneq (,$(VC_REV)$(VC_HASH)$(VC_REV_CUSTOM))
-        REVFLAG := -DREV="r$(VC_REV)-$(VC_HASH)$(VC_REV_CUSTOM)"
-    endif
+endif
+ifneq (,$(VC_REV)$(VC_HASH)$(VC_REV_CUSTOM))
+    REVFLAG := -DREV="r$(VC_REV)-$(VC_HASH)$(VC_REV_CUSTOM)"
 endif
 
 ##### Allow standard environment variables to take precedence, to help package maintainers.

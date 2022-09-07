@@ -90,7 +90,7 @@ static char *voxfilenames[MAXVOXELS];
 char g_haveVoxels;
 //#define kloadvoxel loadvoxel
 
-int32_t novoxmips = 1;
+int32_t novoxmips = 0;
 
 //These variables need to be copied into BUILD
 #define MAXXSIZ 256
@@ -138,7 +138,7 @@ int32_t globalflags;
 
 float g_videoGamma = DEFAULT_GAMMA;
 float g_videoContrast = DEFAULT_CONTRAST;
-float g_videoBrightness = DEFAULT_BRIGHTNESS;
+float g_videoSaturation = DEFAULT_SATURATION;
 
 //Textured Map variables
 static char globalpolytype;
@@ -5007,8 +5007,8 @@ static void classicDrawVoxel(int32_t dasprx, int32_t daspry, int32_t dasprz, int
     j = getpalookup(mulscale21(globvis,i), dashade)<<8;
     setupdrawslab(ylookup[1], FP_OFF(palookup[dapal])+j);
 
-    j = 1310720;
-    //j *= min(daxscale,dayscale); j >>= 6;  //New hacks (for sized-down voxels)
+    j = 2097152;
+    j *= max(daxscale,dayscale); j >>= 5;  //New hacks (for sized-down voxels)
     for (k=0; k<MAXVOXMIPS; k++)
     {
         if (i < j) { i = k; break; }
@@ -5026,7 +5026,7 @@ static void classicDrawVoxel(int32_t dasprx, int32_t daspry, int32_t dasprz, int
     }
 
     char *davoxptr = (char *)voxoff[daindex][i];
-    if (!davoxptr && i > 0) { davoxptr = (char *)voxoff[daindex][0]; mip = i; i = 0;}
+    while (!davoxptr && i > 0) { davoxptr = (char *)voxoff[daindex][--i]; mip = i;}
     if (!davoxptr)
         return;
 
@@ -6687,54 +6687,218 @@ next_most:
             lwall[x] = startumost[x+windowxy1.x]-windowxy1.y;
             swall[x] = startdmost[x+windowxy1.x]-windowxy1.y;
         }
-        for (i=smostwallcnt-1; i>=0; i--)
+        if ((tspr->cstat & 48) == 16)
         {
-            j = smostwall[i];
-            if ((xb1[j] > rx) || (xb2[j] < lx)) continue;
-            if ((yp <= yb1[j]) && (yp <= yb2[j])) continue;
-            if (spritewallfront(tspr,(int32_t)thewall[j]) && ((yp <= yb1[j]) || (yp <= yb2[j]))) continue;
+            const int32_t xspan = tilesiz[tilenum].x;
+            //const int32_t yspan = tilesiz[tilenum].y;
+            const int32_t xv = tspr->xrepeat*sintable[(tspr->ang+2560+1536)&2047];
+            const int32_t yv = tspr->xrepeat*sintable[(tspr->ang+2048+1536)&2047];
 
-            const int32_t dalx2 = max(xb1[j],lx);
-            const int32_t darx2 = min(xb2[j],rx);
+            i = (xspan>>1) + off.x;
+            x1 = tspr->x-globalposx-mulscale16(xv,i); x2 = x1+mulscale16(xv,xspan);
+            y1 = tspr->y-globalposy-mulscale16(yv,i); y2 = y1+mulscale16(yv,xspan);
 
-            switch (smostwalltype[i])
+            vec2_t p1 = get_rel_coords(x1, y1);
+            vec2_t p2 = get_rel_coords(x2, y2);
+
+            if (p1.y <= 0 && p2.y <= 0)
+                return;
+
+            x1 += globalposx; y1 += globalposy;
+            x2 += globalposx; y2 += globalposy;
+
+            if (dmulscale32(p1.x, p2.y, -p2.x, p1.y) >= 0)  // If wall's NOT facing you
             {
-            case 0:
-                if (dalx2 <= darx2)
+                const vec2_t pt = p2;
+                p2 = p1;
+                p1 = pt;
+                i = x1, x1 = x2, x2 = i;
+                i = y1, y1 = y2, y2 = i;
+            }
+
+            for (i=smostwallcnt-1; i>=0; i--)
+            {
+                j = smostwall[i];
+
+                if (xb1[j] > rx || xb2[j] < lx)
+                    continue;
+
+                int32_t dalx2 = xb1[j];
+                int32_t darx2 = xb2[j];
+
+                if (max(p1.y,p2.y) > min(yb1[j],yb2[j]))
                 {
-                    if ((dalx2 == lx) && (darx2 == rx)) return;
-                    //clearbufbyte(&swall[dalx2],(darx2-dalx2+1)*sizeof(swall[0]),0L);
-                    for (x=dalx2; x<=darx2; x++) swall[x] = 0;
-                }
-                break;
-            case 1:
-                k = smoststart[i] - xb1[j];
-                x = dalx2;
-#ifdef CLASSIC_SLICE_BY_4
-                for (; x<=darx2-2; x+=2)
-                {
-                    if (smost[k+x] > lwall[x]) lwall[x] = smost[k+x];
-                    if (smost[k+x+1] > lwall[x+1]) lwall[x+1] = smost[k+x+1];
-                }
+                    if (min(p1.y,p2.y) > max(yb1[j],yb2[j]))
+                    {
+                        x = INT32_MIN;
+                    }
+                    else
+                    {
+                        x = thewall[j]; xp1 = wall[x].x; yp1 = wall[x].y;
+                        x = wall[x].point2; xp2 = wall[x].x; yp2 = wall[x].y;
+
+                        z1 = (xp2-xp1)*(y1-yp1) - (yp2-yp1)*(x1-xp1);
+                        z2 = (xp2-xp1)*(y2-yp1) - (yp2-yp1)*(x2-xp1);
+                        if ((z1 == 0) | (z2 == 0))
+                        {
+                            if ((xp2-xp1)*(tspr->y-yp1) == (tspr->x-xp1)*(yp2-yp1))
+                            {
+                                if (wall[thewall[j]].nextsector == tspr->sectnum)
+                                    x = INT32_MIN;
+                                else
+                                    x = INT32_MAX;
+                            }
+                            else
+                                x = (z1+z2);
+                        }
+                        else if ((z1^z2) >= 0)
+                            x = (z1+z2);
+                        else
+                        {
+                            z1 = (x2-x1)*(yp1-y1) - (y2-y1)*(xp1-x1);
+                            z2 = (x2-x1)*(yp2-y1) - (y2-y1)*(xp2-x1);
+
+                            if (((z1^z2) >= 0) | (z1 == 0) | (z2 == 0))
+                                x = -(z1+z2);
+                            else
+                            {
+                                if ((xp2-xp1)*(tspr->y-yp1) == (tspr->x-xp1)*(yp2-yp1))
+                                {
+                                    if (wall[thewall[j]].nextsector == tspr->sectnum)
+                                        x = INT32_MIN;
+                                    else
+                                        x = INT32_MAX;
+                                }
+                                else
+                                {
+                                    x = INT32_MAX;
+#if 0
+                                    //INTERSECTION!
+                                    x = (xp1-globalposx) + scale(xp2-xp1,z1,z1-z2);
+                                    y = (yp1-globalposy) + scale(yp2-yp1,z1,z1-z2);
+
+                                    yp1 = dmulscale14(x,cosviewingrangeglobalang,y,sinviewingrangeglobalang);
+
+                                    if (yp1 > 0)
+                                    {
+                                        xp1 = dmulscale14(y,cosglobalang,-x,singlobalang);
+
+                                        x = halfxdimen + scale(xp1,halfxdimen,yp1);
+                                        if (xp1 >= 0) x++;   //Fix for SIGNED divide
+
+                                        if (z1 < 0)
+                                            { if (dalx2 < x) dalx2 = x; }
+                                        else
+                                            { if (darx2 > x) darx2 = x; }
+                                        x = INT32_MIN+1;
+                                    }
+                                    else
+                                        x = INT32_MAX;
 #endif
-                for (; x<=darx2; x++)
-                    if (smost[k+x] > lwall[x]) lwall[x] = smost[k+x];
-                break;
-            case 2:
-                k = smoststart[i] - xb1[j];
-                x = dalx2;
+                                }
+                            }
+                        }
+                    }
+
+                    if (x < 0)
+                    {
+                        if (dalx2 < lx) dalx2 = lx;
+                        if (darx2 > rx) darx2 = rx;
+
+                        switch (smostwalltype[i])
+                        {
+                        case 0:
+                            if (dalx2 <= darx2)
+                            {
+                                if ((dalx2 == lx) && (darx2 == rx)) return;
+                                //clearbufbyte(&dwall[dalx2],(darx2-dalx2+1)*sizeof(dwall[0]),0L);
+                                for (k=dalx2; k<=darx2; k++) swall[k] = 0;
+                            }
+                            break;
+                        case 1:
+                            k = smoststart[i] - xb1[j];
+                            x = dalx2;
 #ifdef CLASSIC_SLICE_BY_4
-                for (; x<=darx2-4; x+=4)
-                {
-                    if (smost[k+x] < swall[x]) swall[x] = smost[k+x];
-                    if (smost[k+x+1] < swall[x+1]) swall[x+1] = smost[k+x+1];
-                    if (smost[k+x+2] < swall[x+2]) swall[x+2] = smost[k+x+2];
-                    if (smost[k+x+3] < swall[x+3]) swall[x+3] = smost[k+x+3];
-                }
+                            for (; x<=darx2-2; x+=2)
+                            {
+                                if (smost[k+x] > lwall[x]) lwall[x] = smost[k+x];
+                                if (smost[k+x+1] > lwall[x+1]) lwall[x+1] = smost[k+x+1];
+                            }
 #endif
-                for (; x<=darx2; x++)
-                    if (smost[k+x] < swall[x]) swall[x] = smost[k+x];
-                break;
+                            for (; x<=darx2; x++)
+                                if (smost[k+x] > lwall[x]) lwall[x] = smost[k+x];
+                            break;
+                        case 2:
+                            k = smoststart[i] - xb1[j];
+                            x = dalx2;
+#ifdef CLASSIC_SLICE_BY_4
+                            for (; x<=darx2-4; x+=4)
+                            {
+                                if (smost[k+x] < swall[x]) swall[x] = smost[k+x];
+                                if (smost[k+x+1] < swall[x+1]) swall[x+1] = smost[k+x+1];
+                                if (smost[k+x+2] < swall[x+2]) swall[x+2] = smost[k+x+2];
+                                if (smost[k+x+3] < swall[x+3]) swall[x+3] = smost[k+x+3];
+                            }
+#endif
+                            for (; x<=darx2; x++)
+                                if (smost[k+x] < swall[x]) swall[x] = smost[k+x];
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (i=smostwallcnt-1; i>=0; i--)
+            {
+                j = smostwall[i];
+                if ((xb1[j] > rx) || (xb2[j] < lx)) continue;
+                if ((yp <= yb1[j]) && (yp <= yb2[j])) continue;
+                if (spritewallfront(tspr,(int32_t)thewall[j]) && ((yp <= yb1[j]) || (yp <= yb2[j]))) continue;
+
+                const int32_t dalx2 = max(xb1[j],lx);
+                const int32_t darx2 = min(xb2[j],rx);
+
+                switch (smostwalltype[i])
+                {
+                case 0:
+                    if (dalx2 <= darx2)
+                    {
+                        if ((dalx2 == lx) && (darx2 == rx)) return;
+                        //clearbufbyte(&swall[dalx2],(darx2-dalx2+1)*sizeof(swall[0]),0L);
+                        for (x=dalx2; x<=darx2; x++) swall[x] = 0;
+                    }
+                    break;
+                case 1:
+                    k = smoststart[i] - xb1[j];
+                    x = dalx2;
+#ifdef CLASSIC_SLICE_BY_4
+                    for (; x<=darx2-2; x+=2)
+                    {
+                        if (smost[k+x] > lwall[x]) lwall[x] = smost[k+x];
+                        if (smost[k+x+1] > lwall[x+1]) lwall[x+1] = smost[k+x+1];
+                    }
+#endif
+                    for (; x<=darx2; x++)
+                        if (smost[k+x] > lwall[x]) lwall[x] = smost[k+x];
+                    break;
+                case 2:
+                    k = smoststart[i] - xb1[j];
+                    x = dalx2;
+#ifdef CLASSIC_SLICE_BY_4
+                    for (; x<=darx2-4; x+=4)
+                    {
+                        if (smost[k+x] < swall[x]) swall[x] = smost[k+x];
+                        if (smost[k+x+1] < swall[x+1]) swall[x+1] = smost[k+x+1];
+                        if (smost[k+x+2] < swall[x+2]) swall[x+2] = smost[k+x+2];
+                        if (smost[k+x+3] < swall[x+3]) swall[x+3] = smost[k+x+3];
+                    }
+#endif
+                    for (; x<=darx2; x++)
+                        if (smost[k+x] < swall[x]) swall[x] = smost[k+x];
+                    break;
+                }
             }
         }
 
@@ -6867,26 +7031,22 @@ static void renderDrawSprite(int32_t snum)
 {
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
 
-    switch (videoGetRenderMode())
+#ifdef USE_OPENGL    
+    if (videoGetRenderMode() != REND_CLASSIC)
     {
-    case REND_CLASSIC:
-        classicDrawSprite(snum);
-        return;
-#ifdef USE_OPENGL
-    case REND_POLYMOST:
-        polymost_drawsprite(snum);
-        return;
-# ifdef POLYMER
-    case REND_POLYMER:
-        buildgl_setEnabled(GL_ALPHA_TEST);
+        buildgl_setEnabled(GL_ALPHA_TEST);        
         buildgl_setEnabled(GL_BLEND);
-        polymer_drawsprite(snum);
-        buildgl_setDisabled(GL_BLEND);
-        buildgl_setDisabled(GL_ALPHA_TEST);
+
+        if (videoGetRenderMode() == REND_POLYMOST)
+            polymost_drawsprite(snum);
+# ifdef POLYMER
+        else polymer_drawsprite(snum);
+# endif        
         return;
-# endif
-#endif
     }
+#endif
+
+    classicDrawSprite(snum);
 }
 
 
@@ -6898,22 +7058,21 @@ static void renderDrawMaskedWall(int16_t damaskwallcnt)
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
 
     //============================================================================= //POLYMOST BEGINS
-#ifdef USE_OPENGL
-    if (videoGetRenderMode() == REND_POLYMOST) { polymost_drawmaskwall(damaskwallcnt); return; }
-# ifdef POLYMER
-    else if (videoGetRenderMode() == REND_POLYMER)
+#ifdef USE_OPENGL    
+    if (videoGetRenderMode() != REND_CLASSIC)
     {
-        buildgl_setEnabled(GL_ALPHA_TEST);
-        buildgl_setEnabled(GL_BLEND);
-
-        polymer_drawmaskwall(damaskwallcnt);
-
-        buildgl_setDisabled(GL_BLEND);
-        buildgl_setDisabled(GL_ALPHA_TEST);
-
+        if (videoGetRenderMode() == REND_POLYMOST)
+            polymost_drawmaskwall(damaskwallcnt);
+# ifdef POLYMER
+        else
+        {
+            buildgl_setEnabled(GL_ALPHA_TEST);
+            buildgl_setEnabled(GL_BLEND);
+            polymer_drawmaskwall(damaskwallcnt);
+        }
+# endif
         return;
     }
-#endif
 #endif
     //============================================================================= //POLYMOST ENDS
 
@@ -9803,8 +9962,6 @@ killsprite:
 #ifdef USE_OPENGL
     if (videoGetRenderMode() == REND_POLYMOST)
     {
-        buildgl_setDisabled(GL_BLEND);
-        buildgl_setEnabled(GL_ALPHA_TEST);
         polymost_setClamp(1+2);
 
         if (spritesortcnt < numSprites)
@@ -9870,8 +10027,6 @@ killsprite:
                 renderDrawMaskedWall(i);
         }
 
-        buildgl_setEnabled(GL_BLEND);
-        buildgl_setEnabled(GL_ALPHA_TEST);
         glDepthMask(GL_FALSE);
     }
 #endif
@@ -10418,7 +10573,7 @@ static FORCE_INLINE int32_t have_maptext(void)
 static int enginePrepareLoadBoard(buildvfs_kfd fil, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
 {
     initspritelists();
-
+    mi_collect(true);
     DO_FREE_AND_NULL(reachablesectors);
 
     Bmemset(show2dsector, 0, sizeof(show2dsector));
@@ -11540,7 +11695,8 @@ static void PolymostProcessVoxels(void)
 
     LOG_F(INFO, "Generating 3D meshes from voxel model data. This may take a while...");
     videoNextPage();
-
+    double time = timerGetFractionalTicks();
+    int cnt = 0;
     for (bssize_t i=0; i<MAXVOXELS; i++)
     {
         if (voxfilenames[i])
@@ -11551,8 +11707,10 @@ static void PolymostProcessVoxels(void)
             voxvboalloc(voxmodels[i]);
 # endif
             DO_FREE_AND_NULL(voxfilenames[i]);
+            cnt++;
         }
     }
+    LOG_F(INFO, "Generated 3D meshes for %d voxels in %.2f ms.", cnt, timerGetFractionalTicks() - time);
 }
 
 static void PolymostFreeVBOs(void)
@@ -11755,12 +11913,105 @@ void videoNextPage(void)
     numframes++;
 }
 
+uint8_t voxpal[768];
+uint8_t maxvoxcol;
+
+void getVoxelColorMap(char* davoxptr, uint8_t *bitmap)
+{
+    Bmemset(bitmap, -1, 32);
+    maxvoxcol = 0;
+
+    int32_t *longptr = (int32_t *)davoxptr;
+
+    int32_t xsiz = B_LITTLE32(longptr[0]);
+    int32_t ysiz = B_LITTLE32(longptr[1]);
+
+    davoxptr += (6<<2);
+
+    longptr = (int32_t *)davoxptr;
+
+    int32_t const xyvoxoffs = (xsiz+1)<<2;
+
+    for (int x = 0; x < xsiz; ++x)
+    {
+        intptr_t const slabxoffs = (intptr_t)&davoxptr[B_LITTLE32(longptr[x])];
+        int16_t *const shortptr = (int16_t *)&davoxptr[((x*(ysiz+1))<<1) + xyvoxoffs];
+
+        for (int y = 0; y < ysiz; ++y)
+        {
+            char *voxptr = (char *)(B_LITTLE16(shortptr[y])+slabxoffs);
+            char *const voxend = (char *)(B_LITTLE16(shortptr[y+1])+slabxoffs);
+
+            for (; voxptr<voxend; voxptr+=voxptr[1]+3)
+            {
+                uint8_t zleng = voxptr[1];
+                uint8_t offs = 0;
+
+                do
+                {
+                    uint8_t coloridx = voxptr[3+offs];
+                    
+                    if (coloridx > maxvoxcol)
+                        maxvoxcol = coloridx;
+                    
+                    bitmap_clear(bitmap, coloridx);
+                    offs++;
+                } while (--zleng);
+            }
+
+        }
+    }
+}
+
+void applyVoxelColorMap(char* davoxptr, uint8_t *bitmap)
+{
+    int32_t *longptr = (int32_t *)davoxptr;
+
+    int32_t xsiz = B_LITTLE32(longptr[0]);
+    int32_t ysiz = B_LITTLE32(longptr[1]);
+
+    davoxptr += (6<<2);
+
+    longptr = (int32_t *)davoxptr;
+    int32_t const xyvoxoffs = (xsiz+1)<<2;
+
+    for (int x = 0; x < xsiz; ++x)
+    {
+        const intptr_t slabxoffs = (intptr_t)&davoxptr[B_LITTLE32(longptr[x])];
+        int16_t *const shortptr = (int16_t *)&davoxptr[((x*(ysiz+1))<<1) + xyvoxoffs];
+
+        for (int y = 0; y < ysiz; ++y)
+        {
+            char *voxptr = (char *)(B_LITTLE16(shortptr[y])+slabxoffs);
+            char *const voxend = (char *)(B_LITTLE16(shortptr[y+1])+slabxoffs);
+            
+            for (; voxptr<voxend; voxptr+=voxptr[1]+3)
+            {
+                uint8_t zleng = voxptr[1];
+                uint8_t offs = 0;
+
+                do
+                {
+                    uint8_t coloridx = voxptr[3+offs];
+                    if (coloridx != 255 && bitmap_test(bitmap, coloridx))
+                    {
+                        rgb24_t const& color = *(rgb24_t*)&(IsPaletteIndexFullbright(coloridx)?voxpal:palette)[coloridx * 3];
+                        voxptr[3 + offs] = paletteGetClosestColorWithBlacklist(color.r, color.g, color.b, maxvoxcol, bitmap);
+                    }
+                    offs++;
+                } while (--zleng);
+            }
+        }
+    }
+}
+
+
 //
 // qloadkvx
 //
 int32_t qloadkvx(int32_t voxindex, const char *filename)
 {
-    if ((unsigned)voxindex >= MAXVOXELS)
+    if ((unsigned)voxindex >= MAXVOXELS || (paletteloaded & PALETTE_MAIN) != PALETTE_MAIN)
         return -1;
 
     const buildvfs_kfd fil = kopen4load(filename, 0);
@@ -11770,10 +12021,41 @@ int32_t qloadkvx(int32_t voxindex, const char *filename)
     int32_t lengcnt = 0;
     const int32_t lengtot = kfilelength(fil);
 
-    for (bssize_t i=0; i<MAXVOXMIPS; i++)
+    if (lengtot < 768)
     {
-        int32_t dasiz;
+        LOG_F(ERROR, "qloadkvx: file %s is truncated", filename);
+        return -1;
+    }
+
+    klseek(fil, -768, SEEK_END);
+    
+    maxvoxcol = 0;
+
+    for (int i=0; i<256; i++)
+    {
+        char c[3];
+        kread(fil, c, 3);
+        *(int32_t *)&voxpal[i] = B_LITTLE32((c[0]<<18) + (c[1]<<10) + (c[2]<<2) + (i<<24));   
+    }
+
+    klseek(fil, 0, SEEK_SET);
+
+    auto bitmap = (uint8_t*)Balloca(32);
+    int32_t lastsiz=0;
+
+    for (int i=0; i<MAXVOXMIPS; i++)
+    {
+        int32_t dasiz=0;
         kread(fil, &dasiz, 4); dasiz = B_LITTLE32(dasiz);
+
+        // this is a terrible heuristic based on the worst cases of poorly generated mipmaps found in Ion Fury
+        if (lengcnt >= lengtot-768 || dasiz < ((lastsiz/9) << 1))
+        {
+            DLOG_IF_F(INFO, i != MAXVOXMIPS-1 && lengcnt < lengtot-768, "qloadkvx: only loaded %d mipmaps from %s, resave file in SLAB6X to resolve", i, filename);
+            break;
+        }
+
+        lastsiz = dasiz;
 
         //Must store filenames to use cacheing system :(
         voxlock[voxindex][i] = CACHE1D_PERMANENT;
@@ -11781,12 +12063,14 @@ int32_t qloadkvx(int32_t voxindex, const char *filename)
 
         char *ptr = (char *) voxoff[voxindex][i];
         kread(fil, ptr, dasiz);
+        
+        if (i == 0)
+            getVoxelColorMap(ptr, bitmap);
+        else
+            applyVoxelColorMap(ptr, bitmap);
 
         lengcnt += dasiz+4;
-        if (lengcnt >= lengtot-768)
-            break;
     }
-
     kclose(fil);
 
 #ifdef USE_OPENGL
