@@ -2447,14 +2447,14 @@ cheat_for_port_credits:
 
             menutext(c,98,MENUHIGHLIGHT(0),0,"GAMMA");
             menutext(c,98+16,MENUHIGHLIGHT(1),0,"CONTRAST");
-            menutext(c,98+16+16,MENUHIGHLIGHT(2),0,"BRIGHTNESS");
+            menutext(c,98+16+16,MENUHIGHLIGHT(2),0,"SATURATION");
             menutext(c,98+16+16+16+8,MENUHIGHLIGHT(3),0,"RESET TO DEFAULTS");
 
             Bsprintf(tempbuf,"%s%.2f",g_videoGamma>=0?" ":"",g_videoGamma);
             mgametext(c+177-56,98-8,tempbuf,MENUHIGHLIGHT(0),2+8+16);
             Bsprintf(tempbuf,"%s%.2f",g_videoContrast>=0?" ":"",g_videoContrast);
             mgametext(c+177-56,98+16-8,tempbuf,MENUHIGHLIGHT(1),2+8+16);
-            Bsprintf(tempbuf,"%s%.2f",g_videoBrightness>=0?" ":"", g_videoBrightness);
+            Bsprintf(tempbuf,"%s%.2f",g_videoSaturation>=0?" ":"", g_videoSaturation);
             mgametext(c+177-56,98+16+16-8,tempbuf,MENUHIGHLIGHT(2),2+8+16);
 
             rotatesprite(40<<16,24<<16,24576,0,BONUSSCREEN,0,0,2+8+16,0,scale(ydim,35,200),xdim-1,scale(ydim,80,200)-1);
@@ -2462,31 +2462,31 @@ cheat_for_port_credits:
 
             {
                 int b = (int)(g_videoGamma*40960.f);
-                _bar(0,c+177,98,&b,4096,x==0,MENUHIGHLIGHT(0),0,8192,163840);
+                _bar(0,c+177,98,&b,2048,x==0,MENUHIGHLIGHT(0),0, (int)(MIN_GAMMA * 40960.f), (int)(MAX_GAMMA * 40960.f));
 
                 if (b != (double)(g_videoGamma*40960.f))
                 {
-                    g_videoGamma = (double)b/40960.f;
+                    g_videoGamma = (float)b/40960.f;
                     ud.brightness = (int)(min(max((float)((g_videoGamma-1.0)*10.0),0.0f),15.0f));
                     ud.brightness <<= 2;
                     videoSetPalette(ud.brightness>>2, g_player[myconnectindex].ps->palette,0);
                 }
 
                 b = (int)(g_videoContrast*40960.f);
-                _bar(0,c+177,98+16,&b,2048,x==1,MENUHIGHLIGHT(1),0,4096,110592);
+                _bar(0,c+177,98+16,&b,2048,x==1,MENUHIGHLIGHT(1),0, (int)(MIN_CONTRAST * 40960.f), (int)(MAX_CONTRAST * 40960.f));
 
                 if (b != (g_videoContrast*40960.f))
                 {
-                    g_videoContrast = (double)b/40960.f;
+                    g_videoContrast = (float)b/40960.f;
                     videoSetPalette(ud.brightness>>2, g_player[myconnectindex].ps->palette,0);
                 }
 
-                b = (int)(g_videoBrightness*40960.f);
-                _bar(0,c+177,98+16+16,&b,2048,x==2,MENUHIGHLIGHT(2),0,-32768,32768);
+                b = (int)(g_videoSaturation*40960.f);
+                _bar(0,c+177,98+16+16,&b,2048,x==2,MENUHIGHLIGHT(2),0, (int)(MIN_SATURATION * 40960.f), (int)(MAX_SATURATION * 40960.f));
 
-                if (b != (g_videoBrightness*40960.f))
+                if (b != (g_videoSaturation*40960.f))
                 {
-                    g_videoBrightness = (double)b/40960.f;
+                    g_videoSaturation = (float)b/40960.f;
                     videoSetPalette(ud.brightness>>2, g_player[myconnectindex].ps->palette,0);
                 }
 
@@ -2494,7 +2494,7 @@ cheat_for_port_credits:
                 {
                     g_videoGamma = DEFAULT_GAMMA;
                     g_videoContrast = DEFAULT_CONTRAST;
-                    g_videoBrightness = DEFAULT_BRIGHTNESS;
+                    g_videoSaturation = DEFAULT_SATURATION;
                     ud.brightness = 0;
                     videoSetPalette(ud.brightness>>2, g_player[myconnectindex].ps->palette,0);
                 }
