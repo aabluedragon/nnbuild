@@ -1062,6 +1062,15 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
         Gv_SetVar(lVar2, ud.m_dmflags, g_i, g_p);
         return;
 
+    case USERDEFS_DRAW_YXASPECT:
+        if (iSet)
+        {
+            rotatesprite_yxaspect = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, rotatesprite_yxaspect, g_i, g_p);
+        return;
+
     default:
         return;
     }
