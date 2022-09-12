@@ -212,8 +212,8 @@ int P_FindOtherPlayer(int playerNum, int32_t* pDist)
         if (playerNum != otherPlayer && sprite[g_player[otherPlayer].ps->i].extra > 0)
         {
             int otherPlayerDist = klabs(g_player[otherPlayer].ps->opos.x - g_player[playerNum].ps->pos.x) +
-                klabs(g_player[otherPlayer].ps->opos.y - g_player[playerNum].ps->pos.y) +
-                (klabs(g_player[otherPlayer].ps->opos.z - g_player[playerNum].ps->pos.z) >> 4);
+                                  klabs(g_player[otherPlayer].ps->opos.y - g_player[playerNum].ps->pos.y) +
+                                 (klabs(g_player[otherPlayer].ps->opos.z - g_player[playerNum].ps->pos.z) >> 4);
 
             if (otherPlayerDist < closestPlayerDist)
             {
