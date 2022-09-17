@@ -1693,7 +1693,7 @@ void G_GameExit(const char *t)
 
     //unlink("duke3d.tmp");
 
-    exit(0);
+    Bexit(EXIT_SUCCESS);
 }
 
 char inputloc = 0;
@@ -7940,12 +7940,12 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 if (!Bstrcasecmp(c+1,"?") || !Bstrcasecmp(c+1,"help") || !Bstrcasecmp(c+1,"-help"))
                 {
                     G_ShowParameterHelp();
-                    exit(0);
+                    Bexit(EXIT_SUCCESS);
                 }
                 if (!Bstrcasecmp(c+1,"?") || !Bstrcasecmp(c+1,"debughelp") || !Bstrcasecmp(c+1,"-debughelp"))
                 {
                     G_ShowDebugHelp();
-                    exit(0);
+                    Bexit(EXIT_SUCCESS);
                 }
                 if (!Bstrcasecmp(c+1,"grp") || !Bstrcasecmp(c+1,"g"))
                 {
@@ -8282,7 +8282,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     else
                     {
                         G_ShowParameterHelp();
-                        exit(-1);
+                        Bexit(-1);
                     }
                     break;
                 case 'q':
@@ -8929,7 +8929,7 @@ static void G_Startup(void)
         wm_msgbox("Build Engine Initialization Error",
                   "There was a problem initializing the Build engine: %s", engineerrstr);
         G_Cleanup();
-        exit(1);
+        Bexit(EXIT_FAILURE);
     }
 
     G_InitDynamicTiles();
@@ -9434,7 +9434,7 @@ int app_main(int32_t argc, char const* const* argv)
     {
         wm_msgbox("Build Engine Initialization Error",
                   "There was a problem initializing the Build engine: %s", engineerrstr);
-        exit(1);
+        Bexit(EXIT_FAILURE);
     }
 
     LOG_F(INFO, "Using config file '%s'.",g_setupFileName);
@@ -9456,7 +9456,7 @@ int app_main(int32_t argc, char const* const* argv)
 #endif
 
             engineUnInit();
-            exit(0);
+            Bexit(EXIT_SUCCESS);
         }
     }
 #endif
@@ -9577,7 +9577,7 @@ int app_main(int32_t argc, char const* const* argv)
         Discord_Shutdown();
 #endif
         engineUnInit();
-        exit(1);
+        Bexit(EXIT_FAILURE);
     }
 
     G_SetupGameButtons();

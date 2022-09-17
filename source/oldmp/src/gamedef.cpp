@@ -1957,7 +1957,7 @@ static int C_ParseCommand(void)
     {
         LOG_F(INFO, "Aborted.");
         G_Shutdown();
-        exit(0);
+        Bexit(EXIT_SUCCESS);
     }
 
     if (g_errorCnt > 63 || (*textptr == '\0') || (*(textptr+1) == '\0')) return 1;
