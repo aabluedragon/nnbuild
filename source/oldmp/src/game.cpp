@@ -3396,13 +3396,13 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         G_GameExit("Too many sprites spawned.");
     }
 
+    spriteext[i] = {};
+    spritesmooth[i] = {};
+    actor[i] = {};
+
 #ifdef POLYMER
     practor[i].lightId = -1;
 #endif
-
-    actor[i].bpos.x = s_x;
-    actor[i].bpos.y = s_y;
-    actor[i].bpos.z = s_z;
 
     s->x = s_x;
     s->y = s_y;
@@ -3433,21 +3433,25 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         actor[i].ceilingz = actor[s_ow].ceilingz;
     }
 
-    actor[i].lastvx = 0;
-    actor[i].lastvy = 0;
+    actor[i].bpos.x = s_x;
+    actor[i].bpos.y = s_y;
+    actor[i].bpos.z = s_z;
 
-    actor[i].timetosleep = 0;
+    //actor[i].lastvx = 0;
+    //actor[i].lastvy = 0;
+
+    //actor[i].timetosleep = 0;
     actor[i].actorstayput = -1;
     actor[i].htextra = -1;
     actor[i].htowner = s_ow;
-    actor[i].cgg = 0;
-    actor[i].movflag = 0;
-    actor[i].tempang = 0;
-    actor[i].dispicnum = 0;
+    //actor[i].cgg = 0;
+    //actor[i].movflag = 0;
+    //actor[i].tempang = 0;
+    //actor[i].dispicnum = 0;
 
-    T1(i)=T3(i)=T4(i)=T6(i)=T7(i)=T8(i)=T9(i)=0;
+    //T1(i)=T3(i)=T4(i)=T6(i)=T7(i)=T8(i)=T9(i)=0;
 
-    actor[i].flags = 0;
+    //actor[i].flags = 0;
 
     if (actorscrptr[s_pn])
     {
@@ -3466,9 +3470,6 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
     if (show2dsector[SECT(i)>>3]&(1<<(SECT(i)&7))) show2dsprite[i>>3] |= (1<<(i&7));
     else show2dsprite[i>>3] &= ~(1<<(i&7));
 
-    spriteext[i] = {};
-    spritesmooth[i] = {};
-
     /*
         if(s->sectnum < 0)
         {
@@ -3477,7 +3478,6 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
         }
     */
     A_ResetVars(i);
-    actor[i].flags = 0;
 
     if (s_ss == STAT_PROJECTILE) // Moved from PROJECTILE_RPG to here, so we can maniuplate these in EVENT_EGS.
     {
