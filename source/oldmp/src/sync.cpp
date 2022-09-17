@@ -385,7 +385,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
     int32_t const tickNum = (int32_t)B_UNBUF32(&packbuf[(*j)]);
     (*j) += 4;
 
-    if (tickNum == -1 || tickNum == g_player[otherconnectindex].lastSyncTick || (tickNum > movefifoplc))
+    if (tickNum < 0 || tickNum == g_player[otherconnectindex].lastSyncTick || (tickNum > movefifoplc))
         return;
 
     g_player[otherconnectindex].lastSyncTick = tickNum;
