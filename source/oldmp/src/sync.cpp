@@ -66,6 +66,10 @@ static char Sync_PlayerPos(void)
         updatecrc(crc, pp->pos.z);
         updatecrc(crc, pp->q16ang);
         updatecrc(crc, pp->q16horiz);
+        updatecrc(crc, sprite[pp->i].x);
+        updatecrc(crc, sprite[pp->i].y);
+        updatecrc(crc, sprite[pp->i].z);
+        updatecrc(crc, sprite[pp->i].ang);
     }
 
     return ((char) crc & 255);
@@ -82,47 +86,32 @@ static char Sync_PlayerData(void)
         updatecrc(crc, pp->kickback_pic);
         updatecrc(crc, pp->bobcounter);
         updatecrc(crc, pp->jetpack_on);
+        updatecrc(crc, sprite[pp->i].extra);
     }
 
     return ((char) crc & 255);
-}
-
-static char Sync_PlayerSprite(void)
-{
-    unsigned short crc = 0;
-    for (int32_t SPRITES_OF(STAT_PLAYER, j))
-    {
-        auto spr = &sprite[j];
-        updatecrc(crc, spr->x);
-        updatecrc(crc, spr->y);
-        updatecrc(crc, spr->z);
-        updatecrc(crc, spr->ang);
-        updatecrc(crc, spr->extra);
-    }
-
-    return ((char)crc & 255);
 }
 
 static char Sync_Actors(void)
 {
     unsigned short crc = 0;
     int j;
-    spritetype *spr;
 
     for (SPRITES_OF(STAT_ACTOR, j))
     {
-        spr = &sprite[j];
+        spritetype* spr = &sprite[j];
         updatecrc(crc, spr->x);
         updatecrc(crc, spr->y);
         updatecrc(crc, spr->z);
         updatecrc(crc, spr->lotag);
         updatecrc(crc, spr->hitag);
         updatecrc(crc, spr->ang);
+        updatecrc(crc, spr->owner);
     }
 
     for (SPRITES_OF(STAT_ZOMBIEACTOR, j))
     {
-        spr = &sprite[j];
+        spritetype* spr = &sprite[j];
         updatecrc(crc, spr->x);
         updatecrc(crc, spr->y);
         updatecrc(crc, spr->z);
@@ -156,31 +145,30 @@ static char Sync_Map(void)
 {
     unsigned short crc = 0;
     int j;
-    spritetype *spr;
-    walltype *wal;
-    sectortype *sect;
 
     for (SPRITES_OF(STAT_EFFECTOR, j))
     {
-        spr = &sprite[j];
+        spritetype* spr = &sprite[j];
         updatecrc(crc, spr->x);
         updatecrc(crc, spr->y);
         updatecrc(crc, spr->z);
         updatecrc(crc, spr->ang);
         updatecrc(crc, spr->lotag);
         updatecrc(crc, spr->hitag);
+        updatecrc(crc, spr->owner);
+        updatecrc(crc, spr->sectnum);
     }
 
-    for (j=numwalls;j>=0;j--)
+    for (j = 0; j < numwalls; j++)
     {
-        wal = &wall[j];
+        walltype* wal = &wall[j];
         updatecrc(crc, wal->x);
         updatecrc(crc, wal->y);
     }
 
-    for (j=numsectors;j>=0;j--)
+    for (j = 0; j < numsectors; j++)
     {
-        sect = &sector[j];
+        sectortype* sect = &sector[j];
         updatecrc(crc, sect->floorz);
         updatecrc(crc, sect->ceilingz);
     }
@@ -264,11 +252,12 @@ static SyncType_t syncType[] = {
     DEFINE_SYNCFUNC(Sync_Random),
     DEFINE_SYNCFUNC(Sync_PlayerPos),
     DEFINE_SYNCFUNC(Sync_PlayerData),
-    DEFINE_SYNCFUNC(Sync_PlayerSprite),
     DEFINE_SYNCFUNC(Sync_Projectiles),
     DEFINE_SYNCFUNC(Sync_Actors),
     DEFINE_SYNCFUNC(Sync_Map),
+#if 0
     DEFINE_SYNCFUNC(Sync_GameSettings),
+#endif
 #if BOT_DEBUG == 1
     DEFINE_SYNCFUNC(Sync_Bots),
 #endif
@@ -360,13 +349,13 @@ void Net_AddSyncInfoToPacket(int *j)
     if(tickNum == p->lastSyncTick) // Already sent this one.
     {
         B_BUF32(&packbuf[(*j)], -1);
-        (*j) += 4;
+        (*j) += sizeof(int32_t);
         return;
     }
 
     p->lastSyncTick = tickNum;
     B_BUF32(&packbuf[(*j)], tickNum);
-    (*j) += 4;
+    (*j) += sizeof(int32_t);
 
     for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
     {
@@ -383,7 +372,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
 #endif
 
     int32_t const tickNum = (int32_t)B_UNBUF32(&packbuf[(*j)]);
-    (*j) += 4;
+    (*j) += sizeof(int32_t);
 
     if (tickNum < 0 || tickNum == g_player[otherconnectindex].lastSyncTick || (tickNum > movefifoplc))
         return;
@@ -401,6 +390,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
             if (!syncError[sb])
             {
                 OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d, Player CRC: %d, TickNum: %d, MoveFifoPlc: %d\n", otherconnectindex, syncType[sb].name, head_sync, player_sync, tickNum, movefifoplc);
+                S_PlaySound(DUKE_KILLED2);
                 syncError[sb] = true;
             }
 

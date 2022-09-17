@@ -22,25 +22,25 @@ int pingTime;
 static void Net_AddPingTimeToPacket(int* j)
 {
     B_BUF32(&packbuf[(*j)], pingTime);
-    (*j) += 4;
+    (*j) += sizeof(int32_t);
 }
 
 static void Net_GetPingTimeFromPacket(int* j)
 {
     pingTime = (int32_t)B_UNBUF32(&packbuf[(*j)]);
-    (*j) += 4;
+    (*j) += sizeof(int32_t);
 }
 
 static void Net_AddPlayerPingToPacket(int* j, int playerNum)
 {
     B_BUF32(&packbuf[(*j)], g_player[playerNum].ping);
-    (*j) += 4;
+    (*j) += sizeof(int32_t);
 }
 
 static void Net_GetPlayerPingFromPacket(int* j, int playerNum)
 {
     g_player[playerNum].ping = (uint32_t)B_UNBUF32(&packbuf[(*j)]);
-    (*j) += 4;
+    (*j) += sizeof(int32_t);
 }
 
 static void Net_SendPing(void)
@@ -101,25 +101,25 @@ void Net_AddPlayerInputToPacket(int* j, int playerNum, input_t* osyn, input_t* n
     if (nsyn[playerNum].fvel != osyn[playerNum].fvel)
     {
         B_BUF16(&packbuf[(*j)], nsyn[playerNum].fvel);
-        (*j) += 2;
+        (*j) += sizeof(int16_t);
         packbuf[inputFlagsPos] |= 1;
     }
     if (nsyn[playerNum].svel != osyn[playerNum].svel)
     {
         B_BUF16(&packbuf[(*j)], nsyn[playerNum].svel);
-        (*j) += 2;
+        (*j) += sizeof(int16_t);
         packbuf[inputFlagsPos] |= 2;
     }
     if (nsyn[playerNum].q16avel != osyn[playerNum].q16avel)
     {
         B_BUF32(&packbuf[(*j)], nsyn[playerNum].q16avel);
-        (*j) += 4;
+        (*j) += sizeof(fix16_t);
         packbuf[inputFlagsPos] |= 4;
     }
     if (nsyn[playerNum].q16horz != osyn[playerNum].q16horz)
     {
         B_BUF32(&packbuf[(*j)], nsyn[playerNum].q16horz);
-        (*j) += 4;
+        (*j) += sizeof(fix16_t);
         packbuf[inputFlagsPos] |= 8;
     }
 
@@ -141,10 +141,10 @@ void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t*
 
     if (playerNum == myconnectindex)
     {
-        if (inputFlags & 1) (*j) += 2;
-        if (inputFlags & 2) (*j) += 2;
-        if (inputFlags & 4) (*j) += 4;
-        if (inputFlags & 8) (*j) += 4;
+        if (inputFlags & 1) (*j) += sizeof(int16_t);
+        if (inputFlags & 2) (*j) += sizeof(int16_t);
+        if (inputFlags & 4) (*j) += sizeof(fix16_t);
+        if (inputFlags & 8) (*j) += sizeof(fix16_t);
 
         if (inputFlags & 16) (*j)++;
         if (inputFlags & 32) (*j)++;
@@ -163,22 +163,22 @@ void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t*
     if (inputFlags & 1)
     {
         nsyn[playerNum].fvel = (short)B_UNBUF16(&packbuf[(*j)]);
-        (*j) += 2;
+        (*j) += sizeof(int16_t);
     }
     if (inputFlags & 2)
     {
         nsyn[playerNum].svel = (short)B_UNBUF16(&packbuf[(*j)]);
-        (*j) += 2;
+        (*j) += sizeof(int16_t);
     }
     if (inputFlags & 4)
     {
         nsyn[playerNum].q16avel = (fix16_t)B_UNBUF32(&packbuf[(*j)]);
-        (*j) += 4;
+        (*j) += sizeof(fix16_t);
     }
     if (inputFlags & 8)
     {
         nsyn[playerNum].q16horz = (fix16_t)B_UNBUF32(&packbuf[(*j)]);
-        (*j) += 4;
+        (*j) += sizeof(fix16_t);
     }
 
     if (inputFlags & 16)   nsyn[playerNum].bits = ((nsyn[playerNum].bits & 0xffffff00) | ((int)packbuf[(*j)++]));
@@ -446,8 +446,8 @@ void Net_ParsePackets(void)
                 ud.fraglimit            = packbuf[j++];
                 ud.multimode            = packbuf[j++];
                 ud.playerai             = packbuf[j++];
-                ud.m_dmflags            = (int32_t)B_UNBUF32(&packbuf[j]); j += 4;
-                botNameSeed             = (int32_t)B_UNBUF32(&packbuf[j]); j += 4;
+                ud.m_dmflags            = (int32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
+                botNameSeed             = (int32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
 
                 if (M_DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE))
                     LOG_F(INFO, "Visibility adjustment enabled for multiplayer.");
@@ -474,7 +474,7 @@ void Net_ParsePackets(void)
 
                 // Non-menu variables handled by G_EnterLevel
                 ud.m_coop = packbuf[j++];
-                ud.m_dmflags = (int32_t)B_UNBUF32(&packbuf[j]); j += 4;
+                ud.m_dmflags = (int32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
 
                 G_BeginNewGame();
 
@@ -718,7 +718,7 @@ void Net_ParsePackets(void)
                         vote.level              = packbuf[j++];
                         vote.skill              = packbuf[j++];
                         vote.gametype           = packbuf[j++];
-                        vote.dmflags            = (int32_t)B_UNBUF32(&packbuf[j]); j += 4;
+                        vote.dmflags            = (int32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
 
                         Bsprintf(tempbuf, "%s^00 HAS CALLED A VOTE TO CHANGE MAP TO %s (E%dL%d)",
                             g_player[playerNum].user_name,
@@ -971,8 +971,8 @@ void Net_SendInitialSettings(void)
     packbuf[j++] = ud.fraglimit;
     packbuf[j++] = ud.multimode;
     packbuf[j++] = ud.playerai;
-    B_BUF32(&packbuf[j], ud.m_dmflags); j += 4;
-    B_BUF32(&packbuf[j], botNameSeed); j += 4;
+    B_BUF32(&packbuf[j], ud.m_dmflags); j += sizeof(int32_t);
+    B_BUF32(&packbuf[j], botNameSeed); j += sizeof(int32_t);
 
     int i;
     TRAVERSE_CONNECT(i)
@@ -995,7 +995,7 @@ void Net_NewGame(int volume, int level)
     packbuf[j++] = ud.m_volume_number = volume;
     packbuf[j++] = ud.m_player_skill;
     packbuf[j++] = ud.m_coop;
-    B_BUF32(&packbuf[j], ud.m_dmflags); j += 4;
+    B_BUF32(&packbuf[j], ud.m_dmflags); j += sizeof(int32_t);
 
     int i;
     TRAVERSE_CONNECT(i)
@@ -1507,7 +1507,7 @@ void Net_ClearFIFO(void)
     memset(&syncData, 0, sizeof(syncData));
     memset(&syncError, 0, sizeof(syncError));
     memset(&g_szfirstSyncMsg, 0, sizeof(g_szfirstSyncMsg));
-    g_foundSyncError = 0;
+    g_foundSyncError = false;
 
     bufferjitter = 1;
     mymaxlag = otherminlag = 0;
@@ -1736,7 +1736,7 @@ void Net_InitiateVote()
     packbuf[j++] = vote.level             = ud.m_level_number;
     packbuf[j++] = vote.skill             = ud.m_player_skill;
     packbuf[j++] = vote.gametype          = ud.m_coop;
-    B_BUF32(&packbuf[j], ud.m_dmflags); j += 4;
+    B_BUF32(&packbuf[j], ud.m_dmflags); j += sizeof(int32_t);
 
     int32_t c = 0;
     TRAVERSE_CONNECT(c)
