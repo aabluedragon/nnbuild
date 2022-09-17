@@ -1,14 +1,7 @@
 #ifndef SYNC_H
 #define SYNC_H
 
-#define MAXSYNCBYTES 16
-#define SYNCFIFOSIZ 1024
-
-// TENSW: on really bad network connections, the sync FIFO queue can overflow if it is the
-// same size as the move fifo.
-#if MOVEFIFOSIZ >= SYNCFIFOSIZ
-#error "MOVEFIFOSIZ is greater than or equal to SYNCFIFOSIZ!"
-#endif
+#define MAX_SYNC_TYPES 16
 
 #define DEFINE_SYNCFUNC(funcname) { #funcname, funcname }
 typedef struct
@@ -17,11 +10,11 @@ typedef struct
     char (*func)(void);
 } SyncType_t;
 
-extern char syncstat[MAXSYNCBYTES];
-extern char g_szfirstSyncMsg[MAXSYNCBYTES][60];
+extern char g_szfirstSyncMsg[MAX_SYNC_TYPES][60];
 
-extern int g_foundSyncError;
-extern int syncvalsendtail, syncvalchecktail;
+extern int8_t syncData[MOVEFIFOSIZ][MAX_SYNC_TYPES];
+extern bool syncError[MAX_SYNC_TYPES];
+extern bool g_foundSyncError;
 
 void initsynccrc(void);
 void Net_GetSyncStat(void);

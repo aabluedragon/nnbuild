@@ -11,8 +11,9 @@
 #define OLDNET_EXTERN extern
 #endif
 
-#define PREDICT_CURPOS (predictfifoplc & (MOVEFIFOSIZ - 1))
-#define PREDICT_LASTPOS ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
+#define INPUTFIFO_CURTICK (movefifoplc & (MOVEFIFOSIZ - 1))
+#define INPUTFIFO_LASTTICK ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
+#define INPUTFIFO_PREDICTTICK (predictfifoplc & (MOVEFIFOSIZ - 1))
 
 #define CREATE_PREDICTED_LINKED_LIST(name) decltype(head##name) predicted_head##name; \
                                            decltype(prev##name) predicted_prev##name; \

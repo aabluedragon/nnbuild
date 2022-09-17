@@ -148,14 +148,13 @@ typedef struct {
     PlayerDisplay_t display;
     input_t* inputBits;
 
-    int32_t movefifoend, syncvalhead, myminlag;
+    int32_t movefifoend, myminlag, lastSyncTick;
     int32_t pcolor, pteam, frags[MAXPLAYERS], wchoice[MAX_WEAPONS];
     int32_t fraggedby_time, fraggedby_id, fragged_time, fragged_id;
     uint32_t ping;
 
     char gotvote, playerreadyflag, connected, isBot;
     char user_name[32];
-    char syncval[SYNCFIFOSIZ][MAXSYNCBYTES];
 } playerdata_t;
 extern playerdata_t g_player[MAXPLAYERS];
 

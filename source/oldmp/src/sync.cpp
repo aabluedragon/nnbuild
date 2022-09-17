@@ -26,14 +26,14 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 #include "duke3d.h"
 
-char g_szfirstSyncMsg[MAXSYNCBYTES][60];
-int g_foundSyncError = 0;
-
-char syncstat[MAXSYNCBYTES];
-int syncvalsendtail, syncvalchecktail;
+char g_szfirstSyncMsg[MAX_SYNC_TYPES][60];
 
 static int crctable[256];
 #define updatecrc(dcrc,xz) (dcrc = (crctable[((dcrc)>>8)^((xz)&255)]^((dcrc)<<8)))
+
+int8_t syncData[MOVEFIFOSIZ][MAX_SYNC_TYPES];
+bool syncError[MAX_SYNC_TYPES];
+bool g_foundSyncError = false;
 
 void initsynccrc(void)
 {
@@ -258,7 +258,7 @@ static char Sync_Bots(void)
 }
 #endif
 
-// This must not exceed MAXSYNCBYTES
+// This must not exceed MAX_SYNC_TYPES
 static SyncType_t syncType[] = {
     DEFINE_SYNCFUNC(Sync_Engine),
     DEFINE_SYNCFUNC(Sync_Random),
@@ -277,17 +277,11 @@ static SyncType_t syncType[] = {
 
 void Net_GetSyncStat(void)
 {
-    playerdata_t *pp = &g_player[myconnectindex];
-
     if (numplayers < 2)
         return;
 
     for (int32_t i = 0; i < NUM_SYNC_TYPES; i++)
-    {
-        pp->syncval[pp->syncvalhead & (SYNCFIFOSIZ - 1)][i] = syncType[i].func();
-    }
-
-    pp->syncvalhead++;
+        syncData[INPUTFIFO_CURTICK][i] = syncType[i].func();
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -308,8 +302,8 @@ void Net_DisplaySyncMsg(void)
 
     for (int32_t i = 0; i < NUM_SYNC_TYPES; i++)
     {
-        // syncstat is NON 0 - out of sync
-        if (syncstat[i] != 0)
+        // syncError is NON 0 - out of sync
+        if (syncError[i])
         {
             sprintf(tempbuf, "Out Of Sync - %s", syncType[i].name);
             printext256(4, 100 + (i * 8), 31, 1, tempbuf, 0);
@@ -317,14 +311,14 @@ void Net_DisplaySyncMsg(void)
             if (!g_foundSyncError && g_szfirstSyncMsg[i][0] == '\0')
             {
                 // g_foundSyncError one so test all of them and then never test again
-                g_foundSyncError = TRUE;
+                g_foundSyncError = true;
 
                 // save off loop count
                 moveCount = g_moveThingsCount;
 
                 for (int32_t j = 0; j < NUM_SYNC_TYPES; j++)
                 {
-                    if (syncstat[j] != 0 && g_szfirstSyncMsg[j][0] == '\0')
+                    if (syncError[j] && g_szfirstSyncMsg[j][0] == '\0')
                     {
                         sprintf(tempbuf, "Out Of Sync - %s", syncType[j].name);
                         strcpy(g_szfirstSyncMsg[j], tempbuf);
@@ -358,94 +352,60 @@ void Net_DisplaySyncMsg(void)
     }
 }
 
-void  Net_AddSyncInfoToPacket(int *j)
+void Net_AddSyncInfoToPacket(int *j)
 {
-    int32_t syncSizePos = (*j)++;
-    uint8_t syncSize = 0;
-    // sync testing
-    while (g_player[myconnectindex].syncvalhead > syncvalsendtail && syncSize < 4)
-    {
-        for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
-        {
-            packbuf[(*j)++] = g_player[myconnectindex].syncval[syncvalsendtail & (SYNCFIFOSIZ - 1)][sb];
-        }
-
-        syncvalsendtail++;
-        syncSize++;
-    }
+    auto p = &g_player[myconnectindex];
+    int32_t const tickNum = (myconnectindex == connecthead) ? movefifoplc-1 : movefifoplc;
     
-    packbuf[syncSizePos] = syncSize;
-}
+    if(tickNum == p->lastSyncTick) // Already sent this one.
+    {
+        B_BUF32(&packbuf[(*j)], -1);
+        (*j) += 4;
+        return;
+    }
 
-// Returns false if host's sync check tail has caught up to a client's sync head.
-// Or, if we're a client, and our check tail has caught up to the host's sync head.
-// (In which we need to wait until the host has caught up so we don't get a totally fake, bullshit out-of-sync).
-bool Sync_CheckSyncStat(int32_t playerNum)
-{
-    if ((syncvalchecktail >= g_player[playerNum].syncvalhead) || (syncvalchecktail >= g_player[connecthead].syncvalhead))
-        return false;
+    p->lastSyncTick = tickNum;
+    B_BUF32(&packbuf[(*j)], tickNum);
+    (*j) += 4;
 
     for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
     {
-        char head_sync = g_player[connecthead].syncval[syncvalchecktail & (SYNCFIFOSIZ - 1)][sb];
-        char player_sync = g_player[playerNum].syncval[syncvalchecktail & (SYNCFIFOSIZ - 1)][sb];
-        if (player_sync != head_sync)
-        {
-            if (!syncstat[sb])
-            {
-                OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d (syncvalhead: %d), Player CRC: %d (syncvalhead: %d). syncvalchecktail: %d\n", playerNum, syncType[sb].name, head_sync, g_player[connecthead].syncvalhead, player_sync, g_player[playerNum].syncvalhead, syncvalchecktail);
-                syncstat[sb] = 1;
-            }
-
-            desynched_players[playerNum] = 1;
-        }
+        packbuf[(*j)++] = syncData[tickNum & (MOVEFIFOSIZ-1)][sb];
     }
-
-    return true;
 }
 
 void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
 {
-    playerdata_t *ppo = &g_player[otherconnectindex];
-
     // if ready2send is not set, or player is disconnected then don't try to get sync info
 #if 1
     if (!ready2send || !g_player[otherconnectindex].connected)
         return;
 #endif
 
-    uint8_t syncSize = (uint8_t)packbuf[(*j)++];
+    int32_t const tickNum = (int32_t)B_UNBUF32(&packbuf[(*j)]);
+    (*j) += 4;
+
+    if (tickNum == -1 || tickNum == g_player[otherconnectindex].lastSyncTick || (tickNum > movefifoplc))
+        return;
+
+    g_player[otherconnectindex].lastSyncTick = tickNum;
+
     // Grab sync info from packet buffer
-    for(int32_t i = 0; i < syncSize; i++)
+    for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
     {
-        for (int32_t sb = 0; sb < NUM_SYNC_TYPES; sb++)
-        {
-            ppo->syncval[ppo->syncvalhead & (SYNCFIFOSIZ - 1)][sb] = packbuf[(*j)++];
-        }
+        char head_sync = syncData[tickNum & (MOVEFIFOSIZ - 1)][sb];
+        char player_sync = packbuf[(*j)++];
 
-        ppo->syncvalhead++;
-    }
-
-    // update syncstat
-    // if any of the syncstat vars is non-0 then there is a problem
-    while (1)
-    {
-        if (myconnectindex == connecthead)
+        if (player_sync != head_sync)
         {
-            int32_t i = 0;
-            TRAVERSE_CONNECT(i)
+            if (!syncError[sb])
             {
-                if (!Sync_CheckSyncStat(i))
-                    return;
+                OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d, Player CRC: %d, TickNum: %d, MoveFifoPlc: %d\n", otherconnectindex, syncType[sb].name, head_sync, player_sync, tickNum, movefifoplc);
+                syncError[sb] = true;
             }
-        }
-        else
-        {
-            if (!Sync_CheckSyncStat(myconnectindex))
-                return;
-        }
 
-        syncvalchecktail++;
+            desynched_players[otherconnectindex] = 1;
+        }
     }
 }
 

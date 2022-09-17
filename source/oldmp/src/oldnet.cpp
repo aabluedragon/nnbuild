@@ -1223,7 +1223,7 @@ static void Net_ProcessPrediction(void)
 {
     input_t backupInput = *g_player[myconnectindex].inputBits;
 
-    *g_player[myconnectindex].inputBits = inputfifo[PREDICT_CURPOS][myconnectindex];
+    *g_player[myconnectindex].inputBits = inputfifo[INPUTFIFO_PREDICTTICK][myconnectindex];
 
     // Clear bits that could cause trouble
     g_player[myconnectindex].inputBits->bits &= ~(BIT(SK_PAUSE) | BIT(SK_MULTIFLAG) | BIT(SK_GAMEQUIT));
@@ -1246,9 +1246,9 @@ static void Net_ProcessPrediction(void)
     *g_player[myconnectindex].inputBits = backupInput;
 
 #if 0
-    predictBackup[PREDICT_CURPOS].pos = predictedPlayer.pos;
-    predictBackup[PREDICT_CURPOS].q16ang = predictedPlayer.q16ang;
-    predictBackup[PREDICT_CURPOS].q16horiz = predictedPlayer.q16horiz;
+    predictBackup[INPUTFIFO_PREDICTTICK].pos = predictedPlayer.pos;
+    predictBackup[INPUTFIFO_PREDICTTICK].q16ang = predictedPlayer.q16ang;
+    predictBackup[INPUTFIFO_PREDICTTICK].q16horiz = predictedPlayer.q16horiz;
 #endif
 
     predictfifoplc++;
@@ -1504,8 +1504,8 @@ void Net_DoPrediction(int state)
 
 void Net_ClearFIFO(void)
 {
-    syncvalsendtail = syncvalchecktail = 0;
-    memset(&syncstat, 0, sizeof(syncstat));
+    memset(&syncData, 0, sizeof(syncData));
+    memset(&syncError, 0, sizeof(syncError));
     memset(&g_szfirstSyncMsg, 0, sizeof(g_szfirstSyncMsg));
     g_foundSyncError = 0;
 
@@ -1518,9 +1518,8 @@ void Net_ClearFIFO(void)
     for (int32_t i = 0; i < MAXPLAYERS; i++)
     {
         g_player[i].movefifoend = 0;
-        g_player[i].syncvalhead = 0;
         g_player[i].myminlag = 0;
-        memset(g_player[i].syncval, 0, sizeof(g_player[i].syncval));
+        g_player[i].lastSyncTick = -1;
     }
 }
 

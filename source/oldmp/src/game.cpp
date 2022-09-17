@@ -10213,11 +10213,14 @@ static int G_MoveLoop()
         if (numplayers > 1)
         {
             TRAVERSE_CONNECT(i)
-                if ((movefifoplc >= g_player[i].movefifoend) && !g_gameQuit)
+                if ((g_player[i].movefifoend <= movefifoplc) && !g_gameQuit)
                     return 0; // Player hasn't caught up yet, don't process the next tic.
         }
 
-        if (G_DoMoveThings())
+        int32_t doMoveReturn = G_DoMoveThings();
+        Net_GetSyncStat();
+
+        if (doMoveReturn)
             return 1;
     }
 
@@ -10230,51 +10233,53 @@ static int G_DoMoveThings(void)
 //    char ch;
 
     TRAVERSE_CONNECT(i)
-    if (TEST_SYNC_KEY(g_player[i].inputBits->bits, SK_MULTIFLAG))
     {
-        multiflag = 2;
-        multiwhat = (g_player[i].inputBits->bits>>(SK_MULTIFLAG+1))&1;
-        multipos = (unsigned)(g_player[i].inputBits->bits>>(SK_MULTIFLAG+2))&15;
-        multiwho = i;
-
-        if (multiwhat)
+        if (TEST_SYNC_KEY(g_player[i].inputBits->bits, SK_MULTIFLAG))
         {
-            G_SavePlayer(multipos);
-            multiflag = 0;
+            multiflag = 2;
+            multiwhat = (g_player[i].inputBits->bits >> (SK_MULTIFLAG + 1)) & 1;
+            multipos = (unsigned)(g_player[i].inputBits->bits >> (SK_MULTIFLAG + 2)) & 15;
+            multiwho = i;
 
-            if (multiwho != myconnectindex)
+            if (multiwhat)
             {
-                Bsprintf(apStrings[QUOTE_RESERVED4],"%s^00 SAVED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
-                P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
-            }
-            else
-            {
-                Bstrcpy(apStrings[QUOTE_RESERVED4],"MULTIPLAYER GAME SAVED");
-                P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
-            }
-            break;
-        }
-        else
-        {
-            //            waitforeverybody();
+                G_SavePlayer(multipos);
+                multiflag = 0;
 
-            j = G_LoadPlayer(multipos);
-
-            multiflag = 0;
-
-            if (j == 0)
-            {
                 if (multiwho != myconnectindex)
                 {
-                    Bsprintf(apStrings[QUOTE_RESERVED4],"%s^00 LOADED A MULTIPLAYER GAME",&g_player[multiwho].user_name[0]);
-                    P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
+                    Bsprintf(apStrings[QUOTE_RESERVED4], "%s^00 SAVED A MULTIPLAYER GAME", &g_player[multiwho].user_name[0]);
+                    P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
                 }
                 else
                 {
-                    Bstrcpy(apStrings[QUOTE_RESERVED4],"MULTIPLAYER GAME LOADED");
-                    P_DoQuote(QUOTE_RESERVED4,g_player[myconnectindex].ps);
+                    Bstrcpy(apStrings[QUOTE_RESERVED4], "MULTIPLAYER GAME SAVED");
+                    P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
                 }
-                return 1;
+                break;
+            }
+            else
+            {
+                //            waitforeverybody();
+
+                j = G_LoadPlayer(multipos);
+
+                multiflag = 0;
+
+                if (j == 0)
+                {
+                    if (multiwho != myconnectindex)
+                    {
+                        Bsprintf(apStrings[QUOTE_RESERVED4], "%s^00 LOADED A MULTIPLAYER GAME", &g_player[multiwho].user_name[0]);
+                        P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
+                    }
+                    else
+                    {
+                        Bstrcpy(apStrings[QUOTE_RESERVED4], "MULTIPLAYER GAME LOADED");
+                        P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
+                    }
+                    return 1;
+                }
             }
         }
     }
@@ -10284,7 +10289,7 @@ static int G_DoMoveThings(void)
     
     if (g_RTSPlaying > 0) g_RTSPlaying--;
 
-    // TO-DO: Move this somewhere that it can tick down while in menus.
+    // TO-DO: Move this somewhere that it can tick down while in menus. Perhaps G_MoveLoop.
     for (i=0;i<MAXUSERQUOTES;i++)
         if (user_quote_time[i])
         {
@@ -10307,16 +10312,15 @@ static int G_DoMoveThings(void)
     // Copy input FIFO bits into player's own inputBits struct, and advance our place in the FIFO.
     for (ALL_PLAYERS(i))
     {
-        auto newInputs = &inputfifo[movefifoplc & (MOVEFIFOSIZ - 1)][i];
+        auto newInputs = &inputfifo[INPUTFIFO_CURTICK][i];
         if (g_player[i].isBot)
             DukeBot_GetInput(i, newInputs);
 
         *g_player[i].inputBits = *newInputs;
         Net_CheckPlayerQuit(i);
     }
-    movefifoplc++;
 
-    Net_GetSyncStat();
+    movefifoplc++;
 
     G_UpdateInterpolations();
 
