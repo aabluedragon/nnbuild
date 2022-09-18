@@ -367,7 +367,7 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
 {
     // if ready2send is not set, or player is disconnected then don't try to get sync info
 #if 1
-    if (!ready2send || !g_player[otherconnectindex].connected)
+    if (!ready2send || !g_player[otherconnectindex].connected || g_gameQuit)
         return;
 #endif
 
