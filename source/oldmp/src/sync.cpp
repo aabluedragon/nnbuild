@@ -214,6 +214,7 @@ static char Sync_Engine(void)
     return ((char)crc & 255);
 }
 
+#if 0
 static char Sync_GameSettings(void)
 {
     unsigned short crc = 0;
@@ -224,6 +225,7 @@ static char Sync_GameSettings(void)
 
     return ((char)crc & 255);
 }
+#endif
 
 #if BOT_DEBUG == 1
 static char Sync_Bots(void)
