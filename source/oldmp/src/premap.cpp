@@ -1807,7 +1807,12 @@ int G_EnterLevel(int g)
 
     Bmemcpy(&currentboardfilename[0],&boardfilename[0],BMAX_PATH);
 
-    X_OnEvent(EVENT_ENTERLEVEL, g_player[0].ps->i, 0, -1);
+    for (int ALL_PLAYERS(i))
+    {
+        if (!X_OnEventWithReturn(EVENT_ENTERLEVEL, g_player[i].ps->i, i, 0))
+            break;
+    }
+
     OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
     return 0;
 }
