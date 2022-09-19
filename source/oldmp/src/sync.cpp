@@ -301,6 +301,8 @@ void Net_DisplaySyncMsg(void)
 
             if (!g_foundSyncError && g_szfirstSyncMsg[i][0] == '\0')
             {
+                S_PlaySound(DUKE_KILLED2);
+
                 // g_foundSyncError one so test all of them and then never test again
                 g_foundSyncError = true;
 
@@ -392,7 +394,6 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
             if (!syncError[sb])
             {
                 OSD_Printf("Desynchronized! Player: %d, Type: %s, Head CRC: %d, Player CRC: %d, TickNum: %d, MoveFifoPlc: %d\n", otherconnectindex, syncType[sb].name, head_sync, player_sync, tickNum, movefifoplc);
-                S_PlaySound(DUKE_KILLED2);
                 syncError[sb] = true;
             }
 
