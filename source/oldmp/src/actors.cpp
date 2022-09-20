@@ -6103,12 +6103,6 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         g_player[p].ps->pos.x += l;
                         g_player[p].ps->pos.y += x;
 
-                        if (numplayers > 1)
-                        {
-                            g_player[p].ps->opos.x = g_player[p].ps->pos.x;
-                            g_player[p].ps->opos.y = g_player[p].ps->pos.y;
-                        }
-
                         g_player[p].ps->bobposx += l;
                         g_player[p].ps->bobposy += x;
                     }
@@ -6129,20 +6123,11 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 {
                     if (sprite[j].picnum != SECTOREFFECTOR && sprite[j].picnum != LOCATORS)
                     {
-                        if (numplayers < 2)
-                        {
-                            actor[j].bpos.x = sprite[j].x;
-                            actor[j].bpos.y = sprite[j].y;
-                        }
+                        actor[j].bpos.x = sprite[j].x;
+                        actor[j].bpos.y = sprite[j].y;
 
                         sprite[j].x += l;
                         sprite[j].y += x;
-
-                        if (numplayers > 1)
-                        {
-                            actor[j].bpos.x = sprite[j].x;
-                            actor[j].bpos.y = sprite[j].y;
-                        }
                     }
                     j = nextspritesect[j];
                 }

@@ -5357,8 +5357,6 @@ int A_Spawn(int j, int pn)
                 actor[i].lastvx = j;
                 fallthrough__;
             case SE_30_TWO_WAY_TRAIN:
-                if (numplayers > 1) break;
-                fallthrough__;
             case SE_0_ROTATING_SECTOR:
             case SE_1_PIVOT:
             case SE_5:
