@@ -205,7 +205,7 @@ void faketimerhandler(void) { };
 
 void Net_HandleInput(void)
 {
-    int i, j, k;
+    int i, j;
     //    short who;
     input_t *osyn, *nsyn;
 
@@ -247,9 +247,9 @@ void Net_HandleInput(void)
     TRAVERSE_CONNECT(i)
     if (i != myconnectindex)
     {
-        k = (g_player[myconnectindex].movefifoend-1)-g_player[i].movefifoend;
-        g_player[i].myminlag = min(g_player[i].myminlag,k);
-        mymaxlag = max(mymaxlag,k);
+        int32_t lag = (g_player[myconnectindex].movefifoend-1)-g_player[i].movefifoend;
+        g_player[i].myminlag = min(g_player[i].myminlag, lag);
+        mymaxlag = max(mymaxlag, lag);
     }
 
     if (((g_player[myconnectindex].movefifoend - 1) & (TIMERUPDATESIZ - 1)) == 0)
