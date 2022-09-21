@@ -1762,7 +1762,7 @@ int G_EnterLevel(int g)
 
     ud.last_level = ud.level_number+1;
 
-    G_UpdateInterpolations();
+    G_BackupInterpolations();
 
     g_restorePalette = 1;
 

@@ -5364,7 +5364,7 @@ int A_Spawn(int j, int pn)
             case SE_15_SLIDING_DOOR:
             case SE_16_REACTOR:
             case SE_26:
-                Sect_SetInterpolation(i);
+                Sect_SetInterpolation(SECT(i));
                 break;
             }
 

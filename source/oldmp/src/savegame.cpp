@@ -561,14 +561,14 @@ int32_t G_LoadPlayer(int32_t spot)
             case 16:
             case 26:
             case 30:
-                Sect_SetInterpolation(k);
+                Sect_SetInterpolation(SECT(k));
                 break;
             }
 
             k = nextspritestat[k];
         }
 
-        G_UpdateInterpolations();
+        G_BackupInterpolations();
         for (i = g_animateCount - 1; i >= 0; i--)
             G_SetInterpolation(G_GetAnimationPointer(i));
 

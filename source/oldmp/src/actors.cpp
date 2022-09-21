@@ -32,6 +32,12 @@ intptr_t* actorscrptr[MAXTILES];
 extern int g_numEnvSoundsPlaying;
 extern int g_noEnemies;
 
+void G_BackupInterpolations(void)
+{
+    for (bssize_t i = g_interpolationCnt - 1; i >= 0; i--)
+        interps[i].bakpos = *interps[i].curpos;
+}
+
 void G_UpdateInterpolations(void)  //Stick at beginning of G_DoMoveThings
 {
     for (bssize_t i = g_interpolationCnt - 1; i >= 0; i--)
@@ -808,9 +814,9 @@ void A_DoGutsDir(int sp, int gtype, int n)
     }
 }
 
-void Sect_SetInterpolation(int i)
+void Sect_SetInterpolation(int16_t sectnum)
 {
-    int k, j = sector[SECT(i)].wallptr,endwall = j+sector[SECT(i)].wallnum;
+    int k, j = sector[sectnum].wallptr,endwall = j+sector[sectnum].wallnum;
 
     for (;j<endwall;j++)
     {
@@ -828,9 +834,9 @@ void Sect_SetInterpolation(int i)
     }
 }
 
-void Sect_ClearInterpolation(int i)
+void Sect_ClearInterpolation(int16_t sectnum)
 {
-    int j = sector[SECT(i)].wallptr,endwall = j+sector[SECT(i)].wallnum;
+    int j = sector[sectnum].wallptr,endwall = j+sector[sectnum].wallnum;
 
     for (;j<endwall;j++)
     {

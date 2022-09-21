@@ -326,6 +326,9 @@ const tokenmap_t vm_keywords[] =
 
     { "espawn",                 CON_ESPAWN },
     { "espawnvar",              CON_ESPAWNVAR },
+
+    { "sectsetinterpolation",   CON_SECTSETINTERPOLATION },
+    { "sectclearinterpolation", CON_SECTCLEARINTERPOLATION },
     
     { "sqrt",                   CON_SQRT },
     { "eventloadactor",         CON_EVENTLOADACTOR },
@@ -3885,6 +3888,8 @@ DO_DEFSTATE:
     case CON_CLEARMAPSTATE:
     case CON_ACTIVATECHEAT:
     case CON_SETGAMEPALETTE:
+    case CON_SECTCLEARINTERPOLATION:
+    case CON_SECTSETINTERPOLATION:
         C_GetNextVar();
         return 0;
 

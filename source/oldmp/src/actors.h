@@ -44,6 +44,7 @@ typedef struct
 void G_DeleteAllLights(void);
 #endif
 
+void G_BackupInterpolations(void);
 void G_UpdateInterpolations(void);
 int G_SetInterpolation(int32_t* const posptr);
 void G_StopInterpolation(const int32_t* const posptr);
@@ -80,8 +81,8 @@ void A_DoGuts(int sp, int gtype, int n);
 int A_IncurDamage(int sn);
 
 // I don't like the fact these are in actors.cpp. Should be sector.cpp, IMHO.
-void Sect_SetInterpolation(int i);
-void Sect_ClearInterpolation(int i);
+void Sect_SetInterpolation(int16_t sectnum);
+void Sect_ClearInterpolation(int16_t sectnum);
 
 void A_MoveCyclers(void);
 void A_MoveDummyPlayers(void);

@@ -2479,6 +2479,26 @@ static int X_DoExecute(void)
             break;
         }
 
+    case CON_SECTSETINTERPOLATION:
+    case CON_SECTCLEARINTERPOLATION:
+        insptr++;
+        {
+            int const sectnum = Gv_GetVarX(*insptr++);
+
+            if ((sectnum < 0 || sectnum >= numsectors) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "Invalid sector %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), sectnum);
+                break;
+            }
+
+            if (tw == CON_SECTSETINTERPOLATION)
+                Sect_SetInterpolation(sectnum);
+            else
+                Sect_ClearInterpolation(sectnum);
+
+            break;
+        }
+
     case CON_HITSCAN:
         insptr++;
         {
@@ -4852,37 +4872,37 @@ void G_RestoreMapState(mapstate_t *save)
         {
             switch (sprite[k].lotag)
             {
-            case 31:
+            case SE_31_FLOOR_RISE_FALL:
                 G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
                 break;
-            case 32:
+            case SE_32_CEILING_RISE_FALL:
                 G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
                 break;
-            case 25:
-                G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
-                G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
-                break;
-            case 17:
+            case SE_25_PISTON:
                 G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
                 G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
                 break;
-            case 0:
-            case 5:
-            case 6:
-            case 11:
-            case 14:
-            case 15:
-            case 16:
-            case 26:
-            case 30:
-                Sect_SetInterpolation(k);
+            case SE_17_WARP_ELEVATOR:
+                G_SetInterpolation(&sector[sprite[k].sectnum].floorz);
+                G_SetInterpolation(&sector[sprite[k].sectnum].ceilingz);
+                break;
+            case SE_0_ROTATING_SECTOR:
+            case SE_5:
+            case SE_6_SUBWAY:
+            case SE_11_SWINGING_DOOR:
+            case SE_14_SUBWAY_CAR:
+            case SE_15_SLIDING_DOOR:
+            case SE_16_REACTOR:
+            case SE_26:
+            case SE_30_TWO_WAY_TRAIN:
+                Sect_SetInterpolation(SECT(k));
                 break;
             }
 
             k = nextspritestat[k];
         }
 
-        G_UpdateInterpolations();
+        G_BackupInterpolations();
         for (i = g_animateCount-1;i>=0;i--)
             G_SetInterpolation(G_GetAnimationPointer(i));
 
