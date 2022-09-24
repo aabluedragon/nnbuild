@@ -898,55 +898,64 @@ static void ms(int i)
 // sleeping monsters, etc
 static void G_MoveZombieActors(void)
 {
-    int x, px, py, sx, sy;
-    int i = headspritestat[STAT_ZOMBIEACTOR], j, p, nexti;
-    short psect, ssect;
-    spritetype *s;
+    int spriteNum = headspritestat[STAT_ZOMBIEACTOR];
 
-    while (i >= 0)
+    while (spriteNum >= 0)
     {
-        nexti = nextspritestat[i];
+        int const nextSprite = nextspritestat[spriteNum];
 
-        s = &sprite[i];
-        p = A_FindPlayer(s,&x);
+        int32_t    playerDist;
+        auto const pSprite = &sprite[spriteNum];
+        int const playerNum = A_FindPlayer(pSprite,&playerDist);
+        auto const pPlayer = g_player[playerNum].ps;
 
-        ssect = psect = s->sectnum;
-
-        if (sprite[g_player[p].ps->i].extra > 0)
+        if (sprite[pPlayer->i].extra > 0)
         {
-            if (x < 30000)
+            if (playerDist < 30000)
             {
-                actor[i].timetosleep++;
-                if (actor[i].timetosleep >= (x>>8))
+                actor[spriteNum].timetosleep++;
+                if (actor[spriteNum].timetosleep >= (playerDist >> 8))
                 {
-                    if (A_CheckEnemySprite(s))
+                    int32_t canSeePlayer;
+                    if (A_CheckEnemySprite(pSprite))
                     {
-                        px = g_player[p].ps->opos.x+64-(krand()&127);
-                        py = g_player[p].ps->opos.y+64-(krand()&127);
-                        updatesector(px,py,&psect);
-                        if (psect == -1)
+                        vec3_t const p = { pPlayer->pos.x + 64 - (krand() & 127),
+                                           pPlayer->pos.y + 64 - (krand() & 127),
+                                           pPlayer->pos.z - (krand() % ZOFFSET5) };
+
+                        int16_t pSectnum = pPlayer->cursectnum;
+
+                        updatesector(p.x,p.y,&pSectnum);
+
+                        if (pSectnum == -1)
                         {
-                            i = nexti;
+                            spriteNum = nextSprite;
                             continue;
                         }
-                        sx = s->x+64-(krand()&127);
-                        sy = s->y+64-(krand()&127);
-                        updatesector(px,py,&ssect);
-                        if (ssect == -1)
+
+                        vec3_t const s = { pSprite->x + 64 - (krand() & 127),
+                                           pSprite->y + 64 - (krand() & 127),
+                                           pSprite->z - (krand() % (52 << 8)) };
+
+                        int16_t sectNum = pSprite->sectnum;
+
+                        updatesector(s.x, s.y, &sectNum);
+
+                        if (sectNum == -1)
                         {
-                            i = nexti;
+                            spriteNum = nextSprite;
                             continue;
                         }
-                        j = cansee(sx,sy,s->z-(krand()%(52<<8)),s->sectnum,px,py,g_player[p].ps->opos.z-(krand()%(32<<8)),g_player[p].ps->cursectnum);
+
+                        canSeePlayer = cansee(s.x, s.y, s.z, sectNum, p.x, p.y, p.z, pSectnum);
                     }
                     else
-                        j = cansee(s->x,s->y,s->z-((krand()&31)<<8),s->sectnum,g_player[p].ps->opos.x,g_player[p].ps->opos.y,g_player[p].ps->opos.z-((krand()&31)<<8),g_player[p].ps->cursectnum);
+                        canSeePlayer = cansee(pSprite->x, pSprite->y, pSprite->z - ((krand() & 31) << 8), pSprite->sectnum, pPlayer->opos.x,
+                            pPlayer->opos.y, pPlayer->opos.z - ((krand() & 31) << 8), pPlayer->cursectnum);
 
-                    //             j = 1;
-
-                    if (j)
+                    if (canSeePlayer)
                     {
-                        switch (DynamicTileMap[s->picnum])
+                        switch (DynamicTileMap[pSprite->picnum])
                         {
                         case RUBBERCAN__STATIC:
                         case EXPLODINGBARREL__STATIC:
@@ -962,31 +971,30 @@ static void G_MoveZombieActors(void)
                         case NUKEBARRELDENTED__STATIC:
                         case NUKEBARRELLEAKED__STATIC:
                         case TRIPBOMB__STATIC:
-                            if (sector[s->sectnum].ceilingstat & 1 && A_CheckSpriteFlags(j, SFLAG_NOSHADE) == 0)
-                                s->shade = sector[s->sectnum].ceilingshade;
-                            else s->shade = sector[s->sectnum].floorshade;
-
-                            actor[i].timetosleep = 0;
-                            changespritestat(i, STAT_STANDABLE);
+                            pSprite->shade = ((sector[pSprite->sectnum].ceilingstat & CEILING_STAT_PLAX) && !A_CheckSpriteFlags(spriteNum, SFLAG_NOSHADE))
+                                             ? sector[pSprite->sectnum].ceilingshade
+                                             : sector[pSprite->sectnum].floorshade;
+                            actor[spriteNum].timetosleep = 0;
+                            changespritestat(spriteNum, STAT_STANDABLE);
                             break;
                         default:
-                            actor[i].timetosleep = 0;
-                            A_PlayAlertSound(i);
-                            changespritestat(i, STAT_ACTOR);
+                            actor[spriteNum].timetosleep = 0;
+                            A_PlayAlertSound(spriteNum);
+                            changespritestat(spriteNum, STAT_ACTOR);
                             break;
                         }
                     }
-                    else actor[i].timetosleep = 0;
+                    else actor[spriteNum].timetosleep = 0;
                 }
             }
-            if (A_CheckEnemySprite(s) && A_CheckSpriteFlags(i,SFLAG_NOSHADE) == 0)
+            if (A_CheckEnemySprite(pSprite) && A_CheckSpriteFlags(spriteNum,SFLAG_NOSHADE) == 0)
             {
-                if (sector[s->sectnum].ceilingstat&1)
-                    s->shade = sector[s->sectnum].ceilingshade;
-                else s->shade = sector[s->sectnum].floorshade;
+                pSprite->shade = (sector[pSprite->sectnum].ceilingstat & CEILING_STAT_PLAX)
+                                ? sector[pSprite->sectnum].ceilingshade
+                                : sector[pSprite->sectnum].floorshade;
             }
         }
-        i = nexti;
+        spriteNum = nextSprite;
     }
 }
 
