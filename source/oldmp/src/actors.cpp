@@ -138,6 +138,64 @@ void G_ResetConveyorInterp(void)
     }
 }
 
+static int32_t Wall_SetInterpolation(int16_t wallNum, bool enableInterp)
+{
+    if (enableInterp)
+        return G_SetInterpolation(&wall[wallNum].x) || G_SetInterpolation(&wall[wallNum].y);
+
+    G_StopInterpolation(&wall[wallNum].x);
+    G_StopInterpolation(&wall[wallNum].y);
+    return 0;
+}
+
+// Sets interpolation for all walls of a sector.
+// sectnum: Sector index
+// enableInterp: True to enable interpolation, False to disable/clear it.
+void Sect_SetInterpolation(int16_t sectnum, bool enableInterp)
+{
+    int j = sector[sectnum].wallptr, endwall = j + sector[sectnum].wallnum;
+
+    for (; j < endwall; j++)
+    {
+        Wall_SetInterpolation(j, enableInterp);
+
+        auto const nextWall = wall[j].nextwall;
+        if (nextWall >= 0)
+        {
+            Wall_SetInterpolation(nextWall, enableInterp);
+            Wall_SetInterpolation(wall[nextWall].point2, enableInterp);
+
+            // Propagate to connected TROR walls.
+            auto const trorCeilWall = yax_getnextwall(nextWall, YAX_CEILING);
+            auto const trorFloorWall = yax_getnextwall(nextWall, YAX_FLOOR);
+
+            if (trorCeilWall >= 0)
+            {
+                Wall_SetInterpolation(trorCeilWall, enableInterp);
+
+                auto const nextWall = wall[trorCeilWall].nextwall;
+                if (nextWall >= 0)
+                {
+                    Wall_SetInterpolation(nextWall, enableInterp);
+                    Wall_SetInterpolation(wall[nextWall].point2, enableInterp);
+                }
+            }
+
+            if (trorFloorWall >= 0)
+            {
+                Wall_SetInterpolation(trorFloorWall, enableInterp);
+
+                auto const nextWall = wall[trorFloorWall].nextwall;
+                if (nextWall >= 0)
+                {
+                    Wall_SetInterpolation(nextWall, enableInterp);
+                    Wall_SetInterpolation(wall[nextWall].point2, enableInterp);
+                }
+            }
+        }
+    }
+}
+
 void G_ClearCameraView(DukePlayer_t* ps)
 {
     ps->newowner = -1;
@@ -811,42 +869,6 @@ void A_DoGutsDir(int sp, int gtype, int n)
         a = krand()&2047;
         i = A_InsertSprite(s->sectnum,s->x,s->y,gutz,gtype,-32,sx,sy,a,256+(krand()&127),-512-(krand()&2047),sp,5);
         sprite[i].pal = s->pal;
-    }
-}
-
-void Sect_SetInterpolation(int16_t sectnum)
-{
-    int k, j = sector[sectnum].wallptr,endwall = j+sector[sectnum].wallnum;
-
-    for (;j<endwall;j++)
-    {
-        G_SetInterpolation(&wall[j].x);
-        G_SetInterpolation(&wall[j].y);
-        k = wall[j].nextwall;
-        if (k >= 0)
-        {
-            G_SetInterpolation(&wall[k].x);
-            G_SetInterpolation(&wall[k].y);
-            k = wall[k].point2;
-            G_SetInterpolation(&wall[k].x);
-            G_SetInterpolation(&wall[k].y);
-        }
-    }
-}
-
-void Sect_ClearInterpolation(int16_t sectnum)
-{
-    int j = sector[sectnum].wallptr,endwall = j+sector[sectnum].wallnum;
-
-    for (;j<endwall;j++)
-    {
-        G_StopInterpolation(&wall[j].x);
-        G_StopInterpolation(&wall[j].y);
-        if (wall[j].nextwall >= 0)
-        {
-            G_StopInterpolation(&wall[wall[j].nextwall].x);
-            G_StopInterpolation(&wall[wall[j].nextwall].y);
-        }
     }
 }
 

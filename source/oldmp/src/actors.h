@@ -80,9 +80,8 @@ void A_DoGuts(int sp, int gtype, int n);
 
 int A_IncurDamage(int sn);
 
-// I don't like the fact these are in actors.cpp. Should be sector.cpp, IMHO.
-void Sect_SetInterpolation(int16_t sectnum);
-void Sect_ClearInterpolation(int16_t sectnum);
+// I don't like the fact this is in actors.cpp. Should be sector.cpp, IMHO.
+void Sect_SetInterpolation(int16_t sectnum, bool enableInterp);
 
 void A_MoveCyclers(void);
 void A_MoveDummyPlayers(void);

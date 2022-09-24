@@ -561,7 +561,7 @@ int32_t G_LoadPlayer(int32_t spot)
             case 16:
             case 26:
             case 30:
-                Sect_SetInterpolation(SECT(k));
+                Sect_SetInterpolation(SECT(k), true);
                 break;
             }
 

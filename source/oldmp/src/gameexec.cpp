@@ -2491,10 +2491,7 @@ static int X_DoExecute(void)
                 break;
             }
 
-            if (tw == CON_SECTSETINTERPOLATION)
-                Sect_SetInterpolation(sectnum);
-            else
-                Sect_ClearInterpolation(sectnum);
+            Sect_SetInterpolation(sectnum, (tw == CON_SECTSETINTERPOLATION));
 
             break;
         }
@@ -4895,7 +4892,7 @@ void G_RestoreMapState(mapstate_t *save)
             case SE_16_REACTOR:
             case SE_26:
             case SE_30_TWO_WAY_TRAIN:
-                Sect_SetInterpolation(SECT(k));
+                Sect_SetInterpolation(SECT(k), true);
                 break;
             }
 
