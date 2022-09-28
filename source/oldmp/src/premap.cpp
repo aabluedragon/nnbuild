@@ -1164,6 +1164,10 @@ void G_MakeNewGamePreparations(int vn, int ln, int sk)
 
     g_skillSoundID = -1;
 
+    // Unpause music if it was paused before.
+    if (ud.config.MusicToggle)
+        S_PauseMusic(false);
+
     S_PauseSounds(false);
     S_StopAllSounds();
     S_Cleanup();
