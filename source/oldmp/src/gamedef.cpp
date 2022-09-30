@@ -1451,7 +1451,7 @@ static int C_CheckEventSync(int iEventID)
         case EVENT_DISPLAYWEAPON:
         case EVENT_DISPLAYTIP:
         case EVENT_DRAWWEAPON:
-        case EVENT_ENTERLEVEL:
+        //case EVENT_ENTERLEVEL:
         case EVENT_FAKEDOMOVETHINGS:
         case EVENT_GETLOADTILE:
         case EVENT_GETMENUTILE:
