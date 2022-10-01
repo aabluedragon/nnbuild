@@ -9172,28 +9172,34 @@ static void G_DrawFrame()
         int16_t slimerSect;
         if (slimerSprite > -1)
         {
-            slimerPos = sprite[slimerSprite].xyz;
-            slimerSect = sprite[slimerSprite].sectnum;
-            auto tData = actor[slimerSprite].t_data[2];
+            if (sprite[slimerSprite].picnum == GREENSLIME)
+            {
+                slimerPos = sprite[slimerSprite].xyz;
+                slimerSect = sprite[slimerSprite].sectnum;
+                auto tData = actor[slimerSprite].t_data[2];
 
-            vec3_t pos;
-            fix16_t q16ang, q16horiz;
-            int16_t sectnum;
-            G_CalculateCameraInterpolation(&predictedPlayer, &pos, &q16ang, &q16horiz, &sectnum, smoothRatio);
+                vec3_t pos;
+                fix16_t q16ang, q16horiz;
+                int16_t sectnum;
+                G_CalculateCameraInterpolation(&predictedPlayer, &pos, &q16ang, &q16horiz, &sectnum, smoothRatio);
 
-            sprite[slimerSprite].x = pos.x + (sintable[(fix16_to_int(q16ang) + 512) & 2047] >> 7);
-            sprite[slimerSprite].y = pos.y + (sintable[fix16_to_int(q16ang) & 2047] >> 7);
-            sprite[slimerSprite].z = pos.z - tData + (8 << 8);
-            sprite[slimerSprite].z += fix16_to_int(F16(100) - q16horiz) << 4;
-            changespritesect(slimerSprite, sectnum);
+                sprite[slimerSprite].x = pos.x + (sintable[(fix16_to_int(q16ang) + 512) & 2047] >> 7);
+                sprite[slimerSprite].y = pos.y + (sintable[fix16_to_int(q16ang) & 2047] >> 7);
+                sprite[slimerSprite].z = pos.z - tData + (8 << 8);
+                sprite[slimerSprite].z += fix16_to_int(F16(100) - q16horiz) << 4;
+                changespritesect(slimerSprite, sectnum);
+            }
         }
 
         G_DrawRooms(screenpeek, smoothRatio);
 
         if (slimerSprite > -1)
         {
-            sprite[slimerSprite].xyz = slimerPos;
-            changespritesect(slimerSprite, slimerSect);
+            if (sprite[slimerSprite].picnum == GREENSLIME)
+            {
+                sprite[slimerSprite].xyz = slimerPos;
+                changespritesect(slimerSprite, slimerSect);
+            }
         }
 
         g_player[myconnectindex].ps = originalPlayer;
