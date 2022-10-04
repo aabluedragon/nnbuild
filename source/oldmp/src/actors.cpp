@@ -4580,7 +4580,7 @@ static void G_MoveActors(void)
                     s->xvel = 0;
                     s->yvel = 4;
                     s->zvel = 0;
-                    s->extra = *actorscrptr[s->picnum];
+                    s->extra = G_DefaultActorHealthForTile(s->picnum);
                     s->cstat = 257;
 
                     actor[i].htextra = -1;
