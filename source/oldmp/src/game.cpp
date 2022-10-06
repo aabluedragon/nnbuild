@@ -3557,7 +3557,7 @@ int A_Spawn(int spriteNum, int tileNum)
 
             if (A_CheckSwitchTile(newSprite) && (s.cstat & CSTAT_SPRITE_ALIGNMENT_WALL))
             {
-                if (s.picnum != ACCESSSWITCH && s.picnum != ACCESSSWITCH2 && s.pal)
+                if (s.pal && s.picnum != ACCESSSWITCH && s.picnum != ACCESSSWITCH2)
                 {
                     if ((ud.multimode < 2) || (ud.multimode > 1 && !GTFLAGS(GAMETYPE_DMSWITCHES)))
                     {
@@ -3566,13 +3566,12 @@ int A_Spawn(int spriteNum, int tileNum)
                         s.cstat = CSTAT_SPRITE_INVISIBLE;
                         goto SPAWN_END;
                     }
+
+                    s.pal = 0;
                 }
 
                 s.cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
-
-                if (s.pal && s.picnum != ACCESSSWITCH && s.picnum != ACCESSSWITCH2)
-                    s.pal = 0;
-
+                    
                 goto SPAWN_END;
             }
 
@@ -3580,7 +3579,7 @@ int A_Spawn(int spriteNum, int tileNum)
             {
                 changespritestat(newSprite, STAT_FALLER);
                 s.cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
-                s.hitag = g_impactDamage;
+                s.extra = g_impactDamage;
                 goto SPAWN_END;
             }
         }
