@@ -1162,7 +1162,7 @@ static int X_DoExecute(void)
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),*insptr++);
+            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*insptr++);
             break;
         }
         if (!A_CheckSoundPlaying(g_i,*insptr++))
@@ -1173,8 +1173,9 @@ static int X_DoExecute(void)
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),*insptr);
-            insptr++;break;
+            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*insptr);
+            insptr++;
+            break;
         }
         X_DoConditional(A_CheckSoundPlaying(g_i,*insptr));
         //    X_DoConditional(SoundOwner[*insptr][0].i == g_i);
@@ -1184,8 +1185,9 @@ static int X_DoExecute(void)
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),*insptr);
-            insptr++;break;
+            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*insptr);
+            insptr++;
+            break;
         }
         if (A_CheckSoundPlaying(g_i,*insptr))
             S_StopEnvSound((short)*insptr,g_i);
@@ -1230,8 +1232,9 @@ static int X_DoExecute(void)
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),*insptr);
-            insptr++;break;
+            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*insptr);
+            insptr++;
+            break;
         }
         A_PlaySound((short) *insptr++,g_i);
         break;
@@ -1404,7 +1407,7 @@ static int X_DoExecute(void)
 
     case CON_DEBUG:
         insptr++;
-        VLOG_F(LOG_VM, "%d",*insptr++);
+        VLOG_F(LOG_VM, "%d", (int)*insptr++);
         break;
 
     case CON_ENDOFGAME:
@@ -3006,7 +3009,7 @@ static int X_DoExecute(void)
             g_player[g_p].ps->boot_amount = *insptr;
             break;
         default:
-            OSD_Printf(CON_ERROR "Invalid inventory ID %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),*(insptr-1));
+            OSD_Printf(CON_ERROR "Invalid inventory ID %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*(insptr-1));
             break;
         }
         insptr++;
@@ -3290,7 +3293,7 @@ static int X_DoExecute(void)
                     if ((index < aGameArrays[lVarID].size)&&(index>=0))
                     {
                         OSD_Printf(OSDTEXT_GREEN "CONLOGVAR: Line %d, %s: %s[%d] =%d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),
-                                   aGameArrays[lVarID].szLabel,index,m*aGameArrays[lVarID].plValues[index]);
+                                   aGameArrays[lVarID].szLabel,index,(int)(m*aGameArrays[lVarID].plValues[index]));
                         break;
                     }
                     else
@@ -4300,7 +4303,7 @@ static int X_DoExecute(void)
             if (g_player[g_p].ps->boot_amount != *insptr) j = 1;
             break;
         default:
-            OSD_Printf(CON_ERROR "invalid inventory ID: %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),*(insptr-1));
+            OSD_Printf(CON_ERROR "invalid inventory ID: %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*(insptr-1));
         }
 
         X_DoConditional(j);
@@ -4367,14 +4370,14 @@ static int X_DoExecute(void)
 
         if ((apStrings[*insptr] == NULL) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),*insptr);
+            OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),(int)*insptr);
             insptr++;
             break;
         }
 
         if ((g_p < 0 || g_p >= MAXPLAYERS) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "bad player for quote %d: (%d)\n",g_errorLineNum,VM_GetKeywordForID(g_tw),*insptr,g_p);
+            OSD_Printf(CON_ERROR "bad player for quote %d: (%d)\n",g_errorLineNum,VM_GetKeywordForID(g_tw),(int)*insptr, g_p);
             insptr++;
             break;
         }
