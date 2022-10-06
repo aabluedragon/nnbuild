@@ -1463,9 +1463,14 @@ void clearfifo(void)
 {
     int i = 0;
 
+    // Black-hole any leftover inputs.
+    // Prevents being spun around at map start if you move the mouse while loading.
+    ControlInfo blackHole;
+    CONTROL_GetInput(&blackHole);
+
     Net_ClearFIFO();
 
-    localInput = netInput = {};
+    localInput = {};
     clearbufbyte(&inputfifo,sizeof(input_t)*MOVEFIFOSIZ*MAXPLAYERS,0L);
 
     for (ALL_PLAYERS(i))
@@ -1708,7 +1713,6 @@ int G_EnterLevel(int g)
     //clearbufbyte(actor,sizeof(actor),0l); // JBF 20040531: yes? no?
 
     prelevel(g);
-
     allignwarpelevators();
     resetpspritevars(g);
 

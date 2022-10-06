@@ -1504,6 +1504,8 @@ void Net_DoPrediction(int state)
 
 void Net_ClearFIFO(void)
 {
+    netInput = {}; // Clear all networked input.
+
     memset(&syncData, 0, sizeof(syncData));
     memset(&syncError, 0, sizeof(syncError));
     memset(&g_szfirstSyncMsg, 0, sizeof(g_szfirstSyncMsg));
