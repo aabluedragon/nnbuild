@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "gamedef.h"
 #include "osd.h"
+#include "gamevars.h"
 
 extern int g_i,g_p;
 
@@ -374,7 +375,7 @@ int Gv_NewArray(const char *pszLabel, int asize)
     return 1;
 }
 
-int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
+void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags)
 {
     int i, j;
 
@@ -386,7 +387,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
         g_errorCnt++;
         C_ReportError(-1);
         LOG_F(ERROR, "%s:%d: too many gamevars!",g_scriptFileName,g_lineNumber);
-        return 0;
+        return;
     }
 
     if (Bstrlen(pszLabel) > (MAXVARLABEL-1))
@@ -394,7 +395,7 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
         g_errorCnt++;
         C_ReportError(-1);
         LOG_F(ERROR, "%s:%d: variable name `%s' exceeds limit of %d characters.",g_scriptFileName,g_lineNumber,pszLabel, MAXVARLABEL);
-        return 0;
+        return;
     }
 
     i = hash_find(&gamevarH,pszLabel);
@@ -408,14 +409,14 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
             //  			   LOG_F("%s:%d: warning: Internal gamevar '%s' cannot be redefined.\n",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
             C_ReportError(-1);
             LOG_F(WARNING, "%s:%d: cannot redefine internal gamevar `%s'.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
-            return 0;
+            return;
         }
         else if (!(aGameVars[i].dwFlags & GAMEVAR_DEFAULT) && !(aGameVars[i].dwFlags & GAMEVAR_SYSTEM))
         {
             // it's a duplicate in error
             g_warningCnt++;
             C_ReportError(WARNING_DUPLICATEDEFINITION);
-            return 0;
+            return;
         }
     }
 
@@ -465,8 +466,6 @@ int Gv_NewVar(const char *pszLabel, int lValue, unsigned int dwFlags)
             aGameVars[i].val.plValues[j]=lValue;
     }
     else aGameVars[i].val.lValue = lValue;
-
-    return 1;
 }
 
 void A_ResetVars(int iActor)

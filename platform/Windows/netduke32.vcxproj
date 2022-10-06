@@ -192,6 +192,7 @@
     <ClInclude Include="..\..\source\oldmp\src\gamedefs.h" />
     <ClInclude Include="..\..\source\oldmp\src\gameexec.h" />
     <ClInclude Include="..\..\source\oldmp\src\gametypes.h" />
+    <ClInclude Include="..\..\source\oldmp\src\gamevars.h" />
     <ClInclude Include="..\..\source\oldmp\src\global.h" />
     <ClInclude Include="..\..\source\oldmp\src\grpscan.h" />
     <ClInclude Include="..\..\source\oldmp\src\inv.h" />

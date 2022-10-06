@@ -761,6 +761,7 @@ enum loguru_verbosities_game
 #include "gamedef.h"
 #include "gameexec.h"
 #include "gametypes.h"
+#include "gamevars.h"
 #include "global.h"
 #include "hud.h"
 #include "inv.h"
