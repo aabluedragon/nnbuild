@@ -5330,7 +5330,7 @@ int A_Spawn(int spriteNum, int tileNum)
             {
                 pSprite->xrepeat = pSprite->yrepeat = 0;
                 changespritestat(newSprite, STAT_MISC);
-                break;
+                goto SPAWN_END;
             }
 
             pSprite->pal = 0;
@@ -5356,7 +5356,6 @@ int A_Spawn(int spriteNum, int tileNum)
         case RUBBERCAN__STATIC:
             pSprite->extra = 0;
             fallthrough__;
-
         case EXPLODINGBARREL__STATIC:
         case HORSEONSIDE__STATIC:
         case FIREBARREL__STATIC:
