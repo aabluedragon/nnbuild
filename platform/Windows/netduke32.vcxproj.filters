@@ -132,6 +132,9 @@
     <ClInclude Include="..\..\source\oldmp\src\gameexec.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\oldmp\src\projectiles.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\duke3d\rsrc\eduke32_icon.c">
@@ -231,6 +234,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\oldmp\src\dukebot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\oldmp\src\projectiles.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
