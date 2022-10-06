@@ -27,7 +27,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define KILLIT(KX) {A_DeleteSprite(KX);goto BOLT;}
 
 ActorData_t actor[MAXSPRITES];
-intptr_t* actorscrptr[MAXTILES];
 
 extern int g_numEnvSoundsPlaying;
 extern int g_noEnemies;
@@ -1395,7 +1394,7 @@ void G_MovePlayerSprite(int playerNum)
             otherx = 0;
         }
 
-        if (!oldnet_predicting && actorscrptr[sprite[p->i].picnum])
+        if (!oldnet_predicting && G_TileHasActor(sprite[p->i].picnum))
             A_Execute(p->i, s->yvel, otherx);
 
         if (ud.multimode > 1)
@@ -1984,7 +1983,7 @@ static void G_MoveStandables(void)
 
                 if (actor[i].t_data[7] <= 0)
                 {
-                    //                    s->extra = *actorscrptr[s->picnum];
+                    //                    s->extra = *g_tile[s->picnum].execPtr;
                     T3(i)=16;
                     actor[i].t_data[6]=3;
                     A_PlaySound(LASERTRIP_ARMING,i);
@@ -2670,13 +2669,13 @@ CLEAR_THE_BOLT:
         case RUBBERCAN__STATIC:
         case STEAM__STATIC:
         case CEILINGSTEAM__STATIC:
-            if (!actorscrptr[sprite[i].picnum])
+            if (!G_TileHasActor(sprite[i].picnum))
                 goto BOLT;
             p = A_FindPlayer(s, &x);
             A_Execute(i,p,x);
             goto BOLT;
         case WATERBUBBLEMAKER__STATIC:
-            if (!actorscrptr[sprite[i].picnum])
+            if (!G_TileHasActor(sprite[i].picnum))
                 goto BOLT;
             p = A_FindPlayer(s, &x);
             A_Execute(i,p,x);
@@ -2859,7 +2858,7 @@ static void G_MoveWeapons(void)
                     }
                 }
 
-                for (int32_t projMoveCnt = 1; projMoveCnt <= actor[spriteNum].projectile.velmult; projMoveCnt++)
+                for (int32_t projMoveCnt = 1; projMoveCnt <= actor[spriteNum].projectile.movecnt; projMoveCnt++)
                 {
                     davect = s->xyz;
                     A_GetZLimits(spriteNum);
@@ -3054,7 +3053,7 @@ static void G_MoveWeapons(void)
 
                     if (actor[spriteNum].projectile.workslike & PROJECTILE_HITSCAN)
                     {
-                        if (!actorscrptr[sprite[spriteNum].picnum])
+                        if (!G_TileHasActor(sprite[spriteNum].picnum))
                             goto BOLT;
 
                         int32_t playerDist;
@@ -3367,7 +3366,7 @@ static void G_MoveWeapons(void)
                 goto BOLT;
             }
             case SHOTSPARK1__STATIC:
-                if (!actorscrptr[sprite[spriteNum].picnum])
+                if (!G_TileHasActor(sprite[spriteNum].picnum))
                     goto BOLT;
 
                 int32_t playerDist;
@@ -4989,7 +4988,7 @@ DETONATEB:
             }
         }
 
-        if (!actorscrptr[sprite[i].picnum])
+        if (!G_TileHasActor(sprite[i].picnum))
             goto BOLT;
         p = A_FindPlayer(s,&x);
         A_Execute(i,p,x);
@@ -5424,7 +5423,7 @@ static void G_MoveMisc(void)  // STATNUM 5
             case FORCERIPPLE__STATIC:
             case TRANSPORTERSTAR__STATIC:
             case TRANSPORTERBEAM__STATIC:
-                if (!actorscrptr[sprite[i].picnum])
+                if (!G_TileHasActor(sprite[i].picnum))
                     goto BOLT;
                 p = A_FindPlayer(s,&x);
                 A_Execute(i,p,x);
@@ -7820,19 +7819,19 @@ void A_PlayAlertSound(int i)
 
 int A_CheckSpriteFlags(int iActor, int iType)
 {
-    if ((SpriteFlags[sprite[iActor].picnum]^actor[iActor].flags) & iType) return 1;
+    if ((g_tile[sprite[iActor].picnum].flags^actor[iActor].flags) & iType) return 1;
     return 0;
 }
 
 int A_CheckSpriteTileFlags(int iPicnum, int iType)
 {
-    if (SpriteFlags[iPicnum] & iType) return 1;
+    if (g_tile[iPicnum].flags & iType) return 1;
     return 0;
 }
 
 int A_CheckEnemyTile(int pn)
 {
-    return ((SpriteFlags[pn] & (SFLAG_HARDCODED_BADGUY | SFLAG_BADGUY)) != 0);
+    return ((g_tile[pn].flags & (SFLAG_HARDCODED_BADGUY | SFLAG_BADGUY)) != 0);
 }
 
 int A_CheckEnemySprite(const void *s)

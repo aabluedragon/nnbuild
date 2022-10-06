@@ -421,8 +421,6 @@ extern char g_numPlayerSprites;
 #define USERQUOTE_RIGHTOFFSET 14
 extern int quotebot, quotebotgoal; // game.c
 
-extern intptr_t *actorLoadEventScrptr[MAXTILES];
-
 typedef struct {
 /*    int x;
     int y;
@@ -640,8 +638,6 @@ extern gamearray_t aGameArrays[MAXGAMEARRAYS];
 extern int g_gameVarCount;
 extern int g_gameArrayCount;
 
-extern int SpriteFlags[MAXTILES];
-
 enum SpriteFlags_t {
     SFLAG_SHADOW           = 0x00000001,
     SFLAG_NVG              = 0x00000002,
@@ -656,6 +652,7 @@ enum SpriteFlags_t {
     SFLAG_SMOOTHMOVE       = 0x00002000,
     SFLAG_NOTELEPORT       = 0x00004000,
     SFLAG_BADGUYSTAYPUT    = 0x00008000,
+    SFLAG_CACHE            = 0x00010000,
     SFLAG_ROTFIXED         = 0x00020000,
     SFLAG_HARDCODED_BADGUY = 0x00040000,
     SFLAG_RESERVED1        = 0x00080000, // Was SFLAG_DIDNOSE7WATER
@@ -679,32 +676,6 @@ extern int g_timerTicsPerSecond;
 
 #define PIPEBOMB_REMOTE             1
 #define PIPEBOMB_TIMER              2
-
-// custom projectiles
-
-enum ProjectileFlags_t {
-    PROJECTILE_HITSCAN            = 0x00000001,
-    PROJECTILE_RPG                = 0x00000002,
-    PROJECTILE_BOUNCESOFFWALLS    = 0x00000004,
-    PROJECTILE_BOUNCESOFFMIRRORS  = 0x00000008,
-    PROJECTILE_KNEE               = 0x00000010,
-    PROJECTILE_WATERBUBBLES       = 0x00000020,
-    PROJECTILE_TIMED              = 0x00000040,
-    PROJECTILE_BOUNCESOFFSPRITES  = 0x00000080,
-    PROJECTILE_SPIT               = 0x00000100,
-    PROJECTILE_COOLEXPLOSION1     = 0x00000200,
-    PROJECTILE_BLOOD              = 0x00000400,
-    PROJECTILE_LOSESVELOCITY      = 0x00000800,
-    PROJECTILE_NOAIM              = 0x00001000,
-    PROJECTILE_RANDDECALSIZE      = 0x00002000,
-    PROJECTILE_EXPLODEONTIMER     = 0x00004000,
-    PROJECTILE_RPG_IMPACT         = 0x00008000,
-    PROJECTILE_RADIUS_PICNUM      = 0x00010000,
-    PROJECTILE_ACCURATE_AUTOAIM   = 0x00020000,
-    PROJECTILE_FORCEIMPACT        = 0x00040000,
-    PROJECTILE_ACCURATE           = 0x00100000,
-    PROJECTILE_PENETRATE          = 0x00800000, // TODO: Implement & port to mainline
-};
 
 // logo control
 
@@ -797,6 +768,7 @@ enum loguru_verbosities_game
 #include "music.h"
 #include "player.h"
 #include "premap.h"
+#include "projectiles.h"
 #include "quotes.h"
 #include "rts.h"
 #include "screens.h"
@@ -814,12 +786,12 @@ static inline int32_t gameHandleEvents(void)
 
 static inline int32_t G_TileHasActor(int const tileNum)
 {
-    return actorscrptr[tileNum] != NULL;
+    return g_tile[tileNum].execPtr != NULL;
 }
 
 static inline int32_t G_DefaultActorHealthForTile(int const tileNum)
 {
-    return G_TileHasActor(tileNum) ? *actorscrptr[tileNum] : 0;
+    return G_TileHasActor(tileNum) ? *g_tile[tileNum].execPtr : 0;
 }
 
 #endif

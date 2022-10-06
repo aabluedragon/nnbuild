@@ -86,8 +86,6 @@ extern void clearfifo(void);
 extern int  G_EnterLevel(int g);
 extern void G_BackToMenu(void);
 extern int A_GetHitscanRange(int i);
-extern int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite);
-extern int A_Shoot(int i,int atwith);
 extern void ChangeToMenu(int cm);
 // extern void savetemp(const char *fn,int daptr,int dasiz);
 // extern int G_LoadSaveHeader(char spot,int32_t *vn,int32_t *ln,int32_t *psk,int32_t *numplr);

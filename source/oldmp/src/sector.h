@@ -52,4 +52,7 @@ typedef struct {
     mapstate_t *savedstate;
 } map_t;
 
+// Function Declarations
+int32_t A_CheckHitSprite(int spriteNum, int16_t* hitSprite);
+
 #endif // SECTOR_H

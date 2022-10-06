@@ -2,7 +2,26 @@
 #define ACTORS_H
 
 #include "player.h"
+#include "projectiles.h"
 #include "namesdyn.h"
+
+// These macros are there to give names to the t_data[]/T*/vm.g_t[] indices
+// when used with actors. Greppability of source code is certainly a virtue.
+#define AC_COUNT(t) ((t)[0])  /* the actor's count */
+/* The ID of the actor's current move. In C-CON, the bytecode offset to the
+ * move composite: */
+#define AC_MOVE_ID(t) ((t)[1])
+#define AC_ACTION_COUNT(t) ((t)[2])  /* the actor's action count */
+#define AC_CURFRAME(t) ((t)[3])  /* the actor's current frame offset */
+ /* The ID of the actor's current action. In C-CON, the bytecode offset to the
+  * action composite: */
+#define AC_ACTION_ID(t) ((t)[4])
+#define AC_AI_ID(t) ((t)[5])  /* the ID of the actor's current ai */
+
+// <spr>: sprite pointer
+// <a>: actor_t pointer
+#define AC_ACTIONTICS(spr, a) ((spr)->lotag)
+#define AC_MOVFLAGS(spr, a) ((spr)->hitag)
 
 typedef struct {
     int floorz, ceilingz, lastvx, lastvy;
@@ -18,7 +37,16 @@ typedef struct {
 } ActorData_t;
 extern ActorData_t actor[MAXSPRITES];
 
-extern intptr_t* actorscrptr[MAXTILES];
+typedef struct
+{
+    intptr_t* execPtr;  // pointer to CON script for this tile, formerly actorscrptr
+    intptr_t* loadPtr;  // pointer to load time CON script, formerly actorLoadEventScrPtr or something
+    projectile_t* proj;
+    projectile_t* defproj;
+    uint32_t      flags;       // formerly SpriteFlags, ActorType
+    int32_t       cacherange;  // formerly SpriteCache
+} tiledata_t;
+extern tiledata_t   g_tile[MAXTILES];
 
 #ifdef POLYMER
 typedef struct

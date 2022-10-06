@@ -71,8 +71,6 @@ intptr_t *aplWeaponSelectSound[MAX_WEAPONS];     // Sound of weapon being select
 // Stores the IDs of system vars.
 SystemVarID_t sysVarIDs;
 
-intptr_t *actorLoadEventScrptr[MAXTILES];
-
 intptr_t *apScriptGameEvent[MAXGAMEEVENTS];
 intptr_t *g_parsingEventPtr=NULL;
 
@@ -137,7 +135,10 @@ const tokenmap_t vm_keywords[] =
     { "else",                   CON_ELSE },             // used with if checks
     { "strength",               CON_STRENGTH },         // sets health
     { "break",                  CON_BREAK },            // stops processing
+
     { "shoot",                  CON_SHOOT },            // shoots a projectile
+    { "shootvar",               CON_SHOOT },
+
     { "palfrom",                CON_PALFROM },          // used for player screen shading effect, sets p->pals_time and p->pals[0-2]
     { "sound",                  CON_SOUND },            // plays a sound that was defined with definesound
     { "fall",                   CON_FALL },             // causes actor to fall to sector floor height
@@ -341,13 +342,12 @@ const tokenmap_t vm_keywords[] =
     { "gmaxammo",               CON_GMAXAMMO },
     { "smaxammo",               CON_SMAXAMMO },
     { "startlevel",             CON_STARTLEVEL },
-    { "eshoot",                 CON_ESHOOT },
+
     { "qspawn",                 CON_QSPAWN },
     { "rotatesprite",           CON_ROTATESPRITE },
     { "defineprojectile",       CON_DEFINEPROJECTILE },
     { "spriteshadow",           CON_SPRITESHADOW },
     { "cos",                    CON_COS },
-    { "eshootvar",              CON_ESHOOTVAR },
     { "findnearactor3d",        CON_FINDNEARACTOR3D },
     { "findnearactor3dvar",     CON_FINDNEARACTOR3DVAR },
     { "flash",                  CON_FLASH },
@@ -368,7 +368,6 @@ const tokenmap_t vm_keywords[] =
     { "case",                   CON_CASE },
     { "default",                CON_DEFAULT },
     { "endswitch",              CON_ENDSWITCH },
-    { "shootvar",               CON_SHOOTVAR },
     { "soundvar",               CON_SOUNDVAR },
     { "findplayer",             CON_FINDPLAYER },
     { "findotherplayer",        CON_FINDOTHERPLAYER },
@@ -445,8 +444,13 @@ const tokenmap_t vm_keywords[] =
     { "findnearactorzvar",      CON_FINDNEARACTORZVAR },
     { "findnearspritez",        CON_FINDNEARSPRITEZ },
     { "findnearspritezvar",     CON_FINDNEARSPRITEZVAR },
-    { "zshootvar",              CON_ZSHOOTVAR },
-    { "ezshootvar",             CON_EZSHOOTVAR },
+
+    { "eshoot",                 CON_ESHOOT },
+    { "eshootvar",              CON_ESHOOT },
+
+    { "zshootvar",              CON_ZSHOOT },
+    { "ezshootvar",             CON_EZSHOOT },
+
     { "getcurraddress",         CON_GETCURRADDRESS },
     { "jump",                   CON_JUMP },
     { "qstrlen",                CON_QSTRLEN },
@@ -834,7 +838,7 @@ const memberlabel_t ProjectileLabels[]=
     { "pal", PROJ_PAL, 0, 0 },
     { "extra_rand", PROJ_EXTRA_RAND, 0, 0 },
     { "hitradius", PROJ_HITRADIUS, 0, 0 },
-    { "velmult", PROJ_VEL_MULT, 0, 0 },
+    { "velmult", PROJ_MOVECNT, 0, 0 },
     { "offset", PROJ_OFFSET, 0, 0 },
     { "bounces", PROJ_BOUNCES, 0, 0 },
     { "bsound", PROJ_BSOUND, 0, 0 },
@@ -1102,15 +1106,15 @@ static int C_SetScriptSize(int size)
 
     for (i=MAXTILES-1;i>=0;i--)
     {
-        if (actorscrptr[i])
+        if (g_tile[i].execPtr)
         {
-            j = (intptr_t)actorscrptr[i]-(intptr_t)&apScript[0];
-            actorscrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].execPtr-(intptr_t)&apScript[0];
+            g_tile[i].execPtr = (intptr_t *)j;
         }
-        if (actorLoadEventScrptr[i])
+        if (g_tile[i].loadPtr)
         {
-            j = (intptr_t)actorLoadEventScrptr[i]-(intptr_t)&apScript[0];
-            actorLoadEventScrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].loadPtr - (intptr_t)&apScript[0];
+            g_tile[i].loadPtr = (intptr_t *)j;
         }
     }
 
@@ -1191,15 +1195,15 @@ static int C_SetScriptSize(int size)
 
     for (i=MAXTILES-1;i>=0;i--)
     {
-        if (actorscrptr[i])
+        if (g_tile[i].execPtr)
         {
-            j = (intptr_t)actorscrptr[i]+(intptr_t)&apScript[0];
-            actorscrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].execPtr+(intptr_t)&apScript[0];
+            g_tile[i].execPtr = (intptr_t *)j;
         }
-        if (actorLoadEventScrptr[i])
+        if (g_tile[i].loadPtr)
         {
-            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&apScript[0];
-            actorLoadEventScrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].loadPtr+(intptr_t)&apScript[0];
+            g_tile[i].loadPtr = (intptr_t *)j;
         }
     }
 
@@ -1296,132 +1300,6 @@ static int32_t C_SetDefName(const char* name)
     if (g_defNamePtr)
         LOG_F(INFO, "Using DEF file: %s.", g_defNamePtr);
     return (g_defNamePtr == NULL);
-}
-
-static void C_SetProjectile(int lVar1, int lLabelID, int lVar2)
-{
-    switch (lLabelID)
-    {
-    case PROJ_WORKSLIKE:
-        ProjectileData[lVar1].workslike=lVar2;
-        break;
-
-    case PROJ_SPAWNS:
-        ProjectileData[lVar1].spawns=lVar2;
-        break;
-
-    case PROJ_SXREPEAT:
-        ProjectileData[lVar1].sxrepeat=lVar2;
-        break;
-
-    case PROJ_SYREPEAT:
-        ProjectileData[lVar1].syrepeat=lVar2;
-        break;
-
-    case PROJ_SOUND:
-        ProjectileData[lVar1].sound=lVar2;
-        break;
-
-    case PROJ_ISOUND:
-        ProjectileData[lVar1].isound=lVar2;
-        break;
-
-    case PROJ_VEL:
-        ProjectileData[lVar1].vel=lVar2;
-        break;
-
-    case PROJ_EXTRA:
-        ProjectileData[lVar1].extra=lVar2;
-        break;
-
-    case PROJ_DECAL:
-        ProjectileData[lVar1].decal=lVar2;
-        break;
-
-    case PROJ_TRAIL:
-        ProjectileData[lVar1].trail=lVar2;
-        break;
-
-    case PROJ_TXREPEAT:
-        ProjectileData[lVar1].txrepeat=lVar2;
-        break;
-
-    case PROJ_TYREPEAT:
-        ProjectileData[lVar1].tyrepeat=lVar2;
-        break;
-
-    case PROJ_TOFFSET:
-        ProjectileData[lVar1].toffset=lVar2;
-        break;
-
-    case PROJ_TNUM:
-        ProjectileData[lVar1].tnum=lVar2;
-        break;
-
-    case PROJ_DROP:
-        ProjectileData[lVar1].drop=lVar2;
-        break;
-
-    case PROJ_CSTAT:
-        ProjectileData[lVar1].cstat=lVar2;
-        break;
-
-    case PROJ_CLIPDIST:
-        ProjectileData[lVar1].clipdist=lVar2;
-        break;
-
-    case PROJ_SHADE:
-        ProjectileData[lVar1].shade=lVar2;
-        break;
-
-    case PROJ_XREPEAT:
-        ProjectileData[lVar1].xrepeat=lVar2;
-        break;
-
-    case PROJ_YREPEAT:
-        ProjectileData[lVar1].yrepeat=lVar2;
-        break;
-
-    case PROJ_PAL:
-        ProjectileData[lVar1].pal=lVar2;
-        break;
-
-    case PROJ_EXTRA_RAND:
-        ProjectileData[lVar1].extra_rand=lVar2;
-        break;
-
-    case PROJ_HITRADIUS:
-        ProjectileData[lVar1].hitradius=lVar2;
-        break;
-
-    case PROJ_VEL_MULT:
-        ProjectileData[lVar1].velmult=lVar2;
-        break;
-
-    case PROJ_OFFSET:
-        ProjectileData[lVar1].offset=lVar2;
-        break;
-
-    case PROJ_BOUNCES:
-        ProjectileData[lVar1].bounces=lVar2;
-        break;
-
-    case PROJ_BSOUND:
-        ProjectileData[lVar1].bsound=lVar2;
-        break;
-
-    case PROJ_RANGE:
-        ProjectileData[lVar1].range=lVar2;
-        break;
-
-    default:
-        break;
-    }
-
-    //  DefaultProjectileData[lVar1] = ProjectileData[lVar1];
-    Bmemcpy(&DefaultProjectileData[lVar1], &ProjectileData[lVar1], sizeof(ProjectileData[lVar1]));
-
-    return;
 }
 
 static int C_CheckEventSync(int iEventID)
@@ -2680,7 +2558,7 @@ DO_DEFSTATE:
         C_GetNextValue(LABEL_DEFINE);
         //         Bsprintf(g_szCurrentBlockName,"%s",label+(g_numLabels<<6));
         g_scriptPtr--;
-        actorscrptr[*g_scriptPtr] = g_parsingActorPtr;
+        g_tile[*g_scriptPtr].execPtr = g_parsingActorPtr;
 
         for (j=0;j<4;j++)
         {
@@ -2810,7 +2688,7 @@ DO_DEFSTATE:
         g_szCurrentBlockName[j] = 0;
         C_GetNextValue(LABEL_DEFINE);
         g_scriptPtr--;
-        actorLoadEventScrptr[*g_scriptPtr] = g_parsingActorPtr;
+        g_tile[*g_scriptPtr].loadPtr = g_parsingActorPtr;
 
         g_checkingIfElse = 0;
         return 0;
@@ -2850,13 +2728,13 @@ DO_DEFSTATE:
 
         C_GetNextValue(LABEL_DEFINE);
         g_scriptPtr--;
-        actorscrptr[*g_scriptPtr] = g_parsingActorPtr;
+        g_tile[*g_scriptPtr].execPtr = g_parsingActorPtr;
 
         if (tw == CON_USERACTOR)
         {
-            if (j & 1) SpriteFlags[*g_scriptPtr] |= SFLAG_BADGUY;
-            if (j & 2) SpriteFlags[*g_scriptPtr] |= (SFLAG_BADGUY | SFLAG_BADGUYSTAYPUT);
-            if (j & 4) SpriteFlags[*g_scriptPtr] |= SFLAG_ROTFIXED;
+            if (j & 1) g_tile[*g_scriptPtr].flags |= SFLAG_BADGUY;
+            if (j & 2) g_tile[*g_scriptPtr].flags |= (SFLAG_BADGUY | SFLAG_BADGUYSTAYPUT);
+            if (j & 4) g_tile[*g_scriptPtr].flags |= SFLAG_ROTFIXED;
         }
 
         for (j=0;j<4;j++)
@@ -2944,11 +2822,9 @@ DO_DEFSTATE:
         return 0;
 
     case CON_ESPAWN:
-    case CON_ESHOOT:
     case CON_QSPAWN:
     case CON_EQSPAWN:
     case CON_STRENGTH:
-    case CON_SHOOT:
     case CON_ADDPHEALTH:
     case CON_SPAWN:
     case CON_CSTAT:
@@ -3853,7 +3729,8 @@ DO_DEFSTATE:
         C_GetNextVarType(GAMEVAR_READONLY);
         return 0;
 
-    case CON_ESHOOTVAR:
+    case CON_SHOOT:
+    case CON_ESHOOT:
     case CON_ESPAWNVAR:
     case CON_QSPAWNVAR:
     case CON_EQSPAWNVAR:
@@ -3863,7 +3740,6 @@ DO_DEFSTATE:
     case CON_TIME:
     case CON_INITTIMER:
     case CON_LOCKPLAYER:
-    case CON_SHOOTVAR:
     case CON_QUAKE:
         if (!C_CheckEventSync(g_currentEvent))
         {
@@ -3921,8 +3797,6 @@ DO_DEFSTATE:
     }
 
     case CON_RANDVAR:
-    case CON_ZSHOOT:
-    case CON_EZSHOOT:
         if (!C_CheckEventSync(g_currentEvent))
         {
             C_ReportError(WARNING_EVENTSYNC);
@@ -3948,10 +3822,7 @@ DO_DEFSTATE:
         //printf("Found [add|set]var at line= %d\n",g_lineNumber);
 
         // get the ID of the DEF
-        if (tw != CON_ZSHOOT && tw != CON_EZSHOOT)
-            C_GetNextVarType(GAMEVAR_READONLY);
-        else C_GetNextVar();
-
+        C_GetNextVarType(GAMEVAR_READONLY);
         C_GetNextValue(LABEL_DEFINE); // the number to check against...
         return 0;
     case CON_SETARRAY:
@@ -4132,8 +4003,8 @@ DO_DEFSTATE:
         C_GetNextValue(LABEL_DEFINE);
         z = *(g_scriptPtr-1);
 
-        C_SetProjectile(j,y,z);
-        SpriteFlags[j] |= SFLAG_PROJECTILE;
+        C_DefineProjectile(j,y,z);
+        g_tile[j].flags |= SFLAG_PROJECTILE;
         return 0;
     }
 
@@ -4157,7 +4028,7 @@ DO_DEFSTATE:
             return 0;
         }
 
-        SpriteFlags[j] |= SFLAG_DAMAGEEVENT;
+        g_tile[j].flags |= SFLAG_DAMAGEEVENT;
 
         return 0;
     }
@@ -4186,7 +4057,7 @@ DO_DEFSTATE:
 
         for (; i <= j; i++)
         {
-            SpriteFlags[i] |= SFLAG_DAMAGEEVENT;
+            g_tile[i].flags |= SFLAG_DAMAGEEVENT;
         }
 
         return 0;
@@ -4210,7 +4081,7 @@ DO_DEFSTATE:
 
             C_GetNextValue(LABEL_DEFINE);
             g_scriptPtr--;
-            SpriteFlags[j] = *g_scriptPtr;
+            g_tile[j].flags = *g_scriptPtr;
 
             return 0;
         }
@@ -4250,32 +4121,32 @@ DO_DEFSTATE:
         switch (tw)
         {
         case CON_SPRITESHADOW:
-            SpriteFlags[*g_scriptPtr] |= SFLAG_SHADOW;
+            g_tile[*g_scriptPtr].flags |= SFLAG_SHADOW;
             break;
         case CON_SPRITENVG:
-            SpriteFlags[*g_scriptPtr] |= SFLAG_NVG;
+            g_tile[*g_scriptPtr].flags |= SFLAG_NVG;
             break;
         case CON_SPRITENOSHADE:
-            SpriteFlags[*g_scriptPtr] |= SFLAG_NOSHADE;
+            g_tile[*g_scriptPtr].flags |= SFLAG_NOSHADE;
             break;
         case CON_SPRITENOPAL:
-            SpriteFlags[*g_scriptPtr] |= SFLAG_NOPAL;
+            g_tile[*g_scriptPtr].flags |= SFLAG_NOPAL;
             break;
         case CON_PRECACHE:
-            SpriteCacheList[*g_scriptPtr][0] = j;
             C_GetNextValue(LABEL_DEFINE);
             g_scriptPtr--;
             i = *g_scriptPtr;
-            if (i > MAXTILES-1)
+            if (EDUKE32_PREDICT_FALSE((unsigned)i >= MAXTILES))
             {
                 C_ReportError(ERROR_EXCEEDSMAXTILES);
                 g_errorCnt++;
             }
-            SpriteCacheList[j][1] = i;
+            g_tile[j].cacherange = i;
+
             C_GetNextValue(LABEL_DEFINE);
             g_scriptPtr--;
-            i = *g_scriptPtr;
-            SpriteCacheList[j][2] = i;
+            if (*g_scriptPtr)
+                g_tile[j].flags |= SFLAG_CACHE;
             break;
         }
         return 0;
@@ -4761,10 +4632,10 @@ repeatcase:
         return 1;      // end of block
         break;
 
+    case CON_ZSHOOT:
+    case CON_EZSHOOT:
     case CON_CHANGESPRITESTAT:
     case CON_CHANGESPRITESECT:
-    case CON_ZSHOOTVAR:
-    case CON_EZSHOOTVAR:
         if (!C_CheckEventSync(g_currentEvent))
         {
             g_warningCnt++;
@@ -5950,31 +5821,11 @@ static void C_AddDefaultDefinitions(void)
     AddDefinition("PROJ_TRAIL",PROJ_TRAIL,LABEL_DEFINE);
     AddDefinition("PROJ_TXREPEAT",PROJ_TXREPEAT,LABEL_DEFINE);
     AddDefinition("PROJ_TYREPEAT",PROJ_TYREPEAT,LABEL_DEFINE);
-    AddDefinition("PROJ_VEL_MULT",PROJ_VEL_MULT,LABEL_DEFINE);
+    AddDefinition("PROJ_VEL_MULT",PROJ_MOVECNT,LABEL_DEFINE);
     AddDefinition("PROJ_VEL",PROJ_VEL,LABEL_DEFINE);
     AddDefinition("PROJ_WORKSLIKE",PROJ_WORKSLIKE,LABEL_DEFINE);
     AddDefinition("PROJ_XREPEAT",PROJ_XREPEAT,LABEL_DEFINE);
     AddDefinition("PROJ_YREPEAT",PROJ_YREPEAT,LABEL_DEFINE);
-}
-
-static void C_InitProjectiles(void)
-{
-    int i;
-    projectile_t DefaultProjectile =
-    {
-        1, 100, -1, -1, 2048, 0,
-        (int16_t)SMALLSMOKE, -1, -1, 600, (int16_t)BULLETHOLE, -1, 0, 0, 32, 448, (int16_t)g_numFreezeBounces, PIPEBOMB_BOUNCE, 1,
-        -1, -1, -1, -1, -96, 18, 18, 0, 1
-    };
-
-    // this will only happen if I forget to update this function...
-    if (sizeof(projectile_t) != sizeof(DefaultProjectile))
-        G_GameExit("ERROR: C_InitProjectiles() projectile_t mismatch!");
-
-    for (i=MAXTILES-1;i>=0;i--)
-        Bmemcpy(&ProjectileData[i],&DefaultProjectile,sizeof(projectile_t));
-
-    Bmemcpy(&DefaultProjectileData[0], &ProjectileData[0], sizeof(ProjectileData));
 }
 
 extern int g_numObituaries;
@@ -6053,8 +5904,9 @@ void C_Compile(const char *filenam)
     kread(kFile,(char *)textptr, kFileLen);
     kclose(kFile);
 
-    Bmemset(actorscrptr, 0, sizeof(actorscrptr));
-    Bmemset(actorLoadEventScrptr, 0, sizeof(actorLoadEventScrptr));
+    // CHECKME: Hopefully this is OK to comment out. Couldn't find a suitable replacement.
+    //Bmemset(actorscrptr, 0, sizeof(actorscrptr));
+    //Bmemset(actorLoadEventScrptr, 0, sizeof(actorLoadEventScrptr));
 
 //    clearbufbyte(apScript,sizeof(apScript),0l); // JBF 20040531: yes? no?
     if (apScript != NULL)
@@ -6178,7 +6030,7 @@ void C_Compile(const char *filenam)
             if (VM_HaveEvent(i))
                 j++;
         for (i=MAXTILES-1;i>=0;i--)
-            if (actorscrptr[i])
+            if (g_tile[i].execPtr)
                 k++;
 
         VLOG_F(LOG_CON, "%d/%d event definitions, %d defined actors",j,MAXEVENTS,k);

@@ -29,6 +29,9 @@ G_EXTERN int32_t g_interpolationCnt;
 G_EXTERN int32_t g_interpolationLock;
 G_EXTERN interp_int32_t interps[MAXINTERPOLATIONS];
 
+// Tile Data
+G_EXTERN tiledata_t g_tile[MAXTILES];
+
 // Pre-initialized
 #ifndef global_c_
 extern int g_spriteGravity;
@@ -117,11 +120,6 @@ G_EXTERN intptr_t *apScript;
 G_EXTERN intptr_t *g_scriptPtr;
 G_EXTERN int g_numLabels, g_numDefaultLabels;
 G_EXTERN char *label;
-
-// Tile Data
-G_EXTERN int32_t SpriteFlags[MAXTILES];
-G_EXTERN projectile_t ProjectileData[MAXTILES], DefaultProjectileData[MAXTILES];
-G_EXTERN short SpriteCacheList[MAXTILES][3];
 
 // Clouds
 G_EXTERN short g_numClouds, clouds[128], cloudx[128], cloudy[128];

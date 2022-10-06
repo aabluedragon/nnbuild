@@ -158,12 +158,6 @@ typedef struct {
 } playerdata_t;
 extern playerdata_t g_player[MAXPLAYERS];
 
-typedef struct {
-    int workslike, extra, cstat, extra_rand, hitradius, range;
-    short spawns, sound, isound, vel, decal, trail, tnum, drop, clipdist, offset, bounces, bsound, toffset;
-    signed char sxrepeat, syrepeat, txrepeat, tyrepeat, shade, xrepeat, yrepeat, pal, velmult;
-} projectile_t;
-
 // Externs
 #define PWEAPON(Player, Weapon, Wmember) (aplWeapon ## Wmember [Weapon][Player])
 extern intptr_t* aplWeaponClip[MAX_WEAPONS];            // number of items in clip
@@ -210,8 +204,6 @@ void P_UpdateScreenPal(DukePlayer_t* p);
 void P_QuickKill(DukePlayer_t* p);
 void P_GetInput(int snum, bool uncapped);
 void P_ProcessInput(int snum);
-
-int Proj_GetDamage(projectile_t* pProj);
 
 static inline void P_PalFrom(DukePlayer_t* pPlayer, uint8_t f, uint8_t r, uint8_t g, uint8_t b)
 {

@@ -726,6 +726,7 @@ oldmp_game_objs := \
     osdfuncs.cpp \
     player.cpp \
     premap.cpp \
+    projectiles.cpp \
     rts.cpp \
     savegame.cpp \
     screens.cpp \

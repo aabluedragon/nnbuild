@@ -34,11 +34,11 @@ static int  g_precacheCount;
 
 static void flag_precache(int32_t tile, int32_t type)
 {
-    if (!(gotpic[tile >> 3] & pow2char[tile & 7]))
+    if (!bitmap_test(gotpic, tile))
         g_precacheCount++;
 
-    gotpic[tile >> 3] |= pow2char[tile & 7];
-    precachehightile[type][tile >> 3] |= pow2char[tile & 7];
+    bitmap_set(gotpic, tile);
+    bitmap_set(precachehightile[type], tile);
 }
 
 static void tloadtile(int tilenume, int type)
@@ -58,208 +58,6 @@ static void tloadtile(int tilenume, int type)
 
     for (; firstTile <= lastTile; firstTile++)
         flag_precache(firstTile, type);
-}
-
-static void G_CacheSpriteNum(int i)
-{
-    char maxc;
-    int j;
-
-    if (DMFLAGS_TEST(DMFLAG_NOMONSTERS) && A_CheckEnemySprite(&sprite[i])) return;
-
-    maxc = 1;
-
-    if (SpriteCacheList[PN(i)][0] == PN(i))
-        for (j = PN(i); j <= SpriteCacheList[PN(i)][1]; j++)
-            tloadtile(j,1);
-
-    switch (DynamicTileMap[PN(i)])
-    {
-    case HYDRENT__STATIC:
-        tloadtile(BROKEFIREHYDRENT,1);
-        for (j = TOILETWATER; j < (TOILETWATER+4); j++) tloadtile(j,1);
-        break;
-    case TOILET__STATIC:
-        tloadtile(TOILETBROKE,1);
-        for (j = TOILETWATER; j < (TOILETWATER+4); j++) tloadtile(j,1);
-        break;
-    case STALL__STATIC:
-        tloadtile(STALLBROKE,1);
-        for (j = TOILETWATER; j < (TOILETWATER+4); j++) tloadtile(j,1);
-        break;
-    case RUBBERCAN__STATIC:
-        maxc = 2;
-        break;
-    case TOILETWATER__STATIC:
-        maxc = 4;
-        break;
-    case FEMPIC1__STATIC:
-        maxc = 44;
-        break;
-    case LIZTROOP__STATIC:
-    case LIZTROOPRUNNING__STATIC:
-    case LIZTROOPSHOOT__STATIC:
-    case LIZTROOPJETPACK__STATIC:
-    case LIZTROOPONTOILET__STATIC:
-    case LIZTROOPDUCKING__STATIC:
-        for (j = LIZTROOP; j < (LIZTROOP+72); j++) tloadtile(j,1);
-        for (j=HEADJIB1;j<LEGJIB1+3;j++) tloadtile(j,1);
-        maxc = 0;
-        break;
-    case WOODENHORSE__STATIC:
-        maxc = 5;
-        for (j = HORSEONSIDE; j < (HORSEONSIDE+4); j++) tloadtile(j,1);
-        break;
-    case NEWBEAST__STATIC:
-    case NEWBEASTSTAYPUT__STATIC:
-        maxc = 90;
-        break;
-    case BOSS1__STATIC:
-    case BOSS2__STATIC:
-    case BOSS3__STATIC:
-        maxc = 30;
-        break;
-    case OCTABRAIN__STATIC:
-    case OCTABRAINSTAYPUT__STATIC:
-    case COMMANDER__STATIC:
-    case COMMANDERSTAYPUT__STATIC:
-        maxc = 38;
-        break;
-    case RECON__STATIC:
-        maxc = 13;
-        break;
-    case PIGCOP__STATIC:
-    case PIGCOPDIVE__STATIC:
-        maxc = 61;
-        break;
-    case SHARK__STATIC:
-        maxc = 30;
-        break;
-    case LIZMAN__STATIC:
-    case LIZMANSPITTING__STATIC:
-    case LIZMANFEEDING__STATIC:
-    case LIZMANJUMP__STATIC:
-        for (j=LIZMANHEAD1;j<LIZMANLEG1+3;j++) tloadtile(j,1);
-        maxc = 80;
-        break;
-    case APLAYER__STATIC:
-        maxc = 0;
-        if (ud.multimode > 1)
-        {
-            maxc = 5;
-            for (j = 1420;j < 1420+106; j++) tloadtile(j,1);
-        }
-        break;
-    case ATOMICHEALTH__STATIC:
-        maxc = 14;
-        break;
-    case DRONE__STATIC:
-        maxc = 10;
-        break;
-    case EXPLODINGBARREL__STATIC:
-    case SEENINE__STATIC:
-    case OOZFILTER__STATIC:
-        maxc = 3;
-        break;
-    case NUKEBARREL__STATIC:
-    case CAMERA1__STATIC:
-        maxc = 5;
-        break;
-        // caching of HUD sprites for weapons that may be in the level
-    case CHAINGUNSPRITE__STATIC:
-        for (j=CHAINGUN; j<=CHAINGUN+7; j++) tloadtile(j,1);
-        break;
-    case RPGSPRITE__STATIC:
-        for (j=RPGGUN; j<=RPGGUN+2; j++) tloadtile(j,1);
-        break;
-    case FREEZESPRITE__STATIC:
-        for (j=FREEZE; j<=FREEZE+5; j++) tloadtile(j,1);
-        break;
-    case GROWSPRITEICON__STATIC:
-    case SHRINKERSPRITE__STATIC:
-        for (j=SHRINKER-2; j<=SHRINKER+5; j++) tloadtile(j,1);
-        break;
-    case HBOMBAMMO__STATIC:
-    case HEAVYHBOMB__STATIC:
-        for (j=HANDREMOTE; j<=HANDREMOTE+5; j++) tloadtile(j,1);
-        break;
-    case TRIPBOMBSPRITE__STATIC:
-        for (j=HANDHOLDINGLASER; j<=HANDHOLDINGLASER+4; j++) tloadtile(j,1);
-        break;
-    case SHOTGUNSPRITE__STATIC:
-        tloadtile(SHOTGUNSHELL,1);
-        for (j=SHOTGUN; j<=SHOTGUN+6; j++) tloadtile(j,1);
-        break;
-    case DEVISTATORSPRITE__STATIC:
-        for (j=DEVISTATOR; j<=DEVISTATOR+1; j++) tloadtile(j,1);
-        break;
-
-    }
-
-    for (j = PN(i); j < (PN(i)+maxc); j++) tloadtile(j,1);
-}
-
-static void G_PrecacheSprites(void)
-{
-    int i,j;
-
-    for (i=0;i<MAXTILES;i++)
-    {
-        if (SpriteFlags[i] & SFLAG_PROJECTILE)
-            tloadtile(i,1);
-        if (SpriteCacheList[i][0] == i && SpriteCacheList[i][2])
-            for (j = i; j <= SpriteCacheList[i][1]; j++)
-                tloadtile(j,1);
-    }
-    tloadtile(BOTTOMSTATUSBAR,1);
-    if (ud.multimode > 1)
-        tloadtile(FRAGBAR,1);
-
-    tloadtile(VIEWSCREEN,1);
-
-    for (i=STARTALPHANUM;i<ENDALPHANUM+1;i++) tloadtile(i,1);
-    for (i=BIGALPHANUM; i<BIGALPHANUM+82; i++) tloadtile(i,1);
-    for (i=MINIFONT;i<MINIFONT+63;i++) tloadtile(i,1);
-
-    for (i=FOOTPRINTS;i<FOOTPRINTS+3;i++) tloadtile(i,1);
-
-    for (i = BURNING; i < BURNING+14; i++) tloadtile(i,1);
-    for (i = BURNING2; i < BURNING2+14; i++) tloadtile(i,1);
-
-    for (i = CRACKKNUCKLES; i < CRACKKNUCKLES+4; i++) tloadtile(i,1);
-
-    for (i = FIRSTGUN; i < FIRSTGUN+3 ; i++) tloadtile(i,1);
-    for (i = FIRSTGUNRELOAD; i < FIRSTGUNRELOAD+8 ; i++) tloadtile(i,1);
-
-    for (i = EXPLOSION2; i < EXPLOSION2+21 ; i++) tloadtile(i,1);
-
-    for (i = COOLEXPLOSION1; i < COOLEXPLOSION1+21 ; i++) tloadtile(i,1);
-
-    tloadtile(BULLETHOLE,1);
-    tloadtile(BLOODPOOL,1);
-    for (i = TRANSPORTERBEAM; i < (TRANSPORTERBEAM+6); i++) tloadtile(i,1);
-
-    for (i = SMALLSMOKE; i < (SMALLSMOKE+4); i++) tloadtile(i,1);
-    for (i = SHOTSPARK1; i < (SHOTSPARK1+4); i++) tloadtile(i,1);
-
-    for (i = BLOOD; i < (BLOOD+4); i++) tloadtile(i,1);
-    for (i = JIBS1; i < (JIBS5+5); i++) tloadtile(i,1);
-    for (i = JIBS6; i < (JIBS6+8); i++) tloadtile(i,1);
-
-    for (i = SCRAP1; i < (SCRAP1+29); i++) tloadtile(i,1);
-
-    tloadtile(FIRELASER,1);
-    for (i=FORCERIPPLE; i<(FORCERIPPLE+9); i++) tloadtile(i,1);
-
-    for (i=MENUSCREEN; i<DUKECAR; i++) tloadtile(i,1);
-
-    for (i=RPG; i<RPG+7; i++) tloadtile(i,1);
-    for (i=FREEZEBLAST; i<FREEZEBLAST+3; i++) tloadtile(i,1);
-    for (i=SHRINKSPARK; i<SHRINKSPARK+4; i++) tloadtile(i,1);
-    for (i=GROWSPARK; i<GROWSPARK+4; i++) tloadtile(i,1);
-    for (i=SHRINKEREXPLOSION; i<SHRINKEREXPLOSION+4; i++) tloadtile(i,1);
-    for (i=MORTER; i<MORTER+4; i++) tloadtile(i,4);
-    for (i=0; i<=60; i++) tloadtile(i,1);
 }
 
 static void G_DemoLoadScreen(const char* statustext, int const loadScreenTile, int percent)
@@ -368,102 +166,377 @@ static void G_DoLoadScreen(const char* statustext, int percent)
     }
 }
 
+static void cacheTilesForSprite(int spriteNum)
+{
+    if (DMFLAGS_TEST(DMFLAG_NOMONSTERS) && A_CheckEnemySprite(&sprite[spriteNum])) return;
+
+    int const picnum = sprite[spriteNum].picnum == RESPAWN ? sprite[spriteNum].hitag : sprite[spriteNum].picnum;
+    int extraTiles = 1;
+
+    for (int j = picnum; j <= g_tile[picnum].cacherange; j++)
+        tloadtile(j, 1);
+
+#ifndef EDUKE32_STANDALONE
+    switch (DynamicTileMap[picnum])
+    {
+        case HYDRENT__STATIC:
+            tloadtile(BROKEFIREHYDRENT, 1);
+            for (int j = TOILETWATER; j < (TOILETWATER + 4); j++) tloadtile(j, 1);
+            break;
+        case TOILET__STATIC:
+            tloadtile(TOILETBROKE, 1);
+            for (int j = TOILETWATER; j < (TOILETWATER + 4); j++) tloadtile(j, 1);
+            break;
+        case STALL__STATIC:
+            tloadtile(STALLBROKE, 1);
+            for (int j = TOILETWATER; j < (TOILETWATER + 4); j++) tloadtile(j, 1);
+            break;
+        case RUBBERCAN__STATIC:
+            extraTiles = 2;
+            break;
+        case TOILETWATER__STATIC:
+            extraTiles = 4;
+            break;
+        case FEMPIC1__STATIC:
+            extraTiles = 44;
+            break;
+        case LIZTROOP__STATIC:
+        case LIZTROOPRUNNING__STATIC:
+        case LIZTROOPSHOOT__STATIC:
+        case LIZTROOPJETPACK__STATIC:
+        case LIZTROOPONTOILET__STATIC:
+        case LIZTROOPDUCKING__STATIC:
+            for (int j = LIZTROOP; j < (LIZTROOP + 72); j++) tloadtile(j, 1);
+            for (int j = HEADJIB1; j < LEGJIB1 + 3; j++) tloadtile(j, 1);
+            extraTiles = 0;
+            break;
+        case WOODENHORSE__STATIC:
+            extraTiles = 5;
+            for (int j = HORSEONSIDE; j < (HORSEONSIDE + 4); j++) tloadtile(j, 1);
+            break;
+        case NEWBEAST__STATIC:
+        case NEWBEASTSTAYPUT__STATIC:
+            extraTiles = 90;
+            break;
+        case BOSS1__STATIC:
+        case BOSS2__STATIC:
+        case BOSS3__STATIC:
+        case SHARK__STATIC:
+            extraTiles = 30;
+            break;
+        case OCTABRAIN__STATIC:
+        case OCTABRAINSTAYPUT__STATIC:
+        case COMMANDER__STATIC:
+        case COMMANDERSTAYPUT__STATIC:
+            extraTiles = 38;
+            break;
+        case RECON__STATIC:
+            extraTiles = 13;
+            break;
+        case PIGCOP__STATIC:
+        case PIGCOPDIVE__STATIC:
+            extraTiles = 61;
+            break;
+        case LIZMAN__STATIC:
+        case LIZMANSPITTING__STATIC:
+        case LIZMANFEEDING__STATIC:
+        case LIZMANJUMP__STATIC:
+            for (int j = LIZMANHEAD1; j < LIZMANLEG1 + 3; j++) tloadtile(j, 1);
+            extraTiles = 80;
+            break;
+        case APLAYER__STATIC:
+            extraTiles = 0;
+            //if (ud.multimode > 1) // [JM] Let's precache this anyway, since we can see this in mirrors.
+            {
+                extraTiles = 5;
+                for (int j = 1420; j < 1420 + 106; j++) tloadtile(j, 1);
+            }
+            break;
+        case ATOMICHEALTH__STATIC:
+            extraTiles = 14;
+            break;
+        case DRONE__STATIC:
+            extraTiles = 10;
+            break;
+        case EXPLODINGBARREL__STATIC:
+        case SEENINE__STATIC:
+        case OOZFILTER__STATIC:
+            extraTiles = 3;
+            break;
+        case NUKEBARREL__STATIC:
+        case CAMERA1__STATIC:
+            extraTiles = 5;
+            break;
+            // caching of HUD sprites for weapons that may be in the level
+        case CHAINGUNSPRITE__STATIC:
+            for (int j = CHAINGUN; j <= CHAINGUN + 7; j++) tloadtile(j, 1);
+            break;
+        case RPGSPRITE__STATIC:
+            tloadtile(RPGGUN, 1);
+            for (int j = RPGGUN + 1; j <= RPGGUN + 2; j++) tloadtile(j, 1);
+            break;
+        case FREEZESPRITE__STATIC:
+            tloadtile(FREEZE, 1);
+            tloadtile(FREEZE + 2, 1);
+            for (int j = FREEZE + 3; j <= FREEZE + 5; j++) tloadtile(j, 1);
+            break;
+        case GROWSPRITEICON__STATIC:
+        case SHRINKERSPRITE__STATIC:
+        {
+            int32_t const tile = SHRINKER;
+            for (int j = tile - 2; j <= tile + 1; j++) tloadtile(j, 1);
+            for (int j = SHRINKER + 2; j <= SHRINKER + 5; j++) tloadtile(j, 1);
+            break;
+        }
+        case HBOMBAMMO__STATIC:
+        case HEAVYHBOMB__STATIC:
+            for (int j = HANDREMOTE; j <= HANDREMOTE + 5; j++) tloadtile(j, 1);
+            break;
+        case TRIPBOMBSPRITE__STATIC:
+            for (int j = HANDHOLDINGLASER; j <= HANDHOLDINGLASER + 4; j++) tloadtile(j, 1);
+            break;
+        case SHOTGUNSPRITE__STATIC:
+            tloadtile(SHOTGUNSHELL, 1);
+            for (int j = SHOTGUN; j <= SHOTGUN + 6; j++) tloadtile(j, 1);
+            break;
+        case DEVISTATORSPRITE__STATIC:
+            for (int j = DEVISTATOR; j <= DEVISTATOR + 1; j++) tloadtile(j, 1);
+            break;
+    }
+#endif
+
+    for (int j = picnum; j < (picnum + extraTiles); j++)
+        tloadtile(j, 1);
+}
+
+#ifndef EDUKE32_STANDALONE
+static void cacheDukeTiles(void)
+{
+    //tloadtile(sbartile(), 1);
+    tloadtile(BOTTOMSTATUSBAR, 1);
+
+    if (ud.multimode > 1)
+        tloadtile(FRAGBAR, 1);
+
+    tloadtile(VIEWSCREEN, 1);
+
+    for (int i = STARTALPHANUM; i < ENDALPHANUM + 1; i++)
+        tloadtile(i, 1);
+    for (int i = BIGALPHANUM - 11; i < BIGALPHANUM + 82; i++)
+        tloadtile(i, 1);
+    for (int i = MINIFONT; i < MINIFONT + 93; i++)
+        tloadtile(i, 1);
+
+    for (int i = FOOTPRINTS; i < FOOTPRINTS + 3; i++)
+        tloadtile(i, 1);
+
+    for (int i = BURNING; i < BURNING + 14; i++)
+        tloadtile(i, 1);
+    for (int i = BURNING2; i < BURNING2 + 14; i++)
+        tloadtile(i, 1);
+
+    for (int i = CRACKKNUCKLES; i < CRACKKNUCKLES + 4; i++)
+        tloadtile(i, 1);
+
+    for (int i = FIRSTGUN; i < FIRSTGUN + 3; i++)
+        tloadtile(i, 1);
+    tloadtile(FIRSTGUNRELOAD, 1);
+    //tloadtile(WORLDTOUR ? FIRSTGUNRELOADWIDE : FIRSTGUNRELOAD + 1, 1);
+    tloadtile(FIRSTGUNRELOAD + 1, 1);
+    tloadtile(FIRSTGUNRELOAD + 2, 1);
+    tloadtile(FIRSTGUNRELOAD + 4, 1);
+    for (int i = SHELL; i < SHELL + 2; i++)
+        tloadtile(i, 1);
+
+    for (int i = EXPLOSION2; i < EXPLOSION2 + 21; i++)
+        tloadtile(i, 1);
+
+    for (int i = COOLEXPLOSION1; i < COOLEXPLOSION1 + 21; i++)
+        tloadtile(i, 1);
+
+    tloadtile(BULLETHOLE, 1);
+    tloadtile(BLOODPOOL, 1);
+
+    for (int i = TRANSPORTERBEAM; i < (TRANSPORTERBEAM + 6); i++)
+        tloadtile(i, 1);
+
+    for (int i = SMALLSMOKE; i < (SMALLSMOKE + 4); i++)
+        tloadtile(i, 1);
+    for (int i = SHOTSPARK1; i < (SHOTSPARK1 + 4); i++)
+        tloadtile(i, 1);
+
+    for (int i = BLOOD; i < (BLOOD + 4); i++)
+        tloadtile(i, 1);
+    for (int i = JIBS1; i < (JIBS5 + 5); i++)
+        tloadtile(i, 1);
+    for (int i = JIBS6; i < (JIBS6 + 8); i++)
+        tloadtile(i, 1);
+
+    for (int i = SCRAP1; i < (SCRAP1 + 29); i++)
+        tloadtile(i, 1);
+
+    tloadtile(FIRELASER, 1);
+
+    for (int i = TRANSPORTERSTAR; i < TRANSPORTERSTAR + 6; i++)
+        tloadtile(i, 1);
+
+    for (int i = FORCERIPPLE; i < (FORCERIPPLE + 9); i++)
+        tloadtile(i, 1);
+
+    for (int i = MENUSCREEN; i < DUKECAR; i++)
+        tloadtile(i, 1);
+
+    for (int i = RPG; i < RPG + 7; i++)
+        tloadtile(i, 1);
+    for (int i = FREEZEBLAST; i < FREEZEBLAST + 3; i++)
+        tloadtile(i, 1);
+    for (int i = SHRINKSPARK; i < SHRINKSPARK + 4; i++)
+        tloadtile(i, 1);
+    for (int i = GROWSPARK; i < GROWSPARK + 4; i++)
+        tloadtile(i, 1);
+    for (int i = SHRINKEREXPLOSION; i < SHRINKEREXPLOSION + 4; i++)
+        tloadtile(i, 1);
+    for (int i = MORTER; i < MORTER + 4; i++)
+        tloadtile(i, 1);
+    for (int i = 0; i <= 60; i++)
+        tloadtile(i, 1);
+}
+#endif
+
+static void cacheFlaggedTiles(void)
+{
+    for (int i = 0; i < MAXTILES; i++)
+    {
+        if (g_tile[i].flags & SFLAG_PROJECTILE)
+            tloadtile(i, 1);
+
+        if (A_CheckSpriteTileFlags(i, SFLAG_CACHE))
+            for (int j = i; j <= g_tile[i].cacherange; j++)
+                tloadtile(j, 1);
+    }
+
+#ifndef EDUKE32_STANDALONE
+    cacheDukeTiles();
+#endif
+}
+
+static void cacheExtraTextureMaps(int tileNum, int type)
+{
+#ifdef USE_OPENGL
+    for (int i = 0; i < MAXPALOOKUPS - RESERVEDPALS - 1; i++)
+    {
+#ifdef POLYMER
+        if (videoGetRenderMode() != REND_POLYMER || !polymer_havehighpalookup(0, i))
+#endif
+            polymost_precache(tileNum, i, type);
+    }
+#else
+    UNREFERENCED_PARAMETER(tileNum);
+    UNREFERENCED_PARAMETER(type);
+#endif
+
+#ifdef USE_GLEXT
+    if (r_detailmapping)
+        polymost_precache(tileNum, DETAILPAL, type);
+
+    if (r_glowmapping)
+        polymost_precache(tileNum, GLOWPAL, type);
+#endif
+#ifdef POLYMER
+    if (videoGetRenderMode() == REND_POLYMER)
+    {
+        if (pr_specularmapping)
+            polymost_precache(tileNum, SPECULARPAL, type);
+
+        if (pr_normalmapping)
+            polymost_precache(tileNum, NORMALPAL, type);
+    }
+#endif
+}
+
 void G_CacheMapData(void)
 {
-    int i,j,pc=0;
-    int tc;
-    unsigned int starttime, endtime;
-
-    if (ud.recstat == 2)
+    if (ud.recstat == 2 || !ud.config.useprecache)
         return;
+
+    g_precacheCount = 0;
+    Bmemset(gotpic, 0, sizeof(gotpic));
+    Bmemset(precachehightile, 0, sizeof(precachehightile));
 
     S_TryPlaySpecialMusic(MUS_LOADING);
 
-    starttime = timerGetTicks();
+#if defined EDUKE32_TOUCH_DEVICES && defined USE_OPENGL
+    polymost_glreset();
+#endif
 
-    G_PrecacheSprites();
+    uint32_t const cacheStartTime = timerGetTicks();
 
-    for (i=0;i<numwalls;i++)
+    cacheFlaggedTiles();
+
+    for (int i = 0; i < numwalls; i++)
     {
         tloadtile(wall[i].picnum, 0);
 
         if (wall[i].overpicnum >= 0)
-        {
             tloadtile(wall[i].overpicnum, 0);
-        }
     }
 
-    for (i=0;i<numsectors;i++)
+    for (int i = 0; i < numsectors; i++)
     {
         tloadtile(sector[i].floorpicnum, 0);
         tloadtile(sector[i].ceilingpicnum, 0);
-        if (sector[i].ceilingpicnum == LA)  // JBF 20040509: if( waloff[sector[i].ceilingpicnum] == LA) WTF??!??!?!?
-        {
-            tloadtile(LA+1, 0);
-            tloadtile(LA+2, 0);
-        }
 
-        j = headspritesect[i];
-        while (j >= 0)
+        for (int SPRITES_OF_SECT(i, j))
         {
-            if (sprite[j].xrepeat != 0 && sprite[j].yrepeat != 0 && (sprite[j].cstat&32768) == 0)
-                G_CacheSpriteNum(j);
-            j = nextspritesect[j];
+            if (sprite[j].xrepeat != 0 && sprite[j].yrepeat != 0 && (sprite[j].cstat & CSTAT_SPRITE_INVISIBLE) == 0)
+                cacheTilesForSprite(j);
         }
     }
 
-    tc = (int32_t)totalclock;
-    j = 0;
+    int cnt = 0;
+    int cntDisplayed = -1;
+    int pctDisplayed = -1;
+    int i = 0;
 
-    for (i=0;i<MAXTILES;i++)
+    while (cnt < g_precacheCount)
     {
-        if (!(i&7) && !gotpic[i>>3])
+        if (bitmap_test(gotpic, i))
         {
-            i+=7;
-            continue;
-        }
-        if (gotpic[i>>3] & pow2char[i&7])
-        {
+            cnt++;
+
             if (waloff[i] == 0)
-                tileLoad((short)i);
+                tileLoad((int16_t)i);
 
-#if defined(USE_OPENGL)
-            if (ud.config.useprecache)
+            for (int j = 0; j < 2; j++)
             {
-                int k;
+                if (bitmap_test(precachehightile[j], i))
+                {
+                    tileLoadScaled(i);
 
-                if (precachehightile[0][i>>3] & pow2char[i&7])
-                    for (k=0; k<MAXPALOOKUPS && !KB_KeyPressed(sc_Space); k++)
-                        polymost_precache(i,k,0);
-
-                if (precachehightile[1][i>>3] & pow2char[i&7])
-                    for (k=0; k<MAXPALOOKUPS && !KB_KeyPressed(sc_Space); k++)
-                        polymost_precache(i,k,1);
+                    if (videoGetRenderMode() != REND_CLASSIC)
+                        cacheExtraTextureMaps(i, j);
+                }
             }
-#endif
-            j++;
-            pc++;
-        }
-        else continue;
 
-        MUSIC_Update();
-
-        if ((j&7) == 0)
-        {
             gameHandleEvents();
+            if (KB_KeyPressed(sc_Space))
+                break;
         }
-        if (totalclock - tc > TICRATE/4)
+        i++;
+
+        if (cntDisplayed + (i & 7) < cnt - (i & 7) && engineFPSLimit(true))
         {
-            sprintf(tempbuf,"%d resources remaining\n",g_precacheCount-pc+1);
-            G_DoLoadScreen(tempbuf, min(100,100*pc/g_precacheCount));
-            tc = (int32_t)totalclock;
+            int const percentComplete = min(100, tabledivide32(100 * cntDisplayed, g_precacheCount));
+            cntDisplayed = logapproach(cntDisplayed, cnt);
+            pctDisplayed = logapproach(pctDisplayed, percentComplete);
+            Bsprintf(tempbuf, "Loaded %d%% (%d/%d textures)\n", pctDisplayed, cntDisplayed, g_precacheCount);
+            G_DoLoadScreen(tempbuf, pctDisplayed);
         }
     }
 
-    clearbufbyte(gotpic,sizeof(gotpic),0L);
+    Bmemset(gotpic, 0, sizeof(gotpic));
 
-    endtime = timerGetTicks();
-    OSD_Printf("Cache time: %dms\n", endtime-starttime);
+    LOG_F(INFO, "Cache time: %dms.", timerGetTicks() - cacheStartTime);
 }
 
 void G_UpdateScreenArea(void)

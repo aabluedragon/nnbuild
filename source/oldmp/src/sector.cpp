@@ -1710,7 +1710,7 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
     int16_t sectNum = -1;
     walltype* pWall = &wall[wallNum];
 
-    if ((SpriteFlags[pWall->overpicnum] & SFLAG_DAMAGEEVENT) || (SpriteFlags[pWall->picnum] & SFLAG_DAMAGEEVENT))
+    if ((g_tile[pWall->overpicnum].flags & SFLAG_DAMAGEEVENT) || (g_tile[pWall->picnum].flags & SFLAG_DAMAGEEVENT))
     {
         if (X_OnEventWithReturn(EVENT_DAMAGEWALL, spriteNum, -1, wallNum) < 0)
             return;
@@ -1718,7 +1718,7 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
 
     if (pWall->overpicnum == MIRROR && pWall->pal != 4 &&
         A_CheckSpriteFlags(spriteNum, SFLAG_PROJECTILE) &&
-        (ProjectileData[spriteNum].workslike & PROJECTILE_RPG))
+        (actor[spriteNum].projectile.workslike & PROJECTILE_RPG))
     {
         if (pWall->nextwall == -1 || wall[pWall->nextwall].pal != 4)
         {
@@ -2006,7 +2006,7 @@ void A_DamageWall(int spriteNum, int wallNum, const vec3_t& vPos, int weaponNum)
 void Sect_DamageFloor_Internal(int const spriteNum, int const sectNum)
 {
     int16_t tileNum = sector[sectNum].floorpicnum;
-    if (SpriteFlags[tileNum] & SFLAG_DAMAGEEVENT)
+    if (g_tile[tileNum].flags & SFLAG_DAMAGEEVENT)
     {
         if (X_OnEventWithReturn(EVENT_DAMAGEFLOOR, spriteNum, -1, sectNum) < 0)
             return;
@@ -2022,7 +2022,7 @@ void Sect_DamageFloor(int const spriteNum, int const sectNum)
 void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
 {
     int16_t tileNum = sector[sectNum].ceilingpicnum;
-    if (SpriteFlags[tileNum] & SFLAG_DAMAGEEVENT)
+    if (g_tile[tileNum].flags & SFLAG_DAMAGEEVENT)
     {
         if (X_OnEventWithReturn(EVENT_DAMAGECEILING, spriteNum, -1, sectNum) < 0)
             return;
@@ -2229,7 +2229,7 @@ void A_DamageObject_Internal(int i,int sn)
     case FUELPOD__STATIC:
     case SOLARPANNEL__STATIC:
     case ANTENNA__STATIC:
-        if (sprite[sn].extra != *actorscrptr[SHOTSPARK1])
+        if (sprite[sn].extra != G_DefaultActorHealthForTile(SHOTSPARK1))
         {
             for (j=15;j>0;j--)
                 A_InsertSprite(SECT(i),SX(i),SY(i),sector[SECT(i)].floorz-(12<<8)-(j<<9),SCRAP1+(krand()&15),-8,64,64,

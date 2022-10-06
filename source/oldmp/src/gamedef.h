@@ -25,6 +25,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef _gamedef_h_
 #define _gamedef_h_
 
+#include "actors.h"
+#include "build.h"  // hashtable_t
+#include "common.h"  // tokenlist
+#include "player.h"  // projectile_t
+
 #define MAXGAMEEVENTS   128
 #define LABEL_HASPARM2  1
 #define LABEL_ISSTRING  2
@@ -49,8 +54,6 @@ typedef struct SystemVarID_s {
     int32_t FFIRE               = -1;
 } SystemVarID_t;
 extern SystemVarID_t sysVarIDs;
-
-extern intptr_t *actorLoadEventScrptr[MAXTILES];
 
 extern intptr_t *apScriptGameEvent[MAXGAMEEVENTS];
 
@@ -115,6 +118,7 @@ extern spritetype *g_sp;
 void C_Compile(const char* fn);
 char const* VM_GetKeywordForID(int32_t id);
 
+// Enums
 enum ScriptError_t
 {
     ERROR_CLOSEBRACKET,
@@ -555,7 +559,7 @@ enum ProjectileLabel_t
     PROJ_PAL,
     PROJ_EXTRA_RAND,
     PROJ_HITRADIUS,
-    PROJ_VEL_MULT,
+    PROJ_MOVECNT,
     PROJ_OFFSET,
     PROJ_BOUNCES,
     PROJ_BSOUND,
@@ -774,7 +778,6 @@ enum ScriptKeywords_t
     CON_DEFINEPROJECTILE,   // 193
     CON_SPRITESHADOW,       // 194
     CON_COS,                // 195
-    CON_ESHOOTVAR,          // 196
     CON_FINDNEARACTOR3D,    // 197
     CON_FINDNEARACTOR3DVAR, // 198
     CON_FLASH,              // 199
@@ -795,7 +798,6 @@ enum ScriptKeywords_t
     CON_CASE,               // 214
     CON_DEFAULT,            // 215
     CON_ENDSWITCH,          // 216
-    CON_SHOOTVAR,           // 217
     CON_SOUNDVAR,           // 218
     CON_FINDPLAYER,         // 219
     CON_FINDOTHERPLAYER,    // 220
@@ -873,8 +875,6 @@ enum ScriptKeywords_t
     CON_FINDNEARACTORZVAR,  // 292
     CON_FINDNEARSPRITEZ,    // 293
     CON_FINDNEARSPRITEZVAR, // 294
-    CON_ZSHOOTVAR,          // 295
-    CON_EZSHOOTVAR,         // 296
     CON_GETCURRADDRESS,     // 297
     CON_JUMP,               // 298
     CON_QSTRLEN,            // 299

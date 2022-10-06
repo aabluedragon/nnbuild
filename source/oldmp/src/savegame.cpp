@@ -340,13 +340,13 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_mirrorWall[0],sizeof(int16_t),64,fil) != 64) goto corrupt;
     if (kdfread(&g_mirrorSector[0],sizeof(int16_t),64,fil) != 64) goto corrupt;
     if (kdfread(&show2dsector[0],sizeof(uint8_t),MAXSECTORS>>3,fil) != (MAXSECTORS>>3)) goto corrupt;
-    if (kdfread(&SpriteFlags[0],sizeof(int32_t),MAXTILES,fil) != MAXTILES) goto corrupt;
 
     if (kdfread(&g_numClouds,sizeof(g_numClouds),1,fil) != 1) goto corrupt;
     if (kdfread(&clouds[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
     if (kdfread(&cloudx[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
     if (kdfread(&cloudy[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
 
+    if (kdfread(&g_tile[0], sizeof(tiledata_t), MAXTILES, fil) != MAXTILES) goto corrupt;
     if (kdfread(&g_scriptSize,sizeof(g_scriptSize),1,fil) != 1) goto corrupt;
     if (!g_scriptSize) goto corrupt;
     scriptptrs = (char*)Xcalloc(1,g_scriptSize * sizeof(scriptptrs));
@@ -364,19 +364,18 @@ int32_t G_LoadPlayer(int32_t spot)
             apScript[i] = j;
         }
 
-    if (kdfread(&actorscrptr[0],sizeof(actorscrptr[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
     for (i=0; i<MAXTILES; i++)
-        if (actorscrptr[i])
+        if (g_tile[i].execPtr)
         {
-            j = (intptr_t)actorscrptr[i]+(intptr_t)&apScript[0];
-            actorscrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].execPtr+(intptr_t)&apScript[0];
+            g_tile[i].execPtr = (intptr_t *)j;
         }
-    if (kdfread(&actorLoadEventScrptr[0],sizeof(&actorLoadEventScrptr[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
+
     for (i=0; i<MAXTILES; i++)
-        if (actorLoadEventScrptr[i])
+        if (g_tile[i].loadPtr)
         {
-            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&apScript[0];
-            actorLoadEventScrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].loadPtr+(intptr_t)&apScript[0];
+            g_tile[i].loadPtr = (intptr_t *)j;
         }
 
     scriptptrs = (char*)Xrealloc(scriptptrs, MAXSPRITES * sizeof(scriptptrs));
@@ -425,13 +424,6 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&randomseed,sizeof(randomseed),1,fil) != 1) goto corrupt;
     if (kdfread(&g_globalRandom,sizeof(g_globalRandom),1,fil) != 1) goto corrupt;
     //if (kdfread(&parallaxyscale,sizeof(parallaxyscale),1,fil) != 1) goto corrupt;
-
-    if (kdfread(&ProjectileData[0],sizeof(projectile_t),MAXTILES,fil) != MAXTILES) goto corrupt;
-    if (kdfread(&DefaultProjectileData[0],sizeof(projectile_t),MAXTILES,fil) != MAXTILES) goto corrupt;
-
-    if (kdfread(&SpriteFlags[0],sizeof(SpriteFlags[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
-
-    if (kdfread(&SpriteCacheList[0],sizeof(SpriteCacheList[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
 
     if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
 
@@ -717,13 +709,13 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&g_mirrorWall[0],sizeof(int16_t),64,fil);
     dfwrite(&g_mirrorSector[0],sizeof(int16_t),64,fil);
     dfwrite(&show2dsector[0],sizeof(uint8_t),MAXSECTORS>>3,fil);
-    dfwrite(&SpriteFlags[0],sizeof(int32_t),MAXTILES,fil);
 
     dfwrite(&g_numClouds,sizeof(g_numClouds),1,fil);
     dfwrite(&clouds[0],sizeof(int16_t)<<7,1,fil);
     dfwrite(&cloudx[0],sizeof(int16_t)<<7,1,fil);
     dfwrite(&cloudy[0],sizeof(int16_t)<<7,1,fil);
 
+    dfwrite(&g_tile[0], sizeof(tiledata_t), MAXTILES, fil);
     dfwrite(&g_scriptSize,sizeof(g_scriptSize),1,fil);
     scriptptrs = (char*)Xcalloc(1, g_scriptSize * sizeof(scriptptrs));
     for (i=0; i<g_scriptSize; i++)
@@ -749,31 +741,31 @@ int32_t G_SavePlayer(int32_t spot)
         }
 
     for (i=0; i<MAXTILES; i++)
-        if (actorscrptr[i])
+        if (g_tile[i].execPtr)
         {
-            j = (intptr_t)actorscrptr[i]-(intptr_t)&apScript[0];
-            actorscrptr[i] = (intptr_t *)j;
-        }
-    dfwrite(&actorscrptr[0],sizeof(actorscrptr[0]),MAXTILES,fil);
-    for (i=0; i<MAXTILES; i++)
-        if (actorscrptr[i])
-        {
-            j = (intptr_t)actorscrptr[i]+(intptr_t)&apScript[0];
-            actorscrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].execPtr-(intptr_t)&apScript[0];
+            g_tile[i].execPtr = (intptr_t *)j;
         }
 
     for (i=0; i<MAXTILES; i++)
-        if (actorLoadEventScrptr[i])
+        if (g_tile[i].execPtr)
         {
-            j = (intptr_t)actorLoadEventScrptr[i]-(intptr_t)&apScript[0];
-            actorLoadEventScrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].execPtr+(intptr_t)&apScript[0];
+            g_tile[i].execPtr = (intptr_t *)j;
         }
-    dfwrite(&actorLoadEventScrptr[0],sizeof(actorLoadEventScrptr[0]),MAXTILES,fil);
+
     for (i=0; i<MAXTILES; i++)
-        if (actorLoadEventScrptr[i])
+        if (g_tile[i].loadPtr)
         {
-            j = (intptr_t)actorLoadEventScrptr[i]+(intptr_t)&apScript[0];
-            actorLoadEventScrptr[i] = (intptr_t *)j;
+            j = (intptr_t)g_tile[i].loadPtr-(intptr_t)&apScript[0];
+            g_tile[i].loadPtr = (intptr_t *)j;
+        }
+
+    for (i=0; i<MAXTILES; i++)
+        if (g_tile[i].loadPtr)
+        {
+            j = (intptr_t)g_tile[i].loadPtr+(intptr_t)&apScript[0];
+            g_tile[i].loadPtr = (intptr_t *)j;
         }
 
     Xfree(scriptptrs);
@@ -783,7 +775,7 @@ int32_t G_SavePlayer(int32_t spot)
     {
         scriptptrs[i] = 0;
 
-        if (actorscrptr[PN(i)] == 0) continue;
+        if (g_tile[PN(i)].execPtr == 0) continue;
 
         j = (intptr_t)&apScript[0];
 
@@ -809,7 +801,7 @@ int32_t G_SavePlayer(int32_t spot)
 
     for (i=0; i<MAXSPRITES; i++)
     {
-        if (actorscrptr[PN(i)] == 0) continue;
+        if (g_tile[PN(i)].execPtr == 0) continue;
         j = (intptr_t)&apScript[0];
 
         if (scriptptrs[i]&1)
@@ -847,13 +839,6 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&randomseed,sizeof(randomseed),1,fil);
     dfwrite(&g_globalRandom,sizeof(g_globalRandom),1,fil);
     //dfwrite(&parallaxyscale,sizeof(parallaxyscale),1,fil);
-
-    dfwrite(&ProjectileData[0],sizeof(projectile_t),MAXTILES,fil);
-    dfwrite(&DefaultProjectileData[0],sizeof(projectile_t),MAXTILES,fil);
-
-    dfwrite(&SpriteFlags[0],sizeof(SpriteFlags[0]),MAXTILES,fil);
-
-    dfwrite(&SpriteCacheList[0],sizeof(SpriteCacheList[0]),MAXTILES,fil);
 
     for (i=0; i<MAXQUOTES; i++)
     {

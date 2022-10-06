@@ -710,7 +710,9 @@ void Gv_ResetSystemDefaults(void)
     sysVarIDs.MARKER = Gv_GetVarIndex("MARKER");
     sysVarIDs.FFIRE = Gv_GetVarIndex("FFIRE");
 
-    Bmemcpy(&ProjectileData,&DefaultProjectileData,sizeof(ProjectileData));
+    for (auto& tile : g_tile)
+        if (tile.defproj)
+            *tile.proj = *tile.defproj;
 
     //AddLog("EOF:ResetWeaponDefaults");
 }

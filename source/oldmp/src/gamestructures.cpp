@@ -68,10 +68,10 @@ static inline void X_AccessTileData(int iSet, int lVar1, int lLabelID, int lVar2
     case TILEDATA_GAMEFLAGS:
         if (iSet)
         {
-            SpriteFlags[tile] = lValue;
+            g_tile[tile].flags = lValue;
             return;
         }
-        Gv_SetVar(lVar2, SpriteFlags[tile], g_i, g_p);
+        Gv_SetVar(lVar2, g_tile[tile].flags, g_i, g_p);
         return;
     case TILEDATA_ANIMFRAMES:
         if (iSet)
@@ -1305,13 +1305,13 @@ static inline void X_AccessActiveProjectile(int iSet, int lVar1, int lLabelID, i
         Gv_SetVar(lVar2, actor[proj].projectile.hitradius, g_i, g_p);
         return;
 
-    case PROJ_VEL_MULT:
+    case PROJ_MOVECNT:
         if (iSet)
         {
-            actor[proj].projectile.velmult=lValue;
+            actor[proj].projectile.movecnt=lValue;
             return;
         }
-        Gv_SetVar(lVar2, actor[proj].projectile.velmult, g_i, g_p);
+        Gv_SetVar(lVar2, actor[proj].projectile.movecnt, g_i, g_p);
         return;
 
     case PROJ_OFFSET:
@@ -4044,258 +4044,260 @@ static inline void X_AccessProjectile(int iSet, int lVar1, int lLabelID, int lVa
     if (iSet)
         lValue=Gv_GetVar(lVar2, g_i, g_p);
 
+    auto& p = *g_tile[lVar1].proj;
+
     switch (lLabelID)
     {
     case PROJ_WORKSLIKE:
         if (iSet)
         {
-            ProjectileData[lVar1].workslike=lValue;
+            p.workslike=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].workslike, g_i, g_p);
+        Gv_SetVar(lVar2, p.workslike, g_i, g_p);
         return;
 
     case PROJ_SPAWNS:
         if (iSet)
         {
-            ProjectileData[lVar1].spawns=lValue;
+            p.spawns=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].spawns, g_i, g_p);
+        Gv_SetVar(lVar2, p.spawns, g_i, g_p);
         return;
 
     case PROJ_SXREPEAT:
         if (iSet)
         {
-            ProjectileData[lVar1].sxrepeat=lValue;
+            p.sxrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].sxrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, p.sxrepeat, g_i, g_p);
         return;
 
     case PROJ_SYREPEAT:
         if (iSet)
         {
-            ProjectileData[lVar1].syrepeat=lValue;
+            p.syrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].syrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, p.syrepeat, g_i, g_p);
         return;
 
     case PROJ_SOUND:
         if (iSet)
         {
-            ProjectileData[lVar1].sound=lValue;
+            p.sound=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].sound, g_i, g_p);
+        Gv_SetVar(lVar2, p.sound, g_i, g_p);
         return;
 
     case PROJ_ISOUND:
         if (iSet)
         {
-            ProjectileData[lVar1].isound=lValue;
+            p.isound=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].isound, g_i, g_p);
+        Gv_SetVar(lVar2, p.isound, g_i, g_p);
         return;
 
     case PROJ_VEL:
         if (iSet)
         {
-            ProjectileData[lVar1].vel=lValue;
+            p.vel=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].vel, g_i, g_p);
+        Gv_SetVar(lVar2, p.vel, g_i, g_p);
         return;
 
     case PROJ_EXTRA:
         if (iSet)
         {
-            ProjectileData[lVar1].extra=lValue;
+            p.extra=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].extra, g_i, g_p);
+        Gv_SetVar(lVar2, p.extra, g_i, g_p);
         return;
 
     case PROJ_DECAL:
         if (iSet)
         {
-            ProjectileData[lVar1].decal=lValue;
+            p.decal=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].decal, g_i, g_p);
+        Gv_SetVar(lVar2, p.decal, g_i, g_p);
         return;
 
     case PROJ_TRAIL:
         if (iSet)
         {
-            ProjectileData[lVar1].trail=lValue;
+            p.trail=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].trail, g_i, g_p);
+        Gv_SetVar(lVar2, p.trail, g_i, g_p);
         return;
 
     case PROJ_TXREPEAT:
         if (iSet)
         {
-            ProjectileData[lVar1].txrepeat=lValue;
+            p.txrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].txrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, p.txrepeat, g_i, g_p);
         return;
 
     case PROJ_TYREPEAT:
         if (iSet)
         {
-            ProjectileData[lVar1].tyrepeat=lValue;
+            p.tyrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].tyrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, p.tyrepeat, g_i, g_p);
         return;
 
     case PROJ_TOFFSET:
         if (iSet)
         {
-            ProjectileData[lVar1].toffset=lValue;
+            p.toffset=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].toffset, g_i, g_p);
+        Gv_SetVar(lVar2, p.toffset, g_i, g_p);
         return;
 
     case PROJ_TNUM:
         if (iSet)
         {
-            ProjectileData[lVar1].tnum=lValue;
+            p.tnum=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].tnum, g_i, g_p);
+        Gv_SetVar(lVar2, p.tnum, g_i, g_p);
         return;
 
     case PROJ_DROP:
         if (iSet)
         {
-            ProjectileData[lVar1].drop=lValue;
+            p.drop=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].drop, g_i, g_p);
+        Gv_SetVar(lVar2, p.drop, g_i, g_p);
         return;
 
     case PROJ_CSTAT:
         if (iSet)
         {
-            ProjectileData[lVar1].cstat=lValue;
+            p.cstat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].cstat, g_i, g_p);
+        Gv_SetVar(lVar2, p.cstat, g_i, g_p);
         return;
 
     case PROJ_CLIPDIST:
         if (iSet)
         {
-            ProjectileData[lVar1].clipdist=lValue;
+            p.clipdist=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].clipdist, g_i, g_p);
+        Gv_SetVar(lVar2, p.clipdist, g_i, g_p);
         return;
 
     case PROJ_SHADE:
         if (iSet)
         {
-            ProjectileData[lVar1].shade=lValue;
+            p.shade=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].shade, g_i, g_p);
+        Gv_SetVar(lVar2, p.shade, g_i, g_p);
         return;
 
     case PROJ_XREPEAT:
         if (iSet)
         {
-            ProjectileData[lVar1].xrepeat=lValue;
+            p.xrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].xrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, p.xrepeat, g_i, g_p);
         return;
 
     case PROJ_YREPEAT:
         if (iSet)
         {
-            ProjectileData[lVar1].yrepeat=lValue;
+            p.yrepeat=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].yrepeat, g_i, g_p);
+        Gv_SetVar(lVar2, p.yrepeat, g_i, g_p);
         return;
 
     case PROJ_PAL:
         if (iSet)
         {
-            ProjectileData[lVar1].pal=lValue;
+            p.pal=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].pal, g_i, g_p);
+        Gv_SetVar(lVar2, p.pal, g_i, g_p);
         return;
 
     case PROJ_EXTRA_RAND:
         if (iSet)
         {
-            ProjectileData[lVar1].extra_rand=lValue;
+            p.extra_rand=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].extra_rand, g_i, g_p);
+        Gv_SetVar(lVar2, p.extra_rand, g_i, g_p);
         return;
 
     case PROJ_HITRADIUS:
         if (iSet)
         {
-            ProjectileData[lVar1].hitradius=lValue;
+            p.hitradius=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].hitradius, g_i, g_p);
+        Gv_SetVar(lVar2, p.hitradius, g_i, g_p);
         return;
 
-    case PROJ_VEL_MULT:
+    case PROJ_MOVECNT:
         if (iSet)
         {
-            ProjectileData[lVar1].velmult=lValue;
+            p.movecnt=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].velmult, g_i, g_p);
+        Gv_SetVar(lVar2, p.movecnt, g_i, g_p);
         return;
 
     case PROJ_OFFSET:
         if (iSet)
         {
-            ProjectileData[lVar1].offset=lValue;
+            p.offset=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].offset, g_i, g_p);
+        Gv_SetVar(lVar2, p.offset, g_i, g_p);
         return;
 
     case PROJ_BOUNCES:
         if (iSet)
         {
-            ProjectileData[lVar1].bounces=lValue;
+            p.bounces=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].bounces, g_i, g_p);
+        Gv_SetVar(lVar2, p.bounces, g_i, g_p);
         return;
 
     case PROJ_BSOUND:
         if (iSet)
         {
-            ProjectileData[lVar1].bsound=lValue;
+            p.bsound=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].bsound, g_i, g_p);
+        Gv_SetVar(lVar2, p.bsound, g_i, g_p);
         return;
 
     case PROJ_RANGE:
         if (iSet)
         {
-            ProjectileData[lVar1].range=lValue;
+            p.range=lValue;
             return;
         }
-        Gv_SetVar(lVar2, ProjectileData[lVar1].range, g_i, g_p);
+        Gv_SetVar(lVar2, p.range, g_i, g_p);
         return;
 
     default:

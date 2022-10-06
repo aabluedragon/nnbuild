@@ -1158,11 +1158,6 @@ static int X_DoExecute(void)
         g_sp->yrepeat = (char) *insptr++;
         break;
 
-    case CON_SHOOT:
-        insptr++;
-        A_Shoot(g_i,*insptr++);
-        break;
-
     case CON_SOUNDONCE:
         insptr++;
         if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
@@ -1319,7 +1314,7 @@ static int X_DoExecute(void)
                 {
                     // fix for flying/jumping monsters getting stuck in water
                     if (!(g_sp->hitag & jumptoplayer ||
-                        (actorscrptr[g_sp->picnum] && moveptr >= &apScript[0] && moveptr <= (&apScript[0] + g_scriptSize) && *(moveptr + 1))))
+                        (g_tile[g_sp->picnum].execPtr && moveptr >= &apScript[0] && moveptr <= (&apScript[0] + g_scriptSize) && *(moveptr + 1))))
                     {
                         g_sp->z += (24 << 8);
                     }
@@ -1907,11 +1902,11 @@ static int X_DoExecute(void)
                     sprite[i].hitag = 0;
 
                     // pointers
-                    if (actorscrptr[sprite[i].picnum])
+                    if (g_tile[sprite[i].picnum].execPtr)
                     {
-                        T5(i) = *(actorscrptr[sprite[i].picnum]+1);
-                        T2(i) = *(actorscrptr[sprite[i].picnum]+2);
-                        sprite[i].hitag = *(actorscrptr[sprite[i].picnum]+3);
+                        T5(i) = *(g_tile[sprite[i].picnum].execPtr+1);
+                        T2(i) = *(g_tile[sprite[i].picnum].execPtr+2);
+                        sprite[i].hitag = *(g_tile[sprite[i].picnum].execPtr+3);
                     }
                 }
                 changespritestat(i,j);
@@ -2190,62 +2185,41 @@ static int X_DoExecute(void)
         }
         break;
 
+    case CON_SHOOT:
     case CON_ESHOOT:
-    case CON_EZSHOOT:
-    case CON_ZSHOOT:
-        insptr++;
-
-        if (tw == CON_ZSHOOT || tw == CON_EZSHOOT)
-        {
-            actor[g_i].t_data[9] = Gv_GetVarX(*insptr++);
-            if (actor[g_i].t_data[9] == 0)
-                actor[g_i].t_data[9] = 1;
-        }
-
+    insptr++;
+    {
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),TrackerCast(g_sp->sectnum));
-            insptr++;
-            actor[g_i].t_data[9]=0;
+            OSD_Printf(CON_ERROR "Invalid sector %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), TrackerCast(g_sp->sectnum));
             break;
         }
 
-        j = A_Shoot(g_i,*insptr++);
+        int j = Gv_GetVarX(*insptr++);
+        j = A_Shoot(g_i, j);
 
-        if (tw == CON_EZSHOOT || tw == CON_ESHOOT)
+        if (tw == CON_ESHOOT)
             Gv_SetVarX(sysVarIDs.RETURN, j);
 
-        actor[g_i].t_data[9]=0;
         break;
+    }
 
-    case CON_SHOOTVAR:
-    case CON_ESHOOTVAR:
-    case CON_EZSHOOTVAR:
-    case CON_ZSHOOTVAR:
+    case CON_EZSHOOT:
+    case CON_ZSHOOT:
+    insptr++;
     {
-        int lReturn=-1;
-
-        insptr++;
-
-        if (tw == CON_ZSHOOTVAR || tw == CON_EZSHOOTVAR)
-        {
-            actor[g_i].t_data[9] = Gv_GetVarX(*insptr++);
-            if (actor[g_i].t_data[9] == 0)
-                actor[g_i].t_data[9] = 1;
-        }
-        j=Gv_GetVarX(*insptr++);
-
         if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),TrackerCast(g_sp->sectnum));
-            actor[g_i].t_data[9]=0;
+            OSD_Printf(CON_ERROR "Invalid sector %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), TrackerCast(g_sp->sectnum));
             break;
         }
 
-        lReturn = A_Shoot(g_i, j);
-        if (tw == CON_ESHOOTVAR || tw == CON_EZSHOOTVAR)
-            Gv_SetVarX(sysVarIDs.RETURN, lReturn);
-        actor[g_i].t_data[9]=0;
+        int const zvel = (int16_t)Gv_GetVarX(*insptr++);
+        int j = A_Shoot(g_i, Gv_GetVarX(*insptr++), zvel);
+
+        if (tw == CON_EZSHOOT)
+            Gv_SetVarX(sysVarIDs.RETURN, j);
+
         break;
     }
 
@@ -4513,9 +4487,9 @@ void A_LoadActor(int iActor)
     g_sp = &sprite[g_i];    // Pointer to sprite structure
     g_t = &actor[g_i].t_data[0];   // Sprite's 'extra' data
 
-    if (actorLoadEventScrptr[g_sp->picnum] == 0) return;
+    if (g_tile[g_sp->picnum].loadPtr == 0) return;
 
-    insptr = actorLoadEventScrptr[g_sp->picnum];
+    insptr = g_tile[g_sp->picnum].loadPtr;
 
     g_killitFlag = 0;
 
@@ -4537,7 +4511,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
 {
 //    int temp, temp2;
 
-//    if (actorscrptr[sprite[iActor].picnum] == 0) return;
+//    if (g_tile[sprite[iActor].picnum].execPtr == 0) return;
 
     g_i = iActor;    // Sprite ID
     g_p = iPlayer;   // Player ID
@@ -4545,7 +4519,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     g_sp = &sprite[g_i];    // Pointer to sprite structure
     g_t = &actor[g_i].t_data[0];   // Sprite's 'extra' data
 
-    insptr = 4 + (actorscrptr[g_sp->picnum]);
+    insptr = 4 + (g_tile[g_sp->picnum].execPtr);
 
     g_killitFlag = 0;
 
@@ -4651,7 +4625,7 @@ void G_SaveMapState(mapstate_t *save)
         {
             save->scriptptrs[i] = 0;
 
-            if (actorscrptr[PN(i)] == 0) continue;
+            if (g_tile[PN(i)].execPtr == 0) continue;
 
             j = (intptr_t)&apScript[0];
 
@@ -4676,7 +4650,7 @@ void G_SaveMapState(mapstate_t *save)
 
         for (i=MAXSPRITES-1;i>=0;i--)
         {
-            if (actorscrptr[PN(i)] == 0) continue;
+            if (g_tile[PN(i)].execPtr == 0) continue;
             j = (intptr_t)&apScript[0];
 
             if (save->scriptptrs[i]&1)
