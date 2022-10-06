@@ -3505,7 +3505,7 @@ static inline bool OnEvenGround(spritetype* pSprite, int32_t radius)
 
     updatesector(pSprite->x - radius, pSprite->y + radius, &sectNum);
     if (sectNum < 0 || sector[sectNum].floorz != sector[pSprite->sectnum].floorz)
-        return true;
+        return false;
 
     return true;
 }
