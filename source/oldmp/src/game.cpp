@@ -3489,7 +3489,7 @@ int A_InsertSprite(int whatsect,int s_x,int s_y,int s_z,int s_pn,int s_s,int s_x
 
 static inline bool OnEvenGround(spritetype* pSprite, int32_t radius)
 {
-    auto sectNum = pSprite->sectnum;
+    int16_t sectNum = pSprite->sectnum;
 
     updatesector(pSprite->x + radius, pSprite->y + radius, &sectNum);
     if (sectNum < 0 || sector[sectNum].floorz != sector[pSprite->sectnum].floorz)
