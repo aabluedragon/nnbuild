@@ -5297,7 +5297,6 @@ int A_Spawn(int spriteNum, int tileNum)
         }
         case SEENINE__STATIC:
         case OOZFILTER__STATIC:
-
             pSprite->shade = -16;
             if (pSprite->xrepeat <= 8)
             {
@@ -5309,7 +5308,7 @@ int A_Spawn(int spriteNum, int tileNum)
             pSprite->owner = newSprite;
 
             changespritestat(newSprite, STAT_STANDABLE);
-            break;
+            goto SPAWN_END;
 
         case CRACK1__STATIC:
         case CRACK2__STATIC:
@@ -5340,7 +5339,7 @@ int A_Spawn(int spriteNum, int tileNum)
 
             changespritestat(newSprite, STAT_STANDABLE);
             A_SetSprite(newSprite, CLIPMASK0);
-            break;
+            goto SPAWN_END;
 
         case TOILET__STATIC:
         case STALL__STATIC:
@@ -5348,7 +5347,7 @@ int A_Spawn(int spriteNum, int tileNum)
             pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             pSprite->clipdist = 8;
             pSprite->owner = newSprite;
-            break;
+            goto SPAWN_END;
 
         case CANWITHSOMETHING__STATIC:
         case CANWITHSOMETHING2__STATIC:
@@ -5390,12 +5389,12 @@ int A_Spawn(int spriteNum, int tileNum)
                 pSprite->cstat = (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN) | (krand() & 4);
                 changespritestat(newSprite, STAT_ZOMBIEACTOR);
             }
-            break;
+            goto SPAWN_END;
 
         case TOILETWATER__STATIC:
             pSprite->shade = -16;
             changespritestat(newSprite, STAT_STANDABLE);
-            break;
+            goto SPAWN_END;
     }
 
     // implementation of the default case
