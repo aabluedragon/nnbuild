@@ -160,17 +160,6 @@ extern void G_ProcessDynamicTileMapping(const char *szLabel, int lValue);
 
 extern void A_LoadActor(int sActor);
 
-extern int Gv_GetVarByLabel(const char *szGameLabel, int lDefault, int iActor, int iPlayer);
-extern void Gv_DumpValues(void);
-// extern void AddLog(const char *psz, ...);
-
-extern void Gv_ResetSystemDefaults(void);
-extern void Gv_InitWeaponPointers(void);
-extern void Gv_RefreshPointers(void);
-extern void Gv_Init(void);
-extern void Gv_WriteSave(FILE *fil);
-extern int Gv_ReadSave(int fil);
-
 // extern void SetGameArrayID(int id,int index, int lValue);
 
 extern void C_ReportError(int iError);

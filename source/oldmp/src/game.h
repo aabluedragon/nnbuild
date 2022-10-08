@@ -2,6 +2,7 @@
 #define _GAME_H
 
 #include "actors.h"
+#include "gamevars.h"
 
 #define IDFSIZE 479985668
 #define IDFILENAME "DUKE3D.IDF"
