@@ -3615,6 +3615,32 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
+        case CAMERA1__STATIC:
+            pSprite->extra = 1;
+            pSprite->cstat &= CSTAT_SPRITE_INVISIBLE;
+
+            if (g_damageCameras)
+                pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+
+            if ((ud.multimode < 2) && pSprite->pal != 0)
+            {
+                pSprite->xrepeat = pSprite->yrepeat = 0;
+                changespritestat(newSprite, STAT_MISC);
+            }
+            else
+            {
+                pSprite->pal = 0;
+                changespritestat(newSprite, STAT_ACTOR);
+            }
+            goto SPAWN_END;
+
+        case CAMERAPOLE__STATIC:
+            pSprite->extra = 1;
+            pSprite->cstat &= ~(CSTAT_SPRITE_INVISIBLE);
+
+            if (g_damageCameras)
+                pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+            fallthrough__;
         case GENERICPOLE__STATIC:
             if (ud.multimode < 2 && pSprite->pal != 0)
             {
@@ -3669,7 +3695,8 @@ int A_Spawn(int spriteNum, int tileNum)
         case NEON6__STATIC:
         case DOMELITE__STATIC:
         case NUKEBUTTON__STATIC:
-            pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+            if(pSprite->picnum == DOMELITE)
+                pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             fallthrough__;
         case JIBS1__STATIC:
         case JIBS2__STATIC:
@@ -4124,8 +4151,7 @@ int A_Spawn(int spriteNum, int tileNum)
         case VIEWSCREEN__STATIC:
         case VIEWSCREEN2__STATIC:
             pSprite->owner = newSprite;
-            pSprite->lotag = 1;
-            pSprite->extra = 1;
+            pSprite->lotag = pSprite->extra = 1;
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
