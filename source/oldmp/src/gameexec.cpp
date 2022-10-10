@@ -2940,7 +2940,7 @@ static int X_DoExecute(void)
         switch (*(insptr-1))
         {
         case GET_STEROIDS:
-            g_player[g_p].ps->steroids_amount = *insptr;
+            g_player[g_p].ps->inv_amount[GET_STEROIDS] = *insptr;
             g_player[g_p].ps->inven_icon = 2;
             break;
 
@@ -2951,17 +2951,17 @@ static int X_DoExecute(void)
             break;
 
         case GET_SCUBA:
-            g_player[g_p].ps->scuba_amount =             *insptr;// 1600;
+            g_player[g_p].ps->inv_amount[GET_SCUBA] =             *insptr;// 1600;
             g_player[g_p].ps->inven_icon = 6;
             break;
 
         case GET_HOLODUKE:
-            g_player[g_p].ps->holoduke_amount =          *insptr;// 1600;
+            g_player[g_p].ps->inv_amount[GET_HOLODUKE] =          *insptr;// 1600;
             g_player[g_p].ps->inven_icon = 3;
             break;
 
         case GET_JETPACK:
-            g_player[g_p].ps->jetpack_amount =           *insptr;// 1600;
+            g_player[g_p].ps->inv_amount[GET_JETPACK] =           *insptr;// 1600;
             g_player[g_p].ps->inven_icon = 4;
             break;
 
@@ -2995,18 +2995,18 @@ static int X_DoExecute(void)
         }
 
         case GET_HEATS:
-            g_player[g_p].ps->heat_amount = *insptr;
+            g_player[g_p].ps->inv_amount[GET_HEATS] = *insptr;
             g_player[g_p].ps->inven_icon = 5;
             break;
 
         case GET_FIRSTAID:
             g_player[g_p].ps->inven_icon = 1;
-            g_player[g_p].ps->firstaid_amount = *insptr;
+            g_player[g_p].ps->inv_amount[GET_FIRSTAID] = *insptr;
             break;
 
         case GET_BOOTS:
             g_player[g_p].ps->inven_icon = 7;
-            g_player[g_p].ps->boot_amount = *insptr;
+            g_player[g_p].ps->inv_amount[GET_BOOTS] = *insptr;
             break;
         default:
             OSD_Printf(CON_ERROR "Invalid inventory ID %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*(insptr-1));
@@ -3063,7 +3063,7 @@ static int X_DoExecute(void)
             j = 1;
         else if ((l & pjetpack) && g_player[g_p].ps->jetpack_on)
             j = 1;
-        else if ((l & ponsteroids) && g_player[g_p].ps->steroids_amount > 0 && g_player[g_p].ps->steroids_amount < 400)
+        else if ((l & ponsteroids) && g_player[g_p].ps->inv_amount[GET_STEROIDS] > 0 && g_player[g_p].ps->inv_amount[GET_STEROIDS] < 400)
             j = 1;
         else if ((l & ponground) && g_player[g_p].ps->on_ground)
             j = 1;
@@ -4263,7 +4263,7 @@ static int X_DoExecute(void)
         switch (*insptr++)
         {
         case GET_STEROIDS:
-            if (g_player[g_p].ps->steroids_amount != *insptr)
+            if (g_player[g_p].ps->inv_amount[GET_STEROIDS] != *insptr)
                 j = 1;
             break;
         case GET_SHIELD:
@@ -4271,13 +4271,13 @@ static int X_DoExecute(void)
                 j = 1;
             break;
         case GET_SCUBA:
-            if (g_player[g_p].ps->scuba_amount != *insptr) j = 1;
+            if (g_player[g_p].ps->inv_amount[GET_SCUBA] != *insptr) j = 1;
             break;
         case GET_HOLODUKE:
-            if (g_player[g_p].ps->holoduke_amount != *insptr) j = 1;
+            if (g_player[g_p].ps->inv_amount[GET_HOLODUKE] != *insptr) j = 1;
             break;
         case GET_JETPACK:
-            if (g_player[g_p].ps->jetpack_amount != *insptr) j = 1;
+            if (g_player[g_p].ps->inv_amount[GET_JETPACK] != *insptr) j = 1;
             break;
         case GET_ACCESS:
             switch (g_sp->pal)
@@ -4294,13 +4294,13 @@ static int X_DoExecute(void)
             }
             break;
         case GET_HEATS:
-            if (g_player[g_p].ps->heat_amount != *insptr) j = 1;
+            if (g_player[g_p].ps->inv_amount[GET_HEATS] != *insptr) j = 1;
             break;
         case GET_FIRSTAID:
-            if (g_player[g_p].ps->firstaid_amount != *insptr) j = 1;
+            if (g_player[g_p].ps->inv_amount[GET_FIRSTAID] != *insptr) j = 1;
             break;
         case GET_BOOTS:
-            if (g_player[g_p].ps->boot_amount != *insptr) j = 1;
+            if (g_player[g_p].ps->inv_amount[GET_BOOTS] != *insptr) j = 1;
             break;
         default:
             OSD_Printf(CON_ERROR "invalid inventory ID: %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*(insptr-1));

@@ -145,13 +145,13 @@ void G_ShowScores(bool bonus)
             Bsprintf(tempbuf, "%d^12/^02%d", p->actors_killed, p->fraggedself);
             minitext(deaths_kd_x, yoff, tempbuf, 0, 2 + 8 + 16 + 128);
 
-            score_inventory(misc_x, yoff, FIRSTAID_ICON, p->firstaid_amount > 0);
-            score_inventory(misc_x + 8, yoff, STEROIDS_ICON, p->steroids_amount >= 400);
-            score_inventory(misc_x + 14, yoff, HOLODUKE_ICON, p->holoduke_amount > 0);
-            score_inventory(misc_x + 19, yoff, JETPACK_ICON, p->jetpack_amount > 0);
-            score_inventory(misc_x + 25, yoff, HEAT_ICON, p->heat_amount > 0);
-            score_inventory(misc_x + 32, yoff, AIRTANK_ICON, p->scuba_amount > 0);
-            score_inventory(misc_x + 39, yoff, BOOT_ICON, p->boot_amount > 0);
+            score_inventory(misc_x, yoff, FIRSTAID_ICON, p->inv_amount[GET_FIRSTAID] > 0);
+            score_inventory(misc_x + 8, yoff, STEROIDS_ICON, p->inv_amount[GET_STEROIDS] >= 400);
+            score_inventory(misc_x + 14, yoff, HOLODUKE_ICON, p->inv_amount[GET_HOLODUKE] > 0);
+            score_inventory(misc_x + 19, yoff, JETPACK_ICON, p->inv_amount[GET_JETPACK] > 0);
+            score_inventory(misc_x + 25, yoff, HEAT_ICON, p->inv_amount[GET_HEATS] > 0);
+            score_inventory(misc_x + 32, yoff, AIRTANK_ICON, p->inv_amount[GET_SCUBA] > 0);
+            score_inventory(misc_x + 39, yoff, BOOT_ICON, p->inv_amount[GET_BOOTS] > 0);
         }
         else
         {

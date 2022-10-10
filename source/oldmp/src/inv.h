@@ -23,16 +23,34 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #ifndef INV_H
 #define INV_H
 
-enum InventoryItem_t {
-    GET_STEROIDS,
+enum DukeInvItem_t
+{
+    GET_STEROIDS,  // 0
     GET_SHIELD,
     GET_SCUBA,
     GET_HOLODUKE,
     GET_JETPACK,
-    GET_ACCESS   = 6,
+    GET_DUMMY1,  // 5
+    GET_ACCESS,
     GET_HEATS,
-    GET_FIRSTAID = 9,
-    GET_BOOTS
+    GET_DUMMY2,
+    GET_FIRSTAID,
+    GET_BOOTS,  // 10
+    GET_MAX
+};
+
+// these are not in the same order as the above, and it can't be changed for compat reasons. lame!
+enum DukeInvIcon_t
+{
+    ICON_NONE,  // 0
+    ICON_FIRSTAID,
+    ICON_STEROIDS,
+    ICON_HOLODUKE,
+    ICON_JETPACK,
+    ICON_HEATS,  // 5
+    ICON_SCUBA,
+    ICON_BOOTS,
+    ICON_MAX
 };
 
 enum DukeWeapon_t {

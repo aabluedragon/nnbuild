@@ -1113,22 +1113,22 @@ int mpgametext(int y,const char *t,int s,int dabits)
     return(G_PrintGameText(4,STARTALPHANUM, 5,y,t,s,0,dabits,0, 0, xdim-1, ydim-1, 65536));
 }
 
-int minitext_(int x,int y,const char *t,int s,int p,int sb)
+int minitext_(int x, int y, const char* t, int s, int p, int sb)
 {
     int ac;
-    char ch,cmode;
-//    int ht = usehightile;
+    char ch, cmode;
+    //    int ht = usehightile;
 
-    cmode = (sb&256)!=0;
-    sb &= 255;
+    cmode = (sb & ROTATESPRITE_MAX) != 0;
+    sb &= (ROTATESPRITE_MAX-1);
 
-//    usehightile = (ht && !r_downsize);
+    //    usehightile = (ht && !r_downsize);
     do
     {
-        if (*t == '^' && isdigit(*(t+1)))
+        if (*t == '^' && isdigit(*(t + 1)))
         {
             char smallbuf[4];
-            if (!isdigit(*(++t+1)))
+            if (!isdigit(*(++t + 1)))
             {
                 smallbuf[0] = *(t);
                 smallbuf[1] = '\0';
@@ -1144,18 +1144,17 @@ int minitext_(int x,int y,const char *t,int s,int p,int sb)
         ch = Btoupper(*t);
         if (ch == 32)
         {
-            x+=5;
+            x += 5;
             continue;
         }
         else ac = ch - '!' + MINIFONT;
 
-        if (cmode) rotatesprite(sbarx(x),sbary(y),sbarsc(65536L),0,ac,s,p,sb,0,0,xdim-1,ydim-1);
-        else rotatesprite(x<<16,y<<16,65536L,0,ac,s,p,sb,0,0,xdim-1,ydim-1);
+        if (cmode) rotatesprite(sbarx(x), sbary(y), sbarsc(65536L), 0, ac, s, p, sb, 0, 0, xdim - 1, ydim - 1);
+        else rotatesprite(x << 16, y << 16, 65536L, 0, ac, s, p, sb, 0, 0, xdim - 1, ydim - 1);
         x += 4; // tilesiz[ac].x+1;
 
-    }
-    while (*(++t));
-//    usehightile = ht;
+    } while (*(++t));
+    //    usehightile = ht;
     return (x);
 }
 
@@ -6202,7 +6201,7 @@ PALONLY:
                 t->cstat |= 4;
         }
 
-        if (g_player[screenpeek].ps->heat_amount > 0 && g_player[screenpeek].ps->heat_on && (A_CheckEnemySprite(s) || A_CheckSpriteFlags(t->owner,SFLAG_NVG) || s->picnum == APLAYER || s->statnum == 13))
+        if (g_player[screenpeek].ps->inv_amount[GET_HEATS] > 0 && g_player[screenpeek].ps->heat_on && (A_CheckEnemySprite(s) || A_CheckSpriteFlags(t->owner,SFLAG_NVG) || s->picnum == APLAYER || s->statnum == 13))
         {
             t->pal = 6;
             t->shade = 0;
@@ -6479,64 +6478,56 @@ void G_CheatGetInv(void)
     X_OnEvent(EVENT_CHEATGETSTEROIDS, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->steroids_amount =
-            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->inv_amount[GET_STEROIDS] = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
     Gv_SetVar(sysVarIDs.RETURN, 1200, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETHEAT, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->heat_amount     =
-            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->inv_amount[GET_HEATS] = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
     Gv_SetVar(sysVarIDs.RETURN, 200, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETBOOT, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->boot_amount          =
-            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->inv_amount[GET_BOOTS] = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
     Gv_SetVar(sysVarIDs.RETURN, 100, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETSHIELD, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->shield_amount =
-            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->shield_amount = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
     Gv_SetVar(sysVarIDs.RETURN, 6400, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETSCUBA, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->scuba_amount =
-            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->inv_amount[GET_SCUBA] = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
     Gv_SetVar(sysVarIDs.RETURN, 2400, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETHOLODUKE, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->holoduke_amount =
-            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->inv_amount[GET_HOLODUKE] = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
     Gv_SetVar(sysVarIDs.RETURN, 1600, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETJETPACK, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->jetpack_amount =
-            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->inv_amount[GET_JETPACK] = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
     Gv_SetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->max_player_health, g_player[myconnectindex].ps->i, myconnectindex);
     X_OnEvent(EVENT_CHEATGETFIRSTAID, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->firstaid_amount =
-            Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->inv_amount[GET_FIRSTAID] = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 }
 
@@ -6942,8 +6933,8 @@ FOUNDCHEAT:
                     return;
 
                 case CHEAT_HYPER:
-                    g_player[myconnectindex].ps->steroids_amount = 399;
-                    g_player[myconnectindex].ps->heat_amount = 1200;
+                    g_player[myconnectindex].ps->inv_amount[GET_STEROIDS] = 399;
+                    g_player[myconnectindex].ps->inv_amount[GET_HEATS] = 1200;
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     P_DoQuote(QUOTE_CHEAT_STEROIDS,g_player[myconnectindex].ps);
                     KB_FlushKeyboardQueue();

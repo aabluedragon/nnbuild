@@ -59,54 +59,55 @@ enum WeaponFlags_t {
 typedef struct {
     vec3_t pos, opos, vel;
 
-    int zoom, exitx, exity;
-    int invdisptime;
-    int bobposx, bobposy, pyoff, opyoff;
-    int last_pissed_time, truefz, truecz;
-    int player_par;
-    int bobcounter, weapon_sway;
-    int randomflamex, crack_time;
+    int32_t zoom, exitx, exity;
+    int32_t invdisptime;
+    int32_t bobposx, bobposy, pyoff, opyoff;
+    int32_t last_pissed_time, truefz, truecz;
+    int32_t player_par;
+    int32_t bobcounter, weapon_sway;
+    int32_t randomflamex, crack_time;
 
     fix16_t q16horiz, q16horizoff, oq16horiz, oq16horizoff;
     fix16_t q16ang, oq16ang, q16angvel;
 
-    unsigned int interface_toggle_flag;
+    uint32_t interface_toggle_flag;
 
     palette_t pals;
 
-    int max_secret_rooms, secret_rooms, actors_killed;
-    int runspeed, movement_lock, team;
-    int max_player_health, max_shield_amount, max_ammo_amount[MAX_WEAPONS];
+    int32_t max_secret_rooms, secret_rooms, actors_killed;
+    int32_t runspeed, movement_lock, team;
+    int32_t max_player_health, max_shield_amount;
 
-    int scream_voice;
+    int32_t scream_voice;
 
-    int loogiex[64], loogiey[64], numloogs, loogcnt;
+    int32_t loogiex[64], loogiey[64], numloogs, loogcnt;
 
     char palette;
 
-    short sbs, lowsprite, highsprite, sound_pitch;
+    int16_t sbs, lowsprite, highsprite, sound_pitch;
 
-    short cursectnum, look_ang, olook_ang, last_extra, subweapon;
-    short ammo_amount[MAX_WEAPONS], wackedbyactor, frag, fraggedself;
+    int16_t cursectnum, look_ang, olook_ang, last_extra, subweapon;
+    int16_t wackedbyactor, frag, fraggedself;
+    int16_t max_ammo_amount[MAX_WEAPONS], ammo_amount[MAX_WEAPONS], inv_amount[GET_MAX];
 
+    short shield_amount;
     short curr_weapon, last_weapon, last_used_weapon, wantweaponfire;
-    short holoduke_amount, newowner, hurt_delay, hbomb_hold_delay;
+    short newowner, hurt_delay, hbomb_hold_delay;
     short jumping_counter, airleft;
     short fta, ftq, access_wallnum, access_spritenum;
-    short weapon_ang, firstaid_amount;
+    short weapon_ang;
     short somethingonplayer, on_crane, i, one_parallax_sectnum;
     short over_shoulder_on, random_club_frame;
     short one_eighty_count, cheat_phase;
     short dummyplayersprite, extra_extra8, quick_kick, last_quick_kick;
-    short heat_amount, actorsqu, timebeforeexit, customexitsound;
+    short actorsqu, timebeforeexit, customexitsound;
 
     short weaprecs[16], weapreccnt;
 
-
     short orotscrnang, rotscrnang, dead_flag, show_empty_weapon;   // JBF 20031220: added orotscrnang
-    short scuba_amount, jetpack_amount, steroids_amount, shield_amount;
+    
     short holoduke_on, pycount, weapon_pos, frag_ps;
-    short transporter_hold, last_full_weapon, footprintshade, boot_amount;
+    short transporter_hold, last_full_weapon, footprintshade;
 
     uint8_t toggle_key_flag;
     uint8_t kickback_pic, knuckle_incs, knee_incs, access_incs, fist_incs, tipincs;
@@ -130,11 +131,10 @@ typedef struct {
 } DukePlayer_t;
 
 typedef struct {
-    short got_access, last_extra, shield_amount, curr_weapon, holoduke_on;
-    short firstaid_amount, steroids_amount, holoduke_amount, jetpack_amount;
-    short heat_amount, scuba_amount, boot_amount;
-    short last_weapon, weapon_pos, kickback_pic;
-    short ammo_amount[MAX_WEAPONS], frag[MAXPLAYERS];
+    int16_t got_access, last_extra, shield_amount, curr_weapon, holoduke_on;
+    int16_t inv_amount[GET_MAX];
+    int16_t last_weapon, weapon_pos, kickback_pic;
+    int16_t ammo_amount[MAX_WEAPONS], frag[MAXPLAYERS];
     char inven_icon, jetpack_on, heat_on, gotweapon[MAX_WEAPONS];
 } DukeStatus_t;
 

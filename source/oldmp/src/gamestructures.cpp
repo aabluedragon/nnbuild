@@ -1849,10 +1849,10 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_HOLODUKE_AMOUNT:
         if (iSet)
         {
-            g_player[iPlayer].ps->holoduke_amount=lValue;
+            g_player[iPlayer].ps->inv_amount[GET_HOLODUKE]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->holoduke_amount, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->inv_amount[GET_HOLODUKE], g_i, g_p);
         return;
 
     case PLAYER_NEWOWNER:
@@ -1984,10 +1984,10 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_FIRSTAID_AMOUNT:
         if (iSet)
         {
-            g_player[iPlayer].ps->firstaid_amount=lValue;
+            g_player[iPlayer].ps->inv_amount[GET_FIRSTAID]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->firstaid_amount, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->inv_amount[GET_FIRSTAID], g_i, g_p);
         return;
 
     case PLAYER_SOMETHINGONPLAYER:
@@ -2101,10 +2101,10 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_HEAT_AMOUNT:
         if (iSet)
         {
-            g_player[iPlayer].ps->heat_amount=lValue;
+            g_player[iPlayer].ps->inv_amount[GET_HEATS]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->heat_amount, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->inv_amount[GET_HEATS], g_i, g_p);
         return;
 
     case PLAYER_ACTORSQU:
@@ -2191,28 +2191,28 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_SCUBA_AMOUNT:
         if (iSet)
         {
-            g_player[iPlayer].ps->scuba_amount=lValue;
+            g_player[iPlayer].ps->inv_amount[GET_SCUBA]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->scuba_amount, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->inv_amount[GET_SCUBA], g_i, g_p);
         return;
 
     case PLAYER_JETPACK_AMOUNT:
         if (iSet)
         {
-            g_player[iPlayer].ps->jetpack_amount=lValue;
+            g_player[iPlayer].ps->inv_amount[GET_JETPACK]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->jetpack_amount, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->inv_amount[GET_JETPACK], g_i, g_p);
         return;
 
     case PLAYER_STEROIDS_AMOUNT:
         if (iSet)
         {
-            g_player[iPlayer].ps->steroids_amount=lValue;
+            g_player[iPlayer].ps->inv_amount[GET_STEROIDS]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->steroids_amount, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->inv_amount[GET_STEROIDS], g_i, g_p);
         return;
 
     case PLAYER_SHIELD_AMOUNT:
@@ -2290,10 +2290,10 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_BOOT_AMOUNT:
         if (iSet)
         {
-            g_player[iPlayer].ps->boot_amount=lValue;
+            g_player[iPlayer].ps->inv_amount[GET_BOOTS]=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->boot_amount, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->inv_amount[GET_BOOTS], g_i, g_p);
         return;
 
     case PLAYER_SCREAM_VOICE:

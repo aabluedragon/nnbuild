@@ -2,6 +2,8 @@
 #include "hud.h"
 #include "colmatch.h"
 
+#define USE_PATCHING 1
+
 int32_t althud_numbertile = 2930;
 int32_t althud_numberpal = 0;
 int32_t althud_shadows = 1;
@@ -19,15 +21,23 @@ int32_t g_levelTextTime = 0;
 
 static void G_PatchStatusBar(int32_t x1, int32_t y1, int32_t x2, int32_t y2)
 {
+    int32_t const statusTile = BOTTOMSTATUSBAR;
     int32_t const scl = sbarsc(65536);
-    int32_t const tx = sbarx16((160 << 16) - (tilesiz[BOTTOMSTATUSBAR].x << 15)); // centered
-    int32_t const ty = sbary(200 - tilesiz[BOTTOMSTATUSBAR].y);
+    int32_t const tx = sbarx16((160 << 16) - (tilesiz[statusTile].x << 15)); // centered
+    int32_t const ty = sbary(200 - tilesiz[statusTile].y);
 
-    int32_t const clx1 = sbarsc(scale(x1, xdim, 320)), cly1 = sbarsc(scale(y1, ydim, 200));
-    int32_t const clx2 = sbarsc(scale(x2, xdim, 320)), cly2 = sbarsc(scale(y2, ydim, 200));
-    int32_t const clofx = (xdim - sbarsc(xdim)) >> 1, clofy = (ydim - sbarsc(ydim));
+    vec2_t cl1 = { sbarsc(get_xdim(x1)), sbarsc(get_ydim(y1)) };
+    vec2_t cl2 = { sbarsc(get_xdim(x2)), sbarsc(get_ydim(y2)) };
+    vec2_t clofs = { ((xdim - sbarsc(xdim)) >> 1), (ydim - sbarsc(ydim)) };
 
-    rotatesprite(tx, ty, scl, 0, BOTTOMSTATUSBAR, 4, 0, 10 + 16 + 64, clx1 + clofx, cly1 + clofy, clx2 + clofx - 1, cly2 + clofy - 1);
+    if (x1 == 0 && y1 == 0 && x2 == 320 && y2 == 200) // Patching full screen, so accomodate widescreen bars.
+    {
+        cl1 = { 0, 0 };
+        cl2 = { xdim, ydim };
+        clofs = { 0, 0 };
+    }
+    
+    rotatesprite(tx, ty, scl, 0, statusTile, 4, 0, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_NOMASK, cl1.x + clofs.x, cl1.y + clofs.y, cl2.x + clofs.x - 1, cl2.y + clofs.y - 1);
 }
 
 void G_SetStatusBarScale(int sc)
@@ -150,118 +160,125 @@ void G_DrawFrags(void)
     }
 }
 
+static int32_t G_RemapIconToInventory(int32_t iconNum)
+{
+    switch (iconNum)
+    {
+        case ICON_FIRSTAID: return GET_FIRSTAID;
+        case ICON_STEROIDS: return GET_STEROIDS;
+        case ICON_HOLODUKE: return GET_HOLODUKE;
+        case ICON_JETPACK:  return GET_JETPACK;
+        case ICON_HEATS:    return GET_HEATS;
+        case ICON_SCUBA:    return GET_SCUBA;
+        case ICON_BOOTS:    return GET_BOOTS;
+    }
+
+    return -1;
+}
+
 void G_DrawInventory(DukePlayer_t* p)
 {
-    int n, j = 0, xoff = 0, y;
+    int items_had = 0;
+    int xoff = 160;
+    int y = 154;
 
-    n = (p->jetpack_amount > 0) << 3;
-    if (n & 8) j++;
-    n |= (p->scuba_amount > 0) << 5;
-    if (n & 32) j++;
-    n |= (p->steroids_amount > 0) << 1;
-    if (n & 2) j++;
-    n |= (p->holoduke_amount > 0) << 2;
-    if (n & 4) j++;
-    n |= (p->firstaid_amount > 0);
-    if (n & 1) j++;
-    n |= (p->heat_amount > 0) << 4;
-    if (n & 16) j++;
-    n |= (p->boot_amount > 0) << 6;
-    if (n & 64) j++;
-
-    xoff = 160 - (j * 11);
-
-    j = 0;
-
-    //    if (ud.screen_size > 4)
-    y = 154;
-    //    else y = (ud.drawweapon == 2?150:172);
-
-        /*    if (ud.screen_size == 4 && ud.drawweapon != 2)
-            {
-                xoff += 65;
-                if (ud.multimode > 1)
-                    xoff -= 9;
-            }
-        */
-    while (j <= 9)
+    for (int i = 1; i < ICON_MAX; i++)
     {
-        if (n & (1 << j))
+        int const inv_item = G_RemapIconToInventory(i);
+        if (inv_item != -1)
         {
-            switch (n & (1 << j))
+            int const inv_amount = p->inv_amount[inv_item];
+            if (inv_amount > 0)
             {
-            case   1:
-                rotatesprite(xoff << 16, y << 16, 65536L, 0, FIRSTAID_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
-                break;
-            case   2:
-                rotatesprite((xoff + 1) << 16, y << 16, 65536L, 0, STEROIDS_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
-                break;
-            case   4:
-                rotatesprite((xoff + 2) << 16, y << 16, 65536L, 0, HOLODUKE_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
-                break;
-            case   8:
-                rotatesprite(xoff << 16, y << 16, 65536L, 0, JETPACK_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
-                break;
-            case  16:
-                rotatesprite(xoff << 16, y << 16, 65536L, 0, HEAT_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
-                break;
-            case  32:
-                rotatesprite(xoff << 16, y << 16, 65536L, 0, AIRTANK_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
-                break;
-            case 64:
-                rotatesprite(xoff << 16, (y - 1) << 16, 65536L, 0, BOOT_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
-                break;
+                xoff -= 11;
+                items_had |= 1 << i;
+            }
+        }
+    } 
+
+    for (int i = 1; i < ICON_MAX; i++)
+    {
+        if (items_had & (1 << i))
+        {
+            switch (i)
+            {
+                case ICON_FIRSTAID:
+                    rotatesprite(xoff << 16, y << 16, 65536L, 0, FIRSTAID_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+                    break;
+                case ICON_STEROIDS:
+                    rotatesprite((xoff + 1) << 16, y << 16, 65536L, 0, STEROIDS_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+                    break;
+                case ICON_HOLODUKE:
+                    rotatesprite((xoff + 2) << 16, y << 16, 65536L, 0, HOLODUKE_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+                    break;
+                case ICON_JETPACK:
+                    rotatesprite(xoff << 16, y << 16, 65536L, 0, JETPACK_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+                    break;
+                case ICON_HEATS:
+                    rotatesprite(xoff << 16, y << 16, 65536L, 0, HEAT_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+                    break;
+                case ICON_SCUBA:
+                    rotatesprite(xoff << 16, y << 16, 65536L, 0, AIRTANK_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+                    break;
+                case ICON_BOOTS:
+                    rotatesprite(xoff << 16, (y - 1) << 16, 65536L, 0, BOOT_ICON, 0, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+                    break;
             }
 
             xoff += 22;
 
-            if (p->inven_icon == j + 1)
+            if (p->inven_icon == i)
                 rotatesprite((xoff - 2) << 16, (y + 19) << 16, 65536L, 1024, ARROW, -32, 0, 2 + 16, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
         }
-
-        j++;
     }
 }
 
-// draws inventory numbers in the HUD for both the full and mini status bars
-static void G_DrawInvNum(int x, int y, char num1, char ha, char sbits)
+// Draws inventory numbers in the HUD for both the full and mini status bars.
+static void G_DrawInvNum(int32_t x, int32_t y, char num1, char ha, int32_t sbits)
 {
-    char dabuf[80] = { 0 };
-    int shd = (x < 0);
+    char dabuf[16];
+    int32_t i, shd = (x < 0);
+
+    const int32_t sbscale = sbarsc(65536);
+    const int32_t sby = sbary(y), sbyp1 = sbary(y + 1);
 
     if (shd) x = -x;
 
     Bsprintf(dabuf, "%d", num1);
+
     if (num1 > 99)
     {
-        if (shd && ud.screen_size == 4 && videoGetRenderMode() >= 3 && althud_shadows)
+        if (shd && ud.screen_size == 4 && videoGetRenderMode() >= REND_POLYMOST && althud_shadows)
         {
-            rotatesprite(sbarx(x - 4 + 1), sbary(y + 1), sbarsc(65536L), 0, THREEBYFIVE + dabuf[0] - '0', ha, 4, POLYMOSTTRANS | sbits, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(sbarx(x + 1), sbary(y + 1), sbarsc(65536L), 0, THREEBYFIVE + dabuf[1] - '0', ha, 4, POLYMOSTTRANS | sbits, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(sbarx(x + 4 + 1), sbary(y + 1), sbarsc(65536L), 0, THREEBYFIVE + dabuf[2] - '0', ha, 4, POLYMOSTTRANS | sbits, 0, 0, xdim - 1, ydim - 1);
+            for (i = 0; i <= 2; i++)
+                rotatesprite_fs(sbarx(x + (-4 + 4 * i) + 1), sbyp1, sbscale, 0, THREEBYFIVE + dabuf[i] - '0',
+                    127, 4, POLYMOSTTRANS | sbits);
         }
-        rotatesprite(sbarx(x - 4), sbary(y), sbarsc(65536L), 0, THREEBYFIVE + dabuf[0] - '0', ha, 0, sbits, 0, 0, xdim - 1, ydim - 1);
-        rotatesprite(sbarx(x), sbary(y), sbarsc(65536L), 0, THREEBYFIVE + dabuf[1] - '0', ha, 0, sbits, 0, 0, xdim - 1, ydim - 1);
-        rotatesprite(sbarx(x + 4), sbary(y), sbarsc(65536L), 0, THREEBYFIVE + dabuf[2] - '0', ha, 0, sbits, 0, 0, xdim - 1, ydim - 1);
+
+        for (i = 0; i <= 2; i++)
+            rotatesprite_fs(sbarx(x + (-4 + 4 * i)), sby, sbscale, 0, THREEBYFIVE + dabuf[i] - '0', ha, 0, sbits);
         return;
     }
+
     if (num1 > 9)
     {
-        if (shd && ud.screen_size == 4 && videoGetRenderMode() >= 3 && althud_shadows)
+        if (shd && ud.screen_size == 4 && videoGetRenderMode() >= REND_POLYMOST && althud_shadows)
         {
-            rotatesprite(sbarx(x + 1), sbary(y + 1), sbarsc(65536L), 0, THREEBYFIVE + dabuf[0] - '0', ha, 4, POLYMOSTTRANS | sbits, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(sbarx(x + 4 + 1), sbary(y + 1), sbarsc(65536L), 0, THREEBYFIVE + dabuf[1] - '0', ha, 4, POLYMOSTTRANS | sbits, 0, 0, xdim - 1, ydim - 1);
+            rotatesprite_fs(sbarx(x + 1), sbyp1, sbscale, 0, THREEBYFIVE + dabuf[0] - '0', 127, 4, POLYMOSTTRANS | sbits);
+            rotatesprite_fs(sbarx(x + 4 + 1), sbyp1, sbscale, 0, THREEBYFIVE + dabuf[1] - '0', 127, 4, POLYMOSTTRANS | sbits);
         }
 
-        rotatesprite(sbarx(x), sbary(y), sbarsc(65536L), 0, THREEBYFIVE + dabuf[0] - '0', ha, 0, sbits, 0, 0, xdim - 1, ydim - 1);
-        rotatesprite(sbarx(x + 4), sbary(y), sbarsc(65536L), 0, THREEBYFIVE + dabuf[1] - '0', ha, 0, sbits, 0, 0, xdim - 1, ydim - 1);
+        rotatesprite_fs(sbarx(x), sby, sbscale, 0, THREEBYFIVE + dabuf[0] - '0', ha, 0, sbits);
+        rotatesprite_fs(sbarx(x + 4), sby, sbscale, 0, THREEBYFIVE + dabuf[1] - '0', ha, 0, sbits);
         return;
     }
-    rotatesprite(sbarx(x + 4 + 1), sbary(y + 1), sbarsc(65536L), 0, THREEBYFIVE + dabuf[0] - '0', ha, 4, sbits, 0, 0, xdim - 1, ydim - 1);
-    rotatesprite(sbarx(x + 4), sbary(y), sbarsc(65536L), 0, THREEBYFIVE + dabuf[0] - '0', ha, 0, sbits, 0, 0, xdim - 1, ydim - 1);
+
+    rotatesprite_fs(sbarx(x + 4 + 1), sbyp1, sbscale, 0, THREEBYFIVE + dabuf[0] - '0', ha, 4, sbits);
+    rotatesprite_fs(sbarx(x + 4), sby, sbscale, 0, THREEBYFIVE + dabuf[0] - '0', ha, 0, sbits);
 }
 
-static void G_DrawDigiNum(int x, int y, int n, char s, char cs)
+
+static void G_DrawDigiNum(int x, int y, int n, char s, int32_t cs)
 {
     int i, j = 0, k, p, c;
     char b[10];
@@ -285,7 +302,7 @@ static void G_DrawDigiNum(int x, int y, int n, char s, char cs)
     }
 }
 
-static void G_DrawAltDigiNum(int x, int y, int n, char s, char cs)
+static void G_DrawAltDigiNum(int x, int y, int n, char s, int32_t cs)
 {
     int i, j = 0, k, p, c;
     char b[10];
@@ -492,13 +509,89 @@ static void G_DrawWeapAmounts(DukePlayer_t* p, int x, int y, int u)
     }
 }
 
+static int32_t G_GetInvAmount(const DukePlayer_t* p)
+{
+    switch (p->inven_icon)
+    {
+        case ICON_FIRSTAID:
+            return p->inv_amount[GET_FIRSTAID];
+        case ICON_STEROIDS:
+            return (p->inv_amount[GET_STEROIDS] + 3) >> 2;
+        case ICON_HOLODUKE:
+            return (p->inv_amount[GET_HOLODUKE] + 15) / 24;
+        case ICON_JETPACK:
+            return (p->inv_amount[GET_JETPACK] + 15) >> 4;
+        case ICON_HEATS:
+            return p->inv_amount[GET_HEATS] / 12;
+        case ICON_SCUBA:
+            return (p->inv_amount[GET_SCUBA] + 63) >> 6;
+        case ICON_BOOTS:
+            return p->inv_amount[GET_BOOTS] >> 1;
+    }
+
+    return -1;
+}
+
+static int32_t G_GetInvOn(const DukePlayer_t* p)
+{
+    switch (p->inven_icon)
+    {
+        case ICON_HOLODUKE:
+            return p->holoduke_on;
+        case ICON_JETPACK:
+            return p->jetpack_on;
+        case ICON_HEATS:
+            return p->heat_on;
+    }
+
+    return 0x80000000;
+}
+
+
+static int32_t G_GetMorale(int32_t p_i, int32_t snum)
+{
+    return Gv_GetVarByLabel("PLR_MORALE", -1, p_i, snum);
+}
+
+static inline void rotatesprite_althud(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t picnum, int8_t dashade, char dapalnum, int32_t dastat)
+{
+    if (videoGetRenderMode() >= REND_POLYMOST && althud_shadows)
+        rotatesprite_(sbarx(sx + 1), sbary(sy + 1), z, a, picnum, 127, 4, dastat + POLYMOSTTRANS2, 0, 0, 0, 0, xdim - 1, ydim - 1);
+    rotatesprite_(sbarx(sx), sbary(sy), z, a, picnum, dashade, dapalnum, dastat, 0, 0, 0, 0, xdim - 1, ydim - 1);
+}
+
+static inline void rotatesprite_althudr(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t picnum, int8_t dashade, char dapalnum, int32_t dastat)
+{
+    if (videoGetRenderMode() >= REND_POLYMOST && althud_shadows)
+        rotatesprite_(sbarxr(sx - 1), sbary(sy + 1), z, a, picnum, 127, 4, dastat + POLYMOSTTRANS2, 0, 0, 0, 0, xdim - 1, ydim - 1);
+    rotatesprite_(sbarxr(sx), sbary(sy), z, a, picnum, dashade, dapalnum, dastat, 0, 0, 0, 0, xdim - 1, ydim - 1);
+}
+
 void G_DrawStatusBar(int snum)
 {
-    DukePlayer_t* p = g_player[snum].ps;
-    int i, j, o, ss = ud.screen_size, u;
-    int permbit = 0;
+    auto const p = g_player[snum].ps;
+    int32_t i, j, o;
+    int32_t permbit = 0;
 
-    if (ss < 4) return;
+    const int32_t ss = ud.screen_size;
+    const int32_t althud = ud.althud;
+
+    const int32_t SBY = (200 - tilesiz[BOTTOMSTATUSBAR].y);
+
+    const int32_t sb15 = sbarsc(32768), sb15h = sbarsc(49152);
+    const int32_t sb16 = sbarsc(65536);
+
+    static int32_t item_icons[8];
+
+    if (ss < 4)
+        return;
+
+    if (item_icons[0] == 0)
+    {
+        int32_t iicons[8] = { -1, FIRSTAID_ICON, STEROIDS_ICON, HOLODUKE_ICON,
+                              JETPACK_ICON, HEAT_ICON, AIRTANK_ICON, BOOT_ICON };
+        Bmemcpy(item_icons, iicons, sizeof(item_icons));
+    }
 
     if (g_player[snum].ps->gm & MODE_MENU)
         if ((g_currentMenu >= 400 && g_currentMenu <= 405))
@@ -507,13 +600,14 @@ void G_DrawStatusBar(int snum)
     if (videoGetRenderMode() >= REND_POLYMOST)
         pus = NUMPAGES;   // JBF 20040101: always redraw in GL
 
-    if (ss == 4)   //DRAW MINI STATUS BAR:
+    if (ss == 4) // DRAW MINI STATUS BAR:
     {
-        if (ud.althud) // althud
+        if (althud) // althud
         {
+            int32_t const hudoffset = 200;
             static int ammo_sprites[MAX_WEAPONS];
 
-            if (!ammo_sprites[0])
+            if (EDUKE32_PREDICT_FALSE(ammo_sprites[0] == 0))
             {
                 /* this looks stupid but it lets us initialize static memory to dynamic values
                    these values can be changed from the CONs with dynamic tile remapping
@@ -522,285 +616,212 @@ void G_DrawStatusBar(int snum)
 
                 int asprites[MAX_WEAPONS] = { BOOTS, AMMO, SHOTGUNAMMO,
                                               BATTERYAMMO, RPGAMMO, HBOMBAMMO, CRYSTALAMMO, DEVISTATORAMMO,
-                                              TRIPBOMBSPRITE, FREEZEAMMO + 1, HBOMBAMMO, GROWAMMO
-                };
+                                              TRIPBOMBSPRITE, FREEZEAMMO + 1, HBOMBAMMO, GROWAMMO };
+
                 Bmemcpy(ammo_sprites, asprites, sizeof(ammo_sprites));
             }
 
-            //            rotatesprite(sbarx(5+1),sbary(200-25+1),sbarsc(49152L),0,SIXPAK,0,4,10+16+1+32,0,0,xdim-1,ydim-1);
-            //            rotatesprite(sbarx(5),sbary(200-25),sbarsc(49152L),0,SIXPAK,0,0,10+16,0,0,xdim-1,ydim-1);
-            if (videoGetRenderMode() >= 3 && althud_shadows)
-                rotatesprite(sbarx(2 + 1), sbary(200 - 21 + 1), sbarsc(49152L), 0, COLA, 0, 4, 10 + 16 + POLYMOSTTRANS2, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(sbarx(2), sbary(200 - 21), sbarsc(49152L), 0, COLA, 0, 0, 10 + 16, 0, 0, xdim - 1, ydim - 1);
+            rotatesprite_althud(2, hudoffset - 21, sb15h, 0, COLA, 0, 0, 10 + 16 + 256);
 
             if (sprite[p->i].pal == 1 && p->last_extra < 2)
-                G_DrawAltDigiNum(40, -(200 - 22), 1, -16, 10 + 16);
+                G_DrawAltDigiNum(40, -(hudoffset - 22), 1, -16, 10 + 16 + 256);
             else if (!althud_flashing || p->last_extra > (p->max_player_health >> 2) || (int32_t)totalclock & 32)
             {
-                int s = -8;
+                int32_t s = -8;
                 if (althud_flashing && p->last_extra > p->max_player_health)
                     s += (sintable[((int32_t)totalclock << 5) & 2047] >> 10);
-                G_DrawAltDigiNum(40, -(200 - 22), p->last_extra, s, 10 + 16);
+                G_DrawAltDigiNum(40, -(hudoffset - 22), p->last_extra, s, 10 + 16 + 256);
             }
 
-            if (videoGetRenderMode() >= 3 && althud_shadows)
-                rotatesprite(sbarx(62 + 1), sbary(200 - 25 + 1), sbarsc(49152L), 0, SHIELD, 0, 4, 10 + 16 + POLYMOSTTRANS2, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(sbarx(62), sbary(200 - 25), sbarsc(49152L), 0, SHIELD, 0, 0, 10 + 16, 0, 0, xdim - 1, ydim - 1);
+            rotatesprite_althud(62, hudoffset - 25, sb15h, 0, SHIELD, 0, 0, 10 + 16 + 256);
 
-            G_DrawAltDigiNum(105, -(200 - 22), p->shield_amount, -16, 10 + 16);
-
-            if (videoGetRenderMode() >= 3 && althud_shadows)
             {
-                if (ud.got_access & 1) rotatesprite(sbarxr(39 - 1), sbary(200 - 43 + 1), sbarsc(32768), 0, ACCESSCARD, 0, 4, 10 + 16 + POLYMOSTTRANS2, 0, 0, xdim - 1, ydim - 1);
-                if (ud.got_access & 4) rotatesprite(sbarxr(34 - 1), sbary(200 - 41 + 1), sbarsc(32768), 0, ACCESSCARD, 0, 4, 10 + 16 + POLYMOSTTRANS2, 0, 0, xdim - 1, ydim - 1);
-                if (ud.got_access & 2) rotatesprite(sbarxr(29 - 1), sbary(200 - 39 + 1), sbarsc(32768), 0, ACCESSCARD, 0, 4, 10 + 16 + POLYMOSTTRANS2, 0, 0, xdim - 1, ydim - 1);
+                int32_t lAmount = G_GetMorale(p->i, snum);
+                if (lAmount == -1)
+                    lAmount = p->inv_amount[GET_SHIELD];
+                G_DrawAltDigiNum(105, -(hudoffset - 22), lAmount, -16, 10 + 16 + 256);
             }
 
-            if (ud.got_access & 1) rotatesprite(sbarxr(39), sbary(200 - 43), sbarsc(32768), 0, ACCESSCARD, 0, 0, 10 + 16, 0, 0, xdim - 1, ydim - 1);
-            if (ud.got_access & 4) rotatesprite(sbarxr(34), sbary(200 - 41), sbarsc(32768), 0, ACCESSCARD, 0, 23, 10 + 16, 0, 0, xdim - 1, ydim - 1);
-            if (ud.got_access & 2) rotatesprite(sbarxr(29), sbary(200 - 39), sbarsc(32768), 0, ACCESSCARD, 0, 21, 10 + 16, 0, 0, xdim - 1, ydim - 1);
+            if (ammo_sprites[p->curr_weapon] >= 0)
+            {
+                i = (tilesiz[ammo_sprites[p->curr_weapon]].y >= 50) ? 16384 : 32768;
+                rotatesprite_althudr(57, hudoffset - 15, sbarsc(i), 0, ammo_sprites[p->curr_weapon], 0, 0, 10 + 512);
+            }
 
-            i = 32768;
-            if (p->curr_weapon == PISTOL_WEAPON) i = 16384;
-            if (videoGetRenderMode() >= 3 && althud_shadows)
-                rotatesprite(sbarxr(57 - 1), sbary(200 - 15 + 1), sbarsc(i), 0, ammo_sprites[p->curr_weapon], 0, 4, 2 + POLYMOSTTRANS2, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(sbarxr(57), sbary(200 - 15), sbarsc(i), 0, ammo_sprites[p->curr_weapon], 0, 0, 2, 0, 0, xdim - 1, ydim - 1);
-
-            if (p->curr_weapon == HANDREMOTE_WEAPON) i = HANDBOMB_WEAPON;
+            if (PWEAPON(snum, p->curr_weapon, WorksLike) == HANDREMOTE_WEAPON) i = HANDBOMB_WEAPON;
             else i = p->curr_weapon;
-            if (p->curr_weapon != KNEE_WEAPON &&
+
+            if (PWEAPON(snum, p->curr_weapon, WorksLike) != KNEE_WEAPON &&
                 (!althud_flashing || (int32_t)totalclock & 32 || p->ammo_amount[i] > (p->max_ammo_amount[i] / 10)))
-                G_DrawAltDigiNum(-20, -(200 - 22), p->ammo_amount[i], -16, 10 + 16);
+                G_DrawAltDigiNum(-20, -(hudoffset - 22), p->ammo_amount[i], -16, 10 + 16 + 512);
 
             o = 102;
             permbit = 0;
 
             if (p->inven_icon)
             {
-                switch (p->inven_icon)
+                const int32_t orient = 10 + 16 + permbit + 256;
+
+                int const inv_icon = ((unsigned)p->inven_icon < ICON_MAX) ? item_icons[p->inven_icon] : -1;
+                int const inv_amount = G_GetInvAmount(p);
+                int const inv_on = G_GetInvOn(p);
+
+                if (inv_icon >= 0)
+                    rotatesprite_althud(231 - o, hudoffset - 21 - 2, sb16, 0, inv_icon, 0, 0, orient);
+
+                if (videoGetRenderMode() >= REND_POLYMOST && althud_shadows)
+                    minitextshade(292 - 30 - o + 1, hudoffset - 10 - 3 + 1, "%", 127, 4, POLYMOSTTRANS + orient + ROTATESPRITE_MAX);
+                minitext(292 - 30 - o, hudoffset - 10 - 3, "%", 6, orient + ROTATESPRITE_MAX);
+
+                G_DrawInvNum(-(284 - 30 - o), hudoffset - 6 - 3, (uint8_t)inv_amount, 0, 10 + permbit + 256);
+
+                if (inv_on > 0)
                 {
-                case 1:
-                    i = FIRSTAID_ICON;
-                    break;
-                case 2:
-                    i = STEROIDS_ICON;
-                    break;
-                case 3:
-                    i = HOLODUKE_ICON;
-                    break;
-                case 4:
-                    i = JETPACK_ICON;
-                    break;
-                case 5:
-                    i = HEAT_ICON;
-                    break;
-                case 6:
-                    i = AIRTANK_ICON;
-                    break;
-                case 7:
-                    i = BOOT_ICON;
-                    break;
-                default:
-                    i = -1;
+                    if (videoGetRenderMode() >= REND_POLYMOST && althud_shadows)
+                        minitextshade(288 - 30 - o + 1, hudoffset - 20 - 3 + 1, "On", 127, 4, POLYMOSTTRANS + orient + ROTATESPRITE_MAX);
+                    minitext(288 - 30 - o, hudoffset - 20 - 3, "On", 0, orient + ROTATESPRITE_MAX);
                 }
-                if (i >= 0)
+                else if ((uint32_t)inv_on != 0x80000000)
                 {
-                    if (videoGetRenderMode() >= 3 && althud_shadows)
-                        rotatesprite(sbarx(231 - o + 1), sbary(200 - 21 - 2 + 1), sbarsc(65536L), 0, i, 0, 4, 10 + 16 + permbit + POLYMOSTTRANS2, 0, 0, xdim - 1, ydim - 1);
-                    rotatesprite(sbarx(231 - o), sbary(200 - 21 - 2), sbarsc(65536L), 0, i, 0, 0, 10 + 16 + permbit, 0, 0, xdim - 1, ydim - 1);
+                    if (videoGetRenderMode() >= REND_POLYMOST && althud_shadows)
+                        minitextshade(284 - 30 - o + 1, hudoffset - 20 - 3 + 1, "Off", 127, 4, POLYMOSTTRANS + orient + ROTATESPRITE_MAX);
+                    minitext(284 - 30 - o, hudoffset - 20 - 3, "Off", 2, orient + ROTATESPRITE_MAX);
                 }
 
-                if (videoGetRenderMode() >= 3 && althud_shadows)
-                    minitext(292 - 30 - o + 1, 190 - 3 + 1, "%", 4, POLYMOSTTRANS + 10 + 16 + permbit + 256);
-                minitext(292 - 30 - o, 190 - 3, "%", 6, 10 + 16 + permbit + 256);
-
-                j = 0x80000000;
-                switch (p->inven_icon)
+                if (p->inven_icon >= ICON_SCUBA)
                 {
-                case 1:
-                    i = p->firstaid_amount;
-                    break;
-                case 2:
-                    i = ((p->steroids_amount + 3) >> 2);
-                    break;
-                case 3:
-                    i = ((p->holoduke_amount + 15) / 24);
-                    j = p->holoduke_on;
-                    break;
-                case 4:
-                    i = ((p->jetpack_amount + 15) >> 4);
-                    j = p->jetpack_on;
-                    break;
-                case 5:
-                    i = p->heat_amount / 12;
-                    j = p->heat_on;
-                    break;
-                case 6:
-                    i = ((p->scuba_amount + 63) >> 6);
-                    break;
-                case 7:
-                    i = (p->boot_amount >> 1);
-                    break;
+                    if (videoGetRenderMode() >= REND_POLYMOST && althud_shadows)
+                        minitextshade(284 - 35 - o + 1, hudoffset - 20 - 3 + 1, "Auto", 127, 4, POLYMOSTTRANS + orient + ROTATESPRITE_MAX);
+                    minitext(284 - 35 - o, hudoffset - 20 - 3, "Auto", 2, orient + ROTATESPRITE_MAX);
                 }
-                G_DrawInvNum(-(284 - 30 - o), 200 - 6 - 3, (char)i, 0, 10 + permbit);
-                if (j > 0)
-                {
-                    if (videoGetRenderMode() >= 3 && althud_shadows)
-                        minitext(288 - 30 - o + 1, 180 - 3 + 1, "ON", 4, POLYMOSTTRANS + 10 + 16 + permbit + 256);
-                    minitext(288 - 30 - o, 180 - 3, "ON", 0, 10 + 16 + permbit + 256);
-                }
-                else if ((unsigned int)j != 0x80000000)
-                {
-                    if (videoGetRenderMode() >= 3 && althud_shadows)
-                        minitext(284 - 30 - o + 1, 180 - 3 + 1, "OFF", 4, POLYMOSTTRANS + 10 + 16 + permbit + 256);
-                    minitext(284 - 30 - o, 180 - 3, "OFF", 2, 10 + 16 + permbit + 256);
-                }
-                if (p->inven_icon >= 6)
-                {
-                    if (videoGetRenderMode() >= 3 && althud_shadows)
-                        minitext(284 - 35 - o + 1, 180 - 3 + 1, "AUTO", 4, POLYMOSTTRANS + 10 + 16 + permbit + 256);
-                    minitext(284 - 35 - o, 180 - 3, "AUTO", 2, 10 + 16 + permbit + 256);
-                }
-
             }
-            return;
+
+            if (ud.got_access & 1) rotatesprite_althudr(39, hudoffset - 43, sb15, 0, ACCESSCARD, 0, 0, 10 + 16 + 512);
+            if (ud.got_access & 4) rotatesprite_althudr(34, hudoffset - 41, sb15, 0, ACCESSCARD, 0, 23, 10 + 16 + 512);
+            if (ud.got_access & 2) rotatesprite_althudr(29, hudoffset - 39, sb15, 0, ACCESSCARD, 0, 21, 10 + 16 + 512);
         }
-        rotatesprite(sbarx(5), sbary(200 - 28), sbarsc(65536L), 0, HEALTHBOX, 0, 21, 10 + 16, 0, 0, xdim - 1, ydim - 1);
-        if (p->inven_icon)
-            rotatesprite(sbarx(69), sbary(200 - 30), sbarsc(65536L), 0, INVENTORYBOX, 0, 21, 10 + 16, 0, 0, xdim - 1, ydim - 1);
-
-        if (sprite[p->i].pal == 1 && p->last_extra < 2) // frozen
-            G_DrawDigiNum(20, 200 - 17, 1, -16, 10 + 16);
-        else G_DrawDigiNum(20, 200 - 17, p->last_extra, -16, 10 + 16);
-
-        rotatesprite(sbarx(37), sbary(200 - 28), sbarsc(65536L), 0, AMMOBOX, 0, 21, 10 + 16, 0, 0, xdim - 1, ydim - 1);
-
-        if (p->curr_weapon == HANDREMOTE_WEAPON) i = HANDBOMB_WEAPON;
-        else i = p->curr_weapon;
-        G_DrawDigiNum(53, 200 - 17, p->ammo_amount[i], -16, 10 + 16);
-
-        o = 158;
-        permbit = 0;
-        if (p->inven_icon)
+        else
         {
-            switch (p->inven_icon)
-            {
-            case 1:
-                i = FIRSTAID_ICON;
-                break;
-            case 2:
-                i = STEROIDS_ICON;
-                break;
-            case 3:
-                i = HOLODUKE_ICON;
-                break;
-            case 4:
-                i = JETPACK_ICON;
-                break;
-            case 5:
-                i = HEAT_ICON;
-                break;
-            case 6:
-                i = AIRTANK_ICON;
-                break;
-            case 7:
-                i = BOOT_ICON;
-                break;
-            default:
-                i = -1;
-            }
-            if (i >= 0) rotatesprite(sbarx(231 - o), sbary(200 - 21), sbarsc(65536L), 0, i, 0, 0, 10 + 16 + permbit, 0, 0, xdim - 1, ydim - 1);
+            // ORIGINAL MINI STATUS BAR
+            int32_t orient = 2 + 8 + 16 + 256;
 
-            minitext(292 - 30 - o, 190, "%", 6, 10 + 16 + permbit + 256);
+            rotatesprite_fs(sbarx(5), sbary(200 - 28), sb16, 0, HEALTHBOX, 0, 21, orient);
+            if (p->inven_icon)
+                rotatesprite_fs(sbarx(69), sbary(200 - 30), sb16, 0, INVENTORYBOX, 0, 21, orient);
 
-            j = 0x80000000;
-            switch (p->inven_icon)
+            // health
             {
-            case 1:
-                i = p->firstaid_amount;
-                break;
-            case 2:
-                i = ((p->steroids_amount + 3) >> 2);
-                break;
-            case 3:
-                i = ((p->holoduke_amount + 15) / 24);
-                j = p->holoduke_on;
-                break;
-            case 4:
-                i = ((p->jetpack_amount + 15) >> 4);
-                j = p->jetpack_on;
-                break;
-            case 5:
-                i = p->heat_amount / 12;
-                j = p->heat_on;
-                break;
-            case 6:
-                i = ((p->scuba_amount + 63) >> 6);
-                break;
-            case 7:
-                i = (p->boot_amount >> 1);
-                break;
+                int32_t health = (sprite[p->i].pal == 1 && p->last_extra < 2) ? 1 : p->last_extra;
+                G_DrawDigiNum(20, 200 - 17, health, -16, orient);
             }
-            G_DrawInvNum(284 - 30 - o, 200 - 6, (char)i, 0, 10 + permbit);
-            if (j > 0) minitext(288 - 30 - o, 180, "ON", 0, 10 + 16 + permbit + 256);
-            else if ((unsigned int)j != 0x80000000) minitext(284 - 30 - o, 180, "OFF", 2, 10 + 16 + permbit + 256);
-            if (p->inven_icon >= 6) minitext(284 - 35 - o, 180, "AUTO", 2, 10 + 16 + permbit + 256);
+
+            rotatesprite_fs(sbarx(37), sbary(200 - 28), sb16, 0, AMMOBOX, 0, 21, orient);
+
+            if (PWEAPON(snum, p->curr_weapon, WorksLike) == HANDREMOTE_WEAPON)
+                i = HANDBOMB_WEAPON;
+            else
+                i = p->curr_weapon;
+            G_DrawDigiNum(53, 200 - 17, p->ammo_amount[i], -16, orient);
+
+            o = 158;
+            permbit = 0;
+            if (p->inven_icon)
+            {
+                i = ((unsigned)p->inven_icon < ICON_MAX) ? item_icons[p->inven_icon] : -1;
+                if (i >= 0)
+                    rotatesprite_fs(sbarx(231 - o), sbary(200 - 21), sb16, 0, i, 0, 0, orient);
+
+                // scale by status bar size
+                orient |= ROTATESPRITE_MAX;
+
+                minitext(292 - 30 - o, 190, "%", 6, orient);
+
+                i = G_GetInvAmount(p);
+                j = G_GetInvOn(p);
+
+                G_DrawInvNum(284 - 30 - o, 200 - 6, (uint8_t)i, 0, orient & ~16);
+
+                if (!WW2GI)
+                {
+                    if (j > 0)
+                        minitext(288 - 30 - o, 180, "On", 0, orient);
+                    else if ((uint32_t)j != 0x80000000)
+                        minitext(284 - 30 - o, 180, "Off", 2, orient);
+                }
+
+                if (p->inven_icon >= ICON_SCUBA)
+                    minitext(284 - 35 - o, 180, "Auto", 2, orient);
+            }
         }
         return;
     }
 
     //DRAW/UPDATE FULL STATUS BAR:
+    enum updateType
+    {
+        UPD_NONE        = 0,
+        UPD_HEALTH      = (1 << 0), // update health
+        UPD_ARMOR       = (1 << 1), // update armor
+        UPD_PISTOL      = (1 << 2), // update PISTOL_WEAPON ammo
+        UPD_SHOTGUN     = (1 << 3), // update SHOTGUN_WEAPON ammo
+        UPD_CHAINGUN    = (1 << 4), // update CHAINGUN_WEAPON ammo
+        UPD_RPG         = (1 << 5), // update RPG_WEAPON ammo
+        UPD_HANDBOMB    = (1 << 6), // update HANDBOMB_WEAPON ammo
+        UPD_SHRINKER    = (1 << 7), // update SHRINKER_WEAPON ammo
+        UPD_DEVISTATOR  = (1 << 8), // update DEVISTATOR_WEAPON ammo
+        UPD_TRIPBOMB    = (1 << 9), // update TRIPBOMB_WEAPON ammo
+        UPD_AMMO        = (1 << 10), // update ammo display
+        UPD_INVICON     = (1 << 11), // update inventory icon
+        UPD_INVONOFF    = (1 << 12), // update inventory on/off
+        UPD_INVPERCENT  = (1 << 13), // update inventory %
+        UPD_KEYS        = (1 << 14), // update keys
+        UPD_KILLS       = (1 << 15), // update kills
+        UPD_FREEZE      = (1 << 16), // update FREEZE_WEAPON ammo
+        UPD_WEAPONS     = (UPD_PISTOL | UPD_SHOTGUN | UPD_CHAINGUN | UPD_RPG | UPD_HANDBOMB | UPD_SHRINKER | UPD_DEVISTATOR | UPD_TRIPBOMB | UPD_AMMO | UPD_FREEZE),
+        UPD_ALL         = 0xFFFFFFFF,
+    };
+
+    uint32_t updateBits = UPD_NONE;
 
     if (pus)
     {
         pus = 0;
-        u = -1;
+        updateBits = UPD_ALL;
     }
-    else u = 0;
 
     if (sbar.frag[myconnectindex] != p->frag)
     {
         sbar.frag[myconnectindex] = p->frag;
-        u |= 32768;
+        updateBits |= UPD_KILLS;
     }
     if (sbar.got_access != ud.got_access)
     {
         sbar.got_access = ud.got_access;
-        u |= 16384;
+        updateBits |= UPD_KEYS;
     }
 
     if (sbar.last_extra != p->last_extra)
     {
         sbar.last_extra = p->last_extra;
-        u |= 1;
+        updateBits |= UPD_HEALTH;
     }
 
     {
-        int lAmount = Gv_GetVarByLabel("PLR_MORALE", -1, p->i, snum);
+        int32_t lAmount = G_GetMorale(p->i, snum);
         if (lAmount == -1)
+            lAmount = p->inv_amount[GET_SHIELD];
+        if (sbar.inv_amount[GET_SHIELD] != lAmount)
         {
-            if (sbar.shield_amount != p->shield_amount)
-            {
-                sbar.shield_amount = p->shield_amount;
-                u |= 2;
-            }
-
-        }
-        else
-        {
-            if (sbar.shield_amount != lAmount)
-            {
-                sbar.shield_amount = lAmount;
-                u |= 2;
-            }
-
+            sbar.inv_amount[GET_SHIELD] = lAmount;
+            updateBits |= UPD_ARMOR;
         }
     }
 
     if (sbar.curr_weapon != p->curr_weapon)
     {
         sbar.curr_weapon = p->curr_weapon;
-        u |= (4 + 8 + 16 + 32 + 64 + 128 + 256 + 512 + 1024 + 65536L);
+        
+        updateBits |= UPD_AMMO | UPD_WEAPONS;
     }
 
     for (i = 1; i < MAX_WEAPONS; i++)
@@ -809,246 +830,160 @@ void G_DrawStatusBar(int snum)
         {
             sbar.ammo_amount[i] = p->ammo_amount[i];
             if (i < 9)
-                u |= ((2 << i) + 1024);
-            else u |= 65536L + 1024;
+                updateBits |= ((2 << i) | UPD_AMMO);
+            else if (WW2GI && i == 11)
+                updateBits |= (UPD_SHRINKER | UPD_AMMO);
+            else
+                updateBits |= (UPD_AMMO | UPD_FREEZE);
         }
 
-        if (sbar.gotweapon[i] != p->gotweapon[i])
+        if ((sbar.gotweapon[i]) != (p->gotweapon[i]))
         {
             sbar.gotweapon[i] = p->gotweapon[i];
+
             if (i < 9)
-                u |= ((2 << i) + 1024);
-            else u |= 65536L + 1024;
+                updateBits |= ((2 << i) | UPD_AMMO);
+            else
+                updateBits |= (UPD_AMMO | UPD_FREEZE);
         }
     }
+
     if (sbar.inven_icon != p->inven_icon)
     {
         sbar.inven_icon = p->inven_icon;
-        u |= (2048 + 4096 + 8192);
+        updateBits |= (UPD_INVICON | UPD_INVONOFF | UPD_INVPERCENT);
     }
     if (sbar.holoduke_on != p->holoduke_on)
     {
         sbar.holoduke_on = p->holoduke_on;
-        u |= (4096 + 8192);
+        updateBits |= (UPD_INVONOFF | UPD_INVPERCENT);
     }
     if (sbar.jetpack_on != p->jetpack_on)
     {
         sbar.jetpack_on = p->jetpack_on;
-        u |= (4096 + 8192);
+        updateBits |= (UPD_INVONOFF | UPD_INVPERCENT);
     }
     if (sbar.heat_on != p->heat_on)
     {
         sbar.heat_on = p->heat_on;
-        u |= (4096 + 8192);
+        updateBits |= (UPD_INVONOFF | UPD_INVPERCENT);
     }
-    if (sbar.firstaid_amount != p->firstaid_amount)
-    {
-        sbar.firstaid_amount = p->firstaid_amount;
-        u |= 8192;
-    }
-    if (sbar.steroids_amount != p->steroids_amount)
-    {
-        sbar.steroids_amount = p->steroids_amount;
-        u |= 8192;
-    }
-    if (sbar.holoduke_amount != p->holoduke_amount)
-    {
-        sbar.holoduke_amount = p->holoduke_amount;
-        u |= 8192;
-    }
-    if (sbar.jetpack_amount != p->jetpack_amount)
-    {
-        sbar.jetpack_amount = p->jetpack_amount;
-        u |= 8192;
-    }
-    if (sbar.heat_amount != p->heat_amount)
-    {
-        sbar.heat_amount = p->heat_amount;
-        u |= 8192;
-    }
-    if (sbar.scuba_amount != p->scuba_amount)
-    {
-        sbar.scuba_amount = p->scuba_amount;
-        u |= 8192;
-    }
-    if (sbar.boot_amount != p->boot_amount)
-    {
-        sbar.boot_amount = p->boot_amount;
-        u |= 8192;
-    }
-    if (u == 0) return;
 
-    //0 - update health
-    //1 - update armor
-    //2 - update PISTOL_WEAPON ammo
-    //3 - update SHOTGUN_WEAPON ammo
-    //4 - update CHAINGUN_WEAPON ammo
-    //5 - update RPG_WEAPON ammo
-    //6 - update HANDBOMB_WEAPON ammo
-    //7 - update SHRINKER_WEAPON ammo
-    //8 - update DEVISTATOR_WEAPON ammo
-    //9 - update TRIPBOMB_WEAPON ammo
-    //10 - update ammo display
-    //11 - update inventory icon
-    //12 - update inventory on/off
-    //13 - update inventory %
-    //14 - update keys
-    //15 - update kills
-    //16 - update FREEZE_WEAPON ammo
+    for (i = 1; i < ICON_MAX; i++)
+    {
+        int32_t const item = G_RemapIconToInventory(i);
 
-    if (u == -1)
+        if (sbar.inv_amount[item] != p->inv_amount[item])
+        {
+            sbar.inv_amount[item] = p->inv_amount[item];
+            updateBits |= UPD_INVPERCENT;
+        }
+    }
+
+#if USE_PATCHING
+    if (updateBits == 0)
+        return;
+#else
+    // Patching can sometimes leave stray pixels behind at certain status bar scales.
+    // Turn it off if you wish to avoid this. It is, however, slower.
+    u = UPD_ALL;
+#endif
+
+    if (updateBits == UPD_ALL)
     {
         G_PatchStatusBar(0, 0, 320, 200);
-
-        if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR))
-            rotatesprite(sbarx(277 + 1), sbary(SBY + 7 - 1), sbarsc(65536L), 0, KILLSICON, 0, 0, 10 + 16, 0, 0, xdim - 1, ydim - 1);
+        if ((ud.multimode > 1) && GTFLAGS(GAMETYPE_FRAGBAR))
+            rotatesprite_fs(sbarx(277 + 1), sbary(SBY + 7 - 1), sb16, 0, KILLSICON, 0, 0, 10 + 16);
     }
 
-    if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_FRAGBAR))
+    if ((ud.multimode > 1) && GTFLAGS(GAMETYPE_FRAGBAR))
     {
-        if (u & 32768)
+        if (updateBits & UPD_KILLS)
         {
-            if (u != -1)
-                G_PatchStatusBar(276, SBY + 17, 299, SBY + 17 + 10);
-
+            if (updateBits != UPD_ALL) G_PatchStatusBar(276, SBY + 17, 299, SBY + 17 + 10);
             G_DrawDigiNum(287, SBY + 17, max(p->frag - p->fraggedself, 0), -16, 10 + 16);
         }
     }
     else
     {
-        if (u & 16384)
+        if (updateBits & UPD_KEYS)
         {
-            if (u != -1) G_PatchStatusBar(275, SBY + 18, 299, SBY + 18 + 12);
-            if (ud.got_access & 4) rotatesprite(sbarx(275), sbary(SBY + 16), sbarsc(65536L), 0, ACCESS_ICON, 0, 23, 10 + 16, 0, 0, xdim - 1, ydim - 1);
-            if (ud.got_access & 2) rotatesprite(sbarx(288), sbary(SBY + 16), sbarsc(65536L), 0, ACCESS_ICON, 0, 21, 10 + 16, 0, 0, xdim - 1, ydim - 1);
-            if (ud.got_access & 1) rotatesprite(sbarx(281), sbary(SBY + 23), sbarsc(65536L), 0, ACCESS_ICON, 0, 0, 10 + 16, 0, 0, xdim - 1, ydim - 1);
+            if (updateBits != UPD_ALL) G_PatchStatusBar(275, SBY + 18, 299, SBY + 18 + 12);
+            if (ud.got_access & 4) rotatesprite_fs(sbarx(275), sbary(SBY + 16), sb16, 0, ACCESS_ICON, 0, 23, 10 + 16);
+            if (ud.got_access & 2) rotatesprite_fs(sbarx(288), sbary(SBY + 16), sb16, 0, ACCESS_ICON, 0, 21, 10 + 16);
+            if (ud.got_access & 1) rotatesprite_fs(sbarx(281), sbary(SBY + 23), sb16, 0, ACCESS_ICON, 0, 0, 10 + 16);
         }
     }
-    if (u & (4 + 8 + 16 + 32 + 64 + 128 + 256 + 512 + 65536L)) G_DrawWeapAmounts(p, 96, SBY + 16, u);
 
-    if (u & 1)
+    if (updateBits & UPD_WEAPONS)
+        G_DrawWeapAmounts(p, 96, SBY + 16, updateBits);
+
+    if (updateBits & UPD_HEALTH)
     {
-        if (u != -1) G_PatchStatusBar(20, SBY + 17, 43, SBY + 17 + 11);
+        if (updateBits != UPD_ALL) G_PatchStatusBar(20, SBY + 17, 43, SBY + 17 + 11);
         if (sprite[p->i].pal == 1 && p->last_extra < 2)
             G_DrawDigiNum(32, SBY + 17, 1, -16, 10 + 16);
         else G_DrawDigiNum(32, SBY + 17, p->last_extra, -16, 10 + 16);
     }
-    if (u & 2)
+    if (updateBits & UPD_ARMOR)
     {
-        int lAmount = Gv_GetVarByLabel("PLR_MORALE", -1, p->i, snum);
-        if (u != -1) G_PatchStatusBar(52, SBY + 17, 75, SBY + 17 + 11);
+        int32_t lAmount = G_GetMorale(p->i, snum);
+
+        if (updateBits != UPD_ALL)
+            G_PatchStatusBar(52, SBY + 17, 75, SBY + 17 + 11);
+
         if (lAmount == -1)
-            G_DrawDigiNum(64, SBY + 17, p->shield_amount, -16, 10 + 16);
+            G_DrawDigiNum(64, SBY + 17, p->inv_amount[GET_SHIELD], -16, 10 + 16);
         else
             G_DrawDigiNum(64, SBY + 17, lAmount, -16, 10 + 16);
     }
 
-    if (u & 1024)
+    if (updateBits & UPD_AMMO)
     {
-        if (u != -1) G_PatchStatusBar(196, SBY + 17, 219, SBY + 17 + 11);
-        if (p->curr_weapon != KNEE_WEAPON)
+        if (updateBits != UPD_ALL) G_PatchStatusBar(196, SBY + 17, 219, SBY + 17 + 11);
+        if (PWEAPON(snum, p->curr_weapon, WorksLike) != KNEE_WEAPON)
         {
-            if (p->curr_weapon == HANDREMOTE_WEAPON) i = HANDBOMB_WEAPON;
+            if (PWEAPON(snum, p->curr_weapon, WorksLike) == HANDREMOTE_WEAPON) i = HANDBOMB_WEAPON;
             else i = p->curr_weapon;
             G_DrawDigiNum(230 - 22, SBY + 17, p->ammo_amount[i], -16, 10 + 16);
         }
     }
 
-    if (u & (2048 + 4096 + 8192))
+    if (updateBits & (UPD_INVICON | UPD_INVONOFF | UPD_INVPERCENT))
     {
-        if (u != -1)
+        if (updateBits != UPD_ALL)
         {
-            if (u & (2048 + 4096))
-            {
+            if (updateBits & (2048 + 4096))
                 G_PatchStatusBar(231, SBY + 13, 265, SBY + 13 + 18);
-            }
             else
-            {
                 G_PatchStatusBar(250, SBY + 24, 261, SBY + 24 + 6);
-            }
-
         }
+
         if (p->inven_icon)
         {
             o = 0;
-            //            permbit = 128;
 
-            if (u & (2048 + 4096))
+            if (updateBits & (UPD_INVICON | UPD_INVONOFF))
             {
-                switch (p->inven_icon)
-                {
-                case 1:
-                    i = FIRSTAID_ICON;
-                    break;
-                case 2:
-                    i = STEROIDS_ICON;
-                    break;
-                case 3:
-                    i = HOLODUKE_ICON;
-                    break;
-                case 4:
-                    i = JETPACK_ICON;
-                    break;
-                case 5:
-                    i = HEAT_ICON;
-                    break;
-                case 6:
-                    i = AIRTANK_ICON;
-                    break;
-                case 7:
-                    i = BOOT_ICON;
-                    break;
-                }
-                rotatesprite(sbarx(231 - o), sbary(SBY + 13), sbarsc(65536L), 0, i, 0, 0, 10 + 16 + permbit, 0, 0, xdim - 1, ydim - 1);
-                minitext(292 - 30 - o, SBY + 24, "%", 6, 10 + 16 + permbit + 256);
-                if (p->inven_icon >= 6) minitext(284 - 35 - o, SBY + 14, "AUTO", 2, 10 + 16 + permbit + 256);
+                i = ((unsigned)p->inven_icon < ICON_MAX) ? item_icons[p->inven_icon] : -1;
+                // XXX: i < 0?
+                rotatesprite_fs(sbarx(231 - o), sbary(SBY + 13), sb16, 0, i, 0, 0, 10 + 16 + permbit);
+                minitext(292 - 30 - o, SBY + 24, "%", 6, 10 + 16 + permbit + ROTATESPRITE_MAX);
+                if (p->inven_icon >= ICON_SCUBA) minitext(284 - 35 - o, SBY + 14, "Auto", 2, 10 + 16 + permbit + ROTATESPRITE_MAX);
             }
-            if (u & (2048 + 4096))
+
+            if (updateBits & (UPD_INVICON | UPD_INVONOFF) && !WW2GI)
             {
-                switch (p->inven_icon)
-                {
-                case 3:
-                    j = p->holoduke_on;
-                    break;
-                case 4:
-                    j = p->jetpack_on;
-                    break;
-                case 5:
-                    j = p->heat_on;
-                    break;
-                default:
-                    j = 0x80000000;
-                }
-                if (j > 0) minitext(288 - 30 - o, SBY + 14, "ON", 0, 10 + 16 + permbit + 256);
-                else if ((unsigned int)j != 0x80000000) minitext(284 - 30 - o, SBY + 14, "OFF", 2, 10 + 16 + permbit + 256);
+                j = G_GetInvOn(p);
+
+                if (j > 0) minitext(288 - 30 - o, SBY + 14, "On", 0, 10 + 16 + permbit + ROTATESPRITE_MAX);
+                else if ((uint32_t)j != 0x80000000) minitext(284 - 30 - o, SBY + 14, "Off", 2, 10 + 16 + permbit + ROTATESPRITE_MAX);
             }
-            if (u & 8192)
+
+            if (updateBits & UPD_INVPERCENT)
             {
-                switch (p->inven_icon)
-                {
-                case 1:
-                    i = p->firstaid_amount;
-                    break;
-                case 2:
-                    i = ((p->steroids_amount + 3) >> 2);
-                    break;
-                case 3:
-                    i = ((p->holoduke_amount + 15) / 24);
-                    break;
-                case 4:
-                    i = ((p->jetpack_amount + 15) >> 4);
-                    break;
-                case 5:
-                    i = p->heat_amount / 12;
-                    break;
-                case 6:
-                    i = ((p->scuba_amount + 63) >> 6);
-                    break;
-                case 7:
-                    i = (p->boot_amount >> 1);
-                    break;
-                }
-                G_DrawInvNum(284 - 30 - o, SBY + 28, (char)i, 0, 10 + permbit);
+                i = G_GetInvAmount(p);
+                G_DrawInvNum(284 - 30 - o, SBY + 28, (uint8_t)i, 0, 10 + permbit);
             }
         }
     }
@@ -1160,19 +1095,6 @@ void G_DrawCrosshair(void)
 
 #define WITHIN_TIME(starttime, totaltime) ((starttime - (int32_t)totalclock) > 0 && (starttime - (int32_t)totalclock) <= totaltime)
 
-static int32_t GetDistance2D(int x1, int y1, int x2, int y2)
-{
-    int32_t x = klabs(x1 - x2);
-    int32_t y = klabs(y1 - y2);
-
-    if (x < y) swaplong(&x, &y);
-
-    {
-        int32_t t = y + (y >> 1);
-        return (x - (x >> 5) - (x >> 7) + (t >> 2) + (t >> 6));
-    }
-}
-
 void G_DisplayPlayerId(void)
 {
     int idalpha;
@@ -1206,7 +1128,7 @@ void G_DisplayPlayerId(void)
 
         if ((hit.sprite >= 0) && sprite[hit.sprite].picnum == APLAYER && sprite[hit.sprite].yvel != screenpeek && g_player[sprite[hit.sprite].yvel].ps->dead_flag == 0)
         {
-            if (GetDistance2D(ud.camerapos.x, ud.camerapos.y, sprite[hit.sprite].x, sprite[hit.sprite].y) < 9216)
+            if (ldist(&ud.camerapos, &sprite[hit.sprite].xyz) < 9216)
             {
                 ud.playerid_num = sprite[hit.sprite].yvel;
                 ud.playerid_time = (int32_t)totalclock + ID_TIME;

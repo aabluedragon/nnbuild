@@ -273,19 +273,19 @@ void P_AddWeaponNoSwitch(DukePlayer_t *p, int weapon)
 
 void P_SelectNextInvItem(DukePlayer_t *p)
 {
-    if (p->firstaid_amount > 0)
+    if (p->inv_amount[GET_FIRSTAID] > 0)
         p->inven_icon = 1;
-    else if (p->steroids_amount > 0)
+    else if (p->inv_amount[GET_STEROIDS] > 0)
         p->inven_icon = 2;
-    else if (p->holoduke_amount > 0)
+    else if (p->inv_amount[GET_HOLODUKE] > 0)
         p->inven_icon = 3;
-    else if (p->jetpack_amount > 0)
+    else if (p->inv_amount[GET_JETPACK] > 0)
         p->inven_icon = 4;
-    else if (p->heat_amount > 0)
+    else if (p->inv_amount[GET_HEATS] > 0)
         p->inven_icon = 5;
-    else if (p->scuba_amount > 0)
+    else if (p->inv_amount[GET_SCUBA] > 0)
         p->inven_icon = 6;
-    else if (p->boot_amount > 0)
+    else if (p->inv_amount[GET_BOOTS] > 0)
         p->inven_icon = 7;
     else p->inven_icon = 0;
 }
@@ -1423,7 +1423,7 @@ void G_MovePlayerSprite(int playerNum)
             s->extra = p->max_player_health;
             s->cstat = 257;
             p->dead_flag = 0; // Fix for player sprite clipping into floor if resurrecting
-            p->jetpack_amount = 1599;
+            p->inv_amount[GET_JETPACK] = 1599;
         }
 
         if (s->extra > 0)
@@ -5380,8 +5380,8 @@ static void G_MoveMisc(void)  // STATNUM 5
                 {
                     if (s->pal == 0 && (krand()&255) < 16 && s->picnum != PUKE)
                     {
-                        if (g_player[p].ps->boot_amount > 0)
-                            g_player[p].ps->boot_amount--;
+                        if (g_player[p].ps->inv_amount[GET_BOOTS] > 0)
+                            g_player[p].ps->inv_amount[GET_BOOTS]--;
                         else
                         {
                             if (!A_CheckSoundPlaying(g_player[p].ps->i,DUKE_LONGTERM_PAIN))

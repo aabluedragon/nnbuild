@@ -178,7 +178,7 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
                 score = 30;
             break;
         case FIRSTAID__STATIC:
-            if (p->firstaid_amount < p->max_player_health)
+            if (p->inv_amount[GET_FIRSTAID] < p->max_player_health)
                 score = 100;
             break;
         case SHIELD__STATIC:
@@ -186,26 +186,26 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
                 score = 50;
             break;
         case STEROIDS__STATIC:
-            if (p->steroids_amount < 400)
+            if (p->inv_amount[GET_STEROIDS] < 400)
                 score = 30;
             break;
         case AIRTANK__STATIC:
-            if (p->scuba_amount < 6400)
+            if (p->inv_amount[GET_SCUBA] < 6400)
                 score = 30;
             break;
         case JETPACK__STATIC:
-            if (p->jetpack_amount < 1600)
+            if (p->inv_amount[GET_JETPACK] < 1600)
                 score = 100;
             break;
         case HEATSENSOR__STATIC:
-            if (p->heat_amount < 1200)
+            if (p->inv_amount[GET_HEATS] < 1200)
                 score = 5;
             break;
         case ACCESSCARD__STATIC:
             score = 1;
             break;
         case BOOTS__STATIC:
-            if (p->boot_amount < 200)
+            if (p->inv_amount[GET_BOOTS] < 200)
                 score = 15;
             break;
         case ATOMICHEALTH__STATIC:
@@ -215,7 +215,7 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
                 score = 50;
             break;
         case HOLODUKE__STATIC:
-            if (p->holoduke_amount < 2400)
+            if (p->inv_amount[GET_HOLODUKE] < 2400)
                 score = 5;
             break;
         case RESPAWNMARKERGREEN__STATIC:
@@ -371,7 +371,7 @@ static void DukeBot_GetNextWallForPath(int32_t playerNum, int32_t endsect)
             }
            
             // Can't float or fly?
-            if (curSect->lotag != ST_2_UNDERWATER && p->jetpack_amount < 106)
+            if (curSect->lotag != ST_2_UNDERWATER && p->inv_amount[GET_JETPACK] < 106)
             {
                 if (nextFloorZ < curFloorZ - (72 << 8)) // Floor too high for sector we're searching from?
                 {
@@ -768,7 +768,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     bool const touchingSprite = ((moveResult & 49152) == 49152);
     bool const seePlayer = ((bot->goalPlayer != snum) && !goalp->dead_flag && DukeBot_CanSee(&pSpr->xyz, pSpr->sectnum, &gpSpr->xyz, gpSpr->sectnum));
     bool const seeSprite = (gItemSpr) ? DukeBot_CanSeeItem(&pSpr->xyz, pSpr->sectnum, bot->goalSprite) : false;
-    bool const prioritizeItems = ((pSpr->extra <= 50) || (p->curr_weapon == KNEE_WEAPON && p->steroids_amount == 0) || (p->ammo_amount[p->curr_weapon] <= (p->max_ammo_amount[p->curr_weapon] >> 3)));
+    bool const prioritizeItems = ((pSpr->extra <= 50) || (p->curr_weapon == KNEE_WEAPON && p->inv_amount[GET_STEROIDS] == 0) || (p->ammo_amount[p->curr_weapon] <= (p->max_ammo_amount[p->curr_weapon] >> 3)));
 
     int32_t const gpDist = max(ldist(&pSpr->xyz, &gpSpr->xyz), 1);
     int32_t const sprDist = (bot->goalSprite != -1) ? max(ldist(&pSpr->xyz, &sprite[bot->goalSprite].xyz), 1) : INT32_MAX;
@@ -1025,7 +1025,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
                         moveFlags |= BOT_MOVE_ASCEND;
                     else if ((p->jetpack_on || pSect->lotag == ST_2_UNDERWATER) && ceilZ >= p->pos.z - PMINHEIGHT)
                         moveFlags |= BOT_MOVE_DESCEND;
-                    else if ((p->jetpack_amount > 106 && pSect->lotag != ST_2_UNDERWATER) && floorZ <= p->pos.z - (72 << 8))
+                    else if ((p->inv_amount[GET_JETPACK] > 106 && pSect->lotag != ST_2_UNDERWATER) && floorZ <= p->pos.z - (72 << 8))
                         moveFlags |= BOT_MOVE_ASCEND;
                 }
 
@@ -1097,7 +1097,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     {
         if (p->jetpack_on)
         {
-            if ((p->jetpack_amount < 106) ||
+            if ((p->inv_amount[GET_JETPACK] < 106) ||
                 ((p->truefz - p->truecz) <= (72 << 8)) ||
                 (!touchingWall && !touchingSprite && !goForItem && seePlayer && (pSpr->z < gpSpr->z - (48 << 8))) ||
                 (!touchingWall && !touchingSprite && goForItem && pSpr->z < gItemSpr->z - (4 << 8)))
@@ -1192,10 +1192,10 @@ void DukeBot_GetInput(int snum, input_t* syn)
         }
     }
 
-    if ((p->firstaid_amount > 0) && (p->last_extra < 100) && ((seed_krand(&bot->rand) % 25) == 0))
+    if ((p->inv_amount[GET_FIRSTAID] > 0) && (p->last_extra < 100) && ((seed_krand(&bot->rand) % 25) == 0))
         syn->bits |= BIT(SK_MEDKIT);
 
-    if (seePlayer && (p->steroids_amount >= 400) && (!(seed_krand(&bot->rand) % 100) || p->curr_weapon == KNEE_WEAPON))
+    if (seePlayer && (p->inv_amount[GET_STEROIDS] >= 400) && (!(seed_krand(&bot->rand) % 100) || p->curr_weapon == KNEE_WEAPON))
         syn->bits |= BIT(SK_STEROIDS);
 
     // Impart a bit of randomness, which may help to get unstuck in some situations.

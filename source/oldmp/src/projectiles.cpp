@@ -377,7 +377,7 @@ static void Proj_HandleKnee(hitdata_t* const hitData, int const spriteNum, int c
             A_PlaySound(soundNum, kneeSprite);
     }
 
-    if (pPlayer != NULL && pPlayer->steroids_amount > 0 && pPlayer->steroids_amount < 400)
+    if (pPlayer != NULL && pPlayer->inv_amount[GET_STEROIDS] > 0 && pPlayer->inv_amount[GET_STEROIDS] < 400)
         sprite[kneeSprite].extra += (pPlayer->max_player_health >> 2);
 
     //int const dmg = clamp<int>(sprite[kneeSprite].extra, FF_WEAPON_DMG_MIN, FF_WEAPON_DMG_MAX);

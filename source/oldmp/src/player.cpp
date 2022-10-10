@@ -1701,20 +1701,20 @@ static int P_DoCounters(DukePlayer_t *p)
         }
     }
 
-    if (p->steroids_amount > 0 && p->steroids_amount < 400)
+    if (p->inv_amount[GET_STEROIDS] > 0 && p->inv_amount[GET_STEROIDS] < 400)
     {
-        p->steroids_amount--;
-        if (p->steroids_amount == 0)
+        p->inv_amount[GET_STEROIDS]--;
+        if (p->inv_amount[GET_STEROIDS] == 0)
             P_SelectNextInvItem(p);
-        if (!(p->steroids_amount&7))
+        if (!(p->inv_amount[GET_STEROIDS]&7))
             if (snum == screenpeek || GTFLAGS(GAMETYPE_COOPSOUND))
                 A_PlaySound(DUKE_HARTBEAT,p->i);
     }
 
-    if (p->heat_on && p->heat_amount > 0)
+    if (p->heat_on && p->inv_amount[GET_HEATS] > 0)
     {
-        p->heat_amount--;
-        if (p->heat_amount == 0)
+        p->inv_amount[GET_HEATS]--;
+        if (p->inv_amount[GET_HEATS] == 0)
         {
             p->heat_on = 0;
             P_SelectNextInvItem(p);
@@ -1725,8 +1725,8 @@ static int P_DoCounters(DukePlayer_t *p)
 
     if (p->holoduke_on >= 0)
     {
-        p->holoduke_amount--;
-        if (p->holoduke_amount <= 0)
+        p->inv_amount[GET_HOLODUKE]--;
+        if (p->inv_amount[GET_HOLODUKE] <= 0)
         {
             A_PlaySound(TELEPORTER,p->i);
             p->holoduke_on = -1;
@@ -1734,10 +1734,10 @@ static int P_DoCounters(DukePlayer_t *p)
         }
     }
 
-    if (p->jetpack_on && p->jetpack_amount > 0)
+    if (p->jetpack_on && p->inv_amount[GET_JETPACK] > 0)
     {
-        p->jetpack_amount--;
-        if (p->jetpack_amount <= 0)
+        p->inv_amount[GET_JETPACK]--;
+        if (p->inv_amount[GET_JETPACK] <= 0)
         {
             p->jetpack_on = 0;
             P_SelectNextInvItem(p);
@@ -1786,7 +1786,7 @@ static int P_DoCounters(DukePlayer_t *p)
 
     if (p->cursectnum >= 0 && p->scuba_on == 0 && sector[p->cursectnum].lotag == ST_2_UNDERWATER)
     {
-        if (p->scuba_amount > 0)
+        if (p->inv_amount[GET_SCUBA] > 0)
         {
             p->scuba_on = 1;
             p->inven_icon = 6;
@@ -1804,10 +1804,10 @@ static int P_DoCounters(DukePlayer_t *p)
             }
         }
     }
-    else if (p->scuba_amount > 0 && p->scuba_on)
+    else if (p->inv_amount[GET_SCUBA] > 0 && p->scuba_on)
     {
-        p->scuba_amount--;
-        if (p->scuba_amount == 0)
+        p->inv_amount[GET_SCUBA]--;
+        if (p->inv_amount[GET_SCUBA] == 0)
         {
             p->scuba_on = 0;
             P_SelectNextInvItem(p);
@@ -2702,11 +2702,11 @@ static void P_HandleDamagingFloors(int snum)
 
     if (floorPic == PURPLELAVA || sector[s->sectnum].ceilingpicnum == PURPLELAVA)
     {
-        if (p->boot_amount > 0)
+        if (p->inv_amount[GET_BOOTS] > 0)
         {
-            p->boot_amount--;
+            p->inv_amount[GET_BOOTS]--;
             p->inven_icon = 7;
-            if (p->boot_amount <= 0)
+            if (p->inv_amount[GET_BOOTS] <= 0)
                 P_SelectNextInvItem(p);
         }
         else
@@ -2726,7 +2726,7 @@ static void P_HandleDamagingFloors(int snum)
         case HURTRAIL__STATIC:
             if (rnd(32))
             {
-                if (p->boot_amount > 0)
+                if (p->inv_amount[GET_BOOTS] > 0)
                     useBoot = 1;
                 else
                 {
@@ -2743,7 +2743,7 @@ static void P_HandleDamagingFloors(int snum)
         case FLOORSLIME__STATIC:
             if (rnd(16))
             {
-                if (p->boot_amount > 0)
+                if (p->inv_amount[GET_BOOTS] > 0)
                     useBoot = 1;
                 else
                 {
@@ -2758,7 +2758,7 @@ static void P_HandleDamagingFloors(int snum)
         case FLOORPLASMA__STATIC:
             if (rnd(32))
             {
-                if (p->boot_amount > 0)
+                if (p->inv_amount[GET_BOOTS] > 0)
                     useBoot = 1;
                 else
                 {
@@ -2776,8 +2776,8 @@ static void P_HandleDamagingFloors(int snum)
     if (useBoot)
     {
         P_DoQuote(QUOTE_BOOTS_ON, p);
-        p->boot_amount -= 2;
-        if (p->boot_amount <= 0)
+        p->inv_amount[GET_BOOTS] -= 2;
+        if (p->inv_amount[GET_BOOTS] <= 0)
             P_SelectNextInvItem(p);
     }
 }
@@ -3662,7 +3662,7 @@ void P_ProcessInput(int snum)
         else if (p->walking_snd_toggle > 0)
             p->walking_snd_toggle--;
 
-        if (p->jetpack_on == 0 && p->steroids_amount > 0 && p->steroids_amount < 400)
+        if (p->jetpack_on == 0 && p->inv_amount[GET_STEROIDS] > 0 && p->inv_amount[GET_STEROIDS] < 400)
             doubvel <<= 1;
 
         p->vel.x += ((pInput->fvel * doubvel) << 6);

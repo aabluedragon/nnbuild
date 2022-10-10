@@ -690,9 +690,9 @@ static void P_ResetStatus(int snum)
     p->sbs          = 0;
     p->palette = BASEPAL;
 
-    if (p->steroids_amount < 400)
+    if (p->inv_amount[GET_STEROIDS] < 400)
     {
-        p->steroids_amount = 0;
+        p->inv_amount[GET_STEROIDS] = 0;
         p->inven_icon = 0;
     }
     p->heat_on =            0;
@@ -771,18 +771,18 @@ void P_ResetInventory(int snum)
     DukePlayer_t *p = g_player[snum].ps;
 
     p->inven_icon       = 0;
-    p->boot_amount = 0;
+    p->inv_amount[GET_BOOTS] = 0;
     p->scuba_on =           0;
-    p->scuba_amount =         0;
-    p->heat_amount        = 0;
+    p->inv_amount[GET_SCUBA] =         0;
+    p->inv_amount[GET_HEATS]        = 0;
     p->heat_on = 0;
     p->jetpack_on =         0;
-    p->jetpack_amount =       0;
+    p->inv_amount[GET_JETPACK] =       0;
     p->shield_amount =      g_startArmorAmount;
     p->holoduke_on = -1;
-    p->holoduke_amount =    0;
-    p->firstaid_amount = 0;
-    p->steroids_amount = 0;
+    p->inv_amount[GET_HOLODUKE] =    0;
+    p->inv_amount[GET_FIRSTAID] = 0;
+    p->inv_amount[GET_STEROIDS] = 0;
     p->inven_icon = 0;
     X_OnEvent(EVENT_RESETINVENTORY, p->i, snum, -1);
 }
@@ -1499,7 +1499,7 @@ static void resetpspritevars(char g)
             if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
             {
                 tsbar[i].inven_icon = g_player[i].ps->inven_icon;
-                tsbar[i].steroids_amount = g_player[i].ps->steroids_amount;
+                tsbar[i].inv_amount[GET_STEROIDS] = g_player[i].ps->inv_amount[GET_STEROIDS];
             }
 
             // Reset status for player
@@ -1509,7 +1509,7 @@ static void resetpspritevars(char g)
             if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
             {
                 g_player[i].ps->inven_icon = tsbar[i].inven_icon;
-                g_player[i].ps->steroids_amount = tsbar[i].steroids_amount;
+                g_player[i].ps->inv_amount[GET_STEROIDS] = tsbar[i].inv_amount[GET_STEROIDS];
             }
         }
     }
