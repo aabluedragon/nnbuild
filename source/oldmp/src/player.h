@@ -82,32 +82,32 @@ typedef struct {
 
     int32_t loogiex[64], loogiey[64], numloogs, loogcnt;
 
-    char palette;
-
     int16_t sbs, lowsprite, highsprite, sound_pitch;
 
     int16_t cursectnum, look_ang, olook_ang, last_extra, subweapon;
     int16_t wackedbyactor, frag, fraggedself;
     int16_t max_ammo_amount[MAX_WEAPONS], ammo_amount[MAX_WEAPONS], inv_amount[GET_MAX];
 
-    short shield_amount;
-    short curr_weapon, last_weapon, last_used_weapon, wantweaponfire;
-    short newowner, hurt_delay, hbomb_hold_delay;
-    short jumping_counter, airleft;
-    short fta, ftq, access_wallnum, access_spritenum;
-    short weapon_ang;
-    short somethingonplayer, on_crane, i, one_parallax_sectnum;
-    short over_shoulder_on, random_club_frame;
-    short one_eighty_count, cheat_phase;
-    short dummyplayersprite, extra_extra8, quick_kick, last_quick_kick;
-    short actorsqu, timebeforeexit, customexitsound;
+    int16_t shield_amount;
+    int16_t curr_weapon, last_weapon, last_used_weapon, wantweaponfire;
+    int16_t newowner, hurt_delay, hbomb_hold_delay;
+    int16_t jumping_counter, airleft;
+    int16_t fta, ftq, access_wallnum, access_spritenum;
+    int16_t weapon_ang;
+    int16_t somethingonplayer, on_crane, i, one_parallax_sectnum;
+    int16_t over_shoulder_on, random_club_frame;
+    int16_t one_eighty_count, cheat_phase;
+    int16_t dummyplayersprite, extra_extra8, quick_kick, last_quick_kick;
+    int16_t actorsqu, timebeforeexit, customexitsound;
 
-    short weaprecs[16], weapreccnt;
+    int16_t weaprecs[16], weapreccnt;
 
-    short orotscrnang, rotscrnang, dead_flag, show_empty_weapon;   // JBF 20031220: added orotscrnang
+    int16_t orotscrnang, rotscrnang, dead_flag, show_empty_weapon;   // JBF 20031220: added orotscrnang
     
-    short holoduke_on, pycount, weapon_pos, frag_ps;
-    short transporter_hold, last_full_weapon, footprintshade;
+    int16_t holoduke_on, pycount, weapon_pos, frag_ps;
+    int16_t transporter_hold, last_full_weapon, footprintshade;
+
+    uint8_t palette;
 
     uint8_t toggle_key_flag;
     uint8_t kickback_pic, knuckle_incs, knee_incs, access_incs, fist_incs, tipincs;
@@ -125,7 +125,7 @@ typedef struct {
     char  gotweapon[MAX_WEAPONS], refresh_inventory;
 
     char walking_snd_toggle, palookup, hard_landing;
-    char return_to_center, reloading, name[32];
+    char return_to_center, reloading;
 
     int8_t padding_[1];
 } DukePlayer_t;
