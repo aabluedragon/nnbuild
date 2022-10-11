@@ -4288,7 +4288,7 @@ int A_Spawn(int spriteNum, int tileNum)
         {
             pSprite->xrepeat = pSprite->yrepeat = 0;
 
-            bool const invalidateSpawn = (ud.multimode < 2 || (ud.multimode > 1 && GTFLAGS(GAMETYPE_COOPSPAWN) && pSprite->lotag != 1));
+            bool const invalidateSpawn = (ud.multimode < 2 || (ud.multimode > 1 && pSprite->lotag != !!(GTFLAGS(GAMETYPE_COOPSPAWN))));
             changespritestat(newSprite, invalidateSpawn ? STAT_MISC : STAT_PLAYER);
             goto SPAWN_END;
         }
