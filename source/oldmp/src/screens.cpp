@@ -327,6 +327,27 @@ const char* G_PrintBestTime(void)
     return G_PrintTime3(ud.playerbest);
 }
 
+static int32_t G_PlaySoundWhileNoInput(int32_t soundnum)
+{
+    auto const voice = S_PlaySound(soundnum);
+
+    KB_FlushKeyboardQueue();
+    MOUSE_ClearButton(M_LEFTBUTTON);
+
+    while (FX_SoundActive(voice))
+    {
+        gameHandleEvents();
+        if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON))
+        {
+            KB_FlushKeyboardQueue();
+            MOUSE_ClearButton(M_LEFTBUTTON);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 // Keep on bottom
 void G_BonusScreen(int bonusonly)
 {
@@ -379,254 +400,239 @@ void G_BonusScreen(int bonusonly)
     if (bonusonly) goto FRAGBONUS;
 
     if (numplayers < 2 && ud.eog && ud.from_bonus == 0)
+    {
         switch (ud.volume_number)
         {
-        case 0:
-            if (ud.lockout == 0)
+            case 0:
             {
-                P_SetGamePalette(g_player[myconnectindex].ps, ENDINGPAL, 11); // JBF 20040308
+                if (ud.lockout == 0)
+                {
+                    P_SetGamePalette(g_player[myconnectindex].ps, ENDINGPAL, 11); // JBF 20040308
+                    videoClearViewableArea(0L);
+                    rotatesprite(0, 50 << 16, 65536L, 0, VICTORY1, 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
+                    videoNextPage();
+                    //g_player[myconnectindex].ps->palette = endingpal;
+                    fadepal(0, 0, 0, 63, 0, -1);
+
+                    KB_FlushKeyboardQueue();
+                    totalclock = 0;
+                    while (1)
+                    {
+                        videoClearViewableArea(0L);
+                        rotatesprite(0, 50 << 16, 65536L, 0, VICTORY1, 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
+
+                        // boss
+                        if (totalclock > 390 && totalclock < 780)
+                            for (t = 0; t < 35; t += 5) if (bossmove[t + 2] && (totalclock % 390) > bossmove[t] && (totalclock % 390) <= bossmove[t + 1])
+                            {
+                                if (t == 10 && bonuscnt == 1)
+                                {
+                                    S_PlaySound(SHOTGUN_FIRE);
+                                    S_PlaySound(SQUISHED);
+                                    bonuscnt++;
+                                }
+                                rotatesprite(bossmove[t + 3] << 16, bossmove[t + 4] << 16, 65536L, 0, bossmove[t + 2], 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
+                            }
+
+                        // Breathe
+                        if (totalclock < 450 || totalclock >= 750)
+                        {
+                            if (totalclock >= 750)
+                            {
+                                rotatesprite(86 << 16, 59 << 16, 65536L, 0, VICTORY1 + 8, 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
+                                if (totalclock >= 750 && bonuscnt == 2)
+                                {
+                                    S_PlaySound(DUKETALKTOBOSS);
+                                    bonuscnt++;
+                                }
+
+                            }
+                            for (t = 0; t < 20; t += 5)
+                                if (breathe[t + 2] && (totalclock % 120) > breathe[t] && (totalclock % 120) <= breathe[t + 1])
+                                {
+                                    if (t == 5 && bonuscnt == 0)
+                                    {
+                                        S_PlaySound(BOSSTALKTODUKE);
+                                        bonuscnt++;
+                                    }
+                                    rotatesprite(breathe[t + 3] << 16, breathe[t + 4] << 16, 65536L, 0, breathe[t + 2], 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
+                                }
+                        }
+
+                        gameHandleEvents();
+                        videoNextPage();
+                        if (KB_KeyWaiting())
+                            break;
+                    }
+                }
+
+                fadepal(0, 0, 0, 0, 64, 1);
+
+                KB_FlushKeyboardQueue();
+                //g_player[myconnectindex].ps->palette = palette;
+                P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);   // JBF 20040308
+
+                rotatesprite(0, 0, 65536L, 0, 3292, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
+                IFISSOFTMODE fadepal(0, 0, 0, 63, 0, -1);
+                else videoNextPage();
+
+                while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
+                    gameHandleEvents();
+
+                fadepal(0, 0, 0, 0, 64, 1);
+                S_StopMusic();
+                FX_StopAllSounds();
+                break;
+            }
+            case 1:
+            {
+                S_StopMusic();
                 videoClearViewableArea(0L);
-                rotatesprite(0, 50 << 16, 65536L, 0, VICTORY1, 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
                 videoNextPage();
-                //g_player[myconnectindex].ps->palette = endingpal;
-                fadepal(0, 0, 0, 63, 0, -1);
+
+                if (ud.lockout == 0)
+                {
+                    G_PlayAnim("cineov2.anm", 1);
+                    KB_FlushKeyboardQueue();
+                    videoClearViewableArea(0L);
+                    videoNextPage();
+                }
+
+                S_PlaySound(PIPEBOMB_EXPLODE);
+
+                fadepal(0, 0, 0, 0, 64, 1);
+                videoSetViewableArea(0, 0, xdim - 1, ydim - 1);
+                KB_FlushKeyboardQueue();
+                //g_player[myconnectindex].ps->palette = palette;
+                P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);   // JBF 20040308
+                rotatesprite(0, 0, 65536L, 0, 3293, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
+                IFISSOFTMODE fadepal(0, 0, 0, 63, 0, -1);
+                else videoNextPage();
+
+                while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
+                    gameHandleEvents();
+
+                IFISSOFTMODE fadepal(0, 0, 0, 0, 64, 1);
+
+                break;
+            }
+            case 3:
+            {
+                videoSetViewableArea(0, 0, xdim - 1, ydim - 1);
+
+                S_StopMusic();
+                videoClearViewableArea(0L);
+                videoNextPage();
+
+                if (ud.lockout == 0)
+                {
+                    KB_FlushKeyboardQueue();
+                    G_PlayAnim("vol4e1.anm", 8);
+                    videoClearViewableArea(0L);
+                    videoNextPage();
+                    G_PlayAnim("vol4e2.anm", 10);
+                    videoClearViewableArea(0L);
+                    videoNextPage();
+                    G_PlayAnim("vol4e3.anm", 11);
+                    videoClearViewableArea(0L);
+                    videoNextPage();
+                }
+
+                FX_StopAllSounds();
+                S_PlaySound(ENDSEQVOL3SND4);
+                KB_FlushKeyboardQueue();
+
+                //g_player[myconnectindex].ps->palette = palette;
+                P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);   // JBF 20040308
+                IFISSOFTMODE G_FadePalette(0, 0, 0, 63);
+                videoClearViewableArea(0L);
+                menutext(160, 60, 0, 0, "THANKS TO ALL OUR");
+                menutext(160, 60 + 16, 0, 0, "FANS FOR GIVING");
+                menutext(160, 60 + 16 + 16, 0, 0, "US BIG HEADS.");
+                menutext(160, 70 + 16 + 16 + 16, 0, 0, "LOOK FOR A DUKE NUKEM 3D");
+                menutext(160, 70 + 16 + 16 + 16 + 16, 0, 0, "SEQUEL SOON.");
+                videoNextPage();
+
+                fadepal(0, 0, 0, 63, 0, -3);
+
+                KB_FlushKeyboardQueue();
+                while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
+                    gameHandleEvents();
+
+                fadepal(0, 0, 0, 0, 64, 3);
+
+                videoClearViewableArea(0L);
+                videoNextPage();
+                MOUSE_ClearButton(M_LEFTBUTTON);
+
+                G_PlayAnim("DUKETEAM.ANM", 4);
+
+                KB_FlushKeyboardQueue();
+                while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
+                    gameHandleEvents();
+
+                videoClearViewableArea(0L);
+                videoNextPage();
+                IFISSOFTMODE G_FadePalette(0, 0, 0, 63);
+
+                FX_StopAllSounds();
+                KB_FlushKeyboardQueue();
+                MOUSE_ClearButton(M_LEFTBUTTON);
+
+                break;
+            }
+
+            case 2:
+            {
+                S_StopMusic();
+                videoClearViewableArea(0L);
+                videoNextPage();
+                if (ud.lockout == 0)
+                {
+                    fadepal(0, 0, 0, 63, 0, -1);
+                    G_PlayAnim("cineov3.anm", 2);
+                    KB_FlushKeyboardQueue();
+                    ototalclock = (int32_t)totalclock + 200;
+
+                    while (totalclock < ototalclock)
+                        gameHandleEvents();
+
+                    videoClearViewableArea(0L);
+                    videoNextPage();
+
+                    FX_StopAllSounds();
+                }
+
+                G_PlayAnim("RADLOGO.ANM", 3);
+
+                if (ud.lockout == 0 && !KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
+                {
+                    if (G_PlaySoundWhileNoInput(ENDSEQVOL3SND5)) goto ENDANM;
+                    if (G_PlaySoundWhileNoInput(ENDSEQVOL3SND6)) goto ENDANM;
+                    if (G_PlaySoundWhileNoInput(ENDSEQVOL3SND7)) goto ENDANM;
+                    if (G_PlaySoundWhileNoInput(ENDSEQVOL3SND8)) goto ENDANM;
+                    if (G_PlaySoundWhileNoInput(ENDSEQVOL3SND9)) goto ENDANM;
+                }
+
+                MOUSE_ClearButton(M_LEFTBUTTON);
 
                 KB_FlushKeyboardQueue();
                 totalclock = 0;
-                while (1)
-                {
-                    videoClearViewableArea(0L);
-                    rotatesprite(0, 50 << 16, 65536L, 0, VICTORY1, 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
-
-                    // boss
-                    if (totalclock > 390 && totalclock < 780)
-                        for (t = 0; t < 35; t += 5) if (bossmove[t + 2] && (totalclock % 390) > bossmove[t] && (totalclock % 390) <= bossmove[t + 1])
-                        {
-                            if (t == 10 && bonuscnt == 1)
-                            {
-                                S_PlaySound(SHOTGUN_FIRE);
-                                S_PlaySound(SQUISHED);
-                                bonuscnt++;
-                            }
-                            rotatesprite(bossmove[t + 3] << 16, bossmove[t + 4] << 16, 65536L, 0, bossmove[t + 2], 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
-                        }
-
-                    // Breathe
-                    if (totalclock < 450 || totalclock >= 750)
-                    {
-                        if (totalclock >= 750)
-                        {
-                            rotatesprite(86 << 16, 59 << 16, 65536L, 0, VICTORY1 + 8, 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
-                            if (totalclock >= 750 && bonuscnt == 2)
-                            {
-                                S_PlaySound(DUKETALKTOBOSS);
-                                bonuscnt++;
-                            }
-
-                        }
-                        for (t = 0; t < 20; t += 5)
-                            if (breathe[t + 2] && (totalclock % 120) > breathe[t] && (totalclock % 120) <= breathe[t + 1])
-                            {
-                                if (t == 5 && bonuscnt == 0)
-                                {
-                                    S_PlaySound(BOSSTALKTODUKE);
-                                    bonuscnt++;
-                                }
-                                rotatesprite(breathe[t + 3] << 16, breathe[t + 4] << 16, 65536L, 0, breathe[t + 2], 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);
-                            }
-                    }
-
-                    gameHandleEvents();
-                    videoNextPage();
-                    if (KB_KeyWaiting())
-                        break;
-                }
-            }
-
-            fadepal(0, 0, 0, 0, 64, 1);
-
-            KB_FlushKeyboardQueue();
-            //g_player[myconnectindex].ps->palette = palette;
-            P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);   // JBF 20040308
-
-            rotatesprite(0, 0, 65536L, 0, 3292, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
-            IFISSOFTMODE fadepal(0, 0, 0, 63, 0, -1);
-            else videoNextPage();
-
-            while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
-                gameHandleEvents();
-
-            fadepal(0, 0, 0, 0, 64, 1);
-            S_StopMusic();
-            FX_StopAllSounds();
-            break;
-        case 1:
-            S_StopMusic();
-            videoClearViewableArea(0L);
-            videoNextPage();
-
-            if (ud.lockout == 0)
-            {
-                G_PlayAnim("cineov2.anm", 1);
-                KB_FlushKeyboardQueue();
-                videoClearViewableArea(0L);
-                videoNextPage();
-            }
-
-            S_PlaySound(PIPEBOMB_EXPLODE);
-
-            fadepal(0, 0, 0, 0, 64, 1);
-            videoSetViewableArea(0, 0, xdim - 1, ydim - 1);
-            KB_FlushKeyboardQueue();
-            //g_player[myconnectindex].ps->palette = palette;
-            P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);   // JBF 20040308
-            rotatesprite(0, 0, 65536L, 0, 3293, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
-            IFISSOFTMODE fadepal(0, 0, 0, 63, 0, -1);
-            else videoNextPage();
-
-            while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
-                gameHandleEvents();
-
-            IFISSOFTMODE fadepal(0, 0, 0, 0, 64, 1);
-
-            break;
-
-        case 3:
-
-            videoSetViewableArea(0, 0, xdim - 1, ydim - 1);
-
-            S_StopMusic();
-            videoClearViewableArea(0L);
-            videoNextPage();
-
-            if (ud.lockout == 0)
-            {
-                KB_FlushKeyboardQueue();
-                G_PlayAnim("vol4e1.anm", 8);
-                videoClearViewableArea(0L);
-                videoNextPage();
-                G_PlayAnim("vol4e2.anm", 10);
-                videoClearViewableArea(0L);
-                videoNextPage();
-                G_PlayAnim("vol4e3.anm", 11);
-                videoClearViewableArea(0L);
-                videoNextPage();
-            }
-
-            FX_StopAllSounds();
-            S_PlaySound(ENDSEQVOL3SND4);
-            KB_FlushKeyboardQueue();
-
-            //g_player[myconnectindex].ps->palette = palette;
-            P_SetGamePalette(g_player[myconnectindex].ps, BASEPAL, 11);   // JBF 20040308
-            IFISSOFTMODE G_FadePalette(0, 0, 0, 63);
-            videoClearViewableArea(0L);
-            menutext(160, 60, 0, 0, "THANKS TO ALL OUR");
-            menutext(160, 60 + 16, 0, 0, "FANS FOR GIVING");
-            menutext(160, 60 + 16 + 16, 0, 0, "US BIG HEADS.");
-            menutext(160, 70 + 16 + 16 + 16, 0, 0, "LOOK FOR A DUKE NUKEM 3D");
-            menutext(160, 70 + 16 + 16 + 16 + 16, 0, 0, "SEQUEL SOON.");
-            videoNextPage();
-
-            fadepal(0, 0, 0, 63, 0, -3);
-
-            KB_FlushKeyboardQueue();
-            while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
-                gameHandleEvents();
-
-            fadepal(0, 0, 0, 0, 64, 3);
-
-            videoClearViewableArea(0L);
-            videoNextPage();
-            MOUSE_ClearButton(M_LEFTBUTTON);
-
-            G_PlayAnim("DUKETEAM.ANM", 4);
-
-            KB_FlushKeyboardQueue();
-            while (!KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
-                gameHandleEvents();
-
-            videoClearViewableArea(0L);
-            videoNextPage();
-            IFISSOFTMODE G_FadePalette(0, 0, 0, 63);
-
-            FX_StopAllSounds();
-            KB_FlushKeyboardQueue();
-            MOUSE_ClearButton(M_LEFTBUTTON);
-
-            break;
-
-        case 2:
-
-            S_StopMusic();
-            videoClearViewableArea(0L);
-            videoNextPage();
-            if (ud.lockout == 0)
-            {
-                fadepal(0, 0, 0, 63, 0, -1);
-                G_PlayAnim("cineov3.anm", 2);
-                KB_FlushKeyboardQueue();
-                ototalclock = (int32_t)totalclock + 200;
-
-                while (totalclock < ototalclock)
+                while (!KB_KeyWaiting() && totalclock < 120 && !(MOUSE_GetButtons() & M_LEFTBUTTON))
                     gameHandleEvents();
 
-                videoClearViewableArea(0L);
-                videoNextPage();
-
+            ENDANM:
+                MOUSE_ClearButton(M_LEFTBUTTON);
                 FX_StopAllSounds();
+
+                KB_FlushKeyboardQueue();
+
+                videoClearViewableArea(0L);
+
+                break;
             }
-
-            G_PlayAnim("RADLOGO.ANM", 3);
-
-            if (ud.lockout == 0 && !KB_KeyWaiting() && !(MOUSE_GetButtons() & M_LEFTBUTTON))
-            {
-                S_PlaySound(ENDSEQVOL3SND5);
-                while (S_CheckSoundPlaying(ENDSEQVOL3SND5))
-                    gameHandleEvents();
-
-                if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON)) goto ENDANM;
-
-                S_PlaySound(ENDSEQVOL3SND6);
-                while (S_CheckSoundPlaying(ENDSEQVOL3SND6))
-                    gameHandleEvents();
-
-                if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON)) goto ENDANM;
-
-                S_PlaySound(ENDSEQVOL3SND7);
-                while (S_CheckSoundPlaying(ENDSEQVOL3SND7))
-                    gameHandleEvents();
-
-                if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON)) goto ENDANM;
-
-                S_PlaySound(ENDSEQVOL3SND8);
-                while (S_CheckSoundPlaying(ENDSEQVOL3SND8))
-                    gameHandleEvents();
-
-                if (KB_KeyWaiting() || (MOUSE_GetButtons() & M_LEFTBUTTON)) goto ENDANM;
-
-                S_PlaySound(ENDSEQVOL3SND9);
-                while (S_CheckSoundPlaying(ENDSEQVOL3SND9))
-                    gameHandleEvents();
-            }
-
-            MOUSE_ClearButton(M_LEFTBUTTON);
-
-            KB_FlushKeyboardQueue();
-            totalclock = 0;
-            while (!KB_KeyWaiting() && totalclock < 120 && !(MOUSE_GetButtons() & M_LEFTBUTTON))
-                gameHandleEvents();
-
-        ENDANM:
-            MOUSE_ClearButton(M_LEFTBUTTON);
-            FX_StopAllSounds();
-
-            KB_FlushKeyboardQueue();
-
-            videoClearViewableArea(0L);
-
-            break;
         }
+    }
 
 FRAGBONUS:
 
