@@ -2056,29 +2056,35 @@ static void G_MoveStandables(void)
                 if (actor[i].t_data[6] != 1)
                 {
                     // we're on a trip wire
-                    int16_t cursectnum;
-
+                    int16_t curSectNum;
                     while (x > 0)
                     {
-                        j = A_Spawn(i,LASERLINE);
-                        setspritez_old(j,sprite[j].x,sprite[j].y,sprite[j].z);
-                        sprite[j].hitag = s->hitag;
-                        actor[j].t_data[1] = sprite[j].z;
+                        auto const lineSpr = A_Spawn(i, LASERLINE);
+                        auto const pLine = &sprite[lineSpr];
 
-                        s->x += sintable[(T6(i)+512)&2047]>>4;
-                        s->y += sintable[(T6(i))&2047]>>4;
+                        setsprite(lineSpr, &pLine->xyz);
+
+                        pLine->hitag = s->hitag;
+                        actor[lineSpr].t_data[1] = pLine->z;
+
+                        s->x += sintable[(T6(i) + 512) & 2047] >> 4;
+                        s->y += sintable[(T6(i)) & 2047] >> 4;
 
                         if (x < 1024)
                         {
-                            sprite[j].xrepeat = x>>5;
+                            pLine->xrepeat = x >> 5;
                             break;
                         }
                         x -= 1024;
 
-                        cursectnum = s->sectnum;
-                        updatesector(s->x, s->y, &cursectnum);
-                        if (cursectnum < 0)
+                        curSectNum = s->sectnum;
+                        updatesector(s->x, s->y, &curSectNum);
+
+                        if (curSectNum < 0)
                             break;
+
+                        // this is a hack to work around the LASERLINE sprite's art tile offset
+                        changespritesect(lineSpr, curSectNum);
                     }
                 }
                 T1(i)++;
