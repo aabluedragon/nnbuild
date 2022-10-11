@@ -782,7 +782,6 @@ const memberlabel_t PlayerLabels[]=
     { "holster_weapon", PLAYER_HOLSTER_WEAPON, 0, 0 },
     { "falling_counter", PLAYER_FALLING_COUNTER, 0, 0 },
     { "gotweapon", PLAYER_GOTWEAPON, LABEL_HASPARM2, MAX_WEAPONS },
-    { "refresh_inventory", PLAYER_REFRESH_INVENTORY, 0, 0 },
     { "palette", PLAYER_PALETTE, 0, 0 },
     { "toggle_key_flag", PLAYER_TOGGLE_KEY_FLAG, 0, 0 },
     { "knuckle_incs", PLAYER_KNUCKLE_INCS, 0, 0 },

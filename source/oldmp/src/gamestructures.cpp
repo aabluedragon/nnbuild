@@ -2482,15 +2482,6 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
         Gv_SetVar(lVar2, g_player[iPlayer].ps->gotweapon[lParm2], g_i, g_p);
         return;
 
-    case PLAYER_REFRESH_INVENTORY:
-        if (iSet)
-        {
-            g_player[iPlayer].ps->refresh_inventory=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->refresh_inventory, g_i, g_p);
-        return;
-
         //      case PLAYER_PALETTE:
         //          if(iSet)
         //          {

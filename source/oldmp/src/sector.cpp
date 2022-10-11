@@ -2756,10 +2756,7 @@ void P_HandleSharedKeys(int snum)
             }
             return;		// is there significance to returning?
         }
-        if (p->refresh_inventory)
-        {
-            sb_snum |= BIT(SK_INV_LEFT);   // emulate move left...
-        }
+
         if (p->newowner == -1)
             if (TEST_SYNC_KEY(sb_snum, SK_INV_LEFT) || TEST_SYNC_KEY(sb_snum, SK_INV_RIGHT))
             {
@@ -2768,7 +2765,6 @@ void P_HandleSharedKeys(int snum)
                 if (TEST_SYNC_KEY(sb_snum, SK_INV_RIGHT)) k = 1;
                 else k = 0;
 
-                if (p->refresh_inventory) p->refresh_inventory = 0;
                 dainv = p->inven_icon;
 
                 i = 0;

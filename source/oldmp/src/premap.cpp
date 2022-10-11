@@ -646,7 +646,6 @@ static void P_ResetStatus(int snum)
     p->buttonpalette    = 0;
     p->actorsqu         =-1;
     p->invdisptime      = 0;
-    p->refresh_inventory= 0;
     p->last_pissed_time = 0;
     p->holster_weapon   = 0;
     p->pycount          = 0;

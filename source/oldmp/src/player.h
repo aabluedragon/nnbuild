@@ -105,27 +105,29 @@ typedef struct {
     int16_t orotscrnang, rotscrnang, dead_flag, show_empty_weapon;   // JBF 20031220: added orotscrnang
     
     int16_t holoduke_on, pycount, weapon_pos, frag_ps;
-    int16_t transporter_hold, last_full_weapon, footprintshade;
+    int16_t transporter_hold, last_full_weapon;
 
-    uint8_t palette;
+    uint8_t palette, palookup;
 
     uint8_t toggle_key_flag;
-    uint8_t kickback_pic, knuckle_incs, knee_incs, access_incs, fist_incs, tipincs;
+    uint8_t kickback_pic, rapid_fire_hold, reloading, hbomb_on;
+    uint8_t knuckle_incs, knee_incs, access_incs, fist_incs, tipincs;
 
-    char aim_mode, auto_aim, weaponswitch;
+    uint8_t aim_mode, auto_aim, weaponswitch;
 
-    char gm, on_warping_sector, footprintcount;
-    char hbomb_on, jumping_toggle, rapid_fire_hold, on_ground;
-    char inven_icon, buttonpalette;
+    uint8_t gm; // Debating upgrading this to int32_t, if I add more GM flags.
 
-    char jetpack_on, spritebridge, lastrandomspot;
-    char scuba_on, footprintpal, heat_on;
+    uint8_t jumping_toggle, falling_counter, hard_landing, return_to_center;
+    uint8_t inven_icon, jetpack_on, heat_on, scuba_on;
 
-    char  holster_weapon, falling_counter;
-    char  gotweapon[MAX_WEAPONS], refresh_inventory;
+    uint8_t buttonpalette, footprintpal, footprintcount, footprintshade;
+    uint8_t spritebridge, on_ground, on_warping_sector;
+    uint8_t lastrandomspot;
 
-    char walking_snd_toggle, palookup, hard_landing;
-    char return_to_center, reloading;
+    uint8_t holster_weapon;
+    uint8_t gotweapon[MAX_WEAPONS];
+
+    uint8_t walking_snd_toggle;
 
     int8_t padding_[1];
 } DukePlayer_t;
@@ -133,9 +135,11 @@ typedef struct {
 typedef struct {
     int16_t got_access, last_extra, shield_amount, curr_weapon, holoduke_on;
     int16_t inv_amount[GET_MAX];
-    int16_t last_weapon, weapon_pos, kickback_pic;
+    int16_t last_weapon, weapon_pos;
     int16_t ammo_amount[MAX_WEAPONS], frag[MAXPLAYERS];
-    char inven_icon, jetpack_on, heat_on, gotweapon[MAX_WEAPONS];
+
+    uint8_t kickback_pic, inven_icon, jetpack_on, heat_on;
+    uint8_t gotweapon[MAX_WEAPONS];
 } DukeStatus_t;
 
 typedef struct
