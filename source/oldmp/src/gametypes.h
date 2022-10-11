@@ -7,24 +7,24 @@
 #define GTFLAGS(x) (Gametypes[ud.coop].flags & (x))
 
 enum GametypeFlags_t {
-    GAMETYPE_COOP                   = (1 << 0),
-    GAMETYPE_WEAPSTAY               = (1 << 1),
-    GAMETYPE_FRAGBAR                = (1 << 2),
-    GAMETYPE_SCORESHEET             = (1 << 3),
-    GAMETYPE_DMSWITCHES             = (1 << 4),
-    GAMETYPE_COOPSPAWN              = (1 << 5),
-    GAMETYPE_ACCESSCARDSPRITES      = (1 << 6),
-    GAMETYPE_COOPVIEW               = (1 << 7),
-    GAMETYPE_COOPSOUND              = (1 << 8),
-    GAMETYPE_OTHERPLAYERSINMAP      = (1 << 9),
-    GAMETYPE_ALLOWITEMRESPAWN       = (1 << 10),
-    GAMETYPE_MARKEROPTION           = (1 << 11),
-    GAMETYPE_PLAYERSFRIENDLY        = (1 << 12),
-    GAMETYPE_FIXEDRESPAWN           = (1 << 13),
-    GAMETYPE_ACCESSATSTART          = (1 << 14),
-    GAMETYPE_PRESERVEINVENTORYDEATH = (1 << 15),
-    GAMETYPE_TDM                    = (1 << 16),
-    GAMETYPE_TDMSPAWN               = (1 << 17),
+    GAMETYPE_COOP                   = (1 << 0), // Cooperative mode
+    GAMETYPE_WEAPSTAY               = (1 << 1), // Weapon stay enabled
+    GAMETYPE_FRAGBAR                = (1 << 2), // Enable the frag bar
+    GAMETYPE_SCORESHEET             = (1 << 3), // Show the scoreboard at level end
+    GAMETYPE_DMSWITCHES             = (1 << 4), // Enable DM-only switches
+    GAMETYPE_COOPSPAWN              = (1 << 5), // Use cooperative mode spawn points
+    GAMETYPE_ACCESSCARDSPRITES      = (1 << 6), // Access cards spawn in map
+    GAMETYPE_COOPVIEW               = (1 << 7), // Can view other players' perspectives
+    GAMETYPE_COOPSOUND              = (1 << 8), // Can hear other players' sounds
+    GAMETYPE_OTHERPLAYERSINMAP      = (1 << 9), // Other players show in automap
+    GAMETYPE_ALLOWITEMRESPAWN       = (1 << 10), // Allow item respawning
+    GAMETYPE_MARKEROPTION           = (1 << 11), // Allow enabling respawn markers
+    GAMETYPE_PLAYERSFRIENDLY        = (1 << 12), // All players are allies
+    GAMETYPE_FIXEDRESPAWN           = (1 << 13), // Always respawn at the same point
+    GAMETYPE_ACCESSATSTART          = (1 << 14), // All access cards at start
+    GAMETYPE_PRESERVEINVENTORYEOL   = (1 << 15), // Inventory is preserved betwen level transitions
+    GAMETYPE_TDM                    = (1 << 16), // Team deathmatch
+    GAMETYPE_TDMSPAWN               = (1 << 17), // Respawn near teammates
 };
 
 enum DMFlags_t {

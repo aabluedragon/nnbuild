@@ -840,7 +840,7 @@ static void resetprestat(int snum,int g)
     p->one_parallax_sectnum     = -1;
     g_player[snum].display.visibility = ud.const_visibility;
 
-    if (((g&MODE_EOL) != MODE_EOL && ud.multimode < 2) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1))
+    if (((g&MODE_EOL) != MODE_EOL && ud.multimode < 2) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
     {
         P_ResetWeapons(snum);
         P_ResetInventory(snum);
@@ -1399,8 +1399,8 @@ static void insert_player_sprite(int pNum)
     s->xoffset = 0;
     s->clipdist = 64;
 
-    // Either reset health to max if starting an episode, inventory is to be preserved, or was dead in the last level.
-    if ((ud.last_level == -1) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.multimode > 1) || p->last_extra <= 0)
+    // Either reset health to max if starting an episode, inventory isn't to be preserved, or was dead in the last level.
+    if ((ud.last_level == -1) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1) || p->last_extra <= 0)
     {
         p->last_extra = p->max_player_health;
         s->extra = p->max_player_health;
@@ -1495,7 +1495,7 @@ static void resetpspritevars(char g)
         for(ALL_PLAYERS(i))
         {
             // Kept to keep old behavior. Rest of the block that was here was useless.
-            if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
+            if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.last_level >= 0)
             {
                 tsbar[i].inven_icon = g_player[i].ps->inven_icon;
                 tsbar[i].inv_amount[GET_STEROIDS] = g_player[i].ps->inv_amount[GET_STEROIDS];
@@ -1505,7 +1505,7 @@ static void resetpspritevars(char g)
             P_ResetStatus(i);
 
             // Kept to keep old behavior. Rest of the block that was here was useless.
-            if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYDEATH) && ud.last_level >= 0)
+            if (ud.multimode > 1 && (Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.last_level >= 0)
             {
                 g_player[i].ps->inven_icon = tsbar[i].inven_icon;
                 g_player[i].ps->inv_amount[GET_STEROIDS] = tsbar[i].inv_amount[GET_STEROIDS];
