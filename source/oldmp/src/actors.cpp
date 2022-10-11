@@ -2030,10 +2030,15 @@ static void G_MoveStandables(void)
 
             if (T1(i) < 32)
             {
-                p = A_FindPlayer(s,&x);
-                if (x > 768) T1(i)++;
-                else if (T1(i) > 16) T1(i)++;
+                int32_t playerDist;
+                A_FindPlayer(s,&playerDist);
+
+                if (playerDist > 768)
+                    T1(i)++;
+                else if (T1(i) > 16)
+                    T1(i)++;
             }
+
             if (T1(i) == 32)
             {
                 l = s->ang;
@@ -2046,9 +2051,9 @@ static void G_MoveStandables(void)
                 s->z -= (3<<8);
                 setspritez_old(i,s->x,s->y,s->z);
 
-                x = A_CheckHitSprite(i,&m);
+                int32_t hitDist = A_CheckHitSprite(i,&m);
 
-                actor[i].lastvx = x;
+                actor[i].lastvx = hitDist;
 
                 s->ang = l;
 
@@ -2057,7 +2062,7 @@ static void G_MoveStandables(void)
                 {
                     // we're on a trip wire
                     int16_t curSectNum;
-                    while (x > 0)
+                    while (hitDist > 0)
                     {
                         auto const lineSpr = A_Spawn(i, LASERLINE);
                         auto const pLine = &sprite[lineSpr];
@@ -2070,15 +2075,15 @@ static void G_MoveStandables(void)
                         s->x += sintable[(T6(i) + 512) & 2047] >> 4;
                         s->y += sintable[(T6(i)) & 2047] >> 4;
 
-                        if (x < 1024)
+                        if (hitDist < 1024)
                         {
-                            pLine->xrepeat = x >> 5;
+                            pLine->xrepeat = hitDist >> 5;
                             break;
                         }
-                        x -= 1024;
+                        hitDist -= 1024;
 
                         curSectNum = s->sectnum;
-                        updatesector(s->x, s->y, &curSectNum);
+                        updatesectorz(s->x, s->y, s->z, &curSectNum);
 
                         if (curSectNum < 0)
                             break;
@@ -2091,7 +2096,7 @@ static void G_MoveStandables(void)
                 s->x = T4(i);
                 s->y = T5(i);
                 s->z += (3<<8);
-                setspritez_old(i,s->x,s->y,s->z);
+                setspritez(i, &s->xyz);
                 T4(i) = 0;
                 //                if( m >= 0 && lTripBombControl & TRIPBOMB_TRIPWIRE)
                 if (m >= 0 && actor[i].t_data[6] != 1)
@@ -2102,10 +2107,10 @@ static void G_MoveStandables(void)
                 }
                 else T3(i) = 0;
             }
+
             if (T1(i) == 33)
             {
                 T2(i)++;
-
 
                 T4(i) = s->x;
                 T5(i) = s->y;
