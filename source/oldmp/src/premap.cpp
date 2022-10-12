@@ -809,7 +809,9 @@ static void resetpremapglobals(void)
     g_earthquakeTime = 0;
     g_interpolationCnt = 0;
     g_spriteDeleteQueuePos = 0;
-    for (i = 0; i < g_spriteDeleteQueueSize; i++) SpriteDeletionQueue[i] = -1;
+
+    for (i = 0; i < g_spriteDeleteQueueSize; i++)
+        SpriteDeletionQueue[i] = -1;
 
     startofdynamicinterpolations = 0;
 }
@@ -837,7 +839,7 @@ static void resetprestat(int snum,int g)
     p->one_parallax_sectnum     = -1;
     g_player[snum].display.visibility = ud.const_visibility;
 
-    if (((g&MODE_EOL) != MODE_EOL && ud.multimode < 2) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
+    if ((g&MODE_EOL) != MODE_EOL || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
     {
         P_ResetWeapons(snum);
         P_ResetInventory(snum);
