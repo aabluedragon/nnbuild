@@ -6441,37 +6441,6 @@ char CheatStrings[][MAXCHEATLEN] =
     "sfm",          // 26
 };
 
-enum cheats
-{
-    CHEAT_CORNHOLIO,
-    CHEAT_STUFF,
-    CHEAT_SCOTTY,
-    CHEAT_COORDS,
-    CHEAT_VIEW,
-    CHEAT_TIME,
-    CHEAT_UNLOCK,
-    CHEAT_CASHMAN,
-    CHEAT_ITEMS,
-    CHEAT_RATE,
-    CHEAT_SKILL,
-    CHEAT_BETA,
-    CHEAT_HYPER,
-    CHEAT_MONSTERS,
-    CHEAT_RESERVED,
-    CHEAT_RESERVED2,
-    CHEAT_TODD,
-    CHEAT_SHOWMAP,
-    CHEAT_KROZ,
-    CHEAT_ALLEN,
-    CHEAT_CLIP,
-    CHEAT_WEAPONS,
-    CHEAT_INVENTORY,
-    CHEAT_KEYS,
-    CHEAT_DEBUG,
-    CHEAT_RESERVED3,
-    CHEAT_SCREAMFORME,
-};
-
 void G_CheatGetInv(void)
 {
     Gv_SetVar(sysVarIDs.RETURN, 400, g_player[myconnectindex].ps->i, myconnectindex);
@@ -6669,41 +6638,58 @@ FOUNDCHEAT:
 
                 case CHEAT_CORNHOLIO:
                 case CHEAT_KROZ:
-                    ud.god = 1-ud.god;
+                {
+                    ud.god = 1 - ud.god;
 
                     if (ud.god)
                     {
                         pus = 1;
                         pub = 1;
-                        sprite[g_player[myconnectindex].ps->i].cstat = 257;
 
-                        actor[g_player[myconnectindex].ps->i].t_data[0] = 0;
-                        actor[g_player[myconnectindex].ps->i].t_data[1] = 0;
-                        actor[g_player[myconnectindex].ps->i].t_data[2] = 0;
-                        actor[g_player[myconnectindex].ps->i].t_data[3] = 0;
-                        actor[g_player[myconnectindex].ps->i].t_data[4] = 0;
-                        actor[g_player[myconnectindex].ps->i].t_data[5] = 0;
+                        for (int ALL_PLAYERS(i))
+                        {
+                            auto ps = g_player[i].ps;
+                            sprite[ps->i].cstat = 257;
 
-                        sprite[g_player[myconnectindex].ps->i].hitag = 0;
-                        sprite[g_player[myconnectindex].ps->i].lotag = 0;
-                        sprite[g_player[myconnectindex].ps->i].pal = g_player[myconnectindex].ps->palookup;
+                            actor[ps->i].t_data[0] = 0;
+                            actor[ps->i].t_data[1] = 0;
+                            actor[ps->i].t_data[2] = 0;
+                            actor[ps->i].t_data[3] = 0;
+                            actor[ps->i].t_data[4] = 0;
+                            actor[ps->i].t_data[5] = 0;
 
-                        P_DoQuote(QUOTE_CHEAT_GODMODE_ON,g_player[myconnectindex].ps);
+                            sprite[ps->i].hitag = 0;
+                            sprite[ps->i].lotag = 0;
+                            sprite[ps->i].xrepeat = PLAYER_SPRITE_XREPEAT;
+                            sprite[ps->i].yrepeat = PLAYER_SPRITE_YREPEAT;
+                            sprite[ps->i].pal = ps->palookup;
+                            sprite[ps->i].extra = ps->last_extra = ps->max_player_health;
+
+                            actor[ps->i].htextra = -1;
+                        }
+
+                        P_DoQuote(QUOTE_CHEAT_GODMODE_ON, g_player[myconnectindex].ps);
                     }
                     else
                     {
                         ud.god = 0;
-                        sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                        actor[g_player[myconnectindex].ps->i].htextra = -1;
-                        g_player[myconnectindex].ps->last_extra = g_player[myconnectindex].ps->max_player_health;
-                        P_DoQuote(QUOTE_CHEAT_GODMODE_OFF,g_player[myconnectindex].ps);
+
+                        for (int ALL_PLAYERS(i))
+                        {
+                            auto ps = g_player[i].ps;
+
+                            sprite[ps->i].extra = ps->last_extra = ps->max_player_health;
+
+                            actor[ps->i].htextra = -1;
+                        }
+
+                        P_DoQuote(QUOTE_CHEAT_GODMODE_OFF, g_player[myconnectindex].ps);
                     }
 
-                    sprite[g_player[myconnectindex].ps->i].extra = g_player[myconnectindex].ps->max_player_health;
-                    actor[g_player[myconnectindex].ps->i].htextra = 0;
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
+                }
 
                 case CHEAT_SCREAMFORME:
                     ud.god = 1-ud.god;

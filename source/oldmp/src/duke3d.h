@@ -214,6 +214,38 @@ enum weaponuniqhudid_t
     W_END,
 };
 
+// Only here temporarily, move to cheats.h later.
+enum cheats
+{
+    CHEAT_CORNHOLIO,
+    CHEAT_STUFF,
+    CHEAT_SCOTTY,
+    CHEAT_COORDS,
+    CHEAT_VIEW,
+    CHEAT_TIME,
+    CHEAT_UNLOCK,
+    CHEAT_CASHMAN,
+    CHEAT_ITEMS,
+    CHEAT_RATE,
+    CHEAT_SKILL,
+    CHEAT_BETA,
+    CHEAT_HYPER,
+    CHEAT_MONSTERS,
+    CHEAT_RESERVED,
+    CHEAT_RESERVED2,
+    CHEAT_TODD,
+    CHEAT_SHOWMAP,
+    CHEAT_KROZ,
+    CHEAT_ALLEN,
+    CHEAT_CLIP,
+    CHEAT_WEAPONS,
+    CHEAT_INVENTORY,
+    CHEAT_KEYS,
+    CHEAT_DEBUG,
+    CHEAT_RESERVED3,
+    CHEAT_SCREAMFORME,
+};
+
 // NetDuke32 TO-DO: Move to cmdline.h when I get a chance.
 extern const char* CommandName;
 

@@ -278,7 +278,7 @@ static int osdcmd_god(const osdfuncparm_t *parm)
     UNREFERENCED_PARAMETER(parm);
     if (numplayers == 1 && g_player[myconnectindex].ps->gm & MODE_GAME)
     {
-        osdcmd_cheatsinfo_stat.cheatnum = 0;
+        osdcmd_cheatsinfo_stat.cheatnum = CHEAT_CORNHOLIO;
     }
     else
     {
@@ -293,7 +293,7 @@ static int osdcmd_noclip(const osdfuncparm_t *parm)
     UNREFERENCED_PARAMETER(parm);
     if (numplayers == 1 && g_player[myconnectindex].ps->gm & MODE_GAME)
     {
-        osdcmd_cheatsinfo_stat.cheatnum = 20;
+        osdcmd_cheatsinfo_stat.cheatnum = CHEAT_CLIP;
     }
     else
     {
