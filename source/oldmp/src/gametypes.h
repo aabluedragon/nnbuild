@@ -28,20 +28,21 @@ enum GametypeFlags_t {
 };
 
 enum DMFlags_t {
-    DMFLAG_FRIENDLYFIRE             = (1 << 0),
-    DMFLAG_NOMONSTERS               = (1 << 1),
-    DMFLAG_RESPAWNMONSTERS          = (1 << 2),
-    DMFLAG_RESPAWNITEMS             = (1 << 3),
-    DMFLAG_RESPAWNINVENTORY         = (1 << 4),
-    DMFLAG_MARKERS                  = (1 << 5),
-    DMFLAG_NOEXITS                  = (1 << 6),
-    DMFLAG_WEAPONSTAY               = (1 << 7),
-    DMFLAG_NOPLAYERIDS              = (1 << 8),
-    DMFLAG_NOFOVCHANGE              = (1 << 9),
-    DMFLAG_NOWEAPONICONS            = (1 << 10),
-    DMFLAG_ALLOWVISIBILITYCHANGE    = (1 << 11),
-    DMFLAG_NODMWEAPONSPAWNS         = (1 << 12),
-    DMFLAG_ALLOWDOUBLEKICK          = (1 << 13),
+    DMFLAG_FRIENDLYFIRE             = (1 << 0), // Friendly fire
+    DMFLAG_NOMONSTERS               = (1 << 1), // No monsters
+    DMFLAG_RESPAWNMONSTERS          = (1 << 2), // Respawn monsters
+    DMFLAG_RESPAWNITEMS             = (1 << 3), // Respawn items
+    DMFLAG_RESPAWNINVENTORY         = (1 << 4), // Respawn inventory
+    DMFLAG_MARKERS                  = (1 << 5), // Enable respawn markers
+    DMFLAG_NOEXITS                  = (1 << 6), // Disable exits
+    DMFLAG_WEAPONSTAY               = (1 << 7), // Weapons stay
+    DMFLAG_NOPLAYERIDS              = (1 << 8), // Disable player IDs
+    DMFLAG_NOFOVCHANGE              = (1 << 9), // Disable FOV changes
+    DMFLAG_NOWEAPONICONS            = (1 << 10), // Disable overhead weapon icons
+    DMFLAG_ALLOWVISIBILITYCHANGE    = (1 << 11), // Allow visibility changes
+    DMFLAG_NODMWEAPONSPAWNS         = (1 << 12), // Disable DM weapon spawns in cooperative.
+    DMFLAG_ALLOWDOUBLEKICK          = (1 << 13), // Restore the Duke3D v1.3D double-kick bug.
+    DMFLAG_KEEPITEMSACROSSEPISODES  = (1 << 14), // Keep inventory across episodes in cooperative.
 };
 
 #define DEFAULT_DMFLAGS (DMFLAG_FRIENDLYFIRE | DMFLAG_MARKERS)

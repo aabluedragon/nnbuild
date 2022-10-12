@@ -5098,6 +5098,7 @@ VOLUME_ALL_40x:
                     { "Disable Weapon Icons",       DMFLAG_NOWEAPONICONS },
                     { "Disable DM Weapon Spawns",   DMFLAG_NODMWEAPONSPAWNS },
                     { "Enable V1.3D Double Kick",   DMFLAG_ALLOWDOUBLEKICK },
+                    { "Keep Items Across Episodes", DMFLAG_KEEPITEMSACROSSEPISODES },
                     { "-",                          0 },
                     { "Accept",                     0 },
                 };
@@ -5170,6 +5171,12 @@ VOLUME_ALL_40x:
                             break;
                         }
                         case 11:
+                        {
+                            if (!(Gametypes[ud.m_coop].flags & GAMETYPE_COOP))
+                                enabled = false;
+                            break;
+                        }
+                        case 13:
                         {
                             if (!(Gametypes[ud.m_coop].flags & GAMETYPE_COOP))
                                 enabled = false;

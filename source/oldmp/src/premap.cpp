@@ -1244,8 +1244,8 @@ void G_MakeNewGamePreparations(int vn, int ln, int sk)
     S_StopAllSounds();
     S_Cleanup();
 
-    waitforeverybody();
     ready2send = 0;
+    waitforeverybody();
 
     if (ud.m_recstat != 2 && ud.last_level >= 0 && ud.multimode > 1 && (ud.coop&GAMETYPE_SCORESHEET))
         G_BonusScreen(1);
