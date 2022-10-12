@@ -770,19 +770,16 @@ void P_ResetInventory(int snum)
     DukePlayer_t *p = g_player[snum].ps;
 
     p->inven_icon       = 0;
-    p->inv_amount[GET_BOOTS] = 0;
-    p->scuba_on =           0;
-    p->inv_amount[GET_SCUBA] =         0;
-    p->inv_amount[GET_HEATS]        = 0;
-    p->heat_on = 0;
-    p->jetpack_on =         0;
-    p->inv_amount[GET_JETPACK] =       0;
-    p->shield_amount =      g_startArmorAmount;
-    p->holoduke_on = -1;
-    p->inv_amount[GET_HOLODUKE] =    0;
-    p->inv_amount[GET_FIRSTAID] = 0;
-    p->inv_amount[GET_STEROIDS] = 0;
-    p->inven_icon = 0;
+    p->scuba_on         = 0;
+    p->heat_on          = 0;
+    p->jetpack_on       = 0;
+    p->shield_amount    = g_startArmorAmount;
+    p->holoduke_on      = -1;
+    p->inven_icon       = 0;
+
+    for (int i = 0; i < GET_MAX; i++)
+        p->inv_amount[i] = 0;
+
     X_OnEvent(EVENT_RESETINVENTORY, p->i, snum, -1);
 }
 
