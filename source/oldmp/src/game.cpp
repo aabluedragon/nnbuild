@@ -8273,7 +8273,7 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     if (*(++c) == 0) ud.multimode = 1;
                     else ud.multimode = atoi(c) % (MAXPLAYERS + 1);
 
-                    ud.m_coop = ud.coop = 0;
+                    //ud.m_coop = ud.coop = 0;
                     M_DMFLAGS_SET(DMFLAG_MARKERS | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNINVENTORY, true);
                     break;
                 }
