@@ -9099,15 +9099,7 @@ static int G_EndOfLevel(void)
                     ud.m_volume_number = ud.volume_number = 0;
 
                 if (GTFLAGS(GAMETYPE_COOP) && !DMFLAGS_TEST(DMFLAG_KEEPITEMSACROSSEPISODES))
-                {
-                    for (int ALL_PLAYERS(i))
-                    {
-                        P_ResetWeapons(i);
-                        P_ResetInventory(i);
-                    }
-
                     ud.last_level = -1; // Set last_level to -1 to force G_EnterLevel and its children to reset health and such.
-                }
             }
         }
     }

@@ -839,7 +839,8 @@ static void resetprestat(int snum,int g)
     p->one_parallax_sectnum     = -1;
     g_player[snum].display.visibility = ud.const_visibility;
 
-    if ((g&MODE_EOL) != MODE_EOL || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
+    // If we're not coming from another level (new game), or we're not preserving inventory, reset.
+    if (ud.last_level == -1 || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
     {
         P_ResetWeapons(snum);
         P_ResetInventory(snum);
