@@ -818,6 +818,8 @@ static void resetpremapglobals(void)
 
 static void resetprestat(int snum,int g)
 {
+    UNREFERENCED_PARAMETER(g);
+
     DukePlayer_t *p = g_player[snum].ps;
 
     p->hbomb_on                 = 0;
