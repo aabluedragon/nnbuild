@@ -6842,14 +6842,14 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 if (sprite[j].statnum == STAT_PLAYER && sprite[j].owner >= 0)
                 {
                     p = sprite[j].yvel;
-                    g_player[p].ps->pos.z += q;
-                    g_player[p].ps->truefz += q;
-                    g_player[p].ps->truecz += q;
+                    auto const pPlayer = g_player[p].ps;
+                    pPlayer->pos.z += q;
+                    pPlayer->truefz += q;
+                    pPlayer->truecz += q;
                 }
 
                 if (sprite[j].statnum != STAT_EFFECTOR)
                 {
-                    actor[j].bpos.z = sprite[j].z;
                     sprite[j].z += q;
                 }
 
@@ -6895,27 +6895,28 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 {
                     nextk = nextspritesect[k];
 
-                    if (sprite[k].statnum == 10 && sprite[k].owner >= 0)
+                    if (sprite[k].statnum == STAT_PLAYER && sprite[k].owner >= 0)
                     {
                         p = sprite[k].yvel;
+                        auto const pPlayer = g_player[p].ps;
 
-                        g_player[p].ps->pos.x += sprite[j].x-pSprite->x;
-                        g_player[p].ps->pos.y += sprite[j].y-pSprite->y;
+                        pPlayer->pos.x += sprite[j].x-pSprite->x;
+                        pPlayer->pos.y += sprite[j].y-pSprite->y;
 
-                        g_player[p].ps->pos.z = sector[sprite[j].sectnum].floorz-(pSector->floorz-g_player[p].ps->pos.z);
+                        pPlayer->pos.z = sector[sprite[j].sectnum].floorz-(pSector->floorz-pPlayer->pos.z);
 
                         actor[k].floorz = sector[sprite[j].sectnum].floorz;
                         actor[k].ceilingz = sector[sprite[j].sectnum].ceilingz;
 
-                        g_player[p].ps->bobposx = g_player[p].ps->opos.x = g_player[p].ps->pos.x;
-                        g_player[p].ps->bobposy = g_player[p].ps->opos.y = g_player[p].ps->pos.y;
+                        pPlayer->bobposx = pPlayer->opos.x = pPlayer->pos.x;
+                        pPlayer->bobposy = pPlayer->opos.y = pPlayer->pos.y;
 
-                        g_player[p].ps->truefz = actor[k].floorz;
-                        g_player[p].ps->truecz = actor[k].ceilingz;
-                        g_player[p].ps->bobcounter = 0;
+                        pPlayer->truefz = actor[k].floorz;
+                        pPlayer->truecz = actor[k].ceilingz;
+                        pPlayer->bobcounter = 0;
 
                         changespritesect(k,sprite[j].sectnum);
-                        g_player[p].ps->cursectnum = sprite[j].sectnum;
+                        pPlayer->cursectnum = sprite[j].sectnum;
                     }
                     else if (sprite[k].statnum != STAT_EFFECTOR)
                     {
