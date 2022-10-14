@@ -342,9 +342,9 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&show2dsector[0],sizeof(uint8_t),MAXSECTORS>>3,fil) != (MAXSECTORS>>3)) goto corrupt;
 
     if (kdfread(&g_numClouds,sizeof(g_numClouds),1,fil) != 1) goto corrupt;
-    if (kdfread(&clouds[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
-    if (kdfread(&cloudx[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
-    if (kdfread(&cloudy[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
+    if (kdfread(&g_cloudSect[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
+    if (kdfread(&g_cloudX,sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
+    if (kdfread(&g_cloudY,sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
 
     if (kdfread(&g_tile[0], sizeof(tiledata_t), MAXTILES, fil) != MAXTILES) goto corrupt;
     if (kdfread(&g_scriptSize,sizeof(g_scriptSize),1,fil) != 1) goto corrupt;
@@ -711,9 +711,9 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&show2dsector[0],sizeof(uint8_t),MAXSECTORS>>3,fil);
 
     dfwrite(&g_numClouds,sizeof(g_numClouds),1,fil);
-    dfwrite(&clouds[0],sizeof(int16_t)<<7,1,fil);
-    dfwrite(&cloudx[0],sizeof(int16_t)<<7,1,fil);
-    dfwrite(&cloudy[0],sizeof(int16_t)<<7,1,fil);
+    dfwrite(&g_cloudSect[0],sizeof(int16_t)<<7,1,fil);
+    dfwrite(&g_cloudX,sizeof(int16_t)<<7,1,fil);
+    dfwrite(&g_cloudY,sizeof(int16_t)<<7,1,fil);
 
     dfwrite(&g_tile[0], sizeof(tiledata_t), MAXTILES, fil);
     dfwrite(&g_scriptSize,sizeof(g_scriptSize),1,fil);

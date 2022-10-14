@@ -4677,9 +4677,9 @@ void G_SaveMapState(mapstate_t *save)
         Bmemcpy(&save->g_mirrorCount,&g_mirrorCount,sizeof(g_mirrorCount));
         Bmemcpy(&save->show2dsector[0],&show2dsector[0],sizeof(show2dsector));
         Bmemcpy(&save->g_numClouds,&g_numClouds,sizeof(g_numClouds));
-        Bmemcpy(&save->clouds[0],&clouds[0],sizeof(clouds));
-        Bmemcpy(&save->cloudx[0],&cloudx[0],sizeof(cloudx));
-        Bmemcpy(&save->cloudy[0],&cloudy[0],sizeof(cloudy));
+        Bmemcpy(&save->g_cloudSect[0],&g_cloudSect[0],sizeof(g_cloudSect));
+        Bmemcpy(&save->g_cloudX,&g_cloudX,sizeof(g_cloudX));
+        Bmemcpy(&save->g_cloudY,&g_cloudY,sizeof(g_cloudY));
 
         // OLDMP FIXME
         Bmemcpy(&save->g_pskyidx, &g_pskyidx, sizeof(g_pskyidx));
@@ -4771,9 +4771,9 @@ void G_RestoreMapState(mapstate_t *save)
         Bmemcpy(&g_mirrorCount,&save->g_mirrorCount,sizeof(g_mirrorCount));
         Bmemcpy(&show2dsector[0],&save->show2dsector[0],sizeof(show2dsector));
         Bmemcpy(&g_numClouds,&save->g_numClouds,sizeof(g_numClouds));
-        Bmemcpy(&clouds[0],&save->clouds[0],sizeof(clouds));
-        Bmemcpy(&cloudx[0],&save->cloudx[0],sizeof(cloudx));
-        Bmemcpy(&cloudy[0],&save->cloudy[0],sizeof(cloudy));
+        Bmemcpy(&g_cloudSect[0],&save->g_cloudSect[0],sizeof(g_cloudSect));
+        Bmemcpy(&g_cloudX,&save->g_cloudX,sizeof(g_cloudX));
+        Bmemcpy(&g_cloudY,&save->g_cloudY,sizeof(g_cloudY));
 
         // OLDMP FIXME
         Bmemcpy(&g_pskyidx, &save->g_pskyidx, sizeof(g_pskyidx));

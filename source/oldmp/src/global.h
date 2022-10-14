@@ -122,7 +122,9 @@ G_EXTERN int g_numLabels, g_numDefaultLabels;
 G_EXTERN char *label;
 
 // Clouds
-G_EXTERN short g_numClouds, clouds[128], cloudx[128], cloudy[128];
+G_EXTERN short g_numClouds, g_cloudSect[256];
+G_EXTERN int16_t g_cloudX;
+G_EXTERN int16_t g_cloudY;
 G_EXTERN ClockTicks cloudtotalclock;
 
 // Structs

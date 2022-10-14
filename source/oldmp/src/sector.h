@@ -30,7 +30,7 @@ typedef struct {
     vec2_t origins[2048];
     short g_mirrorWall[64], g_mirrorSector[64], g_mirrorCount;
     char show2dsector[(MAXSECTORS+7)>>3];
-    short g_numClouds,clouds[128],cloudx[128],cloudy[128];
+    short g_numClouds,g_cloudSect[256],g_cloudX,g_cloudY;
     int g_pskyidx;
     ActorData_t actor[MAXSPRITES];
     short pskyoff[MAXPSKYTILES], pskybits;

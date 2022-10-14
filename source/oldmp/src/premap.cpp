@@ -901,8 +901,8 @@ static void prelevel(char g)
 
         if (sector[i].ceilingstat&1)
         {
-            if (sector[i].ceilingpicnum == CLOUDYSKIES && g_numClouds < 127)
-                clouds[g_numClouds++] = i;
+            if (sector[i].ceilingpicnum == CLOUDYSKIES && g_numClouds < ARRAY_SIZE(g_cloudSect))
+                g_cloudSect[g_numClouds++] = i;
 
             for (ALL_PLAYERS(j))
             {

@@ -1776,20 +1776,20 @@ int _EnterText(int small,int x,int y,char *t,int dalen,int c)
 
 static inline void G_MoveClouds(void)
 {
-    if (totalclock > cloudtotalclock || totalclock < (cloudtotalclock-7))
+    if (totalclock <= cloudtotalclock && totalclock >= (cloudtotalclock - 7))
+        return;
+
+    int i;
+
+    cloudtotalclock = (int32_t)totalclock+6;
+
+    g_cloudX += (sintable[(fix16_to_int(g_player[screenpeek].ps->q16ang) + 512) & 2047] >> 9);
+    g_cloudY += (sintable[fix16_to_int(g_player[screenpeek].ps->q16ang) & 2047] >> 9);
+
+    for (i=g_numClouds-1;i>=0;i--)
     {
-        int i;
-
-        cloudtotalclock = (int32_t)totalclock+6;
-
-        for (i=g_numClouds-1;i>=0;i--)
-        {
-            cloudx[i] += (sintable[(fix16_to_int(g_player[screenpeek].ps->q16ang)+512)&2047]>>9);
-            cloudy[i] += (sintable[fix16_to_int(g_player[screenpeek].ps->q16ang)&2047]>>9);
-
-            sector[clouds[i]].ceilingxpanning = cloudx[i]>>6;
-            sector[clouds[i]].ceilingypanning = cloudy[i]>>6;
-        }
+        sector[g_cloudSect[i]].ceilingxpanning = g_cloudX >> 6;
+        sector[g_cloudSect[i]].ceilingypanning = g_cloudY >> 6;
     }
 }
 
