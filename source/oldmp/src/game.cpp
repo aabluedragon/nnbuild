@@ -6389,6 +6389,7 @@ char CheatStrings[][MAXCHEATLEN] =
     "debug",        // 24
     "<RESERVED>",   // 25
     "sfm",          // 26
+    "booti"         // 27
 };
 
 void G_CheatGetInv(void)
@@ -6685,6 +6686,23 @@ FOUNDCHEAT:
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
+
+                case CHEAT_BOOTI:
+                {
+                    bool enabled = DMFLAGS_TEST(DMFLAG_ALLOWDOUBLEKICK);
+                    
+                    if(!enabled)
+                        Bstrcpy(apStrings[QUOTE_RESERVED4], "Booti pls!");
+                    else
+                        Bstrcpy(apStrings[QUOTE_RESERVED4], "Binyot y do u not boot?");
+
+                    P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
+
+                    DMFLAGS_SET(DMFLAG_ALLOWDOUBLEKICK, !enabled);
+                    g_player[myconnectindex].ps->cheat_phase = 0;
+                    KB_FlushKeyboardQueue();
+                    return;
+                }
 
                 case CHEAT_STUFF:
 

@@ -244,6 +244,7 @@ enum cheats
     CHEAT_DEBUG,
     CHEAT_RESERVED3,
     CHEAT_SCREAMFORME,
+    CHEAT_BOOTI,
 };
 
 // NetDuke32 TO-DO: Move to cmdline.h when I get a chance.
