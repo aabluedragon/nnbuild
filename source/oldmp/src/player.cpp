@@ -579,7 +579,7 @@ static int P_DisplayTip(int tipShade, int playerNum)
     return 1;
 }
 
-static int P_DisplayAccessAnim(int gs,int snum)
+static int P_DisplayAccess(int gs,int snum)
 {
     auto const pSprite = g_player[snum].ps;
 
@@ -619,7 +619,7 @@ void P_DisplayWeapon(int snum)
     int32_t weaponShade = pSprite->shade <= 24 ? pSprite->shade : 24;
     int32_t weaponBits = pPlayer->weapon_pos == -9 || pPlayer->weapon_pos >= 10 - 1 ? 0 : RS_LERP;
 
-    if (P_DisplayFistAnim(weaponShade,snum) || P_DisplayKnuckleAnim(weaponShade,snum) || P_DisplayTip(weaponShade,snum) || P_DisplayAccessAnim(weaponShade,snum))
+    if (P_DisplayFistAnim(weaponShade,snum) || P_DisplayKnuckleAnim(weaponShade,snum) || P_DisplayTip(weaponShade,snum) || P_DisplayAccess(weaponShade,snum))
         return;
 
     P_DisplayKneeAnim(weaponShade,snum);
