@@ -2390,57 +2390,7 @@ void G_DisplayRest(int smoothratio)
 #endif
 
     G_PrintFPS();
-
-    // JBF 20040124: display level stats in screen corner
-    if ((ud.overhead_on != 2 && ud.levelstats) && (g_player[myconnectindex].ps->gm&MODE_MENU) == 0)
-    {
-        if (ud.screen_size == 4)
-        {
-            i = scale(ud.althud?tilesiz[BIGALPHANUM].y+10:tilesiz[INVENTORYBOX].y+2,ud.statusbarscale,100);
-//            j = scale(scale(6,ud.config.ScreenWidth,320),ud.statusbarscale,100);
-        }
-        else if (ud.screen_size > 2)
-        {
-            i = scale(tilesiz[BOTTOMSTATUSBAR].y+1,ud.statusbarscale,100);
-            //          j = scale(2,ud.config.ScreenWidth,320);
-        }
-        else
-        {
-            i = 2;
-            //        j = scale(2,ud.config.ScreenWidth,320);
-        }
-        j = scale(2,ud.config.ScreenWidth,320);
-
-        Bsprintf(tempbuf,"T:^15%d:%02d.%02d",
-                 (g_player[myconnectindex].ps->player_par/(26*60)),
-                 (g_player[myconnectindex].ps->player_par/26)%60,
-                 ((g_player[myconnectindex].ps->player_par%26)*38)/10
-                );
-        G_PrintGameText(13,STARTALPHANUM, j,scale(200-i,ud.config.ScreenHeight,200)-textsc(21),tempbuf,0,10,26,0, 0, xdim-1, ydim-1, 65536);
-
-        if (ud.player_skill > 3 || (ud.multimode > 1 && !GTFLAGS(GAMETYPE_PLAYERSFRIENDLY)))
-        {
-            Bsprintf(tempbuf, "K:^15%d", (ud.multimode > 1 && !GTFLAGS(GAMETYPE_PLAYERSFRIENDLY)) ?
-                     g_player[myconnectindex].ps->frag - g_player[myconnectindex].ps->fraggedself : ud.monsters_killed);
-        }
-        else
-        {
-            if (ud.monsters_killed >= ud.total_monsters)
-                Bsprintf(tempbuf,"K:%d/%d", ud.monsters_killed,
-                         ud.total_monsters > ud.monsters_killed ?
-                         ud.total_monsters : ud.monsters_killed);
-            else
-                Bsprintf(tempbuf,"K:^15%d/%d", ud.monsters_killed,
-                         ud.total_monsters > ud.monsters_killed ?
-                         ud.total_monsters : ud.monsters_killed);
-        }
-        G_PrintGameText(13,STARTALPHANUM, j,scale(200-i,ud.config.ScreenHeight,200)-textsc(14),tempbuf,0,10,26,0, 0, xdim-1, ydim-1, 65536);
-
-        if (g_player[myconnectindex].ps->secret_rooms == g_player[myconnectindex].ps->max_secret_rooms)
-            Bsprintf(tempbuf,"S:%d/%d", g_player[myconnectindex].ps->secret_rooms,g_player[myconnectindex].ps->max_secret_rooms);
-        else Bsprintf(tempbuf,"S:^15%d/%d", g_player[myconnectindex].ps->secret_rooms,g_player[myconnectindex].ps->max_secret_rooms);
-        G_PrintGameText(13,STARTALPHANUM, j,scale(200-i,ud.config.ScreenHeight,200)-textsc(7),tempbuf,0,10,26,0, 0, xdim-1, ydim-1, 65536);
-    }
+    G_DrawLevelStats();
 
     if (g_player[myconnectindex].ps->gm&MODE_TYPE)
         Net_EnterMessage();

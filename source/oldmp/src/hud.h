@@ -31,6 +31,7 @@ void G_SetStatusBarScale(int sc);
 void G_DrawFrags(void);
 void G_DrawInventory(DukePlayer_t* p);
 void G_DrawStatusBar(int snum);
+void G_DrawLevelStats();
 
 void G_GetCrosshairColor(void);
 void G_SetCrosshairColor(int32_t r, int32_t g, int32_t b);

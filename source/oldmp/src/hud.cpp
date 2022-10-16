@@ -1244,3 +1244,53 @@ void G_PrintLevelName(void)
             menutext_(160, 75, -g_levelTextTime + 22, 0, g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name, bits);
     }
 }
+
+void G_DrawLevelStats()
+{
+    if (!ud.levelstats || ud.overhead_on == 2 || (g_player[myconnectindex].ps->gm & MODE_MENU) != 0 || X_OnEventWithReturn(EVENT_DISPLAYLEVELSTATS, g_player[screenpeek].ps->i, screenpeek, 0) != 0)
+        return;
+
+    int x, y;
+    auto ps = g_player[screenpeek].ps;
+
+    // JBF 20040124: display level stats in screen corner
+    if (ud.screen_size == 4)
+        y = scale(ud.althud ? tilesiz[BIGALPHANUM].y + 10 : tilesiz[INVENTORYBOX].y + 2, ud.statusbarscale, 100);
+    else if (ud.screen_size > 2)
+        y = scale(tilesiz[BOTTOMSTATUSBAR].y + 1, ud.statusbarscale, 100);
+    else
+        y = 2;
+
+    x = scale(2, ud.config.ScreenWidth, 320);
+
+    Bsprintf(tempbuf, "T:^15%d:%02d.%02d",
+        (ps->player_par / (REALGAMETICSPERSEC * 60)),
+        (ps->player_par / REALGAMETICSPERSEC) % 60,
+        ((ps->player_par % REALGAMETICSPERSEC) * 33) / 10
+    );
+    G_PrintGameText(13, STARTALPHANUM, x, scale(200 - y, ud.config.ScreenHeight, 200) - textsc(21), tempbuf, 0, 10, 26, 0, 0, xdim - 1, ydim - 1, 65536);
+
+    if (ud.player_skill > 3 || (ud.multimode > 1 && !GTFLAGS(GAMETYPE_PLAYERSFRIENDLY)))
+    {
+        Bsprintf(tempbuf, "K:^15%d", (ud.multimode > 1 && !GTFLAGS(GAMETYPE_PLAYERSFRIENDLY)) ?
+            ps->frag - ps->fraggedself : ud.monsters_killed);
+    }
+    else
+    {
+        if (ud.monsters_killed >= ud.total_monsters)
+            Bsprintf(tempbuf, "K:%d/%d", ud.monsters_killed,
+                ud.total_monsters > ud.monsters_killed ?
+                ud.total_monsters : ud.monsters_killed);
+        else
+            Bsprintf(tempbuf, "K:^15%d/%d", ud.monsters_killed,
+                ud.total_monsters > ud.monsters_killed ?
+                ud.total_monsters : ud.monsters_killed);
+    }
+    G_PrintGameText(13, STARTALPHANUM, x, scale(200 - y, ud.config.ScreenHeight, 200) - textsc(14), tempbuf, 0, 10, 26, 0, 0, xdim - 1, ydim - 1, 65536);
+
+    if (ps->secret_rooms == ps->max_secret_rooms)
+        Bsprintf(tempbuf, "S:%d/%d", ps->secret_rooms, ps->max_secret_rooms);
+    else
+        Bsprintf(tempbuf, "S:^15%d/%d", ps->secret_rooms, ps->max_secret_rooms);
+    G_PrintGameText(13, STARTALPHANUM, x, scale(200 - y, ud.config.ScreenHeight, 200) - textsc(7), tempbuf, 0, 10, 26, 0, 0, xdim - 1, ydim - 1, 65536);
+}
