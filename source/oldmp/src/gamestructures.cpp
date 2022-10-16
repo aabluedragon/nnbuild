@@ -1071,6 +1071,15 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
         Gv_SetVar(lVar2, rotatesprite_yxaspect, g_i, g_p);
         return;
 
+    case USERDEFS_MONSTERS_KILLED:
+        if (iSet)
+        {
+            ud.monsters_killed = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, ud.monsters_killed, g_i, g_p);
+        return;
+
     default:
         return;
     }

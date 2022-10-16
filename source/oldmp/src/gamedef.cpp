@@ -953,6 +953,7 @@ const memberlabel_t UserdefsLabels[]=
     { "dmflags", USERDEFS_DMFLAGS, 0, 0 },
     { "m_dmflags", USERDEFS_M_DMFLAGS, 0, 0 },
     { "draw_yxaspect", USERDEFS_DRAW_YXASPECT, 0, 0 },
+    { "monsters_killed", USERDEFS_MONSTERS_KILLED, 0, 0 },
     { "", -1, 0, 0  }     // END OF LIST
 };
 
