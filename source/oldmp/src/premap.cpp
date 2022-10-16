@@ -818,8 +818,6 @@ static void resetpremapglobals(void)
 
 static void resetprestat(int snum,int g)
 {
-    UNREFERENCED_PARAMETER(g);
-
     DukePlayer_t *p = g_player[snum].ps;
 
     p->hbomb_on                 = 0;
@@ -841,8 +839,8 @@ static void resetprestat(int snum,int g)
     p->one_parallax_sectnum     = -1;
     g_player[snum].display.visibility = ud.const_visibility;
 
-    // If we're not coming from another level (new game), or we're not preserving inventory, reset.
-    if (ud.last_level == -1 || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
+    // If starting a new game, restarting a level, or we're not preserving inventory, reset weapons and inventory.
+    if (ud.last_level == -1 || ((g&MODE_RESTART) == MODE_RESTART) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
     {
         P_ResetWeapons(snum);
         P_ResetInventory(snum);
