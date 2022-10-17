@@ -9124,7 +9124,7 @@ static void G_DrawFrame()
         // Get rid of this once we have full actor prediction again.
         // And retarget slimer sprite to it's predicted version.
         auto slimerSprite = g_player[myconnectindex].ps->somethingonplayer;
-        if (slimerSprite > -1 && sprite[slimerSprite].picnum == GREENSLIME)
+        if (slimerSprite > -1 && sprite[slimerSprite].picnum >= GREENSLIME && sprite[slimerSprite].picnum <= (GREENSLIME+7))
         {
             vec3_t slimerPos = sprite[slimerSprite].xyz;
             int16_t slimerSect = sprite[slimerSprite].sectnum;
