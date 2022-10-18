@@ -586,6 +586,12 @@ static int P_DisplayAccess(int gs,int snum)
     if (pSprite->access_incs == 0)
         return 0;
 
+    switch (X_OnEventWithReturn(EVENT_DISPLAYACCESS, pSprite->i, screenpeek, 0))
+    {
+        case 1: return 1;
+        case -1: return 0;
+    }
+
     if ((unsigned)pSprite->access_incs >= ARRAY_SIZE(access_tip_y) - 4 || sprite[pSprite->i].extra <= 0)
         return 1;
 
