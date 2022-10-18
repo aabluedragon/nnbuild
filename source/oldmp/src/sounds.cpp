@@ -1228,6 +1228,26 @@ int A_CheckSoundPlaying(int spriteNum, int soundNum)
     return (spriteNum == -1) ? (snd->playing != 0) : 0;
 }
 
+// Check if actor <i> is playing any sound.
+int A_CheckAnySoundPlaying(int spriteNum)
+{
+    int const msp = g_highestSoundIdx;
+
+    for (int i = 0; i <= msp; ++i)
+    {
+        auto& snd = g_sounds[i];
+
+        if ((snd == &nullsound) | (snd->playing == 0))
+            continue;
+
+        for (int j = 0; j < MAXSOUNDINSTANCES; ++j)
+            if (bitmap_test(&snd->playing, j) && snd->voices[j].owner == spriteNum)
+                return 1;
+    }
+
+    return 0;
+}
+
 int S_CheckSoundPlaying(int soundNum)
 {
     if (EDUKE32_PREDICT_FALSE((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return false;

@@ -84,6 +84,7 @@ void S_PrecacheSounds(void);
 
 // Sound state checking
 int A_CheckSoundPlaying(int spriteNum, int soundNum);
+int A_CheckAnySoundPlaying(int spriteNum);
 int S_CheckSoundPlaying(int soundNum);
 
 // Sound Playback

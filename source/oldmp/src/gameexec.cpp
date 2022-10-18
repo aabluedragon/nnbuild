@@ -3249,6 +3249,7 @@ static int X_DoExecute(void)
             {
                 int var1 = Gv_GetVarX(*insptr++), var2 = Gv_GetVarX(*insptr++);
                 int var3 = Gv_GetVarX(*insptr++), var4 = Gv_GetVarX(*insptr++);
+
                 Bstrcpy(tempbuf,apStrings[sq]);
                 Bsprintf(apStrings[dq],tempbuf,var1,var2,var3,var4);
                 break;
@@ -4433,11 +4434,7 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFNOSOUNDS:
-        for (j=MAXSOUNDS-1;j>=0;j--)
-            if (g_sounds[j]->voices[0].owner == g_i)
-                break;
-
-        X_DoConditional(j < 0);
+        X_DoConditional(!A_CheckAnySoundPlaying(g_i));
         break;
 
     case CON_SPRITEFLAGS:
