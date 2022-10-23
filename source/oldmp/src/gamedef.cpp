@@ -495,6 +495,7 @@ const tokenmap_t vm_keywords[] =
     { "screentext",             CON_SCREENTEXT },
     { "return",                 CON_RETURN },
     { "actorsound",             CON_ACTORSOUND },
+    { "stopactorsound",         CON_STOPACTORSOUND },
     { "rotatespritea",          CON_ROTATESPRITEA },
     { "damageeventtile",        CON_DAMAGEEVENTTILE },
     { "damageeventtilerange",   CON_DAMAGEEVENTTILERANGE },
@@ -4658,6 +4659,7 @@ repeatcase:
     case CON_PREVSPRITESECT:
     case CON_NEXTSPRITESECT:
     case CON_ACTORSOUND:
+    case CON_STOPACTORSOUND:
         C_GetManyVars(2);
         return 0;
     case CON_QSTRDIM:

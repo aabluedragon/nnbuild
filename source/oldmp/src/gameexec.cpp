@@ -1194,6 +1194,25 @@ static int X_DoExecute(void)
         insptr++;
         break;
 
+    case CON_STOPACTORSOUND:
+        insptr++;
+        {
+            int const spriteNum = Gv_GetVarX(*insptr++);
+            int const soundNum = Gv_GetVarX(*insptr++);
+
+            if (((unsigned)soundNum > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), soundNum);
+                insptr++;
+                break;
+            }
+
+            if (A_CheckSoundPlaying(spriteNum, soundNum))
+                S_StopEnvSound(soundNum, spriteNum);
+
+            break;
+        }
+
     case CON_ACTORSOUND:
         insptr++;
         {
