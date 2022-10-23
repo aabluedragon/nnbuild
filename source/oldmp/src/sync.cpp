@@ -350,7 +350,7 @@ void Net_AddSyncInfoToPacket(int *j)
     auto p = &g_player[myconnectindex];
     int32_t const tickNum = (myconnectindex == connecthead) ? movefifoplc-1 : movefifoplc;
     
-    if(tickNum == p->lastSyncTick) // Already sent this one.
+    if(tickNum == p->lastSyncTick || g_gameQuit) // Already sent this one, or disconnecting.
     {
         B_BUF32(&packbuf[(*j)], -1);
         (*j) += sizeof(int32_t);
