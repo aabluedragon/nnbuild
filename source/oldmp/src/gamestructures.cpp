@@ -2179,6 +2179,15 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
         Gv_SetVar(lVar2, g_player[iPlayer].ps->rotscrnang, g_i, g_p);
         return;
 
+    case PLAYER_OROTSCRNANG:
+        if (iSet)
+        {
+            g_player[iPlayer].ps->orotscrnang = lValue;
+            return;
+        }
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->orotscrnang, g_i, g_p);
+        return;
+
     case PLAYER_DEAD_FLAG:
         if (iSet)
         {

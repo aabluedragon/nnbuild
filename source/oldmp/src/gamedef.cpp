@@ -749,6 +749,7 @@ const memberlabel_t PlayerLabels[]=
     { "weapreccnt", PLAYER_WEAPRECCNT, 0, 0 },
     { "interface_toggle_flag", PLAYER_INTERFACE_TOGGLE_FLAG, 0, 0 },
     { "rotscrnang", PLAYER_ROTSCRNANG, 0, 0 },
+    { "orotscrnang", PLAYER_OROTSCRNANG, 0, 0 },
     { "dead_flag", PLAYER_DEAD_FLAG, 0, 0 },
     { "show_empty_weapon", PLAYER_SHOW_EMPTY_WEAPON, 0, 0 },
     { "scuba_amount", PLAYER_SCUBA_AMOUNT, 0, 0 },
