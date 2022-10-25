@@ -2900,6 +2900,8 @@ void P_ProcessInput(int snum)
     int doubvel;
     bool doFloatbob = false;
 
+    p->orotscrnang = p->rotscrnang;
+
     X_OnEvent(EVENT_PROCESSINPUT, playerSprite, snum, -1);
 
     if (p->cheat_phase > 0)
@@ -3068,7 +3070,6 @@ void P_ProcessInput(int snum)
 
         if (floorZ > ceilZ + (16 << 8) && s->pal != 1)
         {
-            p->orotscrnang = p->rotscrnang;
             p->rotscrnang = (p->dead_flag + ((floorZ + p->pos.z) >> 7)) & 2047;
         }
 
@@ -3100,7 +3101,6 @@ void P_ProcessInput(int snum)
 
     doubvel = TICSPERFRAME;
 
-    p->orotscrnang = p->rotscrnang;
     if (p->rotscrnang)
     {
         p->rotscrnang -= (p->rotscrnang >> 1);
