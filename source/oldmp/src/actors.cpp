@@ -8154,6 +8154,8 @@ static void G_RecordOldPlayerPos(void)
 
 void G_MoveWorld(void)
 {
+    X_OnEvent(EVENT_PREWORLD, -1, -1, 0);
+
     if (VM_HaveEvent(EVENT_PREGAME))
     {
         int i, p, j, k = MAXSTATUS - 1, pl;
@@ -8199,6 +8201,8 @@ void G_MoveWorld(void)
     G_MoveEffectors();        //ST 3
 
     G_MoveStandables();       //ST 6
+
+    X_OnEvent(EVENT_WORLD, -1, -1, 0);
 
     if (VM_HaveEvent(EVENT_GAME))
     {
