@@ -500,13 +500,14 @@ static int osdcmd_vidmode(const osdfuncparm_t *parm)
 
 static int osdcmd_spawn(const osdfuncparm_t *parm)
 {
-    int x=0,y=0,z=0;
-    unsigned short cstat=0,picnum=0;
-    unsigned char pal=0;
-    short ang=0;
-    short set=0, idx;
+    auto pPlayer = g_player[myconnectindex].ps;
+    vec3_t pos;
+    int32_t cstat = 0, picnum = 0;
+    int8_t pal = 0;
+    int16_t ang = 0;
+    int16_t set = 0;
 
-    if (numplayers > 1 || !(g_player[myconnectindex].ps->gm & MODE_GAME))
+    if (numplayers > 1 || !(pPlayer->gm & MODE_GAME))
     {
         OSD_Printf("spawn: Can't spawn sprites in multiplayer games or demos\n");
         return OSDCMD_OK;
@@ -515,9 +516,9 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
     switch (parm->numparms)
     {
     case 7: // x,y,z
-        x = Batol(parm->parms[4]);
-        y = Batol(parm->parms[5]);
-        z = Batol(parm->parms[6]);
+        pos.x = Batol(parm->parms[4]);
+        pos.y = Batol(parm->parms[5]);
+        pos.z = Batol(parm->parms[6]);
         set |= 8;
         fallthrough__;
     case 4: // ang
@@ -539,23 +540,23 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
         }
         else
         {
-            int i,j;
-            for (j=0; j<2; j++)
+            int i, j;
+            for (j = 0; j < 2; j++)
             {
-                for (i=0; i<g_numLabels; i++)
+                for (i = 0; i < g_numLabels; i++)
                 {
                     if (
-                        (j == 0 && !Bstrcmp(label+(i<<6),     parm->parms[0])) ||
-                        (j == 1 && !Bstrcasecmp(label+(i<<6), parm->parms[0]))
-                    )
+                        (j == 0 && !Bstrcmp(label + (i << 6), parm->parms[0])) ||
+                        (j == 1 && !Bstrcasecmp(label + (i << 6), parm->parms[0]))
+                        )
                     {
                         picnum = (unsigned short)labelcode[i];
                         break;
                     }
                 }
-                if (i<g_numLabels) break;
+                if (i < g_numLabels) break;
             }
-            if (i==g_numLabels)
+            if (i == g_numLabels)
             {
                 OSD_Printf("spawn: Invalid tile label given\n");
                 return OSDCMD_OK;
@@ -572,13 +573,13 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
         return OSDCMD_SHOWHELP;
     }
 
-    idx = A_Spawn(g_player[myconnectindex].ps->i, (short)picnum);
-    if (set & 1) sprite[idx].pal = (char)pal;
-    if (set & 2) sprite[idx].cstat = (short)cstat;
+    int32_t idx = A_Spawn(pPlayer->i, picnum);
+    if (set & 1) sprite[idx].pal = pal;
+    if (set & 2) sprite[idx].cstat = cstat;
     if (set & 4) sprite[idx].ang = ang;
     if (set & 8)
     {
-        if (setspritez_old(idx, x,y,z) < 0)
+        if (setspritez(idx, &pos) < 0)
         {
             OSD_Printf("spawn: Sprite can't be spawned into null space\n");
             A_DeleteSprite(idx);
