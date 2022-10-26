@@ -1228,7 +1228,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
 
     if (w < 0) return 0;
 
-    if (switchtype == 1) // A wall sprite
+    if (switchtype == 1) // A sprite
     {
         lotag = sprite[w].lotag;
         if (lotag == 0) return 0;
@@ -1238,7 +1238,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         picnum = sprite[w].picnum;
         switchpal = sprite[w].pal;
     }
-    else
+    else // A wall
     {
         lotag = wall[w].lotag;
         if (lotag == 0) return 0;
@@ -1248,6 +1248,10 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         picnum = wall[w].picnum;
         switchpal = wall[w].pal;
     }
+
+    if (X_OnEventWithReturn(EVENT_ACTIVATESWITCH, w, snum, switchtype) == -1)
+        return 0;
+
     //     LOG_F("P_ActivateSwitch called picnum=%i switchtype=%i\n",picnum,switchtype);
     switchpicnum = picnum;
     if ((picnum==DIPSWITCH+1)
@@ -3296,6 +3300,7 @@ static void P_DoSectorInteractions(int32_t playerNum)
         case -1:
             for (ALL_PLAYERS(i))
                 g_player[i].ps->gm = MODE_EOL;
+
             sector[p->cursectnum].lotag = 0;
             if (ud.from_bonus)
             {
