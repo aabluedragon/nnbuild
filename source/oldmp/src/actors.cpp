@@ -652,8 +652,6 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
 
     if (isEnemy)
     {
-        
-
         if (sprite[spritenum].xrepeat > 60)
             retval = clipmove_old(&sprite[spritenum].x,&sprite[spritenum].y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),1024L,(4<<8),(4<<8),cliptype);
         else
@@ -8121,13 +8119,6 @@ static void G_RecordOldSpritePos(void)
     int statNum = 0;
     do
     {
-        // Delay until a later point. Fixes a problem where SE7 and Touchplates cannot be activated concurrently.
-        if (statNum == STAT_PLAYER)
-        {
-            statNum++;
-            continue;
-        }
-
         int spriteNum = headspritestat[statNum++];
 
         while (spriteNum >= 0)
@@ -8138,20 +8129,6 @@ static void G_RecordOldSpritePos(void)
             spriteNum = nextSprite;
         }
     } while (statNum < MAXSTATUS);
-}
-
-// Remainder of G_RecordOldSpritePos()
-static void G_RecordOldPlayerPos(void)
-{
-    int spriteNum = headspritestat[STAT_PLAYER];
-
-    while (spriteNum >= 0)
-    {
-        int const nextSprite = nextspritestat[spriteNum];
-        actor[spriteNum].bpos = sprite[spriteNum].xyz;
-
-        spriteNum = nextSprite;
-    }
 }
 
 void G_MoveWorld(void)
@@ -8191,18 +8168,17 @@ void G_MoveWorld(void)
 
     G_MoveZombieActors();     //ST 2
     G_MoveWeapons();          //ST 4
+
+    G_MoveStandables();       //ST 6
     G_MoveTransports();       //ST 9
 
     G_MovePlayers();          //ST 10
-    G_RecordOldPlayerPos();
 
     G_MoveFallers();          //ST 12
     G_MoveMisc();             //ST 5
 
     G_MoveActors();           //ST 1
     G_MoveEffectors();        //ST 3
-
-    G_MoveStandables();       //ST 6
 
     X_OnEvent(EVENT_WORLD, -1, -1, 0);
 
