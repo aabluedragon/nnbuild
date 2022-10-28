@@ -1319,13 +1319,8 @@ void Net_CorrectPrediction(void)
     // Check if pos is different from opos, if so, restore predicted opos.
     // This is to prevent jitter from moving sectors & corrected mispredictions,
     // while preventing teleports from being interp'd.
-    if ((p->opos.x != p->pos.x) ||
-        (p->opos.y != p->pos.y) ||
-        (p->opos.z != p->pos.z)
-        )
-    {
+    if (p->opos != p->pos)
         predictedPlayer.opos = opos;
-    }
     
     if(p->oq16ang != p->q16ang)
         predictedPlayer.oq16ang = oq16ang;
