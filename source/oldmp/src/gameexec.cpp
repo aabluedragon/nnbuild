@@ -326,7 +326,7 @@ void A_GetZLimits(int iActor)
             lz &= (MAXSPRITES-1);
             if (A_CheckEnemySprite(&sprite[lz]) && sprite[lz].pal != 1)
             {
-                if (s->statnum != 4)
+                if (s->statnum != STAT_PROJECTILE)
                 {
                     actor[iActor].dispicnum = -4; // No shadows on actors
                     s->xvel = -256;
@@ -500,10 +500,9 @@ static void X_Move(void)
 
     if (g_t[1] == 0 || a == 0)
     {
-        if (deadflag || (actor[g_i].bpos.x != g_sp->x) || (actor[g_i].bpos.y != g_sp->y))
-        {
+        if (deadflag || (actor[g_i].bpos.xy != g_sp->xy))
             setsprite(g_i, &g_sp->xyz);
-        }
+
         return;
     }
 
@@ -561,7 +560,8 @@ static void X_Move(void)
     if (g_sp->picnum != APLAYER)
         X_AlterAng(a);
 
-    if (g_sp->xvel > -6 && g_sp->xvel < 6) g_sp->xvel = 0;
+    if (g_sp->xvel > -6 && g_sp->xvel < 6)
+        g_sp->xvel = 0;
 
     int isEnemy = A_CheckEnemySprite(g_sp);
 
@@ -662,8 +662,7 @@ static void X_Move(void)
             }
         }
 
-        actor[g_i].movflag = A_MoveSprite(g_i,
-                                               (daxvel*(sintable[(angdif+512)&2047]))>>14,
+        actor[g_i].movflag = A_MoveSprite(g_i, (daxvel*(sintable[(angdif+512)&2047]))>>14,
                                                (daxvel*(sintable[angdif&2047]))>>14,g_sp->zvel, (a & noclip) ? 0 : CLIPMASK0);
     }
 
@@ -1314,9 +1313,11 @@ static int X_DoExecute(void)
                 else if (g_sp->zvel > 2048 && sector[g_sp->sectnum].lotag != ST_1_ABOVE_WATER)
                 {
                     j = g_sp->sectnum;
-                    pushmove_old(&g_sp->x, &g_sp->y, &g_sp->z, (short*)&j, 128L, (4L << 8), (4L << 8), CLIPMASK0);
+                    pushmove(&g_sp->xyz, (short*)&j, 128L, (4L << 8), (4L << 8), CLIPMASK0);
+
                     if (j != g_sp->sectnum && j >= 0 && j < MAXSECTORS)
                         changespritesect(g_i, j);
+
                     A_PlaySound(THUD, g_i);
                 }
             }

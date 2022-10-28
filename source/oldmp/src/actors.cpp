@@ -690,7 +690,9 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
             if (dasectnum < 0) dasectnum = 0;
             return (16384+dasectnum);
         }
-        if ((retval&49152) >= 32768 && (actor[spritenum].cgg==0)) sprite[spritenum].ang += 768;
+
+        if ((retval&49152) >= 32768 && (actor[spritenum].cgg==0))
+            sprite[spritenum].ang += 768;
     }
     else
     {
@@ -1364,7 +1366,7 @@ void G_MovePlayerSprite(int playerNum)
 
         actor[p->i].bpos.z = s->z = p->opos.z + PHEIGHT;
         s->ang = fix16_to_int(p->oq16ang);
-        setspritez_old(p->i, s->x, s->y, s->z);
+        setspritez(p->i, &s->xyz);
     }
     else
     {
