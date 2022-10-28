@@ -3120,8 +3120,7 @@ void P_ProcessInput(int snum)
         p->q16horizoff = 0;
 
         updatesector(p->pos.x, p->pos.y, &p->cursectnum);
-
-        pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, 128L, (4L << 8), PLAYER_STEP_HEIGHT, CLIPMASK0);
+        pushmove(&p->pos, &p->cursectnum, 128, (4L << 8), PLAYER_STEP_HEIGHT, CLIPMASK0);
 
         if (floorZ > ceilZ + (16 << 8) && s->pal != 1)
         {
@@ -3238,6 +3237,10 @@ void P_ProcessInput(int snum)
         p->one_eighty_count += 128;
         p->q16ang += F16(128);
     }
+
+    updatesector(p->pos.x, p->pos.y, &p->cursectnum);
+    if (!ud.noclip)
+        pushmove(&p->pos, &p->cursectnum, PLAYER_WALLDIST, (4L << 8), PLAYER_STEP_HEIGHT, CLIPMASK0);
 
     // Shrinking code
 
@@ -3723,25 +3726,26 @@ HORIZONLY:
     else
     {
         int const playerSectNum = p->cursectnum;
-        int16_t   ceilingBunch, floorBunch;
-
-        if (playerSectNum >= 0)
-            yax_getbunches(playerSectNum, &ceilingBunch, &floorBunch);
-
+        
         // This updatesectorz conflicts with Duke3D's way of teleporting through water,
         // so make it a bit conditional... OTOH, this way we have an ugly z jump when
         // changing from above water to underwater
-
-        if ((playerSectNum >= 0 && !(sector[playerSectNum].lotag == ST_1_ABOVE_WATER && p->on_ground && floorBunch >= 0))
-            && ((floorBunch >= 0 && !(sector[playerSectNum].floorstat & 512))
-                || (ceilingBunch >= 0 && !(sector[playerSectNum].ceilingstat & 512))))
+        if (playerSectNum >= 0)
         {
-            p->cursectnum += MAXSECTORS;  // skip initial z check, restored by updatesectorz
-            updatesectorz(p->pos.x, p->pos.y, p->pos.z, &p->cursectnum);
+            int16_t   ceilingBunch, floorBunch;
+            yax_getbunches(playerSectNum, &ceilingBunch, &floorBunch);
+
+            if (
+                (floorBunch >= 0 && !(sector[playerSectNum].floorstat & 512) && !(sector[playerSectNum].lotag == ST_1_ABOVE_WATER && p->on_ground))
+                || (ceilingBunch >= 0 && !(sector[playerSectNum].ceilingstat & 512))
+               )
+            {
+                p->cursectnum += MAXSECTORS;  // skip initial z check, restored by updatesectorz
+                updatesectorz(p->pos.x, p->pos.y, p->pos.z, &p->cursectnum);
+            }
         }
 
-        int moveResult = clipmove_old(&p->pos.x, &p->pos.y,
-            &p->pos.z, &p->cursectnum,
+        int moveResult = clipmove(&p->pos, &p->cursectnum,
             p->vel.x, p->vel.y, PLAYER_WALLDIST, PMINHEIGHT, (sectorLotag == ST_1_ABOVE_WATER || p->spritebridge == 1) ? (4L << 8) : PLAYER_STEP_HEIGHT, CLIPMASK0);
 
         if (p->jetpack_on == 0 && sectorLotag != ST_2_UNDERWATER && sectorLotag != ST_1_ABOVE_WATER && shrunk)
@@ -3769,9 +3773,16 @@ HORIZONLY:
     }
 
     // RBG***
-    setspritez_old(playerSprite, p->pos.x, p->pos.y, p->pos.z + PHEIGHT);
+    if (p->cursectnum >= 0)
+    {
+        sprite[p->i].xyz = p->pos;
+        sprite[p->i].z += PHEIGHT;
 
-    if (p->cursectnum >= 0 && sectorLotag < 3)
+        if (p->cursectnum != s->sectnum)
+            changespritesect(p->i, p->cursectnum);
+    }
+
+    if (p->cursectnum >= 0 && sectorLotag < ST_3)
     {
         auto const pSector = (usectorptr_t)&sector[p->cursectnum];
 
@@ -3788,14 +3799,11 @@ HORIZONLY:
         if (!A_CheckSoundPlaying(playerSprite, DUKE_ONWATER))
             A_PlaySound(DUKE_ONWATER, playerSprite);
 
-    if (p->cursectnum != s->sectnum)
-        changespritesect(playerSprite, p->cursectnum);
-
     p->on_warping_sector = 0;
 
     int mashedPotato = 0;
     if (!ud.noclip)
-        mashedPotato = ((pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, PLAYER_WALLDIST, (4L << 8), (4L << 8), CLIPMASK0) < 0) && (A_GetFurthestAngle(p->i, 8) < 512));
+        mashedPotato = ((pushmove(&p->pos, &p->cursectnum, PLAYER_WALLDIST, (4L << 8), (4L << 8), CLIPMASK0) < 0) && (A_GetFurthestAngle(p->i, 8) < 512));
 
     if (!ud.noclip)
     {
