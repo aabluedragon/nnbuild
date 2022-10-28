@@ -6569,10 +6569,10 @@ FOUNDCHEAT:
                     break;
 
                 case CHEAT_CLIP:
-                    ud.clipping = 1-ud.clipping;
+                    ud.noclip = 1-ud.noclip;
                     KB_FlushKeyboardQueue();
                     g_player[myconnectindex].ps->cheat_phase = 0;
-                    P_DoQuote(QUOTE_CHEAT_NOCLIP-!ud.clipping,g_player[myconnectindex].ps);
+                    P_DoQuote(QUOTE_CHEAT_NOCLIP-!ud.noclip,g_player[myconnectindex].ps);
                     return;
 
                 case CHEAT_RESERVED2:
@@ -9844,7 +9844,7 @@ static int G_OpenDemoRead(int g_whichDemo) // 0 = mine
     OSD_Printf("demo duration: %d min %d sec\n", i/60, i%60);
 
     ud.god = ud.cashman = ud.eog = ud.showallmap = 0;
-    ud.clipping = ud.scrollmode = ud.overhead_on = ud.pause_on = 0;
+    ud.noclip = ud.scrollmode = ud.overhead_on = ud.pause_on = 0;
 
     G_MakeNewGamePreparations(ud.volume_number,ud.level_number,ud.player_skill);
     return(1);

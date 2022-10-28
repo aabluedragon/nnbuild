@@ -3160,7 +3160,7 @@ void P_ProcessInput(int snum)
     if (p->on_ground)
         p->bobcounter += sprite[playerSprite].xvel >> 1;
 
-    if (ud.clipping == 0 && (sector[p->cursectnum].floorpicnum == MIRROR || p->cursectnum < 0 || p->cursectnum >= MAXSECTORS))
+    if (ud.noclip == 0 && (sector[p->cursectnum].floorpicnum == MIRROR || p->cursectnum < 0 || p->cursectnum >= MAXSECTORS))
     {
         p->pos.x = p->opos.x;
         p->pos.y = p->opos.y;
@@ -3708,7 +3708,7 @@ HORIZONLY:
     //if (p->cursectnum >= 0 && sector[p->cursectnum].lotag == ST_2_UNDERWATER) k = 0;
     //else k = 1;
 
-    if (ud.clipping)
+    if (ud.noclip)
     {
         p->pos.x += p->vel.x >> 14;
         p->pos.y += p->vel.y >> 14;
@@ -3771,7 +3771,7 @@ HORIZONLY:
         auto const pSector = (usectorptr_t)&sector[p->cursectnum];
 
         // TRAIN_SECTOR_TO_SE_INDEX
-        if ((!ud.clipping && pSector->lotag == ST_31_TWO_WAY_TRAIN) &&
+        if ((!ud.noclip && pSector->lotag == ST_31_TWO_WAY_TRAIN) &&
             ((unsigned)pSector->hitag < MAXSPRITES && sprite[pSector->hitag].xvel && actor[pSector->hitag].t_data[0] == 0))
         {
             P_QuickKill(p);
@@ -3789,10 +3789,10 @@ HORIZONLY:
     p->on_warping_sector = 0;
 
     int mashedPotato = 0;
-    if (ud.clipping == 0)
+    if (!ud.noclip)
         mashedPotato = ((pushmove_old(&p->pos.x, &p->pos.y, &p->pos.z, &p->cursectnum, PLAYER_WALLDIST, (4L << 8), (4L << 8), CLIPMASK0) < 0) && (A_GetFurthestAngle(p->i, 8) < 512));
 
-    if (ud.clipping == 0)
+    if (!ud.noclip)
     {
         if (klabs(actor[playerSprite].floorz - actor[playerSprite].ceilingz) < (48 << 8) || mashedPotato)
         {

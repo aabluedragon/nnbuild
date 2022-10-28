@@ -201,10 +201,10 @@ static inline void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2
     case USERDEFS_CLIPPING:
         if (iSet)
         {
-            ud.clipping = lValue;
+            ud.noclip = lValue;
             return;
         }
-        Gv_SetVar(lVar2, ud.clipping, g_i, g_p);
+        Gv_SetVar(lVar2, ud.noclip, g_i, g_p);
         return;
 
         //  case USERDEFS_USER_NAME:

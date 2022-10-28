@@ -5939,13 +5939,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                 {
-                    if (ud.clipping == 0 && pSprite->xvel >= 192)
+                    if (ud.noclip == 0 && pSprite->xvel >= 192)
                         for (ALL_PLAYERS(p))
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
                             updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&k);
-                            if ((k == -1 && ud.clipping == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
+                            if ((k == -1 && ud.noclip == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
                             {
                                 g_player[p].ps->pos.x = pSprite->x;
                                 g_player[p].ps->pos.y = pSprite->y;
@@ -6026,13 +6026,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                 {
-                    if (ud.clipping == 0 && pSprite->xvel >= 192)
+                    if (ud.noclip == 0 && pSprite->xvel >= 192)
                         for (ALL_PLAYERS(p))
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
                             updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&k);
-                            if ((k == -1 && ud.clipping == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
+                            if ((k == -1 && ud.noclip == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
                             {
                                 g_player[p].ps->opos.x = g_player[p].ps->pos.x = pSprite->x;
                                 g_player[p].ps->opos.y = g_player[p].ps->pos.y = pSprite->y;
@@ -6125,13 +6125,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 x = (pSprite->xvel*sintable[pSprite->ang&2047])>>14;
 
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
-                    if (ud.clipping == 0)
+                    if (ud.noclip == 0)
                         for (ALL_PLAYERS(p))
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
                             updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&k);
-                            if ((k == -1 && ud.clipping == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
+                            if ((k == -1 && ud.noclip == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
                             {
                                 g_player[p].ps->pos.x = pSprite->x;
                                 g_player[p].ps->pos.y = pSprite->y;
@@ -6183,13 +6183,13 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                 if ((pSector->floorz-pSector->ceilingz) < (108<<8))
                 {
-                    if (ud.clipping == 0)
+                    if (ud.noclip == 0)
                         for (ALL_PLAYERS(p))
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
                             updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&k);
-                            if ((k == -1 && ud.clipping == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
+                            if ((k == -1 && ud.noclip == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
                             {
                                 g_player[p].ps->pos.x = pSprite->x;
                                 g_player[p].ps->pos.y = pSprite->y;
