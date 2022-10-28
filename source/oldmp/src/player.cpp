@@ -2880,6 +2880,61 @@ static void P_CheckTouchDamage(DukePlayer_t* p, int j)
     }
 }
 
+static void P_DoJetpack(int const playerNum, int const playerBits, int const playerShrunk, int const sectorLotag, int const floorZ)
+{
+    auto p = g_player[playerNum].ps;
+
+    p->on_ground = 0;
+    p->jumping_counter = 0;
+    p->hard_landing = 0;
+    p->falling_counter = 0;
+
+    if (p->jetpack_on < 11)
+    {
+        p->jetpack_on++;
+        p->pos.z -= (p->jetpack_on << 7); //Goin up
+    }
+    else if (p->jetpack_on == 11 && !A_CheckSoundPlaying(p->i, DUKE_JETPACK_IDLE))
+        A_PlaySound(DUKE_JETPACK_IDLE, p->i);
+
+    int const zAdjust = playerShrunk ? 512 : 2048;
+
+    if (TEST_SYNC_KEY(playerBits, SK_JUMP))         //A (soar high)
+    {
+        // jump
+        Gv_SetVar(sysVarIDs.RETURN, 0, p->i, playerNum);
+        X_OnEvent(EVENT_SOARUP, p->i, playerNum, -1);
+        if (Gv_GetVar(sysVarIDs.RETURN, p->i, playerNum) == 0)
+        {
+            p->pos.z -= zAdjust;
+            p->crack_time = 777;
+        }
+    }
+
+    if (TEST_SYNC_KEY(playerBits, SK_CROUCH))   //Z (soar low)
+    {
+        // crouch
+        Gv_SetVar(sysVarIDs.RETURN, 0, p->i, playerNum);
+        X_OnEvent(EVENT_SOARDOWN, p->i, playerNum, -1);
+        if (Gv_GetVar(sysVarIDs.RETURN, p->i, playerNum) == 0)
+        {
+            p->pos.z += zAdjust;
+            p->crack_time = 777;
+        }
+    }
+
+    int const Zdiff = (playerShrunk == 0 && (sectorLotag == ST_0_NO_EFFECT || sectorLotag == ST_2_UNDERWATER)) ? 32 : 16;
+
+    if (sectorLotag != ST_2_UNDERWATER && p->scuba_on == 1)
+        p->scuba_on = 0;
+
+    if (p->pos.z > (floorZ - (Zdiff << 8)))
+        p->pos.z += ((floorZ - (Zdiff << 8)) - p->pos.z) >> 1;
+
+    if (p->pos.z < (actor[p->i].ceilingz + (18 << 8)))
+        p->pos.z = actor[p->i].ceilingz + (18 << 8);
+}
+
 void P_ProcessInput(int snum)
 {
     DukePlayer_t* p = g_player[snum].ps;
@@ -2909,7 +2964,7 @@ void P_ProcessInput(int snum)
 
     if (p->cursectnum == -1)
     {
-        if (s->extra > 0 && ud.clipping == 0)
+        if (s->extra > 0 && ud.noclip == 0)
         {
             P_QuickKill(p);
             A_PlaySound(SQUISHED, playerSprite);
@@ -3177,7 +3232,6 @@ void P_ProcessInput(int snum)
     p->opos.z = p->pos.z;
     p->opyoff = p->pyoff;
     p->oq16ang = p->q16ang;
-    //p->orotscrnang = p->rotscrnang;
 
     if (p->one_eighty_count < 0)
     {
@@ -3274,57 +3328,8 @@ void P_ProcessInput(int snum)
     }
     else if (p->jetpack_on)
     {
-        p->on_ground = 0;
-        p->jumping_counter = 0;
-        p->hard_landing = 0;
-        p->falling_counter = 0;
-
         doFloatbob = true;
-
-        if (p->jetpack_on < 11)
-        {
-            p->jetpack_on++;
-            p->pos.z -= (p->jetpack_on << 7); //Goin up
-        }
-        else if (p->jetpack_on == 11 && !A_CheckSoundPlaying(playerSprite, DUKE_JETPACK_IDLE))
-            A_PlaySound(DUKE_JETPACK_IDLE, playerSprite);
-
-        int const zAdjust = shrunk ? 512 : 2048;
-
-        if (TEST_SYNC_KEY(playerBits, SK_JUMP))         //A (soar high)
-        {
-            // jump
-            Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
-            X_OnEvent(EVENT_SOARUP, playerSprite, snum, -1);
-            if (Gv_GetVar(sysVarIDs.RETURN, playerSprite, snum) == 0)
-            {
-                p->pos.z -= zAdjust;
-                p->crack_time = 777;
-            }
-        }
-
-        if (TEST_SYNC_KEY(playerBits, SK_CROUCH))   //Z (soar low)
-        {
-            // crouch
-            Gv_SetVar(sysVarIDs.RETURN, 0, playerSprite, snum);
-            X_OnEvent(EVENT_SOARDOWN, playerSprite, snum, -1);
-            if (Gv_GetVar(sysVarIDs.RETURN, playerSprite, snum) == 0)
-            {
-                p->pos.z += zAdjust;
-                p->crack_time = 777;
-            }
-        }
-
-        int const Zdiff = (shrunk == 0 && (sectorLotag == ST_0_NO_EFFECT || sectorLotag == ST_2_UNDERWATER)) ? 32 : 16;
-
-        if (sectorLotag != ST_2_UNDERWATER && p->scuba_on == 1)
-            p->scuba_on = 0;
-
-        if (p->pos.z > (floorZ - (Zdiff << 8)))
-            p->pos.z += ((floorZ - (Zdiff << 8)) - p->pos.z) >> 1;
-        if (p->pos.z < (ceilZ + (18 << 8)))
-            p->pos.z = ceilZ + (18 << 8);
-
+        P_DoJetpack(snum, playerBits, shrunk, sectorLotag, floorZ);
     }
     else if (sectorLotag != ST_2_UNDERWATER)
     {
