@@ -9349,7 +9349,7 @@ int app_main(int32_t argc, char const* const* argv)
 
     initsynccrc();
 
-    enginecompatibilitymode = ENGINE_19961112;
+    enginecompatibilitymode = ENGINE_EDUKE32;//ENGINE_19961112;
 
     G_CheckCommandLine(argc,argv);
 #if 0 // OLDMP MERGE CHECKME
