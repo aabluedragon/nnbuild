@@ -797,6 +797,8 @@ static void resetpremapglobals(void)
 
     ud.total_monsters = 0;
     ud.monsters_killed = 0;
+    ud.secret_rooms = 0;
+    ud.max_secret_rooms = 0;
     ud.limit_hit = 0;
     ud.pause_on = 0;
     ud.camerasprite = -1;
@@ -824,8 +826,6 @@ static void resetprestat(int snum,int g)
     p->cheat_phase              = 0;
     p->pals.f                   = 0;
     p->toggle_key_flag          = 0;
-    p->secret_rooms             = 0;
-    p->max_secret_rooms         = 0;
     p->actors_killed            = 0;
     p->lastrandomspot           = 0;
     p->weapon_pos               = 6;
@@ -911,10 +911,7 @@ static void prelevel(char g)
 
         if (sector[i].lotag == 32767) //Found a secret room
         {
-            for (ALL_PLAYERS(j))
-            {
-                g_player[j].ps->max_secret_rooms++;
-            }
+            ud.max_secret_rooms++;
             continue;
         }
 

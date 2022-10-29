@@ -74,7 +74,7 @@ typedef struct {
 
     palette_t pals;
 
-    int32_t max_secret_rooms, secret_rooms, actors_killed;
+    int32_t actors_killed;
     int32_t runspeed, movement_lock, team;
     int32_t max_player_health, max_shield_amount;
 

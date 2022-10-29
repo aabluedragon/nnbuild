@@ -95,7 +95,7 @@ void CheckDiscord()
             {
                 UpdateDiscord();
             }
-            else if ((last_secret_count != ps->secret_rooms) || (last_max_secrets != ps->max_secret_rooms))
+            else if ((last_secret_count != ud.secret_rooms) || (last_max_secrets != ud.max_secret_rooms))
             {
                 UpdateDiscord();
             }
@@ -163,8 +163,8 @@ void UpdateDiscord()
 
     last_kill_count = ud.monsters_killed;
     last_max_kills = ud.total_monsters;
-    last_secret_count = ps->secret_rooms;
-    last_max_secrets = ps->max_secret_rooms;
+    last_secret_count = ud.secret_rooms;
+    last_max_secrets = ud.max_secret_rooms;
     last_frag_count = ps->frag - ps->fraggedself;
     last_mode = ps->gm;
 

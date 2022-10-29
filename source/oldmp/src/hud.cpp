@@ -1288,9 +1288,9 @@ void G_DrawLevelStats()
     }
     G_PrintGameText(13, STARTALPHANUM, x, scale(200 - y, ud.config.ScreenHeight, 200) - textsc(14), tempbuf, 0, 10, 26, 0, 0, xdim - 1, ydim - 1, 65536);
 
-    if (ps->secret_rooms == ps->max_secret_rooms)
-        Bsprintf(tempbuf, "S:%d/%d", ps->secret_rooms, ps->max_secret_rooms);
+    if (ud.secret_rooms == ud.max_secret_rooms)
+        Bsprintf(tempbuf, "S:%d/%d", ud.secret_rooms, ud.max_secret_rooms);
     else
-        Bsprintf(tempbuf, "S:^15%d/%d", ps->secret_rooms, ps->max_secret_rooms);
+        Bsprintf(tempbuf, "S:^15%d/%d", ud.secret_rooms, ud.max_secret_rooms);
     G_PrintGameText(13, STARTALPHANUM, x, scale(200 - y, ud.config.ScreenHeight, 200) - textsc(7), tempbuf, 0, 10, 26, 0, 0, xdim - 1, ydim - 1, 65536);
 }

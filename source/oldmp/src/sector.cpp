@@ -3295,7 +3295,12 @@ static void P_DoSectorInteractions(int32_t playerNum)
         case 32767:
             sector[p->cursectnum].lotag = 0;
             P_DoQuote(QUOTE_FOUND_SECRET, p);
-            p->secret_rooms++;
+            ud.secret_rooms++;
+            if (ud.multimode > 1 && GTFLAGS(GAMETYPE_COOP))
+            {
+                Bsprintf(tempbuf, "^12%s^12 has found a secret!", &g_player[playerNum].user_name[0]);
+                G_AddUserQuote(tempbuf);
+            }
             return;
         case -1:
             for (ALL_PLAYERS(i))

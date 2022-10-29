@@ -67,6 +67,8 @@ typedef struct {
     int16_t camerasprite, last_camsprite;
     int16_t last_level, secretlevel;
 
+    uint8_t max_secret_rooms, secret_rooms;
+
     char overhead_on, last_overhead;
     char god, warp_on, cashman, eog, showallmap;
     char show_help, scrollmode, noclip;

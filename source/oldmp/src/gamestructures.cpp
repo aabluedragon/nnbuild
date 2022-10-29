@@ -2559,19 +2559,19 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_MAX_SECRET_ROOMS:
         if (iSet)
         {
-            g_player[iPlayer].ps->max_secret_rooms=lValue;
+            ud.max_secret_rooms=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->max_secret_rooms, g_i, g_p);
+        Gv_SetVar(lVar2, ud.max_secret_rooms, g_i, g_p);
         return;
 
     case PLAYER_SECRET_ROOMS:
         if (iSet)
         {
-            g_player[iPlayer].ps->secret_rooms=lValue;
+            ud.secret_rooms=lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->secret_rooms, g_i, g_p);
+        Gv_SetVar(lVar2, ud.secret_rooms, g_i, g_p);
         return;
 
     case PLAYER_PALS:

@@ -922,12 +922,12 @@ FRAGBONUS:
                             bonuscnt++;
                             S_PlaySound(PIPEBOMB_EXPLODE);
                         }
-                        sprintf(tempbuf, "%-3d", g_player[myconnectindex].ps->secret_rooms);
+                        sprintf(tempbuf, "%-3d", ud.secret_rooms);
                         gametext((320 >> 2) + 70, yy + 9, tempbuf, 0, 2 + 8 + 16);
                         yy += 10;
-                        if (g_player[myconnectindex].ps->secret_rooms > 0)
-                            sprintf(tempbuf, "%-3d%%", (100 * g_player[myconnectindex].ps->secret_rooms / g_player[myconnectindex].ps->max_secret_rooms));
-                        sprintf(tempbuf, "%-3d", g_player[myconnectindex].ps->max_secret_rooms - g_player[myconnectindex].ps->secret_rooms);
+                        if (ud.secret_rooms > 0)
+                            sprintf(tempbuf, "%-3d%%", (100 * ud.secret_rooms / ud.max_secret_rooms));
+                        sprintf(tempbuf, "%-3d", ud.max_secret_rooms - ud.secret_rooms);
                         gametext((320 >> 2) + 70, yy + 9, tempbuf, 0, 2 + 8 + 16);
                         yy += 10;
                     }
