@@ -5986,11 +5986,6 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                             g_player[p].ps->q16ang += fix16_from_int(q);
 
-                            if (numplayers > 1)
-                            {
-                                g_player[p].ps->opos.x = g_player[p].ps->pos.x;
-                                g_player[p].ps->opos.y = g_player[p].ps->pos.y;
-                            }
                             if (sprite[g_player[p].ps->i].extra <= 0)
                             {
                                 sprite[g_player[p].ps->i].x = g_player[p].ps->pos.x;
@@ -6011,12 +6006,6 @@ static void G_MoveEffectors(void)   //STATNUM 3
                         sprite[j].y+= x;
 
                         sprite[j].ang+=q;
-
-                        if (numplayers > 1)
-                        {
-                            actor[j].bpos.x = sprite[j].x;
-                            actor[j].bpos.y = sprite[j].y;
-                        }
                     }
                     j = nextspritesect[j];
                 }
