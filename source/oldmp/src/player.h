@@ -85,7 +85,7 @@ typedef struct {
     int16_t sbs, lowsprite, highsprite, sound_pitch;
 
     int16_t cursectnum, look_ang, olook_ang, last_extra, subweapon;
-    int16_t wackedbyactor, frag, fraggedself;
+    int16_t wackedbyactor, frag, fraggedself, lives, deaths;
     int16_t max_ammo_amount[MAX_WEAPONS], ammo_amount[MAX_WEAPONS], inv_amount[GET_MAX];
 
     int16_t shield_amount;

@@ -3171,8 +3171,44 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFHITSPACE:
-        X_DoConditional(TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_OPEN));
+    {
+        int hitSpace = TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_OPEN);
+
+        // SURVIVAL MODE: This had to go here instead of resetplayer, otherwise we'll get buggy behaviour when space is struck.
+        if (hitSpace && g_sp->picnum == APLAYER && g_sp->owner >= 0 && g_sp->yvel == g_p && g_sp->extra <= 0)
+        {
+            auto const p = g_player[g_p].ps;
+            if (GTFLAGS(GAMETYPE_LIMITEDLIVES))
+            {
+                // Make & change to p->lives later!
+                bool allDead = true;
+                for (int ALL_PLAYERS(i))
+                {
+                    if (g_player[i].ps->lives > 0)
+                    {
+                        allDead = false;
+                        break;
+                    }
+                }
+
+                if (allDead)
+                {
+                    for (int ALL_PLAYERS(i))
+                        g_player[i].ps->gm = MODE_RESTART;
+                }
+
+                if (p->lives <= 0)
+                {
+                    Bstrcpy(apStrings[QUOTE_RESERVED4], "You are out of lives!");
+                    P_DoQuote(QUOTE_RESERVED4, g_player[g_p].ps);
+                    hitSpace = 0;
+                }
+            }
+        }
+
+        X_DoConditional(hitSpace);
         break;
+    }
 
     case CON_IFOUTSIDE:
         X_DoConditional(sector[g_sp->sectnum].ceilingstat&1);

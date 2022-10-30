@@ -2547,6 +2547,11 @@ static void P_HandleFragged(int snum)
     if (ud.limit_hit == 1 || (X_OnEventWithReturn(EVENT_FRAGGED, playerSprite, snum, frag_p->i) == -1))
         return;
 
+    if (GTFLAGS(GAMETYPE_LIMITEDLIVES))
+        p->lives--;
+
+    p->deaths++;
+
     if (p->frag_ps != snum)
     {
         if (GTFLAGS(GAMETYPE_TDM) && frag_p->team == g_player[snum].ps->team)
@@ -2589,9 +2594,7 @@ static void P_HandleFragged(int snum)
                 for (int32_t ALL_PLAYERS(i))
                 {
                     if (g_player[i].ps->team == fraggedbyteam) // Flash screens of all winning players
-                    {
                         P_PalFrom(g_player[i].ps, 48, 64, 64, 64);
-                    }
                 }
 
                 ud.from_bonus = 0;
@@ -2600,7 +2603,7 @@ static void P_HandleFragged(int snum)
                 frag_p->timebeforeexit = GAMETICSPERSEC * 8;
             }
         }
-        else if ((frag_p->frag - frag_p->fraggedself) >= ud.fraglimit && ud.fraglimit != 0)
+        else if (!GTFLAGS(GAMETYPE_COOP) && (frag_p->frag - frag_p->fraggedself) >= ud.fraglimit && ud.fraglimit != 0)
         {
             // Fraglimit hit
             Bsprintf(tempbuf, "^08%s ^08wins!", &g_player[p->frag_ps].user_name[0]);

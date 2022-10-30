@@ -142,7 +142,7 @@ void G_ShowScores(bool bonus)
 
             minitext(frags_hp_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
-            Bsprintf(tempbuf, "%d^12/^02%d", p->actors_killed, p->fraggedself);
+            Bsprintf(tempbuf, "%d^12/^02%d", p->actors_killed, p->deaths);
             minitext(deaths_kd_x, yoff, tempbuf, 0, 2 + 8 + 16 + 128);
 
             score_inventory(misc_x, yoff, FIRSTAID_ICON, p->inv_amount[GET_FIRSTAID] > 0);
@@ -155,13 +155,11 @@ void G_ShowScores(bool bonus)
         }
         else
         {
-            deaths = 0;
             nemesis = -1;
             nemesis_kills = 0;
             for (y = 0; y < playerswhenstarted; y++)
             {
                 int killer_frags = g_player[y].frags[i];
-                deaths += killer_frags;
 
                 // If this killer has more frags on this player than last nemesis, make them the new nemesis.
                 if (killer_frags > nemesis_kills)
@@ -174,7 +172,7 @@ void G_ShowScores(bool bonus)
             Bsprintf(tempbuf, "%-4d", g_player[i].ps->frag - g_player[i].ps->fraggedself);
             minitext(frags_hp_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
-            Bsprintf(tempbuf, "%-4d", deaths + g_player[i].ps->fraggedself);
+            Bsprintf(tempbuf, "%-4d", p->deaths);
             minitext(deaths_kd_x, yoff, tempbuf, 2, 2 + 8 + 16 + 128);
 
             if (nemesis > -1)

@@ -25,6 +25,7 @@ enum GametypeFlags_t {
     GAMETYPE_PRESERVEINVENTORYEOL   = (1 << 15), // Inventory is preserved betwen level transitions
     GAMETYPE_TDM                    = (1 << 16), // Team deathmatch
     GAMETYPE_TDMSPAWN               = (1 << 17), // Respawn near teammates
+    GAMETYPE_LIMITEDLIVES           = (1 << 18), // Lives are limited. Die more than ud.fraglmit, you cannot respawn.
 };
 
 enum DMFlags_t {
@@ -119,7 +120,8 @@ static inline void G_ClearGametypeStats(void)
 
         if (p->ps != NULL)
         {
-            p->ps->frag = p->ps->fraggedself = 0;
+            p->ps->deaths = p->ps->frag = p->ps->fraggedself = 0;
+            p->ps->lives = max(1, ud.fraglimit);
             Bmemset(p->frags, 0, sizeof(p->frags));
         }
     }
