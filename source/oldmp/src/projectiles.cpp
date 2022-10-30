@@ -1371,7 +1371,7 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
             }
 #endif
 
-            sprite[returnSprite].cstat = 128;
+            sprite[returnSprite].cstat |= 128;
             sprite[returnSprite].clipdist = 4;
 
             return returnSprite;
@@ -1484,7 +1484,7 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
                 pReturn->yrepeat >>= 1;
             }
 
-            pReturn->cstat = 128;
+            pReturn->cstat |= 128;
             pReturn->clipdist = (projecTile == RPG) ? 4 : 40;
 
             return returnSprite;
@@ -1595,7 +1595,7 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
             int const returnSprite = A_InsertSprite(spriteSectnum, startPos.x + (sintable[(512 + shootAng + 512) & 2047] >> 12),
                 startPos.y + (sintable[(shootAng + 512) & 2047] >> 12), startPos.z + (2 << 8),
                 SHRINKSPARK, -16, 28, 28, shootAng, 768, Zvel, spriteNum, 4);
-            sprite[returnSprite].cstat = 128;
+            sprite[returnSprite].cstat |= 128;
             sprite[returnSprite].clipdist = 32;
 
             return returnSprite;
