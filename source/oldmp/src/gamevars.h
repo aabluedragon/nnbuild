@@ -10,7 +10,7 @@ int __fastcall Gv_GetVarX(int id);
 void __fastcall Gv_SetVarX(int id, int lValue);
 
 void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags);
-int Gv_NewArray(const char* pszLabel, int asize);
+int Gv_NewArray(const char* pszLabel, intptr_t asize);
 
 int Gv_GetVarByLabel(const char* szGameLabel, int lDefault, int iActor, int iPlayer);
 void Gv_DumpValues(void);

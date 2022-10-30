@@ -333,7 +333,7 @@ void Gv_ResetVars(void) /* this is called during a new game and nowhere else */
     }
 }
 
-int Gv_NewArray(const char *pszLabel, int asize)
+int Gv_NewArray(const char *pszLabel, intptr_t asize)
 {
     int i;
 
@@ -614,12 +614,8 @@ void __fastcall Gv_SetVarX(int id, int lValue)
 
 int Gv_GetVarByLabel(const char *szGameLabel, int lDefault, int iActor, int iPlayer)
 {
-    int i = hash_find(&gamevarH,szGameLabel);
-
-    if (i < 0)
-        return lDefault;
-
-    return Gv_GetVar(i, iActor, iPlayer);
+    int gameVar = hash_find(&gamevarH,szGameLabel);
+    return EDUKE32_PREDICT_TRUE(gameVar >= 0) ? Gv_GetVar(gameVar, iActor, iPlayer) : lDefault;
 }
 
 static intptr_t* Gv_GetVarDataPtr(const char* szGameLabel)
