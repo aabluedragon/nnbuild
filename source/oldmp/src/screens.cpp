@@ -60,7 +60,7 @@ void G_ShowVote(void)
 #define score_inventory(x, y, picnum, cond) rotatesprite_((x) << 16, (y) << 16, 24576, 0, picnum, 0, (cond) ? 0 : 4, RS_AUTO | RS_TOPLEFT, (cond) ? 0 : 128, 0, 0, 0, xdim, ydim)
 void G_ShowScores(bool bonus)
 {
-    int i, y, deaths, nemesis_kills, nemesis;
+    int i, y, nemesis_kills, nemesis;
 
     if (playerswhenstarted < 2 || !(Gametypes[ud.coop].flags & (GAMETYPE_COOP | GAMETYPE_SCORESHEET)))
         return;
