@@ -613,8 +613,6 @@ void P_DisplayWeapon(int snum)
 {
     auto const pPlayer = g_player[snum].ps;
     auto const pSprite = ((snum == myconnectindex) && (numplayers > 1)) ? &predicted_sprite[pPlayer->i] : &sprite[pPlayer->i];
-    auto const weaponFrame = &pPlayer->kickback_pic;
-    int currentWeapon;
 
     if (pPlayer->newowner >= 0 || ud.camerasprite >= 0 || pPlayer->over_shoulder_on > 0 || (sprite[pPlayer->i].pal != 1 && sprite[pPlayer->i].extra <= 0))
         return;
@@ -624,6 +622,7 @@ void P_DisplayWeapon(int snum)
     int32_t weaponYOffset = 80 - (pPlayer->weapon_pos * pPlayer->weapon_pos);
     int32_t weaponShade = pSprite->shade <= 24 ? pSprite->shade : 24;
     int32_t weaponBits = pPlayer->weapon_pos == -9 || pPlayer->weapon_pos >= 10 - 1 ? 0 : RS_LERP;
+    int32_t weaponFrame = pPlayer->kickback_pic;
 
     if (P_DisplayFistAnim(weaponShade,snum) || P_DisplayKnuckleAnim(weaponShade,snum) || P_DisplayTip(weaponShade,snum) || P_DisplayAccess(weaponShade,snum))
         return;
@@ -641,17 +640,17 @@ void P_DisplayWeapon(int snum)
     weaponX -= 58 + pPlayer->weapon_ang;
     weaponYOffset -= (pPlayer->hard_landing<<3);
 
-    currentWeapon = PWEAPON(screenpeek, (pPlayer->last_weapon >= 0) ? pPlayer->last_weapon : pPlayer->curr_weapon, WorksLike);
+    int currentWeapon = PWEAPON(snum, (pPlayer->last_weapon >= 0) ? pPlayer->last_weapon : pPlayer->curr_weapon, WorksLike);
     g_gun_pos=weaponYOffset;
     g_looking_arc=weaponY;
     g_currentweapon=currentWeapon;
     g_weapon_xoffset=weaponX;
     g_gs=weaponShade;
-    g_kb=*weaponFrame;
+    g_kb=weaponFrame;
     g_looking_angSR1=pPlayer->look_ang>>1;
 
-    Gv_SetVar(sysVarIDs.RETURN,0,pPlayer->i,snum);
-    X_OnEvent(EVENT_DISPLAYWEAPON, pPlayer->i, screenpeek, -1);
+    Gv_SetVar(sysVarIDs.RETURN,0,pPlayer->i, snum);
+    X_OnEvent(EVENT_DISPLAYWEAPON, pPlayer->i, snum, -1);
 
     if (Gv_GetVar(sysVarIDs.RETURN,pPlayer->i,snum) == 0)
     {
@@ -700,15 +699,15 @@ void P_DisplayWeapon(int snum)
 
             case KNEE_WEAPON:
 
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
-                    if (*weaponFrame > 0)
+                    if (weaponFrame > 0)
                     {
                         int const kneePal = P_GetKneePal(pPlayer);
 
-                        if (*weaponFrame < 5 || *weaponFrame > 9)
+                        if (weaponFrame < 5 || weaponFrame > 9)
                             G_DrawTileScaled(weaponX + 220 - halfLookAng, weaponY + 250 - weaponYOffset, KNEE,
                                 weaponShade, weaponBits, kneePal, W_KNEE);
                         else
@@ -720,49 +719,49 @@ void P_DisplayWeapon(int snum)
 
             case TRIPBOMB_WEAPON:
 
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
                     weaponX += 8;
                     weaponYOffset -= 10;
 
-                    if ((*weaponFrame) > 6)
-                        weaponY += ((*weaponFrame) << 3);
-                    else if ((*weaponFrame) < 4)
+                    if ((weaponFrame) > 6)
+                        weaponY += ((weaponFrame) << 3);
+                    else if ((weaponFrame) < 4)
                         G_DrawWeaponTile(weaponX + 142 - halfLookAng, weaponY + 234 - weaponYOffset, TRIPBOMB, weaponShade, weaponBits, weaponPal, W_TRIPBOMB);
 
-                    G_DrawWeaponTile(weaponX + 130 - halfLookAng, weaponY + 249 - weaponYOffset, HANDHOLDINGLASER + ((*weaponFrame) >> 2), weaponShade, weaponBits,
+                    G_DrawWeaponTile(weaponX + 130 - halfLookAng, weaponY + 249 - weaponYOffset, HANDHOLDINGLASER + ((weaponFrame) >> 2), weaponShade, weaponBits,
                         weaponPal, W_TRIPBOMB_LEFTHAND);
 
-                    G_DrawWeaponTile(weaponX + 152 - halfLookAng, weaponY + 249 - weaponYOffset, HANDHOLDINGLASER + ((*weaponFrame) >> 2), weaponShade, weaponBits | 4,
+                    G_DrawWeaponTile(weaponX + 152 - halfLookAng, weaponY + 249 - weaponYOffset, HANDHOLDINGLASER + ((weaponFrame) >> 2), weaponShade, weaponBits | 4,
                         weaponPal, W_TRIPBOMB_RIGHTHAND);
                 }
                 break;
 
             case RPG_WEAPON:
 
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
-                    weaponX -= sintable[(768 + ((*weaponFrame) << 7)) & 2047] >> 11;
-                    weaponYOffset += sintable[(768 + ((*weaponFrame) << 7)) & 2047] >> 11;
+                    weaponX -= sintable[(768 + ((weaponFrame) << 7)) & 2047] >> 11;
+                    weaponYOffset += sintable[(768 + ((weaponFrame) << 7)) & 2047] >> 11;
 
-                    if (*weaponFrame > 0)
+                    if (weaponFrame > 0)
                     {
                         int totalTime;
-                        if (*weaponFrame < (WW2GI ? (totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime)) : 8))
-                            G_DrawWeaponTile(weaponX + 164, (weaponY << 1) + 176 - weaponYOffset, RPGGUN + ((*weaponFrame) >> 1), weaponShade, weaponBits, weaponPal,
+                        if (weaponFrame < (WW2GI ? (totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime)) : 8))
+                            G_DrawWeaponTile(weaponX + 164, (weaponY << 1) + 176 - weaponYOffset, RPGGUN + ((weaponFrame) >> 1), weaponShade, weaponBits, weaponPal,
                                 W_RPG_MUZZLE);
                         else if (WW2GI)
                         {
                             totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
                             int const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
 
-                            weaponYOffset -= (*weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
-                                ? 10 * ((*weaponFrame) - totalTime)   // down
-                                : 10 * (reloadTime - (*weaponFrame)); // up
+                            weaponYOffset -= (weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
+                                ? 10 * ((weaponFrame) - totalTime)   // down
+                                : 10 * (reloadTime - (weaponFrame)); // up
                         }
                     }
 
@@ -772,9 +771,9 @@ void P_DisplayWeapon(int snum)
 
             case SHOTGUN_WEAPON:
 
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
                     weaponX -= 8;
 
@@ -783,18 +782,18 @@ void P_DisplayWeapon(int snum)
                         int const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
                         int const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
 
-                        if (*weaponFrame > 0)
-                            weaponYOffset -= sintable[(*weaponFrame) << 7] >> 12;
+                        if (weaponFrame > 0)
+                            weaponYOffset -= sintable[(weaponFrame) << 7] >> 12;
 
-                        if (*weaponFrame > 0 && doAnim)
+                        if (weaponFrame > 0 && doAnim)
                             weaponX += 1 - (krand() & 3);
 
-                        if (*weaponFrame == 0)
+                        if (weaponFrame == 0)
                         {
                             G_DrawWeaponTile(weaponX + 146 - halfLookAng, weaponY + 202 - weaponYOffset, SHOTGUN, weaponShade, weaponBits | RS_FORCELERP,
                                 weaponPal, W_SHOTGUN);
                         }
-                        else if (*weaponFrame <= totalTime)
+                        else if (weaponFrame <= totalTime)
                         {
                             G_DrawWeaponTile(weaponX + 146 - halfLookAng, weaponY + 202 - weaponYOffset, SHOTGUN + 1, weaponShade, weaponBits | RS_FORCELERP,
                                 weaponPal, W_SHOTGUN);
@@ -802,9 +801,9 @@ void P_DisplayWeapon(int snum)
                         // else we are in 'reload time'
                         else
                         {
-                            weaponYOffset -= (*weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
-                                ? 10 * ((*weaponFrame) - totalTime)    // D
-                                : 10 * (reloadTime - (*weaponFrame));  // U
+                            weaponYOffset -= (weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
+                                ? 10 * ((weaponFrame) - totalTime)    // D
+                                : 10 * (reloadTime - (weaponFrame));  // U
 
                             G_DrawWeaponTile(weaponX + 146 - halfLookAng, weaponY + 202 - weaponYOffset, SHOTGUN, weaponShade, weaponBits | RS_FORCELERP,
                                 weaponPal, W_SHOTGUN);
@@ -813,7 +812,7 @@ void P_DisplayWeapon(int snum)
                         break;
                     }
 
-                    switch (*weaponFrame)
+                    switch (weaponFrame)
                     {
                     case 1:
                     case 2:
@@ -832,7 +831,7 @@ void P_DisplayWeapon(int snum)
                         weaponYOffset -= 40;
                         weaponX += 20;
 
-                        G_DrawWeaponTile(weaponX + 178 - halfLookAng, weaponY + 194 - weaponYOffset, SHOTGUN + 1 + ((*(weaponFrame)-1) >> 1), -128, weaponBits,
+                        G_DrawWeaponTile(weaponX + 178 - halfLookAng, weaponY + 194 - weaponYOffset, SHOTGUN + 1 + ((weaponFrame-1) >> 1), -128, weaponBits,
                             weaponPal, W_SHOTGUN_MUZZLE);
                         fallthrough__;
                     case 5:
@@ -884,13 +883,13 @@ void P_DisplayWeapon(int snum)
 
             case CHAINGUN_WEAPON:
 
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
-                    if (*weaponFrame > 0)
+                    if (weaponFrame > 0)
                     {
-                        weaponYOffset -= sintable[(*weaponFrame) << 7] >> 12;
+                        weaponYOffset -= sintable[(weaponFrame) << 7] >> 12;
 
                         if (doAnim)
                             weaponX += 1 - (rand() & 3);
@@ -901,12 +900,12 @@ void P_DisplayWeapon(int snum)
                         int const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
                         int const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
 
-                        if (*weaponFrame == 0)
+                        if (weaponFrame == 0)
                         {
                             G_DrawWeaponTile(weaponX + 178 - halfLookAng, weaponY + 233 - weaponYOffset, CHAINGUN + 1, weaponShade, weaponBits | RS_FORCELERP,
                                 weaponPal, W_CHAINGUN_BOTTOM);
                         }
-                        else if (*weaponFrame <= totalTime)
+                        else if (weaponFrame <= totalTime)
                         {
                             G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 243 - weaponYOffset, CHAINGUN + 2, weaponShade, weaponBits | RS_FORCELERP,
                                 weaponPal, W_CHAINGUN_BOTTOM);
@@ -924,16 +923,16 @@ void P_DisplayWeapon(int snum)
                             if (iFifths < 1)
                                 iFifths = 1;
 
-                            if (*weaponFrame < iFifths + totalTime)
+                            if (weaponFrame < iFifths + totalTime)
                             {
                                 // first segment
-                                int const weaponOffset = 80 - 10 * (totalTime + iFifths - (*weaponFrame));
+                                int const weaponOffset = 80 - 10 * (totalTime + iFifths - (weaponFrame));
                                 weaponYOffset += weaponOffset;
                                 weaponX += weaponOffset;
                                 G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 17, weaponShade,
                                     weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_BOTTOM);
                             }
-                            else if (*weaponFrame < (iFifths * 2 + totalTime))
+                            else if (weaponFrame < (iFifths * 2 + totalTime))
                             {
                                 // second segment
                                 weaponYOffset += 80; // D
@@ -941,7 +940,7 @@ void P_DisplayWeapon(int snum)
                                 G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 18, weaponShade,
                                     weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_BOTTOM);
                             }
-                            else if (*weaponFrame < (iFifths * 3 + totalTime))
+                            else if (weaponFrame < (iFifths * 3 + totalTime))
                             {
                                 // third segment
                                 // up
@@ -950,7 +949,7 @@ void P_DisplayWeapon(int snum)
                                 G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 19, weaponShade,
                                     weaponBits | RS_FORCELERP, weaponPal, W_CHAINGUN_BOTTOM);
                             }
-                            else if (*weaponFrame < (iFifths * 4 + totalTime))
+                            else if (weaponFrame < (iFifths * 4 + totalTime))
                             {
                                 // fourth segment
                                 // down
@@ -962,7 +961,7 @@ void P_DisplayWeapon(int snum)
                             else
                             {
                                 // up and left
-                                int const weaponOffset = 10 * (reloadTime - (*weaponFrame));
+                                int const weaponOffset = 10 * (reloadTime - (weaponFrame));
                                 weaponYOffset += weaponOffset; // U
                                 weaponX += weaponOffset;
                                 G_DrawWeaponTile(weaponX + 168 - halfLookAng, weaponY + 260 - weaponYOffset, CHAINGUN - 17, weaponShade,
@@ -973,7 +972,7 @@ void P_DisplayWeapon(int snum)
                         break;
                     }
 
-                    switch (*weaponFrame)
+                    switch (weaponFrame)
                     {
                     case 0:
                         G_DrawWeaponTile(weaponX + 178 - (pPlayer->look_ang >> 1), weaponY + 233 - weaponYOffset, CHAINGUN + 1, weaponShade,
@@ -983,26 +982,26 @@ void P_DisplayWeapon(int snum)
                         break;
 
                     default:
-                        if (*weaponFrame > PWEAPON(screenpeek, CHAINGUN_WEAPON, FireDelay) && *weaponFrame < PWEAPON(screenpeek, CHAINGUN_WEAPON, TotalTime))
+                        if (weaponFrame > PWEAPON(screenpeek, CHAINGUN_WEAPON, FireDelay) && weaponFrame < PWEAPON(screenpeek, CHAINGUN_WEAPON, TotalTime))
                         {
                             int randomOffset = doAnim ? rand() & 7 : 0;
                             G_DrawWeaponTile(randomOffset + weaponX - 4 + 140 - (pPlayer->look_ang >> 1),
-                                randomOffset + weaponY - ((*weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((*weaponFrame - 4) / 5),
+                                randomOffset + weaponY - ((weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((weaponFrame - 4) / 5),
                                 weaponShade, weaponBits, weaponPal);
                             if (doAnim)
                                 randomOffset = rand() & 7;
                             G_DrawWeaponTile(randomOffset + weaponX - 4 + 184 - (pPlayer->look_ang >> 1),
-                                randomOffset + weaponY - ((*weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((*weaponFrame - 4) / 5),
+                                randomOffset + weaponY - ((weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((weaponFrame - 4) / 5),
                                 weaponShade, weaponBits, weaponPal);
                         }
 
-                        if (*weaponFrame < PWEAPON(screenpeek, CHAINGUN_WEAPON, TotalTime) - 4)
+                        if (weaponFrame < PWEAPON(screenpeek, CHAINGUN_WEAPON, TotalTime) - 4)
                         {
                             int const randomOffset = doAnim ? rand() & 7 : 0;
                             G_DrawWeaponTile(randomOffset + weaponX - 4 + 162 - (pPlayer->look_ang >> 1),
-                                randomOffset + weaponY - ((*weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((*weaponFrame - 2) / 5),
+                                randomOffset + weaponY - ((weaponFrame) >> 1) + 208 - weaponYOffset, CHAINGUN + 5 + ((weaponFrame - 2) / 5),
                                 weaponShade, weaponBits, weaponPal);
-                            G_DrawWeaponTile(weaponX + 178 - (pPlayer->look_ang >> 1), weaponY + 233 - weaponYOffset, CHAINGUN + 1 + ((*weaponFrame) >> 1),
+                            G_DrawWeaponTile(weaponX + 178 - (pPlayer->look_ang >> 1), weaponY + 233 - weaponYOffset, CHAINGUN + 1 + ((weaponFrame) >> 1),
                                 weaponShade, weaponBits & ~RS_LERP, weaponPal, W_CHAINGUN_TOP);
                         }
                         else
@@ -1018,109 +1017,109 @@ void P_DisplayWeapon(int snum)
 
             case PISTOL_WEAPON:
 
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
-                    if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, TotalTime) + 1)
+                    if ((weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, TotalTime) + 1)
                     {
                         static uint8_t pistolFrames[] = { 0, 1, 2 };
                         int            pistolOffset = 195 - 12 + weaponX;
 
-                        if ((*weaponFrame) == PWEAPON(screenpeek, PISTOL_WEAPON, FireDelay))
+                        if ((weaponFrame) == PWEAPON(screenpeek, PISTOL_WEAPON, FireDelay))
                             pistolOffset -= 3;
 
                         G_DrawWeaponTile((pistolOffset - (pPlayer->look_ang >> 1)), (weaponY + 244 - weaponYOffset),
-                            FIRSTGUN + pistolFrames[*weaponFrame > 2 ? 0 : *weaponFrame], weaponShade, weaponBits, weaponPal, W_PISTOL);
+                            FIRSTGUN + pistolFrames[weaponFrame > 2 ? 0 : weaponFrame], weaponShade, weaponBits, weaponPal, W_PISTOL);
 
                         break;
                     }
 
                     int32_t const FIRSTGUN_5 = FIRSTGUN + 5;
 
-                    if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 40 : 17))
+                    if ((weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 40 : 17))
                         G_DrawWeaponTile(194 - (pPlayer->look_ang >> 1), weaponY + 230 - weaponYOffset, FIRSTGUN + 4, weaponShade, weaponBits & ~RS_LERP,
                             weaponPal, W_PISTOL);
-                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 35 : 12))
+                    else if ((weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 35 : 12))
                     {
-                        G_DrawWeaponTile(244 - ((*weaponFrame) << 3) - (pPlayer->look_ang >> 1), weaponY + 130 - weaponYOffset + ((*weaponFrame) << 4), FIRSTGUN + 6,
+                        G_DrawWeaponTile(244 - ((weaponFrame) << 3) - (pPlayer->look_ang >> 1), weaponY + 130 - weaponYOffset + ((weaponFrame) << 4), FIRSTGUN + 6,
                             weaponShade, weaponBits, weaponPal, W_PISTOL_CLIP);
                         G_DrawWeaponTile(224 - (pPlayer->look_ang >> 1), weaponY + 220 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
                     }
-                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 30 : 7))
+                    else if ((weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 30 : 7))
                     {
-                        G_DrawWeaponTile(124 + ((*weaponFrame) << 1) - (pPlayer->look_ang >> 1), weaponY + 430 - weaponYOffset - ((*weaponFrame) << 3), FIRSTGUN + 6,
+                        G_DrawWeaponTile(124 + ((weaponFrame) << 1) - (pPlayer->look_ang >> 1), weaponY + 430 - weaponYOffset - ((weaponFrame) << 3), FIRSTGUN + 6,
                             weaponShade, weaponBits, weaponPal, W_PISTOL_CLIP);
                         G_DrawWeaponTile(224 - (pPlayer->look_ang >> 1), weaponY + 220 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
                     }
 
-                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 12 : 4))
+                    else if ((weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 12 : 4))
                     {
                         G_DrawWeaponTile(184 - (pPlayer->look_ang >> 1), weaponY + 235 - weaponYOffset, FIRSTGUN + 8, weaponShade, weaponBits, weaponPal,
                             W_PISTOL_HAND);
                         G_DrawWeaponTile(224 - (pPlayer->look_ang >> 1), weaponY + 210 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
                     }
-                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 6 : 2))
+                    else if ((weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload) - (WW2GI ? 6 : 2))
                     {
                         G_DrawWeaponTile(164 - (pPlayer->look_ang >> 1), weaponY + 245 - weaponYOffset, FIRSTGUN + 8, weaponShade, weaponBits, weaponPal,
                             W_PISTOL_HAND);
                         G_DrawWeaponTile(224 - (pPlayer->look_ang >> 1), weaponY + 220 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
                     }
-                    else if ((*weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload))
+                    else if ((weaponFrame) < PWEAPON(screenpeek, PISTOL_WEAPON, Reload))
                         G_DrawWeaponTile(194 - (pPlayer->look_ang >> 1), weaponY + 235 - weaponYOffset, FIRSTGUN_5, weaponShade, weaponBits, weaponPal, W_PISTOL);
                 }
 
                 break;
             case HANDBOMB_WEAPON:
             {
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
                     static uint8_t pipebombFrames[] = { 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2 };
 
-                    if (*weaponFrame >= PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) || *weaponFrame >= ARRAY_SIZE(pipebombFrames))
+                    if (weaponFrame >= PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) || weaponFrame >= ARRAY_SSIZE(pipebombFrames))
                         break;
 
-                    if (*weaponFrame)
+                    if (weaponFrame)
                     {
                         if (WW2GI)
                         {
                             int const fireDelay = PWEAPON(screenpeek, pPlayer->curr_weapon, FireDelay);
                             int const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
 
-                            if (*weaponFrame <= fireDelay)
+                            if (weaponFrame <= fireDelay)
                             {
                                 // it holds here
-                                weaponYOffset -= 5 * (*weaponFrame);  // D
+                                weaponYOffset -= 5 * (weaponFrame);  // D
                             }
-                            else if (*weaponFrame < ((totalTime - fireDelay) / 2 + fireDelay))
+                            else if (weaponFrame < ((totalTime - fireDelay) / 2 + fireDelay))
                             {
                                 // up and left
-                                int const weaponOffset = (*weaponFrame) - fireDelay;
+                                int const weaponOffset = (weaponFrame) - fireDelay;
                                 weaponYOffset += 10 * weaponOffset;  // U
                                 weaponX += 80 * weaponOffset;
                             }
-                            else if (*weaponFrame < totalTime)
+                            else if (weaponFrame < totalTime)
                             {
                                 // start high
                                 weaponYOffset += 240;
-                                weaponYOffset -= 12 * ((*weaponFrame) - fireDelay);  // D
+                                weaponYOffset -= 12 * ((weaponFrame) - fireDelay);  // D
                                 // move left
-                                weaponX += 90 - 5 * (totalTime - (*weaponFrame));
+                                weaponX += 90 - 5 * (totalTime - (weaponFrame));
                             }
                         }
                         else
                         {
-                            if (*weaponFrame < 7)       weaponYOffset -= 10 * (*weaponFrame);  // D
-                            else if (*weaponFrame < 12) weaponYOffset += 20 * ((*weaponFrame) - 10);  // U
-                            else if (*weaponFrame < 20) weaponYOffset -= 9 * ((*weaponFrame) - 14);  // D
+                            if (weaponFrame < 7)       weaponYOffset -= 10 * (weaponFrame);  // D
+                            else if (weaponFrame < 12) weaponYOffset += 20 * ((weaponFrame) - 10);  // U
+                            else if (weaponFrame < 20) weaponYOffset -= 9 * ((weaponFrame) - 14);  // D
                         }
 
                         weaponYOffset += 10;
                     }
 
-                    G_DrawWeaponTile(weaponX + 190 - halfLookAng, weaponY + 260 - weaponYOffset, HANDTHROW + pipebombFrames[(*weaponFrame)], weaponShade,
+                    G_DrawWeaponTile(weaponX + 190 - halfLookAng, weaponY + 260 - weaponYOffset, HANDTHROW + pipebombFrames[(weaponFrame)], weaponShade,
                         weaponBits, weaponPal, W_HANDBOMB);
                 }
             }
@@ -1128,17 +1127,17 @@ void P_DisplayWeapon(int snum)
 
             case HANDREMOTE_WEAPON:
             {
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
                     static uint8_t remoteFrames[] = { 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0 };
 
-                    if (*weaponFrame >= ARRAY_SIZE(remoteFrames))
+                    if (weaponFrame >= ARRAY_SSIZE(remoteFrames))
                         break;
 
                     weaponX = -48;
-                    G_DrawWeaponTile(weaponX + 150 - halfLookAng, weaponY + 258 - weaponYOffset, HANDREMOTE + remoteFrames[(*weaponFrame)], weaponShade,
+                    G_DrawWeaponTile(weaponX + 150 - halfLookAng, weaponY + 258 - weaponYOffset, HANDREMOTE + remoteFrames[(weaponFrame)], weaponShade,
                         weaponBits | RS_FORCELERP, weaponPal, W_HANDREMOTE);
                 }
             }
@@ -1146,20 +1145,20 @@ void P_DisplayWeapon(int snum)
 
             case DEVISTATOR_WEAPON:
 
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
                     if (WW2GI)
                     {
-                        if (*weaponFrame)
+                        if (weaponFrame)
                         {
                             int32_t const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
                             int32_t const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
 
-                            if (*weaponFrame < totalTime)
+                            if (weaponFrame < totalTime)
                             {
-                                int const tileOffset = ksgn((*weaponFrame) >> 2);
+                                int const tileOffset = ksgn((weaponFrame) >> 2);
 
                                 if (pPlayer->ammo_amount[pPlayer->curr_weapon] & 1)
                                 {
@@ -1180,7 +1179,7 @@ void P_DisplayWeapon(int snum)
                             else
                             {
                                 weaponYOffset
-                                    -= (*weaponFrame < ((reloadTime - totalTime) / 2 + totalTime)) ? 10 * ((*weaponFrame) - totalTime) : 10 * (reloadTime - (*weaponFrame));
+                                    -= (weaponFrame < ((reloadTime - totalTime) / 2 + totalTime)) ? 10 * ((weaponFrame) - totalTime) : 10 * (reloadTime - (weaponFrame));
 
                                 G_DrawWeaponTile(weaponX + 30 - halfLookAng, weaponY + 240 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits | 4, weaponPal,
                                     W_DEVISTATOR_LEFT);
@@ -1198,27 +1197,27 @@ void P_DisplayWeapon(int snum)
                         break;
                     }
 
-                    if (*weaponFrame <= PWEAPON(screenpeek, DEVISTATOR_WEAPON, TotalTime) && *weaponFrame > 0)
+                    if (weaponFrame <= PWEAPON(screenpeek, DEVISTATOR_WEAPON, TotalTime) && weaponFrame > 0)
                     {
                         static uint8_t const devastatorFrames[] = { 0, 4, 12, 24, 12, 4, 0 };
 
-                        if (*weaponFrame >= ARRAY_SIZE(devastatorFrames))
+                        if (weaponFrame >= ARRAY_SSIZE(devastatorFrames))
                             break;
 
-                        int const tileOffset = ksgn((*weaponFrame) >> 2);
+                        int const tileOffset = ksgn((weaponFrame) >> 2);
 
                         if (pPlayer->hbomb_hold_delay)
                         {
                             G_DrawWeaponTile(weaponX + 30 - halfLookAng, weaponY + 240 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits | 4, weaponPal,
                                 W_DEVISTATOR_LEFT);
-                            G_DrawWeaponTile((devastatorFrames[*weaponFrame] >> 1) + weaponX + 268 - halfLookAng,
-                                devastatorFrames[*weaponFrame] + weaponY + 238 - weaponYOffset, DEVISTATOR + tileOffset, -32, weaponBits, weaponPal,
+                            G_DrawWeaponTile((devastatorFrames[weaponFrame] >> 1) + weaponX + 268 - halfLookAng,
+                                devastatorFrames[weaponFrame] + weaponY + 238 - weaponYOffset, DEVISTATOR + tileOffset, -32, weaponBits, weaponPal,
                                 W_DEVISTATOR_RIGHT);
                         }
                         else
                         {
-                            G_DrawWeaponTile(-(devastatorFrames[*weaponFrame] >> 1) + weaponX + 30 - halfLookAng,
-                                devastatorFrames[*weaponFrame] + weaponY + 240 - weaponYOffset, DEVISTATOR + tileOffset, -32, weaponBits | 4, weaponPal,
+                            G_DrawWeaponTile(-(devastatorFrames[weaponFrame] >> 1) + weaponX + 30 - halfLookAng,
+                                devastatorFrames[weaponFrame] + weaponY + 240 - weaponYOffset, DEVISTATOR + tileOffset, -32, weaponBits | 4, weaponPal,
                                 W_DEVISTATOR_LEFT);
                             G_DrawWeaponTile(weaponX + 268 - halfLookAng, weaponY + 238 - weaponYOffset, DEVISTATOR, weaponShade, weaponBits, weaponPal,
                                 W_DEVISTATOR_RIGHT);
@@ -1235,11 +1234,11 @@ void P_DisplayWeapon(int snum)
 
             case FREEZE_WEAPON:
 
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
-                    if ((*weaponFrame) < (PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) + 1) && (*weaponFrame) > 0)
+                    if ((weaponFrame) < (PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) + 1) && (weaponFrame) > 0)
                     {
                         static uint8_t freezerFrames[] = { 0, 0, 1, 1, 2, 2 };
 
@@ -1251,7 +1250,7 @@ void P_DisplayWeapon(int snum)
                         weaponYOffset -= 16;
                         G_DrawWeaponTile(weaponX + 210 - (pPlayer->look_ang >> 1), weaponY + 261 - weaponYOffset, FREEZE + 2, -32,
                             weaponBits & ~RS_LERP, weaponPal, W_FREEZE_BASE);
-                        G_DrawWeaponTile(weaponX + 210 - (pPlayer->look_ang >> 1), weaponY + 235 - weaponYOffset, FREEZE + 3 + freezerFrames[*weaponFrame % 6], -32,
+                        G_DrawWeaponTile(weaponX + 210 - (pPlayer->look_ang >> 1), weaponY + 235 - weaponYOffset, FREEZE + 3 + freezerFrames[weaponFrame % 6], -32,
                             weaponBits & ~RS_LERP, weaponPal, W_FREEZE_TOP);
                     }
                     else
@@ -1262,9 +1261,9 @@ void P_DisplayWeapon(int snum)
 
             case GROW_WEAPON:
             case SHRINKER_WEAPON:
-                Gv_SetVar(sysVarIDs.RETURN, 0, g_player[screenpeek].ps->i, screenpeek);
-                X_OnEvent(EVENT_DRAWWEAPON, g_player[screenpeek].ps->i, screenpeek, -1);
-                if (Gv_GetVar(sysVarIDs.RETURN, g_player[screenpeek].ps->i, screenpeek) == 0)
+                Gv_SetVar(sysVarIDs.RETURN, 0, pPlayer->i, snum);
+                X_OnEvent(EVENT_DRAWWEAPON, pPlayer->i, snum, -1);
+                if (Gv_GetVar(sysVarIDs.RETURN, pPlayer->i, snum) == 0)
                 {
                     bool const isExpander = currentWeapon == GROW_WEAPON;
 
@@ -1273,7 +1272,7 @@ void P_DisplayWeapon(int snum)
 
                     if (WW2GI)
                     {
-                        if (*weaponFrame == 0)
+                        if (weaponFrame == 0)
                         {
                             // the 'at rest' display
                             if (isExpander)
@@ -1303,25 +1302,25 @@ void P_DisplayWeapon(int snum)
                             int const totalTime = PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime);
                             int const reloadTime = PWEAPON(screenpeek, pPlayer->curr_weapon, Reload);
 
-                            if (*weaponFrame < totalTime)
+                            if (weaponFrame < totalTime)
                             {
-                                if (*weaponFrame >= PWEAPON(screenpeek, pPlayer->curr_weapon, FireDelay))
+                                if (weaponFrame >= PWEAPON(screenpeek, pPlayer->curr_weapon, FireDelay))
                                 {
                                     // after fire time.
                                     // lower weapon to reload cartridge (not clip)
-                                    weaponYOffset -= (isExpander ? 15 : 10) * (totalTime - (*weaponFrame));
+                                    weaponYOffset -= (isExpander ? 15 : 10) * (totalTime - (weaponFrame));
                                 }
                             }
                             // else we are in 'reload time'
                             else
                             {
-                                weaponYOffset -= (*weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
-                                    ? (isExpander ? 5 : 10) * ((*weaponFrame) - totalTime) // D
-                                    : 10 * (reloadTime - (*weaponFrame)); // U
+                                weaponYOffset -= (weaponFrame < ((reloadTime - totalTime) / 2 + totalTime))
+                                    ? (isExpander ? 5 : 10) * ((weaponFrame) - totalTime) // D
+                                    : 10 * (reloadTime - (weaponFrame)); // U
                             }
                         }
 
-                        G_DrawWeaponTileUnfaded(weaponX + 184 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + 3 + ((*weaponFrame) & 3), -32, weaponBits,
+                        G_DrawWeaponTileUnfaded(weaponX + 184 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + 3 + ((weaponFrame) & 3), -32, weaponBits,
                             isExpander ? 2 : 0, 0 /*W_SHRINKER_CRYSTAL*/);
 
                         G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + (isExpander ? -1 : 1), weaponShade,
@@ -1330,7 +1329,7 @@ void P_DisplayWeapon(int snum)
                         break;
                     }
 
-                    if ((*weaponFrame) < PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) && (*weaponFrame) > 0)
+                    if ((weaponFrame) < PWEAPON(screenpeek, pPlayer->curr_weapon, TotalTime) && (weaponFrame) > 0)
                     {
                         if (doAnim)
                         {
@@ -1338,7 +1337,7 @@ void P_DisplayWeapon(int snum)
                             weaponYOffset += (rand() & 3);
                         }
 
-                        G_DrawWeaponTileUnfaded(weaponX + 184 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + 3 + ((*weaponFrame) & 3), -32,
+                        G_DrawWeaponTileUnfaded(weaponX + 184 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + 3 + ((weaponFrame) & 3), -32,
                             weaponBits & ~RS_LERP, isExpander ? 2 : 0, W_SHRINKER_CRYSTAL);
                         G_DrawWeaponTile(weaponX + 188 - halfLookAng, weaponY + 240 - weaponYOffset, SHRINKER + (isExpander ? -1 : 1), weaponShade,
                             weaponBits & ~RS_LERP, weaponPal, W_SHRINKER);
