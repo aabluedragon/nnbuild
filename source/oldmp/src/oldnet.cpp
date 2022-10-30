@@ -1274,8 +1274,7 @@ static void Net_ResetPredictionData(void)
 
         if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
         {
-            //Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * MAXPLAYERS);
-            predicted_plValues[i][myconnectindex] = original_plValues[i][myconnectindex];
+            Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * MAXPLAYERS);
         }
         else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
         {
