@@ -986,8 +986,8 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("myhorizoff",(intptr_t)&predictedPlayer.q16horizoff, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("omyhoriz",(intptr_t)&predictedPlayer.oq16horiz, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("omyhorizoff",(intptr_t)&predictedPlayer.oq16horizoff, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("myang",(intptr_t)&predictedPlayer.q16ang, GAMEVAR_SYSTEM | GAMEVAR_INT16PTR | GAMEVAR_SYNCCHECK);
-    Gv_NewVar("omyang",(intptr_t)&predictedPlayer.oq16ang, GAMEVAR_SYSTEM | GAMEVAR_INT16PTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("myang",(intptr_t)&predictedPlayer.q16ang, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
+    Gv_NewVar("omyang",(intptr_t)&predictedPlayer.oq16ang, GAMEVAR_SYSTEM | GAMEVAR_Q16PTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("mycursectnum",(intptr_t)&predictedPlayer.cursectnum, GAMEVAR_SYSTEM | GAMEVAR_INT16PTR | GAMEVAR_SYNCCHECK);
     Gv_NewVar("myjumpingcounter",(intptr_t)&predictedPlayer.jumping_counter, GAMEVAR_SYSTEM | GAMEVAR_INT16PTR | GAMEVAR_SYNCCHECK);
 
