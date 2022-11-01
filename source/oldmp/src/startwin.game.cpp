@@ -37,7 +37,7 @@ const char* credits = {
     "* TerminX, Hendricks266, & Voidpoint - For making EDuke32, helping me during hard times, and giving me a chance to be a part of something as awesome as Ion Fury.\r\n\r\n"
     "* Shotspark Studios - For helping promote this project, and giving me a home on Discord to share my work.\r\n\r\n"
     "* The Build Bros Community - For playing and testing the absolute shit out of this thing, their impeccable work on StrikerDM's community maps, and supporting me over the years.\r\n\r\n"
-    "* NY00123 - For helping me with all kinds of cross-platform issues and bugs.\r\n\r\n"
+    "* NY00123 - For helping me with all kinds of cross-platform issues and bugs, and for helping me find the root cause of some infuriatingly difficult to debug issues.\r\n\r\n"
     "* Doom64hunter - For a ton of support and help with all sorts of issues.\r\n\r\n"
     "-= Donator Hall of Fame =-\r\n"
     "- Balls of Steel Forever\r\n"
@@ -53,6 +53,7 @@ const char* credits = {
     "- Vandclash\r\n"
     "- LittleTijn\r\n"
     "- aaBlueDragon\r\n"
+    "- Yasha\r\n"
     "\r\n"
     "(If I've missed you on this list, please DM me on Ko-Fi with your preferred name and proof of donation!)\r\n"
 };
