@@ -9309,9 +9309,6 @@ int app_main(int32_t argc, char const* const* argv)
 
     G_ExtPreInit(argc, argv);
     
-    //OSD_SetLogFile(APPBASENAME ".log");
-    OSD_SetParameters(0, 0, 0, 12, 2, 12, OSD_ERROR, OSDTEXT_RED, OSDTEXT_DARKRED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
-
     osdcallbacks_t callbacks = {};
     callbacks.drawchar          = GAME_drawosdchar;
     callbacks.drawstr           = GAME_drawosdstr;
@@ -9376,6 +9373,7 @@ int app_main(int32_t argc, char const* const* argv)
         Xfree(str);
     }
 
+    LOG_F(INFO, "Using config file '%s'.", g_setupFileName);
     int32_t const readSetup = CONFIG_ReadSetup();
 
 #ifdef _WIN32
@@ -9386,9 +9384,7 @@ int app_main(int32_t argc, char const* const* argv)
         wm_msgbox("Build Engine Initialization Error",
                   "There was a problem initializing the Build engine: %s", engineerrstr);
         Bexit(EXIT_FAILURE);
-    }
-
-    LOG_F(INFO, "Using config file '%s'.",g_setupFileName);
+    }   
 
 #ifdef DISCORD_RPC
     InitDiscord();
@@ -9517,9 +9513,9 @@ int app_main(int32_t argc, char const* const* argv)
     ud.last_level = -1;
 
     LOG_F(INFO, "Initializing OSD...");
-
     Bsprintf(tempbuf,HEAD2 " - %s (%s)",s_buildRev, s_buildTimestamp);
     OSD_SetVersion(tempbuf, 10, 0);
+    OSD_SetParameters(0, 0, 0, 12, 2, 12, OSD_ERROR, OSDTEXT_RED, OSDTEXT_DARKRED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
     registerosdcommands();
 
     if (CONTROL_Startup(controltype_keyboardandmouse, &GetTime, TICRATE))
