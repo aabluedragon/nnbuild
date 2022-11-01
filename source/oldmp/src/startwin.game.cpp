@@ -24,7 +24,7 @@
 #include "startwin.game.h"
 
 const char* credits = {
-    "Developed by: Jordon ""Striker The Hedgefox"" Moss.\r\n\r\n"
+    "Developed by: Jordon \"Striker The Hedgefox\" Moss.\r\n\r\n"
     "NetDuke32 is a multiplayer-centric port based on EDuke32. "
     "Started late 2015 as a series of maintenance builds of EDuke32-OldMP, it has since "
     "evolved. NetDuke32 brings new features, QoL and netcode improvements, and tries "
