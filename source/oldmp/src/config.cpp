@@ -267,7 +267,7 @@ void CONFIG_SetDefaults(void)
     Bstrcpy(ud.rtsname, G_DefaultRtsFile());
 
     if(!CommandName)
-        Bstrcpy(szPlayerName, "Duke");
+        Bstrcpy(szPlayerName, "Player");
 
     Bstrcpy(ud.ridecule[0], "An inspiration for birth control.");
     Bstrcpy(ud.ridecule[1], "You're gonna die for that!");
@@ -601,12 +601,17 @@ int32_t CONFIG_ReadSetup(void)
 
         if (!CommandName)
         {
-            SCRIPT_GetString(ud.config.scripthandle, "Comm Setup", "PlayerName", &tempbuf[0]);
+            Bmemset(tempbuf, 0, sizeof(tempbuf));
+            if (!SCRIPT_GetString(ud.config.scripthandle, "Comm Setup", "PlayerName", &tempbuf[0]))
+            {
+                if (tempbuf[0] != 0)
+                {
+                    while (Bstrlen(OSD_StripColors(dummybuf, tempbuf)) > 10)
+                        tempbuf[Bstrlen(tempbuf) - 1] = '\0';
 
-            while (Bstrlen(OSD_StripColors(dummybuf, tempbuf)) > 10)
-                tempbuf[Bstrlen(tempbuf) - 1] = '\0';
-
-            Bstrncpyz(szPlayerName, tempbuf, sizeof(szPlayerName));
+                    Bstrncpyz(szPlayerName, tempbuf, sizeof(szPlayerName));
+                }
+            }
         }
 
         SCRIPT_GetString(ud.config.scripthandle, "Comm Setup","RTSName",&ud.rtsname[0]);
