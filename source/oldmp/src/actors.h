@@ -70,6 +70,8 @@ typedef struct
 #define LIGHTZOFF(s) ((sprite[s].yrepeat*tilesiz[sprite[s].picnum].y)<<1)
 
 void G_DeleteAllLights(void);
+void G_InterpolateLights(int smoothratio);
+void G_AddGameLight(int spriteNum, int sectNum, vec3_t const& offset, int lightRange, int lightRadius, int lightHoriz, uint32_t lightColor, int lightPrio);
 #endif
 
 void G_BackupInterpolations(void);

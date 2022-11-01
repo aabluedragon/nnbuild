@@ -491,8 +491,17 @@ void P_FireWeapon(DukePlayer_t *p)
 
         if (!(aplWeaponFlags[p->curr_weapon][snum] & WEAPON_NOVISIBLE))
         {
-            if((numplayers < 2) || (oldnet_predicting == PREDICTSTATE_PROCESS))
+            if ((numplayers < 2) || (oldnet_predicting == PREDICTSTATE_PROCESS))
+            {
+#ifdef POLYMER
+                auto s = (uspriteptr_t)&sprite[p->i];
+                vec3_t const offset = { -((sintable[(s->ang + 512) & 2047]) >> 7), -((sintable[(s->ang) & 2047]) >> 7), PHEIGHT };
+                G_AddGameLight(p->i, p->cursectnum, offset, 8192, 0, 100, PWEAPON(snum, p->curr_weapon, FlashColor), PR_LIGHT_PRIO_MAX_GAME);
+                practor[p->i].lightcount = 2;
+#endif  // POLYMER
+
                 g_player[snum].display.visibility = 0;
+            }
         }
     }
 }

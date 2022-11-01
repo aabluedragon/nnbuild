@@ -2946,8 +2946,8 @@ void G_DrawRooms(int snum,int smoothratio)
 
     G_DoInterpolations(smoothratio);
     G_AnimateCamSprite(smoothratio);
-
     G_DoConveyorInterp(smoothratio);
+    G_InterpolateLights(smoothratio);
 
     if (ud.camerasprite >= 0)
     {
@@ -3490,6 +3490,10 @@ int A_Spawn(int spriteNum, int tileNum)
         a.floorz = sector[s.sectnum].floorz;
         a.ceilingz = sector[s.sectnum].ceilingz;
         a.actorstayput = a.htextra = -1;
+
+#ifdef POLYMER
+        practor[newSprite].lightId = -1;
+#endif
 
         if ((s.cstat & CSTAT_SPRITE_ALIGNMENT) &&
             s.picnum != SPEAKER &&

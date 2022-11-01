@@ -35,6 +35,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern int g_doQuickSave;
 struct osdcmd_cheatsinfo osdcmd_cheatsinfo_stat;
 float r_ambientlight = 1.0, r_ambientlightrecip = 1.0;
+int32_t r_pr_defaultlights = 1;
 extern int hud_glowingquotes;
 extern int r_maxfps;
 
@@ -771,6 +772,9 @@ osdcvardata_t cvar[] =
     { "r_projectionhack", "r_projectionhack: enable/disable projection hack", (void*)&glprojectionhacks, CVAR_INT, 0, 2 },
 #endif
     { "r_ambientlight", "sets the global map light level",(void*)&r_ambientlight, CVAR_FLOAT | CVAR_FUNCPTR, 0, 10 },
+
+    { "r_pr_defaultlights", "default polymer lights:\n 0: off\n 1: on",(void*)&r_pr_defaultlights, CVAR_BOOL, 0, 1 },
+
     { "r_drawweapon", "r_drawweapon: enable/disable weapon drawing", (void*)&ud.drawweapon, CVAR_INT, 0, 2 },
     { "r_upscalefactor", "increase performance by rendering at upscalefactor less than the screen resolution and upscale to the full resolution in the software renderer", (void*)&ud.detail, CVAR_INT | CVAR_FUNCPTR, 1, 16 },
     { "r_size", "change size of viewable area", (void*)&ud.screen_size, CVAR_INT | CVAR_FUNCPTR, 0, 64 },
@@ -1021,6 +1025,24 @@ void onvideomodechange(int newmode)
     {
         palid = g_player[screenpeek].ps->palette;
     }
+
+#ifdef POLYMER
+    if (videoGetRenderMode() == REND_POLYMER)
+    {
+        int32_t i = 0;
+
+        while (i < MAXSPRITES)
+        {
+            if (practor[i].lightptr)
+            {
+                polymer_deletelight(practor[i].lightId);
+                practor[i].lightptr = NULL;
+                practor[i].lightId = -1;
+            }
+            i++;
+        }
+    }
+#endif
 
     videoSetPalette(ud.brightness >> 2, palid, 0);
     g_restorePalette = 1;

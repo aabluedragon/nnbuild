@@ -49,24 +49,25 @@ static int C_SetScriptSize(int size);
 int g_numQuoteRedefinitions = 0;
 
 // pointers to weapon gamevar data
-intptr_t *aplWeaponClip[MAX_WEAPONS];       // number of items in magazine
-intptr_t *aplWeaponReload[MAX_WEAPONS];     // delay to reload (include fire)
+intptr_t *aplWeaponClip[MAX_WEAPONS];           // number of items in magazine
+intptr_t *aplWeaponReload[MAX_WEAPONS];         // delay to reload (include fire)
 intptr_t *aplWeaponFireDelay[MAX_WEAPONS];      // delay to fire
 intptr_t *aplWeaponHoldDelay[MAX_WEAPONS];      // delay after release fire button to fire (0 for none)
 intptr_t *aplWeaponTotalTime[MAX_WEAPONS];      // The total time the weapon is cycling before next fire.
-intptr_t *aplWeaponFlags[MAX_WEAPONS];      // Flags for weapon
-intptr_t *aplWeaponShoots[MAX_WEAPONS];     // what the weapon shoots
+intptr_t *aplWeaponFlags[MAX_WEAPONS];          // Flags for weapon
+intptr_t *aplWeaponFlashColor[MAX_WEAPONS];     // Muzzle flash color
+intptr_t *aplWeaponShoots[MAX_WEAPONS];         // what the weapon shoots
 intptr_t *aplWeaponSpawnTime[MAX_WEAPONS];      // the frame at which to spawn an item
-intptr_t *aplWeaponSpawn[MAX_WEAPONS];      // the item to spawn
+intptr_t *aplWeaponSpawn[MAX_WEAPONS];          // the item to spawn
 intptr_t *aplWeaponShotsPerBurst[MAX_WEAPONS];  // number of shots per 'burst' (one ammo per 'burst'
 intptr_t *aplWeaponWorksLike[MAX_WEAPONS];      // What original the weapon works like
 intptr_t *aplWeaponInitialSound[MAX_WEAPONS];   // Sound made when initialy firing. zero for no sound
 intptr_t *aplWeaponFireSound[MAX_WEAPONS];      // Sound made when firing (each time for automatic)
 intptr_t *aplWeaponSound2Time[MAX_WEAPONS];     // Alternate sound time
 intptr_t *aplWeaponSound2Sound[MAX_WEAPONS];    // Alternate sound sound ID
-intptr_t *aplWeaponReloadSound1[MAX_WEAPONS];    // Sound of magazine being removed
-intptr_t *aplWeaponReloadSound2[MAX_WEAPONS];    // Sound of magazine being inserted
-intptr_t *aplWeaponSelectSound[MAX_WEAPONS];     // Sound of weapon being selected
+intptr_t *aplWeaponReloadSound1[MAX_WEAPONS];   // Sound of magazine being removed
+intptr_t *aplWeaponReloadSound2[MAX_WEAPONS];   // Sound of magazine being inserted
+intptr_t *aplWeaponSelectSound[MAX_WEAPONS];    // Sound of weapon being selected
 
 // Stores the IDs of system vars.
 SystemVarID_t sysVarIDs;

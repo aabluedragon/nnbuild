@@ -182,6 +182,7 @@ extern intptr_t* aplWeaponSound2Sound[MAX_WEAPONS];     // Alternate sound sound
 extern intptr_t* aplWeaponReloadSound1[MAX_WEAPONS];    // Sound of magazine being removed
 extern intptr_t* aplWeaponReloadSound2[MAX_WEAPONS];    // Sound of magazine being inserted
 extern intptr_t* aplWeaponSelectSound[MAX_WEAPONS];     // Sound for weapon selection
+extern intptr_t* aplWeaponFlashColor[MAX_WEAPONS];      // Color for polymer muzzle flash
 
 typedef struct
 {

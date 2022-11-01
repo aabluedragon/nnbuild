@@ -146,6 +146,7 @@ extern user_defs ud;
 extern char boardfilename[BMAX_PATH];
 extern char currentboardfilename[BMAX_PATH];
 extern int32_t playerswhenstarted;
+extern int32_t r_pr_defaultlights;
 
 // Forward declarations
 const char* G_DefaultRtsFile(void);

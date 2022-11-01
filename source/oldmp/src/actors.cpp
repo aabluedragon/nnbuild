@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //-------------------------------------------------------------------------
 #include "duke3d.h"
 #include "compat.h"
+#include "colmatch.h"
 
 #define KILLIT(KX) {A_DeleteSprite(KX);goto BOLT;}
 
@@ -411,6 +412,666 @@ void P_CheckWeapon(DukePlayer_t* pPlayer)
     P_ChangeWeapon(pPlayer, weaponNum);
 }
 
+#ifdef POLYMER
+static void A_DeleteLight(int32_t s)
+{
+    if (practor[s].lightId >= 0)
+        polymer_deletelight(practor[s].lightId);
+    practor[s].lightId = -1;
+    practor[s].lightptr = NULL;
+}
+
+void G_DeleteAllLights(void)
+{
+    for (int i = 0; i < MAXSPRITES; i++)
+        A_DeleteLight(i);
+}
+
+void G_Polymer_UnInit(void)
+{
+    G_DeleteAllLights();
+}
+
+void G_InterpolateLights(int smoothratio)
+{
+#ifdef POLYMER
+    uint16_t const unumsectors = (unsigned)numsectors;
+
+    for (int i = 0; i < PR_MAXLIGHTS; i++)
+    {
+        auto& pr_light = prlights[i];
+
+        if (!pr_light.flags.active || (unsigned)pr_light.owner >= MAXSPRITES)
+            continue;
+
+        uspriteptr_t pSprite = (uspriteptr_t)&sprite[pr_light.owner];
+
+        if ((unsigned)pr_light.sector >= unumsectors || (unsigned)pSprite->sectnum >= unumsectors || pSprite->statnum == MAXSTATUS)
+        {
+            polymer_deletelight(i);
+            continue;
+        }
+
+        auto pActor = &actor[pr_light.owner];
+        auto& pr_actor = practor[pr_light.owner];
+
+        pr_light.xyz = pSprite->xyz;
+        pr_light.xyz -= pr_actor.lightoffset;
+        pr_light.xyz -= { mulscale16(65536 - smoothratio, pSprite->x - pActor->bpos.x),
+            mulscale16(65536 - smoothratio, pSprite->y - pActor->bpos.y),
+            mulscale16(65536 - smoothratio, pSprite->z - pActor->bpos.z) };
+
+        if (pSprite->picnum != SECTOREFFECTOR)
+            pr_light.xy -= { sintable[(fix16_to_int(CAMERA(q16ang)) + 512) & 2047] >> 10,
+            sintable[fix16_to_int(CAMERA(q16ang)) & 2047] >> 10 };
+
+        pr_light.range = pr_actor.lightrange - mulscale16(65536 - smoothratio, pr_actor.lightrange - pr_actor.olightrange);
+        pr_light.angle = pr_actor.lightang - mulscale16(65536 - smoothratio, ((pr_actor.lightang + 1024 - pr_actor.olightang) & 2047) - 1024);
+    }
+#else
+    UNREFERENCED_PARAMETER(smoothratio);
+#endif
+}
+
+void G_AddGameLight(int spriteNum, int sectNum, vec3_t const& offset, int lightRange, int lightRadius, int lightHoriz, uint32_t lightColor, int lightPrio)
+{
+#ifdef POLYMER
+    uspriteptr_t s = (uspriteptr_t)&sprite[spriteNum];
+    auto pr_actor = &practor[spriteNum];
+
+    Bassert(sectNum != -1);
+
+    if (videoGetRenderMode() != REND_POLYMER || pr_lighting != 1)
+        return;
+
+    if (pr_actor->lightptr == NULL)
+    {
+#pragma pack(push, 1)
+        _prlight pr_light;
+#pragma pack(pop)
+        Bmemset(&pr_light, 0, sizeof(pr_light));
+
+        pr_light.sector = sectNum;
+        pr_light.xyz = s->xyz;
+        updatesector(pr_light.x, pr_light.y, &pr_light.sector);
+        pr_light.xyz -= offset;
+
+        pr_light.color[0] = lightColor & 255;
+        pr_light.color[1] = (lightColor >> 8) & 255;
+        pr_light.color[2] = (lightColor >> 16) & 255;
+
+        if (s->pal)
+        {
+            int colidx = paletteGetClosestColorWithBlacklist(pr_light.color[0], pr_light.color[1], pr_light.color[2], 254, PaletteIndexFullbrights);
+            colidx = palookup[s->pal][colidx];
+            pr_actor->lightcolidx = colidx;
+            pr_light.color[0] = curpalette[colidx].r;
+            pr_light.color[1] = curpalette[colidx].g;
+            pr_light.color[2] = curpalette[colidx].b;
+        }
+        else
+            pr_actor->lightcolidx = 0;
+
+        pr_light.radius = lightRadius;
+        pr_light.priority = lightPrio;
+        pr_light.tilenum = 0;
+        pr_light.owner = spriteNum;
+        pr_light.horiz = lightHoriz;
+
+        pr_light.publicflags.emitshadow = 1;
+        pr_light.publicflags.negative = 0;
+
+        pr_actor->lightrange = pr_actor->olightrange = pr_actor->lightmaxrange = pr_light.range = lightRange;
+        pr_actor->lightang = pr_actor->olightang = pr_light.angle = s->ang;
+        pr_actor->lightoffset = offset;
+
+        pr_actor->lightId = polymer_addlight(&pr_light);
+        if (pr_actor->lightId >= 0)
+            pr_actor->lightptr = &prlights[pr_actor->lightId];
+        return;
+    }
+
+    _prlight& pr_light = *pr_actor->lightptr;
+
+    if (lightRange < pr_actor->lightmaxrange >> 1)
+        pr_actor->lightmaxrange = 0;
+
+    if (lightRange > pr_actor->lightmaxrange || lightPrio != pr_light.priority || sprite[spriteNum].xyz != pr_light.xyz + offset
+        || (lightRadius && pr_light.angle != s->ang))
+    {
+        if (lightRange > pr_actor->lightmaxrange)
+            pr_actor->lightmaxrange = lightRange;
+
+        pr_light.xyz = sprite[spriteNum].xyz;
+        pr_light.xyz -= offset;
+        pr_light.sector = sectNum;
+        updatesector(pr_light.x, pr_light.y, &pr_light.sector);
+        pr_light.flags.invalidate = 1;
+    }
+
+    pr_actor->lightoffset = offset;
+    pr_light.priority = lightPrio;
+    pr_actor->olightrange = pr_actor->lightrange;
+    pr_light.range = pr_actor->lightrange = lightRange;
+    pr_actor->olightang = pr_actor->lightang;
+    pr_light.angle = pr_actor->lightang = s->ang;
+    pr_light.color[0] = lightColor & 255;
+    pr_light.color[1] = (lightColor >> 8) & 255;
+    pr_light.color[2] = (lightColor >> 16) & 255;
+    pr_light.horiz = lightHoriz;
+
+    if (pr_actor->lightcolidx)
+    {
+        int colidx = pr_actor->lightcolidx;
+        pr_light.color[0] = curpalette[colidx].r;
+        pr_light.color[1] = curpalette[colidx].g;
+        pr_light.color[2] = curpalette[colidx].b;
+    }
+#else
+    auto unusedParameterWarningsOnConstReferencesSuck = offset;
+    UNREFERENCED_PARAMETER(unusedParameterWarningsOnConstReferencesSuck);
+    UNREFERENCED_PARAMETER(lightRadius);
+    UNREFERENCED_PARAMETER(spriteNum);
+    UNREFERENCED_PARAMETER(sectNum);
+    UNREFERENCED_PARAMETER(lightRange);
+    UNREFERENCED_PARAMETER(lightHoriz);
+    UNREFERENCED_PARAMETER(lightColor);
+    UNREFERENCED_PARAMETER(lightPrio);
+#endif
+}
+
+static void G_DoEffectorLights(void)  // STATNUM 14
+{
+    static int16_t lasti = -1;
+    int16_t i;
+
+    if (lasti != -1 && sprite[lasti].statnum == STAT_LIGHT)
+    {
+        i = lasti;
+        goto in;
+    }
+
+    for (SPRITES_OF(STAT_LIGHT, i))
+    {
+    in:
+        if ((int32_t)(totalclock - ototalclock) >= TICSPERFRAME)
+        {
+            lasti = i;
+            return;
+        }
+
+        switch (sprite[i].lotag)
+        {
+            case SE_49_POINT_LIGHT:
+            {
+                if (!A_CheckSpriteFlags(i, SFLAG_NOLIGHT) && videoGetRenderMode() == REND_POLYMER &&
+                    !(A_CheckSpriteFlags(i, SFLAG_USEACTIVATOR) && sector[sprite[i].sectnum].lotag & 16384))
+                {
+                    if (practor[i].lightptr == NULL)
+                    {
+#pragma pack(push,1)
+                        _prlight mylight;
+#pragma pack(pop)
+                        mylight.sector = SECT(i);
+                        mylight.xyz = sprite[i].xyz;
+                        mylight.range = SHT(i);
+                        mylight.color[0] = sprite[i].xvel;
+                        mylight.color[1] = sprite[i].yvel;
+                        mylight.color[2] = sprite[i].zvel;
+                        mylight.radius = 0;
+                        mylight.angle = SA(i);
+                        mylight.horiz = SH(i);
+                        mylight.minshade = sprite[i].xoffset;
+                        mylight.maxshade = sprite[i].yoffset;
+                        mylight.tilenum = 0;
+                        mylight.publicflags.emitshadow = 0;
+                        mylight.publicflags.negative = !!(CS(i) & 128);
+                        mylight.owner = i;
+
+                        if (CS(i) & 2)
+                        {
+                            if (CS(i) & 512)
+                                mylight.priority = PR_LIGHT_PRIO_LOW;
+                            else
+                                mylight.priority = PR_LIGHT_PRIO_HIGH;
+                        }
+                        else
+                            mylight.priority = PR_LIGHT_PRIO_MAX;
+
+                        practor[i].lightId = polymer_addlight(&mylight);
+                        if (practor[i].lightId >= 0)
+                        {
+                            practor[i].lightptr = &prlights[practor[i].lightId];
+                            practor[i].lightrange = practor[i].olightrange = mylight.range;
+                            practor[i].lightoffset = {};
+                        }
+                        break;
+                    }
+
+                    if (SHT(i) != practor[i].lightptr->range)
+                    {
+                        practor[i].lightptr->range = SHT(i);
+                        practor[i].lightptr->flags.invalidate = 1;
+                    }
+                    if ((sprite[i].xvel != practor[i].lightptr->color[0]) ||
+                        (sprite[i].yvel != practor[i].lightptr->color[1]) ||
+                        (sprite[i].zvel != practor[i].lightptr->color[2]))
+                    {
+                        practor[i].lightptr->color[0] = sprite[i].xvel;
+                        practor[i].lightptr->color[1] = sprite[i].yvel;
+                        practor[i].lightptr->color[2] = sprite[i].zvel;
+                    }
+                    if ((int)!!(CS(i) & 128) != practor[i].lightptr->publicflags.negative) {
+                        practor[i].lightptr->publicflags.negative = !!(CS(i) & 128);
+                    }
+                }
+                break;
+            }
+            case SE_50_SPOT_LIGHT:
+            {
+                if (!A_CheckSpriteFlags(i, SFLAG_NOLIGHT) && videoGetRenderMode() == REND_POLYMER &&
+                    !(A_CheckSpriteFlags(i, SFLAG_USEACTIVATOR) && sector[sprite[i].sectnum].lotag & 16384))
+                {
+                    if (practor[i].lightptr == NULL)
+                    {
+#pragma pack(push,1)
+                        _prlight mylight;
+#pragma pack(pop)
+
+                        mylight.sector = SECT(i);
+                        mylight.xyz = sprite[i].xyz;
+                        mylight.range = SHT(i);
+                        mylight.color[0] = sprite[i].xvel;
+                        mylight.color[1] = sprite[i].yvel;
+                        mylight.color[2] = sprite[i].zvel;
+                        mylight.radius = (256 - (SS(i) + 128)) << 1;
+                        mylight.faderadius = (int16_t)(mylight.radius * 0.75f);
+                        mylight.angle = SA(i);
+                        mylight.horiz = SH(i);
+                        mylight.minshade = sprite[i].xoffset;
+                        mylight.maxshade = sprite[i].yoffset;
+                        mylight.tilenum = actor[i].htpicnum;
+                        mylight.publicflags.emitshadow = !(CS(i) & 64);
+                        mylight.publicflags.negative = !!(CS(i) & 128);
+                        mylight.owner = i;
+
+                        if (CS(i) & 2)
+                        {
+                            if (CS(i) & 512)
+                                mylight.priority = PR_LIGHT_PRIO_LOW;
+                            else
+                                mylight.priority = PR_LIGHT_PRIO_HIGH;
+                        }
+                        else
+                            mylight.priority = PR_LIGHT_PRIO_MAX;
+
+                        practor[i].lightId = polymer_addlight(&mylight);
+                        if (practor[i].lightId >= 0)
+                        {
+                            practor[i].lightptr = &prlights[practor[i].lightId];
+                            practor[i].lightrange = practor[i].olightrange = mylight.range;
+                            // Hack in case polymer_addlight tweaked the horiz value
+                            if (practor[i].lightptr->horiz != SH(i))
+                                SH(i) = practor[i].lightptr->horiz;
+                            practor[i].lightoffset = {};
+                        }
+                        break;
+                    }
+
+                    if (SHT(i) != practor[i].lightptr->range)
+                    {
+                        practor[i].lightptr->range = SHT(i);
+                        practor[i].lightptr->flags.invalidate = 1;
+                    }
+                    if ((sprite[i].xvel != practor[i].lightptr->color[0]) ||
+                        (sprite[i].yvel != practor[i].lightptr->color[1]) ||
+                        (sprite[i].zvel != practor[i].lightptr->color[2]))
+                    {
+                        practor[i].lightptr->color[0] = sprite[i].xvel;
+                        practor[i].lightptr->color[1] = sprite[i].yvel;
+                        practor[i].lightptr->color[2] = sprite[i].zvel;
+                    }
+                    if (((256 - (SS(i) + 128)) << 1) != practor[i].lightptr->radius)
+                    {
+                        practor[i].lightptr->radius = (256 - (SS(i) + 128)) << 1;
+                        practor[i].lightptr->faderadius = (int16_t)(practor[i].lightptr->radius * 0.75f);
+                        practor[i].lightptr->flags.invalidate = 1;
+                    }
+                    if (SA(i) != practor[i].lightptr->angle)
+                    {
+                        practor[i].lightptr->angle = SA(i);
+                        practor[i].lightptr->flags.invalidate = 1;
+                    }
+                    if (SH(i) != practor[i].lightptr->horiz)
+                    {
+                        practor[i].lightptr->horiz = SH(i);
+                        practor[i].lightptr->flags.invalidate = 1;
+                    }
+                    if ((int)!(CS(i) & 64) != practor[i].lightptr->publicflags.emitshadow) {
+                        practor[i].lightptr->publicflags.emitshadow = !(CS(i) & 64);
+                    }
+                    if ((int)!!(CS(i) & 128) != practor[i].lightptr->publicflags.negative) {
+                        practor[i].lightptr->publicflags.negative = !!(CS(i) & 128);
+                    }
+                    practor[i].lightptr->tilenum = actor[i].htpicnum;
+                }
+
+                break;
+            }
+        }
+    }
+
+    lasti = -1;
+}
+
+int savedFires = 0;
+
+static void A_DoLight(int spriteNum)
+{
+    auto const pSprite = &sprite[spriteNum];
+
+    if (pSprite->statnum == STAT_PLAYER)
+    {
+        if (practor[spriteNum].lightptr != NULL && practor[spriteNum].lightcount)
+        {
+            if (!(--practor[spriteNum].lightcount))
+                A_DeleteLight(spriteNum);
+        }
+    }
+    else if (((sector[pSprite->sectnum].floorz - sector[pSprite->sectnum].ceilingz) < 16) || pSprite->z > sector[pSprite->sectnum].floorz || pSprite->z > actor[spriteNum].floorz ||
+        (pSprite->picnum != SECTOREFFECTOR && ((pSprite->cstat & 32768) || pSprite->yrepeat < 4)) ||
+        A_CheckSpriteFlags(spriteNum, SFLAG_NOLIGHT) || (A_CheckSpriteFlags(spriteNum, SFLAG_USEACTIVATOR) && sector[pSprite->sectnum].lotag & 16384))
+    {
+        if (practor[spriteNum].lightptr != NULL)
+            A_DeleteLight(spriteNum);
+    }
+    else
+    {
+        if (practor[spriteNum].lightptr != NULL && practor[spriteNum].lightcount)
+        {
+            if (!(--practor[spriteNum].lightcount))
+                A_DeleteLight(spriteNum);
+        }
+
+        if (pr_lighting != 1 || r_pr_defaultlights < 1)
+            return;
+
+#ifndef EDUKE32_STANDALONE
+        if (FURY)
+            return;
+
+        for (int ii = 0; ii < 2; ii++)
+        {
+            if (pSprite->picnum <= 0)  // oob safety
+                break;
+
+            switch (DynamicTileMap[pSprite->picnum - 1 + ii])
+            {
+                case DIPSWITCH__STATIC:
+                case DIPSWITCH2__STATIC:
+                case DIPSWITCH3__STATIC:
+                case PULLSWITCH__STATIC:
+                case SLOTDOOR__STATIC:
+                case LIGHTSWITCH__STATIC:
+                case SPACELIGHTSWITCH__STATIC:
+                case SPACEDOORSWITCH__STATIC:
+                case FRANKENSTINESWITCH__STATIC:
+                case POWERSWITCH1__STATIC:
+                case LOCKSWITCH1__STATIC:
+                case POWERSWITCH2__STATIC:
+                case TECHSWITCH__STATIC:
+                case ACCESSSWITCH__STATIC:
+                case ACCESSSWITCH2__STATIC:
+                {
+                    if ((pSprite->cstat & 32768) || A_CheckSpriteFlags(spriteNum, SFLAG_NOLIGHT))
+                    {
+                        if (practor[spriteNum].lightptr != NULL)
+                            A_DeleteLight(spriteNum);
+                        break;
+                    }
+
+                    vec3_t const d = { -(sintable[(pSprite->ang + 512) & 2047] >> 7), -(sintable[(pSprite->ang) & 2047] >> 7), LIGHTZOFF(spriteNum) };
+
+                    int16_t sectnum = pSprite->sectnum;
+                    updatesector(pSprite->x, pSprite->y, &sectnum);
+
+                    if ((unsigned)sectnum < MAXSECTORS && pSprite->z <= sector[sectnum].floorz && pSprite->z >= sector[sectnum].ceilingz)
+                        G_AddGameLight(spriteNum, pSprite->sectnum, d, 384 - ii * 64, 0, 100, ii == 0 ? (172 + (200 << 8) + (104 << 16)) : 216 + (52 << 8) + (20 << 16), PR_LIGHT_PRIO_LOW);
+                }
+                break;
+            }
+        }
+
+        switch (DynamicTileMap[pSprite->picnum])
+        {
+            case ATOMICHEALTH__STATIC:
+            case FREEZEAMMO__STATIC:
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD2(spriteNum), 0, 100, 128 + (128 << 8) + (255 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                break;
+
+            case FIRE__STATIC:
+            case FIRE2__STATIC:
+            case BURNING__STATIC:
+            case BURNING2__STATIC:
+            {
+                uint32_t color;
+                int32_t jj;
+
+                static int32_t savedfires[32][4];  // sectnum x y z
+
+                /*
+                if (Actor[i].floorz - Actor[i].ceilingz < 128) break;
+                if (s->z > Actor[i].floorz+2048) break;
+                */
+
+                switch (pSprite->pal)
+                {
+                    case 1: color = 128 + (128 << 8) + (255 << 16); break;
+                    case 2: color = 255 + (48 << 8) + (48 << 16); break;
+                    case 8: color = 48 + (255 << 8) + (48 << 16); break;
+                    default: color = 240 + (160 << 8) + (80 << 16); break;
+                }
+
+                for (jj = savedFires - 1; jj >= 0; jj--)
+                    if (savedfires[jj][0] == pSprite->sectnum && savedfires[jj][1] == (pSprite->x >> 3) &&
+                        savedfires[jj][2] == (pSprite->y >> 3) && savedfires[jj][3] == (pSprite->z >> 7))
+                        break;
+
+                if (jj == -1 && savedFires < 32)
+                {
+                    jj = savedFires;
+                    G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD2(spriteNum), 0, 100, color, PR_LIGHT_PRIO_HIGH_GAME);
+                    savedfires[jj][0] = pSprite->sectnum;
+                    savedfires[jj][1] = pSprite->x >> 3;
+                    savedfires[jj][2] = pSprite->y >> 3;
+                    savedfires[jj][3] = pSprite->z >> 7;
+                    savedFires++;
+                }
+            }
+            break;
+
+            case OOZFILTER__STATIC:
+                if (pSprite->xrepeat > 4)
+                    G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD2(spriteNum), 0, 100, 176 + (252 << 8) + (120 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                break;
+            case FLOORFLAME__STATIC:
+            case FIREBARREL__STATIC:
+            case FIREVASE__STATIC:
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) << 1 }, LIGHTRAD2(spriteNum) >> 1, 0, 100, 255 + (95 << 8), PR_LIGHT_PRIO_HIGH_GAME);
+                break;
+
+            case EXPLOSION2__STATIC:
+                if (!practor[spriteNum].lightcount)
+                {
+                    // XXX: This block gets CODEDUP'd too much.
+                    vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
+                    G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100,
+                        240 + (160 << 8) + (80 << 16), pSprite->yrepeat > 32 ? PR_LIGHT_PRIO_HIGH_GAME : PR_LIGHT_PRIO_LOW_GAME);
+                }
+                break;
+            case FORCERIPPLE__STATIC:
+            {
+                vec3_t const offset = { -((sintable[(pSprite->ang + 512) & 2047]) >> 5), -((sintable[(pSprite->ang) & 2047]) >> 5), LIGHTZOFF(spriteNum) };
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, 80 + (80 << 8) + (255 << 16), PR_LIGHT_PRIO_LOW_GAME);
+                practor[spriteNum].lightcount = 2;
+            }
+            break;
+            case TRANSPORTERBEAM__STATIC:
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, 80 + (80 << 8) + (255 << 16), PR_LIGHT_PRIO_LOW_GAME);
+                practor[spriteNum].lightcount = 2;
+                break;
+            case GROWSPARK__STATIC:
+            {
+                vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, 216 + (52 << 8) + (20 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+            }
+            break;
+            case NEON1__STATIC:
+            case NEON3__STATIC:
+            case NEON4__STATIC:
+            case NEON5__STATIC:
+            case NEON6__STATIC:
+            {
+                vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum) >> 2, 0, 100, 216 + (52 << 8) + (20 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+            }
+            break;
+            case LASERLINE__STATIC:
+            {
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, 1280, 0, 100, 216 + (52 << 8) + (20 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                practor[spriteNum].lightcount = 2;
+            }
+            break;
+            case SHRINKEREXPLOSION__STATIC:
+            {
+                vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, 176 + (252 << 8) + (120 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+            }
+            break;
+            case NEON2__STATIC:
+            case FREEZEBLAST__STATIC:
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum) << 2, 0, 100, 72 + (88 << 8) + (140 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                break;
+            case REACTOR__STATIC:
+            case REACTOR2__STATIC:
+            case REACTORSPARK__STATIC:
+            case REACTOR2SPARK__STATIC:
+            case BOLT1__STATIC:
+            case SIDEBOLT1__STATIC:
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, 72 + (88 << 8) + (140 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                practor[spriteNum].lightcount = 2;
+                break;
+            case COOLEXPLOSION1__STATIC:
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum) << 2, 0, 100, 128 + (0 << 8) + (255 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                break;
+            case SHRINKSPARK__STATIC:
+            case CRYSTALAMMO__STATIC:
+            case 679: // battlelord head thing
+            case 490: // cycloid head thing
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, 176 + (252 << 8) + (120 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                break;
+            case FIRELASER__STATIC:
+                if (pSprite->statnum == STAT_PROJECTILE)
+                    G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, 64 * pSprite->yrepeat, 0, 100, 255 + (95 << 8), PR_LIGHT_PRIO_LOW_GAME);
+                break;
+            case RPG__STATIC:
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD3(spriteNum) << 2, 0, 100, 255 + (95 << 8), PR_LIGHT_PRIO_LOW_GAME);
+                break;
+            case SHOTSPARK1__STATIC:
+                if (AC_ACTION_COUNT(actor[spriteNum].t_data) == 0) // check for first frame of action
+                {
+                    vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
+                    G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD3(spriteNum) << 1, 0, 100, 240 + (160 << 8) + (80 << 16), PR_LIGHT_PRIO_LOW_GAME);
+                    practor[spriteNum].lightcount = 1;
+                }
+                break;
+
+            case RECON__STATIC:
+            {
+                vec3_t const offset = { 0, 0, -2048 };
+                auto& a = actor[spriteNum];
+
+                uint32_t color = 255 + (255 << 8) + (255 << 16);
+                int      radius = 256;
+                int      range = 8192;
+
+                if (a.t_data[0] == 3)
+                {
+                    color = everyothertime & 1 ? 255 : 255 << 16;
+                    radius <<= 1;
+                    range <<= 1;
+                }
+
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, range, radius, (pSprite->xvel >> 2) - 100, color, PR_LIGHT_PRIO_HIGH_GAME);
+                break;
+            }
+            case DRONE__STATIC:
+            case TANK__STATIC:
+            {
+                vec3_t const offset = { 0, 0, 8192 };
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, 4096, 256, 100, 255/*+(255<<8)+(255<<16)*/, PR_LIGHT_PRIO_HIGH_GAME);
+                break;
+            }
+            case DOMELITE__STATIC:
+            {
+                vec3_t offset = { 0, 0, LIGHTZOFF(spriteNum) << 2 };
+                if (pSprite->cstat & 8)
+                    offset.z = -offset.z;
+                pSprite->ang += 64;
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD3(spriteNum) << 3, 384, 100, 255, PR_LIGHT_PRIO_LOW_GAME);
+                break;
+            }
+
+            case FOOTPRINTS__STATIC:
+            case FOOTPRINTS2__STATIC:
+            case FOOTPRINTS3__STATIC:
+            case FOOTPRINTS4__STATIC:
+                if (pSprite->pal != 8)
+                    break;
+                fallthrough__;
+            case BLOODPOOL__STATIC:
+            {
+                uint32_t color;
+
+                switch (pSprite->pal)
+                {
+                    case 1:
+                        color = 72 + (88 << 8) + (140 << 16);
+                        break;
+                    case 0:
+                    case 8:
+                        color = 172 + (200 << 8) + (104 << 16);
+                        break;
+                    default:
+                        color = 0;
+                        break;
+                }
+
+                if (color)
+                    G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, (pSprite->xrepeat << 4) }, (pSprite->xrepeat << 3), 0, 100, color, PR_LIGHT_PRIO_LOW);
+            }
+        }
+#endif // EDUKE32_STANDALONE
+    }
+}
+
+void G_RefreshLights(void)
+{
+#ifdef POLYMER
+    if (!Numsprites || videoGetRenderMode() != REND_POLYMER)
+        return;
+
+    int statNum = 0;
+    savedFires = 0;
+    do
+    {
+        for (int SPRITES_OF(statNum++, spriteNum))
+            A_DoLight(spriteNum);
+    } while (statNum < MAXSTATUS);
+#endif
+}
+#endif // POLYMER
+
 void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
 {
     spritetype *s=&sprite[i],*sj;
@@ -766,6 +1427,11 @@ void A_DeleteSprite(int s)
         if (Gv_GetVar(sysVarIDs.RETURN, -1, -1))
             return;
     }
+
+#ifdef POLYMER
+    if (practor[s].lightptr != NULL && videoGetRenderMode() == REND_POLYMER)
+        A_DeleteLight(s);
+#endif
 
     // AMBIENT_SFX_PLAYING
     if (sprite[s].picnum == MUSICANDSFX && actor[s].t_data[0] == 1)
@@ -7898,211 +8564,6 @@ int A_CheckSwitchTile(int i)
     return 0;
 }
 
-#ifdef POLYMER
-static void A_DeleteLight(int32_t s)
-{
-    if (practor[s].lightId >= 0)
-        polymer_deletelight(practor[s].lightId);
-    practor[s].lightId = -1;
-    practor[s].lightptr = NULL;
-}
-
-void G_DeleteAllLights(void)
-{
-    for (int i = 0; i < MAXSPRITES; i++)
-        A_DeleteLight(i);
-}
-
-void G_Polymer_UnInit(void)
-{
-    G_DeleteAllLights();
-}
-
-static void G_DoEffectorLights(void)  // STATNUM 14
-{
-    static int16_t lasti = -1;
-    int16_t i;
-
-    if (lasti != -1 && sprite[lasti].statnum == STAT_LIGHT)
-    {
-        i = lasti;
-        goto in;
-    }
-
-    for (SPRITES_OF(STAT_LIGHT, i))
-    {
-    in:
-        if ((int32_t)(totalclock - ototalclock) >= TICSPERFRAME)
-        {
-            lasti = i;
-            return;
-        }
-
-        switch (sprite[i].lotag)
-        {
-            case SE_49_POINT_LIGHT:
-            {
-                if (!A_CheckSpriteFlags(i, SFLAG_NOLIGHT) && videoGetRenderMode() == REND_POLYMER &&
-                    !(A_CheckSpriteFlags(i, SFLAG_USEACTIVATOR) && sector[sprite[i].sectnum].lotag & 16384))
-                {
-                    if (practor[i].lightptr == NULL)
-                    {
-#pragma pack(push,1)
-                        _prlight mylight;
-#pragma pack(pop)
-                        mylight.sector = SECT(i);
-                        mylight.xyz = sprite[i].xyz;
-                        mylight.range = SHT(i);
-                        mylight.color[0] = sprite[i].xvel;
-                        mylight.color[1] = sprite[i].yvel;
-                        mylight.color[2] = sprite[i].zvel;
-                        mylight.radius = 0;
-                        mylight.angle = SA(i);
-                        mylight.horiz = SH(i);
-                        mylight.minshade = sprite[i].xoffset;
-                        mylight.maxshade = sprite[i].yoffset;
-                        mylight.tilenum = 0;
-                        mylight.publicflags.emitshadow = 0;
-                        mylight.publicflags.negative = !!(CS(i) & 128);
-                        mylight.owner = i;
-
-                        if (CS(i) & 2)
-                        {
-                            if (CS(i) & 512)
-                                mylight.priority = PR_LIGHT_PRIO_LOW;
-                            else
-                                mylight.priority = PR_LIGHT_PRIO_HIGH;
-                        }
-                        else
-                            mylight.priority = PR_LIGHT_PRIO_MAX;
-
-                        practor[i].lightId = polymer_addlight(&mylight);
-                        if (practor[i].lightId >= 0)
-                        {
-                            practor[i].lightptr = &prlights[practor[i].lightId];
-                            practor[i].lightrange = practor[i].olightrange = mylight.range;
-                            practor[i].lightoffset = {};
-                        }
-                        break;
-                    }
-
-                    if (SHT(i) != practor[i].lightptr->range)
-                    {
-                        practor[i].lightptr->range = SHT(i);
-                        practor[i].lightptr->flags.invalidate = 1;
-                    }
-                    if ((sprite[i].xvel != practor[i].lightptr->color[0]) ||
-                        (sprite[i].yvel != practor[i].lightptr->color[1]) ||
-                        (sprite[i].zvel != practor[i].lightptr->color[2]))
-                    {
-                        practor[i].lightptr->color[0] = sprite[i].xvel;
-                        practor[i].lightptr->color[1] = sprite[i].yvel;
-                        practor[i].lightptr->color[2] = sprite[i].zvel;
-                    }
-                    if ((int)!!(CS(i) & 128) != practor[i].lightptr->publicflags.negative) {
-                        practor[i].lightptr->publicflags.negative = !!(CS(i) & 128);
-                    }
-                }
-                break;
-            }
-            case SE_50_SPOT_LIGHT:
-            {
-                if (!A_CheckSpriteFlags(i, SFLAG_NOLIGHT) && videoGetRenderMode() == REND_POLYMER &&
-                    !(A_CheckSpriteFlags(i, SFLAG_USEACTIVATOR) && sector[sprite[i].sectnum].lotag & 16384))
-                {
-                    if (practor[i].lightptr == NULL)
-                    {
-#pragma pack(push,1)
-                        _prlight mylight;
-#pragma pack(pop)
-
-                        mylight.sector = SECT(i);
-                        mylight.xyz = sprite[i].xyz;
-                        mylight.range = SHT(i);
-                        mylight.color[0] = sprite[i].xvel;
-                        mylight.color[1] = sprite[i].yvel;
-                        mylight.color[2] = sprite[i].zvel;
-                        mylight.radius = (256 - (SS(i) + 128)) << 1;
-                        mylight.faderadius = (int16_t)(mylight.radius * 0.75f);
-                        mylight.angle = SA(i);
-                        mylight.horiz = SH(i);
-                        mylight.minshade = sprite[i].xoffset;
-                        mylight.maxshade = sprite[i].yoffset;
-                        mylight.tilenum = actor[i].htpicnum;
-                        mylight.publicflags.emitshadow = !(CS(i) & 64);
-                        mylight.publicflags.negative = !!(CS(i) & 128);
-                        mylight.owner = i;
-
-                        if (CS(i) & 2)
-                        {
-                            if (CS(i) & 512)
-                                mylight.priority = PR_LIGHT_PRIO_LOW;
-                            else
-                                mylight.priority = PR_LIGHT_PRIO_HIGH;
-                        }
-                        else
-                            mylight.priority = PR_LIGHT_PRIO_MAX;
-
-                        practor[i].lightId = polymer_addlight(&mylight);
-                        if (practor[i].lightId >= 0)
-                        {
-                            practor[i].lightptr = &prlights[practor[i].lightId];
-                            practor[i].lightrange = practor[i].olightrange = mylight.range;
-                            // Hack in case polymer_addlight tweaked the horiz value
-                            if (practor[i].lightptr->horiz != SH(i))
-                                SH(i) = practor[i].lightptr->horiz;
-                            practor[i].lightoffset = {};
-                        }
-                        break;
-                    }
-
-                    if (SHT(i) != practor[i].lightptr->range)
-                    {
-                        practor[i].lightptr->range = SHT(i);
-                        practor[i].lightptr->flags.invalidate = 1;
-                    }
-                    if ((sprite[i].xvel != practor[i].lightptr->color[0]) ||
-                        (sprite[i].yvel != practor[i].lightptr->color[1]) ||
-                        (sprite[i].zvel != practor[i].lightptr->color[2]))
-                    {
-                        practor[i].lightptr->color[0] = sprite[i].xvel;
-                        practor[i].lightptr->color[1] = sprite[i].yvel;
-                        practor[i].lightptr->color[2] = sprite[i].zvel;
-                    }
-                    if (((256 - (SS(i) + 128)) << 1) != practor[i].lightptr->radius)
-                    {
-                        practor[i].lightptr->radius = (256 - (SS(i) + 128)) << 1;
-                        practor[i].lightptr->faderadius = (int16_t)(practor[i].lightptr->radius * 0.75f);
-                        practor[i].lightptr->flags.invalidate = 1;
-                    }
-                    if (SA(i) != practor[i].lightptr->angle)
-                    {
-                        practor[i].lightptr->angle = SA(i);
-                        practor[i].lightptr->flags.invalidate = 1;
-                    }
-                    if (SH(i) != practor[i].lightptr->horiz)
-                    {
-                        practor[i].lightptr->horiz = SH(i);
-                        practor[i].lightptr->flags.invalidate = 1;
-                    }
-                    if ((int)!(CS(i) & 64) != practor[i].lightptr->publicflags.emitshadow) {
-                        practor[i].lightptr->publicflags.emitshadow = !(CS(i) & 64);
-                    }
-                    if ((int)!!(CS(i) & 128) != practor[i].lightptr->publicflags.negative) {
-                        practor[i].lightptr->publicflags.negative = !!(CS(i) & 128);
-                    }
-                    practor[i].lightptr->tilenum = actor[i].htpicnum;
-                }
-
-                break;
-            }
-        }
-    }
-
-    lasti = -1;
-}
-#endif // POLYMER
-
 static void G_RecordOldSpritePos(void)
 {
     int statNum = 0;
@@ -8197,6 +8658,7 @@ void G_MoveWorld(void)
         while (k--);
     }
 
+    G_RefreshLights();
     G_DoSectorAnimations();
     G_MoveFX();               //ST 11
 }
