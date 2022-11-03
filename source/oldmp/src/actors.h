@@ -23,6 +23,9 @@
 #define AC_ACTIONTICS(spr, a) ((spr)->lotag)
 #define AC_MOVFLAGS(spr, a) ((spr)->hitag)
 
+#define ACTOR_MAXFALLINGZVEL 6144
+#define ACTOR_ONWATER_ADDZ (24<<8)
+
 typedef struct {
     int floorz, ceilingz, lastvx, lastvy;
     vec3_t bpos;

@@ -3431,8 +3431,8 @@ void P_ProcessInput(int snum)
                 p->on_ground = 0;
                 p->vel.z += (g_spriteGravity + 80); // (TICSPERFRAME<<6);
 
-                if (p->vel.z >= (4096 + 2048))
-                    p->vel.z = (4096 + 2048);
+                if (p->vel.z >= ACTOR_MAXFALLINGZVEL)
+                    p->vel.z = ACTOR_MAXFALLINGZVEL;
 
                 if (p->vel.z > 2400 && p->falling_counter < 255)
                 {
@@ -3477,7 +3477,7 @@ void P_ProcessInput(int snum)
                 p->scream_voice = FX_Ok;
             }
 
-            if (sectorLotag != ST_1_ABOVE_WATER && sectorLotag != ST_2_UNDERWATER && p->on_ground == 0 && p->vel.z > (6144 >> 1))
+            if (sectorLotag != ST_1_ABOVE_WATER && sectorLotag != ST_2_UNDERWATER && p->on_ground == 0 && p->vel.z > (ACTOR_MAXFALLINGZVEL >> 1))
                 p->hard_landing = p->vel.z >> 10;
 
             p->on_ground = 1;

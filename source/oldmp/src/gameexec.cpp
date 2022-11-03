@@ -388,7 +388,7 @@ void A_Fall(int iActor)
         if (sector[s->sectnum].lotag == ST_2_UNDERWATER && s->zvel > 3122)
             s->zvel = 3144;
 
-        s->z += s->zvel = min(6144, s->zvel+c);
+        s->z += s->zvel = min(ACTOR_MAXFALLINGZVEL, s->zvel+c);
     }
 
     if (fbunch >= 0)

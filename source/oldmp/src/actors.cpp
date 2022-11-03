@@ -1284,37 +1284,40 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
     short dasectnum, cd;
     int isEnemy = A_CheckEnemySprite(&sprite[spritenum]);
 
-    if (sprite[spritenum].statnum == STAT_MISC || (isEnemy && sprite[spritenum].xrepeat < 4))
+    auto const pSprite = &sprite[spritenum];
+    auto const pActor = &actor[spritenum];
+
+    if (pSprite->statnum == STAT_MISC || (isEnemy && pSprite->xrepeat < 4))
     {
-        sprite[spritenum].x += (xchange*TICSPERFRAME)>>2;
-        sprite[spritenum].y += (ychange*TICSPERFRAME)>>2;
-        sprite[spritenum].z += (zchange*TICSPERFRAME)>>2;
+        pSprite->x += (xchange*TICSPERFRAME)>>2;
+        pSprite->y += (ychange*TICSPERFRAME)>>2;
+        pSprite->z += (zchange*TICSPERFRAME)>>2;
 
         if (isEnemy)
-            setsprite(spritenum, &sprite[spritenum].xyz);
+            setsprite(spritenum, &pSprite->xyz);
 
         return 0;
     }
 
-    dasectnum = sprite[spritenum].sectnum;
+    dasectnum = pSprite->sectnum;
     auto sectLotag = sector[dasectnum].lotag;
 
-    oldpos.x = sprite[spritenum].x;
-    oldpos.y = sprite[spritenum].y;
+    oldpos.x = pSprite->x;
+    oldpos.y = pSprite->y;
 
-    daz = sprite[spritenum].z - ((tilesiz[sprite[spritenum].picnum].y*sprite[spritenum].yrepeat)<<1);
+    daz = pSprite->z - ((tilesiz[pSprite->picnum].y*pSprite->yrepeat)<<1);
 
     if (yax_getbunch(dasectnum, (zchange > 0)) >= 0
         && (SECTORFLD(dasectnum, stat, (zchange > 0)) & yax_waltosecmask(cliptype)) == 0)
     {
-        setspritez(spritenum, &sprite[spritenum].xyz);
-        dasectnum = sprite[spritenum].sectnum;
+        setspritez(spritenum, &pSprite->xyz);
+        dasectnum = pSprite->sectnum;
     }
 
     if (isEnemy)
     {
-        if (sprite[spritenum].xrepeat > 60)
-            retval = clipmove_old(&sprite[spritenum].x,&sprite[spritenum].y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),1024L,(4<<8),(4<<8),cliptype);
+        if (pSprite->xrepeat > 60)
+            retval = clipmove_old(&pSprite->x,&pSprite->y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),1024L,(4<<8),(4<<8),cliptype);
         else
         {
             if (sprite[spritenum].picnum == LIZMAN)
@@ -1324,58 +1327,58 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
             else
                 cd = 192L;
 
-            retval = clipmove_old(&sprite[spritenum].x,&sprite[spritenum].y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),cd,(4<<8),(4<<8),cliptype);
+            retval = clipmove_old(&pSprite->x,&pSprite->y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),cd,(4<<8),(4<<8),cliptype);
         }
 
         if (dasectnum < 0 || (dasectnum >= 0 &&
-                              ((actor[spritenum].actorstayput >= 0 && actor[spritenum].actorstayput != dasectnum) ||
-                               ((sprite[spritenum].picnum == BOSS2) && sprite[spritenum].pal == 0 && sector[dasectnum].lotag != ST_3) ||
-                               ((sprite[spritenum].picnum == BOSS1 || sprite[spritenum].picnum == BOSS2) && sector[dasectnum].lotag == ST_1_ABOVE_WATER) /*||
+                              ((pActor->actorstayput >= 0 && pActor->actorstayput != dasectnum) ||
+                               ((pSprite->picnum == BOSS2) && pSprite->pal == 0 && sector[dasectnum].lotag != ST_3) ||
+                               ((pSprite->picnum == BOSS1 || pSprite->picnum == BOSS2) && sector[dasectnum].lotag == ST_1_ABOVE_WATER) /*||
                                (sector[dasectnum].lotag == ST_1_ABOVE_WATER && (sprite[spritenum].picnum == LIZMAN || (sprite[spritenum].picnum == LIZTROOP && sprite[spritenum].zvel == 0)))*/
                               ))
            )
         {
-            sprite[spritenum].x = oldpos.x;
-            sprite[spritenum].y = oldpos.y;
+            pSprite->x = oldpos.x;
+            pSprite->y = oldpos.y;
 
             /*            if (dasectnum >= 0 && sector[dasectnum].lotag == ST_1_ABOVE_WATER && sprite[spritenum].picnum == LIZMAN)
                             sprite[spritenum].ang = (krand()&2047);
                         else if ((actor[spritenum].t_data[0]&3) == 1 && sprite[spritenum].picnum != COMMANDER)
                             sprite[spritenum].ang = (krand()&2047); */
 
-            oldpos.z = sprite[spritenum].z;
+            oldpos.z = pSprite->z;
             setspritez(spritenum, &oldpos);
 
             if (dasectnum < 0) dasectnum = 0;
             return (16384+dasectnum);
         }
 
-        if ((retval&49152) >= 32768 && (actor[spritenum].cgg==0))
-            sprite[spritenum].ang += 768;
+        if ((retval&49152) >= 32768 && (pActor->cgg==0))
+            pSprite->ang += 768;
     }
     else
     {
-        if (sprite[spritenum].statnum == STAT_PROJECTILE)
+        if (pSprite->statnum == STAT_PROJECTILE)
             retval =
-                clipmove_old(&sprite[spritenum].x,&sprite[spritenum].y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),8L,(4<<8),(4<<8),cliptype);
+                clipmove_old(&pSprite->x,&pSprite->y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),8L,(4<<8),(4<<8),cliptype);
         else
             retval =
-                clipmove_old(&sprite[spritenum].x,&sprite[spritenum].y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),(int)(sprite[spritenum].clipdist<<2),(4<<8),(4<<8),cliptype);
+                clipmove_old(&pSprite->x,&pSprite->y,&daz,&dasectnum,((xchange*TICSPERFRAME)<<11),((ychange*TICSPERFRAME)<<11),(int)(pSprite->clipdist<<2),(4<<8),(4<<8),cliptype);
     }
 
     if (dasectnum >= 0)
-        if ((dasectnum != sprite[spritenum].sectnum))
+        if ((dasectnum != pSprite->sectnum))
             changespritesect(spritenum,dasectnum);
 
-    daz = sprite[spritenum].z + ((zchange * TICSPERFRAME) >> 3);
+    daz = pSprite->z + ((zchange * TICSPERFRAME) >> 3);
 
     if ((zchange < 0 && sectLotag == ST_2_UNDERWATER) || (zchange > 0 && sectLotag == ST_1_ABOVE_WATER))
     {
         int32_t otherSect;
         if (A_CheckNoSE7Water((uspriteptr_t)&sprite[spritenum], dasectnum, sectLotag, &otherSect))
         {
-            if (((daz < actor[spritenum].ceilingz) && sectLotag == ST_2_UNDERWATER) ||
-                (daz > actor[spritenum].floorz && sectLotag == ST_1_ABOVE_WATER))
+            if (((daz < pActor->ceilingz) && sectLotag == ST_2_UNDERWATER) ||
+                (daz > pActor->floorz && sectLotag == ST_1_ABOVE_WATER))
             {
                 A_Spawn(spritenum, WATERSPLASH2);
                 changespritesect(spritenum, otherSect);
@@ -1385,8 +1388,8 @@ int A_MoveSprite(int spritenum, int xchange, int ychange, int zchange, unsigned 
         }
     }
     
-    if (((daz > actor[spritenum].ceilingz) && (daz <= actor[spritenum].floorz))
-        || ((sprite[spritenum].statnum == STAT_ACTOR) && actor[spritenum].t_data[1] && (sprite[spritenum].hitag & noclip)))
+    if (((daz > pActor->ceilingz) && (daz <= pActor->floorz))
+        || ((sprite[spritenum].statnum == STAT_ACTOR) && AC_MOVE_ID(pActor->t_data) && (AC_MOVFLAGS(pSprite, pActor) & noclip)))
     {
         sprite[spritenum].z = daz;
     }
@@ -2352,8 +2355,8 @@ static void G_MoveFallers(void)
                 if (s->z < (sector[sect].floorz - ACTOR_FLOOR_OFFSET))
                 {
                     s->zvel += x;
-                    if (s->zvel > 6144)
-                        s->zvel = 6144;
+                    if (s->zvel > ACTOR_MAXFALLINGZVEL)
+                        s->zvel = ACTOR_MAXFALLINGZVEL;
                     s->z += s->zvel;
                 }
                 if ((sector[sect].floorz-s->z) < (16<<8))
@@ -3509,7 +3512,7 @@ static void G_MoveWeapons(void)
                     s->zvel -= actor[spriteNum].projectile.drop;
 
                 if (actor[spriteNum].projectile.workslike & PROJECTILE_SPIT)
-                    if (s->zvel < 6144)
+                    if (s->zvel < ACTOR_MAXFALLINGZVEL)
                         s->zvel += g_spriteGravity-112;
 
                 int32_t projVel = s->xvel;
@@ -3872,7 +3875,7 @@ static void G_MoveWeapons(void)
                         sprite[newSprite].pal = s->pal;
                     }
                 }
-                else if (s->picnum == SPIT) if (s->zvel < 6144)
+                else if (s->picnum == SPIT) if (s->zvel < ACTOR_MAXFALLINGZVEL)
                     s->zvel += g_spriteGravity - 112;
 
                 if (j != 0)
@@ -4626,7 +4629,7 @@ static void G_MoveActors(void)
 
             if (t[3] > 0)
             {
-                if (s->zvel < 6144)
+                if (s->zvel < ACTOR_MAXFALLINGZVEL)
                     s->zvel += 192;
                 s->z += s->zvel;
                 if (s->z > sector[sect].floorz)
@@ -5958,7 +5961,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                         }
                     }
 
-                    if (s->zvel < 6144)
+                    if (s->zvel < ACTOR_MAXFALLINGZVEL)
                     {
                         if (sector[sect].lotag == 2)
                         {
