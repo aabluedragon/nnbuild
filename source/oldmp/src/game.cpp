@@ -8774,22 +8774,22 @@ static void G_CompileScripts(void)
         C_Compile(G_ConFile());
 
     // [JM] Update to use MAXLABELS like mainline
-    if ((unsigned int)g_numLabels > MAXSPRITES*sizeof(spritetype)/64)   // see the arithmetic above for why
+    if ((unsigned int)g_labelCnt > MAXSPRITES*sizeof(spritetype)/64)   // see the arithmetic above for why
         G_GameExit("Error: too many labels defined!");
 
     char *newlabel;
     intptr_t *newlabelcode;
 
-    newlabel     = (char *)Xmalloc(g_numLabels<<6);
-    newlabelcode = (intptr_t *)Xmalloc(g_numLabels*sizeof(intptr_t));
+    newlabel     = (char *)Xmalloc(g_labelCnt<<6);
+    newlabelcode = (intptr_t *)Xmalloc(g_labelCnt*sizeof(intptr_t));
 
     if (!newlabel || !newlabelcode)
     {
         G_GameExit("Error: out of memory retaining labels\n");
     }
 
-    copybuf(label,     newlabel, (g_numLabels*64)/4);
-    copybuf(labelcode, newlabelcode, (g_numLabels*sizeof(intptr_t))/4);
+    copybuf(label,     newlabel, (g_labelCnt*64)/4);
+    copybuf(labelcode, newlabelcode, (g_labelCnt*sizeof(intptr_t))/4);
 
     label = newlabel;
     labelcode = newlabelcode;

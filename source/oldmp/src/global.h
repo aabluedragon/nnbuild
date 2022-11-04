@@ -118,7 +118,7 @@ G_EXTERN intptr_t *insptr, *labelcode, *labeltype;
 G_EXTERN intptr_t *g_parsingActorPtr;
 G_EXTERN intptr_t *apScript;
 G_EXTERN intptr_t *g_scriptPtr;
-G_EXTERN int g_numLabels, g_numDefaultLabels;
+G_EXTERN int g_labelCnt, g_numDefaultLabels;
 G_EXTERN char *label;
 
 // Clouds

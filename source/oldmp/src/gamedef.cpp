@@ -1412,11 +1412,11 @@ static void C_GetNextLabelName(void)
 
     i = 0;
     while (ispecial(*textptr) == 0 && *textptr!='['&& *textptr!=']' && *textptr!='\t' && *textptr!='\n' && *textptr!='\r')
-        label[(g_numLabels<<6)+(i++)] = *(textptr++);
+        label[(g_labelCnt<<6)+(i++)] = *(textptr++);
 
-    label[(g_numLabels<<6)+i] = 0;
+    label[(g_labelCnt<<6)+i] = 0;
     if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
-        VLOG_F(LOG_CON, "%s:%d: debug: got label `%s'.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        VLOG_F(LOG_CON, "%s:%d: debug: got label `%s'.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
 }
 
 static int C_GetKeyword(void)
@@ -1539,7 +1539,7 @@ static void C_GetNextVarType(int type)
     }
     C_GetNextLabelName();
 
-    if (!g_skipKeywordCheck && hash_find(&keywH,label+(g_numLabels<<6))>=0)
+    if (!g_skipKeywordCheck && hash_find(&keywH,label+(g_labelCnt<<6))>=0)
     {
         g_errorCnt++;
         C_ReportError(ERROR_ISAKEYWORD);
@@ -1552,7 +1552,7 @@ static void C_GetNextVarType(int type)
         f |= (MAXGAMEVARS<<2);
 //        LOG_F("got an array");
         textptr++;
-        i=GetADefID(label+(g_numLabels<<6));
+        i=GetADefID(label+(g_labelCnt<<6));
         if (i < 0)
         {
             g_errorCnt++;
@@ -1581,13 +1581,13 @@ static void C_GetNextVarType(int type)
         return;
     }
 //    LOG_F("not an array");
-    i=GetDefID(label+(g_numLabels<<6));
+    i=GetDefID(label+(g_labelCnt<<6));
     if (i<0)   //gamevar not found
     {
         if (!type && !g_labelsOnly)
         {
             //try looking for a define instead
-            Bstrcpy(tempbuf,label+(g_numLabels<<6));
+            Bstrcpy(tempbuf,label+(g_labelCnt<<6));
             i = hash_find(&labelH,tempbuf);
             if (i>=0)
             {
@@ -1627,11 +1627,11 @@ static void C_GetNextVarType(int type)
     if ((aGameVars[i].dwFlags & GAMEVAR_SYNCCHECK) && g_parsingActorPtr && C_CheckEventSync(g_currentEvent))
     {
         C_ReportError(-1);
-        LOG_F(WARNING, "%s:%d: found local gamevar `%s' used within %s; expect multiplayer synchronization issues.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6),g_parsingEventPtr?"a synced event":"an actor");
+        LOG_F(WARNING, "%s:%d: found local gamevar `%s' used within %s; expect multiplayer synchronization issues.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6),g_parsingEventPtr?"a synced event":"an actor");
         g_warningCnt++;
     }
     if (!(g_errorCnt || g_warningCnt) && g_scriptDebug > 1)
-        VLOG_F(LOG_CON, "%s:%d: debug: accepted gamevar `%s'.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        VLOG_F(LOG_CON, "%s:%d: debug: accepted gamevar `%s'.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
 
     bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
     *g_scriptPtr++=(i|f);
@@ -1676,7 +1676,7 @@ static int C_GetNextValue(int type)
     }
     tempbuf[l] = 0;
 
-    if (!g_skipKeywordCheck && hash_find(&keywH,label+(g_numLabels<<6))>=0)
+    if (!g_skipKeywordCheck && hash_find(&keywH,label+(g_labelCnt<<6))>=0)
     {
         g_errorCnt++;
         C_ReportError(ERROR_ISAKEYWORD);
@@ -1882,33 +1882,33 @@ static int C_ParseCommand(void)
 DO_DEFSTATE:
             C_GetNextLabelName();
             g_scriptPtr--;
-            labelcode[g_numLabels] = (intptr_t) g_scriptPtr;
-            labeltype[g_numLabels] = LABEL_STATE;
+            labelcode[g_labelCnt] = (intptr_t) g_scriptPtr;
+            labeltype[g_labelCnt] = LABEL_STATE;
 
             g_processingState = 1;
-            Bsprintf(g_szCurrentBlockName,"%s",label+(g_numLabels<<6));
-            hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
-            g_numLabels++;
+            Bsprintf(g_szCurrentBlockName,"%s",label+(g_labelCnt<<6));
+            hash_add(&labelH,label+(g_labelCnt<<6),g_labelCnt, 0);
+            g_labelCnt++;
             return 0;
         }
 
         C_GetNextLabelName();
 
-        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_labelCnt<<6))>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = hash_find(&gamevarH,label+(g_numLabels<<6));
+        i = hash_find(&gamevarH,label+(g_labelCnt<<6));
         if (i>=0)
         {
             g_warningCnt++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
-        j = hash_find(&labelH,label+(g_numLabels<<6));
+        j = hash_find(&labelH,label+(g_labelCnt<<6));
         if (j>=0)
         {
             if (labeltype[j] & LABEL_STATE)
@@ -1937,7 +1937,7 @@ DO_DEFSTATE:
         else
         {
             C_ReportError(-1);
-            LOG_F(ERROR, "%s:%d: state `%s' not found.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+            LOG_F(ERROR, "%s:%d: state `%s' not found.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
             g_errorCnt++;
         }
         g_scriptPtr++;
@@ -2020,9 +2020,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID=C_GetLabelNameOffset(&projectileH,Bstrtolower(label+(g_numLabels<<6)));
+        lLabelID=C_GetLabelNameOffset(&projectileH,Bstrtolower(label+(g_labelCnt<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -2074,7 +2074,7 @@ DO_DEFSTATE:
         //printf("Got Label '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_labelCnt<<6))>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
@@ -2086,7 +2086,7 @@ DO_DEFSTATE:
         //printf("Done Translating number.  '%.20s'\n",textptr);
 
         C_GetNextValue(LABEL_DEFINE); // get flags
-        //Bsprintf(g_szBuf,"Adding GameVar='%s', val=%l, flags=%lX",label+(g_numLabels<<6),
+        //Bsprintf(g_szBuf,"Adding GameVar='%s', val=%l, flags=%lX",label+(g_labelCnt<<6),
         //      *(g_scriptPtr-2), *(g_scriptPtr-1));
         //AddLog(g_szBuf);
         if ((*(g_scriptPtr-1)&GAMEVAR_USER_MASK)==3)
@@ -2095,7 +2095,7 @@ DO_DEFSTATE:
             *(g_scriptPtr-1)^=GAMEVAR_PERPLAYER;
             C_ReportError(WARNING_BADGAMEVAR);
         }
-        Gv_NewVar(label+(g_numLabels<<6),*(g_scriptPtr-2),
+        Gv_NewVar(label+(g_labelCnt<<6),*(g_scriptPtr-2),
                   (*(g_scriptPtr-1))
                   // can't define default or secret
                   & (~(GAMEVAR_DEFAULT | GAMEVAR_SECRET))
@@ -2119,14 +2119,14 @@ DO_DEFSTATE:
         //printf("Got Label '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_labelCnt<<6))>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = hash_find(&gamevarH,label+(g_numLabels<<6));
+        i = hash_find(&gamevarH,label+(g_labelCnt<<6));
         if (i>=0)
         {
             g_warningCnt++;
@@ -2134,7 +2134,7 @@ DO_DEFSTATE:
         }
 
         C_GetNextValue(LABEL_DEFINE);
-        Gv_NewArray(label+(g_numLabels<<6),*(g_scriptPtr-1));
+        Gv_NewArray(label+(g_labelCnt<<6),*(g_scriptPtr-1));
 
         g_scriptPtr -= 2; // no need to save in script...
         return 0;
@@ -2147,21 +2147,21 @@ DO_DEFSTATE:
         //printf("Got label. '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_labelCnt<<6))>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = hash_find(&gamevarH,label+(g_numLabels<<6));
+        i = hash_find(&gamevarH,label+(g_labelCnt<<6));
         if (i>=0)
         {
             g_warningCnt++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
-        i = hash_find(&labelH,label+(g_numLabels<<6));
+        i = hash_find(&labelH,label+(g_labelCnt<<6));
         if (i>=0)
         {
             /*            if (i >= g_numDefaultLabels)
@@ -2176,12 +2176,12 @@ DO_DEFSTATE:
         //printf("Translated. '%.20s'\n",textptr);
         if (i == -1)
         {
-            //              printf("Defining Definition '%s' to be '%d'\n",label+(g_numLabels<<6),*(g_scriptPtr-1));
-            hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
-            labeltype[g_numLabels] = LABEL_DEFINE;
-            labelcode[g_numLabels++] = *(g_scriptPtr-1);
+            //              printf("Defining Definition '%s' to be '%d'\n",label+(g_labelCnt<<6),*(g_scriptPtr-1));
+            hash_add(&labelH,label+(g_labelCnt<<6),g_labelCnt, 0);
+            labeltype[g_labelCnt] = LABEL_DEFINE;
+            labelcode[g_labelCnt++] = *(g_scriptPtr-1);
             if (*(g_scriptPtr-1) >= 0 && *(g_scriptPtr-1) < MAXTILES && g_dynamicTileMapping)
-                G_ProcessDynamicTileMapping(label+((g_numLabels-1)<<6),*(g_scriptPtr-1));
+                G_ProcessDynamicTileMapping(label+((g_labelCnt-1)<<6),*(g_scriptPtr-1));
         }
         g_scriptPtr -= 2;
         return 0;
@@ -2240,31 +2240,31 @@ DO_DEFSTATE:
             C_GetNextLabelName();
             // Check to see it's already defined
 
-            if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
+            if (hash_find(&keywH,label+(g_labelCnt<<6))>=0)
             {
                 g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = hash_find(&gamevarH,label+(g_numLabels<<6));
+            i = hash_find(&gamevarH,label+(g_labelCnt<<6));
             if (i>=0)
             {
                 g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = hash_find(&labelH,label+(g_numLabels<<6));
+            i = hash_find(&labelH,label+(g_labelCnt<<6));
             if (i>=0)
             {
                 g_warningCnt++;
-                LOG_F(WARNING, "%s:%d: duplicate move `%s' ignored.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+                LOG_F(WARNING, "%s:%d: duplicate move `%s' ignored.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
             }
             if (i == -1)
             {
-                hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
-                labeltype[g_numLabels] = LABEL_MOVE;
-                labelcode[g_numLabels++] = (intptr_t) g_scriptPtr;
+                hash_add(&labelH,label+(g_labelCnt<<6),g_labelCnt, 0);
+                labeltype[g_labelCnt] = LABEL_MOVE;
+                labelcode[g_labelCnt++] = (intptr_t) g_scriptPtr;
             }
             for (j=1;j>=0;j--)
             {
@@ -2418,32 +2418,32 @@ DO_DEFSTATE:
             g_scriptPtr--;
             C_GetNextLabelName();
 
-            if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
+            if (hash_find(&keywH,label+(g_labelCnt<<6))>=0)
             {
                 g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = hash_find(&gamevarH,label+(g_numLabels<<6));
+            i = hash_find(&gamevarH,label+(g_labelCnt<<6));
             if (i>=0)
             {
                 g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = hash_find(&labelH,label+(g_numLabels<<6));
+            i = hash_find(&labelH,label+(g_labelCnt<<6));
             if (i>=0)
             {
                 g_warningCnt++;
-                LOG_F(WARNING, "%s:%d: duplicate ai `%s' ignored.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+                LOG_F(WARNING, "%s:%d: duplicate ai `%s' ignored.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
             }
 
             if (i == -1)
             {
-                labeltype[g_numLabels] = LABEL_AI;
-                hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
-                labelcode[g_numLabels++] = (intptr_t) g_scriptPtr;
+                labeltype[g_labelCnt] = LABEL_AI;
+                hash_add(&labelH,label+(g_labelCnt<<6),g_labelCnt, 0);
+                labelcode[g_labelCnt++] = (intptr_t) g_scriptPtr;
             }
 
             for (j=0;j<3;j++)
@@ -2499,33 +2499,33 @@ DO_DEFSTATE:
             C_GetNextLabelName();
             // Check to see it's already defined
 
-            if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
+            if (hash_find(&keywH,label+(g_labelCnt<<6))>=0)
             {
                 g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = hash_find(&gamevarH,label+(g_numLabels<<6));
+            i = hash_find(&gamevarH,label+(g_labelCnt<<6));
             if (i>=0)
             {
                 g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = hash_find(&labelH,label+(g_numLabels<<6));
+            i = hash_find(&labelH,label+(g_labelCnt<<6));
             if (i>=0)
             {
                 g_warningCnt++;
-                LOG_F(WARNING, "%s:%d: duplicate action `%s' ignored.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+                LOG_F(WARNING, "%s:%d: duplicate action `%s' ignored.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
             }
 
             if (i == -1)
             {
-                labeltype[g_numLabels] = LABEL_ACTION;
-                labelcode[g_numLabels] = (intptr_t) g_scriptPtr;
-                hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
-                g_numLabels++;
+                labeltype[g_labelCnt] = LABEL_ACTION;
+                labelcode[g_labelCnt] = (intptr_t) g_scriptPtr;
+                hash_add(&labelH,label+(g_labelCnt<<6),g_labelCnt, 0);
+                g_labelCnt++;
             }
 
             for (j=4;j>=0;j--)
@@ -2561,7 +2561,7 @@ DO_DEFSTATE:
         }
         g_szCurrentBlockName[j] = 0;
         C_GetNextValue(LABEL_DEFINE);
-        //         Bsprintf(g_szCurrentBlockName,"%s",label+(g_numLabels<<6));
+        //         Bsprintf(g_szCurrentBlockName,"%s",label+(g_labelCnt<<6));
         g_scriptPtr--;
         g_tile[*g_scriptPtr].execPtr = g_parsingActorPtr;
 
@@ -2978,9 +2978,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID=GetLabelNameid(SectorLabels,&sectorH,Bstrtolower(label+(g_numLabels<<6)));
+        lLabelID=GetLabelNameid(SectorLabels,&sectorH,Bstrtolower(label+(g_labelCnt<<6)));
 
         if (lLabelID == -1)
         {
@@ -3114,9 +3114,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID=GetLabelNameid(WallLabels,&wallH,Bstrtolower(label+(g_numLabels<<6)));
+        lLabelID=GetLabelNameid(WallLabels,&wallH,Bstrtolower(label+(g_labelCnt<<6)));
 
         if (lLabelID == -1)
         {
@@ -3182,9 +3182,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID=C_GetLabelNameOffset(&playerH,Bstrtolower(label+(g_numLabels<<6)));
+        lLabelID=C_GetLabelNameOffset(&playerH,Bstrtolower(label+(g_labelCnt<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3264,9 +3264,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID=C_GetLabelNameOffset(&inputH,Bstrtolower(label+(g_numLabels<<6)));
+        lLabelID=C_GetLabelNameOffset(&inputH,Bstrtolower(label+(g_labelCnt<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3333,9 +3333,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID = C_GetLabelNameOffset(&tileDataH, Bstrtolower(label + (g_numLabels << 6)));
+        lLabelID = C_GetLabelNameOffset(&tileDataH, Bstrtolower(label + (g_labelCnt << 6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3384,9 +3384,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID = C_GetLabelNameOffset(&userdefH, Bstrtolower(label + (g_numLabels << 6)));
+        lLabelID = C_GetLabelNameOffset(&userdefH, Bstrtolower(label + (g_labelCnt << 6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3489,18 +3489,18 @@ DO_DEFSTATE:
 
         // get the ID of the DEF
         C_GetNextLabelName();
-        //printf("found label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found label of '%s'\n",   label+(g_labelCnt<<6));
 
         // Check to see if it's a keyword
-        if (hash_find(&keywH,label+(g_numLabels<<6))>=0)
+        if (hash_find(&keywH,label+(g_labelCnt<<6))>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i=GetDefID(label+(g_numLabels<<6));
-        //printf("Label '%s' ID is %d\n",label+(g_numLabels<<6), i);
+        i=GetDefID(label+(g_labelCnt<<6));
+        //printf("Label '%s' ID is %d\n",label+(g_labelCnt<<6), i);
         if (i<0)
         {
             // not a defined DEF
@@ -3524,7 +3524,7 @@ DO_DEFSTATE:
             {
                 g_errorCnt++;
                 C_ReportError(-1);
-                LOG_F(ERROR, "%s:%d: variable `%s' is not per-actor.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+                LOG_F(ERROR, "%s:%d: variable `%s' is not per-actor.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
                 return 0;
 
             }
@@ -3536,7 +3536,7 @@ DO_DEFSTATE:
             {
                 g_errorCnt++;
                 C_ReportError(-1);
-                LOG_F(ERROR, "%s:%d: variable `%s' is not per-player.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+                LOG_F(ERROR, "%s:%d: variable `%s' is not per-player.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
                 return 0;
 
             }
@@ -3601,9 +3601,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID=C_GetLabelNameOffset(&actorH,Bstrtolower(label+(g_numLabels<<6)));
+        lLabelID=C_GetLabelNameOffset(&actorH,Bstrtolower(label+(g_labelCnt<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3697,9 +3697,9 @@ DO_DEFSTATE:
         textptr++;
         /// now pointing at 'xxx'
         C_GetNextLabelName();
-        //printf("found xxx label of '%s'\n",   label+(g_numLabels<<6));
+        //printf("found xxx label of '%s'\n",   label+(g_labelCnt<<6));
 
-        lLabelID=C_GetLabelNameOffset(&tspriteH,Bstrtolower(label+(g_numLabels<<6)));
+        lLabelID=C_GetLabelNameOffset(&tspriteH,Bstrtolower(label+(g_labelCnt<<6)));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3832,7 +3832,7 @@ DO_DEFSTATE:
         return 0;
     case CON_SETARRAY:
         C_GetNextLabelName();
-        i=GetADefID(label+(g_numLabels<<6));
+        i=GetADefID(label+(g_labelCnt<<6));
         if (i > (-1))
         {
             bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
@@ -3862,7 +3862,7 @@ DO_DEFSTATE:
     case CON_GETARRAYSIZE:
     case CON_RESIZEARRAY:
         C_GetNextLabelName();
-        i=GetADefID(label+(g_numLabels<<6));
+        i=GetADefID(label+(g_labelCnt<<6));
         if (i > (-1))
         {
             bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
@@ -5650,10 +5650,10 @@ void copydefaultcons(void)
 
 static void AddDefinition(const char *lLabel,int lValue,int lType)
 {
-    Bstrcpy(label+(g_numLabels<<6),lLabel);
-    labeltype[g_numLabels] = lType;
-    hash_add(&labelH,label+(g_numLabels<<6),g_numLabels, 0);
-    labelcode[g_numLabels++] = lValue;
+    Bstrcpy(label+(g_labelCnt<<6),lLabel);
+    labeltype[g_labelCnt] = lType;
+    hash_add(&labelH,label+(g_labelCnt<<6),g_labelCnt, 0);
+    labelcode[g_labelCnt++] = lValue;
     g_numDefaultLabels++;
 }
 
@@ -5927,7 +5927,7 @@ void C_Compile(const char *filenam)
     bitptr = (char*)Xcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(char));
 //    LOG_F("apScript: %d, bitptr: %d\n",apScript,bitptr);
 
-    g_numLabels = g_numDefaultLabels = 0;
+    g_labelCnt = g_numDefaultLabels = 0;
     g_scriptPtr = apScript+1;
     g_warningCnt = 0;
     g_errorCnt = 0;
@@ -6028,7 +6028,7 @@ void C_Compile(const char *filenam)
 
         VLOG_F(LOG_CON, "Compiled code size: %d*%d bytes, version %s",(unsigned)(g_scriptPtr-apScript),(int32_t)sizeof(intptr_t),(g_scriptVersion == 14?"1.4+":"1.3D"));
         VLOG_F(LOG_CON, "Pointer bitmap size: %d bytes",(g_scriptSize+7)>>3);
-        VLOG_F(LOG_CON, "%d/%d labels, %d/%d variables",g_numLabels,(int32_t)min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
+        VLOG_F(LOG_CON, "%d/%d labels, %d/%d variables",g_labelCnt,(int32_t)min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
 
         for (i=MAXQUOTES-1;i>=0;i--)
             if (apStrings[i])
@@ -6183,19 +6183,19 @@ void C_ReportError(int iError)
         LOG_F(ERROR, "%s:%d: found `%s' within %s.",g_scriptFileName,g_lineNumber,tempbuf,g_parsingEventPtr?"an event":g_parsingActorPtr?"an actor":"a state");
         break;
     case ERROR_ISAKEYWORD:
-        LOG_F(ERROR, "%s:%d: symbol `%s' is a keyword.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(ERROR, "%s:%d: symbol `%s' is a keyword.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case ERROR_NOENDSWITCH:
-        LOG_F(ERROR, "%s:%d: did not find `endswitch' before `%s'.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(ERROR, "%s:%d: did not find `endswitch' before `%s'.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case ERROR_NOTAGAMEDEF:
-        LOG_F(ERROR, "%s:%d: symbol `%s' is not a game definition.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(ERROR, "%s:%d: symbol `%s' is not a game definition.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case ERROR_NOTAGAMEVAR:
-        LOG_F(ERROR, "%s:%d: symbol `%s' is not a game variable.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(ERROR, "%s:%d: symbol `%s' is not a game variable.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case ERROR_NOTAGAMEARRAY:
-        LOG_F(ERROR, "%s:%d: symbol `%s' is not a game array.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(ERROR, "%s:%d: symbol `%s' is not a game array.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case ERROR_GAMEARRAYBNC:
         LOG_F(ERROR, "%s:%d: square brackets for index of game array not closed, expected ] found %c",g_scriptFileName,g_lineNumber,*textptr);
@@ -6213,25 +6213,25 @@ void C_ReportError(int iError)
         LOG_F(ERROR, "%s:%d: parameter `%s' is undefined.",g_scriptFileName,g_lineNumber,tempbuf);
         break;
     case ERROR_SYMBOLNOTRECOGNIZED:
-        LOG_F(ERROR, "%s:%d: symbol `%s' is not recognized.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(ERROR, "%s:%d: symbol `%s' is not recognized.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case ERROR_SYNTAXERROR:
         LOG_F(ERROR, "%s:%d: syntax error.",g_scriptFileName,g_lineNumber);
         break;
     case ERROR_VARREADONLY:
-        LOG_F(ERROR, "%s:%d: variable `%s' is read-only.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(ERROR, "%s:%d: variable `%s' is read-only.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case ERROR_VARTYPEMISMATCH:
-        LOG_F(ERROR, "%s:%d: variable `%s' is of the wrong type.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(ERROR, "%s:%d: variable `%s' is of the wrong type.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case WARNING_BADGAMEVAR:
-        LOG_F(WARNING, "%s:%d: variable `%s' should be either per-player OR per-actor, not both.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(WARNING, "%s:%d: variable `%s' should be either per-player OR per-actor, not both.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case WARNING_DUPLICATECASE:
         LOG_F(WARNING, "%s:%d: duplicate case ignored.",g_scriptFileName,g_lineNumber);
         break;
     case WARNING_DUPLICATEDEFINITION:
-        LOG_F(WARNING, "%s:%d: duplicate game definition `%s' ignored.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(WARNING, "%s:%d: duplicate game definition `%s' ignored.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case WARNING_EVENTSYNC:
         LOG_F(WARNING, "%s:%d: found `%s' within a local event.",g_scriptFileName,g_lineNumber,tempbuf);
@@ -6240,7 +6240,7 @@ void C_ReportError(int iError)
         LOG_F(WARNING, "%s:%d: expected a label, found a constant.",g_scriptFileName,g_lineNumber);
         break;
     case WARNING_NAMEMATCHESVAR:
-        LOG_F(WARNING, "%s:%d: symbol `%s' already used for game variable.",g_scriptFileName,g_lineNumber,label+(g_numLabels<<6));
+        LOG_F(WARNING, "%s:%d: symbol `%s' already used for game variable.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
         break;
     case WARNING_REVEVENTSYNC:
         LOG_F(WARNING, "%s:%d: found `%s' outside of a local event.",g_scriptFileName,g_lineNumber,tempbuf);
