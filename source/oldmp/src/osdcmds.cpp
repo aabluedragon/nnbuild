@@ -544,7 +544,7 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
             int i, j;
             for (j = 0; j < 2; j++)
             {
-                for (i = 0; i < g_numLabels; i++)
+                for (i = 0; i < g_labelCnt; i++)
                 {
                     if (
                         (j == 0 && !Bstrcmp(label + (i << 6), parm->parms[0])) ||
@@ -555,9 +555,9 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
                         break;
                     }
                 }
-                if (i < g_numLabels) break;
+                if (i < g_labelCnt) break;
             }
-            if (i == g_numLabels)
+            if (i == g_labelCnt)
             {
                 OSD_Printf("spawn: Invalid tile label given\n");
                 return OSDCMD_OK;
