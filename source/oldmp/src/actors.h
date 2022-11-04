@@ -63,7 +63,11 @@ typedef struct
 } practor_t;
 
 // NOTE: T5 is AC_ACTION_ID
-#define LIGHTRAD_PICOFS(i) (T5(i) ? *(apScript + T5(i)) + (*(apScript + T5(i) + 2)) * AC_CURFRAME(actor[i].t_data) : 0)
+// Use this method later when the CON VM doesn't suck.
+//#define LIGHTRAD_PICOFS(i) (T5(i) ? *(apScript + T5(i)) + (*(apScript + T5(i) + 2)) * AC_CURFRAME(actor[i].t_data) : 0)
+
+// !!TEMPORARY!! - Old method. Needed to prevent crashes.
+#define LIGHTRAD_PICOFS(i) (T5(i) ? (*(intptr_t *)T5(i)) + *(((intptr_t *)T5(i)+2)) * AC_CURFRAME(actor[i].t_data) : 0)
 
 // this is the same crap as in game.c's tspr manipulation.  puke.
 // XXX: may access tilesizy out-of-bounds by bad user code.
