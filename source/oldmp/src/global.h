@@ -119,7 +119,7 @@ G_EXTERN intptr_t *g_parsingActorPtr;
 G_EXTERN intptr_t *apScript;
 G_EXTERN intptr_t *g_scriptPtr;
 
-G_EXTERN int32_t g_labelCnt, g_numDefaultLabels;
+G_EXTERN int32_t g_labelCnt;
 G_EXTERN int32_t* labelcode;
 G_EXTERN uint8_t* labeltype;
 G_EXTERN char *label;
