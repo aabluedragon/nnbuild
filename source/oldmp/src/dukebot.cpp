@@ -863,7 +863,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
         }
     }
 
-    bool const goForItem = seeSprite && !((combatFlags & BOT_COMBAT_MELEE && (gpDist < (prioritizeItems) ? sprDist : sprDist << 1)) || combatFlags & BOT_COMBAT_STOMP);
+    bool const goForItem = seeSprite && !((combatFlags & BOT_COMBAT_MELEE && (gpDist < (prioritizeItems ? sprDist : sprDist << 1))) || combatFlags & BOT_COMBAT_STOMP);
 
     if (goForItem)
     {
