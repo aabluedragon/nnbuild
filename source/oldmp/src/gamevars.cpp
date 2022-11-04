@@ -406,9 +406,9 @@ void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags)
         if (aGameVars[i].dwFlags & (GAMEVAR_INT32PTR|GAMEVAR_INT16PTR|GAMEVAR_INT8PTR))
         {
             //  			   warning++;
-            //  			   LOG_F("%s:%d: warning: Internal gamevar '%s' cannot be redefined.\n",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
+            //  			   LOG_F("%s:%d: warning: Internal gamevar '%s' cannot be redefined.\n",g_scriptFileName,g_lineNumber,LAST_LABEL);
             C_ReportError(-1);
-            LOG_F(WARNING, "%s:%d: cannot redefine internal gamevar `%s'.",g_scriptFileName,g_lineNumber,label+(g_labelCnt<<6));
+            LOG_F(WARNING, "%s:%d: cannot redefine internal gamevar `%s'.",g_scriptFileName,g_lineNumber,LAST_LABEL);
             return;
         }
         else if (!(aGameVars[i].dwFlags & GAMEVAR_DEFAULT) && !(aGameVars[i].dwFlags & GAMEVAR_SYSTEM))
