@@ -5532,70 +5532,73 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 t->statnum = TSPR_TEMP;
             }
         }
-        else switch (DynamicTileMap[t->picnum])
+        else
+        {
+            switch (DynamicTileMap[t->picnum])
             {
-            case BLOODPOOL__STATIC:
-            case PUKE__STATIC:
-            case FOOTPRINTS__STATIC:
-            case FOOTPRINTS2__STATIC:
-            case FOOTPRINTS3__STATIC:
-            case FOOTPRINTS4__STATIC:
-                if (t->shade == 127) continue;
-                break;
-            case RESPAWNMARKERRED__STATIC:
-            case RESPAWNMARKERYELLOW__STATIC:
-            case RESPAWNMARKERGREEN__STATIC:
-                if (!DMFLAGS_TEST(DMFLAG_MARKERS))
-                    t->xrepeat = t->yrepeat = 0;
-                continue;
-            case CHAIR3__STATIC:
-#if defined(USE_OPENGL)
-                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum,t->pal) >= 0 && !(spriteext[i].flags&SPREXT_NOTMD))
-                {
-                    t->cstat &= ~4;
+                case BLOODPOOL__STATIC:
+                case PUKE__STATIC:
+                case FOOTPRINTS__STATIC:
+                case FOOTPRINTS2__STATIC:
+                case FOOTPRINTS3__STATIC:
+                case FOOTPRINTS4__STATIC:
+                    if (t->shade == 127) continue;
                     break;
-                }
+                case RESPAWNMARKERRED__STATIC:
+                case RESPAWNMARKERYELLOW__STATIC:
+                case RESPAWNMARKERGREEN__STATIC:
+                    if (!DMFLAGS_TEST(DMFLAG_MARKERS))
+                        t->xrepeat = t->yrepeat = 0;
+                    continue;
+                case CHAIR3__STATIC:
+#if defined(USE_OPENGL)
+                    if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum, t->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                    {
+                        t->cstat &= ~4;
+                        break;
+                    }
 #endif
-                k = (((t->ang+3072+128-a)&2047)>>8)&7;
-                if (k>4)
-                {
-                    k = 8-k;
-                    t->cstat |= 4;
-                }
-                else t->cstat &= ~4;
-                t->picnum = s->picnum+k;
-                break;
-            case BLOODSPLAT1__STATIC:
-            case BLOODSPLAT2__STATIC:
-            case BLOODSPLAT3__STATIC:
-            case BLOODSPLAT4__STATIC:
-                if (ud.lockout) t->xrepeat = t->yrepeat = 0;
-                else if (t->pal == 6)
-                {
-                    t->shade = -127;
-                    continue;
-                }
-                fallthrough__;
+                    k = (((t->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
+                    if (k > 4)
+                    {
+                        k = 8 - k;
+                        t->cstat |= 4;
+                    }
+                    else t->cstat &= ~4;
+                    t->picnum = s->picnum + k;
+                    break;
+                case BLOODSPLAT1__STATIC:
+                case BLOODSPLAT2__STATIC:
+                case BLOODSPLAT3__STATIC:
+                case BLOODSPLAT4__STATIC:
+                    if (ud.lockout) t->xrepeat = t->yrepeat = 0;
+                    else if (t->pal == 6)
+                    {
+                        t->shade = -127;
+                        continue;
+                    }
+                    fallthrough__;
 
-            case BULLETHOLE__STATIC:
-            case CRACK1__STATIC:
-            case CRACK2__STATIC:
-            case CRACK3__STATIC:
-            case CRACK4__STATIC:
-                t->shade = 16;
-                continue;
-            case NEON1__STATIC:
-            case NEON2__STATIC:
-            case NEON3__STATIC:
-            case NEON4__STATIC:
-            case NEON5__STATIC:
-            case NEON6__STATIC:
-                continue;
-
-            default:
-                if (((t->cstat&16)) || (A_CheckEnemySprite(t) && t->extra > 0) || t->statnum == 10)
+                case BULLETHOLE__STATIC:
+                case CRACK1__STATIC:
+                case CRACK2__STATIC:
+                case CRACK3__STATIC:
+                case CRACK4__STATIC:
+                    t->shade = 16;
                     continue;
+                case NEON1__STATIC:
+                case NEON2__STATIC:
+                case NEON3__STATIC:
+                case NEON4__STATIC:
+                case NEON5__STATIC:
+                case NEON6__STATIC:
+                    continue;
+
+                default:
+                    if (((t->cstat & 16)) || (A_CheckEnemySprite(t) && t->extra > 0) || t->statnum == 10)
+                        continue;
             }
+        }
 
         if (A_CheckSpriteFlags(t->owner,SFLAG_NOSHADE))
             l = sprite[t->owner].shade;
@@ -5620,86 +5623,88 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
         switch (DynamicTileMap[s->picnum])
         {
-        case NATURALLIGHTNING__STATIC:
-            t->shade = -127;
-            break;
-        case FEM1__STATIC:
-        case FEM2__STATIC:
-        case FEM3__STATIC:
-        case FEM4__STATIC:
-        case FEM5__STATIC:
-        case FEM6__STATIC:
-        case FEM7__STATIC:
-        case FEM8__STATIC:
-        case FEM9__STATIC:
-        case FEM10__STATIC:
-        case MAN__STATIC:
-        case MAN2__STATIC:
-        case WOMAN__STATIC:
-        case NAKED1__STATIC:
-        case PODFEM1__STATIC:
-        case FEMMAG1__STATIC:
-        case FEMMAG2__STATIC:
-        case FEMPIC1__STATIC:
-        case FEMPIC2__STATIC:
-        case FEMPIC3__STATIC:
-        case FEMPIC4__STATIC:
-        case FEMPIC5__STATIC:
-        case FEMPIC6__STATIC:
-        case FEMPIC7__STATIC:
-        case BLOODYPOLE__STATIC:
-        case FEM6PAD__STATIC:
-        case STATUE__STATIC:
-        case STATUEFLASH__STATIC:
-        case OOZ__STATIC:
-        case OOZ2__STATIC:
-        case WALLBLOOD1__STATIC:
-        case WALLBLOOD2__STATIC:
-        case WALLBLOOD3__STATIC:
-        case WALLBLOOD4__STATIC:
-        case WALLBLOOD5__STATIC:
-        case WALLBLOOD7__STATIC:
-        case WALLBLOOD8__STATIC:
-        case SUSHIPLATE1__STATIC:
-        case SUSHIPLATE2__STATIC:
-        case SUSHIPLATE3__STATIC:
-        case SUSHIPLATE4__STATIC:
-        case FETUS__STATIC:
-        case FETUSJIB__STATIC:
-        case FETUSBROKE__STATIC:
-        case HOTMEAT__STATIC:
-        case FOODOBJECT16__STATIC:
-        case DOLPHIN1__STATIC:
-        case DOLPHIN2__STATIC:
-        case TOUGHGAL__STATIC:
-        case TAMPON__STATIC:
-        case XXXSTACY__STATIC:
-            if (ud.lockout)
-            {
-                t->xrepeat = t->yrepeat = 0;
-                //continue;
-            }
+            case NATURALLIGHTNING__STATIC:
+                t->shade = -127;
+                break;
+            case FEM1__STATIC:
+            case FEM2__STATIC:
+            case FEM3__STATIC:
+            case FEM4__STATIC:
+            case FEM5__STATIC:
+            case FEM6__STATIC:
+            case FEM7__STATIC:
+            case FEM8__STATIC:
+            case FEM9__STATIC:
+            case FEM10__STATIC:
+            case MAN__STATIC:
+            case MAN2__STATIC:
+            case WOMAN__STATIC:
+            case NAKED1__STATIC:
+            case PODFEM1__STATIC:
+            case FEMMAG1__STATIC:
+            case FEMMAG2__STATIC:
+            case FEMPIC1__STATIC:
+            case FEMPIC2__STATIC:
+            case FEMPIC3__STATIC:
+            case FEMPIC4__STATIC:
+            case FEMPIC5__STATIC:
+            case FEMPIC6__STATIC:
+            case FEMPIC7__STATIC:
+            case BLOODYPOLE__STATIC:
+            case FEM6PAD__STATIC:
+            case STATUE__STATIC:
+            case STATUEFLASH__STATIC:
+            case OOZ__STATIC:
+            case OOZ2__STATIC:
+            case WALLBLOOD1__STATIC:
+            case WALLBLOOD2__STATIC:
+            case WALLBLOOD3__STATIC:
+            case WALLBLOOD4__STATIC:
+            case WALLBLOOD5__STATIC:
+            case WALLBLOOD7__STATIC:
+            case WALLBLOOD8__STATIC:
+            case SUSHIPLATE1__STATIC:
+            case SUSHIPLATE2__STATIC:
+            case SUSHIPLATE3__STATIC:
+            case SUSHIPLATE4__STATIC:
+            case FETUS__STATIC:
+            case FETUSJIB__STATIC:
+            case FETUSBROKE__STATIC:
+            case HOTMEAT__STATIC:
+            case FOODOBJECT16__STATIC:
+            case DOLPHIN1__STATIC:
+            case DOLPHIN2__STATIC:
+            case TOUGHGAL__STATIC:
+            case TAMPON__STATIC:
+            case XXXSTACY__STATIC:
+                if (ud.lockout)
+                {
+                    t->xrepeat = t->yrepeat = 0;
+                    //continue;
+                }
         }
+
         switch (s->picnum)
         {
-
-        case 4946:
-        case 4947:
-        case 693:
-        case 2254:
-        case 4560:
-        case 4561:
-        case 4562:
-        case 4498:
-        case 4957:
-            if (ud.lockout)
-            {
-                t->xrepeat = t->yrepeat = 0;
-                //continue;
-            }
+            case 4946:
+            case 4947:
+            case 693:
+            case 2254:
+            case 4560:
+            case 4561:
+            case 4562:
+            case 4498:
+            case 4957:
+                if (ud.lockout)
+                {
+                    t->xrepeat = t->yrepeat = 0;
+                    //continue;
+                }
         }
 
-        if (t->statnum == TSPR_TEMP) continue;
+        if (t->statnum == TSPR_TEMP)
+            continue;
+
         if (s->statnum != 1 && s->picnum == APLAYER && g_player[s->yvel].ps->newowner == -1 && s->owner >= 0)
         {
             t->x -= mulscale16(65536-smoothratio,g_player[s->yvel].ps->pos.x - g_player[s->yvel].ps->opos.x);
@@ -5730,357 +5735,355 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
         switch (DynamicTileMap[switchpic])
         {
-        case DUKELYINGDEAD__STATIC:
-            t->z += (24<<8);
-            break;
-        case BLOODPOOL__STATIC:
-        case FOOTPRINTS__STATIC:
-        case FOOTPRINTS2__STATIC:
-        case FOOTPRINTS3__STATIC:
-        case FOOTPRINTS4__STATIC:
-            if (t->pal == 6)
-                t->shade = -127;
-            fallthrough__;
-        case PUKE__STATIC:
-        case MONEY__STATIC:
-            //case MONEY+1__STATIC:
-        case MAIL__STATIC:
-            //case MAIL+1__STATIC:
-        case PAPER__STATIC:
-            //case PAPER+1__STATIC:
-            if (ud.lockout && s->pal == 2)
-            {
-                t->xrepeat = t->yrepeat = 0;
-                //continue;
-            }
-            break;
-        case TRIPBOMB__STATIC:
-            continue;
-        case FORCESPHERE__STATIC:
-            if (t->statnum == 5)
-            {
-                short sqa,sqb;
-
-                sqa =
-                    getangle(
-                        sprite[s->owner].x-g_player[screenpeek].ps->pos.x,
-                        sprite[s->owner].y-g_player[screenpeek].ps->pos.y);
-                sqb =
-                    getangle(
-                        sprite[s->owner].x-t->x,
-                        sprite[s->owner].y-t->y);
-
-                if (klabs(G_GetAngleDelta(sqa,sqb)) > 512)
-                    if (ldist(&sprite[s->owner],t) < ldist(&sprite[g_player[screenpeek].ps->i],&sprite[s->owner]))
-                        t->xrepeat = t->yrepeat = 0;
-            }
-            continue;
-        case BURNING__STATIC:
-        case BURNING2__STATIC:
-            if (sprite[s->owner].statnum == 10)
-            {
-                if (display_mirror == 0 && sprite[s->owner].yvel == screenpeek && g_player[sprite[s->owner].yvel].ps->over_shoulder_on == 0)
-                    t->xrepeat = 0;
-                else
-                {
-                    t->ang = getangle(x-t->x,y-t->y);
-                    t->x = sprite[s->owner].x;
-                    t->y = sprite[s->owner].y;
-                    t->x += sintable[(t->ang+512)&2047]>>10;
-                    t->y += sintable[t->ang&2047]>>10;
-                }
-            }
-            break;
-
-        case ATOMICHEALTH__STATIC:
-            t->z -= (4<<8);
-            break;
-        case CRYSTALAMMO__STATIC:
-            t->shade = (sintable[((int32_t)totalclock<<4)&2047]>>10);
-            continue;
-        case VIEWSCREEN__STATIC:
-        case VIEWSCREEN2__STATIC:
-        {
-            int const viewscrShift = G_GetViewscreenSizeShift(t);
-            int const viewscrTile = TILE_VIEWSCR - viewscrShift;
-
-            if (g_curViewscreen >= 0 && actor[OW(i)].t_data[0] == 1)
-            {
-                t->picnum = STATIC;
-                t->cstat |= (rand() & 12);
-                t->xrepeat += 10;
-                t->yrepeat += 9;
-            }
-            else if (g_curViewscreen == i && display_mirror != 3 && waloff[viewscrTile])
-            {
-                // this exposes a sprite sorting issue which needs to be debugged further...
-#if 0
-                if (spritesortcnt < maxspritesonscreen)
-                {
-                    auto const newt = &tsprite[spritesortcnt++];
-
-                    *newt = *t;
-
-                    newt->cstat |= 2 | 512;
-                    newt->x += (sintable[(newt->ang + 512) & 2047] >> 12);
-                    newt->y += (sintable[newt->ang & 2047] >> 12);
-                    updatesector(newt->x, newt->y, &newt->sectnum);
-                }
-#endif
-                t->picnum = viewscrTile;
-#if VIEWSCREENFACTOR > 0
-                t->xrepeat >>= viewscrShift;
-                t->yrepeat >>= viewscrShift;
-#endif
-            }
-
-            break;
-        }
-
-        case SHRINKSPARK__STATIC:
-            t->picnum = SHRINKSPARK+(((int32_t)totalclock>>4)&3);
-            break;
-        case GROWSPARK__STATIC:
-            t->picnum = GROWSPARK+(((int32_t)totalclock>>4)&3);
-            break;
-        case RPG__STATIC:
-
-#if defined(USE_OPENGL)
-            if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum,t->pal) >= 0 && !(spriteext[i].flags&SPREXT_NOTMD))
-            {
-                int v=getangle(t->xvel,t->zvel>>4);
-                if (v>1023)v-=2048;
-                spriteext[i].mdpitch=v;
-
-                t->cstat &= ~4;
+            case DUKELYINGDEAD__STATIC:
+                t->z += (24 << 8);
                 break;
-            }
-#endif
-            k = getangle(s->x-x,s->y-y);
-            k = (((s->ang+3072+128-k)&2047)/170);
-            if (k > 6)
-            {
-                k = 12-k;
-                t->cstat |= 4;
-            }
-            else t->cstat &= ~4;
-            t->picnum = RPG+k;
-            break;
-
-        case RECON__STATIC:
-
-#if defined(USE_OPENGL)
-            if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum,t->pal) >= 0 && !(spriteext[i].flags&SPREXT_NOTMD))
-            {
-                t->cstat &= ~4;
-                break;
-            }
-#endif
-            k = getangle(s->x-x,s->y-y);
-            k = (((s->ang+3072+128-k)&2047)/170);
-
-            if (k>6)
-            {
-                k = 12-k;
-                t->cstat |= 4;
-            }
-            else t->cstat &= ~4;
-
-            if (klabs(t3) > 64) k += 7;
-            t->picnum = RECON+k;
-
-            break;
-
-        case APLAYER__STATIC:
-
-            p = s->yvel;
-
-            if (t->pal == 1) // Frozen?
-                t->z -= (18<<8);
-
-            if (g_player[p].ps->over_shoulder_on > 0 && g_player[p].ps->newowner < 0 && s->owner != -1)
-            {
-                if(p == screenpeek) // Let's only make the player we're peeking transparent.
-                    t->cstat |= 2;
-
-                if (screenpeek == myconnectindex && numplayers >= 2)
+            case BLOODPOOL__STATIC:
+            case FOOTPRINTS__STATIC:
+            case FOOTPRINTS2__STATIC:
+            case FOOTPRINTS3__STATIC:
+            case FOOTPRINTS4__STATIC:
+                if (t->pal == 6)
+                    t->shade = -127;
+                fallthrough__;
+            case PUKE__STATIC:
+            case MONEY__STATIC:
+                //case MONEY+1__STATIC:
+            case MAIL__STATIC:
+                //case MAIL+1__STATIC:
+            case PAPER__STATIC:
+                //case PAPER+1__STATIC:
+                if (ud.lockout && s->pal == 2)
                 {
-                    t->x = predictedPlayer.opos.x+mulscale16((int)(predictedPlayer.pos.x - predictedPlayer.opos.x),smoothratio);
-                    t->y = predictedPlayer.opos.y+mulscale16((int)(predictedPlayer.pos.y - predictedPlayer.opos.y),smoothratio);
-                    t->z = predictedPlayer.opos.z+mulscale16((int)(predictedPlayer.pos.z - predictedPlayer.opos.z),smoothratio)+(40<<8);
-                    t->ang = fix16_to_int(predictedPlayer.oq16ang+mulscale16(((predictedPlayer.q16ang+1024 - predictedPlayer.oq16ang)&2047)-1024,smoothratio));
-                    t->sectnum = predictedPlayer.cursectnum;
+                    t->xrepeat = t->yrepeat = 0;
+                    //continue;
                 }
-            }
-
-            if (ud.multimode > 1 && (display_mirror || screenpeek != p || s->owner == -1))
-            {
-                if (!DMFLAGS_TEST(DMFLAG_NOWEAPONICONS) && ud.showweapons && sprite[g_player[p].ps->i].extra > 0 && g_player[p].ps->curr_weapon > 0 && (spritesortcnt < maxspritesonscreen))
+                break;
+            case TRIPBOMB__STATIC:
+                continue;
+            case FORCESPHERE__STATIC:
+                if (t->statnum == 5)
                 {
-                    memcpy((spritetype *)&tsprite[spritesortcnt],(spritetype *)t,sizeof(spritetype));
+                    short sqa, sqb;
 
-                    tsprite[spritesortcnt].statnum = TSPR_TEMP;
-                    tsprite[spritesortcnt].shade = t->shade;
-                    tsprite[spritesortcnt].cstat = 0;
-                    tsprite[spritesortcnt].pal = 0;
-                    tsprite[spritesortcnt].picnum = (g_player[p].ps->curr_weapon==GROW_WEAPON?GROWSPRITEICON:WeaponPickupSprites[g_player[p].ps->curr_weapon]);
-                    tsprite[spritesortcnt].z -= (51<<8);
+                    sqa =
+                        getangle(
+                            sprite[s->owner].x - g_player[screenpeek].ps->pos.x,
+                            sprite[s->owner].y - g_player[screenpeek].ps->pos.y);
+                    sqb =
+                        getangle(
+                            sprite[s->owner].x - t->x,
+                            sprite[s->owner].y - t->y);
 
-                    if (tsprite[spritesortcnt].picnum == HEAVYHBOMB)
-                    {
-                        tsprite[spritesortcnt].xrepeat = 10;
-                        tsprite[spritesortcnt].yrepeat = 10;
-                    }
+                    if (klabs(G_GetAngleDelta(sqa, sqb)) > 512)
+                        if (ldist(&sprite[s->owner], t) < ldist(&sprite[g_player[screenpeek].ps->i], &sprite[s->owner]))
+                            t->xrepeat = t->yrepeat = 0;
+                }
+                continue;
+            case BURNING__STATIC:
+            case BURNING2__STATIC:
+                if (sprite[s->owner].statnum == 10)
+                {
+                    if (display_mirror == 0 && sprite[s->owner].yvel == screenpeek && g_player[sprite[s->owner].yvel].ps->over_shoulder_on == 0)
+                        t->xrepeat = 0;
                     else
                     {
-                        tsprite[spritesortcnt].xrepeat = 16;
-                        tsprite[spritesortcnt].yrepeat = 16;
+                        t->ang = getangle(x - t->x, y - t->y);
+                        t->x = sprite[s->owner].x;
+                        t->y = sprite[s->owner].y;
+                        t->x += sintable[(t->ang + 512) & 2047] >> 10;
+                        t->y += sintable[t->ang & 2047] >> 10;
                     }
-                    spritesortcnt++;
                 }
+                break;
 
-                if (g_player[p].inputBits->extbits & (EXTBIT_CHAT) && !ud.pause_on && (spritesortcnt < maxspritesonscreen))
+            case ATOMICHEALTH__STATIC:
+                t->z -= (4 << 8);
+                break;
+            case CRYSTALAMMO__STATIC:
+                t->shade = (sintable[((int32_t)totalclock << 4) & 2047] >> 10);
+                continue;
+            case VIEWSCREEN__STATIC:
+            case VIEWSCREEN2__STATIC:
+            {
+                int const viewscrShift = G_GetViewscreenSizeShift(t);
+                int const viewscrTile = TILE_VIEWSCR - viewscrShift;
+
+                if (g_curViewscreen >= 0 && actor[OW(i)].t_data[0] == 1)
                 {
-                    memcpy((spritetype *)&tsprite[spritesortcnt],(spritetype *)t,sizeof(spritetype));
-
-                    tsprite[spritesortcnt].statnum = TSPR_TEMP;
-
-                    tsprite[spritesortcnt].yrepeat = (t->yrepeat>>3);
-                    if (t->yrepeat < 4) t->yrepeat = 4;
-
-                    tsprite[spritesortcnt].cstat = 0;
-
-                    tsprite[spritesortcnt].picnum = RESPAWNMARKERGREEN;
-
-                    // Code for spinning voxel logos
-                    tsprite[spritesortcnt].ang -= ((int32_t)totalclock << 6);
-
-                    tsprite[spritesortcnt].z -= (60<<8);
-                    tsprite[spritesortcnt].xrepeat = 32;
-                    tsprite[spritesortcnt].yrepeat = 32;
-                    tsprite[spritesortcnt].pal = 20;
-                    spritesortcnt++;
+                    t->picnum = STATIC;
+                    t->cstat |= (rand() & 12);
+                    t->xrepeat += 10;
+                    t->yrepeat += 9;
                 }
+                else if (g_curViewscreen == i && display_mirror != 3 && waloff[viewscrTile])
+                {
+                    // this exposes a sprite sorting issue which needs to be debugged further...
+#if 0
+                    if (spritesortcnt < maxspritesonscreen)
+                    {
+                        auto const newt = &tsprite[spritesortcnt++];
+
+                        *newt = *t;
+
+                        newt->cstat |= 2 | 512;
+                        newt->x += (sintable[(newt->ang + 512) & 2047] >> 12);
+                        newt->y += (sintable[newt->ang & 2047] >> 12);
+                        updatesector(newt->x, newt->y, &newt->sectnum);
+                    }
+#endif
+                    t->picnum = viewscrTile;
+#if VIEWSCREENFACTOR > 0
+                    t->xrepeat >>= viewscrShift;
+                    t->yrepeat >>= viewscrShift;
+#endif
+                }
+
+                break;
             }
 
-            if (s->owner == -1)
-            {
+            case SHRINKSPARK__STATIC:
+                t->picnum = SHRINKSPARK + (((int32_t)totalclock >> 4) & 3);
+                break;
+            case GROWSPARK__STATIC:
+                t->picnum = GROWSPARK + (((int32_t)totalclock >> 4) & 3);
+                break;
+
+            case RPG__STATIC:
+#if defined(USE_OPENGL)
+                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum, t->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                {
+                    int v = getangle(t->xvel, t->zvel >> 4);
+                    if (v > 1023)v -= 2048;
+                    spriteext[i].mdpitch = v;
+
+                    t->cstat &= ~4;
+                    break;
+                }
+#endif
+                k = getangle(s->x - x, s->y - y);
+                k = (((s->ang + 3072 + 128 - k) & 2047) / 170);
+                if (k > 6)
+                {
+                    k = 12 - k;
+                    t->cstat |= 4;
+                }
+                else t->cstat &= ~4;
+                t->picnum = RPG + k;
+                break;
+
+            case RECON__STATIC:
+#if defined(USE_OPENGL)
+                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum, t->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                {
+                    t->cstat &= ~4;
+                    break;
+                }
+#endif
+                k = getangle(s->x - x, s->y - y);
+                k = (((s->ang + 3072 + 128 - k) & 2047) / 170);
+
+                if (k > 6)
+                {
+                    k = 12 - k;
+                    t->cstat |= 4;
+                }
+                else t->cstat &= ~4;
+
+                if (klabs(t3) > 64) k += 7;
+                t->picnum = RECON + k;
+
+                break;
+
+            case APLAYER__STATIC:
+                p = s->yvel;
+
+                if (t->pal == 1) // Frozen?
+                    t->z -= (18 << 8);
+
+                if (g_player[p].ps->over_shoulder_on > 0 && g_player[p].ps->newowner < 0 && s->owner != -1)
+                {
+                    if (p == screenpeek) // Let's only make the player we're peeking transparent.
+                        t->cstat |= 2;
+
+                    if (screenpeek == myconnectindex && numplayers >= 2)
+                    {
+                        t->x = predictedPlayer.opos.x + mulscale16((int)(predictedPlayer.pos.x - predictedPlayer.opos.x), smoothratio);
+                        t->y = predictedPlayer.opos.y + mulscale16((int)(predictedPlayer.pos.y - predictedPlayer.opos.y), smoothratio);
+                        t->z = predictedPlayer.opos.z + mulscale16((int)(predictedPlayer.pos.z - predictedPlayer.opos.z), smoothratio) + (40 << 8);
+                        t->ang = fix16_to_int(predictedPlayer.oq16ang + mulscale16(((predictedPlayer.q16ang + 1024 - predictedPlayer.oq16ang) & 2047) - 1024, smoothratio));
+                        t->sectnum = predictedPlayer.cursectnum;
+                    }
+                }
+
+                if (ud.multimode > 1 && (display_mirror || screenpeek != p || s->owner == -1))
+                {
+                    if (!DMFLAGS_TEST(DMFLAG_NOWEAPONICONS) && ud.showweapons && sprite[g_player[p].ps->i].extra > 0 && g_player[p].ps->curr_weapon > 0 && (spritesortcnt < maxspritesonscreen))
+                    {
+                        memcpy((spritetype*)&tsprite[spritesortcnt], (spritetype*)t, sizeof(spritetype));
+
+                        tsprite[spritesortcnt].statnum = TSPR_TEMP;
+                        tsprite[spritesortcnt].shade = t->shade;
+                        tsprite[spritesortcnt].cstat = 0;
+                        tsprite[spritesortcnt].pal = 0;
+                        tsprite[spritesortcnt].picnum = (g_player[p].ps->curr_weapon == GROW_WEAPON ? GROWSPRITEICON : WeaponPickupSprites[g_player[p].ps->curr_weapon]);
+                        tsprite[spritesortcnt].z -= (51 << 8);
+
+                        if (tsprite[spritesortcnt].picnum == HEAVYHBOMB)
+                        {
+                            tsprite[spritesortcnt].xrepeat = 10;
+                            tsprite[spritesortcnt].yrepeat = 10;
+                        }
+                        else
+                        {
+                            tsprite[spritesortcnt].xrepeat = 16;
+                            tsprite[spritesortcnt].yrepeat = 16;
+                        }
+                        spritesortcnt++;
+                    }
+
+                    if (g_player[p].inputBits->extbits & (EXTBIT_CHAT) && !ud.pause_on && (spritesortcnt < maxspritesonscreen))
+                    {
+                        memcpy((spritetype*)&tsprite[spritesortcnt], (spritetype*)t, sizeof(spritetype));
+
+                        tsprite[spritesortcnt].statnum = TSPR_TEMP;
+
+                        tsprite[spritesortcnt].yrepeat = (t->yrepeat >> 3);
+                        if (t->yrepeat < 4) t->yrepeat = 4;
+
+                        tsprite[spritesortcnt].cstat = 0;
+
+                        tsprite[spritesortcnt].picnum = RESPAWNMARKERGREEN;
+
+                        // Code for spinning voxel logos
+                        tsprite[spritesortcnt].ang -= ((int32_t)totalclock << 6);
+
+                        tsprite[spritesortcnt].z -= (60 << 8);
+                        tsprite[spritesortcnt].xrepeat = 32;
+                        tsprite[spritesortcnt].yrepeat = 32;
+                        tsprite[spritesortcnt].pal = 20;
+                        spritesortcnt++;
+                    }
+                }
+
+                if (s->owner == -1)
+                {
 
 #if defined(USE_OPENGL)
-                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum,t->pal) >= 0 && !(spriteext[i].flags&SPREXT_NOTMD))
-                {
-                    k = 0;
-                    t->cstat &= ~4;
-                }
-                else
+                    if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum, t->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                    {
+                        k = 0;
+                        t->cstat &= ~4;
+                    }
+                    else
 #endif
-                {
-                    k = (((s->ang+3072+128-a)&2047)>>8)&7;
-                    if (k>4)
                     {
-                        k = 8-k;
-                        t->cstat |= 4;
+                        k = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
+                        if (k > 4)
+                        {
+                            k = 8 - k;
+                            t->cstat |= 4;
+                        }
+                        else t->cstat &= ~4;
                     }
-                    else t->cstat &= ~4;
+
+                    if (sector[t->sectnum].lotag == ST_2_UNDERWATER) k += 1795 - 1405;
+                    else if ((actor[i].floorz - s->z) > (64 << 8)) k += 60;
+
+                    t->picnum += k;
+                    t->pal = g_player[p].ps->palookup;
+
+                    goto PALONLY;
                 }
 
-                if (sector[t->sectnum].lotag == ST_2_UNDERWATER) k += 1795-1405;
-                else if ((actor[i].floorz-s->z) > (64<<8)) k += 60;
-
-                t->picnum += k;
-                t->pal = g_player[p].ps->palookup;
-
-                goto PALONLY;
-            }
-
-            // CLAMP PLAYER SPRITE Y TO FLOOR
-            if (g_player[p].ps->on_crane == -1)
-            {
-                int16_t lotag = (sector[s->sectnum].lotag & 0x7ff);
-                int32_t floorZ = actor[g_player[p].ps->i].floorz;
-                bool noSE7water = ((lotag == ST_1_ABOVE_WATER) && A_CheckNoSE7Water((uspriteptr_t)s, s->sectnum, lotag, NULL));
-
-                if (noSE7water || lotag != ST_1_ABOVE_WATER)
+                // CLAMP PLAYER SPRITE Y TO FLOOR
+                if (g_player[p].ps->on_crane == -1)
                 {
-                    int offset = s->z - floorZ + (3 << 8);
-                    if (offset > 1024 && t->yrepeat > 32 && s->extra > 0)
-                        t->yoffset = (int8_t)tabledivide32_noinline(offset, t->yrepeat << 2);
-                    else t->yoffset = 0;
-                }
-            }
+                    int16_t lotag = (sector[s->sectnum].lotag & 0x7ff);
+                    int32_t floorZ = actor[g_player[p].ps->i].floorz;
+                    bool noSE7water = ((lotag == ST_1_ABOVE_WATER) && A_CheckNoSE7Water((uspriteptr_t)s, s->sectnum, lotag, NULL));
 
-            if (g_player[p].ps->newowner > -1)
-            {
-                t4 = *(g_tile[APLAYER].execPtr+1);
-                t3 = 0;
-                t1 = *(g_tile[APLAYER].execPtr+2);
-            }
-
-            if (ud.camerasprite == -1 && g_player[p].ps->newowner == -1)
-                if (s->owner >= 0 && display_mirror == 0 && g_player[p].ps->over_shoulder_on == 0)
-                    if (ud.multimode < 2 || (ud.multimode > 1 && p == screenpeek))
+                    if (noSE7water || lotag != ST_1_ABOVE_WATER)
                     {
-                        t->owner = -1;
-                        t->xrepeat = t->yrepeat = 0;
-                        continue;
+                        int offset = s->z - floorZ + (3 << 8);
+                        if (offset > 1024 && t->yrepeat > 32 && s->extra > 0)
+                            t->yoffset = (int8_t)tabledivide32_noinline(offset, t->yrepeat << 2);
+                        else t->yoffset = 0;
                     }
+                }
+
+                if (g_player[p].ps->newowner > -1)
+                {
+                    t4 = *(g_tile[APLAYER].execPtr + 1);
+                    t3 = 0;
+                    t1 = *(g_tile[APLAYER].execPtr + 2);
+                }
+
+                if (ud.camerasprite == -1 && g_player[p].ps->newowner == -1)
+                    if (s->owner >= 0 && display_mirror == 0 && g_player[p].ps->over_shoulder_on == 0)
+                        if (ud.multimode < 2 || (ud.multimode > 1 && p == screenpeek))
+                        {
+                            t->owner = -1;
+                            t->xrepeat = t->yrepeat = 0;
+                            continue;
+                        }
 
 PALONLY:
 
-            G_MaybeTakeOnFloorPal(t, sect);
+                G_MaybeTakeOnFloorPal(t, sect);
 
-            if (s->owner == -1) continue;
+                if (s->owner == -1) continue;
 
-            if (t->z > actor[i].floorz && t->xrepeat < 32)
-                t->z = actor[i].floorz;
+                if (t->z > actor[i].floorz && t->xrepeat < 32)
+                    t->z = actor[i].floorz;
 
-            break;
-
-        case JIBS1__STATIC:
-        case JIBS2__STATIC:
-        case JIBS3__STATIC:
-        case JIBS4__STATIC:
-        case JIBS5__STATIC:
-        case JIBS6__STATIC:
-        case HEADJIB1__STATIC:
-        case LEGJIB1__STATIC:
-        case ARMJIB1__STATIC:
-        case LIZMANHEAD1__STATIC:
-        case LIZMANARM1__STATIC:
-        case LIZMANLEG1__STATIC:
-        case DUKELEG__STATIC:
-        case DUKEGUN__STATIC:
-        case DUKETORSO__STATIC:
-            if (ud.lockout)
-            {
-                t->xrepeat = t->yrepeat = 0;
-                //continue;
-            }
-            if (t->pal == 6) t->shade = -120;
-            fallthrough__;
-        case SCRAP1__STATIC:
-        case SCRAP2__STATIC:
-        case SCRAP3__STATIC:
-        case SCRAP4__STATIC:
-        case SCRAP5__STATIC:
-            if (actor[i].htpicnum == BLIMP && t->picnum == SCRAP1 && s->yvel >= 0)
-                t->picnum = s->yvel;
-            else t->picnum += T1(i);
-            t->shade -= 6;
-
-            G_MaybeTakeOnFloorPal(t, sect);
-            break;
-
-        case WATERBUBBLE__STATIC:
-            if (sector[t->sectnum].floorpicnum == FLOORSLIME)
-            {
-                t->pal = 7;
                 break;
-            }
-            fallthrough__;
-        default:
-            G_MaybeTakeOnFloorPal(t, sect);
-            break;
+
+            case JIBS1__STATIC:
+            case JIBS2__STATIC:
+            case JIBS3__STATIC:
+            case JIBS4__STATIC:
+            case JIBS5__STATIC:
+            case JIBS6__STATIC:
+            case HEADJIB1__STATIC:
+            case LEGJIB1__STATIC:
+            case ARMJIB1__STATIC:
+            case LIZMANHEAD1__STATIC:
+            case LIZMANARM1__STATIC:
+            case LIZMANLEG1__STATIC:
+            case DUKELEG__STATIC:
+            case DUKEGUN__STATIC:
+            case DUKETORSO__STATIC:
+                if (ud.lockout)
+                {
+                    t->xrepeat = t->yrepeat = 0;
+                    //continue;
+                }
+                if (t->pal == 6) t->shade = -120;
+                fallthrough__;
+            case SCRAP1__STATIC:
+            case SCRAP2__STATIC:
+            case SCRAP3__STATIC:
+            case SCRAP4__STATIC:
+            case SCRAP5__STATIC:
+                if (actor[i].htpicnum == BLIMP && t->picnum == SCRAP1 && s->yvel >= 0)
+                    t->picnum = s->yvel;
+                else t->picnum += T1(i);
+                t->shade -= 6;
+
+                G_MaybeTakeOnFloorPal(t, sect);
+                break;
+
+            case WATERBUBBLE__STATIC:
+                if (sector[t->sectnum].floorpicnum == FLOORSLIME)
+                {
+                    t->pal = 7;
+                    break;
+                }
+                fallthrough__;
+            default:
+                G_MaybeTakeOnFloorPal(t, sect);
+                break;
         }
 
         if (g_tile[s->picnum].execPtr)
@@ -6099,48 +6102,48 @@ PALONLY:
 #endif
                     switch (l)
                     {
-                    case 2:
-                        k = (((s->ang+3072+128-a)&2047)>>8)&1;
-                        break;
+                        case 2:
+                            k = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 1;
+                            break;
 
-                    case 3:
-                    case 4:
-                        k = (((s->ang+3072+128-a)&2047)>>7)&7;
-                        if (k > 3)
-                        {
-                            t->cstat |= 4;
-                            k = 7-k;
-                        }
-                        else t->cstat &= ~4;
-                        break;
+                        case 3:
+                        case 4:
+                            k = (((s->ang + 3072 + 128 - a) & 2047) >> 7) & 7;
+                            if (k > 3)
+                            {
+                                t->cstat |= 4;
+                                k = 7 - k;
+                            }
+                            else t->cstat &= ~4;
+                            break;
 
-                    case 5:
-                        k = getangle(s->x-x,s->y-y);
-                        k = (((s->ang+3072+128-k)&2047)>>8)&7;
-                        if (k>4)
-                        {
-                            k = 8-k;
-                            t->cstat |= 4;
-                        }
-                        else t->cstat &= ~4;
-                        break;
-                    case 7:
-                        k = getangle(s->x-x,s->y-y);
-                        k = (((s->ang+3072+128-k)&2047)/170);
-                        if (k>6)
-                        {
-                            k = 12-k;
-                            t->cstat |= 4;
-                        }
-                        else t->cstat &= ~4;
-                        break;
-                    case 8:
-                        k = (((s->ang+3072+128-a)&2047)>>8)&7;
-                        t->cstat &= ~4;
-                        break;
-                    default:
-                        k = 0;
-                        break;
+                        case 5:
+                            k = getangle(s->x - x, s->y - y);
+                            k = (((s->ang + 3072 + 128 - k) & 2047) >> 8) & 7;
+                            if (k > 4)
+                            {
+                                k = 8 - k;
+                                t->cstat |= 4;
+                            }
+                            else t->cstat &= ~4;
+                            break;
+                        case 7:
+                            k = getangle(s->x - x, s->y - y);
+                            k = (((s->ang + 3072 + 128 - k) & 2047) / 170);
+                            if (k > 6)
+                            {
+                                k = 12 - k;
+                                t->cstat |= 4;
+                            }
+                            else t->cstat &= ~4;
+                            break;
+                        case 8:
+                            k = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
+                            t->cstat &= ~4;
+                            break;
+                        default:
+                            k = 0;
+                            break;
                     }
 
                 t->picnum += k + (*(intptr_t *)t4) + l * t3;
@@ -6226,126 +6229,126 @@ PALONLY:
 
         switch (DynamicTileMap[s->picnum])
         {
-        case LASERLINE__STATIC:
-            if (sector[t->sectnum].lotag == ST_2_UNDERWATER) t->pal = 8;
-            t->z = sprite[s->owner].z-(3<<8);
-            if (g_tripbombLaserMode == 2 && g_player[screenpeek].ps->heat_on == 0)
-                t->yrepeat = 0;
-            fallthrough__;
-        case EXPLOSION2__STATIC:
-        case EXPLOSION2BOT__STATIC:
-        case FREEZEBLAST__STATIC:
-        case ATOMICHEALTH__STATIC:
-        case FIRELASER__STATIC:
-        case SHRINKSPARK__STATIC:
-        case GROWSPARK__STATIC:
-        case CHAINGUN__STATIC:
-        case SHRINKEREXPLOSION__STATIC:
-        case RPG__STATIC:
-        case FLOORFLAME__STATIC:
-            if (t->picnum == EXPLOSION2)
-            {
-                g_player[screenpeek].display.visibility = -127;
-                //g_restorePalette = 1;   // JBF 20040101: why?
-            }
-            t->shade = -127;
-            break;
-        case FIRE__STATIC:
-        case FIRE2__STATIC:
-        case BURNING__STATIC:
-        case BURNING2__STATIC:
-            if (sprite[s->owner].picnum != TREE1 && sprite[s->owner].picnum != TREE2)
-                t->z = sector[t->sectnum].floorz;
-            t->shade = -127;
-            break;
-        case COOLEXPLOSION1__STATIC:
-            t->shade = -127;
-            t->picnum += (s->shade>>1);
-            break;
-        case PLAYERONWATER__STATIC:
-#if defined(USE_OPENGL)
-            if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum,s->pal) >= 0 && !(spriteext[i].flags&SPREXT_NOTMD))
-            {
-                k = 0;
-                t->cstat &= ~4;
-            }
-            else
-#endif
-            {
-                k = (((t->ang+3072+128-a)&2047)>>8)&7;
-                if (k>4)
+            case LASERLINE__STATIC:
+                if (sector[t->sectnum].lotag == ST_2_UNDERWATER) t->pal = 8;
+                t->z = sprite[s->owner].z - (3 << 8);
+                if (g_tripbombLaserMode == 2 && g_player[screenpeek].ps->heat_on == 0)
+                    t->yrepeat = 0;
+                fallthrough__;
+            case EXPLOSION2__STATIC:
+            case EXPLOSION2BOT__STATIC:
+            case FREEZEBLAST__STATIC:
+            case ATOMICHEALTH__STATIC:
+            case FIRELASER__STATIC:
+            case SHRINKSPARK__STATIC:
+            case GROWSPARK__STATIC:
+            case CHAINGUN__STATIC:
+            case SHRINKEREXPLOSION__STATIC:
+            case RPG__STATIC:
+            case FLOORFLAME__STATIC:
+                if (t->picnum == EXPLOSION2)
                 {
-                    k = 8-k;
+                    g_player[screenpeek].display.visibility = -127;
+                    //g_restorePalette = 1;   // JBF 20040101: why?
+                }
+                t->shade = -127;
+                break;
+            case FIRE__STATIC:
+            case FIRE2__STATIC:
+            case BURNING__STATIC:
+            case BURNING2__STATIC:
+                if (sprite[s->owner].picnum != TREE1 && sprite[s->owner].picnum != TREE2)
+                    t->z = sector[t->sectnum].floorz;
+                t->shade = -127;
+                break;
+            case COOLEXPLOSION1__STATIC:
+                t->shade = -127;
+                t->picnum += (s->shade >> 1);
+                break;
+            case PLAYERONWATER__STATIC:
+#if defined(USE_OPENGL)
+                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum, s->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                {
+                    k = 0;
+                    t->cstat &= ~4;
+                }
+                else
+#endif
+                {
+                    k = (((t->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
+                    if (k > 4)
+                    {
+                        k = 8 - k;
+                        t->cstat |= 4;
+                    }
+                    else t->cstat &= ~4;
+                }
+
+                t->picnum = s->picnum + k + ((T1(i) < 4) * 5);
+                t->shade = sprite[s->owner].shade;
+
+                break;
+
+            case WATERSPLASH2__STATIC:
+                t->picnum = WATERSPLASH2 + t1;
+                break;
+            case SHELL__STATIC:
+                t->picnum = s->picnum + (T1(i) & 1);
+                fallthrough__;
+            case SHOTGUNSHELL__STATIC:
+                t->cstat |= 12;
+                if (T1(i) > 1) t->cstat &= ~4;
+                if (T1(i) > 2) t->cstat &= ~12;
+                break;
+            case FRAMEEFFECT1_13__STATIC:
+                if (PLUTOPAK) break;
+                fallthrough__;
+            case FRAMEEFFECT1__STATIC:
+                if (s->owner >= 0 && sprite[s->owner].statnum < MAXSTATUS)
+                {
+                    if (sprite[s->owner].picnum == APLAYER)
+                        if (ud.camerasprite == -1)
+                            if (screenpeek == sprite[s->owner].yvel && display_mirror == 0)
+                            {
+                                t->owner = -1;
+                                break;
+                            }
+                    if ((sprite[s->owner].cstat & 32768) == 0)
+                    {
+                        if (!actor[s->owner].dispicnum)
+                            t->picnum = actor[i].t_data[1];
+                        else t->picnum = actor[s->owner].dispicnum;
+
+                        if (!G_MaybeTakeOnFloorPal(t, sect))
+                            t->pal = sprite[s->owner].pal;
+
+                        t->shade = sprite[s->owner].shade;
+                        t->ang = sprite[s->owner].ang;
+                        t->cstat = 2 | sprite[s->owner].cstat;
+                    }
+                }
+                break;
+
+            case CAMERA1__STATIC:
+            case RAT__STATIC:
+
+#if defined(USE_OPENGL)
+                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum, s->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                {
+                    t->cstat &= ~4;
+                    break;
+                }
+#endif
+
+                k = (((t->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
+                if (k > 4)
+                {
+                    k = 8 - k;
                     t->cstat |= 4;
                 }
                 else t->cstat &= ~4;
-            }
-
-            t->picnum = s->picnum+k+((T1(i)<4)*5);
-            t->shade = sprite[s->owner].shade;
-
-            break;
-
-        case WATERSPLASH2__STATIC:
-            t->picnum = WATERSPLASH2+t1;
-            break;
-        case SHELL__STATIC:
-            t->picnum = s->picnum+(T1(i)&1);
-            fallthrough__;
-        case SHOTGUNSHELL__STATIC:
-            t->cstat |= 12;
-            if (T1(i) > 1) t->cstat &= ~4;
-            if (T1(i) > 2) t->cstat &= ~12;
-            break;
-        case FRAMEEFFECT1_13__STATIC:
-            if (PLUTOPAK) break;
-            fallthrough__;
-        case FRAMEEFFECT1__STATIC:
-            if (s->owner >= 0 && sprite[s->owner].statnum < MAXSTATUS)
-            {
-                if (sprite[s->owner].picnum == APLAYER)
-                    if (ud.camerasprite == -1)
-                        if (screenpeek == sprite[s->owner].yvel && display_mirror == 0)
-                        {
-                            t->owner = -1;
-                            break;
-                        }
-                if ((sprite[s->owner].cstat&32768) == 0)
-                {
-                    if (!actor[s->owner].dispicnum)
-                        t->picnum = actor[i].t_data[1];
-                    else t->picnum = actor[s->owner].dispicnum;
-                    
-                    if (!G_MaybeTakeOnFloorPal(t, sect))
-                        t->pal = sprite[s->owner].pal;
-
-                    t->shade = sprite[s->owner].shade;
-                    t->ang = sprite[s->owner].ang;
-                    t->cstat = 2|sprite[s->owner].cstat;
-                }
-            }
-            break;
-
-        case CAMERA1__STATIC:
-        case RAT__STATIC:
-
-#if defined(USE_OPENGL)
-            if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum,s->pal) >= 0 && !(spriteext[i].flags&SPREXT_NOTMD))
-            {
-                t->cstat &= ~4;
+                t->picnum = s->picnum + k;
                 break;
-            }
-#endif
-
-            k = (((t->ang+3072+128-a)&2047)>>8)&7;
-            if (k>4)
-            {
-                k = 8-k;
-                t->cstat |= 4;
-            }
-            else t->cstat &= ~4;
-            t->picnum = s->picnum+k;
-            break;
         }
 
         actor[i].dispicnum = t->picnum;
