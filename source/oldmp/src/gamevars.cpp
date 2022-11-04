@@ -49,8 +49,8 @@ static void Gv_Free(void) /* called from Gv_ReadSave() and Gv_ResetVars() */
 
     g_gameVarCount=g_gameArrayCount=0;
 
-    hash_init(&gamevarH);
-    hash_init(&arrayH);
+    hash_init(&h_gamevars);
+    hash_init(&h_arrays);
 
     return;
 }
@@ -66,8 +66,8 @@ void Gv_Clear(void)
     for (auto& gameArray : aGameArrays)
         DO_FREE_AND_NULL(gameArray.szLabel);
 
-    hash_init(&gamevarH);
-    hash_init(&arrayH);
+    hash_init(&h_gamevars);
+    hash_init(&h_arrays);
     return;
 }
 
@@ -92,7 +92,7 @@ int Gv_ReadSave(int fil)
         if (kdfread(&(aGameVars[i]),sizeof(gamevar_t),1,fil) != 1) goto corrupt;
         aGameVars[i].szLabel=(char*)Xcalloc(MAXVARLABEL,sizeof(char));
         if (kdfread(aGameVars[i].szLabel,sizeof(char) * MAXVARLABEL, 1, fil) != 1) goto corrupt;
-        hash_add(&gamevarH,aGameVars[i].szLabel,i, 1);
+        hash_add(&h_gamevars,aGameVars[i].szLabel,i, 1);
 
         if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
         {
@@ -120,7 +120,7 @@ int Gv_ReadSave(int fil)
         if (kdfread(&(aGameArrays[i]),sizeof(gamearray_t),1,fil) != 1) goto corrupt;
         aGameArrays[i].szLabel=(char*)Xcalloc(MAXARRAYLABEL,sizeof(char));
         if (kdfread(aGameArrays[i].szLabel,sizeof(char) * MAXARRAYLABEL, 1, fil) != 1) goto corrupt;
-        hash_add(&arrayH,aGameArrays[i].szLabel,i, 1);
+        hash_add(&h_arrays,aGameArrays[i].szLabel,i, 1);
 
         aGameArrays[i].plValues=(intptr_t*)Xcalloc(aGameArrays[i].size,sizeof(intptr_t));
         if (kdfread(aGameArrays[i].plValues,sizeof(intptr_t) * aGameArrays[i].size, 1, fil) < 1) goto corrupt;
@@ -352,7 +352,7 @@ int Gv_NewArray(const char *pszLabel, intptr_t asize)
         LOG_F(ERROR, "%s:%d: array name `%s' exceeds limit of %d characters.",g_scriptFileName,g_lineNumber,pszLabel, MAXARRAYLABEL);
         return 0;
     }
-    i = hash_find(&arrayH,pszLabel);
+    i = hash_find(&h_arrays,pszLabel);
     if (i >=0 && !aGameArrays[i].bReset)
     {
         // found it it's a duplicate in error
@@ -371,7 +371,7 @@ int Gv_NewArray(const char *pszLabel, intptr_t asize)
     aGameArrays[i].size=asize;
     aGameArrays[i].bReset=0;
     g_gameArrayCount++;
-    hash_add(&arrayH,aGameArrays[i].szLabel,i, 1);
+    hash_add(&h_arrays,aGameArrays[i].szLabel,i, 1);
     return 1;
 }
 
@@ -398,7 +398,7 @@ void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags)
         return;
     }
 
-    i = hash_find(&gamevarH,pszLabel);
+    i = hash_find(&h_gamevars,pszLabel);
 
     if (i >= 0 && !(aGameVars[i].dwFlags & GAMEVAR_RESET))
     {
@@ -447,7 +447,7 @@ void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags)
     if (i == g_gameVarCount)
     {
         // we're adding a new one.
-        hash_add(&gamevarH, aGameVars[i].szLabel, g_gameVarCount++, 0);
+        hash_add(&h_gamevars, aGameVars[i].szLabel, g_gameVarCount++, 0);
     }
 
     if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
@@ -478,7 +478,7 @@ void A_ResetVars(int iActor)
 
 static int Gv_GetVarIndex(const char *szGameLabel)
 {
-    int i = hash_find(&gamevarH,szGameLabel);
+    int i = hash_find(&h_gamevars,szGameLabel);
     if (i == -1)
     {
         OSD_Printf(OSD_ERROR "Gv_GetVarDataPtr(): INTERNAL ERROR: couldn't find gamevar %s!\n",szGameLabel);
@@ -614,13 +614,13 @@ void __fastcall Gv_SetVarX(int id, int lValue)
 
 int Gv_GetVarByLabel(const char *szGameLabel, int lDefault, int iActor, int iPlayer)
 {
-    int gameVar = hash_find(&gamevarH,szGameLabel);
+    int gameVar = hash_find(&h_gamevars,szGameLabel);
     return EDUKE32_PREDICT_TRUE(gameVar >= 0) ? Gv_GetVar(gameVar, iActor, iPlayer) : lDefault;
 }
 
 static intptr_t* Gv_GetVarDataPtr(const char* szGameLabel)
 {
-    int const gameVar = hash_find(&gamevarH, szGameLabel);
+    int const gameVar = hash_find(&h_gamevars, szGameLabel);
 
     if (EDUKE32_PREDICT_FALSE((unsigned)gameVar >= MAXGAMEVARS))
         return NULL;

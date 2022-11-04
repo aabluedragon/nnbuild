@@ -605,12 +605,12 @@ static int osdcmd_setvar(const osdfuncparm_t *parm)
 
     strcpy(varname,parm->parms[1]);
     varval = Batol(varname);
-    i = hash_find(&gamevarH,varname);
+    i = hash_find(&h_gamevars,varname);
     if (i >= 0)
         varval=Gv_GetVar(i, g_player[myconnectindex].ps->i, myconnectindex);
 
     strcpy(varname,parm->parms[0]);
-    i = hash_find(&gamevarH,varname);
+    i = hash_find(&h_gamevars,varname);
     if (i >= 0)
         Gv_SetVar(i, varval, g_player[myconnectindex].ps->i, myconnectindex);
     return OSDCMD_OK;
@@ -630,7 +630,7 @@ static int osdcmd_addlogvar(const osdfuncparm_t *parm)
     }
 
     strcpy(varname,parm->parms[0]);
-    i = hash_find(&gamevarH,varname);
+    i = hash_find(&h_gamevars,varname);
     if (i >= 0)
         OSD_Printf("%s = %d\n", varname, Gv_GetVar(i, g_player[myconnectindex].ps->i, myconnectindex));
     return OSDCMD_OK;
@@ -659,12 +659,12 @@ static int osdcmd_setactorvar(const osdfuncparm_t *parm)
     varval = Batol(parm->parms[2]);
     strcpy(varname,parm->parms[2]);
     varval = Batol(varname);
-    i = hash_find(&gamevarH,varname);
+    i = hash_find(&h_gamevars,varname);
     if (i >= 0)
         varval=Gv_GetVar(i, g_player[myconnectindex].ps->i, myconnectindex);
 
     strcpy(varname,parm->parms[1]);
-    i = hash_find(&gamevarH,varname);
+    i = hash_find(&h_gamevars,varname);
     if (i >= 0)
         Gv_SetVar(i, varval, ID, -1);
     return OSDCMD_OK;

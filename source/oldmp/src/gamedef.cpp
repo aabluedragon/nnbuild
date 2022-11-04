@@ -992,64 +992,64 @@ const memberlabel_t TileDataLabels[] =
 char *bitptr; // pointer to bitmap of which bytecode positions contain pointers
 #define BITPTR_POINTER 1
 
-hashtable_t gamevarH    = { MAXGAMEVARS>>1, NULL };
-hashtable_t arrayH      = { MAXGAMEARRAYS>>1, NULL };
-hashtable_t labelH      = { 11264>>1, NULL };
-hashtable_t keywH       = { CON_END>>1, NULL };
+hashtable_t h_gamevars   = { MAXGAMEVARS>>1, NULL };
+hashtable_t h_arrays     = { MAXGAMEARRAYS>>1, NULL };
+hashtable_t h_labels     = { MAXLABELS>>1, NULL };
+hashtable_t h_keywords   = { CON_END>>1, NULL };
 
-hashtable_t sectorH     = { SECTOR_END>>1, NULL };
-hashtable_t wallH       = { WALL_END>>1, NULL };
-hashtable_t userdefH    = { USERDEFS_END>>1, NULL };
+hashtable_t h_sector     = { SECTOR_END>>1, NULL };
+hashtable_t h_wall       = { WALL_END>>1, NULL };
+hashtable_t h_userdef    = { USERDEFS_END>>1, NULL };
 
-hashtable_t projectileH = { PROJ_END>>1, NULL };
-hashtable_t playerH     = { PLAYER_END>>1, NULL };
-hashtable_t inputH      = { INPUT_END>>1, NULL };
-hashtable_t actorH      = { ACTOR_END>>1, NULL };
-hashtable_t tspriteH    = { ACTOR_END>>1, NULL };
-hashtable_t tileDataH   = { TILEDATA_END >> 1, NULL };
+hashtable_t h_projectile = { PROJ_END>>1, NULL };
+hashtable_t h_player     = { PLAYER_END>>1, NULL };
+hashtable_t h_input      = { INPUT_END>>1, NULL };
+hashtable_t h_actor      = { ACTOR_END>>1, NULL };
+hashtable_t h_tsprite    = { ACTOR_END>>1, NULL };
+hashtable_t h_tiledata   = { TILEDATA_END >> 1, NULL };
 
 void inithashnames();
 void freehashnames();
 
-void inithash()
+void VM_InitHashTables()
 {
     int32_t i;
 
-    hash_init(&gamevarH);
-    hash_init(&arrayH);
-    hash_init(&labelH);
+    hash_init(&h_gamevars);
+    hash_init(&h_arrays);
+    hash_init(&h_labels);
     inithashnames();
 
-    hash_init(&keywH);
-    hash_init(&sectorH);
-    hash_init(&wallH);
-    hash_init(&userdefH);
-    hash_init(&projectileH);
-    hash_init(&playerH);
-    hash_init(&inputH);
-    hash_init(&actorH);
-    hash_init(&tspriteH);
-    hash_init(&tileDataH);
+    hash_init(&h_keywords);
+    hash_init(&h_sector);
+    hash_init(&h_wall);
+    hash_init(&h_userdef);
+    hash_init(&h_projectile);
+    hash_init(&h_player);
+    hash_init(&h_input);
+    hash_init(&h_actor);
+    hash_init(&h_tsprite);
+    hash_init(&h_tiledata);
 
     for (auto& keyword : vm_keywords)
-        hash_add(&keywH, keyword.token, keyword.val, 0);
+        hash_add(&h_keywords, keyword.token, keyword.val, 0);
 
-    for (i = 0; SectorLabels[i].lId >= 0; i++) hash_add(&sectorH, SectorLabels[i].name, i, 0);
-    for (i = 0; WallLabels[i].lId >= 0; i++) hash_add(&wallH, WallLabels[i].name, i, 0);
-    for (i = 0; UserdefsLabels[i].lId >= 0; i++) hash_add(&userdefH, UserdefsLabels[i].name, i, 0);
-    for (i = 0; ProjectileLabels[i].lId >= 0; i++) hash_add(&projectileH, ProjectileLabels[i].name, i, 0);
-    for (i = 0; PlayerLabels[i].lId >= 0; i++) hash_add(&playerH, PlayerLabels[i].name, i, 0);
-    for (i = 0; InputLabels[i].lId >= 0; i++) hash_add(&inputH, InputLabels[i].name, i, 0);
-    for (i = 0; ActorLabels[i].lId >= 0; i++) hash_add(&actorH, ActorLabels[i].name, i, 0);
-    for (i = 0; TsprLabels[i].lId >= 0; i++) hash_add(&tspriteH, TsprLabels[i].name, i, 0);
-    for (i = 0; TileDataLabels[i].lId >= 0; i++) hash_add(&tileDataH, TileDataLabels[i].name, i, 0);
+    for (i = 0; SectorLabels[i].lId >= 0; i++) hash_add(&h_sector, SectorLabels[i].name, i, 0);
+    for (i = 0; WallLabels[i].lId >= 0; i++) hash_add(&h_wall, WallLabels[i].name, i, 0);
+    for (i = 0; UserdefsLabels[i].lId >= 0; i++) hash_add(&h_userdef, UserdefsLabels[i].name, i, 0);
+    for (i = 0; ProjectileLabels[i].lId >= 0; i++) hash_add(&h_projectile, ProjectileLabels[i].name, i, 0);
+    for (i = 0; PlayerLabels[i].lId >= 0; i++) hash_add(&h_player, PlayerLabels[i].name, i, 0);
+    for (i = 0; InputLabels[i].lId >= 0; i++) hash_add(&h_input, InputLabels[i].name, i, 0);
+    for (i = 0; ActorLabels[i].lId >= 0; i++) hash_add(&h_actor, ActorLabels[i].name, i, 0);
+    for (i = 0; TsprLabels[i].lId >= 0; i++) hash_add(&h_tsprite, TsprLabels[i].name, i, 0);
+    for (i = 0; TileDataLabels[i].lId >= 0; i++) hash_add(&h_tiledata, TileDataLabels[i].name, i, 0);
 }
 
 void freehash()
 {
-    hash_free(&gamevarH);
-    hash_free(&arrayH);
-    hash_free(&labelH);
+    hash_free(&h_gamevars);
+    hash_free(&h_arrays);
+    hash_free(&h_labels);
 }
 
 char const* VM_GetKeywordForID(int32_t id)
@@ -1367,8 +1367,8 @@ void AddLog(const char *psz, ...)
 }
 #endif
 
-#define GetDefID(szGameLabel) hash_find(&gamevarH,szGameLabel)
-#define GetADefID(szGameLabel) hash_find(&arrayH,szGameLabel)
+#define GetDefID(szGameLabel) hash_find(&h_gamevars,szGameLabel)
+#define GetADefID(szGameLabel) hash_find(&h_arrays,szGameLabel)
 
 static inline int isaltok(char c)
 {
@@ -1441,7 +1441,7 @@ static int C_GetKeyword(void)
         tempbuf[i++] = *(temptextptr++);
     tempbuf[i] = 0;
 
-    return hash_find(&keywH,tempbuf);
+    return hash_find(&h_keywords,tempbuf);
 }
 
 static int C_GetNextKeyword(void) //Returns its code #
@@ -1472,7 +1472,7 @@ static int C_GetNextKeyword(void) //Returns its code #
     }
     tempbuf[l] = 0;
 
-    int i = hash_find(&keywH,tempbuf);
+    int i = hash_find(&h_keywords,tempbuf);
     if (i>=0)
     {
         *g_scriptPtr = i + (g_lineNumber<<12);
@@ -1539,7 +1539,7 @@ static void C_GetNextVarType(int type)
     }
     C_GetNextLabelName();
 
-    if (!g_skipKeywordCheck && hash_find(&keywH,LAST_LABEL)>=0)
+    if (!g_skipKeywordCheck && hash_find(&h_keywords,LAST_LABEL)>=0)
     {
         g_errorCnt++;
         C_ReportError(ERROR_ISAKEYWORD);
@@ -1588,7 +1588,7 @@ static void C_GetNextVarType(int type)
         {
             //try looking for a define instead
             Bstrcpy(tempbuf,LAST_LABEL);
-            i = hash_find(&labelH,tempbuf);
+            i = hash_find(&h_labels,tempbuf);
             if (i>=0)
             {
                 if (labeltype[i] & LABEL_DEFINE)
@@ -1676,14 +1676,14 @@ static int C_GetNextValue(int type)
     }
     tempbuf[l] = 0;
 
-    if (!g_skipKeywordCheck && hash_find(&keywH,LAST_LABEL)>=0)
+    if (!g_skipKeywordCheck && hash_find(&h_keywords,LAST_LABEL)>=0)
     {
         g_errorCnt++;
         C_ReportError(ERROR_ISAKEYWORD);
         textptr+=l;
     }
 
-    i = hash_find(&labelH,tempbuf);
+    i = hash_find(&h_labels,tempbuf);
     if (i>=0)
     {
         const char *el,*gl;
@@ -1887,28 +1887,28 @@ DO_DEFSTATE:
 
             g_processingState = 1;
             Bsprintf(g_szCurrentBlockName,"%s",LAST_LABEL);
-            hash_add(&labelH,LAST_LABEL,g_labelCnt, 0);
+            hash_add(&h_labels,LAST_LABEL,g_labelCnt, 0);
             g_labelCnt++;
             return 0;
         }
 
         C_GetNextLabelName();
 
-        if (hash_find(&keywH,LAST_LABEL)>=0)
+        if (hash_find(&h_keywords,LAST_LABEL)>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = hash_find(&gamevarH,LAST_LABEL);
+        i = hash_find(&h_gamevars,LAST_LABEL);
         if (i>=0)
         {
             g_warningCnt++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
-        j = hash_find(&labelH,LAST_LABEL);
+        j = hash_find(&h_labels,LAST_LABEL);
         if (j>=0)
         {
             if (labeltype[j] & LABEL_STATE)
@@ -2022,7 +2022,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID=C_GetLabelNameOffset(&projectileH,Bstrtolower(LAST_LABEL));
+        lLabelID=C_GetLabelNameOffset(&h_projectile,Bstrtolower(LAST_LABEL));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -2074,7 +2074,7 @@ DO_DEFSTATE:
         //printf("Got Label '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (hash_find(&keywH,LAST_LABEL)>=0)
+        if (hash_find(&h_keywords,LAST_LABEL)>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
@@ -2119,14 +2119,14 @@ DO_DEFSTATE:
         //printf("Got Label '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (hash_find(&keywH,LAST_LABEL)>=0)
+        if (hash_find(&h_keywords,LAST_LABEL)>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = hash_find(&gamevarH,LAST_LABEL);
+        i = hash_find(&h_gamevars,LAST_LABEL);
         if (i>=0)
         {
             g_warningCnt++;
@@ -2147,21 +2147,21 @@ DO_DEFSTATE:
         //printf("Got label. '%.20s'\n",textptr);
         // Check to see it's already defined
 
-        if (hash_find(&keywH,LAST_LABEL)>=0)
+        if (hash_find(&h_keywords,LAST_LABEL)>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
             return 0;
         }
 
-        i = hash_find(&gamevarH,LAST_LABEL);
+        i = hash_find(&h_gamevars,LAST_LABEL);
         if (i>=0)
         {
             g_warningCnt++;
             C_ReportError(WARNING_NAMEMATCHESVAR);
         }
 
-        i = hash_find(&labelH,LAST_LABEL);
+        i = hash_find(&h_labels,LAST_LABEL);
         if (i>=0)
         {
             /*            if (i >= g_numDefaultLabels)
@@ -2177,7 +2177,7 @@ DO_DEFSTATE:
         if (i == -1)
         {
             //              printf("Defining Definition '%s' to be '%d'\n",LAST_LABEL,*(g_scriptPtr-1));
-            hash_add(&labelH,LAST_LABEL,g_labelCnt, 0);
+            hash_add(&h_labels,LAST_LABEL,g_labelCnt, 0);
             labeltype[g_labelCnt] = LABEL_DEFINE;
             labelcode[g_labelCnt++] = *(g_scriptPtr-1);
             if (*(g_scriptPtr-1) >= 0 && *(g_scriptPtr-1) < MAXTILES && g_dynamicTileMapping)
@@ -2240,21 +2240,21 @@ DO_DEFSTATE:
             C_GetNextLabelName();
             // Check to see it's already defined
 
-            if (hash_find(&keywH,LAST_LABEL)>=0)
+            if (hash_find(&h_keywords,LAST_LABEL)>=0)
             {
                 g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = hash_find(&gamevarH,LAST_LABEL);
+            i = hash_find(&h_gamevars,LAST_LABEL);
             if (i>=0)
             {
                 g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = hash_find(&labelH,LAST_LABEL);
+            i = hash_find(&h_labels,LAST_LABEL);
             if (i>=0)
             {
                 g_warningCnt++;
@@ -2262,7 +2262,7 @@ DO_DEFSTATE:
             }
             if (i == -1)
             {
-                hash_add(&labelH,LAST_LABEL,g_labelCnt, 0);
+                hash_add(&h_labels,LAST_LABEL,g_labelCnt, 0);
                 labeltype[g_labelCnt] = LABEL_MOVE;
                 labelcode[g_labelCnt++] = (intptr_t) g_scriptPtr;
             }
@@ -2418,21 +2418,21 @@ DO_DEFSTATE:
             g_scriptPtr--;
             C_GetNextLabelName();
 
-            if (hash_find(&keywH,LAST_LABEL)>=0)
+            if (hash_find(&h_keywords,LAST_LABEL)>=0)
             {
                 g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = hash_find(&gamevarH,LAST_LABEL);
+            i = hash_find(&h_gamevars,LAST_LABEL);
             if (i>=0)
             {
                 g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = hash_find(&labelH,LAST_LABEL);
+            i = hash_find(&h_labels,LAST_LABEL);
             if (i>=0)
             {
                 g_warningCnt++;
@@ -2442,7 +2442,7 @@ DO_DEFSTATE:
             if (i == -1)
             {
                 labeltype[g_labelCnt] = LABEL_AI;
-                hash_add(&labelH,LAST_LABEL,g_labelCnt, 0);
+                hash_add(&h_labels,LAST_LABEL,g_labelCnt, 0);
                 labelcode[g_labelCnt++] = (intptr_t) g_scriptPtr;
             }
 
@@ -2499,21 +2499,21 @@ DO_DEFSTATE:
             C_GetNextLabelName();
             // Check to see it's already defined
 
-            if (hash_find(&keywH,LAST_LABEL)>=0)
+            if (hash_find(&h_keywords,LAST_LABEL)>=0)
             {
                 g_errorCnt++;
                 C_ReportError(ERROR_ISAKEYWORD);
                 return 0;
             }
 
-            i = hash_find(&gamevarH,LAST_LABEL);
+            i = hash_find(&h_gamevars,LAST_LABEL);
             if (i>=0)
             {
                 g_warningCnt++;
                 C_ReportError(WARNING_NAMEMATCHESVAR);
             }
 
-            i = hash_find(&labelH,LAST_LABEL);
+            i = hash_find(&h_labels,LAST_LABEL);
             if (i>=0)
             {
                 g_warningCnt++;
@@ -2524,7 +2524,7 @@ DO_DEFSTATE:
             {
                 labeltype[g_labelCnt] = LABEL_ACTION;
                 labelcode[g_labelCnt] = (intptr_t) g_scriptPtr;
-                hash_add(&labelH,LAST_LABEL,g_labelCnt, 0);
+                hash_add(&h_labels,LAST_LABEL,g_labelCnt, 0);
                 g_labelCnt++;
             }
 
@@ -2980,7 +2980,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID=GetLabelNameid(SectorLabels,&sectorH,Bstrtolower(LAST_LABEL));
+        lLabelID=GetLabelNameid(SectorLabels,&h_sector,Bstrtolower(LAST_LABEL));
 
         if (lLabelID == -1)
         {
@@ -3116,7 +3116,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID=GetLabelNameid(WallLabels,&wallH,Bstrtolower(LAST_LABEL));
+        lLabelID=GetLabelNameid(WallLabels,&h_wall,Bstrtolower(LAST_LABEL));
 
         if (lLabelID == -1)
         {
@@ -3184,7 +3184,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID=C_GetLabelNameOffset(&playerH,Bstrtolower(LAST_LABEL));
+        lLabelID=C_GetLabelNameOffset(&h_player,Bstrtolower(LAST_LABEL));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3266,7 +3266,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID=C_GetLabelNameOffset(&inputH,Bstrtolower(LAST_LABEL));
+        lLabelID=C_GetLabelNameOffset(&h_input,Bstrtolower(LAST_LABEL));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3335,7 +3335,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID = C_GetLabelNameOffset(&tileDataH, Bstrtolower(LAST_LABEL));
+        lLabelID = C_GetLabelNameOffset(&h_tiledata, Bstrtolower(LAST_LABEL));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3386,7 +3386,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID = C_GetLabelNameOffset(&userdefH, Bstrtolower(LAST_LABEL));
+        lLabelID = C_GetLabelNameOffset(&h_userdef, Bstrtolower(LAST_LABEL));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3492,7 +3492,7 @@ DO_DEFSTATE:
         //printf("found label of '%s'\n",   LAST_LABEL);
 
         // Check to see if it's a keyword
-        if (hash_find(&keywH,LAST_LABEL)>=0)
+        if (hash_find(&h_keywords,LAST_LABEL)>=0)
         {
             g_errorCnt++;
             C_ReportError(ERROR_ISAKEYWORD);
@@ -3603,7 +3603,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID=C_GetLabelNameOffset(&actorH,Bstrtolower(LAST_LABEL));
+        lLabelID=C_GetLabelNameOffset(&h_actor,Bstrtolower(LAST_LABEL));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -3699,7 +3699,7 @@ DO_DEFSTATE:
         C_GetNextLabelName();
         //printf("found xxx label of '%s'\n",   LAST_LABEL);
 
-        lLabelID=C_GetLabelNameOffset(&tspriteH,Bstrtolower(LAST_LABEL));
+        lLabelID=C_GetLabelNameOffset(&h_tsprite,Bstrtolower(LAST_LABEL));
         //printf("LabelID is %d\n",lLabelID);
         if (lLabelID == -1)
         {
@@ -5332,7 +5332,7 @@ repeatcase:
 
         // Ideally we could keep the value of i from C_GetNextValue() instead of having to hash_find() again.
         // This depends on tempbuf remaining in place after C_GetNextValue():
-        j = hash_find(&labelH, tempbuf);
+        j = hash_find(&h_labels, tempbuf);
 
         k = g_scriptPtr[-1];
         if (EDUKE32_PREDICT_FALSE((unsigned)k >= MAXSOUNDS - 1))
@@ -5652,7 +5652,7 @@ static void AddDefinition(const char *lLabel,int lValue,int lType)
 {
     Bstrcpy(LAST_LABEL,lLabel);
     labeltype[g_labelCnt] = lType;
-    hash_add(&labelH,LAST_LABEL,g_labelCnt, 0);
+    hash_add(&h_labels,LAST_LABEL,g_labelCnt, 0);
     labelcode[g_labelCnt++] = lValue;
     g_numDefaultLabels++;
 }
@@ -5850,7 +5850,7 @@ void C_Compile(const char *filenam)
 
     clearbuf(apScriptGameEvent,MAXGAMEEVENTS,0L);
 
-    inithash();
+    VM_InitHashTables();
     Gv_Init();
     C_InitProjectiles();
 
@@ -6006,19 +6006,19 @@ void C_Compile(const char *filenam)
     {
         int j=0, k=0;
 
-        hash_free(&keywH);
+        hash_free(&h_keywords);
         freehashnames();
 
-        hash_free(&sectorH);
-        hash_free(&wallH);
-        hash_free(&userdefH);
+        hash_free(&h_sector);
+        hash_free(&h_wall);
+        hash_free(&h_userdef);
 
-        hash_free(&projectileH);
-        hash_free(&playerH);
-        hash_free(&inputH);
-        hash_free(&actorH);
-        hash_free(&tspriteH);
-        hash_free(&tileDataH);
+        hash_free(&h_projectile);
+        hash_free(&h_player);
+        hash_free(&h_input);
+        hash_free(&h_actor);
+        hash_free(&h_tsprite);
+        hash_free(&h_tiledata);
 
         g_totalLines += g_lineNumber;
 

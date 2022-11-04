@@ -33,6 +33,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAXGAMEEVENTS   128
 #define LABEL_HASPARM2  1
 #define LABEL_ISSTRING  2
+
+#define MAXLABELS 16384
 #define LAST_LABEL (label+(g_labelCnt<<6))
 
 typedef struct SystemVarID_s {

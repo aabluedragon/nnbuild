@@ -8762,9 +8762,10 @@ void G_Shutdown(void)
 static void G_CompileScripts(void)
 {
     int psm = pathsearchmode;
-    label     = (char *)&sprite[0]; // V8: 16384*44/64 = 11264  V7: 4096*44/64 = 2816
-    labelcode = (intptr_t *)&sector[0]; // V8: 4096*40/4 = 40960    V7: 1024*40/4 = 10240
-    labeltype = (intptr_t *)&wall[0];   // V8: 16384*32/4 = 131072  V7: 8192*32/4 = 65536
+
+    label = (char*)Xmalloc(MAXLABELS << 6);
+    labelcode = (int32_t*)Xmalloc(MAXLABELS * sizeof(int32_t));
+    labeltype = (uint8_t*)Xmalloc(MAXLABELS * sizeof(uint8_t));
 
     if (g_scriptNamePtr != NULL)
         Bcorrectfilename(g_scriptNamePtr, 0);
@@ -8776,31 +8777,12 @@ static void G_CompileScripts(void)
     if (g_loadFromGroupOnly) // g_loadFromGroupOnly is true only when compiling fails and internal defaults are utilized
         C_Compile(G_ConFile());
 
-    // [JM] Update to use MAXLABELS like mainline
-    if ((unsigned int)g_labelCnt > MAXSPRITES*sizeof(spritetype)/64)   // see the arithmetic above for why
+    if ((unsigned int)g_labelCnt >= MAXLABELS)
         G_GameExit("Error: too many labels defined!");
 
-    char *newlabel;
-    intptr_t *newlabelcode;
-
-    newlabel     = (char *)Xmalloc(g_labelCnt<<6);
-    newlabelcode = (intptr_t *)Xmalloc(g_labelCnt*sizeof(intptr_t));
-
-    if (!newlabel || !newlabelcode)
-    {
-        G_GameExit("Error: out of memory retaining labels\n");
-    }
-
-    copybuf(label,     newlabel, (g_labelCnt*64)/4);
-    copybuf(labelcode, newlabelcode, (g_labelCnt*sizeof(intptr_t))/4);
-
-    label = newlabel;
-    labelcode = newlabelcode;
-    // ******************
-
-    Bmemset(sprite, 0, MAXSPRITES * sizeof(spritetype));
-    Bmemset(sector, 0, MAXSECTORS * sizeof(sectortype));
-    Bmemset(wall, 0, MAXWALLS * sizeof(walltype));
+    label = (char*)Xrealloc(label, g_labelCnt << 6);
+    labelcode = (int32_t*)Xrealloc(labelcode, g_labelCnt * sizeof(int32_t));
+    labeltype = (uint8_t*)Xrealloc(labeltype, g_labelCnt * sizeof(uint8_t));
 
     X_OnEvent(EVENT_INIT, -1, -1, -1);
     pathsearchmode = psm;
