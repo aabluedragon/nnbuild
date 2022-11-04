@@ -531,7 +531,7 @@ static void X_Move(void)
         g_sp->ang += angdif;
     }
 
-    if (((a&jumptoplayer) == jumptoplayer) && !deadflag)
+    if (((a&jumptoplayer_bits) == jumptoplayer_bits) && !deadflag)
     {
         if (g_t[0] < 16)
             g_sp->zvel -= (sintable[(512+(g_t[0]<<4))&2047]>>5);
@@ -1336,7 +1336,7 @@ static int X_DoExecute(void)
                 if(!A_CheckSpriteFlags(g_i, SFLAG_NOWATERDIP))
                 {
                     // fix for flying/jumping monsters getting stuck in water
-                    if (!(g_sp->hitag & jumptoplayer ||
+                    if (!(g_sp->hitag & jumptoplayer_only ||
                         (g_tile[g_sp->picnum].execPtr && moveptr >= &apScript[0] && moveptr <= (&apScript[0] + g_scriptSize) && *(moveptr + 1))))
                     {
                         g_sp->z += (24 << 8);
