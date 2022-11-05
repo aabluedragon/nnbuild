@@ -489,16 +489,17 @@ static inline void X_AlterAng(int a)
 static void X_Move(void)
 {
     int l;
-    intptr_t *moveptr;
-    int a = g_sp->hitag, goalang, angdif;
+    int goalang, angdif;
     int daxvel;
     int deadflag = (A_CheckEnemySprite(g_sp) && g_sp->extra <= 0);
 
-    if (a == -1) a = 0;
+    int movflags = g_sp->hitag;
+    if (movflags == -1)
+        movflags = 0;
 
-    g_t[0]++;
+    AC_COUNT(g_t)++;
 
-    if (g_t[1] == 0 || a == 0)
+    if (AC_MOVE_ID(g_t) == 0 || movflags == 0)
     {
         if (deadflag || (actor[g_i].bpos.xy != g_sp->xy))
             setsprite(g_i, &g_sp->xyz);
@@ -506,7 +507,7 @@ static void X_Move(void)
         return;
     }
 
-    if (a&face_player && !deadflag)
+    if (movflags & face_player && !deadflag)
     {
         if (g_player[g_p].ps->newowner >= 0)
             goalang = getangle(g_player[g_p].ps->opos.x-g_sp->x,g_player[g_p].ps->opos.y-g_sp->y);
@@ -517,10 +518,10 @@ static void X_Move(void)
         g_sp->ang += angdif;
     }
 
-    if (a&spin && !deadflag)
-        g_sp->ang += sintable[((g_t[0]<<3)&2047)]>>6;
+    if (movflags & spin && !deadflag)
+        g_sp->ang += sintable[((AC_COUNT(g_t)<<3)&2047)]>>6;
 
-    if (a&face_player_slow && !deadflag)
+    if (movflags & face_player_slow && !deadflag)
     {
         if (g_player[g_p].ps->newowner >= 0)
             goalang = getangle(g_player[g_p].ps->opos.x-g_sp->x,g_player[g_p].ps->opos.y-g_sp->y);
@@ -531,13 +532,13 @@ static void X_Move(void)
         g_sp->ang += angdif;
     }
 
-    if (((a&jumptoplayer_bits) == jumptoplayer_bits) && !deadflag)
+    if (((movflags & jumptoplayer_bits) == jumptoplayer_bits) && !deadflag)
     {
-        if (g_t[0] < 16)
-            g_sp->zvel -= (sintable[(512+(g_t[0]<<4))&2047]>>5);
+        if (AC_COUNT(g_t) < 16)
+            g_sp->zvel -= (sintable[(512+(AC_COUNT(g_t)<<4))&2047]>>5);
     }
 
-    if (a&face_player_smart && !deadflag)
+    if (movflags & face_player_smart && !deadflag)
     {
         int newx = g_player[g_p].ps->pos.x+(g_player[g_p].ps->vel.x/768);
         int newy = g_player[g_p].ps->pos.y+(g_player[g_p].ps->vel.y/768);
@@ -549,16 +550,16 @@ static void X_Move(void)
         g_sp->ang += angdif;
     }
 
-    moveptr = (intptr_t *)g_t[1];
+    intptr_t* moveptr = (intptr_t *)AC_MOVE_ID(g_t);
 
-    if (a&geth) g_sp->xvel += (*moveptr-g_sp->xvel)>>1;
-    if (a&getv) g_sp->zvel += ((*(moveptr+1)<<4)-g_sp->zvel)>>1;
+    if (movflags & geth) g_sp->xvel += (*moveptr-g_sp->xvel)>>1;
+    if (movflags & getv) g_sp->zvel += ((*(moveptr+1)<<4)-g_sp->zvel)>>1;
 
-    if (a&dodgebullet && !deadflag)
+    if (movflags & dodgebullet && !deadflag)
         A_Dodge(g_sp);
 
     if (g_sp->picnum != APLAYER)
-        X_AlterAng(a);
+        X_AlterAng(movflags);
 
     if (g_sp->xvel > -6 && g_sp->xvel < 6)
         g_sp->xvel = 0;
@@ -654,7 +655,7 @@ static void X_Move(void)
 
                 if (!A_CheckSpriteFlags(g_i, SFLAG_SMOOTHMOVE))
                 {
-                    if (g_t[0]&1)
+                    if (AC_COUNT(g_t)&1)
                         return;
 
                     daxvel <<= 1;
@@ -663,7 +664,7 @@ static void X_Move(void)
         }
 
         actor[g_i].movflag = A_MoveSprite(g_i, (daxvel*(sintable[(angdif+512)&2047]))>>14,
-                                               (daxvel*(sintable[angdif&2047]))>>14,g_sp->zvel, (a & noclip) ? 0 : CLIPMASK0);
+                                               (daxvel*(sintable[angdif&2047]))>>14,g_sp->zvel, (movflags & noclip) ? 0 : CLIPMASK0);
     }
 
     if (isEnemy)
@@ -1006,21 +1007,28 @@ static int X_DoExecute(void)
     case CON_AI:
         insptr++;
         //Following changed to use pointersizes
-        g_t[5] = *insptr++; // Ai
-        g_t[4] = *(intptr_t *)(g_t[5]);       // Action
-        if (g_t[5]) g_t[1] = *(((intptr_t *)g_t[5])+1);       // move
-        g_sp->hitag = *(((intptr_t *)g_t[5])+2);    // move flags
-        g_t[0] = g_t[2] = g_t[3] = 0; // count, actioncount... g_t[3] = ???
-        if (A_CheckEnemySprite(g_sp) && g_sp->extra <= 0) // hack
-            break;
-        if (g_sp->hitag&random_angle)
-            g_sp->ang = krand()&2047;
+        AC_AI_ID(g_t) = *insptr++; // Ai
+        AC_ACTION_ID(g_t) = *(intptr_t *)(AC_AI_ID(g_t)); // Action
+
+        if (AC_AI_ID(g_t))
+            AC_MOVE_ID(g_t) = *(((intptr_t *)AC_AI_ID(g_t))+1); // move
+
+        g_sp->hitag = *(((intptr_t *)AC_AI_ID(g_t))+2); // move flags
+
+        AC_COUNT(g_t) = 0;
+        AC_ACTION_COUNT(g_t) = 0;
+        AC_CURFRAME(g_t) = 0;
+
+        if (!A_CheckEnemySprite(g_sp) || (g_sp->extra > 0)) // hack
+            if (g_sp->hitag & random_angle)
+                g_sp->ang = krand() & 2047;
         break;
 
     case CON_ACTION:
         insptr++;
-        g_t[2] = g_t[3] = 0;
-        g_t[4] = *insptr++;
+        AC_ACTION_COUNT(g_t) = 0;
+        AC_CURFRAME(g_t) = 0;
+        AC_ACTION_ID(g_t) = *insptr++;
         break;
 
     case CON_IFPDISTL:
@@ -1506,13 +1514,13 @@ static int X_DoExecute(void)
 
     case CON_MOVE:
         insptr++;
-        g_t[0]=0;
-        g_t[1] = *insptr++;
+        AC_COUNT(g_t) = 0;
+        AC_MOVE_ID(g_t) = *insptr++;
         g_sp->hitag = *insptr++;
-        if (A_CheckEnemySprite(g_sp) && g_sp->extra <= 0) // hack
-            break;
-        if (g_sp->hitag&random_angle)
-            g_sp->ang = krand()&2047;
+
+        if (!A_CheckEnemySprite(g_sp) || (g_sp->extra > 0)) // hack
+            if (g_sp->hitag & random_angle)
+                g_sp->ang = krand() & 2047;
         break;
 
     case CON_ADDWEAPONVAR:
@@ -2742,23 +2750,20 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFAI:
-        insptr++;
-        X_DoConditional(g_t[5] == *insptr);
+        X_DoConditional(AC_AI_ID(g_t) == *(++insptr));
         break;
 
     case CON_IFACTION:
-        insptr++;
-        X_DoConditional(g_t[4] == *insptr);
+        X_DoConditional(AC_ACTION_ID(g_t) == *(++insptr));
         break;
 
     case CON_IFACTIONCOUNT:
-        insptr++;
-        X_DoConditional(g_t[2] >= *insptr);
+        X_DoConditional(AC_ACTION_COUNT(g_t) >= *(++insptr));
         break;
 
     case CON_RESETACTIONCOUNT:
         insptr++;
-        g_t[2] = 0;
+        AC_ACTION_COUNT(g_t) = 0;
         break;
 
     case CON_DEBRIS:
