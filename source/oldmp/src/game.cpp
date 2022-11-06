@@ -2938,7 +2938,8 @@ void G_DrawRooms(int snum,int smoothratio)
 
     g_visibility = (int)(pDisp->visibility * ((numplayers > 1 && !DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE)) ? 1.f : r_ambientlightrecip)); // Do not allow visibility changes in online play.
 
-    if (ud.pause_on || g_player[snum].ps->on_crane > -1) smoothratio = 65536;
+    if (ud.pause_on)
+        smoothratio = 65536;
 
     ud.camerasect = p->cursectnum;
 
@@ -4252,16 +4253,19 @@ int A_Spawn(int spriteNum, int tileNum)
             pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_ONE_SIDED | CSTAT_SPRITE_BLOCK_HITSCAN);
 
             pSprite->picnum += 2;
+            pSprite->owner = -1;
+            pSprite->extra = 8;
             pSprite->z = sector[sectNum].ceilingz + (48 << 8);
-            T5(newSprite) = tempwallptr;
+
+            pActor->t_data[3] = -1; // Player ID 
+            pActor->t_data[4] = tempwallptr;
 
             g_origins[tempwallptr].x = pSprite->x;
             g_origins[tempwallptr].y = pSprite->y;
             g_origins[tempwallptr + 2].x = pSprite->z;
 
             // Find crane target
-            int s = headspritestat[STAT_DEFAULT];
-            while (s >= 0)
+            for(int SPRITES_OF(STAT_DEFAULT, s))
             {
                 if (sprite[s].picnum == CRANEPOLE && SHT(newSprite) == (sprite[s].hitag))
                 {
@@ -4281,12 +4285,9 @@ int A_Spawn(int spriteNum, int tileNum)
                     setspritez(s, &sprite[s].xyz);
                     break;
                 }
-                s = nextspritestat[s];
             }
-
             tempwallptr += 3;
-            pSprite->owner = -1;
-            pSprite->extra = 8;
+        
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
         }
@@ -5715,7 +5716,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
             if (g_player[s->yvel].ps->dead_flag || s->extra <= 0)
                 t->z += (20<<8); // Matches corpse height of vanilla Duke3D.
         }
-        else if (s->picnum != CRANEPOLE)
+        else
         {
             t->x -= mulscale16(65536-smoothratio,s->x-actor[i].bpos.x);
             t->y -= mulscale16(65536-smoothratio,s->y-actor[i].bpos.y);

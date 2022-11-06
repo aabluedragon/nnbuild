@@ -2377,7 +2377,7 @@ static void G_MoveStandables(void)
 {
     int i = headspritestat[STAT_STANDABLE], j, nexti, nextj, p=0, sect, switchpicnum;
     int l=0, x;
-    intptr_t *t;
+    intptr_t *pData;
     spritetype *s;
     short m;
 
@@ -2385,163 +2385,202 @@ static void G_MoveStandables(void)
     {
         nexti = nextspritestat[i];
 
-        t = &actor[i].t_data[0];
+        pData = &actor[i].t_data[0];
         s = &sprite[i];
         sect = s->sectnum;
 
-        if (sect < 0) KILLIT(i);
-
-        actor[i].bpos = s->xyz;
+        if (sect < 0)
+            KILLIT(i);
 
         IFWITHIN(CRANE,CRANE+3)
         {
-            //t[0] = state
-            //t[1] = checking sector number
+            //pData[0] = state
+            //pData[1] = checking sector number
+            //pData[2] = delay 
+            //pData[3] = grabbed player ID (not implemented yet.)
+            //pData[4] = tempwallptr crap
 
-            if (s->xvel) A_GetZLimits(i);
-
-            if (t[0] == 0)   //Waiting to check the sector
+            enum
             {
-                j = headspritesect[t[1]];
-                while (j>=0)
-                {
-                    nextj = nextspritesect[j];
-                    switch (sprite[j].statnum)
-                    {
-                    case 1:
-                    case 2:
-                    case 6:
-                    case 10:
-                        s->ang = getangle(g_origins[t[4]+1].x - s->x, g_origins[t[4]+1].y - s->y);
-                        setspritez_old(j, g_origins[t[4]+1].x, g_origins[t[4]+1].y, sprite[j].z);
-                        t[0]++;
-                        goto BOLT;
-                    }
-                    j = nextj;
-                }
+                CRANE_WAITING = 0,
+                CRANE_MOVETOSECT = 1,
+                CRANE_LOWERTOGRAB = 2,
+                CRANE_GRABOBJECT = 3,
+                CRANE_GRABWAIT = 4,
+                CRANE_RAISEOBJECT = 5,
+                CRANE_MOVETOORIGIN = 6,
+                CRANE_LOWERTODROP = 7,
+                CRANE_RAISEAFTERDROP = 8,
+                CRANE_RESET = 9,
+            };
+
+            if (s->xvel)
+                A_GetZLimits(i);
+
+            // Safety check in case the player died or somehow got dropped off the crane in a way that wasn't covered in this code.
+            if (EDUKE32_PREDICT_FALSE(pData[3] != -1 && g_player[pData[3]].ps->on_crane == -1))
+            {
+                if (s->owner == -2)
+                    s->owner = -1;
+
+                pData[3] = -1;
             }
 
-            else if (t[0]==1)
+            if (pData[0] == CRANE_WAITING)   //Waiting to check the sector
+            {
+                for (SPRITES_OF_SECT_SAFE(pData[1], j, nextj))
+                {
+                    switch (sprite[j].statnum)
+                    {
+                        case STAT_ACTOR:
+                        case STAT_ZOMBIEACTOR:
+                        case STAT_STANDABLE:
+                        case STAT_PLAYER:
+                        {
+                            vec3_t vect = { g_origins[pData[4] + 1].x, g_origins[pData[4] + 1].y, sprite[j].z };
+
+                            s->ang = getangle(vect.x - s->x, vect.y - s->y);
+                            setsprite(j, &vect);
+                            pData[0] = CRANE_MOVETOSECT;
+                            goto BOLT;
+                        }
+                    }
+                }
+            }
+            else if (pData[0] == CRANE_MOVETOSECT)
             {
                 if (s->xvel < 184)
                 {
-                    s->picnum = CRANE+1;
+                    s->picnum = CRANE + 1;
                     s->xvel += 8;
                 }
-                A_SetSprite(i,CLIPMASK0);
-                if (sect == t[1])
-                    t[0]++;
+                A_SetSprite(i, CLIPMASK0);
+                if (sect == pData[1])
+                    pData[0] = CRANE_LOWERTOGRAB;
             }
-            else if (t[0]==2 || t[0]==7)
+            else if (pData[0] == CRANE_LOWERTOGRAB || pData[0] == CRANE_LOWERTODROP)
             {
                 s->z += (1024+512);
 
-                if (t[0]==2)
+                if (pData[0] == CRANE_LOWERTOGRAB)
                 {
                     if ((sector[sect].floorz - s->z) < (64<<8))
                         if (s->picnum > CRANE) s->picnum--;
 
                     if ((sector[sect].floorz - s->z) < (4096+1024))
-                        t[0]++;
+                        pData[0] = CRANE_GRABOBJECT;
                 }
-                if (t[0]==7)
+                if (pData[0] == CRANE_LOWERTODROP)
                 {
                     if ((sector[sect].floorz - s->z) < (64<<8))
                     {
-                        if (s->picnum > CRANE) s->picnum--;
+                        if (s->picnum > CRANE)
+                            s->picnum--;
                         else
                         {
-                            if (s->owner==-2)
+                            if (s->owner == -2 && pData[3] != -1)
                             {
-                                p = A_FindPlayer(s,&x);
-                                A_PlaySound(DUKE_GRUNT,g_player[p].ps->i);
-                                if (g_player[p].ps->on_crane == i)
-                                    g_player[p].ps->on_crane = -1;
+                                auto const pPlayer = g_player[pData[3]].ps;
+                                A_PlaySound(DUKE_GRUNT, pPlayer->i);
+                                if (pPlayer->on_crane == i)
+                                {
+                                    pPlayer->on_crane = -1;
+                                    pData[3] = -1;
+                                }
                             }
-                            t[0]++;
+
+                            pData[0] = CRANE_RAISEAFTERDROP;
                             s->owner = -1;
                         }
                     }
                 }
             }
-            else if (t[0]==3)
+            else if (pData[0] == CRANE_GRABOBJECT)
             {
                 s->picnum++;
                 if (s->picnum == (CRANE+2))
                 {
-                    p = CheckPlayerInSector(t[1]);
-                    if (p >= 0 && g_player[p].ps->on_ground)
+                    p = CheckPlayerInSector(pData[1]);
+                    if (p >= 0 && g_player[p].ps->on_ground && pData[3] == -1)
                     {
-                        s->owner = -2;
-                        g_player[p].ps->on_crane = i;
-                        A_PlaySound(DUKE_GRUNT,g_player[p].ps->i);
-                        g_player[p].ps->q16ang = fix16_from_int(s->ang+1024);
+                        auto const pPlayer = g_player[p].ps;
+                        int16_t const ang = s->ang + 1024;
+                        
+                        s->owner = -2; // -2 = Got player
+                        pData[3] = p;
+
+                        pPlayer->on_crane = i;
+                        pPlayer->q16ang = fix16_from_int(ang);
+                        sprite[pPlayer->i].ang = ang;
+
+                        A_PlaySound(DUKE_GRUNT, pPlayer->i);
                     }
                     else
                     {
-                        j = headspritesect[t[1]];
-                        while (j>=0)
+                        for (SPRITES_OF_SECT(pData[1], j))
                         {
                             switch (sprite[j].statnum)
                             {
-                            case 1:
-                            case 6:
-                                s->owner = j;
-                                break;
+                                case STAT_ACTOR:
+                                case STAT_STANDABLE:
+                                    s->owner = j;
+                                    break;
                             }
-                            j = nextspritesect[j];
                         }
                     }
 
-                    t[0]++;//Grabbed the sprite
-                    t[2]=0;
+                    pData[0] = CRANE_GRABWAIT; //Grabbed the sprite
+                    pData[2] = 0;
                     goto BOLT;
                 }
             }
-            else if (t[0]==4) //Delay before going up
+            else if (pData[0] == CRANE_GRABWAIT) //Delay before going up
             {
-                t[2]++;
-                if (t[2] > 10)
-                    t[0]++;
+                pData[2]++;
+                if (pData[2] > 10)
+                    pData[0] = CRANE_RAISEOBJECT;
             }
-            else if (t[0]==5 || t[0] == 8)
+            else if (pData[0] == CRANE_RAISEOBJECT || pData[0] == CRANE_RAISEAFTERDROP)
             {
-                if (t[0]==8 && s->picnum < (CRANE+2))
+                if (pData[0] == CRANE_RAISEAFTERDROP && s->picnum < (CRANE + 2))
                     if ((sector[sect].floorz-s->z) > 8192)
                         s->picnum++;
 
-                if (s->z < g_origins[t[4]+2].x)
+                if (s->z < g_origins[pData[4]+2].x)
                 {
-                    t[0]++;
+                    pData[0] = (pData[0] == CRANE_RAISEOBJECT) ? CRANE_MOVETOORIGIN : CRANE_RESET;
                     s->xvel = 0;
                 }
                 else
                     s->z -= (1024+512);
             }
-            else if (t[0]==6)
+            else if (pData[0] == CRANE_MOVETOORIGIN)
             {
                 if (s->xvel < 192)
                     s->xvel += 8;
-                s->ang = getangle(g_origins[t[4]].x - s->x, g_origins[t[4]].y - s->y);
+
+                s->ang = getangle(g_origins[pData[4]].x - s->x, g_origins[pData[4]].y - s->y);
                 A_SetSprite(i,CLIPMASK0);
-                if (((s->x- g_origins[t[4]].x)*(s->x - g_origins[t[4]].x)+(s->y - g_origins[t[4]].y)*(s->y - g_origins[t[4]].y)) < (128*128))
-                    t[0]++;
+
+                if (((s->x- g_origins[pData[4]].x)*(s->x - g_origins[pData[4]].x)+(s->y - g_origins[pData[4]].y)*(s->y - g_origins[pData[4]].y)) < (128*128))
+                    pData[0] = 7;
             }
+            else if (pData[0] == CRANE_RESET)
+                pData[0] = CRANE_WAITING;
 
-            else if (t[0]==9)
-                t[0] = 0;
-
-            setspritez_old(g_origins[t[4]+2].y,s->x,s->y,s->z-(34<<8));
+            setspritez_old(g_origins[pData[4]+2].y,s->x,s->y,s->z-(34<<8));
 
             if (s->owner != -1)
             {
-                p = A_FindPlayer(s,&x);
-
                 IFHIT(i)
                 {
-                    if (s->owner == -2)
-                        if (g_player[p].ps->on_crane == i)
-                            g_player[p].ps->on_crane = -1;
+                    if (s->owner == -2 && pData[3] != -1) // Holding a player
+                    {
+                        auto const pPlayer = g_player[pData[3]].ps;
+                        pPlayer->on_crane = -1;
+                        pData[3] = -1;
+                    }
+
                     s->owner = -1;
                     s->picnum = CRANE;
                     goto BOLT;
@@ -2549,19 +2588,18 @@ static void G_MoveStandables(void)
 
                 if (s->owner >= 0)
                 {
-                    setspritez_old(s->owner,s->x,s->y,s->z);
-
-                    actor[s->owner].bpos = s->xyz;
-
+                    setspritez(s->owner,&s->xyz);
                     s->zvel = 0;
                 }
-                else if (s->owner == -2)
+                else if (s->owner == -2 && pData[3] != -1) // Holding a player
                 {
-                    g_player[p].ps->opos.x = g_player[p].ps->pos.x = s->x-(sintable[(fix16_to_int(g_player[p].ps->q16ang)+512)&2047]>>6);
-                    g_player[p].ps->opos.y = g_player[p].ps->pos.y = s->y-(sintable[fix16_to_int(g_player[p].ps->q16ang)&2047]>>6);
-                    g_player[p].ps->opos.z = g_player[p].ps->pos.z = s->z+(2<<8);
-                    setspritez_old(g_player[p].ps->i,g_player[p].ps->pos.x,g_player[p].ps->pos.y,g_player[p].ps->pos.z);
-                    g_player[p].ps->cursectnum = sprite[g_player[p].ps->i].sectnum;
+                    auto const pPlayer = g_player[pData[3]].ps;
+                    pPlayer->pos.x = s->x - (sintable[(fix16_to_int(pPlayer->q16ang) + 512) & 2047] >> 6);
+                    pPlayer->pos.y = s->y - (sintable[fix16_to_int(pPlayer->q16ang) & 2047] >> 6);
+                    pPlayer->pos.z = s->z + (2 << 8);
+
+                    setspritez(pPlayer->i, &pPlayer->pos);
+                    pPlayer->cursectnum = sprite[pPlayer->i].sectnum;
                 }
             }
 
@@ -2570,11 +2608,11 @@ static void G_MoveStandables(void)
 
         IFWITHIN(WATERFOUNTAIN,WATERFOUNTAIN+3)
         {
-            if (t[0] > 0)
+            if (pData[0] > 0)
             {
-                if (t[0] < 20)
+                if (pData[0] < 20)
                 {
-                    t[0]++;
+                    pData[0]++;
 
                     s->picnum++;
 
@@ -2587,10 +2625,10 @@ static void G_MoveStandables(void)
 
                     if (x > 512)
                     {
-                        t[0] = 0;
+                        pData[0] = 0;
                         s->picnum = WATERFOUNTAIN;
                     }
-                    else t[0] = 1;
+                    else pData[0] = 1;
                 }
             }
             goto BOLT;
@@ -2811,8 +2849,8 @@ static void G_MoveStandables(void)
         {
             if (s->hitag > 0)
             {
-                t[0] = s->cstat;
-                t[1] = s->ang;
+                pData[0] = s->cstat;
+                pData[1] = s->ang;
                 j = A_IncurDamage(i);
                 if (j == FIREEXT || j == RPG || j == RADIUSEXPLOSION || j == SEENINE || j == OOZFILTER)
                 {
@@ -2829,8 +2867,8 @@ static void G_MoveStandables(void)
                 }
                 else
                 {
-                    s->cstat = t[0];
-                    s->ang = t[1];
+                    s->cstat = pData[0];
+                    s->ang = pData[1];
                     s->extra = 0;
                 }
             }
@@ -2892,7 +2930,7 @@ static void G_MoveStandables(void)
                 {
                     if (j) s->lotag = 0;
 
-                    t[3] = 1;
+                    pData[3] = 1;
 
                     j = headspritestat[STAT_STANDABLE];
                     while (j >= 0)
@@ -2969,7 +3007,7 @@ DETONATE:
 
                     s->z -= (32<<8);
 
-                    if ((t[3] == 1 && s->xrepeat) || s->lotag == -99)
+                    if ((pData[3] == 1 && s->xrepeat) || s->lotag == -99)
                     {
                         x = s->extra;
                         A_Spawn(i,EXPLOSION2);
@@ -3119,21 +3157,21 @@ DETONATE:
             if (x > 20480) goto BOLT;
 
 CLEAR_THE_BOLT2:
-            if (t[2])
+            if (pData[2])
             {
-                t[2]--;
+                pData[2]--;
                 goto BOLT;
             }
             if ((s->xrepeat|s->yrepeat) == 0)
             {
-                s->xrepeat=t[0];
-                s->yrepeat=t[1];
+                s->xrepeat=pData[0];
+                s->yrepeat=pData[1];
             }
             if ((krand()&8) == 0)
             {
-                t[0]=s->xrepeat;
-                t[1]=s->yrepeat;
-                t[2] = g_globalRandom&4;
+                pData[0]=s->xrepeat;
+                pData[1]=s->yrepeat;
+                pData[2] = g_globalRandom&4;
                 s->xrepeat=s->yrepeat=0;
                 goto CLEAR_THE_BOLT2;
             }
@@ -3155,27 +3193,27 @@ CLEAR_THE_BOLT2:
             p = A_FindPlayer(s, &x);
             if (x > 20480) goto BOLT;
 
-            if (t[3] == 0)
-                t[3]=sector[sect].floorshade;
+            if (pData[3] == 0)
+                pData[3]=sector[sect].floorshade;
 
 CLEAR_THE_BOLT:
-            if (t[2])
+            if (pData[2])
             {
-                t[2]--;
+                pData[2]--;
                 sector[sect].floorshade = 20;
                 sector[sect].ceilingshade = 20;
                 goto BOLT;
             }
             if ((s->xrepeat|s->yrepeat) == 0)
             {
-                s->xrepeat=t[0];
-                s->yrepeat=t[1];
+                s->xrepeat=pData[0];
+                s->yrepeat=pData[1];
             }
             else if ((krand()&8) == 0)
             {
-                t[0]=s->xrepeat;
-                t[1]=s->yrepeat;
-                t[2] = g_globalRandom&4;
+                pData[0]=s->xrepeat;
+                pData[1]=s->yrepeat;
+                pData[2] = g_globalRandom&4;
                 s->xrepeat=s->yrepeat=0;
                 goto CLEAR_THE_BOLT;
             }
@@ -3205,10 +3243,10 @@ CLEAR_THE_BOLT:
 
         case WATERDRIP__STATIC:
 
-            if (t[1])
+            if (pData[1])
             {
-                t[1]--;
-                if (t[1] == 0)
+                pData[1]--;
+                if (pData[1] == 0)
                     s->cstat &= 32767;
             }
             else
@@ -3230,8 +3268,8 @@ CLEAR_THE_BOLT:
                     }
                     else
                     {
-                        actor[i].bpos.z = s->z = t[0];
-                        t[1] = 48+(krand()&31);
+                        actor[i].bpos.z = s->z = pData[0];
+                        pData[1] = 48+(krand()&31);
                     }
                 }
             }
@@ -3247,16 +3285,16 @@ CLEAR_THE_BOLT:
             goto BOLT;
 
         case TOUCHPLATE__STATIC:
-            if (t[1] == 1 && s->hitag >= 0)  //Move the sector floor
+            if (pData[1] == 1 && s->hitag >= 0)  //Move the sector floor
             {
                 x = sector[sect].floorz;
 
-                if (t[3] == 1)
+                if (pData[3] == 1)
                 {
-                    if (x >= t[2])
+                    if (x >= pData[2])
                     {
                         sector[sect].floorz = x;
-                        t[1] = 0;
+                        pData[1] = 0;
                     }
                     else
                     {
@@ -3270,7 +3308,7 @@ CLEAR_THE_BOLT:
                     if (x <= s->z)
                     {
                         sector[sect].floorz = s->z;
-                        t[1] = 0;
+                        pData[1] = 0;
                     }
                     else
                     {
@@ -3283,28 +3321,28 @@ CLEAR_THE_BOLT:
                 goto BOLT;
             }
 
-            if (t[5] == 1) goto BOLT;
+            if (pData[5] == 1) goto BOLT;
 
             p = CheckPlayerInSector(sect);
             if (p >= 0 && (g_player[p].ps->on_ground || s->ang == 512))
             {
-                if (t[0] == 0 && !check_activator_motion(s->lotag))
+                if (pData[0] == 0 && !check_activator_motion(s->lotag))
                 {
-                    t[0] = 1;
-                    t[1] = 1;
-                    t[3] = !t[3];
+                    pData[0] = 1;
+                    pData[1] = 1;
+                    pData[3] = !pData[3];
                     G_OperateMasterSwitches(s->lotag);
                     G_OperateActivators(s->lotag,p);
                     if (s->hitag > 0)
                     {
                         s->hitag--;
-                        if (s->hitag == 0) t[5] = 1;
+                        if (s->hitag == 0) pData[5] = 1;
                     }
                 }
             }
-            else t[0] = 0;
+            else pData[0] = 0;
 
-            if (t[1] == 1)
+            if (pData[1] == 1)
             {
                 j = headspritestat[STAT_STANDABLE];
                 while (j >= 0)
@@ -3312,7 +3350,7 @@ CLEAR_THE_BOLT:
                     if (j != i && sprite[j].picnum == TOUCHPLATE && sprite[j].lotag == s->lotag)
                     {
                         actor[j].t_data[1] = 1;
-                        actor[j].t_data[3] = t[3];
+                        actor[j].t_data[3] = pData[3];
                     }
                     j = nextspritestat[j];
                 }
@@ -8622,9 +8660,6 @@ void G_MoveWorld(void)
     G_MoveZombieActors();     //ST 2
     G_MoveWeapons();          //ST 4
 
-    G_MoveStandables();       //ST 6
-    G_MoveTransports();       //ST 9
-
     G_MovePlayers();          //ST 10
 
     G_MoveFallers();          //ST 12
@@ -8632,6 +8667,11 @@ void G_MoveWorld(void)
 
     G_MoveActors();           //ST 1
     G_MoveEffectors();        //ST 3
+
+    // [JM] Ideally, anything that moves another object should be after everything else
+    // to prevent rubber-banding BS and jitter, so that's why these have been moved.
+    G_MoveStandables();       //ST 6
+    G_MoveTransports();       //ST 9
 
     X_OnEvent(EVENT_WORLD, -1, -1, 0);
 

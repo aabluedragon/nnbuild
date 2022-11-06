@@ -3209,7 +3209,12 @@ void P_ProcessInput(int snum)
     }
 
     if (p->on_crane >= 0)
+    {
+        // [JM] Record opos/oq16ang here, to prevent a jitterfuck mess.
+        p->opos = p->pos;
+        p->oq16ang = p->q16ang;
         goto HORIZONLY;
+    }
 
     if (s->xvel < 32 || p->on_ground == 0 || p->bobcounter == 1024)
     {
