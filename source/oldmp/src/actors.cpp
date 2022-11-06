@@ -2397,7 +2397,7 @@ static void G_MoveStandables(void)
             //pData[0] = state
             //pData[1] = checking sector number
             //pData[2] = delay 
-            //pData[3] = grabbed player ID (not implemented yet.)
+            //pData[3] = grabbed player ID
             //pData[4] = tempwallptr crap
 
             enum
