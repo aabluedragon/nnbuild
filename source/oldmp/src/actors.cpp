@@ -2417,8 +2417,12 @@ static void G_MoveStandables(void)
             if (s->xvel)
                 A_GetZLimits(i);
 
+            // Prevent OOB access, shouldn't happen, but want to be sure.
+            if (EDUKE32_PREDICT_FALSE(pData[3] >= MAXPLAYERS))
+                pData[3] = -1;
+
             // Safety check in case the player died or somehow got dropped off the crane in a way that wasn't covered in this code.
-            if (EDUKE32_PREDICT_FALSE(pData[3] != -1 && g_player[pData[3]].ps->on_crane == -1))
+            if (EDUKE32_PREDICT_FALSE(pData[3] != -1 && (g_player[pData[3]].ps->on_crane == -1 || !g_player[pData[3]].connected)))
             {
                 if (s->owner == -2)
                     s->owner = -1;
