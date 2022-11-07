@@ -3213,6 +3213,7 @@ void P_ProcessInput(int snum)
         // [JM] Record opos/oq16ang here, to prevent a jitterfuck mess.
         p->opos = p->pos;
         p->oq16ang = p->q16ang;
+        p->opyoff = p->pyoff;
         goto HORIZONLY;
     }
 
