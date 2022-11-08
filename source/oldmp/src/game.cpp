@@ -6427,7 +6427,7 @@ void G_CheatGetInv(void)
     X_OnEvent(EVENT_CHEATGETSHIELD, g_player[myconnectindex].ps->i, myconnectindex, -1);
     if (Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex) >=0)
     {
-        g_player[myconnectindex].ps->shield_amount = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
+        g_player[myconnectindex].ps->inv_amount[GET_SHIELD] = Gv_GetVar(sysVarIDs.RETURN, g_player[myconnectindex].ps->i, myconnectindex);
     }
 
     Gv_SetVar(sysVarIDs.RETURN, 6400, g_player[myconnectindex].ps->i, myconnectindex);

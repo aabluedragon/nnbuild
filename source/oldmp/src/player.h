@@ -88,7 +88,6 @@ typedef struct {
     int16_t wackedbyactor, frag, fraggedself, lives, deaths;
     int16_t max_ammo_amount[MAX_WEAPONS], ammo_amount[MAX_WEAPONS], inv_amount[GET_MAX];
 
-    int16_t shield_amount;
     int16_t curr_weapon, last_weapon, last_used_weapon, wantweaponfire;
     int16_t newowner, hurt_delay, hbomb_hold_delay;
     int16_t jumping_counter, airleft;
@@ -133,7 +132,7 @@ typedef struct {
 } DukePlayer_t;
 
 typedef struct {
-    int16_t got_access, last_extra, shield_amount, curr_weapon, holoduke_on;
+    int16_t got_access, last_extra, curr_weapon, holoduke_on;
     int16_t inv_amount[GET_MAX];
     int16_t last_weapon, weapon_pos;
     int16_t ammo_amount[MAX_WEAPONS], frag[MAXPLAYERS];

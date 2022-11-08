@@ -994,7 +994,7 @@ static int osdcmd_give(const osdfuncparm_t *parm)
     }
     else if (!Bstrcasecmp(parm->parms[0], "armor"))
     {
-        g_player[myconnectindex].ps->shield_amount = 100;
+        g_player[myconnectindex].ps->inv_amount[GET_SHIELD] = 100;
         return OSDCMD_OK;
     }
     else if (!Bstrcasecmp(parm->parms[0], "keys"))

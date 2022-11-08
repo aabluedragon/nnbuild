@@ -773,9 +773,9 @@ void P_ResetInventory(int snum)
     p->scuba_on         = 0;
     p->heat_on          = 0;
     p->jetpack_on       = 0;
-    p->shield_amount    = g_startArmorAmount;
     p->holoduke_on      = -1;
     p->inven_icon       = 0;
+    p->inv_amount[GET_SHIELD] = g_startArmorAmount;
 
     for (int i = 0; i < GET_MAX; i++)
         p->inv_amount[i] = 0;

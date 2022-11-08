@@ -167,17 +167,17 @@ static void P_IncurDamage(DukePlayer_t *p)
         {
             p->extra_extra8 = 0;
 
-            if (p->shield_amount > 0)
+            if (p->inv_amount[GET_SHIELD] > 0)
             {
                 shield_damage =  damage * (20 + (krand()%30)) / 100;
                 damage -= shield_damage;
 
-                p->shield_amount += shield_damage;
+                p->inv_amount[GET_SHIELD] += shield_damage;
 
-                if (p->shield_amount < 0)
+                if (p->inv_amount[GET_SHIELD] < 0)
                 {
-                    damage += p->shield_amount;
-                    p->shield_amount = 0;
+                    damage += p->inv_amount[GET_SHIELD];
+                    p->inv_amount[GET_SHIELD] = 0;
                 }
             }
 
@@ -3088,7 +3088,7 @@ void P_ProcessInput(int snum)
     else
     {
         s->extra = 0;
-        p->shield_amount = 0;
+        p->inv_amount[GET_SHIELD] = 0;
     }
 
     p->last_extra = s->extra;

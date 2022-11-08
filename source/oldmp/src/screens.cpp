@@ -133,7 +133,7 @@ void G_ShowScores(bool bonus)
         {
             if (g_player[i].connected)
             {
-                Bsprintf(tempbuf, "^02%d^12/^06%d", TrackerCast(sprite[p->i].extra), p->shield_amount);
+                Bsprintf(tempbuf, "^02%d^12/^06%d", TrackerCast(sprite[p->i].extra), p->inv_amount[GET_SHIELD]);
             }
             else
             {

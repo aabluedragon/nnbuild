@@ -2236,10 +2236,10 @@ static inline void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, 
     case PLAYER_SHIELD_AMOUNT:
         if (iSet)
         {
-            g_player[iPlayer].ps->shield_amount=lValue;
+            g_player[iPlayer].ps->inv_amount[GET_SHIELD] = lValue;
             return;
         }
-        Gv_SetVar(lVar2, g_player[iPlayer].ps->shield_amount, g_i, g_p);
+        Gv_SetVar(lVar2, g_player[iPlayer].ps->inv_amount[GET_SHIELD], g_i, g_p);
         return;
 
     case PLAYER_HOLODUKE_ON:

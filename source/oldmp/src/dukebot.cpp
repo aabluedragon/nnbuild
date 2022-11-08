@@ -182,7 +182,7 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
                 score = 100;
             break;
         case SHIELD__STATIC:
-            if (p->shield_amount < p->max_shield_amount)
+            if (p->inv_amount[GET_SHIELD] < p->max_shield_amount)
                 score = 50;
             break;
         case STEROIDS__STATIC:

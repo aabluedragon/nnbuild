@@ -2896,7 +2896,7 @@ static int X_DoExecute(void)
             p->q16horizoff = 0;
             p->opyoff = 0;
             p->wackedbyactor = -1;
-            p->shield_amount = g_startArmorAmount;
+            p->inv_amount[GET_SHIELD] = g_startArmorAmount;
             p->dead_flag = 0;
             p->pals.f = 0;
             p->footprintcount = 0;
@@ -2970,9 +2970,9 @@ static int X_DoExecute(void)
             break;
 
         case GET_SHIELD:
-            g_player[g_p].ps->shield_amount +=          *insptr;// 100;
-            if (g_player[g_p].ps->shield_amount > g_player[g_p].ps->max_shield_amount)
-                g_player[g_p].ps->shield_amount = g_player[g_p].ps->max_shield_amount;
+            g_player[g_p].ps->inv_amount[GET_SHIELD] +=          *insptr;// 100;
+            if (g_player[g_p].ps->inv_amount[GET_SHIELD] > g_player[g_p].ps->max_shield_amount)
+                g_player[g_p].ps->inv_amount[GET_SHIELD] = g_player[g_p].ps->max_shield_amount;
             break;
 
         case GET_SCUBA:
@@ -4329,7 +4329,7 @@ static int X_DoExecute(void)
                 j = 1;
             break;
         case GET_SHIELD:
-            if (g_player[g_p].ps->shield_amount != g_player[g_p].ps->max_shield_amount)
+            if (g_player[g_p].ps->inv_amount[GET_SHIELD] != g_player[g_p].ps->max_shield_amount)
                 j = 1;
             break;
         case GET_SCUBA:

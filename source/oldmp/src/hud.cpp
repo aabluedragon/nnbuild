@@ -1154,7 +1154,7 @@ void G_DisplayPlayerId(void)
             {
                 G_ScreenText(MINIFONT, 160, ID_YPOS + 8, 65536, 0, 0, "Friendly", -127, 6, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, idalpha, 3, 5, 1, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
 
-                Bsprintf(tempbuf, "^12Health: ^02%d ^07/ ^12Armor: ^06%d", TrackerCast(sprite[g_player[ud.playerid_num].ps->i].extra), g_player[ud.playerid_num].ps->shield_amount);
+                Bsprintf(tempbuf, "^12Health: ^02%d ^07/ ^12Armor: ^06%d", TrackerCast(sprite[g_player[ud.playerid_num].ps->i].extra), g_player[ud.playerid_num].ps->inv_amount[GET_SHIELD]);
                 G_ScreenText(MINIFONT, 160, ID_YPOS + 14, 65536, 0, 0, tempbuf, -127, 12, RS_AUTO | RS_NOCLIP | RS_TOPLEFT, idalpha, 3, 5, 1, 1, TEXT_XCENTER | TEXT_UPPERCASE, 0, 0, xdim, ydim);
             }
         }
