@@ -5828,29 +5828,16 @@ void C_Compile(const char *filenam)
     int i;
     int startcompiletime;
 
-    clearbuf(apScriptGameEvent,MAXGAMEEVENTS,0L);
+    Bmemset(apScriptGameEvent, 0, sizeof(apScriptGameEvent));
+
+    for (auto& i : g_tile)
+        Bmemset(&i, 0, sizeof(tiledata_t));
 
     VM_InitHashTables();
+
     Gv_Init();
     C_InitProjectiles();
 
-    /* JBF 20040109: Don't prompt to extract CONs from GRP if they're missing.
-     * If someone really wants them they can Kextract them.
-    if(!SafeFileExists(filenam) && g_loadFromGroupOnly == 0)
-    {
-        LOG_F("Missing external CON file(s).\n");
-        LOG_F("COPY INTERNAL DEFAULTS TO DIRECTORY(Y/n)?\n");
-
-    i=wm_ynbox("Missing CON file(s)", "Missing external CON file(s). "
-    "Copy internal defaults to directory?");
-    if (i) i = 'y';
-        if(i == 'y' || i == 'Y')
-        {
-            LOG_F(" Yes\n");
-            copydefaultcons();
-        }
-    }
-    */
     buildvfs_kfd kFile = kopen4loadfrommod(filenam, g_loadFromGroupOnly);
 
     if (kFile == buildvfs_kfd_invalid) // JBF: was 0
@@ -5894,10 +5881,6 @@ void C_Compile(const char *filenam)
     textptr = (char *) mptr;
     kread(kFile,(char *)textptr, kFileLen);
     kclose(kFile);
-
-    // CHECKME: Hopefully this is OK to comment out. Couldn't find a suitable replacement.
-    //Bmemset(actorscrptr, 0, sizeof(actorscrptr));
-    //Bmemset(actorLoadEventScrptr, 0, sizeof(actorLoadEventScrptr));
 
 //    clearbufbyte(apScript,sizeof(apScript),0l); // JBF 20040531: yes? no?
     if (apScript != NULL)
@@ -6034,13 +6017,13 @@ void C_Compile(const char *filenam)
 //            Bstrcpy(apStrings[13],"PRESS USE TO RESTART LEVEL");
 
         for (i=MAXQUOTELEN-7;i>=0;i--)
-            if (Bstrncmp(&apStrings[13][i],"SPACE",5) == 0)
+            if (Bstrncmp(&apStrings[QUOTE_DEAD][i],"SPACE",5) == 0)
             {
                 Bmemset(tempbuf,0,sizeof(tempbuf));
-                Bstrncpy(tempbuf,apStrings[13],i);
+                Bstrncpy(tempbuf,apStrings[QUOTE_DEAD],i);
                 Bstrcat(tempbuf,"OPEN");
-                Bstrcat(tempbuf,&apStrings[13][i+5]);
-                Bstrncpy(apStrings[13],tempbuf,MAXQUOTELEN-1);
+                Bstrcat(tempbuf,&apStrings[QUOTE_DEAD][i+5]);
+                Bstrncpy(apStrings[QUOTE_DEAD],tempbuf,MAXQUOTELEN-1);
                 i = MAXQUOTELEN-7;
             }
 

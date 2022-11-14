@@ -8771,7 +8771,6 @@ static void G_CompileScripts(void)
     if (g_scriptNamePtr != NULL)
         Bcorrectfilename(g_scriptNamePtr, 0);
 
-    // if we compile for a V7 engine wall[] should be used for label names since it's bigger
     pathsearchmode = 1;
     C_Compile(G_ConFile());
 
