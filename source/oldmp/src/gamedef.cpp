@@ -5822,6 +5822,111 @@ static void C_AddDefaultDefinitions(void)
 extern int g_numObituaries;
 extern int g_numSelfObituaries;
 
+static void C_InitQuotes(void)
+{
+    // C_AllocQuote in mainline
+    for (int i = 127; i >= 0; i--)
+        if (apStrings[i] == NULL)
+            apStrings[i] = (char*)Xcalloc(MAXQUOTELEN, sizeof(char));
+
+    // C_ReplaceQuoteSubstring in mainline
+    for (int i = MAXQUOTELEN - 7; i >= 0; i--)
+        if (Bstrncmp(&apStrings[QUOTE_DEAD][i], "SPACE", 5) == 0)
+        {
+            Bmemset(tempbuf, 0, sizeof(tempbuf));
+            Bstrncpy(tempbuf, apStrings[QUOTE_DEAD], i);
+            Bstrcat(tempbuf, "OPEN");
+            Bstrcat(tempbuf, &apStrings[QUOTE_DEAD][i + 5]);
+            Bstrncpy(apStrings[QUOTE_DEAD], tempbuf, MAXQUOTELEN - 1);
+            i = MAXQUOTELEN - 7;
+        }
+
+    // most of these are based on Blood, obviously
+    const char* PlayerObituaries[] =
+    {
+        "^02%s^02 beat %s^02 like a cur",
+        "^02%s^02 broke %s",
+        "^02%s^02 body bagged %s",
+        "^02%s^02 boned %s^02 like a fish",
+        "^02%s^02 castrated %s",
+        "^02%s^02 creamed %s",
+        "^02%s^02 crushed %s",
+        "^02%s^02 destroyed %s",
+        "^02%s^02 diced %s",
+        "^02%s^02 disemboweled %s",
+        "^02%s^02 erased %s",
+        "^02%s^02 eviscerated %s",
+        "^02%s^02 flailed %s",
+        "^02%s^02 flattened %s",
+        "^02%s^02 gave AnAl MaDnEsS to %s",
+        "^02%s^02 gave %s^02 Anal Justice",
+        "^02%s^02 hosed %s",
+        "^02%s^02 hurt %s^02 real bad",
+        "^02%s^02 killed %s",
+        "^02%s^02 made dog meat out of %s",
+        "^02%s^02 made mincemeat out of %s",
+        "^02%s^02 manhandled %s",
+        "^02%s^02 massacred %s",
+        "^02%s^02 mutilated %s",
+        "^02%s^02 murdered %s",
+        "^02%s^02 neutered %s",
+        "^02%s^02 reamed %s",
+        "^02%s^02 ripped %s^02 a new orifice",
+        "^02%s^02 rocked %s",
+        "^02%s^02 sent %s^02 to hell",
+        "^02%s^02 shredded %s",
+        "^02%s^02 slaughtered %s",
+        "^02%s^02 sliced %s",
+        "^02%s^02 smacked %s around",
+        "^02%s^02 smashed %s",
+        "^02%s^02 snuffed %s",
+        "^02%s^02 sodomized %s",
+        "^02%s^02 splattered %s",
+        "^02%s^02 sprayed %s",
+        "^02%s^02 squashed %s",
+        "^02%s^02 throttled %s",
+        "^02%s^02 toasted %s",
+        "^02%s^02 vented %s",
+        "^02%s^02 ventilated %s",
+        "^02%s^02 wasted %s",
+        "^02%s^02 wrecked %s",
+    };
+
+    const char* PlayerSelfObituaries[] =
+    {
+        "^02%s^02 is excrement",
+        "^02%s^02 is hamburger",
+        "^02%s^02 suffered scrotum separation",
+        "^02%s^02 volunteered for population control",
+        "^02%s^02 has suicided",
+        "^02%s^02 bled out",
+        "^02%s^02 died of ligma",
+    };
+
+    EDUKE32_STATIC_ASSERT(OBITQUOTEINDEX + ARRAY_SIZE(PlayerObituaries) - 1 < MAXQUOTES);
+    EDUKE32_STATIC_ASSERT(SUICIDEQUOTEINDEX + ARRAY_SIZE(PlayerSelfObituaries) - 1 < MAXQUOTES);
+
+    g_numObituaries = ARRAY_SIZE(PlayerObituaries);
+    for (int i = g_numObituaries - 1; i >= 0; i--)
+    {
+        if (apStrings[i + OBITQUOTEINDEX] == NULL)
+        {
+            apStrings[i + OBITQUOTEINDEX] = (char*)Xcalloc(MAXQUOTELEN, sizeof(char));
+            Bstrcpy(apStrings[i + OBITQUOTEINDEX], PlayerObituaries[i]);
+        }
+    }
+
+    g_numSelfObituaries = ARRAY_SIZE(PlayerSelfObituaries);
+    for (int i = g_numSelfObituaries - 1; i >= 0; i--)
+    {
+        if (apStrings[i + SUICIDEQUOTEINDEX] == NULL)
+        {
+            apStrings[i + SUICIDEQUOTEINDEX] = (char*)Xcalloc(MAXQUOTELEN, sizeof(char));
+            Bstrcpy(apStrings[i + SUICIDEQUOTEINDEX], PlayerSelfObituaries[i]);
+        }
+    }
+}
+
 void C_Compile(const char *filenam)
 {
     char *mptr;
@@ -5914,24 +6019,6 @@ void C_Compile(const char *filenam)
     if (g_warningCnt|g_errorCnt)
         VLOG_F(g_errorCnt ? loguru::Verbosity_ERROR : g_warningCnt ? loguru::Verbosity_WARNING : loguru::Verbosity_INFO, "Found %d warning(s), %d error(s).", g_warningCnt, g_errorCnt);
 
-    /*    if (error == 0 && warning != 0)
-        {
-            if (g_groupFileHandle != -1 && g_loadFromGroupOnly == 0)
-            {
-                LOG_F("Warning(s) found in file `%s'.  Do you want to use the INTERNAL DEFAULTS (y/N)?",filenam);
-
-                i=wm_ynbox("CON File Compilation Warning", "Warning(s) found in file `%s'. Do you want to use the "
-                           "INTERNAL DEFAULTS?",filenam);
-                if (i) i = 'y';
-                if (i == 'y' || i == 'Y')
-                {
-                    g_loadFromGroupOnly = 1;
-                    LOG_F(" Yes\n");
-                    return;
-                }
-            }
-        } */
-
     if (g_errorCnt)
     {
         if (g_loadFromGroupOnly)
@@ -5991,7 +6078,7 @@ void C_Compile(const char *filenam)
 
         VLOG_F(LOG_CON, "Compiled code size: %d*%d bytes, version %s",(unsigned)(g_scriptPtr-apScript),(int32_t)sizeof(intptr_t),(g_scriptVersion == 14?"1.4+":"1.3D"));
         VLOG_F(LOG_CON, "Pointer bitmap size: %d bytes",(g_scriptSize+7)>>3);
-        VLOG_F(LOG_CON, "%d/%d labels, %d/%d variables",g_labelCnt,(int32_t)min((MAXSECTORS * sizeof(sectortype)/sizeof(int)),(MAXSPRITES * sizeof(spritetype)/(1<<6))),g_gameVarCount,MAXGAMEVARS);
+        VLOG_F(LOG_CON, "%d/%d labels, %d/%d variables",g_labelCnt,MAXLABELS,g_gameVarCount,MAXGAMEVARS);
 
         for (i=MAXQUOTES-1;i>=0;i--)
             if (apStrings[i])
@@ -6009,110 +6096,7 @@ void C_Compile(const char *filenam)
 
         VLOG_F(LOG_CON, "%d/%d event definitions, %d defined actors",j,MAXEVENTS,k);
 
-        for (i=127;i>=0;i--)
-            if (apStrings[i] == NULL)
-                apStrings[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(char));
-
-//        if (!Bstrcmp(apStrings[13],"PRESS SPACE TO RESTART LEVEL"))
-//            Bstrcpy(apStrings[13],"PRESS USE TO RESTART LEVEL");
-
-        for (i=MAXQUOTELEN-7;i>=0;i--)
-            if (Bstrncmp(&apStrings[QUOTE_DEAD][i],"SPACE",5) == 0)
-            {
-                Bmemset(tempbuf,0,sizeof(tempbuf));
-                Bstrncpy(tempbuf,apStrings[QUOTE_DEAD],i);
-                Bstrcat(tempbuf,"OPEN");
-                Bstrcat(tempbuf,&apStrings[QUOTE_DEAD][i+5]);
-                Bstrncpy(apStrings[QUOTE_DEAD],tempbuf,MAXQUOTELEN-1);
-                i = MAXQUOTELEN-7;
-            }
-
-        // most of these are based on Blood, obviously
-        {
-            const char *PlayerObituaries[] =
-            {
-                "^02%s^02 beat %s^02 like a cur",
-                "^02%s^02 broke %s",
-                "^02%s^02 body bagged %s",
-                "^02%s^02 boned %s^02 like a fish",
-                "^02%s^02 castrated %s",
-                "^02%s^02 creamed %s",
-                "^02%s^02 crushed %s",
-                "^02%s^02 destroyed %s",
-                "^02%s^02 diced %s",
-                "^02%s^02 disemboweled %s",
-                "^02%s^02 erased %s",
-                "^02%s^02 eviscerated %s",
-                "^02%s^02 flailed %s",
-                "^02%s^02 flattened %s",
-                "^02%s^02 gave AnAl MaDnEsS to %s",
-                "^02%s^02 gave %s^02 Anal Justice",
-                "^02%s^02 hosed %s",
-                "^02%s^02 hurt %s^02 real bad",
-                "^02%s^02 killed %s",
-                "^02%s^02 made dog meat out of %s",
-                "^02%s^02 made mincemeat out of %s",
-                "^02%s^02 manhandled %s",
-                "^02%s^02 massacred %s",
-                "^02%s^02 mutilated %s",
-                "^02%s^02 murdered %s",
-                "^02%s^02 neutered %s",
-                "^02%s^02 reamed %s",
-                "^02%s^02 ripped %s^02 a new orifice",
-                "^02%s^02 rocked %s",
-                "^02%s^02 sent %s^02 to hell",
-                "^02%s^02 shredded %s",
-                "^02%s^02 slaughtered %s",
-                "^02%s^02 sliced %s",
-                "^02%s^02 smacked %s around",
-                "^02%s^02 smashed %s",
-                "^02%s^02 snuffed %s",
-                "^02%s^02 sodomized %s",
-                "^02%s^02 splattered %s",
-                "^02%s^02 sprayed %s",
-                "^02%s^02 squashed %s",
-                "^02%s^02 throttled %s",
-                "^02%s^02 toasted %s",
-                "^02%s^02 vented %s",
-                "^02%s^02 ventilated %s",
-                "^02%s^02 wasted %s",
-                "^02%s^02 wrecked %s",
-            };
-
-            const char *PlayerSelfObituaries[] =
-            {
-                "^02%s^02 is excrement",
-                "^02%s^02 is hamburger",
-                "^02%s^02 suffered scrotum separation",
-                "^02%s^02 volunteered for population control",
-                "^02%s^02 has suicided",
-                "^02%s^02 bled out",
-                "^02%s^02 died of ligma",
-            };
-
-            EDUKE32_STATIC_ASSERT(OBITQUOTEINDEX + ARRAY_SIZE(PlayerObituaries) - 1 < MAXQUOTES);
-            EDUKE32_STATIC_ASSERT(SUICIDEQUOTEINDEX + ARRAY_SIZE(PlayerSelfObituaries) - 1 < MAXQUOTES);
-
-            g_numObituaries = ARRAY_SIZE(PlayerObituaries);
-            for (i = g_numObituaries - 1; i >= 0; i--)
-            {
-                if (apStrings[i + OBITQUOTEINDEX] == NULL)
-                {
-                    apStrings[i + OBITQUOTEINDEX] = (char*)Xcalloc(MAXQUOTELEN, sizeof(char));
-                    Bstrcpy(apStrings[i + OBITQUOTEINDEX], PlayerObituaries[i]);
-                }
-            }
-
-            g_numSelfObituaries = ARRAY_SIZE(PlayerSelfObituaries);
-            for (i = g_numSelfObituaries - 1; i >= 0; i--)
-            {
-                if (apStrings[i + SUICIDEQUOTEINDEX] == NULL)
-                {
-                    apStrings[i + SUICIDEQUOTEINDEX] = (char*)Xcalloc(MAXQUOTELEN, sizeof(char));
-                    Bstrcpy(apStrings[i + SUICIDEQUOTEINDEX], PlayerSelfObituaries[i]);
-                }
-            }
-        }
+        C_InitQuotes();
     }
 }
 
