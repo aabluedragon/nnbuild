@@ -6770,13 +6770,24 @@ static void G_MoveEffectors(void)   //STATNUM 3
             {
                 pData[3] = !pData[3];
                 pSprite->owner = A_FindLocator(pData[3], pData[0]);
+
+                int32_t locDist = ldist(&sprite[pSprite->owner], pSprite);
+                if (locDist < (2048 - 128))
+                {
+                    pData[5] = locDist >> 1;
+                    pData[6] = locDist >> 4;
+                }
+                else
+                {
+                    pData[5] = 2048;
+                    pData[6] = 128;
+                }
             }
             else
             {
-
                 if (pData[4] == 1) // Starting to go
                 {
-                    if (ldist(&sprite[pSprite->owner], pSprite) < (2048-128))
+                    if (ldist(&sprite[pSprite->owner], pSprite) < pData[5]-pData[6])
                         pData[4] = 2;
                     else
                     {
@@ -6788,9 +6799,9 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 }
                 if (pData[4] == 2)
                 {
-                    l = FindDistance2D(sprite[pSprite->owner].x-pSprite->x,sprite[pSprite->owner].y-pSprite->y);
+                    l = ldist(&sprite[pSprite->owner], pSprite);
 
-                    if (l <= 128)
+                    if (l <= pData[6])
                         pSprite->xvel = 0;
 
                     if (pSprite->xvel > 0)
@@ -6824,23 +6835,26 @@ static void G_MoveEffectors(void)   //STATNUM 3
                 l = (pSprite->xvel*sintable[(pSprite->ang+512)&2047])>>14;
                 x = (pSprite->xvel*sintable[pSprite->ang&2047])>>14;
 
-                if ((pSector->floorz-pSector->ceilingz) < (108<<8))
-                    if (ud.noclip == 0)
-                        for (ALL_PLAYERS(p))
+                if (!ud.noclip && ((pSector->floorz - pSector->ceilingz) < (108 << 8)))
+                {
+                    for (ALL_PLAYERS(p))
+                    {
                         if (sprite[g_player[p].ps->i].extra > 0)
                         {
                             k = g_player[p].ps->cursectnum;
-                            updatesector(g_player[p].ps->pos.x,g_player[p].ps->pos.y,&k);
+                            updatesector(g_player[p].ps->pos.x, g_player[p].ps->pos.y, &k);
                             if ((k == -1 && ud.noclip == 0) || (k == pSprite->sectnum && g_player[p].ps->cursectnum != pSprite->sectnum))
                             {
                                 g_player[p].ps->pos.x = pSprite->x;
                                 g_player[p].ps->pos.y = pSprite->y;
                                 g_player[p].ps->cursectnum = pSprite->sectnum;
 
-                                setspritez_old(g_player[p].ps->i,pSprite->x,pSprite->y,pSprite->z);
+                                setspritez(g_player[p].ps->i, &pSprite->xyz);
                                 P_QuickKill(g_player[p].ps);
                             }
                         }
+                    }
+                }
 
                 for (ALL_PLAYERS(p))
                 {
@@ -6899,7 +6913,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
                                 g_player[p].ps->cursectnum = pSprite->sectnum;
 
-                                setspritez_old(g_player[p].ps->i,pSprite->x,pSprite->y,pSprite->z);
+                                setspritez(g_player[p].ps->i, &pSprite->xyz);
                                 P_QuickKill(g_player[p].ps);
                             }
                         }
