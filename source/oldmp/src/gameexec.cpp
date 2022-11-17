@@ -99,7 +99,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         g_sp = &sprite[g_i];
         g_t = &actor[g_i].t_data[0];
 
-        insptr = apScriptGameEvent[iEventID];
+        insptr = apScriptEvents[iEventID];
 
         g_killitFlag = 0;
 

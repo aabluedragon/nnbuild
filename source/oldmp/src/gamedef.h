@@ -58,7 +58,7 @@ typedef struct SystemVarID_s {
 } SystemVarID_t;
 extern SystemVarID_t sysVarIDs;
 
-extern intptr_t *apScriptGameEvent[MAXGAMEEVENTS];
+extern intptr_t *apScriptEvents[MAXGAMEEVENTS];
 
 extern int otherp;
 extern int g_currentweapon;

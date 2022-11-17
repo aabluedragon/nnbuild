@@ -17,7 +17,7 @@ void A_Fall(int iActor);
 
 static FORCE_INLINE int VM_HaveEvent(int const nEventID)
 {
-    return !!apScriptGameEvent[nEventID];
+    return !!apScriptEvents[nEventID];
 }
 
 #define CON_ERRPRINTF(Text, ...) do { \

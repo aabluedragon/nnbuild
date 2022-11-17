@@ -72,7 +72,7 @@ intptr_t *aplWeaponSelectSound[MAX_WEAPONS];    // Sound of weapon being selecte
 // Stores the IDs of system vars.
 SystemVarID_t sysVarIDs;
 
-intptr_t *apScriptGameEvent[MAXGAMEEVENTS];
+intptr_t *apScriptEvents[MAXGAMEEVENTS];
 intptr_t *g_parsingEventPtr=NULL;
 
 gamevar_t aGameVars[MAXGAMEVARS];
@@ -1116,8 +1116,8 @@ static int C_SetScriptSize(int size)
     for (i=MAXGAMEEVENTS-1;i>=0;i--)
         if (VM_HaveEvent(i))
         {
-            j = (intptr_t)apScriptGameEvent[i]-(intptr_t)&apScript[0];
-            apScriptGameEvent[i] = (intptr_t *)j;
+            j = (intptr_t)apScriptEvents[i]-(intptr_t)&apScript[0];
+            apScriptEvents[i] = (intptr_t *)j;
         }
 
     //LOG_F("offset: %d\n",(unsigned)(g_scriptPtr-apScript));
@@ -1197,8 +1197,8 @@ static int C_SetScriptSize(int size)
     for (i=MAXGAMEEVENTS-1;i>=0;i--)
         if (VM_HaveEvent(i))
         {
-            j = (intptr_t)apScriptGameEvent[i]+(intptr_t)&apScript[0];
-            apScriptGameEvent[i] = (intptr_t *)j;
+            j = (intptr_t)apScriptEvents[i]+(intptr_t)&apScript[0];
+            apScriptEvents[i] = (intptr_t *)j;
         }
     Xfree(scriptptrs);
     return 0;
@@ -2647,7 +2647,7 @@ DO_DEFSTATE:
             LOG_F(WARNING, "%s:%d: duplicate event `%s'.",g_scriptFileName,g_lineNumber,g_szCurrentBlockName);
             g_warningCnt++;
         }
-        else apScriptGameEvent[j]=g_parsingEventPtr;
+        else apScriptEvents[j]=g_parsingEventPtr;
 
         g_checkingIfElse = 0;
 
@@ -5933,7 +5933,7 @@ void C_Compile(const char *filenam)
     int i;
     int startcompiletime;
 
-    Bmemset(apScriptGameEvent, 0, sizeof(apScriptGameEvent));
+    Bmemset(apScriptEvents, 0, sizeof(apScriptEvents));
 
     for (auto& i : g_tile)
         Bmemset(&i, 0, sizeof(tiledata_t));
