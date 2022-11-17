@@ -3637,6 +3637,9 @@ int A_Spawn(int spriteNum, int tileNum)
             if (sector[sectNum].floorpicnum == FLOORSLIME ||
                 sector[sectNum].ceilingpicnum == FLOORSLIME)
                 pSprite->pal = 7;
+            else if (sector[sectNum].floorpicnum == FLOORPLASMA ||
+                sector[sectNum].ceilingpicnum == FLOORPLASMA)
+                pSprite->pal = 2;
 
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
