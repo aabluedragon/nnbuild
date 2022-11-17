@@ -4595,19 +4595,21 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     /* Qbix: Changed variables to be aware of the sizeof *insptr
      * (wether it is int vs intptr_t), Although it is specificly cast to intptr_t*
      * which might be corrected if the code is converted to use offsets */
-    if (g_t[4])
+
+    // [JM] This is VM_UpdateAnim in mainline. This crap needs to go for 64-bit builds but I need assistance.
+    if (AC_ACTION_ID(g_t))
     {
         g_sp->lotag += TICSPERFRAME;
 
-        if (g_sp->lotag > *(intptr_t *)(g_t[4]+4*sizeof(*insptr)))
+        if (g_sp->lotag > *(intptr_t *)(AC_ACTION_ID(g_t)+4*sizeof(*insptr)))
         {
-            g_t[2]++;
+            AC_ACTION_COUNT(g_t)++;
             g_sp->lotag = 0;
-            g_t[3] +=  *(intptr_t *)(g_t[4]+3*sizeof(*insptr));
+            AC_CURFRAME(g_t) +=  *(intptr_t *)(AC_ACTION_ID(g_t)+3*sizeof(*insptr));
         }
 
-        if (klabs(g_t[3]) >= klabs(*(intptr_t *)(g_t[4]+sizeof(*insptr)) * *(intptr_t *)(g_t[4]+3*sizeof(*insptr))))
-            g_t[3] = 0;
+        if (klabs(AC_CURFRAME(g_t)) >= klabs(*(intptr_t *)(AC_ACTION_ID(g_t)+sizeof(*insptr)) * *(intptr_t *)(AC_ACTION_ID(g_t)+3*sizeof(*insptr))))
+            AC_CURFRAME(g_t) = 0;
     }
 
     while (!X_DoExecute());
