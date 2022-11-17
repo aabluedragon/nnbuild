@@ -1073,7 +1073,7 @@ static int C_SetScriptSize(int size)
     intptr_t oscriptPtr = (unsigned)(g_scriptPtr-apScript);
     intptr_t ocaseScriptPtr = (unsigned)(g_caseScriptPtr-apScript);
     intptr_t oparsingEventPtr = (unsigned)(g_parsingEventPtr-apScript);
-    intptr_t oparsingActorPtr = (unsigned)(g_parsingActorPtr-apScript);
+    intptr_t oparsingActorPtr = (unsigned)(g_scriptActorOffset-apScript);
     char *scriptptrs;
     intptr_t *newscript;
     intptr_t i, j;
@@ -1158,8 +1158,8 @@ static int C_SetScriptSize(int size)
         g_caseScriptPtr = (intptr_t *)(apScript+ocaseScriptPtr);
     if (g_parsingEventPtr != NULL)
         g_parsingEventPtr = (intptr_t *)(apScript+oparsingEventPtr);
-    if (g_parsingActorPtr != NULL)
-        g_parsingActorPtr = (intptr_t *)(apScript+oparsingActorPtr);
+    if (g_scriptActorOffset != NULL)
+        g_scriptActorOffset = (intptr_t *)(apScript+oparsingActorPtr);
 
     if (size > osize)
     {
@@ -1253,7 +1253,7 @@ static int32_t C_SkipComments(void)
                         VLOG_F(LOG_CON, "%s:%d: debug: EOF in comment!", g_scriptFileName, g_lineNumber);
                     C_ReportError(-1);
                     LOG_F(ERROR, "%s:%d: found `/*' with no `*/'.", g_scriptFileName, g_lineNumber);
-                    g_parsingActorPtr = 0;
+                    g_scriptActorOffset = 0;
                     g_processingState = g_numBraces = 0;
                     g_errorCnt++;
                     break;
@@ -1291,7 +1291,7 @@ static int32_t C_SetDefName(const char* name)
 
 static int C_CheckEventSync(int iEventID)
 {
-    if (g_parsingEventPtr || g_parsingActorPtr)
+    if (g_parsingEventPtr || g_scriptActorOffset)
     {
         switch (iEventID)
         {
@@ -1608,7 +1608,7 @@ static void C_GetNextVarType(int type)
         C_ReportError(ERROR_VARTYPEMISMATCH);
         return;
     }
-    if ((aGameVars[i].dwFlags & GAMEVAR_SYNCCHECK) && g_parsingActorPtr && C_CheckEventSync(g_currentEvent))
+    if ((aGameVars[i].dwFlags & GAMEVAR_SYNCCHECK) && g_scriptActorOffset && C_CheckEventSync(g_currentEvent))
     {
         C_ReportError(-1);
         LOG_F(WARNING, "%s:%d: found local gamevar `%s' used within %s; expect multiplayer synchronization issues.",g_scriptFileName,g_lineNumber,LAST_LABEL,g_parsingEventPtr?"a synced event":"an actor");
@@ -1853,7 +1853,7 @@ static int C_ParseCommand(void)
     case -1:
         return 0; //End
     case CON_DEFSTATE:
-        if (EDUKE32_PREDICT_FALSE(g_processingState || g_parsingActorPtr))
+        if (EDUKE32_PREDICT_FALSE(g_processingState || g_scriptActorOffset))
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -1861,7 +1861,7 @@ static int C_ParseCommand(void)
         }
         goto DO_DEFSTATE;
     case CON_STATE:
-        if (g_parsingActorPtr == 0 && g_processingState == 0)
+        if (g_scriptActorOffset == 0 && g_processingState == 0)
         {
 DO_DEFSTATE:
             C_GetNextLabelName();
@@ -2186,7 +2186,7 @@ DO_DEFSTATE:
         return 0;
 
     case CON_MOVE:
-        if (g_parsingActorPtr || g_processingState)
+        if (g_scriptActorOffset || g_processingState)
         {
             if (!C_CheckEventSync(g_currentEvent))
             {
@@ -2385,7 +2385,7 @@ DO_DEFSTATE:
         return 0;
 
     case CON_AI:
-        if (g_parsingActorPtr || g_processingState)
+        if (g_scriptActorOffset || g_processingState)
         {
             if (!C_CheckEventSync(g_currentEvent))
             {
@@ -2465,7 +2465,7 @@ DO_DEFSTATE:
         return 0;
 
     case CON_ACTION:
-        if (g_parsingActorPtr || g_processingState)
+        if (g_scriptActorOffset || g_processingState)
         {
             if (!C_CheckEventSync(g_currentEvent))
             {
@@ -2523,7 +2523,7 @@ DO_DEFSTATE:
         return 0;
 
     case CON_ACTOR:
-        if (g_processingState || g_parsingActorPtr)
+        if (g_processingState || g_scriptActorOffset)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -2531,7 +2531,7 @@ DO_DEFSTATE:
 
         g_numBraces = 0;
         g_scriptPtr--;
-        g_parsingActorPtr = g_scriptPtr;
+        g_scriptActorOffset = g_scriptPtr;
 
         C_SkipComments();
         j = 0;
@@ -2544,12 +2544,12 @@ DO_DEFSTATE:
         C_GetNextValue(LABEL_DEFINE);
         //         Bsprintf(g_szCurrentBlockName,"%s",LAST_LABEL);
         g_scriptPtr--;
-        g_tile[*g_scriptPtr].execPtr = g_parsingActorPtr;
+        g_tile[*g_scriptPtr].execPtr = g_scriptActorOffset;
 
         for (j=0;j<4;j++)
         {
-            bitptr[(g_parsingActorPtr+j-apScript)>>3] &= ~(1<<((g_parsingActorPtr+j-apScript)&7));
-            *(g_parsingActorPtr+j) = 0;
+            bitptr[(g_scriptActorOffset+j-apScript)>>3] &= ~(1<<((g_scriptActorOffset+j-apScript)&7));
+            *(g_scriptActorOffset+j) = 0;
             if (j == 3)
             {
                 j = 0;
@@ -2595,16 +2595,16 @@ DO_DEFSTATE:
                     break;
                 }
                 if (*(g_scriptPtr-1) >= (intptr_t)&apScript[0] && *(g_scriptPtr-1) < (intptr_t)&apScript[g_scriptSize])
-                    bitptr[(g_parsingActorPtr+j-apScript)>>3] |= (BITPTR_POINTER<<((g_parsingActorPtr+j-apScript)&7));
-                else bitptr[(g_parsingActorPtr+j-apScript)>>3] &= ~(1<<((g_parsingActorPtr+j-apScript)&7));
-                *(g_parsingActorPtr+j) = *(g_scriptPtr-1);
+                    bitptr[(g_scriptActorOffset+j-apScript)>>3] |= (BITPTR_POINTER<<((g_scriptActorOffset+j-apScript)&7));
+                else bitptr[(g_scriptActorOffset+j-apScript)>>3] &= ~(1<<((g_scriptActorOffset+j-apScript)&7));
+                *(g_scriptActorOffset+j) = *(g_scriptPtr-1);
             }
         }
         g_checkingIfElse = 0;
         return 0;
 
     case CON_ONEVENT:
-        if (g_processingState || g_parsingActorPtr)
+        if (g_processingState || g_scriptActorOffset)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -2613,7 +2613,7 @@ DO_DEFSTATE:
         g_numBraces = 0;
         g_scriptPtr--;
         g_parsingEventPtr = g_scriptPtr;
-        g_parsingActorPtr = g_scriptPtr;
+        g_scriptActorOffset = g_scriptPtr;
 
         C_SkipComments();
         j = 0;
@@ -2641,9 +2641,9 @@ DO_DEFSTATE:
         if (VM_HaveEvent(j))
         {
             tempscrptr = g_parsingEventPtr;
-            g_parsingEventPtr = g_parsingActorPtr = 0;
+            g_parsingEventPtr = g_scriptActorOffset = 0;
             C_ReportError(-1);
-            g_parsingEventPtr = g_parsingActorPtr = tempscrptr;
+            g_parsingEventPtr = g_scriptActorOffset = tempscrptr;
             LOG_F(WARNING, "%s:%d: duplicate event `%s'.",g_scriptFileName,g_lineNumber,g_szCurrentBlockName);
             g_warningCnt++;
         }
@@ -2654,7 +2654,7 @@ DO_DEFSTATE:
         return 0;
 
     case CON_EVENTLOADACTOR:
-        if (g_processingState || g_parsingActorPtr)
+        if (g_processingState || g_scriptActorOffset)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -2662,7 +2662,7 @@ DO_DEFSTATE:
 
         g_numBraces = 0;
         g_scriptPtr--;
-        g_parsingActorPtr = g_scriptPtr;
+        g_scriptActorOffset = g_scriptPtr;
 
         C_SkipComments();
         j = 0;
@@ -2674,13 +2674,13 @@ DO_DEFSTATE:
         g_szCurrentBlockName[j] = 0;
         C_GetNextValue(LABEL_DEFINE);
         g_scriptPtr--;
-        g_tile[*g_scriptPtr].loadPtr = g_parsingActorPtr;
+        g_tile[*g_scriptPtr].loadPtr = g_scriptActorOffset;
 
         g_checkingIfElse = 0;
         return 0;
 
     case CON_USERACTOR:
-        if (g_processingState || g_parsingActorPtr)
+        if (g_processingState || g_scriptActorOffset)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -2688,7 +2688,7 @@ DO_DEFSTATE:
 
         g_numBraces = 0;
         g_scriptPtr--;
-        g_parsingActorPtr = g_scriptPtr;
+        g_scriptActorOffset = g_scriptPtr;
 
         C_GetNextValue(LABEL_DEFINE);
         g_scriptPtr--;
@@ -2714,7 +2714,7 @@ DO_DEFSTATE:
 
         C_GetNextValue(LABEL_DEFINE);
         g_scriptPtr--;
-        g_tile[*g_scriptPtr].execPtr = g_parsingActorPtr;
+        g_tile[*g_scriptPtr].execPtr = g_scriptActorOffset;
 
         if (tw == CON_USERACTOR)
         {
@@ -2726,7 +2726,7 @@ DO_DEFSTATE:
         for (j=0;j<4;j++)
         {
             bitptr[(g_scriptPtr-apScript)>>3] &= ~(1<<((g_scriptPtr-apScript)&7));
-            *(g_parsingActorPtr+j) = 0;
+            *(g_scriptActorOffset+j) = 0;
             if (j == 3)
             {
                 j = 0;
@@ -2772,9 +2772,9 @@ DO_DEFSTATE:
                     break;
                 }
                 if (*(g_scriptPtr-1) >= (intptr_t)&apScript[0] && *(g_scriptPtr-1) < (intptr_t)&apScript[g_scriptSize])
-                    bitptr[(g_parsingActorPtr+j-apScript)>>3] |= (BITPTR_POINTER<<((g_parsingActorPtr+j-apScript)&7));
-                else bitptr[(g_parsingActorPtr+j-apScript)>>3] &= ~(1<<((g_parsingActorPtr+j-apScript)&7));
-                *(g_parsingActorPtr+j) = *(g_scriptPtr-1);
+                    bitptr[(g_scriptActorOffset+j-apScript)>>3] |= (BITPTR_POINTER<<((g_scriptActorOffset+j-apScript)&7));
+                else bitptr[(g_scriptActorOffset+j-apScript)>>3] &= ~(1<<((g_scriptActorOffset+j-apScript)&7));
+                *(g_scriptActorOffset+j) = *(g_scriptPtr-1);
             }
         }
         g_checkingIfElse = 0;
@@ -3967,7 +3967,7 @@ DO_DEFSTATE:
         int y;
         signed int z;
 
-        if (g_processingState || g_parsingActorPtr)
+        if (g_processingState || g_scriptActorOffset)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -3996,7 +3996,7 @@ DO_DEFSTATE:
 
     case CON_DAMAGEEVENTTILE:
     {
-        if (g_processingState || g_parsingActorPtr)
+        if (g_processingState || g_scriptActorOffset)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -4021,7 +4021,7 @@ DO_DEFSTATE:
 
     case CON_DAMAGEEVENTTILERANGE:
     {
-        if (g_processingState || g_parsingActorPtr)
+        if (g_processingState || g_scriptActorOffset)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -4051,7 +4051,7 @@ DO_DEFSTATE:
 
     case CON_SPRITEFLAGS:
     {
-        if (g_parsingActorPtr == 0 && g_processingState == 0)
+        if (g_scriptActorOffset == 0 && g_processingState == 0)
         {
             g_scriptPtr--;
 
@@ -4086,7 +4086,7 @@ DO_DEFSTATE:
     case CON_SPRITENOPAL:
     case CON_PRECACHE:
     {
-        if (g_processingState || g_parsingActorPtr)
+        if (g_processingState || g_scriptActorOffset)
         {
             C_ReportError(ERROR_FOUNDWITHIN);
             g_errorCnt++;
@@ -4791,7 +4791,7 @@ repeatcase:
         return 0;
     }
     case CON_LEFTBRACE:
-        if (!(g_processingState || g_parsingActorPtr || g_parsingEventPtr))
+        if (!(g_processingState || g_scriptActorOffset || g_parsingEventPtr))
         {
             g_errorCnt++;
             C_ReportError(ERROR_SYNTAXERROR);
@@ -5413,13 +5413,13 @@ repeatcase:
             g_errorCnt++;
         }
         g_parsingEventPtr = 0;
-        g_parsingActorPtr = 0;
+        g_scriptActorOffset = 0;
         g_currentEvent = -1;
         Bsprintf(g_szCurrentBlockName,"(none)");
         return 0;
 
     case CON_ENDA:
-        if (g_parsingActorPtr == 0)
+        if (g_scriptActorOffset == 0)
         {
             C_ReportError(-1);
             LOG_F(ERROR, "%s:%d: found `enda' without open `actor'.",g_scriptFileName,g_lineNumber);
@@ -5435,7 +5435,7 @@ repeatcase:
             C_ReportError(ERROR_CLOSEBRACKET);
             g_errorCnt++;
         }
-        g_parsingActorPtr = 0;
+        g_scriptActorOffset = 0;
         Bsprintf(g_szCurrentBlockName,"(none)");
         return 0;
 
@@ -6104,8 +6104,8 @@ void C_ReportError(int iError)
 {
     if (Bstrcmp(g_szCurrentBlockName,g_szLastBlockName))
     {
-        if (g_parsingEventPtr || g_processingState || g_parsingActorPtr)
-            LOG_F(INFO, "%s: In %s `%s':",g_scriptFileName,g_parsingEventPtr?"event":g_parsingActorPtr?"actor":"state",g_szCurrentBlockName);
+        if (g_parsingEventPtr || g_processingState || g_scriptActorOffset)
+            LOG_F(INFO, "%s: In %s `%s':",g_scriptFileName,g_parsingEventPtr?"event":g_scriptActorOffset?"actor":"state",g_szCurrentBlockName);
         else LOG_F(INFO, "%s: At top level:",g_scriptFileName);
         Bstrcpy(g_szLastBlockName,g_szCurrentBlockName);
     }
@@ -6127,7 +6127,7 @@ void C_ReportError(int iError)
         LOG_F(ERROR, "%s:%d: expected a keyword but found `%s'.",g_scriptFileName,g_lineNumber,tempbuf);
         break;
     case ERROR_FOUNDWITHIN:
-        LOG_F(ERROR, "%s:%d: found `%s' within %s.",g_scriptFileName,g_lineNumber,tempbuf,g_parsingEventPtr?"an event":g_parsingActorPtr?"an actor":"a state");
+        LOG_F(ERROR, "%s:%d: found `%s' within %s.",g_scriptFileName,g_lineNumber,tempbuf,g_parsingEventPtr?"an event":g_scriptActorOffset?"an actor":"a state");
         break;
     case ERROR_ISAKEYWORD:
         LOG_F(ERROR, "%s:%d: symbol `%s' is a keyword.",g_scriptFileName,g_lineNumber,LAST_LABEL);
