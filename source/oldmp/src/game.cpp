@@ -5474,6 +5474,32 @@ static inline void G_DoEventAnimSprites(int tspriteNum)
     spriteext[tsprOwner].tspr = NULL;
 }
 
+template <int rotations>
+static int getofs_viewtype(int angDiff)
+{
+    return ((((angDiff + 3072) & 2047) * rotations + 1024) >> 11) % rotations;
+}
+
+template <int rotations>
+static int viewtype_mirror(uint16_t& cstat, int frameOffset)
+{
+    if (frameOffset > rotations / 2)
+    {
+        cstat |= 4;
+        return rotations - frameOffset;
+    }
+
+    cstat &= ~4;
+    return frameOffset;
+}
+
+template <int mirrored_rotations>
+static int getofs_viewtype_mirrored(uint16_t& cstat, int angDiff)
+{
+    return viewtype_mirror<mirrored_rotations * 2 - 2>(cstat, getofs_viewtype<mirrored_rotations * 2 - 2>(angDiff));
+}
+
+
 #ifdef _MSC_VER
 // Visual C thought this was a bit too hard to optimise so we'd better
 // tell it not to try... such a pussy it is.
@@ -5484,11 +5510,12 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 {
     UNREFERENCED_PARAMETER(z);
 
-    int i, j, k, p, sect;
-    intptr_t l, t1,t3,t4;
+    int i, j, p, sect;
+    intptr_t l;
     spritetype* s;
     tspritetype *t;
     int switchpic;
+    int frameOffset;
 
     if (!spritesortcnt) return;
 
@@ -5555,21 +5582,13 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                         t->xrepeat = t->yrepeat = 0;
                     continue;
                 case CHAIR3__STATIC:
-#if defined(USE_OPENGL)
-                    if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum, t->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                    if (tilehasmodelorvoxel(t->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                     {
                         t->cstat &= ~4;
                         break;
                     }
-#endif
-                    k = (((t->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
-                    if (k > 4)
-                    {
-                        k = 8 - k;
-                        t->cstat |= 4;
-                    }
-                    else t->cstat &= ~4;
-                    t->picnum = s->picnum + k;
+                    frameOffset = getofs_viewtype_mirrored<5>(t->cstat, t->ang - a);
+                    t->picnum = s->picnum + frameOffset;
                     break;
                 case BLOODSPLAT1__STATIC:
                 case BLOODSPLAT2__STATIC:
@@ -5727,9 +5746,10 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         }
 
         sect = s->sectnum;
-        t1 = T2(i);
-        t3 = T4(i);
-        t4 = T5(i);
+
+        int32_t curframe = AC_CURFRAME(actor[i].t_data);
+        int32_t scrofs_action = AC_ACTION_ID(actor[i].t_data);
+
         switchpic = s->picnum;
         //some special cases because dynamictostatic system can't handle addition to constants
         if ((s->picnum >= SCRAP6)&&(s->picnum<=SCRAP6+7))
@@ -5854,49 +5874,31 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 break;
 
             case RPG__STATIC:
-#if defined(USE_OPENGL)
-                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum, t->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                if (tilehasmodelorvoxel(t->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                 {
-                    int v = getangle(t->xvel, t->zvel >> 4);
-                    if (v > 1023)v -= 2048;
-                    spriteext[i].mdpitch = v;
+                    int32_t v = getangle(t->xvel, t->zvel >> 4);
 
+                    spriteext[i].mdpitch = (v > 1023 ? v - 2048 : v);
                     t->cstat &= ~4;
                     break;
                 }
-#endif
-                k = getangle(s->x - x, s->y - y);
-                k = (((s->ang + 3072 + 128 - k) & 2047) / 170);
-                if (k > 6)
-                {
-                    k = 12 - k;
-                    t->cstat |= 4;
-                }
-                else t->cstat &= ~4;
-                t->picnum = RPG + k;
+                frameOffset = getofs_viewtype_mirrored<7>(t->cstat, s->ang - getangle(s->x - x, s->y - y));
+                t->picnum = RPG + frameOffset;
                 break;
 
             case RECON__STATIC:
-#if defined(USE_OPENGL)
-                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(t->picnum, t->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                if (tilehasmodelorvoxel(t->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                 {
                     t->cstat &= ~4;
                     break;
                 }
-#endif
-                k = getangle(s->x - x, s->y - y);
-                k = (((s->ang + 3072 + 128 - k) & 2047) / 170);
+                frameOffset = getofs_viewtype_mirrored<7>(t->cstat, s->ang - getangle(s->x - x, s->y - y));
 
-                if (k > 6)
-                {
-                    k = 12 - k;
-                    t->cstat |= 4;
-                }
-                else t->cstat &= ~4;
+                // RECON_T4
+                if (klabs(curframe) > 64)
+                    frameOffset += 7;  // tilted recon car
 
-                if (klabs(t3) > 64) k += 7;
-                t->picnum = RECON + k;
-
+                t->picnum = RECON + frameOffset;
                 break;
 
             case APLAYER__STATIC:
@@ -5972,29 +5974,18 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
                 if (s->owner == -1)
                 {
-
-#if defined(USE_OPENGL)
-                    if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum, t->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                    if (tilehasmodelorvoxel(s->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                     {
-                        k = 0;
+                        frameOffset = 0;
                         t->cstat &= ~4;
                     }
                     else
-#endif
-                    {
-                        k = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
-                        if (k > 4)
-                        {
-                            k = 8 - k;
-                            t->cstat |= 4;
-                        }
-                        else t->cstat &= ~4;
-                    }
+                        frameOffset = getofs_viewtype_mirrored<5>(t->cstat, s->ang - a);
 
-                    if (sector[t->sectnum].lotag == ST_2_UNDERWATER) k += 1795 - 1405;
-                    else if ((actor[i].floorz - s->z) > (64 << 8)) k += 60;
+                    if (sector[s->sectnum].lotag == ST_2_UNDERWATER) frameOffset += 1795 - 1405;
+                    else if ((actor[i].floorz - s->z) > (64 << 8)) frameOffset += 60;
 
-                    t->picnum += k;
+                    t->picnum += frameOffset;
                     t->pal = g_player[p].ps->palookup;
 
                     goto PALONLY;
@@ -6018,9 +6009,13 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
                 if (g_player[p].ps->newowner > -1)
                 {
-                    t4 = *(g_tile[APLAYER].execPtr + 1);
-                    t3 = 0;
-                    t1 = *(g_tile[APLAYER].execPtr + 2);
+                    // Display APLAYER sprites with action PSTAND when viewed through
+                    // a camera.  Not implemented for Lunatic.
+                    const intptr_t* aplayer_scr = g_tile[APLAYER].execPtr;
+                    // [0]=strength, [1]=actionofs, [2]=moveofs
+
+                    scrofs_action = aplayer_scr[1];
+                    curframe = 0;
                 }
 
                 if (ud.camerasprite == -1 && g_player[p].ps->newowner == -1)
@@ -6090,78 +6085,98 @@ PALONLY:
                 break;
         }
 
-        if (g_tile[s->picnum].execPtr)
+        if (G_TileHasActor(s->picnum))
         {
-            if ((intptr_t *)t4 >= &apScript[0] && (intptr_t *)t4 <= (&apScript[0] + g_scriptSize))
+            // [JM] Use this instead of the below if check when the script offset crap is done/fixed!
+            //if ((unsigned)scrofs_action + ACTION_PARAM_COUNT > (unsigned)g_scriptSize || apScript[scrofs_action + ACTION_PARAM_COUNT] != CON_END)
+            if (!((intptr_t*)scrofs_action >= &apScript[0] && (intptr_t*)scrofs_action <= (&apScript[0] + g_scriptSize)))
             {
-                l = *(((intptr_t *)t4)+2); //For TerminX: was *(int *)(t4+8)
+                if (scrofs_action)
+                    LOG_F(ERROR, "Sprite %d tile %d: invalid action at offset %d", i, TrackerCast(s->picnum), scrofs_action);
 
-#if defined(USE_OPENGL)
-                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum,t->pal) >= 0 && !(spriteext[i].flags&SPREXT_NOTMD))
-                {
-                    k = 0;
-                    t->cstat &= ~4;
-                }
-                else
-#endif
-                    switch (l)
-                    {
-                        case 2:
-                            k = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 1;
-                            break;
-
-                        case 3:
-                        case 4:
-                            k = (((s->ang + 3072 + 128 - a) & 2047) >> 7) & 7;
-                            if (k > 3)
-                            {
-                                t->cstat |= 4;
-                                k = 7 - k;
-                            }
-                            else t->cstat &= ~4;
-                            break;
-
-                        case 5:
-                            k = getangle(s->x - x, s->y - y);
-                            k = (((s->ang + 3072 + 128 - k) & 2047) >> 8) & 7;
-                            if (k > 4)
-                            {
-                                k = 8 - k;
-                                t->cstat |= 4;
-                            }
-                            else t->cstat &= ~4;
-                            break;
-                        case 7:
-                            k = getangle(s->x - x, s->y - y);
-                            k = (((s->ang + 3072 + 128 - k) & 2047) / 170);
-                            if (k > 6)
-                            {
-                                k = 12 - k;
-                                t->cstat |= 4;
-                            }
-                            else t->cstat &= ~4;
-                            break;
-                        case 8:
-                            k = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
-                            t->cstat &= ~4;
-                            break;
-                        default:
-                            k = 0;
-                            break;
-                    }
-
-                t->picnum += k + (*(intptr_t *)t4) + l * t3;
-
-                if (l > 0) while (tilesiz[t->picnum].x == 0 && t->picnum > 0)
-                        t->picnum -= l;       //Hack, for actors
-
-                if (actor[i].dispicnum >= 0)
-                    actor[i].dispicnum = t->picnum;
+                goto skip;
             }
-            else if (display_mirror == 1)
-                t->cstat |= 4;
+
+            // [JM] Use this when the script offset crap is done/fixed!
+            /*
+            int32_t viewtype = apScript[scrofs_action + ACTION_VIEWTYPE];
+            uint16_t const action_flags = apScript[scrofs_action + ACTION_FLAGS];
+
+            int const invertp = viewtype < 0;
+            l = klabs(viewtype);
+            */
+            
+            l = *(((intptr_t*)scrofs_action) + 2); //For TerminX: was *(int *)(t4+8)
+
+            if (tilehasmodelorvoxel(s->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
+            {
+                frameOffset = 0;
+                t->cstat &= ~4;
+            }
+            else
+            {
+                // [JM] Replace this with the block from mainline.
+                switch (l)
+                {
+                    case 2:
+                        frameOffset = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 1;
+                        break;
+
+                    case 3:
+                    case 4:
+                        frameOffset = (((s->ang + 3072 + 128 - a) & 2047) >> 7) & 7;
+                        if (frameOffset > 3)
+                        {
+                            t->cstat |= 4;
+                            frameOffset = 7 - frameOffset;
+                        }
+                        else t->cstat &= ~4;
+                        break;
+
+                    case 5:
+                        frameOffset = getangle(s->x - x, s->y - y);
+                        frameOffset = (((s->ang + 3072 + 128 - frameOffset) & 2047) >> 8) & 7;
+                        if (frameOffset > 4)
+                        {
+                            frameOffset = 8 - frameOffset;
+                            t->cstat |= 4;
+                        }
+                        else t->cstat &= ~4;
+                        break;
+                    case 7:
+                        frameOffset = getangle(s->x - x, s->y - y);
+                        frameOffset = (((s->ang + 3072 + 128 - frameOffset) & 2047) / 170);
+                        if (frameOffset > 6)
+                        {
+                            frameOffset = 12 - frameOffset;
+                            t->cstat |= 4;
+                        }
+                        else t->cstat &= ~4;
+                        break;
+                    case 8:
+                        frameOffset = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
+                        t->cstat &= ~4;
+                        break;
+                    default:
+                        frameOffset = 0;
+                        break;
+                }
+            }
+
+            //t->picnum += frameOffset + apScript[scrofs_action + ACTION_STARTFRAME] + viewtype * curframe;
+            t->picnum += frameOffset + (*(intptr_t*)scrofs_action) + l * curframe;
+            // XXX: t->picnum can be out-of-bounds by bad user code.
+
+            //if (viewtype > 0)
+            if (l > 0)
+                while (tilesiz[t->picnum].x == 0 && t->picnum > 0)
+                    t->picnum -= l; // Hack, for actors
+
+            if (actor[i].dispicnum >= 0)
+                actor[i].dispicnum = t->picnum;
         }
 
+skip:
         if (g_player[screenpeek].ps->inv_amount[GET_HEATS] > 0 && g_player[screenpeek].ps->heat_on && (A_CheckEnemySprite(s) || A_CheckSpriteFlags(t->owner,SFLAG_NVG) || s->picnum == APLAYER || s->statnum == 13))
         {
             t->pal = 6;
@@ -6231,6 +6246,8 @@ PALONLY:
                     }
                 }
 
+        //bool const haveAction = scrofs_action != 0 && (unsigned)scrofs_action + ACTION_PARAM_COUNT <= (unsigned)g_scriptSize;
+
         switch (DynamicTileMap[s->picnum])
         {
             case LASERLINE__STATIC:
@@ -6270,31 +6287,24 @@ PALONLY:
                 t->picnum += (s->shade >> 1);
                 break;
             case PLAYERONWATER__STATIC:
-#if defined(USE_OPENGL)
-                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum, s->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                t->shade = sprite[s->owner].shade;
+
+                //if (haveAction)
+                    //break;
+
+                if (tilehasmodelorvoxel(s->picnum, s->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                 {
-                    k = 0;
+                    frameOffset = 0;
                     t->cstat &= ~4;
                 }
                 else
-#endif
-                {
-                    k = (((t->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
-                    if (k > 4)
-                    {
-                        k = 8 - k;
-                        t->cstat |= 4;
-                    }
-                    else t->cstat &= ~4;
-                }
+                    frameOffset = getofs_viewtype_mirrored<5>(t->cstat, t->ang - a);
 
-                t->picnum = s->picnum + k + ((T1(i) < 4) * 5);
-                t->shade = sprite[s->owner].shade;
-
+                t->picnum = s->picnum + frameOffset + ((T1(i) < 4) * 5);
                 break;
 
             case WATERSPLASH2__STATIC:
-                t->picnum = WATERSPLASH2 + t1;
+                t->picnum = WATERSPLASH2 + T2(i);
                 break;
             case SHELL__STATIC:
                 t->picnum = s->picnum + (T1(i) & 1);
@@ -6335,23 +6345,16 @@ PALONLY:
 
             case CAMERA1__STATIC:
             case RAT__STATIC:
+                //if (haveAction)
+                    //break;
 
-#if defined(USE_OPENGL)
-                if (videoGetRenderMode() >= 3 && usemodels && md_tilehasmodel(s->picnum, s->pal) >= 0 && !(spriteext[i].flags & SPREXT_NOTMD))
+                if (tilehasmodelorvoxel(s->picnum, s->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                 {
                     t->cstat &= ~4;
                     break;
                 }
-#endif
-
-                k = (((t->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
-                if (k > 4)
-                {
-                    k = 8 - k;
-                    t->cstat |= 4;
-                }
-                else t->cstat &= ~4;
-                t->picnum = s->picnum + k;
+                frameOffset = getofs_viewtype_mirrored<5>(t->cstat, t->ang - a);
+                t->picnum = s->picnum + frameOffset;
                 break;
         }
 
