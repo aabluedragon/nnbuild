@@ -30,9 +30,20 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "common.h"  // tokenlist
 #include "player.h"  // projectile_t
 
-#define MAXGAMEEVENTS   128
-#define LABEL_HASPARM2  1
-#define LABEL_ISSTRING  2
+#define LABEL_CHAR sizeof(uint8_t)
+#define LABEL_SHORT sizeof(uint16_t)
+#define LABEL_INT sizeof(uint32_t)
+#define LABEL_UNSIGNED 8
+#define LABEL_HASPARM2 16
+#define LABEL_ISSTRING 32
+#define LABEL_READFUNC 64
+#define LABEL_WRITEFUNC 128
+
+#define VM_IFELSE_MAGIC_BIT (1<<31)
+#define VM_INSTMASK 0xfff
+
+#define VM_DECODE_INST(xxx) ((int)((xxx) & VM_INSTMASK))
+#define VM_DECODE_LINE_NUMBER(xxx) ((int)((xxx&~VM_IFELSE_MAGIC_BIT) >> 12))
 
 #define MAXLABELS 16384
 #define LAST_LABEL (label+(g_labelCnt<<6))
@@ -55,10 +66,13 @@ typedef struct SystemVarID_s {
     int32_t MONSTERS_OFF        = -1;
     int32_t MARKER              = -1;
     int32_t FFIRE               = -1;
+
+    int32_t structs = -1;
 } SystemVarID_t;
 extern SystemVarID_t sysVarIDs;
 
-extern intptr_t *apScriptEvents[MAXGAMEEVENTS];
+extern intptr_t apScriptEvents[MAXEVENTS];
+extern int32_t g_currentEvent;
 
 extern int otherp;
 extern int g_currentweapon;
@@ -75,10 +89,11 @@ extern int g_errorCnt,g_warningCnt;
 
 typedef struct
 {
-    const char *name;
-    int lId;
-    int flags;
-    int maxParm2;
+    const char  *name;
+    int         lId;
+    int         flags;
+    int         maxParm2;
+    int16_t     offset;
 } memberlabel_t;
 
 extern const memberlabel_t SectorLabels[];
@@ -95,6 +110,23 @@ typedef struct {
     const char* token;
     int32_t val;
 } tokenmap_t;
+
+struct vmofs
+{
+    char* fn;
+    struct vmofs* next;
+    int offset;
+};
+extern struct vmofs* vmoffset;
+
+static inline const char* C_GetFileForOffset(int const offset)
+{
+    auto ofs = vmoffset;
+    while (ofs->offset > offset)
+        ofs = ofs->next;
+    return ofs->fn;
+}
+#define VM_FILENAME(xxx) C_GetFileForOffset((xxx)-apScript)
 
 /*
 extern void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2);
@@ -122,6 +154,44 @@ void C_Compile(const char* fn);
 char const* VM_GetKeywordForID(int32_t id);
 
 // Enums
+enum
+{
+    LABEL_ACTION = 0x01,
+    LABEL_ACTOR = 0x02,
+    LABEL_AI = 0x04,
+    LABEL_DEFINE = 0x08,
+    LABEL_EVENT = 0x10,
+    LABEL_MOVE = 0x20,
+    LABEL_STATE = 0x40,
+
+    LABEL_ANY = -1,
+};
+
+// KEEPINSYNC gamevars.cpp: "special vars for struct access"
+enum QuickStructureAccess_t
+{
+    STRUCT_SPRITE,
+    STRUCT_SPRITE_INTERNAL__,
+    STRUCT_ACTOR_INTERNAL__,
+    STRUCT_SPRITEEXT_INTERNAL__,
+    STRUCT_SECTOR,
+    STRUCT_SECTOR_INTERNAL__,
+    STRUCT_WALL,
+    STRUCT_WALL_INTERNAL__,
+    STRUCT_PLAYER,
+    STRUCT_PLAYER_INTERNAL__,
+    STRUCT_ACTORVAR,
+    STRUCT_PLAYERVAR,
+    STRUCT_TSPR,
+    STRUCT_PROJECTILE,
+    STRUCT_THISPROJECTILE,
+    STRUCT_USERDEF,
+    STRUCT_INPUT,
+    STRUCT_TILEDATA,
+    //STRUCT_PALDATA,
+    NUMQUICKSTRUCTS,
+};
+
 enum ScriptError_t
 {
     ERROR_CLOSEBRACKET,
@@ -135,6 +205,7 @@ enum ScriptError_t
     ERROR_NOTAGAMEDEF,
     ERROR_NOTAGAMEVAR,
     ERROR_NOTAGAMEARRAY,
+    ERROR_NOTAMEMBER,
     ERROR_GAMEARRAYBNC,
     ERROR_GAMEARRAYBNO,
     ERROR_INVALIDARRAYWRITE,
@@ -479,9 +550,7 @@ enum ActorLabel_t
     ACTOR_SHADE,
     ACTOR_PAL,
     ACTOR_CLIPDIST,
-    ACTOR_DETAIL,
     ACTOR_BLEND,
-    ACTOR_ALPHA,
     ACTOR_XREPEAT,
     ACTOR_YREPEAT,
     ACTOR_XOFFSET,
@@ -496,14 +565,21 @@ enum ActorLabel_t
     ACTOR_LOTAG,
     ACTOR_HITAG,
     ACTOR_EXTRA,
-    ACTOR_HTCGG,
+    ACTOR_ULOTAG,
+    ACTOR_UHITAG,
+
+    ACTOR_STRUCT_BEGIN,
+    ACTOR_HTCGG = ACTOR_STRUCT_BEGIN,
     ACTOR_HTPICNUM,
     ACTOR_HTANG,
     ACTOR_HTEXTRA,
     ACTOR_HTOWNER,
     ACTOR_HTMOVFLAG,
+    ACTOR_HTUMOVFLAG,
     ACTOR_HTTEMPANG,
-    ACTOR_HTACTORSTAYPUT,
+    ACTOR_HTSTAYPUT,
+    ACTOR_HTFLOORZOFFSET,
+    ACTOR_HTWATERZOFFSET,
     ACTOR_HTDISPICNUM,
     ACTOR_HTTIMETOSLEEP,
     ACTOR_HTFLOORZ,
@@ -514,16 +590,23 @@ enum ActorLabel_t
     ACTOR_HTBPOSY,
     ACTOR_HTBPOSZ,
     ACTOR_HTG_T,
-    ACTOR_ANGOFF,
+    ACTOR_HTFLAGS,
+
+    ACTOR_SPRITEEXT_BEGIN,
+    ACTOR_ANGOFF = ACTOR_SPRITEEXT_BEGIN,
     ACTOR_PITCH,
     ACTOR_ROLL,
+    ACTOR_MDPIVOTXOFF,
+    ACTOR_MDPIVOTYOFF,
+    ACTOR_MDPIVOTZOFF,
     ACTOR_MDXOFF,
     ACTOR_MDYOFF,
     ACTOR_MDZOFF,
     ACTOR_MDFLAGS,
     ACTOR_XPANNING,
     ACTOR_YPANNING,
-    ACTOR_HTFLAGS,
+    ACTOR_ALPHA,
+    ACTOR_ISVALID,
     ACTOR_END
 };
 
@@ -713,10 +796,10 @@ enum ScriptKeywords_t
     CON_ENDEVENT,           // 124
     CON_IFVARE,             // 125
     CON_IFVARVARE,          // 126
-    CON_SPGETLOTAG,         // 127
-    CON_SPGETHITAG,         // 128
-    CON_SECTGETLOTAG,       // 129
-    CON_SECTGETHITAG,       // 130
+    CON_SPGETLOTAG,         // 127 !DEPRECATED!
+    CON_SPGETHITAG,         // 128 !DEPRECATED!
+    CON_SECTGETLOTAG,       // 129 !DEPRECATED!
+    CON_SECTGETHITAG,       // 130 !DEPRECATED!
     CON_IFSOUND,            // 131
     CON_GETTEXTUREFLOOR,    // 132
     CON_GETTEXTURECEILING,  // 133
@@ -947,6 +1030,13 @@ enum ScriptKeywords_t
     CON_SECTSETINTERPOLATION,
     CON_SECTCLEARINTERPOLATION,
     CON_STOPACTORSOUND,
+    CON_INV,
+
+    // TRANSFORM_SCRIPT_KEYWORDS_LIST
+    CON_SETVAR_GLOBAL,
+    CON_SETVAR_PLAYER,
+    CON_SETVAR_ACTOR,
+
     CON_END
 };
 #endif

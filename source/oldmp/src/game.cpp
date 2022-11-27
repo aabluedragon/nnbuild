@@ -6087,9 +6087,7 @@ PALONLY:
 
         if (G_TileHasActor(s->picnum))
         {
-            // [JM] Use this instead of the below if check when the script offset crap is done/fixed!
-            //if ((unsigned)scrofs_action + ACTION_PARAM_COUNT > (unsigned)g_scriptSize || apScript[scrofs_action + ACTION_PARAM_COUNT] != CON_END)
-            if (!((intptr_t*)scrofs_action >= &apScript[0] && (intptr_t*)scrofs_action <= (&apScript[0] + g_scriptSize)))
+            if ((unsigned)scrofs_action + ACTION_PARAM_COUNT > (unsigned)g_scriptSize || apScript[scrofs_action + ACTION_PARAM_COUNT] != CON_END)
             {
                 if (scrofs_action)
                     LOG_F(ERROR, "Sprite %d tile %d: invalid action at offset %d", i, TrackerCast(s->picnum), scrofs_action);
@@ -6097,16 +6095,11 @@ PALONLY:
                 goto skip;
             }
 
-            // [JM] Use this when the script offset crap is done/fixed!
-            /*
             int32_t viewtype = apScript[scrofs_action + ACTION_VIEWTYPE];
             uint16_t const action_flags = apScript[scrofs_action + ACTION_FLAGS];
 
             int const invertp = viewtype < 0;
             l = klabs(viewtype);
-            */
-            
-            l = *(((intptr_t*)scrofs_action) + 2); //For TerminX: was *(int *)(t4+8)
 
             if (tilehasmodelorvoxel(s->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
             {
@@ -6115,46 +6108,39 @@ PALONLY:
             }
             else
             {
-                // [JM] Replace this with the block from mainline.
+                int const viewAng = ((l > 4 && l != 8) || action_flags & AF_VIEWPOINT) ? getangle(s->x - x, s->y - y) : a;
+                int const angDiff = invertp ? viewAng - s->ang : s->ang - viewAng;
+
                 switch (l)
                 {
                     case 2:
-                        frameOffset = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 1;
+                        frameOffset = getofs_viewtype<8>(angDiff) & 1;
                         break;
 
                     case 3:
                     case 4:
-                        frameOffset = (((s->ang + 3072 + 128 - a) & 2047) >> 7) & 7;
-                        if (frameOffset > 3)
-                        {
-                            t->cstat |= 4;
-                            frameOffset = 7 - frameOffset;
-                        }
-                        else t->cstat &= ~4;
+                        frameOffset = viewtype_mirror<7>(t->cstat, getofs_viewtype<16>(angDiff) & 7);
                         break;
 
                     case 5:
-                        frameOffset = getangle(s->x - x, s->y - y);
-                        frameOffset = (((s->ang + 3072 + 128 - frameOffset) & 2047) >> 8) & 7;
-                        if (frameOffset > 4)
-                        {
-                            frameOffset = 8 - frameOffset;
-                            t->cstat |= 4;
-                        }
-                        else t->cstat &= ~4;
+                        frameOffset = getofs_viewtype_mirrored<5>(t->cstat, angDiff);
                         break;
                     case 7:
-                        frameOffset = getangle(s->x - x, s->y - y);
-                        frameOffset = (((s->ang + 3072 + 128 - frameOffset) & 2047) / 170);
-                        if (frameOffset > 6)
-                        {
-                            frameOffset = 12 - frameOffset;
-                            t->cstat |= 4;
-                        }
-                        else t->cstat &= ~4;
+                        frameOffset = getofs_viewtype_mirrored<7>(t->cstat, angDiff);
                         break;
                     case 8:
-                        frameOffset = (((s->ang + 3072 + 128 - a) & 2047) >> 8) & 7;
+                        frameOffset = getofs_viewtype<8>(angDiff);
+                        t->cstat &= ~4;
+                        break;
+                    case 9:
+                        frameOffset = getofs_viewtype_mirrored<9>(t->cstat, angDiff);
+                        break;
+                    case 12:
+                        frameOffset = getofs_viewtype<12>(angDiff);
+                        t->cstat &= ~4;
+                        break;
+                    case 16:
+                        frameOffset = getofs_viewtype<16>(angDiff);
                         t->cstat &= ~4;
                         break;
                     default:
@@ -6163,14 +6149,14 @@ PALONLY:
                 }
             }
 
-            //t->picnum += frameOffset + apScript[scrofs_action + ACTION_STARTFRAME] + viewtype * curframe;
-            t->picnum += frameOffset + (*(intptr_t*)scrofs_action) + l * curframe;
+            t->picnum += frameOffset + apScript[scrofs_action + ACTION_STARTFRAME] + viewtype * curframe;
             // XXX: t->picnum can be out-of-bounds by bad user code.
 
-            //if (viewtype > 0)
-            if (l > 0)
+            Bassert((unsigned)t->picnum < MAXTILES);
+
+            if (viewtype > 0)
                 while (tilesiz[t->picnum].x == 0 && t->picnum > 0)
-                    t->picnum -= l; // Hack, for actors
+                    t->picnum -= l;       //Hack, for actors
 
             if (actor[i].dispicnum >= 0)
                 actor[i].dispicnum = t->picnum;
@@ -6246,7 +6232,7 @@ skip:
                     }
                 }
 
-        //bool const haveAction = scrofs_action != 0 && (unsigned)scrofs_action + ACTION_PARAM_COUNT <= (unsigned)g_scriptSize;
+        bool const haveAction = scrofs_action != 0 && (unsigned)scrofs_action + ACTION_PARAM_COUNT <= (unsigned)g_scriptSize;
 
         switch (DynamicTileMap[s->picnum])
         {
@@ -6289,8 +6275,8 @@ skip:
             case PLAYERONWATER__STATIC:
                 t->shade = sprite[s->owner].shade;
 
-                //if (haveAction)
-                    //break;
+                if (haveAction)
+                    break;
 
                 if (tilehasmodelorvoxel(s->picnum, s->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                 {
@@ -6345,8 +6331,8 @@ skip:
 
             case CAMERA1__STATIC:
             case RAT__STATIC:
-                //if (haveAction)
-                    //break;
+                if (haveAction)
+                    break;
 
                 if (tilehasmodelorvoxel(s->picnum, s->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                 {

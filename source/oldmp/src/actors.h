@@ -18,6 +18,22 @@
 #define AC_ACTION_ID(t) ((t)[4])
 #define AC_AI_ID(t) ((t)[5])  /* the ID of the actor's current ai */
 
+enum actionparams
+{
+    ACTION_STARTFRAME = 0,
+    ACTION_NUMFRAMES,
+    ACTION_VIEWTYPE,
+    ACTION_INCVAL,
+    ACTION_DELAY,
+    ACTION_FLAGS,
+    ACTION_PARAM_COUNT,
+};
+
+enum actionflags
+{
+    AF_VIEWPOINT = 1u << 0u,
+};
+
 // <spr>: sprite pointer
 // <a>: actor_t pointer
 #define AC_ACTIONTICS(spr, a) ((spr)->lotag)
@@ -63,11 +79,7 @@ typedef struct
 } practor_t;
 
 // NOTE: T5 is AC_ACTION_ID
-// Use this method later when the CON VM doesn't suck.
-//#define LIGHTRAD_PICOFS(i) (T5(i) ? *(apScript + T5(i)) + (*(apScript + T5(i) + 2)) * AC_CURFRAME(actor[i].t_data) : 0)
-
-// !!TEMPORARY!! - Old method. Needed to prevent crashes.
-#define LIGHTRAD_PICOFS(i) (T5(i) ? (*(intptr_t *)T5(i)) + *(((intptr_t *)T5(i)+2)) * AC_CURFRAME(actor[i].t_data) : 0)
+#define LIGHTRAD_PICOFS(i) (T5(i) ? *(apScript + T5(i)) + (*(apScript + T5(i) + 2)) * AC_CURFRAME(actor[i].t_data) : 0)
 
 // this is the same crap as in game.c's tspr manipulation.  puke.
 // XXX: may access tilesizy out-of-bounds by bad user code.

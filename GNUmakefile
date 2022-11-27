@@ -733,6 +733,7 @@ oldmp_game_objs := \
     sector.cpp \
     sounds.cpp \
     sync.cpp \
+    utils.cpp \
 
 oldmp_game_rsrc_objs :=
 oldmp_game_gen_objs :=

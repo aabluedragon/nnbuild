@@ -115,7 +115,7 @@ G_EXTERN short cyclers[MAXCYCLERS][6], g_numCyclers;
 // CON VM
 G_EXTERN char *apStrings[MAXQUOTES], *apXStrings[MAXQUOTES];
 G_EXTERN intptr_t *insptr;
-G_EXTERN intptr_t *g_scriptActorOffset; // [JM] Not really an offset yet, must make all uses of this like mainline.
+G_EXTERN intptr_t g_scriptActorOffset;
 G_EXTERN intptr_t *apScript;
 G_EXTERN intptr_t *g_scriptPtr;
 

@@ -26,6 +26,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "gamedef.h"
 #include "osd.h"
 
+#define LABEL(struct, memb, name, idx)                                                              \
+    {                                                                                                               \
+        name, idx, sizeof(struct[0].memb) | (is_unsigned<decltype(struct[0].memb)>::value ? LABEL_UNSIGNED : 0), 0, \
+        offsetof(remove_pointer_t<decltype(&struct[0])>, memb)                                                      \
+    }
+
+#define MEMBER(struct, memb, idx) LABEL(struct, memb, #memb, idx)
+
 // this is all the crap for accessing the game's structs through the CON VM
 // I got a 3-4 fps gain by inlining these...
 
@@ -3397,7 +3405,7 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
         return;
 
     case ACTOR_BLEND:
-    case ACTOR_DETAIL:
+    //case ACTOR_DETAIL:
         if (iSet)
         {
             sprite[iActor].blend=lValue;
@@ -3595,7 +3603,7 @@ static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, 
         Gv_SetVar(lVar2,actor[iActor].tempang, g_i, g_p);
         return;
 
-    case ACTOR_HTACTORSTAYPUT:
+    case ACTOR_HTSTAYPUT:
         if (iSet)
         {
             actor[iActor].actorstayput=lValue;
@@ -3897,7 +3905,7 @@ static inline void X_AccessTsprite(int iSet, int lVar1, int lLabelID, int lVar2)
         return;
 
     case ACTOR_BLEND:
-    case ACTOR_DETAIL:
+    //case ACTOR_DETAIL:
         if (iSet)
         {
             spriteext[iActor].tspr->blend=lValue;

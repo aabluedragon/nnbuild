@@ -4,6 +4,11 @@
 #include "gamedef.h"
 #include "vfs.h"
 
+#define GV_FLAG_CONSTANT	(MAXGAMEVARS)
+#define GV_FLAG_NEGATIVE	(MAXGAMEVARS<<1)
+#define GV_FLAG_ARRAY		(MAXGAMEVARS<<2)
+#define GV_FLAG_STRUCT		(MAXGAMEVARS<<3)
+
 int __fastcall Gv_GetVar(int id, int iActor, int iPlayer);
 void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer);
 int __fastcall Gv_GetVarX(int id);

@@ -46,6 +46,14 @@ static int X_DoExecute(void);
 
 #include "gamestructures.cpp"
 
+// Replace with mainline versions later.
+#define VM_ABORT_IF(condition, fmt, ...)  \
+    if (EDUKE32_PREDICT_FALSE(condition)) \
+    {                                     \
+        CON_ERRPRINTF(fmt, __VA_ARGS__);  \
+        break;                            \
+    }
+
 void X_ScriptInfo(void)
 {
     intptr_t *p;
@@ -74,7 +82,7 @@ void X_ScriptInfo(void)
 
 void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
 {
-    if (iEventID<0 || iEventID >= MAXGAMEEVENTS)
+    if (iEventID<0 || iEventID >= MAXEVENTS)
     {
         OSD_Printf(CON_ERROR "invalid event ID",g_errorLineNum,VM_GetKeywordForID(g_tw));
         return;
@@ -90,6 +98,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
     {
         int og_i=g_i, og_p=g_p, okillit_flag=g_killitFlag;
         int og_x=g_x;// *og_t=g_t;
+        int oevent = g_currentEvent;
         intptr_t *oinsptr=insptr, *og_t=g_t;
         spritetype *og_sp=g_sp;
 
@@ -99,7 +108,9 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         g_sp = &sprite[g_i];
         g_t = &actor[g_i].t_data[0];
 
-        insptr = apScriptEvents[iEventID];
+        g_currentEvent = iEventID;
+
+        insptr = apScript + apScriptEvents[iEventID];
 
         g_killitFlag = 0;
 
@@ -117,13 +128,14 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         }
 
         // restore old values...
-        g_i=og_i;
-        g_p=og_p;
-        g_x=og_x;
-        g_sp=og_sp;
-        g_t=og_t;
-        g_killitFlag=okillit_flag;
-        insptr=oinsptr;
+        g_i = og_i;
+        g_p = og_p;
+        g_x = og_x;
+        g_sp = og_sp;
+        g_t = og_t;
+        g_killitFlag = okillit_flag;
+        g_currentEvent = oevent;
+        insptr = oinsptr;
 
         //AddLog("End of Execution");
     }
@@ -131,7 +143,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
 
 int X_OnEventWithReturn(int iEventID, int iActor, int iPlayer, int nReturn)
 {
-    if (iEventID < 0 || iEventID >= MAXGAMEEVENTS)
+    if (iEventID < 0 || iEventID >= MAXEVENTS)
     {
         OSD_Printf(CON_ERROR "invalid event ID", g_errorLineNum, VM_GetKeywordForID(g_tw));
         return nReturn;
@@ -420,68 +432,179 @@ int G_GetAngleDelta(int a,int na)
     return (na-a);
 }
 
+static int A_GetVerticalVel(ActorData_t const* const pActor)
+{
+    int32_t moveScriptOfs = AC_MOVE_ID(pActor->t_data);
+
+    return ((unsigned)moveScriptOfs < (unsigned)g_scriptSize - 1) ? apScript[moveScriptOfs + 1] : 0;
+}
+
+static int32_t A_GetWaterZOffset(int const spriteNum)
+{
+    auto const pSprite = (uspriteptr_t)&sprite[spriteNum];
+    auto const pActor = &actor[spriteNum];
+
+    if (sector[pSprite->sectnum].lotag == ST_1_ABOVE_WATER)
+    {
+        if (A_CheckSpriteFlags(spriteNum, SFLAG_NOWATERDIP))
+            return 0;
+
+        // fix for flying/jumping monsters getting stuck in water
+        if ((AC_MOVFLAGS(pSprite, pActor) & jumptoplayer_only) || (G_TileHasActor(pSprite->picnum) && A_GetVerticalVel(pActor) != 0))
+            return 0;
+
+        return ACTOR_ONWATER_ADDZ;// -((int32_t)pActor->waterzoffset << 8);
+    }
+
+    return 0;
+}
+
+static void VM_Fall(int const spriteNum, spritetype* const pSprite)
+{
+    int spriteGravity = g_spriteGravity;
+
+    pSprite->xoffset = pSprite->yoffset = 0;
+
+    if (sector[pSprite->sectnum].lotag == ST_2_UNDERWATER || EDUKE32_PREDICT_FALSE(G_CheckForSpaceCeiling(pSprite->sectnum)))
+        spriteGravity = g_spriteGravity / 6;
+    else if (EDUKE32_PREDICT_FALSE(G_CheckForSpaceFloor(pSprite->sectnum)))
+        spriteGravity = 0;
+
+    if (!actor[spriteNum].cgg-- || (sector[pSprite->sectnum].floorstat & 2))
+        actor[spriteNum].cgg = 3;
+
+    A_GetZLimits(spriteNum);
+
+    if (pSprite->z < actor[spriteNum].floorz - ACTOR_FLOOR_OFFSET)
+    {
+        // Free fall.
+        pSprite->zvel = min(pSprite->zvel + spriteGravity, ACTOR_MAXFALLINGZVEL);
+        int newZ = pSprite->z + pSprite->zvel;
+
+#ifdef YAX_ENABLE
+        if (yax_getbunch(pSprite->sectnum, YAX_FLOOR) >= 0 && (sector[pSprite->sectnum].floorstat & 512) == 0)
+            setspritez(spriteNum, &pSprite->xyz);
+        else
+#endif
+            if (newZ > actor[spriteNum].floorz - ACTOR_FLOOR_OFFSET)
+                newZ = actor[spriteNum].floorz - ACTOR_FLOOR_OFFSET;
+
+        pSprite->z = newZ;
+        return;
+    }
+
+    // Preliminary new z position of the actor.
+    int newZ = actor[spriteNum].floorz - ACTOR_FLOOR_OFFSET;
+
+    if (A_CheckEnemySprite(pSprite) || (pSprite->picnum == APLAYER && pSprite->owner >= 0))
+    {
+        if (pSprite->zvel > 3084 && pSprite->extra <= 1)
+        {
+            // I'm guessing this DRONE check is from a beta version of the game
+            // where they crashed into the ground when killed
+#ifndef EDUKE32_STANDALONE
+            if (!FURY && !(pSprite->picnum == APLAYER && pSprite->extra > 0) && pSprite->pal != 1 && pSprite->picnum != DRONE)
+            {
+                A_DoGuts(spriteNum, JIBS6, 15);
+                A_PlaySound(SQUISHED, spriteNum);
+                A_Spawn(spriteNum, BLOODPOOL);
+            }
+#endif
+            actor[spriteNum].htpicnum = SHOTSPARK1;
+            actor[spriteNum].htextra = 1;
+            pSprite->zvel = 0;
+        }
+        else if (pSprite->zvel > 2048 && sector[pSprite->sectnum].lotag != ST_1_ABOVE_WATER)
+        {
+            int16_t newsect = pSprite->sectnum;
+
+            pushmove(&pSprite->xyz, &newsect, 128, 4 << 8, 4 << 8, CLIPMASK0);
+            if ((unsigned)newsect < MAXSECTORS)
+                changespritesect(spriteNum, newsect);
+
+#ifndef EDUKE32_STANDALONE
+            if (!FURY)
+                A_PlaySound(THUD, spriteNum);
+#endif
+        }
+    }
+
+    if (sector[pSprite->sectnum].lotag == ST_1_ABOVE_WATER && actor[spriteNum].floorz == yax_getflorzofslope(pSprite->sectnum, pSprite->xy))
+    {
+        pSprite->z = newZ + A_GetWaterZOffset(spriteNum);
+        return;
+    }
+
+    pSprite->z = newZ;
+    pSprite->zvel = 0;
+}
+
 static inline void X_AlterAng(int a)
 {
-    intptr_t *moveptr = (intptr_t *)g_t[1];
-    int ticselapsed = (g_t[0])&31;
+    int const elapsedTics = (AC_COUNT(g_t)) & 31;
 
-    g_sp->xvel += (*moveptr-g_sp->xvel)/5;
-    if (g_sp->zvel < 648) g_sp->zvel += ((*(moveptr+1)<<4)-g_sp->zvel)/5;
+    auto const moveptr = apScript + AC_MOVE_ID(g_t);
+    auto& hvel = moveptr[0];
+    auto& vvel = moveptr[1];
+
+    g_sp->xvel += (hvel - g_sp->xvel) / 5;
+    if (g_sp->zvel < 648)
+        g_sp->zvel += ((vvel << 4) - g_sp->zvel) / 5;
 
     if (A_CheckEnemySprite(g_sp) && g_sp->extra <= 0) // hack
         return;
 
-    if (a&seekplayer)
+    if (a & seekplayer)
     {
         int aang = g_sp->ang, angdif, goalang;
         int j = g_player[g_p].ps->holoduke_on;
 
         // NOTE: looks like 'owner' is set to target sprite ID...
 
-        if (j >= 0 && cansee(sprite[j].x,sprite[j].y,sprite[j].z,sprite[j].sectnum,g_sp->x,g_sp->y,g_sp->z,g_sp->sectnum))
+        if (j >= 0 && cansee(sprite[j].x, sprite[j].y, sprite[j].z, sprite[j].sectnum, g_sp->x, g_sp->y, g_sp->z, g_sp->sectnum))
             g_sp->owner = j;
         else g_sp->owner = g_player[g_p].ps->i;
 
         if (sprite[g_sp->owner].picnum == APLAYER)
-            goalang = getangle(actor[g_i].lastvx-g_sp->x,actor[g_i].lastvy-g_sp->y);
+            goalang = getangle(actor[g_i].lastvx - g_sp->x, actor[g_i].lastvy - g_sp->y);
         else
-            goalang = getangle(sprite[g_sp->owner].x-g_sp->x,sprite[g_sp->owner].y-g_sp->y);
+            goalang = getangle(sprite[g_sp->owner].x - g_sp->x, sprite[g_sp->owner].y - g_sp->y);
 
         if (g_sp->xvel && g_sp->picnum != DRONE)
         {
-            angdif = G_GetAngleDelta(aang,goalang);
+            angdif = G_GetAngleDelta(aang, goalang);
 
-            if (ticselapsed < 2)
+            if (elapsedTics < 2)
             {
                 if (klabs(angdif) < 256)
                 {
-                    j = 128-(krand()&256);
+                    j = 128 - (krand() & 256);
                     g_sp->ang += j;
                     if (A_GetHitscanRange(g_i) < 844)
                         g_sp->ang -= j;
                 }
             }
-            else if (ticselapsed > 18 && ticselapsed < 26) // choose
+            else if (elapsedTics > 18 && elapsedTics < 26) // choose
             {
-                if (klabs(angdif>>2) < 128) g_sp->ang = goalang;
-                else g_sp->ang += angdif>>2;
+                if (klabs(angdif >> 2) < 128) g_sp->ang = goalang;
+                else g_sp->ang += angdif >> 2;
             }
         }
         else g_sp->ang = goalang;
     }
 
-    if (ticselapsed < 1)
+    if (elapsedTics < 1)
     {
         int j = 2;
-        if (a&furthestdir)
+        if (a & furthestdir)
         {
-            g_sp->ang = A_GetFurthestAngle(g_i,j);
+            g_sp->ang = A_GetFurthestAngle(g_i, j);
             g_sp->owner = g_player[g_p].ps->i;
         }
 
-        if (a&fleeenemy)
+        if (a & fleeenemy)
         {
-            g_sp->ang = A_GetFurthestAngle(g_i,j); // += angdif; //  = G_GetAngleDelta(aang,goalang)>>1;
+            g_sp->ang = A_GetFurthestAngle(g_i, j); // += angdif; //  = G_GetAngleDelta(aang,goalang)>>1;
         }
     }
 }
@@ -493,9 +616,8 @@ static void X_Move(void)
     int daxvel;
     int deadflag = (A_CheckEnemySprite(g_sp) && g_sp->extra <= 0);
 
-    int movflags = g_sp->hitag;
-    if (movflags == -1)
-        movflags = 0;
+    auto const movflagsptr = &AC_MOVFLAGS(g_sp, &actor[g_i]);
+    int const movflags = (*movflagsptr == (remove_pointer_t<decltype(movflagsptr)>) - 1) ? 0 : *movflagsptr;
 
     AC_COUNT(g_t)++;
 
@@ -510,9 +632,9 @@ static void X_Move(void)
     if (movflags & face_player && !deadflag)
     {
         if (g_player[g_p].ps->newowner >= 0)
-            goalang = getangle(g_player[g_p].ps->opos.x-g_sp->x,g_player[g_p].ps->opos.y-g_sp->y);
-        else goalang = getangle(g_player[g_p].ps->pos.x-g_sp->x,g_player[g_p].ps->pos.y-g_sp->y);
-        angdif = G_GetAngleDelta(g_sp->ang,goalang)>>2;
+            goalang = getangle(g_player[g_p].ps->opos.x - g_sp->x, g_player[g_p].ps->opos.y - g_sp->y);
+        else goalang = getangle(g_player[g_p].ps->pos.x - g_sp->x, g_player[g_p].ps->pos.y - g_sp->y);
+        angdif = G_GetAngleDelta(g_sp->ang, goalang) >> 2;
         if ((angdif > -8 && angdif < 0) || (angdif < 8 && angdif > 0))
             angdif *= 2;
         g_sp->ang += angdif;
@@ -524,9 +646,9 @@ static void X_Move(void)
     if (movflags & face_player_slow && !deadflag)
     {
         if (g_player[g_p].ps->newowner >= 0)
-            goalang = getangle(g_player[g_p].ps->opos.x-g_sp->x,g_player[g_p].ps->opos.y-g_sp->y);
-        else goalang = getangle(g_player[g_p].ps->pos.x-g_sp->x,g_player[g_p].ps->pos.y-g_sp->y);
-        angdif = G_GetAngleDelta(g_sp->ang,goalang)>>4;
+            goalang = getangle(g_player[g_p].ps->opos.x - g_sp->x, g_player[g_p].ps->opos.y - g_sp->y);
+        else goalang = getangle(g_player[g_p].ps->pos.x - g_sp->x, g_player[g_p].ps->pos.y - g_sp->y);
+        angdif = G_GetAngleDelta(g_sp->ang, goalang) >> 4;
         if ((angdif > -8 && angdif < 0) || (angdif < 8 && angdif > 0))
             angdif *= 2;
         g_sp->ang += angdif;
@@ -540,20 +662,32 @@ static void X_Move(void)
 
     if (movflags & face_player_smart && !deadflag)
     {
-        int newx = g_player[g_p].ps->pos.x+(g_player[g_p].ps->vel.x/768);
-        int newy = g_player[g_p].ps->pos.y+(g_player[g_p].ps->vel.y/768);
+        int newx = g_player[g_p].ps->pos.x + (g_player[g_p].ps->vel.x / 768);
+        int newy = g_player[g_p].ps->pos.y + (g_player[g_p].ps->vel.y / 768);
 
-        goalang = getangle(newx-g_sp->x,newy-g_sp->y);
-        angdif = G_GetAngleDelta(g_sp->ang,goalang)>>2;
+        goalang = getangle(newx - g_sp->x, newy - g_sp->y);
+        angdif = G_GetAngleDelta(g_sp->ang, goalang) >> 2;
         if ((angdif > -8 && angdif < 0) || (angdif < 8 && angdif > 0))
             angdif *= 2;
         g_sp->ang += angdif;
     }
 
-    intptr_t* moveptr = (intptr_t *)AC_MOVE_ID(g_t);
+    if (EDUKE32_PREDICT_FALSE((unsigned)AC_MOVE_ID(g_t) >= (unsigned)g_scriptSize - 1))
+    {
+        AC_MOVE_ID(g_t) = 0;
+        VLOG_F(LOG_VM, "clearing bad moveptr for actor %d (%d)", g_i, TrackerCast(g_sp->picnum));
+        return;
+    }
 
-    if (movflags & geth) g_sp->xvel += (*moveptr-g_sp->xvel)>>1;
-    if (movflags & getv) g_sp->zvel += ((*(moveptr+1)<<4)-g_sp->zvel)>>1;
+    auto const moveptr = apScript + AC_MOVE_ID(g_t);
+    auto& hvel = moveptr[0];
+    auto& vvel = moveptr[1];
+
+    if (movflags & geth)
+        g_sp->xvel += (hvel - g_sp->xvel) >> 1;
+
+    if (movflags & getv)
+        g_sp->zvel += (16 * vvel - g_sp->zvel) >> 1;
 
     if (movflags & dodgebullet && !deadflag)
         A_Dodge(g_sp);
@@ -575,16 +709,16 @@ static void X_Move(void)
                 if (g_sp->picnum == COMMANDER)
                 {
                     actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->xy);
-                    if (g_sp->z > (l-(8<<8)))
+                    if (g_sp->z > (l - (8 << 8)))
                     {
-                        if (g_sp->z > (l-(8<<8))) g_sp->z = l-(8<<8);
+                        if (g_sp->z > (l - (8 << 8))) g_sp->z = l - (8 << 8);
                         g_sp->zvel = 0;
                     }
 
                     actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
-                    if ((g_sp->z-l) < (80<<8))
+                    if ((g_sp->z - l) < (80 << 8))
                     {
-                        g_sp->z = l+(80<<8);
+                        g_sp->z = l + (80 << 8);
                         g_sp->zvel = 0;
                     }
                 }
@@ -593,15 +727,15 @@ static void X_Move(void)
                     if (g_sp->zvel > 0)
                     {
                         actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->xy);
-                        if (g_sp->z > (l-(30<<8)))
-                            g_sp->z = l-(30<<8);
+                        if (g_sp->z > (l - (30 << 8)))
+                            g_sp->z = l - (30 << 8);
                     }
                     else
                     {
                         actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
-                        if ((g_sp->z-l) < (50<<8))
+                        if ((g_sp->z - l) < (50 << 8))
                         {
-                            g_sp->z = l+(50<<8);
+                            g_sp->z = l + (50 << 8);
                             g_sp->zvel = 0;
                         }
                     }
@@ -614,17 +748,17 @@ static void X_Move(void)
                 if (g_sp->zvel < 0)
                 {
                     l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
-                    if ((g_sp->z-l) < (66<<8))
+                    if ((g_sp->z - l) < (66 << 8))
                     {
-                        g_sp->z = l+(66<<8);
+                        g_sp->z = l + (66 << 8);
                         g_sp->zvel >>= 1;
                     }
                 }
             }
         }
         else if (g_sp->picnum == APLAYER)
-            if ((g_sp->z-actor[g_i].ceilingz) < (32<<8))
-                g_sp->z = actor[g_i].ceilingz+(32<<8);
+            if ((g_sp->z - actor[g_i].ceilingz) < (32 << 8))
+                g_sp->z = actor[g_i].ceilingz + (32 << 8);
 
         daxvel = g_sp->xvel;
         angdif = g_sp->ang;
@@ -634,8 +768,8 @@ static void X_Move(void)
             if (g_x < 960 && g_sp->xrepeat > 16)
             {
 
-                daxvel = -(1024-g_x);
-                angdif = getangle(g_player[g_p].ps->pos.x-g_sp->x,g_player[g_p].ps->pos.y-g_sp->y);
+                daxvel = -(1024 - g_x);
+                angdif = getangle(g_player[g_p].ps->pos.x - g_sp->x, g_player[g_p].ps->pos.y - g_sp->y);
 
                 if (g_x < 512)
                 {
@@ -644,18 +778,18 @@ static void X_Move(void)
                 }
                 else
                 {
-                    g_player[g_p].ps->vel.x = mulscale(g_player[g_p].ps->vel.x,g_player[g_p].ps->runspeed-0x2000,16);
-                    g_player[g_p].ps->vel.y = mulscale(g_player[g_p].ps->vel.y,g_player[g_p].ps->runspeed-0x2000,16);
+                    g_player[g_p].ps->vel.x = mulscale(g_player[g_p].ps->vel.x, g_player[g_p].ps->runspeed - 0x2000, 16);
+                    g_player[g_p].ps->vel.y = mulscale(g_player[g_p].ps->vel.y, g_player[g_p].ps->runspeed - 0x2000, 16);
                 }
             }
             else if (g_sp->picnum != DRONE && g_sp->picnum != SHARK && g_sp->picnum != COMMANDER)
             {
-                if(g_player[g_p].ps->actorsqu == g_i)
+                if (g_player[g_p].ps->actorsqu == g_i)
                     return;
 
                 if (!A_CheckSpriteFlags(g_i, SFLAG_SMOOTHMOVE))
                 {
-                    if (AC_COUNT(g_t)&1)
+                    if (AC_COUNT(g_t) & 1)
                         return;
 
                     daxvel <<= 1;
@@ -669,15 +803,14 @@ static void X_Move(void)
 
     if (isEnemy)
     {
-        if (sector[g_sp->sectnum].ceilingstat&1)
-            g_sp->shade += (sector[g_sp->sectnum].ceilingshade-g_sp->shade)>>1;
-        else g_sp->shade += (sector[g_sp->sectnum].floorshade-g_sp->shade)>>1;
+        if (sector[g_sp->sectnum].ceilingstat & 1)
+            g_sp->shade += (sector[g_sp->sectnum].ceilingshade - g_sp->shade) >> 1;
+        else g_sp->shade += (sector[g_sp->sectnum].floorshade - g_sp->shade) >> 1;
 
         if (sector[g_sp->sectnum].floorpicnum == MIRROR)
             A_DeleteSprite(g_i);
     }
 }
-
 
 void addweapon_maybeswitch(DukePlayer_t *ps, int32_t weap)
 {
@@ -843,6 +976,33 @@ static int X_DoExecute(void)
 
     switch (tw)
     {
+        case CON_LEFTBRACE:
+            insptr++;
+            while (!X_DoExecute());
+            break;
+
+        case CON_RIGHTBRACE:
+            insptr++;
+            return 1;
+
+        case CON_SETVAR_GLOBAL:
+            insptr++;
+            aGameVars[*insptr].val.lValue = insptr[1];
+            insptr += 2;
+            break;
+
+        case CON_SETVAR_ACTOR:
+            insptr++;
+            aGameVars[*insptr].val.plValues[g_i & (MAXSPRITES - 1)] = insptr[1];
+            insptr += 2;
+            break;
+
+        case(CON_SETVAR_PLAYER) :
+            insptr++;
+            aGameVars[*insptr].val.plValues[g_p & (MAXPLAYERS - 1)] = insptr[1];
+            insptr += 2;
+            break;
+
     case CON_REDEFINEQUOTE:
         insptr++;
         {
@@ -1006,20 +1166,21 @@ static int X_DoExecute(void)
 
     case CON_AI:
         insptr++;
-        //Following changed to use pointersizes
-        AC_AI_ID(g_t) = *insptr++; // Ai
-        AC_ACTION_ID(g_t) = *(intptr_t *)(AC_AI_ID(g_t)); // Action
+        // Following changed to use pointersizes
+        AC_AI_ID(g_t) = *insptr++;                         // Ai
+        AC_ACTION_ID(g_t) = *(apScript + AC_AI_ID(g_t));  // Action
 
+        // NOTE: "if" check added in r1155. It used to be movflags pointer though.
         if (AC_AI_ID(g_t))
-            AC_MOVE_ID(g_t) = *(((intptr_t *)AC_AI_ID(g_t))+1); // move
+            AC_MOVE_ID(g_t) = *(apScript + AC_AI_ID(g_t) + 1);  // move
 
-        g_sp->hitag = *(((intptr_t *)AC_AI_ID(g_t))+2); // move flags
+        g_sp->hitag = *(apScript + AC_AI_ID(g_t) + 2);  // move flags
 
         AC_COUNT(g_t) = 0;
         AC_ACTION_COUNT(g_t) = 0;
         AC_CURFRAME(g_t) = 0;
 
-        if (!A_CheckEnemySprite(g_sp) || (g_sp->extra > 0)) // hack
+        if ((int)!A_CheckEnemySprite(g_sp) | (int)(g_sp->extra > 0))  // hack
             if (g_sp->hitag & random_angle)
                 g_sp->ang = krand() & 2047;
         break;
@@ -1272,97 +1433,14 @@ static int X_DoExecute(void)
 
     case CON_FALL:
         insptr++;
-        {
-            g_sp->xoffset = g_sp->yoffset = 0;
-
-            j = g_spriteGravity;
-
-            if (G_CheckForSpaceCeiling(g_sp->sectnum) || sector[g_sp->sectnum].lotag == ST_2_UNDERWATER)
-                j = g_spriteGravity / 6;
-            else if (G_CheckForSpaceFloor(g_sp->sectnum))
-                j = 0;
-
-            if (!actor[g_i].cgg-- || (sector[g_sp->sectnum].floorstat & 2))
-            {
-                A_GetZLimits(g_i);
-                actor[g_i].cgg = 3;
-            }
-
-            if (g_sp->z < (actor[g_i].floorz - ACTOR_FLOOR_OFFSET))
-            {
-                g_sp->zvel = min(6144, g_sp->zvel + j);
-                int newZ = g_sp->z + g_sp->zvel;
-
-                if (yax_getbunch(g_sp->sectnum, YAX_FLOOR) >= 0 && (sector[g_sp->sectnum].floorstat & 512) == 0)
-                    setspritez(g_i, &g_sp->xyz);
-                else if (newZ > (actor[g_i].floorz - ACTOR_FLOOR_OFFSET))
-                    newZ = (actor[g_i].floorz - ACTOR_FLOOR_OFFSET);
-
-                g_sp->z = newZ;
-                break;
-            }
-
-            g_sp->z = actor[g_i].floorz - ACTOR_FLOOR_OFFSET;
-
-            if (A_CheckEnemySprite(g_sp) || (g_sp->picnum == APLAYER && g_sp->owner >= 0))
-            {
-                if (g_sp->zvel > 3084 && g_sp->extra <= 1)
-                {
-                    if (!(g_sp->picnum == APLAYER && g_sp->extra > 0) && g_sp->pal != 1 && g_sp->picnum != DRONE)
-                    {
-                        A_DoGuts(g_i, JIBS6, 15);
-                        A_PlaySound(SQUISHED, g_i);
-                        A_Spawn(g_i, BLOODPOOL);
-                    }
-                    actor[g_i].htpicnum = SHOTSPARK1;
-                    actor[g_i].htextra = 1;
-                    g_sp->zvel = 0;
-                }
-                else if (g_sp->zvel > 2048 && sector[g_sp->sectnum].lotag != ST_1_ABOVE_WATER)
-                {
-                    j = g_sp->sectnum;
-                    pushmove(&g_sp->xyz, (short*)&j, 128L, (4L << 8), (4L << 8), CLIPMASK0);
-
-                    if (j != g_sp->sectnum && j >= 0 && j < MAXSECTORS)
-                        changespritesect(g_i, j);
-
-                    A_PlaySound(THUD, g_i);
-                }
-            }
-
-            if (g_sp->z > (actor[g_i].floorz - ACTOR_FLOOR_OFFSET))
-            {
-                A_GetZLimits(g_i);
-                if (actor[g_i].floorz != sector[g_sp->sectnum].floorz)
-                    g_sp->z = (actor[g_i].floorz - ACTOR_FLOOR_OFFSET);
-                break;
-            }
-            else if (sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER)
-            {
-                intptr_t* moveptr = (intptr_t*)g_t[1];
-
-                if(!A_CheckSpriteFlags(g_i, SFLAG_NOWATERDIP))
-                {
-                    // fix for flying/jumping monsters getting stuck in water
-                    if (!(g_sp->hitag & jumptoplayer_only ||
-                        (g_tile[g_sp->picnum].execPtr && moveptr >= &apScript[0] && moveptr <= (&apScript[0] + g_scriptSize) && *(moveptr + 1))))
-                    {
-                        g_sp->z += (24 << 8);
-                    }
-                }
-                break;
-            }
-            g_sp->zvel = 0;
-        }
+        VM_Fall(g_i, g_sp);
         break;
 
     case CON_ENDA:
     case CON_BREAK:
     case CON_ENDS:
         return 1;
-    case CON_RIGHTBRACE:
-        insptr++;
-        return 1;
+
     case CON_ADDAMMO:
         insptr++;
         {
@@ -1506,11 +1584,6 @@ static int X_DoExecute(void)
         insptr = tempscrptr;
     }
     break;
-
-    case CON_LEFTBRACE:
-        insptr++;
-        while (!X_DoExecute());
-        break;
 
     case CON_MOVE:
         insptr++;
@@ -1904,44 +1977,45 @@ static int X_DoExecute(void)
             int i = Gv_GetVarX(*insptr++);
             j = Gv_GetVarX(*insptr++);
 
-                if ((i<0 || i>=MAXSPRITES) && g_scriptSanityChecks)
-                {
-                    OSD_Printf(CON_ERROR "Invalid sprite: %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),i);
-                    break;
-                }
-                if ((j<0 || j>=MAXSTATUS) && g_scriptSanityChecks)
-                {
-                    OSD_Printf(CON_ERROR "Invalid statnum: %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),j);
-                    break;
-                }
-                if (sprite[i].statnum == j) break;
-
-                /* initialize actor data when changing to an actor statnum because there's usually
-                   garbage left over from being handled as a hard coded object */
-
-                if (sprite[i].statnum > STAT_ZOMBIEACTOR && (j == STAT_ACTOR || j == STAT_ZOMBIEACTOR))
-                {
-                    actor[i].lastvx = 0;
-                    actor[i].lastvy = 0;
-                    actor[i].timetosleep = 0;
-                    actor[i].cgg = 0;
-                    actor[i].movflag = 0;
-                    actor[i].tempang = 0;
-                    actor[i].dispicnum = 0;
-                    T1(i)=T2(i)=T3(i)=T4(i)=T5(i)=T6(i)=T7(i)=T8(i)=T9(i)=0;
-                    actor[i].flags = 0;
-                    sprite[i].hitag = 0;
-
-                    // pointers
-                    if (g_tile[sprite[i].picnum].execPtr)
-                    {
-                        T5(i) = *(g_tile[sprite[i].picnum].execPtr+1);
-                        T2(i) = *(g_tile[sprite[i].picnum].execPtr+2);
-                        sprite[i].hitag = *(g_tile[sprite[i].picnum].execPtr+3);
-                    }
-                }
-                changespritestat(i,j);
+            if ((i < 0 || i >= MAXSPRITES) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "Invalid sprite: %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), i);
                 break;
+            }
+            if ((j < 0 || j >= MAXSTATUS) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "Invalid statnum: %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), j);
+                break;
+            }
+            if (sprite[i].statnum == j) break;
+
+            /* initialize actor data when changing to an actor statnum because there's usually
+               garbage left over from being handled as movflags hard coded object */
+
+            if (sprite[i].statnum > STAT_ZOMBIEACTOR && (j == STAT_ACTOR || j == STAT_ZOMBIEACTOR))
+            {
+                actor[i].lastvx = 0;
+                actor[i].lastvy = 0;
+                actor[i].timetosleep = 0;
+                actor[i].cgg = 0;
+                actor[i].movflag = 0;
+                actor[i].tempang = 0;
+                actor[i].dispicnum = 0;
+                T1(i) = T2(i) = T3(i) = T4(i) = T5(i) = T6(i) = T7(i) = T8(i) = T9(i) = 0;
+                actor[i].flags = 0;
+                sprite[i].hitag = 0;
+
+                if (G_TileHasActor(sprite[i].picnum))
+                {
+                    auto actorptr = g_tile[sprite[i].picnum].execPtr;
+                    // offsets
+                    AC_ACTION_ID(actor[i].t_data) = actorptr[1];
+                    AC_MOVE_ID(actor[i].t_data) = actorptr[2];
+                    AC_MOVFLAGS(&sprite[i], pActor) = actorptr[3];  // ai bits (movflags)
+                }
+            }
+            changespritestat(i, j);
+            break;
         }
 
     case CON_STARTLEVEL:
@@ -3299,22 +3373,88 @@ static int X_DoExecute(void)
     case CON_QSPRINTF:
         insptr++;
         {
-            int dq = *insptr++, sq = *insptr++;
-            if ((apStrings[sq] == NULL || apStrings[dq] == NULL) && g_scriptSanityChecks)
-            {
-                OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),apStrings[sq] ? dq : sq);
-                insptr += 4;
-                break;
-            }
+            int const outputQuote = Gv_GetVarX(*insptr++);
+            int const inputQuote = Gv_GetVarX(*insptr++);
 
-            {
-                int var1 = Gv_GetVarX(*insptr++), var2 = Gv_GetVarX(*insptr++);
-                int var3 = Gv_GetVarX(*insptr++), var4 = Gv_GetVarX(*insptr++);
+            VM_ABORT_IF((apStrings[inputQuote] == nullptr) | (apStrings[outputQuote] == nullptr), "null quote %d", apStrings[inputQuote] ? outputQuote : inputQuote);
 
-                Bstrcpy(tempbuf,apStrings[sq]);
-                Bsprintf(apStrings[dq],tempbuf,var1,var2,var3,var4);
-                break;
-            }
+            auto& inBuf = apStrings[inputQuote];
+
+            int32_t arg[32];
+            char    outBuf[MAXQUOTELEN];
+
+            int const quoteLen = Bstrlen(inBuf);
+
+            int inputPos = 0;
+            int outputPos = 0;
+            int argIdx = 0;
+
+            while (VM_DECODE_INST(*insptr) != CON_NULLOP && argIdx < 32)
+                arg[argIdx++] = Gv_GetVarX(*insptr++);
+
+            int numArgs = argIdx;
+
+            insptr++;  // skip the NOP
+
+            argIdx = 0;
+
+            do
+            {
+                while (inputPos < quoteLen && outputPos < MAXQUOTELEN && inBuf[inputPos] != '%')
+                    outBuf[outputPos++] = inBuf[inputPos++];
+
+                if (inBuf[inputPos] == '%')
+                {
+                    inputPos++;
+                    switch (inBuf[inputPos])
+                    {
+                        case 'l':
+                            if (inBuf[inputPos + 1] != 'd')
+                            {
+                                // write the % and l
+                                outBuf[outputPos++] = inBuf[inputPos - 1];
+                                outBuf[outputPos++] = inBuf[inputPos++];
+                                break;
+                            }
+                            inputPos++;
+                            fallthrough__;
+                        case 'd':
+                        {
+                            if (argIdx >= numArgs)
+                                goto finish_qsprintf;
+
+                            char buf[16];
+                            Bsprintf(buf, "%d", arg[argIdx++]);
+
+                            int const bufLen = Bstrlen(buf);
+                            Bmemcpy(&outBuf[outputPos], buf, bufLen);
+                            outputPos += bufLen;
+                            inputPos++;
+                        }
+                        break;
+
+                        case 's':
+                        {
+                            if (argIdx >= numArgs)
+                                goto finish_qsprintf;
+
+                            int const argLen = Bstrlen(apStrings[arg[argIdx]]);
+
+                            Bmemcpy(&outBuf[outputPos], apStrings[arg[argIdx]], argLen);
+                            outputPos += argLen;
+                            argIdx++;
+                            inputPos++;
+                        }
+                        break;
+
+                        default: outBuf[outputPos++] = inBuf[inputPos - 1]; break;
+                    }
+                }
+            } while (inputPos < quoteLen && outputPos < MAXQUOTELEN);
+        finish_qsprintf:
+            outBuf[outputPos] = '\0';
+            Bstrncpyz(apStrings[outputQuote], outBuf, MAXQUOTELEN);
+            break;
         }
 
     case CON_ADDLOG:
@@ -3988,6 +4128,14 @@ static int X_DoExecute(void)
         Gv_SetVarX(j,mulscale(rand(), Gv_GetVarX(*insptr++)+1, 15));
         break;
 
+    case CON_INV:
+        if ((aGameVars[insptr[1]].dwFlags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK)) == 0)
+            aGameVars[insptr[1]].val.lValue = -aGameVars[insptr[1]].val.lValue;
+        else
+            Gv_SetVarX(insptr[1], -Gv_GetVarX(insptr[1]));
+        insptr += 2;
+        break;
+
     case CON_GMAXAMMO:
         insptr++;
         j=Gv_GetVarX(*insptr++);
@@ -4568,6 +4716,31 @@ void A_LoadActor(int iActor)
         A_DeleteSprite(g_i);
 }
 
+void VM_UpdateAnim(int const spriteNum, int32_t* const pData)
+{
+    size_t const actionofs = AC_ACTION_ID(pData);
+    auto const   actionptr = &apScript[actionofs];
+
+    if ((actionofs == 0) | (actionofs + (ACTION_PARAM_COUNT - 1) >= (unsigned)g_scriptSize))
+        return;
+
+    int const action_frames = actionptr[ACTION_NUMFRAMES];
+    int const action_incval = actionptr[ACTION_INCVAL];
+    int const action_delay = actionptr[ACTION_DELAY];
+    auto actionticsptr = &AC_ACTIONTICS(&sprite[spriteNum], &actor[spriteNum]);
+    *actionticsptr += TICSPERFRAME;
+
+    if (*actionticsptr > action_delay)
+    {
+        *actionticsptr = 0;
+        AC_ACTION_COUNT(pData)++;
+        AC_CURFRAME(pData) += action_incval;
+    }
+
+    if (klabs(AC_CURFRAME(pData)) >= klabs(action_frames * action_incval))
+        AC_CURFRAME(pData) = 0;
+}
+
 void A_Execute(int iActor,int iPlayer,int lDist)
 {
 //    int temp, temp2;
@@ -4580,6 +4753,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     g_sp = &sprite[g_i];    // Pointer to sprite structure
     g_t = &actor[g_i].t_data[0];   // Sprite's 'extra' data
 
+    VM_UpdateAnim(g_i, g_t);
     insptr = 4 + (g_tile[g_sp->picnum].execPtr);
 
     g_killitFlag = 0;
@@ -4590,26 +4764,6 @@ void A_Execute(int iActor,int iPlayer,int lDist)
             G_AddMonsterKills(g_i, 1);
         A_DeleteSprite(g_i);
         return;
-    }
-
-    /* Qbix: Changed variables to be aware of the sizeof *insptr
-     * (wether it is int vs intptr_t), Although it is specificly cast to intptr_t*
-     * which might be corrected if the code is converted to use offsets */
-
-    // [JM] This is VM_UpdateAnim in mainline. This crap needs to go for 64-bit builds but I need assistance.
-    if (AC_ACTION_ID(g_t))
-    {
-        g_sp->lotag += TICSPERFRAME;
-
-        if (g_sp->lotag > *(intptr_t *)(AC_ACTION_ID(g_t)+4*sizeof(*insptr)))
-        {
-            AC_ACTION_COUNT(g_t)++;
-            g_sp->lotag = 0;
-            AC_CURFRAME(g_t) +=  *(intptr_t *)(AC_ACTION_ID(g_t)+3*sizeof(*insptr));
-        }
-
-        if (klabs(AC_CURFRAME(g_t)) >= klabs(*(intptr_t *)(AC_ACTION_ID(g_t)+sizeof(*insptr)) * *(intptr_t *)(AC_ACTION_ID(g_t)+3*sizeof(*insptr))))
-            AC_CURFRAME(g_t) = 0;
     }
 
     while (!X_DoExecute());

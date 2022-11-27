@@ -763,7 +763,7 @@ extern int g_numRealPalettes;
 
 extern char CheatStrings[][MAXCHEATLEN];
 
-extern int g_numQuoteRedefinitions;
+extern int g_numXStrings;
 
 // key bindings stuff
 typedef struct {

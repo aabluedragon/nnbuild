@@ -128,16 +128,6 @@ int Gv_ReadSave(int fil)
 
     //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
     //  AddLog(g_szBuf);
-    if (kdfread(apScriptEvents,sizeof(apScriptEvents),1,fil) != 1) goto corrupt;
-    for (i=0;i<MAXGAMEEVENTS;i++)
-        if (VM_HaveEvent(i))
-        {
-            l = (intptr_t)apScriptEvents[i]+(intptr_t)&apScript[0];
-            apScriptEvents[i] = (intptr_t *)l;
-        }
-
-    //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
-    //  AddLog(g_szBuf);
 
     if (kdfread(&savedstate[0],sizeof(savedstate),1,fil) != 1) goto corrupt;
 
@@ -232,20 +222,6 @@ void Gv_WriteSave(FILE *fil)
         dfwrite(aGameArrays[i].szLabel,sizeof(char) * MAXARRAYLABEL, 1, fil);
         dfwrite(aGameArrays[i].plValues,sizeof(intptr_t) * aGameArrays[i].size, 1, fil);
     }
-
-    for (i=0;i<MAXGAMEEVENTS;i++)
-        if (VM_HaveEvent(i))
-        {
-            l = (intptr_t)apScriptEvents[i]-(intptr_t)&apScript[0];
-            apScriptEvents[i] = (intptr_t *)l;
-        }
-    dfwrite(apScriptEvents,sizeof(apScriptEvents),1,fil);
-    for (i=0;i<MAXGAMEEVENTS;i++)
-        if (VM_HaveEvent(i))
-        {
-            l = (intptr_t)apScriptEvents[i]+(intptr_t)&apScript[0];
-            apScriptEvents[i] = (intptr_t *)l;
-        }
 
     for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
         if (g_mapInfo[i].savedstate != NULL)
@@ -821,6 +797,8 @@ void Gv_ResetSystemDefaults(void)
     sysVarIDs.MARKER = Gv_GetVarIndex("MARKER");
     sysVarIDs.FFIRE = Gv_GetVarIndex("FFIRE");
 
+    sysVarIDs.structs = Gv_GetVarIndex("sprite");
+
     for (auto& tile : g_tile)
         if (tile.defproj)
             *tile.proj = *tile.defproj;
@@ -834,6 +812,28 @@ static void Gv_AddSystemVars(void)
     char aszBuf[64];
 
     //AddLog("Gv_AddSystemVars");
+
+    // special vars for struct access
+    // KEEPINSYNC gamedef.h: enum QuickStructureAccess_t (including order)
+    Gv_NewVar("sprite",         -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("__sprite__",     -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("__actor__",      -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("__spriteext__",  -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("sector",         -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("__sector__",     -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("wall",           -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("__wall__",       -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("player",         -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("__player__",     -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("actorvar",       -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("playervar",      -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("tspr",           -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("projectile",     -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("thisprojectile", -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("userdef",        -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("input",          -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("tiledata",       -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    //Gv_NewVar("paldata",        -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
 
     if (NAM_WW2GI)
     {

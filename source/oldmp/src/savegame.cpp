@@ -438,9 +438,9 @@ int32_t G_LoadPlayer(int32_t spot)
         if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
     }
 
-    if (kdfread(&g_numQuoteRedefinitions,sizeof(g_numQuoteRedefinitions),1,fil) != 1) goto corrupt;
+    if (kdfread(&g_numXStrings,sizeof(g_numXStrings),1,fil) != 1) goto corrupt;
 
-    for (i=0; i<g_numQuoteRedefinitions; i++)
+    for (i=0; i<g_numXStrings; i++)
     {
         if (apXStrings[i] != NULL)
             Xfree(apXStrings[i]);
@@ -850,8 +850,8 @@ int32_t G_SavePlayer(int32_t spot)
     }
     dfwrite(&i,sizeof(int32_t),1,fil);
 
-    dfwrite(&g_numQuoteRedefinitions,sizeof(g_numQuoteRedefinitions),1,fil);
-    for (i=0; i<g_numQuoteRedefinitions; i++)
+    dfwrite(&g_numXStrings,sizeof(g_numXStrings),1,fil);
+    for (i=0; i<g_numXStrings; i++)
     {
         if (apXStrings[i] != NULL)
             dfwrite(apXStrings[i],MAXQUOTELEN, 1, fil);
