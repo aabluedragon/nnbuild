@@ -1165,8 +1165,7 @@ static void C_SetScriptSize(int32_t newsize)
             {
                 g_errorCnt++;
                 buildprint("Internal compiler error at ", i, " (0x", hex(i), ")\n");
-                //VM_ScriptInfo(&apScript[i], 16);
-                X_ScriptInfo();
+                VM_ScriptInfo(&apScript[i], 16);
             }
             else
                 apScript[i] -= (intptr_t)apScript;

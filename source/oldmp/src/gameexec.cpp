@@ -54,30 +54,57 @@ static int X_DoExecute(void);
         break;                            \
     }
 
-void X_ScriptInfo(void)
+void VM_ScriptInfo(intptr_t const* const ptr, int const range)
 {
-    intptr_t *p;
-
-    if (!apScript)
+    if (!ptr || (g_currentEvent == -1 && insptr == nullptr))
         return;
 
-    if (insptr)
-    {
-        for (p=insptr-20; p<insptr+20; p++)
-        {
-            VLOG_F(LOG_VM, "%5d: %3d: ",(int32_t)(p - apScript),(int32_t)(p - insptr));
+    int foundInst = 0;
+    int lastLine = 0;
+    char buf[128];
 
-            if (*p>>12&&(*p&0xFFF)<CON_END)
-                VLOG_F(LOG_VM, "%5d %s",(int32_t)(*p>>12),VM_GetKeywordForID(*p & 0xFFF));
-            else
-                VLOG_F(LOG_VM, "%d",(int32_t)*p);
+    for (auto pScript = max<intptr_t const*>(ptr - (range >> 2), apScript),
+        p_end = min<intptr_t const*>(ptr + (range >> 1) + (range >> 2), apScript + g_scriptSize);
+        pScript < p_end;
+        ++pScript)
+    {
+        auto& v = *pScript;
+        int const lineNum = VM_DECODE_LINE_NUMBER(v);
+        int const vmInst = VM_DECODE_INST(v);
+
+        if (lineNum && lineNum >= lastLine && lineNum < g_totalLines && (unsigned)vmInst < CON_OPCODE_END)
+        {
+            lastLine = lineNum;
+
+            if (foundInst == 1)
+                VLOG_F(LOG_VM, "%s", buf);
+            else if (foundInst == 2)
+                LOG_F(ERROR, "%s", buf);
+
+            foundInst = 1;
+
+            if (lineNum == VM_DECODE_LINE_NUMBER(g_tw) || vmInst == VM_DECODE_INST(g_tw))
+                foundInst++;
+
+            Bsprintf(buf, "%8s:%5d: [0x%04x] %s", VM_FILENAME(pScript), lineNum, int32_t((pScript - apScript) * sizeof(intptr_t)), VM_GetKeywordForID(vmInst));
+        }
+        else if (foundInst)
+        {
+            char buf2[16];
+
+            if (bitmap_test(bitptr, pScript - apScript))
+                Bsprintf(buf2, " [0x%04x]", int32_t((pScript - apScript) * sizeof(intptr_t)));
+            else Bsprintf(buf2, " %d", int32_t(*pScript));
+
+            Bstrcat(buf, buf2);
         }
     }
 
-    if (g_i)
-        VLOG_F(LOG_VM, "current actor: %d (%d)",g_i,TrackerCast(g_sp->picnum));
-
-    VLOG_F(LOG_VM, "g_errorLineNum: %d, g_tw: %d",g_errorLineNum,g_tw);
+    if (ptr == insptr)
+    {
+        if (g_sp)
+            VLOG_F(LOG_VM, "current actor: %d (%d)", g_i, TrackerCast(g_sp->picnum));
+    }
 }
 
 void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
@@ -943,21 +970,12 @@ static void G_ShowView(vec3_t vec, fix16_t a, fix16_t horiz, int sect, int ix1, 
     renderSetAspect(viewingRange, yxAspect);
 }
 
+// branch() in mainline.
 static inline void X_DoConditional(int condition)
 {
-    if (condition)
+    if (condition || VM_DECODE_INST(*(insptr = (intptr_t*)insptr[1])) == CON_ELSE)
     {
-        // skip 'else' pointer.. and...
-        insptr+=2;
-        X_DoExecute();
-        return;
-    }
-    insptr = (intptr_t *) *(insptr+1);
-    if (((*insptr)&0xFFF) == CON_ELSE)
-    {
-        // else...
-        // skip 'else' and...
-        insptr+=2;
+        insptr += 2;
         X_DoExecute();
     }
 }
@@ -971,8 +989,10 @@ static int X_DoExecute(void)
     //      Bsprintf(g_szBuf,"Parsing: %d",*insptr);
     //      AddLog(g_szBuf);
 
-    g_errorLineNum = tw>>12;
-    g_tw = tw &= 0xFFF;
+    g_errorLineNum = VM_DECODE_LINE_NUMBER(tw);
+
+    tw = VM_DECODE_INST(tw);
+    g_tw = tw;
 
     switch (tw)
     {
@@ -3920,19 +3940,17 @@ static int X_DoExecute(void)
     case CON_GETACTOR:
         insptr++;
         {
-            // syntax [gs]etactor[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
+            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   labelId = *insptr++;
+            auto const& actorLabel = ActorLabels[labelId];
+            int const   lParm2 = (actorLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
 
-            int lVar1=*insptr++, lLabelID=*insptr++, lParm2 = 0;
+            VM_ABORT_IF(((unsigned)spriteNum >= MAXSPRITES) | ((unsigned)lParm2 > (unsigned)actorLabel.maxParm2),
+                "%s[%d] invalid for sprite %d", actorLabel.name, lParm2, spriteNum);
 
-            if (ActorLabels[lLabelID].flags & LABEL_HASPARM2)
-                lParm2=Gv_GetVarX(*insptr++);
+            int const lVar2 = *insptr++;
 
-            {
-                int lVar2=*insptr++;
-
-                X_AccessSprite(tw==CON_SETACTOR, lVar1, lLabelID, lVar2, lParm2);
-            }
+            X_AccessSprite(tw == CON_SETACTOR, spriteNum, labelId, lVar2, lParm2);
             break;
         }
 
@@ -4358,8 +4376,10 @@ static int X_DoExecute(void)
 
     case CON_IFVARVARN:
         insptr++;
-        j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) != Gv_GetVarX(*(insptr)));
+        j = Gv_GetVarX(*insptr++);
+        j = (j != Gv_GetVarX(*insptr++));
+        insptr--;
+        X_DoConditional(j);
         break;
 
     case CON_IFVARVARE:
@@ -4382,8 +4402,8 @@ static int X_DoExecute(void)
 
     case CON_IFVARE:
         insptr++;
-        j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) == *insptr);
+        j = Gv_GetVarX(*insptr++);
+        X_DoConditional(j == *insptr);
         break;
 
     case CON_IFVARN:
@@ -4675,7 +4695,9 @@ static int X_DoExecute(void)
                            *(insptr-5),*(insptr-4),*(insptr-3),*(insptr-2),*(insptr-1),*insptr,*(insptr+1),
                            *(insptr+2),*(insptr+3),*(insptr+4),*(insptr+5),g_i,g_sp->picnum);
                 OSD_Printf("g_errorLineNum: %d, g_tw: %d\n",g_errorLineNum,g_tw);*/
-        X_ScriptInfo();
+        VM_ScriptInfo(insptr, 64);
+
+        VLOG_F(LOG_VM, "unknown opcode: %d", tw);
 
         G_GameExit("An error has occurred in the EDuke32 CON executor.\n\n"
                    "If you are an end user, please e-mail the file eduke32.log\n"

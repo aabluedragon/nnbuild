@@ -5,7 +5,7 @@
 #include "gamedef.h"  // vmstate_t
 #include "sector.h"  // mapstate_t
 
-void X_ScriptInfo(void);
+void VM_ScriptInfo(intptr_t const* const ptr, int const range);
 
 void X_OnEvent(int iEventID, int sActor, int sPlayer, int lDist);
 int X_OnEventWithReturn(int iEventID, int sActor, int sPlayer, int nReturn);

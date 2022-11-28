@@ -25,8 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "md4.h"
 
-extern char *bitptr;
-
 #define BITPTR_POINTER 1
 
 void ReadSaveGameHeaders(void)
@@ -351,7 +349,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (!g_scriptSize) goto corrupt;
     scriptptrs = (char*)Xcalloc(1,g_scriptSize * sizeof(scriptptrs));
     Xfree(bitptr);
-    bitptr = (char*)Xcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(uint8_t));
+    bitptr = (uint8_t*)Xcalloc(1,(((g_scriptSize+7)>>3)+1) * sizeof(uint8_t));
     if (kdfread(&bitptr[0],sizeof(uint8_t),(g_scriptSize+7)>>3,fil) != ((g_scriptSize+7)>>3)) goto corrupt;
     if (apScript != NULL)
         Xfree(apScript);

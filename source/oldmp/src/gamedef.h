@@ -87,6 +87,8 @@ extern char g_scriptFileName[BMAX_PATH];
 extern int g_totalLines,g_lineNumber;
 extern int g_errorCnt,g_warningCnt;
 
+extern uint8_t* bitptr;
+
 typedef struct
 {
     const char  *name;
@@ -669,93 +671,91 @@ enum TileDataLabel_t
 
 enum ScriptKeywords_t
 {
-    CON_DEFINELEVELNAME,    // 0
-    CON_ACTOR,              // 1
-    CON_ADDAMMO,            // 2
-    CON_IFRND,              // 3
-    CON_ENDA,               // 4
-    CON_IFCANSEE,           // 5
-    CON_IFHITWEAPON,        // 6
-    CON_ACTION,             // 7
-    CON_IFPDISTL,           // 8
-    CON_IFPDISTG,           // 9
-    CON_ELSE,               // 10
-    CON_STRENGTH,           // 11
-    CON_BREAK,              // 12
-    CON_SHOOT,              // 13
-    CON_PALFROM,            // 14
-    CON_SOUND,              // 15
-    CON_FALL,               // 16
-    CON_STATE,              // 17
-    CON_ENDS,               // 18
-    CON_DEFINE,             // 19
-    CON_COMMENT,            // 20 deprecated
-    CON_IFAI,               // 21
-    CON_KILLIT,             // 22
-    CON_ADDWEAPON,          // 23
-    CON_AI,                 // 24
-    CON_ADDPHEALTH,         // 25
-    CON_IFDEAD,             // 26
-    CON_IFSQUISHED,         // 27
-    CON_SIZETO,             // 28
-    CON_LEFTBRACE,          // 29
-    CON_RIGHTBRACE,         // 30
-    CON_SPAWN,              // 31
-    CON_MOVE,               // 32
-    CON_IFWASWEAPON,        // 33
-    CON_IFACTION,           // 34
-    CON_IFACTIONCOUNT,      // 35
-    CON_RESETACTIONCOUNT,   // 36
-    CON_DEBRIS,             // 37
-    CON_PSTOMP,             // 38
-    CON_BLOCKCOMMENT,       // 39 deprecated
-    CON_CSTAT,              // 40
-    CON_IFMOVE,             // 41
-    CON_RESETPLAYER,        // 42
-    CON_IFONWATER,          // 43
-    CON_IFINWATER,          // 44
-    CON_IFCANSHOOTTARGET,   // 45
-    CON_IFCOUNT,            // 46
-    CON_RESETCOUNT,         // 47
-    CON_ADDINVENTORY,       // 48
-    CON_IFACTORNOTSTAYPUT,  // 49
-    CON_HITRADIUS,          // 50
-    CON_IFP,                // 51
-    CON_COUNT,              // 52
-    CON_IFACTOR,            // 53
-    CON_MUSIC,              // 54
-    CON_INCLUDE,            // 55
-    CON_IFSTRENGTH,         // 56
-    CON_DEFINESOUND,        // 57
-    CON_GUTS,               // 58
-    CON_IFSPAWNEDBY,        // 59
-    CON_GAMESTARTUP,        // 60
-    CON_WACKPLAYER,         // 61
-    CON_IFGAPZL,            // 62
-    CON_IFHITSPACE,         // 63
-    CON_IFOUTSIDE,          // 64
-    CON_IFMULTIPLAYER,      // 65
-    CON_OPERATE,            // 66
-    CON_IFINSPACE,          // 67
-    CON_DEBUG,              // 68
-    CON_ENDOFGAME,          // 69
-    CON_IFBULLETNEAR,       // 70
-    CON_IFRESPAWN,          // 71
-    CON_IFFLOORDISTL,       // 72
-    CON_IFCEILINGDISTL,     // 73
-    CON_SPRITEPAL,          // 74
-    CON_IFPINVENTORY,       // 75
-    CON_BETANAME,           // 76
-    CON_CACTOR,             // 77
-    CON_IFPHEALTHL,         // 78
-    CON_DEFINEQUOTE,        // 79
-    CON_QUOTE,              // 80
-    CON_IFINOUTERSPACE,     // 81
-    CON_IFNOTMOVING,        // 82
-    CON_RESPAWNHITAG,       // 83
-    CON_TIP,                // 84
-    CON_IFSPRITEPAL,        // 85
-    CON_MONEY,              // 86
+    // ---
+    // Specialized setvar keywords
+    CON_SETVAR_GLOBAL,
+    CON_SETVAR_PLAYER,
+    CON_SETVAR_ACTOR,
+    // ---
+
+    CON_ADDAMMO,
+    CON_IFRND,
+    CON_ENDA,
+    CON_IFCANSEE,
+    CON_IFHITWEAPON,
+    CON_ACTION,
+    CON_IFPDISTL,
+    CON_IFPDISTG,
+    CON_ELSE,
+    CON_STRENGTH,
+    CON_BREAK,
+    CON_SHOOT,
+    CON_PALFROM,
+    CON_SOUND,
+    CON_FALL,
+    CON_STATE,
+    CON_ENDS,
+    CON_COMMENT,
+    CON_IFAI,
+    CON_KILLIT,
+    CON_ADDWEAPON,
+    CON_AI,
+    CON_ADDPHEALTH,
+    CON_IFDEAD,
+    CON_IFSQUISHED,
+    CON_SIZETO,
+    CON_LEFTBRACE,
+    CON_RIGHTBRACE,
+    CON_SPAWN,
+    CON_MOVE,
+    CON_IFWASWEAPON,
+    CON_IFACTION,
+    CON_IFACTIONCOUNT,
+    CON_RESETACTIONCOUNT,
+    CON_DEBRIS,
+    CON_PSTOMP,
+    CON_BLOCKCOMMENT,
+    CON_CSTAT,
+    CON_IFMOVE,
+    CON_RESETPLAYER,
+    CON_IFONWATER,
+    CON_IFINWATER,
+    CON_IFCANSHOOTTARGET,
+    CON_IFCOUNT,
+    CON_RESETCOUNT,
+    CON_ADDINVENTORY,
+    CON_IFACTORNOTSTAYPUT,
+    CON_HITRADIUS,
+    CON_IFP,
+    CON_COUNT,
+    CON_IFACTOR,
+    CON_IFSTRENGTH,
+    CON_GUTS,
+    CON_IFSPAWNEDBY,
+    CON_WACKPLAYER,
+    CON_IFGAPZL,
+    CON_IFHITSPACE,
+    CON_IFOUTSIDE,
+    CON_IFMULTIPLAYER,
+    CON_OPERATE,
+    CON_IFINSPACE,
+    CON_DEBUG,
+    CON_ENDOFGAME,
+    CON_IFBULLETNEAR,
+    CON_IFRESPAWN,
+    CON_IFFLOORDISTL,
+    CON_IFCEILINGDISTL,
+    CON_SPRITEPAL,
+    CON_IFPINVENTORY,
+    CON_CACTOR,
+    CON_IFPHEALTHL,
+    CON_QUOTE,
+    CON_IFINOUTERSPACE,
+    CON_IFNOTMOVING,
+    CON_RESPAWNHITAG,
+    CON_TIP,
+    CON_IFSPRITEPAL,
+    CON_MONEY,
     CON_SOUNDONCE,          // 87
     CON_ADDKILLS,           // 88
     CON_STOPSOUND,          // 89
@@ -767,7 +767,6 @@ enum ScriptKeywords_t
     CON_GETLASTPAL,         // 95
     CON_PKICK,              // 96
     CON_MIKESND,            // 97
-    CON_USERACTOR,          // 98
     CON_SIZEAT,             // 99
     CON_ADDSTRENGTH,        // 100
     CON_CSTATOR,            // 101
@@ -776,12 +775,9 @@ enum ScriptKeywords_t
     CON_TOSSWEAPON,         // 104
     CON_SLEEPTIME,          // 105
     CON_NULLOP,             // 106
-    CON_DEFINEVOLUMENAME,   // 107
-    CON_DEFINESKILLNAME,    // 108
     CON_IFNOSOUNDS,         // 109
     CON_CLIPDIST,           // 110
     CON_IFANGDIFFL,         // 111
-    CON_GAMEVAR,            // 112
     CON_IFVARL,             // 113
     CON_IFVARG,             // 114
     CON_SETVARVAR,          // 115
@@ -792,7 +788,6 @@ enum ScriptKeywords_t
     CON_IFVARVARG,          // 120
     CON_ADDLOGVAR,          // 121
     CON_ADDLOG,             // 122
-    CON_ONEVENT,            // 123
     CON_ENDEVENT,           // 124
     CON_IFVARE,             // 125
     CON_IFVARVARE,          // 126
@@ -806,7 +801,6 @@ enum ScriptKeywords_t
     CON_INITTIMER,          // 134
     CON_STARTTRACK,         // 135
     CON_RANDVAR,            // 136
-    CON_ENHANCED,           // 137
     CON_GETANGLETOTARGET,   // 138
     CON_GETACTORANGLE,      // 139
     CON_SETACTORANGLE,      // 140
@@ -837,7 +831,6 @@ enum ScriptKeywords_t
     CON_GETPLAYER,          // 165
     CON_SETPLAYER,          // 166
     CON_SQRT,               // 167
-    CON_EVENTLOADACTOR,     // 168
     CON_ESPAWNVAR,          // 169
     CON_GETUSERDEF,         // 170
     CON_SETUSERDEF,         // 171
@@ -862,8 +855,6 @@ enum ScriptKeywords_t
     CON_ESHOOT,             // 190
     CON_QSPAWN,             // 191
     CON_ROTATESPRITE,       // 192
-    CON_DEFINEPROJECTILE,   // 193
-    CON_SPRITESHADOW,       // 194
     CON_COS,                // 195
     CON_FINDNEARACTOR3D,    // 197
     CON_FINDNEARACTOR3DVAR, // 198
@@ -882,8 +873,6 @@ enum ScriptKeywords_t
     CON_ANGOFFVAR,          // 211
     CON_WHILEVARN,          // 212
     CON_SWITCH,             // 213
-    CON_CASE,               // 214
-    CON_DEFAULT,            // 215
     CON_ENDSWITCH,          // 216
     CON_SOUNDVAR,           // 218
     CON_FINDPLAYER,         // 219
@@ -899,7 +888,6 @@ enum ScriptKeywords_t
     CON_LDIST,              // 229
     CON_SHIFTVARL,          // 230
     CON_SHIFTVARR,          // 231
-    CON_SPRITENVG,          // 232
     CON_GETANGLE,           // 233
     CON_WHILEVARVARN,       // 234
     CON_HITSCAN,            // 235
@@ -908,8 +896,7 @@ enum ScriptKeywords_t
     CON_SETPLAYERVAR,       // 238
     CON_MULSCALE,           // 239
     CON_SETASPECT,          // 240
-    CON_EZSHOOT,            // 241
-    CON_SPRITENOSHADE,      // 242
+    CON_EZSHOOT,            // 241 
     CON_MOVESPRITE,         // 243
     CON_CHECKAVAILWEAPON,   // 244
     CON_SOUNDONCEVAR,       // 245
@@ -925,117 +912,141 @@ enum ScriptKeywords_t
     CON_GETPROJECTILE,      // 255
     CON_GETTHISPROJECTILE,  // 256
     CON_SETTHISPROJECTILE,  // 257
-    CON_DEFINECHEAT,        // 258
-    CON_CHEATKEYS,          // 259
-    CON_USERQUOTE,          // 260
-    CON_PRECACHE,           // 261
-    CON_DEFINEGAMEFUNCNAME, // 262
-    CON_REDEFINEQUOTE,      // 263
-    CON_QSPRINTF,           // 264
-    CON_GETPNAME,           // 265
-    CON_QSTRCAT,            // 266
-    CON_QSTRCPY,            // 267
-    CON_SETSPRITE,          // 268
-    CON_ROTATEPOINT,        // 269
-    CON_DRAGPOINT,          // 270
-    CON_GETZRANGE,          // 271
-    CON_CHANGESPRITESTAT,   // 272
-    CON_GETCEILZOFSLOPE,    // 273
-    CON_GETFLORZOFSLOPE,    // 274
-    CON_NEARTAG,            // 275
-    CON_DEFINEGAMETYPE,     // 276
-    CON_CHANGESPRITESECT,   // 277
-    CON_SPRITEFLAGS,        // 278
-    CON_SAVEGAMEVAR,        // 279
-    CON_READGAMEVAR,        // 280
-    CON_FINDNEARSPRITE,     // 281
-    CON_FINDNEARSPRITEVAR,  // 282
-    CON_FINDNEARSPRITE3D,   // 283
-    CON_FINDNEARSPRITE3DVAR,// 284
-    CON_DYNAMICREMAP,       // 285
-    CON_SETINPUT,           // 286
-    CON_GETINPUT,           // 287
-    CON_SAVE,               // 288
-    CON_CANSEE,             // 289
-    CON_CANSEESPR,          // 290
-    CON_FINDNEARACTORZ,     // 291
-    CON_FINDNEARACTORZVAR,  // 292
-    CON_FINDNEARSPRITEZ,    // 293
-    CON_FINDNEARSPRITEZVAR, // 294
-    CON_GETCURRADDRESS,     // 297
-    CON_JUMP,               // 298
-    CON_QSTRLEN,            // 299
-    CON_GETINCANGLE,        // 300
-    CON_QUAKE,              // 301
-    CON_SHOWVIEW,           // 302
-    CON_HEADSPRITESTAT,     // 303
-    CON_PREVSPRITESTAT,     // 304
-    CON_NEXTSPRITESTAT,     // 305
-    CON_HEADSPRITESECT,     // 306
-    CON_PREVSPRITESECT,     // 307
-    CON_NEXTSPRITESECT,     // 308
-    CON_GETKEYNAME,         // 309
-    CON_QSUBSTR,            // 310
-    CON_GAMETEXTZ,          // 311
-    CON_DIGITALNUMBERZ,     // 312
-    CON_SPRITENOPAL,        // 313
-    CON_HITRADIUSVAR,       // 314
-    CON_ROTATESPRITE16,     // 315
-    CON_GAMEARRAY,          // 316
-    CON_SETARRAY,           // 317
-    CON_RESIZEARRAY,        // 318
-    CON_WRITEARRAYTOFILE,   // 319
-    CON_READARRAYFROMFILE,  // 320
-    CON_STARTTRACKVAR,      // 321
-    CON_QGETSYSSTR,         // 322
-    CON_GETTICKS,           // 323
-    CON_GETTSPR,            // 324
-    CON_SETTSPR,            // 325
-    CON_SAVEMAPSTATE,       // 326
-    CON_LOADMAPSTATE,       // 327
-    CON_CLEARMAPSTATE,      // 328
-    CON_SCRIPTSIZE,         // 329
-    CON_SETGAMENAME,        // 330
-    CON_CMENU,              // 331
-    CON_GETTIMEDATE,        // 332 
-    CON_ACTIVATECHEAT,      // 333
-    CON_SETGAMEPALETTE,     // 334
-    CON_SETDEFNAME,         // 335
-    CON_SETCFGNAME,         // 336
-    CON_IFVAROR,            // 337
-    CON_IFVARVAROR,         // 338
-    CON_IFVARXOR,           // 339
-    CON_IFVARVARXOR,        // 340
-    CON_IFVAREITHER,        // 341
-    CON_IFVARVAREITHER,     // 342
-    CON_GETARRAYSIZE,       // 343
-    CON_SAVENN,             // 344
-    CON_QSTRDIM,            // 345, was 369 in r3833
-    CON_SCREENTEXT,         // 346, was 370 in r3833
-    CON_RETURN,             // 347
-    CON_ACTORSOUND,         // 348
-    CON_ROTATESPRITEA,      // 349. was 364 in r3610
-    CON_DAMAGEEVENTTILE,	// 350, was 429 in r6771
-    CON_DAMAGEEVENTTILERANGE, // 351, was 430 in r6771
-    CON_GETTEAMNAME,        // 352
-    CON_KLABS,              // 353
-    CON_SHIFTVARVARL,       // 354
-    CON_SHIFTVARVARR,       // 355
-    CON_GETTILEDATA,        // 356
-    CON_SETTILEDATA,        // 357
-    CON_DEFSTATE,           // 358
-    CON_INTERPOLATE,        // 359
+    CON_USERQUOTE,          // 260  
+    CON_REDEFINEQUOTE,
+    CON_QSPRINTF,
+    CON_GETPNAME,
+    CON_QSTRCAT,
+    CON_QSTRCPY,
+    CON_SETSPRITE,
+    CON_ROTATEPOINT,
+    CON_DRAGPOINT,
+    CON_GETZRANGE,
+    CON_CHANGESPRITESTAT,
+    CON_GETCEILZOFSLOPE,
+    CON_GETFLORZOFSLOPE,
+    CON_NEARTAG,
+    CON_CHANGESPRITESECT,
+    CON_SPRITEFLAGS,
+    CON_SAVEGAMEVAR,
+    CON_READGAMEVAR,
+    CON_FINDNEARSPRITE,
+    CON_FINDNEARSPRITEVAR,
+    CON_FINDNEARSPRITE3D,
+    CON_FINDNEARSPRITE3DVAR,
+    CON_SETINPUT,
+    CON_GETINPUT,
+    CON_SAVE,
+    CON_CANSEE,
+    CON_CANSEESPR,
+    CON_FINDNEARACTORZ,
+    CON_FINDNEARACTORZVAR,
+    CON_FINDNEARSPRITEZ,
+    CON_FINDNEARSPRITEZVAR,
+    CON_GETCURRADDRESS,
+    CON_JUMP,
+    CON_QSTRLEN,
+    CON_GETINCANGLE,
+    CON_QUAKE,
+    CON_SHOWVIEW,
+    CON_HEADSPRITESTAT,
+    CON_PREVSPRITESTAT,
+    CON_NEXTSPRITESTAT,
+    CON_HEADSPRITESECT,
+    CON_PREVSPRITESECT,
+    CON_NEXTSPRITESECT,
+    CON_GETKEYNAME,
+    CON_QSUBSTR,
+    CON_GAMETEXTZ,
+    CON_DIGITALNUMBERZ,
+    CON_HITRADIUSVAR,
+    CON_ROTATESPRITE16,
+    CON_SETARRAY,
+    CON_RESIZEARRAY,
+    CON_WRITEARRAYTOFILE,
+    CON_READARRAYFROMFILE,
+    CON_STARTTRACKVAR,
+    CON_QGETSYSSTR,
+    CON_GETTICKS,
+    CON_GETTSPR,
+    CON_SETTSPR,
+    CON_SAVEMAPSTATE,
+    CON_LOADMAPSTATE,
+    CON_CLEARMAPSTATE,
+    CON_CMENU,
+    CON_GETTIMEDATE, 
+    CON_ACTIVATECHEAT,
+    CON_SETGAMEPALETTE,
+    CON_IFVAROR,
+    CON_IFVARVAROR,
+    CON_IFVARXOR,
+    CON_IFVARVARXOR,
+    CON_IFVAREITHER,
+    CON_IFVARVAREITHER,
+    CON_GETARRAYSIZE,
+    CON_SAVENN,
+    CON_QSTRDIM,
+    CON_SCREENTEXT,
+    CON_RETURN,
+    CON_ACTORSOUND,
+    CON_ROTATESPRITEA,
+    CON_GETTEAMNAME,
+    CON_KLABS,
+    CON_SHIFTVARVARL,
+    CON_SHIFTVARVARR,
+    CON_GETTILEDATA,
+    CON_SETTILEDATA,
+    CON_INTERPOLATE,
     CON_LDISTVAR,
     CON_DISTVAR,
     CON_SECTSETINTERPOLATION,
     CON_SECTCLEARINTERPOLATION,
     CON_STOPACTORSOUND,
     CON_INV,
+    CON_OPCODE_END,
+    // ---
 
-    // TRANSFORM_SCRIPT_KEYWORDS_LIST
-    CON_SETVAR_GLOBAL,
-    CON_SETVAR_PLAYER,
-    CON_SETVAR_ACTOR,
+    // ---
+    // these are the keywords that don't have instructions written into the bytecode
+    // ie: parsed in C_ParseCommand, but no code in VM_DoExecute.
+    CON_ACTOR,
+    CON_BETANAME, // !DEPRECATED!
+    CON_CASE,
+    CON_CHEATKEYS,
+    CON_DAMAGEEVENTTILE,
+    CON_DAMAGEEVENTTILERANGE,
+    CON_DEFAULT,
+    CON_DEFINE,
+    CON_DEFINECHEAT,
+    CON_DEFINEGAMEFUNCNAME,
+    CON_DEFINEGAMETYPE,
+    CON_DEFINELEVELNAME,
+    CON_DEFINEPROJECTILE,
+    CON_DEFINEQUOTE,
+    CON_DEFINESKILLNAME,
+    CON_DEFINESOUND,
+    CON_DEFINEVOLUMENAME,
+    CON_DEFSTATE,
+    CON_DYNAMICREMAP,
+    CON_ENHANCED, // !DEPRECATED!
+    CON_EVENTLOADACTOR,
+    CON_GAMEARRAY,
+    CON_GAMESTARTUP,
+    CON_GAMEVAR,
+    CON_INCLUDE,
+    CON_MUSIC,
+    CON_ONEVENT,
+    CON_PRECACHE,
+    CON_SCRIPTSIZE,
+    CON_SETCFGNAME,
+    CON_SETDEFNAME,
+    CON_SETGAMENAME,
+    CON_SPRITENOPAL,
+    CON_SPRITENOSHADE,
+    CON_SPRITENVG,
+    CON_SPRITESHADOW,
+    CON_USERACTOR,
+    // ---
 
     CON_END
 };

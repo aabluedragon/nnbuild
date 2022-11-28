@@ -465,11 +465,10 @@ static int Gv_GetVarIndex(const char *szGameLabel)
 
 int __fastcall Gv_GetVar(int id, int iActor, int iPlayer)
 {
-    if (id == MAXGAMEVARS)
-        return(*insptr++);
-
     if (id == sysVarIDs.THISACTOR)
         return iActor;
+    if (id == GV_FLAG_CONSTANT)
+        return *insptr++;
 
     if (id == sysVarIDs.RESPAWN_MONSTERS)   return DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS);
     if (id == sysVarIDs.RESPAWN_ITEMS)      return DMFLAGS_TEST(DMFLAG_RESPAWNITEMS);
@@ -548,7 +547,7 @@ static FORCE_INLINE void __fastcall setvar__(int const gameVar, int const newVal
 
 void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
 {
-    if (id<0 || id >= g_gameVarCount)
+    if (!(id & (GV_FLAG_CONSTANT | GV_FLAG_ARRAY | GV_FLAG_STRUCT)) && (id < 0 || id >= g_gameVarCount))
     {
         OSD_Printf(CON_ERROR "Gv_SetVar(): tried to set invalid gamevar ID (%d) from sprite %d (%d), player %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),id,g_i,TrackerCast(sprite[g_i].picnum),g_p);
         return;

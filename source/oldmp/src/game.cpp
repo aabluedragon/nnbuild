@@ -3254,7 +3254,7 @@ static void G_DumpDebugInfo(void)
     int16_t q16ang;
    // FILE * fp=fopen("debug.con","w");
 
-    X_ScriptInfo();
+    VM_ScriptInfo(insptr, 64);
     OSD_Printf("\n");
 
     OSD_Printf("Current gamevar values:\n");
@@ -8661,7 +8661,6 @@ void freehash();
 static void G_Cleanup(void)
 {
     int i;
-    extern char *bitptr;
 
     for (i=(MAXLEVELS*(MAXVOLUMES+1))-1;i>=0;i--) // +1 volume for "intro", "briefing" music
     {
@@ -8980,7 +8979,7 @@ void G_BackToMenu(void)
 void app_crashhandler(void)
 {
     G_CloseDemoWrite();
-    X_ScriptInfo();
+    VM_ScriptInfo(insptr, 64);
     Net_SendQuit();
 }
 

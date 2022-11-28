@@ -3302,30 +3302,9 @@ static inline void X_AccessSector(int iSet, int lVar1, int lLabelID, int lVar2)
     }
 }
 
-static inline void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, int lParm2)
+static inline void X_AccessSprite(int iSet, int iActor, int lLabelID, int lVar2, int lParm2)
 {
     int lValue=0;
-    int iActor=g_i;
-
-    if (lVar1 != sysVarIDs.THISACTOR)
-        iActor=Gv_GetVar(lVar1, g_i, g_p);
-
-    if ((iActor < 0 || iActor >= MAXSPRITES) && g_scriptSanityChecks)
-    {
-        OSD_Printf(CON_ERROR "tried to %s %s on invalid target sprite (%d) from spr %d pic %d gv %s\n",g_errorLineNum,VM_GetKeywordForID(g_tw),
-                   iSet?"set":"get",ActorLabels[lLabelID].name,iActor,g_i,TrackerCast(g_sp->picnum),
-                   (lVar1<MAXGAMEVARS)?aGameVars[lVar1].szLabel:"extended");
-        insptr += (lVar2 == MAXGAMEVARS);
-        return;
-    }
-
-    if ((ActorLabels[lLabelID].flags & LABEL_HASPARM2 && (lParm2 < 0 || lParm2 >= ActorLabels[lLabelID].maxParm2)) && g_scriptSanityChecks)
-    {
-        OSD_Printf(CON_ERROR "tried to %s invalid %s position %d on sprite (%d) from spr %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),
-                   iSet?"set":"get",ActorLabels[lLabelID].name,lParm2,iActor,g_i);
-        insptr += (lVar2 == MAXGAMEVARS);
-        return;
-    }
 
     if (iSet)
         lValue=Gv_GetVar(lVar2, g_i, g_p);
