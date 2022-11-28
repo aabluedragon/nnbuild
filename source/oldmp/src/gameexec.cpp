@@ -3453,6 +3453,42 @@ static int X_DoExecute(void)
                         }
                         break;
 
+                        case '0':
+                        {
+                            if (argIdx >= numArgs)
+                                goto finish_qsprintf;
+
+                            if (!(isdigit(inBuf[inputPos + 1]) && inBuf[inputPos + 2] == 'd'))
+                            {
+                                outBuf[outputPos++] = inBuf[inputPos - 1];
+                                outBuf[outputPos++] = inBuf[inputPos++];
+                                break;
+                            }
+
+                            char buf[16];
+                            Bsprintf(buf, "%d", arg[argIdx++]);
+                            int const bufLen = Bstrlen(buf);
+
+                            int pad = inBuf[inputPos + 1] - '0';
+                            int numZeroes = pad - bufLen;
+                            if (numZeroes > 0)
+                            {
+                                for(int i = 0; i < numZeroes; i++)
+                                    outBuf[outputPos++] = '0';
+                            }
+                            
+                            Bmemcpy(&outBuf[outputPos], buf, bufLen);
+                            outputPos += bufLen;
+                            inputPos+=3;
+                        }
+                        break;
+
+                        case '%':
+                        {
+                            outBuf[outputPos++] = inBuf[inputPos++]; // Skip over doubled % signs, like native printf functions.
+                        }
+                        break;
+
                         case 's':
                         {
                             if (argIdx >= numArgs)
