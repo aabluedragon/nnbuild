@@ -970,18 +970,17 @@ static void G_ShowView(vec3_t vec, fix16_t a, fix16_t horiz, int sect, int ix1, 
     renderSetAspect(viewingRange, yxAspect);
 }
 
-// branch() in mainline.
-static inline void X_DoConditional(int condition)
-{
-    if (condition || VM_DECODE_INST(*(insptr = (intptr_t*)insptr[1])) == CON_ELSE)
-    {
-        insptr += 2;
-        X_DoExecute();
-    }
-}
-
 static int X_DoExecute(void)
 {
+    auto branch = [&](int const x)
+    {
+        if (x || VM_DECODE_INST(*(insptr = (intptr_t*)insptr[1])) == CON_ELSE)
+        {
+            insptr += 2;
+            X_DoExecute();
+        }
+    };
+
     int j, l, s, tw = *insptr;
 
     if (g_killitFlag) return 1;
@@ -1005,6 +1004,10 @@ static int X_DoExecute(void)
             insptr++;
             return 1;
 
+        case CON_ELSE:
+            insptr = (intptr_t*)insptr[1];
+            break;
+
         case CON_SETVAR_GLOBAL:
             insptr++;
             aGameVars[*insptr].val.lValue = insptr[1];
@@ -1017,24 +1020,21 @@ static int X_DoExecute(void)
             insptr += 2;
             break;
 
-        case(CON_SETVAR_PLAYER) :
+        case CON_SETVAR_PLAYER:
             insptr++;
             aGameVars[*insptr].val.plValues[g_p & (MAXPLAYERS - 1)] = insptr[1];
             insptr += 2;
             break;
 
-    case CON_REDEFINEQUOTE:
-        insptr++;
-        {
-            int q = *insptr++, i = *insptr++;
-            if ((apStrings[q] == NULL || apXStrings[i] == NULL) && g_scriptSanityChecks)
+        case CON_REDEFINEQUOTE:
+            insptr++;
             {
-                OSD_Printf(CON_ERROR "%d %d null quote\n",g_errorLineNum,VM_GetKeywordForID(g_tw),q,i);
+                int const strIndex = *insptr++;
+                int const XstrIndex = *insptr++;
+
+                Bstrcpy(apStrings[strIndex], apXStrings[XstrIndex]);
                 break;
             }
-            Bstrcpy(apStrings[q],apXStrings[i]);
-            break;
-        }
 
     case CON_GETTHISPROJECTILE:
     case CON_SETTHISPROJECTILE:
@@ -1049,7 +1049,7 @@ static int X_DoExecute(void)
         }
 
     case CON_IFRND:
-        X_DoConditional(rnd(*(++insptr)));
+        branch(rnd(*(++insptr)));
         break;
 
     case CON_IFCANSHOOTTARGET:
@@ -1066,7 +1066,7 @@ static int X_DoExecute(void)
             j = A_CheckHitSprite(g_i,&temphit);
             if (j == (1<<30))
             {
-                X_DoConditional(1);
+                branch(1);
                 break;
             }
             if (j > sclip)
@@ -1103,17 +1103,17 @@ static int X_DoExecute(void)
         }
         else j = 1;
 
-        X_DoConditional(j);
+        branch(j);
         break;
 
     case CON_IFCANSEETARGET:
         j = cansee(g_sp->x,g_sp->y,g_sp->z-((krand()&41)<<8),g_sp->sectnum,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z/*-((krand()&41)<<8)*/,sprite[g_player[g_p].ps->i].sectnum);
-        X_DoConditional(j);
+        branch(j);
         if (j) actor[g_i].timetosleep = SLEEPTIME;
         break;
 
     case CON_IFACTORNOTSTAYPUT:
-        X_DoConditional(actor[g_i].actorstayput == -1);
+        branch(actor[g_i].actorstayput == -1);
         break;
 
     case CON_IFCANSEE:
@@ -1165,23 +1165,23 @@ static int X_DoExecute(void)
         if (j && (g_sp->statnum == STAT_ACTOR || g_sp->statnum == STAT_STANDABLE))
             actor[g_i].timetosleep = SLEEPTIME;
 
-        X_DoConditional(j);
+        branch(j);
         break;
     }
 
     case CON_IFHITWEAPON:
-        X_DoConditional(A_IncurDamage(g_i) >= 0);
+        branch(A_IncurDamage(g_i) >= 0);
         break;
 
     case CON_IFSQUISHED:
-        X_DoConditional(A_CheckSquished(g_i, g_p));
+        branch(A_CheckSquished(g_i, g_p));
         break;
 
     case CON_IFDEAD:
 //        j = g_sp->extra;
 //        if (g_sp->picnum == APLAYER)
 //            j--;
-        X_DoConditional(g_sp->extra <= 0);
+        branch(g_sp->extra <= 0);
         break;
 
     case CON_AI:
@@ -1214,20 +1214,16 @@ static int X_DoExecute(void)
 
     case CON_IFPDISTL:
         insptr++;
-        X_DoConditional(g_x < *insptr);
+        branch(g_x < *insptr);
         if (g_x > MAXSLEEPDIST && actor[g_i].timetosleep == 0)
             actor[g_i].timetosleep = SLEEPTIME;
         break;
 
     case CON_IFPDISTG:
         insptr++;
-        X_DoConditional(g_x > *insptr);
+        branch(g_x > *insptr);
         if (g_x > MAXSLEEPDIST && actor[g_i].timetosleep == 0)
             actor[g_i].timetosleep = SLEEPTIME;
-        break;
-
-    case CON_ELSE:
-        insptr = (intptr_t *) *(insptr+1);
         break;
 
     case CON_ADDSTRENGTH:
@@ -1250,7 +1246,7 @@ static int X_DoExecute(void)
             if (g_sp->picnum == HBOMBAMMO || g_sp->picnum == TRIPBOMBSPRITE)
             {
                 // To-do: Make this a sprite or weapon flag, not a hardcoded picnum check.
-                X_DoConditional(0);
+                branch(0);
             }
             else if (*insptr == 0) // Param is 0, check if recently picked up.
             {
@@ -1262,7 +1258,7 @@ static int X_DoExecute(void)
                         break; // Yes
 
                 // If we have this weapon already, and it's not dropped, return true.
-                X_DoConditional(j < g_player[g_p].ps->weapreccnt && g_sp->owner == g_i);
+                branch(j < g_player[g_p].ps->weapreccnt && g_sp->owner == g_i);
             }
             else if (g_player[g_p].ps->weapreccnt < 16) // Param is non-zero, and we've picked up under 16 weapons?
             {
@@ -1272,11 +1268,11 @@ static int X_DoExecute(void)
                 // Add weapon to recent pickup list.
                 g_player[g_p].ps->weaprecs[g_player[g_p].ps->weapreccnt++] = g_sp->picnum;
 
-                X_DoConditional(g_sp->owner == g_i); // Return true if map spawned, not dropped.
+                branch(g_sp->owner == g_i); // Return true if map spawned, not dropped.
             }
-            else X_DoConditional(0); // If we're at 16 weapons or above, just give up it seems.
+            else branch(0); // If we're at 16 weapons or above, just give up it seems.
         }
-        else X_DoConditional(0);
+        else branch(0);
         break;
 
     case CON_GETLASTPAL:
@@ -1365,7 +1361,7 @@ static int X_DoExecute(void)
             insptr++;
             break;
         }
-        X_DoConditional(A_CheckSoundPlaying(g_i,*insptr));
+        branch(A_CheckSoundPlaying(g_i,*insptr));
         //    X_DoConditional(SoundOwner[*insptr][0].i == g_i);
         break;
 
@@ -1597,9 +1593,8 @@ static int X_DoExecute(void)
 
     case CON_STATE:
     {
-        intptr_t *tempscrptr=insptr+2;
-
-        insptr = (intptr_t *) *(insptr+1);
+        auto tempscrptr = &insptr[2];
+        insptr = (intptr_t*)insptr[1];
         while (!X_DoExecute());
         insptr = tempscrptr;
     }
@@ -2840,19 +2835,19 @@ static int X_DoExecute(void)
 
     case CON_IFWASWEAPON:
         insptr++;
-        X_DoConditional(actor[g_i].htpicnum == *insptr);
+        branch(actor[g_i].htpicnum == *insptr);
         break;
 
     case CON_IFAI:
-        X_DoConditional(AC_AI_ID(g_t) == *(++insptr));
+        branch(AC_AI_ID(g_t) == *(++insptr));
         break;
 
     case CON_IFACTION:
-        X_DoConditional(AC_ACTION_ID(g_t) == *(++insptr));
+        branch(AC_ACTION_ID(g_t) == *(++insptr));
         break;
 
     case CON_IFACTIONCOUNT:
-        X_DoConditional(AC_ACTION_COUNT(g_t) >= *(++insptr));
+        branch(AC_ACTION_COUNT(g_t) >= *(++insptr));
         break;
 
     case CON_RESETACTIONCOUNT:
@@ -2949,7 +2944,7 @@ static int X_DoExecute(void)
 
     case CON_IFMOVE:
         insptr++;
-        X_DoConditional(g_t[1] == *insptr);
+        branch(g_t[1] == *insptr);
         break;
 
     case CON_RESETPLAYER:
@@ -3032,21 +3027,20 @@ static int X_DoExecute(void)
     break;
 
     case CON_IFONWATER:
-        X_DoConditional(klabs(g_sp->z-sector[g_sp->sectnum].floorz) < (32<<8) && sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER);
+        branch(klabs(g_sp->z-sector[g_sp->sectnum].floorz) < (32<<8) && sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER);
         break;
 
     case CON_IFINWATER:
-        X_DoConditional(sector[g_sp->sectnum].lotag == ST_2_UNDERWATER);
+        branch(sector[g_sp->sectnum].lotag == ST_2_UNDERWATER);
         break;
 
     case CON_IFCOUNT:
         insptr++;
-        X_DoConditional(g_t[0] >= *insptr);
+        branch(g_t[0] >= *insptr);
         break;
 
     case CON_IFACTOR:
-        insptr++;
-        X_DoConditional(g_sp->picnum == *insptr);
+        branch(g_sp->picnum == *(++insptr));
         break;
 
     case CON_RESETCOUNT:
@@ -3202,13 +3196,13 @@ static int X_DoExecute(void)
             else
                 j = 0;
         }
-        X_DoConditional((intptr_t) j);
+        branch((intptr_t) j);
     }
     break;
 
     case CON_IFSTRENGTH:
         insptr++;
-        X_DoConditional(g_sp->extra <= *insptr);
+        branch(g_sp->extra <= *insptr);
         break;
 
     case CON_GUTS:
@@ -3219,7 +3213,7 @@ static int X_DoExecute(void)
 
     case CON_IFSPAWNEDBY:
         insptr++;
-        X_DoConditional(actor[g_i].htpicnum == *insptr);
+        branch(actor[g_i].htpicnum == *insptr);
         break;
 
     case CON_WACKPLAYER:
@@ -3266,7 +3260,7 @@ static int X_DoExecute(void)
 
     case CON_IFGAPZL:
         insptr++;
-        X_DoConditional(((actor[g_i].floorz - actor[g_i].ceilingz) >> 8) < *insptr);
+        branch(((actor[g_i].floorz - actor[g_i].ceilingz) >> 8) < *insptr);
         break;
 
     case CON_IFHITSPACE:
@@ -3305,16 +3299,16 @@ static int X_DoExecute(void)
             }
         }
 
-        X_DoConditional(hitSpace);
+        branch(hitSpace);
         break;
     }
 
     case CON_IFOUTSIDE:
-        X_DoConditional(sector[g_sp->sectnum].ceilingstat&1);
+        branch(sector[g_sp->sectnum].ceilingstat&1);
         break;
 
     case CON_IFMULTIPLAYER:
-        X_DoConditional(ud.multimode > 1);
+        branch(ud.multimode > 1);
         break;
 
     case CON_OPERATE:
@@ -3341,7 +3335,7 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFINSPACE:
-        X_DoConditional(G_CheckForSpaceCeiling(g_sp->sectnum));
+        branch(G_CheckForSpaceCeiling(g_sp->sectnum));
         break;
 
     case CON_SPRITEPAL:
@@ -3357,28 +3351,28 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFBULLETNEAR:
-        X_DoConditional(A_Dodge(g_sp) == 1);
+        branch(A_Dodge(g_sp) == 1);
         break;
 
     case CON_IFRESPAWN:
         if (A_CheckEnemySprite(g_sp))
-            X_DoConditional(DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS));
+            branch(DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS));
         else if (A_CheckInventorySprite(g_sp))
-            X_DoConditional(DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY));
+            branch(DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY));
         else if (DynamicTileMap[g_sp->picnum] == ACCESSCARD__STATIC) // Shim for poorly-concieved CON code. Keys should never respawn.
-            X_DoConditional(0);
+            branch(0);
         else
-            X_DoConditional(DMFLAGS_TEST(DMFLAG_RESPAWNITEMS));
+            branch(DMFLAGS_TEST(DMFLAG_RESPAWNITEMS));
         break;
 
     case CON_IFFLOORDISTL:
         insptr++;
-        X_DoConditional((actor[g_i].floorz - g_sp->z) <= ((*insptr)<<8));
+        branch((actor[g_i].floorz - g_sp->z) <= ((*insptr)<<8));
         break;
 
     case CON_IFCEILINGDISTL:
         insptr++;
-        X_DoConditional((g_sp->z - actor[g_i].ceilingz) <= ((*insptr)<<8));
+        branch((g_sp->z - actor[g_i].ceilingz) <= ((*insptr)<<8));
         break;
 
     case CON_PALFROM:
@@ -3919,26 +3913,18 @@ static int X_DoExecute(void)
     case CON_GETACTORVAR:
         insptr++;
         {
-            // syntax [gs]etactorvar[<var>].<varx> <VAR>
-            // gets the value of the per-actor variable varx into VAR
-            // <var> <varx> <VAR>
-            int lSprite=Gv_GetVarX(*insptr++), lVar1=*insptr++;
-            j=*insptr++;
+            int const lSprite = Gv_GetVarX(*insptr++);
+            VM_ABORT_IF((unsigned)lSprite >= MAXSPRITES, "invalid sprite %d", lSprite);
 
-            if ((lSprite < 0 || lSprite >= MAXSPRITES) && g_scriptSanityChecks)
-            {
-                OSD_Printf(CON_ERROR "invalid sprite ID %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),lSprite);
-                if (lVar1 == MAXGAMEVARS) insptr++;
-                if (j == MAXGAMEVARS) insptr++;
-                break;
-            }
+            int const lVar1 = *insptr++;
+            int const lVar2 = *insptr++;
 
             if (tw == CON_SETACTORVAR)
             {
-                Gv_SetVar(lVar1, Gv_GetVarX(j), lSprite, g_p);
+                Gv_SetVar(lVar1, Gv_GetVarX(lVar2), lSprite, g_p);
                 break;
             }
-            Gv_SetVarX(j, Gv_GetVar(lVar1, lSprite, g_p));
+            Gv_SetVarX(lVar2, Gv_GetVar(lVar1, lSprite, g_p));
             break;
         }
 
@@ -3946,30 +3932,19 @@ static int X_DoExecute(void)
     case CON_GETPLAYERVAR:
         insptr++;
         {
-            int iPlayer;
+            int const playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            VM_ABORT_IF((unsigned)playerNum >= MAXPLAYERS, "invalid player %d", playerNum);
 
-            if (*insptr != sysVarIDs.THISACTOR)
-                iPlayer=Gv_GetVarX(*insptr);
-            else iPlayer = g_p;
+            int const lVar1 = *insptr++;
+            int const lVar2 = *insptr++;
 
-            insptr++;
+            if (tw == CON_SETPLAYERVAR)
             {
-                int lVar1=*insptr++, lVar2=*insptr++;
-
-                if (((unsigned)iPlayer >= MAXPLAYERS || g_player[iPlayer].ps == NULL) && g_scriptSanityChecks)
-                {
-                    OSD_Printf(CON_ERROR "invalid player ID %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),iPlayer);
-                    break;
-                }
-
-                if (tw == CON_SETPLAYERVAR)
-                {
-                    Gv_SetVar(lVar1, Gv_GetVarX(lVar2), g_i, iPlayer);
-                    break;
-                }
-                Gv_SetVarX(lVar2, Gv_GetVar(lVar1, g_i, iPlayer));
+                Gv_SetVar(lVar1, Gv_GetVarX(lVar2), g_i, playerNum);
                 break;
             }
+            Gv_SetVarX(lVar2, Gv_GetVar(lVar1, g_i, playerNum));
+            break;
         }
 
     case CON_SETACTOR:
@@ -3977,8 +3952,7 @@ static int X_DoExecute(void)
         insptr++;
         {
             int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
-            int const   labelId = *insptr++;
-            auto const& actorLabel = ActorLabels[labelId];
+            auto const& actorLabel = ActorLabels[*insptr++];
             int const   lParm2 = (actorLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
 
             VM_ABORT_IF(((unsigned)spriteNum >= MAXSPRITES) | ((unsigned)lParm2 > (unsigned)actorLabel.maxParm2),
@@ -3986,7 +3960,8 @@ static int X_DoExecute(void)
 
             int const lVar2 = *insptr++;
 
-            X_AccessSprite(tw == CON_SETACTOR, spriteNum, labelId, lVar2, lParm2);
+            X_AccessSprite(tw == CON_SETACTOR, spriteNum, actorLabel.lId, lVar2, lParm2);
+
             break;
         }
 
@@ -4389,25 +4364,25 @@ static int X_DoExecute(void)
     case CON_IFVARVARAND:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) & Gv_GetVarX(*(insptr)));
+        branch(Gv_GetVarX(j) & Gv_GetVarX(*(insptr)));
         break;
 
     case CON_IFVARVAROR:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) | Gv_GetVarX(*(insptr)));
+        branch(Gv_GetVarX(j) | Gv_GetVarX(*(insptr)));
         break;
 
     case CON_IFVARVARXOR:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) ^ Gv_GetVarX(*(insptr)));
+        branch(Gv_GetVarX(j) ^ Gv_GetVarX(*(insptr)));
         break;
 
     case CON_IFVARVAREITHER:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) || Gv_GetVarX(*(insptr)));
+        branch(Gv_GetVarX(j) || Gv_GetVarX(*(insptr)));
         break;
 
     case CON_IFVARVARN:
@@ -4415,37 +4390,37 @@ static int X_DoExecute(void)
         j = Gv_GetVarX(*insptr++);
         j = (j != Gv_GetVarX(*insptr++));
         insptr--;
-        X_DoConditional(j);
+        branch(j);
         break;
 
     case CON_IFVARVARE:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) == Gv_GetVarX(*(insptr)));
+        branch(Gv_GetVarX(j) == Gv_GetVarX(*(insptr)));
         break;
 
     case CON_IFVARVARG:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) > Gv_GetVarX(*(insptr)));
+        branch(Gv_GetVarX(j) > Gv_GetVarX(*(insptr)));
         break;
 
     case CON_IFVARVARL:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) < Gv_GetVarX(*(insptr)));
+        branch(Gv_GetVarX(j) < Gv_GetVarX(*(insptr)));
         break;
 
     case CON_IFVARE:
         insptr++;
         j = Gv_GetVarX(*insptr++);
-        X_DoConditional(j == *insptr);
+        branch(j == *insptr);
         break;
 
     case CON_IFVARN:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) != *insptr);
+        branch(Gv_GetVarX(j) != *insptr);
         break;
 
     case CON_WHILEVARN:
@@ -4457,7 +4432,7 @@ static int X_DoExecute(void)
             insptr=savedinsptr;
             if (Gv_GetVarX(*(insptr-1)) == *insptr)
                 j=0;
-            X_DoConditional(j);
+            branch(j);
         }
         while (j);
         break;
@@ -4475,7 +4450,7 @@ static int X_DoExecute(void)
             k=*(insptr);
             if (i == Gv_GetVarX(k))
                 j=0;
-            X_DoConditional(j);
+            branch(j);
         }
         while (j);
         break;
@@ -4484,42 +4459,42 @@ static int X_DoExecute(void)
     case CON_IFVARAND:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) & *insptr);
+        branch(Gv_GetVarX(j) & *insptr);
         break;
 
     case CON_IFVAROR:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) | *insptr);
+        branch(Gv_GetVarX(j) | *insptr);
         break;
 
     case CON_IFVARXOR:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) ^ *insptr);
+        branch(Gv_GetVarX(j) ^ *insptr);
         break;
 
     case CON_IFVAREITHER:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) || *insptr);
+        branch(Gv_GetVarX(j) || *insptr);
         break;
 
     case CON_IFVARG:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) > *insptr);
+        branch(Gv_GetVarX(j) > *insptr);
         break;
 
     case CON_IFVARL:
         insptr++;
         j=*insptr++;
-        X_DoConditional(Gv_GetVarX(j) < *insptr);
+        branch(Gv_GetVarX(j) < *insptr);
         break;
 
     case CON_IFPHEALTHL:
         insptr++;
-        X_DoConditional(sprite[g_player[g_p].ps->i].extra < *insptr);
+        branch(sprite[g_player[g_p].ps->i].extra < *insptr);
         break;
 
     case CON_IFPINVENTORY:
@@ -4572,7 +4547,7 @@ static int X_DoExecute(void)
             OSD_Printf(CON_ERROR "invalid inventory ID: %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*(insptr-1));
         }
 
-        X_DoConditional(j);
+        branch(j);
         break;
     }
 
@@ -4627,7 +4602,7 @@ static int X_DoExecute(void)
                 }
             }
         }
-        X_DoConditional(j);
+        branch(j);
     }
     break;
 
@@ -4666,11 +4641,11 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFINOUTERSPACE:
-        X_DoConditional(G_CheckForSpaceFloor(g_sp->sectnum));
+        branch(G_CheckForSpaceFloor(g_sp->sectnum));
         break;
 
     case CON_IFNOTMOVING:
-        X_DoConditional((actor[g_i].movflag&49152) > 16384);
+        branch((actor[g_i].movflag&49152) > 16384);
         break;
 
     case CON_RESPAWNHITAG:
@@ -4689,17 +4664,17 @@ static int X_DoExecute(void)
 
     case CON_IFSPRITEPAL:
         insptr++;
-        X_DoConditional(g_sp->pal == *insptr);
+        branch(g_sp->pal == *insptr);
         break;
 
     case CON_IFANGDIFFL:
         insptr++;
         j = klabs(G_GetAngleDelta(fix16_to_int(g_player[g_p].ps->q16ang),g_sp->ang));
-        X_DoConditional(j <= *insptr);
+        branch(j <= *insptr);
         break;
 
     case CON_IFNOSOUNDS:
-        X_DoConditional(!A_CheckAnySoundPlaying(g_i));
+        branch(!A_CheckAnySoundPlaying(g_i));
         break;
 
     case CON_SPRITEFLAGS:

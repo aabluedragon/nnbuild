@@ -3623,7 +3623,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
             }
         }
 
-        scriptWriteValue(label.lId);
+        scriptWriteValue(labelNum);
 
         if (label.flags & LABEL_HASPARM2)
             C_GetNextVar();
