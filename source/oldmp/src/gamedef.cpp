@@ -582,7 +582,6 @@ const memberlabel_t ActorLabels[]=
     { "clipdist",       ACTOR_CLIPDIST, 0, 0, -1 },
     //{ "detail",         ACTOR_DETAIL, 0, 0, -1 }, // aka filler, not used
     { "blend",          ACTOR_BLEND, 0, 0, -1 },
-    { "alpha",          ACTOR_ALPHA, 0, 0, -1 },
     { "xrepeat",        ACTOR_XREPEAT, 0, 0, -1 },
     { "yrepeat",        ACTOR_YREPEAT, 0, 0, -1 },
     { "xoffset",        ACTOR_XOFFSET, 0, 0, -1 },
@@ -617,6 +616,7 @@ const memberlabel_t ActorLabels[]=
     { "htbposy",        ACTOR_HTBPOSY, 0, 0, -1 },
     { "htbposz",        ACTOR_HTBPOSZ, 0, 0, -1 },
     { "htg_t",          ACTOR_HTG_T, LABEL_HASPARM2, 10, -1 },
+    { "htflags",        ACTOR_HTFLAGS, 0, 0, -1 },
 
     // model flags
 
@@ -630,7 +630,7 @@ const memberlabel_t ActorLabels[]=
     { "xpanning",       ACTOR_XPANNING, 0, 0, -1 },
     { "ypanning",       ACTOR_YPANNING, 0, 0, -1 },
 
-    { "htflags",        ACTOR_HTFLAGS, 0, 0, -1 },
+    { "alpha",          ACTOR_ALPHA, 0, 0, -1 },
 
     { "",               -1, 0, 0, -1  }     // END OF LIST
 };
