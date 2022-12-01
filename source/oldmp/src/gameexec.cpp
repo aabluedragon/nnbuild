@@ -31,6 +31,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osdcmds.h"
 #include "osd.h"
 
+#include "gamestructures.h"
+
 void G_RestoreMapState(mapstate_t *save);
 void G_SaveMapState(mapstate_t *save);
 
@@ -43,8 +45,6 @@ int g_errorLineNum;
 int g_tw;
 
 static int X_DoExecute(void);
-
-#include "gamestructures.cpp"
 
 // Replace with mainline versions later.
 #define VM_ABORT_IF(condition, fmt, ...)  \
@@ -3599,11 +3599,13 @@ static int X_DoExecute(void)
     case CON_GETSECTOR:
         insptr++;
         {
-            // syntax [gs]etsector[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
-            int lVar1=*insptr++, lLabelID=*insptr++, lVar2=*insptr++;
+            int const   sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_sp->sectnum;
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;
 
-            X_AccessSector(tw==CON_SETSECTOR, lVar1, lLabelID, lVar2);
+            VM_ABORT_IF((unsigned)sectNum >= MAXSECTORS, "invalid sector %d", sectNum);
+
+            X_AccessSector(tw==CON_SETSECTOR, sectNum, labelNum, lVar2);
             break;
         }
 
@@ -3830,16 +3832,21 @@ static int X_DoExecute(void)
     case CON_GETPLAYER:
         insptr++;
         {
-            // syntax [gs]etplayer[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
-            int lVar1=*insptr++, lLabelID=*insptr++, lParm2 = 0, lVar2;
-            // HACK: need to have access to labels structure at run-time...
+            int const   playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const labelNum = *insptr++;
+            auto const& playerLabel = PlayerLabels[labelNum];
+            int const   lParm2 = (playerLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
 
-            if (PlayerLabels[lLabelID].flags & LABEL_HASPARM2)
-                lParm2=Gv_GetVarX(*insptr++);
-            lVar2=*insptr++;
+            VM_ABORT_IF(((unsigned)playerNum >= MAXPLAYERS) | ((unsigned)lParm2 > (unsigned)playerLabel.maxParm2),
+                "%s[%d] invalid for player %d", playerLabel.name, lParm2, playerNum);
 
-            X_AccessPlayer(tw==CON_SETPLAYER, lVar1, lLabelID, lVar2, lParm2);
+            int const lVar2 = *insptr++;
+
+            if (tw == CON_SETPLAYER)
+                VM_SetPlayer(playerNum, labelNum, lParm2, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetPlayer(playerNum, labelNum, lParm2));
+
             break;
         }
 
@@ -3871,17 +3878,12 @@ static int X_DoExecute(void)
     case CON_SETUSERDEF:
         insptr++;
         {
-            // syntax [gs]etuserdef.xxx <VAR>
-            //  <xxxid> <varid>
-            int lLabelID = *insptr++;
-            int lParm2 = 0, lVar2;
+            int const labelNum = *insptr++;
+            auto const& udLabel = UserdefsLabels[labelNum];
+            int const lParm2 = (udLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
+            int const lVar2 = *insptr++;
 
-            if (UserdefsLabels[lLabelID].flags & LABEL_HASPARM2)
-                lParm2 = Gv_GetVarX(*insptr++);
-
-            lVar2=*insptr++;
-
-            X_AccessUserdef(tw==CON_SETUSERDEF, lLabelID, lVar2, lParm2);
+            X_AccessUserdef(tw==CON_SETUSERDEF, labelNum, lVar2, lParm2);
             break;
         }
 
@@ -3889,11 +3891,10 @@ static int X_DoExecute(void)
     case CON_SETPROJECTILE:
         insptr++;
         {
-            // syntax [gs]etplayer[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
-            int lVar1=Gv_GetVarX(*insptr++), lLabelID=*insptr++, lVar2=*insptr++;
-
-            X_AccessProjectile(tw==CON_SETPROJECTILE,lVar1,lLabelID,lVar2);
+            int const tileNum = Gv_GetVarX(*insptr++);
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;
+            X_AccessProjectile(tw == CON_SETPROJECTILE, tileNum, labelNum, lVar2);
             break;
         }
 
@@ -3952,7 +3953,8 @@ static int X_DoExecute(void)
         insptr++;
         {
             int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
-            auto const& actorLabel = ActorLabels[*insptr++];
+            int const   labelNum = *insptr++;
+            auto const& actorLabel = ActorLabels[labelNum];
             int const   lParm2 = (actorLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
 
             VM_ABORT_IF(((unsigned)spriteNum >= MAXSPRITES) | ((unsigned)lParm2 > (unsigned)actorLabel.maxParm2),
@@ -3960,7 +3962,7 @@ static int X_DoExecute(void)
 
             int const lVar2 = *insptr++;
 
-            X_AccessSprite(tw == CON_SETACTOR, spriteNum, actorLabel.lId, lVar2, lParm2);
+            X_AccessSprite(tw == CON_SETACTOR, spriteNum, labelNum, lVar2, lParm2);
 
             break;
         }
@@ -3969,12 +3971,13 @@ static int X_DoExecute(void)
     case CON_GETTSPR:
         insptr++;
         {
-            // syntax [gs]etactor[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
+            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            VM_ABORT_IF((unsigned)spriteNum >= MAXSPRITES, "invalid sprite %d", spriteNum);
 
-            int lVar1=*insptr++, lLabelID=*insptr++, lVar2=*insptr++;
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;
 
-            X_AccessTsprite(tw==CON_SETTSPR, lVar1, lLabelID, lVar2);
+            X_AccessTsprite(tw==CON_SETTSPR, spriteNum, labelNum, lVar2);
             break;
         }
 

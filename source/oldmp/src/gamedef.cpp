@@ -29,6 +29,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "osd.h"
 
+#include "gamestructures.h"
+
 #define LINE_NUMBER (g_lineNumber << 12)
 
 int g_scriptVersion = 13; // 13 = 1.3D-style CON files, 14 = 1.4/1.5 style CON files
@@ -755,7 +757,7 @@ const memberlabel_t PlayerLabels[]=
     { "actorsqu",               PLAYER_ACTORSQU, 0, 0, -1 },
     { "timebeforeexit",         PLAYER_TIMEBEFOREEXIT, 0, 0, -1 },
     { "customexitsound",        PLAYER_CUSTOMEXITSOUND, 0, 0, -1 },
-    { "weaprecs[16]",           PLAYER_WEAPRECS, 0, 0, -1 },
+    { "weaprecs",               PLAYER_WEAPRECS, LABEL_HASPARM2, MAX_WEAPONS, -1 },
     { "weapreccnt",             PLAYER_WEAPRECCNT, 0, 0, -1 },
     { "interface_toggle_flag",  PLAYER_INTERFACE_TOGGLE_FLAG, 0, 0, -1 },
     { "rotscrnang",             PLAYER_ROTSCRNANG, 0, 0, -1 },
@@ -2446,7 +2448,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
         if (labelNum == -1)
             continue;
 
-        scriptWriteValue(ProjectileLabels[labelNum].lId);
+        scriptWriteValue(labelNum);
 
         switch (tw)
         {
@@ -3271,7 +3273,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
         //if (label.offset != -1 && (label.flags & LABEL_WRITEFUNC) == 0)
         //    *ins = CON_GETSECTORSTRUCT | LINE_NUMBER;
 
-        scriptWriteValue(label.lId);
+        scriptWriteValue(labelNum);
 
         C_GetNextVarType(tw == CON_GETSECTOR ? GAMEVAR_READONLY : 0);
 
@@ -3396,7 +3398,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
         //if (label.offset != -1 && (label.flags & (LABEL_WRITEFUNC | LABEL_HASPARM2)) == 0)
         //    *ins = CON_SETPLAYERSTRUCT | LINE_NUMBER;
 
-        scriptWriteValue(label.lId);
+        scriptWriteValue(labelNum);
 
         if (label.flags & LABEL_HASPARM2)
             C_GetNextVar();
@@ -3647,7 +3649,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
         if (labelNum == -1)
             continue;
 
-        scriptWriteValue(TsprLabels[labelNum].lId);
+        scriptWriteValue(labelNum);
 
         C_GetNextVarType((tw == CON_GETTSPR) ? GAMEVAR_READONLY : 0);
         continue;

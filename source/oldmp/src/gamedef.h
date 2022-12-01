@@ -130,18 +130,6 @@ static inline const char* C_GetFileForOffset(int const offset)
 }
 #define VM_FILENAME(xxx) C_GetFileForOffset((xxx)-apScript)
 
-/*
-extern void X_AccessUserdef(int iSet, int lLabelID, int lVar2, int lParm2);
-extern void X_AccessActiveProjectile(int iSet, int lVar1, int lLabelID, int lVar2);
-extern void X_AccessPlayer(int iSet, int lVar1, int lLabelID, int lVar2, int lParm2);
-extern void X_AccessPlayerInput(int iSet, int lVar1, int lLabelID, int lVar2);
-extern void X_AccessWall(int iSet, int lVar1, int lLabelID, int lVar2);
-extern void X_AccessSector(int iSet, int lVar1, int lLabelID, int lVar2);
-extern void X_AccessSprite(int iSet, int lVar1, int lLabelID, int lVar2, int lParm2);
-extern void X_AccessTsprite(int iSet, int lVar1, int lLabelID, int lVar2);
-extern void X_AccessProjectile(int iSet, int lVar1, int lLabelID, int lVar2);
-*/
-
 #define CON_ERROR OSD_ERROR "Line %d, %s: "
 
 extern int g_i,g_p;
