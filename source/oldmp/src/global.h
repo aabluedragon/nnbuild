@@ -30,6 +30,7 @@ G_EXTERN int32_t g_interpolationLock;
 G_EXTERN interp_int32_t interps[MAXINTERPOLATIONS];
 
 // Tile Data
+G_EXTERN char* g_tileLabels[MAXTILES];
 G_EXTERN tiledata_t g_tile[MAXTILES];
 
 // Pre-initialized

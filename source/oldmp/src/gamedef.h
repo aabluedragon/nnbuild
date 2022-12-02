@@ -71,6 +71,7 @@ typedef struct SystemVarID_s {
 } SystemVarID_t;
 extern SystemVarID_t sysVarIDs;
 
+extern const char* EventNames[MAXEVENTS];
 extern intptr_t apScriptEvents[MAXEVENTS];
 extern int32_t g_currentEvent;
 
@@ -88,25 +89,6 @@ extern int g_totalLines,g_lineNumber;
 extern int g_errorCnt,g_warningCnt;
 
 extern uint8_t* bitptr;
-
-typedef struct
-{
-    const char  *name;
-    int         lId;
-    int         flags;
-    int         maxParm2;
-    int16_t     offset;
-} memberlabel_t;
-
-extern const memberlabel_t SectorLabels[];
-extern const memberlabel_t WallLabels[];
-extern const memberlabel_t ActorLabels[];
-extern const memberlabel_t PlayerLabels[];
-extern const memberlabel_t ProjectileLabels[];
-extern const memberlabel_t UserdefsLabels[];
-extern const memberlabel_t InputLabels[];
-extern const memberlabel_t TsprLabels[];
-extern const memberlabel_t TileDataLabels[];
 
 typedef struct {
     const char* token;

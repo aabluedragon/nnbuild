@@ -1900,13 +1900,13 @@ void G_FreeMapState(int mapnum)
 
     for (j=0;j<g_gameVarCount;j++)
     {
-        if (aGameVars[j].dwFlags & GAMEVAR_NORESET) continue;
-        if (aGameVars[j].dwFlags & GAMEVAR_PERPLAYER)
+        if (aGameVars[j].flags & GAMEVAR_NORESET) continue;
+        if (aGameVars[j].flags & GAMEVAR_PERPLAYER)
         {
             if (g_mapInfo[mapnum].savedstate->vars[j])
                 Xfree(g_mapInfo[mapnum].savedstate->vars[j]);
         }
-        else if (aGameVars[j].dwFlags & GAMEVAR_PERACTOR)
+        else if (aGameVars[j].flags & GAMEVAR_PERACTOR)
         {
             if (g_mapInfo[mapnum].savedstate->vars[j])
                 Xfree(g_mapInfo[mapnum].savedstate->vars[j]);

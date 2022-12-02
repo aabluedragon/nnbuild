@@ -36,7 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 void G_RestoreMapState(mapstate_t *save);
 void G_SaveMapState(mapstate_t *save);
 
-int g_i,g_p;
+int g_i, g_p;
 static int g_x;
 static intptr_t *g_t;
 spritetype *g_sp;
@@ -109,6 +109,8 @@ void VM_ScriptInfo(intptr_t const* const ptr, int const range)
 
 void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
 {
+    ERROR_CONTEXT("VM event execution", &EventNames[iEventID][0]);
+
     if (iEventID<0 || iEventID >= MAXEVENTS)
     {
         OSD_Printf(CON_ERROR "invalid event ID",g_errorLineNum,VM_GetKeywordForID(g_tw));
@@ -968,6 +970,74 @@ static void G_ShowView(vec3_t vec, fix16_t a, fix16_t horiz, int sect, int ix1, 
     G_RestoreInterpolations();
     G_UpdateScreenArea();
     renderSetAspect(viewingRange, yxAspect);
+}
+
+static inline void SetArray(int const arrayNum, int const arrayIndex, int const newValue)
+{
+    auto& arr = aGameArrays[arrayNum];
+
+#if 0 // this needs to be a compile time check, not something done at runtime...
+    if (EDUKE32_PREDICT_FALSE(arr.flags & GAMEARRAY_READONLY))
+    {
+        LOG_F(ERROR, "Tried to set value in read-only array '%s'.", arr.szLabel);
+        vm.flags |= VM_RETURN;
+        return;
+    }
+#endif
+
+    switch (arr.flags & GAMEARRAY_TYPE_MASK)
+    {
+        case 0: arr.pValues[arrayIndex] = newValue; break;
+        case GAMEARRAY_INT16: ((int16_t*)arr.pValues)[arrayIndex] = newValue; break;
+        case GAMEARRAY_INT8: ((int8_t*)arr.pValues)[arrayIndex] = newValue; break;
+        case GAMEARRAY_UINT16: ((uint16_t*)arr.pValues)[arrayIndex] = newValue; break;
+        case GAMEARRAY_UINT8: ((int8_t*)arr.pValues)[arrayIndex] = newValue; break;
+        case GAMEARRAY_BITMAP:
+        {
+            uint32_t const mask = pow2char[arrayIndex & 7];
+            uint8_t& value = ((uint8_t*)arr.pValues)[arrayIndex >> 3];
+            value = (value & ~mask) | (-!!newValue & mask);
+            break;
+        }
+    }
+}
+
+static void ResizeArray(int const arrayNum, int const newSize)
+{
+    auto& arr = aGameArrays[arrayNum];
+
+    int const oldSize = arr.size;
+
+    if ((newSize == oldSize) | (newSize < 0))
+        return;
+#if 0
+    OSD_Printf(OSDTEXT_GREEN "CON_RESIZEARRAY: resizing array %s from %d to %d\n",
+        array.szLabel, array.size, newSize);
+#endif
+    if (newSize == 0)
+    {
+        Xaligned_free(arr.pValues);
+        arr.pValues = nullptr;
+        arr.size = 0;
+        return;
+    }
+
+    size_t const oldBytes = Gv_GetArrayAllocSizeForCount(arrayNum, oldSize);
+    size_t const newBytes = Gv_GetArrayAllocSizeForCount(arrayNum, newSize);
+
+    auto const oldArray = arr.pValues;
+    auto const newArray = (intptr_t*)Xaligned_alloc(ARRAY_ALIGNMENT, newBytes);
+
+    if (oldSize != 0)
+        Bmemcpy(newArray, oldArray, min(oldBytes, newBytes));
+
+    if (newSize > oldSize)
+        Bmemset((char*)newArray + oldBytes, 0, newBytes - oldBytes);
+
+    arr.pValues = newArray;
+    arr.size = newSize;
+
+    Xaligned_free(oldArray);
 }
 
 static int X_DoExecute(void)
@@ -3545,7 +3615,7 @@ static int X_DoExecute(void)
                     if ((index < aGameArrays[lVarID].size)&&(index>=0))
                     {
                         OSD_Printf(OSDTEXT_GREEN "CONLOGVAR: Line %d, %s: %s[%d] =%d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),
-                                   aGameArrays[lVarID].szLabel,index,(int)(m*aGameArrays[lVarID].plValues[index]));
+                                   aGameArrays[lVarID].szLabel,index,(int)(m*aGameArrays[lVarID].pValues[index]));
                         break;
                     }
                     else
@@ -3570,16 +3640,16 @@ static int X_DoExecute(void)
             Bsprintf(szBuf,"CONLOGVAR: L=%d %s ",g_errorLineNum, aGameVars[lVarID].szLabel);
             strcpy(g_szBuf,szBuf);
 
-            if (aGameVars[lVarID].dwFlags & GAMEVAR_READONLY)
+            if (aGameVars[lVarID].flags & GAMEVAR_READONLY)
             {
                 Bsprintf(szBuf," (read-only)");
                 strcat(g_szBuf,szBuf);
             }
-            if (aGameVars[lVarID].dwFlags & GAMEVAR_PERPLAYER)
+            if (aGameVars[lVarID].flags & GAMEVAR_PERPLAYER)
             {
                 Bsprintf(szBuf," (Per Player. Player=%d)",g_p);
             }
-            else if (aGameVars[lVarID].dwFlags & GAMEVAR_PERACTOR)
+            else if (aGameVars[lVarID].flags & GAMEVAR_PERACTOR)
             {
                 Bsprintf(szBuf," (Per Actor. Actor=%d)",g_i);
             }
@@ -4048,37 +4118,29 @@ static int X_DoExecute(void)
 
     case CON_SETARRAY:
         insptr++;
-        j=*insptr++;
         {
-            int index = Gv_GetVarX(*insptr++);
-            int value = Gv_GetVarX(*insptr++);
+            int const arrayNum = *insptr++;
+            int const arrayIndex = Gv_GetVarX(*insptr++);
+            VM_ABORT_IF(((unsigned)arrayNum >= (unsigned)g_gameArrayCount) | ((unsigned)arrayIndex >= (unsigned)aGameArrays[arrayNum & (MAXGAMEARRAYS - 1)].size),
+                "invalid array %d or index %d", arrayNum, arrayIndex);
 
-//            SetGameArrayID(j,index,value);
-            if (j<0 || j >= g_gameArrayCount || index >= aGameArrays[j].size || index < 0)
-            {
-                OSD_Printf(OSD_ERROR "Gv_SetVar(): tried to set invalid array ID (%d) or index out of bounds from sprite %d (%d), player %d\n",j,g_i,TrackerCast(sprite[g_i].picnum),g_p);
-                return 0;
-            }
-            aGameArrays[j].plValues[index]=value;
+            SetArray(arrayNum, arrayIndex, Gv_GetVarX(*insptr++));
             break;
         }
     case CON_GETARRAYSIZE:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(*insptr++,aGameArrays[j].size);
-        break;
+        {
+            int const arrayNum = *insptr++;
+            Gv_SetVarX(*insptr++, (aGameArrays[arrayNum].flags & GAMEARRAY_VARSIZE) ? Gv_GetVarX(aGameArrays[arrayNum].size) : aGameArrays[arrayNum].size);
+            break;
+        }
 
     case CON_RESIZEARRAY:
         insptr++;
-        j=*insptr++;
         {
-            int asize = Gv_GetVarX(*insptr++);
-            if (asize > 0)
-            {
-                OSD_Printf(OSDTEXT_GREEN "CON_RESIZEARRAY: resizing array %s from %d to %d\n", aGameArrays[j].szLabel, aGameArrays[j].size, asize);
-                aGameArrays[j].plValues=(intptr_t*)Xrealloc(aGameArrays[j].plValues, sizeof(intptr_t) * asize);
-                aGameArrays[j].size = asize;
-            }
+            int const arrayNum = *insptr++;
+            int const newSize = Gv_GetVarX(*insptr++);
+            ResizeArray(arrayNum, newSize);
             break;
         }
 
@@ -4161,7 +4223,7 @@ static int X_DoExecute(void)
         break;
 
     case CON_INV:
-        if ((aGameVars[insptr[1]].dwFlags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK)) == 0)
+        if ((aGameVars[insptr[1]].flags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK)) == 0)
             aGameVars[insptr[1]].val.lValue = -aGameVars[insptr[1]].val.lValue;
         else
             Gv_SetVarX(insptr[1], -Gv_GetVarX(insptr[1]));
@@ -4779,20 +4841,22 @@ void VM_UpdateAnim(int const spriteNum, int32_t* const pData)
 
 void A_Execute(int iActor,int iPlayer,int lDist)
 {
-//    int temp, temp2;
-
-//    if (g_tile[sprite[iActor].picnum].execPtr == 0) return;
-
     g_i = iActor;    // Sprite ID
     g_p = iPlayer;   // Player ID
     g_x = lDist;     // ??
     g_sp = &sprite[g_i];    // Pointer to sprite structure
     g_t = &actor[g_i].t_data[0];   // Sprite's 'extra' data
 
-    VM_UpdateAnim(g_i, g_t);
-    insptr = 4 + (g_tile[g_sp->picnum].execPtr);
+    int const picnum = g_sp->picnum;
 
-    g_killitFlag = 0;
+    //MICROPROFILE_SCOPE_TOKEN(g_actorTokens[picnum]);
+
+    if (g_tileLabels[picnum])
+        ERROR_CONTEXT("actor", &g_tileLabels[picnum][0]);
+    else
+        ERROR_CONTEXT("actor", picnum);
+
+    ERROR_CONTEXT("spritenum", iActor);
 
     if (g_sp->sectnum < 0 || g_sp->sectnum >= MAXSECTORS)
     {
@@ -4802,7 +4866,13 @@ void A_Execute(int iActor,int iPlayer,int lDist)
         return;
     }
 
+    VM_UpdateAnim(g_i, g_t);
+
+    g_killitFlag = 0;
+
+    insptr = 4 + (g_tile[g_sp->picnum].execPtr);
     while (!X_DoExecute());
+    insptr = NULL;
 
     if (g_killitFlag == 1)
     {
@@ -4947,14 +5017,14 @@ void G_SaveMapState(mapstate_t *save)
 
         for (i=g_gameVarCount-1; i>=0;i--)
         {
-            if (aGameVars[i].dwFlags & GAMEVAR_NORESET) continue;
-            if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
+            if (aGameVars[i].flags & GAMEVAR_NORESET) continue;
+            if (aGameVars[i].flags & GAMEVAR_PERPLAYER)
             {
                 if (!save->vars[i])
                     save->vars[i] = (intptr_t*)Xcalloc(MAXPLAYERS,sizeof(intptr_t));
                 Bmemcpy(&save->vars[i][0],&aGameVars[i].val.plValues[0],sizeof(intptr_t) * MAXPLAYERS);
             }
-            else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
+            else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
             {
                 if (!save->vars[i])
                     save->vars[i] = (intptr_t*)Xcalloc(MAXSPRITES,sizeof(intptr_t));
@@ -5043,10 +5113,10 @@ void G_RestoreMapState(mapstate_t *save)
 
         for (i=g_gameVarCount-1;i>=0;i--)
         {
-            if (aGameVars[i].dwFlags & GAMEVAR_NORESET) continue;
-            if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
+            if (aGameVars[i].flags & GAMEVAR_NORESET) continue;
+            if (aGameVars[i].flags & GAMEVAR_PERPLAYER)
                 Bmemcpy(&aGameVars[i].val.plValues[0],&save->vars[i][0],sizeof(intptr_t) * MAXPLAYERS);
-            else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
+            else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
                 Bmemcpy(&aGameVars[i].val.plValues[0],&save->vars[i][0],sizeof(intptr_t) * MAXSPRITES);
             else aGameVars[i].val.lValue = (intptr_t)save->vars[i];
         }

@@ -3292,17 +3292,17 @@ static void G_DumpDebugInfo(void)
             OSD_Printf("Sprite %d (%d,%d,%d) (picnum: %d)\n",j,TrackerCast(sprite[j].x),TrackerCast(sprite[j].y),TrackerCast(sprite[j].z),TrackerCast(sprite[j].picnum));
             for (i=0;i<g_gameVarCount;i++)
             {
-                if (aGameVars[i].dwFlags & (GAMEVAR_PERACTOR))
+                if (aGameVars[i].flags & (GAMEVAR_PERACTOR))
                 {
-                    if (aGameVars[i].val.plValues[j] != aGameVars[i].lDefault)
+                    if (aGameVars[i].val.plValues[j] != aGameVars[i].defaultValue)
                     {
                         OSD_Printf("gamevar %s ",aGameVars[i].szLabel);
                         OSD_Printf("%" PRIdPTR "",aGameVars[i].val.plValues[j]);
                         OSD_Printf(" GAMEVAR_PERACTOR");
-                        if (aGameVars[i].dwFlags != GAMEVAR_PERACTOR)
+                        if (aGameVars[i].flags != GAMEVAR_PERACTOR)
                         {
                             OSD_Printf(" // ");
-                            if (aGameVars[i].dwFlags & (GAMEVAR_SYSTEM))
+                            if (aGameVars[i].flags & (GAMEVAR_SYSTEM))
                             {
                                 OSD_Printf(" (system)");
                             }

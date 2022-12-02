@@ -146,34 +146,6 @@ enum
     SE_131 = 131,
 };
 
-// sector lotags
-enum
-{
-    ST_0_NO_EFFECT = 0,
-    ST_1_ABOVE_WATER = 1,
-    ST_2_UNDERWATER = 2,
-    ST_3 = 3,
-    // ^^^ maybe not complete substitution in code
-    ST_9_SLIDING_ST_DOOR = 9,
-    ST_15_WARP_ELEVATOR = 15,
-    ST_16_PLATFORM_DOWN = 16,
-    ST_17_PLATFORM_UP = 17,
-    ST_18_ELEVATOR_DOWN = 18,
-    ST_19_ELEVATOR_UP = 19,
-    ST_20_CEILING_DOOR = 20,
-    ST_21_FLOOR_DOOR = 21,
-    ST_22_SPLITTING_DOOR = 22,
-    ST_23_SWINGING_DOOR = 23,
-    ST_25_SLIDING_DOOR = 25,
-    ST_26_SPLITTING_ST_DOOR = 26,
-    ST_27_STRETCH_BRIDGE = 27,
-    ST_28_DROP_FLOOR = 28,
-    ST_29_TEETH_DOOR = 29,
-    ST_30_ROTATE_RISE_BRIDGE = 30,
-    ST_31_TWO_WAY_TRAIN = 31,
-    // left: ST 32767, 65534, 65535
-};
-
 enum weaponuniqhudid_t
 {
     W_NONE,
@@ -612,70 +584,6 @@ enum SystemString_t {
 };
 
 // store global game definitions
-
-
-
-enum GamevarFlags_t {
-    MAXGAMEVARS        = 2048,       // must be a power of two
-    MAXVARLABEL        = 26,
-    GAMEVAR_PERPLAYER  = 0x00000001, // per-player variable
-    GAMEVAR_PERACTOR   = 0x00000002, // per-actor variable
-    GAMEVAR_USER_MASK  = (0x00000001|0x00000002),
-    GAMEVAR_RESET      = 0x00000008, // marks var for to default
-    GAMEVAR_DEFAULT    = 0x00000100, // allow override
-    GAMEVAR_SECRET     = 0x00000200, // don't dump...
-    GAMEVAR_NODEFAULT  = 0x00000400, // don't reset on actor spawn
-    GAMEVAR_SYSTEM     = 0x00000800, // cannot change mode flags...(only default value)
-    GAMEVAR_READONLY   = 0x00001000, // values are read-only (no setvar allowed)
-    GAMEVAR_INT32PTR   = 0x00002000, // plValues is a pointer to a 32-bit integer
-    GAMEVAR_SYNCCHECK  = 0x00004000, // throw warnings during compile if used in local event
-    GAMEVAR_INT16PTR   = 0x00008000, // plValues is a pointer to a 16-bit integer
-    GAMEVAR_INT8PTR    = 0x00010000, // plValues is a pointer to an 8-bit integer
-    GAMEVAR_NORESET    = 0x00020000, // var values are not reset when restoring map state
-    GAMEVAR_SPECIAL    = 0x00040000, // flag for structure member shortcut vars
-    GAMEVAR_NOMULTI    = 0x00080000, // don't attach to multiplayer packets
-    GAMEVAR_Q16PTR     = 0x00100000,
-
-    GAMEVAR_RAWQ16PTR = GAMEVAR_Q16PTR | GAMEVAR_SPECIAL,
-    GAMEVAR_PTR_MASK = GAMEVAR_INT32PTR | GAMEVAR_INT16PTR | GAMEVAR_INT8PTR | GAMEVAR_Q16PTR | GAMEVAR_RAWQ16PTR,
-};
-
-// Alignments for per-player and per-actor variables.
-#define PLAYER_VAR_ALIGNMENT (sizeof(intptr_t))
-#define ACTOR_VAR_ALIGNMENT 16
-
-#define ARRAY_ALIGNMENT 16
-
-extern void Gv_Clear(void);
-
-enum GamearrayFlags_t {
-    MAXGAMEARRAYS      = (MAXGAMEVARS>>2), // must be lower than MAXGAMEVARS
-    MAXARRAYLABEL      = MAXVARLABEL,
-    GAMEARRAY_NORMAL   = 0,
-    GAMEARRAY_NORESET  = 0x00000001,
-};
-
-typedef struct {
-    union {
-        intptr_t lValue;
-        intptr_t *plValues;     // array of values when 'per-player', or 'per-actor'
-    } val;
-    intptr_t lDefault;
-    unsigned int dwFlags;
-    char *szLabel;
-} gamevar_t;
-
-typedef struct {
-    char *szLabel;
-    intptr_t *plValues;     // array of values
-    int size;
-    char bReset;
-} gamearray_t;
-
-extern gamevar_t aGameVars[MAXGAMEVARS];
-extern gamearray_t aGameArrays[MAXGAMEARRAYS];
-extern int g_gameVarCount;
-extern int g_gameArrayCount;
 
 enum SpriteFlags_t {
     SFLAG_SHADOW           = 0x00000001,

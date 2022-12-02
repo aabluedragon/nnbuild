@@ -1269,14 +1269,14 @@ static void Net_ResetPredictionData(void)
 
     for (int i = g_gameVarCount - 1; i >= 0; i--)
     {
-        if (aGameVars[i].dwFlags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+        if (aGameVars[i].flags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
             continue;
 
-        if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
+        if (aGameVars[i].flags & GAMEVAR_PERPLAYER)
         {
             Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * MAXPLAYERS);
         }
-        else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
+        else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
         {
             Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * MAXSPRITES);
         }
@@ -1347,22 +1347,22 @@ static void Net_InitializeGameVarPointers(void)
     // Init GameVar original pointers here
     for (int i = g_gameVarCount - 1; i >= 0; i--)
     {
-        if (aGameVars[i].dwFlags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+        if (aGameVars[i].flags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
             continue;
 
         // Store original addresses
-        if (aGameVars[i].dwFlags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
+        if (aGameVars[i].flags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
         {
             original_plValues[i] = aGameVars[i].val.plValues;
         }
 
         // Allocate memory for predicted values
-        if (aGameVars[i].dwFlags & GAMEVAR_PERPLAYER)
+        if (aGameVars[i].flags & GAMEVAR_PERPLAYER)
         {
             if (!predicted_plValues[i])
                 predicted_plValues[i] = (intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
         }
-        else if (aGameVars[i].dwFlags & GAMEVAR_PERACTOR)
+        else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
         {
             if (!predicted_plValues[i])
                 predicted_plValues[i] = (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
@@ -1396,10 +1396,10 @@ void Net_UsePredictedPointers(void)
 
     for (int i = g_gameVarCount - 1; i >= 0; i--)
     {
-        if (aGameVars[i].dwFlags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+        if (aGameVars[i].flags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
             continue;
 
-        if (aGameVars[i].dwFlags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
+        if (aGameVars[i].flags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
         {
             aGameVars[i].val.plValues = predicted_plValues[i];
         }
@@ -1420,10 +1420,10 @@ void Net_UseOriginalPointers(void)
     // Switch to Original GameVars here
     for (int i = g_gameVarCount - 1; i >= 0; i--)
     {
-        if (aGameVars[i].dwFlags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+        if (aGameVars[i].flags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
             continue;
 
-        if (aGameVars[i].dwFlags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
+        if (aGameVars[i].flags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
         {
             aGameVars[i].val.plValues = original_plValues[i];
         }
@@ -1441,10 +1441,10 @@ void Net_SwapPredictedLinkedLists(void)
 
     for (int i = g_gameVarCount - 1; i >= 0; i--)
     {
-        if (aGameVars[i].dwFlags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
+        if (aGameVars[i].flags & (/*GAMEVAR_READONLY |*/ GAMEVAR_SPECIAL | GAMEVAR_NOMULTI | GAMEVAR_PTR_MASK))
             continue;
 
-        if (!(aGameVars[i].dwFlags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR)))
+        if (!(aGameVars[i].flags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR)))
         {
             std::swap(aGameVars[i].val.lValue, predicted_lValue[i]);
         }
