@@ -555,92 +555,60 @@ void VM_InitHashTables(void)
 // this is all the crap for accessing the game's structs through the CON VM
 // I got a 3-4 fps gain by inlining these...
 
-void __fastcall X_AccessTileData(int iSet, int lVar1, int lLabelID, int lVar2)
+int32_t __fastcall VM_GetTileData(int const tileNum, int32_t labelNum)
 {
-    int lValue = 0, tile = g_i;
-
-    if (lVar1 != sysVarIDs.THISACTOR)
-        tile = Gv_GetVar(lVar1, g_i, g_p);
-
-    if ((tile < 0 || tile >= MAXTILES) && g_scriptSanityChecks)
+    if (EDUKE32_PREDICT_FALSE((unsigned)tileNum >= MAXTILES))
     {
-        OSD_Printf(CON_ERROR "tried to %s %s on invalid tile number (%d) from sprite id: %d, picnum: %d.\n", g_errorLineNum, VM_GetKeywordForID(g_tw),
-            iSet ? "set" : "get", TileDataLabels[lLabelID].name, tile, g_i, TrackerCast(g_sp->picnum));
-        insptr += (lVar2 == MAXGAMEVARS);
+        CON_ERRPRINTF("invalid tile %d\n", tileNum);
+        return -1;
+    }
+
+    auto const& tileDataLabel = TileDataLabels[labelNum];
+    auto const& p = picanm[tileNum];
+
+    switch (tileDataLabel.lId)
+    {
+        case TILEDATA_XSIZE:        return tilesiz[tileNum].x;
+        case TILEDATA_YSIZE:        return tilesiz[tileNum].y;
+
+        case TILEDATA_GAMEFLAGS:    return g_tile[tileNum].flags;
+
+        case TILEDATA_ANIMFRAMES:   return p.num;
+        case TILEDATA_XOFFSET:      return p.xofs;
+        case TILEDATA_YOFFSET:      return p.yofs;
+
+        case TILEDATA_ANIMSPEED:    return (p.sf & PICANM_ANIMSPEED_MASK);
+        case TILEDATA_ANIMTYPE:     return (p.sf & PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT;
+
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
+    }
+}
+
+void __fastcall VM_SetTileData(int const tileNum, int const labelNum, int32_t newValue)
+{
+    if (EDUKE32_PREDICT_FALSE((unsigned)tileNum >= MAXTILES))
+    {
+        CON_ERRPRINTF("invalid tile %d\n", tileNum);
         return;
     }
 
-    if (iSet)
-        lValue = Gv_GetVar(lVar2, g_i, g_p);
+    auto const& tileDataLabel = TileDataLabels[labelNum];
+    auto& p = picanm[tileNum];
 
-    switch (lLabelID)
+    switch (tileDataLabel.lId)
     {
-    case TILEDATA_XSIZE:
-        if (iSet)
-        {
-            tilesiz[tile].x = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, tilesiz[tile].x, g_i, g_p);
-        return;
-    case TILEDATA_YSIZE:
-        if (iSet)
-        {
-            tilesiz[tile].y = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, tilesiz[tile].y, g_i, g_p);
-        return;
-    case TILEDATA_GAMEFLAGS:
-        if (iSet)
-        {
-            g_tile[tile].flags = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, g_tile[tile].flags, g_i, g_p);
-        return;
-    case TILEDATA_ANIMFRAMES:
-        if (iSet)
-        {
-            picanm[tile].num = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, picanm[tile].num, g_i, g_p);
-        return;
-    case TILEDATA_XOFFSET:
-        if (iSet)
-        {
-            picanm[tile].xofs = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, picanm[tile].xofs, g_i, g_p);
-        return;
-    case TILEDATA_YOFFSET:
-        if (iSet)
-        {
-            picanm[tile].yofs = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, picanm[tile].yofs, g_i, g_p);
-        return;
-    case TILEDATA_ANIMSPEED:
-        if (iSet)
-        {
-            picanm[tile].sf = (picanm[tile].sf & ~PICANM_ANIMSPEED_MASK) | (lValue & PICANM_ANIMSPEED_MASK);
-            return;
-        }
-        Gv_SetVar(lVar2, (picanm[tile].sf & PICANM_ANIMSPEED_MASK), g_i, g_p);
-        return;
-    case TILEDATA_ANIMTYPE:
-        if (iSet)
-        {
-            picanm[tile].sf = (picanm[tile].sf & ~PICANM_ANIMTYPE_MASK) | ((lValue << PICANM_ANIMTYPE_SHIFT) & PICANM_ANIMTYPE_MASK);
-            return;
-        }
-        Gv_SetVar(lVar2, (picanm[tile].sf & PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT, g_i, g_p);
-        return;
-    default:
-        return;
+        //case TILEDATA_XSIZE: tilesiz[tileNum].x = newValue; break;
+        //case TILEDATA_YSIZE: tilesiz[tileNum].y = newValue; break;
+
+        case TILEDATA_GAMEFLAGS: g_tile[tileNum].flags = newValue; return;
+
+        case TILEDATA_ANIMFRAMES: p.num = newValue; return;
+        case TILEDATA_XOFFSET:    p.xofs = newValue; return;
+        case TILEDATA_YOFFSET:    p.yofs = newValue; return;
+
+        case TILEDATA_ANIMSPEED: p.sf = (p.sf & ~PICANM_ANIMSPEED_MASK) | (newValue & PICANM_ANIMSPEED_MASK); return;
+        case TILEDATA_ANIMTYPE:  p.sf = (p.sf & ~PICANM_ANIMTYPE_MASK) | ((newValue << PICANM_ANIMTYPE_SHIFT) & PICANM_ANIMTYPE_MASK); return;
+        default: return;
     }
 }
 

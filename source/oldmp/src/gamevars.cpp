@@ -642,14 +642,14 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 CHECK_INDEX(MAXTILES);
                 returnValue = VM_GetProjectile(arrayIndex, labelNum);
                 break;
-#if 0
+
             case STRUCT_TILEDATA:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = vm.pSprite->picnum;
+                    arrayIndex = g_sp->picnum;
                 CHECK_INDEX(MAXTILES);
                 returnValue = VM_GetTileData(arrayIndex, labelNum);
                 break;
-
+#if 0
             case STRUCT_PALDATA:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
                     arrayIndex = vm.pSprite->pal;
@@ -698,6 +698,7 @@ int __fastcall Gv_GetVar(int id, int iActor, int iPlayer)
     if (id == GV_FLAG_CONSTANT)
         return *insptr++;
 
+    // Special IDs for backwards compatibility
     if (id == sysVarIDs.RESPAWN_MONSTERS)   return DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS);
     if (id == sysVarIDs.RESPAWN_ITEMS)      return DMFLAGS_TEST(DMFLAG_RESPAWNITEMS);
     if (id == sysVarIDs.RESPAWN_INVENTORY)  return DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY);

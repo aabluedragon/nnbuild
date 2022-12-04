@@ -3910,10 +3910,10 @@ static int X_DoExecute(void)
     case CON_GETPLAYER:
         insptr++;
         {
-            int const   playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
-            int const labelNum = *insptr++;
+            int const   playerNum   = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const   labelNum    = *insptr++;
             auto const& playerLabel = PlayerLabels[labelNum];
-            int const   lParm2 = (playerLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
+            int const   lParm2      = (playerLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
 
             VM_ABORT_IF(((unsigned)playerNum >= MAXPLAYERS) | ((unsigned)lParm2 > (unsigned)playerLabel.maxParm2),
                 "%s[%d] invalid for player %d", playerLabel.name, lParm2, playerNum);
@@ -3932,10 +3932,9 @@ static int X_DoExecute(void)
     case CON_GETINPUT:
         insptr++;
         {
-            int const playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
-            int const labelNum = *insptr++;
-            int const lVar2 = *insptr++;
-
+            int const playerNum     = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const labelNum      = *insptr++;
+            int const lVar2         = *insptr++;
 
             if(tw == CON_SETINPUT)
                 VM_SetPlayerInput(playerNum, labelNum, Gv_GetVarX(lVar2));
@@ -3949,11 +3948,15 @@ static int X_DoExecute(void)
     case CON_GETTILEDATA:
         insptr++;
         {
-            // syntax [gs]ettiledata[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
-            int lVar1 = *insptr++, lLabelID = *insptr++, lVar2 = *insptr++;
+            int const tileNum   = *insptr++;
+            int const labelNum  = *insptr++;
+            int const lVar2     = *insptr++;
 
-            X_AccessTileData(tw == CON_SETTILEDATA, lVar1, lLabelID, lVar2);
+            if(tw == CON_SETTILEDATA)
+                VM_SetTileData(tileNum, labelNum, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetTileData(tileNum, labelNum));
+
             break;
         }
 
@@ -3961,10 +3964,10 @@ static int X_DoExecute(void)
     case CON_GETUSERDEF:
         insptr++;
         {
-            int const labelNum = *insptr++;
-            auto const& udLabel = UserdefsLabels[labelNum];
-            int const lParm2 = (udLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
-            int const lVar2 = *insptr++;
+            int const   labelNum    = *insptr++;
+            auto const& udLabel     = UserdefsLabels[labelNum];
+            int const   lParm2      = (udLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
+            int const   lVar2       = *insptr++;
 
             X_AccessUserdef(tw==CON_SETUSERDEF, labelNum, lVar2, lParm2);
             break;
@@ -3974,14 +3977,15 @@ static int X_DoExecute(void)
     case CON_GETPROJECTILE:
         insptr++;
         {
-            int const tileNum = Gv_GetVarX(*insptr++);
-            int const labelNum = *insptr++;
-            int const lVar2 = *insptr++;
+            int const tileNum   = Gv_GetVarX(*insptr++);
+            int const labelNum  = *insptr++;
+            int const lVar2     = *insptr++;
 
             if(tw == CON_SETPROJECTILE)
                 VM_SetProjectile(tileNum, labelNum, Gv_GetVarX(lVar2));
             else
                 Gv_SetVarX(lVar2, VM_GetProjectile(tileNum, labelNum));
+
             break;
         }
 
@@ -3992,8 +3996,8 @@ static int X_DoExecute(void)
             int const wallNum = Gv_GetVarX(*insptr++);
             VM_ABORT_IF((unsigned)wallNum >= MAXWALLS, "invalid wall %d", wallNum);
 
-            int const labelNum = *insptr++;
-            int const lVar2 = *insptr++;
+            int const labelNum  = *insptr++;
+            int const lVar2     = *insptr++;
 
             if(tw == CON_SETWALL)
                 VM_SetWall(wallNum, labelNum, Gv_GetVarX(lVar2));
@@ -4014,11 +4018,10 @@ static int X_DoExecute(void)
             int const lVar2 = *insptr++;
 
             if (tw == CON_SETACTORVAR)
-            {
                 Gv_SetVar(lVar1, Gv_GetVarX(lVar2), lSprite, g_p);
-                break;
-            }
-            Gv_SetVarX(lVar2, Gv_GetVar(lVar1, lSprite, g_p));
+            else
+                Gv_SetVarX(lVar2, Gv_GetVar(lVar1, lSprite, g_p));
+
             break;
         }
 
@@ -4033,11 +4036,10 @@ static int X_DoExecute(void)
             int const lVar2 = *insptr++;
 
             if (tw == CON_SETPLAYERVAR)
-            {
                 Gv_SetVar(lVar1, Gv_GetVarX(lVar2), g_i, playerNum);
-                break;
-            }
-            Gv_SetVarX(lVar2, Gv_GetVar(lVar1, g_i, playerNum));
+            else
+                Gv_SetVarX(lVar2, Gv_GetVar(lVar1, g_i, playerNum));
+
             break;
         }
 
@@ -4045,15 +4047,14 @@ static int X_DoExecute(void)
     case CON_GETACTOR:
         insptr++;
         {
-            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
-            int const   labelNum = *insptr++;
-            auto const& actorLabel = ActorLabels[labelNum];
-            int const   lParm2 = (actorLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
+            int const   spriteNum   = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   labelNum    = *insptr++;
+            auto const& actorLabel  = ActorLabels[labelNum];
+            int const   lParm2      = (actorLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
+            int const   lVar2       = *insptr++;
 
             VM_ABORT_IF(((unsigned)spriteNum >= MAXSPRITES) | ((unsigned)lParm2 > (unsigned)actorLabel.maxParm2),
-                "%s[%d] invalid for sprite %d", actorLabel.name, lParm2, spriteNum);
-
-            int const lVar2 = *insptr++;
+                "%s[%d] invalid for sprite %d", actorLabel.name, lParm2, spriteNum);       
 
             if (tw == CON_SETACTOR)
                 VM_SetSprite(spriteNum, labelNum, lParm2, Gv_GetVarX(lVar2));
@@ -4070,14 +4071,15 @@ static int X_DoExecute(void)
             int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
             VM_ABORT_IF((unsigned)spriteNum >= MAXSPRITES, "invalid sprite %d", spriteNum);
 
-            int const labelNum = *insptr++;
-            auto const& tsprLabel = TsprLabels[labelNum];
-            int const lVar2 = *insptr++;
+            int const   labelNum    = *insptr++;
+            auto const& tsprLabel   = TsprLabels[labelNum];
+            int const   lVar2       = *insptr++;
 
             if(tw == CON_SETTSPR)
                 VM_SetStruct(tsprLabel.flags, (intptr_t*)((char*)spriteext[spriteNum].tspr + tsprLabel.offset), Gv_GetVarX(lVar2));
             else
                 Gv_SetVarX(lVar2, VM_GetStruct(tsprLabel.flags, (intptr_t*)((char*)spriteext[spriteNum].tspr + tsprLabel.offset)));
+
             break;
         }
 
