@@ -1254,8 +1254,8 @@ static void C_GetNextVarType(int32_t type)
                             *varptr = (*varptr & ~(MAXGAMEVARS - 1)) + sysVarIDs.structs + STRUCT_SPRITE_INTERNAL__;
                     }
                 }
-
                 break;
+
                 case STRUCT_SECTOR:
                 {
                     auto const& label = SectorLabels[labelNum];
@@ -2817,12 +2817,12 @@ static bool C_ParseCommand(bool loop /*= false*/)
 
         Bassert((*ins & VM_INSTMASK) == tw);
 
-        auto const& label = WallLabels[labelNum];
+        //auto const& label = WallLabels[labelNum];
 
         //if (label.offset != -1 && (label.flags & LABEL_WRITEFUNC) == 0)
         //    *ins = CON_GETWALLSTRUCT | LINE_NUMBER;
 
-        scriptWriteValue(label.lId);
+        scriptWriteValue(labelNum);
 
         C_GetNextVarType(tw == CON_GETWALL ? GAMEVAR_READONLY : 0);
         continue;
@@ -2920,7 +2920,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
         textptr++;
         C_GetNextLabelName();
 
-        int const labelNum = C_GetLabelNameID(UserdefsLabels, &h_userdef, Bstrtolower(LAST_LABEL));
+        int const labelNum = C_GetLabelNameOffset(&h_userdef, Bstrtolower(LAST_LABEL));
 
         if (EDUKE32_PREDICT_FALSE(labelNum == -1))
         {

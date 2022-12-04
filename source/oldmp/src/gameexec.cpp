@@ -4460,26 +4460,34 @@ static int X_DoExecute(void)
 
     case CON_IFVARVARAND:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) & Gv_GetVarX(*(insptr)));
+        j = Gv_GetVarX(*insptr++);
+        j = (j & Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
         break;
 
     case CON_IFVARVAROR:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) | Gv_GetVarX(*(insptr)));
+        j = Gv_GetVarX(*insptr++);
+        j = (j | Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
         break;
 
     case CON_IFVARVARXOR:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) ^ Gv_GetVarX(*(insptr)));
+        j = Gv_GetVarX(*insptr++);
+        j = (j ^ Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
         break;
 
     case CON_IFVARVAREITHER:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) || Gv_GetVarX(*(insptr)));
+        j = Gv_GetVarX(*insptr++);
+        j = (j || Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
         break;
 
     case CON_IFVARVARN:
@@ -4492,20 +4500,26 @@ static int X_DoExecute(void)
 
     case CON_IFVARVARE:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) == Gv_GetVarX(*(insptr)));
+        j = Gv_GetVarX(*insptr++);
+        j = (j == Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
         break;
 
     case CON_IFVARVARG:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) > Gv_GetVarX(*(insptr)));
+        j = Gv_GetVarX(*insptr++);
+        j = (j > Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
         break;
 
     case CON_IFVARVARL:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) < Gv_GetVarX(*(insptr)));
+        j = Gv_GetVarX(*insptr++);
+        j = (j < Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
         break;
 
     case CON_IFVARE:
