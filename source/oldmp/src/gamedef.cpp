@@ -2873,7 +2873,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
         if (labelNum == -1)
             continue;
 
-        scriptWriteValue(InputLabels[labelNum].lId);
+        scriptWriteValue(labelNum);
 
         C_GetNextVarType(tw == CON_GETINPUT ? GAMEVAR_READONLY : 0);
         continue;
@@ -2893,7 +2893,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
         if (labelNum == -1)
             continue;
 
-        scriptWriteValue(TileDataLabels[labelNum].lId);
+        scriptWriteValue(labelNum);
 
         C_GetNextVarType((tw == CON_GETTILEDATA) ? GAMEVAR_READONLY : 0);
         continue;

@@ -1106,15 +1106,19 @@ static int X_DoExecute(void)
                 break;
             }
 
-    case CON_GETTHISPROJECTILE:
     case CON_SETTHISPROJECTILE:
+    case CON_GETTHISPROJECTILE:
         insptr++;
         {
-            // syntax [gs]etplayer[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
-            int lVar1=*insptr++, lLabelID=*insptr++, lVar2=*insptr++;
+            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;
 
-            X_AccessActiveProjectile(tw==CON_SETTHISPROJECTILE,lVar1,lLabelID,lVar2);
+            if(tw == CON_SETTHISPROJECTILE)
+                VM_SetActiveProjectile(spriteNum, labelNum, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetActiveProjectile(spriteNum, labelNum));
+
             break;
         }
 
@@ -3675,7 +3679,11 @@ static int X_DoExecute(void)
 
             VM_ABORT_IF((unsigned)sectNum >= MAXSECTORS, "invalid sector %d", sectNum);
 
-            X_AccessSector(tw==CON_SETSECTOR, sectNum, labelNum, lVar2);
+            if(tw == CON_SETSECTOR)
+                VM_SetSector(sectNum, labelNum, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetSector(sectNum, labelNum));
+
             break;
         }
 
@@ -3924,11 +3932,16 @@ static int X_DoExecute(void)
     case CON_GETINPUT:
         insptr++;
         {
-            // syntax [gs]etplayer[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
-            int lVar1=*insptr++, lLabelID=*insptr++, lVar2=*insptr++;
+            int const playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;
 
-            X_AccessPlayerInput(tw==CON_SETINPUT, lVar1, lLabelID, lVar2);
+
+            if(tw == CON_SETINPUT)
+                VM_SetPlayerInput(playerNum, labelNum, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetPlayerInput(playerNum, labelNum));
+
             break;
         }
 
@@ -3944,8 +3957,8 @@ static int X_DoExecute(void)
             break;
         }
 
-    case CON_GETUSERDEF:
     case CON_SETUSERDEF:
+    case CON_GETUSERDEF:
         insptr++;
         {
             int const labelNum = *insptr++;
@@ -3957,14 +3970,18 @@ static int X_DoExecute(void)
             break;
         }
 
-    case CON_GETPROJECTILE:
     case CON_SETPROJECTILE:
+    case CON_GETPROJECTILE:
         insptr++;
         {
             int const tileNum = Gv_GetVarX(*insptr++);
             int const labelNum = *insptr++;
             int const lVar2 = *insptr++;
-            X_AccessProjectile(tw == CON_SETPROJECTILE, tileNum, labelNum, lVar2);
+
+            if(tw == CON_SETPROJECTILE)
+                VM_SetProjectile(tileNum, labelNum, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetProjectile(tileNum, labelNum));
             break;
         }
 
@@ -3972,11 +3989,17 @@ static int X_DoExecute(void)
     case CON_GETWALL:
         insptr++;
         {
-            // syntax [gs]etwall[<var>].x <VAR>
-            // <varid> <xxxid> <varid>
-            int lVar1=*insptr++, lLabelID=*insptr++, lVar2=*insptr++;
+            int const wallNum = Gv_GetVarX(*insptr++);
+            VM_ABORT_IF((unsigned)wallNum >= MAXWALLS, "invalid wall %d", wallNum);
 
-            X_AccessWall(tw==CON_SETWALL, lVar1, lLabelID, lVar2);
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;
+
+            if(tw == CON_SETWALL)
+                VM_SetWall(wallNum, labelNum, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetWall(wallNum, labelNum));
+
             break;
         }
 
@@ -4032,7 +4055,10 @@ static int X_DoExecute(void)
 
             int const lVar2 = *insptr++;
 
-            X_AccessSprite(tw == CON_SETACTOR, spriteNum, labelNum, lVar2, lParm2);
+            if (tw == CON_SETACTOR)
+                VM_SetSprite(spriteNum, labelNum, lParm2, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetSprite(spriteNum, labelNum, lParm2));
 
             break;
         }
@@ -4045,9 +4071,13 @@ static int X_DoExecute(void)
             VM_ABORT_IF((unsigned)spriteNum >= MAXSPRITES, "invalid sprite %d", spriteNum);
 
             int const labelNum = *insptr++;
+            auto const& tsprLabel = TsprLabels[labelNum];
             int const lVar2 = *insptr++;
 
-            X_AccessTsprite(tw==CON_SETTSPR, spriteNum, labelNum, lVar2);
+            if(tw == CON_SETTSPR)
+                VM_SetStruct(tsprLabel.flags, (intptr_t*)((char*)spriteext[spriteNum].tspr + tsprLabel.offset), Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetStruct(tsprLabel.flags, (intptr_t*)((char*)spriteext[spriteNum].tspr + tsprLabel.offset)));
             break;
         }
 

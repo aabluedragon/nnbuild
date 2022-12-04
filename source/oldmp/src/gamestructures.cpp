@@ -27,59 +27,67 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osd.h"
 #include "gamestructures.h"
 
+#define LABEL(struct, memb, name, idx)                                                              \
+    {                                                                                                               \
+        name, idx, sizeof(struct[0].memb) | (is_unsigned<decltype(struct[0].memb)>::value ? LABEL_UNSIGNED : 0), 0, \
+        offsetof(remove_pointer_t<decltype(&struct[0])>, memb)                                                      \
+    }
+
+#define MEMBER(struct, memb, idx) LABEL(struct, memb, #memb, idx)
+
 const memberlabel_t SectorLabels[] =
 {
-    { "wallptr",            SECTOR_WALLPTR, 0, 0, -1 },
-    { "wallnum",            SECTOR_WALLNUM, 0, 0, -1 },
-    { "ceilingz",           SECTOR_CEILINGZ, 0, 0, -1 },
-    { "ceilingzgoal",       SECTOR_CEILINGZGOAL, 0, 0, -1 },
-    { "ceilingzvel",        SECTOR_CEILINGZVEL, 0, 0, -1 },
-    { "floorz",             SECTOR_FLOORZ, 0, 0, -1 },
-    { "floorzgoal",         SECTOR_FLOORZGOAL, 0, 0, -1 },
-    { "floorzvel",          SECTOR_FLOORZVEL, 0, 0, -1 },
-    { "ceilingstat",        SECTOR_CEILINGSTAT, 0, 0, -1 },
-    { "floorstat",          SECTOR_FLOORSTAT, 0, 0, -1 },
-    { "ceilingpicnum",      SECTOR_CEILINGPICNUM, 0, 0, -1 },
-    { "ceilingslope",       SECTOR_CEILINGSLOPE, 0, 0, -1 },
-    { "ceilingshade",       SECTOR_CEILINGSHADE, 0, 0, -1 },
-    { "ceilingpal",         SECTOR_CEILINGPAL, 0, 0, -1 },
+    { "wallptr",            SECTOR_WALLPTR,         0, 0, -1 },
+    { "wallnum",            SECTOR_WALLNUM,         0, 0, -1 },
+    { "ceilingz",           SECTOR_CEILINGZ,        0, 0, -1 },
+    { "ceilingzgoal",       SECTOR_CEILINGZGOAL,    0, 0, -1 },
+    { "ceilingzvel",        SECTOR_CEILINGZVEL,     0, 0, -1 },
+    { "floorz",             SECTOR_FLOORZ,          0, 0, -1 },
+    { "floorzgoal",         SECTOR_FLOORZGOAL,      0, 0, -1 },
+    { "floorzvel",          SECTOR_FLOORZVEL,       0, 0, -1 },
+    { "ceilingstat",        SECTOR_CEILINGSTAT,     0, 0, -1 },
+    { "floorstat",          SECTOR_FLOORSTAT,       0, 0, -1 },
+    { "ceilingpicnum",      SECTOR_CEILINGPICNUM,   0, 0, -1 },
+    { "ceilingslope",       SECTOR_CEILINGSLOPE,    0, 0, -1 },
+    { "ceilingshade",       SECTOR_CEILINGSHADE,    0, 0, -1 },
+    { "ceilingpal",         SECTOR_CEILINGPAL,      0, 0, -1 },
     { "ceilingxpanning",    SECTOR_CEILINGXPANNING, 0, 0, -1 },
     { "ceilingypanning",    SECTOR_CEILINGYPANNING, 0, 0, -1 },
-    { "floorpicnum",        SECTOR_FLOORPICNUM, 0, 0, -1 },
-    { "floorslope",         SECTOR_FLOORSLOPE, 0, 0, -1 },
-    { "floorshade",         SECTOR_FLOORSHADE, 0, 0, -1 },
-    { "floorpal",           SECTOR_FLOORPAL, 0, 0, -1 },
-    { "floorxpanning",      SECTOR_FLOORXPANNING, 0, 0, -1 },
-    { "floorypanning",      SECTOR_FLOORYPANNING, 0, 0, -1 },
-    { "visibility",         SECTOR_VISIBILITY, 0, 0, -1 },
-    // { "filler",           SECTOR_ALIGNTO, 0, 0, -1 },
-    { "alignto",            SECTOR_ALIGNTO, 0, 0, -1 }, // aka filler, not used
-    { "lotag",              SECTOR_LOTAG, 0, 0, -1 },
-    { "hitag",              SECTOR_HITAG, 0, 0, -1 },
-    { "extra",              SECTOR_EXTRA, 0, 0, -1 },
-    { "",                   -1, 0, 0, -1  }     // END OF LIST
+    { "floorpicnum",        SECTOR_FLOORPICNUM,     0, 0, -1 },
+    { "floorslope",         SECTOR_FLOORSLOPE,      0, 0, -1 },
+    { "floorshade",         SECTOR_FLOORSHADE,      0, 0, -1 },
+    { "floorpal",           SECTOR_FLOORPAL,        0, 0, -1 },
+    { "floorxpanning",      SECTOR_FLOORXPANNING,   0, 0, -1 },
+    { "floorypanning",      SECTOR_FLOORYPANNING,   0, 0, -1 },
+    { "visibility",         SECTOR_VISIBILITY,      0, 0, -1 },
+    //{ "filler",             SECTOR_ALIGNTO,         0, 0, -1 },
+    { "alignto",            SECTOR_ALIGNTO,         0, 0, -1 }, // aka filler, not used
+    { "lotag",              SECTOR_LOTAG,           0, 0, -1 },
+    { "hitag",              SECTOR_HITAG,           0, 0, -1 },
+    { "extra",              SECTOR_EXTRA,           0, 0, -1 },
+    { "",                   -1,                     0, 0, -1 }     // END OF LIST
 };
 
 const memberlabel_t WallLabels[] =
 {
-    { "x",          WALL_X, 0, 0, -1 },
-    { "y",          WALL_Y, 0, 0, -1 },
-    { "point2",     WALL_POINT2, 0, 0, -1 },
-    { "nextwall",   WALL_NEXTWALL, 0, 0, -1 },
-    { "nextsector", WALL_NEXTSECTOR, 0, 0, -1 },
-    { "cstat",      WALL_CSTAT, 0, 0, -1 },
-    { "picnum",     WALL_PICNUM, 0, 0, -1 },
-    { "overpicnum", WALL_OVERPICNUM, 0, 0, -1 },
-    { "shade",      WALL_SHADE, 0, 0, -1 },
-    { "pal",        WALL_PAL, 0, 0, -1 },
-    { "xrepeat",    WALL_XREPEAT, 0, 0, -1 },
-    { "yrepeat",    WALL_YREPEAT, 0, 0, -1 },
-    { "xpanning",   WALL_XPANNING, 0, 0, -1 },
-    { "ypanning",   WALL_YPANNING, 0, 0, -1 },
-    { "lotag",      WALL_LOTAG, 0, 0, -1 },
-    { "hitag",      WALL_HITAG, 0, 0, -1 },
-    { "extra",      WALL_EXTRA, 0, 0, -1 },
-    { "",           -1, 0, 0, -1  }     // END OF LIST
+    { "x",          WALL_X,             0, 0, -1 },
+    { "y",          WALL_Y,             0, 0, -1 },
+    { "point2",     WALL_POINT2,        0, 0, -1 },
+    { "nextwall",   WALL_NEXTWALL,      0, 0, -1 },
+    { "nextsector", WALL_NEXTSECTOR,    0, 0, -1 },
+    { "cstat",      WALL_CSTAT,         0, 0, -1 },
+    { "picnum",     WALL_PICNUM,        0, 0, -1 },
+    { "overpicnum", WALL_OVERPICNUM,    0, 0, -1 },
+    { "shade",      WALL_SHADE,         0, 0, -1 },
+    { "pal",        WALL_PAL,           0, 0, -1 },
+    { "xrepeat",    WALL_XREPEAT,       0, 0, -1 },
+    { "yrepeat",    WALL_YREPEAT,       0, 0, -1 },
+    { "xpanning",   WALL_XPANNING,      0, 0, -1 },
+    { "ypanning",   WALL_YPANNING,      0, 0, -1 },
+    { "lotag",      WALL_LOTAG,         0, 0, -1 },
+    { "hitag",      WALL_HITAG,         0, 0, -1 },
+    { "extra",      WALL_EXTRA,         0, 0, -1 },
+    { "",           -1,                 0, 0, -1 }     // END OF LIST
 };
 
 const memberlabel_t ActorLabels[] =
@@ -147,38 +155,33 @@ const memberlabel_t ActorLabels[] =
     { "",               -1, 0, 0, -1  }     // END OF LIST
 };
 
-const memberlabel_t TsprLabels[] =
+memberlabel_t const TsprLabels[] =
 {
     // tsprite access
 
-    { "tsprx",          ACTOR_X, 0, 0, -1 },
-    { "tspry",          ACTOR_Y, 0, 0, -1 },
-    { "tsprz",          ACTOR_Z, 0, 0, -1 },
-    { "tsprcstat",      ACTOR_CSTAT, 0, 0, -1 },
-    { "tsprpicnum",     ACTOR_PICNUM, 0, 0, -1 },
-    { "tsprshade",      ACTOR_SHADE, 0, 0, -1 },
-    { "tsprpal",        ACTOR_PAL, 0, 0, -1 },
-    { "tsprclipdist",   ACTOR_CLIPDIST, 0, 0, -1 },
-    //{ "tsprfiller",   ACTOR_DETAIL, 0, 0, -1 },
-    //{ "tsprdetail",     ACTOR_DETAIL, 0, 0, -1 }, // aka filler, not used
-    { "tsprblend",      ACTOR_BLEND, 0, 0, -1 },
-    { "tsprxrepeat",    ACTOR_XREPEAT, 0, 0, -1 },
-    { "tspryrepeat",    ACTOR_YREPEAT, 0, 0, -1 },
-    { "tsprxoffset",    ACTOR_XOFFSET, 0, 0, -1 },
-    { "tspryoffset",    ACTOR_YOFFSET, 0, 0, -1 },
-    { "tsprsectnum",    ACTOR_SECTNUM, 0, 0, -1 },
-    { "tsprstatnum",    ACTOR_STATNUM, 0, 0, -1 },
-    { "tsprang",        ACTOR_ANG, 0, 0, -1 },
-    { "tsprowner",      ACTOR_OWNER, 0, 0, -1 },
-#if 1
-    { "tsprxvel",       ACTOR_XVEL, 0, 0, -1 },
-    { "tspryvel",       ACTOR_YVEL, 0, 0, -1 },
-    { "tsprzvel",       ACTOR_ZVEL, 0, 0, -1 },
-    { "tsprlotag",      ACTOR_LOTAG, 0, 0, -1 },
-    { "tsprhitag",      ACTOR_HITAG, 0, 0, -1 },
-    { "tsprextra",      ACTOR_EXTRA, 0, 0, -1 },
-#endif
-    { "",               -1, 0, 0, -1 } // END OF LIST
+    LABEL(sprite, x,        "tsprx",        ACTOR_X),
+    LABEL(sprite, y,        "tspry",        ACTOR_Y),
+    LABEL(sprite, z,        "tsprz",        ACTOR_Z),
+    LABEL(sprite, cstat,    "tsprcstat",    ACTOR_CSTAT),
+    LABEL(sprite, picnum,   "tsprpicnum",   ACTOR_PICNUM),
+    LABEL(sprite, shade,    "tsprshade",    ACTOR_SHADE),
+    LABEL(sprite, pal,      "tsprpal",      ACTOR_PAL),
+    LABEL(sprite, clipdist, "tsprclipdist", ACTOR_CLIPDIST),
+    LABEL(sprite, blend,    "tsprblend",    ACTOR_BLEND),
+    LABEL(sprite, xrepeat,  "tsprxrepeat",  ACTOR_XREPEAT),
+    LABEL(sprite, yrepeat,  "tspryrepeat",  ACTOR_YREPEAT),
+    LABEL(sprite, xoffset,  "tsprxoffset",  ACTOR_XOFFSET),
+    LABEL(sprite, yoffset,  "tspryoffset",  ACTOR_YOFFSET),
+    LABEL(sprite, sectnum,  "tsprsectnum",  ACTOR_SECTNUM),
+    LABEL(sprite, statnum,  "tsprstatnum",  ACTOR_STATNUM),
+    LABEL(sprite, ang,      "tsprang",      ACTOR_ANG),
+    LABEL(sprite, owner,    "tsprowner",    ACTOR_OWNER),
+    LABEL(sprite, xvel,     "tsprxvel",     ACTOR_XVEL),
+    LABEL(sprite, yvel,     "tspryvel",     ACTOR_YVEL),
+    LABEL(sprite, zvel,     "tsprzvel",     ACTOR_ZVEL),
+    LABEL(sprite, lotag,    "tsprlotag",    ACTOR_LOTAG),
+    LABEL(sprite, hitag,    "tsprhitag",    ACTOR_HITAG),
+    LABEL(sprite, extra,    "tsprextra",    ACTOR_EXTRA),
 };
 
 const memberlabel_t PlayerLabels[] =
@@ -337,148 +340,146 @@ const memberlabel_t PlayerLabels[] =
 
 const memberlabel_t ProjectileLabels[] =
 {
-    { "workslike",  PROJ_WORKSLIKE, 0, 0, -1 },
-    { "spawns",     PROJ_SPAWNS, 0, 0, -1 },
-    { "sxrepeat",   PROJ_SXREPEAT, 0, 0, -1 },
-    { "syrepeat",   PROJ_SYREPEAT, 0, 0, -1 },
-    { "sound",      PROJ_SOUND, 0, 0, -1 },
-    { "isound",     PROJ_ISOUND, 0, 0, -1 },
-    { "vel",        PROJ_VEL, 0, 0, -1 },
-    { "extra",      PROJ_EXTRA, 0, 0, -1 },
-    { "decal",      PROJ_DECAL, 0, 0, -1 },
-    { "trail",      PROJ_TRAIL, 0, 0, -1 },
-    { "txrepeat",   PROJ_TXREPEAT, 0, 0, -1 },
-    { "tyrepeat",   PROJ_TYREPEAT, 0, 0, -1 },
-    { "toffset",    PROJ_TOFFSET, 0, 0, -1 },
-    { "tnum",       PROJ_TNUM, 0, 0, -1 },
-    { "drop",       PROJ_DROP, 0, 0, -1 },
-    { "cstat",      PROJ_CSTAT, 0, 0, -1 },
-    { "clipdist",   PROJ_CLIPDIST, 0, 0, -1 },
-    { "shade",      PROJ_SHADE, 0, 0, -1 },
-    { "xrepeat",    PROJ_XREPEAT, 0, 0, -1 },
-    { "yrepeat",    PROJ_YREPEAT, 0, 0, -1 },
-    { "pal",        PROJ_PAL, 0, 0, -1 },
-    { "extra_rand", PROJ_EXTRA_RAND, 0, 0, -1 },
-    { "hitradius",  PROJ_HITRADIUS, 0, 0, -1 },
-    { "velmult",    PROJ_MOVECNT, 0, 0, -1 },
-    { "offset",     PROJ_OFFSET, 0, 0, -1 },
-    { "bounces",    PROJ_BOUNCES, 0, 0, -1 },
-    { "bsound",     PROJ_BSOUND, 0, 0, -1 },
-    { "range",      PROJ_RANGE, 0, 0, -1 },
-    { "",           -1, 0, 0, -1 } // END OF LIST
+    { "workslike",  PROJ_WORKSLIKE,     0, 0, -1 },
+    { "spawns",     PROJ_SPAWNS,        0, 0, -1 },
+    { "sxrepeat",   PROJ_SXREPEAT,      0, 0, -1 },
+    { "syrepeat",   PROJ_SYREPEAT,      0, 0, -1 },
+    { "sound",      PROJ_SOUND,         0, 0, -1 },
+    { "isound",     PROJ_ISOUND,        0, 0, -1 },
+    { "vel",        PROJ_VEL,           0, 0, -1 },
+    { "extra",      PROJ_EXTRA,         0, 0, -1 },
+    { "decal",      PROJ_DECAL,         0, 0, -1 },
+    { "trail",      PROJ_TRAIL,         0, 0, -1 },
+    { "txrepeat",   PROJ_TXREPEAT,      0, 0, -1 },
+    { "tyrepeat",   PROJ_TYREPEAT,      0, 0, -1 },
+    { "toffset",    PROJ_TOFFSET,       0, 0, -1 },
+    { "tnum",       PROJ_TNUM,          0, 0, -1 },
+    { "drop",       PROJ_DROP,          0, 0, -1 },
+    { "cstat",      PROJ_CSTAT,         0, 0, -1 },
+    { "clipdist",   PROJ_CLIPDIST,      0, 0, -1 },
+    { "shade",      PROJ_SHADE,         0, 0, -1 },
+    { "xrepeat",    PROJ_XREPEAT,       0, 0, -1 },
+    { "yrepeat",    PROJ_YREPEAT,       0, 0, -1 },
+    { "pal",        PROJ_PAL,           0, 0, -1 },
+    { "extra_rand", PROJ_EXTRA_RAND,    0, 0, -1 },
+    { "hitradius",  PROJ_HITRADIUS,     0, 0, -1 },
+    { "velmult",    PROJ_MOVECNT,       0, 0, -1 },
+    { "offset",     PROJ_OFFSET,        0, 0, -1 },
+    { "bounces",    PROJ_BOUNCES,       0, 0, -1 },
+    { "bsound",     PROJ_BSOUND,        0, 0, -1 },
+    { "range",      PROJ_RANGE,         0, 0, -1 },
+    { "",           -1,                 0, 0, -1 } // END OF LIST
 };
 
 const memberlabel_t UserdefsLabels[] =
 {
-    { "god",                        USERDEFS_GOD,                   0, 0, -1 },
-    { "warp_on",                    USERDEFS_WARP_ON,               0, 0, -1 },
-    { "cashman",                    USERDEFS_CASHMAN,               0, 0, -1 },
-    { "eog",                        USERDEFS_EOG,                   0, 0, -1 },
-    { "showallmap",                 USERDEFS_SHOWALLMAP,            0, 0, -1 },
-    { "show_help",                  USERDEFS_SHOW_HELP,             0, 0, -1 },
-    { "scrollmode",                 USERDEFS_SCROLLMODE,            0, 0, -1 },
-    { "clipping",                   USERDEFS_CLIPPING,              0, 0, -1 },
-    { "user_name",                  USERDEFS_USER_NAME,             LABEL_HASPARM2, MAXPLAYERS, -1 },
-    { "ridecule",                   USERDEFS_RIDECULE,              LABEL_HASPARM2 | LABEL_ISSTRING, 10, -1 },
-    { "savegame",                   USERDEFS_SAVEGAME,              LABEL_HASPARM2 | LABEL_ISSTRING, 10, -1 },
-    { "pwlockout",                  USERDEFS_PWLOCKOUT,             LABEL_ISSTRING, 128, -1 },
-    { "rtsname;",                   USERDEFS_RTSNAME,               LABEL_ISSTRING, 128, -1 },
-    { "overhead_on",                USERDEFS_OVERHEAD_ON,           0, 0, -1 },
-    { "last_overhead",              USERDEFS_LAST_OVERHEAD,         0, 0, -1 },
-    { "showweapons",                USERDEFS_SHOWWEAPONS,           0, 0, -1 },
+    { "god",                    USERDEFS_GOD,                   0, 0, -1 },
+    { "warp_on",                USERDEFS_WARP_ON,               0, 0, -1 },
+    { "cashman",                USERDEFS_CASHMAN,               0, 0, -1 },
+    { "eog",                    USERDEFS_EOG,                   0, 0, -1 },
+    { "showallmap",             USERDEFS_SHOWALLMAP,            0, 0, -1 },
+    { "show_help",              USERDEFS_SHOW_HELP,             0, 0, -1 },
+    { "scrollmode",             USERDEFS_SCROLLMODE,            0, 0, -1 },
+    { "clipping",               USERDEFS_CLIPPING,              0, 0, -1 },
+    { "user_name",              USERDEFS_USER_NAME,             LABEL_HASPARM2, MAXPLAYERS, -1 },
+    { "ridecule",               USERDEFS_RIDECULE,              LABEL_HASPARM2 | LABEL_ISSTRING, 10, -1 },
+    { "savegame",               USERDEFS_SAVEGAME,              LABEL_HASPARM2 | LABEL_ISSTRING, 10, -1 },
+    { "pwlockout",              USERDEFS_PWLOCKOUT,             LABEL_ISSTRING, 128, -1 },
+    { "rtsname;",               USERDEFS_RTSNAME,               LABEL_ISSTRING, 128, -1 },
+    { "overhead_on",            USERDEFS_OVERHEAD_ON,           0, 0, -1 },
+    { "last_overhead",          USERDEFS_LAST_OVERHEAD,         0, 0, -1 },
+    { "showweapons",            USERDEFS_SHOWWEAPONS,           0, 0, -1 },
 
-    { "pause_on",                   USERDEFS_PAUSE_ON,              0, 0, -1 },
-    { "from_bonus",                 USERDEFS_FROM_BONUS,            0, 0, -1 },
-    { "camerasprite",               USERDEFS_CAMERASPRITE,          0, 0, -1 },
-    { "last_camsprite",             USERDEFS_LAST_CAMSPRITE,        0, 0, -1 },
-    { "last_level",                 USERDEFS_LAST_LEVEL,            0, 0, -1 },
-    { "secretlevel",                USERDEFS_SECRETLEVEL,           0, 0, -1 },
+    { "pause_on",               USERDEFS_PAUSE_ON,              0, 0, -1 },
+    { "from_bonus",             USERDEFS_FROM_BONUS,            0, 0, -1 },
+    { "camerasprite",           USERDEFS_CAMERASPRITE,          0, 0, -1 },
+    { "last_camsprite",         USERDEFS_LAST_CAMSPRITE,        0, 0, -1 },
+    { "last_level",             USERDEFS_LAST_LEVEL,            0, 0, -1 },
+    { "secretlevel",            USERDEFS_SECRETLEVEL,           0, 0, -1 },
 
-    { "const_visibility",           USERDEFS_CONST_VISIBILITY,      0, 0, -1 },
-    { "uw_framerate",               USERDEFS_UW_FRAMERATE,          0, 0, -1 },
-    { "camera_time",                USERDEFS_CAMERA_TIME,           0, 0, -1 },
-    { "folfvel",                    USERDEFS_FOLFVEL,               0, 0, -1 },
-    { "folavel",                    USERDEFS_FOLAVEL,               0, 0, -1 },
-    { "folx",                       USERDEFS_FOLX,                  0, 0, -1 },
-    { "foly",                       USERDEFS_FOLY,                  0, 0, -1 },
-    { "fola",                       USERDEFS_FOLA,                  0, 0, -1 },
-    { "reccnt",                     USERDEFS_RECCNT,                0, 0, -1 },
+    { "const_visibility",       USERDEFS_CONST_VISIBILITY,      0, 0, -1 },
+    { "uw_framerate",           USERDEFS_UW_FRAMERATE,          0, 0, -1 },
+    { "camera_time",            USERDEFS_CAMERA_TIME,           0, 0, -1 },
+    { "folfvel",                USERDEFS_FOLFVEL,               0, 0, -1 },
+    { "folavel",                USERDEFS_FOLAVEL,               0, 0, -1 },
+    { "folx",                   USERDEFS_FOLX,                  0, 0, -1 },
+    { "foly",                   USERDEFS_FOLY,                  0, 0, -1 },
+    { "fola",                   USERDEFS_FOLA,                  0, 0, -1 },
+    { "reccnt",                 USERDEFS_RECCNT,                0, 0, -1 },
 
-    { "entered_name",               USERDEFS_ENTERED_NAME,          0, 0, -1 },
-    { "screen_tilting",             USERDEFS_SCREEN_TILTING,        0, 0, -1 },
-    { "shadows",                    USERDEFS_SHADOWS,               0, 0, -1 },
-    { "fta_on",                     USERDEFS_FTA_ON,                0, 0, -1 },
-    { "executions",                 USERDEFS_EXECUTIONS,            0, 0, -1 },
-    { "auto_run",                   USERDEFS_AUTO_RUN,              0, 0, -1 },
-    { "coords",                     USERDEFS_COORDS,                0, 0, -1 },
-    { "tickrate",                   USERDEFS_TICKRATE,              0, 0, -1 },
-    { "m_coop",                     USERDEFS_M_COOP,                0, 0, -1 },
-    { "coop",                       USERDEFS_COOP,                  0, 0, -1 },
-    { "screen_size",                USERDEFS_SCREEN_SIZE,           0, 0, -1 },
-    { "lockout",                    USERDEFS_LOCKOUT,               0, 0, -1 },
-    { "crosshair",                  USERDEFS_CROSSHAIR,             0, 0, -1 },
+    { "entered_name",           USERDEFS_ENTERED_NAME,          0, 0, -1 },
+    { "screen_tilting",         USERDEFS_SCREEN_TILTING,        0, 0, -1 },
+    { "shadows",                USERDEFS_SHADOWS,               0, 0, -1 },
+    { "fta_on",                 USERDEFS_FTA_ON,                0, 0, -1 },
+    { "executions",             USERDEFS_EXECUTIONS,            0, 0, -1 },
+    { "auto_run",               USERDEFS_AUTO_RUN,              0, 0, -1 },
+    { "coords",                 USERDEFS_COORDS,                0, 0, -1 },
+    { "tickrate",               USERDEFS_TICKRATE,              0, 0, -1 },
+    { "m_coop",                 USERDEFS_M_COOP,                0, 0, -1 },
+    { "coop",                   USERDEFS_COOP,                  0, 0, -1 },
+    { "screen_size",            USERDEFS_SCREEN_SIZE,           0, 0, -1 },
+    { "lockout",                USERDEFS_LOCKOUT,               0, 0, -1 },
+    { "crosshair",              USERDEFS_CROSSHAIR,             0, 0, -1 },
 
-    { "wchoice[MAXPLAYERS][MAX_WEAPONS]",   USERDEFS_WCHOICE, 0, 0, -1 },
-
-    { "playerai",                   USERDEFS_PLAYERAI,              0, 0, -1 },
-    { "respawn_monsters",           USERDEFS_RESPAWN_MONSTERS,      0, 0, -1 },
-    { "respawn_items",              USERDEFS_RESPAWN_ITEMS,         0, 0, -1 },
-    { "respawn_inventory",          USERDEFS_RESPAWN_INVENTORY,     0, 0, -1 },
-    { "recstat",                    USERDEFS_RECSTAT,               0, 0, -1 },
-    { "monsters_off",               USERDEFS_MONSTERS_OFF,          0, 0, -1 },
-    { "brightness",                 USERDEFS_BRIGHTNESS,            0, 0, -1 },
-    { "m_respawn_items",            USERDEFS_M_RESPAWN_ITEMS,       0, 0, -1 },
-    { "m_respawn_monsters",         USERDEFS_M_RESPAWN_MONSTERS,    0, 0, -1 },
-    { "m_respawn_inventory",        USERDEFS_M_RESPAWN_INVENTORY,   0, 0, -1 },
-    { "m_recstat",                  USERDEFS_M_RECSTAT,             0, 0, -1 },
-    { "m_monsters_off",             USERDEFS_M_MONSTERS_OFF,        0, 0, -1 },
-    { "detail",                     USERDEFS_DETAIL,                0, 0, -1 },
-    { "m_ffire",                    USERDEFS_M_FFIRE,               0, 0, -1 },
-    { "ffire",                      USERDEFS_FFIRE,                 0, 0, -1 },
-    { "m_player_skill",             USERDEFS_M_PLAYER_SKILL,        0, 0, -1 },
-    { "m_level_number",             USERDEFS_M_LEVEL_NUMBER,        0, 0, -1 },
-    { "m_volume_number",            USERDEFS_M_VOLUME_NUMBER,       0, 0, -1 },
-    { "multimode",                  USERDEFS_MULTIMODE,             0, 0, -1 },
-    { "player_skill",               USERDEFS_PLAYER_SKILL,          0, 0, -1 },
-    { "level_number",               USERDEFS_LEVEL_NUMBER,          0, 0, -1 },
-    { "volume_number",              USERDEFS_VOLUME_NUMBER,         0, 0, -1 },
-    { "m_marker",                   USERDEFS_M_MARKER,              0, 0, -1 },
-    { "marker",                     USERDEFS_MARKER,                0, 0, -1 },
-    { "mouseflip",                  USERDEFS_MOUSEFLIP,             0, 0, -1 },
-    { "statusbarscale",             USERDEFS_STATUSBARSCALE,        0, 0, -1 },
-    { "drawweapon",                 USERDEFS_DRAWWEAPON,            0, 0, -1 },
-    { "mouseaiming",                USERDEFS_MOUSEAIMING,           0, 0, -1 },
-    { "weaponswitch",               USERDEFS_WEAPONSWITCH,          0, 0, -1 },
-    { "democams",                   USERDEFS_DEMOCAMS,              0, 0, -1 },
-    { "color",                      USERDEFS_COLOR,                 0, 0, -1 },
-    { "msgdisptime",                USERDEFS_MSGDISPTIME,           0, 0, -1 },
-    { "statusbarmode",              USERDEFS_STATUSBARMODE,         0, 0, -1 },
-    { "m_noexits",                  USERDEFS_M_NOEXITS,             0, 0, -1 },
-    { "noexits",                    USERDEFS_NOEXITS,               0, 0, -1 },
-    { "autovote",                   USERDEFS_AUTOVOTE,              0, 0, -1 },
-    { "automsg",                    USERDEFS_AUTOMSG,               0, 0, -1 },
-    { "idplayers",                  USERDEFS_IDPLAYERS,             0, 0, -1 },
-    { "team",                       USERDEFS_TEAM,                  0, 0, -1 },
-    { "viewbob",                    USERDEFS_VIEWBOB,               0, 0, -1 },
-    { "weaponsway",                 USERDEFS_WEAPONSWAY,            0, 0, -1 },
-    { "angleinterpolation",         USERDEFS_ANGLEINTERPOLATION,    0, 0, -1 },
-    { "obituaries",                 USERDEFS_OBITUARIES,            0, 0, -1 },
-    { "levelstats",                 USERDEFS_LEVELSTATS,            0, 0, -1 },
-    { "crosshairscale",             USERDEFS_CROSSHAIRSCALE,        0, 0, -1 },
-    { "althud",                     USERDEFS_ALTHUD,                0, 0, -1 },
-    { "display_bonus_screen",       USERDEFS_DISPLAY_BONUS_SCREEN,  0, 0, -1 },
-    { "show_level_text",            USERDEFS_SHOW_LEVEL_TEXT,       0, 0, -1 },
-    { "weaponscale",                USERDEFS_WEAPONSCALE,           0, 0, -1 },
-    { "textscale",                  USERDEFS_TEXTSCALE,             0, 0, -1 },
-    { "return",                     USERDEFS_RETURN,                LABEL_HASPARM2, MAX_RETURN_VALUES, -1 },
-    { "teampal",                    USERDEFS_TEAMPAL,               LABEL_HASPARM2, MAXPLAYERS, -1 },
-    { "teamfrags",                  USERDEFS_TEAMFRAGS,             LABEL_HASPARM2, MAXPLAYERS, -1 },
-    { "teamsuicides",               USERDEFS_TEAMSUICIDES,          LABEL_HASPARM2, MAXPLAYERS, -1 },
-    { "dmflags",                    USERDEFS_DMFLAGS,               0, 0, -1 },
-    { "m_dmflags",                  USERDEFS_M_DMFLAGS,             0, 0, -1 },
-    { "draw_yxaspect",              USERDEFS_DRAW_YXASPECT,         0, 0, -1 },
-    { "monsters_killed",            USERDEFS_MONSTERS_KILLED,       0, 0, -1 },
-    { "",                           -1,                             0, 0, -1 } // END OF LIST
+    { "playerai",               USERDEFS_PLAYERAI,              0, 0, -1 },
+    { "respawn_monsters",       USERDEFS_RESPAWN_MONSTERS,      0, 0, -1 },
+    { "respawn_items",          USERDEFS_RESPAWN_ITEMS,         0, 0, -1 },
+    { "respawn_inventory",      USERDEFS_RESPAWN_INVENTORY,     0, 0, -1 },
+    { "recstat",                USERDEFS_RECSTAT,               0, 0, -1 },
+    { "monsters_off",           USERDEFS_MONSTERS_OFF,          0, 0, -1 },
+    { "brightness",             USERDEFS_BRIGHTNESS,            0, 0, -1 },
+    { "m_respawn_items",        USERDEFS_M_RESPAWN_ITEMS,       0, 0, -1 },
+    { "m_respawn_monsters",     USERDEFS_M_RESPAWN_MONSTERS,    0, 0, -1 },
+    { "m_respawn_inventory",    USERDEFS_M_RESPAWN_INVENTORY,   0, 0, -1 },
+    { "m_recstat",              USERDEFS_M_RECSTAT,             0, 0, -1 },
+    { "m_monsters_off",         USERDEFS_M_MONSTERS_OFF,        0, 0, -1 },
+    { "detail",                 USERDEFS_DETAIL,                0, 0, -1 },
+    { "m_ffire",                USERDEFS_M_FFIRE,               0, 0, -1 },
+    { "ffire",                  USERDEFS_FFIRE,                 0, 0, -1 },
+    { "m_player_skill",         USERDEFS_M_PLAYER_SKILL,        0, 0, -1 },
+    { "m_level_number",         USERDEFS_M_LEVEL_NUMBER,        0, 0, -1 },
+    { "m_volume_number",        USERDEFS_M_VOLUME_NUMBER,       0, 0, -1 },
+    { "multimode",              USERDEFS_MULTIMODE,             0, 0, -1 },
+    { "player_skill",           USERDEFS_PLAYER_SKILL,          0, 0, -1 },
+    { "level_number",           USERDEFS_LEVEL_NUMBER,          0, 0, -1 },
+    { "volume_number",          USERDEFS_VOLUME_NUMBER,         0, 0, -1 },
+    { "m_marker",               USERDEFS_M_MARKER,              0, 0, -1 },
+    { "marker",                 USERDEFS_MARKER,                0, 0, -1 },
+    { "mouseflip",              USERDEFS_MOUSEFLIP,             0, 0, -1 },
+    { "statusbarscale",         USERDEFS_STATUSBARSCALE,        0, 0, -1 },
+    { "drawweapon",             USERDEFS_DRAWWEAPON,            0, 0, -1 },
+    { "mouseaiming",            USERDEFS_MOUSEAIMING,           0, 0, -1 },
+    { "weaponswitch",           USERDEFS_WEAPONSWITCH,          0, 0, -1 },
+    { "democams",               USERDEFS_DEMOCAMS,              0, 0, -1 },
+    { "color",                  USERDEFS_COLOR,                 0, 0, -1 },
+    { "msgdisptime",            USERDEFS_MSGDISPTIME,           0, 0, -1 },
+    { "statusbarmode",          USERDEFS_STATUSBARMODE,         0, 0, -1 },
+    { "m_noexits",              USERDEFS_M_NOEXITS,             0, 0, -1 },
+    { "noexits",                USERDEFS_NOEXITS,               0, 0, -1 },
+    { "autovote",               USERDEFS_AUTOVOTE,              0, 0, -1 },
+    { "automsg",                USERDEFS_AUTOMSG,               0, 0, -1 },
+    { "idplayers",              USERDEFS_IDPLAYERS,             0, 0, -1 },
+    { "team",                   USERDEFS_TEAM,                  0, 0, -1 },
+    { "viewbob",                USERDEFS_VIEWBOB,               0, 0, -1 },
+    { "weaponsway",             USERDEFS_WEAPONSWAY,            0, 0, -1 },
+    { "angleinterpolation",     USERDEFS_ANGLEINTERPOLATION,    0, 0, -1 },
+    { "obituaries",             USERDEFS_OBITUARIES,            0, 0, -1 },
+    { "levelstats",             USERDEFS_LEVELSTATS,            0, 0, -1 },
+    { "crosshairscale",         USERDEFS_CROSSHAIRSCALE,        0, 0, -1 },
+    { "althud",                 USERDEFS_ALTHUD,                0, 0, -1 },
+    { "display_bonus_screen",   USERDEFS_DISPLAY_BONUS_SCREEN,  0, 0, -1 },
+    { "show_level_text",        USERDEFS_SHOW_LEVEL_TEXT,       0, 0, -1 },
+    { "weaponscale",            USERDEFS_WEAPONSCALE,           0, 0, -1 },
+    { "textscale",              USERDEFS_TEXTSCALE,             0, 0, -1 },
+    { "return",                 USERDEFS_RETURN,                LABEL_HASPARM2, MAX_RETURN_VALUES, -1 },
+    { "teampal",                USERDEFS_TEAMPAL,               LABEL_HASPARM2, MAXPLAYERS, -1 },
+    { "teamfrags",              USERDEFS_TEAMFRAGS,             LABEL_HASPARM2, MAXPLAYERS, -1 },
+    { "teamsuicides",           USERDEFS_TEAMSUICIDES,          LABEL_HASPARM2, MAXPLAYERS, -1 },
+    { "dmflags",                USERDEFS_DMFLAGS,               0, 0, -1 },
+    { "m_dmflags",              USERDEFS_M_DMFLAGS,             0, 0, -1 },
+    { "draw_yxaspect",          USERDEFS_DRAW_YXASPECT,         0, 0, -1 },
+    { "monsters_killed",        USERDEFS_MONSTERS_KILLED,       0, 0, -1 },
+    { "",                       -1,                             0, 0, -1 } // END OF LIST
 };
 
 const memberlabel_t InputLabels[] =
@@ -509,6 +510,8 @@ const memberlabel_t TileDataLabels[] =
     { "gameflags",  TILEDATA_GAMEFLAGS,  0, 0, -1 },
     { "",           -1,                  0, 0, -1 } // END OF LIST
 };
+#undef MEMBER
+#undef LABEL
 
 hashtable_t h_actor         = { ACTOR_END >> 1, NULL };
 hashtable_t h_input         = { INPUT_END >> 1, NULL };
@@ -548,14 +551,6 @@ void VM_InitHashTables(void)
     STRUCT_HASH_SETUP(h_wall, WallLabels);
 }
 #undef STRUCT_HASH_SETUP
-
-#define LABEL(struct, memb, name, idx)                                                              \
-    {                                                                                                               \
-        name, idx, sizeof(struct[0].memb) | (is_unsigned<decltype(struct[0].memb)>::value ? LABEL_UNSIGNED : 0), 0, \
-        offsetof(remove_pointer_t<decltype(&struct[0])>, memb)                                                      \
-    }
-
-#define MEMBER(struct, memb, idx) LABEL(struct, memb, #memb, idx)
 
 // this is all the crap for accessing the game's structs through the CON VM
 // I got a 3-4 fps gain by inlining these...
@@ -1061,17 +1056,6 @@ void __fastcall X_AccessUserdef(int iSet, int labelNum, int lVar2, int lParm2)
         }
         Gv_SetVar(lVar2, ud.crosshair, g_i, g_p);
         return;
-
-        /*
-    case USERDEFS_WCHOICE:
-        if(iSet)
-        {
-            ud.wchoice = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.wchoice, g_i, g_p);
-        return;
-        */
 
     case USERDEFS_PLAYERAI:
         if (iSet)
@@ -1612,283 +1596,93 @@ void __fastcall X_AccessUserdef(int iSet, int labelNum, int lVar2, int lParm2)
     }
 }
 
-void __fastcall X_AccessActiveProjectile(int iSet, int lVar1, int lLabelID, int lVar2)
+int32_t __fastcall VM_GetActiveProjectile(int const spriteNum, int32_t labelNum)
 {
-    int lValue = 0;
-    int proj = g_i;
+    auto const& projLabel = ProjectileLabels[labelNum];
 
-    if (lVar1 != sysVarIDs.THISACTOR)
-        proj=Gv_GetVar(lVar1, g_i, g_p);
-
-    if ((proj < 0 || proj >= MAXSPRITES) && g_scriptSanityChecks)
+    if (EDUKE32_PREDICT_FALSE((unsigned)spriteNum >= MAXSPRITES))
     {
-//        OSD_Printf("X_AccessActiveProjectile(): invalid projectile (%d)\n",proj);
-        OSD_Printf(CON_ERROR "tried to %s %s on invalid target projectile (%d) %d %d from %s\n",g_errorLineNum,VM_GetKeywordForID(g_tw),
-                   iSet?"set":"get",ProjectileLabels[lLabelID].name,proj,g_i,TrackerCast(g_sp->picnum),
-                   (lVar1<MAXGAMEVARS)?aGameVars[lVar1].szLabel:"extended");
-        insptr += (lVar2 == MAXGAMEVARS);
+        CON_ERRPRINTF("%s invalid for projectile %d\n", projLabel.name, spriteNum);
+        return -1;
+    }
+
+    auto const& proj = actor[spriteNum].projectile;
+    switch (projLabel.lId)
+    {
+        case PROJ_WORKSLIKE:    return proj.workslike;
+        case PROJ_SPAWNS:       return proj.spawns;
+        case PROJ_SXREPEAT:     return proj.sxrepeat;
+        case PROJ_SYREPEAT:     return proj.syrepeat;
+        case PROJ_SOUND:        return proj.sound;
+        case PROJ_ISOUND:       return proj.isound;
+        case PROJ_VEL:          return proj.vel;
+        case PROJ_EXTRA:        return proj.extra;
+        case PROJ_DECAL:        return proj.decal;
+        case PROJ_TRAIL:        return proj.trail;
+        case PROJ_TXREPEAT:     return proj.txrepeat;
+        case PROJ_TYREPEAT:     return proj.tyrepeat;
+        case PROJ_TOFFSET:      return proj.toffset;
+        case PROJ_TNUM:         return proj.tnum;
+        case PROJ_DROP:         return proj.drop;
+        case PROJ_CSTAT:        return proj.cstat;
+        case PROJ_CLIPDIST:     return proj.clipdist;
+        case PROJ_SHADE:        return proj.shade;
+        case PROJ_XREPEAT:      return proj.xrepeat;
+        case PROJ_YREPEAT:      return proj.yrepeat;
+        case PROJ_PAL:          return proj.pal;
+        case PROJ_EXTRA_RAND:   return proj.extra_rand;
+        case PROJ_HITRADIUS:    return proj.hitradius;
+        case PROJ_MOVECNT:      return proj.movecnt;
+        case PROJ_OFFSET:       return proj.offset;
+        case PROJ_BOUNCES:      return proj.bounces;
+        case PROJ_BSOUND:       return proj.bsound;
+        case PROJ_RANGE:        return proj.range;
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
+    }
+}
+
+void __fastcall VM_SetActiveProjectile(int const spriteNum, int const labelNum, int32_t const newValue)
+{
+    auto const& projLabel = ProjectileLabels[labelNum];
+
+    if (EDUKE32_PREDICT_FALSE((unsigned)spriteNum >= MAXSPRITES))
+    {
+        CON_ERRPRINTF("%s invalid for projectile %d\n", projLabel.name, spriteNum);
         return;
     }
 
-    if (iSet)
-        lValue=Gv_GetVar(lVar2, g_i, g_p);
-
-    switch (lLabelID)
+    auto& proj = actor[spriteNum].projectile;
+    switch (projLabel.lId)
     {
-    case PROJ_WORKSLIKE:
-        if (iSet)
-        {
-            actor[proj].projectile.workslike=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.workslike, g_i, g_p);
-        return;
-
-    case PROJ_SPAWNS:
-        if (iSet)
-        {
-            actor[proj].projectile.spawns=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.spawns, g_i, g_p);
-        return;
-
-    case PROJ_SXREPEAT:
-        if (iSet)
-        {
-            actor[proj].projectile.sxrepeat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.sxrepeat, g_i, g_p);
-        return;
-
-    case PROJ_SYREPEAT:
-        if (iSet)
-        {
-            actor[proj].projectile.syrepeat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.syrepeat, g_i, g_p);
-        return;
-
-    case PROJ_SOUND:
-        if (iSet)
-        {
-            actor[proj].projectile.sound=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.sound, g_i, g_p);
-        return;
-
-    case PROJ_ISOUND:
-        if (iSet)
-        {
-            actor[proj].projectile.isound=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.isound, g_i, g_p);
-        return;
-
-    case PROJ_VEL:
-        if (iSet)
-        {
-            actor[proj].projectile.vel=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.vel, g_i, g_p);
-        return;
-
-    case PROJ_EXTRA:
-        if (iSet)
-        {
-            actor[proj].projectile.extra=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.extra, g_i, g_p);
-        return;
-
-    case PROJ_DECAL:
-        if (iSet)
-        {
-            actor[proj].projectile.decal=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.decal, g_i, g_p);
-        return;
-
-    case PROJ_TRAIL:
-        if (iSet)
-        {
-            actor[proj].projectile.trail=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.trail, g_i, g_p);
-        return;
-
-    case PROJ_TXREPEAT:
-        if (iSet)
-        {
-            actor[proj].projectile.txrepeat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.txrepeat, g_i, g_p);
-        return;
-
-    case PROJ_TYREPEAT:
-        if (iSet)
-        {
-            actor[proj].projectile.tyrepeat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.tyrepeat, g_i, g_p);
-        return;
-
-    case PROJ_TOFFSET:
-        if (iSet)
-        {
-            actor[proj].projectile.toffset=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.toffset, g_i, g_p);
-        return;
-
-    case PROJ_TNUM:
-        if (iSet)
-        {
-            actor[proj].projectile.tnum=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.tnum, g_i, g_p);
-        return;
-
-    case PROJ_DROP:
-        if (iSet)
-        {
-            actor[proj].projectile.drop=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.drop, g_i, g_p);
-        return;
-
-    case PROJ_CSTAT:
-        if (iSet)
-        {
-            actor[proj].projectile.cstat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.cstat, g_i, g_p);
-        return;
-
-    case PROJ_CLIPDIST:
-        if (iSet)
-        {
-            actor[proj].projectile.clipdist=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.clipdist, g_i, g_p);
-        return;
-
-    case PROJ_SHADE:
-        if (iSet)
-        {
-            actor[proj].projectile.shade=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.shade, g_i, g_p);
-        return;
-
-    case PROJ_XREPEAT:
-        if (iSet)
-        {
-            actor[proj].projectile.xrepeat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.xrepeat, g_i, g_p);
-        return;
-
-    case PROJ_YREPEAT:
-        if (iSet)
-        {
-            actor[proj].projectile.yrepeat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.yrepeat, g_i, g_p);
-        return;
-
-    case PROJ_PAL:
-        if (iSet)
-        {
-            actor[proj].projectile.pal=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.pal, g_i, g_p);
-        return;
-
-    case PROJ_EXTRA_RAND:
-        if (iSet)
-        {
-            actor[proj].projectile.extra_rand=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.extra_rand, g_i, g_p);
-        return;
-
-    case PROJ_HITRADIUS:
-        if (iSet)
-        {
-            actor[proj].projectile.hitradius=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.hitradius, g_i, g_p);
-        return;
-
-    case PROJ_MOVECNT:
-        if (iSet)
-        {
-            actor[proj].projectile.movecnt=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.movecnt, g_i, g_p);
-        return;
-
-    case PROJ_OFFSET:
-        if (iSet)
-        {
-            actor[proj].projectile.offset=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.offset, g_i, g_p);
-        return;
-
-    case PROJ_BOUNCES:
-        if (iSet)
-        {
-            actor[proj].projectile.bounces=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.bounces, g_i, g_p);
-        return;
-
-    case PROJ_BSOUND:
-        if (iSet)
-        {
-            actor[proj].projectile.bsound=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.bsound, g_i, g_p);
-        return;
-
-    case PROJ_RANGE:
-        if (iSet)
-        {
-            actor[proj].projectile.range=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, actor[proj].projectile.range, g_i, g_p);
-        return;
-
-    default:
-        return;
+        case PROJ_WORKSLIKE:    proj.workslike  = newValue; return;
+        case PROJ_SPAWNS:       proj.spawns     = newValue; return;
+        case PROJ_SXREPEAT:     proj.sxrepeat   = newValue; return;
+        case PROJ_SYREPEAT:     proj.syrepeat   = newValue; return;
+        case PROJ_SOUND:        proj.sound      = newValue; return;
+        case PROJ_ISOUND:       proj.isound     = newValue; return;
+        case PROJ_VEL:          proj.vel        = newValue; return;
+        case PROJ_EXTRA:        proj.extra      = newValue; return;
+        case PROJ_DECAL:        proj.decal      = newValue; return;
+        case PROJ_TRAIL:        proj.trail      = newValue; return;
+        case PROJ_TXREPEAT:     proj.txrepeat   = newValue; return;
+        case PROJ_TYREPEAT:     proj.tyrepeat   = newValue; return;
+        case PROJ_TOFFSET:      proj.toffset    = newValue; return;
+        case PROJ_TNUM:         proj.tnum       = newValue; return;
+        case PROJ_DROP:         proj.drop       = newValue; return;
+        case PROJ_CSTAT:        proj.cstat      = newValue; return;
+        case PROJ_CLIPDIST:     proj.clipdist   = newValue; return;
+        case PROJ_SHADE:        proj.shade      = newValue; return;
+        case PROJ_XREPEAT:      proj.xrepeat    = newValue; return;
+        case PROJ_YREPEAT:      proj.yrepeat    = newValue; return;
+        case PROJ_PAL:          proj.pal        = newValue; return;
+        case PROJ_EXTRA_RAND:   proj.extra_rand = newValue; return;
+        case PROJ_HITRADIUS:    proj.hitradius  = newValue; return;
+        case PROJ_MOVECNT:      proj.movecnt    = newValue; return;
+        case PROJ_OFFSET:       proj.offset     = newValue; return;
+        case PROJ_BOUNCES:      proj.bounces    = newValue; return;
+        case PROJ_BSOUND:       proj.bsound     = newValue; return;
+        case PROJ_RANGE:        proj.range      = newValue; return;
+        default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }
 
@@ -2084,7 +1878,7 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
         case PLAYER_LOWSPRITE:              return ps.lowsprite; // [JM] Lowest sprite touching. Read-only.
         case PLAYER_HIGHSPRITE:             return ps.highsprite; // [JM] Lowest sprite touching. // Read-only.
 
-        default: EDUKE32_UNREACHABLE_SECTION(return -1;);
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
 
@@ -2303,1234 +2097,423 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
         case PLAYER_LOWSPRITE:              return; // [JM] Lowest sprite touching. Read-only.
         case PLAYER_HIGHSPRITE:             return; // [JM] Lowest sprite touching. // Read-only.
 
-        default: EDUKE32_UNREACHABLE_SECTION(return;);
+        default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }
 
-void __fastcall X_AccessPlayerInput(int iSet, int lVar1, int lLabelID, int lVar2)
+int32_t __fastcall VM_GetPlayerInput(int const playerNum, int32_t labelNum)
 {
-    int lValue=0;
-    int iPlayer=g_p;
-
-    if (lVar1 != sysVarIDs.THISACTOR)
-        iPlayer=Gv_GetVar(lVar1, g_i, g_p);
-
-    if (((unsigned)iPlayer >= MAXPLAYERS || g_player[iPlayer].ps == NULL) && g_scriptSanityChecks)
+    if (((unsigned)playerNum >= MAXPLAYERS || g_player[playerNum].ps == NULL || !g_player[playerNum].connected) && g_scriptSanityChecks)
     {
-        insptr += (lVar2 == MAXGAMEVARS);
-        OSD_Printf(CON_ERROR "invalid target player (%d) %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),iPlayer,g_i);
-        return;
+        CON_ERRPRINTF("invalid player %d\n", playerNum);
+        return -1;
     }
 
-    if (iSet)
-        lValue=Gv_GetVar(lVar2, g_i, g_p);
+    auto& i = *g_player[playerNum].inputBits;
+    auto const& inputLabel = InputLabels[labelNum];
 
-    switch (lLabelID)
+    switch (inputLabel.lId)
     {
-    case INPUT_AVEL:
-        if (iSet)
-        {
-            g_player[iPlayer].inputBits->q16avel=fix16_from_int(lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, fix16_to_int(g_player[iPlayer].inputBits->q16avel), g_i, g_p);
-        return;
-
-    case INPUT_HORZ:
-        if (iSet)
-        {
-            g_player[iPlayer].inputBits->q16horz=fix16_from_int(lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, fix16_to_int(g_player[iPlayer].inputBits->q16horz), g_i, g_p);
-        return;
-
-    case INPUT_FVEL:
-        if (iSet)
-        {
-            g_player[iPlayer].inputBits->fvel=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, g_player[iPlayer].inputBits->fvel, g_i, g_p);
-        return;
-
-    case INPUT_SVEL:
-        if (iSet)
-        {
-            g_player[iPlayer].inputBits->svel=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, g_player[iPlayer].inputBits->svel, g_i, g_p);
-        return;
-
-    case INPUT_BITS:
-        if (iSet)
-        {
-            g_player[iPlayer].inputBits->bits=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, g_player[iPlayer].inputBits->bits, g_i, g_p);
-        return;
-
-    case INPUT_EXTBITS:
-        if (iSet)
-        {
-            g_player[iPlayer].inputBits->extbits=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, g_player[iPlayer].inputBits->extbits, g_i, g_p);
-        return;
-    default:
-        return;
+        case INPUT_AVEL:    return fix16_to_int(i.q16avel);
+        case INPUT_HORZ:    return fix16_to_int(i.q16horz);
+        case INPUT_FVEL:    return i.fvel;
+        case INPUT_SVEL:    return i.svel;
+        case INPUT_BITS:    return i.bits;
+        case INPUT_EXTBITS: return i.extbits;
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
 
-void __fastcall X_AccessWall(int iSet, int lVar1, int lLabelID, int lVar2)
+void __fastcall VM_SetPlayerInput(int const playerNum, int const labelNum, int32_t const newValue)
 {
-    int const lValue = (iSet) ? Gv_GetVar(lVar2, g_i, g_p) : 0;
-    int iWall = Gv_GetVar(lVar1, g_i, g_p);
-
-    if ((iWall<0 || iWall >= numwalls) && g_scriptSanityChecks)
+    if (((unsigned)playerNum >= MAXPLAYERS || g_player[playerNum].ps == NULL || !g_player[playerNum].connected) && g_scriptSanityChecks)
     {
-        insptr += (lVar2 == MAXGAMEVARS);
-        OSD_Printf(CON_ERROR "Invalid wall %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),iWall);
+        CON_ERRPRINTF("invalid player %d\n", playerNum);
         return;
     }
 
-    switch (lLabelID)
+    auto& i = *g_player[playerNum].inputBits;
+    auto const& inputLabel = InputLabels[labelNum];
+
+    switch (inputLabel.lId)
     {
-    case WALL_X:
-        if (iSet)
-        {
-            wall[iWall].x=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].x, g_i, g_p);
-        return;
-
-    case WALL_Y:
-        if (iSet)
-        {
-            wall[iWall].y=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].y, g_i, g_p);
-        return;
-
-    case WALL_POINT2:
-        if (iSet)
-        {
-            wall[iWall].point2=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].point2, g_i, g_p);
-        return;
-
-    case WALL_NEXTWALL:
-        if (iSet)
-        {
-            wall[iWall].nextwall=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].nextwall, g_i, g_p);
-        return;
-
-    case WALL_NEXTSECTOR:
-        if (iSet)
-        {
-            wall[iWall].nextsector=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].nextsector, g_i, g_p);
-        return;
-
-    case WALL_CSTAT:
-        if (iSet)
-        {
-            wall[iWall].cstat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].cstat, g_i, g_p);
-        return;
-
-    case WALL_PICNUM:
-        if (iSet)
-        {
-            wall[iWall].picnum=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].picnum, g_i, g_p);
-        return;
-
-    case WALL_OVERPICNUM:
-        if (iSet)
-        {
-            wall[iWall].overpicnum=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].overpicnum, g_i, g_p);
-        return;
-
-    case WALL_SHADE:
-        if (iSet)
-        {
-            wall[iWall].shade=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].shade, g_i, g_p);
-        return;
-
-    case WALL_PAL:
-        if (iSet)
-        {
-            wall[iWall].pal=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].pal, g_i, g_p);
-        return;
-
-    case WALL_XREPEAT:
-        if (iSet)
-        {
-            wall[iWall].xrepeat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].xrepeat, g_i, g_p);
-        return;
-
-    case WALL_YREPEAT:
-        if (iSet)
-        {
-            wall[iWall].yrepeat=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].yrepeat, g_i, g_p);
-        return;
-
-    case WALL_XPANNING:
-        if (iSet)
-        {
-            wall[iWall].xpanning=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].xpanning, g_i, g_p);
-        return;
-
-    case WALL_YPANNING:
-        if (iSet)
-        {
-            wall[iWall].ypanning=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].ypanning, g_i, g_p);
-        return;
-
-    case WALL_LOTAG:
-        if (iSet)
-        {
-            wall[iWall].lotag=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].lotag, g_i, g_p);
-        return;
-
-    case WALL_HITAG:
-        if (iSet)
-        {
-            wall[iWall].hitag=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].hitag, g_i, g_p);
-        return;
-
-    case WALL_EXTRA:
-        if (iSet)
-        {
-            wall[iWall].extra=lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, wall[iWall].extra, g_i, g_p);
-        return;
-    default:
-        return;
+        case INPUT_AVEL:    i.q16avel   = fix16_from_int(newValue); return;
+        case INPUT_HORZ:    i.q16horz   = fix16_from_int(newValue); return;
+        case INPUT_FVEL:    i.fvel      = newValue; return;
+        case INPUT_SVEL:    i.svel      = newValue; return;
+        case INPUT_BITS:    i.bits      = newValue; return;
+        case INPUT_EXTBITS: i.extbits   = newValue; return;
+        default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }
 
-void __fastcall X_AccessSector(int iSet, int iSector, int labelNum, int lVar2)
+int32_t __fastcall VM_GetWall(int const wallNum, int32_t labelNum)
 {
-    int const lValue = (iSet) ? Gv_GetVar(lVar2, g_i, g_p) : 0;
+    auto const& w = wall[wallNum];
+    auto const& wallLabel = WallLabels[labelNum];
+
+    switch (wallLabel.lId)
+    {
+        case WALL_X:            return w.x;
+        case WALL_Y:            return w.y;
+
+        case WALL_POINT2:       return w.point2;
+        case WALL_NEXTWALL:     return w.nextwall;
+        case WALL_NEXTSECTOR:   return w.nextsector;
+        case WALL_CSTAT:        return w.cstat;
+        case WALL_PICNUM:       return w.picnum;
+        case WALL_OVERPICNUM:   return w.overpicnum;
+        case WALL_SHADE:        return w.shade;
+        case WALL_PAL:          return w.pal;
+        case WALL_XREPEAT:      return w.xrepeat;
+        case WALL_YREPEAT:      return w.yrepeat;
+        case WALL_XPANNING:     return w.xpanning;
+        case WALL_YPANNING:     return w.ypanning;
+        case WALL_LOTAG:        return w.lotag;
+        case WALL_HITAG:        return w.hitag;
+        case WALL_EXTRA:        return w.extra;
+
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
+    }
+}
+
+void __fastcall VM_SetWall(int const wallNum, int const labelNum, int32_t const newValue)
+{
+    auto& w = wall[wallNum];
+    auto const& wallLabel = WallLabels[labelNum];
+
+    switch (wallLabel.lId)
+    {
+        case WALL_X:            w.x             = newValue; return;
+        case WALL_Y:            w.y             = newValue; return;
+
+        case WALL_POINT2:       w.point2        = newValue; return;
+        case WALL_NEXTWALL:     w.nextwall      = newValue; return;
+        case WALL_NEXTSECTOR:   w.nextsector    = newValue; return;
+        case WALL_CSTAT:        w.cstat         = newValue; return;
+        case WALL_PICNUM:       w.picnum        = newValue; return;
+        case WALL_OVERPICNUM:   w.overpicnum    = newValue; return;
+        case WALL_SHADE:        w.shade         = newValue; return;
+        case WALL_PAL:          w.pal           = newValue; return;
+        case WALL_XREPEAT:      w.xrepeat       = newValue; return;
+        case WALL_YREPEAT:      w.yrepeat       = newValue; return;
+        case WALL_XPANNING:     w.xpanning      = newValue; return;
+        case WALL_YPANNING:     w.ypanning      = newValue; return;
+        case WALL_LOTAG:        w.lotag         = newValue; return;
+        case WALL_HITAG:        w.hitag         = newValue; return;
+        case WALL_EXTRA:        w.extra         = newValue; return;
+
+        default: EDUKE32_UNREACHABLE_SECTION(return);
+    }
+}
+
+int32_t __fastcall VM_GetSector(int const sectNum, int32_t labelNum)
+{
     auto const& sectLabel = SectorLabels[labelNum];
+    auto& s = sector[sectNum];
 
-    sectortype* const s = &sector[iSector];
     switch (sectLabel.lId)
     {
-        case SECTOR_WALLPTR:
-            if (iSet)
-            {
-                s->wallptr = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->wallptr, g_i, g_p);
-            return;
+        case SECTOR_WALLPTR:        return s.wallptr;
+        case SECTOR_WALLNUM:        return s.wallnum;
 
-        case SECTOR_WALLNUM:
-            if (iSet)
-            {
-                s->wallnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->wallnum, g_i, g_p);
-            return;
+        case SECTOR_CEILINGZ:       return s.ceilingz;
+        case SECTOR_CEILINGZVEL:    return (GetAnimationGoal(sectNum, SECTANIM_CEILING) == -1) ? 0 : s.extra;
+        case SECTOR_CEILINGZGOAL:   return GetAnimationGoal(sectNum, SECTANIM_CEILING);
 
-        case SECTOR_CEILINGZ:
-            if (iSet)
-            {
-                s->ceilingz = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->ceilingz, g_i, g_p);
-            return;
+        case SECTOR_FLOORZ:         return s.floorz;
+        case SECTOR_FLOORZVEL:      return (GetAnimationGoal(sectNum, SECTANIM_FLOOR) == -1) ? 0 : s.extra;
+        case SECTOR_FLOORZGOAL:     return GetAnimationGoal(sectNum, SECTANIM_FLOOR);
 
-        case SECTOR_CEILINGZVEL:
-        {
-            if (iSet)
-            {
-                s->extra = lValue;
-                int const goal = GetAnimationGoal(iSector, SECTANIM_CEILING);
-                if (goal != -1)
-                    SetAnimation(iSector, SECTANIM_CEILING, goal, s->extra);
+        case SECTOR_CEILINGSTAT:        return s.ceilingstat;
+        case SECTOR_FLOORSTAT:          return s.floorstat;
 
-                return;
-            }
-            Gv_SetVar(lVar2, (GetAnimationGoal(iSector, SECTANIM_CEILING) == -1) ? 0 : s->extra, g_i, g_p);
-            return;
-        }
+        case SECTOR_CEILINGPICNUM:      return s.ceilingpicnum;
+        case SECTOR_CEILINGSLOPE:       return s.ceilingheinum;
+        case SECTOR_CEILINGSHADE:       return s.ceilingshade;
+        case SECTOR_CEILINGPAL:         return s.ceilingpal;
+        case SECTOR_CEILINGXPANNING:    return s.ceilingxpanning;
+        case SECTOR_CEILINGYPANNING:    return s.ceilingypanning;
 
-        case SECTOR_CEILINGZGOAL:
-            if (iSet)
-            {
-                SetAnimation(iSector, SECTANIM_CEILING, lValue, s->extra);
-                return;
-            }
-            Gv_SetVar(lVar2, GetAnimationGoal(iSector, SECTANIM_CEILING), g_i, g_p);
-            return;
+        case SECTOR_FLOORPICNUM:        return s.floorpicnum;
+        case SECTOR_FLOORSLOPE:         return s.floorheinum;
+        case SECTOR_FLOORSHADE:         return s.floorshade;
+        case SECTOR_FLOORPAL:           return s.floorpal;
+        case SECTOR_FLOORXPANNING:      return s.floorxpanning;
+        case SECTOR_FLOORYPANNING:      return s.floorypanning;
 
-        case SECTOR_FLOORZ:
-            if (iSet)
-            {
-                s->floorz = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->floorz, g_i, g_p);
-            return;
+        case SECTOR_VISIBILITY:         return s.visibility;
+        case SECTOR_ALIGNTO:            return s.fogpal;
+        case SECTOR_LOTAG:              return s.lotag;
+        case SECTOR_HITAG:              return s.hitag;
+        case SECTOR_EXTRA:              return s.extra;
 
-        case SECTOR_FLOORZVEL:
-        {
-            if (iSet)
-            {
-                s->extra = lValue;
-                int const goal = GetAnimationGoal(iSector, SECTANIM_FLOOR);
-                if (goal != -1)
-                    SetAnimation(iSector, SECTANIM_FLOOR, goal, s->extra);
-
-                return;
-            }
-            Gv_SetVar(lVar2, (GetAnimationGoal(iSector, SECTANIM_FLOOR) == -1) ? 0 : s->extra, g_i, g_p);
-            return;
-        }
-
-        case SECTOR_FLOORZGOAL:
-            if (iSet)
-            {
-                SetAnimation(iSector, SECTANIM_FLOOR, lValue, s->extra);
-                return;
-            }
-            Gv_SetVar(lVar2, GetAnimationGoal(iSector, SECTANIM_FLOOR), g_i, g_p);
-            return;
-
-        case SECTOR_CEILINGSTAT:
-            if (iSet)
-            {
-                s->ceilingstat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->ceilingstat, g_i, g_p);
-            return;
-
-        case SECTOR_FLOORSTAT:
-            if (iSet)
-            {
-                s->floorstat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->floorstat, g_i, g_p);
-            return;
-
-        case SECTOR_CEILINGPICNUM:
-            if (iSet)
-            {
-                s->ceilingpicnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->ceilingpicnum, g_i, g_p);
-            return;
-
-        case SECTOR_CEILINGSLOPE:
-            if (iSet)
-            {
-                s->ceilingheinum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->ceilingheinum, g_i, g_p);
-            return;
-
-        case SECTOR_CEILINGSHADE:
-            if (iSet)
-            {
-                s->ceilingshade = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->ceilingshade, g_i, g_p);
-            return;
-
-        case SECTOR_CEILINGPAL:
-            if (iSet)
-            {
-                s->ceilingpal = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->ceilingpal, g_i, g_p);
-            return;
-
-        case SECTOR_CEILINGXPANNING:
-            if (iSet)
-            {
-                s->ceilingxpanning = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->ceilingxpanning, g_i, g_p);
-            return;
-
-        case SECTOR_CEILINGYPANNING:
-            if (iSet)
-            {
-                s->ceilingypanning = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->ceilingypanning, g_i, g_p);
-            return;
-
-        case SECTOR_FLOORPICNUM:
-            if (iSet)
-            {
-                s->floorpicnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->floorpicnum, g_i, g_p);
-            return;
-
-        case SECTOR_FLOORSLOPE:
-            if (iSet)
-            {
-                s->floorheinum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->floorheinum, g_i, g_p);
-            return;
-
-        case SECTOR_FLOORSHADE:
-            if (iSet)
-            {
-                s->floorshade = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->floorshade, g_i, g_p);
-            return;
-
-        case SECTOR_FLOORPAL:
-            if (iSet)
-            {
-                s->floorpal = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->floorpal, g_i, g_p);
-            return;
-
-        case SECTOR_FLOORXPANNING:
-            if (iSet)
-            {
-                s->floorxpanning = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->floorxpanning, g_i, g_p);
-            return;
-
-        case SECTOR_FLOORYPANNING:
-            if (iSet)
-            {
-                s->floorypanning = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->floorypanning, g_i, g_p);
-            return;
-
-        case SECTOR_VISIBILITY:
-            if (iSet)
-            {
-                s->visibility = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->visibility, g_i, g_p);
-            return;
-
-        case SECTOR_ALIGNTO:
-            if (iSet)
-            {
-                s->fogpal = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->fogpal, g_i, g_p);
-            return;
-
-        case SECTOR_LOTAG:
-            if (iSet)
-            {
-                s->lotag = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->lotag, g_i, g_p);
-            return;
-
-        case SECTOR_HITAG:
-            if (iSet)
-            {
-                s->hitag = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->hitag, g_i, g_p);
-            return;
-
-        case SECTOR_EXTRA:
-            if (iSet)
-            {
-                s->extra = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, s->extra, g_i, g_p);
-            return;
-
-        default:
-            return;
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
 
-void __fastcall X_AccessSprite(int iSet, int iActor, int labelNum, int lVar2, int lParm2)
+void __fastcall VM_SetSector(int const sectNum, int const labelNum, int32_t newValue)
 {
-    int const lValue = (iSet) ? Gv_GetVar(lVar2, g_i, g_p) : 0;
+    auto const& sectLabel = SectorLabels[labelNum];
+    auto& s = sector[sectNum];
+
+    switch (sectLabel.lId)
+    {
+        case SECTOR_WALLPTR: s.wallptr = newValue; return;
+        case SECTOR_WALLNUM: s.wallnum = newValue; return;
+
+        case SECTOR_CEILINGZ: s.ceilingz = newValue; return;
+        case SECTOR_CEILINGZVEL:
+        {
+            s.extra = newValue;
+            int const goal = GetAnimationGoal(sectNum, SECTANIM_CEILING);
+            if (goal != -1)
+                SetAnimation(sectNum, SECTANIM_CEILING, goal, s.extra);
+
+            return;
+        }
+        case SECTOR_CEILINGZGOAL: SetAnimation(sectNum, SECTANIM_CEILING, newValue, s.extra); return;
+
+        case SECTOR_FLOORZ: s.floorz = newValue; return;
+        case SECTOR_FLOORZVEL:
+        {
+            s.extra = newValue;
+            int const goal = GetAnimationGoal(sectNum, SECTANIM_FLOOR);
+            if (goal != -1)
+                SetAnimation(sectNum, SECTANIM_FLOOR, goal, s.extra);
+
+            return;
+        }
+        case SECTOR_FLOORZGOAL: SetAnimation(sectNum, SECTANIM_FLOOR, newValue, s.extra); return;
+
+        case SECTOR_CEILINGSTAT:        s.ceilingstat       = newValue; return;
+        case SECTOR_FLOORSTAT:          s.floorstat         = newValue; return;
+
+        case SECTOR_CEILINGPICNUM:      s.ceilingpicnum     = newValue; return;
+        case SECTOR_CEILINGSLOPE:       s.ceilingheinum     = newValue; return;
+        case SECTOR_CEILINGSHADE:       s.ceilingshade      = newValue; return;
+        case SECTOR_CEILINGPAL:         s.ceilingpal        = newValue; return;
+        case SECTOR_CEILINGXPANNING:    s.ceilingxpanning   = newValue; return;
+        case SECTOR_CEILINGYPANNING:    s.ceilingypanning   = newValue; return;
+
+        case SECTOR_FLOORPICNUM:        s.floorpicnum       = newValue; return;
+        case SECTOR_FLOORSLOPE:         s.floorheinum       = newValue; return;
+        case SECTOR_FLOORSHADE:         s.floorshade        = newValue; return;
+        case SECTOR_FLOORPAL:           s.floorpal          = newValue; return;
+        case SECTOR_FLOORXPANNING:      s.floorxpanning     = newValue; return;
+        case SECTOR_FLOORYPANNING:      s.floorypanning     = newValue; return;
+
+        case SECTOR_VISIBILITY:         s.visibility        = newValue; return;
+        case SECTOR_ALIGNTO:            s.fogpal            = newValue; return;
+        case SECTOR_LOTAG:              s.lotag             = newValue; return;
+        case SECTOR_HITAG:              s.hitag             = newValue; return;
+        case SECTOR_EXTRA:              s.extra             = newValue; return;
+
+        default: EDUKE32_UNREACHABLE_SECTION(return);
+    }
+}
+
+int32_t __fastcall VM_GetSprite(int const spriteNum, int32_t labelNum, int const lParm2)
+{
     auto const& actorLabel = ActorLabels[labelNum];
+    auto const& act = actor[spriteNum];
+    auto const& spr = sprite[spriteNum];
+    auto const& ext = spriteext[spriteNum];
 
     switch (actorLabel.lId)
     {
-        case ACTOR_X:
-            if (iSet)
-            {
-                sprite[iActor].x = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].x, g_i, g_p);
-            return;
+        case ACTOR_X:               return spr.x;
+        case ACTOR_Y:               return spr.y;
+        case ACTOR_Z:               return spr.z;
 
-        case ACTOR_Y:
-            if (iSet)
-            {
-                sprite[iActor].y = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].y, g_i, g_p);
-            return;
+        case ACTOR_CSTAT:           return spr.cstat;
+        case ACTOR_PICNUM:          return spr.picnum;
+        case ACTOR_SHADE:           return spr.shade;
+        case ACTOR_PAL:             return spr.pal;
+        case ACTOR_CLIPDIST:        return spr.clipdist;
 
-        case ACTOR_Z:
-            if (iSet)
-            {
-                sprite[iActor].z = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].z, g_i, g_p);
-            return;
+        case ACTOR_BLEND:           return spr.blend;
 
-        case ACTOR_CSTAT:
-            if (iSet)
-            {
-                sprite[iActor].cstat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].cstat, g_i, g_p);
-            return;
+        case ACTOR_XREPEAT:         return spr.xrepeat;
+        case ACTOR_YREPEAT:         return spr.yrepeat;
 
-        case ACTOR_PICNUM:
-            if (iSet)
-            {
-                sprite[iActor].picnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].picnum, g_i, g_p);
-            return;
+        case ACTOR_XOFFSET:         return spr.xoffset;
+        case ACTOR_YOFFSET:         return spr.yoffset;
 
-        case ACTOR_SHADE:
-            if (iSet)
-            {
-                sprite[iActor].shade = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].shade, g_i, g_p);
-            return;
+        case ACTOR_SECTNUM:         return spr.sectnum;
+        case ACTOR_STATNUM:         return spr.statnum;
 
-        case ACTOR_PAL:
-            if (iSet)
-            {
-                sprite[iActor].pal = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].pal, g_i, g_p);
-            return;
+        case ACTOR_ANG:             return spr.ang;
+        case ACTOR_OWNER:           return spr.owner;
 
-        case ACTOR_CLIPDIST:
-            if (iSet)
-            {
-                sprite[iActor].clipdist = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].clipdist, g_i, g_p);
-            return;
+        case ACTOR_XVEL:            return spr.xvel;
+        case ACTOR_YVEL:            return spr.yvel;
+        case ACTOR_ZVEL:            return spr.zvel;
 
-        case ACTOR_BLEND:
-            //case ACTOR_DETAIL:
-            if (iSet)
-            {
-                sprite[iActor].blend = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].blend, g_i, g_p);
-            return;
+        case ACTOR_LOTAG:           return spr.lotag;
+        case ACTOR_HITAG:           return spr.hitag;
 
-        case ACTOR_XREPEAT:
-            if (iSet)
-            {
-                sprite[iActor].xrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].xrepeat, g_i, g_p);
-            return;
+        case ACTOR_EXTRA:           return spr.extra;
 
-        case ACTOR_YREPEAT:
-            if (iSet)
-            {
-                sprite[iActor].yrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].yrepeat, g_i, g_p);
-            return;
+        case ACTOR_HTCGG:           return act.cgg;
+        case ACTOR_HTPICNUM:        return act.htpicnum;
+        case ACTOR_HTANG:           return act.htang;
+        case ACTOR_HTEXTRA:         return act.htextra;
+        case ACTOR_HTOWNER:         return act.htowner;
+        case ACTOR_HTMOVFLAG:       return act.movflag;
+        case ACTOR_HTTEMPANG:       return act.tempang;
+        case ACTOR_HTSTAYPUT:       return act.actorstayput;
+        case ACTOR_HTDISPICNUM:     return act.dispicnum;
+        case ACTOR_HTTIMETOSLEEP:   return act.timetosleep;
+        case ACTOR_HTFLOORZ:        return act.floorz;
+        case ACTOR_HTCEILINGZ:      return act.ceilingz;
+        case ACTOR_HTLASTVX:        return act.lastvx;
+        case ACTOR_HTLASTVY:        return act.lastvy;
+        case ACTOR_HTBPOSX:         return act.bpos.x;
+        case ACTOR_HTBPOSY:         return act.bpos.y;
+        case ACTOR_HTBPOSZ:         return act.bpos.z;
+        case ACTOR_HTG_T:           return act.t_data[lParm2];
+        case ACTOR_HTFLAGS:         return act.flags;
 
-        case ACTOR_XOFFSET:
-            if (iSet)
-            {
-                sprite[iActor].xoffset = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].xoffset, g_i, g_p);
-            return;
+        case ACTOR_ANGOFF:          return ext.mdangoff;
+        case ACTOR_PITCH:           return ext.mdpitch;
+        case ACTOR_ROLL:            return ext.mdroll;
+        case ACTOR_MDXOFF:          return ext.mdpivot_offset.x;
+        case ACTOR_MDYOFF:          return ext.mdpivot_offset.y;
+        case ACTOR_MDZOFF:          return ext.mdpivot_offset.z;
+        case ACTOR_MDFLAGS:         return ext.flags;
+        case ACTOR_XPANNING:        return ext.xpanning;
+        case ACTOR_YPANNING:        return ext.ypanning;
+        case ACTOR_ALPHA:           return (uint8_t)(ext.alpha * 255.0f);
 
-        case ACTOR_YOFFSET:
-            if (iSet)
-            {
-                sprite[iActor].yoffset = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].yoffset, g_i, g_p);
-            return;
-
-        case ACTOR_SECTNUM:
-            if (iSet)
-            {
-                changespritesect(iActor, lValue);
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].sectnum, g_i, g_p);
-            return;
-
-        case ACTOR_STATNUM:
-            if (iSet)
-            {
-                changespritestat(iActor, lValue);
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].statnum, g_i, g_p);
-            return;
-
-        case ACTOR_ANG:
-            if (iSet)
-            {
-                sprite[iActor].ang = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].ang, g_i, g_p);
-            return;
-
-        case ACTOR_OWNER:
-            if (iSet)
-            {
-                sprite[iActor].owner = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].owner, g_i, g_p);
-            return;
-
-        case ACTOR_XVEL:
-            if (iSet)
-            {
-                sprite[iActor].xvel = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].xvel, g_i, g_p);
-            return;
-
-        case ACTOR_YVEL:
-            if (iSet)
-            {
-                sprite[iActor].yvel = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].yvel, g_i, g_p);
-            return;
-
-        case ACTOR_ZVEL:
-            if (iSet)
-            {
-                sprite[iActor].zvel = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].zvel, g_i, g_p);
-            return;
-
-        case ACTOR_LOTAG:
-            if (iSet)
-            {
-                sprite[iActor].lotag = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].lotag, g_i, g_p);
-            return;
-
-        case ACTOR_HITAG:
-            if (iSet)
-            {
-                sprite[iActor].hitag = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].hitag, g_i, g_p);
-            return;
-
-        case ACTOR_EXTRA:
-            if (iSet)
-            {
-                sprite[iActor].extra = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, sprite[iActor].extra, g_i, g_p);
-            return;
-
-        case ACTOR_HTCGG:
-            if (iSet)
-            {
-                actor[iActor].cgg = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].cgg, g_i, g_p);
-            return;
-
-        case ACTOR_HTPICNUM:
-            if (iSet)
-            {
-                actor[iActor].htpicnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].htpicnum, g_i, g_p);
-            return;
-
-        case ACTOR_HTANG:
-            if (iSet)
-            {
-                actor[iActor].htang = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].htang, g_i, g_p);
-            return;
-
-        case ACTOR_HTEXTRA:
-            if (iSet)
-            {
-                actor[iActor].htextra = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].htextra, g_i, g_p);
-            return;
-
-        case ACTOR_HTOWNER:
-            if (iSet)
-            {
-                actor[iActor].htowner = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].htowner, g_i, g_p);
-            return;
-
-        case ACTOR_HTMOVFLAG:
-            if (iSet)
-            {
-                actor[iActor].movflag = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].movflag, g_i, g_p);
-            return;
-
-        case ACTOR_HTTEMPANG:
-            if (iSet)
-            {
-                actor[iActor].tempang = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].tempang, g_i, g_p);
-            return;
-
-        case ACTOR_HTSTAYPUT:
-            if (iSet)
-            {
-                actor[iActor].actorstayput = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].actorstayput, g_i, g_p);
-            return;
-
-        case ACTOR_HTDISPICNUM:
-            if (iSet)
-            {
-                actor[iActor].dispicnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].dispicnum, g_i, g_p);
-            return;
-
-        case ACTOR_HTTIMETOSLEEP:
-            if (iSet)
-            {
-                actor[iActor].timetosleep = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].timetosleep, g_i, g_p);
-            return;
-
-        case ACTOR_HTFLOORZ:
-            if (iSet)
-            {
-                actor[iActor].floorz = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].floorz, g_i, g_p);
-            return;
-
-        case ACTOR_HTCEILINGZ:
-            if (iSet)
-            {
-                actor[iActor].ceilingz = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].ceilingz, g_i, g_p);
-            return;
-
-        case ACTOR_HTLASTVX:
-            if (iSet)
-            {
-                actor[iActor].lastvx = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].lastvx, g_i, g_p);
-            return;
-
-        case ACTOR_HTLASTVY:
-            if (iSet)
-            {
-                actor[iActor].lastvy = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].lastvy, g_i, g_p);
-            return;
-
-        case ACTOR_HTBPOSX:
-            if (iSet)
-            {
-                actor[iActor].bpos.x = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].bpos.x, g_i, g_p);
-            return;
-
-        case ACTOR_HTBPOSY:
-            if (iSet)
-            {
-                actor[iActor].bpos.y = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].bpos.y, g_i, g_p);
-            return;
-
-        case ACTOR_HTBPOSZ:
-            if (iSet)
-            {
-                actor[iActor].bpos.z = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].bpos.z, g_i, g_p);
-            return;
-
-        case ACTOR_HTG_T:
-            if (iSet)
-            {
-                actor[iActor].t_data[lParm2] = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].t_data[lParm2], g_i, g_p);
-            return;
-
-        case ACTOR_ANGOFF:
-            if (iSet)
-            {
-                spriteext[iActor].mdangoff = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].mdangoff, g_i, g_p);
-            return;
-
-        case ACTOR_PITCH:
-            if (iSet)
-            {
-                spriteext[iActor].mdpitch = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].mdpitch, g_i, g_p);
-            return;
-
-        case ACTOR_ROLL:
-            if (iSet)
-            {
-                spriteext[iActor].mdroll = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].mdroll, g_i, g_p);
-            return;
-
-        case ACTOR_MDXOFF:
-            if (iSet)
-            {
-                spriteext[iActor].mdpivot_offset.x = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].mdpivot_offset.x, g_i, g_p);
-            return;
-
-        case ACTOR_MDYOFF:
-            if (iSet)
-            {
-                spriteext[iActor].mdpivot_offset.y = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].mdpivot_offset.y, g_i, g_p);
-            return;
-
-        case ACTOR_MDZOFF:
-            if (iSet)
-            {
-                spriteext[iActor].mdpivot_offset.z = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].mdpivot_offset.z, g_i, g_p);
-            return;
-
-        case ACTOR_MDFLAGS:
-            if (iSet)
-            {
-                spriteext[iActor].flags = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].flags, g_i, g_p);
-            return;
-
-        case ACTOR_XPANNING:
-            if (iSet)
-            {
-                spriteext[iActor].xpanning = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].xpanning, g_i, g_p);
-            return;
-
-        case ACTOR_YPANNING:
-            if (iSet)
-            {
-                spriteext[iActor].ypanning = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, spriteext[iActor].ypanning, g_i, g_p);
-            return;
-
-        case ACTOR_HTFLAGS:
-            if (iSet)
-            {
-                actor[iActor].flags = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, actor[iActor].flags, g_i, g_p);
-            return;
-
-        case ACTOR_ALPHA:
-            if (iSet)
-            {
-                spriteext[iActor].alpha = (float)lValue * (1.f / 255.0f);;
-                return;
-            }
-            Gv_SetVar(lVar2, (uint8_t)(spriteext[iActor].alpha * 255.0f), g_i, g_p);
-            return;
-
-        default:
-            return;
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
 
-void __fastcall X_AccessTsprite(int iSet, int iActor, int labelNum, int lVar2)
+void __fastcall VM_SetSprite(int const spriteNum, int const labelNum, int const lParm2, int32_t const newValue)
 {
-    int const lValue = (iSet) ? Gv_GetVar(lVar2, g_i, g_p) : 0;
-    auto const& tsprLabel = TsprLabels[labelNum];
+    auto const& actorLabel = ActorLabels[labelNum];
+    auto& act = actor[spriteNum];
+    auto& spr = sprite[spriteNum];
+    auto& ext = spriteext[spriteNum];
 
-    auto const tspr = spriteext[iActor].tspr;
-    switch (tsprLabel.lId)
+    switch (actorLabel.lId)
     {
-        case ACTOR_X:
-            if (iSet)
-            {
-                tspr->x = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->x, g_i, g_p);
-            return;
+        case ACTOR_X:               spr.x                   = newValue; return;
+        case ACTOR_Y:               spr.y                   = newValue; return;
+        case ACTOR_Z:               spr.z                   = newValue; return;
 
-        case ACTOR_Y:
-            if (iSet)
-            {
-                tspr->y = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->y, g_i, g_p);
-            return;
+        case ACTOR_CSTAT:           spr.cstat               = newValue; return;
+        case ACTOR_PICNUM:          spr.picnum              = newValue; return;
+        case ACTOR_SHADE:           spr.shade               = newValue; return;
+        case ACTOR_PAL:             spr.pal                 = newValue; return;
+        case ACTOR_CLIPDIST:        spr.clipdist            = newValue; return;
 
-        case ACTOR_Z:
-            if (iSet)
-            {
-                tspr->z = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->z, g_i, g_p);
-            return;
+        case ACTOR_BLEND:           spr.blend               = newValue; return;
 
-        case ACTOR_CSTAT:
-            if (iSet)
-            {
-                tspr->cstat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->cstat, g_i, g_p);
-            return;
+        case ACTOR_XREPEAT:         spr.xrepeat             = newValue; return;
+        case ACTOR_YREPEAT:         spr.yrepeat             = newValue; return;
 
-        case ACTOR_PICNUM:
-            if (iSet)
-            {
-                tspr->picnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->picnum, g_i, g_p);
-            return;
+        case ACTOR_XOFFSET:         spr.xoffset             = newValue; return;
+        case ACTOR_YOFFSET:         spr.yoffset             = newValue; return;
 
-        case ACTOR_SHADE:
-            if (iSet)
-            {
-                tspr->shade = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->shade, g_i, g_p);
-            return;
+        case ACTOR_SECTNUM:         changespritesect(spriteNum, newValue); return;
+        case ACTOR_STATNUM:         changespritestat(spriteNum, newValue); return;
 
-        case ACTOR_PAL:
-            if (iSet)
-            {
-                tspr->pal = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->pal, g_i, g_p);
-            return;
+        case ACTOR_ANG:             spr.ang                 = newValue; return;
+        case ACTOR_OWNER:           spr.owner               = newValue; return;
 
-        case ACTOR_CLIPDIST:
-            if (iSet)
-            {
-                tspr->clipdist = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->clipdist, g_i, g_p);
-            return;
+        case ACTOR_XVEL:            spr.xvel                = newValue; return;
+        case ACTOR_YVEL:            spr.yvel                = newValue; return;
+        case ACTOR_ZVEL:            spr.zvel                = newValue; return;
 
-        case ACTOR_BLEND:
-            //case ACTOR_DETAIL:
-            if (iSet)
-            {
-                tspr->blend = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->blend, g_i, g_p);
-            return;
+        case ACTOR_LOTAG:           spr.lotag               = newValue; return;
+        case ACTOR_HITAG:           spr.hitag               = newValue; return;
 
-        case ACTOR_XREPEAT:
-            if (iSet)
-            {
-                tspr->xrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->xrepeat, g_i, g_p);
-            return;
+        case ACTOR_EXTRA:           spr.extra               = newValue; return;
 
-        case ACTOR_YREPEAT:
-            if (iSet)
-            {
-                tspr->yrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->yrepeat, g_i, g_p);
-            return;
+        case ACTOR_HTCGG:           act.cgg                 = newValue; return;
+        case ACTOR_HTPICNUM:        act.htpicnum            = newValue; return;
+        case ACTOR_HTANG:           act.htang               = newValue; return;
+        case ACTOR_HTEXTRA:         act.htextra             = newValue; return;
+        case ACTOR_HTOWNER:         act.htowner             = newValue; return;
+        case ACTOR_HTMOVFLAG:       act.movflag             = newValue; return;
+        case ACTOR_HTTEMPANG:       act.tempang             = newValue; return;
+        case ACTOR_HTSTAYPUT:       act.actorstayput        = newValue; return;
+        case ACTOR_HTDISPICNUM:     act.dispicnum           = newValue; return;
+        case ACTOR_HTTIMETOSLEEP:   act.timetosleep         = newValue; return;
+        case ACTOR_HTFLOORZ:        act.floorz              = newValue; return;
+        case ACTOR_HTCEILINGZ:      act.ceilingz            = newValue; return;
+        case ACTOR_HTLASTVX:        act.lastvx              = newValue; return;
+        case ACTOR_HTLASTVY:        act.lastvy              = newValue; return;
+        case ACTOR_HTBPOSX:         act.bpos.x              = newValue; return;
+        case ACTOR_HTBPOSY:         act.bpos.y              = newValue; return;
+        case ACTOR_HTBPOSZ:         act.bpos.z              = newValue; return;
+        case ACTOR_HTG_T:           act.t_data[lParm2]      = newValue; return;
+        case ACTOR_HTFLAGS:         act.flags               = newValue; return;
 
-        case ACTOR_XOFFSET:
-            if (iSet)
-            {
-                tspr->xoffset = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->xoffset, g_i, g_p);
-            return;
+        case ACTOR_ANGOFF:          ext.mdangoff            = newValue; return;
+        case ACTOR_PITCH:           ext.mdpitch             = newValue; return;
+        case ACTOR_ROLL:            ext.mdroll              = newValue; return;
+        case ACTOR_MDXOFF:          ext.mdpivot_offset.x    = newValue; return;
+        case ACTOR_MDYOFF:          ext.mdpivot_offset.y    = newValue; return;
+        case ACTOR_MDZOFF:          ext.mdpivot_offset.z    = newValue; return;
+        case ACTOR_MDFLAGS:         ext.flags               = newValue; return;
+        case ACTOR_XPANNING:        ext.xpanning            = newValue; return;
+        case ACTOR_YPANNING:        ext.ypanning            = newValue; return;
+        case ACTOR_ALPHA:           ext.alpha               = (float)newValue * (1.f / 255.0f); return;
 
-        case ACTOR_YOFFSET:
-            if (iSet)
-            {
-                tspr->yoffset = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->yoffset, g_i, g_p);
-            return;
-
-        case ACTOR_SECTNUM:
-            if (iSet)
-            {
-                tspr->sectnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->sectnum, g_i, g_p);
-            return;
-
-        case ACTOR_STATNUM:
-            if (iSet)
-            {
-                tspr->statnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->statnum, g_i, g_p);
-            return;
-
-        case ACTOR_ANG:
-            if (iSet)
-            {
-                tspr->ang = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->ang, g_i, g_p);
-            return;
-
-        case ACTOR_OWNER:
-            if (iSet)
-            {
-                tspr->owner = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->owner, g_i, g_p);
-            return;
-
-#if 1
-        case ACTOR_XVEL:
-            if (iSet)
-            {
-                tspr->xvel = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->xvel, g_i, g_p);
-            return;
-
-        case ACTOR_YVEL:
-            if (iSet)
-            {
-                tspr->yvel = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->yvel, g_i, g_p);
-            return;
-
-        case ACTOR_ZVEL:
-            if (iSet)
-            {
-                tspr->zvel = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->zvel, g_i, g_p);
-            return;
-
-        case ACTOR_LOTAG:
-            if (iSet)
-            {
-                tspr->lotag = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->lotag, g_i, g_p);
-            return;
-
-        case ACTOR_HITAG:
-            if (iSet)
-            {
-                tspr->hitag = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->hitag, g_i, g_p);
-            return;
-
-        case ACTOR_EXTRA:
-            if (iSet)
-            {
-                tspr->extra = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, tspr->extra, g_i, g_p);
-            return;
-#endif
-
-        default:
-            return;
+        default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }
 
-void __fastcall X_AccessProjectile(int iSet, int tileNum, int labelNum, int lVar2)
+int32_t __fastcall VM_GetProjectile(int const tileNum, int32_t labelNum)
 {
-    int const lValue = (iSet) ? Gv_GetVar(lVar2, g_i, g_p) : 0;
+    auto const& projLabel = ProjectileLabels[labelNum];
+
+    if (EDUKE32_PREDICT_FALSE((unsigned)tileNum >= MAXTILES || g_tile[tileNum].proj == NULL))
+    {
+        CON_ERRPRINTF("invalid projectile %d\n", tileNum);
+        return -1;
+    }
+
+    auto const& proj = *g_tile[tileNum].proj;
+    switch (projLabel.lId)
+    {
+        case PROJ_WORKSLIKE:    return proj.workslike;
+        case PROJ_SPAWNS:       return proj.spawns;
+        case PROJ_SXREPEAT:     return proj.sxrepeat;
+        case PROJ_SYREPEAT:     return proj.syrepeat;
+        case PROJ_SOUND:        return proj.sound;
+        case PROJ_ISOUND:       return proj.isound;
+        case PROJ_VEL:          return proj.vel;
+        case PROJ_EXTRA:        return proj.extra;
+        case PROJ_DECAL:        return proj.decal;
+        case PROJ_TRAIL:        return proj.trail;
+        case PROJ_TXREPEAT:     return proj.txrepeat;
+        case PROJ_TYREPEAT:     return proj.tyrepeat;
+        case PROJ_TOFFSET:      return proj.toffset;
+        case PROJ_TNUM:         return proj.tnum;
+        case PROJ_DROP:         return proj.drop;
+        case PROJ_CSTAT:        return proj.cstat;
+        case PROJ_CLIPDIST:     return proj.clipdist;
+        case PROJ_SHADE:        return proj.shade;
+        case PROJ_XREPEAT:      return proj.xrepeat;
+        case PROJ_YREPEAT:      return proj.yrepeat;
+        case PROJ_PAL:          return proj.pal;
+        case PROJ_EXTRA_RAND:   return proj.extra_rand;
+        case PROJ_HITRADIUS:    return proj.hitradius;
+        case PROJ_MOVECNT:      return proj.movecnt;
+        case PROJ_OFFSET:       return proj.offset;
+        case PROJ_BOUNCES:      return proj.bounces;
+        case PROJ_BSOUND:       return proj.bsound;
+        case PROJ_RANGE:        return proj.range;
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
+    }
+}
+
+void __fastcall VM_SetProjectile(int const tileNum, int const labelNum, int32_t const newValue)
+{
     auto const& projLabel = ProjectileLabels[labelNum];
 
     if (EDUKE32_PREDICT_FALSE((unsigned)tileNum >= MAXTILES || g_tile[tileNum].proj == NULL))
@@ -3542,259 +2525,34 @@ void __fastcall X_AccessProjectile(int iSet, int tileNum, int labelNum, int lVar
     auto& proj = *g_tile[tileNum].proj;
     switch (projLabel.lId)
     {
-        case PROJ_WORKSLIKE:
-            if (iSet)
-            {
-                proj.workslike = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.workslike, g_i, g_p);
-            return;
-
-        case PROJ_SPAWNS:
-            if (iSet)
-            {
-                proj.spawns = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.spawns, g_i, g_p);
-            return;
-
-        case PROJ_SXREPEAT:
-            if (iSet)
-            {
-                proj.sxrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.sxrepeat, g_i, g_p);
-            return;
-
-        case PROJ_SYREPEAT:
-            if (iSet)
-            {
-                proj.syrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.syrepeat, g_i, g_p);
-            return;
-
-        case PROJ_SOUND:
-            if (iSet)
-            {
-                proj.sound = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.sound, g_i, g_p);
-            return;
-
-        case PROJ_ISOUND:
-            if (iSet)
-            {
-                proj.isound = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.isound, g_i, g_p);
-            return;
-
-        case PROJ_VEL:
-            if (iSet)
-            {
-                proj.vel = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.vel, g_i, g_p);
-            return;
-
-        case PROJ_EXTRA:
-            if (iSet)
-            {
-                proj.extra = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.extra, g_i, g_p);
-            return;
-
-        case PROJ_DECAL:
-            if (iSet)
-            {
-                proj.decal = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.decal, g_i, g_p);
-            return;
-
-        case PROJ_TRAIL:
-            if (iSet)
-            {
-                proj.trail = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.trail, g_i, g_p);
-            return;
-
-        case PROJ_TXREPEAT:
-            if (iSet)
-            {
-                proj.txrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.txrepeat, g_i, g_p);
-            return;
-
-        case PROJ_TYREPEAT:
-            if (iSet)
-            {
-                proj.tyrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.tyrepeat, g_i, g_p);
-            return;
-
-        case PROJ_TOFFSET:
-            if (iSet)
-            {
-                proj.toffset = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.toffset, g_i, g_p);
-            return;
-
-        case PROJ_TNUM:
-            if (iSet)
-            {
-                proj.tnum = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.tnum, g_i, g_p);
-            return;
-
-        case PROJ_DROP:
-            if (iSet)
-            {
-                proj.drop = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.drop, g_i, g_p);
-            return;
-
-        case PROJ_CSTAT:
-            if (iSet)
-            {
-                proj.cstat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.cstat, g_i, g_p);
-            return;
-
-        case PROJ_CLIPDIST:
-            if (iSet)
-            {
-                proj.clipdist = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.clipdist, g_i, g_p);
-            return;
-
-        case PROJ_SHADE:
-            if (iSet)
-            {
-                proj.shade = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.shade, g_i, g_p);
-            return;
-
-        case PROJ_XREPEAT:
-            if (iSet)
-            {
-                proj.xrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.xrepeat, g_i, g_p);
-            return;
-
-        case PROJ_YREPEAT:
-            if (iSet)
-            {
-                proj.yrepeat = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.yrepeat, g_i, g_p);
-            return;
-
-        case PROJ_PAL:
-            if (iSet)
-            {
-                proj.pal = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.pal, g_i, g_p);
-            return;
-
-        case PROJ_EXTRA_RAND:
-            if (iSet)
-            {
-                proj.extra_rand = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.extra_rand, g_i, g_p);
-            return;
-
-        case PROJ_HITRADIUS:
-            if (iSet)
-            {
-                proj.hitradius = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.hitradius, g_i, g_p);
-            return;
-
-        case PROJ_MOVECNT:
-            if (iSet)
-            {
-                proj.movecnt = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.movecnt, g_i, g_p);
-            return;
-
-        case PROJ_OFFSET:
-            if (iSet)
-            {
-                proj.offset = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.offset, g_i, g_p);
-            return;
-
-        case PROJ_BOUNCES:
-            if (iSet)
-            {
-                proj.bounces = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.bounces, g_i, g_p);
-            return;
-
-        case PROJ_BSOUND:
-            if (iSet)
-            {
-                proj.bsound = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.bsound, g_i, g_p);
-            return;
-
-        case PROJ_RANGE:
-            if (iSet)
-            {
-                proj.range = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, proj.range, g_i, g_p);
-            return;
-
-        default:
-            return;
+        case PROJ_WORKSLIKE:    proj.workslike  = newValue; return;
+        case PROJ_SPAWNS:       proj.spawns     = newValue; return;
+        case PROJ_SXREPEAT:     proj.sxrepeat   = newValue; return;
+        case PROJ_SYREPEAT:     proj.syrepeat   = newValue; return;
+        case PROJ_SOUND:        proj.sound      = newValue; return;
+        case PROJ_ISOUND:       proj.isound     = newValue; return;
+        case PROJ_VEL:          proj.vel        = newValue; return;
+        case PROJ_EXTRA:        proj.extra      = newValue; return;
+        case PROJ_DECAL:        proj.decal      = newValue; return;
+        case PROJ_TRAIL:        proj.trail      = newValue; return;
+        case PROJ_TXREPEAT:     proj.txrepeat   = newValue; return;
+        case PROJ_TYREPEAT:     proj.tyrepeat   = newValue; return;
+        case PROJ_TOFFSET:      proj.toffset    = newValue; return;
+        case PROJ_TNUM:         proj.tnum       = newValue; return;
+        case PROJ_DROP:         proj.drop       = newValue; return;
+        case PROJ_CSTAT:        proj.cstat      = newValue; return;
+        case PROJ_CLIPDIST:     proj.clipdist   = newValue; return;
+        case PROJ_SHADE:        proj.shade      = newValue; return;
+        case PROJ_XREPEAT:      proj.xrepeat    = newValue; return;
+        case PROJ_YREPEAT:      proj.yrepeat    = newValue; return;
+        case PROJ_PAL:          proj.pal        = newValue; return;
+        case PROJ_EXTRA_RAND:   proj.extra_rand = newValue; return;
+        case PROJ_HITRADIUS:    proj.hitradius  = newValue; return;
+        case PROJ_MOVECNT:      proj.movecnt    = newValue; return;
+        case PROJ_OFFSET:       proj.offset     = newValue; return;
+        case PROJ_BOUNCES:      proj.bounces    = newValue; return;
+        case PROJ_BSOUND:       proj.bsound     = newValue; return;
+        case PROJ_RANGE:        proj.range      = newValue; return;
+        default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }

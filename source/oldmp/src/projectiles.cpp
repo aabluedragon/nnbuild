@@ -1,5 +1,6 @@
 #include "duke3d.h"
 #include "projectiles.h"
+#include "gamestructures.h"
 
 defaultprojectile_t DefaultProjectile;
 EDUKE32_STATIC_ASSERT(sizeof(projectile_t) == sizeof(DefaultProjectile));

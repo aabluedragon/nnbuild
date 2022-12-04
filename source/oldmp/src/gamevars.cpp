@@ -564,7 +564,6 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
 
         switch (gv - sysVarIDs.structs)
         {
-#if 0
             case STRUCT_SPRITE_INTERNAL__:
                 CHECK_INDEX(MAXSPRITES);
                 returnValue = VM_GetStruct(ActorLabels[labelNum].flags, (intptr_t*)((intptr_t)&sprite[arrayIndex] + ActorLabels[labelNum].offset));
@@ -618,7 +617,6 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 CHECK_INDEX(MAXSPRITES);
                 returnValue = VM_GetStruct(TsprLabels[labelNum].flags, (intptr_t*)((intptr_t)(spriteext[arrayIndex].tspr) + TsprLabels[labelNum].offset));
                 break;
-#endif
 
             case STRUCT_PLAYER:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
@@ -627,7 +625,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 arrayIndexVar = (EDUKE32_PREDICT_FALSE(PlayerLabels[labelNum].flags & LABEL_HASPARM2)) ? Gv_GetVar(*insptr++, spriteNum, playerNum) : 0;
                 returnValue = VM_GetPlayer(arrayIndex, labelNum, arrayIndexVar);
                 break;
-#if 0
+
             case STRUCT_PLAYER_INTERNAL__:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
                     arrayIndex = g_p;
@@ -644,7 +642,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 CHECK_INDEX(MAXTILES);
                 returnValue = VM_GetProjectile(arrayIndex, labelNum);
                 break;
-
+#if 0
             case STRUCT_TILEDATA:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
                     arrayIndex = vm.pSprite->picnum;
@@ -658,7 +656,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 CHECK_INDEX(MAXPALOOKUPS);
                 returnValue = VM_GetPalData(arrayIndex, labelNum);
                 break;
-
+#endif
 
             case STRUCT_INPUT:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
@@ -666,7 +664,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 CHECK_INDEX(MAXPLAYERS);
                 returnValue = VM_GetPlayerInput(arrayIndex, labelNum);
                 break;
-
+#if 0
             case STRUCT_USERDEF:
                 arrayIndexVar = (EDUKE32_PREDICT_FALSE(UserdefsLabels[labelNum].flags & LABEL_HASPARM2)) ? Gv_GetVar(*insptr++) : 0;
                 returnValue = VM_GetUserdef(labelNum, arrayIndexVar);
