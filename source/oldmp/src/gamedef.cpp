@@ -239,7 +239,9 @@ const tokenmap_t vm_keywords[] =
     { "ifnosounds",             CON_IFNOSOUNDS },
     { "clipdist",               CON_CLIPDIST },
     { "ifangdiffl",             CON_IFANGDIFFL },
+
     { "gamevar",                CON_GAMEVAR },
+    { "var",                    CON_GAMEVAR },
 
     { "ifvarl",                 CON_IFVARL },
     { "ifvarg",                 CON_IFVARG },
@@ -477,11 +479,14 @@ const tokenmap_t vm_keywords[] =
     { "spritenopal",            CON_SPRITENOPAL },
     { "hitradiusvar",           CON_HITRADIUSVAR },
     { "rotatesprite16",         CON_ROTATESPRITE16 },
+
+    { "array",                  CON_GAMEARRAY },
     { "gamearray",              CON_GAMEARRAY },
     { "setarray",               CON_SETARRAY },
     { "resizearray",            CON_RESIZEARRAY },
     { "writearraytofile",       CON_WRITEARRAYTOFILE },
     { "readarrayfromfile",      CON_READARRAYFROMFILE },
+
     { "starttrackvar",          CON_STARTTRACKVAR },
     { "qgetsysstr",             CON_QGETSYSSTR },
     { "getticks",               CON_GETTICKS },
@@ -5340,6 +5345,19 @@ static void C_AddDefaultDefinitions(void)
 
     C_AddDefinition("CLIPMASK0", CLIPMASK0, LABEL_DEFINE);
     C_AddDefinition("CLIPMASK1", CLIPMASK1, LABEL_DEFINE);
+
+    C_AddDefinition("GAMEARRAY_BOOLEAN", GAMEARRAY_BITMAP, LABEL_DEFINE);
+    C_AddDefinition("GAMEARRAY_INT16",   GAMEARRAY_INT16, LABEL_DEFINE);
+    C_AddDefinition("GAMEARRAY_INT8",    GAMEARRAY_INT8, LABEL_DEFINE);
+    C_AddDefinition("GAMEARRAY_RESTORE", GAMEARRAY_RESTORE, LABEL_DEFINE);
+    C_AddDefinition("GAMEARRAY_UINT16",  GAMEARRAY_UINT16, LABEL_DEFINE);
+    C_AddDefinition("GAMEARRAY_UINT8",   GAMEARRAY_UINT8, LABEL_DEFINE);
+
+    C_AddDefinition("GAMEVAR_NODEFAULT", GAMEVAR_NODEFAULT, LABEL_DEFINE);
+    C_AddDefinition("GAMEVAR_NOMULTI",   GAMEVAR_NOMULTI, LABEL_DEFINE);
+    C_AddDefinition("GAMEVAR_NORESET",   GAMEVAR_NORESET, LABEL_DEFINE);
+    C_AddDefinition("GAMEVAR_PERACTOR",  GAMEVAR_PERACTOR, LABEL_DEFINE);
+    C_AddDefinition("GAMEVAR_PERPLAYER", GAMEVAR_PERPLAYER, LABEL_DEFINE);
 
     C_AddDefinition("STAT_DEFAULT", STAT_ACTOR, LABEL_DEFINE);
     C_AddDefinition("STAT_ACTOR", STAT_ACTOR, LABEL_DEFINE);
