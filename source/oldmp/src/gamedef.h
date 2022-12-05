@@ -283,163 +283,168 @@ enum ScriptKeywords_t
     CON_TIP,
     CON_IFSPRITEPAL,
     CON_MONEY,
-    CON_SOUNDONCE,          // 87
-    CON_ADDKILLS,           // 88
-    CON_STOPSOUND,          // 89
-    CON_IFAWAYFROMWALL,     // 90
-    CON_IFCANSEETARGET,     // 91
-    CON_GLOBALSOUND,        // 92
-    CON_LOTSOFGLASS,        // 93
-    CON_IFGOTWEAPONCE,      // 94
-    CON_GETLASTPAL,         // 95
-    CON_PKICK,              // 96
-    CON_MIKESND,            // 97
-    CON_SIZEAT,             // 99
-    CON_ADDSTRENGTH,        // 100
-    CON_CSTATOR,            // 101
-    CON_MAIL,               // 102
-    CON_PAPER,              // 103
-    CON_TOSSWEAPON,         // 104
-    CON_SLEEPTIME,          // 105
-    CON_NULLOP,             // 106
-    CON_IFNOSOUNDS,         // 109
-    CON_CLIPDIST,           // 110
-    CON_IFANGDIFFL,         // 111
-    CON_IFVARL,             // 113
-    CON_IFVARG,             // 114
-    CON_SETVARVAR,          // 115
-    CON_SETVAR,             // 116
-    CON_ADDVARVAR,          // 117
-    CON_ADDVAR,             // 118
-    CON_IFVARVARL,          // 119
-    CON_IFVARVARG,          // 120
-    CON_ADDLOGVAR,          // 121
-    CON_ADDLOG,             // 122
-    CON_ENDEVENT,           // 124
-    CON_IFVARE,             // 125
-    CON_IFVARVARE,          // 126
-    CON_SPGETLOTAG,         // 127 !DEPRECATED!
-    CON_SPGETHITAG,         // 128 !DEPRECATED!
-    CON_SECTGETLOTAG,       // 129 !DEPRECATED!
-    CON_SECTGETHITAG,       // 130 !DEPRECATED!
-    CON_IFSOUND,            // 131
-    CON_GETTEXTUREFLOOR,    // 132
-    CON_GETTEXTURECEILING,  // 133
-    CON_INITTIMER,          // 134
-    CON_STARTTRACK,         // 135
-    CON_RANDVAR,            // 136
-    CON_GETANGLETOTARGET,   // 138
-    CON_GETACTORANGLE,      // 139
-    CON_SETACTORANGLE,      // 140
-    CON_MULVAR,             // 141
-    CON_MULVARVAR,          // 142
-    CON_DIVVAR,             // 143
-    CON_DIVVARVAR,          // 144
-    CON_MODVAR,             // 145
-    CON_MODVARVAR,          // 146
-    CON_ANDVAR,             // 147
-    CON_ANDVARVAR,          // 148
-    CON_ORVAR,              // 149
-    CON_ORVARVAR,           // 150
-    CON_GETPLAYERANGLE,     // 151
-    CON_SETPLAYERANGLE,     // 152
-    CON_LOCKPLAYER,         // 153
-    CON_SETSECTOR,          // 154
-    CON_GETSECTOR,          // 155
-    CON_SETACTOR,           // 156
-    CON_GETACTOR,           // 157
-    CON_SETWALL,            // 158
-    CON_GETWALL,            // 159
-    CON_FINDNEARACTOR,      // 160
-    CON_FINDNEARACTORVAR,   // 161
-    CON_SETACTORVAR,        // 162
-    CON_GETACTORVAR,        // 163
-    CON_ESPAWN,             // 164
-    CON_GETPLAYER,          // 165
-    CON_SETPLAYER,          // 166
-    CON_SQRT,               // 167
-    CON_ESPAWNVAR,          // 169
-    CON_GETUSERDEF,         // 170
-    CON_SETUSERDEF,         // 171
-    CON_SUBVARVAR,          // 172
-    CON_SUBVAR,             // 173
-    CON_IFVARN,             // 174
-    CON_IFVARVARN,          // 175
-    CON_IFVARAND,           // 176
-    CON_IFVARVARAND,        // 177
-    CON_MYOS,               // 178
-    CON_MYOSPAL,            // 179
-    CON_DISPLAYRAND,        // 180
-    CON_SIN,                // 181
-    CON_XORVARVAR,          // 182
-    CON_XORVAR,             // 183
-    CON_RANDVARVAR,         // 184
-    CON_MYOSX,              // 185
-    CON_MYOSPALX,           // 186
-    CON_GMAXAMMO,           // 187
-    CON_SMAXAMMO,           // 188
-    CON_STARTLEVEL,         // 189
-    CON_ESHOOT,             // 190
-    CON_QSPAWN,             // 191
-    CON_ROTATESPRITE,       // 192
-    CON_COS,                // 195
-    CON_FINDNEARACTOR3D,    // 197
-    CON_FINDNEARACTOR3DVAR, // 198
-    CON_FLASH,              // 199
-    CON_QSPAWNVAR,          // 200
-    CON_EQSPAWN,            // 201
-    CON_EQSPAWNVAR,         // 202
-    CON_MINITEXT,           // 203
-    CON_GAMETEXT,           // 204
-    CON_DIGITALNUMBER,      // 205
-    CON_ADDWEAPONVAR,       // 206
-    CON_SETPROJECTILE,      // 207
-    CON_ANGOFF,             // 208
-    CON_UPDATESECTOR,       // 209
-    CON_INSERTSPRITEQ,      // 210
-    CON_ANGOFFVAR,          // 211
-    CON_WHILEVARN,          // 212
-    CON_SWITCH,             // 213
-    CON_ENDSWITCH,          // 216
-    CON_SOUNDVAR,           // 218
-    CON_FINDPLAYER,         // 219
-    CON_FINDOTHERPLAYER,    // 220
-    CON_ACTIVATEBYSECTOR,   // 221
-    CON_OPERATESECTORS,     // 222
-    CON_OPERATERESPAWNS,    // 223
-    CON_OPERATEACTIVATORS,  // 224
-    CON_OPERATEMASTERSWITCHES,  // 225
-    CON_CHECKACTIVATORMOTION,   // 226
-    CON_ZSHOOT,             // 227
-    CON_DIST,               // 228
-    CON_LDIST,              // 229
-    CON_SHIFTVARL,          // 230
-    CON_SHIFTVARR,          // 231
-    CON_GETANGLE,           // 233
-    CON_WHILEVARVARN,       // 234
-    CON_HITSCAN,            // 235
-    CON_TIME,               // 236
-    CON_GETPLAYERVAR,       // 237
-    CON_SETPLAYERVAR,       // 238
-    CON_MULSCALE,           // 239
-    CON_SETASPECT,          // 240
-    CON_EZSHOOT,            // 241 
-    CON_MOVESPRITE,         // 243
-    CON_CHECKAVAILWEAPON,   // 244
-    CON_SOUNDONCEVAR,       // 245
-    CON_UPDATESECTORZ,      // 246
-    CON_STOPALLSOUNDS,      // 247
-    CON_SSP,                // 248
-    CON_STOPSOUNDVAR,       // 249
-    CON_DISPLAYRANDVAR,     // 250
-    CON_DISPLAYRANDVARVAR,  // 251
-    CON_CHECKAVAILINVEN,    // 252
-    CON_GLOBALSOUNDVAR,     // 253
-    CON_GUNIQHUDID,         // 254
-    CON_GETPROJECTILE,      // 255
-    CON_GETTHISPROJECTILE,  // 256
-    CON_SETTHISPROJECTILE,  // 257
-    CON_USERQUOTE,          // 260  
+    CON_SOUNDONCE,
+    CON_ADDKILLS,
+    CON_STOPSOUND,
+    CON_IFAWAYFROMWALL,
+    CON_IFCANSEETARGET,
+    CON_GLOBALSOUND,
+    CON_LOTSOFGLASS,
+    CON_IFGOTWEAPONCE,
+    CON_GETLASTPAL,
+    CON_PKICK,
+    CON_MIKESND,
+    CON_SIZEAT,
+    CON_ADDSTRENGTH,
+    CON_CSTATOR,
+    CON_MAIL,
+    CON_PAPER,
+    CON_TOSSWEAPON,
+    CON_SLEEPTIME,
+    CON_NULLOP,
+    CON_IFNOSOUNDS,
+    CON_CLIPDIST,
+    CON_IFANGDIFFL,
+    CON_IFVARL,
+    CON_IFVARG,
+    CON_SETVARVAR,
+    CON_SETVAR,
+    CON_ADDVARVAR,
+    CON_ADDVAR,
+    CON_IFVARVARL,
+    CON_IFVARVARG,
+    CON_ADDLOGVAR,
+    CON_ADDLOG,
+    CON_ENDEVENT,
+    CON_IFVARE,
+    CON_IFVARVARE,
+    CON_SPGETLOTAG,         // !DEPRECATED!
+    CON_SPGETHITAG,         // !DEPRECATED!
+    CON_SECTGETLOTAG,       // !DEPRECATED!
+    CON_SECTGETHITAG,       // !DEPRECATED!
+    CON_IFSOUND,
+    CON_GETTEXTUREFLOOR,
+    CON_GETTEXTURECEILING,
+    CON_INITTIMER,
+    CON_STARTTRACK,
+    CON_RANDVAR,
+    CON_GETANGLETOTARGET,
+    CON_GETACTORANGLE,
+    CON_SETACTORANGLE,
+    CON_MULVAR,
+    CON_MULVARVAR,
+    CON_DIVVAR,
+    CON_DIVVARVAR,
+    CON_MODVAR,
+    CON_MODVARVAR,
+    CON_ANDVAR,
+    CON_ANDVARVAR,
+    CON_ORVAR,
+    CON_ORVARVAR,
+    CON_GETPLAYERANGLE,
+    CON_SETPLAYERANGLE,
+    CON_LOCKPLAYER,
+
+    CON_SETSECTOR,
+    CON_GETSECTOR,
+    CON_SETACTOR,
+    CON_GETACTOR,
+    CON_SETWALL,
+    CON_GETWALL,
+    CON_SETACTORVAR,
+    CON_GETACTORVAR,
+    
+
+    CON_GETPLAYER,
+    CON_SETPLAYER,
+
+    CON_FINDNEARACTOR,
+    CON_FINDNEARACTORVAR,
+
+    CON_ESPAWN,
+    CON_SQRT,
+    CON_ESPAWNVAR,
+    CON_GETUSERDEF,
+    CON_SETUSERDEF,
+    CON_SUBVARVAR,
+    CON_SUBVAR,
+    CON_IFVARN,
+    CON_IFVARVARN,
+    CON_IFVARAND,
+    CON_IFVARVARAND,
+    CON_MYOS,
+    CON_MYOSPAL,
+    CON_DISPLAYRAND,
+    CON_SIN,
+    CON_XORVARVAR,
+    CON_XORVAR,
+    CON_RANDVARVAR,
+    CON_MYOSX,
+    CON_MYOSPALX,
+    CON_GMAXAMMO,
+    CON_SMAXAMMO,
+    CON_STARTLEVEL,
+    CON_ESHOOT,
+    CON_QSPAWN,
+    CON_ROTATESPRITE,
+    CON_COS,
+    CON_FINDNEARACTOR3D,
+    CON_FINDNEARACTOR3DVAR,
+    CON_FLASH,
+    CON_QSPAWNVAR,
+    CON_EQSPAWN,
+    CON_EQSPAWNVAR,
+    CON_MINITEXT,
+    CON_GAMETEXT,
+    CON_DIGITALNUMBER,
+    CON_ADDWEAPONVAR,
+    CON_SETPROJECTILE,
+    CON_ANGOFF,
+    CON_UPDATESECTOR,
+    CON_INSERTSPRITEQ,
+    CON_ANGOFFVAR,
+    CON_WHILEVARN,
+    CON_SWITCH,
+    CON_ENDSWITCH,
+    CON_SOUNDVAR,
+    CON_FINDPLAYER,
+    CON_FINDOTHERPLAYER,
+    CON_ACTIVATEBYSECTOR,
+    CON_OPERATESECTORS,
+    CON_OPERATERESPAWNS,
+    CON_OPERATEACTIVATORS,
+    CON_OPERATEMASTERSWITCHES,
+    CON_CHECKACTIVATORMOTION,
+    CON_ZSHOOT,
+    CON_DIST,
+    CON_LDIST,
+    CON_SHIFTVARL,
+    CON_SHIFTVARR,
+    CON_GETANGLE,
+    CON_WHILEVARVARN,
+    CON_HITSCAN,
+    CON_TIME,
+    CON_GETPLAYERVAR,
+    CON_SETPLAYERVAR,
+    CON_MULSCALE,
+    CON_SETASPECT,
+    CON_EZSHOOT,
+    CON_MOVESPRITE,
+    CON_CHECKAVAILWEAPON,
+    CON_SOUNDONCEVAR,
+    CON_UPDATESECTORZ,
+    CON_STOPALLSOUNDS,
+    CON_SSP,
+    CON_STOPSOUNDVAR,
+    CON_DISPLAYRANDVAR,
+    CON_DISPLAYRANDVARVAR,
+    CON_CHECKAVAILINVEN,
+    CON_GLOBALSOUNDVAR,
+    CON_GUNIQHUDID,
+    CON_GETPROJECTILE,
+    CON_GETTHISPROJECTILE,
+    CON_SETTHISPROJECTILE,
+    CON_USERQUOTE,
     CON_REDEFINEQUOTE,
     CON_QSPRINTF,
     CON_GETPNAME,
