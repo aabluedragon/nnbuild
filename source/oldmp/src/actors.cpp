@@ -2377,7 +2377,7 @@ static void G_MoveStandables(void)
 {
     int i = headspritestat[STAT_STANDABLE], j, nexti, nextj, p=0, sect, switchpicnum;
     int l=0, x;
-    intptr_t *pData;
+    int32_t *pData;
     spritetype *s;
     short m;
 
@@ -4434,7 +4434,7 @@ static short A_FindLocator(int n,int sn)
 static void G_MoveActors(void)
 {
     int x, m, l;
-    intptr_t *t;
+    int32_t *t;
     int a, j, nexti, nextj, sect, p, switchpicnum, k;
     spritetype *s;
     int i = headspritestat[STAT_ACTOR];
@@ -5724,7 +5724,7 @@ static void G_MoveMisc(void)  // STATNUM 5
 {
     short i, j, nexti, sect, p;
     int l, x;
-    intptr_t *t;
+    int32_t *t;
     spritetype *s;
     int switchpicnum;
 
@@ -6304,7 +6304,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
 {
     const spritetype *pSprite = &sprite[spriteNum];
     sectortype *const pSector = &sector[sprite[spriteNum].sectnum];
-    intptr_t *const    pData = actor[spriteNum].t_data;
+    int32_t *const    pData = actor[spriteNum].t_data;
     int j;
 
     if (klabs(pSector->floorz - spriteZ) < sprite[spriteNum].yvel)
@@ -6363,7 +6363,7 @@ static void HandleSE31(int spriteNum, int setFloorZ, int spriteZ, int SEdir, int
 static void G_MoveEffectors(void)   //STATNUM 3
 {
     int q=0,  m, x, st, j;
-    intptr_t *pData,l;
+    int32_t *pData,l;
     int spriteNum = headspritestat[STAT_EFFECTOR], nextk, p, sh, nextj;
     short k;
     walltype *wal;
@@ -6597,7 +6597,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
 
             if (pSprite->owner == -1)
             {
-                Bsprintf(tempbuf,"Could not find any locators for SE# 6 and 14 with a hitag of %" PRIdPTR ".\n", pData[3]);
+                Bsprintf(tempbuf,"Could not find any locators for SE# 6 and 14 with a hitag of %d.\n", pData[3]);
                 G_GameExit(tempbuf);
             }
 
@@ -7898,32 +7898,30 @@ static void G_MoveEffectors(void)   //STATNUM 3
             break;
 
         case SE_21_DROP_FLOOR: // Cascading effect
-
+        {
             if (pData[0] == 0) break;
 
-            if (pSprite->ang == 1536)
-                l = (intptr_t) &pSector->ceilingz;
-            else
-                l = (intptr_t) &pSector->floorz;
+            int32_t* zptr = (pSprite->ang == 1536) ? &pSector->ceilingz : &pSector->floorz;
 
-            if (pData[0] == 1)   //Decide if the pSprite->sectnum should go up or down
+            if (pData[0] == 1)   //Decide if the s->sectnum should go up or down
             {
-                pSprite->zvel = ksgn(pSprite->z-*(int *)l) * (SP(spriteNum)<<4);
+                pSprite->zvel = ksgn(pSprite->z - *zptr) * (SP(spriteNum) << 4);
                 pData[0]++;
             }
 
             if (pSector->extra == 0)
             {
-                *(int *)l += pSprite->zvel;
+                *zptr += pSprite->zvel;
 
-                if (klabs(*(int *)l-pSprite->z) < 1024)
+                if (klabs(*zptr - pSprite->z) < 1024)
                 {
-                    *(int *)l = pSprite->z;
-                    KILLIT(spriteNum); //All done
+                    *zptr = pSprite->z;
+                    KILLIT(spriteNum); //All done   // SE_21_KILLIT, see sector.c
                 }
             }
             else pSector->extra--;
             break;
+        }
 
         case SE_22_TEETH_DOOR:
 

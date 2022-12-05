@@ -38,7 +38,7 @@ void G_SaveMapState(mapstate_t *save);
 
 int g_i, g_p;
 static int g_x;
-static intptr_t *g_t;
+static int32_t *g_t;
 spritetype *g_sp;
 static int g_killitFlag;
 int g_errorLineNum;
@@ -128,7 +128,8 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         int og_i=g_i, og_p=g_p, okillit_flag=g_killitFlag;
         int og_x=g_x;// *og_t=g_t;
         int oevent = g_currentEvent;
-        intptr_t *oinsptr=insptr, *og_t=g_t;
+        intptr_t* oinsptr = insptr;
+        int32_t* og_t = g_t;
         spritetype *og_sp=g_sp;
 
         g_i = iActor;    // current sprite ID
