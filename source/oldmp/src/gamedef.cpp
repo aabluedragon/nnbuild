@@ -611,6 +611,28 @@ void freehash()
     hash_free(&h_labels);
 }
 
+// some keywords generate different opcodes depending on the context the keyword is used in
+// keywords_for_private_opcodes[] resolves those opcodes to the publicly facing keyword that can generate them
+static const tokenmap_t keywords_for_private_opcodes[] =
+{
+    { "getactor",  CON_GETSPRITEEXT },
+    { "getactor",  CON_GETACTORSTRUCT },
+    { "getactor",  CON_GETSPRITESTRUCT },
+
+    { "setactor",  CON_SETSPRITEEXT },
+    { "setactor",  CON_SETACTORSTRUCT },
+    { "setactor",  CON_SETSPRITESTRUCT },
+
+    { "getwall",   CON_GETWALLSTRUCT },
+    { "setwall",   CON_SETWALLSTRUCT },
+
+    { "getsector", CON_GETSECTORSTRUCT },
+    { "setsector", CON_SETSECTORSTRUCT },
+
+    { "getplayer", CON_GETPLAYERSTRUCT },
+    { "setplayer", CON_SETPLAYERSTRUCT },
+};
+
 char const* VM_GetKeywordForID(int32_t id)
 {
     // could be better, but this is used strictly for diagnostic warning and error messages
@@ -618,11 +640,9 @@ char const* VM_GetKeywordForID(int32_t id)
         if (keyword.val == id)
             return keyword.token;
 
-#if 0 // Not implemented yet.
     for (tokenmap_t const& keyword : keywords_for_private_opcodes)
         if (keyword.val == id)
             return keyword.token;
-#endif
 
     return "<unknown instruction>";
 }
@@ -2726,9 +2746,12 @@ static bool C_ParseCommand(bool loop /*= false*/)
 
         Bassert((*ins & VM_INSTMASK) == tw);
 
-        //auto const& label = SectorLabels[labelNum];
-        //if (label.offset != -1 && (label.flags & LABEL_WRITEFUNC) == 0)
-        //    *ins = CON_GETSECTORSTRUCT | LINE_NUMBER;
+        auto const& label = SectorLabels[labelNum];
+
+        int32_t const opcode = (tw == CON_GETSECTOR) ? CON_GETSECTORSTRUCT : CON_SETSECTORSTRUCT;
+        int32_t const labelFunc = (tw == CON_GETSECTOR) ? LABEL_READFUNC : LABEL_WRITEFUNC;
+        if (label.offset != -1 && (label.flags & labelFunc) == 0)
+            *ins = opcode | LINE_NUMBER;
 
         scriptWriteValue(labelNum);
 
@@ -2822,10 +2845,12 @@ static bool C_ParseCommand(bool loop /*= false*/)
 
         Bassert((*ins & VM_INSTMASK) == tw);
 
-        //auto const& label = WallLabels[labelNum];
+        auto const& label = WallLabels[labelNum];
 
-        //if (label.offset != -1 && (label.flags & LABEL_WRITEFUNC) == 0)
-        //    *ins = CON_GETWALLSTRUCT | LINE_NUMBER;
+        int32_t const opcode = (tw == CON_GETWALL) ? CON_GETWALLSTRUCT : CON_SETWALLSTRUCT;
+        int32_t const labelFunc = (tw == CON_GETWALL) ? LABEL_READFUNC : LABEL_WRITEFUNC;
+        if (label.offset != -1 && (label.flags & labelFunc) == 0)
+            *ins = opcode | LINE_NUMBER;
 
         scriptWriteValue(labelNum);
 
@@ -2852,8 +2877,10 @@ static bool C_ParseCommand(bool loop /*= false*/)
 
         auto const& label = PlayerLabels[labelNum];
 
-        //if (label.offset != -1 && (label.flags & (LABEL_WRITEFUNC | LABEL_HASPARM2)) == 0)
-        //    *ins = CON_SETPLAYERSTRUCT | LINE_NUMBER;
+        int32_t const opcode = (tw == CON_GETPLAYER) ? CON_GETPLAYERSTRUCT : CON_SETPLAYERSTRUCT;
+        int32_t const labelFunc = (tw == CON_GETPLAYER) ? LABEL_READFUNC : LABEL_WRITEFUNC;
+        if (label.offset != -1 && (label.flags & (labelFunc | LABEL_HASPARM2)) == 0)
+            *ins = opcode | LINE_NUMBER;
 
         scriptWriteValue(labelNum);
 
@@ -3056,29 +3083,42 @@ static bool C_ParseCommand(bool loop /*= false*/)
         Bassert((*ins & VM_INSTMASK) == tw);
 
         auto const& label = ActorLabels[labelNum];
-
-        /*
-        if (label.offset != -1 && (label.flags & (LABEL_READFUNC | LABEL_HASPARM2)) == 0)
+        
+        if (tw == CON_GETACTOR)
         {
-            if (labelNum >= ACTOR_SPRITEEXT_BEGIN)
-                *ins = CON_GETSPRITEEXT | LINE_NUMBER;
-            else if (labelNum >= ACTOR_STRUCT_BEGIN)
-                *ins = CON_GETACTORSTRUCT | LINE_NUMBER;
-            else
-                *ins = CON_GETSPRITESTRUCT | LINE_NUMBER;
-        }
-        */
-
-        // Check if were setting something that isn't sync safe in a local event
-        if (tw == CON_SETACTOR && !C_CheckEventSync(g_currentEvent))
-        {
-            switch (label.lId)
+            if (label.offset != -1 && (label.flags & (LABEL_READFUNC | LABEL_HASPARM2)) == 0)
             {
-                case ACTOR_ALPHA: break;
-                default:
-                    C_ReportError(WARNING_EVENTSYNC);
-                    g_warningCnt++;
-                    break;
+                if (labelNum >= ACTOR_SPRITEEXT_BEGIN)
+                    *ins = CON_GETSPRITEEXT | LINE_NUMBER;
+                else if (labelNum >= ACTOR_STRUCT_BEGIN)
+                    *ins = CON_GETACTORSTRUCT | LINE_NUMBER;
+                else
+                    *ins = CON_GETSPRITESTRUCT | LINE_NUMBER;
+            }
+        }
+        else
+        {
+            if (label.offset != -1 && (label.flags & (LABEL_WRITEFUNC | LABEL_HASPARM2)) == 0)
+            {
+                if (labelNum >= ACTOR_SPRITEEXT_BEGIN)
+                    *ins = CON_SETSPRITEEXT | LINE_NUMBER;
+                else if (labelNum >= ACTOR_STRUCT_BEGIN)
+                    *ins = CON_SETACTORSTRUCT | LINE_NUMBER;
+                else
+                    *ins = CON_SETSPRITESTRUCT | LINE_NUMBER;
+            }
+
+            // Check if were setting something that isn't sync safe in a local event
+            if(!C_CheckEventSync(g_currentEvent))
+            {
+                switch (label.lId)
+                {
+                    case ACTOR_ALPHA: break;
+                    default:
+                        C_ReportError(WARNING_EVENTSYNC);
+                        g_warningCnt++;
+                        break;
+                }
             }
         }
 

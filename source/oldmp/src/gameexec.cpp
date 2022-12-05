@@ -3674,7 +3674,7 @@ static int X_DoExecute(void)
     case CON_GETSECTOR:
         insptr++;
         {
-            int const   sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_sp->sectnum;
+            int const sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_sp->sectnum;
             int const labelNum = *insptr++;
             int const lVar2 = *insptr++;
 
@@ -3684,6 +3684,26 @@ static int X_DoExecute(void)
                 VM_SetSector(sectNum, labelNum, Gv_GetVarX(lVar2));
             else
                 Gv_SetVarX(lVar2, VM_GetSector(sectNum, labelNum));
+
+            break;
+        }
+
+    case CON_SETSECTORSTRUCT:
+    case CON_GETSECTORSTRUCT:
+        insptr++;
+        {
+            int const sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_sp->sectnum;
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;
+
+            VM_ABORT_IF((unsigned)sectNum >= MAXSECTORS, "invalid sector %d", sectNum);
+
+            auto const& sectLabel = SectorLabels[labelNum];
+
+            if (tw == CON_SETSECTORSTRUCT)
+                VM_SetStruct(sectLabel.flags, (intptr_t*)((char*)&sector[sectNum] + sectLabel.offset), Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetStruct(sectLabel.flags, (intptr_t*)((char*)&sector[sectNum] + sectLabel.offset)));
 
             break;
         }
@@ -3929,6 +3949,28 @@ static int X_DoExecute(void)
             break;
         }
 
+    case CON_SETPLAYERSTRUCT:
+    case CON_GETPLAYERSTRUCT:
+        insptr++;
+        {
+            int const   playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const   labelNum = *insptr++;
+            auto const& playerLabel = PlayerLabels[labelNum];
+            int const   lParm2 = (playerLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
+
+            VM_ABORT_IF(((unsigned)playerNum >= MAXPLAYERS) | ((unsigned)lParm2 > (unsigned)playerLabel.maxParm2),
+                "%s[%d] invalid for player %d", playerLabel.name, lParm2, playerNum);
+
+            int const lVar2 = *insptr++;
+
+            if (tw == CON_SETPLAYERSTRUCT)
+                VM_SetStruct(playerLabel.flags, (intptr_t*)((char*)&g_player[playerNum].ps[0] + playerLabel.offset), Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetStruct(playerLabel.flags, (intptr_t*)((char*)&g_player[playerNum].ps[0] + playerLabel.offset)));
+
+            break;
+        }
+
     case CON_SETINPUT:
     case CON_GETINPUT:
         insptr++;
@@ -4011,6 +4053,26 @@ static int X_DoExecute(void)
             break;
         }
 
+    case CON_SETWALLSTRUCT:
+    case CON_GETWALLSTRUCT:
+        insptr++;
+        {
+            int const wallNum = Gv_GetVarX(*insptr++);
+            VM_ABORT_IF((unsigned)wallNum >= MAXWALLS, "invalid wall %d", wallNum);
+
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;
+
+            auto const& wallLabel = WallLabels[labelNum];
+
+            if (tw == CON_SETWALLSTRUCT)
+                VM_SetStruct(wallLabel.flags, (intptr_t*)((char*)&wall[wallNum] + wallLabel.offset), Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetStruct(wallLabel.flags, (intptr_t*)((char*)&wall[wallNum] + wallLabel.offset)));
+
+            break;
+        }
+
     case CON_SETACTORVAR:
     case CON_GETACTORVAR:
         insptr++;
@@ -4064,6 +4126,66 @@ static int X_DoExecute(void)
                 VM_SetSprite(spriteNum, labelNum, lParm2, Gv_GetVarX(lVar2));
             else
                 Gv_SetVarX(lVar2, VM_GetSprite(spriteNum, labelNum, lParm2));
+
+            break;
+        }
+
+    // For actor[] struct only, not to be confused with the large umbrella of sprite[], actor[], and spriteext[] that CON_GET/SETACTOR covers.
+    case CON_SETACTORSTRUCT:
+    case CON_GETACTORSTRUCT:
+        insptr++;
+        {
+            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   labelNum = *insptr++;
+            auto const& actorLabel = ActorLabels[labelNum];
+            int const   lVar2 = *insptr++;
+
+            VM_ABORT_IF((unsigned)spriteNum >= MAXSPRITES, "invalid sprite %d", spriteNum);
+
+            if (tw == CON_SETACTORSTRUCT)
+                VM_SetStruct(actorLabel.flags, (intptr_t*)((char*)&actor[spriteNum] + actorLabel.offset), Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetStruct(actorLabel.flags, (intptr_t*)((char*)&actor[spriteNum] + actorLabel.offset)));
+
+            break;
+        }
+    
+    // Same, but for spriteext[].
+    case CON_SETSPRITEEXT:
+    case CON_GETSPRITEEXT:
+        insptr++;
+        {
+            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   labelNum = *insptr++;
+            auto const& spriteExtLabel = ActorLabels[labelNum];
+            int const   lVar2 = *insptr++;
+
+            VM_ABORT_IF((unsigned)spriteNum >= MAXSPRITES, "invalid sprite %d", spriteNum);
+
+            if (tw == CON_SETSPRITEEXT)
+                VM_SetStruct(spriteExtLabel.flags, (intptr_t*)((char*)&spriteext[spriteNum] + spriteExtLabel.offset), Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetStruct(spriteExtLabel.flags, (intptr_t*)((char*)&spriteext[spriteNum] + spriteExtLabel.offset)));
+
+            break;
+        }
+
+    // Lastly, for sprite[].
+    case CON_SETSPRITESTRUCT:
+    case CON_GETSPRITESTRUCT:
+        insptr++;
+        {
+            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   labelNum = *insptr++;
+            auto const& spriteLabel = ActorLabels[labelNum];
+            int const   lVar2 = *insptr++;
+
+            VM_ABORT_IF((unsigned)spriteNum >= MAXSPRITES, "invalid sprite %d", spriteNum);
+
+            if (tw == CON_SETSPRITESTRUCT)
+                VM_SetStruct(spriteLabel.flags, (intptr_t*)((char*)&sprite[spriteNum] + spriteLabel.offset), Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetStruct(spriteLabel.flags, (intptr_t*)((char*)&sprite[spriteNum] + spriteLabel.offset)));
 
             break;
         }
