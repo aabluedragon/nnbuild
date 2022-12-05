@@ -664,12 +664,11 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 CHECK_INDEX(MAXPLAYERS);
                 returnValue = VM_GetPlayerInput(arrayIndex, labelNum);
                 break;
-#if 0
+
             case STRUCT_USERDEF:
-                arrayIndexVar = (EDUKE32_PREDICT_FALSE(UserdefsLabels[labelNum].flags & LABEL_HASPARM2)) ? Gv_GetVar(*insptr++) : 0;
+                arrayIndexVar = (EDUKE32_PREDICT_FALSE(UserdefsLabels[labelNum].flags & LABEL_HASPARM2)) ? Gv_GetVarX(*insptr++) : 0;
                 returnValue = VM_GetUserdef(labelNum, arrayIndexVar);
                 break;
-#endif
         }
     }
     else // if (gameVar & GV_FLAG_ARRAY)

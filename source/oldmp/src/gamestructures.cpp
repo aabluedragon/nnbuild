@@ -612,9 +612,143 @@ void __fastcall VM_SetTileData(int const tileNum, int const labelNum, int32_t ne
     }
 }
 
-void __fastcall X_AccessUserdef(int iSet, int labelNum, int lVar2, int lParm2)
+int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
 {
-    int const lValue = (iSet) ? Gv_GetVar(lVar2, g_i, g_p) : 0;
+    auto const& udLabel = UserdefsLabels[labelNum];
+    if (EDUKE32_PREDICT_FALSE(udLabel.flags & LABEL_HASPARM2 && (unsigned)lParm2 >= (unsigned)udLabel.maxParm2))
+    {
+        CON_ERRPRINTF("%s[%d] invalid for userdef", udLabel.name, lParm2);
+        return -1;
+    }
+
+    switch (udLabel.lId)
+    {
+        case USERDEFS_GOD:                  return ud.god;
+        case USERDEFS_WARP_ON:              return ud.warp_on;
+        case USERDEFS_CASHMAN:              return ud.cashman;
+        case USERDEFS_EOG:                  return ud.eog;
+        case USERDEFS_SHOWALLMAP:           return ud.showallmap;
+        case USERDEFS_SHOW_HELP:            return ud.show_help;
+        case USERDEFS_SCROLLMODE:           return ud.scrollmode;
+        case USERDEFS_CLIPPING:             return ud.noclip;
+        case USERDEFS_OVERHEAD_ON:          return ud.overhead_on;
+        case USERDEFS_LAST_OVERHEAD:        return ud.last_overhead;
+        case USERDEFS_SHOWWEAPONS:          return ud.showweapons;
+        case USERDEFS_PAUSE_ON:             return ud.pause_on;
+        case USERDEFS_FROM_BONUS:           return ud.from_bonus;
+        case USERDEFS_CAMERASPRITE:         return ud.camerasprite;
+        case USERDEFS_LAST_CAMSPRITE:       return ud.last_camsprite;
+        case USERDEFS_LAST_LEVEL:           return ud.last_level;
+        case USERDEFS_SECRETLEVEL:          return ud.secretlevel;
+        case USERDEFS_CONST_VISIBILITY:     return ud.const_visibility;
+        case USERDEFS_UW_FRAMERATE:         return ud.uw_framerate;
+        case USERDEFS_CAMERA_TIME:          return ud.camera_time;
+        case USERDEFS_FOLFVEL:              return ud.folfvel;
+        case USERDEFS_FOLAVEL:              return ud.folavel;
+        case USERDEFS_FOLX:                 return ud.folx;
+        case USERDEFS_FOLY:                 return ud.foly;
+        case USERDEFS_FOLA:                 return ud.fola;
+        case USERDEFS_RECCNT:               return ud.reccnt;
+        case USERDEFS_ENTERED_NAME:         return ud.entered_name;
+        case USERDEFS_SCREEN_TILTING:       return ud.screen_tilting;
+        case USERDEFS_SHADOWS:              return ud.shadows;
+        case USERDEFS_FTA_ON:               return ud.fta_on;
+        case USERDEFS_EXECUTIONS:           return ud.executions;
+        case USERDEFS_AUTO_RUN:             return ud.auto_run;
+        case USERDEFS_COORDS:               return ud.coords;
+        case USERDEFS_TICKRATE:             return ud.showfps;
+        case USERDEFS_M_COOP:               return ud.m_coop;
+        case USERDEFS_COOP:                 return ud.coop;
+        case USERDEFS_SCREEN_SIZE:          return ud.screen_size;
+        case USERDEFS_LOCKOUT:              return ud.lockout;
+        case USERDEFS_CROSSHAIR:            return ud.crosshair;
+        case USERDEFS_PLAYERAI:             return ud.playerai;
+
+        case USERDEFS_RESPAWN_MONSTERS:     return DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS);
+        case USERDEFS_RESPAWN_ITEMS:        return DMFLAGS_TEST(DMFLAG_RESPAWNITEMS);
+        case USERDEFS_RESPAWN_INVENTORY:    return DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY);
+
+        case USERDEFS_RECSTAT:              return ud.recstat;
+
+        case USERDEFS_MONSTERS_OFF:         return DMFLAGS_TEST(DMFLAG_NOMONSTERS);
+
+        case USERDEFS_BRIGHTNESS:           return ud.brightness;
+
+        case USERDEFS_M_RESPAWN_ITEMS:      return M_DMFLAGS_TEST(DMFLAG_RESPAWNITEMS);
+        case USERDEFS_M_RESPAWN_MONSTERS:   return M_DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS);
+        case USERDEFS_M_RESPAWN_INVENTORY:  return M_DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY);
+
+        case USERDEFS_M_RECSTAT:            return ud.m_recstat;
+
+        case USERDEFS_M_MONSTERS_OFF:       return M_DMFLAGS_TEST(DMFLAG_NOMONSTERS);
+
+        case USERDEFS_DETAIL:               return ud.detail;
+
+        case USERDEFS_M_FFIRE:              return M_DMFLAGS_TEST(DMFLAG_FRIENDLYFIRE);
+        case USERDEFS_FFIRE:                return DMFLAGS_TEST(DMFLAG_FRIENDLYFIRE);
+
+        case USERDEFS_M_PLAYER_SKILL:       return ud.m_player_skill;
+        case USERDEFS_M_LEVEL_NUMBER:       return ud.m_level_number;
+        case USERDEFS_M_VOLUME_NUMBER:      return ud.m_volume_number;
+        case USERDEFS_MULTIMODE:            return ud.multimode;
+        case USERDEFS_PLAYER_SKILL:         return ud.player_skill;
+        case USERDEFS_LEVEL_NUMBER:         return ud.level_number;
+        case USERDEFS_VOLUME_NUMBER:        return ud.volume_number;
+
+        case USERDEFS_M_MARKER:             return M_DMFLAGS_TEST(DMFLAG_MARKERS);
+        case USERDEFS_MARKER:               return DMFLAGS_TEST(DMFLAG_MARKERS);
+
+        case USERDEFS_MOUSEFLIP:            return ud.mouseflip;
+        case USERDEFS_STATUSBARSCALE:       return ud.statusbarscale;
+        case USERDEFS_DRAWWEAPON:           return ud.drawweapon;
+        case USERDEFS_MOUSEAIMING:          return ud.mouseaiming;
+        case USERDEFS_WEAPONSWITCH:         return ud.weaponswitch;
+        case USERDEFS_DEMOCAMS:             return ud.democams;
+        case USERDEFS_COLOR:                return ud.color;
+        case USERDEFS_MSGDISPTIME:          return ud.msgdisptime;
+        case USERDEFS_STATUSBARMODE:        return ud.statusbarmode;
+
+        case USERDEFS_M_NOEXITS:            return M_DMFLAGS_TEST(DMFLAG_NOEXITS);
+        case USERDEFS_NOEXITS:              return DMFLAGS_TEST(DMFLAG_NOEXITS);
+
+        case USERDEFS_AUTOVOTE:             return ud.autovote;
+        case USERDEFS_AUTOMSG:              return ud.automsg;
+        case USERDEFS_IDPLAYERS:            return ud.idplayers;
+        case USERDEFS_TEAM:                 return ud.team;
+        case USERDEFS_VIEWBOB:              return ud.viewbob;
+        case USERDEFS_WEAPONSWAY:           return ud.weaponsway;
+        case USERDEFS_ANGLEINTERPOLATION:   return ud.angleinterpolation;
+        case USERDEFS_OBITUARIES:           return ud.obituaries;
+        case USERDEFS_LEVELSTATS:           return ud.levelstats;
+        case USERDEFS_CROSSHAIRSCALE:       return ud.crosshairscale;
+        case USERDEFS_ALTHUD:               return ud.althud;
+        case USERDEFS_DISPLAY_BONUS_SCREEN: return ud.display_bonus_screen;
+        case USERDEFS_SHOW_LEVEL_TEXT:      return ud.show_level_text;
+        case USERDEFS_WEAPONSCALE:          return ud.weaponscale;
+        case USERDEFS_TEXTSCALE:            return ud.textscale;
+
+        case USERDEFS_RETURN:
+        {
+            if (lParm2 == 0)
+                return Gv_GetVarX(sysVarIDs.RETURN);
+            else
+                return ud.returnvar[lParm2 - 1];
+        }
+
+        case USERDEFS_TEAMPAL:              return teams[lParm2].palnum;
+        case USERDEFS_TEAMFRAGS:            return teams[lParm2].frags;
+        case USERDEFS_TEAMSUICIDES:         return teams[lParm2].suicides;
+        case USERDEFS_DMFLAGS:              return ud.dmflags;
+        case USERDEFS_M_DMFLAGS:            return ud.m_dmflags;
+        case USERDEFS_DRAW_YXASPECT:        return rotatesprite_yxaspect;
+        case USERDEFS_MONSTERS_KILLED:      return ud.monsters_killed;
+
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
+    }
+}
+
+void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t const newValue)
+{
     auto const& udLabel = UserdefsLabels[labelNum];
 
     if (EDUKE32_PREDICT_FALSE(udLabel.flags & LABEL_HASPARM2 && (unsigned)lParm2 >= (unsigned)udLabel.maxParm2))
@@ -625,942 +759,138 @@ void __fastcall X_AccessUserdef(int iSet, int labelNum, int lVar2, int lParm2)
 
     switch (udLabel.lId)
     {
-    case USERDEFS_GOD:
-        if (iSet)
+        case USERDEFS_GOD:                  ud.god              = newValue; return;
+        case USERDEFS_WARP_ON:              ud.warp_on          = newValue; return;
+        case USERDEFS_CASHMAN:              ud.cashman          = newValue; return;
+        case USERDEFS_EOG:                  ud.eog              = newValue; return;
+        case USERDEFS_SHOWALLMAP:           ud.showallmap       = newValue; return;
+        case USERDEFS_SHOW_HELP:            ud.show_help        = newValue; return;
+        case USERDEFS_SCROLLMODE:           ud.scrollmode       = newValue; return;
+        case USERDEFS_CLIPPING:             ud.noclip           = newValue; return;
+        case USERDEFS_OVERHEAD_ON:          ud.overhead_on      = newValue; return;
+        case USERDEFS_LAST_OVERHEAD:        ud.last_overhead    = newValue; return;
+        case USERDEFS_SHOWWEAPONS:          ud.showweapons      = newValue; return;
+        case USERDEFS_PAUSE_ON:             ud.pause_on         = newValue; return;
+        case USERDEFS_FROM_BONUS:           ud.from_bonus       = newValue; return;
+        case USERDEFS_CAMERASPRITE:         ud.camerasprite     = newValue; return;
+        case USERDEFS_LAST_CAMSPRITE:       ud.last_camsprite   = newValue; return;
+        case USERDEFS_LAST_LEVEL:           ud.last_level       = newValue; return;
+        case USERDEFS_SECRETLEVEL:          ud.secretlevel      = newValue; return;
+        case USERDEFS_CONST_VISIBILITY:     ud.const_visibility = newValue; return;
+        case USERDEFS_UW_FRAMERATE:         ud.uw_framerate     = newValue; return;
+        case USERDEFS_CAMERA_TIME:          ud.camera_time      = newValue; return;
+        case USERDEFS_FOLFVEL:              ud.folfvel          = newValue; return;
+        case USERDEFS_FOLAVEL:              ud.folavel          = newValue; return;
+        case USERDEFS_FOLX:                 ud.folx             = newValue; return;
+        case USERDEFS_FOLY:                 ud.foly             = newValue; return;
+        case USERDEFS_FOLA:                 ud.fola             = newValue; return;
+        case USERDEFS_RECCNT:               ud.reccnt           = newValue; return;
+        case USERDEFS_ENTERED_NAME:         ud.entered_name     = newValue; return;
+        case USERDEFS_SCREEN_TILTING:       ud.screen_tilting   = newValue; return;
+        case USERDEFS_SHADOWS:              ud.shadows          = newValue; return;
+        case USERDEFS_FTA_ON:               ud.fta_on           = newValue; return;
+        case USERDEFS_EXECUTIONS:           ud.executions       = newValue; return;
+        case USERDEFS_AUTO_RUN:             ud.auto_run         = newValue; return;
+        case USERDEFS_COORDS:               ud.coords           = newValue; return;
+        case USERDEFS_TICKRATE:             ud.showfps          = newValue; return;
+        case USERDEFS_M_COOP:               ud.m_coop           = newValue; return;
+        case USERDEFS_COOP:                 ud.coop             = newValue; return;
+
+        case USERDEFS_SCREEN_SIZE:
         {
-            ud.god = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.god, g_i, g_p);
-        return;
-
-    case USERDEFS_WARP_ON:
-        if (iSet)
-        {
-            ud.warp_on = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.warp_on, g_i, g_p);
-        return;
-
-    case USERDEFS_CASHMAN:
-        if (iSet)
-        {
-            ud.cashman = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.cashman, g_i, g_p);
-        return;
-
-    case USERDEFS_EOG:
-        if (iSet)
-        {
-            ud.eog = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.eog, g_i, g_p);
-        return;
-
-    case USERDEFS_SHOWALLMAP:
-        if (iSet)
-        {
-            ud.showallmap = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.showallmap, g_i, g_p);
-        return;
-
-    case USERDEFS_SHOW_HELP:
-        if (iSet)
-        {
-            ud.show_help = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.show_help, g_i, g_p);
-        return;
-
-    case USERDEFS_SCROLLMODE:
-        if (iSet)
-        {
-            ud.scrollmode = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.scrollmode, g_i, g_p);
-        return;
-
-    case USERDEFS_CLIPPING:
-        if (iSet)
-        {
-            ud.noclip = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.noclip, g_i, g_p);
-        return;
-
-        //  case USERDEFS_USER_NAME:
-        //      if(iSet)
-        //      {
-        //          ud.user_name[MAXPLAYERS][32] = lValue;
-        //          return;
-        //      }
-        //      Gv_SetVar(lVar2, ud.user_name[MAXPLAYERS][32], g_i, g_p);
-        //      return;
-
-        //  case USERDEFS_RIDECULE:
-        //      if(iSet)
-        //      {
-        //          ud.ridecule = lValue;
-        //          return;
-        //      }
-        //      Gv_SetVar(lVar2, ud.ridecule, g_i, g_p);
-        //      return;
-
-        //  case USERDEFS_SAVEGAME:
-        //      if(iSet)
-        //      {
-        //          ud.savegame = lValue;
-        //          return;
-        //      }
-        //      Gv_SetVar(lVar2, ud.savegame, g_i, g_p);
-        //      return;
-
-        //  case USERDEFS_PWLOCKOUT:
-        //      if(iSet)
-        //      {
-        //          ud.pwlockout = lValue;
-        //          return;
-        //      }
-        //      Gv_SetVar(lVar2, ud.pwlockout, g_i, g_p);
-        //      return;
-
-        //  case USERDEFS_RTSNAME:
-        //      if(iSet)
-        //      {
-        //          ud.rtsname = lValue;
-        //          return;
-        //      }
-        //      Gv_SetVar(lVar2, ud.rtsname, g_i, g_p);
-        //      return;
-
-    case USERDEFS_OVERHEAD_ON:
-        if (iSet)
-        {
-            ud.overhead_on = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.overhead_on, g_i, g_p);
-        return;
-
-    case USERDEFS_LAST_OVERHEAD:
-        if (iSet)
-        {
-            ud.last_overhead = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.last_overhead, g_i, g_p);
-        return;
-
-    case USERDEFS_SHOWWEAPONS:
-        if (iSet)
-        {
-            ud.showweapons = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.showweapons, g_i, g_p);
-        return;
-
-    case USERDEFS_PAUSE_ON:
-        if (iSet)
-        {
-            ud.pause_on = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.pause_on, g_i, g_p);
-        return;
-
-    case USERDEFS_FROM_BONUS:
-        if (iSet)
-        {
-            ud.from_bonus = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.from_bonus, g_i, g_p);
-        return;
-
-    case USERDEFS_CAMERASPRITE:
-        if (iSet)
-        {
-            ud.camerasprite = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.camerasprite, g_i, g_p);
-        return;
-
-    case USERDEFS_LAST_CAMSPRITE:
-        if (iSet)
-        {
-            ud.last_camsprite = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.last_camsprite, g_i, g_p);
-        return;
-
-    case USERDEFS_LAST_LEVEL:
-        if (iSet)
-        {
-            ud.last_level = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.last_level, g_i, g_p);
-        return;
-
-    case USERDEFS_SECRETLEVEL:
-        if (iSet)
-        {
-            ud.secretlevel = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.secretlevel, g_i, g_p);
-        return;
-
-    case USERDEFS_CONST_VISIBILITY:
-        if (iSet)
-        {
-            ud.const_visibility = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.const_visibility, g_i, g_p);
-        return;
-
-    case USERDEFS_UW_FRAMERATE:
-        if (iSet)
-        {
-            ud.uw_framerate = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.uw_framerate, g_i, g_p);
-        return;
-
-    case USERDEFS_CAMERA_TIME:
-        if (iSet)
-        {
-            ud.camera_time = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.camera_time, g_i, g_p);
-        return;
-
-    case USERDEFS_FOLFVEL:
-        if (iSet)
-        {
-            ud.folfvel = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.folfvel, g_i, g_p);
-        return;
-
-    case USERDEFS_FOLAVEL:
-        if (iSet)
-        {
-            ud.folavel = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.folavel, g_i, g_p);
-        return;
-
-    case USERDEFS_FOLX:
-        if (iSet)
-        {
-            ud.folx = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.folx, g_i, g_p);
-        return;
-
-    case USERDEFS_FOLY:
-        if (iSet)
-        {
-            ud.foly = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.foly, g_i, g_p);
-        return;
-
-    case USERDEFS_FOLA:
-        if (iSet)
-        {
-            ud.fola = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.fola, g_i, g_p);
-        return;
-
-    case USERDEFS_RECCNT:
-        if (iSet)
-        {
-            ud.reccnt = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.reccnt, g_i, g_p);
-        return;
-
-    case USERDEFS_ENTERED_NAME:
-        if (iSet)
-        {
-            ud.entered_name = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.entered_name, g_i, g_p);
-        return;
-
-    case USERDEFS_SCREEN_TILTING:
-        if (iSet)
-        {
-            ud.screen_tilting = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.screen_tilting, g_i, g_p);
-        return;
-
-    case USERDEFS_SHADOWS:
-        if (iSet)
-        {
-            ud.shadows = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.shadows, g_i, g_p);
-        return;
-
-    case USERDEFS_FTA_ON:
-        if (iSet)
-        {
-            ud.fta_on = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.fta_on, g_i, g_p);
-        return;
-
-    case USERDEFS_EXECUTIONS:
-        if (iSet)
-        {
-            ud.executions = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.executions, g_i, g_p);
-        return;
-
-    case USERDEFS_AUTO_RUN:
-        if (iSet)
-        {
-            ud.auto_run = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.auto_run, g_i, g_p);
-        return;
-
-    case USERDEFS_COORDS:
-        if (iSet)
-        {
-            ud.coords = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.coords, g_i, g_p);
-        return;
-
-    case USERDEFS_TICKRATE:
-        if (iSet)
-        {
-            ud.showfps = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.showfps, g_i, g_p);
-        return;
-
-    case USERDEFS_M_COOP:
-        if (iSet)
-        {
-            ud.m_coop = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.m_coop, g_i, g_p);
-        return;
-
-    case USERDEFS_COOP:
-        if (iSet)
-        {
-            ud.coop = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.coop, g_i, g_p);
-        return;
-
-    case USERDEFS_SCREEN_SIZE:
-        if (iSet)
-        {
-            if (ud.screen_size != lValue)
+            if (ud.screen_size != newValue)
             {
-                ud.screen_size = lValue;
+                ud.screen_size = newValue;
                 G_UpdateScreenArea();
             }
             return;
         }
-        Gv_SetVar(lVar2, ud.screen_size, g_i, g_p);
-        return;
 
-    case USERDEFS_LOCKOUT:
-        if (iSet)
+        case USERDEFS_LOCKOUT:              ud.lockout          = newValue; return;
+        case USERDEFS_CROSSHAIR:            ud.crosshair        = newValue; return;
+        case USERDEFS_PLAYERAI:             ud.playerai         = newValue; return;
+
+        case USERDEFS_RESPAWN_MONSTERS:     DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, newValue); return;
+        case USERDEFS_RESPAWN_ITEMS:        DMFLAGS_SET(DMFLAG_RESPAWNITEMS, newValue); return;
+        case USERDEFS_RESPAWN_INVENTORY:    DMFLAGS_SET(DMFLAG_RESPAWNINVENTORY, newValue); return;
+
+        case USERDEFS_RECSTAT:              ud.recstat          = newValue; return;
+
+        case USERDEFS_MONSTERS_OFF:         DMFLAGS_SET(DMFLAG_NOMONSTERS, newValue); return;
+
+        case USERDEFS_BRIGHTNESS:           ud.brightness       = newValue; return;
+
+        case USERDEFS_M_RESPAWN_ITEMS:      M_DMFLAGS_SET(DMFLAG_RESPAWNITEMS, newValue); return;
+        case USERDEFS_M_RESPAWN_MONSTERS:   M_DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, newValue); return;
+        case USERDEFS_M_RESPAWN_INVENTORY:  M_DMFLAGS_SET(DMFLAG_RESPAWNINVENTORY, newValue); return;
+
+        case USERDEFS_M_RECSTAT:            ud.m_recstat        = newValue; return;
+
+        case USERDEFS_M_MONSTERS_OFF:       M_DMFLAGS_SET(DMFLAG_NOMONSTERS, newValue); return;
+
+        case USERDEFS_DETAIL:               ud.detail           = newValue; return;
+
+        case USERDEFS_M_FFIRE:              M_DMFLAGS_SET(DMFLAG_FRIENDLYFIRE, newValue); return;
+        case USERDEFS_FFIRE:                DMFLAGS_SET(DMFLAG_FRIENDLYFIRE, newValue); return;
+
+        case USERDEFS_M_PLAYER_SKILL:       ud.m_player_skill   = newValue; return;
+        case USERDEFS_M_LEVEL_NUMBER:       ud.m_level_number   = newValue; return;
+        case USERDEFS_M_VOLUME_NUMBER:      ud.m_volume_number  = newValue; return;
+        case USERDEFS_MULTIMODE:            ud.multimode        = newValue; return;
+        case USERDEFS_PLAYER_SKILL:         ud.player_skill     = newValue; return;
+        case USERDEFS_LEVEL_NUMBER:         ud.level_number     = newValue; return;
+        case USERDEFS_VOLUME_NUMBER:        ud.volume_number    = newValue; return;
+
+        case USERDEFS_M_MARKER:             M_DMFLAGS_SET(DMFLAG_MARKERS, newValue); return;
+        case USERDEFS_MARKER:               DMFLAGS_SET(DMFLAG_MARKERS, newValue); return;
+
+        case USERDEFS_MOUSEFLIP:            ud.mouseflip        = newValue; return;
+        case USERDEFS_STATUSBARSCALE:       ud.statusbarscale   = newValue; return;
+        case USERDEFS_DRAWWEAPON:           ud.drawweapon       = newValue; return;
+        case USERDEFS_MOUSEAIMING:          ud.mouseaiming      = newValue; return;
+        case USERDEFS_WEAPONSWITCH:         ud.weaponswitch     = newValue; return;
+        case USERDEFS_DEMOCAMS:             ud.democams         = newValue; return;
+        case USERDEFS_COLOR:                ud.color            = newValue; return;
+        case USERDEFS_MSGDISPTIME:          ud.msgdisptime      = newValue; return;
+        case USERDEFS_STATUSBARMODE:        ud.statusbarmode    = newValue; return;
+
+        case USERDEFS_M_NOEXITS:            M_DMFLAGS_SET(DMFLAG_NOEXITS, newValue); return;
+        case USERDEFS_NOEXITS:              DMFLAGS_SET(DMFLAG_NOEXITS, newValue); return;
+
+        case USERDEFS_AUTOVOTE:             ud.autovote             = newValue; return;
+        case USERDEFS_AUTOMSG:              ud.automsg              = newValue; return;
+        case USERDEFS_IDPLAYERS:            ud.idplayers            = newValue; return;
+        case USERDEFS_TEAM:                 ud.team                 = newValue; return;
+        case USERDEFS_VIEWBOB:              ud.viewbob              = newValue; return;
+        case USERDEFS_WEAPONSWAY:           ud.weaponsway           = newValue; return;
+        case USERDEFS_ANGLEINTERPOLATION:   ud.angleinterpolation   = newValue; return;
+        case USERDEFS_OBITUARIES:           ud.obituaries           = newValue; return;
+        case USERDEFS_LEVELSTATS:           ud.levelstats           = newValue; return;
+        case USERDEFS_CROSSHAIRSCALE:       ud.crosshairscale       = newValue; return;
+        case USERDEFS_ALTHUD:               ud.althud               = newValue; return;
+        case USERDEFS_DISPLAY_BONUS_SCREEN: ud.display_bonus_screen = newValue; return;
+        case USERDEFS_SHOW_LEVEL_TEXT:      ud.show_level_text      = newValue; return;
+        case USERDEFS_WEAPONSCALE:          ud.weaponscale          = newValue; return;
+        case USERDEFS_TEXTSCALE:            ud.textscale            = newValue; return;
+
+        case USERDEFS_RETURN:
         {
-            ud.lockout = lValue;
+            if (lParm2 == 0)
+                Gv_SetVarX(sysVarIDs.RETURN, newValue);
+            else
+                ud.returnvar[lParm2 - 1] = newValue;
             return;
         }
-        Gv_SetVar(lVar2, ud.lockout, g_i, g_p);
-        return;
 
-    case USERDEFS_CROSSHAIR:
-        if (iSet)
-        {
-            ud.crosshair = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.crosshair, g_i, g_p);
-        return;
+        case USERDEFS_TEAMPAL:          teams[lParm2].palnum    = newValue; return;
+        case USERDEFS_TEAMFRAGS:        teams[lParm2].frags     = newValue; return;
+        case USERDEFS_TEAMSUICIDES:     teams[lParm2].suicides  = newValue; return;
+        case USERDEFS_DMFLAGS:          ud.dmflags              = newValue; return;
+        case USERDEFS_M_DMFLAGS:        ud.m_dmflags            = newValue; return;
+        case USERDEFS_DRAW_YXASPECT:    rotatesprite_yxaspect   = newValue; return;
+        case USERDEFS_MONSTERS_KILLED:  ud.monsters_killed      = newValue; return;
 
-    case USERDEFS_PLAYERAI:
-        if (iSet)
-        {
-            ud.playerai = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.playerai, g_i, g_p);
-        return;
-
-    case USERDEFS_RESPAWN_MONSTERS:
-        if (iSet)
-        {
-            DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS), g_i, g_p);
-        return;
-
-    case USERDEFS_RESPAWN_ITEMS:
-        if (iSet)
-        {
-            DMFLAGS_SET(DMFLAG_RESPAWNITEMS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_RESPAWNITEMS), g_i, g_p);
-        return;
-
-    case USERDEFS_RESPAWN_INVENTORY:
-        if (iSet)
-        {
-            DMFLAGS_SET(DMFLAG_RESPAWNINVENTORY, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY), g_i, g_p);
-        return;
-
-    case USERDEFS_RECSTAT:
-        if (iSet)
-        {
-            ud.recstat = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.recstat, g_i, g_p);
-        return;
-
-    case USERDEFS_MONSTERS_OFF:
-        if (iSet)
-        {
-            DMFLAGS_SET(DMFLAG_NOMONSTERS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_NOMONSTERS), g_i, g_p);
-        return;
-
-    case USERDEFS_BRIGHTNESS:
-        if (iSet)
-        {
-            ud.brightness = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.brightness, g_i, g_p);
-        return;
-
-    case USERDEFS_M_RESPAWN_ITEMS:
-        if (iSet)
-        {
-            M_DMFLAGS_SET(DMFLAG_RESPAWNITEMS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_RESPAWNITEMS), g_i, g_p);
-        return;
-
-    case USERDEFS_M_RESPAWN_MONSTERS:
-        if (iSet)
-        {
-            M_DMFLAGS_SET(DMFLAG_RESPAWNMONSTERS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS), g_i, g_p);
-        return;
-
-    case USERDEFS_M_RESPAWN_INVENTORY:
-        if (iSet)
-        {
-            M_DMFLAGS_SET(DMFLAG_RESPAWNINVENTORY, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY), g_i, g_p);
-        return;
-
-    case USERDEFS_M_RECSTAT:
-        if (iSet)
-        {
-            ud.m_recstat = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.m_recstat, g_i, g_p);
-        return;
-
-    case USERDEFS_M_MONSTERS_OFF:
-        if (iSet)
-        {
-            M_DMFLAGS_SET(DMFLAG_NOMONSTERS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_NOMONSTERS), g_i, g_p);
-        return;
-
-    case USERDEFS_DETAIL:
-        if (iSet)
-        {
-            ud.detail = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.detail, g_i, g_p);
-        return;
-
-    case USERDEFS_M_FFIRE:
-        if (iSet)
-        {
-            M_DMFLAGS_SET(DMFLAG_FRIENDLYFIRE, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_FRIENDLYFIRE), g_i, g_p);
-        return;
-
-    case USERDEFS_FFIRE:
-        if (iSet)
-        {
-            DMFLAGS_SET(DMFLAG_FRIENDLYFIRE, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_FRIENDLYFIRE), g_i, g_p);
-        return;
-
-    case USERDEFS_M_PLAYER_SKILL:
-        if (iSet)
-        {
-            ud.m_player_skill = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.m_player_skill, g_i, g_p);
-        return;
-
-    case USERDEFS_M_LEVEL_NUMBER:
-        if (iSet)
-        {
-            ud.m_level_number = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.m_level_number, g_i, g_p);
-        return;
-
-    case USERDEFS_M_VOLUME_NUMBER:
-        if (iSet)
-        {
-            ud.m_volume_number = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.m_volume_number, g_i, g_p);
-        return;
-
-    case USERDEFS_MULTIMODE:
-        if (iSet)
-        {
-            ud.multimode = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.multimode, g_i, g_p);
-        return;
-
-    case USERDEFS_PLAYER_SKILL:
-        if (iSet)
-        {
-            ud.player_skill = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.player_skill, g_i, g_p);
-        return;
-
-    case USERDEFS_LEVEL_NUMBER:
-        if (iSet)
-        {
-            ud.level_number = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.level_number, g_i, g_p);
-        return;
-
-    case USERDEFS_VOLUME_NUMBER:
-        if (iSet)
-        {
-            ud.volume_number = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.volume_number, g_i, g_p);
-        return;
-
-    case USERDEFS_M_MARKER:
-        if (iSet)
-        {
-            M_DMFLAGS_SET(DMFLAG_MARKERS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_MARKERS), g_i, g_p);
-        return;
-
-    case USERDEFS_MARKER:
-        if (iSet)
-        {
-            DMFLAGS_SET(DMFLAG_MARKERS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_MARKERS), g_i, g_p);
-        return;
-
-    case USERDEFS_MOUSEFLIP:
-        if (iSet)
-        {
-            ud.mouseflip = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.mouseflip, g_i, g_p);
-        return;
-
-    case USERDEFS_STATUSBARSCALE:
-        if (iSet)
-        {
-            ud.statusbarscale = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.statusbarscale, g_i, g_p);
-        return;
-
-    case USERDEFS_DRAWWEAPON:
-        if (iSet)
-        {
-            ud.drawweapon = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.drawweapon, g_i, g_p);
-        return;
-
-    case USERDEFS_MOUSEAIMING:
-        if (iSet)
-        {
-            ud.mouseaiming = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.mouseaiming, g_i, g_p);
-        return;
-
-    case USERDEFS_WEAPONSWITCH:
-        if (iSet)
-        {
-            ud.weaponswitch = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.weaponswitch, g_i, g_p);
-        return;
-
-    case USERDEFS_DEMOCAMS:
-        if (iSet)
-        {
-            ud.democams = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.democams, g_i, g_p);
-        return;
-
-    case USERDEFS_COLOR:
-        if (iSet)
-        {
-            ud.color = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.color, g_i, g_p);
-        return;
-
-    case USERDEFS_MSGDISPTIME:
-        if (iSet)
-        {
-            ud.msgdisptime = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.msgdisptime, g_i, g_p);
-        return;
-
-    case USERDEFS_STATUSBARMODE:
-        if (iSet)
-        {
-            ud.statusbarmode = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.statusbarmode, g_i, g_p);
-        return;
-
-    case USERDEFS_M_NOEXITS:
-        if (iSet)
-        {
-            M_DMFLAGS_SET(DMFLAG_NOEXITS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, M_DMFLAGS_TEST(DMFLAG_NOEXITS), g_i, g_p);
-        return;
-
-    case USERDEFS_NOEXITS:
-        if (iSet)
-        {
-            DMFLAGS_SET(DMFLAG_NOEXITS, lValue);
-            return;
-        }
-        Gv_SetVar(lVar2, DMFLAGS_TEST(DMFLAG_NOEXITS), g_i, g_p);
-        return;
-
-    case USERDEFS_AUTOVOTE:
-        if (iSet)
-        {
-            ud.autovote = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.autovote, g_i, g_p);
-        return;
-
-    case USERDEFS_AUTOMSG:
-        if (iSet)
-        {
-            ud.automsg = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.automsg, g_i, g_p);
-        return;
-
-    case USERDEFS_IDPLAYERS:
-        if (iSet)
-        {
-            ud.idplayers = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.idplayers, g_i, g_p);
-        return;
-
-    case USERDEFS_TEAM:
-        if (iSet)
-        {
-            ud.team = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.team, g_i, g_p);
-        return;
-
-    case USERDEFS_VIEWBOB:
-        if (iSet)
-        {
-            ud.viewbob = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.viewbob, g_i, g_p);
-        return;
-
-    case USERDEFS_WEAPONSWAY:
-        if (iSet)
-        {
-            ud.weaponsway = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.weaponsway, g_i, g_p);
-        return;
-
-    case USERDEFS_ANGLEINTERPOLATION:
-        if (iSet)
-        {
-            ud.angleinterpolation = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.angleinterpolation, g_i, g_p);
-        return;
-
-    case USERDEFS_OBITUARIES:
-        if (iSet)
-        {
-            ud.obituaries = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.obituaries, g_i, g_p);
-        return;
-
-    case USERDEFS_LEVELSTATS:
-        if (iSet)
-        {
-            ud.levelstats = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.levelstats, g_i, g_p);
-        return;
-
-    case USERDEFS_CROSSHAIRSCALE:
-        if (iSet)
-        {
-            ud.crosshairscale = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.crosshairscale, g_i, g_p);
-        return;
-
-    case USERDEFS_ALTHUD:
-        if (iSet)
-        {
-            ud.althud = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.althud, g_i, g_p);
-        return;
-
-    case USERDEFS_DISPLAY_BONUS_SCREEN:
-        if (iSet)
-        {
-            ud.display_bonus_screen = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.display_bonus_screen, g_i, g_p);
-        return;
-
-    case USERDEFS_SHOW_LEVEL_TEXT:
-        if (iSet)
-        {
-            ud.show_level_text = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.show_level_text, g_i, g_p);
-        return;
-
-    case USERDEFS_WEAPONSCALE:
-        if (iSet)
-        {
-            ud.weaponscale = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.weaponscale, g_i, g_p);
-        return;
-
-    case USERDEFS_TEXTSCALE:
-        if (iSet)
-        {
-            ud.textscale = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.textscale, g_i, g_p);
-        return;
-
-    case USERDEFS_RETURN:
-        if (lParm2 == 0)
-        {
-            if (iSet)
-            {
-                Gv_SetVarX(sysVarIDs.RETURN, lValue);
-                return;
-            }
-            Gv_SetVar(lVar2, Gv_GetVarX(sysVarIDs.RETURN), g_i, g_p);
-        }
-        else
-        {
-            if (iSet)
-            {
-                ud.returnvar[lParm2 - 1] = lValue;
-                return;
-            }
-            Gv_SetVar(lVar2, ud.returnvar[lParm2 - 1], g_i, g_p);
-        }
-        return;
-
-    case USERDEFS_TEAMPAL:
-        if (iSet)
-        {
-            teams[lParm2].palnum = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, teams[lParm2].palnum, g_i, g_p);
-        return;
-
-    case USERDEFS_TEAMFRAGS:
-        if (iSet)
-        {
-            teams[lParm2].frags = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, teams[lParm2].frags, g_i, g_p);
-        return;
-
-    case USERDEFS_TEAMSUICIDES:
-        if (iSet)
-        {
-            teams[lParm2].suicides = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, teams[lParm2].suicides, g_i, g_p);
-        return;
-
-    case USERDEFS_DMFLAGS:
-        if (iSet)
-        {
-            ud.dmflags = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.dmflags, g_i, g_p);
-        return;
-
-    case USERDEFS_M_DMFLAGS:
-        if (iSet)
-        {
-            ud.m_dmflags = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.m_dmflags, g_i, g_p);
-        return;
-
-    case USERDEFS_DRAW_YXASPECT:
-        if (iSet)
-        {
-            rotatesprite_yxaspect = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, rotatesprite_yxaspect, g_i, g_p);
-        return;
-
-    case USERDEFS_MONSTERS_KILLED:
-        if (iSet)
-        {
-            ud.monsters_killed = lValue;
-            return;
-        }
-        Gv_SetVar(lVar2, ud.monsters_killed, g_i, g_p);
-        return;
-
-    default:
-        return;
+        default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }
 

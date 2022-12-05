@@ -3969,7 +3969,10 @@ static int X_DoExecute(void)
             int const   lParm2      = (udLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
             int const   lVar2       = *insptr++;
 
-            X_AccessUserdef(tw==CON_SETUSERDEF, labelNum, lVar2, lParm2);
+            if (tw == CON_SETUSERDEF)
+                VM_SetUserdef(labelNum, lParm2, Gv_GetVarX(lVar2));
+            else
+                Gv_SetVarX(lVar2, VM_GetUserdef(labelNum, lParm2));
             break;
         }
 

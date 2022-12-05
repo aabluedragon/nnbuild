@@ -29,7 +29,8 @@ void    __fastcall VM_SetActiveProjectile(int const spriteNum, int const labelNu
 int32_t __fastcall VM_GetTileData(int const tileNum, int32_t labelNum);
 void    __fastcall VM_SetTileData(int const tileNum, int const labelNum, int32_t newValue);
 
-void __fastcall X_AccessUserdef(int iSet, int labelNum, int lVar2, int lParm2);
+int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2);
+void    __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t const newValue);
 
 typedef struct
 {
