@@ -338,6 +338,8 @@ void CONFIG_SetDefaults(void)
         CONTROL_MapAnalogAxis(i, ud.config.JoystickAnalogueAxes[i], controldevice_joystick);
     }
 #endif
+
+    X_OnEvent(EVENT_SETDEFAULTS, g_player[myconnectindex].ps->i, myconnectindex, -1);
 }
 
 // wrapper for CONTROL_MapKey(), generates key bindings to reflect changes to keyboard setup

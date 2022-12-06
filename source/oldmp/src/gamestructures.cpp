@@ -443,6 +443,8 @@ const memberlabel_t UserdefsLabels[] =
     { "player_skill",           USERDEFS_PLAYER_SKILL,          0, 0, -1 },
     { "level_number",           USERDEFS_LEVEL_NUMBER,          0, 0, -1 },
     { "volume_number",          USERDEFS_VOLUME_NUMBER,         0, 0, -1 },
+    { "user_map",               USERDEFS_USER_MAP,              0, 0, -1 },
+    { "m_user_map",             USERDEFS_M_USER_MAP,            0, 0, -1 },
     { "m_marker",               USERDEFS_M_MARKER,              0, 0, -1 },
     { "marker",                 USERDEFS_MARKER,                0, 0, -1 },
     { "mouseflip",              USERDEFS_MOUSEFLIP,             0, 0, -1 },
@@ -471,7 +473,12 @@ const memberlabel_t UserdefsLabels[] =
     { "show_level_text",        USERDEFS_SHOW_LEVEL_TEXT,       0, 0, -1 },
     { "weaponscale",            USERDEFS_WEAPONSCALE,           0, 0, -1 },
     { "textscale",              USERDEFS_TEXTSCALE,             0, 0, -1 },
+
     { "return",                 USERDEFS_RETURN,                LABEL_HASPARM2, MAX_RETURN_VALUES, -1 },
+    { "vm_player",              USERDEFS_VM_PLAYER,             0, 0, -1 },
+    { "vm_sprite",              USERDEFS_VM_SPRITE,             0, 0, -1 },
+    { "vm_distance",            USERDEFS_VM_DISTANCE,           0, 0, -1 },
+
     { "teampal",                USERDEFS_TEAMPAL,               LABEL_HASPARM2, MAXPLAYERS, -1 },
     { "teamfrags",              USERDEFS_TEAMFRAGS,             LABEL_HASPARM2, MAXPLAYERS, -1 },
     { "teamsuicides",           USERDEFS_TEAMSUICIDES,          LABEL_HASPARM2, MAXPLAYERS, -1 },
@@ -695,6 +702,9 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
         case USERDEFS_LEVEL_NUMBER:         return ud.level_number;
         case USERDEFS_VOLUME_NUMBER:        return ud.volume_number;
 
+        case USERDEFS_USER_MAP:             return G_HaveUserMap();
+        case USERDEFS_M_USER_MAP:           return Menu_HaveUserMap();
+
         case USERDEFS_M_MARKER:             return M_DMFLAGS_TEST(DMFLAG_MARKERS);
         case USERDEFS_MARKER:               return DMFLAGS_TEST(DMFLAG_MARKERS);
 
@@ -734,6 +744,9 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
             else
                 return ud.returnvar[lParm2 - 1];
         }
+        case USERDEFS_VM_PLAYER:              return g_p;//vm.playerNum;
+        case USERDEFS_VM_SPRITE:              return g_i;//vm.spriteNum;
+        case USERDEFS_VM_DISTANCE:            return g_x;//vm.playerDist;
 
         case USERDEFS_TEAMPAL:              return teams[lParm2].palnum;
         case USERDEFS_TEAMFRAGS:            return teams[lParm2].frags;
@@ -841,6 +854,9 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
         case USERDEFS_LEVEL_NUMBER:         ud.level_number     = newValue; return;
         case USERDEFS_VOLUME_NUMBER:        ud.volume_number    = newValue; return;
 
+        //case USERDEFS_USER_MAP:
+        //case USERDEFS_M_USER_MAP:
+
         case USERDEFS_M_MARKER:             M_DMFLAGS_SET(DMFLAG_MARKERS, newValue); return;
         case USERDEFS_MARKER:               DMFLAGS_SET(DMFLAG_MARKERS, newValue); return;
 
@@ -881,6 +897,9 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
                 ud.returnvar[lParm2 - 1] = newValue;
             return;
         }
+        case USERDEFS_VM_PLAYER:            g_p = newValue; return; //vm.playerNum;
+        case USERDEFS_VM_SPRITE:            g_i = newValue; return; //vm.spriteNum;
+        case USERDEFS_VM_DISTANCE:          g_x = newValue; return; //vm.playerDist;
 
         case USERDEFS_TEAMPAL:          teams[lParm2].palnum    = newValue; return;
         case USERDEFS_TEAMFRAGS:        teams[lParm2].frags     = newValue; return;
@@ -890,7 +909,7 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
         case USERDEFS_DRAW_YXASPECT:    rotatesprite_yxaspect   = newValue; return;
         case USERDEFS_MONSTERS_KILLED:  ud.monsters_killed      = newValue; return;
 
-        default: EDUKE32_UNREACHABLE_SECTION(return);
+        default: return;
     }
 }
 

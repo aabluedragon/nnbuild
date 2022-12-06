@@ -462,6 +462,7 @@ extern int g_myAimMode, g_myAimStat, g_oldAimStat;
 
 enum GameEvent_t {
     EVENT_INIT,
+    EVENT_SETDEFAULTS,
     EVENT_ENTERLEVEL,
     EVENT_RESETWEAPONS,
     EVENT_RESETINVENTORY,

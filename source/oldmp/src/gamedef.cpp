@@ -244,44 +244,94 @@ const tokenmap_t vm_keywords[] =
     { "var",                    CON_GAMEVAR },
 
     { "ifvarl",                 CON_IFVARL },
-    { "ifvarg",                 CON_IFVARG },
     { "ifvarvarl",              CON_IFVARVARL },
+    { "ifl",                    CON_IFVARVARL },
+
+    { "ifvarle",                CON_IFVARLE },
+    { "ifvarvarle",             CON_IFVARVARLE },
+    { "ifle",                   CON_IFVARVARLE },
+
+    { "ifvarg",                 CON_IFVARG },
     { "ifvarvarg",              CON_IFVARVARG },
+    { "ifg",                    CON_IFVARVARG },
+
+    { "ifvarge",                CON_IFVARGE },
+    { "ifvarvarge",             CON_IFVARVARGE },
+    { "ifge",                   CON_IFVARVARGE },
+
     { "ifvare",                 CON_IFVARE },
     { "ifvarvare",              CON_IFVARVARE },
+    { "ife",                    CON_IFVARVARE },
+
     { "ifvarn",                 CON_IFVARN },
     { "ifvarvarn",              CON_IFVARVARN },
+    { "ifn",                    CON_IFVARVARN },
+
     { "ifvarand",               CON_IFVARAND },
     { "ifvarvarand",            CON_IFVARVARAND },
+    { "ifand",                  CON_IFVARVARAND },
+
     { "ifvaror",                CON_IFVAROR },
     { "ifvarvaror",             CON_IFVARVAROR },
+    { "ifor",                   CON_IFVARVAROR },
+
     { "ifvarxor",               CON_IFVARXOR },
     { "ifvarvarxor",            CON_IFVARVARXOR },
+    { "ifxor",                  CON_IFVARVARXOR },
+
     { "ifvareither",            CON_IFVAREITHER },
     { "ifvarvareither",         CON_IFVARVAREITHER },
+    { "ifeither",               CON_IFVARVAREITHER },
+
+    { "for",                    CON_FOR },
+
+    { "whilevarn",              CON_WHILEVARN },
+    { "whilevarvarn",           CON_WHILEVARVARN },
+    { "whilen",                 CON_WHILEVARVARN },
 
     { "setvar",                 CON_SETVAR },
     { "setvarvar",              CON_SETVARVAR },
+    { "set",                    CON_SETVARVAR },
+
     { "addvar",                 CON_ADDVAR },
     { "addvarvar",              CON_ADDVARVAR },
+    { "add",                    CON_ADDVARVAR },
+
     { "subvar",                 CON_SUBVAR },
     { "subvarvar",              CON_SUBVARVAR },
+    { "sub",                    CON_SUBVARVAR },
+
     { "mulvar",                 CON_MULVAR },
     { "mulvarvar",              CON_MULVARVAR },
+    { "mul",                    CON_MULVARVAR },
+
     { "divvar",                 CON_DIVVAR },
     { "divvarvar",              CON_DIVVARVAR },
+    { "div",                    CON_DIVVARVAR },
+
     { "modvar",                 CON_MODVAR },
     { "modvarvar",              CON_MODVARVAR },
+    { "mod",                    CON_MODVARVAR },
+
     { "andvar",                 CON_ANDVAR },
     { "andvarvar",              CON_ANDVARVAR },
+
     { "orvar",                  CON_ORVAR },
     { "orvarvar",               CON_ORVARVAR },
+    { "or",                     CON_ORVARVAR },
+
     { "xorvar",                 CON_XORVAR },
     { "xorvarvar",              CON_XORVARVAR },
+    { "xor",                    CON_XORVARVAR },
+
     { "shiftvarl",              CON_SHIFTVARL },
     { "shiftvarvarl",           CON_SHIFTVARVARL },
+    { "shiftl",                 CON_SHIFTVARVARL },
+
     { "shiftvarr",              CON_SHIFTVARR },
     { "shiftvarvarr",           CON_SHIFTVARVARR },
+    { "shiftr",                 CON_SHIFTVARVARR },
+
     { "randvar",                CON_RANDVAR },
     { "randvarvar",             CON_RANDVARVAR },
     { "displayrandvar",         CON_DISPLAYRANDVAR },
@@ -291,6 +341,7 @@ const tokenmap_t vm_keywords[] =
     { "addlog",                 CON_ADDLOG },
 
     { "onevent",                CON_ONEVENT },
+    { "appendevent",            CON_APPENDEVENT },
     { "endevent",               CON_ENDEVENT },
     
     { "spgetlotag",             CON_SPGETLOTAG },
@@ -372,7 +423,7 @@ const tokenmap_t vm_keywords[] =
     { "updatesector",           CON_UPDATESECTOR },
     { "insertspriteq",          CON_INSERTSPRITEQ },
     { "angoffvar",              CON_ANGOFFVAR },
-    { "whilevarn",              CON_WHILEVARN },
+    
     { "switch",                 CON_SWITCH },
     { "case",                   CON_CASE },
     { "default",                CON_DEFAULT },
@@ -395,7 +446,7 @@ const tokenmap_t vm_keywords[] =
 
     { "spritenvg",              CON_SPRITENVG },
     { "getangle",               CON_GETANGLE },
-    { "whilevarvarn",           CON_WHILEVARVARN },
+
     { "hitscan",                CON_HITSCAN },
     { "time",                   CON_TIME },
     { "getplayervar",           CON_GETPLAYERVAR },
@@ -528,9 +579,9 @@ static const vec2_t varvartable[] =
     { CON_IFVARVARE,         CON_IFVARE },
     { CON_IFVARVAREITHER,    CON_IFVAREITHER },
     { CON_IFVARVARG,         CON_IFVARG },
-    //{ CON_IFVARVARGE,        CON_IFVARGE },
+    { CON_IFVARVARGE,        CON_IFVARGE },
     { CON_IFVARVARL,         CON_IFVARL },
-    //{ CON_IFVARVARLE,        CON_IFVARLE },
+    { CON_IFVARVARLE,        CON_IFVARLE },
     { CON_IFVARVARN,         CON_IFVARN },
     { CON_IFVARVAROR,        CON_IFVAROR },
     { CON_IFVARVARXOR,       CON_IFVARXOR },
@@ -577,7 +628,7 @@ hashtable_t h_gamevars   = { MAXGAMEVARS>>1, NULL };
 hashtable_t h_arrays     = { MAXGAMEARRAYS>>1, NULL };
 hashtable_t h_labels     = { MAXLABELS>>1, NULL };
 hashtable_t h_keywords   = { CON_END>>1, NULL };
-//static hashtable_t h_iter       = { ITER_END >> 1, NULL };
+hashtable_t h_iter       = { ITER_END >> 1, NULL };
 
 static inthashtable_t h_varvar = { NULL, INTHASH_SIZE(ARRAY_SIZE(varvartable)) };
 static inthashtable_t h_globalvar = { NULL, INTHASH_SIZE(ARRAY_SIZE(globalvartable)) };
@@ -594,13 +645,13 @@ static inthashtable_t* const inttables[] = {
 static hashtable_t* const tables[] = {
     &h_arrays,
     &h_gamevars,
-    //&h_iter,
+    &h_iter,
     &h_keywords,
     &h_labels,
 };
 
 static hashtable_t* const tables_free[] = {
-    //&h_iter,
+    &h_iter,
     &h_keywords,
 };
 
@@ -610,6 +661,27 @@ void freehash()
     hash_free(&h_arrays);
     hash_free(&h_labels);
 }
+
+const tokenmap_t iter_tokens[] =
+{
+    { "allsprites",       ITER_ALLSPRITES },
+    { "allspritesbystat", ITER_ALLSPRITESBYSTAT },
+    { "allspritesbysect", ITER_ALLSPRITESBYSECT },
+    { "allsectors",       ITER_ALLSECTORS },
+    { "allwalls",         ITER_ALLWALLS },
+    { "activelights",     ITER_ACTIVELIGHTS },
+    { "drawnsprites",     ITER_DRAWNSPRITES },
+    { "spritesofsector",  ITER_SPRITESOFSECTOR },
+    { "spritesofstatus",  ITER_SPRITESOFSTATUS },
+    { "loopofwall",       ITER_LOOPOFWALL },
+    { "wallsofsector",    ITER_WALLSOFSECTOR },
+    { "range",            ITER_RANGE },
+    // vvv alternatives go here vvv
+    { "lights",           ITER_ACTIVELIGHTS },
+    { "sprofsec",         ITER_SPRITESOFSECTOR },
+    { "sprofstat",        ITER_SPRITESOFSTATUS },
+    { "walofsec",         ITER_WALLSOFSECTOR },
+};
 
 // some keywords generate different opcodes depending on the context the keyword is used in
 // keywords_for_private_opcodes[] resolves those opcodes to the publicly facing keyword that can generate them
@@ -2490,7 +2562,7 @@ static bool C_ParseCommand(bool loop /*= false*/)
         continue;
 
     case CON_ONEVENT:
-    //case CON_APPENDEVENT:
+    case CON_APPENDEVENT:
         if (EDUKE32_PREDICT_FALSE(g_processingState || g_scriptActorOffset))
         {
             C_ReportError(ERROR_FOUNDWITHIN);
@@ -3665,7 +3737,9 @@ static bool C_ParseCommand(bool loop /*= false*/)
         continue;
 
     case CON_IFVARVARG:
+    case CON_IFVARVARGE:
     case CON_IFVARVARL:
+    case CON_IFVARVARLE:
     case CON_IFVARVARE:
     case CON_IFVARVARN:
     case CON_IFVARVARAND:
@@ -3736,7 +3810,9 @@ static bool C_ParseCommand(bool loop /*= false*/)
         continue;
 
     case CON_IFVARL:
+    case CON_IFVARLE:
     case CON_IFVARG:
+    case CON_IFVARGE:
     case CON_IFVARE:
     case CON_IFVARN:
     case CON_IFVARAND:
@@ -3780,6 +3856,36 @@ static bool C_ParseCommand(bool loop /*= false*/)
 
         continue;
     }
+
+    case CON_FOR:  // special-purpose iteration
+    {
+        C_GetNextVarType(GAMEVAR_READONLY);
+        C_GetNextLabelName();
+
+        int const iterType = hash_find(&h_iter, LAST_LABEL);
+
+        if (EDUKE32_PREDICT_FALSE(iterType < 0))
+        {
+            C_CUSTOMERROR("unknown iteration type '%s'.", LAST_LABEL);
+            return 1;
+        }
+
+        scriptWriteValue(iterType);
+
+        if (iterType >= ITER_SPRITESOFSECTOR)
+            C_GetNextVar();
+
+        intptr_t const offset = g_scriptPtr - apScript;
+        g_scriptPtr++; //Leave a spot for the location to jump to after completion
+
+        C_ParseCommand();
+
+        // write relative offset
+        auto const tscrptr = (intptr_t*)apScript + offset;
+        scriptWriteAtOffset((g_scriptPtr - apScript) - offset, tscrptr);
+        continue;
+    }
+
     case CON_ADDLOGVAR:
 
         // syntax: addlogvar <var>
@@ -5321,6 +5427,7 @@ static void C_AddDefaultDefinitions(void)
     C_AddEvent(EVENT_RESETWEAPONS);
     C_AddEvent(EVENT_RETURNTOCENTER);
     C_AddEvent(EVENT_SELECTWEAPON);
+    C_AddEvent(EVENT_SETDEFAULTS);
     C_AddEvent(EVENT_SOARDOWN);
     C_AddEvent(EVENT_SOARUP);
     C_AddEvent(EVENT_SPAWN);
@@ -5447,6 +5554,27 @@ static void C_AddDefaultDefinitions(void)
     C_AddDefinition("PROJ_WORKSLIKE",PROJ_WORKSLIKE,LABEL_DEFINE);
     C_AddDefinition("PROJ_XREPEAT",PROJ_XREPEAT,LABEL_DEFINE);
     C_AddDefinition("PROJ_YREPEAT",PROJ_YREPEAT,LABEL_DEFINE);
+
+    C_AddDefinition("SFLAG_BADGUY",          SFLAG_BADGUY, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_DAMAGEEVENT",     SFLAG_DAMAGEEVENT, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_GREENSLIMEFOOD",  SFLAG_GREENSLIMEFOOD, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_HURTSPAWNBLOOD",  SFLAG_HURTSPAWNBLOOD, LABEL_DEFINE);
+    //C_AddDefinition("SFLAG_NOCLIP",          SFLAG_NOCLIP, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_NODAMAGEPUSH",    SFLAG_NODAMAGEPUSH, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_NOEVENTS",        SFLAG_NOEVENTCODE, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_NOLIGHT",         SFLAG_NOLIGHT, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_NOPAL",           SFLAG_NOPAL, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_NOSHADE",         SFLAG_NOSHADE, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_NOTELEPORT",      SFLAG_NOTELEPORT, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_NOWATERDIP",      SFLAG_NOWATERDIP, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_NVG",             SFLAG_NVG, LABEL_DEFINE);
+    //C_AddDefinition("SFLAG_REALCLIPDIST",    SFLAG_REALCLIPDIST, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_SHADOW",          SFLAG_SHADOW, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_SMOOTHMOVE",      SFLAG_SMOOTHMOVE, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_USEACTIVATOR",    SFLAG_USEACTIVATOR, LABEL_DEFINE);
+    //C_AddDefinition("SFLAG_WAKEUPBADGUYS",   SFLAG_WAKEUPBADGUYS, LABEL_DEFINE);
+    //C_AddDefinition("SFLAG_NOWATERSECTOR",   SFLAG_NOWATERSECTOR, LABEL_DEFINE);
+    C_AddDefinition("SFLAG_QUEUEDFORDELETE", SFLAG_QUEUEDFORDELETE, LABEL_DEFINE);
 }
 
 static char const* C_ScriptVersionString(int32_t version)
@@ -5503,8 +5631,8 @@ void scriptInitTables()
     for (auto& keyword : vm_keywords)
         hash_add(&h_keywords, keyword.token, keyword.val, 0);
 
-    //for (auto& iter_token : iter_tokens)
-        //hash_add(&h_iter, iter_token.token, iter_token.val, 0);
+    for (auto& iter_token : iter_tokens)
+        hash_add(&h_iter, iter_token.token, iter_token.val, 0);
 
     for (auto& varvar : varvartable)
         inthash_add(&h_varvar, varvar.x, varvar.y, 0);

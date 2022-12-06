@@ -36,8 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 void G_RestoreMapState(mapstate_t *save);
 void G_SaveMapState(mapstate_t *save);
 
-int g_i, g_p;
-static int g_x;
+int g_i, g_p, g_x;
 static int32_t *g_t;
 spritetype *g_sp;
 static int g_killitFlag;
@@ -139,14 +138,13 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         g_t = &actor[g_i].t_data[0];
 
         g_currentEvent = iEventID;
-
-        insptr = apScript + apScriptEvents[iEventID];
-
         g_killitFlag = 0;
+
+        insptr = apScript + apScriptEvents[iEventID]; 
 
         while (!X_DoExecute());
 
-        if (g_killitFlag == 1)
+        if (g_killitFlag & VM_KILL)
         {
             // if player was set to squish, first stop that...
             if (g_p >= 0)
@@ -876,12 +874,12 @@ void addweapon_addammo_common(DukePlayer_t *ps, int32_t weap, int32_t amount)
         addweapon_maybeswitch(ps, weap);
 }
 
-static int32_t VM_AddWeapon(int32_t weap, int32_t amount, DukePlayer_t *ps)
+static void VM_AddWeapon(int32_t weap, int32_t amount, DukePlayer_t *ps)
 {
     if ((unsigned)weap >= MAX_WEAPONS)
     {
         CON_ERRPRINTF("Invalid weapon ID %d\n", weap);
-        return 1;
+        return;
     }
 
     if (!ps->gotweapon[weap])
@@ -890,13 +888,11 @@ static int32_t VM_AddWeapon(int32_t weap, int32_t amount, DukePlayer_t *ps)
     }
     else if (ps->ammo_amount[weap] >= ps->max_ammo_amount[weap])
     {
-        g_killitFlag = 2;
-        return 2;
+        g_killitFlag |= VM_NOEXECUTE;
+        return;
     }
 
     addweapon_addammo_common(ps, weap, amount);
-
-    return 0;
 }
 
 static int G_StartTrackSlot(int const volumeNum, int const levelNum)
@@ -1054,7 +1050,7 @@ static int X_DoExecute(void)
 
     int j, l, s, tw = *insptr;
 
-    if (g_killitFlag) return 1;
+    if (g_killitFlag & (VM_RETURN | VM_KILL | VM_NOEXECUTE)) return 1;
 
     //      Bsprintf(g_szBuf,"Parsing: %d",*insptr);
     //      AddLog(g_szBuf);
@@ -1546,7 +1542,7 @@ static int X_DoExecute(void)
 
             if (ps->ammo_amount[weap] >= ps->max_ammo_amount[weap])
             {
-                g_killitFlag = 2;
+                g_killitFlag |= VM_NOEXECUTE;
                 break;
             }
 
@@ -1555,7 +1551,7 @@ static int X_DoExecute(void)
         break;
 
     case CON_RETURN:
-        g_killitFlag = 2;
+        g_killitFlag |= VM_RETURN;
         break;
 
     case CON_MONEY:
@@ -1591,7 +1587,7 @@ static int X_DoExecute(void)
 
     case CON_KILLIT:
         insptr++;
-        g_killitFlag = 1;
+        g_killitFlag |= VM_KILL;
         break;
 
     case CON_ADDWEAPON:
@@ -2247,6 +2243,160 @@ static int X_DoExecute(void)
         fallthrough__;
     case CON_ENDEVENT:
         return 1;
+
+    case CON_FOR:  // special-purpose iteration
+        insptr++;
+        {
+            int const returnVar = *insptr++;
+            int const iterType = *insptr++;
+            int const nIndex = iterType <= ITER_DRAWNSPRITES ? 0 : Gv_GetVarX(*insptr++);
+
+            auto const pEnd = insptr + *insptr;
+            auto const pNext = ++insptr;
+
+            auto execute = [&](int const index) {
+                Gv_SetVarX(returnVar, index);
+                insptr = pNext;
+                X_DoExecute();
+                //return !!(vm.flags & VM_RETURN);
+                return !!(g_killitFlag & VM_RETURN);
+            };
+
+            auto spriteexecute = [&](int const index) {
+                {
+                    //MICROPROFILE_SCOPE_TOKEN(g_statnumTokens[sprite[index].statnum]);
+                    execute(index);
+                }
+                //return !!(vm.flags & VM_RETURN);
+                return !!(g_killitFlag & VM_RETURN);
+            };
+
+            switch (iterType)
+            {
+                case ITER_ALLSPRITES:
+                    for (native_t jj = 0; jj < MAXSPRITES; ++jj)
+                    {
+                        if (sprite[jj].statnum == MAXSTATUS)
+                            continue;
+
+                        if (spriteexecute(jj))
+                            return 1;
+                    }
+                    break;
+
+                case ITER_ALLSPRITESBYSTAT:
+                    for (native_t statNum = 0; statNum < MAXSTATUS; ++statNum)
+                    {
+                        for (native_t kk, SPRITES_OF_STAT_SAFE(statNum, jj, kk))
+                        {
+                            if (spriteexecute(jj))
+                                return 1;
+                        }
+                    }
+                    break;
+
+                case ITER_ALLSPRITESBYSECT:
+                    for (native_t sectNum = 0; sectNum < numsectors; ++sectNum)
+                    {
+                        for (native_t kk, SPRITES_OF_SECT_SAFE(sectNum, jj, kk))
+                        {
+                            if (spriteexecute(jj))
+                                return 1;
+                        }
+                    }
+                    break;
+
+                case ITER_ALLSECTORS:
+                    for (native_t jj = 0; jj < numsectors; ++jj)
+                        if (execute(jj))
+                            return 1;
+                    break;
+
+                case ITER_ALLWALLS:
+                    for (native_t jj = 0; jj < numwalls; ++jj)
+                        if (execute(jj))
+                            return 1;
+                    break;
+
+                case ITER_ACTIVELIGHTS:
+#ifdef POLYMER
+                    for (native_t jj = 0; jj < PR_MAXLIGHTS; ++jj)
+                    {
+                        if (!prlights[jj].flags.active)
+                            continue;
+
+                        if (execute(jj))
+                            return 1;
+                    }
+#endif
+                    break;
+
+                case ITER_DRAWNSPRITES:
+                    for (native_t jj = 0; jj < spritesortcnt; jj++)
+                        if (execute(jj))
+                            return 1;
+                    break;
+
+                case ITER_SPRITESOFSECTOR:
+                    if ((unsigned)nIndex >= MAXSECTORS)
+                        goto badindex;
+
+                    for (native_t kk, SPRITES_OF_SECT_SAFE(nIndex, jj, kk))
+                    {
+                        if (spriteexecute(jj))
+                            return 1;
+                    }
+                    break;
+
+                case ITER_SPRITESOFSTATUS:
+                    if ((unsigned)nIndex >= MAXSTATUS)
+                        goto badindex;
+
+                    for (native_t kk, SPRITES_OF_STAT_SAFE(nIndex, jj, kk))
+                    {
+                        if (spriteexecute(jj))
+                            return 1;
+                    }
+                    break;
+
+                case ITER_WALLSOFSECTOR:
+                    if ((unsigned)nIndex >= MAXSECTORS)
+                        goto badindex;
+
+                    for (native_t jj = sector[nIndex].wallptr, endwall = jj + sector[nIndex].wallnum - 1; jj <= endwall; jj++)
+                        if (execute(jj))
+                            return 1;
+                    break;
+
+                case ITER_LOOPOFWALL:
+                    if ((unsigned)nIndex >= (unsigned)numwalls)
+                        goto badindex;
+                    {
+                        int jj = nIndex;
+                        do
+                        {
+                            if (execute(jj))
+                                return 1;
+
+                            jj = wall[jj].point2;
+                        } while (jj != nIndex);
+                    }
+                    break;
+
+                case ITER_RANGE:
+                    for (native_t jj = 0; jj < nIndex; jj++)
+                        if (execute(jj))
+                            return 1;
+                    break;
+                badindex:
+                    VLOG_F(LOG_VM, "%s:%d: for %s: index %d out of range!", VM_FILENAME(insptr), VM_DECODE_LINE_NUMBER(g_tw), iter_tokens[iterType].token, nIndex);
+                    //vm.flags |= VM_RETURN;
+                    g_killitFlag |= VM_RETURN;
+                    break;
+            }
+            insptr = pEnd;
+        }
+        break;
 
     case CON_DISPLAYRAND:
         insptr++;
@@ -3036,7 +3186,7 @@ static int X_DoExecute(void)
                 ChangeToMenu(15000);
             }
             else g_player[g_p].ps->gm = MODE_RESTART;
-            g_killitFlag = 2;
+            g_killitFlag |= VM_NOEXECUTE;
         }
         else
         {
@@ -4640,10 +4790,26 @@ static int X_DoExecute(void)
         branch(j);
         break;
 
+    case CON_IFVARVARGE:
+        insptr++;
+        j = Gv_GetVarX(*insptr++);
+        j = (j >= Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
+        break;
+
     case CON_IFVARVARL:
         insptr++;
         j = Gv_GetVarX(*insptr++);
         j = (j < Gv_GetVarX(*insptr++));
+        insptr--;
+        branch(j);
+        break;
+
+    case CON_IFVARVARLE:
+        insptr++;
+        j = Gv_GetVarX(*insptr++);
+        j = (j <= Gv_GetVarX(*insptr++));
         insptr--;
         branch(j);
         break;
@@ -4723,10 +4889,22 @@ static int X_DoExecute(void)
         branch(Gv_GetVarX(j) > *insptr);
         break;
 
+    case CON_IFVARGE:
+        insptr++;
+        j = *insptr++;
+        branch(Gv_GetVarX(j) >= *insptr);
+        break;
+
     case CON_IFVARL:
         insptr++;
         j=*insptr++;
         branch(Gv_GetVarX(j) < *insptr);
+        break;
+
+    case CON_IFVARLE:
+        insptr++;
+        j = *insptr++;
+        branch(Gv_GetVarX(j) <= *insptr);
         break;
 
     case CON_IFPHEALTHL:
@@ -4970,7 +5148,7 @@ void A_LoadActor(int iActor)
 
     insptr = g_tile[g_sp->picnum].loadPtr;
 
-    g_killitFlag = 0;
+    g_killitFlag &= ~(VM_RETURN | VM_KILL | VM_NOEXECUTE);
 
     if (g_sp->sectnum < 0 || g_sp->sectnum >= MAXSECTORS)
     {
@@ -4982,7 +5160,7 @@ void A_LoadActor(int iActor)
 
     while (!X_DoExecute());
 
-    if (g_killitFlag == 1)
+    if (g_killitFlag & VM_KILL)
         A_DeleteSprite(g_i);
 }
 
@@ -5046,7 +5224,7 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     while (!X_DoExecute());
     insptr = NULL;
 
-    if (g_killitFlag == 1)
+    if (g_killitFlag & VM_KILL)
     {
         // if player was set to squish, first stop that...
         if (g_player[g_p].ps->actorsqu == g_i)

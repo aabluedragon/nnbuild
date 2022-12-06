@@ -39,14 +39,30 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define LABEL_READFUNC 64
 #define LABEL_WRITEFUNC 128
 
+#define MAXLABELS 16384
+#define LAST_LABEL (label+(g_labelCnt<<6))
+
 #define VM_IFELSE_MAGIC_BIT (1<<31)
 #define VM_INSTMASK 0xfff
 
 #define VM_DECODE_INST(xxx) ((int)((xxx) & VM_INSTMASK))
 #define VM_DECODE_LINE_NUMBER(xxx) ((int)((xxx&~VM_IFELSE_MAGIC_BIT) >> 12))
 
-#define MAXLABELS 16384
-#define LAST_LABEL (label+(g_labelCnt<<6))
+#define C_CUSTOMERROR(Text, ...)                                                               \
+    do                                                                                         \
+    {                                                                                          \
+        C_ReportError(-1);                                                                     \
+        LOG_F(ERROR, "%s:%d: " Text, g_scriptFileName, g_lineNumber, ##__VA_ARGS__); \
+        g_errorCnt++;                                                                          \
+    } while (0)
+
+#define C_CUSTOMWARNING(Text, ...)                                                               \
+    do                                                                                           \
+    {                                                                                            \
+        C_ReportError(-1);                                                                       \
+        LOG_F(WARNING, "%s:%d: " Text, g_scriptFileName, g_lineNumber, ##__VA_ARGS__); \
+        g_warningCnt++;                                                                          \
+    } while (0)
 
 typedef struct SystemVarID_s {
     int32_t RETURN          = -1;
@@ -94,6 +110,7 @@ typedef struct {
     const char* token;
     int32_t val;
 } tokenmap_t;
+extern const tokenmap_t iter_tokens[];
 
 struct vmofs
 {
@@ -114,7 +131,7 @@ static inline const char* C_GetFileForOffset(int const offset)
 
 #define CON_ERROR OSD_ERROR "Line %d, %s: "
 
-extern int g_i,g_p;
+extern int g_i,g_p,g_x;
 extern int g_scriptSanityChecks;
 
 extern int g_errorLineNum;
@@ -305,14 +322,33 @@ enum ScriptKeywords_t
     CON_IFNOSOUNDS,
     CON_CLIPDIST,
     CON_IFANGDIFFL,
+
+    CON_IFVARN,
     CON_IFVARL,
+    CON_IFVARLE,
     CON_IFVARG,
+    CON_IFVARGE,
+    CON_IFVARAND,
+    CON_IFVAROR,
+    CON_IFVARXOR,
+    CON_IFVAREITHER,
+
+    CON_IFVARVARN,
+    CON_IFVARVARL,
+    CON_IFVARVARLE,
+    CON_IFVARVARG,
+    CON_IFVARVARGE,
+    CON_IFVARVARAND,
+    CON_IFVARVAROR,
+    CON_IFVARVARXOR,
+    CON_IFVARVAREITHER,
+
     CON_SETVARVAR,
     CON_SETVAR,
     CON_ADDVARVAR,
     CON_ADDVAR,
-    CON_IFVARVARL,
-    CON_IFVARVARG,
+    CON_FOR,
+
     CON_ADDLOGVAR,
     CON_ADDLOG,
     CON_ENDEVENT,
@@ -382,10 +418,6 @@ enum ScriptKeywords_t
     CON_SETUSERDEF,
     CON_SUBVARVAR,
     CON_SUBVAR,
-    CON_IFVARN,
-    CON_IFVARVARN,
-    CON_IFVARAND,
-    CON_IFVARVARAND,
     CON_MYOS,
     CON_MYOSPAL,
     CON_DISPLAYRAND,
@@ -523,12 +555,7 @@ enum ScriptKeywords_t
     CON_GETTIMEDATE, 
     CON_ACTIVATECHEAT,
     CON_SETGAMEPALETTE,
-    CON_IFVAROR,
-    CON_IFVARVAROR,
-    CON_IFVARXOR,
-    CON_IFVARVARXOR,
-    CON_IFVAREITHER,
-    CON_IFVARVAREITHER,
+
     CON_GETARRAYSIZE,
     CON_SAVENN,
     CON_QSTRDIM,
@@ -581,7 +608,10 @@ enum ScriptKeywords_t
     CON_GAMEVAR,
     CON_INCLUDE,
     CON_MUSIC,
+
     CON_ONEVENT,
+    CON_APPENDEVENT,
+
     CON_PRECACHE,
     CON_SCRIPTSIZE,
     CON_SETCFGNAME,
@@ -595,5 +625,23 @@ enum ScriptKeywords_t
     // ---
 
     CON_END
+};
+
+enum IterationTypes_t
+{
+    ITER_ALLSPRITES,
+    ITER_ALLSECTORS,
+    ITER_ALLWALLS,
+    ITER_ACTIVELIGHTS,
+    ITER_DRAWNSPRITES,
+    // ---
+    ITER_SPRITESOFSECTOR,
+    ITER_SPRITESOFSTATUS,
+    ITER_WALLSOFSECTOR,
+    ITER_LOOPOFWALL,
+    ITER_RANGE,
+    ITER_ALLSPRITESBYSTAT,
+    ITER_ALLSPRITESBYSECT,
+    ITER_END
 };
 #endif
