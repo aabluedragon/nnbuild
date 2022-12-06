@@ -315,6 +315,7 @@ const tokenmap_t vm_keywords[] =
 
     { "andvar",                 CON_ANDVAR },
     { "andvarvar",              CON_ANDVARVAR },
+    { "and",                    CON_ANDVARVAR },
 
     { "orvar",                  CON_ORVAR },
     { "orvarvar",               CON_ORVARVAR },
