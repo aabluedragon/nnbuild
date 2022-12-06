@@ -40,7 +40,7 @@ short g_spriteDeleteQueueSize=64;
 char EpisodeNames[MAXVOLUMES][33] = { "L.A. MELTDOWN", "LUNAR APOCALYPSE", "SHRAPNEL CITY" };
 char g_numVolumes = 3;
 
-char SkillNames[5][33] = { "PIECE OF CAKE", "LET'S ROCK", "COME GET SOME", "DAMN I'M GOOD" };
+char g_skillNames[5][33] = { "PIECE OF CAKE", "LET'S ROCK", "COME GET SOME", "DAMN I'M GOOD" };
 
 short BlimpSpawnSprites[15] =
 {

@@ -2156,10 +2156,10 @@ cheat_for_port_credits:
                 KB_FlushKeyboardQueue();
             }
 
-            menutext(c,70,MENUHIGHLIGHT(0),PHX(-2),SkillNames[0]);
-            menutext(c,70+19,MENUHIGHLIGHT(1),PHX(-3),SkillNames[1]);
-            menutext(c,70+19+19,MENUHIGHLIGHT(2),PHX(-4),SkillNames[2]);
-            menutext(c,70+19+19+19,MENUHIGHLIGHT(3),PHX(-5),SkillNames[3]);
+            menutext(c,70,MENUHIGHLIGHT(0),PHX(-2),g_skillNames[0]);
+            menutext(c,70+19,MENUHIGHLIGHT(1),PHX(-3),g_skillNames[1]);
+            menutext(c,70+19+19,MENUHIGHLIGHT(2),PHX(-4),g_skillNames[2]);
+            menutext(c,70+19+19+19,MENUHIGHLIGHT(3),PHX(-5),g_skillNames[3]);
             break;
         }
 
@@ -5028,7 +5028,7 @@ VOLUME_ALL_40x:
 
             mgametext(c+70,57+16+16-7-9,&g_mapInfo[MAXLEVELS*ud.m_volume_number+ud.m_level_number].name[0],MENUHIGHLIGHT(2),2+8+16);
 
-            mgametext(c+70,57+16+16+16-7-9, ud.m_player_skill > 0 ? SkillNames[ud.m_player_skill-1] : "NONE",MENUHIGHLIGHT(3),2+8+16);
+            mgametext(c+70,57+16+16+16-7-9, ud.m_player_skill > 0 ? g_skillNames[ud.m_player_skill-1] : "NONE",MENUHIGHLIGHT(3),2+8+16);
 
             c -= 44;
 

@@ -2762,8 +2762,8 @@ static void G_MoveStandables(void)
                 s->z -= (3<<8);
                 setspritez_old(i,s->x,s->y,s->z);
 
-                int32_t hitDist = A_CheckHitSprite(i,&m);
-
+                int16_t hitSprite = -1;
+                int32_t hitDist = A_CheckHitSprite(i, &hitSprite);
                 actor[i].lastvx = hitDist;
 
                 s->ang = l;
@@ -2803,14 +2803,16 @@ static void G_MoveStandables(void)
                         changespritesect(lineSpr, curSectNum);
                     }
                 }
+
                 T1(i)++;
                 s->x = T4(i);
                 s->y = T5(i);
                 s->z += (3<<8);
                 setspritez(i, &s->xyz);
                 T4(i) = 0;
-                //                if( m >= 0 && lTripBombControl & TRIPBOMB_TRIPWIRE)
-                if (m >= 0 && actor[i].t_data[6] != 1)
+
+                // if( m >= 0 && lTripBombControl & TRIPBOMB_TRIPWIRE)
+                if (hitSprite >= 0 && actor[i].t_data[6] != 1)
                 {
                     actor[i].t_data[6] = 3;
                     T3(i) = 13;
@@ -2837,7 +2839,7 @@ static void G_MoveStandables(void)
                 s->z += (3<<8);
                 setspritez_old(i,s->x,s->y,s->z);
 
-                //                if( actor[i].lastvx != x && lTripBombControl & TRIPBOMB_TRIPWIRE)
+                // if( actor[i].lastvx != x && lTripBombControl & TRIPBOMB_TRIPWIRE)
                 if (actor[i].lastvx != x && actor[i].t_data[6] != 1)
                 {
                     actor[i].t_data[6] = 3;

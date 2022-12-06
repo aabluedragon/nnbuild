@@ -4644,17 +4644,17 @@ static bool C_ParseCommand(bool loop /*= false*/)
 
         while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
         {
-            SkillNames[j][i] = toupper(*textptr);
+            g_skillNames[j][i] = toupper(*textptr);
             textptr++,i++;
-            if (i >= (signed)sizeof(SkillNames[j])-1)
+            if (i >= (signed)sizeof(g_skillNames[j])-1)
             {
-                LOG_F(ERROR, "%s:%d: skill name exceeds limit of %d characters.",g_scriptFileName,g_lineNumber,(int32_t)sizeof(SkillNames[j])-1);
+                LOG_F(ERROR, "%s:%d: skill name exceeds limit of %d characters.",g_scriptFileName,g_lineNumber,(int32_t)sizeof(g_skillNames[j])-1);
                 g_errorCnt++;
                 scriptSkipLine();
                 break;
             }
         }
-        SkillNames[j][i] = '\0';
+        g_skillNames[j][i] = '\0';
         continue;
 
     case CON_SETGAMENAME:

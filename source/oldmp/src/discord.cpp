@@ -174,7 +174,7 @@ void UpdateDiscord()
         {
             if (ud.player_skill >= 1 && ud.player_skill <= 4)
             {
-                //Bstrcpy(skillname, SkillNames[ud.player_skill - 1]);
+                //Bstrcpy(skillname, g_skillNames[ud.player_skill - 1]);
                 //capitalize(skillname);
                 Bsprintf(buffer[0], u8"SP | \U0001F480 %d/%d \U0001F50D %d/%d", last_kill_count, last_max_kills, last_secret_count, last_max_secrets);
             }

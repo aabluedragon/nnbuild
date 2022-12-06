@@ -46,7 +46,7 @@ extern short g_spriteDeleteQueueSize;
 extern char g_numVolumes;
 
 extern char EpisodeNames[MAXVOLUMES][33];
-extern char SkillNames[5][33];
+extern char g_skillNames[5][33];
 extern short BlimpSpawnSprites[15];
 extern char CheatKeys[2];
 extern char g_setupFileName[BMAX_PATH];
