@@ -36,10 +36,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 void G_RestoreMapState(mapstate_t *save);
 void G_SaveMapState(mapstate_t *save);
 
-int g_i, g_p, g_x;
-static int32_t *g_t;
-spritetype *g_sp;
-static int g_killitFlag;
+vmstate_t vm;
+
 int g_errorLineNum;
 int g_tw;
 
@@ -101,8 +99,8 @@ void VM_ScriptInfo(intptr_t const* const ptr, int const range)
 
     if (ptr == insptr)
     {
-        if (g_sp)
-            VLOG_F(LOG_VM, "current actor: %d (%d)", g_i, TrackerCast(g_sp->picnum));
+        if (vm.pUSprite)
+            VLOG_F(LOG_VM, "current actor: %d (%d)", vm.spriteNum, vm.pUSprite->picnum);
     }
 }
 
@@ -124,44 +122,44 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
     }
 
     {
-        int og_i=g_i, og_p=g_p, okillit_flag=g_killitFlag;
-        int og_x=g_x;// *og_t=g_t;
+        int og_i=vm.spriteNum, og_p=vm.playerNum, okillit_flag=vm.flags;
+        int og_x=vm.playerDist;// *og_t=vm.pData;
         int oevent = g_currentEvent;
         intptr_t* oinsptr = insptr;
-        int32_t* og_t = g_t;
-        spritetype *og_sp=g_sp;
+        int32_t* og_t = vm.pData;
+        spritetype *og_sp=vm.pSprite;
 
-        g_i = iActor;    // current sprite ID
-        g_p = iPlayer;    // current player ID
-        g_x = lDist;    // ?
-        g_sp = &sprite[g_i];
-        g_t = &actor[g_i].t_data[0];
+        vm.spriteNum = iActor;    // current sprite ID
+        vm.playerNum = iPlayer;    // current player ID
+        vm.playerDist = lDist;    // ?
+        vm.pSprite = &sprite[vm.spriteNum];
+        vm.pData = &actor[vm.spriteNum].t_data[0];
 
         g_currentEvent = iEventID;
-        g_killitFlag = 0;
+        vm.flags = 0;
 
         insptr = apScript + apScriptEvents[iEventID]; 
 
         while (!X_DoExecute());
 
-        if (g_killitFlag & VM_KILL)
+        if (vm.flags & VM_KILL)
         {
             // if player was set to squish, first stop that...
-            if (g_p >= 0)
+            if (vm.playerNum >= 0)
             {
-                if (g_player[g_p].ps->actorsqu == g_i)
-                    g_player[g_p].ps->actorsqu = -1;
+                if (g_player[vm.playerNum].ps->actorsqu == vm.spriteNum)
+                    g_player[vm.playerNum].ps->actorsqu = -1;
             }
-            A_DeleteSprite(g_i);
+            A_DeleteSprite(vm.spriteNum);
         }
 
         // restore old values...
-        g_i = og_i;
-        g_p = og_p;
-        g_x = og_x;
-        g_sp = og_sp;
-        g_t = og_t;
-        g_killitFlag = okillit_flag;
+        vm.spriteNum = og_i;
+        vm.playerNum = og_p;
+        vm.playerDist = og_x;
+        vm.pSprite = og_sp;
+        vm.pData = og_t;
+        vm.flags = okillit_flag;
         g_currentEvent = oevent;
         insptr = oinsptr;
 
@@ -569,36 +567,36 @@ static void VM_Fall(int const spriteNum, spritetype* const pSprite)
 
 static inline void X_AlterAng(int a)
 {
-    int const elapsedTics = (AC_COUNT(g_t)) & 31;
+    int const elapsedTics = (AC_COUNT(vm.pData)) & 31;
 
-    auto const moveptr = apScript + AC_MOVE_ID(g_t);
+    auto const moveptr = apScript + AC_MOVE_ID(vm.pData);
     auto& hvel = moveptr[0];
     auto& vvel = moveptr[1];
 
-    g_sp->xvel += (hvel - g_sp->xvel) / 5;
-    if (g_sp->zvel < 648)
-        g_sp->zvel += ((vvel << 4) - g_sp->zvel) / 5;
+    vm.pSprite->xvel += (hvel - vm.pSprite->xvel) / 5;
+    if (vm.pSprite->zvel < 648)
+        vm.pSprite->zvel += ((vvel << 4) - vm.pSprite->zvel) / 5;
 
-    if (A_CheckEnemySprite(g_sp) && g_sp->extra <= 0) // hack
+    if (A_CheckEnemySprite(vm.pSprite) && vm.pSprite->extra <= 0) // hack
         return;
 
     if (a & seekplayer)
     {
-        int aang = g_sp->ang, angdif, goalang;
-        int j = g_player[g_p].ps->holoduke_on;
+        int aang = vm.pSprite->ang, angdif, goalang;
+        int j = g_player[vm.playerNum].ps->holoduke_on;
 
         // NOTE: looks like 'owner' is set to target sprite ID...
 
-        if (j >= 0 && cansee(sprite[j].x, sprite[j].y, sprite[j].z, sprite[j].sectnum, g_sp->x, g_sp->y, g_sp->z, g_sp->sectnum))
-            g_sp->owner = j;
-        else g_sp->owner = g_player[g_p].ps->i;
+        if (j >= 0 && cansee(sprite[j].x, sprite[j].y, sprite[j].z, sprite[j].sectnum, vm.pSprite->x, vm.pSprite->y, vm.pSprite->z, vm.pSprite->sectnum))
+            vm.pSprite->owner = j;
+        else vm.pSprite->owner = g_player[vm.playerNum].ps->i;
 
-        if (sprite[g_sp->owner].picnum == APLAYER)
-            goalang = getangle(actor[g_i].lastvx - g_sp->x, actor[g_i].lastvy - g_sp->y);
+        if (sprite[vm.pSprite->owner].picnum == APLAYER)
+            goalang = getangle(actor[vm.spriteNum].lastvx - vm.pSprite->x, actor[vm.spriteNum].lastvy - vm.pSprite->y);
         else
-            goalang = getangle(sprite[g_sp->owner].x - g_sp->x, sprite[g_sp->owner].y - g_sp->y);
+            goalang = getangle(sprite[vm.pSprite->owner].x - vm.pSprite->x, sprite[vm.pSprite->owner].y - vm.pSprite->y);
 
-        if (g_sp->xvel && g_sp->picnum != DRONE)
+        if (vm.pSprite->xvel && vm.pSprite->picnum != DRONE)
         {
             angdif = G_GetAngleDelta(aang, goalang);
 
@@ -607,18 +605,18 @@ static inline void X_AlterAng(int a)
                 if (klabs(angdif) < 256)
                 {
                     j = 128 - (krand() & 256);
-                    g_sp->ang += j;
-                    if (A_GetHitscanRange(g_i) < 844)
-                        g_sp->ang -= j;
+                    vm.pSprite->ang += j;
+                    if (A_GetHitscanRange(vm.spriteNum) < 844)
+                        vm.pSprite->ang -= j;
                 }
             }
             else if (elapsedTics > 18 && elapsedTics < 26) // choose
             {
-                if (klabs(angdif >> 2) < 128) g_sp->ang = goalang;
-                else g_sp->ang += angdif >> 2;
+                if (klabs(angdif >> 2) < 128) vm.pSprite->ang = goalang;
+                else vm.pSprite->ang += angdif >> 2;
             }
         }
-        else g_sp->ang = goalang;
+        else vm.pSprite->ang = goalang;
     }
 
     if (elapsedTics < 1)
@@ -626,13 +624,13 @@ static inline void X_AlterAng(int a)
         int j = 2;
         if (a & furthestdir)
         {
-            g_sp->ang = A_GetFurthestAngle(g_i, j);
-            g_sp->owner = g_player[g_p].ps->i;
+            vm.pSprite->ang = A_GetFurthestAngle(vm.spriteNum, j);
+            vm.pSprite->owner = g_player[vm.playerNum].ps->i;
         }
 
         if (a & fleeenemy)
         {
-            g_sp->ang = A_GetFurthestAngle(g_i, j); // += angdif; //  = G_GetAngleDelta(aang,goalang)>>1;
+            vm.pSprite->ang = A_GetFurthestAngle(vm.spriteNum, j); // += angdif; //  = G_GetAngleDelta(aang,goalang)>>1;
         }
     }
 }
@@ -642,182 +640,182 @@ static void X_Move(void)
     int l;
     int goalang, angdif;
     int daxvel;
-    int deadflag = (A_CheckEnemySprite(g_sp) && g_sp->extra <= 0);
+    int deadflag = (A_CheckEnemySprite(vm.pSprite) && vm.pSprite->extra <= 0);
 
-    auto const movflagsptr = &AC_MOVFLAGS(g_sp, &actor[g_i]);
+    auto const movflagsptr = &AC_MOVFLAGS(vm.pSprite, &actor[vm.spriteNum]);
     int const movflags = (*movflagsptr == (remove_pointer_t<decltype(movflagsptr)>) - 1) ? 0 : *movflagsptr;
 
-    AC_COUNT(g_t)++;
+    AC_COUNT(vm.pData)++;
 
-    if (AC_MOVE_ID(g_t) == 0 || movflags == 0)
+    if (AC_MOVE_ID(vm.pData) == 0 || movflags == 0)
     {
-        if (deadflag || (actor[g_i].bpos.xy != g_sp->xy))
-            setsprite(g_i, &g_sp->xyz);
+        if (deadflag || (actor[vm.spriteNum].bpos.xy != vm.pSprite->xy))
+            setsprite(vm.spriteNum, &vm.pSprite->xyz);
 
         return;
     }
 
     if (movflags & face_player && !deadflag)
     {
-        if (g_player[g_p].ps->newowner >= 0)
-            goalang = getangle(g_player[g_p].ps->opos.x - g_sp->x, g_player[g_p].ps->opos.y - g_sp->y);
-        else goalang = getangle(g_player[g_p].ps->pos.x - g_sp->x, g_player[g_p].ps->pos.y - g_sp->y);
-        angdif = G_GetAngleDelta(g_sp->ang, goalang) >> 2;
+        if (g_player[vm.playerNum].ps->newowner >= 0)
+            goalang = getangle(g_player[vm.playerNum].ps->opos.x - vm.pSprite->x, g_player[vm.playerNum].ps->opos.y - vm.pSprite->y);
+        else goalang = getangle(g_player[vm.playerNum].ps->pos.x - vm.pSprite->x, g_player[vm.playerNum].ps->pos.y - vm.pSprite->y);
+        angdif = G_GetAngleDelta(vm.pSprite->ang, goalang) >> 2;
         if ((angdif > -8 && angdif < 0) || (angdif < 8 && angdif > 0))
             angdif *= 2;
-        g_sp->ang += angdif;
+        vm.pSprite->ang += angdif;
     }
 
     if (movflags & spin && !deadflag)
-        g_sp->ang += sintable[((AC_COUNT(g_t)<<3)&2047)]>>6;
+        vm.pSprite->ang += sintable[((AC_COUNT(vm.pData)<<3)&2047)]>>6;
 
     if (movflags & face_player_slow && !deadflag)
     {
-        if (g_player[g_p].ps->newowner >= 0)
-            goalang = getangle(g_player[g_p].ps->opos.x - g_sp->x, g_player[g_p].ps->opos.y - g_sp->y);
-        else goalang = getangle(g_player[g_p].ps->pos.x - g_sp->x, g_player[g_p].ps->pos.y - g_sp->y);
-        angdif = G_GetAngleDelta(g_sp->ang, goalang) >> 4;
+        if (g_player[vm.playerNum].ps->newowner >= 0)
+            goalang = getangle(g_player[vm.playerNum].ps->opos.x - vm.pSprite->x, g_player[vm.playerNum].ps->opos.y - vm.pSprite->y);
+        else goalang = getangle(g_player[vm.playerNum].ps->pos.x - vm.pSprite->x, g_player[vm.playerNum].ps->pos.y - vm.pSprite->y);
+        angdif = G_GetAngleDelta(vm.pSprite->ang, goalang) >> 4;
         if ((angdif > -8 && angdif < 0) || (angdif < 8 && angdif > 0))
             angdif *= 2;
-        g_sp->ang += angdif;
+        vm.pSprite->ang += angdif;
     }
 
     if (((movflags & jumptoplayer_bits) == jumptoplayer_bits) && !deadflag)
     {
-        if (AC_COUNT(g_t) < 16)
-            g_sp->zvel -= (sintable[(512+(AC_COUNT(g_t)<<4))&2047]>>5);
+        if (AC_COUNT(vm.pData) < 16)
+            vm.pSprite->zvel -= (sintable[(512+(AC_COUNT(vm.pData)<<4))&2047]>>5);
     }
 
     if (movflags & face_player_smart && !deadflag)
     {
-        int newx = g_player[g_p].ps->pos.x + (g_player[g_p].ps->vel.x / 768);
-        int newy = g_player[g_p].ps->pos.y + (g_player[g_p].ps->vel.y / 768);
+        int newx = g_player[vm.playerNum].ps->pos.x + (g_player[vm.playerNum].ps->vel.x / 768);
+        int newy = g_player[vm.playerNum].ps->pos.y + (g_player[vm.playerNum].ps->vel.y / 768);
 
-        goalang = getangle(newx - g_sp->x, newy - g_sp->y);
-        angdif = G_GetAngleDelta(g_sp->ang, goalang) >> 2;
+        goalang = getangle(newx - vm.pSprite->x, newy - vm.pSprite->y);
+        angdif = G_GetAngleDelta(vm.pSprite->ang, goalang) >> 2;
         if ((angdif > -8 && angdif < 0) || (angdif < 8 && angdif > 0))
             angdif *= 2;
-        g_sp->ang += angdif;
+        vm.pSprite->ang += angdif;
     }
 
-    if (EDUKE32_PREDICT_FALSE((unsigned)AC_MOVE_ID(g_t) >= (unsigned)g_scriptSize - 1))
+    if (EDUKE32_PREDICT_FALSE((unsigned)AC_MOVE_ID(vm.pData) >= (unsigned)g_scriptSize - 1))
     {
-        AC_MOVE_ID(g_t) = 0;
-        VLOG_F(LOG_VM, "clearing bad moveptr for actor %d (%d)", g_i, TrackerCast(g_sp->picnum));
+        AC_MOVE_ID(vm.pData) = 0;
+        VLOG_F(LOG_VM, "clearing bad moveptr for actor %d (%d)", vm.spriteNum, vm.pUSprite->picnum);
         return;
     }
 
-    auto const moveptr = apScript + AC_MOVE_ID(g_t);
+    auto const moveptr = apScript + AC_MOVE_ID(vm.pData);
     auto& hvel = moveptr[0];
     auto& vvel = moveptr[1];
 
     if (movflags & geth)
-        g_sp->xvel += (hvel - g_sp->xvel) >> 1;
+        vm.pSprite->xvel += (hvel - vm.pSprite->xvel) >> 1;
 
     if (movflags & getv)
-        g_sp->zvel += (16 * vvel - g_sp->zvel) >> 1;
+        vm.pSprite->zvel += (16 * vvel - vm.pSprite->zvel) >> 1;
 
     if (movflags & dodgebullet && !deadflag)
-        A_Dodge(g_sp);
+        A_Dodge(vm.pSprite);
 
-    if (g_sp->picnum != APLAYER)
+    if (vm.pSprite->picnum != APLAYER)
         X_AlterAng(movflags);
 
-    if (g_sp->xvel > -6 && g_sp->xvel < 6)
-        g_sp->xvel = 0;
+    if (vm.pSprite->xvel > -6 && vm.pSprite->xvel < 6)
+        vm.pSprite->xvel = 0;
 
-    int isEnemy = A_CheckEnemySprite(g_sp);
+    int isEnemy = A_CheckEnemySprite(vm.pSprite);
 
-    if (g_sp->xvel || g_sp->zvel)
+    if (vm.pSprite->xvel || vm.pSprite->zvel)
     {
-        if (isEnemy && g_sp->picnum != ROTATEGUN)
+        if (isEnemy && vm.pSprite->picnum != ROTATEGUN)
         {
-            if ((g_sp->picnum == DRONE || g_sp->picnum == COMMANDER) && g_sp->extra > 0)
+            if ((vm.pSprite->picnum == DRONE || vm.pSprite->picnum == COMMANDER) && vm.pSprite->extra > 0)
             {
-                if (g_sp->picnum == COMMANDER)
+                if (vm.pSprite->picnum == COMMANDER)
                 {
-                    actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->xy);
-                    if (g_sp->z > (l - (8 << 8)))
+                    actor[vm.spriteNum].floorz = l = yax_getflorzofslope(vm.pSprite->sectnum, vm.pSprite->xy);
+                    if (vm.pSprite->z > (l - (8 << 8)))
                     {
-                        if (g_sp->z > (l - (8 << 8))) g_sp->z = l - (8 << 8);
-                        g_sp->zvel = 0;
+                        if (vm.pSprite->z > (l - (8 << 8))) vm.pSprite->z = l - (8 << 8);
+                        vm.pSprite->zvel = 0;
                     }
 
-                    actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
-                    if ((g_sp->z - l) < (80 << 8))
+                    actor[vm.spriteNum].ceilingz = l = yax_getceilzofslope(vm.pSprite->sectnum, vm.pSprite->xy);
+                    if ((vm.pSprite->z - l) < (80 << 8))
                     {
-                        g_sp->z = l + (80 << 8);
-                        g_sp->zvel = 0;
+                        vm.pSprite->z = l + (80 << 8);
+                        vm.pSprite->zvel = 0;
                     }
                 }
                 else
                 {
-                    if (g_sp->zvel > 0)
+                    if (vm.pSprite->zvel > 0)
                     {
-                        actor[g_i].floorz = l = yax_getflorzofslope(g_sp->sectnum, g_sp->xy);
-                        if (g_sp->z > (l - (30 << 8)))
-                            g_sp->z = l - (30 << 8);
+                        actor[vm.spriteNum].floorz = l = yax_getflorzofslope(vm.pSprite->sectnum, vm.pSprite->xy);
+                        if (vm.pSprite->z > (l - (30 << 8)))
+                            vm.pSprite->z = l - (30 << 8);
                     }
                     else
                     {
-                        actor[g_i].ceilingz = l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
-                        if ((g_sp->z - l) < (50 << 8))
+                        actor[vm.spriteNum].ceilingz = l = yax_getceilzofslope(vm.pSprite->sectnum, vm.pSprite->xy);
+                        if ((vm.pSprite->z - l) < (50 << 8))
                         {
-                            g_sp->z = l + (50 << 8);
-                            g_sp->zvel = 0;
+                            vm.pSprite->z = l + (50 << 8);
+                            vm.pSprite->zvel = 0;
                         }
                     }
                 }
             }
-            else if (g_sp->picnum != ORGANTIC)
+            else if (vm.pSprite->picnum != ORGANTIC)
             {
-                if (g_sp->zvel > 0 && actor[g_i].floorz < g_sp->z)
-                    g_sp->z = actor[g_i].floorz;
-                if (g_sp->zvel < 0)
+                if (vm.pSprite->zvel > 0 && actor[vm.spriteNum].floorz < vm.pSprite->z)
+                    vm.pSprite->z = actor[vm.spriteNum].floorz;
+                if (vm.pSprite->zvel < 0)
                 {
-                    l = yax_getceilzofslope(g_sp->sectnum, g_sp->xy);
-                    if ((g_sp->z - l) < (66 << 8))
+                    l = yax_getceilzofslope(vm.pSprite->sectnum, vm.pSprite->xy);
+                    if ((vm.pSprite->z - l) < (66 << 8))
                     {
-                        g_sp->z = l + (66 << 8);
-                        g_sp->zvel >>= 1;
+                        vm.pSprite->z = l + (66 << 8);
+                        vm.pSprite->zvel >>= 1;
                     }
                 }
             }
         }
-        else if (g_sp->picnum == APLAYER)
-            if ((g_sp->z - actor[g_i].ceilingz) < (32 << 8))
-                g_sp->z = actor[g_i].ceilingz + (32 << 8);
+        else if (vm.pSprite->picnum == APLAYER)
+            if ((vm.pSprite->z - actor[vm.spriteNum].ceilingz) < (32 << 8))
+                vm.pSprite->z = actor[vm.spriteNum].ceilingz + (32 << 8);
 
-        daxvel = g_sp->xvel;
-        angdif = g_sp->ang;
+        daxvel = vm.pSprite->xvel;
+        angdif = vm.pSprite->ang;
 
-        if (isEnemy && g_sp->picnum != ROTATEGUN)
+        if (isEnemy && vm.pSprite->picnum != ROTATEGUN)
         {
-            if (g_x < 960 && g_sp->xrepeat > 16)
+            if (vm.playerDist < 960 && vm.pSprite->xrepeat > 16)
             {
 
-                daxvel = -(1024 - g_x);
-                angdif = getangle(g_player[g_p].ps->pos.x - g_sp->x, g_player[g_p].ps->pos.y - g_sp->y);
+                daxvel = -(1024 - vm.playerDist);
+                angdif = getangle(g_player[vm.playerNum].ps->pos.x - vm.pSprite->x, g_player[vm.playerNum].ps->pos.y - vm.pSprite->y);
 
-                if (g_x < 512)
+                if (vm.playerDist < 512)
                 {
-                    g_player[g_p].ps->vel.x = 0;
-                    g_player[g_p].ps->vel.y = 0;
+                    g_player[vm.playerNum].ps->vel.x = 0;
+                    g_player[vm.playerNum].ps->vel.y = 0;
                 }
                 else
                 {
-                    g_player[g_p].ps->vel.x = mulscale(g_player[g_p].ps->vel.x, g_player[g_p].ps->runspeed - 0x2000, 16);
-                    g_player[g_p].ps->vel.y = mulscale(g_player[g_p].ps->vel.y, g_player[g_p].ps->runspeed - 0x2000, 16);
+                    g_player[vm.playerNum].ps->vel.x = mulscale(g_player[vm.playerNum].ps->vel.x, g_player[vm.playerNum].ps->runspeed - 0x2000, 16);
+                    g_player[vm.playerNum].ps->vel.y = mulscale(g_player[vm.playerNum].ps->vel.y, g_player[vm.playerNum].ps->runspeed - 0x2000, 16);
                 }
             }
-            else if (g_sp->picnum != DRONE && g_sp->picnum != SHARK && g_sp->picnum != COMMANDER)
+            else if (vm.pSprite->picnum != DRONE && vm.pSprite->picnum != SHARK && vm.pSprite->picnum != COMMANDER)
             {
-                if (g_player[g_p].ps->actorsqu == g_i)
+                if (g_player[vm.playerNum].ps->actorsqu == vm.spriteNum)
                     return;
 
-                if (!A_CheckSpriteFlags(g_i, SFLAG_SMOOTHMOVE))
+                if (!A_CheckSpriteFlags(vm.spriteNum, SFLAG_SMOOTHMOVE))
                 {
-                    if (AC_COUNT(g_t) & 1)
+                    if (AC_COUNT(vm.pData) & 1)
                         return;
 
                     daxvel <<= 1;
@@ -825,18 +823,18 @@ static void X_Move(void)
             }
         }
 
-        actor[g_i].movflag = A_MoveSprite(g_i, (daxvel*(sintable[(angdif+512)&2047]))>>14,
-                                               (daxvel*(sintable[angdif&2047]))>>14,g_sp->zvel, (movflags & noclip) ? 0 : CLIPMASK0);
+        actor[vm.spriteNum].movflag = A_MoveSprite(vm.spriteNum, (daxvel*(sintable[(angdif+512)&2047]))>>14,
+                                               (daxvel*(sintable[angdif&2047]))>>14,vm.pSprite->zvel, (movflags & noclip) ? 0 : CLIPMASK0);
     }
 
     if (isEnemy)
     {
-        if (sector[g_sp->sectnum].ceilingstat & 1)
-            g_sp->shade += (sector[g_sp->sectnum].ceilingshade - g_sp->shade) >> 1;
-        else g_sp->shade += (sector[g_sp->sectnum].floorshade - g_sp->shade) >> 1;
+        if (sector[vm.pSprite->sectnum].ceilingstat & 1)
+            vm.pSprite->shade += (sector[vm.pSprite->sectnum].ceilingshade - vm.pSprite->shade) >> 1;
+        else vm.pSprite->shade += (sector[vm.pSprite->sectnum].floorshade - vm.pSprite->shade) >> 1;
 
-        if (sector[g_sp->sectnum].floorpicnum == MIRROR)
-            A_DeleteSprite(g_i);
+        if (sector[vm.pSprite->sectnum].floorpicnum == MIRROR)
+            A_DeleteSprite(vm.spriteNum);
     }
 }
 
@@ -888,7 +886,7 @@ static void VM_AddWeapon(int32_t weap, int32_t amount, DukePlayer_t *ps)
     }
     else if (ps->ammo_amount[weap] >= ps->max_ammo_amount[weap])
     {
-        g_killitFlag |= VM_NOEXECUTE;
+        vm.flags |= VM_NOEXECUTE;
         return;
     }
 
@@ -1050,7 +1048,7 @@ static int X_DoExecute(void)
 
     int j, l, s, tw = *insptr;
 
-    if (g_killitFlag & (VM_RETURN | VM_KILL | VM_NOEXECUTE)) return 1;
+    if (vm.flags & (VM_RETURN | VM_KILL | VM_NOEXECUTE)) return 1;
 
     //      Bsprintf(g_szBuf,"Parsing: %d",*insptr);
     //      AddLog(g_szBuf);
@@ -1083,13 +1081,13 @@ static int X_DoExecute(void)
 
         case CON_SETVAR_ACTOR:
             insptr++;
-            aGameVars[*insptr].val.plValues[g_i & (MAXSPRITES - 1)] = insptr[1];
+            aGameVars[*insptr].val.plValues[vm.spriteNum & (MAXSPRITES - 1)] = insptr[1];
             insptr += 2;
             break;
 
         case CON_SETVAR_PLAYER:
             insptr++;
-            aGameVars[*insptr].val.plValues[g_p & (MAXPLAYERS - 1)] = insptr[1];
+            aGameVars[*insptr].val.plValues[vm.playerNum & (MAXPLAYERS - 1)] = insptr[1];
             insptr += 2;
             break;
 
@@ -1107,7 +1105,7 @@ static int X_DoExecute(void)
     case CON_GETTHISPROJECTILE:
         insptr++;
         {
-            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.spriteNum;
             int const labelNum = *insptr++;
             int const lVar2 = *insptr++;
 
@@ -1124,17 +1122,17 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFCANSHOOTTARGET:
-        if (g_x > 1024)
+        if (vm.playerDist > 1024)
         {
             short temphit, sclip = 768, angdif = 16;
 
-            if (A_CheckEnemySprite(g_sp) && g_sp->xrepeat > 56)
+            if (A_CheckEnemySprite(vm.pSprite) && vm.pSprite->xrepeat > 56)
             {
                 sclip = 3084;
                 angdif = 48;
             }
 
-            j = A_CheckHitSprite(g_i,&temphit);
+            j = A_CheckHitSprite(vm.spriteNum,&temphit);
             if (j == (1<<30))
             {
                 branch(1);
@@ -1142,25 +1140,25 @@ static int X_DoExecute(void)
             }
             if (j > sclip)
             {
-                if (temphit >= 0 && sprite[temphit].picnum == g_sp->picnum)
+                if (temphit >= 0 && sprite[temphit].picnum == vm.pSprite->picnum)
                     j = 0;
                 else
                 {
-                    g_sp->ang += angdif;
-                    j = A_CheckHitSprite(g_i,&temphit);
-                    g_sp->ang -= angdif;
+                    vm.pSprite->ang += angdif;
+                    j = A_CheckHitSprite(vm.spriteNum,&temphit);
+                    vm.pSprite->ang -= angdif;
                     if (j > sclip)
                     {
-                        if (temphit >= 0 && sprite[temphit].picnum == g_sp->picnum)
+                        if (temphit >= 0 && sprite[temphit].picnum == vm.pSprite->picnum)
                             j = 0;
                         else
                         {
-                            g_sp->ang -= angdif;
-                            j = A_CheckHitSprite(g_i,&temphit);
-                            g_sp->ang += angdif;
+                            vm.pSprite->ang -= angdif;
+                            j = A_CheckHitSprite(vm.spriteNum,&temphit);
+                            vm.pSprite->ang += angdif;
                             if (j > 768)
                             {
-                                if (temphit >= 0 && sprite[temphit].picnum == g_sp->picnum)
+                                if (temphit >= 0 && sprite[temphit].picnum == vm.pSprite->picnum)
                                     j = 0;
                                 else j = 1;
                             }
@@ -1178,38 +1176,38 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFCANSEETARGET:
-        j = cansee(g_sp->x,g_sp->y,g_sp->z-((krand()&41)<<8),g_sp->sectnum,g_player[g_p].ps->pos.x,g_player[g_p].ps->pos.y,g_player[g_p].ps->pos.z/*-((krand()&41)<<8)*/,sprite[g_player[g_p].ps->i].sectnum);
+        j = cansee(vm.pSprite->x,vm.pSprite->y,vm.pSprite->z-((krand()&41)<<8),vm.pSprite->sectnum,g_player[vm.playerNum].ps->pos.x,g_player[vm.playerNum].ps->pos.y,g_player[vm.playerNum].ps->pos.z/*-((krand()&41)<<8)*/,sprite[g_player[vm.playerNum].ps->i].sectnum);
         branch(j);
-        if (j) actor[g_i].timetosleep = SLEEPTIME;
+        if (j) actor[vm.spriteNum].timetosleep = SLEEPTIME;
         break;
 
     case CON_IFACTORNOTSTAYPUT:
-        branch(actor[g_i].actorstayput == -1);
+        branch(actor[vm.spriteNum].actorstayput == -1);
         break;
 
     case CON_IFCANSEE:
     {
-        spritetype *s = &sprite[g_player[g_p].ps->i];
+        spritetype *s = &sprite[g_player[vm.playerNum].ps->i];
 
         // select sprite for monster to target
         // if holoduke is on, let them target holoduke first.
         //
-        if (g_player[g_p].ps->holoduke_on >= 0)
+        if (g_player[vm.playerNum].ps->holoduke_on >= 0)
         {
-            s = &sprite[g_player[g_p].ps->holoduke_on];
-            j = cansee(g_sp->x,g_sp->y,g_sp->z-(krand()&((32<<8)-1)),g_sp->sectnum,
+            s = &sprite[g_player[vm.playerNum].ps->holoduke_on];
+            j = cansee(vm.pSprite->x,vm.pSprite->y,vm.pSprite->z-(krand()&((32<<8)-1)),vm.pSprite->sectnum,
                        s->x,s->y,s->z,s->sectnum);
 
             if (j == 0)
             {
                 // they can't see player's holoduke
                 // check for player...
-                s = &sprite[g_player[g_p].ps->i];
+                s = &sprite[g_player[vm.playerNum].ps->i];
             }
         }
 
         // can they see player, (or player's holoduke)
-        j = cansee(g_sp->x,g_sp->y,g_sp->z-(krand()&((47<<8))),g_sp->sectnum,
+        j = cansee(vm.pSprite->x,vm.pSprite->y,vm.pSprite->z-(krand()&((47<<8))),vm.pSprite->sectnum,
                    s->x,s->y,s->z-(24<<8),s->sectnum);
 
         if (j == 0)
@@ -1221,7 +1219,7 @@ static int X_DoExecute(void)
                 // also modifies 'target' x&y if found..
 
                 j = 1;
-                if (A_FurthestVisiblePoint(g_i,s,&actor[g_i].lastvx,&actor[g_i].lastvy) == -1)
+                if (A_FurthestVisiblePoint(vm.spriteNum,s,&actor[vm.spriteNum].lastvx,&actor[vm.spriteNum].lastvy) == -1)
                     j = 0;
             }
         }
@@ -1229,82 +1227,82 @@ static int X_DoExecute(void)
         {
             // else, they did see it.
             // save where we were looking...
-            actor[g_i].lastvx = s->x;
-            actor[g_i].lastvy = s->y;
+            actor[vm.spriteNum].lastvx = s->x;
+            actor[vm.spriteNum].lastvy = s->y;
         }
 
-        if (j && (g_sp->statnum == STAT_ACTOR || g_sp->statnum == STAT_STANDABLE))
-            actor[g_i].timetosleep = SLEEPTIME;
+        if (j && (vm.pSprite->statnum == STAT_ACTOR || vm.pSprite->statnum == STAT_STANDABLE))
+            actor[vm.spriteNum].timetosleep = SLEEPTIME;
 
         branch(j);
         break;
     }
 
     case CON_IFHITWEAPON:
-        branch(A_IncurDamage(g_i) >= 0);
+        branch(A_IncurDamage(vm.spriteNum) >= 0);
         break;
 
     case CON_IFSQUISHED:
-        branch(A_CheckSquished(g_i, g_p));
+        branch(A_CheckSquished(vm.spriteNum, vm.playerNum));
         break;
 
     case CON_IFDEAD:
-//        j = g_sp->extra;
-//        if (g_sp->picnum == APLAYER)
+//        j = vm.pSprite->extra;
+//        if (vm.pSprite->picnum == APLAYER)
 //            j--;
-        branch(g_sp->extra <= 0);
+        branch(vm.pSprite->extra <= 0);
         break;
 
     case CON_AI:
         insptr++;
         // Following changed to use pointersizes
-        AC_AI_ID(g_t) = *insptr++;                         // Ai
-        AC_ACTION_ID(g_t) = *(apScript + AC_AI_ID(g_t));  // Action
+        AC_AI_ID(vm.pData) = *insptr++;                         // Ai
+        AC_ACTION_ID(vm.pData) = *(apScript + AC_AI_ID(vm.pData));  // Action
 
         // NOTE: "if" check added in r1155. It used to be movflags pointer though.
-        if (AC_AI_ID(g_t))
-            AC_MOVE_ID(g_t) = *(apScript + AC_AI_ID(g_t) + 1);  // move
+        if (AC_AI_ID(vm.pData))
+            AC_MOVE_ID(vm.pData) = *(apScript + AC_AI_ID(vm.pData) + 1);  // move
 
-        g_sp->hitag = *(apScript + AC_AI_ID(g_t) + 2);  // move flags
+        vm.pSprite->hitag = *(apScript + AC_AI_ID(vm.pData) + 2);  // move flags
 
-        AC_COUNT(g_t) = 0;
-        AC_ACTION_COUNT(g_t) = 0;
-        AC_CURFRAME(g_t) = 0;
+        AC_COUNT(vm.pData) = 0;
+        AC_ACTION_COUNT(vm.pData) = 0;
+        AC_CURFRAME(vm.pData) = 0;
 
-        if ((int)!A_CheckEnemySprite(g_sp) | (int)(g_sp->extra > 0))  // hack
-            if (g_sp->hitag & random_angle)
-                g_sp->ang = krand() & 2047;
+        if ((int)!A_CheckEnemySprite(vm.pSprite) | (int)(vm.pSprite->extra > 0))  // hack
+            if (vm.pSprite->hitag & random_angle)
+                vm.pSprite->ang = krand() & 2047;
         break;
 
     case CON_ACTION:
         insptr++;
-        AC_ACTION_COUNT(g_t) = 0;
-        AC_CURFRAME(g_t) = 0;
-        AC_ACTION_ID(g_t) = *insptr++;
+        AC_ACTION_COUNT(vm.pData) = 0;
+        AC_CURFRAME(vm.pData) = 0;
+        AC_ACTION_ID(vm.pData) = *insptr++;
         break;
 
     case CON_IFPDISTL:
         insptr++;
-        branch(g_x < *insptr);
-        if (g_x > MAXSLEEPDIST && actor[g_i].timetosleep == 0)
-            actor[g_i].timetosleep = SLEEPTIME;
+        branch(vm.playerDist < *insptr);
+        if (vm.playerDist > MAXSLEEPDIST && actor[vm.spriteNum].timetosleep == 0)
+            actor[vm.spriteNum].timetosleep = SLEEPTIME;
         break;
 
     case CON_IFPDISTG:
         insptr++;
-        branch(g_x > *insptr);
-        if (g_x > MAXSLEEPDIST && actor[g_i].timetosleep == 0)
-            actor[g_i].timetosleep = SLEEPTIME;
+        branch(vm.playerDist > *insptr);
+        if (vm.playerDist > MAXSLEEPDIST && actor[vm.spriteNum].timetosleep == 0)
+            actor[vm.spriteNum].timetosleep = SLEEPTIME;
         break;
 
     case CON_ADDSTRENGTH:
         insptr++;
-        g_sp->extra += *insptr++;
+        vm.pSprite->extra += *insptr++;
         break;
 
     case CON_STRENGTH:
         insptr++;
-        g_sp->extra = *insptr++;
+        vm.pSprite->extra = *insptr++;
         break;
 
     case CON_IFGOTWEAPONCE:
@@ -1314,7 +1312,7 @@ static int X_DoExecute(void)
         if ((Gametypes[ud.coop].flags & GAMETYPE_WEAPSTAY) && ud.multimode > 1)
         {
             // HACK: Don't do this for pipebombs and tripmines, the weapon is also ammo.
-            if (g_sp->picnum == HBOMBAMMO || g_sp->picnum == TRIPBOMBSPRITE)
+            if (vm.pSprite->picnum == HBOMBAMMO || vm.pSprite->picnum == TRIPBOMBSPRITE)
             {
                 // To-do: Make this a sprite or weapon flag, not a hardcoded picnum check.
                 branch(0);
@@ -1324,22 +1322,22 @@ static int X_DoExecute(void)
                 // To-do: Make this block do fuck all (return false),
                 //        and make a much more reliable, less shitty check in addweapon.
 
-                for (j=0;j < g_player[g_p].ps->weapreccnt;j++)
-                    if (g_player[g_p].ps->weaprecs[j] == g_sp->picnum)
+                for (j=0;j < g_player[vm.playerNum].ps->weapreccnt;j++)
+                    if (g_player[vm.playerNum].ps->weaprecs[j] == vm.pSprite->picnum)
                         break; // Yes
 
                 // If we have this weapon already, and it's not dropped, return true.
-                branch(j < g_player[g_p].ps->weapreccnt && g_sp->owner == g_i);
+                branch(j < g_player[vm.playerNum].ps->weapreccnt && vm.pSprite->owner == vm.spriteNum);
             }
-            else if (g_player[g_p].ps->weapreccnt < 16) // Param is non-zero, and we've picked up under 16 weapons?
+            else if (g_player[vm.playerNum].ps->weapreccnt < 16) // Param is non-zero, and we've picked up under 16 weapons?
             {
                 // To-do: Just check if param is 1, and remove the line underneath this one.
                 //        This weapreccnt shit is wack.
 
                 // Add weapon to recent pickup list.
-                g_player[g_p].ps->weaprecs[g_player[g_p].ps->weapreccnt++] = g_sp->picnum;
+                g_player[vm.playerNum].ps->weaprecs[g_player[vm.playerNum].ps->weapreccnt++] = vm.pSprite->picnum;
 
-                branch(g_sp->owner == g_i); // Return true if map spawned, not dropped.
+                branch(vm.pSprite->owner == vm.spriteNum); // Return true if map spawned, not dropped.
             }
             else branch(0); // If we're at 16 weapons or above, just give up it seems.
         }
@@ -1348,20 +1346,20 @@ static int X_DoExecute(void)
 
     case CON_GETLASTPAL:
         insptr++;
-        if (g_sp->picnum == APLAYER)
-            g_sp->pal = g_player[g_sp->yvel].ps->palookup;
+        if (vm.pSprite->picnum == APLAYER)
+            vm.pSprite->pal = g_player[vm.pSprite->yvel].ps->palookup;
         else
         {
-            if (g_sp->pal == 1 && g_sp->extra == 0) // hack for frozen
-                g_sp->extra++;
-            g_sp->pal = actor[g_i].tempang;
+            if (vm.pSprite->pal == 1 && vm.pSprite->extra == 0) // hack for frozen
+                vm.pSprite->extra++;
+            vm.pSprite->pal = actor[vm.spriteNum].tempang;
         }
-        actor[g_i].tempang = 0;
+        actor[vm.spriteNum].tempang = 0;
         break;
 
     case CON_TOSSWEAPON:
         insptr++;
-        P_DropWeapon(g_player[g_sp->yvel].ps);
+        P_DropWeapon(g_player[vm.pSprite->yvel].ps);
         break;
 
     case CON_NULLOP:
@@ -1370,38 +1368,38 @@ static int X_DoExecute(void)
 
     case CON_MIKESND:
         insptr++;
-        if ((g_sp->yvel < 0 || (unsigned)g_sp->yvel > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+        if ((vm.pSprite->yvel < 0 || (unsigned)vm.pSprite->yvel > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),TrackerCast(g_sp->yvel));
+            OSD_Printf(CON_ERROR "Invalid sound %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),TrackerCast(vm.pSprite->yvel));
             insptr++;
             break;
         }
-        if (!A_CheckSoundPlaying(g_i,g_sp->yvel))
-            A_PlaySound(g_sp->yvel,g_i);
+        if (!A_CheckSoundPlaying(vm.spriteNum,vm.pSprite->yvel))
+            A_PlaySound(vm.pSprite->yvel,vm.spriteNum);
         break;
 
     case CON_PKICK:
         insptr++;
 
-        if (ud.multimode > 1 && g_sp->picnum == APLAYER)
+        if (ud.multimode > 1 && vm.pSprite->picnum == APLAYER)
         {
             if (g_player[otherp].ps->quick_kick == 0)
                 g_player[otherp].ps->quick_kick = 14;
         }
-        else if (g_sp->picnum != APLAYER && g_player[g_p].ps->quick_kick == 0)
-            g_player[g_p].ps->quick_kick = 14;
+        else if (vm.pSprite->picnum != APLAYER && g_player[vm.playerNum].ps->quick_kick == 0)
+            g_player[vm.playerNum].ps->quick_kick = 14;
         break;
 
     case CON_SIZETO:
         insptr++;
 
-        j = (*insptr++-g_sp->xrepeat)<<1;
-        g_sp->xrepeat += ksgn(j);
+        j = (*insptr++-vm.pSprite->xrepeat)<<1;
+        vm.pSprite->xrepeat += ksgn(j);
 
-        if ((g_sp->picnum == APLAYER && g_sp->yrepeat < 36) || *insptr < g_sp->yrepeat || ((g_sp->yrepeat*(tilesiz[g_sp->picnum].y+8))<<2) < (actor[g_i].floorz - actor[g_i].ceilingz))
+        if ((vm.pSprite->picnum == APLAYER && vm.pSprite->yrepeat < 36) || *insptr < vm.pSprite->yrepeat || ((vm.pSprite->yrepeat*(tilesiz[vm.pSprite->picnum].y+8))<<2) < (actor[vm.spriteNum].floorz - actor[vm.spriteNum].ceilingz))
         {
-            j = ((*insptr)-g_sp->yrepeat)<<1;
-            if (klabs(j)) g_sp->yrepeat += ksgn(j);
+            j = ((*insptr)-vm.pSprite->yrepeat)<<1;
+            if (klabs(j)) vm.pSprite->yrepeat += ksgn(j);
         }
         insptr++;
 
@@ -1409,8 +1407,8 @@ static int X_DoExecute(void)
 
     case CON_SIZEAT:
         insptr++;
-        g_sp->xrepeat = (char) *insptr++;
-        g_sp->yrepeat = (char) *insptr++;
+        vm.pSprite->xrepeat = (char) *insptr++;
+        vm.pSprite->yrepeat = (char) *insptr++;
         break;
 
     case CON_SOUNDONCE:
@@ -1420,8 +1418,8 @@ static int X_DoExecute(void)
             OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*insptr++);
             break;
         }
-        if (!A_CheckSoundPlaying(g_i,*insptr++))
-            A_PlaySound(*(insptr-1),g_i);
+        if (!A_CheckSoundPlaying(vm.spriteNum,*insptr++))
+            A_PlaySound(*(insptr-1),vm.spriteNum);
         break;
 
     case CON_IFSOUND:
@@ -1432,8 +1430,8 @@ static int X_DoExecute(void)
             insptr++;
             break;
         }
-        branch(A_CheckSoundPlaying(g_i,*insptr));
-        //    X_DoConditional(SoundOwner[*insptr][0].i == g_i);
+        branch(A_CheckSoundPlaying(vm.spriteNum,*insptr));
+        //    X_DoConditional(SoundOwner[*insptr][0].i == vm.spriteNum);
         break;
 
     case CON_STOPSOUND:
@@ -1444,8 +1442,8 @@ static int X_DoExecute(void)
             insptr++;
             break;
         }
-        if (A_CheckSoundPlaying(g_i,*insptr))
-            S_StopEnvSound((short)*insptr,g_i);
+        if (A_CheckSoundPlaying(vm.spriteNum,*insptr))
+            S_StopEnvSound((short)*insptr,vm.spriteNum);
         insptr++;
         break;
 
@@ -1471,7 +1469,7 @@ static int X_DoExecute(void)
     case CON_ACTORSOUND:
         insptr++;
         {
-            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(*(insptr - 1)) : g_i;
+            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(*(insptr - 1)) : vm.spriteNum;
             int const soundNum = Gv_GetVarX(*insptr++);
 
             if ((unsigned)soundNum >= MAXSOUNDS)
@@ -1494,9 +1492,9 @@ static int X_DoExecute(void)
                 break;
             }
 
-            if ((Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND) && !A_CheckEnemySprite(g_sp))
-                A_PlaySound(soundNum, g_player[g_p].ps->i);
-            else if (g_p == screenpeek || (Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND))
+            if ((Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND) && !A_CheckEnemySprite(vm.pSprite))
+                A_PlaySound(soundNum, g_player[vm.playerNum].ps->i);
+            else if (vm.playerNum == screenpeek || (Gametypes[ud.coop].flags & GAMETYPE_COOPSOUND))
                 A_PlaySound(soundNum, g_player[screenpeek].ps->i);
 
             break;
@@ -1510,17 +1508,17 @@ static int X_DoExecute(void)
             insptr++;
             break;
         }
-        A_PlaySound((short) *insptr++,g_i);
+        A_PlaySound((short) *insptr++,vm.spriteNum);
         break;
 
     case CON_TIP:
         insptr++;
-        g_player[g_p].ps->tipincs = 26;
+        g_player[vm.playerNum].ps->tipincs = 26;
         break;
 
     case CON_FALL:
         insptr++;
-        VM_Fall(g_i, g_sp);
+        VM_Fall(vm.spriteNum, vm.pSprite);
         break;
 
     case CON_ENDA:
@@ -1532,7 +1530,7 @@ static int X_DoExecute(void)
         insptr++;
         {
             int32_t weap=*insptr++, amount=*insptr++;
-            DukePlayer_t *ps = g_player[g_p].ps;
+            DukePlayer_t *ps = g_player[vm.playerNum].ps;
 
             if ((unsigned)weap >= MAX_WEAPONS)
             {
@@ -1542,7 +1540,7 @@ static int X_DoExecute(void)
 
             if (ps->ammo_amount[weap] >= ps->max_ammo_amount[weap])
             {
-                g_killitFlag |= VM_NOEXECUTE;
+                vm.flags |= VM_NOEXECUTE;
                 break;
             }
 
@@ -1551,50 +1549,50 @@ static int X_DoExecute(void)
         break;
 
     case CON_RETURN:
-        g_killitFlag |= VM_RETURN;
+        vm.flags |= VM_RETURN;
         break;
 
     case CON_MONEY:
         insptr++;
-        A_SpawnMultiple(g_i, MONEY, *insptr++);
+        A_SpawnMultiple(vm.spriteNum, MONEY, *insptr++);
         break;
 
     case CON_MAIL:
         insptr++;
-        A_SpawnMultiple(g_i, MAIL, *insptr++);
+        A_SpawnMultiple(vm.spriteNum, MAIL, *insptr++);
         break;
 
     case CON_SLEEPTIME:
         insptr++;
-        actor[g_i].timetosleep = (short)*insptr++;
+        actor[vm.spriteNum].timetosleep = (short)*insptr++;
         break;
 
     case CON_PAPER:
         insptr++;
-        A_SpawnMultiple(g_i, PAPER, *insptr++);
+        A_SpawnMultiple(vm.spriteNum, PAPER, *insptr++);
         break;
 
     case CON_ADDKILLS:
         insptr++;
-        G_AddMonsterKills(g_i, *insptr++);
-        actor[g_i].actorstayput = -1;
+        G_AddMonsterKills(vm.spriteNum, *insptr++);
+        actor[vm.spriteNum].actorstayput = -1;
         break;
 
     case CON_LOTSOFGLASS:
         insptr++;
-        A_SpawnGlass(g_i,*insptr++);
+        A_SpawnGlass(vm.spriteNum,*insptr++);
         break;
 
     case CON_KILLIT:
         insptr++;
-        g_killitFlag |= VM_KILL;
+        vm.flags |= VM_KILL;
         break;
 
     case CON_ADDWEAPON:
         insptr++;
         {
             int32_t weap=*insptr++, amount=*insptr++;
-            VM_AddWeapon(weap, amount, g_player[g_p].ps);
+            VM_AddWeapon(weap, amount, g_player[vm.playerNum].ps);
         }
         break;
 
@@ -1605,24 +1603,24 @@ static int X_DoExecute(void)
 
     case CON_ENDOFGAME:
         insptr++;
-        g_player[g_p].ps->timebeforeexit = *insptr++;
-        g_player[g_p].ps->customexitsound = -1;
+        g_player[vm.playerNum].ps->timebeforeexit = *insptr++;
+        g_player[vm.playerNum].ps->customexitsound = -1;
         ud.eog = 1;
         break;
 
     case CON_ADDPHEALTH:
         insptr++;
 
-        if (g_player[g_p].ps->newowner >= 0)
+        if (g_player[vm.playerNum].ps->newowner >= 0)
         {
-            G_ClearCameraView(g_player[g_p].ps);
+            G_ClearCameraView(g_player[vm.playerNum].ps);
         }
 
-        j = sprite[g_player[g_p].ps->i].extra;
+        j = sprite[g_player[vm.playerNum].ps->i].extra;
 
-        if (g_sp->picnum != ATOMICHEALTH)
+        if (vm.pSprite->picnum != ATOMICHEALTH)
         {
-            if (j > g_player[g_p].ps->max_player_health && *insptr > 0)
+            if (j > g_player[vm.playerNum].ps->max_player_health && *insptr > 0)
             {
                 insptr++;
                 break;
@@ -1631,16 +1629,16 @@ static int X_DoExecute(void)
             {
                 if (j > 0)
                     j += *insptr;
-                if (j > g_player[g_p].ps->max_player_health && *insptr > 0)
-                    j = g_player[g_p].ps->max_player_health;
+                if (j > g_player[vm.playerNum].ps->max_player_health && *insptr > 0)
+                    j = g_player[vm.playerNum].ps->max_player_health;
             }
         }
         else
         {
             if (j > 0)
                 j += *insptr;
-            if (j > (g_player[g_p].ps->max_player_health<<1))
-                j = (g_player[g_p].ps->max_player_health<<1);
+            if (j > (g_player[vm.playerNum].ps->max_player_health<<1))
+                j = (g_player[vm.playerNum].ps->max_player_health<<1);
         }
 
         if (j < 0) j = 0;
@@ -1649,14 +1647,14 @@ static int X_DoExecute(void)
         {
             if (*insptr > 0)
             {
-                if ((j - *insptr) < (g_player[g_p].ps->max_player_health>>2) &&
-                        j >= (g_player[g_p].ps->max_player_health>>2))
-                    A_PlaySound(DUKE_GOTHEALTHATLOW,g_player[g_p].ps->i);
+                if ((j - *insptr) < (g_player[vm.playerNum].ps->max_player_health>>2) &&
+                        j >= (g_player[vm.playerNum].ps->max_player_health>>2))
+                    A_PlaySound(DUKE_GOTHEALTHATLOW,g_player[vm.playerNum].ps->i);
 
-                g_player[g_p].ps->last_extra = j;
+                g_player[vm.playerNum].ps->last_extra = j;
             }
 
-            sprite[g_player[g_p].ps->i].extra = j;
+            sprite[g_player[vm.playerNum].ps->i].extra = j;
         }
 
         insptr++;
@@ -1673,20 +1671,20 @@ static int X_DoExecute(void)
 
     case CON_MOVE:
         insptr++;
-        AC_COUNT(g_t) = 0;
-        AC_MOVE_ID(g_t) = *insptr++;
-        g_sp->hitag = *insptr++;
+        AC_COUNT(vm.pData) = 0;
+        AC_MOVE_ID(vm.pData) = *insptr++;
+        vm.pSprite->hitag = *insptr++;
 
-        if (!A_CheckEnemySprite(g_sp) || (g_sp->extra > 0)) // hack
-            if (g_sp->hitag & random_angle)
-                g_sp->ang = krand() & 2047;
+        if (!A_CheckEnemySprite(vm.pSprite) || (vm.pSprite->extra > 0)) // hack
+            if (vm.pSprite->hitag & random_angle)
+                vm.pSprite->ang = krand() & 2047;
         break;
 
     case CON_ADDWEAPONVAR:
         insptr++;
         {
             int32_t weap=Gv_GetVarX(*insptr++), amount=Gv_GetVarX(*insptr++);
-            VM_AddWeapon(weap, amount, g_player[g_p].ps);
+            VM_AddWeapon(weap, amount, g_player[vm.playerNum].ps);
         }
         break;
 
@@ -1700,7 +1698,7 @@ static int X_DoExecute(void)
             int var1 = Gv_GetVarX(*insptr++), var2;
             if (tw == CON_OPERATEACTIVATORS && *insptr == sysVarIDs.THISACTOR)
             {
-                var2 = g_p;
+                var2 = vm.playerNum;
                 insptr++;
             }
             else var2 = Gv_GetVarX(*insptr++);
@@ -1771,7 +1769,7 @@ static int X_DoExecute(void)
 
     case CON_INSERTSPRITEQ:
         insptr++;
-        A_AddToDeleteQueue(g_i);
+        A_AddToDeleteQueue(vm.spriteNum);
         break;
 
     case CON_QSTRLEN:
@@ -1972,12 +1970,12 @@ static int X_DoExecute(void)
             int i = Gv_GetVarX(*insptr++), j;
             if (tw == CON_GETPNAME && *insptr == sysVarIDs.THISACTOR)
             {
-                j = g_p;
+                j = vm.playerNum;
                 insptr++;
             }
             else if (tw == CON_GETTEAMNAME && *insptr == sysVarIDs.THISACTOR)
             {
-                j = g_player[g_p].ps->team;
+                j = g_player[vm.playerNum].ps->team;
                 insptr++;
             }
             else j = Gv_GetVarX(*insptr++);
@@ -2019,7 +2017,7 @@ static int X_DoExecute(void)
                     Bstrcpy(apStrings[i],g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].filename);
                     break;
                 case STR_PLAYERNAME:
-                    Bstrcpy(apStrings[i],g_player[g_p].user_name);
+                    Bstrcpy(apStrings[i],g_player[vm.playerNum].user_name);
                     break;
                 case STR_VERSION:
                     Bsprintf(tempbuf,HEAD2 " %s",s_buildRev);
@@ -2259,7 +2257,7 @@ static int X_DoExecute(void)
                 insptr = pNext;
                 X_DoExecute();
                 //return !!(vm.flags & VM_RETURN);
-                return !!(g_killitFlag & VM_RETURN);
+                return !!(vm.flags & VM_RETURN);
             };
 
             auto spriteexecute = [&](int const index) {
@@ -2268,7 +2266,7 @@ static int X_DoExecute(void)
                     execute(index);
                 }
                 //return !!(vm.flags & VM_RETURN);
-                return !!(g_killitFlag & VM_RETURN);
+                return !!(vm.flags & VM_RETURN);
             };
 
             switch (iterType)
@@ -2391,7 +2389,7 @@ static int X_DoExecute(void)
                 badindex:
                     VLOG_F(LOG_VM, "%s:%d: for %s: index %d out of range!", VM_FILENAME(insptr), VM_DECODE_LINE_NUMBER(g_tw), iter_tokens[iterType].token, nIndex);
                     //vm.flags |= VM_RETURN;
-                    g_killitFlag |= VM_RETURN;
+                    vm.flags |= VM_RETURN;
                     break;
             }
             insptr = pEnd;
@@ -2477,12 +2475,12 @@ static int X_DoExecute(void)
         insptr++;
         {
             int lIn=Gv_GetVarX(*insptr++);
-            if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
+            if ((vm.pSprite->sectnum < 0 || vm.pSprite->sectnum >= numsectors) && g_scriptSanityChecks)
             {
-                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),TrackerCast(g_sp->sectnum));
+                OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),TrackerCast(vm.pSprite->sectnum));
                 break;
             }
-            j = A_Spawn(g_i, lIn);
+            j = A_Spawn(vm.spriteNum, lIn);
             switch (tw)
             {
             case CON_EQSPAWNVAR:
@@ -2505,14 +2503,14 @@ static int X_DoExecute(void)
     case CON_QSPAWN:
         insptr++;
 
-        if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
+        if ((vm.pSprite->sectnum < 0 || vm.pSprite->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),TrackerCast(g_sp->sectnum));
+            OSD_Printf(CON_ERROR "Invalid sector %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),TrackerCast(vm.pSprite->sectnum));
             insptr++;
             break;
         }
 
-        j = A_Spawn(g_i,*insptr++);
+        j = A_Spawn(vm.spriteNum,*insptr++);
 
         switch (tw)
         {
@@ -2534,14 +2532,14 @@ static int X_DoExecute(void)
     case CON_ESHOOT:
     insptr++;
     {
-        if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
+        if ((vm.pSprite->sectnum < 0 || vm.pSprite->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), TrackerCast(g_sp->sectnum));
+            OSD_Printf(CON_ERROR "Invalid sector %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), TrackerCast(vm.pSprite->sectnum));
             break;
         }
 
         int j = Gv_GetVarX(*insptr++);
-        j = A_Shoot(g_i, j);
+        j = A_Shoot(vm.spriteNum, j);
 
         if (tw == CON_ESHOOT)
             Gv_SetVarX(sysVarIDs.RETURN, j);
@@ -2553,14 +2551,14 @@ static int X_DoExecute(void)
     case CON_ZSHOOT:
     insptr++;
     {
-        if ((g_sp->sectnum < 0 || g_sp->sectnum >= numsectors) && g_scriptSanityChecks)
+        if ((vm.pSprite->sectnum < 0 || vm.pSprite->sectnum >= numsectors) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sector %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), TrackerCast(g_sp->sectnum));
+            OSD_Printf(CON_ERROR "Invalid sector %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), TrackerCast(vm.pSprite->sectnum));
             break;
         }
 
         int const zvel = (int16_t)Gv_GetVarX(*insptr++);
-        int j = A_Shoot(g_i, Gv_GetVarX(*insptr++), zvel);
+        int j = A_Shoot(vm.spriteNum, Gv_GetVarX(*insptr++), zvel);
 
         if (tw == CON_EZSHOOT)
             Gv_SetVarX(sysVarIDs.RETURN, j);
@@ -2590,18 +2588,18 @@ static int X_DoExecute(void)
         switch (tw)
         {
         case CON_SOUNDONCEVAR:
-            if (!A_CheckSoundPlaying(g_i,j))
-                A_PlaySound((short)j,g_i);
+            if (!A_CheckSoundPlaying(vm.spriteNum,j))
+                A_PlaySound((short)j,vm.spriteNum);
             break;
         case CON_GLOBALSOUNDVAR:
             A_PlaySound((short)j,g_player[screenpeek].ps->i);
             break;
         case CON_STOPSOUNDVAR:
-            if (A_CheckSoundPlaying(g_i,j))
-                S_StopEnvSound((short)j,g_i);
+            if (A_CheckSoundPlaying(vm.spriteNum,j))
+                S_StopEnvSound((short)j,vm.spriteNum);
             break;
         case CON_SOUNDVAR:
-            A_PlaySound((short)j,g_i);
+            A_PlaySound((short)j,vm.spriteNum);
             break;
         }
         break;
@@ -2773,7 +2771,7 @@ static int X_DoExecute(void)
 
     case CON_ANGOFF:
         insptr++;
-        spriteext[g_i].mdangoff=*insptr++;
+        spriteext[vm.spriteNum].mdangoff=*insptr++;
         break;
 
     case CON_GETZRANGE:
@@ -3042,7 +3040,7 @@ static int X_DoExecute(void)
             int x=Gv_GetVarX(*insptr++), y=Gv_GetVarX(*insptr++);
             int z=(tw==CON_UPDATESECTORZ)?Gv_GetVarX(*insptr++):0;
             int var=*insptr++;
-            short w=sprite[g_i].sectnum;
+            short w=sprite[vm.spriteNum].sectnum;
 
             if (tw==CON_UPDATESECTOR) updatesector(x,y,&w);
             else updatesectorz(x,y,z,&w);
@@ -3053,31 +3051,31 @@ static int X_DoExecute(void)
 
     case CON_SPAWN:
         insptr++;
-        if (g_sp->sectnum >= 0 && g_sp->sectnum < MAXSECTORS)
-            A_Spawn(g_i,*insptr);
+        if (vm.pSprite->sectnum >= 0 && vm.pSprite->sectnum < MAXSECTORS)
+            A_Spawn(vm.spriteNum,*insptr);
         insptr++;
         break;
 
     case CON_IFWASWEAPON:
         insptr++;
-        branch(actor[g_i].htpicnum == *insptr);
+        branch(actor[vm.spriteNum].htpicnum == *insptr);
         break;
 
     case CON_IFAI:
-        branch(AC_AI_ID(g_t) == *(++insptr));
+        branch(AC_AI_ID(vm.pData) == *(++insptr));
         break;
 
     case CON_IFACTION:
-        branch(AC_ACTION_ID(g_t) == *(++insptr));
+        branch(AC_ACTION_ID(vm.pData) == *(++insptr));
         break;
 
     case CON_IFACTIONCOUNT:
-        branch(AC_ACTION_COUNT(g_t) >= *(++insptr));
+        branch(AC_ACTION_COUNT(vm.pData) >= *(++insptr));
         break;
 
     case CON_RESETACTIONCOUNT:
         insptr++;
-        AC_ACTION_COUNT(g_t) = 0;
+        AC_ACTION_COUNT(vm.pData) = 0;
         break;
 
     case CON_DEBRIS:
@@ -3085,22 +3083,22 @@ static int X_DoExecute(void)
         {
             int dnum = *insptr++;
 
-            if (g_sp->sectnum >= 0 && g_sp->sectnum < MAXSECTORS)
+            if (vm.pSprite->sectnum >= 0 && vm.pSprite->sectnum < MAXSECTORS)
                 for (j=(*insptr)-1;j>=0;j--)
                 {
-                    if (g_sp->picnum == BLIMP && dnum == SCRAP1)
+                    if (vm.pSprite->picnum == BLIMP && dnum == SCRAP1)
                         s = 0;
                     else s = (krand()%3);
 
-                    l = A_InsertSprite(g_sp->sectnum,
-                                       g_sp->x+(krand()&255)-128,g_sp->y+(krand()&255)-128,g_sp->z-(8<<8)-(krand()&8191),
-                                       dnum+s,g_sp->shade,32+(krand()&15),32+(krand()&15),
+                    l = A_InsertSprite(vm.pSprite->sectnum,
+                                       vm.pSprite->x+(krand()&255)-128,vm.pSprite->y+(krand()&255)-128,vm.pSprite->z-(8<<8)-(krand()&8191),
+                                       dnum+s,vm.pSprite->shade,32+(krand()&15),32+(krand()&15),
                                        krand()&2047,(krand()&127)+32,
-                                       -(krand()&2047),g_i,5);
-                    if (g_sp->picnum == BLIMP && dnum == SCRAP1)
+                                       -(krand()&2047),vm.spriteNum,5);
+                    if (vm.pSprite->picnum == BLIMP && dnum == SCRAP1)
                         sprite[l].yvel = BlimpSpawnSprites[j%14];
                     else sprite[l].yvel = -1;
-                    sprite[l].pal = g_sp->pal;
+                    sprite[l].pal = vm.pSprite->pal;
                 }
             insptr++;
         }
@@ -3108,22 +3106,22 @@ static int X_DoExecute(void)
 
     case CON_COUNT:
         insptr++;
-        g_t[0] = (short) *insptr++;
+        vm.pData[0] = (short) *insptr++;
         break;
 
     case CON_CSTATOR:
         insptr++;
-        g_sp->cstat |= (short) *insptr++;
+        vm.pSprite->cstat |= (short) *insptr++;
         break;
 
     case CON_CLIPDIST:
         insptr++;
-        g_sp->clipdist = (short) *insptr++;
+        vm.pSprite->clipdist = (short) *insptr++;
         break;
 
     case CON_CSTAT:
         insptr++;
-        g_sp->cstat = (short) *insptr++;
+        vm.pSprite->cstat = (short) *insptr++;
         break;
     case CON_SAVENN:
     case CON_SAVE:
@@ -3169,7 +3167,7 @@ static int X_DoExecute(void)
 
     case CON_IFMOVE:
         insptr++;
-        branch(g_t[1] == *insptr);
+        branch(vm.pData[1] == *insptr);
         break;
 
     case CON_RESETPLAYER:
@@ -3181,32 +3179,32 @@ static int X_DoExecute(void)
         {
             if (g_lastSaveSlot >= 0 && ud.recstat != 2)
             {
-                g_player[g_p].ps->gm = MODE_MENU;
+                g_player[vm.playerNum].ps->gm = MODE_MENU;
                 KB_ClearKeyDown(sc_Space);
                 ChangeToMenu(15000);
             }
-            else g_player[g_p].ps->gm = MODE_RESTART;
-            g_killitFlag |= VM_NOEXECUTE;
+            else g_player[vm.playerNum].ps->gm = MODE_RESTART;
+            vm.flags |= VM_NOEXECUTE;
         }
         else
         {
-            auto const p = g_player[g_p].ps;
-            P_RandomSpawnPoint(g_p);
+            auto const p = g_player[vm.playerNum].ps;
+            P_RandomSpawnPoint(vm.playerNum);
 
-            g_sp->cstat = 257;
-            g_sp->shade = -12;
-            g_sp->clipdist = 64;
-            g_sp->xrepeat = PLAYER_SPRITE_XREPEAT;
-            g_sp->yrepeat = PLAYER_SPRITE_YREPEAT;
-            g_sp->owner = g_i;
-            g_sp->xoffset = 0;
-            g_sp->pal = g_player[g_p].ps->palookup;
+            vm.pSprite->cstat = 257;
+            vm.pSprite->shade = -12;
+            vm.pSprite->clipdist = 64;
+            vm.pSprite->xrepeat = PLAYER_SPRITE_XREPEAT;
+            vm.pSprite->yrepeat = PLAYER_SPRITE_YREPEAT;
+            vm.pSprite->owner = vm.spriteNum;
+            vm.pSprite->xoffset = 0;
+            vm.pSprite->pal = g_player[vm.playerNum].ps->palookup;
 
-            p->last_extra = g_sp->extra = p->max_player_health;
+            p->last_extra = vm.pSprite->extra = p->max_player_health;
             p->wantweaponfire = -1;
             p->q16horiz = F16(100);
             p->on_crane = -1;
-            p->frag_ps = g_p;
+            p->frag_ps = vm.playerNum;
             p->q16horizoff = 0;
             p->opyoff = 0;
             p->wackedbyactor = -1;
@@ -3226,51 +3224,51 @@ static int X_DoExecute(void)
             p->lowsprite = -1;
             p->highsprite = -1;
 
-            actor[g_i].htextra = -1;
-            actor[g_i].htowner = g_i;
-            actor[g_i].htpicnum = g_sp->picnum;
+            actor[vm.spriteNum].htextra = -1;
+            actor[vm.spriteNum].htowner = vm.spriteNum;
+            actor[vm.spriteNum].htpicnum = vm.pSprite->picnum;
 
-            actor[g_i].cgg = 0;
-            actor[g_i].movflag = 0;
-            actor[g_i].tempang = 0;
-            actor[g_i].actorstayput = -1;
-            actor[g_i].dispicnum = 0;
+            actor[vm.spriteNum].cgg = 0;
+            actor[vm.spriteNum].movflag = 0;
+            actor[vm.spriteNum].tempang = 0;
+            actor[vm.spriteNum].actorstayput = -1;
+            actor[vm.spriteNum].dispicnum = 0;
 
-            P_ResetInventory(g_p);
-            P_ResetWeapons(g_p);
+            P_ResetInventory(vm.playerNum);
+            P_ResetWeapons(vm.playerNum);
 
             p->reloading = 0;
             p->movement_lock = 0;
 
-            X_OnEvent(EVENT_RESETPLAYER, p->i, g_p, -1);
+            X_OnEvent(EVENT_RESETPLAYER, p->i, vm.playerNum, -1);
             g_cameraDistance = 0;
             g_cameraClock = (int32_t)totalclock;
         }
-        P_UpdateScreenPal(g_player[g_p].ps);
+        P_UpdateScreenPal(g_player[vm.playerNum].ps);
         //AddLog("EOF: resetplayer");
     }
     break;
 
     case CON_IFONWATER:
-        branch(klabs(g_sp->z-sector[g_sp->sectnum].floorz) < (32<<8) && sector[g_sp->sectnum].lotag == ST_1_ABOVE_WATER);
+        branch(klabs(vm.pSprite->z-sector[vm.pSprite->sectnum].floorz) < (32<<8) && sector[vm.pSprite->sectnum].lotag == ST_1_ABOVE_WATER);
         break;
 
     case CON_IFINWATER:
-        branch(sector[g_sp->sectnum].lotag == ST_2_UNDERWATER);
+        branch(sector[vm.pSprite->sectnum].lotag == ST_2_UNDERWATER);
         break;
 
     case CON_IFCOUNT:
         insptr++;
-        branch(g_t[0] >= *insptr);
+        branch(vm.pData[0] >= *insptr);
         break;
 
     case CON_IFACTOR:
-        branch(g_sp->picnum == *(++insptr));
+        branch(vm.pSprite->picnum == *(++insptr));
         break;
 
     case CON_RESETCOUNT:
         insptr++;
-        g_t[0] = 0;
+        vm.pData[0] = 0;
         break;
 
     case CON_ADDINVENTORY:
@@ -3278,36 +3276,36 @@ static int X_DoExecute(void)
         switch (*(insptr-1))
         {
         case GET_STEROIDS:
-            g_player[g_p].ps->inv_amount[GET_STEROIDS] = *insptr;
-            g_player[g_p].ps->inven_icon = 2;
+            g_player[vm.playerNum].ps->inv_amount[GET_STEROIDS] = *insptr;
+            g_player[vm.playerNum].ps->inven_icon = 2;
             break;
 
         case GET_SHIELD:
-            g_player[g_p].ps->inv_amount[GET_SHIELD] +=          *insptr;// 100;
-            if (g_player[g_p].ps->inv_amount[GET_SHIELD] > g_player[g_p].ps->max_shield_amount)
-                g_player[g_p].ps->inv_amount[GET_SHIELD] = g_player[g_p].ps->max_shield_amount;
+            g_player[vm.playerNum].ps->inv_amount[GET_SHIELD] +=          *insptr;// 100;
+            if (g_player[vm.playerNum].ps->inv_amount[GET_SHIELD] > g_player[vm.playerNum].ps->max_shield_amount)
+                g_player[vm.playerNum].ps->inv_amount[GET_SHIELD] = g_player[vm.playerNum].ps->max_shield_amount;
             break;
 
         case GET_SCUBA:
-            g_player[g_p].ps->inv_amount[GET_SCUBA] =             *insptr;// 1600;
-            g_player[g_p].ps->inven_icon = 6;
+            g_player[vm.playerNum].ps->inv_amount[GET_SCUBA] =             *insptr;// 1600;
+            g_player[vm.playerNum].ps->inven_icon = 6;
             break;
 
         case GET_HOLODUKE:
-            g_player[g_p].ps->inv_amount[GET_HOLODUKE] =          *insptr;// 1600;
-            g_player[g_p].ps->inven_icon = 3;
+            g_player[vm.playerNum].ps->inv_amount[GET_HOLODUKE] =          *insptr;// 1600;
+            g_player[vm.playerNum].ps->inven_icon = 3;
             break;
 
         case GET_JETPACK:
-            g_player[g_p].ps->inv_amount[GET_JETPACK] =           *insptr;// 1600;
-            g_player[g_p].ps->inven_icon = 4;
+            g_player[vm.playerNum].ps->inv_amount[GET_JETPACK] =           *insptr;// 1600;
+            g_player[vm.playerNum].ps->inven_icon = 4;
             break;
 
         case GET_ACCESS:
         {
             char keyname[7];
 
-            switch (g_sp->pal)
+            switch (vm.pSprite->pal)
             {
             case  0:
                 Bsprintf(keyname, "Blue");
@@ -3325,7 +3323,7 @@ static int X_DoExecute(void)
 
             if (ud.multimode > 1)
             {
-                Bsprintf(tempbuf, "^12%s^12 has acquired a ^%d%s^12 key!", &g_player[g_p].user_name[0], TrackerCast(g_sp->pal), keyname);
+                Bsprintf(tempbuf, "^12%s^12 has acquired a ^%d%s^12 key!", &g_player[vm.playerNum].user_name[0], TrackerCast(vm.pSprite->pal), keyname);
                 G_AddUserQuote(tempbuf);
             }
 
@@ -3333,18 +3331,18 @@ static int X_DoExecute(void)
         }
 
         case GET_HEATS:
-            g_player[g_p].ps->inv_amount[GET_HEATS] = *insptr;
-            g_player[g_p].ps->inven_icon = 5;
+            g_player[vm.playerNum].ps->inv_amount[GET_HEATS] = *insptr;
+            g_player[vm.playerNum].ps->inven_icon = 5;
             break;
 
         case GET_FIRSTAID:
-            g_player[g_p].ps->inven_icon = 1;
-            g_player[g_p].ps->inv_amount[GET_FIRSTAID] = *insptr;
+            g_player[vm.playerNum].ps->inven_icon = 1;
+            g_player[vm.playerNum].ps->inv_amount[GET_FIRSTAID] = *insptr;
             break;
 
         case GET_BOOTS:
-            g_player[g_p].ps->inven_icon = 7;
-            g_player[g_p].ps->inv_amount[GET_BOOTS] = *insptr;
+            g_player[vm.playerNum].ps->inven_icon = 7;
+            g_player[vm.playerNum].ps->inv_amount[GET_BOOTS] = *insptr;
             break;
         default:
             OSD_Printf(CON_ERROR "Invalid inventory ID %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*(insptr-1));
@@ -3358,12 +3356,12 @@ static int X_DoExecute(void)
         {
             int v1=Gv_GetVarX(*insptr++),v2=Gv_GetVarX(*insptr++),v3=Gv_GetVarX(*insptr++);
             int v4=Gv_GetVarX(*insptr++),v5=Gv_GetVarX(*insptr++);
-            A_RadiusDamage(g_i,v1,v2,v3,v4,v5);
+            A_RadiusDamage(vm.spriteNum,v1,v2,v3,v4,v5);
         }
         break;
 
     case CON_HITRADIUS:
-        A_RadiusDamage(g_i,*(insptr+1),*(insptr+2),*(insptr+3),*(insptr+4),*(insptr+5));
+        A_RadiusDamage(vm.spriteNum,*(insptr+1),*(insptr+2),*(insptr+3),*(insptr+4),*(insptr+5));
         insptr+=6;
         break;
 
@@ -3374,47 +3372,47 @@ static int X_DoExecute(void)
         l = *(++insptr);
         j = 0;
 
-        s = sprite[g_player[g_p].ps->i].xvel;
+        s = sprite[g_player[vm.playerNum].ps->i].xvel;
 
-        if ((l & pducking) && g_player[g_p].ps->on_ground && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_CROUCH))
+        if ((l & pducking) && g_player[vm.playerNum].ps->on_ground && TEST_SYNC_KEY(g_player[vm.playerNum].inputBits->bits, SK_CROUCH))
             j = 1;
-        else if ((l & pfalling) && g_player[g_p].ps->jumping_counter == 0 && !g_player[g_p].ps->on_ground &&
-                 g_player[g_p].ps->vel.z > 2048)
+        else if ((l & pfalling) && g_player[vm.playerNum].ps->jumping_counter == 0 && !g_player[vm.playerNum].ps->on_ground &&
+                 g_player[vm.playerNum].ps->vel.z > 2048)
             j = 1;
-        else if ((l & pjumping) && g_player[g_p].ps->jumping_counter > 348)
+        else if ((l & pjumping) && g_player[vm.playerNum].ps->jumping_counter > 348)
             j = 1;
         else if ((l & pstanding) && s >= 0 && s < 8)
             j = 1;
-        else if ((l & pwalking) && s >= 8 && !TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
+        else if ((l & pwalking) && s >= 8 && !TEST_SYNC_KEY(g_player[vm.playerNum].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l & prunning) && s >= 8 && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
+        else if ((l & prunning) && s >= 8 && TEST_SYNC_KEY(g_player[vm.playerNum].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l & phigher) && g_player[g_p].ps->pos.z < (g_sp->z-(48<<8)))
+        else if ((l & phigher) && g_player[vm.playerNum].ps->pos.z < (vm.pSprite->z-(48<<8)))
             j = 1;
-        else if ((l & pwalkingback) && s <= -8 && !TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
+        else if ((l & pwalkingback) && s <= -8 && !TEST_SYNC_KEY(g_player[vm.playerNum].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l & prunningback) && s <= -8 && TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_RUN))
+        else if ((l & prunningback) && s <= -8 && TEST_SYNC_KEY(g_player[vm.playerNum].inputBits->bits, SK_RUN))
             j = 1;
-        else if ((l & pkicking) && (g_player[g_p].ps->quick_kick > 0 || (g_player[g_p].ps->curr_weapon == KNEE_WEAPON && g_player[g_p].ps->kickback_pic > 0)))
+        else if ((l & pkicking) && (g_player[vm.playerNum].ps->quick_kick > 0 || (g_player[vm.playerNum].ps->curr_weapon == KNEE_WEAPON && g_player[vm.playerNum].ps->kickback_pic > 0)))
             j = 1;
-        else if ((l & pshrunk) && sprite[g_player[g_p].ps->i].xrepeat < 32)
+        else if ((l & pshrunk) && sprite[g_player[vm.playerNum].ps->i].xrepeat < 32)
             j = 1;
-        else if ((l & pjetpack) && g_player[g_p].ps->jetpack_on)
+        else if ((l & pjetpack) && g_player[vm.playerNum].ps->jetpack_on)
             j = 1;
-        else if ((l & ponsteroids) && g_player[g_p].ps->inv_amount[GET_STEROIDS] > 0 && g_player[g_p].ps->inv_amount[GET_STEROIDS] < 400)
+        else if ((l & ponsteroids) && g_player[vm.playerNum].ps->inv_amount[GET_STEROIDS] > 0 && g_player[vm.playerNum].ps->inv_amount[GET_STEROIDS] < 400)
             j = 1;
-        else if ((l & ponground) && g_player[g_p].ps->on_ground)
+        else if ((l & ponground) && g_player[vm.playerNum].ps->on_ground)
             j = 1;
-        else if ((l & palive) && sprite[g_player[g_p].ps->i].xrepeat > 32 && sprite[g_player[g_p].ps->i].extra > 0 && g_player[g_p].ps->timebeforeexit == 0)
+        else if ((l & palive) && sprite[g_player[vm.playerNum].ps->i].xrepeat > 32 && sprite[g_player[vm.playerNum].ps->i].extra > 0 && g_player[vm.playerNum].ps->timebeforeexit == 0)
             j = 1;
-        else if ((l & pdead) && sprite[g_player[g_p].ps->i].extra <= 0)
+        else if ((l & pdead) && sprite[g_player[vm.playerNum].ps->i].extra <= 0)
             j = 1;
         else if ((l & pfacing))
         {
-            if (g_sp->picnum == APLAYER && ud.multimode > 1)
-                j = G_GetAngleDelta(fix16_to_int(g_player[otherp].ps->q16ang),getangle(g_player[g_p].ps->pos.x-g_player[otherp].ps->pos.x,g_player[g_p].ps->pos.y-g_player[otherp].ps->pos.y));
+            if (vm.pSprite->picnum == APLAYER && ud.multimode > 1)
+                j = G_GetAngleDelta(fix16_to_int(g_player[otherp].ps->q16ang),getangle(g_player[vm.playerNum].ps->pos.x-g_player[otherp].ps->pos.x,g_player[vm.playerNum].ps->pos.y-g_player[otherp].ps->pos.y));
             else
-                j = G_GetAngleDelta(fix16_to_int(g_player[g_p].ps->q16ang),getangle(g_sp->x-g_player[g_p].ps->pos.x,g_sp->y-g_player[g_p].ps->pos.y));
+                j = G_GetAngleDelta(fix16_to_int(g_player[vm.playerNum].ps->q16ang),getangle(vm.pSprite->x-g_player[vm.playerNum].ps->pos.x,vm.pSprite->y-g_player[vm.playerNum].ps->pos.y));
 
             if (j > -128 && j < 128)
                 j = 1;
@@ -3427,29 +3425,29 @@ static int X_DoExecute(void)
 
     case CON_IFSTRENGTH:
         insptr++;
-        branch(g_sp->extra <= *insptr);
+        branch(vm.pSprite->extra <= *insptr);
         break;
 
     case CON_GUTS:
         insptr += 2;
-        A_DoGuts(g_i,*(insptr-1),*insptr);
+        A_DoGuts(vm.spriteNum,*(insptr-1),*insptr);
         insptr++;
         break;
 
     case CON_IFSPAWNEDBY:
         insptr++;
-        branch(actor[g_i].htpicnum == *insptr);
+        branch(actor[vm.spriteNum].htpicnum == *insptr);
         break;
 
     case CON_WACKPLAYER:
         insptr++;
-        P_ForceAngle(g_player[g_p].ps);
+        P_ForceAngle(g_player[vm.playerNum].ps);
         return 0;
 
     case CON_FLASH:
         insptr++;
-        sprite[g_i].shade = -127;
-        g_player[g_p].display.visibility = -127;
+        sprite[vm.spriteNum].shade = -127;
+        g_player[vm.playerNum].display.visibility = -127;
         return 0;
 
     case CON_SAVEMAPSTATE:
@@ -3479,23 +3477,23 @@ static int X_DoExecute(void)
 
     case CON_STOPALLSOUNDS:
         insptr++;
-        if (screenpeek == g_p)
+        if (screenpeek == vm.playerNum)
             FX_StopAllSounds();
         return 0;
 
     case CON_IFGAPZL:
         insptr++;
-        branch(((actor[g_i].floorz - actor[g_i].ceilingz) >> 8) < *insptr);
+        branch(((actor[vm.spriteNum].floorz - actor[vm.spriteNum].ceilingz) >> 8) < *insptr);
         break;
 
     case CON_IFHITSPACE:
     {
-        int hitSpace = TEST_SYNC_KEY(g_player[g_p].inputBits->bits, SK_OPEN);
+        int hitSpace = TEST_SYNC_KEY(g_player[vm.playerNum].inputBits->bits, SK_OPEN);
 
         // SURVIVAL MODE: This had to go here instead of resetplayer, otherwise we'll get buggy behaviour when space is struck.
-        if (hitSpace && g_sp->picnum == APLAYER && g_sp->owner >= 0 && g_sp->yvel == g_p && g_sp->extra <= 0)
+        if (hitSpace && vm.pSprite->picnum == APLAYER && vm.pSprite->owner >= 0 && vm.pSprite->yvel == vm.playerNum && vm.pSprite->extra <= 0)
         {
-            auto const p = g_player[g_p].ps;
+            auto const p = g_player[vm.playerNum].ps;
             if (GTFLAGS(GAMETYPE_LIMITEDLIVES))
             {
                 // Make & change to p->lives later!
@@ -3518,7 +3516,7 @@ static int X_DoExecute(void)
                 if (p->lives <= 0)
                 {
                     Bstrcpy(apStrings[QUOTE_RESERVED4], "You are out of lives!");
-                    P_DoQuote(QUOTE_RESERVED4, g_player[g_p].ps);
+                    P_DoQuote(QUOTE_RESERVED4, g_player[vm.playerNum].ps);
                     hitSpace = 0;
                 }
             }
@@ -3529,7 +3527,7 @@ static int X_DoExecute(void)
     }
 
     case CON_IFOUTSIDE:
-        branch(sector[g_sp->sectnum].ceilingstat&1);
+        branch(sector[vm.pSprite->sectnum].ceilingstat&1);
         break;
 
     case CON_IFMULTIPLAYER:
@@ -3538,9 +3536,9 @@ static int X_DoExecute(void)
 
     case CON_OPERATE:
         insptr++;
-        if (sector[g_sp->sectnum].lotag == ST_0_NO_EFFECT)
+        if (sector[vm.pSprite->sectnum].lotag == ST_0_NO_EFFECT)
         {
-            neartag(g_sp->x,g_sp->y,g_sp->z-(32<<8),g_sp->sectnum,g_sp->ang,&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,768L,1, NULL);
+            neartag(vm.pSprite->x,vm.pSprite->y,vm.pSprite->z-(32<<8),vm.pSprite->sectnum,vm.pSprite->ang,&neartagsector,&neartagwall,&neartagsprite,&neartaghitdist,768L,1, NULL);
             if (neartagsector >= 0 && isanearoperator(sector[neartagsector].lotag))
                 if ((sector[neartagsector].lotag&0xff) == 23 || sector[neartagsector].floorz == sector[neartagsector].ceilingz)
                     if ((sector[neartagsector].lotag&16384) == 0)
@@ -3554,37 +3552,37 @@ static int X_DoExecute(void)
                                 j = nextspritesect[j];
                             }
                             if (j == -1)
-                                G_OperateSectors(neartagsector,g_i);
+                                G_OperateSectors(neartagsector,vm.spriteNum);
                         }
         }
         break;
 
     case CON_IFINSPACE:
-        branch(G_CheckForSpaceCeiling(g_sp->sectnum));
+        branch(G_CheckForSpaceCeiling(vm.pSprite->sectnum));
         break;
 
     case CON_SPRITEPAL:
         insptr++;
-        if (g_sp->picnum != APLAYER)
-            actor[g_i].tempang = g_sp->pal;
-        g_sp->pal = *insptr++;
+        if (vm.pSprite->picnum != APLAYER)
+            actor[vm.spriteNum].tempang = vm.pSprite->pal;
+        vm.pSprite->pal = *insptr++;
         break;
 
     case CON_CACTOR:
         insptr++;
-        g_sp->picnum = *insptr++;
+        vm.pSprite->picnum = *insptr++;
         break;
 
     case CON_IFBULLETNEAR:
-        branch(A_Dodge(g_sp) == 1);
+        branch(A_Dodge(vm.pSprite) == 1);
         break;
 
     case CON_IFRESPAWN:
-        if (A_CheckEnemySprite(g_sp))
+        if (A_CheckEnemySprite(vm.pSprite))
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS));
-        else if (A_CheckInventorySprite(g_sp))
+        else if (A_CheckInventorySprite(vm.pSprite))
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY));
-        else if (DynamicTileMap[g_sp->picnum] == ACCESSCARD__STATIC) // Shim for poorly-concieved CON code. Keys should never respawn.
+        else if (DynamicTileMap[vm.pSprite->picnum] == ACCESSCARD__STATIC) // Shim for poorly-concieved CON code. Keys should never respawn.
             branch(0);
         else
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNITEMS));
@@ -3592,12 +3590,12 @@ static int X_DoExecute(void)
 
     case CON_IFFLOORDISTL:
         insptr++;
-        branch((actor[g_i].floorz - g_sp->z) <= ((*insptr)<<8));
+        branch((actor[vm.spriteNum].floorz - vm.pSprite->z) <= ((*insptr)<<8));
         break;
 
     case CON_IFCEILINGDISTL:
         insptr++;
-        branch((g_sp->z - actor[g_i].ceilingz) <= ((*insptr)<<8));
+        branch((vm.pSprite->z - actor[vm.spriteNum].ceilingz) <= ((*insptr)<<8));
         break;
 
     case CON_PALFROM:
@@ -3605,7 +3603,7 @@ static int X_DoExecute(void)
         {
             palette_t const pal = { uint8_t(insptr[1]), uint8_t(insptr[2]), uint8_t(insptr[3]), uint8_t(insptr[0]) };
             insptr += 4;
-            P_PalFrom(g_player[g_p].ps, pal.f, pal.r, pal.g, pal.b);
+            P_PalFrom(g_player[vm.playerNum].ps, pal.f, pal.r, pal.g, pal.b);
         }
         break;
 
@@ -3802,11 +3800,11 @@ static int X_DoExecute(void)
             }
             if (aGameVars[lVarID].flags & GAMEVAR_PERPLAYER)
             {
-                Bsprintf(szBuf," (Per Player. Player=%d)",g_p);
+                Bsprintf(szBuf," (Per Player. Player=%d)",vm.playerNum);
             }
             else if (aGameVars[lVarID].flags & GAMEVAR_PERACTOR)
             {
-                Bsprintf(szBuf," (Per Actor. Actor=%d)",g_i);
+                Bsprintf(szBuf," (Per Actor. Actor=%d)",vm.spriteNum);
             }
             else
             {
@@ -3824,7 +3822,7 @@ static int X_DoExecute(void)
     case CON_GETSECTOR:
         insptr++;
         {
-            int const sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_sp->sectnum;
+            int const sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.pSprite->sectnum;
             int const labelNum = *insptr++;
             int const lVar2 = *insptr++;
 
@@ -3842,7 +3840,7 @@ static int X_DoExecute(void)
     case CON_GETSECTORSTRUCT:
         insptr++;
         {
-            int const sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_sp->sectnum;
+            int const sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.pSprite->sectnum;
             int const labelNum = *insptr++;
             int const lVar2 = *insptr++;
 
@@ -3891,7 +3889,7 @@ static int X_DoExecute(void)
                 {
                     while (j>=0)
                     {
-                        if (sprite[j].picnum == lType && j != g_i && dist(&sprite[g_i], &sprite[j]) < lMaxDist)
+                        if (sprite[j].picnum == lType && j != vm.spriteNum && dist(&sprite[vm.spriteNum], &sprite[j]) < lMaxDist)
                         {
                             lFound=j;
                             j = MAXSPRITES;
@@ -3906,7 +3904,7 @@ static int X_DoExecute(void)
 
                 while (j>=0)
                 {
-                    if (sprite[j].picnum == lType && j != g_i && ldist(&sprite[g_i], &sprite[j]) < lMaxDist)
+                    if (sprite[j].picnum == lType && j != vm.spriteNum && ldist(&sprite[vm.spriteNum], &sprite[j]) < lMaxDist)
                     {
                         lFound=j;
                         j = MAXSPRITES;
@@ -3947,7 +3945,7 @@ static int X_DoExecute(void)
                 {
                     while (j >= 0)
                     {
-                        if (sprite[j].picnum == lType && j != g_i && dist(&sprite[g_i], &sprite[j]) < lMaxDist)
+                        if (sprite[j].picnum == lType && j != vm.spriteNum && dist(&sprite[vm.spriteNum], &sprite[j]) < lMaxDist)
                         {
                             lFound=j;
                             j = MAXSPRITES;
@@ -3962,7 +3960,7 @@ static int X_DoExecute(void)
 
                 while (j >= 0)
                 {
-                    if (sprite[j].picnum == lType && j != g_i && ldist(&sprite[g_i], &sprite[j]) < lMaxDist)
+                    if (sprite[j].picnum == lType && j != vm.spriteNum && ldist(&sprite[vm.spriteNum], &sprite[j]) < lMaxDist)
                     {
                         lFound=j;
                         j = MAXSPRITES;
@@ -3997,12 +3995,12 @@ static int X_DoExecute(void)
                 if (j == -1) continue;
                 do
                 {
-                    if (sprite[j].picnum == lType && j != g_i)
+                    if (sprite[j].picnum == lType && j != vm.spriteNum)
                     {
-                        lTemp=ldist(&sprite[g_i], &sprite[j]);
+                        lTemp=ldist(&sprite[vm.spriteNum], &sprite[j]);
                         if (lTemp < lMaxDist)
                         {
-                            lTemp2=klabs(sprite[g_i].z-sprite[j].z);
+                            lTemp2=klabs(sprite[vm.spriteNum].z-sprite[j].z);
                             if (lTemp2 < lMaxZDist)
                             {
                                 lFound=j;
@@ -4040,12 +4038,12 @@ static int X_DoExecute(void)
                 if (j == -1) continue;
                 do
                 {
-                    if (sprite[j].picnum == lType && j != g_i)
+                    if (sprite[j].picnum == lType && j != vm.spriteNum)
                     {
-                        lTemp=ldist(&sprite[g_i], &sprite[j]);
+                        lTemp=ldist(&sprite[vm.spriteNum], &sprite[j]);
                         if (lTemp < lMaxDist)
                         {
-                            lTemp2=klabs(sprite[g_i].z-sprite[j].z);
+                            lTemp2=klabs(sprite[vm.spriteNum].z-sprite[j].z);
                             if (lTemp2 < lMaxZDist)
                             {
                                 lFound=j;
@@ -4067,13 +4065,13 @@ static int X_DoExecute(void)
 
     case CON_FINDPLAYER:
         insptr++;
-        Gv_SetVarX(sysVarIDs.RETURN, A_FindPlayer(&sprite[g_i],&j));
+        Gv_SetVarX(sysVarIDs.RETURN, A_FindPlayer(&sprite[vm.spriteNum],&j));
         Gv_SetVarX(*insptr++, j);
         break;
 
     case CON_FINDOTHERPLAYER:
         insptr++;
-        Gv_SetVarX(sysVarIDs.RETURN, P_FindOtherPlayer(g_p,&j));
+        Gv_SetVarX(sysVarIDs.RETURN, P_FindOtherPlayer(vm.playerNum,&j));
         Gv_SetVarX(*insptr++, j);
         break;
 
@@ -4081,7 +4079,7 @@ static int X_DoExecute(void)
     case CON_GETPLAYER:
         insptr++;
         {
-            int const   playerNum   = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const   playerNum   = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.playerNum;
             int const   labelNum    = *insptr++;
             auto const& playerLabel = PlayerLabels[labelNum];
             int const   lParm2      = (playerLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
@@ -4103,7 +4101,7 @@ static int X_DoExecute(void)
     case CON_GETPLAYERSTRUCT:
         insptr++;
         {
-            int const   playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const   playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.playerNum;
             int const   labelNum = *insptr++;
             auto const& playerLabel = PlayerLabels[labelNum];
             int const   lParm2 = (playerLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
@@ -4125,7 +4123,7 @@ static int X_DoExecute(void)
     case CON_GETINPUT:
         insptr++;
         {
-            int const playerNum     = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const playerNum     = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.playerNum;
             int const labelNum      = *insptr++;
             int const lVar2         = *insptr++;
 
@@ -4234,9 +4232,9 @@ static int X_DoExecute(void)
             int const lVar2 = *insptr++;
 
             if (tw == CON_SETACTORVAR)
-                Gv_SetVar(lVar1, Gv_GetVarX(lVar2), lSprite, g_p);
+                Gv_SetVar(lVar1, Gv_GetVarX(lVar2), lSprite, vm.playerNum);
             else
-                Gv_SetVarX(lVar2, Gv_GetVar(lVar1, lSprite, g_p));
+                Gv_SetVarX(lVar2, Gv_GetVar(lVar1, lSprite, vm.playerNum));
 
             break;
         }
@@ -4245,16 +4243,16 @@ static int X_DoExecute(void)
     case CON_GETPLAYERVAR:
         insptr++;
         {
-            int const playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_p;
+            int const playerNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.playerNum;
             VM_ABORT_IF((unsigned)playerNum >= MAXPLAYERS, "invalid player %d", playerNum);
 
             int const lVar1 = *insptr++;
             int const lVar2 = *insptr++;
 
             if (tw == CON_SETPLAYERVAR)
-                Gv_SetVar(lVar1, Gv_GetVarX(lVar2), g_i, playerNum);
+                Gv_SetVar(lVar1, Gv_GetVarX(lVar2), vm.spriteNum, playerNum);
             else
-                Gv_SetVarX(lVar2, Gv_GetVar(lVar1, g_i, playerNum));
+                Gv_SetVarX(lVar2, Gv_GetVar(lVar1, vm.spriteNum, playerNum));
 
             break;
         }
@@ -4263,7 +4261,7 @@ static int X_DoExecute(void)
     case CON_GETACTOR:
         insptr++;
         {
-            int const   spriteNum   = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   spriteNum   = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.spriteNum;
             int const   labelNum    = *insptr++;
             auto const& actorLabel  = ActorLabels[labelNum];
             int const   lParm2      = (actorLabel.flags & LABEL_HASPARM2) ? Gv_GetVarX(*insptr++) : 0;
@@ -4285,7 +4283,7 @@ static int X_DoExecute(void)
     case CON_GETACTORSTRUCT:
         insptr++;
         {
-            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.spriteNum;
             int const   labelNum = *insptr++;
             auto const& actorLabel = ActorLabels[labelNum];
             int const   lVar2 = *insptr++;
@@ -4305,7 +4303,7 @@ static int X_DoExecute(void)
     case CON_GETSPRITEEXT:
         insptr++;
         {
-            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.spriteNum;
             int const   labelNum = *insptr++;
             auto const& spriteExtLabel = ActorLabels[labelNum];
             int const   lVar2 = *insptr++;
@@ -4325,7 +4323,7 @@ static int X_DoExecute(void)
     case CON_GETSPRITESTRUCT:
         insptr++;
         {
-            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const   spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.spriteNum;
             int const   labelNum = *insptr++;
             auto const& spriteLabel = ActorLabels[labelNum];
             int const   lVar2 = *insptr++;
@@ -4344,7 +4342,7 @@ static int X_DoExecute(void)
     case CON_GETTSPR:
         insptr++;
         {
-            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : g_i;
+            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.spriteNum;
             VM_ABORT_IF((unsigned)spriteNum >= MAXSPRITES, "invalid sprite %d", spriteNum);
 
             int const   labelNum    = *insptr++;
@@ -4361,24 +4359,24 @@ static int X_DoExecute(void)
 
     case CON_GETANGLETOTARGET:
         insptr++;
-        // actor[g_i].lastvx and lastvy are last known location of target.
-        Gv_SetVarX(*insptr++, getangle(actor[g_i].lastvx-g_sp->x,actor[g_i].lastvy-g_sp->y));
+        // actor[vm.spriteNum].lastvx and lastvy are last known location of target.
+        Gv_SetVarX(*insptr++, getangle(actor[vm.spriteNum].lastvx-vm.pSprite->x,actor[vm.spriteNum].lastvy-vm.pSprite->y));
         break;
 
     case CON_ANGOFFVAR:
         insptr++;
-        spriteext[g_i].mdangoff=Gv_GetVarX(*insptr++);
+        spriteext[vm.spriteNum].mdangoff=Gv_GetVarX(*insptr++);
         break;
 
     case CON_LOCKPLAYER:
         insptr++;
-        g_player[g_p].ps->transporter_hold=Gv_GetVarX(*insptr++);
+        g_player[vm.playerNum].ps->transporter_hold=Gv_GetVarX(*insptr++);
         break;
 
     case CON_CHECKAVAILWEAPON:
     case CON_CHECKAVAILINVEN:
         insptr++;
-        j = g_p;
+        j = vm.playerNum;
 
         if (*insptr != sysVarIDs.THISACTOR)
             j=Gv_GetVarX(*insptr);
@@ -4399,23 +4397,23 @@ static int X_DoExecute(void)
 
     case CON_GETPLAYERANGLE:
         insptr++;
-        Gv_SetVarX(*insptr++, fix16_to_int(g_player[g_p].ps->q16ang));
+        Gv_SetVarX(*insptr++, fix16_to_int(g_player[vm.playerNum].ps->q16ang));
         break;
 
     case CON_SETPLAYERANGLE:
         insptr++;
-        g_player[g_p].ps->q16ang=fix16_from_int(Gv_GetVarX(*insptr++) & 2047);
+        g_player[vm.playerNum].ps->q16ang=fix16_from_int(Gv_GetVarX(*insptr++) & 2047);
         break;
 
     case CON_GETACTORANGLE:
         insptr++;
-        Gv_SetVarX(*insptr++, g_sp->ang);
+        Gv_SetVarX(*insptr++, vm.pSprite->ang);
         break;
 
     case CON_SETACTORANGLE:
         insptr++;
-        g_sp->ang=Gv_GetVarX(*insptr++);
-        g_sp->ang &= 2047;
+        vm.pSprite->ang=Gv_GetVarX(*insptr++);
+        vm.pSprite->ang &= 2047;
         break;
 
     case CON_SETVAR:
@@ -4547,7 +4545,7 @@ static int X_DoExecute(void)
             insptr++;
             break;
         }
-        Gv_SetVarX(*insptr++, g_player[g_p].ps->max_ammo_amount[j]);
+        Gv_SetVarX(*insptr++, g_player[vm.playerNum].ps->max_ammo_amount[j]);
         break;
 
     case CON_SMAXAMMO:
@@ -4559,7 +4557,7 @@ static int X_DoExecute(void)
             insptr++;
             break;
         }
-        g_player[g_p].ps->max_ammo_amount[j]=Gv_GetVarX(*insptr++);
+        g_player[vm.playerNum].ps->max_ammo_amount[j]=Gv_GetVarX(*insptr++);
         break;
 
     case CON_MULVARVAR:
@@ -4684,27 +4682,27 @@ static int X_DoExecute(void)
 
     case CON_SPGETLOTAG:
         insptr++;
-        Gv_SetVarX(sysVarIDs.LOTAG, g_sp->lotag);
+        Gv_SetVarX(sysVarIDs.LOTAG, vm.pSprite->lotag);
         break;
 
     case CON_SPGETHITAG:
         insptr++;
-        Gv_SetVarX(sysVarIDs.HITAG, g_sp->hitag);
+        Gv_SetVarX(sysVarIDs.HITAG, vm.pSprite->hitag);
         break;
 
     case CON_SECTGETLOTAG:
         insptr++;
-        Gv_SetVarX(sysVarIDs.LOTAG, sector[g_sp->sectnum].lotag);
+        Gv_SetVarX(sysVarIDs.LOTAG, sector[vm.pSprite->sectnum].lotag);
         break;
 
     case CON_SECTGETHITAG:
         insptr++;
-        Gv_SetVarX(sysVarIDs.HITAG, sector[g_sp->sectnum].hitag);
+        Gv_SetVarX(sysVarIDs.HITAG, sector[vm.pSprite->sectnum].hitag);
         break;
 
     case CON_GETTEXTUREFLOOR:
         insptr++;
-        Gv_SetVarX(sysVarIDs.TEXTURE, sector[g_sp->sectnum].floorpicnum);
+        Gv_SetVarX(sysVarIDs.TEXTURE, sector[vm.pSprite->sectnum].floorpicnum);
         break;
 
     case CON_STARTTRACK:
@@ -4726,12 +4724,12 @@ static int X_DoExecute(void)
 
     case CON_SETGAMEPALETTE:
         insptr++;
-        P_SetGamePalette(g_player[g_p].ps, Gv_GetVarX(*(insptr++)), 0);
+        P_SetGamePalette(g_player[vm.playerNum].ps, Gv_GetVarX(*(insptr++)), 0);
         break;
 
     case CON_GETTEXTURECEILING:
         insptr++;
-        Gv_SetVarX(sysVarIDs.TEXTURE, sector[g_sp->sectnum].ceilingpicnum);
+        Gv_SetVarX(sysVarIDs.TEXTURE, sector[vm.pSprite->sectnum].ceilingpicnum);
         break;
 
     case CON_IFVARVARAND:
@@ -4909,7 +4907,7 @@ static int X_DoExecute(void)
 
     case CON_IFPHEALTHL:
         insptr++;
-        branch(sprite[g_player[g_p].ps->i].extra < *insptr);
+        branch(sprite[g_player[vm.playerNum].ps->i].extra < *insptr);
         break;
 
     case CON_IFPINVENTORY:
@@ -4919,24 +4917,24 @@ static int X_DoExecute(void)
         switch (*insptr++)
         {
         case GET_STEROIDS:
-            if (g_player[g_p].ps->inv_amount[GET_STEROIDS] != *insptr)
+            if (g_player[vm.playerNum].ps->inv_amount[GET_STEROIDS] != *insptr)
                 j = 1;
             break;
         case GET_SHIELD:
-            if (g_player[g_p].ps->inv_amount[GET_SHIELD] != g_player[g_p].ps->max_shield_amount)
+            if (g_player[vm.playerNum].ps->inv_amount[GET_SHIELD] != g_player[vm.playerNum].ps->max_shield_amount)
                 j = 1;
             break;
         case GET_SCUBA:
-            if (g_player[g_p].ps->inv_amount[GET_SCUBA] != *insptr) j = 1;
+            if (g_player[vm.playerNum].ps->inv_amount[GET_SCUBA] != *insptr) j = 1;
             break;
         case GET_HOLODUKE:
-            if (g_player[g_p].ps->inv_amount[GET_HOLODUKE] != *insptr) j = 1;
+            if (g_player[vm.playerNum].ps->inv_amount[GET_HOLODUKE] != *insptr) j = 1;
             break;
         case GET_JETPACK:
-            if (g_player[g_p].ps->inv_amount[GET_JETPACK] != *insptr) j = 1;
+            if (g_player[vm.playerNum].ps->inv_amount[GET_JETPACK] != *insptr) j = 1;
             break;
         case GET_ACCESS:
-            switch (g_sp->pal)
+            switch (vm.pSprite->pal)
             {
             case  0:
                 if (ud.got_access&1) j = 1;
@@ -4950,13 +4948,13 @@ static int X_DoExecute(void)
             }
             break;
         case GET_HEATS:
-            if (g_player[g_p].ps->inv_amount[GET_HEATS] != *insptr) j = 1;
+            if (g_player[vm.playerNum].ps->inv_amount[GET_HEATS] != *insptr) j = 1;
             break;
         case GET_FIRSTAID:
-            if (g_player[g_p].ps->inv_amount[GET_FIRSTAID] != *insptr) j = 1;
+            if (g_player[vm.playerNum].ps->inv_amount[GET_FIRSTAID] != *insptr) j = 1;
             break;
         case GET_BOOTS:
-            if (g_player[g_p].ps->inv_amount[GET_BOOTS] != *insptr) j = 1;
+            if (g_player[vm.playerNum].ps->inv_amount[GET_BOOTS] != *insptr) j = 1;
             break;
         default:
             OSD_Printf(CON_ERROR "invalid inventory ID: %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*(insptr-1));
@@ -4969,27 +4967,27 @@ static int X_DoExecute(void)
     case CON_PSTOMP:
     {
         insptr++;
-        if (g_player[g_p].ps->knee_incs == 0 && sprite[g_player[g_p].ps->i].xrepeat >= 40)
+        if (g_player[vm.playerNum].ps->knee_incs == 0 && sprite[g_player[vm.playerNum].ps->i].xrepeat >= 40)
         {
-            if (cansee(g_sp->x, g_sp->y, g_sp->z - (4 << 8), g_sp->sectnum, g_player[g_p].ps->pos.x, g_player[g_p].ps->pos.y, g_player[g_p].ps->pos.z + (16 << 8), sprite[g_player[g_p].ps->i].sectnum))
+            if (cansee(vm.pSprite->x, vm.pSprite->y, vm.pSprite->z - (4 << 8), vm.pSprite->sectnum, g_player[vm.playerNum].ps->pos.x, g_player[vm.playerNum].ps->pos.y, g_player[vm.playerNum].ps->pos.z + (16 << 8), sprite[g_player[vm.playerNum].ps->i].sectnum))
             {
                 for (j = MAXPLAYERS - 1; j >= 0; j--) // Anyone already stomping this guy?
                 {
                     if (g_player[j].ps == NULL || !g_player[j].connected)
                         continue;
 
-                    if (g_player[j].ps->actorsqu == g_i) // Yes. Don't try.
+                    if (g_player[j].ps->actorsqu == vm.spriteNum) // Yes. Don't try.
                         break;
                 }
 
                 if (j == -1)
                 {
-                    g_player[g_p].ps->knee_incs = 1;
+                    g_player[vm.playerNum].ps->knee_incs = 1;
 
-                    if (g_player[g_p].ps->weapon_pos == 0)
-                        g_player[g_p].ps->weapon_pos = -1;
+                    if (g_player[vm.playerNum].ps->weapon_pos == 0)
+                        g_player[vm.playerNum].ps->weapon_pos = -1;
 
-                    g_player[g_p].ps->actorsqu = g_i;
+                    g_player[vm.playerNum].ps->actorsqu = vm.spriteNum;
                 }
             }
         }
@@ -4998,21 +4996,21 @@ static int X_DoExecute(void)
 
     case CON_IFAWAYFROMWALL:
     {
-        short s1=g_sp->sectnum;
+        short s1=vm.pSprite->sectnum;
 
         j = 0;
 
-        updatesector(g_sp->x+108,g_sp->y+108,&s1);
-        if (s1 == g_sp->sectnum)
+        updatesector(vm.pSprite->x+108,vm.pSprite->y+108,&s1);
+        if (s1 == vm.pSprite->sectnum)
         {
-            updatesector(g_sp->x-108,g_sp->y-108,&s1);
-            if (s1 == g_sp->sectnum)
+            updatesector(vm.pSprite->x-108,vm.pSprite->y-108,&s1);
+            if (s1 == vm.pSprite->sectnum)
             {
-                updatesector(g_sp->x+108,g_sp->y-108,&s1);
-                if (s1 == g_sp->sectnum)
+                updatesector(vm.pSprite->x+108,vm.pSprite->y-108,&s1);
+                if (s1 == vm.pSprite->sectnum)
                 {
-                    updatesector(g_sp->x-108,g_sp->y+108,&s1);
-                    if (s1 == g_sp->sectnum)
+                    updatesector(vm.pSprite->x-108,vm.pSprite->y+108,&s1);
+                    if (s1 == vm.pSprite->sectnum)
                         j = 1;
                 }
             }
@@ -5031,14 +5029,14 @@ static int X_DoExecute(void)
             break;
         }
 
-        if ((g_p < 0 || g_p >= MAXPLAYERS) && g_scriptSanityChecks)
+        if ((vm.playerNum < 0 || vm.playerNum >= MAXPLAYERS) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "bad player for quote %d: (%d)\n",g_errorLineNum,VM_GetKeywordForID(g_tw),(int)*insptr, g_p);
+            OSD_Printf(CON_ERROR "bad player for quote %d: (%d)\n",g_errorLineNum,VM_GetKeywordForID(g_tw),(int)*insptr, vm.playerNum);
             insptr++;
             break;
         }
 
-        P_DoQuote(*(insptr++)|MAXQUOTES,g_player[g_p].ps);
+        P_DoQuote(*(insptr++)|MAXQUOTES,g_player[vm.playerNum].ps);
         break;
 
     case CON_USERQUOTE:
@@ -5056,45 +5054,45 @@ static int X_DoExecute(void)
         break;
 
     case CON_IFINOUTERSPACE:
-        branch(G_CheckForSpaceFloor(g_sp->sectnum));
+        branch(G_CheckForSpaceFloor(vm.pSprite->sectnum));
         break;
 
     case CON_IFNOTMOVING:
-        branch((actor[g_i].movflag&49152) > 16384);
+        branch((actor[vm.spriteNum].movflag&49152) > 16384);
         break;
 
     case CON_RESPAWNHITAG:
         insptr++;
-        if (G_CheckFemSprite(g_i))
+        if (G_CheckFemSprite(vm.spriteNum))
         {
-            if (g_sp->yvel)
-                G_OperateRespawns(g_sp->yvel);
+            if (vm.pSprite->yvel)
+                G_OperateRespawns(vm.pSprite->yvel);
         }
         else
         {
-            if (g_sp->hitag >= 0)
-                G_OperateRespawns(g_sp->hitag);
+            if (vm.pSprite->hitag >= 0)
+                G_OperateRespawns(vm.pSprite->hitag);
         }
         break;
 
     case CON_IFSPRITEPAL:
         insptr++;
-        branch(g_sp->pal == *insptr);
+        branch(vm.pSprite->pal == *insptr);
         break;
 
     case CON_IFANGDIFFL:
         insptr++;
-        j = klabs(G_GetAngleDelta(fix16_to_int(g_player[g_p].ps->q16ang),g_sp->ang));
+        j = klabs(G_GetAngleDelta(fix16_to_int(g_player[vm.playerNum].ps->q16ang),vm.pSprite->ang));
         branch(j <= *insptr);
         break;
 
     case CON_IFNOSOUNDS:
-        branch(!A_CheckAnySoundPlaying(g_i));
+        branch(!A_CheckAnySoundPlaying(vm.spriteNum));
         break;
 
     case CON_SPRITEFLAGS:
         insptr++;
-        actor[g_i].flags = Gv_GetVarX(*insptr++);
+        actor[vm.spriteNum].flags = Gv_GetVarX(*insptr++);
         break;
 
     case CON_GETTICKS:
@@ -5119,7 +5117,7 @@ static int X_DoExecute(void)
         /*        OSD_Printf("fatal error: default processing: previous five values: %d, %d, %d, %d, %d, "
                            "current opcode: %d, next five values: %d, %d, %d, %d, %d\ncurrent actor: %d (%d)\n",
                            *(insptr-5),*(insptr-4),*(insptr-3),*(insptr-2),*(insptr-1),*insptr,*(insptr+1),
-                           *(insptr+2),*(insptr+3),*(insptr+4),*(insptr+5),g_i,g_sp->picnum);
+                           *(insptr+2),*(insptr+3),*(insptr+4),*(insptr+5),vm.spriteNum,vm.pSprite->picnum);
                 OSD_Printf("g_errorLineNum: %d, g_tw: %d\n",g_errorLineNum,g_tw);*/
         VM_ScriptInfo(insptr, 64);
 
@@ -5138,30 +5136,30 @@ static int X_DoExecute(void)
 
 void A_LoadActor(int iActor)
 {
-    g_i = iActor;    // Sprite ID
-    g_p = -1; // iPlayer;    // Player ID
-    g_x = -1; // lDist;    // ??
-    g_sp = &sprite[g_i];    // Pointer to sprite structure
-    g_t = &actor[g_i].t_data[0];   // Sprite's 'extra' data
+    vm.spriteNum = iActor;    // Sprite ID
+    vm.playerNum = -1; // playerNum;    // Player ID
+    vm.playerDist = -1; // playerDist;    // ??
+    vm.pSprite = &sprite[vm.spriteNum];    // Pointer to sprite structure
+    vm.pData = &actor[vm.spriteNum].t_data[0];   // Sprite's 'extra' data
 
-    if (g_tile[g_sp->picnum].loadPtr == 0) return;
+    if (g_tile[vm.pSprite->picnum].loadPtr == 0) return;
 
-    insptr = g_tile[g_sp->picnum].loadPtr;
+    insptr = g_tile[vm.pSprite->picnum].loadPtr;
 
-    g_killitFlag &= ~(VM_RETURN | VM_KILL | VM_NOEXECUTE);
+    vm.flags &= ~(VM_RETURN | VM_KILL | VM_NOEXECUTE);
 
-    if (g_sp->sectnum < 0 || g_sp->sectnum >= MAXSECTORS)
+    if (vm.pSprite->sectnum < 0 || vm.pSprite->sectnum >= MAXSECTORS)
     {
-        //      if(A_CheckEnemySprite(g_sp))
-        //          g_player[g_p].ps->actors_killed++;
-        A_DeleteSprite(g_i);
+        //      if(A_CheckEnemySprite(vm.pSprite))
+        //          g_player[vm.playerNum].ps->actors_killed++;
+        A_DeleteSprite(vm.spriteNum);
         return;
     }
 
     while (!X_DoExecute());
 
-    if (g_killitFlag & VM_KILL)
-        A_DeleteSprite(g_i);
+    if (vm.flags & VM_KILL)
+        A_DeleteSprite(vm.spriteNum);
 }
 
 void VM_UpdateAnim(int const spriteNum, int32_t* const pData)
@@ -5189,15 +5187,14 @@ void VM_UpdateAnim(int const spriteNum, int32_t* const pData)
         AC_CURFRAME(pData) = 0;
 }
 
-void A_Execute(int iActor,int iPlayer,int lDist)
+void A_Execute(int spriteNum, int playerNum, int playerDist)
 {
-    g_i = iActor;    // Sprite ID
-    g_p = iPlayer;   // Player ID
-    g_x = lDist;     // ??
-    g_sp = &sprite[g_i];    // Pointer to sprite structure
-    g_t = &actor[g_i].t_data[0];   // Sprite's 'extra' data
+    // for some reason this is faster than using the C++ syntax; e.g vm = vmstate_t{ ... }
+    vmstate_t const tempvm
+        = { spriteNum, playerNum, playerDist, 0, &sprite[spriteNum], &actor[spriteNum].t_data[0], g_player[playerNum].ps, &actor[spriteNum] };
+    vm = tempvm;
 
-    int const picnum = g_sp->picnum;
+    int const picnum = vm.pSprite->picnum;
 
     //MICROPROFILE_SCOPE_TOKEN(g_actorTokens[picnum]);
 
@@ -5206,37 +5203,37 @@ void A_Execute(int iActor,int iPlayer,int lDist)
     else
         ERROR_CONTEXT("actor", picnum);
 
-    ERROR_CONTEXT("spritenum", iActor);
+    ERROR_CONTEXT("spritenum", spriteNum);
 
-    if (g_sp->sectnum < 0 || g_sp->sectnum >= MAXSECTORS)
+    if (vm.pSprite->sectnum < 0 || vm.pSprite->sectnum >= MAXSECTORS)
     {
-        if (A_CheckEnemySprite(g_sp))
-            G_AddMonsterKills(g_i, 1);
-        A_DeleteSprite(g_i);
+        if (A_CheckEnemySprite(vm.pSprite))
+            G_AddMonsterKills(vm.spriteNum, 1);
+        A_DeleteSprite(vm.spriteNum);
         return;
     }
 
-    VM_UpdateAnim(g_i, g_t);
+    VM_UpdateAnim(vm.spriteNum, vm.pData);
 
-    g_killitFlag = 0;
+    vm.flags = 0;
 
-    insptr = 4 + (g_tile[g_sp->picnum].execPtr);
+    insptr = 4 + (g_tile[vm.pSprite->picnum].execPtr);
     while (!X_DoExecute());
     insptr = NULL;
 
-    if (g_killitFlag & VM_KILL)
+    if (vm.flags & VM_KILL)
     {
         // if player was set to squish, first stop that...
-        if (g_player[g_p].ps->actorsqu == g_i)
-            g_player[g_p].ps->actorsqu = -1;
-        A_DeleteSprite(g_i);
+        if (g_player[vm.playerNum].ps->actorsqu == vm.spriteNum)
+            g_player[vm.playerNum].ps->actorsqu = -1;
+        A_DeleteSprite(vm.spriteNum);
         return;
     }
 
     X_Move();
 
-    if (g_sp->statnum == 6)
-        switch (DynamicTileMap[g_sp->picnum])
+    if (vm.pSprite->statnum == STAT_STANDABLE)
+        switch (DynamicTileMap[vm.pSprite->picnum])
         {
         case RUBBERCAN__STATIC:
         case EXPLODINGBARREL__STATIC:
@@ -5249,28 +5246,28 @@ void A_Execute(int iActor,int iPlayer,int lDist)
         case NUKEBARRELLEAKED__STATIC:
         case TRIPBOMB__STATIC:
         case EGG__STATIC:
-            if (actor[g_i].timetosleep > 1)
-                actor[g_i].timetosleep--;
-            else if (actor[g_i].timetosleep == 1)
-                changespritestat(g_i, STAT_ZOMBIEACTOR);
+            if (actor[vm.spriteNum].timetosleep > 1)
+                actor[vm.spriteNum].timetosleep--;
+            else if (actor[vm.spriteNum].timetosleep == 1)
+                changespritestat(vm.spriteNum, STAT_ZOMBIEACTOR);
         default:
             return;
         }
 
-    if (g_sp->statnum != 1)
+    if (vm.pSprite->statnum != STAT_ACTOR)
         return;
 
-    if (A_CheckEnemySprite(g_sp))
+    if (A_CheckEnemySprite(vm.pSprite))
     {
-        if (g_sp->xrepeat > 60) return;
-        if (DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS) && g_sp->extra <= 0) return;
+        if (vm.pSprite->xrepeat > 60) return;
+        if (DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS) && vm.pSprite->extra <= 0) return;
     }
-    else if (DMFLAGS_TEST(DMFLAG_RESPAWNITEMS) && (g_sp->cstat&32768)) return;
+    else if (DMFLAGS_TEST(DMFLAG_RESPAWNITEMS) && (vm.pSprite->cstat&32768)) return;
 
-    if (actor[g_i].timetosleep > 1)
-        actor[g_i].timetosleep--;
-    else if (actor[g_i].timetosleep == 1)
-        changespritestat(g_i, STAT_ZOMBIEACTOR);
+    if (actor[vm.spriteNum].timetosleep > 1)
+        actor[vm.spriteNum].timetosleep--;
+    else if (actor[vm.spriteNum].timetosleep == 1)
+        changespritestat(vm.spriteNum, STAT_ZOMBIEACTOR);
 }
 
 void G_SaveMapState(mapstate_t *save)

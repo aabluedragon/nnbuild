@@ -131,13 +131,10 @@ static inline const char* C_GetFileForOffset(int const offset)
 
 #define CON_ERROR OSD_ERROR "Line %d, %s: "
 
-extern int g_i,g_p,g_x;
 extern int g_scriptSanityChecks;
-
 extern int g_errorLineNum;
 extern int g_tw;
 extern const tokenmap_t vm_keywords[];
-extern spritetype *g_sp;
 
 void C_Compile(const char* fn);
 char const* VM_GetKeywordForID(int32_t id);

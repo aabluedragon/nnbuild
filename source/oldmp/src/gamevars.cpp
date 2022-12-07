@@ -33,8 +33,6 @@ gamearray_t aGameArrays[MAXGAMEARRAYS];
 int g_gameVarCount = 0;
 int g_gameArrayCount = 0;
 
-extern int g_i, g_p;
-
 void Gv_RefreshPointers(void);
 extern void G_FreeMapState(int mapnum);
 
@@ -575,19 +573,19 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 break;
 
                 // no THISACTOR check here because we convert those cases to setvarvar
-            case STRUCT_ACTORVAR: returnValue = Gv_GetVar(labelNum, arrayIndex, g_p); break;
-            case STRUCT_PLAYERVAR: returnValue = Gv_GetVar(labelNum, g_i, arrayIndex); break;
+            case STRUCT_ACTORVAR: returnValue = Gv_GetVar(labelNum, arrayIndex, vm.playerNum); break;
+            case STRUCT_PLAYERVAR: returnValue = Gv_GetVar(labelNum, vm.spriteNum, arrayIndex); break;
 
             case STRUCT_SECTOR:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = g_sp->sectnum;
+                    arrayIndex = vm.pSprite->sectnum;
                 CHECK_INDEX(MAXSECTORS);
                 returnValue = VM_GetSector(arrayIndex, labelNum);
                 break;
 
             case STRUCT_SECTOR_INTERNAL__:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = g_sp->sectnum;
+                    arrayIndex = vm.pSprite->sectnum;
                 CHECK_INDEX(MAXSECTORS);
                 returnValue = VM_GetStruct(SectorLabels[labelNum].flags, (intptr_t*)((intptr_t)&sector[arrayIndex] + SectorLabels[labelNum].offset));
                 break;
@@ -620,7 +618,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
 
             case STRUCT_PLAYER:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = g_p;
+                    arrayIndex = vm.playerNum;
                 CHECK_INDEX(MAXPLAYERS);
                 arrayIndexVar = (EDUKE32_PREDICT_FALSE(PlayerLabels[labelNum].flags & LABEL_HASPARM2)) ? Gv_GetVar(*insptr++, spriteNum, playerNum) : 0;
                 returnValue = VM_GetPlayer(arrayIndex, labelNum, arrayIndexVar);
@@ -628,7 +626,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
 
             case STRUCT_PLAYER_INTERNAL__:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = g_p;
+                    arrayIndex = vm.playerNum;
                 CHECK_INDEX(MAXPLAYERS);
                 returnValue = VM_GetStruct(PlayerLabels[labelNum].flags, (intptr_t*)((intptr_t)&g_player[arrayIndex].ps[0] + PlayerLabels[labelNum].offset));
                 break;
@@ -645,7 +643,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
 
             case STRUCT_TILEDATA:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = g_sp->picnum;
+                    arrayIndex = vm.pSprite->picnum;
                 CHECK_INDEX(MAXTILES);
                 returnValue = VM_GetTileData(arrayIndex, labelNum);
                 break;
@@ -660,7 +658,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
 
             case STRUCT_INPUT:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = g_p;
+                    arrayIndex = vm.playerNum;
                 CHECK_INDEX(MAXPLAYERS);
                 returnValue = VM_GetPlayerInput(arrayIndex, labelNum);
                 break;
@@ -744,7 +742,7 @@ void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
 {
     if (!(id & (GV_FLAG_CONSTANT | GV_FLAG_ARRAY | GV_FLAG_STRUCT)) && (id < 0 || id >= g_gameVarCount))
     {
-        OSD_Printf(CON_ERROR "Gv_SetVar(): tried to set invalid gamevar ID (%d) from sprite %d (%d), player %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),id,g_i,TrackerCast(sprite[g_i].picnum),g_p);
+        OSD_Printf(CON_ERROR "Gv_SetVar(): tried to set invalid gamevar ID (%d) from sprite %d (%d), player %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),id,vm.spriteNum,TrackerCast(sprite[vm.spriteNum].picnum),vm.playerNum);
         return;
     }
     //Bsprintf(g_szBuf,"SGVI: %d ('%s') to %d for %d %d",id,aGameVars[id].szLabel,lValue,iActor,iPlayer);
@@ -755,14 +753,14 @@ void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
     case GAMEVAR_PERPLAYER:
         if (iPlayer < 0 || iPlayer > MAXPLAYERS-1)
         {
-            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid player (%d) for per-player gamevar %s from sprite %d, player %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),iPlayer,aGameVars[id].szLabel,g_i,g_p);
+            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid player (%d) for per-player gamevar %s from sprite %d, player %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),iPlayer,aGameVars[id].szLabel,vm.spriteNum,vm.playerNum);
             return;
         }
         break;
     case GAMEVAR_PERACTOR:
         if (iActor < 0 || iActor > MAXSPRITES-1)
         {
-            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid sprite (%d) for per-actor gamevar %s from sprite %d (%d), player %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),iActor,aGameVars[id].szLabel,g_i,TrackerCast(sprite[g_i].picnum),g_p);
+            OSD_Printf(CON_ERROR "Gv_SetVar(): invalid sprite (%d) for per-actor gamevar %s from sprite %d (%d), player %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),iActor,aGameVars[id].szLabel,vm.spriteNum,TrackerCast(sprite[vm.spriteNum].picnum),vm.playerNum);
             return;
         }
         break;
@@ -774,12 +772,12 @@ void __fastcall Gv_SetVar(int id, int lValue, int iActor, int iPlayer)
 
 int __fastcall Gv_GetVarX(int id)
 {
-    return Gv_GetVar(id, g_i, g_p);
+    return Gv_GetVar(id, vm.spriteNum, vm.playerNum);
 }
 
 void __fastcall Gv_SetVarX(int id, int lValue)
 {
-    setvar__(id, lValue, g_i, g_p);
+    setvar__(id, lValue, vm.spriteNum, vm.playerNum);
 }
 
 int Gv_GetVarByLabel(const char *szGameLabel, int lDefault, int iActor, int iPlayer)

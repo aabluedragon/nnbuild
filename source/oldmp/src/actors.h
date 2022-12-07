@@ -5,7 +5,7 @@
 #include "projectiles.h"
 #include "namesdyn.h"
 
-// These macros are there to give names to the t_data[]/T*/vm.g_t[] indices
+// These macros are there to give names to the t_data[]/T*/vm.pData[] indices
 // when used with actors. Greppability of source code is certainly a virtue.
 #define AC_COUNT(t) ((t)[0])  /* the actor's count */
 /* The ID of the actor's current move. In C-CON, the bytecode offset to the

@@ -12,6 +12,23 @@ enum vmflags_t
     VM_NOEXECUTE    = 0x00000004,
 };
 
+typedef struct {
+    int spriteNum;
+    int playerNum;
+    int playerDist;
+    int flags;
+
+    union {
+        spritetype* pSprite;
+        uspritetype* pUSprite;
+    };
+
+    int32_t* pData;
+    DukePlayer_t* pPlayer;
+    ActorData_t* pActor;
+} vmstate_t;
+extern vmstate_t vm;
+
 void VM_ScriptInfo(intptr_t const* const ptr, int const range);
 
 void X_OnEvent(int iEventID, int sActor, int sPlayer, int lDist);

@@ -744,9 +744,9 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
             else
                 return ud.returnvar[lParm2 - 1];
         }
-        case USERDEFS_VM_PLAYER:              return g_p;//vm.playerNum;
-        case USERDEFS_VM_SPRITE:              return g_i;//vm.spriteNum;
-        case USERDEFS_VM_DISTANCE:            return g_x;//vm.playerDist;
+        case USERDEFS_VM_PLAYER:              return vm.playerNum;//vm.playerNum;
+        case USERDEFS_VM_SPRITE:              return vm.spriteNum;//vm.spriteNum;
+        case USERDEFS_VM_DISTANCE:            return vm.playerDist;//vm.playerDist;
 
         case USERDEFS_TEAMPAL:              return teams[lParm2].palnum;
         case USERDEFS_TEAMFRAGS:            return teams[lParm2].frags;
@@ -897,9 +897,9 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
                 ud.returnvar[lParm2 - 1] = newValue;
             return;
         }
-        case USERDEFS_VM_PLAYER:            g_p = newValue; return; //vm.playerNum;
-        case USERDEFS_VM_SPRITE:            g_i = newValue; return; //vm.spriteNum;
-        case USERDEFS_VM_DISTANCE:          g_x = newValue; return; //vm.playerDist;
+        case USERDEFS_VM_PLAYER:            vm.playerNum = newValue; return; //vm.playerNum;
+        case USERDEFS_VM_SPRITE:            vm.spriteNum = newValue; return; //vm.spriteNum;
+        case USERDEFS_VM_DISTANCE:          vm.playerDist = newValue; return; //vm.playerDist;
 
         case USERDEFS_TEAMPAL:          teams[lParm2].palnum    = newValue; return;
         case USERDEFS_TEAMFRAGS:        teams[lParm2].frags     = newValue; return;
@@ -1278,7 +1278,7 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
         case PLAYER_CURR_WEAPON:
         {
             ps.curr_weapon = newValue;
-            Gv_SetVar(sysVarIDs.WEAPON, ps.curr_weapon, g_i, playerNum);
+            Gv_SetVar(sysVarIDs.WEAPON, ps.curr_weapon, vm.spriteNum, playerNum);
             return;
         }
         case PLAYER_LAST_WEAPON:            ps.last_weapon              = newValue; return;
