@@ -2256,7 +2256,6 @@ static int X_DoExecute(void)
                 Gv_SetVarX(returnVar, index);
                 insptr = pNext;
                 X_DoExecute();
-                //return !!(vm.flags & VM_RETURN);
                 return !!(vm.flags & VM_RETURN);
             };
 
@@ -2265,7 +2264,6 @@ static int X_DoExecute(void)
                     //MICROPROFILE_SCOPE_TOKEN(g_statnumTokens[sprite[index].statnum]);
                     execute(index);
                 }
-                //return !!(vm.flags & VM_RETURN);
                 return !!(vm.flags & VM_RETURN);
             };
 
@@ -2388,7 +2386,6 @@ static int X_DoExecute(void)
                     break;
                 badindex:
                     VLOG_F(LOG_VM, "%s:%d: for %s: index %d out of range!", VM_FILENAME(insptr), VM_DECODE_LINE_NUMBER(g_tw), iter_tokens[iterType].token, nIndex);
-                    //vm.flags |= VM_RETURN;
                     vm.flags |= VM_RETURN;
                     break;
             }
@@ -4659,14 +4656,14 @@ static int X_DoExecute(void)
 
     case CON_SIN:
         insptr++;
-        Gv_SetVarX(*insptr, sintable[Gv_GetVarX(*(insptr+1))&2047]);
-        insptr += 2;
+        j = *insptr++;
+        Gv_SetVarX(j, sintable[Gv_GetVarX(*insptr++) & 2047]);
         break;
 
     case CON_COS:
         insptr++;
-        Gv_SetVarX(*insptr, sintable[(Gv_GetVarX(*(insptr+1))+512)&2047]);
-        insptr += 2;
+        j = *insptr++;
+        Gv_SetVarX(j, sintable[(Gv_GetVarX(*insptr++) + 512) & 2047]);
         break;
 
     case CON_KLABS:
