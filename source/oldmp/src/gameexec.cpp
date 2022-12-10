@@ -4136,9 +4136,9 @@ static int X_DoExecute(void)
     case CON_GETTILEDATA:
         insptr++;
         {
-            int const tileNum   = *insptr++;
-            int const labelNum  = *insptr++;
-            int const lVar2     = *insptr++;
+            int const tileNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.pSprite->picnum;
+            int const labelNum = *insptr++;
+            int const lVar2 = *insptr++;  
 
             if(tw == CON_SETTILEDATA)
                 VM_SetTileData(tileNum, labelNum, Gv_GetVarX(lVar2));
