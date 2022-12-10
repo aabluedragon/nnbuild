@@ -574,7 +574,14 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
 
                 // no THISACTOR check here because we convert those cases to setvarvar
             case STRUCT_ACTORVAR: returnValue = Gv_GetVar(labelNum, arrayIndex, vm.playerNum); break;
-            case STRUCT_PLAYERVAR: returnValue = Gv_GetVar(labelNum, vm.spriteNum, arrayIndex); break;
+
+                // [JM] "playervar" still needs a check. The quick-access isn't converted to setvarvar,
+                //      and sprites need to be able to get vars from the closest player via vm.playerNum.
+            case STRUCT_PLAYERVAR:
+                if (arrayIndexVar == sysVarIDs.THISACTOR)
+                    arrayIndex = vm.playerNum;
+                returnValue = Gv_GetVar(labelNum, vm.spriteNum, arrayIndex);
+                break;
 
             case STRUCT_SECTOR:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
