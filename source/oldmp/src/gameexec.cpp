@@ -4880,26 +4880,26 @@ static int X_DoExecute(void)
 
     case CON_IFVARG:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) > *insptr);
+        j = Gv_GetVarX(*insptr++);
+        branch(j > *insptr);
         break;
 
     case CON_IFVARGE:
         insptr++;
-        j = *insptr++;
-        branch(Gv_GetVarX(j) >= *insptr);
+        j = Gv_GetVarX(*insptr++);
+        branch(j >= *insptr);
         break;
 
     case CON_IFVARL:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) < *insptr);
+        j = Gv_GetVarX(*insptr++);
+        branch(j < *insptr);
         break;
 
     case CON_IFVARLE:
         insptr++;
-        j = *insptr++;
-        branch(Gv_GetVarX(j) <= *insptr);
+        j = Gv_GetVarX(*insptr++);
+        branch(j <= *insptr);
         break;
 
     case CON_IFPHEALTHL:
