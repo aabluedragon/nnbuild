@@ -1274,13 +1274,13 @@ static void Net_ResetPredictionData(void)
 
         if (aGameVars[i].flags & GAMEVAR_PERPLAYER)
         {
-            Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * MAXPLAYERS);
+            Bmemcpy(predicted_pValues[i], original_pValues[i], sizeof(intptr_t) * MAXPLAYERS);
         }
         else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
         {
-            Bmemcpy(predicted_plValues[i], original_plValues[i], sizeof(intptr_t) * MAXSPRITES);
+            Bmemcpy(predicted_pValues[i], original_pValues[i], sizeof(intptr_t) * MAXSPRITES);
         }
-        else predicted_lValue[i] = aGameVars[i].val.lValue;
+        else predicted_lValue[i] = aGameVars[i].lValue;
     }
 }
 
@@ -1353,19 +1353,19 @@ static void Net_InitializeGameVarPointers(void)
         // Store original addresses
         if (aGameVars[i].flags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
         {
-            original_plValues[i] = aGameVars[i].val.plValues;
+            original_pValues[i] = aGameVars[i].pValues;
         }
 
         // Allocate memory for predicted values
         if (aGameVars[i].flags & GAMEVAR_PERPLAYER)
         {
-            if (!predicted_plValues[i])
-                predicted_plValues[i] = (intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
+            if (!predicted_pValues[i])
+                predicted_pValues[i] = (intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
         }
         else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
         {
-            if (!predicted_plValues[i])
-                predicted_plValues[i] = (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
+            if (!predicted_pValues[i])
+                predicted_pValues[i] = (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
         }
     }
 }
@@ -1401,7 +1401,7 @@ void Net_UsePredictedPointers(void)
 
         if (aGameVars[i].flags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
         {
-            aGameVars[i].val.plValues = predicted_plValues[i];
+            aGameVars[i].pValues = predicted_pValues[i];
         }
     }
 
@@ -1425,7 +1425,7 @@ void Net_UseOriginalPointers(void)
 
         if (aGameVars[i].flags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR))
         {
-            aGameVars[i].val.plValues = original_plValues[i];
+            aGameVars[i].pValues = original_pValues[i];
         }
     }
 
@@ -1446,7 +1446,7 @@ void Net_SwapPredictedLinkedLists(void)
 
         if (!(aGameVars[i].flags & (GAMEVAR_PERPLAYER | GAMEVAR_PERACTOR)))
         {
-            std::swap(aGameVars[i].val.lValue, predicted_lValue[i]);
+            std::swap(aGameVars[i].lValue, predicted_lValue[i]);
         }
     }
 }

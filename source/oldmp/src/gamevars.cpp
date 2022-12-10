@@ -41,7 +41,7 @@ static void Gv_Free(void) /* called from Gv_ReadSave() and Gv_ResetVars() */
     for (auto& gameVar : aGameVars)
     {
         if (gameVar.flags & GAMEVAR_USER_MASK)
-            ALIGNED_FREE_AND_NULL(gameVar.val.plValues);
+            ALIGNED_FREE_AND_NULL(gameVar.pValues);
         gameVar.flags |= GAMEVAR_RESET;
     }
 
@@ -102,13 +102,13 @@ int Gv_ReadSave(int fil)
 
         if (aGameVars[i].flags & GAMEVAR_PERPLAYER)
         {
-            aGameVars[i].val.plValues=(intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
-            if (kdfread(aGameVars[i].val.plValues,sizeof(intptr_t) * MAXPLAYERS, 1, fil) != 1) goto corrupt;
+            aGameVars[i].pValues=(intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
+            if (kdfread(aGameVars[i].pValues,sizeof(intptr_t) * MAXPLAYERS, 1, fil) != 1) goto corrupt;
         }
         else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
         {
-            aGameVars[i].val.plValues= (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
-            if (kdfread(&aGameVars[i].val.plValues[0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
+            aGameVars[i].pValues= (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
+            if (kdfread(&aGameVars[i].pValues[0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
         }
     }
     //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
@@ -210,13 +210,13 @@ void Gv_WriteSave(FILE *fil)
         {
             //Bsprintf(g_szBuf,"Writing value array for %s (%d)",aGameVars[i].szLabel,sizeof(int) * MAXPLAYERS);
             //AddLog(g_szBuf);
-            dfwrite(aGameVars[i].val.plValues,sizeof(intptr_t) * MAXPLAYERS, 1, fil);
+            dfwrite(aGameVars[i].pValues,sizeof(intptr_t) * MAXPLAYERS, 1, fil);
         }
         else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
         {
             //Bsprintf(g_szBuf,"Writing value array for %s (%d)",aGameVars[i].szLabel,sizeof(int) * MAXSPRITES);
             //AddLog(g_szBuf);
-            dfwrite(&aGameVars[i].val.plValues[0],sizeof(intptr_t), MAXSPRITES, fil);
+            dfwrite(&aGameVars[i].pValues[0],sizeof(intptr_t), MAXSPRITES, fil);
         }
     }
 
@@ -273,13 +273,13 @@ void Gv_DumpValues(void)
         OSD_Printf("gamevar %s ",aGameVars[i].szLabel);
 
         if (aGameVars[i].flags & (GAMEVAR_INT32PTR))
-            OSD_Printf("%d",*((int*)aGameVars[i].val.lValue));
+            OSD_Printf("%d",*((int*)aGameVars[i].lValue));
         else if (aGameVars[i].flags & (GAMEVAR_INT16PTR))
-            OSD_Printf("%d",*((short*)aGameVars[i].val.lValue));
+            OSD_Printf("%d",*((short*)aGameVars[i].lValue));
         else if (aGameVars[i].flags & (GAMEVAR_INT8PTR))
-            OSD_Printf("%d",*((char*)aGameVars[i].val.lValue));
+            OSD_Printf("%d",*((char*)aGameVars[i].lValue));
         else
-            OSD_Printf("%" PRIdPTR "",aGameVars[i].val.lValue);
+            OSD_Printf("%" PRIdPTR "",aGameVars[i].lValue);
         if (aGameVars[i].flags & (GAMEVAR_PERPLAYER))
             OSD_Printf(" GAMEVAR_PERPLAYER");
         else if (aGameVars[i].flags & (GAMEVAR_PERACTOR))
@@ -305,7 +305,7 @@ void Gv_ResetVars(void) /* this is called during a new game and nowhere else */
     for (auto& aGameVar : aGameVars)
     {
         if (aGameVar.szLabel != NULL)
-            Gv_NewVar(aGameVar.szLabel, (aGameVar.flags & GAMEVAR_NODEFAULT) ? aGameVar.val.lValue : aGameVar.defaultValue, aGameVar.flags);
+            Gv_NewVar(aGameVar.szLabel, (aGameVar.flags & GAMEVAR_NODEFAULT) ? aGameVar.lValue : aGameVar.defaultValue, aGameVar.flags);
     }
 
     for (auto& aGameArray : aGameArrays)
@@ -454,7 +454,7 @@ void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags)
 
         // only free if per-{actor,player}
         if (newVar.flags & GAMEVAR_USER_MASK)
-            ALIGNED_FREE_AND_NULL(newVar.val.plValues);
+            ALIGNED_FREE_AND_NULL(newVar.pValues);
     }
 
     // if existing is system, they only get to change default value....
@@ -470,26 +470,26 @@ void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags)
     // Set initial values. (Or, override values for system gamevars.)
     if (newVar.flags & GAMEVAR_PERPLAYER)
     {
-        if (!newVar.val.plValues)
+        if (!newVar.pValues)
         {
-            newVar.val.plValues = (intptr_t*)Xaligned_alloc(PLAYER_VAR_ALIGNMENT, MAXPLAYERS * sizeof(intptr_t));
-            Bmemset(newVar.val.plValues, 0, MAXPLAYERS * sizeof(intptr_t));
+            newVar.pValues = (intptr_t*)Xaligned_alloc(PLAYER_VAR_ALIGNMENT, MAXPLAYERS * sizeof(intptr_t));
+            Bmemset(newVar.pValues, 0, MAXPLAYERS * sizeof(intptr_t));
         }
         for (bssize_t j = MAXPLAYERS - 1; j >= 0; --j)
-            newVar.val.plValues[j] = lValue;
+            newVar.pValues[j] = lValue;
         //        std::fill_n(newVar.pValues, MAXPLAYERS, lValue);
     }
     else if (newVar.flags & GAMEVAR_PERACTOR)
     {
-        if (!newVar.val.plValues)
+        if (!newVar.pValues)
         {
-            newVar.val.plValues = (intptr_t*)Xaligned_alloc(ACTOR_VAR_ALIGNMENT, MAXSPRITES * sizeof(intptr_t));
-            Bmemset(newVar.val.plValues, 0, MAXSPRITES * sizeof(intptr_t));
+            newVar.pValues = (intptr_t*)Xaligned_alloc(ACTOR_VAR_ALIGNMENT, MAXSPRITES * sizeof(intptr_t));
+            Bmemset(newVar.pValues, 0, MAXSPRITES * sizeof(intptr_t));
         }
         for (bssize_t j = MAXSPRITES - 1; j >= 0; --j)
-            newVar.val.plValues[j] = lValue;
+            newVar.pValues[j] = lValue;
     }
-    else newVar.val.lValue = lValue;
+    else newVar.lValue = lValue;
 }
 
 void A_ResetVars(int iActor)
@@ -497,7 +497,7 @@ void A_ResetVars(int iActor)
     int i=(MAXGAMEVARS-1);
     for (;i>=0;i--)
         if ((aGameVars[i].flags & GAMEVAR_PERACTOR) && !(aGameVars[i].flags & GAMEVAR_NODEFAULT))
-            aGameVars[i].val.plValues[iActor]=aGameVars[i].defaultValue;
+            aGameVars[i].pValues[iActor]=aGameVars[i].defaultValue;
 }
 
 static int Gv_GetVarIndex(const char *szGameLabel)
@@ -716,14 +716,14 @@ int __fastcall Gv_GetVar(int id, int iActor, int iPlayer)
 
     switch (var.flags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK))
     {
-        default:                returnValue = var.val.lValue; break;
-        case GAMEVAR_PERACTOR:  returnValue = var.val.plValues[iActor & (MAXSPRITES - 1)]; break;
-        case GAMEVAR_PERPLAYER: returnValue = var.val.plValues[iPlayer & (MAXPLAYERS - 1)]; break;
+        default:                returnValue = var.lValue; break;
+        case GAMEVAR_PERACTOR:  returnValue = var.pValues[iActor & (MAXSPRITES - 1)]; break;
+        case GAMEVAR_PERPLAYER: returnValue = var.pValues[iPlayer & (MAXPLAYERS - 1)]; break;
         case GAMEVAR_RAWQ16PTR:
-        case GAMEVAR_INT32PTR:  returnValue = *(int32_t*)var.val.lValue; break;
-        case GAMEVAR_INT16PTR:  returnValue = *(int16_t*)var.val.lValue; break;
-        case GAMEVAR_INT8PTR:   returnValue = *(uint8_t*)var.val.lValue; break;
-        case GAMEVAR_Q16PTR:    returnValue = fix16_to_int(*(fix16_t*)var.val.lValue); break;
+        case GAMEVAR_INT32PTR:  returnValue = *(int32_t*)var.lValue; break;
+        case GAMEVAR_INT16PTR:  returnValue = *(int16_t*)var.lValue; break;
+        case GAMEVAR_INT8PTR:   returnValue = *(uint8_t*)var.lValue; break;
+        case GAMEVAR_Q16PTR:    returnValue = fix16_to_int(*(fix16_t*)var.lValue); break;
     }
 
     return NEGATE_ON_CONDITION(returnValue, id & GV_FLAG_NEGATIVE);
@@ -734,14 +734,14 @@ static FORCE_INLINE void __fastcall setvar__(int const gameVar, int const newVal
     gamevar_t& var = aGameVars[gameVar];
     switch (var.flags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK))
     {
-        default:                var.val.lValue = newValue; break;
-        case GAMEVAR_PERPLAYER: var.val.plValues[playerNum & (MAXPLAYERS - 1)] = newValue; break;
-        case GAMEVAR_PERACTOR:  var.val.plValues[spriteNum & (MAXSPRITES - 1)] = newValue; break;
+        default:                var.lValue = newValue; break;
+        case GAMEVAR_PERPLAYER: var.pValues[playerNum & (MAXPLAYERS - 1)] = newValue; break;
+        case GAMEVAR_PERACTOR:  var.pValues[spriteNum & (MAXSPRITES - 1)] = newValue; break;
         case GAMEVAR_RAWQ16PTR:
-        case GAMEVAR_INT32PTR:  *((int32_t*)var.val.lValue) = (int32_t)newValue; break;
-        case GAMEVAR_INT16PTR:  *((int16_t*)var.val.lValue) = (int16_t)newValue; break;
-        case GAMEVAR_INT8PTR:   *((uint8_t*)var.val.lValue) = (uint8_t)newValue; break;
-        case GAMEVAR_Q16PTR:    *(fix16_t*)var.val.lValue = fix16_from_int((int16_t)newValue); break;
+        case GAMEVAR_INT32PTR:  *((int32_t*)var.lValue) = (int32_t)newValue; break;
+        case GAMEVAR_INT16PTR:  *((int16_t*)var.lValue) = (int16_t)newValue; break;
+        case GAMEVAR_INT8PTR:   *((uint8_t*)var.lValue) = (uint8_t)newValue; break;
+        case GAMEVAR_Q16PTR:    *(fix16_t*)var.lValue = fix16_from_int((int16_t)newValue); break;
     }
 }
 
@@ -803,9 +803,9 @@ static intptr_t* Gv_GetVarDataPtr(const char* szGameLabel)
     gamevar_t& var = aGameVars[gameVar];
 
     if (var.flags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK))
-        return var.val.plValues;
+        return var.pValues;
 
-    return &(var.val.lValue);
+    return &(var.lValue);
 }
 
 // Will set members that were overridden at CON translation time to 1.
@@ -1306,89 +1306,89 @@ void Gv_InitWeaponPointers(void)
 
 void Gv_RefreshPointers(void)
 {
-    aGameVars[Gv_GetVarIndex("LEVEL")].val.lValue = (intptr_t)&ud.level_number;
-    aGameVars[Gv_GetVarIndex("VOLUME")].val.lValue = (intptr_t)&ud.volume_number;
+    aGameVars[Gv_GetVarIndex("LEVEL")].lValue = (intptr_t)&ud.level_number;
+    aGameVars[Gv_GetVarIndex("VOLUME")].lValue = (intptr_t)&ud.volume_number;
 
-    aGameVars[Gv_GetVarIndex("COOP")].val.lValue = (intptr_t)&ud.coop;
-    aGameVars[Gv_GetVarIndex("MULTIMODE")].val.lValue = (intptr_t)&ud.multimode;
+    aGameVars[Gv_GetVarIndex("COOP")].lValue = (intptr_t)&ud.coop;
+    aGameVars[Gv_GetVarIndex("MULTIMODE")].lValue = (intptr_t)&ud.multimode;
 
-    aGameVars[Gv_GetVarIndex("myconnectindex")].val.lValue = (intptr_t)&myconnectindex;
-    aGameVars[Gv_GetVarIndex("screenpeek")].val.lValue = (intptr_t)&screenpeek;
-    aGameVars[Gv_GetVarIndex("currentweapon")].val.lValue = (intptr_t)&g_currentweapon;
-    aGameVars[Gv_GetVarIndex("gs")].val.lValue = (intptr_t)&g_gs;
-    aGameVars[Gv_GetVarIndex("looking_arc")].val.lValue = (intptr_t)&g_looking_arc;
-    aGameVars[Gv_GetVarIndex("gun_pos")].val.lValue = (intptr_t)&g_gun_pos;
-    aGameVars[Gv_GetVarIndex("weapon_xoffset")].val.lValue = (intptr_t)&g_weapon_xoffset;
-    aGameVars[Gv_GetVarIndex("weaponcount")].val.lValue = (intptr_t)&g_kb;
-    aGameVars[Gv_GetVarIndex("looking_angSR1")].val.lValue = (intptr_t)&g_looking_angSR1;
-    aGameVars[Gv_GetVarIndex("xdim")].val.lValue = (intptr_t)&xdim;
-    aGameVars[Gv_GetVarIndex("ydim")].val.lValue = (intptr_t)&ydim;
-    aGameVars[Gv_GetVarIndex("windowx1")].val.lValue = (intptr_t)&windowxy1.x;
-    aGameVars[Gv_GetVarIndex("windowx2")].val.lValue = (intptr_t)&windowxy2.x;
-    aGameVars[Gv_GetVarIndex("windowy1")].val.lValue = (intptr_t)&windowxy1.y;
-    aGameVars[Gv_GetVarIndex("windowy2")].val.lValue = (intptr_t)&windowxy2.y;
-    aGameVars[Gv_GetVarIndex("totalclock")].val.lValue = (intptr_t)&totalclock;
-    //aGameVars[Gv_GetVarIndex("lastvisinc")].val.lValue = (intptr_t)&lastvisinc;
-    aGameVars[Gv_GetVarIndex("numsectors")].val.lValue = (intptr_t)&numsectors;
-    aGameVars[Gv_GetVarIndex("numplayers")].val.lValue = (intptr_t)&numplayers;
-    aGameVars[Gv_GetVarIndex("current_menu")].val.lValue = (intptr_t)&g_currentMenu;
-    aGameVars[Gv_GetVarIndex("viewingrange")].val.lValue = (intptr_t)&viewingrange;
-    aGameVars[Gv_GetVarIndex("yxaspect")].val.lValue = (intptr_t)&yxaspect;
-    aGameVars[Gv_GetVarIndex("gravitationalconstant")].val.lValue = (intptr_t)&g_spriteGravity;
-    aGameVars[Gv_GetVarIndex("gametype_flags")].val.lValue = (intptr_t)&Gametypes[ud.coop].flags;
-    aGameVars[Gv_GetVarIndex("framerate")].val.lValue = (intptr_t)&g_currentFrameRate;
+    aGameVars[Gv_GetVarIndex("myconnectindex")].lValue = (intptr_t)&myconnectindex;
+    aGameVars[Gv_GetVarIndex("screenpeek")].lValue = (intptr_t)&screenpeek;
+    aGameVars[Gv_GetVarIndex("currentweapon")].lValue = (intptr_t)&g_currentweapon;
+    aGameVars[Gv_GetVarIndex("gs")].lValue = (intptr_t)&g_gs;
+    aGameVars[Gv_GetVarIndex("looking_arc")].lValue = (intptr_t)&g_looking_arc;
+    aGameVars[Gv_GetVarIndex("gun_pos")].lValue = (intptr_t)&g_gun_pos;
+    aGameVars[Gv_GetVarIndex("weapon_xoffset")].lValue = (intptr_t)&g_weapon_xoffset;
+    aGameVars[Gv_GetVarIndex("weaponcount")].lValue = (intptr_t)&g_kb;
+    aGameVars[Gv_GetVarIndex("looking_angSR1")].lValue = (intptr_t)&g_looking_angSR1;
+    aGameVars[Gv_GetVarIndex("xdim")].lValue = (intptr_t)&xdim;
+    aGameVars[Gv_GetVarIndex("ydim")].lValue = (intptr_t)&ydim;
+    aGameVars[Gv_GetVarIndex("windowx1")].lValue = (intptr_t)&windowxy1.x;
+    aGameVars[Gv_GetVarIndex("windowx2")].lValue = (intptr_t)&windowxy2.x;
+    aGameVars[Gv_GetVarIndex("windowy1")].lValue = (intptr_t)&windowxy1.y;
+    aGameVars[Gv_GetVarIndex("windowy2")].lValue = (intptr_t)&windowxy2.y;
+    aGameVars[Gv_GetVarIndex("totalclock")].lValue = (intptr_t)&totalclock;
+    //aGameVars[Gv_GetVarIndex("lastvisinc")].lValue = (intptr_t)&lastvisinc;
+    aGameVars[Gv_GetVarIndex("numsectors")].lValue = (intptr_t)&numsectors;
+    aGameVars[Gv_GetVarIndex("numplayers")].lValue = (intptr_t)&numplayers;
+    aGameVars[Gv_GetVarIndex("current_menu")].lValue = (intptr_t)&g_currentMenu;
+    aGameVars[Gv_GetVarIndex("viewingrange")].lValue = (intptr_t)&viewingrange;
+    aGameVars[Gv_GetVarIndex("yxaspect")].lValue = (intptr_t)&yxaspect;
+    aGameVars[Gv_GetVarIndex("gravitationalconstant")].lValue = (intptr_t)&g_spriteGravity;
+    aGameVars[Gv_GetVarIndex("gametype_flags")].lValue = (intptr_t)&Gametypes[ud.coop].flags;
+    aGameVars[Gv_GetVarIndex("framerate")].lValue = (intptr_t)&g_currentFrameRate;
 
-    aGameVars[Gv_GetVarIndex("camerax")].val.lValue = (intptr_t)&ud.camerapos.x;
-    aGameVars[Gv_GetVarIndex("cameray")].val.lValue = (intptr_t)&ud.camerapos.y;
-    aGameVars[Gv_GetVarIndex("cameraz")].val.lValue = (intptr_t)&ud.camerapos.z;
-    aGameVars[Gv_GetVarIndex("cameraang")].val.lValue = (intptr_t)&ud.cameraq16ang;
-    aGameVars[Gv_GetVarIndex("cameraq16ang")].val.lValue = (intptr_t)&ud.cameraq16ang;
-    aGameVars[Gv_GetVarIndex("camerahoriz")].val.lValue = (intptr_t)&ud.cameraq16horiz; // XXX FIXME
-    aGameVars[Gv_GetVarIndex("cameraq16horiz")].val.lValue = (intptr_t)&ud.cameraq16horiz; // XXX FIXME
-    aGameVars[Gv_GetVarIndex("camerasect")].val.lValue = (intptr_t)&ud.camerasect;
-    aGameVars[Gv_GetVarIndex("cameradist")].val.lValue = (intptr_t)&g_cameraDistance;
-    aGameVars[Gv_GetVarIndex("cameraclock")].val.lValue = (intptr_t)&g_cameraClock;
+    aGameVars[Gv_GetVarIndex("camerax")].lValue = (intptr_t)&ud.camerapos.x;
+    aGameVars[Gv_GetVarIndex("cameray")].lValue = (intptr_t)&ud.camerapos.y;
+    aGameVars[Gv_GetVarIndex("cameraz")].lValue = (intptr_t)&ud.camerapos.z;
+    aGameVars[Gv_GetVarIndex("cameraang")].lValue = (intptr_t)&ud.cameraq16ang;
+    aGameVars[Gv_GetVarIndex("cameraq16ang")].lValue = (intptr_t)&ud.cameraq16ang;
+    aGameVars[Gv_GetVarIndex("camerahoriz")].lValue = (intptr_t)&ud.cameraq16horiz; // XXX FIXME
+    aGameVars[Gv_GetVarIndex("cameraq16horiz")].lValue = (intptr_t)&ud.cameraq16horiz; // XXX FIXME
+    aGameVars[Gv_GetVarIndex("camerasect")].lValue = (intptr_t)&ud.camerasect;
+    aGameVars[Gv_GetVarIndex("cameradist")].lValue = (intptr_t)&g_cameraDistance;
+    aGameVars[Gv_GetVarIndex("cameraclock")].lValue = (intptr_t)&g_cameraClock;
 
     // Prediction
-    aGameVars[Gv_GetVarIndex("myx")].val.lValue = (intptr_t)&predictedPlayer.pos.x;
-    aGameVars[Gv_GetVarIndex("myy")].val.lValue = (intptr_t)&predictedPlayer.pos.y;
-    aGameVars[Gv_GetVarIndex("myz")].val.lValue = (intptr_t)&predictedPlayer.pos.z;
-    aGameVars[Gv_GetVarIndex("omyx")].val.lValue = (intptr_t)&predictedPlayer.opos.x;
-    aGameVars[Gv_GetVarIndex("omyy")].val.lValue = (intptr_t)&predictedPlayer.opos.y;
-    aGameVars[Gv_GetVarIndex("omyz")].val.lValue = (intptr_t)&predictedPlayer.opos.z;
-    aGameVars[Gv_GetVarIndex("myxvel")].val.lValue = (intptr_t)&predictedPlayer.vel.x;
-    aGameVars[Gv_GetVarIndex("myyvel")].val.lValue = (intptr_t)&predictedPlayer.vel.y;
-    aGameVars[Gv_GetVarIndex("myzvel")].val.lValue = (intptr_t)&predictedPlayer.vel.z;
+    aGameVars[Gv_GetVarIndex("myx")].lValue = (intptr_t)&predictedPlayer.pos.x;
+    aGameVars[Gv_GetVarIndex("myy")].lValue = (intptr_t)&predictedPlayer.pos.y;
+    aGameVars[Gv_GetVarIndex("myz")].lValue = (intptr_t)&predictedPlayer.pos.z;
+    aGameVars[Gv_GetVarIndex("omyx")].lValue = (intptr_t)&predictedPlayer.opos.x;
+    aGameVars[Gv_GetVarIndex("omyy")].lValue = (intptr_t)&predictedPlayer.opos.y;
+    aGameVars[Gv_GetVarIndex("omyz")].lValue = (intptr_t)&predictedPlayer.opos.z;
+    aGameVars[Gv_GetVarIndex("myxvel")].lValue = (intptr_t)&predictedPlayer.vel.x;
+    aGameVars[Gv_GetVarIndex("myyvel")].lValue = (intptr_t)&predictedPlayer.vel.y;
+    aGameVars[Gv_GetVarIndex("myzvel")].lValue = (intptr_t)&predictedPlayer.vel.z;
 
-    aGameVars[Gv_GetVarIndex("myhoriz")].val.lValue = (intptr_t)&predictedPlayer.q16horiz;
-    aGameVars[Gv_GetVarIndex("myhorizoff")].val.lValue = (intptr_t)&predictedPlayer.q16horizoff;
-    aGameVars[Gv_GetVarIndex("omyhoriz")].val.lValue = (intptr_t)&predictedPlayer.oq16horiz;
-    aGameVars[Gv_GetVarIndex("omyhorizoff")].val.lValue = (intptr_t)&predictedPlayer.oq16horizoff;
-    aGameVars[Gv_GetVarIndex("myang")].val.lValue = (intptr_t)&predictedPlayer.q16ang;
-    aGameVars[Gv_GetVarIndex("omyang")].val.lValue = (intptr_t)&predictedPlayer.oq16ang;
-    aGameVars[Gv_GetVarIndex("mycursectnum")].val.lValue = (intptr_t)&predictedPlayer.cursectnum;
-    aGameVars[Gv_GetVarIndex("myjumpingcounter")].val.lValue = (intptr_t)&predictedPlayer.jumping_counter;
+    aGameVars[Gv_GetVarIndex("myhoriz")].lValue = (intptr_t)&predictedPlayer.q16horiz;
+    aGameVars[Gv_GetVarIndex("myhorizoff")].lValue = (intptr_t)&predictedPlayer.q16horizoff;
+    aGameVars[Gv_GetVarIndex("omyhoriz")].lValue = (intptr_t)&predictedPlayer.oq16horiz;
+    aGameVars[Gv_GetVarIndex("omyhorizoff")].lValue = (intptr_t)&predictedPlayer.oq16horizoff;
+    aGameVars[Gv_GetVarIndex("myang")].lValue = (intptr_t)&predictedPlayer.q16ang;
+    aGameVars[Gv_GetVarIndex("omyang")].lValue = (intptr_t)&predictedPlayer.oq16ang;
+    aGameVars[Gv_GetVarIndex("mycursectnum")].lValue = (intptr_t)&predictedPlayer.cursectnum;
+    aGameVars[Gv_GetVarIndex("myjumpingcounter")].lValue = (intptr_t)&predictedPlayer.jumping_counter;
 
-    aGameVars[Gv_GetVarIndex("myjumpingtoggle")].val.lValue = (intptr_t)&predictedPlayer.jumping_toggle;
-    aGameVars[Gv_GetVarIndex("myonground")].val.lValue = (intptr_t)&predictedPlayer.on_ground;
-    aGameVars[Gv_GetVarIndex("myhardlanding")].val.lValue = (intptr_t)&predictedPlayer.hard_landing;
-    aGameVars[Gv_GetVarIndex("myreturntocenter")].val.lValue = (intptr_t)&predictedPlayer.return_to_center;
+    aGameVars[Gv_GetVarIndex("myjumpingtoggle")].lValue = (intptr_t)&predictedPlayer.jumping_toggle;
+    aGameVars[Gv_GetVarIndex("myonground")].lValue = (intptr_t)&predictedPlayer.on_ground;
+    aGameVars[Gv_GetVarIndex("myhardlanding")].lValue = (intptr_t)&predictedPlayer.hard_landing;
+    aGameVars[Gv_GetVarIndex("myreturntocenter")].lValue = (intptr_t)&predictedPlayer.return_to_center;
 
-    aGameVars[Gv_GetVarIndex("predicting")].val.lValue = (intptr_t)&oldnet_predicting;
+    aGameVars[Gv_GetVarIndex("predicting")].lValue = (intptr_t)&oldnet_predicting;
     // ---
 
-    aGameVars[Gv_GetVarIndex("display_mirror")].val.lValue = (intptr_t)&display_mirror;
-    aGameVars[Gv_GetVarIndex("randomseed")].val.lValue = (intptr_t)&randomseed;
+    aGameVars[Gv_GetVarIndex("display_mirror")].lValue = (intptr_t)&display_mirror;
+    aGameVars[Gv_GetVarIndex("randomseed")].lValue = (intptr_t)&randomseed;
 
-    aGameVars[Gv_GetVarIndex("NUMWALLS")].val.lValue = (intptr_t)&numwalls;
-    aGameVars[Gv_GetVarIndex("NUMSECTORS")].val.lValue = (intptr_t)&numsectors;
-    aGameVars[Gv_GetVarIndex("Numsprites")].val.lValue = (intptr_t)&Numsprites;
+    aGameVars[Gv_GetVarIndex("NUMWALLS")].lValue = (intptr_t)&numwalls;
+    aGameVars[Gv_GetVarIndex("NUMSECTORS")].lValue = (intptr_t)&numsectors;
+    aGameVars[Gv_GetVarIndex("Numsprites")].lValue = (intptr_t)&Numsprites;
 
-    aGameVars[Gv_GetVarIndex("lastsavepos")].val.lValue = (intptr_t)&g_lastSaveSlot;
+    aGameVars[Gv_GetVarIndex("lastsavepos")].lValue = (intptr_t)&g_lastSaveSlot;
 
-    aGameVars[Gv_GetVarIndex("numteams")].val.lValue = (intptr_t)&numTeams;
+    aGameVars[Gv_GetVarIndex("numteams")].lValue = (intptr_t)&numTeams;
 
 # ifdef USE_OPENGL
-    aGameVars[Gv_GetVarIndex("rendmode")].val.lValue = (intptr_t)&rendmode;
+    aGameVars[Gv_GetVarIndex("rendmode")].lValue = (intptr_t)&rendmode;
 # endif
 }

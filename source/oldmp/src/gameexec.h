@@ -12,23 +12,6 @@ enum vmflags_t
     VM_NOEXECUTE    = 0x00000004,
 };
 
-typedef struct {
-    int spriteNum;
-    int playerNum;
-    int playerDist;
-    int flags;
-
-    union {
-        spritetype* pSprite;
-        uspritetype* pUSprite;
-    };
-
-    int32_t* pData;
-    DukePlayer_t* pPlayer;
-    ActorData_t* pActor;
-} vmstate_t;
-extern vmstate_t vm;
-
 void VM_ScriptInfo(intptr_t const* const ptr, int const range);
 
 void X_OnEvent(int iEventID, int sActor, int sPlayer, int lDist);
@@ -45,7 +28,14 @@ static FORCE_INLINE int VM_HaveEvent(int const nEventID)
 }
 
 #define CON_ERRPRINTF(Text, ...) do { \
-        OSD_Printf("Line %d, %s: " Text, g_errorLineNum, VM_GetKeywordForID(g_tw), ## __VA_ARGS__); \
-    } while (0)
+    vm.flags |= VM_RETURN; \
+    LOG_F(ERROR, "%s:%d: %s: " Text, VM_FILENAME(insptr), VM_DECODE_LINE_NUMBER(g_tw), VM_GetKeywordForID(VM_DECODE_INST(g_tw)), ## __VA_ARGS__); \
+} while (0)
+
+#define CON_CRITICALERRPRINTF(Text, ...) do { \
+    vm.flags |= VM_RETURN; \
+    LOG_F(ERROR, "%s:%d: %s: " Text, VM_FILENAME(insptr), VM_DECODE_LINE_NUMBER(g_tw), VM_GetKeywordForID(VM_DECODE_INST(g_tw)), ## __VA_ARGS__); \
+    wm_msgbox(APPNAME, "%s:%d: %s: " Text, VM_FILENAME(insptr), VM_DECODE_LINE_NUMBER(g_tw), VM_GetKeywordForID(VM_DECODE_INST(g_tw)), ## __VA_ARGS__); \
+} while (0)
 
 #endif // GAMEEXEC_H

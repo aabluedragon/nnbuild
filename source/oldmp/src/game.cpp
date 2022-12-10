@@ -3294,10 +3294,10 @@ static void G_DumpDebugInfo(void)
             {
                 if (aGameVars[i].flags & (GAMEVAR_PERACTOR))
                 {
-                    if (aGameVars[i].val.plValues[j] != aGameVars[i].defaultValue)
+                    if (aGameVars[i].pValues[j] != aGameVars[i].defaultValue)
                     {
                         OSD_Printf("gamevar %s ",aGameVars[i].szLabel);
-                        OSD_Printf("%" PRIdPTR "",aGameVars[i].val.plValues[j]);
+                        OSD_Printf("%" PRIdPTR "",aGameVars[i].pValues[j]);
                         OSD_Printf(" GAMEVAR_PERACTOR");
                         if (aGameVars[i].flags != GAMEVAR_PERACTOR)
                         {

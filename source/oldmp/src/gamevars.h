@@ -26,10 +26,10 @@ enum GamevarFlags_t {
     GAMEVAR_NODEFAULT   = 0x00000400, // don't reset on actor spawn
     GAMEVAR_SYSTEM      = 0x00000800, // cannot change mode flags...(only default value)
     GAMEVAR_READONLY    = 0x00001000, // values are read-only (no setvar allowed)
-    GAMEVAR_INT32PTR    = 0x00002000, // plValues is a pointer to a 32-bit integer
+    GAMEVAR_INT32PTR    = 0x00002000, // pValues is a pointer to a 32-bit integer
     GAMEVAR_SYNCCHECK   = 0x00004000, // throw warnings during compile if used in local event
-    GAMEVAR_INT16PTR    = 0x00008000, // plValues is a pointer to a 16-bit integer
-    GAMEVAR_INT8PTR     = 0x00010000, // plValues is a pointer to an 8-bit integer
+    GAMEVAR_INT16PTR    = 0x00008000, // pValues is a pointer to a 16-bit integer
+    GAMEVAR_INT8PTR     = 0x00010000, // pValues is a pointer to an 8-bit integer
     GAMEVAR_NORESET     = 0x00020000, // var values are not reset when restoring map state
     GAMEVAR_SPECIAL     = 0x00040000, // flag for structure member shortcut vars
     GAMEVAR_NOMULTI     = 0x00080000, // don't attach to multiplayer packets
@@ -69,8 +69,8 @@ enum GamearrayFlags_t
 typedef struct {
     union {
         intptr_t lValue;
-        intptr_t* plValues;     // array of values when 'per-player', or 'per-actor'
-    } val;
+        intptr_t* pValues;     // array of values when 'per-player', or 'per-actor'
+    };
     intptr_t defaultValue;
     unsigned int flags;
     char* szLabel;
@@ -132,5 +132,83 @@ static FORCE_INLINE int __fastcall Gv_GetArrayValue(int const id, int index)
         case GAMEARRAY_BITMAP: return !!(((uint8_t*)aGameArrays[id].pValues)[index >> 3] & pow2char[index & 7]);
     }
 }
+
+static FORCE_INLINE void __fastcall Gv_DivVar(int const id, int32_t const d)
+{
+    using namespace libdivide;
+
+    auto& var = aGameVars[id];
+    auto dptr = &bfdivtable32[((uint32_t)d < DIVTABLESIZE) * d];
+
+    if ((d != lastd_s32_b) & !((uint32_t)d < DIVTABLESIZE))
+        bfdivtable32[0] = libdivide_s32_branchfree_gen((lastd_s32_b = d));
+
+    auto iptr = &var.lValue;
+
+    switch (var.flags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK))
+    {
+        case GAMEVAR_PERACTOR: iptr = &var.pValues[vm.spriteNum & (MAXSPRITES - 1)]; goto jmp;
+        case GAMEVAR_PERPLAYER: iptr = &var.pValues[vm.playerNum & (MAXPLAYERS - 1)]; fallthrough__;
+        default: jmp: *iptr = libdivide_s32_branchfree_do(*iptr, dptr); break;
+
+        case GAMEVAR_INT32PTR:
+        {
+            auto& value = *(int32_t*)var.pValues;
+            value = libdivide_s32_branchfree_do(value, dptr);
+            break;
+        }
+        case GAMEVAR_INT16PTR:
+        {
+            auto& value = *(int16_t*)var.pValues;
+            value = (int16_t)libdivide_s32_branchfree_do(value, dptr);
+            break;
+        }
+        case GAMEVAR_Q16PTR:
+        {
+            auto& value = *(fix16_t*)var.pValues;
+            value = fix16_div(value, fix16_from_int(d));
+            break;
+        }
+    }
+}
+
+#define VM_GAMEVAR_OPERATOR(func, operator)                                                            \
+    static FORCE_INLINE ATTRIBUTE((flatten)) void __fastcall func(int const id, int32_t const operand) \
+    {                                                                                                  \
+        auto &var = aGameVars[id];                                                                     \
+                                                                                                       \
+        switch (var.flags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK))                                    \
+        {                                                                                              \
+            default:                                                                                   \
+                var.lValue operator operand;                                                           \
+                break;                                                                                 \
+            case GAMEVAR_PERPLAYER:                                                                    \
+                var.pValues[vm.playerNum & (MAXPLAYERS-1)] operator operand;                           \
+                break;                                                                                 \
+            case GAMEVAR_PERACTOR:                                                                     \
+                var.pValues[vm.spriteNum & (MAXSPRITES-1)] operator operand;                           \
+                break;                                                                                 \
+            case GAMEVAR_INT32PTR: *(int32_t *)var.pValues operator(int32_t) operand; break;           \
+            case GAMEVAR_INT16PTR: *(int16_t *)var.pValues operator(int16_t) operand; break;           \
+            case GAMEVAR_Q16PTR:                                                                       \
+            {                                                                                          \
+                Fix16 *pfix = (Fix16 *)var.lValue;                                                     \
+                *pfix  operator fix16_from_int(operand);                                               \
+                break;                                                                                 \
+            }                                                                                          \
+        }                                                                                              \
+    }
+
+VM_GAMEVAR_OPERATOR(Gv_AddVar, +=)
+VM_GAMEVAR_OPERATOR(Gv_SubVar, -=)
+VM_GAMEVAR_OPERATOR(Gv_MulVar, *=)
+VM_GAMEVAR_OPERATOR(Gv_ModVar, %=)
+VM_GAMEVAR_OPERATOR(Gv_AndVar, &=)
+VM_GAMEVAR_OPERATOR(Gv_XorVar, ^=)
+VM_GAMEVAR_OPERATOR(Gv_OrVar, |=)
+VM_GAMEVAR_OPERATOR(Gv_ShiftVarL, <<=)
+VM_GAMEVAR_OPERATOR(Gv_ShiftVarR, >>=)
+
+#undef VM_GAMEVAR_OPERATOR
 
 #endif // GAMEVARS_H

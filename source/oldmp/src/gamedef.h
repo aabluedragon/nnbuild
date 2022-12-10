@@ -107,6 +107,23 @@ extern int g_errorCnt,g_warningCnt;
 extern uint8_t* bitptr;
 
 typedef struct {
+    int spriteNum;
+    int playerNum;
+    int playerDist;
+    int flags;
+
+    union {
+        spritetype* pSprite;
+        uspritetype* pUSprite;
+    };
+
+    int32_t* pData;
+    DukePlayer_t* pPlayer;
+    ActorData_t* pActor;
+} vmstate_t;
+extern vmstate_t vm;
+
+typedef struct {
     const char* token;
     int32_t val;
 } tokenmap_t;

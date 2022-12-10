@@ -44,12 +44,21 @@ int g_tw;
 static int X_DoExecute(void);
 
 // Replace with mainline versions later.
+#if defined _MSC_VER
 #define VM_ABORT_IF(condition, fmt, ...)  \
     if (EDUKE32_PREDICT_FALSE(condition)) \
     {                                     \
         CON_ERRPRINTF(fmt, __VA_ARGS__);  \
-        break;                            \
+        break;              \
     }
+#else
+#define VM_ABORT_IF(condition, ...)       \
+    if (EDUKE32_PREDICT_FALSE(condition)) \
+    {                                     \
+        CON_ERRPRINTF(__VA_ARGS__);       \
+        break;              \
+    }
+#endif
 
 void VM_ScriptInfo(intptr_t const* const ptr, int const range)
 {
@@ -1075,19 +1084,19 @@ static int X_DoExecute(void)
 
         case CON_SETVAR_GLOBAL:
             insptr++;
-            aGameVars[*insptr].val.lValue = insptr[1];
+            aGameVars[*insptr].lValue = insptr[1];
             insptr += 2;
             break;
 
         case CON_SETVAR_ACTOR:
             insptr++;
-            aGameVars[*insptr].val.plValues[vm.spriteNum & (MAXSPRITES - 1)] = insptr[1];
+            aGameVars[*insptr].pValues[vm.spriteNum & (MAXSPRITES - 1)] = insptr[1];
             insptr += 2;
             break;
 
         case CON_SETVAR_PLAYER:
             insptr++;
-            aGameVars[*insptr].val.plValues[vm.playerNum & (MAXPLAYERS - 1)] = insptr[1];
+            aGameVars[*insptr].pValues[vm.playerNum & (MAXPLAYERS - 1)] = insptr[1];
             insptr += 2;
             break;
 
@@ -4460,63 +4469,66 @@ static int X_DoExecute(void)
         break;
 
     case CON_MULVAR:
-        insptr++;
-        Gv_SetVarX(*insptr, Gv_GetVarX(*insptr) * *(insptr+1));
-        insptr += 2;
+        Gv_MulVar(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_DIVVAR:
-        insptr++;
-        if (*(insptr+1) == 0)
+        if (insptr[2] == 0)
         {
             OSD_Printf(CON_ERROR "Divide by zero.\n",g_errorLineNum,VM_GetKeywordForID(g_tw));
-            insptr += 2;
+            insptr += 3;
             break;
         }
-        Gv_SetVarX(*insptr, Gv_GetVarX(*insptr) / *(insptr+1));
-        insptr += 2;
+
+        Gv_DivVar(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_MODVAR:
-        insptr++;
-        if (*(insptr+1) == 0)
+        if (insptr[2] == 0)
         {
             OSD_Printf(CON_ERROR "Mod by zero.\n",g_errorLineNum,VM_GetKeywordForID(g_tw));
-            insptr += 2;
+            insptr += 3;
             break;
         }
-        Gv_SetVarX(*insptr,Gv_GetVarX(*insptr)%*(insptr+1));
-        insptr += 2;
+
+        Gv_ModVar(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_ANDVAR:
-        insptr++;
-        Gv_SetVarX(*insptr,Gv_GetVarX(*insptr) & *(insptr+1));
-        insptr += 2;
+        Gv_AndVar(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_ORVAR:
-        insptr++;
-        Gv_SetVarX(*insptr,Gv_GetVarX(*insptr) | *(insptr+1));
-        insptr += 2;
+        Gv_OrVar(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_XORVAR:
-        insptr++;
-        Gv_SetVarX(*insptr,Gv_GetVarX(*insptr) ^ *(insptr+1));
-        insptr += 2;
+        Gv_XorVar(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_SETVARVAR:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(*insptr++));
+        {
+            j = *insptr++;
+            int const nValue = Gv_GetVarX(*insptr++);
+
+            if ((aGameVars[j].flags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK)) == 0)
+                aGameVars[j].lValue = nValue;
+            else
+                Gv_SetVarX(j, nValue);
+        }
         break;
 
     case CON_RANDVARVAR:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(j,mulscale(krand(), Gv_GetVarX(*insptr++)+1, 16));
+        j = *insptr++;
+        Gv_SetVarX(j, mulscale16(krand(), Gv_GetVarX(*insptr++) + 1));
         break;
 
     case CON_DISPLAYRANDVARVAR:
@@ -4527,7 +4539,7 @@ static int X_DoExecute(void)
 
     case CON_INV:
         if ((aGameVars[insptr[1]].flags & (GAMEVAR_USER_MASK | GAMEVAR_PTR_MASK)) == 0)
-            aGameVars[insptr[1]].val.lValue = -aGameVars[insptr[1]].val.lValue;
+            aGameVars[insptr[1]].lValue = -aGameVars[insptr[1]].lValue;
         else
             Gv_SetVarX(insptr[1], -Gv_GetVarX(insptr[1]));
         insptr += 2;
@@ -4559,99 +4571,90 @@ static int X_DoExecute(void)
 
     case CON_MULVARVAR:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(j)*Gv_GetVarX(*insptr++));
+        j = *insptr++;
+        Gv_MulVar(j, Gv_GetVarX(*insptr++));
         break;
 
     case CON_DIVVARVAR:
         insptr++;
-        j=*insptr++;
         {
-            int l2=Gv_GetVarX(*insptr++);
+            j = *insptr++;
 
-            if (l2==0)
-            {
-                OSD_Printf(CON_ERROR "Divide by zero.\n",g_errorLineNum,VM_GetKeywordForID(g_tw));
-                break;
-            }
-            Gv_SetVarX(j, Gv_GetVarX(j)/l2);
+            int const nValue = Gv_GetVarX(*insptr++);
+
+            VM_ABORT_IF(!nValue, "divide by zero!");
+
+            Gv_DivVar(j, nValue);
             break;
         }
 
     case CON_MODVARVAR:
         insptr++;
-        j=*insptr++;
         {
-            int l2=Gv_GetVarX(*insptr++);
+            j = *insptr++;
 
-            if (l2==0)
-            {
-                OSD_Printf(CON_ERROR "Mod by zero.\n",g_errorLineNum,VM_GetKeywordForID(g_tw));
-                break;
-            }
+            int const nValue = Gv_GetVarX(*insptr++);
 
-            Gv_SetVarX(j, Gv_GetVarX(j) % l2);
+            VM_ABORT_IF(!nValue, "mod by zero!");
+
+            Gv_ModVar(j, nValue);
             break;
         }
 
     case CON_ANDVARVAR:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(j) & Gv_GetVarX(*insptr++));
+        j = *insptr++;
+        Gv_AndVar(j, Gv_GetVarX(*insptr++));
         break;
 
     case CON_XORVARVAR:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(j) ^ Gv_GetVarX(*insptr++));
+        j = *insptr++;
+        Gv_XorVar(j, Gv_GetVarX(*insptr++));
         break;
 
     case CON_ORVARVAR:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(j) | Gv_GetVarX(*insptr++));
+        j = *insptr++;
+        Gv_OrVar(j, Gv_GetVarX(*insptr++));
         break;
 
     case CON_SUBVAR:
-        insptr++;
-        Gv_SetVarX(*insptr, Gv_GetVarX(*insptr) - *(insptr+1));
-        insptr += 2;
+        Gv_SubVar(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_SUBVARVAR:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(j) - Gv_GetVarX(*insptr++));
+        j = *insptr++;
+        Gv_SubVar(j, Gv_GetVarX(*insptr++));
         break;
 
     case CON_ADDVAR:
-        insptr++;
-        Gv_SetVarX(*insptr, Gv_GetVarX(*insptr) + *(insptr+1));
-        insptr += 2;
+        Gv_AddVar(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_SHIFTVARL:
-        insptr++;
-        Gv_SetVarX(*insptr, Gv_GetVarX(*insptr) << *(insptr+1));
-        insptr += 2;
+        Gv_ShiftVarL(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_SHIFTVARR:
-        insptr++;
-        Gv_SetVarX(*insptr, Gv_GetVarX(*insptr) >> *(insptr+1));
-        insptr += 2;
+        Gv_ShiftVarR(insptr[1], insptr[2]);
+        insptr += 3;
         break;
 
     case CON_SHIFTVARVARL:
         insptr++;
         j = *insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(j) << Gv_GetVarX(*insptr++));
+        Gv_ShiftVarL(j, Gv_GetVarX(*insptr++));
         break;
 
     case CON_SHIFTVARVARR:
         insptr++;
         j = *insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(j) >> Gv_GetVarX(*insptr++));
+        Gv_ShiftVarR(j, Gv_GetVarX(*insptr++));
         break;
 
     case CON_SIN:
@@ -4673,8 +4676,8 @@ static int X_DoExecute(void)
 
     case CON_ADDVARVAR:
         insptr++;
-        j=*insptr++;
-        Gv_SetVarX(j, Gv_GetVarX(j) + Gv_GetVarX(*insptr++));
+        j = *insptr++;
+        Gv_AddVar(j, Gv_GetVarX(*insptr++));
         break;
 
     case CON_SPGETLOTAG:
@@ -5366,15 +5369,15 @@ void G_SaveMapState(mapstate_t *save)
             {
                 if (!save->vars[i])
                     save->vars[i] = (intptr_t*)Xcalloc(MAXPLAYERS,sizeof(intptr_t));
-                Bmemcpy(&save->vars[i][0],&aGameVars[i].val.plValues[0],sizeof(intptr_t) * MAXPLAYERS);
+                Bmemcpy(&save->vars[i][0],&aGameVars[i].pValues[0],sizeof(intptr_t) * MAXPLAYERS);
             }
             else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
             {
                 if (!save->vars[i])
                     save->vars[i] = (intptr_t*)Xcalloc(MAXSPRITES,sizeof(intptr_t));
-                Bmemcpy(&save->vars[i][0],&aGameVars[i].val.plValues[0],sizeof(intptr_t) * MAXSPRITES);
+                Bmemcpy(&save->vars[i][0],&aGameVars[i].pValues[0],sizeof(intptr_t) * MAXSPRITES);
             }
-            else save->vars[i] = (intptr_t *)aGameVars[i].val.lValue;
+            else save->vars[i] = (intptr_t *)aGameVars[i].lValue;
         }
 
         ototalclock = (int32_t)totalclock;
@@ -5459,10 +5462,10 @@ void G_RestoreMapState(mapstate_t *save)
         {
             if (aGameVars[i].flags & GAMEVAR_NORESET) continue;
             if (aGameVars[i].flags & GAMEVAR_PERPLAYER)
-                Bmemcpy(&aGameVars[i].val.plValues[0],&save->vars[i][0],sizeof(intptr_t) * MAXPLAYERS);
+                Bmemcpy(&aGameVars[i].pValues[0],&save->vars[i][0],sizeof(intptr_t) * MAXPLAYERS);
             else if (aGameVars[i].flags & GAMEVAR_PERACTOR)
-                Bmemcpy(&aGameVars[i].val.plValues[0],&save->vars[i][0],sizeof(intptr_t) * MAXSPRITES);
-            else aGameVars[i].val.lValue = (intptr_t)save->vars[i];
+                Bmemcpy(&aGameVars[i].pValues[0],&save->vars[i][0],sizeof(intptr_t) * MAXSPRITES);
+            else aGameVars[i].lValue = (intptr_t)save->vars[i];
         }
 
         Gv_RefreshPointers();
