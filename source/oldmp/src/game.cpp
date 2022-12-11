@@ -8063,6 +8063,26 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
+                if (!Bstrcasecmp(c + 1, "x"))
+                {
+                    if (argc > i + 1)
+                    {
+                        G_AddCon(argv[i + 1]);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "mx"))
+                {
+                    if (argc > i + 1)
+                    {
+                        G_AddConModule(argv[i + 1]);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
 #if !defined(_WIN32)
                 if (!Bstrcasecmp(c+1,"usecwd"))
                 {
@@ -8341,15 +8361,6 @@ static void G_CheckCommandLine(int argc, char const* const* argv)
                 case 'w':
                 case 'W':
                     ud.coords = 1;
-                    break;
-                case 'x':
-                case 'X':
-                    c++;
-                    if (*c)
-                    {
-                        G_AddCon(c);
-                        userconfiles = 1;
-                    }
                     break;
                 case 'y':
                 case 'Y':
