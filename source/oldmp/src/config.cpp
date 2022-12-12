@@ -547,8 +547,6 @@ void CONFIG_SetupJoystick(void)
 =
 ===================
 */
-extern int g_noSetup;
-
 int32_t CONFIG_ReadSetup(void)
 {
     int32_t dummy, i = 0;

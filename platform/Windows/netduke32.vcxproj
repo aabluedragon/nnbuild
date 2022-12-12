@@ -180,6 +180,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\source\oldmp\src\actors.h" />
+    <ClInclude Include="..\..\source\oldmp\src\cmdline.h" />
     <ClInclude Include="..\..\source\oldmp\src\common_game.h" />
     <ClInclude Include="..\..\source\oldmp\src\config.h" />
     <ClInclude Include="..\..\source\oldmp\src\discord.h" />
@@ -227,6 +228,7 @@
     <ClCompile Include="..\..\source\duke3d\rsrc\eduke32_icon.c" />
     <ClCompile Include="..\..\source\oldmp\src\actors.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\anim.cpp" />
+    <ClCompile Include="..\..\source\oldmp\src\cmdline.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\common.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\config.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\discord.cpp" />

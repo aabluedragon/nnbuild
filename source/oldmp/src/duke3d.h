@@ -704,6 +704,7 @@ enum loguru_verbosities_game
 #include "_rts.h"
 #include "actors.h"
 #include "common_game.h"
+#include "cmdline.h"
 #include "dukebot.h"
 #include "game.h"
 #include "gamedef.h"

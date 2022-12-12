@@ -145,6 +145,7 @@ extern user_defs ud;
 // Externs
 extern char boardfilename[BMAX_PATH];
 extern char currentboardfilename[BMAX_PATH];
+extern int32_t MAXCACHE1DSIZE;
 extern int32_t playerswhenstarted;
 extern int32_t r_pr_defaultlights;
 

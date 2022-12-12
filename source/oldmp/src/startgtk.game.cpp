@@ -276,9 +276,6 @@ static unsigned char GetModsDirNames(GtkListStore *list)
     return iternumb;
 }
 
-extern int g_noSetup;
-extern int g_noAutoLoad;
-
 static void PopulateForm(unsigned char pgs)
 {
     if ((pgs == ALL) || (pgs == POPULATE_VIDEO))

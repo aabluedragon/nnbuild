@@ -111,8 +111,6 @@ static int getfilenames(const char *path)
 #define POPULATE_GAME 4
 #define POPULATE_GAMEDIRS 8
 
-extern int g_noSetup;
-
 static void PopulateForm(int pgs)
 {
     HWND hwnd;

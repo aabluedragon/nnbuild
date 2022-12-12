@@ -706,6 +706,7 @@ oldmp_game_proper := NetDuke32
 oldmp_game_objs := \
     actors.cpp \
     anim.cpp \
+    cmdline.cpp \
     config.cpp \
     common.cpp \
     discord.cpp \
