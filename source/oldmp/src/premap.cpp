@@ -179,72 +179,72 @@ static void cacheTilesForSprite(int spriteNum)
 #ifndef EDUKE32_STANDALONE
     switch (DynamicTileMap[picnum])
     {
-        case HYDRENT__STATIC:
+        case HYDRENT__:
             tloadtile(BROKEFIREHYDRENT, 1);
             for (int j = TOILETWATER; j < (TOILETWATER + 4); j++) tloadtile(j, 1);
             break;
-        case TOILET__STATIC:
+        case TOILET__:
             tloadtile(TOILETBROKE, 1);
             for (int j = TOILETWATER; j < (TOILETWATER + 4); j++) tloadtile(j, 1);
             break;
-        case STALL__STATIC:
+        case STALL__:
             tloadtile(STALLBROKE, 1);
             for (int j = TOILETWATER; j < (TOILETWATER + 4); j++) tloadtile(j, 1);
             break;
-        case RUBBERCAN__STATIC:
+        case RUBBERCAN__:
             extraTiles = 2;
             break;
-        case TOILETWATER__STATIC:
+        case TOILETWATER__:
             extraTiles = 4;
             break;
-        case FEMPIC1__STATIC:
+        case FEMPIC1__:
             extraTiles = 44;
             break;
-        case LIZTROOP__STATIC:
-        case LIZTROOPRUNNING__STATIC:
-        case LIZTROOPSHOOT__STATIC:
-        case LIZTROOPJETPACK__STATIC:
-        case LIZTROOPONTOILET__STATIC:
-        case LIZTROOPDUCKING__STATIC:
+        case LIZTROOP__:
+        case LIZTROOPRUNNING__:
+        case LIZTROOPSHOOT__:
+        case LIZTROOPJETPACK__:
+        case LIZTROOPONTOILET__:
+        case LIZTROOPDUCKING__:
             for (int j = LIZTROOP; j < (LIZTROOP + 72); j++) tloadtile(j, 1);
             for (int j = HEADJIB1; j < LEGJIB1 + 3; j++) tloadtile(j, 1);
             extraTiles = 0;
             break;
-        case WOODENHORSE__STATIC:
+        case WOODENHORSE__:
             extraTiles = 5;
             for (int j = HORSEONSIDE; j < (HORSEONSIDE + 4); j++) tloadtile(j, 1);
             break;
-        case NEWBEAST__STATIC:
-        case NEWBEASTSTAYPUT__STATIC:
+        case NEWBEAST__:
+        case NEWBEASTSTAYPUT__:
             extraTiles = 90;
             break;
-        case BOSS1__STATIC:
-        case BOSS2__STATIC:
-        case BOSS3__STATIC:
-        case SHARK__STATIC:
+        case BOSS1__:
+        case BOSS2__:
+        case BOSS3__:
+        case SHARK__:
             extraTiles = 30;
             break;
-        case OCTABRAIN__STATIC:
-        case OCTABRAINSTAYPUT__STATIC:
-        case COMMANDER__STATIC:
-        case COMMANDERSTAYPUT__STATIC:
+        case OCTABRAIN__:
+        case OCTABRAINSTAYPUT__:
+        case COMMANDER__:
+        case COMMANDERSTAYPUT__:
             extraTiles = 38;
             break;
-        case RECON__STATIC:
+        case RECON__:
             extraTiles = 13;
             break;
-        case PIGCOP__STATIC:
-        case PIGCOPDIVE__STATIC:
+        case PIGCOP__:
+        case PIGCOPDIVE__:
             extraTiles = 61;
             break;
-        case LIZMAN__STATIC:
-        case LIZMANSPITTING__STATIC:
-        case LIZMANFEEDING__STATIC:
-        case LIZMANJUMP__STATIC:
+        case LIZMAN__:
+        case LIZMANSPITTING__:
+        case LIZMANFEEDING__:
+        case LIZMANJUMP__:
             for (int j = LIZMANHEAD1; j < LIZMANLEG1 + 3; j++) tloadtile(j, 1);
             extraTiles = 80;
             break;
-        case APLAYER__STATIC:
+        case APLAYER__:
             extraTiles = 0;
             //if (ud.multimode > 1) // [JM] Let's precache this anyway, since we can see this in mirrors.
             {
@@ -252,54 +252,54 @@ static void cacheTilesForSprite(int spriteNum)
                 for (int j = 1420; j < 1420 + 106; j++) tloadtile(j, 1);
             }
             break;
-        case ATOMICHEALTH__STATIC:
+        case ATOMICHEALTH__:
             extraTiles = 14;
             break;
-        case DRONE__STATIC:
+        case DRONE__:
             extraTiles = 10;
             break;
-        case EXPLODINGBARREL__STATIC:
-        case SEENINE__STATIC:
-        case OOZFILTER__STATIC:
+        case EXPLODINGBARREL__:
+        case SEENINE__:
+        case OOZFILTER__:
             extraTiles = 3;
             break;
-        case NUKEBARREL__STATIC:
-        case CAMERA1__STATIC:
+        case NUKEBARREL__:
+        case CAMERA1__:
             extraTiles = 5;
             break;
             // caching of HUD sprites for weapons that may be in the level
-        case CHAINGUNSPRITE__STATIC:
+        case CHAINGUNSPRITE__:
             for (int j = CHAINGUN; j <= CHAINGUN + 7; j++) tloadtile(j, 1);
             break;
-        case RPGSPRITE__STATIC:
+        case RPGSPRITE__:
             tloadtile(RPGGUN, 1);
             for (int j = RPGGUN + 1; j <= RPGGUN + 2; j++) tloadtile(j, 1);
             break;
-        case FREEZESPRITE__STATIC:
+        case FREEZESPRITE__:
             tloadtile(FREEZE, 1);
             tloadtile(FREEZE + 2, 1);
             for (int j = FREEZE + 3; j <= FREEZE + 5; j++) tloadtile(j, 1);
             break;
-        case GROWSPRITEICON__STATIC:
-        case SHRINKERSPRITE__STATIC:
+        case GROWSPRITEICON__:
+        case SHRINKERSPRITE__:
         {
             int32_t const tile = SHRINKER;
             for (int j = tile - 2; j <= tile + 1; j++) tloadtile(j, 1);
             for (int j = SHRINKER + 2; j <= SHRINKER + 5; j++) tloadtile(j, 1);
             break;
         }
-        case HBOMBAMMO__STATIC:
-        case HEAVYHBOMB__STATIC:
+        case HBOMBAMMO__:
+        case HEAVYHBOMB__:
             for (int j = HANDREMOTE; j <= HANDREMOTE + 5; j++) tloadtile(j, 1);
             break;
-        case TRIPBOMBSPRITE__STATIC:
+        case TRIPBOMBSPRITE__:
             for (int j = HANDHOLDINGLASER; j <= HANDHOLDINGLASER + 4; j++) tloadtile(j, 1);
             break;
-        case SHOTGUNSPRITE__STATIC:
+        case SHOTGUNSPRITE__:
             tloadtile(SHOTGUNSHELL, 1);
             for (int j = SHOTGUN; j <= SHOTGUN + 6; j++) tloadtile(j, 1);
             break;
-        case DEVISTATORSPRITE__STATIC:
+        case DEVISTATORSPRITE__:
             for (int j = DEVISTATOR; j <= DEVISTATOR + 1; j++) tloadtile(j, 1);
             break;
     }
@@ -943,12 +943,12 @@ static void prelevel(char g)
         }
         else switch (DynamicTileMap[PN(i)])
             {
-            case GPSPEED__STATIC:
+            case GPSPEED__:
                 sector[SECT(i)].extra = SLT(i);
                 A_DeleteSprite(i);
                 break;
 
-            case CYCLER__STATIC:
+            case CYCLER__:
                 if (g_numCyclers >= MAXCYCLERS)
                 {
                     Bsprintf(tempbuf,"\nToo many cycling sectors (%d max).",MAXCYCLERS);
@@ -964,14 +964,14 @@ static void prelevel(char g)
                 A_DeleteSprite(i);
                 break;
 
-            case SECTOREFFECTOR__STATIC:
-            case ACTIVATOR__STATIC:
-            case TOUCHPLATE__STATIC:
-            case ACTIVATORLOCKED__STATIC:
-            case MUSICANDSFX__STATIC:
-            case LOCATORS__STATIC:
-            case MASTERSWITCH__STATIC:
-            case RESPAWN__STATIC:
+            case SECTOREFFECTOR__:
+            case ACTIVATOR__:
+            case TOUCHPLATE__:
+            case ACTIVATORLOCKED__:
+            case MUSICANDSFX__:
+            case LOCATORS__:
+            case MASTERSWITCH__:
+            case RESPAWN__:
                 sprite[i].cstat = 0;
                 break;
             }
@@ -1005,19 +1005,19 @@ static void prelevel(char g)
     {
         switch (DynamicTileMap[PN(i)-1])
         {
-        case DIPSWITCH__STATIC:
-        case DIPSWITCH2__STATIC:
-        case PULLSWITCH__STATIC:
-        case HANDSWITCH__STATIC:
-        case SLOTDOOR__STATIC:
-        case LIGHTSWITCH__STATIC:
-        case SPACELIGHTSWITCH__STATIC:
-        case SPACEDOORSWITCH__STATIC:
-        case FRANKENSTINESWITCH__STATIC:
-        case LIGHTSWITCH2__STATIC:
-        case POWERSWITCH1__STATIC:
-        case LOCKSWITCH1__STATIC:
-        case POWERSWITCH2__STATIC:
+        case DIPSWITCH__:
+        case DIPSWITCH2__:
+        case PULLSWITCH__:
+        case HANDSWITCH__:
+        case SLOTDOOR__:
+        case LIGHTSWITCH__:
+        case SPACELIGHTSWITCH__:
+        case SPACEDOORSWITCH__:
+        case FRANKENSTINESWITCH__:
+        case LIGHTSWITCH2__:
+        case POWERSWITCH1__:
+        case LOCKSWITCH1__:
+        case POWERSWITCH2__:
             for (j=0;j<lotaglist;j++)
                 if (SLT(i) == lotags[j])
                     break;
@@ -1081,15 +1081,15 @@ static void prelevel(char g)
         }
         switch (DynamicTileMap[switchpicnum])
         {
-        case FANSHADOW__STATIC:
-        case FANSPRITE__STATIC:
+        case FANSHADOW__:
+        case FANSPRITE__:
             wall->cstat |= 65;
             animwall[g_numAnimWalls].wallnum = i;
             g_numAnimWalls++;
             break;
 
-        case W_FORCEFIELD__STATIC:
-            if (wal->overpicnum==W_FORCEFIELD__STATIC)
+        case W_FORCEFIELD__:
+            if (wal->overpicnum==W_FORCEFIELD__)
                 for (j=0;j<3;j++)
                     tloadtile(W_FORCEFIELD+j, 0);
             if (wal->shade > 31)
@@ -1102,7 +1102,7 @@ static void prelevel(char g)
                     wal->lotag;
             fallthrough__;
 
-        case BIGFORCE__STATIC:
+        case BIGFORCE__:
 
             animwall[g_numAnimWalls].wallnum = i;
             g_numAnimWalls++;
@@ -1114,26 +1114,26 @@ static void prelevel(char g)
 
         switch (DynamicTileMap[wal->picnum])
         {
-        case WATERTILE2__STATIC:
+        case WATERTILE2__:
             for (j=0;j<3;j++)
                 tloadtile(wal->picnum+j, 0);
             break;
 
-        case TECHLIGHT2__STATIC:
-        case TECHLIGHT4__STATIC:
+        case TECHLIGHT2__:
+        case TECHLIGHT4__:
             tloadtile(wal->picnum, 0);
             break;
-        case W_TECHWALL1__STATIC:
-        case W_TECHWALL2__STATIC:
-        case W_TECHWALL3__STATIC:
-        case W_TECHWALL4__STATIC:
+        case W_TECHWALL1__:
+        case W_TECHWALL2__:
+        case W_TECHWALL3__:
+        case W_TECHWALL4__:
             animwall[g_numAnimWalls].wallnum = i;
             //                animwall[g_numAnimWalls].tag = -1;
             g_numAnimWalls++;
             break;
-        case SCREENBREAK6__STATIC:
-        case SCREENBREAK7__STATIC:
-        case SCREENBREAK8__STATIC:
+        case SCREENBREAK6__:
+        case SCREENBREAK7__:
+        case SCREENBREAK8__:
             for (j=SCREENBREAK6;j<SCREENBREAK9;j++)
                 tloadtile(j, 0);
             animwall[g_numAnimWalls].wallnum = i;
@@ -1141,9 +1141,9 @@ static void prelevel(char g)
             g_numAnimWalls++;
             break;
 
-        case FEMPIC1__STATIC:
-        case FEMPIC2__STATIC:
-        case FEMPIC3__STATIC:
+        case FEMPIC1__:
+        case FEMPIC2__:
+        case FEMPIC3__:
 
             wal->extra = wal->picnum;
             animwall[g_numAnimWalls].tag = -1;
@@ -1159,23 +1159,23 @@ static void prelevel(char g)
             g_numAnimWalls++;
             break;
 
-        case SCREENBREAK1__STATIC:
-        case SCREENBREAK2__STATIC:
-        case SCREENBREAK3__STATIC:
-        case SCREENBREAK4__STATIC:
-        case SCREENBREAK5__STATIC:
+        case SCREENBREAK1__:
+        case SCREENBREAK2__:
+        case SCREENBREAK3__:
+        case SCREENBREAK4__:
+        case SCREENBREAK5__:
 
-        case SCREENBREAK9__STATIC:
-        case SCREENBREAK10__STATIC:
-        case SCREENBREAK11__STATIC:
-        case SCREENBREAK12__STATIC:
-        case SCREENBREAK13__STATIC:
-        case SCREENBREAK14__STATIC:
-        case SCREENBREAK15__STATIC:
-        case SCREENBREAK16__STATIC:
-        case SCREENBREAK17__STATIC:
-        case SCREENBREAK18__STATIC:
-        case SCREENBREAK19__STATIC:
+        case SCREENBREAK9__:
+        case SCREENBREAK10__:
+        case SCREENBREAK11__:
+        case SCREENBREAK12__:
+        case SCREENBREAK13__:
+        case SCREENBREAK14__:
+        case SCREENBREAK15__:
+        case SCREENBREAK16__:
+        case SCREENBREAK17__:
+        case SCREENBREAK18__:
+        case SCREENBREAK19__:
 
             animwall[g_numAnimWalls].wallnum = i;
             animwall[g_numAnimWalls].tag = wal->picnum;
@@ -1812,9 +1812,9 @@ int G_EnterLevel(int g)
     for (ALL_PLAYERS(i))
     switch (DynamicTileMap[sector[sprite[g_player[i].ps->i].sectnum].floorpicnum])
     {
-    case HURTRAIL__STATIC:
-    case FLOORSLIME__STATIC:
-    case FLOORPLASMA__STATIC:
+    case HURTRAIL__:
+    case FLOORSLIME__:
+    case FLOORPLASMA__:
         P_ResetWeapons(i);
         P_ResetInventory(i);
         g_player[i].ps->gotweapon[PISTOL_WEAPON] = 0;

@@ -825,70 +825,70 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
     {
         KNEE_WEAPON, 0, 0, 7, 14, 0,
         WEAPON_NOVISIBLE | WEAPON_RANDOMRESTART | WEAPON_AUTOMATIC,
-        KNEE__STATIC, 0, 0, 0, 0, 0, 0,
+        KNEE__, 0, 0, 0, 0, 0, 0,
         0, EJECT_CLIP, INSERT_CLIP, 0, 0
     },
 
     {
         PISTOL_WEAPON, 12, 27, 2, 5, 0,
         WEAPON_RELOAD_TIMING,
-        SHOTSPARK1__STATIC, 2, SHELL__STATIC, 0, 0, PISTOL_FIRE, 0, 0,
+        SHOTSPARK1__, 2, SHELL__, 0, 0, PISTOL_FIRE, 0, 0,
         EJECT_CLIP, INSERT_CLIP, INSERT_CLIP, 255 + (95 << 8)
     },
 
     {
         SHOTGUN_WEAPON, 0, 13, 4, 30, 0,
         WEAPON_CHECKATRELOAD,
-        SHOTGUN__STATIC, 24, SHOTGUNSHELL__STATIC, 7, 0, SHOTGUN_FIRE, 15, SHOTGUN_COCK,
+        SHOTGUN__, 24, SHOTGUNSHELL__, 7, 0, SHOTGUN_FIRE, 15, SHOTGUN_COCK,
         EJECT_CLIP, INSERT_CLIP, SHOTGUN_COCK, 255 + (95 << 8)
     },
 
     {
         CHAINGUN_WEAPON, 0, 0, 3, 12, 3,
         WEAPON_AUTOMATIC | WEAPON_FIREEVERYTHIRD | WEAPON_AMMOPERSHOT | WEAPON_SPAWNTYPE3 | WEAPON_RESET,
-        CHAINGUN__STATIC, 1, SHELL__STATIC, 0, 0, CHAINGUN_FIRE, 0, 0,
+        CHAINGUN__, 1, SHELL__, 0, 0, CHAINGUN_FIRE, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 255 + (95 << 8)
     },
 
     {
         RPG_WEAPON, 0, 0, 4, 20, 0,
         0,
-        RPG__STATIC, 0, 0, 0, 0, 0, 0, 0,
+        RPG__, 0, 0, 0, 0, 0, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 255 + (95 << 8)
     },
 
     {
         HANDBOMB_WEAPON, 0, 30, 6, 19, 12,
         WEAPON_THROWIT,
-        HEAVYHBOMB__STATIC, 0, 0, 0, 0, 0, 0,
+        HEAVYHBOMB__, 0, 0, 0, 0, 0, 0,
         0, EJECT_CLIP, INSERT_CLIP, 0, 0
     },
 
     {
         SHRINKER_WEAPON, 0, 0, 10, 12, 0,
         WEAPON_GLOWS,
-        SHRINKER__STATIC, 0, 0, 0, SHRINKER_FIRE, 0, 0, 0,
+        SHRINKER__, 0, 0, 0, SHRINKER_FIRE, 0, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 176 + (252 << 8) + (120 << 16)
     },
 
     {
         DEVISTATOR_WEAPON, 0, 0, 3, 6, 5,
         WEAPON_FIREEVERYOTHER | WEAPON_AMMOPERSHOT,
-        RPG__STATIC, 0, 0, 2, CAT_FIRE, 0, 0, 0,
+        RPG__, 0, 0, 2, CAT_FIRE, 0, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 255 + (95 << 8)
     },
 
     {
         TRIPBOMB_WEAPON, 0, 16, 3, 16, 7,
         WEAPON_NOVISIBLE | WEAPON_STANDSTILL | WEAPON_CHECKATRELOAD,
-        HANDHOLDINGLASER__STATIC, 0, 0, 0, 0, 0, 0,
+        HANDHOLDINGLASER__, 0, 0, 0, 0, 0, 0,
         0, EJECT_CLIP, INSERT_CLIP, 0, 0
     },
 
     {
         FREEZE_WEAPON, 0, 0, 3, 5, 0,
         WEAPON_RESET,
-        FREEZEBLAST__STATIC, 0, 0, 0, CAT_FIRE, CAT_FIRE, 0, 0,
+        FREEZEBLAST__, 0, 0, 0, CAT_FIRE, CAT_FIRE, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 72 + (88 << 8) + (140 << 16)
     },
 
@@ -902,7 +902,7 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
     {
         GROW_WEAPON, 0, 0, 3, 5, 0,
         WEAPON_GLOWS,
-        GROWSPARK__STATIC, 0, 0, 0, 0, EXPANDERSHOOT, 0, 0,
+        GROWSPARK__, 0, 0, 0, 0, EXPANDERSHOOT, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 216 + (52 << 8) + (20 << 16)
     },
 
@@ -910,7 +910,7 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
     {
         FLAMETHROWER_WEAPON, 0, 0, 2, 16, 0,
         WEAPON_RESET,
-        FIREBALL__STATIC, 0, 0, 0, FLAMETHROWER_INTRO, FLAMETHROWER_INTRO, 0, 0,
+        FIREBALL__, 0, 0, 0, FLAMETHROWER_INTRO, FLAMETHROWER_INTRO, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 216 + (52 << 8) + (20 << 16)
     },
 #endif

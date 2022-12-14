@@ -3588,7 +3588,7 @@ static int X_DoExecute(void)
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS));
         else if (A_CheckInventorySprite(vm.pSprite))
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY));
-        else if (DynamicTileMap[vm.pSprite->picnum] == ACCESSCARD__STATIC) // Shim for poorly-concieved CON code. Keys should never respawn.
+        else if (DynamicTileMap[vm.pSprite->picnum] == ACCESSCARD__) // Shim for poorly-concieved CON code. Keys should never respawn.
             branch(0);
         else
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNITEMS));
@@ -5235,17 +5235,17 @@ void A_Execute(int spriteNum, int playerNum, int playerDist)
     if (vm.pSprite->statnum == STAT_STANDABLE)
         switch (DynamicTileMap[vm.pSprite->picnum])
         {
-        case RUBBERCAN__STATIC:
-        case EXPLODINGBARREL__STATIC:
-        case WOODENHORSE__STATIC:
-        case HORSEONSIDE__STATIC:
-        case CANWITHSOMETHING__STATIC:
-        case FIREBARREL__STATIC:
-        case NUKEBARREL__STATIC:
-        case NUKEBARRELDENTED__STATIC:
-        case NUKEBARRELLEAKED__STATIC:
-        case TRIPBOMB__STATIC:
-        case EGG__STATIC:
+        case RUBBERCAN__:
+        case EXPLODINGBARREL__:
+        case WOODENHORSE__:
+        case HORSEONSIDE__:
+        case CANWITHSOMETHING__:
+        case FIREBARREL__:
+        case NUKEBARREL__:
+        case NUKEBARRELDENTED__:
+        case NUKEBARRELLEAKED__:
+        case TRIPBOMB__:
+        case EGG__:
             if (actor[vm.spriteNum].timetosleep > 1)
                 actor[vm.spriteNum].timetosleep--;
             else if (actor[vm.spriteNum].timetosleep == 1)
@@ -5493,11 +5493,11 @@ void G_RestoreMapState(mapstate_t *save)
             for (x=g_numAnimWalls-1;x>=0;x--)
                 switch (DynamicTileMap[wall[animwall[x].wallnum].picnum])
                 {
-                case FEMPIC1__STATIC:
+                case FEMPIC1__:
                     wall[animwall[x].wallnum].picnum = BLANKSCREEN;
                     break;
-                case FEMPIC2__STATIC:
-                case FEMPIC3__STATIC:
+                case FEMPIC2__:
+                case FEMPIC3__:
                     wall[animwall[x].wallnum].picnum = SCREENBREAK6;
                     break;
                 }

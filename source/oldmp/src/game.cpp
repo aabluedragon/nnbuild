@@ -1248,13 +1248,13 @@ int A_CheckInventorySprite(spritetype *s)
 {
     switch (DynamicTileMap[s->picnum])
     {
-    case FIRSTAID__STATIC:
-    case STEROIDS__STATIC:
-    case HEATSENSOR__STATIC:
-    case BOOTS__STATIC:
-    case JETPACK__STATIC:
-    case HOLODUKE__STATIC:
-    case AIRTANK__STATIC:
+    case FIRSTAID__:
+    case STEROIDS__:
+    case HEATSENSOR__:
+    case BOOTS__:
+    case JETPACK__:
+    case HOLODUKE__:
+    case AIRTANK__:
         return 1;
     }
     return 0;
@@ -3545,12 +3545,12 @@ int A_Spawn(int spriteNum, int tileNum)
 
     switch (DynamicTileMap[pSprite->picnum])
     {
-        case FOF__STATIC:
+        case FOF__:
             pSprite->xrepeat = pSprite->yrepeat = 0;
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case CAMERA1__STATIC:
+        case CAMERA1__:
             pSprite->extra = 1;
             pSprite->cstat &= CSTAT_SPRITE_INVISIBLE;
 
@@ -3569,14 +3569,14 @@ int A_Spawn(int spriteNum, int tileNum)
             }
             goto SPAWN_END;
 
-        case CAMERAPOLE__STATIC:
+        case CAMERAPOLE__:
             pSprite->extra = 1;
             pSprite->cstat &= ~(CSTAT_SPRITE_INVISIBLE);
 
             if (g_damageCameras)
                 pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             fallthrough__;
-        case GENERICPOLE__STATIC:
+        case GENERICPOLE__:
             if (ud.multimode < 2 && pSprite->pal != 0)
             {
                 pSprite->xrepeat = pSprite->yrepeat = 0;
@@ -3586,8 +3586,8 @@ int A_Spawn(int spriteNum, int tileNum)
                 pSprite->pal = 0;
             goto SPAWN_END;
 
-        case BOLT1__STATIC:
-        case SIDEBOLT1__STATIC:
+        case BOLT1__:
+        case SIDEBOLT1__:
             T1(newSprite) = pSprite->xrepeat;
             T2(newSprite) = pSprite->yrepeat;
             pSprite->yvel = 0;
@@ -3595,7 +3595,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case WATERSPLASH2__STATIC:
+        case WATERSPLASH2__:
             pSprite->shade = -16;
             pSprite->cstat |= CSTAT_SPRITE_YCENTER;
 
@@ -3625,36 +3625,36 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case NEON1__STATIC:
-        case NEON2__STATIC:
-        case NEON3__STATIC:
-        case NEON4__STATIC:
-        case NEON5__STATIC:
-        case NEON6__STATIC:
-        case DOMELITE__STATIC:
-        case NUKEBUTTON__STATIC:
+        case NEON1__:
+        case NEON2__:
+        case NEON3__:
+        case NEON4__:
+        case NEON5__:
+        case NEON6__:
+        case DOMELITE__:
+        case NUKEBUTTON__:
             if(pSprite->picnum == DOMELITE)
                 pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             fallthrough__;
-        case JIBS1__STATIC:
-        case JIBS2__STATIC:
-        case JIBS3__STATIC:
-        case JIBS4__STATIC:
-        case JIBS5__STATIC:
-        case JIBS6__STATIC:
-        case HEADJIB1__STATIC:
-        case ARMJIB1__STATIC:
-        case LEGJIB1__STATIC:
-        case LIZMANHEAD1__STATIC:
-        case LIZMANARM1__STATIC:
-        case LIZMANLEG1__STATIC:
-        case DUKETORSO__STATIC:
-        case DUKEGUN__STATIC:
-        case DUKELEG__STATIC:
+        case JIBS1__:
+        case JIBS2__:
+        case JIBS3__:
+        case JIBS4__:
+        case JIBS5__:
+        case JIBS6__:
+        case HEADJIB1__:
+        case ARMJIB1__:
+        case LEGJIB1__:
+        case LIZMANHEAD1__:
+        case LIZMANARM1__:
+        case LIZMANLEG1__:
+        case DUKETORSO__:
+        case DUKEGUN__:
+        case DUKELEG__:
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case TONGUE__STATIC:
+        case TONGUE__:
             if (hasParent)
                 pSprite->ang = pParent->ang;
             pSprite->z -= 38 << 8;
@@ -3663,13 +3663,13 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_PROJECTILE);
             goto SPAWN_END;
 
-        case NATURALLIGHTNING__STATIC:
+        case NATURALLIGHTNING__:
             pSprite->cstat &= ~(CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             pSprite->cstat |= 32768;
             goto SPAWN_END;
 
-        case TRANSPORTERSTAR__STATIC:
-        case TRANSPORTERBEAM__STATIC:
+        case TRANSPORTERSTAR__:
+        case TRANSPORTERBEAM__:
             if (!hasParent)
                 goto SPAWN_END;
 
@@ -3705,13 +3705,13 @@ int A_Spawn(int spriteNum, int tileNum)
             setspritez(newSprite, &pSprite->xyz);
             goto SPAWN_END;
 
-        case FEMMAG1__STATIC:
-        case FEMMAG2__STATIC:
+        case FEMMAG1__:
+        case FEMMAG2__:
             pSprite->cstat &= ~(CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             changespritestat(newSprite, STAT_DEFAULT);
             goto SPAWN_END;
 
-        case LASERLINE__STATIC:
+        case LASERLINE__:
             pSprite->yrepeat = 6;
             pSprite->xrepeat = 32;
 
@@ -3730,7 +3730,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case FORCESPHERE__STATIC:
+        case FORCESPHERE__:
             if (!hasParent)
             {
                 pSprite->cstat = (short)32768;
@@ -3743,7 +3743,7 @@ int A_Spawn(int spriteNum, int tileNum)
             }
             goto SPAWN_END;
 
-        case BLOOD__STATIC:
+        case BLOOD__:
             pSprite->xrepeat = pSprite->yrepeat = 16;
             pSprite->z -= (26 << 8);
             if (hasParent && pParent->pal == 6)
@@ -3751,8 +3751,8 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case BLOODPOOL__STATIC:
-        case PUKE__STATIC:
+        case BLOODPOOL__:
+        case PUKE__:
             changespritestat(newSprite, STAT_MISC);
 
             if (!OnEvenGround(pSprite, 108) || sector[pSprite->sectnum].lotag == ST_1_ABOVE_WATER)
@@ -3787,16 +3787,16 @@ int A_Spawn(int spriteNum, int tileNum)
 
             goto SPAWN_END;
 
-        case FECES__STATIC:
+        case FECES__:
             if (hasParent)
                 pSprite->xrepeat = pSprite->yrepeat = 1;
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case BLOODSPLAT1__STATIC:
-        case BLOODSPLAT2__STATIC:
-        case BLOODSPLAT3__STATIC:
-        case BLOODSPLAT4__STATIC:
+        case BLOODSPLAT1__:
+        case BLOODSPLAT2__:
+        case BLOODSPLAT3__:
+        case BLOODSPLAT4__:
             pSprite->cstat |= CSTAT_SPRITE_ALIGNMENT_WALL;
             pSprite->xrepeat = 7 + (krand() & 7);
             pSprite->yrepeat = 7 + (krand() & 7);
@@ -3807,7 +3807,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case TRIPBOMB__STATIC:
+        case TRIPBOMB__:
             if (pSprite->lotag > ud.player_skill)
             {
                 pSprite->xrepeat = pSprite->yrepeat = 0;
@@ -3829,7 +3829,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, 2);
             goto SPAWN_END;
 
-        case SPACEMARINE__STATIC:
+        case SPACEMARINE__:
             if (pSprite->picnum == SPACEMARINE)
             {
                 pSprite->extra = 20;
@@ -3838,81 +3838,81 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_ZOMBIEACTOR);
             goto SPAWN_END;
 
-        case HYDRENT__STATIC:
-        case PANNEL1__STATIC:
-        case PANNEL2__STATIC:
-        case SATELITE__STATIC:
-        case FUELPOD__STATIC:
-        case SOLARPANNEL__STATIC:
-        case ANTENNA__STATIC:
-        case GRATE1__STATIC:
-        case CHAIR1__STATIC:
-        case CHAIR2__STATIC:
-        case CHAIR3__STATIC:
-        case BOTTLE1__STATIC:
-        case BOTTLE2__STATIC:
-        case BOTTLE3__STATIC:
-        case BOTTLE4__STATIC:
-        case BOTTLE5__STATIC:
-        case BOTTLE6__STATIC:
-        case BOTTLE7__STATIC:
-        case BOTTLE8__STATIC:
-        case BOTTLE10__STATIC:
-        case BOTTLE11__STATIC:
-        case BOTTLE12__STATIC:
-        case BOTTLE13__STATIC:
-        case BOTTLE14__STATIC:
-        case BOTTLE15__STATIC:
-        case BOTTLE16__STATIC:
-        case BOTTLE17__STATIC:
-        case BOTTLE18__STATIC:
-        case BOTTLE19__STATIC:
-        case OCEANSPRITE1__STATIC:
-        case OCEANSPRITE2__STATIC:
-        case OCEANSPRITE3__STATIC:
-        case OCEANSPRITE5__STATIC:
-        case MONK__STATIC:
-        case INDY__STATIC:
-        case LUKE__STATIC:
-        case JURYGUY__STATIC:
-        case SCALE__STATIC:
-        case VACUUM__STATIC:
-        case FANSPRITE__STATIC:
-        case CACTUS__STATIC:
-        case CACTUSBROKE__STATIC:
-        case HANGLIGHT__STATIC:
-        case FETUS__STATIC:
-        case FETUSBROKE__STATIC:
-        case CAMERALIGHT__STATIC:
-        case MOVIECAMERA__STATIC:
-        case IVUNIT__STATIC:
-        case POT1__STATIC:
-        case POT2__STATIC:
-        case POT3__STATIC:
-        case TRIPODCAMERA__STATIC:
-        case SUSHIPLATE1__STATIC:
-        case SUSHIPLATE2__STATIC:
-        case SUSHIPLATE3__STATIC:
-        case SUSHIPLATE4__STATIC:
-        case SUSHIPLATE5__STATIC:
-        case WAITTOBESEATED__STATIC:
-        case VASE__STATIC:
-        case PIPE1__STATIC:
-        case PIPE2__STATIC:
-        case PIPE3__STATIC:
-        case PIPE4__STATIC:
-        case PIPE5__STATIC:
-        case PIPE6__STATIC:
+        case HYDRENT__:
+        case PANNEL1__:
+        case PANNEL2__:
+        case SATELITE__:
+        case FUELPOD__:
+        case SOLARPANNEL__:
+        case ANTENNA__:
+        case GRATE1__:
+        case CHAIR1__:
+        case CHAIR2__:
+        case CHAIR3__:
+        case BOTTLE1__:
+        case BOTTLE2__:
+        case BOTTLE3__:
+        case BOTTLE4__:
+        case BOTTLE5__:
+        case BOTTLE6__:
+        case BOTTLE7__:
+        case BOTTLE8__:
+        case BOTTLE10__:
+        case BOTTLE11__:
+        case BOTTLE12__:
+        case BOTTLE13__:
+        case BOTTLE14__:
+        case BOTTLE15__:
+        case BOTTLE16__:
+        case BOTTLE17__:
+        case BOTTLE18__:
+        case BOTTLE19__:
+        case OCEANSPRITE1__:
+        case OCEANSPRITE2__:
+        case OCEANSPRITE3__:
+        case OCEANSPRITE5__:
+        case MONK__:
+        case INDY__:
+        case LUKE__:
+        case JURYGUY__:
+        case SCALE__:
+        case VACUUM__:
+        case FANSPRITE__:
+        case CACTUS__:
+        case CACTUSBROKE__:
+        case HANGLIGHT__:
+        case FETUS__:
+        case FETUSBROKE__:
+        case CAMERALIGHT__:
+        case MOVIECAMERA__:
+        case IVUNIT__:
+        case POT1__:
+        case POT2__:
+        case POT3__:
+        case TRIPODCAMERA__:
+        case SUSHIPLATE1__:
+        case SUSHIPLATE2__:
+        case SUSHIPLATE3__:
+        case SUSHIPLATE4__:
+        case SUSHIPLATE5__:
+        case WAITTOBESEATED__:
+        case VASE__:
+        case PIPE1__:
+        case PIPE2__:
+        case PIPE3__:
+        case PIPE4__:
+        case PIPE5__:
+        case PIPE6__:
             pSprite->clipdist = 32;
             pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             fallthrough__;
-        case OCEANSPRITE4__STATIC:
+        case OCEANSPRITE4__:
             changespritestat(newSprite, STAT_DEFAULT);
             goto SPAWN_END;
 
-        case DUKETAG__STATIC:
-        case SIGN1__STATIC:
-        case SIGN2__STATIC:
+        case DUKETAG__:
+        case SIGN1__:
+        case SIGN2__:
             if ((ud.multimode < 2 || GTFLAGS(GAMETYPE_COOP)) && pSprite->pal != 0)
             {
                 pSprite->xrepeat = pSprite->yrepeat = 0;
@@ -3921,21 +3921,21 @@ int A_Spawn(int spriteNum, int tileNum)
             else pSprite->pal = 0;
             goto SPAWN_END;
 
-        case MASKWALL1__STATIC:
-        case MASKWALL2__STATIC:
-        case MASKWALL3__STATIC:
-        case MASKWALL4__STATIC:
-        case MASKWALL5__STATIC:
-        case MASKWALL6__STATIC:
-        case MASKWALL7__STATIC:
-        case MASKWALL8__STATIC:
-        case MASKWALL9__STATIC:
-        case MASKWALL10__STATIC:
-        case MASKWALL11__STATIC:
-        case MASKWALL12__STATIC:
-        case MASKWALL13__STATIC:
-        case MASKWALL14__STATIC:
-        case MASKWALL15__STATIC:
+        case MASKWALL1__:
+        case MASKWALL2__:
+        case MASKWALL3__:
+        case MASKWALL4__:
+        case MASKWALL5__:
+        case MASKWALL6__:
+        case MASKWALL7__:
+        case MASKWALL8__:
+        case MASKWALL9__:
+        case MASKWALL10__:
+        case MASKWALL11__:
+        case MASKWALL12__:
+        case MASKWALL13__:
+        case MASKWALL14__:
+        case MASKWALL15__:
         {
             int const cstat_mask = pSprite->cstat & (CSTAT_SPRITE_XFLIP | CSTAT_SPRITE_YFLIP | CSTAT_SPRITE_ALIGNMENT);
             pSprite->cstat = cstat_mask | CSTAT_SPRITE_BLOCK;
@@ -3943,11 +3943,11 @@ int A_Spawn(int spriteNum, int tileNum)
             goto SPAWN_END;
         }
 
-        case FRAMEEFFECT1_13__STATIC:
+        case FRAMEEFFECT1_13__:
             if (PLUTOPAK)
                 break;
             fallthrough__;
-        case FRAMEEFFECT1__STATIC:
+        case FRAMEEFFECT1__:
             if (hasParent)
             {
                 pSprite->xrepeat = pParent->xrepeat;
@@ -3959,10 +3959,10 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case FOOTPRINTS__STATIC:
-        case FOOTPRINTS2__STATIC:
-        case FOOTPRINTS3__STATIC:
-        case FOOTPRINTS4__STATIC:
+        case FOOTPRINTS__:
+        case FOOTPRINTS2__:
+        case FOOTPRINTS3__:
+        case FOOTPRINTS4__:
             if (hasParent)
             {
                 if(!OnEvenGround(pSprite, 84))
@@ -3983,28 +3983,28 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case FEM1__STATIC:
-        case FEM2__STATIC:
-        case FEM3__STATIC:
-        case FEM4__STATIC:
-        case FEM5__STATIC:
-        case FEM6__STATIC:
-        case FEM7__STATIC:
-        case FEM8__STATIC:
-        case FEM9__STATIC:
-        case FEM10__STATIC:
-        case PODFEM1__STATIC:
-        case NAKED1__STATIC:
-        case STATUE__STATIC:
-        case TOUGHGAL__STATIC:
+        case FEM1__:
+        case FEM2__:
+        case FEM3__:
+        case FEM4__:
+        case FEM5__:
+        case FEM6__:
+        case FEM7__:
+        case FEM8__:
+        case FEM9__:
+        case FEM10__:
+        case PODFEM1__:
+        case NAKED1__:
+        case STATUE__:
+        case TOUGHGAL__:
             pSprite->yvel = pSprite->hitag;
             pSprite->hitag = -1;
             if (pSprite->picnum == PODFEM1)
                 pSprite->extra <<= 1;
             fallthrough__;
-        case BLOODYPOLE__STATIC:
-        case QUEBALL__STATIC:
-        case STRIPEBALL__STATIC:
+        case BLOODYPOLE__:
+        case QUEBALL__:
+        case STRIPEBALL__:
 
             if (pSprite->picnum == QUEBALL || pSprite->picnum == STRIPEBALL)
             {
@@ -4020,7 +4020,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_ZOMBIEACTOR);
             goto SPAWN_END;
 
-        case DUKELYINGDEAD__STATIC:
+        case DUKELYINGDEAD__:
             if (hasParent && pParent->picnum == APLAYER)
             {
                 pSprite->xrepeat = pParent->xrepeat;
@@ -4029,16 +4029,16 @@ int A_Spawn(int spriteNum, int tileNum)
                 pSprite->pal = g_player[pParent->yvel].ps->palookup;
             }
             fallthrough__;
-        case DUKECAR__STATIC:
-        case HELECOPT__STATIC:
+        case DUKECAR__:
+        case HELECOPT__:
             //                if(sp->picnum == HELECOPT || sp->picnum == DUKECAR) sp->xvel = 1024;
             pSprite->cstat = 0;
             pSprite->extra = 1;
             pSprite->xvel = 292;
             pSprite->zvel = 360;
             fallthrough__;
-        case RESPAWNMARKERRED__STATIC:
-        case BLIMP__STATIC:
+        case RESPAWNMARKERRED__:
+        case BLIMP__:
 
             if (pSprite->picnum == RESPAWNMARKERRED)
             {
@@ -4052,32 +4052,32 @@ int A_Spawn(int spriteNum, int tileNum)
                 pSprite->clipdist = 128;
             }
             fallthrough__;
-        case MIKE__STATIC:
+        case MIKE__:
             if (pSprite->picnum == MIKE)
             {
                 pSprite->yvel = pSprite->hitag;
                 pSprite->hitag = 0;
             }
             fallthrough__;
-        case WEATHERWARN__STATIC:
+        case WEATHERWARN__:
             changespritestat(newSprite, STAT_ACTOR);
             goto SPAWN_END;
 
-        case SPOTLITE__STATIC:
+        case SPOTLITE__:
             T1(newSprite) = pSprite->x;
             T2(newSprite) = pSprite->y;
             goto SPAWN_END;
 
-        case BULLETHOLE__STATIC:
+        case BULLETHOLE__:
             pSprite->xrepeat = pSprite->yrepeat = 3;
             pSprite->cstat = CSTAT_SPRITE_ALIGNMENT_WALL + (krand() & 12);
             A_AddToDeleteQueue(newSprite);
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case MONEY__STATIC:
-        case MAIL__STATIC:
-        case PAPER__STATIC:
+        case MONEY__:
+        case MAIL__:
+        case PAPER__:
             pActor->t_data[0] = krand() & 2047;
             pSprite->cstat = krand() & 12;
             pSprite->xrepeat = pSprite->yrepeat = 8;
@@ -4086,15 +4086,15 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case VIEWSCREEN__STATIC:
-        case VIEWSCREEN2__STATIC:
+        case VIEWSCREEN__:
+        case VIEWSCREEN2__:
             pSprite->owner = newSprite;
             pSprite->lotag = pSprite->extra = 1;
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case SHELL__STATIC: //From the player
-        case SHOTGUNSHELL__STATIC:
+        case SHELL__: //From the player
+        case SHOTGUNSHELL__:
             if (hasParent)
             {
                 int snum, a;
@@ -4138,7 +4138,7 @@ int A_Spawn(int spriteNum, int tileNum)
             }
             goto SPAWN_END;
 
-        case WATERBUBBLE__STATIC:
+        case WATERBUBBLE__:
             if (hasParent)
             {
                 if (pParent->picnum == APLAYER)
@@ -4152,10 +4152,10 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case RESPAWN__STATIC:
+        case RESPAWN__:
             pSprite->extra = 66 - 13;
             fallthrough__;
-        case MUSICANDSFX__STATIC:
+        case MUSICANDSFX__:
             if (ud.multimode < 2 && pSprite->pal == 1)
             {
                 pSprite->xrepeat = pSprite->yrepeat = 0;
@@ -4166,13 +4166,13 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_FX);
             goto SPAWN_END;
 
-        case EXPLOSION2__STATIC:
-        case EXPLOSION2BOT__STATIC:
-        case BURNING__STATIC:
-        case BURNING2__STATIC:
-        case SMALLSMOKE__STATIC:
-        case SHRINKEREXPLOSION__STATIC:
-        case COOLEXPLOSION1__STATIC:
+        case EXPLOSION2__:
+        case EXPLOSION2BOT__:
+        case BURNING__:
+        case BURNING2__:
+        case SMALLSMOKE__:
+        case SHRINKEREXPLOSION__:
+        case COOLEXPLOSION1__:
             if (hasParent)
             {
                 pSprite->ang = pParent->ang;
@@ -4211,7 +4211,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_MISC);
             goto SPAWN_END;
 
-        case PLAYERONWATER__STATIC:
+        case PLAYERONWATER__:
             if (hasParent)
             {
                 pSprite->xrepeat = pParent->xrepeat;
@@ -4223,7 +4223,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_DUMMYPLAYER);
             goto SPAWN_END;
 
-        case APLAYER__STATIC:
+        case APLAYER__:
         {
             pSprite->xrepeat = pSprite->yrepeat = 0;
 
@@ -4232,7 +4232,7 @@ int A_Spawn(int spriteNum, int tileNum)
             goto SPAWN_END;
         }
 
-        case CRANE__STATIC:
+        case CRANE__:
         {
             pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_ONE_SIDED | CSTAT_SPRITE_BLOCK_HITSCAN);
 
@@ -4276,7 +4276,7 @@ int A_Spawn(int spriteNum, int tileNum)
             goto SPAWN_END;
         }
 
-        case WATERDRIP__STATIC:
+        case WATERDRIP__:
         {
             if (hasParent && (pParent->statnum == STAT_PLAYER || pParent->statnum == STAT_ACTOR))
             {
@@ -4305,7 +4305,7 @@ int A_Spawn(int spriteNum, int tileNum)
             goto SPAWN_END;
         }
 
-        case TRASH__STATIC:
+        case TRASH__:
             pSprite->ang = krand() & 2047;
 
             pSprite->xrepeat = 24;
@@ -4314,19 +4314,19 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case WATERDRIPSPLASH__STATIC:
+        case WATERDRIPSPLASH__:
             pSprite->xrepeat = 24;
             pSprite->yrepeat = 24;
 
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case PLUG__STATIC:
+        case PLUG__:
             pSprite->lotag = 9999;
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case TOUCHPLATE__STATIC:
+        case TOUCHPLATE__:
             T3(newSprite) = sector[sectNum].floorz;
             if (sector[sectNum].lotag != ST_1_ABOVE_WATER && sector[sectNum].lotag != ST_2_UNDERWATER)
                 sector[sectNum].floorz = pSprite->z;
@@ -4345,7 +4345,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case WATERBUBBLEMAKER__STATIC:
+        case WATERBUBBLEMAKER__:
             if (pSprite->hitag)
             {
                 // JBF 20030913: Pisses off X_Move(), eg. in bobsp2
@@ -4358,70 +4358,70 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case MASTERSWITCH__STATIC:
+        case MASTERSWITCH__:
             if (pSprite->picnum == MASTERSWITCH)
                 pSprite->cstat |= CSTAT_SPRITE_INVISIBLE;
             pSprite->yvel = 0;
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case TARGET__STATIC:
-        case DUCK__STATIC:
-        case LETTER__STATIC:
+        case TARGET__:
+        case DUCK__:
+        case LETTER__:
             pSprite->extra = 1;
             pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             changespritestat(newSprite, STAT_ACTOR);
             goto SPAWN_END;
 
-        case OCTABRAINSTAYPUT__STATIC:
-        case LIZTROOPSTAYPUT__STATIC:
-        case PIGCOPSTAYPUT__STATIC:
-        case LIZMANSTAYPUT__STATIC:
-        case BOSS1STAYPUT__STATIC:
-        case PIGCOPDIVE__STATIC:
-        case COMMANDERSTAYPUT__STATIC:
-        case BOSS4STAYPUT__STATIC:
+        case OCTABRAINSTAYPUT__:
+        case LIZTROOPSTAYPUT__:
+        case PIGCOPSTAYPUT__:
+        case LIZMANSTAYPUT__:
+        case BOSS1STAYPUT__:
+        case PIGCOPDIVE__:
+        case COMMANDERSTAYPUT__:
+        case BOSS4STAYPUT__:
             pActor->actorstayput = pSprite->sectnum;
             fallthrough__;
-        case BOSS1__STATIC:
-        case BOSS2__STATIC:
-        case BOSS3__STATIC:
-        case BOSS4__STATIC:
-        case ROTATEGUN__STATIC:
-        case GREENSLIME__STATIC:
+        case BOSS1__:
+        case BOSS2__:
+        case BOSS3__:
+        case BOSS4__:
+        case ROTATEGUN__:
+        case GREENSLIME__:
             if (pSprite->picnum == GREENSLIME)
                 pSprite->extra = 1;
             fallthrough__;
-        case DRONE__STATIC:
-        case LIZTROOPONTOILET__STATIC:
-        case LIZTROOPJUSTSIT__STATIC:
-        case LIZTROOPSHOOT__STATIC:
-        case LIZTROOPJETPACK__STATIC:
-        case LIZTROOPDUCKING__STATIC:
-        case LIZTROOPRUNNING__STATIC:
-        case LIZTROOP__STATIC:
-        case OCTABRAIN__STATIC:
-        case COMMANDER__STATIC:
-        case PIGCOP__STATIC:
-        case LIZMAN__STATIC:
-        case LIZMANSPITTING__STATIC:
-        case LIZMANFEEDING__STATIC:
-        case LIZMANJUMP__STATIC:
-        case ORGANTIC__STATIC:
-        case RAT__STATIC:
-        case SHARK__STATIC:
+        case DRONE__:
+        case LIZTROOPONTOILET__:
+        case LIZTROOPJUSTSIT__:
+        case LIZTROOPSHOOT__:
+        case LIZTROOPJETPACK__:
+        case LIZTROOPDUCKING__:
+        case LIZTROOPRUNNING__:
+        case LIZTROOP__:
+        case OCTABRAIN__:
+        case COMMANDER__:
+        case PIGCOP__:
+        case LIZMAN__:
+        case LIZMANSPITTING__:
+        case LIZMANFEEDING__:
+        case LIZMANJUMP__:
+        case ORGANTIC__:
+        case RAT__:
+        case SHARK__:
             if (pSprite->pal == 0)
             {
                 switch (DynamicTileMap[pSprite->picnum])
                 {
-                    case LIZTROOPONTOILET__STATIC:
-                    case LIZTROOPSHOOT__STATIC:
-                    case LIZTROOPJETPACK__STATIC:
-                    case LIZTROOPDUCKING__STATIC:
-                    case LIZTROOPRUNNING__STATIC:
-                    case LIZTROOPSTAYPUT__STATIC:
-                    case LIZTROOPJUSTSIT__STATIC:
-                    case LIZTROOP__STATIC:
+                    case LIZTROOPONTOILET__:
+                    case LIZTROOPSHOOT__:
+                    case LIZTROOPJETPACK__:
+                    case LIZTROOPDUCKING__:
+                    case LIZTROOPRUNNING__:
+                    case LIZTROOPSTAYPUT__:
+                    case LIZTROOPJUSTSIT__:
+                    case LIZTROOP__:
                         pSprite->pal = 22;
                         break;
                 }
@@ -4505,27 +4505,27 @@ int A_Spawn(int spriteNum, int tileNum)
 
             goto SPAWN_END;
 
-        case LOCATORS__STATIC:
+        case LOCATORS__:
             pSprite->cstat |= CSTAT_SPRITE_INVISIBLE;
             changespritestat(newSprite, STAT_LOCATOR);
             goto SPAWN_END;
 
-        case ACTIVATORLOCKED__STATIC:
-        case ACTIVATOR__STATIC:
+        case ACTIVATORLOCKED__:
+        case ACTIVATOR__:
             pSprite->cstat = CSTAT_SPRITE_INVISIBLE;
             if (pSprite->picnum == ACTIVATORLOCKED)
                 sector[pSprite->sectnum].lotag |= 16384;
             changespritestat(newSprite, STAT_ACTIVATOR);
             goto SPAWN_END;
 
-        case DOORSHOCK__STATIC:
+        case DOORSHOCK__:
             pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             pSprite->shade = -12;
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case OOZ__STATIC:
-        case OOZ2__STATIC:
+        case OOZ__:
+        case OOZ2__:
         {
             pSprite->shade = -12;
 
@@ -4547,7 +4547,7 @@ int A_Spawn(int spriteNum, int tileNum)
             goto SPAWN_END;
         }
 
-        case HEAVYHBOMB__STATIC:
+        case HEAVYHBOMB__:
             if (hasParent)
                 pSprite->owner = spriteNum;
             else
@@ -4568,9 +4568,9 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_ZOMBIEACTOR);
             goto SPAWN_END;
 
-        case REACTOR2__STATIC:
-        case REACTOR__STATIC:
-        case RECON__STATIC:
+        case REACTOR2__:
+        case REACTOR__:
+        case RECON__:
             if (pSprite->picnum == RECON)
             {
                 if (pSprite->lotag > ud.player_skill)
@@ -4608,37 +4608,37 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_ZOMBIEACTOR);
             goto SPAWN_END;
 
-        case ATOMICHEALTH__STATIC:
-        case STEROIDS__STATIC:
-        case HEATSENSOR__STATIC:
-        case SHIELD__STATIC:
-        case AIRTANK__STATIC:
-        case TRIPBOMBSPRITE__STATIC:
-        case JETPACK__STATIC:
-        case HOLODUKE__STATIC:
+        case ATOMICHEALTH__:
+        case STEROIDS__:
+        case HEATSENSOR__:
+        case SHIELD__:
+        case AIRTANK__:
+        case TRIPBOMBSPRITE__:
+        case JETPACK__:
+        case HOLODUKE__:
 
-        case FIRSTGUNSPRITE__STATIC:
-        case CHAINGUNSPRITE__STATIC:
-        case SHOTGUNSPRITE__STATIC:
-        case RPGSPRITE__STATIC:
-        case SHRINKERSPRITE__STATIC:
-        case FREEZESPRITE__STATIC:
-        case DEVISTATORSPRITE__STATIC:
+        case FIRSTGUNSPRITE__:
+        case CHAINGUNSPRITE__:
+        case SHOTGUNSPRITE__:
+        case RPGSPRITE__:
+        case SHRINKERSPRITE__:
+        case FREEZESPRITE__:
+        case DEVISTATORSPRITE__:
 
-        case SHOTGUNAMMO__STATIC:
-        case FREEZEAMMO__STATIC:
-        case HBOMBAMMO__STATIC:
-        case CRYSTALAMMO__STATIC:
-        case GROWAMMO__STATIC:
-        case BATTERYAMMO__STATIC:
-        case DEVISTATORAMMO__STATIC:
-        case RPGAMMO__STATIC:
-        case BOOTS__STATIC:
-        case AMMO__STATIC:
-        case AMMOLOTS__STATIC:
-        case COLA__STATIC:
-        case FIRSTAID__STATIC:
-        case SIXPAK__STATIC:
+        case SHOTGUNAMMO__:
+        case FREEZEAMMO__:
+        case HBOMBAMMO__:
+        case CRYSTALAMMO__:
+        case GROWAMMO__:
+        case BATTERYAMMO__:
+        case DEVISTATORAMMO__:
+        case RPGAMMO__:
+        case BOOTS__:
+        case AMMO__:
+        case AMMOLOTS__:
+        case COLA__:
+        case FIRSTAID__:
+        case SIXPAK__:
 
             if (hasParent)
             {
@@ -4664,7 +4664,7 @@ int A_Spawn(int spriteNum, int tileNum)
             pSprite->pal = 0;
             fallthrough__;
 
-        case ACCESSCARD__STATIC:
+        case ACCESSCARD__:
 
             if (pSprite->picnum == ATOMICHEALTH)
                 pSprite->cstat |= CSTAT_SPRITE_YCENTER;
@@ -4693,26 +4693,26 @@ int A_Spawn(int spriteNum, int tileNum)
             }
             goto SPAWN_END;
 
-        case WATERFOUNTAIN__STATIC:
+        case WATERFOUNTAIN__:
             pSprite->lotag = 1;
             fallthrough__;
 
-        case TREE1__STATIC:
-        case TREE2__STATIC:
-        case TIRE__STATIC:
-        case CONE__STATIC:
-        case BOX__STATIC:
+        case TREE1__:
+        case TREE2__:
+        case TIRE__:
+        case CONE__:
+        case BOX__:
             pSprite->cstat = (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN); // Make it hittable
             pSprite->extra = 1;
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case FLOORFLAME__STATIC:
+        case FLOORFLAME__:
             pSprite->shade = -127;
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case BOUNCEMINE__STATIC:
+        case BOUNCEMINE__:
             if(!hasParent)
                 pSprite->owner = newSprite;
 
@@ -4723,7 +4723,7 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_ZOMBIEACTOR);
             goto SPAWN_END;
 
-        case STEAM__STATIC:
+        case STEAM__:
             if (hasParent)
             {
                 pSprite->ang = pParent->ang;
@@ -4735,11 +4735,11 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case CEILINGSTEAM__STATIC:
+        case CEILINGSTEAM__:
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case SECTOREFFECTOR__STATIC:
+        case SECTOREFFECTOR__:
         {
             pSprite->cstat |= CSTAT_SPRITE_INVISIBLE;
             pSprite->xrepeat = pSprite->yrepeat = 0;
@@ -5259,8 +5259,8 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_EFFECTOR);
             goto SPAWN_END;
         }
-        case SEENINE__STATIC:
-        case OOZFILTER__STATIC:
+        case SEENINE__:
+        case OOZFILTER__:
             pSprite->shade = -16;
             if (pSprite->xrepeat <= 8)
             {
@@ -5274,11 +5274,11 @@ int A_Spawn(int spriteNum, int tileNum)
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
 
-        case CRACK1__STATIC:
-        case CRACK2__STATIC:
-        case CRACK3__STATIC:
-        case CRACK4__STATIC:
-        case FIREEXT__STATIC:
+        case CRACK1__:
+        case CRACK2__:
+        case CRACK3__:
+        case CRACK4__:
+        case FIREEXT__:
             if (pSprite->picnum == FIREEXT)
             {
                 pSprite->cstat = (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
@@ -5305,29 +5305,29 @@ int A_Spawn(int spriteNum, int tileNum)
             A_SetSprite(newSprite, CLIPMASK0);
             goto SPAWN_END;
 
-        case TOILET__STATIC:
-        case STALL__STATIC:
+        case TOILET__:
+        case STALL__:
             pSprite->lotag = 1;
             pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
             pSprite->clipdist = 8;
             pSprite->owner = newSprite;
             goto SPAWN_END;
 
-        case CANWITHSOMETHING__STATIC:
-        case CANWITHSOMETHING2__STATIC:
-        case CANWITHSOMETHING3__STATIC:
-        case CANWITHSOMETHING4__STATIC:
-        case RUBBERCAN__STATIC:
+        case CANWITHSOMETHING__:
+        case CANWITHSOMETHING2__:
+        case CANWITHSOMETHING3__:
+        case CANWITHSOMETHING4__:
+        case RUBBERCAN__:
             pSprite->extra = 0;
             fallthrough__;
-        case EXPLODINGBARREL__STATIC:
-        case HORSEONSIDE__STATIC:
-        case FIREBARREL__STATIC:
-        case NUKEBARREL__STATIC:
-        case FIREVASE__STATIC:
-        case NUKEBARRELDENTED__STATIC:
-        case NUKEBARRELLEAKED__STATIC:
-        case WOODENHORSE__STATIC:
+        case EXPLODINGBARREL__:
+        case HORSEONSIDE__:
+        case FIREBARREL__:
+        case NUKEBARREL__:
+        case FIREVASE__:
+        case NUKEBARRELDENTED__:
+        case NUKEBARRELLEAKED__:
+        case WOODENHORSE__:
             if (hasParent)
             {
                 pSprite->xrepeat = pSprite->yrepeat = 32;
@@ -5339,7 +5339,7 @@ int A_Spawn(int spriteNum, int tileNum)
             pSprite->clipdist = 72;
             A_Fall(newSprite);
             fallthrough__;
-        case EGG__STATIC:
+        case EGG__:
             if (DMFLAGS_TEST(DMFLAG_NOMONSTERS) && pSprite->picnum == EGG)
             {
                 pSprite->xrepeat = pSprite->yrepeat = 0;
@@ -5354,7 +5354,7 @@ int A_Spawn(int spriteNum, int tileNum)
             }
             goto SPAWN_END;
 
-        case TOILETWATER__STATIC:
+        case TOILETWATER__:
             pSprite->shade = -16;
             changespritestat(newSprite, STAT_STANDABLE);
             goto SPAWN_END;
@@ -5511,7 +5511,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
         switch (DynamicTileMap[s->picnum])
         {
-        case SECTOREFFECTOR__STATIC:
+        case SECTOREFFECTOR__:
             if (s->lotag == SE_40_ROR_UPPER || s->lotag == SE_41_ROR_LOWER)
             {
                 t->cstat = 32768;
@@ -5548,21 +5548,21 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         {
             switch (DynamicTileMap[t->picnum])
             {
-                case BLOODPOOL__STATIC:
-                case PUKE__STATIC:
-                case FOOTPRINTS__STATIC:
-                case FOOTPRINTS2__STATIC:
-                case FOOTPRINTS3__STATIC:
-                case FOOTPRINTS4__STATIC:
+                case BLOODPOOL__:
+                case PUKE__:
+                case FOOTPRINTS__:
+                case FOOTPRINTS2__:
+                case FOOTPRINTS3__:
+                case FOOTPRINTS4__:
                     if (t->shade == 127) continue;
                     break;
-                case RESPAWNMARKERRED__STATIC:
-                case RESPAWNMARKERYELLOW__STATIC:
-                case RESPAWNMARKERGREEN__STATIC:
+                case RESPAWNMARKERRED__:
+                case RESPAWNMARKERYELLOW__:
+                case RESPAWNMARKERGREEN__:
                     if (!DMFLAGS_TEST(DMFLAG_MARKERS))
                         t->xrepeat = t->yrepeat = 0;
                     continue;
-                case CHAIR3__STATIC:
+                case CHAIR3__:
                     if (tilehasmodelorvoxel(t->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                     {
                         t->cstat &= ~4;
@@ -5571,10 +5571,10 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     frameOffset = getofs_viewtype_mirrored<5>(t->cstat, t->ang - a);
                     t->picnum = s->picnum + frameOffset;
                     break;
-                case BLOODSPLAT1__STATIC:
-                case BLOODSPLAT2__STATIC:
-                case BLOODSPLAT3__STATIC:
-                case BLOODSPLAT4__STATIC:
+                case BLOODSPLAT1__:
+                case BLOODSPLAT2__:
+                case BLOODSPLAT3__:
+                case BLOODSPLAT4__:
                     if (ud.lockout) t->xrepeat = t->yrepeat = 0;
                     else if (t->pal == 6)
                     {
@@ -5583,19 +5583,19 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     }
                     fallthrough__;
 
-                case BULLETHOLE__STATIC:
-                case CRACK1__STATIC:
-                case CRACK2__STATIC:
-                case CRACK3__STATIC:
-                case CRACK4__STATIC:
+                case BULLETHOLE__:
+                case CRACK1__:
+                case CRACK2__:
+                case CRACK3__:
+                case CRACK4__:
                     t->shade = 16;
                     continue;
-                case NEON1__STATIC:
-                case NEON2__STATIC:
-                case NEON3__STATIC:
-                case NEON4__STATIC:
-                case NEON5__STATIC:
-                case NEON6__STATIC:
+                case NEON1__:
+                case NEON2__:
+                case NEON3__:
+                case NEON4__:
+                case NEON5__:
+                case NEON6__:
                     continue;
 
                 default:
@@ -5627,60 +5627,60 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
         switch (DynamicTileMap[s->picnum])
         {
-            case NATURALLIGHTNING__STATIC:
+            case NATURALLIGHTNING__:
                 t->shade = -127;
                 break;
-            case FEM1__STATIC:
-            case FEM2__STATIC:
-            case FEM3__STATIC:
-            case FEM4__STATIC:
-            case FEM5__STATIC:
-            case FEM6__STATIC:
-            case FEM7__STATIC:
-            case FEM8__STATIC:
-            case FEM9__STATIC:
-            case FEM10__STATIC:
-            case MAN__STATIC:
-            case MAN2__STATIC:
-            case WOMAN__STATIC:
-            case NAKED1__STATIC:
-            case PODFEM1__STATIC:
-            case FEMMAG1__STATIC:
-            case FEMMAG2__STATIC:
-            case FEMPIC1__STATIC:
-            case FEMPIC2__STATIC:
-            case FEMPIC3__STATIC:
-            case FEMPIC4__STATIC:
-            case FEMPIC5__STATIC:
-            case FEMPIC6__STATIC:
-            case FEMPIC7__STATIC:
-            case BLOODYPOLE__STATIC:
-            case FEM6PAD__STATIC:
-            case STATUE__STATIC:
-            case STATUEFLASH__STATIC:
-            case OOZ__STATIC:
-            case OOZ2__STATIC:
-            case WALLBLOOD1__STATIC:
-            case WALLBLOOD2__STATIC:
-            case WALLBLOOD3__STATIC:
-            case WALLBLOOD4__STATIC:
-            case WALLBLOOD5__STATIC:
-            case WALLBLOOD7__STATIC:
-            case WALLBLOOD8__STATIC:
-            case SUSHIPLATE1__STATIC:
-            case SUSHIPLATE2__STATIC:
-            case SUSHIPLATE3__STATIC:
-            case SUSHIPLATE4__STATIC:
-            case FETUS__STATIC:
-            case FETUSJIB__STATIC:
-            case FETUSBROKE__STATIC:
-            case HOTMEAT__STATIC:
-            case FOODOBJECT16__STATIC:
-            case DOLPHIN1__STATIC:
-            case DOLPHIN2__STATIC:
-            case TOUGHGAL__STATIC:
-            case TAMPON__STATIC:
-            case XXXSTACY__STATIC:
+            case FEM1__:
+            case FEM2__:
+            case FEM3__:
+            case FEM4__:
+            case FEM5__:
+            case FEM6__:
+            case FEM7__:
+            case FEM8__:
+            case FEM9__:
+            case FEM10__:
+            case MAN__:
+            case MAN2__:
+            case WOMAN__:
+            case NAKED1__:
+            case PODFEM1__:
+            case FEMMAG1__:
+            case FEMMAG2__:
+            case FEMPIC1__:
+            case FEMPIC2__:
+            case FEMPIC3__:
+            case FEMPIC4__:
+            case FEMPIC5__:
+            case FEMPIC6__:
+            case FEMPIC7__:
+            case BLOODYPOLE__:
+            case FEM6PAD__:
+            case STATUE__:
+            case STATUEFLASH__:
+            case OOZ__:
+            case OOZ2__:
+            case WALLBLOOD1__:
+            case WALLBLOOD2__:
+            case WALLBLOOD3__:
+            case WALLBLOOD4__:
+            case WALLBLOOD5__:
+            case WALLBLOOD7__:
+            case WALLBLOOD8__:
+            case SUSHIPLATE1__:
+            case SUSHIPLATE2__:
+            case SUSHIPLATE3__:
+            case SUSHIPLATE4__:
+            case FETUS__:
+            case FETUSJIB__:
+            case FETUSBROKE__:
+            case HOTMEAT__:
+            case FOODOBJECT16__:
+            case DOLPHIN1__:
+            case DOLPHIN2__:
+            case TOUGHGAL__:
+            case TAMPON__:
+            case XXXSTACY__:
                 if (ud.lockout)
                 {
                     t->xrepeat = t->yrepeat = 0;
@@ -5740,33 +5740,33 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
 
         switch (DynamicTileMap[switchpic])
         {
-            case DUKELYINGDEAD__STATIC:
+            case DUKELYINGDEAD__:
                 t->z += (24 << 8);
                 break;
-            case BLOODPOOL__STATIC:
-            case FOOTPRINTS__STATIC:
-            case FOOTPRINTS2__STATIC:
-            case FOOTPRINTS3__STATIC:
-            case FOOTPRINTS4__STATIC:
+            case BLOODPOOL__:
+            case FOOTPRINTS__:
+            case FOOTPRINTS2__:
+            case FOOTPRINTS3__:
+            case FOOTPRINTS4__:
                 if (t->pal == 6)
                     t->shade = -127;
                 fallthrough__;
-            case PUKE__STATIC:
-            case MONEY__STATIC:
-                //case MONEY+1__STATIC:
-            case MAIL__STATIC:
-                //case MAIL+1__STATIC:
-            case PAPER__STATIC:
-                //case PAPER+1__STATIC:
+            case PUKE__:
+            case MONEY__:
+                //case MONEY+1__:
+            case MAIL__:
+                //case MAIL+1__:
+            case PAPER__:
+                //case PAPER+1__:
                 if (ud.lockout && s->pal == 2)
                 {
                     t->xrepeat = t->yrepeat = 0;
                     //continue;
                 }
                 break;
-            case TRIPBOMB__STATIC:
+            case TRIPBOMB__:
                 continue;
-            case FORCESPHERE__STATIC:
+            case FORCESPHERE__:
                 if (t->statnum == 5)
                 {
                     short sqa, sqb;
@@ -5785,8 +5785,8 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                             t->xrepeat = t->yrepeat = 0;
                 }
                 continue;
-            case BURNING__STATIC:
-            case BURNING2__STATIC:
+            case BURNING__:
+            case BURNING2__:
                 if (sprite[s->owner].statnum == 10)
                 {
                     if (display_mirror == 0 && sprite[s->owner].yvel == screenpeek && g_player[sprite[s->owner].yvel].ps->over_shoulder_on == 0)
@@ -5802,14 +5802,14 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 }
                 break;
 
-            case ATOMICHEALTH__STATIC:
+            case ATOMICHEALTH__:
                 t->z -= (4 << 8);
                 break;
-            case CRYSTALAMMO__STATIC:
+            case CRYSTALAMMO__:
                 t->shade = (sintable[((int32_t)totalclock << 4) & 2047] >> 10);
                 continue;
-            case VIEWSCREEN__STATIC:
-            case VIEWSCREEN2__STATIC:
+            case VIEWSCREEN__:
+            case VIEWSCREEN2__:
             {
                 int const viewscrShift = G_GetViewscreenSizeShift(t);
                 int const viewscrTile = TILE_VIEWSCR - viewscrShift;
@@ -5847,14 +5847,14 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 break;
             }
 
-            case SHRINKSPARK__STATIC:
+            case SHRINKSPARK__:
                 t->picnum = SHRINKSPARK + (((int32_t)totalclock >> 4) & 3);
                 break;
-            case GROWSPARK__STATIC:
+            case GROWSPARK__:
                 t->picnum = GROWSPARK + (((int32_t)totalclock >> 4) & 3);
                 break;
 
-            case RPG__STATIC:
+            case RPG__:
                 if (tilehasmodelorvoxel(t->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                 {
                     int32_t v = getangle(t->xvel, t->zvel >> 4);
@@ -5867,7 +5867,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 t->picnum = RPG + frameOffset;
                 break;
 
-            case RECON__STATIC:
+            case RECON__:
                 if (tilehasmodelorvoxel(t->picnum, t->pal) && !(spriteext[i].flags & SPREXT_NOTMD))
                 {
                     t->cstat &= ~4;
@@ -5882,7 +5882,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 t->picnum = RECON + frameOffset;
                 break;
 
-            case APLAYER__STATIC:
+            case APLAYER__:
                 p = s->yvel;
 
                 if (t->pal == 1) // Frozen?
@@ -6019,21 +6019,21 @@ PALONLY:
 
                 break;
 
-            case JIBS1__STATIC:
-            case JIBS2__STATIC:
-            case JIBS3__STATIC:
-            case JIBS4__STATIC:
-            case JIBS5__STATIC:
-            case JIBS6__STATIC:
-            case HEADJIB1__STATIC:
-            case LEGJIB1__STATIC:
-            case ARMJIB1__STATIC:
-            case LIZMANHEAD1__STATIC:
-            case LIZMANARM1__STATIC:
-            case LIZMANLEG1__STATIC:
-            case DUKELEG__STATIC:
-            case DUKEGUN__STATIC:
-            case DUKETORSO__STATIC:
+            case JIBS1__:
+            case JIBS2__:
+            case JIBS3__:
+            case JIBS4__:
+            case JIBS5__:
+            case JIBS6__:
+            case HEADJIB1__:
+            case LEGJIB1__:
+            case ARMJIB1__:
+            case LIZMANHEAD1__:
+            case LIZMANARM1__:
+            case LIZMANLEG1__:
+            case DUKELEG__:
+            case DUKEGUN__:
+            case DUKETORSO__:
                 if (ud.lockout)
                 {
                     t->xrepeat = t->yrepeat = 0;
@@ -6041,11 +6041,11 @@ PALONLY:
                 }
                 if (t->pal == 6) t->shade = -120;
                 fallthrough__;
-            case SCRAP1__STATIC:
-            case SCRAP2__STATIC:
-            case SCRAP3__STATIC:
-            case SCRAP4__STATIC:
-            case SCRAP5__STATIC:
+            case SCRAP1__:
+            case SCRAP2__:
+            case SCRAP3__:
+            case SCRAP4__:
+            case SCRAP5__:
                 if (actor[i].htpicnum == BLIMP && t->picnum == SCRAP1 && s->yvel >= 0)
                     t->picnum = s->yvel;
                 else t->picnum += T1(i);
@@ -6054,7 +6054,7 @@ PALONLY:
                 G_MaybeTakeOnFloorPal(t, sect);
                 break;
 
-            case WATERBUBBLE__STATIC:
+            case WATERBUBBLE__:
                 if (sector[t->sectnum].floorpicnum == FLOORSLIME)
                 {
                     t->pal = 7;
@@ -6217,23 +6217,23 @@ skip:
 
         switch (DynamicTileMap[s->picnum])
         {
-            case LASERLINE__STATIC:
+            case LASERLINE__:
                 if (sector[t->sectnum].lotag == ST_2_UNDERWATER) t->pal = 8;
                 t->z = sprite[s->owner].z - (3 << 8);
                 if (g_tripbombLaserMode == 2 && g_player[screenpeek].ps->heat_on == 0)
                     t->yrepeat = 0;
                 fallthrough__;
-            case EXPLOSION2__STATIC:
-            case EXPLOSION2BOT__STATIC:
-            case FREEZEBLAST__STATIC:
-            case ATOMICHEALTH__STATIC:
-            case FIRELASER__STATIC:
-            case SHRINKSPARK__STATIC:
-            case GROWSPARK__STATIC:
-            case CHAINGUN__STATIC:
-            case SHRINKEREXPLOSION__STATIC:
-            case RPG__STATIC:
-            case FLOORFLAME__STATIC:
+            case EXPLOSION2__:
+            case EXPLOSION2BOT__:
+            case FREEZEBLAST__:
+            case ATOMICHEALTH__:
+            case FIRELASER__:
+            case SHRINKSPARK__:
+            case GROWSPARK__:
+            case CHAINGUN__:
+            case SHRINKEREXPLOSION__:
+            case RPG__:
+            case FLOORFLAME__:
                 if (t->picnum == EXPLOSION2)
                 {
                     g_player[screenpeek].display.visibility = -127;
@@ -6241,19 +6241,19 @@ skip:
                 }
                 t->shade = -127;
                 break;
-            case FIRE__STATIC:
-            case FIRE2__STATIC:
-            case BURNING__STATIC:
-            case BURNING2__STATIC:
+            case FIRE__:
+            case FIRE2__:
+            case BURNING__:
+            case BURNING2__:
                 if (sprite[s->owner].picnum != TREE1 && sprite[s->owner].picnum != TREE2)
                     t->z = sector[t->sectnum].floorz;
                 t->shade = -127;
                 break;
-            case COOLEXPLOSION1__STATIC:
+            case COOLEXPLOSION1__:
                 t->shade = -127;
                 t->picnum += (s->shade >> 1);
                 break;
-            case PLAYERONWATER__STATIC:
+            case PLAYERONWATER__:
                 t->shade = sprite[s->owner].shade;
 
                 if (haveAction)
@@ -6270,21 +6270,21 @@ skip:
                 t->picnum = s->picnum + frameOffset + ((T1(i) < 4) * 5);
                 break;
 
-            case WATERSPLASH2__STATIC:
+            case WATERSPLASH2__:
                 t->picnum = WATERSPLASH2 + T2(i);
                 break;
-            case SHELL__STATIC:
+            case SHELL__:
                 t->picnum = s->picnum + (T1(i) & 1);
                 fallthrough__;
-            case SHOTGUNSHELL__STATIC:
+            case SHOTGUNSHELL__:
                 t->cstat |= 12;
                 if (T1(i) > 1) t->cstat &= ~4;
                 if (T1(i) > 2) t->cstat &= ~12;
                 break;
-            case FRAMEEFFECT1_13__STATIC:
+            case FRAMEEFFECT1_13__:
                 if (PLUTOPAK) break;
                 fallthrough__;
-            case FRAMEEFFECT1__STATIC:
+            case FRAMEEFFECT1__:
                 if (s->owner >= 0 && sprite[s->owner].statnum < MAXSTATUS)
                 {
                     if (sprite[s->owner].picnum == APLAYER)
@@ -6310,8 +6310,8 @@ skip:
                 }
                 break;
 
-            case CAMERA1__STATIC:
-            case RAT__STATIC:
+            case CAMERA1__:
+            case RAT__:
                 if (haveAction)
                     break;
 

@@ -145,80 +145,80 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
 
     switch (DynamicTileMap[sprite[spriteNum].picnum])
     {
-        case FIRSTGUNSPRITE__STATIC:    score = DukeBot_GetWeaponScore(pNum, spriteNum, PISTOL_WEAPON, false); break;
-        case RPGSPRITE__STATIC:         score = DukeBot_GetWeaponScore(pNum, spriteNum, RPG_WEAPON, false); break;
-        case FREEZESPRITE__STATIC:      score = DukeBot_GetWeaponScore(pNum, spriteNum, FREEZE_WEAPON, false); break;
-        case SHRINKERSPRITE__STATIC:    score = DukeBot_GetWeaponScore(pNum, spriteNum, SHRINKER_WEAPON, false); break;
-        case HEAVYHBOMB__STATIC:        score = DukeBot_GetWeaponScore(pNum, spriteNum, HANDBOMB_WEAPON, false); break;
-        case CHAINGUNSPRITE__STATIC:    score = DukeBot_GetWeaponScore(pNum, spriteNum, CHAINGUN_WEAPON, false); break;
-        case TRIPBOMBSPRITE__STATIC:    score = DukeBot_GetWeaponScore(pNum, spriteNum, TRIPBOMB_WEAPON, false); break;
-        case SHOTGUNSPRITE__STATIC:     score = DukeBot_GetWeaponScore(pNum, spriteNum, SHOTGUN_WEAPON, false); break;
-        case DEVISTATORSPRITE__STATIC:  score = DukeBot_GetWeaponScore(pNum, spriteNum, DEVISTATOR_WEAPON, false); break;
+        case FIRSTGUNSPRITE__:    score = DukeBot_GetWeaponScore(pNum, spriteNum, PISTOL_WEAPON, false); break;
+        case RPGSPRITE__:         score = DukeBot_GetWeaponScore(pNum, spriteNum, RPG_WEAPON, false); break;
+        case FREEZESPRITE__:      score = DukeBot_GetWeaponScore(pNum, spriteNum, FREEZE_WEAPON, false); break;
+        case SHRINKERSPRITE__:    score = DukeBot_GetWeaponScore(pNum, spriteNum, SHRINKER_WEAPON, false); break;
+        case HEAVYHBOMB__:        score = DukeBot_GetWeaponScore(pNum, spriteNum, HANDBOMB_WEAPON, false); break;
+        case CHAINGUNSPRITE__:    score = DukeBot_GetWeaponScore(pNum, spriteNum, CHAINGUN_WEAPON, false); break;
+        case TRIPBOMBSPRITE__:    score = DukeBot_GetWeaponScore(pNum, spriteNum, TRIPBOMB_WEAPON, false); break;
+        case SHOTGUNSPRITE__:     score = DukeBot_GetWeaponScore(pNum, spriteNum, SHOTGUN_WEAPON, false); break;
+        case DEVISTATORSPRITE__:  score = DukeBot_GetWeaponScore(pNum, spriteNum, DEVISTATOR_WEAPON, false); break;
 
-        case FREEZEAMMO__STATIC:        score = DukeBot_GetWeaponScore(pNum, spriteNum, FREEZE_WEAPON, true); break;
-        case AMMO__STATIC:              score = DukeBot_GetWeaponScore(pNum, spriteNum, PISTOL_WEAPON, true); break;
-        case BATTERYAMMO__STATIC:       score = DukeBot_GetWeaponScore(pNum, spriteNum, CHAINGUN_WEAPON, true); break;
-        case DEVISTATORAMMO__STATIC:    score = DukeBot_GetWeaponScore(pNum, spriteNum, DEVISTATOR_WEAPON, true); break;
-        case RPGAMMO__STATIC:           score = DukeBot_GetWeaponScore(pNum, spriteNum, RPG_WEAPON, true); break;
-        case CRYSTALAMMO__STATIC:       score = DukeBot_GetWeaponScore(pNum, spriteNum, SHRINKER_WEAPON, true); break;
-        case GROWAMMO__STATIC:          score = DukeBot_GetWeaponScore(pNum, spriteNum, GROW_WEAPON, true); break;
-        case HBOMBAMMO__STATIC:         score = DukeBot_GetWeaponScore(pNum, spriteNum, HANDBOMB_WEAPON, true); break;
-        case SHOTGUNAMMO__STATIC:       score = DukeBot_GetWeaponScore(pNum, spriteNum, SHOTGUN_WEAPON, true); break;
+        case FREEZEAMMO__:        score = DukeBot_GetWeaponScore(pNum, spriteNum, FREEZE_WEAPON, true); break;
+        case AMMO__:              score = DukeBot_GetWeaponScore(pNum, spriteNum, PISTOL_WEAPON, true); break;
+        case BATTERYAMMO__:       score = DukeBot_GetWeaponScore(pNum, spriteNum, CHAINGUN_WEAPON, true); break;
+        case DEVISTATORAMMO__:    score = DukeBot_GetWeaponScore(pNum, spriteNum, DEVISTATOR_WEAPON, true); break;
+        case RPGAMMO__:           score = DukeBot_GetWeaponScore(pNum, spriteNum, RPG_WEAPON, true); break;
+        case CRYSTALAMMO__:       score = DukeBot_GetWeaponScore(pNum, spriteNum, SHRINKER_WEAPON, true); break;
+        case GROWAMMO__:          score = DukeBot_GetWeaponScore(pNum, spriteNum, GROW_WEAPON, true); break;
+        case HBOMBAMMO__:         score = DukeBot_GetWeaponScore(pNum, spriteNum, HANDBOMB_WEAPON, true); break;
+        case SHOTGUNAMMO__:       score = DukeBot_GetWeaponScore(pNum, spriteNum, SHOTGUN_WEAPON, true); break;
 
-        case COLA__STATIC:
+        case COLA__:
             if (sprite[p->i].extra < 50)
                 score = 20;
             else if (sprite[p->i].extra < p->max_player_health)
                 score = 10;
             break;
-        case SIXPAK__STATIC:
+        case SIXPAK__:
             if (sprite[p->i].extra < 50)
                 score = 60;
             else if (sprite[p->i].extra < p->max_player_health)
                 score = 30;
             break;
-        case FIRSTAID__STATIC:
+        case FIRSTAID__:
             if (p->inv_amount[GET_FIRSTAID] < p->max_player_health)
                 score = 100;
             break;
-        case SHIELD__STATIC:
+        case SHIELD__:
             if (p->inv_amount[GET_SHIELD] < p->max_shield_amount)
                 score = 50;
             break;
-        case STEROIDS__STATIC:
+        case STEROIDS__:
             if (p->inv_amount[GET_STEROIDS] < 400)
                 score = 30;
             break;
-        case AIRTANK__STATIC:
+        case AIRTANK__:
             if (p->inv_amount[GET_SCUBA] < 6400)
                 score = 30;
             break;
-        case JETPACK__STATIC:
+        case JETPACK__:
             if (p->inv_amount[GET_JETPACK] < 1600)
                 score = 100;
             break;
-        case HEATSENSOR__STATIC:
+        case HEATSENSOR__:
             if (p->inv_amount[GET_HEATS] < 1200)
                 score = 5;
             break;
-        case ACCESSCARD__STATIC:
+        case ACCESSCARD__:
             score = 1;
             break;
-        case BOOTS__STATIC:
+        case BOOTS__:
             if (p->inv_amount[GET_BOOTS] < 200)
                 score = 15;
             break;
-        case ATOMICHEALTH__STATIC:
+        case ATOMICHEALTH__:
             if (sprite[p->i].extra < 50)
                 score = 100;
             else if (sprite[p->i].extra < p->max_player_health << 1)
                 score = 50;
             break;
-        case HOLODUKE__STATIC:
+        case HOLODUKE__:
             if (p->inv_amount[GET_HOLODUKE] < 2400)
                 score = 5;
             break;
-        case RESPAWNMARKERGREEN__STATIC:
+        case RESPAWNMARKERGREEN__:
             score = 1;
             break;
     }
@@ -925,10 +925,10 @@ void DukeBot_GetInput(int snum, input_t* syn)
         int32_t dodgeSpeed = 0;
         switch (DynamicTileMap[sprite[spr].picnum])
         {
-            case TONGUE__STATIC:      dodgeSpeed = 4;  break;
-            case FREEZEBLAST__STATIC: dodgeSpeed = 4;  break;
-            case SHRINKSPARK__STATIC: dodgeSpeed = 16; break;
-            case RPG__STATIC:         dodgeSpeed = 16; break;
+            case TONGUE__:      dodgeSpeed = 4;  break;
+            case FREEZEBLAST__: dodgeSpeed = 4;  break;
+            case SHRINKSPARK__: dodgeSpeed = 16; break;
+            case RPG__:         dodgeSpeed = 16; break;
             default:                  dodgeSpeed = 0;  break;
         }
 

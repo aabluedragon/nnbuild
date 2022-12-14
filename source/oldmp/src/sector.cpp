@@ -148,28 +148,28 @@ int CheckDoorTile(int dapic)
 {
     switch (DynamicTileMap[dapic])
     {
-    case DOORTILE1__STATIC:
-    case DOORTILE2__STATIC:
-    case DOORTILE3__STATIC:
-    case DOORTILE4__STATIC:
-    case DOORTILE5__STATIC:
-    case DOORTILE6__STATIC:
-    case DOORTILE7__STATIC:
-    case DOORTILE8__STATIC:
-    case DOORTILE9__STATIC:
-    case DOORTILE10__STATIC:
-    case DOORTILE11__STATIC:
-    case DOORTILE12__STATIC:
-    case DOORTILE14__STATIC:
-    case DOORTILE15__STATIC:
-    case DOORTILE16__STATIC:
-    case DOORTILE17__STATIC:
-    case DOORTILE18__STATIC:
-    case DOORTILE19__STATIC:
-    case DOORTILE20__STATIC:
-    case DOORTILE21__STATIC:
-    case DOORTILE22__STATIC:
-    case DOORTILE23__STATIC:
+    case DOORTILE1__:
+    case DOORTILE2__:
+    case DOORTILE3__:
+    case DOORTILE4__:
+    case DOORTILE5__:
+    case DOORTILE6__:
+    case DOORTILE7__:
+    case DOORTILE8__:
+    case DOORTILE9__:
+    case DOORTILE10__:
+    case DOORTILE11__:
+    case DOORTILE12__:
+    case DOORTILE14__:
+    case DOORTILE15__:
+    case DOORTILE16__:
+    case DOORTILE17__:
+    case DOORTILE18__:
+    case DOORTILE19__:
+    case DOORTILE20__:
+    case DOORTILE21__:
+    case DOORTILE22__:
+    case DOORTILE23__:
         return 1;
     }
     return 0;
@@ -512,23 +512,23 @@ void G_AnimateWalls(void)
 
         switch (DynamicTileMap[j])
         {
-        case SCREENBREAK1__STATIC:
-        case SCREENBREAK2__STATIC:
-        case SCREENBREAK3__STATIC:
-        case SCREENBREAK4__STATIC:
-        case SCREENBREAK5__STATIC:
+        case SCREENBREAK1__:
+        case SCREENBREAK2__:
+        case SCREENBREAK3__:
+        case SCREENBREAK4__:
+        case SCREENBREAK5__:
 
-        case SCREENBREAK9__STATIC:
-        case SCREENBREAK10__STATIC:
-        case SCREENBREAK11__STATIC:
-        case SCREENBREAK12__STATIC:
-        case SCREENBREAK13__STATIC:
-        case SCREENBREAK14__STATIC:
-        case SCREENBREAK15__STATIC:
-        case SCREENBREAK16__STATIC:
-        case SCREENBREAK17__STATIC:
-        case SCREENBREAK18__STATIC:
-        case SCREENBREAK19__STATIC:
+        case SCREENBREAK9__:
+        case SCREENBREAK10__:
+        case SCREENBREAK11__:
+        case SCREENBREAK12__:
+        case SCREENBREAK13__:
+        case SCREENBREAK14__:
+        case SCREENBREAK15__:
+        case SCREENBREAK16__:
+        case SCREENBREAK17__:
+        case SCREENBREAK18__:
+        case SCREENBREAK19__:
 
             if ((seed_krand(&g_random.animwall)&255) < 16)
             {
@@ -538,9 +538,9 @@ void G_AnimateWalls(void)
 
             continue;
 
-        case SCREENBREAK6__STATIC:
-        case SCREENBREAK7__STATIC:
-        case SCREENBREAK8__STATIC:
+        case SCREENBREAK6__:
+        case SCREENBREAK7__:
+        case SCREENBREAK8__:
 
             if (animwall[p].tag >= 0 && wall[i].extra != FEMPIC2 && wall[i].extra != FEMPIC3)
                 wall[i].picnum = animwall[p].tag;
@@ -1282,15 +1282,15 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
 
     switch (DynamicTileMap[switchpicnum])
     {
-    case DIPSWITCH__STATIC:
+    case DIPSWITCH__:
         //    case DIPSWITCH+1:
-    case TECHSWITCH__STATIC:
+    case TECHSWITCH__:
         //    case TECHSWITCH+1:
-    case ALIENSWITCH__STATIC:
+    case ALIENSWITCH__:
         //    case ALIENSWITCH+1:
         break;
-    case ACCESSSWITCH__STATIC:
-    case ACCESSSWITCH2__STATIC:
+    case ACCESSSWITCH__:
+    case ACCESSSWITCH2__:
         if (g_player[snum].ps->access_incs == 0)
         {
             if (switchpal == 0)
@@ -1325,35 +1325,35 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
             return 0;
         }
         fallthrough__;
-    case DIPSWITCH2__STATIC:
+    case DIPSWITCH2__:
         //case DIPSWITCH2+1:
-    case DIPSWITCH3__STATIC:
+    case DIPSWITCH3__:
         //case DIPSWITCH3+1:
-    case MULTISWITCH__STATIC:
+    case MULTISWITCH__:
         //case MULTISWITCH+1:
         //case MULTISWITCH+2:
         //case MULTISWITCH+3:
-    case PULLSWITCH__STATIC:
+    case PULLSWITCH__:
         //case PULLSWITCH+1:
-    case HANDSWITCH__STATIC:
+    case HANDSWITCH__:
         //case HANDSWITCH+1:
-    case SLOTDOOR__STATIC:
+    case SLOTDOOR__:
         //case SLOTDOOR+1:
-    case LIGHTSWITCH__STATIC:
+    case LIGHTSWITCH__:
         //case LIGHTSWITCH+1:
-    case SPACELIGHTSWITCH__STATIC:
+    case SPACELIGHTSWITCH__:
         //case SPACELIGHTSWITCH+1:
-    case SPACEDOORSWITCH__STATIC:
+    case SPACEDOORSWITCH__:
         //case SPACEDOORSWITCH+1:
-    case FRANKENSTINESWITCH__STATIC:
+    case FRANKENSTINESWITCH__:
         //case FRANKENSTINESWITCH+1:
-    case LIGHTSWITCH2__STATIC:
+    case LIGHTSWITCH2__:
         //case LIGHTSWITCH2+1:
-    case POWERSWITCH1__STATIC:
+    case POWERSWITCH1__:
         //case POWERSWITCH1+1:
-    case LOCKSWITCH1__STATIC:
+    case LOCKSWITCH1__:
         //case LOCKSWITCH1+1:
-    case POWERSWITCH2__STATIC:
+    case POWERSWITCH2__:
         //case POWERSWITCH2+1:
         if (check_activator_motion(lotag)) return 0;
         break;
@@ -1382,54 +1382,54 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
             switch (DynamicTileMap[switchpicnum])
             {
 
-            case DIPSWITCH__STATIC:
-            case TECHSWITCH__STATIC:
-            case ALIENSWITCH__STATIC:
+            case DIPSWITCH__:
+            case TECHSWITCH__:
+            case ALIENSWITCH__:
                 if (switchtype == 1 && w == i) PN(i)++;
                 else if (SHT(i) == 0) correctdips++;
                 numdips++;
                 break;
-            case ACCESSSWITCH__STATIC:
-            case ACCESSSWITCH2__STATIC:
-            case SLOTDOOR__STATIC:
-            case LIGHTSWITCH__STATIC:
-            case SPACELIGHTSWITCH__STATIC:
-            case SPACEDOORSWITCH__STATIC:
-            case FRANKENSTINESWITCH__STATIC:
-            case LIGHTSWITCH2__STATIC:
-            case POWERSWITCH1__STATIC:
-            case LOCKSWITCH1__STATIC:
-            case POWERSWITCH2__STATIC:
-            case HANDSWITCH__STATIC:
-            case PULLSWITCH__STATIC:
-            case DIPSWITCH2__STATIC:
-            case DIPSWITCH3__STATIC:
+            case ACCESSSWITCH__:
+            case ACCESSSWITCH2__:
+            case SLOTDOOR__:
+            case LIGHTSWITCH__:
+            case SPACELIGHTSWITCH__:
+            case SPACEDOORSWITCH__:
+            case FRANKENSTINESWITCH__:
+            case LIGHTSWITCH2__:
+            case POWERSWITCH1__:
+            case LOCKSWITCH1__:
+            case POWERSWITCH2__:
+            case HANDSWITCH__:
+            case PULLSWITCH__:
+            case DIPSWITCH2__:
+            case DIPSWITCH3__:
                 sprite[i].picnum++;
                 break;
             default:
                 switch (DynamicTileMap[switchpicnum-1])
                 {
 
-                case TECHSWITCH__STATIC:
-                case DIPSWITCH__STATIC:
-                case ALIENSWITCH__STATIC:
+                case TECHSWITCH__:
+                case DIPSWITCH__:
+                case ALIENSWITCH__:
                     if (switchtype == 1 && w == i) PN(i)--;
                     else if (SHT(i) == 1) correctdips++;
                     numdips++;
                     break;
-                case PULLSWITCH__STATIC:
-                case HANDSWITCH__STATIC:
-                case LIGHTSWITCH2__STATIC:
-                case POWERSWITCH1__STATIC:
-                case LOCKSWITCH1__STATIC:
-                case POWERSWITCH2__STATIC:
-                case SLOTDOOR__STATIC:
-                case LIGHTSWITCH__STATIC:
-                case SPACELIGHTSWITCH__STATIC:
-                case SPACEDOORSWITCH__STATIC:
-                case FRANKENSTINESWITCH__STATIC:
-                case DIPSWITCH2__STATIC:
-                case DIPSWITCH3__STATIC:
+                case PULLSWITCH__:
+                case HANDSWITCH__:
+                case LIGHTSWITCH2__:
+                case POWERSWITCH1__:
+                case LOCKSWITCH1__:
+                case POWERSWITCH2__:
+                case SLOTDOOR__:
+                case LIGHTSWITCH__:
+                case SPACELIGHTSWITCH__:
+                case SPACEDOORSWITCH__:
+                case FRANKENSTINESWITCH__:
+                case DIPSWITCH2__:
+                case DIPSWITCH3__:
                     sprite[i].picnum--;
                     break;
                 }
@@ -1454,54 +1454,54 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
             switch (DynamicTileMap[wall[x].picnum])
             {
 
-            case DIPSWITCH__STATIC:
-            case TECHSWITCH__STATIC:
-            case ALIENSWITCH__STATIC:
+            case DIPSWITCH__:
+            case TECHSWITCH__:
+            case ALIENSWITCH__:
                 if (switchtype == 0 && i == w) wall[x].picnum++;
                 else if (wall[x].hitag == 0) correctdips++;
                 numdips++;
                 break;
-            case ACCESSSWITCH__STATIC:
-            case ACCESSSWITCH2__STATIC:
-            case SLOTDOOR__STATIC:
-            case LIGHTSWITCH__STATIC:
-            case SPACELIGHTSWITCH__STATIC:
-            case SPACEDOORSWITCH__STATIC:
-            case FRANKENSTINESWITCH__STATIC:
-            case LIGHTSWITCH2__STATIC:
-            case POWERSWITCH1__STATIC:
-            case LOCKSWITCH1__STATIC:
-            case POWERSWITCH2__STATIC:
-            case HANDSWITCH__STATIC:
-            case PULLSWITCH__STATIC:
-            case DIPSWITCH2__STATIC:
-            case DIPSWITCH3__STATIC:
+            case ACCESSSWITCH__:
+            case ACCESSSWITCH2__:
+            case SLOTDOOR__:
+            case LIGHTSWITCH__:
+            case SPACELIGHTSWITCH__:
+            case SPACEDOORSWITCH__:
+            case FRANKENSTINESWITCH__:
+            case LIGHTSWITCH2__:
+            case POWERSWITCH1__:
+            case LOCKSWITCH1__:
+            case POWERSWITCH2__:
+            case HANDSWITCH__:
+            case PULLSWITCH__:
+            case DIPSWITCH2__:
+            case DIPSWITCH3__:
                 wall[x].picnum++;
                 break;
             default:
                 switch (DynamicTileMap[wall[x].picnum-1])
                 {
 
-                case TECHSWITCH__STATIC:
-                case DIPSWITCH__STATIC:
-                case ALIENSWITCH__STATIC:
+                case TECHSWITCH__:
+                case DIPSWITCH__:
+                case ALIENSWITCH__:
                     if (switchtype == 0 && i == w) wall[x].picnum--;
                     else if (wall[x].hitag == 1) correctdips++;
                     numdips++;
                     break;
-                case PULLSWITCH__STATIC:
-                case HANDSWITCH__STATIC:
-                case LIGHTSWITCH2__STATIC:
-                case POWERSWITCH1__STATIC:
-                case LOCKSWITCH1__STATIC:
-                case POWERSWITCH2__STATIC:
-                case SLOTDOOR__STATIC:
-                case LIGHTSWITCH__STATIC:
-                case SPACELIGHTSWITCH__STATIC:
-                case SPACEDOORSWITCH__STATIC:
-                case FRANKENSTINESWITCH__STATIC:
-                case DIPSWITCH2__STATIC:
-                case DIPSWITCH3__STATIC:
+                case PULLSWITCH__:
+                case HANDSWITCH__:
+                case LIGHTSWITCH2__:
+                case POWERSWITCH1__:
+                case LOCKSWITCH1__:
+                case POWERSWITCH2__:
+                case SLOTDOOR__:
+                case LIGHTSWITCH__:
+                case SPACELIGHTSWITCH__:
+                case SPACEDOORSWITCH__:
+                case FRANKENSTINESWITCH__:
+                case DIPSWITCH2__:
+                case DIPSWITCH3__:
                     wall[x].picnum--;
                     break;
                 }
@@ -1549,11 +1549,11 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
     default:
         if (CheckDoorTile(picnum) == 0) break;
         fallthrough__;
-    case DIPSWITCH__STATIC:
+    case DIPSWITCH__:
         //case DIPSWITCH+1:
-    case TECHSWITCH__STATIC:
+    case TECHSWITCH__:
         //case TECHSWITCH+1:
-    case ALIENSWITCH__STATIC:
+    case ALIENSWITCH__:
         //case ALIENSWITCH+1:
         if (picnum == DIPSWITCH  || picnum == DIPSWITCH+1 ||
                 picnum == ALIENSWITCH || picnum == ALIENSWITCH+1 ||
@@ -1575,37 +1575,37 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
             S_PlaySoundXYZ(END_OF_LEVEL_WARN,g_player[snum].ps->i,sx,sy,g_player[snum].ps->pos.z);
         }
         fallthrough__;
-    case DIPSWITCH2__STATIC:
+    case DIPSWITCH2__:
         //case DIPSWITCH2+1:
-    case DIPSWITCH3__STATIC:
+    case DIPSWITCH3__:
         //case DIPSWITCH3+1:
-    case MULTISWITCH__STATIC:
+    case MULTISWITCH__:
         //case MULTISWITCH+1:
         //case MULTISWITCH+2:
         //case MULTISWITCH+3:
-    case ACCESSSWITCH__STATIC:
-    case ACCESSSWITCH2__STATIC:
-    case SLOTDOOR__STATIC:
+    case ACCESSSWITCH__:
+    case ACCESSSWITCH2__:
+    case SLOTDOOR__:
         //case SLOTDOOR+1:
-    case LIGHTSWITCH__STATIC:
+    case LIGHTSWITCH__:
         //case LIGHTSWITCH+1:
-    case SPACELIGHTSWITCH__STATIC:
+    case SPACELIGHTSWITCH__:
         //case SPACELIGHTSWITCH+1:
-    case SPACEDOORSWITCH__STATIC:
+    case SPACEDOORSWITCH__:
         //case SPACEDOORSWITCH+1:
-    case FRANKENSTINESWITCH__STATIC:
+    case FRANKENSTINESWITCH__:
         //case FRANKENSTINESWITCH+1:
-    case LIGHTSWITCH2__STATIC:
+    case LIGHTSWITCH2__:
         //case LIGHTSWITCH2+1:
-    case POWERSWITCH1__STATIC:
+    case POWERSWITCH1__:
         //case POWERSWITCH1+1:
-    case LOCKSWITCH1__STATIC:
+    case LOCKSWITCH1__:
         //case LOCKSWITCH1+1:
-    case POWERSWITCH2__STATIC:
+    case POWERSWITCH2__:
         //case POWERSWITCH2+1:
-    case HANDSWITCH__STATIC:
+    case HANDSWITCH__:
         //case HANDSWITCH+1:
-    case PULLSWITCH__STATIC:
+    case PULLSWITCH__:
         //case PULLSWITCH+1:
 
         if (picnum == MULTISWITCH || picnum == (MULTISWITCH+1) ||
@@ -1740,14 +1740,14 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
     {
         switch (DynamicTileMap[weaponNum])
         {
-        case RADIUSEXPLOSION__STATIC:
-        case SEENINE__STATIC:
+        case RADIUSEXPLOSION__:
+        case SEENINE__:
 #ifndef EDUKE32_STANDALONE
-        case HEAVYHBOMB__STATIC:
-        case RPG__STATIC:
-        case HYDRENT__STATIC:
-        case OOZFILTER__STATIC:
-        case EXPLODINGBARREL__STATIC:
+        case HEAVYHBOMB__:
+        case RPG__:
+        case HYDRENT__:
+        case OOZFILTER__:
+        case EXPLODINGBARREL__:
 #endif
             if (pWall->nextwall == -1 || wall[pWall->nextwall].pal != 4)
             {
@@ -1770,7 +1770,7 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
 
         switch (DynamicTileMap[switchPic])
         {
-        case FANSPRITE__STATIC:
+        case FANSPRITE__:
             pWall->overpicnum = FANSPRITEBROKE;
             pWall->cstat &= 65535 - 65;
             if (pWall->nextwall >= 0)
@@ -1783,10 +1783,10 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
             return;
 
 #ifndef EDUKE32_STANDALONE
-        case W_FORCEFIELD__STATIC:
+        case W_FORCEFIELD__:
             pWall->extra = 1;  // tell the forces to animate
             fallthrough__;
-        case BIGFORCE__STATIC:
+        case BIGFORCE__:
         {
             updatesector(vPos.x, vPos.y, &sectNum);
             if (sectNum < 0)
@@ -1813,7 +1813,7 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
         }
         return;
 
-        case GLASS__STATIC:
+        case GLASS__:
             updatesector(vPos.x, vPos.y, &sectNum);
             if (sectNum < 0)
                 return;
@@ -1834,7 +1834,7 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
             }
             return;
 
-        case STAINGLASS1__STATIC:
+        case STAINGLASS1__:
             updatesector(vPos.x, vPos.y, &sectNum);
             if (sectNum < 0)
                 return;
@@ -1851,38 +1851,38 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
 
     switch (DynamicTileMap[pWall->picnum])
     {
-    case COLAMACHINE__STATIC:
-    case VENDMACHINE__STATIC:
+    case COLAMACHINE__:
+    case VENDMACHINE__:
         G_BreakWall(pWall->picnum + 2, spriteNum, wallNum);
         A_PlaySound(VENT_BUST, spriteNum);
         return;
 
-    case OJ__STATIC:
-    case FEMPIC2__STATIC:
-    case FEMPIC3__STATIC:
+    case OJ__:
+    case FEMPIC2__:
+    case FEMPIC3__:
 
-    case SCREENBREAK6__STATIC:
-    case SCREENBREAK7__STATIC:
-    case SCREENBREAK8__STATIC:
+    case SCREENBREAK6__:
+    case SCREENBREAK7__:
+    case SCREENBREAK8__:
 
-    case SCREENBREAK1__STATIC:
-    case SCREENBREAK2__STATIC:
-    case SCREENBREAK3__STATIC:
-    case SCREENBREAK4__STATIC:
-    case SCREENBREAK5__STATIC:
+    case SCREENBREAK1__:
+    case SCREENBREAK2__:
+    case SCREENBREAK3__:
+    case SCREENBREAK4__:
+    case SCREENBREAK5__:
 
-    case SCREENBREAK9__STATIC:
-    case SCREENBREAK10__STATIC:
-    case SCREENBREAK11__STATIC:
-    case SCREENBREAK12__STATIC:
-    case SCREENBREAK13__STATIC:
-    case SCREENBREAK14__STATIC:
-    case SCREENBREAK15__STATIC:
-    case SCREENBREAK16__STATIC:
-    case SCREENBREAK17__STATIC:
-    case SCREENBREAK18__STATIC:
-    case SCREENBREAK19__STATIC:
-    case BORNTOBEWILDSCREEN__STATIC:
+    case SCREENBREAK9__:
+    case SCREENBREAK10__:
+    case SCREENBREAK11__:
+    case SCREENBREAK12__:
+    case SCREENBREAK13__:
+    case SCREENBREAK14__:
+    case SCREENBREAK15__:
+    case SCREENBREAK16__:
+    case SCREENBREAK17__:
+    case SCREENBREAK18__:
+    case SCREENBREAK19__:
+    case BORNTOBEWILDSCREEN__:
 #ifndef EDUKE32_STANDALONE
         A_SpawnWallGlass(spriteNum, wallNum, 30);
         A_PlaySound(GLASS_HEAVYBREAK, spriteNum);
@@ -1890,62 +1890,62 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
         pWall->picnum = W_SCREENBREAK + (krand() % 3);
         return;
 
-    case W_TECHWALL5__STATIC:
-    case W_TECHWALL6__STATIC:
-    case W_TECHWALL7__STATIC:
-    case W_TECHWALL8__STATIC:
-    case W_TECHWALL9__STATIC:
+    case W_TECHWALL5__:
+    case W_TECHWALL6__:
+    case W_TECHWALL7__:
+    case W_TECHWALL8__:
+    case W_TECHWALL9__:
         G_BreakWall(pWall->picnum + 1, spriteNum, wallNum);
         return;
 
-    case W_MILKSHELF__STATIC:
+    case W_MILKSHELF__:
         G_BreakWall(W_MILKSHELFBROKE, spriteNum, wallNum);
         return;
 
-    case W_TECHWALL10__STATIC:
+    case W_TECHWALL10__:
         G_BreakWall(W_HITTECHWALL10, spriteNum, wallNum);
         return;
 
-    case W_TECHWALL1__STATIC:
-    case W_TECHWALL11__STATIC:
-    case W_TECHWALL12__STATIC:
-    case W_TECHWALL13__STATIC:
-    case W_TECHWALL14__STATIC:
+    case W_TECHWALL1__:
+    case W_TECHWALL11__:
+    case W_TECHWALL12__:
+    case W_TECHWALL13__:
+    case W_TECHWALL14__:
         G_BreakWall(W_HITTECHWALL1, spriteNum, wallNum);
         return;
 
-    case W_TECHWALL15__STATIC:
+    case W_TECHWALL15__:
         G_BreakWall(W_HITTECHWALL15, spriteNum, wallNum);
         return;
 
-    case W_TECHWALL16__STATIC:
+    case W_TECHWALL16__:
         G_BreakWall(W_HITTECHWALL16, spriteNum, wallNum);
         return;
 
-    case W_TECHWALL2__STATIC:
+    case W_TECHWALL2__:
         G_BreakWall(W_HITTECHWALL2, spriteNum, wallNum);
         return;
 
-    case W_TECHWALL3__STATIC:
+    case W_TECHWALL3__:
         G_BreakWall(W_HITTECHWALL3, spriteNum, wallNum);
         return;
 
-    case W_TECHWALL4__STATIC:
+    case W_TECHWALL4__:
         G_BreakWall(W_HITTECHWALL4, spriteNum, wallNum);
         return;
 
-    case ATM__STATIC:
+    case ATM__:
         pWall->picnum = ATMBROKE;
         A_SpawnMultiple(spriteNum, MONEY, 1 + (krand() & 7));
         A_PlaySound(GLASS_HEAVYBREAK, spriteNum);
         break;
 
-    case WALLLIGHT1__STATIC:
-    case WALLLIGHT2__STATIC:
-    case WALLLIGHT3__STATIC:
-    case WALLLIGHT4__STATIC:
-    case TECHLIGHT2__STATIC:
-    case TECHLIGHT4__STATIC:
+    case WALLLIGHT1__:
+    case WALLLIGHT2__:
+    case WALLLIGHT3__:
+    case WALLLIGHT4__:
+    case TECHLIGHT2__:
+    case TECHLIGHT4__:
     {
 #ifndef EDUKE32_STANDALONE
         A_PlaySound(rnd(128) ? GLASS_HEAVYBREAK : GLASS_BREAKING, spriteNum);
@@ -2039,12 +2039,12 @@ void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
 #ifndef EDUKE32_STANDALONE
     switch (DynamicTileMap[*pPicnum])
     {
-    case WALLLIGHT1__STATIC: *pPicnum = WALLLIGHTBUST1; goto GLASSBREAK_CODE;
-    case WALLLIGHT2__STATIC: *pPicnum = WALLLIGHTBUST2; goto GLASSBREAK_CODE;
-    case WALLLIGHT3__STATIC: *pPicnum = WALLLIGHTBUST3; goto GLASSBREAK_CODE;
-    case WALLLIGHT4__STATIC: *pPicnum = WALLLIGHTBUST4; goto GLASSBREAK_CODE;
-    case TECHLIGHT2__STATIC: *pPicnum = TECHLIGHTBUST2; goto GLASSBREAK_CODE;
-    case TECHLIGHT4__STATIC: *pPicnum = TECHLIGHTBUST4;
+    case WALLLIGHT1__: *pPicnum = WALLLIGHTBUST1; goto GLASSBREAK_CODE;
+    case WALLLIGHT2__: *pPicnum = WALLLIGHTBUST2; goto GLASSBREAK_CODE;
+    case WALLLIGHT3__: *pPicnum = WALLLIGHTBUST3; goto GLASSBREAK_CODE;
+    case WALLLIGHT4__: *pPicnum = WALLLIGHTBUST4; goto GLASSBREAK_CODE;
+    case TECHLIGHT2__: *pPicnum = TECHLIGHTBUST2; goto GLASSBREAK_CODE;
+    case TECHLIGHT4__: *pPicnum = TECHLIGHTBUST4;
 #else
     if (0)
     {
@@ -2111,16 +2111,16 @@ void A_DamageObject_Internal(int i,int sn)
 
     switch (DynamicTileMap[PN(i)])
     {
-    case OCEANSPRITE1__STATIC:
-    case OCEANSPRITE2__STATIC:
-    case OCEANSPRITE3__STATIC:
-    case OCEANSPRITE4__STATIC:
-    case OCEANSPRITE5__STATIC:
+    case OCEANSPRITE1__:
+    case OCEANSPRITE2__:
+    case OCEANSPRITE3__:
+    case OCEANSPRITE4__:
+    case OCEANSPRITE5__:
         A_Spawn(i,SMALLSMOKE);
         A_DeleteSprite(i);
         break;
-    case QUEBALL__STATIC:
-    case STRIPEBALL__STATIC:
+    case QUEBALL__:
+    case STRIPEBALL__:
         if (sprite[sn].picnum == QUEBALL || sprite[sn].picnum == STRIPEBALL)
         {
             sprite[sn].xvel = (sprite[i].xvel>>1)+(sprite[i].xvel>>2);
@@ -2143,11 +2143,11 @@ void A_DamageObject_Internal(int i,int sn)
             }
         }
         break;
-    case TREE1__STATIC:
-    case TREE2__STATIC:
-    case TIRE__STATIC:
-    case CONE__STATIC:
-    case BOX__STATIC:
+    case TREE1__:
+    case TREE2__:
+    case TIRE__:
+    case CONE__:
+    case BOX__:
     {
         if (radiusDamage == 1)
             if (T1(i) == 0)
@@ -2158,11 +2158,11 @@ void A_DamageObject_Internal(int i,int sn)
             }
         switch (DynamicTileMap[sprite[sn].picnum])
         {
-        case RADIUSEXPLOSION__STATIC:
-        case RPG__STATIC:
-        case FIRELASER__STATIC:
-        case HYDRENT__STATIC:
-        case HEAVYHBOMB__STATIC:
+        case RADIUSEXPLOSION__:
+        case RPG__:
+        case FIRELASER__:
+        case HYDRENT__:
+        case HEAVYHBOMB__:
             if (T1(i) == 0)
             {
                 CS(i) &= ~257;
@@ -2173,15 +2173,15 @@ void A_DamageObject_Internal(int i,int sn)
         }
         break;
     }
-    case CACTUS__STATIC:
+    case CACTUS__:
     {
         switch (DynamicTileMap[sprite[sn].picnum])
         {
-            case RADIUSEXPLOSION__STATIC:
-            case RPG__STATIC:
-            case FIRELASER__STATIC:
-            case HYDRENT__STATIC:
-            case HEAVYHBOMB__STATIC:
+            case RADIUSEXPLOSION__:
+            case RPG__:
+            case FIRELASER__:
+            case HYDRENT__:
+            case HEAVYHBOMB__:
                 radiusDamage = 1;
                 break;
         }
@@ -2202,8 +2202,8 @@ void A_DamageObject_Internal(int i,int sn)
         }
         break;
     }
-    case HANGLIGHT__STATIC:
-    case GENERICPOLE2__STATIC:
+    case HANGLIGHT__:
+    case GENERICPOLE2__:
         for (k=6;k>0;k--)
             A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(8<<8),SCRAP1+(krand()&15),-8,48,48,krand()&2047,(krand()&63)+64,-(krand()&4095)-(sprite[i].zvel>>2),i,5);
         A_PlaySound(GLASS_HEAVYBREAK,i);
@@ -2211,7 +2211,7 @@ void A_DamageObject_Internal(int i,int sn)
         break;
 
 
-    case FANSPRITE__STATIC:
+    case FANSPRITE__:
         PN(i) = FANSPRITEBROKE;
         CS(i) &= (65535-257);
         if (sector[SECT(i)].floorpicnum == FANSHADOW)
@@ -2222,17 +2222,16 @@ void A_DamageObject_Internal(int i,int sn)
         for (j=16;j>0;j--) RANDOMSCRAP(s, i);
 
         break;
-    case WATERFOUNTAIN__STATIC:
+    case WATERFOUNTAIN__:
         //    case WATERFOUNTAIN+1:
         //    case WATERFOUNTAIN+2:
-        //    case __STATIC:
         PN(i) = WATERFOUNTAINBROKE;
         A_Spawn(i,TOILETWATER);
         break;
-    case SATELITE__STATIC:
-    case FUELPOD__STATIC:
-    case SOLARPANNEL__STATIC:
-    case ANTENNA__STATIC:
+    case SATELITE__:
+    case FUELPOD__:
+    case SOLARPANNEL__:
+    case ANTENNA__:
         if (sprite[sn].extra != G_DefaultActorHealthForTile(SHOTSPARK1))
         {
             for (j=15;j>0;j--)
@@ -2242,34 +2241,34 @@ void A_DamageObject_Internal(int i,int sn)
             A_DeleteSprite(i);
         }
         break;
-    case BOTTLE1__STATIC:
-    case BOTTLE2__STATIC:
-    case BOTTLE3__STATIC:
-    case BOTTLE4__STATIC:
-    case BOTTLE5__STATIC:
-    case BOTTLE6__STATIC:
-    case BOTTLE8__STATIC:
-    case BOTTLE10__STATIC:
-    case BOTTLE11__STATIC:
-    case BOTTLE12__STATIC:
-    case BOTTLE13__STATIC:
-    case BOTTLE14__STATIC:
-    case BOTTLE15__STATIC:
-    case BOTTLE16__STATIC:
-    case BOTTLE17__STATIC:
-    case BOTTLE18__STATIC:
-    case BOTTLE19__STATIC:
-    case WATERFOUNTAINBROKE__STATIC:
-    case DOMELITE__STATIC:
-    case SUSHIPLATE1__STATIC:
-    case SUSHIPLATE2__STATIC:
-    case SUSHIPLATE3__STATIC:
-    case SUSHIPLATE4__STATIC:
-    case SUSHIPLATE5__STATIC:
-    case WAITTOBESEATED__STATIC:
-    case VASE__STATIC:
-    case STATUEFLASH__STATIC:
-    case STATUE__STATIC:
+    case BOTTLE1__:
+    case BOTTLE2__:
+    case BOTTLE3__:
+    case BOTTLE4__:
+    case BOTTLE5__:
+    case BOTTLE6__:
+    case BOTTLE8__:
+    case BOTTLE10__:
+    case BOTTLE11__:
+    case BOTTLE12__:
+    case BOTTLE13__:
+    case BOTTLE14__:
+    case BOTTLE15__:
+    case BOTTLE16__:
+    case BOTTLE17__:
+    case BOTTLE18__:
+    case BOTTLE19__:
+    case WATERFOUNTAINBROKE__:
+    case DOMELITE__:
+    case SUSHIPLATE1__:
+    case SUSHIPLATE2__:
+    case SUSHIPLATE3__:
+    case SUSHIPLATE4__:
+    case SUSHIPLATE5__:
+    case WAITTOBESEATED__:
+    case VASE__:
+    case STATUEFLASH__:
+    case STATUE__:
         if (PN(i) == BOTTLE10)
             A_SpawnMultiple(i, MONEY, 4+(krand()&3));
         else if (PN(i) == STATUE || PN(i) == STATUEFLASH)
@@ -2285,12 +2284,12 @@ void A_DamageObject_Internal(int i,int sn)
         A_SpawnWallGlass(i,-1,8);
         A_DeleteSprite(i);
         break;
-    case FETUS__STATIC:
+    case FETUS__:
         PN(i) = FETUSBROKE;
         A_PlaySound(GLASS_BREAKING,i);
         A_SpawnWallGlass(i,-1,10);
         break;
-    case FETUSBROKE__STATIC:
+    case FETUSBROKE__:
         for (j=48;j>0;j--)
         {
             A_Shoot(i,BLOODSPLAT1);
@@ -2299,18 +2298,18 @@ void A_DamageObject_Internal(int i,int sn)
         A_PlaySound(GLASS_HEAVYBREAK,i);
         A_PlaySound(SQUISHED,i);
         fallthrough__;
-    case BOTTLE7__STATIC:
+    case BOTTLE7__:
         A_PlaySound(GLASS_BREAKING,i);
         A_SpawnWallGlass(i,-1,10);
         A_DeleteSprite(i);
         break;
-    case HYDROPLANT__STATIC:
+    case HYDROPLANT__:
         PN(i) = BROKEHYDROPLANT;
         A_PlaySound(GLASS_BREAKING,i);
         A_SpawnWallGlass(i,-1,10);
         break;
 
-    case FORCESPHERE__STATIC:
+    case FORCESPHERE__:
         sprite[i].xrepeat = 0;
         actor[OW(i)].t_data[0] = 32;
         actor[OW(i)].t_data[1] = !actor[OW(i)].t_data[1];
@@ -2318,13 +2317,13 @@ void A_DamageObject_Internal(int i,int sn)
         A_Spawn(i,EXPLOSION2);
         break;
 
-    case BROKEHYDROPLANT__STATIC:
+    case BROKEHYDROPLANT__:
         A_PlaySound(GLASS_BREAKING, i);
         A_SpawnWallGlass(i, -1, 5);
         A_DeleteSprite(i);
         break;
 
-    case TOILET__STATIC:
+    case TOILET__:
         PN(i) = TOILETBROKE;
         CS(i) |= (krand()&1)<<2;
         CS(i) &= ~257;
@@ -2332,7 +2331,7 @@ void A_DamageObject_Internal(int i,int sn)
         A_PlaySound(GLASS_BREAKING,i);
         break;
 
-    case STALL__STATIC:
+    case STALL__:
         PN(i) = STALLBROKE;
         CS(i) |= (krand()&1)<<2;
         CS(i) &= ~257;
@@ -2340,7 +2339,7 @@ void A_DamageObject_Internal(int i,int sn)
         A_PlaySound(GLASS_HEAVYBREAK,i);
         break;
 
-    case HYDRENT__STATIC:
+    case HYDRENT__:
         PN(i) = BROKEFIREHYDRENT;
         A_Spawn(i,TOILETWATER);
 
@@ -2352,52 +2351,52 @@ void A_DamageObject_Internal(int i,int sn)
         A_PlaySound(GLASS_HEAVYBREAK,i);
         break;
 
-    case GRATE1__STATIC:
+    case GRATE1__:
         PN(i) = BGRATE1;
         CS(i) &= (65535-256-1);
         A_PlaySound(VENT_BUST,i);
         break;
 
-    case CIRCLEPANNEL__STATIC:
+    case CIRCLEPANNEL__:
         PN(i) = CIRCLEPANNELBROKE;
         CS(i) &= (65535-256-1);
         A_PlaySound(VENT_BUST,i);
         break;
-    case PANNEL1__STATIC:
-    case PANNEL2__STATIC:
+    case PANNEL1__:
+    case PANNEL2__:
         PN(i) = BPANNEL1;
         CS(i) &= (65535-256-1);
         A_PlaySound(VENT_BUST,i);
         break;
-    case PANNEL3__STATIC:
+    case PANNEL3__:
         PN(i) = BPANNEL3;
         CS(i) &= (65535-256-1);
         A_PlaySound(VENT_BUST,i);
         break;
-    case PIPE1__STATIC:
-    case PIPE2__STATIC:
-    case PIPE3__STATIC:
-    case PIPE4__STATIC:
-    case PIPE5__STATIC:
-    case PIPE6__STATIC:
+    case PIPE1__:
+    case PIPE2__:
+    case PIPE3__:
+    case PIPE4__:
+    case PIPE5__:
+    case PIPE6__:
         switch (DynamicTileMap[PN(i)])
         {
-        case PIPE1__STATIC:
+        case PIPE1__:
             PN(i)=PIPE1B;
             break;
-        case PIPE2__STATIC:
+        case PIPE2__:
             PN(i)=PIPE2B;
             break;
-        case PIPE3__STATIC:
+        case PIPE3__:
             PN(i)=PIPE3B;
             break;
-        case PIPE4__STATIC:
+        case PIPE4__:
             PN(i)=PIPE4B;
             break;
-        case PIPE5__STATIC:
+        case PIPE5__:
             PN(i)=PIPE5B;
             break;
-        case PIPE6__STATIC:
+        case PIPE6__:
             PN(i)=PIPE6B;
             break;
         }
@@ -2406,15 +2405,15 @@ void A_DamageObject_Internal(int i,int sn)
         sprite[j].z = sector[SECT(i)].floorz-(32<<8);
         break;
 
-    case MONK__STATIC:
-    case LUKE__STATIC:
-    case INDY__STATIC:
-    case JURYGUY__STATIC:
+    case MONK__:
+    case LUKE__:
+    case INDY__:
+    case JURYGUY__:
         A_PlaySound(SLT(i),i);
         A_Spawn(i,SHT(i));
         fallthrough__;
 
-    case SPACEMARINE__STATIC:
+    case SPACEMARINE__:
         sprite[i].extra -= sprite[sn].extra;
         if (sprite[i].extra > 0) break;
         SA(i) = krand()&2047;
@@ -2442,27 +2441,27 @@ void A_DamageObject_Internal(int i,int sn)
         S_PlaySound(SQUISHED);
         A_DeleteSprite(i);
         break;
-    case CHAIR1__STATIC:
-    case CHAIR2__STATIC:
+    case CHAIR1__:
+    case CHAIR2__:
         PN(i) = BROKENCHAIR;
         CS(i) = 0;
         break;
-    case CHAIR3__STATIC:
-    case MOVIECAMERA__STATIC:
-    case SCALE__STATIC:
-    case VACUUM__STATIC:
-    case CAMERALIGHT__STATIC:
-    case IVUNIT__STATIC:
-    case POT1__STATIC:
-    case POT2__STATIC:
-    case POT3__STATIC:
-    case TRIPODCAMERA__STATIC:
+    case CHAIR3__:
+    case MOVIECAMERA__:
+    case SCALE__:
+    case VACUUM__:
+    case CAMERALIGHT__:
+    case IVUNIT__:
+    case POT1__:
+    case POT2__:
+    case POT3__:
+    case TRIPODCAMERA__:
         A_PlaySound(GLASS_HEAVYBREAK,i);
         s = &sprite[i];
         for (j=16;j>0;j--) RANDOMSCRAP(s, i);
         A_DeleteSprite(i);
         break;
-    case PLAYERONWATER__STATIC:
+    case PLAYERONWATER__:
         i = OW(i);
         fallthrough__;
     default:
@@ -3487,8 +3486,8 @@ void P_CheckSectors(int snum)
 
             switch (DynamicTileMap[sprite[neartagsprite].picnum])
             {
-                case TOILET__STATIC:
-                case STALL__STATIC:
+                case TOILET__:
+                case STALL__:
                     if (p->last_pissed_time == 0)
                     {
                         if (ud.lockout == 0) A_PlaySound(DUKE_URINATE,p->i);
@@ -3512,7 +3511,7 @@ void P_CheckSectors(int snum)
                         A_PlaySound(FLUSH_TOILET,neartagsprite);
                     return;
 
-                case NUKEBUTTON__STATIC:
+                case NUKEBUTTON__:
 
                     P_FindWall(p,&j);
                     if (j >= 0 && wall[j].overpicnum == 0)
@@ -3534,7 +3533,7 @@ void P_CheckSectors(int snum)
                             }
                         }
                     return;
-                case WATERFOUNTAIN__STATIC:
+                case WATERFOUNTAIN__:
                     if (actor[neartagsprite].t_data[0] != 1)
                     {
                         actor[neartagsprite].t_data[0] = 1;
@@ -3547,13 +3546,13 @@ void P_CheckSectors(int snum)
                         }
                     }
                     return;
-                case PLUG__STATIC:
+                case PLUG__:
                     A_PlaySound(SHORT_CIRCUIT,p->i);
                     sprite[p->i].extra -= 2+(krand()&3);
                     P_PalFrom(p, 32, 48, 48, 64);
                     break;
-                case VIEWSCREEN__STATIC:
-                case VIEWSCREEN2__STATIC:
+                case VIEWSCREEN__:
+                case VIEWSCREEN2__:
                     P_CycleCameras(snum, neartagsprite);
                     return;
             }

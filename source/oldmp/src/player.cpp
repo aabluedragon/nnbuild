@@ -1854,9 +1854,9 @@ static int P_DoCounters(DukePlayer_t *p)
     return 0;
 }
 
-int16_t WeaponPickupSprites[MAX_WEAPONS] = { KNEE__STATIC, FIRSTGUNSPRITE__STATIC, SHOTGUNSPRITE__STATIC,
-        CHAINGUNSPRITE__STATIC, RPGSPRITE__STATIC, HEAVYHBOMB__STATIC, SHRINKERSPRITE__STATIC, DEVISTATORSPRITE__STATIC,
-        TRIPBOMBSPRITE__STATIC, FREEZESPRITE__STATIC, HEAVYHBOMB__STATIC, SHRINKERSPRITE__STATIC
+int16_t WeaponPickupSprites[MAX_WEAPONS] = { KNEE__, FIRSTGUNSPRITE__, SHOTGUNSPRITE__,
+        CHAINGUNSPRITE__, RPGSPRITE__, HEAVYHBOMB__, SHRINKERSPRITE__, DEVISTATORSPRITE__,
+        TRIPBOMBSPRITE__, FREEZESPRITE__, HEAVYHBOMB__, SHRINKERSPRITE__
                                          };
 // this is used for player deaths
 void P_DropWeapon(DukePlayer_t *p)
@@ -2740,7 +2740,7 @@ static void P_HandleDamagingFloors(int snum)
     {
         switch (DynamicTileMap[floorPic])
         {
-        case HURTRAIL__STATIC:
+        case HURTRAIL__:
             if (rnd(32))
             {
                 if (p->inv_amount[GET_BOOTS] > 0)
@@ -2757,7 +2757,7 @@ static void P_HandleDamagingFloors(int snum)
                 }
             }
             break;
-        case FLOORSLIME__STATIC:
+        case FLOORSLIME__:
             if (rnd(16))
             {
                 if (p->inv_amount[GET_BOOTS] > 0)
@@ -2772,7 +2772,7 @@ static void P_HandleDamagingFloors(int snum)
                 }
             }
             break;
-        case FLOORPLASMA__STATIC:
+        case FLOORPLASMA__:
             if (rnd(32))
             {
                 if (p->inv_amount[GET_BOOTS] > 0)
@@ -2859,7 +2859,7 @@ static void P_CheckTouchDamage(DukePlayer_t* p, int j)
 
         switch (DynamicTileMap[switchpicnum])
         {
-        case W_FORCEFIELD__STATIC:
+        case W_FORCEFIELD__:
             //        case W_FORCEFIELD+1:
             //        case W_FORCEFIELD+2:
             sprite[p->i].extra -= 5;
@@ -2879,7 +2879,7 @@ static void P_CheckTouchDamage(DukePlayer_t* p, int j)
 
             break;
 
-        case BIGFORCE__STATIC:
+        case BIGFORCE__:
             p->hurt_delay = 26;
             A_DamageWall(p->i, j,
                 { p->pos.x + (sintable[(fix16_to_int(p->q16ang) + 512) & 2047] >> 9),
@@ -3675,8 +3675,8 @@ void P_ProcessInput(int snum)
 
                     switch (DynamicTileMap[floorPic])
                     {
-                    case PANNEL1__STATIC:
-                    case PANNEL2__STATIC:
+                    case PANNEL1__:
+                    case PANNEL2__:
                         A_PlaySound(DUKE_WALKINDUCTS, playerSprite);
                         p->walking_snd_toggle = 1;
                         break;

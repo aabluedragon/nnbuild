@@ -231,20 +231,20 @@ static inline bool G_CheckFemSprite(int32_t spriteNum)
 {
     switch (DynamicTileMap[sprite[spriteNum].picnum])
     {
-        case FEM1__STATIC:
-        case FEM2__STATIC:
-        case FEM3__STATIC:
-        case FEM4__STATIC:
-        case FEM5__STATIC:
-        case FEM6__STATIC:
-        case FEM7__STATIC:
-        case FEM8__STATIC:
-        case FEM9__STATIC:
-        case FEM10__STATIC:
-        case PODFEM1__STATIC:
-        case NAKED1__STATIC:
-        case STATUE__STATIC:
-        case TOUGHGAL__STATIC:
+        case FEM1__:
+        case FEM2__:
+        case FEM3__:
+        case FEM4__:
+        case FEM5__:
+        case FEM6__:
+        case FEM7__:
+        case FEM8__:
+        case FEM9__:
+        case FEM10__:
+        case PODFEM1__:
+        case NAKED1__:
+        case STATUE__:
+        case TOUGHGAL__:
             return true;
     }
 
