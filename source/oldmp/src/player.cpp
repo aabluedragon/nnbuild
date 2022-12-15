@@ -506,31 +506,32 @@ void P_FireWeapon(DukePlayer_t *p)
     }
 }
 
-void P_DoWeaponSpawn(DukePlayer_t *p)
+static void P_DoWeaponSpawn(int playerNum)
 {
     if (oldnet_predicting)
         return;
 
-    int j, snum = sprite[p->i].yvel;
+    auto const pPlayer = g_player[playerNum].ps;
 
-    if (!aplWeaponSpawn[p->curr_weapon][snum])
+    // NOTE: For the 'Spawn' member, 0 means 'none', too (originally so,
+    // i.e. legacy). The check for <0 was added to the check because mod
+    // authors (rightly) assumed that -1 is the no-op value.
+    if (PWEAPON(playerNum, pPlayer->curr_weapon, Spawn) <= 0)  // <=0 : AMC TC beta/RC2 has WEAPONx_SPAWN -1
         return;
 
-    j = A_Spawn(p->i, aplWeaponSpawn[p->curr_weapon][snum]);
+    int newSprite = A_Spawn(pPlayer->i, PWEAPON(playerNum, pPlayer->curr_weapon, Spawn));
 
-    if ((aplWeaponFlags[p->curr_weapon][snum] & WEAPON_SPAWNTYPE3))
+    if ((PWEAPON(playerNum, pPlayer->curr_weapon, Flags) & WEAPON_SPAWNTYPE3))
     {
         // like chaingun shells
-        sprite[j].ang += 1024;
-        sprite[j].ang &= 2047;
-        sprite[j].xvel += 32;
-        sprite[j].z += (3<<8);
+        sprite[newSprite].ang += 1024;
+        sprite[newSprite].ang &= 2047;
+        sprite[newSprite].xvel += 32;
+        sprite[newSprite].z += (3 << 8);
     }
 
-    A_SetSprite(j,CLIPMASK0);
-
+    A_SetSprite(newSprite, CLIPMASK0);
 }
-
 void P_DisplayScubaMask(int snum)
 {
     int p;
@@ -2338,7 +2339,7 @@ static void P_ProcessWeapon(int playerNum)
                 }
             }
             if (*kb == aplWeaponSpawnTime[p->curr_weapon][playerNum])
-                P_DoWeaponSpawn(p);
+                P_DoWeaponSpawn(playerNum);
 
             if ((*kb) >= aplWeaponTotalTime[p->curr_weapon][playerNum])
             {
@@ -2407,20 +2408,20 @@ static void P_ProcessWeapon(int playerNum)
                             if (((*(kb)) % 3) == 0)
                             {
                                 P_FireWeapon(p);
-                                P_DoWeaponSpawn(p);
+                                P_DoWeaponSpawn(playerNum);
                             }
                         }
                         else if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_FIREEVERYOTHER)
                         {
                             P_FireWeapon(p);
-                            P_DoWeaponSpawn(p);
+                            P_DoWeaponSpawn(playerNum);
                         }
                         else
                         {
                             if (*kb == aplWeaponFireDelay[p->curr_weapon][playerNum])
                             {
                                 P_FireWeapon(p);
-                                //                                P_DoWeaponSpawn(p);
+                                //                                P_DoWeaponSpawn(playerNum);
                             }
                         }
                         if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_RESET &&
@@ -2436,14 +2437,14 @@ static void P_ProcessWeapon(int playerNum)
                         if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_FIREEVERYOTHER)
                         {
                             P_FireWeapon(p);
-                            P_DoWeaponSpawn(p);
+                            P_DoWeaponSpawn(playerNum);
                         }
                         else
                         {
                             if (*kb == aplWeaponFireDelay[p->curr_weapon][playerNum])
                             {
                                 P_FireWeapon(p);
-                                //                                P_DoWeaponSpawn(p);
+                                //                                P_DoWeaponSpawn(playerNum);
                             }
                         }
                     }
