@@ -4841,16 +4841,12 @@ static int X_DoExecute(void)
 
     case CON_WHILEVARN:
     {
-        intptr_t *savedinsptr=insptr+2;
-        j=1;
+        auto const savedinsptr = &insptr[2];
         do
         {
-            insptr=savedinsptr;
-            if (Gv_GetVarX(*(insptr-1)) == *insptr)
-                j=0;
-            branch(j);
-        }
-        while (j);
+            insptr = savedinsptr;
+            branch((j = (Gv_GetVarX(insptr[-1]) != *insptr)));
+        } while (j && (vm.flags & VM_RETURN) == 0);
         break;
     }
 
