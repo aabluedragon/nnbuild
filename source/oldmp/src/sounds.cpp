@@ -763,8 +763,9 @@ static int S_CalcDistAndAng(int spriteNum, int soundNum, int camSect, int camAng
                 || !cansee(camPos.x, camPos.y, camPos.z - (24 << 8), camSect, soundPos.x, soundPos.y, soundPos.z - (24 << 8), soundSect)))))
         sndist += sndist >> 5;
 
-    if ((g_sounds[soundNum]->flags & (SF_GLOBAL | SF_DTAG)) == (SF_GLOBAL | SF_DTAG) || (!FURY && (soundNum == PIPEBOMB_EXPLODE || soundNum == LASERTRIP_EXPLODE || soundNum == RPG_EXPLODE)))
+    if ((g_sounds[soundNum]->flags & (SF_GLOBAL | SF_DTAG)) == (SF_GLOBAL | SF_DTAG))
     {
+boost:
         int const sdist = g_sounds[soundNum]->distOffset > 0 ? g_sounds[soundNum]->distOffset : 6144;
 
         explosion = true;
@@ -772,6 +773,18 @@ static int S_CalcDistAndAng(int spriteNum, int soundNum, int camSect, int camAng
         if (sndist > sdist)
             sndist = sdist;
     }
+#ifndef EDUKE32_STANDALONE
+    else if (!FURY)
+    {
+        switch (soundGetMapping(soundNum))
+        {
+            case PIPEBOMB_EXPLODE__:
+            case LASERTRIP_EXPLODE__:
+            case RPG_EXPLODE__:
+                goto boost;
+        }
+    }
+#endif
 
     if ((g_sounds[soundNum]->flags & (SF_GLOBAL | SF_DTAG)) == SF_GLOBAL || sndist < ((255 - LOUDESTVOLUME) << 6))
         sndist = ((255 - LOUDESTVOLUME) << 6);
