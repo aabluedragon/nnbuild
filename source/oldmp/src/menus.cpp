@@ -130,6 +130,13 @@ static ControlInfo minfo;
 
 static short mi, mii;
 
+static void Menu_BlackRectangle(int32_t x, int32_t y, int32_t width, int32_t height, int32_t orientation)
+{
+    const int32_t xscale = divscale16(width, tilesiz[0].x << 16), yscale = divscale16(height, tilesiz[0].y << 16);
+
+    rotatesprite_(x, y, max(xscale, yscale), 0, 0, 127, 4, (orientation & (1 | 32)) | 2 | 8 | 16, 0, 0, get_xdim_16(x), get_ydim_16(y), get_xdim_16(x + width), get_ydim_16(y + height));
+}
+
 static int probe_(int type,int x,int y,int i,int numItems)
 {
     short centre;
@@ -182,7 +189,7 @@ static int probe_(int type,int x,int y,int i,int numItems)
         rotatesprite(((320>>1)-(centre>>1)-70)<<16,(y+(probey*i)-4)<<16,65536L>>type,0,SPINNINGNUKEICON+(((int32_t)totalclock>>3)%7),sh,0,10,0,0,xdim-1,ydim-1);
     }
     else
-        rotatesprite((x<<16)-((tilesiz[BIGFNTCURSOR].x-4)<<(16-type)),(y+(probey*i)-(4>>type))<<16,65536L>>type,0,SPINNINGNUKEICON+((((int32_t)totalclock>>3))%7),sh,0,10,0,0,xdim-1,ydim-1);
+        rotatesprite((x<<16)-((tilesiz[SPINNINGNUKEICON].x-4)<<(16-type)),(y+(probey*i)-(4>>type))<<16,65536L>>type,0,SPINNINGNUKEICON+((((int32_t)totalclock>>3))%7),sh,0,10,0,0,xdim-1,ydim-1);
 
     if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Enter) || (LMB && !onbar))
     {
@@ -263,7 +270,7 @@ int menutext_(int x,int y,int s,int p,const char *t,int bits)
                     ac = BIGCOMMA;
                     break;
                 case '!':
-                    ac = BIGX;
+                    ac = BIGX_;
                     break;
                 case '?':
                     ac = BIGQ;
@@ -316,7 +323,7 @@ int menutext_(int x,int y,int s,int p,const char *t,int bits)
                 ac = BIGCOMMA;
                 break;
             case '!':
-                ac = BIGX;
+                ac = BIGX_;
                 break;
             case '\'':
                 ac = BIGAPPOS;
@@ -1167,7 +1174,7 @@ void M_DisplayMenus(void)
                         ud.lockout = 1;
 
                         for (x = 0; x < g_numAnimWalls; x++)
-                            switch (DynamicTileMap[wall[animwall[x].wallnum].picnum])
+                            switch (tileGetMapping(wall[animwall[x].wallnum].picnum))
                             {
                             case FEMPIC1__:
                                 wall[animwall[x].wallnum].picnum = BLANKSCREEN;
@@ -1906,9 +1913,7 @@ cheat_for_port_credits:
             menutext(160,24,0,0,"SELECT A USER MAP");
 
             // black translucent background underneath file lists
-            rotatesprite(0<<16, 0<<16, 65536l<<5, 0, BLANK, 0, 0, 10+16+1+32,
-                         scale(40-4,xdim,320),scale(12+32-2,ydim,200),
-                         scale(320-40+4,xdim,320)-1,scale(12+32+112+4,ydim,200)-1);
+            Menu_BlackRectangle(36 << 16, 42 << 16, 248 << 16, 123 << 16, 1 | 32);
 
             // path
             minitext(38,45,boardfilename,16,26);

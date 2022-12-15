@@ -184,6 +184,7 @@
     <ClInclude Include="..\..\source\oldmp\src\common_game.h" />
     <ClInclude Include="..\..\source\oldmp\src\config.h" />
     <ClInclude Include="..\..\source\oldmp\src\discord.h" />
+    <ClInclude Include="..\..\source\oldmp\src\dnames.h" />
     <ClInclude Include="..\..\source\oldmp\src\duke3d.h" />
     <ClInclude Include="..\..\source\oldmp\src\dukebot.h" />
     <ClInclude Include="..\..\source\oldmp\src\funct.h" />
@@ -203,7 +204,6 @@
     <ClInclude Include="..\..\source\oldmp\src\mapster32.h" />
     <ClInclude Include="..\..\source\oldmp\src\mdump.h" />
     <ClInclude Include="..\..\source\oldmp\src\names.h" />
-    <ClInclude Include="..\..\source\oldmp\src\namesdyn.h" />
     <ClInclude Include="..\..\source\oldmp\src\oldnet.h" />
     <ClInclude Include="..\..\source\oldmp\src\osdcmds.h" />
     <ClInclude Include="..\..\source\oldmp\src\osdfuncs.h" />
@@ -232,6 +232,7 @@
     <ClCompile Include="..\..\source\oldmp\src\common.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\config.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\discord.cpp" />
+    <ClCompile Include="..\..\source\oldmp\src\dnames.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\dukebot.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\game.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\gamedef.cpp" />
@@ -243,7 +244,6 @@
     <ClCompile Include="..\..\source\oldmp\src\grpscan.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\mdump.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\menus.cpp" />
-    <ClCompile Include="..\..\source\oldmp\src\namesdyn.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\oldnet.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\osdcmds.cpp" />
     <ClCompile Include="..\..\source\oldmp\src\osdfuncs.cpp" />

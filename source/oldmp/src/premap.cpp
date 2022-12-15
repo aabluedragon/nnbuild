@@ -177,7 +177,7 @@ static void cacheTilesForSprite(int spriteNum)
         tloadtile(j, 1);
 
 #ifndef EDUKE32_STANDALONE
-    switch (DynamicTileMap[picnum])
+    switch (tileGetMapping(picnum))
     {
         case HYDRENT__:
             tloadtile(BROKEFIREHYDRENT, 1);
@@ -941,7 +941,7 @@ static void prelevel(char g)
                 g_player[j].ps->exity = SY(i);
             }
         }
-        else switch (DynamicTileMap[PN(i)])
+        else switch (tileGetMapping(PN(i)))
             {
             case GPSPEED__:
                 sector[SECT(i)].extra = SLT(i);
@@ -1003,41 +1003,41 @@ static void prelevel(char g)
     i = headspritestat[STAT_DEFAULT];
     while (i >= 0)
     {
-        switch (DynamicTileMap[PN(i)-1])
+        switch (tileGetMapping(PN(i) - 1))
         {
-        case DIPSWITCH__:
-        case DIPSWITCH2__:
-        case PULLSWITCH__:
-        case HANDSWITCH__:
-        case SLOTDOOR__:
-        case LIGHTSWITCH__:
-        case SPACELIGHTSWITCH__:
-        case SPACEDOORSWITCH__:
-        case FRANKENSTINESWITCH__:
-        case LIGHTSWITCH2__:
-        case POWERSWITCH1__:
-        case LOCKSWITCH1__:
-        case POWERSWITCH2__:
-            for (j=0;j<lotaglist;j++)
-                if (SLT(i) == lotags[j])
-                    break;
+            case DIPSWITCH__:
+            case DIPSWITCH2__:
+            case PULLSWITCH__:
+            case HANDSWITCH__:
+            case SLOTDOOR__:
+            case LIGHTSWITCH__:
+            case SPACELIGHTSWITCH__:
+            case SPACEDOORSWITCH__:
+            case FRANKENSTINESWITCH__:
+            case LIGHTSWITCH2__:
+            case POWERSWITCH1__:
+            case LOCKSWITCH1__:
+            case POWERSWITCH2__:
+                for (j = 0; j < lotaglist; j++)
+                    if (SLT(i) == lotags[j])
+                        break;
 
-            if (j == lotaglist)
-            {
-                lotags[lotaglist] = SLT(i);
-                lotaglist++;
-                if (lotaglist > MAXSPRITES-1)
-                    G_GameExit("\nToo many switches.");
-
-                j = headspritestat[STAT_EFFECTOR];
-                while (j >= 0)
+                if (j == lotaglist)
                 {
-                    if (sprite[j].lotag == SE_12_LIGHT_SWITCH && sprite[j].hitag == SLT(i))
-                        actor[j].t_data[0] = 1;
-                    j = nextspritestat[j];
+                    lotags[lotaglist] = SLT(i);
+                    lotaglist++;
+                    if (lotaglist > MAXSPRITES - 1)
+                        G_GameExit("\nToo many switches.");
+
+                    j = headspritestat[STAT_EFFECTOR];
+                    while (j >= 0)
+                    {
+                        if (sprite[j].lotag == SE_12_LIGHT_SWITCH && sprite[j].hitag == SLT(i))
+                            actor[j].t_data[0] = 1;
+                        j = nextspritestat[j];
+                    }
                 }
-            }
-            break;
+                break;
         }
         i = nextspritestat[i];
     }
@@ -1079,7 +1079,7 @@ static void prelevel(char g)
         {
             switchpicnum = W_FORCEFIELD;
         }
-        switch (DynamicTileMap[switchpicnum])
+        switch (tileGetMapping(switchpicnum))
         {
         case FANSHADOW__:
         case FANSPRITE__:
@@ -1112,7 +1112,7 @@ static void prelevel(char g)
 
         wal->extra = -1;
 
-        switch (DynamicTileMap[wal->picnum])
+        switch (tileGetMapping(wal->picnum))
         {
         case WATERTILE2__:
             for (j=0;j<3;j++)
@@ -1810,7 +1810,7 @@ int G_EnterLevel(int g)
     }
 
     for (ALL_PLAYERS(i))
-    switch (DynamicTileMap[sector[sprite[g_player[i].ps->i].sectnum].floorpicnum])
+    switch (tileGetMapping(sector[sprite[g_player[i].ps->i].sectnum].floorpicnum))
     {
     case HURTRAIL__:
     case FLOORSLIME__:

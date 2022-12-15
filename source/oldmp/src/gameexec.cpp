@@ -3588,7 +3588,7 @@ static int X_DoExecute(void)
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNMONSTERS));
         else if (A_CheckInventorySprite(vm.pSprite))
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNINVENTORY));
-        else if (DynamicTileMap[vm.pSprite->picnum] == ACCESSCARD__) // Shim for poorly-concieved CON code. Keys should never respawn.
+        else if (tileGetMapping(vm.pSprite->picnum) == ACCESSCARD__) // Shim for poorly-concieved CON code. Keys should never respawn.
             branch(0);
         else
             branch(DMFLAGS_TEST(DMFLAG_RESPAWNITEMS));
@@ -5233,7 +5233,7 @@ void A_Execute(int spriteNum, int playerNum, int playerDist)
     X_Move();
 
     if (vm.pSprite->statnum == STAT_STANDABLE)
-        switch (DynamicTileMap[vm.pSprite->picnum])
+        switch (tileGetMapping(vm.pSprite->picnum))
         {
         case RUBBERCAN__:
         case EXPLODINGBARREL__:
@@ -5491,7 +5491,7 @@ void G_RestoreMapState(mapstate_t *save)
         else
         {
             for (x=g_numAnimWalls-1;x>=0;x--)
-                switch (DynamicTileMap[wall[animwall[x].wallnum].picnum])
+                switch (tileGetMapping(wall[animwall[x].wallnum].picnum))
                 {
                 case FEMPIC1__:
                     wall[animwall[x].wallnum].picnum = BLANKSCREEN;

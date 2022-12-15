@@ -419,7 +419,7 @@ static int A_FindTargetSprite(spritetype* s, int aang, int atwith)
         {
             if (A_CheckSpriteTileFlags(atwith, SFLAG_PROJECTILE) && (Proj_GetProjectile(atwith)->workslike & PROJECTILE_RPG))
                 return -1;
-            else switch (DynamicTileMap[atwith])
+            else switch (tileGetMapping(atwith))
             {
                 case TONGUE__:
                 case FREEZEBLAST__:
@@ -1109,7 +1109,7 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
     int vel;
 
     // Do flashes & firing audio first, in case we need to block the rest for prediction.
-    switch (DynamicTileMap[projecTile])
+    switch (tileGetMapping(projecTile))
     {
 #if 0
         case FIREBALL__:
@@ -1141,7 +1141,7 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
     if (oldnet_predicting)
         return -1;
 
-    switch (DynamicTileMap[projecTile])
+    switch (tileGetMapping(projecTile))
     {
         case BLOODSPLAT1__:
         case BLOODSPLAT2__:

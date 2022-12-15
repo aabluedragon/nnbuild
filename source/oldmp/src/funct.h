@@ -155,9 +155,6 @@ extern vec2_t G_ScreenText(const int32_t font, int32_t x, int32_t y, const int32
 #define gametextpal(x,y,t,s,p) G_PrintGameText(0,STARTALPHANUM, x,y,t,s,p,26,0, 0, xdim-1, ydim-1, 65536)
 #define gametextpalbits(x,y,t,s,p,dabits) G_PrintGameText(0,STARTALPHANUM, x,y,t,s,p,dabits,0, 0, xdim-1, ydim-1, 65536)
 
-extern void G_InitDynamicTiles();
-extern void G_ProcessDynamicTileMapping(const char *szLabel, int lValue);
-
 extern void A_LoadActor(int sActor);
 
 // extern void SetGameArrayID(int id,int index, int lValue);

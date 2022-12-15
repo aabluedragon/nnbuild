@@ -805,7 +805,7 @@ static void A_DoLight(int spriteNum)
             if (pSprite->picnum <= 0)  // oob safety
                 break;
 
-            switch (DynamicTileMap[pSprite->picnum - 1 + ii])
+            switch (tileGetMapping(pSprite->picnum - 1 + ii))
             {
                 case DIPSWITCH__:
                 case DIPSWITCH2__:
@@ -842,7 +842,7 @@ static void A_DoLight(int spriteNum)
             }
         }
 
-        switch (DynamicTileMap[pSprite->picnum])
+        switch (tileGetMapping(pSprite->picnum))
         {
             case ATOMICHEALTH__:
             case FREEZEAMMO__:
@@ -1623,7 +1623,7 @@ static void G_MoveZombieActors(void)
 
                     if (canSeePlayer)
                     {
-                        switch (DynamicTileMap[pSprite->picnum])
+                        switch (tileGetMapping(pSprite->picnum))
                         {
                         case RUBBERCAN__:
                         case EXPLODINGBARREL__:
@@ -1727,7 +1727,7 @@ int A_IncurDamage(int spriteNum)
 
                 if (!A_CheckSpriteTileFlags(pActor->htpicnum, SFLAG_NODAMAGEPUSH)) // Check if projectile can push.
                 {
-                    switch (DynamicTileMap[pActor->htpicnum])
+                    switch (tileGetMapping(pActor->htpicnum))
                     {
                         case RADIUSEXPLOSION__:
                         case RPG__:
@@ -2163,7 +2163,7 @@ static void G_MoveFX(void)
         auto const pSprite = &sprite[spriteNum];
         int const  nextSprite = nextspritestat[spriteNum];
 
-        switch (DynamicTileMap[pSprite->picnum])
+        switch (tileGetMapping(pSprite->picnum))
         {
         case RESPAWN__:
             if (pSprite->extra == 66)
@@ -3060,7 +3060,7 @@ DETONATE:
                         }
                         else if (sprite[j].statnum == 6)
                         {
-                            switch (DynamicTileMap[sprite[j].picnum])
+                            switch (tileGetMapping(sprite[j].picnum))
                             {
                             case SEENINE__:
                             case OOZFILTER__:
@@ -3085,7 +3085,7 @@ DETONATE:
             switchpicnum = BOLT1;
         }
 
-        switch (DynamicTileMap[switchpicnum])
+        switch (tileGetMapping(switchpicnum))
         {
         case VIEWSCREEN__:
         case VIEWSCREEN2__:
@@ -3796,7 +3796,7 @@ static void G_MoveWeapons(void)
         {
 
             // here
-            switch (DynamicTileMap[s->picnum])
+            switch (tileGetMapping(s->picnum))
             {
             case RADIUSEXPLOSION__:
             case KNEE__:
@@ -3875,7 +3875,7 @@ static void G_MoveWeapons(void)
 
                 A_GetZLimits(spriteNum);
 
-                switch (DynamicTileMap[s->picnum])
+                switch (tileGetMapping(s->picnum))
                 {
                     case RPG__:
                         if (actor[spriteNum].htpicnum != BOSS2 && s->xrepeat >= 10 && sector[s->sectnum].lotag != ST_2_UNDERWATER)
@@ -4292,7 +4292,7 @@ static void G_MoveTransports(void)
 
                     if (warpspriteto && A_CheckSpriteFlags(j,SFLAG_DECAL)) goto JBOLT;
 
-                    if (warpspriteto) switch (DynamicTileMap[sprite[j].picnum])
+                    if (warpspriteto) switch (tileGetMapping(sprite[j].picnum))
                     {
                         case TRANSPORTERSTAR__:
                         case TRANSPORTERBEAM__:
@@ -4460,7 +4460,7 @@ static void G_MoveActors(void)
         {
             switchpicnum = GREENSLIME;
         }
-        switch (DynamicTileMap[switchpicnum])
+        switch (tileGetMapping(switchpicnum))
         {
         case DUCK__:
         case TARGET__:
@@ -5441,7 +5441,7 @@ DETONATEB:
                 {
                     x = s->extra;
                     m = 0;
-                    switch (DynamicTileMap[s->picnum])
+                    switch (tileGetMapping(s->picnum))
                     {
                     case HEAVYHBOMB__:
                         m = g_pipebombBlastRadius;
@@ -5544,7 +5544,7 @@ DETONATEB:
                 j = headspritesect[sect];
                 while (j >= 0)
                 {
-                    switch (DynamicTileMap[sprite[j].picnum])
+                    switch (tileGetMapping(sprite[j].picnum))
                     {
                     case SECTOREFFECTOR__:
                         if (sprite[j].lotag == SE_1_PIVOT)
@@ -5756,7 +5756,7 @@ static void G_MoveMisc(void)  // STATNUM 5
         }
         if ((s->picnum == MONEY+1) || (s->picnum == MAIL+1) || (s->picnum == PAPER+1))
             actor[i].floorz = s->z = yax_getflorzofslope(s->sectnum,s->xy);
-        else switch (DynamicTileMap[switchpicnum])
+        else switch (tileGetMapping(switchpicnum))
             {
             case NEON1__:
             case NEON2__:
@@ -7953,7 +7953,7 @@ static void G_MoveEffectors(void)   //STATNUM 3
                     switch (sprite[j].statnum)
                     {
                     case 5:
-                        switch (DynamicTileMap[sprite[j].picnum])
+                        switch (tileGetMapping(sprite[j].picnum))
                         {
                         case BLOODPOOL__:
                         case PUKE__:
@@ -8479,7 +8479,7 @@ BOLT:
 void A_PlayAlertSound(int i)
 {
     if (sprite[i].extra > 0)
-        switch (DynamicTileMap[PN(i)])
+        switch (tileGetMapping(PN(i)))
         {
         case LIZTROOPONTOILET__:
         case LIZTROOPJUSTSIT__:
@@ -8575,7 +8575,7 @@ int A_CheckSwitchTile(int i)
     //loop to catch both states of switches
     for (j=1;j>=0;j--)
     {
-        switch (DynamicTileMap[PN(i)-j])
+        switch (tileGetMapping(PN(i)-j))
         {
         case HANDPRINTSWITCH__:
             //case HANDPRINTSWITCH+1:

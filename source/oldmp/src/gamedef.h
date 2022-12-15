@@ -153,6 +153,9 @@ extern int g_errorLineNum;
 extern int g_tw;
 extern const tokenmap_t vm_keywords[];
 
+extern hashtable_t h_gamevars;
+extern hashtable_t h_arrays;
+
 void C_Compile(const char* fn);
 char const* VM_GetKeywordForID(int32_t id);
 

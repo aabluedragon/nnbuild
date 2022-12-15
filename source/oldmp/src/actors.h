@@ -3,7 +3,7 @@
 
 #include "player.h"
 #include "projectiles.h"
-#include "namesdyn.h"
+#include "dnames.h"
 
 // These macros are there to give names to the t_data[]/T*/vm.pData[] indices
 // when used with actors. Greppability of source code is certainly a virtue.

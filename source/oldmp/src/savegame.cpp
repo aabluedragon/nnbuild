@@ -448,7 +448,7 @@ int32_t G_LoadPlayer(int32_t spot)
         if (kdfread((char *)apXStrings[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
     }
 
-    if (kdfread(&DynamicTileMap[0],sizeof(DynamicTileMap[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
+    if (kdfread(&g_dynTileList[0],sizeof(g_dynTileList[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
 
     if (Gv_ReadSave(fil)) goto corrupt;
 
@@ -508,7 +508,7 @@ int32_t G_LoadPlayer(int32_t spot)
         else
         {
             for (x = 0; x < g_numAnimWalls; x++)
-                switch (DynamicTileMap[wall[animwall[x].wallnum].picnum])
+                switch (tileGetMapping(wall[animwall[x].wallnum].picnum))
                 {
                 case FEMPIC1__:
                     wall[animwall[x].wallnum].picnum = BLANKSCREEN;
@@ -855,7 +855,7 @@ int32_t G_SavePlayer(int32_t spot)
             dfwrite(apXStrings[i],MAXQUOTELEN, 1, fil);
     }
 
-    dfwrite(&DynamicTileMap[0],sizeof(DynamicTileMap[0]),MAXTILES,fil);
+    dfwrite(&g_dynTileList[0],sizeof(g_dynTileList[0]),MAXTILES,fil);
 
     Gv_WriteSave(fil);
 

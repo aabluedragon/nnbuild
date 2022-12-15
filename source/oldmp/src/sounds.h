@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "build.h"
 #include "compat.h"
 #include "sounds_common.h"
-#include "namesdyn.h"
+#include "dnames.h"
 
 #define MAXSOUNDS           16384
 #define MAXSOUNDINSTANCES   8

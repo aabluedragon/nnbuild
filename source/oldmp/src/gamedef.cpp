@@ -625,10 +625,10 @@ uint8_t *bitptr; // pointer to bitmap of which bytecode positions contain pointe
 #define BITPTR_CLEAR(x) bitmap_clear(bitptr, x)
 #define BITPTR_IS_POINTER(x) bitmap_test(bitptr, x)
 
+static hashtable_t h_keywords = { CON_END >> 1, NULL };
 hashtable_t h_gamevars   = { MAXGAMEVARS>>1, NULL };
 hashtable_t h_arrays     = { MAXGAMEARRAYS>>1, NULL };
 hashtable_t h_labels     = { MAXLABELS>>1, NULL };
-hashtable_t h_keywords   = { CON_END>>1, NULL };
 hashtable_t h_iter       = { ITER_END >> 1, NULL };
 
 static inthashtable_t h_varvar = { NULL, INTHASH_SIZE(ARRAY_SIZE(varvartable)) };
@@ -2153,7 +2153,7 @@ DO_DEFSTATE:
                     hash_add(&h_labels, LAST_LABEL, g_labelCnt, 0);
 
                     if ((unsigned)g_scriptPtr[-1] < MAXTILES && g_dynamicTileMapping)
-                        G_ProcessDynamicTileMapping(LAST_LABEL, g_scriptPtr[-1]);
+                        G_ProcessDynamicNameMapping(LAST_LABEL, g_dynTileList, g_scriptPtr[-1]);
 
                     labeltype[g_labelCnt] = LABEL_DEFINE;
                     labelcode[g_labelCnt++] = g_scriptPtr[-1];

@@ -1,10 +1,8 @@
 //-------------------------------------------------------------------------
 /*
-Copyright (C) 1996, 2003 - 3D Realms Entertainment
-Copyright (C) 2000, 2003 - Matt Saettler (EDuke Enhancements)
-Copyright (C) 2004, 2007 - EDuke32 developers
+Copyright (C) 2010 EDuke32 developers and contributors
 
-This file is part of EDuke32
+This file is part of EDuke32.
 
 EDuke32 is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License version 2
@@ -18,7 +16,7 @@ See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 
@@ -161,7 +159,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define DOORTILE18 447
 #define DOORTILE19 448
 #define DOORTILE20 449
-// #define SPACESHUTTLE 487
+#define SPACESHUTTLE 487
 #define SATELLITE 489
 #define VIEWSCREEN2 499
 #define VIEWSCREENBROKE 501
@@ -440,7 +438,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define HEADJIB1 1768
 #define ARMJIB1 1772
 #define LEGJIB1 1776
+#define CANNON 1810
 #define CANNONBALL 1817
+#define CANNONBALLS 1818
 #define OCTABRAIN 1820
 #define OCTABRAINSTAYPUT 1821
 #define OCTATOP 1845
@@ -598,7 +598,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define BIGALPHANUM 2940
 #define BIGPERIOD 3002
 #define BIGCOMMA 3003
-#define BIGX 3004
+#define BIGX_ 3004
 #define BIGQ 3005
 #define BIGSEMI 3006
 #define BIGCOLIN 3007
@@ -748,6 +748,39 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define SIGN1 4909
 #define SIGN2 4912
 #define JURYGUY 4943
+
+#define WIDESCREENSTATUSBAR 5120
+#define RPGGUNWIDE 5121
+#define FIRSTGUNRELOADWIDE 5122
+#define FREEZEWIDE 5123
+#define FREEZEFIREWIDE 5124
+#define SHRINKERWIDE 5127
+#define CRACKKNUCKLESWIDE 5129
+#define FLAMETHROWERSPRITE 5134
+#define FLAMETHROWERAMMO 5135
+#define FLAMETHROWER 5138
+#define FLAMETHROWERFIRE 5139
+#define FLAMETHROWERFLAME 1891
+#define FLAMETHROWERPILOT 5174
+#define FIREBALL 5163
+#define ONFIRE 5152
+#define ONFIRESMOKE 5143
+#define BURNEDCORPSE 5173
+#define WHISPYSMOKE 5268
+#define FIREFLY 5180
+#define FIREFLYSHRINKEFFECT 5360
+#define FIREFLYGROWEFFECT 5367
+#define FIREFLYFLYINGEFFECT 5296
+#define BOSS5 5310
+#define BOSS5STAYPUT 5311
+#define LAVAPOOL 5304
+#define LAVASPLASH 5371
+#define LAVAPOOLBUBBLE 5207
+#define BOSS2STAYPUT 2711
+#define BOSS3STAYPUT 2761
+#define E32_TILE5736 5736
+#define E32_TILE5737 5737
+#define E32_TILE5846 5846
 
 // These tile positions are reserved!
 #define RESERVEDSLOT1 6132

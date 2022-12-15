@@ -42,7 +42,7 @@ char g_numVolumes = 3;
 
 char g_skillNames[5][33] = { "PIECE OF CAKE", "LET'S ROCK", "COME GET SOME", "DAMN I'M GOOD" };
 
-short g_blimpSpawnItems[15] =
+int16_t g_blimpSpawnItems[15] =
 {
     RPGSPRITE__,
     CHAINGUNSPRITE__,

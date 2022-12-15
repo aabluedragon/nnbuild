@@ -247,7 +247,6 @@ extern const char* CommandName;
 #include "fx_man.h"
 #include "config.h"
 #include "control.h"
-#include "namesdyn.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -682,10 +681,6 @@ typedef struct {
 
 extern keydef_t keynames[];
 extern const char *mousenames[];
-
-extern hashtable_t h_gamevars;
-extern hashtable_t h_arrays;
-extern hashtable_t h_keywords;
 extern hashtable_t gamefuncH;
 
 #include "funct.h"
@@ -705,6 +700,7 @@ enum loguru_verbosities_game
 #include "actors.h"
 #include "common_game.h"
 #include "cmdline.h"
+#include "dnames.h"
 #include "dukebot.h"
 #include "game.h"
 #include "gamedef.h"
@@ -724,7 +720,6 @@ enum loguru_verbosities_game
 #include "screens.h"
 #include "sector.h"
 #include "sounds.h"
-#include "soundefs.h"
 #include "sync.h"
 #include "oldnet.h"
 

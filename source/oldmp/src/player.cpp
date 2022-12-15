@@ -2738,7 +2738,7 @@ static void P_HandleDamagingFloors(int snum)
 
     if (p->on_ground && truefdist <= PHEIGHT + (16 << 8))
     {
-        switch (DynamicTileMap[floorPic])
+        switch (tileGetMapping(floorPic))
         {
         case HURTRAIL__:
             if (rnd(32))
@@ -2857,7 +2857,7 @@ static void P_CheckTouchDamage(DukePlayer_t* p, int j)
         if ((switchpicnum > W_FORCEFIELD) && (switchpicnum <= W_FORCEFIELD + 2))
             switchpicnum = W_FORCEFIELD;
 
-        switch (DynamicTileMap[switchpicnum])
+        switch (tileGetMapping(switchpicnum))
         {
         case W_FORCEFIELD__:
             //        case W_FORCEFIELD+1:
@@ -3673,7 +3673,7 @@ void P_ProcessInput(int snum)
                         ? TrackerCast(sprite[lowZhit & (MAXSPRITES - 1)].picnum)
                         : TrackerCast(sector[p->cursectnum].floorpicnum);
 
-                    switch (DynamicTileMap[floorPic])
+                    switch (tileGetMapping(floorPic))
                     {
                     case PANNEL1__:
                     case PANNEL2__:

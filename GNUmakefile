@@ -710,6 +710,7 @@ oldmp_game_objs := \
     config.cpp \
     common.cpp \
     discord.cpp \
+    dnames.cpp \
     dukebot.cpp \
     game.cpp \
     gamedef.cpp \
@@ -721,7 +722,6 @@ oldmp_game_objs := \
     grpscan.cpp \
     hud.cpp \
     menus.cpp \
-    namesdyn.cpp \
     oldnet.cpp \
     osdcmds.cpp \
     osdfuncs.cpp \

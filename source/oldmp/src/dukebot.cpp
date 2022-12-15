@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "duke3d.h"
 #include "dukebot.h"
-#include "namesdyn.h"
+#include "dnames.h"
 
 DukeBotAI_t botAI[MAXPLAYERS];
 int32_t botNameSeed;
@@ -143,7 +143,7 @@ static int DukeBot_GetSpriteScore(int pNum, int32_t spriteNum)
     auto const p = g_player[pNum].ps;
     int32_t score = 0;
 
-    switch (DynamicTileMap[sprite[spriteNum].picnum])
+    switch (tileGetMapping(sprite[spriteNum].picnum))
     {
         case FIRSTGUNSPRITE__:    score = DukeBot_GetWeaponScore(pNum, spriteNum, PISTOL_WEAPON, false); break;
         case RPGSPRITE__:         score = DukeBot_GetWeaponScore(pNum, spriteNum, RPG_WEAPON, false); break;
@@ -923,7 +923,7 @@ void DukeBot_GetInput(int snum, input_t* syn)
     for (int spr = headspritestat[STAT_PROJECTILE]; spr >= 0; spr = nextspritestat[spr])
     {
         int32_t dodgeSpeed = 0;
-        switch (DynamicTileMap[sprite[spr].picnum])
+        switch (tileGetMapping(sprite[spr].picnum))
         {
             case TONGUE__:      dodgeSpeed = 4;  break;
             case FREEZEBLAST__: dodgeSpeed = 4;  break;

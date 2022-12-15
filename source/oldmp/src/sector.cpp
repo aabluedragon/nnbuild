@@ -146,31 +146,31 @@ int check_activator_motion(int lotag)
 
 int CheckDoorTile(int dapic)
 {
-    switch (DynamicTileMap[dapic])
+    switch (tileGetMapping(dapic))
     {
-    case DOORTILE1__:
-    case DOORTILE2__:
-    case DOORTILE3__:
-    case DOORTILE4__:
-    case DOORTILE5__:
-    case DOORTILE6__:
-    case DOORTILE7__:
-    case DOORTILE8__:
-    case DOORTILE9__:
-    case DOORTILE10__:
-    case DOORTILE11__:
-    case DOORTILE12__:
-    case DOORTILE14__:
-    case DOORTILE15__:
-    case DOORTILE16__:
-    case DOORTILE17__:
-    case DOORTILE18__:
-    case DOORTILE19__:
-    case DOORTILE20__:
-    case DOORTILE21__:
-    case DOORTILE22__:
-    case DOORTILE23__:
-        return 1;
+        case DOORTILE1__:
+        case DOORTILE2__:
+        case DOORTILE3__:
+        case DOORTILE4__:
+        case DOORTILE5__:
+        case DOORTILE6__:
+        case DOORTILE7__:
+        case DOORTILE8__:
+        case DOORTILE9__:
+        case DOORTILE10__:
+        case DOORTILE11__:
+        case DOORTILE12__:
+        case DOORTILE14__:
+        case DOORTILE15__:
+        case DOORTILE16__:
+        case DOORTILE17__:
+        case DOORTILE18__:
+        case DOORTILE19__:
+        case DOORTILE20__:
+        case DOORTILE21__:
+        case DOORTILE22__:
+        case DOORTILE23__:
+            return 1;
     }
     return 0;
 }
@@ -510,7 +510,7 @@ void G_AnimateWalls(void)
         i = animwall[p].wallnum;
         j = wall[i].picnum;
 
-        switch (DynamicTileMap[j])
+        switch (tileGetMapping(j))
         {
         case SCREENBREAK1__:
         case SCREENBREAK2__:
@@ -1280,7 +1280,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         switchpicnum = MULTISWITCH;
     }
 
-    switch (DynamicTileMap[switchpicnum])
+    switch (tileGetMapping(switchpicnum))
     {
     case DIPSWITCH__:
         //    case DIPSWITCH+1:
@@ -1379,7 +1379,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                     sprite[i].picnum = MULTISWITCH;
 
             }
-            switch (DynamicTileMap[switchpicnum])
+            switch (tileGetMapping(switchpicnum))
             {
 
             case DIPSWITCH__:
@@ -1407,7 +1407,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                 sprite[i].picnum++;
                 break;
             default:
-                switch (DynamicTileMap[switchpicnum-1])
+                switch (tileGetMapping(switchpicnum-1))
                 {
 
                 case TECHSWITCH__:
@@ -1451,9 +1451,8 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                     wall[x].picnum = MULTISWITCH;
 
             }
-            switch (DynamicTileMap[wall[x].picnum])
+            switch (tileGetMapping(wall[x].picnum))
             {
-
             case DIPSWITCH__:
             case TECHSWITCH__:
             case ALIENSWITCH__:
@@ -1479,7 +1478,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
                 wall[x].picnum++;
                 break;
             default:
-                switch (DynamicTileMap[wall[x].picnum-1])
+                switch (tileGetMapping(wall[x].picnum-1))
                 {
 
                 case TECHSWITCH__:
@@ -1544,7 +1543,7 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
         switchpicnum = MULTISWITCH;
     }
 
-    switch (DynamicTileMap[switchpicnum])
+    switch (tileGetMapping(switchpicnum))
     {
     default:
         if (CheckDoorTile(picnum) == 0) break;
@@ -1738,7 +1737,7 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
 
     if (pWall->overpicnum == MIRROR && pWall->pal != 4)
     {
-        switch (DynamicTileMap[weaponNum])
+        switch (tileGetMapping(weaponNum))
         {
         case RADIUSEXPLOSION__:
         case SEENINE__:
@@ -1768,7 +1767,7 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
     {
         int const switchPic = G_GetForcefieldPicnum(wallNum);
 
-        switch (DynamicTileMap[switchPic])
+        switch (tileGetMapping(switchPic))
         {
         case FANSPRITE__:
             pWall->overpicnum = FANSPRITEBROKE;
@@ -1849,7 +1848,7 @@ void A_DamageWall_Internal(int spriteNum, int wallNum, const vec3_t& vPos, int w
         }
     }
 
-    switch (DynamicTileMap[pWall->picnum])
+    switch (tileGetMapping(pWall->picnum))
     {
     case COLAMACHINE__:
     case VENDMACHINE__:
@@ -2031,13 +2030,13 @@ void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
         if (X_OnEventWithReturn(EVENT_DAMAGECEILING, spriteNum, -1, sectNum) < 0)
             return;
     }
-
+    // [JM] Is this ifndef clusterfuck necessary? They pretty much disable this entire function anyway, so shouldn't this be split into an #ifdef/elseif?
 #ifndef EDUKE32_STANDALONE
     int16_t* const pPicnum = &sector[sectNum].ceilingpicnum;
 #endif
 
 #ifndef EDUKE32_STANDALONE
-    switch (DynamicTileMap[*pPicnum])
+    switch (tileGetMapping(*pPicnum))
     {
     case WALLLIGHT1__: *pPicnum = WALLLIGHTBUST1; goto GLASSBREAK_CODE;
     case WALLLIGHT2__: *pPicnum = WALLLIGHTBUST2; goto GLASSBREAK_CODE;
@@ -2109,7 +2108,7 @@ void A_DamageObject_Internal(int i,int sn)
         if (actor[sn].projectile.workslike & PROJECTILE_RPG)
             radiusDamage = 1;
 
-    switch (DynamicTileMap[PN(i)])
+    switch (tileGetMapping(PN(i)))
     {
     case OCEANSPRITE1__:
     case OCEANSPRITE2__:
@@ -2156,7 +2155,7 @@ void A_DamageObject_Internal(int i,int sn)
                 T1(i) = 1;
                 A_Spawn(i,BURNING);
             }
-        switch (DynamicTileMap[sprite[sn].picnum])
+        switch (tileGetMapping(sprite[sn].picnum))
         {
         case RADIUSEXPLOSION__:
         case RPG__:
@@ -2175,7 +2174,7 @@ void A_DamageObject_Internal(int i,int sn)
     }
     case CACTUS__:
     {
-        switch (DynamicTileMap[sprite[sn].picnum])
+        switch (tileGetMapping(sprite[sn].picnum))
         {
             case RADIUSEXPLOSION__:
             case RPG__:
@@ -2379,7 +2378,7 @@ void A_DamageObject_Internal(int i,int sn)
     case PIPE4__:
     case PIPE5__:
     case PIPE6__:
-        switch (DynamicTileMap[PN(i)])
+        switch (tileGetMapping(PN(i)))
         {
         case PIPE1__:
             PN(i)=PIPE1B;
@@ -3484,7 +3483,7 @@ void P_CheckSectors(int snum)
         {
             if (P_ActivateSwitch(snum,neartagsprite,1)) return;
 
-            switch (DynamicTileMap[sprite[neartagsprite].picnum])
+            switch (tileGetMapping(sprite[neartagsprite].picnum))
             {
                 case TOILET__:
                 case STALL__:

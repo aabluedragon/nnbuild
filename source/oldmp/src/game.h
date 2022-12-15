@@ -229,7 +229,7 @@ static inline int G_GetMusicIdx(const char* str)
 
 static inline bool G_CheckFemSprite(int32_t spriteNum)
 {
-    switch (DynamicTileMap[sprite[spriteNum].picnum])
+    switch (tileGetMapping(sprite[spriteNum].picnum))
     {
         case FEM1__:
         case FEM2__:
@@ -295,6 +295,17 @@ static inline int32_t get_xdim(int32_t x)
 static inline int32_t get_ydim(int32_t y)
 {
     y = mulscale16((y << 16) + rotatesprite_y_offset - (200 << 15), rotatesprite_yxaspect) + (200 << 15);
+    return scale(y, ydim, 200 << 16);
+}
+
+static inline int32_t get_xdim_16(int32_t x)
+{
+    const int32_t screenwidth = scale(240 << 16, xdim, ydim);
+    return scale(x + (screenwidth >> 1) - (160 << 16), xdim, screenwidth);
+}
+static inline int32_t get_ydim_16(int32_t y)
+{
+    y = mulscale16(y + rotatesprite_y_offset - (200 << 15), rotatesprite_yxaspect) + (200 << 15);
     return scale(y, ydim, 200 << 16);
 }
 

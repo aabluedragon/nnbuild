@@ -210,7 +210,7 @@ int32_t G_GetStringTile(int32_t font, char *t, int32_t f)
             return font + (BIGCOMMA - (BIGALPHANUM + offset));
             break;
         case '!':
-            return font + (BIGX - (BIGALPHANUM + offset));
+            return font + (BIGX_ - (BIGALPHANUM + offset));
             break;
         case '?':
             return font + (BIGQ - (BIGALPHANUM + offset));
@@ -1246,16 +1246,16 @@ static void G_ShowCacheLocks(void)
 
 int A_CheckInventorySprite(spritetype *s)
 {
-    switch (DynamicTileMap[s->picnum])
+    switch (tileGetMapping(s->picnum))
     {
-    case FIRSTAID__:
-    case STEROIDS__:
-    case HEATSENSOR__:
-    case BOOTS__:
-    case JETPACK__:
-    case HOLODUKE__:
-    case AIRTANK__:
-        return 1;
+        case FIRSTAID__:
+        case STEROIDS__:
+        case HEATSENSOR__:
+        case BOOTS__:
+        case JETPACK__:
+        case HOLODUKE__:
+        case AIRTANK__:
+            return 1;
     }
     return 0;
 }
@@ -3543,7 +3543,7 @@ int A_Spawn(int spriteNum, int tileNum)
     else if (pSprite->picnum >= SIDEBOLT1 && pSprite->picnum <= SIDEBOLT1 + 3)
         pSprite->picnum = SIDEBOLT1;
 
-    switch (DynamicTileMap[pSprite->picnum])
+    switch (tileGetMapping(pSprite->picnum))
     {
         case FOF__:
             pSprite->xrepeat = pSprite->yrepeat = 0;
@@ -4412,7 +4412,7 @@ int A_Spawn(int spriteNum, int tileNum)
         case SHARK__:
             if (pSprite->pal == 0)
             {
-                switch (DynamicTileMap[pSprite->picnum])
+                switch (tileGetMapping(pSprite->picnum))
                 {
                     case LIZTROOPONTOILET__:
                     case LIZTROOPSHOOT__:
@@ -5509,7 +5509,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         i = t->owner;
         s = &sprite[i];
 
-        switch (DynamicTileMap[s->picnum])
+        switch (tileGetMapping(s->picnum))
         {
         case SECTOREFFECTOR__:
             if (s->lotag == SE_40_ROR_UPPER || s->lotag == SE_41_ROR_LOWER)
@@ -5546,7 +5546,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         }
         else
         {
-            switch (DynamicTileMap[t->picnum])
+            switch (tileGetMapping(t->picnum))
             {
                 case BLOODPOOL__:
                 case PUKE__:
@@ -5625,7 +5625,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         i = t->owner;
         s = &sprite[i];
 
-        switch (DynamicTileMap[s->picnum])
+        switch (tileGetMapping(s->picnum))
         {
             case NATURALLIGHTNING__:
                 t->shade = -127;
@@ -5738,7 +5738,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         else if ((s->picnum==MONEY+1)||(s->picnum==MAIL+1)||(s->picnum==PAPER+1))
             switchpic--;
 
-        switch (DynamicTileMap[switchpic])
+        switch (tileGetMapping(switchpic))
         {
             case DUKELYINGDEAD__:
                 t->z += (24 << 8);
@@ -6215,7 +6215,7 @@ skip:
 
         bool const haveAction = scrofs_action != 0 && (unsigned)scrofs_action + ACTION_PARAM_COUNT <= (unsigned)g_scriptSize;
 
-        switch (DynamicTileMap[s->picnum])
+        switch (tileGetMapping(s->picnum))
         {
             case LASERLINE__:
                 if (sector[t->sectnum].lotag == ST_2_UNDERWATER) t->pal = 8;
@@ -8186,7 +8186,7 @@ static void G_Startup(void)
         Bexit(EXIT_FAILURE);
     }
 
-    G_InitDynamicTiles();
+    G_InitDynamicNames();
     G_InitMultiPsky(CLOUDYOCEAN, MOONSKY1, BIGORBIT1, LA);
     G_PostCreateGameState();
 
