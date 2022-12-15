@@ -65,6 +65,8 @@ const memberlabel_t SectorLabels[] =
     { "lotag",              SECTOR_LOTAG,           0, 0, -1 },
     { "hitag",              SECTOR_HITAG,           0, 0, -1 },
     { "extra",              SECTOR_EXTRA,           0, 0, -1 },
+    { "ceilingbunch",       SECTOR_CEILINGBUNCH,    0, 0, -1 },
+    { "floorbunch",         SECTOR_FLOORBUNCH,      0, 0, -1 },
     { "",                   -1,                     0, 0, -1 }     // END OF LIST
 };
 
@@ -1009,6 +1011,12 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
     auto& ps = *thisPlayer.ps;
     auto const& playerLabel = PlayerLabels[labelNum];
 
+    if ((thisPlayer.ps == NULL && playerLabel.lId != PLAYER_CONNECTED) && g_scriptSanityChecks)
+    {
+        CON_ERRPRINTF("tried to access NULL player! %d\n", playerNum);
+        return -1;
+    }
+
     switch (playerLabel.lId)
     {
         case PLAYER_ZOOM:               return ps.zoom;
@@ -1206,7 +1214,7 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
     auto& thisPlayer = g_player[playerNum];
     auto& ps = *thisPlayer.ps;
 
-    if ((thisPlayer.ps == NULL && playerLabel.lId != PLAYER_CONNECTED) && g_scriptSanityChecks)
+    if ((thisPlayer.ps == NULL) && g_scriptSanityChecks)
     {
         CON_ERRPRINTF("tried to access NULL player! %d\n", playerNum);
         return;
@@ -1565,6 +1573,14 @@ int32_t __fastcall VM_GetSector(int const sectNum, int32_t labelNum)
         case SECTOR_HITAG:              return s.hitag;
         case SECTOR_EXTRA:              return s.extra;
 
+        case SECTOR_CEILINGBUNCH:
+        case SECTOR_FLOORBUNCH:
+#ifdef YAX_ENABLE
+            return yax_getbunch(sectNum, labelNum == SECTOR_FLOORBUNCH);
+#else
+            return -1;
+#endif
+
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
@@ -1625,6 +1641,10 @@ void __fastcall VM_SetSector(int const sectNum, int const labelNum, int32_t newV
         case SECTOR_LOTAG:              s.lotag             = newValue; return;
         case SECTOR_HITAG:              s.hitag             = newValue; return;
         case SECTOR_EXTRA:              s.extra             = newValue; return;
+
+        case SECTOR_CEILINGBUNCH:
+        case SECTOR_FLOORBUNCH:
+            break;
 
         default: EDUKE32_UNREACHABLE_SECTION(return);
     }
