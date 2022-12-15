@@ -1064,8 +1064,8 @@ static int X_DoExecute(void)
 
     g_errorLineNum = VM_DECODE_LINE_NUMBER(tw);
 
-    tw = VM_DECODE_INST(tw);
     g_tw = tw;
+    tw = VM_DECODE_INST(tw);
 
     switch (tw)
     {
