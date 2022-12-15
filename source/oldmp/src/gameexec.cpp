@@ -4856,19 +4856,15 @@ static int X_DoExecute(void)
 
     case CON_WHILEVARVARN:
     {
-        int i,k;
-        intptr_t *savedinsptr=insptr+2;
-        j=1;
+        auto const savedinsptr = &insptr[2];
         do
         {
-            insptr=savedinsptr;
-            i = Gv_GetVarX(*(insptr-1));
-            k=*(insptr);
-            if (i == Gv_GetVarX(k))
-                j=0;
+            insptr = savedinsptr;
+            j = Gv_GetVarX(insptr[-1]);
+            j = (j != Gv_GetVarX(*insptr++));
+            insptr--;
             branch(j);
-        }
-        while (j);
+        } while (j && (vm.flags & VM_RETURN) == 0);
         break;
     }
 
