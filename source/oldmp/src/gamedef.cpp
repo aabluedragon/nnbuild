@@ -49,7 +49,8 @@ static bool g_switchCountPhase = false;
 static bool g_checkingCase;
 
 static bool g_skipBranch;
-static int g_labelsOnly = 0, g_dynamicTileMapping = 0;
+static bool g_dynamicTileMapping, g_dynamicSoundMapping;
+static int g_labelsOnly = 0;
 static int g_lastKeyword = -1;
 static int g_numBraces = 0;
 
@@ -219,7 +220,12 @@ const tokenmap_t vm_keywords[] =
     { "stopsound",              CON_STOPSOUND },
     { "ifawayfromwall",         CON_IFAWAYFROMWALL },
     { "ifcanseetarget",         CON_IFCANSEETARGET },
+
+    { "soundvar",               CON_SOUND },
     { "globalsound",            CON_GLOBALSOUND },
+    { "globalsoundvar",         CON_GLOBALSOUND },
+    { "screensound",            CON_SCREENSOUND },
+
     { "lotsofglass",            CON_LOTSOFGLASS },
     { "ifgotweaponce",          CON_IFGOTWEAPONCE },
     { "getlastpal",             CON_GETLASTPAL },
@@ -282,6 +288,8 @@ const tokenmap_t vm_keywords[] =
     { "ifvareither",            CON_IFVAREITHER },
     { "ifvarvareither",         CON_IFVARVAREITHER },
     { "ifeither",               CON_IFVARVAREITHER },
+
+    { "ifactorsound",           CON_IFACTORSOUND },
 
     { "for",                    CON_FOR },
 
@@ -429,7 +437,6 @@ const tokenmap_t vm_keywords[] =
     { "case",                   CON_CASE },
     { "default",                CON_DEFAULT },
     { "endswitch",              CON_ENDSWITCH },
-    { "soundvar",               CON_SOUNDVAR },
     { "findplayer",             CON_FINDPLAYER },
     { "findotherplayer",        CON_FINDOTHERPLAYER },
     { "activatebysector",       CON_ACTIVATEBYSECTOR },         // sectnum, spriteid
@@ -464,7 +471,6 @@ const tokenmap_t vm_keywords[] =
     { "ssp",                    CON_SSP },
     { "stopsoundvar",           CON_STOPSOUNDVAR },
     { "checkavailinven",        CON_CHECKAVAILINVEN },
-    { "globalsoundvar",         CON_GLOBALSOUNDVAR },
     { "guniqhudid",             CON_GUNIQHUDID },
     { "getprojectile",          CON_GETPROJECTILE },
     { "getthisprojectile",      CON_GETTHISPROJECTILE },
@@ -497,6 +503,7 @@ const tokenmap_t vm_keywords[] =
     { "findnearsprite3d",       CON_FINDNEARSPRITE3D },
     { "findnearsprite3dvar",    CON_FINDNEARSPRITE3DVAR },
     { "dynamicremap",           CON_DYNAMICREMAP },
+    { "dynamicsoundremap",      CON_DYNAMICSOUNDREMAP },
 
     { "save",                   CON_SAVE },
     { "cansee",                 CON_CANSEE },
@@ -2700,8 +2707,6 @@ DO_DEFSTATE:
                 fallthrough__;
             case CON_ANGOFF:
             case CON_QUOTE:
-            case CON_SOUND:
-            case CON_GLOBALSOUND:
             case CON_SOUNDONCE:
             case CON_STOPSOUND:
                 C_GetNextValue(LABEL_DEFINE);
@@ -3257,8 +3262,9 @@ DO_DEFSTATE:
                 fallthrough__;
             case CON_JUMP:
             case CON_CMENU:
-            case CON_SOUNDVAR:
-            case CON_GLOBALSOUNDVAR:
+            case CON_SOUND:
+            case CON_GLOBALSOUND:
+            case CON_SCREENSOUND:
             case CON_STOPSOUNDVAR:
             case CON_SOUNDONCEVAR:
             case CON_ANGOFFVAR:
@@ -3293,16 +3299,48 @@ DO_DEFSTATE:
             }
 
             case CON_DYNAMICREMAP:
-            {
                 g_scriptPtr--;
-                if (g_dynamicTileMapping++)
+                if (EDUKE32_PREDICT_FALSE(g_dynamicTileMapping))
                 {
-                    LOG_F(WARNING, "%s:%d: duplicate g_dynamicTileMapping statement", g_scriptFileName, g_lineNumber);
+                    LOG_F(WARNING, "%s:%d: duplicate dynamicremap statement", g_scriptFileName, g_lineNumber);
                     g_warningCnt++;
                 }
-                else VLOG_F(LOG_CON, "Using dynamic tile remapping");
+#ifdef USE_DNAMES
+#ifdef DEBUGGINGAIDS
+                else
+                    VLOG_F(LOG_CON, "Using dynamic tile remapping");
+#endif
+                g_dynamicTileMapping = 1;
+#else
+                else
+                {
+                    LOG_F(WARNING, "%s:%d: dynamic tile remapping is disabled in this build", g_scriptFileName, g_lineNumber);
+                    g_warningCnt++;
+                }
+#endif
                 continue;
-            }
+
+            case CON_DYNAMICSOUNDREMAP:
+                g_scriptPtr--;
+                if (EDUKE32_PREDICT_FALSE(g_dynamicSoundMapping))
+                {
+                    LOG_F(WARNING, "%s:%d: duplicate dynamicsoundremap statement", g_scriptFileName, g_lineNumber);
+                    g_warningCnt++;
+                }
+                else
+#ifdef USE_DNAMES
+#ifdef DEBUGGINGAIDS
+                    VLOG_F(LOG_CON, "Using dynamic sound remapping");
+#endif
+
+                g_dynamicSoundMapping = 1;
+#else
+                {
+                    LOG_F(WARNING, "%s:%d: dynamic sound remapping is disabled in this build", g_scriptFileName, g_lineNumber);
+                    g_warningCnt++;
+                }
+#endif
+                continue;
 
             case CON_RANDVAR:
                 if (!C_CheckEventSync(g_currentEvent))
@@ -3737,6 +3775,7 @@ setvarvar:
                 }
                 continue;
 
+            case CON_IFACTORSOUND:
             case CON_IFVARVARG:
             case CON_IFVARVARGE:
             case CON_IFVARVARL:
@@ -4403,7 +4442,6 @@ repeatcase:
                         C_FinishBitOr(j);
                         break;
                     case CON_IFSOUND:
-                        //case CON_IFACTORSOUND:
                     default:
                         C_GetNextValue(LABEL_DEFINE);
                         break;
@@ -5035,14 +5073,13 @@ repeatcase:
                     k = MAXSOUNDS - 1;
                 }
 
-
                 S_AllocIndexes(k);
 
                 if (EDUKE32_PREDICT_TRUE(g_sounds[k] == &nullsound))
                     g_sounds[k] = (sound_t*)Xcalloc(1, sizeof(sound_t));
                 else
                 {
-                    LOG_F(WARNING, "%s:%d: sound %d already defined (%s)", g_scriptFileName, g_lineNumber, k, g_sounds[k]->filename);
+                    LOG_F(WARNING, "%s:%d: overwriting existing definition for sound #%d (%s)", g_scriptFileName, g_lineNumber, k, g_sounds[k]->filename);
                     g_warningCnt++;
                 }
 
@@ -5095,6 +5132,7 @@ repeatcase:
 
                 C_GetNextValue(LABEL_DEFINE);
                 int distance = g_scriptPtr[-1];
+
                 g_scriptPtr -= 5;
 
                 float volume = 1.0;
@@ -5103,8 +5141,11 @@ repeatcase:
 
                 if (k > g_highestSoundIdx)
                     g_highestSoundIdx = k;
+
+                if (g_dynamicSoundMapping && j >= 0 && (labeltype[j] & LABEL_DEFINE))
+                    G_ProcessDynamicNameMapping(label + (j << 6), g_dynSoundList, k);
+                continue;
             }
-            continue;
 
             case CON_ENDEVENT:
 

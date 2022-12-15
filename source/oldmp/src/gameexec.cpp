@@ -1431,16 +1431,23 @@ static int X_DoExecute(void)
             A_PlaySound(*(insptr-1),vm.spriteNum);
         break;
 
-    case CON_IFSOUND:
+    case CON_IFACTORSOUND:
         insptr++;
-        if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*insptr);
-            insptr++;
+            int const spriteNum = Gv_GetVarX(*insptr++);
+            int const soundNum = Gv_GetVarX(*insptr++);
+
+            VM_ABORT_IF((unsigned)soundNum > (unsigned)g_highestSoundIdx, "invalid sound #%d", soundNum);
+
+            insptr--;
+            branch(A_CheckSoundPlaying(spriteNum, soundNum));
             break;
         }
-        branch(A_CheckSoundPlaying(vm.spriteNum,*insptr));
-        //    X_DoConditional(SoundOwner[*insptr][0].i == vm.spriteNum);
+
+    case CON_IFSOUND:
+        insptr++;
+        VM_ABORT_IF((unsigned)*insptr > (unsigned)g_highestSoundIdx, "invalid sound #%d", (int32_t)*insptr);
+        branch(S_CheckSoundPlaying(*insptr));
         break;
 
     case CON_STOPSOUND:
@@ -1494,7 +1501,7 @@ static int X_DoExecute(void)
     case CON_GLOBALSOUND:
         insptr++;
         {
-            int const soundNum = *insptr++;
+            int const soundNum = Gv_GetVarX(*insptr++);
             if ((soundNum < 0 || (unsigned)soundNum > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
             {
                 OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), soundNum);
@@ -1511,14 +1518,31 @@ static int X_DoExecute(void)
 
     case CON_SOUND:
         insptr++;
-        if ((*insptr < 0 || (unsigned)*insptr > (unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
         {
-            OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*insptr);
-            insptr++;
+            int const soundNum = Gv_GetVarX(*insptr++);
+            if ((soundNum < 0 || (unsigned)soundNum >(unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), soundNum);
+                break;
+            }
+
+            A_PlaySound(soundNum, vm.spriteNum);
             break;
         }
-        A_PlaySound((short) *insptr++,vm.spriteNum);
-        break;
+
+    case CON_SCREENSOUND:
+        insptr++;
+        {
+            int const soundNum = Gv_GetVarX(*insptr++);
+            if ((soundNum < 0 || (unsigned)soundNum >(unsigned)g_highestSoundIdx) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "Invalid sound %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), soundNum);
+                break;
+            }
+
+            S_PlaySound(soundNum);
+            break;
+        }
 
     case CON_TIP:
         insptr++;
@@ -2578,10 +2602,8 @@ static int X_DoExecute(void)
         ChangeToMenu(j);
         break;
 
-    case CON_SOUNDVAR:
     case CON_STOPSOUNDVAR:
     case CON_SOUNDONCEVAR:
-    case CON_GLOBALSOUNDVAR:
         insptr++;
         j=Gv_GetVarX(*insptr++);
 
@@ -2597,15 +2619,9 @@ static int X_DoExecute(void)
             if (!A_CheckSoundPlaying(vm.spriteNum,j))
                 A_PlaySound((short)j,vm.spriteNum);
             break;
-        case CON_GLOBALSOUNDVAR:
-            A_PlaySound((short)j,g_player[screenpeek].ps->i);
-            break;
         case CON_STOPSOUNDVAR:
             if (A_CheckSoundPlaying(vm.spriteNum,j))
                 S_StopEnvSound((short)j,vm.spriteNum);
-            break;
-        case CON_SOUNDVAR:
-            A_PlaySound((short)j,vm.spriteNum);
             break;
         }
         break;
@@ -4859,26 +4875,26 @@ static int X_DoExecute(void)
 
     case CON_IFVARAND:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) & *insptr);
+        j = Gv_GetVarX(*insptr++);
+        branch(j & *insptr);
         break;
 
     case CON_IFVAROR:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) | *insptr);
+        j = Gv_GetVarX(*insptr++);
+        branch(j | *insptr);
         break;
 
     case CON_IFVARXOR:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) ^ *insptr);
+        j = Gv_GetVarX(*insptr++);
+        branch(j ^ *insptr);
         break;
 
     case CON_IFVAREITHER:
         insptr++;
-        j=*insptr++;
-        branch(Gv_GetVarX(j) || *insptr);
+        j = Gv_GetVarX(*insptr++);
+        branch(j || *insptr);
         break;
 
     case CON_IFVARG:
