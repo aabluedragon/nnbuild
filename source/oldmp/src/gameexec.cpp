@@ -3102,7 +3102,7 @@ static int X_DoExecute(void)
                                        krand()&2047,(krand()&127)+32,
                                        -(krand()&2047),vm.spriteNum,5);
                     if (vm.pSprite->picnum == BLIMP && dnum == SCRAP1)
-                        sprite[l].yvel = BlimpSpawnSprites[j%14];
+                        sprite[l].yvel = g_blimpSpawnItems[j%14];
                     else sprite[l].yvel = -1;
                     sprite[l].pal = vm.pSprite->pal;
                 }

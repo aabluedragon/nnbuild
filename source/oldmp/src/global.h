@@ -47,7 +47,7 @@ extern char g_numVolumes;
 
 extern char EpisodeNames[MAXVOLUMES][33];
 extern char g_skillNames[5][33];
-extern short BlimpSpawnSprites[15];
+extern int16_t g_blimpSpawnItems[15];
 extern char CheatKeys[2];
 extern char g_setupFileName[BMAX_PATH];
 
