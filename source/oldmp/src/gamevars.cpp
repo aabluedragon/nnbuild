@@ -1216,6 +1216,14 @@ static void Gv_AddSystemVars(void)
 # else
     Gv_NewVar("rendmode", 0, GAMEVAR_READONLY | GAMEVAR_SYSTEM);
 # endif
+
+    // SYSTEM_GAMEARRAY
+    Gv_NewArray("gotpic", (void*)&gotpic[0], MAXTILES, GAMEARRAY_SYSTEM | GAMEARRAY_BITMAP);
+    Gv_NewArray("gotsector", (void*)&gotsector[0], MAXSECTORS, GAMEARRAY_SYSTEM | GAMEARRAY_BITMAP);
+    //Gv_NewArray("radiusdmgstatnums", (void*)&g_radiusDmgStatnums[0], MAXSTATUS, GAMEARRAY_SYSTEM | GAMEARRAY_BITMAP);
+    Gv_NewArray("show2dsector", (void*)&show2dsector[0], MAXSECTORS, GAMEARRAY_SYSTEM | GAMEARRAY_BITMAP);
+    Gv_NewArray("tilesizx", (void*)&tilesiz[0].x, MAXTILES, GAMEARRAY_SYSTEM | GAMEARRAY_STRIDE2 | GAMEARRAY_READONLY | GAMEARRAY_INT16);
+    Gv_NewArray("tilesizy", (void*)&tilesiz[0].y, MAXTILES, GAMEARRAY_SYSTEM | GAMEARRAY_STRIDE2 | GAMEARRAY_READONLY | GAMEARRAY_INT16);
 }
 
 void Gv_Init(void)
@@ -1391,4 +1399,9 @@ void Gv_RefreshPointers(void)
 # ifdef USE_OPENGL
     aGameVars[Gv_GetVarIndex("rendmode")].lValue = (intptr_t)&rendmode;
 # endif
+
+    // System GameArrays
+    aGameArrays[Gv_GetArrayIndex("gotpic")].pValues = (intptr_t*)&gotpic[0];
+    aGameArrays[Gv_GetArrayIndex("tilesizx")].pValues = (intptr_t*)&tilesiz[0].x;
+    aGameArrays[Gv_GetArrayIndex("tilesizy")].pValues = (intptr_t*)&tilesiz[0].y;
 }
