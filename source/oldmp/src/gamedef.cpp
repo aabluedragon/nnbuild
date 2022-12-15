@@ -361,7 +361,10 @@ const tokenmap_t vm_keywords[] =
     { "gettexturefloor",        CON_GETTEXTUREFLOOR },
     { "gettextureceiling",      CON_GETTEXTURECEILING },
     { "inittimer",              CON_INITTIMER },
+
     { "starttrack",             CON_STARTTRACK }, 
+    { "starttrackvar",          CON_STARTTRACK },
+
     { "enhanced",               CON_ENHANCED },
     { "getangletotarget",       CON_GETANGLETOTARGET },
     { "getactorangle",          CON_GETACTORANGLE },
@@ -546,7 +549,6 @@ const tokenmap_t vm_keywords[] =
     { "writearraytofile",       CON_WRITEARRAYTOFILE },
     { "readarrayfromfile",      CON_READARRAYFROMFILE },
 
-    { "starttrackvar",          CON_STARTTRACKVAR },
     { "qgetsysstr",             CON_QGETSYSSTR },
     { "getticks",               CON_GETTICKS },
     { "savemapstate",           CON_SAVEMAPSTATE },
@@ -3274,7 +3276,7 @@ DO_DEFSTATE:
             case CON_SAVEGAMEVAR:
             case CON_READGAMEVAR:
             case CON_USERQUOTE:
-            case CON_STARTTRACKVAR:
+            case CON_STARTTRACK:
             case CON_CLEARMAPSTATE:
             case CON_ACTIVATECHEAT:
             case CON_SETGAMEPALETTE:
@@ -3843,11 +3845,6 @@ setvarvar:
                 }
                 continue;
             }
-
-            case CON_STARTTRACK:
-                // one parameter (track#)
-                C_GetNextValue(LABEL_DEFINE);
-                continue;
 
             case CON_IFVARL:
             case CON_IFVARLE:
@@ -5539,6 +5536,7 @@ static void C_AddDefaultDefinitions(void)
     C_AddDefinition("MAXTILES", MAXTILES, LABEL_DEFINE);
     C_AddDefinition("MAXLEVELS", MAXLEVELS, LABEL_DEFINE);
     C_AddDefinition("MAXVOLUMES", MAXVOLUMES, LABEL_DEFINE);
+    C_AddDefinition("SPECIALMUS", (MAXVOLUMES+1), LABEL_DEFINE);
     C_AddDefinition("MAXSECTORS", MAXSECTORS, LABEL_DEFINE);
 
     C_AddDefinition("CLIPMASK0", CLIPMASK0, LABEL_DEFINE);

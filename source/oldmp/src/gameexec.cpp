@@ -4722,7 +4722,6 @@ static int X_DoExecute(void)
         break;
 
     case CON_STARTTRACK:
-    case CON_STARTTRACKVAR:
         insptr++;
         G_StartTrackSlotWrap(ud.volume_number, Gv_GetVarX(*(insptr++)));
         break;
