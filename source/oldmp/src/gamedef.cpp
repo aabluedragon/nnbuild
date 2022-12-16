@@ -5437,7 +5437,8 @@ static void C_AddDefaultDefinitions(void)
     C_AddEvent(EVENT_DISPLAYWEAPON);
     C_AddEvent(EVENT_DISPLAYTIP);
     C_AddEvent(EVENT_DOFIRE);
-    C_AddEvent(EVENT_FIREEVERYOTHER);
+    C_AddEvent(EVENT_PREWEAPONSHOOT);
+    C_AddEvent(EVENT_POSTWEAPONSHOOT);
     C_AddEvent(EVENT_DRAWWEAPON);
     C_AddEvent(EVENT_EGS);
     C_AddEvent(EVENT_ENTERLEVEL);

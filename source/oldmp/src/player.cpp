@@ -468,8 +468,13 @@ void P_FireWeapon(DukePlayer_t *p)
         }
 
         P_SetWeaponGamevars(snum, p);
-//        OSD_Printf("doing %d %d %d\n",aplWeaponShoots[p->curr_weapon][snum],p->curr_weapon,snum);
-        A_Shoot(p->i,aplWeaponShoots[p->curr_weapon][snum]);
+
+        if (X_OnEventWithReturn(EVENT_PREWEAPONSHOOT, p->i, snum, 0) == 0)
+        {
+            A_Shoot(p->i, aplWeaponShoots[p->curr_weapon][snum]);
+            X_OnEvent(EVENT_POSTWEAPONSHOOT, p->i, snum, -1);
+        }
+
         for (i=1;i<aplWeaponShotsPerBurst[p->curr_weapon][snum];i++)
         {
             if (aplWeaponFlags[p->curr_weapon][snum] & WEAPON_FIREEVERYOTHER)
@@ -477,7 +482,7 @@ void P_FireWeapon(DukePlayer_t *p)
                 // this makes the projectiles fire on a delay from player code
                 actor[p->i].t_data[7] = (aplWeaponShotsPerBurst[p->curr_weapon][snum])<<1;
             }
-            else
+            else if (X_OnEventWithReturn(EVENT_PREWEAPONSHOOT, p->i, snum, 0) == 0)
             {
                 if (aplWeaponFlags[p->curr_weapon][snum] & WEAPON_AMMOPERSHOT)
                 {
@@ -486,6 +491,7 @@ void P_FireWeapon(DukePlayer_t *p)
                     else break;
                 }
                 A_Shoot(p->i,aplWeaponShoots[p->curr_weapon][snum]);
+                X_OnEvent(EVENT_POSTWEAPONSHOOT, p->i, snum, -1);
             }
         }
 
@@ -2033,9 +2039,7 @@ static void P_ProcessWeapon(int playerNum)
         actor[p->i].t_data[7]--;
         if (p->last_weapon == -1 && actor[p->i].t_data[7] != 0 && ((actor[p->i].t_data[7] & 1) == 0))
         {
-            Gv_SetVar(sysVarIDs.RETURN, 0, p->i, playerNum);
-            X_OnEvent(EVENT_FIREEVERYOTHER, p->i, playerNum, -1);
-            if (Gv_GetVar(sysVarIDs.RETURN, p->i, playerNum) == 0)
+            if (X_OnEventWithReturn(EVENT_PREWEAPONSHOOT, p->i, playerNum, 0) == 0)
             {
                 if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_AMMOPERSHOT)
                 {
@@ -2051,6 +2055,7 @@ static void P_ProcessWeapon(int playerNum)
                 if (actor[p->i].t_data[7] != 0)
                 {
                     A_Shoot(p->i, aplWeaponShoots[p->curr_weapon][playerNum]);
+                    X_OnEvent(EVENT_POSTWEAPONSHOOT, p->i, playerNum, -1);
                 }
             }
         }
