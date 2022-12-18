@@ -236,7 +236,7 @@ void S_MusicVolume(int32_t volume)
 
 void S_RestartMusic(void)
 {
-    if (ud.recstat != 2 && g_player[myconnectindex].ps->gm & MODE_GAME)
+    if (ud.recstat != 2 && ud.gm & MODE_GAME)
     {
         S_PlayLevelMusicOrNothing(g_musicIndex);
     }
@@ -848,7 +848,7 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
     auto const pPlayer = g_player[myconnectindex].ps;
 
     if (((snd->flags & SF_ADULT) && ud.lockout)
-        || (pPlayer->gm & MODE_MENU)
+        || (ud.gm & MODE_MENU)
         || (pPlayer->timebeforeexit > 0 && pPlayer->timebeforeexit <= GAMETICSPERSEC * 3))
         return -1;
 
@@ -1126,7 +1126,7 @@ void S_ChangeAllSoundPitches(int pitchOffset)
 
 void S_Update(void)
 {
-    if ((g_player[myconnectindex].ps->gm & (MODE_GAME | MODE_DEMO)) == 0)
+    if ((ud.gm & (MODE_GAME | MODE_DEMO)) == 0)
         return;
 
     g_numEnvSoundsPlaying = 0;

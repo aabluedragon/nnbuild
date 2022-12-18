@@ -3282,7 +3282,6 @@ static void P_DoSectorInteractions(int32_t playerNum)
     if (oldnet_predicting)
         return;
 
-    int i = 0;
     DukePlayer_t* p = g_player[playerNum].ps;
 
     if (p->cursectnum > -1)
@@ -3301,23 +3300,8 @@ static void P_DoSectorInteractions(int32_t playerNum)
             }
             return;
         case -1:
-            for (ALL_PLAYERS(i))
-                g_player[i].ps->gm = MODE_EOL;
-
             sector[p->cursectnum].lotag = 0;
-            if (ud.from_bonus)
-            {
-                ud.level_number = ud.from_bonus;
-                ud.m_level_number = ud.level_number;
-                ud.from_bonus = 0;
-            }
-            else
-            {
-                ud.level_number++;
-                if (ud.level_number > MAXLEVELS - 1)
-                    ud.level_number = 0;
-                ud.m_level_number = ud.level_number;
-            }
+            Net_EndOfLevel(false);
             return;
         case -2:
             sector[p->cursectnum].lotag = 0;
@@ -3377,7 +3361,7 @@ void P_CheckSectors(int snum)
 
     //After this point the the player effects the map with space
 
-    if (p->gm&MODE_TYPE || sprite[p->i].extra <= 0)
+    if (sprite[p->i].extra <= 0)
         return;
 
     if (TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_OPEN))

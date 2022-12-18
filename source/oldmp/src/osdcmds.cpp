@@ -115,13 +115,13 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
 
             Net_InitiateVote();
 
-            g_player[myconnectindex].ps->gm |= MODE_MENU;
+            ud.gm |= MODE_MENU;
             ChangeToMenu(603);
         }
         return OSDCMD_OK;
     }
 
-    if (g_player[myconnectindex].ps->gm & MODE_GAME)
+    if (ud.gm & MODE_GAME)
     {
         // in-game behave like a cheat
         osdcmd_cheatsinfo_stat.cheatnum = 2;
@@ -251,7 +251,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
 
             Net_InitiateVote();
 
-            g_player[myconnectindex].ps->gm |= MODE_MENU;
+            ud.gm |= MODE_MENU;
             ChangeToMenu(603);
         }
 
@@ -277,7 +277,7 @@ static int osdcmd_map(const osdfuncparm_t *parm)
 static int osdcmd_god(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
-    if (numplayers == 1 && g_player[myconnectindex].ps->gm & MODE_GAME)
+    if (numplayers == 1 && ud.gm & MODE_GAME)
     {
         osdcmd_cheatsinfo_stat.cheatnum = CHEAT_CORNHOLIO;
     }
@@ -292,7 +292,7 @@ static int osdcmd_god(const osdfuncparm_t *parm)
 static int osdcmd_noclip(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
-    if (numplayers == 1 && g_player[myconnectindex].ps->gm & MODE_GAME)
+    if (numplayers == 1 && ud.gm & MODE_GAME)
     {
         osdcmd_cheatsinfo_stat.cheatnum = CHEAT_CLIP;
     }
@@ -508,7 +508,7 @@ static int osdcmd_spawn(const osdfuncparm_t *parm)
     int16_t ang = 0;
     int16_t set = 0;
 
-    if (numplayers > 1 || !(pPlayer->gm & MODE_GAME))
+    if (numplayers > 1 || !(ud.gm & MODE_GAME))
     {
         OSD_Printf("spawn: Can't spawn sprites in multiplayer games or demos\n");
         return OSDCMD_OK;
@@ -962,7 +962,7 @@ static int osdcmd_give(const osdfuncparm_t *parm)
 {
     int i;
 
-    if (numplayers != 1 || (g_player[myconnectindex].ps->gm & MODE_GAME) == 0 ||
+    if (numplayers != 1 || (ud.gm & MODE_GAME) == 0 ||
             g_player[myconnectindex].ps->dead_flag != 0)
     {
         OSD_Printf("give: Cannot give while dead or not in a single-player game.\n");
@@ -1081,7 +1081,7 @@ static int osdcmd_button(osdcmdptr_t parm)
 
     char const* p = parm->name + strlen_gamefunc_;
 
-    //    if (g_player[myconnectindex].ps->gm == MODE_GAME) // only trigger these if in game
+    //    if (ud.gm == MODE_GAME) // only trigger these if in game
     CONTROL_ButtonFlags[CONFIG_FunctionNameToNum(p)] = 1; // FIXME
 
     return OSDCMD_OK;
@@ -1410,7 +1410,7 @@ static int osdcmd_unbound(osdcmdptr_t parm)
 static int osdcmd_quicksave(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
-    if (!(g_player[myconnectindex].ps->gm & MODE_GAME))
+    if (!(ud.gm & MODE_GAME))
         OSD_Printf("quicksave: not in a game.\n");
     else g_doQuickSave = 1;
     return OSDCMD_OK;
@@ -1419,7 +1419,7 @@ static int osdcmd_quicksave(const osdfuncparm_t *parm)
 static int osdcmd_quickload(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
-    if (!(g_player[myconnectindex].ps->gm & MODE_GAME))
+    if (!(ud.gm & MODE_GAME))
         OSD_Printf("quickload: not in a game.\n");
     else g_doQuickSave = 2;
     return OSDCMD_OK;

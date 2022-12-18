@@ -1140,7 +1140,7 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
         case PLAYER_FOOTPRINTSHADE:         return ps.footprintshade;
         case PLAYER_BOOT_AMOUNT:            return ps.inv_amount[GET_BOOTS];
         case PLAYER_SCREAM_VOICE:           return ps.scream_voice;
-        case PLAYER_GM:                     return ps.gm;
+        case PLAYER_GM:                     return ud.gm;
         case PLAYER_ON_WARPING_SECTOR:      return ps.on_warping_sector;
         case PLAYER_FOOTPRINTCOUNT:         return ps.footprintcount;
         case PLAYER_HBOMB_ON:               return ps.hbomb_on;
@@ -1347,7 +1347,7 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
         case PLAYER_FOOTPRINTSHADE:         ps.footprintshade           = newValue; return;
         case PLAYER_BOOT_AMOUNT:            ps.inv_amount[GET_BOOTS]    = newValue; return;
         case PLAYER_SCREAM_VOICE:           ps.scream_voice             = newValue; return;
-        case PLAYER_GM:                     ps.gm                       = newValue; return;
+        case PLAYER_GM:                     ud.gm                       = newValue; return;
         case PLAYER_ON_WARPING_SECTOR:      ps.on_warping_sector        = newValue; return;
         case PLAYER_FOOTPRINTCOUNT:         ps.footprintcount           = newValue; return;
         case PLAYER_HBOMB_ON:               ps.hbomb_on                 = newValue; return;

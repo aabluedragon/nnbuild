@@ -114,7 +114,7 @@ typedef struct {
 
     uint8_t aim_mode, auto_aim, weaponswitch;
 
-    uint8_t gm; // Debating upgrading this to int32_t, if I add more GM flags.
+    uint8_t pflags;
 
     uint8_t jumping_toggle, falling_counter, hard_landing, return_to_center;
     uint8_t inven_icon, jetpack_on, heat_on, scuba_on;

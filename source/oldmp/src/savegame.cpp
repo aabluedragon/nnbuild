@@ -487,7 +487,7 @@ int32_t G_LoadPlayer(int32_t spot)
         if (ud.config.MusicToggle)
             S_PauseMusic(false);
 
-        g_player[myconnectindex].ps->gm = MODE_GAME;
+        ud.gm = MODE_GAME;
         ud.recstat = 0;
 
         if (g_player[myconnectindex].ps->jetpack_on)

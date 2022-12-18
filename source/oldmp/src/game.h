@@ -68,6 +68,7 @@ typedef struct {
     int16_t last_level, secretlevel;
 
     uint8_t max_secret_rooms, secret_rooms;
+    uint8_t gm;
 
     char overhead_on, last_overhead;
     char god, warp_on, cashman, eog, showallmap;
@@ -281,7 +282,7 @@ static inline int G_GetViewscreenSizeShift(T const* spr)
 
 static inline int32_t calc_smoothratio(ClockTicks const totalclk, ClockTicks const ototalclk)
 {
-    if (ud.pause_on || ud.show_help /*|| g_player[myconnectindex].ps->gm & MODE_MENU*/)
+    if (ud.pause_on || ud.show_help /*|| ud.gm & MODE_MENU*/)
         return 65536;
 
     return calc_smoothratio(totalclk, ototalclk, REALGAMETICSPERSEC);

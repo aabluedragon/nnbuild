@@ -73,21 +73,21 @@ void CheckDiscord()
     if (ps == NULL)
         return;
 
-    if (last_mode != ps->gm)
+    if (last_mode != ud.gm)
     {
-        if (!(last_mode & MODE_GAME) && (ps->gm & MODE_GAME))
+        if (!(last_mode & MODE_GAME) && (ud.gm & MODE_GAME))
         {
             time_started = (int64_t)time(NULL);
             UpdateDiscord();
         }
-        else if((ps->gm & MODE_EOL) || ((last_mode & MODE_GAME) && !(ps->gm & MODE_GAME)))
+        else if((ud.gm & MODE_EOL) || ((last_mode & MODE_GAME) && !(ud.gm & MODE_GAME)))
         {
             time_started = 0;
             UpdateDiscord();
         }
     }
 
-    if (ps->gm & MODE_GAME)
+    if (ud.gm & MODE_GAME)
     {
         if (ud.multimode <= 1 || GTFLAGS(GAMETYPE_COOP))
         {
@@ -166,7 +166,7 @@ void UpdateDiscord()
     last_secret_count = ud.secret_rooms;
     last_max_secrets = ud.max_secret_rooms;
     last_frag_count = ps->frag - ps->fraggedself;
-    last_mode = ps->gm;
+    last_mode = ud.gm;
 
     if (last_mode & MODE_GAME)
     {

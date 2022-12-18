@@ -1293,12 +1293,12 @@ void G_MakeNewGamePreparations(int vn, int ln, int sk)
             g_mapInfo[i].savedstate = NULL;
         }
 
+    ud.gm = 0; // [JM] Needed?
     // Set up some player-specific info
     for (ALL_PLAYERS(j))
     {
         DukePlayer_t *p = g_player[j].ps;
         p->zoom = 768;
-        p->gm = 0;
         if (!(Gametypes[ud.m_coop].flags & GAMETYPE_COOP)) // If gametype isn't coop
         {
             // [JM] Maybe do a P_ResetWeapons here instead?
@@ -1793,12 +1793,12 @@ int G_EnterLevel(int g)
     G_CacheMapData();
 
     if ((g&MODE_GAME) || (g&MODE_EOL))
-        g_player[myconnectindex].ps->gm = MODE_GAME;
+        ud.gm = MODE_GAME;
     else if (g&MODE_RESTART)
     {
         if (ud.recstat == 2)
-            g_player[myconnectindex].ps->gm = MODE_DEMO;
-        else g_player[myconnectindex].ps->gm = MODE_GAME;
+            ud.gm = MODE_DEMO;
+        else ud.gm = MODE_GAME;
     }
 
     if ((ud.recstat == 1) && (g&MODE_RESTART) != MODE_RESTART)

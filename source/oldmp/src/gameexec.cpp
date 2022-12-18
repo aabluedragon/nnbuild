@@ -2155,11 +2155,16 @@ static int X_DoExecute(void)
 
             ud.m_volume_number = ud.volume_number = volnume;
             ud.m_level_number = ud.level_number = levnume;
+
+// [JM] Disabled for Duke64 TC compatibility. Hopefully won't break too much shit. If it does, I'll need to modify the Duke64 TC and add some new events.
+#if 0
             if (numplayers > 1 && myconnectindex == connecthead)
                 Net_NewGame(volnume,levnume);
             else
+#endif
             {
-                g_player[myconnectindex].ps->gm |= MODE_EOL;
+                ud.gm |= MODE_EOL;
+
                 ud.display_bonus_screen = 0;
             } // MODE_RESTART;
 
@@ -3201,11 +3206,11 @@ static int X_DoExecute(void)
         {
             if (g_lastSaveSlot >= 0 && ud.recstat != 2)
             {
-                g_player[vm.playerNum].ps->gm = MODE_MENU;
+                ud.gm = MODE_MENU;
                 KB_ClearKeyDown(sc_Space);
                 ChangeToMenu(15000);
             }
-            else g_player[vm.playerNum].ps->gm = MODE_RESTART;
+            else ud.gm = MODE_RESTART;
             vm.flags |= VM_NOEXECUTE;
         }
         else
@@ -3530,10 +3535,7 @@ static int X_DoExecute(void)
                 }
 
                 if (allDead)
-                {
-                    for (int ALL_PLAYERS(i))
-                        g_player[i].ps->gm = MODE_RESTART;
-                }
+                    ud.gm = MODE_RESTART;
 
                 if (p->lives <= 0)
                 {
@@ -4729,7 +4731,7 @@ static int X_DoExecute(void)
     case CON_ACTIVATECHEAT:
         insptr++;
         j=Gv_GetVarX(*(insptr++));
-        if (numplayers != 1 || !(g_player[myconnectindex].ps->gm & MODE_GAME))
+        if (numplayers != 1 || !(ud.gm & MODE_GAME))
         {
             OSD_Printf(CON_ERROR "not in a single-player game.\n",g_errorLineNum,VM_GetKeywordForID(g_tw));
             break;

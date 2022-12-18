@@ -566,7 +566,7 @@ void M_DisplayMenus(void)
     else
         buttonstat = MOUSE_GetButtons();
 
-    if ((g_player[myconnectindex].ps->gm&MODE_MENU) == 0)
+    if ((ud.gm&MODE_MENU) == 0)
     {
         walock[TILE_LOADSHOT] = 1;
         return;
@@ -574,7 +574,7 @@ void M_DisplayMenus(void)
 
     X_OnEvent(EVENT_DISPLAYMENU, g_player[screenpeek].ps->i, screenpeek, -1);
 
-    g_player[myconnectindex].ps->gm &= (0xff-MODE_TYPE);
+    ud.gm &= (0xff-MODE_TYPE);
     g_player[myconnectindex].ps->fta = 0;
 
     x = 0;
@@ -642,7 +642,7 @@ void M_DisplayMenus(void)
                     ready2send = 1;
                     totalclock = ototalclock;
                 }
-                g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                ud.gm &= ~MODE_MENU;
             }
             break;
         }
@@ -1065,7 +1065,7 @@ void M_DisplayMenus(void)
                 KB_ClearKeyDown(sc_N);
                 KB_ClearKeyDown(sc_Escape);
 
-                g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                ud.gm &= ~MODE_MENU;
                 if (ud.multimode < 2 && ud.recstat != 2)
                 {
                     ready2send = 1;
@@ -1082,13 +1082,13 @@ void M_DisplayMenus(void)
                 if (ud.multimode > 1)
                 {
                     G_LoadPlayer(-1 - g_lastSaveSlot);
-                    g_player[myconnectindex].ps->gm = MODE_GAME;
+                    ud.gm = MODE_GAME;
                 }
                 else
                 {
                     c = G_LoadPlayer(g_lastSaveSlot);
                     if (c == 0)
-                        g_player[myconnectindex].ps->gm = MODE_GAME;
+                        ud.gm = MODE_GAME;
                 }
             }
 
@@ -1244,10 +1244,10 @@ void M_DisplayMenus(void)
 
                 if (ud.multimode > 1)
                 {
-                    if (g_player[myconnectindex].ps->gm&MODE_GAME)
+                    if (ud.gm&MODE_GAME)
                     {
                         G_LoadPlayer(-1 - g_lastSaveSlot);
-                        g_player[myconnectindex].ps->gm = MODE_GAME;
+                        ud.gm = MODE_GAME;
                     }
                     else
                     {
@@ -1271,7 +1271,7 @@ void M_DisplayMenus(void)
                 {
                     c = G_LoadPlayer(g_lastSaveSlot);
                     if (c == 0)
-                        g_player[myconnectindex].ps->gm = MODE_GAME;
+                        ud.gm = MODE_GAME;
                 }
 
                 break;
@@ -1284,9 +1284,9 @@ void M_DisplayMenus(void)
                 KB_ClearKeyDown(sc_N);
                 KB_ClearKeyDown(sc_Escape);
                 S_PlaySound(EXITMENUSOUND);
-                if (g_player[myconnectindex].ps->gm&MODE_GAME)
+                if (ud.gm&MODE_GAME)
                 {
-                    g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                    ud.gm &= ~MODE_MENU;
                     if (ud.multimode < 2 && ud.recstat != 2)
                     {
                         ready2send = 1;
@@ -1319,7 +1319,7 @@ void M_DisplayMenus(void)
                     ready2send = 1;
                     totalclock = ototalclock;
                 }
-                g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                ud.gm &= ~MODE_MENU;
                 S_PlaySound(EXITMENUSOUND);
                 break;
             }
@@ -1714,9 +1714,9 @@ cheat_for_port_credits:
 
             if (KB_KeyPressed(sc_Q)) ChangeToMenu(500);
 
-            if (x == -1 && (g_player[myconnectindex].ps->gm&MODE_GAME || ud.recstat == 2))
+            if (x == -1 && (ud.gm&MODE_GAME || ud.recstat == 2))
             {
-                g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                ud.gm &= ~MODE_MENU;
                 if (ud.multimode < 2 && ud.recstat != 2)
                 {
                     ready2send = 1;
@@ -1801,7 +1801,7 @@ cheat_for_port_credits:
                 ChangeToMenu(500);
                 break;
             case -1:
-                g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                ud.gm &= ~MODE_MENU;
                 if (ud.multimode < 2 && ud.recstat != 2)
                 {
                     ready2send = 1;
@@ -1874,7 +1874,7 @@ cheat_for_port_credits:
             }
             else if (x == -1)
             {
-                if (g_player[myconnectindex].ps->gm&MODE_GAME) ChangeToMenu(50);
+                if (ud.gm&MODE_GAME) ChangeToMenu(50);
                 else ChangeToMenu(0);
             }
 
@@ -2433,9 +2433,9 @@ cheat_for_port_credits:
 
             if (x == -1)
             {
-                if (g_player[myconnectindex].ps->gm&MODE_GAME && g_currentMenu == 232)
+                if (ud.gm&MODE_GAME && g_currentMenu == 232)
                 {
-                    g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                    ud.gm &= ~MODE_MENU;
                     if (ud.multimode < 2  && ud.recstat != 2)
                     {
                         ready2send = 1;
@@ -2660,13 +2660,13 @@ cheat_for_port_credits:
                     case 11:
                         if (x==io)
                         {
-                            enabled = !((g_player[myconnectindex].ps->gm&MODE_GAME) && ud.m_recstat != 1);
-                            if ((g_player[myconnectindex].ps->gm&MODE_GAME)) G_CloseDemoWrite();
+                            enabled = !((ud.gm&MODE_GAME) && ud.m_recstat != 1);
+                            if ((ud.gm&MODE_GAME)) G_CloseDemoWrite();
                             else ud.m_recstat = !ud.m_recstat;
                         }
-                        if ((g_player[myconnectindex].ps->gm&MODE_GAME) && ud.m_recstat != 1)
+                        if ((ud.gm&MODE_GAME) && ud.m_recstat != 1)
                             enabled = 0;
-                        mgametextpal(d,yy,ud.m_recstat?((ud.m_recstat && enabled && g_player[myconnectindex].ps->gm&MODE_GAME)?"Running":"On"):"Off",enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE,enabled?0:1);
+                        mgametextpal(d,yy,ud.m_recstat?((ud.m_recstat && enabled && ud.gm&MODE_GAME)?"Running":"On"):"Off",enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE,enabled?0:1);
                         break;
                     case 12:
                         if (x==io) ChangeToMenu(201);
@@ -2853,7 +2853,7 @@ cheat_for_port_credits:
             switch (x)
             {
             case -1:
-                if (g_player[myconnectindex].ps->gm&MODE_GAME) ChangeToMenu(50);
+                if (ud.gm&MODE_GAME) ChangeToMenu(50);
                 else ChangeToMenu(0);
                 break;
 
@@ -4254,9 +4254,9 @@ cheat_for_port_credits:
                     ud.config.NumVoices = soundvoices;
                     ud.config.NumBits = soundbits;
 
-                    if (g_player[myconnectindex].ps->gm&MODE_GAME && g_currentMenu == 701)
+                    if (ud.gm&MODE_GAME && g_currentMenu == 701)
                     {
-                        g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                        ud.gm &= ~MODE_MENU;
                         if (ud.multimode < 2  && ud.recstat != 2)
                         {
                             ready2send = 1;
@@ -4516,7 +4516,7 @@ cheat_for_port_credits:
                 if (x == -1)
                 {
                     //        ReadSaveGameHeaders();
-                    g_player[myconnectindex].ps->gm = MODE_GAME;
+                    ud.gm = MODE_GAME;
                     if (ud.multimode < 2  && ud.recstat != 2)
                     {
                         ready2send = 1;
@@ -4538,7 +4538,7 @@ cheat_for_port_credits:
                             G_SavePlayer(-1-(g_currentMenu-360));
                         else G_SavePlayer(g_currentMenu-360);
                         g_lastSaveSlot = g_currentMenu-360;
-                        g_player[myconnectindex].ps->gm = MODE_GAME;
+                        ud.gm = MODE_GAME;
 
                         if (ud.multimode < 2  && ud.recstat != 2)
                         {
@@ -4603,16 +4603,16 @@ cheat_for_port_credits:
             case -1:
                 if (g_currentMenu == 300)
                 {
-                    if ((g_player[myconnectindex].ps->gm&MODE_GAME) != MODE_GAME)
+                    if ((ud.gm&MODE_GAME) != MODE_GAME)
                     {
                         ChangeToMenu(0);
                         break;
                     }
                     else
-                        g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                        ud.gm &= ~MODE_MENU;
                 }
                 else
-                    g_player[myconnectindex].ps->gm = MODE_GAME;
+                    ud.gm = MODE_GAME;
 
                 if (ud.multimode < 2 && ud.recstat != 2)
                 {
@@ -4708,7 +4708,7 @@ DISPLAYNAMES:
 
             if (KB_KeyPressed(sc_Escape))
             {
-                if (g_player[myconnectindex].ps->gm&MODE_GAME)
+                if (ud.gm&MODE_GAME)
                     ChangeToMenu(50);
                 else ChangeToMenu(0);
                 return;
@@ -4768,7 +4768,7 @@ VOLUME_ALL_40x:
 
             if (x == -1)
             {
-                if (g_player[myconnectindex].ps->gm&MODE_GAME)
+                if (ud.gm&MODE_GAME)
                     ChangeToMenu(50);
                 else ChangeToMenu(0);
                 return;
@@ -4808,8 +4808,8 @@ VOLUME_ALL_40x:
             {
                 KB_ClearKeyDown(sc_N);
                 quittimer = 0;
-                if (g_player[myconnectindex].ps->gm&MODE_DEMO && ud.recstat == 2)
-                    g_player[myconnectindex].ps->gm = MODE_DEMO;
+                if (ud.gm&MODE_DEMO && ud.recstat == 2)
+                    ud.gm = MODE_DEMO;
                 else
                 {
                     if (g_currentMenu == 502)
@@ -4817,9 +4817,9 @@ VOLUME_ALL_40x:
                         ChangeToMenu(last_menu);
                         probey = last_menu_pos;
                     }
-                    else if (!(g_player[myconnectindex].ps->gm & MODE_GAME || ud.recstat == 2))
+                    else if (!(ud.gm & MODE_GAME || ud.recstat == 2))
                         ChangeToMenu(0);
-                    else g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                    else ud.gm &= ~MODE_MENU;
                     if (ud.multimode < 2  && ud.recstat != 2)
                     {
                         ready2send = 1;
@@ -4839,7 +4839,7 @@ VOLUME_ALL_40x:
             if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Y) || LMB)
             {
                 KB_FlushKeyboardQueue();
-                g_player[myconnectindex].ps->gm = MODE_DEMO;
+                ud.gm = MODE_DEMO;
                 if (ud.recstat == 1)
                     G_CloseDemoWrite();
                 ChangeToMenu(0);
@@ -4849,7 +4849,7 @@ VOLUME_ALL_40x:
 
             if (x == -1 || KB_KeyPressed(sc_N) || RMB)
             {
-                g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                ud.gm &= ~MODE_MENU;
                 if (ud.multimode < 2 && ud.recstat != 2)
                 {
                     ready2send = 1;
@@ -4909,7 +4909,7 @@ VOLUME_ALL_40x:
         case 600:
         {
             c = (320>>1) - 120;
-            if ((g_player[myconnectindex].ps->gm&MODE_GAME) != MODE_GAME)
+            if ((ud.gm&MODE_GAME) != MODE_GAME)
                 G_DrawFrags();
             rotatesprite(160<<16,26<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
             menutext(160,31,0,0,&g_player[myconnectindex].user_name[0]);
@@ -4945,7 +4945,7 @@ VOLUME_ALL_40x:
             {
             case -1:
                 ud.m_recstat = 0;
-                if (g_player[myconnectindex].ps->gm&MODE_GAME) ChangeToMenu(50);
+                if (ud.gm&MODE_GAME) ChangeToMenu(50);
                 else ChangeToMenu(0);
                 break;
             case 0:
@@ -5223,7 +5223,7 @@ VOLUME_ALL_40x:
 
     X_OnEvent(EVENT_DISPLAYMENUREST, g_player[myconnectindex].ps->i, myconnectindex, -1);
 
-    if ((g_player[myconnectindex].ps->gm&MODE_MENU) != MODE_MENU)
+    if ((ud.gm&MODE_MENU) != MODE_MENU)
     {
         G_UpdateScreenArea();
         g_cameraClock = (int32_t)totalclock;

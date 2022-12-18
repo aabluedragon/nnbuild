@@ -719,7 +719,7 @@ FRAGBONUS:
 
         if (engineFPSLimit())
         {
-            if (g_player[myconnectindex].ps->gm & MODE_EOL)
+            if (ud.gm & MODE_EOL)
             {
                 videoClearScreen(0);
                 rotatesprite(0, 0, 65536L, 0, BONUSSCREEN + gfx_offset, 0, 0, 2 + 8 + 16 + 64 + 128, 0, 0, xdim - 1, ydim - 1);

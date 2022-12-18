@@ -561,8 +561,7 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_EOL:
             {
-                for (ALL_PLAYERS(i))
-                    g_player[i].ps->gm = MODE_EOL;
+                ud.gm = MODE_EOL;
 
                 ud.level_number = packbuf[1];
                 ud.from_bonus = packbuf[2];
@@ -797,7 +796,7 @@ void Net_SendQuit(void)
 {
     if (g_gameQuit == 0 && (numplayers > 1))
     {
-        if (g_player[myconnectindex].ps->gm&MODE_GAME)
+        if (ud.gm & MODE_GAME)
         {
             g_gameQuit = 1;
             quittimer = (int32_t)totalclock+(CLOCKTICKSPERSECOND*2);
@@ -1007,11 +1006,10 @@ void Net_NewGame(int volume, int level)
 
 void Net_EndOfLevel(bool secret)
 {
-    if ((myconnectindex != connecthead) || oldnet_predicting)
+    if (/*(myconnectindex != connecthead) ||*/ oldnet_predicting)
         return;
 
-    for (int32_t ALL_PLAYERS(i))
-        g_player[i].ps->gm = MODE_EOL;
+    ud.gm = MODE_EOL;
 
     if (secret)
     {
@@ -1019,8 +1017,6 @@ void Net_EndOfLevel(bool secret)
 
         if (ud.secretlevel > 0 && ud.secretlevel < MAXLEVELS)
             ud.level_number = ud.secretlevel - 1;
-
-        ud.m_level_number = ud.level_number;
     }
     else
     {
@@ -1039,7 +1035,7 @@ void Net_EndOfLevel(bool secret)
     }
 
     G_RevertUnconfirmedGameSettings();
-
+#if 0 // [JM] Disabled for Duke64 TC compat. Might break other things, but here's hoping it does not.
     packbuf[0] = PACKET_TYPE_EOL;
     packbuf[1] = ud.level_number;
     packbuf[2] = ud.from_bonus;
@@ -1050,13 +1046,14 @@ void Net_EndOfLevel(bool secret)
         if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 3);
         if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
+#endif
 }
 
 void Net_EnterMessage(void)
 {
     short ch, hitstate, i, j, l;
 
-    if (g_player[myconnectindex].ps->gm&MODE_SENDTOWHOM)
+    if (ud.gm & MODE_SENDTOWHOM)
     {
         if (g_chatPlayer != -1 || ud.multimode < 3)
         {
@@ -1116,7 +1113,7 @@ void Net_EnterMessage(void)
             }
 
             g_chatPlayer = -1;
-            g_player[myconnectindex].ps->gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
+            ud.gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
         }
         else if (g_chatPlayer == -1)
         {
@@ -1160,7 +1157,7 @@ void Net_EnterMessage(void)
                     g_chatPlayer = ud.multimode;
                     if (i == 27)
                     {
-                        g_player[myconnectindex].ps->gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
+                        ud.gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
                         g_chatPlayer = -1;
                     }
                     else
@@ -1194,7 +1191,7 @@ void Net_EnterMessage(void)
             KB_ClearKeyDown(sc_Enter);
             if (Bstrlen(typebuf) == 0)
             {
-                g_player[myconnectindex].ps->gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
+                ud.gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
                 return;
             }
             if (ud.automsg)
@@ -1202,10 +1199,10 @@ void Net_EnterMessage(void)
                 if (SHIFTS_IS_PRESSED) g_chatPlayer = -1;
                 else g_chatPlayer = ud.multimode;
             }
-            g_player[myconnectindex].ps->gm |= MODE_SENDTOWHOM;
+            ud.gm |= MODE_SENDTOWHOM;
         }
         else if (hitstate == -1)
-            g_player[myconnectindex].ps->gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
+            ud.gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
         else pub = NUMPAGES;
     }
 }
@@ -1704,7 +1701,7 @@ void Net_Disconnect(bool showScores)
 
     if (!quickExit && showScores)
     {
-        if (playerswhenstarted > 1 && g_player[myconnectindex].ps->gm & MODE_GAME && GTFLAGS(GAMETYPE_SCORESHEET))
+        if (playerswhenstarted > 1 && ud.gm & MODE_GAME && GTFLAGS(GAMETYPE_SCORESHEET))
         {
             G_BonusScreen(1);
             videoSetGameMode(ud.config.ScreenMode, ud.config.ScreenWidth, ud.config.ScreenHeight, ud.config.ScreenBPP, ud.detail);

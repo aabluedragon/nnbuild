@@ -1185,7 +1185,7 @@ void G_HandleSpecialKeys(void)
     }
 
     // only dispatch commands here when not in a game
-    if (!(myplayer->gm&MODE_GAME))
+    if (!(ud.gm&MODE_GAME))
     {
         OSD_DispatchQueued();
     }
@@ -1473,7 +1473,7 @@ static void G_PrintGameQuotes(void)
 
 //    quotebot = min(quotebot,j);
     //  quotebotgoal = min(quotebotgoal,j);
-//    if (g_player[myconnectindex].ps->gm&MODE_TYPE) j -= 8;
+//    if (ud.gm&MODE_TYPE) j -= 8;
     //quotebotgoal = j;
     //j = quotebot;
     j = scale(j,ydim,200);
@@ -1683,7 +1683,7 @@ int _EnterText(int small,int x,int y,char *t,int dalen,int c)
     char ch;
     int i;
 
-    while ((ch = KB_GetCh()) != 0 || (g_player[myconnectindex].ps->gm&MODE_MENU && (MOUSE_GetButtons()&M_RIGHTBUTTON)))
+    while ((ch = KB_GetCh()) != 0 || (ud.gm&MODE_MENU && (MOUSE_GetButtons()&M_RIGHTBUTTON)))
     {
         if (ch == asc_BackSpace)
         {
@@ -1701,7 +1701,7 @@ int _EnterText(int small,int x,int y,char *t,int dalen,int c)
                 KB_ClearKeyDown(sc_kpad_Enter);
                 return (1);
             }
-            else if (ch == asc_Escape || (g_player[myconnectindex].ps->gm&MODE_MENU && (MOUSE_GetButtons()&M_RIGHTBUTTON)))
+            else if (ch == asc_Escape || (ud.gm&MODE_MENU && (MOUSE_GetButtons()&M_RIGHTBUTTON)))
             {
                 KB_ClearKeyDown(sc_Escape);
                 MOUSE_ClearButton(M_RIGHTBUTTON);
@@ -1728,13 +1728,13 @@ int _EnterText(int small,int x,int y,char *t,int dalen,int c)
         for (ii=0;ii<inputloc;ii++)
             b[(unsigned char)ii] = '*';
         b[(unsigned char)inputloc] = 0;
-        if (g_player[myconnectindex].ps->gm&MODE_TYPE)
+        if (ud.gm&MODE_TYPE)
             x = mpgametext(y,b,c,2+8+16);
         else x = gametext(x,y,b,c,2+8+16);
     }
     else
     {
-        if (g_player[myconnectindex].ps->gm&MODE_TYPE)
+        if (ud.gm&MODE_TYPE)
             x = mpgametext(y,t,c,2+8+16);
         else x = gametext(x,y,t,c,2+8+16);
     }
@@ -2297,11 +2297,11 @@ void G_DisplayRest(int smoothratio)
             && ud.show_help == 0
             && g_player[myconnectindex].ps->newowner == -1)
     {
-        if ((g_player[myconnectindex].ps->gm&MODE_MENU) == MODE_MENU && g_currentMenu < 51)
+        if ((ud.gm&MODE_MENU) == MODE_MENU && g_currentMenu < 51)
         {
             KB_ClearKeyDown(sc_Escape);
             S_PlaySound(EXITMENUSOUND);
-            g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+            ud.gm &= ~MODE_MENU;
             if (ud.multimode < 2 && ud.recstat != 2)
             {
                 ready2send = 1;
@@ -2312,21 +2312,21 @@ void G_DisplayRest(int smoothratio)
             walock[TILE_SAVESHOT] = 199;
             G_UpdateScreenArea();
         }
-        else if ((g_player[myconnectindex].ps->gm&MODE_MENU) != MODE_MENU &&
+        else if ((ud.gm&MODE_MENU) != MODE_MENU &&
                  g_player[myconnectindex].ps->newowner == -1 &&
-                 (g_player[myconnectindex].ps->gm&MODE_TYPE) != MODE_TYPE)
+                 (ud.gm&MODE_TYPE) != MODE_TYPE)
         {
             KB_ClearKeyDown(sc_Escape);
             FX_StopAllSounds();
 
             S_MenuSound();
 
-            g_player[myconnectindex].ps->gm |= MODE_MENU;
+            ud.gm |= MODE_MENU;
 
             if (ud.multimode < 2 && ud.recstat != 2)
                 ready2send = 0;
 
-            if (g_player[myconnectindex].ps->gm&MODE_GAME)
+            if (ud.gm&MODE_GAME)
                 ChangeToMenu(50);
             else
                 ChangeToMenu(0);
@@ -2354,7 +2354,7 @@ void G_DisplayRest(int smoothratio)
     }
 #endif
 
-    if (ud.pause_on==1 && (g_player[myconnectindex].ps->gm&MODE_MENU) == 0)
+    if (ud.pause_on==1 && (ud.gm&MODE_MENU) == 0)
         menutext(160,100,0,0,"GAME PAUSED");
 
     if (ud.coords)
@@ -2365,7 +2365,7 @@ void G_DisplayRest(int smoothratio)
         extern int mdpause;
 
         mdpause = 0;
-        if (ud.pause_on || (g_player[myconnectindex].ps->gm&MODE_MENU && numplayers < 2))
+        if (ud.pause_on || (ud.gm&MODE_MENU && numplayers < 2))
             mdpause = 1;
     }
 #endif
@@ -2373,7 +2373,7 @@ void G_DisplayRest(int smoothratio)
     G_PrintFPS();
     G_DrawLevelStats();
 
-    if (g_player[myconnectindex].ps->gm&MODE_TYPE)
+    if (ud.gm&MODE_TYPE)
         Net_EnterMessage();
     else
         M_DisplayMenus();
@@ -2485,7 +2485,7 @@ void G_DrawBackground(void)
 
     y1 = 0;
     y2 = ydim;
-    if (g_player[myconnectindex].ps->gm & MODE_GAME || ud.recstat == 2)
+    if (ud.gm & MODE_GAME || ud.recstat == 2)
         //if (ud.recstat == 0 || ud.recstat == 1 || (ud.recstat == 2 && ud.reccnt > 0)) // JBF 20040717
     {
         /*
@@ -6448,7 +6448,7 @@ static void G_DoCheats(void)
         consolecheat = 1;
     }
 
-    if ((g_player[myconnectindex].ps->gm&MODE_TYPE) || (g_player[myconnectindex].ps->gm&MODE_MENU))
+    if ((ud.gm&MODE_TYPE) || (ud.gm&MODE_MENU))
         return;
 
     if (VOLUMEONE && !z)
@@ -6557,7 +6557,7 @@ FOUNDCHEAT:
                     return;
 
                 case CHEAT_RESERVED2:
-                    g_player[myconnectindex].ps->gm = MODE_EOL;
+                    ud.gm = MODE_EOL;
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
                     return;
@@ -6758,7 +6758,7 @@ FOUNDCHEAT:
                     }
                     if (numplayers > 1 && myconnectindex == connecthead)
                         Net_NewGame(ud.m_volume_number,ud.m_level_number);
-                    else g_player[myconnectindex].ps->gm |= MODE_RESTART;
+                    else ud.gm |= MODE_RESTART;
 
                     g_player[myconnectindex].ps->cheat_phase = 0;
                     KB_FlushKeyboardQueue();
@@ -6890,7 +6890,7 @@ FOUNDCHEAT:
                 case CHEAT_RESERVED:
                 case CHEAT_RESERVED3:
                     ud.eog = 1;
-                    g_player[myconnectindex].ps->gm |= MODE_EOL;
+                    ud.gm |= MODE_EOL;
                     KB_FlushKeyboardQueue();
                     return;
                 }
@@ -6976,7 +6976,7 @@ static void G_HandleVoteKeys(void)
     if (vote.starter != -1)
     {
         if (!player->gotvote && vote.starter != myconnectindex)
-            g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+            ud.gm &= ~MODE_MENU;
 
         if (myconnectindex == connecthead)
         {
@@ -7012,7 +7012,7 @@ static void G_HandleVoteKeys(void)
 
                     Bsprintf(apStrings[QUOTE_RESERVED2], "VOTE FAILED");
                     P_DoQuote(QUOTE_RESERVED2, g_player[myconnectindex].ps);
-                    g_player[myconnectindex].ps->gm &= ~MODE_MENU;
+                    ud.gm &= ~MODE_MENU;
                 }
             }
         }
@@ -7034,7 +7034,7 @@ static void G_HandleLocalKeys(void)
 
     G_HandleVoteKeys();
 
-    if (!ALT_IS_PRESSED && ud.overhead_on == 0 && (g_player[myconnectindex].ps->gm & MODE_TYPE) == 0)
+    if (!ALT_IS_PRESSED && ud.overhead_on == 0 && (ud.gm & MODE_TYPE) == 0)
     {
         if (BUTTON(gamefunc_Enlarge_Screen))
         {
@@ -7082,7 +7082,7 @@ static void G_HandleLocalKeys(void)
         }
     }
 
-    if (g_player[myconnectindex].ps->cheat_phase == 1 || (g_player[myconnectindex].ps->gm&(MODE_MENU|MODE_TYPE))) return;
+    if (g_player[myconnectindex].ps->cheat_phase == 1 || (ud.gm&(MODE_MENU|MODE_TYPE))) return;
 
     if (BUTTON(gamefunc_See_Coop_View) && (GTFLAGS(GAMETYPE_COOPVIEW) || ud.recstat == 2))
     {
@@ -7214,7 +7214,7 @@ static void G_HandleLocalKeys(void)
         {
             KB_FlushKeyboardQueue();
             CONTROL_ClearButton(gamefunc_SendMessage);
-            g_player[myconnectindex].ps->gm |= MODE_TYPE;
+            ud.gm |= MODE_TYPE;
             typebuf[0] = 0;
             inputloc = 0;
         }
@@ -7265,7 +7265,7 @@ FAKE_F2:
                 FX_StopAllSounds();
 
                 //                videoSetViewableArea(0,0,xdim-1,ydim-1);
-                g_player[myconnectindex].ps->gm |= MODE_MENU;
+                ud.gm |= MODE_MENU;
 
                 if (ud.multimode < 2)
                 {
@@ -7284,7 +7284,7 @@ FAKE_F3:
                 FX_StopAllSounds();
 
                 //                videoSetViewableArea(0,0,xdim-1,ydim-1);
-                g_player[myconnectindex].ps->gm |= MODE_MENU;
+                ud.gm |= MODE_MENU;
                 if (ud.multimode < 2 && ud.recstat != 2)
                 {
                     ready2send = 0;
@@ -7299,7 +7299,7 @@ FAKE_F3:
             KB_ClearKeyDown(sc_F4);
             FX_StopAllSounds();
 
-            g_player[myconnectindex].ps->gm |= MODE_MENU;
+            ud.gm |= MODE_MENU;
             if (ud.multimode < 2 && ud.recstat != 2)
             {
                 ready2send = 0;
@@ -7309,7 +7309,7 @@ FAKE_F3:
 
         }
 
-        if ((BUTTON(gamefunc_Quick_Save) || g_doQuickSave == 1) && (g_player[myconnectindex].ps->gm&MODE_GAME))
+        if ((BUTTON(gamefunc_Quick_Save) || g_doQuickSave == 1) && (ud.gm&MODE_GAME))
         {
             CONTROL_ClearButton(gamefunc_Quick_Save);
             g_doQuickSave = 0;
@@ -7380,7 +7380,7 @@ FAKE_F3:
             }
         }
 
-        if ((BUTTON(gamefunc_Quick_Load) || g_doQuickSave == 2) && (g_player[myconnectindex].ps->gm&MODE_GAME))
+        if ((BUTTON(gamefunc_Quick_Load) || g_doQuickSave == 2) && (ud.gm&MODE_GAME))
         {
             CONTROL_ClearButton(gamefunc_Quick_Load);
             g_doQuickSave = 0;
@@ -7396,13 +7396,13 @@ FAKE_F3:
                 if (ud.multimode > 1)
                 {
                     G_LoadPlayer(-1-g_lastSaveSlot);
-                    g_player[myconnectindex].ps->gm = MODE_GAME;
+                    ud.gm = MODE_GAME;
                 }
                 else
                 {
                     i = G_LoadPlayer(g_lastSaveSlot);
                     if (i == 0)
-                        g_player[myconnectindex].ps->gm = MODE_GAME;
+                        ud.gm = MODE_GAME;
                 }
             }
         }
@@ -7412,7 +7412,7 @@ FAKE_F3:
             KB_ClearKeyDown(sc_F10);
             ChangeToMenu(500);
             FX_StopAllSounds();
-            g_player[myconnectindex].ps->gm |= MODE_MENU;
+            ud.gm |= MODE_MENU;
             if (ud.multimode < 2 && ud.recstat != 2)
             {
                 ready2send = 0;
@@ -7478,7 +7478,7 @@ FAKE_F3:
         ChangeToMenu(232);
         FX_StopAllSounds();
 
-        g_player[myconnectindex].ps->gm |= MODE_MENU;
+        ud.gm |= MODE_MENU;
         if (ud.multimode < 2 && ud.recstat != 2)
         {
             ready2send = 0;
@@ -8296,7 +8296,7 @@ void G_BackToMenu(void)
         G_CloseDemoWrite();
 
     ud.warp_on = 0;
-    g_player[myconnectindex].ps->gm = MODE_MENU;
+    ud.gm = MODE_MENU;
     ChangeToMenu(0);
     KB_FlushKeyboardQueue();
     G_UpdateAppTitle();
@@ -8328,7 +8328,7 @@ static int G_EndOfLevel(void)
     P_SetGamePalette(&p, BASEPAL, 0);
     P_UpdateScreenPal(&p);
 
-    if (p.gm & MODE_EOL)
+    if (ud.gm & MODE_EOL)
     {
         G_CloseDemoWrite();
         waitforeverybody();
@@ -8359,7 +8359,7 @@ static int G_EndOfLevel(void)
                 {
                     G_DoOrderScreen();
                 }
-                p.gm = MODE_MENU;
+                ud.gm = MODE_MENU;
                 ChangeToMenu(0);
                 probey = 0;
                 return 2;
@@ -8384,9 +8384,9 @@ static int G_EndOfLevel(void)
     waitforeverybody();
 
     if (numplayers > 1)
-        p.gm = MODE_GAME;
+        ud.gm = MODE_GAME;
 
-    if (G_EnterLevel(p.gm))
+    if (G_EnterLevel(ud.gm))
     {
         G_BackToMenu();
         return 2;
@@ -8398,7 +8398,7 @@ static int G_EndOfLevel(void)
 static void G_DrawFrame()
 {
     // only allow binds to function if the player is actually in a game (not in a menu, typing, et cetera) or demo
-    CONTROL_BindsEnabled = (g_player[myconnectindex].ps->gm == MODE_GAME || g_player[myconnectindex].ps->gm == MODE_DEMO);
+    CONTROL_BindsEnabled = (ud.gm == MODE_GAME || ud.gm == MODE_DEMO);
     G_HandleLocalKeys();
     OSD_DispatchQueued();
    
@@ -8480,7 +8480,7 @@ static void G_DrawFrame()
 
     if (VOLUMEONE)
     {
-        if (ud.show_help == 0 && g_showShareware > 0 && (g_player[myconnectindex].ps->gm & MODE_MENU) == 0)
+        if (ud.show_help == 0 && g_showShareware > 0 && (ud.gm & MODE_MENU) == 0)
             rotatesprite((320 - 50) << 16, 9 << 16, 65536L, 0, BETAVERSION, 0, 0, 2 + 8 + 16 + 128, 0, 0, xdim - 1, ydim - 1);
     }
     // ---------
@@ -8985,7 +8985,7 @@ MAIN_LOOP_RESTART:
         //bool gameUpdate = false;
         //double gameUpdateStartTime = timerGetHiTicks();
 
-        if (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME)
+        if (((ud.multimode > 1) || (ud.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME)
         {
             do
             {
@@ -9008,12 +9008,12 @@ MAIN_LOOP_RESTART:
 
                     Net_HandleInput();
 
-                    if (((ud.show_help == 0 && (myplayer.gm & MODE_MENU) != MODE_MENU) || ud.recstat == 2 || (ud.multimode > 1))
-                        && (myplayer.gm & MODE_GAME))
+                    if (((ud.show_help == 0 && (ud.gm & MODE_MENU) != MODE_MENU) || ud.recstat == 2 || (ud.multimode > 1))
+                        && (ud.gm & MODE_GAME))
                     {
                         G_MoveLoop();
                     }
-                } while (((ud.multimode > 1) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME);
+                } while (((ud.multimode > 1) || (ud.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME);
 
                 //gameUpdate = true;
                 //g_gameUpdateTime = timerGetHiTicks() - gameUpdateStartTime;
@@ -9027,7 +9027,7 @@ MAIN_LOOP_RESTART:
 
         G_DoCheats();
 
-        if (myplayer.gm & (MODE_EOL | MODE_RESTART))
+        if (ud.gm & (MODE_EOL | MODE_RESTART))
         {
             switch (G_EndOfLevel())
             {
@@ -9047,7 +9047,7 @@ MAIN_LOOP_RESTART:
         }
 
         // KEEP THIS AT THE END OF THIS WHILE LOOP
-        if (myplayer.gm & MODE_DEMO)
+        if (ud.gm & MODE_DEMO)
             goto MAIN_LOOP_RESTART;
     } while (1);
 
@@ -9248,7 +9248,7 @@ static int G_PlaybackDemo(void)
 
 RECHECK:
 
-    in_menu = g_player[myconnectindex].ps->gm&MODE_MENU;
+    in_menu = ud.gm&MODE_MENU;
 
     pub = NUMPAGES;
     pus = NUMPAGES;
@@ -9293,7 +9293,7 @@ RECHECK:
     {
         FX_StopAllSounds();
 
-        g_player[myconnectindex].ps->gm |= MODE_MENU;
+        ud.gm |= MODE_MENU;
     }
 
     ready2send = 0;
@@ -9318,7 +9318,7 @@ RECHECK:
                         foundemo = 0;
                         ud.reccnt = 0;
                         kclose(recfilep);
-                        g_player[myconnectindex].ps->gm |= MODE_MENU;
+                        ud.gm |= MODE_MENU;
                         goto RECHECK;
                     }
                 }
@@ -9351,21 +9351,21 @@ RECHECK:
                 G_DrawRooms(screenpeek, smoothRatio);
                 G_DisplayRest(smoothRatio);
 
-                if (ud.multimode > 1 && g_player[myconnectindex].ps->gm)
+                if (ud.multimode > 1 && ud.gm)
                     Net_GetPackets();
             }
 
             // Loop back and re-check for a demo if we're just coming out of a level.
-            if ((g_player[myconnectindex].ps->gm & MODE_MENU) && (g_player[myconnectindex].ps->gm & MODE_EOL))
+            if ((ud.gm & MODE_MENU) && (ud.gm & MODE_EOL))
                 goto RECHECK;
 
             // Open menu if escape key is pressed.
-            if (KB_KeyPressed(sc_Escape) && (g_player[myconnectindex].ps->gm & MODE_MENU) == 0 && (g_player[myconnectindex].ps->gm & MODE_TYPE) == 0)
+            if (KB_KeyPressed(sc_Escape) && (ud.gm & MODE_MENU) == 0 && (ud.gm & MODE_TYPE) == 0)
             {
                 KB_ClearKeyDown(sc_Escape);
                 FX_StopAllSounds();
 
-                g_player[myconnectindex].ps->gm |= MODE_MENU;
+                ud.gm |= MODE_MENU;
                 ChangeToMenu(0);
                 S_MenuSound();
             }
@@ -9373,12 +9373,12 @@ RECHECK:
             if (in_vote)
                 G_ShowVote();
 
-            if (g_player[myconnectindex].ps->gm & MODE_TYPE)
+            if (ud.gm & MODE_TYPE)
             {
                 Net_EnterMessage();
 
-                if ((g_player[myconnectindex].ps->gm & MODE_TYPE) != MODE_TYPE)
-                    g_player[myconnectindex].ps->gm |= MODE_MENU;
+                if ((ud.gm & MODE_TYPE) != MODE_TYPE)
+                    ud.gm |= MODE_MENU;
             }
             else
             {
@@ -9398,7 +9398,7 @@ RECHECK:
                     {
                         KB_FlushKeyboardQueue();
                         CONTROL_ClearButton(gamefunc_SendMessage);
-                        g_player[myconnectindex].ps->gm |= MODE_TYPE;
+                        ud.gm |= MODE_TYPE;
                         typebuf[0] = 0;
                         inputloc = 0;
                     }
@@ -9415,7 +9415,7 @@ RECHECK:
 
             if (VOLUMEONE)
             {
-                if (ud.show_help == 0 && (g_player[myconnectindex].ps->gm & MODE_MENU) == 0)
+                if (ud.show_help == 0 && (ud.gm & MODE_MENU) == 0)
                     rotatesprite((320 - 50) << 16, 9 << 16, 65536L, 0, BETAVERSION, 0, 0, 2 + 8 + 16 + 128, 0, 0, xdim - 1, ydim - 1);
             }
 
@@ -9424,7 +9424,7 @@ RECHECK:
 
         gameHandleEvents();
 
-        if (g_player[myconnectindex].ps->gm==MODE_END || g_player[myconnectindex].ps->gm==MODE_GAME)
+        if (ud.gm==MODE_END || ud.gm==MODE_GAME)
         {
             if (foundemo)
                 kclose(recfilep);
@@ -9448,7 +9448,7 @@ RECHECK:
     }
 #endif
 
-    if (g_player[myconnectindex].ps->gm&MODE_MENU) goto RECHECK;
+    if (ud.gm&MODE_MENU) goto RECHECK;
     return 1;
 }
 

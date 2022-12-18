@@ -706,7 +706,7 @@ void P_DisplayWeapon(int snum)
         }
         else
         {
-            int const doAnim = !(sprite[pPlayer->i].pal == 1 || ud.pause_on || g_player[myconnectindex].ps->gm & MODE_MENU);
+            int const doAnim = !(sprite[pPlayer->i].pal == 1 || ud.pause_on || ud.gm & MODE_MENU);
             int const halfLookAng = pPlayer->look_ang >> 1;
             int const weaponPal = P_GetHudPal(pPlayer);
 
@@ -1386,12 +1386,12 @@ void P_GetInput(int snum, bool uncapped)
     int32_t keymove;
     DukePlayer_t *p = g_player[snum].ps;
 
-    if ((p->gm&MODE_MENU) || ud.limit_hit || (p->gm&MODE_TYPE)
+    if ((ud.gm&MODE_MENU) || ud.limit_hit || (ud.gm&MODE_TYPE)
         || (ud.pause_on && !KB_KeyPressed(sc_Pause))
         //|| (numplayers > 1 && (int32_t)totalclock < 10) // HACK: kill P_GetInput() for the first 10 tics of a new map in multi
         )   
     {
-        if (!(p->gm&MODE_MENU))
+        if (!(ud.gm&MODE_MENU))
             CONTROL_GetInput(&info);
 
         localInput = {};

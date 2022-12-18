@@ -593,7 +593,7 @@ void G_DrawStatusBar(int snum)
         Bmemcpy(item_icons, iicons, sizeof(item_icons));
     }
 
-    if (g_player[snum].ps->gm & MODE_MENU)
+    if (ud.gm & MODE_MENU)
         if ((g_currentMenu >= 400 && g_currentMenu <= 405))
             return;
 
@@ -1099,7 +1099,7 @@ void G_DisplayPlayerId(void)
 {
     int idalpha;
 
-    if (g_player[myconnectindex].ps->gm & MODE_MENU)
+    if (ud.gm & MODE_MENU)
         return;
 
     if (ud.idplayers && (ud.multimode > 1) && !DMFLAGS_TEST(DMFLAG_NOPLAYERIDS))
@@ -1247,7 +1247,7 @@ void G_PrintLevelName(void)
 
 void G_DrawLevelStats()
 {
-    if (!ud.levelstats || ud.overhead_on == 2 || (g_player[myconnectindex].ps->gm & MODE_MENU) != 0 || X_OnEventWithReturn(EVENT_DISPLAYLEVELSTATS, g_player[screenpeek].ps->i, screenpeek, 0) != 0)
+    if (!ud.levelstats || ud.overhead_on == 2 || (ud.gm & MODE_MENU) != 0 || X_OnEventWithReturn(EVENT_DISPLAYLEVELSTATS, g_player[screenpeek].ps->i, screenpeek, 0) != 0)
         return;
 
     int x, y;
