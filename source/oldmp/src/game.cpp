@@ -2889,7 +2889,7 @@ void G_DrawRooms(int snum,int smoothratio)
 {
     int floorZ, ceilZ;
     int i;
-    DukePlayer_t *p = (screenpeek == myconnectindex && numplayers > 1) ? &predictedPlayer :  g_player[snum].ps;
+    DukePlayer_t *p = (snum == myconnectindex && numplayers > 1) ? &predictedPlayer :  g_player[snum].ps;
     PlayerDisplay_t* pDisp = &g_player[snum].display;
     short tang;
     int tiltcx,tiltcy,tiltcs=0;    // JBF 20030807
@@ -3070,9 +3070,7 @@ void G_DrawRooms(int snum,int smoothratio)
 
         if (p->newowner < 0)
         {
-            DukePlayer_t* camPlayer = (snum == myconnectindex) && (numplayers > 1) ? &predictedPlayer : p;
-
-            G_CalculateCameraInterpolation(camPlayer, &ud.camerapos, &ud.cameraq16ang, &ud.cameraq16horiz, &ud.camerasect, smoothratio);
+            G_CalculateCameraInterpolation(p, &ud.camerapos, &ud.cameraq16ang, &ud.cameraq16horiz, &ud.camerasect, smoothratio);
 
             if (p->over_shoulder_on > 0)
                 G_DoThirdPerson(p, &ud.camerapos, &ud.camerasect, fix16_to_int(ud.cameraq16ang), fix16_to_int(ud.cameraq16horiz));
@@ -9618,15 +9616,15 @@ static int G_DoMoveThings(void)
         }
         // ---
 
-        oldnet_predictablestate = true;
+        oldnet_predictcontext = i;
         P_HandleSharedKeys(i);
-        oldnet_predictablestate = false;
+        oldnet_predictcontext = -1;
 
         if (ud.pause_on == 0)
         {
-            oldnet_predictablestate = true;
+            oldnet_predictcontext = i;
             P_ProcessInput(i);
-            oldnet_predictablestate = false;
+            oldnet_predictcontext = -1;
             P_CheckSectors(i);
         }
     }

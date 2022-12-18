@@ -55,8 +55,8 @@ extern int movefifoplc;
 OLDNET_EXTERN input_t netInput;
 
 OLDNET_EXTERN bool oldnet_gotinitialsettings; // True if we got PACKET_TYPE_INIT_SETTINGS from the host.
-OLDNET_EXTERN bool oldnet_predictablestate; // Must enable this on code branches that are able to predict sounds and other effects.
-OLDNET_EXTERN int32_t oldnet_predicting; // Check if oldnet_predicting is true and return in code branches you want to avoid going into during prediction.
+OLDNET_EXTERN int32_t oldnet_predictcontext; // Must set to player number on code branches that are able to predict sounds and other effects.
+OLDNET_EXTERN int32_t oldnet_predicting; // Check if oldnet_predicting is non-zero and return in code branches you want to avoid going into during prediction.
 
 OLDNET_EXTERN int predictfifoplc;
 
@@ -154,5 +154,23 @@ void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
 void Net_Disconnect(bool showScores);
 void waitforeverybody();
+
+// Returns true if we're in a valid predictable state and context for the local player.
+// Used to prevent sounds and display events from triggering outside of prediction if they are predictable.
+static inline bool Net_InPredictableState()
+{
+    if (numplayers > 1)
+    {
+        // Do not predict during correction phase, lest we annihilate our ears.
+        if (oldnet_predicting == PREDICTSTATE_CORRECT)
+            return false;
+
+        // Predictable state, but we're not predicting, so block.
+        if ((oldnet_predictcontext == myconnectindex) && (oldnet_predicting == PREDICTSTATE_OFF))
+            return false;
+    }
+
+    return true;
+}
 
 #endif

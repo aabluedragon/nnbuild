@@ -497,7 +497,7 @@ void P_FireWeapon(DukePlayer_t *p)
 
         if (!(aplWeaponFlags[p->curr_weapon][snum] & WEAPON_NOVISIBLE))
         {
-            if ((numplayers < 2) || (oldnet_predicting == PREDICTSTATE_PROCESS))
+            if (Net_InPredictableState())
             {
 #ifdef POLYMER
                 auto s = (uspriteptr_t)&sprite[p->i];
@@ -2478,7 +2478,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
         p->timebeforeexit--;
         if (p->timebeforeexit == GAMETICSPERSEC * 5 && (ud.limit_hit == 0))
         {
-            oldnet_predictablestate = false;
+            oldnet_predictcontext = -1;
             FX_StopAllSounds();
 
             if (p->customexitsound >= 0)
@@ -2486,7 +2486,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
                 S_PlaySound(p->customexitsound);
                 P_DoQuote(QUOTE_WEREGONNAFRYYOURASS, p);
             }
-            oldnet_predictablestate = true;
+            oldnet_predictcontext = playerNum;
         }
         else if (p->timebeforeexit == 1)
         {
@@ -2532,9 +2532,9 @@ static int P_HandleFist(int playerNum)
         if (p->fist_incs == 28)
         {
             if (ud.recstat == 1) G_CloseDemoWrite();
-            oldnet_predictablestate = false;
+            oldnet_predictcontext = -1;
             S_PlaySound(PIPEBOMB_EXPLODE);
-            oldnet_predictablestate = true;
+            oldnet_predictcontext = playerNum;
             P_PalFrom(p, 48, 64, 64, 64);
         }
         if (p->fist_incs > 42)
@@ -3637,9 +3637,9 @@ void P_ProcessInput(int snum)
 
     if (p->spritebridge == 0)
     {
-        oldnet_predictablestate = false;
+        oldnet_predictcontext = -1;
         P_HandleDamagingFloors(snum);
-        oldnet_predictablestate = true;
+        oldnet_predictcontext = snum;
     }
 
     if (pInput->extbits & (EXTBIT_MOVEFORWARD))
@@ -3774,10 +3774,10 @@ HORIZONLY:
         if (p->jetpack_on == 0 && sectorLotag != ST_2_UNDERWATER && sectorLotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
 
-        oldnet_predictablestate = false;
+        oldnet_predictcontext = -1;
         if (moveResult)
             P_CheckTouchDamage(p, moveResult);
-        oldnet_predictablestate = true;
+        oldnet_predictcontext = snum;
     }
 
     if (p->jetpack_on == 0)

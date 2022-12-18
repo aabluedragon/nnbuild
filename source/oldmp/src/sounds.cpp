@@ -795,29 +795,6 @@ boost:
     return explosion;
 }
 
-static bool S_PredictionCheck(int spriteNum)
-{
-    if (numplayers > 1)
-    {
-        // Do not predict during correction phase, lest we annihilate our ears.
-        if (oldnet_predicting == PREDICTSTATE_CORRECT)
-            return true;
-
-        // Predictable, but we're not predicting, so block.
-        if (oldnet_predictablestate && !oldnet_predicting)
-        {
-            if (spriteNum < 0)
-                return true;
-
-            // Make sure the sound is coming from the local player.
-            if (sprite[spriteNum].picnum == APLAYER && sprite[spriteNum].yvel == myconnectindex)
-                return true;
-        }
-    }
-
-    return false;
-}
-
 int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z)
 {
     vec3_t pos;
@@ -830,7 +807,7 @@ int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z)
 
 int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
 {
-    if (S_PredictionCheck(spriteNum))
+    if (!Net_InPredictableState())
         return -1;
 
     int const sndNum = X_OnEventWithReturn(EVENT_SOUND, spriteNum, screenpeek, num);
@@ -965,7 +942,7 @@ error:
 
 int S_PlaySound(int num)
 {
-    if (S_PredictionCheck(-1))
+    if (!Net_InPredictableState())
         return -1;
 
     int sndnum = X_OnEventWithReturn(EVENT_SOUND, g_player[screenpeek].ps->i, screenpeek, num);
@@ -1025,7 +1002,7 @@ int A_PlaySound(int soundNum, int spriteNum)
 
 void S_StopEnvSound(int soundNum, int spriteNum)
 {
-    if (S_PredictionCheck(spriteNum))
+    if (!Net_InPredictableState())
         return;
 
     if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum)))
@@ -1082,7 +1059,7 @@ void S_StopAllSounds(void)
 
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
 {
-    if (S_PredictionCheck(spriteNum))
+    if (!Net_InPredictableState())
         return;
 
     if ((g_sounds[soundNum] == &nullsound) | (g_sounds[soundNum]->playing == 0))
