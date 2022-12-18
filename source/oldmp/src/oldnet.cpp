@@ -1229,14 +1229,14 @@ static void Net_ProcessPrediction(void)
 
     oldnet_predictcontext = myconnectindex;
     P_HandleSharedKeys(myconnectindex);
-    oldnet_predictcontext = -1;
+    oldnet_predictcontext = NOT_PREDICTABLE;
 
     if (ud.pause_on == 0)
     {
         //X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
         oldnet_predictcontext = myconnectindex;
         P_ProcessInput(myconnectindex);
-        oldnet_predictcontext = -1;
+        oldnet_predictcontext = NOT_PREDICTABLE;
         G_MovePlayerSprite(myconnectindex);
     }
 
@@ -1377,7 +1377,7 @@ void Net_InitializePrediction(void)
         OSD_Printf("^02Prediction Code Error! Tried to init prediction while currently using predicted pointers!\n");
 
     originalPlayer = g_player[myconnectindex].ps;
-    oldnet_predictcontext = -1; // Must be initialized to -1.
+    oldnet_predictcontext = NOT_PREDICTABLE; // Must be initialized to NOT_PREDICTABLE.
     Net_InitializeGameVarPointers();
     Net_UseOriginalPointers();
     Net_ResetPredictionData();

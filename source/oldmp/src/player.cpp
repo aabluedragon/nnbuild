@@ -2478,7 +2478,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
         p->timebeforeexit--;
         if (p->timebeforeexit == GAMETICSPERSEC * 5 && (ud.limit_hit == 0))
         {
-            oldnet_predictcontext = -1;
+            oldnet_predictcontext = NOT_PREDICTABLE;
             FX_StopAllSounds();
 
             if (p->customexitsound >= 0)
@@ -2532,7 +2532,7 @@ static int P_HandleFist(int playerNum)
         if (p->fist_incs == 28)
         {
             if (ud.recstat == 1) G_CloseDemoWrite();
-            oldnet_predictcontext = -1;
+            oldnet_predictcontext = NOT_PREDICTABLE;
             S_PlaySound(PIPEBOMB_EXPLODE);
             oldnet_predictcontext = playerNum;
             P_PalFrom(p, 48, 64, 64, 64);
@@ -3637,7 +3637,7 @@ void P_ProcessInput(int snum)
 
     if (p->spritebridge == 0)
     {
-        oldnet_predictcontext = -1;
+        oldnet_predictcontext = NOT_PREDICTABLE;
         P_HandleDamagingFloors(snum);
         oldnet_predictcontext = snum;
     }
@@ -3774,7 +3774,7 @@ HORIZONLY:
         if (p->jetpack_on == 0 && sectorLotag != ST_2_UNDERWATER && sectorLotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
 
-        oldnet_predictcontext = -1;
+        oldnet_predictcontext = NOT_PREDICTABLE;
         if (moveResult)
             P_CheckTouchDamage(p, moveResult);
         oldnet_predictcontext = snum;

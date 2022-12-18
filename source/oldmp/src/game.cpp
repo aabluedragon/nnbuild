@@ -9618,13 +9618,13 @@ static int G_DoMoveThings(void)
 
         oldnet_predictcontext = i;
         P_HandleSharedKeys(i);
-        oldnet_predictcontext = -1;
+        oldnet_predictcontext = NOT_PREDICTABLE;
 
         if (ud.pause_on == 0)
         {
             oldnet_predictcontext = i;
             P_ProcessInput(i);
-            oldnet_predictcontext = -1;
+            oldnet_predictcontext = NOT_PREDICTABLE;
             P_CheckSectors(i);
         }
     }

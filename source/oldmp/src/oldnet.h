@@ -11,6 +11,8 @@
 #define OLDNET_EXTERN extern
 #endif
 
+#define NOT_PREDICTABLE -1
+
 #define INPUTFIFO_CURTICK (movefifoplc & (MOVEFIFOSIZ - 1))
 #define INPUTFIFO_LASTTICK ((movefifoplc - 1) & (MOVEFIFOSIZ - 1))
 #define INPUTFIFO_PREDICTTICK (predictfifoplc & (MOVEFIFOSIZ - 1))
