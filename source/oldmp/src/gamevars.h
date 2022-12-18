@@ -151,6 +151,7 @@ static FORCE_INLINE void __fastcall Gv_DivVar(int const id, int32_t const d)
         case GAMEVAR_PERPLAYER: iptr = &var.pValues[vm.playerNum & (MAXPLAYERS - 1)]; fallthrough__;
         default: jmp: *iptr = libdivide_s32_branchfree_do(*iptr, dptr); break;
 
+        case GAMEVAR_RAWQ16PTR:
         case GAMEVAR_INT32PTR:
         {
             auto& value = *(int32_t*)var.pValues;
