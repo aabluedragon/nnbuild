@@ -190,9 +190,7 @@ static void P_IncurDamage(DukePlayer_t *p)
 
 void P_QuickKill(DukePlayer_t *p)
 {
-    if (oldnet_predicting)
-        return;
-
+    UNPREDICTABLE_FUNCTION();
     P_PalFrom(p, 48, 48, 48, 48);
 
     sprite[p->i].extra = 0;
@@ -514,8 +512,7 @@ void P_FireWeapon(DukePlayer_t *p)
 
 static void P_DoWeaponSpawn(int playerNum)
 {
-    if (oldnet_predicting)
-        return;
+    UNPREDICTABLE_FUNCTION();
 
     auto const pPlayer = g_player[playerNum].ps;
 
@@ -1651,8 +1648,7 @@ void P_GetInput(int snum, bool uncapped)
 
 static void P_ConsumeKeycard(int32_t playerNum, int32_t keypal)
 {
-    if (oldnet_predicting)
-        return;
+    UNPREDICTABLE_FUNCTION();
 
     char keyname[7];
 
@@ -2466,8 +2462,7 @@ int g_numSelfObituaries = 0;
 
 static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt ProcessInput
 {
-    if (oldnet_predicting)
-        return 0;
+    UNPREDICTABLE_FUNCTION(0);
 
     DukePlayer_t* p = g_player[playerNum].ps;
 
@@ -2478,7 +2473,6 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
         p->timebeforeexit--;
         if (p->timebeforeexit == GAMETICSPERSEC * 5 && (ud.limit_hit == 0))
         {
-            oldnet_predictcontext = NOT_PREDICTABLE;
             FX_StopAllSounds();
 
             if (p->customexitsound >= 0)
@@ -2486,7 +2480,6 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
                 S_PlaySound(p->customexitsound);
                 P_DoQuote(QUOTE_WEREGONNAFRYYOURASS, p);
             }
-            oldnet_predictcontext = playerNum;
         }
         else if (p->timebeforeexit == 1)
         {
@@ -2520,8 +2513,7 @@ static int P_HandleSpecialTimers(int playerNum) // Ret: 0 = Pass, 1 = Halt Proce
 
 static int P_HandleFist(int playerNum)
 {
-    if (oldnet_predicting)
-        return 0;
+    UNPREDICTABLE_FUNCTION(0);
 
     DukePlayer_t* p = g_player[playerNum].ps;
 
@@ -2531,10 +2523,10 @@ static int P_HandleFist(int playerNum)
         p->fist_incs++;
         if (p->fist_incs == 28)
         {
-            if (ud.recstat == 1) G_CloseDemoWrite();
-            oldnet_predictcontext = NOT_PREDICTABLE;
+            if (ud.recstat == 1)
+                G_CloseDemoWrite();
+
             S_PlaySound(PIPEBOMB_EXPLODE);
-            oldnet_predictcontext = playerNum;
             P_PalFrom(p, 48, 64, 64, 64);
         }
         if (p->fist_incs > 42)
@@ -2551,8 +2543,7 @@ static int P_HandleFist(int playerNum)
 
 static void P_HandleFragged(int snum)
 {
-    if (oldnet_predicting)
-        return;
+    UNPREDICTABLE_FUNCTION();
 
     DukePlayer_t* p = g_player[snum].ps;
     DukePlayer_t* frag_p = g_player[p->frag_ps].ps;
@@ -2676,7 +2667,11 @@ static void P_HandleDeath(int snum)
         if (s->pal != 1) // Not frozen
         {
             if (!oldnet_predicting)
+            {
+                oldnet_predictcontext = NOT_PREDICTABLE;
                 P_PalFrom(p, 63, 63, 0, 0);
+                oldnet_predictcontext = snum;
+            }
 
             p->pos.z -= (16 << 8);
             s->z -= (16 << 8);
@@ -2711,8 +2706,7 @@ static void P_HandleDeath(int snum)
 
 static void P_HandleDamagingFloors(int snum)
 {
-    if (oldnet_predicting)
-        return;
+    UNPREDICTABLE_FUNCTION();
 
     DukePlayer_t* p = g_player[snum].ps;
     int playerSprite = g_player[snum].ps->i;
@@ -2826,8 +2820,7 @@ static bool P_DoSpriteBridge(int32_t spriteNum, DukePlayer_t* pPlayer)
 
 static void P_CheckTouchDamage(DukePlayer_t* p, int j)
 {
-    if (oldnet_predicting)
-        return;
+    UNPREDICTABLE_FUNCTION();
 
     if ((j = X_OnEventWithReturn(EVENT_CHECKTOUCHDAMAGE, p->i, sprite[p->i].yvel, j)) == -1)
         return;
@@ -2954,6 +2947,8 @@ static void P_DoJetpack(int const playerNum, int const playerBits, int const pla
 
 void P_ProcessInput(int snum)
 {
+    SET_PREDICTION_CONTEXT(snum);
+
     DukePlayer_t* p = g_player[snum].ps;
 
     input_t* pInput = g_player[snum].inputBits;
@@ -3636,11 +3631,7 @@ void P_ProcessInput(int snum)
     }
 
     if (p->spritebridge == 0)
-    {
-        oldnet_predictcontext = NOT_PREDICTABLE;
         P_HandleDamagingFloors(snum);
-        oldnet_predictcontext = snum;
-    }
 
     if (pInput->extbits & (EXTBIT_MOVEFORWARD))
         X_OnEvent(EVENT_MOVEFORWARD, playerSprite, snum, -1);
@@ -3774,10 +3765,8 @@ HORIZONLY:
         if (p->jetpack_on == 0 && sectorLotag != ST_2_UNDERWATER && sectorLotag != ST_1_ABOVE_WATER && shrunk)
             p->pos.z += 32 << 8;
 
-        oldnet_predictcontext = NOT_PREDICTABLE;
         if (moveResult)
             P_CheckTouchDamage(p, moveResult);
-        oldnet_predictcontext = snum;
     }
 
     if (p->jetpack_on == 0)

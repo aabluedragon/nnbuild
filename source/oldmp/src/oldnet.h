@@ -164,7 +164,7 @@ static inline bool Net_InPredictableState(int32_t spriteNum = -1)
     if (numplayers > 1)
     {
         auto const p = g_player[myconnectindex].ps;
-        // Do not predict during correction phase, lest we annihilate our ears.
+        // Do not predict during correction phase, lest we annihilate our ears/eyes.
         if (oldnet_predicting == PREDICTSTATE_CORRECT)
             return false;
 
@@ -175,5 +175,33 @@ static inline bool Net_InPredictableState(int32_t spriteNum = -1)
 
     return true;
 }
+
+// [JM] Taken from this tutorial: https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#e19-use-a-final_action-object-to-express-cleanup-if-no-suitable-resource-handle-is-available
+template<typename A>
+struct final_action {   // slightly simplified
+    A act;
+    final_action(A a) : act{ a } {}
+    ~final_action() { act(); }
+};
+
+template<typename A>
+final_action<A> finally(A act)   // deduce action type
+{
+    return final_action<A>{act};
+}
+
+// Put at the highest point of predictable code branches.
+#define SET_PREDICTION_CONTEXT(playerNum)   \
+    oldnet_predictcontext = playerNum;      \
+    auto onexit = finally([&]{ oldnet_predictcontext = NOT_PREDICTABLE; } )
+
+// Put at the start of functions that cannot be predicted.
+// Returns immediately if predicting. Automatically handles reverting to old context value on any return.
+// Set retval for the desired value when bailing during prediction.
+#define UNPREDICTABLE_FUNCTION(retval)                                      \
+    auto const pcontext_old = oldnet_predictcontext;                        \
+    oldnet_predictcontext = NOT_PREDICTABLE;                                \
+    auto onexit = finally([&]{ oldnet_predictcontext = pcontext_old; } );   \
+    if(oldnet_predicting) return retval
 
 #endif

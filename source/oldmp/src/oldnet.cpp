@@ -1227,16 +1227,11 @@ static void Net_ProcessPrediction(void)
 
     g_player[myconnectindex].ps = &predictedPlayer;
 
-    oldnet_predictcontext = myconnectindex;
     P_HandleSharedKeys(myconnectindex);
-    oldnet_predictcontext = NOT_PREDICTABLE;
-
     if (ud.pause_on == 0)
     {
         //X_OnEvent(EVENT_FAKEDOMOVETHINGS, g_player[myconnectindex].ps->i, myconnectindex, -1);
-        oldnet_predictcontext = myconnectindex;
         P_ProcessInput(myconnectindex);
-        oldnet_predictcontext = NOT_PREDICTABLE;
         G_MovePlayerSprite(myconnectindex);
     }
 

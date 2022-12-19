@@ -2609,6 +2609,8 @@ static int P_CheckDetonatorSpecialCase(DukePlayer_t* const pPlayer, int weaponNu
 
 void P_HandleSharedKeys(int snum)
 {
+    SET_PREDICTION_CONTEXT(snum);
+
     int i, k, dainv;
     unsigned int sb_snum = g_player[snum].inputBits->bits;// , j;
     DukePlayer_t *p = g_player[snum].ps;
