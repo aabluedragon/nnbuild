@@ -4437,29 +4437,25 @@ static void G_MoveActors(void)
 {
     int x, m, l;
     int32_t *t;
-    int a, j, nexti, nextj, sect, p, switchpicnum, k;
-    spritetype *s;
+    int a, j, nextj, p, k;
     int i = headspritestat[STAT_ACTOR];
 
     while (i >= 0)
     {
-        nexti = nextspritestat[i];
-
-        s = &sprite[i];
-
-        sect = s->sectnum;
+        auto s = &sprite[i];
+        int nexti = nextspritestat[i];
+        int sect = s->sectnum;
+        int switchpicnum = s->picnum;
 
         if (s->xrepeat == 0 || sect < 0 || sect >= MAXSECTORS)
             KILLIT(i);
 
         t = &actor[i].t_data[0];
+        actor[i].bpos = s->xyz;  
 
-        actor[i].bpos = s->xyz;
-        switchpicnum=s->picnum;
-        if ((s->picnum > GREENSLIME)&&(s->picnum <= GREENSLIME+7))
-        {
+        if ((s->picnum > GREENSLIME) && (s->picnum <= GREENSLIME+7))
             switchpicnum = GREENSLIME;
-        }
+
         switch (tileGetMapping(switchpicnum))
         {
         case DUCK__:
@@ -4513,15 +4509,14 @@ static void G_MoveActors(void)
         case RESPAWNMARKERRED__:
         case RESPAWNMARKERYELLOW__:
         case RESPAWNMARKERGREEN__:
-            T1(i)++;
-            if (T1(i) > g_itemRespawnTime)
-            {
+            if (++T1(i) > g_itemRespawnTime)
                 KILLIT(i);
-            }
-            if (T1(i) >= (g_itemRespawnTime>>1) && T1(i) < ((g_itemRespawnTime>>1)+(g_itemRespawnTime>>2)))
+
+            if (T1(i) >= (g_itemRespawnTime >> 1) && T1(i) < ((g_itemRespawnTime >> 1) + (g_itemRespawnTime >> 2)))
                 PN(i) = RESPAWNMARKERYELLOW;
-            else if (T1(i) > ((g_itemRespawnTime>>1)+(g_itemRespawnTime>>2)))
+            else if (T1(i) > ((g_itemRespawnTime >> 1) + (g_itemRespawnTime >> 2)))
                 PN(i) = RESPAWNMARKERGREEN;
+
             A_Fall(i);
             break;
 
