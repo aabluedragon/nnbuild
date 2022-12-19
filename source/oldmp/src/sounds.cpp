@@ -807,7 +807,7 @@ int32_t S_PlaySoundXYZ(int32_t num,int32_t i,int32_t x,int32_t y,int32_t z)
 
 int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
 {
-    if (!Net_InPredictableState())
+    if (!Net_InPredictableState(spriteNum))
         return -1;
 
     int const sndNum = X_OnEventWithReturn(EVENT_SOUND, spriteNum, screenpeek, num);
@@ -1002,7 +1002,7 @@ int A_PlaySound(int soundNum, int spriteNum)
 
 void S_StopEnvSound(int soundNum, int spriteNum)
 {
-    if (!Net_InPredictableState())
+    if (!Net_InPredictableState(spriteNum))
         return;
 
     if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum)))
@@ -1059,7 +1059,7 @@ void S_StopAllSounds(void)
 
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
 {
-    if (!Net_InPredictableState())
+    if (!Net_InPredictableState(spriteNum))
         return;
 
     if ((g_sounds[soundNum] == &nullsound) | (g_sounds[soundNum]->playing == 0))

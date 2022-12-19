@@ -159,16 +159,17 @@ void waitforeverybody();
 
 // Returns true if we're in a valid predictable state and context for the local player.
 // Used to prevent sounds and display events from triggering outside of prediction if they are predictable.
-static inline bool Net_InPredictableState()
+static inline bool Net_InPredictableState(int32_t spriteNum = -1)
 {
     if (numplayers > 1)
     {
+        auto const p = g_player[myconnectindex].ps;
         // Do not predict during correction phase, lest we annihilate our ears.
         if (oldnet_predicting == PREDICTSTATE_CORRECT)
             return false;
 
         // Predictable state, but we're not predicting, so block.
-        if ((oldnet_predictcontext == myconnectindex) && (oldnet_predicting == PREDICTSTATE_OFF))
+        if ((oldnet_predictcontext == myconnectindex) && (spriteNum == -1 || spriteNum == p->i) && (oldnet_predicting == PREDICTSTATE_OFF))
             return false;
     }
 
