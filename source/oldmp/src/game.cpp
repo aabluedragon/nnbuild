@@ -4035,28 +4035,25 @@ int A_Spawn(int spriteNum, int tileNum)
             pSprite->xvel = 292;
             pSprite->zvel = 360;
             fallthrough__;
-        case RESPAWNMARKERRED__:
         case BLIMP__:
+            pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+            pSprite->clipdist = 128;
+            changespritestat(newSprite, STAT_ACTOR);
+            goto SPAWN_END;
 
-            if (pSprite->picnum == RESPAWNMARKERRED)
-            {
-                pSprite->xrepeat = pSprite->yrepeat = 24;
-                if (hasParent)
-                    pSprite->z = actor[spriteNum].floorz; // -(1<<4);
-            }
-            else
-            {
-                pSprite->cstat |= (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
-                pSprite->clipdist = 128;
-            }
-            fallthrough__;
+        case RESPAWNMARKERRED__:
+            pSprite->xrepeat = pSprite->yrepeat = 24;
+            if (hasParent)
+                pSprite->z = actor[spriteNum].floorz; // -(1<<4);
+            changespritestat(newSprite, STAT_ACTOR);
+            goto SPAWN_END;
+
         case MIKE__:
-            if (pSprite->picnum == MIKE)
-            {
-                pSprite->yvel = pSprite->hitag;
-                pSprite->hitag = 0;
-            }
-            fallthrough__;
+            pSprite->yvel = pSprite->hitag;
+            pSprite->hitag = 0;
+            changespritestat(newSprite, STAT_ACTOR);
+            goto SPAWN_END;
+
         case WEATHERWARN__:
             changespritestat(newSprite, STAT_ACTOR);
             goto SPAWN_END;
