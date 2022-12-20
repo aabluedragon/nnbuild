@@ -8029,12 +8029,23 @@ static void G_Cleanup(void)
     Xfree(apScript);
     Xfree(bitptr);
 
+    auto ofs = vmoffset;
+    while (ofs)
+    {
+        auto next = ofs->next;
+        Xfree(ofs->fn);
+        Xfree(ofs);
+        ofs = next;
+    }
+
     Gv_Clear();
 
     freehash();
+    hash_free(&h_gamefuncs);
 
-    hash_free(&gamefuncH);
-    // NetDuke32: Clear dukeanim and dynamictilemap hashes here once backported.
+    // NetDuke32: Clear dukeanim here once backported.
+    inthash_free(&h_dsound);
+    inthash_free(&h_dynamictilemap);
 
     Duke_CommonCleanup();
 }
@@ -8665,12 +8676,12 @@ int app_main(int32_t argc, char const* const* argv)
     if (getcwd(cwd,BMAX_PATH))
         addsearchpath(cwd);
 
-    hash_init(&gamefuncH);
+    hash_init(&h_gamefuncs);
     for (i=NUMGAMEFUNCTIONS-1;i>=0;i--)
     {
         char *str = Bstrtolower(Xstrdup(gamefunctions[i]));
-        hash_add(&gamefuncH,gamefunctions[i],i, 0);
-        hash_add(&gamefuncH,str,i, 0);
+        hash_add(&h_gamefuncs,gamefunctions[i],i, 0);
+        hash_add(&h_gamefuncs,str,i, 0);
         Xfree(str);
     }
 

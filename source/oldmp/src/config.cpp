@@ -51,14 +51,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 ===================
 */
 
-hashtable_t gamefuncH    = { NUMGAMEFUNCTIONS<<1, NULL };
+hashtable_t h_gamefuncs    = { NUMGAMEFUNCTIONS<<1, NULL };
 
 int32_t CONFIG_FunctionNameToNum(const char* func)
 {
     if (!func)
         return -1;
 
-    return hash_findcase(&gamefuncH, func);
+    return hash_findcase(&h_gamefuncs, func);
 }
 
 /*

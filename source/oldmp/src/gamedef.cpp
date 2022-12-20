@@ -4630,7 +4630,7 @@ repeatcase:
 
                 i = 0;
 
-                hash_delete(&gamefuncH, gamefunctions[j]);
+                hash_delete(&h_gamefuncs, gamefunctions[j]);
 
                 while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
                 {
@@ -4655,7 +4655,7 @@ repeatcase:
                     }
                 }
                 gamefunctions[j][i] = '\0';
-                hash_add(&gamefuncH, gamefunctions[j], j, 0);
+                hash_add(&h_gamefuncs, gamefunctions[j], j, 0);
 
                 continue;
 

@@ -682,7 +682,7 @@ typedef struct {
 
 extern keydef_t keynames[];
 extern const char *mousenames[];
-extern hashtable_t gamefuncH;
+extern hashtable_t h_gamefuncs;
 
 #include "funct.h"
 
