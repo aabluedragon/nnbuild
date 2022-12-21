@@ -69,4 +69,10 @@ enum DukeWeapon_t {
     MAX_WEAPONS
 };
 
+static int const icon_to_inv[ICON_MAX] = { GET_FIRSTAID, GET_FIRSTAID, GET_STEROIDS, GET_HOLODUKE,
+                                           GET_JETPACK,  GET_HEATS,    GET_SCUBA,    GET_BOOTS };
+
+static int const inv_to_icon[GET_MAX] = { ICON_STEROIDS, ICON_NONE,  ICON_SCUBA, ICON_HOLODUKE, ICON_JETPACK, ICON_NONE,
+                                          ICON_NONE,     ICON_HEATS, ICON_NONE,  ICON_FIRSTAID, ICON_BOOTS };
+
 #endif

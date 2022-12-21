@@ -2610,7 +2610,7 @@ void P_HandleSharedKeys(int snum)
 {
     SET_PREDICTION_CONTEXT(snum);
 
-    int i, k, dainv;
+    int i, k, inventoryIcon;
     unsigned int sb_snum = g_player[snum].inputBits->bits;// , j;
     DukePlayer_t *p = g_player[snum].ps;
 
@@ -2696,9 +2696,11 @@ void P_HandleSharedKeys(int snum)
             }
         }
 
-        if (ud.pause_on) return;
+        if (ud.pause_on)
+            return;
 
-        if (sprite[p->i].extra <= 0) return;		// if dead...
+        if (sprite[p->i].extra <= 0)
+            return; // if dead...
 
         if (TEST_SYNC_KEY(sb_snum, SK_INVENTORY) && p->newowner == -1)	// inventory button generates event for selected item
         {
@@ -2708,21 +2710,11 @@ void P_HandleSharedKeys(int snum)
             {
                 switch (p->inven_icon)
                 {
-                case 4:
-                    sb_snum |= BIT(SK_JETPACK);
-                    break;
-                case 3:
-                    sb_snum |= BIT(SK_HOLODUKE);
-                    break;
-                case 5:
-                    sb_snum |= BIT(SK_NIGHTVISION);
-                    break;
-                case 1:
-                    sb_snum |= BIT(SK_MEDKIT);
-                    break;
-                case 2:
-                    sb_snum |= BIT(SK_STEROIDS);
-                    break;
+                    case ICON_JETPACK:  sb_snum |= BIT(SK_JETPACK);     break;
+                    case ICON_HOLODUKE: sb_snum |= BIT(SK_HOLODUKE);    break;
+                    case ICON_HEATS:    sb_snum |= BIT(SK_NIGHTVISION); break;
+                    case ICON_FIRSTAID: sb_snum |= BIT(SK_MEDKIT);      break;
+                    case ICON_STEROIDS: sb_snum |= BIT(SK_STEROIDS);    break;
                 }
             }
         }
@@ -2768,7 +2760,7 @@ void P_HandleSharedKeys(int snum)
                 if (TEST_SYNC_KEY(sb_snum, SK_INV_RIGHT)) k = 1;
                 else k = 0;
 
-                dainv = p->inven_icon;
+                inventoryIcon = p->inven_icon;
 
                 i = 0;
 CHECKINV1:
@@ -2777,75 +2769,78 @@ CHECKINV1:
                 {
                     i++;
 
-                    switch (dainv)
+                    switch (inventoryIcon)
                     {
                     case 4:
                         if (p->inv_amount[GET_JETPACK] > 0 && i > 1)
                             break;
-                        if (k) dainv = 5;
-                        else dainv = 3;
+                        if (k) inventoryIcon = 5;
+                        else inventoryIcon = 3;
                         goto CHECKINV1;
                     case 6:
                         if (p->inv_amount[GET_SCUBA] > 0 && i > 1)
                             break;
-                        if (k) dainv = 7;
-                        else dainv = 5;
+                        if (k) inventoryIcon = 7;
+                        else inventoryIcon = 5;
                         goto CHECKINV1;
                     case 2:
                         if (p->inv_amount[GET_STEROIDS] > 0 && i > 1)
                             break;
-                        if (k) dainv = 3;
-                        else dainv = 1;
+                        if (k) inventoryIcon = 3;
+                        else inventoryIcon = 1;
                         goto CHECKINV1;
                     case 3:
                         if (p->inv_amount[GET_HOLODUKE] > 0 && i > 1)
                             break;
-                        if (k) dainv = 4;
-                        else dainv = 2;
+                        if (k) inventoryIcon = 4;
+                        else inventoryIcon = 2;
                         goto CHECKINV1;
                     case 0:
                     case 1:
                         if (p->inv_amount[GET_FIRSTAID] > 0 && i > 1)
                             break;
-                        if (k) dainv = 2;
-                        else dainv = 7;
+                        if (k) inventoryIcon = 2;
+                        else inventoryIcon = 7;
                         goto CHECKINV1;
                     case 5:
                         if (p->inv_amount[GET_HEATS] > 0 && i > 1)
                             break;
-                        if (k) dainv = 6;
-                        else dainv = 4;
+                        if (k) inventoryIcon = 6;
+                        else inventoryIcon = 4;
                         goto CHECKINV1;
                     case 7:
                         if (p->inv_amount[GET_BOOTS] > 0 && i > 1)
                             break;
-                        if (k) dainv = 1;
-                        else dainv = 6;
+                        if (k) inventoryIcon = 1;
+                        else inventoryIcon = 6;
                         goto CHECKINV1;
                     }
                 }
-                else dainv = 0;
+                else inventoryIcon = 0;
 
                 if (TEST_SYNC_KEY(sb_snum, SK_INV_LEFT))   // Inventory_Left
                 {
-                    Gv_SetVar(sysVarIDs.RETURN,dainv,g_player[snum].ps->i,snum);
+                    Gv_SetVar(sysVarIDs.RETURN,inventoryIcon,g_player[snum].ps->i,snum);
                     X_OnEvent(EVENT_INVENTORYLEFT,g_player[snum].ps->i,snum, -1);
-                    dainv=Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum);
+                    inventoryIcon=Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum);
                 }
                 if (TEST_SYNC_KEY(sb_snum, SK_INV_RIGHT))   // Inventory_Right
                 {
-                    Gv_SetVar(sysVarIDs.RETURN,dainv,g_player[snum].ps->i,snum);
+                    Gv_SetVar(sysVarIDs.RETURN,inventoryIcon,g_player[snum].ps->i,snum);
                     X_OnEvent(EVENT_INVENTORYRIGHT,g_player[snum].ps->i,snum, -1);
-                    dainv=Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum);
+                    inventoryIcon=Gv_GetVar(sysVarIDs.RETURN,g_player[snum].ps->i,snum);
                 }
 
-                p->inven_icon = dainv;
+                if (inventoryIcon >= 1)
+                {
+                    p->inven_icon = inventoryIcon;
 
-                static const int32_t invQuotes[8] = { QUOTE_MEDKIT, QUOTE_STEROIDS, QUOTE_HOLODUKE,
-                    QUOTE_JETPACK, QUOTE_NVG, QUOTE_SCUBA, QUOTE_BOOTS, 0 };
+                    static const int32_t invQuotes[8] = { QUOTE_MEDKIT, QUOTE_STEROIDS, QUOTE_HOLODUKE,
+                        QUOTE_JETPACK, QUOTE_NVG, QUOTE_SCUBA, QUOTE_BOOTS, 0 };
 
-                if (dainv - 1 < ARRAY_SSIZE(invQuotes))
-                    P_DoQuote(invQuotes[dainv - 1], p);
+                    if (inventoryIcon - 1 < ARRAY_SSIZE(invQuotes))
+                        P_DoQuote(invQuotes[inventoryIcon - 1], p);
+                }
             }
 
         weaponNum = ((sb_snum & SK_WEAPON_MASK) >> SK_WEAPON_BITS) - 1;

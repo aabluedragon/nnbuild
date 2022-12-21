@@ -160,22 +160,6 @@ void G_DrawFrags(void)
     }
 }
 
-static int32_t G_RemapIconToInventory(int32_t iconNum)
-{
-    switch (iconNum)
-    {
-        case ICON_FIRSTAID: return GET_FIRSTAID;
-        case ICON_STEROIDS: return GET_STEROIDS;
-        case ICON_HOLODUKE: return GET_HOLODUKE;
-        case ICON_JETPACK:  return GET_JETPACK;
-        case ICON_HEATS:    return GET_HEATS;
-        case ICON_SCUBA:    return GET_SCUBA;
-        case ICON_BOOTS:    return GET_BOOTS;
-    }
-
-    return -1;
-}
-
 void G_DrawInventory(DukePlayer_t* p)
 {
     int items_had = 0;
@@ -184,7 +168,7 @@ void G_DrawInventory(DukePlayer_t* p)
 
     for (int i = 1; i < ICON_MAX; i++)
     {
-        int const inv_item = G_RemapIconToInventory(i);
+        int const inv_item = icon_to_inv[i];
         if (inv_item != -1)
         {
             int const inv_amount = p->inv_amount[inv_item];
@@ -871,7 +855,7 @@ void G_DrawStatusBar(int snum)
 
     for (i = 1; i < ICON_MAX; i++)
     {
-        int32_t const item = G_RemapIconToInventory(i);
+        int32_t const item = icon_to_inv[i];
 
         if (sbar.inv_amount[item] != p->inv_amount[item])
         {

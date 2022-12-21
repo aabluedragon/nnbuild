@@ -9619,9 +9619,7 @@ static int G_DoMoveThings(void)
             g_player[i].ps->palookup = teams[g_player[i].ps->team].palnum;
 
         if (sprite[g_player[i].ps->i].pal != 1) // Frozen
-        {
             sprite[g_player[i].ps->i].pal = g_player[i].ps->palookup;
-        }
         // ---
 
         P_HandleSharedKeys(i);

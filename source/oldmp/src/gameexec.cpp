@@ -902,6 +902,61 @@ static void VM_AddWeapon(int32_t weap, int32_t amount, DukePlayer_t *ps)
     addweapon_addammo_common(ps, weap, amount);
 }
 
+static void VM_AddInventory(DukePlayer_t* const pPlayer, int const itemNum, int const nAmount)
+{
+    switch (itemNum)
+    {
+        case GET_STEROIDS:
+        case GET_SCUBA:
+        case GET_HOLODUKE:
+        case GET_JETPACK:
+        case GET_HEATS:
+        case GET_FIRSTAID:
+        case GET_BOOTS:
+            pPlayer->inven_icon = inv_to_icon[itemNum];
+            pPlayer->inv_amount[itemNum] = nAmount;
+            break;
+
+        case GET_SHIELD:
+        {
+            int16_t& shield_amount = pPlayer->inv_amount[GET_SHIELD];
+            shield_amount = min(shield_amount + nAmount, pPlayer->max_shield_amount);
+            break;
+        }
+
+        case GET_ACCESS:
+        {
+            char keyname[7];
+
+            switch (vm.pSprite->pal)
+            {
+                case  0:
+                    Bsprintf(keyname, "Blue");
+                    ud.got_access |= 1;
+                    break;
+                case 21:
+                    Bsprintf(keyname, "Red");
+                    ud.got_access |= 2;
+                    break;
+                case 23:
+                    Bsprintf(keyname, "Yellow");
+                    ud.got_access |= 4;
+                    break;
+            }
+
+            if (ud.multimode > 1)
+            {
+                Bsprintf(tempbuf, "^12%s^12 has acquired a ^%d%s^12 key!", &g_player[vm.playerNum].user_name[0], TrackerCast(vm.pSprite->pal), keyname);
+                G_AddUserQuote(tempbuf);
+            }
+
+            break;
+        }
+
+        default: CON_ERRPRINTF("invalid inventory item %d", itemNum); break;
+    }
+}
+
 static int G_StartTrackSlot(int const volumeNum, int const levelNum)
 {
     if ((unsigned)volumeNum <= MAXVOLUMES && (unsigned)levelNum < MAXLEVELS)
@@ -3299,82 +3354,10 @@ static int X_DoExecute(void)
         break;
 
     case CON_ADDINVENTORY:
-        insptr+=2;
-        switch (*(insptr-1))
-        {
-        case GET_STEROIDS:
-            g_player[vm.playerNum].ps->inv_amount[GET_STEROIDS] = *insptr;
-            g_player[vm.playerNum].ps->inven_icon = 2;
-            break;
+        insptr += 2;
 
-        case GET_SHIELD:
-            g_player[vm.playerNum].ps->inv_amount[GET_SHIELD] +=          *insptr;// 100;
-            if (g_player[vm.playerNum].ps->inv_amount[GET_SHIELD] > g_player[vm.playerNum].ps->max_shield_amount)
-                g_player[vm.playerNum].ps->inv_amount[GET_SHIELD] = g_player[vm.playerNum].ps->max_shield_amount;
-            break;
+        VM_AddInventory(vm.pPlayer, insptr[-1], *insptr);
 
-        case GET_SCUBA:
-            g_player[vm.playerNum].ps->inv_amount[GET_SCUBA] =             *insptr;// 1600;
-            g_player[vm.playerNum].ps->inven_icon = 6;
-            break;
-
-        case GET_HOLODUKE:
-            g_player[vm.playerNum].ps->inv_amount[GET_HOLODUKE] =          *insptr;// 1600;
-            g_player[vm.playerNum].ps->inven_icon = 3;
-            break;
-
-        case GET_JETPACK:
-            g_player[vm.playerNum].ps->inv_amount[GET_JETPACK] =           *insptr;// 1600;
-            g_player[vm.playerNum].ps->inven_icon = 4;
-            break;
-
-        case GET_ACCESS:
-        {
-            char keyname[7];
-
-            switch (vm.pSprite->pal)
-            {
-            case  0:
-                Bsprintf(keyname, "Blue");
-                ud.got_access |= 1;
-                break;
-            case 21:
-                Bsprintf(keyname, "Red");
-                ud.got_access |= 2;
-                break;
-            case 23:
-                Bsprintf(keyname, "Yellow");
-                ud.got_access |= 4;
-                break;
-            }
-
-            if (ud.multimode > 1)
-            {
-                Bsprintf(tempbuf, "^12%s^12 has acquired a ^%d%s^12 key!", &g_player[vm.playerNum].user_name[0], TrackerCast(vm.pSprite->pal), keyname);
-                G_AddUserQuote(tempbuf);
-            }
-
-            break;
-        }
-
-        case GET_HEATS:
-            g_player[vm.playerNum].ps->inv_amount[GET_HEATS] = *insptr;
-            g_player[vm.playerNum].ps->inven_icon = 5;
-            break;
-
-        case GET_FIRSTAID:
-            g_player[vm.playerNum].ps->inven_icon = 1;
-            g_player[vm.playerNum].ps->inv_amount[GET_FIRSTAID] = *insptr;
-            break;
-
-        case GET_BOOTS:
-            g_player[vm.playerNum].ps->inven_icon = 7;
-            g_player[vm.playerNum].ps->inv_amount[GET_BOOTS] = *insptr;
-            break;
-        default:
-            OSD_Printf(CON_ERROR "Invalid inventory ID %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), (int)*(insptr-1));
-            break;
-        }
         insptr++;
         break;
 
