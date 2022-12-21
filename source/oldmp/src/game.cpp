@@ -2216,9 +2216,7 @@ void G_DisplayRest(int smoothratio)
                 G_DrawCameraText(pp->newowner);
             else
             {
-                Net_UsePredictedPointers();
                 P_DisplayWeapon(screenpeek);
-                Net_UseOriginalPointers();
 
                 if (pp->over_shoulder_on == 0)
                     P_DisplayScubaMask(screenpeek);
@@ -2372,11 +2370,6 @@ void G_DisplayRest(int smoothratio)
 
     G_PrintFPS();
     G_DrawLevelStats();
-
-    if (ud.gm&MODE_TYPE)
-        Net_EnterMessage();
-    else
-        M_DisplayMenus();
 
     {
         static int32_t applied = 0;
@@ -2889,7 +2882,7 @@ void G_DrawRooms(int snum,int smoothratio)
 {
     int floorZ, ceilZ;
     int i;
-    DukePlayer_t *p = (snum == myconnectindex && numplayers > 1) ? &predictedPlayer :  g_player[snum].ps;
+    DukePlayer_t *p = g_player[snum].ps;
     PlayerDisplay_t* pDisp = &g_player[snum].display;
     short tang;
     int tiltcx,tiltcy,tiltcs=0;    // JBF 20030807
@@ -8427,16 +8420,16 @@ static void G_DrawFrame()
     if (numplayers > 1 && (screenpeek == myconnectindex))
     {
         Net_SwapPredictedLinkedLists();
-        g_player[myconnectindex].ps = &predictedPlayer;
+        Net_UsePredictedPointers();
+
         auto pSprite = originalPlayer->i;
-        auto oldSprite = sprite[pSprite];
         sprite[pSprite] = predicted_sprite[pSprite];
 
         // And an even worse hack to get slimers to attach to your face.
         // Get rid of this once we have full actor prediction again.
         // And retarget slimer sprite to it's predicted version.
         auto slimerSprite = g_player[myconnectindex].ps->somethingonplayer;
-        if (slimerSprite > -1 && sprite[slimerSprite].picnum >= GREENSLIME && sprite[slimerSprite].picnum <= (GREENSLIME+7))
+        if (slimerSprite > -1 && sprite[slimerSprite].picnum >= GREENSLIME && sprite[slimerSprite].picnum <= (GREENSLIME + 7))
         {
             vec3_t slimerPos = sprite[slimerSprite].xyz;
             int16_t slimerSect = sprite[slimerSprite].sectnum;
@@ -8445,7 +8438,7 @@ static void G_DrawFrame()
             vec3_t pos;
             fix16_t q16ang, q16horiz;
             int16_t sectnum;
-            G_CalculateCameraInterpolation(&predictedPlayer, &pos, &q16ang, &q16horiz, &sectnum, smoothRatio);
+            G_CalculateCameraInterpolation(g_player[screenpeek].ps, &pos, &q16ang, &q16horiz, &sectnum, smoothRatio);
 
             sprite[slimerSprite].x = pos.x + (sintable[(fix16_to_int(q16ang) + 512) & 2047] >> 7);
             sprite[slimerSprite].y = pos.y + (sintable[fix16_to_int(q16ang) & 2047] >> 7);
@@ -8460,10 +8453,6 @@ static void G_DrawFrame()
         }
         else
             G_DrawRooms(screenpeek, smoothRatio);
-
-        g_player[myconnectindex].ps = originalPlayer;
-        sprite[pSprite] = oldSprite;
-        Net_SwapPredictedLinkedLists();
     }
     else
     {
@@ -8472,7 +8461,20 @@ static void G_DrawFrame()
 
     if (videoGetRenderMode() >= REND_POLYMOST)
         G_DrawBackground();
+
     G_DisplayRest(smoothRatio);
+
+    if (numplayers > 1 && (screenpeek == myconnectindex))
+    {
+        Net_SwapPredictedLinkedLists();
+        Net_UseOriginalPointers();
+    }
+
+    // Moved out of G_DisplayRest, since menu code can *ROYALLY* fuck up the predicted pointers.
+    if (ud.gm & MODE_TYPE)
+        Net_EnterMessage();
+    else
+        M_DisplayMenus();
 
     G_ShowVote();
 
