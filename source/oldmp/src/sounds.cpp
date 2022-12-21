@@ -1246,7 +1246,8 @@ int S_CheckSoundPlaying(int soundNum)
 
 void S_DetachSoundsFromSprite(int spriteNum)
 {
-    if (oldnet_predicting) return;
+    if (oldnet_predicting)
+        return;
 
     for (int i = 0; i <= g_highestSoundIdx; ++i)
     {

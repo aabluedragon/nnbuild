@@ -1884,8 +1884,7 @@ void P_DropWeapon(DukePlayer_t *p)
 
 void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer)
 {
-    if (oldnet_predicting)
-        return;
+    UNPREDICTABLE_FUNCTION(); // [JM] Might not need this anymore. We shall see.
 
     //int const newOwner = pPlayer->newowner;
     //pPlayer->pos = sprite[newOwner].pos;
@@ -1899,8 +1898,7 @@ void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer)
 
 static void P_TossPipebomb(int playerNum)
 {
-    if (oldnet_predicting)
-        return;
+    UNPREDICTABLE_FUNCTION();
 
     DukePlayer_t* p = g_player[playerNum].ps;
     unsigned int sb_snum = g_player[playerNum].inputBits->bits;
@@ -2284,7 +2282,7 @@ static void P_ProcessWeapon(int playerNum)
                 {
                     if (!(aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_NOVISIBLE))
                     {
-                        if ((numplayers < 2) || (oldnet_predicting == PREDICTSTATE_PROCESS))
+                        if (Net_InPredictableState())
                             g_player[playerNum].display.visibility = 0;
                     }
 

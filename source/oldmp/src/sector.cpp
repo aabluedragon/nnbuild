@@ -1671,11 +1671,10 @@ int P_ActivateSwitch(int snum,int w,int switchtype)
 
 void activatebysector(int sect,int j)
 {
+    UNPREDICTABLE_FUNCTION();
+
     int i = headspritesect[sect];
     int didit = 0;
-
-    if (oldnet_predicting)
-        return;
 
     while (i >= 0)
     {
@@ -3281,8 +3280,7 @@ static void G_ClearCameras(DukePlayer_t* p)
 
 static void P_DoSectorInteractions(int32_t playerNum)
 {
-    if (oldnet_predicting)
-        return;
+    UNPREDICTABLE_FUNCTION();
 
     DukePlayer_t* p = g_player[playerNum].ps;
 
