@@ -2493,7 +2493,7 @@ void G_DrawBackground(void)
     {
         // when not rendering a game, fullscreen wipe
 #define MENUTILE (!videoGetRenderMode()?MENUSCREEN:LOADSCREEN)
-        Gv_SetVar(sysVarIDs.RETURN,tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?MENUTILE:BIGHOLE, -1, -1);
+        Gv_SetVar(sysVarIDs.RETURN, tilesiz[MENUTILE].x == 320 && tilesiz[MENUTILE].y == 200 ? MENUTILE : BIGHOLE, -1, -1);
         X_OnEvent(EVENT_GETMENUTILE, -1, myconnectindex, -1);
         if (Gv_GetVarByLabel("MENU_TILE", tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?0:1, -1, -1))
         {
@@ -2549,13 +2549,14 @@ void G_DrawBackground(void)
         */
         // when not rendering a game, fullscreen wipe
         x2 = (xdim - scale((int32_t)(ydim*1.333333333333333333f), ud.statusbarscale, 100)) >> 1;
-        for (y = y2 - y2%tilesiz[dapicnum].y; y<ydim; y += tilesiz[dapicnum].y)
-            for (x = 0; x<xdim >> 1; x += tilesiz[dapicnum].x)
+        for (y = y2 - y2 % tilesiz[dapicnum].y; y < ydim; y += tilesiz[dapicnum].y)
+        {
+            for (x = 0; x < xdim >> 1; x += tilesiz[dapicnum].x)
             {
                 rotatesprite(x << 16, y << 16, 65536L, 0, dapicnum, 8, 0, 8 + 16 + 64, 0, y2, x2, ydim - 1);
                 rotatesprite((xdim - x) << 16, y << 16, 65536L, 0, dapicnum, 8, 0, 8 + 16 + 64, xdim - x2 - 1, y2, xdim - 1, ydim - 1);
             }
-
+        }
     }
 
     if (ud.screen_size > 8)
@@ -2890,7 +2891,7 @@ void G_DrawRooms(int snum,int smoothratio)
     int const viewingRange = viewingrange;
     rotatespritesmoothratio = smoothratio;
 
-    if (pub > 0 || videoGetRenderMode() >= 3) // JBF 20040101: redraw background always
+    if (pub > 0 || videoGetRenderMode() >= REND_POLYMOST) // JBF 20040101: redraw background always
     {
         if (ud.screen_size >= 8)
             G_DrawBackground();

@@ -746,9 +746,9 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
             else
                 return ud.returnvar[lParm2 - 1];
         }
-        case USERDEFS_VM_PLAYER:              return vm.playerNum;//vm.playerNum;
-        case USERDEFS_VM_SPRITE:              return vm.spriteNum;//vm.spriteNum;
-        case USERDEFS_VM_DISTANCE:            return vm.playerDist;//vm.playerDist;
+        case USERDEFS_VM_PLAYER:            return vm.playerNum;
+        case USERDEFS_VM_SPRITE:            return vm.spriteNum;
+        case USERDEFS_VM_DISTANCE:          return vm.playerDist;
 
         case USERDEFS_TEAMPAL:              return teams[lParm2].palnum;
         case USERDEFS_TEAMFRAGS:            return teams[lParm2].frags;
