@@ -488,6 +488,8 @@ const memberlabel_t UserdefsLabels[] =
     { "m_dmflags",              USERDEFS_M_DMFLAGS,             0, 0, -1 },
     { "draw_yxaspect",          USERDEFS_DRAW_YXASPECT,         0, 0, -1 },
     { "monsters_killed",        USERDEFS_MONSTERS_KILLED,       0, 0, -1 },
+    { "limit_hit",              USERDEFS_LIMIT_HIT,             0, 0, -1 },
+    { "winner",                 USERDEFS_WINNER,                0, 0, -1 },
     { "",                       -1,                             0, 0, -1 } // END OF LIST
 };
 
@@ -757,6 +759,8 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
         case USERDEFS_M_DMFLAGS:            return ud.m_dmflags;
         case USERDEFS_DRAW_YXASPECT:        return rotatesprite_yxaspect;
         case USERDEFS_MONSTERS_KILLED:      return ud.monsters_killed;
+        case USERDEFS_LIMIT_HIT:            return ud.limit_hit;
+        case USERDEFS_WINNER:               return ud.winner;
 
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
@@ -910,6 +914,8 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
         case USERDEFS_M_DMFLAGS:        ud.m_dmflags            = newValue; return;
         case USERDEFS_DRAW_YXASPECT:    rotatesprite_yxaspect   = newValue; return;
         case USERDEFS_MONSTERS_KILLED:  ud.monsters_killed      = newValue; return;
+        case USERDEFS_LIMIT_HIT:        ud.limit_hit            = newValue; return;
+        case USERDEFS_WINNER:           ud.winner               = newValue; return;
 
         default: return;
     }
