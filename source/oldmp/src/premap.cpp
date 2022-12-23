@@ -1545,7 +1545,7 @@ void clearfifo(void)
     Net_ClearFIFO();
 
     localInput = {};
-    clearbufbyte(&inputfifo,sizeof(input_t)*MOVEFIFOSIZ*MAXPLAYERS,0L);
+    Bmemset(&inputfifo, 0, sizeof(inputfifo));
 
     for (ALL_PLAYERS(i))
     {
