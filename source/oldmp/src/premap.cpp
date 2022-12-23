@@ -581,6 +581,9 @@ void G_RevertUnconfirmedGameSettings()
     ud.m_player_skill = ud.player_skill;
     ud.m_coop = ud.coop;
     ud.m_dmflags = ud.dmflags;
+
+    if (!Menu_HaveUserMap())
+        boardfilename[0] = 0;
 }
 
 void P_RandomSpawnPoint(int snum)
@@ -1202,6 +1205,9 @@ static void prelevel(char g)
 // Use this when you want to start a new game, or new level.
 void G_NewGame(uint32_t flags)
 {
+    if (!Menu_HaveUserMap()) // Clear usermap if we're not going to one.
+        boardfilename[0] = 0;
+
     if ((myconnectindex == connecthead) && !(flags & NEWGAME_NOSEND))
         Net_SendNewGame(flags);
 

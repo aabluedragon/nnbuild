@@ -560,11 +560,9 @@ void Net_ParsePackets(void)
             case PACKET_TYPE_EOL:
             {
                 ud.gm = MODE_EOL;
-
                 ud.level_number = packbuf[1];
                 ud.from_bonus = packbuf[2];
-
-                G_RevertUnconfirmedGameSettings();
+                ud.secretlevel = packbuf[3];
                 break;
             }
 
@@ -1033,16 +1031,16 @@ void Net_EndOfLevel(bool secret)
         }
     }
 
-    G_RevertUnconfirmedGameSettings();
 #if 0 // [JM] Disabled for Duke64 TC compat. Might break other things, but here's hoping it does not.
     packbuf[0] = PACKET_TYPE_EOL;
     packbuf[1] = ud.level_number;
     packbuf[2] = ud.from_bonus;
+    packbuf[3] = ud.secretlevel;
 
     int i;
     TRAVERSE_CONNECT(i)
     {
-        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 3);
+        if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)packbuf, 4);
         if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
 #endif

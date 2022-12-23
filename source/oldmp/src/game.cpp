@@ -8366,11 +8366,11 @@ static int G_EndOfLevel(void)
             }
             else
             {
-                ud.m_level_number = ud.level_number = 0;
-                ud.m_volume_number = ++ud.volume_number;
+                ud.level_number = 0;
+                ud.volume_number++;
 
                 if(ud.volume_number > g_numVolumes)
-                    ud.m_volume_number = ud.volume_number = 0;
+                    ud.volume_number = 0;
 
                 if (GTFLAGS(GAMETYPE_COOP) && !DMFLAGS_TEST(DMFLAG_KEEPITEMSACROSSEPISODES))
                     ud.last_level = -1; // Set last_level to -1 to force G_EnterLevel and its children to reset health and such.
@@ -8380,6 +8380,9 @@ static int G_EndOfLevel(void)
 
     ud.display_bonus_screen = 1;
     ready2send = 0;
+
+    // [JM] Forces menu versions of volume/level number to new values. Prevents desync if someone fucked with their settings.
+    G_RevertUnconfirmedGameSettings();
 
     Net_WaitForPlayers();
 
