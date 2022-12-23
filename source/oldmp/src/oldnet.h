@@ -177,6 +177,7 @@ static inline bool Net_InPredictableState(int32_t spriteNum = -1)
 }
 
 // [JM] Taken from this tutorial: https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#e19-use-a-final_action-object-to-express-cleanup-if-no-suitable-resource-handle-is-available
+//      Uses a struct's destructor as a clever way of performing an action when a function returns or the current scope is left.
 template<typename A>
 struct final_action {   // slightly simplified
     A act;
@@ -193,7 +194,7 @@ final_action<A> finally(A act)   // deduce action type
 // Put at the highest point of predictable code branches.
 #define SET_PREDICTION_CONTEXT(playerNum)   \
     oldnet_predictcontext = playerNum;      \
-    auto onexit = finally([&]{ oldnet_predictcontext = NOT_PREDICTABLE; } )
+    auto onexit = finally([&]{ oldnet_predictcontext = NOT_PREDICTABLE; })
 
 // Put at the start of functions that cannot be predicted.
 // Returns immediately if predicting. Automatically handles reverting to old context value on any return.
@@ -201,7 +202,7 @@ final_action<A> finally(A act)   // deduce action type
 #define UNPREDICTABLE_FUNCTION(retval)                                      \
     auto const pcontext_old = oldnet_predictcontext;                        \
     oldnet_predictcontext = NOT_PREDICTABLE;                                \
-    auto onexit = finally([&]{ oldnet_predictcontext = pcontext_old; } );   \
+    auto onexit = finally([&]{ oldnet_predictcontext = pcontext_old; });    \
     if(oldnet_predicting) return retval
 
 #endif
