@@ -216,7 +216,7 @@ void UpdateDiscord()
     }
     else
     {
-        memset(buffer[0], 0, sizeof(buffer[1]));
+        memset(buffer[0], 0, sizeof(buffer[0]));
         memset(buffer[1], 0, sizeof(buffer[1]));
     }
 
