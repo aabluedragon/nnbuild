@@ -2208,20 +2208,16 @@ static int X_DoExecute(void)
                 break;
             }
 
-            ud.m_volume_number = ud.volume_number = volnume;
-            ud.m_level_number = ud.level_number = levnume;
-
-// [JM] Disabled for Duke64 TC compatibility. Hopefully won't break too much shit. If it does, I'll need to modify the Duke64 TC and add some new events.
+            ud.m_volume_number = volnume;
+            ud.m_level_number = levnume;
+            ud.display_bonus_screen = 0;
 #if 0
-            if (numplayers > 1 && myconnectindex == connecthead)
-                Net_NewGame(volnume,levnume);
-            else
+            G_NewGame(NEWGAME_NORMAL); // [JM] Doing it this way is busted in the Duke64 TC for some dumb fucking reason.
+#else
+            ud.volume_number = ud.m_volume_number;
+            ud.level_number = ud.m_level_number;
+            ud.gm = MODE_EOL;
 #endif
-            {
-                ud.gm |= MODE_EOL;
-
-                ud.display_bonus_screen = 0;
-            } // MODE_RESTART;
 
             break;
         }
@@ -5537,8 +5533,7 @@ void G_RestoreMapState(mapstate_t *save)
         for (i = g_animateCount-1;i>=0;i--)
             G_SetInterpolation(G_GetAnimationPointer(i));
 
-        waitforeverybody();
-        mmulti_flushpackets();
+        Net_WaitForPlayers();
         clearfifo();
         G_ResetTimers();
     }

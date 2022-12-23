@@ -137,7 +137,7 @@ void Net_SendFragLimit(void);
 void Net_SendPlayerName(void);
 void Net_SendUserMapName(void);
 void Net_SendInitialSettings(void);
-void Net_NewGame(int volume, int level);
+void Net_SendNewGame(uint32_t flags);
 void Net_EndOfLevel(bool secret);
 void Net_EnterMessage(void);
 
@@ -155,7 +155,7 @@ void Net_CancelVote();
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
 void Net_Disconnect(bool showScores);
-void waitforeverybody();
+void Net_WaitForPlayers();
 
 // Returns true if we're in a valid predictable state and context for the local player.
 // Used to prevent sounds and display events from triggering outside of prediction if they are predictable.

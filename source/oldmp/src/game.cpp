@@ -6746,7 +6746,7 @@ FOUNDCHEAT:
                         ud.m_player_skill = ud.player_skill = cheatbuf[i] - '1';
                     }
                     if (numplayers > 1 && myconnectindex == connecthead)
-                        Net_NewGame(ud.m_volume_number,ud.m_level_number);
+                        G_NewGame(NEWGAME_RESETALL);
                     else ud.gm |= MODE_RESTART;
 
                     g_player[myconnectindex].ps->cheat_phase = 0;
@@ -6986,7 +6986,7 @@ static void G_HandleVoteKeys(void)
                     ud.m_coop               = vote.gametype;
                     ud.m_dmflags            = vote.dmflags;
 
-                    G_BeginNewGame();
+                    G_NewGame(NEWGAME_RESETALL);
 
                     if (vote.starter == myconnectindex || myconnectindex == connecthead)
                         G_AddUserQuote("VOTE SUCCEEDED");
@@ -7958,7 +7958,7 @@ static void G_DisplayLogo(void)
         MOUSE_ClearButton(M_LEFTBUTTON);
     }
 
-    waitforeverybody();
+    Net_WaitForPlayers();
 
     renderFlushPerms();
     videoClearViewableArea(0L);
@@ -8331,7 +8331,7 @@ static int G_EndOfLevel(void)
     if (ud.gm & MODE_EOL)
     {
         G_CloseDemoWrite();
-        waitforeverybody();
+        Net_WaitForPlayers();
 
         ready2send = 0;
 
@@ -8381,7 +8381,7 @@ static int G_EndOfLevel(void)
     ud.display_bonus_screen = 1;
     ready2send = 0;
 
-    waitforeverybody();
+    Net_WaitForPlayers();
 
     if (numplayers > 1)
         ud.gm = MODE_GAME;
@@ -8561,7 +8561,7 @@ bool G_InitMultiplayer()
         Net_SendWeaponChoice();
         Net_SendUserMapName();
 
-        waitforeverybody();
+        Net_WaitForPlayers();
     }
 
     // Fill in base stats for bots. To-do: Move some of this into the bot init code.
@@ -8932,25 +8932,15 @@ MAIN_LOOP_RESTART:
             ud.m_level_number = 7;
             ud.m_volume_number = 0;
 
-            waitforeverybody();
-
-            for (ALL_PLAYERS(i))
-            {
-                P_ResetWeapons(i);
-                P_ResetInventory(i);
-            }
-
-            G_MakeNewGamePreparations(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
-
-            if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
+            Net_WaitForPlayers();
+            
+            G_NewGame(NEWGAME_NOSEND | NEWGAME_RESETALL);
         }
         else G_DisplayLogo();
     }
     else if (ud.warp_on == 1)
     {
-        G_MakeNewGamePreparations(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
-
-        if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
+        G_NewGame(NEWGAME_NORMAL);
     }
     else G_UpdateScreenArea();
 

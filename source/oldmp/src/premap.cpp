@@ -1199,16 +1199,21 @@ static void prelevel(char g)
     }
 }
 
-// Resets the game completely, wiping player inventory.
-void G_BeginNewGame()
+// Use this when you want to start a new game, or new level.
+void G_NewGame(uint32_t flags)
 {
-    for (int32_t ALL_PLAYERS(i))
-    {
-        P_ResetWeapons(i);
-        P_ResetInventory(i);
-    }
+    if ((myconnectindex == connecthead) && !(flags & NEWGAME_NOSEND))
+        Net_SendNewGame(flags);
 
-    Net_NewGame(ud.m_volume_number, ud.m_level_number);
+    if ((myconnectindex != connecthead) && !(flags & (NEWGAME_FROMSERVER | NEWGAME_NOSEND)))
+        return;
+
+    if(flags & NEWGAME_RESETALL) // Clear all player inventory
+        for (int32_t ALL_PLAYERS(i))
+        {
+            P_ResetWeapons(i);
+            P_ResetInventory(i);
+        }
 
     G_MakeNewGamePreparations(ud.m_volume_number, ud.m_level_number, ud.m_player_skill);
     if (G_EnterLevel(MODE_GAME))
@@ -1242,7 +1247,7 @@ void G_MakeNewGamePreparations(int vn, int ln, int sk)
     S_Cleanup();
 
     ready2send = 0;
-    waitforeverybody();
+    Net_WaitForPlayers();
 
     if (ud.m_recstat != 2 && ud.last_level >= 0 && ud.multimode > 1 && (ud.coop&GAMETYPE_SCORESHEET))
         G_BonusScreen(1);
@@ -1657,9 +1662,6 @@ int G_EnterLevel(int g)
 {
     int i;
 
-//    mmulti_flushpackets();
-//    waitforeverybody();
-
     // G_ApplyMenuToGameFlags?
     // ---------------------------------
     vote = votedata_t();
@@ -1848,8 +1850,7 @@ int G_EnterLevel(int g)
     G_ClearGametypeStats();
     DukeBot_ResetAll();
 
-    waitforeverybody();
-    mmulti_flushpackets();
+    Net_WaitForPlayers();
 
     G_FadePalette(0,0,0,0);
     G_UpdateScreenArea();

@@ -2153,7 +2153,7 @@ cheat_for_port_credits:
                     videoNextPage();
                 }
 
-                G_BeginNewGame();
+                G_NewGame(NEWGAME_RESETALL);
             }
             else if (x == -1)
             {
@@ -5003,7 +5003,7 @@ VOLUME_ALL_40x:
                 // master does whatever it wants
                 if (myconnectindex == connecthead)
                 {
-                    G_BeginNewGame();
+                    G_NewGame(NEWGAME_RESETALL);
                     break;
                 }
                 else if (vote.starter == -1)

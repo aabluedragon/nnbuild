@@ -99,17 +99,17 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
         return OSDCMD_SHOWHELP;
     }
 
+    ud.m_volume_number = volume;
+    ud.m_level_number = level;
+
     if (numplayers > 1)
     {
         if (myconnectindex == connecthead)
         {
-            Net_NewGame(volume, level);
+            G_NewGame(NEWGAME_RESETALL);
         }
         else if (vote.starter == -1)
         {
-            ud.m_volume_number = volume;
-            ud.m_level_number = level;
-
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
                 M_DMFLAGS_SET(DMFLAG_NOEXITS, false);
 
@@ -133,17 +133,12 @@ static int osdcmd_changelevel(const osdfuncparm_t *parm)
         // out-of-game behave like a menu command
         osdcmd_cheatsinfo_stat.cheatnum = -1;
 
-        ud.m_volume_number = volume;
-        ud.m_level_number = level;
-
         M_DMFLAGS_SET(DMFLAG_NOMONSTERS | DMFLAG_RESPAWNINVENTORY | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNMONSTERS, false);
 
         ud.m_coop = 1;
-
         ud.multimode = 1;
 
-        G_MakeNewGamePreparations(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
-        if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
+        G_NewGame(NEWGAME_RESETALL);
     }
 
     return OSDCMD_OK;
@@ -230,21 +225,19 @@ static int osdcmd_map(const osdfuncparm_t *parm)
     boardfilename[1] = 0;
     strcat(boardfilename, filename);
 
+    ud.m_volume_number = 0;
+    ud.m_level_number = 7;
+
     if (numplayers > 1)
     {
         if (myconnectindex == connecthead)
         {
-            Net_SendUserMapName();
-            ud.m_volume_number = 0;
-            ud.m_level_number = 7;
-            Net_NewGame(ud.m_volume_number, ud.m_level_number);
+            Net_SendUserMapName();   
+            G_NewGame(NEWGAME_RESETALL);
         }
         else if (vote.starter == -1)
         {
             Net_SendUserMapName();
-
-            ud.m_volume_number = 0;
-            ud.m_level_number = 7;
 
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
                 M_DMFLAGS_SET(DMFLAG_NOEXITS, false);
@@ -259,17 +252,12 @@ static int osdcmd_map(const osdfuncparm_t *parm)
     }
 
     osdcmd_cheatsinfo_stat.cheatnum = -1;
-    ud.m_volume_number = 0;
-    ud.m_level_number = 7;
-
-    M_DMFLAGS_SET(DMFLAG_NOMONSTERS | DMFLAG_RESPAWNINVENTORY | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNMONSTERS, false);
-
     ud.m_coop = 1;
-
     ud.multimode = 1;
 
-    G_MakeNewGamePreparations(ud.m_volume_number,ud.m_level_number,ud.m_player_skill);
-    if (G_EnterLevel(MODE_GAME)) G_BackToMenu();
+    M_DMFLAGS_SET(DMFLAG_NOMONSTERS | DMFLAG_RESPAWNINVENTORY | DMFLAG_RESPAWNITEMS | DMFLAG_RESPAWNMONSTERS, false);  
+
+    G_NewGame(NEWGAME_RESETALL);
 
     return OSDCMD_OK;
 }

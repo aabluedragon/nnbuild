@@ -468,16 +468,14 @@ void Net_ParsePackets(void)
                     G_AddUserQuote("VOTE SUCCEEDED");
 
                 j = 1;
-                ud.m_level_number = ud.level_number     = packbuf[j++];
-                ud.m_volume_number = ud.volume_number   = packbuf[j++];
-                ud.m_player_skill = ud.player_skill     = packbuf[j++];
-
-                // Non-menu variables handled by G_EnterLevel
-                ud.m_coop = packbuf[j++];
-                ud.m_dmflags = (int32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
-
-                G_BeginNewGame();
-
+                // Non-menu versions of these variables are handled by G_EnterLevel
+                ud.m_level_number   = packbuf[j++];
+                ud.m_volume_number  = packbuf[j++];
+                ud.m_player_skill   = packbuf[j++];
+                ud.m_coop           = packbuf[j++];
+                ud.m_dmflags        = (int32_t)B_UNBUF32(&packbuf[j]);  j += sizeof(int32_t);
+                uint32_t flags      = (uint32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
+                G_NewGame(flags | NEWGAME_FROMSERVER);
                 break;
             }
             case PACKET_TYPE_NULL_PACKET:
@@ -861,7 +859,7 @@ void Net_SendVersion(void)
         if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
 
-    waitforeverybody();
+    Net_WaitForPlayers();
 }
 
 void Net_SendPlayerOptions(void)
@@ -982,7 +980,7 @@ void Net_SendInitialSettings(void)
     }
 }
 
-void Net_NewGame(int volume, int level)
+void Net_SendNewGame(uint32_t flags)
 {
     if (numplayers < 2 || myconnectindex != connecthead) // Only hosts should be allowed to do this.
         return;
@@ -990,11 +988,12 @@ void Net_NewGame(int volume, int level)
     packbuf[0] = PACKET_TYPE_NEW_GAME;
     
     int32_t j = 1;
-    packbuf[j++] = ud.m_level_number = level;
-    packbuf[j++] = ud.m_volume_number = volume;
+    packbuf[j++] = ud.m_level_number;
+    packbuf[j++] = ud.m_volume_number;
     packbuf[j++] = ud.m_player_skill;
     packbuf[j++] = ud.m_coop;
     B_BUF32(&packbuf[j], ud.m_dmflags); j += sizeof(int32_t);
+    B_BUF32(&packbuf[j], flags);        j += sizeof(int32_t);
 
     int i;
     TRAVERSE_CONNECT(i)
@@ -1575,7 +1574,7 @@ void Net_CheckPlayerQuit(int i)
     g_player[myconnectindex].ps->ftq = QUOTE_RESERVED2, g_player[myconnectindex].ps->fta = 180;
 }
 
-void waitforeverybody()
+void Net_WaitForPlayers()
 {
     int i;
 
