@@ -8331,9 +8331,6 @@ static int G_EndOfLevel(void)
     if (ud.gm & MODE_EOL)
     {
         G_CloseDemoWrite();
-        Net_WaitForPlayers();
-
-        ready2send = 0;
 
         if (p.player_par > 0 && (p.player_par < ud.playerbest || ud.playerbest < 0) && ud.display_bonus_screen == 1)
             CONFIG_SetMapBestTime(g_loadedMapHack.md4, p.player_par);
@@ -8381,10 +8378,10 @@ static int G_EndOfLevel(void)
     ud.display_bonus_screen = 1;
     ready2send = 0;
 
+    Net_WaitForPlayers();
+
     // [JM] Forces menu versions of volume/level number to new values. Prevents desync if someone fucked with their settings.
     G_RevertUnconfirmedGameSettings();
-
-    Net_WaitForPlayers();
 
     if (numplayers > 1)
         ud.gm = MODE_GAME;
@@ -8959,7 +8956,7 @@ MAIN_LOOP_RESTART:
     myplayer.weaponswitch = ud.weaponswitch;
     g_player[myconnectindex].pteam = ud.team;
 
-#if 0 // This should probably be removed now. Causes problems with player color.
+#if 0 // This should probably be removed now. Causes problems with player color, and is handled elsewhere anyway.
     if (Gametypes[ud.coop].flags & GAMETYPE_TDM)
         myplayer.palookup = g_player[myconnectindex].pcolor = teams[g_player[myconnectindex].pteam].palnum;
     else
