@@ -236,6 +236,7 @@ void CONFIG_SetDefaults(void)
     ud.detail = 1;
     ud.drawweapon = 1;
     ud.fov = 90;
+    ud.fta_on = 1;
     ud.idplayers = 1;
     ud.levelstats = 0;
     ud.lockout = 0;
@@ -887,7 +888,7 @@ void CONFIG_WriteSetup(uint32_t flags)
         SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "WindowPosY", g_windowPos.y, FALSE, FALSE);
     }
 
-    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "Messages",ud.fta_on,false,false);
+    SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "Messages",ud.fta_on,false,true);
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "OSDHightile",osdhightile,false,false);
 

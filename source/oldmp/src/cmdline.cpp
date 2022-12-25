@@ -135,7 +135,6 @@ void G_CheckCommandLine(int argc, char const* const* argv)
 
     i = 1;
 
-    ud.fta_on = 1;
     ud.god = 0;
     ud.warp_on = 0;
     ud.cashman = 0;
