@@ -56,8 +56,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <shellapi.h>
 #define UPDATEINTERVAL 604800 // 1w
 #include "winbits.h"
-#else
-static int usecwd = 0;
 #endif /* _WIN32 */
 int g_scriptSanityChecks = 1;
 

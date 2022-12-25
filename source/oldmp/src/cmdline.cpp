@@ -371,7 +371,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
 #if !defined(_WIN32)
                 if (!Bstrcasecmp(c + 1, "usecwd"))
                 {
-                    usecwd = 1;
+                    g_useCwd = 1;
                     i++;
                     continue;
                 }
