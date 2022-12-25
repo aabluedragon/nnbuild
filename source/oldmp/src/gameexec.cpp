@@ -3318,6 +3318,12 @@ static int X_DoExecute(void)
             p->reloading = 0;
             p->movement_lock = 0;
 
+            if (GTFLAGS(GAMETYPE_LIMITEDLIVES))
+            {
+                Bsprintf(apStrings[QUOTE_RESERVED4], "You have %d %s left!", p->lives, (p->lives == 1) ? "life" : "lives");
+                P_DoQuote(QUOTE_RESERVED4, p);
+            }
+
             X_OnEvent(EVENT_RESETPLAYER, p->i, vm.playerNum, -1);
             g_cameraDistance = 0;
             g_cameraClock = (int32_t)totalclock;

@@ -54,6 +54,7 @@ const char* credits = {
     "- LittleTijn\r\n"
     "- aaBlueDragon\r\n"
     "- Yasha\r\n"
+    "- TheXna\r\n"
     "\r\n"
     "(If I've missed you on this list, please DM me on Ko-Fi with your preferred name and proof of donation!)\r\n"
 };
