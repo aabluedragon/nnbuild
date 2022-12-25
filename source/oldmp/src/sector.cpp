@@ -59,24 +59,27 @@ int A_CallSound(int sectNum, int spriteNum)
     int soundNum;
     int const SFXsprite = S_FindMusicSFX(sectNum, &soundNum);
 
-    if (SFXsprite >= 0)
+    if (SFXsprite >= 0 && soundNum)
     {
+        auto const snd = g_sounds[soundNum];
+        int32_t const oldFlags = snd->flags;
         if (spriteNum == -1)
             spriteNum = SFXsprite;
 
         if (T1(SFXsprite) == 0)
         {
-            if ((g_sounds[soundNum]->flags & (SF_GLOBAL | SF_DTAG)) != SF_GLOBAL)
+            if ((snd->flags & (SF_GLOBAL | SF_DTAG)) != SF_GLOBAL)
             {
-                if (soundNum)
-                {
-                    A_PlaySound(soundNum, spriteNum);
+                if (snd->flags & SF_LOOP)
+                    snd->flags |= SF_ONEINST_INTERNAL;
 
-                    if (SHT(SFXsprite) && soundNum != SHT(SFXsprite) && SHT(SFXsprite) <= g_highestSoundIdx)
-                        S_StopEnvSound(SHT(SFXsprite), T6(SFXsprite));
+                A_PlaySound(soundNum, spriteNum);
+                snd->flags = oldFlags;
 
-                    T6(SFXsprite) = spriteNum;
-                }
+                if (SHT(SFXsprite) && soundNum != SHT(SFXsprite) && SHT(SFXsprite) <= g_highestSoundIdx)
+                    S_StopEnvSound(SHT(SFXsprite), T6(SFXsprite));
+
+                T6(SFXsprite) = spriteNum;
 
                 if ((sector[SECT(SFXsprite)].lotag & 0xff) != ST_22_SPLITTING_DOOR)
                     T1(SFXsprite) = 1;
@@ -85,9 +88,15 @@ int A_CallSound(int sectNum, int spriteNum)
         else if (SHT(SFXsprite) <= g_highestSoundIdx)
         {
             if (SHT(SFXsprite))
-                A_PlaySound(SHT(SFXsprite), spriteNum);
+            {
+                if (snd->flags & SF_LOOP)
+                    snd->flags |= SF_ONEINST_INTERNAL;
 
-            if ((g_sounds[soundNum]->flags & SF_LOOP) || (SHT(SFXsprite) && SHT(SFXsprite) != soundNum))
+                A_PlaySound(SHT(SFXsprite), spriteNum);
+                snd->flags = oldFlags;
+            }
+
+            if ((snd->flags & SF_LOOP) || (SHT(SFXsprite) && SHT(SFXsprite) != soundNum))
                 S_StopEnvSound(soundNum, T6(SFXsprite));
 
             T6(SFXsprite) = spriteNum;

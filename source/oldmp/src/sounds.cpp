@@ -608,8 +608,10 @@ int32_t S_DefineSound(int sndidx, const char* name, int minpitch, int maxpitch, 
     snd->volume = volume * fix16_one;
     snd->voices = &nullvoice;
 
+#if 0 // [JM] Now only used in A_CallSound.
     if (snd->flags & SF_LOOP)
         snd->flags |= SF_ONEINST_INTERNAL;
+#endif
 
     return 0;
 }
