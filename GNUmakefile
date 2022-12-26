@@ -675,35 +675,35 @@ endif
 
 #### NetDuke32
 
-oldmp := oldmp
+netduke32 := netduke32
 
-oldmp_game_ldflags :=
+netduke32_game_ldflags :=
 
-oldmp_game_stripflags :=
+netduke32_game_stripflags :=
 
-oldmp_root := $(source)/$(oldmp)
-oldmp_src := $(oldmp_root)/src
-oldmp_rsrc := $(oldmp_root)/rsrc
-oldmp_obj := $(obj)/$(oldmp)
+netduke32_root := $(source)/$(netduke32)
+netduke32_src := $(netduke32_root)/src
+netduke32_rsrc := $(netduke32_root)/rsrc
+netduke32_obj := $(obj)/$(netduke32)
 
-oldmp_cflags := -I$(oldmp_src) 
+netduke32_cflags := -I$(netduke32_src) 
 
-oldmp_game_deps := audiolib mact
+netduke32_game_deps := audiolib mact
 
 ifeq ($(USE_DISCORDRPC), 1)
-    oldmp_game_deps += discordrpc
-    oldmp_cflags += -DDISCORD_RPC
+    netduke32_game_deps += discordrpc
+    netduke32_cflags += -DDISCORD_RPC
 endif
 
-oldmp_game := netduke32
+netduke32_game := netduke32
 
 ifneq (,$(APPBASENAME))
-    oldmp_game := $(APPBASENAME)
+    netduke32_game := $(APPBASENAME)
 endif
 
-oldmp_game_proper := NetDuke32
+netduke32_game_proper := NetDuke32
 
-oldmp_game_objs := \
+netduke32_game_objs := \
     actors.cpp \
     anim.cpp \
     cmdline.cpp \
@@ -736,26 +736,26 @@ oldmp_game_objs := \
     sync.cpp \
     utils.cpp \
 
-oldmp_game_rsrc_objs :=
-oldmp_game_gen_objs :=
+netduke32_game_rsrc_objs :=
+netduke32_game_gen_objs :=
 
-oldmp_game_miscdeps :=
-oldmp_game_orderonlydeps :=
+netduke32_game_miscdeps :=
+netduke32_game_orderonlydeps :=
 
 ifeq ($(PLATFORM),WINDOWS)
-    oldmp_game_objs += winbits.cpp
-    oldmp_game_rsrc_objs += gameres.rc
+    netduke32_game_objs += winbits.cpp
+    netduke32_game_rsrc_objs += gameres.rc
     ifeq ($(STARTUP_WINDOW),1)
-        oldmp_game_objs += startwin.game.cpp
+        netduke32_game_objs += startwin.game.cpp
     endif
 endif
 
 ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
-    oldmp_game_objs += startgtk.game.cpp
-    oldmp_game_gen_objs += game_banner.c
+    netduke32_game_objs += startgtk.game.cpp
+    netduke32_game_gen_objs += game_banner.c
 endif
 ifeq ($(RENDERTYPE),SDL)
-    oldmp_game_rsrc_objs += game_icon.c
+    netduke32_game_rsrc_objs += game_icon.c
 endif
 
 #### Includes
@@ -785,7 +785,7 @@ games := \
     duke3d \
     kenbuild \
     sw \
-    oldmp \
+    netduke32 \
 
 libraries := \
     audiolib \
@@ -811,7 +811,7 @@ roles := \
     game \
 
 # If blank string, substring not found.
-ifeq (,$(findstring oldmp,$(MAKECMDGOALS)))
+ifeq (,$(findstring netduke32,$(MAKECMDGOALS)))
     roles += editor
 endif
 
@@ -1008,7 +1008,7 @@ cleantools:
 	-$(call RM,$(addsuffix $(EXESUFFIX),$($(subst clean,,$@)_targets)))
 	-$(call RMDIR,$($(subst clean,,$@)_obj))
 
-clean: cleanduke3d cleansw cleanoldmp cleantools
+clean: cleanduke3d cleansw cleannetduke32 cleantools
 	-$(call RMDIR,$(obj))
 	-$(call RM,$(ebacktrace_dll))
 	-$(call RM,$(voidwrap_lib))

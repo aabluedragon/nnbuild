@@ -12,136 +12,136 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\source\oldmp\src\_functio.h">
+    <ClInclude Include="..\..\source\netduke32\src\_functio.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\_midi.h">
+    <ClInclude Include="..\..\source\netduke32\src\_midi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\_rts.h">
+    <ClInclude Include="..\..\source\netduke32\src\_rts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\config.h">
+    <ClInclude Include="..\..\source\netduke32\src\config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\discord.h">
+    <ClInclude Include="..\..\source\netduke32\src\discord.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\duke3d.h">
+    <ClInclude Include="..\..\source\netduke32\src\duke3d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\funct.h">
+    <ClInclude Include="..\..\source\netduke32\src\funct.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\function.h">
+    <ClInclude Include="..\..\source\netduke32\src\function.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\gamedef.h">
+    <ClInclude Include="..\..\source\netduke32\src\gamedef.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\gamedefs.h">
+    <ClInclude Include="..\..\source\netduke32\src\gamedefs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\grpscan.h">
+    <ClInclude Include="..\..\source\netduke32\src\grpscan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\keys.h">
+    <ClInclude Include="..\..\source\netduke32\src\keys.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\macros.h">
+    <ClInclude Include="..\..\source\netduke32\src\macros.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\mapster32.h">
+    <ClInclude Include="..\..\source\netduke32\src\mapster32.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\mdump.h">
+    <ClInclude Include="..\..\source\netduke32\src\mdump.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\names.h">
+    <ClInclude Include="..\..\source\netduke32\src\names.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\oldnet.h">
+    <ClInclude Include="..\..\source\netduke32\src\oldnet.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\osdcmds.h">
+    <ClInclude Include="..\..\source\netduke32\src\osdcmds.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\osdfuncs.h">
+    <ClInclude Include="..\..\source\netduke32\src\osdfuncs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\rts.h">
+    <ClInclude Include="..\..\source\netduke32\src\rts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\soundefs.h">
+    <ClInclude Include="..\..\source\netduke32\src\soundefs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\sounds.h">
+    <ClInclude Include="..\..\source\netduke32\src\sounds.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\standard.h">
+    <ClInclude Include="..\..\source\netduke32\src\standard.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\startwin.game.h">
+    <ClInclude Include="..\..\source\netduke32\src\startwin.game.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\sync.h">
+    <ClInclude Include="..\..\source\netduke32\src\sync.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\screens.h">
+    <ClInclude Include="..\..\source\netduke32\src\screens.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\global.h">
+    <ClInclude Include="..\..\source\netduke32\src\global.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\actors.h">
+    <ClInclude Include="..\..\source\netduke32\src\actors.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\common_game.h">
+    <ClInclude Include="..\..\source\netduke32\src\common_game.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\game.h">
+    <ClInclude Include="..\..\source\netduke32\src\game.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\quotes.h">
+    <ClInclude Include="..\..\source\netduke32\src\quotes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\premap.h">
+    <ClInclude Include="..\..\source\netduke32\src\premap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\player.h">
+    <ClInclude Include="..\..\source\netduke32\src\player.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\inv.h">
+    <ClInclude Include="..\..\source\netduke32\src\inv.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\hud.h">
+    <ClInclude Include="..\..\source\netduke32\src\hud.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\sector.h">
+    <ClInclude Include="..\..\source\netduke32\src\sector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\gametypes.h">
+    <ClInclude Include="..\..\source\netduke32\src\gametypes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\dukebot.h">
+    <ClInclude Include="..\..\source\netduke32\src\dukebot.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\gameexec.h">
+    <ClInclude Include="..\..\source\netduke32\src\gameexec.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\projectiles.h">
+    <ClInclude Include="..\..\source\netduke32\src\projectiles.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\gamevars.h">
+    <ClInclude Include="..\..\source\netduke32\src\gamevars.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\gamestructures.h">
+    <ClInclude Include="..\..\source\netduke32\src\gamestructures.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\cmdline.h">
+    <ClInclude Include="..\..\source\netduke32\src\cmdline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\oldmp\src\dnames.h">
+    <ClInclude Include="..\..\source\netduke32\src\dnames.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -149,111 +149,111 @@
     <ClCompile Include="..\..\source\duke3d\rsrc\eduke32_icon.c">
       <Filter>Resource Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\actors.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\actors.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\anim.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\anim.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\config.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\config.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\discord.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\discord.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\game.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\game.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\gamedef.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\gamedef.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\gameexec.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\gameexec.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\gamestructures.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\gamestructures.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\gamevars.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\gamevars.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\global.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\global.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\grpscan.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\grpscan.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\mdump.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\mdump.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\menus.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\menus.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\oldnet.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\oldnet.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\osdcmds.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\osdcmds.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\osdfuncs.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\osdfuncs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\player.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\player.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\premap.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\premap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\rts.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\rts.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\savegame.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\savegame.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\sector.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\sector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\sounds.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\sounds.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\startgtk.game.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\startgtk.game.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\startwin.game.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\startwin.game.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\sync.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\sync.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\winbits.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\winbits.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\screens.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\screens.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\common.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\common.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\hud.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\hud.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\gametypes.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\gametypes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\dukebot.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\dukebot.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\projectiles.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\projectiles.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\cmdline.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\cmdline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\oldmp\src\dnames.cpp">
+    <ClCompile Include="..\..\source\netduke32\src\dnames.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="..\..\source\oldmp\rsrc\gameres.rc">
+    <ResourceCompile Include="..\..\source\netduke32\rsrc\gameres.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
