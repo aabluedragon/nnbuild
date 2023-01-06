@@ -159,6 +159,7 @@ void Net_WaitForPlayers();
 
 // Returns true if we're in a valid predictable state and context for the local player.
 // Used to prevent sounds and display events from triggering outside of prediction if they are predictable.
+// Also prevents double-playing of one-shot events like light flashes and sound playback.
 static inline bool Net_InPredictableState(int32_t spriteNum = -1)
 {
     if (numplayers > 1)

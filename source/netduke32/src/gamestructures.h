@@ -531,6 +531,7 @@ enum ProjectileLabel_t
     PROJ_BOUNCES,
     PROJ_BSOUND,
     PROJ_RANGE, // 28
+    PROJ_FLASH_COLOR,
     PROJ_END
 };
 

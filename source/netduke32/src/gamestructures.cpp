@@ -370,6 +370,7 @@ const memberlabel_t ProjectileLabels[] =
     { "bounces",    PROJ_BOUNCES,       0, 0, -1 },
     { "bsound",     PROJ_BSOUND,        0, 0, -1 },
     { "range",      PROJ_RANGE,         0, 0, -1 },
+    { "flashcolor", PROJ_FLASH_COLOR,   0, 0, -1 },
     { "",           -1,                 0, 0, -1 } // END OF LIST
 };
 
@@ -1851,6 +1852,7 @@ int32_t __fastcall VM_GetProjectile(int const tileNum, int32_t labelNum)
         case PROJ_BOUNCES:      return proj.bounces;
         case PROJ_BSOUND:       return proj.bsound;
         case PROJ_RANGE:        return proj.range;
+        case PROJ_FLASH_COLOR:  return proj.flashcolor;
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
@@ -1896,6 +1898,7 @@ void __fastcall VM_SetProjectile(int const tileNum, int const labelNum, int32_t 
         case PROJ_BOUNCES:      proj.bounces    = newValue; return;
         case PROJ_BSOUND:       proj.bsound     = newValue; return;
         case PROJ_RANGE:        proj.range      = newValue; return;
+        case PROJ_FLASH_COLOR:  proj.flashcolor = newValue; return;
         default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }
