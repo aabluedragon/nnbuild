@@ -815,8 +815,8 @@ static int A_ShootCustom(int const spriteNum, int const projecTile, int shootAng
     int const           playerNum = (pSprite->picnum == APLAYER) ? pSprite->yvel : -1;
     auto const pPlayer = playerNum >= 0 ? g_player[playerNum].ps : NULL;
 
-#if 0 //POLYMER
-    if (videoGetRenderMode() == REND_POLYMER && pProj->flashcolor)
+#if POLYMER
+    if (videoGetRenderMode() == REND_POLYMER && pProj->flashcolor && (playerNum == -1 || (playerNum > -1 && Net_InPredictableState())))
     {
         vec3_t const offset = { -((sintable[(pSprite->ang + 512) & 2047]) >> 7), -((sintable[(pSprite->ang) & 2047]) >> 7), PHEIGHT };
         G_AddGameLight(spriteNum, pSprite->sectnum, offset, 8192, 0, 100, pProj->flashcolor, PR_LIGHT_PRIO_MAX_GAME);
