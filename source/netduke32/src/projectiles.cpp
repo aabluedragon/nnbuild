@@ -35,66 +35,66 @@ void C_InitProjectiles(void)
     }
 }
 
-void C_AllocProjectile(int32_t j)
+void C_AllocProjectile(int32_t tileNum)
 {
-    g_tile[j].proj = (projectile_t*)Xrealloc(g_tile[j].proj, 2 * sizeof(projectile_t));
-    g_tile[j].defproj = g_tile[j].proj + 1;
+    g_tile[tileNum].proj = (projectile_t*)Xrealloc(g_tile[tileNum].proj, 2 * sizeof(projectile_t));
+    g_tile[tileNum].defproj = g_tile[tileNum].proj + 1;
 }
 
-void C_FreeProjectile(int32_t j)
+void C_FreeProjectile(int32_t tileNum)
 {
-    DO_FREE_AND_NULL(g_tile[j].proj);
-    g_tile[j].defproj = NULL;
+    DO_FREE_AND_NULL(g_tile[tileNum].proj);
+    g_tile[tileNum].defproj = NULL;
 }
 
-void C_DefineProjectile(int32_t j, int32_t what, int32_t val)
+void C_DefineProjectile(int32_t tileNum, int32_t labelNum, int32_t val)
 {
-    if (g_tile[j].proj == NULL)
+    if (g_tile[tileNum].proj == NULL)
     {
-        C_AllocProjectile(j);
-        *g_tile[j].proj = DefaultProjectile;
+        C_AllocProjectile(tileNum);
+        *g_tile[tileNum].proj = DefaultProjectile;
     }
 
-    projectile_t* const proj = g_tile[j].proj;
+    projectile_t* const proj = g_tile[tileNum].proj;
 
-    switch (what)
+    switch (labelNum)
     {
-        case PROJ_WORKSLIKE:   proj->workslike = val; break;
-        case PROJ_SPAWNS:      proj->spawns = val; break;
-        case PROJ_SXREPEAT:    proj->sxrepeat = val; break;
-        case PROJ_SYREPEAT:    proj->syrepeat = val; break;
-        case PROJ_SOUND:       proj->sound = val; break;
-        case PROJ_ISOUND:      proj->isound = val; break;
-        case PROJ_VEL:         proj->vel = val; break;
-        case PROJ_EXTRA:       proj->extra = val; break;
-        case PROJ_DECAL:       proj->decal = val; break;
-        case PROJ_TRAIL:       proj->trail = val; break;
-        case PROJ_TXREPEAT:    proj->txrepeat = val; break;
-        case PROJ_TYREPEAT:    proj->tyrepeat = val; break;
-        case PROJ_TOFFSET:     proj->toffset = val; break;
-        case PROJ_TNUM:        proj->tnum = val; break;
-        case PROJ_DROP:        proj->drop = val; break;
-        case PROJ_CSTAT:       proj->cstat = val; break;
-        case PROJ_CLIPDIST:    proj->clipdist = val; break;
-        case PROJ_SHADE:       proj->shade = val; break;
-        case PROJ_XREPEAT:     proj->xrepeat = val; break;
-        case PROJ_YREPEAT:     proj->yrepeat = val; break;
-        case PROJ_PAL:         proj->pal = val; break;
+        case PROJ_WORKSLIKE:   proj->workslike  = val; break;
+        case PROJ_SPAWNS:      proj->spawns     = val; break;
+        case PROJ_SXREPEAT:    proj->sxrepeat   = val; break;
+        case PROJ_SYREPEAT:    proj->syrepeat   = val; break;
+        case PROJ_SOUND:       proj->sound      = val; break;
+        case PROJ_ISOUND:      proj->isound     = val; break;
+        case PROJ_VEL:         proj->vel        = val; break;
+        case PROJ_EXTRA:       proj->extra      = val; break;
+        case PROJ_DECAL:       proj->decal      = val; break;
+        case PROJ_TRAIL:       proj->trail      = val; break;
+        case PROJ_TXREPEAT:    proj->txrepeat   = val; break;
+        case PROJ_TYREPEAT:    proj->tyrepeat   = val; break;
+        case PROJ_TOFFSET:     proj->toffset    = val; break;
+        case PROJ_TNUM:        proj->tnum       = val; break;
+        case PROJ_DROP:        proj->drop       = val; break;
+        case PROJ_CSTAT:       proj->cstat      = val; break;
+        case PROJ_CLIPDIST:    proj->clipdist   = val; break;
+        case PROJ_SHADE:       proj->shade      = val; break;
+        case PROJ_XREPEAT:     proj->xrepeat    = val; break;
+        case PROJ_YREPEAT:     proj->yrepeat    = val; break;
+        case PROJ_PAL:         proj->pal        = val; break;
         case PROJ_EXTRA_RAND:  proj->extra_rand = val; break;
-        case PROJ_HITRADIUS:   proj->hitradius = val; break;
-        case PROJ_MOVECNT:     proj->movecnt = val; break;
-        case PROJ_OFFSET:      proj->offset = val; break;
-        case PROJ_BOUNCES:     proj->bounces = val; break;
-        case PROJ_BSOUND:      proj->bsound = val; break;
-        case PROJ_RANGE:       proj->range = val; break;
-            //case PROJ_FLASH_COLOR: proj->flashcolor = val; break;
-            //case PROJ_USERDATA:    proj->userdata = val; break;
+        case PROJ_HITRADIUS:   proj->hitradius  = val; break;
+        case PROJ_MOVECNT:     proj->movecnt    = val; break;
+        case PROJ_OFFSET:      proj->offset     = val; break;
+        case PROJ_BOUNCES:     proj->bounces    = val; break;
+        case PROJ_BSOUND:      proj->bsound     = val; break;
+        case PROJ_RANGE:       proj->range      = val; break;
+        case PROJ_FLASH_COLOR: proj->flashcolor = val; break;
+        //case PROJ_USERDATA:    proj->userdata   = val; break;
         default: break;
     }
 
-    *g_tile[j].defproj = *proj;
+    *g_tile[tileNum].defproj = *proj;
 
-    g_tile[j].flags |= SFLAG_PROJECTILE;
+    g_tile[tileNum].flags |= SFLAG_PROJECTILE;
 }
 
 projectile_t* Proj_GetProjectile(int tile)
@@ -815,15 +815,6 @@ static int A_ShootCustom(int const spriteNum, int const projecTile, int shootAng
     int const           playerNum = (pSprite->picnum == APLAYER) ? pSprite->yvel : -1;
     auto const pPlayer = playerNum >= 0 ? g_player[playerNum].ps : NULL;
 
-#if POLYMER
-    if (videoGetRenderMode() == REND_POLYMER && pProj->flashcolor && (playerNum == -1 || (playerNum > -1 && Net_InPredictableState())))
-    {
-        vec3_t const offset = { -((sintable[(pSprite->ang + 512) & 2047]) >> 7), -((sintable[(pSprite->ang) & 2047]) >> 7), PHEIGHT };
-        G_AddGameLight(spriteNum, pSprite->sectnum, offset, 8192, 0, 100, pProj->flashcolor, PR_LIGHT_PRIO_MAX_GAME);
-        practor[spriteNum].lightcount = 2;
-    }
-#endif // POLYMER
-
     // Do flashes & firing audio first, in case we need to block the rest for prediction.
     if (pProj->workslike & (PROJECTILE_HITSCAN | PROJECTILE_RPG))
     {
@@ -837,6 +828,16 @@ static int A_ShootCustom(int const spriteNum, int const projecTile, int shootAng
     // Stop here if we're predicting
     if (oldnet_predicting)
         return -1;
+
+#ifdef POLYMER
+    // Flashes for non-players.
+    if (videoGetRenderMode() == REND_POLYMER && pProj->flashcolor && playerNum == -1)
+    {
+        vec3_t const offset = { -((sintable[(pSprite->ang + 512) & 2047]) >> 7), -((sintable[(pSprite->ang) & 2047]) >> 7), PHEIGHT };
+        G_AddGameLight(spriteNum, pSprite->sectnum, offset, 8192, 0, 100, pProj->flashcolor, PR_LIGHT_PRIO_MAX_GAME);
+        practor[spriteNum].lightcount = 2;
+    }
+#endif // POLYMER
 
     if (pProj->offset == 0)
         pProj->offset = 1;
@@ -1141,6 +1142,29 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
     if (oldnet_predicting)
         return -1;
 
+#ifdef POLYMER
+    // Flashes for non-players.
+    if (videoGetRenderMode() == REND_POLYMER && (playerNum == -1))
+    {
+        switch (tileGetMapping(projecTile))
+        {
+            case FIRELASER__:
+            case SHOTGUN__:
+            case SHOTSPARK1__:
+            case CHAINGUN__:
+            case RPG__:
+            case MORTER__:
+            {
+                vec3_t const offset = { -((sintable[(pSprite->ang + 512) & 2047]) >> 7), -((sintable[(pSprite->ang) & 2047]) >> 7), PHEIGHT };
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, 8192, 0, 100, 255 + (95 << 8), PR_LIGHT_PRIO_MAX_GAME);
+                practor[spriteNum].lightcount = 2;
+            }
+
+            break;
+        }
+    }
+#endif // POLYMER
+
     switch (tileGetMapping(projecTile))
     {
         case BLOODSPLAT1__:
@@ -1397,7 +1421,7 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
             }
             else
             {
-                // NOTE: j is a player index
+                // NOTE: tileNum is a player index
                 j = A_FindPlayer(pSprite, NULL);
                 shootAng = getangle(g_player[j].ps->opos.x - startPos.x, g_player[j].ps->opos.y - startPos.y);
                 if (PN(spriteNum) == BOSS3)
@@ -1707,14 +1731,12 @@ int A_Shoot(int spriteNum, int projecTile, int const forceZvel)
     int    shootAng;
     vec3_t startPos;
 
-    if (pSprite->picnum == APLAYER)
+    if (playerNum != -1)
     {
         startPos = pPlayer->pos;
         startPos.z += pPlayer->pyoff + ZOFFSET6;
         shootAng = fix16_to_int(pPlayer->q16ang);
-
-        if(!oldnet_predicting)
-            pPlayer->crack_time = 777;
+        pPlayer->crack_time = 777;
     }
     else
     {
@@ -1732,27 +1754,6 @@ int A_Shoot(int spriteNum, int projecTile, int const forceZvel)
                 startPos.y += (sintable[(shootAng + 512 + 96) & 2047] >> 7);
             }
         }
-
-#ifndef EDUKE32_STANDALONE
-#if 0 // POLYMER
-        switch (DynamicTileMap[projecTile])
-        {
-            case FIRELASER__:
-            case SHOTGUN__:
-            case SHOTSPARK1__:
-            case CHAINGUN__:
-            case RPG__:
-            case MORTER__:
-            {
-                vec3_t const offset = { -((sintable[(pSprite->ang + 512) & 2047]) >> 7), -((sintable[(pSprite->ang) & 2047]) >> 7), PHEIGHT };
-                G_AddGameLight(spriteNum, pSprite->sectnum, offset, 8192, 0, 100, 255 + (95 << 8), PR_LIGHT_PRIO_MAX_GAME);
-                practor[spriteNum].lightcount = 2;
-            }
-
-            break;
-        }
-#endif // POLYMER
-#endif // !EDUKE32_STANDALONE
     }
 
 #ifdef EDUKE32_STANDALONE

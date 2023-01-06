@@ -52,10 +52,10 @@ enum ProjectileFlags_t {
 };
 
 // Function Declarations
-void C_AllocProjectile(int32_t j);
-void C_FreeProjectile(int32_t j);
+void C_AllocProjectile(int32_t tileNum);
+void C_FreeProjectile(int32_t tileNum);
 void C_InitProjectiles(void);
-void C_DefineProjectile(int32_t j, int32_t what, int32_t val);
+void C_DefineProjectile(int32_t tileNum, int32_t labelNum, int32_t val);
 
 int Proj_GetDamage(projectile_t* pProj);
 projectile_t* Proj_GetProjectile(int tile);
