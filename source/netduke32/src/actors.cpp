@@ -852,7 +852,7 @@ static void A_DoLight(int spriteNum)
         {
             case ATOMICHEALTH__:
             case FREEZEAMMO__:
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD2(spriteNum), 0, 100, 128 + (128 << 8) + (255 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD2(spriteNum), 0, 100, RGB_TO_INT(128, 128, 255), PR_LIGHT_PRIO_HIGH_GAME);
                 break;
 
             case FIRE__:
