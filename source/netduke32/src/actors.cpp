@@ -479,10 +479,16 @@ void G_AddGameLight(int spriteNum, int sectNum, vec3_t const& offset, int lightR
     uspriteptr_t s = (uspriteptr_t)&sprite[spriteNum];
     auto pr_actor = &practor[spriteNum];
 
-    Bassert(sectNum != -1);
-
     if (videoGetRenderMode() != REND_POLYMER || pr_lighting != 1)
         return;
+
+    if (sectNum == -1)
+    {
+#ifdef DEBUGGINGAIDS
+        LOG_F(ERROR, "Actor %d (picnum: %d) tried to create a dynamic light in NULL sector!", spriteNum, TrackerCast(sprite[spriteNum].picnum));
+#endif
+        return;
+    }
 
     if (pr_actor->lightptr == NULL)
     {
