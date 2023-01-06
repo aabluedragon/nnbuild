@@ -836,7 +836,7 @@ static void A_DoLight(int spriteNum)
                     updatesector(pSprite->x, pSprite->y, &sectnum);
 
                     if ((unsigned)sectnum < MAXSECTORS && pSprite->z <= sector[sectnum].floorz && pSprite->z >= sector[sectnum].ceilingz)
-                        G_AddGameLight(spriteNum, pSprite->sectnum, d, 384 - ii * 64, 0, 100, ii == 0 ? (172 + (200 << 8) + (104 << 16)) : 216 + (52 << 8) + (20 << 16), PR_LIGHT_PRIO_LOW);
+                        G_AddGameLight(spriteNum, pSprite->sectnum, d, 384 - ii * 64, 0, 100, (ii == 0) ? RGB_TO_INT(172, 200, 104) : RGB_TO_INT(216, 52, 20), PR_LIGHT_PRIO_LOW);
                 }
                 break;
             }
@@ -866,10 +866,10 @@ static void A_DoLight(int spriteNum)
 
                 switch (pSprite->pal)
                 {
-                    case 1: color = 128 + (128 << 8) + (255 << 16); break;
-                    case 2: color = 255 + (48 << 8) + (48 << 16); break;
-                    case 8: color = 48 + (255 << 8) + (48 << 16); break;
-                    default: color = 240 + (160 << 8) + (80 << 16); break;
+                    case 1: color = RGB_TO_INT(128, 128, 255); break;
+                    case 2: color = RGB_TO_INT(255, 48, 48); break;
+                    case 8: color = RGB_TO_INT(48, 255, 48); break;
+                    default: color = RGB_TO_INT(240, 160, 80); break;
                 }
 
                 for (jj = savedFires - 1; jj >= 0; jj--)
@@ -892,12 +892,12 @@ static void A_DoLight(int spriteNum)
 
             case OOZFILTER__:
                 if (pSprite->xrepeat > 4)
-                    G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD2(spriteNum), 0, 100, 176 + (252 << 8) + (120 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                    G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD2(spriteNum), 0, 100, RGB_TO_INT(176, 252, 120), PR_LIGHT_PRIO_HIGH_GAME);
                 break;
             case FLOORFLAME__:
             case FIREBARREL__:
             case FIREVASE__:
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) << 1 }, LIGHTRAD2(spriteNum) >> 1, 0, 100, 255 + (95 << 8), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) << 1 }, LIGHTRAD2(spriteNum) >> 1, 0, 100, RGB_TO_INT(255, 95, 0), PR_LIGHT_PRIO_HIGH_GAME);
                 break;
 
             case EXPLOSION2__:
@@ -906,24 +906,24 @@ static void A_DoLight(int spriteNum)
                     // XXX: This block gets CODEDUP'd too much.
                     vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
                     G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100,
-                        240 + (160 << 8) + (80 << 16), pSprite->yrepeat > 32 ? PR_LIGHT_PRIO_HIGH_GAME : PR_LIGHT_PRIO_LOW_GAME);
+                        RGB_TO_INT(240, 160, 80), pSprite->yrepeat > 32 ? PR_LIGHT_PRIO_HIGH_GAME : PR_LIGHT_PRIO_LOW_GAME);
                 }
                 break;
             case FORCERIPPLE__:
             {
                 vec3_t const offset = { -((sintable[(pSprite->ang + 512) & 2047]) >> 5), -((sintable[(pSprite->ang) & 2047]) >> 5), LIGHTZOFF(spriteNum) };
-                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, 80 + (80 << 8) + (255 << 16), PR_LIGHT_PRIO_LOW_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, RGB_TO_INT(80, 40, 255), PR_LIGHT_PRIO_LOW_GAME);
                 practor[spriteNum].lightcount = 2;
             }
             break;
             case TRANSPORTERBEAM__:
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, 80 + (80 << 8) + (255 << 16), PR_LIGHT_PRIO_LOW_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, RGB_TO_INT(80, 80, 255), PR_LIGHT_PRIO_LOW_GAME);
                 practor[spriteNum].lightcount = 2;
                 break;
             case GROWSPARK__:
             {
                 vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
-                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, 216 + (52 << 8) + (20 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, RGB_TO_INT(216, 52, 20), PR_LIGHT_PRIO_HIGH_GAME);
             }
             break;
             case NEON1__:
@@ -933,24 +933,24 @@ static void A_DoLight(int spriteNum)
             case NEON6__:
             {
                 vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
-                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum) >> 2, 0, 100, 216 + (52 << 8) + (20 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum) >> 2, 0, 100, RGB_TO_INT(216, 52, 20), PR_LIGHT_PRIO_HIGH_GAME);
             }
             break;
             case LASERLINE__:
             {
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, 1280, 0, 100, 216 + (52 << 8) + (20 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, 1280, 0, 100, RGB_TO_INT(216, 52, 20), PR_LIGHT_PRIO_HIGH_GAME);
                 practor[spriteNum].lightcount = 2;
             }
             break;
             case SHRINKEREXPLOSION__:
             {
                 vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
-                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, 176 + (252 << 8) + (120 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD(spriteNum), 0, 100, RGB_TO_INT(176, 252, 120), PR_LIGHT_PRIO_HIGH_GAME);
             }
             break;
             case NEON2__:
             case FREEZEBLAST__:
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum) << 2, 0, 100, 72 + (88 << 8) + (140 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum) << 2, 0, 100, RGB_TO_INT(72, 88, 140), PR_LIGHT_PRIO_HIGH_GAME);
                 break;
             case REACTOR__:
             case REACTOR2__:
@@ -958,30 +958,30 @@ static void A_DoLight(int spriteNum)
             case REACTOR2SPARK__:
             case BOLT1__:
             case SIDEBOLT1__:
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, 72 + (88 << 8) + (140 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, RGB_TO_INT(72, 88, 140), PR_LIGHT_PRIO_HIGH_GAME);
                 practor[spriteNum].lightcount = 2;
                 break;
             case COOLEXPLOSION1__:
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum) << 2, 0, 100, 128 + (0 << 8) + (255 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum) << 2, 0, 100, RGB_TO_INT(128, 0, 255), PR_LIGHT_PRIO_HIGH_GAME);
                 break;
             case SHRINKSPARK__:
             case CRYSTALAMMO__:
             case 679: // battlelord head thing
             case 490: // cycloid head thing
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, 176 + (252 << 8) + (120 << 16), PR_LIGHT_PRIO_HIGH_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD(spriteNum), 0, 100, RGB_TO_INT(176, 252, 120), PR_LIGHT_PRIO_HIGH_GAME);
                 break;
             case FIRELASER__:
                 if (pSprite->statnum == STAT_PROJECTILE)
-                    G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, 64 * pSprite->yrepeat, 0, 100, 255 + (95 << 8), PR_LIGHT_PRIO_LOW_GAME);
+                    G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, 64 * pSprite->yrepeat, 0, 100, RGB_TO_INT(255, 95, 0), PR_LIGHT_PRIO_LOW_GAME);
                 break;
             case RPG__:
-                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD3(spriteNum) << 2, 0, 100, 255 + (95 << 8), PR_LIGHT_PRIO_LOW_GAME);
+                G_AddGameLight(spriteNum, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD3(spriteNum) << 2, 0, 100, RGB_TO_INT(255, 95, 0), PR_LIGHT_PRIO_LOW_GAME);
                 break;
             case SHOTSPARK1__:
                 if (AC_ACTION_COUNT(actor[spriteNum].t_data) == 0) // check for first frame of action
                 {
                     vec3_t const offset = { ((sintable[(pSprite->ang + 512) & 2047]) >> 6), ((sintable[(pSprite->ang) & 2047]) >> 6), LIGHTZOFF(spriteNum) };
-                    G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD3(spriteNum) << 1, 0, 100, 240 + (160 << 8) + (80 << 16), PR_LIGHT_PRIO_LOW_GAME);
+                    G_AddGameLight(spriteNum, pSprite->sectnum, offset, LIGHTRAD3(spriteNum) << 1, 0, 100, RGB_TO_INT(240, 160, 80), PR_LIGHT_PRIO_LOW_GAME);
                     practor[spriteNum].lightcount = 1;
                 }
                 break;
@@ -991,13 +991,13 @@ static void A_DoLight(int spriteNum)
                 vec3_t const offset = { 0, 0, -2048 };
                 auto& a = actor[spriteNum];
 
-                uint32_t color = 255 + (255 << 8) + (255 << 16);
+                uint32_t color = RGB_TO_INT(255, 255, 255);
                 int      radius = 256;
                 int      range = 8192;
 
                 if (a.t_data[0] == 3)
                 {
-                    color = everyothertime & 1 ? 255 : 255 << 16;
+                    color = everyothertime & 1 ? RGB_TO_INT(255, 0, 0) : RGB_TO_INT(0, 0, 255);
                     radius <<= 1;
                     range <<= 1;
                 }
@@ -1036,11 +1036,11 @@ static void A_DoLight(int spriteNum)
                 switch (pSprite->pal)
                 {
                     case 1:
-                        color = 72 + (88 << 8) + (140 << 16);
+                        color = RGB_TO_INT(72, 88, 140);
                         break;
                     case 0:
                     case 8:
-                        color = 172 + (200 << 8) + (104 << 16);
+                        color = RGB_TO_INT(172, 200, 104);
                         break;
                     default:
                         color = 0;

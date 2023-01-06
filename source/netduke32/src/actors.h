@@ -87,6 +87,7 @@ typedef struct
 #define LIGHTRAD2(s) ((sprite[s].yrepeat + ((rand() % sprite[s].yrepeat)>>2)) * tilesiz[sprite[s].picnum + LIGHTRAD_PICOFS(s)].y)
 #define LIGHTRAD3(s) (sprite[s].yrepeat * tilesiz[sprite[s].picnum].y)
 #define LIGHTZOFF(s) ((sprite[s].yrepeat*tilesiz[sprite[s].picnum].y)<<1)
+#define RGB_TO_INT(r,g,b) (r + (g << 8) + (b << 16)) // Converts RGB values to integer.
 
 void G_DeleteAllLights(void);
 void G_InterpolateLights(int smoothratio);
