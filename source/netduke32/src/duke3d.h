@@ -29,7 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAXPLAYERS 16
 #define MAXSPAWNPOINTS 64
 
-#define VERSION "v1.2"
+#define VERSION "v1.2.1"
 #define HEAD2 APPNAME " " VERSION
 
 #define MOVEFIFOSIZ 256
@@ -47,10 +47,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define HORIZ_MIN -99
 #define HORIZ_MAX 299
-
-#define GAMEDUKE 0
-#define GAMENAM 1
-#define GAMEWW2 3
 
 #define VOLUMEALL (g_Shareware==0)
 #define PLUTOPAK (g_scriptVersion==14)
