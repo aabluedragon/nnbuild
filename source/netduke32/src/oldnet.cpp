@@ -159,7 +159,8 @@ void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t*
         return;
     }
 
-    copybufbyte(&osyn[playerNum], &nsyn[playerNum], sizeof(input_t));
+    nsyn[playerNum] = osyn[playerNum];
+
     if (inputFlags & 1)
     {
         nsyn[playerNum].fvel = (short)B_UNBUF16(&packbuf[(*j)]);
