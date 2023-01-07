@@ -3541,26 +3541,35 @@ static void G_MoveWeapons(void)
 
         if (A_CheckSpriteFlags(spriteNum,SFLAG_PROJECTILE))
         {
+            auto pProj = &actor[spriteNum].projectile;
             /* Custom projectiles.  This is a big hack. */
 
-            if (actor[spriteNum].projectile.pal >= 0)
-                s->pal=actor[spriteNum].projectile.pal;
+            if (pProj->pal >= 0)
+                s->pal = pProj->pal;
 
-            if (actor[spriteNum].projectile.workslike & PROJECTILE_KNEE)
+            if (pProj->workslike & PROJECTILE_KNEE)
                 KILLIT(spriteNum);
 
-            if (actor[spriteNum].projectile.workslike & PROJECTILE_RPG)
+            if (pProj->workslike & PROJECTILE_RPG)
             {
-                if (actor[spriteNum].projectile.workslike & PROJECTILE_COOLEXPLOSION1)
+                VM_UpdateAnim(spriteNum, &actor[spriteNum].t_data[0]);
+
+                if (pProj->flashcolor)
+                    G_AddGameLight(spriteNum, s->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, LIGHTRAD4(spriteNum),
+                        0, 100,
+                        pProj->flashcolor, PR_LIGHT_PRIO_LOW_GAME);
+
+                if (pProj->workslike & PROJECTILE_COOLEXPLOSION1)
                 {
                     s->shade++;
-                    if (s->shade >= 40) KILLIT(spriteNum);
+                    if (s->shade >= 40)
+                        KILLIT(spriteNum);
                 }
 
-                if (actor[spriteNum].projectile.drop)
-                    s->zvel -= actor[spriteNum].projectile.drop;
+                if (pProj->drop)
+                    s->zvel -= pProj->drop;
 
-                if (actor[spriteNum].projectile.workslike & PROJECTILE_SPIT)
+                if (pProj->workslike & PROJECTILE_SPIT)
                     if (s->zvel < ACTOR_MAXFALLINGZVEL)
                         s->zvel += g_spriteGravity-112;
 
@@ -3573,21 +3582,21 @@ static void G_MoveWeapons(void)
                     projZvel = s->zvel>>1;
                 }
 
-                if (actor[spriteNum].projectile.trail >= 0)
+                if (pProj->trail >= 0)
                 {
-                    for (int32_t f = 0; f <= actor[spriteNum].projectile.tnum; f++)
+                    for (int32_t f = 0; f <= pProj->tnum; f++)
                     {
-                        j = A_Spawn(spriteNum, actor[spriteNum].projectile.trail);
-                        if (actor[spriteNum].projectile.toffset != 0)
-                            sprite[j].z += (actor[spriteNum].projectile.toffset << 8);
-                        if (actor[spriteNum].projectile.txrepeat >= 0)
-                            sprite[j].xrepeat = actor[spriteNum].projectile.txrepeat;
-                        if (actor[spriteNum].projectile.tyrepeat >= 0)
-                            sprite[j].yrepeat = actor[spriteNum].projectile.tyrepeat;
+                        j = A_Spawn(spriteNum, pProj->trail);
+                        if (pProj->toffset != 0)
+                            sprite[j].z += (pProj->toffset << 8);
+                        if (pProj->txrepeat >= 0)
+                            sprite[j].xrepeat = pProj->txrepeat;
+                        if (pProj->tyrepeat >= 0)
+                            sprite[j].yrepeat = pProj->tyrepeat;
                     }
                 }
 
-                for (int32_t projMoveCnt = 1; projMoveCnt <= actor[spriteNum].projectile.movecnt; projMoveCnt++)
+                for (int32_t projMoveCnt = 1; projMoveCnt <= pProj->movecnt; projMoveCnt++)
                 {
                     davect = s->xyz;
                     A_GetZLimits(spriteNum);
@@ -3600,7 +3609,7 @@ static void G_MoveWeapons(void)
                         break;
                 }
 
-                if (!(actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS) &&
+                if (!(pProj->workslike & PROJECTILE_BOUNCESOFFWALLS) &&
                         s->yvel >= 0 && sprite[s->yvel].sectnum < MAXSECTORS)
                     if (FindDistance2D(s->x-sprite[s->yvel].x,s->y-sprite[s->yvel].y) < 256)
                         j = 49152|s->yvel;
@@ -3612,23 +3621,23 @@ static void G_MoveWeapons(void)
                     KILLIT(spriteNum);
                 }
 
-                if (actor[spriteNum].projectile.workslike & PROJECTILE_TIMED && actor[spriteNum].projectile.range > 0)
+                if (pProj->workslike & PROJECTILE_TIMED && pProj->range > 0)
                 {
                     if (!(actor[spriteNum].t_data[8]))
                         actor[spriteNum].t_data[8] = 1;
                     else
                         actor[spriteNum].t_data[8]++;
 
-                    if (actor[spriteNum].t_data[8] > actor[spriteNum].projectile.range)
+                    if (actor[spriteNum].t_data[8] > pProj->range)
                     {
-                        if (actor[spriteNum].projectile.workslike & PROJECTILE_EXPLODEONTIMER)
+                        if (pProj->workslike & PROJECTILE_EXPLODEONTIMER)
                             A_DoProjectileEffects(spriteNum, &davect, 1);
 
                         KILLIT(spriteNum);
                     }
                 }
 
-                if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
+                if (pProj->workslike & PROJECTILE_BOUNCESOFFWALLS)
                 {
                     /*                    if(s->yvel < 1 || s->extra < 2 || (s->xvel|s->zvel) == 0)
                                 Did this cause the bug with prematurely exploding projectiles? */
@@ -3640,16 +3649,16 @@ static void G_MoveWeapons(void)
 
                 }
 
-                if ((j & 49152) != 49152 && !(actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS))
+                if ((j & 49152) != 49152 && !(pProj->workslike & PROJECTILE_BOUNCESOFFWALLS))
                     G_WeaponHitCeilingOrFloor(spriteNum, s, &j);
 
-                if (actor[spriteNum].projectile.workslike & PROJECTILE_WATERBUBBLES &&
+                if (pProj->workslike & PROJECTILE_WATERBUBBLES &&
                         sector[s->sectnum].lotag == ST_2_UNDERWATER && rnd(140))
                     A_Spawn(spriteNum,WATERBUBBLE);
 
                 if (j != 0)
                 {
-                    if (actor[spriteNum].projectile.workslike & PROJECTILE_COOLEXPLOSION1)
+                    if (pProj->workslike & PROJECTILE_COOLEXPLOSION1)
                     {
                         s->xvel = 0;
                         s->zvel = 0;
@@ -3659,22 +3668,22 @@ static void G_MoveWeapons(void)
                     {
                         j &= (MAXSPRITES-1);
 
-                        if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFSPRITES)
+                        if (pProj->workslike & PROJECTILE_BOUNCESOFFSPRITES)
                         {
                             s->yvel--;
 
                             int32_t const projAngle = getangle(sprite[j].x-s->x,sprite[j].y-s->y)+(sprite[j].cstat&16?0:512);
                             s->ang = ((projAngle << 1) - s->ang)&2047;
 
-                            if (actor[spriteNum].projectile.bsound >= 0)
-                                A_PlaySound(actor[spriteNum].projectile.bsound,spriteNum);
+                            if (pProj->bsound >= 0)
+                                A_PlaySound(pProj->bsound,spriteNum);
 
-                            if (actor[spriteNum].projectile.workslike & PROJECTILE_LOSESVELOCITY)
+                            if (pProj->workslike & PROJECTILE_LOSESVELOCITY)
                             {
                                 s->xvel=s->xvel>>1;
                                 s->zvel=s->zvel>>1;
                             }
-                            if (!(actor[spriteNum].projectile.workslike & PROJECTILE_FORCEIMPACT))
+                            if (!(pProj->workslike & PROJECTILE_FORCEIMPACT))
                                 goto BOLT;
                         }
 
@@ -3685,24 +3694,24 @@ static void G_MoveWeapons(void)
                             int32_t playerNum = sprite[j].yvel;
                             A_PlaySound(PISTOL_BODYHIT,j);
 
-                            if (actor[spriteNum].projectile.workslike & PROJECTILE_SPIT)
+                            if (pProj->workslike & PROJECTILE_SPIT)
                                 P_HandleBeingSpitOn(g_player[playerNum].ps);
                         }
 
-                        if (actor[spriteNum].projectile.workslike & PROJECTILE_RPG_IMPACT)
+                        if (pProj->workslike & PROJECTILE_RPG_IMPACT)
                         {
                             // [JM] Commented out because the A_DamageObject above does this now, allowing it to be modified by EVENT_DAMAGESPRITE.
                             //actor[j].htowner = s->owner;
                             //actor[j].htpicnum = s->picnum;
-                            //actor[j].htextra += actor[spriteNum].projectile.extra;
+                            //actor[j].htextra += pProj->extra;
 
                             A_DoProjectileEffects(spriteNum, &davect, 0);
 
-                            if (!(actor[spriteNum].projectile.workslike & PROJECTILE_FORCEIMPACT))
+                            if (!(pProj->workslike & PROJECTILE_FORCEIMPACT))
                                 KILLIT(spriteNum);
                         }
 
-                        if (actor[spriteNum].projectile.workslike & PROJECTILE_FORCEIMPACT)
+                        if (pProj->workslike & PROJECTILE_FORCEIMPACT)
                             goto BOLT;
 
                     }
@@ -3710,7 +3719,7 @@ static void G_MoveWeapons(void)
                     {
                         j &= (MAXWALLS-1);
 
-                        if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFMIRRORS &&
+                        if (pProj->workslike & PROJECTILE_BOUNCESOFFMIRRORS &&
                                 (wall[j].overpicnum == MIRROR || wall[j].picnum == MIRROR))
                         {
                             int32_t const projAngle = getangle(wall[wall[j].point2].x-wall[j].x,
@@ -3726,7 +3735,7 @@ static void G_MoveWeapons(void)
                             setspritez(spriteNum,&davect);
                             A_DamageWall(spriteNum,j,s->xyz,s->picnum);
 
-                            if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
+                            if (pProj->workslike & PROJECTILE_BOUNCESOFFWALLS)
                             {
                                 if (wall[j].overpicnum != MIRROR && wall[j].picnum != MIRROR)
                                     s->yvel--;
@@ -3736,10 +3745,10 @@ static void G_MoveWeapons(void)
 
                                 s->ang = ((projAngle << 1) - s->ang) & 2047;
 
-                                if (actor[spriteNum].projectile.bsound >= 0)
-                                    A_PlaySound(actor[spriteNum].projectile.bsound,spriteNum);
+                                if (pProj->bsound >= 0)
+                                    A_PlaySound(pProj->bsound,spriteNum);
 
-                                if (actor[spriteNum].projectile.workslike & PROJECTILE_LOSESVELOCITY)
+                                if (pProj->workslike & PROJECTILE_LOSESVELOCITY)
                                 {
                                     s->xvel=s->xvel>>1;
                                     s->zvel=s->zvel>>1;
@@ -3760,17 +3769,17 @@ static void G_MoveWeapons(void)
                             Sect_DamageCeiling(spriteNum, s->sectnum);
                         }
 
-                        if (actor[spriteNum].projectile.workslike & PROJECTILE_BOUNCESOFFWALLS)
+                        if (pProj->workslike & PROJECTILE_BOUNCESOFFWALLS)
                         {
                             A_DoProjectileBounce(spriteNum);
                             A_SetSprite(spriteNum, CLIPMASK1);
 
                             s->yvel--;
 
-                            if (actor[spriteNum].projectile.bsound >= 0)
-                                A_PlaySound(actor[spriteNum].projectile.bsound,spriteNum);
+                            if (pProj->bsound >= 0)
+                                A_PlaySound(pProj->bsound,spriteNum);
 
-                            if (actor[spriteNum].projectile.workslike & PROJECTILE_LOSESVELOCITY)
+                            if (pProj->workslike & PROJECTILE_LOSESVELOCITY)
                             {
                                 s->xvel=s->xvel>>1;
                                 s->zvel=s->zvel>>1;
@@ -3780,7 +3789,7 @@ static void G_MoveWeapons(void)
                         }
                     }
 
-                    if (actor[spriteNum].projectile.workslike & PROJECTILE_HITSCAN)
+                    if (pProj->workslike & PROJECTILE_HITSCAN)
                     {
                         if (!G_TileHasActor(sprite[spriteNum].picnum))
                             goto BOLT;

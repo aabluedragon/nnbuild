@@ -13,6 +13,7 @@ enum vmflags_t
 };
 
 void VM_ScriptInfo(intptr_t const* const ptr, int const range);
+void VM_UpdateAnim(int const spriteNum, int32_t* const pData);
 
 void X_OnEvent(int iEventID, int sActor, int sPlayer, int lDist);
 int X_OnEventWithReturn(int iEventID, int sActor, int sPlayer, int nReturn);

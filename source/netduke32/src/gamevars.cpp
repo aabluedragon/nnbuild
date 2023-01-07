@@ -833,28 +833,28 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
         PISTOL_WEAPON, 12, 27, 2, 5, 0,
         WEAPON_RELOAD_TIMING,
         SHOTSPARK1__, 2, SHELL__, 0, 0, PISTOL_FIRE, 0, 0,
-        EJECT_CLIP, INSERT_CLIP, INSERT_CLIP, 255 + (95 << 8)
+        EJECT_CLIP, INSERT_CLIP, INSERT_CLIP, RGB_TO_INT(255, 95, 0)
     },
 
     {
         SHOTGUN_WEAPON, 0, 13, 4, 30, 0,
         WEAPON_CHECKATRELOAD,
         SHOTGUN__, 24, SHOTGUNSHELL__, 7, 0, SHOTGUN_FIRE, 15, SHOTGUN_COCK,
-        EJECT_CLIP, INSERT_CLIP, SHOTGUN_COCK, 255 + (95 << 8)
+        EJECT_CLIP, INSERT_CLIP, SHOTGUN_COCK, RGB_TO_INT(255, 95, 0)
     },
 
     {
         CHAINGUN_WEAPON, 0, 0, 3, 12, 3,
         WEAPON_AUTOMATIC | WEAPON_FIREEVERYTHIRD | WEAPON_AMMOPERSHOT | WEAPON_SPAWNTYPE3 | WEAPON_RESET,
         CHAINGUN__, 1, SHELL__, 0, 0, CHAINGUN_FIRE, 0, 0,
-        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 255 + (95 << 8)
+        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(255, 95, 0)
     },
 
     {
         RPG_WEAPON, 0, 0, 4, 20, 0,
         0,
         RPG__, 0, 0, 0, 0, 0, 0, 0,
-        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 255 + (95 << 8)
+        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(255, 95, 0)
     },
 
     {
@@ -868,14 +868,14 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
         SHRINKER_WEAPON, 0, 0, 10, 12, 0,
         WEAPON_GLOWS,
         SHRINKER__, 0, 0, 0, SHRINKER_FIRE, 0, 0, 0,
-        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 176 + (252 << 8) + (120 << 16)
+        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(176, 252, 120)
     },
 
     {
         DEVISTATOR_WEAPON, 0, 0, 3, 6, 5,
         WEAPON_FIREEVERYOTHER | WEAPON_AMMOPERSHOT,
         RPG__, 0, 0, 2, CAT_FIRE, 0, 0, 0,
-        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 255 + (95 << 8)
+        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(255, 95, 0)
     },
 
     {
@@ -889,7 +889,7 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
         FREEZE_WEAPON, 0, 0, 3, 5, 0,
         WEAPON_RESET,
         FREEZEBLAST__, 0, 0, 0, CAT_FIRE, CAT_FIRE, 0, 0,
-        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 72 + (88 << 8) + (140 << 16)
+        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(72, 88, 140)
     },
 
     {
@@ -903,7 +903,7 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
         GROW_WEAPON, 0, 0, 3, 5, 0,
         WEAPON_GLOWS,
         GROWSPARK__, 0, 0, 0, 0, EXPANDERSHOOT, 0, 0,
-        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 216 + (52 << 8) + (20 << 16)
+        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(216, 52, 20)
     },
 
 #if 0
@@ -911,7 +911,7 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
         FLAMETHROWER_WEAPON, 0, 0, 2, 16, 0,
         WEAPON_RESET,
         FIREBALL__, 0, 0, 0, FLAMETHROWER_INTRO, FLAMETHROWER_INTRO, 0, 0,
-        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, 216 + (52 << 8) + (20 << 16)
+        EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(216, 52, 20)
     },
 #endif
 
