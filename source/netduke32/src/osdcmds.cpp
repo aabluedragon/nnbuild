@@ -326,11 +326,11 @@ static int osdcmd_fileinfo(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
-#if 0
-static int osdcmd_rate(const osdfuncparm_t *parm)
+#if 1
+static int osdcmd_packetrate(const osdfuncparm_t *parm)
 {
-#ifndef RANCID_NETWORKING
     int i;
+    extern int packetrate; // mmulti.cpp
 
     if (parm->numparms == 0)
     {
@@ -347,8 +347,7 @@ static int osdcmd_rate(const osdfuncparm_t *parm)
         OSD_Printf("rate %d\n", packetrate);
     }
     else OSD_Printf("rate: value out of range\n");
-#endif
-    UNREFERENCED_PARAMETER(parm);
+
     return OSDCMD_OK;
 }
 #endif
@@ -1565,7 +1564,7 @@ int registerosdcommands(void)
     OSD_RegisterFunction("quit","quit: exits the game immediately", osdcmd_quit);
     OSD_RegisterFunction("exit","exit: exits the game immediately", osdcmd_quit);
 
-    //OSD_RegisterFunction("rate","rate: sets the multiplayer packet send rate, in packets/sec",osdcmd_rate);
+    OSD_RegisterFunction("packetrate","packetrate: sets the multiplayer packet send rate, in packets/sec",osdcmd_packetrate);
     OSD_RegisterFunction("restartsound","restartsound: reinitializes the sound system",osdcmd_restartsound);
     OSD_RegisterFunction("restartvid","restartvid: reinitializes the video mode",osdcmd_restartvid);
 
