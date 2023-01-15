@@ -83,6 +83,8 @@ void Net_GetPackets(void)
     }
 #endif
 
+    ChatPipe_Poll();
+
     if (numplayers < 2 || g_networkBroadcastMode == NETMODE_OFFLINE)
         return;
 
@@ -1079,6 +1081,8 @@ void Net_EnterMessage(void)
                 Bsprintf(recbuf, "%s^07: ", g_player[myconnectindex].user_name);
             }
 
+            ChatPipe_SendMessage(typebuf);
+
             Bstrcat(recbuf,typebuf);
             j = Bstrlen(recbuf);
             recbuf[j] = 0;
@@ -1087,11 +1091,13 @@ void Net_EnterMessage(void)
             if (g_chatPlayer >= ud.multimode)
             {
                 tempbuf[1] = 255;
+
                 TRAVERSE_CONNECT(ch)
                 {
                     if (ch != myconnectindex) mmulti_sendpacket(ch, (unsigned char*)tempbuf,j+2);
                     if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
                 }
+
                 G_AddUserQuote(recbuf);
                 quotebot += 8;
                 l = G_GameTextLen(USERQUOTE_LEFTOFFSET,OSD_StripColors(tempbuf,recbuf));

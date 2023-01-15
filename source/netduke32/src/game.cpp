@@ -8817,6 +8817,8 @@ int app_main(int32_t argc, char const* const* argv)
         }
     }
 
+    ChatPipe_Create();
+
     auto& myplayer = *g_player[myconnectindex].ps;
     myplayer.palette = BASEPAL;
 

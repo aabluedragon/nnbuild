@@ -706,6 +706,7 @@ netduke32_game_proper := NetDuke32
 netduke32_game_objs := \
     actors.cpp \
     anim.cpp \
+    chatpipe.cpp \
     cmdline.cpp \
     config.cpp \
     common.cpp \

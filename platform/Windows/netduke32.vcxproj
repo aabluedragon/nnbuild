@@ -180,6 +180,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\source\netduke32\src\actors.h" />
+    <ClInclude Include="..\..\source\netduke32\src\chatpipe.h" />
     <ClInclude Include="..\..\source\netduke32\src\cmdline.h" />
     <ClInclude Include="..\..\source\netduke32\src\common_game.h" />
     <ClInclude Include="..\..\source\netduke32\src\config.h" />
@@ -229,6 +230,7 @@
     <ClCompile Include="..\..\source\duke3d\rsrc\eduke32_icon.c" />
     <ClCompile Include="..\..\source\netduke32\src\actors.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\anim.cpp" />
+    <ClCompile Include="..\..\source\netduke32\src\chatpipe.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\cmdline.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\common.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\config.cpp" />
