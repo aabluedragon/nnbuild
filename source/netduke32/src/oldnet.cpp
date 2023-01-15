@@ -1081,8 +1081,6 @@ void Net_EnterMessage(void)
                 Bsprintf(recbuf, "%s^07: ", g_player[myconnectindex].user_name);
             }
 
-            ChatPipe_SendMessage(typebuf);
-
             Bstrcat(recbuf,typebuf);
             j = Bstrlen(recbuf);
             recbuf[j] = 0;
@@ -1090,6 +1088,7 @@ void Net_EnterMessage(void)
 
             if (g_chatPlayer >= ud.multimode)
             {
+                ChatPipe_SendMessage(typebuf);
                 tempbuf[1] = 255;
 
                 TRAVERSE_CONNECT(ch)
