@@ -23,7 +23,7 @@
     <ProjectGuid>{A36D57BF-05F1-40D2-9D43-625AC28EBB7F}</ProjectGuid>
     <RootNamespace>eduke32</RootNamespace>
     <Keyword>MakeFileProj</Keyword>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>netduke32</ProjectName>
   </PropertyGroup>
