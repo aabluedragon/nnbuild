@@ -418,6 +418,7 @@ extern char g_numPlayerSprites;
 
 #define MAXQUOTELEN 128
 #define MAXUSERQUOTES 6
+#define MAXUSERQUOTELEN 256 // Formerly 178.
 #define USERQUOTE_LEFTOFFSET 5
 #define USERQUOTE_RIGHTOFFSET 14
 extern int quotebot, quotebotgoal; // game.c

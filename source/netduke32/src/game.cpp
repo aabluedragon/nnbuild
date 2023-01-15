@@ -87,7 +87,7 @@ int g_Shareware = 0;
 
 int quotebot, quotebotgoal;
 int user_quote_time[MAXUSERQUOTES];
-char user_quote[MAXUSERQUOTES][178];
+char user_quote[MAXUSERQUOTES][MAXUSERQUOTELEN];
 // char typebuflen,typebuf[41];
 
 int32_t MAXCACHE1DSIZE = (96*1024*1024);
@@ -1140,6 +1140,10 @@ int minitext_(int x, int y, const char* t, int s, int p, int sb)
 void G_AddUserQuote(const char *daquote)
 {
     int i;
+
+    // Crash prevention.
+    if (Bstrlen(daquote) > MAXUSERQUOTELEN)
+        return;
 
     for (i=MAXUSERQUOTES-1;i>0;i--)
     {
