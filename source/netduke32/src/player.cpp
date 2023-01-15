@@ -190,7 +190,7 @@ static void P_IncurDamage(DukePlayer_t *p)
 
 void P_QuickKill(DukePlayer_t *p)
 {
-    UNPREDICTABLE_FUNCTION();
+    UNPREDICTABLE_FUNCTION;
     P_PalFrom(p, 48, 48, 48, 48);
 
     sprite[p->i].extra = 0;
@@ -512,7 +512,7 @@ void P_FireWeapon(DukePlayer_t *p)
 
 static void P_DoWeaponSpawn(int playerNum)
 {
-    UNPREDICTABLE_FUNCTION();
+    UNPREDICTABLE_FUNCTION;
 
     auto const pPlayer = g_player[playerNum].ps;
 
@@ -1648,7 +1648,7 @@ void P_GetInput(int snum, bool uncapped)
 
 static void P_ConsumeKeycard(int32_t playerNum, int32_t keypal)
 {
-    UNPREDICTABLE_FUNCTION();
+    UNPREDICTABLE_FUNCTION;
 
     char keyname[7];
 
@@ -1884,7 +1884,7 @@ void P_DropWeapon(DukePlayer_t *p)
 
 void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer)
 {
-    UNPREDICTABLE_FUNCTION(); // [JM] Might not need this anymore. We shall see.
+    UNPREDICTABLE_FUNCTION; // [JM] Might not need this anymore. We shall see.
 
     //int const newOwner = pPlayer->newowner;
     //pPlayer->pos = sprite[newOwner].pos;
@@ -1898,7 +1898,7 @@ void P_UpdatePosWhenViewingCam(DukePlayer_t* pPlayer)
 
 static void P_TossPipebomb(int playerNum)
 {
-    UNPREDICTABLE_FUNCTION();
+    UNPREDICTABLE_FUNCTION;
 
     DukePlayer_t* p = g_player[playerNum].ps;
     unsigned int sb_snum = g_player[playerNum].inputBits->bits;
@@ -2541,7 +2541,7 @@ static int P_HandleFist(int playerNum)
 
 static void P_HandleFragged(int snum)
 {
-    UNPREDICTABLE_FUNCTION();
+    UNPREDICTABLE_FUNCTION;
 
     DukePlayer_t* p = g_player[snum].ps;
     DukePlayer_t* frag_p = g_player[p->frag_ps].ps;
@@ -2704,7 +2704,7 @@ static void P_HandleDeath(int snum)
 
 static void P_HandleDamagingFloors(int snum)
 {
-    UNPREDICTABLE_FUNCTION();
+    UNPREDICTABLE_FUNCTION;
 
     DukePlayer_t* p = g_player[snum].ps;
     int playerSprite = g_player[snum].ps->i;
@@ -2818,7 +2818,7 @@ static bool P_DoSpriteBridge(int32_t spriteNum, DukePlayer_t* pPlayer)
 
 static void P_CheckTouchDamage(DukePlayer_t* p, int j)
 {
-    UNPREDICTABLE_FUNCTION();
+    UNPREDICTABLE_FUNCTION;
 
     if ((j = X_OnEventWithReturn(EVENT_CHECKTOUCHDAMAGE, p->i, sprite[p->i].yvel, j)) == -1)
         return;

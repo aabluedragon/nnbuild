@@ -199,11 +199,11 @@ final_action<A> finally(A act)   // deduce action type
 
 // Put at the start of functions that cannot be predicted.
 // Returns immediately if predicting. Automatically handles reverting to old context value on any return.
-// Set retval for the desired value when bailing during prediction.
-#define UNPREDICTABLE_FUNCTION(retval)                                      \
+// Follow up with a value in parenthesis to return desired value when bailing during prediction. Eg: UNPREDICTABLE_FUNCTION(0);
+#define UNPREDICTABLE_FUNCTION                                              \
     auto const pcontext_old = oldnet_predictcontext;                        \
     oldnet_predictcontext = NOT_PREDICTABLE;                                \
     auto onexit = finally([&]{ oldnet_predictcontext = pcontext_old; });    \
-    if(oldnet_predicting) return retval
+    if(oldnet_predicting) return
 
 #endif
