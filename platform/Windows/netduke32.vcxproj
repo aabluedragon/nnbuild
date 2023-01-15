@@ -220,6 +220,7 @@
     <ClInclude Include="..\..\source\netduke32\src\standard.h" />
     <ClInclude Include="..\..\source\netduke32\src\startwin.game.h" />
     <ClInclude Include="..\..\source\netduke32\src\sync.h" />
+    <ClInclude Include="..\..\source\netduke32\src\utils.h" />
     <ClInclude Include="..\..\source\netduke32\src\_functio.h" />
     <ClInclude Include="..\..\source\netduke32\src\_midi.h" />
     <ClInclude Include="..\..\source\netduke32\src\_rts.h" />
@@ -264,6 +265,7 @@
     </ClCompile>
     <ClCompile Include="..\..\source\netduke32\src\startwin.game.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\sync.cpp" />
+    <ClCompile Include="..\..\source\netduke32\src\utils.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\winbits.cpp" />
   </ItemGroup>
   <ItemGroup>
