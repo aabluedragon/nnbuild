@@ -867,7 +867,7 @@ static int A_ShootCustom(int const spriteNum, int const projecTile, int shootAng
             do
             {
                 auto curHit = &hits[hitCount];
-                int hitVoid = Proj_DoHitscan(spriteNum, (pProj->cstat >= 0) ? pProj->cstat : 256 + 1, &nextStartPos, zvel, shootAng, curHit);
+                int const hitVoid = Proj_DoHitscan(spriteNum, (pProj->cstat >= 0) ? pProj->cstat : 256 + 1, &nextStartPos, zvel, shootAng, curHit);
 
                 // Hit void space, bail.
                 if (hitVoid)
