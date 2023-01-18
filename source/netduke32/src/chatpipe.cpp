@@ -23,14 +23,30 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 //-------------------------------------------------------------------------
 
+// Lobby chat synchronization using named pipes (Windows), and UNIX domain sockets (UNIX/Linux).
+
 #include "duke3d.h"
 #include "chatpipe.h"
 #include "sjson.h"
 
-static void ChatPipe_WriteToPipe(const char* message);
+#define CHATPIPE_BUFSIZE 4096
+#define CHATPIPE_TIMEOUT 5000
+
+// Colors for the text display
+#define CPCOLOR_HEADER "^23"
+#define CPCOLOR_USERNAME "^15"
+#define CPCOLOR_TEXT "^12"
+#define CPCOLOR_JOIN "^08"
+#define CPCOLOR_LEAVE "^10"
+
+// Pre-defined, re-usable text
+#define CPTEXT_HEADER CPCOLOR_HEADER "[LOBBY] "
+
+// Global vars
 char cpTempBuf[CHATPIPE_BUFSIZE];
 
 // Platform-agnostic functions.
+static void ChatPipe_WriteToPipe(const char* message);
 
 static bool ChatPipe_ParseJSON(const char* data)
 {
@@ -46,7 +62,7 @@ static bool ChatPipe_ParseJSON(const char* data)
 			const char* strUser = sjson_get_string(jRoot, "user", NULL);
 			const char* strText = sjson_get_string(jRoot, "text", NULL);
 			
-			snprintf(cpTempBuf, MAXUSERQUOTELEN, "^23[LOBBY] ^15%s: ^12%s", strUser, strText);
+			snprintf(cpTempBuf, MAXUSERQUOTELEN, CPTEXT_HEADER CPCOLOR_USERNAME "%s: " CPCOLOR_TEXT "%s", strUser, strText);
 			G_AddUserQuote(cpTempBuf);
 			success = true;
 		}
@@ -54,7 +70,7 @@ static bool ChatPipe_ParseJSON(const char* data)
 		{
 			const char* strUser = sjson_get_string(jRoot, "user", NULL);
 
-			snprintf(cpTempBuf, MAXUSERQUOTELEN, "^23[LOBBY] ^15%s ^08has joined the lobby.", strUser);
+			snprintf(cpTempBuf, MAXUSERQUOTELEN, CPTEXT_HEADER CPCOLOR_USERNAME "%s " CPCOLOR_JOIN "has joined the lobby.", strUser);
 			G_AddUserQuote(cpTempBuf);
 			success = true;
 		}
@@ -62,7 +78,7 @@ static bool ChatPipe_ParseJSON(const char* data)
 		{
 			const char* strUser = sjson_get_string(jRoot, "user", NULL);
 
-			snprintf(cpTempBuf, MAXUSERQUOTELEN, "^23[LOBBY] ^15%s ^10has left the lobby.", strUser);
+			snprintf(cpTempBuf, MAXUSERQUOTELEN, CPTEXT_HEADER CPCOLOR_USERNAME "%s " CPCOLOR_LEAVE "has left the lobby.", strUser);
 			G_AddUserQuote(cpTempBuf);
 			success = true;
 		}
@@ -348,7 +364,7 @@ void ChatPipe_Poll(void) // Called once per game loop
 	
 	return;
 }
-#else // Linux stuff
+#else // Unix/Linux stuff
 
 static void ChatPipe_WriteToPipe(const char* message)
 {
