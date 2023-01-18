@@ -178,7 +178,7 @@ void ChatPipe_Create(void)
 		return;
 	}
 
-	Pipe.handle = CreateNamedPipe("\\\\.\\pipe\\NetDuke32", 
+	Pipe.handle = CreateNamedPipe("\\\\.\\pipe\\" APPNAME, 
 		PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, 
 		PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT, 
 		1, 
