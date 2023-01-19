@@ -2038,54 +2038,50 @@ void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum)
         if (X_OnEventWithReturn(EVENT_DAMAGECEILING, spriteNum, -1, sectNum) < 0)
             return;
     }
-    // [JM] Is this ifndef clusterfuck necessary? They pretty much disable this entire function anyway, so shouldn't this be split into an #ifdef/elseif?
-#ifndef EDUKE32_STANDALONE
-    int16_t* const pPicnum = &sector[sectNum].ceilingpicnum;
-#endif
 
 #ifndef EDUKE32_STANDALONE
+    int16_t* const pPicnum = &sector[sectNum].ceilingpicnum;
     switch (tileGetMapping(*pPicnum))
     {
-    case WALLLIGHT1__: *pPicnum = WALLLIGHTBUST1; goto GLASSBREAK_CODE;
-    case WALLLIGHT2__: *pPicnum = WALLLIGHTBUST2; goto GLASSBREAK_CODE;
-    case WALLLIGHT3__: *pPicnum = WALLLIGHTBUST3; goto GLASSBREAK_CODE;
-    case WALLLIGHT4__: *pPicnum = WALLLIGHTBUST4; goto GLASSBREAK_CODE;
-    case TECHLIGHT2__: *pPicnum = TECHLIGHTBUST2; goto GLASSBREAK_CODE;
-    case TECHLIGHT4__: *pPicnum = TECHLIGHTBUST4;
-#else
-    if (0)
-    {
-#endif
-    GLASSBREAK_CODE:
-#ifndef EDUKE32_STANDALONE
-        A_SpawnCeilingGlass(g_player[myconnectindex].ps->i, sectNum, 10);
-        A_PlaySound(GLASS_BREAKING, spriteNum);
-#endif
-        if (sector[sectNum].hitag == 0)
+        case WALLLIGHT1__: *pPicnum = WALLLIGHTBUST1; goto GLASSBREAK_CODE;
+        case WALLLIGHT2__: *pPicnum = WALLLIGHTBUST2; goto GLASSBREAK_CODE;
+        case WALLLIGHT3__: *pPicnum = WALLLIGHTBUST3; goto GLASSBREAK_CODE;
+        case WALLLIGHT4__: *pPicnum = WALLLIGHTBUST4; goto GLASSBREAK_CODE;
+        case TECHLIGHT2__: *pPicnum = TECHLIGHTBUST2; goto GLASSBREAK_CODE;
+        case TECHLIGHT4__: *pPicnum = TECHLIGHTBUST4;
         {
-            for (bssize_t SPRITES_OF_SECT(sectNum, i))
+            // [JM] Will refactor when I backport EVENT_DAMAGEHPLANE.
+        GLASSBREAK_CODE:
+            A_SpawnCeilingGlass(g_player[myconnectindex].ps->i, sectNum, 10);
+            A_PlaySound(GLASS_BREAKING, spriteNum);
+
+            if (sector[sectNum].hitag == 0)
             {
-                if (PN(i) == SECTOREFFECTOR && SLT(i) == SE_12_LIGHT_SWITCH)
+                for (bssize_t SPRITES_OF_SECT(sectNum, i))
                 {
-                    for (bssize_t SPRITES_OF(STAT_EFFECTOR, j))
-                        if (sprite[j].hitag == SHT(i))
-                            actor[j].t_data[3] = 1;
-                    break;
+                    if (PN(i) == SECTOREFFECTOR && SLT(i) == SE_12_LIGHT_SWITCH)
+                    {
+                        for (bssize_t SPRITES_OF(STAT_EFFECTOR, j))
+                            if (sprite[j].hitag == SHT(i))
+                                actor[j].t_data[3] = 1;
+                        break;
+                    }
+                }
+            }
+
+            int j = krand() & 1;
+
+            for (bssize_t SPRITES_OF(STAT_EFFECTOR, i))
+            {
+                if (SHT(i) == sector[sectNum].hitag && SLT(i) == SE_3_RANDOM_LIGHTS_AFTER_SHOT_OUT)
+                {
+                    T3(i) = j;
+                    T5(i) = 1;
                 }
             }
         }
-
-        int j = krand() & 1;
-
-        for (bssize_t SPRITES_OF(STAT_EFFECTOR, i))
-        {
-            if (SHT(i) == sector[sectNum].hitag && SLT(i) == SE_3_RANDOM_LIGHTS_AFTER_SHOT_OUT)
-            {
-                T3(i) = j;
-                T5(i) = 1;
-            }
-        }
     }
+#endif
 }
 
 void Sect_DamageCeiling(int const spriteNum, int const sectNum)
