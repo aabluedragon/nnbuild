@@ -3,7 +3,7 @@
 Copyright (C) 1996, 2003 - 3D Realms Entertainment
 Copyright (C) 2000, 2003 - Matt Saettler (EDuke Enhancements)
 Copyright (C) 2004, 2007 - EDuke32 developers
-Copyright (C) 2022, 2022 - Jordon Moss (Aka. StrikerTheHedgefox)
+Copyright (C) 2022, 2023 - Jordon Moss (Aka. StrikerTheHedgefox)
 
 This file is part of EDuke32 / NetDuke32
 

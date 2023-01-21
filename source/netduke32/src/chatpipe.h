@@ -26,8 +26,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef CHATPIPE_H
 #define CHATPIPE_H
 
-#include "build.h"
-
 void ChatPipe_Create(void);
 void ChatPipe_SendMessage(const char* message);
 void ChatPipe_Poll(void);

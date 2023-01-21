@@ -44,6 +44,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // Global vars
 char cpTempBuf[CHATPIPE_BUFSIZE];
+bool pipeActive = false;
 
 // Platform-agnostic functions.
 static void ChatPipe_WriteToPipe(const char* message);
@@ -99,6 +100,9 @@ static bool ChatPipe_ParseJSON(const char* data)
 
 void ChatPipe_SendMessage(const char* message)
 {
+	if (!pipeActive)
+		return;
+
 	sjson_context* jsonCtx = sjson_create_context(0, 0, NULL);
 	sjson_node* jRoot = sjson_mkobject(jsonCtx);
 	
@@ -188,7 +192,7 @@ static void ChatPipe_Reconnect()
 
 void ChatPipe_Create(void)
 {
-	if (Pipe.handle != NULL)
+	if (pipeActive)
 	{
 		LOG_F(ERROR, "%s: Already have a chat pipe!", __func__);
 		return;
@@ -216,10 +220,15 @@ void ChatPipe_Create(void)
 	Pipe.state = ChatPipe_Connect() ? PIPESTATE_CONNECTING : PIPESTATE_READY;
 	Pipe.readFlag = 0;
 	Pipe.writeFlag = 0;
+
+	pipeActive = true;
 }
 
 static void ChatPipe_WriteToPipe(const char* message)
 {
+	if (!pipeActive)
+		return;
+
 	DWORD byteCnt;
 
 	snprintf(Pipe.writeBuffer, sizeof(Pipe.writeBuffer), "%s", message);
@@ -330,7 +339,7 @@ void ChatPipe_OnReadComplete()
 
 void ChatPipe_Poll(void) // Called once per game loop
 {
-	if (Pipe.handle == NULL)
+	if (!pipeActive)
 		return;
 	
 	HANDLE handles[3] = { waitEvent, Pipe.overlapRead.hEvent, Pipe.overlapWrite.hEvent };
@@ -373,10 +382,13 @@ static void ChatPipe_WriteToPipe(const char* message)
 
 void ChatPipe_Create(void)
 {
+	pipeActive = true;
 }
 
 void ChatPipe_Poll(void) // Called once per game loop
 {
+	if (!pipeActive)
+		return;
 }
 
 #endif
