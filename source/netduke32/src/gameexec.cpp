@@ -3325,8 +3325,11 @@ static int X_DoExecute(void)
             }
 
             X_OnEvent(EVENT_RESETPLAYER, p->i, vm.playerNum, -1);
-            g_cameraDistance = 0;
-            g_cameraClock = (int32_t)totalclock;
+            if (vm.playerNum == myconnectindex)
+            {
+                g_cameraDistance = 0;
+                g_cameraClock = (int32_t)totalclock;
+            }
         }
         P_UpdateScreenPal(g_player[vm.playerNum].ps);
         //AddLog("EOF: resetplayer");
