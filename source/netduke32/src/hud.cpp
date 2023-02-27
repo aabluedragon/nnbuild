@@ -49,9 +49,9 @@ void G_SetStatusBarScale(int sc)
 // For compact fragbar style.
 static void G_DrawFragbarCell(const char* text, uint8_t pal, int32_t ypos, int32_t value)
 {
-    int32_t const xpos = 267;
+    int32_t const xpos = 259;
     int32_t const x_offset = scale(120, xdim, ydim) - (160); // Widescreen offset
-    vec2_t const dim = { 52, 5 };
+    vec2_t const dim = { 60, 5 };
 
     rotatesprite_(0, 0, 65536, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT | RS_STRETCH | RS_TRANS1 | RS_TRANS2, 0, 0, get_xdim(xpos + x_offset), get_ydim(ypos), get_xdim(xpos + x_offset + dim.x), get_ydim(ypos + dim.y));
     G_ScreenText(MINIFONT, xpos + 1, ypos, 65536, 0, 0, text, -127, pal, RS_AUTO | RS_NOCLIP | RS_TOPLEFT | RS_ALIGN_R, 0, 3, 5, 1, 1, TEXT_UPPERCASE, 0, 0, xdim, ydim);
