@@ -73,7 +73,7 @@ void G_DrawFrags(void)
             bool redraw = false;
 
             for (ALL_PLAYERS(i))
-                if (g_player[i].ps->frag != sbar.frag[i])
+                if (sbar.frag[i] != g_player[i].ps->frag - g_player[i].ps->fraggedself)
                     redraw = true;
 
             if (!redraw)
@@ -81,7 +81,7 @@ void G_DrawFrags(void)
 
             for (ALL_PLAYERS(i))
                 if (i != myconnectindex)
-                    sbar.frag[i] = g_player[i].ps->frag;
+                    sbar.frag[i] = g_player[i].ps->frag - g_player[i].ps->fraggedself;
         }
 
         int32_t const xpos = (320 << 15) - (tilesiz[FRAGBAR].x << 15);
@@ -773,9 +773,9 @@ void G_DrawStatusBar(int snum)
         updateBits = UPD_ALL;
     }
 
-    if (sbar.frag[myconnectindex] != p->frag)
+    if (sbar.frag[myconnectindex] != p->frag - p->fraggedself)
     {
-        sbar.frag[myconnectindex] = p->frag;
+        sbar.frag[myconnectindex] = p->frag - p->fraggedself;
         updateBits |= UPD_KILLS;
     }
     if (sbar.got_access != ud.got_access)
