@@ -760,7 +760,8 @@ static int S_CalcDistAndAng(int spriteNum, int soundNum, int camSect, int camAng
         sndist = 0;
 
     if (!FURY && ((unsigned)camSect >= (unsigned)numsectors || (unsigned)soundSect >= (unsigned)numsectors
-        || (sndist && PN(spriteNum) != MUSICANDSFX
+        || (sndist
+            && (!valid_sprite || PN(spriteNum) != MUSICANDSFX)
             && (!sectorsareconnected(camSect, soundSect)
                 || !cansee(camPos.x, camPos.y, camPos.z - (24 << 8), camSect, soundPos.x, soundPos.y, soundPos.z - (24 << 8), soundSect)))))
         sndist += sndist >> 5;
