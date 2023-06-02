@@ -249,6 +249,7 @@ static unsigned char GetModsDirNames(GtkListStore *list)
     BUILDVFS_FIND_REC *dirs = NULL;
     GtkTreeIter iter;
 
+    int const bakpathsearchmode = pathsearchmode;
     pathsearchmode = 1;
 
     if ((homedir = Bgethomedir()))
@@ -273,6 +274,7 @@ static unsigned char GetModsDirNames(GtkListStore *list)
     klistfree(dirs);
     dirs = NULL;
 
+    pathsearchmode = bakpathsearchmode;
     return iternumb;
 }
 
