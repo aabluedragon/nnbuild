@@ -5,6 +5,7 @@
 
 #define TIMERUPDATESIZ 32
 
+int netQuitSend  = 0;
 int quittimer = 0;
 int lastpackettime = 0;
 int mymaxlag, otherminlag, bufferjitter = 1;
@@ -793,6 +794,13 @@ void Net_ParsePackets(void)
 
 void Net_SendQuit(void)
 {
+    if (netQuitSend)
+    {
+        //game.cpp@app_crashhandler() calls Net_SendQuit(). It has been called already when the crash has happen within Net_SendQuit().
+        //Abort the second call
+        return;
+    }
+    netQuitSend = 1;
     if (g_gameQuit == 0 && (numplayers > 1))
     {
         if (ud.gm & MODE_GAME)
