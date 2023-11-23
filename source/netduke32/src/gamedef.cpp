@@ -4681,7 +4681,7 @@ repeatcase:
                 {
                     g_skillNames[j][i] = toupper(*textptr);
                     textptr++, i++;
-                    if (i >= (signed)sizeof(g_skillNames[j]) - 1)
+                    if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(g_skillNames[j])))
                     {
                         LOG_F(WARNING, "%s:%d: truncating skill name to %d characters.",
                               g_scriptFileName, g_lineNumber, (int32_t)sizeof(g_skillNames[j]) - 1);
@@ -4707,7 +4707,7 @@ repeatcase:
                 {
                     gamename[i] = *textptr;
                     textptr++, i++;
-                    if (i >= (signed)sizeof(gamename) - 1)
+                    if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(gamename)))
                     {
                         LOG_F(WARNING, "%s:%d: truncating game name to %d characters.",
                               g_scriptFileName, g_lineNumber, (int32_t)sizeof(gamename) - 1);
@@ -4822,7 +4822,7 @@ repeatcase:
                 {
                     Gametypes[j].name[i] = toupper(*textptr);
                     textptr++, i++;
-                    if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(Gametypes[j].name) - 1))
+                    if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(Gametypes[j].name)))
                     {
                         LOG_F(WARNING, "%s:%d: truncating gametype name to %d characters.",
                               g_scriptFileName, g_lineNumber, (int32_t)sizeof(Gametypes[j].name) - 1);
@@ -5048,7 +5048,7 @@ repeatcase:
                 {
                     CheatStrings[k][i] = *textptr;
                     textptr++, i++;
-                    if (i >= (signed)sizeof(CheatStrings[k]) - 1)
+                    if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(CheatStrings[k])))
                     {
                         LOG_F(WARNING, "%s:%d: truncating cheat string to %d characters.",
                               g_scriptFileName, g_lineNumber, (signed)sizeof(CheatStrings[k]) - 1);
