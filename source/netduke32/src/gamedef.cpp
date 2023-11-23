@@ -4691,6 +4691,14 @@ repeatcase:
                         break;
                     }
                 }
+
+                if (EDUKE32_PREDICT_FALSE(i == 0))
+                {
+                    LOG_F(WARNING, "%s:%d: empty skill name.",
+                          g_scriptFileName, g_lineNumber);
+                    g_skillNames[j][i++] = ' ';
+                }
+
                 g_skillNames[j][i] = '\0';
                 continue;
 
