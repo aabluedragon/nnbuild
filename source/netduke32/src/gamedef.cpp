@@ -4683,8 +4683,10 @@ repeatcase:
                     textptr++, i++;
                     if (i >= (signed)sizeof(g_skillNames[j]) - 1)
                     {
-                        LOG_F(ERROR, "%s:%d: skill name exceeds limit of %d characters.", g_scriptFileName, g_lineNumber, (int32_t)sizeof(g_skillNames[j]) - 1);
-                        g_errorCnt++;
+                        LOG_F(WARNING, "%s:%d: truncating skill name to %d characters.",
+                              g_scriptFileName, g_lineNumber, (int32_t)sizeof(g_skillNames[j]) - 1);
+                        i--;
+                        g_warningCnt++;
                         scriptSkipLine();
                         break;
                     }
@@ -4707,8 +4709,10 @@ repeatcase:
                     textptr++, i++;
                     if (i >= (signed)sizeof(gamename) - 1)
                     {
-                        LOG_F(ERROR, "%s:%d: game name exceeds limit of %d characters.", g_scriptFileName, g_lineNumber, (int32_t)sizeof(gamename) - 1);
-                        g_errorCnt++;
+                        LOG_F(WARNING, "%s:%d: truncating game name to %d characters.",
+                              g_scriptFileName, g_lineNumber, (int32_t)sizeof(gamename) - 1);
+                        i--;
+                        g_warningCnt++;
                         scriptSkipLine();
                         break;
                     }
@@ -4818,12 +4822,14 @@ repeatcase:
                 {
                     Gametypes[j].name[i] = toupper(*textptr);
                     textptr++, i++;
-                    if (i >= (signed)sizeof(Gametypes[j].name) - 1)
+                    if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(Gametypes[j].name) - 1))
                     {
-                        LOG_F(ERROR, "%s:%d: gametype name exceeds limit of %d characters.", g_scriptFileName, g_lineNumber, (int32_t)sizeof(Gametypes[j].name) - 1);
-                        g_errorCnt++;
+                        LOG_F(WARNING, "%s:%d: truncating gametype name to %d characters.",
+                              g_scriptFileName, g_lineNumber, (int32_t)sizeof(Gametypes[j].name) - 1);
+                        i--;
+                        g_warningCnt++;
                         scriptSkipLine();
-                        continue;
+                        break;
                     }
                 }
                 Gametypes[j].name[i] = '\0';
@@ -5044,8 +5050,10 @@ repeatcase:
                     textptr++, i++;
                     if (i >= (signed)sizeof(CheatStrings[k]) - 1)
                     {
-                        LOG_F(ERROR, "%s:%d: cheat exceeds limit of %d characters.", g_scriptFileName, g_lineNumber, MAXCHEATLEN);
-                        g_errorCnt++;
+                        LOG_F(WARNING, "%s:%d: truncating cheat string to %d characters.",
+                              g_scriptFileName, g_lineNumber, (signed)sizeof(CheatStrings[k]) - 1);
+                        i--;
+                        g_warningCnt++;
                         scriptSkipLine();
                         break;
                     }
