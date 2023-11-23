@@ -4665,7 +4665,8 @@ repeatcase:
                 C_GetNextValue(LABEL_DEFINE);
                 g_scriptPtr--;
                 j = *g_scriptPtr;
-                C_SkipComments();
+
+                scriptSkipSpaces();
 
                 if (j < 0 || j > 4)
                 {
