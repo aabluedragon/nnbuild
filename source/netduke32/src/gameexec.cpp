@@ -2248,21 +2248,21 @@ static int X_DoExecute(void)
             switch (tw)
             {
             case CON_MYOS:
-                G_DrawTile(x,y,tilenum,shade,orientation);
+                VM_DrawTile(x,y,tilenum,shade,orientation);
                 break;
             case CON_MYOSPAL:
             {
                 int pal=Gv_GetVarX(*insptr++);
-                G_DrawTilePal(x,y,tilenum,shade,orientation,pal);
+                VM_DrawTilePal(x,y,tilenum,shade,orientation,pal);
                 break;
             }
             case CON_MYOSX:
-                G_DrawTileSmall(x,y,tilenum,shade,orientation);
+                VM_DrawTileSmall(x,y,tilenum,shade,orientation);
                 break;
             case CON_MYOSPALX:
             {
                 int pal=Gv_GetVarX(*insptr++);
-                G_DrawTilePalSmall(x,y,tilenum,shade,orientation,pal);
+                VM_DrawTilePalSmall(x,y,tilenum,shade,orientation,pal);
                 break;
             }
             }
@@ -5568,4 +5568,36 @@ void G_RestoreMapState(mapstate_t *save)
         clearfifo();
         G_ResetTimers();
     }
+}
+
+// MYOS* CON commands.
+void VM_DrawTileGeneric(int32_t x, int32_t y, int32_t zoom, int32_t tilenum, int32_t shade, int32_t orientation, int32_t p)
+{
+    orientation &= (ROTATESPRITE_MAX-1);
+
+    int const rotAngle = (orientation&4) ? 1024 : 0;
+
+    if (!(orientation&ROTATESPRITE_FULL16))
+    {
+        x<<=16;
+        y<<=16;
+    }
+
+    rotatesprite_win(x, y, zoom, rotAngle, tilenum, shade, p, 2|orientation);
+}
+
+void VM_DrawTile(int32_t x, int32_t y, int32_t tilenum, int32_t shade, int32_t orientation)
+{
+    auto const pPlayer = g_player[screenpeek].ps;
+    int32_t    tilePal = pPlayer->cursectnum >= 0 ? sector[pPlayer->cursectnum].floorpal : 0;
+
+    VM_DrawTileGeneric(x, y, 65536, tilenum, shade, orientation, tilePal);
+}
+
+void VM_DrawTileSmall(int32_t x, int32_t y, int32_t tilenum, int32_t shade, int32_t orientation)
+{
+    auto const pPlayer = g_player[screenpeek].ps;
+    int32_t    tilePal = pPlayer->cursectnum >= 0 ? sector[pPlayer->cursectnum].floorpal : 0;
+
+    VM_DrawTileGeneric(x, y, 32768, tilenum, shade, orientation, tilePal);
 }

@@ -101,8 +101,6 @@ extern void overwritesprite(int thex,int they,int tilenum,int shade,int stat,int
 extern void gamenumber(int x,int y,int n,int s);
 extern void G_Shutdown(void);
 
-extern void G_DrawTile(int x,int y,int tilenum,int shade,int orientation);
-extern void G_DrawTilePal(int x,int y,int tilenum,int shade,int orientation,int p);
 extern void G_GameExit(const char *t);
 extern void G_DisplayRest(int smoothratio);
 extern void updatesectorz(int x,int y,int z,short *sectnum);
@@ -130,8 +128,6 @@ extern void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q
 extern int G_GameTextLen(int x, const char *t);
 extern int G_PrintGameText(int small, int starttile, int x,int y,const char *t,int s,int p,int orientation,int x1, int y1, int x2, int y2,int z);
 extern void G_DrawTXDigiNumZ(int starttile, int x,int y,int n,int s,int pal,int cs,int x1, int y1, int x2, int y2, int z);
-extern void G_DrawTileSmall(int x,int y,int tilenum,int shade,int orientation);
-extern void G_DrawTilePalSmall(int x,int y,int tilenum,int shade,int orientation,int p);
 extern void Gv_ResetVars(void);
 extern void A_ResetVars(int iActor);
 

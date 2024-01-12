@@ -1262,46 +1262,6 @@ int A_CheckInventorySprite(spritetype *s)
     return 0;
 }
 
-void G_DrawTile(int x, int y, int tilenum, int shade, int orientation)
-{
-    int p = sector[g_player[screenpeek].ps->cursectnum].floorpal, a = 0;
-
-    if (orientation&4)
-        a = 1024;
-
-    rotatesprite((orientation&256)?x:(x<<16),(orientation&256)?y:(y<<16),65536L,a,tilenum,shade,p,2|orientation,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);
-}
-
-void G_DrawTilePal(int x, int y, int tilenum, int shade, int orientation, int p)
-{
-    int a = 0;
-
-    if (orientation&4)
-        a = 1024;
-
-    rotatesprite((orientation&256)?x:(x<<16),(orientation&256)?y:(y<<16),65536L,a,tilenum,shade,p,2|orientation,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);
-}
-
-void G_DrawTileSmall(int x, int y, int tilenum, int shade, int orientation)
-{
-    int p = sector[g_player[screenpeek].ps->cursectnum].floorpal, a = 0;
-
-    if (orientation&4)
-        a = 1024;
-
-    rotatesprite((orientation&256)?x:(x<<16),(orientation&256)?y:(y<<16),32768L,a,tilenum,shade,p,2|orientation,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);
-}
-
-void G_DrawTilePalSmall(int x, int y, int tilenum, int shade, int orientation, int p)
-{
-    int a = 0;
-
-    if (orientation&4)
-        a = 1024;
-
-    rotatesprite((orientation&256)?x:(x<<16),(orientation&256)?y:(y<<16),32768L,a,tilenum,shade,p,2|orientation,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);
-}
-
 void G_DrawTXDigiNumZ(int starttile, int x,int y,int n,int s,int pal,int cs,int x1, int y1, int x2, int y2, int z)
 {
     int i, j = 0, k, p, c;
