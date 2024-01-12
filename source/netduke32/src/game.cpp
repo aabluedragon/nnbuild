@@ -1266,7 +1266,7 @@ void G_DrawTXDigiNumZ(int starttile, int x,int y,int n,int s,int pal,int cs,int 
 {
     int i, j = 0, k, p, c;
     char b[10];
-    int shift = (cs&256)?0:16;
+    int shift = (cs&ROTATESPRITE_FULL16)?0:16;
 
     //ltoa(n,b,10);
     Bsnprintf(b,10,"%d",n);
@@ -1277,7 +1277,7 @@ void G_DrawTXDigiNumZ(int starttile, int x,int y,int n,int s,int pal,int cs,int 
         p = starttile+*(b+k)-'0';
         j += (tilesiz[p].x+1)*z/65536;
     }
-    if (cs&256) j<<=16;
+    if (cs&ROTATESPRITE_FULL16) j<<=16;
     c = x-(j>>1);
 
     j = 0;
@@ -1287,7 +1287,7 @@ void G_DrawTXDigiNumZ(int starttile, int x,int y,int n,int s,int pal,int cs,int 
         rotatesprite((c+j)<<shift,y<<shift,z,0,p,s,pal,2|cs,x1,y1,x2,y2);
         /*        rotatesprite((c+j)<<16,y<<16,65536L,0,p,s,pal,cs,0,0,xdim-1,ydim-1);
                 rotatesprite(x<<16,y<<16,32768L,a,tilenum,shade,p,2|orientation,windowxy1.x,windowxy1.y,windowxy2.x,windowxy2.y);*/
-        j += ((tilesiz[p].x+1)*z/65536)<<((cs&256)?16:0);
+        j += ((tilesiz[p].x+1)*z/65536)<<((cs&ROTATESPRITE_FULL16)?16:0);
     }
 }
 
