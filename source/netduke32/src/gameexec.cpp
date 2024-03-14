@@ -5264,7 +5264,15 @@ void A_Execute(int spriteNum, int playerNum, int playerDist)
     if (actor[vm.spriteNum].timetosleep > 1)
         actor[vm.spriteNum].timetosleep--;
     else if (actor[vm.spriteNum].timetosleep == 1)
+    {
+#ifndef EDUKE32_STANDALONE
+        if (!FURY &&
+            EDUKE32_PREDICT_FALSE(g_scriptVersion == 13 &&
+                                  ((vm.pSprite->picnum == FIRE) || (vm.pSprite->picnum == FIRE2))))
+            return;
+#endif
         changespritestat(vm.spriteNum, STAT_ZOMBIEACTOR);
+    }
 }
 
 void G_SaveMapState(mapstate_t *save)
