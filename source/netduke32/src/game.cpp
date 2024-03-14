@@ -4417,6 +4417,11 @@ int A_Spawn(int spriteNum, int tileNum)
                         break;
                 }
             }
+            else
+            {
+                if (!PLUTOPAK)
+                    pSprite->extra <<= 1;
+            }
 
             if (pSprite->picnum == BOSS4STAYPUT || pSprite->picnum == BOSS1 || pSprite->picnum == BOSS2 || pSprite->picnum == BOSS1STAYPUT || pSprite->picnum == BOSS3 || pSprite->picnum == BOSS4)
             {
