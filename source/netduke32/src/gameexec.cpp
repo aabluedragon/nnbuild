@@ -1458,13 +1458,27 @@ static int X_DoExecute(void)
         insptr++;
 
         j = (*insptr++-vm.pSprite->xrepeat)<<1;
-        vm.pSprite->xrepeat += ksgn(j);
-
-        if ((vm.pSprite->picnum == APLAYER && vm.pSprite->yrepeat < 36) || *insptr < vm.pSprite->yrepeat || ((vm.pSprite->yrepeat*(tilesiz[vm.pSprite->picnum].y+8))<<2) < (actor[vm.spriteNum].floorz - actor[vm.spriteNum].ceilingz))
+        if (PLUTOPAK)
         {
-            j = ((*insptr)-vm.pSprite->yrepeat)<<1;
-            if (klabs(j)) vm.pSprite->yrepeat += ksgn(j);
+            vm.pSprite->xrepeat += ksgn(j);
+
+            if ((vm.pSprite->picnum == APLAYER && vm.pSprite->yrepeat < 36) || *insptr < vm.pSprite->yrepeat || ((vm.pSprite->yrepeat*(tilesiz[vm.pSprite->picnum].y+8))<<2) < (actor[vm.spriteNum].floorz - actor[vm.spriteNum].ceilingz))
+            {
+                j = ((*insptr)-vm.pSprite->yrepeat)<<1;
+                if (klabs(j)) vm.pSprite->yrepeat += ksgn(j);
+            }
         }
+        else
+        {
+            if (klabs(j) > 2)
+                vm.pSprite->xrepeat += ksgn(j);
+
+            j = ((*insptr)-vm.pSprite->yrepeat)<<1;
+
+            if (klabs(j) > 2)
+                vm.pSprite->yrepeat += ksgn(j);
+        }
+
         insptr++;
 
         break;
