@@ -448,7 +448,7 @@ int32_t G_LoadPlayer(int32_t spot)
         if (kdfread((char *)apXStrings[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
     }
 
-    if (kdfread(&g_dynTileList[0],sizeof(g_dynTileList[0]),MAXTILES,fil) != MAXTILES) goto corrupt;
+    if (kdfread(&g_dynTileList[0],sizeof(g_dynTileList[0]),g_dynTileListSize,fil) != g_dynTileListSize) goto corrupt;
 
     if (Gv_ReadSave(fil)) goto corrupt;
 
@@ -712,6 +712,21 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&g_cloudX,sizeof(int16_t)<<7,1,fil);
     dfwrite(&g_cloudY,sizeof(int16_t)<<7,1,fil);
 
+    for (i=0; i<MAXTILES; i++)
+        if (g_tile[i].execPtr)
+        {
+            j = (intptr_t)g_tile[i].execPtr-(intptr_t)&apScript[0];
+            g_tile[i].execPtr = (intptr_t *)j;
+        }
+
+    for (i=0; i<MAXTILES; i++)
+        if (g_tile[i].loadPtr)
+        {
+            j = (intptr_t)g_tile[i].loadPtr-(intptr_t)&apScript[0];
+            g_tile[i].loadPtr = (intptr_t *)j;
+        }
+
+
     dfwrite(&g_tile[0], sizeof(tiledata_t), MAXTILES, fil);
     dfwrite(&g_scriptSize,sizeof(g_scriptSize),1,fil);
     scriptptrs = (char*)Xcalloc(1, g_scriptSize * sizeof(scriptptrs));
@@ -740,22 +755,8 @@ int32_t G_SavePlayer(int32_t spot)
     for (i=0; i<MAXTILES; i++)
         if (g_tile[i].execPtr)
         {
-            j = (intptr_t)g_tile[i].execPtr-(intptr_t)&apScript[0];
-            g_tile[i].execPtr = (intptr_t *)j;
-        }
-
-    for (i=0; i<MAXTILES; i++)
-        if (g_tile[i].execPtr)
-        {
             j = (intptr_t)g_tile[i].execPtr+(intptr_t)&apScript[0];
             g_tile[i].execPtr = (intptr_t *)j;
-        }
-
-    for (i=0; i<MAXTILES; i++)
-        if (g_tile[i].loadPtr)
-        {
-            j = (intptr_t)g_tile[i].loadPtr-(intptr_t)&apScript[0];
-            g_tile[i].loadPtr = (intptr_t *)j;
         }
 
     for (i=0; i<MAXTILES; i++)
@@ -854,7 +855,7 @@ int32_t G_SavePlayer(int32_t spot)
             dfwrite(apXStrings[i],MAXQUOTELEN, 1, fil);
     }
 
-    dfwrite(&g_dynTileList[0],sizeof(g_dynTileList[0]),MAXTILES,fil);
+    dfwrite(&g_dynTileList[0],sizeof(g_dynTileList[0]),g_dynTileListSize,fil);
 
     Gv_WriteSave(fil);
 

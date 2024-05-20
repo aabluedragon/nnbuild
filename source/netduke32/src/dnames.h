@@ -39,6 +39,7 @@ struct dynitem
 
 extern struct dynitem g_dynSoundList[];
 extern struct dynitem g_dynTileList[];
+extern const int g_dynTileListSize;
 
 constexpr int16_t KICK_HIT__            = 0;
 constexpr int16_t PISTOL_RICOCHET__     = 1;

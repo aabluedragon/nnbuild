@@ -804,6 +804,8 @@ struct dynitem g_dynTileList[] =
     { "E32_TILE5846",        &E32_TILE5846,        E32_TILE5846__ },
  };
 
+const int g_dynTileListSize = ARRAY_SSIZE(g_dynTileList);
+
 inthashtable_t h_dynamictilemap = { nullptr, 640 };
 inthashtable_t h_dsound = { nullptr, INTHASH_SIZE(ARRAY_SIZE(g_dynSoundList)) };
 
