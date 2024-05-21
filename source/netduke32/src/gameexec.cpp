@@ -5560,6 +5560,7 @@ void G_RestoreMapState(mapstate_t *save)
             k = nextspritestat[k];
         }
 
+        calc_sector_reachability();
         G_BackupInterpolations();
         for (i = g_animateCount-1;i>=0;i--)
             G_SetInterpolation(G_GetAnimationPointer(i));
