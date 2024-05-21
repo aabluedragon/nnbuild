@@ -254,8 +254,6 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&ud.volume_number,sizeof(ud.volume_number),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.level_number,sizeof(ud.level_number),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.player_skill,sizeof(ud.player_skill),1,fil) != 1) goto corrupt;
-    if (kdfread(&ud.music_episode, sizeof(ud.music_episode), 1, fil) != 1) goto corrupt;
-    if (kdfread(&ud.music_level, sizeof(ud.music_level), 1, fil) != 1) goto corrupt;
 
     ud.m_level_number = ud.level_number;
     ud.m_volume_number = ud.volume_number;
@@ -296,6 +294,13 @@ int32_t G_LoadPlayer(int32_t spot)
     tilesiz[TILE_LOADSHOT].y = 320;
     if (kdfread((char *)waloff[TILE_LOADSHOT],320,200,fil) != 200) goto corrupt;
     tileInvalidate(TILE_LOADSHOT,0,255);
+
+    if (kdfread(&ud.music_episode, sizeof(ud.music_episode), 1, fil) != 1) goto corrupt;
+    if (kdfread(&ud.music_level, sizeof(ud.music_level), 1, fil) != 1) goto corrupt;
+
+    if (kdfread(&ud.monsters_killed,sizeof(ud.monsters_killed),1,fil) != 1) goto corrupt;
+    if (kdfread(&ud.total_monsters,sizeof(ud.total_monsters),1,fil) != 1) goto corrupt;
+    if (kdfread(&ud.playerbest,sizeof(ud.playerbest),1,fil) != 1) goto corrupt;
 
     if (kdfread(&numwalls,sizeof(numwalls),1,fil) != 1) goto corrupt;
     if (kdfread(&wall[0],sizeof(walltype),MAXWALLS,fil) != MAXWALLS) goto corrupt;
@@ -398,6 +403,8 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_earthquakeTime,sizeof(g_earthquakeTime),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.from_bonus,sizeof(ud.from_bonus),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.secretlevel,sizeof(ud.secretlevel),1,fil) != 1) goto corrupt;
+    if (kdfread(&ud.max_secret_rooms,sizeof(ud.max_secret_rooms),1,fil) != 1) goto corrupt;
+    if (kdfread(&ud.secret_rooms,sizeof(ud.secret_rooms),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.dmflags,sizeof(ud.dmflags),1,fil) != 1) goto corrupt;
     ud.m_dmflags = ud.dmflags;
 
@@ -573,6 +580,7 @@ int32_t G_LoadPlayer(int32_t spot)
         Net_WaitForPlayers();
 
         G_ResetTimers();
+        calc_sector_reachability();
     }
 
     return(0);
@@ -645,8 +653,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&ud.volume_number,sizeof(ud.volume_number),1,fil);
     dfwrite(&ud.level_number,sizeof(ud.level_number),1,fil);
     dfwrite(&ud.player_skill,sizeof(ud.player_skill),1,fil);
-    dfwrite(&ud.music_episode, sizeof(ud.music_episode), 1, fil);
-    dfwrite(&ud.music_level, sizeof(ud.music_level), 1, fil);
+
     dfwrite(&currentboardfilename[0],BMAX_PATH,1,fil);
     if (!waloff[TILE_SAVESHOT])
     {
@@ -656,6 +663,13 @@ int32_t G_SavePlayer(int32_t spot)
         walock[TILE_SAVESHOT] = 1;
     }
     dfwrite((char *)waloff[TILE_SAVESHOT],320,200,fil);
+
+    dfwrite(&ud.music_episode, sizeof(ud.music_episode), 1, fil);
+    dfwrite(&ud.music_level, sizeof(ud.music_level), 1, fil);
+
+    dfwrite(&ud.monsters_killed,sizeof(ud.monsters_killed),1,fil);
+    dfwrite(&ud.total_monsters,sizeof(ud.total_monsters),1,fil);
+    dfwrite(&ud.playerbest,sizeof(ud.playerbest),1,fil);
 
     dfwrite(&numwalls,sizeof(numwalls),1,fil);
     dfwrite(&wall[0],sizeof(walltype),MAXWALLS,fil);
@@ -818,6 +832,8 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&g_earthquakeTime,sizeof(g_earthquakeTime),1,fil);
     dfwrite(&ud.from_bonus,sizeof(ud.from_bonus),1,fil);
     dfwrite(&ud.secretlevel,sizeof(ud.secretlevel),1,fil);
+    dfwrite(&ud.max_secret_rooms,sizeof(ud.max_secret_rooms),1,fil);
+    dfwrite(&ud.secret_rooms,sizeof(ud.secret_rooms),1,fil);
     dfwrite(&ud.dmflags,sizeof(ud.dmflags),1,fil);
     dfwrite(&ud.god,sizeof(ud.god),1,fil);
     dfwrite(&ud.auto_run,sizeof(ud.auto_run),1,fil);
