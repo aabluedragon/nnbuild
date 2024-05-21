@@ -309,6 +309,15 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&sprite[0],sizeof(spritetype),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
     if (kdfread(&spriteext[0],sizeof(spriteext_t),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
 
+#ifdef YAX_ENABLE
+    if (kdfread(&numyaxbunches,sizeof(numyaxbunches),1,fil) != 1) goto corrupt;
+# if !defined NEW_MAP_FORMAT
+    if (kdfread(yax_bunchnum,sizeof(yax_bunchnum[0]),numsectors,fil) != numsectors) goto corrupt;
+    if (kdfread(yax_nextwall,sizeof(yax_nextwall[0]),numwalls,fil) != numwalls) goto corrupt;
+# endif
+    yax_update(numyaxbunches > 0 ? 2 : 1);
+#endif
+
 #if 0 // Polymer
     if (kdfread(&lightcount,sizeof(lightcount),1,fil) != 1) goto corrupt;
     if (kdfread(&prlights[0],sizeof(_prlight),lightcount,fil) != lightcount) goto corrupt;
@@ -686,6 +695,14 @@ int32_t G_SavePlayer(int32_t spot)
         }
 #endif
     dfwrite(&spriteext[0],sizeof(spriteext_t),MAXSPRITES,fil);
+
+#ifdef YAX_ENABLE
+    dfwrite(&numyaxbunches,sizeof(numyaxbunches),1,fil);
+# if !defined NEW_MAP_FORMAT
+    dfwrite(yax_bunchnum,sizeof(yax_bunchnum[0]),numsectors,fil);
+    dfwrite(yax_nextwall,sizeof(yax_nextwall[0]),numwalls,fil);
+# endif
+#endif
 
 #if 0 //POLYMER
     dfwrite(&lightcount,sizeof(lightcount),1,fil);
