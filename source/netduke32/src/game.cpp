@@ -8677,7 +8677,7 @@ int app_main(int32_t argc, char const* const* argv)
 
 // OLDMP MERGE CHECKME
 #ifdef STARTUP_SETUP_WINDOW
-    if (readSetup < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_JF || ud.config.ForceSetup)) || g_commandSetup)
+    if (readSetup < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_NETDUKE32 || ud.config.ForceSetup)) || g_commandSetup)
     {
         if (quitevent || !startwin_run())
         {
@@ -9055,9 +9055,9 @@ static int G_OpenDemoRead(int g_whichDemo) // 0 = mine
     if (ver != BYTEVERSION /*&& ver != 116 && ver != 117*/)
     {
         /* old demo playback */
-        if (ver == BYTEVERSION_JF)   LOG_F(ERROR, "Demo %s is for Regular edition.", d);
-        else if (ver == BYTEVERSION_JF+1) LOG_F(ERROR, "Demo %s is for Atomic edition.", d);
-        else if (ver == BYTEVERSION_JF+2) LOG_F(ERROR, "Demo %s is for Shareware version.", d);
+        if (ver == BYTEVERSION_NETDUKE32)   LOG_F(ERROR, "Demo %s is for Regular edition.", d);
+        else if (ver == BYTEVERSION_NETDUKE32+1) LOG_F(ERROR, "Demo %s is for Atomic edition.", d);
+        else if (ver == BYTEVERSION_NETDUKE32+2) LOG_F(ERROR, "Demo %s is for Shareware version.", d);
 //        else OSD_Printf("Demo %s is of an incompatible version (%d).\n", d, ver);
         kclose(recfilep);
         ud.reccnt=0;

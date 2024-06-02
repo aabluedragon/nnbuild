@@ -3292,10 +3292,10 @@ DO_DEFSTATE:
                 //printf("We are enhanced, baby...\n");
                 C_GetNextValue(LABEL_DEFINE);
                 g_scriptPtr--;
-                if (*g_scriptPtr > BYTEVERSION_JF)
+                if (*g_scriptPtr > BYTEVERSION_NETDUKE32)
                 {
                     g_warningCnt++;
-                    LOG_F(WARNING, "%s:%d: need build %d, found build %d", g_scriptFileName, g_lineNumber, k, BYTEVERSION_JF);
+                    LOG_F(WARNING, "%s:%d: need build %d, found build %d", g_scriptFileName, g_lineNumber, k, BYTEVERSION_NETDUKE32);
                 }
                 continue;
             }

@@ -583,7 +583,7 @@ void Net_ParsePackets(void)
                         }
                         if (packbuf[3] != (char)BYTEVERSION)
                         {
-                            LOG_F(ERROR, "Player has version %d, expecting %d (%d, %d, %d)", packbuf[3], BYTEVERSION, BYTEVERSION_JF, PLUTOPAK, VOLUMEONE);
+                            LOG_F(ERROR, "Player has version %d, expecting %d (%d, %d, %d)", packbuf[3], BYTEVERSION, BYTEVERSION_NETDUKE32, PLUTOPAK, VOLUMEONE);
                             G_GameExit("You cannot play Duke with different versions!");
                         }
 

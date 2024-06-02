@@ -835,7 +835,7 @@ void CONFIG_WriteSetup(uint32_t flags)
         ud.config.scripthandle = SCRIPT_Init(g_setupFileName);
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Misc", "Executions", ++ud.executions, false, false);
-    SCRIPT_PutNumber(ud.config.scripthandle, "Setup", "ConfigVersion", BYTEVERSION_JF, false, false);
+    SCRIPT_PutNumber(ud.config.scripthandle, "Setup", "ConfigVersion", BYTEVERSION_NETDUKE32, false, false);
     SCRIPT_PutNumber(ud.config.scripthandle, "Setup", "ForceSetup", ud.config.ForceSetup, false, false);
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "ScreenBPP", ud.config.ScreenBPP, false, false);  // JBF 20040523
