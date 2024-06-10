@@ -40,7 +40,7 @@ void ReadSaveGameHeaders(void)
     {
         fn[4] = i+'0';
         if ((fil = kopen4loadfrommod(fn,0)) == -1) continue;
-        if (kdfread(&j,sizeof(int32_t),1,fil) != 1)
+        if (kdfread(&j,sizeof(j),1,fil) != 1)
         {
             kclose(fil);
             continue;
@@ -93,13 +93,13 @@ int32_t G_LoadSaveHeader(char spot,struct savehead *saveh)
 
     if (kdfread(&bv,sizeof(bv),1,fil) != 1) goto corrupt;
 
-    if (kdfread(&saveh->numplr,sizeof(int32_t),1,fil) != 1) goto corrupt;
+    if (kdfread(&saveh->numplr,sizeof(saveh->numplr),1,fil) != 1) goto corrupt;
 
-    if (kdfread(saveh->name,19,1,fil) != 1) goto corrupt;
-    if (kdfread(&saveh->volnum,sizeof(int32_t),1,fil) != 1) goto corrupt;
-    if (kdfread(&saveh->levnum,sizeof(int32_t),1,fil) != 1) goto corrupt;
-    if (kdfread(&saveh->plrskl,sizeof(int32_t),1,fil) != 1) goto corrupt;
-    if (kdfread(saveh->boardfn,BMAX_PATH,1,fil) != 1) goto corrupt;
+    if (kdfread(saveh->name,sizeof(saveh->name),1,fil) != 1) goto corrupt;
+    if (kdfread(&saveh->volnum,sizeof(saveh->volnum),1,fil) != 1) goto corrupt;
+    if (kdfread(&saveh->levnum,sizeof(saveh->levnum),1,fil) != 1) goto corrupt;
+    if (kdfread(&saveh->plrskl,sizeof(saveh->plrskl),1,fil) != 1) goto corrupt;
+    if (kdfread(saveh->boardfn,sizeof(saveh->boardfn),1,fil) != 1) goto corrupt;
 
     if (waloff[TILE_LOADSHOT] == 0) g_cache.allocateBlock(&waloff[TILE_LOADSHOT],320*200,&walock[TILE_LOADSHOT]);
     tilesiz[TILE_LOADSHOT].x = 200;
@@ -322,7 +322,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&lightcount,sizeof(lightcount),1,fil) != 1) goto corrupt;
     if (kdfread(&prlights[0],sizeof(_prlight),lightcount,fil) != lightcount) goto corrupt;
 #else
-    if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
+    if (kdfread(&i,sizeof(i),1,fil) != 1) goto corrupt;
 #endif // POLYMER
 
 #if defined(USE_OPENGL)
@@ -338,25 +338,25 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&prevspritestat[STAT_DEFAULT],sizeof(prevspritestat[STAT_DEFAULT]),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
     if (kdfread(&nextspritestat[STAT_DEFAULT],sizeof(nextspritestat[STAT_DEFAULT]),MAXSPRITES,fil) != MAXSPRITES) goto corrupt;
     if (kdfread(&g_numCyclers,sizeof(g_numCyclers),1,fil) != 1) goto corrupt;
-    if (kdfread(&cyclers[0][0],sizeof(cyclers[0][0])*6,MAXCYCLERS,fil) != MAXCYCLERS) goto corrupt;
+    if (kdfread(&cyclers[0][0],sizeof(cyclers),1,fil) != 1) goto corrupt;
     for (i=0; i<nump; i++)
         if (kdfread(g_player[i].ps,sizeof(DukePlayer_t),1,fil) != 1) goto corrupt;
     if (kdfread(&g_playerSpawnPoints,sizeof(g_playerSpawnPoints),1,fil) != 1) goto corrupt;
     if (kdfread(&g_numAnimWalls,sizeof(g_numAnimWalls),1,fil) != 1) goto corrupt;
     if (kdfread(&animwall,sizeof(animwall),1,fil) != 1) goto corrupt;
     if (kdfread(&g_origins[0], sizeof(vec2_t), sizeof(g_origins) / sizeof(vec2_t), fil) != sizeof(g_origins) / sizeof(vec2_t)) goto corrupt;
-    if (kdfread((int16_t *)&g_spriteDeleteQueuePos,sizeof(int16_t),1,fil) != 1) goto corrupt;
-    if (kdfread((int16_t *)&g_spriteDeleteQueueSize,sizeof(int16_t),1,fil) != 1) goto corrupt;
-    if (kdfread((int16_t *)&SpriteDeletionQueue[0],sizeof(int16_t),g_spriteDeleteQueueSize,fil) != g_spriteDeleteQueueSize) goto corrupt;
-    if (kdfread(&g_mirrorCount,sizeof(int16_t),1,fil) != 1) goto corrupt;
-    if (kdfread(&g_mirrorWall[0],sizeof(int16_t),64,fil) != 64) goto corrupt;
-    if (kdfread(&g_mirrorSector[0],sizeof(int16_t),64,fil) != 64) goto corrupt;
-    if (kdfread(&show2dsector[0],sizeof(uint8_t),MAXSECTORS>>3,fil) != (MAXSECTORS>>3)) goto corrupt;
+    if (kdfread(&g_spriteDeleteQueuePos,sizeof(g_spriteDeleteQueuePos),1,fil) != 1) goto corrupt;
+    if (kdfread(&g_spriteDeleteQueueSize,sizeof(g_spriteDeleteQueueSize),1,fil) != 1) goto corrupt;
+    if (kdfread(&SpriteDeletionQueue[0],sizeof(*SpriteDeletionQueue),g_spriteDeleteQueueSize,fil) != g_spriteDeleteQueueSize) goto corrupt;
+    if (kdfread(&g_mirrorCount,sizeof(g_mirrorCount),1,fil) != 1) goto corrupt;
+    if (kdfread(&g_mirrorWall[0],sizeof(g_mirrorWall),1,fil) != 1) goto corrupt;
+    if (kdfread(&g_mirrorSector[0],sizeof(g_mirrorSector),1,fil) != 1) goto corrupt;
+    if (kdfread(&show2dsector[0],sizeof(show2dsector),1,fil) != 1) goto corrupt;
 
     if (kdfread(&g_numClouds,sizeof(g_numClouds),1,fil) != 1) goto corrupt;
-    if (kdfread(&g_cloudSect[0],sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
-    if (kdfread(&g_cloudX,sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
-    if (kdfread(&g_cloudY,sizeof(int16_t)<<7,1,fil) != 1) goto corrupt;
+    if (kdfread(&g_cloudSect[0],sizeof(g_cloudSect),1,fil) != 1) goto corrupt;
+    if (kdfread(&g_cloudX,sizeof(g_cloudX),1,fil) != 1) goto corrupt;
+    if (kdfread(&g_cloudY,sizeof(g_cloudY),1,fil) != 1) goto corrupt;
 
     if (kdfread(&g_tile[0], sizeof(tiledata_t), MAXTILES, fil) != MAXTILES) goto corrupt;
     if (kdfread(&g_scriptSize,sizeof(g_scriptSize),1,fil) != 1) goto corrupt;
@@ -439,7 +439,7 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_globalRandom,sizeof(g_globalRandom),1,fil) != 1) goto corrupt;
     //if (kdfread(&parallaxyscale,sizeof(parallaxyscale),1,fil) != 1) goto corrupt;
 
-    if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
+    if (kdfread(&i,sizeof(i),1,fil) != 1) goto corrupt;
 
     while (i != MAXQUOTES)
     {
@@ -449,7 +449,7 @@ int32_t G_LoadPlayer(int32_t spot)
         apStrings[i] = (char*)Xcalloc(MAXQUOTELEN,sizeof(uint8_t));
 
         if (kdfread((char *)apStrings[i],MAXQUOTELEN,1,fil) != 1) goto corrupt;
-        if (kdfread(&i,sizeof(int32_t),1,fil) != 1) goto corrupt;
+        if (kdfread(&i,sizeof(i),1,fil) != 1) goto corrupt;
     }
 
     if (kdfread(&g_numXStrings,sizeof(g_numXStrings),1,fil) != 1) goto corrupt;
@@ -709,7 +709,7 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&prlights[0],sizeof(_prlight),lightcount,fil);
 #else
     i = 0;
-    dfwrite(&i,sizeof(int32_t),1,fil);
+    dfwrite(&i,sizeof(i),1,fil);
 #endif // POLYMER
 
 #if defined(USE_OPENGL)
@@ -723,25 +723,25 @@ int32_t G_SavePlayer(int32_t spot)
     dfwrite(&prevspritestat[STAT_DEFAULT],sizeof(prevspritestat[0]),MAXSPRITES,fil);
     dfwrite(&nextspritestat[STAT_DEFAULT],sizeof(nextspritestat[0]),MAXSPRITES,fil);
     dfwrite(&g_numCyclers,sizeof(g_numCyclers),1,fil);
-    dfwrite(&cyclers[0][0],sizeof(cyclers[0][0])*6,MAXCYCLERS,fil);
+    dfwrite(&cyclers[0][0],sizeof(cyclers),1,fil);
     for (i=0; i<ud.multimode; i++)
         dfwrite(g_player[i].ps,sizeof(DukePlayer_t),1,fil);
     dfwrite(&g_playerSpawnPoints,sizeof(g_playerSpawnPoints),1,fil);
     dfwrite(&g_numAnimWalls,sizeof(g_numAnimWalls),1,fil);
     dfwrite(&animwall,sizeof(animwall),1,fil);
     dfwrite(&g_origins[0], sizeof(vec2_t), sizeof(g_origins) / sizeof(vec2_t), fil);
-    dfwrite(&g_spriteDeleteQueuePos,sizeof(int16_t),1,fil);
-    dfwrite(&g_spriteDeleteQueueSize,sizeof(int16_t),1,fil);
-    dfwrite(&SpriteDeletionQueue[0],sizeof(int16_t),g_spriteDeleteQueueSize,fil);
-    dfwrite(&g_mirrorCount,sizeof(int16_t),1,fil);
-    dfwrite(&g_mirrorWall[0],sizeof(int16_t),64,fil);
-    dfwrite(&g_mirrorSector[0],sizeof(int16_t),64,fil);
-    dfwrite(&show2dsector[0],sizeof(uint8_t),MAXSECTORS>>3,fil);
+    dfwrite(&g_spriteDeleteQueuePos,sizeof(g_spriteDeleteQueuePos),1,fil);
+    dfwrite(&g_spriteDeleteQueueSize,sizeof(g_spriteDeleteQueueSize),1,fil);
+    dfwrite(&SpriteDeletionQueue[0],sizeof(*SpriteDeletionQueue),g_spriteDeleteQueueSize,fil);
+    dfwrite(&g_mirrorCount,sizeof(g_mirrorCount),1,fil);
+    dfwrite(&g_mirrorWall[0],sizeof(g_mirrorWall),1,fil);
+    dfwrite(&g_mirrorSector[0],sizeof(g_mirrorSector),1,fil);
+    dfwrite(&show2dsector[0],sizeof(show2dsector),1,fil);
 
     dfwrite(&g_numClouds,sizeof(g_numClouds),1,fil);
-    dfwrite(&g_cloudSect[0],sizeof(int16_t)<<7,1,fil);
-    dfwrite(&g_cloudX,sizeof(int16_t)<<7,1,fil);
-    dfwrite(&g_cloudY,sizeof(int16_t)<<7,1,fil);
+    dfwrite(&g_cloudSect[0],sizeof(g_cloudSect),1,fil);
+    dfwrite(&g_cloudX,sizeof(g_cloudX),1,fil);
+    dfwrite(&g_cloudY,sizeof(g_cloudY),1,fil);
 
     for (i=0; i<MAXTILES; i++)
         if (g_tile[i].execPtr)
@@ -875,11 +875,11 @@ int32_t G_SavePlayer(int32_t spot)
     {
         if (apStrings[i] != NULL)
         {
-            dfwrite(&i,sizeof(int32_t),1,fil);
+            dfwrite(&i,sizeof(i),1,fil);
             dfwrite(apStrings[i],MAXQUOTELEN, 1, fil);
         }
     }
-    dfwrite(&i,sizeof(int32_t),1,fil);
+    dfwrite(&i,sizeof(i),1,fil);
 
     dfwrite(&g_numXStrings,sizeof(g_numXStrings),1,fil);
     for (i=0; i<g_numXStrings; i++)

@@ -111,14 +111,6 @@ int Gv_ReadSave(int fil)
             if (kdfread(&aGameVars[i].pValues[0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
         }
     }
-    //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
-    //  AddLog(g_szBuf);
-
-    Gv_InitWeaponPointers();
-
-    //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
-    //  AddLog(g_szBuf);
-    Gv_RefreshPointers();
 
     if (kdfread(&g_gameArrayCount,sizeof(g_gameArrayCount),1,fil) != 1) goto corrupt;
     for (i=0;i<g_gameArrayCount;i++)
@@ -128,8 +120,12 @@ int Gv_ReadSave(int fil)
         if (kdfread(aGameArrays[i].szLabel,sizeof(char) * MAXARRAYLABEL, 1, fil) != 1) goto corrupt;
         hash_add(&h_arrays,aGameArrays[i].szLabel,i, 1);
 
-        aGameArrays[i].pValues=(intptr_t*)Xcalloc(aGameArrays[i].size,sizeof(intptr_t));
-        if (kdfread(aGameArrays[i].pValues,sizeof(intptr_t) * aGameArrays[i].size, 1, fil) < 1) goto corrupt;
+        int32_t arrayAllocSize = Gv_GetArrayAllocSize(i);
+        if (arrayAllocSize > 0)
+        {
+            aGameArrays[i].pValues=(intptr_t*)Xcalloc(arrayAllocSize, 1);
+            if (kdfread(aGameArrays[i].pValues, arrayAllocSize, 1, fil) < 1) goto corrupt;
+        }
     }
 
     //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
@@ -172,6 +168,14 @@ int Gv_ReadSave(int fil)
     g_szBuf[l]=0;
     OSD_Printf("%s\n",g_szBuf);
 
+    //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
+    //  AddLog(g_szBuf);
+
+    Gv_InitWeaponPointers();
+
+    //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
+    //  AddLog(g_szBuf);
+    Gv_RefreshPointers();
 #if 0
     {
         FILE *fp;
@@ -226,7 +230,9 @@ void Gv_WriteSave(FILE *fil)
     {
         dfwrite(&(aGameArrays[i]),sizeof(gamearray_t),1,fil);
         dfwrite(aGameArrays[i].szLabel,sizeof(char) * MAXARRAYLABEL, 1, fil);
-        dfwrite(aGameArrays[i].pValues,sizeof(intptr_t) * aGameArrays[i].size, 1, fil);
+        int32_t arrayAllocSize = Gv_GetArrayAllocSize(i);
+        if (arrayAllocSize > 0)
+            dfwrite(aGameArrays[i].pValues, arrayAllocSize, 1, fil);
     }
 
     for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
