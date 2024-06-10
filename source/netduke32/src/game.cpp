@@ -8283,8 +8283,8 @@ static void G_FatalEngineInitError(void)
     debug_break();
 #endif
     //G_Cleanup();
-    Bsprintf(tempbuf, "There was a problem initializing the engine: %s\n", engineerrstr);
-    ERRprintf("%s", tempbuf);
+    Bsprintf(tempbuf, "There was a problem initializing the engine: %s", engineerrstr);
+    LOG_F(ERROR, "%s", tempbuf);
     //fatal_exit(tempbuf);
     G_Shutdown();
 }
