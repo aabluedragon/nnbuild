@@ -619,7 +619,7 @@ static int osdcmd_addlogvar(const osdfuncparm_t *parm)
     strcpy(varname,parm->parms[0]);
     i = hash_find(&h_gamevars,varname);
     if (i >= 0)
-        OSD_Printf("%s = %d\n", varname, Gv_GetVar(i, g_player[myconnectindex].ps->i, myconnectindex));
+        OSD_Printf("%s = %d\n", varname, Gv_GetVar(i, g_player[screenpeek].ps->i, screenpeek));
     return OSDCMD_OK;
 }
 

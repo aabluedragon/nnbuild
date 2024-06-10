@@ -93,7 +93,7 @@ static void G_DemoLoadScreen(const char* statustext, int const loadScreenTile, i
 static void G_DoLoadScreen(const char* statustext, int percent)
 {
     Gv_SetVar(sysVarIDs.RETURN, LOADSCREEN, -1, -1);
-    X_OnEvent(EVENT_GETLOADTILE, -1, myconnectindex, -1);
+    X_OnEvent(EVENT_GETLOADTILE, g_player[screenpeek].ps->i, screenpeek, -1);
     int const loadScreenTile = Gv_GetVar(sysVarIDs.RETURN, -1, -1);
 
     if (ud.recstat == 2)

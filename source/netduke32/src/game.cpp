@@ -2456,7 +2456,7 @@ void G_DrawBackground(void)
         // when not rendering a game, fullscreen wipe
 #define MENUTILE (!videoGetRenderMode()?MENUSCREEN:LOADSCREEN)
         Gv_SetVar(sysVarIDs.RETURN, tilesiz[MENUTILE].x == 320 && tilesiz[MENUTILE].y == 200 ? MENUTILE : BIGHOLE, -1, -1);
-        X_OnEvent(EVENT_GETMENUTILE, -1, myconnectindex, -1);
+        X_OnEvent(EVENT_GETMENUTILE, g_player[screenpeek].ps->i, screenpeek, -1);
         if (Gv_GetVarByLabel("MENU_TILE", tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?0:1, -1, -1))
         {
             for (y=y1;y<y2;y+=tilesiz[Gv_GetVar(sysVarIDs.RETURN, -1, -1)].y)
@@ -7910,7 +7910,7 @@ static void G_DisplayLogo(void)
                     }
                 }
 
-                X_OnEvent(EVENT_LOGO, -1, screenpeek, -1);
+                X_OnEvent(EVENT_LOGO, g_player[screenpeek].ps->i, screenpeek, -1);
 
                 gameHandleEvents();
 
