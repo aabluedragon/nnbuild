@@ -2841,6 +2841,41 @@ static void G_CalculateCameraInterpolation(DukePlayer_t *p, vec3_t* pos, fix16_t
     }
 }
 
+#ifdef USE_OPENGL
+static void G_ReadGLFrame(void)
+{
+//    MICROPROFILE_SCOPEI("Game", EDUKE32_FUNCTION, MP_YELLOWGREEN);
+
+    // Save OpenGL screenshot with Duke3D palette
+    // NOTE: maybe need to move this to the engine...
+
+    auto frame = (palette_t *)Xaligned_alloc(16, xdim * ydim * sizeof(palette_t));
+    char *const pic = (char *) waloff[TILE_SAVESHOT];
+
+    Bassert(waloff[TILE_SAVESHOT]);
+
+    int const xf = divscale16(ydim*4/3, 320);
+    int const yf = divscale16(ydim, 200);  // (ydim<<16)/200
+
+    videoBeginDrawing();
+    glReadPixels(0, 0, xdim, ydim, GL_RGBA, GL_UNSIGNED_BYTE, frame);
+    videoEndDrawing();
+
+    for (int y = 0; y < 200; y++)
+    {
+        const int32_t base = mulscale16(200 - y - 1, yf)*xdim;
+
+        for (int x = 0; x < 320; x++)
+        {
+            const palette_t *pix = &frame[base + mulscale16(x, xf) + (xdim-(ydim*4/3))/2];
+            pic[320 * y + x] = paletteGetClosestColor(pix->r, pix->g, pix->b);
+        }
+    }
+
+    Xaligned_free(frame);
+}
+#endif
+
 void G_DrawRooms(int snum,int smoothratio)
 {
     int floorZ, ceilZ;
@@ -2927,8 +2962,13 @@ void G_DrawRooms(int snum,int smoothratio)
         {
             walock[TILE_SAVESHOT] = 199;
             if (waloff[TILE_SAVESHOT] == 0)
+            {
                 g_cache.allocateBlock(&waloff[TILE_SAVESHOT],200*320,&walock[TILE_SAVESHOT]);
-            renderSetTarget(TILE_SAVESHOT,200L,320L);
+                tileSetSize(TILE_SAVESHOT, 200, 320);
+            }
+
+            if (videoGetRenderMode() == REND_CLASSIC)
+                renderSetTarget(TILE_SAVESHOT, 200, 320);
         }
         else if (screenTilting)
         {
@@ -3120,8 +3160,17 @@ void G_DrawRooms(int snum,int smoothratio)
 
         if (g_screenCapture == 1)
         {
-            renderRestoreTarget();
             g_screenCapture = 0;
+
+            if (videoGetRenderMode() == REND_CLASSIC)
+                renderRestoreTarget();
+#ifdef USE_OPENGL
+            else
+            {
+                G_ReadGLFrame();
+                tileInvalidate(TILE_SAVESHOT, 0, 255);
+            }
+#endif
             //            walock[TILE_SAVESHOT] = 1;
         }
         else if (videoGetRenderMode() == REND_CLASSIC && ((ud.screen_tilting && p->rotscrnang) || ud.detail==0))
