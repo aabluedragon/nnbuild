@@ -155,6 +155,67 @@ static void sv_loadMhk(char* currentboardfilename)
     }
 }
 
+// Projectile processing
+
+static projectile_t *savegame_projectiledata;
+static uint8_t       savegame_projectiles[bitmap_size(MAXTILES)];
+static int32_t       savegame_projectilecnt = 0;
+
+static void sv_preprojectilesave()
+{
+    savegame_projectilecnt = 0;
+    Bmemset(savegame_projectiles, 0, sizeof(savegame_projectiles));
+
+    for (auto & i : g_tile)
+        if (i.proj)
+            savegame_projectilecnt++;
+
+    if (savegame_projectilecnt > 0)
+        savegame_projectiledata = (projectile_t *) Xrealloc(savegame_projectiledata, sizeof(projectile_t) * savegame_projectilecnt);
+
+    for (int i = 0, cnt = 0; i < MAXTILES; i++)
+    {
+        if (g_tile[i].proj)
+        {
+            savegame_projectiles[i>>3] |= 1<<(i&7);
+            Bmemcpy(&savegame_projectiledata[cnt++], g_tile[i].proj, sizeof(projectile_t));
+        }
+    }
+}
+
+static void sv_postprojectilesave()
+{
+    DO_FREE_AND_NULL(savegame_projectiledata);
+}
+
+static void sv_preprojectileload()
+{
+    savegame_projectilecnt = 0;
+
+    for (int i = 0; i < MAXTILES; i++)
+    {
+        if (bitmap_test(savegame_projectiles, i))
+            savegame_projectilecnt++;
+    }
+
+    if (savegame_projectilecnt > 0)
+        savegame_projectiledata = (projectile_t *) Xrealloc(savegame_projectiledata, sizeof(projectile_t) * savegame_projectilecnt);
+}
+
+static void sv_postprojectileload()
+{
+    for (int i = 0, cnt = 0; i < MAXTILES; i++)
+    {
+        if (bitmap_test(savegame_projectiles, i))
+        {
+            C_AllocProjectile(i);
+            Bmemcpy(g_tile[i].proj, &savegame_projectiledata[cnt++], sizeof(projectile_t));
+        }
+    }
+
+    DO_FREE_AND_NULL(savegame_projectiledata);
+}
+
 // hack
 static int different_user_map;
 
@@ -402,6 +463,19 @@ int32_t G_LoadPlayer(int32_t spot)
         if (scriptptrs[i]&2) T5(i) += j;
         if (scriptptrs[i]&4) T6(i) += j;
     }
+
+    // Projectiles
+    if (kdfread(&savegame_projectiles[0],sizeof(savegame_projectiles),1,fil) != 1) goto corrupt;
+    sv_preprojectileload();
+    if (kdfread(&savegame_projectiledata[0],sizeof(savegame_projectiledata[0]),savegame_projectilecnt,fil) != savegame_projectilecnt) goto corrupt;
+    // FIXME: g_tile as a whole is loaded from file, including stale
+    // proj pointers. EDuke32 itself does not store the g_tile array.
+    // More generally, EDuke32 does not support loading saved games
+    // with differing CON code.
+    for (auto & i : g_tile)
+        if (i.proj)
+            i.proj = 0;
+    sv_postprojectileload();
 
     if (kdfread(&lockclock,sizeof(lockclock),1,fil) != 1) goto corrupt;
     if (kdfread(&g_pskyidx,sizeof(g_pskyidx),1,fil) != 1) goto corrupt;
@@ -840,6 +914,12 @@ int32_t G_SavePlayer(int32_t spot)
         if (scriptptrs[i]&4)
             T6(i) += j;
     }
+
+    // Projectiles
+    sv_preprojectilesave();
+    dfwrite(&savegame_projectiles[0],sizeof(savegame_projectiles),1,fil);
+    dfwrite(&savegame_projectiledata[0],sizeof(savegame_projectiledata[0]),savegame_projectilecnt,fil);
+    sv_postprojectilesave();
 
     dfwrite(&lockclock,sizeof(lockclock),1,fil);
     dfwrite(&g_pskyidx,sizeof(g_pskyidx),1,fil);
