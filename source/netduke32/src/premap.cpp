@@ -843,7 +843,12 @@ static void resetprestat(int snum,int g)
     g_player[snum].display.visibility = ud.const_visibility;
 
     // If starting a new game, restarting a level, or we're not preserving inventory, reset weapons and inventory.
-    if (ud.last_level == -1 || ((g&MODE_RESTART) == MODE_RESTART) || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
+    // With MODE_RESTART not being set after refusing an offer to load a saved game,
+    // MODE_EOL is checked for 1-player games. MODE_RESTART is set for Survival mode.
+    if (ud.last_level == -1 ||
+        (((g&MODE_EOL) != MODE_EOL) && ud.multimode < 2)
+        || ((g&MODE_RESTART) == MODE_RESTART)
+        || (!(Gametypes[ud.coop].flags & GAMETYPE_PRESERVEINVENTORYEOL) && ud.multimode > 1))
     {
         P_ResetWeapons(snum);
         P_ResetInventory(snum);
