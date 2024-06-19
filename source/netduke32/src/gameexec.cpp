@@ -5302,6 +5302,8 @@ void G_SaveMapState(mapstate_t *save)
         Bmemcpy(&save->sector[0],&sector[0],sizeof(sectortype)*MAXSECTORS);
         Bmemcpy(&save->sprite[0],&sprite[0],sizeof(spritetype)*MAXSPRITES);
         Bmemcpy(&save->spriteext[0],&spriteext[0],sizeof(spriteext_t)*MAXSPRITES);
+
+        save->numsprites = Numsprites;
         save->tailspritefree = tailspritefree;
         Bmemcpy(&save->headspritesect[0],&headspritesect[0],sizeof(headspritesect));
         Bmemcpy(&save->prevspritesect[0],&prevspritesect[0],sizeof(prevspritesect));
@@ -5426,6 +5428,8 @@ void G_RestoreMapState(mapstate_t *save)
         Bmemcpy(&sector[0],&save->sector[0],sizeof(sectortype)*MAXSECTORS);
         Bmemcpy(&sprite[0],&save->sprite[0],sizeof(spritetype)*MAXSPRITES);
         Bmemcpy(&spriteext[0],&save->spriteext[0],sizeof(spriteext_t)*MAXSPRITES);
+
+        Numsprites = save->numsprites;
         tailspritefree = save->tailspritefree;
         Bmemcpy(&headspritesect[0],&save->headspritesect[0],sizeof(headspritesect));
         Bmemcpy(&prevspritesect[0],&save->prevspritesect[0],sizeof(prevspritesect));

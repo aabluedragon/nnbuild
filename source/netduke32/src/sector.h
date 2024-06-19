@@ -42,6 +42,8 @@ typedef struct {
     sectortype sector[MAXSECTORS];
     spritetype sprite[MAXSPRITES];
     spriteext_t spriteext[MAXSPRITES];
+
+    int32_t numsprites;
     short tailspritefree;
     short headspritesect[MAXSECTORS+1];
     short prevspritesect[MAXSPRITES];
