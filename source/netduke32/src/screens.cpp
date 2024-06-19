@@ -835,7 +835,7 @@ FRAGBONUS:
 
                         yy += 10;
 
-                        if (!(ud.volume_number == 0 && ud.last_level - 1 == 7))
+                        if (!(ud.volume_number == 0 && ud.last_level - 1 == 7 && boardfilename[0]))
                         {
                             if (g_mapInfo[G_LastMapInfoIndex()].partime)
                             {
