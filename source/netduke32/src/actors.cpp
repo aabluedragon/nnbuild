@@ -2394,7 +2394,7 @@ static void G_MoveStandables(void)
         s = &sprite[i];
         sect = s->sectnum;
 
-        if (sect < 0)
+        if ((unsigned)sect >= MAXSECTORS)
             KILLIT(i);
 
         IFWITHIN(CRANE,CRANE+3)
@@ -3534,7 +3534,7 @@ static void G_MoveWeapons(void)
         nexti = nextspritestat[spriteNum];
         s = &sprite[spriteNum];
 
-        if (s->sectnum < 0) KILLIT(spriteNum);
+        if ((unsigned)s->sectnum >= MAXSECTORS) KILLIT(spriteNum);
 
         actor[spriteNum].bpos = s->xyz;
         // here
@@ -3616,7 +3616,7 @@ static void G_MoveWeapons(void)
 
                 actor[spriteNum].movflag = j;
 
-                if (s->sectnum < 0)
+                if ((unsigned)s->sectnum >= MAXSECTORS)
                 {
                     KILLIT(spriteNum);
                 }
@@ -3908,7 +3908,7 @@ static void G_MoveWeapons(void)
 
                 actor[spriteNum].movflag = j;
 
-                if (s->sectnum < 0)
+                if ((unsigned)s->sectnum >= MAXSECTORS)
                     KILLIT(spriteNum);
 
                 if ((j & 49152) != 49152 && (s->picnum != FREEZEBLAST))
@@ -4461,7 +4461,7 @@ static void G_MoveActors(void)
         int sect = s->sectnum;
         int switchpicnum = s->picnum;
 
-        if (s->xrepeat == 0 || sect < 0 || sect >= MAXSECTORS)
+        if (s->xrepeat == 0 || (unsigned)sect >= MAXSECTORS)
             KILLIT(i);
 
         t = &actor[i].t_data[0];
@@ -5748,7 +5748,7 @@ static void G_MoveMisc(void)  // STATNUM 5
         s = &sprite[i];
         sect = s->sectnum;
 
-        if (sect < 0 || s->xrepeat == 0) KILLIT(i);
+        if ((unsigned)sect >= MAXSECTORS || s->xrepeat == 0) KILLIT(i);
 
         switchpicnum = s->picnum;
         if ((s->picnum > NUKEBUTTON)&&(s->picnum <= NUKEBUTTON+3))
@@ -5931,7 +5931,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 if ((krand()&3) == 0)
                     setspritez_old(i,s->x,s->y,s->z);
 
-                if (s->sectnum == -1) KILLIT(i);
+                if ((unsigned)s->sectnum >= MAXSECTORS) KILLIT(i);
                 l = yax_getflorzofslope(s->sectnum,s->xy);
 
                 if (s->z > l)
@@ -5989,10 +5989,13 @@ static void G_MoveMisc(void)  // STATNUM 5
                     sect = s->sectnum;
                 }
                 
+                if ((unsigned)sect >= MAXSECTORS)
+                    KILLIT(i);
+
                 // Update Z's for TROR.
                 yax_getzsofslope(sect, s->x, s->y, &ceilZ, &floorZ);
 
-                if (ceilZ == floorZ || sect < 0 || sect >= MAXSECTORS)
+                if (ceilZ == floorZ)
                     KILLIT(i);
 
                 if (s->z < floorZ - (2 << 8))
@@ -6033,7 +6036,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 {
                     if (t[2] == 0)
                     {
-                        if (s->sectnum == -1)
+                        if ((unsigned)s->sectnum >= MAXSECTORS)
                         {
                             KILLIT(i);
                         }
@@ -6167,7 +6170,7 @@ static void G_MoveMisc(void)  // STATNUM 5
 
                 A_SetSprite(i,CLIPMASK0);
 
-                if (sect < 0 || (sector[sect].floorz + 256) < s->z) KILLIT(i);
+                if ((unsigned)sect >= MAXSECTORS || (sector[sect].floorz + 256) < s->z) KILLIT(i);
 
                 if (sector[sect].lotag == 2)
                 {
@@ -6208,7 +6211,7 @@ static void G_MoveMisc(void)  // STATNUM 5
                 A_Fall(i);
 
                 if (s->zvel > 4096) s->zvel = 4096;
-                if (sect < 0) KILLIT(i);
+                if ((unsigned)sect >= MAXSECTORS) KILLIT(i);
 
                 if (s->z == actor[i].floorz-(ACTOR_FLOOR_OFFSET) && t[0] < 3)
                 {
