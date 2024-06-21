@@ -124,7 +124,9 @@ static int32_t sv_loadBoardMD4(char* const fn)
     klseek(fil, 0, SEEK_SET);
     int32_t boardsize = kfilelength(fil);
     uint8_t* fullboard = (uint8_t*)Xmalloc(boardsize);
-    if (kread_and_test(fil, fullboard, boardsize))
+    bool failed = kread_and_test(fil, fullboard, boardsize);
+    kclose(fil);
+    if (failed)
     {
         Xfree(fullboard);
         return -1;
@@ -267,7 +269,7 @@ int32_t G_LoadPlayer(int32_t spot)
     g_szBuf[bv]=0;
     //    AddLog(g_szBuf);
 
-    if (kdfread(&bv,sizeof(bv),1,fil) != 1) return -1;
+    if (kdfread(&bv,sizeof(bv),1,fil) != 1) goto corrupt;
     if (bv != BYTEVERSION)
     {
         P_DoQuote(QUOTE_SAVE_BAD_VERSION,g_player[myconnectindex].ps);
@@ -277,7 +279,7 @@ int32_t G_LoadPlayer(int32_t spot)
         return 1;
     }
 
-    if (kdfread(&nump,sizeof(nump),1,fil) != 1) return -1;
+    if (kdfread(&nump,sizeof(nump),1,fil) != 1) goto corrupt;
     if (nump != ud.multimode)
     {
         kclose(fil);
@@ -669,6 +671,7 @@ int32_t G_LoadPlayer(int32_t spot)
 
     return(0);
 corrupt:
+    kclose(fil);
     Bsprintf(tempbuf,"Save game file \"%s\" is corrupt or of the wrong version.",fnptr);
     G_GameExit(tempbuf);
     return -1;
