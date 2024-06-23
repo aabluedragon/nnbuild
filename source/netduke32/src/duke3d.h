@@ -404,7 +404,7 @@ extern int probey;
 
 struct savehead {
     char name[19];
-    int numplr,volnum,levnum,plrskl;
+    int32_t numplr,volnum,levnum,plrskl;
     char boardfn[BMAX_PATH];
 };
 
