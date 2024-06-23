@@ -470,7 +470,8 @@ int32_t G_LoadPlayer(int32_t spot)
     // Projectiles
     if (kdfread(&savegame_projectiles[0],sizeof(savegame_projectiles),1,fil) != 1) goto corrupt;
     sv_preprojectileload();
-    if (kdfread(&savegame_projectiledata[0],sizeof(savegame_projectiledata[0]),savegame_projectilecnt,fil) != savegame_projectilecnt) goto corrupt;
+    if (savegame_projectilecnt > 0)
+        if (kdfread(&savegame_projectiledata[0],sizeof(savegame_projectiledata[0]),savegame_projectilecnt,fil) != savegame_projectilecnt) goto corrupt;
     // FIXME: g_tile as a whole is loaded from file, including stale
     // proj pointers. EDuke32 itself does not store the g_tile array.
     // More generally, EDuke32 does not support loading saved games
@@ -923,7 +924,8 @@ int32_t G_SavePlayer(int32_t spot)
     // Projectiles
     sv_preprojectilesave();
     dfwrite(&savegame_projectiles[0],sizeof(savegame_projectiles),1,fil);
-    dfwrite(&savegame_projectiledata[0],sizeof(savegame_projectiledata[0]),savegame_projectilecnt,fil);
+    if (savegame_projectilecnt > 0)
+        dfwrite(&savegame_projectiledata[0],sizeof(savegame_projectiledata[0]),savegame_projectilecnt,fil);
     sv_postprojectilesave();
 
     dfwrite(&lockclock,sizeof(lockclock),1,fil);
