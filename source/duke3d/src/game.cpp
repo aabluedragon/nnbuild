@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "input.h"
 #include "menus.h"
 #include "microprofile.h"
-#include "minicoro.h"
+//#include "minicoro.h"
 #include "network.h"
 #include "osdcmds.h"
 #include "osdfuncs.h"
@@ -174,7 +174,6 @@ enum gametokens
     T_DISTANCE,
     T_VOLUME,
     T_DELAY,
-    T_RENAMEFILE,
     T_GLOBALGAMEFLAGS,
     T_ASPECT,
     T_FORCEFILTER,
@@ -282,33 +281,33 @@ int32_t A_CheckInventorySprite(spritetype *s)
 
 EDUKE32_NORETURN void app_exit(int returnCode);
 
-static int g_programExitCode = INT_MIN;
+//static int g_programExitCode = INT_MIN;
 
-void g_switchRoutine(mco_coro *co)
-{
-    mco_result res = mco_resume(co);
-    Bassert(res == MCO_SUCCESS);
-
-    if (g_programExitCode != INT_MIN)
-    {
-        if (mco_running() == nullptr)
-            Bexit(g_programExitCode);
-
-        res = mco_yield(mco_running());
-        Bassert(res == MCO_SUCCESS);
-    }
-
-    if (res != MCO_SUCCESS)
-        fatal_exit(mco_result_description(res));
-}
+//void g_switchRoutine(mco_coro *co)
+//{
+//    mco_result res = mco_resume(co);
+//    Bassert(res == MCO_SUCCESS);
+//
+//    if (g_programExitCode != INT_MIN)
+//    {
+//        if (mco_running() == nullptr)
+//            Bexit(g_programExitCode);
+//
+//        res = mco_yield(mco_running());
+//        Bassert(res == MCO_SUCCESS);
+//    }
+//
+//    if (res != MCO_SUCCESS)
+//        fatal_exit(mco_result_description(res));
+//}
 
 void app_exit(int returnCode)
 {
-    if (mco_running())
-    {
-        g_programExitCode = returnCode;
-        mco_yield(mco_running());
-    }
+    //if (mco_running())
+    //{
+    //    g_programExitCode = returnCode;
+    //    mco_yield(mco_running());
+    //}
 
 #ifndef NETCODE_DISABLE
     enet_deinitialize();
@@ -453,7 +452,7 @@ static int32_t G_DoThirdPerson(const DukePlayer_t *pp, vec3_t *vect, int16_t *vs
 }
 
 #ifdef LEGACY_ROR
-char ror_protectedsectors[MAXSECTORS];
+char ror_protectedsectors[bitmap_size(MAXSECTORS)];
 static int32_t drawing_ror = 0;
 static int32_t ror_sprite = -1;
 
@@ -462,9 +461,6 @@ static void G_OROR_DupeSprites(spritetype const *sp)
     // dupe the sprites touching the portal to the other sector
     int32_t k;
     spritetype const *refsp;
-
-    if ((unsigned)sp->yvel >= (unsigned)g_mostConcurrentPlayers)
-        return;
 
     refsp = &sprite[sp->yvel];
 
@@ -537,7 +533,7 @@ static void G_SE40(int32_t smoothratio)
                 {
                     SE40backupStat[i] = sector[i].ceilingstat;
                     SE40backupZ[i] = sector[i].ceilingz;
-                    if (!ror_protectedsectors[i] || sp->lotag == 41)
+                    if (!bitmap_test(ror_protectedsectors, i) || sp->lotag == 41)
                     {
                         sector[i].ceilingstat = 1;
                         sector[i].ceilingz += newz;
@@ -559,7 +555,7 @@ static void G_SE40(int32_t smoothratio)
                 {
                     SE40backupStat[i] = sector[i].floorstat;
                     SE40backupZ[i] = sector[i].floorz;
-                    if (!ror_protectedsectors[i] || sp->lotag == 41)
+                    if (!bitmap_test(ror_protectedsectors, i) || sp->lotag == 41)
                     {
                         sector[i].floorstat = 1;
                         sector[i].floorz = +newz;
@@ -609,7 +605,7 @@ void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q16horiz
 {
     MICROPROFILE_SCOPEI("Game", EDUKE32_FUNCTION, MP_YELLOWGREEN);
 
-    if ((gotpic[MIRROR>>3]&pow2char[MIRROR&7])
+    if (bitmap_test(gotpic, MIRROR)
 #ifdef POLYMER
         && (videoGetRenderMode() != REND_POLYMER)
 #endif
@@ -619,7 +615,7 @@ void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q16horiz
         {
             // NOTE: We can have g_mirrorCount==0 but gotpic'd MIRROR,
             // for example in LNGA2.
-            gotpic[MIRROR>>3] &= ~pow2char[MIRROR&7];
+            bitmap_clear(gotpic, MIRROR);
 
             //give scripts the chance to reset gotpics for effects that run in EVENT_DISPLAYROOMS
             //EVENT_RESETGOTPICS must be called after the last call to EVENT_DISPLAYROOMS in a frame, but before any engine-side renderDrawRoomsQ16
@@ -699,13 +695,16 @@ void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q16horiz
 
             if (videoGetRenderMode() != REND_POLYMER)
             {
-                int32_t didmirror;
-
+#ifdef YAX_ENABLE
                 yax_preparedrawrooms();
-                didmirror = renderDrawRoomsQ16(tposx,tposy,z,tang,q16horiz,g_mirrorSector[i]+MAXSECTORS);
+                auto const didmirror =
+#endif
+                    renderDrawRoomsQ16(tposx,tposy,z,tang,q16horiz,g_mirrorSector[i]+MAXSECTORS);
+#ifdef YAX_ENABLE
                 //POGO: if didmirror == 0, we may simply wish to abort instead of rendering with yax_drawrooms (which may require cleaning yax state)
                 if (videoGetRenderMode() != REND_CLASSIC || didmirror)
                     yax_drawrooms(G_DoSpriteAnimations, g_mirrorSector[i], didmirror, smoothratio);
+#endif
             }
 #ifdef USE_OPENGL
             else
@@ -735,7 +734,7 @@ static void G_ClearGotMirror()
         // XXX: fix the sequence of setting/clearing this bit. Right now,
         // we always draw one frame without drawing the mirror, after which
         // the bit gets set and drawn subsequently.
-        gotpic[MIRROR>>3] &= ~pow2char[MIRROR&7];
+        bitmap_clear(gotpic, MIRROR);
     }
 }
 
@@ -746,21 +745,13 @@ static void G_ReadGLFrame(void)
 
     // Save OpenGL screenshot with Duke3D palette
     // NOTE: maybe need to move this to the engine...
-    
-    static char lock;
-    static palette_t *frame;
-
-    lock = CACHE1D_PERMANENT;
-
-    if (frame == nullptr)
-        g_cache.allocateBlock((intptr_t *)&frame, xdim * ydim * sizeof(palette_t), &lock);
-
+    auto frame = (palette_t *)Xaligned_alloc(16, xdim * ydim * sizeof(palette_t));
     char *const pic = (char *) waloff[TILE_SAVESHOT];
+
+    Bassert(waloff[TILE_SAVESHOT]);
 
     int const xf = divscale16(ydim*4/3, 320);
     int const yf = divscale16(ydim, 200);  // (ydim<<16)/200
-
-    tilesiz[TILE_SAVESHOT] = { 200, 320 };
 
     videoBeginDrawing();
     glReadPixels(0, 0, xdim, ydim, GL_RGBA, GL_UNSIGNED_BYTE, frame);
@@ -777,7 +768,7 @@ static void G_ReadGLFrame(void)
         }
     }
 
-    lock = CACHE1D_FREE;
+    Xaligned_free(frame);
 }
 #endif
 
@@ -807,7 +798,11 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
     VM_OnEvent(EVENT_DISPLAYSTART, pPlayer->i, playerNum);
 
     if ((ud.overhead_on == 2 && !automapping) || ud.show_help || (pPlayer->cursectnum == -1 && videoGetRenderMode() != REND_CLASSIC))
+    {
+        if (g_screenCapture && pPlayer->cursectnum == -1)
+            LOG_F(ERROR, "Unable to capture screenshot for savegame because player cursectnum is -1!");
         return;
+    }
 
     if (r_usenewaspect)
     {
@@ -827,6 +822,20 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
     G_AnimateCamSprite(smoothRatio);
     G_DoConveyorInterp(smoothRatio);
     G_InterpolateLights(smoothRatio);
+
+    if (g_screenCapture)
+    {
+        walock[TILE_SAVESHOT] = CACHE1D_PERMANENT;
+
+        if (waloff[TILE_SAVESHOT] == 0)
+        {
+            g_cache.allocateBlock(&waloff[TILE_SAVESHOT],200*320,&walock[TILE_SAVESHOT]);
+            tileSetSize(TILE_SAVESHOT, 200, 320);
+        }
+
+        if (videoGetRenderMode() == REND_CLASSIC)
+            renderSetTarget(TILE_SAVESHOT, 200, 320);
+    }
 
     if (ud.camerasprite >= 0)
     {
@@ -885,114 +894,107 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
         else
             renderSetAspect(mulscale16(vr, viewingrange), yxaspect);
 
-        if (g_screenCapture)
+        if (!g_screenCapture)
         {
-            walock[TILE_SAVESHOT] = CACHE1D_PERMANENT;
-
-            if (waloff[TILE_SAVESHOT] == 0)
-                g_cache.allocateBlock(&waloff[TILE_SAVESHOT],200*320,&walock[TILE_SAVESHOT]);
-
-            if (videoGetRenderMode() == REND_CLASSIC)
-                renderSetTarget(TILE_SAVESHOT, 200, 320);
-        }
-        else if (screenTilting)
-        {
-            int32_t oviewingrange = viewingrange;  // save it from renderSetAspect()
-            const int16_t tang = (ud.screen_tilting) ? pPlayer->rotscrnang : 0;
-
-            if (tang == 1024)
-                screenTilting = 2;
-            else
+            if (screenTilting)
             {
-                // Maximum possible allocation size passed to allocache() below
-                // since there is no equivalent of free() for allocache().
-#if MAXYDIM >= 640
-                int const maxTiltSize = 640*640;
-#else
-                int const maxTiltSize = 320*320;
-#endif
-                // To render a tilted screen in high quality, we need at least
-                // 640 pixels of *Y* dimension.
-#if MAXYDIM >= 640
-                // We also need
-                //  * xdim >= 640 since tiltcx will be passed as setview()'s x2
-                //    which must be less than xdim.
-                //  * ydim >= 640 (sic!) since the tile-to-draw-to will be set
-                //    up with dimension 400x640, but the engine's arrays like
-                //    lastx[] are alloc'd with *xdim* elements! (This point is
-                //    the dynamic counterpart of the #if above since we now
-                //    allocate these engine arrays tightly.)
-                // XXX: The engine should be in charge of setting up everything
-                // so that no oob access occur.
-                if (xdim >= 640 && ydim >= 640)
+                int32_t oviewingrange = viewingrange;  // save it from renderSetAspect()
+                const int16_t tang = (ud.screen_tilting) ? pPlayer->rotscrnang : 0;
+
+                if (tang == 1024)
+                    screenTilting = 2;
+                else
                 {
-                    tiltcs = 2;
-                    tiltcx = 640;
-                    tiltcy = 400;
+                    // Maximum possible allocation size passed to allocache() below
+                    // since there is no equivalent of free() for allocache().
+    #if MAXYDIM >= 640
+                    int const maxTiltSize = 640*640;
+    #else
+                    int const maxTiltSize = 320*320;
+    #endif
+                    // To render a tilted screen in high quality, we need at least
+                    // 640 pixels of *Y* dimension.
+    #if MAXYDIM >= 640
+                    // We also need
+                    //  * xdim >= 640 since tiltcx will be passed as setview()'s x2
+                    //    which must be less than xdim.
+                    //  * ydim >= 640 (sic!) since the tile-to-draw-to will be set
+                    //    up with dimension 400x640, but the engine's arrays like
+                    //    lastx[] are alloc'd with *xdim* elements! (This point is
+                    //    the dynamic counterpart of the #if above since we now
+                    //    allocate these engine arrays tightly.)
+                    // XXX: The engine should be in charge of setting up everything
+                    // so that no oob access occur.
+                    if (xdim >= 640 && ydim >= 640)
+                    {
+                        tiltcs = 2;
+                        tiltcx = 640;
+                        tiltcy = 400;
+                    }
+                    else
+    #endif
+                    {
+                        // JBF 20030807: Increased tilted-screen quality
+                        tiltcs = 1;
+
+                        // NOTE: The same reflections as above apply here, too.
+                        // TILT_SETVIEWTOTILE_320.
+                        tiltcx = 320;
+                        tiltcy = 200;
+                    }
+
+                    // If the view is rotated (not 0 or 180 degrees modulo 360 degrees),
+                    // we render onto a square tile and display a portion of that
+                    // rotated on-screen later on.
+                    const int32_t viewtilexsiz = (tang&1023) ? tiltcx : tiltcy;
+                    const int32_t viewtileysiz = tiltcx;
+
+                    walock[TILE_TILT] = CACHE1D_PERMANENT;
+                    if (waloff[TILE_TILT] == 0)
+                        g_cache.allocateBlock(&waloff[TILE_TILT], maxTiltSize, &walock[TILE_TILT]);
+
+                    renderSetTarget(TILE_TILT, viewtilexsiz, viewtileysiz);
+
+                    if ((tang&1023) == 512)
+                    {
+                        //Block off unscreen section of 90ø tilted screen
+                        int const j = tiltcx-(60*tiltcs);
+                        for (bssize_t i=(60*tiltcs)-1; i>=0; i--)
+                        {
+                            startumost[i] = 1;
+                            startumost[i+j] = 1;
+                            startdmost[i] = 0;
+                            startdmost[i+j] = 0;
+                        }
+                    }
+
+                    int vRange = (tang & 511);
+
+                    if (vRange > 256)
+                        vRange = 512 - vRange;
+
+                    vRange = sintable[vRange + 512] * 8 + sintable[vRange] * 5;
+                    renderSetAspect(mulscale16(oviewingrange, vRange >> 1), yxaspect);
+                }
+            }
+    #ifdef USE_OPENGL
+            else if (videoGetRenderMode() >= REND_POLYMOST)
+            {
+                if (ud.screen_tilting
+    #ifdef SPLITSCREEN_MOD_HACKS
+                    && !g_fakeMultiMode
+    #endif
+                )
+                {
+                    renderSetRollAngle(pPlayer->orotscrnang + mulscale16(((pPlayer->rotscrnang - pPlayer->orotscrnang + 1024)&2047)-1024, smoothRatio));
                 }
                 else
-#endif
                 {
-                    // JBF 20030807: Increased tilted-screen quality
-                    tiltcs = 1;
-
-                    // NOTE: The same reflections as above apply here, too.
-                    // TILT_SETVIEWTOTILE_320.
-                    tiltcx = 320;
-                    tiltcy = 200;
+                    renderSetRollAngle(0);
                 }
-
-                // If the view is rotated (not 0 or 180 degrees modulo 360 degrees),
-                // we render onto a square tile and display a portion of that
-                // rotated on-screen later on.
-                const int32_t viewtilexsiz = (tang&1023) ? tiltcx : tiltcy;
-                const int32_t viewtileysiz = tiltcx;
-
-                walock[TILE_TILT] = CACHE1D_PERMANENT;
-                if (waloff[TILE_TILT] == 0)
-                    g_cache.allocateBlock(&waloff[TILE_TILT], maxTiltSize, &walock[TILE_TILT]);
-
-                renderSetTarget(TILE_TILT, viewtilexsiz, viewtileysiz);
-
-                if ((tang&1023) == 512)
-                {
-                    //Block off unscreen section of 90ø tilted screen
-                    int const j = tiltcx-(60*tiltcs);
-                    for (bssize_t i=(60*tiltcs)-1; i>=0; i--)
-                    {
-                        startumost[i] = 1;
-                        startumost[i+j] = 1;
-                        startdmost[i] = 0;
-                        startdmost[i+j] = 0;
-                    }
-                }
-
-                int vRange = (tang & 511);
-
-                if (vRange > 256)
-                    vRange = 512 - vRange;
-
-                vRange = sintable[vRange + 512] * 8 + sintable[vRange] * 5;
-                renderSetAspect(mulscale16(oviewingrange, vRange >> 1), yxaspect);
             }
+    #endif
         }
-#ifdef USE_OPENGL
-        else if (videoGetRenderMode() >= REND_POLYMOST)
-        {
-            if (ud.screen_tilting
-#ifdef SPLITSCREEN_MOD_HACKS
-                && !g_fakeMultiMode
-#endif
-            )
-            {
-                renderSetRollAngle(pPlayer->orotscrnang + mulscale16(((pPlayer->rotscrnang - pPlayer->orotscrnang + 1024)&2047)-1024, smoothRatio));
-            }
-            else
-            {
-                renderSetRollAngle(0);
-            }
-        }
-#endif
 
         if (pPlayer->newowner < 0)
         {
@@ -1134,7 +1136,7 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
             dr_viewingrange = viewingrange;
             dr_yxaspect = yxaspect;
 #ifdef DEBUG_MIRRORS_ONLY
-            gotpic[MIRROR>>3] |= pow2char[MIRROR&7];
+            bitmap_set(gotpic, MIRROR);
 #else
             yax_preparedrawrooms();
             renderDrawRoomsQ16(CAMERA(pos.x),CAMERA(pos.y),CAMERA(pos.z),CAMERA(q16ang),CAMERA(q16horiz),CAMERA(sect));
@@ -1153,6 +1155,9 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
 
         if (g_screenCapture)
         {
+            if (noDraw)
+                LOG_F(ERROR, "Unable to capture screenshot for savegame because EVENT_DISPLAYROOMS returned %d!", noDraw);
+
             g_screenCapture = 0;
 
             if (videoGetRenderMode() == REND_CLASSIC)
@@ -1359,11 +1364,11 @@ int32_t A_InsertSprite(int16_t whatsect,int32_t s_x,int32_t s_y,int32_t s_z,int1
         G_DumpDebugInfo();
         LOG_F(ERROR, "Failed spawning pic %d spr from pic %d spr %d at x:%d,y:%d,z:%d,sect:%d",
                           s_pn,s_ow < 0 ? -1 : TrackerCast(sprite[s_ow].picnum),s_ow,s_x,s_y,s_z,whatsect);
-        ERRprintf("Too many sprites spawned.");
+        LOG_F(ERROR, "Too many sprites spawned.");
         fatal_exit("Too many sprites spawned.");
     }
 
-#ifdef DEBUGGINGAIDS
+#if 1//def DEBUGGINGAIDS
     g_spriteStat.numins++;
 #endif
 
@@ -1483,7 +1488,7 @@ int A_Spawn(int spriteNum, int tileNum)
         practor[newSprite].lightId = -1;
 #endif
 
-        if ((s.cstat & 48)
+        if ((s.cstat & CSTAT_SPRITE_ALIGNMENT)
 #ifndef EDUKE32_STANDALONE
             && s.picnum != SPEAKER && s.picnum != LETTER && s.picnum != DUCK && s.picnum != TARGET && s.picnum != TRIPBOMB
 #endif
@@ -1493,7 +1498,7 @@ int A_Spawn(int spriteNum, int tileNum)
                 goto SPAWN_END;
 
 #ifndef EDUKE32_STANDALONE
-            if (A_CheckSwitchTile(newSprite) && (s.cstat & 16))
+            if (A_CheckSwitchTile(newSprite) && (s.cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL)
             {
                 if (s.pal && s.picnum != ACCESSSWITCH && s.picnum != ACCESSSWITCH2)
                 {
@@ -2700,7 +2705,7 @@ int A_Spawn(int spriteNum, int tileNum)
 #ifdef POLYMER
             if (pSprite->yrepeat > 32)
             {
-                G_AddGameLight(newSprite, pSprite->sectnum, { 0, 0, LIGHTZOFF(spriteNum) }, 32768, 0, 100,255+(95<<8), PR_LIGHT_PRIO_MAX_GAME);
+                G_AddGameLight(newSprite, pSprite->sectnum, { 0, 0, LIGHTZOFF(newSprite) }, 32768, 0, 100,255+(95<<8), PR_LIGHT_PRIO_MAX_GAME);
                 practor[newSprite].lightcount = 2;
             }
             fallthrough__;
@@ -2744,7 +2749,11 @@ int A_Spawn(int spriteNum, int tileNum)
 
             if (spriteNum >= 0)
             {
+#ifdef YAX_ENABLE
+                int const floorZ = yax_getflorzofslope(pSprite->sectnum, pSprite->xy);
+#else
                 int const floorZ = getflorzofslope(pSprite->sectnum, pSprite->x, pSprite->y);
+#endif
 
                 if (pSprite->z > floorZ-ZOFFSET4)
                     pSprite->z = floorZ-ZOFFSET4;
@@ -2879,7 +2888,7 @@ int A_Spawn(int spriteNum, int tileNum)
                 goto SPAWN_END;
                 break;
             case 46:
-                ror_protectedsectors[pSprite->sectnum] = 1;
+                bitmap_set(ror_protectedsectors, pSprite->sectnum);
                 /* XXX: fall-through intended? */
                 fallthrough__;
 #endif
@@ -3448,7 +3457,7 @@ int A_Spawn(int spriteNum, int tileNum)
             }
             else
             {
-                pSprite->cstat |= (pSprite->cstat & 48) ? 1 : 17;
+                pSprite->cstat |= (pSprite->cstat & CSTAT_SPRITE_ALIGNMENT) ? 1 : (1 | CSTAT_SPRITE_ALIGNMENT_WALL);
                 pSprite->extra = 1;
             }
 
@@ -3703,16 +3712,18 @@ void G_DoSpriteAnimations(int32_t ourx, int32_t oury, int32_t ourz, int32_t oura
     int32_t j, frameOffset, playerNum;
     intptr_t l;
 
+#ifdef LEGACY_ROR
+    ror_sprite = -1;
+#endif
+
     if (spritesortcnt == 0)
     {
-#ifdef DEBUGGINGAIDS
+#if 1//def DEBUGGINGAIDS
         g_spriteStat.numonscreen = 0;
 #endif
         return;
     }
-#ifdef LEGACY_ROR
-    ror_sprite = -1;
-#endif
+
     for (j=spritesortcnt-1; j>=0; j--)
     {
         auto const t = &tsprite[j];
@@ -3803,7 +3814,7 @@ void G_DoSpriteAnimations(int32_t ourx, int32_t oury, int32_t ourz, int32_t oura
                 continue;
             default:
                 // NOTE: wall-aligned sprites will never take on ceiling/floor shade...
-                if ((t->cstat&16) || (A_CheckEnemySprite(t) &&
+                if ((t->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL || (A_CheckEnemySprite(t) &&
                     (unsigned)t->owner < MAXSPRITES && sprite[t->owner].extra > 0) || t->statnum == STAT_PLAYER)
                     continue;
             }
@@ -4351,7 +4362,11 @@ skip:
                 {
                     int const shadowZ = ((sector[sect].lotag & 0xff) > 2 || pSprite->statnum == STAT_PROJECTILE ||
                                    pSprite->statnum == STAT_MISC || pSprite->picnum == DRONE || pSprite->picnum == COMMANDER)
-                                  ? sector[sect].floorz
+#ifdef YAX_ENABLE
+                                  ? yax_getflorzofslope(sect, pSprite->xy)
+#else
+                                  ? getflorzofslope(sect, pSprite->x, pSprite->y)
+#endif
                                   : actor[i].floorz;
 
                     if ((pSprite->z-shadowZ) < ZOFFSET3 && g_player[screenpeek].ps->pos.z < shadowZ)
@@ -4373,6 +4388,7 @@ skip:
 #ifdef USE_OPENGL
                         if (videoGetRenderMode() >= REND_POLYMOST)
                         {
+                            tsprShadow->clipdist |= TSPR_FLAGS_NO_GLOW;
                             if (tilehasmodelorvoxel(t->picnum,t->pal))
                             {
                                 tsprShadow->yrepeat = 0;
@@ -4531,7 +4547,7 @@ skip:
             G_DoEventAnimSprites(j);
     }
 
-#ifdef DEBUGGINGAIDS
+#if 1//def DEBUGGINGAIDS
     g_spriteStat.numonscreen = spritesortcnt;
 #endif
 }
@@ -5190,25 +5206,11 @@ FAKE_F3:
 
 static int parsedefinitions_game(scriptfile *, int);
 
-static void parsedefinitions_game_include(const char *fileName, scriptfile *pScript, const char *cmdtokptr, int const firstPass)
+static void parsedefinitions_game_include(const char *fileName, scriptfile * /*pScript*/, const char * /*cmdtokptr*/, int const firstPass)
 {
     scriptfile *included = scriptfile_fromfile(fileName);
 
-    if (!included)
-    {
-        if (!Bstrcasecmp(cmdtokptr,"null") || pScript == NULL) // this is a bit overboard to prevent unused parameter warnings
-            {
-           // initprintf("Warning: Failed including %s as module\n", fn);
-            }
-/*
-        else
-            {
-            initprintf("Warning: Failed including %s on line %s:%d\n",
-                       fn, script->filename,scriptfile_getlinum(script,cmdtokptr));
-            }
-*/
-    }
-    else
+    if (included)
     {
         parsedefinitions_game(included, firstPass);
         scriptfile_close(included);
@@ -5251,16 +5253,15 @@ static void parsedefinitions_game_animsounds(scriptfile *pScript, const char * b
         // frame numbers start at 1 for us
         if (frameNum <= 0)
         {
-            LOG_F(ERROR, "Frame number must be greater than zero on line %s:%d", pScript->filename,
-                       scriptfile_getlinum(pScript, pScript->ltextptr));
+            LOG_F(ERROR, "%s:%d: error: frame number must be greater than zero",
+                         pScript->filename, scriptfile_getlinum(pScript, pScript->ltextptr));
             break;
         }
 
         if (frameNum < lastFrameNum)
         {
-            LOG_F(ERROR, "Frame numbers must be in (not necessarily strictly)"
-                       " ascending order (line %s:%d)",
-                       pScript->filename, scriptfile_getlinum(pScript, pScript->ltextptr));
+            LOG_F(ERROR, "%s:%d: error: frame numbers must be in (not necessarily strictly) ascending order",
+                         pScript->filename, scriptfile_getlinum(pScript, pScript->ltextptr));
             break;
         }
 
@@ -5268,8 +5269,9 @@ static void parsedefinitions_game_animsounds(scriptfile *pScript, const char * b
 
         if ((unsigned)soundNum >= MAXSOUNDS && soundNum != -1)
         {
-            LOG_F(ERROR, "Sound number #%d invalid on line %s:%d", soundNum, pScript->filename,
-                       scriptfile_getlinum(pScript, pScript->ltextptr));
+            LOG_F(ERROR, "%s:%d: error: sound number #%d invalid",
+                         pScript->filename, scriptfile_getlinum(pScript, pScript->ltextptr),
+                         soundNum);
             break;
         }
 
@@ -5327,8 +5329,8 @@ static int newgamesubchoice_recursive(scriptfile *pScript, MenuGameplayEntry ent
 
     if ((unsigned)subChoiceID >= MAXMENUGAMEPLAYENTRIES)
     {
-        LOG_F(ERROR, "Maximum subchoices exceeded near line %s:%d",
-            pScript->filename, scriptfile_getlinum(pScript, subChoicePtr));
+        LOG_F(ERROR, "%s:%d: error: maximum subchoices exceeded",
+                     pScript->filename, scriptfile_getlinum(pScript, subChoicePtr));
         pScript->textptr = subChoiceEnd+1;
         return -1;
     }
@@ -5406,7 +5408,6 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         { "sound",           T_SOUND            },
         { "cutscene",        T_CUTSCENE         },
         { "animsounds",      T_ANIMSOUNDS       },
-        { "renamefile",      T_RENAMEFILE       },
         { "globalgameflags", T_GLOBALGAMEFLAGS  },
         { "newgamechoices",  T_NEWGAMECHOICES   },
         { "localization"  ,  T_LOCALIZATION     },
@@ -5459,6 +5460,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         {
             char *fileName;
 
+            int32_t bakpathsearchmode = pathsearchmode;
             pathsearchmode = 1;
             if (!scriptfile_getstring(pScript,&fileName) && firstPass)
             {
@@ -5472,7 +5474,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                 }
             }
 
-            pathsearchmode = 0;
+            pathsearchmode = bakpathsearchmode;
         }
         break;
         case T_CACHESIZE:
@@ -5509,8 +5511,9 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
             if (scriptfile_getsymbol(pScript, &number)) break;
 
             if (EDUKE32_PREDICT_FALSE(scriptfile_addsymbolvalue(name, number) < 0))
-                LOG_F(WARNING, "Symbol %s unable to be redefined to %d on line %s:%d",
-                           name, number, pScript->filename, scriptfile_getlinum(pScript, pToken));
+                LOG_F(WARNING, "%s:%d: warning: symbol %s unable to be redefined to %d",
+                               pScript->filename, scriptfile_getlinum(pScript, pToken),
+                               name, number);
             break;
         }
         case T_NOAUTOLOAD:
@@ -5540,8 +5543,8 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
             {
                 if (musicID==NULL)
                 {
-                    LOG_F(ERROR, "Missing ID for music definition near line %s:%d",
-                               pScript->filename, scriptfile_getlinum(pScript,tokenPtr));
+                    LOG_F(ERROR, "%s:%d: error: missing ID for music definition",
+                                 pScript->filename, scriptfile_getlinum(pScript,tokenPtr));
                     break;
                 }
 
@@ -5549,7 +5552,8 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                     break;
 
                 if (S_DefineMusic(musicID, fileName) == -1)
-                    LOG_F(ERROR, "Invalid music ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
+                    LOG_F(ERROR, "%s:%d: error: invalid music ID",
+                                 pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
             }
         }
         break;
@@ -5643,8 +5647,8 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
             if (!animPtr)
             {
-                LOG_F(ERROR, "Expected animation filename on line %s:%d",
-                    pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
+                LOG_F(ERROR, "%s:%d: error: expected animation filename",
+                             pScript->filename, scriptfile_getlinum(pScript, tokenPtr));
                 break;
             }
 
@@ -5689,7 +5693,8 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
             {
                 if (soundNum==-1)
                 {
-                    LOG_F(ERROR, "Missing ID for sound definition near line %s:%d", pScript->filename, scriptfile_getlinum(pScript,tokenPtr));
+                    LOG_F(ERROR, "%s:%d: error: missing ID for sound definition",
+                                 pScript->filename, scriptfile_getlinum(pScript,tokenPtr));
                     break;
                 }
 
@@ -5698,7 +5703,8 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
                 // maybe I should have just packed this into a sound_t and passed a reference...
                 if (S_DefineSound(soundNum, fileName, minpitch, maxpitch, priority, type, distance, volume) == -1)
-                    LOG_F(ERROR, "Invalid sound ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript,tokenPtr));
+                    LOG_F(ERROR, "%s:%d: error: invalid sound ID",
+                                 pScript->filename, scriptfile_getlinum(pScript,tokenPtr));
             }
         }
         break;
@@ -5730,8 +5736,8 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
                         if ((unsigned)choiceID >= MAXMENUGAMEPLAYENTRIES)
                         {
-                            LOG_F(ERROR, "Maximum choices exceeded near line %s:%d",
-                                pScript->filename, scriptfile_getlinum(pScript, choicePtr));
+                            LOG_F(ERROR, "%s:%d: error: maximum choices exceeded",
+                                         pScript->filename, scriptfile_getlinum(pScript, choicePtr));
                             pScript->textptr = choiceEnd+1;
                             break;
                         }
@@ -5826,8 +5832,9 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
                 if (currSlot >= NUMGAMEFUNCTIONS)
                 {
-                    LOG_F(ERROR, "Key remap exceeds number of valid gamefunctions %d near line %s:%d",
-                                NUMGAMEFUNCTIONS, pScript->filename, scriptfile_getlinum(pScript, mapPtr));
+                    LOG_F(ERROR, "%s:%d: error: key remap exceeds number of valid gamefunctions %d",
+                                 pScript->filename, scriptfile_getlinum(pScript, mapPtr),
+                                 NUMGAMEFUNCTIONS);
                     pScript->textptr = keyRemapEnd+1;
                     break;
                 }
@@ -5837,14 +5844,16 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 
                 if (keyIndex < 0 || keyIndex >= NUMGAMEFUNCTIONS)
                 {
-                    LOG_F(ERROR, "Invalid key index %d near line %s:%d",
-                                keyIndex, pScript->filename, scriptfile_getlinum(pScript, mapPtr));
+                    LOG_F(ERROR, "%s:%d: error: invalid key index %d",
+                                 pScript->filename, scriptfile_getlinum(pScript, mapPtr),
+                                 keyIndex);
                     continue;
                 }
                 else if (gamefunc_bitmap & (1ULL << keyIndex))
                 {
-                    LOG_F(WARNING, "Duplicate listing of key '%s' near line %s:%d",
-                                gamefunc_symbol_names[keyIndex], pScript->filename, scriptfile_getlinum(pScript, mapPtr));
+                    LOG_F(WARNING, "%s:%d: warning: duplicate listing of key '%s'",
+                                   pScript->filename, scriptfile_getlinum(pScript, mapPtr),
+                                   gamefunc_symbol_names[keyIndex]);
                     continue;
                 }
 
@@ -6163,12 +6172,17 @@ void G_PostCreateGameState(void)
     A_InitEnemyFlags();
 }
 
-static void G_HandleMemErr(int32_t lineNum, const char *fileName, const char *funcName)
+static void G_HandleMemErr(int32_t bytes, int32_t lineNum, const char *fileName, const char *funcName)
 {
 #ifdef DEBUGGINGAIDS
     debug_break();
+    Bsprintf(tempbuf, "Out of memory: failed allocating %d bytes at %s:%d (%s)!", bytes, fileName, lineNum, funcName);
+#else
+    UNREFERENCED_PARAMETER(lineNum);
+    UNREFERENCED_PARAMETER(fileName);
+    UNREFERENCED_PARAMETER(funcName);
+    Bsprintf(tempbuf, "Out of memory: failed allocating %d bytes!", bytes);
 #endif
-    Bsprintf(tempbuf, "Out of memory in %s:%d (%s)", fileName, lineNum, funcName);
     fatal_exit(tempbuf);
 }
 
@@ -6179,7 +6193,7 @@ static void G_FatalEngineInitError(void)
 #endif
     G_Cleanup();
     Bsprintf(tempbuf, "There was a problem initializing the engine: %s", engineerrstr);
-    ERRprintf("%s", tempbuf);
+    LOG_F(ERROR, "%s", tempbuf);
     fatal_exit(tempbuf);
 }
 
@@ -6281,7 +6295,7 @@ static void G_Startup(void)
     // after dynamic tile remapping (from C_Compile) and loading tiles.
     picanm[LOADSCREEN].sf |= PICANM_NOFULLBRIGHT_BIT;
 
-//    initprintf("Loading palette/lookups...\n");
+    // LOG_F(INFO, "Loading palette/lookups...");
     G_LoadLookups();
 
     screenpeek = myconnectindex;
@@ -6451,54 +6465,56 @@ void Net_DedicatedServerStdin(void)
 }
 #endif
 
-static void drawframe_entry(mco_coro *co)
+void drawframe_do(void)
 {
-    do
+    MICROPROFILE_SCOPEI("Game", EDUKE32_FUNCTION, MP_YELLOWGREEN);
+
+    g_lastFrameStartTime = timerGetNanoTicks();
+
+    if (!g_saveRequested)
     {
-        MICROPROFILE_SCOPEI("Game", EDUKE32_FUNCTION, MP_YELLOWGREEN);
+        // only allow binds to function if the player is actually in a game (not in a menu, typing, et cetera) or demo
+        CONTROL_BindsEnabled = !!(g_player[myconnectindex].ps->gm & (MODE_GAME | MODE_DEMO));
 
-        g_lastFrameStartTime = timerGetNanoTicks();
+        G_HandleLocalKeys();
+        OSD_DispatchQueued();
+        P_GetInput(myconnectindex);
+    }
+    else
+    {
+        localInput = {};
+        localInput.bits = (((int32_t)g_gameQuit) << SK_GAMEQUIT);
+        localInput.extbits = BIT(EK_CHAT_MODE);
+    }
 
-        if (!g_saveRequested)
-        {
-            // only allow binds to function if the player is actually in a game (not in a menu, typing, et cetera) or demo
-            CONTROL_BindsEnabled = !!(g_player[myconnectindex].ps->gm & (MODE_GAME|MODE_DEMO));
+    int const smoothratio = calc_smoothratio(totalclock, ototalclock);
 
-            G_HandleLocalKeys();
-            OSD_DispatchQueued();
-            P_GetInput(myconnectindex);
-        }
+    G_DrawRooms(screenpeek, smoothratio);
 
-        int const smoothratio = calc_smoothratio(totalclock, ototalclock);
+    if (videoGetRenderMode() >= REND_POLYMOST)
+        G_DrawBackground();
 
-        G_DrawRooms(screenpeek, smoothratio);
+    G_DisplayRest(smoothratio);
 
-        if (videoGetRenderMode() >= REND_POLYMOST)
-            G_DrawBackground();
+    g_frameJustDrawn = true;
+    g_lastFrameEndTime = timerGetNanoTicks();
+    g_lastFrameDuration = g_lastFrameEndTime - g_lastFrameStartTime;
+    g_frameCounter++;
 
-        G_DisplayRest(smoothratio);
-
-#if MICROPROFILE_ENABLED != 0
-        for (auto &gv : aGameVars)
-        {
-            if ((gv.flags & (GAMEVAR_USER_MASK|GAMEVAR_PTR_MASK)) == 0)
-            {            
-                MICROPROFILE_COUNTER_SET(gv.szLabel, gv.global);
-            }
-        }
-#endif
-        g_frameJustDrawn = true;
-        g_lastFrameEndTime = timerGetNanoTicks();
-        g_lastFrameDuration = g_lastFrameEndTime - g_lastFrameStartTime;
-        g_frameCounter++;
-
-        videoNextPage();
-        S_Update();
-        g_lastFrameEndTime2 = timerGetNanoTicks();
-        g_lastFrameDuration2 = g_lastFrameEndTime2 - g_lastFrameStartTime;
-        mco_yield(co);
-    } while (1);
+    videoNextPage();
+    S_Update();
+    g_lastFrameEndTime2 = timerGetNanoTicks();
+    g_lastFrameDuration2 = g_lastFrameEndTime2 - g_lastFrameStartTime;
 }
+
+//static void drawframe_entry(mco_coro *co)
+//{
+//    do
+//    {
+//        drawframe_do();
+//        mco_yield(co);
+//    } while (1);
+//}
 
 void dukeFillInputForTic(void)
 {
@@ -6519,33 +6535,33 @@ void dukeFillInputForTic(void)
         input.svel += pPlayer->fric.y;
     }
 
-    localInput ={};
+    localInput = {};
 }
 
-void dukeCreateFrameRoutine(void)
-{
-    static mco_desc co_drawframe_desc;
-    mco_result res;
-
-    if (co_drawframe)
-    {
-        res = mco_destroy(co_drawframe);
-        Bassert(res == MCO_SUCCESS);
-        if (res != MCO_SUCCESS)
-            fatal_exit(mco_result_description(res));
-    }
-
-    co_drawframe_desc = mco_desc_init(drawframe_entry, g_frameStackSize);
-    co_drawframe_desc.user_data = NULL;
-
-    res = mco_create(&co_drawframe, &co_drawframe_desc);
-    Bassert(res == MCO_SUCCESS);
-    if (res != MCO_SUCCESS)
-        fatal_exit(mco_result_description(res));
-
-    if (g_frameStackSize != DRAWFRAME_DEFAULT_STACK_SIZE)
-        LOG_F(INFO, "Draw routine created with %d byte stack.", g_frameStackSize);
-}
+//void dukeCreateFrameRoutine(void)
+//{
+//    static mco_desc co_drawframe_desc;
+//    mco_result res;
+//
+//    if (co_drawframe)
+//    {
+//        res = mco_destroy(co_drawframe);
+//        Bassert(res == MCO_SUCCESS);
+//        if (res != MCO_SUCCESS)
+//            fatal_exit(mco_result_description(res));
+//    }
+//
+//    co_drawframe_desc = mco_desc_init(drawframe_entry, g_frameStackSize);
+//    co_drawframe_desc.user_data = NULL;
+//
+//    res = mco_create(&co_drawframe, &co_drawframe_desc);
+//    Bassert(res == MCO_SUCCESS);
+//    if (res != MCO_SUCCESS)
+//        fatal_exit(mco_result_description(res));
+//
+//    if (g_frameStackSize != DRAWFRAME_DEFAULT_STACK_SIZE)
+//        LOG_F(INFO, "Draw routine created with %d byte stack.", g_frameStackSize);
+//}
 
 static const char* dukeVerbosityCallback(loguru::Verbosity verbosity)
 {
@@ -6559,14 +6575,6 @@ static const char* dukeVerbosityCallback(loguru::Verbosity verbosity)
 
 int app_main(int argc, char const* const* argv)
 {
-    engineSetLogFile(APPBASENAME ".log", LOG_GAME_MAX);
-    engineSetLogVerbosityCallback(dukeVerbosityCallback);
-
-#ifndef NETCODE_DISABLE
-    if (enet_initialize() != 0)
-        LOG_F(ERROR, "An error occurred while initializing ENet.");
-#endif
-
 #ifdef _WIN32
 #ifndef DEBUGGINGAIDS
     if (!G_CheckCmdSwitch(argc, argv, "-noinstancechecking") && !windowsCheckAlreadyRunning())
@@ -6587,6 +6595,9 @@ int app_main(int argc, char const* const* argv)
 
     G_ExtPreInit(argc, argv);
 
+    engineSetLogFile(APPBASENAME ".log", LOG_GAME_MAX);
+    engineSetLogVerbosityCallback(dukeVerbosityCallback);
+
 #ifdef __APPLE__
     if (!g_useCwd)
     {
@@ -6599,6 +6610,11 @@ int app_main(int argc, char const* const* argv)
         OSD_SetLogFile(cwd);
         Xfree(homedir);
     }
+#endif
+
+#ifndef NETCODE_DISABLE
+    if (enet_initialize() != 0)
+        LOG_F(ERROR, "An error occurred while initializing ENet.");
 #endif
 
     osdcallbacks_t callbacks = {};
@@ -6656,9 +6672,6 @@ int app_main(int argc, char const* const* argv)
     CONFIG_ReadSetup();
 
 #if defined(_WIN32) && !defined (EDUKE32_STANDALONE)
-
-//    initprintf("build %d\n",(uint8_t)Batoi(BUILDDATE));
-
     if (ud.config.CheckForUpdates == 1)
     {
         if (time(NULL) - ud.config.LastUpdateCheck > UPDATEINTERVAL)
@@ -6712,7 +6725,7 @@ int app_main(int argc, char const* const* argv)
     G_ScanGroups();
 
 #ifdef STARTUP_SETUP_WINDOW
-    if (!Bgetenv("SteamTenfoot") && (readSetup < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_EDUKE32 || ud.setup.forcesetup)) || g_commandSetup))
+    if (g_commandSetup || (!Bgetenv("SteamTenfoot") && (readSetup < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_EDUKE32 || ud.setup.forcesetup)))))
     {
         if (quitevent || !startwin_run())
         {
@@ -6805,14 +6818,14 @@ int app_main(int argc, char const* const* argv)
 
     Anim_Init();
 
-    const char *defsfile = G_DefFile();
+    char const * const deffile = G_DefFile();
     uint32_t stime = timerGetTicks();
-    if (!loaddefinitionsfile(defsfile))
+    if (!loaddefinitionsfile(deffile))
     {
         uint32_t etime = timerGetTicks();
-        LOG_F(INFO, "Definitions file '%s' loaded in %d ms.", defsfile, etime-stime);
+        LOG_F(INFO, "Definitions file '%s' loaded in %d ms.", deffile, etime-stime);
     }
-    loaddefinitions_game(defsfile, FALSE);
+    loaddefinitions_game(deffile, FALSE);
 
     for (char * m : g_defModules)
         Xfree(m);
@@ -6978,7 +6991,7 @@ int app_main(int argc, char const* const* argv)
     S_ClearSoundLocks();
 
     //    getpackets();
-    dukeCreateFrameRoutine();
+    //dukeCreateFrameRoutine();
 
     VM_OnEvent(EVENT_INITCOMPLETE);
 
@@ -7081,30 +7094,24 @@ MAIN_LOOP_RESTART:
             quitevent = 0;
         }
 
-        if (g_restartFrameRoutine)
-        {
-            dukeCreateFrameRoutine();
-            g_restartFrameRoutine = 0;
-        }
+        //if (g_restartFrameRoutine)
+        //{
+        //    dukeCreateFrameRoutine();
+        //    g_restartFrameRoutine = 0;
+        //}
 
-        bool gameUpdate = false;
         double gameUpdateStartTime = timerGetFractionalTicks();
         auto framecnt = g_frameCounter;
 
         if (((g_netClient || g_netServer) || (myplayer.gm & (MODE_MENU|MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME)
         {
-            do 
+            do
             {
-                if (g_networkMode != NET_DEDICATED_SERVER && (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0)
-                {
-                    if (!g_frameJustDrawn)
-                        break;
-                    g_frameJustDrawn = false;
-                    dukeFillInputForTic();
-                }
-
                 do
                 {
+                    if (g_frameJustDrawn && g_networkMode != NET_DEDICATED_SERVER && (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0)
+                        dukeFillInputForTic();
+
                     if (ready2send == 0)
                         break;
 
@@ -7113,17 +7120,18 @@ MAIN_LOOP_RESTART:
                     if (((ud.show_help == 0 && (myplayer.gm & MODE_MENU) != MODE_MENU) || ud.recstat == 2 || (g_netServer || ud.multimode > 1))
                         && (myplayer.gm & MODE_GAME))
                     {
+                        g_frameJustDrawn = false;
                         Net_GetPackets();
                         G_DoMoveThings();
                     }
-                }
-                while (((g_netClient || g_netServer) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME);
 
-                gameUpdate = true;
+                }
+                while (((g_netClient || g_netServer) || (myplayer.gm & (MODE_MENU | MODE_DEMO)) == 0) && (int32_t)(totalclock - ototalclock) >= TICSPERFRAME && !g_saveRequested);
+
                 g_gameUpdateTime = timerGetFractionalTicks() - gameUpdateStartTime;
 
                 if (g_frameCounter != framecnt)
-                    g_gameUpdateTime -= (double)g_lastFrameDuration * 1000.0 / (double)timerGetNanoTickRate();
+                    g_gameUpdateTime -= (double)g_lastFrameDuration * (g_frameCounter - framecnt) * 1000.0 / (double)timerGetNanoTickRate();
 
                 if (g_gameUpdateAvgTime <= 0.0)
                     g_gameUpdateAvgTime = g_gameUpdateTime;
@@ -7132,9 +7140,9 @@ MAIN_LOOP_RESTART:
                 = ((GAMEUPDATEAVGTIMENUMSAMPLES - 1.f) * g_gameUpdateAvgTime + g_gameUpdateTime) / ((float)GAMEUPDATEAVGTIMENUMSAMPLES);
             } while (0);
 
-            if (gameUpdate)
-                g_gameUpdateAndDrawTime = g_gameUpdateTime + (double)g_lastFrameDuration * 1000.0 / (double)timerGetNanoTickRate();
         }
+
+        g_gameUpdateAndDrawTime = g_gameUpdateTime + (double)g_lastFrameDuration * 1000.0 / (double)timerGetNanoTickRate();
 
         G_DoCheats();
 
@@ -7165,7 +7173,8 @@ MAIN_LOOP_RESTART:
 #endif
             }
 
-            g_switchRoutine(co_drawframe);
+            //g_switchRoutine(co_drawframe);
+            drawframe_do();
         }
 
         // handle CON_SAVE and CON_SAVENN

@@ -198,10 +198,11 @@ MenuItem sound_i[] =
 
     //{DefButton(btn_talking, 0, "Talking"), OPT_XS,            OPT_LINE(4), 1, m_defshade, 0, NULL, MNU_FxCheck, NULL},
     {DefButton(btn_ambience, 0, "Ambience"), OPT_XS,          OPT_LINE(4), 1, m_defshade, 0, NULL, MNU_FxCheck, NULL},
+    {DefButton(btn_reverb, 0, "Alt Reverb"), OPT_XS,          OPT_LINE(5), 1, m_defshade, 0, NULL, MNU_FxCheck, NULL},
 #ifdef ASS_REVERSESTEREO
-    {DefButton(btn_flipstereo, 0, "Flip Stereo"), OPT_XS,     OPT_LINE(5), 1, m_defshade, 0, NULL, MNU_FxCheck, NULL},
+    {DefButton(btn_flipstereo, 0, "Flip Stereo"), OPT_XS,     OPT_LINE(6), 1, m_defshade, 0, NULL, MNU_FxCheck, NULL},
 #endif
-    //{DefButton(btn_playcd, 0, "Play CD"), OPT_XS,         OPT_LINE(6), 1, m_defshade, 0, NULL, NULL, NULL},
+    //{DefButton(btn_playcd, 0, "Play CD"), OPT_XS,         OPT_LINE(7), 1, m_defshade, 0, NULL, NULL, NULL},
     {DefNone}
 };
 
@@ -342,7 +343,6 @@ MenuItem joyaxes_i[] =
 MenuGroup joyaxessetupgroup = {65, 5, "^Joystick Axes", joyaxes_i, pic_newgametitl, 0, m_defshade, NULL, NULL, 1};
 
 
-static char AdvancedMouseAxisFunctions[4][MAXAXISFUNCTIONLENGTH] = { "", "", "", "" };
 MenuItem advancedmouse_i[] =
 {
     {DefSlider(sldr_mousescalex, 0, "X-Axis Scale"), OPT_XS,     OPT_LINE(0), 1, m_defshade, 0, NULL, NULL, NULL},
@@ -1635,14 +1635,13 @@ MNU_OrderCustom(UserCall call, MenuItem *item)
         static const char *jtitle = "^Port Credits";
         static const char *text1[] =
         {
-            "*Technical Director",
+            "*Developers (A-Z)",
             " Evan \"Hendricks266\" Ramos",
-            "*Developers",
             " Richard \"TerminX\" Gobeille",
+            "*Retired developers (A-Z)",
             " Alex \"pogokeen\" Dawson",
-            "*Retired developers",
-            " Pierre-Loup \"Plagman\" Griffais",
             " Philipp \"Helixhorned\" Kutin",
+            " Pierre-Loup \"Plagman\" Griffais",
             "*Special thanks to",
             " Jonathon \"JonoF\" Fowler",
             "*Uses BUILD Engine technology by",
@@ -1650,18 +1649,19 @@ MNU_OrderCustom(UserCall call, MenuItem *item)
         };
         static const char *text2[] =
         {
-            "*Additional thanks to",
+            "*Contributors (A-Z)",
             " Alexey \"Nuke.YKT\" Skrybykin",
-            " Jordon \"Striker\" Moss",
-            " Fox",
-            " NY00123",
             " Barry \"sirlemonhead\" Duncan",
-            " Gennadii \"termit\" Potapov",
-            " Sergei Shubin",
-            " Par \"Parkar\" Karlsson", // "Pär \"Parkar\" Karlsson",
+            " Fox Martins",
+            " Jordon \"Striker\" Moss",
+            " NY00123",
+            "*Additional thanks to (A-Z)",
             " Ben \"ProAsm\" Smit",
-            " Mitchell \"mjr4077au\" Richters",
             " Charlie Wiederhold",
+            " Gennadii \"termit\" Potapov",
+            " Mitchell \"mjr4077au\" Richters",
+            " Par \"Parkar\" Karlsson", // "Pär \"Parkar\" Karlsson",
+            " Sergei Shubin",
             "-",
             " This program is distributed under the terms of the",
             " GNU General Public License version 2 as published by the",
@@ -2104,6 +2104,7 @@ MNU_InitMenus(void)
 
     buttonsettings[btn_voxels] = gs.Voxels;
     buttonsettings[btn_ambience] = gs.Ambient;
+    buttonsettings[btn_reverb] = gs.AltReverb;
     buttonsettings[btn_playcd] = gs.PlayCD;
     buttonsettings[btn_flipstereo] = gs.FlipStereo;
     buttonsettings[btn_stats] = gs.Stats;
@@ -3341,6 +3342,10 @@ MNU_DoButton(MenuItem_p item, SWBOOL draw)
                         StopAmbientSound();
                 }
             }
+            break;
+        case btn_reverb:
+            last_value = gs.AltReverb;
+            gs.AltReverb = state = buttonsettings[item->button];
             break;
         case btn_flipstereo:
             last_value = gs.FlipStereo;
@@ -5123,5 +5128,3 @@ void ResetPalette(PLAYERp pp)
 }
 
 // vim:ts=4:sw=4:expandtab:
-
-

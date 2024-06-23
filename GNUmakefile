@@ -45,7 +45,7 @@ define getdeps
 $(call expanddeps,$1_$2 $(common_$2_deps) engine)
 endef
 define getfiltered
-$(filter-out $(strip $($1_excl)), $(subst $($1_src)/, ,$(wildcard $($1_src)/*.c $($1_src)/*.cpp)))
+$(filter-out $(strip $($1_excl)), $(subst $($1_src)/, ,$(wildcard $($1_src)/$2)))
 endef
 
 ##### External Library Definitions
@@ -82,9 +82,9 @@ libxmplite_inc := $(libxmplite_root)/include
 libxmplite_obj := $(obj)/$(libxmplite)
 
 libxmplite_excl :=
-libxmplite_objs := $(call getfiltered,libxmplite)
+libxmplite_objs := $(call getfiltered,libxmplite,*.c)
 
-libxmplite_cflags := -DHAVE_ROUND -DLIBXMP_CORE_PLAYER -DLIBXMP_NO_PROWIZARD -DLIBXMP_NO_DEPACKERS -DBUILDING_STATIC -I$(libxmplite_inc)/libxmp-lite -Wno-unused-parameter -Wno-sign-compare
+libxmplite_cflags := -DHAVE_ROUND -DLIBXMP_CORE_PLAYER -DLIBXMP_NO_PROWIZARD -DLIBXMP_NO_DEPACKERS -DBUILDING_STATIC -I$(libxmplite_inc)/libxmp-lite -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-cast-qual
 
 
 #### PhysicsFS
@@ -105,7 +105,7 @@ else
 endif
 
 ifneq (0,$(USE_PHYSFS))
-    physfs_objs := $(call getfiltered,physfs)
+    physfs_objs := $(call getfiltered,physfs,*.c)
 else
     physfs_objs :=
 endif
@@ -133,7 +133,7 @@ ifneq ($(RENDERTYPE),WIN)
 endif
 
 ifneq (0,$(USE_OPENGL))
-    glad_objs := $(call getfiltered,glad)
+    glad_objs := $(call getfiltered,glad,*.c)
 else
     glad_objs :=
 endif
@@ -152,16 +152,18 @@ mimalloc_obj := $(obj)/$(mimalloc)
 
 mimalloc_excl := \
     alloc-override.c \
+    free.c \
     page-queue.c \
     static.c \
-    
-ifneq ($(PLATFORM),APPLE)
-    mimalloc_excl += alloc-override-osx.c
-endif
-    
-mimalloc_objs := $(call getfiltered,mimalloc)
 
-mimalloc_cflags := -D_WIN32_WINNT=0x0600 -DMI_USE_RTLGENRANDOM -DMI_SHOW_ERRORS -fexceptions -Wno-cast-qual -Wno-class-memaccess -Wno-unknown-pragmas -Wno-array-bounds -Wno-null-dereference
+mimalloc_objs := $(call getfiltered,mimalloc,*.c)
+mimalloc_objs += prim/prim.c
+
+mimalloc_cflags := -D_WIN32_WINNT=0x0600 -DMI_USE_RTLGENRANDOM -DMI_SHOW_ERRORS -fexceptions -Wno-cast-qual -Wno-unknown-pragmas -Wno-array-bounds -Wno-null-dereference -Wno-missing-field-initializers
+
+ifeq (,$(filter 1 2 3 4 5 6 7,$(GCC_MAJOR)))
+    mimalloc_cflags += -Wno-class-memaccess
+endif
 
 
 #### imgui
@@ -174,7 +176,15 @@ imgui_inc := $(imgui_root)/include
 imgui_obj := $(obj)/$(imgui)
 
 imgui_excl :=
-imgui_objs := $(call getfiltered,imgui)
+
+ifneq ($(RENDERTYPE),SDL)
+    imgui_excl += imgui_impl_sdl2.cpp
+endif
+ifneq ($(RENDERTYPE),WIN)
+    imgui_excl += imgui_impl_win32.cpp
+endif
+
+imgui_objs := $(call getfiltered,imgui,*.cpp)
 
 imgui_cflags := -I$(imgui_inc) -Wno-cast-qual -Wno-cast-function-type -Wno-null-dereference -Wno-stringop-overflow
 
@@ -194,7 +204,7 @@ ifneq ($(PLATFORM),WINDOWS)
     voidwrap_excl += dllmain.cpp
 endif
 
-voidwrap_objs := $(call getfiltered,voidwrap)
+voidwrap_objs := $(call getfiltered,voidwrap,*.cpp)
 
 ifeq ($(IMPLICIT_ARCH),x86_64)
     ifeq ($(PLATFORM),WINDOWS)
@@ -240,7 +250,7 @@ engine_obj := $(obj)/$(engine)
 
 engine_cflags :=
 
-engine_deps := mimalloc
+engine_deps :=
 
 ifneq (1,$(SDL_TARGET))
     engine_deps += imgui
@@ -248,6 +258,10 @@ endif
 
 ifneq (0,$(USE_PHYSFS))
     engine_deps += physfs
+endif
+
+ifneq (0,$(USE_MIMALLOC))
+    engine_deps += mimalloc
 endif
 
 engine_editor_objs := \
@@ -275,7 +289,7 @@ engine_excl := \
     startgtk.editor.cpp \
     startwin.editor.cpp \
     $(engine_editor_objs) \
-        
+
 ifeq (1,$(USE_OPENGL))
     engine_deps += glad
 else
@@ -287,14 +301,14 @@ else
         polymost.cpp \
         tilepacker.cpp \
         voxmodel.cpp \
-    
+
 endif
 
 ifeq ($(PLATFORM),WINDOWS)
     ifeq ($(STARTUP_WINDOW),1)
         engine_editor_objs += startwin.editor.cpp
     endif
-else    
+else
     engine_excl += winbits.cpp
 endif
 
@@ -304,18 +318,19 @@ else
     engine_excl += wiibits.cpp
 endif
 
-ifeq ($(RENDERTYPE),SDL)
-    ifeq (1,$(HAVE_GTK2))
-        ifeq ($(STARTUP_WINDOW),1)
-            engine_editor_objs += startgtk.editor.cpp
-        endif
-    else
-        engine_excl += gtkbits.cpp dynamicgtk.cpp
-    endif
-    
-    engine_excl += winlayer.cpp rawinput.cpp
-else
+ifneq ($(RENDERTYPE),SDL)
     engine_excl += sdlayer.cpp
+endif
+ifneq ($(RENDERTYPE),WIN)
+    engine_excl += winlayer.cpp rawinput.cpp
+endif
+
+ifeq (1,$(HAVE_GTK2))
+    ifeq ($(STARTUP_WINDOW),1)
+        engine_editor_objs += startgtk.editor.cpp
+    endif
+else
+    engine_excl += gtkbits.cpp dynamicgtk.cpp
 endif
 
 ifeq ($(USE_LIBVPX),0)
@@ -323,7 +338,8 @@ ifeq ($(USE_LIBVPX),0)
 endif
 
 engine_objs := \
-    $(call getfiltered,engine) \
+    $(call getfiltered,engine,*.c) \
+    $(call getfiltered,engine,*.cpp) \
     polymost1Frag.glsl \
     polymost1Vert.glsl \
 
@@ -357,7 +373,7 @@ mact_inc := $(mact_root)/include
 mact_obj := $(obj)/$(mact)
 
 mact_excl :=
-mact_objs := $(call getfiltered,mact)
+mact_objs := $(call getfiltered,mact,*.cpp)
 
 mact_cflags :=
 
@@ -374,9 +390,9 @@ audiolib_deps :=
 
 audiolib_excl := \
     music_external.cpp \
-    
+
 ifneq ($(PLATFORM),WINDOWS)
-    audiolib_excl += driver_directsound.cpp driver_winmm.cpp 
+    audiolib_excl += driver_directsound.cpp driver_winmm.cpp
 endif
 ifneq ($(SUBPLATFORM),LINUX)
     audiolib_excl += driver_alsa.cpp
@@ -385,7 +401,7 @@ ifneq ($(RENDERTYPE),SDL)
     audiolib_excl += driver_sdl.cpp
 endif
 
-audiolib_objs := $(call getfiltered,audiolib)
+audiolib_objs := $(call getfiltered,audiolib,*.cpp)
 
 audiolib_cflags :=
 
@@ -408,7 +424,11 @@ tools_obj := $(obj)/$(tools)
 
 tools_cflags := $(engine_cflags) -I$(engine_src)
 
-tools_deps := engine_tools mimalloc
+tools_deps := engine_tools
+
+ifneq (0,$(USE_MIMALLOC))
+    tools_deps += mimalloc
+endif
 
 tools_targets := \
     arttool \
@@ -453,7 +473,7 @@ kenbuild_editor := ekenbuild-editor
 kenbuild_game_deps := audiolib
 
 kenbuild_game_proper := EKenBuild
-kenbuild_editor_proper := EKenBuild Editor
+kenbuild_editor_proper := EKenBuild-Editor
 
 kenbuild_game_objs := \
     common.cpp \
@@ -542,7 +562,7 @@ duke3d_editor_objs := \
     common.cpp \
     grpscan.cpp \
     sounds_mapster32.cpp \
-    
+
 duke3d_excl := \
     in_android.cpp \
     m32structures.cpp \
@@ -551,8 +571,8 @@ duke3d_excl := \
     startwin.game.cpp \
     $(duke3d_common_editor_objs) \
     $(duke3d_editor_objs) \
-        
-duke3d_game_objs := $(call getfiltered,duke3d) \
+
+duke3d_game_objs := $(call getfiltered,duke3d,*.cpp) \
     common.cpp \
     grpscan.cpp \
 
@@ -575,12 +595,12 @@ ifeq ($(PLATFORM),BSD)
 endif
 
 ifeq ($(PLATFORM),DARWIN)
-    LIBS += -lFLAC -lm \
-            -Wl,-framework,Cocoa -Wl,-framework,Carbon -Wl,-framework,OpenGL \
+    LIBS += -lFLAC \
+            -Wl,-framework,Cocoa -Wl,-framework,Carbon \
             -Wl,-framework,CoreMIDI -Wl,-framework,AudioUnit \
-            -Wl,-framework,AudioToolbox -Wl,-framework,IOKit -Wl,-framework,AGL
+            -Wl,-framework,AudioToolbox -Wl,-framework,IOKit
     ifneq (00,$(DARWIN9)$(DARWIN10))
-        LIBS += -Wl,-framework,QuickTime -lm
+        LIBS += -Wl,-framework,QuickTime
     endif
 
     ifeq ($(STARTUP_WINDOW),1)
@@ -642,12 +662,12 @@ sw_excl := \
     startgtk.game.cpp \
     startwin.game.cpp \
     $(sw_editor_objs) \
-        
-sw_game_objs := $(call getfiltered,sw) \
+
+sw_game_objs := $(call getfiltered,sw,*.cpp) \
     colormap.cpp \
     common.cpp \
     grpscan.cpp \
-    
+
 sw_game_rsrc_objs :=
 sw_editor_rsrc_objs :=
 sw_game_gen_objs :=
@@ -762,15 +782,18 @@ endif
 #### Includes
 
 COMPILERFLAGS += \
+    -MP -MMD \
     -I$(engine_inc) \
     -I$(mact_inc) \
     -I$(audiolib_inc) \
     -I$(glad_inc) \
     -I$(voidwrap_inc) \
-    -I$(mimalloc_inc) \
     -I$(imgui_inc) \
     -I$(discordrpc_inc) \
-    -MP -MMD \
+
+ifneq (0,$(USE_MIMALLOC))
+    COMPILERFLAGS += -I$(mimalloc_inc)
+endif
 
 ifneq (0,$(USE_PHYSFS))
     COMPILERFLAGS += -I$(physfs_inc) -DUSE_PHYSFS
@@ -794,10 +817,13 @@ libraries := \
     glad \
     imgui \
     libxmplite \
-    mimalloc \
     mact \
     voidwrap \
     discordrpc \
+
+ifneq (0,$(USE_MIMALLOC))
+    libraries += mimalloc
+endif
 
 ifneq (0,$(USE_PHYSFS))
     libraries += physfs
@@ -865,7 +891,8 @@ define BUILDRULE
 
 $$($1_$2)$$(EXESUFFIX): $$(foreach i,$(call getdeps,$1,$2),$$(call expandobjs,$$i)) $$($1_$2_miscdeps) | $$($1_$2_orderonlydeps)
 	$$(LINK_STATUS)
-	$$(RECIPE_IF) $$(LINKER) -o $$@ $$^ $$(GUI_LIBS) $$($1_$2_ldflags) $$(LIBDIRS) $$(LIBS) $$(RECIPE_RESULT_LINK)
+	$$(call MKDIR,"$$(obj)/$$($1_$2)_dump")
+	$$(RECIPE_IF) $$(LINKER) $$(call LF,$$(obj)/$$($1_$2)_dump) -o $$@ $$^ $$(GUI_LIBS) $$($1_$2_ldflags) $$(LIBDIRS) $$(LIBS) $$(RECIPE_RESULT_LINK)
 ifeq ($$(PLATFORM),WII)
 ifneq ($$(ELF2DOL),)
 	$$(ELF2DOL) $$@ $$($1_$2)$$(DOLSUFFIX)
@@ -879,6 +906,7 @@ ifeq ($$(PLATFORM),DARWIN)
 	$(call MKDIR,"$$($1_$2_proper).app/Contents/MacOS")
 	cp -f "$$($1_$2)$$(EXESUFFIX)" "$$($1_$2_proper).app/Contents/MacOS/"
 endif
+	$$(call RMDIR,"$$(obj)/$$($1_$2)_dump")
 
 endef
 
@@ -898,17 +926,19 @@ libklzw$(DLLSUFFIX): $(engine_src)/klzw.cpp
 # to debug the tools link phase, make a copy of this rule explicitly replacing % with the name of a tool, such as kextract
 %$(EXESUFFIX): $(tools_obj)/%.$o $(foreach i,tools $(tools_deps),$(call expandobjs,$i))
 	$(LINK_STATUS)
-	$(RECIPE_IF) $(LINKER) -o $@ $^ $(LIBDIRS) $(LIBS) $(RECIPE_RESULT_LINK)
+	$(call MKDIR,"$(tools_obj)/$*")
+	$(RECIPE_IF) $(LINKER) $(call LF,$(tools_obj)/$*) -o $@ $^ $(LIBDIRS) $(LIBS) $(RECIPE_RESULT_LINK)
 ifneq ($(STRIP),)
 	$(STRIP) $@
 endif
+	$(call RMDIR,"$(tools_obj)/$*")
 
 
 ### Voidwrap
 
 $(voidwrap_lib): $(foreach i,$(voidwrap),$(call expandobjs,$i))
 	$(LINK_STATUS)
-	$(RECIPE_IF) $(LINKER) -shared -Wl,-soname,$@ -o $@ $^ $(LIBDIRS) $(voidwrap_root)/sdk/redistributable_bin/$(steamworks_lib) $(RECIPE_RESULT_LINK)
+	$(RECIPE_IF) $(LINKER) $(call LF,$(voidwrap_obj)) -shared -Wl,-soname,$@ -o $@ $^ $(LIBDIRS) $(voidwrap_root)/sdk/redistributable_bin/$(steamworks_lib) $(RECIPE_RESULT_LINK)
 ifneq ($(STRIP),)
 	$(STRIP) $@
 endif
@@ -930,22 +960,27 @@ $$($1_obj)/%.$$o: $$($1_src)/%.yasm | $$($1_obj)
 
 $$($1_obj)/%.$$o: $$($1_src)/%.c | $$($1_obj)
 	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(COMPILER_C) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
 
 $$($1_obj)/%.$$o: $$($1_src)/%.cpp | $$($1_obj)
 	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(COMPILER_CXX) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
 
 $$($1_obj)/%.$$o: $$($1_src)/%.m | $$($1_obj)
 	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(COMPILER_OBJC) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
 
 $$($1_obj)/%.$$o: $$($1_src)/%.mm | $$($1_obj)
 	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(COMPILER_OBJCXX) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
 
 $$($1_obj)/%.$$o: $$($1_obj)/%.c | $$($1_obj)
 	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(COMPILER_C) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
 
 $$($1_obj)/%.$$o: $$($1_src)/%.glsl | $$($1_obj)
@@ -955,16 +990,19 @@ $$($1_obj)/%.$$o: $$($1_src)/%.glsl | $$($1_obj)
 	@$$(call CAT,$$<) >> $$($1_obj)/$$(<F).cpp
 	@$$(call RAW_ECHO,$$(paren_close)shader";) >> $$($1_obj)/$$(<F).cpp
 	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(COMPILER_CXX) $$($1_cflags) -c $$($1_obj)/$$(<F).cpp -o $$@ $$(RECIPE_RESULT_COMPILE)
 
 ## Cosmetic stuff
 
 $$($1_obj)/%.$$o: $$($1_rsrc)/%.rc | $$($1_obj)
 	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(RC) -i $$< -o $$@ --include-dir=$$(engine_inc) --include-dir=$$($1_src) --include-dir=$$($1_rsrc) -DPOLYMER=$$(POLYMER) $(REVFLAG) $$(RECIPE_RESULT_COMPILE)
 
 $$($1_obj)/%.$$o: $$($1_rsrc)/%.c | $$($1_obj)
 	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(COMPILER_C) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
 
 $$($1_obj)/%_banner.c: $$($1_rsrc)/%.bmp | $$($1_obj)

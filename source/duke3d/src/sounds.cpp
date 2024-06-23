@@ -90,7 +90,7 @@ void S_SoundStartup(void)
         LOG_F(ERROR, "Failed initializing sound subsystem: %s", FX_ErrorString(status));
         return;
     }
-    
+
     freeSlotReadIndex = freeSlotWriteIndex = localQueueIndex = 0;
 #ifndef NDEBUG
     freeSlotPendingCnt = 0;
@@ -109,15 +109,16 @@ void S_SoundStartup(void)
         if (g_sounds[i] == &nullsound)
             continue;
 
-        g_sounds[i]->playing = 0;
-        g_sounds[i]->voices = &nullvoice;
+        auto &snd = g_sounds[i];
 
-#ifdef CACHING_DOESNT_SUCK
-        g_sounds[i]->lock = CACHE1D_UNLOCKED;
-#endif
+        snd->playing = 0;
+        snd->voices = &nullvoice;
+
+        if (snd->lock != CACHE1D_PERMANENT)
+            snd->lock = CACHE1D_UNLOCKED;
     }
 
-    FX_SetVolume(ud.config.FXVolume);
+    FX_SetVolume(ud.config.MasterVolume);
     //S_MusicVolume(ud.config.MusicVolume);
 
 #ifdef ASS_REVERSESTEREO
@@ -160,8 +161,7 @@ void S_MusicStartup(void)
 
     MUSIC_SetVolume(ud.config.MusicVolume);
 
-    auto const fil = kopen4load("d3dtimbr.tmb", 0);
-
+    buildvfs_kfd const fil = kopen4load("d3dtimbr.tmb", 0);
     if (fil != buildvfs_kfd_invalid)
     {
         int l = kfilelength(fil);
@@ -269,7 +269,7 @@ static int S_PlayMusic(const char *fn)
         return 1;
 
     buildvfs_kfd fp = S_OpenAudio(fn, 0, 1);
-    if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
+    if (/*EDUKE32_PREDICT_FALSE*/(fp == buildvfs_kfd_invalid))
     {
         LOG_F(ERROR, "Unable to play %s: file not found.",fn);
         return 2;
@@ -277,7 +277,7 @@ static int S_PlayMusic(const char *fn)
 
     int32_t MusicLen = kfilelength(fp);
 
-    if (EDUKE32_PREDICT_FALSE(MusicLen < 4))
+    if (/*EDUKE32_PREDICT_FALSE*/(MusicLen < 4))
     {
         LOG_F(ERROR, "Unable to play %s: no data.",fn);
         kclose(fp);
@@ -287,7 +287,7 @@ static int S_PlayMusic(const char *fn)
     char * MyMusicPtr = (char *)Xaligned_alloc(16, MusicLen);
     int MyMusicSize = kread(fp, MyMusicPtr, MusicLen);
 
-    if (EDUKE32_PREDICT_FALSE(MyMusicSize != MusicLen))
+    if (/*EDUKE32_PREDICT_FALSE*/(MyMusicSize != MusicLen))
     {
         LOG_F(ERROR, "Unable to play %s: read %d of %d bytes expected.", fn, MyMusicSize, MusicLen);
         kclose(fp);
@@ -479,11 +479,11 @@ void S_Cleanup(void)
         // for which there was no open slot to keep track of the voice
         if (num >= (MAXSOUNDS*MAXSOUNDINSTANCES))
         {
-            if (g_sounds[num-(MAXSOUNDS*MAXSOUNDINSTANCES)]->flags & SF_TALK)
+            auto &snd = g_sounds[num-(MAXSOUNDS*MAXSOUNDINSTANCES)];
+            if (snd->flags & SF_TALK)
                 g_dukeTalk = false;
-#ifdef CACHING_DOESNT_SUCK
-            --g_soundlocks[num-(MAXSOUNDS*MAXSOUNDINSTANCES)];
-#endif
+            if (!snd->playing && snd->lock != CACHE1D_PERMANENT)
+                snd->lock = CACHE1D_UNLOCKED;
             continue;
         }
 
@@ -494,7 +494,7 @@ void S_Cleanup(void)
         auto &snd   = g_sounds[num];
         auto &voice = snd->voices[voiceindex];
         int const spriteNum = voice.owner;
-        
+
         DVLOG_IF_F(LOG_DEBUG, !bitmap_test(&snd->playing, voiceindex), "Sound %d index %d is not playing", num, voiceindex);
         bitmap_clear(&snd->playing, voiceindex);
 
@@ -507,24 +507,22 @@ void S_Cleanup(void)
             actor[spriteNum].t_data[0] = 0;
 
         S_FillVoiceInfo(&voice, -1, 0, UINT16_MAX);
-
-#ifdef CACHING_DOESNT_SUCK
-        --g_soundlocks[num];
-#endif
+        if (!snd->playing && snd->lock != CACHE1D_PERMANENT)
+            snd->lock = CACHE1D_UNLOCKED;
     }
 }
 
 // returns number of bytes read
 int32_t S_LoadSound(int num)
 {
-    if ((unsigned)num > (unsigned)g_highestSoundIdx || EDUKE32_PREDICT_FALSE(g_sounds[num] == &nullsound))
+    if ((unsigned)num > (unsigned)g_highestSoundIdx || g_sounds[num] == &nullsound)
         return 0;
 
     auto &snd = g_sounds[num];
 
     buildvfs_kfd fp = S_OpenAudio(snd->filename, g_loadFromGroupOnly, 0);
 
-    if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
+    if (/*EDUKE32_PREDICT_FALSE*/(fp == buildvfs_kfd_invalid))
     {
         DVLOG_F(LOG_DEBUG, "Unable to load sound #%d: file %s not found.", num, snd->filename);
         return 0;
@@ -576,7 +574,7 @@ static int32_t S_DefineAudioIfSupported(char** fn, const char* name)
 
 int32_t S_DefineSound(int sndidx, const char *name, int minpitch, int maxpitch, int priority, int type, int distance, float volume)
 {
-    if (EDUKE32_PREDICT_FALSE((unsigned)sndidx >= MAXSOUNDS))
+    if (/*EDUKE32_PREDICT_FALSE*/((unsigned)sndidx >= MAXSOUNDS))
         return -1;
 
     S_AllocIndexes(sndidx);
@@ -654,7 +652,7 @@ static inline int S_GetPitch(int num)
 }
 
 static void S_AllocVoiceInfo(sound_t *snd)
-{   
+{
     snd->voices = (voiceinfo_t*) Xcalloc(MAXSOUNDINSTANCES, sizeof(voiceinfo_t));
     for (int i=0; i<MAXSOUNDINSTANCES; ++i)
         snd->voices[i] = nullvoice;
@@ -663,27 +661,27 @@ static void S_AllocVoiceInfo(sound_t *snd)
 static int S_GetSlot(int soundNum)
 {
     auto &snd = g_sounds[soundNum];
-    
+
     if (snd->voices == &nullvoice)
         S_AllocVoiceInfo(snd);
 
     int slot = 0, dist = 0, position = 0;
     int bestslot = MAXSOUNDINSTANCES;
-    
+
     if (snd->playing == 0)
         goto done;
-    
+
     do
     {
         if (!bitmap_test(&snd->playing, slot))
             goto done;
     }
     while (++slot < MAXSOUNDINSTANCES);
-    
+
     S_Cleanup();
 
     slot = 0;
-    
+
     if (snd->playing != 0xff)
     {
         do
@@ -694,7 +692,7 @@ static int S_GetSlot(int soundNum)
         while (++slot < MAXSOUNDINSTANCES);
         slot = 0;
     }
-    
+
     do
     {
         auto &voice = snd->voices[slot];
@@ -714,10 +712,10 @@ static int S_GetSlot(int soundNum)
         }
     }
     while (++slot < MAXSOUNDINSTANCES);
-    
+
     if (bestslot == MAXSOUNDINSTANCES)
         return MAXSOUNDINSTANCES;
-    
+
     slot = bestslot;
     FX_StopSound(snd->voices[slot].handle, false);
 
@@ -830,7 +828,13 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
     if ((sndNum == -1 && num != -1) || !ud.config.SoundToggle || (unsigned)spriteNum >= MAXSPRITES) // check that the user returned -1, but only if -1 wasn't playing already (in which case, warn)
         return -1;
 
-    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(sndNum)))
+    if ((unsigned)sndNum < (unsigned)g_highestSoundIdx && g_sounds[sndNum]->ptr == nullptr && g_sounds[sndNum]->filename)
+    {
+        LOG_F(WARNING, "Sound #%d (%s) not precached!", sndNum, g_sounds[sndNum]->filename);
+        S_LoadSound(sndNum);
+    }
+
+    if (/*EDUKE32_PREDICT_FALSE*/(!S_SoundIsValid(sndNum)))
     {
         LOG_F(WARNING, "Invalid sound #%d", sndNum);
         return -1;
@@ -844,6 +848,13 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
         || (pPlayer->timebeforeexit > 0 && pPlayer->timebeforeexit <= GAMETICSPERSEC * 3))
         return -1;
 
+    // Duke-Tag sound
+    if ((snd->flags & (SF_DTAG|SF_GLOBAL)) == SF_DTAG)
+    {
+        S_PlaySound(sndNum);
+        return 0;
+    }
+
     // Duke talk
     if (snd->flags & SF_TALK)
     {
@@ -855,27 +866,6 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
         // don't play if any Duke talk sounds are already playing
         else if (g_dukeTalk || !(ud.config.VoiceToggle & 1))
             return -1;
-    }
-    else if ((snd->flags & (SF_DTAG|SF_GLOBAL)) == SF_DTAG)  // Duke-Tag sound
-    {
-        int const voice = S_PlaySound(sndNum);
-
-        if (voice <= FX_Ok)
-            return -1;
-
-        int slot = 0;
-        while (slot < MAXSOUNDINSTANCES && snd->voices[slot].handle != voice)
-            slot++;
-        
-        if (EDUKE32_PREDICT_FALSE(slot >= MAXSOUNDINSTANCES))
-        {
-            LOG_F(WARNING, "S_PlaySound3D: slot >= MAXSOUNDINSTANCES!");
-            return -1;
-        }        
-            
-        snd->voices[slot].owner = spriteNum;
-
-        return voice;
     }
 
     int32_t    sndist, sndang;
@@ -919,30 +909,28 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
 
     if ((snd->flags & (SF_LOOP|SF_ONEINST_INTERNAL)) == (SF_LOOP|SF_ONEINST_INTERNAL) && snd->playing)
         return -1;
-    
-#ifdef CACHING_DOESNT_SUCK
-    if (++g_soundlocks[sndNum] < CACHE1D_LOCKED)
-        g_soundlocks[sndNum] = CACHE1D_LOCKED;
-#endif
+
+    if (++snd->lock < CACHE1D_LOCKED)
+        snd->lock = CACHE1D_LOCKED;
+
     int const sndSlot = S_GetSlot(sndNum);
 
     // the only way this should return MAXSOUNDINSTANCES is if all slots are in use by voices that haven't actually started playing yet
     if (sndSlot == MAXSOUNDINSTANCES || !FX_VoiceAvailable(snd->priority))
     {
 error:
-#ifdef CACHING_DOESNT_SUCK
-        g_soundlocks[sndNum]--;
-#endif
+        snd->lock--;
         return -1;
-    }        
+    }
 
     S_FillVoiceInfo(&snd->voices[sndSlot], spriteNum, -1, sndist >> 6);
 
     if (snd->flags & SF_TALK)
         g_dukeTalk = true;
 
-    int const voice = FX_Play3D(snd->ptr, snd->len, repeatp ? FX_LOOP : FX_ONESHOT, pitch, sndang >> 4, sndist >> 6,
-                                                        snd->priority, snd->volume, (sndNum * MAXSOUNDINSTANCES) + sndSlot);
+    fix16_t const volume = fix16_from_float(((snd->flags & SF_TALK) || ((snd->flags & SF_SPEECH) && ud.config.VoiceVolume > ud.config.FXVolume)) ? fix16_to_float(snd->volume) * ((float)ud.config.VoiceVolume / 255.f) : fix16_to_float(snd->volume) * ((float)ud.config.FXVolume / 255.f));
+    int const voice = FX_Play3D(snd->ptr, snd->len, repeatp ? FX_LOOP : FX_ONESHOT, pitch, sndang >> 4, sndist >> 6, snd->priority,
+                                volume, (sndNum * MAXSOUNDINSTANCES) + sndSlot);
 
     if (voice <= FX_Ok)
     {
@@ -963,7 +951,13 @@ int S_PlaySound(int num)
     if ((sndnum == -1 && num != -1) || !ud.config.SoundToggle) // check that the user returned -1, but only if -1 wasn't playing already (in which case, warn)
         return -1;
 
-    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(sndnum)))
+    if ((unsigned)sndnum < (unsigned)g_highestSoundIdx && g_sounds[sndnum]->ptr == nullptr && g_sounds[sndnum]->filename)
+    {
+        LOG_F(WARNING, "Sound #%d (%s) not precached!", sndnum, g_sounds[sndnum]->filename);
+        S_LoadSound(sndnum);
+    }
+
+    if (/*EDUKE32_PREDICT_FALSE*/(!S_SoundIsValid(sndnum)))
     {
         LOG_F(WARNING, "Invalid sound #%d", sndnum);
         return -1;
@@ -976,28 +970,25 @@ int S_PlaySound(int num)
 
     int const pitch = S_GetPitch(num);
 
-#ifdef CACHING_DOESNT_SUCK
-    if (++g_soundlocks[num] < CACHE1D_LOCKED)
-        g_soundlocks[num] = CACHE1D_LOCKED;
-#endif
+    if (++snd->lock < CACHE1D_LOCKED)
+        snd->lock = CACHE1D_LOCKED;
 
     sndnum = S_GetSlot(num);
 
     if (sndnum == MAXSOUNDINSTANCES || !FX_VoiceAvailable(snd->priority))
     {
 error:
-#ifdef CACHING_DOESNT_SUCK
-        g_soundlocks[num]--;
-#endif
+        snd->lock--;
         return -1;
     }
-        
+
     if (snd->flags & SF_TALK)
         g_dukeTalk = true;
 
+    fix16_t const volume = fix16_from_float(((snd->flags & SF_TALK) || ((snd->flags & SF_SPEECH) && ud.config.VoiceVolume > ud.config.FXVolume)) ? fix16_to_float(snd->volume) * ((float)ud.config.VoiceVolume / 255.f) : fix16_to_float(snd->volume) * ((float)ud.config.FXVolume / 255.f));
     int const voice = (snd->flags & SF_LOOP) ? FX_Play(snd->ptr, snd->len, 0, -1, pitch, LOUDESTVOLUME, LOUDESTVOLUME,
-                                                  LOUDESTVOLUME, snd->len, snd->volume, (num * MAXSOUNDINSTANCES) + sndnum)
-                                        : FX_Play3D(snd->ptr, snd->len, FX_ONESHOT, pitch, 0, 255 - LOUDESTVOLUME, snd->priority, snd->volume,
+                                                  LOUDESTVOLUME, snd->len, volume, (num * MAXSOUNDINSTANCES) + sndnum)
+                                        : FX_Play3D(snd->ptr, snd->len, FX_ONESHOT, pitch, 0, 255 - LOUDESTVOLUME, snd->priority, volume,
                                                     (num * MAXSOUNDINSTANCES) + sndnum);
 
     if (voice <= FX_Ok)
@@ -1020,7 +1011,7 @@ int A_PlaySound(int soundNum, int spriteNum)
 
 void S_StopEnvSound(int soundNum, int spriteNum)
 {
-    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum)))
+    if (/*EDUKE32_PREDICT_FALSE*/(!S_SoundIsValid(soundNum)))
     {
         LOG_F(WARNING, "Invalid sound #%d", soundNum);
         return;
@@ -1028,14 +1019,14 @@ void S_StopEnvSound(int soundNum, int spriteNum)
 
     int j;
 
-    do 
+    do
     {
         if (g_sounds[soundNum]->playing == 0)
             return;
-        
+
         for (j=0; j < MAXSOUNDINSTANCES; ++j)
         {
-            if (bitmap_test(&g_sounds[soundNum]->playing, j) == 0)
+            if (!bitmap_test(&g_sounds[soundNum]->playing, j))
                 continue;
 
             auto &voice = g_sounds[soundNum]->voices[j];
@@ -1065,15 +1056,17 @@ void S_StopAllSounds(void)
         if (g_sounds[i] == &nullsound)
             continue;
 
-        g_sounds[i]->playing = 0;
+        auto &snd = g_sounds[i];
 
-        if (g_sounds[i]->voices != &nullvoice)
+        snd->playing = 0;
+
+        if (snd->voices != &nullvoice)
             for (int j = 0; j < MAXSOUNDINSTANCES; ++j)
-                g_sounds[i]->voices[j] = nullvoice;
+                snd->voices[j] = nullvoice;
 
-#ifdef CACHING_DOESNT_SUCK
-        g_sounds[i]->lock = CACHE1D_UNLOCKED;
-#endif
+
+        if (snd->lock != CACHE1D_PERMANENT)
+            snd->lock = CACHE1D_UNLOCKED;
     }
 
     g_dukeTalk = false;
@@ -1086,7 +1079,7 @@ void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
 
     for (int j=0; j < MAXSOUNDINSTANCES; ++j)
     {
-        if (bitmap_test(&g_sounds[soundNum]->playing, j) == 0)
+        if (!bitmap_test(&g_sounds[soundNum]->playing, j))
             continue;
 
         auto &voice = g_sounds[soundNum]->voices[j];
@@ -1094,7 +1087,7 @@ void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
         if ((spriteNum == -1 && voice.handle > FX_Ok) || (spriteNum != -1 && voice.owner == spriteNum))
         {
             Bassert(spriteNum == -1 || voice.handle > FX_Ok);
-            if (EDUKE32_PREDICT_FALSE(spriteNum >= 0 && voice.handle <= FX_Ok))
+            if (/*EDUKE32_PREDICT_FALSE*/(spriteNum >= 0 && voice.handle <= FX_Ok))
                 LOG_F(ERROR, "Invalid voice for sound #%d index #%d! (%d)", soundNum, j, voice.handle);
             else
                 FX_SetPitch(voice.handle, pitchoffset);
@@ -1150,9 +1143,9 @@ void S_Update(void)
         {
             auto &voice = g_sounds[sndnum]->voices[j];
 
-            if (bitmap_test(&g_sounds[sndnum]->playing, j) == 0)
+            if (!bitmap_test(&g_sounds[sndnum]->playing, j))
                 continue;
-            
+
             // this is incremented here as a way to track how long the sound has been playing for ownerless sounds
             if ((unsigned)(spriteNum = voice.owner) >= MAXSPRITES)
             {
@@ -1183,7 +1176,7 @@ void S_Callback(intptr_t num)
     if ((unsigned)num < (MAXSOUNDS * MAXSOUNDINSTANCES))
     {
         int const voiceindex = num & (MAXSOUNDINSTANCES-1);
-        int const anum = (num - voiceindex) / MAXSOUNDINSTANCES;    
+        int const anum = (num - voiceindex) / MAXSOUNDINSTANCES;
 
         if (!bitmap_test(&g_sounds[anum]->playing, voiceindex))
         {
@@ -1202,25 +1195,20 @@ void S_Callback(intptr_t num)
 
 void S_ClearSoundLocks(void)
 {
-#ifdef CACHING_DOESNT_SUCK
-    int32_t i;
-    int32_t const msp = g_highestSoundIdx;
-
     for (native_t i = 0; i < 11; ++i)
-        if (rts_lumplockbyte[i] >= CACHE1D_LOCKED)
+        if (rts_lumplockbyte[i] >= CACHE1D_LOCKED && rts_lumplockbyte[i] < CACHE1D_PERMANENT)
             rts_lumplockbyte[i] = CACHE1D_UNLOCKED;
 
     int32_t const msp = g_highestSoundIdx;
 
     for (native_t i = 0; i <= msp; ++i)
-        if (g_soundlocks[i] >= CACHE1D_LOCKED)
-            g_soundlocks[i] = CACHE1D_UNLOCKED;
-#endif
+        if (g_sounds[i]->lock >= CACHE1D_LOCKED && g_sounds[i]->lock < CACHE1D_PERMANENT)
+            g_sounds[i]->lock = CACHE1D_UNLOCKED;
 }
 
 int A_CheckSoundPlaying(int spriteNum, int soundNum)
 {
-    if (EDUKE32_PREDICT_FALSE((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return 0;
+    if (/*EDUKE32_PREDICT_FALSE*/((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return 0;
 
     auto &snd = g_sounds[soundNum];
 
@@ -1245,7 +1233,7 @@ int A_CheckAnySoundPlaying(int spriteNum)
 
         if ((snd == &nullsound) | (snd->playing == 0))
             continue;
-        
+
         for (int j = 0; j < MAXSOUNDINSTANCES; ++j)
             if (bitmap_test(&snd->playing, j) && snd->voices[j].owner == spriteNum)
                 return 1;
@@ -1256,6 +1244,6 @@ int A_CheckAnySoundPlaying(int spriteNum)
 
 int S_CheckSoundPlaying(int soundNum)
 {
-    if (EDUKE32_PREDICT_FALSE((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return false;
+    if (/*EDUKE32_PREDICT_FALSE*/((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return false;
     return (g_sounds[soundNum]->playing != 0);
 }

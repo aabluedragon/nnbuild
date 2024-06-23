@@ -757,7 +757,7 @@ int32_t CONFIG_ReadSetup(void)
 
 static void CONFIG_WriteCvars()
 {
-    static const char filename[] = "voidsw_cvars.cfg";
+    static const char filename[] = APPBASENAME "_cvars.cfg";
 
     buildvfs_FILE fp = buildvfs_fopen_write(filename);
 
@@ -890,4 +890,3 @@ void CONFIG_WriteSetup(void)
 
     CONFIG_WriteCvars();
 }
-

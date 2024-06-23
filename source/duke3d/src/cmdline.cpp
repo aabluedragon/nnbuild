@@ -155,7 +155,6 @@ static void G_AddDemo(const char* param)
 
 void G_CheckCommandLine(int32_t argc, char const * const * argv)
 {
-    int16_t i = 1, j;
     const char *c, *k;
 
     ud.m_respawn_items = 0;
@@ -178,7 +177,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
 
 #ifdef HAVE_CLIPSHAPE_FEATURE
     // pre-form the default 10 clipmaps
-    for (j = '0'; j<='9'; ++j)
+    for (int j = '0'; j<='9'; ++j)
     {
         char clipshape[16] = "_clipshape0.map";
 
@@ -189,19 +188,13 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
 
     if (argc > 1)
     {
-        tempbuf[0] = 0;
-
-        Bstrcpy(tempbuf, "Application parameters: ");
-
-        while (i < argc)
-        {
-            Bstrcat(tempbuf, argv[i++]);
-            Bstrcat(tempbuf, " ");
-        }
-        
+        size_t constexpr size = ARRAY_SIZE(tempbuf);
+        size_t bytesWritten = Bsnprintf(tempbuf, size, "Application parameters:");
+        for (int i = 1; i < argc; ++i)
+            bytesWritten += Bsnprintf(tempbuf + bytesWritten, size - bytesWritten, " %s", argv[i]);
         LOG_F(INFO, "%s", tempbuf);
 
-        i = 1;
+        int i = 1;
         do
         {
             const char *const oc = argv[i];
@@ -317,15 +310,29 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
-#if defined RENDERTYPEWIN
+#ifdef _WIN32
                 if (!Bstrcasecmp(c+1, "nodinput"))
                 {
-                    initprintf("DirectInput (joystick) support disabled\n");
-                    di_disabled = 1;
+                    VLOG_F(LOG_INPUT, "DirectInput (controller) support disabled");
+                    g_controllerSupportFlags |= CONTROLLER_NO_DINPUT;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c+1, "noxinput"))
+                {
+                    VLOG_F(LOG_INPUT, "XInput (controller) support disabled");
+                    g_controllerSupportFlags |= CONTROLLER_NO_XINPUT;
                     i++;
                     continue;
                 }
 #endif
+                if (!Bstrcasecmp(c+1, "nocontroller"))
+                {
+                    VLOG_F(LOG_INPUT, "Controller support disabled.");
+                    g_controllerSupportFlags |= CONTROLLER_DISABLED;
+                    i++;
+                    continue;
+                }
                 if (!Bstrcasecmp(c+1, "noautoload"))
                 {
                     LOG_F(INFO, "Autoload disabled");
@@ -336,12 +343,12 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
 #ifndef NETCODE_DISABLE
                 if (!Bstrcasecmp(c+1, "net"))
                 {
-                    G_GameExit("EDuke32 no longer supports legacy networking.\n\n"
-                        "If using YANG or other launchers that only support legacy netplay, download an older build of EDuke32. "
+                    G_GameExit(APPNAME " no longer supports legacy networking.\n\n"
+                        "If using YANG or other launchers that only support legacy netplay, download NetDuke32. "
                         "Otherwise, run the following:\n\n"
-                        "eduke32 -server\n\n"
+                        APPBASENAME " -server\n\n"
                         "Other clients can then connect by typing \"connect [host]\" in the console.\n\n"
-                        "EDuke32 will now close.");
+                        APPNAME " will now close.");
                 }
 #endif
                 if (!Bstrcasecmp(c+1, "port"))
@@ -690,7 +697,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     break;
                 case 's':
                     c++;
-                    ud.m_player_skill = ud.player_skill = (Batoi(c)%5);
+                    ud.m_player_skill = ud.player_skill = clamp(Batoi(c), 0, g_maxDefinedSkill);
                     if (ud.m_player_skill == 4)
                         ud.m_respawn_monsters = ud.respawn_monsters = 1;
                     break;
@@ -708,9 +715,10 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     LOG_F(INFO, "Respawn on.");
                     break;
                 case 'u':
+                {
                     g_forceWeaponChoice = 1;
                     c++;
-                    j = 0;
+                    int j = 0;
                     if (*c)
                     {
                         LOG_F(INFO, "Using favorite weapon order(s).");
@@ -755,6 +763,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                         Bsprintf(ud.wchoice, "3457860291");
                     }
                     break;
+                }
                 case 'v':
                     c++;
                     ud.warp_on = 1;

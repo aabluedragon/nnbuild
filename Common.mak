@@ -175,6 +175,8 @@ ifeq ($(PLATFORM),WII)
     CROSS := powerpc-eabi-
 
     CCFULLPATH = $(DEVKITPPC)/bin/$(CC)
+else ifeq ($(PLATFORM),$(filter $(PLATFORM),DINGOO GCW))
+    CROSS := mipsel-linux-
 endif
 
 CC := $(CROSS)gcc$(CROSS_SUFFIX)
@@ -209,10 +211,6 @@ ifeq ($(AS),as)
     override AS := nasm
 endif
 
-ifeq ($(PLATFORM),$(filter $(PLATFORM),DINGOO GCW))
-    CROSS := mipsel-linux-
-endif
-
 CLANG := 0
 ifeq ($(findstring clang,$(CC) $(MAKECMDGOALS)),clang)
     override CLANG := 1
@@ -241,7 +239,9 @@ endif
 LLD := 0
 
 ifneq (0,$(CLANG))
-    override LLD := 1
+    ifneq ($(PLATFORM),DARWIN)
+        override LLD := 1
+    endif
     CLANGXXNAME := $(subst clang,clang++,$(CLANGNAME))
     override CC := $(CLANGNAME) -x c
     override CXX := $(CLANGXXNAME) -x c++
@@ -288,6 +288,8 @@ ifeq ($(PLATFORM),WINDOWS)
     endif
 else ifeq ($(PLATFORM),WII)
     IMPLICIT_ARCH := ppc
+else ifeq ($(PLATFORM),$(filter $(PLATFORM),DINGOO GCW))
+    IMPLICIT_ARCH := mipsel
 else
     ifneq ($(ARCH),)
         override ARCH := $(subst i486,i386,$(subst i586,i386,$(subst i686,i386,$(strip $(ARCH)))))
@@ -297,6 +299,9 @@ else
     endif
 
     ifeq ($(findstring x86_64,$(IMPLICIT_ARCH)),x86_64)
+        BITS := 64
+    endif
+    ifeq ($(findstring arm64,$(IMPLICIT_ARCH)),arm64)
         BITS := 64
     endif
 endif
@@ -342,6 +347,7 @@ HAVE_XMP := 1
 RENDERTYPE := SDL
 SDL_TARGET := 2
 USE_PHYSFS := 0
+USE_MIMALLOC := 1
 
 ifneq (0,$(USE_PHYSFS))
     # PhysFS requires this to be off
@@ -483,7 +489,9 @@ LIBDIRS :=
 
 ASFORMAT := elf$(BITS)
 ifeq ($(PLATFORM),WINDOWS)
-    LINKERFLAGS += -static -Wl,-subsystem,windows
+    WINDOWS_MAJOR := 6
+    WINDOWS_MINOR := 1
+    LINKERFLAGS += -static -Wl,-subsystem,windows:$(WINDOWS_MAJOR).$(WINDOWS_MINOR),--major-os-version,$(WINDOWS_MAJOR),--minor-os-version,$(WINDOWS_MINOR)
     COMPILERFLAGS += -DUNDERSCORES
     ASFORMAT := win$(BITS)
     ASFLAGS += -DUNDERSCORES
@@ -509,14 +517,16 @@ else ifeq ($(PLATFORM),DARWIN)
     COMMONFLAGS += $(ARCH)
 
     ifneq ($(findstring x86_64,$(IMPLICIT_ARCH)),x86_64)
-        LINKERFLAGS += -read_only_relocs suppress
+        ifneq ($(findstring arm64,$(IMPLICIT_ARCH)),arm64)
+            LINKERFLAGS += -read_only_relocs suppress
+        endif
     endif
 
     COMPILERFLAGS += -DUNDERSCORES
     ASFORMAT := macho
     ASFLAGS += -DUNDERSCORES
 
-    ifeq ($(findstring x86_64,$(IMPLICIT_ARCH)),x86_64)
+    ifeq ($(BITS),64)
         ASFORMAT += 64
     endif
 else ifeq ($(PLATFORM),WII)
@@ -549,7 +559,7 @@ ifndef OPTOPT
         else
             OPTOPT := -march=core2
         endif
-        OPTOPT += -mmmx -msse -msse2 -msse3 -mssse3 -mfpmath=sse
+        OPTOPT += -mmmx -msse -msse2 -msse3 -mfpmath=sse
     endif
     ifeq ($(findstring i386, $(IMPLICIT_ARCH)),i386)
         ifeq ($(PLATFORM),DARWIN)
@@ -580,11 +590,15 @@ ifeq ($(PACKAGE_REPOSITORY),0)
     COMMONFLAGS += -O$(OPTLEVEL) $(OPTOPT)
 endif
 
+define LF
+-save-temps=obj -dumpdir $1
+endef
+
 ifneq (0,$(LTO))
     COMPILERFLAGS += -DUSING_LTO
     ifeq (1,$(LTO))
         ifeq (0,$(CLANG))
-            COMMONFLAGS += -flto
+            COMMONFLAGS += -flto=12
         else
             COMMONFLAGS += -flto=thin
         endif
@@ -595,6 +609,11 @@ endif
 
 ifeq (1,$(LLD))
     COMMONFLAGS += -fuse-ld=lld
+    LF :=
+endif
+
+ifeq ($(PLATFORM),DARWIN)
+    LF :=
 endif
 
 ##### Debugging
@@ -623,8 +642,9 @@ endif
 # for a list of possible ASan and UBsan options.
 
 ASAN_FLAGS := -fsanitize=address -fsanitize=bounds,enum,float-cast-overflow
-ASAN_FLAGS := $(ASAN_FLAGS),signed-integer-overflow,unsigned-integer-overflow
-ASAN_FLAGS := $(ASAN_FLAGS),undefined,return,null,pointer-overflow,float-divide-by-zero
+#ASAN_FLAGS := $(ASAN_FLAGS),signed-integer-overflow
+#ASAN_FLAGS := $(ASAN_FLAGS),undefined
+ASAN_FLAGS := $(ASAN_FLAGS),return,null,pointer-overflow
 #ASAN_FLAGS := $(ASAN_FLAGS) -fsanitize-undefined-trap-on-error
 
 ifeq (0,$(FORCEDEBUG))
@@ -727,7 +747,7 @@ ifeq (0,$(CLANG))
                 ifneq (,$(filter 4 5,$(GCC_MAJOR)))
                     W_GCC_6 :=
                 endif
-            endif     
+            endif
         endif
     endif
 
@@ -841,8 +861,13 @@ else ifeq ($(PLATFORM),DARWIN)
         COMPILERFLAGS += -I/opt/local/include
     endif
     ifneq ($(shell brew --version &>/dev/null; echo $$?),127)
-        LIBDIRS += -L/usr/local/lib
-        COMPILERFLAGS += -I/usr/local/include
+        ifneq (,$(wildcard /opt/homebrew/))
+            LIBDIRS += -L/opt/homebrew/lib
+            COMPILERFLAGS += -I/opt/homebrew/include
+        else
+            LIBDIRS += -L/usr/local/lib
+            COMPILERFLAGS += -I/usr/local/include
+        endif
     endif
     ifneq ($(shell fink --version &>/dev/null; echo $$?),127)
         LIBDIRS += -L/sw/lib
@@ -861,6 +886,9 @@ endif
 ifneq (0,$(USE_LIBVPX))
     COMPILERFLAGS += -DUSE_LIBVPX
     LIBS += -lvpx
+endif
+ifneq (0,$(USE_MIMALLOC))
+    COMPILERFLAGS += -DUSE_MIMALLOC
 endif
 
 ifneq (0,$(HAVE_VORBIS))
@@ -911,8 +939,11 @@ ifeq ($(RENDERTYPE),SDL)
         endif
     else
         ifneq ($(SDLCONFIG),)
+            ifeq ($(PLATFORM),DARWIN)
+                override SDL_STATIC := 0
+            endif
             ifneq ($(SDL_STATIC),0)
-                override SDLCONFIG_LIBS := -Wl,-Bstatic -l$(SDLNAME) -Wl,-Bdynamic $(strip $(subst -l$(SDLNAME),,$(shell $(SDLCONFIG) --static-libs)))
+                override SDLCONFIG_LIBS := -Wl,-Bstatic -l$(SDLNAME) -Wl,-Bdynamic $(strip $(subst -l$(SDLNAME),,$(shell CC=$(CC) $(SDLCONFIG) --static-libs)))
                 # for some reason SteamRT has a GCC with --enable-default-pie but its SDL2 has it disabled. WTF?
                 LINKERFLAGS += -no-pie
             endif

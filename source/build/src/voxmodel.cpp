@@ -72,11 +72,12 @@ uint32_t gloadtex(const int32_t *picbuf, int32_t xsiz, int32_t ysiz, int32_t is8
 
     // Correct for GL's RGB order; also apply gamma here:
     const coltype *const pic = (const coltype *)picbuf;
-    coltype *pic2 = (coltype *)Xmalloc(xsiz*ysiz*sizeof(coltype));
+    int32_t const cnt = xsiz * ysiz;
+    coltype *pic2 = (coltype *)Xmalloc(cnt * sizeof(coltype));
 
     if (!is8bit)
     {
-        for (int i=xsiz*ysiz-1; i>=0; i--)
+        for (int32_t i = 0; i < cnt; ++i)
         {
             coltype &tcol = pic2[i];
             tcol.b = cptr[pic[i].r];
@@ -92,7 +93,7 @@ uint32_t gloadtex(const int32_t *picbuf, int32_t xsiz, int32_t ysiz, int32_t is8
         if (palookup[dapal] == NULL)
             dapal = 0;
 
-        for (int i=xsiz*ysiz-1; i>=0; i--)
+        for (int32_t i = 0; i < cnt; ++i)
         {
             const int32_t ii = palookup[dapal][pic[i].a];
 
@@ -148,21 +149,25 @@ static void putvox(int32_t x, int32_t y, int32_t z, int32_t col)
 #if 0
 static void setzrange0(int32_t *lptr, int32_t z0, int32_t z1)
 {
-    if (!((z0^z1)&~31)) { lptr[z0>>5] &= ((~-(1<<SHIFTMOD32(z0)))|-(1<<SHIFTMOD32(z1))); return; }
+    int32_t const m0 = ~(~0u<<SHIFTMOD32(z0));
+    int32_t const m1 = ~0u<<SHIFTMOD32(z1);
+    if (!((z0^z1)&~31)) { lptr[z0>>5] &= m0|m1; return; }
     int32_t z = (z0>>5), ze = (z1>>5);
-    lptr[z] &=~-(1<<SHIFTMOD32(z0));
+    lptr[z] &= m0;
     for (z++; z<ze; z++) lptr[z] = 0;
-    lptr[z] &= -(1<<SHIFTMOD32(z1));
+    lptr[z] &= m1;
 }
 #endif
 //Set all bits in vbit from (x,y,z0) to (x,y,z1-1) to 1's
 static void setzrange1(int32_t *lptr, int32_t z0, int32_t z1)
 {
-    if (!((z0^z1)&~31)) { lptr[z0>>5] |= ((~-(1<<SHIFTMOD32(z1)))&-(1<<SHIFTMOD32(z0))); return; }
+    int32_t const m0 = ~0u<<SHIFTMOD32(z0);
+    int32_t const m1 = ~(~0u<<SHIFTMOD32(z1));
+    if (!((z0^z1)&~31)) { lptr[z0>>5] |= m1&m0; return; }
     int32_t z = (z0>>5), ze = (z1>>5);
-    lptr[z] |= -(1<<SHIFTMOD32(z0));
+    lptr[z] |= m0;
     for (z++; z<ze; z++) lptr[z] = -1;
-    lptr[z] |=~-(1<<SHIFTMOD32(z1));
+    lptr[z] |= m1;
 }
 
 static bool isrectfree(int32_t x0, int32_t y0, int32_t dx, int32_t dy)
@@ -348,7 +353,7 @@ static void addquad(int32_t x0, int32_t y0, int32_t z0, int32_t x1, int32_t y1, 
     qptr->v[2].x = x2; qptr->v[2].y = y2; qptr->v[2].z = z2;
 
     constexpr vec2_u16_t vbw = { VOXBORDWIDTH, VOXBORDWIDTH };
-    
+
     for (int j=0; j<3; j++)
         qptr->v[j].uv = shp[z]+vbw;
 
@@ -557,7 +562,7 @@ skindidntfit:
 
             v = gvox->mytexx*gvox->mytexy;
             constexpr vec2_u16_t vbw = { (VOXBORDWIDTH<<1), (VOXBORDWIDTH<<1) };
-            
+
             for (int z=0; z<sc; z++)
             {
                 auto d = shp[z] + vbw;
@@ -658,7 +663,7 @@ skindidntfit:
     }
 
     DO_FREE_AND_NULL(gquad);
-    
+
     return gvox;
 }
 
@@ -684,7 +689,7 @@ static void read_pal(buildvfs_kfd fil, int32_t pal[256])
     for (int i=0; i<256; i++)
     {
         char c[3];
-        kread(fil, c, 3);
+        kread(fil, c, sizeof(c));
 //#if B_BIG_ENDIAN != 0
         pal[i] = B_LITTLE32((c[0]<<18) + (c[1]<<10) + (c[2]<<2) + (i<<24));
 //#endif
@@ -717,23 +722,30 @@ static int32_t loadvox(const char *filnam)
 
     char *const tbuf = (char *)Xmalloc(voxsiz.z*sizeof(uint8_t));
 
-    klseek(fil, 12, SEEK_SET);
+    klseek(fil, sizeof(vec3_t), SEEK_SET);
     for (int x=0; x<voxsiz.x; x++)
-        for (int y=0, j=x*yzsiz; y<voxsiz.y; y++, j+=voxsiz.z)
+    {
+        int32_t j = x * yzsiz;
+        for (int y=0; y<voxsiz.y; y++)
         {
             kread(fil, tbuf, voxsiz.z);
 
-            for (int z=voxsiz.z-1; z>=0; z--)
+            for (int32_t z = 0; z < voxsiz.z; ++z)
                 if (tbuf[z] != 255)
                 {
                     const int32_t i = j+z;
                     vbit[i>>5] |= (1<<SHIFTMOD32(i));
                 }
-        }
 
-    klseek(fil, 12, SEEK_SET);
+            j += voxsiz.z;
+        }
+    }
+
+    klseek(fil, sizeof(vec3_t), SEEK_SET);
     for (int x=0; x<voxsiz.x; x++)
-        for (int y=0, j=x*yzsiz; y<voxsiz.y; y++, j+=voxsiz.z)
+    {
+        int32_t j = x * yzsiz;
+        for (int y=0; y<voxsiz.y; y++)
         {
             kread(fil, tbuf, voxsiz.z);
 
@@ -758,7 +770,10 @@ static int32_t loadvox(const char *filnam)
                     continue;
                 }
             }
+
+            j += voxsiz.z;
         }
+    }
 
     Xfree(tbuf);
     kclose(fil);
@@ -768,32 +783,37 @@ static int32_t loadvox(const char *filnam)
 
 static int32_t loadkvx(const char *filnam)
 {
-    int32_t i, mip1leng;
-
     const buildvfs_kfd fil = kopen4load(filnam, 0);
     if (fil == buildvfs_kfd_invalid)
         return -1;
 
-    kread(fil, &mip1leng, 4); mip1leng = B_LITTLE32(mip1leng);
+    int32_t mip1leng;
+    kread(fil, &mip1leng, sizeof(int32_t));
     kread(fil, &voxsiz, sizeof(vec3_t));
 #if B_BIG_ENDIAN != 0
+    mip1leng = B_LITTLE32(mip1leng);
     voxsiz.x = B_LITTLE32(voxsiz.x);
     voxsiz.y = B_LITTLE32(voxsiz.y);
     voxsiz.z = B_LITTLE32(voxsiz.z);
 #endif
-    kread(fil, &i, 4); voxpiv.x = (float)B_LITTLE32(i)*(1.f/256.f);
-    kread(fil, &i, 4); voxpiv.y = (float)B_LITTLE32(i)*(1.f/256.f);
-    kread(fil, &i, 4); voxpiv.z = (float)B_LITTLE32(i)*(1.f/256.f);
+
+    vec3_t v;
+    kread(fil, &v, sizeof(vec3_t));
+    voxpiv.x = (float)B_LITTLE32(v.x)*(1.f/256.f);
+    voxpiv.y = (float)B_LITTLE32(v.y)*(1.f/256.f);
+    voxpiv.z = (float)B_LITTLE32(v.z)*(1.f/256.f);
     klseek(fil, (voxsiz.x+1)<<2, SEEK_CUR);
 
     const int32_t ysizp1 = voxsiz.y+1;
-    i = voxsiz.x*ysizp1*sizeof(int16_t);
+    int32_t const xyoffscnt = voxsiz.x * ysizp1;
+    int32_t const xyoffssiz = xyoffscnt * sizeof(uint16_t);
 
-    uint16_t *xyoffs = (uint16_t *)Xmalloc(i);
-    kread(fil, xyoffs, i);
-
-    for (i=i/sizeof(int16_t)-1; i>=0; i--)
+    uint16_t *xyoffs = (uint16_t *)Xmalloc(xyoffssiz);
+    kread(fil, xyoffs, xyoffssiz);
+#if B_BIG_ENDIAN != 0
+    for (int32_t i = 0; i < xyoffscnt; ++i)
         xyoffs[i] = B_LITTLE16(xyoffs[i]);
+#endif
 
     int32_t pal[256];
     read_pal(fil, pal);
@@ -807,23 +827,23 @@ static int32_t loadkvx(const char *filnam)
     vcolhashsizm1--; //approx to numvoxs!
     alloc_vcolhashead();
 
-    klseek(fil, 28+((voxsiz.x+1)<<2)+((ysizp1*voxsiz.x)<<1), SEEK_SET);
+    klseek(fil, (7 * sizeof(int32_t)) + ((voxsiz.x+1)<<2) + ((ysizp1*voxsiz.x)<<1), SEEK_SET);
 
-    i = kfilelength(fil)-ktell(fil);
-    char *const tbuf = (char *)Xmalloc(i);
+    int32_t const tbufsiz = kfilelength(fil)-ktell(fil);
+    char *const tbuf = (char *)Xmalloc(tbufsiz);
 
-    kread(fil, tbuf, i);
+    kread(fil, tbuf, tbufsiz);
     kclose(fil);
 
     char *cptr = tbuf;
 
     for (int x=0; x<voxsiz.x; x++) //Set surface voxels to 1 else 0
-        for (int y=0, j=x*yzsiz; y<voxsiz.y; y++, j+=voxsiz.z)
+    {
+        int32_t j = x * yzsiz;
+        for (int y=0; y<voxsiz.y; y++)
         {
-            i = xyoffs[x*ysizp1+y+1] - xyoffs[x*ysizp1+y];
-            if (!i)
-                continue;
-
+            int32_t const idx = x*ysizp1+y;
+            int32_t i = xyoffs[idx+1] - xyoffs[idx];
             int32_t z1 = 0;
 
             while (i)
@@ -843,7 +863,10 @@ static int32_t loadkvx(const char *filnam)
                 for (int z=z0; z<z1; z++)
                     putvox(x, y, z, pal[*cptr++]);
             }
+
+            j += voxsiz.z;
         }
+    }
 
     Xfree(tbuf);
     Xfree(xyoffs);
@@ -853,18 +876,17 @@ static int32_t loadkvx(const char *filnam)
 
 static int32_t loadkv6(const char *filnam)
 {
-    int32_t i;
-
     const buildvfs_kfd fil = kopen4load(filnam, 0);
     if (fil == buildvfs_kfd_invalid)
         return -1;
 
-    kread(fil, &i, 4);
-    if (B_LITTLE32(i) != 0x6c78764b)
+    int32_t magic;
+    kread(fil, &magic, sizeof(int32_t));
+    if (magic != B_LITTLE32(0x6c78764b)) // "Kvxl"
     {
         kclose(fil);
         return -1;
-    } //Kvxl
+    }
 
     kread(fil, &voxsiz, sizeof(vec3_t));
 #if B_BIG_ENDIAN != 0
@@ -872,21 +894,33 @@ static int32_t loadkv6(const char *filnam)
     voxsiz.y = B_LITTLE32(voxsiz.y);
     voxsiz.z = B_LITTLE32(voxsiz.z);
 #endif
-    kread(fil, &i, 4); i = B_LITTLE32(i); voxpiv.x = *(float*)&i;
-    kread(fil, &i, 4); i = B_LITTLE32(i); voxpiv.y = *(float*)&i;
-    kread(fil, &i, 4); i = B_LITTLE32(i); voxpiv.z = *(float*)&i;
+
+    vec3_t v;
+    kread(fil, &v, sizeof(vec3_t));
+#if B_BIG_ENDIAN != 0
+    v.x = B_LITTLE32(v.x);
+    v.y = B_LITTLE32(v.y);
+    v.z = B_LITTLE32(v.z);
+#endif
+    EDUKE32_STATIC_ASSERT(sizeof(vec3_t) == sizeof(vec3f_t));
+    memcpy(&voxpiv, &v, sizeof(vec3_t));
 
     int32_t numvoxs;
-    kread(fil, &numvoxs, 4); numvoxs = B_LITTLE32(numvoxs);
+    kread(fil, &numvoxs, sizeof(int32_t));
+    numvoxs = B_LITTLE32(numvoxs);
 
-    uint16_t *const ylen = (uint16_t *)Xmalloc(voxsiz.x*voxsiz.y*sizeof(int16_t));
+    int32_t const ylencnt = voxsiz.x * voxsiz.y;
+    int32_t const ylensiz = ylencnt * sizeof(uint16_t);
+    uint16_t *const ylen = (uint16_t *)Xmalloc(ylensiz);
 
-    klseek(fil, 32+(numvoxs<<3)+(voxsiz.x<<2), SEEK_SET);
-    kread(fil, ylen, voxsiz.x*voxsiz.y*sizeof(int16_t));
-    for (i=voxsiz.x*voxsiz.y-1; i>=0; i--)
+    klseek(fil, (8 * sizeof(int32_t)) + (numvoxs<<3) + (voxsiz.x<<2), SEEK_SET);
+    kread(fil, ylen, ylensiz);
+#if B_BIG_ENDIAN != 0
+    for (int32_t i = 0; i < ylencnt; ++i)
         ylen[i] = B_LITTLE16(ylen[i]);
+#endif
 
-    klseek(fil, 32, SEEK_SET);
+    klseek(fil, 8 * sizeof(int32_t), SEEK_SET);
 
     alloc_vbit();
 
@@ -898,14 +932,16 @@ static int32_t loadkv6(const char *filnam)
     alloc_vcolhashead();
 
     for (int x=0; x<voxsiz.x; x++)
-        for (int y=0, j=x*yzsiz; y<voxsiz.y; y++, j+=voxsiz.z)
+    {
+        int32_t j = x * yzsiz;
+        for (int y=0; y<voxsiz.y; y++)
         {
             int32_t z1 = voxsiz.z;
 
-            for (i=ylen[x*voxsiz.y+y]; i>0; i--)
+            for (int32_t i = 0, i_end = ylen[x*voxsiz.y+y]; i < i_end; ++i)
             {
                 char c[8];
-                kread(fil, c, 8); //b,g,r,a,z_lo,z_hi,vis,dir
+                kread(fil, c, sizeof(c)); //b,g,r,a,z_lo,z_hi,vis,dir
 
                 const int32_t z0 = B_LITTLE16(B_UNBUF16(&c[4]));
 
@@ -917,7 +953,10 @@ static int32_t loadkv6(const char *filnam)
                 putvox(x, y, z0, B_LITTLE32(B_UNBUF32(&c[0]))&0xffffff);
                 z1 = z0+1;
             }
+
+            j += voxsiz.z;
         }
+    }
 
     Xfree(ylen);
     kclose(fil);
@@ -1002,19 +1041,21 @@ int32_t polymost_voxdraw(voxmodel_t *m, tspriteptr_t const tspr)
     if ((intptr_t)m == (intptr_t)(-1)) // hackhackhack
         return 0;
 
-    if ((tspr->cstat&48)==32)
+    if (tspr->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR)
         return 0;
 
     buildgl_outputDebugMessage(3, "polymost_voxdraw(m:%p, tspr:%p)", m, tspr);
 
     //updateanimation((md2model *)m,tspr);
 
+    auto const tsprflags = tspr->clipdist;
+
     vec3f_t m0 = { m->scale, m->scale, m->scale };
     vec3f_t a0 = { 0, 0, m->zadd*m->scale };
 
     k0 = m->bscale / 64.f;
     f = (float) tspr->xrepeat * (256.f/320.f) * k0;
-    if ((sprite[tspr->owner].cstat&48)==16)
+    if ((sprite[tspr->owner].cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL)
         f *= 1.25f;
     a0.y -= tspr->xoffset*sintable[(spriteext[tspr->owner].mdangoff+512)&2047]*(1.f/(64.f*16384.f));
     a0.x += tspr->xoffset*sintable[spriteext[tspr->owner].mdangoff&2047]*(1.f/(64.f*16384.f));
@@ -1028,12 +1069,12 @@ int32_t polymost_voxdraw(voxmodel_t *m, tspriteptr_t const tspr)
     m0.z *= f; a0.z *= f;
 
     k0 = (float) (tspr->z+spriteext[tspr->owner].mdposition_offset.z);
-    f = ((globalorientation&8) && (sprite[tspr->owner].cstat&48)!=0) ? -4.f : 4.f;
+    f = ((globalorientation&8) && (sprite[tspr->owner].cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_FACING) ? -4.f : 4.f;
     k0 -= (tspr->yoffset*tspr->yrepeat)*f*m->bscale;
     zoff = m->siz.z*.5f;
     if (!(tspr->cstat&128))
         zoff += m->piv.z;
-    else if ((tspr->cstat&48) != 48)
+    else if (!(tsprflags & TSPR_FLAGS_SLAB))
     {
         zoff += m->piv.z;
         zoff -= m->siz.z*.5f;
@@ -1043,7 +1084,7 @@ int32_t polymost_voxdraw(voxmodel_t *m, tspriteptr_t const tspr)
     f = (65536.f*512.f) / ((float)xdimen*viewingrange);
     g = 32.f / ((float)xdimen*gxyaspect);
 
-    int const shadowHack = !!(tspr->clipdist & TSPR_FLAGS_MDHACK);
+    int const shadowHack = !!(tsprflags & TSPR_FLAGS_MDHACK);
 
     m0.y *= f; a0.y = (((float)(tspr->x+spriteext[tspr->owner].mdposition_offset.x-globalposx)) * (1.f/1024.f) + a0.y) * f;
     m0.x *=-f; a0.x = (((float)(tspr->y+spriteext[tspr->owner].mdposition_offset.y-globalposy)) * -(1.f/1024.f) + a0.x) * -f;
@@ -1084,7 +1125,10 @@ int32_t polymost_voxdraw(voxmodel_t *m, tspriteptr_t const tspr)
     if (have_basepal_tint())
         hictinting_apply(pc, MAXPALOOKUPS - 1);
 
-    if (!shadowHack && (voxflags[tiletovox[tspr->picnum]] & VF_NOTRANS) != VF_NOTRANS)
+    int32_t const voxid = (tsprflags & TSPR_FLAGS_SLAB)
+                        ? tspr->picnum
+                        : tiletovox[tspr->picnum];
+    if (!shadowHack && !(voxflags[voxid] & VF_NOTRANS))
     {
         pc[3] = (tspr->cstat & CSTAT_SPRITE_TRANSLUCENT) ? glblend[tspr->blend].def[!!(tspr->cstat & CSTAT_SPRITE_TRANSLUCENT_INVERT)].alpha : 1.0f;
         pc[3] *= 1.0f - spriteext[tspr->owner].alpha;
@@ -1098,11 +1142,11 @@ int32_t polymost_voxdraw(voxmodel_t *m, tspriteptr_t const tspr)
         if (shadowHack)
             handle_blend(0, 0, 0);
     }
-    
+
     if (!(tspr->cstat & CSTAT_SPRITE_TRANSLUCENT) || spriteext[tspr->owner].alpha > 0.f || pc[3] < 1.0f)
         buildgl_setEnabled(GL_BLEND);
     else buildgl_setDisabled(GL_BLEND);
-    
+
     //transform to Build coords
     float omat[16];
     Bmemcpy(omat, mat, sizeof(omat));

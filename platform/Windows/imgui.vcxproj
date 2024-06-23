@@ -31,7 +31,8 @@
     <ClInclude Include="..\..\source\imgui\include\imgui.h" />
     <ClInclude Include="..\..\source\imgui\include\imgui_impl_opengl3.h" />
     <ClInclude Include="..\..\source\imgui\include\imgui_impl_opengl3_loader.h" />
-    <ClInclude Include="..\..\source\imgui\include\imgui_impl_sdl.h" />
+    <ClInclude Include="..\..\source\imgui\include\imgui_impl_sdl2.h" />
+    <ClInclude Include="..\..\source\imgui\include\imgui_impl_win32.h" />
     <ClInclude Include="..\..\source\imgui\include\imgui_internal.h" />
     <ClInclude Include="..\..\source\imgui\include\imstb_rectpack.h" />
     <ClInclude Include="..\..\source\imgui\include\imstb_textedit.h" />
@@ -42,7 +43,10 @@
     <ClCompile Include="..\..\source\imgui\src\imgui_demo.cpp" />
     <ClCompile Include="..\..\source\imgui\src\imgui_draw.cpp" />
     <ClCompile Include="..\..\source\imgui\src\imgui_impl_opengl3.cpp" />
-    <ClCompile Include="..\..\source\imgui\src\imgui_impl_sdl.cpp" />
+    <ClCompile Include="..\..\source\imgui\src\imgui_impl_sdl2.cpp" />
+    <ClCompile Include="..\..\source\imgui\src\imgui_impl_win32.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\source\imgui\src\imgui_tables.cpp" />
     <ClCompile Include="..\..\source\imgui\src\imgui_widgets.cpp" />
   </ItemGroup>
@@ -69,7 +73,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <EnableASAN>true</EnableASAN>
+    <EnableASAN>false</EnableASAN>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
@@ -122,35 +126,15 @@
     <Import Project="props\build_common.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
-    <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
-    <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>

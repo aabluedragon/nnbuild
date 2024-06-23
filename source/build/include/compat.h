@@ -7,6 +7,21 @@
 
 #pragma once
 
+#ifndef __APPLE__
+#include <malloc.h>
+#endif
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef USE_MIMALLOC
+# if defined __cplusplus && defined __APPLE__
+// avoid compilation failure due to use of std::realloc in this header
+#  include <locale>
+# endif
+# include "mimalloc.h"
+# include "mimalloc-override.h"
+#endif
+
 #ifdef _WIN32
 # include "windows_inc.h"
 #endif
@@ -49,11 +64,19 @@
 # define EDUKE32_MSVC_CXX_PREREQ(major) 0
 #endif
 
+#ifdef __INTEL_COMPILER
+# define EDUKE32_ICC_PREREQ(major) ((major) <= __INTEL_COMPILER)
+#else
+# define EDUKE32_ICC_PREREQ(major) 0
+#endif
+
 
 ////////// Language detection //////////
 
 #if defined __STDC__
-# if defined __STDC_VERSION__ && __STDC_VERSION__ >= 201112L
+# if defined __STDC_VERSION__ && __STDC_VERSION__ >= 201710L
+#  define CSTD 2017
+# elif defined __STDC_VERSION__ && __STDC_VERSION__ >= 201112L
 #  define CSTD 2011
 # elif defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
 #  define CSTD 1999
@@ -121,8 +144,11 @@
 # define ATTRIBUTE_OPTIMIZE(str)
 #endif
 
+// must be placed before return type and at both declaration and definition
 #if EDUKE32_GCC_PREREQ(4,0)
 # define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#elif EDUKE32_MSVC_PREREQ(1700)
+# define WARN_UNUSED_RESULT _Check_return_
 #else
 # define WARN_UNUSED_RESULT
 #endif
@@ -175,11 +201,16 @@
 # define EDUKE32_NORETURN __attribute__((noreturn))
 #endif
 
-#if 1 && defined(__OPTIMIZE__) && (defined __GNUC__ || __has_builtin(__builtin_expect))
-# define EDUKE32_PREDICT_TRUE(x)       __builtin_expect(!!(x),1)
-# define EDUKE32_PREDICT_FALSE(x)     __builtin_expect(!!(x),0)
+#if 1 && defined(__OPTIMIZE__) && ( \
+  EDUKE32_GCC_PREREQ(3,0) || \
+  EDUKE32_ICC_PREREQ(800) || \
+  defined __clang__ || \
+  __has_builtin(__builtin_expect) \
+)
+# define EDUKE32_PREDICT_TRUE(x)  __builtin_expect(!!(x),1)
+# define EDUKE32_PREDICT_FALSE(x) __builtin_expect(!!(x),0)
 #else
-# define EDUKE32_PREDICT_TRUE(x) (x)
+# define EDUKE32_PREDICT_TRUE(x)  (x)
 # define EDUKE32_PREDICT_FALSE(x) (x)
 #endif
 
@@ -317,7 +348,7 @@
 # define EDUKE32_CPU_X86
 #elif defined _M_PPC || defined __powerpc__ || defined __powerpc64__
 # define EDUKE32_CPU_PPC
-#elif defined __MIPSEL__ || defined __mips_isa_rev
+#elif defined __mips__ || defined __MIPSEL__ || defined __MIPSEB__ || defined __mips_isa_rev
 # define EDUKE32_CPU_MIPS
 #endif
 
@@ -331,10 +362,10 @@ defined __x86_64__ || defined __amd64__ || defined _M_X64 || defined _M_IA64 || 
 
 #if defined(__linux)
 # include <endian.h>
-# if __BYTE_ORDER == __LITTLE_ENDIAN
+# if __BYTE_ORDER == __LITTLE_ENDIAN || __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #  define B_LITTLE_ENDIAN 1
 #  define B_BIG_ENDIAN    0
-# elif __BYTE_ORDER == __BIG_ENDIAN
+# elif __BYTE_ORDER == __BIG_ENDIAN || __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #  define B_LITTLE_ENDIAN 0
 #  define B_BIG_ENDIAN    1
 # endif
@@ -435,8 +466,6 @@ defined __x86_64__ || defined __amd64__ || defined _M_X64 || defined _M_IA64 || 
 #ifndef USE_PHYSFS
 #include <stdio.h>
 #endif
-#include <stdlib.h>
-#include <string.h>
 
 #if !(defined _WIN32 && defined __clang__)
 #include <float.h>
@@ -683,13 +712,6 @@ static FORCE_INLINE int32_t Blrintf(const float x)
 # define Bsqrtf sqrtf
 #endif
 
-// redefined for apple/ppc, which chokes on stderr when linking...
-#if defined EDUKE32_OSX && defined __BIG_ENDIAN__
-# define ERRprintf(fmt, ...) printf(fmt, ## __VA_ARGS__)
-#else
-# define ERRprintf(fmt, ...) fprintf(stderr, fmt, ## __VA_ARGS__)
-#endif
-
 #ifdef __ANDROID__
 void eduke32_exit_return(int) ATTRIBUTE((noreturn));
 # define exit(x) eduke32_exit_return(x)
@@ -750,20 +772,6 @@ void eduke32_exit_return(int) ATTRIBUTE((noreturn));
 # define PRIxPTR "x"
 # undef SCNx32
 # define SCNx32 "x"
-#endif
-
-#if defined EDUKE32_OSX
-# if !defined __x86_64__ && defined __GNUC__
-// PK 20110617: is*() crashes for me in x86 code compiled from 64-bit, and gives link errors on ppc
-//              This hack patches all occurences.
-#  define isdigit(ch) ({ int32_t c__dontuse_=ch; c__dontuse_>='0' && c__dontuse_<='9'; })
-#  define isalpha(ch) ({ int32_t c__dontuse2_=ch; (c__dontuse2_>='A' && c__dontuse2_<='Z') || (c__dontuse2_>='a' && c__dontuse2_<='z'); })
-#  define isalnum(ch2)  ({ int32_t c2__dontuse_=ch2; isalpha(c2__dontuse_) || isdigit(c2__dontuse_); })
-#  if defined __BIG_ENDIAN__
-#   define isspace(ch)  ({ int32_t c__dontuse_=ch; (c__dontuse_==' ' || c__dontuse_=='\t' || c__dontuse_=='\n' || c__dontuse_=='\v' || c__dontuse_=='\f' || c__dontuse_=='\r'); })
-#   define isprint(ch)  ({ int32_t c__dontuse_=ch; (c__dontuse_>=0x20 && c__dontuse_<0x7f); })
-#  endif
-# endif
 #endif
 
 
@@ -1134,7 +1142,7 @@ CONSTEXPR size_t logbasenegative(T n)
 #define isPow2OrZero(v) (((v) & ((v) - 1)) == 0)
 #define isPow2(v) (isPow2OrZero(v) && (v))
 
-static FORCE_INLINE int nextPow2(int const value)
+static FORCE_INLINE CONSTEXPR_CXX14 int nextPow2(int const value)
 {
     int i = 1;
     while (i < value)
@@ -1142,9 +1150,11 @@ static FORCE_INLINE int nextPow2(int const value)
     return i;
 }
 
-////////// Bitfield manipulation //////////
-
 static CONSTEXPR const char pow2char[8] = {1,2,4,8,16,32,64,128u};
+
+////////// Bitmap data structure //////////
+
+#define bitmap_size(N) (((N) + 7) >> 3)
 
 #ifdef __cplusplus
 template <typename T>
@@ -1162,19 +1172,24 @@ static FORCE_INLINE void bitmap_clear(T *const ptr, int const n)
 }
 
 template <typename T>
-static FORCE_INLINE CONSTEXPR bool bitmap_test(T const *const ptr, int const n)
+static FORCE_INLINE void bitmap_flip(T *const ptr, int const n)
+{
+    EDUKE32_STATIC_ASSERT((sizeof(T) << 3) == CHAR_BIT);
+    ptr[n>>3] ^= pow2char[n&7];
+}
+
+template <typename T>
+static FORCE_INLINE CONSTEXPR WARN_UNUSED_RESULT bool bitmap_test(T const *const ptr, int const n)
 {
     EDUKE32_STATIC_ASSERT((sizeof(T) << 3) == CHAR_BIT);
     return (ptr[n>>3] & pow2char[n&7]) == pow2char[n&7];
 }
 
-////////// Utility functions //////////
-
 // breadth-first search helpers
 template <typename T>
 void bfirst_search_init(T *const list, uint8_t *const bitmap, T *const eltnumptr, int const maxelts, int const firstelt)
 {
-    Bmemset(bitmap, 0, (maxelts+7)>>3);
+    Bmemset(bitmap, 0, bitmap_size(maxelts));
 
     list[0] = firstelt;
     bitmap_set(bitmap, firstelt);
@@ -1192,6 +1207,8 @@ void bfirst_search_try(T *const list, uint8_t *const bitmap, T *const eltnumptr,
 }
 #endif
 
+////////// Utility functions //////////
+
 #if RAND_MAX == 32767
 static FORCE_INLINE uint16_t system_15bit_rand(void) { return (uint16_t)rand(); }
 #else  // RAND_MAX > 32767, assumed to be of the form 2^k - 1
@@ -1206,7 +1223,7 @@ static FORCE_INLINE char *Bstrncpyz(char *dst, const char *src, bsize_t n)
         Bmemcpy(dst, src, min(Bstrlen(src)+1, n-1));
         dst[n-1] = '\0';
     }
-    
+
     return dst;
 }
 
@@ -1316,8 +1333,8 @@ static FORCE_INLINE void xalloc_set_location(int32_t const line, const char * co
 }
 #endif
 
-void set_memerr_handler(void (*handlerfunc)(int32_t, const char *, const char *));
-EDUKE32_NORETURN void handle_memerr(void);
+void set_memerr_handler(void (*handlerfunc)(int32_t, int32_t, const char *, const char *));
+EDUKE32_NORETURN void handle_memerr(int32_t bytes);
 
 #ifdef __cplusplus
 #include "smmalloc.h"
@@ -1353,7 +1370,7 @@ static FORCE_INLINE char *xstrdup(const char *s)
         ptr[len-1] = '\0';
         return ptr;
     }
-    handle_memerr();
+    handle_memerr(len);
     EDUKE32_UNREACHABLE_SECTION(return nullptr);
 }
 
@@ -1361,7 +1378,7 @@ static FORCE_INLINE void *xmalloc(bsize_t const size)
 {
     void *ptr = _sm_malloc(g_sm_heap, size, ALLOC_ALIGNMENT);
     if (EDUKE32_PREDICT_TRUE(ptr != nullptr)) return ptr;
-    handle_memerr();
+    handle_memerr(size);
     EDUKE32_UNREACHABLE_SECTION(return nullptr);
 }
 
@@ -1374,7 +1391,7 @@ static FORCE_INLINE void *xcalloc(bsize_t const nmemb, bsize_t const size)
         Bmemset(ptr, 0, siz);
         return ptr;
     }
-    handle_memerr();
+    handle_memerr(size);
     EDUKE32_UNREACHABLE_SECTION(return nullptr);
 }
 
@@ -1387,7 +1404,7 @@ static FORCE_INLINE void *xrealloc(void * const ptr, bsize_t const size)
     //  - size == 0 make it behave like free() if ptr != NULL
     // Since we want to catch an out-of-mem in the first case, this leaves:
     if (EDUKE32_PREDICT_TRUE(newptr != nullptr || size == 0)) return newptr;
-    handle_memerr();
+    handle_memerr(size);
     EDUKE32_UNREACHABLE_SECTION(return nullptr);
 }
 
@@ -1397,7 +1414,7 @@ static FORCE_INLINE void *xaligned_alloc(bsize_t const alignment, bsize_t const 
 {
     void *ptr = _sm_malloc(g_sm_heap, size, alignment);
     if (EDUKE32_PREDICT_TRUE(ptr != nullptr)) return ptr;
-    handle_memerr();
+    handle_memerr(size);
     EDUKE32_UNREACHABLE_SECTION(return nullptr);
 }
 
@@ -1410,7 +1427,7 @@ static FORCE_INLINE void *xaligned_calloc(bsize_t const alignment, bsize_t const
         Bmemset(ptr, 0, blocksize);
         return ptr;
     }
-    handle_memerr();
+    handle_memerr(size);
     EDUKE32_UNREACHABLE_SECTION(return nullptr);
 }
 
@@ -1480,7 +1497,12 @@ static inline void maybe_grow_buffer(char ** const buffer, int32_t * const buffe
 #include "clockticks.hpp"
 #endif
 
-#include "debugbreak.h"
+#ifdef NDEBUG
+# define debug_break() ((void)0)
+#else
+# include "debugbreak.h"
+#endif
+
 #include "rdtsc.h"
 
 /* End dependence on compat.o object. */

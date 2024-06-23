@@ -10,6 +10,7 @@ Ken Silverman's official web site: http://www.advsys.net/ken
 
 #include "build.h"
 #include "common.h"
+#include "editor.h"
 #include "engine_priv.h"
 #include "kplib.h"
 #include "mdsprite.h"
@@ -76,7 +77,7 @@ static float dxb1[MAXWALLSB], dxb2[MAXWALLSB];
 
 //POGOTODO: the SCISDIST could be set to 0 now to allow close objects to render properly,
 //          but there's a nasty rendering bug that needs to be dug into when setting SCISDIST lower than 1
-#define SCISDIST 1.f  //close plane clipping distance
+#define SCISDIST 0.1f  //close plane clipping distance
 
 #define SOFTROTMAT 0
 
@@ -235,6 +236,8 @@ static inline float float_trans(uint32_t maskprops, uint8_t blend)
 }
 
 char ptempbuf[MAXWALLSB<<1];
+
+uint8_t didwall[bitmap_size(MAXWALLS)];
 
 #define MIN_CACHETIME_PRINT 10
 
@@ -485,7 +488,8 @@ static GLuint polymost2_compileShader(GLenum shaderType, const char* const sourc
 void polymost_glreset()
 {
     buildgl_resetStateAccounting();
-    buildgl_activeTexture(GL_TEXTURE0);
+    if (!nogl)
+        buildgl_activeTexture(GL_TEXTURE0);
 
     for (bssize_t i=0; i<=MAXPALOOKUPS-1; i++)
     {
@@ -541,7 +545,9 @@ void polymost_glreset()
 
     // texcache_freeptrs();
     texcache_syncmemcache();
-    polymost_initdrawpoly();
+
+    if (!nogl)
+        polymost_initdrawpoly();
 
     DVLOG_F(LOG_DEBUG, "polymost_glreset()");
 }
@@ -554,7 +560,7 @@ static void Polymost_DetermineTextureFormatSupport(void);
 void polymost_resetVertexPointers()
 {
     buildgl_bindBuffer(GL_ARRAY_BUFFER, drawpolyVertsID);
-    
+
     glVertexPointer(3, GL_FLOAT, 5 * sizeof(float), 0);
     glTexCoordPointer(2, GL_FLOAT, 5 * sizeof(float), (GLvoid*)(3 * sizeof(float)));
 
@@ -729,7 +735,7 @@ char polymost_getClamp()
 void polymost_setClamp(char clamp)
 {
     vec2f_t clampy = { float(clamp & 1), float(clamp >> 1) };
-    
+
     if (gl.currentShaderProgramID != polymost1CurrentShaderProgramID || clampy == polymost1Clamp)
         return;
 
@@ -843,7 +849,7 @@ void polymost_shadeInterpolate(int32_t shadeInterpolate)
 {
     if (gl.currentShaderProgramID != polymost1CurrentShaderProgramID || shadeInterpolate == polymost1ShadeInterpolate)
         return;
-    
+
     polymost1ShadeInterpolate = shadeInterpolate;
     glUniform1f(polymost1ShadeInterpolateLoc, polymost1ShadeInterpolate);
 }
@@ -1005,7 +1011,7 @@ void polymost_glinit()
              0.5f, 0.0f, 0.0f, 1.0f, 0.0f  //bottom-right
         };
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVerts), quadVerts, GL_STATIC_DRAW);
-    
+
     //specify format/arrangement for vertex positions:
     glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(float) * 5, 0);
     //specify format/arrangement for vertex texture coords:
@@ -1097,7 +1103,7 @@ void polymost_glinit()
     GLuint polymost1BasicVertexShaderID = 0;
     GLuint polymost1ExtendedFragmentShaderID = 0;
     GLuint polymost1BasicFragmentShaderID = 0;
-    
+
     if (!glIsProgram(polymost1ExtendedShaderProgramID))
     {
         polymost1ExtendedShaderProgramID = glCreateProgram();
@@ -1598,7 +1604,7 @@ static int32_t Polymost_TryDummyTexture(coltype const * const pic, int32_t const
         ++formats;
     }
 
-    initputs("No texture formats supported?!\n");
+    LOG_F(ERROR, "No texture formats supported?!");
 
     return 0;
 }
@@ -1884,7 +1890,7 @@ void uploadbasepalette(int32_t basepalnum)
         basepalWFullBrightInfo[i*4] = basepaltable[basepalnum][i*3];
         basepalWFullBrightInfo[i*4+1] = basepaltable[basepalnum][i*3+1];
         basepalWFullBrightInfo[i*4+2] = basepaltable[basepalnum][i*3+2];
-        basepalWFullBrightInfo[i*4+3] = 0-(IsPaletteIndexFullbright(i) != 0);
+        basepalWFullBrightInfo[i*4+3] = 0-!!bitmap_test(PaletteIndexFullbright, i);
     }
 
     char allocateTexture = !paletteTextureIDs[basepalnum];
@@ -2157,13 +2163,13 @@ void gloadtile_art(int32_t dapic, int32_t dapal, int32_t tintpalnum, int32_t das
                     if (!fullbrightloadingpass)
                     {
                         // regular texture
-                        if (IsPaletteIndexFullbright(dacol) && dofullbright)
+                        if (bitmap_test(PaletteIndexFullbright, dacol) && dofullbright)
                             hasfullbright = 1;
                     }
                     else
                     {
                         // texture with only fullbright areas
-                        if (!IsPaletteIndexFullbright(dacol))    // regular colors
+                        if (!bitmap_test(PaletteIndexFullbright, dacol))    // regular colors
                         {
                             wpptr->a = 0;
                             hasalpha = 1;
@@ -2722,6 +2728,19 @@ static inline pthtyp *our_texcache_fetch(int32_t dameth)
     return texcache_fetch(globalpicnum, globalpal, getpalookup(0, globalshade), dameth);
 }
 
+static inline bool polymost_spriteIsLegacyVoxel(tspritetype const * const tspr)
+{
+    auto const tsprflags = tspr->clipdist;
+    auto const picnum = tspr->picnum;
+    return (tsprflags & TSPR_FLAGS_SLAB) && (unsigned)picnum < MAXVOXELS && voxmodels[picnum];
+}
+
+static inline bool polymost_spriteIsModernVoxel(tspritetype const * const tspr)
+{
+    auto const picnum = tspr->picnum;
+    return !polymost_spriteIsLegacyVoxel(tspr) && usevoxels && (unsigned)tiletovox[picnum] < MAXVOXELS && voxmodels[tiletovox[picnum]];
+}
+
 int32_t polymost_maskWallHasTranslucency(uwalltype const * const wall)
 {
     if (wall->cstat & CSTAT_WALL_TRANSLUCENT)
@@ -2741,13 +2760,13 @@ int32_t polymost_maskWallHasTranslucency(uwalltype const * const wall)
 
 int32_t polymost_spriteHasTranslucency(tspritetype const * const tspr)
 {
-    if (usevoxels && (tspr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_SLAB && tiletovox[tspr->picnum] >= 0 && voxmodels[tiletovox[tspr->picnum]] && (voxflags[tiletovox[tspr->picnum]] & VF_NOTRANS) == VF_NOTRANS)
+    if (polymost_spriteIsModernVoxel(tspr) && (voxflags[tiletovox[tspr->picnum]] & VF_NOTRANS))
         return false;
 
-    if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_SLAB && voxmodels[tspr->picnum] && (voxflags[tspr->picnum] & VF_NOTRANS) == VF_NOTRANS)
+    if (polymost_spriteIsLegacyVoxel(tspr) && (voxflags[tspr->picnum] & VF_NOTRANS))
         return false;
 
-    if ((tspr->cstat & CSTAT_SPRITE_TRANSLUCENT) || (tspr->clipdist & TSPR_FLAGS_DRAW_LAST) || 
+    if ((tspr->cstat & CSTAT_SPRITE_TRANSLUCENT) || (tspr->clipdist & TSPR_FLAGS_DRAW_LAST) ||
         ((unsigned)tspr->owner < MAXSPRITES && spriteext[tspr->owner].alpha))
         return true;
 
@@ -2772,10 +2791,10 @@ int32_t polymost_spriteIsModelOrVoxel(tspritetype const * const tspr)
         tile2model[Ptile2tile(tspr->picnum, tspr->pal)].framenum >= 0)
         return true;
 
-    if (usevoxels && (tspr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_SLAB && tiletovox[tspr->picnum] >= 0 && voxmodels[tiletovox[tspr->picnum]])
+    if (polymost_spriteIsModernVoxel(tspr))
         return true;
 
-    if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_SLAB && voxmodels[tspr->picnum])
+    if (polymost_spriteIsLegacyVoxel(tspr))
         return true;
 
     return false;
@@ -3131,13 +3150,13 @@ void polymost_bufferVert(vec3f_t const v, vec2f_t const t)
     uint32_t const off = (persistentStreamBuffer * drawpolyVertsOffset + drawpolyVertsCnt++) * 5;
     *(vec3f_t *)(&drawpolyVerts[off]) = v;
     *(vec2f_t*)(&drawpolyVerts[off+3]) = t;
-}    
+}
 
 void polymost_finishBufferedDrawing(int mode)
 {
     if (!persistentStreamBuffer)
         glBufferSubData(GL_ARRAY_BUFFER, drawpolyVertsOffset * sizeof(float) * 5, drawpolyVertsCnt * sizeof(float) * 5, drawpolyVerts);
-    
+
     glDrawArrays(mode, drawpolyVertsOffset, drawpolyVertsCnt);
     drawpolyVertsOffset += drawpolyVertsCnt;
     drawpolyVertsCnt = 0;
@@ -3356,7 +3375,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
     }
 
     // glow texture
-    if (r_glowmapping)
+    if (r_glowmapping && !(globalclipdist & TSPR_FLAGS_NO_GLOW))
     {
         pthtyp *glowpth = NULL;
 
@@ -3677,7 +3696,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
         polymost_drawpoly(dpxy, n, method_);
 
         buildgl_setDisabled(GL_ALPHA_TEST);
-        
+
         if (!nofog)
             polymost_setFogEnabled(true);
 
@@ -3954,7 +3973,7 @@ static void polymost_domost(float x0, float y0, float x1, float y1, float y0top 
             firstnode = i;
             continue;
         }
-        
+
         if (n0.x >= dm1.x)
             break;
 
@@ -4762,7 +4781,7 @@ void polymost_editorfunc(void)
     hitallsprites = 1;
 
     hitscan((const vec3_t *) &vect, globalcursectnum, //Start position
-        v.x, v.y, v.z, hit, 0xffff0030);
+        v.x, v.y, v.z, hit, spriteinsertmode ? 0xffff0030 | (CSTAT_SPRITE_BLOCK << 16) : 0xffff0030);
 
     hitallsprites = 0;
 }
@@ -5108,7 +5127,7 @@ void fgetzsofslope(usectorptr_t sec, float dax, float day, float* ceilz, float *
 
     int const i = nsqrtasm(uhypsq(d.x,d.y))<<5;
     if (i == 0) return;
-    
+
     float const j = (d.x*(day-wal->y)-d.y*(dax-wal->x))*(1.f/8.f);
     if (sec->ceilingstat&2)
         *ceilz += (sec->ceilingheinum*j)/i;
@@ -5132,7 +5151,7 @@ static void polymost_flatskyrender(vec2f_t const* const dpxy, int32_t const n, i
         xys[i].x = v.x * r + ghalfx;
         xys[i].y = v.y * r + ghalfy;
     }
-    
+
     float const fglobalang = fix16_to_float(qglobalang);
     int32_t dapyscale, dapskybits, dapyoffs, daptileyscale;
     int8_t const * dapskyoff = getpsky(globalpicnum, &dapyscale, &dapskybits, &dapyoffs, &daptileyscale);
@@ -5171,6 +5190,8 @@ static void polymost_flatskyrender(vec2f_t const* const dpxy, int32_t const n, i
     polymost_setClamp((npot || xpanning != 0) ? 0 : 2);
 
     int picnumbak = globalpicnum;
+    int32_t const ogclipdist = globalclipdist;
+    globalclipdist = 0;
     ti = globalpicnum;
     o.y = fviewingrange/(ghalfx*256.f); o.z = 1.f/o.y;
 
@@ -5302,6 +5323,7 @@ static void polymost_flatskyrender(vec2f_t const* const dpxy, int32_t const n, i
     while (ti >= 0);
 
     globalpicnum = picnumbak;
+    globalclipdist = ogclipdist;
 
     polymost_setClamp(0);
 
@@ -5379,6 +5401,14 @@ static void polymost_drawalls(int32_t const bunch)
 
         if (x1 <= x0) continue;
 
+        if (bitmap_test(didwall, wallnum))
+        {
+            LOG_F(WARNING, "Tried to draw wall %d twice in a frame", wallnum);
+            continue;
+        }
+
+        bitmap_set(didwall, wallnum);
+
         ryp0 *= gyxscale; ryp1 *= gyxscale;
 
         float cz, fz;
@@ -5395,7 +5425,7 @@ static void polymost_drawalls(int32_t const bunch)
 
         xtex2.u = ytex2.u = otex2.u = 0;
         xtex2.v = ytex2.v = otex2.v = 0;
-        
+
         // Floor
 
         if (searchit == 2
@@ -5411,7 +5441,7 @@ static void polymost_drawalls(int32_t const bunch)
         }
 
 #ifdef YAX_ENABLE
-        
+
         int32_t checkcf = 0;
         int16_t bn[2] = {};
 
@@ -5433,6 +5463,7 @@ static void polymost_drawalls(int32_t const bunch)
         globalshade = sec->floorshade;
         globalpal = sec->floorpal;
         globalorientation = sec->floorstat;
+        globalclipdist = 0;
         globvis = (sector[sectnum].visibility != 0) ?
                   mulscale4(globalcisibility, (uint8_t)(sector[sectnum].visibility + 16)) :
                   globalcisibility;
@@ -5825,12 +5856,12 @@ static void polymost_drawalls(int32_t const bunch)
             }
         }
 #endif
-        
+
         doeditorcheck = 0;
 
         // Ceiling
- 
-        if (searchit == 2      
+
+        if (searchit == 2
 #ifdef YAX_ENABLE
             && (yax_getbunch(sectnum, YAX_CEILING) < 0 || showinvisibility || (sec->floorstat&(256+128)) || klabs(yax_globallev-YAX_MAXDRAWS)==YAX_MAXDRAWS)
 #endif
@@ -5851,6 +5882,7 @@ static void polymost_drawalls(int32_t const bunch)
         globalshade = sec->ceilingshade;
         globalpal = sec->ceilingpal;
         globalorientation = sec->ceilingstat;
+        globalclipdist = 0;
         globvis = (sector[sectnum].visibility != 0) ?
                   mulscale4(globalcisibility, (uint8_t)(sector[sectnum].visibility + 16)) :
                   globalcisibility;
@@ -6244,7 +6276,7 @@ static void polymost_drawalls(int32_t const bunch)
             }
         }
 #endif
-        
+
         doeditorcheck = 0;
 
 #ifdef YAX_ENABLE
@@ -6326,6 +6358,7 @@ static void polymost_drawalls(int32_t const bunch)
                     doeditorcheck = 1;
                 }
                 globalpicnum = wal->picnum; globalshade = wal->shade; globalpal = (int32_t)((uint8_t)wal->pal);
+                globalclipdist = 0;
                 globvis = globalvisibility;
                 if (sector[sectnum].visibility != 0) globvis = mulscale4(globvis, (uint8_t)(sector[sectnum].visibility+16));
                 globvis2 = globalvisibility2;
@@ -6363,7 +6396,7 @@ static void polymost_drawalls(int32_t const bunch)
             if (((ofy0 < fy0) || (ofy1 < fy1)) && (!((sec->floorstat&sector[nextsectnum].floorstat)&1)))
             {
                 uwallptr_t nwal;
-               
+
                 if (searchit == 2)
                 {
                     psectnum = sectnum;
@@ -6382,6 +6415,7 @@ static void polymost_drawalls(int32_t const bunch)
                     ytex.u += (float)(nwal->xpanning - wal->xpanning) * ytex.d;
                 }
                 globalpicnum = nwal->picnum; globalshade = nwal->shade; globalpal = (int32_t)((uint8_t)nwal->pal);
+                globalclipdist = 0;
                 globvis = globalvisibility;
                 if (sector[sectnum].visibility != 0) globvis = mulscale4(globvis, (uint8_t)(sector[sectnum].visibility+16));
                 globvis2 = globalvisibility2;
@@ -6443,6 +6477,7 @@ static void polymost_drawalls(int32_t const bunch)
 
                 globalshade = wal->shade;
                 globalpal = wal->pal;
+                globalclipdist = 0;
                 globvis = (sector[sectnum].visibility != 0) ?
                           mulscale4(globalvisibility, (uint8_t)(sector[sectnum].visibility + 16)) :
                           globalvisibility;
@@ -6546,15 +6581,17 @@ void polymost_scansector(int32_t sectnum)
 
             vec2_t const s = { spr->x-globalposx, spr->y-globalposy };
 
-            if ((spr->cstat&48) ||
+            if ((spr->cstat & CSTAT_SPRITE_ALIGNMENT) ||
                 (usemodels && tile2model[spr->picnum].modelid>=0) ||
                 ((s.x * gcosang) + (s.y * gsinang) > 0))
             {
-                if ((spr->cstat&(64+48))!=(64+16) ||
+                if ((spr->cstat & (CSTAT_SPRITE_ONE_SIDED|CSTAT_SPRITE_ALIGNMENT)) != (CSTAT_SPRITE_ONE_SIDED|CSTAT_SPRITE_ALIGNMENT_WALL) ||
                     (usevoxels && tiletovox[spr->picnum] >= 0 && voxmodels[tiletovox[spr->picnum]]) ||
                     dmulscale6(sintable[(spr->ang+512)&2047],-s.x, sintable[spr->ang&2047],-s.y) > 0)
+                {
                     if (renderAddTsprite(z, sectnum))
                         break;
+                }
             }
         }
 
@@ -6790,6 +6827,8 @@ void polymost_drawrooms()
 
     buildgl_outputDebugMessage(3, "polymost_drawrooms()");
 
+    Bmemset(didwall, 0, sizeof(didwall));
+
     videoBeginDrawing();
     frameoffset = frameplace + windowxy1.y*bytesperline + windowxy1.x;
 
@@ -6981,7 +7020,7 @@ void polymost_drawrooms()
     }
     //else if (!g_nodraw) { videoEndDrawing(); return; }
 #endif
-    
+
     doeditorcheck = 0;
 
     if (searchit >= 1)
@@ -7130,6 +7169,7 @@ static void polymost_drawmaskwallinternal(int32_t wallIndex)
 
     buildgl_outputDebugMessage(3, "polymost_drawmaskwallinternal(wallIndex:%d)", wallIndex);
 
+    globalclipdist = 0;
     globalpicnum = wal->overpicnum;
     if ((uint32_t)globalpicnum >= MAXTILES)
         globalpicnum = 0;
@@ -7512,6 +7552,7 @@ void polymost2_drawsprite(int32_t snum)
     usectorptr_t sec;
 
     int32_t spritenum = tspr->owner;
+    auto const tsprflags = tspr->clipdist;
 
     tileUpdatePicnum(&tspr->picnum, spritenum + 32768);
 
@@ -7519,6 +7560,7 @@ void polymost2_drawsprite(int32_t snum)
     globalshade = tspr->shade;
     globalpal = tspr->pal;
     globalorientation = tspr->cstat;
+    globalclipdist = tspr->clipdist;
     globvis = globalvisibility;
 
     if (sector[tspr->sectnum].visibility != 0)
@@ -7526,7 +7568,7 @@ void polymost2_drawsprite(int32_t snum)
 
     vec2f_t off = { 0.f, 0.f };
 
-    if ((globalorientation & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_SLAB)  // only non-voxel sprites should do this
+    if (!(tsprflags & TSPR_FLAGS_SLAB))  // only non-voxel sprites should do this
     {
         int const flag = usehightile && h_xsize[globalpicnum];
         off.x = (float)((int32_t)tspr->xoffset + (flag ? h_xoffs[globalpicnum] : picanm[globalpicnum].xofs));
@@ -7558,13 +7600,13 @@ void polymost2_drawsprite(int32_t snum)
             break;  // else, render as flat sprite
         }
 
-        if (usevoxels && (tspr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_SLAB && tiletovox[tspr->picnum] >= 0 && voxmodels[tiletovox[tspr->picnum]])
+        if (polymost_spriteIsModernVoxel(tspr))
         {
             if (polymost_voxdraw(voxmodels[tiletovox[tspr->picnum]], tspr)) return;
             break;  // else, render as flat sprite
         }
 
-        if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_SLAB && voxmodels[tspr->picnum])
+        if (polymost_spriteIsLegacyVoxel(tspr))
         {
             polymost_voxdraw(voxmodels[tspr->picnum], tspr);
             return;
@@ -7576,7 +7618,7 @@ void polymost2_drawsprite(int32_t snum)
     //POGO: some comments seem to indicate that spinning sprites were intended to be supported before the
     //      decision was made to implement that behaviour with voxels.
     //      Skip SLAB aligned sprites when not rendering as voxels.
-    if ((globalorientation & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_SLAB)
+    if (tsprflags & TSPR_FLAGS_SLAB)
     {
         return;
     }
@@ -7654,7 +7696,7 @@ void polymost2_drawsprite(int32_t snum)
     {
         horzScale *= 256.f/320.f;
     }
-    else if ((globalorientation & CSTAT_SPRITE_ALIGNMENT)==CSTAT_SPRITE_ALIGNMENT_FLOOR)
+    else if (globalorientation & CSTAT_SPRITE_ALIGNMENT_FLOOR)
     {
         //POGOTODO: fix floor sprites to be scaled up slightly by the right amount, and note their tex is slightly clipped on the leading edges
         vertScale += 1.f/320.f;
@@ -7665,7 +7707,7 @@ void polymost2_drawsprite(int32_t snum)
 
     //handle sprite flipping
     horzScale *= -2.f*((globalorientation & CSTAT_SPRITE_XFLIP) != 0) + 1.f;
-    vertScale *= -2.f*(((globalorientation & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_FLOOR) &
+    vertScale *= -2.f*(!(globalorientation & CSTAT_SPRITE_ALIGNMENT_FLOOR) &
                        ((globalorientation & CSTAT_SPRITE_YFLIP) != 0)) + 1.f;
 
     //POGOTODO: replace this with simply using off.x and a different float for z offsets
@@ -7794,7 +7836,7 @@ void polymost2_drawsprite(int32_t snum)
     off.y *= ((float) (((globalorientation & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_FACING) &
                        ((globalorientation & CSTAT_SPRITE_YFLIP) != 0)))*-2.f + 1.f;
 
-    if ((globalorientation & CSTAT_SPRITE_ALIGNMENT)==CSTAT_SPRITE_ALIGNMENT_FLOOR)
+    if (globalorientation & CSTAT_SPRITE_ALIGNMENT_FLOOR)
     {
         vertScale = -vertScale;
         orientationOffset.x += ftsiz.y*((float) tspr->yrepeat)*(1.f/8.f);
@@ -7823,7 +7865,7 @@ void polymost2_drawsprite(int32_t snum)
     orientationOffset.y *= -(1.f/16384.f)*g;
     calcmat(a0, &orientationOffset, f, modelViewMatrix, angle);
 
-    if ((globalorientation & CSTAT_SPRITE_ALIGNMENT)==CSTAT_SPRITE_ALIGNMENT_FLOOR)
+    if (globalorientation & CSTAT_SPRITE_ALIGNMENT_FLOOR)
     {
         float temp = modelViewMatrix[4]; modelViewMatrix[4] = modelViewMatrix[8]*16.f; modelViewMatrix[8] = -temp*(1.f/16.f);
         temp = modelViewMatrix[5]; modelViewMatrix[5] = modelViewMatrix[9]*16.f; modelViewMatrix[9] = -temp*(1.f/16.f);
@@ -7912,7 +7954,7 @@ void polymost_mdeditorfunc(tspriteptr_t const tspr)
     s0 = { ghalfx * p0.x * ryp0 + ghalfx, ((float)(xyz.z - globalposz)) * gyxscale * ryp0 + ghoriz };
 
     float const f = ryp0 * fxdimen * (1.0f / 160.f);
-    
+
     vec2_16_t const oldsiz = tilesiz[globalpicnum];
     vec2_t tsiz = { oldsiz.x, oldsiz.y };
 
@@ -8096,13 +8138,16 @@ void polymost_drawsprite(int32_t snum)
 
     buildgl_outputDebugMessage(3, "polymost_drawsprite(snum:%d)", snum);
 
-    if ((tspr->cstat&48) != 48)
+    auto const tsprflags = tspr->clipdist;
+
+    if (!(tsprflags & TSPR_FLAGS_SLAB))
         tileUpdatePicnum(&tspr->picnum, spritenum + 32768);
 
     globalpicnum = tspr->picnum;
     globalshade = tspr->shade;
     globalpal = tspr->pal;
     globalorientation = tspr->cstat;
+    globalclipdist = tspr->clipdist;
     globvis = globalvisibility;
 
     if (sector[tspr->sectnum].visibility != 0)
@@ -8115,12 +8160,12 @@ void polymost_drawsprite(int32_t snum)
 
     vec2_t off = { 0, 0 };
 
-    if ((globalorientation & 48) != 48)  // only non-voxel sprites should do this
+    if (!(tsprflags & TSPR_FLAGS_SLAB))  // only non-voxel sprites should do this
     {
         int const flag = usehightile && h_xsize[globalpicnum];
         off = { flag ? h_xoffs[globalpicnum] : picanm[globalpicnum].xofs,
                 flag ? h_yoffs[globalpicnum] : picanm[globalpicnum].yofs };
-        if (!(tspr->clipdist & TSPR_FLAGS_SLOPE_SPRITE))
+        if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_SLOPE)
         {
             off.x += tspr->xoffset;
             off.y += tspr->yoffset;
@@ -8148,7 +8193,7 @@ void polymost_drawsprite(int32_t snum)
             break;  // else, render as flat sprite
         }
 
-        if (usevoxels && (tspr->cstat & 48) != 48 && tiletovox[tspr->picnum] >= 0 && voxmodels[tiletovox[tspr->picnum]])
+        if (polymost_spriteIsModernVoxel(tspr))
         {
             if (polymost_voxdraw(voxmodels[tiletovox[tspr->picnum]], tspr))
             {
@@ -8160,7 +8205,7 @@ void polymost_drawsprite(int32_t snum)
             break;  // else, render as flat sprite
         }
 
-        if ((tspr->cstat & 48) == 48 && voxmodels[tspr->picnum])
+        if (polymost_spriteIsLegacyVoxel(tspr))
         {
             polymost_voxdraw(voxmodels[tspr->picnum], tspr);
 
@@ -8209,9 +8254,9 @@ void polymost_drawsprite(int32_t snum)
 
     vec2f_t const ftsiz = { (float) tsiz.x, (float) tsiz.y };
 
-    switch ((globalorientation >> 4) & 3)
+    switch (globalorientation & CSTAT_SPRITE_ALIGNMENT)
     {
-        case 0:  // Face sprite
+        case CSTAT_SPRITE_ALIGNMENT_FACING:  // Face sprite
         {
             // Project 3D to 2D
             if (globalorientation & 4)
@@ -8334,7 +8379,7 @@ void polymost_drawsprite(int32_t snum)
         }
         break;
 
-        case 1:  // Wall sprite
+        case CSTAT_SPRITE_ALIGNMENT_WALL:  // Wall sprite
         {
             // Project 3D to 2D
             if (globalorientation & 4)
@@ -8564,7 +8609,8 @@ void polymost_drawsprite(int32_t snum)
         }
         break;
 
-        case 2:  // Floor sprite
+        case CSTAT_SPRITE_ALIGNMENT_FLOOR:  // Floor sprite
+        case CSTAT_SPRITE_ALIGNMENT_SLOPE:  // Sloped sprite
             globvis2 = globalhisibility2;
             if (sector[tspr->sectnum].visibility != 0)
                 globvis2 = mulscale4(globvis2, (uint8_t)(sector[tspr->sectnum].visibility + 16));
@@ -8809,9 +8855,6 @@ void polymost_drawsprite(int32_t snum)
             }
 
             break;
-
-        case 3:  // Voxel sprite
-            break;
     }
 
     if (automapping == 1 && (unsigned)spritenum < MAXSPRITES)
@@ -9017,7 +9060,7 @@ void polymost_dorotatespritemodel(int32_t sx, int32_t sy, int32_t z, int16_t a, 
     polymost_setFogEnabled(false);
 
     tspriteptr[maxspritesonscreen] = &tspr;
-    
+
     if (videoGetRenderMode() == REND_POLYMOST)
         polymost_mddraw(&tspr);
 # ifdef POLYMER
@@ -9055,7 +9098,7 @@ void polymost_dorotatespritemodel(int32_t sx, int32_t sy, int32_t z, int16_t a, 
 # endif
 
     tspriteptr[maxspritesonscreen] = nullptr;
-    
+
     if (!nofog) polymost_setFogEnabled(true);
 
     gvrcorrection = ogvrcorrection;
@@ -9096,6 +9139,8 @@ void polymost_dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16
     globalpicnum = picnum;
     int32_t const  ogshade = globalshade;
     globalshade = dashade;
+    int32_t const  ogclipdist = globalclipdist;
+    globalclipdist = 0;
     int32_t const  ogpal = globalpal;
     globalpal = (int32_t)((uint8_t)dapalnum);
     float const  oghalfx = ghalfx;
@@ -9146,7 +9191,7 @@ void polymost_dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16
 #endif
 
     int32_t method = DAMETH_CLAMPED; //Use OpenGL clamping - dorotatesprite never repeats
-    
+
     if (!(dastat & RS_NOMASK))
     {
         buildgl_setEnabled(GL_ALPHA_TEST);
@@ -9337,6 +9382,7 @@ void polymost_dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16
     globalpicnum = ogpicnum;
     globalshade  = ogshade;
     globalpal    = ogpal;
+    globalclipdist = ogclipdist;
     ghalfx       = oghalfx;
     ghalfy       = oghalfy;
     grhalfxdown10 = ogrhalfxdown10;
@@ -9575,7 +9621,7 @@ void polymost_fillpolygon(int32_t npoints)
     }
 }
 
-int32_t polymost_drawtilescreen(int32_t tilex, int32_t tiley, int32_t wallnum, int32_t dimen, int32_t tilezoom,
+int32_t polymost_drawtilescreen(int32_t tilex, int32_t tiley, int32_t tilenum, int32_t dimen, int32_t tilezoom,
                                 int32_t usehitile, uint8_t *loadedhitile)
 {
     float xdime, ydime, xdimepad, ydimepad, scx, scy, ratio = 1.f;
@@ -9585,21 +9631,21 @@ int32_t polymost_drawtilescreen(int32_t tilex, int32_t tiley, int32_t wallnum, i
     if (videoGetRenderMode() < REND_POLYMOST || !in3dmode())
         return -1;
 
-    buildgl_outputDebugMessage(3, "polymost_drawtilescreen(tilex:%d, tiley:%d, wallnum:%d, dimen:%d, tilezoom:%d, usehitile:%d, loadedhitile:%p)",
-                                  tilex, tiley, wallnum, dimen, tilezoom, usehitile, loadedhitile);
+    buildgl_outputDebugMessage(3, "polymost_drawtilescreen(tilex:%d, tiley:%d, tilenum:%d, dimen:%d, tilezoom:%d, usehitile:%d, loadedhitile:%p)",
+                                  tilex, tiley, tilenum, dimen, tilezoom, usehitile, loadedhitile);
 
     if (!glinfo.texnpot)
     {
-        i = (1<<(picsiz[wallnum]&15)); if (i < tilesiz[wallnum].x) i += i; xdimepad = (float)i;
-        i = (1<<(picsiz[wallnum]>>4)); if (i < tilesiz[wallnum].y) i += i; ydimepad = (float)i;
+        i = (1<<(picsiz[tilenum]&15)); if (i < tilesiz[tilenum].x) i += i; xdimepad = (float)i;
+        i = (1<<(picsiz[tilenum]>>4)); if (i < tilesiz[tilenum].y) i += i; ydimepad = (float)i;
     }
     else
     {
-        xdimepad = (float)tilesiz[wallnum].x;
-        ydimepad = (float)tilesiz[wallnum].y;
+        xdimepad = (float)tilesiz[tilenum].x;
+        ydimepad = (float)tilesiz[tilenum].y;
     }
-    xdime = (float)tilesiz[wallnum].x; xdimepad = xdime/xdimepad;
-    ydime = (float)tilesiz[wallnum].y; ydimepad = ydime/ydimepad;
+    xdime = (float)tilesiz[tilenum].x; xdimepad = xdime/xdimepad;
+    ydime = (float)tilesiz[tilenum].y; ydimepad = ydime/ydimepad;
 
     if ((xdime <= dimen) && (ydime <= dimen))
     {
@@ -9618,9 +9664,9 @@ int32_t polymost_drawtilescreen(int32_t tilex, int32_t tiley, int32_t wallnum, i
 
     int32_t const ousehightile = usehightile;
     usehightile = usehitile && usehightile;
-    pth = texcache_fetch(wallnum, 0, 0, DAMETH_CLAMPED | (videoGetRenderMode() == REND_POLYMOST && polymost_useindexedtextures() ? DAMETH_INDEXED : 0));
+    pth = texcache_fetch(tilenum, 0, 0, DAMETH_CLAMPED | (videoGetRenderMode() == REND_POLYMOST && polymost_useindexedtextures() ? DAMETH_INDEXED : 0));
     if (usehightile)
-        bitmap_set(loadedhitile, wallnum);
+        bitmap_set(loadedhitile, tilenum);
     usehightile = ousehightile;
 
     if (pth)
@@ -9742,7 +9788,7 @@ int32_t polymost_printtext256(int32_t xpos, int32_t ypos, int16_t col, int16_t b
 
     bricolor(&p, col);
     bricolor(&b, arbackcol);
-    
+
     if (videoGetRenderMode() < REND_POLYMOST || !in3dmode() || (!polymosttext && gen_font_glyph_tex() < 0))
         return -1;
 
@@ -10090,12 +10136,12 @@ void polymost_precache(int32_t dapicnum, int32_t dapalnum, int32_t datype)
 
 #include "compat.h"
 
-int32_t polymost_drawtilescreen(int32_t tilex, int32_t tiley, int32_t wallnum, int32_t dimen,
+int32_t polymost_drawtilescreen(int32_t tilex, int32_t tiley, int32_t tilenum, int32_t dimen,
                                 int32_t usehitile, uint8_t *loadedhitile)
 {
     UNREFERENCED_PARAMETER(tilex);
     UNREFERENCED_PARAMETER(tiley);
-    UNREFERENCED_PARAMETER(wallnum);
+    UNREFERENCED_PARAMETER(tilenum);
     UNREFERENCED_PARAMETER(dimen);
     UNREFERENCED_PARAMETER(usehitile);
     UNREFERENCED_PARAMETER(loadedhitile);

@@ -27,72 +27,46 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\source\mimalloc\src\alloc-aligned.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\alloc-override-osx.c">
-      <ExcludedFromBuild>true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\alloc-override.c">
-      <ExcludedFromBuild>true</ExcludedFromBuild>
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\alloc-posix.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\alloc.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\arena.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\bitmap.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\heap.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\init.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\options.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\os.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\page-queue.c">
-      <ExcludedFromBuild>true</ExcludedFromBuild>
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\page.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\random.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\region.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\segment.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\static.c">
-      <ExcludedFromBuild>true</ExcludedFromBuild>
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\source\mimalloc\src\stats.c">
-      <CompileAs>CompileAsCpp</CompileAs>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\..\source\mimalloc\include\mimalloc-atomic.h" />
-    <ClInclude Include="..\..\source\mimalloc\include\mimalloc-internal.h" />
     <ClInclude Include="..\..\source\mimalloc\include\mimalloc-new-delete.h" />
     <ClInclude Include="..\..\source\mimalloc\include\mimalloc-override.h" />
-    <ClInclude Include="..\..\source\mimalloc\include\mimalloc-types.h" />
     <ClInclude Include="..\..\source\mimalloc\include\mimalloc.h" />
+    <ClInclude Include="..\..\source\mimalloc\include\mimalloc\atomic.h" />
+    <ClInclude Include="..\..\source\mimalloc\include\mimalloc\internal.h" />
+    <ClInclude Include="..\..\source\mimalloc\include\mimalloc\prim.h" />
+    <ClInclude Include="..\..\source\mimalloc\include\mimalloc\track.h" />
+    <ClInclude Include="..\..\source\mimalloc\include\mimalloc\types.h" />
     <ClInclude Include="..\..\source\mimalloc\src\bitmap.h" />
+    <ClInclude Include="..\..\source\mimalloc\src\prim\windows\etw.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\source\mimalloc\src\alloc-aligned.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\alloc-override.c">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\source\mimalloc\src\alloc-posix.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\alloc.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\arena.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\bitmap.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\free.c">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\source\mimalloc\src\heap.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\init.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\libc.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\options.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\os.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\page-queue.c">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\source\mimalloc\src\page.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\prim\windows\prim.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\random.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\segment-map.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\segment.c" />
+    <ClCompile Include="..\..\source\mimalloc\src\static.c">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\source\mimalloc\src\stats.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
@@ -117,7 +91,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <EnableASAN>true</EnableASAN>
+    <EnableASAN>false</EnableASAN>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
@@ -170,35 +144,15 @@
     <Import Project="props\build_common.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
-    <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
-    <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)Build\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\Build\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>

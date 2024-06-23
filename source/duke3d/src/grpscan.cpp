@@ -55,11 +55,13 @@ static internalgrpinfo_t const internalgrpfiles[] =
     { "Duke it out in D.C.",                   DUKEDCPP_CRC, 8225517, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, NULL, NULL},
     { "Duke it out in D.C.",                   DUKEDC_CRC,  8410183,  GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, NULL, NULL},
     { "Duke it out in D.C.",                   (int32_t) 0x39A692BF,  8410187, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, "DUKEDC.CON", NULL},
+    { "Duke it out in D.C.",                   (int32_t) 0xC63B6A8B,  8410149, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, "DUKEDC.CON", NULL},
     { "Duke Caribbean: Life's a Beach (1.3D)", VACA13_CRC,  23559381, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE13_CRC, NULL, process_vaca13},
     { "Duke Caribbean: Life's a Beach (PPak)", VACAPP_CRC,  22551333, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKEPP_CRC, NULL, process_vacapp15},
     { "Duke Caribbean: Life's a Beach",        VACA15_CRC,  22521880, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, NULL, process_vacapp15},
     { "Duke Caribbean: Life's a Beach",        DUKECB_CRC,  22213819, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, NULL, NULL},
     { "Duke Caribbean: Life's a Beach",        (int32_t) 0x65B5F690, 22397273, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, "VACATION.CON", NULL},
+    { "Duke Caribbean: Life's a Beach",        (int32_t) 0x64CF2351, 22213795, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, "VACATION.CON", NULL},
     { "Duke: Nuclear Winter",                  DUKENW_CRC,  16169365, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, "NWINTER.CON", NULL},
     { "Duke: Nuclear Winter Demo",             (int32_t) 0xC7EFBFA9,  10965909, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE15_CRC, "NWINTER.CON", NULL},
     { "Duke!ZONE II (1.3D)",                   DZ2_13_CRC,  26135388, GAMEFLAG_DUKE|GAMEFLAG_ADDON, DUKE13_CRC, "DZ-GAME.CON", NULL},
@@ -395,12 +397,13 @@ static void ProcessGroups(BUILDVFS_FIND_REC *srch, native_t maxsize)
                 continue;
             } // failed to stat the file
             Xfree(fn);
-            if (fg->size == (int32_t)st.st_size && fg->mtime == (int32_t)st.st_mtime)
+            if (st.st_size && fg->size == (int32_t)st.st_size && fg->mtime == (int32_t)st.st_mtime)
             {
-                grpinfo_t const * const grptype = FindGrpInfo(fg->crcval, fg->size);
+                auto const grptype = FindGrpInfo(fg->crcval, fg->size);
+
                 if (grptype)
                 {
-                    grpfile_t * const grp = (grpfile_t *)Xcalloc(1, sizeof(grpfile_t));
+                    auto const grp = (grpfile_t *)Xcalloc(1, sizeof(grpfile_t));
                     grp->filename = Xstrdup(sidx->name);
                     grp->type = grptype;
                     grp->next = foundgrps;
@@ -425,7 +428,7 @@ static void ProcessGroups(BUILDVFS_FIND_REC *srch, native_t maxsize)
             fh = openfrompath(sidx->name, BO_RDONLY|BO_BINARY, BS_IREAD);
             if (fh < 0) continue;
             if (Bfstat(fh, &st)) continue;
-            if (st.st_size > maxsize) continue;
+            if (!st.st_size || st.st_size > maxsize) continue;
 
             DLOG_F(INFO, " Checksumming %s...", sidx->name);
             do
@@ -438,10 +441,11 @@ static void ProcessGroups(BUILDVFS_FIND_REC *srch, native_t maxsize)
 
             LOG_F(INFO, " %s has checksum 0x%08x", sidx->name, crcval);
 
-            grpinfo_t const * const grptype = FindGrpInfo(crcval, st.st_size);
+            auto const grptype = FindGrpInfo(crcval, st.st_size);
+
             if (grptype)
             {
-                grpfile_t * const grp = (grpfile_t *)Xcalloc(1, sizeof(grpfile_t));
+                auto const grp = (grpfile_t *)Xcalloc(1, sizeof(grpfile_t));
                 grp->filename = Xstrdup(sidx->name);
                 grp->type = grptype;
                 grp->next = foundgrps;
@@ -513,7 +517,6 @@ int32_t ScanGroups(void)
 
     if (usedgrpcache)
     {
-        int32_t i = 0;
         buildvfs_FILE fp = buildvfs_fopen_write(GRPCACHEFILE);
         if (fp)
         {
@@ -522,7 +525,6 @@ int32_t ScanGroups(void)
                 fgg = fg->next;
                 fprintf(fp, "\"%s\" %d %d %d\n", fg->name, fg->size, fg->mtime, fg->crcval);
                 Xfree(fg);
-                i++;
             }
             buildvfs_fclose(fp);
         }

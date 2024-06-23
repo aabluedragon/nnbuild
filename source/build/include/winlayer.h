@@ -11,7 +11,6 @@ extern uint32_t maxrefreshfreq;
 
 extern int32_t glusecds;
 
-extern char di_disabled;
 extern char forcegl;
 
 HWND win_gethwnd(void);
@@ -36,4 +35,3 @@ static inline void idle(int const msec = 1)
 #error "Already using the " build_interface_layer_ ". Can't now use Windows."
 #endif
 #endif // build_interface_layer_
-

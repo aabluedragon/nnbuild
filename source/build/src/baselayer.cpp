@@ -5,7 +5,6 @@
 #include "cache1d.h"
 #include "communityapi.h"
 #include "compat.h"
-#include "mimalloc.h"
 #include "osd.h"
 #include "polymost.h"
 #include "renderlayer.h"
@@ -16,7 +15,7 @@
 #define MCO_MALLOC Xmalloc
 #define MCO_FREE Xfree
 
-#include "minicoro.h"
+//#include "minicoro.h"
 
 #define LIBASYNC_IMPLEMENTATION
 #include "libasync_config.h"
@@ -46,6 +45,8 @@ uint8_t g_keyAsciiPos;
 uint8_t g_keyAsciiEnd;
 char    g_keyRemapTable[NUMKEYS];
 char    g_keyNameTable[NUMKEYS][24];
+
+char    g_controllerSupportFlags;
 
 int32_t r_maxfps = -1;
 uint64_t g_frameDelay;
@@ -86,7 +87,6 @@ void initputs(const char *buf)
 
     // terrible hack... the start window relies on newlines, but we don't have them at the end of the buffer anymore
     int len = Bstrlen(buf);
-    Bassert(len > 0);
 
     if (buf[len] == '\n')
         startwin_puts(buf);
@@ -131,7 +131,7 @@ static int osdfunc_bucketlist(osdcmdptr_t UNUSED(parm))
 
         if (missCount)
             LOG_F(INFO, "%12s: %s%u","miss", osd->draw.errorfmt, missCount);
-        
+
         if (freeCount)
             LOG_F(INFO, "%12s: %u",  "freed",     freeCount);
 
@@ -148,21 +148,25 @@ static int osdfunc_bucketlist(osdcmdptr_t UNUSED(parm))
     return OSDCMD_OK;
 }
 
+#ifdef USE_MIMALLOC
 static int osdfunc_heapinfo(osdcmdptr_t UNUSED(parm))
 {
     UNREFERENCED_CONST_PARAMETER(parm);
     mi_stats_print(NULL);
     return OSDCMD_OK;
 }
+#endif
 
 void engineSetupAllocator(void)
-{    
+{
     engineCreateAllocator();
 
 #ifdef SMMALLOC_STATS_SUPPORT
     OSD_RegisterFunction("bucketlist", "bucketlist: list bucket statistics", osdfunc_bucketlist);
 #endif
+#ifdef USE_MIMALLOC
     OSD_RegisterFunction("heapinfo", "heapinfo: memory usage statistics", osdfunc_heapinfo);
+#endif
 }
 
 const char*(*gameVerbosityCallback)(loguru::Verbosity verbosity) = nullptr;
@@ -173,7 +177,7 @@ const char *engineVerbosityCallback(loguru::Verbosity verbosity)
     if (gameVerbosityCallback)
     {
         auto str = gameVerbosityCallback(verbosity);
-        
+
         if (str != nullptr)
             return str;
     }
@@ -238,7 +242,7 @@ void engineSetupLogging(int &argc, char **argv)
     });
     loguru::Options initopts;
     initopts.verbosity_flag = nullptr;
-    initopts.signal_options.unsafe_signal_handler = true;
+    initopts.signal_options.unsafe_signal_handler = false;
     loguru::init(argc, argv, initopts);
 }
 
@@ -371,6 +375,8 @@ controllerinput_t joystick;
 void joySetCallback(void (*callback)(int32_t, int32_t)) { joystick.pCallback = callback; }
 void joyReadButtons(int32_t *pResult) { *pResult = appactive ? joystick.bits : 0; }
 bool joyHasButton(int button) { return !!(joystick.validButtons & (1 << button)); }
+
+void (*g_fileDropCallback)(char const *);
 
 #if defined __linux || defined EDUKE32_BSD || defined __APPLE__
 # include <sys/mman.h>
@@ -637,7 +643,7 @@ static int osdfunc_setrendermode(osdcmdptr_t parm)
 #endif
         nullptr, nullptr, "Polymost", "Polymer (for great justice)"
     };
-    
+
     if (parm->numparms != 1)
         return OSDCMD_SHOWHELP;
 
@@ -648,7 +654,7 @@ static int osdfunc_setrendermode(osdcmdptr_t parm)
 
     if (videoGetRenderMode() == m)
         return OSDCMD_OK;
-    
+
     if ((m==REND_CLASSIC) != (bpp==8) && baselayer_osdcmd_vidmode_func)
     {
         // Mismatch between video mode and requested renderer, do auto switch.
@@ -800,6 +806,7 @@ int32_t baselayer_init(void)
           (void *) &r_screenxy, SCREENASPECT_CVAR_TYPE, 0, 9999 },
         { "r_fpgrouscan","use floating-point numbers for slope rendering",(void *) &r_fpgrouscan, CVAR_BOOL, 0, 1 },
         { "r_hightile","enable/disable hightile texture rendering",(void *) &usehightile, CVAR_BOOL, 0, 1 },
+        { "r_maxspritesonscreen","maximum number of sprites to draw per frame",(void *) &maxspritesonscreen, CVAR_INT, 0, MAXSPRITESONSCREEN },
         { "r_novoxmips","turn off/on the use of mipmaps when rendering 8-bit voxels",(void *) &novoxmips, CVAR_BOOL, 0, 1 },
         { "r_rotatespriteinterp", "interpolate repeated rotatesprite calls", (void *)&r_rotatespriteinterp, CVAR_BOOL, 0, 1 },
         { "r_voxels","enable/disable automatic sprite->voxel rendering",(void *) &usevoxels, CVAR_BOOL, 0, 1 },
@@ -878,26 +885,24 @@ void maybe_redirect_outputs(void)
 
 int engineFPSLimit(bool const throttle)
 {
-    static uint64_t nextFrameTicks;
-    static uint64_t savedFrameDelay;
+    static uint64_t lastFrameTicks;
+    static uint64_t lastDelay;
 
     if (r_maxfps == -2)
         return true;
 
     g_frameDelay = calcFrameDelay(!throttle || ((unsigned)(r_maxfps-1) < (unsigned)refreshfreq) ? r_maxfps : -1);
 
+    if (g_frameDelay != lastDelay)
+        lastFrameTicks = timerGetNanoTicks(), lastDelay = g_frameDelay;
+
     uint64_t frameTicks = timerGetNanoTicks();
 
-    if (g_frameDelay != savedFrameDelay)
+    if (frameTicks - lastFrameTicks >= g_frameDelay)
     {
-        savedFrameDelay = g_frameDelay;
-        nextFrameTicks  = frameTicks + g_frameDelay;
-    }
-
-    if (frameTicks >= nextFrameTicks)
-    {
-        while (frameTicks >= nextFrameTicks)
-            nextFrameTicks += g_frameDelay;
+        do
+            lastFrameTicks += g_frameDelay;
+        while (frameTicks - lastFrameTicks >= g_frameDelay);
 
         return true;
     }

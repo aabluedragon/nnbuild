@@ -185,8 +185,9 @@ int32_t showheightindicators=1;
 int32_t circlewall=-1;
 
 static void classicScanSector(int16_t startsectnum);
+#ifdef ENGINE_CLEAR_SCREEN
 static void draw_rainbow_background(void);
-
+#endif
 int16_t editstatus = 0;
 static fix16_t global100horiz;  // (-100..300)-scale horiz (the one passed to drawrooms)
 
@@ -219,7 +220,7 @@ invalid:
             cht->lock = 254;
             return NULL;
         }
-        
+
         kpgetdim(kpzbuf, length, &xsiz, &ysiz);
 
         if (EDUKE32_PREDICT_FALSE((xsiz <= 0) | (ysiz <= 0)))
@@ -241,18 +242,18 @@ invalid:
             Xfree(picptr);
             goto invalid;
         }
-        
+
         cht->upscale = upscale;
         cht->lock    = CACHE1D_UNLOCKED;
-        
+
         g_cache.allocateBlock(&cht->ptr, xsiz * ysiz, &cht->lock);
 
         //paletteFlushClosestColor();
 
         auto buf = (char*)cht->ptr;
-        
+
         Bmemset(buf, 255, xsiz * ysiz);
-        
+
         int const alphacut = clamp((int)(255.f - 255.f * si->alphacut), 0, 255);
 
         for (int j = 0; j < ysiz; ++j)
@@ -265,7 +266,7 @@ invalid:
                     buf[(i * ysiz) + j] = paletteGetClosestColorUpToIndex(col->b, col->g, col->r, 254);
             }
         }
-        
+
         Xfree(picptr);
     }
     else if (cht->lock < CACHE1D_UNLOCKED)
@@ -297,11 +298,9 @@ void initcrc16()
 }
 
 // adapted from build.c
-static void getclosestpointonwall_internal(vec2_t const p, int32_t const dawall, vec2_t *const closest)
+void getclosestpointonline(vec2_t const p, vec2_t w, vec2_t w2, vec2_t *const closest)
 {
-    vec2_t const w  = wall[dawall].xy;
-    vec2_t const w2 = wall[wall[dawall].point2].xy;
-    vec2_t const d  = { w2.x - w.x, w2.y - w.y };
+    vec2_t const d = w2 - w;
 
     int64_t i = d.x * ((int64_t)p.x - w.x) + d.y * ((int64_t)p.y - w.y);
 
@@ -324,12 +323,17 @@ static void getclosestpointonwall_internal(vec2_t const p, int32_t const dawall,
     *closest = { (int32_t)(w.x + ((d.x * i) >> 30)), (int32_t)(w.y + ((d.y * i) >> 30)) };
 }
 
+static FORCE_INLINE void getclosestpointonwall_internal(vec2_t const p, int32_t const dawall, vec2_t *const closest)
+{
+    getclosestpointonline(p, wall[dawall].xy, wall[wall[dawall].point2].xy, closest);
+}
+
 ////////// YAX //////////
 
 int32_t numgraysects = 0;
-uint8_t graysectbitmap[(MAXSECTORS+7)>>3];
-uint8_t graywallbitmap[(MAXWALLS+7)>>3];
-int32_t autogray = 0, showinnergray = 1;
+uint8_t graysectbitmap[bitmap_size(MAXSECTORS)];
+uint8_t graywallbitmap[bitmap_size(MAXWALLS)];
+int32_t autogray = 0, showinnergray = 1, showgraysectors = 1;
 
 //#define YAX_DEBUG_YMOSTS
 
@@ -346,6 +350,11 @@ int32_t get_alwaysshowgray(void)
     return showinnergray || !(editorzrange[0]==INT32_MIN && editorzrange[1]==INT32_MAX);
 }
 
+int32_t get_skipgraysectors(void)
+{
+    return numgraysects && !showgraysectors && !(editorzrange[0]==INT32_MIN && editorzrange[1]==INT32_MAX);
+}
+
 void yax_updategrays(int32_t posze)
 {
     int32_t i, j;
@@ -360,6 +369,7 @@ void yax_updategrays(int32_t posze)
 
     for (i=0; i<numsectors; i++)
     {
+        int32_t keep = true;
 #ifdef YAX_ENABLE
         int16_t cb, fb;
         yax_getbunches(i, &cb, &fb);
@@ -367,7 +377,7 @@ void yax_updategrays(int32_t posze)
         // Update grayouts due to TROR, has to be --v--       half-open      --v--
         // because only one level should ever be    v                          v
         // active.                                  v                          v
-        int32_t keep = ((cb<0 || sector[i].ceilingz < posze) && (fb<0 || posze <= sector[i].floorz));
+        keep = ((cb<0 || sector[i].ceilingz < posze) && (fb<0 || posze <= sector[i].floorz));
         if (autogray && (cb>=0 || fb>=0) && (sector[i].ceilingz <= posze && posze <= sector[i].floorz))
         {
             mingoodz = min(mingoodz, TrackerCast(sector[i].ceilingz));
@@ -428,9 +438,10 @@ static int16_t yax_spritesortcnt[1 + 2*YAX_MAXDRAWS];
 static uint16_t yax_tsprite[1 + 2*YAX_MAXDRAWS][MAXSPRITESONSCREEN];
 static uint8_t yax_tsprfrombunch[1 + 2*YAX_MAXDRAWS][MAXSPRITESONSCREEN];
 static int16_t yax_updown[MAXSECTORS][2];
+static int16_t yax_layershift[1 + 2*YAX_MAXDRAWS][MAXSPRITESONSCREEN];
 
 // drawn sectors
-uint8_t yax_gotsector[(MAXSECTORS+7)>>3];  // engine internal
+uint8_t yax_gotsector[bitmap_size(MAXSECTORS)];  // engine internal
 
 # if !defined NEW_MAP_FORMAT
 // Game-time YAX data structures, V7-V9 map formats.
@@ -611,10 +622,10 @@ void yax_update(int32_t resetstat)
     {
         // make bunchnums consecutive
         uint8_t *const havebunch = (uint8_t *)tempbuf;
-        uint8_t *const bunchmap = havebunch + ((YAX_MAXBUNCHES+7)>>3);
+        uint8_t *const bunchmap = havebunch + bitmap_size(YAX_MAXBUNCHES);
         int32_t dasub = 0;
 
-        Bmemset(havebunch, 0, (YAX_MAXBUNCHES+7)>>3);
+        Bmemset(havebunch, 0, bitmap_size(YAX_MAXBUNCHES));
         for (i=0; i<numsectors; i++)
         {
             yax_getbunches(i, &cb, &fb);
@@ -626,7 +637,7 @@ void yax_update(int32_t resetstat)
 
         for (i=0; i<YAX_MAXBUNCHES; i++)
         {
-            if (bitmap_test(havebunch, i)==0)
+            if (!bitmap_test(havebunch, i))
             {
                 bunchmap[i] = 255;
                 dasub++;
@@ -750,7 +761,7 @@ static int16_t bunchsec[YAX_MAXBUNCHES], bunchdist[YAX_MAXBUNCHES];
 
 static int32_t ymostallocsize = 0;  // numyaxbunches*xdimen (no sizeof(int16_t) here!)
 static int16_t *yumost=NULL, *ydmost=NULL;  // used as if [numyaxbunches][xdimen]
-uint8_t haveymost[(YAX_MAXBUNCHES+7)>>3];
+uint8_t haveymost[bitmap_size(YAX_MAXBUNCHES)];
 
 static inline int32_t yax_walldist(int32_t w)
 {
@@ -790,12 +801,12 @@ static void yax_scanbunches(int32_t bbeg, int32_t numhere, const uint8_t *lastgo
 
             for (j=startwall; j<endwall; j++)
             {
-/*
+#if 0
                 if ((w=yax_getnextwall(j,!yax_globalcf))>=0)
                     if ((ns=wall[w].nextsector)>=0)
-                        if ((lastgotsector[ns>>3]&pow2char[ns&7])==0)
+                        if (!bitmap_test(lastgotsector, ns))
                             continue;
-*/
+#endif
                 walldist = yax_walldist(j);
                 if (walldist < bestwalldist)
                 {
@@ -905,17 +916,21 @@ static void yax_copytsprites()
 
             if (cf != -1)
             {
+#if 0
                 if ((yax_globallev-YAX_MAXDRAWS)*(-1 + 2*cf) > 0)
                     if (yax_getbunch(sectnum, cf) != yax_globalbunch)
                         continue;
+#endif
 
-                sectnum = yax_getneighborsect(spr->x, spr->y, sectnum, cf);
+                for (int k = 0; k < yax_layershift[yax_globallev][i] && (sectnum >= 0); k++)
+                    sectnum = yax_getneighborsect(spr->x, spr->y, sectnum, cf);
+
                 if (sectnum < 0)
                     continue;
             }
         }
 
-        if (spritesortcnt >= maxspritesonscreen)
+        if (spritesortcnt >= MAXSPRITESONSCREEN)
             break;
 
         tspriteptr_t tsp = renderAddTSpriteFromSprite(spritenum);
@@ -931,7 +946,7 @@ void yax_preparedrawrooms(void)
 
     g_nodraw = 1;
     Bmemset(yax_spritesortcnt, 0, sizeof(yax_spritesortcnt));
-    Bmemset(haveymost, 0, (numyaxbunches+7)>>3);
+    Bmemset(haveymost, 0, bitmap_size(numyaxbunches));
 
     if (videoGetRenderMode() == REND_CLASSIC && ymostallocsize < xdimen*numyaxbunches)
     {
@@ -946,7 +961,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
 {
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
 
-    static uint8_t havebunch[(YAX_MAXBUNCHES+7)>>3];
+    static uint8_t havebunch[bitmap_size(YAX_MAXBUNCHES)];
 
     const fix16_t horiz = global100horiz;
 
@@ -957,7 +972,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
     int32_t bbeg, numhere;
 
     // original (1st-draw) and accumulated ('per-level') gotsector bitmaps
-    static uint8_t ogotsector[(MAXSECTORS+7)>>3], lgotsector[(MAXSECTORS+7)>>3];
+    static uint8_t ogotsector[bitmap_size(MAXSECTORS)], lgotsector[bitmap_size(MAXSECTORS)];
 #ifdef YAX_DEBUG
     uint64_t t;
 #endif
@@ -972,11 +987,11 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
 
     // if we're here, there was just a drawrooms() call with g_nodraw=1
 
-    Bmemcpy(ogotsector, gotsector, (numsectors+7)>>3);
+    Bmemcpy(ogotsector, gotsector, bitmap_size(numsectors));
 
     if (sectnum >= 0)
         yax_getbunches(sectnum, &ourbunch[0], &ourbunch[1]);
-    Bmemset(&havebunch, 0, (numyaxbunches+7)>>3);
+    Bmemset(&havebunch, 0, bitmap_size(numyaxbunches));
 
     // first scan all bunches above, then all below...
     for (cf=0; cf<2; cf++)
@@ -986,7 +1001,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
         if (cf==1)
         {
             sectnum = osectnum;
-            Bmemcpy(gotsector, ogotsector, (numsectors+7)>>3);
+            Bmemcpy(gotsector, ogotsector, bitmap_size(numsectors));
         }
 
         for (lev=0; /*lev<YAX_MAXDRAWS*/; lev++)
@@ -1004,7 +1019,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
                 j = yax_getbunch(i, cf);
                 if (j >= 0 && !bitmap_test(havebunch, j))
                 {
-                    if (videoGetRenderMode() == REND_CLASSIC && bitmap_test(haveymost, j)==0)
+                    if (videoGetRenderMode() == REND_CLASSIC && !bitmap_test(haveymost, j))
                     {
                         yaxdebug("%s, l %d: skipped bunch %d (no *most)", cf?"v":"^", lev, j);
                         continue;
@@ -1044,7 +1059,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
 
                     if (k < 0)
                     {
-                        yaxprintf("%s, l %d: skipped bunch %d\n", cf?"v":"^", lev, j);
+                        yaxprintf("%s, l %d: skipped bunch %d", cf?"v":"^", lev, j);
                         continue;
                     }
 
@@ -1056,7 +1071,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
                         // +MAXSECTORS: force
                         renderDrawRoomsQ16(globalposx,globalposy,globalposz,qglobalang,horiz,k+MAXSECTORS);
                         if (numhere > 1)
-                            for (i=0; i<(numsectors+7)>>3; i++)
+                            for (i=0; i<bitmap_size(numsectors); i++)
                                 lgotsector[i] |= gotsector[i];
 
                         yaxdebug("l%d: faked (bn %2d) sec %4d,%3d dspr, ob=[%2d,%2d], sn=%4d, %.3f ms",
@@ -1073,7 +1088,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
                 }
 
                 if (numhere > 1 && lev != YAX_MAXDRAWS-1)
-                    Bmemcpy(gotsector, lgotsector, (numsectors+7)>>3);
+                    Bmemcpy(gotsector, lgotsector, bitmap_size(numsectors));
             }
 
             if (numhere==0 || lev==YAX_MAXDRAWS-1)
@@ -1108,7 +1123,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
 #endif
     }
 #endif
-    
+
 #ifdef USE_OPENGL
     if (videoGetRenderMode() == REND_POLYMOST)
     {
@@ -1155,7 +1170,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
                             yax_nomaskpass = 0;
                             break;  // no need to draw the same stuff twice
                         }
-                        Bmemcpy(yax_gotsector, gotsector, (numsectors+7)>>3);
+                        Bmemcpy(yax_gotsector, gotsector, bitmap_size(numsectors));
                     }
                 }
 
@@ -1240,6 +1255,7 @@ void yax_drawrooms(void (*SpriteAnimFunc)(int32_t,int32_t,int32_t,int32_t,int32_
 #endif  // defined YAX_ENABLE
 
 // must have writable frame buffer, i.e. done begindrawing()
+#ifdef ENGINE_CLEAR_SCREEN
 static void draw_rainbow_background(void)
 {
     int32_t y, i;
@@ -1259,7 +1275,7 @@ static void draw_rainbow_background(void)
         dst += bytesperline;
     }
 }
-
+#endif
 //
 // setslope
 //
@@ -1461,7 +1477,7 @@ static int32_t smoststart[MAXWALLSB];
 static char smostwalltype[MAXWALLSB];
 static int32_t smostwall[MAXWALLSB], smostwallcnt = -1;
 
-static vec3_t spritesxyz[MAXSPRITESONSCREEN+1];
+static vec3_t spritesxyz[MAXSPRITESONSCREEN + 1];
 
 int32_t xdimen = -1, xdimenrecip, halfxdimen, xdimenscale, xdimscale;
 float fxdimen = -1.f;
@@ -1495,7 +1511,7 @@ static int32_t viewingrangerecip;
 
 static int8_t globalxshift, globalyshift;
 static int32_t globalxpanning, globalypanning;
-int32_t globalshade, globalorientation;
+int32_t globalshade, globalorientation, globalclipdist;
 static int16_t globalshiftval;
 #ifdef HIGH_PRECISION_SPRITE
 static int64_t globalzd;
@@ -1554,8 +1570,8 @@ uint8_t vgapal16[4*256] =
 };
 
 int16_t searchit;
-int32_t searchx = -1, searchy;                          //search input
-int16_t searchsector, searchwall, searchstat;     //search output
+int32_t searchx = -1, searchy;                 // search input
+int16_t searchsector, searchwall, searchstat;  // search output
 
 // SEARCHBOTTOMWALL:
 //   When aiming at a the bottom part of a 2-sided wall whose bottom part
@@ -1594,14 +1610,14 @@ char apptitle[256] = "Build Engine";
 //          1=break out of sprite collecting;
 int32_t renderAddTsprite(int16_t z, int16_t sectnum)
 {
-    auto const spr = (uspriteptr_t)&sprite[z];
 #ifdef YAX_ENABLE
+    auto const spr = (uspriteptr_t)&sprite[z];
     if (g_nodraw==0)
     {
         if (numyaxbunches==0)
         {
 #endif
-            if (spritesortcnt >= maxspritesonscreen)
+            if (spritesortcnt >= MAXSPRITESONSCREEN)
                 return 1;
 
             renderAddTSpriteFromSprite(z);
@@ -1614,7 +1630,7 @@ int32_t renderAddTsprite(int16_t z, int16_t sectnum)
     {
         int16_t *sortcnt = &yax_spritesortcnt[yax_globallev];
 
-        if (*sortcnt >= maxspritesonscreen)
+        if (*sortcnt >= MAXSPRITESONSCREEN)
             return 1;
 
         yax_tsprite[yax_globallev][*sortcnt] = z;
@@ -1626,38 +1642,58 @@ int32_t renderAddTsprite(int16_t z, int16_t sectnum)
         (*sortcnt)++;
 
         // now check whether the tsprite needs duplication into another level
-        if ((spr->cstat&48)==32)
+        if ((spr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_FLOOR)
             return 0;
 
-        int16_t cb, fb;
-
-        yax_getbunches(sectnum, &cb, &fb);
-        if (cb < 0 && fb < 0)
-            return 0;
-
-        int32_t spheight;
+        int32_t spheight, yax_nextlev, curSect;
         int16_t spzofs = spriteheightofs(z, &spheight, 1);
 
-        // TODO: get*zofslope?
-        if (cb>=0 && spr->z+spzofs-spheight < sector[sectnum].ceilingz)
+        // check sectors above
+        yax_nextlev = yax_globallev;
+        curSect = sectnum;
+        int32_t upperSect = yax_getneighborsect(sprite[z].x, sprite[z].y, sectnum, YAX_CEILING);
+        while (upperSect >= 0 && yax_nextlev > 0)
         {
-            sortcnt = &yax_spritesortcnt[yax_globallev-1];
-            if (*sortcnt < maxspritesonscreen)
+            if (spr->z+spzofs-spheight >= getceilzofslope(curSect, sprite[z].x, sprite[z].y))
+                break;
+
+            sortcnt = &yax_spritesortcnt[yax_nextlev-1];
+            if (*sortcnt < MAXSPRITESONSCREEN)
             {
-                yax_tsprite[yax_globallev-1][*sortcnt] = z|MAXSPRITES;
+                yax_layershift[yax_nextlev-1][*sortcnt] = abs(yax_globallev-yax_nextlev)+1;
+                yax_tsprite[yax_nextlev-1][*sortcnt] = z|MAXSPRITES;
                 (*sortcnt)++;
             }
+
+            yax_nextlev--;
+            curSect = upperSect;
+            upperSect = yax_getneighborsect(sprite[z].x, sprite[z].y, curSect, YAX_CEILING);
         }
-        if (fb>=0 && spr->z+spzofs > sector[sectnum].floorz)
+
+        // check sectors below
+        yax_nextlev = yax_globallev;
+        curSect = sectnum;
+        int32_t lowerSect = yax_getneighborsect(sprite[z].x, sprite[z].y, sectnum, YAX_FLOOR);
+        while (lowerSect >= 0 && yax_nextlev < (2*YAX_MAXDRAWS + 1))
         {
-            sortcnt = &yax_spritesortcnt[yax_globallev+1];
-            if (*sortcnt < maxspritesonscreen)
+            if (spr->z+spzofs <= getflorzofslope(curSect, sprite[z].x, sprite[z].y))
+                break;
+
+            sortcnt = &yax_spritesortcnt[yax_nextlev+1];
+            if (*sortcnt < MAXSPRITESONSCREEN)
             {
-                yax_tsprite[yax_globallev+1][*sortcnt] = z|(MAXSPRITES<<1);
+                yax_layershift[yax_nextlev+1][*sortcnt] = abs(yax_globallev-yax_nextlev)+1;
+                yax_tsprite[yax_nextlev+1][*sortcnt] = z|(MAXSPRITES<<1);
                 (*sortcnt)++;
             }
+
+            yax_nextlev++;
+            curSect = lowerSect;
+            lowerSect = yax_getneighborsect(sprite[z].x, sprite[z].y, curSect, YAX_FLOOR);
         }
     }
+#else
+    UNREFERENCED_PARAMETER(sectnum);
 #endif
 
     return 0;
@@ -1748,7 +1784,7 @@ static inline int findUnusedTile(void)
     static int lastUnusedTile = MAXUSERTILES-1;
 
     for (; lastUnusedTile >= 0; --lastUnusedTile)
-        if ((tilesiz[lastUnusedTile].x|tilesiz[lastUnusedTile].y) == 0)
+        if ((tilesiz[lastUnusedTile].x|tilesiz[lastUnusedTile].y) == 0 && !waloff[lastUnusedTile])
             return lastUnusedTile;
 
     return -1;
@@ -1784,12 +1820,12 @@ static void classicScanSector(int16_t startsectnum)
 
             vec2_t const s = { spr->x-globalposx, spr->y-globalposy };
 
-            if ((spr->cstat&48) || ((coord_t)s.x*cosglobalang+(coord_t)s.y*singlobalang > 0))
-                if ((spr->cstat&(64+48))!=(64+16) || dmulscale6(sintable[(spr->ang+512)&2047],-s.x, sintable[spr->ang&2047],-s.y) > 0)
+            if ((spr->cstat & CSTAT_SPRITE_ALIGNMENT) || ((coord_t)s.x*cosglobalang+(coord_t)s.y*singlobalang > 0))
+                if ((spr->cstat & (CSTAT_SPRITE_ONE_SIDED|CSTAT_SPRITE_ALIGNMENT)) != (CSTAT_SPRITE_ONE_SIDED|CSTAT_SPRITE_ALIGNMENT_WALL) || dmulscale6(sintable[(spr->ang+512)&2047],-s.x, sintable[spr->ang&2047],-s.y) > 0)
                     if (renderAddTsprite(i, sectnum))
                         break;
         }
-        
+
         bitmap_set(gotsector, sectnum);
 
         const int32_t onumbunches = numbunches;
@@ -1821,14 +1857,14 @@ static void classicScanSector(int16_t startsectnum)
 #ifdef YAX_ENABLE
                 if (yax_nomaskpass==0 || !yax_isislandwall(w, !yax_globalcf) || (yax_nomaskdidit=1, 0))
 #endif
-                if (bitmap_test(gotsector, nextsectnum) == 0)
+                if (!bitmap_test(gotsector, nextsectnum))
                 {
                     // OV: E2L10
                     coord_t temp = (coord_t)x1*y2-(coord_t)x2*y1;
                     int32_t tempint = temp;
                     if (
 #ifdef YAX_ENABLE
-                        yax_globallev == YAX_MAXDRAWS && 
+                        yax_globallev == YAX_MAXDRAWS &&
 #endif
                         ((uint64_t)tempint+262144) < 524288)  // BXY_MAX?
                         if (mulscale5(tempint,tempint) <= (x2-x1)*(x2-x1)+(y2-y1)*(y2-y1))
@@ -1897,13 +1933,13 @@ skipitaddwall:
 
 void printscans(void)
 {
-    static uint8_t didscan[(MAXWALLSB+7)>>3];
+    static uint8_t didscan[bitmap_size(MAXWALLSB)];
 
     Bmemset(didscan, 0, sizeof(didscan));
 
     for (bssize_t s=0; s<numscans; s++)
     {
-        if (bunchp2[s] >= 0 && (didscan[s>>3] & pow2char[s&7])==0)
+        if (bunchp2[s] >= 0 && !bitmap_test(didscan, s))
         {
             printf("scan ");
 
@@ -1915,13 +1951,13 @@ void printscans(void)
 
                 printf("%s%d(%d) ", cond ? "!" : "", z, thewall[z]);
 
-                if (didscan[z>>3] & pow2char[z&7])
+                if (bitmap_test(didscan, z))
                 {
                     printf("*");
                     break;
                 }
 
-                didscan[z>>3] |= pow2char[z&7];
+                bitmap_set(didscan, z);
                 z = bunchp2[z];
             } while (z >= 0);
 
@@ -2052,9 +2088,9 @@ static void maskwallscan(int32_t x1, int32_t x2, int32_t saturatevplc)
     if ((dwall[x1] < 0) && (dwall[x2] < 0)) return;
 
     vec2_16_t tsiz = tilesiz[globalpicnum];
-    if ((tsiz.x <= 0) || (tsiz.y <= 0)) return;
-
     setgotpic(globalpicnum);
+
+    if ((tsiz.x <= 0) || (tsiz.y <= 0)) return;
 
     vec2_16_t upscale = {};
     globalbufplc = tileLoadScaled(globalpicnum, &upscale);
@@ -3430,7 +3466,8 @@ static void nonpow2_thline(intptr_t bufplc, uint32_t bx, int32_t cntup16, uint32
 //
 static void ceilspritehline(int32_t x2, int32_t y)
 {
-    int32_t x1, v, bx, by;
+    int32_t x1, bx, by;
+    int64_t v;
 
     //x = x1 + (x2-x1)t + (y1-y2)u  ~  x = 160v
     //y = y1 + (y2-y1)t + (x2-x1)u  ~  y = (scrx-160)v
@@ -3438,13 +3475,13 @@ static void ceilspritehline(int32_t x2, int32_t y)
 
     x1 = lastx[y]; if (x2 < x1) return;
 
-    v = int32_t((globalzd*int64_t(horizlookup[y-globalhoriz+horizycent]))>>20);
-    bx = (uint32_t)mulscale14(globalx2*x1+globalx1,v) + globalxpanning;
-    by = (uint32_t)mulscale14(globaly2*x1+globaly1,v) + globalypanning;
-    asm1 = mulscale14(globalx2,v);
-    asm2 = mulscale14(globaly2,v);
+    v = (globalzd*int64_t(horizlookup[y-globalhoriz+horizycent]))>>20;
+    bx = (uint32_t)(((globalx2*x1+globalx1)*v)>>14) + globalxpanning;
+    by = (uint32_t)(((globaly2*x1+globaly1)*v)>>14) + globalypanning;
+    asm1 = int32_t((globalx2*v)>>14);
+    asm2 = int32_t((globaly2*v)>>14);
 
-    asm3 = FP_OFF(palookup[globalpal]) + getpalookupsh(mulscale28(klabs(v),globvis));
+    asm3 = FP_OFF(palookup[globalpal]) + getpalookupsh(int32_t((abs(v)*globvis)>>28));
 
     if (globalispow2)
     {
@@ -3787,23 +3824,23 @@ static void fgrouscan(int32_t dax1, int32_t dax2, int32_t sectnum, char dastat)
 
             globalx3 = globalx2*(1.f/1024.f);
             globaly3 = globaly2*(1.f/1024.f);
-            float bz = (y2*globalzd)*(1.f/65536.f) + globalzx*(1.f/64.f);
+            float bz = (y2*globalzd)*(1.f/65536.f) + globalzx*(1.f/64.f), bzr = 1.f/bz;
             uint8_t *p = (uint8_t*)(ylookup[y2]+x+frameoffset);
             intptr_t* A_C_RESTRICT slopalptr = (intptr_t*)nptr2;
             const char* const A_C_RESTRICT trans = paletteGetBlendTable(0);
             uint32_t u, v;
             int cnt = y2-y1+1;
 #define LINTERPSIZ 4
-            int u0 = Blrintf(1048576.f*globalx3/bz);
-            int v0 = Blrintf(1048576.f*globaly3/bz);
+            int u0 = Blrintf(1048576.f*globalx3*bzr);
+            int v0 = Blrintf(1048576.f*globaly3*bzr);
             switch (globalorientation&0x180)
             {
             case 0:
                 while (cnt > 0)
                 {
-                    bz += bzinc*(1<<LINTERPSIZ);
-                    int u1 = Blrintf(1048576.f*globalx3/bz);
-                    int v1 = Blrintf(1048576.f*globaly3/bz);
+                    bz += bzinc*(1<<LINTERPSIZ), bzr = 1.f/bz;
+                    int u1 = Blrintf(1048576.f*globalx3*bzr);
+                    int v1 = Blrintf(1048576.f*globaly3*bzr);
                     u1 = (u1-u0)>>LINTERPSIZ;
                     v1 = (v1-v0)>>LINTERPSIZ;
                     int cnt2 = min(cnt, 1<<LINTERPSIZ);
@@ -3823,9 +3860,9 @@ static void fgrouscan(int32_t dax1, int32_t dax2, int32_t sectnum, char dastat)
             case 128:
                 while (cnt > 0)
                 {
-                    bz += bzinc*(1<<LINTERPSIZ);
-                    int u1 = Blrintf(1048576.f*globalx3/bz);
-                    int v1 = Blrintf(1048576.f*globaly3/bz);
+                    bz += bzinc*(1<<LINTERPSIZ), bzr = 1.f/bz;
+                    int u1 = Blrintf(1048576.f*globalx3*bzr);
+                    int v1 = Blrintf(1048576.f*globaly3*bzr);
                     u1 = (u1-u0)>>LINTERPSIZ;
                     v1 = (v1-v0)>>LINTERPSIZ;
                     int cnt2 = min(cnt, 1<<LINTERPSIZ);
@@ -3847,9 +3884,9 @@ static void fgrouscan(int32_t dax1, int32_t dax2, int32_t sectnum, char dastat)
             case 256:
                 while (cnt > 0)
                 {
-                    bz += bzinc*(1<<LINTERPSIZ);
-                    int u1 = Blrintf(1048576.f*globalx3/bz);
-                    int v1 = Blrintf(1048576.f*globaly3/bz);
+                    bz += bzinc*(1<<LINTERPSIZ), bzr = 1.f/bz;
+                    int u1 = Blrintf(1048576.f*globalx3*bzr);
+                    int v1 = Blrintf(1048576.f*globaly3*bzr);
                     u1 = (u1-u0)>>LINTERPSIZ;
                     v1 = (v1-v0)>>LINTERPSIZ;
                     int cnt2 = min(cnt, 1<<LINTERPSIZ);
@@ -3874,9 +3911,9 @@ static void fgrouscan(int32_t dax1, int32_t dax2, int32_t sectnum, char dastat)
             case 384:
                 while (cnt > 0)
                 {
-                    bz += bzinc*(1<<LINTERPSIZ);
-                    int u1 = Blrintf(1048576.f*globalx3/bz);
-                    int v1 = Blrintf(1048576.f*globaly3/bz);
+                    bz += bzinc*(1<<LINTERPSIZ), bzr = 1.f/bz;
+                    int u1 = Blrintf(1048576.f*globalx3*bzr);
+                    int v1 = Blrintf(1048576.f*globaly3*bzr);
                     u1 = (u1-u0)>>LINTERPSIZ;
                     v1 = (v1-v0)>>LINTERPSIZ;
                     int cnt2 = min(cnt, 1<<LINTERPSIZ);
@@ -4472,7 +4509,7 @@ static void classicDrawBunches(int32_t bunch)
         int16_t bn[2];
 # if 0
         int32_t obunchchk = (1 && yax_globalbunch>=0 &&
-                             haveymost[yax_globalbunch>>3]&pow2char[yax_globalbunch&7]);
+                             bitmap_test(haveymost, yax_globalbunch));
 
         // if (obunchchk)
         const int32_t x2 = yax_globalbunch*xdimen;
@@ -4492,7 +4529,7 @@ static void classicDrawBunches(int32_t bunch)
         for (i=0; i<2; i++)
             if (checkcf&(1<<i))
             {
-                if (bitmap_test(haveymost, bn[i])==0)
+                if (!bitmap_test(haveymost, bn[i]))
                 {
                     // init yax *most arrays for that bunch
                     bitmap_set(haveymost, bn[i]);
@@ -4864,7 +4901,7 @@ static void classicDrawBunches(int32_t bunch)
             if (numhits < 0)
                 return;
 
-            if (!(wal->cstat&32) && bitmap_test(gotsector, nextsectnum) == 0)
+            if (!(wal->cstat&32) && !bitmap_test(gotsector, nextsectnum))
             {
                 if (umost[x2] < dmost[x2])
                     classicScanSector(nextsectnum);
@@ -4995,8 +5032,9 @@ typedef zint_t voxint_t;
 //
 static void classicDrawVoxel(int32_t dasprx, int32_t daspry, int32_t dasprz, int32_t dasprang,
                              int32_t daxscale, int32_t dayscale, int32_t daindex,
-                             int8_t dashade, char dapal, const int32_t *daumost, const int32_t *dadmost,
-                             const int8_t cstat, const int32_t clipcf, int32_t floorz, int32_t ceilingz)
+                             char dapal, const int32_t *daumost, const int32_t *dadmost,
+                             const int16_t cstat, const int32_t tsprflags, int32_t floorz, int32_t ceilingz,
+                             const int32_t yp)
 {
     int32_t i, j, k, x, y, mip;
 
@@ -5006,8 +5044,9 @@ static void classicDrawVoxel(int32_t dasprx, int32_t daspry, int32_t dasprz, int
     int32_t sprsinang = sintable[dasprang&2047];
 
     i = klabs(dmulscale6(dasprx-globalposx, cosang, daspry-globalposy, sinang));
-    j = getpalookup(mulscale21(globvis,i), dashade)<<8;
-    setupdrawslab(ylookup[1], FP_OFF(palookup[dapal])+j);
+    int32_t const swallx = mulscale19(yp, xdimscale);
+    intptr_t const palookupoffs = FP_OFF(palookup[dapal]) + getpalookupsh(mulscale16(swallx,globvis));
+    setupdrawslab(ylookup[1], palookupoffs);
 
     j = 2097152;
     j *= max(daxscale,dayscale); j >>= 5;  //New hacks (for sized-down voxels)
@@ -5090,7 +5129,7 @@ static void classicDrawVoxel(int32_t dasprx, int32_t daspry, int32_t dasprz, int
     int32_t zoff = dazsiz<<14;
     if (!(cstat & 128))
         zoff += dazpivot<<7;
-    else if ((cstat&48) != 48)
+    else if (!(tsprflags & TSPR_FLAGS_SLAB))
     {
         zoff += dazpivot<<7;
         zoff -= dazsiz<<14;
@@ -5253,7 +5292,7 @@ static void classicDrawVoxel(int32_t dasprx, int32_t daspry, int32_t dasprz, int
                 const int32_t l2 = mulscale(distrecip[clamp((ny+yoff)>>14, 1, DISTRECIPSIZ-1)], dayscale, 12+mip);
                 int32_t cz1 = 0, cz2 = INT32_MAX;
 
-                if (clipcf)
+                if (!(tsprflags & TSPR_FLAGS_SLAB)) // clipcf
                 {
                     cz1 = mulscale32((ceilingoff < 0) ? l1 : l2, ceilingoff) + globalhoriz;
                     cz2 = mulscale32((flooroff < 0) ? l2 : l1, flooroff) + globalhoriz;
@@ -5308,7 +5347,7 @@ static void classicDrawVoxel(int32_t dasprx, int32_t daspry, int32_t dasprz, int
 
                         if (z1 < um) { yplc = yinc*(um-z1); z1 = um; }
                         else yplc = 0;
-                        
+
                         if (cstat & 8)
                             yinc = -yinc;
                         if (cstat & 8)
@@ -5459,8 +5498,9 @@ static void classicDrawSprite(int32_t snum)
     auto const sec = (usectorptr_t)&sector[sectnum];
 
     int32_t cstat=tspr->cstat, tilenum;
+    auto tsprflags = tspr->clipdist;
 
-    if ((cstat&48) != 48)
+    if (!(tsprflags & TSPR_FLAGS_SLAB))
         tileUpdatePicnum(&tspr->picnum, spritenum+32768);
 
     if (!(cstat&2) && alpha > 0.0f)
@@ -5488,15 +5528,16 @@ static void classicDrawSprite(int32_t snum)
 
     tilenum = tspr->picnum;
 
-    if ((cstat&48)==48)
+    if (tsprflags & TSPR_FLAGS_SLAB)
         vtilenum = tilenum; // if the game wants voxels, it gets voxels
-    else if ((cstat & 48) != 32 && usevoxels && tiletovox[tilenum] != -1 && spritenum != -1 && !(spriteext[spritenum].flags&SPREXT_NOTMD))
+    else if (!(cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR) && usevoxels && tiletovox[tilenum] != -1 && spritenum != -1 && !(spriteext[spritenum].flags&SPREXT_NOTMD))
     {
         vtilenum = tiletovox[tilenum];
-        cstat |= 48;
+        tsprflags |= TSPR_FLAGS_SLAB;
+        cstat &= ~CSTAT_SPRITE_ALIGNMENT;
     }
 
-    if ((cstat&48) != 48)
+    if (!(tsprflags & TSPR_FLAGS_SLAB))
     {
         if (spritenum < 0 || tilesiz[tilenum].x <= 0 || tilesiz[tilenum].y <= 0)
             return;
@@ -5520,1163 +5561,9 @@ static void classicDrawSprite(int32_t snum)
         off.y += tspr->yoffset;
     }
 
-    if ((cstat&48) == 0)
+    if (tsprflags & TSPR_FLAGS_SLAB)
     {
-        int32_t startum, startdm;
-        int32_t linum, linuminc;
-
-draw_as_face_sprite:
-        if (yp <= (4<<8)) return;
-
-        int const isiz = divscale19(xdimenscale,yp);
-        int const xv = mulscale16(((int32_t)tspr->xrepeat)<<16,xyaspect);
-        vec2_16_t const span = tilesiz[tilenum];
-        vec2_t const siz = { mulscale30(isiz, xv * span.x), mulscale14(isiz, tspr->yrepeat * span.y) };
-
-        if (/*EDUKE32_PREDICT_FALSE*/((span.x>>11) >= siz.x || span.y >= (siz.y>>1)))
-            return;  //Watch out for divscale overflow
-
-        vec2_16_t upscale = {};
-        tileLoadScaled(tilenum, &upscale);
-
-        x1 = xb-(siz.x>>1);
-        if (span.x&1) x1 += mulscale31(isiz,xv);  //Odd xspans
-        i = mulscale30(isiz,xv*off.x);
-        if ((cstat&4) == 0) x1 -= i; else x1 += i;
-
-        y1 = mulscale16(tspr->z-globalposz,isiz);
-        y1 -= mulscale14(isiz,tspr->yrepeat*off.y);
-        y1 += (globalhoriz<<8)-siz.y;
-        if (cstat&128)
-        {
-            y1 += (siz.y>>1);
-            if (span.y&1) y1 += mulscale15(isiz,tspr->yrepeat);  //Odd yspans
-        }
-
-        x2 = x1+siz.x-1;
-        y2 = y1+siz.y-1;
-        if ((y1|255) >= (y2|255)) return;
-
-        int32_t lx = (x1>>8)+1; if (lx < 0) lx = 0;
-        int32_t rx = (x2>>8); if (rx >= xdimen) rx = xdimen-1;
-        if (lx > rx) return;
-
-        startum = ((sec->ceilingstat&3) == 0) ? globalhoriz+mulscale24(isiz,sec->ceilingz-globalposz)-1 : 0;
-        startdm = ((sec->floorstat&3) == 0) ? globalhoriz+mulscale24(isiz,sec->floorz-globalposz)+1 : INT32_MAX;
-
-        if ((y1>>8) > startum) startum = (y1>>8);
-        if ((y2>>8) < startdm) startdm = (y2>>8);
-
-        if (startum < -32768) startum = -32768;
-        if (startdm > 32767) startdm = 32767;
-        if (startum >= startdm) return;
-
-        if ((cstat&4) == 0)
-        {
-            linuminc = divscale24(span.x<<upscale.x,siz.x);
-            linum = mulscale8((lx<<8)-x1,linuminc);
-        }
-        else
-        {
-            linuminc = -divscale24(span.x<<upscale.x,siz.x);
-            linum = mulscale8((lx<<8)-x2,linuminc);
-        }
-
-        if ((cstat&8) > 0)
-            swaplong(&y1, &y2);
-
-        x = lx;
-#ifdef CLASSIC_SLICE_BY_4
-        for (; x<=rx-4; x+=4)
-        {
-            uwall[x] =   max<int>(startumost[windowxy1.x+x]-windowxy1.y,   startum);
-            uwall[x+1] = max<int>(startumost[windowxy1.x+x+1]-windowxy1.y, startum);
-            uwall[x+2] = max<int>(startumost[windowxy1.x+x+2]-windowxy1.y, startum);
-            uwall[x+3] = max<int>(startumost[windowxy1.x+x+3]-windowxy1.y, startum);
-
-            dwall[x] =   min<int>(startdmost[windowxy1.x+x]-windowxy1.y,   startdm);
-            dwall[x+1] = min<int>(startdmost[windowxy1.x+x+1]-windowxy1.y, startdm);
-            dwall[x+2] = min<int>(startdmost[windowxy1.x+x+2]-windowxy1.y, startdm);
-            dwall[x+3] = min<int>(startdmost[windowxy1.x+x+3]-windowxy1.y, startdm);
-        }
-#endif
-        for (; x<=rx; x++)
-        {
-            uwall[x] = max<int>(startumost[windowxy1.x+x]-windowxy1.y,startum);
-            dwall[x] = min<int>(startdmost[windowxy1.x+x]-windowxy1.y,startdm);
-        }
-
-        int32_t daclip = 0;
-        for (i=smostwallcnt-1; i>=0; i--)
-        {
-            if (smostwalltype[i]&daclip) continue;
-            j = smostwall[i];
-            if ((xb1[j] > rx) || (xb2[j] < lx)) continue;
-            if ((yp <= yb1[j]) && (yp <= yb2[j])) continue;
-            if (spritewallfront(tspr,(int32_t)thewall[j]) && ((yp <= yb1[j]) || (yp <= yb2[j]))) continue;
-
-            const int32_t dalx2 = max(xb1[j],lx);
-            const int32_t darx2 = min(xb2[j],rx);
-
-            switch (smostwalltype[i])
-            {
-            case 0:
-                if (dalx2 <= darx2)
-                {
-                    if ((dalx2 == lx) && (darx2 == rx)) return;
-                    //clearbufbyte(&dwall[dalx2],(darx2-dalx2+1)*sizeof(dwall[0]),0L);
-                    for (k=dalx2; k<=darx2; k++) dwall[k] = 0;
-                }
-                break;
-            case 1:
-                k = smoststart[i] - xb1[j];
-                x = dalx2;
-#ifdef CLASSIC_SLICE_BY_4 // ok, this one is really by 2 ;)
-                for (; x<=darx2-2; x+=2)
-                {
-                    if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
-                    if (smost[k+x+1] > uwall[x+1]) uwall[x+1] = smost[k+x+1];
-                }
-#endif
-                for (; x<=darx2; x++)
-                    if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
-                if ((dalx2 == lx) && (darx2 == rx)) daclip |= 1;
-                break;
-            case 2:
-                k = smoststart[i] - xb1[j];
-                x = dalx2;
-#ifdef CLASSIC_SLICE_BY_4
-                for (; x<=darx2-4; x+=4)
-                {
-                    if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
-                    if (smost[k+x+1] < dwall[x+1]) dwall[x+1] = smost[k+x+1];
-                    if (smost[k+x+2] < dwall[x+2]) dwall[x+2] = smost[k+x+2];
-                    if (smost[k+x+3] < dwall[x+3]) dwall[x+3] = smost[k+x+3];
-                }
-#endif
-                for (; x<=darx2; x++)
-                    if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
-                if ((dalx2 == lx) && (darx2 == rx)) daclip |= 2;
-                break;
-            }
-        }
-
-        if (uwall[rx] >= dwall[rx])
-        {
-            for (x=lx; x<rx; x++)
-                if (uwall[x] < dwall[x]) break;
-            if (x == rx) return;
-        }
-
-        //sprite
-#ifdef YAX_ENABLE
-        if (yax_globallev==YAX_MAXDRAWS || searchit==2)
-#endif
-        if (searchit >= 1 && (searchx >= lx && searchx <= rx))
-            if (searchy >= uwall[searchx] && searchy < dwall[searchx])
-            {
-                searchsector = sectnum; searchwall = spritenum;
-                searchstat = 3; searchit = 1;
-            }
-
-        setup_globals_sprite1(tspr, sec, span.y, off.y, tilenum, cstat, &z1, &z2, upscale);
-
-        qinterpolatedown16((intptr_t)&lwall[lx],rx-lx+1,linum,linuminc);
-        clearbuf(&swall[lx],rx-lx+1,mulscale19(yp,xdimscale));
-
-        {
-#ifdef HIGH_PRECISION_SPRITE
-            union { float f; int32_t i; } sw = {
-                // initialize the float of the union
-                ((cstat&8) ? -1 : 1)
-                * (float)yp * xdimscale
-                * (1<<(22-19)) / (span.y*tspr->yrepeat)
-            };
-
-            clearbuf(&swallf[lx], rx-lx+1, sw.i);
-#endif
-        }
-
-        drawing_sprite = 1;
-
-        if ((cstat&2) == 0)
-            maskwallscan(lx,rx, (cstat&8)==0);
-        else
-            transmaskwallscan(lx,rx, (cstat&8)==0);
-
-        drawing_sprite = 0;
-        globalht = nullptr;
-    }
-    else if ((cstat&48) == 16)
-    {
-        const int32_t xspan = tilesiz[tilenum].x;
-        const int32_t yspan = tilesiz[tilenum].y;
-        const int32_t xv = tspr->xrepeat*sintable[(tspr->ang+2560+1536)&2047];
-        const int32_t yv = tspr->xrepeat*sintable[(tspr->ang+2048+1536)&2047];
-
-        if ((cstat&4) > 0) off.x = -off.x;
-        if ((cstat&8) > 0) off.y = -off.y;
-
-        i = (xspan>>1) + off.x;
-        x1 = tspr->x-globalposx-mulscale16(xv,i); x2 = x1+mulscale16(xv,xspan);
-        y1 = tspr->y-globalposy-mulscale16(yv,i); y2 = y1+mulscale16(yv,xspan);
-
-        vec2_t p1 = get_rel_coords(x1, y1);
-        vec2_t p2 = get_rel_coords(x2, y2);
-
-        if (p1.y <= 0 && p2.y <= 0)
-            return;
-
-        x1 += globalposx; y1 += globalposy;
-        x2 += globalposx; y2 += globalposy;
-
-        int32_t swapped = 0;
-        if (dmulscale32(p1.x, p2.y, -p2.x, p1.y) >= 0)  // If wall's NOT facing you
-        {
-            if ((cstat&64) != 0)
-                return;
-
-            const vec2_t pt = p2;
-            p2 = p1;
-            p1 = pt;
-            i = x1, x1 = x2, x2 = i;
-            i = y1, y1 = y2, y2 = i;
-            swapped = 1;
-        }
-
-        int32_t sx1, sx2, sy1, sy2;
-        if (!get_screen_coords(p1, p2, &sx1, &sy1, &sx2, &sy2))
-            return;
-
-        vec2_16_t upscale = {};
-        tileLoadScaled(tilenum, &upscale);
-
-        const int32_t topinc = -mulscale10(p1.y,xspan<<upscale.x);
-        int32_t top = mulscale3((mulscale10(p1.x,xdimen) - mulscale9(sx1-halfxdimen,p1.y)), xspan<<upscale.x);
-        const int32_t botinc = (p2.y-p1.y)>>8;
-        int32_t bot = mulscale11(p1.x-p2.x,xdimen) + mulscale2(sx1-halfxdimen,botinc);
-
-        j = sx2+3;
-        z = divscale10(top,bot);
-        lwall[sx1] = (z>>8);
-        for (x=sx1+4; x<=j; x+=4)
-        {
-            top += topinc; bot += botinc;
-            zz = z; z = divscale10(top, bot);
-            i = ((z+zz)>>1);
-            lwall[x-3] = ((i+zz)>>9);
-            lwall[x-2] = (i>>8);
-            lwall[x-1] = ((i+z)>>9);
-            lwall[x] = (z>>8);
-        }
-
-        if (lwall[sx1] < 0) lwall[sx1] = 0;
-        if (lwall[sx2] >= (xspan<<upscale.x)) lwall[sx2] = (xspan<<upscale.x)-1;
-
-        if ((swapped^((cstat&4)>0)) > 0)
-        {
-            j = (xspan<<upscale.x)-1;
-            for (x=sx1; x<=sx2; x++)
-                lwall[x] = j-lwall[x];
-        }
-
-        // XXX: UNUSED?
-        rx1[MAXWALLSB-1] = p1.x; ry1[MAXWALLSB-1] = p1.y;
-        rx2[MAXWALLSB-1] = p2.x; ry2[MAXWALLSB-1] = p2.y;
-
-        setup_globals_sprite1(tspr, sec, yspan, off.y, tilenum, cstat, &z1, &z2, upscale);
-
-        if ((sec->ceilingstat&1) == 0 && z1 < sec->ceilingz)
-            z1 = sec->ceilingz;
-        if ((sec->floorstat&1) == 0 && z2 > sec->floorz)
-            z2 = sec->floorz;
-
-        xb1[MAXWALLSB-1] = sx1;
-        xb2[MAXWALLSB-1] = sx2;
-        yb1[MAXWALLSB-1] = sy1;
-        yb2[MAXWALLSB-1] = sy2;
-        owallmost(uwall, MAXWALLSB-1, z1-globalposz);
-        owallmost(dwall, MAXWALLSB-1, z2-globalposz);
-
-        int32_t hplc = divscale19(xdimenscale,sy1);
-        const int32_t hplc2 = divscale19(xdimenscale,sy2);
-        const int32_t idiv = sx2-sx1;
-        int32_t hinc[4] = { idiv ? tabledivide32(hplc2-hplc, idiv) : 0 };
-
-#ifdef HIGH_PRECISION_SPRITE
-        float const cc     = ((1<<19) * fxdimen * (float)yxaspect) * (1.f/320.f);
-        float const loopcc = ((cstat&8) ? -1.f : 1.f) * (float(1<<30) * float(1<<24)) / float(yspan * tspr->yrepeat);
-
-        float hplcf    = cc / sy1;
-        float hincf[4] = { idiv ? (cc / sy2 - hplcf) / idiv : 0 };
-
-#ifdef CLASSIC_SLICE_BY_4
-        hincf[1] = hincf[0] * 2.f;
-        hincf[2] = hincf[0] * 3.f;
-        hincf[3] = hincf[0] * 4.f;
-#endif // CLASSIC_SLICE_BY_4
-#endif // HIGH_PRECISION_SPRITE
-#ifdef CLASSIC_SLICE_BY_4
-        hinc[1] = hinc[0]<<1;
-        hinc[2] = hinc[0]*3;
-        hinc[3] = hinc[0]<<2;
-#endif
-        i = sx1;
-
-#ifdef CLASSIC_SLICE_BY_4
-        for (; i<=sx2-4; i+=4)
-        {
-            swall[i] = (krecipasm(hplc)<<2);
-            swall[i+1] = (krecipasm(hplc+hinc[0])<<2);
-            swall[i+2] = (krecipasm(hplc+hinc[1])<<2);
-            swall[i+3] = (krecipasm(hplc+hinc[2])<<2);
-            hplc += hinc[3];
-#ifdef HIGH_PRECISION_SPRITE
-            swallf[i] =   loopcc/hplcf;
-            swallf[i+1] = loopcc/(hplcf+hincf[0]);
-            swallf[i+2] = loopcc/(hplcf+hincf[1]);
-            swallf[i+3] = loopcc/(hplcf+hincf[2]);
-            hplcf += hincf[3];
-#endif // HIGH_PRECISION_SPRITE
-        }
-#endif // CLASSIC_SLICE_BY_4
-
-        for (; i<=sx2; i++)
-        {
-            swall[i] = (krecipasm(hplc)<<2);
-            hplc += hinc[0];
-#ifdef HIGH_PRECISION_SPRITE
-            swallf[i] = loopcc/hplcf;
-            hplcf += hincf[0];
-#endif
-        }
-
-        for (i=smostwallcnt-1; i>=0; i--)
-        {
-            j = smostwall[i];
-
-            if (xb1[j] > sx2 || xb2[j] < sx1)
-                continue;
-
-            int32_t dalx2 = xb1[j];
-            int32_t darx2 = xb2[j];
-
-            if (max(sy1,sy2) > min(yb1[j],yb2[j]))
-            {
-                if (min(sy1,sy2) > max(yb1[j],yb2[j]))
-                {
-                    x = INT32_MIN;
-                }
-                else
-                {
-                    x = thewall[j]; xp1 = wall[x].x; yp1 = wall[x].y;
-                    x = wall[x].point2; xp2 = wall[x].x; yp2 = wall[x].y;
-
-                    z1 = (xp2-xp1)*(y1-yp1) - (yp2-yp1)*(x1-xp1);
-                    z2 = (xp2-xp1)*(y2-yp1) - (yp2-yp1)*(x2-xp1);
-                    if ((z1 == 0) | (z2 == 0))
-                    {
-                        if ((xp2-xp1)*(tspr->y-yp1) == (tspr->x-xp1)*(yp2-yp1))
-                        {
-                            if (wall[thewall[j]].nextsector == tspr->sectnum)
-                                x = INT32_MIN;
-                            else
-                                x = INT32_MAX;
-                        }
-                        else
-                            x = (z1+z2);
-                    }
-                    else if ((z1^z2) >= 0)
-                        x = (z1+z2);
-                    else
-                    {
-                        z1 = (x2-x1)*(yp1-y1) - (y2-y1)*(xp1-x1);
-                        z2 = (x2-x1)*(yp2-y1) - (y2-y1)*(xp2-x1);
-
-                        if (((z1^z2) >= 0) | (z1 == 0) | (z2 == 0))
-                            x = -(z1+z2);
-                        else
-                        {
-                            if ((xp2-xp1)*(tspr->y-yp1) == (tspr->x-xp1)*(yp2-yp1))
-                            {
-                                if (wall[thewall[j]].nextsector == tspr->sectnum)
-                                    x = INT32_MIN;
-                                else
-                                    x = INT32_MAX;
-                            }
-                            else
-                            {
-                                //INTERSECTION!
-                                x = (xp1-globalposx) + scale(xp2-xp1,z1,z1-z2);
-                                y = (yp1-globalposy) + scale(yp2-yp1,z1,z1-z2);
-
-                                yp1 = dmulscale14(x,cosviewingrangeglobalang,y,sinviewingrangeglobalang);
-
-                                if (yp1 > 0)
-                                {
-                                    xp1 = dmulscale14(y,cosglobalang,-x,singlobalang);
-
-                                    x = halfxdimen + scale(xp1,halfxdimen,yp1);
-                                    if (xp1 >= 0) x++;   //Fix for SIGNED divide
-
-                                    if (z1 < 0)
-                                        { if (dalx2 < x) dalx2 = x; }
-                                    else
-                                        { if (darx2 > x) darx2 = x; }
-                                    x = INT32_MIN+1;
-                                }
-                                else
-                                    x = INT32_MAX;
-                            }
-                        }
-                    }
-                }
-
-                if (x < 0)
-                {
-                    if (dalx2 < sx1) dalx2 = sx1;
-                    if (darx2 > sx2) darx2 = sx2;
-
-                    switch (smostwalltype[i])
-                    {
-                    case 0:
-                        if (dalx2 <= darx2)
-                        {
-                            if ((dalx2 == sx1) && (darx2 == sx2)) return;
-                            //clearbufbyte(&dwall[dalx2],(darx2-dalx2+1)*sizeof(dwall[0]),0L);
-                            for (k=dalx2; k<=darx2; k++) dwall[k] = 0;
-                        }
-                        break;
-                    case 1:
-                        k = smoststart[i] - xb1[j];
-                        x = dalx2;
-#ifdef CLASSIC_SLICE_BY_4
-                        for (; x<=darx2-2; x+=2)
-                        {
-                            if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
-                            if (smost[k+x+1] > uwall[x+1]) uwall[x+1] = smost[k+x+1];
-                        }
-#endif
-                        for (; x<=darx2; x++)
-                            if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
-                        break;
-                    case 2:
-                        k = smoststart[i] - xb1[j];
-                        x = dalx2;
-#ifdef CLASSIC_SLICE_BY_4
-                        for (; x<=darx2-4; x+=4)
-                        {
-                            if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
-                            if (smost[k+x+1] < dwall[x+1]) dwall[x+1] = smost[k+x+1];
-                            if (smost[k+x+2] < dwall[x+2]) dwall[x+2] = smost[k+x+2];
-                            if (smost[k+x+3] < dwall[x+3]) dwall[x+3] = smost[k+x+3];
-                        }
-#endif
-                        for (; x<=darx2; x++)
-                            if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
-                        break;
-                    }
-                }
-            }
-        }
-
-        //sprite
-#ifdef YAX_ENABLE
-        if (yax_globallev==YAX_MAXDRAWS || searchit==2)
-#endif
-        if (searchit >= 1 && (searchx >= sx1 && searchx <= sx2))
-            if (searchy >= uwall[searchx] && searchy <= dwall[searchx])
-            {
-                searchsector = sectnum; searchwall = spritenum;
-                searchstat = 3; searchit = 1;
-            }
-
-        drawing_sprite = 1;
-
-        if ((cstat&2) == 0)
-            maskwallscan(sx1,sx2, (cstat&8)==0);
-        else
-            transmaskwallscan(sx1,sx2, (cstat&8)==0);
-
-        drawing_sprite = 0;
-        globalht = nullptr;
-    }
-    else if ((cstat&48) == 32)
-    {
-        if ((cstat&64) != 0)
-            if ((globalposz > tspriteGetZOfSlope(tspr, globalposx, globalposy)) == ((cstat&8)==0))
-                return;
-
-        if ((cstat&4) > 0) off.x = -off.x;
-        if ((cstat&8) > 0) off.y = -off.y;
-        vec2_16_t span = tilesiz[tilenum];
-        const int32_t ratio = nsqrtasm(slope * slope + 16777216);
-
-        //Rotate center point
-        dax = tspr->x-globalposx;
-        day = tspr->y-globalposy;
-        const int32_t cz = dmulscale10(cosglobalang,dax,singlobalang,day);
-        const int32_t cx = dmulscale10(cosglobalang,day,-singlobalang,dax);
-
-        //Get top-left corner
-        int32_t const cosang = dmulscale14(sintable[(tspr->ang+512)&2047], cosglobalang, sintable[tspr->ang&2047], singlobalang);
-        int32_t const sinang = dmulscale14(sintable[(tspr->ang+512)&2047], -singlobalang, sintable[tspr->ang&2047], cosglobalang);
-        dax = (((span.x>>1)+off.x)*tspr->xrepeat)<<8;
-        day = divscale20(((span.y>>1)+off.y)*tspr->yrepeat,ratio);
-        rzi[0] = cz+dmulscale20(sinang,dax,cosang,day);
-        rxi[0] = cx+dmulscale20(sinang,day,-cosang,dax);
-
-        //Get other 3 corners
-        dax = (span.x*tspr->xrepeat)<<8;
-        day = divscale20(span.y*tspr->yrepeat,ratio);
-        rzi[1] = rzi[0]-mulscale20(sinang,dax);
-        rxi[1] = rxi[0]+mulscale20(cosang,dax);
-        dax = -mulscale20(cosang,day);
-        day = -mulscale20(sinang,day);
-        rzi[2] = rzi[1]+dax; rxi[2] = rxi[1]+day;
-        rzi[3] = rzi[0]+dax; rxi[3] = rxi[0]+day;
-
-        float sgzd = 0, sgzx = 0, sgz = 0, sdaz = 0;
-        vec2f_t sg_f = {}, sg_f2 = {};
-        vec2_t sg1 = {};
-
-        if (slope != 0)
-        {
-            int daz = 0;
-            float const fslope  = (float)slope;
-            float const fsinang = (float)sinang;
-            float const fcosang = (float)cosang;
-
-            for (i = 0; i < 4; i++)
-            {
-                int const j = dmulscale8(-sinang, rxi[i]-cx,
-                                        -cosang, rzi[i]-cz);
-                int const z = (tspr->z + mulscale18(slope, j) - globalposz);
-
-                if (i == 0)
-                    daz = z;
-
-                ryi[i] = scale(z,yxaspect,320<<8);
-            }
-
-            float const fi = (0-halfxdimen)*xdimenrecip;
-            sg_f = { fcosang*float(xdimenrecip)*(1.f/524288.f), fsinang*float(xdimenrecip)*(1.f/524288.f) };
-            sg_f2 = { -fsinang*float(viewingrangerecip)*(1.f/4096.f) + fcosang*fi*(1.f/134217728.f),
-                       fcosang*float(viewingrangerecip)*(1.f/4096.f) + fsinang*fi*(1.f/134217728.f) };
-
-            sgzd = xdimscale*512.f;
-            sgzx = sg_f2.y*fslope*(1.f/256.f) + (1-globalhoriz)*sgzd*(1.f/1024.f);
-            sgz = sg_f.y*fslope*(1.f/65536.f);
-
-            float const fx = 64.f/float(tspr->xrepeat);
-            float const fy = 64.f/float(tspr->yrepeat) * float(ratio) * (1.f / 4096.f);
-
-            sg_f.x *= fx;
-            sg_f.y *= fy;
-            sg_f2.x *= fx;
-            sg_f2.y *= fy;
-
-            sg1 = { divscale6(dmulscale10(rxi[0], -cosang, rzi[0], sinang), tspr->xrepeat),
-                    mulscale12(divscale6(dmulscale10(rxi[0], sinang, rzi[0], cosang), tspr->yrepeat), ratio) };
-
-            if (cstat & 4)
-            {
-                sg1.x = -sg1.x;
-                sg_f2.x = -sg_f2.x;
-                sg_f.x = -sg_f.x;
-            }
-
-            sdaz = fslope*(fsinang*float(rxi[0])+fcosang*float(rzi[0]))*(1.f/262144.f) + float(daz)*256.f;
-            sg_f = { (sg_f.x*sdaz)*(1.f/268435456.f), (sg_f.y*-sdaz)*(1.f/268435456.f) };
-            sg_f2 = { (sg_f2.x*sdaz)*(1.f/1048576.f), (sg_f2.y*-sdaz)*(1.f/1048576.f) };
-
-            rzi[0] = mulscale16(rzi[0], viewingrange);
-            rzi[1] = mulscale16(rzi[1], viewingrange);
-            rzi[2] = mulscale16(rzi[2], viewingrange);
-            rzi[3] = mulscale16(rzi[3], viewingrange);
-
-            //If ceilsprite is above you, reverse order of points
-            if (globalposz > tspriteGetZOfSlope(tspr, globalposx, globalposy))
-            {
-                i = rxi[1]; rxi[1] = rxi[3]; rxi[3] = i;
-                i = rzi[1]; rzi[1] = rzi[3]; rzi[3] = i;
-                i = ryi[1]; ryi[1] = ryi[3]; ryi[3] = i;
-            }
-        }
-        else
-        {
-            //Put all points on same z
-            ryi[0] = scale((tspr->z-globalposz),yxaspect,320<<8);
-            if (ryi[0] == 0) return;
-            ryi[1] = ryi[2] = ryi[3] = ryi[0];
-
-            if ((cstat&4) == 0)
-                { z = 0; z1 = 1; z2 = 3; }
-            else
-                { z = 1; z1 = 0; z2 = 2; }
-
-            dax = rzi[z1]-rzi[z]; day = rxi[z1]-rxi[z];
-            int32_t bot = dmulscale8(dax,dax,day,day);
-            if ((klabs(dax)>>13) >= bot || (klabs(day)>>13) >= bot)
-                return;
-            globalx1 = divscale18(dax,bot);
-            globalx2 = divscale18(day,bot);
-
-            dax = rzi[z2]-rzi[z]; day = rxi[z2]-rxi[z];
-            bot = dmulscale8(dax,dax,day,day);
-            if ((klabs(dax)>>13) >= bot || (klabs(day)>>13) >= bot)
-                return;
-            globaly1 = divscale18(dax,bot);
-            globaly2 = divscale18(day,bot);
-
-            //Calculate globals for hline texture mapping function
-            globalxpanning = rxi[z];
-            globalypanning = rzi[z];
-            globalzd = decltype(globalzd)(ryi[z]);
-
-            rzi[0] = mulscale16(rzi[0],viewingrange);
-            rzi[1] = mulscale16(rzi[1],viewingrange);
-            rzi[2] = mulscale16(rzi[2],viewingrange);
-            rzi[3] = mulscale16(rzi[3],viewingrange);
-
-            if (ryi[0] < 0)   //If ceilsprite is above you, reverse order of points
-            {
-                i = rxi[1]; rxi[1] = rxi[3]; rxi[3] = i;
-                i = rzi[1]; rzi[1] = rzi[3]; rzi[3] = i;
-            }
-        }
-
-        //Clip polygon in 3-space
-        int32_t npoints = 4;
-
-        //Clip edge 1
-        int32_t npoints2 = 0;
-        int32_t zzsgn = rxi[0]+rzi[0], zsgn;
-        for (z=0; z<npoints; z++)
-        {
-            zz = z+1; if (zz == npoints) zz = 0;
-            zsgn = zzsgn; zzsgn = rxi[zz]+rzi[zz];
-            if (zsgn >= 0)
-            {
-                rxi2[npoints2] = rxi[z]; ryi2[npoints2] = ryi[z]; rzi2[npoints2] = rzi[z];
-                npoints2++;
-            }
-            if ((zsgn^zzsgn) < 0)
-            {
-                int32_t t = divscale30(zsgn,zsgn-zzsgn);
-                rxi2[npoints2] = rxi[z] + mulscale30(t,rxi[zz]-rxi[z]);
-                ryi2[npoints2] = ryi[z] + mulscale30(t,ryi[zz]-ryi[z]);
-                rzi2[npoints2] = rzi[z] + mulscale30(t,rzi[zz]-rzi[z]);
-                npoints2++;
-            }
-        }
-        if (npoints2 <= 2) return;
-
-        //Clip edge 2
-        npoints = 0;
-        zzsgn = rxi2[0]-rzi2[0];
-        for (z=0; z<npoints2; z++)
-        {
-            zz = z+1; if (zz == npoints2) zz = 0;
-            zsgn = zzsgn; zzsgn = rxi2[zz]-rzi2[zz];
-            if (zsgn <= 0)
-            {
-                rxi[npoints] = rxi2[z]; ryi[npoints] = ryi2[z]; rzi[npoints] = rzi2[z];
-                npoints++;
-            }
-            if ((zsgn^zzsgn) < 0)
-            {
-                int32_t t = divscale30(zsgn,zsgn-zzsgn);
-                rxi[npoints] = rxi2[z] + mulscale30(t,rxi2[zz]-rxi2[z]);
-                ryi[npoints] = ryi2[z] + mulscale30(t,ryi2[zz]-ryi2[z]);
-                rzi[npoints] = rzi2[z] + mulscale30(t,rzi2[zz]-rzi2[z]);
-                npoints++;
-            }
-        }
-        if (npoints <= 2) return;
-
-        //Clip edge 3
-        npoints2 = 0;
-        zzsgn = ryi[0]*halfxdimen + (rzi[0]*(globalhoriz-0));
-        for (z=0; z<npoints; z++)
-        {
-            zz = z+1; if (zz == npoints) zz = 0;
-            zsgn = zzsgn; zzsgn = ryi[zz]*halfxdimen + (rzi[zz]*(globalhoriz-0));
-            if (zsgn >= 0)
-            {
-                rxi2[npoints2] = rxi[z];
-                ryi2[npoints2] = ryi[z];
-                rzi2[npoints2] = rzi[z];
-                npoints2++;
-            }
-            if ((zsgn^zzsgn) < 0)
-            {
-                int32_t t = divscale30(zsgn,zsgn-zzsgn);
-                rxi2[npoints2] = rxi[z] + mulscale30(t,rxi[zz]-rxi[z]);
-                ryi2[npoints2] = ryi[z] + mulscale30(t,ryi[zz]-ryi[z]);
-                rzi2[npoints2] = rzi[z] + mulscale30(t,rzi[zz]-rzi[z]);
-                npoints2++;
-            }
-        }
-        if (npoints2 <= 2) return;
-
-        //Clip edge 4
-        npoints = 0;
-        zzsgn = ryi2[0]*halfxdimen + (rzi2[0]*(globalhoriz-ydimen));
-        for (z=0; z<npoints2; z++)
-        {
-            zz = z+1; if (zz == npoints2) zz = 0;
-            zsgn = zzsgn; zzsgn = ryi2[zz]*halfxdimen + (rzi2[zz]*(globalhoriz-ydimen));
-            if (zsgn <= 0)
-            {
-                rxi[npoints] = rxi2[z];
-                ryi[npoints] = ryi2[z];
-                rzi[npoints] = rzi2[z];
-                npoints++;
-            }
-            if ((zsgn^zzsgn) < 0)
-            {
-                int32_t t = divscale30(zsgn,zsgn-zzsgn);
-                rxi[npoints] = rxi2[z] + mulscale30(t,rxi2[zz]-rxi2[z]);
-                ryi[npoints] = ryi2[z] + mulscale30(t,ryi2[zz]-ryi2[z]);
-                rzi[npoints] = rzi2[z] + mulscale30(t,rzi2[zz]-rzi2[z]);
-                npoints++;
-            }
-        }
-        if (npoints <= 2) return;
-
-        //Project onto screen
-        int32_t lpoint = -1, lmax = INT32_MAX;
-        int32_t rpoint = -1, rmax = INT32_MIN;
-        for (z=0; z<npoints; z++)
-        {
-            xsi[z] = scale(rxi[z],xdimen<<15,rzi[z]) + (xdimen<<15);
-            ysi[z] = scale(ryi[z],xdimen<<15,rzi[z]) + (globalhoriz<<16);
-            if (xsi[z] < 0) xsi[z] = 0;
-            if (xsi[z] > (xdimen<<16)) xsi[z] = (xdimen<<16);
-            if (ysi[z] < ((int32_t)0<<16)) ysi[z] = ((int32_t)0<<16);
-            if (ysi[z] > ((int32_t)ydimen<<16)) ysi[z] = ((int32_t)ydimen<<16);
-            if (xsi[z] < lmax) lmax = xsi[z], lpoint = z;
-            if (xsi[z] > rmax) rmax = xsi[z], rpoint = z;
-        }
-
-        //Get uwall arrays
-        for (z=lpoint; z!=rpoint; z=zz)
-        {
-            zz = z+1; if (zz == npoints) zz = 0;
-
-            dax1 = ((xsi[z]+65535)>>16);
-            dax2 = ((xsi[zz]+65535)>>16);
-            if (dax2 > dax1)
-            {
-                int32_t yinc = divscale16(ysi[zz]-ysi[z],xsi[zz]-xsi[z]);
-                y = ysi[z] + mulscale16((dax1<<16)-xsi[z],yinc);
-                qinterpolatedown16short((intptr_t)(&uwall[dax1]),dax2-dax1,y,yinc);
-            }
-        }
-
-        //Get dwall arrays
-        for (; z!=lpoint; z=zz)
-        {
-            zz = z+1; if (zz == npoints) zz = 0;
-
-            dax1 = ((xsi[zz]+65535)>>16);
-            dax2 = ((xsi[z]+65535)>>16);
-            if (dax2 > dax1)
-            {
-                int32_t yinc = divscale16(ysi[zz]-ysi[z],xsi[zz]-xsi[z]);
-                y = ysi[zz] + mulscale16((dax1<<16)-xsi[zz],yinc);
-                qinterpolatedown16short((intptr_t)(&dwall[dax1]),dax2-dax1,y,yinc);
-            }
-        }
-
-
-        const int32_t lx = ((lmax+65535)>>16);
-        const int32_t rx = min(((rmax+65535)>>16), xdim-1);
-        // min(): OOB prevention. Simple test case: have a floor-aligned sprite
-        // to the right of the player. Slowly rotate right toward it. When it
-        // just becomes visible, the condition rx == xdim can occur.
-
-        // Don't pointlessly keep going. If the following condition holds, the
-        // ceilspritescan() at the end of our block would not draw any lines,
-        // and moreover may access uwall[] OOB (with x1==xdim).
-        if (rx-1 < lx)
-            return;
-
-        for (x=lx; x<=rx; x++)
-        {
-            uwall[x] = max<int>(uwall[x],startumost[x+windowxy1.x]-windowxy1.y);
-            dwall[x] = min<int>(dwall[x],startdmost[x+windowxy1.x]-windowxy1.y);
-        }
-
-        //Additional uwall/dwall clipping goes here
-        for (i=smostwallcnt-1; i>=0; i--)
-        {
-            j = smostwall[i];
-            if ((xb1[j] > rx) || (xb2[j] < lx)) continue;
-            if ((yp <= yb1[j]) && (yp <= yb2[j])) continue;
-
-            //if (spritewallfront(tspr,thewall[j]) == 0)
-            x = thewall[j]; xp1 = wall[x].x; yp1 = wall[x].y;
-            x = wall[x].point2; xp2 = wall[x].x; yp2 = wall[x].y;
-            x = (xp2-xp1)*(tspr->y-yp1)-(tspr->x-xp1)*(yp2-yp1);
-            if ((yp > yb1[j]) && (yp > yb2[j])) x = -1;
-            if ((x >= 0) && ((x != 0) || (wall[thewall[j]].nextsector != tspr->sectnum))) continue;
-
-            const int32_t dalx2 = max(xb1[j],lx);
-            const int32_t darx2 = min(xb2[j],rx);
-
-            switch (smostwalltype[i])
-            {
-            case 0:
-                if (dalx2 <= darx2)
-                {
-                    if ((dalx2 == lx) && (darx2 == rx)) return;
-                    //clearbufbyte(&dwall[dalx2],(darx2-dalx2+1)*sizeof(dwall[0]),0L);
-                    for (x=dalx2; x<=darx2; x++) dwall[x] = 0;
-                }
-                break;
-            case 1:
-                k = smoststart[i] - xb1[j];
-                for (x=dalx2; x<=darx2; x++)
-                    if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
-                break;
-            case 2:
-                k = smoststart[i] - xb1[j];
-                for (x=dalx2; x<=darx2; x++)
-                    if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
-                break;
-            }
-        }
-
-        //sprite
-#ifdef YAX_ENABLE
-        if (yax_globallev==YAX_MAXDRAWS || searchit==2)
-#endif
-        if (searchit >= 1 && (searchx >= lx && searchx <= rx))
-            if (searchy >= uwall[searchx] && searchy <= dwall[searchx])
-            {
-                searchsector = sectnum; searchwall = spritenum;
-                searchstat = 3; searchit = 1;
-            }
-
-        globalorientation = cstat;
-        globalpicnum = tilenum;
-        if ((unsigned)globalpicnum >= (unsigned)MAXTILES) globalpicnum = 0;
-
-        setgotpic(globalpicnum);
-
-        vec2_16_t upscale = {};
-        globalbufplc = tileLoadScaled(globalpicnum, &upscale);
-
-        if (slope != 0)
-        {
-            x = picsiz[globalpicnum]; y = ((x>>4)&15); x &= 15;
-            x += upscale.x;
-            y += upscale.y;
-            sg1 = { divscale20(sg1.x, span.x) >> 16, divscale20(sg1.y, span.y) >> 16 };
-            vec2f_t const tmp = { 256.f/float(span.x), 256.f/float(span.y) };
-            sg_f2.x *= tmp.x;
-            sg_f2.y *= tmp.y;
-            sg_f.x *= tmp.x;
-            sg_f.y *= tmp.y;
-            span.x <<= upscale.x;
-            span.y <<= upscale.y;
-            int const ispow2 = (pow2long[x]==span.x && pow2long[y]==span.y);
-
-            //asm1 = -(globalzd>>(16-BITSOFPRECISION));
-#define LINTERPSIZ 4
-            float const bzinc = -sgzd*(1.f/65536.f) * (1<<LINTERPSIZ);
-            int32_t const vis = (sec->visibility != 0) ? mulscale4(globalhisibility, (uint8_t)(sec->visibility+16)) : globalhisibility;
-            globvis = ((((int64_t)(vis*sdaz)) >> 13) * xdimscale) >> 16;
-
-            intptr_t fj = FP_OFF(palookup[globalpal]);
-
-            setupslopevlin_alsotrans(x + (y<<8),globalbufplc,-ylookup[1]);
-
-            int32_t const l = Blrintf((sgzd)*(1.f/65536.f));
-
-            int32_t const shinc = Blrintf(sgz*xdimenscale*(1.f/65536.f));
-
-            int32_t shoffs = (shinc > 0) ? (4 << 15) : ((16380 - ydimen) << 15);  // JBF: was 2044
-            int32_t y1 = uwall[lx];
-
-            int32_t m1 = Blrintf((y1*sgzd)*(1.f/65536.f) + sgzx*(1.f/64.f));
-            //Avoid visibility overflow by crossing horizon
-            m1 += klabs(l);
-            int32_t m2 = m1+l;
-            int32_t shy1 = y1+(shoffs>>15);
-            int32_t shy2;
-            if ((unsigned)shy1 >= SLOPALOOKUPSIZ-1)
-            {
-                LOG_F(ERROR, "%s:%d: slopalookup[%" PRId32 "] overflow drawing sprite %d!", EDUKE32_FUNCTION, __LINE__, shy1, spritenum);
-                return;
-            }
-
-            intptr_t *mptr1 = &slopalookup[shy1]; intptr_t *mptr2 = mptr1+1;
-            sg_f2.x += sg_f.x * lx;
-            sg_f2.y += sg_f.y * lx;
-            sgzx += sgz * lx;
-            shoffs += shinc *lx;
-
-            for (int x=lx; x<rx; x++)
-            {
-                y1 = uwall[x]; y2 = dwall[x]-1;
-                if (y1 <= y2)
-                {
-                    shy1 = y1+(shoffs>>15);
-                    shy2 = y2+(shoffs>>15);
-
-                    // Ridiculously steep gradient?
-                    if ((unsigned)shy1 >= SLOPALOOKUPSIZ || (unsigned)shy2 >= SLOPALOOKUPSIZ)
-                    {
-                        LOG_F(ERROR, "%s:%d: slopalookup[%" PRId32 "] overflow drawing spritenum %d!", EDUKE32_FUNCTION, __LINE__,
-                                   (unsigned)shy1 >= SLOPALOOKUPSIZ ? shy1 : shy2, spritenum);
-                        goto next_most;
-                    }
-
-                    intptr_t *nptr1 = &slopalookup[shy1];
-                    intptr_t *nptr2 = &slopalookup[shy2];
-
-                    while (nptr1 <= mptr1)
-                    {
-                        *mptr1-- = fj + getpalookupsh(mulscale24(krecipasm(m1),globvis));
-                        m1 -= l;
-                    }
-                    while (nptr2 >= mptr2)
-                    {
-                        *mptr2++ = fj + getpalookupsh(mulscale24(krecipasm(m2),globvis));
-                        m2 += l;
-                    }
-
-                    vec2f_t const sg_f3 = { sg_f2.x*(1.f/1024.f)*1048576.f, sg_f2.y*(1.f/1024.f)*1048576.f };
-                    float bz = (y2*sgzd)*(1.f/65536.f) + sgzx*(1.f/64.f);
-                    uint8_t *p = (uint8_t*)(ylookup[y2]+x+frameoffset);
-                    intptr_t* A_C_RESTRICT slopalptr = (intptr_t*)nptr2;
-                    int cnt = y2-y1+1;
-                    int u0 = Blrintf(sg_f3.x/bz);
-                    int v0 = Blrintf(sg_f3.y/bz);
-                    if (ispow2)
-                    {
-                        if ((cstat&2)==0)
-                        {
-                            while (cnt > 0)
-                            {
-                                bz += bzinc;
-                                int const u1 = ((int)(sg_f3.x/bz)-u0)>>LINTERPSIZ;
-                                int const v1 = ((int)(sg_f3.y/bz)-v0)>>LINTERPSIZ;
-                                int cnt2 = min(cnt, 1<<LINTERPSIZ);
-                                for (; cnt2>0; cnt2--)
-                                {
-                                    uint16_t u = (sg1.x+u0)&0xffff;
-                                    uint16_t v = (sg1.y+v0)&0xffff;
-                                    char ch = ggbuf[((u>>(16-gglogx))<<gglogy)+(v>>(16-gglogy))];
-                                    if (ch != 255)
-                                        *p = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
-                                    slopalptr--;
-                                    p += ggpinc;
-                                    u0 += u1;
-                                    v0 += v1;
-                                }
-                                cnt -= 1<<LINTERPSIZ;
-                            }
-                        }
-                        else
-                        {
-                            const char* const trans = paletteGetBlendTable(globalblend);
-                            if (cstat & 512)
-                            {
-                                while (cnt > 0)
-                                {
-                                    bz += bzinc;
-                                    int const u1 = ((int)(sg_f3.x/bz)-u0)>>LINTERPSIZ;
-                                    int const v1 = ((int)(sg_f3.y/bz)-v0)>>LINTERPSIZ;
-                                    int cnt2 = min(cnt, 1<<LINTERPSIZ);
-                                    for (; cnt2>0; cnt2--)
-                                    {
-                                        uint16_t u = (sg1.x+u0)&0xffff;
-                                        uint16_t v = (sg1.y+v0)&0xffff;
-                                        char ch = ggbuf[((u>>(16-gglogx))<<gglogy)+(v>>(16-gglogy))];
-                                        if (ch != 255)
-                                        {
-                                            ch = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
-                                            *p = trans[(ch<<8)|*p];
-                                        }
-                                        slopalptr--;
-                                        p += ggpinc;
-                                        u0 += u1;
-                                        v0 += v1;
-                                    }
-                                    cnt -= 1<<LINTERPSIZ;
-                                }
-                            }
-                            else
-                            {
-                                while (cnt > 0)
-                                {
-                                    bz += bzinc;
-                                    int const u1 = ((int)(sg_f3.x/bz)-u0)>>LINTERPSIZ;
-                                    int const v1 = ((int)(sg_f3.y/bz)-v0)>>LINTERPSIZ;
-                                    int cnt2 = min(cnt, 1<<LINTERPSIZ);
-                                    for (; cnt2>0; cnt2--)
-                                    {
-                                        uint16_t u = (sg1.x+u0)&0xffff;
-                                        uint16_t v = (sg1.y+v0)&0xffff;
-                                        char ch = ggbuf[((u>>(16-gglogx))<<gglogy)+(v>>(16-gglogy))];
-                                        if (ch != 255)
-                                        {
-                                            ch = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
-                                            *p = trans[(*p<<8)|ch];
-                                        }
-                                        slopalptr--;
-                                        p += ggpinc;
-                                        u0 += u1;
-                                        v0 += v1;
-                                    }
-                                    cnt -= 1<<LINTERPSIZ;
-                                }
-                            }
-                        }
-                    }
-                    else // the slow path...
-                    {
-                        if ((cstat&2)==0)
-                        {
-                            while (cnt > 0)
-                            {
-                                bz += bzinc;
-                                int const u1 = ((int)(sg_f3.x/bz)-u0)>>LINTERPSIZ;
-                                int const v1 = ((int)(sg_f3.y/bz)-v0)>>LINTERPSIZ;
-                                int cnt2 = min(cnt, 1<<LINTERPSIZ);
-                                for (; cnt2>0; cnt2--)
-                                {
-                                    uint16_t u = (sg1.x+u0)&0xffff;
-                                    uint16_t v = (sg1.y+v0)&0xffff;
-                                    char ch = ggbuf[mulscale16(u, span.x)*span.y+mulscale16(v, span.y)];
-                                    if (ch != 255)
-                                        *p = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
-                                    slopalptr--;
-                                    p += ggpinc;
-                                    u0 += u1;
-                                    v0 += v1;
-                                }
-                                cnt -= 1<<LINTERPSIZ;
-                            }
-                        }
-                        else
-                        {
-                            const char* const trans = paletteGetBlendTable(globalblend);
-                            if (cstat & 512)
-                            {
-                                while (cnt > 0)
-                                {
-                                    bz += bzinc;
-                                    int const u1 = ((int)(sg_f3.x/bz)-u0)>>LINTERPSIZ;
-                                    int const v1 = ((int)(sg_f3.y/bz)-v0)>>LINTERPSIZ;
-                                    int cnt2 = min(cnt, 1<<LINTERPSIZ);
-                                    for (; cnt2>0; cnt2--)
-                                    {
-                                        uint16_t u = (sg1.x+u0)&0xffff;
-                                        uint16_t v = (sg1.y+v0)&0xffff;
-                                        char ch = ggbuf[mulscale16(u, span.x)*span.y+mulscale16(v, span.y)];
-                                        if (ch != 255)
-                                        {
-                                            ch = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
-                                            *p = trans[(ch<<8)|*p];
-                                        }
-                                        slopalptr--;
-                                        p += ggpinc;
-                                        u0 += u1;
-                                        v0 += v1;
-                                    }
-                                    cnt -= 1<<LINTERPSIZ;
-                                }
-                            }
-                            else
-                            {
-                                while (cnt > 0)
-                                {
-                                    bz += bzinc;
-                                    int const u1 = ((int)(sg_f3.x/bz)-u0)>>LINTERPSIZ;
-                                    int const v1 = ((int)(sg_f3.y/bz)-v0)>>LINTERPSIZ;
-                                    int cnt2 = min(cnt, 1<<LINTERPSIZ);
-                                    for (; cnt2>0; cnt2--)
-                                    {
-                                        uint16_t u = (sg1.x+u0)&0xffff;
-                                        uint16_t v = (sg1.y+v0)&0xffff;
-                                        char ch = ggbuf[mulscale16(u, span.x)*span.y+mulscale16(v, span.y)];
-                                        if (ch != 255)
-                                        {
-                                            ch = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
-                                            *p = trans[(*p<<8)|ch];
-                                        }
-                                        slopalptr--;
-                                        p += ggpinc;
-                                        u0 += u1;
-                                        v0 += v1;
-                                    }
-                                    cnt -= 1<<LINTERPSIZ;
-                                }
-                            }
-                        }
-                    }
-#undef LINTERPSIZ
-                    if ((x&15) == 0) faketimerhandler();
-                }
-next_most:
-                sg_f2.x += sg_f.x;
-                sg_f2.y += sg_f.y;
-                sgzx += sgz;
-                shoffs += shinc;
-            }
-        }
-        else
-        {
-            globvis = mulscale16(globalhisibility,viewingrange);
-            if (sec->visibility != 0) globvis = mulscale4(globvis, (uint8_t)(sec->visibility+16));
-
-            x = picsiz[globalpicnum]; y = ((x>>4)&15); x &= 15;
-            x += upscale.x;
-            y += upscale.y;
-#if 0
-            if (pow2long[x] != xspan)
-            {
-                x++;
-                globalx1 = mulscale(globalx1,xspan,x);
-                globalx2 = mulscale(globalx2,xspan,x);
-            }
-#endif
-            dax = globalxpanning; day = globalypanning;
-            globalxpanning = -((globalx1*day+globalx2*dax)<<6);
-            globalypanning = -((globaly1*day+globaly2*dax)<<6);
-
-            globalx2 = mulscale16(globalx2,viewingrange);
-            globaly2 = mulscale16(globaly2,viewingrange);
-            globalzd = decltype(globalzd)((globalzd*int64_t(viewingrangerecip))>>4);
-
-            globalx1 = (globalx1-globalx2)*halfxdimen;
-            globaly1 = (globaly1-globaly2)*halfxdimen;
-
-            if ((cstat&2) == 0)
-                msethlineshift(x,y);
-            else
-                tsethlineshift(x,y);
-
-            span.x <<= upscale.x;
-            span.y <<= upscale.y;
-
-            globalispow2 = (pow2long[x]==span.x && pow2long[y]==span.y);
-            globalxspan = span.x;
-            globalyspan = span.y;
-
-            //Draw it!
-            ceilspritescan(lx,rx-1);
-            globalispow2 = 1;
-        }
-    }
-    else if ((cstat&48) == 48)
-    {
-        const int32_t daxrepeat = ((sprite[spritenum].cstat&48)==16) ?
+        const int32_t daxrepeat = ((sprite[spritenum].cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL) ?
             (tspr->xrepeat * 5) / 4 :
             tspr->xrepeat;
 
@@ -6689,7 +5576,7 @@ next_most:
             lwall[x] = startumost[x+windowxy1.x]-windowxy1.y;
             swall[x] = startdmost[x+windowxy1.x]-windowxy1.y;
         }
-        if ((tspr->cstat & 48) == 16)
+        if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL)
         {
             const int32_t xspan = tilesiz[tilenum].x;
             //const int32_t yspan = tilesiz[tilenum].y;
@@ -6942,10 +5829,11 @@ next_most:
         off.x = tspr->xoffset;
         off.y = /*picanm[sprite[tspr->owner].picnum].yofs +*/ tspr->yoffset;
         if (cstat & 4) off.x = -off.x;
-        if ((cstat & 8) && (tspr->cstat&48) != 0) off.y = -off.y;
+        if ((cstat & 8) && ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_FACING || (tspr->clipdist & TSPR_FLAGS_SLAB)))
+            off.y = -off.y;
         tspr->z -= off.y * tspr->yrepeat << 2;
 
-        const float xfactor = (tspr->cstat&48) != 16 ? (256.f/320.f) : 1.f;
+        const float xfactor = ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_WALL || (tspr->clipdist & TSPR_FLAGS_SLAB)) ? (256.f/320.f) : 1.f;
         const int32_t xv = (int32_t)(tspr->xrepeat*sintable[(tspr->ang+2560+1536)&2047]*xfactor);
         const int32_t yv = (int32_t)(tspr->xrepeat*sintable[(tspr->ang+2048+1536)&2047]*xfactor);
 
@@ -7022,7 +5910,1234 @@ next_most:
         const int32_t floorz = (sec->floorstat&3) == 0 ? sec->floorz : INT32_MAX;
 
         classicDrawVoxel(x,y,z,i,daxrepeat,(int32_t)tspr->yrepeat,vtilenum,
-            tspr->shade,tspr->pal,lwall,swall,tspr->cstat,(tspr->cstat&48)!=48,floorz,ceilingz);
+            tspr->pal,lwall,swall,tspr->cstat,tspr->clipdist,floorz,ceilingz,yp);
+    }
+    else if ((cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_FACING)
+    {
+        int32_t startum, startdm;
+        int32_t linum, linuminc;
+
+draw_as_face_sprite:
+        if (yp <= (4<<8)) return;
+
+        int const isiz = divscale19(xdimenscale,yp);
+        int const xv = mulscale16(((int32_t)tspr->xrepeat)<<16,xyaspect);
+        vec2_16_t const span = tilesiz[tilenum];
+        vec2_t const siz = { mulscale30(isiz, xv * span.x), mulscale14(isiz, tspr->yrepeat * span.y) };
+
+        if (/*EDUKE32_PREDICT_FALSE*/((span.x>>11) >= siz.x || span.y >= (siz.y>>1)))
+            return;  //Watch out for divscale overflow
+
+        vec2_16_t upscale = {};
+        tileLoadScaled(tilenum, &upscale);
+
+        x1 = xb-(siz.x>>1);
+        if (span.x&1) x1 += mulscale31(isiz,xv);  //Odd xspans
+        i = mulscale30(isiz,xv*off.x);
+        if ((cstat&4) == 0) x1 -= i; else x1 += i;
+
+        y1 = mulscale16(tspr->z-globalposz,isiz);
+        y1 -= mulscale14(isiz,tspr->yrepeat*off.y);
+        y1 += (globalhoriz<<8)-siz.y;
+        if (cstat&128)
+        {
+            y1 += (siz.y>>1);
+            if (span.y&1) y1 += mulscale15(isiz,tspr->yrepeat);  //Odd yspans
+        }
+
+        x2 = x1+siz.x-1;
+        y2 = y1+siz.y-1;
+        if ((y1|255) >= (y2|255)) return;
+
+        int32_t lx = (x1>>8)+1; if (lx < 0) lx = 0;
+        int32_t rx = (x2>>8); if (rx >= xdimen) rx = xdimen-1;
+        if (lx > rx) return;
+
+        startum = ((sec->ceilingstat&3) == 0) ? globalhoriz+mulscale24(isiz,sec->ceilingz-globalposz)-1 : 0;
+        startdm = ((sec->floorstat&3) == 0) ? globalhoriz+mulscale24(isiz,sec->floorz-globalposz)+1 : INT32_MAX;
+
+        if ((y1>>8) > startum) startum = (y1>>8);
+        if ((y2>>8) < startdm) startdm = (y2>>8);
+
+        if (startum < -32768) startum = -32768;
+        if (startdm > 32767) startdm = 32767;
+        if (startum >= startdm) return;
+
+        if ((cstat&4) == 0)
+        {
+            linuminc = divscale24(span.x<<upscale.x,siz.x);
+            linum = mulscale8((lx<<8)-x1,linuminc);
+        }
+        else
+        {
+            linuminc = -divscale24(span.x<<upscale.x,siz.x);
+            linum = mulscale8((lx<<8)-x2,linuminc);
+        }
+
+        if ((cstat&8) > 0)
+            swaplong(&y1, &y2);
+
+        x = lx;
+#ifdef CLASSIC_SLICE_BY_4
+        for (; x<=rx-4; x+=4)
+        {
+            uwall[x] =   max<int>(startumost[windowxy1.x+x]-windowxy1.y,   startum);
+            uwall[x+1] = max<int>(startumost[windowxy1.x+x+1]-windowxy1.y, startum);
+            uwall[x+2] = max<int>(startumost[windowxy1.x+x+2]-windowxy1.y, startum);
+            uwall[x+3] = max<int>(startumost[windowxy1.x+x+3]-windowxy1.y, startum);
+
+            dwall[x] =   min<int>(startdmost[windowxy1.x+x]-windowxy1.y,   startdm);
+            dwall[x+1] = min<int>(startdmost[windowxy1.x+x+1]-windowxy1.y, startdm);
+            dwall[x+2] = min<int>(startdmost[windowxy1.x+x+2]-windowxy1.y, startdm);
+            dwall[x+3] = min<int>(startdmost[windowxy1.x+x+3]-windowxy1.y, startdm);
+        }
+#endif
+        for (; x<=rx; x++)
+        {
+            uwall[x] = max<int>(startumost[windowxy1.x+x]-windowxy1.y,startum);
+            dwall[x] = min<int>(startdmost[windowxy1.x+x]-windowxy1.y,startdm);
+        }
+
+        int32_t daclip = 0;
+        for (i=smostwallcnt-1; i>=0; i--)
+        {
+            if (smostwalltype[i]&daclip) continue;
+            j = smostwall[i];
+            if ((xb1[j] > rx) || (xb2[j] < lx)) continue;
+            if ((yp <= yb1[j]) && (yp <= yb2[j])) continue;
+            if (spritewallfront(tspr,(int32_t)thewall[j]) && ((yp <= yb1[j]) || (yp <= yb2[j]))) continue;
+
+            const int32_t dalx2 = max(xb1[j],lx);
+            const int32_t darx2 = min(xb2[j],rx);
+
+            switch (smostwalltype[i])
+            {
+            case 0:
+                if (dalx2 <= darx2)
+                {
+                    if ((dalx2 == lx) && (darx2 == rx)) return;
+                    //clearbufbyte(&dwall[dalx2],(darx2-dalx2+1)*sizeof(dwall[0]),0L);
+                    for (k=dalx2; k<=darx2; k++) dwall[k] = 0;
+                }
+                break;
+            case 1:
+                k = smoststart[i] - xb1[j];
+                x = dalx2;
+#ifdef CLASSIC_SLICE_BY_4 // ok, this one is really by 2 ;)
+                for (; x<=darx2-2; x+=2)
+                {
+                    if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
+                    if (smost[k+x+1] > uwall[x+1]) uwall[x+1] = smost[k+x+1];
+                }
+#endif
+                for (; x<=darx2; x++)
+                    if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
+                if ((dalx2 == lx) && (darx2 == rx)) daclip |= 1;
+                break;
+            case 2:
+                k = smoststart[i] - xb1[j];
+                x = dalx2;
+#ifdef CLASSIC_SLICE_BY_4
+                for (; x<=darx2-4; x+=4)
+                {
+                    if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
+                    if (smost[k+x+1] < dwall[x+1]) dwall[x+1] = smost[k+x+1];
+                    if (smost[k+x+2] < dwall[x+2]) dwall[x+2] = smost[k+x+2];
+                    if (smost[k+x+3] < dwall[x+3]) dwall[x+3] = smost[k+x+3];
+                }
+#endif
+                for (; x<=darx2; x++)
+                    if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
+                if ((dalx2 == lx) && (darx2 == rx)) daclip |= 2;
+                break;
+            }
+        }
+
+        if (uwall[rx] >= dwall[rx])
+        {
+            for (x=lx; x<rx; x++)
+                if (uwall[x] < dwall[x]) break;
+            if (x == rx) return;
+        }
+
+        //sprite
+#ifdef YAX_ENABLE
+        if (yax_globallev==YAX_MAXDRAWS || searchit==2)
+#endif
+        if (searchit >= 1 && (searchx >= lx && searchx <= rx))
+            if (searchy >= uwall[searchx] && searchy < dwall[searchx])
+            {
+                searchsector = sectnum; searchwall = spritenum;
+                searchstat = 3; searchit = 1;
+            }
+
+        setup_globals_sprite1(tspr, sec, span.y, off.y, tilenum, cstat, &z1, &z2, upscale);
+
+        qinterpolatedown16((intptr_t)&lwall[lx],rx-lx+1,linum,linuminc);
+        clearbuf(&swall[lx],rx-lx+1,mulscale19(yp,xdimscale));
+
+        {
+#ifdef HIGH_PRECISION_SPRITE
+            union { float f; int32_t i; } sw = {
+                // initialize the float of the union
+                ((cstat&8) ? -1 : 1)
+                * (float)yp * xdimscale
+                * (1<<(22-19)) / (span.y*tspr->yrepeat)
+            };
+
+            clearbuf(&swallf[lx], rx-lx+1, sw.i);
+#endif
+        }
+
+        drawing_sprite = 1;
+
+        if ((cstat&2) == 0)
+            maskwallscan(lx,rx, (cstat&8)==0);
+        else
+            transmaskwallscan(lx,rx, (cstat&8)==0);
+
+        drawing_sprite = 0;
+        globalht = nullptr;
+    }
+    else if ((cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL)
+    {
+        const int32_t xspan = tilesiz[tilenum].x;
+        const int32_t yspan = tilesiz[tilenum].y;
+        const int32_t xv = tspr->xrepeat*sintable[(tspr->ang+2560+1536)&2047];
+        const int32_t yv = tspr->xrepeat*sintable[(tspr->ang+2048+1536)&2047];
+
+        if ((cstat&4) > 0) off.x = -off.x;
+        if ((cstat&8) > 0) off.y = -off.y;
+
+        i = (xspan>>1) + off.x;
+        x1 = tspr->x-globalposx-mulscale16(xv,i); x2 = x1+mulscale16(xv,xspan);
+        y1 = tspr->y-globalposy-mulscale16(yv,i); y2 = y1+mulscale16(yv,xspan);
+
+        vec2_t p1 = get_rel_coords(x1, y1);
+        vec2_t p2 = get_rel_coords(x2, y2);
+
+        if (p1.y <= 0 && p2.y <= 0)
+            return;
+
+        x1 += globalposx; y1 += globalposy;
+        x2 += globalposx; y2 += globalposy;
+
+        int32_t swapped = 0;
+        if (dmulscale32(p1.x, p2.y, -p2.x, p1.y) >= 0)  // If wall's NOT facing you
+        {
+            if ((cstat&64) != 0)
+                return;
+
+            const vec2_t pt = p2;
+            p2 = p1;
+            p1 = pt;
+            i = x1, x1 = x2, x2 = i;
+            i = y1, y1 = y2, y2 = i;
+            swapped = 1;
+        }
+
+        int32_t sx1, sx2, sy1, sy2;
+        if (!get_screen_coords(p1, p2, &sx1, &sy1, &sx2, &sy2))
+            return;
+
+        vec2_16_t upscale = {};
+        tileLoadScaled(tilenum, &upscale);
+
+        const int64_t topinc = -((int64_t(p1.y) * int64_t(xspan<<upscale.x)) >> 10);
+        int64_t top = (int64_t(((int64_t(p1.x) * int64_t(xdimen)) >> 10) - ((int64_t(sx1-halfxdimen) * int64_t(p1.y)) >> 9)) * int64_t(xspan<<upscale.x)) >> 3;
+        const int64_t botinc = int64_t(p2.y-p1.y)>>8;
+        int64_t bot = ((int64_t(p1.x-p2.x) * int64_t(xdimen)) >> 11) + ((int64_t(sx1-halfxdimen) * int64_t(botinc)) >> 2);
+
+        j = sx2+3;
+        z = divscale64(top, bot, 10);
+        lwall[sx1] = (z>>8);
+        for (x=sx1+4; x<=j; x+=4)
+        {
+            top += topinc; bot += botinc;
+            zz = z; z = divscale64(top, bot, 10);
+            i = ((z+zz)>>1);
+            lwall[x-3] = ((i+zz)>>9);
+            lwall[x-2] = (i>>8);
+            lwall[x-1] = ((i+z)>>9);
+            lwall[x] = (z>>8);
+        }
+
+        if (lwall[sx1] < 0) lwall[sx1] = 0;
+        if (lwall[sx2] >= (xspan<<upscale.x)) lwall[sx2] = (xspan<<upscale.x)-1;
+
+        if ((swapped^((cstat&4)>0)) > 0)
+        {
+            j = (xspan<<upscale.x)-1;
+            for (x=sx1; x<=sx2; x++)
+                lwall[x] = j-lwall[x];
+        }
+
+        // XXX: UNUSED?
+        rx1[MAXWALLSB-1] = p1.x; ry1[MAXWALLSB-1] = p1.y;
+        rx2[MAXWALLSB-1] = p2.x; ry2[MAXWALLSB-1] = p2.y;
+
+        setup_globals_sprite1(tspr, sec, yspan, off.y, tilenum, cstat, &z1, &z2, upscale);
+
+        if ((sec->ceilingstat&1) == 0 && z1 < sec->ceilingz)
+            z1 = sec->ceilingz;
+        if ((sec->floorstat&1) == 0 && z2 > sec->floorz)
+            z2 = sec->floorz;
+
+        xb1[MAXWALLSB-1] = sx1;
+        xb2[MAXWALLSB-1] = sx2;
+        yb1[MAXWALLSB-1] = sy1;
+        yb2[MAXWALLSB-1] = sy2;
+        owallmost(uwall, MAXWALLSB-1, z1-globalposz);
+        owallmost(dwall, MAXWALLSB-1, z2-globalposz);
+
+        int32_t hplc = divscale19(xdimenscale,sy1);
+        const int32_t hplc2 = divscale19(xdimenscale,sy2);
+        const int32_t idiv = sx2-sx1;
+        int32_t hinc[4] = { idiv ? tabledivide32(hplc2-hplc, idiv) : 0 };
+
+#ifdef HIGH_PRECISION_SPRITE
+        float const cc     = ((1<<19) * fxdimen * (float)yxaspect) * (1.f/320.f);
+        float const loopcc = ((cstat&8) ? -1.f : 1.f) * (float(1<<30) * float(1<<24)) / float(yspan * tspr->yrepeat);
+
+        float hplcf    = cc / sy1;
+        float hincf[4] = { idiv ? (cc / sy2 - hplcf) / idiv : 0 };
+
+#ifdef CLASSIC_SLICE_BY_4
+        hincf[1] = hincf[0] * 2.f;
+        hincf[2] = hincf[0] * 3.f;
+        hincf[3] = hincf[0] * 4.f;
+#endif // CLASSIC_SLICE_BY_4
+#endif // HIGH_PRECISION_SPRITE
+#ifdef CLASSIC_SLICE_BY_4
+        hinc[1] = hinc[0]<<1;
+        hinc[2] = hinc[0]*3;
+        hinc[3] = hinc[0]<<2;
+#endif
+        i = sx1;
+
+#ifdef CLASSIC_SLICE_BY_4
+        for (; i<=sx2-4; i+=4)
+        {
+            swall[i] = (krecipasm(hplc)<<2);
+            swall[i+1] = (krecipasm(hplc+hinc[0])<<2);
+            swall[i+2] = (krecipasm(hplc+hinc[1])<<2);
+            swall[i+3] = (krecipasm(hplc+hinc[2])<<2);
+            hplc += hinc[3];
+#ifdef HIGH_PRECISION_SPRITE
+            swallf[i] =   loopcc/hplcf;
+            swallf[i+1] = loopcc/(hplcf+hincf[0]);
+            swallf[i+2] = loopcc/(hplcf+hincf[1]);
+            swallf[i+3] = loopcc/(hplcf+hincf[2]);
+            hplcf += hincf[3];
+#endif // HIGH_PRECISION_SPRITE
+        }
+#endif // CLASSIC_SLICE_BY_4
+
+        for (; i<=sx2; i++)
+        {
+            swall[i] = (krecipasm(hplc)<<2);
+            hplc += hinc[0];
+#ifdef HIGH_PRECISION_SPRITE
+            swallf[i] = loopcc/hplcf;
+            hplcf += hincf[0];
+#endif
+        }
+
+        for (i=smostwallcnt-1; i>=0; i--)
+        {
+            j = smostwall[i];
+
+            if (xb1[j] > sx2 || xb2[j] < sx1)
+                continue;
+
+            int32_t dalx2 = xb1[j];
+            int32_t darx2 = xb2[j];
+
+            if (max(sy1,sy2) > min(yb1[j],yb2[j]))
+            {
+                if (min(sy1,sy2) > max(yb1[j],yb2[j]))
+                {
+                    x = INT32_MIN;
+                }
+                else
+                {
+                    x = thewall[j]; xp1 = wall[x].x; yp1 = wall[x].y;
+                    x = wall[x].point2; xp2 = wall[x].x; yp2 = wall[x].y;
+
+                    z1 = (xp2-xp1)*(y1-yp1) - (yp2-yp1)*(x1-xp1);
+                    z2 = (xp2-xp1)*(y2-yp1) - (yp2-yp1)*(x2-xp1);
+                    if ((z1 == 0) | (z2 == 0))
+                    {
+                        if ((xp2-xp1)*(tspr->y-yp1) == (tspr->x-xp1)*(yp2-yp1))
+                        {
+                            if (wall[thewall[j]].nextsector == tspr->sectnum)
+                                x = INT32_MIN;
+                            else
+                                x = INT32_MAX;
+                        }
+                        else
+                            x = (z1+z2);
+                    }
+                    else if ((z1^z2) >= 0)
+                        x = (z1+z2);
+                    else
+                    {
+                        z1 = (x2-x1)*(yp1-y1) - (y2-y1)*(xp1-x1);
+                        z2 = (x2-x1)*(yp2-y1) - (y2-y1)*(xp2-x1);
+
+                        if (((z1^z2) >= 0) | (z1 == 0) | (z2 == 0))
+                            x = -(z1+z2);
+                        else
+                        {
+                            if ((xp2-xp1)*(tspr->y-yp1) == (tspr->x-xp1)*(yp2-yp1))
+                            {
+                                if (wall[thewall[j]].nextsector == tspr->sectnum)
+                                    x = INT32_MIN;
+                                else
+                                    x = INT32_MAX;
+                            }
+                            else
+                            {
+                                //INTERSECTION!
+                                x = (xp1-globalposx) + scale(xp2-xp1,z1,z1-z2);
+                                y = (yp1-globalposy) + scale(yp2-yp1,z1,z1-z2);
+
+                                yp1 = dmulscale14(x,cosviewingrangeglobalang,y,sinviewingrangeglobalang);
+
+                                if (yp1 > 0)
+                                {
+                                    xp1 = dmulscale14(y,cosglobalang,-x,singlobalang);
+
+                                    x = halfxdimen + scale(xp1,halfxdimen,yp1);
+                                    if (xp1 >= 0) x++;   //Fix for SIGNED divide
+
+                                    if (z1 < 0)
+                                        { if (dalx2 < x) dalx2 = x; }
+                                    else
+                                        { if (darx2 > x) darx2 = x; }
+                                    x = INT32_MIN+1;
+                                }
+                                else
+                                    x = INT32_MAX;
+                            }
+                        }
+                    }
+                }
+
+                if (x < 0)
+                {
+                    if (dalx2 < sx1) dalx2 = sx1;
+                    if (darx2 > sx2) darx2 = sx2;
+
+                    switch (smostwalltype[i])
+                    {
+                    case 0:
+                        if (dalx2 <= darx2)
+                        {
+                            if ((dalx2 == sx1) && (darx2 == sx2)) return;
+                            //clearbufbyte(&dwall[dalx2],(darx2-dalx2+1)*sizeof(dwall[0]),0L);
+                            for (k=dalx2; k<=darx2; k++) dwall[k] = 0;
+                        }
+                        break;
+                    case 1:
+                        k = smoststart[i] - xb1[j];
+                        x = dalx2;
+#ifdef CLASSIC_SLICE_BY_4
+                        for (; x<=darx2-2; x+=2)
+                        {
+                            if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
+                            if (smost[k+x+1] > uwall[x+1]) uwall[x+1] = smost[k+x+1];
+                        }
+#endif
+                        for (; x<=darx2; x++)
+                            if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
+                        break;
+                    case 2:
+                        k = smoststart[i] - xb1[j];
+                        x = dalx2;
+#ifdef CLASSIC_SLICE_BY_4
+                        for (; x<=darx2-4; x+=4)
+                        {
+                            if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
+                            if (smost[k+x+1] < dwall[x+1]) dwall[x+1] = smost[k+x+1];
+                            if (smost[k+x+2] < dwall[x+2]) dwall[x+2] = smost[k+x+2];
+                            if (smost[k+x+3] < dwall[x+3]) dwall[x+3] = smost[k+x+3];
+                        }
+#endif
+                        for (; x<=darx2; x++)
+                            if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
+                        break;
+                    }
+                }
+            }
+        }
+
+        //sprite
+#ifdef YAX_ENABLE
+        if (yax_globallev==YAX_MAXDRAWS || searchit==2)
+#endif
+        if (searchit >= 1 && (searchx >= sx1 && searchx <= sx2))
+            if (searchy >= uwall[searchx] && searchy <= dwall[searchx])
+            {
+                searchsector = sectnum; searchwall = spritenum;
+                searchstat = 3; searchit = 1;
+            }
+
+        drawing_sprite = 1;
+
+        if ((cstat&2) == 0)
+            maskwallscan(sx1,sx2, (cstat&8)==0);
+        else
+            transmaskwallscan(sx1,sx2, (cstat&8)==0);
+
+        drawing_sprite = 0;
+        globalht = nullptr;
+    }
+    else if (cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR)
+    {
+        if ((cstat&64) != 0)
+            if ((globalposz > tspriteGetZOfSlope(tspr, globalposx, globalposy)) == ((cstat&8)==0))
+                return;
+
+        if ((cstat&4) > 0) off.x = -off.x;
+        if ((cstat&8) > 0) off.y = -off.y;
+        vec2_16_t span = tilesiz[tilenum];
+        const int32_t ratio = nsqrtasm(slope * slope + 16777216);
+
+        //Rotate center point
+        dax = tspr->x-globalposx;
+        day = tspr->y-globalposy;
+        const int32_t cz = dmulscale10(cosglobalang,dax,singlobalang,day);
+        const int32_t cx = dmulscale10(cosglobalang,day,-singlobalang,dax);
+
+        //Get top-left corner
+        int32_t const cosang = dmulscale14(sintable[(tspr->ang+512)&2047], cosglobalang, sintable[tspr->ang&2047], singlobalang);
+        int32_t const sinang = dmulscale14(sintable[(tspr->ang+512)&2047], -singlobalang, sintable[tspr->ang&2047], cosglobalang);
+        dax = (((span.x>>1)+off.x)*tspr->xrepeat)<<8;
+        day = divscale20(((span.y>>1)+off.y)*tspr->yrepeat,ratio);
+        rzi[0] = cz+dmulscale20(sinang,dax,cosang,day);
+        rxi[0] = cx+dmulscale20(sinang,day,-cosang,dax);
+
+        //Get other 3 corners
+        dax = (span.x*tspr->xrepeat)<<8;
+        day = divscale20(span.y*tspr->yrepeat,ratio);
+        rzi[1] = rzi[0]-mulscale20(sinang,dax);
+        rxi[1] = rxi[0]+mulscale20(cosang,dax);
+        dax = -mulscale20(cosang,day);
+        day = -mulscale20(sinang,day);
+        rzi[2] = rzi[1]+dax; rxi[2] = rxi[1]+day;
+        rzi[3] = rzi[0]+dax; rxi[3] = rxi[0]+day;
+
+        float sgzd = 0, sgzx = 0, sgz = 0, sdaz = 0;
+        vec2f_t sg_f = {}, sg_f2 = {};
+        vec2_t sg1 = {};
+
+        if (slope != 0)
+        {
+            int daz = 0;
+            float const fslope  = (float)slope;
+            float const fsinang = (float)sinang;
+            float const fcosang = (float)cosang;
+
+            for (i = 0; i < 4; i++)
+            {
+                int const j = dmulscale8(-sinang, rxi[i]-cx,
+                                        -cosang, rzi[i]-cz);
+                int const z = (tspr->z + mulscale18(slope, j) - globalposz);
+
+                if (i == 0)
+                    daz = z;
+
+                ryi[i] = scale(z,yxaspect,320<<8);
+            }
+
+            float const fi = (0-halfxdimen)*xdimenrecip;
+            sg_f = { fcosang*float(xdimenrecip)*(1.f/524288.f), fsinang*float(xdimenrecip)*(1.f/524288.f) };
+            sg_f2 = { -fsinang*float(viewingrangerecip)*(1.f/4096.f) + fcosang*fi*(1.f/134217728.f),
+                       fcosang*float(viewingrangerecip)*(1.f/4096.f) + fsinang*fi*(1.f/134217728.f) };
+
+            sgzd = xdimscale*512.f;
+            sgzx = sg_f2.y*fslope*(1.f/256.f) + (1-globalhoriz)*sgzd*(1.f/1024.f);
+            sgz = sg_f.y*fslope*(1.f/65536.f);
+
+            float const fx = 64.f/float(tspr->xrepeat);
+            float const fy = 64.f/float(tspr->yrepeat) * float(ratio) * (1.f / 4096.f);
+
+            sg_f.x *= fx;
+            sg_f.y *= fy;
+            sg_f2.x *= fx;
+            sg_f2.y *= fy;
+
+            sg1 = { divscale6(dmulscale10(rxi[0], -cosang, rzi[0], sinang), tspr->xrepeat),
+                    mulscale12(divscale6(dmulscale10(rxi[0], sinang, rzi[0], cosang), tspr->yrepeat), ratio) };
+
+            if (cstat & 4)
+            {
+                sg1.x = -sg1.x;
+                sg_f2.x = -sg_f2.x;
+                sg_f.x = -sg_f.x;
+            }
+
+            sdaz = fslope*(fsinang*float(rxi[0])+fcosang*float(rzi[0]))*(1.f/262144.f) + float(daz)*256.f;
+            sg_f = { (sg_f.x*sdaz)*(1.f/268435456.f), (sg_f.y*-sdaz)*(1.f/268435456.f) };
+            sg_f2 = { (sg_f2.x*sdaz)*(1.f/1048576.f), (sg_f2.y*-sdaz)*(1.f/1048576.f) };
+
+            rzi[0] = mulscale16(rzi[0], viewingrange);
+            rzi[1] = mulscale16(rzi[1], viewingrange);
+            rzi[2] = mulscale16(rzi[2], viewingrange);
+            rzi[3] = mulscale16(rzi[3], viewingrange);
+
+            //If ceilsprite is above you, reverse order of points
+            if (globalposz > tspriteGetZOfSlope(tspr, globalposx, globalposy))
+            {
+                i = rxi[1]; rxi[1] = rxi[3]; rxi[3] = i;
+                i = rzi[1]; rzi[1] = rzi[3]; rzi[3] = i;
+                i = ryi[1]; ryi[1] = ryi[3]; ryi[3] = i;
+            }
+        }
+        else
+        {
+            //Put all points on same z
+            ryi[0] = scale((tspr->z-globalposz),yxaspect,320<<8);
+            if (ryi[0] == 0) return;
+            ryi[1] = ryi[2] = ryi[3] = ryi[0];
+
+            if ((cstat&4) == 0)
+                { z = 0; z1 = 1; z2 = 3; }
+            else
+                { z = 1; z1 = 0; z2 = 2; }
+
+            dax = rzi[z1]-rzi[z]; day = rxi[z1]-rxi[z];
+            int32_t bot = dmulscale8(dax,dax,day,day);
+            if ((klabs(dax)>>13) >= bot || (klabs(day)>>13) >= bot)
+                return;
+            globalx1 = divscale18(dax,bot);
+            globalx2 = divscale18(day,bot);
+
+            dax = rzi[z2]-rzi[z]; day = rxi[z2]-rxi[z];
+            bot = dmulscale8(dax,dax,day,day);
+            if ((klabs(dax)>>13) >= bot || (klabs(day)>>13) >= bot)
+                return;
+            globaly1 = divscale18(dax,bot);
+            globaly2 = divscale18(day,bot);
+
+            //Calculate globals for hline texture mapping function
+            globalxpanning = rxi[z];
+            globalypanning = rzi[z];
+            globalzd = decltype(globalzd)(ryi[z]);
+
+            rzi[0] = mulscale16(rzi[0],viewingrange);
+            rzi[1] = mulscale16(rzi[1],viewingrange);
+            rzi[2] = mulscale16(rzi[2],viewingrange);
+            rzi[3] = mulscale16(rzi[3],viewingrange);
+
+            if (ryi[0] < 0)   //If ceilsprite is above you, reverse order of points
+            {
+                i = rxi[1]; rxi[1] = rxi[3]; rxi[3] = i;
+                i = rzi[1]; rzi[1] = rzi[3]; rzi[3] = i;
+            }
+        }
+
+        //Clip polygon in 3-space
+        int32_t npoints = 4;
+
+        //Clip edge 1
+        int32_t npoints2 = 0;
+        int64_t zzsgn = rxi[0]+rzi[0], zsgn;
+        for (z=0; z<npoints; z++)
+        {
+            zz = z+1; if (zz == npoints) zz = 0;
+            zsgn = zzsgn; zzsgn = rxi[zz]+rzi[zz];
+            if (zsgn >= 0)
+            {
+                rxi2[npoints2] = rxi[z]; ryi2[npoints2] = ryi[z]; rzi2[npoints2] = rzi[z];
+                npoints2++;
+            }
+            if ((zsgn^zzsgn) < 0)
+            {
+                int64_t t = divscale64(zsgn,zsgn-zzsgn, 30);
+                rxi2[npoints2] = rxi[z] + int32_t((t * (rxi[zz]-rxi[z])) >> 30);
+                ryi2[npoints2] = ryi[z] + int32_t((t * (ryi[zz]-ryi[z])) >> 30);
+                rzi2[npoints2] = rzi[z] + int32_t((t * (rzi[zz]-rzi[z])) >> 30);
+                npoints2++;
+            }
+        }
+        if (npoints2 <= 2) return;
+
+        //Clip edge 2
+        npoints = 0;
+        zzsgn = rxi2[0]-rzi2[0];
+        for (z=0; z<npoints2; z++)
+        {
+            zz = z+1; if (zz == npoints2) zz = 0;
+            zsgn = zzsgn; zzsgn = rxi2[zz]-rzi2[zz];
+            if (zsgn <= 0)
+            {
+                rxi[npoints] = rxi2[z]; ryi[npoints] = ryi2[z]; rzi[npoints] = rzi2[z];
+                npoints++;
+            }
+            if ((zsgn^zzsgn) < 0)
+            {
+                int64_t t = divscale64(zsgn,zsgn-zzsgn, 30);
+                rxi[npoints] = rxi2[z] + int32_t((t * (rxi2[zz]-rxi2[z])) >> 30);
+                ryi[npoints] = ryi2[z] + int32_t((t * (ryi2[zz]-ryi2[z])) >> 30);
+                rzi[npoints] = rzi2[z] + int32_t((t * (rzi2[zz]-rzi2[z])) >> 30);
+                npoints++;
+            }
+        }
+        if (npoints <= 2) return;
+
+        //Clip edge 3
+        npoints2 = 0;
+        zzsgn = ryi[0]*int64_t(halfxdimen) + (rzi[0]*int64_t(globalhoriz-0));
+        for (z=0; z<npoints; z++)
+        {
+            zz = z+1; if (zz == npoints) zz = 0;
+            zsgn = zzsgn; zzsgn = ryi[zz]*int64_t(halfxdimen) + (rzi[zz]*int64_t(globalhoriz-0));
+            if (zsgn >= 0)
+            {
+                rxi2[npoints2] = rxi[z];
+                ryi2[npoints2] = ryi[z];
+                rzi2[npoints2] = rzi[z];
+                npoints2++;
+            }
+            if ((zsgn^zzsgn) < 0)
+            {
+                int64_t t = divscale64(zsgn,zsgn-zzsgn, 30);
+                rxi2[npoints2] = rxi[z] + int32_t((t * (rxi[zz]-rxi[z])) >> 30);
+                ryi2[npoints2] = ryi[z] + int32_t((t * (ryi[zz]-ryi[z])) >> 30);
+                rzi2[npoints2] = rzi[z] + int32_t((t * (rzi[zz]-rzi[z])) >> 30);
+                npoints2++;
+            }
+        }
+        if (npoints2 <= 2) return;
+
+        //Clip edge 4
+        npoints = 0;
+        zzsgn = ryi2[0]*int64_t(halfxdimen) + (rzi2[0]*int64_t(globalhoriz-ydimen));
+        for (z=0; z<npoints2; z++)
+        {
+            zz = z+1; if (zz == npoints2) zz = 0;
+            zsgn = zzsgn; zzsgn = ryi2[zz]*int64_t(halfxdimen) + (rzi2[zz]*int64_t(globalhoriz-ydimen));
+            if (zsgn <= 0)
+            {
+                rxi[npoints] = rxi2[z];
+                ryi[npoints] = ryi2[z];
+                rzi[npoints] = rzi2[z];
+                npoints++;
+            }
+            if ((zsgn^zzsgn) < 0)
+            {
+                int64_t t = divscale64(zsgn,zsgn-zzsgn, 30);
+                rxi[npoints] = rxi2[z] + mulscale30(t,rxi2[zz]-rxi2[z]);
+                ryi[npoints] = ryi2[z] + mulscale30(t,ryi2[zz]-ryi2[z]);
+                rzi[npoints] = rzi2[z] + mulscale30(t,rzi2[zz]-rzi2[z]);
+                npoints++;
+            }
+        }
+        if (npoints <= 2) return;
+
+        //Project onto screen
+        int32_t lpoint = -1, lmax = INT32_MAX;
+        int32_t rpoint = -1, rmax = INT32_MIN;
+        for (z=0; z<npoints; z++)
+        {
+            xsi[z] = scale(rxi[z],xdimen<<15,rzi[z]) + (xdimen<<15);
+            ysi[z] = scale(ryi[z],xdimen<<15,rzi[z]) + (globalhoriz<<16);
+            if (xsi[z] < 0) xsi[z] = 0;
+            if (xsi[z] > (xdimen<<16)) xsi[z] = (xdimen<<16);
+            if (ysi[z] < ((int32_t)0<<16)) ysi[z] = ((int32_t)0<<16);
+            if (ysi[z] > ((int32_t)ydimen<<16)) ysi[z] = ((int32_t)ydimen<<16);
+            if (xsi[z] < lmax) lmax = xsi[z], lpoint = z;
+            if (xsi[z] > rmax) rmax = xsi[z], rpoint = z;
+        }
+
+        //Get uwall arrays
+        for (z=lpoint; z!=rpoint; z=zz)
+        {
+            zz = z+1; if (zz == npoints) zz = 0;
+
+            dax1 = ((xsi[z]+65535)>>16);
+            dax2 = ((xsi[zz]+65535)>>16);
+            if (dax2 > dax1)
+            {
+                int32_t yinc = divscale16(ysi[zz]-ysi[z],xsi[zz]-xsi[z]);
+                y = ysi[z] + mulscale16((dax1<<16)-xsi[z],yinc);
+                qinterpolatedown16short((intptr_t)(&uwall[dax1]),dax2-dax1,y,yinc);
+            }
+        }
+
+        //Get dwall arrays
+        for (; z!=lpoint; z=zz)
+        {
+            zz = z+1; if (zz == npoints) zz = 0;
+
+            dax1 = ((xsi[zz]+65535)>>16);
+            dax2 = ((xsi[z]+65535)>>16);
+            if (dax2 > dax1)
+            {
+                int32_t yinc = divscale16(ysi[zz]-ysi[z],xsi[zz]-xsi[z]);
+                y = ysi[zz] + mulscale16((dax1<<16)-xsi[zz],yinc);
+                qinterpolatedown16short((intptr_t)(&dwall[dax1]),dax2-dax1,y,yinc);
+            }
+        }
+
+
+        const int32_t lx = ((lmax+65535)>>16);
+        const int32_t rx = min(((rmax+65535)>>16), xdim-1);
+        // min(): OOB prevention. Simple test case: have a floor-aligned sprite
+        // to the right of the player. Slowly rotate right toward it. When it
+        // just becomes visible, the condition rx == xdim can occur.
+
+        // Don't pointlessly keep going. If the following condition holds, the
+        // ceilspritescan() at the end of our block would not draw any lines,
+        // and moreover may access uwall[] OOB (with x1==xdim).
+        if (rx-1 < lx)
+            return;
+
+        for (x=lx; x<=rx; x++)
+        {
+            uwall[x] = max<int>(uwall[x],startumost[x+windowxy1.x]-windowxy1.y);
+            dwall[x] = min<int>(dwall[x],startdmost[x+windowxy1.x]-windowxy1.y);
+        }
+
+        //Additional uwall/dwall clipping goes here
+        for (i=smostwallcnt-1; i>=0; i--)
+        {
+            j = smostwall[i];
+            if ((xb1[j] > rx) || (xb2[j] < lx)) continue;
+            if ((yp <= yb1[j]) && (yp <= yb2[j])) continue;
+
+            //if (spritewallfront(tspr,thewall[j]) == 0)
+            x = thewall[j]; xp1 = wall[x].x; yp1 = wall[x].y;
+            x = wall[x].point2; xp2 = wall[x].x; yp2 = wall[x].y;
+            x = (xp2-xp1)*(tspr->y-yp1)-(tspr->x-xp1)*(yp2-yp1);
+            if ((yp > yb1[j]) && (yp > yb2[j])) x = -1;
+            if ((x >= 0) && ((x != 0) || (wall[thewall[j]].nextsector != tspr->sectnum))) continue;
+
+            const int32_t dalx2 = max(xb1[j],lx);
+            const int32_t darx2 = min(xb2[j],rx);
+
+            switch (smostwalltype[i])
+            {
+            case 0:
+                if (dalx2 <= darx2)
+                {
+                    if ((dalx2 == lx) && (darx2 == rx)) return;
+                    //clearbufbyte(&dwall[dalx2],(darx2-dalx2+1)*sizeof(dwall[0]),0L);
+                    for (x=dalx2; x<=darx2; x++) dwall[x] = 0;
+                }
+                break;
+            case 1:
+                k = smoststart[i] - xb1[j];
+                for (x=dalx2; x<=darx2; x++)
+                    if (smost[k+x] > uwall[x]) uwall[x] = smost[k+x];
+                break;
+            case 2:
+                k = smoststart[i] - xb1[j];
+                for (x=dalx2; x<=darx2; x++)
+                    if (smost[k+x] < dwall[x]) dwall[x] = smost[k+x];
+                break;
+            }
+        }
+
+        //sprite
+#ifdef YAX_ENABLE
+        if (yax_globallev==YAX_MAXDRAWS || searchit==2)
+#endif
+        if (searchit >= 1 && (searchx >= lx && searchx <= rx))
+            if (searchy >= uwall[searchx] && searchy <= dwall[searchx])
+            {
+                searchsector = sectnum; searchwall = spritenum;
+                searchstat = 3; searchit = 1;
+            }
+
+        globalorientation = cstat;
+        globalpicnum = tilenum;
+        if ((unsigned)globalpicnum >= (unsigned)MAXTILES) globalpicnum = 0;
+
+        setgotpic(globalpicnum);
+
+        vec2_16_t upscale = {};
+        globalbufplc = tileLoadScaled(globalpicnum, &upscale);
+
+        if (slope != 0)
+        {
+            x = picsiz[globalpicnum]; y = ((x>>4)&15); x &= 15;
+            x += upscale.x;
+            y += upscale.y;
+            sg1 = { divscale20(sg1.x, span.x) >> 16, divscale20(sg1.y, span.y) >> 16 };
+            vec2f_t const tmp = { 256.f/float(span.x), 256.f/float(span.y) };
+            sg_f2.x *= tmp.x;
+            sg_f2.y *= tmp.y;
+            sg_f.x *= tmp.x;
+            sg_f.y *= tmp.y;
+            span.x <<= upscale.x;
+            span.y <<= upscale.y;
+            int const ispow2 = (pow2long[x]==span.x && pow2long[y]==span.y);
+
+            //asm1 = -(globalzd>>(16-BITSOFPRECISION));
+#define LINTERPSIZ 4
+            float const bzinc = -sgzd*(1.f/65536.f) * (1<<LINTERPSIZ);
+            float const bzinc2 = -sgzd*(1.f/65536.f);
+            int32_t const vis = (sec->visibility != 0) ? mulscale4(globalhisibility, (uint8_t)(sec->visibility+16)) : globalhisibility;
+            globvis = ((((int64_t)(vis*sdaz)) >> 13) * xdimscale) >> 16;
+
+            intptr_t fj = FP_OFF(palookup[globalpal]);
+
+            setupslopevlin_alsotrans(x + (y<<8),globalbufplc,-ylookup[1]);
+
+            int32_t const l = Blrintf((sgzd)*(1.f/65536.f));
+
+            int32_t const shinc = Blrintf(sgz*xdimenscale*(1.f/65536.f));
+
+            int32_t shoffs = (shinc > 0) ? (4 << 15) : ((16380 - ydimen) << 15);  // JBF: was 2044
+            int32_t y1 = uwall[lx];
+
+            int32_t m1 = Blrintf((y1*sgzd)*(1.f/65536.f) + sgzx*(1.f/64.f));
+            //Avoid visibility overflow by crossing horizon
+            m1 += klabs(l);
+            int32_t m2 = m1+l;
+            int32_t shy1 = y1+(shoffs>>15);
+            int32_t shy2;
+            if ((unsigned)shy1 >= SLOPALOOKUPSIZ-1)
+            {
+                LOG_F(ERROR, "%s:%d: slopalookup[%" PRId32 "] overflow drawing sprite %d!", EDUKE32_FUNCTION, __LINE__, shy1, spritenum);
+                return;
+            }
+
+            intptr_t *mptr1 = &slopalookup[shy1]; intptr_t *mptr2 = mptr1+1;
+            sg_f2.x += sg_f.x * lx;
+            sg_f2.y += sg_f.y * lx;
+            sgzx += sgz * lx;
+            shoffs += shinc *lx;
+
+            for (int x=lx; x<rx; x++)
+            {
+                y1 = uwall[x]; y2 = dwall[x]-1;
+                if (y1 <= y2)
+                {
+                    shy1 = y1+(shoffs>>15);
+                    shy2 = y2+(shoffs>>15);
+
+                    // Ridiculously steep gradient?
+                    if ((unsigned)shy1 >= SLOPALOOKUPSIZ || (unsigned)shy2 >= SLOPALOOKUPSIZ)
+                    {
+                        LOG_F(ERROR, "%s:%d: slopalookup[%" PRId32 "] overflow drawing spritenum %d!", EDUKE32_FUNCTION, __LINE__,
+                                   (unsigned)shy1 >= SLOPALOOKUPSIZ ? shy1 : shy2, spritenum);
+                        goto next_most;
+                    }
+
+                    intptr_t *nptr1 = &slopalookup[shy1];
+                    intptr_t *nptr2 = &slopalookup[shy2];
+
+                    while (nptr1 <= mptr1)
+                    {
+                        *mptr1-- = fj + getpalookupsh(mulscale24(krecipasm(m1),globvis));
+                        m1 -= l;
+                    }
+                    while (nptr2 >= mptr2)
+                    {
+                        *mptr2++ = fj + getpalookupsh(mulscale24(krecipasm(m2),globvis));
+                        m2 += l;
+                    }
+
+                    vec2f_t const sg_f3 = { sg_f2.x*(1.f/1024.f)*1048576.f, sg_f2.y*(1.f/1024.f)*1048576.f };
+                    float bz = (y2*sgzd)*(1.f/65536.f) + sgzx*(1.f/64.f), bzr = 1.f/bz;
+                    uint8_t *p = (uint8_t*)(ylookup[y2]+x+frameoffset);
+                    intptr_t* A_C_RESTRICT slopalptr = (intptr_t*)nptr2;
+                    int cnt = y2-y1+1;
+                    int u0 = Blrintf(sg_f3.x*bzr);
+                    int v0 = Blrintf(sg_f3.y*bzr);
+                    if (ispow2)
+                    {
+                        if ((cstat&2)==0)
+                        {
+                            while (cnt > 0)
+                            {
+                                int cnt2;
+                                int u1, v1;
+                                if (cnt >= (1<<LINTERPSIZ))
+                                {
+                                    bz += bzinc, bzr = 1.f/bz;
+                                    u1 = ((int)(sg_f3.x*bzr)-u0)>>LINTERPSIZ;
+                                    v1 = ((int)(sg_f3.y*bzr)-v0)>>LINTERPSIZ;
+                                    cnt2 = 1<<LINTERPSIZ;
+                                }
+                                else
+                                {
+                                    bz += bzinc2 * cnt, bzr = 1.f/bz;
+                                    u1 = tabledivide32_branchfree_noinline((int)(sg_f3.x*bzr)-u0, cnt);
+                                    v1 = tabledivide32_branchfree_noinline((int)(sg_f3.y*bzr)-v0, cnt);
+                                    cnt2 = cnt;
+                                }
+                                for (; cnt2>0; cnt2--)
+                                {
+                                    uint16_t u = (sg1.x+u0)&0xffff;
+                                    uint16_t v = (sg1.y+v0)&0xffff;
+                                    char ch = ggbuf[((u>>(16-gglogx))<<gglogy)+(v>>(16-gglogy))];
+                                    if (ch != 255)
+                                        *p = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
+                                    slopalptr--;
+                                    p += ggpinc;
+                                    u0 += u1;
+                                    v0 += v1;
+                                }
+                                cnt -= 1<<LINTERPSIZ;
+                            }
+                        }
+                        else
+                        {
+                            const char* const trans = paletteGetBlendTable(globalblend);
+                            if (cstat & 512)
+                            {
+                                while (cnt > 0)
+                                {
+                                    int cnt2;
+                                    int u1, v1;
+                                    if (cnt >= (1<<LINTERPSIZ))
+                                    {
+                                        bz += bzinc, bzr = 1.f/bz;
+                                        u1 = ((int)(sg_f3.x*bzr)-u0)>>LINTERPSIZ;
+                                        v1 = ((int)(sg_f3.y*bzr)-v0)>>LINTERPSIZ;
+                                        cnt2 = 1<<LINTERPSIZ;
+                                    }
+                                    else
+                                    {
+                                        bz += bzinc2 * cnt, bzr = 1.f/bz;
+                                        u1 = tabledivide32_branchfree_noinline((int)(sg_f3.x*bzr)-u0, cnt);
+                                        v1 = tabledivide32_branchfree_noinline((int)(sg_f3.y*bzr)-v0, cnt);
+                                        cnt2 = cnt;
+                                    }
+                                    for (; cnt2>0; cnt2--)
+                                    {
+                                        uint16_t u = (sg1.x+u0)&0xffff;
+                                        uint16_t v = (sg1.y+v0)&0xffff;
+                                        char ch = ggbuf[((u>>(16-gglogx))<<gglogy)+(v>>(16-gglogy))];
+                                        if (ch != 255)
+                                        {
+                                            ch = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
+                                            *p = trans[(ch<<8)|*p];
+                                        }
+                                        slopalptr--;
+                                        p += ggpinc;
+                                        u0 += u1;
+                                        v0 += v1;
+                                    }
+                                    cnt -= 1<<LINTERPSIZ;
+                                }
+                            }
+                            else
+                            {
+                                while (cnt > 0)
+                                {
+                                    int cnt2;
+                                    int u1, v1;
+                                    if (cnt >= (1<<LINTERPSIZ))
+                                    {
+                                        bz += bzinc, bzr = 1.f/bz;
+                                        u1 = ((int)(sg_f3.x*bzr)-u0)>>LINTERPSIZ;
+                                        v1 = ((int)(sg_f3.y*bzr)-v0)>>LINTERPSIZ;
+                                        cnt2 = 1<<LINTERPSIZ;
+                                    }
+                                    else
+                                    {
+                                        bz += bzinc2 * cnt, bzr = 1.f/bz;
+                                        u1 = tabledivide32_branchfree_noinline((int)(sg_f3.x*bzr)-u0, cnt);
+                                        v1 = tabledivide32_branchfree_noinline((int)(sg_f3.y*bzr)-v0, cnt);
+                                        cnt2 = cnt;
+                                    }
+                                    for (; cnt2>0; cnt2--)
+                                    {
+                                        uint16_t u = (sg1.x+u0)&0xffff;
+                                        uint16_t v = (sg1.y+v0)&0xffff;
+                                        char ch = ggbuf[((u>>(16-gglogx))<<gglogy)+(v>>(16-gglogy))];
+                                        if (ch != 255)
+                                        {
+                                            ch = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
+                                            *p = trans[(*p<<8)|ch];
+                                        }
+                                        slopalptr--;
+                                        p += ggpinc;
+                                        u0 += u1;
+                                        v0 += v1;
+                                    }
+                                    cnt -= 1<<LINTERPSIZ;
+                                }
+                            }
+                        }
+                    }
+                    else // the slow path...
+                    {
+                        if ((cstat&2)==0)
+                        {
+                            while (cnt > 0)
+                            {
+                                int cnt2;
+                                int u1, v1;
+                                if (cnt >= (1<<LINTERPSIZ))
+                                {
+                                    bz += bzinc, bzr = 1.f/bz;
+                                    u1 = ((int)(sg_f3.x*bzr)-u0)>>LINTERPSIZ;
+                                    v1 = ((int)(sg_f3.y*bzr)-v0)>>LINTERPSIZ;
+                                    cnt2 = 1<<LINTERPSIZ;
+                                }
+                                else
+                                {
+                                    bz += bzinc2 * cnt, bzr = 1.f/bz;
+                                    u1 = tabledivide32_branchfree_noinline((int)(sg_f3.x*bzr)-u0, cnt);
+                                    v1 = tabledivide32_branchfree_noinline((int)(sg_f3.y*bzr)-v0, cnt);
+                                    cnt2 = cnt;
+                                }
+                                for (; cnt2>0; cnt2--)
+                                {
+                                    uint16_t u = (sg1.x+u0)&0xffff;
+                                    uint16_t v = (sg1.y+v0)&0xffff;
+                                    char ch = ggbuf[mulscale16(u, span.x)*span.y+mulscale16(v, span.y)];
+                                    if (ch != 255)
+                                        *p = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
+                                    slopalptr--;
+                                    p += ggpinc;
+                                    u0 += u1;
+                                    v0 += v1;
+                                }
+                                cnt -= 1<<LINTERPSIZ;
+                            }
+                        }
+                        else
+                        {
+                            const char* const trans = paletteGetBlendTable(globalblend);
+                            if (cstat & 512)
+                            {
+                                while (cnt > 0)
+                                {
+                                    int cnt2;
+                                    int u1, v1;
+                                    if (cnt >= (1<<LINTERPSIZ))
+                                    {
+                                        bz += bzinc, bzr = 1.f/bz;
+                                        u1 = ((int)(sg_f3.x*bzr)-u0)>>LINTERPSIZ;
+                                        v1 = ((int)(sg_f3.y*bzr)-v0)>>LINTERPSIZ;
+                                        cnt2 = 1<<LINTERPSIZ;
+                                    }
+                                    else
+                                    {
+                                        bz += bzinc2 * cnt, bzr = 1.f/bz;
+                                        u1 = tabledivide32_branchfree_noinline((int)(sg_f3.x*bzr)-u0, cnt);
+                                        v1 = tabledivide32_branchfree_noinline((int)(sg_f3.y*bzr)-v0, cnt);
+                                        cnt2 = cnt;
+                                    }
+                                    for (; cnt2>0; cnt2--)
+                                    {
+                                        uint16_t u = (sg1.x+u0)&0xffff;
+                                        uint16_t v = (sg1.y+v0)&0xffff;
+                                        char ch = ggbuf[mulscale16(u, span.x)*span.y+mulscale16(v, span.y)];
+                                        if (ch != 255)
+                                        {
+                                            ch = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
+                                            *p = trans[(ch<<8)|*p];
+                                        }
+                                        slopalptr--;
+                                        p += ggpinc;
+                                        u0 += u1;
+                                        v0 += v1;
+                                    }
+                                    cnt -= 1<<LINTERPSIZ;
+                                }
+                            }
+                            else
+                            {
+                                while (cnt > 0)
+                                {
+                                    int cnt2;
+                                    int u1, v1;
+                                    if (cnt >= (1<<LINTERPSIZ))
+                                    {
+                                        bz += bzinc, bzr = 1.f/bz;
+                                        u1 = ((int)(sg_f3.x*bzr)-u0)>>LINTERPSIZ;
+                                        v1 = ((int)(sg_f3.y*bzr)-v0)>>LINTERPSIZ;
+                                        cnt2 = 1<<LINTERPSIZ;
+                                    }
+                                    else
+                                    {
+                                        bz += bzinc2 * cnt, bzr = 1.f/bz;
+                                        u1 = tabledivide32_branchfree_noinline((int)(sg_f3.x*bzr)-u0, cnt);
+                                        v1 = tabledivide32_branchfree_noinline((int)(sg_f3.y*bzr)-v0, cnt);
+                                        cnt2 = cnt;
+                                    }
+                                    for (; cnt2>0; cnt2--)
+                                    {
+                                        uint16_t u = (sg1.x+u0)&0xffff;
+                                        uint16_t v = (sg1.y+v0)&0xffff;
+                                        char ch = ggbuf[mulscale16(u, span.x)*span.y+mulscale16(v, span.y)];
+                                        if (ch != 255)
+                                        {
+                                            ch = *(uint8_t *)(((intptr_t)slopalptr[0])+ch);
+                                            *p = trans[(*p<<8)|ch];
+                                        }
+                                        slopalptr--;
+                                        p += ggpinc;
+                                        u0 += u1;
+                                        v0 += v1;
+                                    }
+                                    cnt -= 1<<LINTERPSIZ;
+                                }
+                            }
+                        }
+                    }
+#undef LINTERPSIZ
+                    if ((x&15) == 0) faketimerhandler();
+                }
+next_most:
+                sg_f2.x += sg_f.x;
+                sg_f2.y += sg_f.y;
+                sgzx += sgz;
+                shoffs += shinc;
+            }
+        }
+        else
+        {
+            globvis = mulscale16(globalhisibility,viewingrange);
+            if (sec->visibility != 0) globvis = mulscale4(globvis, (uint8_t)(sec->visibility+16));
+
+            x = picsiz[globalpicnum]; y = ((x>>4)&15); x &= 15;
+            x += upscale.x;
+            y += upscale.y;
+#if 0
+            if (pow2long[x] != xspan)
+            {
+                x++;
+                globalx1 = mulscale(globalx1,xspan,x);
+                globalx2 = mulscale(globalx2,xspan,x);
+            }
+#endif
+            dax = globalxpanning; day = globalypanning;
+            globalxpanning = -((globalx1*day+globalx2*dax)<<6);
+            globalypanning = -((globaly1*day+globaly2*dax)<<6);
+
+            globalx2 = mulscale16(globalx2,viewingrange);
+            globaly2 = mulscale16(globaly2,viewingrange);
+            globalzd = decltype(globalzd)((globalzd*int64_t(viewingrangerecip))>>4);
+
+            globalx1 = (globalx1-globalx2)*halfxdimen;
+            globaly1 = (globaly1-globaly2)*halfxdimen;
+
+            if ((cstat&2) == 0)
+                msethlineshift(x,y);
+            else
+                tsethlineshift(x,y);
+
+            span.x <<= upscale.x;
+            span.y <<= upscale.y;
+
+            globalispow2 = (pow2long[x]==span.x && pow2long[y]==span.y);
+            globalxspan = span.x;
+            globalyspan = span.y;
+
+            //Draw it!
+            ceilspritescan(lx,rx-1);
+            globalispow2 = 1;
+        }
     }
 
     if (automapping == 1 && (unsigned)spritenum < MAXSPRITES)
@@ -7033,17 +7148,17 @@ static void renderDrawSprite(int32_t snum)
 {
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
 
-#ifdef USE_OPENGL    
+#ifdef USE_OPENGL
     if (videoGetRenderMode() != REND_CLASSIC)
     {
-        buildgl_setEnabled(GL_ALPHA_TEST);        
+        buildgl_setEnabled(GL_ALPHA_TEST);
         buildgl_setEnabled(GL_BLEND);
 
         if (videoGetRenderMode() == REND_POLYMOST)
             polymost_drawsprite(snum);
 # ifdef POLYMER
         else polymer_drawsprite(snum);
-# endif        
+# endif
         return;
     }
 #endif
@@ -7060,12 +7175,12 @@ static void renderDrawMaskedWall(int16_t damaskwallcnt)
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
 
     //============================================================================= //POLYMOST BEGINS
-#ifdef USE_OPENGL    
+#ifdef USE_OPENGL
     if (videoGetRenderMode() != REND_CLASSIC)
     {
         buildgl_setEnabled(GL_ALPHA_TEST);
         buildgl_setEnabled(GL_BLEND);
-        
+
         if (videoGetRenderMode() == REND_POLYMOST)
             polymost_drawmaskwall(damaskwallcnt);
 # ifdef POLYMER
@@ -7762,33 +7877,45 @@ static void dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t
         // r_rotatespriteinterp 1: only interpolate when explicitly requested with RS_LERP
         // r_rotatespriteinterp 2: interpolate if the picnum or size matches regardless of RS_LERP being set
         // r_rotatespriteinterp 3: relax above picnum check to include the next tile, with potentially undesirable results
-
+#pragma pack(push, 1)
         static struct sm
         {
             vec4_t lerp, goal;
             int16_t picnum, flags;
             ClockTicks clock;
         } smooth[MAXUNIQHUDID];
-        
-        auto &sm  = smooth[uniqid];
+#pragma pack(pop)
+
+        auto &sm  = smooth[uniqid & (MAXUNIQHUDID-1)];
         auto &sm0 = smooth[0];
 
         vec4_t const goal  = { sx, sy, z, a };
         auto const   clock = totalclock;
 
         sm0 = { goal, goal, picnum, (int16_t)(dastat & ~RS_TRANS_MASK), clock };
-        
-        auto lerpWouldLookDerp = [&](void)
-        {
-            return !(dastat & RS_LERP) || sm.clock == 0 || clock - sm.clock > 4
-                   || (!(dastat & RS_FORCELERP) && (sm.flags != (dastat & ~RS_TRANS_MASK) || (tilesiz[picnum] != tilesiz[sm.picnum]
-                   && (unsigned)(picnum - sm.picnum)))) || klabs(a - sm.goal.a) == 1024;
-        };
 
-        if (lerpWouldLookDerp())
-            sm.lerp = sm.goal = sm0.goal;
-        else 
+        bool const lerpWouldLookDerp = !(dastat & RS_LERP) || sm.clock == 0 || (clock - sm.clock > 4) || (clock - sm.clock < 0)
+                                       || (!(dastat & RS_FORCELERP) && (sm.flags != (dastat & ~RS_TRANS_MASK) || (tilesiz[picnum] != tilesiz[sm.picnum]
+                                       && (unsigned)(picnum - sm.picnum)))) || klabs(a - sm.goal.a) == 1024;
+
+        if (clock - sm.clock >= 4 || sm0.goal != sm.goal)
         {
+            sm.lerp = sm.goal;
+            sm.goal = sm0.goal;
+            sm.clock = sm0.clock;
+        }
+
+        if (lerpWouldLookDerp)
+            sm.lerp = sm.goal = sm0.goal;
+        else
+        {
+            if (dastat & RS_NOPOSLERP)
+                sm.lerp.xy = sm.goal.xy = sm0.goal.xy;
+            if (dastat & RS_NOZOOMLERP)
+                sm.lerp.z = sm.goal.z = sm0.goal.z;
+            if (dastat & RS_NOANGLERP)
+                sm.lerp.a = sm.goal.a = sm0.goal.a;
+
             sm0.lerp = { sm.goal.x - mulscale16(65536-rotatespritesmoothratio, sm.goal.x - sm.lerp.x),
                          sm.goal.y - mulscale16(65536-rotatespritesmoothratio, sm.goal.y - sm.lerp.y),
                          sm.goal.z - mulscale16(65536-rotatespritesmoothratio, sm.goal.z - sm.lerp.z),
@@ -7798,13 +7925,6 @@ static void dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t
         sm.picnum = sm0.picnum;
         sm.flags  = sm0.flags;
 
-        if (clock - sm.clock > 1 || sm0.goal != sm.goal)
-        {
-            sm.lerp  = sm.goal;
-            sm.goal  = sm0.goal;
-            sm.clock = sm0.clock;
-        }
-
         if (r_rotatespriteinterp)
         {
             sx = sm0.lerp.x;
@@ -7813,6 +7933,9 @@ static void dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t
             a  = sm0.lerp.a;
         }
     }
+
+    if (daalpha == 255) // No sense trying to draw something invisible.
+        return;
 
     //============================================================================= //POLYMOST BEGINS
 #ifdef USE_OPENGL
@@ -7937,9 +8060,6 @@ static void dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t
     // Alpha handling
     if (!(dastat&RS_TRANS1) && daalpha > 0)
     {
-        if (daalpha == 255)
-            return;
-
         if (numalphatabs != 0)
         {
             if (falpha_to_blend((float)daalpha / 255.0f, &dastat, &dablend, RS_TRANS1, RS_TRANS2))
@@ -8446,7 +8566,7 @@ static void dosetaspect(void)
                 no_radarang2 = 1;
 #ifdef DEBUGGINGAIDS
                 if (editstatus)
-                    initprintf("no rad2\n");
+                    LOG_F(INFO, "no rad2");
 #endif
                 break;
             }
@@ -8999,7 +9119,7 @@ static void sighandler(int sig, siginfo_t *info, void *ctx)
         default:
             s = "?! (unknown)"; break;
         }
-        ERRprintf("Caught SIGFPE at address %p, code %s. Aborting.\n", info->si_addr, s);
+        LOG_F(ERROR, "Caught SIGFPE at address %p, code %s. Aborting.", info->si_addr, s);
         break;
     default:
         break;
@@ -9119,6 +9239,7 @@ int32_t engineInit(void)
 
     Bmemset(voxoff, 0, sizeof(voxoff));
     Bmemset(voxlock, 0, sizeof(voxlock));
+    Bmemset(voxflags, 0, sizeof(voxflags));
 
     for (i=0; i<MAXTILES; i++)
         tiletovox[i] = -1;
@@ -9290,7 +9411,7 @@ void set_globalang(fix16_t const ang)
     fcosglobalang = fcosang;
     fsinglobalang = fsinang;
 #endif
-    
+
     cosglobalang = (int)fcosang;
     singlobalang = (int)fsinang;
 
@@ -9396,25 +9517,25 @@ int32_t renderDrawRoomsQ16(int32_t daposx, int32_t daposy, int32_t daposz,
 
     for (int i = 0; i < numwalls; ++i)
     {
-        if (wall[i].cstat & CSTAT_WALL_ROTATE_90)
+        if ((wall[i].cstat & CSTAT_WALL_ROTATE_90) != CSTAT_WALL_ROTATE_90)
+            continue;
+
+        auto &w    = wall[i];
+        auto &tile = rottile[w.picnum+animateoffs(w.picnum)];
+
+        if (tile.newtile == -1)
         {
-            auto &w    = wall[i];
-            auto &tile = rottile[w.picnum+animateoffs(w.picnum)];
+            tile.newtile = findUnusedTile();
+            Bassert(tile.newtile != -1);
 
-            if (tile.newtile == -1 && tile.owner == -1)
-            {
-                tile.newtile = findUnusedTile();
-                Bassert(tile.newtile != -1);
+            rottile[tile.newtile].owner = w.picnum+animateoffs(w.picnum);
 
-                rottile[tile.newtile].owner = w.picnum+animateoffs(w.picnum);
-
-                auto &siz  = tilesiz[w.picnum+animateoffs(w.picnum)];
-                tileSetSize(tile.newtile, siz.x, siz.y);
-
-                tileLoad(tile.newtile);
-                // Bassert(waloff[tile.newtile]);
-            }
+            auto &siz  = tilesiz[w.picnum+animateoffs(w.picnum)];
+            tileSetSize(tile.newtile, siz.y, siz.x);
         }
+
+        if (tile.newtile != -1 && !waloff[tile.newtile])
+            tileLoad(tile.newtile);
     }
 
 #ifdef USE_OPENGL
@@ -9737,7 +9858,7 @@ static inline void    drawmaskleaf(_maskleaf* wall)
 }
 #endif
 
-static inline int32_t         sameside(const _equation *eq, const vec2f_t *p1, const vec2f_t *p2)
+static inline bool sameside(const _equation *eq, const vec2f_t *p1, const vec2f_t *p2)
 {
     const float sign1 = (eq->a * p1->x) + (eq->b * p1->y) + eq->c;
     const float sign2 = (eq->a * p2->x) + (eq->b * p2->y) + eq->c;
@@ -9747,103 +9868,291 @@ static inline int32_t         sameside(const _equation *eq, const vec2f_t *p1, c
 // x1, y1: in/out
 // rest x/y: out
 
-
-
 #ifdef DEBUG_MASK_DRAWING
 int32_t g_maskDrawMode = 0;
 #endif
 
 static inline int comparetsprites(int const k, int const l)
 {
+    auto const *const kspr = tspriteptr[k];
+    auto const *const lspr = tspriteptr[l];
+
 #ifdef USE_OPENGL
     if (videoGetRenderMode() == REND_POLYMOST)
     {
-        if ((tspriteptr[k]->cstat & 48) != (tspriteptr[l]->cstat & 48))
-            return (tspriteptr[k]->cstat & 48) - (tspriteptr[l]->cstat & 48);
+        if ((kspr->cstat & CSTAT_SPRITE_ALIGNMENT) != (lspr->cstat & CSTAT_SPRITE_ALIGNMENT))
+            return (kspr->cstat & CSTAT_SPRITE_ALIGNMENT) - (lspr->cstat & CSTAT_SPRITE_ALIGNMENT);
 
-        if ((tspriteptr[k]->cstat & 48) == 16 && tspriteptr[k]->ang != tspriteptr[l]->ang)
-            return tspriteptr[k]->ang - tspriteptr[l]->ang;
+        if ((kspr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL && kspr->ang != lspr->ang)
+            return kspr->ang - lspr->ang;
     }
 #endif
-    if (tspriteptr[k]->statnum != tspriteptr[l]->statnum)
-        return tspriteptr[k]->statnum - tspriteptr[l]->statnum;
+    if (kspr->statnum != lspr->statnum)
+        return kspr->statnum - lspr->statnum;
 
-    if (tspriteptr[k]->x == tspriteptr[l]->x &&
-        tspriteptr[k]->y == tspriteptr[l]->y &&
-        tspriteptr[k]->z == tspriteptr[l]->z &&
-        (tspriteptr[k]->cstat & 48) == (tspriteptr[l]->cstat & 48) &&
-        tspriteptr[k]->owner != tspriteptr[l]->owner)
-        return tspriteptr[k]->owner - tspriteptr[l]->owner;
+    if (kspr->x == lspr->x &&
+        kspr->y == lspr->y &&
+        kspr->z == lspr->z &&
+        (kspr->cstat & CSTAT_SPRITE_ALIGNMENT) == (lspr->cstat & CSTAT_SPRITE_ALIGNMENT) &&
+        kspr->owner != lspr->owner)
+        return kspr->owner - lspr->owner;
 
-    if (klabs(spritesxyz[k].z-globalposz) != klabs(spritesxyz[l].z-globalposz))
-        return klabs(spritesxyz[k].z-globalposz)-klabs(spritesxyz[l].z-globalposz);
+    if (klabs(spritesxyz[k].z - globalposz) != klabs(spritesxyz[l].z - globalposz))
+        return klabs(spritesxyz[k].z - globalposz) - klabs(spritesxyz[l].z - globalposz);
 
     return 0;
 }
 
 static void sortsprites(int const start, int const end)
 {
-    int32_t i, gap, y, ys;
-
     if (start >= end)
         return;
 
-    gap = 1; while (gap < end - start) gap = (gap<<1)+1;
-    for (gap>>=1; gap>0; gap>>=1)   //Sort sprite list
-        for (i=start; i<end-gap; i++)
-            for (bssize_t l=i; l>=start; l-=gap)
+    int32_t gap = 1;
+    while (gap < end - start) gap = (gap << 1) + 1;
+
+    // Sort sprite list
+    for (gap >>= 1; gap > 0; gap >>= 1)
+        for (int32_t i = start; i < end - gap; i++)
+            for (bssize_t l = i; l >= start; l -= gap)
             {
-                if (spritesxyz[l].y <= spritesxyz[l+gap].y) break;
-                swapptr(&tspriteptr[l],&tspriteptr[l+gap]);
-                swaplong(&spritesxyz[l].x,&spritesxyz[l+gap].x);
-                swaplong(&spritesxyz[l].y,&spritesxyz[l+gap].y);
+                if (spritesxyz[l].y <= spritesxyz[l + gap].y)
+                    break;
+
+                swapptr(&tspriteptr[l], &tspriteptr[l + gap]);
+                swaplong(&spritesxyz[l].x, &spritesxyz[l + gap].x);
+                swaplong(&spritesxyz[l].y, &spritesxyz[l + gap].y);
             }
 
-    ys = spritesxyz[start].y; i = start;
-    for (bssize_t j=start+1; j<=end; j++)
+    int32_t ys = spritesxyz[start].y;
+    int32_t i = start;
+
+    for (bssize_t j = start + 1; j <= end; j++)
     {
         if (j < end)
         {
-            y = spritesxyz[j].y;
+            int32_t y = spritesxyz[j].y;
             if (y == ys)
                 continue;
 
             ys = y;
         }
 
-        if (j > i+1)
+        if (j > i + 1)
         {
-            for (bssize_t k=i; k<j; k++)
+            for (bssize_t k = i; k < j; k++)
             {
                 auto const s = tspriteptr[k];
+                int32_t z = s->z;
 
-                spritesxyz[k].z = s->z;
-                if ((s->cstat&48) != 32)
+                if (!(s->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR))
                 {
-                    int32_t yoff = picanm[s->picnum].yofs + s->yoffset;
-                    int32_t yspan = (tilesiz[s->picnum].y*s->yrepeat<<2);
+                    int32_t const yoff  = picanm[s->picnum].yofs + s->yoffset;
+                    int32_t const yspan = (tilesiz[s->picnum].y * s->yrepeat << 2);
 
-                    spritesxyz[k].z -= (yoff*s->yrepeat)<<2;
+                    z -= (yoff * s->yrepeat) << 2;
 
-                    if (!(s->cstat&128))
-                        spritesxyz[k].z -= (yspan>>1);
-                    if (klabs(spritesxyz[k].z-globalposz) < (yspan>>1))
-                        spritesxyz[k].z = globalposz;
+                    if (!(s->cstat & 128))
+                        z -= (yspan >> 1);
+
+                    if (klabs(z - globalposz) < (yspan >> 1))
+                        z = globalposz;
                 }
+
+                spritesxyz[k].z = z;
             }
 
-            for (bssize_t k=i+1; k<j; k++)
-                for (bssize_t l=i; l<k; l++)
+            for (bssize_t k = i + 1; k < j; k++)
+                for (bssize_t l = i; l < k; l++)
                     if (comparetsprites(k, l) < 0)
                     {
-                        swapptr(&tspriteptr[k],&tspriteptr[l]);
-                        vec3_t tv3 = spritesxyz[k];
+                        swapptr(&tspriteptr[k], &tspriteptr[l]);
+                        vec3_t tv3    = spritesxyz[k];
                         spritesxyz[k] = spritesxyz[l];
                         spritesxyz[l] = tv3;
                     }
         }
+
         i = j;
     }
+}
+
+static void PolymostPrepareMasks()
+{
+#ifdef USE_OPENGL
+    int32_t i = spritesortcnt - 1;
+    int32_t back = i;
+
+    spritesortcnt = 0;
+
+    for (; i >= 0; --i)
+    {
+        if (polymost_spriteHasTranslucency(&tsprite[i]))
+        {
+            tspriteptr[spritesortcnt] = &tsprite[i];
+            ++spritesortcnt;
+        }
+        else
+        {
+            tspriteptr[back] = &tsprite[i];
+            --back;
+        }
+    }
+#endif
+}
+
+static void PolymostDrawMasks(int32_t numSprites)
+{
+#ifdef USE_OPENGL
+    polymost_setClamp(1 + 2);
+
+    if (spritesortcnt < numSprites)
+    {
+        for (bssize_t i = numSprites - 1; i >= spritesortcnt; /* 'i' set at and of loop */)
+        {
+            int32_t const py = spritesxyz[i].y;
+            int32_t const pcstat = tspriteptr[i]->cstat & CSTAT_SPRITE_ALIGNMENT;
+            int32_t const pangle = tspriteptr[i]->ang;
+            int j = i - 1;
+
+            if (!polymost_spriteIsModelOrVoxel(tspriteptr[i]))
+            {
+                while (j >= spritesortcnt && py == spritesxyz[j].y && pcstat == (tspriteptr[j]->cstat & CSTAT_SPRITE_ALIGNMENT) && (pcstat != CSTAT_SPRITE_ALIGNMENT_WALL || pangle == tspriteptr[j]->ang)
+                    && !polymost_spriteIsModelOrVoxel(tspriteptr[j]))
+                {
+                    j--;
+                }
+            }
+
+            if (i - j == 1)
+            {
+//                debugmask_add(i | 32768, tspriteptr[i]->owner);
+                renderDrawSprite(i);
+                tspriteptr[i] = NULL;
+            }
+            else
+            {
+                glDepthMask(GL_FALSE);
+
+                for (bssize_t k = i; k > j; k--)
+                {
+//                    debugmask_add(k | 32768, tspriteptr[k]->owner);
+                    renderDrawSprite(k);
+                }
+
+                glDepthMask(GL_TRUE);
+
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+                for (bssize_t k = i; k > j; k--)
+                {
+                    renderDrawSprite(k);
+                    tspriteptr[k] = NULL;
+                }
+
+                glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            }
+
+            i = j;
+        }
+    }
+
+    polymost_setClamp(0);
+
+    int32_t numMaskWalls = maskwallcnt;
+    maskwallcnt = 0;
+
+    for (int32_t i = 0; i < numMaskWalls; i++)
+    {
+        if (polymost_maskWallHasTranslucency((uwalltype *) &wall[thewall[maskwall[i]]]))
+        {
+            maskwall[maskwallcnt] = maskwall[i];
+            maskwallcnt++;
+        }
+        else
+            renderDrawMaskedWall(i);
+    }
+
+    glDepthMask(GL_FALSE);
+#endif
+}
+
+static void DrawDebugSpriteMarkers()
+{
+#if 0
+    for (int32_t i = spritesortcnt - 1; i >= 0; i--)
+    {
+        double  xs = tspriteptr[i]->x - globalposx;
+        double  ys = tspriteptr[i]->y - globalposy;
+        int32_t zs = tspriteptr[i]->z - globalposz;
+
+        int32_t xp = ys * cosglobalang - xs * singlobalang;
+        int32_t yp = (zs << 1);
+        int32_t zp = xs * cosglobalang + ys * singlobalang;
+
+        xs = ((double)xp * (halfxdimen << 12) / zp) + ((halfxdimen + windowxy1.x) << 12);
+        ys = ((double)yp * (xdimenscale << 12) / zp) + ((globalhoriz + windowxy1.y) << 12);
+
+        if (xs >= INT32_MIN && xs <= INT32_MAX && ys >= INT32_MIN && ys <= INT32_MAX)
+        {
+            renderDrawLine(xs - 65536, ys - 65536, xs + 65536, ys + 65536, 31);
+            renderDrawLine(xs + 65536, ys - 65536, xs - 65536, ys + 65536, 31);
+        }
+    }
+#endif
+}
+
+enum class Sides
+{
+    none  = 0,
+    left  = 1,
+    right = 2,
+    both  = left | right,
+};
+
+static vec2_t GetCenterPoint(tspriteptr_t tspr) {
+    switch (tspr->cstat & CSTAT_SPRITE_ALIGNMENT) {
+    case CSTAT_SPRITE_ALIGNMENT_WALL:
+        return get_wallspr_center(tspr);
+    case CSTAT_SPRITE_ALIGNMENT_FLOOR:
+        return get_floorspr_center(tspr, false);
+    case CSTAT_SPRITE_ALIGNMENT_SLOPE:
+        return get_floorspr_center(tspr, true);
+    case CSTAT_SPRITE_ALIGNMENT_FACING:
+        // TODO: implement?
+        return tspr->xy;
+    }
+
+    EDUKE32_UNREACHABLE_SECTION(abort());
+}
+
+static int32_t GetCornerPoints(tspriteptr_t tspr, int32_t (&xx)[4], int32_t (&yy)[4])
+{
+    bool const isOnFloor = (tspr->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR) != 0;
+
+    if (isOnFloor)
+    {
+        get_floorspr_points(tspr, 0, 0,
+                            &xx[0], &xx[1], &xx[2], &xx[3],
+                            &yy[0], &yy[1], &yy[2], &yy[3],
+                            tspriteGetSlope(tspr));
+    }
+    else
+    {
+        const int32_t oang = tspr->ang;
+
+        // Consider face sprites as wall sprites with camera ang.
+        // XXX: factor 4/5 needed?
+        if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_WALL)
+            tspr->ang = globalang;
+
+        get_wallspr_points(tspr, &xx[0], &xx[1], &yy[0], &yy[1]);
+
+        if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_WALL)
+            tspr->ang = oang;
+    }
+
+    return isOnFloor ? 4 : 2;
 }
 
 //
@@ -9853,16 +10162,18 @@ void renderDrawMasks(void)
 {
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
 
-#ifdef DEBUG_MASK_DRAWING
-        static struct {
-            int16_t di;  // &32768: &32767 is tspriteptr[], else thewall[] index
-            int16_t i;   // sprite[] or wall[] index
-        } debugmask[MAXWALLSB + MAXSPRITESONSCREEN + 1];
+    bool const isPolymost = (videoGetRenderMode() == REND_POLYMOST);
 
-        int32_t dmasknum = 0;
+#ifdef DEBUG_MASK_DRAWING
+    static struct {
+        int16_t di;  // &32768: &32767 is tspriteptr[], else thewall[] index
+        int16_t i;   // sprite[] or wall[] index
+    } debugmask[MAXWALLSB + MAXSPRITESONSCREEN + 1];
+
+    int32_t dmasknum = 0;
 
 # define debugmask_add(dispidx, idx) do { \
-        if (g_maskDrawMode && videoGetRenderMode()==REND_CLASSIC) { \
+        if (g_maskDrawMode && videoGetRenderMode() == REND_CLASSIC) { \
             debugmask[dmasknum].di = dispidx; \
             debugmask[dmasknum++].i = idx; \
         } \
@@ -9870,53 +10181,34 @@ void renderDrawMasks(void)
 #else
 # define debugmask_add(dispidx, idx) do {} while (0)
 #endif
-    int32_t i = spritesortcnt-1;
     int32_t numSprites = spritesortcnt;
 
-#ifdef USE_OPENGL
-    if (videoGetRenderMode() == REND_POLYMOST)
+    if (isPolymost)
+        PolymostPrepareMasks();
+    else
     {
-        spritesortcnt = 0;
-        int32_t back = i;
-        for (; i >= 0; --i)
-        {
-            if (polymost_spriteHasTranslucency(&tsprite[i]))
-            {
-                tspriteptr[spritesortcnt] = &tsprite[i];
-                ++spritesortcnt;
-            } else
-            {
-                tspriteptr[back] = &tsprite[i];
-                --back;
-            }
-        }
-    } else
-#endif
-    {
-        for (; i >= 0; --i)
-        {
+        for (int32_t i = spritesortcnt - 1; i >= 0; --i)
             tspriteptr[i] = &tsprite[i];
-        }
     }
 
-    for (i=numSprites-1; i>=0; --i)
+    for (int32_t i = numSprites - 1; i >= 0; --i)
     {
-        const int32_t xs = tspriteptr[i]->x-globalposx, ys = tspriteptr[i]->y-globalposy;
-        const int32_t yp = dmulscale6(xs,cosviewingrangeglobalang,ys,sinviewingrangeglobalang);
+        const int32_t xs = tspriteptr[i]->x - globalposx, ys = tspriteptr[i]->y - globalposy;
+        const int32_t yp = dmulscale6(xs, cosviewingrangeglobalang, ys, sinviewingrangeglobalang);
 #ifdef USE_OPENGL
         const int32_t modelp = polymost_spriteIsModelOrVoxel(tspriteptr[i]);
 #endif
 
-        if (yp > (4<<8))
+        if (yp > (4 << 8))
         {
-            const int32_t xp = dmulscale6(ys,cosglobalang,-xs,singlobalang);
+            const int32_t xp = dmulscale6(ys, cosglobalang, -xs, singlobalang);
 
-            if (mulscale24(labs(xp+yp),xdimen) >= yp)
+            if (mulscale24(labs(xp + yp), xdimen) >= yp)
                 goto killsprite;
 
-            spritesxyz[i].x = scale(xp+yp,xdimen<<7,yp);
+            spritesxyz[i].x = scale(xp + yp, xdimen << 7, yp);
         }
-        else if ((tspriteptr[i]->cstat&48) == 0)
+        else if ((tspriteptr[i]->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_FACING)
         {
 killsprite:
 #ifdef USE_OPENGL
@@ -9927,6 +10219,7 @@ killsprite:
                 if (i >= spritesortcnt)
                 {
                     --numSprites;
+
                     if (i != numSprites)
                     {
                         tspriteptr[i] = tspriteptr[numSprites];
@@ -9938,6 +10231,7 @@ killsprite:
                 {
                     --numSprites;
                     --spritesortcnt;
+
                     if (i != numSprites)
                     {
                         tspriteptr[i] = tspriteptr[spritesortcnt];
@@ -9948,9 +10242,11 @@ killsprite:
                         spritesxyz[spritesortcnt].y = spritesxyz[numSprites].y;
                     }
                 }
+
                 continue;
             }
         }
+
         spritesxyz[i].y = yp;
     }
 
@@ -9959,99 +10255,10 @@ killsprite:
 
     videoBeginDrawing(); //{{{
 
-#ifdef USE_OPENGL
-    if (videoGetRenderMode() == REND_POLYMOST)
-    {
-        polymost_setClamp(1+2);
+    if (isPolymost)
+        PolymostDrawMasks(numSprites);
 
-        if (spritesortcnt < numSprites)
-        {
-            for (bssize_t i = numSprites-1; i >= spritesortcnt;)
-            {
-                int32_t py = spritesxyz[i].y;
-                int32_t pcstat = tspriteptr[i]->cstat & 48;
-                int32_t pangle = tspriteptr[i]->ang;
-                int j = i - 1;
-                if (!polymost_spriteIsModelOrVoxel(tspriteptr[i]))
-                {
-                    while (j >= spritesortcnt && py == spritesxyz[j].y && pcstat == (tspriteptr[j]->cstat & 48) && (pcstat != 16 || pangle == tspriteptr[j]->ang)
-                        && !polymost_spriteIsModelOrVoxel(tspriteptr[j]))
-                    {
-                        j--;
-                    }
-                }
-                if (i - j == 1)
-                {
-                    debugmask_add(i | 32768, tspriteptr[i]->owner);
-                    renderDrawSprite(i);
-                    tspriteptr[i] = NULL;
-                }
-                else
-                {
-                    glDepthMask(GL_FALSE);
-
-                    for (bssize_t k = i; k > j; k--)
-                    {
-                        debugmask_add(k | 32768, tspriteptr[k]->owner);
-                        renderDrawSprite(k);
-                    }
-
-                    glDepthMask(GL_TRUE);
-
-                    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-                    
-                    for (bssize_t k = i; k > j; k--)
-                    {
-                        renderDrawSprite(k);
-                        tspriteptr[k] = NULL;
-                    }
-
-                    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-                }
-                i = j;
-            }
-        }
-
-        polymost_setClamp(0);
-        int32_t numMaskWalls = maskwallcnt;
-        maskwallcnt = 0;
-        for (i = 0; i < numMaskWalls; i++)
-        {
-            if (polymost_maskWallHasTranslucency((uwalltype *) &wall[thewall[maskwall[i]]]))
-            {
-                maskwall[maskwallcnt] = maskwall[i];
-                maskwallcnt++;
-            }
-            else
-                renderDrawMaskedWall(i);
-        }
-
-        glDepthMask(GL_FALSE);
-    }
-#endif
-
-#if 0
-        for (i=spritesortcnt-1; i>=0; i--)
-        {
-            double xs = tspriteptr[i]->x-globalposx;
-            double ys = tspriteptr[i]->y-globalposy;
-            int32_t zs = tspriteptr[i]->z-globalposz;
-
-            int32_t xp = ys*cosglobalang-xs*singlobalang;
-            int32_t yp = (zs<<1);
-            int32_t zp = xs*cosglobalang+ys*singlobalang;
-
-            xs = ((double)xp*(halfxdimen<<12)/zp)+((halfxdimen+windowxy1.x)<<12);
-            ys = ((double)yp*(xdimenscale<<12)/zp)+((globalhoriz+windowxy1.y)<<12);
-
-            if (xs >= INT32_MIN && xs <= INT32_MAX && ys >= INT32_MIN && ys <= INT32_MAX)
-            {
-                drawline256(xs-65536,ys-65536,xs+65536,ys+65536,31);
-                drawline256(xs+65536,ys-65536,xs-65536,ys+65536,31);
-            }
-        }
-#endif
+    DrawDebugSpriteMarkers();
 
     vec2f_t pos;
 
@@ -10063,94 +10270,84 @@ killsprite:
     while (maskwallcnt)
     {
         // PLAG: sorting stuff
-        const int32_t w = (videoGetRenderMode()==REND_POLYMER) ?
+        const int32_t w = (videoGetRenderMode() == REND_POLYMER) ?
             maskwall[maskwallcnt-1] : thewall[maskwall[maskwallcnt-1]];
 
         maskwallcnt--;
 
-        vec2f_t dot    = { (float)wall[w].x, (float)wall[w].y };
-        vec2f_t dot2   = { (float)wall[wall[w].point2].x, (float)wall[wall[w].point2].y };
-        vec2f_t middle = { (dot.x + dot2.x) * .5f, (dot.y + dot2.y) * .5f };
+        vec2f_t const dot    = { (float)wall[w].x, (float)wall[w].y };
+        vec2f_t const dot2   = { (float)wall[wall[w].point2].x, (float)wall[wall[w].point2].y };
+        vec2f_t const middle = { (dot.x + dot2.x) * .5f, (dot.y + dot2.y) * .5f };
 
-        _equation maskeq = equation(dot.x, dot.y, dot2.x, dot2.y);
-        _equation p1eq   = equation(pos.x, pos.y, dot.x, dot.y);
-        _equation p2eq   = equation(pos.x, pos.y, dot2.x, dot2.y);
+        _equation const maskeq = equation(dot.x, dot.y, dot2.x, dot2.y);
+        _equation const p1eq   = equation(pos.x, pos.y, dot.x, dot.y);
+        _equation const p2eq   = equation(pos.x, pos.y, dot2.x, dot2.y);
+
+        auto maskwall_separates = [&](vec2f_t const &spr)
+        {
+            // Does the maskwall separate the sprite from camera?
+            return !sameside(&maskeq, &spr, &pos);
+        };
+
+        auto wall_cone_sides = [&](vec2f_t const &spr)
+        {
+            // For each of the two rays from the camera to the two wall-points:
+            // does position 'spr' fall into the inside of the so-defined "cone"?
+            const bool inleft = sameside(&p1eq, &middle, &spr);
+            const bool inright = sameside(&p2eq, &middle, &spr);
+
+            static_assert((int)Sides::left == 1 && (int)Sides::right == 2, "");
+
+            return static_cast<Sides>((int)inleft | (inright << 1));
+        };
 
 #ifdef USE_OPENGL
-        if (videoGetRenderMode() == REND_POLYMOST)
-            polymost_setClamp(1+2);
+        if (isPolymost)
+            polymost_setClamp(1 + 2);
 #endif
+        int32_t i = spritesortcnt;
 
-        i = spritesortcnt;
         while (i)
         {
             i--;
+
             if (tspriteptr[i] != NULL)
             {
-                vec2f_t spr;
                 auto const tspr = tspriteptr[i];
+                vec2_t const cen = GetCenterPoint(tspr);
+                vec2f_t spr{(float)cen.x, (float)cen.y};
 
-                spr.x = (float)tspr->x;
-                spr.y = (float)tspr->y;
-
-                if (!sameside(&maskeq, &spr, &pos))
+                if (maskwall_separates(spr))
                 {
-                    // Sprite and camera are on different sides of the
-                    // masked wall.
+                    // Sprite and camera are on different sides of the masked wall. Check:
+                    // is that particular maskwall relevant for this sprite, i.e. does the
+                    // former obstruct the latter? If yes, we want to draw the sprite first.
 
-                    // Check if the sprite is inside the 'cone' given by
-                    // the rays from the camera to the two wall-points.
-                    const int32_t inleft = sameside(&p1eq, &middle, &spr);
-                    const int32_t inright = sameside(&p2eq, &middle, &spr);
-
-                    int32_t ok = (inleft && inright);
+                    auto const sides = wall_cone_sides(spr);
+                    bool ok = (sides == Sides::both);
 
                     if (!ok)
                     {
-                        // If not, check if any of the border points are...
+                        // No, considering the sprite's center point alone. But maybe if its
+                        // border points are taken into account?
                         int32_t xx[4] = { tspr->x };
                         int32_t yy[4] = { tspr->y };
-                        int32_t numpts, jj;
 
-                        const _equation pineq = inleft ? p1eq : p2eq;
+                        int32_t const otherSide = (int)Sides::both - (int)sides;
+                        int32_t const numpts    = GetCornerPoints(tspr, xx, yy);
 
-                        if ((tspr->cstat & 48) == 32)
+                        for (int32_t jj = 0; jj < numpts; jj++)
                         {
-                            numpts = 4;
-                            get_floorspr_points(tspr, 0, 0,
-                                                &xx[0], &xx[1], &xx[2], &xx[3],
-                                                &yy[0], &yy[1], &yy[2], &yy[3],
-                                                tspriteGetSlope(tspr));
-                        }
-                        else
-                        {
-                            const int32_t oang = tspr->ang;
-                            numpts = 2;
+                            spr = {(float)xx[jj], (float)yy[jj]};
 
-                            // Consider face sprites as wall sprites with camera ang.
-                            // XXX: factor 4/5 needed?
-                            if ((tspr->cstat & 48) != 16)
-                                tspriteptr[i]->ang = globalang;
-
-                            get_wallspr_points(tspr, &xx[0], &xx[1], &yy[0], &yy[1]);
-
-                            if ((tspr->cstat & 48) != 16)
-                                tspriteptr[i]->ang = oang;
-                        }
-
-                        for (jj=0; jj<numpts; jj++)
-                        {
-                            spr.x = (float)xx[jj];
-                            spr.y = (float)yy[jj];
-
-                            if (!sameside(&maskeq, &spr, &pos))  // behind the maskwall,
-                                if ((sameside(&p1eq, &middle, &spr) &&  // inside the 'cone',
-                                        sameside(&p2eq, &middle, &spr))
-                                        || !sameside(&pineq, &middle, &spr))  // or on the other outside.
-                                {
-                                    ok = 1;
-                                    break;
-                                }
+                            // Relative to the sprite center: is the border point still on the
+                            // same side of the masked wall but now on the other side of the
+                            // wall-cone ray which gave rise to the "outside" status?
+                            if (maskwall_separates(spr) && ((int)wall_cone_sides(spr) & otherSide) != 0)
+                            {
+                                ok = true;
+                                break;
+                            }
                         }
                     }
 
@@ -10165,30 +10362,34 @@ killsprite:
             }
         }
 
-        debugmask_add(maskwall[maskwallcnt], thewall[maskwall[maskwallcnt]]);
 #ifdef USE_OPENGL
-        if (videoGetRenderMode() == REND_POLYMOST)
+        if (isPolymost)
             polymost_setClamp(0);
 #endif
+        debugmask_add(maskwall[maskwallcnt], thewall[maskwall[maskwallcnt]]);
         renderDrawMaskedWall(maskwallcnt);
     }
 
 #ifdef USE_OPENGL
-    if (videoGetRenderMode() == REND_POLYMOST)
-        polymost_setClamp(1+2);
+    if (isPolymost)
+        polymost_setClamp(1 + 2);
 #endif
+
+    if (spritesortcnt > maxspritesonscreen)
+        spritesortcnt = maxspritesonscreen;
+
     while (spritesortcnt)
     {
         --spritesortcnt;
         if (tspriteptr[spritesortcnt] != NULL)
         {
-            debugmask_add(i | 32768, tspriteptr[i]->owner);
+            debugmask_add(spritesortcnt | 32768, tspriteptr[spritesortcnt]->owner);
             renderDrawSprite(spritesortcnt);
             tspriteptr[spritesortcnt] = NULL;
         }
     }
 #ifdef USE_OPENGL
-    if (videoGetRenderMode() == REND_POLYMOST)
+    if (isPolymost)
     {
         glDepthMask(GL_TRUE);
         polymost_setClamp(0);
@@ -10202,7 +10403,7 @@ killsprite:
 #ifdef DEBUG_MASK_DRAWING
     if (g_maskDrawMode && videoGetRenderMode() == REND_CLASSIC)
     {
-        for (i=0; i<dmasknum; i++)
+        for (int32_t i = 0; i < dmasknum; i++)
         {
             EDUKE32_STATIC_ASSERT(MAXWALLS <= 32768 && MAXSPRITES <= 32768);
             int32_t spritep = !!(debugmask[i].di & 32768);
@@ -10327,7 +10528,7 @@ void renderDrawMapView(int32_t dax, int32_t day, int32_t zoome, int16_t ang)
                 if (sprite[i].cstat & 32768)
                     continue;
 
-                if ((sprite[i].cstat & 48) >= 32)
+                if (sprite[i].cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR)
                 {
                     if ((sprite[i].cstat & (64 + 8)) == (64 + 8))
                         continue;
@@ -10439,7 +10640,7 @@ void renderDrawMapView(int32_t dax, int32_t day, int32_t zoome, int16_t ang)
     for (s=sortnum-1; s>=0; s--)
     {
         auto const spr = (uspritetype * )&sprite[tsprite[s].owner];
-        if ((spr->cstat&48) >= 32)
+        if (spr->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR)
         {
             const int32_t xspan = tilesiz[spr->picnum].x;
             const int32_t yspan = tilesiz[spr->picnum].y;
@@ -10573,7 +10774,9 @@ static FORCE_INLINE int32_t have_maptext(void)
 static int enginePrepareLoadBoard(buildvfs_kfd fil, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
 {
     initspritelists();
+#ifdef USE_MIMALLOC
     mi_collect(true);
+#endif
     DO_FREE_AND_NULL(reachablesectors);
 
     Bmemset(show2dsector, 0, sizeof(show2dsector));
@@ -10609,7 +10812,7 @@ static int enginePrepareLoadBoard(buildvfs_kfd fil, vec3_t *dapos, int16_t *daan
 
 static FORCE_INLINE size_t getreachabilitybitmapsegmentsize(void)
 {
-    return ((numsectors + 7) >> 3);
+    return bitmap_size(numsectors);
 }
 
 static FORCE_INLINE size_t getreachabilitybitmapsize(void)
@@ -10696,6 +10899,7 @@ void calc_sector_reachability(void)
 #endif
                 }
 
+#ifdef YAX_ENABLE
                 int upperSect = yax_vnextsec(j, YAX_CEILING);
                 if (upperSect >= 0 && !bitmap_test(sectbitmap, upperSect))
                 {
@@ -10713,6 +10917,7 @@ void calc_sector_reachability(void)
                     LOG_F(INFO, "sector %d reaches sector %d through TROR", sectnum, lowerSect);
 #endif
                 }
+#endif
             }
         }
     }
@@ -10730,8 +10935,8 @@ static int32_t engineFinishLoadBoard(const vec3_t* dapos, int16_t* dacursectnum,
     {
         int32_t removeit = 0;
 
-        if ((sprite[i].cstat & 48) == 48 && (sprite[i].xoffset|sprite[i].yoffset) == 0)
-            sprite[i].cstat &= ~48;
+        if ((sprite[i].cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_SLOPE && (sprite[i].xoffset|sprite[i].yoffset) == 0)
+            sprite[i].cstat &= ~CSTAT_SPRITE_ALIGNMENT_SLOPE;
 
         if (sprite[i].statnum == MAXSTATUS)
         {
@@ -10827,7 +11032,7 @@ static void check_sprite(int32_t i)
     else if ((unsigned)sprite[i].picnum >= MAXTILES)
     {
         LOG_F(ERROR, "Error in map file: sprite #%d (%d,%d) with illegal picnum (%d) was REMOVED.",
-                   i, TrackerCast(sprite[i].x), TrackerCast(sprite[i].y), TrackerCast(sprite[i].sectnum));
+                   i, TrackerCast(sprite[i].x), TrackerCast(sprite[i].y), TrackerCast(sprite[i].picnum));
         remove_sprite(i);
     }
     else if ((unsigned)sprite[i].sectnum >= (unsigned)numsectors)
@@ -11014,7 +11219,7 @@ int32_t engineLoadBoard(const char *filename, char flags, vec3_t *dapos, int16_t
 
     ////////// Read sprites //////////
 
-    if (kread_and_test(fil,&numsprites,2)) goto error; 
+    if (kread_and_test(fil,&numsprites,2)) goto error;
     numsprites = B_LITTLE16(numsprites);
     if ((unsigned)numsprites >= MYMAXSPRITES()+1) goto error;
 
@@ -11087,8 +11292,7 @@ skip_reading_mapbin:
 
         system_getcvars();
 
-        auto mapInfo = (usermaphack_t *)bsearch(&g_loadedMapHack, usermaphacks, num_usermaphacks,
-                                            sizeof(usermaphack_t), compare_usermaphacks);
+        auto mapInfo = find_usermaphack();
 
         // Per-map ART
         if (mapInfo && mapInfo->mapart)
@@ -11148,7 +11352,7 @@ int32_t engineLoadBoardV5V6(const char *filename, char fromwhere, vec3_t *dapos,
         numsectors = 0;
         numwalls   = 0;
         kclose(fil);
-        return -1; 
+        return -1;
     }
 
     switch (mapversion)
@@ -11349,7 +11553,7 @@ int32_t engineLoadBoardV5V6(const char *filename, char fromwhere, vec3_t *dapos,
                 v6spr.lotag   = B_LITTLE16(v6spr.lotag);
                 v6spr.hitag   = B_LITTLE16(v6spr.hitag);
                 v6spr.extra   = B_LITTLE16(v6spr.extra);
-                
+
                 convertv6sprv7(&v6spr, &sprite[i]);
                 check_sprite(i);
             }
@@ -11446,7 +11650,7 @@ int32_t saveboard(const char *filename, const vec3_t *dapos, int16_t daang, int1
 #ifdef NEW_MAP_FORMAT
     if (mapversion == 10)
     {
-        initprintf("Saving of TROR maps not yet accessible in the Lunatic preview build\n");
+        LOG_F(ERROR, "Saving of TROR maps not yet accessible with NEW_MAP_FORMAT");
         return -1;
 //        return saveboard_maptext(filename, dapos, daang, dacursectnum);
     }
@@ -11792,7 +11996,7 @@ int32_t videoSetGameMode(char davidoption, int32_t daupscaledxdim, int32_t daups
     OSD_ResizeDisplay(xdim, ydim);
 
     videoAllocateBuffers();
-    
+
     //Force drawrooms to call dosetaspect & recalculate stuff
     oxyaspect = oxdimen = oviewingrange = -1;
 
@@ -11918,7 +12122,7 @@ uint8_t maxvoxcol;
 
 void getVoxelColorMap(char* davoxptr, uint8_t *bitmap)
 {
-    Bmemset(bitmap, -1, 32);
+    Bmemset(bitmap, -1, bitmap_size(256));
     maxvoxcol = 0;
 
     int32_t *longptr = (int32_t *)davoxptr;
@@ -11950,10 +12154,10 @@ void getVoxelColorMap(char* davoxptr, uint8_t *bitmap)
                 do
                 {
                     uint8_t coloridx = voxptr[3+offs];
-                    
+
                     if (coloridx > maxvoxcol)
                         maxvoxcol = coloridx;
-                    
+
                     bitmap_clear(bitmap, coloridx);
                     offs++;
                 } while (--zleng);
@@ -11984,7 +12188,7 @@ void applyVoxelColorMap(char* davoxptr, uint8_t *bitmap)
         {
             char *voxptr = (char *)(B_LITTLE16(shortptr[y])+slabxoffs);
             char *const voxend = (char *)(B_LITTLE16(shortptr[y+1])+slabxoffs);
-            
+
             for (; voxptr<voxend; voxptr+=voxptr[1]+3)
             {
                 uint8_t zleng = voxptr[1];
@@ -11995,7 +12199,7 @@ void applyVoxelColorMap(char* davoxptr, uint8_t *bitmap)
                     uint8_t coloridx = voxptr[3+offs];
                     if (coloridx != 255 && bitmap_test(bitmap, coloridx))
                     {
-                        rgb24_t const& color = *(rgb24_t*)&(IsPaletteIndexFullbright(coloridx)?voxpal:palette)[coloridx * 3];
+                        rgb24_t const& color = *(rgb24_t*)&(bitmap_test(PaletteIndexFullbright, coloridx)?voxpal:palette)[coloridx * 3];
                         voxptr[3 + offs] = paletteGetClosestColorWithBlacklist(color.r, color.g, color.b, maxvoxcol, bitmap);
                     }
                     offs++;
@@ -12028,19 +12232,19 @@ int32_t qloadkvx(int32_t voxindex, const char *filename)
     }
 
     klseek(fil, -768, SEEK_END);
-    
+
     maxvoxcol = 0;
 
     for (int i=0; i<256; i++)
     {
         char c[3];
         kread(fil, c, 3);
-        *(int32_t *)&voxpal[i] = B_LITTLE32((c[0]<<18) + (c[1]<<10) + (c[2]<<2) + (i<<24));   
+        *(int32_t *)&voxpal[i] = B_LITTLE32((c[0]<<18) + (c[1]<<10) + (c[2]<<2) + (i<<24));
     }
 
     klseek(fil, 0, SEEK_SET);
 
-    auto bitmap = (uint8_t*)Balloca(32);
+    uint8_t bitmap[bitmap_size(256)];
     int32_t lastsiz=0;
 
     for (int i=0; i<MAXVOXMIPS; i++)
@@ -12063,7 +12267,7 @@ int32_t qloadkvx(int32_t voxindex, const char *filename)
 
         char *ptr = (char *) voxoff[voxindex][i];
         kread(fil, ptr, dasiz);
-        
+
         if (i == 0)
             getVoxelColorMap(ptr, bitmap);
         else
@@ -12089,10 +12293,9 @@ int32_t qloadkvx(int32_t voxindex, const char *filename)
     return 0;
 }
 
-void vox_undefine(int32_t const tile)
+void vox_clearid(int32_t const voxindex)
 {
-    ssize_t voxindex = tiletovox[tile];
-    if (voxindex < 0)
+    if ((unsigned)voxindex >= MAXVOXELS)
         return;
 
 #ifdef USE_OPENGL
@@ -12112,9 +12315,14 @@ void vox_undefine(int32_t const tile)
     }
     voxscale[voxindex] = 65536;
     voxflags[voxindex] = 0;
-    tiletovox[tile] = -1;
 
     // TODO: nextvoxid
+}
+
+void vox_undefine(int32_t const tile)
+{
+    vox_clearid(tiletovox[tile]);
+    tiletovox[tile] = -1;
 }
 
 //
@@ -12297,7 +12505,7 @@ fix16_t __fastcall getq16angledelta(fix16_t first, fix16_t second)
 
     if (klabs(fix16_sub(first, second)) < F16(1024))
         return fix16_sub(second, first);
-    else 
+    else
         return fix16_sub((second > F16(1024)) ? fix16_sub(second, F16(2048)) : second, (first > F16(1024)) ? fix16_sub(first, F16(2048)) : first);
 }
 
@@ -12468,16 +12676,62 @@ int32_t cansee_19950829(int32_t xs, int32_t ys, int32_t zs, int16_t sectnums, in
     return 0;
 }
 
-int32_t cansee(int32_t x1, int32_t y1, int32_t z1, int16_t sect1, int32_t x2, int32_t y2, int32_t z2, int16_t sect2, int32_t wallmask)
+#ifdef YAX_ENABLE
+// Traverse TROR transitions at the given (x,y) coordinates until no longer possible.
+// If the z coordinate is below the floor or above the ceiling, return the closest vertical sectnum.
+static int16_t yax_cansee_fixsector(int32_t x, int32_t y, int32_t z, int16_t startSect)
+{
+    if ((unsigned) (startSect) >= MAXSECTORS)
+        return startSect;
+
+    int16_t cb, fb;
+    yax_getbunches(startSect, &cb, &fb);
+    if (cb || fb)
+    {
+        int16_t curSect = startSect;
+        while(z < getcorrectceilzofslope(curSect, x, y))
+        {
+            int16_t prevSect = curSect;
+            curSect = yax_getneighborsect(x, y, curSect, YAX_CEILING);
+            if (curSect < 0) return prevSect;
+        }
+
+        while(z > getcorrectflorzofslope(curSect, x, y))
+        {
+            int16_t prevSect = curSect;
+            curSect = yax_getneighborsect(x, y, curSect, YAX_FLOOR);
+            if (curSect < 0) return prevSect;
+        }
+
+        return curSect;
+    }
+
+    return startSect;
+}
+#endif
+
+int32_t cansee(int32_t x1, int32_t y1, int32_t z1, int16_t orig_sect1, int32_t x2, int32_t y2, int32_t z2, int16_t orig_sect2, int32_t wallmask)
 {
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
+
+    int16_t sect1 = orig_sect1;
+    int16_t sect2 = orig_sect2;
+
+#ifdef YAX_ENABLE
+    // If the z coordinate is out of bounds in a TROR sector, try to traverse TROR transitions to reach its containing sector.
+    if (enginecompatibilitymode == ENGINE_EDUKE32 && numyaxbunches > 0)
+    {
+        sect1 = yax_cansee_fixsector(x1, y1, z1, orig_sect1);
+        sect2 = yax_cansee_fixsector(x2, y2, z2, orig_sect2);
+    }
+#endif
 
     if (enginecompatibilitymode == ENGINE_19950829)
         return cansee_19950829(x1, y1, z1, sect1, x2, y2, z2, sect2);
     int32_t dacnt, danum;
     const int32_t x21 = x2-x1, y21 = y2-y1, z21 = z2-z1;
 
-    static uint8_t sectbitmap[(MAXSECTORS+7)>>3];
+    static uint8_t sectbitmap[bitmap_size(MAXSECTORS)];
 #ifdef YAX_ENABLE
     int16_t pendingsectnum;
     vec3_t pendingvec;
@@ -12630,7 +12884,9 @@ restart_grand:
             if (z <= cfz[0] || z >= cfz[1])
                 return 0;
 
+#ifdef YAX_ENABLE
 add_nextsector:
+#endif
             if (!bitmap_test(sectbitmap, nexts))
             {
                 bitmap_set(sectbitmap, nexts);
@@ -12771,7 +13027,7 @@ void dragpoint(int16_t pointhighlight, int32_t dax, int32_t day, uint8_t flags)
     uint8_t *const walbitmap = (uint8_t *)tempbuf;
 
     if ((flags&1)==0)
-        Bmemset(walbitmap, 0, (numwalls+7)>>3);
+        Bmemset(walbitmap, 0, bitmap_size(numwalls));
     yaxwalls[numyaxwalls++] = pointhighlight;
 
     for (i=0; i<numyaxwalls; i++)
@@ -12792,7 +13048,7 @@ void dragpoint(int16_t pointhighlight, int32_t dax, int32_t day, uint8_t flags)
 
             for (YAX_ITER_WALLS(w, j, tmpcf))
             {
-                if (bitmap_test(walbitmap, j)==0)
+                if (!bitmap_test(walbitmap, j))
                 {
                     bitmap_set(walbitmap, j);
                     yaxwalls[numyaxwalls++] = j;
@@ -12859,6 +13115,8 @@ void dragpoint(int16_t pointhighlight, int32_t dax, int32_t day, uint8_t flags)
 {
     int16_t cnt, tempshort;
     int32_t thelastwall;
+
+    UNREFERENCED_PARAMETER(flags);
 
     tempshort = pointhighlight;    //search points CCW
     cnt = MAXWALLS;
@@ -13012,7 +13270,7 @@ int findwallbetweensectors(int sect1, int sect2)
 // updatesector[z]
 //
 int16_t updatesectorneighborlist[MAXSECTORS];
-uint8_t updatesectorneighbormap[(MAXSECTORS+7)>>3];
+uint8_t updatesectorneighbormap[bitmap_size(MAXSECTORS)];
 
 void updatesector_compat(int32_t const x, int32_t const y, int16_t* const sectnum)
 {
@@ -13251,7 +13509,7 @@ void updatesectorneighbor(int32_t const x, int32_t const y, int16_t * const sect
         int16_t nsecs;
         bfirst_search_init(updatesectorneighborlist, updatesectorneighbormap, &nsecs, MAXSECTORS, initialsectnum);
 
-        int32_t const initialDistance = getsectordist({x, y}, initialsectnum);        
+        int32_t const initialDistance = getsectordist({x, y}, initialsectnum);
 
         // initialDistance == 0 means the point passed to getsectordist was inside the passed sectnum
         if (initialDistance == 0)
@@ -13277,7 +13535,7 @@ void updatesectorneighbor(int32_t const x, int32_t const y, int16_t * const sect
         }
     }
 
-    Bmemset(updatesectorneighbormap, 0, (MAXSECTORS+7)>>3);
+    Bmemset(updatesectorneighbormap, 0, bitmap_size(MAXSECTORS));
     *sectnum = -1;
 }
 
@@ -13297,7 +13555,7 @@ restart:
 #endif
     uint32_t const correctedsectnum = (unsigned)*sectnum;
     if (correctedsectnum < (unsigned)numsectors)
-    {    
+    {
         int16_t nsecs;
         bfirst_search_init(updatesectorneighborlist, updatesectorneighbormap, &nsecs, MAXSECTORS, correctedsectnum);
 
@@ -13357,7 +13615,7 @@ restart:
         }
     }
 
-    Bmemset(updatesectorneighbormap, 0, (MAXSECTORS+7)>>3);
+    Bmemset(updatesectorneighbormap, 0, bitmap_size(MAXSECTORS));
     *sectnum = -1;
 }
 
@@ -13577,7 +13835,8 @@ void rotatesprite_(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t picnum,
     //  bit RS_CENTERORIGIN: see dorotspr_handle_bit2
     ////////////////////
 
-    if (((dastat & RS_PERM) == 0) || (numpages < 2) || (beforedrawrooms != 0))
+    auto const impermanent = (dastat & RS_PERM) == 0 || videoGetRenderMode() == REND_POLYMER;
+    if (impermanent || (numpages < 2) || (beforedrawrooms != 0))
     {
         videoBeginDrawing(); //{{{
         dorotatesprite(sx,sy,z,a,picnum,dashade,dapalnum,dastat,daalpha,dablend,cx1,cy1,cx2,cy2,guniqhudid);
@@ -13588,7 +13847,7 @@ void rotatesprite_(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t picnum,
             (sx == (160<<16)) && (sy == (100<<16)) && (z == 65536L) && (a == 0) && ((dastat&RS_TRANS1) == 0))
         permhead = permtail = 0;
 
-    if ((dastat & RS_PERM) == 0)
+    if (impermanent)
         return;
 
     if (numpages >= 2)
@@ -14356,7 +14615,7 @@ void videoSet2dMode(int32_t daxdim, int32_t daydim)
 
     qsetmode = ((daxdim<<16)|(daydim&0xffff));
 }
-#endif // 
+#endif //
 
 static int32_t printext_checkypos(int32_t ypos, int32_t *yminptr, int32_t *ymaxptr)
 {
@@ -14699,15 +14958,16 @@ static void PolymerProcessModels(void)
 //
 int32_t videoSetRenderMode(int32_t renderer)
 {
-    UNREFERENCED_PARAMETER(renderer);
-
 #ifdef USE_OPENGL
     buildgl_resetStateAccounting();
 
     if (bpp == 8)
     {
-        buildgl_setDisabled(GL_BLEND);
-        buildgl_setDisabled(GL_ALPHA_TEST);
+        if (!nogl)
+        {
+            buildgl_setDisabled(GL_BLEND);
+            buildgl_setDisabled(GL_ALPHA_TEST);
+        }
         renderer = REND_CLASSIC;
     }
 # ifdef POLYMER
@@ -14728,7 +14988,8 @@ int32_t videoSetRenderMode(int32_t renderer)
         polymer_uninit();
     }
 # else
-    else renderer = REND_POLYMOST;
+    else
+        renderer = REND_POLYMOST;
 # endif
 
     // Fixes mirror glitches that occur when changing the renderer.
@@ -14745,6 +15006,8 @@ int32_t videoSetRenderMode(int32_t renderer)
     {
         polymost_init();
     }
+#else
+    UNREFERENCED_PARAMETER(renderer);
 #endif
 
     return 0;
@@ -14805,4 +15068,3 @@ void tileInvalidate(int16_t tilenume, int32_t pal, int32_t how)
 /*
  * vim:ts=8:
  */
-

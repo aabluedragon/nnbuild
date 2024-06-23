@@ -17,7 +17,7 @@
 
 #if SDL_MAJOR_VERSION >= 2
 # include "imgui.h"
-# include "imgui_impl_sdl.h"
+# include "imgui_impl_sdl2.h"
 #ifdef USE_OPENGL
 # include "imgui_impl_opengl3.h"
 #endif
@@ -487,7 +487,7 @@ int main(int argc, char *argv[])
 #endif
 
     engineSetupLogging(argc, argv);
-    
+
 #if SDL_VERSION_ATLEAST(2, 0, 8)
     if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 8))
         SDL_SetMemoryFunctions(_xmalloc, _xcalloc, _xrealloc, _xfree);
@@ -653,34 +653,26 @@ int32_t sdlayer_checkversion(void);
 int32_t sdlayer_checkversion(void)
 {
     SDL_version compiled;
-    auto str = (char*)Balloca(128);
+    auto str = (char*)Balloca(256);
     str[0] = 0;
 
     SDL_GetVersion(&linked);
 
-    // odd-numbered SDL patch levels are dev snapshots, even-numbered are proper releases
     // string is in the format "https://github.com/libsdl-org/SDL.git@bfd2f8993f173535efe436f8e60827cc44351bea"
     char const *rev;
 
-    if (linked.patch & 1 && (rev = SDL_GetRevision()))
+    if ((rev = SDL_GetRevision()) && Bstrlen(rev) > 0)
     {
-        char buf[10] = {};
-
-        int len = Bstrlen(rev);
-
-        if (len > 49 && rev[len-41] == '@')
-            Bmemcpy(buf, &rev[len-40], 9);
-
-        Bsnprintf(str, 128, "Initializing SDL %s (%d.%d.%d snapshot)", buf, linked.major, linked.minor, linked.patch);
+        Bsnprintf(str, 256, "Initializing SDL %d.%d.%d (%s)", linked.major, linked.minor, linked.patch, rev);
     }
     else
     {
         SDL_VERSION(&compiled);
 
         if (!Bmemcmp(&compiled, &linked, sizeof(SDL_version)))
-            Bsnprintf(str, 128, "Initializing SDL %d.%d.%d", compiled.major, compiled.minor, compiled.patch);
+            Bsnprintf(str, 256, "Initializing SDL %d.%d.%d", compiled.major, compiled.minor, compiled.patch);
         else
-            Bsnprintf(str, 128, "Initializing SDL %d.%d.%d (built against version %d.%d.%d)",
+            Bsnprintf(str, 256, "Initializing SDL %d.%d.%d (built against version %d.%d.%d)",
                 linked.major, linked.minor, linked.patch, compiled.major, compiled.minor, compiled.patch);
     }
 
@@ -749,7 +741,7 @@ int32_t initsystem(void)
 #endif
 
 #ifndef _WIN32
-        const char *drvname = SDL_GetVideoDriver(0);
+        const char *drvname = SDL_GetCurrentVideoDriver();
 
         if (drvname)
             LOG_F(INFO, "Using '%s' video driver.", drvname);
@@ -929,7 +921,7 @@ void joyScanDevices()
             else
 #endif
                 Bstrncpyz(name, SDL_JoystickNameForIndex(i), sizeof(name));
-                
+
             VLOG_F(LOG_INPUT, "  %d. %s", i + 1, name);
         }
 #if SDL_MAJOR_VERSION >= 2
@@ -1088,27 +1080,38 @@ int32_t initinput(void(*hotplugCallback)(void) /*= nullptr*/)
         Bstrncpyz(g_keyNameTable[keytranslation[i]], SDL_GetKeyName(SDL_SCANCODE_TO_KEYCODE(i)), sizeof(g_keyNameTable[0]));
     }
 
+    if ((g_controllerSupportFlags & CONTROLLER_DISABLED) == 0)
+    {
 #if SDL_MAJOR_VERSION >= 2
-    if (!SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC))
+# if defined SDL_HINT_DIRECTINPUT_ENABLED
+        if (g_controllerSupportFlags & CONTROLLER_NO_DINPUT)
+            SDL_SetHint(SDL_HINT_DIRECTINPUT_ENABLED, "0");
+# endif
+# if defined SDL_HINT_XINPUT_ENABLED
+        if (g_controllerSupportFlags & CONTROLLER_NO_XINPUT)
+            SDL_SetHint(SDL_HINT_XINPUT_ENABLED, "0");
+# endif
+        if (!SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER))
 #else
-    if (!SDL_InitSubSystem(SDL_INIT_JOYSTICK))
+        if (!SDL_InitSubSystem(SDL_INIT_JOYSTICK))
 #endif
-        joyScanDevices();
+            joyScanDevices();
 
 #if SDL_VERSION_ATLEAST(2, 0, 9)
-    if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
-    {
-        if (joystick.flags & JOY_RUMBLE)
+        if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
         {
-            switch (joystick.flags & JOY_RUMBLE)
+            if (joystick.flags & JOY_RUMBLE)
             {
-            case JOY_RUMBLE:
-                VLOG_F(LOG_INPUT, "Controller supports rumble.");
-                break;
+                switch (joystick.flags & JOY_RUMBLE)
+                {
+                case JOY_RUMBLE:
+                    VLOG_F(LOG_INPUT, "Controller supports rumble.");
+                    break;
+                }
             }
         }
-    }
 #endif
+    }
 
     return 0;
 }
@@ -1351,6 +1354,7 @@ static char modeschecked=0;
 #if SDL_MAJOR_VERSION >= 2
 void videoGetModes(int display)
 {
+    char *dummy = NULL;
     int32_t i, maxx = 0, maxy = 0;
     SDL_DisplayMode dispmode;
 
@@ -1361,7 +1365,7 @@ void videoGetModes(int display)
         return;
     else
     {
-        auto name = Xstrdup(videoGetDisplayName(display)), shortened = strtok(name, "(");
+        auto name = Xstrdup(videoGetDisplayName(display)), shortened = Bstrtoken(name, "(", &dummy, 1);
         if (!shortened) shortened = name;
         VLOG_F(LOG_GFX, "Detecting video modes for display %d (%s)...", display, shortened);
         DO_FREE_AND_NULL(name);
@@ -1730,7 +1734,7 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
                 LOG_F(ERROR, "Unable to set video mode: %s.", SDL_GetError());
                 return -1;
             }
-            else 
+            else
                 refreshfreq = newmode.refresh_rate;
         }
     }
@@ -1842,6 +1846,7 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
 
               { SDL_GL_STENCIL_SIZE, 1 },
               { SDL_GL_ACCELERATED_VISUAL, 1 },
+              { SDL_GL_DEPTH_SIZE, 24 },
           };
 
         SDL_GL_ATTRIBUTES(i, sdlayer_gl_attributes);
@@ -1900,7 +1905,8 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
     setvideomode_sdlcommonpost(x, y, c, fs, regrab);
 
 #if MICROPROFILE_ENABLED != 0
-    MicroProfileGpuInitGL();
+    if (!nogl)
+        MicroProfileGpuInitGL();
 #endif
 
 #ifdef _WIN32
@@ -2087,7 +2093,7 @@ void videoShowFrame(int32_t w)
 
         {
             MICROPROFILE_SCOPEI("Engine", "SDL_GL_SwapWindow", MP_GREEN3);
-#if SDL_MAJOR_VERSION >= 2            
+#if SDL_MAJOR_VERSION >= 2
             SDL_GL_SwapWindow(sdl_window);
 #else
             SDL_GL_SwapBuffers();
@@ -2102,6 +2108,39 @@ void videoShowFrame(int32_t w)
 
         MicroProfileFlip();
 
+#if 0
+        if (glinfo.reset_notification)
+        {
+            static const auto glGetGraphicsReset = glGetGraphicsResetStatus ? glGetGraphicsResetStatus : glGetGraphicsResetStatusKHR;
+            auto status = glGetGraphicsReset();
+            if (status != GL_NO_ERROR)
+            {
+                do
+                {
+                    switch (status)
+                    {
+                    case GL_GUILTY_CONTEXT_RESET:
+                        LOG_F(ERROR, "OPENGL CONTEXT LOST: GUILTY!");
+                        break;
+                    case GL_INNOCENT_CONTEXT_RESET:
+                        LOG_F(ERROR, "OPENGL CONTEXT LOST: INNOCENT!");
+                        break;
+                    case GL_UNKNOWN_CONTEXT_RESET:
+                        LOG_F(ERROR, "OPENGL CONTEXT LOST!");
+                        break;
+                    }
+                } while ((status = glGetGraphicsReset()) != GL_NO_ERROR);
+
+                videoResetMode();
+
+                if (videoSetGameMode(fullscreen, xres, yres, bpp, upscalefactor))
+                {
+                    LOG_F(ERROR, "Failed to reset video mode after lost OpenGL context; terminating.");
+                    Bexit(EXIT_FAILURE);
+                }
+            }
+        }
+#endif
         // attached overlays and streaming hooks tend to change the GL state without setting it back
 
         if (w != -1)
@@ -2176,7 +2215,7 @@ int32_t videoSetGamma(void)
     if (novideo)
         return 0;
 
-#ifdef USE_OPENGL    
+#ifdef USE_OPENGL
     if (!nogl)
     {
         g_glColorCorrection = { g_videoGamma, g_videoContrast, g_videoSaturation, 0.f };
@@ -2186,7 +2225,7 @@ int32_t videoSetGamma(void)
         return 0;
     }
 #endif
-    
+
     int32_t i;
     uint16_t gammaTable[768];
     float gamma = max(MIN_GAMMA, min(MAX_GAMMA, g_videoGamma));
@@ -2438,7 +2477,7 @@ int32_t handleevents_sdlcommon(SDL_Event *ev)
 #endif
             }
             break;
-            
+
         case SDL_QUIT:
             quitevent = 1;
             return -1;
@@ -2482,6 +2521,11 @@ int32_t handleevents_pollsdl(void)
 
         switch (ev.type)
         {
+            case SDL_DROPFILE:
+                if (g_fileDropCallback && ev.drop.type == SDL_DROPFILE)
+                    g_fileDropCallback(ev.drop.file);
+                SDL_free(ev.drop.file);
+                break;
             case SDL_TEXTINPUT:
                 j = 0;
                 do
@@ -2804,40 +2848,6 @@ int32_t handleevents(void)
 
     communityapiRunCallbacks();
 
-#ifdef USE_OPENGL
-    if (!nogl && glinfo.reset_notification)
-    {
-        static const auto glGetGraphicsReset = glGetGraphicsResetStatusKHR ? glGetGraphicsResetStatusKHR : glGetGraphicsResetStatus;
-        auto status = glGetGraphicsReset();
-        if (status != GL_NO_ERROR)
-        {
-            do
-            { 
-                switch (status)
-                {
-                    case GL_GUILTY_CONTEXT_RESET:
-                        LOG_F(ERROR, "OPENGL CONTEXT LOST: GUILTY!");
-                        break;
-                    case GL_INNOCENT_CONTEXT_RESET:
-                        LOG_F(ERROR, "OPENGL CONTEXT LOST: INNOCENT!");
-                        break;
-                    case GL_UNKNOWN_CONTEXT_RESET:
-                        LOG_F(ERROR, "OPENGL CONTEXT LOST!");
-                        break;
-                }
-            } while ((status = glGetGraphicsReset()) != GL_NO_ERROR);
-
-            videoResetMode();
-
-            if (videoSetGameMode(fullscreen,xres,yres,bpp,upscalefactor))
-            {
-                LOG_F(ERROR, "Failed to reset video mode after lost OpenGL context; terminating.");
-                Bexit(EXIT_FAILURE);
-            }
-        }
-    }
-#endif
-
     if (!frameplace && sdl_resize.x)
     {
         if (in3dmode())
@@ -2858,4 +2868,3 @@ int32_t handleevents(void)
 #if SDL_MAJOR_VERSION < 2
 # include "sdlayer12.cpp"
 #endif
-

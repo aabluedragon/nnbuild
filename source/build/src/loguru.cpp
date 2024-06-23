@@ -498,7 +498,7 @@ namespace loguru
 	{
 		int arg_dest = 1;
 		int out_argc = argc;
-		
+
 		for (int arg_it = 1; arg_it < argc; ++arg_it) {
 			auto cmd = argv[arg_it];
 			auto arg_len = strlen(verbosity_flag);
@@ -612,20 +612,21 @@ namespace loguru
 
 	Text errno_as_text()
 	{
-		char buff[256];
 	#if defined(__GLIBC__) && defined(_GNU_SOURCE)
 		// GNU Version
+		char buff[256];
 		return Text(STRDUP(strerror_r(errno, buff, sizeof(buff))));
-	#elif defined(__APPLE__) || _POSIX_C_SOURCE >= 200112L
+	#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L)
 		// XSI Version
+		char buff[256];
 		strerror_r(errno, buff, sizeof(buff));
 		return Text(strdup(buff));
 	#elif defined(_WIN32)
+		char buff[256];
 		strerror_s(buff, sizeof(buff), errno);
 		return Text(STRDUP(buff));
 	#else
 		// Not thread-safe.
-		(void)buff; // unused parameter
 		return Text(STRDUP(strerror(errno)));
 	#endif
 	}
@@ -1008,9 +1009,9 @@ namespace loguru
 		if (!name)
 		{
 			if (verbosity <= Verbosity_FATAL) {
-				name = "FATL";
+				name = "FATAL";
 			} else if (verbosity == Verbosity_ERROR) {
-				name = "ERR";
+				name = "ERROR";
 			} else if (verbosity == Verbosity_WARNING) {
 				name = "WARN";
 			} else if (verbosity == Verbosity_INFO) {
@@ -1143,6 +1144,8 @@ namespace loguru
 			} else {
 				buffer[0] = 0;
 			}
+		#elif defined(__FreeBSD__) || defined(__OpenBSD__)
+			pthread_get_name_np(pthread_self(), buffer, length);
 		#elif LOGURU_PTHREADS
 			// Ask the OS about the thread name.
 			// This is what we *want* to do on all platforms, but
@@ -1173,6 +1176,8 @@ namespace loguru
 			#elif defined(__FreeBSD__)
 				long thread_id;
 				(void)thr_self(&thread_id);
+			#elif defined(__OpenBSD__)
+				pid_t thread_id = getthrid();
 			#elif LOGURU_PTHREADS
 				const auto native_id = pthread_self();
 				// Warning, even within POSIX, return types and sizes vary:

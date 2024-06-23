@@ -708,7 +708,7 @@ GLfloat         *curskymodelviewmatrix;
 
 static int16_t  sectorqueue[MAXSECTORS];
 static GLuint   queryid[MAXWALLS];
-static uint8_t  drawingstate[(MAXSECTORS+7)>>3];
+static uint8_t  drawingstate[bitmap_size(MAXSECTORS)];
 
 int16_t         *cursectormasks;
 int16_t         *cursectormaskcount;
@@ -1350,7 +1350,7 @@ void                polymer_editorpick(void)
             GLfloat bestwdistsq = (GLfloat)3.4e38, wdistsq;
             GLfloat w1[2], w2[2], w21[2], pw1[2], pw2[2];
             walltype *wal = &wall[sector[searchsector].wallptr];
-            
+
             GLfloat dadepth;
             glReadPixels(searchx, ydim-searchy, 1,1, GL_DEPTH_COMPONENT, GL_FLOAT, &dadepth);
             GLfloat x,y,z;
@@ -1406,7 +1406,7 @@ void                polymer_editorpick(void)
                         continue;
 
                     GLfloat scrpxz[2];
-                    GLfloat ptonline[2] = { w2[0]+(w2d/(w1d+w2d))*w21[0], 
+                    GLfloat ptonline[2] = { w2[0]+(w2d/(w1d+w2d))*w21[0],
                                             w2[1]+(w2d/(w1d+w2d))*w21[1] };
                     relvec2f(p,ptonline, scrpxz);
                     if (dot2f(scrvxz,scrpxz)<0)
@@ -1482,7 +1482,7 @@ void                polymer_drawmaskwall(int32_t damaskwallcnt)
     if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Masked wall %i", damaskwallcnt);
 
     int16_t const wallnum = maskwall[damaskwallcnt];
-    
+
     auto sec = (usectorptr_t)&sector[wallsect[wallnum]];
     auto wal = &wall[wallnum];
     auto w   = prwalls[wallnum];
@@ -1518,10 +1518,12 @@ void                polymer_drawsprite(int32_t snum)
     if (bad_tspr(tspr))
         return;
 
-    if ((tspr->clipdist & TSPR_FLAGS_NO_SHADOW) && (depth && !mirrors[depth-1].plane))
+    auto const tsprflags = tspr->clipdist;
+
+    if ((tsprflags & TSPR_FLAGS_NO_SHADOW) && (depth && !mirrors[depth-1].plane))
         return;
 
-    if ((tspr->clipdist & TSPR_FLAGS_INVISIBLE_WITH_SHADOW) && (!depth || mirrors[depth-1].plane))
+    if ((tsprflags & TSPR_FLAGS_INVISIBLE_WITH_SHADOW) && (!depth || mirrors[depth-1].plane))
         return;
 
     int const spritenum = tspr->owner;
@@ -1573,21 +1575,22 @@ void                polymer_drawsprite(int32_t snum)
     if (s == NULL)
         return;
 
-    switch ((tspr->cstat>>4) & 3)
+    switch (cs & CSTAT_SPRITE_ALIGNMENT)
     {
-    case 1:
+    case CSTAT_SPRITE_ALIGNMENT_WALL:
         prsectors[tspr->sectnum]->wallsproffset += 0.5f;
         if (!depth || mirrors[depth-1].plane)
             glPolygonOffset(-(1.f/min(2048, sepldist(globalposx-tspr->x, globalposy-tspr->y)>>2)), -64);
         break;
-    case 2:
+    case CSTAT_SPRITE_ALIGNMENT_FLOOR:
+    case CSTAT_SPRITE_ALIGNMENT_SLOPE:
         prsectors[tspr->sectnum]->floorsproffset += 0.5f;
         if (!depth || mirrors[depth-1].plane)
             glPolygonOffset(-(1.f/min(2048, sepdist(globalposx-tspr->x, globalposy-tspr->y, globalposz-tspr->z)>>5)), -64);
         break;
     }
 
-    if ((cs & 48) == 0)
+    if ((cs & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_FACING)
     {
         int32_t curpriority = 0;
 
@@ -1616,11 +1619,11 @@ void                polymer_drawsprite(int32_t snum)
     }
 
     if (automapping == 1)
-        show2dsprite[spritenum>>3] |= pow2char[spritenum&7];
+        bitmap_set(show2dsprite, spritenum);
 
-    if ((tspr->cstat & 64) && (tspr->cstat & SPR_ALIGN_MASK))
+    if ((tspr->cstat & 64) && (tspr->cstat & CSTAT_SPRITE_ALIGNMENT))
     {
-        if ((tspr->cstat & SPR_ALIGN_MASK)==SPR_FLOOR && (tspr->cstat & SPR_YFLIP))
+        if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR) && (tspr->cstat & CSTAT_SPRITE_YFLIP))
             SWITCH_CULL_DIRECTION;
         buildgl_setEnabled(GL_CULL_FACE);
     }
@@ -1633,9 +1636,9 @@ void                polymer_drawsprite(int32_t snum)
     if ((!depth || mirrors[depth-1].plane) && !pr_ati_nodepthoffset)
         buildgl_setDisabled(GL_POLYGON_OFFSET_FILL);
 
-    if ((tspr->cstat & 64) && (tspr->cstat & SPR_ALIGN_MASK))
+    if ((tspr->cstat & 64) && (tspr->cstat & CSTAT_SPRITE_ALIGNMENT))
     {
-        if ((tspr->cstat & SPR_ALIGN_MASK)==SPR_FLOOR && (tspr->cstat & SPR_YFLIP))
+        if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR) && (tspr->cstat & CSTAT_SPRITE_YFLIP))
             SWITCH_CULL_DIRECTION;
         buildgl_setDisabled(GL_CULL_FACE);
     }
@@ -1791,8 +1794,10 @@ static void         polymer_displayrooms(const int16_t dacursectnum)
 {
     usectorptr_t      sec;
     int32_t         i;
+#ifdef YAX_ENABLE
     int16_t         bunchnum;
     int16_t         ns;
+#endif
     GLint           result;
     int16_t         doquery;
     int32_t         front;
@@ -2656,7 +2661,7 @@ static int32_t      polymer_updatesector(int16_t sectnum)
     }
     while (i < sec->wallnum);
 
-    if (needfloor || 
+    if (needfloor ||
             (s->flags.empty) ||
             (sec->floorz != s->floorz) ||
             (sec->ceilingz != s->ceilingz) ||
@@ -3030,9 +3035,9 @@ static void polymer_drawsector(int16_t sectnum, int32_t domasks)
     if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Drawing sector %i", sectnum);
 
     if (automapping)
-        show2dsector[sectnum>>3] |= pow2char[sectnum&7];
+        bitmap_set(show2dsector, sectnum);
 
-    gotsector[sectnum>>3] |= pow2char[sectnum&7];
+    bitmap_set(gotsector, sectnum);
 
     auto sec        = (usectorptr_t)&sector[sectnum];
     auto s          = prsectors[sectnum];
@@ -3047,9 +3052,12 @@ static void polymer_drawsector(int16_t sectnum, int32_t domasks)
     // Draw masks regardless; avoid all non-masks TROR links
     if (sec->floorstat & 384) {
         draw = domasks;
-    } else if (yax_getbunch(sectnum, YAX_FLOOR) >= 0) {
+    }
+#ifdef YAX_ENABLE
+    else if (yax_getbunch(sectnum, YAX_FLOOR) >= 0) {
         draw = FALSE;
     }
+#endif
 
     // Parallaxed
     if (sec->floorstat & 1) {
@@ -3093,9 +3101,12 @@ static void polymer_drawsector(int16_t sectnum, int32_t domasks)
     // Draw masks regardless; avoid all non-masks TROR links
     if (sec->ceilingstat & 384) {
         draw = domasks;
-    } else if (yax_getbunch(sectnum, YAX_CEILING) >= 0) {
+    }
+#ifdef YAX_ENABLE
+    else if (yax_getbunch(sectnum, YAX_CEILING) >= 0) {
         draw = FALSE;
     }
+#endif
 
     // Parallaxed
     if (sec->ceilingstat & 1) {
@@ -3694,7 +3705,7 @@ static void         polymer_drawwall(int16_t sectnum, int16_t wallnum)
     //}
 
     if (automapping)
-        show2dwall[wallnum>>3] |= pow2char[wallnum&7];
+        bitmap_set(show2dwall, wallnum);
 
     if (pr_verbosity >= 3) VLOG_F(LOG_PR, "Finished drawing wall %i.", wallnum);
 }
@@ -3884,7 +3895,7 @@ static inline void  polymer_scansprites(int16_t sectnum, tspriteptr_t localtspri
         auto spr = (uspriteptr_t)&sprite[i];
         if ((((spr->cstat&0x8000) == 0) || (showinvisibility)) &&
                 (spr->xrepeat > 0) && (spr->yrepeat > 0) &&
-                (*localspritesortcnt < maxspritesonscreen))
+                (*localspritesortcnt < MAXSPRITESONSCREEN))
         {
             // this function's localtsprite is either the tsprite global or
             // polymer_drawroom's locattsprite, so no aliasing
@@ -3905,8 +3916,8 @@ void                polymer_updatesprite(int32_t snum)
     _prsprite       *s;
 
     const uint32_t cs = tspr->cstat;
-    const uint32_t alignmask = (cs & SPR_ALIGN_MASK);
-    const uint8_t flooraligned = (alignmask==SPR_FLOOR);
+    const uint32_t alignmask = (cs & CSTAT_SPRITE_ALIGNMENT);
+    const uint8_t flooraligned = !!(cs & CSTAT_SPRITE_ALIGNMENT_FLOOR);
 
     if (pr_nullrender >= 3) return;
 
@@ -3928,7 +3939,7 @@ void                polymer_updatesprite(int32_t snum)
         s->hash = 0xDEADBEEF;
     }
 
-    if ((tspr->cstat & 48) && !s->plane.vbo)
+    if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) && !s->plane.vbo)
     {
         if (pr_nullrender < 2)
         {
@@ -3938,7 +3949,7 @@ void                polymer_updatesprite(int32_t snum)
         }
     }
 
-    if (tspr->cstat & 48 && searchit != 2)
+    if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) && searchit != 2)
     {
         uint32_t const changed = XXH3_64bits((uint8_t *) tspr, offsetof(spritetype, owner));
 
@@ -3968,7 +3979,7 @@ void                polymer_updatesprite(int32_t snum)
         s->hash = 0xDEADBEEF;
     }
 
-    if (((tspr->cstat>>4) & 3) == 0)
+    if ((tspr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_FACING)
         xratio = (float)(tspr->xrepeat) * 0.20f; // 32 / 160
     else
         xratio = (float)(tspr->xrepeat) * 0.25f;
@@ -3989,9 +4000,9 @@ void                polymer_updatesprite(int32_t snum)
 
     tilexoff = (usehightile && h_xsize[curpicnum]) ? h_xoffs[curpicnum] : picanm[curpicnum].xofs;
     tileyoff = (usehightile && h_xsize[curpicnum]) ? h_yoffs[curpicnum] : picanm[curpicnum].yofs;
-    
+
     heinum = tspriteGetSlope(tspr);
-    
+
     if (heinum == 0)
     {
         tilexoff += (int32_t)tspr->xoffset;
@@ -4003,7 +4014,7 @@ void                polymer_updatesprite(int32_t snum)
 
     if ((tspr->cstat & 128) && !flooraligned)
     {
-        if (alignmask == 0)
+        if (alignmask == CSTAT_SPRITE_ALIGNMENT_FACING)
             yoff -= ysize / 2;
         else
             centeryoff = ysize / 2;
@@ -4020,30 +4031,30 @@ void                polymer_updatesprite(int32_t snum)
     inbuffer = vertsprite;
 
     {
-        const uint8_t xflip = !!(cs & SPR_XFLIP);
-        const uint8_t yflip = !!(cs & SPR_YFLIP);
+        const uint8_t xflip = !!(cs & CSTAT_SPRITE_XFLIP);
+        const uint8_t yflip = !!(cs & CSTAT_SPRITE_YFLIP);
 
         // Initially set flipu and flipv.
         flipu = (xflip ^ flooraligned);
         flipv = (yflip && !flooraligned);
 
-        if (pr_billboardingmode && alignmask==0)
+        if (pr_billboardingmode && alignmask == CSTAT_SPRITE_ALIGNMENT_FACING)
         {
             // do surgery on the face tspr to make it look like a wall sprite
-            tspr->cstat |= 16;
+            tspr->cstat |= CSTAT_SPRITE_ALIGNMENT_WALL;
             tspr->ang = (fix16_to_int(viewangle) + 1024) & 2047;
         }
 
         if (flipu)
             xoff = -xoff;
 
-        if (yflip && alignmask!=0)
+        if (yflip && alignmask != CSTAT_SPRITE_ALIGNMENT_FACING)
             yoff = -yoff;
     }
 
-    switch (tspr->cstat & SPR_ALIGN_MASK)
+    switch (tspr->cstat & CSTAT_SPRITE_ALIGNMENT)
     {
-    case 0:
+    case CSTAT_SPRITE_ALIGNMENT_FACING:
         ang = (float)((fix16_to_int(viewangle)) & 2047) * (360.f/2048.f);
 
         glTranslatef(spos[0], spos[1], spos[2]);
@@ -4052,7 +4063,7 @@ void                polymer_updatesprite(int32_t snum)
         glTranslatef((float)(-xoff), (float)(yoff), 0.0f);
         glScalef((float)(xsize), (float)(ysize), 1.0f);
         break;
-    case SPR_WALL:
+    case CSTAT_SPRITE_ALIGNMENT_WALL:
         {
             int16_t wallnum = ((unsigned)tspr->owner >= MAXSPRITES) ? -1 : ornament[tspr->owner].wall;
             wallspriteinfo_t *ws = ((unsigned)tspr->owner >= MAXSPRITES) ? nullptr : &ornament[tspr->owner];
@@ -4083,7 +4094,8 @@ void                polymer_updatesprite(int32_t snum)
             glScalef((float)(xsize), (float)(ysize), 1.0f);
             break;
         }
-    case SPR_FLOOR:
+    case CSTAT_SPRITE_ALIGNMENT_FLOOR:
+    case CSTAT_SPRITE_ALIGNMENT_SLOPE:
     {
         float const sang = atan2f(float(heinum), 4096.f) * (180.f * float(M_1_PI));
         ang = (float)((tspr->ang + 1024) & 2047) * (360.f/2048.f);
@@ -4128,7 +4140,7 @@ void                polymer_updatesprite(int32_t snum)
 
     if (pr_nullrender < 2)
     {
-        if (alignmask)
+        if (alignmask != CSTAT_SPRITE_ALIGNMENT_FACING)
         {
             buildgl_bindBuffer(GL_ARRAY_BUFFER, s->plane.vbo);
             glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(_prvert), s->plane.buffer);
@@ -4141,7 +4153,7 @@ void                polymer_updatesprite(int32_t snum)
         }
     }
 
-    if (alignmask)
+    if (alignmask != CSTAT_SPRITE_ALIGNMENT_FACING)
     {
         int32_t curpriority = 0;
 
@@ -4347,6 +4359,7 @@ static void         polymer_drawskybox(int16_t tilenum, char palnum, int8_t shad
     tileUpdatePicnum(&tilenum, 0);
 
     _prmaterial     skymaterial;
+    drawingskybox = 1;
     polymer_getbuildmaterial(&skymaterial, tilenum, palnum, shade, 0, PTH_HIGHTILE|PTH_CLAMPED);
     auto skymaterialbits = polymer_bindmaterial(&skymaterial, NULL, 0);
     buildgl_bindSamplerObject(0, PTH_HIGHTILE|PTH_CLAMPED);
@@ -4424,6 +4437,8 @@ void polymer_drawmdsprite(tspriteptr_t tspr)
     if (m->indices == NULL)
         polymer_loadmodelvbos(m);
 
+    auto const tsprflags = tspr->clipdist;
+
     // Hackish, but that means it's a model drawn by rotatesprite.
     if (tspriteptr[maxspritesonscreen] == tspr) {
         spos[0] = fglobalposy;
@@ -4450,7 +4465,7 @@ void polymer_drawmdsprite(tspriteptr_t tspr)
 
     ang -= 90.0f;
 
-    if (((tspr->cstat>>4) & 3) == 2)
+    if (tspr->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR)
         ang -= 90.0f;
 
     glMatrixMode(GL_MODELVIEW);
@@ -4458,7 +4473,7 @@ void polymer_drawmdsprite(tspriteptr_t tspr)
     glLoadIdentity();
 
     scale = m->scale * 0.25f;
-    
+
     if (pr_overridemodelscale) {
         scale *= pr_overridemodelscale;
     } else {
@@ -4484,7 +4499,7 @@ void polymer_drawmdsprite(tspriteptr_t tspr)
         glTranslatef(spos[0], spos[1], spos[2]);
         glRotatef(-ang, 0.0f, 1.0f, 0.0f);
     }
-    if (((tspr->cstat>>4) & 3) == 2)
+    if (tspr->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR)
     {
         glTranslatef(0.0f, 0.0, -(float)(tilesiz[tspr->picnum].y * tspr->yrepeat) / 8.0f);
         glRotatef(90.0f, 0.0f, 0.0f, 1.0f);
@@ -4492,7 +4507,7 @@ void polymer_drawmdsprite(tspriteptr_t tspr)
     else
         glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
 
-    if ((tspr->cstat & 128) && (((tspr->cstat>>4) & 3) != 2))
+    if ((tspr->cstat & 128) && !(tspr->cstat & CSTAT_SPRITE_ALIGNMENT_FLOOR))
         glTranslatef(0.0f, 0.0, -(float)(tilesiz[tspr->picnum].y * tspr->yrepeat) / 8.0f);
 
     // yoffset differs from zadd in that it does not follow cstat&8 y-flipping
@@ -4743,7 +4758,7 @@ void polymer_drawmdsprite(tspriteptr_t tspr)
         if (!mdspritematerial.diffusemap)
             continue;
 
-        if (!(tspr->clipdist & TSPR_FLAGS_MDHACK))
+        if (!(tsprflags & TSPR_FLAGS_MDHACK))
         {
             mdspritematerial.detailmap =
                     mdloadskin((md2model_t *)m,tile2model[Ptile2tile(tspr->picnum,lpal)].skinnum,DETAILPAL,surfi);
@@ -5205,7 +5220,7 @@ static int32_t      polymer_bindmaterial(const _prmaterial *material, const int1
     auto &prprogram = *polymer_getprogram(programbits);
 
     buildgl_useShaderProgram(prprogram.handle);
-    
+
     // --------- bit setup
 
     texunit = 0;
@@ -5701,7 +5716,7 @@ static _prprograminfo *polymer_compileprogram(int32_t programbits)
     // --------- ATTRIBUTE/UNIFORM LOCATIONS
 
     prprogram.uniform_colorCorrection = glGetUniformLocation(program, "u_colorCorrection");
-    
+
     if (programbits & (1 << PR_BIT_ANIM_INTERPOLATION))
     {
         prprogram.attrib_nextFrameData   = glGetAttribLocation(program, "nextFrameData");
@@ -5796,7 +5811,7 @@ static void         polymer_updatelights(void)
 
             if (light->radius)
                 polymer_processspotlight(light);
-            
+
             if (!polymer_culllight(i))
                 light->flags.invalidate = 0;
         }
@@ -5885,8 +5900,7 @@ out:
 
 static FORCE_INLINE void polymer_deleteplanelight(_prplane *const plane, int16_t const lighti)
 {
-    int i = plane->lightcount - 1;
-    do
+    for (int i = plane->lightcount - 1; i >= 0; --i)
     {
         if (plane->lights[i] == lighti)
         {
@@ -5895,7 +5909,6 @@ static FORCE_INLINE void polymer_deleteplanelight(_prplane *const plane, int16_t
             return;
         }
     }
-    while (--i >= 0);
 }
 
 static int polymer_planeinlight(_prplane const &plane, _prlight const &light)
@@ -6012,7 +6025,9 @@ static int polymer_culllight(int16_t lighti)
 
     int32_t front = 0;
     int32_t back  = 1;
+#ifdef YAX_ENABLE
     int16_t bunchnum;
+#endif
 
     if (!sectorsareconnected(globalcursectnum, light.sector)) return 1;
 
@@ -6027,7 +6042,9 @@ static int polymer_culllight(int16_t lighti)
 
         polymer_pokesector(sectorqueue[front]);
 
+#ifdef YAX_ENABLE
         int checkror = FALSE;
+#endif
 
         if (!(sec->floorstat & 1))
         {
@@ -6039,11 +6056,15 @@ static int polymer_culllight(int16_t lighti)
             if (!light.radius) {
                 if (zdiff < light.range) {
                     polymer_addplanelight(&s->floor, lighti);
+#ifdef YAX_ENABLE
                     checkror = TRUE;
+#endif
                 }
             } else if (polymer_planeinlight(s->floor, light)) {
                 polymer_addplanelight(&s->floor, lighti);
+#ifdef YAX_ENABLE
                 checkror = TRUE;
+#endif
             }
         }
 
@@ -6062,8 +6083,8 @@ static int polymer_culllight(int16_t lighti)
                 }
             }
         }
-#endif
         checkror = FALSE;
+#endif
 
         if (!(sec->ceilingstat & 1))
         {
@@ -6075,11 +6096,15 @@ static int polymer_culllight(int16_t lighti)
             if (!light.radius) {
                 if (zdiff < light.range) {
                     polymer_addplanelight(&s->ceil, lighti);
+#ifdef YAX_ENABLE
                     checkror = TRUE;
+#endif
                 }
             } else if (polymer_planeinlight(s->ceil, light)) {
                 polymer_addplanelight(&s->ceil, lighti);
+#ifdef YAX_ENABLE
                 checkror = TRUE;
+#endif
             }
         }
 
@@ -6154,9 +6179,9 @@ static int polymer_culllight(int16_t lighti)
         {
             _prsprite *s = prsprites[i];
 
-            if ((sprite[i].cstat & 48) == 0 || s == NULL)
+            if ((sprite[i].cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_FACING || s == NULL)
                 continue;
-        
+
             if (polymer_planeinlight(s->plane, light))
                 polymer_addplanelight(&s->plane, lighti);
         }

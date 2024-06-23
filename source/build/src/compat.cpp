@@ -21,7 +21,8 @@
 #endif
 
 #if defined __linux || defined EDUKE32_BSD
-# include <libgen.h> // for dirname()
+#include <libgen.h>  // for dirname()
+#include <pwd.h>     // for getpwuid()
 #endif
 #if defined EDUKE32_BSD
 # include <limits.h> // for PATH_MAX
@@ -33,7 +34,7 @@
 
 ////////// PANICKING ALLOCATION FUNCTIONS //////////
 
-static void (*g_MemErrHandler)(int32_t line, const char *file, const char *func);
+static void (*g_MemErrHandler)(int32_t bytes, int32_t line, const char *file, const char *func);
 
 
 #ifdef __cplusplus
@@ -57,16 +58,16 @@ void  _xaligned_free(void *const ptr) { xaligned_free(ptr); }
 }
 #endif
 
-void handle_memerr(void)
+EDUKE32_NORETURN void handle_memerr(int32_t bytes)
 {
     debug_break();
 
     if (g_MemErrHandler)
     {
 #ifdef DEBUGGINGAIDS
-        g_MemErrHandler(g_MemErrLine, g_MemErrFile, g_MemErrFunc);
+        g_MemErrHandler(bytes, g_MemErrLine, g_MemErrFile, g_MemErrFunc);
 #else
-        g_MemErrHandler(0, "???", "???");
+        g_MemErrHandler(bytes, 0, "???", "???");
 #endif
     }
 
@@ -74,7 +75,7 @@ void handle_memerr(void)
     EDUKE32_UNREACHABLE_SECTION(return nullptr);
 }
 
-void set_memerr_handler(void (*handlerfunc)(int32_t, const char *, const char *)) { g_MemErrHandler = handlerfunc; }
+void set_memerr_handler(void (*handlerfunc)(int32_t, int32_t, const char *, const char *)) { g_MemErrHandler = handlerfunc; }
 sm_allocator g_sm_heap;
 
 
@@ -125,8 +126,13 @@ char *Bgethomedir(void)
         drv[1] = '\0';
     return Xstrdup(cwd);
 #else
-    char *e = getenv("HOME");
-    if (!e) return NULL;
+    char const *e;
+    if ((e = getenv("HOME")) == NULL || e[0] == '\0')
+    {
+        auto const pw = getpwuid(getuid());
+        if (pw == NULL || (e = pw->pw_dir) == NULL || e[0] == '\0')
+            return NULL;
+    }
     return Xstrdup(e);
 #endif
 }

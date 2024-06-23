@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 
+#ifndef EDUKE32_STANDALONE
 #ifdef _WIN32
 
 #include "compat.h"
@@ -39,7 +40,7 @@ int32_t windowsCheckForUpdates(char *buffer)
     struct hostent *h;
     char const *host = "www.eduke32.com";
     char const *req = "GET http://www.eduke32.com/VERSION HTTP/1.0\r\n\r\n\r\n";
-    char *tok;
+    char *tok, *restBuf = NULL;
     char tempbuf[2048],otherbuf[16],ver[16];
     SOCKET mysock;
     WSADATA ws;
@@ -79,7 +80,7 @@ int32_t windowsCheckForUpdates(char *buffer)
     if (connect(mysock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr)) == SOCKET_ERROR)
         goto done;
 
-    i = send(mysock, req, strlen(req), 0);
+    i = send(mysock, req, Bstrlen(req), 0);
 
     if (i == SOCKET_ERROR)
         goto done;
@@ -91,14 +92,15 @@ int32_t windowsCheckForUpdates(char *buffer)
 
     Bmemcpy(&otherbuf, &tempbuf, sizeof(otherbuf));
 
-    strtok(otherbuf, " ");
+    Bstrtoken(otherbuf, " ", &restBuf, 1);
 
-    if ((tok = strtok(NULL, " ")) == NULL)
+    if ((tok = Bstrtoken(NULL, " ", &restBuf, 1)) == NULL)
         goto done;
 
     if (Batol(tok) == 200)
     {
-        for (i = 0; (unsigned)i < strlen(tempbuf); i++)  // HACK: all of this needs to die a fiery death; we just skip to the content
+        int const len = Bstrlen(tempbuf);
+        for (i = 0; i < len; i++)  // HACK: all of this needs to die a fiery death; we just skip to the content
         {
             // instead of actually parsing any of the http headers
             if (i > 4)
@@ -116,7 +118,7 @@ int32_t windowsCheckForUpdates(char *buffer)
 
         if (j)
         {
-            strcpy(buffer, ver);
+            Bstrcpy(buffer, ver);
             r = 1;
             goto done;
         }
@@ -128,4 +130,5 @@ done:
 
     return r;
 }
+#endif
 #endif

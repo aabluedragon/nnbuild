@@ -32,7 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "fix16.h"
 #include "gamedefs.h"
 #include "gamevars.h"
-#include "minicoro.h"
+//#include "minicoro.h"
 #include "mmulti.h"
 #include "network.h"
 #include "savegame.h"
@@ -164,7 +164,7 @@ typedef struct {
     int32_t camera_time,folfvel,folsvel,folavel,folx,foly,fola;
     int32_t reccnt,crosshairscale;
 
-    int32_t runkey_mode,statusbarscale,mouseaiming,weaponswitch,drawweapon;   // JBF 20031125
+    int32_t runkey_mode,kick_mode,statusbarscale,mouseaiming,weaponswitch,drawweapon;   // JBF 20031125
     int32_t democams,color,msgdisptime,statusbarmode;
     int32_t m_noexits,noexits,autovote,automsg,idplayers;
     int32_t team, viewbob, weaponsway, althud, weaponscale, textscale;
@@ -234,7 +234,9 @@ typedef struct {
         //
         // Sound variables
         //
+        int32_t MasterVolume;
         int32_t FXVolume;
+        int32_t VoiceVolume;
         int32_t MusicDevice;
         int32_t MusicVolume;
         int32_t SoundToggle;
@@ -300,7 +302,7 @@ static inline int Menu_HaveUserMap(void)
 extern const char *G_DefaultRtsFile(void);
 
 #ifdef LEGACY_ROR
-extern char ror_protectedsectors[MAXSECTORS];
+extern char ror_protectedsectors[bitmap_size(MAXSECTORS)];
 #endif
 
 extern float r_ambientlight;
@@ -309,7 +311,7 @@ extern int32_t r_pr_defaultlights;
 extern bool g_frameJustDrawn;
 extern uint64_t g_lastFrameStartTime;
 extern uint64_t g_lastFrameEndTime;
-extern uint64_t g_lastFrameDuration;
+extern uint64_t g_lastFrameDuration, g_lastFrameDuration2;
 extern uint32_t g_frameCounter;
 
 // minicoro.h says to make sure this isn't a multiple of 64K
@@ -318,17 +320,22 @@ extern uint32_t g_frameCounter;
 #define DRAWFRAME_MAX_STACK_SIZE     (1792 * 1024)
 
 extern int32_t g_vm_preempt;
-extern mco_coro* co_drawframe;
-extern void g_switchRoutine(mco_coro *co);
+//extern mco_coro* co_drawframe;
+//extern void g_switchRoutine(mco_coro *co);
+extern void drawframe_do(void);
 
 static FORCE_INLINE int dukeMaybeDrawFrame(void)
 {
     // g_frameJustDrawn is set by G_DrawFrame() (and thus by the coroutine)
     // it isn't cleared until the next game tic is processed.
-
-    if (g_vm_preempt && !g_saveRequested && !g_frameJustDrawn && timerGetNanoTicks() >= g_lastFrameEndTime + (g_lastFrameEndTime - g_lastFrameStartTime - g_lastFrameDuration) && engineFPSLimit())
+    auto ticks = timerGetNanoTicks();
+    if (g_vm_preempt && !g_saveRequested /*&& mco_running() != co_drawframe*/
+        && (ticks - g_lastFrameStartTime) >= g_frameDelay && ticks - g_lastFrameStartTime - g_lastFrameDuration2 < g_frameDelay
+        && !g_frameJustDrawn && engineFPSLimit())
     {
-        g_switchRoutine(co_drawframe);
+        //LOG_F(INFO, "VM drawframe preemption");
+        //g_switchRoutine(co_drawframe);
+        drawframe_do();
         return 1;
     }
 
@@ -414,7 +421,7 @@ void P_SetGamePalette(DukePlayer_t *player, uint32_t palid, int32_t set);
 // Cstat protection mask for (currently) spawned MASKWALL* sprites.
 // TODO: look at more cases of cstat=(cstat&PROTECTED)|ADDED in A_Spawn()?
 // 2048+(32+16)+8+4
-#define SPAWN_PROTECT_CSTAT_MASK (CSTAT_SPRITE_NOSHADE|CSTAT_SPRITE_ALIGNMENT_SLAB|CSTAT_SPRITE_XFLIP|CSTAT_SPRITE_YFLIP);
+#define SPAWN_PROTECT_CSTAT_MASK (CSTAT_SPRITE_NOSHADE|CSTAT_SPRITE_ALIGNMENT_MASK|CSTAT_SPRITE_XFLIP|CSTAT_SPRITE_YFLIP);
 
 void fadepal(int32_t r,int32_t g,int32_t b,int32_t start,int32_t end,int32_t step);
 //void fadepaltile(int32_t r,int32_t g,int32_t b,int32_t start,int32_t end,int32_t step,int32_t tile);
@@ -438,6 +445,19 @@ static inline int G_GetTeamPalette(int team)
 extern int G_StartRTS(int lumpNum, int localPlayer);
 
 extern void G_MaybeAllocPlayer(int32_t pnum);
+
+static inline int dukeAllowQuickKick(void)
+{
+    switch (ud.kick_mode)
+    {
+    default:
+        return g_scriptVersion == 13;
+    case 1:
+        return 1;
+    case 2:
+        return 0;
+    }
+}
 
 static inline int32_t gameHandleEvents(void)
 {

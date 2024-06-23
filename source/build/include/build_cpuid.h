@@ -14,13 +14,13 @@ enum cpuinfo_vendor_x86
 
 struct cpuinfo_t
 {
-    int type;
+    //int type;
     char *vendorIDString;
     char *brandString;
 
     struct
     {
-        int invariant_tsc : 1;
+        unsigned int invariant_tsc : 1;
     } features;
 };
 
