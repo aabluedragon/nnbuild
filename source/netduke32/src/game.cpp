@@ -8400,8 +8400,13 @@ static int G_EndOfLevel(void)
     // [JM] Forces menu versions of volume/level number to new values. Prevents desync if someone fucked with their settings.
     G_RevertUnconfirmedGameSettings();
 
+    // A part of the original codebase, it's disabled now due to Survival mode
+    // signaling map reload with MODE_RESTART. Additionally, this caused
+    // a discrepancy between real and fake multiplayer games.
+#if 0
     if (numplayers > 1)
         ud.gm = MODE_GAME;
+#endif
 
     if (G_EnterLevel(ud.gm))
     {
