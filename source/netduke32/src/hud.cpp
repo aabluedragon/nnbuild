@@ -1085,6 +1085,12 @@ void G_DisplayPlayerId(void)
 
     if (ud.gm & MODE_MENU)
         return;
+    // Camera data might be invalid here if called right after level transition.
+    if (ud.overhead_on == 2 || ud.show_help)
+    {
+        ud.playerid_time = 0;
+        return;
+    }
 
     if (ud.idplayers && (ud.multimode > 1) && !DMFLAGS_TEST(DMFLAG_NOPLAYERIDS))
     {
