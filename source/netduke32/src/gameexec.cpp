@@ -138,8 +138,8 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         int32_t* og_t = vm.pData;
         spritetype *og_sp=vm.pSprite;
 
-        vm.spriteNum = iActor;    // current sprite ID
-        vm.playerNum = iPlayer;    // current player ID
+        vm.spriteNum = iActor&(MAXSPRITES-1);
+        vm.playerNum = iPlayer&(MAXPLAYERS-1);
         vm.playerDist = lDist;    // ?
         vm.pSprite = &sprite[vm.spriteNum];
         vm.pData = &actor[vm.spriteNum].t_data[0];
