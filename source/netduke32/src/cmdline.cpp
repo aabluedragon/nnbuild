@@ -592,36 +592,44 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                         break;
                     case 'u':
                     case 'U':
-                        CommandWeaponChoice = 1;
                         c++;
                         j = 0;
                         if (*c)
                         {
-                            LOG_F(INFO, "Using favorite weapon order(s).");
-                            while (*c)
+                            // Only accept numbers from 0 to 9
+                            while ((*c >= '0') && (*c <= '9') && j < min<int>(MAX_WEAPONS, 10))
                             {
                                 g_player[0].wchoice[j] = *c - '0';
                                 ud.wchoice[j] = *c;
                                 c++;
                                 j++;
                             }
-                            while (j < 10)
-                            {
-                                if (j == 9)
-                                {
-                                    g_player[0].wchoice[9] = 1;
-                                    ud.wchoice[9] = '1';
-                                }
-                                else
-                                {
-                                    g_player[0].wchoice[j] = 2;
-                                    ud.wchoice[j] = '2';
-                                }
 
-                                j++;
+                            // Apply weapon priority if a valid value is given
+                            if (j > 0)
+                            {
+                                CommandWeaponChoice = 1;
+                                LOG_F(INFO, "Using favorite weapon order(s).");
+                                // Pad value when not all weapons are given
+                                while (j < 10)
+                                {
+                                    if (j == 9)
+                                    {
+                                        g_player[0].wchoice[9] = 1;
+                                        ud.wchoice[9] = '1';
+                                    }
+                                    else
+                                    {
+                                        g_player[0].wchoice[j] = 2;
+                                        ud.wchoice[j] = '2';
+                                    }
+
+                                    j++;
+                                }
                             }
                         }
-                        else
+
+                        if (!CommandWeaponChoice)
                         {
                             LOG_F(INFO, "Using default weapon orders.");
                             g_player[0].wchoice[0] = 3;
