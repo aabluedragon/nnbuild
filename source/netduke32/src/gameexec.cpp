@@ -3375,7 +3375,7 @@ static int X_DoExecute(void)
     case CON_ADDINVENTORY:
         insptr += 2;
 
-        VM_AddInventory(vm.pPlayer, insptr[-1], *insptr);
+        VM_AddInventory(g_player[vm.playerNum].ps, insptr[-1], *insptr);
 
         insptr++;
         break;
