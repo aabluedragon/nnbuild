@@ -974,10 +974,19 @@ void joyScanDevices()
 
                 inputdevices |= DEV_JOYSTICK;
 
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+                if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 18))
+                {
+                    if (SDL_GameControllerHasRumble(controller))
+                        joystick.hasRumble = 1;
+                    else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
+                }
+                else
+#endif
 #if SDL_VERSION_ATLEAST(2, 0, 9)
                 if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
                 {
-                    if (!SDL_GameControllerRumble(controller, 0xc000, 0xc000, 10))
+                    if (!SDL_GameControllerRumble(controller, 1, 1, 1))
                         joystick.hasRumble = 1;
                     else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
                 }
@@ -1020,10 +1029,19 @@ void joyScanDevices()
                 SDL_JoystickEventState(SDL_ENABLE);
                 inputdevices |= DEV_JOYSTICK;
 
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+                if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 18))
+                {
+                    if (SDL_JoystickHasRumble(joydev))
+                        joystick.hasRumble = 1;
+                    else DVLOG_F(LOG_INPUT, "Couldn't init joystick rumble: %s.", SDL_GetError());
+                }
+                else
+#endif
 #if SDL_VERSION_ATLEAST(2, 0, 9)
                 if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
                 {
-                    if (!SDL_JoystickRumble(joydev, 0xffff, 0xffff, 200))
+                    if (!SDL_JoystickRumble(joydev, 1, 1, 1))
                         joystick.hasRumble = 1;
                     else DVLOG_F(LOG_INPUT, "Couldn't init joystick rumble: %s.", SDL_GetError());
                 }
@@ -1832,10 +1850,6 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
             int32_t value;
         } sdlayer_gl_attributes[] =
         {
-#ifdef EDUKE32_GLES
-              { SDL_GL_CONTEXT_MAJOR_VERSION, 1 },
-              { SDL_GL_CONTEXT_MINOR_VERSION, 1 },
-#endif
               { SDL_GL_CONTEXT_FLAGS,
 #ifndef NDEBUG
               SDL_GL_CONTEXT_DEBUG_FLAG |
@@ -1868,7 +1882,11 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
             nogl = 1;
         }
 
+#ifndef EDUKE32_GLES
         gladLoadGLLoader(SDL_GL_GetProcAddress);
+#else
+        gladLoadGLES2Loader(SDL_GL_GetProcAddress);
+#endif
         if (GLVersion.major < 2)
         {
             LOG_F(ERROR, "Video driver does not support OpenGL version 2 or greater; all OpenGL modes are unavailable.");
