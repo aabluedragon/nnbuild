@@ -507,6 +507,16 @@ void P_FireWeapon(DukePlayer_t *p)
                 g_player[snum].display.visibility = 0;
             }
         }
+        if (WW2GI)
+        {
+            //Check for reload every shot for burst weapons
+            if (/*!(aplWeaponFlags[p->curr_weapon][snum] & WEAPON_CHECKATRELOAD) && */ p->reloading == 1 ||
+                    (aplWeaponReload[p->curr_weapon][snum] > aplWeaponTotalTime[p->curr_weapon][snum] && p->ammo_amount[p->curr_weapon] > 0
+                        && (aplWeaponClip[p->curr_weapon][snum]) && (((p->ammo_amount[p->curr_weapon] % (aplWeaponClip[p->curr_weapon][snum])) == 0))))
+            {
+                p->kickback_pic = aplWeaponTotalTime[p->curr_weapon][snum];
+            }
+        }
     }
 }
 
