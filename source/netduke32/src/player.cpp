@@ -418,6 +418,9 @@ static int P_DisplayKneeAnim(int gs,int snum)
 
 static int P_DisplayKnuckleAnim(int gs,int snum)
 {
+    if (WW2GI)
+        return 0;
+
     static char knuckleFrames[] = {0,1,2,2,3,3,3,2,2,1,0};
     auto const pPlayer = g_player[snum].ps;
 
@@ -1846,18 +1849,20 @@ static int P_DoCounters(DukePlayer_t *p)
         p->knuckle_incs ++;
         if (p->knuckle_incs==10)
         {
-            if ((int32_t)totalclock > 1024)
-                if (snum == screenpeek || GTFLAGS(GAMETYPE_COOPSOUND))
-                {
+            if (!WW2GI)
+            {
+                if ((int32_t)totalclock > 1024)
+                    if (snum == screenpeek || GTFLAGS(GAMETYPE_COOPSOUND))
+                    {
 
-                    if (rand()&1)
-                        A_PlaySound(DUKE_CRACK,p->i);
-                    else A_PlaySound(DUKE_CRACK2,p->i);
+                        if (rand()&1)
+                            A_PlaySound(DUKE_CRACK,p->i);
+                        else A_PlaySound(DUKE_CRACK2,p->i);
 
-                }
+                    }
 
-            A_PlaySound(DUKE_CRACK_FIRST,p->i);
-
+                A_PlaySound(DUKE_CRACK_FIRST,p->i);
+            }
         }
         else if (p->knuckle_incs == 22 || TEST_SYNC_KEY(g_player[snum].inputBits->bits, SK_FIRE))
             p->knuckle_incs=0;
@@ -2273,7 +2278,8 @@ static void P_ProcessWeapon(int playerNum)
                 }
                 else
                 {
-                    p->weapon_pos = 10;
+                     if (!NAM_WW2GI)
+                        p->weapon_pos = 10;
                     P_CheckWeapon(p);
                 }
             }
