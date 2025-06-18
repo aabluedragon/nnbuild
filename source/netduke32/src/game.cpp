@@ -4122,7 +4122,7 @@ int A_Spawn(int spriteNum, int tileNum)
 
                 pSprite->shade = -8;
 
-                if (pSprite->yvel == 1 || NAM)
+                if (pSprite->yvel == 1 || NAM_WW2GI)
                 {
                     pSprite->ang = a + 512;
                     pSprite->xvel = 30;
