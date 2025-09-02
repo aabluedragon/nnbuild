@@ -4227,8 +4227,8 @@ cheat_for_port_credits:
                     "-",
                     "Restart sound system",
                     "-",
-                    "Duke talk",
-                    "Dukematch player sounds",
+                    WW2GI ? "WW2GI talk" : NAM ? "NAM talk" : "Duke talk",
+                    WW2GI ? "GI Match player sounds" : NAM ? "GruntMatch player sounds" : "DukeMatch player sounds",
                     "Ambient sounds",
                     NULL
                 };
@@ -5053,7 +5053,11 @@ VOLUME_ALL_40x:
             sprintf(tempbuf,"LEVEL %d",ud.m_level_number+1);
             menutext(c,57+16+16-9,MENUHIGHLIGHT(2),PHX(-4),tempbuf);
 
-            menutext(c,57+16+16+16-9,MENUHIGHLIGHT(3),PHX(-5),"MONSTERS");
+            if (NAM_WW2GI) {
+                menutext(c,57+16+16+16-9,MENUHIGHLIGHT(3),PHX(-5),"ENEMIES");
+            } else {
+                menutext(c,57+16+16+16-9,MENUHIGHLIGHT(3),PHX(-5),"MONSTERS");
+            }
 
             menutext(c,57+16+16+16+16-9,MENUHIGHLIGHT(4),0,"GAME FLAGS");
 
@@ -5093,7 +5097,7 @@ VOLUME_ALL_40x:
                     { "Enable Markers",             DMFLAG_MARKERS },
                     { "Weapons Stay",               DMFLAG_WEAPONSTAY },
                     { "-",                          0 },
-                    { "Respawn Monsters",           DMFLAG_RESPAWNMONSTERS },
+                    { NAM_WW2GI ? "Respawn Enemies" : "Respawn Monsters", DMFLAG_RESPAWNMONSTERS },
                     { "Respawn Inventory",          DMFLAG_RESPAWNINVENTORY },
                     { "Respawn Items",              DMFLAG_RESPAWNITEMS },
                     { "-",                          0 },

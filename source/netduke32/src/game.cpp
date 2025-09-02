@@ -8759,10 +8759,16 @@ int app_main(int32_t argc, char const* const* argv)
     if (!g_useCwd)
         G_CleanupSearchPaths();
 
-    if (WW2GI || NAM)
+    if (NAM)
     {
         Bsprintf(Gametypes[0].name, "GRUNTMATCH");
         Bsprintf(Gametypes[2].name, "TEAM GRUNTMATCH");
+    }
+
+    if (WW2GI)
+    {
+        Bstrcpy(Gametypes[0].name, "GI MATCH");
+        Bstrcpy(Gametypes[2].name, "TEAM GI MATCH");
     }
 
     //G_SetupCheats();
