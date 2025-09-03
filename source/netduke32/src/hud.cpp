@@ -2,7 +2,7 @@
 #include "hud.h"
 #include "colmatch.h"
 
-#define USE_PATCHING 1
+#define USE_PATCHING 0
 
 int32_t althud_numbertile = 2930;
 int32_t althud_numberpal = 0;
@@ -870,7 +870,7 @@ void G_DrawStatusBar(int snum)
 #else
     // Patching can sometimes leave stray pixels behind at certain status bar scales.
     // Turn it off if you wish to avoid this. It is, however, slower.
-    u = UPD_ALL;
+    updateBits = UPD_ALL;
 #endif
 
     if (updateBits == UPD_ALL)
