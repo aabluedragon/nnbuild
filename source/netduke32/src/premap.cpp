@@ -778,11 +778,11 @@ void P_ResetInventory(int snum)
     p->jetpack_on       = 0;
     p->holoduke_on      = -1;
     p->inven_icon       = 0;
-    p->inv_amount[GET_SHIELD] = g_startArmorAmount;
 
     for (int i = 0; i < GET_MAX; i++)
         p->inv_amount[i] = 0;
 
+    p->inv_amount[GET_SHIELD] = g_startArmorAmount;
     X_OnEvent(EVENT_RESETINVENTORY, p->i, snum, -1);
 }
 
