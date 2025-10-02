@@ -1398,19 +1398,20 @@ void M_DisplayMenus(void)
         case 996:
         case 997:
         case 998:
+        case 999:
         {
             c = 160;
             if (!VOLUMEALL || !PLUTOPAK)
             {
                 //rotatesprite(c<<16,200<<15,65536L,0,MENUSCREEN,16,0,10+64,0,0,xdim-1,ydim-1);
                 rotatesprite(c << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
-                menutext(c, 24, 0, 0, g_currentMenu == 998 ? "ABOUT EDUKE32" : "CREDITS");
+                menutext(c, 24, 0, 0, g_currentMenu >= 998 ? "ABOUT NETDUKE32" : "CREDITS");
 
-                l = 8;
+                l = 9;
             }
             else
             {
-                l = 3;
+                l = 4;
             }
 
             if (KB_KeyPressed(sc_LeftArrow) ||
@@ -1576,11 +1577,15 @@ void M_DisplayMenus(void)
                 case 998:
                     l = 10;
                     goto cheat_for_port_credits;
+                case 999:
+                    l = 10;
+                    goto cheat_for_port_credits2;
                 }
                 break;
             }
 
             // Plutonium pak menus
+            int32_t oy;
             switch (g_currentMenu)
             {
             case 990:
@@ -1591,28 +1596,42 @@ void M_DisplayMenus(void)
             case 993:   // JBF 20031220
                 rotatesprite(160 << 16, 200 << 15, 65536L, 0, MENUSCREEN, 0, 0, 10 + 64, 0, 0, xdim - 1, ydim - 1);
                 rotatesprite(c << 16, 19 << 16, 65536L, 0, MENUBAR, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
-                menutext(160, 24, 0, 0, "ABOUT EDUKE32");
+                menutext(160, 24, 0, 0, "ABOUT NETDUKE32");
 
 cheat_for_port_credits:
                 if (g_scriptVersion == 13) l = (-2);
+                oy = -l;
 #define MENU_INCREMENT(x) (oy += x)  // maybe this should have been MENU_EXCREMENT instead
-                int32_t oy = -l;
 
-                mgametext(160, MENU_INCREMENT(38), "GAME PROGRAMMING", 0, 2 + 8 + 16);
+                mgametext(160, MENU_INCREMENT(38), "EDuke32 developers", 0, 2 + 8 + 16);
                 creditscminitext(160, MENU_INCREMENT(10), "Richard \"TerminX\" Gobeille");
+                creditscminitext(160, MENU_INCREMENT(7), "Evan \"Hendricks266\" Ramos");
+                creditscminitext(160, MENU_INCREMENT(7), "Alexey \"Nuke.YKT\" Skrybykin");
+                creditscminitext(160, MENU_INCREMENT(7), "Dino \"Doom64hunter\" Bollinger");
 
-                mgametext(160, MENU_INCREMENT(9), "\"JFDUKE3D\" AND \"JFBUILD\" CODE", 0, 2 + 8 + 16);
+                mgametext(160, MENU_INCREMENT(9), "Retired EDuke32 developers", 0, 2 + 8 + 16);
+                creditscminitext(160, MENU_INCREMENT(11), "Pierre-Loup \"Plagman\" Griffais");
+                creditscminitext(160, MENU_INCREMENT(7), "Philipp \"Helixhorned\" Kutin");
+                creditscminitext(160, MENU_INCREMENT(7), "Alex \"pogokeen\" Dawson");
+
+                mgametext(160, MENU_INCREMENT(9), "NetDuke32 developer", 0, 2 + 8 + 16);
+                creditscminitext(160, MENU_INCREMENT(11), "Jordon \"Striker\" Moss");
+
+                mgametext(160, MENU_INCREMENT(9), "Special thanks to", 0, 2 + 8 + 16);
                 creditscminitext(160, MENU_INCREMENT(10), "Jonathon \"JonoF\" Fowler");
 
-                mgametext(160, MENU_INCREMENT(9), "BUILD ENGINE, \"POLYMOST\" RENDERER", 0, 2 + 8 + 16);
-                mgametext(160, MENU_INCREMENT(8), "NETWORKING, OTHER CODE", 0, 2 + 8 + 16);
-                p = "Ken \"Awesoken\" Silverman";
+                mgametext(160, MENU_INCREMENT(9), "Uses BUILD Engine technology by", 0, 2 + 8 + 16);
                 creditscminitext(160, MENU_INCREMENT(10), "Ken \"Awesoken\" Silverman");
+                break;
+            case 994:
+                rotatesprite(160 << 16, 200 << 15, 65536L, 0, MENUSCREEN, 0, 0, 10 + 64, 0, 0, xdim - 1, ydim - 1);
+                rotatesprite(c << 16, 19 << 16, 65536L, 0, MENUBAR, 0, 0, 10, 0, 0, xdim - 1, ydim - 1);
+                menutext(160, 24, 0, 0, "ABOUT NETDUKE32");
 
-                mgametext(160, MENU_INCREMENT(9), "ADDITIONAL RENDERING FEATURES", 0, 2 + 8 + 16);
-                creditscminitext(160, MENU_INCREMENT(10), "Pierre-Loup \"Plagman\" Griffais");
-
-                mgametext(160, MENU_INCREMENT(9), "LICENSE AND OTHER CONTRIBUTORS", 0, 2 + 8 + 16);
+cheat_for_port_credits2:
+                if (g_scriptVersion == 13) l = (-2);
+                oy = -l;
+                mgametext(160, MENU_INCREMENT(38), "License and Other Contributors", 0, 2 + 8 + 16);
                 {
                     const char *scroller[] =
                     {
@@ -1623,26 +1642,41 @@ cheat_for_port_credits:
                         "Thanks to the following people for their contributions:",
                         " ",
                         "Adam Fazakerley",   // netcode stuff
-                        "Charlie Honig",     // showview command
-                        "Dan Gaskill",       // testing
+                        "Alexey Lysiuk",     // "_mental_" - bugfixes, shader build step in Xcode project
+                        "Barry Duncan",      // "sirlemonhead" - engine version compatibility
+                        "Bioman",            // GTK work, APT repository and package upkeep
+                        "Brandon Bergren",   // "Bdragon" - tiles.cfg
+                        "Charlie Honig",     // "CONAN" - showview command
+                        "CL102",             // "CommonLoon102" - mdposoff
+                        "Dan Gaskill",       // "Danukem" - testing
+                        "David Koenig",      // "Bargle" - Merged a couple of things from duke3d_w32
                         "Ed Coolidge",       // Mapster32 improvements
-                        "Hunter_rus",        // tons of shit
+                        "Emile Belanger",    // "Beloko" - original Android work
+                        "Fox Martins",       // "Fox666" - various patches, Polymost shading and aspect fixes
+                        "Hunter_rus",        // tons of stuff
                         "James Bentler",     // Mapster32 improvements
-                        "Javier Martinez",   // EDuke 2.1.1 stuff I think
+                        "Jasper Foreman",    // netcode contributions
+                        "Javier Martinez",   // "Malone3D" - EDuke 2.1.1 components
                         "Jeff Hart",         // website graphics
-                        "Jonathan Smith",    // testing
-                        "Jose del Castillo", // EDuke 2.1.1 stuff I think
+                        "Jonathan Strander", // "Mblackwell" - testing and feature speccing
+                        "Jose del Castillo", // "Renegado" - EDuke 2.1.1 components
                         "Lachlan McDonald",  // official EDuke32 icon
-                        "Marcus Herbert",    // OSX compatibility work
-                        "Matthew Palmer",    // testing and eduke32.com domain
+                        "LeoD",              // bugfixes
+                        "LSDNinja",          // OS X help and testing
+                        "Marcus Herbert",    // "rhoenie" - OS X compatibility work
+                        "Martijn van Antwerpen", // "LittleTijn" - patches, NetDuke32 fixes
+                        "Matthew Palmer",    // "Usurper" - testing and eduke32.com domain
+                        "Matt Saettler",     // "Matteus" - NAM, WWII GI, DOS EDuke 2.0 enhancements
+                        "Mitchell Richters", // "mjr4077au" - audiolib ALSA improvements
                         "Ozkan Sezer",       // SDL/GTK version checking improvements
-                        "Peter Green",       // dynamic remapping, custom gametypes
-                        "Peter Veenstra",    // port to 64-bit
-                        "Philipp Kutin",     // Mapster32 improvements
-                        "Ryan Gordon",       // icculus.org Duke3D port sound code
+                        "Peter Green",       // "Plugwash" - dynamic remapping, custom gametypes
+                        "Peter Veenstra",    // "Qbix" - port to 64-bit
+                        "Robin Green",       // CON array support
+                        "Ryan Gordon",       // "icculus" - icculus.org Duke3D port sound code
                         "Stephen Anthony",   // early 64-bit porting work
-                        " ",
-                        "EDuke originally by Matt Saettler",
+                        "tmyqlfpir",         // patches
+                        "tueidj",            // Wii port
+                        "Yoav N.",           // "NY00123" - Linux / SDL patches, engine version compatibility
                         " ",
                         "--x--",
                         " ",
@@ -1654,15 +1688,15 @@ cheat_for_port_credits:
                     };
                     const int numlines = sizeof(scroller) / sizeof(char *);
                     MENU_INCREMENT(10);
-                    for (m = 0, i = ((int32_t)totalclock / 104) % numlines; m < 6; m++, i++)
+                    for (m = 0, i = ((int32_t)totalclock / 104) % numlines; m < 16; m++, i++)
                     {
                         if (i == numlines) i = 0;
                         creditscminitext(160, oy + (m * 7), scroller[i]);
                     }
                 }
 
-                creditscminitext(160, MENU_INCREMENT(47), "Visit www.eduke32.com for news and updates");
-                creditscminitext(160, MENU_INCREMENT(7), "See wiki.eduke32.com/stuff for new releases");
+                creditscminitext(160, MENU_INCREMENT(120), "Visit www.eduke32.com for news and updates");
+                break;
 #undef MENU_INCREMENT
             }
             break;
