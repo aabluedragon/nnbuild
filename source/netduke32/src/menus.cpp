@@ -84,6 +84,12 @@ static int32_t MEOSV_SOUND_MIDIDRIVER[] = {
     ASS_SF2,
 };
 
+static void creditscminitext(int32_t x, int32_t y, const char *t)
+{
+   minitext((x+1) - (Bstrlen(t) << 1), y+1, t, 4, 10 + 16 + 128);
+   minitext(x - (Bstrlen(t) << 1), y, t, 8, 10 + 16 + 128);
+}
+
 void ChangeToMenu(int cm)
 {
     g_currentMenu = cm;
@@ -1589,28 +1595,24 @@ void M_DisplayMenus(void)
 
 cheat_for_port_credits:
                 if (g_scriptVersion == 13) l = (-2);
-                mgametext(160, 38 - l, "GAME PROGRAMMING", 0, 2 + 8 + 16);
-                p = "Richard \"TerminX\" Gobeille";
-                minitext(161 - (Bstrlen(p) << 1), 39 + 10 - l, p, 4, 10 + 16 + 128);
-                minitext(160 - (Bstrlen(p) << 1), 38 + 10 - l, p, 8, 10 + 16 + 128);
+#define MENU_INCREMENT(x) (oy += x)  // maybe this should have been MENU_EXCREMENT instead
+                int32_t oy = -l;
 
-                mgametext(160, 57 - l, "\"JFDUKE3D\" AND \"JFBUILD\" CODE", 0, 2 + 8 + 16);
-                p = "Jonathon \"JonoF\" Fowler";
-                minitext(161 - (Bstrlen(p) << 1), 58 + 10 - l, p, 4, 10 + 16 + 128);
-                minitext(160 - (Bstrlen(p) << 1), 57 + 10 - l, p, 8, 10 + 16 + 128);
+                mgametext(160, MENU_INCREMENT(38), "GAME PROGRAMMING", 0, 2 + 8 + 16);
+                creditscminitext(160, MENU_INCREMENT(10), "Richard \"TerminX\" Gobeille");
 
-                mgametext(160, 76 - l, "BUILD ENGINE, \"POLYMOST\" RENDERER", 0, 2 + 8 + 16);
-                mgametext(160, 76 + 8 - l, "NETWORKING, OTHER CODE", 0, 2 + 8 + 16);
+                mgametext(160, MENU_INCREMENT(9), "\"JFDUKE3D\" AND \"JFBUILD\" CODE", 0, 2 + 8 + 16);
+                creditscminitext(160, MENU_INCREMENT(10), "Jonathon \"JonoF\" Fowler");
+
+                mgametext(160, MENU_INCREMENT(9), "BUILD ENGINE, \"POLYMOST\" RENDERER", 0, 2 + 8 + 16);
+                mgametext(160, MENU_INCREMENT(8), "NETWORKING, OTHER CODE", 0, 2 + 8 + 16);
                 p = "Ken \"Awesoken\" Silverman";
-                minitext(161 - (Bstrlen(p) << 1), 77 + 8 + 10 - l, p, 4, 10 + 16 + 128);
-                minitext(160 - (Bstrlen(p) << 1), 76 + 8 + 10 - l, p, 8, 10 + 16 + 128);
+                creditscminitext(160, MENU_INCREMENT(10), "Ken \"Awesoken\" Silverman");
 
-                mgametext(160, 103 - l, "ADDITIONAL RENDERING FEATURES", 0, 2 + 8 + 16);
-                p = "Pierre-Loup \"Plagman\" Griffais";
-                minitext(161 - (Bstrlen(p) << 1), 104 + 10 - l, p, 4, 10 + 16 + 128);
-                minitext(160 - (Bstrlen(p) << 1), 103 + 10 - l, p, 8, 10 + 16 + 128);
+                mgametext(160, MENU_INCREMENT(9), "ADDITIONAL RENDERING FEATURES", 0, 2 + 8 + 16);
+                creditscminitext(160, MENU_INCREMENT(10), "Pierre-Loup \"Plagman\" Griffais");
 
-                mgametext(160, 122 - l, "LICENSE AND OTHER CONTRIBUTORS", 0, 2 + 8 + 16);
+                mgametext(160, MENU_INCREMENT(9), "LICENSE AND OTHER CONTRIBUTORS", 0, 2 + 8 + 16);
                 {
                     const char *scroller[] =
                     {
@@ -1651,20 +1653,17 @@ cheat_for_port_credits:
                         " "
                     };
                     const int numlines = sizeof(scroller) / sizeof(char *);
+                    MENU_INCREMENT(10);
                     for (m = 0, i = ((int32_t)totalclock / 104) % numlines; m < 6; m++, i++)
                     {
                         if (i == numlines) i = 0;
-                        minitext(161 - (Bstrlen(scroller[i]) << 1), 101 + 10 + 10 + 8 + 4 + (m * 7) - l, scroller[i], 4, 10 + 16 + 128);
-                        minitext(160 - (Bstrlen(scroller[i]) << 1), 100 + 10 + 10 + 8 + 4 + (m * 7) - l, scroller[i], 8, 10 + 16 + 128);
+                        creditscminitext(160, oy + (m * 7), scroller[i]);
                     }
                 }
 
-                p = "Visit www.eduke32.com for news and updates";
-                minitext(161 - (Bstrlen(p) << 1), 136 + 10 + 10 + 10 + 10 + 4 - l, p, 4, 10 + 16 + 128);
-                minitext(160 - (Bstrlen(p) << 1), 135 + 10 + 10 + 10 + 10 + 4 - l, p, 8, 10 + 16 + 128);
-                p = "See wiki.eduke32.com/stuff for new releases";
-                minitext(161 - (Bstrlen(p) << 1), 143 + 10 + 10 + 10 + 10 + 4 - l, p, 4, 10 + 16 + 128);
-                minitext(160 - (Bstrlen(p) << 1), 142 + 10 + 10 + 10 + 10 + 4 - l, p, 8, 10 + 16 + 128);
+                creditscminitext(160, MENU_INCREMENT(47), "Visit www.eduke32.com for news and updates");
+                creditscminitext(160, MENU_INCREMENT(7), "See wiki.eduke32.com/stuff for new releases");
+#undef MENU_INCREMENT
             }
             break;
         }
