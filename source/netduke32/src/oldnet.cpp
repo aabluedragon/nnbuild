@@ -20,6 +20,9 @@ extern char *rtsptr; // game.c
 
 int pingTime;
 
+// Without initializing value as done here, menu sounds might be missing.
+int32_t oldnet_predictcontext = NOT_PREDICTABLE;
+
 static void Net_AddPingTimeToPacket(int* j)
 {
     B_BUF32(&packbuf[(*j)], pingTime);

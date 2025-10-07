@@ -57,7 +57,7 @@ extern int movefifoplc;
 OLDNET_EXTERN input_t netInput;
 
 OLDNET_EXTERN bool oldnet_gotinitialsettings; // True if we got PACKET_TYPE_INIT_SETTINGS from the host.
-OLDNET_EXTERN int32_t oldnet_predictcontext; // Must set to player number on code branches that are able to predict sounds and other effects.
+extern int32_t oldnet_predictcontext; // Must set to player number on code branches that are able to predict sounds and other effects.
 OLDNET_EXTERN int32_t oldnet_predicting; // Check if oldnet_predicting is non-zero and return in code branches you want to avoid going into during prediction.
 
 OLDNET_EXTERN int predictfifoplc;
