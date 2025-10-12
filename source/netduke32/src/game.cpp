@@ -6248,7 +6248,8 @@ skip:
                 break;
             case FIRE__:
             case FIRE2__:
-            t->cstat |= 128;
+                t->cstat |= 128;
+                fallthrough__;
             case BURNING__:
             case BURNING2__:
                 if (sprite[s->owner].picnum != TREE1 && sprite[s->owner].picnum != TREE2)
