@@ -1,5 +1,5 @@
-#include <windows.h>
-#include <commctrl.h>
+#define NEED_COMMCTRL_H
+#include "../../build/include/windows_inc.h"
 #include "../src/startwin.game.h"
 
 RSRC_ICON ICON "game_icon.ico"
@@ -48,14 +48,17 @@ BEGIN
 	CONTROL	"Dicks", WIN_STARTWIN_CREDITS, "EDIT", ES_LEFT | ES_MULTILINE | ES_READONLY | WS_CHILD | WS_VISIBLE | WS_VSCROLL, 0, 0, 246, 127
 END
 
-#define FILEVER        1,4,9,9
-#define PRODUCTVER     1,4,9,9
-#define STRFILEVER     "1.5.0devel\0"
-#define STRPRODUCTVER  "1.5.0devel\0"
+#define VER        1,0,0,0
+
+#if defined EDUKE32_FAKE_DATE || defined EDUKE32_FAKE_TIME
+# define VERSTR     REVSTR
+#else
+# define VERSTR     REVSTR " built " __DATE__ " " __TIME__
+#endif
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION FILEVER
- PRODUCTVERSION PRODUCTVER
+ FILEVERSION VER
+ PRODUCTVERSION VER
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x3L
@@ -71,13 +74,13 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription", "NetDuke32"
-            VALUE "FileVersion", STRFILEVER
+            VALUE "FileVersion", VERSTR
             VALUE "InternalName", "NetDuke32"
             VALUE "LegalCopyright", "Copyright © 1996, 2003 3D Realms Entertainment, 2004-2008 EDuke32 Team"
             VALUE "LegalTrademarks", "Duke Nukem® is a Registered Trademark of Apogee Software, Ltd."
             VALUE "OriginalFilename", "netduke32.exe"
             VALUE "ProductName", "NetDuke32"
-            VALUE "ProductVersion", STRPRODUCTVER
+            VALUE "ProductVersion", VERSTR
         END
     END
     BLOCK "VarFileInfo"
