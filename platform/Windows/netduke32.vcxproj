@@ -205,6 +205,7 @@
     <ClInclude Include="..\..\source\netduke32\src\mapster32.h" />
     <ClInclude Include="..\..\source\netduke32\src\mdump.h" />
     <ClInclude Include="..\..\source\netduke32\src\names.h" />
+    <ClInclude Include="..\..\source\netduke32\src\net_predict.h" />
     <ClInclude Include="..\..\source\netduke32\src\oldnet.h" />
     <ClInclude Include="..\..\source\netduke32\src\osdcmds.h" />
     <ClInclude Include="..\..\source\netduke32\src\osdfuncs.h" />
@@ -247,6 +248,7 @@
     <ClCompile Include="..\..\source\netduke32\src\grpscan.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\mdump.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\menus.cpp" />
+    <ClCompile Include="..\..\source\netduke32\src\net_predict.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\oldnet.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\osdcmds.cpp" />
     <ClCompile Include="..\..\source\netduke32\src\osdfuncs.cpp" />

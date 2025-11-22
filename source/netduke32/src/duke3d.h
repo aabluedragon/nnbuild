@@ -711,6 +711,8 @@ enum loguru_verbosities_game
 #include "inv.h"
 #include "macros.h"
 #include "music.h"
+#include "net_predict.h"
+#include "oldnet.h"
 #include "player.h"
 #include "premap.h"
 #include "projectiles.h"
@@ -720,7 +722,6 @@ enum loguru_verbosities_game
 #include "sector.h"
 #include "sounds.h"
 #include "sync.h"
-#include "oldnet.h"
 
 static inline int32_t gameHandleEvents(void)
 {

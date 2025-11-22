@@ -744,6 +744,7 @@ netduke32_game_objs := \
     grpscan.cpp \
     hud.cpp \
     menus.cpp \
+    net_predict.cpp \
     oldnet.cpp \
     osdcmds.cpp \
     osdfuncs.cpp \
