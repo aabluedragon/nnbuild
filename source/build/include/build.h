@@ -94,7 +94,7 @@ enum rendmode_t {
 #define MAXTILES 30720
 #define MAXUSERTILES (MAXTILES-256)  // reserve 256 tiles at the end
 
-#define MAXVOXELS 1024
+#define MAXVOXELS 2048
 #define MAXSTATUS 1024
 #define MAXPLAYERS 16
 // Maximum number of component tiles in a multi-psky:
@@ -1212,7 +1212,7 @@ typedef struct artheader_t {
     int32_t tilestart, tileend, numtiles;
     uint8_t* tileread;
 } artheader_t;
-#define ARTv1_UNITOFFSET ((signed)(4*sizeof(int32_t) + 2*sizeof(int16_t) + sizeof(picanm_t)))
+#define ARTv1_UNITOFFSET ((signed)(4*sizeof(int32_t) + 2*sizeof(int16_t) + sizeof(uint32_t)))
 
 int32_t    enginePreInit(void);	// a partial setup of the engine used for launch windows
 int32_t    engineInit(void);
