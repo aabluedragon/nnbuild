@@ -765,6 +765,12 @@ netduke32_game_gen_objs :=
 netduke32_game_miscdeps :=
 netduke32_game_orderonlydeps :=
 
+ifeq ($(PLATFORM),DARWIN)
+    ifeq ($(STARTUP_WINDOW),1)
+        netduke32_game_objs += GrpFile.game.mm GameListSource.game.mm startosx.game.mm
+    endif
+endif
+
 ifeq ($(PLATFORM),WINDOWS)
     netduke32_game_objs += winbits.cpp
     netduke32_game_rsrc_objs += gameres.rc
