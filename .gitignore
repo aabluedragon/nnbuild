@@ -87,3 +87,5 @@ project.xcworkspace/
 .DS_Store
 ._*
 /source/voidwrap/sdk/
+/source/discordrpc/obj_linux
+/source/discordrpc/obj_win

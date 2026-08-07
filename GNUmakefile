@@ -50,6 +50,28 @@ endef
 
 ##### External Library Definitions
 
+#### discord-rpc
+
+discordrpc := discordrpc
+
+discordrpc_root := $(source)/$(discordrpc)
+discordrpc_src := $(discordrpc_root)/src
+discordrpc_inc := $(discordrpc_root)/include
+discordrpc_obj := $(obj)/$(discordrpc)
+
+discordrpc_objs := \
+    discord_rpc.cpp \
+    rpc_connection.cpp \
+    serialization.cpp \
+
+ifeq ($(PLATFORM),WINDOWS)
+discordrpc_objs+=connection_win.cpp discord_register_win.cpp
+else
+discordrpc_objs+=connection_unix.cpp discord_register_linux.cpp
+endif
+
+discordrpc_cflags=-g -I$(discordrpc_inc) -Wno-class-memaccess
+
 #### libxmp-lite
 
 libxmplite := libxmp-lite
@@ -672,6 +694,92 @@ ifeq ($(PLATFORM),DARWIN)
     endif
 endif
 
+#### NetDuke32
+
+netduke32 := netduke32
+
+netduke32_game_ldflags :=
+
+netduke32_game_stripflags :=
+
+netduke32_root := $(source)/$(netduke32)
+netduke32_src := $(netduke32_root)/src
+netduke32_rsrc := $(netduke32_root)/rsrc
+netduke32_obj := $(obj)/$(netduke32)
+
+netduke32_cflags := -I$(netduke32_src) 
+
+netduke32_game_deps := audiolib mact
+
+ifeq ($(USE_DISCORDRPC), 1)
+    netduke32_game_deps += discordrpc
+    netduke32_cflags += -DDISCORD_RPC
+endif
+
+netduke32_game := netduke32
+
+ifneq (,$(APPBASENAME))
+    netduke32_game := $(APPBASENAME)
+endif
+
+netduke32_game_proper := NetDuke32
+
+netduke32_game_objs := \
+    actors.cpp \
+    anim.cpp \
+    chatpipe.cpp \
+    cmdline.cpp \
+    config.cpp \
+    common.cpp \
+    discord.cpp \
+    dnames.cpp \
+    dukebot.cpp \
+    game.cpp \
+    gamedef.cpp \
+    gameexec.cpp \
+    gamestructures.cpp \
+    gametypes.cpp \
+    gamevars.cpp \
+    global.cpp \
+    grpscan.cpp \
+    hud.cpp \
+    menus.cpp \
+    net_predict.cpp \
+    oldnet.cpp \
+    osdcmds.cpp \
+    osdfuncs.cpp \
+    player.cpp \
+    premap.cpp \
+    projectiles.cpp \
+    rts.cpp \
+    savegame.cpp \
+    screens.cpp \
+    sector.cpp \
+    sounds.cpp \
+    sync.cpp \
+    utils.cpp \
+
+netduke32_game_rsrc_objs :=
+netduke32_game_gen_objs :=
+
+netduke32_game_miscdeps :=
+netduke32_game_orderonlydeps :=
+
+ifeq ($(PLATFORM),WINDOWS)
+    netduke32_game_objs += winbits.cpp
+    netduke32_game_rsrc_objs += gameres.rc
+    ifeq ($(STARTUP_WINDOW),1)
+        netduke32_game_objs += startwin.game.cpp
+    endif
+endif
+
+ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
+    netduke32_game_objs += startgtk.game.cpp
+    netduke32_game_gen_objs += game_banner.c
+endif
+ifeq ($(RENDERTYPE),SDL)
+    netduke32_game_rsrc_objs += game_icon.c
+endif
 
 #### Includes
 
@@ -683,6 +791,7 @@ COMPILERFLAGS += \
     -I$(glad_inc) \
     -I$(voidwrap_inc) \
     -I$(imgui_inc) \
+    -I$(discordrpc_inc) \
 
 ifneq (0,$(USE_MIMALLOC))
     COMPILERFLAGS += -I$(mimalloc_inc)
@@ -702,6 +811,7 @@ games := \
     duke3d \
     kenbuild \
     sw \
+    netduke32 \
 
 libraries := \
     audiolib \
@@ -711,6 +821,7 @@ libraries := \
     libxmplite \
     mact \
     voidwrap \
+    discordrpc \
 
 ifneq (0,$(USE_MIMALLOC))
     libraries += mimalloc
@@ -727,8 +838,11 @@ components := \
 
 roles := \
     game \
-    editor \
 
+# If blank string, substring not found.
+ifeq (,$(findstring netduke32,$(MAKECMDGOALS)))
+    roles += editor
+endif
 
 ifeq ($(PRETTY_OUTPUT),1)
 .SILENT:
@@ -935,7 +1049,7 @@ cleantools:
 	-$(call RM,$(addsuffix $(EXESUFFIX),$($(subst clean,,$@)_targets)))
 	-$(call RMDIR,$($(subst clean,,$@)_obj))
 
-clean: cleanduke3d cleansw cleantools
+clean: cleanduke3d cleansw cleannetduke32 cleantools
 	-$(call RMDIR,$(obj))
 	-$(call RM,$(ebacktrace_dll))
 	-$(call RM,$(voidwrap_lib))

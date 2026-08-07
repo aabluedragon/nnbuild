@@ -178,7 +178,6 @@ void CONFIG_SetDefaultKeys(const char (*keyptr)[MAXGAMEFUNCLEN], bool lazy/*=fal
     }
 }
 
-
 void CONFIG_SetDefaults(void)
 {
     ud.config.scripthandle = -1;
