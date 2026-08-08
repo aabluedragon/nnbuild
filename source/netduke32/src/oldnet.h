@@ -74,6 +74,11 @@ enum DukePacket_t
     PACKET_TYPE_SNAPSHOT_CHUNK,    // Master -> late joiner: piece of the state snapshot.
     PACKET_TYPE_LATEJOIN_GO,       // Master -> everyone: integrate player [1] with roster mask [2..3].
 
+    PACKET_TYPE_LAG_NOTIFY,        // Master -> everyone: laggards mask + seconds left + votes mask.
+    PACKET_TYPE_LAG_CLEAR,         // Master -> everyone: stall resolved, resume.
+    PACKET_TYPE_LAG_VOTE,          // Slave -> master: I vote to drop the current laggard(s).
+    PACKET_TYPE_DROP_PLAYER,       // Master -> everyone: remove player [1], roster mask [2..3].
+
     PACKET_END, // Should remain last in list.
 };
 
@@ -105,6 +110,11 @@ void Net_CancelVote();
 
 // Late joining (see Net_MasterCheckLateJoin in oldnet.cpp).
 #define LATEJOIN_SAVE_SPOT 100
+OLDNET_EXTERN int32_t g_netAsyncMode;   // Host: server-authoritative, never blocks on slow clients.
+OLDNET_EXTERN int32_t g_netLagActive;   // Everyone: a lockstep lag dialog is open right now.
+OLDNET_EXTERN uint16_t g_netLagMask;    // Everyone: which slots are lagging.
+OLDNET_EXTERN int32_t g_netLagSecsLeft; // Everyone: countdown shown in the dialog.
+OLDNET_EXTERN uint16_t g_netLagVoteMask;// Everyone: which slots have been voted to drop.
 OLDNET_EXTERN int32_t g_netLateJoin;    // Host: started with -latejoin, open slots may join mid-game.
 OLDNET_EXTERN int32_t g_netLateJoiner;  // This client is joining a game already in progress.
 OLDNET_EXTERN int32_t g_netLateJoinerReady; // Joiner reached the main loop; safe to load the snapshot.
@@ -114,6 +124,10 @@ void Net_ApplyConnectedMask(uint16_t mask);
 void Net_RebuildConnectList(void);
 void Net_MasterCheckLateJoin(void);
 void Net_PeerCheckLateJoin(void);
+
+void Net_LagUpdate(void);
+void Net_LagVote(void);
+void Net_DisplayLagDialog(void);
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);

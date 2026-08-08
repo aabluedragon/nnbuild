@@ -8539,6 +8539,7 @@ static void G_DrawFrame()
         G_ShowCacheLocks();
 
     Net_DisplaySyncMsg();
+    Net_DisplayLagDialog();
 
     if (VOLUMEONE)
     {
@@ -9118,6 +9119,11 @@ MAIN_LOOP_RESTART:
         }
 
         G_DoCheats();
+
+        // Runs every frame regardless of whether the simulation could advance,
+        // so a lockstep stall opens the countdown dialog and eventually drops
+        // the laggard instead of freezing the game.
+        Net_LagUpdate();
 
         if (ud.gm & (MODE_EOL | MODE_RESTART))
         {

@@ -70,6 +70,10 @@ static void G_ShowParameterHelp(void)
         "-net /n0:3\tHost 3-player match in master/slave mode.\n"
         "-net /n0 192.168.0.1\tJoin specified IP in master/slave mode.\n"
         "\n"
+        "-async\t\tHost: server-authoritative netplay (don't wait on slow\n"
+        "\t\tclients). Default is lockstep (equal lag for all).\n"
+        "-latejoin\tHost: start with open slots that players may join mid-game.\n"
+        "\n"
         "-noffire\t\tDisable friendly fire\n"
         "-rts [file.rts]\tLoad a custom Remote Ridicule sound bank\n"
         "-r\t\tRecord demo\n"
@@ -411,6 +415,15 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     // and let the remaining slots join mid-game.
                     g_netLateJoin = TRUE;
                     LOG_F(INFO, "Late joining enabled.");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "async"))
+                {
+                    // Host: server-authoritative netplay - the master never
+                    // blocks on slow clients (vs lockstep's equal-lag model).
+                    g_netAsyncMode = TRUE;
+                    LOG_F(INFO, "Asynchronous (server-authoritative) netplay enabled.");
                     i++;
                     continue;
                 }

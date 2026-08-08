@@ -14,12 +14,22 @@ int mymaxlag, otherminlag, bufferjitter = 1;
 int movefifosendplc;
 int movefifoplc;
 
+// Lockstep lag handling (Warcraft 3 style): when the master stalls waiting
+// for a slow player, open a countdown; if it expires (or a majority votes to
+// drop), the laggard is removed instead of hanging every machine forever.
+#define LAGWAIT_COUNTDOWN_SEC 30
+static int32_t lagWaitActive;      // Master: a stall dialog is currently open.
+static uint32_t lagWaitDeadline;   // timerGetTicks() value when the countdown hits 0.
+static uint16_t lagStalledMask;    // Which slots we are stalled on.
+static uint16_t lagDropVoteMask;   // Which slots have been voted to drop.
+
 static int32_t lateJoinPending = -1;
 static int32_t lateJoinGoSlot = -1;
 static uint16_t lateJoinGoMask;
 static int32_t lateJoinGoRNG[6];
 static void Net_IntegrateLateJoin(int32_t slot);
 static void Net_CompleteLateJoin(int32_t slot);
+static void Net_DropLaggard(int32_t slot);
 static char *snapshotBuf;
 static int32_t snapshotChunksGot, snapshotChunkTotal, snapshotLastLen;
 #define SNAPSHOT_CHUNK_SIZE 1024
@@ -225,6 +235,226 @@ void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t*
     }
 }
 
+// Count connected players that are NOT in the stalled set - the electorate
+// that can vote a laggard out.
+static int32_t Net_CountVoters(uint16_t stalledMask)
+{
+    int32_t n = 0;
+    for (int32_t i = 0; i < numplayers; i++)
+        if (g_player[i].connected && !((stalledMask >> i) & 1) && i != myconnectindex)
+            n++;
+    return n;
+}
+
+static void Net_BroadcastLagState(void)
+{
+    packbuf[0] = PACKET_TYPE_LAG_NOTIFY;
+    B_BUF16(&packbuf[1], lagStalledMask);
+    B_BUF16(&packbuf[3], (uint16_t)g_netLagSecsLeft);
+    B_BUF16(&packbuf[5], lagDropVoteMask);
+    for (int32_t i = 0; i < numplayers; i++)
+        if (i != myconnectindex && g_player[i].connected)
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 7);
+
+    g_netLagActive = 1;
+    g_netLagMask = lagStalledMask;
+    g_netLagVoteMask = lagDropVoteMask;
+}
+
+// Master, every frame (from the main loop, independent of the simulation
+// clock): detect a lockstep stall, run the WC3-style countdown dialog, and
+// drop a laggard on timeout or majority vote so the game never hangs.
+void Net_LagUpdate(void)
+{
+    if (g_netAsyncMode || myconnectindex != connecthead || numplayers < 2)
+        return;
+
+    if (!(ud.gm & MODE_GAME) || ud.recstat == 2 || g_lateJoinFreeze)
+        return;
+
+    uint32_t const now = timerGetTicks();
+
+    // Track when the broadcast tick last advanced; a stall only counts once
+    // the master has been unable to progress for a short grace period, so
+    // ordinary network jitter never flickers the dialog.
+    static int32_t lastSendPlc = -1;
+    static uint32_t lastAdvanceTime;
+    if (movefifosendplc != lastSendPlc)
+    {
+        lastSendPlc = movefifosendplc;
+        lastAdvanceTime = now;
+    }
+
+    // Are we waiting on anyone for the tick we're trying to broadcast?
+    int i;
+    uint16_t stalled = 0;
+    TRAVERSE_CONNECT(i)
+        if (i != myconnectindex && g_player[i].movefifoend <= movefifosendplc)
+            stalled |= (1 << i);
+
+    if (stalled && !lagWaitActive && (now - lastAdvanceTime) < 500)
+        return;  // Within the grace period; not a real stall yet.
+
+    if (!stalled)
+    {
+        if (lagWaitActive)
+        {
+            lagWaitActive = 0;
+            lagStalledMask = 0;
+            lagDropVoteMask = 0;
+            g_netLagActive = 0;
+            g_netLagMask = 0;
+            packbuf[0] = PACKET_TYPE_LAG_CLEAR;
+            for (int32_t i = 0; i < numplayers; i++)
+                if (i != myconnectindex && g_player[i].connected)
+                    mmulti_sendpacket(i, (unsigned char *)packbuf, 1);
+        }
+        return;
+    }
+
+    if (!lagWaitActive)
+    {
+        int32_t secs = LAGWAIT_COUNTDOWN_SEC;
+        char const *e = getenv("NETDUKE_LAGSECS");  // test override
+        if (e) secs = atoi(e);
+
+        lagWaitActive = 1;
+        lagDropVoteMask = 0;
+        lagWaitDeadline = now + (uint32_t)secs * 1000u;
+        LOG_F(INFO, "Lockstep stall: waiting for player(s) mask 0x%x, %d second countdown", stalled, secs);
+    }
+
+    lagStalledMask = stalled;
+    g_netLagSecsLeft = max(0, (int32_t)(lagWaitDeadline - now) / 1000);
+
+    // Tally votes; drop on timeout or majority of eligible (non-stalled) voters.
+    int32_t const voters = Net_CountVoters(lagStalledMask);
+    int32_t votes = 0;
+    for (int32_t v = 0; v < numplayers; v++)
+        if ((lagDropVoteMask >> v) & 1)
+            votes++;
+    bool const timedOut = (int32_t)(lagWaitDeadline - now) <= 0;
+
+    if (timedOut || (voters > 0 && votes * 2 >= voters))
+    {
+        for (int32_t i = 0; i < numplayers; i++)
+            if ((lagStalledMask >> i) & 1)
+            {
+                Net_DropLaggard(i);
+                return;  // Handle one per frame; a second laggard re-opens next frame.
+            }
+    }
+
+    // Refresh the shared dialog roughly twice a second.
+    static uint32_t lastBroadcast;
+    if (now - lastBroadcast >= 400)
+    {
+        lastBroadcast = now;
+        Net_BroadcastLagState();
+    }
+}
+
+// Master: drop a laggard. Substitute its input for the pending tick so this
+// frame completes identically everywhere, mark it disconnected, and broadcast
+// the new roster; slaves apply the same removal from the packet.
+static void Net_DropLaggard(int32_t slot)
+{
+    LOG_F(INFO, "Dropping lagging player %d (%s)", slot, g_player[slot].user_name);
+
+    while (g_player[slot].movefifoend <= movefifosendplc)
+    {
+        int32_t const e = g_player[slot].movefifoend;
+        inputfifo[e & (MOVEFIFOSIZ-1)][slot] = inputfifo[(e-1) & (MOVEFIFOSIZ-1)][slot];
+        g_player[slot].movefifoend++;
+    }
+
+    g_player[slot].connected = 0;
+    Net_RebuildConnectList();
+
+    packbuf[0] = PACKET_TYPE_DROP_PLAYER;
+    packbuf[1] = (char)slot;
+    B_BUF16(&packbuf[2], Net_ConnectedMask());
+    for (int32_t i = 0; i < numplayers; i++)
+        if (i != myconnectindex && g_player[i].connected)
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 4);
+
+    P_QuickKill(g_player[slot].ps);
+    Bsprintf(buf, "%s^00 dropped (lag)", g_player[slot].user_name);
+    G_AddUserQuote(buf);
+
+    lagWaitActive = 0;
+    lagStalledMask = 0;
+    lagDropVoteMask = 0;
+    g_netLagActive = 0;
+    g_netLagMask = 0;
+
+    packbuf[0] = PACKET_TYPE_LAG_CLEAR;
+    for (int32_t i = 0; i < numplayers; i++)
+        if (i != myconnectindex && g_player[i].connected)
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 1);
+}
+
+// A non-laggard presses the vote key: tell the master (or, on the master,
+// record it directly).
+void Net_LagVote(void)
+{
+    if (!g_netLagActive)
+        return;
+
+    if (myconnectindex == connecthead)
+    {
+        lagDropVoteMask |= (1 << myconnectindex);
+    }
+    else
+    {
+        packbuf[0] = PACKET_TYPE_LAG_VOTE;
+        packbuf[1] = (char)myconnectindex;
+        mmulti_sendpacket(connecthead, (unsigned char *)packbuf, 2);
+    }
+
+    g_netLagVoteMask |= (1 << myconnectindex);
+}
+
+// Drawn every frame from G_DrawFrame. While a lockstep stall is open this
+// shows the Warcraft 3-style countdown and lets other players vote the
+// laggard out with F9.
+void Net_DisplayLagDialog(void)
+{
+    if (!g_netLagActive)
+        return;
+
+    int const meLagging = (g_netLagMask >> myconnectindex) & 1;
+
+    int y = 60;
+    gametext(160, y, "WAITING FOR PLAYERS", 14, 2); y += 12;
+
+    for (int32_t i = 0; i < numplayers; i++)
+    {
+        if (!((g_netLagMask >> i) & 1))
+            continue;
+        Bsprintf(tempbuf, "%s is lagging", g_player[i].user_name);
+        gametext(160, y, tempbuf, 14, 2);
+        y += 8;
+    }
+
+    Bsprintf(tempbuf, "Continuing in %d...", g_netLagSecsLeft);
+    gametext(160, y, tempbuf, 14, 2); y += 12;
+
+    if (!meLagging)
+    {
+        int const voted = (g_netLagVoteMask >> myconnectindex) & 1;
+        gametext(160, y, voted ? "Vote to drop cast" : "Press F9 to vote to drop", 14, 2);
+
+        if (!voted && KB_UnBoundKeyPressed(sc_F9))
+        {
+            KB_ClearKeyDown(sc_F9);
+            Net_LagVote();
+        }
+    }
+    else
+        gametext(160, y, "Reconnect or you will be dropped", 14, 2);
+}
+
 void faketimerhandler(void) { };
 
 void Net_HandleInput(void)
@@ -352,10 +582,36 @@ void Net_HandleInput(void)
 
     while (1)  //Master
     {
-        TRAVERSE_CONNECT(i)
+        if (g_netAsyncMode)
         {
-            if (g_player[i].movefifoend <= movefifosendplc)
+            // Asynchronous (server-authoritative) mode: never wait for slow
+            // clients. Tick at the pace of our own input, substituting each
+            // absent player's last known input; their real inputs are applied
+            // to later ticks when they arrive.
+            if (g_player[myconnectindex].movefifoend <= movefifosendplc)
                 return;
+
+            TRAVERSE_CONNECT(i)
+            {
+                while (g_player[i].movefifoend <= movefifosendplc)
+                {
+                    int32_t const e = g_player[i].movefifoend;
+                    inputfifo[e & (MOVEFIFOSIZ-1)][i] = inputfifo[(e-1) & (MOVEFIFOSIZ-1)][i];
+                    g_player[i].movefifoend++;
+                }
+            }
+        }
+        else
+        {
+            // Lockstep: can't advance until every player's input for this tick
+            // has arrived. The lag dialog / drop countdown is driven separately
+            // from the main loop (Net_LagUpdate) so it keeps running even while
+            // the simulation is fully stalled.
+            TRAVERSE_CONNECT(i)
+            {
+                if (g_player[i].movefifoend <= movefifosendplc)
+                    return;
+            }
         }
 
         osyn = (input_t *)&inputfifo[(movefifosendplc-1)&(MOVEFIFOSIZ-1)];
@@ -493,6 +749,7 @@ void Net_ParsePackets(void)
 
                 Net_ApplyConnectedMask(B_UNBUF16(&packbuf[j])); j += sizeof(uint16_t);
                 Net_RebuildConnectList();
+                g_netAsyncMode = packbuf[j++];
 
                 if (M_DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE))
                     LOG_F(INFO, "Visibility adjustment enabled for multiplayer.");
@@ -542,6 +799,43 @@ void Net_ParsePackets(void)
                 lateJoinGoMask = B_UNBUF16(&packbuf[2]);
                 for (i = 0; i < 6; i++)
                     lateJoinGoRNG[i] = (int32_t)B_UNBUF32(&packbuf[4 + i * 4]);
+                break;
+            }
+            case PACKET_TYPE_LAG_NOTIFY:
+            {
+                g_netLagActive = 1;
+                g_netLagMask = B_UNBUF16(&packbuf[1]);
+                g_netLagSecsLeft = (int16_t)B_UNBUF16(&packbuf[3]);
+                g_netLagVoteMask = B_UNBUF16(&packbuf[5]);
+                break;
+            }
+            case PACKET_TYPE_LAG_CLEAR:
+            {
+                g_netLagActive = 0;
+                g_netLagMask = 0;
+                g_netLagVoteMask = 0;
+                break;
+            }
+            case PACKET_TYPE_LAG_VOTE:
+            {
+                // Master tallies a slave's drop vote.
+                if (myconnectindex == connecthead)
+                    lagDropVoteMask |= (1 << (uint8_t)packbuf[1]);
+                break;
+            }
+            case PACKET_TYPE_DROP_PLAYER:
+            {
+                int32_t const slot = (uint8_t)packbuf[1];
+                Net_ApplyConnectedMask(B_UNBUF16(&packbuf[2]));
+                Net_RebuildConnectList();
+                if ((unsigned)slot < MAXPLAYERS && g_player[slot].ps)
+                {
+                    P_QuickKill(g_player[slot].ps);
+                    Bsprintf(buf, "%s^00 dropped (lag)", g_player[slot].user_name);
+                    G_AddUserQuote(buf);
+                }
+                g_netLagActive = 0;
+                g_netLagMask = 0;
                 break;
             }
             case PACKET_TYPE_NEW_GAME:
@@ -1314,6 +1608,7 @@ static int32_t Net_BuildInitialSettings(void)
     B_BUF32(&packbuf[j], ud.m_dmflags); j += sizeof(int32_t);
     B_BUF32(&packbuf[j], botNameSeed); j += sizeof(int32_t);
     B_BUF16(&packbuf[j], Net_ConnectedMask()); j += sizeof(uint16_t);
+    packbuf[j++] = (char)g_netAsyncMode;
 
     return j;
 }
