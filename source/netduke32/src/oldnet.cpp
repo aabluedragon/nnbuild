@@ -4,6 +4,11 @@
 #include "oldnet.h"
 #include "net_predict.h"
 
+#ifndef _WIN32
+# include <poll.h>
+# include <unistd.h>
+#endif
+
 #define TIMERUPDATESIZ 32
 
 int netQuitSend  = 0;
@@ -354,12 +359,20 @@ void Net_LagUpdate(void)
     }
 }
 
-// Master: drop a laggard. Substitute its input for the pending tick so this
-// frame completes identically everywhere, mark it disconnected, and broadcast
-// the new roster; slaves apply the same removal from the packet.
-static void Net_DropLaggard(int32_t slot)
+// Master: schedule a player's removal. Freeze input and fill the target's
+// pending ticks; the actual removal happens once every machine has drained to
+// the same tick (Net_MasterCheckDrop), matching the late-join discipline so
+// the roster change lands on one identical tick everywhere.
+static int32_t g_pendingKickSlot = -1;
+static char g_pendingKickReason[32];
+static int32_t g_pendingDropSlot = -1;   // slave side: removal announced, apply at tick
+static uint16_t g_pendingDropMask;
+static int32_t g_pendingDropTick;
+
+static void Net_ScheduleRemove(int32_t slot, const char *reasonQuote)
 {
-    LOG_F(INFO, "Dropping lagging player %d (%s)", slot, g_player[slot].user_name);
+    if (g_pendingKickSlot >= 0)
+        return;  // one at a time; the caller can retry after this completes
 
     while (g_player[slot].movefifoend <= movefifosendplc)
     {
@@ -368,19 +381,84 @@ static void Net_DropLaggard(int32_t slot)
         g_player[slot].movefifoend++;
     }
 
+    g_pendingKickSlot = slot;
+    Bstrncpyz(g_pendingKickReason, reasonQuote, sizeof(g_pendingKickReason));
+    g_lateJoinFreeze = 1;  // pause the master's input flow while we drain
+}
+
+static void Net_ApplyRemoval(int32_t slot, const char *reasonQuote)
+{
     g_player[slot].connected = 0;
     Net_RebuildConnectList();
+    P_QuickKill(g_player[slot].ps);
+    Bsprintf(buf, "%s^00 %s", g_player[slot].user_name, reasonQuote);
+    G_AddUserQuote(buf);
+}
+
+// Master, each frame: once frozen for a scheduled removal and every machine
+// has drained to the broadcast tick, tell everyone and apply the removal at a
+// ready barrier (as late-join does), then resume.
+void Net_MasterCheckDrop(void)
+{
+    if (g_pendingKickSlot < 0 || myconnectindex != connecthead)
+        return;
+    if (movefifoplc < movefifosendplc)
+        return;  // still draining
+
+    int32_t const slot = g_pendingKickSlot;
+    // Everyone removes the player right before simulating this tick, so the
+    // roster change lands identically without needing a ready barrier.
+    int32_t const dropTick = movefifosendplc;
 
     packbuf[0] = PACKET_TYPE_DROP_PLAYER;
     packbuf[1] = (char)slot;
-    B_BUF16(&packbuf[2], Net_ConnectedMask());
+    B_BUF16(&packbuf[2], Net_ConnectedMask() & ~(1 << slot));
+    B_BUF32(&packbuf[4], dropTick);
     for (int32_t i = 0; i < numplayers; i++)
         if (i != myconnectindex && g_player[i].connected)
-            mmulti_sendpacket(i, (unsigned char *)packbuf, 4);
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 8);
 
-    P_QuickKill(g_player[slot].ps);
-    Bsprintf(buf, "%s^00 dropped (lag)", g_player[slot].user_name);
-    G_AddUserQuote(buf);
+    // Also inform the departing player so it can exit cleanly, then sever it
+    // at the transport level.
+    if (g_player[slot].connected && mmulti_slotconnected(slot))
+        mmulti_sendpacket(slot, (unsigned char *)packbuf, 8);
+
+    Net_ApplyRemoval(slot, g_pendingKickReason);
+    mmulti_dropslot(slot);
+
+    g_pendingKickSlot = -1;
+    g_lateJoinFreeze = 0;
+}
+
+// Slaves: apply an announced removal right before simulating the tick the
+// master tagged it with, matching the master exactly. Called at the top of
+// G_MoveLoop, before the tick-drain loop, so the removed player is already
+// gone when this tick is simulated.
+void Net_PeerCheckDrop(void)
+{
+    if (g_pendingDropSlot < 0 || myconnectindex == connecthead)
+        return;
+    if (movefifoplc < g_pendingDropTick)
+        return;  // haven't reached the drop tick yet
+
+    int32_t const slot = g_pendingDropSlot;
+    g_pendingDropSlot = -1;
+
+    Net_ApplyConnectedMask(g_pendingDropMask);
+    g_player[slot].connected = 0;
+    Net_RebuildConnectList();
+    if ((unsigned)slot < MAXPLAYERS && g_player[slot].ps)
+    {
+        P_QuickKill(g_player[slot].ps);
+        Bsprintf(buf, "%s^00 left", g_player[slot].user_name);
+        G_AddUserQuote(buf);
+    }
+}
+
+static void Net_DropLaggard(int32_t slot)
+{
+    LOG_F(INFO, "Dropping lagging player %d (%s)", slot, g_player[slot].user_name);
+    Net_ScheduleRemove(slot, "dropped (lag)");
 
     lagWaitActive = 0;
     lagStalledMask = 0;
@@ -413,6 +491,286 @@ void Net_LagVote(void)
     }
 
     g_netLagVoteMask |= (1 << myconnectindex);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Host administration: ban list, kick, ban, and the join/leave notifications.
+//////////////////////////////////////////////////////////////////////////////
+
+struct banentry_t { uint32_t ip; char name[32]; };
+static banentry_t g_banList[MAXBANS];
+static int32_t g_banCount;
+static int32_t g_banLoaded;
+
+static void Net_FormatIP(uint32_t ip, char *out, size_t outsize)
+{
+    Bsnprintf(out, outsize, "%u.%u.%u.%u", ip & 255, (ip >> 8) & 255, (ip >> 16) & 255, (ip >> 24) & 255);
+}
+
+static uint32_t Net_ParseIP(const char *s)
+{
+    // Produce the same little-endian s_addr layout inet_addr() yields (first
+    // octet in the low byte), matching how mmulti stores otherip[].
+    unsigned a, b, c, d;
+    if (sscanf(s, "%u.%u.%u.%u", &a, &b, &c, &d) == 4 && a < 256 && b < 256 && c < 256 && d < 256)
+        return a | (b << 8) | (c << 16) | (d << 24);
+    return 0;
+}
+
+static void Net_LoadBanList(void)
+{
+    if (g_banLoaded)
+        return;
+    g_banLoaded = 1;
+    g_banCount = 0;
+
+    int32_t fil = kopen4loadfrommod("banlist.txt", 0);
+    if (fil == -1)
+        return;
+
+    int32_t len = kfilelength(fil);
+    char *text = (char *)Xmalloc(len + 1);
+    kread(fil, text, len);
+    text[len] = 0;
+    kclose(fil);
+
+    char *line = strtok(text, "\r\n");
+    while (line && g_banCount < MAXBANS)
+    {
+        while (*line == ' ' || *line == '\t') line++;
+        if (*line && *line != '#')
+        {
+            char ipstr[64] = {0}, name[32] = {0};
+            sscanf(line, "%63s %31[^\r\n]", ipstr, name);
+            uint32_t ip = Net_ParseIP(ipstr);
+            if (ip)
+            {
+                g_banList[g_banCount].ip = ip;
+                Bstrncpyz(g_banList[g_banCount].name, name, sizeof(g_banList[0].name));
+                g_banCount++;
+            }
+        }
+        line = strtok(NULL, "\r\n");
+    }
+    Xfree(text);
+    LOG_F(INFO, "Loaded %d ban(s) from banlist.txt", g_banCount);
+}
+
+static void Net_SaveBanList(void)
+{
+    char temp[BMAX_PATH];
+    if (g_modDir[0] != '/')
+        Bsnprintf(temp, sizeof(temp), "%s/banlist.txt", g_modDir);
+    else
+        Bstrcpy(temp, "banlist.txt");
+
+    buildvfs_FILE fil = buildvfs_fopen_write(temp);
+    if (!fil)
+    {
+        LOG_F(ERROR, "Couldn't write banlist.txt");
+        return;
+    }
+
+    char linebuf[128], ipstr[64];
+    buildvfs_fputstrptr(fil, "# NetDuke32 ban list - one entry per line: <ip> <name>\n");
+    for (int32_t i = 0; i < g_banCount; i++)
+    {
+        Net_FormatIP(g_banList[i].ip, ipstr, sizeof(ipstr));
+        Bsnprintf(linebuf, sizeof(linebuf), "%s %s\n", ipstr, g_banList[i].name);
+        buildvfs_fputstrptr(fil, linebuf);
+    }
+    buildvfs_fclose(fil);
+}
+
+// Registered with mmulti; called at the transport handshake.
+static int Net_BanCheck(int ip)
+{
+    Net_LoadBanList();
+    for (int32_t i = 0; i < g_banCount; i++)
+        if (g_banList[i].ip == (uint32_t)ip)
+        {
+            char ipstr[64];
+            Net_FormatIP((uint32_t)ip, ipstr, sizeof(ipstr));
+            LOG_F(INFO, "Refused banned address %s", ipstr);
+            Bsprintf(buf, "Refused banned %s", ipstr);
+            G_AddUserQuote(buf);
+            return 1;
+        }
+    return 0;
+}
+
+// Registered with mmulti; called when a new address begins the handshake.
+static void Net_JoinNotify(int ip)
+{
+    char ipstr[64];
+    Net_FormatIP((uint32_t)ip, ipstr, sizeof(ipstr));
+    LOG_F(INFO, "%s is attempting to join", ipstr);
+    Bsprintf(buf, "%s is joining...", ipstr);
+    G_AddUserQuote(buf);
+}
+
+void Net_AdminInit(void)
+{
+    Net_LoadBanList();
+    mmulti_setcallbacks(Net_BanCheck, Net_JoinNotify);
+}
+
+// Resolve a player reference (name or slot number string) to a connected slot,
+// or -1. Name match is case-insensitive and may be a prefix.
+static int32_t Net_ResolvePlayer(const char *ref)
+{
+    if (ref[0] >= '0' && ref[0] <= '9' && !ref[1 + strspn(ref+1, "0123456789")])
+    {
+        int32_t s = atoi(ref);
+        if ((unsigned)s < (unsigned)numplayers && g_player[s].connected)
+            return s;
+        return -1;
+    }
+    size_t const n = strlen(ref);
+    for (int32_t i = 0; i < numplayers; i++)
+        if (g_player[i].connected && !Bstrncasecmp(g_player[i].user_name, ref, n))
+            return i;
+    return -1;
+}
+
+int32_t Net_KickPlayer(const char *ref)
+{
+    if (myconnectindex != connecthead || numplayers < 2)
+        return -1;
+    int32_t slot = Net_ResolvePlayer(ref);
+    if (slot < 0 || slot == myconnectindex)
+        return -1;
+
+    LOG_F(INFO, "Kicked player %d (%s)", slot, g_player[slot].user_name);
+    Net_ScheduleRemove(slot, "was kicked");
+    return slot;
+}
+
+static void Net_AddBanIP(uint32_t ip, const char *name)
+{
+    Net_LoadBanList();
+    for (int32_t i = 0; i < g_banCount; i++)
+        if (g_banList[i].ip == ip)
+            return;  // already banned
+    if (g_banCount >= MAXBANS)
+    {
+        LOG_F(ERROR, "Ban list is full (%d)", MAXBANS);
+        return;
+    }
+    g_banList[g_banCount].ip = ip;
+    Bstrncpyz(g_banList[g_banCount].name, name ? name : "", sizeof(g_banList[0].name));
+    g_banCount++;
+    Net_SaveBanList();
+}
+
+// Ban by connected player (name/slot) or by literal IP string.
+int32_t Net_BanPlayer(const char *ref)
+{
+    if (myconnectindex != connecthead)
+        return -1;
+
+    char ipstr[64];
+    int32_t slot = Net_ResolvePlayer(ref);
+
+    if (slot >= 0 && slot != myconnectindex)
+    {
+        uint32_t ip = (uint32_t)mmulti_getslotip(slot);
+        Net_FormatIP(ip, ipstr, sizeof(ipstr));
+        LOG_F(INFO, "Banned player %d (%s) at %s", slot, g_player[slot].user_name, ipstr);
+        Net_AddBanIP(ip, g_player[slot].user_name);
+        Net_ScheduleRemove(slot, "was banned");
+        return slot;
+    }
+
+    // Not a connected player - treat the argument as an IP to blacklist.
+    uint32_t ip = Net_ParseIP(ref);
+    if (ip)
+    {
+        Net_FormatIP(ip, ipstr, sizeof(ipstr));
+        Net_AddBanIP(ip, "");
+        LOG_F(INFO, "Banned address %s", ipstr);
+        return 0;
+    }
+    return -1;
+}
+
+int32_t Net_Unban(const char *ref)
+{
+    Net_LoadBanList();
+    uint32_t ip = Net_ParseIP(ref);
+    size_t const n = strlen(ref);
+    int32_t removed = 0;
+
+    for (int32_t i = 0; i < g_banCount; )
+    {
+        bool match = (ip && g_banList[i].ip == ip)
+                  || (!ip && g_banList[i].name[0] && !Bstrncasecmp(g_banList[i].name, ref, n));
+        if (match)
+        {
+            g_banList[i] = g_banList[--g_banCount];
+            removed++;
+        }
+        else i++;
+    }
+    if (removed)
+        Net_SaveBanList();
+    return removed;
+}
+
+void Net_ListBans(void)
+{
+    Net_LoadBanList();
+    OSD_Printf("Ban list (%d):\n", g_banCount);
+    char ipstr[64];
+    for (int32_t i = 0; i < g_banCount; i++)
+    {
+        Net_FormatIP(g_banList[i].ip, ipstr, sizeof(ipstr));
+        OSD_Printf("  %s %s\n", ipstr, g_banList[i].name);
+    }
+}
+
+// Non-blocking read of console commands from stdin, for a dedicated/headless
+// host driven from a terminal. Dispatches each complete line to the OSD.
+void Net_PollStdin(void)
+{
+#ifndef _WIN32
+    static char linebuf[256];
+    static int32_t linelen;
+
+    struct pollfd pfd = { 0 /*stdin*/, POLLIN, 0 };
+    while (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN))
+    {
+        char c;
+        if (read(0, &c, 1) != 1)
+            break;
+        if (c == '\n')
+        {
+            linebuf[linelen] = 0;
+            linelen = 0;
+            if (linebuf[0])
+                OSD_Dispatch(linebuf);
+        }
+        else if (linelen < (int32_t)sizeof(linebuf) - 1)
+            linebuf[linelen++] = c;
+    }
+#endif
+}
+
+void Net_ListPlayers(void)
+{
+    char ipstr[64];
+    OSD_Printf("Players:\n");
+    for (int32_t i = 0; i < numplayers; i++)
+    {
+        if (!g_player[i].connected)
+            continue;
+        if (i == myconnectindex)
+            Bstrcpy(ipstr, "(this machine)");
+        else
+            Net_FormatIP((uint32_t)mmulti_getslotip(i), ipstr, sizeof(ipstr));
+        OSD_Printf("  %d: %s  %s%s\n", i, g_player[i].user_name, ipstr,
+                   i == connecthead ? "  [host]" : "");
+    }
 }
 
 // Drawn every frame from G_DrawFrame. While a lockstep stall is open this
@@ -826,14 +1184,19 @@ void Net_ParsePackets(void)
             case PACKET_TYPE_DROP_PLAYER:
             {
                 int32_t const slot = (uint8_t)packbuf[1];
-                Net_ApplyConnectedMask(B_UNBUF16(&packbuf[2]));
-                Net_RebuildConnectList();
-                if ((unsigned)slot < MAXPLAYERS && g_player[slot].ps)
+
+                if (slot == myconnectindex)
                 {
-                    P_QuickKill(g_player[slot].ps);
-                    Bsprintf(buf, "%s^00 dropped (lag)", g_player[slot].user_name);
-                    G_AddUserQuote(buf);
+                    // We were removed by the host.
+                    G_GameExit("You were removed from the game.");
+                    break;
                 }
+
+                // Apply at the master-tagged tick (Net_PeerCheckDrop) so every
+                // machine removes the player on the identical tick.
+                g_pendingDropSlot = slot;
+                g_pendingDropMask = B_UNBUF16(&packbuf[2]);
+                g_pendingDropTick = (int32_t)B_UNBUF32(&packbuf[4]);
                 g_netLagActive = 0;
                 g_netLagMask = 0;
                 break;
@@ -1420,7 +1783,9 @@ static void Net_IntegrateLateJoin(int32_t slot)
     g_lateJoinFreeze = 0;
     lateJoinPending = -1;
 
-    LOG_F(INFO, "Player %d joined the game in progress", slot);
+    LOG_F(INFO, "Player %d (%s) joined the game in progress", slot, g_player[slot].user_name);
+    Bsprintf(buf, "%s^00 joined", g_player[slot].user_name);
+    G_AddUserQuote(buf);
 }
 
 // Joiner side of PACKET_TYPE_LATEJOIN_GO: persist the streamed snapshot and
@@ -1935,6 +2300,7 @@ void Net_CheckPlayerQuit(int i)
     P_QuickKill(g_player[i].ps);
     A_DeleteSprite(g_player[i].ps->i);
 
+    LOG_F(INFO, "Player %d (%s) left the game", i, g_player[i].user_name);
     Bsprintf(buf, "%s^00 is history!", g_player[i].user_name);
     G_AddUserQuote(buf);
     Bstrcpy(apStrings[QUOTE_RESERVED2], buf);

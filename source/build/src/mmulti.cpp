@@ -532,6 +532,36 @@ int mmulti_slotconnected(int slot)
     return otherip[slot] != 0;
 }
 
+// The game registers these so mmulti can enforce the ban list at the
+// transport handshake and report join attempts, without mmulti needing to
+// know about the game's ban policy or player naming.
+static int  (*mmulti_bancheck)(int ip);
+static void (*mmulti_joinnotify)(int ip);
+
+void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip))
+{
+    mmulti_bancheck = bancheck;
+    mmulti_joinnotify = joinnotify;
+}
+
+int mmulti_getslotip(int slot)
+{
+    if ((unsigned)slot >= MAXPLAYERS)
+        return 0;
+    return otherip[slot];
+}
+
+// Fully sever a slot at the transport level (used by kick/ban). Clearing the
+// address stops us sending to them and makes their packets fall through as an
+// unknown peer.
+void mmulti_dropslot(int slot)
+{
+    if ((unsigned)slot >= MAXPLAYERS)
+        return;
+    otherip[slot] = 0;
+    otherport[slot] = 0;
+}
+
 int initmultiplayerscycle(void)
 {
     int i, k;
@@ -758,12 +788,21 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                 //Master responds to slave with 0xab whenever it receives a 0xaa - even if during game!
                 if ((pakbuf[k] == 0xaa) && (myconnectindex == connecthead))
                 {
+                    // Reject handshakes from banned addresses outright.
+                    if (mmulti_bancheck && mmulti_bancheck(snatchip))
+                        continue;
+
                     for (other=1;other<numplayers;other++)
                     {
                         //Only send to others asking for a response
                         if ((otherip[other]) && ((otherip[other] != snatchip) || (otherport[other] != snatchport))) continue;
+
+                        bool const wasNew = (otherip[other] == 0);
                         otherip[other] = snatchip;
                         otherport[other] = snatchport;
+
+                        if (wasNew && mmulti_joinnotify)
+                            mmulti_joinnotify(snatchip);
 
                         //   short crc16ofs;       //offset of crc16
                         //   int icnt0;           //-1 (special packet for MMULTI.C's player collection)

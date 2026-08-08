@@ -124,10 +124,23 @@ void Net_ApplyConnectedMask(uint16_t mask);
 void Net_RebuildConnectList(void);
 void Net_MasterCheckLateJoin(void);
 void Net_PeerCheckLateJoin(void);
+void Net_MasterCheckDrop(void);
+void Net_PeerCheckDrop(void);
 
 void Net_LagUpdate(void);
 void Net_LagVote(void);
 void Net_DisplayLagDialog(void);
+
+// Host administration (kick/ban/banlist).
+#define MAXBANS 256
+OLDNET_EXTERN int32_t g_netServerConsole; // Read admin commands from stdin (dedicated/headless host).
+void Net_AdminInit(void);
+void Net_PollStdin(void);
+int32_t Net_KickPlayer(const char *ref);
+int32_t Net_BanPlayer(const char *ref);
+int32_t Net_Unban(const char *ref);
+void Net_ListBans(void);
+void Net_ListPlayers(void);
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);

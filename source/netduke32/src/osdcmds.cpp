@@ -46,6 +46,59 @@ static inline int osdcmd_quit(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
+static int osdcmd_kick(const osdfuncparm_t *parm)
+{
+    if (parm->numparms != 1) return OSDCMD_SHOWHELP;
+    if (numplayers < 2 || myconnectindex != connecthead)
+    {
+        OSD_Printf("kick: only the host of a multiplayer game can kick.\n");
+        return OSDCMD_OK;
+    }
+    if (Net_KickPlayer(parm->parms[0]) < 0)
+        OSD_Printf("kick: no such player \"%s\" (try listplayers).\n", parm->parms[0]);
+    return OSDCMD_OK;
+}
+
+static int osdcmd_ban(const osdfuncparm_t *parm)
+{
+    if (parm->numparms != 1) return OSDCMD_SHOWHELP;
+    if (myconnectindex != connecthead)
+    {
+        OSD_Printf("ban: only the host can ban.\n");
+        return OSDCMD_OK;
+    }
+    if (Net_BanPlayer(parm->parms[0]) < 0)
+        OSD_Printf("ban: no such player or IP \"%s\".\n", parm->parms[0]);
+    return OSDCMD_OK;
+}
+
+static int osdcmd_unban(const osdfuncparm_t *parm)
+{
+    if (parm->numparms != 1) return OSDCMD_SHOWHELP;
+    int32_t n = Net_Unban(parm->parms[0]);
+    OSD_Printf("unban: removed %d entr%s.\n", n, n == 1 ? "y" : "ies");
+    return OSDCMD_OK;
+}
+
+static int osdcmd_listban(const osdfuncparm_t *parm)
+{
+    UNREFERENCED_PARAMETER(parm);
+    Net_ListBans();
+    return OSDCMD_OK;
+}
+
+static int osdcmd_listplayers(const osdfuncparm_t *parm)
+{
+    UNREFERENCED_PARAMETER(parm);
+    if (numplayers < 2)
+    {
+        OSD_Printf("listplayers: not in a multiplayer game.\n");
+        return OSDCMD_OK;
+    }
+    Net_ListPlayers();
+    return OSDCMD_OK;
+}
+
 static int osdcmd_echo(const osdfuncparm_t *parm)
 {
     int i;
@@ -1537,6 +1590,12 @@ int registerosdcommands(void)
     }
 
     OSD_RegisterFunction("addpath","addpath <path>: adds path to game filesystem", osdcmd_addpath);
+
+    OSD_RegisterFunction("kick","kick <name|slot>: (host) remove a player from the game", osdcmd_kick);
+    OSD_RegisterFunction("ban","ban <name|slot|ip>: (host) remove a player and blacklist their IP", osdcmd_ban);
+    OSD_RegisterFunction("unban","unban <ip|name>: remove an entry from the ban list", osdcmd_unban);
+    OSD_RegisterFunction("listban","listban: show the ban list", osdcmd_listban);
+    OSD_RegisterFunction("listplayers","listplayers: show connected players, slots and IPs", osdcmd_listplayers);
 
     OSD_RegisterFunction("bind","bind <key> <string>: associates a keypress with a string of console input. Type \"bind showkeys\" for a list of keys and \"listsymbols\" for a list of valid console commands.", osdcmd_bind);
 

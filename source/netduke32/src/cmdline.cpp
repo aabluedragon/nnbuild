@@ -73,6 +73,8 @@ static void G_ShowParameterHelp(void)
         "-async\t\tHost: server-authoritative netplay (don't wait on slow\n"
         "\t\tclients). Default is lockstep (equal lag for all).\n"
         "-latejoin\tHost: start with open slots that players may join mid-game.\n"
+        "-dedicated\tHost: read admin commands from stdin (kick/ban/etc).\n"
+        "\t\tConsole commands: kick, ban, unban, listban, listplayers.\n"
         "\n"
         "-noffire\t\tDisable friendly fire\n"
         "-rts [file.rts]\tLoad a custom Remote Ridicule sound bank\n"
@@ -424,6 +426,14 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     // blocks on slow clients (vs lockstep's equal-lag model).
                     g_netAsyncMode = TRUE;
                     LOG_F(INFO, "Asynchronous (server-authoritative) netplay enabled.");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "dedicated"))
+                {
+                    // Host: read admin commands from stdin, log to stdout.
+                    g_netServerConsole = TRUE;
+                    LOG_F(INFO, "Dedicated server console enabled (reading stdin).");
                     i++;
                     continue;
                 }

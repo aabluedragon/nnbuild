@@ -8569,6 +8569,10 @@ bool G_InitMultiplayer()
     if (g_netLateJoin)
         mmulti_allowlatejoin(2);
 
+    // Register the ban check before the transport handshake so banned
+    // addresses are refused even on the initial connection.
+    Net_AdminInit();
+
     if (initmultiplayersparms(netparamcount, netparam))
     {
         LOG_F(INFO, "Waiting for players...");
@@ -9125,6 +9129,9 @@ MAIN_LOOP_RESTART:
         // the laggard instead of freezing the game.
         Net_LagUpdate();
 
+        if (g_netServerConsole)
+            Net_PollStdin();
+
         if (ud.gm & (MODE_EOL | MODE_RESTART))
         {
             switch (G_EndOfLevel())
@@ -9564,6 +9571,8 @@ static int G_MoveLoop()
 
     Net_MasterCheckLateJoin();
     Net_PeerCheckLateJoin();
+    Net_MasterCheckDrop();
+    Net_PeerCheckDrop();
 
     if (numplayers > 1)
         Net_DoPrediction(PREDICTSTATE_PROCESS);
