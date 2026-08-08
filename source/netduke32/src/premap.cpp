@@ -1543,6 +1543,42 @@ static void resetpspritevars(char g)
     }
 }
 
+// Spawn a mid-game (late) joiner's player as if it had been present since the
+// level started: a real APLAYER sprite at a spawn point, full health, weapons
+// and inventory. Called deterministically on every machine already in the game
+// (and captured in the snapshot the joiner loads), so the sprite index and
+// state line up everywhere. Consumes no synced RNG. Level-wide key access is
+// preserved so integrating a joiner doesn't re-lock doors for everyone.
+void P_SpawnLateJoiner(int snum)
+{
+    if (g_numPlayerSprites <= 0)
+        return; // No player start in this map; nothing sane to spawn onto.
+
+    int const savedAccess = ud.got_access;
+
+    // This slot was never present when the level started, so the CON scripts
+    // never initialized its health/ammo caps - they are zero, which would spawn
+    // a dead (0 HP) player. Inherit them from the master, which is always
+    // spawned and carries the same CON-defined caps on every machine.
+    auto const p = g_player[snum].ps;
+    auto const refp = g_player[connecthead].ps;
+    if (snum != connecthead)
+    {
+        p->max_player_health = refp->max_player_health;
+        p->max_shield_amount = refp->max_shield_amount;
+        for (int w = 0; w < MAX_WEAPONS; w++)
+            p->max_ammo_amount[w] = refp->max_ammo_amount[w];
+    }
+    p->last_extra = 0; // force insert_player_sprite to (re)fill to max health
+
+    insert_player_sprite(snum); // sets p->i, position, full health
+    P_ResetStatus(snum);        // per-player status (dead_flag=0, velocities, ...)
+    P_ResetWeapons(snum);
+    P_ResetInventory(snum);
+
+    ud.got_access = savedAccess;
+}
+
 void G_ResetTimers(void)
 {
     totalclock = cloudtotalclock = ototalclock = lockclock = 0;

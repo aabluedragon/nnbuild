@@ -2214,6 +2214,13 @@ static void Net_CompleteLateJoin(int32_t slot)
     g_random.playerweapon = lateJoinGoRNG[4];
     wrandomseed           = (uint32_t)lateJoinGoRNG[5];
 
+    // The snapshot is a pre-spawn world (our slot was never present, so it is
+    // dead at the origin). Spawn ourselves now with the exact same code every
+    // other machine runs against the same pre-spawn state, so the result is
+    // bit-identical everywhere without depending on the savegame capturing
+    // every side effect of the spawn.
+    P_SpawnLateJoiner(myconnectindex);
+
     g_netLateJoiner = 2;
 }
 
@@ -2230,7 +2237,12 @@ void Net_PeerCheckLateJoin(void)
     int32_t const slot = lateJoinGoSlot;
     lateJoinGoSlot = -1;
     Net_ApplyConnectedMask(lateJoinGoMask);
+    // Existing peers spawn the joiner's player locally, deterministically and at
+    // this same (master-locked) tick, matching the host's pre-snapshot spawn.
+    // The joiner itself gets the spawned player from the snapshot, so it does
+    // not run this.
     Net_IntegrateLateJoin(slot);
+    P_SpawnLateJoiner(slot);
     Net_WaitForPlayers();
     G_ResetTimers();
 }
@@ -2344,6 +2356,9 @@ void Net_MasterCheckLateJoin(void)
             mmulti_sendpacket(i, (unsigned char *)packbuf, 28);
 
     Net_IntegrateLateJoin(slot);
+    // Snapshot was pre-spawn; spawn the joiner into our live world with the
+    // same code the joiner and peers run, keeping every machine identical.
+    P_SpawnLateJoiner(slot);
     Net_WaitForPlayers();  // The joiner reaches this barrier from inside G_LoadPlayer.
     G_ResetTimers();
 }
