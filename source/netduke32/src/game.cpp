@@ -9157,6 +9157,9 @@ MAIN_LOOP_RESTART:
         // so a lockstep stall opens the countdown dialog and eventually drops
         // the laggard instead of freezing the game.
         Net_LagUpdate();
+        // Also every frame: drop a client that has gone silent entirely, so its
+        // slot frees up for a rejoin (works in async, and unsticks lockstep).
+        Net_MasterCheckTimeouts();
         Net_CheckMapRotation();
 
         if (g_netServerConsole)

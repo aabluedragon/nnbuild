@@ -131,6 +131,7 @@ void Net_MasterCheckLateJoin(void);
 void Net_PeerCheckLateJoin(void);
 void Net_MasterCheckDrop(void);
 void Net_PeerCheckDrop(void);
+void Net_MasterCheckTimeouts(void);
 
 void Net_LagUpdate(void);
 void Net_LagVote(void);

@@ -369,6 +369,12 @@ static int32_t g_pendingDropSlot = -1;   // slave side: removal announced, apply
 static uint16_t g_pendingDropMask;
 static int32_t g_pendingDropTick;
 
+// Master: real-time (ms) of the last packet seen from each slot, for detecting
+// a client that left ungracefully (crash/close/network loss) so its slot can be
+// freed for someone to rejoin. 0 means "not heard from this session yet".
+static uint32_t g_slotLastPacketMs[MAXPLAYERS];
+#define NET_CLIENT_TIMEOUT_MS 5000
+
 static void Net_ScheduleRemove(int32_t slot, const char *reasonQuote)
 {
     if (g_pendingKickSlot >= 0)
@@ -428,6 +434,39 @@ void Net_MasterCheckDrop(void)
 
     g_pendingKickSlot = -1;
     g_lateJoinFreeze = 0;
+}
+
+// Master, each frame: drop a client we've stopped hearing from entirely
+// (ungraceful leave - crash, window closed, network dropped). This uses real
+// time, so it fires in async mode (which never stalls and has no lag dialog)
+// and also cuts short a lockstep stall once a peer is clearly gone, rather than
+// waiting out the full lag vote. Dropping frees the slot so someone can rejoin.
+void Net_MasterCheckTimeouts(void)
+{
+    if (myconnectindex != connecthead || numplayers < 2)
+        return;
+    if (!(ud.gm & MODE_GAME) || ud.recstat == 2)
+        return;
+    if (g_pendingKickSlot >= 0 || g_lateJoinFreeze || lateJoinPending >= 0)
+        return;  // a roster change / state transfer is already in progress
+
+    uint32_t const now = timerGetTicks();
+    for (int32_t i = 0; i < numplayers; i++)
+    {
+        if (i == myconnectindex || !g_player[i].connected)
+            continue;
+        uint32_t const last = g_slotLastPacketMs[i];
+        if (last == 0)
+            continue;  // haven't heard from this slot yet this session
+        if (now - last > NET_CLIENT_TIMEOUT_MS)
+        {
+            LOG_F(INFO, "Player %d (%s) timed out (%u ms silent); dropping.",
+                  i, g_player[i].user_name, now - last);
+            g_slotLastPacketMs[i] = 0;
+            Net_ScheduleRemove(i, "timed out");
+            return;
+        }
+    }
 }
 
 // Slaves: apply an announced removal right before simulating the tick the
@@ -1413,6 +1452,8 @@ void Net_ParsePackets(void)
             continue;
 
         lastpackettime = (int32_t)totalclock;
+        if ((unsigned)other < MAXPLAYERS)
+            g_slotLastPacketMs[other] = timerGetTicks();
 
         switch (packbuf[0])
         {
@@ -2152,6 +2193,11 @@ static void Net_IntegrateLateJoin(int32_t slot)
     g_player[slot].connected = 1;
     g_player[slot].isBot = 0;
 
+    // Give the freshly-joined slot a current heartbeat so the idle-timeout
+    // drop doesn't fire before its first input packet arrives.
+    if ((unsigned)slot < MAXPLAYERS)
+        g_slotLastPacketMs[slot] = timerGetTicks();
+
     Net_RebuildConnectList();
 
     for (int32_t i = 0; i < MAXPLAYERS; i++)
@@ -2755,10 +2801,41 @@ void Net_WaitForPlayers()
     auto oldPal = g_player[myconnectindex].ps->palette;
     P_SetGamePalette(g_player[myconnectindex].ps, TITLEPAL, 11);
 
+    uint32_t const waitStart = timerGetTicks();
+
     while (1)
     {
         //if (quitevent) G_GameExit(""); // This sucks
         gameHandleEvents();
+
+        // Master resilience: never hang here forever. If a slot never becomes
+        // ready within a grace period (e.g. a client that dropped or stalled
+        // during a mid-game join), disconnect the stragglers and carry on so
+        // the whole server can't be frozen by one bad peer. They can reconnect.
+        if (myconnectindex == connecthead && timerGetTicks() - waitStart > 10000)
+        {
+            int32_t dropped = 0;
+            TRAVERSE_CONNECT(i)
+            {
+                if (i != myconnectindex
+                    && g_player[i].playerreadyflag < g_player[myconnectindex].playerreadyflag)
+                {
+                    LOG_F(WARNING, "Player %d (%s) never became ready; disconnecting to keep the server alive.",
+                          i, g_player[i].user_name);
+                    g_player[i].connected = 0;
+                    mmulti_dropslot(i);
+                    if ((unsigned)i < MAXPLAYERS)
+                        g_slotLastPacketMs[i] = 0;
+                    dropped = 1;
+                }
+            }
+            if (dropped)
+            {
+                Net_RebuildConnectList();
+                P_SetGamePalette(g_player[myconnectindex].ps, oldPal, 11);
+                return;
+            }
+        }
 
         if (!engineFPSLimit())
             continue;
