@@ -323,10 +323,13 @@ void Net_GetSyncStat(void)
                 if (t != 1 && t != 4 && t != 5)  // T2/T5/T6 hold script pointers
                     fnv(actor[i].t_data[t]);
         }
-        fprintf(syncDumpFile, "%u seed=%08x ws=%08x grand=%08x wg=%04x wp=%04x ns=%d acrc=%08x",
+        extern int mymaxlag, otherminlag, bufferjitter;
+        fprintf(syncDumpFile, "%u seed=%08x ws=%08x grand=%08x wg=%04x wp=%04x ns=%d acrc=%08x bj=%d oml=%d",
                 g_moveThingsCount, (unsigned)randomseed, (unsigned)wrandomseed,
                 (unsigned)g_globalRandom, (unsigned)g_random.global,
-                (unsigned)g_random.playerweapon, Numsprites, acrc);
+                (unsigned)g_random.playerweapon, Numsprites, acrc, bufferjitter, otherminlag);
+        for (int32_t ALL_PLAYERS(i))
+            fprintf(syncDumpFile, " fd%d=%d", i, g_player[i].movefifoend - movefifoplc);
         for (int32_t ALL_PLAYERS(i))
         {
             auto pp = g_player[i].ps;

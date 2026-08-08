@@ -262,9 +262,22 @@ void Net_HandleInput(void)
         i = mymaxlag - bufferjitter;
         mymaxlag = 0;
         if (i > 0)
-            bufferjitter += ((2 + i) >> 2);
+        {
+            // Grow towards the observed jitter, but never leap: a single
+            // hitch (level load, window drag) used to add (2+i)>>2 ticks in
+            // one step - a 100-tick stall meant a full second of input lag
+            // that stuck around near-permanently.
+            bufferjitter += min(((2 + i) >> 2), 2);
+        }
         else if (i < 0)
-            bufferjitter -= ((2 - i) >> 2);
+        {
+            // The old decay ((2 - i) >> 2) rounds to zero for small
+            // overshoots, so bufferjitter could never drop the last couple
+            // of ticks back to the real jitter floor. Always step down.
+            bufferjitter -= max(((2 - i) >> 2), 1);
+        }
+
+        bufferjitter = clamp(bufferjitter, 0, 10);
     }
 
     // Master/Slave
