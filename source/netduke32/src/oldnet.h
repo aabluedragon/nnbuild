@@ -146,6 +146,7 @@ void Net_ListPlayers(void);
 OLDNET_EXTERN int32_t g_mapRotationMode; // 0 off, 1 sequential, 2 random
 int32_t Net_RotateNextMap(void);
 void Net_ListMapRotation(void);
+void Net_CheckMapRotation(void);
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);

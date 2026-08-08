@@ -9135,6 +9135,7 @@ MAIN_LOOP_RESTART:
         // so a lockstep stall opens the countdown dialog and eventually drops
         // the laggard instead of freezing the game.
         Net_LagUpdate();
+        Net_CheckMapRotation();
 
         if (g_netServerConsole)
             Net_PollStdin();

@@ -768,6 +768,17 @@ static maprot_t g_mapRot[MAXMAPROT];
 static int32_t g_mapRotCount;
 static int32_t g_mapRotIndex = -1;
 static int32_t g_mapRotLoaded;
+static int32_t g_pendingRotate;
+
+// Main-loop context: perform a rotation the sim requested at level end.
+void Net_CheckMapRotation(void)
+{
+    if (!g_pendingRotate)
+        return;
+    g_pendingRotate = 0;
+    if (myconnectindex == connecthead)
+        Net_RotateNextMap();
+}
 
 static void Net_LoadMapList(void)
 {
@@ -2143,6 +2154,19 @@ void Net_EndOfLevel(bool secret)
 {
     if (/*(myconnectindex != connecthead) ||*/ oldnet_predicting)
         return;
+
+    // Map rotation is host-authoritative: on level end the host starts the
+    // next rotation map for everyone via the NEW_GAME broadcast (the proven
+    // path 'nextmap' uses). Clients suppress their own end-of-level advance
+    // and wait for that broadcast, so nobody double-advances. The actual
+    // rotation is deferred to main-loop context (Net_CheckMapRotation) since
+    // we're deep in the movement code here.
+    if (g_mapRotationMode && numplayers > 1)
+    {
+        if (myconnectindex == connecthead)
+            g_pendingRotate = 1;
+        return;
+    }
 
     ud.gm = MODE_EOL;
 
