@@ -13,6 +13,12 @@
 #include "texcache.h"
 #include "vfs.h"
 
+// Defined in oldnet.cpp (multiplayer). Declared here to avoid pulling the full
+// multiplayer header into build-layer common code.
+#define MAXNETMODFILES 8
+extern char g_netModFiles[MAXNETMODFILES][BMAX_PATH];
+extern int32_t g_netModFileCount;
+
 #ifdef _WIN32
 # include "windows_inc.h"
 # include "winbits.h"
@@ -492,6 +498,11 @@ void G_LoadGroups(int32_t autoload)
             LOG_F(INFO, "Loaded %s", CommandGrps->str);
             if (autoload)
                 G_DoAutoload(CommandGrps->str);
+
+            // Remember command-line mod group files so a multiplayer host can
+            // stream them to clients automatically (see Net_SendGameFiles).
+            if (g_netModFileCount < MAXNETMODFILES)
+                Bstrncpyz(g_netModFiles[g_netModFileCount++], CommandGrps->str, BMAX_PATH);
         }
 
         Xfree(CommandGrps->str);

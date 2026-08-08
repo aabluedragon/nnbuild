@@ -961,11 +961,15 @@ void Net_SendFile(int32_t slot, const char *name)
     hdr[hl++] = (char)namelen;
     Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
 
+    // An explicit slot may be a late joiner not yet marked g_player.connected
+    // (we send it the map before it loads the snapshot), so gate on the mmulti
+    // link in that case rather than on roster membership.
+    #define NET_FILE_WANTS(i) (((i) != myconnectindex) && (slot >= 0 \
+        ? ((i) == slot && mmulti_slotconnected(i)) : g_player[i].connected))
+
     for (int32_t i = 0; i < numplayers; i++)
     {
-        if (i == myconnectindex || !g_player[i].connected)
-            continue;
-        if (slot >= 0 && i != slot)
+        if (!NET_FILE_WANTS(i))
             continue;
         mmulti_sendpacket(i, (unsigned char *)hdr, hl);
     }
@@ -982,9 +986,7 @@ void Net_SendFile(int32_t slot, const char *name)
 
         for (int32_t i = 0; i < numplayers; i++)
         {
-            if (i == myconnectindex || !g_player[i].connected)
-                continue;
-            if (slot >= 0 && i != slot)
+            if (!NET_FILE_WANTS(i))
                 continue;
             mmulti_sendpacket(i, (unsigned char *)chunk, len + 7);
         }
@@ -992,7 +994,24 @@ void Net_SendFile(int32_t slot, const char *name)
         while (mmulti_getoutputcirclesize() > 128)
             gameHandleEvents();
     }
+    #undef NET_FILE_WANTS
     Xfree(data);
+}
+
+// Host: push everything a client needs to play the current game - the usermap
+// (if any) and the mod group files the host loaded on its command line. mmulti
+// is reliable+ordered, so callers send this BEFORE the USER_MAP name packet:
+// that guarantees the file lands on disk before the client tries to open it.
+void Net_SendGameFiles(int32_t slot)
+{
+    if (myconnectindex != connecthead)
+        return;
+
+    for (int32_t i = 0; i < g_netModFileCount; i++)
+        Net_SendFile(slot, g_netModFiles[i]);
+
+    if (boardfilename[0])
+        Net_SendFile(slot, boardfilename);
 }
 
 static void Net_ReceiveFileHeader(void)
@@ -1039,11 +1058,20 @@ static void Net_ReceiveFileChunk(void)
     if (crc != g_recvFileCrc)
         LOG_F(WARNING, "Received %s but CRC mismatch (%08x != %08x)", g_recvFileName, crc, g_recvFileCrc);
 
+    // Write under the basename only - never honour an absolute path or any
+    // directory components the sender's name may carry (e.g. a leading '/'),
+    // which would otherwise try to write to the filesystem root. Land it in the
+    // mod directory when one is configured, otherwise the working directory.
+    const char *base = Bstrrchr(g_recvFileName, '/');
+    base = base ? base + 1 : g_recvFileName;
+    if (base[0] == 0)
+        base = g_recvFileName;
+
     char temp[BMAX_PATH];
-    if (g_modDir[0] != '/')
-        Bsnprintf(temp, sizeof(temp), "%s/%s", g_modDir, g_recvFileName);
+    if (g_modDir[0] && g_modDir[0] != '/')
+        Bsnprintf(temp, sizeof(temp), "%s/%s", g_modDir, base);
     else
-        Bstrcpy(temp, g_recvFileName);
+        Bstrcpy(temp, base);
 
     buildvfs_FILE fp = buildvfs_fopen_write(temp);
     if (fp)
@@ -1053,6 +1081,22 @@ static void Net_ReceiveFileChunk(void)
         LOG_F(INFO, "Wrote %s (%d bytes)", g_recvFileName, filesize);
         Bsprintf(buf, "Received %s", g_recvFileName);
         G_AddUserQuote(buf);
+
+        // Group files (custom map/art/sound packs) must be mounted so their
+        // contents become visible to the asset loader; plain files (.map, etc.)
+        // are already reachable now that they sit in the mod directory. Note CON
+        // gameplay code inside a mod is compiled at startup and won't hot-load.
+        const char *ext = Bstrrchr(g_recvFileName, '.');
+        if (ext && (!Bstrcasecmp(ext, ".grp") || !Bstrcasecmp(ext, ".zip")
+                 || !Bstrcasecmp(ext, ".pk3") || !Bstrcasecmp(ext, ".pk4")))
+        {
+            if (initgroupfile(temp) != -1)
+            {
+                LOG_F(INFO, "Mounted received group file %s", g_recvFileName);
+                Bsprintf(buf, "Mounted %s", g_recvFileName);
+                G_AddUserQuote(buf);
+            }
+        }
     }
     else
         LOG_F(ERROR, "Couldn't write received file %s", g_recvFileName);
@@ -2230,6 +2274,11 @@ void Net_MasterCheckLateJoin(void)
         return;
 
     int32_t const slot = lateJoinPending;
+
+    // The joiner needs the map (and any host mods) on disk before it can load
+    // the state snapshot that references them. Reliable+ordered delivery means
+    // these all arrive before the snapshot chunks we send next.
+    Net_SendGameFiles(slot);
 
     if (G_SavePlayer(LATEJOIN_SAVE_SPOT))
     {

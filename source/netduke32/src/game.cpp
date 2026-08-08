@@ -8639,7 +8639,18 @@ bool G_InitMultiplayer()
 
         if (!g_netLateJoiner)
         {
-            Net_SendUserMapName();
+            // The map is host-authoritative. The host pushes the map + any mods
+            // first (reliable+ordered, so they land before the USER_MAP name),
+            // then announces the map name; clients that lack the files download
+            // them automatically instead of failing to open. A client must NOT
+            // broadcast its own (possibly empty) map name here - doing so would
+            // overwrite the host's authoritative boardfilename and desync which
+            // startup branch each machine takes (usermap barrier vs. logo).
+            if (myconnectindex == connecthead)
+            {
+                Net_SendGameFiles(-1);
+                Net_SendUserMapName();
+            }
             Net_WaitForPlayers();
         }
     }
