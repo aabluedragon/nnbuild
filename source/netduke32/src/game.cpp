@@ -8998,12 +8998,20 @@ int app_main(int32_t argc, char const* const* argv)
 
     system_getcvars();
 
-    LOG_F(INFO, "Initializing music...");
-    S_MusicStartup();
-    LOG_F(INFO, "Initializing sound...");
-    S_SoundStartup();
+    if (g_forceHeadless)
+    {
+        // Headless console server: open no audio device at all (terminal only).
+        LOG_F(INFO, "Headless mode: sound disabled.");
+    }
+    else
+    {
+        LOG_F(INFO, "Initializing music...");
+        S_MusicStartup();
+        LOG_F(INFO, "Initializing sound...");
+        S_SoundStartup();
 
-    FX_StopAllSounds();
+        FX_StopAllSounds();
+    }
 
     if (ud.warp_on > 1 && ud.multimode < 2)
     {
@@ -9165,7 +9173,12 @@ MAIN_LOOP_RESTART:
 
         if (engineFPSLimit())
         {
-            if (g_netLateJoiner == 1 && !(ud.gm & MODE_GAME))
+            if (g_forceHeadless)
+            {
+                // Headless console server: there is no video output at all, so
+                // skip every draw path (the timing side effects above still run).
+            }
+            else if (g_netLateJoiner == 1 && !(ud.gm & MODE_GAME))
             {
                 // Waiting for the host's snapshot: there is no world to draw.
                 videoClearScreen(0L);

@@ -32,6 +32,7 @@ extern int32_t g_maskDrawMode;
 
 extern char quitevent, appactive;
 extern char modechange;
+extern char g_forceHeadless; // Run with no video/window at all (dedicated console server).
 #ifdef USE_OPENGL
 extern char nogl;
 #else

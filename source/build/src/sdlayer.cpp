@@ -80,6 +80,7 @@ bool startwin_isopen(void) { return false; }
 int32_t inputchecked = 0;
 
 char quitevent=0, appactive=1, novideo=0;
+char g_forceHeadless=0;
 
 // video
 static SDL_Surface *sdl_surface/*=NULL*/;
@@ -551,10 +552,23 @@ int main(int argc, char *argv[])
     gtkbuild_init(&argc, &argv);
 #endif
 
+    // Detect headless/console mode before any window is created. The game layer
+    // parses this again for its own setup (implying -dedicated, muting sound),
+    // but the startup/setup window is opened here, before app_main() parses the
+    // command line, so we must recognize it up front to suppress that too.
+    for (int ha = 1; ha < argc; ha++)
+        if (argv[ha] && (argv[ha][0] == '-') &&
+            (!Bstrcasecmp(argv[ha] + 1, "headless") || !Bstrcasecmp(argv[ha] + 1, "console")))
+        {
+            g_forceHeadless = 1;
+            break;
+        }
+
 #ifdef EDUKE32_OSX
     osx_preopen();
 #endif
-    startwin_open();
+    if (!g_forceHeadless)
+        startwin_open();
 #ifdef EDUKE32_OSX
     osx_postopen();
 #endif
@@ -704,6 +718,20 @@ int32_t initsystem(void)
         return -1;
 
     int32_t err = 0;
+
+    if (g_forceHeadless)
+    {
+        // Dedicated console server: use SDL's "dummy" video driver so no window
+        // is ever created and no display/GUI is required (works over SSH too),
+        // while the mode-setting machinery and timers keep working. Force the
+        // software path since the dummy driver has no OpenGL, and skip all
+        // drawing in the game loop. The net effect is a terminal-only server.
+        LOG_F(INFO, "Headless mode: no window or graphics (dedicated console server).");
+        SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+#ifdef USE_OPENGL
+        nogl = 1;
+#endif
+    }
 
     if (SDL_WasInit(SDL_INIT_VIDEO) != SDL_INIT_VIDEO)
         err = SDL_InitSubSystem(SDL_INIT_VIDEO);
@@ -1676,9 +1704,10 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
 
 #ifdef EDUKE32_OSX
     // The window now exists; make sure the process is a foreground app so it can
-    // receive keyboard focus when launched from a terminal (do it once).
+    // receive keyboard focus when launched from a terminal (do it once). Not in
+    // headless mode - there is no window and we stay a background process.
     static int osx_didforeground = 0;
-    if (!osx_didforeground)
+    if (!osx_didforeground && !g_forceHeadless)
     {
         osx_foreground();
 # if SDL_MAJOR_VERSION >= 2

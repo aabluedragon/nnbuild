@@ -77,6 +77,8 @@ static void G_ShowParameterHelp(void)
         "\t\tremaining slots stay open to join anytime. Implies -latejoin.\n"
         "-dedicated\tHost: read admin commands from stdin (kick/ban/etc).\n"
         "\t\tConsole commands: kick, ban, unban, listban, listplayers.\n"
+        "-headless\tHost: dedicated server with no window, graphics or sound -\n"
+        "\t\tterminal only. Implies -dedicated. (alias: -console)\n"
         "\n"
         "-noffire\t\tDisable friendly fire\n"
         "-rts [file.rts]\tLoad a custom Remote Ridicule sound bank\n"
@@ -459,6 +461,21 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     // Host: read admin commands from stdin, log to stdout.
                     g_netServerConsole = TRUE;
                     LOG_F(INFO, "Dedicated server console enabled (reading stdin).");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "headless") || !Bstrcasecmp(c + 1, "console"))
+                {
+                    // Dedicated console server with no graphics at all: no
+                    // window, no OpenGL, no sound - just the terminal. Implies
+                    // -dedicated. (The bare-video skip itself is handled in the
+                    // startup layer, which scans argv for this flag directly;
+                    // here we also enable the console and mute audio.)
+                    g_forceHeadless = TRUE;
+                    g_netServerConsole = TRUE;
+                    g_noSound = TRUE;
+                    g_noMusic = TRUE;
+                    LOG_F(INFO, "Headless dedicated server: no video, no sound (terminal only).");
                     i++;
                     continue;
                 }
