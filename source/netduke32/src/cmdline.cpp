@@ -405,6 +405,15 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
+                if (!Bstrcasecmp(c + 1, "latejoin"))
+                {
+                    // Host: start once at least one other player is present
+                    // and let the remaining slots join mid-game.
+                    g_netLateJoin = TRUE;
+                    LOG_F(INFO, "Late joining enabled.");
+                    i++;
+                    continue;
+                }
 #if defined(RENDERTYPEWIN) && defined(USE_OPENGL)
                 if (!Bstrcasecmp(c + 1, "forcegl"))
                 {

@@ -27,6 +27,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "duke3d.h"
 
 char g_szfirstSyncMsg[MAX_SYNC_TYPES][60];
+int32_t g_syncCheckStartTick;
 
 static int crctable[256];
 #define updatecrc(dcrc,xz) (dcrc = (crctable[((dcrc)>>8)^((xz)&255)]^((dcrc)<<8)))
@@ -481,7 +482,10 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
     int32_t const tickNum = (int32_t)B_UNBUF32(&packbuf[(*j)]);
     (*j) += sizeof(int32_t);
 
-    if (tickNum < 0 || tickNum == g_player[otherconnectindex].lastSyncTick || (tickNum > movefifoplc))
+    // g_syncCheckStartTick skips verification of the first ticks after a
+    // late join: packets timestamped with the pre-join tick numbering can
+    // still be in flight when the counters restart at zero.
+    if (tickNum < g_syncCheckStartTick || tickNum == g_player[otherconnectindex].lastSyncTick || (tickNum > movefifoplc))
         return;
 
     g_player[otherconnectindex].lastSyncTick = tickNum;

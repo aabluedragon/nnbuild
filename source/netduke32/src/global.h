@@ -108,7 +108,8 @@ G_EXTERN int startofdynamicinterpolations;
 G_EXTERN short g_curViewscreen;
 G_EXTERN short g_mirrorWall[64], g_mirrorSector[64], g_mirrorCount;
 
-G_EXTERN char buf[1024], tempbuf[2048], packbuf[576], menutextbuf[128];
+// packbuf must hold the largest packet mmulti can deliver (MAXPAKSIZ).
+G_EXTERN char buf[1024], tempbuf[2048], packbuf[2048], menutextbuf[128];
 G_EXTERN char typebuflen, typebuf[141];
 
 G_EXTERN short cyclers[MAXCYCLERS][6], g_numCyclers;

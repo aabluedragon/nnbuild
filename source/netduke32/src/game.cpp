@@ -8565,6 +8565,9 @@ bool G_InitMultiplayer()
     for (int32_t i = 0; i < MAXPLAYERS; i++)
         g_player[i].playerreadyflag = 0;
 
+    if (g_netLateJoin)
+        mmulti_allowlatejoin(2);
+
     if (initmultiplayersparms(netparamcount, netparam))
     {
         LOG_F(INFO, "Waiting for players...");
@@ -8593,16 +8596,32 @@ bool G_InitMultiplayer()
         LOG_F(INFO, "Multiplayer initialized.");
 
         // Init real players, making sure they aren't set as bots. Allows player/bot mix.
+        // With late joining, only mmulti-connected slots start as present; the
+        // master's INIT_SETTINGS carries the authoritative roster to clients.
         for (int32_t i = 1; i < numplayers; i++)
         {
             G_MaybeAllocPlayer(i);
-            g_player[i].connected = 1;
+            g_player[i].connected = (g_netLateJoin && myconnectindex == connecthead)
+                                    ? mmulti_slotconnected(i) : 1;
             g_player[i].isBot = 0;
         }
 
+        if (g_netLateJoin && myconnectindex == connecthead)
+            Net_RebuildConnectList();
+
         if (numplayers > ud.multimode)
             ud.multimode = numplayers;
-        
+
+        // If the session is already running, the host announces that within
+        // moments of the transport handshake; ingest pending packets so
+        // g_netLateJoiner is known before the version barrier below.
+        if (myconnectindex != connecthead)
+        {
+            int32_t const waitStart = (int32_t)totalclock;
+            while ((int32_t)totalclock - waitStart < TICRATE/2 && !g_netLateJoiner)
+                gameHandleEvents();
+        }
+
         Net_SendVersion();
 
         if (myconnectindex == connecthead) // Host
@@ -8612,9 +8631,12 @@ bool G_InitMultiplayer()
 
         Net_SendPlayerOptions();
         Net_SendWeaponChoice();
-        Net_SendUserMapName();
 
-        Net_WaitForPlayers();
+        if (!g_netLateJoiner)
+        {
+            Net_SendUserMapName();
+            Net_WaitForPlayers();
+        }
     }
 
     // Fill in base stats for bots. To-do: Move some of this into the bot init code.
@@ -8986,7 +9008,17 @@ MAIN_LOOP_RESTART:
     G_GetCrosshairColor();
     G_SetCrosshairColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b);
 
-    if (ud.warp_on == 0)
+    if (g_netLateJoiner)
+    {
+        // Joining a game in progress: the state arrives over the network.
+        // Skip the logo/new-game startup, set up the prediction pointers the
+        // normal game-start path would have initialized, and idle in the
+        // main loop until the snapshot load flips us into MODE_GAME.
+        G_MaybeAllocPlayer(myconnectindex);
+        Net_ClearFIFO();
+        g_netLateJoinerReady = 1;
+    }
+    else if (ud.warp_on == 0)
     {
         if (ud.multimode > 1 && boardfilename[0] != 0)
         {
@@ -8994,7 +9026,7 @@ MAIN_LOOP_RESTART:
             ud.m_volume_number = 0;
 
             Net_WaitForPlayers();
-            
+
             G_NewGame(NEWGAME_NOSEND | NEWGAME_RESETALL);
         }
         else G_DisplayLogo();
@@ -9005,7 +9037,7 @@ MAIN_LOOP_RESTART:
     }
     else G_UpdateScreenArea();
 
-    if (ud.warp_on == 0 && G_PlaybackDemo())
+    if (!g_netLateJoiner && ud.warp_on == 0 && G_PlaybackDemo())
     {
         FX_StopAllSounds();
 
@@ -9098,7 +9130,15 @@ MAIN_LOOP_RESTART:
 
         if (engineFPSLimit())
         {
-            G_DrawFrame();
+            if (g_netLateJoiner == 1 && !(ud.gm & MODE_GAME))
+            {
+                // Waiting for the host's snapshot: there is no world to draw.
+                videoClearScreen(0L);
+                gametext(160, 100, "JOINING GAME IN PROGRESS...", 14, 2);
+                videoNextPage();
+            }
+            else
+                G_DrawFrame();
 
             //if (gameUpdate)
             //    g_gameUpdateAndDrawTime = timerGetHiTicks() - gameUpdateStartTime;
@@ -9516,12 +9556,18 @@ static int G_MoveLoop()
 {
     int i;
 
+    Net_MasterCheckLateJoin();
+    Net_PeerCheckLateJoin();
+
     if (numplayers > 1)
         Net_DoPrediction(PREDICTSTATE_PROCESS);
     else
         bufferjitter = 0;
 
-    while ((g_player[myconnectindex].movefifoend-movefifoplc) > bufferjitter)
+    // While a late-join transfer is pending, consume exactly the ticks that
+    // were broadcast (movefifosendplc) so all machines pause on one state.
+    while (g_lateJoinFreeze ? (movefifoplc < movefifosendplc)
+                            : ((g_player[myconnectindex].movefifoend-movefifoplc) > bufferjitter))
     {
         if (numplayers > 1)
         {

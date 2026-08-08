@@ -242,7 +242,12 @@ int32_t G_LoadPlayer(int32_t spot)
         return -1;
     }
 
-    if (multiflag == 2 && multiwho != myconnectindex)
+    if (spot == LATEJOIN_SAVE_SPOT)
+    {
+        strcpy(fn, "egamlj.sav");
+        fnptr = fn;
+    }
+    else if (multiflag == 2 && multiwho != myconnectindex)
     {
         fnptr = mpfn;
         mpfn[4] = spot + 'A';
@@ -300,7 +305,10 @@ int32_t G_LoadPlayer(int32_t spot)
         videoNextPage();
     }
 
-    Net_WaitForPlayers();
+    // A late joiner meets the others at the barrier at the END of the load
+    // (after clearfifo); they are not waiting for this early one.
+    if (spot != LATEJOIN_SAVE_SPOT)
+        Net_WaitForPlayers();
 
     FX_StopAllSounds();
 
@@ -699,9 +707,17 @@ int32_t G_SavePlayer(int32_t spot)
         return -1;
     }
 
-    Net_WaitForPlayers();
+    // The late-join snapshot is written while the other machines are frozen
+    // waiting for it; they are not in the ready barrier.
+    if (spot != LATEJOIN_SAVE_SPOT)
+        Net_WaitForPlayers();
 
-    if (multiflag == 2 && multiwho != myconnectindex)
+    if (spot == LATEJOIN_SAVE_SPOT)
+    {
+        strcpy(fn, "egamlj.sav");
+        fnptr = fn;
+    }
+    else if (multiflag == 2 && multiwho != myconnectindex)
     {
         fnptr = mpfn;
         mpfn[4] = spot + 'A';
@@ -989,7 +1005,8 @@ int32_t G_SavePlayer(int32_t spot)
 
     ready2send = 1;
 
-    Net_WaitForPlayers();
+    if (spot != LATEJOIN_SAVE_SPOT)
+        Net_WaitForPlayers();
 
     ototalclock = (int32_t)totalclock;
 

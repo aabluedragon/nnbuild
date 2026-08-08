@@ -14,6 +14,16 @@ int mymaxlag, otherminlag, bufferjitter = 1;
 int movefifosendplc;
 int movefifoplc;
 
+static int32_t lateJoinPending = -1;
+static int32_t lateJoinGoSlot = -1;
+static uint16_t lateJoinGoMask;
+static int32_t lateJoinGoRNG[6];
+static void Net_IntegrateLateJoin(int32_t slot);
+static void Net_CompleteLateJoin(int32_t slot);
+static char *snapshotBuf;
+static int32_t snapshotChunksGot, snapshotChunkTotal, snapshotLastLen;
+#define SNAPSHOT_CHUNK_SIZE 1024
+
 static int g_chatPlayer = -1;
 static char recbuf[180];
 
@@ -86,6 +96,15 @@ void Net_GetPackets(void)
 #endif
 
     ChatPipe_Poll();
+
+    // Joiner: act on the GO once init is done and the engine can load/draw.
+    if (lateJoinGoSlot == myconnectindex && in3dmode() && g_netLateJoinerReady)
+    {
+        int32_t const slot = lateJoinGoSlot;
+        lateJoinGoSlot = -1;
+        Net_ApplyConnectedMask(lateJoinGoMask);
+        Net_CompleteLateJoin(slot);
+    }
 
     if (numplayers < 2 || g_networkBroadcastMode == NETMODE_OFFLINE)
         return;
@@ -221,6 +240,11 @@ void Net_HandleInput(void)
     }
 
     Net_GetPackets();
+
+    // A late-join state transfer is in progress: stop generating and
+    // aggregating input so every machine settles on the same tick.
+    if (g_lateJoinFreeze)
+        return;
 
     if (g_player[myconnectindex].movefifoend - movefifoplc >= 100)
         return;
@@ -467,11 +491,57 @@ void Net_ParsePackets(void)
                 ud.m_dmflags            = (int32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
                 botNameSeed             = (int32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
 
+                Net_ApplyConnectedMask(B_UNBUF16(&packbuf[j])); j += sizeof(uint16_t);
+                Net_RebuildConnectList();
+
                 if (M_DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE))
                     LOG_F(INFO, "Visibility adjustment enabled for multiplayer.");
 
                 oldnet_gotinitialsettings = true;
 
+                break;
+            }
+            case PACKET_TYPE_LATEJOIN_ANNOUNCE:
+            {
+                g_netLateJoiner = 1;
+                g_noLogo = 1;  // Straight into the game once the snapshot lands.
+                LOG_F(INFO, "Joining a game in progress; waiting for the state snapshot...");
+                break;
+            }
+            case PACKET_TYPE_SNAPSHOT_CHUNK:
+            {
+                int32_t const seq = B_UNBUF16(&packbuf[1]);
+                int32_t const total = B_UNBUF16(&packbuf[3]);
+                int32_t const len = B_UNBUF16(&packbuf[5]);
+
+                if (total <= 0 || (unsigned)seq >= (unsigned)total || (unsigned)len > SNAPSHOT_CHUNK_SIZE)
+                    break;
+
+                if (snapshotBuf == NULL)
+                {
+                    snapshotBuf = (char *)Xmalloc(total * SNAPSHOT_CHUNK_SIZE);
+                    snapshotChunksGot = 0;
+                    snapshotChunkTotal = total;
+                }
+
+                Bmemcpy(&snapshotBuf[seq * SNAPSHOT_CHUNK_SIZE], &packbuf[7], len);
+                snapshotChunksGot++;
+                if (seq == total - 1)
+                    snapshotLastLen = len;
+
+                break;
+            }
+            case PACKET_TYPE_LATEJOIN_GO:
+            {
+                // Never integrate from inside the packet parser: the joiner
+                // waits until its init is done (see Net_GetPackets), and
+                // existing peers wait until they have simulated every tick
+                // the master broadcast (see Net_PeerCheckLateJoin), so that
+                // all machines fold the new player in on the identical tick.
+                lateJoinGoSlot = (uint8_t)packbuf[1];
+                lateJoinGoMask = B_UNBUF16(&packbuf[2]);
+                for (i = 0; i < 6; i++)
+                    lateJoinGoRNG[i] = (int32_t)B_UNBUF32(&packbuf[4 + i * 4]);
                 break;
             }
             case PACKET_TYPE_NEW_GAME:
@@ -887,7 +957,11 @@ void Net_SendVersion(void)
         if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
 
-    Net_WaitForPlayers();
+    // A late joiner must stay out of the ready-flag protocol until the
+    // final integration barrier, or its counters contaminate the running
+    // game's barrier bookkeeping.
+    if (!g_netLateJoiner)
+        Net_WaitForPlayers();
 }
 
 void Net_SendPlayerOptions(void)
@@ -981,11 +1055,251 @@ void Net_SendUserMapName(void)
     }
 }
 
-void Net_SendInitialSettings(void)
+uint16_t Net_ConnectedMask(void)
 {
-    if (myconnectindex != connecthead) // First player dictates initial settings.
+    uint16_t mask = 0;
+    for (int32_t i = 0; i < numplayers && i < 16; i++)
+        if (g_player[i].connected)
+            mask |= (1 << i);
+    return mask;
+}
+
+void Net_ApplyConnectedMask(uint16_t mask)
+{
+    for (int32_t i = 0; i < numplayers && i < 16; i++)
+    {
+        g_player[i].connected = (mask >> i) & 1;
+        if (g_player[i].connected)
+        {
+            G_MaybeAllocPlayer(i);
+            g_player[i].isBot = 0;
+        }
+    }
+}
+
+// Rebuild connecthead/connectpoint2 to span exactly the connected players,
+// in ascending slot order so every machine derives the identical list.
+void Net_RebuildConnectList(void)
+{
+    int32_t last = -1;
+    connecthead = -1;
+    for (int32_t i = 0; i < numplayers; i++)
+    {
+        if (!g_player[i].connected)
+            continue;
+        if (connecthead < 0)
+            connecthead = i;
+        else
+            connectpoint2[last] = i;
+        last = i;
+    }
+    if (last >= 0)
+        connectpoint2[last] = -1;
+}
+
+static void Net_SendInitialSettingsTo(int32_t playerNum);
+
+// Shared by every machine when a late joiner is admitted: flip the slot on,
+// rebuild the rotation, and rewind the input pipeline to tick zero. The
+// world state itself is untouched on existing peers - the joiner arrives at
+// the identical state by loading the master's snapshot.
+static void Net_IntegrateLateJoin(int32_t slot)
+{
+    G_MaybeAllocPlayer(slot);
+    g_player[slot].connected = 1;
+    g_player[slot].isBot = 0;
+
+    Net_RebuildConnectList();
+
+    for (int32_t i = 0; i < MAXPLAYERS; i++)
+        g_player[i].playerreadyflag = 0;
+
+    // Full input-fifo wipe (not just the counters): the wire format encodes
+    // inputs as deltas against the previous fifo slot, so its contents must
+    // be identical on every machine when the tick counter restarts.
+    clearfifo();
+
+    // Packets stamped with the old tick numbering may still be in flight;
+    // don't let them false-positive the desync detector.
+    g_syncCheckStartTick = MOVEFIFOSIZ;
+
+    g_lateJoinFreeze = 0;
+    lateJoinPending = -1;
+
+    LOG_F(INFO, "Player %d joined the game in progress", slot);
+}
+
+// Joiner side of PACKET_TYPE_LATEJOIN_GO: persist the streamed snapshot and
+// load it; G_LoadPlayer ends in the ready barrier the others are waiting at.
+static void Net_CompleteLateJoin(int32_t slot)
+{
+    if (snapshotBuf == NULL || snapshotChunksGot < snapshotChunkTotal)
+    {
+        LOG_F(ERROR, "Late join: snapshot incomplete (%d/%d chunks)",
+              snapshotChunksGot, snapshotChunkTotal);
+        G_GameExit("Late join failed: incomplete state snapshot.");
+    }
+
+    char temp[BMAX_PATH];
+    if (g_modDir[0] != '/')
+        Bsnprintf(temp, sizeof(temp), "%s/egamlj.sav", g_modDir);
+    else
+        Bstrcpy(temp, "egamlj.sav");
+
+    buildvfs_FILE fil = buildvfs_fopen_write(temp);
+    if (fil == NULL)
+        G_GameExit("Late join failed: can't write state snapshot.");
+
+    buildvfs_fwrite(snapshotBuf, 1,
+                    (snapshotChunkTotal - 1) * SNAPSHOT_CHUNK_SIZE + snapshotLastLen, fil);
+    buildvfs_fclose(fil);
+    DO_FREE_AND_NULL(snapshotBuf);
+
+    Net_IntegrateLateJoin(slot);
+
+    multiflag = 0;
+    if (G_LoadPlayer(LATEJOIN_SAVE_SPOT))
+        G_GameExit("Late join failed: couldn't load state snapshot.");
+
+    // Auxiliary RNG streams live outside the savegame; adopt the master's.
+    g_globalRandom        = (short)lateJoinGoRNG[0];
+    g_random.global       = lateJoinGoRNG[1];
+    g_random.animwall     = lateJoinGoRNG[2];
+    g_random.player       = lateJoinGoRNG[3];
+    g_random.playerweapon = lateJoinGoRNG[4];
+    wrandomseed           = (uint32_t)lateJoinGoRNG[5];
+
+    g_netLateJoiner = 2;
+}
+
+// Existing peers: integrate a pending late join once every broadcast tick
+// has been simulated, which matches the tick the master snapshotted.
+void Net_PeerCheckLateJoin(void)
+{
+    if (lateJoinGoSlot < 0 || lateJoinGoSlot == myconnectindex || myconnectindex == connecthead)
         return;
 
+    if (g_player[connecthead].movefifoend > movefifoplc)
+        return;  // Still have master ticks to simulate.
+
+    int32_t const slot = lateJoinGoSlot;
+    lateJoinGoSlot = -1;
+    Net_ApplyConnectedMask(lateJoinGoMask);
+    Net_IntegrateLateJoin(slot);
+    Net_WaitForPlayers();
+    G_ResetTimers();
+}
+
+// Master only: called once per frame from the move loop. When an empty slot
+// completes the mmulti handshake mid-game, pause the input flow (the
+// lockstep peers stall on their own), snapshot the paused state, stream it
+// to the joiner, then tell everyone to fold the new player in.
+void Net_MasterCheckLateJoin(void)
+{
+    if (!g_netLateJoin || myconnectindex != connecthead || numplayers < 2)
+        return;
+
+    if (!(ud.gm & MODE_GAME) || ud.recstat == 2)
+        return;
+
+    if (lateJoinPending < 0)
+    {
+        for (int32_t i = 1; i < numplayers; i++)
+        {
+            if (!g_player[i].connected && mmulti_slotconnected(i))
+            {
+                lateJoinPending = i;
+                g_lateJoinFreeze = 1;
+                LOG_F(INFO, "Late joiner in slot %d; pausing for state transfer", i);
+
+                // Tell the joiner right away what's going on, so it knows to
+                // stay out of the startup barriers and wait for the snapshot.
+                packbuf[0] = PACKET_TYPE_LATEJOIN_ANNOUNCE;
+                mmulti_sendpacket(i, (unsigned char *)packbuf, 1);
+                Net_SendInitialSettingsTo(i);
+                break;
+            }
+        }
+        if (lateJoinPending < 0)
+            return;
+    }
+
+    // Wait until we have simulated every tick we broadcast, so that all
+    // peers can settle on the identical state.
+    if (movefifoplc < movefifosendplc)
+        return;
+
+    int32_t const slot = lateJoinPending;
+
+    if (G_SavePlayer(LATEJOIN_SAVE_SPOT))
+    {
+        LOG_F(ERROR, "Late join: failed to write the state snapshot");
+        g_lateJoinFreeze = 0;
+        lateJoinPending = -1;
+        return;
+    }
+
+    int32_t const fil = kopen4loadfrommod("egamlj.sav", 0);
+    if (fil == -1)
+    {
+        LOG_F(ERROR, "Late join: failed to read back the state snapshot");
+        g_lateJoinFreeze = 0;
+        lateJoinPending = -1;
+        return;
+    }
+
+    int32_t const snapLen = kfilelength(fil);
+    int32_t const total = (snapLen + SNAPSHOT_CHUNK_SIZE - 1) / SNAPSHOT_CHUNK_SIZE;
+    char chunk[SNAPSHOT_CHUNK_SIZE + 8];
+
+    LOG_F(INFO, "Late join: sending %d byte snapshot in %d chunks", snapLen, total);
+
+    for (int32_t seq = 0; seq < total; seq++)
+    {
+        int32_t const len = min(SNAPSHOT_CHUNK_SIZE, snapLen - seq * SNAPSHOT_CHUNK_SIZE);
+
+        chunk[0] = PACKET_TYPE_SNAPSHOT_CHUNK;
+        B_BUF16(&chunk[1], (uint16_t)seq);
+        B_BUF16(&chunk[3], (uint16_t)total);
+        B_BUF16(&chunk[5], (uint16_t)len);
+        kread(fil, &chunk[7], len);
+
+        mmulti_sendpacket(slot, (unsigned char *)chunk, len + 7);
+
+        // Keep the reliable-delivery window from overflowing; this also
+        // keeps acks and peer traffic flowing while we blast the file out.
+        while (mmulti_getoutputcirclesize() > 128)
+            gameHandleEvents();
+    }
+    kclose(fil);
+
+    // Everyone integrates the same roster; the GO carries it so the joiner
+    // learns who is actually present.
+    g_player[slot].connected = 1;
+
+    packbuf[0] = PACKET_TYPE_LATEJOIN_GO;
+    packbuf[1] = (char)slot;
+    B_BUF16(&packbuf[2], Net_ConnectedMask());
+    // The auxiliary RNG streams aren't part of the savegame snapshot; ship
+    // them along so the joiner can seed them after loading.
+    B_BUF32(&packbuf[4], (int32_t)g_globalRandom);
+    B_BUF32(&packbuf[8], g_random.global);
+    B_BUF32(&packbuf[12], g_random.animwall);
+    B_BUF32(&packbuf[16], g_random.player);
+    B_BUF32(&packbuf[20], g_random.playerweapon);
+    B_BUF32(&packbuf[24], (int32_t)wrandomseed);
+
+    for (int32_t i = 0; i < numplayers; i++)
+        if (i != myconnectindex && g_player[i].connected)
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 28);
+
+    Net_IntegrateLateJoin(slot);
+    Net_WaitForPlayers();  // The joiner reaches this barrier from inside G_LoadPlayer.
+    G_ResetTimers();
+}
+
+static int32_t Net_BuildInitialSettings(void)
+{
     packbuf[0] = PACKET_TYPE_INIT_SETTINGS;
 
     int32_t j = 1;
@@ -999,6 +1313,17 @@ void Net_SendInitialSettings(void)
     packbuf[j++] = ud.playerai;
     B_BUF32(&packbuf[j], ud.m_dmflags); j += sizeof(int32_t);
     B_BUF32(&packbuf[j], botNameSeed); j += sizeof(int32_t);
+    B_BUF16(&packbuf[j], Net_ConnectedMask()); j += sizeof(uint16_t);
+
+    return j;
+}
+
+void Net_SendInitialSettings(void)
+{
+    if (myconnectindex != connecthead) // First player dictates initial settings.
+        return;
+
+    int32_t j = Net_BuildInitialSettings();
 
     int i;
     TRAVERSE_CONNECT(i)
@@ -1007,6 +1332,12 @@ void Net_SendInitialSettings(void)
             mmulti_sendpacket(i, (unsigned char*)packbuf, j);
         if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
     }
+}
+
+static void Net_SendInitialSettingsTo(int32_t playerNum)
+{
+    int32_t const j = Net_BuildInitialSettings();
+    mmulti_sendpacket(playerNum, (unsigned char*)packbuf, j);
 }
 
 void Net_SendNewGame(uint32_t flags)

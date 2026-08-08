@@ -69,6 +69,11 @@ enum DukePacket_t
     PACKET_TYPE_FRAGLIMIT_CHANGED,
     PACKET_TYPE_EOL,
     PACKET_TYPE_PING,
+
+    PACKET_TYPE_LATEJOIN_ANNOUNCE, // Master -> late joiner: game in progress, snapshot follows.
+    PACKET_TYPE_SNAPSHOT_CHUNK,    // Master -> late joiner: piece of the state snapshot.
+    PACKET_TYPE_LATEJOIN_GO,       // Master -> everyone: integrate player [1] with roster mask [2..3].
+
     PACKET_END, // Should remain last in list.
 };
 
@@ -97,6 +102,18 @@ void Net_EnterMessage(void);
 
 void Net_InitiateVote();
 void Net_CancelVote();
+
+// Late joining (see Net_MasterCheckLateJoin in oldnet.cpp).
+#define LATEJOIN_SAVE_SPOT 100
+OLDNET_EXTERN int32_t g_netLateJoin;    // Host: started with -latejoin, open slots may join mid-game.
+OLDNET_EXTERN int32_t g_netLateJoiner;  // This client is joining a game already in progress.
+OLDNET_EXTERN int32_t g_netLateJoinerReady; // Joiner reached the main loop; safe to load the snapshot.
+OLDNET_EXTERN int32_t g_lateJoinFreeze; // Master: input flow paused for a state transfer.
+uint16_t Net_ConnectedMask(void);
+void Net_ApplyConnectedMask(uint16_t mask);
+void Net_RebuildConnectList(void);
+void Net_MasterCheckLateJoin(void);
+void Net_PeerCheckLateJoin(void);
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);

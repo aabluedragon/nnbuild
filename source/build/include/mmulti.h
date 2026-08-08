@@ -22,6 +22,8 @@ int initmultiplayersparms(int argc, const char * const *argv);
 int initmultiplayerscycle(void);
 
 void mmulti_initmultiplayers(int argc, const char * const *argv, char damultioption, char dacomrateoption, char dapriority);
+void mmulti_allowlatejoin(int minplayers);
+int mmulti_slotconnected(int slot);
 void mmulti_setpackettimeout(int datimeoutcount, int daresendagaincount);
 void mmulti_uninitmultiplayers(void);
 void mmulti_sendlogon(void);

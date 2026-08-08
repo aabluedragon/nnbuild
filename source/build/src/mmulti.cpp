@@ -449,6 +449,14 @@ int initmultiplayersparms(int argc, const char * const *argv)
                 {
                     networkmode = MMULTI_MODE_P2P;
                     myconnectindex = daindex; daindex++;
+                    // Optional /n1:<count> declares total slots so a host can
+                    // leave room for late joiners.
+                    if ((argv[i][3] == ':') && (argv[i][4] >= '0') && (argv[i][4] <= '9'))
+                    {
+                        numplayers = (argv[i][4]-'0');
+                        if ((argv[i][5] >= '0') && (argv[i][5] <= '9')) numplayers = numplayers*10+(argv[i][5]-'0');
+                        printf("mmulti: %d-player game\n", numplayers);
+                    }
                     printf("mmulti: Peer-to-peer mode\n");
                 }
                 continue;
@@ -504,6 +512,26 @@ int initmultiplayersparms(int argc, const char * const *argv)
     return (numplayers >= 2);
 }
 
+static int minlatejoinplayers = 0;
+
+// Allow the session to begin once minplayers (including the local machine)
+// are connected; remaining slots may complete the 0xaa/0xab handshake while
+// the game is already running (see mmulti_getpacket) and be integrated by
+// the game via a late-join mechanism.
+void mmulti_allowlatejoin(int minplayers)
+{
+    minlatejoinplayers = minplayers;
+}
+
+int mmulti_slotconnected(int slot)
+{
+    if ((unsigned)slot >= MAXPLAYERS)
+        return 0;
+    if (slot == myconnectindex)
+        return 1;
+    return otherip[slot] != 0;
+}
+
 int initmultiplayerscycle(void)
 {
     int i, k;
@@ -517,6 +545,17 @@ int initmultiplayerscycle(void)
     tims = GetTickCount();
     if (myconnectindex == connecthead) //Player 0 only
     {
+        if (minlatejoinplayers > 0)
+        {
+            k = 1;
+            for (i=numplayers-1;i>0;i--)
+                if (otherip[i]) k++;
+            if (k >= minlatejoinplayers)
+            {
+                netready = 1;
+                return 0;
+            }
+        }
         for (i=numplayers-1;i>0;i--)
             if (!otherip[i]) break;
         if (!i)

@@ -11,6 +11,7 @@ typedef struct
 } SyncType_t;
 
 extern char g_szfirstSyncMsg[MAX_SYNC_TYPES][60];
+extern int32_t g_syncCheckStartTick;
 
 extern int8_t syncData[MOVEFIFOSIZ][MAX_SYNC_TYPES];
 extern bool syncError[MAX_SYNC_TYPES];
