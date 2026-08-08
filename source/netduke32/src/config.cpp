@@ -542,6 +542,27 @@ void CONFIG_SetupJoystick(void)
     }
 }
 
+// Fill out with a random 32-hex-char identifier. Seeded from the wall clock and
+// address entropy (NOT the game's synced RNG, so every install differs), then
+// expanded with xorshift64 - not cryptographic, just unique enough that two
+// installs practically never collide.
+void CONFIG_GenerateGUID(char *out)
+{
+    uint64_t s = (uint64_t)time(NULL);
+    s = s * 6364136223846793005ULL + 1442695040888963407ULL;
+    s ^= (uint64_t)(uintptr_t)&s;
+    s ^= (uint64_t)(uintptr_t)out << 1;
+    s ^= (uint64_t)clock() << 21;
+
+    static char const hex[] = "0123456789abcdef";
+    for (int i = 0; i < NET_GUID_LEN - 1; i++)
+    {
+        s ^= s << 13; s ^= s >> 7; s ^= s << 17;  // xorshift64
+        out[i] = hex[s & 15];
+    }
+    out[NET_GUID_LEN - 1] = 0;
+}
+
 /*
 ===================
 =
@@ -588,6 +609,26 @@ int32_t CONFIG_ReadSetup(void)
         if (i) ud.config.scripthandle = SCRIPT_Load("duke3d.cfg");
     }
     pathsearchmode = 0;
+
+    // Establish the player's stable GUID before anything else, creating the
+    // config if this is a fresh install (so the identity persists from the very
+    // first run). Read an existing one, otherwise generate and persist it now.
+    if (ud.config.scripthandle < 0)
+        ud.config.scripthandle = SCRIPT_Init(g_setupFileName);
+    if (ud.config.scripthandle >= 0)
+    {
+        char guidbuf[64] = { 0 };
+        if (SCRIPT_GetString(ud.config.scripthandle, "Comm Setup", "PlayerGUID", guidbuf)
+            || Bstrlen(guidbuf) != NET_GUID_LEN - 1)
+        {
+            CONFIG_GenerateGUID(g_netClientGuid);
+            LOG_F(INFO, "Generated a new player GUID.");
+            SCRIPT_PutString(ud.config.scripthandle, "Comm Setup", "PlayerGUID", g_netClientGuid);
+            SCRIPT_Save(ud.config.scripthandle, g_setupFileName);
+        }
+        else
+            Bstrncpyz(g_netClientGuid, guidbuf, NET_GUID_LEN);
+    }
 
     if (ud.config.scripthandle < 0) return -1;
 
@@ -1003,6 +1044,9 @@ void CONFIG_WriteSetup(uint32_t flags)
 
     if(!CommandName && szPlayerName[0] != '\0')
         SCRIPT_PutString(ud.config.scripthandle, "Comm Setup","PlayerName",&szPlayerName[0]);
+
+    if (g_netClientGuid[0] != '\0')
+        SCRIPT_PutString(ud.config.scripthandle, "Comm Setup","PlayerGUID",&g_netClientGuid[0]);
 
     SCRIPT_PutString(ud.config.scripthandle, "Comm Setup","RTSName",&ud.rtsname[0]);
 

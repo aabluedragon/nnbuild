@@ -9160,6 +9160,8 @@ MAIN_LOOP_RESTART:
         // Also every frame: drop a client that has gone silent entirely, so its
         // slot frees up for a rejoin (works in async, and unsticks lockstep).
         Net_MasterCheckTimeouts();
+        // And restore a reconnecting player's score once its GUID has arrived.
+        Net_MasterCheckRestore();
         Net_CheckMapRotation();
 
         if (g_netServerConsole)

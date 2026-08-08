@@ -82,6 +82,7 @@ extern void P_RandomSpawnPoint(int snum);
 extern void P_ResetWeapons(int snum);
 extern void P_ResetInventory(int snum);
 extern void P_SpawnLateJoiner(int snum);
+extern void Net_ClearScoreArchive(void);
 extern void G_ResetTimers(void);
 extern void clearfifo(void);
 extern int  G_EnterLevel(int g);

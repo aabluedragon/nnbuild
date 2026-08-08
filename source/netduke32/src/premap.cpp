@@ -1217,6 +1217,11 @@ static void prelevel(char g)
 // Use this when you want to start a new game, or new level.
 void G_NewGame(uint32_t flags)
 {
+    // A new match/level begins: forget any archived scores so a player who
+    // rejoins after the match ended (level changed / score limit reached)
+    // starts fresh rather than reclaiming their previous score.
+    Net_ClearScoreArchive();
+
     if (!Menu_HaveUserMap()) // Clear usermap if we're not going to one.
         boardfilename[0] = 0;
 
@@ -1575,6 +1580,12 @@ void P_SpawnLateJoiner(int snum)
     P_ResetStatus(snum);        // per-player status (dead_flag=0, velocities, ...)
     P_ResetWeapons(snum);
     P_ResetInventory(snum);
+
+    // A late joiner starts with a clean score by default; the host separately
+    // decides (by GUID identity) whether to restore a previous score afterwards.
+    p->frag = p->fraggedself = p->deaths = 0;
+    for (int32_t i = 0; i < MAXPLAYERS; i++)
+        g_player[snum].frags[i] = 0;
 
     ud.got_access = savedAccess;
 }

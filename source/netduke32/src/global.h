@@ -143,6 +143,11 @@ G_EXTERN practor_t practor[MAXSPRITES];
 // Multiplayer/Demos
 G_EXTERN int screenpeek;
 G_EXTERN char szPlayerName[32];
+// A stable, per-install random identifier (32 hex chars + NUL) generated on
+// first run and stored in the config. Sent to the server so it can restore a
+// player's score across reconnects by identity rather than by nickname.
+#define NET_GUID_LEN 33
+G_EXTERN char g_netClientGuid[NET_GUID_LEN];
 G_EXTERN char ready2send;
 G_EXTERN char g_numPlayerSprites;
 G_EXTERN signed char multiwho, multipos, multiwhat, multiflag;
