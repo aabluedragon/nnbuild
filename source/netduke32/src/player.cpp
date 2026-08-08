@@ -3076,6 +3076,15 @@ void P_ProcessInput(int snum)
     int playerSprite = p->i;
     spritetype* s = &sprite[playerSprite];
 
+    // A dedicated host does not participate in the match. Every machine knows
+    // this deterministically via the broadcast g_netServerDedicated flag, so we
+    // can safely mark slot 0's avatar an invisible, intangible spectator here:
+    // it is never drawn, and shots, projectiles and other players pass straight
+    // through it, so it cannot be shot or fragged for points. (Kept in sync by
+    // reapplying every tick on all machines.)
+    if (g_netServerDedicated && snum == connecthead)
+        s->cstat = (s->cstat | CSTAT_SPRITE_INVISIBLE) & ~(CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+
     int shrunk = (s->yrepeat < 32);
     int floorZOffset;
 

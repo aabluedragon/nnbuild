@@ -138,6 +138,7 @@ void Net_DisplayLagDialog(void);
 // Host administration (kick/ban/banlist).
 #define MAXBANS 256
 OLDNET_EXTERN int32_t g_netServerConsole; // Read admin commands from stdin (dedicated/headless host).
+OLDNET_EXTERN int32_t g_netServerDedicated; // Authoritative (broadcast): slot 0 is a non-playing spectator.
 void Net_AdminInit(void);
 void Net_PollStdin(void);
 void Net_DrawServerScreen(void);

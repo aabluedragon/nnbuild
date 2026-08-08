@@ -1487,6 +1487,7 @@ void Net_ParsePackets(void)
                 Net_ApplyConnectedMask(B_UNBUF16(&packbuf[j])); j += sizeof(uint16_t);
                 Net_RebuildConnectList();
                 g_netAsyncMode = packbuf[j++];
+                g_netServerDedicated = packbuf[j++];
 
                 if (M_DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE))
                     LOG_F(INFO, "Visibility adjustment enabled for multiplayer.");
@@ -2364,6 +2365,11 @@ static int32_t Net_BuildInitialSettings(void)
     B_BUF32(&packbuf[j], botNameSeed); j += sizeof(int32_t);
     B_BUF16(&packbuf[j], Net_ConnectedMask()); j += sizeof(uint16_t);
     packbuf[j++] = (char)g_netAsyncMode;
+
+    // A dedicated host announces that slot 0 is a non-participating spectator so
+    // every machine deterministically applies the same spectator state to it.
+    g_netServerDedicated = g_netServerConsole ? 1 : 0;
+    packbuf[j++] = (char)g_netServerDedicated;
 
     return j;
 }
