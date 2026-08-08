@@ -82,6 +82,8 @@ enum DukePacket_t
     PACKET_TYPE_FILE_HEADER,       // Host -> client: begin transfer (name, size, crc).
     PACKET_TYPE_FILE_CHUNK,        // Host -> client: a piece of the file being sent.
 
+    PACKET_TYPE_RESTORE_SCORE,     // Master -> everyone: set slot's score (reconnect by GUID).
+
     PACKET_END, // Should remain last in list.
 };
 
@@ -132,6 +134,7 @@ void Net_PeerCheckLateJoin(void);
 void Net_MasterCheckDrop(void);
 void Net_PeerCheckDrop(void);
 void Net_MasterCheckTimeouts(void);
+void Net_MasterCheckRestore(void);
 
 void Net_LagUpdate(void);
 void Net_LagVote(void);
@@ -155,6 +158,10 @@ OLDNET_EXTERN int32_t g_mapRotationMode; // 0 off, 1 sequential, 2 random
 int32_t Net_RotateNextMap(void);
 void Net_ListMapRotation(void);
 void Net_CheckMapRotation(void);
+
+// Score persistence across reconnects (host, keyed by client GUID). Cleared at
+// the start of a new match so a rejoin after the match ended starts fresh.
+void Net_ClearScoreArchive(void);
 
 // Host -> client file transfer.
 #define MAXNETMODFILES 8

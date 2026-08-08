@@ -32,6 +32,25 @@ static int32_t lateJoinPending = -1;
 static uint32_t lateJoinAnnounceStart = 0; // master: when we began announcing the pending join
 static uint32_t lateJoinLastAnnounce = 0;  // master: last announce (re)send time
 static int32_t lateJoinGoSlot = -1;
+
+// Per-slot client identity (from PACKET_TYPE_PLAYER_NAME). The master uses these
+// plus the slot IP to restore a reconnecting player's score by identity.
+static char g_playerGuid[MAXPLAYERS][NET_GUID_LEN];
+
+// Master-side score archive: when a player leaves, we stash their score keyed by
+// GUID+IP so we can restore it if the same player rejoins the SAME match. It is
+// cleared whenever a new match starts (level change / fraglimit), so a rejoin
+// after the match ended starts fresh. Score fields are not part of the sync CRC,
+// so restoring them cannot desync the simulation.
+#define MAXSCOREARCHIVE 32
+struct scoresave_t { bool used; char guid[NET_GUID_LEN]; uint32_t ip; int32_t frag, fraggedself, deaths; };
+static scoresave_t g_scoreArchive[MAXSCOREARCHIVE];
+// Restore values chosen by the master for a rejoining slot (computed once its
+// GUID is known), then broadcast so every scoreboard agrees.
+static int32_t g_lateJoinRestoreFrag = 0, g_lateJoinRestoreFraggedself = 0, g_lateJoinRestoreDeaths = 0;
+// Master: slots that just late-joined and are waiting for their GUID to arrive
+// so a score-restore decision can be made and broadcast.
+static bool g_slotAwaitingRestore[MAXPLAYERS];
 static uint16_t lateJoinGoMask;
 static int32_t lateJoinGoRNG[6];
 static void Net_IntegrateLateJoin(int32_t slot);
@@ -377,8 +396,132 @@ static int32_t g_pendingDropTick;
 static uint32_t g_slotLastPacketMs[MAXPLAYERS];
 #define NET_CLIENT_TIMEOUT_MS 5000
 
+// ---- Score persistence across reconnects (master, keyed by client GUID) ----
+
+void Net_ClearScoreArchive(void)
+{
+    Bmemset(g_scoreArchive, 0, sizeof(g_scoreArchive));
+}
+
+// Master: stash a departing player's score so the same identity can reclaim it
+// if they rejoin this match.
+static void Net_ArchiveScore(int32_t slot)
+{
+    if (myconnectindex != connecthead || (unsigned)slot >= MAXPLAYERS || !g_player[slot].ps)
+        return;
+    if (!g_playerGuid[slot][0])
+        return;  // no identity to key on; nothing to restore later
+
+    uint32_t const ip = (uint32_t)mmulti_getslotip(slot);
+
+    int32_t idx = -1, freeIdx = -1;
+    for (int32_t i = 0; i < MAXSCOREARCHIVE; i++)
+    {
+        if (!g_scoreArchive[i].used) { if (freeIdx < 0) freeIdx = i; continue; }
+        if (g_scoreArchive[i].ip == ip && !Bstrcmp(g_scoreArchive[i].guid, g_playerGuid[slot])) { idx = i; break; }
+    }
+    if (idx < 0) idx = (freeIdx >= 0) ? freeIdx : 0;
+
+    g_scoreArchive[idx].used = true;
+    Bstrncpyz(g_scoreArchive[idx].guid, g_playerGuid[slot], NET_GUID_LEN);
+    g_scoreArchive[idx].ip = ip;
+    g_scoreArchive[idx].frag = g_player[slot].ps->frag;
+    g_scoreArchive[idx].fraggedself = g_player[slot].ps->fraggedself;
+    g_scoreArchive[idx].deaths = g_player[slot].ps->deaths;
+}
+
+// Master: decide what score a rejoining slot should get, per the identity rules:
+// exactly one archived entry for this GUID -> restore it; several entries for the
+// GUID -> disambiguate by IP and restore only if exactly one GUID+IP match;
+// otherwise (ambiguous, or no match, or the match already ended so the archive
+// was cleared) -> start fresh at zero. Result goes into g_lateJoinRestore*.
+static void Net_ComputeRestoreScore(int32_t slot)
+{
+    g_lateJoinRestoreFrag = g_lateJoinRestoreFraggedself = g_lateJoinRestoreDeaths = 0;
+
+    if (myconnectindex != connecthead || (unsigned)slot >= MAXPLAYERS || !g_playerGuid[slot][0])
+        return;
+
+    uint32_t const ip = (uint32_t)mmulti_getslotip(slot);
+
+    int32_t byGuid = 0, byGuidIp = 0, guidIdx = -1, guidIpIdx = -1;
+    for (int32_t i = 0; i < MAXSCOREARCHIVE; i++)
+    {
+        if (!g_scoreArchive[i].used || Bstrcmp(g_scoreArchive[i].guid, g_playerGuid[slot]))
+            continue;
+        byGuid++; guidIdx = i;
+        if (g_scoreArchive[i].ip == ip) { byGuidIp++; guidIpIdx = i; }
+    }
+
+    int32_t pick = -1;
+    if (byGuid == 1)
+        pick = guidIdx;                 // unique identity -> restore
+    else if (byGuid > 1 && byGuidIp == 1)
+        pick = guidIpIdx;               // ambiguous GUID, but IP breaks the tie
+    // else: ambiguous even with IP, or no entry -> leave at zero (fresh)
+
+    if (pick < 0)
+        return;
+
+    g_lateJoinRestoreFrag        = g_scoreArchive[pick].frag;
+    g_lateJoinRestoreFraggedself = g_scoreArchive[pick].fraggedself;
+    g_lateJoinRestoreDeaths      = g_scoreArchive[pick].deaths;
+    g_scoreArchive[pick].used    = false;  // consumed
+    LOG_F(INFO, "Restoring score (%d frags) for rejoining player in slot %d.", g_lateJoinRestoreFrag, slot);
+}
+
+// Every machine: apply the master's chosen restore score to a just-spawned
+// joiner. With no restore this simply confirms the fresh zero the spawn set.
+static void Net_ApplyRestoreScore(int32_t slot)
+{
+    if ((unsigned)slot >= MAXPLAYERS || !g_player[slot].ps)
+        return;
+    g_player[slot].ps->frag        = g_lateJoinRestoreFrag;
+    g_player[slot].ps->fraggedself = g_lateJoinRestoreFraggedself;
+    g_player[slot].ps->deaths      = g_lateJoinRestoreDeaths;
+}
+
+// Master, each frame: a slot that just late-joined has its GUID a moment later
+// (its name packet only flushes once it is fully in the game). Once we have it,
+// decide the reconnect score restore and broadcast it so every scoreboard
+// matches, then stop waiting on that slot.
+void Net_MasterCheckRestore(void)
+{
+    if (myconnectindex != connecthead)
+        return;
+
+    for (int32_t slot = 0; slot < numplayers; slot++)
+    {
+        if (!g_slotAwaitingRestore[slot])
+            continue;
+        if (!g_player[slot].connected)      // gave up / left before we could
+        {
+            g_slotAwaitingRestore[slot] = false;
+            continue;
+        }
+        if (!g_playerGuid[slot][0])
+            continue;                        // GUID not here yet; wait
+
+        g_slotAwaitingRestore[slot] = false;
+        Net_ComputeRestoreScore(slot);       // fills g_lateJoinRestore*
+        Net_ApplyRestoreScore(slot);         // apply locally
+
+        // Tell everyone so their scoreboards agree.
+        packbuf[0] = PACKET_TYPE_RESTORE_SCORE;
+        packbuf[1] = (char)slot;
+        B_BUF32(&packbuf[2],  g_lateJoinRestoreFrag);
+        B_BUF32(&packbuf[6],  g_lateJoinRestoreFraggedself);
+        B_BUF32(&packbuf[10], g_lateJoinRestoreDeaths);
+        for (int32_t i = 0; i < numplayers; i++)
+            if (i != myconnectindex && g_player[i].connected)
+                mmulti_sendpacket(i, (unsigned char *)packbuf, 14);
+    }
+}
+
 static void Net_ScheduleRemove(int32_t slot, const char *reasonQuote)
 {
+    Net_ArchiveScore(slot);
+
     if (g_pendingKickSlot >= 0)
         return;  // one at a time; the caller can retry after this completes
 
@@ -558,6 +701,16 @@ static uint32_t Net_ParseIP(const char *s)
     return 0;
 }
 
+// True for the IPv4 loopback range 127.0.0.0/8 (the first octet is the low
+// byte in mmulti's layout). The mmulti transport is IPv4-only, so an IPv6
+// loopback (::1) or IPv4-mapped loopback would already appear here as a
+// 127.x.x.x address once resolved. We never ban these - banning the host's own
+// loopback would lock the operator (and any local clients) out of their server.
+static bool Net_IsLoopbackIP(uint32_t ip)
+{
+    return (ip & 0xFF) == 127;
+}
+
 static void Net_LoadBanList(void)
 {
     if (g_banLoaded)
@@ -626,6 +779,8 @@ static void Net_SaveBanList(void)
 // Registered with mmulti; called at the transport handshake.
 static int Net_BanCheck(int ip)
 {
+    if (Net_IsLoopbackIP((uint32_t)ip))
+        return 0;  // never lock out localhost, even from a stale ban entry
     Net_LoadBanList();
     for (int32_t i = 0; i < g_banCount; i++)
         if (g_banList[i].ip == (uint32_t)ip)
@@ -689,6 +844,11 @@ int32_t Net_KickPlayer(const char *ref)
 
 static void Net_AddBanIP(uint32_t ip, const char *name)
 {
+    if (Net_IsLoopbackIP(ip))
+    {
+        LOG_F(WARNING, "Refusing to ban a loopback address (localhost).");
+        return;
+    }
     Net_LoadBanList();
     for (int32_t i = 0; i < g_banCount; i++)
         if (g_banList[i].ip == ip)
@@ -716,6 +876,11 @@ int32_t Net_BanPlayer(const char *ref)
     if (slot >= 0 && slot != myconnectindex)
     {
         uint32_t ip = (uint32_t)mmulti_getslotip(slot);
+        if (Net_IsLoopbackIP(ip))
+        {
+            LOG_F(WARNING, "Refusing to ban %s: they are on localhost.", g_player[slot].user_name);
+            return -1;
+        }
         Net_FormatIP(ip, ipstr, sizeof(ipstr));
         LOG_F(INFO, "Banned player %d (%s) at %s", slot, g_player[slot].user_name, ipstr);
         Net_AddBanIP(ip, g_player[slot].user_name);
@@ -727,6 +892,11 @@ int32_t Net_BanPlayer(const char *ref)
     uint32_t ip = Net_ParseIP(ref);
     if (ip)
     {
+        if (Net_IsLoopbackIP(ip))
+        {
+            LOG_F(WARNING, "Refusing to ban a loopback address (localhost).");
+            return -1;
+        }
         Net_FormatIP(ip, ipstr, sizeof(ipstr));
         Net_AddBanIP(ip, "");
         LOG_F(INFO, "Banned address %s", ipstr);
@@ -1583,6 +1753,17 @@ void Net_ParsePackets(void)
                     lateJoinGoRNG[i] = (int32_t)B_UNBUF32(&packbuf[4 + i * 4]);
                 break;
             }
+            case PACKET_TYPE_RESTORE_SCORE:
+            {
+                int32_t const slot = (uint8_t)packbuf[1];
+                if ((unsigned)slot < MAXPLAYERS && g_player[slot].ps)
+                {
+                    g_player[slot].ps->frag        = (int32_t)B_UNBUF32(&packbuf[2]);
+                    g_player[slot].ps->fraggedself = (int32_t)B_UNBUF32(&packbuf[6]);
+                    g_player[slot].ps->deaths      = (int32_t)B_UNBUF32(&packbuf[10]);
+                }
+                break;
+            }
             case PACKET_TYPE_LAG_NOTIFY:
             {
                 g_netLagActive = 1;
@@ -1797,7 +1978,17 @@ void Net_ParsePackets(void)
                             g_player[playerNum].user_name[i - 2] = packbuf[i];
                         }
                         g_player[playerNum].user_name[i - 2] = 0;
-                        i++;
+                        while (packbuf[i] && i < packbufleng) i++; // skip any remaining name bytes
+                        i++;                                       // and its null terminator
+
+                        // Read the appended GUID (see Net_SendPlayerName).
+                        if ((unsigned)playerNum < MAXPLAYERS)
+                        {
+                            int32_t g = 0;
+                            while (i < packbufleng && packbuf[i] && g < NET_GUID_LEN - 1)
+                                g_playerGuid[playerNum][g++] = packbuf[i++];
+                            g_playerGuid[playerNum][g] = 0;
+                        }
 
                         LOG_F(INFO, "Player %d's name is now %s", playerNum, g_player[playerNum].user_name);
 
@@ -2111,6 +2302,12 @@ void Net_SendPlayerName(void)
     for (i=0;szPlayerName[i];i++) buf[l++] = Btoupper(szPlayerName[i]);
     buf[l++] = 0;
 
+    // Append our stable GUID (also null-terminated) so the host can key score
+    // restoration on identity rather than nickname. Remember our own too.
+    Bstrncpyz(g_playerGuid[myconnectindex], g_netClientGuid, NET_GUID_LEN);
+    for (i=0;g_netClientGuid[i];i++) buf[l++] = g_netClientGuid[i];
+    buf[l++] = 0;
+
     TRAVERSE_CONNECT(i)
     {
         if (i != myconnectindex) mmulti_sendpacket(i, (unsigned char*)&buf[0],l);
@@ -2317,6 +2514,11 @@ void Net_MasterCheckLateJoin(void)
                 lateJoinPending = i;
                 g_lateJoinFreeze = 1;
                 lateJoinAnnounceStart = lateJoinLastAnnounce = timerGetTicks();
+                // Forget the previous occupant's identity so score restoration
+                // keys only on the GUID the NEW joiner sends (arriving during its
+                // init, before we build the GO packet). A joiner that never sends
+                // one simply can't reclaim a score.
+                g_playerGuid[i][0] = 0;
                 LOG_F(INFO, "Late joiner in slot %d; pausing for state transfer", i);
 
                 // Tell the joiner what's going on, so it knows to stay out of
@@ -2426,6 +2628,10 @@ void Net_MasterCheckLateJoin(void)
     // Snapshot was pre-spawn; spawn the joiner into our live world with the
     // same code the joiner and peers run, keeping every machine identical.
     P_SpawnLateJoiner(slot);
+    // The joiner's GUID arrives a little later (its name packet only flushes
+    // once it is fully in the game), so score restoration is deferred until
+    // then - see Net_MasterCheckRestore.
+    g_slotAwaitingRestore[slot] = true;
     Net_WaitForPlayers();  // The joiner reaches this barrier from inside G_LoadPlayer.
     G_ResetTimers();
 }
