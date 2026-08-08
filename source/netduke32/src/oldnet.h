@@ -114,6 +114,7 @@ void Net_CancelVote();
 // Late joining (see Net_MasterCheckLateJoin in oldnet.cpp).
 #define LATEJOIN_SAVE_SPOT 100
 OLDNET_EXTERN int32_t g_netAsyncMode;   // Host: server-authoritative, never blocks on slow clients.
+OLDNET_EXTERN int32_t g_netZeroPing;    // Client-local shot prediction (make firing feel instant).
 OLDNET_EXTERN int32_t g_netLagActive;   // Everyone: a lockstep lag dialog is open right now.
 OLDNET_EXTERN uint16_t g_netLagMask;    // Everyone: which slots are lagging.
 OLDNET_EXTERN int32_t g_netLagSecsLeft; // Everyone: countdown shown in the dialog.

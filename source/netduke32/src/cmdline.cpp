@@ -354,6 +354,16 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
+                // --zeroping (also accepts -zeroping): client-side shot
+                // prediction so hitscan/projectile fire feels instant in
+                // multiplayer. Purely local; each player sets it independently.
+                if (!Bstrcasecmp(c + 1, "zeroping") || !Bstrcasecmp(c + 1, "-zeroping"))
+                {
+                    g_netZeroPing = 1;
+                    LOG_F(INFO, "ZeroPing shot prediction enabled.");
+                    i++;
+                    continue;
+                }
                 if (!Bstrcasecmp(c + 1, "x"))
                 {
                     if (argc > i + 1)

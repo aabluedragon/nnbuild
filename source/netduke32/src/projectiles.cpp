@@ -649,6 +649,16 @@ static int P_PostFireHitscan(int playerNum, int const spriteNum, hitdata_t* cons
     int const projecTile, int const zvel, int const spawnTile, int const decalTile, int const wallDamage,
     int const decalFlags)
 {
+    // ZeroPing prediction: the visible feedback (muzzle flash, tracer and the
+    // impact spark) is already spawned by the caller before we get here. This
+    // function only performs authoritative-world changes - damage, frag counts,
+    // switch activation, wall/ceiling damage, and decals that enqueue into the
+    // global deletion queue. None of that state is part of the discarded
+    // predicted sprite copy, so running it during prediction would permanently
+    // corrupt the real game and desync. Draw nothing here while predicting.
+    if (oldnet_predicting)
+        return 0;
+
     if (hitData->wall == -1 && hitData->sprite == -1)
     {
         if (Proj_MaybeDamageCF2(spriteNum, zvel, hitData->sect))
@@ -828,8 +838,11 @@ static int A_ShootCustom(int const spriteNum, int const projecTile, int shootAng
             A_PlaySound(pProj->sound, spriteNum);
     }
 
-    // Stop here if we're predicting
-    if (oldnet_predicting)
+    // Stop here if we're predicting - unless ZeroPing is on, in which case we
+    // let the shot spawn into the (discarded) predicted world so firing feels
+    // instant. Damage/state changes land on predicted copies and are thrown
+    // away each pass; the authoritative shot follows a few ticks later.
+    if (oldnet_predicting && !g_netZeroPing)
         return -1;
 
 #ifdef POLYMER
@@ -1141,8 +1154,8 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
         }
     }
 
-    // Stop here if we're predicting.
-    if (oldnet_predicting)
+    // Stop here if we're predicting (unless ZeroPing predicts the shot).
+    if (oldnet_predicting && !g_netZeroPing)
         return -1;
 
 #ifdef POLYMER
@@ -1290,7 +1303,13 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
             sprite[otherSprite].xrepeat = sprite[otherSprite].yrepeat = 1;
             A_SetHitData(otherSprite, &hitData);
 
-            if (hitData.wall == -1 && hitData.sprite == -1 && hitData.sect >= 0)
+            // Damage mutates authoritative world state (outside the discarded
+            // predicted copy); skip it while doing ZeroPing shot prediction.
+            if (oldnet_predicting)
+            {
+                /* draw the spark only */
+            }
+            else if (hitData.wall == -1 && hitData.sprite == -1 && hitData.sect >= 0)
             {
                 Proj_MaybeDamageCF2(otherSprite, Zvel, hitData.sect);
             }
