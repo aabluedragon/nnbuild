@@ -1064,11 +1064,12 @@ int32_t Net_RotateNextMap(void)
     if (e.usermap[0])
     {
         Bstrcpy(boardfilename, e.usermap);
+        // Send the map file (and host mods) BEFORE the USER_MAP name: mmulti is
+        // reliable+ordered, so a client has the file on disk before the name (and
+        // the NEW_GAME that loads it) arrive - no manual pre-sync, no desync onto
+        // a fallback level for clients that lack the map.
+        Net_SendGameFiles(-1);
         Net_SendUserMapName();
-        // Push the map file to clients before the NEW_GAME below. mmulti is
-        // reliable and ordered, so a client receives (and writes) the file
-        // before the NEW_GAME that makes it load - no manual pre-sync needed.
-        Net_SendFile(-1, e.usermap);
         LOG_F(INFO, "Rotating to usermap %s", e.usermap);
         Bsprintf(buf, "Next map: %s", e.usermap);
     }

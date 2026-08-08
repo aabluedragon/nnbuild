@@ -317,7 +317,13 @@ static int osdcmd_map(const osdfuncparm_t *parm)
     {
         if (myconnectindex == connecthead)
         {
-            Net_SendUserMapName();   
+            // Push the map (and any host mods) to clients BEFORE announcing its
+            // name: reliable+ordered delivery guarantees a client has the file on
+            // disk before the USER_MAP name (and the NEW_GAME that loads it)
+            // arrive, so clients that lack the usermap sync it instead of failing
+            // to open it and desyncing onto a fallback level.
+            Net_SendGameFiles(-1);
+            Net_SendUserMapName();
             G_NewGame(NEWGAME_RESETALL);
         }
         else if (vote.starter == -1)
