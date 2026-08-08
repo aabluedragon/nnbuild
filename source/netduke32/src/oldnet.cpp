@@ -29,6 +29,8 @@ static uint16_t lagStalledMask;    // Which slots we are stalled on.
 static uint16_t lagDropVoteMask;   // Which slots have been voted to drop.
 
 static int32_t lateJoinPending = -1;
+static uint32_t lateJoinAnnounceStart = 0; // master: when we began announcing the pending join
+static uint32_t lateJoinLastAnnounce = 0;  // master: last announce (re)send time
 static int32_t lateJoinGoSlot = -1;
 static uint16_t lateJoinGoMask;
 static int32_t lateJoinGoRNG[6];
@@ -1539,9 +1541,10 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_LATEJOIN_ANNOUNCE:
             {
+                if (!g_netLateJoiner)
+                    LOG_F(INFO, "Joining a game in progress; waiting for the state snapshot...");
                 g_netLateJoiner = 1;
                 g_noLogo = 1;  // Straight into the game once the snapshot lands.
-                LOG_F(INFO, "Joining a game in progress; waiting for the state snapshot...");
                 break;
             }
             case PACKET_TYPE_SNAPSHOT_CHUNK:
@@ -2313,10 +2316,11 @@ void Net_MasterCheckLateJoin(void)
             {
                 lateJoinPending = i;
                 g_lateJoinFreeze = 1;
+                lateJoinAnnounceStart = lateJoinLastAnnounce = timerGetTicks();
                 LOG_F(INFO, "Late joiner in slot %d; pausing for state transfer", i);
 
-                // Tell the joiner right away what's going on, so it knows to
-                // stay out of the startup barriers and wait for the snapshot.
+                // Tell the joiner what's going on, so it knows to stay out of
+                // the startup barriers and wait for the snapshot.
                 packbuf[0] = PACKET_TYPE_LATEJOIN_ANNOUNCE;
                 mmulti_sendpacket(i, (unsigned char *)packbuf, 1);
                 Net_SendInitialSettingsTo(i);
@@ -2325,6 +2329,23 @@ void Net_MasterCheckLateJoin(void)
         }
         if (lateJoinPending < 0)
             return;
+    }
+
+    // A reconnecting client may still be finishing its own handshake when we
+    // first announce, so a single announce can be lost. Re-send the announce
+    // (and the initial settings) for a short window so the joiner reliably
+    // learns it is joining in progress before we start streaming the snapshot.
+    {
+        uint32_t const now = timerGetTicks();
+        if (now - lateJoinLastAnnounce > 200)
+        {
+            lateJoinLastAnnounce = now;
+            packbuf[0] = PACKET_TYPE_LATEJOIN_ANNOUNCE;
+            mmulti_sendpacket(lateJoinPending, (unsigned char *)packbuf, 1);
+            Net_SendInitialSettingsTo(lateJoinPending);
+        }
+        if (now - lateJoinAnnounceStart < 1200)
+            return;  // still inside the announce window
     }
 
     // Wait until we have simulated every tick we broadcast, so that all

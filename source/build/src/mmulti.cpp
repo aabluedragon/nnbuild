@@ -551,15 +551,31 @@ int mmulti_getslotip(int slot)
     return otherip[slot];
 }
 
-// Fully sever a slot at the transport level (used by kick/ban). Clearing the
-// address stops us sending to them and makes their packets fall through as an
-// unknown peer.
+// Fully sever a slot at the transport level (used by kick/ban and by the game
+// when it drops a departed player). Clearing the address stops us sending to
+// them and makes their packets fall through as an unknown peer. We ALSO reset
+// this slot's reliable-delivery sequencing to its initial state, so a client
+// that later reconnects into the slot starts from a clean sequence instead of
+// clashing with the previous occupant's stale ack/packet counters (which made
+// the master silently reject the reconnecting client's packets).
 void mmulti_dropslot(int slot)
 {
     if ((unsigned)slot >= MAXPLAYERS)
         return;
     otherip[slot] = 0;
-    otherport[slot] = 0;
+    otherport[slot] = htons(NETPORT);
+
+    icnt0[slot] = 0;
+    ocnt0[slot] = 0;
+    ocnt1[slot] = 0;
+    Bmemset(ipak[slot], 0, sizeof(ipak[slot]));
+    lastsendtims[slot] = GetTickCount();
+    fullpakbufsignals[slot] = 0;
+#if (SIMLAG > 1)
+    simlagcnt[slot] = 0;
+#endif
+    HeardFrom[slot] = 0;
+    HeardFrom2[slot] = 0;
 }
 
 int initmultiplayerscycle(void)
