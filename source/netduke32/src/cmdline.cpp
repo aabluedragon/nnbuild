@@ -427,9 +427,8 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     }
                     else if (((c[0] == 'n') || (c[0] == 'N')) && (c[1] == '1'))
                     {
-                        //g_networkBroadcastMode = NETMODE_P2P;
+                        g_networkBroadcastMode = NETMODE_P2P;
                         LOG_F(INFO, "Network mode: peer-to-peer");
-                        G_GameExit("Peer-To-Peer networking is no longer supported! Use master/slave.");
                     }
 
                 }

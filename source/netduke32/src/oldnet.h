@@ -75,7 +75,7 @@ enum DukePacket_t
 enum NetMode_t
 {
     NETMODE_MASTERSLAVE,
-    NETMODE_P2P, // UNSUPPORTED.
+    NETMODE_P2P,
     NETMODE_OFFLINE = 255
 };
 
