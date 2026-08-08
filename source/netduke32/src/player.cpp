@@ -47,14 +47,24 @@ char pColorNames[MAXPALOOKUPS][32] = { "Auto" };
 // APLAYER's tiles to the enemy's, mapping APLAYER's CON action start frames
 // (PSTAND/PWALK/...) onto equivalent frames of the enemy's tile layout. Frame
 // numbers below come from the stock GAME.CON action definitions.
-const char *g_playerSkinNames[MAXPLAYERSKINS] = { "Duke", "Trooper", "Pig Cop" };
+const char *g_playerSkinNames[MAXPLAYERSKINS] = {
+    "Duke", "Assault Trooper", "Assault Captain", "Octabrain",
+    "Assault Commander", "Enforcer", "Pig Cop", "Protector Drone"
+};
 
+// Which stock enemy each skin is drawn as. Assault Captain shares the Assault
+// Trooper's art (in Duke it's a palette variant), so it reuses LIZTROOP.
 int32_t P_SkinBaseTile(int32_t skin)
 {
     switch (skin)
     {
-        case 1: return LIZTROOP;
-        case 2: return PIGCOP;
+        case 1: return LIZTROOP;    // Assault Trooper
+        case 2: return LIZTROOP;    // Assault Captain (trooper art)
+        case 3: return OCTABRAIN;   // Octabrain
+        case 4: return COMMANDER;   // Assault Commander
+        case 5: return LIZMAN;      // Enforcer
+        case 6: return PIGCOP;      // Pig Cop
+        case 7: return DRONE;       // Protector Drone (Atomic+ only)
     }
     return -1;
 }
@@ -77,8 +87,10 @@ void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t *startFrame
     struct frameinfo { int16_t start, frames, viewtype; };
     frameinfo f;
 
-    if (skin == 1)  // LIZTROOP
+    switch (skin)
     {
+    case 1:   // Assault Trooper (LIZTROOP)
+    case 2:   // Assault Captain - shares the trooper's art
         switch (aplayerStartFrame)
         {
             case 20:  // PWALK/PRUN/PFROZEN
@@ -101,9 +113,9 @@ void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t *startFrame
             default:  // PSTAND/PTREDWATER/...
                 f = { 0, 1, 5 }; break;
         }
-    }
-    else  // PIGCOP
-    {
+        break;
+
+    case 6:   // Pig Cop (PIGCOP)
         switch (aplayerStartFrame)
         {
             case 20:
@@ -120,6 +132,47 @@ void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t *startFrame
             default:
                 f = { 30, 1, 5 }; break;  // APIGSTAND
         }
+        break;
+
+    case 5:   // Enforcer (LIZMAN). Offsets from the stock tile layout
+              // (LIZMANSPITTING=+30, LIZMANJUMP=+45); death frames are a
+              // best-effort estimate and may want a visual tweak.
+        switch (aplayerStartFrame)
+        {
+            case 20:
+            case 375:
+                f = { 0, 4, 5 }; break;   // walk
+            case 45:
+                f = { 0, 4, 5 }; break;
+            case 40:  // PAKICKING
+                f = { 30, 1, 5 }; break;  // LIZMANSPITTING
+            case 15:
+            case 50:
+            case 65:
+                f = { 45, 1, 5 }; break;  // LIZMANJUMP
+            case 106:
+                f = { 50, 5, 1 }; break;  // dying (estimate)
+            case 113:
+                f = { 54, 1, 1 }; break;  // dead (estimate)
+            default:
+                f = { 0, 1, 5 }; break;   // stand
+        }
+        break;
+
+    default:  // Floating enemies: Octabrain (3), Assault Commander (4),
+              // Protector Drone (7). They have no ground walk cycle, so every
+              // motion maps to their roaming/float frames; death uses tail-end
+              // frames (best-effort - visually tune per enemy if needed).
+        switch (aplayerStartFrame)
+        {
+            case 106:
+                f = { 24, 5, 1 }; break;  // dying (estimate)
+            case 113:
+                f = { 28, 1, 1 }; break;  // dead (estimate)
+            default:
+                f = { 0, 4, 5 }; break;   // float/roam
+        }
+        break;
     }
 
     *startFrame = f.start;
@@ -131,10 +184,26 @@ int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead)
 {
     int32_t pain, dying, roam, recog;
 
+    // Only PRED and PIG expose a full CON-remappable sound set as runtime
+    // symbols (see dnames.h); the other enemies' pain/dying/roam sounds live
+    // only as fixed definitions in soundefs.h. Those aren't remapped, so the
+    // runtime id equals the definition - use the numbers directly. (Kept in a
+    // local table so the intent is clear; values mirror soundefs.h.)
+    enum { S_CAPT_ROAM=115, S_CAPT_PAIN=118, S_CAPT_DYING=119,
+           S_OCTA_ROAM=140, S_OCTA_PAIN=143, S_OCTA_DYING=144,
+           S_COMM_ROAM=135, S_COMM_PAIN=138, S_COMM_DYING=139,
+           S_DRON_ROAM=130, S_DRON_PAIN=133, S_DRON_DYING=134,
+           S_LIZARD_PAIN=62 };
+
     switch (skin)
     {
-        case 1: pain = PRED_PAIN; dying = PRED_DYING; roam = PRED_ROAM; recog = PRED_RECOG; break;
-        case 2: pain = PIG_PAIN; dying = PIG_DYING; roam = PIG_ROAM; recog = PIG_RECOG; break;
+        case 1: pain = PRED_PAIN;    dying = PRED_DYING;   roam = PRED_ROAM;    recog = PRED_RECOG; break;  // Assault Trooper
+        case 2: pain = S_CAPT_PAIN;  dying = S_CAPT_DYING; roam = S_CAPT_ROAM;  recog = CAPT_RECOG; break;  // Assault Captain
+        case 3: pain = S_OCTA_PAIN;  dying = S_OCTA_DYING; roam = S_OCTA_ROAM;  recog = OCTA_RECOG; break;  // Octabrain
+        case 4: pain = S_COMM_PAIN;  dying = S_COMM_DYING; roam = S_COMM_ROAM;  recog = COMM_RECOG; break;  // Assault Commander
+        case 5: pain = S_LIZARD_PAIN;dying = S_LIZARD_PAIN;roam = S_LIZARD_PAIN;recog = S_LIZARD_PAIN; break; // Enforcer (only a pain sound is stock)
+        case 6: pain = PIG_PAIN;     dying = PIG_DYING;    roam = PIG_ROAM;     recog = PIG_RECOG; break;   // Pig Cop
+        case 7: pain = S_DRON_PAIN;  dying = S_DRON_DYING; roam = S_DRON_ROAM;  recog = DRON_RECOG; break;  // Protector Drone
         default: return soundNum;
     }
 

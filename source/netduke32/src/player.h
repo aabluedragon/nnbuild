@@ -233,8 +233,10 @@ void P_QuickKill(DukePlayer_t* p);
 void P_GetInput(int snum, bool uncapped);
 void P_ProcessInput(int snum);
 
-// Multiplayer enemy skins. Skin 0 is Duke; see g_playerSkinNames.
-#define MAXPLAYERSKINS 3
+// Multiplayer enemy skins. Skin 0 is Duke; see g_playerSkinNames. Skins whose
+// art isn't present in the running game (e.g. Protector Drone in shareware)
+// fall back to Duke via P_ValidateSkin.
+#define MAXPLAYERSKINS 8
 extern const char *g_playerSkinNames[MAXPLAYERSKINS];
 int32_t P_SkinBaseTile(int32_t skin);
 int32_t P_ValidateSkin(int32_t skin);
