@@ -494,9 +494,8 @@ void G_CacheMapData(void)
     }
 
     int cnt = 0;
-    int cntDisplayed = -1;
-    int pctDisplayed = -1;
     int i = 0;
+    uint32_t lastProgressTime = 0;
 
     while (cnt < g_precacheCount)
     {
@@ -518,19 +517,27 @@ void G_CacheMapData(void)
                 }
             }
 
-            gameHandleEvents();
-            if (KB_KeyPressed(sc_Space))
-                break;
+            // Event pumping and progress redraws used to happen for nearly
+            // every tile, and each redraw blocked on the frame limiter -
+            // turning a few hundred milliseconds of tile I/O into many
+            // seconds of vsync waits. Pump occasionally and repaint on a
+            // timer instead.
+            if ((cnt & 15) == 0)
+            {
+                gameHandleEvents();
+                if (KB_KeyPressed(sc_Space))
+                    break;
+            }
         }
         i++;
 
-        if (cntDisplayed + (i & 7) < cnt - (i & 7) && engineFPSLimit(true))
+        uint32_t const now = timerGetTicks();
+        if (now - lastProgressTime >= 50)
         {
-            int const percentComplete = min(100, tabledivide32(100 * cntDisplayed, g_precacheCount));
-            cntDisplayed = logapproach(cntDisplayed, cnt);
-            pctDisplayed = logapproach(pctDisplayed, percentComplete);
-            Bsprintf(tempbuf, "Loaded %d%% (%d/%d textures)\n", pctDisplayed, cntDisplayed, g_precacheCount);
-            G_DoLoadScreen(tempbuf, pctDisplayed);
+            lastProgressTime = now;
+            int const pct = min(100, tabledivide32(100 * cnt, max(g_precacheCount, 1)));
+            Bsprintf(tempbuf, "Loaded %d%% (%d/%d textures)\n", pct, cnt, g_precacheCount);
+            G_DoLoadScreen(tempbuf, pct);
         }
     }
 
