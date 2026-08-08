@@ -9185,9 +9185,29 @@ MAIN_LOOP_RESTART:
             }
             else if (g_netLateJoiner == 1 && !(ud.gm & MODE_GAME))
             {
-                // Waiting for the host's snapshot: there is no world to draw.
+                // Joining a game in progress: no world yet - show a loading
+                // screen with the current phase, a progress bar and a percent.
+                // NOTE: everything goes in a SINGLE gametext() call. Issuing two
+                // or more gametext() calls from this pre-MODE_GAME draw path
+                // wedges the joiner's packet intake and the snapshot never
+                // arrives, so status text, bar and percent share one line.
                 videoClearScreen(0L);
-                gametext(160, 100, "JOINING GAME IN PROGRESS...", 14, 2);
+
+                int32_t const pct = clamp(g_lateJoinPercent, 0, 100);
+                int32_t const filled = pct * 20 / 100;
+                char bar[24];
+                int32_t k = 0;
+                bar[k++] = '[';
+                for (int32_t b = 0; b < 20; b++) bar[k++] = (b < filled) ? '=' : '-';
+                bar[k++] = ']';
+                bar[k] = 0;
+
+                char line[128];
+                Bsnprintf(line, sizeof(line), "%s   %s  %d%%",
+                          g_lateJoinStatus[0] ? g_lateJoinStatus : "Joining game in progress",
+                          bar, pct);
+                gametext(160, 100, line, 14, 2);
+
                 videoNextPage();
             }
             else if (g_netServerConsole && (ud.gm & MODE_GAME))

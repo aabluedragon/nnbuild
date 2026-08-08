@@ -1243,6 +1243,9 @@ static void Net_ReceiveFileHeader(void)
     LOG_F(INFO, "Receiving %s (%d bytes) from host", g_recvFileName, size);
     Bsprintf(buf, "Downloading %s...", g_recvFileName);
     G_AddUserQuote(buf);
+
+    Bsnprintf(g_lateJoinStatus, sizeof(g_lateJoinStatus), "Downloading %s", g_recvFileName);
+    g_lateJoinPercent = 0;
 }
 
 static void Net_ReceiveFileChunk(void)
@@ -1259,6 +1262,9 @@ static void Net_ReceiveFileChunk(void)
     g_recvFileChunksGot++;
     if (seq == total - 1)
         g_recvFileLastLen = len;
+
+    if (g_recvFileChunkTotal > 0)
+        g_lateJoinPercent = 100 * g_recvFileChunksGot / g_recvFileChunkTotal;
 
     if (g_recvFileChunksGot < g_recvFileChunkTotal)
         return;
@@ -1712,7 +1718,11 @@ void Net_ParsePackets(void)
             case PACKET_TYPE_LATEJOIN_ANNOUNCE:
             {
                 if (!g_netLateJoiner)
+                {
                     LOG_F(INFO, "Joining a game in progress; waiting for the state snapshot...");
+                    Bstrncpyz(g_lateJoinStatus, "Connecting to game in progress", sizeof(g_lateJoinStatus));
+                    g_lateJoinPercent = 0;
+                }
                 g_netLateJoiner = 1;
                 g_noLogo = 1;  // Straight into the game once the snapshot lands.
                 break;
@@ -1731,12 +1741,17 @@ void Net_ParsePackets(void)
                     snapshotBuf = (char *)Xmalloc(total * SNAPSHOT_CHUNK_SIZE);
                     snapshotChunksGot = 0;
                     snapshotChunkTotal = total;
+                    Bstrncpyz(g_lateJoinStatus, "Receiving game state", sizeof(g_lateJoinStatus));
+                    g_lateJoinPercent = 0;
                 }
 
                 Bmemcpy(&snapshotBuf[seq * SNAPSHOT_CHUNK_SIZE], &packbuf[7], len);
                 snapshotChunksGot++;
                 if (seq == total - 1)
                     snapshotLastLen = len;
+
+                if (snapshotChunkTotal > 0)
+                    g_lateJoinPercent = 100 * snapshotChunksGot / snapshotChunkTotal;
 
                 break;
             }
@@ -2445,6 +2460,9 @@ static void Net_CompleteLateJoin(int32_t slot)
                     (snapshotChunkTotal - 1) * SNAPSHOT_CHUNK_SIZE + snapshotLastLen, fil);
     buildvfs_fclose(fil);
     DO_FREE_AND_NULL(snapshotBuf);
+
+    Bstrncpyz(g_lateJoinStatus, "Entering the level", sizeof(g_lateJoinStatus));
+    g_lateJoinPercent = 100;
 
     Net_IntegrateLateJoin(slot);
 
