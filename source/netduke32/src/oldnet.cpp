@@ -853,7 +853,11 @@ int32_t Net_RotateNextMap(void)
     if (e.usermap[0])
     {
         Bstrcpy(boardfilename, e.usermap);
-        Net_SendUserMapName();  // clients need the name (and, later, the file)
+        Net_SendUserMapName();
+        // Push the map file to clients before the NEW_GAME below. mmulti is
+        // reliable and ordered, so a client receives (and writes) the file
+        // before the NEW_GAME that makes it load - no manual pre-sync needed.
+        Net_SendFile(-1, e.usermap);
         LOG_F(INFO, "Rotating to usermap %s", e.usermap);
         Bsprintf(buf, "Next map: %s", e.usermap);
     }
