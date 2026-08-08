@@ -99,6 +99,26 @@ static int osdcmd_listplayers(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
+static int osdcmd_nextmap(const osdfuncparm_t *parm)
+{
+    UNREFERENCED_PARAMETER(parm);
+    if (numplayers < 2 || myconnectindex != connecthead)
+    {
+        OSD_Printf("nextmap: only the host of a multiplayer game can rotate maps.\n");
+        return OSDCMD_OK;
+    }
+    if (Net_RotateNextMap() < 0)
+        OSD_Printf("nextmap: the map rotation is empty (create maplist.txt).\n");
+    return OSDCMD_OK;
+}
+
+static int osdcmd_maplist(const osdfuncparm_t *parm)
+{
+    UNREFERENCED_PARAMETER(parm);
+    Net_ListMapRotation();
+    return OSDCMD_OK;
+}
+
 static int osdcmd_echo(const osdfuncparm_t *parm)
 {
     int i;
@@ -797,6 +817,7 @@ osdcvardata_t cvar[] =
     { "team", "team: player's team number", (void*)&ud.team, CVAR_INT | CVAR_MULTI, 0, 3 },
     { "color", "player palette", (void*)&ud.m_color, CVAR_INT | CVAR_MULTI, 0, MAXPALOOKUPS - 1 },
     { "skin", "player skin: 0 = Duke, 1 = Trooper, 2 = Pig Cop", (void*)&ud.skin, CVAR_INT | CVAR_MULTI, 0, MAXPLAYERSKINS - 1 },
+    { "sv_maprotation", "map rotation: 0 off, 1 sequential, 2 random", (void*)&g_mapRotationMode, CVAR_INT, 0, 2 },
 
     // Mouse
     { "in_aimmode", "hold button for mouse aim" CVAR_BOOL_OPTSTR, (void*)&ud.mouseaiming, CVAR_BOOL, 0, 1 },
@@ -1596,6 +1617,8 @@ int registerosdcommands(void)
     OSD_RegisterFunction("unban","unban <ip|name>: remove an entry from the ban list", osdcmd_unban);
     OSD_RegisterFunction("listban","listban: show the ban list", osdcmd_listban);
     OSD_RegisterFunction("listplayers","listplayers: show connected players, slots and IPs", osdcmd_listplayers);
+    OSD_RegisterFunction("nextmap","nextmap: (host) advance to the next map in the rotation", osdcmd_nextmap);
+    OSD_RegisterFunction("maplist","maplist: show the map rotation (maplist.txt)", osdcmd_maplist);
 
     OSD_RegisterFunction("bind","bind <key> <string>: associates a keypress with a string of console input. Type \"bind showkeys\" for a list of keys and \"listsymbols\" for a list of valid console commands.", osdcmd_bind);
 

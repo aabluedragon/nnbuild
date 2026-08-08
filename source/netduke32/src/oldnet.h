@@ -142,6 +142,11 @@ int32_t Net_Unban(const char *ref);
 void Net_ListBans(void);
 void Net_ListPlayers(void);
 
+// Map rotation (host-authoritative).
+OLDNET_EXTERN int32_t g_mapRotationMode; // 0 off, 1 sequential, 2 random
+int32_t Net_RotateNextMap(void);
+void Net_ListMapRotation(void);
+
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
 void Net_Disconnect(bool showScores);

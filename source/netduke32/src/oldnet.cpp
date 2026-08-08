@@ -756,6 +756,122 @@ void Net_PollStdin(void)
 #endif
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// Map rotation. Host-authoritative: the host picks the next map (sequentially
+// or at random) and starts it via the normal NEW_GAME broadcast, so clients
+// follow through the proven map-change path.
+//////////////////////////////////////////////////////////////////////////////
+
+#define MAXMAPROT 64
+struct maprot_t { int16_t vol, lev; char usermap[32]; };
+static maprot_t g_mapRot[MAXMAPROT];
+static int32_t g_mapRotCount;
+static int32_t g_mapRotIndex = -1;
+static int32_t g_mapRotLoaded;
+
+static void Net_LoadMapList(void)
+{
+    if (g_mapRotLoaded)
+        return;
+    g_mapRotLoaded = 1;
+    g_mapRotCount = 0;
+
+    int32_t fil = kopen4loadfrommod("maplist.txt", 0);
+    if (fil == -1)
+        return;
+
+    int32_t len = kfilelength(fil);
+    char *text = (char *)Xmalloc(len + 1);
+    kread(fil, text, len);
+    text[len] = 0;
+    kclose(fil);
+
+    char *line = strtok(text, "\r\n");
+    while (line && g_mapRotCount < MAXMAPROT)
+    {
+        while (*line == ' ' || *line == '\t') line++;
+        if (*line && *line != '#')
+        {
+            maprot_t &e = g_mapRot[g_mapRotCount];
+            unsigned v, l;
+            // "E<vol>L<level>" for built-in maps, otherwise a usermap filename.
+            if ((line[0] == 'e' || line[0] == 'E') && sscanf(line + 1, "%uL%u", &v, &l) == 2)
+            {
+                e.vol = (int16_t)(v - 1);
+                e.lev = (int16_t)(l - 1);
+                e.usermap[0] = 0;
+                g_mapRotCount++;
+            }
+            else
+            {
+                char name[32] = {0};
+                sscanf(line, "%31s", name);
+                if (name[0])
+                {
+                    e.vol = 0; e.lev = 7;
+                    Bstrncpyz(e.usermap, name, sizeof(e.usermap));
+                    g_mapRotCount++;
+                }
+            }
+        }
+        line = strtok(NULL, "\r\n");
+    }
+    Xfree(text);
+    LOG_F(INFO, "Loaded %d map(s) into the rotation from maplist.txt", g_mapRotCount);
+}
+
+// Host: advance to the next map in the rotation and start it for everyone.
+int32_t Net_RotateNextMap(void)
+{
+    if (myconnectindex != connecthead)
+        return -1;
+    Net_LoadMapList();
+    if (g_mapRotCount == 0)
+        return -1;
+
+    if (g_mapRotationMode == 2)
+        g_mapRotIndex = wrand() % g_mapRotCount;      // host-chosen, then broadcast
+    else
+        g_mapRotIndex = (g_mapRotIndex + 1) % g_mapRotCount;
+
+    maprot_t const &e = g_mapRot[g_mapRotIndex];
+
+    ud.m_volume_number = ud.volume_number = e.vol;
+    ud.m_level_number  = ud.level_number  = e.lev;
+
+    if (e.usermap[0])
+    {
+        Bstrcpy(boardfilename, e.usermap);
+        Net_SendUserMapName();  // clients need the name (and, later, the file)
+        LOG_F(INFO, "Rotating to usermap %s", e.usermap);
+        Bsprintf(buf, "Next map: %s", e.usermap);
+    }
+    else
+    {
+        boardfilename[0] = 0;
+        LOG_F(INFO, "Rotating to E%dL%d", e.vol + 1, e.lev + 1);
+        Bsprintf(buf, "Next map: E%dL%d", e.vol + 1, e.lev + 1);
+    }
+    G_AddUserQuote(buf);
+
+    G_NewGame(NEWGAME_RESETALL);  // broadcasts NEW_GAME; clients follow
+    return g_mapRotIndex;
+}
+
+void Net_ListMapRotation(void)
+{
+    Net_LoadMapList();
+    OSD_Printf("Map rotation (%d, mode %s):\n", g_mapRotCount,
+               g_mapRotationMode == 2 ? "random" : g_mapRotationMode == 1 ? "sequential" : "off");
+    for (int32_t i = 0; i < g_mapRotCount; i++)
+    {
+        if (g_mapRot[i].usermap[0])
+            OSD_Printf("  %d: %s%s\n", i, g_mapRot[i].usermap, i == g_mapRotIndex ? "  <-" : "");
+        else
+            OSD_Printf("  %d: E%dL%d%s\n", i, g_mapRot[i].vol + 1, g_mapRot[i].lev + 1, i == g_mapRotIndex ? "  <-" : "");
+    }
+}
+
 void Net_ListPlayers(void)
 {
     char ipstr[64];
