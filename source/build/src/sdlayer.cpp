@@ -1674,6 +1674,21 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
 {
     wm_setapptitle(apptitle);
 
+#ifdef EDUKE32_OSX
+    // The window now exists; make sure the process is a foreground app so it can
+    // receive keyboard focus when launched from a terminal (do it once).
+    static int osx_didforeground = 0;
+    if (!osx_didforeground)
+    {
+        osx_foreground();
+# if SDL_MAJOR_VERSION >= 2
+        if (sdl_window)
+            SDL_RaiseWindow(sdl_window);
+# endif
+        osx_didforeground = 1;
+    }
+#endif
+
     xres = x;
     yres = y;
     bpp = c;

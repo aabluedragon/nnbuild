@@ -37,6 +37,21 @@ void osx_postopen(void)
     [nsapp finishLaunching];
 }
 
+void osx_foreground(void)
+{
+    // A bare Unix binary launched from a terminal (i.e. not double-clicked as a
+    // .app bundle) is treated by macOS as a background/accessory process, so its
+    // window never becomes key and keystrokes keep going to the terminal. Make
+    // the process a regular foreground app and pull it to the front so the game
+    // window can take keyboard focus. Harmless when already run from a bundle.
+    if (!nsapp)
+        nsapp = [NSApplication sharedApplication];
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+    [nsapp setActivationPolicy:NSApplicationActivationPolicyRegular];
+#endif
+    [nsapp activateIgnoringOtherApps:YES];
+}
+
 int osx_msgbox(const char *name, const char *msg)
 {
 	NSString *mmsg = [[NSString alloc] initWithUTF8String:msg];
