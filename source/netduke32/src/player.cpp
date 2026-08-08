@@ -42,6 +42,111 @@ playerdata_t g_player[MAXPLAYERS];
 uint8_t allowedColors[(MAXPALOOKUPS + CHAR_BIT - 1) / CHAR_BIT];
 char pColorNames[MAXPALOOKUPS][32] = { "Auto" };
 
+// Multiplayer enemy skins: a player can be drawn (and voiced) as one of a few
+// stock enemies. The tsprite in G_DoSpriteAnimations is retargeted from
+// APLAYER's tiles to the enemy's, mapping APLAYER's CON action start frames
+// (PSTAND/PWALK/...) onto equivalent frames of the enemy's tile layout. Frame
+// numbers below come from the stock GAME.CON action definitions.
+const char *g_playerSkinNames[MAXPLAYERSKINS] = { "Duke", "Trooper", "Pig Cop" };
+
+int32_t P_SkinBaseTile(int32_t skin)
+{
+    switch (skin)
+    {
+        case 1: return LIZTROOP;
+        case 2: return PIGCOP;
+    }
+    return -1;
+}
+
+int32_t P_ValidateSkin(int32_t skin)
+{
+    if (skin <= 0 || skin >= MAXPLAYERSKINS)
+        return 0;
+
+    // Fall back to Duke if the art isn't there (e.g. total conversions).
+    int32_t const tile = P_SkinBaseTile(skin);
+    if ((unsigned)tile >= MAXTILES || tilesiz[tile].x == 0)
+        return 0;
+
+    return skin;
+}
+
+void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t *startFrame, int32_t *numFrames, int32_t *viewType)
+{
+    struct frameinfo { int16_t start, frames, viewtype; };
+    frameinfo f;
+
+    if (skin == 1)  // LIZTROOP
+    {
+        switch (aplayerStartFrame)
+        {
+            case 20:  // PWALK/PRUN/PFROZEN
+            case 375: // PSWIMMING
+                f = { 0, 4, 5 }; break;
+            case 45:  // PWALKBACK/PRUNBACK
+                f = { 15, 4, 5 }; break;
+            case 15:  // PJPHOUVER
+            case 50:  // PJUMPING
+            case 65:  // PFALLING
+                f = { 40, 1, 5 }; break;  // ATROOPJETPACK
+            case 40:  // PAKICKING
+                f = { 35, 1, 5 }; break;  // ATROOPSHOOT
+            case 86:  // PDUCKING/PCRAWLING
+                f = { 64, 1, 5 }; break;  // ATROOPDUCK
+            case 106: // PEXPLODE/PFLINTCHING/PTHROWNBACK
+                f = { 50, 5, 1 }; break;  // ATROOPDYING
+            case 113: // PEXPLODEAD/PLYINGDEAD
+                f = { 54, 1, 1 }; break;  // ATROOPDEAD
+            default:  // PSTAND/PTREDWATER/...
+                f = { 0, 1, 5 }; break;
+        }
+    }
+    else  // PIGCOP
+    {
+        switch (aplayerStartFrame)
+        {
+            case 20:
+            case 375:
+                f = { 0, 4, 5 }; break;   // APIGWALK
+            case 45:
+                f = { 0, 4, 5 }; break;
+            case 86:
+                f = { 40, 1, 5 }; break;  // APIGDIVE
+            case 106:
+                f = { 55, 5, 1 }; break;  // APIGDYING
+            case 113:
+                f = { 60, 1, 1 }; break;  // APIGDEAD
+            default:
+                f = { 30, 1, 5 }; break;  // APIGSTAND
+        }
+    }
+
+    *startFrame = f.start;
+    *numFrames = f.frames;
+    *viewType = f.viewtype;
+}
+
+int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead)
+{
+    int32_t pain, dying, roam, recog;
+
+    switch (skin)
+    {
+        case 1: pain = PRED_PAIN; dying = PRED_DYING; roam = PRED_ROAM; recog = PRED_RECOG; break;
+        case 2: pain = PIG_PAIN; dying = PIG_DYING; roam = PIG_ROAM; recog = PIG_RECOG; break;
+        default: return soundNum;
+    }
+
+    if (playerDead || soundNum == DUKE_SCREAM)
+        return dying;
+
+    if (soundNum == DUKE_GRUNT || soundNum == DUKE_LONGTERM_PAIN)
+        return pain;
+
+    return (soundNum & 1) ? recog : roam;
+}
+
 void playerColor_init(void)
 {
     LOG_F(INFO, "Player Color INIT:\n");

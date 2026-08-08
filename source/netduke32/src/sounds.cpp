@@ -818,7 +818,7 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
     if (!Net_InPredictableState(spriteNum))
         return -1;
 
-    int const sndNum = X_OnEventWithReturn(EVENT_SOUND, spriteNum, screenpeek, num);
+    int sndNum = X_OnEventWithReturn(EVENT_SOUND, spriteNum, screenpeek, num);
 
     if ((sndNum == -1 && num != -1) || !ud.config.SoundToggle || (unsigned)spriteNum >= MAXSPRITES) // check that the user returned -1, but only if -1 wasn't playing already (in which case, warn)
         return -1;
@@ -827,6 +827,20 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
     {
         LOG_F(WARNING, "Invalid sound #%d", sndNum);
         return -1;
+    }
+
+    // Enemy skin: replace Duke's voice with the skin's when the speaking
+    // sprite is a skinned player.
+    if ((g_sounds[sndNum]->flags & SF_TALK) && sprite[spriteNum].picnum == APLAYER
+        && (unsigned)sprite[spriteNum].yvel < MAXPLAYERS)
+    {
+        int32_t const skin = P_ValidateSkin(g_player[sprite[spriteNum].yvel].pskin);
+        if (skin)
+        {
+            int32_t const skinSndNum = P_SkinRemapVoice(skin, sndNum, sprite[spriteNum].extra <= 0);
+            if (S_SoundIsValid(skinSndNum))
+                sndNum = skinSndNum;
+        }
     }
 
     auto& snd = g_sounds[sndNum];

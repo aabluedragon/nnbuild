@@ -252,6 +252,7 @@ void CONFIG_SetDefaults(void)
     ud.statusbarmode = 0;
     ud.statusbarscale = 100;
     ud.team = 0;
+    ud.skin = 0;
     ud.viewbob = 1;
     ud.weaponsway = 1;
     ud.weaponswitch = 3;	// new+empty

@@ -152,7 +152,7 @@ typedef struct {
     input_t* inputBits;
 
     int32_t movefifoend, myminlag, lastSyncTick;
-    int32_t pcolor, pteam, frags[MAXPLAYERS], wchoice[MAX_WEAPONS];
+    int32_t pcolor, pteam, pskin, frags[MAXPLAYERS], wchoice[MAX_WEAPONS];
     int32_t fraggedby_time, fraggedby_id, fragged_time, fragged_id;
     uint32_t ping;
 
@@ -232,6 +232,14 @@ void P_UpdateScreenPal(DukePlayer_t* p);
 void P_QuickKill(DukePlayer_t* p);
 void P_GetInput(int snum, bool uncapped);
 void P_ProcessInput(int snum);
+
+// Multiplayer enemy skins. Skin 0 is Duke; see g_playerSkinNames.
+#define MAXPLAYERSKINS 3
+extern const char *g_playerSkinNames[MAXPLAYERSKINS];
+int32_t P_SkinBaseTile(int32_t skin);
+int32_t P_ValidateSkin(int32_t skin);
+void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t *startFrame, int32_t *numFrames, int32_t *viewType);
+int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead);
 
 static inline void P_PalFrom(DukePlayer_t* pPlayer, uint8_t f, uint8_t r, uint8_t g, uint8_t b)
 {

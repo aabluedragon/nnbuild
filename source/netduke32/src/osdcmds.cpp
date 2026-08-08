@@ -743,6 +743,7 @@ osdcvardata_t cvar[] =
     // Player Colors
     { "team", "team: player's team number", (void*)&ud.team, CVAR_INT | CVAR_MULTI, 0, 3 },
     { "color", "player palette", (void*)&ud.m_color, CVAR_INT | CVAR_MULTI, 0, MAXPALOOKUPS - 1 },
+    { "skin", "player skin: 0 = Duke, 1 = Trooper, 2 = Pig Cop", (void*)&ud.skin, CVAR_INT | CVAR_MULTI, 0, MAXPLAYERSKINS - 1 },
 
     // Mouse
     { "in_aimmode", "hold button for mouse aim" CVAR_BOOL_OPTSTR, (void*)&ud.mouseaiming, CVAR_BOOL, 0, 1 },
@@ -874,6 +875,12 @@ static int osdcmd_cvar_set_game(osdcmdptr_t parm)
     else if (!Bstrcasecmp(parm->name, "color"))
     {
         ud.color = playerColor_getValidPal(ud.m_color);
+        G_UpdatePlayerFromMenu();
+    }
+    else if (!Bstrcasecmp(parm->name, "skin"))
+    {
+        if (ud.skin && !P_ValidateSkin(ud.skin))
+            ud.skin = 0;
         G_UpdatePlayerFromMenu();
     }
     else if (!Bstrcasecmp(parm->name, "osdscale"))

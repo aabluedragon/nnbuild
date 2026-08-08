@@ -710,6 +710,7 @@ void M_DisplayMenus(void)
                     "-",
                     "Team",
                     "-",
+                    "Skin",
                     "-",
                     "Auto aim",
                     "Mouse aim",
@@ -728,7 +729,10 @@ void M_DisplayMenus(void)
                 if (probey == 2)
                     x = teams[ud.team].palnum;
 
-                rotatesprite((260) << 16, (24 + (tilesiz[APLAYER].y >> 1)) << 16, 49152L, 0, 1441 - ((((4 - ((int32_t)totalclock >> 4))) & 3) * 5), 0, x, 10, 0, 0, xdim - 1, ydim - 1);
+                if (P_ValidateSkin(ud.skin))
+                    rotatesprite((260) << 16, (24 + (tilesiz[APLAYER].y >> 1)) << 16, 49152L, 0, P_SkinBaseTile(ud.skin) + ((((4 - ((int32_t)totalclock >> 4))) & 3) * 5), 0, x, 10, 0, 0, xdim - 1, ydim - 1);
+                else
+                    rotatesprite((260) << 16, (24 + (tilesiz[APLAYER].y >> 1)) << 16, 49152L, 0, 1441 - ((((4 - ((int32_t)totalclock >> 4))) & 3) * 5), 0, x, 10, 0, 0, xdim - 1, ydim - 1);
 
                 for (ii = io = 0; opts[ii]; ii++)
                 {
@@ -813,24 +817,41 @@ void M_DisplayMenus(void)
                             break;
 
                         case 3:
+                            i = ud.skin;
+                            if (x == io)
+                            {
+                                ud.skin++;
+                                if (ud.skin >= MAXPLAYERSKINS)
+                                    ud.skin = 0;
+                            }
+                            modval(0, MAXPLAYERSKINS-1, (int *)&ud.skin, 1, probey == 3);
+                            if (ud.skin != i)
+                            {
+                                if (ud.skin && !P_ValidateSkin(ud.skin))
+                                    ud.skin = 0;
+                                G_UpdatePlayerFromMenu();
+                            }
+                            break;
+
+                        case 4:
                             i = ud.config.AutoAim;
                             if (x == io)
                                 ud.config.AutoAim = (ud.config.AutoAim == 2) ? 0 : ud.config.AutoAim + 1;
-                            modval(0, 2, (int *)&ud.config.AutoAim, 1, probey == 3);
+                            modval(0, 2, (int *)&ud.config.AutoAim, 1, probey == 4);
                             if (ud.config.AutoAim != i)
                                 G_UpdatePlayerFromMenu();
                             break;
 
-                        case 4:
+                        case 5:
                             i = ud.mouseaiming;
                             if (x == io)
                                 ud.mouseaiming = !ud.mouseaiming;
-                            modval(0, 1, (int *)&ud.mouseaiming, 1, probey == 4);
+                            modval(0, 1, (int *)&ud.mouseaiming, 1, probey == 5);
                             if (ud.mouseaiming != i)
                                 G_UpdatePlayerFromMenu();
                             break;
 
-                        case 5:
+                        case 6:
                             i = 0;
                             if (ud.weaponswitch & 1)
                             {
@@ -841,7 +862,7 @@ void M_DisplayMenus(void)
                             l = i;
                             if (x == io)
                                 i = (i == 2) ? 0 : i + 1;
-                            modval(0, 2, (int32_t *)&i, 1, probey == 5);
+                            modval(0, 2, (int32_t *)&i, 1, probey == 6);
                             if (i != l)
                             {
                                 if (i > 0)
@@ -858,13 +879,13 @@ void M_DisplayMenus(void)
                                 G_UpdatePlayerFromMenu();
                             }
                             break;
-                        case 6:
+                        case 7:
                             i = 0;
                             if (ud.weaponswitch & 2)
                                 i = 1;
                             if (x == io)
                                 i = 1 - i;
-                            modval(0, 1, (int *)&i, 1, probey == 6);
+                            modval(0, 1, (int *)&i, 1, probey == 7);
                             if ((ud.weaponswitch & 2 && !i) || (!(ud.weaponswitch & 2) && i))
                             {
                                 ud.weaponswitch ^= 2;
@@ -872,7 +893,7 @@ void M_DisplayMenus(void)
                             }
                             break;
 
-                        case 7:
+                        case 8:
                             if (x == io)
                             {
                                 ChangeToMenu(20004);
@@ -958,17 +979,21 @@ void M_DisplayMenus(void)
                         break;
 
                         case 3:
+                            mgametext(d - 50, yy, g_playerSkinNames[(unsigned)ud.skin < MAXPLAYERSKINS ? ud.skin : 0], MENUHIGHLIGHT(io), 2 + 8 + 16);
+                            break;
+
+                        case 4:
                         {
                             const char *s[] = { "Off", "All weapons", "Bullets only" };
                             mgametext(d - 50, yy, s[ud.config.AutoAim], MENUHIGHLIGHT(io), 2 + 8 + 16);
                         }
                         break;
 
-                        case 4:
+                        case 5:
                             mgametext(d - 50, yy, ud.mouseaiming ? "Hold button" : "Toggle on/off", MENUHIGHLIGHT(io), 2 + 8 + 16);
                             break;
 
-                        case 5:
+                        case 6:
                         {
                             const char *s[] = { "Off", "All weapons", "Fav priority" };
                             i = 0;
@@ -982,7 +1007,7 @@ void M_DisplayMenus(void)
                         }
                         break;
 
-                        case 6:
+                        case 7:
                             mgametext(d + 45, yy, ud.weaponswitch & 2 ? "On" : "Off", MENUHIGHLIGHT(io), 2 + 8 + 16);
                             break;
 

@@ -68,6 +68,12 @@ struct dynitem g_dynSoundList[] =
     { "DUKE_LAND_HURT",      &DUKE_LAND_HURT,      DUKE_LAND_HURT__ },
     { "DUKE_KILLED2",        &DUKE_KILLED2,        DUKE_KILLED2__ },
     { "DUKE_LONGTERM_PAIN",  &DUKE_LONGTERM_PAIN,  DUKE_LONGTERM_PAIN__ },
+    { "PRED_ROAM",           &PRED_ROAM,           PRED_ROAM__ },
+    { "PRED_PAIN",           &PRED_PAIN,           PRED_PAIN__ },
+    { "PRED_DYING",          &PRED_DYING,          PRED_DYING__ },
+    { "PIG_ROAM",            &PIG_ROAM,            PIG_ROAM__ },
+    { "PIG_PAIN",            &PIG_PAIN,            PIG_PAIN__ },
+    { "PIG_DYING",           &PIG_DYING,           PIG_DYING__ },
     { "DUKE_ONWATER",        &DUKE_ONWATER,        DUKE_ONWATER__ },
     { "DUKE_PISSRELIEF",     &DUKE_PISSRELIEF,     DUKE_PISSRELIEF__ },
     { "DUKE_SCREAM",         &DUKE_SCREAM,         DUKE_SCREAM__ },
@@ -847,6 +853,12 @@ int16_t DUKE_LAND           = DUKE_LAND__;
 int16_t DUKE_LAND_HURT      = DUKE_LAND_HURT__;
 int16_t DUKE_KILLED2        = DUKE_KILLED2__;
 int16_t DUKE_LONGTERM_PAIN  = DUKE_LONGTERM_PAIN__;
+int16_t PRED_ROAM           = PRED_ROAM__;
+int16_t PRED_PAIN           = PRED_PAIN__;
+int16_t PRED_DYING          = PRED_DYING__;
+int16_t PIG_ROAM            = PIG_ROAM__;
+int16_t PIG_PAIN            = PIG_PAIN__;
+int16_t PIG_DYING           = PIG_DYING__;
 int16_t DUKE_ONWATER        = DUKE_ONWATER__;
 int16_t DUKE_PISSRELIEF     = DUKE_PISSRELIEF__;
 int16_t DUKE_SCREAM         = DUKE_SCREAM__;

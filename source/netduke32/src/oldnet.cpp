@@ -605,6 +605,11 @@ void Net_ParsePackets(void)
                         g_player[playerNum].ps->weaponswitch = packbuf[j++];
                         g_player[playerNum].ps->palookup = g_player[playerNum].pcolor = playerColor_getValidPal(packbuf[j++]);
                         g_player[playerNum].pteam = packbuf[j++];
+                        g_player[playerNum].pskin = P_ValidateSkin(packbuf[j++]);
+
+                        if (g_player[playerNum].pskin)
+                            LOG_F(INFO, "Player %d is using the %s skin", playerNum,
+                                  g_playerSkinNames[g_player[playerNum].pskin]);
 
                         break;
                     }
@@ -888,6 +893,7 @@ void Net_SendPlayerOptions(void)
     buf[l++] = g_player[myconnectindex].ps->weaponswitch = ud.weaponswitch;
     buf[l++] = g_player[myconnectindex].ps->palookup = g_player[myconnectindex].pcolor = playerColor_getValidPal(ud.color);
     buf[l++] = g_player[myconnectindex].pteam = ud.team;
+    buf[l++] = g_player[myconnectindex].pskin = P_ValidateSkin(ud.skin);
 
     TRAVERSE_CONNECT(i)
     {

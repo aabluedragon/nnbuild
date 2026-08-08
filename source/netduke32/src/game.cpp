@@ -6013,6 +6013,35 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                             continue;
                         }
 
+                // Enemy skin: retarget the tsprite from APLAYER's tiles to the
+                // chosen enemy's, translating the current CON action of APLAYER
+                // (PSTAND/PWALK/...) to the enemy's equivalent frames. Purely
+                // cosmetic - the game sprite stays APLAYER.
+                if (s->owner >= 0 && P_ValidateSkin(g_player[p].pskin) && t->pal != 1
+                    && (unsigned)scrofs_action + ACTION_PARAM_COUNT <= (unsigned)g_scriptSize
+                    && apScript[scrofs_action + ACTION_PARAM_COUNT] == CON_END)
+                {
+                    int32_t skinStart, skinFrames, skinViewtype;
+                    P_GetSkinFrame(g_player[p].pskin, apScript[scrofs_action + ACTION_STARTFRAME],
+                                   &skinStart, &skinFrames, &skinViewtype);
+
+                    int32_t skinOffset = 0;
+                    if (skinViewtype == 5)
+                        skinOffset = getofs_viewtype_mirrored<5>(t->cstat, s->ang - a);
+
+                    t->picnum = P_SkinBaseTile(g_player[p].pskin) + skinStart + skinOffset
+                                + skinViewtype * (klabs(curframe) % skinFrames);
+                    t->pal = g_player[p].ps->palookup;
+                    scrofs_action = 0;  // The generic CON action block below must not re-offset.
+
+                    G_MaybeTakeOnFloorPal(t, sect);
+
+                    if (t->z > actor[i].floorz && t->xrepeat < 32)
+                        t->z = actor[i].floorz;
+
+                    break;
+                }
+
 PALONLY:
 
                 G_MaybeTakeOnFloorPal(t, sect);
@@ -8300,6 +8329,7 @@ void G_UpdatePlayerFromMenu(void)
         g_player[myconnectindex].ps->weaponswitch = ud.weaponswitch;
         g_player[myconnectindex].ps->palookup = g_player[myconnectindex].pcolor = ud.color;
         g_player[myconnectindex].pteam = ud.team;
+        g_player[myconnectindex].pskin = P_ValidateSkin(ud.skin);
 
         if (sprite[g_player[myconnectindex].ps->i].picnum == APLAYER && sprite[g_player[myconnectindex].ps->i].pal != 1)
             sprite[g_player[myconnectindex].ps->i].pal = g_player[myconnectindex].pcolor;
