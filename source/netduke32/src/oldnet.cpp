@@ -1060,6 +1060,37 @@ static void Net_ReceiveFileChunk(void)
     DO_FREE_AND_NULL(g_recvFileBuf);
 }
 
+// Dedicated-server status screen, drawn in place of the 3D view. Local only.
+void Net_DrawServerScreen(void)
+{
+    videoClearScreen(0L);
+
+    int y = 20;
+    gametext(160, y, "NETDUKE32 DEDICATED SERVER", 14, 2); y += 12;
+
+    if (boardfilename[0])
+        Bsprintf(tempbuf, "Map: %s", boardfilename);
+    else
+        Bsprintf(tempbuf, "Map: E%dL%d", ud.volume_number + 1, ud.level_number + 1);
+    gametext(160, y, tempbuf, 0, 2); y += 12;
+
+    Bsprintf(tempbuf, "Players: %d", numplayers - 1);  // minus the server itself
+    gametext(160, y, tempbuf, 0, 2); y += 12;
+
+    for (int32_t i = 0; i < numplayers; i++)
+    {
+        if (!g_player[i].connected || i == myconnectindex)
+            continue;
+        Bsprintf(tempbuf, "%d: %s", i, g_player[i].user_name);
+        gametext(160, y, tempbuf, 0, 2); y += 8;
+    }
+
+    y += 8;
+    gametext(160, y, "console: kick ban listplayers nextmap", 14, 2);
+
+    videoNextPage();
+}
+
 void Net_ListPlayers(void)
 {
     char ipstr[64];

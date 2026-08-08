@@ -9158,6 +9158,12 @@ MAIN_LOOP_RESTART:
                 gametext(160, 100, "JOINING GAME IN PROGRESS...", 14, 2);
                 videoNextPage();
             }
+            else if (g_netServerConsole && (ud.gm & MODE_GAME))
+            {
+                // Dedicated server: draw a status screen instead of the world
+                // from the idle operator's eyes. Purely local - no sim effect.
+                Net_DrawServerScreen();
+            }
             else
                 G_DrawFrame();
 

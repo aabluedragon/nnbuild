@@ -139,6 +139,7 @@ void Net_DisplayLagDialog(void);
 OLDNET_EXTERN int32_t g_netServerConsole; // Read admin commands from stdin (dedicated/headless host).
 void Net_AdminInit(void);
 void Net_PollStdin(void);
+void Net_DrawServerScreen(void);
 int32_t Net_KickPlayer(const char *ref);
 int32_t Net_BanPlayer(const char *ref);
 int32_t Net_Unban(const char *ref);
