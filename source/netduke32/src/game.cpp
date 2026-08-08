@@ -8566,8 +8566,11 @@ bool G_InitMultiplayer()
     for (int32_t i = 0; i < MAXPLAYERS; i++)
         g_player[i].playerreadyflag = 0;
 
+    // -latejoin starts once one other player is present (min 2); -startnow
+    // begins immediately with just the host (min 1), leaving every other slot
+    // open for players to join at any time.
     if (g_netLateJoin)
-        mmulti_allowlatejoin(2);
+        mmulti_allowlatejoin(g_netStartNow ? 1 : 2);
 
     // Register the ban check before the transport handshake so banned
     // addresses are refused even on the initial connection.

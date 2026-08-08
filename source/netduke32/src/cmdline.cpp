@@ -73,6 +73,8 @@ static void G_ShowParameterHelp(void)
         "-async\t\tHost: server-authoritative netplay (don't wait on slow\n"
         "\t\tclients). Default is lockstep (equal lag for all).\n"
         "-latejoin\tHost: start with open slots that players may join mid-game.\n"
+        "-startnow\tHost: begin immediately with whoever is present (even alone);\n"
+        "\t\tremaining slots stay open to join anytime. Implies -latejoin.\n"
         "-dedicated\tHost: read admin commands from stdin (kick/ban/etc).\n"
         "\t\tConsole commands: kick, ban, unban, listban, listplayers.\n"
         "\n"
@@ -427,6 +429,19 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     // and let the remaining slots join mid-game.
                     g_netLateJoin = TRUE;
                     LOG_F(INFO, "Late joining enabled.");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "startnow") || !Bstrcasecmp(c + 1, "nowait"))
+                {
+                    // Host: begin the match immediately with whoever is present
+                    // (even just the host alone) instead of waiting for the
+                    // slot count named by /nX:N. The remaining slots stay open
+                    // for players to join at any time, so this implies late
+                    // joining. Works for both async and lockstep Master/Slave.
+                    g_netStartNow = TRUE;
+                    g_netLateJoin = TRUE;
+                    LOG_F(INFO, "Start-now enabled: match begins immediately, players may join anytime.");
                     i++;
                     continue;
                 }

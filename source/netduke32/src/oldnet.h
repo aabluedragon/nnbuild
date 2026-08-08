@@ -120,6 +120,7 @@ OLDNET_EXTERN uint16_t g_netLagMask;    // Everyone: which slots are lagging.
 OLDNET_EXTERN int32_t g_netLagSecsLeft; // Everyone: countdown shown in the dialog.
 OLDNET_EXTERN uint16_t g_netLagVoteMask;// Everyone: which slots have been voted to drop.
 OLDNET_EXTERN int32_t g_netLateJoin;    // Host: started with -latejoin, open slots may join mid-game.
+OLDNET_EXTERN int32_t g_netStartNow;    // Host: begin immediately with whoever is present; rest join anytime.
 OLDNET_EXTERN int32_t g_netLateJoiner;  // This client is joining a game already in progress.
 OLDNET_EXTERN int32_t g_netLateJoinerReady; // Joiner reached the main loop; safe to load the snapshot.
 OLDNET_EXTERN int32_t g_lateJoinFreeze; // Master: input flow paused for a state transfer.
