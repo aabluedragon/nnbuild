@@ -1550,8 +1550,12 @@ void clearfifo(void)
 
     // Black-hole any leftover inputs.
     // Prevents being spun around at map start if you move the mouse while loading.
-    ControlInfo blackHole;
-    CONTROL_GetInput(&blackHole);
+    // CONTROL isn't up yet if a client enters a level straight from Net_WaitForPlayers.
+    if (CONTROL_Started)
+    {
+        ControlInfo blackHole;
+        CONTROL_GetInput(&blackHole);
+    }
 
     Net_ClearFIFO();
 
@@ -1863,11 +1867,16 @@ int G_EnterLevel(int g)
 
     Net_WaitForPlayers();
 
-    G_FadePalette(0,0,0,0);
-    G_UpdateScreenArea();
-    videoClearViewableArea(0L);
-    G_DrawBackground();
-    G_DrawRooms(myconnectindex,65536);
+    // Video isn't up yet if a client enters a level straight from Net_WaitForPlayers
+    // during G_InitMultiplayer; app_main draws the first frame later in that case.
+    if (in3dmode())
+    {
+        G_FadePalette(0,0,0,0);
+        G_UpdateScreenArea();
+        videoClearViewableArea(0L);
+        G_DrawBackground();
+        G_DrawRooms(myconnectindex,65536);
+    }
 
     g_player[myconnectindex].ps->over_shoulder_on = 0;
 
