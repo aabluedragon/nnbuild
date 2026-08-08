@@ -9093,6 +9093,13 @@ MAIN_LOOP_RESTART:
                 P_GetInput(myconnectindex, false);
                 netInput = localInput;
                 localInput = {}; // Input has been processed, flush.
+
+                // A dedicated server operator drives admin commands from the
+                // console, not a live avatar; suppress its gameplay input so
+                // it stays put. (Deterministic: every machine sees empty input
+                // for the host, so this can't desync.)
+                if (g_netServerConsole)
+                    netInput = {};
                 
                 // The while condition in this loop is a duplicate of the if condition above. Why?
                 // Why not check for readytosend in the above "if" and cut this out?
