@@ -79,6 +79,9 @@ enum DukePacket_t
     PACKET_TYPE_LAG_VOTE,          // Slave -> master: I vote to drop the current laggard(s).
     PACKET_TYPE_DROP_PLAYER,       // Master -> everyone: remove player [1], roster mask [2..3].
 
+    PACKET_TYPE_FILE_HEADER,       // Host -> client: begin transfer (name, size, crc).
+    PACKET_TYPE_FILE_CHUNK,        // Host -> client: a piece of the file being sent.
+
     PACKET_END, // Should remain last in list.
 };
 
@@ -147,6 +150,9 @@ OLDNET_EXTERN int32_t g_mapRotationMode; // 0 off, 1 sequential, 2 random
 int32_t Net_RotateNextMap(void);
 void Net_ListMapRotation(void);
 void Net_CheckMapRotation(void);
+
+// Host -> client file transfer.
+void Net_SendFile(int32_t slot, const char *name);
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);

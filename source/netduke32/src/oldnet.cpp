@@ -883,6 +883,179 @@ void Net_ListMapRotation(void)
     }
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// Host -> client file transfer (maps, mods), so clients don't have to sync
+// files by hand. Reuses the chunked-stream approach proven for late-join
+// snapshots. Files land in the client's mod/working directory.
+//////////////////////////////////////////////////////////////////////////////
+
+#define FILE_CHUNK_SIZE 1024
+static char *g_recvFileBuf;
+static char g_recvFileName[64];
+static int32_t g_recvFileChunksGot, g_recvFileChunkTotal, g_recvFileLastLen;
+static uint32_t g_recvFileCrc;
+
+static uint32_t Net_FileCrc(const char *data, int32_t len)
+{
+    // FNV-1a - self-contained integrity check for transferred files.
+    uint32_t h = 2166136261u;
+    for (int32_t i = 0; i < len; i++)
+        h = (h ^ (uint8_t)data[i]) * 16777619u;
+    return h;
+}
+
+// True if the client already has this file with a matching size+crc.
+static int Net_HaveFile(const char *name, int32_t size, uint32_t crc)
+{
+    int32_t fil = kopen4loadfrommod(name, 0);
+    if (fil == -1)
+        return 0;
+    int32_t const len = kfilelength(fil);
+    if (len != size)
+    {
+        kclose(fil);
+        return 0;
+    }
+    char *tmp = (char *)Xmalloc(len);
+    kread(fil, tmp, len);
+    kclose(fil);
+    uint32_t const have = Net_FileCrc(tmp, len);
+    Xfree(tmp);
+    return have == crc;
+}
+
+// Host: stream a file to one client (or, with slot < 0, every client that
+// lacks it). Called before starting a map that references the file.
+void Net_SendFile(int32_t slot, const char *name)
+{
+    if (myconnectindex != connecthead)
+        return;
+
+    int32_t fil = kopen4loadfrommod(name, 0);
+    if (fil == -1)
+    {
+        LOG_F(WARNING, "Net_SendFile: can't open %s", name);
+        return;
+    }
+    int32_t const size = kfilelength(fil);
+    char *data = (char *)Xmalloc(size + 1);
+    kread(fil, data, size);
+    kclose(fil);
+    uint32_t const crc = Net_FileCrc(data, size);
+
+    int32_t const total = (size + FILE_CHUNK_SIZE - 1) / FILE_CHUNK_SIZE;
+    LOG_F(INFO, "Sending %s (%d bytes, %d chunks)%s", name, size, total,
+          slot < 0 ? " to all" : "");
+
+    char hdr[80];
+    hdr[0] = PACKET_TYPE_FILE_HEADER;
+    int32_t hl = 1;
+    B_BUF32(&hdr[hl], size); hl += 4;
+    B_BUF32(&hdr[hl], (int32_t)crc); hl += 4;
+    B_BUF16(&hdr[hl], (uint16_t)total); hl += 2;
+    int32_t const namelen = min((int32_t)strlen(name), 63);
+    hdr[hl++] = (char)namelen;
+    Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
+
+    for (int32_t i = 0; i < numplayers; i++)
+    {
+        if (i == myconnectindex || !g_player[i].connected)
+            continue;
+        if (slot >= 0 && i != slot)
+            continue;
+        mmulti_sendpacket(i, (unsigned char *)hdr, hl);
+    }
+
+    char chunk[FILE_CHUNK_SIZE + 8];
+    for (int32_t seq = 0; seq < total; seq++)
+    {
+        int32_t const len = min(FILE_CHUNK_SIZE, size - seq * FILE_CHUNK_SIZE);
+        chunk[0] = PACKET_TYPE_FILE_CHUNK;
+        B_BUF16(&chunk[1], (uint16_t)seq);
+        B_BUF16(&chunk[3], (uint16_t)total);
+        B_BUF16(&chunk[5], (uint16_t)len);
+        Bmemcpy(&chunk[7], &data[seq * FILE_CHUNK_SIZE], len);
+
+        for (int32_t i = 0; i < numplayers; i++)
+        {
+            if (i == myconnectindex || !g_player[i].connected)
+                continue;
+            if (slot >= 0 && i != slot)
+                continue;
+            mmulti_sendpacket(i, (unsigned char *)chunk, len + 7);
+        }
+
+        while (mmulti_getoutputcirclesize() > 128)
+            gameHandleEvents();
+    }
+    Xfree(data);
+}
+
+static void Net_ReceiveFileHeader(void)
+{
+    int32_t j = 1;
+    int32_t const size = (int32_t)B_UNBUF32(&packbuf[j]); j += 4;
+    g_recvFileCrc = (uint32_t)B_UNBUF32(&packbuf[j]); j += 4;
+    g_recvFileChunkTotal = B_UNBUF16(&packbuf[j]); j += 2;
+    int32_t const namelen = (uint8_t)packbuf[j++];
+    Bmemcpy(g_recvFileName, &packbuf[j], min(namelen, 63));
+    g_recvFileName[min(namelen, 63)] = 0;
+
+    DO_FREE_AND_NULL(g_recvFileBuf);
+    if (g_recvFileChunkTotal > 0)
+        g_recvFileBuf = (char *)Xmalloc(g_recvFileChunkTotal * FILE_CHUNK_SIZE);
+    g_recvFileChunksGot = 0;
+
+    LOG_F(INFO, "Receiving %s (%d bytes) from host", g_recvFileName, size);
+    Bsprintf(buf, "Downloading %s...", g_recvFileName);
+    G_AddUserQuote(buf);
+}
+
+static void Net_ReceiveFileChunk(void)
+{
+    if (g_recvFileBuf == NULL)
+        return;
+    int32_t const seq = B_UNBUF16(&packbuf[1]);
+    int32_t const total = B_UNBUF16(&packbuf[3]);
+    int32_t const len = B_UNBUF16(&packbuf[5]);
+    if (total != g_recvFileChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > FILE_CHUNK_SIZE)
+        return;
+
+    Bmemcpy(&g_recvFileBuf[seq * FILE_CHUNK_SIZE], &packbuf[7], len);
+    g_recvFileChunksGot++;
+    if (seq == total - 1)
+        g_recvFileLastLen = len;
+
+    if (g_recvFileChunksGot < g_recvFileChunkTotal)
+        return;
+
+    // Complete: write the file into the mod/working directory.
+    int32_t const filesize = (g_recvFileChunkTotal - 1) * FILE_CHUNK_SIZE + g_recvFileLastLen;
+    uint32_t const crc = Net_FileCrc(g_recvFileBuf, filesize);
+    if (crc != g_recvFileCrc)
+        LOG_F(WARNING, "Received %s but CRC mismatch (%08x != %08x)", g_recvFileName, crc, g_recvFileCrc);
+
+    char temp[BMAX_PATH];
+    if (g_modDir[0] != '/')
+        Bsnprintf(temp, sizeof(temp), "%s/%s", g_modDir, g_recvFileName);
+    else
+        Bstrcpy(temp, g_recvFileName);
+
+    buildvfs_FILE fp = buildvfs_fopen_write(temp);
+    if (fp)
+    {
+        buildvfs_fwrite(g_recvFileBuf, 1, filesize, fp);
+        buildvfs_fclose(fp);
+        LOG_F(INFO, "Wrote %s (%d bytes)", g_recvFileName, filesize);
+        Bsprintf(buf, "Received %s", g_recvFileName);
+        G_AddUserQuote(buf);
+    }
+    else
+        LOG_F(ERROR, "Couldn't write received file %s", g_recvFileName);
+
+    DO_FREE_AND_NULL(g_recvFileBuf);
+}
+
 void Net_ListPlayers(void)
 {
     char ipstr[64];
@@ -1328,6 +1501,12 @@ void Net_ParsePackets(void)
                 g_netLagMask = 0;
                 break;
             }
+            case PACKET_TYPE_FILE_HEADER:
+                Net_ReceiveFileHeader();
+                break;
+            case PACKET_TYPE_FILE_CHUNK:
+                Net_ReceiveFileChunk();
+                break;
             case PACKET_TYPE_NEW_GAME:
             {
                 if (myconnectindex == connecthead)

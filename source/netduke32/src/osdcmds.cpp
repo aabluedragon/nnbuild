@@ -119,6 +119,18 @@ static int osdcmd_maplist(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
+static int osdcmd_sendfile(const osdfuncparm_t *parm)
+{
+    if (parm->numparms != 1) return OSDCMD_SHOWHELP;
+    if (numplayers < 2 || myconnectindex != connecthead)
+    {
+        OSD_Printf("sendfile: only the host of a multiplayer game can send files.\n");
+        return OSDCMD_OK;
+    }
+    Net_SendFile(-1, parm->parms[0]);
+    return OSDCMD_OK;
+}
+
 static int osdcmd_echo(const osdfuncparm_t *parm)
 {
     int i;
@@ -1619,6 +1631,7 @@ int registerosdcommands(void)
     OSD_RegisterFunction("listplayers","listplayers: show connected players, slots and IPs", osdcmd_listplayers);
     OSD_RegisterFunction("nextmap","nextmap: (host) advance to the next map in the rotation", osdcmd_nextmap);
     OSD_RegisterFunction("maplist","maplist: show the map rotation (maplist.txt)", osdcmd_maplist);
+    OSD_RegisterFunction("sendfile","sendfile <name>: (host) send a file to all clients", osdcmd_sendfile);
 
     OSD_RegisterFunction("bind","bind <key> <string>: associates a keypress with a string of console input. Type \"bind showkeys\" for a list of keys and \"listsymbols\" for a list of valid console commands.", osdcmd_bind);
 
