@@ -273,6 +273,105 @@ void Net_GetSyncStat(void)
 
     for (int32_t i = 0; i < NUM_SYNC_TYPES; i++)
         syncData[INPUTFIFO_CURTICK][i] = syncType[i].func();
+
+    // Set NETDUKE_SYNCDUMP to write per-tick state to syncdump.txt for
+    // diffing runs against each other when chasing desyncs.
+    static FILE *syncDumpFile;
+    static bool syncDumpChecked;
+    if (!syncDumpChecked)
+    {
+        syncDumpChecked = true;
+        if (getenv("NETDUKE_SYNCDUMP"))
+            syncDumpFile = fopen("syncdump.txt", "w");
+    }
+#if KRANDDEBUG
+    // With NETDUKE_KRD set (requires a KRANDDEBUG=1 build), record a backtrace
+    // of every krand() call between ticks 8 and 20 and dump them to krd.txt.
+    if (getenv("NETDUKE_KRD"))
+    {
+        extern unsigned int g_moveThingsCount;
+        extern void krd_enable(int which);
+        extern int32_t krd_print(const char *filename);
+        if (g_moveThingsCount == 8)
+            krd_enable(1);
+        else if (g_moveThingsCount == 20)
+        {
+            LOG_F(INFO, "krd anchor: Net_GetSyncStat at %p", (void *)&Net_GetSyncStat);
+            krd_print("krd.txt");
+        }
+    }
+#endif
+    if (syncDumpFile)
+    {
+        extern unsigned int g_moveThingsCount;
+        uint32_t acrc = 2166136261u;
+        auto fnv = [&acrc](int32_t v) {
+            for (int b = 0; b < 4; b++, v >>= 8)
+                acrc = (acrc ^ (uint8_t)v) * 16777619u;
+        };
+        for (int32_t i = 0; i < MAXSPRITES; i++)
+        {
+            // STAT_MISC/STAT_FX sprites hold viewer-local state (ambience, eyecandy).
+            if (sprite[i].statnum == MAXSTATUS || sprite[i].statnum == STAT_MISC || sprite[i].statnum == STAT_FX)
+                continue;
+            fnv(i); fnv(sprite[i].x); fnv(sprite[i].y); fnv(sprite[i].z);
+            fnv(sprite[i].ang); fnv(sprite[i].extra); fnv(sprite[i].xvel);
+            fnv(sprite[i].yvel); fnv(sprite[i].zvel); fnv(sprite[i].lotag);
+            fnv(sprite[i].hitag); fnv(sprite[i].owner); fnv(sprite[i].statnum);
+            fnv(actor[i].timetosleep);
+            for (int t = 0; t < 10; t++)
+                if (t != 1 && t != 4 && t != 5)  // T2/T5/T6 hold script pointers
+                    fnv(actor[i].t_data[t]);
+        }
+        fprintf(syncDumpFile, "%u seed=%08x ws=%08x grand=%08x wg=%04x wp=%04x ns=%d acrc=%08x",
+                g_moveThingsCount, (unsigned)randomseed, (unsigned)wrandomseed,
+                (unsigned)g_globalRandom, (unsigned)g_random.global,
+                (unsigned)g_random.playerweapon, Numsprites, acrc);
+        for (int32_t ALL_PLAYERS(i))
+        {
+            auto pp = g_player[i].ps;
+            fprintf(syncDumpFile, " p%d=%d,%d,%d,%x,%d,o=%d,%d,%d,cs=%d", i, (int32_t)pp->pos.x,
+                    (int32_t)pp->pos.y, (int32_t)pp->pos.z, (unsigned)pp->q16ang,
+                    (int32_t)sprite[pp->i].extra, (int32_t)pp->opos.x, (int32_t)pp->opos.y,
+                    (int32_t)pp->opos.z, (int32_t)pp->cursectnum);
+        }
+        fputc('\n', syncDumpFile);
+        fflush(syncDumpFile);
+
+        // NETDUKE_STATEDUMP=<tick>: write per-sprite sim state for every tick
+        // up to <tick>, one statedump_NNN.txt file each.
+        static int32_t stateDumpTick = -2;
+        if (stateDumpTick == -2)
+        {
+            char const *e = getenv("NETDUKE_STATEDUMP");
+            stateDumpTick = e ? atoi(e) : -1;
+        }
+        if (stateDumpTick > 0 && (int32_t)g_moveThingsCount <= stateDumpTick)
+        {
+            char sfn[32];
+            snprintf(sfn, sizeof(sfn), "statedump_%03u.txt", g_moveThingsCount);
+            FILE *sf = fopen(sfn, "w");
+            if (sf)
+            {
+                for (int32_t i = 0; i < MAXSPRITES; i++)
+                {
+                    if (sprite[i].statnum == MAXSTATUS)
+                        continue;
+                    fprintf(sf, "%d st=%d pic=%d %d,%d,%d a=%d e=%d v=%d,%d,%d lt=%d ht=%d ow=%d tts=%d td=",
+                            i, (int32_t)sprite[i].statnum, (int32_t)sprite[i].picnum,
+                            (int32_t)sprite[i].x, (int32_t)sprite[i].y, (int32_t)sprite[i].z,
+                            (int32_t)sprite[i].ang, (int32_t)sprite[i].extra,
+                            (int32_t)sprite[i].xvel, (int32_t)sprite[i].yvel,
+                            (int32_t)sprite[i].zvel, (int32_t)sprite[i].lotag,
+                            (int32_t)sprite[i].hitag, (int32_t)sprite[i].owner,
+                            (int32_t)actor[i].timetosleep);
+                    for (int t = 0; t < 10; t++)
+                        fprintf(sf, "%d%c", (int32_t)actor[i].t_data[t], t == 9 ? '\n' : ',');
+                }
+                fclose(sf);
+            }
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -315,6 +414,7 @@ void Net_DisplaySyncMsg(void)
                     {
                         sprintf(tempbuf, "Out Of Sync - %s", syncType[j].name);
                         strcpy(g_szfirstSyncMsg[j], tempbuf);
+                        LOG_F(ERROR, "%s (moveCount %u)", tempbuf, g_moveThingsCount);
                     }
                 }
             }

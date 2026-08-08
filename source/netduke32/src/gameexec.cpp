@@ -3182,11 +3182,13 @@ static int X_DoExecute(void)
                         s = 0;
                     else s = (krand()%3);
 
+                    int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand();
+                    int32_t const r5 = krand(), r6 = krand(), r7 = krand(), r8 = krand();
                     l = A_InsertSprite(vm.pSprite->sectnum,
-                                       vm.pSprite->x+(krand()&255)-128,vm.pSprite->y+(krand()&255)-128,vm.pSprite->z-(8<<8)-(krand()&8191),
-                                       dnum+s,vm.pSprite->shade,32+(krand()&15),32+(krand()&15),
-                                       krand()&2047,(krand()&127)+32,
-                                       -(krand()&2047),vm.spriteNum,5);
+                                       vm.pSprite->x+(r1&255)-128,vm.pSprite->y+(r2&255)-128,vm.pSprite->z-(8<<8)-(r3&8191),
+                                       dnum+s,vm.pSprite->shade,32+(r4&15),32+(r5&15),
+                                       r6&2047,(r7&127)+32,
+                                       -(r8&2047),vm.spriteNum,5);
                     if (vm.pSprite->picnum == BLIMP && dnum == SCRAP1)
                         sprite[l].yvel = g_blimpSpawnItems[j%14];
                     else sprite[l].yvel = -1;

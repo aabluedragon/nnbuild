@@ -9725,7 +9725,8 @@ void A_SpawnWallGlass(int i,int wallnum,int n)
         for (j=n-1; j >= 0 ;j--)
         {
             a = SA(i)-256+(krand()&511)+1024;
-            A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i),GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),1024-(krand()&1023),i,5);
+            int32_t const r1 = krand(), r2 = krand();
+            A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i),GLASSPIECES+(j%3),-32,36,36,a,32+(r1&63),1024-(r2&1023),i,5);
         }
         return;
     }
@@ -9756,7 +9757,8 @@ void A_SpawnWallGlass(int i,int wallnum,int n)
             if (z < -(32<<8) || z > (32<<8))
                 z = SZ(i)-(32<<8)+(krand()&((64<<8)-1));
             a = SA(i)-1024;
-            A_InsertSprite(SECT(i),x1,y1,z,GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),-(krand()&1023),i,5);
+            int32_t const r1 = krand(), r2 = krand();
+            A_InsertSprite(SECT(i),x1,y1,z,GLASSPIECES+(j%3),-32,36,36,a,32+(r1&63),-(r2&1023),i,5);
         }
     }
 }
@@ -9769,7 +9771,8 @@ void A_SpawnGlass(int i,int n)
     {
         a = krand()&2047;
         z = SZ(i)-((krand()&16)<<8);
-        k = A_InsertSprite(SECT(i),SX(i),SY(i),z,GLASSPIECES+(j%3),krand()&15,36,36,a,32+(krand()&63),-512-(krand()&2047),i,5);
+        int32_t const r1 = krand(), r2 = krand(), r3 = krand();
+        k = A_InsertSprite(SECT(i),SX(i),SY(i),z,GLASSPIECES+(j%3),r1&15,36,36,a,32+(r2&63),-512-(r3&2047),i,5);
         sprite[k].pal = sprite[i].pal;
     }
 }
@@ -9810,7 +9813,8 @@ void A_SpawnRandomGlass(int i,int wallnum,int n)
         for (j=n-1; j >= 0 ;j--)
         {
             a = krand()&2047;
-            k = A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(krand()&(63<<8)),GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),1024-(krand()&2047),i,5);
+            int32_t const r1 = krand(), r2 = krand(), r3 = krand();
+            k = A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(r1&(63<<8)),GLASSPIECES+(j%3),-32,36,36,a,32+(r2&63),1024-(r3&2047),i,5);
             sprite[k].pal = krand()&15;
         }
         return;
@@ -9833,7 +9837,8 @@ void A_SpawnRandomGlass(int i,int wallnum,int n)
         if (z < -(32<<8) || z > (32<<8))
             z = SZ(i)-(32<<8)+(krand()&((64<<8)-1));
         a = SA(i)-1024;
-        k = A_InsertSprite(SECT(i),x1,y1,z,GLASSPIECES+(j%3),-32,36,36,a,32+(krand()&63),-(krand()&2047),i,5);
+        int32_t const r1 = krand(), r2 = krand();
+        k = A_InsertSprite(SECT(i),x1,y1,z,GLASSPIECES+(j%3),-32,36,36,a,32+(r1&63),-(r2&2047),i,5);
         sprite[k].pal = krand()&7;
     }
 }

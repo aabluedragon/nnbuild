@@ -653,10 +653,15 @@ int32_t S_DefineMusic(const char* ID, const char* name)
 
 static inline int S_GetPitch(int num)
 {
+    // Pitch variation is local presentation; it must not draw from the
+    // synchronized game RNG streams. Sound playback differs per machine
+    // (ambience range is measured from the local viewer, voice availability
+    // varies), so consuming wrand() here desyncs multiplayer.
+    static int32_t pitchSeed = 1;
     auto const& snd = g_sounds[num];
     int const   range = klabs(snd->maxpitch - snd->minpitch);
 
-    return (range == 0) ? snd->minpitch : min(snd->minpitch, snd->maxpitch) + wrand() % range;
+    return (range == 0) ? snd->minpitch : min(snd->minpitch, snd->maxpitch) + seed_krand(&pitchSeed) % range;
 }
 
 static void S_AllocVoiceInfo(sound_t* snd)

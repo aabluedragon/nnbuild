@@ -284,7 +284,11 @@ extern int g_scriptVersion, g_Shareware, g_gameType;
 
 #define    ALT_IS_PRESSED ( KB_KeyPressed( sc_RightAlt ) || KB_KeyPressed( sc_LeftAlt ) )
 #define    SHIFTS_IS_PRESSED ( KB_KeyPressed( sc_RightShift ) || KB_KeyPressed( sc_LeftShift ) )
-#define    RANDOMSCRAP(s, i) A_InsertSprite(s->sectnum,s->x+(krand()&255)-128,s->y+(krand()&255)-128,s->z-(8<<8)-(krand()&8191),SCRAP6+(krand()&15),-8,48,48,krand()&2047,(krand()&63)+64,-512-(krand()&2047),i,5)
+// Function rather than a macro: multiple krand() calls in one argument list
+// are evaluated in an unspecified order, which differs between compilers and
+// desyncs multiplayer across platforms.
+int32_t A_SpawnRandomScrap(spritetype const *pSprite, int spriteNum);
+#define    RANDOMSCRAP(s, i) A_SpawnRandomScrap(s, i)
 
 enum GameMode_t {
     MODE_MENU       = 1,

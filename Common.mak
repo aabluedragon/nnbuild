@@ -712,6 +712,12 @@ ifneq (0,$(CLANG))
 endif
 
 COMMONFLAGS += -fno-strict-aliasing -fno-threadsafe-statics $(F_JUMP_TABLES) $(F_NO_STACK_PROTECTOR)
+# Define signed integer overflow as wraparound. The game and engine math
+# (e.g. cansee()'s cross products, flagged "XXX: OVERFLOW") can overflow on
+# real map data; without this, different compilers/architectures may
+# legitimately produce different results, which desyncs multiplayer between
+# platforms.
+COMMONFLAGS += -fwrapv
 
 
 ##### Warnings

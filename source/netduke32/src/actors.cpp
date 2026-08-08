@@ -1469,6 +1469,18 @@ void A_AddToDeleteQueue(int spriteNum)
     g_spriteDeleteQueuePos = (g_spriteDeleteQueuePos + 1) % g_spriteDeleteQueueSize;
 }
 
+int32_t A_SpawnRandomScrap(spritetype const *pSprite, int spriteNum)
+{
+    // krand() calls hoisted out of the argument list: argument evaluation
+    // order is unspecified and differs between compilers, desyncing
+    // multiplayer across platforms.
+    int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand();
+    int32_t const r5 = krand(), r6 = krand(), r7 = krand();
+    return A_InsertSprite(pSprite->sectnum, pSprite->x + (r1 & 255) - 128, pSprite->y + (r2 & 255) - 128,
+                          pSprite->z - (8 << 8) - (r3 & 8191), SCRAP6 + (r4 & 15), -8, 48, 48, r5 & 2047,
+                          (r6 & 63) + 64, -512 - (r7 & 2047), spriteNum, 5);
+}
+
 void A_SpawnMultiple(int sp, int pic, int n)
 {
     int j;
@@ -1476,7 +1488,8 @@ void A_SpawnMultiple(int sp, int pic, int n)
 
     for (;n>0;n--)
     {
-        j = A_InsertSprite(s->sectnum,s->x,s->y,s->z-(krand()%(47<<8)),pic,-32,8,8,krand()&2047,0,0,sp,5);
+        int32_t const r1 = krand(), r2 = krand();
+        j = A_InsertSprite(s->sectnum,s->x,s->y,s->z-(r1%(47<<8)),pic,-32,8,8,r2&2047,0,0,sp,5);
         A_Spawn(-1, j);
         sprite[j].cstat = krand()&12;
     }
@@ -1508,7 +1521,10 @@ void A_DoGuts(int sp, int gtype, int n)
     for (j=n;j>0;j--)
     {
         a = krand()&2047;
-        i = A_InsertSprite(s->sectnum,s->x+(krand()&255)-128,s->y+(krand()&255)-128,gutz-(krand()&8191),gtype,-32,sx,sy,a,48+(krand()&31),-512-(krand()&2047),sp,5);
+        {
+            int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand(), r5 = krand();
+            i = A_InsertSprite(s->sectnum,s->x+(r1&255)-128,s->y+(r2&255)-128,gutz-(r3&8191),gtype,-32,sx,sy,a,48+(r4&31),-512-(r5&2047),sp,5);
+        }
         if (PN(i) == JIBS2)
         {
             sprite[i].xrepeat >>= 2;
@@ -1541,7 +1557,10 @@ void A_DoGutsDir(int sp, int gtype, int n)
     for (j=n;j>0;j--)
     {
         a = krand()&2047;
-        i = A_InsertSprite(s->sectnum,s->x,s->y,gutz,gtype,-32,sx,sy,a,256+(krand()&127),-512-(krand()&2047),sp,5);
+        {
+            int32_t const r1 = krand(), r2 = krand();
+            i = A_InsertSprite(s->sectnum,s->x,s->y,gutz,gtype,-32,sx,sy,a,256+(r1&127),-512-(r2&2047),sp,5);
+        }
         sprite[i].pal = s->pal;
     }
 }
@@ -1624,8 +1643,13 @@ static void G_MoveZombieActors(void)
                         canSeePlayer = cansee(s.x, s.y, s.z, sectNum, p.x, p.y, p.z, pSectnum);
                     }
                     else
-                        canSeePlayer = cansee(pSprite->x, pSprite->y, pSprite->z - ((krand() & 31) << 8), pSprite->sectnum, pPlayer->opos.x,
-                            pPlayer->opos.y, pPlayer->opos.z - ((krand() & 31) << 8), pPlayer->cursectnum);
+                    {
+                        // krand() calls hoisted: argument evaluation order is
+                        // unspecified and differs between compilers.
+                        int32_t const zoff1 = (krand() & 31) << 8, zoff2 = (krand() & 31) << 8;
+                        canSeePlayer = cansee(pSprite->x, pSprite->y, pSprite->z - zoff1, pSprite->sectnum, pPlayer->opos.x,
+                            pPlayer->opos.y, pPlayer->opos.z - zoff2, pPlayer->cursectnum);
+                    }
 
                     if (canSeePlayer)
                     {
@@ -2893,9 +2917,10 @@ static void G_MoveStandables(void)
 
             for (int k = 0; k < 16; k++)
             {
-                j = A_InsertSprite(SECT(i), SX(i), SY(i), SZ(i) - (krand() % (48 << 8)),
-                    SCRAP3 + (krand() & 3), -8, 48, 48, krand() & 2047, (krand() & 63) + 64,
-                    -(krand() & 4095) - (sprite[i].zvel >> 2), i, 5);
+                int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand(), r5 = krand();
+                j = A_InsertSprite(SECT(i), SX(i), SY(i), SZ(i) - (r1 % (48 << 8)),
+                    SCRAP3 + (r2 & 3), -8, 48, 48, r3 & 2047, (r4 & 63) + 64,
+                    -(r5 & 4095) - (sprite[i].zvel >> 2), i, 5);
 
                 sprite[j].pal = 2;
             }
@@ -4960,7 +4985,8 @@ static void G_MoveActors(void)
                     if (j == FREEZEBLAST) goto BOLT;
                     for (j=16; j >= 0 ;j--)
                     {
-                        k = A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i),GLASSPIECES+(j%3),-32,36,36,krand()&2047,32+(krand()&63),1024-(krand()&1023),i,5);
+                        int32_t const r1 = krand(), r2 = krand(), r3 = krand();
+                        k = A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i),GLASSPIECES+(j%3),-32,36,36,r1&2047,32+(r2&63),1024-(r3&1023),i,5);
                         sprite[k].pal = 1;
                     }
                     A_PlaySound(GLASS_BREAKING,i);
@@ -4991,7 +5017,8 @@ static void G_MoveActors(void)
                     {
                         for (x=0;x<8;x++)
                         {
-                            j = A_InsertSprite(sect,s->x,s->y,s->z-(8<<8),SCRAP3+(krand()&3),-8,48,48,krand()&2047,(krand()&63)+64,-(krand()&4095)-(s->zvel>>2),i,5);
+                            int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand();
+                            j = A_InsertSprite(sect,s->x,s->y,s->z-(8<<8),SCRAP3+(r1&3),-8,48,48,r2&2047,(r3&63)+64,-(r4&4095)-(s->zvel>>2),i,5);
                             sprite[j].pal = 6;
                         }
 
@@ -5097,7 +5124,8 @@ static void G_MoveActors(void)
 
                 for (x=0;x<8;x++)
                 {
-                    j = A_InsertSprite(sect,s->x,s->y,s->z-(8<<8),SCRAP3+(krand()&3),-8,48,48,krand()&2047,(krand()&63)+64,-(krand()&4095)-(s->zvel>>2),i,5);
+                    int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand();
+                    j = A_InsertSprite(sect,s->x,s->y,s->z-(8<<8),SCRAP3+(r1&3),-8,48,48,r2&2047,(r3&63)+64,-(r4&4095)-(s->zvel>>2),i,5);
                     sprite[j].pal = 6;
                 }
                 t[0] = GREENSLIME_DEAD;

@@ -727,7 +727,7 @@
 #define ksgn(b) \
 	({ int32_t __b=(b), __r; \
 	   __asm__ __volatile__ ("addl %%ebx, %%ebx; sbbl %%eax, %%eax; cmpl %%ebx, %%eax; adcb $0, %%al" \
-		: "=a" (__r) : "b" (__b) : "cc"); \
+		: "=a" (__r), "+b" (__b) : : "cc"); \
 	 __r; })
 
 #define pragmas_have_swaps
@@ -752,7 +752,7 @@
 	({ void *__a=(a), *__b=(b); int32_t __c=(c); \
 	   __asm__ __volatile__ ("0: movl (%%eax), %%esi; movl (%%ebx), %%edi; movl %%esi, (%%ebx); " \
 				"movl %%edi, (%%eax); addl $4, %%eax; addl $4, %%ebx; decl %%ecx; jnz 0b" \
-		: : "a" (__a), "b" (__b), "c" (__c) : "esi", "edi", "memory", "cc"); \
+		: "+a" (__a), "+b" (__b), "+c" (__c) : : "esi", "edi", "memory", "cc"); \
 	 0; })
 #define swap64bit(a,b) \
 	({ void *__a=(a), *__b=(b); \

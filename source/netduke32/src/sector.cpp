@@ -2194,9 +2194,10 @@ void A_DamageObject_Internal(int i,int sn)
         {
             for (bssize_t k = 64; k > 0; k--)
             {
+                int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand(), r5 = krand();
                 int newSprite =
-                    A_InsertSprite(SECT(i), SX(i), SY(i), SZ(i) - (krand() % (48 << 8)), SCRAP3 + (krand() & 3), -8, 48, 48,
-                        krand() & 2047, (krand() & 63) + 64, -(krand() & 4095) - (sprite[i].zvel >> 2), i, 5);
+                    A_InsertSprite(SECT(i), SX(i), SY(i), SZ(i) - (r1 % (48 << 8)), SCRAP3 + (r2 & 3), -8, 48, 48,
+                        r3 & 2047, (r4 & 63) + 64, -(r5 & 4095) - (sprite[i].zvel >> 2), i, 5);
                 sprite[newSprite].pal = 8;
             }
             //        case CACTUSBROKE:
@@ -2209,7 +2210,10 @@ void A_DamageObject_Internal(int i,int sn)
     case HANGLIGHT__:
     case GENERICPOLE2__:
         for (k=6;k>0;k--)
-            A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(8<<8),SCRAP1+(krand()&15),-8,48,48,krand()&2047,(krand()&63)+64,-(krand()&4095)-(sprite[i].zvel>>2),i,5);
+        {
+            int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand();
+            A_InsertSprite(SECT(i),SX(i),SY(i),SZ(i)-(8<<8),SCRAP1+(r1&15),-8,48,48,r2&2047,(r3&63)+64,-(r4&4095)-(sprite[i].zvel>>2),i,5);
+        }
         A_PlaySound(GLASS_HEAVYBREAK,i);
         A_DeleteSprite(i);
         break;
@@ -2239,8 +2243,11 @@ void A_DamageObject_Internal(int i,int sn)
         if (sprite[sn].extra != G_DefaultActorHealthForTile(SHOTSPARK1))
         {
             for (j=15;j>0;j--)
-                A_InsertSprite(SECT(i),SX(i),SY(i),sector[SECT(i)].floorz-(12<<8)-(j<<9),SCRAP1+(krand()&15),-8,64,64,
-                               krand()&2047,(krand()&127)+64,-(krand()&511)-256,i,5);
+            {
+                int32_t const r1 = krand(), r2 = krand(), r3 = krand(), r4 = krand();
+                A_InsertSprite(SECT(i),SX(i),SY(i),sector[SECT(i)].floorz-(12<<8)-(j<<9),SCRAP1+(r1&15),-8,64,64,
+                               r2&2047,(r3&127)+64,-(r4&511)-256,i,5);
+            }
             A_Spawn(i,EXPLOSION2);
             A_DeleteSprite(i);
         }

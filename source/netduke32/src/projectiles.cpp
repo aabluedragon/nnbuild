@@ -184,7 +184,10 @@ static void Proj_DoWaterTracers(vec3_t startPos, vec3_t const* endPos, int n, in
             break;
 
         if (sector[sectNum].lotag == ST_2_UNDERWATER)
-            A_InsertSprite(sectNum, startPos.x, startPos.y, startPos.z, WATERBUBBLE, -32, 4 + (krand() & 3), 4 + (krand() & 3), krand() & 2047, 0, 0, ownerSpriteNum, 5);
+        {
+            int32_t const r1 = krand(), r2 = krand(), r3 = krand();
+            A_InsertSprite(sectNum, startPos.x, startPos.y, startPos.z, WATERBUBBLE, -32, 4 + (r1 & 3), 4 + (r2 & 3), r3 & 2047, 0, 0, ownerSpriteNum, 5);
+        }
         else
             A_InsertSprite(sectNum, startPos.x, startPos.y, startPos.z, SMALLSMOKE, -32, 14, 14, 0, 0, 0, ownerSpriteNum, STAT_MISC);
     }
