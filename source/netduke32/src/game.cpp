@@ -1098,7 +1098,13 @@ int mpgametext(int y,const char *t,int s,int dabits)
 // alive. 'tc' is an animation clock (e.g. totalclock).
 void G_DrawWavyCenteredText(int32_t y, const char *t, int32_t tc)
 {
-    static uint8_t const s_pals[] = { 0, 23, 21, 10, 11, 9 }; // default, yellow, red, greens, blue
+    // Understated two-tone pulse: the whole line holds one shade for two
+    // seconds, then flashes to the other, and so on - just blue and light
+    // blue, no per-letter shimmer, so the "joining" screen reads as calm.
+    int32_t const pal = 9; // blue
+    // totalclock runs at 120 ticks/second, so 240 ticks is a 2-second hold
+    // before each flash between the lighter (shade 0) and deeper (shade 16) blue.
+    int32_t const shade = ((tc / 240) & 1) ? 16 : 0;
 
     // Measure the (unscaled, 320-wide space) width so we can centre it.
     int32_t w = 0;
@@ -1112,18 +1118,11 @@ void G_DrawWavyCenteredText(int32_t y, const char *t, int32_t tc)
 
     int32_t x = 160 - (w >> 1);
     char one[2] = { 0, 0 };
-    int32_t i = 0;
-    for (const char *s = t; *s; ++s, ++i)
+    for (const char *s = t; *s; ++s)
     {
         if (*s == ' ') { x += 5; continue; }
         int32_t const ac = *s - '!' + STARTALPHANUM;
         if ((unsigned)(ac - STARTALPHANUM) > 93u) continue;
-
-        // Triangle brightness wave (0 = bright .. 18 = dim) travelling letter to
-        // letter, plus a slow per-letter colour cycle a few steps apart.
-        int32_t const phase = ((tc * 3) + i * 16) & 127;
-        int32_t const shade = klabs(phase - 64) * 18 / 64;
-        int32_t const pal   = s_pals[(uint32_t)((tc >> 4) + i) % ARRAY_SIZE(s_pals)];
 
         one[0] = *s;
         gametextpalbits(x, y, one, shade, pal, 2);
