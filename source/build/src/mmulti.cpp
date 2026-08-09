@@ -347,7 +347,6 @@ void mmulti_generic(int other, unsigned char *bufptr, int messleng, int command)
     UNREFERENCED_PARAMETER(messleng);
     UNREFERENCED_PARAMETER(command);
 }
-int mmulti_getoutputcirclesize() { return(0); }
 void mmulti_flushpackets() {}
 void mmulti_sendlogon() {}
 void mmulti_sendlogoff() {}
@@ -539,6 +538,32 @@ static int mmulti_extraslot = -1;
 void mmulti_setextraslot(int slot)
 {
     mmulti_extraslot = slot;
+}
+
+// Largest number of unacked reliable packets currently queued for any peer we
+// service (connected peers plus a pending late joiner). Callers streaming a
+// large payload use this to throttle so the 512-entry per-peer ring (opak)
+// never overflows and the 256-wide ack window is never exceeded - otherwise a
+// still-unacked slot gets reused and packets are silently lost. Returns 0 when
+// nothing is in flight.
+int mmulti_getoutputcirclesize(void)
+{
+    int maxwin = 0;
+    for (int i = connecthead; i >= 0; i = connectpoint2[i])
+    {
+        if (i != myconnectindex)
+        {
+            int const win = ocnt1[i] - ocnt0[i];
+            if (win > maxwin) maxwin = win;
+        }
+        if ((networkmode == MMULTI_MODE_MS) && (myconnectindex != connecthead)) break;
+    }
+    if ((mmulti_extraslot >= 0) && (mmulti_extraslot != myconnectindex))
+    {
+        int const win = ocnt1[mmulti_extraslot] - ocnt0[mmulti_extraslot];
+        if (win > maxwin) maxwin = win;
+    }
+    return maxwin;
 }
 
 // The game registers these so mmulti can enforce the ban list at the

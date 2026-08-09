@@ -8924,11 +8924,6 @@ int app_main(int32_t argc, char const* const* argv)
     CONFIG_WriteSetup(1);
     CONFIG_ReadSetup();
 
-    // Re-apply the command-line audio mute: the config read just above restores
-    // the toggles from disk, which would undo the -nosound/-dedicated muting.
-    if (g_noSound) ud.config.SoundToggle = 0;
-    if (g_noMusic) ud.config.MusicToggle = 0;
-
     char const* rtsname = g_rtsNamePtr ? g_rtsNamePtr : ud.rtsname;
     RTS_Init(rtsname);
 
@@ -9003,11 +8998,20 @@ int app_main(int32_t argc, char const* const* argv)
 
     system_getcvars();
 
+    // Re-apply the command-line audio mute here, as the LAST thing before audio
+    // init: every earlier restore point (CONFIG_ReadSetup, CONFIG_ReadSettings
+    // exec'ing snd_enabled/mus_enabled from <cfg>_settings.cfg, autoexec.cfg,
+    // system_getcvars) has already run, so nothing left can turn the toggles
+    // back on. This keeps -nosound/-dedicated/-headless from ever calling into
+    // the (possibly uninitialized) FX layer and spamming "unable to play".
+    if (g_noSound) ud.config.SoundToggle = 0;
+    if (g_noMusic) ud.config.MusicToggle = 0;
+
     if (g_forceHeadless)
     {
         // Headless console server: open no audio device at all (terminal only).
-        // The sound/music toggles were already forced off after the config read
-        // above, so the running sim never calls into the uninitialized FX layer.
+        // The sound/music toggles were forced off just above, so the running
+        // sim never calls into the uninitialized FX layer.
         LOG_F(INFO, "Headless mode: sound disabled.");
     }
     else

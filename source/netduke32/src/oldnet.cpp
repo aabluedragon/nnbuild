@@ -32,6 +32,7 @@ static int32_t lateJoinPending = -1;
 static uint32_t lateJoinAnnounceStart = 0; // master: when we began announcing the pending join
 static uint32_t lateJoinLastAnnounce = 0;  // master: last announce (re)send time
 static bool lateJoinJoinerReady = false;   // master: joiner reached its main loop (its READY arrived)
+static uint32_t lateJoinClientStartMs = 0; // joiner: when we entered late-join wait (backstop timeout)
 static int32_t lateJoinGoSlot = -1;
 
 // Per-slot client identity (from PACKET_TYPE_PLAYER_NAME). The master uses these
@@ -421,7 +422,18 @@ static void Net_ArchiveScore(int32_t slot)
         if (!g_scoreArchive[i].used) { if (freeIdx < 0) freeIdx = i; continue; }
         if (g_scoreArchive[i].ip == ip && !Bstrcmp(g_scoreArchive[i].guid, g_playerGuid[slot])) { idx = i; break; }
     }
-    if (idx < 0) idx = (freeIdx >= 0) ? freeIdx : 0;
+    if (idx < 0)
+    {
+        if (freeIdx < 0)
+        {
+            // Archive full (>32 distinct identities churned this match) and this
+            // one isn't already stored: drop it rather than clobbering another
+            // player's saved score at a fixed index.
+            LOG_F(WARNING, "Score archive full; not saving score for slot %d", slot);
+            return;
+        }
+        idx = freeIdx;
+    }
 
     g_scoreArchive[idx].used = true;
     Bstrncpyz(g_scoreArchive[idx].guid, g_playerGuid[slot], NET_GUID_LEN);
@@ -436,12 +448,12 @@ static void Net_ArchiveScore(int32_t slot)
 // GUID -> disambiguate by IP and restore only if exactly one GUID+IP match;
 // otherwise (ambiguous, or no match, or the match already ended so the archive
 // was cleared) -> start fresh at zero. Result goes into g_lateJoinRestore*.
-static void Net_ComputeRestoreScore(int32_t slot)
+static bool Net_ComputeRestoreScore(int32_t slot)
 {
     g_lateJoinRestoreFrag = g_lateJoinRestoreFraggedself = g_lateJoinRestoreDeaths = 0;
 
     if (myconnectindex != connecthead || (unsigned)slot >= MAXPLAYERS || !g_playerGuid[slot][0])
-        return;
+        return false;
 
     uint32_t const ip = (uint32_t)mmulti_getslotip(slot);
 
@@ -462,13 +474,14 @@ static void Net_ComputeRestoreScore(int32_t slot)
     // else: ambiguous even with IP, or no entry -> leave at zero (fresh)
 
     if (pick < 0)
-        return;
+        return false;
 
     g_lateJoinRestoreFrag        = g_scoreArchive[pick].frag;
     g_lateJoinRestoreFraggedself = g_scoreArchive[pick].fraggedself;
     g_lateJoinRestoreDeaths      = g_scoreArchive[pick].deaths;
     g_scoreArchive[pick].used    = false;  // consumed
     LOG_F(INFO, "Restoring score (%d frags) for rejoining player in slot %d.", g_lateJoinRestoreFrag, slot);
+    return true;
 }
 
 // Every machine: apply the master's chosen restore score to a just-spawned
@@ -504,7 +517,12 @@ void Net_MasterCheckRestore(void)
             continue;                        // GUID not here yet; wait
 
         g_slotAwaitingRestore[slot] = false;
-        Net_ComputeRestoreScore(slot);       // fills g_lateJoinRestore*
+
+        // Only touch the score when we actually matched an archived identity.
+        // Broadcasting a zero "restore" for a fresh joiner would wipe any frags
+        // it earned in the brief window between spawning and its GUID arriving.
+        if (!Net_ComputeRestoreScore(slot))  // fills g_lateJoinRestore* on a match
+            continue;
         Net_ApplyRestoreScore(slot);         // apply locally
 
         // Tell everyone so their scoreboards agree.
@@ -908,6 +926,11 @@ int32_t Net_BanPlayer(const char *ref)
 
 int32_t Net_Unban(const char *ref)
 {
+    // An empty reference must match nothing: a zero-length name compare returns
+    // "equal" against every entry and would wipe the whole ban list at once.
+    if (!ref || !ref[0])
+        return 0;
+
     Net_LoadBanList();
     uint32_t ip = Net_ParseIP(ref);
     size_t const n = strlen(ref);
@@ -988,8 +1011,20 @@ void Net_CheckMapRotation(void)
     if (!g_pendingRotate)
         return;
     g_pendingRotate = 0;
-    if (myconnectindex == connecthead)
-        Net_RotateNextMap();
+    if (myconnectindex != connecthead)
+        return;
+
+    if (Net_RotateNextMap() < 0)
+    {
+        // Rotation is enabled but the list is empty or unreadable. Clients have
+        // already suppressed their own end-of-level advance and are waiting for
+        // our NEW_GAME (they only know rotation is on, not that the list is
+        // empty), so we must broadcast one or the match soft-locks. Restart the
+        // current map - a sensible "no list -> stay here" that keeps everyone
+        // in lockstep on the same level.
+        LOG_F(WARNING, "Map rotation enabled but no maps available; restarting the current level");
+        G_NewGame(NEWGAME_RESETALL);
+    }
 }
 
 static void Net_LoadMapList(void)
@@ -1141,6 +1176,40 @@ static int Net_HaveFile(const char *name, int32_t size, uint32_t crc)
     return have == crc;
 }
 
+// Block until the reliable-output backlog for every serviced peer drains below
+// a safe bound, so a large streamed payload (snapshot / mod file) can't outrun
+// the 512-entry per-peer ring and get silently overwritten. We pump the network
+// directly (mmulti_getpacket with a NULL buffer processes acks and retransmits
+// without delivering app packets) so the peers' ack counters actually advance;
+// gameHandleEvents keeps the machine responsive. A timeout prevents a dead or
+// wedged peer from freezing the host here - if it fires, the higher-level
+// late-join/idle timeouts abort the join.
+// The per-peer reliable ring (opak) holds 512 entries; throttle only as the
+// backlog nears that so we never overwrite an unacked slot. A normal snapshot
+// (~260 chunks) stays well under this, so it blasts in one pass and trickles
+// out non-blocking exactly as before - only an unusually large payload actually
+// waits here. (512 = mmulti FIFSIZ; leave a margin for the chunk we're about to
+// queue and any concurrent peer traffic counted in the max.)
+#define NET_RELIABLE_WINDOW_MAX 480
+static void Net_DrainReliableWindow(void)
+{
+    if (mmulti_getoutputcirclesize() <= NET_RELIABLE_WINDOW_MAX)
+        return;
+
+    uint32_t const start = timerGetTicks();
+    while (mmulti_getoutputcirclesize() > NET_RELIABLE_WINDOW_MAX)
+    {
+        int32_t o;
+        mmulti_getpacket(&o, NULL);
+        gameHandleEvents();
+        if (timerGetTicks() - start > 10000)
+        {
+            LOG_F(WARNING, "Reliable output window stalled while streaming; peer not acking");
+            break;
+        }
+    }
+}
+
 // Host: stream a file to one client (or, with slot < 0, every client that
 // lacks it). Called before starting a map that references the file.
 void Net_SendFile(int32_t slot, const char *name)
@@ -1204,8 +1273,7 @@ void Net_SendFile(int32_t slot, const char *name)
             mmulti_sendpacket(i, (unsigned char *)chunk, len + 7);
         }
 
-        while (mmulti_getoutputcirclesize() > 128)
-            gameHandleEvents();
+        Net_DrainReliableWindow();
     }
     #undef NET_FILE_WANTS
     Xfree(data);
@@ -1275,16 +1343,32 @@ static void Net_ReceiveFileChunk(void)
     int32_t const filesize = (g_recvFileChunkTotal - 1) * FILE_CHUNK_SIZE + g_recvFileLastLen;
     uint32_t const crc = Net_FileCrc(g_recvFileBuf, filesize);
     if (crc != g_recvFileCrc)
-        LOG_F(WARNING, "Received %s but CRC mismatch (%08x != %08x)", g_recvFileName, crc, g_recvFileCrc);
+    {
+        // A corrupt transfer must not be written or mounted: a bad map/GRP on
+        // disk can crash the loader or desync us. Drop it; the host's reliable
+        // delivery makes a clean mismatch rare, and a failed asset surfaces as a
+        // normal "file not found" rather than silent corruption.
+        LOG_F(ERROR, "Received %s but CRC mismatch (%08x != %08x); discarding", g_recvFileName, crc, g_recvFileCrc);
+        DO_FREE_AND_NULL(g_recvFileBuf);
+        return;
+    }
 
     // Write under the basename only - never honour an absolute path or any
-    // directory components the sender's name may carry (e.g. a leading '/'),
-    // which would otherwise try to write to the filesystem root. Land it in the
-    // mod directory when one is configured, otherwise the working directory.
-    const char *base = Bstrrchr(g_recvFileName, '/');
+    // directory components the sender's name may carry (e.g. a leading '/' or,
+    // on Windows, a '\'), which would otherwise escape the mod directory. Strip
+    // to the last separator of either kind, and refuse anything still containing
+    // a parent-directory reference. Land it in the mod directory when one is
+    // configured, otherwise the working directory.
+    const char *fslash = Bstrrchr(g_recvFileName, '/');
+    const char *bslash = Bstrrchr(g_recvFileName, '\\');
+    const char *base = max(fslash, bslash);
     base = base ? base + 1 : g_recvFileName;
-    if (base[0] == 0)
-        base = g_recvFileName;
+    if (base[0] == 0 || Bstrstr(base, ".."))
+    {
+        LOG_F(ERROR, "Refusing received file with unsafe name '%s'", g_recvFileName);
+        DO_FREE_AND_NULL(g_recvFileBuf);
+        return;
+    }
 
     char temp[BMAX_PATH];
     if (g_modDir[0] && g_modDir[0] != '/')
@@ -1709,6 +1793,9 @@ void Net_ParsePackets(void)
                 Net_RebuildConnectList();
                 g_netAsyncMode = packbuf[j++];
                 g_netServerDedicated = packbuf[j++];
+                // Mirror the host's rotation state so our level-end handling
+                // matches the host's (see Net_EndOfLevel / Net_BuildInitialSettings).
+                g_mapRotationMode = packbuf[j++];
 
                 if (M_DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE))
                     LOG_F(INFO, "Visibility adjustment enabled for multiplayer.");
@@ -1724,6 +1811,7 @@ void Net_ParsePackets(void)
                     LOG_F(INFO, "Joining a game in progress; waiting for the state snapshot...");
                     Bstrncpyz(g_lateJoinStatus, "Connecting to game in progress", sizeof(g_lateJoinStatus));
                     g_lateJoinPercent = 0;
+                    lateJoinClientStartMs = timerGetTicks();  // start the client backstop timeout
                 }
                 g_netLateJoiner = 1;
                 g_noLogo = 1;  // Straight into the game once the snapshot lands.
@@ -2281,6 +2369,14 @@ void Net_SendLateJoinReady(void)
         return;
 
     uint32_t const now = timerGetTicks();
+
+    // Backstop: never wait forever. If the transfer hasn't completed within a
+    // generous window, the master has likely given up on us (its own abort is
+    // shorter) or the link is dead - exit cleanly with a message rather than
+    // heartbeating at a blank screen until the user kills the process.
+    if (lateJoinClientStartMs && (now - lateJoinClientStartMs > 45000))
+        G_GameExit("Timed out joining the game in progress.");
+
     if (now - lastReadyTic < 150)
         return;
     lastReadyTic = now;
@@ -2609,7 +2705,7 @@ void Net_MasterCheckLateJoin(void)
         }
         if (!lateJoinJoinerReady)
         {
-            if (now - lateJoinAnnounceStart > 15000)
+            if (now - lateJoinAnnounceStart > 25000)
             {
                 LOG_F(WARNING, "Late joiner in slot %d never became ready; aborting join", lateJoinPending);
                 mmulti_dropslot(lateJoinPending);
@@ -2672,8 +2768,7 @@ void Net_MasterCheckLateJoin(void)
 
         // Keep the reliable-delivery window from overflowing; this also
         // keeps acks and peer traffic flowing while we blast the file out.
-        while (mmulti_getoutputcirclesize() > 128)
-            gameHandleEvents();
+        Net_DrainReliableWindow();
     }
     kclose(fil);
 
@@ -2731,6 +2826,12 @@ static int32_t Net_BuildInitialSettings(void)
     // every machine deterministically applies the same spectator state to it.
     g_netServerDedicated = g_netServerConsole ? 1 : 0;
     packbuf[j++] = (char)g_netServerDedicated;
+
+    // Whether the host rotates maps. Clients must know this so that at level
+    // end they suppress their own advance and wait for the host's NEW_GAME
+    // (Net_EndOfLevel); otherwise the host defers while clients advance locally
+    // and the machines desync onto different levels.
+    packbuf[j++] = (char)g_mapRotationMode;
 
     return j;
 }

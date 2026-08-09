@@ -827,6 +827,19 @@ void M_DisplayMenus(void)
                             modval(0, MAXPLAYERSKINS-1, (int *)&ud.skin, 1, probey == 3);
                             if (ud.skin != i)
                             {
+                                // Skip version-gated skins (e.g. Protector Drone
+                                // in shareware) by continuing in the direction we
+                                // just moved, instead of snapping back to Duke -
+                                // otherwise cycling backward from Duke lands on a
+                                // gated skin and appears stuck. Skin 0 is always
+                                // valid, so this terminates.
+                                int const dir = (ud.skin == (i + 1) % MAXPLAYERSKINS) ? 1 : -1;
+                                for (int guard = 0; ud.skin != 0 && !P_ValidateSkin(ud.skin) && guard < MAXPLAYERSKINS; guard++)
+                                {
+                                    ud.skin += dir;
+                                    if (ud.skin >= MAXPLAYERSKINS) ud.skin = 0;
+                                    else if (ud.skin < 0) ud.skin = MAXPLAYERSKINS - 1;
+                                }
                                 if (ud.skin && !P_ValidateSkin(ud.skin))
                                     ud.skin = 0;
                                 G_UpdatePlayerFromMenu();
