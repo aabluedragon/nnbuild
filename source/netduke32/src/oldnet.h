@@ -86,6 +86,8 @@ enum DukePacket_t
 
     PACKET_TYPE_LATEJOIN_READY,    // Late joiner -> master: I'm in my main loop, start streaming.
 
+    PACKET_TYPE_PLAYER_LEAVING,    // Client -> master: dropping out now (desync reconnect); free my slot.
+
     PACKET_END, // Should remain last in list.
 };
 
@@ -131,6 +133,10 @@ OLDNET_EXTERN char g_lateJoinStatus[64]; // Joiner: current phase text for the l
 OLDNET_EXTERN int32_t g_lateJoinPercent; // Joiner: 0..100 progress of the current phase.
 OLDNET_EXTERN int32_t g_netLateJoinerReady; // Joiner reached the main loop; safe to load the snapshot.
 OLDNET_EXTERN int32_t g_lateJoinFreeze; // Master: input flow paused for a state transfer.
+OLDNET_EXTERN int32_t g_netReconnectPending; // Client: desynced, reconnect from a fresh process.
+OLDNET_EXTERN char g_netDesyncReason[64];    // Client: which sync stream first diverged.
+void Net_StoreProcessArgs(int32_t argc, char const * const *argv);
+void Net_ClientReconnect(void);
 uint16_t Net_ConnectedMask(void);
 void Net_ApplyConnectedMask(uint16_t mask);
 void Net_RebuildConnectList(void);

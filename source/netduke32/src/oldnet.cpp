@@ -4,6 +4,12 @@
 #include "oldnet.h"
 #include "net_predict.h"
 
+#ifdef _WIN32
+# include <process.h>  // _execv, for the desync self-reconnect
+#else
+# include <unistd.h>   // execv
+#endif
+
 #ifndef _WIN32
 # include <poll.h>
 # include <unistd.h>
@@ -1907,6 +1913,16 @@ void Net_ParsePackets(void)
                     lateJoinJoinerReady = true;
                 break;
             }
+            case PACKET_TYPE_PLAYER_LEAVING:
+            {
+                // A client is dropping out on purpose (reconnecting after a
+                // desync). Drop it cleanly, right now, so its slot and transport
+                // sequence reset before its relaunched self re-handshakes.
+                if (myconnectindex == connecthead && (unsigned)other < MAXPLAYERS
+                    && g_player[other].connected)
+                    Net_ScheduleRemove(other, "left to reconnect");
+                break;
+            }
             case PACKET_TYPE_LAG_NOTIFY:
             {
                 g_netLagActive = 1;
@@ -3126,6 +3142,63 @@ void Net_EnterMessage(void)
             ud.gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
         else pub = NUMPAGES;
     }
+}
+
+// The process's own argv, stashed at startup so a desynced client can relaunch
+// itself with the identical command line to reconnect (see Net_ClientReconnect).
+static int32_t g_procArgc;
+static char const * const *g_procArgv;
+
+void Net_StoreProcessArgs(int32_t argc, char const * const *argv)
+{
+    g_procArgc = argc;
+    g_procArgv = argv;
+}
+
+// A desynced client can't safely keep simulating against the host, and there is
+// no in-process rewind, so recover by relaunching ourselves with the same
+// command line. That re-runs the whole proven connect+late-join path (the host
+// times out our old slot and re-admits us, restoring our score by GUID), which
+// is far more robust than trying to surgically re-sync a diverged live state.
+void Net_ClientReconnect(void)
+{
+    g_netReconnectPending = 0;
+
+    LOG_F(WARNING, "Desynchronized from host (%s); reconnecting.",
+          g_netDesyncReason[0] ? g_netDesyncReason : "unknown");
+
+    // Tell the host we're leaving so it drops our slot immediately (freeing it
+    // and resetting the transport sequence) instead of waiting out the idle
+    // timeout - otherwise our relaunched self would race the host and re-handshake
+    // into a still-occupied slot. Pump the network a few times so the packet is
+    // actually transmitted before we tear the socket down.
+    if (numplayers > 1 && myconnectindex != connecthead)
+    {
+        packbuf[0] = PACKET_TYPE_PLAYER_LEAVING;
+        packbuf[1] = (char)myconnectindex;
+        for (int32_t rep = 0; rep < 8; rep++)
+        {
+            mmulti_sendpacket(connecthead, (unsigned char *)packbuf, 2);
+            int32_t o;
+            mmulti_getpacket(&o, NULL);  // drive dosendpackets so it goes out now
+        }
+    }
+
+    // Release our UDP socket first so the fresh image can rebind the same port.
+    mmulti_uninitmultiplayers();
+
+    if (g_procArgv && g_procArgv[0])
+    {
+#ifdef _WIN32
+        _execv(g_procArgv[0], (char * const *)g_procArgv);
+#else
+        execv(g_procArgv[0], (char * const *)g_procArgv);
+#endif
+    }
+
+    // exec() only returns if it failed; fall back to a clean exit so a launcher
+    // (or the player) can restart us.
+    G_GameExit("Reconnect after desync failed; please rejoin.");
 }
 
 void Net_ClearFIFO(void)

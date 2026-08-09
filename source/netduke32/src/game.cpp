@@ -8702,6 +8702,9 @@ int app_main(int32_t argc, char const* const* argv)
     int i = 0;
     char cwd[BMAX_PATH];
 
+    // Stash the command line so a desynced client can relaunch itself with it.
+    Net_StoreProcessArgs(argc, argv);
+
     engineSetLogFile(APPBASENAME ".log", LOG_GAME_MAX);
     engineSetLogVerbosityCallback(dukeVerbosityCallback);
 
@@ -9109,6 +9112,39 @@ MAIN_LOOP_RESTART:
             // JBF
             KB_KeyDown[sc_Escape] = 1;
             quitevent = 0;
+        }
+
+        // We diverged from the host and can't keep simulating a bogus world.
+        // Tell the player why, briefly, then relaunch to reconnect cleanly
+        // (Net_ClientReconnect does not return on success).
+        if (g_netReconnectPending)
+        {
+            static uint32_t reconnectMsgStart = 0;
+            if (!reconnectMsgStart)
+            {
+                reconnectMsgStart = timerGetTicks();
+                LOG_F(WARNING, "Desynchronized from host (%s); reconnecting shortly.",
+                      g_netDesyncReason[0] ? g_netDesyncReason : "unknown");
+            }
+
+            if (!g_forceHeadless)
+            {
+                char msg[128];
+                videoClearScreen(0L);
+                Bsnprintf(msg, sizeof(msg), "LOST SYNC WITH HOST (%s)",
+                          g_netDesyncReason[0] ? g_netDesyncReason : "unknown");
+                gametext(160, 90, msg, 14, 2);
+                gametext(160, 102, "The game desynchronized.", 14, 2);
+                gametext(160, 114, "Reconnecting...", 14, 2);
+                videoNextPage();
+            }
+
+            if (timerGetTicks() - reconnectMsgStart > 1800)
+            {
+                reconnectMsgStart = 0;
+                Net_ClientReconnect();
+            }
+            continue;
         }
 
         static bool frameJustDrawn;

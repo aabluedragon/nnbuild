@@ -505,6 +505,17 @@ void Net_GetSyncInfoFromPacket(char *packbuf, int *j, int otherconnectindex)
             }
 
             desynched_players[otherconnectindex] = 1;
+
+            // A client that has diverged from the host can't keep simulating a
+            // valid world. Remember why and flag a reconnect; the main loop
+            // tells the player and relaunches us (Net_ClientReconnect), which
+            // leaves cleanly and rejoins in sync. (The host stays put; only the
+            // diverged client rebuilds itself.)
+            if (!g_netReconnectPending && myconnectindex != connecthead && otherconnectindex == connecthead)
+            {
+                Bstrncpyz(g_netDesyncReason, syncType[sb].name, sizeof(g_netDesyncReason));
+                g_netReconnectPending = 1;
+            }
         }
     }
 }
