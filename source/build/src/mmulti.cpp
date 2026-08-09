@@ -58,7 +58,16 @@ static int GetTickCount(void)
 
 #define MAXPLAYERS 16
 // Note that size is restricted by how much is allowed in a UDP packet.
-#define MAXPAKSIZ 2048
+// Larger packets let the reliable sender pack many ordered messages into one
+// datagram. That matters for the late-join state snapshot (~270KB): the sender
+// only advances past the oldest un-acked message, and a peer acks about once
+// per frame, so throughput is (messages-per-packet x frame-rate). At 2048 only
+// one ~1KB snapshot chunk fit per packet, capping the transfer near 40 KB/s
+// (~7s). Room for several chunks per packet scales that up proportionally.
+// Ordinary gameplay packets stay tiny, so this only enlarges the rare big
+// transfer; datagrams above the path MTU just fragment, and the reliable layer
+// already handles any resulting loss.
+#define MAXPAKSIZ 8192
 //#define MAXPAKSIZ 576
 
 
