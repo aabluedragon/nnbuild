@@ -98,6 +98,7 @@ void G_DrawFrags(void)
 
                 if (pNum >= MAXPLAYERS) break;
                 if (!plr->connected) continue;
+                if (g_netServerDedicated && pNum == connecthead) continue; // spectator host
 
                 // Name
                 minitext(21 + (73 * column), 2 + (8 * row), &plr->user_name[0], plr->ps->palookup, RS_AUTO | RS_NOCLIP | RS_TOPLEFT);
@@ -123,6 +124,8 @@ void G_DrawFrags(void)
                     auto const plr = &g_player[pNum];
                     if (!plr->connected)
                         continue;
+                    if (g_netServerDedicated && pNum == connecthead)
+                        continue; // spectator host
 
                     if (plr->pteam == team)
                     {
@@ -151,6 +154,8 @@ void G_DrawFrags(void)
                 auto const plr = &g_player[pNum];
                 if (!plr->connected)
                     continue;
+                if (g_netServerDedicated && pNum == connecthead)
+                    continue; // spectator host
 
                 G_DrawFragbarCell(plr->user_name, plr->ps->palookup, ypos, plr->ps->frag - plr->ps->fraggedself);
 

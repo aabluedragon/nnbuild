@@ -552,13 +552,16 @@ int main(int argc, char *argv[])
     gtkbuild_init(&argc, &argv);
 #endif
 
-    // Detect headless/console mode before any window is created. The game layer
-    // parses this again for its own setup (implying -dedicated, muting sound),
-    // but the startup/setup window is opened here, before app_main() parses the
-    // command line, so we must recognize it up front to suppress that too.
+    // Detect headless/console/dedicated mode before any window is created. The
+    // game layer parses these again for its own setup (muting sound etc.), but
+    // the startup/setup window is opened here, before app_main() parses the
+    // command line, so we must recognize them up front to suppress that too.
+    // A dedicated server has no operator at a screen, so it never needs a window
+    // or an OpenGL/graphics context - run it fully headless.
     for (int ha = 1; ha < argc; ha++)
         if (argv[ha] && (argv[ha][0] == '-') &&
-            (!Bstrcasecmp(argv[ha] + 1, "headless") || !Bstrcasecmp(argv[ha] + 1, "console")))
+            (!Bstrcasecmp(argv[ha] + 1, "headless") || !Bstrcasecmp(argv[ha] + 1, "console")
+             || !Bstrcasecmp(argv[ha] + 1, "dedicated")))
         {
             g_forceHeadless = 1;
             break;

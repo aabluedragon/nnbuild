@@ -122,6 +122,12 @@ void G_ShowScores(bool bonus)
 
     for (i = 0; i < playerswhenstarted; i++)
     {
+        // A dedicated host is a non-participating spectator, not a competitor,
+        // so omit its row entirely from the scoreboard (no yoff advance -> no
+        // blank gap). Every machine keys this off the broadcast dedicated flag.
+        if (g_netServerDedicated && i == connecthead)
+            continue;
+
         DukePlayer_t* p = g_player[i].ps;
 
         Bsprintf(tempbuf, "%d", i + 1);
