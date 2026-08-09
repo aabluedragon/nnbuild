@@ -25,7 +25,7 @@ extern int g_useCwd;
 #endif
 
 #ifndef APPBASENAME
-#define APPBASENAME         "netduke32"
+#define APPBASENAME         "vibebuild32"
 #endif
 
 #define SETUPFILENAME APPBASENAME ".cfg"

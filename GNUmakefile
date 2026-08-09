@@ -719,13 +719,13 @@ ifeq ($(USE_DISCORDRPC), 1)
     netduke32_cflags += -DDISCORD_RPC
 endif
 
-netduke32_game := netduke32
+netduke32_game := vibebuild32
 
 ifneq (,$(APPBASENAME))
     netduke32_game := $(APPBASENAME)
 endif
 
-netduke32_game_proper := NetDuke32
+netduke32_game_proper := VibeBuild32
 
 netduke32_game_objs := \
     actors.cpp \
