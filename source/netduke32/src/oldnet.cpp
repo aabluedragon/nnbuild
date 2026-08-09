@@ -1361,9 +1361,23 @@ static void Net_ReceiveFileHeader(void)
     g_recvFileName[min(namelen, 63)] = 0;
 
     DO_FREE_AND_NULL(g_recvFileBuf);
+    g_recvFileChunksGot = 0;
+
+    // Only download a file we don't already have. A built-in map (E1L3 etc.
+    // ships inside the GRP) or any other file we share byte-for-byte with the
+    // host needs no transfer - a matching size+crc means our copy is identical,
+    // so we use it directly. Leaving g_recvFileBuf NULL turns the streamed
+    // chunks into no-ops, so we neither rewrite the file nor show a misleading
+    // "Downloading" for something already in the game. A genuinely missing or
+    // different-version file (crc mismatch) still downloads as before.
+    if (Net_HaveFile(g_recvFileName, size, g_recvFileCrc))
+    {
+        LOG_F(INFO, "Host offered %s (%d bytes); already have it, skipping download", g_recvFileName, size);
+        return;
+    }
+
     if (g_recvFileChunkTotal > 0)
         g_recvFileBuf = (char *)Xmalloc(g_recvFileChunkTotal * FILE_CHUNK_SIZE);
-    g_recvFileChunksGot = 0;
 
     LOG_F(INFO, "Receiving %s (%d bytes) from host", g_recvFileName, size);
     Bsprintf(buf, "Downloading %s...", g_recvFileName);
