@@ -295,40 +295,84 @@ static int osdcmd_map(const osdfuncparm_t *parm)
     }
 #endif
 
-    strcpy(filename,parm->parms[0]);
-    if (strchr(filename,'.') == 0)
-        strcat(filename,".map");
-
-    if ((i = kopen4loadfrommod(filename,0)) < 0)
+    // A built-in episode map ("ExLy") is part of the game data every client
+    // already has in the GRP, so load it by volume/level - exactly like the map
+    // rotation - rather than as a user map. boardfilename stays empty, so the
+    // host never transfers a built-in map to clients, and the HUD shows "E1L3"
+    // instead of a file path.
+    bool builtin = false;
     {
-        OSD_Printf(OSD_ERROR "map: file \"%s\" not found.\n", filename);
-        return OSDCMD_OK;
+        char base[64];
+        Bstrncpyz(base, parm->parms[0], sizeof(base));
+        int32_t blen = Bstrlen(base);
+        if (blen > 4 && !Bstrcasecmp(base + blen - 4, ".map"))   // tolerate an explicit ".map"
+            blen -= 4, base[blen] = 0;
+        for (int32_t k = 0; k < blen; k++)                        // upper-case for the parse
+            if (base[k] >= 'a' && base[k] <= 'z') base[k] -= 32;
+
+        unsigned vol, lev;
+        char extra;
+        if (base[0] == 'E'
+            && sscanf(base + 1, "%uL%u%c", &vol, &lev, &extra) == 2   // exactly "ExLy", no trailing junk
+            && vol >= 1 && vol <= MAXVOLUMES && lev >= 1 && lev <= MAXLEVELS)
+        {
+            char bmap[16];
+            Bsnprintf(bmap, sizeof(bmap), "e%ul%u.map", vol, lev);
+            int32_t const bf = kopen4loadfrommod(bmap, 0);
+            if (bf >= 0)
+            {
+                kclose(bf);
+                boardfilename[0] = 0;
+                ud.m_volume_number = (int)(vol - 1);
+                ud.m_level_number  = (int)(lev - 1);
+                builtin = true;
+            }
+        }
     }
-    kclose(i);
 
-    boardfilename[0] = '/';
-    boardfilename[1] = 0;
-    strcat(boardfilename, filename);
+    if (!builtin)
+    {
+        strcpy(filename,parm->parms[0]);
+        if (strchr(filename,'.') == 0)
+            strcat(filename,".map");
 
-    ud.m_volume_number = 0;
-    ud.m_level_number = 7;
+        if ((i = kopen4loadfrommod(filename,0)) < 0)
+        {
+            OSD_Printf(OSD_ERROR "map: file \"%s\" not found.\n", filename);
+            return OSDCMD_OK;
+        }
+        kclose(i);
+
+        boardfilename[0] = '/';
+        boardfilename[1] = 0;
+        strcat(boardfilename, filename);
+
+        ud.m_volume_number = 0;
+        ud.m_level_number = 7;
+    }
 
     if (numplayers > 1)
     {
         if (myconnectindex == connecthead)
         {
-            // Push the map (and any host mods) to clients BEFORE announcing its
-            // name: reliable+ordered delivery guarantees a client has the file on
-            // disk before the USER_MAP name (and the NEW_GAME that loads it)
-            // arrive, so clients that lack the usermap sync it instead of failing
-            // to open it and desyncing onto a fallback level.
-            Net_SendGameFiles(-1);
-            Net_SendUserMapName();
+            // A built-in map needs no file/name push - clients load it by
+            // volume/level from the broadcast NEW_GAME. Only a user map has to be
+            // shipped (and its name announced) first: push the map (and any host
+            // mods) BEFORE the name, since reliable+ordered delivery guarantees a
+            // client has the file on disk before the USER_MAP name (and the
+            // NEW_GAME that loads it) arrive, so clients that lack the usermap
+            // sync it instead of failing to open it and desyncing onto a fallback.
+            if (!builtin)
+            {
+                Net_SendGameFiles(-1);
+                Net_SendUserMapName();
+            }
             G_NewGame(NEWGAME_RESETALL);
         }
         else if (vote.starter == -1)
         {
-            Net_SendUserMapName();
+            if (!builtin)
+                Net_SendUserMapName();
 
             if ((Gametypes[ud.m_coop].flags & GAMETYPE_PLAYERSFRIENDLY) && !(Gametypes[ud.m_coop].flags & GAMETYPE_TDM))
                 M_DMFLAGS_SET(DMFLAG_NOEXITS, false);
