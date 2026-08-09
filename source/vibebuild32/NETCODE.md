@@ -193,11 +193,45 @@ Two local instances (server + client) on E1L1:
 
 ---
 
+## 7b. Masterserver, lobby & STUN
+
+A standalone public directory + NAT-punch rendezvous, run with
+`vibebuild32 -masterserver [port]` (default **23519**). Own UDP protocol,
+independent of the game transport: 4-byte magic `"VBMS"` + 1 type byte.
+
+- **Advertise** (`MS_ADVERTISE`/`_STOP`): a host started with `-advertise <addr>`
+  pulses name/gameport/players/map from `Net_HostAdvertise` each frame; the
+  master keys the entry off the packet source. `-advertise` must precede `-net`.
+- **List** (`MS_LIST_REQ`/`_RESP`): the in-game **JOIN GAME** menu (menus.cpp
+  case 20020) and the `serverlist` console command call
+  `Masterserver_QueryList`.
+- **STUN / hole-punch** (`MS_PUNCH_REQ` → `MS_PUNCH_NOTIFY` + `MS_STUN_RESP`,
+  marker `"VBPH"`): when a client's direct connect stalls it sends
+  `MS_PUNCH_REQ` **from its game socket** (`mmulti_sendraw`, so the master sees
+  the real game endpoint). The master tells the server to punch toward the
+  client (`Masterserver_HostPump` → `mmulti_punchto`) and tells the client the
+  server's address. Both sides fire packets from the game socket to open the
+  path; mmulti's normal handshake then connects.
+- **Join flow**: menu join → `Net_LaunchAddress` relaunches the process as a
+  client (`execv`) with `-net … host:port` + `-punchtarget host:port`. On
+  repeated failure (~28s) `Net_LaunchMenu` relaunches back with `-joinerror
+  <msg>`, which the JOIN menu shows in red.
+- The master and lobby handle **IPv4 and IPv6** (separate `AF_INET`/`AF_INET6`
+  sockets; exact per-family `addrlen` — macOS rejects `sockaddr_storage` len for
+  v4). **Limitation:** the game transport (mmulti) is still IPv4-only, so the
+  actual connection resolves IPv4 even for an IPv6-listed server.
+
+Files: `source/vibebuild32/src/masterserver.cpp` / `.h` (protocol + rendezvous),
+`oldnet.cpp` (advertise/pump/launch), `menus.cpp` (Host/Join UI).
+
+---
+
 ## 8. Key files
 
 | File | Role |
 |------|------|
 | `source/vibebuild32/src/oldnet.cpp` | netcode core: handshake glue, late-join, rejoin, ready barrier, file transfer, admin |
+| `source/vibebuild32/src/masterserver.cpp` | masterserver protocol, lobby list, STUN/NAT hole-punch rendezvous |
 | `source/build/src/mmulti.cpp` | reliable UDP transport |
 | `source/vibebuild32/src/sync.cpp` | per-tick desync detection |
 | `source/vibebuild32/src/game.cpp` | sim loop `G_MoveLoop` / `G_DoMoveThings`, `movefifoplc` |
