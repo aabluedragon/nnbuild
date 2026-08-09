@@ -8631,15 +8631,37 @@ bool G_InitMultiplayer()
     if (initmultiplayersparms(netparamcount, netparam))
     {
         LOG_F(INFO, "Waiting for players...");
+        // The transport already re-sends the connection handshake several times a
+        // second, so a client whose server isn't up yet keeps trying until it
+        // answers. Surface that on the startup window (refreshing every 3s) with a
+        // retry count so a client launched before its server - e.g. by an external
+        // match launcher racing the host - doesn't look hung, and remind the user
+        // they can cancel (Cancel button / closing the window / Cmd+Q all abort).
+        bool const amClient = (myconnectindex != connecthead);
+        uint32_t nextNote = timerGetTicks() + 1500;
+        int32_t retryNum = 0;
         while (initmultiplayerscycle())
         {
             handleevents();
             if (quitevent)
             {
+                startwin_settitle(APPNAME);
                 G_Shutdown();
                 return false;
             }
+            if ((int32_t)(timerGetTicks() - nextNote) >= 0)
+            {
+                nextNote = timerGetTicks() + 3000;
+                char msg[128];
+                if (amClient)
+                    Bsnprintf(msg, sizeof(msg), "Waiting for the server - retrying (%d)... Cancel to abort", ++retryNum);
+                else
+                    Bsnprintf(msg, sizeof(msg), "Waiting for players... Cancel to abort");
+                startwin_settitle(msg);
+                LOG_F(INFO, "%s", msg);
+            }
         }
+        startwin_settitle(APPNAME);
     }
 
     if (netparam)

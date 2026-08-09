@@ -414,6 +414,7 @@ static struct {
     UNREFERENCED_PARAMETER(sender);
 
     retval = 0;
+    quitevent = 1;  // closing the window aborts, including while retrying a connection
 
     return YES;
 }
@@ -484,6 +485,10 @@ static struct {
     UNREFERENCED_PARAMETER(sender);
 
     retval = 0;
+    // Also signal a quit so Cancel works after the setup dialog has returned -
+    // e.g. while the game is idling on this window retrying a connection to a
+    // server that isn't up yet. The main loop watches quitevent and shuts down.
+    quitevent = 1;
 }
 
 - (void)start:(id)sender
