@@ -1092,6 +1092,45 @@ int mpgametext(int y,const char *t,int s,int dabits)
     return(G_PrintGameText(4,STARTALPHANUM, 5,y,t,s,0,dabits,0, 0, xdim-1, ydim-1, 65536));
 }
 
+// Draw a horizontally-centered string with a lively animation: a shimmer of
+// brightness sweeps across the letters while their colours cycle, one letter
+// offset from the next. Used to make the "joining game in progress" screen feel
+// alive. 'tc' is an animation clock (e.g. totalclock).
+void G_DrawWavyCenteredText(int32_t y, const char *t, int32_t tc)
+{
+    static uint8_t const s_pals[] = { 0, 23, 21, 10, 11, 9 }; // default, yellow, red, greens, blue
+
+    // Measure the (unscaled, 320-wide space) width so we can centre it.
+    int32_t w = 0;
+    for (const char *s = t; *s; ++s)
+    {
+        if (*s == ' ') { w += 5; continue; }
+        int32_t const ac = *s - '!' + STARTALPHANUM;
+        if ((unsigned)(ac - STARTALPHANUM) > 93u) continue;
+        w += (*s >= '0' && *s <= '9') ? 8 : tilesiz[ac].x;
+    }
+
+    int32_t x = 160 - (w >> 1);
+    char one[2] = { 0, 0 };
+    int32_t i = 0;
+    for (const char *s = t; *s; ++s, ++i)
+    {
+        if (*s == ' ') { x += 5; continue; }
+        int32_t const ac = *s - '!' + STARTALPHANUM;
+        if ((unsigned)(ac - STARTALPHANUM) > 93u) continue;
+
+        // Triangle brightness wave (0 = bright .. 18 = dim) travelling letter to
+        // letter, plus a slow per-letter colour cycle a few steps apart.
+        int32_t const phase = ((tc * 3) + i * 16) & 127;
+        int32_t const shade = klabs(phase - 64) * 18 / 64;
+        int32_t const pal   = s_pals[(uint32_t)((tc >> 4) + i) % ARRAY_SIZE(s_pals)];
+
+        one[0] = *s;
+        gametextpalbits(x, y, one, shade, pal, 2);
+        x += (*s >= '0' && *s <= '9') ? 8 : tilesiz[ac].x;
+    }
+}
+
 int minitext_(int x, int y, const char* t, int s, int p, int sb)
 {
     int ac;
@@ -9253,9 +9292,10 @@ MAIN_LOOP_RESTART:
                 char pctline[16];
                 Bsnprintf(pctline, sizeof(pctline), "%d%%", pct);
 
-                gametext(160, 90, g_lateJoinStatus[0] ? g_lateJoinStatus : "Joining game in progress", 14, 2);
-                gametext(160, 102, bar, 14, 2);
-                gametext(160, 114, pctline, 14, 2);
+                int32_t const anim = (int32_t)totalclock;
+                G_DrawWavyCenteredText(90, g_lateJoinStatus[0] ? g_lateJoinStatus : "Joining game in progress", anim);
+                G_DrawWavyCenteredText(102, bar, anim);
+                G_DrawWavyCenteredText(114, pctline, anim);
 
                 videoNextPage();
             }
