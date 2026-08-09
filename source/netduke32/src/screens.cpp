@@ -129,6 +129,15 @@ void G_ShowScores(bool bonus)
         if (g_netServerDedicated && i == connecthead)
             continue;
 
+        // Skip reserved-but-never-occupied slots. A late-join host keeps empty
+        // slots open for mid-game joiners, so playerswhenstarted counts more
+        // slots than have ever held a player; those slots aren't connected and
+        // carry no name, and would otherwise draw as blank "NOBODY" rows. A slot
+        // a real player has held keeps its name, so a disconnected player's
+        // final score still shows.
+        if (!g_player[i].connected && g_player[i].user_name[0] == 0)
+            continue;
+
         DukePlayer_t* p = g_player[i].ps;
 
         Bsprintf(tempbuf, "%d", i + 1);
