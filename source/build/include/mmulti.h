@@ -26,6 +26,8 @@ void mmulti_allowlatejoin(int minplayers);
 int mmulti_slotconnected(int slot);
 void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip), int (*reconnectnotify)(int slot));
 int mmulti_getslotip(int slot);
+// Full textual address of a slot ("a.b.c.d:port" or "[ipv6]:port"); "" if empty.
+void mmulti_getslotaddrstr(int slot, char *out, int outsize);
 int mmulti_getport(void);
 void mmulti_punchto(unsigned int ip, unsigned short port);
 // Send raw bytes from the game socket to (ip,port) (network order) - used to

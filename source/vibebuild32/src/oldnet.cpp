@@ -1575,7 +1575,12 @@ void Net_ListPlayers(void)
         if (i == myconnectindex)
             Bstrcpy(ipstr, "(this machine)");
         else
-            Net_FormatIP((uint32_t)mmulti_getslotip(i), ipstr, sizeof(ipstr));
+        {
+            // Full address so IPv6 peers show correctly (getslotip is IPv4-only).
+            mmulti_getslotaddrstr(i, ipstr, sizeof(ipstr));
+            if (!ipstr[0])
+                Net_FormatIP((uint32_t)mmulti_getslotip(i), ipstr, sizeof(ipstr));
+        }
         OSD_Printf("  %d: %s  %s%s\n", i, g_player[i].user_name, ipstr,
                    i == connecthead ? "  [host]" : "");
     }

@@ -101,8 +101,161 @@ static int pakmemi = 1;
 
 #define NETPORT 0x5bd9
 static SOCKET mysock = (SOCKET) INVALID_SOCKET;
-static int myip, myport = NETPORT, otherip[MAXPLAYERS], otherport[MAXPLAYERS];
-static int snatchip = 0, snatchport = 0, netready = 0;
+static int mysock_v4only = 0;   // set when the dual-stack IPv6 socket was unavailable
+static int myport = NETPORT, netready = 0;
+
+// ---------------------------------------------------------------------------
+// Peer addressing (IPv4 + IPv6). Every peer is stored as an IPv6 socket
+// address; IPv4 peers are held as IPv4-mapped addresses (::ffff:a.b.c.d) so a
+// single dual-stack socket carries both families. sin6_family == 0 marks an
+// empty slot. The ban/natfree/display code that still thinks in 32-bit IPv4
+// goes through addr_get4() (returns the mapped IPv4, or 0 for a real IPv6 peer).
+// ---------------------------------------------------------------------------
+static struct sockaddr_in6 otheraddr[MAXPLAYERS];
+static struct sockaddr_in6 snatchaddr;
+
+static inline int addr_valid(const struct sockaddr_in6 *a) { return a->sin6_family != 0; }
+static inline void addr_clear(struct sockaddr_in6 *a) { memset(a, 0, sizeof(*a)); }
+
+// Equal endpoint (address + port).
+static inline int addr_eq(const struct sockaddr_in6 *a, const struct sockaddr_in6 *b)
+{
+    return a->sin6_family && b->sin6_family && a->sin6_port == b->sin6_port
+        && !memcmp(&a->sin6_addr, &b->sin6_addr, sizeof(a->sin6_addr));
+}
+// Equal address only (ignore port) - used by natfree when a peer's port drifts.
+static inline int addr_eq_ip(const struct sockaddr_in6 *a, const struct sockaddr_in6 *b)
+{
+    return a->sin6_family && b->sin6_family
+        && !memcmp(&a->sin6_addr, &b->sin6_addr, sizeof(a->sin6_addr));
+}
+
+// Build an IPv4-mapped IPv6 endpoint from a network-order IPv4 addr + port.
+static void addr_set4(struct sockaddr_in6 *a, unsigned int ip4_netorder, unsigned short port_netorder)
+{
+    memset(a, 0, sizeof(*a));
+    a->sin6_family = AF_INET6;
+    a->sin6_port = port_netorder;
+    a->sin6_addr.s6_addr[10] = 0xff;
+    a->sin6_addr.s6_addr[11] = 0xff;
+    memcpy(&a->sin6_addr.s6_addr[12], &ip4_netorder, 4);
+}
+
+// Return the network-order IPv4 address if this is a v4-mapped endpoint, else 0.
+static unsigned int addr_get4(const struct sockaddr_in6 *a)
+{
+    if (a->sin6_family == AF_INET6 && IN6_IS_ADDR_V4MAPPED(&a->sin6_addr))
+    {
+        unsigned int ip;
+        memcpy(&ip, &a->sin6_addr.s6_addr[12], 4);
+        return ip;
+    }
+    return 0;
+}
+
+// Format an endpoint as "a.b.c.d:port" (v4/mapped) or "[ipv6]:port".
+static void addr_to_str(const struct sockaddr_in6 *a, char *out, int outsize)
+{
+    if (!a->sin6_family) { Bstrncpyz(out, "?:?", outsize); return; }
+    unsigned int const ip4 = addr_get4(a);
+    if (ip4)
+        Bsnprintf(out, outsize, "%u.%u.%u.%u:%u",
+                  ip4 & 255, (ip4 >> 8) & 255, (ip4 >> 16) & 255, (ip4 >> 24) & 255,
+                  (unsigned)ntohs(a->sin6_port));
+    else
+    {
+        char h[INET6_ADDRSTRLEN] = "";
+        inet_ntop(AF_INET6, (void *)&a->sin6_addr, h, sizeof(h));
+        Bsnprintf(out, outsize, "[%s]:%u", h, (unsigned)ntohs(a->sin6_port));
+    }
+}
+
+// Send a datagram to an IPv6/mapped endpoint. Handles the v4-only fallback
+// socket by unwrapping the mapped address into a sockaddr_in. Returns nonzero
+// on success.
+static int netsendto(const struct sockaddr_in6 *dst, const char *buf, int len)
+{
+    if (mysock == (SOCKET)INVALID_SOCKET || !dst->sin6_family) return 0;
+    if (mysock_v4only)
+    {
+        unsigned int const ip4 = addr_get4(dst);
+        if (!ip4) return 0;   // can't reach a real IPv6 peer over a v4-only socket
+        struct sockaddr_in s4;
+        memset(&s4, 0, sizeof(s4));
+        s4.sin_family = AF_INET;
+        s4.sin_addr.s_addr = ip4;
+        s4.sin_port = dst->sin6_port;
+        return sendto(mysock, buf, len, 0, (struct sockaddr *)&s4, sizeof(s4)) != SOCKET_ERROR;
+    }
+    return sendto(mysock, buf, len, 0, (struct sockaddr *)dst, sizeof(*dst)) != SOCKET_ERROR;
+}
+
+// Resolve a peer spec into an IPv4-mapped-or-IPv6 endpoint. Accepts
+// "a.b.c.d[:port]", "[ip:v6::addr][:port]", "host.name[:port]", and a bare
+// IPv6 literal (colons, no brackets) with the default port. Returns nonzero on
+// success, filling *out (family AF_INET6 always; v4 results are mapped).
+static int resolve_peer(const char *spec, unsigned short defport_netorder, struct sockaddr_in6 *out)
+{
+    char host[256] = "";
+    char port[16] = "";
+    port[0] = 0;
+
+    if (spec[0] == '[')   // bracketed IPv6: [addr]:port
+    {
+        const char *end = strchr(spec, ']');
+        if (!end) return 0;
+        int n = (int)(end - spec - 1);
+        if (n <= 0 || n >= (int)sizeof(host)) return 0;
+        memcpy(host, spec + 1, n); host[n] = 0;
+        if (end[1] == ':') Bstrncpyz(port, end + 2, sizeof(port));
+    }
+    else
+    {
+        // Count colons: exactly one => host:port; more than one => bare IPv6.
+        int colons = 0;
+        const char *last = NULL;
+        for (const char *p = spec; *p; p++)
+            if (*p == ':') { colons++; last = p; }
+
+        if (colons == 1)
+        {
+            int n = (int)(last - spec);
+            if (n >= (int)sizeof(host)) n = sizeof(host) - 1;
+            memcpy(host, spec, n); host[n] = 0;
+            Bstrncpyz(port, last + 1, sizeof(port));
+        }
+        else
+            Bstrncpyz(host, spec, sizeof(host));   // v4/hostname w/o port, or bare IPv6
+    }
+
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    if (getaddrinfo(host, port[0] ? port : NULL, &hints, &res) != 0 || !res)
+        return 0;
+
+    int ok = 0;
+    // Prefer an IPv6 result, but accept the first if none is v6.
+    struct addrinfo *pick = res, *ai;
+    for (ai = res; ai; ai = ai->ai_next)
+        if (ai->ai_family == AF_INET6) { pick = ai; break; }
+
+    if (pick->ai_family == AF_INET6)
+    {
+        memcpy(out, pick->ai_addr, sizeof(struct sockaddr_in6));
+        if (!port[0]) out->sin6_port = defport_netorder;
+        ok = 1;
+    }
+    else if (pick->ai_family == AF_INET)
+    {
+        struct sockaddr_in *s4 = (struct sockaddr_in *)pick->ai_addr;
+        addr_set4(out, s4->sin_addr.s_addr, port[0] ? s4->sin_port : defport_netorder);
+        ok = 1;
+    }
+    freeaddrinfo(res);
+    return ok;
+}
 
 #ifdef _WIN32
 int wsainitialized = 0;
@@ -189,13 +342,6 @@ static int set_socket_blockmode(SOCKET socket, int onOrOff)
 
 int netinit(int portnum)
 {
-    LPHOSTENT lpHostEnt;
-    char hostnam[256];
-    struct sockaddr_in ip;
-#ifdef __BEOS__
-    int i;
-#endif
-
 #ifdef _WIN32
     if (wsainitialized == 0)
     {
@@ -206,36 +352,61 @@ int netinit(int portnum)
     }
 #endif
 
-    mysock = socket(AF_INET,SOCK_DGRAM,0); if (mysock == INVALID_SOCKET) return(0);
-#ifdef __BEOS__
-    i = 1; if (setsockopt(mysock,SOL_SOCKET,SO_NONBLOCK,&i,sizeof(i)) < 0) return(0);
-#else
-//    i = 1; if (ioctlsocket(mysock,FIONBIO,(unsigned int *)&i) == SOCKET_ERROR) return(0);
-    if (!set_socket_blockmode(mysock,0)) return(0);
-#endif
-
-    ip.sin_family = AF_INET;
-    ip.sin_addr.s_addr = INADDR_ANY;
-    ip.sin_port = htons(portnum);
-    if (bind(mysock,(struct sockaddr *)&ip,sizeof(ip)) != SOCKET_ERROR)
+    // Try a dual-stack IPv6 socket first (carries both IPv4-mapped and native
+    // IPv6 peers). Fall back to a plain IPv4 socket where IPv6 is unavailable.
+    mysock_v4only = 0;
+    mysock = socket(AF_INET6, SOCK_DGRAM, 0);
+    if (mysock == INVALID_SOCKET)
     {
+        mysock = socket(AF_INET, SOCK_DGRAM, 0);
+        if (mysock == INVALID_SOCKET) return(0);
+        mysock_v4only = 1;
+    }
+    else
+    {
+        int off = 0;   // IPV6_V6ONLY off => accept IPv4-mapped traffic too
+        if (setsockopt(mysock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&off, sizeof(off)) < 0)
+        {
+            // Some stacks refuse to disable v6-only; drop to an IPv4 socket so
+            // at least IPv4 play keeps working.
+            closesocket(mysock);
+            mysock = socket(AF_INET, SOCK_DGRAM, 0);
+            if (mysock == INVALID_SOCKET) return(0);
+            mysock_v4only = 1;
+        }
+    }
+
+    if (!set_socket_blockmode(mysock,0)) return(0);
+
+    if (mysock_v4only)
+    {
+        struct sockaddr_in ip;
+        memset(&ip, 0, sizeof(ip));
+        ip.sin_family = AF_INET;
+        ip.sin_addr.s_addr = INADDR_ANY;
+        ip.sin_port = htons(portnum);
+        if (bind(mysock,(struct sockaddr *)&ip,sizeof(ip)) == SOCKET_ERROR) return(0);
         myport = portnum;
-        if (gethostname(hostnam,sizeof(hostnam)) != SOCKET_ERROR)
-            if ((lpHostEnt = gethostbyname(hostnam)))
-            {
-                myip = ip.sin_addr.s_addr = *(int *)lpHostEnt->h_addr;
-                printf("mmulti: This machine's IP is %s\n", inet_ntoa(ip.sin_addr));
-            }
+        printf("mmulti: bound UDP port %d (IPv4 only)\n", portnum);
         return(1);
     }
-    return(0);
+    else
+    {
+        struct sockaddr_in6 ip;
+        memset(&ip, 0, sizeof(ip));
+        ip.sin6_family = AF_INET6;
+        ip.sin6_addr = in6addr_any;
+        ip.sin6_port = htons(portnum);
+        if (bind(mysock,(struct sockaddr *)&ip,sizeof(ip)) == SOCKET_ERROR) return(0);
+        myport = portnum;
+        printf("mmulti: bound UDP port %d (IPv4+IPv6)\n", portnum);
+        return(1);
+    }
 }
 
 int netsend(int other, char *dabuf, int bufsiz)  //0:buffer full... can't send
 {
-    struct sockaddr_in ip;
-
-    if (!otherip[other]) return(0);
+    if (!addr_valid(&otheraddr[other])) return(0);
 
     /*Addfaz NatFree Start*/
     if (natfree && !nfFinished)
@@ -253,10 +424,7 @@ int netsend(int other, char *dabuf, int bufsiz)  //0:buffer full... can't send
     }
     /*Addfaz NatFree End*/
 
-    ip.sin_family = AF_INET;
-    ip.sin_addr.s_addr = otherip[other];
-    ip.sin_port = otherport[other];
-    return(sendto(mysock,dabuf,bufsiz,0,(struct sockaddr *)&ip,sizeof(struct sockaddr_in)) != SOCKET_ERROR);
+    return netsendto(&otheraddr[other], dabuf, bufsiz);
 }
 
 // Send a tiny packet from the game socket to ip:port to open a NAT hole for
@@ -265,14 +433,10 @@ int netsend(int other, char *dabuf, int bufsiz)  //0:buffer full... can't send
 // the point is only that the datagram leaves through our NAT.
 void mmulti_punchto(unsigned int ip, unsigned short port)
 {
-    if (mysock == (SOCKET)INVALID_SOCKET) return;
-    struct sockaddr_in a;
-    memset(&a, 0, sizeof(a));
-    a.sin_family = AF_INET;
-    a.sin_addr.s_addr = ip;
-    a.sin_port = port;
+    struct sockaddr_in6 a;
+    addr_set4(&a, ip, port);
     static const char punch[5] = { 'V', 'B', 'P', 'H', 0 };
-    sendto(mysock, punch, sizeof(punch), 0, (struct sockaddr *)&a, sizeof(a));
+    netsendto(&a, punch, sizeof(punch));
 }
 
 // Send an arbitrary datagram from the game socket to ip:port (network order).
@@ -280,32 +444,36 @@ void mmulti_punchto(unsigned int ip, unsigned short port)
 // game endpoint for hole-punching.
 void mmulti_sendraw(unsigned int ip, unsigned short port, const void *buf, int len)
 {
-    if (mysock == (SOCKET)INVALID_SOCKET) return;
-    struct sockaddr_in a;
-    memset(&a, 0, sizeof(a));
-    a.sin_family = AF_INET;
-    a.sin_addr.s_addr = ip;
-    a.sin_port = port;
-    sendto(mysock, (const char *)buf, len, 0, (struct sockaddr *)&a, sizeof(a));
+    struct sockaddr_in6 a;
+    addr_set4(&a, ip, port);
+    netsendto(&a, (const char *)buf, len);
 }
 
 int netread(int *other, char *dabuf, int bufsiz)  //0:no packets in buffer
 {
-    struct sockaddr_in ip;
+    struct sockaddr_storage from;
+    socklen_t fromlen = sizeof(from);
     int i;
 
-    i = sizeof(ip);
-
-    if (recvfrom(mysock,dabuf,bufsiz,0,(struct sockaddr *)&ip,(socklen_t *)&i) == -1) return(0);
+    if (recvfrom(mysock,dabuf,bufsiz,0,(struct sockaddr *)&from,&fromlen) == -1) return(0);
 #if (SIMMIS > 0)
     if ((wrand()&255) < SIMMIS) return(0);
 #endif
 
-    snatchip = (int)ip.sin_addr.s_addr; snatchport = (int)ip.sin_port;
+    // Normalize the sender into an IPv6/mapped endpoint (snatchaddr).
+    if (from.ss_family == AF_INET6)
+        memcpy(&snatchaddr, &from, sizeof(struct sockaddr_in6));
+    else if (from.ss_family == AF_INET)
+    {
+        struct sockaddr_in *s4 = (struct sockaddr_in *)&from;
+        addr_set4(&snatchaddr, s4->sin_addr.s_addr, s4->sin_port);
+    }
+    else
+        return(0);
 
     (*other) = myconnectindex;
     for (i=0;i<MAXPLAYERS;i++)
-        if ((otherip[i] == snatchip) && (otherport[i] == snatchport))
+        if (addr_eq(&otheraddr[i], &snatchaddr))
             {(*other) = i; break; }
 
     /*Addfaz NatFree Start*/
@@ -313,14 +481,15 @@ int netread(int *other, char *dabuf, int bufsiz)  //0:no packets in buffer
     {
         if (!nfCheckHF((*other))) //Check if have heard from this player already
         {
-            if (otherip[nfCurrentPlayer] == snatchip) //Check IP Matches
+            if (addr_eq_ip(&otheraddr[nfCurrentPlayer], &snatchaddr)) //Check IP Matches
             {
                 if (!nfCheckHF(nfCurrentPlayer) && !HeardFrom2[nfCurrentPlayer])
                 {
-                    if (otherport[nfCurrentPlayer] != snatchport) //If Port numbers do not match
+                    if (otheraddr[nfCurrentPlayer].sin6_port != snatchaddr.sin6_port) //If Port numbers do not match
                     {
-                        LOG_F(INFO, "natfree: port number for player %d changed from %d to %d.",nfCurrentPlayer,otherport[nfCurrentPlayer],snatchport);
-                        otherport[nfCurrentPlayer] = snatchport; //Correct the port number
+                        LOG_F(INFO, "natfree: port number for player %d changed from %d to %d.",nfCurrentPlayer,
+                              (int)ntohs(otheraddr[nfCurrentPlayer].sin6_port),(int)ntohs(snatchaddr.sin6_port));
+                        otheraddr[nfCurrentPlayer].sin6_port = snatchaddr.sin6_port; //Correct the port number
                     }
                 }
                 (*other) = nfCurrentPlayer; //Set pointer
@@ -416,8 +585,7 @@ static void initmultiplayers_reset(void)
     for (i=1;i<MAXPLAYERS;i++) lastsendtims[i] = lastsendtims[0];
     numplayers = 1; myconnectindex = 0;
 
-    memset(otherip,0,sizeof(otherip));
-    for (i=0;i<MAXPLAYERS;i++) otherport[i] = htons(NETPORT);
+    memset(otheraddr,0,sizeof(otheraddr));
 }
 
 // Multiplayer command line summary. Assume myconnectindex always = 0 for 192.168.1.2
@@ -503,36 +671,18 @@ int initmultiplayersparms(int argc, const char * const *argv)
         }
 
         st = strdup(argv[i]); if (!st) break;
-        if (isvalidipaddress(st))
         {
-            if ((networkmode == MMULTI_MODE_P2P) && (daindex == myconnectindex)) daindex++;
-            for (j=0;st[j];j++)
-            {
-                if (st[j] == ':')
-                    { otherport[daindex] = htons((unsigned short)atol(&st[j+1])); st[j] = 0; break; }
-            }
-            otherip[daindex] = inet_addr(st);
-            printf("mmulti: Player %d at %s:%d\n",daindex,st,ntohs(otherport[daindex]));
-            daindex++;
-        }
-        else
-        {
-            LPHOSTENT lph;
-            unsigned short pt = htons(NETPORT);
-
-            for (j=0;st[j];j++)
-                if (st[j] == ':')
-                    { pt = htons((unsigned short)atol(&st[j+1])); st[j] = 0; break; }
-            if ((lph = gethostbyname(st)))
+            struct sockaddr_in6 pa;
+            if (resolve_peer(st, htons((unsigned short)NETPORT), &pa))
             {
                 if ((networkmode == MMULTI_MODE_P2P) && (daindex == myconnectindex)) daindex++;
-                otherip[daindex] = *(int *)lph->h_addr;
-                otherport[daindex] = pt;
-                printf("mmulti: Player %d at %s:%d (%s)\n",daindex,
-                       inet_ntoa(*(struct in_addr *)lph->h_addr),ntohs(pt),argv[i]);
+                otheraddr[daindex] = pa;
+                char abuf[80];
+                addr_to_str(&pa, abuf, sizeof(abuf));
+                printf("mmulti: Player %d at %s (%s)\n", daindex, abuf, argv[i]);
                 daindex++;
             }
-            else printf("mmulti: Failed resolving %s\n",argv[i]);
+            else printf("mmulti: Failed resolving %s\n", argv[i]);
         }
         free(st);
     }
@@ -567,7 +717,7 @@ int mmulti_slotconnected(int slot)
         return 0;
     if (slot == myconnectindex)
         return 1;
-    return otherip[slot] != 0;
+    return addr_valid(&otheraddr[slot]);
 }
 
 // A slot that mmulti_getpacket should also service even though it isn't in the
@@ -622,11 +772,24 @@ void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip), in
     mmulti_reconnectnotify = reconnectnotify;
 }
 
+// The peer's IPv4 address (network order) for the IPv4-oriented ban/display
+// helpers. Returns 0 for a real IPv6 peer (they can't be represented as a
+// 32-bit IPv4; ban-by-name still works, and the address display uses
+// mmulti_getslotaddrstr).
 int mmulti_getslotip(int slot)
 {
     if ((unsigned)slot >= MAXPLAYERS)
         return 0;
-    return otherip[slot];
+    return (int)addr_get4(&otheraddr[slot]);
+}
+
+// Full textual address of a slot ("a.b.c.d:port" or "[ipv6]:port"), for logs
+// and the connected-players display. Empty string for an unoccupied slot.
+void mmulti_getslotaddrstr(int slot, char *out, int outsize)
+{
+    if (outsize <= 0) return;
+    if ((unsigned)slot >= MAXPLAYERS || !addr_valid(&otheraddr[slot])) { out[0] = 0; return; }
+    addr_to_str(&otheraddr[slot], out, outsize);
 }
 
 // The UDP port this instance is bound to (for advertising to a masterserver).
@@ -648,8 +811,7 @@ void mmulti_dropslot(int slot)
         return;
     if (slot == mmulti_extraslot)
         mmulti_extraslot = -1;
-    otherip[slot] = 0;
-    otherport[slot] = htons(NETPORT);
+    addr_clear(&otheraddr[slot]);
 
     icnt0[slot] = 0;
     ocnt0[slot] = 0;
@@ -681,7 +843,7 @@ int initmultiplayerscycle(void)
         {
             k = 1;
             for (i=numplayers-1;i>0;i--)
-                if (otherip[i]) k++;
+                if (addr_valid(&otheraddr[i])) k++;
             if (k >= minlatejoinplayers)
             {
                 netready = 1;
@@ -689,7 +851,7 @@ int initmultiplayerscycle(void)
             }
         }
         for (i=numplayers-1;i>0;i--)
-            if (!otherip[i]) break;
+            if (!addr_valid(&otheraddr[i])) break;
         if (!i)
         {
             nfIncCP(); //Addfaz NatFree
@@ -769,7 +931,7 @@ void dosendpackets(int other)  //Host to send intially, client to send to others
 {
     int i, j, k;
 
-    if (!otherip[other]) return;
+    if (!addr_valid(&otheraddr[other])) return;
 
     //Packet format:
     //   short crc16ofs;       //offset of crc16
@@ -895,17 +1057,16 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                 if ((pakbuf[k] == 0xaa) && (myconnectindex == connecthead))
                 {
                     // Reject handshakes from banned addresses outright.
-                    if (mmulti_bancheck && mmulti_bancheck(snatchip))
+                    if (mmulti_bancheck && mmulti_bancheck((int)addr_get4(&snatchaddr)))
                         continue;
 
                     for (other=1;other<numplayers;other++)
                     {
                         //Only send to others asking for a response
-                        if ((otherip[other]) && ((otherip[other] != snatchip) || (otherport[other] != snatchport))) continue;
+                        if (addr_valid(&otheraddr[other]) && !addr_eq(&otheraddr[other], &snatchaddr)) continue;
 
-                        bool const wasNew = (otherip[other] == 0);
-                        otherip[other] = snatchip;
-                        otherport[other] = snatchport;
+                        bool const wasNew = !addr_valid(&otheraddr[other]);
+                        otheraddr[other] = snatchaddr;
 
                         // A fresh handshake on a slot that is already a live
                         // in-game player means that client restarted. Let the
@@ -916,7 +1077,7 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                             break;
 
                         if (wasNew && mmulti_joinnotify)
-                            mmulti_joinnotify(snatchip);
+                            mmulti_joinnotify((int)addr_get4(&snatchaddr));
 
                         //   short crc16ofs;       //offset of crc16
                         //   int icnt0;           //-1 (special packet for MMULTI.C's player collection)
@@ -940,7 +1101,9 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                         }
                         else
                         {
-                            LOG_F(INFO, "mmulti: player %d connected! (%d.%d.%d.%d:%d)", other, otherip[other]&255,(otherip[other]>>8)&255,(otherip[other]>>16)&255,(((unsigned int)otherip[other])>>24),otherport[other]);
+                            char abuf[80];
+                            addr_to_str(&otheraddr[other], abuf, sizeof(abuf));
+                            LOG_F(INFO, "mmulti: player %d connected! (%s)", other, abuf);
                         }
                         /*Addfaz NatFree End*/
 
@@ -960,8 +1123,7 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                         for (i=0;i<numplayers-1;i++) connectpoint2[i] = i+1;
                         connectpoint2[numplayers-1] = -1;
 
-                        otherip[connecthead] = snatchip;
-                        otherport[connecthead] = snatchport;
+                        otheraddr[connecthead] = snatchaddr;
                         netready = 1;
 
                         /*Addfaz NatFree Start*/
