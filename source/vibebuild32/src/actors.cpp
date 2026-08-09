@@ -1502,6 +1502,16 @@ void A_DoGuts(int sp, int gtype, int n)
 //    int pal;
     spritetype *s = &sprite[sp];
 
+    // A player wearing an enemy skin shouldn't scatter Duke's recognizable body
+    // parts when gibbed (the stock standard_pjibs state spawns DUKETORSO/LEG/GUN
+    // alongside the meat). Swap those for generic gore so a blown-up skinned
+    // player looks like a real enemy being blown to bits. Deterministic - pskin
+    // is network-synced and the count/krand use is unchanged, so it can't desync.
+    if ((gtype == DUKETORSO || gtype == DUKEGUN || gtype == DUKELEG)
+        && s->picnum == APLAYER && (unsigned)s->yvel < (unsigned)MAXPLAYERS
+        && P_ValidateSkin(g_player[s->yvel].pskin))
+        gtype = JIBS6;
+
     if (A_CheckEnemySprite(s) && s->xrepeat < 16)
         sx = sy = 8;
 
