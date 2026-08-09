@@ -49,7 +49,7 @@ char pColorNames[MAXPALOOKUPS][32] = { "Auto" };
 // numbers below come from the stock GAME.CON action definitions.
 const char *g_playerSkinNames[MAXPLAYERSKINS] = {
     "Duke", "Assault Trooper", "Assault Captain", "Octabrain",
-    "Assault Commander", "Enforcer", "Pig Cop", "Protector Drone"
+    "Assault Commander", "Enforcer", "Pig Cop", "Alien Beast"
 };
 
 // Which stock enemy each skin is drawn as. Assault Captain shares the Assault
@@ -64,7 +64,7 @@ int32_t P_SkinBaseTile(int32_t skin)
         case 4: return COMMANDER;   // Assault Commander
         case 5: return LIZMAN;      // Enforcer
         case 6: return PIGCOP;      // Pig Cop
-        case 7: return DRONE;       // Protector Drone (Atomic+ only)
+        case 7: return NEWBEAST;    // Alien Beast / Protozoid Slimer (Atomic+ only)
     }
     return -1;
 }
@@ -159,10 +159,29 @@ void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t *startFrame
         }
         break;
 
-    default:  // Floating enemies: Octabrain (3), Assault Commander (4),
-              // Protector Drone (7). They have no ground walk cycle, so every
-              // motion maps to their roaming/float frames; death uses tail-end
-              // frames (best-effort - visually tune per enemy if needed).
+    case 7:   // Alien Beast (NEWBEAST) - a ground crawler, so map to its walk
+              // cycle like the other bipeds; death frames are a best-effort
+              // estimate within the tile's range.
+        switch (aplayerStartFrame)
+        {
+            case 20:
+            case 375:
+                f = { 0, 4, 5 }; break;   // walk
+            case 45:
+                f = { 0, 4, 5 }; break;
+            case 106:
+                f = { 20, 5, 1 }; break;  // dying (estimate)
+            case 113:
+                f = { 24, 1, 1 }; break;  // dead (estimate)
+            default:
+                f = { 0, 1, 5 }; break;   // stand
+        }
+        break;
+
+    default:  // Floating enemies: Octabrain (3), Assault Commander (4). They
+              // have no ground walk cycle, so every motion maps to their
+              // roaming/float frames; death uses tail-end frames (best-effort -
+              // visually tune per enemy if needed).
         switch (aplayerStartFrame)
         {
             case 106:
@@ -203,7 +222,7 @@ int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead)
         case 4: pain = S_COMM_PAIN;  dying = S_COMM_DYING; roam = S_COMM_ROAM;  recog = COMM_RECOG; break;  // Assault Commander
         case 5: pain = S_LIZARD_PAIN;dying = S_LIZARD_PAIN;roam = S_LIZARD_PAIN;recog = S_LIZARD_PAIN; break; // Enforcer (only a pain sound is stock)
         case 6: pain = PIG_PAIN;     dying = PIG_DYING;    roam = PIG_ROAM;     recog = PIG_RECOG; break;   // Pig Cop
-        case 7: pain = S_DRON_PAIN;  dying = S_DRON_DYING; roam = S_DRON_ROAM;  recog = DRON_RECOG; break;  // Protector Drone
+        case 7: pain = NEWBEAST_PAIN;dying = NEWBEAST_DYING;roam = NEWBEAST_ROAM;recog = NEWBEAST_RECOG; break; // Alien Beast
         default: return soundNum;
     }
 

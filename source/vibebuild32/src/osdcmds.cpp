@@ -912,7 +912,7 @@ osdcvardata_t cvar[] =
     // Player Colors
     { "team", "team: player's team number", (void*)&ud.team, CVAR_INT | CVAR_MULTI, 0, 3 },
     { "color", "player palette", (void*)&ud.m_color, CVAR_INT | CVAR_MULTI, 0, MAXPALOOKUPS - 1 },
-    { "skin", "player skin: 0=Duke 1=Assault Trooper 2=Assault Captain 3=Octabrain 4=Assault Commander 5=Enforcer 6=Pig Cop 7=Protector Drone (unavailable skins fall back to Duke)", (void*)&ud.skin, CVAR_INT | CVAR_MULTI, 0, MAXPLAYERSKINS - 1 },
+    { "skin", "player skin: 0=Duke 1=Assault Trooper 2=Assault Captain 3=Octabrain 4=Assault Commander 5=Enforcer 6=Pig Cop 7=Alien Beast (unavailable skins fall back to Duke)", (void*)&ud.skin, CVAR_INT | CVAR_MULTI, 0, MAXPLAYERSKINS - 1 },
     { "sv_maprotation", "map rotation: 0 off, 1 sequential, 2 random", (void*)&g_mapRotationMode, CVAR_INT, 0, 2 },
 
     // Mouse

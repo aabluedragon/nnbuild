@@ -50,6 +50,10 @@ struct dynitem g_dynSoundList[] =
     { "CHAINGUN_FIRE",       &CHAINGUN_FIRE,      CHAINGUN_FIRE__ },
     { "COMM_RECOG",          &COMM_RECOG,         COMM_RECOG__ },
     { "DRON_RECOG",          &DRON_RECOG,         DRON_RECOG__ },
+    { "NEWBEAST_ROAM",       &NEWBEAST_ROAM,      NEWBEAST_ROAM__ },
+    { "NEWBEAST_RECOG",      &NEWBEAST_RECOG,     NEWBEAST_RECOG__ },
+    { "NEWBEAST_PAIN",       &NEWBEAST_PAIN,      NEWBEAST_PAIN__ },
+    { "NEWBEAST_DYING",      &NEWBEAST_DYING,     NEWBEAST_DYING__ },
     { "DUKE_CRACK",          &DUKE_CRACK,          DUKE_CRACK__ },
     { "DUKE_CRACK_FIRST",    &DUKE_CRACK_FIRST,    DUKE_CRACK_FIRST__ },
     { "DUKE_CRACK2",         &DUKE_CRACK2,         DUKE_CRACK2__ },
@@ -835,6 +839,10 @@ int16_t CAT_FIRE            = CAT_FIRE__;
 int16_t CHAINGUN_FIRE       = CHAINGUN_FIRE__;
 int16_t COMM_RECOG          = COMM_RECOG__;
 int16_t DRON_RECOG          = DRON_RECOG__;
+int16_t NEWBEAST_ROAM       = NEWBEAST_ROAM__;
+int16_t NEWBEAST_RECOG      = NEWBEAST_RECOG__;
+int16_t NEWBEAST_PAIN       = NEWBEAST_PAIN__;
+int16_t NEWBEAST_DYING      = NEWBEAST_DYING__;
 int16_t DUKE_CRACK          = DUKE_CRACK__;
 int16_t DUKE_CRACK_FIRST    = DUKE_CRACK_FIRST__;
 int16_t DUKE_CRACK2         = DUKE_CRACK2__;
