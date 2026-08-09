@@ -1098,13 +1098,11 @@ int mpgametext(int y,const char *t,int s,int dabits)
 // alive. 'tc' is an animation clock (e.g. totalclock).
 void G_DrawWavyCenteredText(int32_t y, const char *t, int32_t tc)
 {
-    // Understated two-tone pulse: the whole line holds one shade for two
-    // seconds, then flashes to the other, and so on - just blue and light
-    // blue, no per-letter shimmer, so the "joining" screen reads as calm.
-    int32_t const pal = 9; // blue
-    // totalclock runs at 120 ticks/second, so 240 ticks is a 2-second hold
-    // before each flash between the lighter (shade 0) and deeper (shade 16) blue.
-    int32_t const shade = ((tc / 240) & 1) ? 16 : 0;
+    // Gentle animated shimmer for the loading screen: a soft brightness wave
+    // rolls across the letters while their colour drifts slowly through a small
+    // set of cool, cohesive tones - lively but not flashy. The tc divisors set
+    // the pace (smaller = faster); totalclock runs at 120 ticks/second.
+    static uint8_t const s_pals[] = { 9, 9, 9, 16, 16, 9, 9, 12 }; // blue, deep blue, steel
 
     // Measure the (unscaled, 320-wide space) width so we can centre it.
     int32_t w = 0;
@@ -1117,12 +1115,22 @@ void G_DrawWavyCenteredText(int32_t y, const char *t, int32_t tc)
     }
 
     int32_t x = 160 - (w >> 1);
+    int32_t i = 0;
     char one[2] = { 0, 0 };
     for (const char *s = t; *s; ++s)
     {
         if (*s == ' ') { x += 5; continue; }
         int32_t const ac = *s - '!' + STARTALPHANUM;
         if ((unsigned)(ac - STARTALPHANUM) > 93u) continue;
+
+        // Colour drift: neighbouring letters differ by one step and the whole
+        // pattern scrolls one step every half-second, so colour ripples slowly
+        // along the line.
+        int32_t const pal = s_pals[(uint32_t)((tc / 60) + i) % ARRAY_SIZE(s_pals)];
+        // Brightness wave: a triangle (0 = light .. 14 = deep) sweeping across
+        // the letters, one full breath every ~2 seconds.
+        int32_t const phase = (tc + i * 18) & 255;
+        int32_t const shade = klabs(phase - 128) * 14 / 128;
 
         one[0] = *s;
         // G_PrintGameText treats x == 160 (the 320-wide screen centre) as a
@@ -1131,6 +1139,7 @@ void G_DrawWavyCenteredText(int32_t y, const char *t, int32_t tc)
         // near the middle of a centred line (e.g. the progress bar). Nudge off
         // that one column so every glyph lands exactly where we place it.
         gametextpalbits((x == 160) ? 161 : x, y, one, shade, pal, 2);
+        ++i;
         x += (*s >= '0' && *s <= '9') ? 8 : tilesiz[ac].x;
     }
 }
