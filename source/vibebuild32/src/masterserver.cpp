@@ -330,7 +330,14 @@ static void ms_expire(uint32_t now)
 {
     for (int i = 0; i < MS_MAX_ENTRIES; i++)
         if (g_ent[i].used && (now - g_ent[i].lastseen) > MS_ENTRY_TTL_MS)
+        {
+            // A server that stopped pinging (crashed / lost link) without a clean
+            // stop - drop it once it goes stale so the list only shows live hosts.
+            const struct sockaddr_storage *ss = g_ent[i].src4.ss_family ? &g_ent[i].src4 : &g_ent[i].src6;
+            char a[128]; ms_addr_to_str(ss, g_ent[i].gameport, a, sizeof(a));
+            LOG_F(INFO, "masterserver: - %s \"%s\" (timed out)", a, g_ent[i].name);
             g_ent[i].used = 0;
+        }
 }
 
 // read a length-prefixed (1 byte) string into dst
@@ -434,7 +441,12 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
             if (!g_ent[i].used) continue;
             if (haveId ? (g_ent[i].serverId == serverId)
                        : (ms_sameaddr(&g_ent[i].src4, from) || ms_sameaddr(&g_ent[i].src6, from)))
+            {
+                const struct sockaddr_storage *ss = g_ent[i].src4.ss_family ? &g_ent[i].src4 : &g_ent[i].src6;
+                char a[128]; ms_addr_to_str(ss, g_ent[i].gameport, a, sizeof(a));
+                LOG_F(INFO, "masterserver: - %s \"%s\" (going away)", a, g_ent[i].name);
                 g_ent[i].used = 0;
+            }
         }
     }
     else if (type == MS_LIST_REQ)

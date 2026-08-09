@@ -1649,6 +1649,12 @@ extern int g_doQuickSave;
 
 void G_GameExit(const char *t)
 {
+    // If we're an advertised host, tell the masterserver we're going away so our
+    // listing is removed immediately instead of lingering until its TTL expires.
+    // Self-gates on whether we're actually advertising, so it's a no-op for
+    // clients and non-advertised hosts.
+    Masterserver_AdvertiseStop();
+
     if (*t != 0 && g_player[myconnectindex].ps != NULL)
         g_player[myconnectindex].ps->palette = BASEPAL;
 
