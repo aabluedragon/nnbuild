@@ -205,13 +205,18 @@ independent of the game transport: 4-byte magic `"VBMS"` + 1 type byte.
 - **List** (`MS_LIST_REQ`/`_RESP`): the in-game **JOIN GAME** menu (menus.cpp
   case 20020) and the `serverlist` console command call
   `Masterserver_QueryList`.
-- **STUN / hole-punch** (`MS_PUNCH_REQ` → `MS_PUNCH_NOTIFY` + `MS_STUN_RESP`,
-  marker `"VBPH"`): when a client's direct connect stalls it sends
-  `MS_PUNCH_REQ` **from its game socket** (`mmulti_sendraw`, so the master sees
-  the real game endpoint). The master tells the server to punch toward the
-  client (`Masterserver_HostPump` → `mmulti_punchto`) and tells the client the
-  server's address. Both sides fire packets from the game socket to open the
-  path; mmulti's normal handshake then connects.
+- **STUN / hole-punch (IPv4 + IPv6)** (`MS_PUNCH_REQ` → `MS_PUNCH_NOTIFY` +
+  `MS_STUN_RESP`, marker `"VBPH"`): when a client's direct connect stalls it
+  sends `MS_PUNCH_REQ` **from its game socket** (`mmulti_sendraw_str`, so the
+  master sees the real game endpoint), contacting the master over the **same
+  family as the join target** (`MakePunchReq` picks v4/v6 to match). The master
+  tells the server to punch toward the client (`Masterserver_HostPump` →
+  `mmulti_punchto_str`) and tells the client the server's address; both address
+  strings carry `[ipv6]` or `a.b.c.d`. The master sends each reply/notify out
+  the socket matching the destination family (`ms_send_family` over `g_msSock4/
+  6`). Both sides fire packets from the game socket to open the path; mmulti's
+  normal handshake then connects. The join relaunch carries the master via
+  `-masteraddr` so the connecting client punches through the same one.
 - **Join flow**: menu join → `Net_LaunchAddress` relaunches the process as a
   client (`execv`) with `-net … host:port` + `-punchtarget host:port`. On
   repeated failure (~28s) `Net_LaunchMenu` relaunches back with `-joinerror
