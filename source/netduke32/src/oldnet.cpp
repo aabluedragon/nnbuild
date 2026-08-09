@@ -3479,6 +3479,15 @@ void Net_WaitForPlayers()
         // Check if ready, if not, break from loop.
         TRAVERSE_CONNECT(i)
         {
+            // A slot scheduled for removal (e.g. a client that left and is
+            // reconnecting on the same slot) will never signal ready on this
+            // dead connection. Don't block the barrier on it - otherwise the
+            // master sits here until the 10s timeout before it can return to the
+            // main loop and process the drop + clean re-admit, which the joiner
+            // experiences as being stuck on "waiting for the state snapshot".
+            if (i == g_pendingKickSlot)
+                continue;
+
             if (g_player[i].playerreadyflag < g_player[myconnectindex].playerreadyflag)
                 break;
 
