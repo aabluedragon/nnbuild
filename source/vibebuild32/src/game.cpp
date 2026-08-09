@@ -6082,6 +6082,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 {
                     int32_t skinStart, skinFrames, skinViewtype;
                     P_GetSkinFrame(g_player[p].pskin, apScript[scrofs_action + ACTION_STARTFRAME],
+                                   apScript[scrofs_action + ACTION_NUMFRAMES],
                                    &skinStart, &skinFrames, &skinViewtype);
 
                     int32_t skinOffset = 0;

@@ -240,7 +240,7 @@ void P_ProcessInput(int snum);
 extern const char *g_playerSkinNames[MAXPLAYERSKINS];
 int32_t P_SkinBaseTile(int32_t skin);
 int32_t P_ValidateSkin(int32_t skin);
-void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t *startFrame, int32_t *numFrames, int32_t *viewType);
+void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t aplayerNumFrames, int32_t *startFrame, int32_t *numFrames, int32_t *viewType);
 int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead);
 
 static inline void P_PalFrom(DukePlayer_t* pPlayer, uint8_t f, uint8_t r, uint8_t g, uint8_t b)

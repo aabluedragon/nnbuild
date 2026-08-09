@@ -82,121 +82,62 @@ int32_t P_ValidateSkin(int32_t skin)
     return skin;
 }
 
-void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t *startFrame, int32_t *numFrames, int32_t *viewType)
+// Map APLAYER's current CON action to the equivalent frames of the enemy skin's
+// stock tile layout, so a skinned player stands, walks, gets hit and dies with
+// the right sprites. Every {start, frames, viewtype} triple below is taken
+// straight from the stock GAME.CON action definitions for that enemy (start is a
+// tile offset from the enemy's base tile; viewtype 5 = directional, 1 = single
+// view as used for pain/death). aplayerNumFrames distinguishes the two things
+// that share APLAYER start-frame 106: PFLINTCHING (1 frame = getting hit) from
+// PEXPLODE/PTHROWNBACK (5 frames = dying).
+void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t aplayerNumFrames,
+                    int32_t *startFrame, int32_t *numFrames, int32_t *viewType)
 {
+    enum { ST_STAND, ST_WALK, ST_WALKBACK, ST_ATTACK, ST_JUMP, ST_DUCK, ST_PAIN, ST_DYING, ST_DEAD, ST_COUNT };
     struct frameinfo { int16_t start, frames, viewtype; };
-    frameinfo f;
 
-    switch (skin)
+    // [skin][state]. Enemies without a distinct action for a state reuse the
+    // nearest sensible one (floaters have no jump/duck -> roam/stand; enemies
+    // with no flinch -> the first dying frame as a brief wince).
+    static const frameinfo tbl[MAXPLAYERSKINS][ST_COUNT] =
     {
-    case 1:   // Assault Trooper (LIZTROOP)
-    case 2:   // Assault Captain - shares the trooper's art
-        switch (aplayerStartFrame)
-        {
-            case 20:  // PWALK/PRUN/PFROZEN
-            case 375: // PSWIMMING
-                f = { 0, 4, 5 }; break;
-            case 45:  // PWALKBACK/PRUNBACK
-                f = { 15, 4, 5 }; break;
-            case 15:  // PJPHOUVER
-            case 50:  // PJUMPING
-            case 65:  // PFALLING
-                f = { 40, 1, 5 }; break;  // ATROOPJETPACK
-            case 40:  // PAKICKING
-                f = { 35, 1, 5 }; break;  // ATROOPSHOOT
-            case 86:  // PDUCKING/PCRAWLING
-                f = { 64, 1, 5 }; break;  // ATROOPDUCK
-            case 106: // PEXPLODE/PFLINTCHING/PTHROWNBACK
-                f = { 50, 5, 1 }; break;  // ATROOPDYING
-            case 113: // PEXPLODEAD/PLYINGDEAD
-                f = { 54, 1, 1 }; break;  // ATROOPDEAD
-            default:  // PSTAND/PTREDWATER/...
-                f = { 0, 1, 5 }; break;
-        }
-        break;
+        {},  // 0 = Duke (never skinned)
+        // 1 Assault Trooper (LIZTROOP)
+        { {0,1,5}, {0,4,5}, {15,4,5}, {35,1,5}, {40,1,5}, {64,1,5}, {50,1,1}, {50,5,1}, {54,1,1} },
+        // 2 Assault Captain (shares LIZTROOP art)
+        { {0,1,5}, {0,4,5}, {15,4,5}, {35,1,5}, {40,1,5}, {64,1,5}, {50,1,1}, {50,5,1}, {54,1,1} },
+        // 3 Octabrain (OCTABRAIN, floating)
+        { {0,1,5}, {0,3,5}, {0,3,5}, {20,1,5}, {0,3,5}, {0,1,5}, {30,1,1}, {30,8,1}, {38,1,1} },
+        // 4 Assault Commander (COMMANDER, floating; no flinch -> first dying frame)
+        { {0,1,5}, {0,3,5}, {0,3,5}, {20,1,5}, {0,3,5}, {0,1,5}, {30,1,1}, {30,8,1}, {38,1,1} },
+        // 5 Enforcer (LIZMAN; no flinch/duck -> first dying frame / stand)
+        { {0,1,5}, {0,4,5}, {0,4,5}, {70,2,5}, {45,3,5}, {0,1,5}, {60,1,1}, {60,6,1}, {65,1,1} },
+        // 6 Pig Cop (PIGCOP; dive stands in for duck; no jump -> walk)
+        { {30,1,5}, {0,4,5}, {0,4,5}, {30,2,5}, {0,4,5}, {40,2,5}, {55,1,1}, {55,5,1}, {60,1,1} },
+        // 7 Alien Beast (NEWBEAST; walk starts at tile 10; no duck -> stand)
+        { {10,1,5}, {10,4,5}, {10,4,5}, {30,3,5}, {80,2,5}, {10,1,5}, {71,1,1}, {72,8,1}, {79,1,1} },
+    };
 
-    case 6:   // Pig Cop (PIGCOP)
-        switch (aplayerStartFrame)
-        {
-            case 20:
-            case 375:
-                f = { 0, 4, 5 }; break;   // APIGWALK
-            case 45:
-                f = { 0, 4, 5 }; break;
-            case 86:
-                f = { 40, 1, 5 }; break;  // APIGDIVE
-            case 106:
-                f = { 55, 5, 1 }; break;  // APIGDYING
-            case 113:
-                f = { 60, 1, 1 }; break;  // APIGDEAD
-            default:
-                f = { 30, 1, 5 }; break;  // APIGSTAND
-        }
-        break;
-
-    case 5:   // Enforcer (LIZMAN). Offsets from the stock tile layout
-              // (LIZMANSPITTING=+30, LIZMANJUMP=+45); death frames are a
-              // best-effort estimate and may want a visual tweak.
-        switch (aplayerStartFrame)
-        {
-            case 20:
-            case 375:
-                f = { 0, 4, 5 }; break;   // walk
-            case 45:
-                f = { 0, 4, 5 }; break;
-            case 40:  // PAKICKING
-                f = { 30, 1, 5 }; break;  // LIZMANSPITTING
-            case 15:
-            case 50:
-            case 65:
-                f = { 45, 1, 5 }; break;  // LIZMANJUMP
-            case 106:
-                f = { 50, 5, 1 }; break;  // dying (estimate)
-            case 113:
-                f = { 54, 1, 1 }; break;  // dead (estimate)
-            default:
-                f = { 0, 1, 5 }; break;   // stand
-        }
-        break;
-
-    case 7:   // Alien Beast (NEWBEAST) - a ground crawler, so map to its walk
-              // cycle like the other bipeds; death frames are a best-effort
-              // estimate within the tile's range.
-        switch (aplayerStartFrame)
-        {
-            case 20:
-            case 375:
-                f = { 0, 4, 5 }; break;   // walk
-            case 45:
-                f = { 0, 4, 5 }; break;
-            case 106:
-                f = { 20, 5, 1 }; break;  // dying (estimate)
-            case 113:
-                f = { 24, 1, 1 }; break;  // dead (estimate)
-            default:
-                f = { 0, 1, 5 }; break;   // stand
-        }
-        break;
-
-    default:  // Floating enemies: Octabrain (3), Assault Commander (4). They
-              // have no ground walk cycle, so every motion maps to their
-              // roaming/float frames; death uses tail-end frames (best-effort -
-              // visually tune per enemy if needed).
-        switch (aplayerStartFrame)
-        {
-            case 106:
-                f = { 24, 5, 1 }; break;  // dying (estimate)
-            case 113:
-                f = { 28, 1, 1 }; break;  // dead (estimate)
-            default:
-                f = { 0, 4, 5 }; break;   // float/roam
-        }
-        break;
+    int state;
+    switch (aplayerStartFrame)
+    {
+        case 20:  case 375:            state = ST_WALK;     break;  // PWALK/PRUN/PFROZEN, PSWIMMING
+        case 45:                       state = ST_WALKBACK; break;  // PWALKBACK/PRUNBACK
+        case 40:                       state = ST_ATTACK;   break;  // PAKICKING
+        case 15:  case 50:  case 65:   state = ST_JUMP;     break;  // PJPHOUVER/PJUMPING/PFALLING
+        case 86:                       state = ST_DUCK;     break;  // PDUCKING/PCRAWLING
+        case 106: state = (aplayerNumFrames <= 1) ? ST_PAIN : ST_DYING; break; // flinch vs dying
+        case 113:                      state = ST_DEAD;     break;  // PLYINGDEAD/PEXPLODEAD
+        default:                       state = ST_STAND;    break;  // PSTAND/PTREDWATER/...
     }
 
+    if ((unsigned)skin >= MAXPLAYERSKINS || skin <= 0)
+        skin = 1;
+
+    frameinfo const f = tbl[skin][state];
     *startFrame = f.start;
-    *numFrames = f.frames;
-    *viewType = f.viewtype;
+    *numFrames  = f.frames;
+    *viewType   = f.viewtype;
 }
 
 int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead)
