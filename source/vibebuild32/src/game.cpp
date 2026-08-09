@@ -9351,10 +9351,13 @@ MAIN_LOOP_RESTART:
                 G_DrawWavyCenteredText(102, bar, anim);
                 G_DrawWavyCenteredText(114, pctline, anim);
 
-                // Spinning nuke icons flanking the progress bar (one each way).
-                int16_t const spin = (int16_t)((anim << 4) & 2047);
-                rotatesprite(88 << 16, 104 << 16, 20 << 10,  spin, SPINNINGNUKEICON, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-                rotatesprite(232 << 16, 104 << 16, 20 << 10, (int16_t)(-spin), SPINNINGNUKEICON, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+                // The atomic spinner used throughout the menus: it doesn't rotate
+                // geometrically, it cycles through 7 pre-rendered angle frames
+                // (SPINNINGNUKEICON + 0..6, advancing every 8 tics). Draw one each
+                // side, spinning opposite ways like the menu cursor does.
+                int32_t const nukeFrame = ((int32_t)totalclock >> 3) % 7;
+                rotatesprite(88 << 16, 104 << 16, 32768, 0, SPINNINGNUKEICON + nukeFrame, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+                rotatesprite(232 << 16, 104 << 16, 32768, 0, SPINNINGNUKEICON + 6 - ((6 + nukeFrame) % 7), 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
 
                 // Below the bar: a CANCEL option. Down highlights it, Up returns
                 // to waiting; Enter on CANCEL (or Escape) aborts the join and
