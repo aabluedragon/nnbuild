@@ -193,7 +193,7 @@ void Net_ClearScoreArchive(void);
 #define MAXNETMODFILES 8
 OLDNET_EXTERN char g_netModFiles[MAXNETMODFILES][BMAX_PATH]; // Mods (-g grp/zip) the host loaded.
 OLDNET_EXTERN int32_t g_netModFileCount;
-void Net_SendFile(int32_t slot, const char *name);
+void Net_SendFile(int32_t slot, const char *name, int32_t fileIndex = 1, int32_t fileTotal = 1);
 void Net_SendGameFiles(int32_t slot); // Push the current map + host mods (slot<0 = everyone).
 
 void Net_ClearFIFO(void);

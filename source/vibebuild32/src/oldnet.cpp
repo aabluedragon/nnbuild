@@ -1411,7 +1411,7 @@ static bool Net_DrainReliableWindow(void)
 
 // Host: stream a file to one client (or, with slot < 0, every client that
 // lacks it). Called before starting a map that references the file.
-void Net_SendFile(int32_t slot, const char *name)
+void Net_SendFile(int32_t slot, const char *name, int32_t fileIndex, int32_t fileTotal)
 {
     if (myconnectindex != connecthead)
         return;
@@ -1441,6 +1441,10 @@ void Net_SendFile(int32_t slot, const char *name)
     int32_t const namelen = min((int32_t)strlen(name), 63);
     hdr[hl++] = (char)namelen;
     Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
+    // 1-based position of this file within the set, and the set size, so the
+    // joiner can show "downloading file X of Y" for multi-file transfers.
+    hdr[hl++] = (char)clamp(fileIndex, 1, 255);
+    hdr[hl++] = (char)clamp(fileTotal, 1, 255);
 
     // An explicit slot may be a late joiner not yet marked g_player.connected
     // (we send it the map before it loads the snapshot), so gate on the mmulti
@@ -1491,11 +1495,13 @@ void Net_SendGameFiles(int32_t slot)
     if (myconnectindex != connecthead)
         return;
 
+    int32_t const total = g_netModFileCount + (boardfilename[0] ? 1 : 0);
+    int32_t idx = 0;
     for (int32_t i = 0; i < g_netModFileCount; i++)
-        Net_SendFile(slot, g_netModFiles[i]);
+        Net_SendFile(slot, g_netModFiles[i], ++idx, total);
 
     if (boardfilename[0])
-        Net_SendFile(slot, boardfilename);
+        Net_SendFile(slot, boardfilename, ++idx, total);
 }
 
 static void Net_ReceiveFileHeader(void)
@@ -1507,6 +1513,16 @@ static void Net_ReceiveFileHeader(void)
     int32_t const namelen = (uint8_t)packbuf[j++];
     Bmemcpy(g_recvFileName, &packbuf[j], min(namelen, 63));
     g_recvFileName[min(namelen, 63)] = 0;
+    j += namelen;
+
+    // Position of this file within the set (1-based) and the set size, so we can
+    // show "file X of Y" when the host is sending more than one file.
+    int32_t const fileIndex = (uint8_t)packbuf[j++];
+    int32_t const fileTotal = (uint8_t)packbuf[j++];
+    char ofY[24];
+    ofY[0] = 0;
+    if (fileTotal > 1)
+        Bsnprintf(ofY, sizeof(ofY), " (file %d of %d)", fileIndex, fileTotal);
 
     DO_FREE_AND_NULL(g_recvFileBuf);
     g_recvFileChunksGot = 0;
@@ -1522,6 +1538,11 @@ static void Net_ReceiveFileHeader(void)
     if (Net_HaveFile(g_recvFileName, size, g_recvFileCrc))
     {
         LOG_F(INFO, "Host offered %s (%d bytes); already have it, skipping download", g_recvFileName, size);
+        if (fileTotal > 1)   // keep the multi-file counter moving over skipped files
+        {
+            Bsnprintf(g_lateJoinStatus, sizeof(g_lateJoinStatus), "Have %s%s", g_recvFileName, ofY);
+            g_lateJoinPercent = 100;
+        }
         return;
     }
 
@@ -1544,17 +1565,22 @@ static void Net_ReceiveFileHeader(void)
         }
         Bsprintf(buf, "Using local %s", g_recvFileName);
         G_AddUserQuote(buf);
+        if (fileTotal > 1)
+        {
+            Bsnprintf(g_lateJoinStatus, sizeof(g_lateJoinStatus), "Have %s%s", g_recvFileName, ofY);
+            g_lateJoinPercent = 100;
+        }
         return;
     }
 
     if (g_recvFileChunkTotal > 0)
         g_recvFileBuf = (char *)Xmalloc(g_recvFileChunkTotal * FILE_CHUNK_SIZE);
 
-    LOG_F(INFO, "Receiving %s (%d bytes) from host", g_recvFileName, size);
+    LOG_F(INFO, "Receiving %s (%d bytes) from host%s", g_recvFileName, size, ofY);
     Bsprintf(buf, "Downloading %s...", g_recvFileName);
     G_AddUserQuote(buf);
 
-    Bsnprintf(g_lateJoinStatus, sizeof(g_lateJoinStatus), "Downloading %s", g_recvFileName);
+    Bsnprintf(g_lateJoinStatus, sizeof(g_lateJoinStatus), "Downloading %s%s", g_recvFileName, ofY);
     g_lateJoinPercent = 0;
 }
 
