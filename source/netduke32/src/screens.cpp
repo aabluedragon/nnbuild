@@ -109,8 +109,9 @@ void G_ShowScores(bool bonus)
 
     yoff += 10;
 
-    // Background
-    rotatesprite_(0, 0, 65536L, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT, 128, 0, get_xdim(start_x - 6), get_ydim(score_start_y-2), get_xdim(ping_x + 21), get_ydim(yoff+(7*playerswhenstarted)));
+    // Background - one row per shown player (the dedicated host row is omitted).
+    int32_t const shownRows = playerswhenstarted - ((g_netServerDedicated && connecthead >= 0) ? 1 : 0);
+    rotatesprite_(0, 0, 65536L, 0, BETASCREEN, 0, 4, RS_AUTO | RS_TOPLEFT, 128, 0, get_xdim(start_x - 6), get_ydim(score_start_y-2), get_xdim(ping_x + 21), get_ydim(yoff+(7*shownRows)));
 
     // Headers
     minitext(start_x, score_start_y, "#", 8, 2 + 8 + 16 + 128);

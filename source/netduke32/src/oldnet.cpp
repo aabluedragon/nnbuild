@@ -41,6 +41,15 @@ static bool lateJoinJoinerReady = false;   // master: joiner reached its main lo
 static uint32_t lateJoinClientStartMs = 0; // joiner: when we entered late-join wait (backstop timeout)
 static int32_t lateJoinGoSlot = -1;
 
+// Async slave: our outgoing input stream, kept independent of the authoritative
+// fifo (which is master-driven) so a master substitution can't corrupt the
+// delta base. g_asyncSentCount counts inputs sent, for backpressure. All three
+// are reset whenever the fifo is cleared (Net_ClearFIFO) so the first post-clear
+// delta is encoded against the same zeroed base the master decodes against -
+// otherwise a held input would be silently dropped across a level change.
+static input_t g_asyncOutPrev, g_asyncOutCur;
+static int32_t g_asyncSentCount;
+
 // Per-slot client identity (from PACKET_TYPE_PLAYER_NAME). The master uses these
 // plus the slot IP to restore a reconnecting player's score by identity.
 static char g_playerGuid[MAXPLAYERS][NET_GUID_LEN];
@@ -1201,10 +1210,15 @@ static int Net_HaveFile(const char *name, int32_t size, uint32_t crc)
 // waits here. (512 = mmulti FIFSIZ; leave a margin for the chunk we're about to
 // queue and any concurrent peer traffic counted in the max.)
 #define NET_RELIABLE_WINDOW_MAX 480
-static void Net_DrainReliableWindow(void)
+// Returns false if the window never drained within the timeout - the peer is
+// dead or wedged, and the CALLER must abort the transfer (stop queuing chunks).
+// If it kept looping instead, every remaining chunk would spin its own full
+// timeout while the whole server is frozen, and the reliable ring would be
+// overwritten (silent corruption) once the throttle stopped holding.
+static bool Net_DrainReliableWindow(void)
 {
     if (mmulti_getoutputcirclesize() <= NET_RELIABLE_WINDOW_MAX)
-        return;
+        return true;
 
     uint32_t const start = timerGetTicks();
     while (mmulti_getoutputcirclesize() > NET_RELIABLE_WINDOW_MAX)
@@ -1214,10 +1228,11 @@ static void Net_DrainReliableWindow(void)
         gameHandleEvents();
         if (timerGetTicks() - start > 10000)
         {
-            LOG_F(WARNING, "Reliable output window stalled while streaming; peer not acking");
-            break;
+            LOG_F(WARNING, "Reliable output window stalled while streaming; peer not acking - aborting transfer");
+            return false;
         }
     }
+    return true;
 }
 
 // Host: stream a file to one client (or, with slot < 0, every client that
@@ -1283,7 +1298,11 @@ void Net_SendFile(int32_t slot, const char *name)
             mmulti_sendpacket(i, (unsigned char *)chunk, len + 7);
         }
 
-        Net_DrainReliableWindow();
+        if (!Net_DrainReliableWindow())
+        {
+            LOG_F(WARNING, "File transfer of %s aborted: a receiver stopped acking", name);
+            break;  // a peer died mid-transfer; stop rather than freeze the server
+        }
     }
     #undef NET_FILE_WANTS
     Xfree(data);
@@ -1535,15 +1554,20 @@ void Net_HandleInput(void)
     // like every other player.
     if (g_netAsyncMode && numplayers >= 2 && myconnectindex != connecthead)
     {
-        if (g_player[myconnectindex].movefifoend - movefifoplc < 100)
+        // Backpressure: g_asyncSentCount counts inputs we've sent; our own
+        // movefifoend counts the ones the master has echoed back. Their gap is
+        // the master's still-unconfirmed queue of our input. Cap it so long-match
+        // clock skew can't grow it until it wraps the 256-entry ring and corrupts
+        // input. While throttled, the master just repeats our last input.
+        if (g_asyncSentCount - g_player[myconnectindex].movefifoend < 128)
         {
-            static input_t asyncOutPrev, asyncOutCur;
-            asyncOutPrev = asyncOutCur;
-            asyncOutCur = netInput;
+            g_asyncOutPrev = g_asyncOutCur;
+            g_asyncOutCur = netInput;
+            g_asyncSentCount++;
 
             int aj = 1;
             packbuf[0] = PACKET_TYPE_SLAVE_TO_MASTER;
-            Net_AddPlayerInputToPacket(&aj, 0, &asyncOutPrev, &asyncOutCur);
+            Net_AddPlayerInputToPacket(&aj, 0, &g_asyncOutPrev, &g_asyncOutCur);
             Net_AddSyncInfoToPacket(&aj);
             mmulti_sendpacket(connecthead, (unsigned char*)packbuf, aj);
         }
@@ -2812,7 +2836,20 @@ void Net_MasterCheckLateJoin(void)
 
         // Keep the reliable-delivery window from overflowing; this also
         // keeps acks and peer traffic flowing while we blast the file out.
-        Net_DrainReliableWindow();
+        if (!Net_DrainReliableWindow())
+        {
+            // The joiner died mid-stream. Abort instead of spinning a full
+            // timeout per remaining chunk (which would freeze every other
+            // player and corrupt the reliable ring). The slot frees up to rejoin.
+            LOG_F(WARNING, "Late join aborted: slot %d stopped acking during the snapshot", slot);
+            kclose(fil);
+            mmulti_dropslot(slot);
+            lateJoinPending = -1;
+            g_lateJoinFreeze = 0;
+            mmulti_setextraslot(-1);
+            g_player[slot].connected = 0;
+            return;
+        }
     }
     kclose(fil);
 
@@ -3148,11 +3185,34 @@ void Net_EnterMessage(void)
 // itself with the identical command line to reconnect (see Net_ClientReconnect).
 static int32_t g_procArgc;
 static char const * const *g_procArgv;
+static char g_procExePath[BMAX_PATH];
 
 void Net_StoreProcessArgs(int32_t argc, char const * const *argv)
 {
     g_procArgc = argc;
     g_procArgv = argv;
+
+    // Resolve an ABSOLUTE path to our own binary for the reconnect relaunch:
+    // execv() does not search PATH and resolves a relative argv[0] against the
+    // CURRENT directory - which the game may have chdir'd away from - so a bare
+    // or relative argv[0] would fail to relaunch and the client would just quit.
+    // Bgetappdir() returns the real executable directory; join it with argv[0]'s
+    // basename.
+    char *dir = Bgetappdir();
+    if (dir && dir[0] && argv && argv[0])
+    {
+        char const *base = Bstrrchr(argv[0], '/');
+#ifdef _WIN32
+        char const *bslash = Bstrrchr(argv[0], '\\');
+        if (bslash > base) base = bslash;
+#endif
+        base = base ? base + 1 : argv[0];
+        Bsnprintf(g_procExePath, sizeof(g_procExePath), "%s/%s", dir, base);
+    }
+    else if (argv && argv[0])
+        Bstrncpyz(g_procExePath, argv[0], sizeof(g_procExePath));
+    if (dir)
+        Xfree(dir);
 }
 
 // A desynced client can't safely keep simulating against the host, and there is
@@ -3187,12 +3247,14 @@ void Net_ClientReconnect(void)
     // Release our UDP socket first so the fresh image can rebind the same port.
     mmulti_uninitmultiplayers();
 
-    if (g_procArgv && g_procArgv[0])
+    char const *exe = g_procExePath[0] ? g_procExePath
+                    : (g_procArgv ? g_procArgv[0] : NULL);
+    if (exe && g_procArgv)
     {
 #ifdef _WIN32
-        _execv(g_procArgv[0], (char * const *)g_procArgv);
+        _execv(exe, (char * const *)g_procArgv);
 #else
-        execv(g_procArgv[0], (char * const *)g_procArgv);
+        execv(exe, (char * const *)g_procArgv);
 #endif
     }
 
@@ -3213,6 +3275,12 @@ void Net_ClearFIFO(void)
     bufferjitter = 1;
     mymaxlag = otherminlag = 0;
     movefifoplc = movefifosendplc = predictfifoplc = 0;
+
+    // Async slave outgoing stream: reset the delta base and send counter in
+    // lockstep with the fifo so the first input after this clear is encoded
+    // against the same zeroed base the master decodes it against.
+    g_asyncOutPrev = g_asyncOutCur = {};
+    g_asyncSentCount = 0;
 
     Net_InitializePrediction();
 
