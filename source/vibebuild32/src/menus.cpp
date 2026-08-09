@@ -734,9 +734,14 @@ void M_DisplayMenus(void)
 
             for (int32_t i = 0; i < nServers; i++)
             {
-                char line[80];
-                Bsnprintf(line, sizeof(line), "%-14.14s %2d/%-2d %-8.8s %s",
-                          s_list[i].name, s_list[i].players, s_list[i].maxplayers, s_list[i].map, s_list[i].addr);
+                char line[96];
+                // Primary address is the mandatory IPv4; note when IPv6 is also
+                // available for the same server.
+                char const *shown = s_list[i].addr[0] ? s_list[i].addr : s_list[i].addr6;
+                char const *v6tag = (s_list[i].addr[0] && s_list[i].addr6[0]) ? " +v6"
+                                  : (!s_list[i].addr[0] && s_list[i].addr6[0]) ? " v6" : "";
+                Bsnprintf(line, sizeof(line), "%-14.14s %2d/%-2d %-8.8s %s%s",
+                          s_list[i].name, s_list[i].players, s_list[i].maxplayers, s_list[i].map, shown, v6tag);
                 minitextshade(52, y0 + i * 9, line, (probey == i) ? 0 : 16, 0, 2 + 8 + 16);
             }
             minitextshade(52, y0 + nServers * 9, "Enter address manually...", (probey == nServers) ? 0 : 16, 0, 2 + 8 + 16);
@@ -756,7 +761,16 @@ void M_DisplayMenus(void)
             mgametext(160, 172, hdr, 0, 2 + 8 + 16);
 
             if (x == -1) { s_count = -2; ChangeToMenu(20001); }
-            else if (x >= 0 && x < nServers) { Net_LaunchAddress(s_list[x].addr); }
+            else if (x >= 0 && x < nServers)
+            {
+                // Connect over IPv4 by default (always reachable); use IPv6 when
+                // the user prefers it and it's offered, or when it's the only
+                // address the server published.
+                char const *tgt = s_list[x].addr;
+                if ((g_netPreferIPv6 && s_list[x].addr6[0]) || !tgt[0])
+                    tgt = s_list[x].addr6;
+                if (tgt[0]) Net_LaunchAddress(tgt);
+            }
             else if (x == nServers) { g_joinAddrBuf[0] = 0; inputloc = 0; KB_FlushKeyboardQueue(); ChangeToMenu(20021); }
             else if (x == nServers + 1) { s_count = -2; }   // refresh
             break;

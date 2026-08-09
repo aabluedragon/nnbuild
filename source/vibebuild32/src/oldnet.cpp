@@ -26,6 +26,10 @@ char g_punchTargetAddr[128] = "";
 // being displayed.
 char g_joinErrorMsg[128] = "";
 
+// When set (cl_preferipv6), the lobby prefers a server's IPv6 address if it
+// published one. Off by default so IPv4-only clients always connect.
+int32_t g_netPreferIPv6 = 0;
+
 #ifndef _WIN32
 # include <poll.h>
 # include <unistd.h>

@@ -149,6 +149,8 @@ extern char g_masterServerAddr[128];
 extern char g_punchTargetAddr[128];
 // Reason a previous join failed, shown once in the JOIN GAME menu; empty if none.
 extern char g_joinErrorMsg[128];
+// cl_preferipv6: lobby prefers a server's IPv6 address when it has one.
+extern int32_t g_netPreferIPv6;
 uint16_t Net_ConnectedMask(void);
 void Net_ApplyConnectedMask(uint16_t mask);
 void Net_RebuildConnectList(void);

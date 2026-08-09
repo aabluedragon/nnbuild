@@ -213,13 +213,75 @@ static int ms_resolve(const char *addr, int32_t defPort, struct sockaddr_storage
     return 1;
 }
 
+// Resolve "host[:port]" to its IPv4 and/or IPv6 endpoints (both, when the name
+// has them). Fills out4/out6 and sets *have4/*have6. Returns 1 if at least one
+// family resolved. Used to advertise a server over both families.
+static int ms_resolve_both(const char *addr, int32_t defPort,
+                           struct sockaddr_storage *out4, int *have4,
+                           struct sockaddr_storage *out6, int *have6)
+{
+    *have4 = *have6 = 0;
+
+    char host[256];
+    Bstrncpyz(host, addr, sizeof(host));
+    char portbuf[16];
+    Bsnprintf(portbuf, sizeof(portbuf), "%d", defPort);
+    const char *port = portbuf;
+
+    if (host[0] == '[')
+    {
+        char *close = Bstrchr(host, ']');
+        if (close)
+        {
+            *close = 0;
+            memmove(host, host + 1, Bstrlen(host + 1) + 1);
+            if (close[1] == ':') port = close + 2;
+        }
+    }
+    else
+    {
+        char *colon = Bstrchr(host, ':');
+        if (colon && !Bstrchr(colon + 1, ':'))
+        {
+            *colon = 0;
+            port = colon + 1;
+        }
+    }
+
+    struct addrinfo hints, *res = NULL;
+    Bmemset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    ms_netinit();
+    if (getaddrinfo(host, port, &hints, &res) != 0 || !res)
+        return 0;
+
+    for (struct addrinfo *ai = res; ai; ai = ai->ai_next)
+    {
+        if (ai->ai_family == AF_INET && !*have4)
+        {
+            Bmemcpy(out4, ai->ai_addr, ai->ai_addrlen);
+            *have4 = 1;
+        }
+        else if (ai->ai_family == AF_INET6 && !*have6)
+        {
+            Bmemcpy(out6, ai->ai_addr, ai->ai_addrlen);
+            *have6 = 1;
+        }
+    }
+    freeaddrinfo(res);
+    return (*have4 || *have6);
+}
+
 // ---------------------------------------------------------------------------
 // masterserver: the standalone directory / STUN process
 // ---------------------------------------------------------------------------
 
 struct ms_entry_t
 {
-    struct sockaddr_storage src;   // where the advertise came from (public endpoint)
+    uint32_t serverId;             // random per-server-instance id (merges v4+v6)
+    struct sockaddr_storage src4;  // public IPv4 advertise endpoint (family 0 = none)
+    struct sockaddr_storage src6;  // public IPv6 advertise endpoint (family 0 = none)
     uint16_t gameport;             // the port the game actually listens on
     uint8_t players, maxplayers;
     char name[32];
@@ -290,33 +352,54 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
 
     if (type == MS_ADVERTISE)
     {
-        if (pos + 4 > n) return;
+        if (pos + 8 > n) return;
         uint16_t gameport = (uint16_t)(buf[pos] | (buf[pos + 1] << 8)); pos += 2;
         uint8_t players = buf[pos++];
         uint8_t maxp = buf[pos++];
+        uint32_t serverId = (uint32_t)(buf[pos] | (buf[pos+1] << 8) | (buf[pos+2] << 16) | ((uint32_t)buf[pos+3] << 24));
+        pos += 4;
         char name[32] = "", map[24] = "";
         ms_getstr(buf, n, &pos, name, sizeof(name));
         ms_getstr(buf, n, &pos, map, sizeof(map));
 
+        // One logical server may advertise from both its IPv4 and IPv6 endpoint;
+        // merge those by serverId into a single entry that carries both. Match an
+        // existing entry by serverId, else claim a free slot.
         int slot = -1, freeSlot = -1;
         for (int i = 0; i < MS_MAX_ENTRIES; i++)
         {
-            if (g_ent[i].used) { if (ms_sameaddr(&g_ent[i].src, from)) { slot = i; break; } }
+            if (g_ent[i].used) { if (g_ent[i].serverId == serverId) { slot = i; break; } }
             else if (freeSlot < 0) freeSlot = i;
         }
         if (slot < 0) slot = freeSlot;
         if (slot >= 0)
         {
             int fresh = !g_ent[slot].used;
+            if (fresh)
+            {
+                Bmemset(&g_ent[slot], 0, sizeof(g_ent[slot]));
+                g_ent[slot].serverId = serverId;
+            }
             g_ent[slot].used = 1;
-            g_ent[slot].src = *from;
+            // Record this advertise's endpoint in the matching family slot.
+            int hadFamily;
+            if (from->ss_family == AF_INET6)
+            {
+                hadFamily = (g_ent[slot].src6.ss_family != 0);
+                g_ent[slot].src6 = *from;
+            }
+            else
+            {
+                hadFamily = (g_ent[slot].src4.ss_family != 0);
+                g_ent[slot].src4 = *from;
+            }
             g_ent[slot].gameport = gameport;
             g_ent[slot].players = players;
             g_ent[slot].maxplayers = maxp;
             Bstrncpyz(g_ent[slot].name, name, sizeof(g_ent[slot].name));
             Bstrncpyz(g_ent[slot].map, map, sizeof(g_ent[slot].map));
             g_ent[slot].lastseen = now;
-            if (fresh)
+            if (fresh || !hadFamily)
             {
                 char a[128]; ms_addr_to_str(from, gameport, a, sizeof(a));
                 LOG_F(INFO, "masterserver: + %s \"%s\" (%s)", a, name, map);
@@ -325,8 +408,19 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
     }
     else if (type == MS_ADVERTISE_STOP)
     {
+        // Match by serverId when present (clears both families at once); fall
+        // back to source-address match for older stop packets.
+        uint32_t serverId = 0;
+        int haveId = (pos + 4 <= n);
+        if (haveId)
+            serverId = (uint32_t)(buf[pos] | (buf[pos+1] << 8) | (buf[pos+2] << 16) | ((uint32_t)buf[pos+3] << 24));
         for (int i = 0; i < MS_MAX_ENTRIES; i++)
-            if (g_ent[i].used && ms_sameaddr(&g_ent[i].src, from)) g_ent[i].used = 0;
+        {
+            if (!g_ent[i].used) continue;
+            if (haveId ? (g_ent[i].serverId == serverId)
+                       : (ms_sameaddr(&g_ent[i].src4, from) || ms_sameaddr(&g_ent[i].src6, from)))
+                g_ent[i].used = 0;
+        }
     }
     else if (type == MS_LIST_REQ)
     {
@@ -335,12 +429,15 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
         out[4] = MS_LIST_RESP;
         int op = 6;   // out[5] = count (filled below)
         int count = 0;
-        for (int i = 0; i < MS_MAX_ENTRIES && op < (int)sizeof(out) - 80; i++)
+        for (int i = 0; i < MS_MAX_ENTRIES && op < (int)sizeof(out) - 160; i++)
         {
             if (!g_ent[i].used) continue;
-            char a[128]; ms_addr_to_str(&g_ent[i].src, g_ent[i].gameport, a, sizeof(a));
+            char a4[128] = "", a6[128] = "";
+            if (g_ent[i].src4.ss_family) ms_addr_to_str(&g_ent[i].src4, g_ent[i].gameport, a4, sizeof(a4));
+            if (g_ent[i].src6.ss_family) ms_addr_to_str(&g_ent[i].src6, g_ent[i].gameport, a6, sizeof(a6));
             int save = op;
-            if (!ms_putstr(out, &op, sizeof(out), a)) { op = save; break; }
+            if (!ms_putstr(out, &op, sizeof(out), a4)) { op = save; break; }   // IPv4 (may be "")
+            if (!ms_putstr(out, &op, sizeof(out), a6)) { op = save; break; }   // IPv6 (may be "")
             if (op + 2 > (int)sizeof(out)) { op = save; break; }
             out[op++] = g_ent[i].players;
             out[op++] = g_ent[i].maxplayers;
@@ -371,14 +468,22 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
         for (int i = 0; i < MS_MAX_ENTRIES; i++)
         {
             if (!g_ent[i].used) continue;
-            char a[128]; ms_addr_to_str(&g_ent[i].src, g_ent[i].gameport, a, sizeof(a));
-            if (Bstrcmp(a, target)) continue;
+            // The client may be trying either the v4 or v6 address; punch out the
+            // matching family's endpoint.
+            char a4[128] = "", a6[128] = "";
+            if (g_ent[i].src4.ss_family) ms_addr_to_str(&g_ent[i].src4, g_ent[i].gameport, a4, sizeof(a4));
+            if (g_ent[i].src6.ss_family) ms_addr_to_str(&g_ent[i].src6, g_ent[i].gameport, a6, sizeof(a6));
+            const struct sockaddr_storage *srv;
+            const char *a;
+            if (a4[0] && !Bstrcmp(a4, target)) { srv = &g_ent[i].src4; a = a4; }
+            else if (a6[0] && !Bstrcmp(a6, target)) { srv = &g_ent[i].src6; a = a6; }
+            else continue;
 
             char cliAddr[128]; ms_addr_to_str(from, 0, cliAddr, sizeof(cliAddr));
             uint8_t out[192];
             Bmemcpy(out, MS_MAGIC, 4); out[4] = MS_PUNCH_NOTIFY;
             int op = 5; ms_putstr(out, &op, sizeof(out), cliAddr);
-            sendto(s, (char *)out, op, 0, (struct sockaddr *)&g_ent[i].src, ms_sslen(&g_ent[i].src));
+            sendto(s, (char *)out, op, 0, (struct sockaddr *)srv, ms_sslen(srv));
 
             uint8_t r[192];
             Bmemcpy(r, MS_MAGIC, 4); r[4] = MS_STUN_RESP;
@@ -448,34 +553,80 @@ void Masterserver_Run(int32_t port)
 // game-server side: advertise ourselves
 // ---------------------------------------------------------------------------
 
-static MS_SOCKET g_advSock = (MS_SOCKET)INVALID_SOCKET;
-static struct sockaddr_storage g_advDst;
+// Advertise over both families when the masterserver has both A and AAAA
+// records and this machine has connectivity: g_advSock4 carries the mandatory
+// IPv4 registration, g_advSock6 the optional IPv6 one. A random serverId lets
+// the masterserver merge the two into one listing.
+static MS_SOCKET g_advSock4 = (MS_SOCKET)INVALID_SOCKET;
+static MS_SOCKET g_advSock6 = (MS_SOCKET)INVALID_SOCKET;
+static struct sockaddr_storage g_advDst4, g_advDst6;
+static int g_advHave4 = 0, g_advHave6 = 0;
 static int g_advOn = 0;
 static uint32_t g_advLast = 0;
+static uint32_t g_serverId = 0;
 
 void Masterserver_SetAdvertise(const char *addr)
 {
     g_advOn = 0;
+    if (g_advSock4 != (MS_SOCKET)INVALID_SOCKET) { ms_close(g_advSock4); g_advSock4 = (MS_SOCKET)INVALID_SOCKET; }
+    if (g_advSock6 != (MS_SOCKET)INVALID_SOCKET) { ms_close(g_advSock6); g_advSock6 = (MS_SOCKET)INVALID_SOCKET; }
     if (!addr || !addr[0]) return;
-    if (!ms_resolve(addr, MASTERSERVER_DEFAULT_PORT, &g_advDst))
+
+    if (!ms_resolve_both(addr, MASTERSERVER_DEFAULT_PORT, &g_advDst4, &g_advHave4, &g_advDst6, &g_advHave6))
     {
         LOG_F(WARNING, "advertise: could not resolve masterserver '%s'", addr);
         return;
     }
-    if (g_advSock != (MS_SOCKET)INVALID_SOCKET) { ms_close(g_advSock); g_advSock = (MS_SOCKET)INVALID_SOCKET; }
-    g_advSock = ms_opensocket(g_advDst.ss_family, -1);
-    if (g_advSock == (MS_SOCKET)INVALID_SOCKET)
+
+    if (g_advHave4)
+    {
+        g_advSock4 = ms_opensocket(AF_INET, -1);
+        if (g_advSock4 != (MS_SOCKET)INVALID_SOCKET) ms_setnonblock(g_advSock4);
+        else g_advHave4 = 0;
+    }
+    if (g_advHave6)
+    {
+        g_advSock6 = ms_opensocket(AF_INET6, -1);
+        if (g_advSock6 != (MS_SOCKET)INVALID_SOCKET) ms_setnonblock(g_advSock6);
+        else g_advHave6 = 0;
+    }
+    if (!g_advHave4 && !g_advHave6)
     {
         LOG_F(WARNING, "advertise: could not open a socket");
         return;
     }
-    ms_setnonblock(g_advSock);
+
+    // A per-instance id so the masterserver folds our IPv4 and IPv6 advertises
+    // into a single listing.
+    g_serverId = ms_nowms() ^ ((uint32_t)(uintptr_t)&g_serverId) ^ (g_serverId * 2654435761u + 1u);
+    if (!g_serverId) g_serverId = 1;
+
     g_advOn = 1;
     g_advLast = 0;
-    LOG_F(INFO, "Advertising this server to masterserver '%s'", addr);
+    LOG_F(INFO, "Advertising this server to masterserver '%s' (IPv4:%s IPv6:%s)",
+          addr, g_advHave4 ? "on" : "off", g_advHave6 ? "on" : "off");
 }
 
 int32_t Masterserver_IsAdvertising(void) { return g_advOn; }
+
+static int ms_build_advertise(uint8_t *out, int cap, const char *name, int32_t gameport,
+                              int32_t players, int32_t maxplayers, const char *map)
+{
+    Bmemcpy(out, MS_MAGIC, 4);
+    out[4] = MS_ADVERTISE;
+    int op = 5;
+    out[op++] = (uint8_t)(gameport & 0xff);
+    out[op++] = (uint8_t)((gameport >> 8) & 0xff);
+    out[op++] = (uint8_t)players;
+    out[op++] = (uint8_t)maxplayers;
+    out[op++] = (uint8_t)(g_serverId & 0xff);
+    out[op++] = (uint8_t)((g_serverId >> 8) & 0xff);
+    out[op++] = (uint8_t)((g_serverId >> 16) & 0xff);
+    out[op++] = (uint8_t)((g_serverId >> 24) & 0xff);
+    ms_putstr(out, &op, cap, name ? name : "server");
+    ms_putstr(out, &op, cap, map ? map : "");
+    return op;
+}
 
 void Masterserver_AdvertisePulse(const char *name, int32_t gameport, int32_t players, int32_t maxplayers, const char *map)
 {
@@ -485,25 +636,28 @@ void Masterserver_AdvertisePulse(const char *name, int32_t gameport, int32_t pla
     g_advLast = now;
 
     uint8_t out[MS_PKT];
-    Bmemcpy(out, MS_MAGIC, 4);
-    out[4] = MS_ADVERTISE;
-    int op = 5;
-    out[op++] = (uint8_t)(gameport & 0xff);
-    out[op++] = (uint8_t)((gameport >> 8) & 0xff);
-    out[op++] = (uint8_t)players;
-    out[op++] = (uint8_t)maxplayers;
-    ms_putstr(out, &op, sizeof(out), name ? name : "server");
-    ms_putstr(out, &op, sizeof(out), map ? map : "");
-    sendto(g_advSock, (char *)out, op, 0, (struct sockaddr *)&g_advDst, ms_sslen(&g_advDst));
+    int op = ms_build_advertise(out, sizeof(out), name, gameport, players, maxplayers, map);
+
+    if (g_advHave4 && g_advSock4 != (MS_SOCKET)INVALID_SOCKET)
+        sendto(g_advSock4, (char *)out, op, 0, (struct sockaddr *)&g_advDst4, ms_sslen(&g_advDst4));
+    if (g_advHave6 && g_advSock6 != (MS_SOCKET)INVALID_SOCKET)
+        sendto(g_advSock6, (char *)out, op, 0, (struct sockaddr *)&g_advDst6, ms_sslen(&g_advDst6));
 }
 
 void Masterserver_AdvertiseStop(void)
 {
     if (!g_advOn) return;
-    uint8_t out[8];
+    uint8_t out[16];
     Bmemcpy(out, MS_MAGIC, 4);
     out[4] = MS_ADVERTISE_STOP;
-    sendto(g_advSock, (char *)out, 5, 0, (struct sockaddr *)&g_advDst, ms_sslen(&g_advDst));
+    out[5] = (uint8_t)(g_serverId & 0xff);
+    out[6] = (uint8_t)((g_serverId >> 8) & 0xff);
+    out[7] = (uint8_t)((g_serverId >> 16) & 0xff);
+    out[8] = (uint8_t)((g_serverId >> 24) & 0xff);
+    if (g_advHave4 && g_advSock4 != (MS_SOCKET)INVALID_SOCKET)
+        sendto(g_advSock4, (char *)out, 9, 0, (struct sockaddr *)&g_advDst4, ms_sslen(&g_advDst4));
+    if (g_advHave6 && g_advSock6 != (MS_SOCKET)INVALID_SOCKET)
+        sendto(g_advSock6, (char *)out, 9, 0, (struct sockaddr *)&g_advDst6, ms_sslen(&g_advDst6));
     g_advOn = 0;
 }
 
@@ -520,16 +674,15 @@ void Masterserver_SetPunchFn(void (*fn)(unsigned int, unsigned short))
 
 // Host: drain any punch requests the masterserver forwarded to our advertise
 // socket, opening a NAT hole to each waiting client via the registered callback.
-void Masterserver_HostPump(void)
+static void ms_pump_sock(MS_SOCKET s)
 {
-    if (!g_advOn || g_advSock == (MS_SOCKET)INVALID_SOCKET)
-        return;
+    if (s == (MS_SOCKET)INVALID_SOCKET) return;
     for (int guard = 0; guard < 16; guard++)
     {
         uint8_t buf[MS_PKT];
         struct sockaddr_storage from;
         socklen_t fl = sizeof(from);
-        int n = (int)recvfrom(g_advSock, (char *)buf, sizeof(buf), 0, (struct sockaddr *)&from, &fl);
+        int n = (int)recvfrom(s, (char *)buf, sizeof(buf), 0, (struct sockaddr *)&from, &fl);
         if (n < 5 || Bmemcmp(buf, MS_MAGIC, 4))
             break;
         if (buf[4] == MS_PUNCH_NOTIFY)
@@ -538,6 +691,8 @@ void Masterserver_HostPump(void)
             int pos = 5;
             ms_getstr(buf, n, &pos, cli, sizeof(cli));
             struct sockaddr_storage ca;
+            // The game socket punches over IPv4 (mmulti_punchto is IPv4); a v6
+            // client's hole-punch is handled by the client retrying directly.
             if (ms_resolve(cli, 0, &ca) && ca.ss_family == AF_INET && g_punchFn)
             {
                 const struct sockaddr_in *a = (const struct sockaddr_in *)&ca;
@@ -546,6 +701,15 @@ void Masterserver_HostPump(void)
             }
         }
     }
+}
+
+// Host: drain punch requests the masterserver forwarded to either advertise
+// socket, opening a NAT hole to each waiting client via the registered callback.
+void Masterserver_HostPump(void)
+{
+    if (!g_advOn) return;
+    ms_pump_sock(g_advSock4);
+    ms_pump_sock(g_advSock6);
 }
 
 // Client: resolve the masterserver to an IPv4 endpoint (for sending a punch
@@ -612,14 +776,16 @@ int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, i
         int pos = 6;
         for (int i = 0; i < count && got < maxout; i++)
         {
-            char a[128] = "", name[32] = "", map[24] = "";
-            if (!ms_getstr(buf, n, &pos, a, sizeof(a))) break;
+            char a4[128] = "", a6[128] = "", name[32] = "", map[24] = "";
+            if (!ms_getstr(buf, n, &pos, a4, sizeof(a4))) break;
+            if (!ms_getstr(buf, n, &pos, a6, sizeof(a6))) break;
             if (pos + 2 > n) break;
             int players = buf[pos++];
             int maxp = buf[pos++];
             if (!ms_getstr(buf, n, &pos, name, sizeof(name))) break;
             if (!ms_getstr(buf, n, &pos, map, sizeof(map))) break;
-            Bstrncpyz(out[got].addr, a, sizeof(out[got].addr));
+            Bstrncpyz(out[got].addr, a4, sizeof(out[got].addr));
+            Bstrncpyz(out[got].addr6, a6, sizeof(out[got].addr6));
             Bstrncpyz(out[got].name, name, sizeof(out[got].name));
             Bstrncpyz(out[got].map, map, sizeof(out[got].map));
             out[got].players = players;

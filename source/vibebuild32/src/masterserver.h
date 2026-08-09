@@ -29,7 +29,8 @@ void Masterserver_AdvertiseStop(void);   // send a one-shot "going away"
 // ----- Client side: query a masterserver for the lobby list ------------------
 struct msserver_t
 {
-    char addr[128];     // "a.b.c.d:port" or "[ipv6]:port" - directly usable to connect
+    char addr[128];     // IPv4 "a.b.c.d:port" - the mandatory address (may be "")
+    char addr6[128];    // IPv6 "[ipv6]:port" - optional, "" if the server has none
     char name[32];
     char map[24];
     int32_t players, maxplayers;
