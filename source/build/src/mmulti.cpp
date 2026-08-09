@@ -73,6 +73,13 @@ static int GetTickCount(void)
 
 #define PAKRATE 250  //Packet rate/sec limit ... necessary?
 int packetrate = PAKRATE;
+
+// Max datagrams a single dosendpackets() call may emit to one peer. Normal
+// gameplay has a tiny reliable window that fits in one packet, so this only
+// matters for a large streamed payload (snapshot / mod file): it lets the whole
+// unacked window go onto the wire each cycle instead of just the front packet,
+// which otherwise capped bulk transfers at ~one packet per ack round-trip.
+#define NET_MAX_PACKETS_PER_CALL 128
 #define SIMMIS 0     //Release:0  Test:100 Packets per 256 missed.
 #define SIMLAG 0     //Release:0  Test: 10 Packets to delay receipt
 #if (SIMLAG != 0)
@@ -951,45 +958,57 @@ void dosendpackets(int other)  //Host to send intially, client to send to others
     if (tims < lastsendtims[other]+1000/packetrate) return;
     lastsendtims[other] = tims;
 
-    k = 2;
-    *(int *)&pakbuf[k] = icnt0[other]; k += 4;
-    memset(&pakbuf[k],0,32);
-    for (i=icnt0[other];i<icnt0[other]+256;i++)
-        if (ipak[other][i&(FIFSIZ-1)])
-            pakbuf[((i-icnt0[other])>>3)+k] |= (1<<((i-icnt0[other])&7));
-    k += 32;
-
     while ((ocnt0[other] < ocnt1[other]) && (!opak[other][ocnt0[other]&(FIFSIZ-1)])) ocnt0[other]++;
-    for (i=ocnt0[other];i<ocnt1[other];i++)
+
+    // Emit successive datagrams covering the whole unacked window, each carrying
+    // the ack bitmap header, until the window is exhausted or the per-call cap is
+    // hit. For ordinary gameplay the window fits in one packet, so this runs
+    // exactly once (unchanged behavior); only a large transfer sends several.
+    int sendfrom = ocnt0[other];
+    int packets = 0;
+    do
     {
-        j = *(short *)&pakmem[opak[other][i&(FIFSIZ-1)]]; if (!j) continue; //packet already acked
-        if (k+6+j+4 > (int)sizeof(pakbuf))
+        k = 2;
+        *(int *)&pakbuf[k] = icnt0[other]; k += 4;
+        memset(&pakbuf[k],0,32);
+        for (i=icnt0[other];i<icnt0[other]+256;i++)
+            if (ipak[other][i&(FIFSIZ-1)])
+                pakbuf[((i-icnt0[other])>>3)+k] |= (1<<((i-icnt0[other])&7));
+        k += 32;
+
+        for (i=sendfrom;i<ocnt1[other];i++)
         {
-            if (!fullpakbufsignals[other])
+            j = *(short *)&pakmem[opak[other][i&(FIFSIZ-1)]]; if (!j) continue; //packet already acked
+            if (k+6+j+4 > (int)sizeof(pakbuf))
             {
-                LOG_F(WARNING, "mmulti: output pakbuf filled for peer %d.", other);
-                fullpakbufsignals[other] = 16;
+                if (!fullpakbufsignals[other])
+                {
+                    LOG_F(WARNING, "mmulti: output pakbuf filled for peer %d.", other);
+                    fullpakbufsignals[other] = 16;
+                }
+                break;
             }
-            break;
+
+            *(unsigned short *)&pakbuf[k] = (unsigned short)j; k += 2;
+            *(int *)&pakbuf[k] = i; k += 4;
+            memcpy(&pakbuf[k],&pakmem[opak[other][i&(FIFSIZ-1)]+2],j); k += j;
         }
+        if (i == ocnt1[other])
+            fullpakbufsignals[other] = max(fullpakbufsignals[other] - 1, 0);
 
-        *(unsigned short *)&pakbuf[k] = (unsigned short)j; k += 2;
-        *(int *)&pakbuf[k] = i; k += 4;
-        memcpy(&pakbuf[k],&pakmem[opak[other][i&(FIFSIZ-1)]+2],j); k += j;
+        *(unsigned short *)&pakbuf[k] = 0; k += 2;
+        *(unsigned short *)&pakbuf[0] = (unsigned short)k;
+        *(unsigned short *)&pakbuf[k] = getcrc16(pakbuf,k); k += 2;
+
+        /*Addfaz NatFree Start*/
+        if (nfCheckCP(other) || !natfree) //Clients only if heard from host
+            netsend(other,pakbuf,k);
+        /*Addfaz NatFree End*/
+
+        packets++;
+        sendfrom = i;   // next datagram continues after what this one packed
     }
-    if (i == ocnt1[other])
-        fullpakbufsignals[other] = max(fullpakbufsignals[other] - 1, 0);
-
-    *(unsigned short *)&pakbuf[k] = 0; k += 2;
-    *(unsigned short *)&pakbuf[0] = (unsigned short)k;
-    *(unsigned short *)&pakbuf[k] = getcrc16(pakbuf,k); k += 2;
-
-    //printf("Send: "); for(i=0;i<k;i++) printf("%02x ",pakbuf[i]); printf("\n");
-
-    /*Addfaz NatFree Start*/
-    if (nfCheckCP(other) || !natfree) //Clients only if heard from host
-        netsend(other,pakbuf,k);
-    /*Addfaz NatFree End*/
+    while (sendfrom < ocnt1[other] && packets < NET_MAX_PACKETS_PER_CALL);
 }
 
 void mmulti_sendpacket(int other, unsigned char *bufptr, int messleng)

@@ -10,6 +10,8 @@
 #else
 # include <unistd.h>   // execv
 #endif
+#include <dirent.h>    // recursive scan for an already-present mod file
+#include <sys/stat.h>
 
 // Masterserver the in-game lobby queries; overridable with the cl_masterserver
 // cvar. Defaults to localhost for local play/testing.
@@ -59,7 +61,16 @@ static uint32_t lateJoinAnnounceStart = 0; // master: when we began announcing t
 static uint32_t lateJoinLastAnnounce = 0;  // master: last announce (re)send time
 static bool lateJoinJoinerReady = false;   // master: joiner reached its main loop (its READY arrived)
 static uint32_t lateJoinClientStartMs = 0; // joiner: when we entered late-join wait (backstop timeout)
+static uint32_t lateJoinLastProgressMs = 0; // joiner: last time snapshot/file data arrived (idle timeout)
 static int32_t lateJoinGoSlot = -1;
+
+// Abort the late join only after this long with NO progress at all - a genuine
+// stall (dead host / lost link), never while a large mod download is streaming.
+#define NET_LATEJOIN_IDLE_MS 20000
+
+// Called whenever snapshot or file-transfer data arrives during a late join, so
+// the idle timeout above measures a real stall rather than total elapsed time.
+static inline void Net_NoteLateJoinProgress(void) { lateJoinLastProgressMs = timerGetTicks(); }
 
 // Async slave: our outgoing input stream, kept independent of the authoritative
 // fifo (which is master-driven) so a master substitution can't corrupt the
@@ -1282,6 +1293,82 @@ static int Net_HaveFile(const char *name, int32_t size, uint32_t crc)
     return have == crc;
 }
 
+// Recursively scan `dir` (bounded depth) for a file whose basename matches
+// `wantBase` case-insensitively and whose contents match size+crc. Fills `out`
+// with the full path and returns 1 on the first match.
+static int Net_ScanDirForFile(const char *dir, const char *wantBase, int32_t size, uint32_t crc,
+                              int depth, char *out, int32_t outcap)
+{
+    if (depth > 6)
+        return 0;
+    DIR *d = opendir(dir[0] ? dir : ".");
+    if (!d)
+        return 0;
+
+    int found = 0;
+    struct dirent *de;
+    while (!found && (de = readdir(d)) != NULL)
+    {
+        if (!Bstrcmp(de->d_name, ".") || !Bstrcmp(de->d_name, ".."))
+            continue;
+
+        char path[BMAX_PATH];
+        Bsnprintf(path, sizeof(path), "%s/%s", dir, de->d_name);
+
+        struct stat st;
+        if (stat(path, &st) != 0)
+            continue;
+
+        if (S_ISDIR(st.st_mode))
+            found = Net_ScanDirForFile(path, wantBase, size, crc, depth + 1, out, outcap);
+        else if (S_ISREG(st.st_mode) && (int32_t)st.st_size == size && !Bstrcasecmp(de->d_name, wantBase))
+        {
+            // name + size match - confirm identical content (same checksum the
+            // host advertised) before trusting it.
+            FILE *fp = fopen(path, "rb");
+            if (fp)
+            {
+                char *tmp = (char *)Xmalloc(size);
+                size_t const rd = fread(tmp, 1, size, fp);
+                fclose(fp);
+                if ((int32_t)rd == size && Net_FileCrc(tmp, size) == crc)
+                {
+                    Bstrncpyz(out, path, outcap);
+                    found = 1;
+                }
+                Xfree(tmp);
+            }
+        }
+    }
+    closedir(d);
+    return found;
+}
+
+// Look for an already-present identical copy of an offered file anywhere under
+// the working directory (and the mod directory) - matched by basename
+// (case-insensitive) plus size + content checksum. Returns 1 and fills `out`.
+static int Net_FindExistingFile(const char *name, int32_t size, uint32_t crc, char *out, int32_t outcap)
+{
+    if (size <= 0)
+        return 0;
+    const char *fslash = Bstrrchr(name, '/');
+    const char *bslash = Bstrrchr(name, '\\');
+    const char *base = max(fslash, bslash);
+    base = base ? base + 1 : name;
+    if (!base[0])
+        return 0;
+
+    // Scan the working-directory tree only. Also scan g_modDir when it is a
+    // real, scoped subfolder - never a filesystem root like "/" (which would
+    // crawl the whole disk and could match an unrelated copy).
+    if (Net_ScanDirForFile(".", base, size, crc, 0, out, outcap))
+        return 1;
+    if (g_modDir[0] && g_modDir[0] != '/' && Bstrcmp(g_modDir, ".") && Bstrcmp(g_modDir, "..")
+        && Net_ScanDirForFile(g_modDir, base, size, crc, 0, out, outcap))
+        return 1;
+    return 0;
+}
+
 // Block until the reliable-output backlog for every serviced peer drains below
 // a safe bound, so a large streamed payload (snapshot / mod file) can't outrun
 // the 512-entry per-peer ring and get silently overwritten. We pump the network
@@ -1423,6 +1510,7 @@ static void Net_ReceiveFileHeader(void)
 
     DO_FREE_AND_NULL(g_recvFileBuf);
     g_recvFileChunksGot = 0;
+    Net_NoteLateJoinProgress();
 
     // Only download a file we don't already have. A built-in map (E1L3 etc.
     // ships inside the GRP) or any other file we share byte-for-byte with the
@@ -1434,6 +1522,28 @@ static void Net_ReceiveFileHeader(void)
     if (Net_HaveFile(g_recvFileName, size, g_recvFileCrc))
     {
         LOG_F(INFO, "Host offered %s (%d bytes); already have it, skipping download", g_recvFileName, size);
+        return;
+    }
+
+    // Also look through our directory tree: the user may already have this mod
+    // sitting in a subfolder (a different name-case, or just not on the search
+    // path). If a file whose basename matches case-insensitively also matches
+    // byte-for-byte (same size + content checksum the host sent), reuse it
+    // instead of downloading - mounting a group from where it already lives.
+    char foundPath[BMAX_PATH];
+    if (Net_FindExistingFile(g_recvFileName, size, g_recvFileCrc, foundPath, sizeof(foundPath)))
+    {
+        LOG_F(INFO, "Host offered %s (%d bytes); found an identical copy at %s, using it instead of downloading",
+              g_recvFileName, size, foundPath);
+        const char *ext = Bstrrchr(g_recvFileName, '.');
+        if (ext && (!Bstrcasecmp(ext, ".grp") || !Bstrcasecmp(ext, ".zip")
+                 || !Bstrcasecmp(ext, ".pk3") || !Bstrcasecmp(ext, ".pk4")))
+        {
+            if (initgroupfile(foundPath) != -1)
+                LOG_F(INFO, "Mounted existing group file %s", foundPath);
+        }
+        Bsprintf(buf, "Using local %s", g_recvFileName);
+        G_AddUserQuote(buf);
         return;
     }
 
@@ -1450,6 +1560,7 @@ static void Net_ReceiveFileHeader(void)
 
 static void Net_ReceiveFileChunk(void)
 {
+    Net_NoteLateJoinProgress();
     if (g_recvFileBuf == NULL)
         return;
     int32_t const seq = B_UNBUF16(&packbuf[1]);
@@ -2105,6 +2216,7 @@ void Net_ParsePackets(void)
                     Bstrncpyz(g_lateJoinStatus, "Connecting to game in progress", sizeof(g_lateJoinStatus));
                     g_lateJoinPercent = 0;
                     lateJoinClientStartMs = timerGetTicks();  // start the client backstop timeout
+                    Net_NoteLateJoinProgress();
                 }
                 g_netLateJoiner = 1;
                 g_noLogo = 1;  // Straight into the game once the snapshot lands.
@@ -2130,6 +2242,7 @@ void Net_ParsePackets(void)
 
                 Bmemcpy(&snapshotBuf[seq * SNAPSHOT_CHUNK_SIZE], &packbuf[7], len);
                 snapshotChunksGot++;
+                Net_NoteLateJoinProgress();
                 if (seq == total - 1)
                     snapshotLastLen = len;
 
@@ -2694,12 +2807,12 @@ void Net_SendLateJoinReady(void)
 
     uint32_t const now = timerGetTicks();
 
-    // Backstop: never wait forever. If the transfer hasn't completed within a
-    // generous window, the master has likely given up on us (its own abort is
-    // shorter) or the link is dead - exit cleanly with a message rather than
-    // heartbeating at a blank screen until the user kills the process.
-    if (lateJoinClientStartMs && (now - lateJoinClientStartMs > 45000))
-        G_GameExit("Timed out joining the game in progress.");
+    // Backstop: abort only on a genuine stall - no snapshot/file data at all for
+    // NET_LATEJOIN_IDLE_MS. A large mod download keeps resetting the progress
+    // timer (Net_NoteLateJoinProgress), so a slow-but-advancing transfer never
+    // trips this; only a dead host or lost link does.
+    if (lateJoinClientStartMs && (now - lateJoinLastProgressMs > NET_LATEJOIN_IDLE_MS))
+        G_GameExit("Timed out joining the game in progress (no data from host).");
 
     if (now - lastReadyTic < 150)
         return;
