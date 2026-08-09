@@ -1577,6 +1577,16 @@ void P_SpawnLateJoiner(int snum)
     p->last_extra = 0; // force insert_player_sprite to (re)fill to max health
 
     insert_player_sprite(snum); // sets p->i, position, full health
+
+    // Don't always drop the joiner onto their fixed per-slot start - scatter
+    // them across the map's spawn points like a normal deathmatch (re)spawn.
+    // This runs on every machine (master, joiner and peers all call
+    // P_SpawnLateJoiner) at the identical, frozen RNG state the snapshot was
+    // captured and restored at, so the krand() pick lands on the same point
+    // everywhere and doesn't diverge the shared random stream. In co-op /
+    // fixed-respawn modes P_RandomSpawnPoint keeps the per-player start.
+    P_RandomSpawnPoint(snum);
+
     P_ResetStatus(snum);        // per-player status (dead_flag=0, velocities, ...)
     P_ResetWeapons(snum);
     P_ResetInventory(snum);

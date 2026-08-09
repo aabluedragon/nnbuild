@@ -9279,7 +9279,24 @@ MAIN_LOOP_RESTART:
                 // bar, then the percentage, each centered on a separate line.
                 videoClearScreen(0L);
 
-                int32_t const pct = clamp(g_lateJoinPercent, 0, 100);
+                // Glide the shown value toward the real progress instead of
+                // snapping chunk-to-chunk, so the bar animates smoothly. Regress
+                // instantly (a new join/phase resets progress to 0); creep
+                // forward a fraction of the remaining gap each frame - always at
+                // least 1 so it keeps moving, capped so a bursty transfer still
+                // eases in rather than jumping - giving a steady, pleasant pace.
+                int32_t const target = clamp(g_lateJoinPercent, 0, 100);
+                static int32_t s_shownPct = 0;
+                if (target < s_shownPct)
+                    s_shownPct = target;
+                else if (s_shownPct < target)
+                {
+                    int32_t step = (target - s_shownPct) / 8 + 1;
+                    if (step > 3) step = 3;
+                    s_shownPct += step;
+                }
+                int32_t const pct = s_shownPct;
+
                 int32_t const filled = pct * 20 / 100;
                 char bar[24];
                 int32_t k = 0;
@@ -9288,8 +9305,10 @@ MAIN_LOOP_RESTART:
                 bar[k++] = ']';
                 bar[k] = 0;
 
+                // Zero-pad to two digits so it reads "08%" rather than "8%"
+                // (100% naturally stays three digits).
                 char pctline[16];
-                Bsnprintf(pctline, sizeof(pctline), "%d%%", pct);
+                Bsnprintf(pctline, sizeof(pctline), "%02d%%", pct);
 
                 int32_t const anim = (int32_t)totalclock;
                 G_DrawWavyCenteredText(90, g_lateJoinStatus[0] ? g_lateJoinStatus : "Joining game in progress", anim);
