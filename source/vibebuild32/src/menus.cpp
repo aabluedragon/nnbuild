@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //-------------------------------------------------------------------------
 
 #include "duke3d.h"
+#include "masterserver.h"
 #include "mouse.h"
 #include "osd.h"
 #include "osdcmds.h"
@@ -497,6 +498,9 @@ static void modval(int min, int max,int *p,int dainc,int damodify)
 #define UNSELMENUSHADE 10
 #define DISABLEDMENUSHADE 20
 #define MENUHIGHLIGHT(x) probey==x?(sintable[((int32_t)totalclock<<5)&2047]>>12):UNSELMENUSHADE
+
+// In-game lobby (masterserver) state.
+static char g_joinAddrBuf[64];
 // #define MENUHIGHLIGHT(x) probey==x?-(sintable[((int32_t)totalclock<<4)&2047]>>12):probey-x>=0?(probey-x)<<2:-((probey-x)<<2)
 
 #define SHX(X) 0
@@ -691,6 +695,90 @@ void M_DisplayMenus(void)
             menutext(160, 100 - 18, MENUHIGHLIGHT(0), 0, "PLAYER SETUP");
             menutext(160, 100, MENUHIGHLIGHT(1), 0, "JOIN GAME");
             menutext(160, 100 + 18, MENUHIGHLIGHT(2), 0, "HOST GAME");
+            break;
+        }
+
+        case 20010:   // HOST GAME
+        {
+            rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+            menutext(160, 24, 0, 0, "HOST GAME");
+
+            x = M_Probe(160, 70, 18, 2);
+            if (x == -1) ChangeToMenu(20001);
+            else if (x == 0) Net_LaunchHost(1);   // advertise to the masterserver (internet)
+            else if (x == 1) Net_LaunchHost(0);   // LAN only
+
+            menutext(160, 70, MENUHIGHLIGHT(0), 0, "HOST INTERNET GAME");
+            menutext(160, 88, MENUHIGHLIGHT(1), 0, "HOST LAN GAME");
+            mgametext(160, 140, "Starts a 4-player listen server on E1L1.", 0, 2 + 8 + 16);
+            mgametext(160, 150, "Others join from their lobby; you can", 0, 2 + 8 + 16);
+            mgametext(160, 160, "change map from the console (map exly).", 0, 2 + 8 + 16);
+            break;
+        }
+
+        case 20020:   // JOIN GAME - masterserver lobby list
+        {
+            rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+            menutext(160, 24, 0, 0, "JOIN GAME");
+
+            static struct msserver_t s_list[12];
+            static int32_t s_count = -2;   // -2 = need to query, -1 = query failed, >=0 = results
+            if (s_count == -2)
+                s_count = Masterserver_QueryList(g_masterServerAddr, s_list, 12, 1200);
+
+            int32_t const nServers = (s_count > 0) ? (s_count > 12 ? 12 : s_count) : 0;
+            int32_t const nItems = nServers + 2;   // + "enter address" + "refresh"
+
+            int32_t const y0 = 46;
+            x = probesm(52, y0, 9, nItems);
+
+            for (int32_t i = 0; i < nServers; i++)
+            {
+                char line[80];
+                Bsnprintf(line, sizeof(line), "%-14.14s %2d/%-2d %-8.8s %s",
+                          s_list[i].name, s_list[i].players, s_list[i].maxplayers, s_list[i].map, s_list[i].addr);
+                minitextshade(52, y0 + i * 9, line, (probey == i) ? 0 : 16, 0, 2 + 8 + 16);
+            }
+            minitextshade(52, y0 + nServers * 9, "Enter address manually...", (probey == nServers) ? 0 : 16, 0, 2 + 8 + 16);
+            minitextshade(52, y0 + (nServers + 1) * 9, "Refresh list", (probey == nServers + 1) ? 0 : 16, 0, 2 + 8 + 16);
+
+            if (s_count == -1)
+                mgametext(160, 150, "Could not reach the masterserver.", 0, 2 + 8 + 16);
+            else if (nServers == 0)
+                mgametext(160, 150, "No servers advertised.", 0, 2 + 8 + 16);
+
+            char hdr[96];
+            Bsnprintf(hdr, sizeof(hdr), "Masterserver: %s", g_masterServerAddr);
+            mgametext(160, 172, hdr, 0, 2 + 8 + 16);
+
+            if (x == -1) { s_count = -2; ChangeToMenu(20001); }
+            else if (x >= 0 && x < nServers) { Net_LaunchAddress(s_list[x].addr); }
+            else if (x == nServers) { g_joinAddrBuf[0] = 0; inputloc = 0; KB_FlushKeyboardQueue(); ChangeToMenu(20021); }
+            else if (x == nServers + 1) { s_count = -2; }   // refresh
+            break;
+        }
+
+        case 20021:   // JOIN - manual address entry
+        {
+            rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+            menutext(160, 24, 0, 0, "JOIN BY ADDRESS");
+
+            mgametext(160, 64, "Enter the server address and port:", 0, 2 + 8 + 16);
+            mgametext(160, 78, "IPv4  1.2.3.4:23513", 0, 2 + 8 + 16);
+            mgametext(160, 88, "IPv6  [2001:db8::1]:23513", 0, 2 + 8 + 16);
+
+            char ch = KB_GetCh();
+            int32_t L = Bstrlen(g_joinAddrBuf);
+            if (ch == asc_BackSpace) { if (L > 0) g_joinAddrBuf[L - 1] = 0; }
+            else if (ch == asc_Enter) { if (L > 0) Net_LaunchAddress(g_joinAddrBuf); }
+            else if (ch == asc_Escape) { KB_ClearKeyDown(sc_Escape); ChangeToMenu(20020); }
+            else if (ch >= 32 && ch < 127 && L < (int32_t)sizeof(g_joinAddrBuf) - 2)
+            { g_joinAddrBuf[L] = ch; g_joinAddrBuf[L + 1] = 0; }
+
+            char field[80];
+            Bsnprintf(field, sizeof(field), "%s%s", g_joinAddrBuf, ((int32_t)totalclock & 32) ? "_" : "");
+            mgametext(160, 112, field[0] ? field : "_", 0, 2 + 8 + 16);
+            mgametext(160, 150, "ENTER to join      ESC to go back", 0, 2 + 8 + 16);
             break;
         }
 
@@ -1746,7 +1834,7 @@ cheat_for_port_credits2:
             rotatesprite(c<<16,28<<16,65536L,0,INGAMEDUKETHREEDEE,0,0,10,0,0,xdim-1,ydim-1);
             if (PLUTOPAK)   // JBF 20030804
                 rotatesprite((c+100)<<16,36<<16,65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t)totalclock<<4)&2047]>>11),0,2+8,0,0,xdim-1,ydim-1);
-            x = M_Probe(c,67,16,6);
+            x = M_Probe(c,67,16,7);
             if (x >= 0)
             {
                 if (ud.multimode > 1 && x == 0 && ud.recstat != 2)
@@ -1762,21 +1850,24 @@ cheat_for_port_credits2:
                     case 0:
                         ChangeToMenu(100);
                         break;
-                        //case 1: break;//ChangeToMenu(20001);break;   // JBF 20031128: I'm taking over the TEN menu option
                     case 1:
+                        KB_FlushKeyboardQueue();
+                        ChangeToMenu(20001);   // MULTIPLAYER (host / join)
+                        break;
+                    case 2:
                         ChangeToMenu(202);
                         break;   // JBF 20031205: was 200
-                    case 2:
+                    case 3:
                         ChangeToMenu(300);
                         break;
-                    case 3:
+                    case 4:
                         KB_FlushKeyboardQueue();
                         ChangeToMenu(400);
                         break;
-                    case 4:
+                    case 5:
                         ChangeToMenu(990);
                         break;
-                    case 5:
+                    case 6:
                         ChangeToMenu(500);
                         break;
                     }
@@ -1795,29 +1886,18 @@ cheat_for_port_credits2:
                 }
             }
 
-            menutext(c,67,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
-
-            //    menutext(c,67+16,0,1,"NETWORK GAME");
-
-            menutext(c,67+16/*+16*/,MENUHIGHLIGHT(1),PHX(-3),"OPTIONS");
-
-            menutext(c,67+16+16/*+16*/,MENUHIGHLIGHT(2),PHX(-4),"LOAD GAME");
+            menutext(c,67+16*0,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
+            menutext(c,67+16*1,MENUHIGHLIGHT(1),0,"MULTIPLAYER");
+            menutext(c,67+16*2,MENUHIGHLIGHT(2),PHX(-3),"OPTIONS");
+            menutext(c,67+16*3,MENUHIGHLIGHT(3),PHX(-4),"LOAD GAME");
 
             if (!VOLUMEALL)
-            {
-
-                menutext(c,67+16+16+16/*+16*/,MENUHIGHLIGHT(3),PHX(-5),"HOW TO ORDER");
-            }
+                menutext(c,67+16*4,MENUHIGHLIGHT(4),PHX(-5),"HOW TO ORDER");
             else
-            {
+                menutext(c,67+16*4,MENUHIGHLIGHT(4),PHX(-5),"HELP");
 
-                menutext(c,67+16+16+16/*+16*/,MENUHIGHLIGHT(3),PHX(-5),"HELP");
-            }
-
-            menutext(c,67+16+16+16+16/*+16*/,MENUHIGHLIGHT(4),PHX(-6),"CREDITS");
-
-
-            menutext(c,67+16+16+16+16+16/*+16*/,MENUHIGHLIGHT(5),PHX(-7),"QUIT");
+            menutext(c,67+16*5,MENUHIGHLIGHT(5),PHX(-6),"CREDITS");
+            menutext(c,67+16*6,MENUHIGHLIGHT(6),PHX(-7),"QUIT");
             break;
         }
 

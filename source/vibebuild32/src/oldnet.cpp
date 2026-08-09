@@ -11,6 +11,10 @@
 # include <unistd.h>   // execv
 #endif
 
+// Masterserver the in-game lobby queries; overridable with the cl_masterserver
+// cvar. Defaults to localhost for local play/testing.
+char g_masterServerAddr[128] = "127.0.0.1";
+
 #ifndef _WIN32
 # include <poll.h>
 # include <unistd.h>
@@ -3490,6 +3494,90 @@ void Net_ClientReconnect(void)
     // exec() only returns if it failed; fall back to a clean exit so a launcher
     // (or the player) can restart us.
     G_GameExit("Reconnect after desync failed; please rejoin.");
+}
+
+// Join a server chosen from the in-game lobby by relaunching ourselves as a
+// client connecting to `hostport` ("a.b.c.d:port" or "[v6]:port"). Reuses the
+// proven startup connection path rather than re-initialising mmulti mid-run.
+// Preserves the original args (minus any prior -net block) so data dirs / mods
+// stay configured.
+void Net_LaunchAddress(const char *hostport)
+{
+    if (!hostport || !hostport[0])
+        return;
+
+    char const *exe = Net_ResolveExePath();
+    if (!exe || !g_procArgv)
+    {
+        G_GameExit("Cannot relaunch to join a server.");
+        return;
+    }
+
+    static char const *newargv[80];
+    int32_t n = 0;
+    for (int32_t i = 0; g_procArgv[i] && n < 70; i++)
+    {
+        if (!Bstrcasecmp(g_procArgv[i], "-net"))   // drop any existing net block (it runs to end of line)
+            break;
+        newargv[n++] = g_procArgv[i];
+    }
+    newargv[n++] = "-net";
+    newargv[n++] = "/p23530";       // a client source port distinct from the usual host port
+    newargv[n++] = "/n0";
+    newargv[n++] = hostport;
+    newargv[n]   = NULL;
+
+    LOG_F(INFO, "Joining %s (relaunching as client)", hostport);
+    mmulti_uninitmultiplayers();
+#ifdef _WIN32
+    _execv(exe, (char * const *)newargv);
+#else
+    execv(exe, (char * const *)newargv);
+#endif
+    G_GameExit("Join relaunch failed; please restart to join.");
+}
+
+// Start hosting a listen server by relaunching with host net args (4 slots,
+// begins immediately; others late-join). If `advertise`, also publish to the
+// masterserver so it appears in the internet lobby.
+void Net_LaunchHost(int32_t advertise)
+{
+    char const *exe = Net_ResolveExePath();
+    if (!exe || !g_procArgv)
+    {
+        G_GameExit("Cannot relaunch to host.");
+        return;
+    }
+
+    static char const *nv[80];
+    int32_t n = 0;
+    for (int32_t i = 0; g_procArgv[i] && n < 66; i++)
+    {
+        if (!Bstrcasecmp(g_procArgv[i], "-net"))
+            break;
+        nv[n++] = g_procArgv[i];
+    }
+    nv[n++] = "-startnow";
+    nv[n++] = "-v1";
+    nv[n++] = "-l1";
+    if (advertise && g_masterServerAddr[0])
+    {
+        nv[n++] = "-advertise";
+        nv[n++] = g_masterServerAddr;
+    }
+    nv[n++] = "-net";
+    nv[n++] = "/p23513";
+    nv[n++] = "/n0:4";
+    nv[n]   = NULL;
+
+    LOG_F(INFO, "Hosting a listen server (relaunching)%s", advertise ? " + advertising" : "");
+    mmulti_uninitmultiplayers();
+#ifdef _WIN32
+    _execv(exe, (char * const *)nv);
+#else
+    execv(exe, (char * const *)nv);
+#endif
+    G_GameExit("Host relaunch failed; please restart to host.");
 }
 
 void Net_ClearFIFO(void)

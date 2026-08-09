@@ -891,6 +891,7 @@ osdcvardata_t cvar[] =
     { "cl_idplayers", "cl_idplayers: enable/disable name display when aiming at opponents", (void*)&ud.idplayers, CVAR_BOOL, 0, 1 },
 
     { "cl_showcoords", "cl_showcoords: show your position in the game world", (void*)&ud.coords, CVAR_BOOL, 0, 1 },
+    { "cl_masterserver", "cl_masterserver: address (host[:port]) of the masterserver the in-game lobby queries", (void*)g_masterServerAddr, CVAR_STRING, 0, sizeof(g_masterServerAddr) },
     { "cl_showweapons", "cl_showweapons: show weapons opponents are using", (void*)&ud.showweapons, CVAR_BOOL, 0, 1 },
 
     { "cl_viewbob", "cl_viewbob: enable/disable player head bobbing", (void*)&ud.viewbob, CVAR_BOOL, 0, 1 },

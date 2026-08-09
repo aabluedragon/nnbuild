@@ -139,6 +139,11 @@ OLDNET_EXTERN int32_t g_netReconnectPending; // Client: desynced, reconnect from
 OLDNET_EXTERN char g_netDesyncReason[64];    // Client: which sync stream first diverged.
 void Net_StoreProcessArgs(int32_t argc, char const * const *argv);
 void Net_ClientReconnect(void);
+void Net_LaunchAddress(const char *hostport);   // relaunch as a client joining hostport
+void Net_LaunchHost(int32_t advertise);         // relaunch as a listen host (optionally advertised)
+
+// Masterserver the in-game lobby queries (settable via cl_masterserver).
+extern char g_masterServerAddr[128];
 uint16_t Net_ConnectedMask(void);
 void Net_ApplyConnectedMask(uint16_t mask);
 void Net_RebuildConnectList(void);
