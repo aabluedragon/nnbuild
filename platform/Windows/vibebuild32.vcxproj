@@ -25,7 +25,7 @@
     <Keyword>MakeFileProj</Keyword>
     <PlatformToolset>v143</PlatformToolset>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>netduke32</ProjectName>
+    <ProjectName>vibebuild32</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -179,98 +179,98 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\source\netduke32\src\actors.h" />
-    <ClInclude Include="..\..\source\netduke32\src\chatpipe.h" />
-    <ClInclude Include="..\..\source\netduke32\src\cmdline.h" />
-    <ClInclude Include="..\..\source\netduke32\src\common_game.h" />
-    <ClInclude Include="..\..\source\netduke32\src\config.h" />
-    <ClInclude Include="..\..\source\netduke32\src\discord.h" />
-    <ClInclude Include="..\..\source\netduke32\src\dnames.h" />
-    <ClInclude Include="..\..\source\netduke32\src\duke3d.h" />
-    <ClInclude Include="..\..\source\netduke32\src\dukebot.h" />
-    <ClInclude Include="..\..\source\netduke32\src\funct.h" />
-    <ClInclude Include="..\..\source\netduke32\src\function.h" />
-    <ClInclude Include="..\..\source\netduke32\src\game.h" />
-    <ClInclude Include="..\..\source\netduke32\src\gamedef.h" />
-    <ClInclude Include="..\..\source\netduke32\src\gamedefs.h" />
-    <ClInclude Include="..\..\source\netduke32\src\gameexec.h" />
-    <ClInclude Include="..\..\source\netduke32\src\gamestructures.h" />
-    <ClInclude Include="..\..\source\netduke32\src\gametypes.h" />
-    <ClInclude Include="..\..\source\netduke32\src\gamevars.h" />
-    <ClInclude Include="..\..\source\netduke32\src\global.h" />
-    <ClInclude Include="..\..\source\netduke32\src\grpscan.h" />
-    <ClInclude Include="..\..\source\netduke32\src\inv.h" />
-    <ClInclude Include="..\..\source\netduke32\src\keys.h" />
-    <ClInclude Include="..\..\source\netduke32\src\macros.h" />
-    <ClInclude Include="..\..\source\netduke32\src\mapster32.h" />
-    <ClInclude Include="..\..\source\netduke32\src\mdump.h" />
-    <ClInclude Include="..\..\source\netduke32\src\names.h" />
-    <ClInclude Include="..\..\source\netduke32\src\net_predict.h" />
-    <ClInclude Include="..\..\source\netduke32\src\oldnet.h" />
-    <ClInclude Include="..\..\source\netduke32\src\osdcmds.h" />
-    <ClInclude Include="..\..\source\netduke32\src\osdfuncs.h" />
-    <ClInclude Include="..\..\source\netduke32\src\player.h" />
-    <ClInclude Include="..\..\source\netduke32\src\premap.h" />
-    <ClInclude Include="..\..\source\netduke32\src\projectiles.h" />
-    <ClInclude Include="..\..\source\netduke32\src\quotes.h" />
-    <ClInclude Include="..\..\source\netduke32\src\rts.h" />
-    <ClInclude Include="..\..\source\netduke32\src\hud.h" />
-    <ClInclude Include="..\..\source\netduke32\src\screens.h" />
-    <ClInclude Include="..\..\source\netduke32\src\sector.h" />
-    <ClInclude Include="..\..\source\netduke32\src\soundefs.h" />
-    <ClInclude Include="..\..\source\netduke32\src\sounds.h" />
-    <ClInclude Include="..\..\source\netduke32\src\standard.h" />
-    <ClInclude Include="..\..\source\netduke32\src\startwin.game.h" />
-    <ClInclude Include="..\..\source\netduke32\src\sync.h" />
-    <ClInclude Include="..\..\source\netduke32\src\utils.h" />
-    <ClInclude Include="..\..\source\netduke32\src\_functio.h" />
-    <ClInclude Include="..\..\source\netduke32\src\_midi.h" />
-    <ClInclude Include="..\..\source\netduke32\src\_rts.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\actors.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\chatpipe.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\cmdline.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\common_game.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\config.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\discord.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\dnames.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\duke3d.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\dukebot.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\funct.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\function.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\game.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\gamedef.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\gamedefs.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\gameexec.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\gamestructures.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\gametypes.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\gamevars.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\global.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\grpscan.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\inv.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\keys.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\macros.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\mapster32.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\mdump.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\names.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\net_predict.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\oldnet.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\osdcmds.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\osdfuncs.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\player.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\premap.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\projectiles.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\quotes.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\rts.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\hud.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\screens.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\sector.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\soundefs.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\sounds.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\standard.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\startwin.game.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\sync.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\utils.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\_functio.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\_midi.h" />
+    <ClInclude Include="..\..\source\vibebuild32\src\_rts.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\duke3d\rsrc\eduke32_icon.c" />
-    <ClCompile Include="..\..\source\netduke32\src\actors.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\anim.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\chatpipe.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\cmdline.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\common.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\config.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\discord.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\dnames.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\dukebot.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\game.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\gamedef.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\gameexec.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\gamestructures.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\gametypes.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\gamevars.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\global.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\grpscan.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\mdump.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\menus.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\net_predict.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\oldnet.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\osdcmds.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\osdfuncs.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\player.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\premap.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\projectiles.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\rts.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\savegame.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\hud.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\screens.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\sector.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\sounds.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\startgtk.game.cpp">
+    <ClCompile Include="..\..\source\vibebuild32\src\actors.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\anim.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\chatpipe.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\cmdline.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\common.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\config.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\discord.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\dnames.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\dukebot.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\game.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\gamedef.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\gameexec.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\gamestructures.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\gametypes.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\gamevars.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\global.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\grpscan.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\mdump.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\menus.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\net_predict.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\oldnet.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\osdcmds.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\osdfuncs.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\player.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\premap.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\projectiles.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\rts.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\savegame.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\hud.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\screens.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\sector.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\sounds.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\startgtk.game.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\source\netduke32\src\startwin.game.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\sync.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\utils.cpp" />
-    <ClCompile Include="..\..\source\netduke32\src\winbits.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\startwin.game.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\sync.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\utils.cpp" />
+    <ClCompile Include="..\..\source\vibebuild32\src\winbits.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="audiolib.vcxproj">
@@ -296,7 +296,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="..\..\source\netduke32\rsrc\gameres.rc" />
+    <ResourceCompile Include="..\..\source\vibebuild32\rsrc\gameres.rc" />
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="eduke32.exe.manifest" />

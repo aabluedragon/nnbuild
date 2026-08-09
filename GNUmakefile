@@ -699,35 +699,35 @@ endif
 
 #### NetDuke32
 
-netduke32 := netduke32
+vibebuild32 := vibebuild32
 
-netduke32_game_ldflags :=
+vibebuild32_game_ldflags :=
 
-netduke32_game_stripflags :=
+vibebuild32_game_stripflags :=
 
-netduke32_root := $(source)/$(netduke32)
-netduke32_src := $(netduke32_root)/src
-netduke32_rsrc := $(netduke32_root)/rsrc
-netduke32_obj := $(obj)/$(netduke32)
+vibebuild32_root := $(source)/$(vibebuild32)
+vibebuild32_src := $(vibebuild32_root)/src
+vibebuild32_rsrc := $(vibebuild32_root)/rsrc
+vibebuild32_obj := $(obj)/$(vibebuild32)
 
-netduke32_cflags := -I$(netduke32_src) 
+vibebuild32_cflags := -I$(vibebuild32_src) 
 
-netduke32_game_deps := audiolib mact
+vibebuild32_game_deps := audiolib mact
 
 ifeq ($(USE_DISCORDRPC), 1)
-    netduke32_game_deps += discordrpc
-    netduke32_cflags += -DDISCORD_RPC
+    vibebuild32_game_deps += discordrpc
+    vibebuild32_cflags += -DDISCORD_RPC
 endif
 
-netduke32_game := vibebuild32
+vibebuild32_game := vibebuild32
 
 ifneq (,$(APPBASENAME))
-    netduke32_game := $(APPBASENAME)
+    vibebuild32_game := $(APPBASENAME)
 endif
 
-netduke32_game_proper := VibeBuild32
+vibebuild32_game_proper := VibeBuild32
 
-netduke32_game_objs := \
+vibebuild32_game_objs := \
     actors.cpp \
     anim.cpp \
     chatpipe.cpp \
@@ -762,32 +762,32 @@ netduke32_game_objs := \
     sync.cpp \
     utils.cpp \
 
-netduke32_game_rsrc_objs :=
-netduke32_game_gen_objs :=
+vibebuild32_game_rsrc_objs :=
+vibebuild32_game_gen_objs :=
 
-netduke32_game_miscdeps :=
-netduke32_game_orderonlydeps :=
+vibebuild32_game_miscdeps :=
+vibebuild32_game_orderonlydeps :=
 
 ifeq ($(PLATFORM),DARWIN)
     ifeq ($(STARTUP_WINDOW),1)
-        netduke32_game_objs += GrpFile.game.mm GameListSource.game.mm startosx.game.mm
+        vibebuild32_game_objs += GrpFile.game.mm GameListSource.game.mm startosx.game.mm
     endif
 endif
 
 ifeq ($(PLATFORM),WINDOWS)
-    netduke32_game_objs += winbits.cpp
-    netduke32_game_rsrc_objs += gameres.rc
+    vibebuild32_game_objs += winbits.cpp
+    vibebuild32_game_rsrc_objs += gameres.rc
     ifeq ($(STARTUP_WINDOW),1)
-        netduke32_game_objs += startwin.game.cpp
+        vibebuild32_game_objs += startwin.game.cpp
     endif
 endif
 
 ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
-    netduke32_game_objs += startgtk.game.cpp
-    netduke32_game_gen_objs += game_banner.c
+    vibebuild32_game_objs += startgtk.game.cpp
+    vibebuild32_game_gen_objs += game_banner.c
 endif
 ifeq ($(RENDERTYPE),SDL)
-    netduke32_game_rsrc_objs += game_icon.c
+    vibebuild32_game_rsrc_objs += game_icon.c
 endif
 
 #### Includes
@@ -820,7 +820,7 @@ games := \
     duke3d \
     kenbuild \
     sw \
-    netduke32 \
+    vibebuild32 \
 
 libraries := \
     audiolib \
@@ -849,7 +849,7 @@ roles := \
     game \
 
 # If blank string, substring not found.
-ifeq (,$(findstring netduke32,$(MAKECMDGOALS)))
+ifeq (,$(findstring vibebuild32,$(MAKECMDGOALS)))
     roles += editor
 endif
 
@@ -1058,7 +1058,7 @@ cleantools:
 	-$(call RM,$(addsuffix $(EXESUFFIX),$($(subst clean,,$@)_targets)))
 	-$(call RMDIR,$($(subst clean,,$@)_obj))
 
-clean: cleanduke3d cleansw cleannetduke32 cleantools
+clean: cleanduke3d cleansw cleanvibebuild32 cleantools
 	-$(call RMDIR,$(obj))
 	-$(call RM,$(ebacktrace_dll))
 	-$(call RM,$(voidwrap_lib))
