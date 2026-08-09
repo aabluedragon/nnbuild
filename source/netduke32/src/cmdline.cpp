@@ -70,9 +70,9 @@ static void G_ShowParameterHelp(void)
         "-net /n0:3\tHost 3-player match in master/slave mode.\n"
         "-net /n0 192.168.0.1\tJoin specified IP in master/slave mode.\n"
         "\n"
-        "-async\t\tHost: server-authoritative netplay (don't wait on slow\n"
-        "\t\tclients). EXPERIMENTAL - desyncs when players move; prefer\n"
-        "\t\tthe default lockstep mode (equal lag for all).\n"
+        "-async\t\tHost: server-authoritative netplay - never stall on a slow\n"
+        "\t\tclient (their own input gets more latency instead). Default\n"
+        "\t\tis lockstep (equal lag for all).\n"
         "-latejoin\tHost: start with open slots that players may join mid-game.\n"
         "-startnow\tHost: begin immediately with whoever is present (even alone);\n"
         "\t\tremaining slots stay open to join anytime. Implies -latejoin.\n"
@@ -453,12 +453,14 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     // Host: server-authoritative netplay - the master never
                     // blocks on slow clients (vs lockstep's equal-lag model).
                     g_netAsyncMode = TRUE;
-                    LOG_F(WARNING, "Asynchronous (server-authoritative) netplay enabled.");
-                    // Async is EXPERIMENTAL and currently desyncs: a client
-                    // applies its own input immediately while the host buffers
-                    // it, so the two diverge the moment a player moves. Use the
-                    // default lockstep mode (omit -async) for a stable game.
-                    LOG_F(WARNING, "  -async is experimental and WILL desync when players move; omit it to use stable lockstep netplay.");
+                    // Server-authoritative: the master picks each tick's canonical
+                    // input (a slow client's is substituted, then applied when it
+                    // arrives) and every machine - including the client itself -
+                    // simulates from that, so the game never stalls on a laggard
+                    // and stays in sync. Trade-off vs lockstep: a client's own
+                    // input has a server round-trip of latency (no local
+                    // prediction yet) instead of everyone sharing the worst lag.
+                    LOG_F(INFO, "Asynchronous (server-authoritative) netplay enabled.");
                     i++;
                     continue;
                 }

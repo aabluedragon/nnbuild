@@ -200,7 +200,11 @@ void Net_GetPlayerInputFromPacket(int* j, int playerNum, input_t* osyn, input_t*
     char inputFlags = packbuf[(*j)++];
     char extFlags = packbuf[(*j)++];
 
-    if (playerNum == myconnectindex)
+    // Lockstep trusts our own local input and just skips the master's echo of
+    // it (they're identical - the master never substitutes). In async the
+    // master CAN substitute our input, so we must apply the echoed canonical
+    // version like any other player, or we desync. So only skip when NOT async.
+    if (playerNum == myconnectindex && !g_netAsyncMode)
     {
         if (inputFlags & 1) (*j) += sizeof(int16_t);
         if (inputFlags & 2) (*j) += sizeof(int16_t);
@@ -1515,6 +1519,30 @@ void Net_HandleInput(void)
     // aggregating input so every machine settles on the same tick.
     if (g_lateJoinFreeze)
         return;
+
+    // Async slave: our own player is authoritative-driven by the master's
+    // echoed canonical input (which the master may substitute when ours arrives
+    // late), so we must NOT feed local input straight into the authoritative
+    // sim the way lockstep does - that races the master and desyncs the instant
+    // we move. Just stage our input and send it; MASTER_TO_SLAVE applies the
+    // canonical version to our fifo (see Net_GetPlayerInputFromPacket), exactly
+    // like every other player.
+    if (g_netAsyncMode && numplayers >= 2 && myconnectindex != connecthead)
+    {
+        if (g_player[myconnectindex].movefifoend - movefifoplc < 100)
+        {
+            static input_t asyncOutPrev, asyncOutCur;
+            asyncOutPrev = asyncOutCur;
+            asyncOutCur = netInput;
+
+            int aj = 1;
+            packbuf[0] = PACKET_TYPE_SLAVE_TO_MASTER;
+            Net_AddPlayerInputToPacket(&aj, 0, &asyncOutPrev, &asyncOutCur);
+            Net_AddSyncInfoToPacket(&aj);
+            mmulti_sendpacket(connecthead, (unsigned char*)packbuf, aj);
+        }
+        return;
+    }
 
     if (g_player[myconnectindex].movefifoend - movefifoplc >= 100)
         return;
