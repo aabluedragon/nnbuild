@@ -43,16 +43,21 @@ Reliable + ordered delivery, per peer slot:
 - `0xaa/0xab` handshake (slave sends `0xaa`, master replies `0xab` with the
   slot + player count). `ic0 == -1` marks these special handshake packets.
 - Each datagram packs the ack bitmap **plus as many queued ordered messages as
-  fit in `MAXPAKSIZ`**, always starting from the oldest un-acked (`ocnt0`).
+  fit in `MAXPAKSIZ`**, starting from the oldest un-acked (`ocnt0`).
 
 Notable settings / fixes:
 
-- **`MAXPAKSIZ = 8192`** (was 2048). The sender only advances past the oldest
-  un-acked message and a peer acks ~once per frame, so reliable throughput is
-  `(messages-per-packet × frame-rate)`. At 2048 only one ~1 KB snapshot chunk
-  fit per datagram, pinning the late-join transfer near 40 KB/s (~7 s). Bigger
-  packets let each ack advance several chunks (~0.8 s). Gameplay packets stay
-  tiny; only the rare big transfer grows.
+- **`MAXPAKSIZ = 8192`** (was 2048) — more chunks per datagram for big
+  transfers; gameplay packets stay tiny.
+- **Whole-window send (`dosendpackets`).** Originally each call emitted only the
+  *front* packet (~7 chunks) and re-sent it every cycle until acked, so only ~7
+  chunks were ever in flight per ack round-trip — bulk transfers crawled
+  (~180 KB/s; a 22 MB mod couldn't finish before the join timeout). It now emits
+  successive datagrams covering the **whole** unacked window per call (capped by
+  `NET_MAX_PACKETS_PER_CALL = 128`). A one-packet gameplay window is unchanged
+  (loop runs once, same fast retransmit from `ocnt0`); only large streams fan
+  out. Result: 2 MB 12.6 s → 0.19 s, 22 MB → ~1.9 s. Determinism-neutral
+  (delivery stays reliable+ordered).
 - **Stale-ack clamp:** `if (ic0 > ocnt1[other]) ic0 = ocnt1[other];` before
   advancing `ocnt0`. A peer can't have received more than we sent; a larger
   `ic0` can only be a stale packet from a *previous* connection on this slot
@@ -81,9 +86,21 @@ A client may join a match already in progress:
 2. Master waits for the joiner's `LATEJOIN_READY` (the joiner only sends it once
    it's in its main loop reading packets — sending the snapshot earlier races
    the joiner's init and drops chunks).
-3. Master snapshots the paused world (a savegame via `G_SavePlayer`) and streams
-   it as `SNAPSHOT_CHUNK`s, throttled by `Net_DrainReliableWindow` (keeps the
-   512-entry ring from overflowing).
+3. Master streams the mod files it loaded (`-g` GRP/zip, via `Net_SendGameFiles`
+   → `Net_SendFile` as `FILE_HEADER`/`FILE_CHUNK`) and then snapshots the paused
+   world (a savegame via `G_SavePlayer`), streaming it as `SNAPSHOT_CHUNK`s.
+   Both are throttled by `Net_DrainReliableWindow` (keeps the 512-entry ring
+   from overflowing). The joiner writes each received file, CRC-checks it, and
+   mounts group files (`initgroupfile`).
+   - **Skip when already present:** before downloading, the joiner checks the
+     search path (`Net_HaveFile`, exact size+crc) *and* recursively scans its
+     working-dir tree (`Net_FindExistingFile`, basename case-insensitive +
+     size+crc) — a copy already sitting in a `mods/` subfolder is mounted in
+     place, no transfer.
+   - **Idle, not fixed, timeout:** the joiner aborts only after
+     `NET_LATEJOIN_IDLE_MS = 20 s` with **no** data at all
+     (`Net_NoteLateJoinProgress` resets it on every file/snapshot chunk), so a
+     large-but-progressing download never trips it; only a dead host does.
 4. Master broadcasts `LATEJOIN_GO` (slot, roster mask, auxiliary RNG seeds),
    integrates the joiner, and spawns it.
 5. Every existing peer applies the same integration + spawn **at the same
