@@ -5818,7 +5818,6 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     int32_t ds, df, dv;
                     P_GetSkinFrame(g_player[dp].pskin, 113, 1, &ds, &df, &dv);  // PLYINGDEAD -> dead frame
 
-                    int32_t const origFootOfs = P_SkinFootOffset(t->picnum, t->yrepeat, t->cstat, 0);
                     int32_t const skinBase = P_SkinBaseTile(g_player[dp].pskin);
                     t->picnum = skinBase + ds;   // single-view dead frame
                     t->pal = g_player[dp].ps->palookup;
@@ -5832,8 +5831,11 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                         t->yrepeat = clamp((t->yrepeat * num) / den, 1, 255);
                         t->xrepeat = clamp((t->xrepeat * num) / den, 1, 255);
                     }
+                    // Rest the body on the actual floor - same anchor the APLAYER
+                    // lying-dead frame uses, so there's no jump when this permanent
+                    // corpse replaces it at respawn.
                     int32_t const newFootOfs = P_SkinFootOffset(t->picnum, t->yrepeat, t->cstat, 1);
-                    t->z += origFootOfs - newFootOfs;
+                    t->z = actor[i].floorz - newFootOfs;
                     break;
                 }
                 t->z += (24 << 8);
@@ -6113,7 +6115,8 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     && apScript[scrofs_action + ACTION_PARAM_COUNT] == CON_END)
                 {
                     int32_t skinStart, skinFrames, skinViewtype;
-                    P_GetSkinFrame(g_player[p].pskin, apScript[scrofs_action + ACTION_STARTFRAME],
+                    int32_t const aplayerStart = apScript[scrofs_action + ACTION_STARTFRAME];
+                    P_GetSkinFrame(g_player[p].pskin, aplayerStart,
                                    apScript[scrofs_action + ACTION_NUMFRAMES],
                                    &skinStart, &skinFrames, &skinViewtype);
 
@@ -6151,12 +6154,18 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                         t->xrepeat = clamp((t->xrepeat * num) / den, 1, 255);
                     }
 
-                    // Vertical: re-anchor this exact frame's feet to the player's
-                    // feet, so every frame (walk, flinch, the 8-frame death, the
-                    // flat corpse) shares the same ground line instead of floating
-                    // or sinking with the tile's own height / yoffset.
+                    // Vertical: re-anchor this exact frame's feet to the ground.
+                    // Living frames follow the player's own origin (so a jump
+                    // lifts the skin); the lying-dead frame (PLYINGDEAD, the body
+                    // shown between death and respawn) rests on the actual floor,
+                    // exactly like the permanent DUKELYINGDEAD corpse that replaces
+                    // it at respawn - otherwise the player's dead z (bumped +20<<8
+                    // for Duke's corpse) leaves the enemy body sunken.
                     int32_t const newFootOfs = P_SkinFootOffset(t->picnum, t->yrepeat, t->cstat, 1);
-                    t->z += origFootOfs - newFootOfs;
+                    if (aplayerStart == 113)
+                        t->z = actor[i].floorz - newFootOfs;
+                    else
+                        t->z += origFootOfs - newFootOfs;
 
                     G_MaybeTakeOnFloorPal(t, sect);
 
