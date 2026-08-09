@@ -71,14 +71,17 @@ int32_t P_SkinBaseTile(int32_t skin)
 
 // World-z offset from a sprite's origin down to its feet for a given tile and
 // size, using the engine's own rule (see spriteheightofsptr): tile height scaled
-// by yrepeat, the CSTAT_YCENTER bit, and the per-tile yoffset. The skin renderer
-// uses this to keep an enemy tile's feet planted on the ground across frames of
-// different height / yoffset.
-int32_t P_SkinFootOffset(int32_t picnum, int32_t yrepeat, int32_t cstat)
+// by yrepeat, the CSTAT_YCENTER bit, and - only when alsotileyofs is set - the
+// per-tile art yoffset. The skin renderer anchors to the player's z WITHOUT its
+// art yoffset (a stable ground reference; the player's own tiles carry very
+// different yoffsets between e.g. standing (small) and the flat corpse (large)),
+// but places the enemy tile WITH its yoffset so it renders as the game intends.
+int32_t P_SkinFootOffset(int32_t picnum, int32_t yrepeat, int32_t cstat, int32_t alsotileyofs)
 {
     int32_t const hei = (tilesiz[picnum].y * yrepeat) << 2;
     int32_t zofs = (cstat & 128) ? (hei >> 1) : 0;
-    zofs -= picanm[picnum].yofs * yrepeat << 2;
+    if (alsotileyofs)
+        zofs -= picanm[picnum].yofs * yrepeat << 2;
     return zofs;
 }
 

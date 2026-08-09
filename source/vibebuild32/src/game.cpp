@@ -6089,10 +6089,11 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     if (skinViewtype == 5)
                         skinOffset = getofs_viewtype_mirrored<5>(t->cstat, s->ang - a);
 
-                    // Remember where the player tile's feet are so we can plant
-                    // the enemy tile's feet at the same spot after the swap.
+                    // Remember the player's ground position (its sprite origin,
+                    // ignoring the player tile's own art yoffset) so we can plant
+                    // the enemy tile's feet there after the swap.
                     int32_t const origPicnum   = t->picnum;
-                    int32_t const origFootOfs  = P_SkinFootOffset(origPicnum, t->yrepeat, t->cstat);
+                    int32_t const origFootOfs  = P_SkinFootOffset(origPicnum, t->yrepeat, t->cstat, 0);
 
                     int32_t const skinBase = P_SkinBaseTile(g_player[p].pskin);
                     t->picnum = skinBase + skinStart + skinOffset
@@ -6122,7 +6123,7 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     // feet, so every frame (walk, flinch, the 8-frame death, the
                     // flat corpse) shares the same ground line instead of floating
                     // or sinking with the tile's own height / yoffset.
-                    int32_t const newFootOfs = P_SkinFootOffset(t->picnum, t->yrepeat, t->cstat);
+                    int32_t const newFootOfs = P_SkinFootOffset(t->picnum, t->yrepeat, t->cstat, 1);
                     t->z += origFootOfs - newFootOfs;
 
                     G_MaybeTakeOnFloorPal(t, sect);
