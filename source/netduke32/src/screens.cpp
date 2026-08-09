@@ -121,6 +121,11 @@ void G_ShowScores(bool bonus)
     minitext(misc_x, score_start_y, (Gametypes[ud.coop].flags & GAMETYPE_COOP) ? "INVENTORY" : "NEMESIS", 8, 2 + 8 + 16 + 128);
     minitext(ping_x, score_start_y, "PING", 8, 2 + 8 + 16 + 128);
 
+    // Sequential position shown in the "#" column. Counts only the rows we draw,
+    // so the first real player is #1 even when slot 0 is a hidden dedicated host
+    // and regardless of any skipped empty slots - not the raw connect index.
+    int32_t rank = 0;
+
     for (i = 0; i < playerswhenstarted; i++)
     {
         // A dedicated host is a non-participating spectator, not a competitor,
@@ -140,7 +145,7 @@ void G_ShowScores(bool bonus)
 
         DukePlayer_t* p = g_player[i].ps;
 
-        Bsprintf(tempbuf, "%d", i + 1);
+        Bsprintf(tempbuf, "%d", ++rank);
         minitext(start_x, yoff, tempbuf, 0, 2 + 8 + 16 + 128);
 
         minitext(name_x, yoff, g_player[i].user_name, p->palookup, 2 + 8 + 16 + 128);
