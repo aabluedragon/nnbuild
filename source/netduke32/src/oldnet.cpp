@@ -3376,8 +3376,19 @@ void Net_CheckPlayerQuit(int i)
         }
     }
 
-    numplayers--;
-    ud.multimode--;
+    // On a late-join host, a departing player's slot stays reserved so they (or
+    // anyone) can rejoin it mid-game. Shrinking numplayers here would be
+    // permanent - nothing grows it back on a late-join - so after a few
+    // leave/rejoin cycles it would fall below 2, at which point the host stops
+    // running the ready handshake (Net_WaitForPlayers early-returns) and the
+    // next joiner hangs on "WAITING FOR PLAYERS". Keep the reserved slot count
+    // stable on the host; the connect list above already dropped the slot from
+    // active traversal, mirroring the empty-but-reserved state used at startup.
+    if (!(myconnectindex == connecthead && g_netLateJoin))
+    {
+        numplayers--;
+        ud.multimode--;
+    }
 
     if (numplayers < 2)
         S_PlaySound(GENERIC_AMBIENCE17);
