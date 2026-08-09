@@ -8924,6 +8924,11 @@ int app_main(int32_t argc, char const* const* argv)
     CONFIG_WriteSetup(1);
     CONFIG_ReadSetup();
 
+    // Re-apply the command-line audio mute: the config read just above restores
+    // the toggles from disk, which would undo the -nosound/-dedicated muting.
+    if (g_noSound) ud.config.SoundToggle = 0;
+    if (g_noMusic) ud.config.MusicToggle = 0;
+
     char const* rtsname = g_rtsNamePtr ? g_rtsNamePtr : ud.rtsname;
     RTS_Init(rtsname);
 
@@ -9001,6 +9006,8 @@ int app_main(int32_t argc, char const* const* argv)
     if (g_forceHeadless)
     {
         // Headless console server: open no audio device at all (terminal only).
+        // The sound/music toggles were already forced off after the config read
+        // above, so the running sim never calls into the uninitialized FX layer.
         LOG_F(INFO, "Headless mode: sound disabled.");
     }
     else
@@ -9163,6 +9170,10 @@ MAIN_LOOP_RESTART:
         // And restore a reconnecting player's score once its GUID has arrived.
         Net_MasterCheckRestore();
         Net_CheckMapRotation();
+        // A late joiner tells the master it's ready to receive the snapshot,
+        // so the master doesn't stream it before this loop is pumping packets.
+        if (g_netLateJoiner == 1 && !(ud.gm & MODE_GAME))
+            Net_SendLateJoinReady();
 
         if (g_netServerConsole)
             Net_PollStdin();
@@ -9186,11 +9197,8 @@ MAIN_LOOP_RESTART:
             else if (g_netLateJoiner == 1 && !(ud.gm & MODE_GAME))
             {
                 // Joining a game in progress: no world yet - show a loading
-                // screen with the current phase, a progress bar and a percent.
-                // NOTE: everything goes in a SINGLE gametext() call. Issuing two
-                // or more gametext() calls from this pre-MODE_GAME draw path
-                // wedges the joiner's packet intake and the snapshot never
-                // arrives, so status text, bar and percent share one line.
+                // screen with the current phase on its own line, then a progress
+                // bar, then the percentage, each centered on a separate line.
                 videoClearScreen(0L);
 
                 int32_t const pct = clamp(g_lateJoinPercent, 0, 100);
@@ -9202,11 +9210,12 @@ MAIN_LOOP_RESTART:
                 bar[k++] = ']';
                 bar[k] = 0;
 
-                char line[128];
-                Bsnprintf(line, sizeof(line), "%s   %s  %d%%",
-                          g_lateJoinStatus[0] ? g_lateJoinStatus : "Joining game in progress",
-                          bar, pct);
-                gametext(160, 100, line, 14, 2);
+                char pctline[16];
+                Bsnprintf(pctline, sizeof(pctline), "%d%%", pct);
+
+                gametext(160, 90, g_lateJoinStatus[0] ? g_lateJoinStatus : "Joining game in progress", 14, 2);
+                gametext(160, 102, bar, 14, 2);
+                gametext(160, 114, pctline, 14, 2);
 
                 videoNextPage();
             }

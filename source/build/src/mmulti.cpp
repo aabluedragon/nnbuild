@@ -532,6 +532,15 @@ int mmulti_slotconnected(int slot)
     return otherip[slot] != 0;
 }
 
+// A slot that mmulti_getpacket should also service even though it isn't in the
+// connect list yet (see mmulti_setextraslot). -1 disables.
+static int mmulti_extraslot = -1;
+
+void mmulti_setextraslot(int slot)
+{
+    mmulti_extraslot = slot;
+}
+
 // The game registers these so mmulti can enforce the ban list at the
 // transport handshake and report join attempts, without mmulti needing to
 // know about the game's ban policy or player naming.
@@ -562,6 +571,8 @@ void mmulti_dropslot(int slot)
 {
     if ((unsigned)slot >= MAXPLAYERS)
         return;
+    if (slot == mmulti_extraslot)
+        mmulti_extraslot = -1;
     otherip[slot] = 0;
     otherport[slot] = htons(NETPORT);
 
@@ -776,6 +787,10 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
             if (i != myconnectindex) dosendpackets(i);
             if ((networkmode == MMULTI_MODE_MS) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
         }
+        // Keep acks/retransmits flowing to a late joiner that isn't in the
+        // connect list yet, so the reliable state transfer actually completes.
+        if ((mmulti_extraslot >= 0) && (mmulti_extraslot != myconnectindex))
+            dosendpackets(mmulti_extraslot);
     }
 
     while (netread(&other,pakbuf,sizeof(pakbuf)))
@@ -931,6 +946,20 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
             }
         }
         if ((networkmode == MMULTI_MODE_MS) && (myconnectindex != connecthead)) break; //slaves in M/S mode only send to master
+    }
+
+    // Also deliver ordered packets from a late joiner not yet in the connect
+    // list, so the host can hear it (readiness, name, GUID) during the transfer.
+    if ((mmulti_extraslot >= 0) && (mmulti_extraslot != myconnectindex))
+    {
+        i = mmulti_extraslot;
+        j = ipak[i][icnt0[i]&(FIFSIZ-1)];
+        if (j)
+        {
+            messleng = *(short *)&pakmem[j]; memcpy(bufptr,&pakmem[j+2],messleng);
+            *retother = i; ipak[i][icnt0[i]&(FIFSIZ-1)] = 0; icnt0[i]++;
+            return(messleng);
+        }
     }
 
     return(0);

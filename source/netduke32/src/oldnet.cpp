@@ -31,6 +31,7 @@ static uint16_t lagDropVoteMask;   // Which slots have been voted to drop.
 static int32_t lateJoinPending = -1;
 static uint32_t lateJoinAnnounceStart = 0; // master: when we began announcing the pending join
 static uint32_t lateJoinLastAnnounce = 0;  // master: last announce (re)send time
+static bool lateJoinJoinerReady = false;   // master: joiner reached its main loop (its READY arrived)
 static int32_t lateJoinGoSlot = -1;
 
 // Per-slot client identity (from PACKET_TYPE_PLAYER_NAME). The master uses these
@@ -1780,6 +1781,16 @@ void Net_ParsePackets(void)
                 }
                 break;
             }
+            case PACKET_TYPE_LATEJOIN_READY:
+            {
+                // The late joiner has reached its main loop and is now actively
+                // reading packets, so it can safely receive the snapshot stream.
+                // Only then do we start streaming - sending earlier races the
+                // joiner's init and drops chunks it isn't yet listening for.
+                if (myconnectindex == connecthead && other == lateJoinPending)
+                    lateJoinJoinerReady = true;
+                break;
+            }
             case PACKET_TYPE_LAG_NOTIFY:
             {
                 g_netLagActive = 1;
@@ -2258,6 +2269,27 @@ void Net_SendVersion(void)
         Net_WaitForPlayers();
 }
 
+void Net_SendLateJoinReady(void)
+{
+    // Heartbeat from a late joiner to the master: "I've reached my main loop
+    // and I'm reading packets now - it's safe to stream the snapshot." Sent
+    // repeatedly (throttled) until we start receiving the snapshot, because a
+    // single ready packet can be lost while the master is still announcing.
+    static uint32_t lastReadyTic = 0;
+
+    if (!g_netLateJoiner || numplayers < 2 || myconnectindex == connecthead)
+        return;
+
+    uint32_t const now = timerGetTicks();
+    if (now - lastReadyTic < 150)
+        return;
+    lastReadyTic = now;
+
+    buf[0] = PACKET_TYPE_LATEJOIN_READY;
+    buf[1] = myconnectindex;
+    mmulti_sendpacket(connecthead, (unsigned char *)&buf[0], 2);
+}
+
 void Net_SendPlayerOptions(void)
 {
     int i,l;
@@ -2430,6 +2462,8 @@ static void Net_IntegrateLateJoin(int32_t slot)
 
     g_lateJoinFreeze = 0;
     lateJoinPending = -1;
+    // The joiner is now in the connect list; mmulti services it normally.
+    mmulti_setextraslot(-1);
 
     LOG_F(INFO, "Player %d (%s) joined the game in progress", slot, g_player[slot].user_name);
     Bsprintf(buf, "%s^00 joined", g_player[slot].user_name);
@@ -2532,7 +2566,12 @@ void Net_MasterCheckLateJoin(void)
             {
                 lateJoinPending = i;
                 g_lateJoinFreeze = 1;
+                lateJoinJoinerReady = false;
                 lateJoinAnnounceStart = lateJoinLastAnnounce = timerGetTicks();
+                // Service this slot's reliable channel even though it isn't in
+                // the connect list yet, so announce/files/snapshot deliver (with
+                // retransmits) and we can hear the joiner's readiness signal.
+                mmulti_setextraslot(i);
                 // Forget the previous occupant's identity so score restoration
                 // keys only on the GUID the NEW joiner sends (arriving during its
                 // init, before we build the GO packet). A joiner that never sends
@@ -2552,10 +2591,13 @@ void Net_MasterCheckLateJoin(void)
             return;
     }
 
-    // A reconnecting client may still be finishing its own handshake when we
-    // first announce, so a single announce can be lost. Re-send the announce
-    // (and the initial settings) for a short window so the joiner reliably
-    // learns it is joining in progress before we start streaming the snapshot.
+    // A reconnecting client can take a variable amount of time to finish its
+    // own init before it starts reading packets, so a fixed announce window is
+    // a race: announce too early and every copy is lost before the joiner is
+    // listening. Instead, keep re-announcing until the joiner proves it is up
+    // and reading packets by sending us a READY packet (lateJoinJoinerReady),
+    // and only then proceed to stream the snapshot. A generous timeout guards
+    // against a joiner that dies mid-init so we don't freeze the game forever.
     {
         uint32_t const now = timerGetTicks();
         if (now - lateJoinLastAnnounce > 200)
@@ -2565,8 +2607,18 @@ void Net_MasterCheckLateJoin(void)
             mmulti_sendpacket(lateJoinPending, (unsigned char *)packbuf, 1);
             Net_SendInitialSettingsTo(lateJoinPending);
         }
-        if (now - lateJoinAnnounceStart < 1200)
-            return;  // still inside the announce window
+        if (!lateJoinJoinerReady)
+        {
+            if (now - lateJoinAnnounceStart > 15000)
+            {
+                LOG_F(WARNING, "Late joiner in slot %d never became ready; aborting join", lateJoinPending);
+                mmulti_dropslot(lateJoinPending);
+                lateJoinPending = -1;
+                g_lateJoinFreeze = 0;
+                mmulti_setextraslot(-1);
+            }
+            return;  // keep announcing until the joiner is listening
+        }
     }
 
     // Wait until we have simulated every tick we broadcast, so that all
@@ -2586,6 +2638,7 @@ void Net_MasterCheckLateJoin(void)
         LOG_F(ERROR, "Late join: failed to write the state snapshot");
         g_lateJoinFreeze = 0;
         lateJoinPending = -1;
+        mmulti_setextraslot(-1);
         return;
     }
 
@@ -2595,6 +2648,7 @@ void Net_MasterCheckLateJoin(void)
         LOG_F(ERROR, "Late join: failed to read back the state snapshot");
         g_lateJoinFreeze = 0;
         lateJoinPending = -1;
+        mmulti_setextraslot(-1);
         return;
     }
 

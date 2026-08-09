@@ -458,8 +458,13 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 }
                 if (!Bstrcasecmp(c + 1, "dedicated"))
                 {
-                    // Host: read admin commands from stdin, log to stdout.
+                    // Host: read admin commands from stdin, log to stdout. The
+                    // operator has no view and no speakers, so mute audio too -
+                    // otherwise ambient level sounds spam "unable to play" errors
+                    // and waste CPU on a machine nobody is listening at.
                     g_netServerConsole = TRUE;
+                    g_noSound = TRUE;
+                    g_noMusic = TRUE;
                     LOG_F(INFO, "Dedicated server console enabled (reading stdin).");
                     i++;
                     continue;

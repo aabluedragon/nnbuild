@@ -84,6 +84,8 @@ enum DukePacket_t
 
     PACKET_TYPE_RESTORE_SCORE,     // Master -> everyone: set slot's score (reconnect by GUID).
 
+    PACKET_TYPE_LATEJOIN_READY,    // Late joiner -> master: I'm in my main loop, start streaming.
+
     PACKET_END, // Should remain last in list.
 };
 
@@ -101,6 +103,7 @@ void Net_ParsePackets(void);
 void Net_SendQuit(void);
 void Net_SendWeaponChoice(void);
 void Net_SendVersion(void);
+void Net_SendLateJoinReady(void);
 void Net_SendPlayerOptions(void);
 void Net_SendFragLimit(void);
 void Net_SendPlayerName(void);

@@ -27,6 +27,11 @@ int mmulti_slotconnected(int slot);
 void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip));
 int mmulti_getslotip(int slot);
 void mmulti_dropslot(int slot);
+// Also service (send acks/retransmits to, and deliver ordered packets from) a
+// slot that isn't in the active connect list yet - used so the host can talk
+// reliably with a late joiner during the state transfer, before it's folded
+// into the running game. Pass -1 to clear.
+void mmulti_setextraslot(int slot);
 void mmulti_setpackettimeout(int datimeoutcount, int daresendagaincount);
 void mmulti_uninitmultiplayers(void);
 void mmulti_sendlogon(void);
