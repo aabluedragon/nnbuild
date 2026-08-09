@@ -571,11 +571,16 @@ int mmulti_getoutputcirclesize(void)
 // know about the game's ban policy or player naming.
 static int  (*mmulti_bancheck)(int ip);
 static void (*mmulti_joinnotify)(int ip);
+// Returns nonzero if a fresh handshake arriving on an already-connected slot is
+// a reconnect (the client restarted): the game drops the stale slot and mmulti
+// withholds the 0xab so the client keeps handshaking until it can rejoin clean.
+static int  (*mmulti_reconnectnotify)(int slot);
 
-void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip))
+void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip), int (*reconnectnotify)(int slot))
 {
     mmulti_bancheck = bancheck;
     mmulti_joinnotify = joinnotify;
+    mmulti_reconnectnotify = reconnectnotify;
 }
 
 int mmulti_getslotip(int slot)
@@ -857,6 +862,14 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                         otherip[other] = snatchip;
                         otherport[other] = snatchport;
 
+                        // A fresh handshake on a slot that is already a live
+                        // in-game player means that client restarted. Let the
+                        // game drop the stale slot; withhold the 0xab so the
+                        // client keeps handshaking and is re-admitted cleanly
+                        // (with reset sequence counters) once the drop completes.
+                        if (!wasNew && mmulti_reconnectnotify && mmulti_reconnectnotify(other))
+                            break;
+
                         if (wasNew && mmulti_joinnotify)
                             mmulti_joinnotify(snatchip);
 
@@ -920,6 +933,14 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
             }
             else
             {
+                // Clamp the peer's acknowledged-count to what we've actually
+                // sent. A peer can never have received more packets than we
+                // transmitted, so ic0 > ocnt1 can only be a stale/duplicate
+                // packet from a previous connection on this slot (e.g. a client
+                // that restarted on the same slot mid-game). Honoring such an
+                // ack would fast-forward our send cursor past packets the peer
+                // never got, permanently deadlocking the reliable stream.
+                if (ic0 > ocnt1[other]) ic0 = ocnt1[other];
                 if (ocnt0[other] < ic0) ocnt0[other] = ic0;
                 for (i=ic0;i<min(ic0+256,ocnt1[other]);i++)
                     if (pakbuf[((i-ic0)>>3)+k]&(1<<((i-ic0)&7)))

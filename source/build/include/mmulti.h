@@ -24,7 +24,7 @@ int initmultiplayerscycle(void);
 void mmulti_initmultiplayers(int argc, const char * const *argv, char damultioption, char dacomrateoption, char dapriority);
 void mmulti_allowlatejoin(int minplayers);
 int mmulti_slotconnected(int slot);
-void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip));
+void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip), int (*reconnectnotify)(int slot));
 int mmulti_getslotip(int slot);
 void mmulti_dropslot(int slot);
 // Also service (send acks/retransmits to, and deliver ordered packets from) a

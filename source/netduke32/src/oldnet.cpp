@@ -843,10 +843,36 @@ static void Net_JoinNotify(int ip)
     G_AddUserQuote(buf);
 }
 
+// mmulti calls this (master only) when a fresh handshake lands on an existing
+// slot. If that slot is a live, fully-integrated in-game player, the only way it
+// can be handshaking again is that the client process restarted (left and
+// rejoined). Drop the stale connection so the client is re-admitted as a fresh
+// late joiner (with its transport sequence reset and its score restored by
+// GUID). Returning nonzero tells mmulti to withhold the 0xab, so the client
+// keeps retrying the handshake until the drop finishes and it can rejoin clean.
+// This makes rejoin work no matter how fast the client left and came back,
+// without waiting for the idle timeout to free the slot.
+static int Net_ReconnectNotify(int slot)
+{
+    if (myconnectindex != connecthead || (unsigned)slot >= MAXPLAYERS)
+        return 0;
+    if (slot == lateJoinPending)
+        return 0;  // this slot is mid-join already; a normal handshake retry
+    if (!g_player[slot].connected)
+        return 0;  // not an in-game player; let the normal join handshake proceed
+
+    if (g_pendingKickSlot < 0 && !g_lateJoinFreeze)
+    {
+        LOG_F(INFO, "Slot %d re-handshaked while in-game; dropping stale connection to re-admit", slot);
+        Net_ScheduleRemove(slot, "reconnecting");
+    }
+    return 1;  // withhold the handshake reply; the client retries after the drop
+}
+
 void Net_AdminInit(void)
 {
     Net_LoadBanList();
-    mmulti_setcallbacks(Net_BanCheck, Net_JoinNotify);
+    mmulti_setcallbacks(Net_BanCheck, Net_JoinNotify, Net_ReconnectNotify);
 }
 
 // Resolve a player reference (name or slot number string) to a connected slot,
