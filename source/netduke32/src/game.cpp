@@ -1125,7 +1125,12 @@ void G_DrawWavyCenteredText(int32_t y, const char *t, int32_t tc)
         if ((unsigned)(ac - STARTALPHANUM) > 93u) continue;
 
         one[0] = *s;
-        gametextpalbits(x, y, one, shade, pal, 2);
+        // G_PrintGameText treats x == 160 (the 320-wide screen centre) as a
+        // magic "auto-centre this string" flag, which would re-centre this lone
+        // glyph and knock it out of the row - visible as a misaligned character
+        // near the middle of a centred line (e.g. the progress bar). Nudge off
+        // that one column so every glyph lands exactly where we place it.
+        gametextpalbits((x == 160) ? 161 : x, y, one, shade, pal, 2);
         x += (*s >= '0' && *s <= '9') ? 8 : tilesiz[ac].x;
     }
 }
