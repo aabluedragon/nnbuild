@@ -218,8 +218,34 @@ independent of the game transport: 4-byte magic `"VBMS"` + 1 type byte.
   <msg>`, which the JOIN menu shows in red.
 - The master and lobby handle **IPv4 and IPv6** (separate `AF_INET`/`AF_INET6`
   sockets; exact per-family `addrlen` — macOS rejects `sockaddr_storage` len for
-  v4). **Limitation:** the game transport (mmulti) is still IPv4-only, so the
-  actual connection resolves IPv4 even for an IPv6-listed server.
+  v4). A server advertises over **both** families when it can: `SetAdvertise`
+  resolves the master's A + AAAA records, opens a v4 and v6 advertise socket, and
+  tags each pulse with a random `serverId` so the master merges the two into one
+  listing carrying both endpoints. IPv4 is mandatory; IPv6 is optional.
+- **The game transport (mmulti) itself is dual-stack** — see §7c. The lobby row
+  connects over IPv4 by default (always reachable), or IPv6 when `cl_preferipv6`
+  is set / it's the only address published.
+
+## 7c. IPv4 + IPv6 game transport (mmulti)
+
+The reliable UDP transport carries **both** families over a single dual-stack
+`AF_INET6` socket (`IPV6_V6ONLY` off), falling back to a plain `AF_INET` socket
+(`mysock_v4only`) where IPv6 is unavailable.
+
+- Every peer is identified by its full socket address (`sockaddr_in6`), not a
+  32-bit IPv4 + port. IPv4 peers are stored as **IPv4-mapped** addresses
+  (`::ffff:a.b.c.d`) so one socket handles both; `sin6_family == 0` marks an
+  empty slot. Helpers: `addr_valid/addr_eq/addr_eq_ip/addr_set4/addr_get4/
+  addr_to_str/netsendto`.
+- Peer specs (`/n0 host`, manual entry) resolve via `getaddrinfo` (`resolve_peer`):
+  `a.b.c.d[:port]`, `[ipv6::addr]:port`, bare IPv6 literals, and hostnames; an
+  IPv6 result is preferred when a name has both.
+- The IPv4-oriented ban/natfree/`getslotip` code keeps its 32-bit view through
+  `addr_get4` (returns 0 for a real IPv6 peer); `mmulti_getslotaddrstr` gives the
+  full address for logs / the connected-players list.
+- This changes **addressing only**, not the reliable-delivery sequencing, so it
+  is determinism-neutral (verified: IPv4 and native `[::1]` connects both play
+  with 0 desync).
 
 Files: `source/vibebuild32/src/masterserver.cpp` / `.h` (protocol + rendezvous),
 `oldnet.cpp` (advertise/pump/launch), `menus.cpp` (Host/Join UI).
@@ -232,7 +258,7 @@ Files: `source/vibebuild32/src/masterserver.cpp` / `.h` (protocol + rendezvous),
 |------|------|
 | `source/vibebuild32/src/oldnet.cpp` | netcode core: handshake glue, late-join, rejoin, ready barrier, file transfer, admin |
 | `source/vibebuild32/src/masterserver.cpp` | masterserver protocol, lobby list, STUN/NAT hole-punch rendezvous |
-| `source/build/src/mmulti.cpp` | reliable UDP transport |
+| `source/build/src/mmulti.cpp` | reliable UDP transport (dual-stack IPv4+IPv6) |
 | `source/vibebuild32/src/sync.cpp` | per-tick desync detection |
 | `source/vibebuild32/src/game.cpp` | sim loop `G_MoveLoop` / `G_DoMoveThings`, `movefifoplc` |
 | `source/vibebuild32/src/premap.cpp` | `P_SpawnLateJoiner`, `P_RandomSpawnPoint` |
