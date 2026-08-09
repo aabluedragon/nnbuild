@@ -292,11 +292,26 @@ struct ms_entry_t
 
 static ms_entry_t g_ent[MS_MAX_ENTRIES];
 
+// The masterserver's two listening sockets, so a reply can always leave on the
+// socket matching the destination family (a v4 socket can't send to a v6 peer,
+// and vice-versa) - needed when a punch request arrives on one family but must
+// notify a server registered on the other.
+static MS_SOCKET g_msSock4 = (MS_SOCKET)INVALID_SOCKET;
+static MS_SOCKET g_msSock6 = (MS_SOCKET)INVALID_SOCKET;
+
 // The exact sockaddr length for a family - macOS rejects sends with the padded
 // sockaddr_storage length for an IPv4 address.
 static socklen_t ms_sslen(const struct sockaddr_storage *ss)
 {
     return ss->ss_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+}
+
+// Send to dst on whichever listening socket matches its family.
+static void ms_send_family(const struct sockaddr_storage *dst, const void *buf, int len)
+{
+    MS_SOCKET s = (dst->ss_family == AF_INET6) ? g_msSock6 : g_msSock4;
+    if (s != (MS_SOCKET)INVALID_SOCKET)
+        sendto(s, (const char *)buf, len, 0, (struct sockaddr *)dst, ms_sslen(dst));
 }
 
 static int ms_sameaddr(const struct sockaddr_storage *a, const struct sockaddr_storage *b)
@@ -483,7 +498,9 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
             uint8_t out[192];
             Bmemcpy(out, MS_MAGIC, 4); out[4] = MS_PUNCH_NOTIFY;
             int op = 5; ms_putstr(out, &op, sizeof(out), cliAddr);
-            sendto(s, (char *)out, op, 0, (struct sockaddr *)srv, ms_sslen(srv));
+            // The server may be registered on the other family than the request
+            // arrived on, so send the notify out the matching-family socket.
+            ms_send_family(srv, out, op);
 
             uint8_t r[192];
             Bmemcpy(r, MS_MAGIC, 4); r[4] = MS_STUN_RESP;
@@ -511,6 +528,8 @@ void Masterserver_Run(int32_t port)
     }
     if (s4 != (MS_SOCKET)INVALID_SOCKET) ms_setnonblock(s4);
     if (s6 != (MS_SOCKET)INVALID_SOCKET) ms_setnonblock(s6);
+    g_msSock4 = s4;
+    g_msSock6 = s6;
     LOG_F(INFO, "VibeBuild32 masterserver listening on UDP %d (IPv4:%s IPv6:%s)", port,
           s4 != (MS_SOCKET)INVALID_SOCKET ? "on" : "off", s6 != (MS_SOCKET)INVALID_SOCKET ? "on" : "off");
 
@@ -665,9 +684,9 @@ void Masterserver_AdvertiseStop(void)
 // NAT hole-punch assist
 // ---------------------------------------------------------------------------
 
-static void (*g_punchFn)(unsigned int, unsigned short) = NULL;
+static void (*g_punchFn)(const char *) = NULL;
 
-void Masterserver_SetPunchFn(void (*fn)(unsigned int, unsigned short))
+void Masterserver_SetPunchFn(void (*fn)(const char *))
 {
     g_punchFn = fn;
 }
@@ -690,13 +709,11 @@ static void ms_pump_sock(MS_SOCKET s)
             char cli[128] = "";
             int pos = 5;
             ms_getstr(buf, n, &pos, cli, sizeof(cli));
-            struct sockaddr_storage ca;
-            // The game socket punches over IPv4 (mmulti_punchto is IPv4); a v6
-            // client's hole-punch is handled by the client retrying directly.
-            if (ms_resolve(cli, 0, &ca) && ca.ss_family == AF_INET && g_punchFn)
+            // Open a hole toward the waiting client (IPv4 or IPv6) from the game
+            // socket. The callback resolves the address string itself.
+            if (cli[0] && g_punchFn)
             {
-                const struct sockaddr_in *a = (const struct sockaddr_in *)&ca;
-                g_punchFn((unsigned int)a->sin_addr.s_addr, (unsigned short)a->sin_port);
+                g_punchFn(cli);
                 LOG_F(INFO, "punch: opening hole to %s for an incoming client", cli);
             }
         }
@@ -716,14 +733,29 @@ void Masterserver_HostPump(void)
 // request from the game socket) and build the request packet. Returns the
 // packet length, or 0 on failure; fills *ip/*port (network order).
 int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr,
-                                  unsigned int *ip, unsigned short *port, void *buf, int32_t cap)
+                                  char *outMasterEp, int32_t outcap, void *buf, int32_t cap)
 {
-    struct sockaddr_storage dst;
-    if (!ms_resolve(masterAddr, MASTERSERVER_DEFAULT_PORT, &dst) || dst.ss_family != AF_INET)
-        return 0;   // IPv6 masterserver punch not wired through the game socket yet
-    const struct sockaddr_in *a = (const struct sockaddr_in *)&dst;
-    *ip = (unsigned int)a->sin_addr.s_addr;
-    *port = (unsigned short)a->sin_port;
+    // Contact the masterserver over the same family as the join target, so the
+    // master learns our game endpoint in that family and can rendezvous it with
+    // the server's matching (v4 or v6) advertise endpoint.
+    struct sockaddr_storage tss;
+    if (!ms_resolve(targetAddr, 0, &tss))
+        return 0;
+    int want6 = (tss.ss_family == AF_INET6 && !ms_is_v4mapped((const struct sockaddr_in6 *)&tss));
+
+    struct sockaddr_storage m4, m6;
+    int h4 = 0, h6 = 0;
+    if (!ms_resolve_both(masterAddr, MASTERSERVER_DEFAULT_PORT, &m4, &h4, &m6, &h6))
+        return 0;
+
+    const struct sockaddr_storage *m;
+    if (want6 && h6) m = &m6;
+    else if (!want6 && h4) m = &m4;
+    else if (h4) m = &m4;         // target v6 but master has no v6: fall back to v4
+    else if (h6) m = &m6;
+    else return 0;
+
+    ms_addr_to_str(m, 0, outMasterEp, outcap);   // keep the master's own port
 
     uint8_t *out = (uint8_t *)buf;
     if (cap < 6) return 0;

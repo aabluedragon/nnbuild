@@ -656,12 +656,12 @@ void Net_HostAdvertise(void)
     static int punchFnRegistered = 0;
     if (!punchFnRegistered)
     {
-        Masterserver_SetPunchFn(mmulti_punchto);
+        Masterserver_SetPunchFn(mmulti_punchto_str);
         punchFnRegistered = 1;
     }
 
     // Service NAT-punch requests the masterserver forwards to us (opens a hole
-    // toward each waiting client via mmulti_punchto). Do this even between
+    // toward each waiting client via mmulti_punchto_str). Do this even between
     // levels, before the MODE_GAME gate below.
     Masterserver_HostPump();
 
@@ -3560,6 +3560,13 @@ void Net_LaunchAddress(const char *hostport)
     // the connection loop can request a masterserver hole-punch to it.
     newargv[n++] = "-punchtarget";
     newargv[n++] = hostport;
+    // Carry the masterserver the lobby used so the connecting client punches via
+    // the same one (its own cvar may be unset on a fresh launch).
+    if (g_masterServerAddr[0])
+    {
+        newargv[n++] = "-masteraddr";
+        newargv[n++] = g_masterServerAddr;
+    }
     newargv[n++] = "-net";
     newargv[n++] = "/p23530";       // a client source port distinct from the usual host port
     newargv[n++] = "/n0";

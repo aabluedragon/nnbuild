@@ -508,6 +508,19 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
+                if (!Bstrcasecmp(c + 1, "masteraddr"))
+                {
+                    // Client: the masterserver address the lobby used, carried
+                    // across the join relaunch so the connecting client contacts
+                    // the same master (for NAT-punch) instead of its own default.
+                    if (i + 1 < argc && argv[i + 1][0])
+                    {
+                        Bstrncpyz(g_masterServerAddr, argv[i + 1], sizeof(g_masterServerAddr));
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
                 if (!Bstrcasecmp(c + 1, "joinerror"))
                 {
                     // Client: a message describing why the previous join failed,

@@ -40,16 +40,19 @@ struct msserver_t
 // count, or -1 on error.
 int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, int32_t maxout, int32_t timeoutMs);
 
-// ----- NAT hole-punch assist (STUN) ------------------------------------------
+// ----- NAT hole-punch assist (STUN, IPv4 + IPv6) -----------------------------
 // Client: build a punch request to send from the GAME socket (so the master
-// learns our real game endpoint) - resolves the master to an IPv4 ip/port
-// (network order) and fills buf. Returns the packet length, or 0 on failure.
+// learns our real game endpoint). The master is contacted over the same family
+// as targetAddr, so v4 targets punch over v4 and v6 targets over v6. Fills
+// outMasterEp with the masterserver endpoint string to send to ("a.b.c.d:port"
+// or "[ipv6]:port") and buf with the packet. Returns the packet length, or 0.
 int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr,
-                                  unsigned int *ip, unsigned short *port, void *buf, int32_t cap);
+                                  char *outMasterEp, int32_t outcap, void *buf, int32_t cap);
 
-// Host: register a callback that opens a NAT hole to (ip,port) (network order),
-// then pump the advertise socket each frame so incoming punch requests fire it.
-void Masterserver_SetPunchFn(void (*fn)(unsigned int ip, unsigned short port));
+// Host: register a callback that opens a NAT hole toward an address string
+// ("a.b.c.d:port" or "[ipv6]:port"), then pump the advertise sockets each frame
+// so incoming punch requests fire it.
+void Masterserver_SetPunchFn(void (*fn)(const char *addr));
 void Masterserver_HostPump(void);
 
 #ifdef __cplusplus

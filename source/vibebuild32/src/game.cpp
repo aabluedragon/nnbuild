@@ -8665,18 +8665,18 @@ bool G_InitMultiplayer()
                 // join, the server is likely behind NAT: ask the masterserver to
                 // punch a hole to it. The request must go out our game socket (so
                 // the master learns our real game endpoint) - build it and send it
-                // via mmulti_sendraw. Harmless if the server is directly reachable.
+                // via mmulti_sendraw_str. Harmless if the server is directly reachable.
                 if (amClient && g_punchTargetAddr[0] && g_masterServerAddr[0])
                 {
-                    unsigned int msIp; unsigned short msPort;
+                    char msEp[128];
                     unsigned char pbuf[160];
                     int32_t const plen = Masterserver_MakePunchReq(g_masterServerAddr, g_punchTargetAddr,
-                                                                   &msIp, &msPort, pbuf, sizeof(pbuf));
+                                                                   msEp, sizeof(msEp), pbuf, sizeof(pbuf));
                     if (plen > 0)
                     {
-                        mmulti_sendraw(msIp, msPort, pbuf, plen);
+                        mmulti_sendraw_str(msEp, pbuf, plen);
                         LOG_F(INFO, "Requested NAT punch to %s via masterserver %s",
-                              g_punchTargetAddr, g_masterServerAddr);
+                              g_punchTargetAddr, msEp);
                     }
                 }
 

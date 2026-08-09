@@ -29,10 +29,11 @@ int mmulti_getslotip(int slot);
 // Full textual address of a slot ("a.b.c.d:port" or "[ipv6]:port"); "" if empty.
 void mmulti_getslotaddrstr(int slot, char *out, int outsize);
 int mmulti_getport(void);
-void mmulti_punchto(unsigned int ip, unsigned short port);
-// Send raw bytes from the game socket to (ip,port) (network order) - used to
-// deliver masterserver NAT-punch requests from the real game endpoint.
-void mmulti_sendraw(unsigned int ip, unsigned short port, const void *buf, int len);
+// Open a NAT / firewall hole toward addr ("a.b.c.d:port" or "[ipv6]:port").
+void mmulti_punchto_str(const char *addr);
+// Send raw bytes from the game socket to addr (v4 or v6) - used to deliver
+// masterserver NAT-punch requests from the real game endpoint.
+void mmulti_sendraw_str(const char *addr, const void *buf, int len);
 void mmulti_dropslot(int slot);
 // Also service (send acks/retransmits to, and deliver ordered packets from) a
 // slot that isn't in the active connect list yet - used so the host can talk

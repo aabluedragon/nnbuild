@@ -427,25 +427,26 @@ int netsend(int other, char *dabuf, int bufsiz)  //0:buffer full... can't send
     return netsendto(&otheraddr[other], dabuf, bufsiz);
 }
 
-// Send a tiny packet from the game socket to ip:port to open a NAT hole for
-// that peer (used by the masterserver-assisted join). ip/port are network byte
-// order. The peer's mmulti ignores the payload (it isn't a valid game packet);
-// the point is only that the datagram leaves through our NAT.
-void mmulti_punchto(unsigned int ip, unsigned short port)
+// Send a tiny packet from the game socket to addr ("a.b.c.d:port" or
+// "[ipv6]:port") to open a NAT / stateful-firewall hole for that peer (used by
+// the masterserver-assisted join, IPv4 and IPv6). The peer's mmulti ignores the
+// payload (it isn't a valid game packet); the point is only that the datagram
+// leaves through our NAT.
+void mmulti_punchto_str(const char *addr)
 {
     struct sockaddr_in6 a;
-    addr_set4(&a, ip, port);
+    if (!addr || !resolve_peer(addr, htons((unsigned short)NETPORT), &a)) return;
     static const char punch[5] = { 'V', 'B', 'P', 'H', 0 };
     netsendto(&a, punch, sizeof(punch));
 }
 
-// Send an arbitrary datagram from the game socket to ip:port (network order).
-// Used to talk to the masterserver over the game port, so it learns our real
-// game endpoint for hole-punching.
-void mmulti_sendraw(unsigned int ip, unsigned short port, const void *buf, int len)
+// Send an arbitrary datagram from the game socket to addr (v4 or v6). Used to
+// talk to the masterserver over the game port, so it learns our real game
+// endpoint (v4 or v6) for hole-punching.
+void mmulti_sendraw_str(const char *addr, const void *buf, int len)
 {
     struct sockaddr_in6 a;
-    addr_set4(&a, ip, port);
+    if (!addr || !resolve_peer(addr, htons((unsigned short)NETPORT), &a)) return;
     netsendto(&a, (const char *)buf, len);
 }
 
