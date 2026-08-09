@@ -9351,7 +9351,38 @@ MAIN_LOOP_RESTART:
                 G_DrawWavyCenteredText(102, bar, anim);
                 G_DrawWavyCenteredText(114, pctline, anim);
 
+                // Spinning nuke icons flanking the progress bar (one each way).
+                int16_t const spin = (int16_t)((anim << 4) & 2047);
+                rotatesprite(88 << 16, 104 << 16, 20 << 10,  spin, SPINNINGNUKEICON, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+                rotatesprite(232 << 16, 104 << 16, 20 << 10, (int16_t)(-spin), SPINNINGNUKEICON, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+
+                // Below the bar: a CANCEL option. Down highlights it, Up returns
+                // to waiting; Enter on CANCEL (or Escape) aborts the join and
+                // quits. selection 0 = keep waiting, 1 = cancel.
+                static int32_t s_cancelSel = 0;
+                if (KB_KeyPressed(sc_DownArrow)) { KB_ClearKeyDown(sc_DownArrow); s_cancelSel = 1; }
+                if (KB_KeyPressed(sc_UpArrow))   { KB_ClearKeyDown(sc_UpArrow);   s_cancelSel = 0; }
+
+                bool const cancelChosen = KB_KeyPressed(sc_Escape)
+                    || (s_cancelSel == 1 && (KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter)));
+
+                // Highlight the currently-selected line (bright/white) vs the
+                // other (dim/grey), so up/down clearly moves between them.
+                gametextpalbits(160, 132, "WAITING",
+                    s_cancelSel == 0 ? 0 : 20, s_cancelSel == 0 ? 0 : 12, 2 + 8 + 16);
+                gametextpalbits(160, 144, "CANCEL",
+                    s_cancelSel == 1 ? 0 : 20, s_cancelSel == 1 ? 10 : 12, 2 + 8 + 16);
+
                 videoNextPage();
+
+                if (cancelChosen)
+                {
+                    KB_ClearKeyDown(sc_Escape);
+                    KB_ClearKeyDown(sc_Enter);
+                    KB_ClearKeyDown(sc_kpad_Enter);
+                    s_cancelSel = 0;
+                    G_GameExit("Join cancelled.");
+                }
             }
             else if (g_netServerConsole && (ud.gm & MODE_GAME))
             {
