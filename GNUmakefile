@@ -746,6 +746,7 @@ vibebuild32_game_objs := \
     global.cpp \
     grpscan.cpp \
     hud.cpp \
+    masterserver.cpp \
     menus.cpp \
     net_predict.cpp \
     oldnet.cpp \

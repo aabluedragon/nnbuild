@@ -3,6 +3,7 @@
 #include "duke3d.h"
 #include "oldnet.h"
 #include "net_predict.h"
+#include "masterserver.h"
 
 #ifdef _WIN32
 # include <process.h>  // _execv, for the desync self-reconnect
@@ -624,6 +625,32 @@ void Net_MasterCheckDrop(void)
 // time, so it fires in async mode (which never stalls and has no lag dialog)
 // and also cuts short a lockstep stall once a peer is clearly gone, rather than
 // waiting out the full lag vote. Dropping frees the slot so someone can rejoin.
+// Host: periodically publish this server's details to the masterserver, so it
+// shows up in the in-game lobby. Cheap and rate-limited inside the pulse.
+void Net_HostAdvertise(void)
+{
+    if (myconnectindex != connecthead || !Masterserver_IsAdvertising())
+        return;
+    if (!(ud.gm & MODE_GAME))
+        return;
+
+    char map[24];
+    if (boardfilename[0])
+    {
+        char const *slash = Bstrrchr(boardfilename, '/');
+        Bstrncpyz(map, slash ? slash + 1 : boardfilename, sizeof(map));
+    }
+    else
+        Bsnprintf(map, sizeof(map), "E%dL%d", ud.volume_number + 1, ud.level_number + 1);
+
+    char const *name = g_player[connecthead].user_name;
+    int32_t const dedic = g_netServerDedicated ? 1 : 0;
+
+    Masterserver_AdvertisePulse(name && name[0] ? name : "VibeBuild32 server",
+                                mmulti_getport(), numplayers - dedic,
+                                playerswhenstarted - dedic, map);
+}
+
 void Net_MasterCheckTimeouts(void)
 {
     if (myconnectindex != connecthead || numplayers < 2)

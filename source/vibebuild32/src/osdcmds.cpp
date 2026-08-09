@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osd.h"
 #include "baselayer.h"
 #include "duke3d.h"
+#include "masterserver.h"
 #include "crc32.h"
 #include "osdfuncs.h"
 #include <ctype.h>
@@ -409,6 +410,19 @@ static int osdcmd_god(const osdfuncparm_t *parm)
         OSD_Printf("god: Not in a single-player game.\n");
     }
 
+    return OSDCMD_OK;
+}
+
+// serverlist <masterserver-addr>: query a masterserver and print the lobby.
+static int osdcmd_serverlist(const osdfuncparm_t *parm)
+{
+    const char *master = (parm->numparms >= 1) ? parm->parms[0] : "127.0.0.1";
+    struct msserver_t list[64];
+    int32_t n = Masterserver_QueryList(master, list, 64, 1500);
+    if (n < 0) { OSD_Printf("serverlist: could not reach masterserver '%s'\n", master); return OSDCMD_OK; }
+    OSD_Printf("%d server(s) advertised on %s:\n", n, master);
+    for (int32_t i = 0; i < n; i++)
+        OSD_Printf("  %-28s %2d/%-2d  %-10s %s\n", list[i].addr, list[i].players, list[i].maxplayers, list[i].map, list[i].name);
     return OSDCMD_OK;
 }
 
@@ -1692,6 +1706,7 @@ int registerosdcommands(void)
     OSD_RegisterFunction("listban","listban: show the ban list", osdcmd_listban);
     OSD_RegisterFunction("listplayers","listplayers: show connected players, slots and IPs", osdcmd_listplayers);
     OSD_RegisterFunction("nextmap","nextmap: (host) advance to the next map in the rotation", osdcmd_nextmap);
+    OSD_RegisterFunction("serverlist","serverlist [masterserver]: query a masterserver and print advertised servers", osdcmd_serverlist);
     OSD_RegisterFunction("monsters","monsters off | on [skill] | <skill>: (host) clear all monsters, or re-enable at a skill", osdcmd_monsters);
     OSD_RegisterFunction("spawn","spawn <picnum> <player | x y [z]>: (host) spawn an actor near a player or at coordinates", osdcmd_spawn);
     OSD_RegisterFunction("maplist","maplist: show the map rotation (maplist.txt)", osdcmd_maplist);

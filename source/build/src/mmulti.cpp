@@ -599,6 +599,12 @@ int mmulti_getslotip(int slot)
     return otherip[slot];
 }
 
+// The UDP port this instance is bound to (for advertising to a masterserver).
+int mmulti_getport(void)
+{
+    return myport;
+}
+
 // Fully sever a slot at the transport level (used by kick/ban and by the game
 // when it drops a departed player). Clearing the address stops us sending to
 // them and makes their packets fall through as an unknown peer. We ALSO reset

@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "screens.h"
 #include "renderlayer.h"
 #include "cmdline.h"
+#include "masterserver.h"
 
 int32_t g_commandSetup = 0;
 int32_t g_noSetup = 0;
@@ -477,6 +478,19 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     g_noSound = TRUE;
                     g_noMusic = TRUE;
                     LOG_F(INFO, "Dedicated server enabled (headless, reading stdin).");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "advertise"))
+                {
+                    // Host: publish this server to a masterserver so it shows up
+                    // in the in-game lobby. Next arg is the masterserver
+                    // host[:port] (IPv4, [IPv6] or a hostname).
+                    if (i + 1 < argc && argv[i + 1][0])
+                    {
+                        Masterserver_SetAdvertise(argv[i + 1]);
+                        i++;
+                    }
                     i++;
                     continue;
                 }

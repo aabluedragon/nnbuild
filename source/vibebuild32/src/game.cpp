@@ -38,6 +38,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osd.h"
 #include "osdfuncs.h"
 #include "osdcmds.h"
+#include "masterserver.h"
 #include "scriptfile.h"
 #include "grpscan.h"
 #include "kplib.h"
@@ -8782,6 +8783,20 @@ int app_main(int32_t argc, char const* const* argv)
     engineSetLogFile(APPBASENAME ".log", LOG_GAME_MAX);
     engineSetLogVerbosityCallback(dukeVerbosityCallback);
 
+    // -masterserver [port]: run the standalone public lobby / STUN server and
+    // nothing else - no game, no data files, no window. Handled up front before
+    // any game init so it stays a tiny network-only process.
+    for (int mi = 1; mi < argc; mi++)
+        if (!Bstrcasecmp(argv[mi], "-masterserver"))
+        {
+            int32_t msport = MASTERSERVER_DEFAULT_PORT;
+            if (mi + 1 < argc && argv[mi + 1][0] && argv[mi + 1][0] != '-')
+                msport = Batol(argv[mi + 1]);
+            LOG_F(INFO, HEAD2 " %s", s_buildRev);
+            Masterserver_Run(msport);
+            return 0;
+        }
+
 #ifdef _WIN32
 #ifndef DEBUGGINGAIDS
     if (!G_CheckCmdSwitch(argc, argv, "-noinstancechecking") && !windowsCheckAlreadyRunning())
@@ -9284,6 +9299,7 @@ MAIN_LOOP_RESTART:
         // And restore a reconnecting player's score once its GUID has arrived.
         Net_MasterCheckRestore();
         Net_CheckMapRotation();
+        Net_HostAdvertise();
         // A late joiner tells the master it's ready to receive the snapshot,
         // so the master doesn't stream it before this loop is pumping packets.
         if (g_netLateJoiner == 1 && !(ud.gm & MODE_GAME))
