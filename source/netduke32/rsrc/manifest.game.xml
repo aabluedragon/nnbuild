@@ -9,10 +9,10 @@
   <assemblyIdentity
       version="1.0.0.0"
       processorArchitecture="*"
-      name="NetDuke32"
+      name="VibeBuild32"
       type="win32"
 />
-  <description>NetDuke32</description>
+  <description>VibeBuild32</description>
   <dependency>
     <dependentAssembly>
       <assemblyIdentity

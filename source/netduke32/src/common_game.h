@@ -21,7 +21,7 @@ extern "C" {
 extern int g_useCwd;
 
 #ifndef APPNAME
-#define APPNAME             "NetDuke32"
+#define APPNAME             "VibeBuild32"
 #endif
 
 #ifndef APPBASENAME

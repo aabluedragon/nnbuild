@@ -1652,7 +1652,7 @@ cheat_for_port_credits:
                 creditscminitext(160, MENU_INCREMENT(7), "Philipp \"Helixhorned\" Kutin");
                 creditscminitext(160, MENU_INCREMENT(7), "Alex \"pogokeen\" Dawson");
 
-                mgametext(160, MENU_INCREMENT(9), "NetDuke32 developer", 0, 2 + 8 + 16);
+                mgametext(160, MENU_INCREMENT(9), "VibeBuild32 developer", 0, 2 + 8 + 16);
                 creditscminitext(160, MENU_INCREMENT(11), "Jordon \"Striker\" Moss");
 
                 mgametext(160, MENU_INCREMENT(9), "Special thanks to", 0, 2 + 8 + 16);

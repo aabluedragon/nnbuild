@@ -804,7 +804,7 @@ static void Net_SaveBanList(void)
     }
 
     char linebuf[128], ipstr[64];
-    buildvfs_fputstrptr(fil, "# NetDuke32 ban list - one entry per line: <ip> <name>\n");
+    buildvfs_fputstrptr(fil, "# " APPNAME " ban list - one entry per line: <ip> <name>\n");
     for (int32_t i = 0; i < g_banCount; i++)
     {
         Net_FormatIP(g_banList[i].ip, ipstr, sizeof(ipstr));
@@ -2141,7 +2141,7 @@ void Net_ParsePackets(void)
                         if (packbuf[2] != (char)atoi(VERSION))
                         {
                             LOG_F(ERROR, "Player has version %d, expecting %d", packbuf[2], (char)atoi(VERSION));
-                            G_GameExit("You cannot play with different versions of NetDuke32!");
+                            G_GameExit("You cannot play with different versions of " APPNAME "!");
                         }
                         if (packbuf[3] != (char)BYTEVERSION)
                         {
