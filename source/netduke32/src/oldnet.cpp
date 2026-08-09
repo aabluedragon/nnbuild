@@ -3189,30 +3189,43 @@ static char g_procExePath[BMAX_PATH];
 
 void Net_StoreProcessArgs(int32_t argc, char const * const *argv)
 {
+    // Keep this trivial: it runs at the very top of app_main, before the engine
+    // (and, on macOS, the Cocoa/CoreFoundation app) is initialized. Resolving the
+    // executable path here via Bgetappdir() would spin up NSBundle/CoreFoundation
+    // too early and corrupt the later SDL/Cocoa init (a headless server crashed
+    // in CoreFoundation). The path is resolved lazily instead, at reconnect time.
     g_procArgc = argc;
     g_procArgv = argv;
+}
 
-    // Resolve an ABSOLUTE path to our own binary for the reconnect relaunch:
-    // execv() does not search PATH and resolves a relative argv[0] against the
-    // CURRENT directory - which the game may have chdir'd away from - so a bare
-    // or relative argv[0] would fail to relaunch and the client would just quit.
-    // Bgetappdir() returns the real executable directory; join it with argv[0]'s
-    // basename.
+// Resolve an ABSOLUTE path to our own binary, lazily and only when a reconnect
+// is actually needed (long after startup, so the Cocoa app is fully up). execv()
+// does not search PATH and resolves a relative argv[0] against the CURRENT
+// directory - which the game may have chdir'd away from - so a bare/relative
+// argv[0] would fail to relaunch. Bgetappdir() gives the real executable
+// directory; join it with argv[0]'s basename.
+static char const *Net_ResolveExePath(void)
+{
+    if (g_procExePath[0])
+        return g_procExePath;
+
     char *dir = Bgetappdir();
-    if (dir && dir[0] && argv && argv[0])
+    if (dir && dir[0] && g_procArgv && g_procArgv[0])
     {
-        char const *base = Bstrrchr(argv[0], '/');
+        char const *base = Bstrrchr(g_procArgv[0], '/');
 #ifdef _WIN32
-        char const *bslash = Bstrrchr(argv[0], '\\');
+        char const *bslash = Bstrrchr(g_procArgv[0], '\\');
         if (bslash > base) base = bslash;
 #endif
-        base = base ? base + 1 : argv[0];
+        base = base ? base + 1 : g_procArgv[0];
         Bsnprintf(g_procExePath, sizeof(g_procExePath), "%s/%s", dir, base);
     }
-    else if (argv && argv[0])
-        Bstrncpyz(g_procExePath, argv[0], sizeof(g_procExePath));
+    else if (g_procArgv && g_procArgv[0])
+        Bstrncpyz(g_procExePath, g_procArgv[0], sizeof(g_procExePath));
     if (dir)
         Xfree(dir);
+
+    return g_procExePath[0] ? g_procExePath : (g_procArgv ? g_procArgv[0] : NULL);
 }
 
 // A desynced client can't safely keep simulating against the host, and there is
@@ -3247,8 +3260,7 @@ void Net_ClientReconnect(void)
     // Release our UDP socket first so the fresh image can rebind the same port.
     mmulti_uninitmultiplayers();
 
-    char const *exe = g_procExePath[0] ? g_procExePath
-                    : (g_procArgv ? g_procArgv[0] : NULL);
+    char const *exe = Net_ResolveExePath();
     if (exe && g_procArgv)
     {
 #ifdef _WIN32
