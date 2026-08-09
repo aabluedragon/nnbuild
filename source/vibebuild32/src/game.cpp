@@ -9351,17 +9351,9 @@ MAIN_LOOP_RESTART:
                 G_DrawWavyCenteredText(102, bar, anim);
                 G_DrawWavyCenteredText(114, pctline, anim);
 
-                // The atomic spinner used throughout the menus: it doesn't rotate
-                // geometrically, it cycles through 7 pre-rendered angle frames
-                // (SPINNINGNUKEICON + 0..6, advancing every 8 tics). Draw one each
-                // side, spinning opposite ways like the menu cursor does.
-                int32_t const nukeFrame = ((int32_t)totalclock >> 3) % 7;
-                rotatesprite(88 << 16, 104 << 16, 32768, 0, SPINNINGNUKEICON + nukeFrame, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-                rotatesprite(232 << 16, 104 << 16, 32768, 0, SPINNINGNUKEICON + 6 - ((6 + nukeFrame) % 7), 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-
-                // Below the bar: a CANCEL option. Down highlights it, Up returns
-                // to waiting; Enter on CANCEL (or Escape) aborts the join and
-                // quits. selection 0 = keep waiting, 1 = cancel.
+                // Two options below the bar: WAITING (keep loading) and CANCEL.
+                // Up/Down moves the selection; Enter on CANCEL (or Escape) aborts
+                // the join and quits. selection 0 = waiting, 1 = cancel.
                 static int32_t s_cancelSel = 0;
                 if (KB_KeyPressed(sc_DownArrow)) { KB_ClearKeyDown(sc_DownArrow); s_cancelSel = 1; }
                 if (KB_KeyPressed(sc_UpArrow))   { KB_ClearKeyDown(sc_UpArrow);   s_cancelSel = 0; }
@@ -9369,12 +9361,19 @@ MAIN_LOOP_RESTART:
                 bool const cancelChosen = KB_KeyPressed(sc_Escape)
                     || (s_cancelSel == 1 && (KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter)));
 
-                // Highlight the currently-selected line (bright/white) vs the
-                // other (dim/grey), so up/down clearly moves between them.
+                // Highlight the selected line (bright/white) vs the other (dim/grey).
                 gametextpalbits(160, 132, "WAITING",
                     s_cancelSel == 0 ? 0 : 20, s_cancelSel == 0 ? 0 : 12, 2 + 8 + 16);
                 gametextpalbits(160, 144, "CANCEL",
                     s_cancelSel == 1 ? 0 : 20, s_cancelSel == 1 ? 10 : 12, 2 + 8 + 16);
+
+                // The menu's atomic spinner (frame-cycled angle sprites, not a
+                // geometric rotation) acts as the cursor: draw it flanking the
+                // currently-selected option, spinning opposite ways on each side.
+                int32_t const nukeFrame = ((int32_t)totalclock >> 3) % 7;
+                int32_t const selY = (s_cancelSel == 1 ? 144 : 132) + 4;
+                rotatesprite(130 << 16, selY << 16, 32768, 0, SPINNINGNUKEICON + nukeFrame, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+                rotatesprite(190 << 16, selY << 16, 32768, 0, SPINNINGNUKEICON + 6 - ((6 + nukeFrame) % 7), 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
 
                 videoNextPage();
 
