@@ -877,7 +877,7 @@ void Net_AdminInit(void)
 
 // Resolve a player reference (name or slot number string) to a connected slot,
 // or -1. Name match is case-insensitive and may be a prefix.
-static int32_t Net_ResolvePlayer(const char *ref)
+int32_t Net_ResolvePlayer(const char *ref)
 {
     if (ref[0] >= '0' && ref[0] <= '9' && !ref[1 + strspn(ref+1, "0123456789")])
     {
@@ -1790,6 +1790,135 @@ void Net_HandleInput(void)
     }
 }
 
+// ---------------------------------------------------------------------------
+// Deterministic host events (server-console spawn / monster control)
+//
+// Any mid-game world change must happen identically on every machine at the
+// same sim tick or the lockstep simulation desyncs (see NETCODE.md). So the
+// host doesn't mutate the world directly: it schedules the change for a
+// near-future tick, applies it locally at that tick, AND broadcasts it so every
+// peer applies the same change at the same tick. Because all machines run the
+// same ticks in order with the same sprite pool and RNG state, the result is
+// bit-identical.
+// ---------------------------------------------------------------------------
+
+// How many ticks ahead of the host's latest generated input to schedule an
+// event. Peers can never simulate past the host's movefifoend, so any tick
+// beyond it is guaranteed to be in every machine's future; this margin only
+// needs to cover the reliable packet reaching the peers, which it does many
+// times over. Small so the command feels responsive.
+#define NET_HOSTEVENT_MARGIN 12
+#define NET_MAX_HOSTEVENTS 32
+
+enum { HOSTEV_MONSTERS, HOSTEV_SPAWN };
+
+struct hostevent_t { int32_t tick, kind, a, b, c, d, e, f; };
+static hostevent_t g_hostEvents[NET_MAX_HOSTEVENTS];
+static int32_t g_hostEventCount;
+
+static void Net_QueueHostEvent(hostevent_t const &ev)
+{
+    if (g_hostEventCount < NET_MAX_HOSTEVENTS)
+        g_hostEvents[g_hostEventCount++] = ev;
+}
+
+static void Net_ApplyHostEvent(hostevent_t const &ev)
+{
+    switch (ev.kind)
+    {
+        case HOSTEV_MONSTERS:
+        {
+            int32_t const on = ev.a, skill = ev.b;
+            DMFLAGS_SET(DMFLAG_NOMONSTERS, !on);
+            M_DMFLAGS_SET(DMFLAG_NOMONSTERS, !on);
+            if (!on)
+            {
+                // Kill-and-remove every enemy actor. Iterating the sprite pool
+                // by index and deleting in place is deterministic: the pool is
+                // identical on every machine, so the same slots are freed in the
+                // same order and stay in lockstep.
+                for (int32_t i = 0; i < MAXSPRITES; i++)
+                    if (sprite[i].statnum != MAXSTATUS && A_CheckEnemySprite(&sprite[i]))
+                        A_DeleteSprite(i);
+            }
+            else if (skill >= 0)
+                ud.player_skill = ud.m_player_skill = skill;
+            break;
+        }
+        case HOSTEV_SPAWN:
+        {
+            int32_t const picnum = ev.a, x = ev.b, y = ev.c, z = ev.d, sectnum = ev.e, ang = ev.f;
+            if ((unsigned)sectnum >= (unsigned)numsectors || (unsigned)picnum >= MAXTILES)
+                break;
+            int32_t const s = A_InsertSprite(sectnum, x, y, z, picnum, -16, 48, 48, ang, 0, 0, -1, 0);
+            if (s >= 0)
+                A_Spawn(-1, s);  // run the actor's spawn init (same code, same RNG, on every machine)
+            break;
+        }
+    }
+}
+
+// Pumped once per simulated tick from G_DoMoveThings, right after movefifoplc++.
+// Fires any scheduled event whose tick has arrived. Every machine reaches each
+// tick in order, so they all fire at the identical tick.
+void Net_RunHostEvents(void)
+{
+    for (int32_t i = 0; i < g_hostEventCount; )
+    {
+        if (movefifoplc >= g_hostEvents[i].tick)
+        {
+            hostevent_t const ev = g_hostEvents[i];
+            g_hostEvents[i] = g_hostEvents[--g_hostEventCount];  // compact
+            Net_ApplyHostEvent(ev);
+        }
+        else
+            ++i;
+    }
+}
+
+// Host side: schedule an event for a future tick, apply it locally at that tick,
+// and broadcast it to every connected peer to apply at the same tick.
+static void Net_ScheduleHostEvent(int32_t kind, int32_t a, int32_t b, int32_t c, int32_t d, int32_t e, int32_t f)
+{
+    if (myconnectindex != connecthead)
+        return;
+
+    hostevent_t ev;
+    ev.tick = g_player[connecthead].movefifoend + NET_HOSTEVENT_MARGIN;
+    ev.kind = kind; ev.a = a; ev.b = b; ev.c = c; ev.d = d; ev.e = e; ev.f = f;
+
+    Net_QueueHostEvent(ev);
+
+    int32_t p = 0;
+    packbuf[p++] = PACKET_TYPE_HOST_EVENT;
+    B_BUF32(&packbuf[p], ev.tick); p += 4;
+    packbuf[p++] = (char)ev.kind;
+    B_BUF32(&packbuf[p], ev.a); p += 4;
+    B_BUF32(&packbuf[p], ev.b); p += 4;
+    B_BUF32(&packbuf[p], ev.c); p += 4;
+    B_BUF32(&packbuf[p], ev.d); p += 4;
+    B_BUF32(&packbuf[p], ev.e); p += 4;
+    B_BUF32(&packbuf[p], ev.f); p += 4;
+
+    int32_t i;
+    TRAVERSE_CONNECT(i)
+        if (i != myconnectindex)
+            mmulti_sendpacket(i, (unsigned char *)packbuf, p);
+}
+
+void Net_HostMonsters(int32_t on, int32_t skill)
+{
+    Net_ScheduleHostEvent(HOSTEV_MONSTERS, on, skill, 0, 0, 0, 0);
+}
+
+int32_t Net_HostSpawn(int32_t picnum, int32_t x, int32_t y, int32_t z, int32_t sectnum, int32_t ang)
+{
+    if ((unsigned)sectnum >= (unsigned)numsectors || (unsigned)picnum >= MAXTILES)
+        return -1;
+    Net_ScheduleHostEvent(HOSTEV_SPAWN, picnum, x, y, z, sectnum, ang);
+    return 0;
+}
+
 void Net_ParsePackets(void)
 {
     int i, j;
@@ -1985,6 +2114,27 @@ void Net_ParsePackets(void)
                 if (myconnectindex == connecthead && (unsigned)other < MAXPLAYERS
                     && g_player[other].connected)
                     Net_ScheduleRemove(other, "left to reconnect");
+                break;
+            }
+            case PACKET_TYPE_HOST_EVENT:
+            {
+                // Host scheduled a world change (spawn / monster control) for a
+                // future tick. Queue it with the same tick the host chose; we
+                // apply it when our movefifoplc reaches it, in lockstep.
+                if (other == connecthead && myconnectindex != connecthead)
+                {
+                    hostevent_t ev;
+                    int32_t q = 1;
+                    ev.tick = (int32_t)B_UNBUF32(&packbuf[q]); q += 4;
+                    ev.kind = (uint8_t)packbuf[q++];
+                    ev.a = (int32_t)B_UNBUF32(&packbuf[q]); q += 4;
+                    ev.b = (int32_t)B_UNBUF32(&packbuf[q]); q += 4;
+                    ev.c = (int32_t)B_UNBUF32(&packbuf[q]); q += 4;
+                    ev.d = (int32_t)B_UNBUF32(&packbuf[q]); q += 4;
+                    ev.e = (int32_t)B_UNBUF32(&packbuf[q]); q += 4;
+                    ev.f = (int32_t)B_UNBUF32(&packbuf[q]); q += 4;
+                    Net_QueueHostEvent(ev);
+                }
                 break;
             }
             case PACKET_TYPE_LAG_NOTIFY:
@@ -3327,6 +3477,11 @@ void Net_ClearFIFO(void)
     bufferjitter = 1;
     mymaxlag = otherminlag = 0;
     movefifoplc = movefifosendplc = predictfifoplc = 0;
+
+    // The tick counter just reset, so drop any host events still scheduled
+    // against the old numbering - they'd otherwise fire at the wrong tick (or
+    // never) after the restart.
+    g_hostEventCount = 0;
 
     // Async slave outgoing stream: reset the delta base and send counter in
     // lockstep with the fifo so the first input after this clear is encoded

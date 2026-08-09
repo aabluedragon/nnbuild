@@ -9883,6 +9883,11 @@ static int G_DoMoveThings(void)
 
     movefifoplc++;
 
+    // Apply any host-scheduled world change (server-console spawn / monster
+    // control) due this tick. Runs on every machine at the identical tick, so
+    // the mutation stays in lockstep (see Net_RunHostEvents / NETCODE.md).
+    Net_RunHostEvents();
+
     G_UpdateInterpolations();
 
     everyothertime++;

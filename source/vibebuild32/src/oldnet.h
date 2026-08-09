@@ -88,6 +88,8 @@ enum DukePacket_t
 
     PACKET_TYPE_PLAYER_LEAVING,    // Client -> master: dropping out now (desync reconnect); free my slot.
 
+    PACKET_TYPE_HOST_EVENT,        // Master -> everyone: apply a world change (spawn / monster control) at a scheduled tick.
+
     PACKET_END, // Should remain last in list.
 };
 
@@ -185,5 +187,15 @@ void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
 void Net_Disconnect(bool showScores);
 void Net_WaitForPlayers();
+
+// Host-authoritative, deterministic world changes (spawn actors / monster
+// control) driven from the server console. The host schedules the change for a
+// near-future sim tick and broadcasts it; every machine applies it when its
+// movefifoplc reaches that tick, so the mutation is bit-identical everywhere and
+// can't desync. Net_RunHostEvents() is pumped once per simulated tick.
+void Net_RunHostEvents(void);
+void Net_HostMonsters(int32_t on, int32_t skill);       // skill < 0 = keep current
+int32_t Net_HostSpawn(int32_t picnum, int32_t x, int32_t y, int32_t z, int32_t sectnum, int32_t ang);
+int32_t Net_ResolvePlayer(const char *ref);             // name/slot -> connected slot, or -1
 
 #endif

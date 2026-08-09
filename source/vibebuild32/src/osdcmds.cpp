@@ -412,6 +412,109 @@ static int osdcmd_god(const osdfuncparm_t *parm)
     return OSDCMD_OK;
 }
 
+// (host) Turn the level's monsters off (kill + remove every enemy actor) or
+// back on at a chosen skill. Applied deterministically on every machine via a
+// scheduled host event (see Net_HostMonsters / NETCODE.md).
+static int osdcmd_monsters(const osdfuncparm_t *parm)
+{
+    if (numplayers > 1 && myconnectindex != connecthead)
+    { OSD_Printf("monsters: host only.\n"); return OSDCMD_OK; }
+    if (!(ud.gm & MODE_GAME))
+    { OSD_Printf("monsters: not in a game.\n"); return OSDCMD_OK; }
+    if (parm->numparms < 1)
+    { OSD_Printf("monsters off | on [skill 1-4] | <skill 1-4>\n"); return OSDCMD_SHOWHELP; }
+
+    if (!Bstrcasecmp(parm->parms[0], "off"))
+    {
+        Net_HostMonsters(0, -1);
+        OSD_Printf("monsters: OFF - clearing all monsters\n");
+        return OSDCMD_OK;
+    }
+
+    // "on [skill]" takes the skill from the console arg (else keeps the current
+    // command-line skill); "<skill>" is shorthand for "on <skill>".
+    const char *skillArg = !Bstrcasecmp(parm->parms[0], "on")
+                         ? ((parm->numparms >= 2) ? parm->parms[1] : NULL)
+                         : parm->parms[0];
+
+    int32_t skill = -1;
+    if (skillArg)
+    {
+        int32_t const v = Batol(skillArg);
+        if (v < 1 || v > 5)
+        { OSD_Printf("monsters off | on [skill 1-4] | <skill 1-4>\n"); return OSDCMD_SHOWHELP; }
+        skill = v - 1;
+    }
+    Net_HostMonsters(1, skill);
+    if (skill >= 0) OSD_Printf("monsters: ON at skill %d\n", skill + 1);
+    else            OSD_Printf("monsters: ON (skill unchanged)\n");
+    return OSDCMD_OK;
+}
+
+// (host) Spawn any actor/item tile near a named player or at map coordinates.
+// Absolute coordinates are resolved on the host and broadcast, so every machine
+// spawns the identical sprite at the same tick (see Net_HostSpawn / NETCODE.md).
+static int osdcmd_spawn(const osdfuncparm_t *parm)
+{
+    if (numplayers > 1 && myconnectindex != connecthead)
+    { OSD_Printf("spawn: host only.\n"); return OSDCMD_OK; }
+    if (!(ud.gm & MODE_GAME))
+    { OSD_Printf("spawn: not in a game.\n"); return OSDCMD_OK; }
+    if (parm->numparms < 2)
+    {
+        OSD_Printf("spawn <picnum> <player>       spawn near the named player\n");
+        OSD_Printf("spawn <picnum> <x> <y> [z]    spawn at map coordinates\n");
+        return OSDCMD_SHOWHELP;
+    }
+
+    // Tile: a number, or a CON label name (e.g. LIZTROOP, SHOTGUNSPRITE).
+    int32_t picnum = -1;
+    if (isdigit(parm->parms[0][0]))
+        picnum = (unsigned short)Batol(parm->parms[0]);
+    else
+        for (int32_t j = 0; j < 2 && picnum < 0; j++)
+            for (int32_t i = 0; i < g_labelCnt; i++)
+                if ((j == 0 && !Bstrcmp(label + (i << 6), parm->parms[0])) ||
+                    (j == 1 && !Bstrcasecmp(label + (i << 6), parm->parms[0])))
+                { picnum = labelcode[i]; break; }
+    if (picnum <= 0 || picnum >= MAXTILES)
+    { OSD_Printf("spawn: unknown tile '%s'\n", parm->parms[0]); return OSDCMD_OK; }
+
+    int32_t x, y, z, ang = 0;
+    int16_t sect = -1;
+
+    int32_t const slot = (parm->numparms == 2) ? Net_ResolvePlayer(parm->parms[1]) : -1;
+    if (slot >= 0)
+    {
+        auto p = g_player[slot].ps;
+        ang = fix16_to_int(p->q16ang) & 2047;
+        // ~512 build units in front of the player, at their height/sector.
+        x = p->pos.x + (sintable[(ang + 512) & 2047] >> 5);
+        y = p->pos.y + (sintable[ang & 2047] >> 5);
+        z = p->pos.z;
+        sect = p->cursectnum;
+        updatesector(x, y, &sect);
+        if (sect < 0) { x = p->pos.x; y = p->pos.y; sect = p->cursectnum; }
+    }
+    else
+    {
+        if (parm->numparms < 3)
+        { OSD_Printf("spawn: player '%s' not found (use <picnum> <x> <y> [z])\n", parm->parms[1]); return OSDCMD_OK; }
+        x = Batol(parm->parms[1]);
+        y = Batol(parm->parms[2]);
+        updatesector(x, y, &sect);
+        if (sect < 0)
+        { OSD_Printf("spawn: (%d, %d) is not inside any sector\n", x, y); return OSDCMD_OK; }
+        z = (parm->numparms >= 4) ? Batol(parm->parms[3]) : (sector[sect].floorz - (24 << 8));
+    }
+
+    if (Net_HostSpawn(picnum, x, y, z, sect, ang) == 0)
+        OSD_Printf("spawn: tile %d at (%d, %d) sector %d\n", picnum, x, y, sect);
+    else
+        OSD_Printf("spawn: failed\n");
+    return OSDCMD_OK;
+}
+
 static int osdcmd_noclip(const osdfuncparm_t *parm)
 {
     UNREFERENCED_PARAMETER(parm);
@@ -618,97 +721,6 @@ static int osdcmd_vidmode(const osdfuncparm_t *parm)
     ud.config.ScreenMode = newfs;
     onvideomodechange(ud.config.ScreenBPP>8);
     G_UpdateScreenArea();
-    return OSDCMD_OK;
-}
-
-static int osdcmd_spawn(const osdfuncparm_t *parm)
-{
-    auto pPlayer = g_player[myconnectindex].ps;
-    vec3_t pos;
-    int32_t cstat = 0, picnum = 0;
-    int8_t pal = 0;
-    int16_t ang = 0;
-    int16_t set = 0;
-
-    if (numplayers > 1 || !(ud.gm & MODE_GAME))
-    {
-        OSD_Printf("spawn: Can't spawn sprites in multiplayer games or demos\n");
-        return OSDCMD_OK;
-    }
-
-    switch (parm->numparms)
-    {
-    case 7: // x,y,z
-        pos.x = Batol(parm->parms[4]);
-        pos.y = Batol(parm->parms[5]);
-        pos.z = Batol(parm->parms[6]);
-        set |= 8;
-        fallthrough__;
-    case 4: // ang
-        ang = Batol(parm->parms[3]) & 2047;
-        set |= 4;
-        fallthrough__;
-    case 3: // cstat
-        cstat = (unsigned short)Batol(parm->parms[2]);
-        set |= 2;
-        fallthrough__;
-    case 2: // pal
-        pal = (unsigned char)Batol(parm->parms[1]);
-        set |= 1;
-        fallthrough__;
-    case 1: // tile number
-        if (isdigit(parm->parms[0][0]))
-        {
-            picnum = (unsigned short)Batol(parm->parms[0]);
-        }
-        else
-        {
-            int i, j;
-            for (j = 0; j < 2; j++)
-            {
-                for (i = 0; i < g_labelCnt; i++)
-                {
-                    if (
-                        (j == 0 && !Bstrcmp(label + (i << 6), parm->parms[0])) ||
-                        (j == 1 && !Bstrcasecmp(label + (i << 6), parm->parms[0]))
-                        )
-                    {
-                        picnum = (unsigned short)labelcode[i];
-                        break;
-                    }
-                }
-                if (i < g_labelCnt) break;
-            }
-            if (i == g_labelCnt)
-            {
-                OSD_Printf("spawn: Invalid tile label given\n");
-                return OSDCMD_OK;
-            }
-        }
-
-        if (picnum >= MAXTILES)
-        {
-            OSD_Printf("spawn: Invalid tile number\n");
-            return OSDCMD_OK;
-        }
-        break;
-    default:
-        return OSDCMD_SHOWHELP;
-    }
-
-    int32_t idx = A_Spawn(pPlayer->i, picnum);
-    if (set & 1) sprite[idx].pal = pal;
-    if (set & 2) sprite[idx].cstat = cstat;
-    if (set & 4) sprite[idx].ang = ang;
-    if (set & 8)
-    {
-        if (setspritez(idx, &pos) < 0)
-        {
-            OSD_Printf("spawn: Sprite can't be spawned into null space\n");
-            A_DeleteSprite(idx);
-        }
-    }
-
     return OSDCMD_OK;
 }
 
@@ -1680,6 +1692,8 @@ int registerosdcommands(void)
     OSD_RegisterFunction("listban","listban: show the ban list", osdcmd_listban);
     OSD_RegisterFunction("listplayers","listplayers: show connected players, slots and IPs", osdcmd_listplayers);
     OSD_RegisterFunction("nextmap","nextmap: (host) advance to the next map in the rotation", osdcmd_nextmap);
+    OSD_RegisterFunction("monsters","monsters off | on [skill] | <skill>: (host) clear all monsters, or re-enable at a skill", osdcmd_monsters);
+    OSD_RegisterFunction("spawn","spawn <picnum> <player | x y [z]>: (host) spawn an actor near a player or at coordinates", osdcmd_spawn);
     OSD_RegisterFunction("maplist","maplist: show the map rotation (maplist.txt)", osdcmd_maplist);
     OSD_RegisterFunction("sendfile","sendfile <name>: (host) send a file to all clients", osdcmd_sendfile);
 
@@ -1733,8 +1747,6 @@ int registerosdcommands(void)
     OSD_RegisterFunction("setvarvar","setvarvar <gamevar1> <gamevar2>: sets the value of <gamevar1> to <gamevar2>", osdcmd_setvar);
     OSD_RegisterFunction("setactorvar","setactorvar <actor#> <gamevar> <value>: sets the value of <actor#>'s <gamevar> to <value>", osdcmd_setactorvar);
     OSD_RegisterFunction("screenshot","screenshot: takes a screenshot.  See r_scrcaptureformat.", osdcmd_screenshot);
-
-    OSD_RegisterFunction("spawn","spawn <picnum> [palnum] [cstat] [ang] [x y z]: spawns a sprite with the given properties",osdcmd_spawn);
 
     OSD_RegisterFunction("unbind","unbind <key>: unbinds a key", osdcmd_unbind);
     OSD_RegisterFunction("unbindall","unbindall: unbinds all keys", osdcmd_unbindall);
