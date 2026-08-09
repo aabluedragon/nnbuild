@@ -6089,15 +6089,43 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     if (skinViewtype == 5)
                         skinOffset = getofs_viewtype_mirrored<5>(t->cstat, s->ang - a);
 
-                    t->picnum = P_SkinBaseTile(g_player[p].pskin) + skinStart + skinOffset
+                    // Remember where the player tile's feet are so we can plant
+                    // the enemy tile's feet at the same spot after the swap.
+                    int32_t const origPicnum   = t->picnum;
+                    int32_t const origFootOfs  = P_SkinFootOffset(origPicnum, t->yrepeat, t->cstat);
+
+                    int32_t const skinBase = P_SkinBaseTile(g_player[p].pskin);
+                    t->picnum = skinBase + skinStart + skinOffset
                                 + skinViewtype * (klabs(curframe) % skinFrames);
                     t->pal = g_player[p].ps->palookup;
                     scrofs_action = 0;  // The generic CON action block below must not re-offset.
 
-                    G_MaybeTakeOnFloorPal(t, sect);
+                    // Size: scale uniformly (preserving aspect and each frame's
+                    // relative proportions) so the enemy's stand frame is drawn
+                    // at the player tile's world height - otherwise a tall enemy
+                    // tile towers and a short one shrinks at the player's repeat.
+                    int32_t rs, rf, rv;
+                    P_GetSkinFrame(g_player[p].pskin, 0, 1, &rs, &rf, &rv);  // PSTAND reference
+                    int32_t const refTile = skinBase + rs;
+                    // Use the fixed APLAYER stand tile as the reference height (a
+                    // constant), not the player's current frame, so the enemy's
+                    // size stays steady instead of pulsing as the player animates.
+                    if ((unsigned)refTile < MAXTILES && tilesiz[refTile].y > 0 && tilesiz[APLAYER].y > 0)
+                    {
+                        int32_t const num = tilesiz[APLAYER].y;      // player stand tile height (px)
+                        int32_t const den = tilesiz[refTile].y;      // enemy stand tile height (px)
+                        t->yrepeat = clamp((t->yrepeat * num) / den, 1, 255);
+                        t->xrepeat = clamp((t->xrepeat * num) / den, 1, 255);
+                    }
 
-                    if (t->z > actor[i].floorz && t->xrepeat < 32)
-                        t->z = actor[i].floorz;
+                    // Vertical: re-anchor this exact frame's feet to the player's
+                    // feet, so every frame (walk, flinch, the 8-frame death, the
+                    // flat corpse) shares the same ground line instead of floating
+                    // or sinking with the tile's own height / yoffset.
+                    int32_t const newFootOfs = P_SkinFootOffset(t->picnum, t->yrepeat, t->cstat);
+                    t->z += origFootOfs - newFootOfs;
+
+                    G_MaybeTakeOnFloorPal(t, sect);
 
                     break;
                 }
