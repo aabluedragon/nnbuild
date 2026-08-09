@@ -5805,8 +5805,40 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         switch (tileGetMapping(switchpic))
         {
             case DUKELYINGDEAD__:
+            {
+                // The persistent corpse is a separate DUKELYINGDEAD sprite, not
+                // the APLAYER, so it misses the enemy-skin retarget below and
+                // would otherwise always show Duke's body. Recover the dead
+                // player via the corpse's owner (the APLAYER it spawned from) and
+                // draw that skin's dead frame instead.
+                int32_t const ow = s->owner;
+                int32_t const dp = (ow >= 0 && sprite[ow].picnum == APLAYER) ? sprite[ow].yvel : -1;
+                if ((unsigned)dp < MAXPLAYERS && t->pal != 1 && P_ValidateSkin(g_player[dp].pskin))
+                {
+                    int32_t ds, df, dv;
+                    P_GetSkinFrame(g_player[dp].pskin, 113, 1, &ds, &df, &dv);  // PLYINGDEAD -> dead frame
+
+                    int32_t const origFootOfs = P_SkinFootOffset(t->picnum, t->yrepeat, t->cstat, 0);
+                    int32_t const skinBase = P_SkinBaseTile(g_player[dp].pskin);
+                    t->picnum = skinBase + ds;   // single-view dead frame
+                    t->pal = g_player[dp].ps->palookup;
+
+                    int32_t rs, rf, rv;
+                    P_GetSkinFrame(g_player[dp].pskin, 0, 1, &rs, &rf, &rv);  // stand reference for size
+                    int32_t const refTile = skinBase + rs;
+                    if ((unsigned)refTile < MAXTILES && tilesiz[refTile].y > 0 && tilesiz[APLAYER].y > 0)
+                    {
+                        int32_t const num = tilesiz[APLAYER].y, den = tilesiz[refTile].y;
+                        t->yrepeat = clamp((t->yrepeat * num) / den, 1, 255);
+                        t->xrepeat = clamp((t->xrepeat * num) / den, 1, 255);
+                    }
+                    int32_t const newFootOfs = P_SkinFootOffset(t->picnum, t->yrepeat, t->cstat, 1);
+                    t->z += origFootOfs - newFootOfs;
+                    break;
+                }
                 t->z += (24 << 8);
                 break;
+            }
             case BLOODPOOL__:
             case FOOTPRINTS__:
             case FOOTPRINTS2__:
