@@ -494,6 +494,32 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
+                if (!Bstrcasecmp(c + 1, "punchtarget"))
+                {
+                    // Client: the "host:port" this client is joining, so the
+                    // connection loop can request a masterserver NAT hole-punch
+                    // to it if the direct connect stalls. Set on lobby/manual
+                    // join relaunch.
+                    if (i + 1 < argc && argv[i + 1][0])
+                    {
+                        Bstrncpyz(g_punchTargetAddr, argv[i + 1], sizeof(g_punchTargetAddr));
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "joinerror"))
+                {
+                    // Client: a message describing why the previous join failed,
+                    // shown once in the JOIN GAME menu after relaunching there.
+                    if (i + 1 < argc && argv[i + 1][0])
+                    {
+                        Bstrncpyz(g_joinErrorMsg, argv[i + 1], sizeof(g_joinErrorMsg));
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
                 if (!Bstrcasecmp(c + 1, "headless") || !Bstrcasecmp(c + 1, "console"))
                 {
                     // Dedicated console server with no graphics at all: no

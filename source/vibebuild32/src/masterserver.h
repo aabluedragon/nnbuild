@@ -39,6 +39,18 @@ struct msserver_t
 // count, or -1 on error.
 int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, int32_t maxout, int32_t timeoutMs);
 
+// ----- NAT hole-punch assist (STUN) ------------------------------------------
+// Client: build a punch request to send from the GAME socket (so the master
+// learns our real game endpoint) - resolves the master to an IPv4 ip/port
+// (network order) and fills buf. Returns the packet length, or 0 on failure.
+int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr,
+                                  unsigned int *ip, unsigned short *port, void *buf, int32_t cap);
+
+// Host: register a callback that opens a NAT hole to (ip,port) (network order),
+// then pump the advertise socket each frame so incoming punch requests fire it.
+void Masterserver_SetPunchFn(void (*fn)(unsigned int ip, unsigned short port));
+void Masterserver_HostPump(void);
+
 #ifdef __cplusplus
 }
 #endif

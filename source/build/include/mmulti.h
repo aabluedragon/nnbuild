@@ -27,6 +27,10 @@ int mmulti_slotconnected(int slot);
 void mmulti_setcallbacks(int (*bancheck)(int ip), void (*joinnotify)(int ip), int (*reconnectnotify)(int slot));
 int mmulti_getslotip(int slot);
 int mmulti_getport(void);
+void mmulti_punchto(unsigned int ip, unsigned short port);
+// Send raw bytes from the game socket to (ip,port) (network order) - used to
+// deliver masterserver NAT-punch requests from the real game endpoint.
+void mmulti_sendraw(unsigned int ip, unsigned short port, const void *buf, int len);
 void mmulti_dropslot(int slot);
 // Also service (send acks/retransmits to, and deliver ordered packets from) a
 // slot that isn't in the active connect list yet - used so the host can talk

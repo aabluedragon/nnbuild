@@ -36,6 +36,8 @@ enum
     MS_LIST_RESP      = 0xB3,   // master  -> client : (chunk of) the list
     MS_STUN_REQ       = 0xB4,   // anyone  -> master : what is my public address?
     MS_STUN_RESP      = 0xB5,   // master  -> sender : your public address is ...
+    MS_PUNCH_REQ      = 0xB6,   // client  -> master : arrange a hole-punch to <server>
+    MS_PUNCH_NOTIFY   = 0xB7,   // master  -> server : client <addr> wants in, punch to it
 };
 
 #define MS_ENTRY_TTL_MS   30000   // drop a server not heard from in this long
@@ -270,7 +272,7 @@ static int ms_getstr(const uint8_t *buf, int len, int *pos, char *dst, int dstsz
 static int ms_putstr(uint8_t *buf, int *pos, int cap, const char *s)
 {
     int n = (int)Bstrlen(s);
-    if (n > 31) n = 31;
+    if (n > 100) n = 100;   // room for long IPv6 [addr]:port strings
     if (*pos + 1 + n > cap) return 0;
     buf[(*pos)++] = (uint8_t)n;
     Bmemcpy(buf + *pos, s, n);
@@ -351,13 +353,41 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
     }
     else if (type == MS_STUN_REQ)
     {
-        uint8_t out[64];
+        uint8_t out[160];
         Bmemcpy(out, MS_MAGIC, 4);
         out[4] = MS_STUN_RESP;
         int op = 5;
         char a[128]; ms_addr_to_str(from, 0, a, sizeof(a));
         ms_putstr(out, &op, sizeof(out), a);
         sendto(s, (char *)out, op, 0, (struct sockaddr *)from, fromlen);
+    }
+    else if (type == MS_PUNCH_REQ)
+    {
+        // A client wants to reach a server it saw in the list. Find that server
+        // and tell it to punch a hole toward this client; also tell the client
+        // the server's address so it keeps handshaking there.
+        char target[128] = "";
+        ms_getstr(buf, n, &pos, target, sizeof(target));
+        for (int i = 0; i < MS_MAX_ENTRIES; i++)
+        {
+            if (!g_ent[i].used) continue;
+            char a[128]; ms_addr_to_str(&g_ent[i].src, g_ent[i].gameport, a, sizeof(a));
+            if (Bstrcmp(a, target)) continue;
+
+            char cliAddr[128]; ms_addr_to_str(from, 0, cliAddr, sizeof(cliAddr));
+            uint8_t out[192];
+            Bmemcpy(out, MS_MAGIC, 4); out[4] = MS_PUNCH_NOTIFY;
+            int op = 5; ms_putstr(out, &op, sizeof(out), cliAddr);
+            sendto(s, (char *)out, op, 0, (struct sockaddr *)&g_ent[i].src, ms_sslen(&g_ent[i].src));
+
+            uint8_t r[192];
+            Bmemcpy(r, MS_MAGIC, 4); r[4] = MS_STUN_RESP;
+            int rp = 5; ms_putstr(r, &rp, sizeof(r), a);
+            sendto(s, (char *)r, rp, 0, (struct sockaddr *)from, fromlen);
+
+            LOG_F(INFO, "masterserver: punch %s <-> %s", cliAddr, a);
+            break;
+        }
     }
 }
 
@@ -475,6 +505,69 @@ void Masterserver_AdvertiseStop(void)
     out[4] = MS_ADVERTISE_STOP;
     sendto(g_advSock, (char *)out, 5, 0, (struct sockaddr *)&g_advDst, ms_sslen(&g_advDst));
     g_advOn = 0;
+}
+
+// ---------------------------------------------------------------------------
+// NAT hole-punch assist
+// ---------------------------------------------------------------------------
+
+static void (*g_punchFn)(unsigned int, unsigned short) = NULL;
+
+void Masterserver_SetPunchFn(void (*fn)(unsigned int, unsigned short))
+{
+    g_punchFn = fn;
+}
+
+// Host: drain any punch requests the masterserver forwarded to our advertise
+// socket, opening a NAT hole to each waiting client via the registered callback.
+void Masterserver_HostPump(void)
+{
+    if (!g_advOn || g_advSock == (MS_SOCKET)INVALID_SOCKET)
+        return;
+    for (int guard = 0; guard < 16; guard++)
+    {
+        uint8_t buf[MS_PKT];
+        struct sockaddr_storage from;
+        socklen_t fl = sizeof(from);
+        int n = (int)recvfrom(g_advSock, (char *)buf, sizeof(buf), 0, (struct sockaddr *)&from, &fl);
+        if (n < 5 || Bmemcmp(buf, MS_MAGIC, 4))
+            break;
+        if (buf[4] == MS_PUNCH_NOTIFY)
+        {
+            char cli[128] = "";
+            int pos = 5;
+            ms_getstr(buf, n, &pos, cli, sizeof(cli));
+            struct sockaddr_storage ca;
+            if (ms_resolve(cli, 0, &ca) && ca.ss_family == AF_INET && g_punchFn)
+            {
+                const struct sockaddr_in *a = (const struct sockaddr_in *)&ca;
+                g_punchFn((unsigned int)a->sin_addr.s_addr, (unsigned short)a->sin_port);
+                LOG_F(INFO, "punch: opening hole to %s for an incoming client", cli);
+            }
+        }
+    }
+}
+
+// Client: resolve the masterserver to an IPv4 endpoint (for sending a punch
+// request from the game socket) and build the request packet. Returns the
+// packet length, or 0 on failure; fills *ip/*port (network order).
+int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr,
+                                  unsigned int *ip, unsigned short *port, void *buf, int32_t cap)
+{
+    struct sockaddr_storage dst;
+    if (!ms_resolve(masterAddr, MASTERSERVER_DEFAULT_PORT, &dst) || dst.ss_family != AF_INET)
+        return 0;   // IPv6 masterserver punch not wired through the game socket yet
+    const struct sockaddr_in *a = (const struct sockaddr_in *)&dst;
+    *ip = (unsigned int)a->sin_addr.s_addr;
+    *port = (unsigned short)a->sin_port;
+
+    uint8_t *out = (uint8_t *)buf;
+    if (cap < 6) return 0;
+    Bmemcpy(out, MS_MAGIC, 4);
+    out[4] = MS_PUNCH_REQ;
+    int op = 5;
+    ms_putstr(out, &op, cap, targetAddr);
+    return op;
 }
 
 // ---------------------------------------------------------------------------

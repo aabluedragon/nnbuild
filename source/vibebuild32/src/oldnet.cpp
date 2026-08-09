@@ -15,6 +15,17 @@
 // cvar. Defaults to localhost for local play/testing.
 char g_masterServerAddr[128] = "127.0.0.1";
 
+// When a client is relaunched to join a specific server (from the lobby or a
+// manual address), this holds that server's "host:port" so the connection loop
+// can ask the masterserver to punch a NAT hole to it if the direct connect
+// stalls. Empty for hosts / non-lobby launches.
+char g_punchTargetAddr[128] = "";
+
+// Set via -joinerror when a client relaunches back to the menu after a failed
+// join; the JOIN GAME menu shows it once so the user learns why. Cleared after
+// being displayed.
+char g_joinErrorMsg[128] = "";
+
 #ifndef _WIN32
 # include <poll.h>
 # include <unistd.h>
@@ -635,6 +646,21 @@ void Net_HostAdvertise(void)
 {
     if (myconnectindex != connecthead || !Masterserver_IsAdvertising())
         return;
+
+    // Register (once) the callback that opens a NAT hole toward a waiting client
+    // by firing a marker packet from our game socket.
+    static int punchFnRegistered = 0;
+    if (!punchFnRegistered)
+    {
+        Masterserver_SetPunchFn(mmulti_punchto);
+        punchFnRegistered = 1;
+    }
+
+    // Service NAT-punch requests the masterserver forwards to us (opens a hole
+    // toward each waiting client via mmulti_punchto). Do this even between
+    // levels, before the MODE_GAME gate below.
+    Masterserver_HostPump();
+
     if (!(ud.gm & MODE_GAME))
         return;
 
@@ -3521,6 +3547,10 @@ void Net_LaunchAddress(const char *hostport)
             break;
         newargv[n++] = g_procArgv[i];
     }
+    // Remember the target so, if the direct connect stalls (server behind NAT),
+    // the connection loop can request a masterserver hole-punch to it.
+    newargv[n++] = "-punchtarget";
+    newargv[n++] = hostport;
     newargv[n++] = "-net";
     newargv[n++] = "/p23530";       // a client source port distinct from the usual host port
     newargv[n++] = "/n0";
@@ -3535,6 +3565,51 @@ void Net_LaunchAddress(const char *hostport)
     execv(exe, (char * const *)newargv);
 #endif
     G_GameExit("Join relaunch failed; please restart to join.");
+}
+
+// Relaunch back to a plain single-player session (main menu) after a join was
+// aborted or failed, dropping any -net/-punchtarget block. If `errmsg` is set,
+// it is forwarded via -joinerror so the JOIN GAME menu can show why.
+void Net_LaunchMenu(const char *errmsg)
+{
+    char const *exe = Net_ResolveExePath();
+    if (!exe || !g_procArgv)
+    {
+        G_GameExit("Could not return to the menu.");
+        return;
+    }
+
+    static char const *mv[80];
+    int32_t n = 0;
+    for (int32_t i = 0; g_procArgv[i] && n < 74; i++)
+    {
+        // Drop the net block (runs to end of line) and any prior -punchtarget /
+        // -joinerror so they don't accumulate across relaunches.
+        if (!Bstrcasecmp(g_procArgv[i], "-net"))
+            break;
+        if (!Bstrcasecmp(g_procArgv[i], "-punchtarget") || !Bstrcasecmp(g_procArgv[i], "-joinerror"))
+        {
+            if (g_procArgv[i + 1])
+                i++;   // also skip its value
+            continue;
+        }
+        mv[n++] = g_procArgv[i];
+    }
+    if (errmsg && errmsg[0])
+    {
+        mv[n++] = "-joinerror";
+        mv[n++] = errmsg;
+    }
+    mv[n] = NULL;
+
+    LOG_F(INFO, "Returning to the menu%s%s", errmsg && errmsg[0] ? ": " : "", errmsg ? errmsg : "");
+    mmulti_uninitmultiplayers();
+#ifdef _WIN32
+    _execv(exe, (char * const *)mv);
+#else
+    execv(exe, (char * const *)mv);
+#endif
+    G_GameExit("Could not return to the menu; please restart.");
 }
 
 // Start hosting a listen server by relaunching with host net args (4 slots,

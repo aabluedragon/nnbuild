@@ -742,6 +742,10 @@ void M_DisplayMenus(void)
             minitextshade(52, y0 + nServers * 9, "Enter address manually...", (probey == nServers) ? 0 : 16, 0, 2 + 8 + 16);
             minitextshade(52, y0 + (nServers + 1) * 9, "Refresh list", (probey == nServers + 1) ? 0 : 16, 0, 2 + 8 + 16);
 
+            // If we just relaunched here after a failed join, show why (in red).
+            if (g_joinErrorMsg[0])
+                mgametext(160, 138, g_joinErrorMsg, 0, 2 + 8 + 16);
+
             if (s_count == -1)
                 mgametext(160, 150, "Could not reach the masterserver.", 0, 2 + 8 + 16);
             else if (nServers == 0)

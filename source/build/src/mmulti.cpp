@@ -259,6 +259,36 @@ int netsend(int other, char *dabuf, int bufsiz)  //0:buffer full... can't send
     return(sendto(mysock,dabuf,bufsiz,0,(struct sockaddr *)&ip,sizeof(struct sockaddr_in)) != SOCKET_ERROR);
 }
 
+// Send a tiny packet from the game socket to ip:port to open a NAT hole for
+// that peer (used by the masterserver-assisted join). ip/port are network byte
+// order. The peer's mmulti ignores the payload (it isn't a valid game packet);
+// the point is only that the datagram leaves through our NAT.
+void mmulti_punchto(unsigned int ip, unsigned short port)
+{
+    if (mysock == (SOCKET)INVALID_SOCKET) return;
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof(a));
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = ip;
+    a.sin_port = port;
+    static const char punch[5] = { 'V', 'B', 'P', 'H', 0 };
+    sendto(mysock, punch, sizeof(punch), 0, (struct sockaddr *)&a, sizeof(a));
+}
+
+// Send an arbitrary datagram from the game socket to ip:port (network order).
+// Used to talk to the masterserver over the game port, so it learns our real
+// game endpoint for hole-punching.
+void mmulti_sendraw(unsigned int ip, unsigned short port, const void *buf, int len)
+{
+    if (mysock == (SOCKET)INVALID_SOCKET) return;
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof(a));
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = ip;
+    a.sin_port = port;
+    sendto(mysock, (const char *)buf, len, 0, (struct sockaddr *)&a, sizeof(a));
+}
+
 int netread(int *other, char *dabuf, int bufsiz)  //0:no packets in buffer
 {
     struct sockaddr_in ip;

@@ -8660,6 +8660,40 @@ bool G_InitMultiplayer()
                     Bsnprintf(msg, sizeof(msg), "Waiting for players... Cancel to abort");
                 startwin_settitle(msg);
                 LOG_F(INFO, "%s", msg);
+
+                // If the direct connect keeps stalling and this was a lobby/manual
+                // join, the server is likely behind NAT: ask the masterserver to
+                // punch a hole to it. The request must go out our game socket (so
+                // the master learns our real game endpoint) - build it and send it
+                // via mmulti_sendraw. Harmless if the server is directly reachable.
+                if (amClient && g_punchTargetAddr[0] && g_masterServerAddr[0])
+                {
+                    unsigned int msIp; unsigned short msPort;
+                    unsigned char pbuf[160];
+                    int32_t const plen = Masterserver_MakePunchReq(g_masterServerAddr, g_punchTargetAddr,
+                                                                   &msIp, &msPort, pbuf, sizeof(pbuf));
+                    if (plen > 0)
+                    {
+                        mmulti_sendraw(msIp, msPort, pbuf, plen);
+                        LOG_F(INFO, "Requested NAT punch to %s via masterserver %s",
+                              g_punchTargetAddr, g_masterServerAddr);
+                    }
+                }
+
+                // A lobby/manual join that never connects (server offline or
+                // unreachable even after NAT-punch attempts) shouldn't retry
+                // forever: give up after ~30s and return to the JOIN menu with an
+                // error the user can act on. Only for such explicit joins - a
+                // host waiting for players, or a launcher-spawned client racing
+                // its host, keeps waiting as before.
+                if (amClient && g_punchTargetAddr[0] && retryNum >= 10)
+                {
+                    startwin_settitle(APPNAME);
+                    LOG_F(INFO, "Giving up on %s after %d retries; returning to menu", g_punchTargetAddr, retryNum);
+                    char err[128];
+                    Bsnprintf(err, sizeof(err), "Could not reach %s (offline or unreachable).", g_punchTargetAddr);
+                    Net_LaunchMenu(err);   // relaunches; does not return
+                }
             }
         }
         startwin_settitle(APPNAME);
@@ -9193,6 +9227,15 @@ MAIN_LOOP_RESTART:
 
     ud.warp_on = 0;
     KB_KeyDown[sc_Pause] = 0;   // JBF: I hate the pause key
+
+    // Relaunched to the menu after a failed join: drop the user straight onto
+    // the JOIN GAME screen so they see the error banner and can retry/pick
+    // another server, rather than starting back at the main menu.
+    if (g_joinErrorMsg[0])
+    {
+        ud.gm = MODE_MENU;
+        ChangeToMenu(20020);
+    }
 
     do // main loop
     {

@@ -141,9 +141,14 @@ void Net_StoreProcessArgs(int32_t argc, char const * const *argv);
 void Net_ClientReconnect(void);
 void Net_LaunchAddress(const char *hostport);   // relaunch as a client joining hostport
 void Net_LaunchHost(int32_t advertise);         // relaunch as a listen host (optionally advertised)
+void Net_LaunchMenu(const char *errmsg);        // relaunch back to the menu (optional join-error banner)
 
 // Masterserver the in-game lobby queries (settable via cl_masterserver).
 extern char g_masterServerAddr[128];
+// Client's join target ("host:port") for NAT-punch; empty if not a lobby join.
+extern char g_punchTargetAddr[128];
+// Reason a previous join failed, shown once in the JOIN GAME menu; empty if none.
+extern char g_joinErrorMsg[128];
 uint16_t Net_ConnectedMask(void);
 void Net_ApplyConnectedMask(uint16_t mask);
 void Net_RebuildConnectList(void);
