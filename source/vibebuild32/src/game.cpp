@@ -9372,8 +9372,8 @@ MAIN_LOOP_RESTART:
                 // currently-selected option, spinning opposite ways on each side.
                 int32_t const nukeFrame = ((int32_t)totalclock >> 3) % 7;
                 int32_t const selY = (s_cancelSel == 1 ? 144 : 132) + 4;
-                rotatesprite(130 << 16, selY << 16, 32768, 0, SPINNINGNUKEICON + nukeFrame, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-                rotatesprite(190 << 16, selY << 16, 32768, 0, SPINNINGNUKEICON + 6 - ((6 + nukeFrame) % 7), 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+                rotatesprite(114 << 16, selY << 16, 32768, 0, SPINNINGNUKEICON + nukeFrame, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+                rotatesprite(206 << 16, selY << 16, 32768, 0, SPINNINGNUKEICON + 6 - ((6 + nukeFrame) % 7), 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
 
                 videoNextPage();
 
