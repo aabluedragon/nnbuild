@@ -3337,6 +3337,17 @@ void Net_CheckPlayerQuit(int i)
 
     g_player[i].connected = 0;
 
+    // On the host, a clean quit must reset the player's transport slot, not just
+    // their game presence. Otherwise mmulti still considers the slot connected
+    // (otherip stays set) and its reliable sequence counters keep the departing
+    // client's values: the host would immediately treat the stale connection as
+    // a fresh late joiner, and a client relaunching on the same slot would
+    // deadlock against the leftover sequence state (its ocnt-0 packets look
+    // "already seen"). Dropping the slot clears otherip and zeroes the counters
+    // so a rejoin - however quick - starts from a clean transport.
+    if (myconnectindex == connecthead && i != connecthead)
+        mmulti_dropslot(i);
+
     G_CloseDemoWrite();
 
     // If we're the master, keep executing until all slaves can get the packet.
