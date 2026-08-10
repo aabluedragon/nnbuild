@@ -76,19 +76,28 @@ static int gs_swAvail(char *dir, int sz)   { return gs_findGrp("SW.GRP", "sw", d
 static int gs_bloodAvail(char *dir, int sz){ return gs_findGrp("BLOOD.RFF", "blood", dir, sz)
                                                   || gs_findGrp("blood.rff", "blood", dir, sz); }
 
-// First-cut picker: a console prompt. (A graphical picker in the startup window
-// is a follow-up; this keeps selection working now.)
-static int gs_menu(int dukeAvail, int swAvail)
+// First-cut picker: a console prompt listing whichever games are present.
+// (A graphical picker in the startup window is a follow-up.) Returns the game
+// index (0=Duke, 1=SW, 2=Blood).
+static int gs_menu(int dukeAvail, int swAvail, int bloodAvail)
 {
-    if (!(dukeAvail && swAvail))
-        return swAvail ? 1 : 0;
-    LOG_F(INFO, "Select a game:  1) Duke Nukem 3D   2) Shadow Warrior  [1]: ");
-    fprintf(stderr, "\nSelect a game:\n  1) Duke Nukem 3D\n  2) Shadow Warrior\nChoice [1]: ");
+    int opt[3], nopt = 0;
+    fprintf(stderr, "\nSelect a game:\n");
+    if (dukeAvail)  { opt[nopt] = 0; fprintf(stderr, "  %d) Duke Nukem 3D\n",  nopt + 1); nopt++; }
+    if (swAvail)    { opt[nopt] = 1; fprintf(stderr, "  %d) Shadow Warrior\n", nopt + 1); nopt++; }
+    if (bloodAvail) { opt[nopt] = 2; fprintf(stderr, "  %d) Blood\n",          nopt + 1); nopt++; }
+    if (nopt <= 1)
+        return nopt == 1 ? opt[0] : 0;
+    fprintf(stderr, "Choice [1]: ");
     fflush(stderr);
     char line[16] = "";
-    if (fgets(line, sizeof(line), stdin) && (line[0] == '2'))
-        return 1;
-    return 0;
+    int pick = 1;
+    if (fgets(line, sizeof(line), stdin))
+    {
+        int const c = line[0] - '0';
+        if (c >= 1 && c <= nopt) pick = c;
+    }
+    return opt[pick - 1];
 }
 
 static void gs_choose(int argc, char const * const * argv)
@@ -119,7 +128,7 @@ static void gs_choose(int argc, char const * const * argv)
         if (nAvail == 1)
             sel = dukeAvail ? 0 : (swAvail ? 1 : 2);
         else if (nAvail > 1)
-            sel = bypass ? (dukeAvail ? 0 : (swAvail ? 1 : 2)) : gs_menu(dukeAvail, swAvail);
+            sel = bypass ? (dukeAvail ? 0 : (swAvail ? 1 : 2)) : gs_menu(dukeAvail, swAvail, bloodAvail);
         else
             sel = 0;  // none found; let Duke's normal grp search report it
     }
