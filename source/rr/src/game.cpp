@@ -8230,9 +8230,17 @@ int RR_app_main(int argc, char const * const * argv)
 
     G_CheckCommandLine(argc,argv);
 
-    // VibeBuild32: a -startnow host stays at the pre-game lobby until players join,
-    // so suppress the -v/-l auto-warp (those args still set m_volume/m_level, which
-    // is the level the match launches into once -startnow fires).
+    // VibeBuild32: a dedicated/headless server always HOLDS at the pre-game lobby to
+    // gather players (never auto-warps into a solo level, which would reject joiners),
+    // and auto-starts the match once the lobby fills - this is the DEFAULT. -wait opts
+    // out of the auto-start (the lobby just waits); -startnow forces auto-start on for a
+    // windowed -server too. -v/-l still set m_volume/m_level = the level a match launches into.
+    if (g_forceHeadless && g_networkMode == NET_SERVER)
+    {
+        ud.warp_on = 0;                       // hold at the lobby, don't warp into a solo game
+        if (!g_netWait)
+            g_netStartNow = 1;                // and auto-start once players join (default)
+    }
     if (g_netStartNow)
         ud.warp_on = 0;
 

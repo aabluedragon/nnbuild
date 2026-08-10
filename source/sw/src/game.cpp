@@ -3286,7 +3286,7 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     vb_netarg_ctx const swNetArg = {
         NULL, 0, 0,
         &g_noSetup, &g_noLogo,
-        NULL, NULL, 0,
+        NULL, NULL, NULL, 0,
         Net_SetAdvertise, Net_QueryLobby, NULL, Net_AddNetFile
     };
     for (i=1; i<argc; i++)

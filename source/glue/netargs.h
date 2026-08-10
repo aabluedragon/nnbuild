@@ -11,9 +11,10 @@
 //   -lobbylist <master>   print the servers a masterserver is advertising
 //   -joinlobby <master>   query a masterserver and join the first advertised server
 //   -netfile  <path>      (host) offer this file to joiners (mod grp / user map)
-//   -startnow             (dedicated host) auto-launch once the lobby is full
-//   -nplayers <N>         players to wait for before -startnow fires (default 2)
-//   -headless|-dedicated|-console   run a windowless dedicated server
+//   -nplayers <N>         players to wait for before a dedicated server auto-starts (default 2)
+//   -wait                 dedicated server: DON'T auto-start; hold in the lobby for players
+//   -startnow             force auto-start even on a windowed -server (dedicated already does)
+//   -headless|-dedicated|-console   run a windowless dedicated server (auto-starts by default)
 //
 // A game passes NULL for any hook/var it does not support; that flag is still
 // accepted (and consumed) but does nothing, so command lines stay portable.
@@ -28,8 +29,9 @@
 "  -lobbylist <master>       list the servers a masterserver is advertising\n" \
 "  -joinlobby <master>       join the first server a masterserver is advertising\n" \
 "  -netfile <path>           (host) offer a mod/map file to joiners\n" \
-"  -startnow [-nplayers N]   dedicated: auto-start once N players are in the lobby (default 2)\n" \
-"  -headless / -dedicated    run a windowless dedicated server\n"
+"  -headless / -dedicated    run a windowless dedicated server (auto-starts by default)\n" \
+"  -nplayers <N>             players to wait for before a dedicated server auto-starts (default 2)\n" \
+"  -wait                     dedicated: hold in the lobby instead of auto-starting\n"
 
 struct vb_netarg_ctx
 {
@@ -39,6 +41,7 @@ struct vb_netarg_ctx
     int *noLogo;                      // set to 1 to skip the logo (NULL if n/a)
     int *startNow;                    // set to 1 for -startnow (NULL if the game has no auto-start)
     int *startNowPlayers;             // set for -nplayers (NULL if unsupported)
+    int *wait;                        // set to 1 for -wait (NULL if the game has no auto-start)
     int  maxPlayers;                  // upper clamp for -nplayers (e.g. MAXPLAYERS)
     void (*setAdvertise)(const char *);
     int  (*queryLobby)(const char *);
@@ -85,6 +88,11 @@ static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *flag, const cha
     if (!Bstrcasecmp(flag, "startnow"))
     {
         if (cx->startNow) *cx->startNow = 1;
+        return 1;
+    }
+    if (!Bstrcasecmp(flag, "wait"))   // hold a dedicated server in the lobby instead of auto-starting
+    {
+        if (cx->wait) *cx->wait = 1;
         return 1;
     }
     if (!Bstrcasecmp(flag, "nplayers"))

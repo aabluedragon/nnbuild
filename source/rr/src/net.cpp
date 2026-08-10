@@ -44,10 +44,13 @@ enet_uint16 g_netPort = 23513;
 int32_t g_netDisconnect = 0;
 char g_netPassword[32];
 int32_t g_netPlayersWaiting = 0;
-// VibeBuild32: headless/dedicated auto-start. -startnow arms it; the host launches
-// the match (for everyone) as soon as the pre-game lobby reaches g_netStartNowPlayers.
+// VibeBuild32: headless/dedicated auto-start. A dedicated/headless server auto-launches
+// the match (for everyone) once the pre-game lobby reaches g_netStartNowPlayers - this
+// is the DEFAULT (armed in RR_app_main). -wait (g_netWait) opts out and holds in the
+// lobby; -startnow forces it on even for a windowed -server.
 int32_t g_netStartNow = 0;
 int32_t g_netStartNowPlayers = 2;
+int32_t g_netWait = 0;
 #ifndef NETCODE_DISABLE
 int32_t g_networkMode = NET_CLIENT;
 #endif

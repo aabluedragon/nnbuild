@@ -198,7 +198,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
         vb_netarg_ctx const netctx = {
             &g_networkMode, NET_SERVER, NET_CLIENT,
             &g_noSetup, &g_noLogo,
-            &g_netStartNow, &g_netStartNowPlayers, MAXPLAYERS,
+            &g_netStartNow, &g_netStartNowPlayers, &g_netWait, MAXPLAYERS,
             Net_SetAdvertise, Net_QueryLobby, Net_JoinLobby, Net_AddNetFile
         };
 #endif
