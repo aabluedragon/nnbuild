@@ -1412,6 +1412,7 @@ SWITCH switches[] = {
     { "broadcast", 1, 0 },
     { "advertise", 80, 1 },  // VibeBuild32: advertise this server to a masterserver
     { "lobbylist", 81, 1 },  // VibeBuild32: query a masterserver's server list
+    { "joinlobby", 82, 1 },  // VibeBuild32: query masterserver + join first server
     { "map", 2, 1 },
     { "masterslave", 3, 0 },
     { "level", 4, 2 },
@@ -1632,6 +1633,9 @@ void ParseOptions(void)
             break;
         case 81:  // VibeBuild32: -lobbylist <masteraddr>
             if (OptArgc >= 1) Net_QueryLobby(OptArgv[0]);
+            break;
+        case 82:  // VibeBuild32: -joinlobby <masteraddr>
+            if (OptArgc >= 1) Net_JoinLobby(OptArgv[0]);
             break;
         case 21:
             if (OptArgc < 1)

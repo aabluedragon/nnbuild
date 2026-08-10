@@ -1404,6 +1404,24 @@ int Net_QueryLobby(const char *masterAddr)  // -lobbylist <masteraddr>
     return n;
 }
 
+// -joinlobby <masteraddr>: query the masterserver, pick the first advertised
+// server, split its ip:port into Blood's gNetAddress/gNetPort, and become a client.
+int Net_JoinLobby(const char *masterAddr)
+{
+    if (!Masterserver_QueryList) { LOG_F(WARNING, "joinlobby: no masterserver support"); return 0; }
+    blood_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
+    if (n <= 0) { LOG_F(WARNING, "joinlobby: no servers advertised at %s", masterAddr); return 0; }
+    char const *ep = list[0].addr[0] ? list[0].addr : list[0].addr6;
+    char host[48]; Bstrncpyz(host, ep, sizeof(host));
+    char *colon = strrchr(host, ':');   // "a.b.c.d:port" -> split on the last ':'
+    if (colon) { *colon = 0; gNetPort = atoi(colon + 1); }
+    Bstrncpyz(gNetAddress, host, sizeof(gNetAddress));
+    gNetMode = NETWORK_CLIENT;
+    LOG_F(INFO, "joinlobby: joining \"%s\" at %s:%d (via masterserver %s)", list[0].name, gNetAddress, gNetPort, masterAddr);
+    return 1;
+}
+
 void netUpdate(void)
 {
     Net_HostAdvertise();  // VibeBuild32: masterserver/lobby heartbeat (host only)
