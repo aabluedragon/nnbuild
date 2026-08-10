@@ -904,18 +904,27 @@ endif
 # their game-internal symbols that also exist in Duke localized, so the two game
 # modules no longer collide. SW's own startup window is dropped (Duke's serves
 # both). See source/sw/UNIFY_WITH_VIBEBUILD32.md. macOS (arm64) for now.
+# $(call MERGE_RULE,<game>,<prior-merge-objs>): prelink <game>'s game objects
+# ($(<game>merge_objs)) with every game-internal symbol that also exists in one of the
+# already-linked games (<prior-merge-objs>) localized, so the coexisting copies do not
+# collide in the combined binary. macOS/arm64: objcopy is unavailable, so this uses
+# ld -r + -unexported_symbols_list. Instantiated once per extra game below.
+define MERGE_RULE
+$$(obj)/$(1)_merged.o: $$($(1)merge_objs) $(2)
+	@echo "Merging $(1) objects (localizing game-internal collisions with prior games)..."
+	@nm -g $(2) 2>/dev/null | awk '$$$$2 ~ /^[TDBS]$$$$/{print $$$$3}' | sort -u > $$(obj)/$(1)_prior_strong.txt
+	@nm -g $$($(1)merge_objs) 2>/dev/null | awk '$$$$2 ~ /^[TDBS]$$$$/{print $$$$3}' | sort -u > $$(obj)/$(1)_strong.txt
+	@comm -12 $$(obj)/$(1)_prior_strong.txt $$(obj)/$(1)_strong.txt > $$(obj)/$(1)_hide.txt
+	ld -r -arch arm64 $$($(1)merge_objs) -o $$(obj)/$(1)_premerge.o
+	ld -r -arch arm64 $$(obj)/$(1)_premerge.o -o $$@ -unexported_symbols_list $$(obj)/$(1)_hide.txt
+endef
+
 ifeq ($(WITH_SW),1)
 vibebuild32_cflags += -DWITH_SW
 swmerge_objs := $(filter-out %GameListSource.game.$o %GrpFile.game.$o %StartupWinController.game.$o %startosx.game.$o %startwin.game.$o %startgtk.game.$o,$(addprefix $(sw_obj)/,$(addsuffix .$o,$(basename $(sw_game_objs)))))
 dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
 
-$(obj)/sw_merged.o: $(swmerge_objs) $(dukemerge_objs)
-	@echo "Merging Shadow Warrior objects (localizing game-internal collisions with Duke)..."
-	@nm -g $(dukemerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/duke_strong.txt
-	@nm -g $(swmerge_objs)   2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/sw_strong.txt
-	@comm -12 $(obj)/duke_strong.txt $(obj)/sw_strong.txt > $(obj)/sw_hide.txt
-	ld -r -arch arm64 $(swmerge_objs) -o $(obj)/sw_premerge.o
-	ld -r -arch arm64 $(obj)/sw_premerge.o -o $@ -unexported_symbols_list $(obj)/sw_hide.txt
+$(eval $(call MERGE_RULE,sw,$(dukemerge_objs)))
 
 vibebuild32_game_miscdeps += $(obj)/sw_merged.o
 endif
@@ -954,13 +963,7 @@ components += blood
 dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
 bloodmerge_objs := $(addprefix $(blood_obj)/,$(addsuffix .$o,$(basename $(blood_game_objs))))
 
-$(obj)/blood_merged.o: $(bloodmerge_objs) $(dukemerge_objs) $(swmerge_objs)
-	@echo "Merging Blood objects (localizing game-internal collisions with Duke/SW)..."
-	@nm -g $(dukemerge_objs) $(swmerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/dukesw_strong.txt
-	@nm -g $(bloodmerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/blood_strong.txt
-	@comm -12 $(obj)/dukesw_strong.txt $(obj)/blood_strong.txt > $(obj)/blood_hide.txt
-	ld -r -arch arm64 $(bloodmerge_objs) -o $(obj)/blood_premerge.o
-	ld -r -arch arm64 $(obj)/blood_premerge.o -o $@ -unexported_symbols_list $(obj)/blood_hide.txt
+$(eval $(call MERGE_RULE,blood,$(dukemerge_objs) $(swmerge_objs)))
 
 vibebuild32_game_miscdeps += $(obj)/blood_merged.o
 endif
@@ -992,13 +995,7 @@ components += rr
 dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
 rrmerge_objs := $(addprefix $(rr_obj)/,$(addsuffix .$o,$(basename $(rr_game_objs))))
 
-$(obj)/rr_merged.o: $(rrmerge_objs) $(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs)
-	@echo "Merging Redneck Rampage objects (localizing collisions with Duke/SW/Blood)..."
-	@nm -g $(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/dsb_strong.txt
-	@nm -g $(rrmerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/rr_strong.txt
-	@comm -12 $(obj)/dsb_strong.txt $(obj)/rr_strong.txt > $(obj)/rr_hide.txt
-	ld -r -arch arm64 $(rrmerge_objs) -o $(obj)/rr_premerge.o
-	ld -r -arch arm64 $(obj)/rr_premerge.o -o $@ -unexported_symbols_list $(obj)/rr_hide.txt
+$(eval $(call MERGE_RULE,rr,$(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs)))
 
 vibebuild32_game_miscdeps += $(obj)/rr_merged.o
 endif
