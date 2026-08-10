@@ -1823,7 +1823,11 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
 
     if (fs)
     {
-        if (SDL_SetWindowFullscreen(sdl_window, SDL_WINDOW_FULLSCREEN))
+        // VibeBuild32: use desktop (borderless) fullscreen rather than exclusive mode-changing
+        // fullscreen. On macOS/retina, exclusive fullscreen switches to a physical mode that may
+        // not match the requested resolution, leaving the framebuffer letterboxed in a corner.
+        // Desktop fullscreen always covers the whole screen; the render is scaled up to fill it.
+        if (SDL_SetWindowFullscreen(sdl_window, SDL_WINDOW_FULLSCREEN_DESKTOP))
         {
             LOG_F(ERROR, "Unable to set window fullscreen: %s.", SDL_GetError());
             return -1;
