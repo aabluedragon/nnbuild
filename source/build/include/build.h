@@ -1507,6 +1507,13 @@ extern int32_t (*deletesprite_replace)(int16_t spritenum);
 extern int32_t (*changespritesect_replace)(int16_t spritenum, int16_t newsectnum);
 extern int32_t (*changespritestat_replace)(int16_t spritenum, int16_t newstatnum);
 extern void    (*initspritelists_replace)(void);
+extern int32_t (*animateoffs_replace)(int const tilenum, int fakevar);
+extern void    (*paletteLoadFromDisk_replace)(void);
+extern int32_t (*getpalookup_replace)(int32_t davis, int32_t dashade);
+extern void    (*loadvoxel_replace)(int32_t voxel);
+extern int32_t (*loadboard_replace)(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum);
+extern int32_t (*saveboard_replace)(const char *filename, const vec3_t *dapos, int16_t daang, int16_t dacursectnum);
+extern int32_t bloodhack;  // NotBlood: alters YAX wall-pointer arithmetic for Blood maps
 
 int32_t   changespritesect(int16_t spritenum, int16_t newsectnum);
 int32_t   changespritestat(int16_t spritenum, int16_t newstatnum);

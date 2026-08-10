@@ -143,6 +143,7 @@ static void maybe_alloc_palookup(int32_t palnum);
 //
 void paletteLoadFromDisk(void)
 {
+    if (paletteLoadFromDisk_replace) { paletteLoadFromDisk_replace(); return; }  // Blood palettes
     paletteInitClosestColorScale(30, 59, 11);
     paletteInitClosestColorGrid();
 

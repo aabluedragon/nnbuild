@@ -2483,6 +2483,8 @@ static void prepwall(int32_t z, uwallptr_t wal)
 //
 int32_t animateoffs(int const tilenum)
 {
+    if (animateoffs_replace)  // Blood custom tile animation
+        return animateoffs_replace(tilenum, 0);
     int const animnum = picanm[tilenum].num;
 
     if (animnum <= 0)
@@ -8807,6 +8809,15 @@ int32_t r_mirrormode = 0, r_mirrormodemulti = 0;
 void videoMirrorTile(uint8_t *, int, int) {}
 void videoMirrorDrawing(void) {}
 
+// Blood (NotBlood) engine override hooks (rest) + bloodhack flag. Default NULL/0.
+int32_t bloodhack = 0;
+int32_t (*animateoffs_replace)(int const tilenum, int fakevar) = NULL;
+void    (*paletteLoadFromDisk_replace)(void) = NULL;
+int32_t (*getpalookup_replace)(int32_t davis, int32_t dashade) = NULL;
+void    (*loadvoxel_replace)(int32_t voxel) = NULL;
+int32_t (*loadboard_replace)(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum) = NULL;
+int32_t (*saveboard_replace)(const char *filename, const vec3_t *dapos, int16_t daang, int16_t dacursectnum) = NULL;
+
 int32_t (*insertsprite_replace)(int16_t sectnum, int16_t statnum) = NULL;  // Blood override hook
 int32_t insertsprite(int16_t sectnum, int16_t statnum)
 {
@@ -11095,6 +11106,8 @@ int32_t (*loadboard_maptext)(buildvfs_kfd fil, vec3_t *dapos, int16_t *daang, in
 //       <= -4: map-text error
 int32_t engineLoadBoard(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
 {
+    if (loadboard_replace)  // Blood parses its own map format
+        return loadboard_replace(filename, flags, dapos, daang, dacursectnum);
     int32_t i;
     int16_t numsprites;
     const char myflags = flags&(~3);
@@ -11635,6 +11648,8 @@ static int32_t get_mapversion(void)
 //
 int32_t saveboard(const char *filename, const vec3_t *dapos, int16_t daang, int16_t dacursectnum)
 {
+    if (saveboard_replace)  // Blood writes its own map format
+        return saveboard_replace(filename, dapos, daang, dacursectnum);
     int16_t numsprites, ts;
     int32_t i, j, tl;
 
