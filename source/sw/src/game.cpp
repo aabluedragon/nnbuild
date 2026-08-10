@@ -3405,9 +3405,9 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     for (cnt = 1; cnt < argc; ++cnt)
     {
         char const * arg = argv[cnt];
-        if (*arg != '/' && *arg != '-')
+        if (*arg != '-')   // VibeBuild32 modern args: dash only, no slash
             continue;
-        ++arg;
+        while (*arg == '-') ++arg;   // accept -foo and --foo
 
         if (Bstrncasecmp(arg, "j", 1) == 0 && !SW_SHAREWARE)
         {
@@ -3544,11 +3544,11 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     {
         char const *arg = argv[cnt];
 
-        if (*arg != '/' && *arg != '-') continue;
+        if (*arg != '-') continue;   // VibeBuild32 modern args: dash only, no slash
 
         // Store arg in command line array!
         CON_StoreArg(arg);
-        arg++;
+        while (*arg == '-') arg++;   // accept -foo and --foo
 
         if (Bstrncasecmp(arg, "autonet",7) == 0)
         {
@@ -3657,6 +3657,20 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
         else if (Bstrncasecmp(arg, "monst", 5) == 0)
         {
             DebugActor = TRUE;
+        }
+        // VibeBuild32 canonical: --enemies <n> / -e<n>; 0 = no enemies, 1+ = skill level.
+        else if (Bstrncasecmp(arg, "enemies", 7) == 0 || (Btolower(arg[0]) == 'e' && (isdigit((uint8_t)arg[1]) || arg[1] == 0)))
+        {
+            const char *nstr = (Btolower(arg[0]) == 'e' && arg[1]) ? arg + 1
+                             : (cnt + 1 < argc ? argv[++cnt] : "0");
+            int const n = atoi(nstr);
+            if (n <= 0)
+                DebugActor = TRUE;              // no enemies
+            else
+            {
+                Skill = max(short(0), min(short(3), short(n - 1)));
+                DebugActor = FALSE;
+            }
         }
         else if (Bstrncasecmp(arg, "nopredict",9) == 0)
         {

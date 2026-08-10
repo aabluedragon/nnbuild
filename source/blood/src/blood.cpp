@@ -1424,6 +1424,8 @@ SWITCH switches[] = {
     { "masterslave", 3, 0 },
     { "level", 4, 2 },
     { "nodudes", 5, 1 },
+    { "enemies", 85, 1 },    // VibeBuild32 canonical: --enemies <n> (0 = none, 1+ = skill)
+    { "e", 85, 1 },
     //{ "playback", 6, 1 },
     //{ "record", 7, 1 },
     { "validate", 44, 1 },
@@ -1441,6 +1443,7 @@ SWITCH switches[] = {
     //{ "getopt", 19, 1 },
     { "auto", 20, 0 },
     { "pname", 21, 1 },
+    { "name", 21, 1 },       // VibeBuild32: canonical cross-game name (player name)
     { "noresend", 22, 0 },
     { "silentaim", 23, 0 },
     { "nodemo", 25, 0 },
@@ -1699,6 +1702,18 @@ void ParseOptions(void)
         case 5:
             gGameOptions.nMonsterSettings = 0;
             break;
+        case 85:  // VibeBuild32 canonical: --enemies <n> / -e <n>; 0 = no enemies, 1+ = skill
+        {
+            int const n = (OptArgc >= 1) ? (int)strtol(OptArgv[0], NULL, 0) : 0;  // 1-based: 0 = none, 1 = first skill
+            if (n <= 0)
+                gGameOptions.nMonsterSettings = 0;
+            else
+            {
+                gGameOptions.nMonsterSettings = 1;
+                gSkill = ClipRange(n - 1, 0, 4);
+            }
+            break;
+        }
         case 8:
             gRobust = 1;
             break;

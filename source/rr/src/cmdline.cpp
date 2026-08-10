@@ -585,9 +585,10 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
             {
                 static const struct { const char *lng; char shrt; int val; } aliases[] = {
                     { "level",'l',1 }, { "volume",'v',1 }, { "skill",'s',1 }, { "grp",'g',1 },
-                    { "group",'g',1 }, { "def",'h',1 }, { "demo",'d',1 }, { "con",'x',1 },
-                    { "path",'j',1 }, { "coop",'c',1 }, { "players",'q',1 }, { "respawn",'t',1 },
-                    { "weapons",'u',1 }, { "ai",'a',0 }, { "record",'r',0 }, { "coords",'w',0 },
+                    { "group",'g',1 }, { "def",'h',1 }, { "demo",'d',1 }, { "playback",'d',1 },
+                    { "con",'x',1 }, { "path",'j',1 }, { "coop",'c',1 }, { "players",'q',1 },
+                    { "respawn",'t',1 }, { "weapons",'u',1 }, { "ai",'a',0 }, { "record",'r',0 },
+                    { "coords",'w',0 }, { "enemies",'e',1 },   // canonical cross-game names
                 };
                 char name[24]; const char *inlineVal = Bstrchr(c+1, '=');
                 if (inlineVal) { int n = min((int)(inlineVal-(c+1)), 23); Bmemcpy(name, c+1, n); name[n] = 0; inlineVal++; }
@@ -625,6 +626,25 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     }
                     ud.m_coop--;
                     break;
+                case 'e':   // VibeBuild32 canonical: -e<n> / --enemies <n>; 0 = no enemies, 1+ = skill
+                {
+                    c++;
+                    int const n = Batoi(c);   // 1-based: 0 = no enemies, 1 = first skill, ...
+                    if (n <= 0)
+                    {
+                        ud.m_monsters_off = 1;
+                        ud.m_player_skill = ud.player_skill = 0;
+                        initprintf("No enemies.\n");
+                    }
+                    else
+                    {
+                        ud.m_monsters_off = 0;
+                        ud.m_player_skill = ud.player_skill = clamp(n-1, 0, g_skillCnt);
+                        if (ud.m_player_skill == 4)
+                            ud.m_respawn_monsters = ud.respawn_monsters = 1;
+                    }
+                    break;
+                }
                 case 'd':
                 {
                     c++;

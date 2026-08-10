@@ -213,6 +213,25 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
+                // VibeBuild32 canonical cross-game flag: --enemies <n> (0 = no enemies, 1+ = skill).
+                if (!Bstrcasecmp(c + 1, "enemies") || !Bstrcasecmp(c + 1, "-enemies"))
+                {
+                    int const n = (argc > i + 1) ? atoi(argv[i + 1]) : 0;   // 1-based
+                    if (n <= 0)
+                    {
+                        M_DMFLAGS_SET(DMFLAG_NOMONSTERS, true);
+                        ud.m_player_skill = ud.player_skill = 0;
+                        LOG_F(INFO, "No enemies.");
+                    }
+                    else
+                    {
+                        M_DMFLAGS_SET(DMFLAG_NOMONSTERS, false);
+                        ud.m_player_skill = ud.player_skill = clamp(n - 1, 0, 4);
+                    }
+                    if (argc > i + 1) i++;
+                    i++;
+                    continue;
+                }
                 if (!Bstrcasecmp(c + 1, "cfg"))
                 {
                     if (argc > i + 1)
@@ -617,6 +636,24 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                         LOG_F(INFO, "Play demo %s.", c);
                         Bstrcpy(firstdemofile, c);
                         break;
+                    case 'e':   // VibeBuild32 canonical: -e<n>; 0 = no enemies, 1+ = skill.
+                    case 'E':
+                    {
+                        c++;
+                        int const n = atoi(c);   // 1-based: 0 = no enemies, 1 = first skill, ...
+                        if (n <= 0)
+                        {
+                            M_DMFLAGS_SET(DMFLAG_NOMONSTERS, true);
+                            ud.m_player_skill = ud.player_skill = 0;
+                            LOG_F(INFO, "No enemies.");
+                        }
+                        else
+                        {
+                            M_DMFLAGS_SET(DMFLAG_NOMONSTERS, false);
+                            ud.m_player_skill = ud.player_skill = clamp(n - 1, 0, 4);
+                        }
+                        break;
+                    }
                     case 'g':
                     case 'G':
                         c++;
