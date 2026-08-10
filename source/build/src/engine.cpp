@@ -8813,6 +8813,11 @@ void videoMirrorDrawing(void) {}
 int32_t r_rortexture = 0, r_rortexturerange = 0, r_rorphase = 0;
 void polymer_setrorcallback(rorcallback) {}
 
+// Blood (NotBlood) voxel-from-buffer + GL-voxel callback + screen tint stubs.
+void (*PolymostProcessVoxels_Callback)(void) = NULL;
+voxmodel_t *loadkvxfrombuf(const char * /*buffer*/, int32_t /*length*/) { return NULL; }
+void videoTintBlood(int32_t /*r*/, int32_t /*g*/, int32_t /*b*/) {}
+
 // Blood (NotBlood) engine override hooks (rest) + bloodhack flag. Default NULL/0.
 int32_t bloodhack = 0;
 int32_t (*animateoffs_replace)(int const tilenum, int fakevar) = NULL;

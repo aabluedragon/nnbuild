@@ -11,3 +11,9 @@ bool CONTROL_GetControllerAxisIsTwinAxisStick(int32_t /*whichaxis*/) { return fa
 void CONTROL_GetAxisHeatMap(int32_t /*nAxis*/, uint8_t * /*tilePtr*/, int32_t /*nWidth*/, int32_t /*nHeight*/,
                             int32_t /*nPalBase*/, int32_t /*nPalRange*/, bool /*bDithering*/) {}
 void mouseMoveToCenter(void) {}
+
+// Credits/cutscene stubs: credits.cpp is excluded (needs libsmackerdec). Blood
+// runs without Smacker cutscenes; these no-ops satisfy the callers.
+char credPlaySmk(const char * /*pzSMK*/, const char * /*pzWAV*/, int /*nWAV*/) { return 0; }
+void credReset(void) {}
+void credLogosDos(void) {}
