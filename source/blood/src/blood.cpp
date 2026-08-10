@@ -2070,7 +2070,9 @@ int Blood_app_main(int argc, char const * const * argv)
     ScanINIFiles();
 
 #ifdef STARTUP_SETUP_WINDOW
-    if (readSetup < 0 || (!gNoSetup && (configversion != BYTEVERSION || gSetup.forcesetup)) || gCommandSetup)
+    // VibeBuild32: -nosetup (gNoSetup) also skips the forced first-run window
+    // (missing config, readSetup<0) so `-game blood -nosetup` launches directly.
+    if ((readSetup < 0 && !gNoSetup) || (!gNoSetup && (configversion != BYTEVERSION || gSetup.forcesetup)) || gCommandSetup)
     {
         if (quitevent || !startwin_run())
         {

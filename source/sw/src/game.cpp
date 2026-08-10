@@ -3455,7 +3455,10 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     SW_ScanGroups();
 
 #ifdef STARTUP_SETUP_WINDOW
-    if (i < 0 || CommandSetup || (ud_setup.ForceSetup && !g_noSetup))
+    // VibeBuild32: -nosetup (g_noSetup) also skips the forced first-run window
+    // (missing config, i<0), so `-game sw -nosetup` launches directly in the
+    // unified binary without hand-seeding a config.
+    if ((i < 0 && !g_noSetup) || CommandSetup || (ud_setup.ForceSetup && !g_noSetup))
     {
         if (quitevent || !startwin_run())
         {
