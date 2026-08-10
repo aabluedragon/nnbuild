@@ -61,6 +61,7 @@ Things required to make savegames work:
 #include "player.h"
 #include "lists.h"
 #include "network.h"
+#include "netargs.h"   // VibeBuild32: unified multiplayer command-line flags
 #include "pal.h"
 #include "fx_man.h"
 
@@ -3242,7 +3243,7 @@ void CommandLineHelp(char const * const * /*argv*/)
     char *str;
     int strl;
 
-    strl = 30 + 70;
+    strl = 30 + 70 + sizeof(VB_NETARGS_HELP);
     for (i=0; i < (int)SIZ(cli_arg); i++)
         if (cli_arg[i].arg_fmt && (!SW_SHAREWARE || (!cli_arg[i].notshareware && SW_SHAREWARE)))
             strl += strlen(cli_arg[i].arg_fmt) + 1 + strlen(cli_arg[i].arg_descr) + 1;
@@ -3262,6 +3263,7 @@ void CommandLineHelp(char const * const * /*argv*/)
                 strcat(str, "\n");
             }
         }
+        strcat(str, VB_NETARGS_HELP);   // VibeBuild32: unified multiplayer flags
         wm_msgbox("Shadow Warrior Help", "%s", str);
         Xfree(str);
     }
@@ -3278,6 +3280,15 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     void gameinput(void);
     int cnt = 0;
 
+    // VibeBuild32: shared multiplayer flags (advertise/lobbylist/netfile/headless/etc).
+    // SW sets server mode via mmulti, so networkMode stays NULL here; -joinlobby (auto-join),
+    // -punchto and -masteraddr are SW-specific and handled by their own branches below.
+    vb_netarg_ctx const swNetArg = {
+        NULL, 0, 0,
+        &g_noSetup, &g_noLogo,
+        NULL, NULL, 0,
+        Net_SetAdvertise, Net_QueryLobby, NULL, Net_AddNetFile
+    };
     for (i=1; i<argc; i++)
     {
         if (argv[i][0] != '-'
@@ -3302,35 +3313,24 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
         {
             g_noLogo = 1;
         }
-        else if (!Bstrcasecmp(argv[i]+1, "advertise") && i+1 < argc)
-        {
-            Net_SetAdvertise(argv[i+1]);  // advertise this server to a masterserver/lobby
-            i++;
-        }
         else if (!Bstrcasecmp(argv[i]+1, "punchto") && i+1 < argc)
         {
-            Net_SetPunchTarget(argv[i+1]);  // client: NAT-punch toward this server
+            Net_SetPunchTarget(argv[i+1]);  // SW-specific: client NAT-punch toward this server
             i++;
         }
         else if (!Bstrcasecmp(argv[i]+1, "masteraddr") && i+1 < argc)
         {
-            Net_SetMasterAddr(argv[i+1]);   // client: masterserver used for the punch
-            i++;
-        }
-        else if (!Bstrcasecmp(argv[i]+1, "lobbylist") && i+1 < argc)
-        {
-            Net_QueryLobby(argv[i+1]);      // client: query+log a masterserver's server list
+            Net_SetMasterAddr(argv[i+1]);   // SW-specific: masterserver used for the punch
             i++;
         }
         else if (!Bstrcasecmp(argv[i]+1, "joinlobby") && i+1 < argc)
         {
-            Net_SetAutoJoin(argv[i+1]);     // client: query masterserver + auto-join first server
+            Net_SetAutoJoin(argv[i+1]);     // SW-specific: query masterserver + auto-join (relaunch)
             i++;
         }
-        else if (!Bstrcasecmp(argv[i]+1, "netfile") && i+1 < argc)
+        else if (int const nc = VB_NetArg(&swNetArg, argv[i]+1, (i+1 < argc) ? argv[i+1] : nullptr))
         {
-            Net_AddNetFile(argv[i+1]);      // host: offer this file to joiners (mid-game transfer)
-            i++;
+            i += nc - 1;   // shared: -advertise/-lobbylist/-netfile/-headless (the for-loop does one ++)
         }
         else if (!Bstrcasecmp(argv[i]+1, "?"))
         {

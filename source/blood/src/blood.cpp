@@ -54,6 +54,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "mirrors.h"
 #include "music.h"
 #include "network.h"
+#include "netargs.h"   // VibeBuild32: unified multiplayer flag help text
 #include "osdcmds.h"
 #include "replace.h"
 #include "resource.h"
@@ -1588,6 +1589,7 @@ void PrintHelp(void)
     puts("-RFF          Specify an RFF file for Blood game resources");
     puts("-ini          Specify an INI file name (default is blood.ini)");
 #endif
+    fputs(VB_NETARGS_HELP, stdout);   // VibeBuild32: unified multiplayer flags
     exit(0);
 }
 

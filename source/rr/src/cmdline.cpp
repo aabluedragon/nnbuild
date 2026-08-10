@@ -25,6 +25,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "screens.h"
 #include "renderlayer.h"
 #include "cmdline.h"
+#ifndef NETCODE_DISABLE
+# include "netargs.h"   // VibeBuild32: unified multiplayer command-line flags
+#endif
 
 int32_t g_commandSetup = 0;
 int32_t g_noSetup = 0;
@@ -72,6 +75,9 @@ void G_ShowParameterHelp(void)
         "-#\t\tLoad and run a game from slot # (0-9)\n"
         //              "\n-?/--help\tDisplay this help message and exit\n"
         "\nSee " APPBASENAME " -debughelp for additional parameters for debugging"
+#ifndef NETCODE_DISABLE
+        VB_NETARGS_HELP
+#endif
         ;
 #ifdef WM_MSGBOX_WINDOW
     Bsnprintf(tempbuf, sizeof(tempbuf), HEAD2 " %s", s_buildRev);
@@ -186,6 +192,16 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
             initprintf("%s ", argv[i++]);
         initprintf("\n");
 
+#ifndef NETCODE_DISABLE
+        // VibeBuild32: unified multiplayer flags (advertise/lobbylist/joinlobby/netfile/
+        // startnow/nplayers/headless). One dispatcher shared with SW/Blood - see netargs.h.
+        vb_netarg_ctx const netctx = {
+            &g_networkMode, NET_SERVER, NET_CLIENT,
+            &g_noSetup, &g_noLogo,
+            &g_netStartNow, &g_netStartNowPlayers, MAXPLAYERS,
+            Net_SetAdvertise, Net_QueryLobby, Net_JoinLobby, Net_AddNetFile
+        };
+#endif
         i = 1;
         do
         {
@@ -201,6 +217,12 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                 )
             {
                 shortopt = 0;
+#ifndef NETCODE_DISABLE
+                {
+                    int const consumed = VB_NetArg(&netctx, c+1, (i+1 < argc) ? argv[i+1] : NULL);
+                    if (consumed) { i += consumed; continue; }
+                }
+#endif
 
                 if (!Bstrcasecmp(c+1, "?") || !Bstrcasecmp(c+1, "help") || !Bstrcasecmp(c+1, "-help"))
                 {
@@ -324,35 +346,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
-                // VibeBuild32: the engine's early argv scan already turns these into a
-                // windowless dedicated server (g_forceHeadless). Recognize them as
-                // whole words here so RR's single-char '-h' (add .def file) switch does
-                // not swallow "-headless" as "-h eadless".
-                if (!Bstrcasecmp(c+1, "headless") || !Bstrcasecmp(c+1, "dedicated") || !Bstrcasecmp(c+1, "console"))
-                {
-                    g_networkMode = NET_SERVER;   // a dedicated server hosts
-                    g_noSetup = g_noLogo = TRUE;
-                    i++;
-                    continue;
-                }
-                // VibeBuild32: -startnow auto-launches the match once the lobby fills;
-                // -nplayers <N> sets how many players to wait for (host included, default 2).
-                if (!Bstrcasecmp(c+1, "startnow"))
-                {
-                    g_netStartNow = 1;
-                    i++;
-                    continue;
-                }
-                if (!Bstrcasecmp(c+1, "nplayers"))
-                {
-                    if (argc > i+1)
-                    {
-                        g_netStartNowPlayers = clamp(Batoi(argv[i+1]), 2, MAXPLAYERS);
-                        i++;
-                    }
-                    i++;
-                    continue;
-                }
+                // -headless/-startnow/-nplayers etc. are handled by VB_NetArg above.
 #ifndef NETCODE_DISABLE
                 if (!Bstrcasecmp(c+1, "net"))
                 {
@@ -400,40 +394,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
-                // VibeBuild32: masterserver advertise/matchmaking (mirrors Duke/SW/Blood)
-                if (!Bstrcasecmp(c+1, "advertise"))  // -advertise <masteraddr>: listen host, register with masterserver
-                {
-                    if (argc > i+1)
-                    {
-                        g_networkMode = NET_SERVER;
-                        g_noSetup = g_noLogo = TRUE;
-                        Net_SetAdvertise(argv[i+1]);
-                        i++;
-                    }
-                    i++;
-                    continue;
-                }
-                if (!Bstrcasecmp(c+1, "lobbylist"))  // -lobbylist <masteraddr>: print advertised servers and exit-ish
-                {
-                    if (argc > i+1)
-                    {
-                        Net_QueryLobby(argv[i+1]);
-                        i++;
-                    }
-                    i++;
-                    continue;
-                }
-                if (!Bstrcasecmp(c+1, "joinlobby"))  // -joinlobby <masteraddr>: pick first advertised server and join it
-                {
-                    if (argc > i+1)
-                    {
-                        g_noSetup = g_noLogo = TRUE;
-                        Net_JoinLobby(argv[i+1]);
-                        i++;
-                    }
-                    i++;
-                    continue;
-                }
+                // -advertise/-lobbylist/-joinlobby are handled by VB_NetArg above.
                 if (!Bstrcasecmp(c+1, "password"))
                 {
                     if (argc > i+1)
