@@ -1129,7 +1129,12 @@ int32_t initinput(void(*hotplugCallback)(void) /*= nullptr*/)
         Bstrncpyz(g_keyNameTable[keytranslation[i]], SDL_GetKeyName(SDL_SCANCODE_TO_KEYCODE(i)), sizeof(g_keyNameTable[0]));
     }
 
-    if ((g_controllerSupportFlags & CONTROLLER_DISABLED) == 0)
+    // A dedicated/headless server has no player at a controller; initializing the
+    // joystick/gamecontroller subsystem there makes SDL re-enumerate HID devices on
+    // every event pump (on macOS, DARWIN_JoystickDetect runs a CFRunLoop) - profiling
+    // showed that dominating CPU when the loop isn't vsync-capped, i.e. a dedicated
+    // server would spin ~100% CPU on joystick polling. Skip it entirely when headless.
+    if ((g_controllerSupportFlags & CONTROLLER_DISABLED) == 0 && !g_forceHeadless)
     {
 #if SDL_MAJOR_VERSION >= 2
 # if defined SDL_HINT_DIRECTINPUT_ENABLED
