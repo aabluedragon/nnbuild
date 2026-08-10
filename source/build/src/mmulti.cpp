@@ -25,6 +25,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <ifaddrs.h>   // VibeBuild32: local-interface enumeration for order-independent P2P
 #define SOCKET int
 #define INVALID_HANDLE_VALUE (-1)
 #define INVALID_SOCKET (-1)
@@ -607,10 +608,58 @@ static void initmultiplayers_reset(void)
 // 192.168.1.2     game /n1 192.168.1.100  game /n1 192.168.1.100 192.168.1.4
 // 192.168.1.100   game 192.168.1.2 /n1    game 192.168.1.2 /n1 192.168.1.4
 // 192.168.1.4                             game 192.168.1.2 192.168.1.100 /n1
+//
+// VibeBuild32: the above legacy form (list the OTHER peers, /n1 marks your slot by
+// position) still works. But you may instead list EVERY player's address - including
+// your own - after /n1 in ANY order; mmulti sorts them canonically so all participants
+// derive the same slot ordering, and auto-detects which one is the local machine. That
+// is, all three players can just run:  game /n1 192.168.1.2 192.168.1.100 192.168.1.4
+
+// Canonical ordering of endpoints (address bytes, then port) so a sorted roster is the
+// same on every participant regardless of the order the addresses were typed.
+static int vb_addr_cmp(const void *pa, const void *pb)
+{
+    const struct sockaddr_in6 *a = (const struct sockaddr_in6 *)pa, *b = (const struct sockaddr_in6 *)pb;
+    int const c = memcmp(&a->sin6_addr, &b->sin6_addr, sizeof(a->sin6_addr));
+    if (c) return c;
+    return (int)ntohs(a->sin6_port) - (int)ntohs(b->sin6_port);
+}
+
+// Is <a> this machine on our listen port? (loopback for same-box testing, or one of the
+// local interface addresses for LAN). Lets us find "self" in an order-independent roster.
+static int vb_addr_is_local(const struct sockaddr_in6 *a, int listenPort)
+{
+    if ((int)ntohs(a->sin6_port) != listenPort) return 0;
+    if (IN6_IS_ADDR_LOOPBACK(&a->sin6_addr)) return 1;
+    unsigned int const ip4 = addr_get4(a);
+    if (ip4 == htonl(INADDR_LOOPBACK)) return 1;
+#ifndef _WIN32
+    struct ifaddrs *ifa = NULL;
+    int found = 0;
+    if (getifaddrs(&ifa) == 0)
+    {
+        for (struct ifaddrs *p = ifa; p && !found; p = p->ifa_next)
+        {
+            if (!p->ifa_addr) continue;
+            if (ip4 && p->ifa_addr->sa_family == AF_INET)
+                found = (((struct sockaddr_in *)p->ifa_addr)->sin_addr.s_addr == ip4);
+            else if (!ip4 && p->ifa_addr->sa_family == AF_INET6)
+                found = !memcmp(&((struct sockaddr_in6 *)p->ifa_addr)->sin6_addr, &a->sin6_addr, sizeof(a->sin6_addr));
+        }
+        freeifaddrs(ifa);
+    }
+    return found;
+#else
+    return 0;
+#endif
+}
+
 int initmultiplayersparms(int argc, const char * const *argv)
 {
     int i, j, daindex, portnum = NETPORT;
     char *st;
+    struct sockaddr_in6 roster[MAXPLAYERS];   // VibeBuild32: all listed addresses, for order-independent P2P
+    int rosterCnt = 0;
 
     pakmem = (char *)Xmalloc(PAKMEMSIZ);
     initmultiplayers_reset();
@@ -683,6 +732,7 @@ int initmultiplayersparms(int argc, const char * const *argv)
             struct sockaddr_in6 pa;
             if (resolve_peer(st, htons((unsigned short)NETPORT), &pa))
             {
+                if (rosterCnt < MAXPLAYERS) roster[rosterCnt++] = pa;   // for order-independent P2P below
                 if ((networkmode == MMULTI_MODE_P2P) && (daindex == myconnectindex)) daindex++;
                 otheraddr[daindex] = pa;
                 char abuf[80];
@@ -697,6 +747,34 @@ int initmultiplayersparms(int argc, const char * const *argv)
     if ((networkmode == -1) && (daindex)) { numplayers = 2; networkmode = MMULTI_MODE_MS; } //an IP w/o /n# defaults to /n0
     if ((numplayers >= 2) && (daindex) && (networkmode == MMULTI_MODE_MS)) myconnectindex = 1;
     if (daindex > numplayers) numplayers = daindex;
+
+    // VibeBuild32: order-independent P2P. If the local machine's own address is among the
+    // listed ones, the participant listed the full roster (any order) rather than the
+    // legacy "peers only, /n1 marks my slot" form. Sort the roster canonically so every
+    // participant agrees on the slot ordering, and take our own slot from where we land.
+    if (networkmode == MMULTI_MODE_P2P && rosterCnt >= 2)
+    {
+        int self = -1;
+        for (int r = 0; r < rosterCnt; r++)
+            if (vb_addr_is_local(&roster[r], portnum)) { self = r; break; }
+        if (self >= 0)
+        {
+            qsort(roster, rosterCnt, sizeof(roster[0]), vb_addr_cmp);
+            self = -1;
+            for (int r = 0; r < rosterCnt; r++)
+                if (vb_addr_is_local(&roster[r], portnum)) { self = r; break; }
+            myconnectindex = self;
+            if (rosterCnt > numplayers) numplayers = rosterCnt;
+            for (int r = 0; r < rosterCnt; r++)
+            {
+                if (r == self) { addr_clear(&otheraddr[r]); continue; }
+                otheraddr[r] = roster[r];
+                char abuf[80]; addr_to_str(&roster[r], abuf, sizeof(abuf));
+                printf("mmulti: (sorted) player %d at %s\n", r, abuf);
+            }
+            printf("mmulti: order-independent P2P: %d players, I am player %d\n", numplayers, myconnectindex);
+        }
+    }
 
     //for(i=0;i<numplayers;i++)
     //   printf("Player %d: %d.%d.%d.%d:%d\n",i,otherip[i]&255,(otherip[i]>>8)&255,(otherip[i]>>16)&255,((unsigned int)otherip[i])>>24,ntohs(otherport[i]));
