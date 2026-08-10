@@ -324,6 +324,17 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
+                // VibeBuild32: the engine's early argv scan already turns these into a
+                // windowless dedicated server (g_forceHeadless). Recognize them as
+                // whole words here so RR's single-char '-h' (add .def file) switch does
+                // not swallow "-headless" as "-h eadless".
+                if (!Bstrcasecmp(c+1, "headless") || !Bstrcasecmp(c+1, "dedicated") || !Bstrcasecmp(c+1, "console"))
+                {
+                    g_networkMode = NET_SERVER;   // a dedicated server hosts
+                    g_noSetup = g_noLogo = TRUE;
+                    i++;
+                    continue;
+                }
 #ifndef NETCODE_DISABLE
                 if (!Bstrcasecmp(c+1, "net"))
                 {
