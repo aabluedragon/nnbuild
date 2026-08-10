@@ -728,6 +728,7 @@ endif
 vibebuild32_game_proper := VibeBuild32
 
 vibebuild32_game_objs := \
+    gameselect.cpp \
     actors.cpp \
     anim.cpp \
     chatpipe.cpp \

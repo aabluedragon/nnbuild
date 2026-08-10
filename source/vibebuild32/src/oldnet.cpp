@@ -1767,7 +1767,9 @@ void Net_DisplayLagDialog(void)
         gametext(160, y, "Reconnect or you will be dropped", 14, 2);
 }
 
-void faketimerhandler(void) { };
+// Renamed from faketimerhandler: the engine's per-tic callback is now a
+// dispatcher in gameselect.cpp routing to this (Duke, a no-op) or SW's.
+void Duke_faketimerhandler(void) { };
 
 void Net_HandleInput(void)
 {

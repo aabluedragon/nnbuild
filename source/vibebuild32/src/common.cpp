@@ -80,7 +80,9 @@ const char *G_DefaultGrpFile(void)
     return "(none)";
 #endif
 }
-const char *G_DefaultDefFile(void)
+// Renamed from G_DefaultDefFile: the canonical name is now a dispatcher in
+// gameselect.cpp that routes to this (Duke) or SW's version by active game.
+const char *Duke_G_DefaultDefFile(void)
 {
 #ifndef EDUKE32_STANDALONE
     if (DUKE)

@@ -8883,7 +8883,9 @@ static const char* dukeVerbosityCallback(loguru::Verbosity verbosity)
     }
 }
 
-int app_main(int32_t argc, char const* const* argv)
+// Renamed from app_main: the engine's app_main is now the game selector (see
+// gameselect.cpp), which dispatches here for Duke3D.
+int Duke_app_main(int32_t argc, char const* const* argv)
 {
     int i = 0;
     char cwd[BMAX_PATH];
