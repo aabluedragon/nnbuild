@@ -2918,15 +2918,7 @@ void Net_ReceiveDisconnect(ENetEvent *event)
 static char s_rrMasterAddr[128] = "";   // masterserver used for -joinlobby / NAT punch
 static char s_rrJoinAddr[128]   = "";   // "ip:port" of the server we are joining (punch target)
 
-static void RR_Net_AdvertiseStopAtExit(void) { if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop(); }
-
-void Net_SetAdvertise(const char *addr)  // -advertise <masteraddr>
-{
-    if (!Masterserver_SetAdvertise) return;
-    Masterserver_SetAdvertise(addr);
-    static int reg = 0;
-    if (!reg) { atexit(RR_Net_AdvertiseStopAtExit); reg = 1; }
-}
+void Net_SetAdvertise(const char *addr) { VB_SetAdvertise(addr); }  // -advertise <masteraddr> (shared)
 
 void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
 {
@@ -2941,17 +2933,7 @@ void Net_HostAdvertise(void)  // pulse this server to the masterserver (host onl
         Masterserver_AdvertisePulse(name, g_netPort, numplayers, numplayers, map);
 }
 
-int Net_QueryLobby(const char *masterAddr)  // -lobbylist <masteraddr>
-{
-    if (!Masterserver_QueryList) { LOG_F(WARNING, "RR lobby query unavailable"); return -1; }
-    vb_msserver_t list[16];
-    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
-    LOG_F(INFO, "RR lobby: %d server(s) at %s", (int)n, masterAddr);
-    for (int i = 0; i < n; i++)
-        LOG_F(INFO, "  [%d] %s  \"%s\"  map=%s  %d/%d",
-              i, list[i].addr[0] ? list[i].addr : list[i].addr6, list[i].name, list[i].map, list[i].players, list[i].maxplayers);
-    return n;
-}
+int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "RR"); }  // -lobbylist (shared)
 
 // Client NAT hole-punch: ask the masterserver to punch a hole toward the server we
 // are joining. The request must leave our GAME socket (enet's) so the master learns

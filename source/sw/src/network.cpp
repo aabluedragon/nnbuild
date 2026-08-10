@@ -1321,22 +1321,7 @@ void Net_SetMasterAddr(const char *addr)  { Bstrncpyz(s_swMasterAddr,  addr, siz
 // exercises it from the console. vb_msserver_t + the weak Masterserver_QueryList
 // come from netshared.h.
 
-int Net_QueryLobby(const char *masterAddr)
-{
-    if (!Masterserver_QueryList)  // standalone SW: no masterserver linked
-    {
-        LOG_F(WARNING, "SW lobby query unavailable (no masterserver in this build)");
-        return -1;
-    }
-    vb_msserver_t list[16];
-    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
-    LOG_F(INFO, "SW lobby: %d server(s) at %s", (int)n, masterAddr);
-    for (int i = 0; i < n; i++)
-        LOG_F(INFO, "  [%d] %s  \"%s\"  map=%s  %d/%d",
-              i, list[i].addr[0] ? list[i].addr : list[i].addr6,
-              list[i].name, list[i].map, list[i].players, list[i].maxplayers);
-    return n;
-}
+int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "SW"); }  // -lobbylist (shared)
 
 // --- in-menu server browser backend -----------------------------------------
 int Net_QueryLobbyList(const char *masterAddr, sw_lobby_server *out, int maxout)
@@ -1443,20 +1428,8 @@ void Net_ClientPunchAttempt(void)
 
 extern char LevelName[20];
 
-static void Net_AdvertiseStopAtExit(void)
-{
-    if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop();
-}
-
-// Enable advertising this server to a masterserver (from -advertise <addr>).
-void Net_SetAdvertise(const char *addr)
-{
-    if (!Masterserver_SetAdvertise)  // standalone SW: no masterserver linked
-        return;
-    Masterserver_SetAdvertise(addr);
-    static int atexitReg = 0;
-    if (!atexitReg) { atexit(Net_AdvertiseStopAtExit); atexitReg = 1; }  // graceful "going away"
-}
+// Enable advertising this server to a masterserver (from -advertise <addr>). Shared.
+void Net_SetAdvertise(const char *addr) { VB_SetAdvertise(addr); }
 
 // Called each net tic from getpackets(): service NAT-punch requests and pulse
 // this server's presence (host only). Mirrors Duke's Net_HostAdvertise().

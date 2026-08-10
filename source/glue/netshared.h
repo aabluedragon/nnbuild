@@ -85,6 +85,33 @@ struct vb_filerecv_t
 // initgroupfile, LOG_F, Xmalloc, ...), so include this header AFTER the engine/game
 // headers that declare them (it is, in every game's netcode TU).
 
+// --- masterserver client helpers (identical logic across the games) -----------
+static inline void VB_AdvertiseStopAtExit(void) { if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop(); }
+
+// -advertise <masteraddr>: register this listen server with a masterserver, and
+// arrange to withdraw it at exit. No-op if Duke's masterserver isn't linked in.
+static inline void VB_SetAdvertise(const char *addr)
+{
+    if (!Masterserver_SetAdvertise) return;
+    Masterserver_SetAdvertise(addr);
+    static int reg = 0;
+    if (!reg) { atexit(VB_AdvertiseStopAtExit); reg = 1; }
+}
+
+// -lobbylist <masteraddr>: query a masterserver and log its advertised servers.
+// <tag> names the game for the log lines. Returns the server count (-1 if unsupported).
+static inline int VB_QueryLobby(const char *masterAddr, const char *tag)
+{
+    if (!Masterserver_QueryList) { LOG_F(WARNING, "%s lobby query unavailable", tag); return -1; }
+    vb_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
+    LOG_F(INFO, "%s lobby: %d server(s) at %s", tag, (int)n, masterAddr);
+    for (int i = 0; i < n; i++)
+        LOG_F(INFO, "  [%d] %s  \"%s\"  map=%s  %d/%d",
+              i, list[i].addr[0] ? list[i].addr : list[i].addr6, list[i].name, list[i].map, list[i].players, list[i].maxplayers);
+    return n;
+}
+
 // Host-side file sender. Builds the HEADER + CHUNK packets and hands each to <send>
 // (the game's transport: enet for Blood/RR, mmulti for SW). hdrType/chunkType are the
 // leading packet-type bytes (VB_FILE_HEADER/CHUNK for the enet games; SW passes its
