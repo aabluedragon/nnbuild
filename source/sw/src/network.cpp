@@ -1353,6 +1353,38 @@ int Net_QueryLobby(const char *masterAddr)
     return n;
 }
 
+// -joinlobby <masteraddr>: query the masterserver, pick the first advertised
+// server, and hand its address to SW's mmulti connect (with NAT-punch armed).
+// This is the discover+join core of a server browser, driven from the command
+// line so it is verifiable without menu rendering.
+static char s_autoJoinMaster[128] = "";
+char s_autoJoinServer[128] = "";  // filled by Net_ResolveAutoJoin; read by InitGame
+void Net_SetAutoJoin(const char *masterAddr) { Bstrncpyz(s_autoJoinMaster, masterAddr, sizeof(s_autoJoinMaster)); }
+
+int Net_ResolveAutoJoin(void)
+{
+    if (!s_autoJoinMaster[0])
+        return 0;
+    if (!Masterserver_QueryList)
+    {
+        LOG_F(WARNING, "joinlobby: no masterserver support in this build");
+        return 0;
+    }
+    sw_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(s_autoJoinMaster, list, 16, 1500);
+    if (n <= 0)
+    {
+        LOG_F(WARNING, "joinlobby: no servers advertised at %s", s_autoJoinMaster);
+        return 0;
+    }
+    Bstrncpyz(s_autoJoinServer, list[0].addr[0] ? list[0].addr : list[0].addr6, sizeof(s_autoJoinServer));
+    Net_SetPunchTarget(s_autoJoinServer);   // arm NAT punch toward the chosen server
+    Net_SetMasterAddr(s_autoJoinMaster);
+    LOG_F(INFO, "joinlobby: joining \"%s\" at %s (via masterserver %s)",
+          list[0].name, s_autoJoinServer, s_autoJoinMaster);
+    return 1;
+}
+
 void Net_ClientPunchAttempt(void)
 {
     if (!Masterserver_MakePunchReq)              // weak-absent in the standalone SW build

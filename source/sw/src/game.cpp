@@ -867,7 +867,23 @@ InitGame(int32_t argc, char const * const * argv)
     InitPalette();
     // sets numplayers, connecthead, connectpoint2, myconnectindex
 
-    if (!firstnet)
+    extern char s_autoJoinServer[128];
+    if (Net_ResolveAutoJoin())  // -joinlobby: masterserver picked a server to join
+    {
+        char const *netargv[2] = { s_autoJoinServer, NULL };
+        if (initmultiplayersparms(1, netargv))
+        {
+            NetBroadcastMode = (networkmode == MMULTI_MODE_P2P);
+            LOG_F(INFO, "Joining lobby server %s...", s_autoJoinServer);
+            while (initmultiplayerscycle())
+            {
+                handleevents();
+                Net_ClientPunchAttempt();
+                if (quitevent) { QuitFlag = TRUE; return; }
+            }
+        }
+    }
+    else if (!firstnet)
         initmultiplayers(0, NULL, 0, 0, 0);
     else if (initmultiplayersparms(argc - firstnet, &argv[firstnet]))
     {
@@ -876,6 +892,7 @@ InitGame(int32_t argc, char const * const * argv)
         while (initmultiplayerscycle())
         {
             handleevents();
+            Net_HostAdvertise();       // keep advertising to the masterserver while waiting for joiners
             Net_ClientPunchAttempt();  // NAT hole-punch toward the server (lobby/manual join)
             if (quitevent)
             {
@@ -3295,6 +3312,11 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
         else if (!Bstrcasecmp(argv[i]+1, "lobbylist") && i+1 < argc)
         {
             Net_QueryLobby(argv[i+1]);      // client: query+log a masterserver's server list
+            i++;
+        }
+        else if (!Bstrcasecmp(argv[i]+1, "joinlobby") && i+1 < argc)
+        {
+            Net_SetAutoJoin(argv[i+1]);     // client: query masterserver + auto-join first server
             i++;
         }
         else if (!Bstrcasecmp(argv[i]+1, "?"))

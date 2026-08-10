@@ -151,8 +151,17 @@ These must resolve to one definition that routes to the **active** game.
      `Masterserver_QueryList`) + `-lobbylist <addr>` arg. VERIFIED full round-trip:
      an SW `-advertise` server registered, then an SW `-lobbylist` client fetched
      it: `SW lobby: 1 server(s)` / `[0] ...:23513 "VibeBuild32 SW server" map=SW 1/1`.
-   - [TODO-UI] In-menu server BROWSER: wire the above list into SW's menus.cpp so a
-     player can see servers and pick-to-join (backend done; pure SW menu UI left).
+   - [DONE] Lobby-based MATCHMAKING (discover + join). `-joinlobby <masteraddr>`
+     (Net_SetAutoJoin/Net_ResolveAutoJoin) queries the masterserver, picks the first
+     server, and feeds its address into SW's mmulti connect with NAT-punch armed;
+     the host's connect-wait loop now also calls Net_HostAdvertise() so a waiting
+     server is discoverable. VERIFIED full round-trip: an advertising SW host
+     (`-advertise ... -net -p1234 /n0:2`) was discovered by an SW `-joinlobby`
+     client which CONNECTED (`mmulti: player 1 connected!`) and began the
+     `waitforeverybody()` sync handshake.
+   - [TODO-UI] In-menu server BROWSER (graphical): wire the list into SW's menus.cpp
+     for click-to-join. Backend + the whole discover/join path are done; this is
+     pure SW menu-framework UI (unverifiable without a display).
    - [TODO] Mid-game join + file transfer with x-of-y. SCOPED: Duke's chunked
      transfer (`Net_SendFile`/`Net_SendGameFiles`, `Net_FindExistingFile` dedup by
      size+CRC, `oldnet.cpp:1267-1501`) is ~game-agnostic at the wire level

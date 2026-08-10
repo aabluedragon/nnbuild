@@ -177,6 +177,8 @@ void Net_SetPunchTarget(const char *addr);  // client NAT-punch: server to reach
 void Net_SetMasterAddr(const char *addr);   // client NAT-punch: masterserver addr
 void Net_ClientPunchAttempt(void);
 int  Net_QueryLobby(const char *masterAddr); // client: fetch+log masterserver server list
+void Net_SetAutoJoin(const char *masterAddr); // -joinlobby: query+join first server
+int  Net_ResolveAutoJoin(void);               // returns 1 + fills s_autoJoinServer if a server was picked
 void SendMulitNameChange(char *new_name);
 void InitNetVars(void);
 void InitTimingVars(void);
