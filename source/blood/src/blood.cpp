@@ -1419,10 +1419,12 @@ SWITCH switches[] = {
     { "headless", 84, 0 },   // VibeBuild32: windowless server (engine sets g_forceHeadless)
     { "dedicated", 84, 0 },
     { "console", 84, 0 },
-    { "l", 4, 2 },           // VibeBuild32: -l / --level <episode> <level>
+    { "l", 4, 2 },           // VibeBuild32: -l / --level <level> or <episode> <level>
     { "map", 2, 1 },
     { "masterslave", 3, 0 },
     { "level", 4, 2 },
+    { "volume", 86, 1 },     // VibeBuild32 canonical: --volume <e> selects the episode
+    { "v", 86, 1 },
     { "nodudes", 5, 1 },
     { "enemies", 85, 1 },    // VibeBuild32 canonical: --enemies <n> (0 = none, 1+ = skill)
     { "e", 85, 1 },
@@ -1672,10 +1674,19 @@ void ParseOptions(void)
             gPacketMode = PACKETMODE_2;
             break;
         case 4:
-            if (OptArgc < 2)
+            // VibeBuild32: --level accepts the canonical single-number form (level in the
+            // selected/first episode) as well as Blood's original "<episode> <level>" pair.
+            if (OptArgc < 1)
                 ThrowError("Missing argument");
-            bUseInternalE = ClipRange(atoi(OptArgv[0]), 1, kMaxEpisodes)-1;
-            bUseInternalL = ClipRange(atoi(OptArgv[1]), 1, kMaxLevels)-1;
+            if (OptArgc >= 2)
+                bUseInternalE = ClipRange(atoi(OptArgv[0]), 1, kMaxEpisodes)-1;
+            bUseInternalL = ClipRange(atoi(OptArgv[OptArgc >= 2 ? 1 : 0]), 1, kMaxLevels)-1;
+            bUseInternalMap = 1;
+            bNoDemo = 1;
+            break;
+        case 86:  // VibeBuild32 canonical: --volume <e> selects the episode (Blood is episodic)
+            if (OptArgc >= 1)
+                bUseInternalE = ClipRange(atoi(OptArgv[0]), 1, kMaxEpisodes)-1;
             bUseInternalMap = 1;
             bNoDemo = 1;
             break;
