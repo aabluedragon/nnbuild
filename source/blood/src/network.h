@@ -182,5 +182,7 @@ void Net_SetAdvertise(const char *addr);  // VibeBuild32 masterserver/lobby adve
 void Net_HostAdvertise(void);
 int  Net_QueryLobby(const char *masterAddr);
 int  Net_JoinLobby(const char *masterAddr);   // query+join first advertised server
+void Net_AddNetFile(const char *path);        // host: offer this file to joiners (-netfile)
+void Net_SendGameFiles(int nDest);            // host: stream offered files to a joiner
 void netDeinitialize(void);
 void netBroadcastNewGame(void);

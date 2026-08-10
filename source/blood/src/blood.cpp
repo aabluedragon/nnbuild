@@ -1413,6 +1413,7 @@ SWITCH switches[] = {
     { "advertise", 80, 1 },  // VibeBuild32: advertise this server to a masterserver
     { "lobbylist", 81, 1 },  // VibeBuild32: query a masterserver's server list
     { "joinlobby", 82, 1 },  // VibeBuild32: query masterserver + join first server
+    { "netfile", 83, 1 },    // VibeBuild32: host offers this file to joiners
     { "map", 2, 1 },
     { "masterslave", 3, 0 },
     { "level", 4, 2 },
@@ -1636,6 +1637,9 @@ void ParseOptions(void)
             break;
         case 82:  // VibeBuild32: -joinlobby <masteraddr>
             if (OptArgc >= 1) Net_JoinLobby(OptArgv[0]);
+            break;
+        case 83:  // VibeBuild32: -netfile <path> (host offers file to joiners)
+            if (OptArgc >= 1) Net_AddNetFile(OptArgv[0]);
             break;
         case 21:
             if (OptArgc < 1)

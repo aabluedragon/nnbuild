@@ -334,6 +334,130 @@ short netGetPacket(short *pSource, char *pMessage)
     return 0;
 }
 
+// ===== Mid-game file transfer (ported from the SW/Duke version) ==============
+// Host streams joiner-needed files (extra files via -netfile) over Blood's own
+// netSendPacket, in two commands; the client dedups by size+CRC, writes missing
+// files, and mounts group files. Commands 240/241 are unused by Blood.
+#define BL_FILE_HEADER 240
+#define BL_FILE_CHUNK  241
+#define BL_FILE_CHUNK_SIZE 1024
+#define BL_MAX_NETFILES 8
+static char     s_blNetFiles[BL_MAX_NETFILES][BMAX_PATH];
+static int      s_blNetFileCount = 0;
+static char    *g_blRecvBuf = NULL;
+static int      g_blRecvChunkTotal = 0, g_blRecvChunksGot = 0, g_blRecvLastLen = 0;
+static uint32_t g_blRecvCrc = 0;
+static char     g_blRecvName[64];
+
+void Net_AddNetFile(const char *path) { if (s_blNetFileCount < BL_MAX_NETFILES) Bstrncpyz(s_blNetFiles[s_blNetFileCount++], path, BMAX_PATH); }
+
+static uint32_t Net_FileCrc(const char *data, int len)  // FNV-1a (matches SW/Duke)
+{
+    uint32_t h = 2166136261u;
+    for (int i = 0; i < len; i++) h = (h ^ (uint8_t)data[i]) * 16777619u;
+    return h;
+}
+static void     bl_put32(char *p, uint32_t v) { p[0]=(char)v; p[1]=(char)(v>>8); p[2]=(char)(v>>16); p[3]=(char)(v>>24); }
+static void     bl_put16(char *p, uint16_t v) { p[0]=(char)v; p[1]=(char)(v>>8); }
+static uint32_t bl_get32(const uint8_t *p) { return p[0]|(p[1]<<8)|(p[2]<<16)|((uint32_t)p[3]<<24); }
+static uint16_t bl_get16(const uint8_t *p) { return (uint16_t)(p[0]|(p[1]<<8)); }
+
+static int Net_HaveFile(const char *name, int size, uint32_t crc)
+{
+    int fil = kopen4loadfrommod(name, 0);
+    if (fil == -1) return 0;
+    int const len = kfilelength(fil);
+    if (len != size) { kclose(fil); return 0; }
+    char *tmp = (char *)Xmalloc(len + 1);
+    kread(fil, tmp, len); kclose(fil);
+    uint32_t const have = Net_FileCrc(tmp, len);
+    Xfree(tmp);
+    return have == crc;
+}
+
+static void Net_SendFileBlood(int nDest, const char *name, int fileIndex, int fileTotal)
+{
+    int fil = kopen4loadfrommod(name, 0);
+    if (fil == -1) { LOG_F(WARNING, "Net_SendFile: can't open %s", name); return; }
+    int const size = kfilelength(fil);
+    char *data = (char *)Xmalloc(size + 1);
+    kread(fil, data, size); kclose(fil);
+    uint32_t const crc = Net_FileCrc(data, size);
+    int const total = (size + BL_FILE_CHUNK_SIZE - 1) / BL_FILE_CHUNK_SIZE;
+    LOG_F(INFO, "Blood: sending %s (%d bytes, %d chunks) to player %d", name, size, total, nDest);
+
+    char hdr[80]; int hl = 0;
+    hdr[hl++] = (char)BL_FILE_HEADER;
+    bl_put32(&hdr[hl], (uint32_t)size); hl += 4;
+    bl_put32(&hdr[hl], crc); hl += 4;
+    bl_put16(&hdr[hl], (uint16_t)total); hl += 2;
+    int const namelen = min((int)strlen(name), 63);
+    hdr[hl++] = (char)namelen;
+    Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
+    hdr[hl++] = (char)ClipRange(fileIndex, 1, 255);
+    hdr[hl++] = (char)ClipRange(fileTotal, 1, 255);
+    netSendPacket(nDest, hdr, hl);
+
+    char chunk[BL_FILE_CHUNK_SIZE + 8];
+    for (int seq = 0; seq < total; seq++)
+    {
+        int const len = min(BL_FILE_CHUNK_SIZE, size - seq * BL_FILE_CHUNK_SIZE);
+        chunk[0] = (char)BL_FILE_CHUNK;
+        bl_put16(&chunk[1], (uint16_t)seq);
+        bl_put16(&chunk[3], (uint16_t)total);
+        bl_put16(&chunk[5], (uint16_t)len);
+        Bmemcpy(&chunk[7], &data[seq * BL_FILE_CHUNK_SIZE], len);
+        netSendPacket(nDest, chunk, len + 7);
+    }
+    Xfree(data);
+}
+
+void Net_SendGameFiles(int nDest)  // host: send offered files to a joiner
+{
+    if (gNetMode != NETWORK_SERVER || s_blNetFileCount == 0) return;
+    for (int i = 0; i < s_blNetFileCount; i++)
+        Net_SendFileBlood(nDest, s_blNetFiles[i], i + 1, s_blNetFileCount);
+}
+
+static void Net_RecvFileHeaderBlood(const uint8_t *pkt)
+{
+    int j = 1;
+    int const size = (int)bl_get32(&pkt[j]); j += 4;
+    g_blRecvCrc = bl_get32(&pkt[j]); j += 4;
+    g_blRecvChunkTotal = bl_get16(&pkt[j]); j += 2;
+    int const namelen = pkt[j++];
+    Bmemcpy(g_blRecvName, &pkt[j], min(namelen, 63)); g_blRecvName[min(namelen, 63)] = 0; j += namelen;
+    int const fileIndex = pkt[j++], fileTotal = pkt[j++];
+    char ofY[24] = ""; if (fileTotal > 1) Bsnprintf(ofY, sizeof(ofY), " (file %d of %d)", fileIndex, fileTotal);
+    DO_FREE_AND_NULL(g_blRecvBuf); g_blRecvChunksGot = 0;
+    if (Net_HaveFile(g_blRecvName, size, g_blRecvCrc)) { LOG_F(INFO, "Blood: already have %s%s, skipping", g_blRecvName, ofY); return; }
+    if (g_blRecvChunkTotal > 0) g_blRecvBuf = (char *)Xmalloc(g_blRecvChunkTotal * BL_FILE_CHUNK_SIZE);
+    LOG_F(INFO, "Blood: receiving %s (%d bytes) from host%s", g_blRecvName, size, ofY);
+}
+
+static void Net_RecvFileChunkBlood(const uint8_t *pkt)
+{
+    if (!g_blRecvBuf) return;
+    int const seq = bl_get16(&pkt[1]), total = bl_get16(&pkt[3]), len = bl_get16(&pkt[5]);
+    if (total != g_blRecvChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > BL_FILE_CHUNK_SIZE) return;
+    Bmemcpy(&g_blRecvBuf[seq * BL_FILE_CHUNK_SIZE], &pkt[7], len);
+    g_blRecvChunksGot++;
+    if (seq == total - 1) g_blRecvLastLen = len;
+    if (g_blRecvChunksGot < g_blRecvChunkTotal) return;
+    int const filesize = (g_blRecvChunkTotal - 1) * BL_FILE_CHUNK_SIZE + g_blRecvLastLen;
+    if (Net_FileCrc(g_blRecvBuf, filesize) != g_blRecvCrc) { LOG_F(ERROR, "Blood: %s CRC mismatch, discarding", g_blRecvName); DO_FREE_AND_NULL(g_blRecvBuf); return; }
+    const char *fslash = Bstrrchr(g_blRecvName, '/'), *bslash = Bstrrchr(g_blRecvName, '\\');
+    const char *base = max(fslash, bslash); base = base ? base + 1 : g_blRecvName;
+    if (base[0] == 0 || Bstrstr(base, "..")) { LOG_F(ERROR, "Blood: unsafe recv name '%s'", g_blRecvName); DO_FREE_AND_NULL(g_blRecvBuf); return; }
+    buildvfs_FILE fp = buildvfs_fopen_write(base);
+    if (fp) { buildvfs_fwrite(g_blRecvBuf, 1, filesize, fp); buildvfs_fclose(fp); LOG_F(INFO, "Blood: wrote %s (%d bytes)", base, filesize);
+        const char *ext = Bstrrchr(g_blRecvName, '.');
+        if (ext && (!Bstrcasecmp(ext, ".grp") || !Bstrcasecmp(ext, ".zip") || !Bstrcasecmp(ext, ".pk3") || !Bstrcasecmp(ext, ".rff")))
+            if (initgroupfile(base) != -1) LOG_F(INFO, "Blood: mounted %s", base);
+    } else LOG_F(ERROR, "Blood: couldn't write %s", base);
+    DO_FREE_AND_NULL(g_blRecvBuf);
+}
+
 void netGetPackets(void)
 {
     short nPlayer;
@@ -564,6 +688,12 @@ void netGetPackets(void)
             break;
         case 255:
             keystatus[1] = 1;
+            break;
+        case BL_FILE_HEADER:   // VibeBuild32 mid-game file transfer (host -> joiner)
+            Net_RecvFileHeaderBlood((const uint8_t *)packet);
+            break;
+        case BL_FILE_CHUNK:
+            Net_RecvFileChunkBlood((const uint8_t *)packet);
             break;
         }
     }
@@ -1108,6 +1238,7 @@ void netInitialize(bool bConsole)
                         if (gNetPlayerPeer[i] == NULL)
                         {
                             gNetPlayerPeer[i] = event.peer;
+                            Net_SendGameFiles(i);  // VibeBuild32: stream joiner-needed files (reliable, arrives before level load)
                             break;
                         }
                     }
@@ -1301,6 +1432,12 @@ void netInitialize(bool bConsole)
                             //LOG_F(INFO, "BLOOD_SERVICE_CONNECTID");
                             break;
                         }
+                    }
+                    else  // VibeBuild32: mid-game file transfer arrives on the GAME channel during join
+                    {
+                        const uint8_t *pkt = (const uint8_t *)event.packet->data + 1;  // skip prepended sender index
+                        if (pkt[0] == BL_FILE_HEADER)      Net_RecvFileHeaderBlood(pkt);
+                        else if (pkt[0] == BL_FILE_CHUNK)  Net_RecvFileChunkBlood(pkt);
                     }
                     enet_packet_destroy(event.packet);
                     break;
@@ -1521,8 +1658,16 @@ void netUpdate(void)
                     break;
                 }
                 case BLOOD_ENET_GAME:
-                    netPostEPacket(event.packet);
+                {
+                    // VibeBuild32: dispatch mid-game file-transfer packets immediately
+                    // (they arrive during the join/sync wait, before netGetPackets runs).
+                    // Skip the sender-index byte netSendPacket prepends; our command is next.
+                    const uint8_t *pkt = (const uint8_t *)event.packet->data + 1;
+                    if (pkt[0] == BL_FILE_HEADER)      { Net_RecvFileHeaderBlood(pkt); enet_packet_destroy(event.packet); }
+                    else if (pkt[0] == BL_FILE_CHUNK)  { Net_RecvFileChunkBlood(pkt); enet_packet_destroy(event.packet); }
+                    else netPostEPacket(event.packet);
                     break;
+                }
                 }
             default:
                 break;
