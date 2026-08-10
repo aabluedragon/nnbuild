@@ -8230,6 +8230,12 @@ int RR_app_main(int argc, char const * const * argv)
 
     G_CheckCommandLine(argc,argv);
 
+    // VibeBuild32: a -startnow host stays at the pre-game lobby until players join,
+    // so suppress the -v/-l auto-warp (those args still set m_volume/m_level, which
+    // is the level the match launches into once -startnow fires).
+    if (g_netStartNow)
+        ud.warp_on = 0;
+
     // This needs to happen afterwards, as G_CheckCommandLine() is where we set
     // up the command-line-provided search paths (duh).
     G_ExtInit();

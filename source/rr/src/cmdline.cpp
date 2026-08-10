@@ -335,6 +335,24 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
+                // VibeBuild32: -startnow auto-launches the match once the lobby fills;
+                // -nplayers <N> sets how many players to wait for (host included, default 2).
+                if (!Bstrcasecmp(c+1, "startnow"))
+                {
+                    g_netStartNow = 1;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c+1, "nplayers"))
+                {
+                    if (argc > i+1)
+                    {
+                        g_netStartNowPlayers = clamp(Batoi(argv[i+1]), 2, MAXPLAYERS);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
 #ifndef NETCODE_DISABLE
                 if (!Bstrcasecmp(c+1, "net"))
                 {

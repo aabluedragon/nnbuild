@@ -40,6 +40,8 @@ extern ENetPeer       *g_netClientPeer;
 extern char           g_netPassword[32];
 extern int32_t        g_netDisconnect;
 extern int32_t        g_netPlayersWaiting;
+extern int32_t        g_netStartNow;         // headless/dedicated: auto-launch when lobby is full enough
+extern int32_t        g_netStartNowPlayers;  // target player count for -startnow (default 2)
 extern enet_uint16    g_netPort;
 #ifndef NETCODE_DISABLE
 extern int32_t        g_networkMode;

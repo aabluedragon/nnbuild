@@ -42,6 +42,10 @@ enet_uint16 g_netPort = 23513;
 int32_t g_netDisconnect = 0;
 char g_netPassword[32];
 int32_t g_netPlayersWaiting = 0;
+// VibeBuild32: headless/dedicated auto-start. -startnow arms it; the host launches
+// the match (for everyone) as soon as the pre-game lobby reaches g_netStartNowPlayers.
+int32_t g_netStartNow = 0;
+int32_t g_netStartNowPlayers = 2;
 #ifndef NETCODE_DISABLE
 int32_t g_networkMode = NET_CLIENT;
 #endif
@@ -3017,6 +3021,19 @@ void Net_GetPackets(void)
     if (g_netServer)
     {
         Net_HandleClientPackets();
+
+        // VibeBuild32: headless/dedicated auto-start. Once the pre-game lobby has the
+        // requested number of players, the host launches the match for everyone using
+        // the same sequence as the "Launch" menu item. Fires once (MODE_GAME then set).
+        if (g_netStartNow && !(g_player[myconnectindex].ps->gm & MODE_GAME)
+            && numplayers >= g_netStartNowPlayers)
+        {
+            g_netStartNow = 0;
+            LOG_F(INFO, "RR: -startnow launching match (%d players in lobby)", numplayers);
+            Net_FillNewGame(&pendingnewgame, 1);
+            Net_SendNewGame(1, NULL);
+            Net_StartNewGame();
+        }
     }
     else if (g_netClient)
     {
@@ -3391,7 +3408,6 @@ void Net_ReceiveAcknowledge(uint8_t *pbuf, int32_t packbufleng)
 {
     UNREFERENCED_PARAMETER(pbuf); // remove when this variable is used
     UNREFERENCED_PARAMETER(packbufleng); // remove when this variable is used
-
     Net_SendChallenge();
 }
 
@@ -3442,7 +3458,6 @@ void Net_ReceiveChallenge(uint8_t *pbuf, int32_t packbufleng, ENetEvent *event)
         initprintf("Bad password from client.\n");
         return;
     }
-
     Net_SyncPlayer(event);
 }
 
