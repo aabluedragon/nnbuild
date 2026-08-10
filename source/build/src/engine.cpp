@@ -8802,6 +8802,11 @@ LISTFN_STATIC void do_deletespritestat(int16_t deleteme)
 //
 // insertsprite
 //
+// Blood (NotBlood) mirror-rendering compat stubs (no-op; mirror sectors don't render).
+int32_t r_mirrormode = 0, r_mirrormodemulti = 0;
+void videoMirrorTile(uint8_t *, int, int) {}
+void videoMirrorDrawing(void) {}
+
 int32_t (*insertsprite_replace)(int16_t sectnum, int16_t statnum) = NULL;  // Blood override hook
 int32_t insertsprite(int16_t sectnum, int16_t statnum)
 {

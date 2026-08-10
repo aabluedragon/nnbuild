@@ -1049,6 +1049,8 @@ enum
 {
     VF_NOTRANS = 1<<0,
     // begin downstream
+    VF_ROTATE  = 1<<6,  // Blood (NotBlood); no-op in our engine
+    VF_RESERVE = 1<<7,  // Blood (NotBlood)
     // end downstream
 };
 
