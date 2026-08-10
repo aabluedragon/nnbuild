@@ -98,13 +98,25 @@ These must resolve to one definition that routes to the **active** game.
 
 ## Staged plan
 1. (done) Prove `ld -r` localize; enumerate + categorize the 54 collisions.
-2. Glue TU + game selector; wire the combined link; reach a clean link.
-3. Runtime bring-up: make the selected SW game actually init/loop/render/sound
-   inside the combined process (the real work — one engine, two game states).
-4. Test both games launch and play from the one binary (Duke unchanged; SW with
-   your Sw.grp); 0 desync on the Duke side preserved.
-5. Only then: port vibebuild32 features (netcode, masterserver, IPv6, transfer,
-   skins) onto SW's game code, one at a time.
+2. (done) Glue TU + game selector; wire the combined link; reach a clean link.
+3. (done) Runtime bring-up: `-game sw` reaches SW's title/intro screen end-to-end
+   inside the combined `vibebuild32` binary — selector chdir → `SW_app_main` →
+   engine init → "SHADOW WARRIOR(tm) Version 1.2" → 32M cache → title-screen
+   event loop (`while (!KeyPressed()) handleevents()`). Verified via stack sample
+   (main thread idling in `SDL_WaitEventTimeout` from SW's intro wait), headless.
+   Duke (`-game duke`) unchanged (E1L1). Default `make vibebuild32` still Duke-only.
+4. (done) Both games launch from the one binary. NOTE — first-run friction: SW's
+   setup gate (`game.cpp:3402`, `if (i<0 || CommandSetup || (ForceSetup&&!g_noSetup))`)
+   forces the shared (Duke-provided) Cocoa startup window when `CONFIG_ReadSetup()`
+   returns <0, i.e. no `~/.config/voidsw/voidsw.cfg` yet — identical to Duke's own
+   first-run. Seed a `voidsw.cfg` with `[Setup] ForceSetup=0 / SelectedGRP="Sw.grp"`
+   (or click Start once) and SW auto-launches thereafter. `-nosetup` alone does NOT
+   bypass it because the `i<0` (missing-config) term ignores `g_noSetup`.
+5. IN PROGRESS: port vibebuild32 features onto SW's game code, one at a time.
+   SW's net model is its own `SW_PACKET` delta-input system (`network.cpp`, 1657 LOC,
+   `EncodeBits`/`DecodeBits`), NOT Duke's `oldnet.cpp` (4153 LOC) that we extended
+   with deterministic lockstep + masterserver/IPv6/STUN/mid-game transfer/skins.
+   Each feature is Duke-game-specific and must be re-homed onto SW's net path.
 
 ## Reference: game data
 SW GRP: `/Users/alonamir/games/Shadow Warrior Complete/Sw.grp` (+ WT.GRP world tour).
