@@ -3780,6 +3780,26 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
                     strcat(DemoFileName, ".dmo");
             }
         }
+        // VibeBuild32 canonical demo flags: --record / --playback [file] (cross-game names for -dr/-dp).
+        else if (Bstrncasecmp(arg, "record", 6) == 0)
+        {
+            DemoRecording = TRUE;
+            DemoPlaying = FALSE;
+            DemoRecCnt = 0;
+        }
+        else if (Bstrncasecmp(arg, "playback", 8) == 0)
+        {
+            DemoPlaying = TRUE;
+            DemoRecording = FALSE;
+            PreCaching = TRUE;
+
+            if (cnt + 1 < argc && argv[cnt + 1][0] != '-')
+            {
+                strcpy(DemoFileName, argv[++cnt]);
+                if (strchr(DemoFileName, '.') == 0)
+                    strcat(DemoFileName, ".dmo");
+            }
+        }
 
 #if 0 //def NET_MODE_MASTER_SLAVE
         else if (Bstrncasecmp(arg, "masterslave",6) == 0)

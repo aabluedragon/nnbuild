@@ -232,6 +232,27 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
+                // VibeBuild32 canonical demo flags: --record / --playback [file] (cross-game).
+                if (!Bstrcasecmp(c + 1, "record") || !Bstrcasecmp(c + 1, "-record"))
+                {
+                    ud.m_recstat = 1;
+                    LOG_F(INFO, "Demo record mode on.");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "playback") || !Bstrcasecmp(c + 1, "-playback"))
+                {
+                    if (argc > i + 1 && argv[i + 1][0] != '-')
+                    {
+                        Bstrncpyz(firstdemofile, argv[i + 1], sizeof(firstdemofile));
+                        if (strchr(firstdemofile, '.') == 0)
+                            Bstrcat(firstdemofile, ".dmo");
+                        LOG_F(INFO, "Play demo %s.", firstdemofile);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
                 if (!Bstrcasecmp(c + 1, "cfg"))
                 {
                     if (argc > i + 1)
