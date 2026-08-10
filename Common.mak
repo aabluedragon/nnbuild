@@ -584,6 +584,12 @@ ifndef OPTOPT
     ifeq ($(PLATFORM),WII)
         OPTOPT := -mtune=750
     endif
+    # arm64 (Apple Silicon) got no CPU tuning before - the -march flags above are
+    # x86-only. Target the Apple-M baseline so the compiler schedules for and uses
+    # Apple Silicon instructions (a free singleplayer FPS win on our platform).
+    ifeq ($(findstring arm64,$(IMPLICIT_ARCH)),arm64)
+        OPTOPT := -mcpu=apple-m1
+    endif
 endif
 
 ifeq ($(PACKAGE_REPOSITORY),0)
