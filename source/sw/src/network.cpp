@@ -33,6 +33,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "tags.h"
 #include "names2.h"
 #include "network.h"
+#include "netshared.h"   // VibeBuild32: shared masterserver-client + file-transfer glue
 #include "pal.h"
 #include "demo.h"
 
@@ -1305,21 +1306,7 @@ checkmasterslaveswitch(void)
 // build. Declaring its API weak lets this same object file link both ways: in
 // the combined binary the symbols bind to Duke's game-agnostic implementation;
 // in the standalone SW build they stay null and every call is guarded away.
-#ifdef __GNUC__
-# define MS_WEAK __attribute__((weak))
-#else
-# define MS_WEAK
-#endif
-extern "C" {
-    void    Masterserver_SetAdvertise(const char *addr) MS_WEAK;
-    int32_t Masterserver_IsAdvertising(void) MS_WEAK;
-    void    Masterserver_AdvertisePulse(const char *name, int32_t gameport, int32_t players, int32_t maxplayers, const char *map) MS_WEAK;
-    void    Masterserver_AdvertiseStop(void) MS_WEAK;
-    void    Masterserver_SetPunchFn(void (*fn)(const char *)) MS_WEAK;
-    void    Masterserver_HostPump(void) MS_WEAK;
-    int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr,
-                                      char *outMasterEp, int32_t outcap, void *buf, int32_t cap) MS_WEAK;
-}
+// The weak Masterserver_* client API is shared in netshared.h.
 
 // Client-side NAT-punch: a joining client asks the masterserver to open a hole
 // toward the server it is trying to reach. -punchto sets the server address,
@@ -1331,17 +1318,8 @@ void Net_SetMasterAddr(const char *addr)  { Bstrncpyz(s_swMasterAddr,  addr, siz
 
 // Client lobby query: ask a masterserver for its list of advertised servers.
 // This is the backend a future in-menu server browser calls; -lobbylist <addr>
-// exercises it from the console. The struct must match masterserver.h's
-// msserver_t layout exactly (we can't include that Duke-side header here).
-struct sw_msserver_t
-{
-    char    addr[128];
-    char    addr6[128];
-    char    name[32];
-    char    map[24];
-    int32_t players, maxplayers;
-};
-extern "C" int32_t Masterserver_QueryList(const char *masterAddr, void *out, int32_t maxout, int32_t timeoutMs) MS_WEAK;
+// exercises it from the console. vb_msserver_t + the weak Masterserver_QueryList
+// come from netshared.h.
 
 int Net_QueryLobby(const char *masterAddr)
 {
@@ -1350,7 +1328,7 @@ int Net_QueryLobby(const char *masterAddr)
         LOG_F(WARNING, "SW lobby query unavailable (no masterserver in this build)");
         return -1;
     }
-    sw_msserver_t list[16];
+    vb_msserver_t list[16];
     int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
     LOG_F(INFO, "SW lobby: %d server(s) at %s", (int)n, masterAddr);
     for (int i = 0; i < n; i++)
@@ -1364,7 +1342,7 @@ int Net_QueryLobby(const char *masterAddr)
 int Net_QueryLobbyList(const char *masterAddr, sw_lobby_server *out, int maxout)
 {
     if (!Masterserver_QueryList) return -1;
-    sw_msserver_t list[16];
+    vb_msserver_t list[16];
     int const cap = maxout < 16 ? maxout : 16;
     int32_t const n = Masterserver_QueryList(masterAddr, list, cap, 1200);
     for (int i = 0; i < n && i < maxout; i++)
@@ -1427,7 +1405,7 @@ int Net_ResolveAutoJoin(void)
         LOG_F(WARNING, "joinlobby: no masterserver support in this build");
         return 0;
     }
-    sw_msserver_t list[16];
+    vb_msserver_t list[16];
     int32_t const n = Masterserver_QueryList(s_autoJoinMaster, list, 16, 1500);
     if (n <= 0)
     {
@@ -1511,24 +1489,11 @@ void Net_HostAdvertise(void)
 // Host streams the game files a joiner needs (extra GRPs given via -netfile, and
 // the current usermap) as two custom packets over mmulti's reliable channel; the
 // client dedups by size+CRC, writes any missing file, and mounts group files.
-#define SW_FILE_CHUNK_SIZE 1024
 extern char UserMapName[80];
-
-static uint32_t Net_FileCrc(const char *data, int len)  // FNV-1a, self-contained
-{
-    uint32_t h = 2166136261u;
-    for (int i = 0; i < len; i++) h = (h ^ (uint8_t)data[i]) * 16777619u;
-    return h;
-}
-static void     sw_put32(char *p, uint32_t v) { p[0]=(char)v; p[1]=(char)(v>>8); p[2]=(char)(v>>16); p[3]=(char)(v>>24); }
-static void     sw_put16(char *p, uint16_t v) { p[0]=(char)v; p[1]=(char)(v>>8); }
-static uint32_t sw_get32(const uint8_t *p) { return p[0]|(p[1]<<8)|(p[2]<<16)|((uint32_t)p[3]<<24); }
-static uint16_t sw_get16(const uint8_t *p) { return (uint16_t)(p[0]|(p[1]<<8)); }
-
-#define SW_MAX_NETFILES 8
-static char s_swNetFiles[SW_MAX_NETFILES][BMAX_PATH];
+// Chunk size / max files / crc / byte helpers are shared in netshared.h (VB_*).
+static char s_swNetFiles[VB_MAX_NETFILES][BMAX_PATH];
 static int  s_swNetFileCount = 0;
-void Net_AddNetFile(const char *path) { if (s_swNetFileCount < SW_MAX_NETFILES) Bstrncpyz(s_swNetFiles[s_swNetFileCount++], path, BMAX_PATH); }
+void Net_AddNetFile(const char *path) { if (s_swNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_swNetFiles[s_swNetFileCount++], path, BMAX_PATH); }
 
 static int Net_HaveFile(const char *name, int size, uint32_t crc)
 {
@@ -1538,7 +1503,7 @@ static int Net_HaveFile(const char *name, int size, uint32_t crc)
     if (len != size) { kclose(fil); return 0; }
     char *tmp = (char *)Xmalloc(len + 1);
     kread(fil, tmp, len); kclose(fil);
-    uint32_t const have = Net_FileCrc(tmp, len);
+    uint32_t const have = VB_FileCrc(tmp, len);
     Xfree(tmp);
     return have == crc;
 }
@@ -1553,15 +1518,15 @@ void Net_SendFile(int slot, const char *name, int fileIndex, int fileTotal)
     int const size = kfilelength(fil);
     char *data = (char *)Xmalloc(size + 1);
     kread(fil, data, size); kclose(fil);
-    uint32_t const crc = Net_FileCrc(data, size);
-    int const total = (size + SW_FILE_CHUNK_SIZE - 1) / SW_FILE_CHUNK_SIZE;
+    uint32_t const crc = VB_FileCrc(data, size);
+    int const total = (size + VB_FILE_CHUNK_SIZE - 1) / VB_FILE_CHUNK_SIZE;
     LOG_F(INFO, "SW: sending %s (%d bytes, %d chunks)%s", name, size, total, slot < 0 ? " to all" : "");
 
     char hdr[80]; int hl = 0;
     hdr[hl++] = PACKET_TYPE_FILE_HEADER;
-    sw_put32(&hdr[hl], (uint32_t)size); hl += 4;
-    sw_put32(&hdr[hl], crc); hl += 4;
-    sw_put16(&hdr[hl], (uint16_t)total); hl += 2;
+    VB_put32(&hdr[hl], (uint32_t)size); hl += 4;
+    VB_put32(&hdr[hl], crc); hl += 4;
+    VB_put16(&hdr[hl], (uint16_t)total); hl += 2;
     int const namelen = min((int)strlen(name), 63);
     hdr[hl++] = (char)namelen;
     Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
@@ -1570,15 +1535,15 @@ void Net_SendFile(int slot, const char *name, int fileIndex, int fileTotal)
     for (int i = 0; i < numplayers; i++)
         if (SW_FILE_WANTS(i)) mmulti_sendpacket(i, (unsigned char *)hdr, hl);
 
-    char chunk[SW_FILE_CHUNK_SIZE + 8];
+    char chunk[VB_FILE_CHUNK_SIZE + 8];
     for (int seq = 0; seq < total; seq++)
     {
-        int const len = min(SW_FILE_CHUNK_SIZE, size - seq * SW_FILE_CHUNK_SIZE);
+        int const len = min(VB_FILE_CHUNK_SIZE, size - seq * VB_FILE_CHUNK_SIZE);
         chunk[0] = PACKET_TYPE_FILE_CHUNK;
-        sw_put16(&chunk[1], (uint16_t)seq);
-        sw_put16(&chunk[3], (uint16_t)total);
-        sw_put16(&chunk[5], (uint16_t)len);
-        Bmemcpy(&chunk[7], &data[seq * SW_FILE_CHUNK_SIZE], len);
+        VB_put16(&chunk[1], (uint16_t)seq);
+        VB_put16(&chunk[3], (uint16_t)total);
+        VB_put16(&chunk[5], (uint16_t)len);
+        Bmemcpy(&chunk[7], &data[seq * VB_FILE_CHUNK_SIZE], len);
         for (int i = 0; i < numplayers; i++)
             if (SW_FILE_WANTS(i)) mmulti_sendpacket(i, (unsigned char *)chunk, len + 7);
     }
@@ -1605,9 +1570,9 @@ static char     g_swRecvName[64];
 static void Net_ReceiveFileHeader(void)
 {
     int j = 1;
-    int const size = (int)sw_get32(&packbuf[j]); j += 4;
-    g_swRecvCrc = sw_get32(&packbuf[j]); j += 4;
-    g_swRecvChunkTotal = sw_get16(&packbuf[j]); j += 2;
+    int const size = (int)VB_get32(&packbuf[j]); j += 4;
+    g_swRecvCrc = VB_get32(&packbuf[j]); j += 4;
+    g_swRecvChunkTotal = VB_get16(&packbuf[j]); j += 2;
     int const namelen = (uint8_t)packbuf[j++];
     Bmemcpy(g_swRecvName, &packbuf[j], min(namelen, 63)); g_swRecvName[min(namelen, 63)] = 0; j += namelen;
     int const fileIndex = (uint8_t)packbuf[j++];
@@ -1620,24 +1585,24 @@ static void Net_ReceiveFileHeader(void)
         LOG_F(INFO, "SW: host offered %s (%d bytes); already have it%s, skipping", g_swRecvName, size, ofY);
         return;  // leaving g_swRecvBuf NULL makes the streamed chunks no-ops
     }
-    if (g_swRecvChunkTotal > 0) g_swRecvBuf = (char *)Xmalloc(g_swRecvChunkTotal * SW_FILE_CHUNK_SIZE);
+    if (g_swRecvChunkTotal > 0) g_swRecvBuf = (char *)Xmalloc(g_swRecvChunkTotal * VB_FILE_CHUNK_SIZE);
     LOG_F(INFO, "SW: receiving %s (%d bytes) from host%s", g_swRecvName, size, ofY);
 }
 
 static void Net_ReceiveFileChunk(void)
 {
     if (!g_swRecvBuf) return;
-    int const seq = sw_get16(&packbuf[1]);
-    int const total = sw_get16(&packbuf[3]);
-    int const len = sw_get16(&packbuf[5]);
-    if (total != g_swRecvChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > SW_FILE_CHUNK_SIZE) return;
-    Bmemcpy(&g_swRecvBuf[seq * SW_FILE_CHUNK_SIZE], &packbuf[7], len);
+    int const seq = VB_get16(&packbuf[1]);
+    int const total = VB_get16(&packbuf[3]);
+    int const len = VB_get16(&packbuf[5]);
+    if (total != g_swRecvChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > VB_FILE_CHUNK_SIZE) return;
+    Bmemcpy(&g_swRecvBuf[seq * VB_FILE_CHUNK_SIZE], &packbuf[7], len);
     g_swRecvChunksGot++;
     if (seq == total - 1) g_swRecvLastLen = len;
     if (g_swRecvChunksGot < g_swRecvChunkTotal) return;
 
-    int const filesize = (g_swRecvChunkTotal - 1) * SW_FILE_CHUNK_SIZE + g_swRecvLastLen;
-    uint32_t const crc = Net_FileCrc(g_swRecvBuf, filesize);
+    int const filesize = (g_swRecvChunkTotal - 1) * VB_FILE_CHUNK_SIZE + g_swRecvLastLen;
+    uint32_t const crc = VB_FileCrc(g_swRecvBuf, filesize);
     if (crc != g_swRecvCrc)
     {
         LOG_F(ERROR, "SW: received %s but CRC mismatch; discarding", g_swRecvName);

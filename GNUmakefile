@@ -642,7 +642,7 @@ sw_src := $(sw_root)/src
 sw_rsrc := $(sw_root)/rsrc
 sw_obj := $(obj)/$(sw)
 
-sw_cflags :=
+sw_cflags := -I$(source)/glue
 
 sw_game_deps := audiolib mact
 sw_editor_deps := audiolib
@@ -934,7 +934,7 @@ blood_root := $(source)/blood
 blood_src := $(blood_root)/src
 blood_rsrc := $(blood_root)/rsrc
 blood_obj := $(obj)/blood
-blood_cflags := -I$(blood_src) -Wno-c++11-narrowing -Wno-narrowing
+blood_cflags := -I$(source)/glue -I$(blood_src) -Wno-c++11-narrowing -Wno-narrowing
 blood_game_deps := audiolib mact
 blood_game_objs := \
     blood.cpp actor.cpp ai.cpp aibat.cpp aibeast.cpp aiboneel.cpp aiburn.cpp \
@@ -978,7 +978,7 @@ rr := rr
 rr_root := $(source)/rr
 rr_src := $(rr_root)/src
 rr_obj := $(obj)/rr
-rr_cflags := -I$(rr_src) -Wno-c++11-narrowing -Wno-narrowing
+rr_cflags := -I$(source)/glue -I$(rr_src) -Wno-c++11-narrowing -Wno-narrowing
 rr_game_deps := audiolib mact
 rr_game_objs := \
     actors.cpp anim.cpp cheats.cpp cmdline.cpp common.cpp config.cpp demo.cpp \

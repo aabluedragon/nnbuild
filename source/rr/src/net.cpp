@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "game.h"
 #include "gamedef.h"
 #include "net.h"
+#include "netshared.h"   // VibeBuild32: shared masterserver-client + file-transfer glue
 #include "premap.h"
 #include "savegame.h"
 #include "input.h"
@@ -2911,25 +2912,11 @@ void Net_ReceiveDisconnect(ENetEvent *event)
 
 // --- VibeBuild32 masterserver/lobby features, ported onto Redneck Rampage -----
 // Redneck Rampage uses the engine's native enet netcode (like Blood), so this is
-// the same transport-independent feature layer as the Blood port. Weak-linked to
-// Duke's game-agnostic Masterserver_* (external in the combined vibebuild32 binary;
-// null in a standalone build). See source/blood/src/network.cpp for the twin.
-#ifdef __GNUC__
-# define MS_WEAK __attribute__((weak))
-#else
-# define MS_WEAK
-#endif
-extern "C" {
-    void    Masterserver_SetAdvertise(const char *addr) MS_WEAK;
-    int32_t Masterserver_IsAdvertising(void) MS_WEAK;
-    void    Masterserver_AdvertisePulse(const char *name, int32_t gameport, int32_t players, int32_t maxplayers, const char *map) MS_WEAK;
-    void    Masterserver_AdvertiseStop(void) MS_WEAK;
-    int32_t Masterserver_QueryList(const char *masterAddr, void *out, int32_t maxout, int32_t timeoutMs) MS_WEAK;
-    int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr, char *outMasterEp, int32_t outcap, void *buf, int32_t cap) MS_WEAK;
-}
+// the same transport-independent feature layer as the Blood port. The shared
+// masterserver-client API + record + crc/byte helpers live in netshared.h; only
+// RR's thin transport glue is below. See source/blood/src/network.cpp for the twin.
 static char s_rrMasterAddr[128] = "";   // masterserver used for -joinlobby / NAT punch
 static char s_rrJoinAddr[128]   = "";   // "ip:port" of the server we are joining (punch target)
-struct rr_msserver_t { char addr[128]; char addr6[128]; char name[32]; char map[24]; int32_t players, maxplayers; };
 
 static void RR_Net_AdvertiseStopAtExit(void) { if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop(); }
 
@@ -2957,7 +2944,7 @@ void Net_HostAdvertise(void)  // pulse this server to the masterserver (host onl
 int Net_QueryLobby(const char *masterAddr)  // -lobbylist <masteraddr>
 {
     if (!Masterserver_QueryList) { LOG_F(WARNING, "RR lobby query unavailable"); return -1; }
-    rr_msserver_t list[16];
+    vb_msserver_t list[16];
     int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
     LOG_F(INFO, "RR lobby: %d server(s) at %s", (int)n, masterAddr);
     for (int i = 0; i < n; i++)
@@ -2996,7 +2983,7 @@ int Net_JoinLobby(const char *masterAddr)
 {
     Bstrncpyz(s_rrMasterAddr, masterAddr, sizeof(s_rrMasterAddr));  // remember for NAT punch
     if (!Masterserver_QueryList) { LOG_F(WARNING, "joinlobby: no masterserver support"); return 0; }
-    rr_msserver_t list[16];
+    vb_msserver_t list[16];
     int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
     if (n <= 0) { LOG_F(WARNING, "joinlobby: no servers advertised at %s", masterAddr); return 0; }
     char const *ep = list[0].addr[0] ? list[0].addr : list[0].addr6;
@@ -3013,24 +3000,15 @@ int Net_JoinLobby(const char *masterAddr)
 // packets go host->joiner on CHAN_GAMESTATE (reliable, ordered) and are enqueued
 // before the match-start NEW_GAME packet, so the client has the files by the time
 // it enters the level. Mirrors the Blood/Duke transfer (FNV-1a crc, 1KB chunks).
-#define RR_FILE_HEADER 240
-#define RR_FILE_CHUNK  241
-#define RR_FILE_CHUNK_SIZE 1024
-#define RR_MAX_NETFILES 8
-static char     s_rrNetFiles[RR_MAX_NETFILES][BMAX_PATH];
+// Wire constants + crc/byte helpers are shared in netshared.h (VB_*).
+static char     s_rrNetFiles[VB_MAX_NETFILES][BMAX_PATH];
 static int      s_rrNetFileCount = 0;
 static char    *g_rrRecvBuf = NULL;
 static int      g_rrRecvChunkTotal = 0, g_rrRecvChunksGot = 0, g_rrRecvLastLen = 0;
 static uint32_t g_rrRecvCrc = 0;
 static char     g_rrRecvName[64];
 
-void Net_AddNetFile(const char *path) { if (s_rrNetFileCount < RR_MAX_NETFILES) Bstrncpyz(s_rrNetFiles[s_rrNetFileCount++], path, BMAX_PATH); }
-
-static uint32_t rr_FileCrc(const char *data, int len) { uint32_t h = 2166136261u; for (int i = 0; i < len; i++) h = (h ^ (uint8_t)data[i]) * 16777619u; return h; }
-static void     rr_put32(char *p, uint32_t v) { p[0]=(char)v; p[1]=(char)(v>>8); p[2]=(char)(v>>16); p[3]=(char)(v>>24); }
-static void     rr_put16(char *p, uint16_t v) { p[0]=(char)v; p[1]=(char)(v>>8); }
-static uint32_t rr_get32(const uint8_t *p) { return p[0]|(p[1]<<8)|(p[2]<<16)|((uint32_t)p[3]<<24); }
-static uint16_t rr_get16(const uint8_t *p) { return (uint16_t)(p[0]|(p[1]<<8)); }
+void Net_AddNetFile(const char *path) { if (s_rrNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_rrNetFiles[s_rrNetFileCount++], path, BMAX_PATH); }
 
 static int rr_HaveFile(const char *name, int size, uint32_t crc)
 {
@@ -3040,7 +3018,7 @@ static int rr_HaveFile(const char *name, int size, uint32_t crc)
     if (len != size) { kclose(fil); return 0; }
     char *tmp = (char *)Xmalloc(len + 1);
     kread(fil, tmp, len); kclose(fil);
-    uint32_t const have = rr_FileCrc(tmp, len);
+    uint32_t const have = VB_FileCrc(tmp, len);
     Xfree(tmp);
     return have == crc;
 }
@@ -3052,15 +3030,15 @@ static void rr_SendFile(ENetPeer *peer, const char *name, int fileIndex, int fil
     int const size = kfilelength(fil);
     char *data = (char *)Xmalloc(size + 1);
     kread(fil, data, size); kclose(fil);
-    uint32_t const crc = rr_FileCrc(data, size);
-    int const total = (size + RR_FILE_CHUNK_SIZE - 1) / RR_FILE_CHUNK_SIZE;
+    uint32_t const crc = VB_FileCrc(data, size);
+    int const total = (size + VB_FILE_CHUNK_SIZE - 1) / VB_FILE_CHUNK_SIZE;
     LOG_F(INFO, "RR: sending %s (%d bytes, %d chunks) to joiner", name, size, total);
 
     char hdr[80]; int hl = 0;
-    hdr[hl++] = (char)RR_FILE_HEADER;
-    rr_put32(&hdr[hl], (uint32_t)size); hl += 4;
-    rr_put32(&hdr[hl], crc); hl += 4;
-    rr_put16(&hdr[hl], (uint16_t)total); hl += 2;
+    hdr[hl++] = (char)VB_FILE_HEADER;
+    VB_put32(&hdr[hl], (uint32_t)size); hl += 4;
+    VB_put32(&hdr[hl], crc); hl += 4;
+    VB_put16(&hdr[hl], (uint16_t)total); hl += 2;
     int const namelen = min((int)Bstrlen(name), 63);
     hdr[hl++] = (char)namelen;
     Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
@@ -3068,15 +3046,15 @@ static void rr_SendFile(ENetPeer *peer, const char *name, int fileIndex, int fil
     hdr[hl++] = (char)clamp(fileTotal, 1, 255);
     enet_peer_send(peer, CHAN_GAMESTATE, enet_packet_create(hdr, hl, ENET_PACKET_FLAG_RELIABLE));
 
-    char chunk[RR_FILE_CHUNK_SIZE + 8];
+    char chunk[VB_FILE_CHUNK_SIZE + 8];
     for (int seq = 0; seq < total; seq++)
     {
-        int const len = min(RR_FILE_CHUNK_SIZE, size - seq * RR_FILE_CHUNK_SIZE);
-        chunk[0] = (char)RR_FILE_CHUNK;
-        rr_put16(&chunk[1], (uint16_t)seq);
-        rr_put16(&chunk[3], (uint16_t)total);
-        rr_put16(&chunk[5], (uint16_t)len);
-        Bmemcpy(&chunk[7], &data[seq * RR_FILE_CHUNK_SIZE], len);
+        int const len = min(VB_FILE_CHUNK_SIZE, size - seq * VB_FILE_CHUNK_SIZE);
+        chunk[0] = (char)VB_FILE_CHUNK;
+        VB_put16(&chunk[1], (uint16_t)seq);
+        VB_put16(&chunk[3], (uint16_t)total);
+        VB_put16(&chunk[5], (uint16_t)len);
+        Bmemcpy(&chunk[7], &data[seq * VB_FILE_CHUNK_SIZE], len);
         enet_peer_send(peer, CHAN_GAMESTATE, enet_packet_create(chunk, len + 7, ENET_PACKET_FLAG_RELIABLE));
     }
     Xfree(data);
@@ -3086,10 +3064,10 @@ static void rr_SendFile(ENetPeer *peer, const char *name, int fileIndex, int fil
 void Net_SendGameFiles(ENetPeer *peer)  // host: push custom content to a joining client
 {
     if (!g_netServer || !peer) return;
-    char offer[RR_MAX_NETFILES + 1][BMAX_PATH]; int n = 0;
-    for (int i = 0; i < s_rrNetFileCount && n < RR_MAX_NETFILES; i++)
+    char offer[VB_MAX_NETFILES + 1][BMAX_PATH]; int n = 0;
+    for (int i = 0; i < s_rrNetFileCount && n < VB_MAX_NETFILES; i++)
         Bstrncpyz(offer[n++], s_rrNetFiles[i], BMAX_PATH);
-    if (boardfilename[0] && n <= RR_MAX_NETFILES)      // the current user map, if any
+    if (boardfilename[0] && n <= VB_MAX_NETFILES)      // the current user map, if any
         Bstrncpyz(offer[n++], boardfilename, BMAX_PATH);
     if (n == 0) return;
     for (int i = 0; i < n; i++) rr_SendFile(peer, offer[i], i + 1, n);
@@ -3098,30 +3076,30 @@ void Net_SendGameFiles(ENetPeer *peer)  // host: push custom content to a joinin
 static void Net_RecvFileHeader(const uint8_t *pkt)
 {
     int j = 1;
-    int const size = (int)rr_get32(&pkt[j]); j += 4;
-    g_rrRecvCrc = rr_get32(&pkt[j]); j += 4;
-    g_rrRecvChunkTotal = rr_get16(&pkt[j]); j += 2;
+    int const size = (int)VB_get32(&pkt[j]); j += 4;
+    g_rrRecvCrc = VB_get32(&pkt[j]); j += 4;
+    g_rrRecvChunkTotal = VB_get16(&pkt[j]); j += 2;
     int const namelen = pkt[j++];
     Bmemcpy(g_rrRecvName, &pkt[j], min(namelen, 63)); g_rrRecvName[min(namelen, 63)] = 0; j += namelen;
     int const fileIndex = pkt[j++], fileTotal = pkt[j++];
     char ofY[24] = ""; if (fileTotal > 1) Bsnprintf(ofY, sizeof(ofY), " (file %d of %d)", fileIndex, fileTotal);
     DO_FREE_AND_NULL(g_rrRecvBuf); g_rrRecvChunksGot = 0;
     if (rr_HaveFile(g_rrRecvName, size, g_rrRecvCrc)) { LOG_F(INFO, "RR: already have %s%s, skipping", g_rrRecvName, ofY); return; }
-    if (g_rrRecvChunkTotal > 0) g_rrRecvBuf = (char *)Xmalloc(g_rrRecvChunkTotal * RR_FILE_CHUNK_SIZE);
+    if (g_rrRecvChunkTotal > 0) g_rrRecvBuf = (char *)Xmalloc(g_rrRecvChunkTotal * VB_FILE_CHUNK_SIZE);
     LOG_F(INFO, "RR: receiving %s (%d bytes) from host%s", g_rrRecvName, size, ofY);
 }
 
 static void Net_RecvFileChunk(const uint8_t *pkt)
 {
     if (!g_rrRecvBuf) return;
-    int const seq = rr_get16(&pkt[1]), total = rr_get16(&pkt[3]), len = rr_get16(&pkt[5]);
-    if (total != g_rrRecvChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > RR_FILE_CHUNK_SIZE) return;
-    Bmemcpy(&g_rrRecvBuf[seq * RR_FILE_CHUNK_SIZE], &pkt[7], len);
+    int const seq = VB_get16(&pkt[1]), total = VB_get16(&pkt[3]), len = VB_get16(&pkt[5]);
+    if (total != g_rrRecvChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > VB_FILE_CHUNK_SIZE) return;
+    Bmemcpy(&g_rrRecvBuf[seq * VB_FILE_CHUNK_SIZE], &pkt[7], len);
     g_rrRecvChunksGot++;
     if (seq == total - 1) g_rrRecvLastLen = len;
     if (g_rrRecvChunksGot < g_rrRecvChunkTotal) return;
-    int const filesize = (g_rrRecvChunkTotal - 1) * RR_FILE_CHUNK_SIZE + g_rrRecvLastLen;
-    if (rr_FileCrc(g_rrRecvBuf, filesize) != g_rrRecvCrc) { LOG_F(ERROR, "RR: %s CRC mismatch, discarding", g_rrRecvName); DO_FREE_AND_NULL(g_rrRecvBuf); return; }
+    int const filesize = (g_rrRecvChunkTotal - 1) * VB_FILE_CHUNK_SIZE + g_rrRecvLastLen;
+    if (VB_FileCrc(g_rrRecvBuf, filesize) != g_rrRecvCrc) { LOG_F(ERROR, "RR: %s CRC mismatch, discarding", g_rrRecvName); DO_FREE_AND_NULL(g_rrRecvBuf); return; }
     const char *fslash = Bstrrchr(g_rrRecvName, '/'), *bslash = Bstrrchr(g_rrRecvName, '\\');
     const char *base = max(fslash, bslash); base = base ? base + 1 : g_rrRecvName;
     if (base[0] == 0 || Bstrstr(base, "..")) { LOG_F(ERROR, "RR: unsafe recv name '%s'", g_rrRecvName); DO_FREE_AND_NULL(g_rrRecvBuf); return; }
@@ -3405,11 +3383,11 @@ void Net_ParseServerPacket(ENetEvent *event)
         Net_ReceiveNewGame(event);
         break;
 
-    case RR_FILE_HEADER:   // VibeBuild32: host is pushing custom content to us
+    case VB_FILE_HEADER:   // VibeBuild32: host is pushing custom content to us
         Net_RecvFileHeader(pbuf);
         break;
 
-    case RR_FILE_CHUNK:
+    case VB_FILE_CHUNK:
         Net_RecvFileChunk(pbuf);
         break;
 
