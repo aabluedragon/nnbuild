@@ -132,10 +132,14 @@ These must resolve to one definition that routes to the **active** game.
      `-advertise <addr>` arg; `atexit` graceful stop. VERIFIED end-to-end: a
      standalone `-masterserver` registered an SW `-advertise` client:
      `masterserver: + 127.0.0.1:PORT "VibeBuild32 SW server" (SW)` (dual-stack).
-   - [TODO] Masterserver client browser + client NAT-punch on join. SW's connect
-     runs inside shared mmulti (no Duke-style retry loop), so the client punch is
-     best added game-agnostically in mmulti's connect path (benefits both games)
-     rather than re-homed into SW game code.
+   - [DONE] Client NAT hole-punch on join. SW's `initmultiplayerscycle()` connect
+     loop (game.cpp:876) now calls `Net_ClientPunchAttempt()` — throttled, builds
+     the request via weak `Masterserver_MakePunchReq` + shared `mmulti_sendraw_str`.
+     New `-punchto <server>` / `-masteraddr <ms>` args (must precede `-net`).
+     VERIFIED: an SW client auto-starting a net game toward an unreachable server
+     logs `SW: requested NAT punch to <target> via masterserver <ep>` while waiting.
+   - [TODO] Masterserver client BROWSER (in-menu server list + pick-to-join). Needs
+     SW menu wiring; the query/response wire format is game-agnostic in masterserver.cpp.
    - [TODO] Mid-game join + file transfer with x-of-y (Duke `oldnet.cpp`, tied to
      Duke's connection protocol; SW has its own connect handshake).
    - [TODO] Deterministic lockstep / rejoin (the big one — replaces SW's
