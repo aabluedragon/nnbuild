@@ -73,6 +73,36 @@ didn't see every Blood header). The genuine ENGINE gaps to add to source/build:
   `EVTIME2TICKS`, `kModern*`, `kDude*`, `cdudeGet`, `nnExt*`, `isUnderwaterSector`.
 - Struct fields DONE: `picanm_t.extra`, `hitdata_t.pos` alias.
 
+## STATUS: Blood engine reconciliation COMPLETE (all committed, Duke/SW verified)
+Every CORE Blood game file compiles clean against our unified engine: **84/89**.
+The 5 that don't are all excluded from a first build anyway:
+- `startgtk.game.cpp`, `startwin.game.cpp` — drop (use Duke's startup window, like SW).
+- `mapedit.cpp` — the map editor (not needed for the game).
+- `credits.cpp` — needs libsmackerdec cutscenes (stub/exclude; no cutscenes).
+- `nnextsif.cpp` — modern-map custom conditions (defer; a mapper feature, 97 refs).
+
+Engine changes landed (all null/no-op defaults, zero Duke/SW regression):
+- buildtypes.h struct union-aliases (type/flags/index/inittype on sprite/tsprite,
+  type on wall/sector).
+- build.h picanm_t.extra, hitdata_t.pos alias, VF_ROTATE/VF_RESERVE.
+- 11 engine override hooks (sprite lifecycle + loadboard/saveboard/animateoffs/
+  getpalookup/loadvoxel/paletteLoadFromDisk) + bloodhack flag, with call sites.
+- baselayer.h mirror-render stubs (r_mirrormode*, MIRRORMODE, videoMirror*).
+- mact control stubs (JOYSTICK_SetSnapZone, CONTROL_GetAxisHeatMap,
+  CONTROL_GetControllerAxisIsTwinAxisStick, mouseMoveToCenter) via
+  source/blood/src/vb_compat.cpp.
+
+## Remaining to a running -game blood (build wiring + runtime)
+A. Makefile: blood_obj + a WITH_BLOOD block mirroring WITH_SW (compile
+   source/blood/src, exclude the 5 files above, ld -r localize collisions vs
+   Duke+SW, blood_merged.o into vibebuild32_game_miscdeps).
+B. Rename Blood's app_main/G_DefaultDefFile/faketimerhandler -> Blood_*.
+C. gameselect.cpp: g_activeGame==2 dispatch, `-game blood`, blood/ GRP+RFF autodetect.
+D. 3-game link (localize the Duke/SW/Blood collision intersection).
+E. Runtime bring-up: `-game blood` reaches Blood's title/menu.
+F. Port the MP features onto Blood (shared mmulti + the same weak-linked
+   Masterserver_* pattern proven on SW).
+
 ## DONE so far (all committed, Duke/SW verified unaffected)
 - struct aliases (2115->194), 5 sprite-mgmt engine hooks, picanm/hitdata fields.
 

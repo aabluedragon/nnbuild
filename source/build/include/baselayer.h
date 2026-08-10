@@ -334,6 +334,7 @@ void keyFlushChars(void);
 void mouseInit(void);
 void mouseUninit(void);
 int32_t mouseReadAbs(vec2_t *pResult, vec2_t const *pInput);
+void mouseMoveToCenter(void);  // Blood (NotBlood) compat
 void mouseGrabInput(bool grab);
 void mouseLockToWindow(char a);
 int32_t mouseReadButtons(void);
