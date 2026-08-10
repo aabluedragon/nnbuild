@@ -2772,6 +2772,7 @@ void Net_Connect(const char *srvaddr)
 
     for (i=4; i>0; i--)
     {
+        Net_ClientPunch();  // VibeBuild32: ask the masterserver to hole-punch toward the server (joinlobby only)
         /* Wait up to 5 seconds for the connection attempt to succeed. */
         if (enet_host_service(g_netClient, & event, 5000) > 0 &&
                 event.type == ENET_EVENT_TYPE_CONNECT)
@@ -2900,8 +2901,108 @@ void Net_ReceiveDisconnect(ENetEvent *event)
 
 #endif
 
+// --- VibeBuild32 masterserver/lobby features, ported onto Redneck Rampage -----
+// Redneck Rampage uses the engine's native enet netcode (like Blood), so this is
+// the same transport-independent feature layer as the Blood port. Weak-linked to
+// Duke's game-agnostic Masterserver_* (external in the combined vibebuild32 binary;
+// null in a standalone build). See source/blood/src/network.cpp for the twin.
+#ifdef __GNUC__
+# define MS_WEAK __attribute__((weak))
+#else
+# define MS_WEAK
+#endif
+extern "C" {
+    void    Masterserver_SetAdvertise(const char *addr) MS_WEAK;
+    int32_t Masterserver_IsAdvertising(void) MS_WEAK;
+    void    Masterserver_AdvertisePulse(const char *name, int32_t gameport, int32_t players, int32_t maxplayers, const char *map) MS_WEAK;
+    void    Masterserver_AdvertiseStop(void) MS_WEAK;
+    int32_t Masterserver_QueryList(const char *masterAddr, void *out, int32_t maxout, int32_t timeoutMs) MS_WEAK;
+    int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr, char *outMasterEp, int32_t outcap, void *buf, int32_t cap) MS_WEAK;
+}
+static char s_rrMasterAddr[128] = "";   // masterserver used for -joinlobby / NAT punch
+static char s_rrJoinAddr[128]   = "";   // "ip:port" of the server we are joining (punch target)
+struct rr_msserver_t { char addr[128]; char addr6[128]; char name[32]; char map[24]; int32_t players, maxplayers; };
+
+static void RR_Net_AdvertiseStopAtExit(void) { if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop(); }
+
+void Net_SetAdvertise(const char *addr)  // -advertise <masteraddr>
+{
+    if (!Masterserver_SetAdvertise) return;
+    Masterserver_SetAdvertise(addr);
+    static int reg = 0;
+    if (!reg) { atexit(RR_Net_AdvertiseStopAtExit); reg = 1; }
+}
+
+void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
+{
+    if (!Masterserver_IsAdvertising || !Masterserver_IsAdvertising())
+        return;
+    if (g_networkMode != NET_SERVER)  // only the listen host advertises
+        return;
+    char map[24];
+    Bstrncpyz(map, boardfilename[0] ? boardfilename : "Redneck Rampage", sizeof(map));
+    char const *name = szPlayerName[0] ? szPlayerName : "VibeBuild32 Redneck server";
+    if (Masterserver_AdvertisePulse)
+        Masterserver_AdvertisePulse(name, g_netPort, numplayers, numplayers, map);
+}
+
+int Net_QueryLobby(const char *masterAddr)  // -lobbylist <masteraddr>
+{
+    if (!Masterserver_QueryList) { LOG_F(WARNING, "RR lobby query unavailable"); return -1; }
+    rr_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
+    LOG_F(INFO, "RR lobby: %d server(s) at %s", (int)n, masterAddr);
+    for (int i = 0; i < n; i++)
+        LOG_F(INFO, "  [%d] %s  \"%s\"  map=%s  %d/%d",
+              i, list[i].addr[0] ? list[i].addr : list[i].addr6, list[i].name, list[i].map, list[i].players, list[i].maxplayers);
+    return n;
+}
+
+// Client NAT hole-punch: ask the masterserver to punch a hole toward the server we
+// are joining. The request must leave our GAME socket (enet's) so the master learns
+// our real game endpoint - fire it via enet_socket_send on the client host.
+void Net_ClientPunch(void)
+{
+    if (!Masterserver_MakePunchReq || !s_rrMasterAddr[0] || g_networkMode != NET_CLIENT || !g_netClient || !s_rrJoinAddr[0])
+        return;
+    char msEp[128]; unsigned char pbuf[160];
+    int32_t const plen = Masterserver_MakePunchReq(s_rrMasterAddr, s_rrJoinAddr, msEp, sizeof(msEp), pbuf, sizeof(pbuf));
+    if (plen <= 0) return;
+    // msEp is "a.b.c.d:port" (or "[ipv6]:port"); resolve into an ENetAddress and raw-send.
+    // enet_address_set_host (getaddrinfo) handles IPv4->IPv4-mapped; set_host_ip only parses IPv6 literals.
+    char host[64]; Bstrncpyz(host, msEp, sizeof(host));
+    char *colon = strrchr(host, ':'); int port = 0;
+    if (colon) { *colon = 0; port = atoi(colon + 1); }
+    ENetAddress addr; memset(&addr, 0, sizeof(addr));
+    if (enet_address_set_host(&addr, host) == 0) {
+        addr.port = (enet_uint16)port;
+        ENetBuffer b; b.data = pbuf; b.dataLength = plen;
+        enet_socket_send(g_netClient->socket, &addr, &b, 1);
+        LOG_F(INFO, "RR: requested NAT punch to %s via masterserver %s", s_rrJoinAddr, msEp);
+    }
+}
+
+// -joinlobby <masteraddr>: query the masterserver, pick the first advertised server,
+// remember it as the punch target, and connect to it.
+int Net_JoinLobby(const char *masterAddr)
+{
+    Bstrncpyz(s_rrMasterAddr, masterAddr, sizeof(s_rrMasterAddr));  // remember for NAT punch
+    if (!Masterserver_QueryList) { LOG_F(WARNING, "joinlobby: no masterserver support"); return 0; }
+    rr_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
+    if (n <= 0) { LOG_F(WARNING, "joinlobby: no servers advertised at %s", masterAddr); return 0; }
+    char const *ep = list[0].addr[0] ? list[0].addr : list[0].addr6;
+    Bstrncpyz(s_rrJoinAddr, ep, sizeof(s_rrJoinAddr));  // "ip:port" punch target
+    g_networkMode = NET_CLIENT;
+    LOG_F(INFO, "joinlobby: joining \"%s\" at %s (via masterserver %s)", list[0].name, ep, masterAddr);
+    Net_Connect(ep);
+    return 1;
+}
+
 void Net_GetPackets(void)
 {
+    Net_HostAdvertise();  // VibeBuild32: masterserver/lobby heartbeat (host only, rate-limited internally)
+
     if (g_netDisconnect)
     {
         Net_Disconnect();

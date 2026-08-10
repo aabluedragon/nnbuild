@@ -214,6 +214,13 @@ void    Net_Connect(const char *srvaddr);
 void    Net_Disconnect(void);
 void    Net_ReceiveDisconnect(ENetEvent *event);
 
+// VibeBuild32 masterserver/lobby features (see net.cpp)
+void    Net_SetAdvertise(const char *addr);
+void    Net_HostAdvertise(void);
+int     Net_QueryLobby(const char *masterAddr);
+void    Net_ClientPunch(void);
+int     Net_JoinLobby(const char *masterAddr);
+
 // Packet Handlers
 #endif
 void    Net_ClearFIFO(void);

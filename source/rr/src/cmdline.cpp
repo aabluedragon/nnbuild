@@ -371,6 +371,40 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
+                // VibeBuild32: masterserver advertise/matchmaking (mirrors Duke/SW/Blood)
+                if (!Bstrcasecmp(c+1, "advertise"))  // -advertise <masteraddr>: listen host, register with masterserver
+                {
+                    if (argc > i+1)
+                    {
+                        g_networkMode = NET_SERVER;
+                        g_noSetup = g_noLogo = TRUE;
+                        Net_SetAdvertise(argv[i+1]);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c+1, "lobbylist"))  // -lobbylist <masteraddr>: print advertised servers and exit-ish
+                {
+                    if (argc > i+1)
+                    {
+                        Net_QueryLobby(argv[i+1]);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c+1, "joinlobby"))  // -joinlobby <masteraddr>: pick first advertised server and join it
+                {
+                    if (argc > i+1)
+                    {
+                        g_noSetup = g_noLogo = TRUE;
+                        Net_JoinLobby(argv[i+1]);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
                 if (!Bstrcasecmp(c+1, "password"))
                 {
                     if (argc > i+1)
