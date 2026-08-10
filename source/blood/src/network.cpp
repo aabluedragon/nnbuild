@@ -1350,8 +1350,62 @@ void netPostEPacket(ENetPacket *pEPacket)
 }
 #endif
 
+// --- VibeBuild32 masterserver/lobby features, ported onto Blood ---------------
+// Transport-independent (own UDP sockets), so they work with Blood's native enet
+// netcode. Weak-linked to Duke's game-agnostic Masterserver_* (external in the
+// combined binary; null in a standalone build). See source/sw for the SW port.
+#ifdef __GNUC__
+# define MS_WEAK __attribute__((weak))
+#else
+# define MS_WEAK
+#endif
+extern "C" {
+    void    Masterserver_SetAdvertise(const char *addr) MS_WEAK;
+    int32_t Masterserver_IsAdvertising(void) MS_WEAK;
+    void    Masterserver_AdvertisePulse(const char *name, int32_t gameport, int32_t players, int32_t maxplayers, const char *map) MS_WEAK;
+    void    Masterserver_AdvertiseStop(void) MS_WEAK;
+    int32_t Masterserver_QueryList(const char *masterAddr, void *out, int32_t maxout, int32_t timeoutMs) MS_WEAK;
+}
+struct blood_msserver_t { char addr[128]; char addr6[128]; char name[32]; char map[24]; int32_t players, maxplayers; };
+
+static void Blood_Net_AdvertiseStopAtExit(void) { if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop(); }
+
+void Net_SetAdvertise(const char *addr)  // -advertise <masteraddr>
+{
+    if (!Masterserver_SetAdvertise) return;
+    Masterserver_SetAdvertise(addr);
+    static int reg = 0;
+    if (!reg) { atexit(Blood_Net_AdvertiseStopAtExit); reg = 1; }
+}
+
+void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
+{
+    if (!Masterserver_IsAdvertising || !Masterserver_IsAdvertising())
+        return;
+    if (gNetMode != NETWORK_SERVER)  // only the host advertises
+        return;
+    char map[24];
+    Bstrncpyz(map, gGameOptions.zLevelName[0] ? gGameOptions.zLevelName : "Blood", sizeof(map));
+    char const *name = szPlayerName[0] ? szPlayerName : "VibeBuild32 Blood server";
+    if (Masterserver_AdvertisePulse)
+        Masterserver_AdvertisePulse(name, gNetPort, gNetPlayers, gNetPlayers, map);
+}
+
+int Net_QueryLobby(const char *masterAddr)  // -lobbylist <masteraddr>
+{
+    if (!Masterserver_QueryList) { LOG_F(WARNING, "Blood lobby query unavailable"); return -1; }
+    blood_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
+    LOG_F(INFO, "Blood lobby: %d server(s) at %s", (int)n, masterAddr);
+    for (int i = 0; i < n; i++)
+        LOG_F(INFO, "  [%d] %s  \"%s\"  map=%s  %d/%d",
+              i, list[i].addr[0] ? list[i].addr : list[i].addr6, list[i].name, list[i].map, list[i].players, list[i].maxplayers);
+    return n;
+}
+
 void netUpdate(void)
 {
+    Net_HostAdvertise();  // VibeBuild32: masterserver/lobby heartbeat (host only)
 #ifndef NETCODE_DISABLE
     ENetEvent event;
     if (gNetMode == NETWORK_NONE)

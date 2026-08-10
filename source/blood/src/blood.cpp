@@ -1410,6 +1410,8 @@ SWITCH switches[] = {
     { "?", 0, 0 },
     { "help", 0, 0 },
     { "broadcast", 1, 0 },
+    { "advertise", 80, 1 },  // VibeBuild32: advertise this server to a masterserver
+    { "lobbylist", 81, 1 },  // VibeBuild32: query a masterserver's server list
     { "map", 2, 1 },
     { "masterslave", 3, 0 },
     { "level", 4, 2 },
@@ -1624,6 +1626,12 @@ void ParseOptions(void)
         //    break;
         case 1:
             gPacketMode = PACKETMODE_2;
+            break;
+        case 80:  // VibeBuild32: -advertise <masteraddr>
+            if (OptArgc >= 1) Net_SetAdvertise(OptArgv[0]);
+            break;
+        case 81:  // VibeBuild32: -lobbylist <masteraddr>
+            if (OptArgc >= 1) Net_QueryLobby(OptArgv[0]);
             break;
         case 21:
             if (OptArgc < 1)
