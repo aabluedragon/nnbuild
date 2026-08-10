@@ -5926,9 +5926,19 @@ default_case2:
             t->picnum += frameOffset + apScript[scrofs_action + ACTION_STARTFRAME] + l*curframe;
             // XXX: t->picnum can be out-of-bounds by bad user code.
 
+            // Test t->picnum > 0 BEFORE indexing tilesiz so a negative picnum never
+            // reads tilesiz[] out of bounds. //Hack, for actors
             if (l > 0)
-                while (tilesiz[t->picnum].x == 0 && t->picnum > 0)
-                    t->picnum -= l;       //Hack, for actors
+                while (t->picnum > 0 && tilesiz[t->picnum].x == 0)
+                    t->picnum -= l;
+
+            // VibeBuild32: the hack loop can overshoot below 0 (e.g. picnum 5, l 10 -> -5)
+            // and bad CON action frames can push picnum past MAXTILES; either feeds a
+            // negative/oob tile to the renderer's texcache/hightile lookup and faults.
+            // RR actually hits this at E1L1 (Duke's actor tiles happen to always be
+            // present, so it never triggered there). Clamp to a safe tile.
+            if ((unsigned)t->picnum >= MAXTILES)
+                t->picnum = 0;
 
             if (actor[i].dispicnum >= 0)
                 actor[i].dispicnum = t->picnum;

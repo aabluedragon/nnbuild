@@ -81,9 +81,17 @@ static int gs_swAvail(char *dir, int sz)   { return gs_findGrp("SW.GRP", "sw", d
 // Blood ships BLOOD.RFF (resource file), in the cwd or a blood/ subdir.
 static int gs_bloodAvail(char *dir, int sz){ return gs_findGrp("BLOOD.RFF", "blood", dir, sz)
                                                   || gs_findGrp("blood.rff", "blood", dir, sz); }
-// Redneck Rampage ships REDNECK.GRP, in the cwd or an rr/ subdir.
-static int gs_rrAvail(char *dir, int sz)   { return gs_findGrp("REDNECK.GRP", "rr", dir, sz)
-                                                  || gs_findGrp("redneck.grp", "rr", dir, sz); }
+// Redneck Rampage ships REDNECK.GRP, in the cwd or an rr/ subdir. Remember which
+// spelling matched so we can hand RR an explicit -gamegrp (its CRC autodetect does
+// not recognize every REDNECK.GRP revision, and without a mounted grp all art/sound
+// is missing).
+static char gs_rrGrpFile[64] = "";
+static int gs_rrAvail(char *dir, int sz)
+{
+    if (gs_findGrp("REDNECK.GRP", "rr", dir, sz)) { Bstrncpyz(gs_rrGrpFile, "REDNECK.GRP", sizeof(gs_rrGrpFile)); return 1; }
+    if (gs_findGrp("redneck.grp", "rr", dir, sz)) { Bstrncpyz(gs_rrGrpFile, "redneck.grp", sizeof(gs_rrGrpFile)); return 1; }
+    return 0;
+}
 
 // First-cut picker: a console prompt listing whichever games are present.
 // (A graphical picker in the startup window is a follow-up.) Returns the game
@@ -174,13 +182,23 @@ static void gs_choose(int argc, char const * const * argv)
 // -nogamemenu) removed, so the chosen game's parser never sees them.
 static char const **gs_filterArgv(int argc, char const * const * argv, int *outArgc)
 {
-    char const **out = (char const **)Xmalloc((argc + 1) * sizeof(char *));
+    // +2 slots in case we inject "-gamegrp <name>" for Redneck Rampage below.
+    char const **out = (char const **)Xmalloc((argc + 3) * sizeof(char *));
     int n = 0;
+    int haveGameGrp = 0;
     for (int i = 0; i < argc; i++)
     {
         if (!Bstrcasecmp(argv[i], "-game")) { i++; continue; }   // skip flag + its value
         if (!Bstrcasecmp(argv[i], "-nogamemenu")) continue;
+        if (!Bstrcasecmp(argv[i], "-gamegrp")) haveGameGrp = 1;
         out[n++] = argv[i];
+    }
+    // RR's grp CRC autodetect misses some REDNECK.GRP revisions; since we already
+    // located the file, name it explicitly so its art/sound actually mount.
+    if (g_activeGame == 3 && gs_rrGrpFile[0] && !haveGameGrp)
+    {
+        out[n++] = "-gamegrp";
+        out[n++] = gs_rrGrpFile;
     }
     out[n] = NULL;
     *outArgc = n;
