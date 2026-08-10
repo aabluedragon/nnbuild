@@ -1361,7 +1361,17 @@ void netInitialize(bool bConsole)
             netResetToSinglePlayer();
             return;
         }
-        if (enet_host_service(gNetENetClient, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT)
+        // VibeBuild32: punch a NAT hole toward the server (via the masterserver) while
+        // waiting for the connect, instead of one blocking 5s wait - so a NAT'd server
+        // opens its hole toward us and the enet handshake gets through.
+        bool bConnected = false;
+        for (int waited = 0; waited < 5000 && !bConnected; waited += 100)
+        {
+            Net_ClientPunch();
+            if (enet_host_service(gNetENetClient, &event, 100) > 0 && event.type == ENET_EVENT_TYPE_CONNECT)
+                bConnected = true;
+        }
+        if (bConnected)
             LOG_F(INFO, "Connected to %s:%i", gNetAddress, gNetPort);
         else
         {
@@ -1503,7 +1513,9 @@ extern "C" {
     void    Masterserver_AdvertisePulse(const char *name, int32_t gameport, int32_t players, int32_t maxplayers, const char *map) MS_WEAK;
     void    Masterserver_AdvertiseStop(void) MS_WEAK;
     int32_t Masterserver_QueryList(const char *masterAddr, void *out, int32_t maxout, int32_t timeoutMs) MS_WEAK;
+    int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr, char *outMasterEp, int32_t outcap, void *buf, int32_t cap) MS_WEAK;
 }
+static char s_blMasterAddr[128] = "";  // masterserver used for -joinlobby / NAT punch
 struct blood_msserver_t { char addr[128]; char addr6[128]; char name[32]; char map[24]; int32_t players, maxplayers; };
 
 static void Blood_Net_AdvertiseStopAtExit(void) { if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop(); }
@@ -1543,8 +1555,34 @@ int Net_QueryLobby(const char *masterAddr)  // -lobbylist <masteraddr>
 
 // -joinlobby <masteraddr>: query the masterserver, pick the first advertised
 // server, split its ip:port into Blood's gNetAddress/gNetPort, and become a client.
+// Client NAT hole-punch: ask the masterserver to punch a hole toward the server
+// we are joining. The request must go out our GAME socket (enet's) so the master
+// learns our real game endpoint - fire it via enet_socket_send on the client host.
+void Net_ClientPunch(void)
+{
+    if (!Masterserver_MakePunchReq || !s_blMasterAddr[0] || gNetMode != NETWORK_CLIENT || !gNetENetClient)
+        return;
+    char target[64]; Bsnprintf(target, sizeof(target), "%s:%d", gNetAddress, gNetPort);
+    char msEp[128]; unsigned char pbuf[160];
+    int32_t const plen = Masterserver_MakePunchReq(s_blMasterAddr, target, msEp, sizeof(msEp), pbuf, sizeof(pbuf));
+    if (plen <= 0) return;
+    // msEp is "a.b.c.d:port" (or "[ipv6]:port"); resolve into an ENetAddress and raw-send.
+    // Use enet_address_set_host (getaddrinfo) - set_host_ip only parses IPv6 literals.
+    char host[64]; Bstrncpyz(host, msEp, sizeof(host));
+    char *colon = strrchr(host, ':'); int port = 0;
+    if (colon) { *colon = 0; port = atoi(colon + 1); }
+    ENetAddress addr; memset(&addr, 0, sizeof(addr));
+    if (enet_address_set_host(&addr, host) == 0) {
+        addr.port = (enet_uint16)port;
+        ENetBuffer b; b.data = pbuf; b.dataLength = plen;
+        enet_socket_send(gNetENetClient->socket, &addr, &b, 1);
+        LOG_F(INFO, "Blood: requested NAT punch to %s via masterserver %s", target, msEp);
+    }
+}
+
 int Net_JoinLobby(const char *masterAddr)
 {
+    Bstrncpyz(s_blMasterAddr, masterAddr, sizeof(s_blMasterAddr));  // remember for NAT punch
     if (!Masterserver_QueryList) { LOG_F(WARNING, "joinlobby: no masterserver support"); return 0; }
     blood_msserver_t list[16];
     int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
