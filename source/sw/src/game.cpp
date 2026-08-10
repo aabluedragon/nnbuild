@@ -3241,7 +3241,10 @@ void CommandLineHelp(char const * const * /*argv*/)
     }
 }
 
-int32_t app_main(int32_t argc, char const * const * argv)
+// Renamed from app_main so both games can live in one binary: the engine's
+// app_main is the game selector (vibebuild32/src/gameselect.cpp), which
+// dispatches here for Shadow Warrior.
+int32_t SW_app_main(int32_t argc, char const * const * argv)
 {
     int i;
     extern int MovesPerPacket;

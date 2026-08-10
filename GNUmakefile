@@ -899,6 +899,27 @@ ifneq ($(ELF2DOL),)
 endif
 endif
 
+# ---- WITH_SW: link Shadow Warrior (VoidSW) into the vibebuild32 binary --------
+# The SW game objects are prelinked (ld -r) into one relocatable object with
+# their game-internal symbols that also exist in Duke localized, so the two game
+# modules no longer collide. SW's own startup window is dropped (Duke's serves
+# both). See source/sw/UNIFY_WITH_VIBEBUILD32.md. macOS (arm64) for now.
+ifeq ($(WITH_SW),1)
+vibebuild32_cflags += -DWITH_SW
+swmerge_objs := $(filter-out %GameListSource.game.$o %GrpFile.game.$o %StartupWinController.game.$o %startosx.game.$o %startwin.game.$o %startgtk.game.$o,$(addprefix $(sw_obj)/,$(addsuffix .$o,$(basename $(sw_game_objs)))))
+dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+
+$(obj)/sw_merged.o: $(swmerge_objs) $(dukemerge_objs)
+	@echo "Merging Shadow Warrior objects (localizing game-internal collisions with Duke)..."
+	@nm -g $(dukemerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/duke_strong.txt
+	@nm -g $(swmerge_objs)   2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/sw_strong.txt
+	@comm -12 $(obj)/duke_strong.txt $(obj)/sw_strong.txt > $(obj)/sw_hide.txt
+	ld -r -arch arm64 $(swmerge_objs) -o $(obj)/sw_premerge.o
+	ld -r -arch arm64 $(obj)/sw_premerge.o -o $@ -unexported_symbols_list $(obj)/sw_hide.txt
+
+vibebuild32_game_miscdeps += $(obj)/sw_merged.o
+endif
+
 
 define BUILDRULE
 

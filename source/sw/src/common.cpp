@@ -39,7 +39,8 @@ const char *G_GrpFile(void)
         return g_grpNamePtr;
 }
 
-const char *G_DefaultDefFile(void)
+// Renamed: the canonical G_DefaultDefFile is a dispatcher in gameselect.cpp.
+const char *SW_G_DefaultDefFile(void)
 {
     return defaultdeffilename;
 }

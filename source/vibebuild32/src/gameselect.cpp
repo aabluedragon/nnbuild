@@ -125,15 +125,36 @@ static void gs_choose(int argc, char const * const * argv)
     LOG_F(INFO, "Game selector: launching %s", sel == 1 ? "Shadow Warrior" : "Duke Nukem 3D");
 }
 
+// Build a copy of argv with the selector's own options (-game <name>,
+// -nogamemenu) removed, so the chosen game's parser never sees them.
+static char const **gs_filterArgv(int argc, char const * const * argv, int *outArgc)
+{
+    char const **out = (char const **)Xmalloc((argc + 1) * sizeof(char *));
+    int n = 0;
+    for (int i = 0; i < argc; i++)
+    {
+        if (!Bstrcasecmp(argv[i], "-game")) { i++; continue; }   // skip flag + its value
+        if (!Bstrcasecmp(argv[i], "-nogamemenu")) continue;
+        out[n++] = argv[i];
+    }
+    out[n] = NULL;
+    *outArgc = n;
+    return out;
+}
+
 // --- the engine entry point --------------------------------------------------
 int app_main(int32_t argc, char const * const * argv)
 {
     gs_choose(argc, argv);
+
+    int fargc = 0;
+    char const **fargv = gs_filterArgv(argc, argv, &fargc);
+
 #ifdef WITH_SW
     if (g_activeGame == 1)
-        return SW_app_main(argc, argv);
+        return SW_app_main(fargc, fargv);
 #endif
-    return Duke_app_main(argc, argv);
+    return Duke_app_main(fargc, fargv);
 }
 
 // --- callbacks both games define: route to the active one --------------------

@@ -968,7 +968,8 @@ AddSyncInfoToPacket(int *j)
     }
 }
 
-void faketimerhandler(void) { ; }
+// Renamed: the canonical faketimerhandler is a dispatcher in gameselect.cpp.
+void SW_faketimerhandler(void) { ; }
 
 void
 UpdateInputs(void)
