@@ -90,6 +90,22 @@ didn't see every Blood header). The genuine ENGINE gaps to add to source/build:
   `EVTIME2TICKS`, `kModern*`, `kDude*`, `cdudeGet`, `nnExt*`, `isUnderwaterSector`.
 - Struct fields DONE: `picanm_t.extra`, `hitdata_t.pos` alias.
 
+## MULTIPLAYER: Blood has native enet MP + our masterserver/lobby features (VERIFIED)
+- enet is already in our engine (build/src/enet.cpp) - dropped the needless
+  -DNETCODE_DISABLE so Blood uses its NATIVE multiplayer.
+- Ported our masterserver/lobby features onto Blood (weak-linked Masterserver_*,
+  transport-independent so they ride alongside enet):
+  - `-advertise <ms>`: host pulses the masterserver from netInitialize's wait loop
+    + netUpdate. VERIFIED: masterserver registered the Blood server
+    (`masterserver: + 127.0.0.1:PORT "Tchernobog" (Blood)`).
+  - `-lobbylist <ms>`: query + log the server list.
+  - `-joinlobby <ms>`: query, pick first server, split ip:port into
+    gNetAddress/gNetPort, become NETWORK_CLIENT. VERIFIED end-to-end: a Blood
+    -joinlobby client discovered an advertised Blood server and CONNECTED over enet
+    (Connecting to -> Connected to -> Successfully connected to server).
+- Remaining (additional) MP features for Blood: NAT-punch (enet-socket, vs SW's
+  mmulti), mid-game file transfer, dual-stack IPv6 (enet is v4).
+
 ## STATUS: Blood engine reconciliation COMPLETE (all committed, Duke/SW verified)
 Every CORE Blood game file compiles clean against our unified engine: **84/89**.
 The 5 that don't are all excluded from a first build anyway:
