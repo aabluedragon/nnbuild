@@ -965,6 +965,7 @@ typedef struct {
     int8_t xofs, yofs;
     uint8_t sf;  // anim. speed and flags
     uint8_t tileflags; // tile-specific flags, such as true non-power-of-2 drawing.
+    uint8_t extra;     // Blood (NotBlood) tile metadata; unused by Duke/SW
 } picanm_t;
 EXTERN picanm_t picanm[MAXTILES];
 typedef struct { int16_t newtile; int16_t owner; } rottile_t;
@@ -1204,7 +1205,7 @@ OTHER VARIABLES:
 ***************************************************************************/
 
 typedef struct {
-    union { struct { int32_t x, y, z; }; vec3_t xyz; vec2_t xy; };
+    union { struct { int32_t x, y, z; }; vec3_t xyz, pos; vec2_t xy; };  // 'pos' aliases xyz (Blood)
     int16_t sprite, wall, sect;
 } hitdata_t;
 
