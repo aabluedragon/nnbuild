@@ -1414,6 +1414,9 @@ SWITCH switches[] = {
     { "lobbylist", 81, 1 },  // VibeBuild32: query a masterserver's server list
     { "joinlobby", 82, 1 },  // VibeBuild32: query masterserver + join first server
     { "netfile", 83, 1 },    // VibeBuild32: host offers this file to joiners
+    { "headless", 84, 0 },   // VibeBuild32: windowless server (engine sets g_forceHeadless)
+    { "dedicated", 84, 0 },
+    { "console", 84, 0 },
     { "map", 2, 1 },
     { "masterslave", 3, 0 },
     { "level", 4, 2 },
@@ -1641,6 +1644,9 @@ void ParseOptions(void)
         case 83:  // VibeBuild32: -netfile <path> (host offers file to joiners)
             if (OptArgc >= 1) Net_AddNetFile(OptArgv[0]);
             break;
+        case 84:  // VibeBuild32: -headless/-dedicated/-console; engine already set
+            break;  // g_forceHeadless from its early argv scan, so just accept it here
+
         case 21:
             if (OptArgc < 1)
                 ThrowError("Missing argument");
