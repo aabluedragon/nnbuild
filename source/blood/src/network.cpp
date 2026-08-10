@@ -34,7 +34,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "eventq.h"
 #include "globals.h"
 #include "network.h"
-#include "netshared.h"   // VibeBuild32: shared masterserver-client + file-transfer glue
+#include "netshared.h"       // VibeBuild32: shared masterserver-client + file-transfer glue
+#include "netshared_enet.h"  // shared enet-transport glue (NAT punch)
 #include "menu.h"
 #include "player.h"
 #include "seq.h"
@@ -1415,15 +1416,10 @@ void Net_SetAdvertise(const char *addr) { VB_SetAdvertise(addr); }  // -advertis
 
 void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
 {
-    if (!Masterserver_IsAdvertising || !Masterserver_IsAdvertising())
-        return;
-    if (gNetMode != NETWORK_SERVER)  // only the host advertises
-        return;
     char map[24];
     Bstrncpyz(map, gGameOptions.zLevelName[0] ? gGameOptions.zLevelName : "Blood", sizeof(map));
-    char const *name = szPlayerName[0] ? szPlayerName : "VibeBuild32 Blood server";
-    if (Masterserver_AdvertisePulse)
-        Masterserver_AdvertisePulse(name, gNetPort, gNetPlayers, gNetPlayers, map);
+    VB_HostAdvertisePulse(gNetMode == NETWORK_SERVER, szPlayerName[0] ? szPlayerName : "VibeBuild32 Blood server",
+                          gNetPort, gNetPlayers, gNetPlayers, map);
 }
 
 int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "Blood"); }  // -lobbylist (shared)
@@ -1435,40 +1431,23 @@ int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "B
 // learns our real game endpoint - fire it via enet_socket_send on the client host.
 void Net_ClientPunch(void)
 {
-    if (!Masterserver_MakePunchReq || !s_blMasterAddr[0] || gNetMode != NETWORK_CLIENT || !gNetENetClient)
+    if (!s_blMasterAddr[0] || gNetMode != NETWORK_CLIENT || !gNetENetClient)
         return;
     char target[64]; Bsnprintf(target, sizeof(target), "%s:%d", gNetAddress, gNetPort);
-    char msEp[128]; unsigned char pbuf[160];
-    int32_t const plen = Masterserver_MakePunchReq(s_blMasterAddr, target, msEp, sizeof(msEp), pbuf, sizeof(pbuf));
-    if (plen <= 0) return;
-    // msEp is "a.b.c.d:port" (or "[ipv6]:port"); resolve into an ENetAddress and raw-send.
-    // Use enet_address_set_host (getaddrinfo) - set_host_ip only parses IPv6 literals.
-    char host[64]; Bstrncpyz(host, msEp, sizeof(host));
-    char *colon = strrchr(host, ':'); int port = 0;
-    if (colon) { *colon = 0; port = atoi(colon + 1); }
-    ENetAddress addr; memset(&addr, 0, sizeof(addr));
-    if (enet_address_set_host(&addr, host) == 0) {
-        addr.port = (enet_uint16)port;
-        ENetBuffer b; b.data = pbuf; b.dataLength = plen;
-        enet_socket_send(gNetENetClient->socket, &addr, &b, 1);
-        LOG_F(INFO, "Blood: requested NAT punch to %s via masterserver %s", target, msEp);
-    }
+    VB_SendPunch(s_blMasterAddr, target, gNetENetClient->socket, "Blood");
 }
 
 int Net_JoinLobby(const char *masterAddr)
 {
     Bstrncpyz(s_blMasterAddr, masterAddr, sizeof(s_blMasterAddr));  // remember for NAT punch
-    if (!Masterserver_QueryList) { LOG_F(WARNING, "joinlobby: no masterserver support"); return 0; }
-    vb_msserver_t list[16];
-    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
-    if (n <= 0) { LOG_F(WARNING, "joinlobby: no servers advertised at %s", masterAddr); return 0; }
-    char const *ep = list[0].addr[0] ? list[0].addr : list[0].addr6;
+    char ep[48], name[32];
+    if (!VB_QueryFirstServer(masterAddr, ep, sizeof(ep), name, sizeof(name))) return 0;
     char host[48]; Bstrncpyz(host, ep, sizeof(host));
     char *colon = strrchr(host, ':');   // "a.b.c.d:port" -> split on the last ':'
     if (colon) { *colon = 0; gNetPort = atoi(colon + 1); }
     Bstrncpyz(gNetAddress, host, sizeof(gNetAddress));
     gNetMode = NETWORK_CLIENT;
-    LOG_F(INFO, "joinlobby: joining \"%s\" at %s:%d (via masterserver %s)", list[0].name, gNetAddress, gNetPort, masterAddr);
+    LOG_F(INFO, "joinlobby: joining \"%s\" at %s:%d (via masterserver %s)", name, gNetAddress, gNetPort, masterAddr);
     return 1;
 }
 

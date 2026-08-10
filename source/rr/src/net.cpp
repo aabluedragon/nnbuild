@@ -24,7 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "game.h"
 #include "gamedef.h"
 #include "net.h"
-#include "netshared.h"   // VibeBuild32: shared masterserver-client + file-transfer glue
+#include "netshared.h"       // VibeBuild32: shared masterserver-client + file-transfer glue
+#include "netshared_enet.h"  // shared enet-transport glue (NAT punch)
 #include "premap.h"
 #include "savegame.h"
 #include "input.h"
@@ -2922,15 +2923,10 @@ void Net_SetAdvertise(const char *addr) { VB_SetAdvertise(addr); }  // -advertis
 
 void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
 {
-    if (!Masterserver_IsAdvertising || !Masterserver_IsAdvertising())
-        return;
-    if (g_networkMode != NET_SERVER)  // only the listen host advertises
-        return;
     char map[24];
     Bstrncpyz(map, boardfilename[0] ? boardfilename : "Redneck Rampage", sizeof(map));
-    char const *name = szPlayerName[0] ? szPlayerName : "VibeBuild32 Redneck server";
-    if (Masterserver_AdvertisePulse)
-        Masterserver_AdvertisePulse(name, g_netPort, numplayers, numplayers, map);
+    VB_HostAdvertisePulse(g_networkMode == NET_SERVER, szPlayerName[0] ? szPlayerName : "VibeBuild32 Redneck server",
+                          g_netPort, numplayers, numplayers, map);
 }
 
 int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "RR"); }  // -lobbylist (shared)
@@ -2940,23 +2936,9 @@ int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "R
 // our real game endpoint - fire it via enet_socket_send on the client host.
 void Net_ClientPunch(void)
 {
-    if (!Masterserver_MakePunchReq || !s_rrMasterAddr[0] || g_networkMode != NET_CLIENT || !g_netClient || !s_rrJoinAddr[0])
+    if (!s_rrMasterAddr[0] || g_networkMode != NET_CLIENT || !g_netClient || !s_rrJoinAddr[0])
         return;
-    char msEp[128]; unsigned char pbuf[160];
-    int32_t const plen = Masterserver_MakePunchReq(s_rrMasterAddr, s_rrJoinAddr, msEp, sizeof(msEp), pbuf, sizeof(pbuf));
-    if (plen <= 0) return;
-    // msEp is "a.b.c.d:port" (or "[ipv6]:port"); resolve into an ENetAddress and raw-send.
-    // enet_address_set_host (getaddrinfo) handles IPv4->IPv4-mapped; set_host_ip only parses IPv6 literals.
-    char host[64]; Bstrncpyz(host, msEp, sizeof(host));
-    char *colon = strrchr(host, ':'); int port = 0;
-    if (colon) { *colon = 0; port = atoi(colon + 1); }
-    ENetAddress addr; memset(&addr, 0, sizeof(addr));
-    if (enet_address_set_host(&addr, host) == 0) {
-        addr.port = (enet_uint16)port;
-        ENetBuffer b; b.data = pbuf; b.dataLength = plen;
-        enet_socket_send(g_netClient->socket, &addr, &b, 1);
-        LOG_F(INFO, "RR: requested NAT punch to %s via masterserver %s", s_rrJoinAddr, msEp);
-    }
+    VB_SendPunch(s_rrMasterAddr, s_rrJoinAddr, g_netClient->socket, "RR");
 }
 
 // -joinlobby <masteraddr>: query the masterserver, pick the first advertised server,
@@ -2964,14 +2946,11 @@ void Net_ClientPunch(void)
 int Net_JoinLobby(const char *masterAddr)
 {
     Bstrncpyz(s_rrMasterAddr, masterAddr, sizeof(s_rrMasterAddr));  // remember for NAT punch
-    if (!Masterserver_QueryList) { LOG_F(WARNING, "joinlobby: no masterserver support"); return 0; }
-    vb_msserver_t list[16];
-    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
-    if (n <= 0) { LOG_F(WARNING, "joinlobby: no servers advertised at %s", masterAddr); return 0; }
-    char const *ep = list[0].addr[0] ? list[0].addr : list[0].addr6;
+    char ep[64], name[32];
+    if (!VB_QueryFirstServer(masterAddr, ep, sizeof(ep), name, sizeof(name))) return 0;
     Bstrncpyz(s_rrJoinAddr, ep, sizeof(s_rrJoinAddr));  // "ip:port" punch target
     g_networkMode = NET_CLIENT;
-    LOG_F(INFO, "joinlobby: joining \"%s\" at %s (via masterserver %s)", list[0].name, ep, masterAddr);
+    LOG_F(INFO, "joinlobby: joining \"%s\" at %s (via masterserver %s)", name, ep, masterAddr);
     Net_Connect(ep);
     return 1;
 }

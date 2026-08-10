@@ -112,6 +112,29 @@ static inline int VB_QueryLobby(const char *masterAddr, const char *tag)
     return n;
 }
 
+// Host advertise heartbeat: pulse this listen server to the masterserver. The game
+// supplies isServer + its name/port/player-count/map; the guards are shared.
+static inline void VB_HostAdvertisePulse(int isServer, const char *name, int port, int players, int maxplayers, const char *map)
+{
+    if (!Masterserver_IsAdvertising || !Masterserver_IsAdvertising()) return;
+    if (!isServer) return;  // only the listen host advertises
+    if (Masterserver_AdvertisePulse) Masterserver_AdvertisePulse(name, port, players, maxplayers, map);
+}
+
+// Query a masterserver and hand back the first advertised server's endpoint ("ip:port",
+// v4 preferred) and name. Backs -joinlobby for every game (each connects its own way).
+static inline int VB_QueryFirstServer(const char *masterAddr, char *outEp, int epCap, char *outName, int nameCap)
+{
+    if (!Masterserver_QueryList) { LOG_F(WARNING, "joinlobby: no masterserver support"); return 0; }
+    vb_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
+    if (n <= 0) { LOG_F(WARNING, "joinlobby: no servers advertised at %s", masterAddr); return 0; }
+    const char *ep = list[0].addr[0] ? list[0].addr : list[0].addr6;
+    Bstrncpyz(outEp, ep, epCap);
+    if (outName) Bstrncpyz(outName, list[0].name, nameCap);
+    return 1;
+}
+
 // Host-side file sender. Builds the HEADER + CHUNK packets and hands each to <send>
 // (the game's transport: enet for Blood/RR, mmulti for SW). hdrType/chunkType are the
 // leading packet-type bytes (VB_FILE_HEADER/CHUNK for the enet games; SW passes its
