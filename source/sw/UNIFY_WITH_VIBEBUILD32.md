@@ -153,10 +153,21 @@ These must resolve to one definition that routes to the **active** game.
      it: `SW lobby: 1 server(s)` / `[0] ...:23513 "VibeBuild32 SW server" map=SW 1/1`.
    - [TODO-UI] In-menu server BROWSER: wire the above list into SW's menus.cpp so a
      player can see servers and pick-to-join (backend done; pure SW menu UI left).
-   - [TODO] Mid-game join + file transfer with x-of-y (Duke `oldnet.cpp`, tied to
-     Duke's connection protocol; SW has its own connect handshake).
-   - [TODO] Deterministic lockstep / rejoin (the big one — replaces SW's
-     `SW_PACKET` sync model).
+   - [TODO] Mid-game join + file transfer with x-of-y. SCOPED: Duke's chunked
+     transfer (`Net_SendFile`/`Net_SendGameFiles`, `Net_FindExistingFile` dedup by
+     size+CRC, `oldnet.cpp:1267-1501`) is ~game-agnostic at the wire level
+     (`mmulti_sendpacket` + `PACKET_TYPE_FILE_HEADER`/`_FILE_CHUNK`). Porting to SW
+     needs: (a) add those two packet ids to SW's own packet-type space and handle
+     them in SW's `getpackets()` switch (network.cpp:1296, `switch(packbuf[0])`)
+     without colliding with SW's ids; (b) a mid-game late-join trigger — SW's
+     connect is a fixed pre-game `waitforeverybody` handshake with no "joiner lacks
+     the GRP, host streams it" path. Non-trivial multi-file port; can't verify
+     headlessly (mid-game join needs real video past the level-load stall).
+   - [TODO] Deterministic lockstep / rejoin. NOTE: SW ALREADY runs a working
+     lockstep sync (`SW_PACKET` + `waitforeverybody`, verified above); our Duke
+     variant's value is the rejoin/late-join fixes, which depend on the mid-game
+     path above. A full swap of SW's sync model is a large, risky rewrite with
+     little upside since SW's own lockstep already syncs cleanly.
    - [TODO] Enemy skins (Duke CON/actor-specific; SW's actors differ — may not map).
 
 ## Reference: game data
