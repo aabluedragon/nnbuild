@@ -177,7 +177,12 @@ These must resolve to one definition that routes to the **active** game.
      variant's value is the rejoin/late-join fixes, which depend on the mid-game
      path above. A full swap of SW's sync model is a large, risky rewrite with
      little upside since SW's own lockstep already syncs cleanly.
-   - [TODO] Enemy skins (Duke CON/actor-specific; SW's actors differ — may not map).
+   - [N/A] Enemy skins. ASSESSED not applicable: Duke's feature draws a PLAYER as a
+     stock ENEMY tile (`P_SkinBaseTile`→NEWBEAST, `P_GetSkinFrame`, `P_ValidateSkin`)
+     via its CON/actor art. SW has no CON, entirely different enemy art, and already
+     differentiates multiplayer players by team-color palette swap
+     (`pp->SpriteP->pal = PALETTE_PLAYER0 + pp->TeamColor`, network.cpp:497). Re-homing
+     Duke's mechanic would be inventing a new SW feature, not porting ours — out of scope.
 
 ## Reference: game data
 SW GRP: `/Users/alonamir/games/Shadow Warrior Complete/Sw.grp` (+ WT.GRP world tour).
