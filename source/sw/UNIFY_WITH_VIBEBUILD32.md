@@ -118,5 +118,29 @@ These must resolve to one definition that routes to the **active** game.
    with deterministic lockstep + masterserver/IPv6/STUN/mid-game transfer/skins.
    Each feature is Duke-game-specific and must be re-homed onto SW's net path.
 
+   What's already SHARED (free for SW via the engine, no port needed):
+   - `mmulti.cpp` transport: dual-stack IPv4/IPv6 peers, STUN (`mmulti_punchto_str`/
+     `mmulti_sendraw_str`), fast whole-window send (`dosendpackets`,
+     `NET_MAX_PACKETS_PER_CALL`). SW already routes packets through mmulti.
+   - `masterserver.cpp` module: game-agnostic; only in Duke's obj list, so its
+     `Masterserver_*` symbols are external and callable from SW in the combined link.
+
+   Feature-port checklist onto SW:
+   - [DONE] Masterserver/lobby ADVERTISE (host side) + NAT-punch service. SW's
+     `network.cpp` calls the `Masterserver_*` API weak-linked (null in standalone
+     sw, bound to Duke's in the combined binary); pulses from `getpackets()`;
+     `-advertise <addr>` arg; `atexit` graceful stop. VERIFIED end-to-end: a
+     standalone `-masterserver` registered an SW `-advertise` client:
+     `masterserver: + 127.0.0.1:PORT "VibeBuild32 SW server" (SW)` (dual-stack).
+   - [TODO] Masterserver client browser + client NAT-punch on join. SW's connect
+     runs inside shared mmulti (no Duke-style retry loop), so the client punch is
+     best added game-agnostically in mmulti's connect path (benefits both games)
+     rather than re-homed into SW game code.
+   - [TODO] Mid-game join + file transfer with x-of-y (Duke `oldnet.cpp`, tied to
+     Duke's connection protocol; SW has its own connect handshake).
+   - [TODO] Deterministic lockstep / rejoin (the big one — replaces SW's
+     `SW_PACKET` sync model).
+   - [TODO] Enemy skins (Duke CON/actor-specific; SW's actors differ — may not map).
+
 ## Reference: game data
 SW GRP: `/Users/alonamir/games/Shadow Warrior Complete/Sw.grp` (+ WT.GRP world tour).
