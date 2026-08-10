@@ -923,7 +923,7 @@ endif
 # ---- WITH_BLOOD: link Blood (from NotBlood) into the vibebuild32 binary -------
 # Same pattern as WITH_SW. Blood's game objects are prelinked (ld -r) with the
 # game-internal symbols that also exist in Duke or SW localized. Blood's own
-# netcode (enet) is disabled (-DNETCODE_DISABLE); it will use shared mmulti.
+# Blood uses its native enet netcode (enet is built into our engine: build/src/enet.cpp).
 # Excludes: mapedit (editor), credits (smacker cutscenes), nnext* (modern-map
 # conditions), and Blood's startup window (Duke's serves all). Build with
 # WITH_SW=1 WITH_BLOOD=1. See source/blood/BLOOD_UNIFY.md. macOS (arm64) for now.
@@ -934,7 +934,7 @@ blood_root := $(source)/blood
 blood_src := $(blood_root)/src
 blood_rsrc := $(blood_root)/rsrc
 blood_obj := $(obj)/blood
-blood_cflags := -I$(blood_src) -DNETCODE_DISABLE -Wno-c++11-narrowing -Wno-narrowing
+blood_cflags := -I$(blood_src) -Wno-c++11-narrowing -Wno-narrowing
 blood_game_deps := audiolib mact
 blood_game_objs := \
     blood.cpp actor.cpp ai.cpp aibat.cpp aibeast.cpp aiboneel.cpp aiburn.cpp \
