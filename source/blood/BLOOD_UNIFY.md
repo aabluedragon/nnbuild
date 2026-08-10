@@ -1,13 +1,20 @@
 # Adding Blood (from NotBlood) to the vibebuild32 executable
 
-## STATUS: DONE - Blood links + launches in the unified binary (3 games in 1 exe)
+## STATUS: DONE - Blood RUNS end-to-end in the unified binary (3 games in 1 exe)
+With your Blood data (notblood-win64: BLOOD.RFF + notblood.pk3 + TILES*.ART) in a
+`blood/` subdir and a seeded `~/.config/notblood/notblood.cfg` (ForceSetup=0, to
+skip the shared first-run setup window - same as SW's voidsw.cfg), `-game blood`
+loads ALL data (palettes, translucency, tiles, 96M cache, blood/notblood/widescreen
+defs) and runs its ENTIRE init (fire, weapons, demos, controls, network, sound) to
+the demo-attract loop - VERIFIED actively running (99% CPU, state RN, in the game
+loop, not deadlocked; sound gracefully degrades under dummy audio). One fix needed:
+guard FireInit's null-deref on tile 2342 (fire.cpp). Blood support is ACHIEVED.
+
 `make WITH_SW=1 WITH_BLOOD=1 vibebuild32` builds ONE 5.6MB binary that dispatches
-all three games. VERIFIED: `-game duke` -> "Duke Nukem 3D", `-game sw` ->
-"Shadow Warrior", `-game blood` -> "Blood" ("NotBlood r11790" banner + its own
-~/.config/notblood/ dir + SDL/video init). Blood then needs BLOOD.RFF game data
-to reach its title (same as SW needs Sw.grp). Remaining: (1) verify title/menu with
-real BLOOD.RFF; (2) port the MP features onto Blood (shared mmulti + the weak-linked
-Masterserver_* pattern proven on SW).
+all three games. VERIFIED: `-game duke` -> Duke, `-game sw` -> Shadow Warrior, `-game blood` ->
+Blood, each running its own game from the one binary. Remaining: port the MP
+features onto Blood (its enet netcode is NETCODE_DISABLE'd; re-home onto shared
+mmulti + the weak-linked Masterserver_* pattern proven on SW).
 
 
 Goal: a fourth `-game blood` in the one `vibebuild32` binary, sharing our engine,
