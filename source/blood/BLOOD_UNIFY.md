@@ -1,5 +1,15 @@
 # Adding Blood (from NotBlood) to the vibebuild32 executable
 
+## STATUS: DONE - Blood links + launches in the unified binary (3 games in 1 exe)
+`make WITH_SW=1 WITH_BLOOD=1 vibebuild32` builds ONE 5.6MB binary that dispatches
+all three games. VERIFIED: `-game duke` -> "Duke Nukem 3D", `-game sw` ->
+"Shadow Warrior", `-game blood` -> "Blood" ("NotBlood r11790" banner + its own
+~/.config/notblood/ dir + SDL/video init). Blood then needs BLOOD.RFF game data
+to reach its title (same as SW needs Sw.grp). Remaining: (1) verify title/menu with
+real BLOOD.RFF; (2) port the MP features onto Blood (shared mmulti + the weak-linked
+Masterserver_* pattern proven on SW).
+
+
 Goal: a fourth `-game blood` in the one `vibebuild32` binary, sharing our engine,
 sourced from NotBlood (`/Users/alonamir/dev/NotBlood`). Same merge pattern as SW
 (see ../sw/UNIFY_WITH_VIBEBUILD32.md): compile Blood's game module against OUR
