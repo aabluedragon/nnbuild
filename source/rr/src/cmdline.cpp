@@ -42,39 +42,41 @@ int32_t g_fakeMultiMode = 0;
 void G_ShowParameterHelp(void)
 {
     static char const s[] = "Usage: " APPBASENAME " [files] [options]\n"
-        "Example: " APPBASENAME " -usecwd -cfg myconfig.cfg -map nukeland.map\n\n"
+        "Example: " APPBASENAME " --usecwd --cfg=myconfig.cfg --map=nukeland.map\n\n"
         "Files can be of type [grp|zip|map|con|def]\n"
+        "Every option has a --long form and a -short form, and takes its value as either\n"
+        "--opt value or --opt=value.\n"
         "\n"
-        "-cfg [file.cfg]\tUse an alternate configuration file\n"
+        "--cfg <file.cfg>\tUse an alternate configuration file\n"
 #ifdef HAVE_CLIPSHAPE_FEATURE
-        "-clipmap [file.map]\tLoad an additional clipping map for use with clipshape\n"
+        "--clipmap <file.map>\tLoad an additional clipping map for use with clipshape\n"
 #endif
-        "-connect [host]\tConnect to a multiplayer game\n"
-        "-c#\t\tMultiplayer mode #, 1 = DM, 2 = Co-op, 3 = DM(no spawn)\n"
-        "-d [file.edm or #]\tPlay a demo\n"
-        "-g [file.grp]\tLoad additional game data\n"
-        "-h [file.def]\tLoad an alternate definitions file\n"
-        "-j [dir]\t\tAdd a directory to " APPNAME "'s search list\n"
-        "-l#\t\tStart game on level #, see -v\n"
-        "-map [file.map]\tLoad an external map file\n"
-        "-mh [file.def]\tInclude an additional definitions module\n"
-        "-mx [file.con]\tInclude an additional CON script module\n"
-        "-m\t\tDisable enemies\n"
-        "-rts [file.rts]\tLoad a custom Remote Ridicule sound bank\n"
-        "-r\t\tRecord demo\n"
-        "-s#\t\tStart game on skill level #\n"
-        "-server\t\tStart a multiplayer server\n"
+        "--connect <host>\tConnect to a multiplayer game\n"
+        "--coop, -c<#>\t\tMultiplayer mode #, 1 = DM, 2 = Co-op, 3 = DM(no spawn)\n"
+        "--demo, -d <file.edm|#>\tPlay a demo\n"
+        "--grp, -g <file.grp>\tLoad additional game data\n"
+        "--def <file.def>\tLoad an alternate definitions file\n"
+        "--path, -j <dir>\tAdd a directory to " APPNAME "'s search list\n"
+        "--level, -l <#>\t\tStart game on level #, see --volume\n"
+        "--map <file.map>\tLoad an external map file\n"
+        "-mh <file.def>\t\tInclude an additional definitions module\n"
+        "-mx <file.con>\t\tInclude an additional CON script module\n"
+        "-m\t\t\tDisable enemies\n"
+        "--rts <file.rts>\tLoad a custom Remote Ridicule sound bank\n"
+        "--record, -r\t\tRecord demo\n"
+        "--skill, -s <#>\t\tStart game on skill level #\n"
+        "--server\t\tStart a multiplayer server\n"
 #ifdef STARTUP_SETUP_WINDOW
-        "-setup/nosetup\tEnable or disable startup window\n"
+        "--setup / --nosetup\tEnable or disable startup window\n"
 #endif
-        "-t#\t\tRespawn mode: 1 = enemies, 2 = weapons, 3 = items, x = all\n"
-        "-usecwd\t\tRead data and configuration from current directory\n"
-        "-u#########\tUser's favorite weapon order (default: 3425689071)\n"
-        "-v#\t\tStart game on episode #, see -l\n"
-        "-x [game.con]\tLoad custom CON script\n"
-        "-#\t\tLoad and run a game from slot # (0-9)\n"
-        //              "\n-?/--help\tDisplay this help message and exit\n"
-        "\nSee " APPBASENAME " -debughelp for additional parameters for debugging"
+        "--respawn, -t <#>\tRespawn mode: 1 = enemies, 2 = weapons, 3 = items, x = all\n"
+        "--usecwd\t\tRead data and configuration from current directory\n"
+        "--weapons, -u<#####>\tUser's favorite weapon order (default: 3425689071)\n"
+        "--volume, -v <#>\tStart game on episode #, see --level\n"
+        "--con, -x <game.con>\tLoad custom CON script\n"
+        "-#\t\t\tLoad and run a game from slot # (0-9)\n"
+        "-h, --help\t\tDisplay this help message and exit\n"
+        "\nSee " APPBASENAME " --debughelp for additional parameters for debugging"
 #ifndef NETCODE_DISABLE
         VB_NETARGS_HELP
 #endif
@@ -210,11 +212,12 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
 
             c = oc;
 
-            if ((*c == '-')
-#ifdef _WIN32
-                || (*c == '/')
-#endif
-                )
+            // VibeBuild32 modern args: treat "--foo" the same as "-foo" so every option
+            // has a long form; slash ("/foo") options are gone.
+            if (c[0] == '-' && c[1] == '-' && c[2])
+                c++;
+
+            if (*c == '-')
             {
                 shortopt = 0;
 #ifndef NETCODE_DISABLE
@@ -224,7 +227,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                 }
 #endif
 
-                if (!Bstrcasecmp(c+1, "?") || !Bstrcasecmp(c+1, "help") || !Bstrcasecmp(c+1, "-help"))
+                if (!Bstrcasecmp(c+1, "?") || !Bstrcasecmp(c+1, "h") || !Bstrcasecmp(c+1, "help"))
                 {
                     G_ShowParameterHelp();
                     Bexit(0);
@@ -574,11 +577,33 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                 }
             }
 
-            if ((*c == '-')
-#ifdef _WIN32
-                || (*c == '/')
-#endif
-                )
+            // VibeBuild32: long aliases for the single-char options below. Rewrite a
+            // "--name"/"--name=value"/"--name value" token to the short "-Xvalue" form so
+            // the existing switch handles it (both forms stay valid).
+            static char s_optbuf[BMAX_PATH + 4];
+            if (c[0] == '-')
+            {
+                static const struct { const char *lng; char shrt; int val; } aliases[] = {
+                    { "level",'l',1 }, { "volume",'v',1 }, { "skill",'s',1 }, { "grp",'g',1 },
+                    { "group",'g',1 }, { "def",'h',1 }, { "demo",'d',1 }, { "con",'x',1 },
+                    { "path",'j',1 }, { "coop",'c',1 }, { "players",'q',1 }, { "respawn",'t',1 },
+                    { "weapons",'u',1 }, { "ai",'a',0 }, { "record",'r',0 }, { "coords",'w',0 },
+                };
+                char name[24]; const char *inlineVal = Bstrchr(c+1, '=');
+                if (inlineVal) { int n = min((int)(inlineVal-(c+1)), 23); Bmemcpy(name, c+1, n); name[n] = 0; inlineVal++; }
+                else Bstrncpyz(name, c+1, sizeof(name));
+                for (auto const & al : aliases)
+                {
+                    if (Bstrcasecmp(name, al.lng)) continue;
+                    const char *v = inlineVal ? inlineVal : (al.val && i+1 < argc ? argv[i+1] : "");
+                    Bsnprintf(s_optbuf, sizeof(s_optbuf), "-%c%s", al.shrt, al.val ? v : "");
+                    if (al.val && !inlineVal && i+1 < argc) i++;   // consumed the separate value token
+                    c = s_optbuf;
+                    break;
+                }
+            }
+
+            if (*c == '-')
             {
                 shortopt = 1;
 

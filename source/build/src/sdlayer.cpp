@@ -559,13 +559,16 @@ int main(int argc, char *argv[])
     // A dedicated server has no operator at a screen, so it never needs a window
     // or an OpenGL/graphics context - run it fully headless.
     for (int ha = 1; ha < argc; ha++)
-        if (argv[ha] && (argv[ha][0] == '-') &&
-            (!Bstrcasecmp(argv[ha] + 1, "headless") || !Bstrcasecmp(argv[ha] + 1, "console")
-             || !Bstrcasecmp(argv[ha] + 1, "dedicated")))
+    {
+        if (!argv[ha] || argv[ha][0] != '-') continue;
+        const char *a = argv[ha];
+        while (*a == '-') a++;                          // accept -headless and --headless
+        if (!Bstrcasecmp(a, "headless") || !Bstrcasecmp(a, "console") || !Bstrcasecmp(a, "dedicated"))
         {
             g_forceHeadless = 1;
             break;
         }
+    }
 
 #ifdef EDUKE32_OSX
     osx_preopen();

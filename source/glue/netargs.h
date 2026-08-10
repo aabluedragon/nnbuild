@@ -25,13 +25,14 @@
 // documented in exactly one place.
 #define VB_NETARGS_HELP \
 "\nMultiplayer (VibeBuild32):\n" \
-"  -advertise <master>       host a server and register it with a masterserver\n" \
-"  -lobbylist <master>       list the servers a masterserver is advertising\n" \
-"  -joinlobby <master>       join the first server a masterserver is advertising\n" \
-"  -netfile <path>           (host) offer a mod/map file to joiners\n" \
-"  -headless / -dedicated    run a windowless dedicated server (auto-starts by default)\n" \
-"  -nplayers <N>             players to wait for before a dedicated server auto-starts (default 2)\n" \
-"  -wait                     dedicated: hold in the lobby instead of auto-starting\n"
+"  --advertise <master>      host a server and register it with a masterserver\n" \
+"  --lobbylist <master>      list the servers a masterserver is advertising\n" \
+"  --joinlobby <master>      join the first server a masterserver is advertising\n" \
+"  --netfile <path>          (host) offer a mod/map file to joiners\n" \
+"  --headless / --dedicated  run a windowless dedicated server (auto-starts by default)\n" \
+"  --nplayers <N>            players to wait for before a dedicated server auto-starts (default 2)\n" \
+"  --wait                    dedicated: hold in the lobby instead of auto-starting\n" \
+"  (options also accept --flag=value and the legacy single-dash form)\n"
 
 struct vb_netarg_ctx
 {
@@ -49,41 +50,71 @@ struct vb_netarg_ctx
     void (*addNetFile)(const char *);
 };
 
-// <flag> is the token WITHOUT its leading '-'. <next> is the following argv token
-// (or NULL if there is none). Returns the number of argv tokens consumed:
-//   0 = <flag> is not a VibeBuild32 net flag (the caller handles it),
-//   1 = a value-less flag was handled,
-//   2 = a flag + its value were handled.
-static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *flag, const char *next)
+// <arg> is an argv token that may carry its leading dashes and a "=value" suffix
+// (modern forms: --flag, --flag=value, and legacy -flag / -flag value). <next> is the
+// following argv token (or NULL). Returns argv tokens consumed:
+//   0 = <arg> is not a VibeBuild32 net flag (the caller handles it),
+//   1 = handled with no separate value (value-less flag, or an inline --flag=value),
+//   2 = handled and the separate <next> token was its value.
+static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *arg, const char *next)
 {
+    while (*arg == '-') arg++;                         // accept -flag and --flag alike
+
+    char flag[24];                                     // the name, split off any "=value"
+    const char *inlineVal = strchr(arg, '=');
+    if (inlineVal)
+    {
+        int n = (int)(inlineVal - arg);
+        if (n > (int)sizeof(flag) - 1) n = sizeof(flag) - 1;
+        Bmemcpy(flag, arg, n); flag[n] = 0;
+        inlineVal++;                                   // point past '='
+    }
+    else Bstrncpyz(flag, arg, sizeof(flag));
+
+    // A value comes from --flag=value (inline) or the next token; the consumed count
+    // reflects which so the caller advances argv correctly.
+    const char *const val = inlineVal ? inlineVal : next;
+    int const valConsumed = inlineVal ? 1 : 2;
+
     if (!Bstrcasecmp(flag, "advertise"))
     {
-        if (!next) return 1;
+        if (!val) return 1;
         if (cx->networkMode) *cx->networkMode = cx->serverMode;
         if (cx->noSetup) *cx->noSetup = 1;
         if (cx->noLogo)  *cx->noLogo  = 1;
-        if (cx->setAdvertise) cx->setAdvertise(next);
-        return 2;
+        if (cx->setAdvertise) cx->setAdvertise(val);
+        return valConsumed;
     }
     if (!Bstrcasecmp(flag, "lobbylist"))
     {
-        if (!next) return 1;
-        if (cx->queryLobby) cx->queryLobby(next);
-        return 2;
+        if (!val) return 1;
+        if (cx->queryLobby) cx->queryLobby(val);
+        return valConsumed;
     }
     if (!Bstrcasecmp(flag, "joinlobby"))
     {
-        if (!next) return 1;
+        if (!val) return 1;
         if (cx->noSetup) *cx->noSetup = 1;
         if (cx->noLogo)  *cx->noLogo  = 1;
-        if (cx->joinLobby) cx->joinLobby(next);
-        return 2;
+        if (cx->joinLobby) cx->joinLobby(val);
+        return valConsumed;
     }
     if (!Bstrcasecmp(flag, "netfile"))
     {
-        if (!next) return 1;
-        if (cx->addNetFile) cx->addNetFile(next);
-        return 2;
+        if (!val) return 1;
+        if (cx->addNetFile) cx->addNetFile(val);
+        return valConsumed;
+    }
+    if (!Bstrcasecmp(flag, "nplayers"))
+    {
+        if (!val) return 1;
+        if (cx->startNowPlayers)
+        {
+            int v = atoi(val);
+            int const hi = cx->maxPlayers > 2 ? cx->maxPlayers : 2;
+            *cx->startNowPlayers = v < 2 ? 2 : (v > hi ? hi : v);
+        }
+        return valConsumed;
     }
     if (!Bstrcasecmp(flag, "startnow"))
     {
@@ -94,17 +125,6 @@ static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *flag, const cha
     {
         if (cx->wait) *cx->wait = 1;
         return 1;
-    }
-    if (!Bstrcasecmp(flag, "nplayers"))
-    {
-        if (!next) return 1;
-        if (cx->startNowPlayers)
-        {
-            int v = atoi(next);
-            int const hi = cx->maxPlayers > 2 ? cx->maxPlayers : 2;
-            *cx->startNowPlayers = v < 2 ? 2 : (v > hi ? hi : v);
-        }
-        return 2;
     }
     if (!Bstrcasecmp(flag, "headless") || !Bstrcasecmp(flag, "dedicated") || !Bstrcasecmp(flag, "console"))
     {

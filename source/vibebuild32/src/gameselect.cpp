@@ -179,11 +179,13 @@ static void gs_choose(int argc, char const * const * argv)
 }
 
 // Build a copy of argv with the selector's own options (-game <name>,
-// -nogamemenu) removed, so the chosen game's parser never sees them.
+// -nogamemenu) removed, so the chosen game's parser never sees them. Also splits the
+// modern "--name=value" form into two tokens ("--name", "value") so every game's
+// option parser (which reads the value as the following token) accepts it uniformly.
 static char const **gs_filterArgv(int argc, char const * const * argv, int *outArgc)
 {
-    // +2 slots in case we inject "-gamegrp <name>" for Redneck Rampage below.
-    char const **out = (char const **)Xmalloc((argc + 3) * sizeof(char *));
+    // Up to 2 entries per arg (a "-name=value" splits in two), plus injected -gamegrp.
+    char const **out = (char const **)Xmalloc((2 * argc + 4) * sizeof(char *));
     int n = 0;
     int haveGameGrp = 0;
     for (int i = 0; i < argc; i++)
@@ -191,7 +193,19 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
         if (!Bstrcasecmp(argv[i], "-game")) { i++; continue; }   // skip flag + its value
         if (!Bstrcasecmp(argv[i], "-nogamemenu")) continue;
         if (!Bstrcasecmp(argv[i], "-gamegrp")) haveGameGrp = 1;
-        out[n++] = argv[i];
+
+        // Modern args: split an option token's "=value" off into its own token.
+        const char *a = argv[i], *eq;
+        if (a[0] == '-' && (eq = strchr(a, '=')) != NULL && eq > a + 1)
+        {
+            size_t const nameLen = (size_t)(eq - a);
+            char *name = (char *)Xmalloc(nameLen + 1);
+            Bmemcpy(name, a, nameLen); name[nameLen] = 0;
+            out[n++] = name;
+            out[n++] = eq + 1;   // value (stable: points into the original argv string)
+            continue;
+        }
+        out[n++] = a;
     }
     // RR's grp CRC autodetect misses some REDNECK.GRP revisions; since we already
     // located the file, name it explicitly so its art/sound actually mount.
