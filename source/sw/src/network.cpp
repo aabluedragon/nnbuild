@@ -1310,6 +1310,37 @@ extern "C" {
     void    Masterserver_AdvertiseStop(void) MS_WEAK;
     void    Masterserver_SetPunchFn(void (*fn)(const char *)) MS_WEAK;
     void    Masterserver_HostPump(void) MS_WEAK;
+    int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr,
+                                      char *outMasterEp, int32_t outcap, void *buf, int32_t cap) MS_WEAK;
+}
+
+// Client-side NAT-punch: a joining client asks the masterserver to open a hole
+// toward the server it is trying to reach. -punchto sets the server address,
+// -masteraddr sets the masterserver. Fired (throttled) from SW's connect cycle.
+static char s_swPunchTarget[128] = "";
+static char s_swMasterAddr[128]  = "";
+void Net_SetPunchTarget(const char *addr) { Bstrncpyz(s_swPunchTarget, addr, sizeof(s_swPunchTarget)); }
+void Net_SetMasterAddr(const char *addr)  { Bstrncpyz(s_swMasterAddr,  addr, sizeof(s_swMasterAddr)); }
+
+void Net_ClientPunchAttempt(void)
+{
+    if (!Masterserver_MakePunchReq)              // weak-absent in the standalone SW build
+        return;
+    if (!s_swPunchTarget[0] || !s_swMasterAddr[0])  // only a lobby/manual joiner sets these
+        return;
+    static int throttle = 0;                     // the connect cycle spins fast; punch periodically
+    if ((throttle++ % 60) != 0)
+        return;
+
+    char msEp[128];
+    unsigned char pbuf[160];
+    int32_t const plen = Masterserver_MakePunchReq(s_swMasterAddr, s_swPunchTarget,
+                                                   msEp, sizeof(msEp), pbuf, sizeof(pbuf));
+    if (plen > 0)
+    {
+        mmulti_sendraw_str(msEp, pbuf, plen);    // request goes out our game socket
+        LOG_F(INFO, "SW: requested NAT punch to %s via masterserver %s", s_swPunchTarget, msEp);
+    }
 }
 
 extern char LevelName[20];

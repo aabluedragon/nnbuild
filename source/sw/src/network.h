@@ -173,6 +173,9 @@ void UpdateInputs(void);
 void getpackets(void);
 void Net_SetAdvertise(const char *addr);  // VibeBuild32 masterserver/lobby advertise
 void Net_HostAdvertise(void);
+void Net_SetPunchTarget(const char *addr);  // client NAT-punch: server to reach
+void Net_SetMasterAddr(const char *addr);   // client NAT-punch: masterserver addr
+void Net_ClientPunchAttempt(void);
 void SendMulitNameChange(char *new_name);
 void InitNetVars(void);
 void InitTimingVars(void);

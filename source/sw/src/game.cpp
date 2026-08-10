@@ -876,6 +876,7 @@ InitGame(int32_t argc, char const * const * argv)
         while (initmultiplayerscycle())
         {
             handleevents();
+            Net_ClientPunchAttempt();  // NAT hole-punch toward the server (lobby/manual join)
             if (quitevent)
             {
                 QuitFlag = TRUE;
@@ -3279,6 +3280,16 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
         else if (!Bstrcasecmp(argv[i]+1, "advertise") && i+1 < argc)
         {
             Net_SetAdvertise(argv[i+1]);  // advertise this server to a masterserver/lobby
+            i++;
+        }
+        else if (!Bstrcasecmp(argv[i]+1, "punchto") && i+1 < argc)
+        {
+            Net_SetPunchTarget(argv[i+1]);  // client: NAT-punch toward this server
+            i++;
+        }
+        else if (!Bstrcasecmp(argv[i]+1, "masteraddr") && i+1 < argc)
+        {
+            Net_SetMasterAddr(argv[i+1]);   // client: masterserver used for the punch
             i++;
         }
         else if (!Bstrcasecmp(argv[i]+1, "?"))
