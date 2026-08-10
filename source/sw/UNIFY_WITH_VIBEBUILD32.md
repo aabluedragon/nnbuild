@@ -125,6 +125,15 @@ These must resolve to one definition that routes to the **active** game.
    - `masterserver.cpp` module: game-agnostic; only in Duke's obj list, so its
      `Masterserver_*` symbols are external and callable from SW in the combined link.
 
+   CORE SW MULTIPLAYER VERIFIED in the unified binary: two `-game sw` instances on
+   localhost (mmulti P2P, `-net -p<port> /n1 <peer:port>`) connect and run SW's
+   pre-game sync handshake in lockstep — P0 logs `mmulti: player 1 connected!` and
+   BOTH advance through `waitforeverybody() #1..#4` (game.cpp level-init barriers)
+   at matching times. Confirms SW's `SW_PACKET` netcode + the shared mmulti
+   transport (dual-stack/STUN/fast-send) work together for SW. Headless runs then
+   stall at `InitLevel`/`LoadLevel`/precache (dummy video, same as the SP title
+   stall), so full 2-player gameplay needs a real display, not a net fix.
+
    Feature-port checklist onto SW:
    - [DONE] Masterserver/lobby ADVERTISE (host side) + NAT-punch service. SW's
      `network.cpp` calls the `Masterserver_*` API weak-linked (null in standalone
