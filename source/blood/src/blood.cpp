@@ -2308,7 +2308,8 @@ RESTART:
     gViewIndex = myconnectindex;
     gMe = gView = &gPlayer[myconnectindex];
     netBroadcastPlayerInfo(myconnectindex);
-    LOG_F(INFO, "Waiting for network players!");
+    if (numplayers >= 2)   // VibeBuild32: only announce the wait when it's an actual network game
+        LOG_F(INFO, "Waiting for network players!");
     netWaitForEveryone(0);
     if (gRestartGame)
     {
