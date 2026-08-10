@@ -3169,7 +3169,19 @@ void polymost_bufferVert(vec3f_t const v, vec2f_t const t)
 void polymost_finishBufferedDrawing(int mode)
 {
     if (!persistentStreamBuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, drawpolyVertsOffset * sizeof(float) * 5, drawpolyVertsCnt * sizeof(float) * 5, drawpolyVerts);
+    {
+        // Orphan-and-upload: replace the whole VBO with just this batch via glBufferData
+        // (a fresh backing store), so the driver never has to sync against pending GPU
+        // reads. glBufferSubData into an in-use buffer forces a full GPU sync (semaphore
+        // wait) on Apple's legacy GL-over-Metal - where glMapBufferRange(UNSYNCHRONIZED)
+        // isn't available - and profiling showed ~95% of frame time lost to that stall.
+        // glBufferData is core GL 1.5, so this works on every path. (VibeBuild32 perf.)
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)drawpolyVertsCnt * sizeof(float) * 5, drawpolyVerts, GL_STREAM_DRAW);
+        glDrawArrays(mode, 0, drawpolyVertsCnt);
+        drawpolyVertsOffset = 0;
+        drawpolyVertsCnt = 0;
+        return;
+    }
 
     glDrawArrays(mode, drawpolyVertsOffset, drawpolyVertsCnt);
     drawpolyVertsOffset += drawpolyVertsCnt;
