@@ -28,7 +28,7 @@
 # define gs_chdir chdir
 #endif
 
-// 0 = Duke3D (vibebuild32), 1 = Shadow Warrior. Read by the dispatchers below.
+// 0 = Duke3D (vibebuild32), 1 = Shadow Warrior, 2 = Blood. Read by the dispatchers.
 int g_activeGame = 0;
 
 // --- each game's real entry + the callbacks both games define (renamed) -------
@@ -39,6 +39,11 @@ extern void Duke_faketimerhandler(void);
 extern int SW_app_main(int32_t argc, char const * const * argv);
 extern const char *SW_G_DefaultDefFile(void);
 extern void SW_faketimerhandler(void);
+#endif
+#ifdef WITH_BLOOD
+extern int Blood_app_main(int32_t argc, char const * const * argv);
+extern const char *Blood_G_DefaultDefFile(void);
+extern void Blood_faketimerhandler(void);
 #endif
 
 // --- helpers -----------------------------------------------------------------
@@ -67,6 +72,9 @@ static int gs_dukeAvail(char *dir, int sz) { return gs_findGrp("DUKE3D.GRP", "du
 static int gs_swAvail(char *dir, int sz)   { return gs_findGrp("SW.GRP", "sw", dir, sz)
                                                   || gs_findGrp("Sw.grp", "sw", dir, sz)
                                                   || gs_findGrp("sw.grp", "sw", dir, sz); }
+// Blood ships BLOOD.RFF (resource file), in the cwd or a blood/ subdir.
+static int gs_bloodAvail(char *dir, int sz){ return gs_findGrp("BLOOD.RFF", "blood", dir, sz)
+                                                  || gs_findGrp("blood.rff", "blood", dir, sz); }
 
 // First-cut picker: a console prompt. (A graphical picker in the startup window
 // is a follow-up; this keeps selection working now.)
@@ -93,36 +101,45 @@ static void gs_choose(int argc, char const * const * argv)
         else if (!Bstrcasecmp(argv[i], "-nogamemenu")) bypass = 1;
     }
 
-    char dukeDir[BMAX_PATH] = "", swDir[BMAX_PATH] = "";
-    int const dukeAvail = gs_dukeAvail(dukeDir, sizeof(dukeDir));
-    int const swAvail   = gs_swAvail(swDir, sizeof(swDir));
+    char dukeDir[BMAX_PATH] = "", swDir[BMAX_PATH] = "", bloodDir[BMAX_PATH] = "";
+    int const dukeAvail  = gs_dukeAvail(dukeDir, sizeof(dukeDir));
+    int const swAvail    = gs_swAvail(swDir, sizeof(swDir));
+    int const bloodAvail = gs_bloodAvail(bloodDir, sizeof(bloodDir));
 
     int sel = -1;
     if (want)
     {
         if (!Bstrcasecmp(want, "sw") || !Bstrcasecmp(want, "shadowwarrior")) sel = 1;
+        else if (!Bstrcasecmp(want, "blood")) sel = 2;
         else if (!Bstrcasecmp(want, "duke") || !Bstrcasecmp(want, "duke3d")) sel = 0;
     }
     if (sel < 0)
     {
-        if (dukeAvail && !swAvail) sel = 0;
-        else if (swAvail && !dukeAvail) sel = 1;
-        else if (dukeAvail && swAvail) sel = bypass ? 0 : gs_menu(dukeAvail, swAvail);
-        else sel = 0;  // neither found; let Duke's normal grp search report it
+        int const nAvail = (dukeAvail ? 1 : 0) + (swAvail ? 1 : 0) + (bloodAvail ? 1 : 0);
+        if (nAvail == 1)
+            sel = dukeAvail ? 0 : (swAvail ? 1 : 2);
+        else if (nAvail > 1)
+            sel = bypass ? (dukeAvail ? 0 : (swAvail ? 1 : 2)) : gs_menu(dukeAvail, swAvail);
+        else
+            sel = 0;  // none found; let Duke's normal grp search report it
     }
 
 #ifndef WITH_SW
-    sel = 0;  // SW not compiled in
+    if (sel == 1) sel = 0;  // SW not compiled in
+#endif
+#ifndef WITH_BLOOD
+    if (sel == 2) sel = 0;  // Blood not compiled in
 #endif
     g_activeGame = sel;
 
-    const char *dir = (sel == 1) ? swDir : dukeDir;
+    const char *const name = (sel == 2) ? "Blood" : (sel == 1) ? "Shadow Warrior" : "Duke Nukem 3D";
+    const char *dir = (sel == 2) ? bloodDir : (sel == 1) ? swDir : dukeDir;
     if (dir[0] && Bstrcmp(dir, "."))
     {
         if (gs_chdir(dir) == 0)
-            LOG_F(INFO, "Game selector: switched into '%s' for %s", dir, sel == 1 ? "Shadow Warrior" : "Duke Nukem 3D");
+            LOG_F(INFO, "Game selector: switched into '%s' for %s", dir, name);
     }
-    LOG_F(INFO, "Game selector: launching %s", sel == 1 ? "Shadow Warrior" : "Duke Nukem 3D");
+    LOG_F(INFO, "Game selector: launching %s", name);
 }
 
 // Build a copy of argv with the selector's own options (-game <name>,
@@ -154,6 +171,10 @@ int app_main(int32_t argc, char const * const * argv)
     if (g_activeGame == 1)
         return SW_app_main(fargc, fargv);
 #endif
+#ifdef WITH_BLOOD
+    if (g_activeGame == 2)
+        return Blood_app_main(fargc, fargv);
+#endif
     return Duke_app_main(fargc, fargv);
 }
 
@@ -164,6 +185,9 @@ extern "C" const char *G_DefaultDefFile(void)
 #ifdef WITH_SW
     if (g_activeGame == 1) return SW_G_DefaultDefFile();
 #endif
+#ifdef WITH_BLOOD
+    if (g_activeGame == 2) return Blood_G_DefaultDefFile();
+#endif
     return Duke_G_DefaultDefFile();
 }
 
@@ -171,6 +195,9 @@ extern "C" void faketimerhandler(void)
 {
 #ifdef WITH_SW
     if (g_activeGame == 1) { SW_faketimerhandler(); return; }
+#endif
+#ifdef WITH_BLOOD
+    if (g_activeGame == 2) { Blood_faketimerhandler(); return; }
 #endif
     Duke_faketimerhandler();
 }
