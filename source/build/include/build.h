@@ -1515,6 +1515,13 @@ extern int32_t (*loadboard_replace)(const char *filename, char flags, vec3_t *da
 extern int32_t (*saveboard_replace)(const char *filename, const vec3_t *dapos, int16_t daang, int16_t dacursectnum);
 extern int32_t bloodhack;  // NotBlood: alters YAX wall-pointer arithmetic for Blood maps
 
+// Blood (NotBlood) room-over-room (ROR) compat. POLYMER is -DPOLYMER=0 here (no
+// real Polymer), so these are stubs: the globals exist and the callback setter is
+// a no-op (Blood's ROR/stacked-sector visuals don't render under polymost).
+extern int32_t r_rortexture, r_rortexturerange, r_rorphase;
+typedef void (*rorcallback)(int16_t sectnum, int16_t wallnum, int8_t rorstat, int16_t *msectnum, int32_t *gx, int32_t *gy, int32_t *gz);
+void polymer_setrorcallback(rorcallback callback);
+
 int32_t   changespritesect(int16_t spritenum, int16_t newsectnum);
 int32_t   changespritestat(int16_t spritenum, int16_t newstatnum);
 int32_t   setsprite(int16_t spritenum, const vec3_t *) ATTRIBUTE((nonnull(2)));

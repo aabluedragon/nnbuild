@@ -8809,6 +8809,10 @@ int32_t r_mirrormode = 0, r_mirrormodemulti = 0;
 void videoMirrorTile(uint8_t *, int, int) {}
 void videoMirrorDrawing(void) {}
 
+// Blood (NotBlood) ROR compat stubs (no real Polymer; ROR visuals don't render).
+int32_t r_rortexture = 0, r_rortexturerange = 0, r_rorphase = 0;
+void polymer_setrorcallback(rorcallback) {}
+
 // Blood (NotBlood) engine override hooks (rest) + bloodhack flag. Default NULL/0.
 int32_t bloodhack = 0;
 int32_t (*animateoffs_replace)(int const tilenum, int fakevar) = NULL;

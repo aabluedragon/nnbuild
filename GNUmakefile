@@ -920,6 +920,51 @@ $(obj)/sw_merged.o: $(swmerge_objs) $(dukemerge_objs)
 vibebuild32_game_miscdeps += $(obj)/sw_merged.o
 endif
 
+# ---- WITH_BLOOD: link Blood (from NotBlood) into the vibebuild32 binary -------
+# Same pattern as WITH_SW. Blood's game objects are prelinked (ld -r) with the
+# game-internal symbols that also exist in Duke or SW localized. Blood's own
+# netcode (enet) is disabled (-DNETCODE_DISABLE); it will use shared mmulti.
+# Excludes: mapedit (editor), credits (smacker cutscenes), nnext* (modern-map
+# conditions), and Blood's startup window (Duke's serves all). Build with
+# WITH_SW=1 WITH_BLOOD=1. See source/blood/BLOOD_UNIFY.md. macOS (arm64) for now.
+ifeq ($(WITH_BLOOD),1)
+vibebuild32_cflags += -DWITH_BLOOD
+blood := blood
+blood_root := $(source)/blood
+blood_src := $(blood_root)/src
+blood_rsrc := $(blood_root)/rsrc
+blood_obj := $(obj)/blood
+blood_cflags := -I$(blood_src) -DNETCODE_DISABLE -Wno-c++11-narrowing -Wno-narrowing
+blood_game_deps := audiolib mact
+blood_game_objs := \
+    blood.cpp actor.cpp ai.cpp aibat.cpp aibeast.cpp aiboneel.cpp aiburn.cpp \
+    aicaleb.cpp aicerber.cpp aicult.cpp aigarg.cpp aighost.cpp aigilbst.cpp \
+    aihand.cpp aihound.cpp aiinnoc.cpp aipod.cpp airat.cpp aispid.cpp \
+    aitchern.cpp aizomba.cpp aizombf.cpp asound.cpp barf.cpp callback.cpp \
+    chatpipe.cpp choke.cpp common.cpp config.cpp controls.cpp db.cpp demo.cpp \
+    dude.cpp endgame.cpp eventq.cpp fire.cpp fx.cpp gamemenu.cpp gameutil.cpp \
+    getopt.cpp gfx.cpp gib.cpp globals.cpp gui.cpp inifile.cpp iob.cpp \
+    levels.cpp loadsave.cpp map2d.cpp menu.cpp messages.cpp mirrors.cpp \
+    misc.cpp network.cpp osdcmd.cpp player.cpp qav.cpp qheap.cpp replace.cpp \
+    resource.cpp screen.cpp sectorfx.cpp seq.cpp sfx.cpp sound.cpp tile.cpp \
+    trig.cpp triggers.cpp view.cpp warp.cpp weapon.cpp weather.cpp \
+    vb_compat.cpp \
+
+components += blood
+dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+bloodmerge_objs := $(addprefix $(blood_obj)/,$(addsuffix .$o,$(basename $(blood_game_objs))))
+
+$(obj)/blood_merged.o: $(bloodmerge_objs) $(dukemerge_objs) $(swmerge_objs)
+	@echo "Merging Blood objects (localizing game-internal collisions with Duke/SW)..."
+	@nm -g $(dukemerge_objs) $(swmerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/dukesw_strong.txt
+	@nm -g $(bloodmerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/blood_strong.txt
+	@comm -12 $(obj)/dukesw_strong.txt $(obj)/blood_strong.txt > $(obj)/blood_hide.txt
+	ld -r -arch arm64 $(bloodmerge_objs) -o $(obj)/blood_premerge.o
+	ld -r -arch arm64 $(obj)/blood_premerge.o -o $@ -unexported_symbols_list $(obj)/blood_hide.txt
+
+vibebuild32_game_miscdeps += $(obj)/blood_merged.o
+endif
+
 
 define BUILDRULE
 

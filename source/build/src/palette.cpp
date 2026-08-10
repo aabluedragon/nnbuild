@@ -34,6 +34,7 @@ float frealmaxshade;
 
 #if defined(USE_OPENGL)
 palette_t palookupfog[MAXPALOOKUPS];
+float palookupfogfactor[MAXPALOOKUPS];  // Blood (NotBlood) compat
 #endif
 
 // For every pal number, whether tsprite pal should not be taken over from
