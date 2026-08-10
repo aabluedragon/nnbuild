@@ -147,8 +147,12 @@ These must resolve to one definition that routes to the **active** game.
      New `-punchto <server>` / `-masteraddr <ms>` args (must precede `-net`).
      VERIFIED: an SW client auto-starting a net game toward an unreachable server
      logs `SW: requested NAT punch to <target> via masterserver <ep>` while waiting.
-   - [TODO] Masterserver client BROWSER (in-menu server list + pick-to-join). Needs
-     SW menu wiring; the query/response wire format is game-agnostic in masterserver.cpp.
+   - [DONE-BACKEND] Masterserver client LOBBY QUERY. `Net_QueryLobby()` (weak
+     `Masterserver_QueryList`) + `-lobbylist <addr>` arg. VERIFIED full round-trip:
+     an SW `-advertise` server registered, then an SW `-lobbylist` client fetched
+     it: `SW lobby: 1 server(s)` / `[0] ...:23513 "VibeBuild32 SW server" map=SW 1/1`.
+   - [TODO-UI] In-menu server BROWSER: wire the above list into SW's menus.cpp so a
+     player can see servers and pick-to-join (backend done; pure SW menu UI left).
    - [TODO] Mid-game join + file transfer with x-of-y (Duke `oldnet.cpp`, tied to
      Duke's connection protocol; SW has its own connect handshake).
    - [TODO] Deterministic lockstep / rejoin (the big one — replaces SW's

@@ -176,6 +176,7 @@ void Net_HostAdvertise(void);
 void Net_SetPunchTarget(const char *addr);  // client NAT-punch: server to reach
 void Net_SetMasterAddr(const char *addr);   // client NAT-punch: masterserver addr
 void Net_ClientPunchAttempt(void);
+int  Net_QueryLobby(const char *masterAddr); // client: fetch+log masterserver server list
 void SendMulitNameChange(char *new_name);
 void InitNetVars(void);
 void InitTimingVars(void);

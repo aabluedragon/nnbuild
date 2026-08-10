@@ -3292,6 +3292,11 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
             Net_SetMasterAddr(argv[i+1]);   // client: masterserver used for the punch
             i++;
         }
+        else if (!Bstrcasecmp(argv[i]+1, "lobbylist") && i+1 < argc)
+        {
+            Net_QueryLobby(argv[i+1]);      // client: query+log a masterserver's server list
+            i++;
+        }
         else if (!Bstrcasecmp(argv[i]+1, "?"))
         {
             CommandLineHelp(argv);

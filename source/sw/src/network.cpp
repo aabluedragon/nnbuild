@@ -1322,6 +1322,37 @@ static char s_swMasterAddr[128]  = "";
 void Net_SetPunchTarget(const char *addr) { Bstrncpyz(s_swPunchTarget, addr, sizeof(s_swPunchTarget)); }
 void Net_SetMasterAddr(const char *addr)  { Bstrncpyz(s_swMasterAddr,  addr, sizeof(s_swMasterAddr)); }
 
+// Client lobby query: ask a masterserver for its list of advertised servers.
+// This is the backend a future in-menu server browser calls; -lobbylist <addr>
+// exercises it from the console. The struct must match masterserver.h's
+// msserver_t layout exactly (we can't include that Duke-side header here).
+struct sw_msserver_t
+{
+    char    addr[128];
+    char    addr6[128];
+    char    name[32];
+    char    map[24];
+    int32_t players, maxplayers;
+};
+extern "C" int32_t Masterserver_QueryList(const char *masterAddr, void *out, int32_t maxout, int32_t timeoutMs) MS_WEAK;
+
+int Net_QueryLobby(const char *masterAddr)
+{
+    if (!Masterserver_QueryList)  // standalone SW: no masterserver linked
+    {
+        LOG_F(WARNING, "SW lobby query unavailable (no masterserver in this build)");
+        return -1;
+    }
+    sw_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(masterAddr, list, 16, 1500);
+    LOG_F(INFO, "SW lobby: %d server(s) at %s", (int)n, masterAddr);
+    for (int i = 0; i < n; i++)
+        LOG_F(INFO, "  [%d] %s  \"%s\"  map=%s  %d/%d",
+              i, list[i].addr[0] ? list[i].addr : list[i].addr6,
+              list[i].name, list[i].map, list[i].players, list[i].maxplayers);
+    return n;
+}
+
 void Net_ClientPunchAttempt(void)
 {
     if (!Masterserver_MakePunchReq)              // weak-absent in the standalone SW build
