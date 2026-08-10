@@ -84,7 +84,11 @@ char surfType[kMaxTiles];
 signed char tileShade[kMaxTiles];
 short voxelIndex[kMaxTiles];
 
-const char *pzBaseFileName = "TILES%03i.ART"; //"TILES%03i.ART";
+// VibeBuild32: the eduke32 engine's artGetIndexedFileName() does POSITIONAL digit
+// substitution on chars [5][6][7] of a literal "TILESNNN.ART" name — it does NOT
+// printf-expand "%03i". Passing the old "TILES%03i.ART" format produced the bogus
+// name "TILES000i.ART", so zero ART files loaded and the whole game rendered black.
+const char *pzBaseFileName = "TILES000.ART";
 
 int32_t MAXCACHE1DSIZE = (96*1024*1024);
 
