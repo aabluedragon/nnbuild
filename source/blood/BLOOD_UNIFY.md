@@ -58,6 +58,24 @@ didn't see every Blood header). The genuine ENGINE gaps to add to source/build:
     NotBlood's 2; loadboard is engineLoadBoard) + call sites: animateoffs,
     getpalookup, loadvoxel, loadboard (engineLoadBoard), saveboard,
     paletteLoadFromDisk. loadboard_replace is critical (Blood's map format).
+## Build-integration findings (measured)
+- Blood game source: copy NotBlood `source/blood/src` (88 .cpp) into our
+  `source/blood/src`. `blood_game_deps := audiolib mact libsmackerdec` (+enet).
+- We do NOT have libsmackerdec; Blood uses Smacker ONLY in `credits.cpp`
+  (cutscene playback) -> stub it out (Blood runs without cutscenes) rather than
+  vendoring libsmackerdec.
+- enet: not needed - Blood MP will use our shared mmulti like SW/Duke.
+- Engine gaps confirmed engine-level (add to source/build, stub the NotBlood mirror
+  feature): `MIRRORMODE`/`r_mirrormode`/`r_mirrormodemulti`/`videoMirror*`,
+  `VF_ROTATE`/`VF_RESERVE`, resolution globals `xdimgame`/`ydimgame`/`xdim2d`/`ydim2d`.
+- Engine gaps that are actually Blood-internal (resolve once each Blood .cpp is
+  built with its own headers, e.g. nnexts.h): `OBJ_SPRITE/WALL/SECTOR`,
+  `EVTIME2TICKS`, `kModern*`, `kDude*`, `cdudeGet`, `nnExt*`, `isUnderwaterSector`.
+- Struct fields DONE: `picanm_t.extra`, `hitdata_t.pos` alias.
+
+## DONE so far (all committed, Duke/SW verified unaffected)
+- struct aliases (2115->194), 5 sprite-mgmt engine hooks, picanm/hitdata fields.
+
 2. Add the bounded engine gaps above to source/build (structs, mirror globals,
    enums, input shims, `_replace` hooks).
 3. Compile Blood as a module (all 88 files + blood headers) → resolve the
