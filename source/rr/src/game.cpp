@@ -8304,7 +8304,9 @@ int RR_app_main(int argc, char const * const * argv)
     G_ScanGroups();
 
 #ifdef STARTUP_SETUP_WINDOW
-    if (readSetup < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_EDUKE32 || ud.setup.forcesetup)) || g_commandSetup)
+    // VibeBuild32: -nosetup must also skip the first-run (readSetup<0) startup window,
+    // else a fresh config hangs on a setup dialog we don't ship. Matches SW/Blood.
+    if ((readSetup < 0 && !g_noSetup) || (!g_noSetup && (ud.configversion != BYTEVERSION_EDUKE32 || ud.setup.forcesetup)) || g_commandSetup)
     {
         if (quitevent || !startwin_run())
         {
