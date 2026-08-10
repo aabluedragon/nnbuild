@@ -428,6 +428,63 @@ MenuItem network_extra_i[] =
 
 MenuGroup networkextragroup = {50, 5, "^Net Options", network_extra_i, pic_newgametitl, 0, m_defshade, NULL, NULL, 0};
 
+// --- In-menu server browser (VibeBuild32) -----------------------------------
+// A custom-draw menu group that lists servers advertised to the masterserver and
+// lets the player pick one; selecting relaunches into that server (SW connects at
+// startup, so joining is a re-exec with -net <server>). Backend in network.cpp.
+static sw_lobby_server s_sbList[16];
+static int s_sbCount = -2;   // -2 = not queried yet, -1 = query failed, >=0 = server count
+static int s_sbSel = 0;
+
+SWBOOL MNU_ServerBrowserDraw(UserCall UNUSED(call), MenuItem *UNUSED(item))
+{
+    char line[96];
+    if (s_sbCount == -2)   // query once on entry
+    {
+        s_sbSel = 0;
+        s_sbCount = Net_QueryLobbyList(Net_GetMasterAddr(), s_sbList, 16);
+    }
+    Bsnprintf(line, sizeof(line), "Masterserver: %s", Net_GetMasterAddr());
+    MNU_DrawString(20, 40, line, 1, 16);
+    if (s_sbCount <= 0)
+    {
+        MNU_DrawString(20, 58, s_sbCount == 0 ? "No servers found." : "Masterserver unavailable.", 1, 16);
+        MNU_DrawString(20, 72, "R = refresh    ESC = back", 1, 16);
+        return TRUE;
+    }
+    Bsnprintf(line, sizeof(line), "%d server(s):", s_sbCount);
+    MNU_DrawString(20, 54, line, 1, 16);
+    for (int i = 0; i < s_sbCount; i++)
+    {
+        Bsnprintf(line, sizeof(line), "%c %-16s %-8s %d/%d",
+                  i == s_sbSel ? '>' : ' ', s_sbList[i].name, s_sbList[i].map,
+                  s_sbList[i].players, s_sbList[i].maxplayers);
+        MNU_DrawString(20, 68 + i * 9, line, i == s_sbSel ? 0 : 12, 16);
+    }
+    MNU_DrawString(20, 68 + s_sbCount * 9 + 8, "ENTER = join   R = refresh   ESC = back", 1, 16);
+    return TRUE;
+}
+
+SWBOOL MNU_ServerBrowserMove(UserCall UNUSED(call), MenuItem *UNUSED(item))
+{
+    if (KB_KeyPressed(sc_UpArrow))   { KB_ClearKeyDown(sc_UpArrow);   if (s_sbSel > 0) s_sbSel--; }
+    if (KB_KeyPressed(sc_DownArrow)) { KB_ClearKeyDown(sc_DownArrow); if (s_sbSel < s_sbCount - 1) s_sbSel++; }
+    if (KB_KeyPressed(sc_R))         { KB_ClearKeyDown(sc_R); s_sbCount = -2; }  // refresh
+    if (KB_KeyPressed(sc_Enter) && s_sbCount > 0)
+    {
+        KB_ClearKeyDown(sc_Enter);
+        Net_JoinServerBrowser(s_sbList[s_sbSel].addr);
+    }
+    return TRUE;
+}
+
+MenuItem serverbrowser_i[] =
+{
+    {DefInert(0, " "), OPT_XS, OPT_LINE(0), 0, m_defshade, 0, NULL, NULL, NULL},
+    {DefNone}
+};
+MenuGroup serverbrowsergroup = {20, 5, "^Server Browser", serverbrowser_i, pic_newgametitl, 0, m_defshade, MNU_ServerBrowserDraw, MNU_ServerBrowserMove, 0};
+
 MenuItem network_i[] =
 {
     {DefSlider(sldr_gametype, 0, "Game Type"),   OPT_XS,         OPT_LINE(0), 1, m_defshade, 0, NULL, NULL, NULL},
@@ -452,6 +509,8 @@ MenuItem network_i[] =
 
     {DefInert(0, UserMapName),         OPT_XSIDE,                OPT_LINE(8), pic_episode1, m_defshade, 0, NULL, NULL, NULL},
     {DefOption(KEYSC_S, "Start Game"),   OPT_XS,                    OPT_LINE(8), pic_episode1, m_defshade, 0, MNU_StartNetGame, NULL, NULL},
+
+    {DefLayer(KEYSC_B, "Browse Servers", &serverbrowsergroup), OPT_XS, OPT_LINE(9), 1, m_defshade, 0, NULL, NULL, NULL},  // VibeBuild32: in-menu server browser
 
     {DefNone}
 

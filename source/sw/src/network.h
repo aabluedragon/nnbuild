@@ -179,6 +179,12 @@ void Net_SetPunchTarget(const char *addr);  // client NAT-punch: server to reach
 void Net_SetMasterAddr(const char *addr);   // client NAT-punch: masterserver addr
 void Net_ClientPunchAttempt(void);
 int  Net_QueryLobby(const char *masterAddr); // client: fetch+log masterserver server list
+
+// In-menu server browser (menus.cpp) support.
+struct sw_lobby_server { char addr[128]; char name[32]; char map[24]; int players, maxplayers; };
+int   Net_QueryLobbyList(const char *masterAddr, struct sw_lobby_server *out, int maxout);
+const char *Net_GetMasterAddr(void);          // masterserver for the browser (-masteraddr, else default)
+void  Net_JoinServerBrowser(const char *serverAddr);  // join a browser-picked server
 void Net_SetAutoJoin(const char *masterAddr); // -joinlobby: query+join first server
 int  Net_ResolveAutoJoin(void);               // returns 1 + fills s_autoJoinServer if a server was picked
 void Net_AddNetFile(const char *path);        // host: offer this file to joiners (-netfile)

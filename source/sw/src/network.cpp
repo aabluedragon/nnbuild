@@ -38,6 +38,13 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 #include "weapon.h"
 #include "text.h"
+
+#if defined __APPLE__
+# include <mach-o/dyld.h>   // _NSGetExecutablePath (server-browser relaunch)
+#endif
+#if defined __APPLE__ || defined __linux__
+# include <unistd.h>        // execv, chdir, readlink
+#endif
 #include "menus.h"
 
 
@@ -1351,6 +1358,56 @@ int Net_QueryLobby(const char *masterAddr)
               i, list[i].addr[0] ? list[i].addr : list[i].addr6,
               list[i].name, list[i].map, list[i].players, list[i].maxplayers);
     return n;
+}
+
+// --- in-menu server browser backend -----------------------------------------
+int Net_QueryLobbyList(const char *masterAddr, sw_lobby_server *out, int maxout)
+{
+    if (!Masterserver_QueryList) return -1;
+    sw_msserver_t list[16];
+    int const cap = maxout < 16 ? maxout : 16;
+    int32_t const n = Masterserver_QueryList(masterAddr, list, cap, 1200);
+    for (int i = 0; i < n && i < maxout; i++)
+    {
+        Bstrncpyz(out[i].addr, list[i].addr[0] ? list[i].addr : list[i].addr6, sizeof(out[i].addr));
+        Bstrncpyz(out[i].name, list[i].name, sizeof(out[i].name));
+        Bstrncpyz(out[i].map,  list[i].map,  sizeof(out[i].map));
+        out[i].players = list[i].players;
+        out[i].maxplayers = list[i].maxplayers;
+    }
+    return n;
+}
+
+const char *Net_GetMasterAddr(void) { return s_swMasterAddr[0] ? s_swMasterAddr : "127.0.0.1"; }
+
+// The SW mmulti connection is established at startup from -net args, not from the
+// menu; the cleanest way to join a browser-picked server is to relaunch into that
+// connection. Re-exec ourselves with -game sw -net <server>.
+void Net_JoinServerBrowser(const char *serverAddr)
+{
+#if defined __APPLE__ || defined __linux__
+    char exe[BMAX_PATH] = "";
+# if defined __APPLE__
+    uint32_t sz = sizeof(exe);
+    if (_NSGetExecutablePath(exe, &sz) != 0) { LOG_F(ERROR, "browser: can't find exe path"); return; }
+# else
+    ssize_t const r = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+    if (r <= 0) { LOG_F(ERROR, "browser: can't find exe path"); return; }
+    exe[r] = 0;
+# endif
+    static char sarg[128];  Bstrncpyz(sarg,  serverAddr, sizeof(sarg));
+    static char maddr[136]; Bstrncpyz(maddr, Net_GetMasterAddr(), sizeof(maddr));
+    char const *args[] = { exe, (char*)"-game", (char*)"sw", (char*)"-nosetup",
+                           (char*)"-masteraddr", maddr, (char*)"-net", sarg, NULL };
+    // The selector chdir'd us into sw/; back out so the relaunch re-selects the game.
+    if (chdir("..") != 0) { /* best effort */ }
+    LOG_F(INFO, "Server browser: joining %s (relaunching)...", serverAddr);
+    execv(exe, (char * const *)args);
+    LOG_F(ERROR, "Server browser: relaunch failed (execv)");
+#else
+    (void)serverAddr;
+    LOG_F(WARNING, "Server browser join not supported on this platform");
+#endif
 }
 
 // -joinlobby <masteraddr>: query the masterserver, pick the first advertised
