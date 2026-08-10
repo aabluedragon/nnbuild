@@ -182,6 +182,11 @@ void G_CheckCommandLine(int argc, char const* const* argv)
             c = const_cast<char*>(argv[i]);
             if (((*c == '/') || (*c == '-')) && (!firstnet))
             {
+                // VibeBuild32 modern args: accept "--foo" as "-foo" so every Duke option
+                // gains a long form, matching RR/SW/Blood (e.g. --cfg, --map, --nosetup, --nologo).
+                if (c[0] == '-' && c[1] == '-' && c[2])
+                    c++;
+
                 if (!Bstrcasecmp(c + 1, "?") || !Bstrcasecmp(c + 1, "help") || !Bstrcasecmp(c + 1, "-help"))
                 {
                     G_ShowParameterHelp();
@@ -410,7 +415,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "x"))
+                if (!Bstrcasecmp(c + 1, "x") || !Bstrcasecmp(c + 1, "con"))   // VibeBuild32 canonical: --con
                 {
                     if (argc > i + 1)
                     {
@@ -618,6 +623,31 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 netparam[i - firstnet - 1] = const_cast<char*>(argv[i]);
                 i++;
                 continue;
+            }
+
+            // VibeBuild32: canonical long aliases for the value-taking single-char options
+            // below. Rewrite "--name value"/"--name=value" to the short "-Xvalue" form the
+            // switch already handles, so Duke matches RR/SW/Blood option names.
+            static char s_optbuf[BMAX_PATH + 4];
+            if (c[0] == '-')
+            {
+                static const struct { const char *lng; char shrt; int val; } aliases[] = {
+                    { "level",'l',1 }, { "volume",'v',1 }, { "skill",'s',1 }, { "coop",'c',1 },
+                    { "players",'q',1 }, { "respawn",'t',1 }, { "weapons",'u',1 }, { "def",'h',1 },
+                    { "path",'j',1 }, { "demo",'d',1 },
+                };
+                char name[24]; const char *inlineVal = Bstrchr(c + 1, '=');
+                if (inlineVal) { int n = min((int)(inlineVal - (c + 1)), 23); Bmemcpy(name, c + 1, n); name[n] = 0; inlineVal++; }
+                else Bstrncpyz(name, c + 1, sizeof(name));
+                for (auto const & al : aliases)
+                {
+                    if (Bstrcasecmp(name, al.lng)) continue;
+                    const char *v = inlineVal ? inlineVal : (al.val && i + 1 < argc ? argv[i + 1] : "");
+                    Bsnprintf(s_optbuf, sizeof(s_optbuf), "-%c%s", al.shrt, al.val ? v : "");
+                    if (al.val && !inlineVal && i + 1 < argc) i++;   // consumed the separate value token
+                    c = s_optbuf;
+                    break;
+                }
             }
 
             if ((*c == '/') || (*c == '-'))

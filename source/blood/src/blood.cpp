@@ -1440,6 +1440,7 @@ SWITCH switches[] = {
     { "control", 16, 1 },
     { "vector", 17, 1 },
     { "quick", 18, 0 },
+    { "nologo", 18, 0 },   // VibeBuild32: canonical cross-game name for skip-intro (alias of -quick)
     //{ "getopt", 19, 1 },
     { "auto", 20, 0 },
     { "pname", 21, 1 },
