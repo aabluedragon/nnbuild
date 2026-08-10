@@ -1410,6 +1410,7 @@ void ProcessFrame(void)
 SWITCH switches[] = {
     { "?", 0, 0 },
     { "help", 0, 0 },
+    { "h", 0, 0 },           // VibeBuild32: -h / --help
     { "broadcast", 1, 0 },
     { "advertise", 80, 1 },  // VibeBuild32: advertise this server to a masterserver
     { "lobbylist", 81, 1 },  // VibeBuild32: query a masterserver's server list
@@ -1418,6 +1419,7 @@ SWITCH switches[] = {
     { "headless", 84, 0 },   // VibeBuild32: windowless server (engine sets g_forceHeadless)
     { "dedicated", 84, 0 },
     { "console", 84, 0 },
+    { "l", 4, 2 },           // VibeBuild32: -l / --level <episode> <level>
     { "map", 2, 1 },
     { "masterslave", 3, 0 },
     { "level", 4, 2 },

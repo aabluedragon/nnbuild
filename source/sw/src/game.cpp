@@ -3291,48 +3291,44 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     };
     for (i=1; i<argc; i++)
     {
-        if (argv[i][0] != '-'
-#ifdef _WIN32
-            && argv[i][0] != '/'
-#endif
-            )
-        {
+        if (argv[i][0] != '-')   // VibeBuild32 modern args: dash only, no slash
             continue;
-        }
-        if (!Bstrcasecmp(argv[i]+1, "setup"))
+        // Option name with leading dashes stripped, so "-foo" and "--foo" both work.
+        const char *o = (argv[i][1] == '-') ? argv[i] + 2 : argv[i] + 1;
+        if (!Bstrcasecmp(o, "setup"))
         {
             CommandSetup = TRUE;
             g_noSetup = 0;
         }
-        else if (!Bstrcasecmp(argv[i]+1, "nosetup"))
+        else if (!Bstrcasecmp(o, "nosetup"))
         {
             CommandSetup = FALSE;
             g_noSetup = 1;
         }
-        else if (!Bstrcasecmp(argv[i]+1, "nologo") || !Bstrcasecmp(argv[i]+1, "quick"))
+        else if (!Bstrcasecmp(o, "nologo") || !Bstrcasecmp(o, "quick"))
         {
             g_noLogo = 1;
         }
-        else if (!Bstrcasecmp(argv[i]+1, "punchto") && i+1 < argc)
+        else if (!Bstrcasecmp(o, "punchto") && i+1 < argc)
         {
             Net_SetPunchTarget(argv[i+1]);  // SW-specific: client NAT-punch toward this server
             i++;
         }
-        else if (!Bstrcasecmp(argv[i]+1, "masteraddr") && i+1 < argc)
+        else if (!Bstrcasecmp(o, "masteraddr") && i+1 < argc)
         {
             Net_SetMasterAddr(argv[i+1]);   // SW-specific: masterserver used for the punch
             i++;
         }
-        else if (!Bstrcasecmp(argv[i]+1, "joinlobby") && i+1 < argc)
+        else if (!Bstrcasecmp(o, "joinlobby") && i+1 < argc)
         {
             Net_SetAutoJoin(argv[i+1]);     // SW-specific: query masterserver + auto-join (relaunch)
             i++;
         }
-        else if (int const nc = VB_NetArg(&swNetArg, argv[i]+1, (i+1 < argc) ? argv[i+1] : nullptr))
+        else if (int const nc = VB_NetArg(&swNetArg, o, (i+1 < argc) ? argv[i+1] : nullptr))
         {
             i += nc - 1;   // shared: -advertise/-lobbylist/-netfile/-headless (the for-loop does one ++)
         }
-        else if (!Bstrcasecmp(argv[i]+1, "?"))
+        else if (!Bstrcasecmp(o, "?") || !Bstrcasecmp(o, "h") || !Bstrcasecmp(o, "help"))
         {
             CommandLineHelp(argv);
             return 0;

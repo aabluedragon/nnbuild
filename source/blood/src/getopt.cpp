@@ -31,7 +31,7 @@ char const * const *margv;
 const char *OptArgv[16];
 int OptArgc;
 const char *OptFull;
-const char *SwitchChars = "-/";
+const char *SwitchChars = "-";   // VibeBuild32: modern args - dash only, no slash options
 
 int GetOptions(SWITCH *switches)
 {
@@ -51,7 +51,7 @@ int GetOptions(SWITCH *switches)
         pChar = NULL;
         return kOptFull;
     }
-    pChar++;
+    while (*pChar && strchr(SwitchChars, *pChar)) pChar++;   // VibeBuild32: accept --long too
     int i;
     int nID;
     for (i = 0; true; i++)
