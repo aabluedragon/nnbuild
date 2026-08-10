@@ -965,6 +965,44 @@ $(obj)/blood_merged.o: $(bloodmerge_objs) $(dukemerge_objs) $(swmerge_objs)
 vibebuild32_game_miscdeps += $(obj)/blood_merged.o
 endif
 
+# ---- WITH_RR: link Redneck Rampage (from Rednukem/NBlood) into vibebuild32 ----
+# RR is a Duke-engine variant (eduke32 lineage, like our Duke code), so it compiles
+# against our engine cleanly; it collides heavily with our Duke code, so the ld -r
+# merge localizes ALL of the game-internal collisions (vs Duke/SW/Blood). Excludes
+# the Mapster32 editor (astub/m32*/sounds_mapster32), platform-only files
+# (in_android/mdump/winbits) and the startup window (Duke's serves all). Build with
+# WITH_SW=1 WITH_BLOOD=1 WITH_RR=1. See source/rr/RR_UNIFY.md. macOS (arm64) for now.
+ifeq ($(WITH_RR),1)
+vibebuild32_cflags += -DWITH_RR
+rr := rr
+rr_root := $(source)/rr
+rr_src := $(rr_root)/src
+rr_obj := $(obj)/rr
+rr_cflags := -I$(rr_src) -Wno-c++11-narrowing -Wno-narrowing
+rr_game_deps := audiolib mact
+rr_game_objs := \
+    actors.cpp anim.cpp cheats.cpp cmdline.cpp common.cpp config.cpp demo.cpp \
+    filestream.cpp game.cpp gamedef.cpp gameexec.cpp gamestructures.cpp gamevars.cpp \
+    global.cpp grpscan.cpp input.cpp menus.cpp namesdyn.cpp net.cpp osdcmds.cpp \
+    osdfuncs.cpp player.cpp playmve.cpp premap.cpp rrdh.cpp rts.cpp savegame.cpp \
+    sbar.cpp screens.cpp screentext.cpp sector.cpp sounds.cpp soundsdyn.cpp \
+    n64/reality_stubs.cpp \
+
+components += rr
+dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+rrmerge_objs := $(addprefix $(rr_obj)/,$(addsuffix .$o,$(basename $(rr_game_objs))))
+
+$(obj)/rr_merged.o: $(rrmerge_objs) $(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs)
+	@echo "Merging Redneck Rampage objects (localizing collisions with Duke/SW/Blood)..."
+	@nm -g $(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/dsb_strong.txt
+	@nm -g $(rrmerge_objs) 2>/dev/null | awk '$$2 ~ /^[TDBS]$$/{print $$3}' | sort -u > $(obj)/rr_strong.txt
+	@comm -12 $(obj)/dsb_strong.txt $(obj)/rr_strong.txt > $(obj)/rr_hide.txt
+	ld -r -arch arm64 $(rrmerge_objs) -o $(obj)/rr_premerge.o
+	ld -r -arch arm64 $(obj)/rr_premerge.o -o $@ -unexported_symbols_list $(obj)/rr_hide.txt
+
+vibebuild32_game_miscdeps += $(obj)/rr_merged.o
+endif
+
 
 define BUILDRULE
 

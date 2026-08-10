@@ -28,7 +28,8 @@
 # define gs_chdir chdir
 #endif
 
-// 0 = Duke3D (vibebuild32), 1 = Shadow Warrior, 2 = Blood. Read by the dispatchers.
+// 0 = Duke3D (vibebuild32), 1 = Shadow Warrior, 2 = Blood, 3 = Redneck Rampage.
+// Read by the dispatchers.
 int g_activeGame = 0;
 
 // --- each game's real entry + the callbacks both games define (renamed) -------
@@ -44,6 +45,11 @@ extern void SW_faketimerhandler(void);
 extern int Blood_app_main(int32_t argc, char const * const * argv);
 extern const char *Blood_G_DefaultDefFile(void);
 extern void Blood_faketimerhandler(void);
+#endif
+#ifdef WITH_RR
+extern int RR_app_main(int32_t argc, char const * const * argv);
+extern const char *RR_G_DefaultDefFile(void);
+extern void RR_faketimerhandler(void);
 #endif
 
 // --- helpers -----------------------------------------------------------------
@@ -75,17 +81,21 @@ static int gs_swAvail(char *dir, int sz)   { return gs_findGrp("SW.GRP", "sw", d
 // Blood ships BLOOD.RFF (resource file), in the cwd or a blood/ subdir.
 static int gs_bloodAvail(char *dir, int sz){ return gs_findGrp("BLOOD.RFF", "blood", dir, sz)
                                                   || gs_findGrp("blood.rff", "blood", dir, sz); }
+// Redneck Rampage ships REDNECK.GRP, in the cwd or an rr/ subdir.
+static int gs_rrAvail(char *dir, int sz)   { return gs_findGrp("REDNECK.GRP", "rr", dir, sz)
+                                                  || gs_findGrp("redneck.grp", "rr", dir, sz); }
 
 // First-cut picker: a console prompt listing whichever games are present.
 // (A graphical picker in the startup window is a follow-up.) Returns the game
-// index (0=Duke, 1=SW, 2=Blood).
-static int gs_menu(int dukeAvail, int swAvail, int bloodAvail)
+// index (0=Duke, 1=SW, 2=Blood, 3=Redneck Rampage).
+static int gs_menu(int dukeAvail, int swAvail, int bloodAvail, int rrAvail)
 {
-    int opt[3], nopt = 0;
+    int opt[4], nopt = 0;
     fprintf(stderr, "\nSelect a game:\n");
     if (dukeAvail)  { opt[nopt] = 0; fprintf(stderr, "  %d) Duke Nukem 3D\n",  nopt + 1); nopt++; }
     if (swAvail)    { opt[nopt] = 1; fprintf(stderr, "  %d) Shadow Warrior\n", nopt + 1); nopt++; }
     if (bloodAvail) { opt[nopt] = 2; fprintf(stderr, "  %d) Blood\n",          nopt + 1); nopt++; }
+    if (rrAvail)    { opt[nopt] = 3; fprintf(stderr, "  %d) Redneck Rampage\n", nopt + 1); nopt++; }
     if (nopt <= 1)
         return nopt == 1 ? opt[0] : 0;
     fprintf(stderr, "Choice [1]: ");
@@ -110,28 +120,34 @@ static void gs_choose(int argc, char const * const * argv)
         else if (!Bstrcasecmp(argv[i], "-nogamemenu")) bypass = 1;
     }
 
-    char dukeDir[BMAX_PATH] = "", swDir[BMAX_PATH] = "", bloodDir[BMAX_PATH] = "";
+    char dukeDir[BMAX_PATH] = "", swDir[BMAX_PATH] = "", bloodDir[BMAX_PATH] = "", rrDir[BMAX_PATH] = "";
     int const dukeAvail  = gs_dukeAvail(dukeDir, sizeof(dukeDir));
     int const swAvail    = gs_swAvail(swDir, sizeof(swDir));
     int const bloodAvail = gs_bloodAvail(bloodDir, sizeof(bloodDir));
+    int const rrAvail    = gs_rrAvail(rrDir, sizeof(rrDir));
+
+    // pick the first available game (Duke > SW > Blood > RR) as the fallback default
+    #define GS_FIRST_AVAIL (dukeAvail ? 0 : (swAvail ? 1 : (bloodAvail ? 2 : 3)))
 
     int sel = -1;
     if (want)
     {
         if (!Bstrcasecmp(want, "sw") || !Bstrcasecmp(want, "shadowwarrior")) sel = 1;
         else if (!Bstrcasecmp(want, "blood")) sel = 2;
+        else if (!Bstrcasecmp(want, "rr") || !Bstrcasecmp(want, "redneck") || !Bstrcasecmp(want, "redneckrampage")) sel = 3;
         else if (!Bstrcasecmp(want, "duke") || !Bstrcasecmp(want, "duke3d")) sel = 0;
     }
     if (sel < 0)
     {
-        int const nAvail = (dukeAvail ? 1 : 0) + (swAvail ? 1 : 0) + (bloodAvail ? 1 : 0);
+        int const nAvail = (dukeAvail ? 1 : 0) + (swAvail ? 1 : 0) + (bloodAvail ? 1 : 0) + (rrAvail ? 1 : 0);
         if (nAvail == 1)
-            sel = dukeAvail ? 0 : (swAvail ? 1 : 2);
+            sel = GS_FIRST_AVAIL;
         else if (nAvail > 1)
-            sel = bypass ? (dukeAvail ? 0 : (swAvail ? 1 : 2)) : gs_menu(dukeAvail, swAvail, bloodAvail);
+            sel = bypass ? GS_FIRST_AVAIL : gs_menu(dukeAvail, swAvail, bloodAvail, rrAvail);
         else
             sel = 0;  // none found; let Duke's normal grp search report it
     }
+    #undef GS_FIRST_AVAIL
 
 #ifndef WITH_SW
     if (sel == 1) sel = 0;  // SW not compiled in
@@ -139,10 +155,13 @@ static void gs_choose(int argc, char const * const * argv)
 #ifndef WITH_BLOOD
     if (sel == 2) sel = 0;  // Blood not compiled in
 #endif
+#ifndef WITH_RR
+    if (sel == 3) sel = 0;  // Redneck Rampage not compiled in
+#endif
     g_activeGame = sel;
 
-    const char *const name = (sel == 2) ? "Blood" : (sel == 1) ? "Shadow Warrior" : "Duke Nukem 3D";
-    const char *dir = (sel == 2) ? bloodDir : (sel == 1) ? swDir : dukeDir;
+    const char *const name = (sel == 3) ? "Redneck Rampage" : (sel == 2) ? "Blood" : (sel == 1) ? "Shadow Warrior" : "Duke Nukem 3D";
+    const char *dir = (sel == 3) ? rrDir : (sel == 2) ? bloodDir : (sel == 1) ? swDir : dukeDir;
     if (dir[0] && Bstrcmp(dir, "."))
     {
         if (gs_chdir(dir) == 0)
@@ -184,6 +203,10 @@ int app_main(int32_t argc, char const * const * argv)
     if (g_activeGame == 2)
         return Blood_app_main(fargc, fargv);
 #endif
+#ifdef WITH_RR
+    if (g_activeGame == 3)
+        return RR_app_main(fargc, fargv);
+#endif
     return Duke_app_main(fargc, fargv);
 }
 
@@ -197,6 +220,9 @@ extern "C" const char *G_DefaultDefFile(void)
 #ifdef WITH_BLOOD
     if (g_activeGame == 2) return Blood_G_DefaultDefFile();
 #endif
+#ifdef WITH_RR
+    if (g_activeGame == 3) return RR_G_DefaultDefFile();
+#endif
     return Duke_G_DefaultDefFile();
 }
 
@@ -207,6 +233,9 @@ extern "C" void faketimerhandler(void)
 #endif
 #ifdef WITH_BLOOD
     if (g_activeGame == 2) { Blood_faketimerhandler(); return; }
+#endif
+#ifdef WITH_RR
+    if (g_activeGame == 3) { RR_faketimerhandler(); return; }
 #endif
     Duke_faketimerhandler();
 }

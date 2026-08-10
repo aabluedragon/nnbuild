@@ -1656,6 +1656,11 @@ typedef struct
 EXTERN int32_t mdinited;
 EXTERN tile2model_t tile2model[MAXTILES+EXTRATILES];
 
+// Duke Nukem 64 (Reality) mode hooks. duke64 is 0 for every other game.
+// rt_tileload_callback is defined (=nullptr) in tiles.cpp, so declare it plain extern.
+EXTERN int32_t duke64;
+extern bool (*rt_tileload_callback)(int16_t tileNum);
+
 static FORCE_INLINE int32_t md_tilehasmodel(int32_t const tilenume, int32_t const pal)
 {
     return mdinited ? tile2model[Ptile2tile(tilenume,pal)].modelid : -1;
