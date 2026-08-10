@@ -171,6 +171,8 @@ extern SWBOOL AutoNet;
 
 void UpdateInputs(void);
 void getpackets(void);
+void Net_SetAdvertise(const char *addr);  // VibeBuild32 masterserver/lobby advertise
+void Net_HostAdvertise(void);
 void SendMulitNameChange(char *new_name);
 void InitNetVars(void);
 void InitTimingVars(void);

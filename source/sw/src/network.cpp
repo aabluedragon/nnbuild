@@ -1292,6 +1292,70 @@ checkmasterslaveswitch(void)
 {
 }
 
+// --- VibeBuild32 masterserver/lobby, ported onto SW's net path ----------------
+// The masterserver module (source/vibebuild32/src/masterserver.cpp) is only
+// linked in the combined `vibebuild32` binary, not in the standalone `sw`/voidsw
+// build. Declaring its API weak lets this same object file link both ways: in
+// the combined binary the symbols bind to Duke's game-agnostic implementation;
+// in the standalone SW build they stay null and every call is guarded away.
+#ifdef __GNUC__
+# define MS_WEAK __attribute__((weak))
+#else
+# define MS_WEAK
+#endif
+extern "C" {
+    void    Masterserver_SetAdvertise(const char *addr) MS_WEAK;
+    int32_t Masterserver_IsAdvertising(void) MS_WEAK;
+    void    Masterserver_AdvertisePulse(const char *name, int32_t gameport, int32_t players, int32_t maxplayers, const char *map) MS_WEAK;
+    void    Masterserver_AdvertiseStop(void) MS_WEAK;
+    void    Masterserver_SetPunchFn(void (*fn)(const char *)) MS_WEAK;
+    void    Masterserver_HostPump(void) MS_WEAK;
+}
+
+extern char LevelName[20];
+
+static void Net_AdvertiseStopAtExit(void)
+{
+    if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop();
+}
+
+// Enable advertising this server to a masterserver (from -advertise <addr>).
+void Net_SetAdvertise(const char *addr)
+{
+    if (!Masterserver_SetAdvertise)  // standalone SW: no masterserver linked
+        return;
+    Masterserver_SetAdvertise(addr);
+    static int atexitReg = 0;
+    if (!atexitReg) { atexit(Net_AdvertiseStopAtExit); atexitReg = 1; }  // graceful "going away"
+}
+
+// Called each net tic from getpackets(): service NAT-punch requests and pulse
+// this server's presence (host only). Mirrors Duke's Net_HostAdvertise().
+void Net_HostAdvertise(void)
+{
+    if (!Masterserver_IsAdvertising)  // weak-absent in the standalone SW build
+        return;
+    if (myconnectindex != connecthead || !Masterserver_IsAdvertising())
+        return;
+
+    static int punchFnRegistered = 0;
+    if (!punchFnRegistered && Masterserver_SetPunchFn)
+    {
+        Masterserver_SetPunchFn(mmulti_punchto_str);  // opens a NAT hole toward waiting clients
+        punchFnRegistered = 1;
+    }
+    if (Masterserver_HostPump)
+        Masterserver_HostPump();
+
+    char map[24];
+    Bstrncpyz(map, LevelName[0] ? LevelName : "SW", sizeof(map));
+
+    char const *name = Player[connecthead].PlayerName;
+    if (Masterserver_AdvertisePulse)
+        Masterserver_AdvertisePulse(name && name[0] ? name : "VibeBuild32 SW server",
+                                    mmulti_getport(), numplayers, numplayers, map);
+}
+
 void
 getpackets(void)
 {
@@ -1301,6 +1365,8 @@ getpackets(void)
     SW_PACKET tempinput;
 
     timerUpdateClock();
+
+    Net_HostAdvertise();  // masterserver/lobby heartbeat + NAT punch (host only)
 
     if (!CommEnabled)
         return;

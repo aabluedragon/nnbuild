@@ -3276,6 +3276,11 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
         {
             g_noLogo = 1;
         }
+        else if (!Bstrcasecmp(argv[i]+1, "advertise") && i+1 < argc)
+        {
+            Net_SetAdvertise(argv[i+1]);  // advertise this server to a masterserver/lobby
+            i++;
+        }
         else if (!Bstrcasecmp(argv[i]+1, "?"))
         {
             CommandLineHelp(argv);
