@@ -1078,6 +1078,7 @@ void netInitialize(bool bConsole)
         while (numplayers < gNetPlayers)
         {
             handleevents();
+            Net_HostAdvertise();  // VibeBuild32: advertise to the masterserver while waiting for joiners
             if (quitevent)
             {
                 netServerDisconnect();
