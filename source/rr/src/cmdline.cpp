@@ -649,7 +649,12 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                 case 'g':
                     c++;
                     if (*c)
+                    {
                         G_AddGroup(c);
+#ifndef NETCODE_DISABLE
+                        Net_AddNetFile(c);  // VibeBuild32: offer -g mods to joining clients
+#endif
+                    }
                     break;
                 case 'h':
                     c++;

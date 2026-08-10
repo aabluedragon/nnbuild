@@ -223,6 +223,10 @@ int     Net_QueryLobby(const char *masterAddr);
 void    Net_ClientPunch(void);
 int     Net_JoinLobby(const char *masterAddr);
 
+// VibeBuild32 lobby file transfer (host pushes custom content to joiners)
+void    Net_AddNetFile(const char *path);
+void    Net_SendGameFiles(ENetPeer *peer);
+
 // Packet Handlers
 #endif
 void    Net_ClearFIFO(void);
