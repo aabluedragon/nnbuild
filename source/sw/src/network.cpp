@@ -1450,6 +1450,163 @@ void Net_HostAdvertise(void)
                                     mmulti_getport(), numplayers, numplayers, map);
 }
 
+// ===== Mid-game file transfer (ported from Duke oldnet.cpp) ==================
+// Host streams the game files a joiner needs (extra GRPs given via -netfile, and
+// the current usermap) as two custom packets over mmulti's reliable channel; the
+// client dedups by size+CRC, writes any missing file, and mounts group files.
+#define SW_FILE_CHUNK_SIZE 1024
+extern char UserMapName[80];
+
+static uint32_t Net_FileCrc(const char *data, int len)  // FNV-1a, self-contained
+{
+    uint32_t h = 2166136261u;
+    for (int i = 0; i < len; i++) h = (h ^ (uint8_t)data[i]) * 16777619u;
+    return h;
+}
+static void     sw_put32(char *p, uint32_t v) { p[0]=(char)v; p[1]=(char)(v>>8); p[2]=(char)(v>>16); p[3]=(char)(v>>24); }
+static void     sw_put16(char *p, uint16_t v) { p[0]=(char)v; p[1]=(char)(v>>8); }
+static uint32_t sw_get32(const uint8_t *p) { return p[0]|(p[1]<<8)|(p[2]<<16)|((uint32_t)p[3]<<24); }
+static uint16_t sw_get16(const uint8_t *p) { return (uint16_t)(p[0]|(p[1]<<8)); }
+
+#define SW_MAX_NETFILES 8
+static char s_swNetFiles[SW_MAX_NETFILES][BMAX_PATH];
+static int  s_swNetFileCount = 0;
+void Net_AddNetFile(const char *path) { if (s_swNetFileCount < SW_MAX_NETFILES) Bstrncpyz(s_swNetFiles[s_swNetFileCount++], path, BMAX_PATH); }
+
+static int Net_HaveFile(const char *name, int size, uint32_t crc)
+{
+    int fil = kopen4loadfrommod(name, 0);
+    if (fil == -1) return 0;
+    int const len = kfilelength(fil);
+    if (len != size) { kclose(fil); return 0; }
+    char *tmp = (char *)Xmalloc(len + 1);
+    kread(fil, tmp, len); kclose(fil);
+    uint32_t const have = Net_FileCrc(tmp, len);
+    Xfree(tmp);
+    return have == crc;
+}
+
+#define SW_FILE_WANTS(i) ((i) != myconnectindex && (slot < 0 ? mmulti_slotconnected(i) : ((i) == slot && mmulti_slotconnected(i))))
+
+void Net_SendFile(int slot, const char *name, int fileIndex, int fileTotal)
+{
+    if (myconnectindex != connecthead) return;
+    int fil = kopen4loadfrommod(name, 0);
+    if (fil == -1) { LOG_F(WARNING, "Net_SendFile: can't open %s", name); return; }
+    int const size = kfilelength(fil);
+    char *data = (char *)Xmalloc(size + 1);
+    kread(fil, data, size); kclose(fil);
+    uint32_t const crc = Net_FileCrc(data, size);
+    int const total = (size + SW_FILE_CHUNK_SIZE - 1) / SW_FILE_CHUNK_SIZE;
+    LOG_F(INFO, "SW: sending %s (%d bytes, %d chunks)%s", name, size, total, slot < 0 ? " to all" : "");
+
+    char hdr[80]; int hl = 0;
+    hdr[hl++] = PACKET_TYPE_FILE_HEADER;
+    sw_put32(&hdr[hl], (uint32_t)size); hl += 4;
+    sw_put32(&hdr[hl], crc); hl += 4;
+    sw_put16(&hdr[hl], (uint16_t)total); hl += 2;
+    int const namelen = min((int)strlen(name), 63);
+    hdr[hl++] = (char)namelen;
+    Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
+    hdr[hl++] = (char)clamp(fileIndex, 1, 255);
+    hdr[hl++] = (char)clamp(fileTotal, 1, 255);
+    for (int i = 0; i < numplayers; i++)
+        if (SW_FILE_WANTS(i)) mmulti_sendpacket(i, (unsigned char *)hdr, hl);
+
+    char chunk[SW_FILE_CHUNK_SIZE + 8];
+    for (int seq = 0; seq < total; seq++)
+    {
+        int const len = min(SW_FILE_CHUNK_SIZE, size - seq * SW_FILE_CHUNK_SIZE);
+        chunk[0] = PACKET_TYPE_FILE_CHUNK;
+        sw_put16(&chunk[1], (uint16_t)seq);
+        sw_put16(&chunk[3], (uint16_t)total);
+        sw_put16(&chunk[5], (uint16_t)len);
+        Bmemcpy(&chunk[7], &data[seq * SW_FILE_CHUNK_SIZE], len);
+        for (int i = 0; i < numplayers; i++)
+            if (SW_FILE_WANTS(i)) mmulti_sendpacket(i, (unsigned char *)chunk, len + 7);
+    }
+    Xfree(data);
+}
+#undef SW_FILE_WANTS
+
+// Host: push every file a joiner needs (extra GRPs + the current usermap).
+void Net_SendGameFiles(int slot)
+{
+    if (myconnectindex != connecthead) return;
+    int const total = s_swNetFileCount + (UserMapName[0] ? 1 : 0);
+    if (total == 0) return;
+    int idx = 0;
+    for (int i = 0; i < s_swNetFileCount; i++) Net_SendFile(slot, s_swNetFiles[i], ++idx, total);
+    if (UserMapName[0]) Net_SendFile(slot, UserMapName, ++idx, total);
+}
+
+static char    *g_swRecvBuf = NULL;
+static int      g_swRecvChunkTotal = 0, g_swRecvChunksGot = 0, g_swRecvLastLen = 0;
+static uint32_t g_swRecvCrc = 0;
+static char     g_swRecvName[64];
+
+static void Net_ReceiveFileHeader(void)
+{
+    int j = 1;
+    int const size = (int)sw_get32(&packbuf[j]); j += 4;
+    g_swRecvCrc = sw_get32(&packbuf[j]); j += 4;
+    g_swRecvChunkTotal = sw_get16(&packbuf[j]); j += 2;
+    int const namelen = (uint8_t)packbuf[j++];
+    Bmemcpy(g_swRecvName, &packbuf[j], min(namelen, 63)); g_swRecvName[min(namelen, 63)] = 0; j += namelen;
+    int const fileIndex = (uint8_t)packbuf[j++];
+    int const fileTotal = (uint8_t)packbuf[j++];
+    char ofY[24] = ""; if (fileTotal > 1) Bsnprintf(ofY, sizeof(ofY), " (file %d of %d)", fileIndex, fileTotal);
+
+    DO_FREE_AND_NULL(g_swRecvBuf); g_swRecvChunksGot = 0;
+    if (Net_HaveFile(g_swRecvName, size, g_swRecvCrc))
+    {
+        LOG_F(INFO, "SW: host offered %s (%d bytes); already have it%s, skipping", g_swRecvName, size, ofY);
+        return;  // leaving g_swRecvBuf NULL makes the streamed chunks no-ops
+    }
+    if (g_swRecvChunkTotal > 0) g_swRecvBuf = (char *)Xmalloc(g_swRecvChunkTotal * SW_FILE_CHUNK_SIZE);
+    LOG_F(INFO, "SW: receiving %s (%d bytes) from host%s", g_swRecvName, size, ofY);
+}
+
+static void Net_ReceiveFileChunk(void)
+{
+    if (!g_swRecvBuf) return;
+    int const seq = sw_get16(&packbuf[1]);
+    int const total = sw_get16(&packbuf[3]);
+    int const len = sw_get16(&packbuf[5]);
+    if (total != g_swRecvChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > SW_FILE_CHUNK_SIZE) return;
+    Bmemcpy(&g_swRecvBuf[seq * SW_FILE_CHUNK_SIZE], &packbuf[7], len);
+    g_swRecvChunksGot++;
+    if (seq == total - 1) g_swRecvLastLen = len;
+    if (g_swRecvChunksGot < g_swRecvChunkTotal) return;
+
+    int const filesize = (g_swRecvChunkTotal - 1) * SW_FILE_CHUNK_SIZE + g_swRecvLastLen;
+    uint32_t const crc = Net_FileCrc(g_swRecvBuf, filesize);
+    if (crc != g_swRecvCrc)
+    {
+        LOG_F(ERROR, "SW: received %s but CRC mismatch; discarding", g_swRecvName);
+        DO_FREE_AND_NULL(g_swRecvBuf); return;
+    }
+    const char *fslash = Bstrrchr(g_swRecvName, '/');
+    const char *bslash = Bstrrchr(g_swRecvName, '\\');
+    const char *base = max(fslash, bslash); base = base ? base + 1 : g_swRecvName;
+    if (base[0] == 0 || Bstrstr(base, ".."))
+    {
+        LOG_F(ERROR, "SW: refusing received file with unsafe name '%s'", g_swRecvName);
+        DO_FREE_AND_NULL(g_swRecvBuf); return;
+    }
+    buildvfs_FILE fp = buildvfs_fopen_write(base);
+    if (fp)
+    {
+        buildvfs_fwrite(g_swRecvBuf, 1, filesize, fp); buildvfs_fclose(fp);
+        LOG_F(INFO, "SW: wrote %s (%d bytes)", base, filesize);
+        const char *ext = Bstrrchr(g_swRecvName, '.');
+        if (ext && (!Bstrcasecmp(ext, ".grp") || !Bstrcasecmp(ext, ".zip") || !Bstrcasecmp(ext, ".pk3") || !Bstrcasecmp(ext, ".pk4")))
+            if (initgroupfile(base) != -1) LOG_F(INFO, "SW: mounted received group file %s", base);
+    }
+    else LOG_F(ERROR, "SW: couldn't write received file %s", base);
+    DO_FREE_AND_NULL(g_swRecvBuf);
+}
+
 void
 getpackets(void)
 {
@@ -1807,6 +1964,13 @@ getpackets(void)
 
         case PACKET_TYPE_PROXY:
             LOG_F(ERROR, "getpackets(): nested proxy packets!?");
+            break;
+
+        case PACKET_TYPE_FILE_HEADER:   // mid-game file transfer (host -> joiner)
+            Net_ReceiveFileHeader();
+            break;
+        case PACKET_TYPE_FILE_CHUNK:
+            Net_ReceiveFileChunk();
             break;
 
         default:

@@ -901,6 +901,14 @@ InitGame(int32_t argc, char const * const * argv)
             }
         }
     }
+
+    // Host streams any joiner-needed files (extra GRPs from -netfile + the
+    // usermap) now that everyone is connected but before the level loads, so a
+    // client that lacks a mod downloads+mounts it first. mmulti is reliable, so
+    // the bytes land before the shared level load reads them.
+    if (numplayers > 1 && myconnectindex == connecthead)
+        Net_SendGameFiles(-1);
+
     initsynccrc();
 
     // code to duplicate packets
@@ -3317,6 +3325,11 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
         else if (!Bstrcasecmp(argv[i]+1, "joinlobby") && i+1 < argc)
         {
             Net_SetAutoJoin(argv[i+1]);     // client: query masterserver + auto-join first server
+            i++;
+        }
+        else if (!Bstrcasecmp(argv[i]+1, "netfile") && i+1 < argc)
+        {
+            Net_AddNetFile(argv[i+1]);      // host: offer this file to joiners (mid-game transfer)
             i++;
         }
         else if (!Bstrcasecmp(argv[i]+1, "?"))
