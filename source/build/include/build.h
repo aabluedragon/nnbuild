@@ -1496,6 +1496,15 @@ void do_deletespritesect(int16_t deleteme);
 int32_t insertsprite(int16_t sectnum, int16_t statnum);
 int32_t deletesprite(int16_t spritenum);
 
+// Blood (NotBlood) engine override hooks: nullable function pointers the game can
+// set to replace core engine behavior. Default NULL -> stock behavior, so Duke/SW
+// are unaffected. See source/blood/BLOOD_UNIFY.md.
+extern int32_t (*insertsprite_replace)(int16_t sectnum, int16_t statnum);
+extern int32_t (*deletesprite_replace)(int16_t spritenum);
+extern int32_t (*changespritesect_replace)(int16_t spritenum, int16_t newsectnum);
+extern int32_t (*changespritestat_replace)(int16_t spritenum, int16_t newstatnum);
+extern void    (*initspritelists_replace)(void);
+
 int32_t   changespritesect(int16_t spritenum, int16_t newsectnum);
 int32_t   changespritestat(int16_t spritenum, int16_t newstatnum);
 int32_t   setsprite(int16_t spritenum, const vec3_t *) ATTRIBUTE((nonnull(2)));

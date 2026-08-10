@@ -51,6 +51,13 @@ didn't see every Blood header). The genuine ENGINE gaps to add to source/build:
 
 ## Remaining steps
 1. (done) struct aliases → 2115→194, verified safe.
+1b. (done) 5 core engine override hooks added to engine.cpp + build.h, all
+    null-default (Duke/SW unaffected, combined binary verified): insertsprite,
+    deletesprite, changespritesect, changespritestat, initspritelists. Remaining
+    hooks need minor signature reconciliation (our animateoffs takes 1 arg vs
+    NotBlood's 2; loadboard is engineLoadBoard) + call sites: animateoffs,
+    getpalookup, loadvoxel, loadboard (engineLoadBoard), saveboard,
+    paletteLoadFromDisk. loadboard_replace is critical (Blood's map format).
 2. Add the bounded engine gaps above to source/build (structs, mirror globals,
    enums, input shims, `_replace` hooks).
 3. Compile Blood as a module (all 88 files + blood headers) → resolve the
