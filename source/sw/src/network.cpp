@@ -1495,18 +1495,7 @@ static char s_swNetFiles[VB_MAX_NETFILES][BMAX_PATH];
 static int  s_swNetFileCount = 0;
 void Net_AddNetFile(const char *path) { if (s_swNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_swNetFiles[s_swNetFileCount++], path, BMAX_PATH); }
 
-static int Net_HaveFile(const char *name, int size, uint32_t crc)
-{
-    int fil = kopen4loadfrommod(name, 0);
-    if (fil == -1) return 0;
-    int const len = kfilelength(fil);
-    if (len != size) { kclose(fil); return 0; }
-    char *tmp = (char *)Xmalloc(len + 1);
-    kread(fil, tmp, len); kclose(fil);
-    uint32_t const have = VB_FileCrc(tmp, len);
-    Xfree(tmp);
-    return have == crc;
-}
+// VB_HaveFile (shared dedup check) lives in netshared.h.
 
 #define SW_FILE_WANTS(i) ((i) != myconnectindex && (slot < 0 ? mmulti_slotconnected(i) : ((i) == slot && mmulti_slotconnected(i))))
 
@@ -1562,72 +1551,9 @@ void Net_SendGameFiles(int slot)
     if (UserMapName[0]) Net_SendFile(slot, UserMapName, ++idx, total);
 }
 
-static char    *g_swRecvBuf = NULL;
-static int      g_swRecvChunkTotal = 0, g_swRecvChunksGot = 0, g_swRecvLastLen = 0;
-static uint32_t g_swRecvCrc = 0;
-static char     g_swRecvName[64];
-
-static void Net_ReceiveFileHeader(void)
-{
-    int j = 1;
-    int const size = (int)VB_get32(&packbuf[j]); j += 4;
-    g_swRecvCrc = VB_get32(&packbuf[j]); j += 4;
-    g_swRecvChunkTotal = VB_get16(&packbuf[j]); j += 2;
-    int const namelen = (uint8_t)packbuf[j++];
-    Bmemcpy(g_swRecvName, &packbuf[j], min(namelen, 63)); g_swRecvName[min(namelen, 63)] = 0; j += namelen;
-    int const fileIndex = (uint8_t)packbuf[j++];
-    int const fileTotal = (uint8_t)packbuf[j++];
-    char ofY[24] = ""; if (fileTotal > 1) Bsnprintf(ofY, sizeof(ofY), " (file %d of %d)", fileIndex, fileTotal);
-
-    DO_FREE_AND_NULL(g_swRecvBuf); g_swRecvChunksGot = 0;
-    if (Net_HaveFile(g_swRecvName, size, g_swRecvCrc))
-    {
-        LOG_F(INFO, "SW: host offered %s (%d bytes); already have it%s, skipping", g_swRecvName, size, ofY);
-        return;  // leaving g_swRecvBuf NULL makes the streamed chunks no-ops
-    }
-    if (g_swRecvChunkTotal > 0) g_swRecvBuf = (char *)Xmalloc(g_swRecvChunkTotal * VB_FILE_CHUNK_SIZE);
-    LOG_F(INFO, "SW: receiving %s (%d bytes) from host%s", g_swRecvName, size, ofY);
-}
-
-static void Net_ReceiveFileChunk(void)
-{
-    if (!g_swRecvBuf) return;
-    int const seq = VB_get16(&packbuf[1]);
-    int const total = VB_get16(&packbuf[3]);
-    int const len = VB_get16(&packbuf[5]);
-    if (total != g_swRecvChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > VB_FILE_CHUNK_SIZE) return;
-    Bmemcpy(&g_swRecvBuf[seq * VB_FILE_CHUNK_SIZE], &packbuf[7], len);
-    g_swRecvChunksGot++;
-    if (seq == total - 1) g_swRecvLastLen = len;
-    if (g_swRecvChunksGot < g_swRecvChunkTotal) return;
-
-    int const filesize = (g_swRecvChunkTotal - 1) * VB_FILE_CHUNK_SIZE + g_swRecvLastLen;
-    uint32_t const crc = VB_FileCrc(g_swRecvBuf, filesize);
-    if (crc != g_swRecvCrc)
-    {
-        LOG_F(ERROR, "SW: received %s but CRC mismatch; discarding", g_swRecvName);
-        DO_FREE_AND_NULL(g_swRecvBuf); return;
-    }
-    const char *fslash = Bstrrchr(g_swRecvName, '/');
-    const char *bslash = Bstrrchr(g_swRecvName, '\\');
-    const char *base = max(fslash, bslash); base = base ? base + 1 : g_swRecvName;
-    if (base[0] == 0 || Bstrstr(base, ".."))
-    {
-        LOG_F(ERROR, "SW: refusing received file with unsafe name '%s'", g_swRecvName);
-        DO_FREE_AND_NULL(g_swRecvBuf); return;
-    }
-    buildvfs_FILE fp = buildvfs_fopen_write(base);
-    if (fp)
-    {
-        buildvfs_fwrite(g_swRecvBuf, 1, filesize, fp); buildvfs_fclose(fp);
-        LOG_F(INFO, "SW: wrote %s (%d bytes)", base, filesize);
-        const char *ext = Bstrrchr(g_swRecvName, '.');
-        if (ext && (!Bstrcasecmp(ext, ".grp") || !Bstrcasecmp(ext, ".zip") || !Bstrcasecmp(ext, ".pk3") || !Bstrcasecmp(ext, ".pk4")))
-            if (initgroupfile(base) != -1) LOG_F(INFO, "SW: mounted received group file %s", base);
-    }
-    else LOG_F(ERROR, "SW: couldn't write received file %s", base);
-    DO_FREE_AND_NULL(g_swRecvBuf);
-}
+static vb_filerecv_t s_swRecv;   // incoming file reassembly (shared receiver, netshared.h)
+// The file receiver (VB_RecvFileHeader/Chunk) reads SW's global packbuf; see the
+// dispatch below. Reassembly/CRC/write/mount are shared in netshared.h.
 
 void
 getpackets(void)
@@ -1989,10 +1915,10 @@ getpackets(void)
             break;
 
         case PACKET_TYPE_FILE_HEADER:   // mid-game file transfer (host -> joiner)
-            Net_ReceiveFileHeader();
+            VB_RecvFileHeader(&s_swRecv, (const uint8_t *)packbuf, "SW");
             break;
         case PACKET_TYPE_FILE_CHUNK:
-            Net_ReceiveFileChunk();
+            VB_RecvFileChunk(&s_swRecv, (const uint8_t *)packbuf, "SW");
             break;
 
         default:

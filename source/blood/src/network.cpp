@@ -342,25 +342,9 @@ short netGetPacket(short *pSource, char *pMessage)
 // Blood. Wire constants + crc/byte helpers are shared in netshared.h (VB_*).
 static char     s_blNetFiles[VB_MAX_NETFILES][BMAX_PATH];
 static int      s_blNetFileCount = 0;
-static char    *g_blRecvBuf = NULL;
-static int      g_blRecvChunkTotal = 0, g_blRecvChunksGot = 0, g_blRecvLastLen = 0;
-static uint32_t g_blRecvCrc = 0;
-static char     g_blRecvName[64];
+static vb_filerecv_t s_blRecv;   // incoming file reassembly (shared receiver, netshared.h)
 
 void Net_AddNetFile(const char *path) { if (s_blNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_blNetFiles[s_blNetFileCount++], path, BMAX_PATH); }
-
-static int Net_HaveFile(const char *name, int size, uint32_t crc)
-{
-    int fil = kopen4loadfrommod(name, 0);
-    if (fil == -1) return 0;
-    int const len = kfilelength(fil);
-    if (len != size) { kclose(fil); return 0; }
-    char *tmp = (char *)Xmalloc(len + 1);
-    kread(fil, tmp, len); kclose(fil);
-    uint32_t const have = VB_FileCrc(tmp, len);
-    Xfree(tmp);
-    return have == crc;
-}
 
 static void Net_SendFileBlood(int nDest, const char *name, int fileIndex, int fileTotal)
 {
@@ -406,44 +390,7 @@ void Net_SendGameFiles(int nDest)  // host: send offered files to a joiner
         Net_SendFileBlood(nDest, s_blNetFiles[i], i + 1, s_blNetFileCount);
 }
 
-static void Net_RecvFileHeaderBlood(const uint8_t *pkt)
-{
-    int j = 1;
-    int const size = (int)VB_get32(&pkt[j]); j += 4;
-    g_blRecvCrc = VB_get32(&pkt[j]); j += 4;
-    g_blRecvChunkTotal = VB_get16(&pkt[j]); j += 2;
-    int const namelen = pkt[j++];
-    Bmemcpy(g_blRecvName, &pkt[j], min(namelen, 63)); g_blRecvName[min(namelen, 63)] = 0; j += namelen;
-    int const fileIndex = pkt[j++], fileTotal = pkt[j++];
-    char ofY[24] = ""; if (fileTotal > 1) Bsnprintf(ofY, sizeof(ofY), " (file %d of %d)", fileIndex, fileTotal);
-    DO_FREE_AND_NULL(g_blRecvBuf); g_blRecvChunksGot = 0;
-    if (Net_HaveFile(g_blRecvName, size, g_blRecvCrc)) { LOG_F(INFO, "Blood: already have %s%s, skipping", g_blRecvName, ofY); return; }
-    if (g_blRecvChunkTotal > 0) g_blRecvBuf = (char *)Xmalloc(g_blRecvChunkTotal * VB_FILE_CHUNK_SIZE);
-    LOG_F(INFO, "Blood: receiving %s (%d bytes) from host%s", g_blRecvName, size, ofY);
-}
-
-static void Net_RecvFileChunkBlood(const uint8_t *pkt)
-{
-    if (!g_blRecvBuf) return;
-    int const seq = VB_get16(&pkt[1]), total = VB_get16(&pkt[3]), len = VB_get16(&pkt[5]);
-    if (total != g_blRecvChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > VB_FILE_CHUNK_SIZE) return;
-    Bmemcpy(&g_blRecvBuf[seq * VB_FILE_CHUNK_SIZE], &pkt[7], len);
-    g_blRecvChunksGot++;
-    if (seq == total - 1) g_blRecvLastLen = len;
-    if (g_blRecvChunksGot < g_blRecvChunkTotal) return;
-    int const filesize = (g_blRecvChunkTotal - 1) * VB_FILE_CHUNK_SIZE + g_blRecvLastLen;
-    if (VB_FileCrc(g_blRecvBuf, filesize) != g_blRecvCrc) { LOG_F(ERROR, "Blood: %s CRC mismatch, discarding", g_blRecvName); DO_FREE_AND_NULL(g_blRecvBuf); return; }
-    const char *fslash = Bstrrchr(g_blRecvName, '/'), *bslash = Bstrrchr(g_blRecvName, '\\');
-    const char *base = max(fslash, bslash); base = base ? base + 1 : g_blRecvName;
-    if (base[0] == 0 || Bstrstr(base, "..")) { LOG_F(ERROR, "Blood: unsafe recv name '%s'", g_blRecvName); DO_FREE_AND_NULL(g_blRecvBuf); return; }
-    buildvfs_FILE fp = buildvfs_fopen_write(base);
-    if (fp) { buildvfs_fwrite(g_blRecvBuf, 1, filesize, fp); buildvfs_fclose(fp); LOG_F(INFO, "Blood: wrote %s (%d bytes)", base, filesize);
-        const char *ext = Bstrrchr(g_blRecvName, '.');
-        if (ext && (!Bstrcasecmp(ext, ".grp") || !Bstrcasecmp(ext, ".zip") || !Bstrcasecmp(ext, ".pk3") || !Bstrcasecmp(ext, ".rff")))
-            if (initgroupfile(base) != -1) LOG_F(INFO, "Blood: mounted %s", base);
-    } else LOG_F(ERROR, "Blood: couldn't write %s", base);
-    DO_FREE_AND_NULL(g_blRecvBuf);
-}
+// The file receiver (VB_RecvFileHeader/Chunk) + dedup check live in netshared.h.
 
 void netGetPackets(void)
 {
@@ -677,10 +624,10 @@ void netGetPackets(void)
             keystatus[1] = 1;
             break;
         case VB_FILE_HEADER:   // VibeBuild32 mid-game file transfer (host -> joiner)
-            Net_RecvFileHeaderBlood((const uint8_t *)packet);
+            VB_RecvFileHeader(&s_blRecv, (const uint8_t *)packet, "Blood");
             break;
         case VB_FILE_CHUNK:
-            Net_RecvFileChunkBlood((const uint8_t *)packet);
+            VB_RecvFileChunk(&s_blRecv, (const uint8_t *)packet, "Blood");
             break;
         }
     }
@@ -1433,8 +1380,8 @@ void netInitialize(bool bConsole)
                     else  // VibeBuild32: mid-game file transfer arrives on the GAME channel during join
                     {
                         const uint8_t *pkt = (const uint8_t *)event.packet->data + 1;  // skip prepended sender index
-                        if (pkt[0] == VB_FILE_HEADER)      Net_RecvFileHeaderBlood(pkt);
-                        else if (pkt[0] == VB_FILE_CHUNK)  Net_RecvFileChunkBlood(pkt);
+                        if (pkt[0] == VB_FILE_HEADER)      VB_RecvFileHeader(&s_blRecv, pkt, "Blood");
+                        else if (pkt[0] == VB_FILE_CHUNK)  VB_RecvFileChunk(&s_blRecv, pkt, "Blood");
                     }
                     enet_packet_destroy(event.packet);
                     break;
@@ -1674,8 +1621,8 @@ void netUpdate(void)
                     // (they arrive during the join/sync wait, before netGetPackets runs).
                     // Skip the sender-index byte netSendPacket prepends; our command is next.
                     const uint8_t *pkt = (const uint8_t *)event.packet->data + 1;
-                    if (pkt[0] == VB_FILE_HEADER)      { Net_RecvFileHeaderBlood(pkt); enet_packet_destroy(event.packet); }
-                    else if (pkt[0] == VB_FILE_CHUNK)  { Net_RecvFileChunkBlood(pkt); enet_packet_destroy(event.packet); }
+                    if (pkt[0] == VB_FILE_HEADER)      { VB_RecvFileHeader(&s_blRecv, pkt, "Blood"); enet_packet_destroy(event.packet); }
+                    else if (pkt[0] == VB_FILE_CHUNK)  { VB_RecvFileChunk(&s_blRecv, pkt, "Blood"); enet_packet_destroy(event.packet); }
                     else netPostEPacket(event.packet);
                     break;
                 }
