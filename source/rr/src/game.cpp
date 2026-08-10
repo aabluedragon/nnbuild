@@ -7969,13 +7969,17 @@ static void G_Startup(void)
     {
         char *cwd;
 
+        // VibeBuild32: pass the literal "tiles000.art" (not a "%03i" format). The eduke32
+        // engine's artGetIndexedFileName() substitutes digits positionally into a literal
+        // "tilesNNN.art" name; a format string produced "tiles000i.art", so zero ART files
+        // loaded and the game rendered black (same bug that hit Blood).
         if (g_modDir[0] != '/' && (cwd = getcwd(NULL, 0)))
         {
             Bchdir(g_modDir);
-            if (artLoadFiles("tiles%03i.art",MAXCACHE1DSIZE) < 0)
+            if (artLoadFiles("tiles000.art",MAXCACHE1DSIZE) < 0)
             {
                 Bchdir(cwd);
-                if (artLoadFiles("tiles%03i.art",MAXCACHE1DSIZE) < 0)
+                if (artLoadFiles("tiles000.art",MAXCACHE1DSIZE) < 0)
                     G_GameExit("Failed loading art.");
             }
             Bchdir(cwd);
@@ -7984,7 +7988,7 @@ static void G_Startup(void)
 #endif
 
         }
-        else if (artLoadFiles("tiles%03i.art",MAXCACHE1DSIZE) < 0)
+        else if (artLoadFiles("tiles000.art",MAXCACHE1DSIZE) < 0)
             G_GameExit("Failed loading art.");
     }
 
