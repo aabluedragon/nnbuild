@@ -3007,41 +3007,14 @@ static vb_filerecv_t s_rrRecv;   // incoming file reassembly (shared receiver, n
 
 void Net_AddNetFile(const char *path) { if (s_rrNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_rrNetFiles[s_rrNetFileCount++], path, BMAX_PATH); }
 
+// enet transport callback for the shared VB_SendFile: reliable send to one peer.
+static void rr_SendCb(void *ctx, const void *buf, int len)
+{
+    enet_peer_send((ENetPeer *)ctx, CHAN_GAMESTATE, enet_packet_create((void *)buf, len, ENET_PACKET_FLAG_RELIABLE));
+}
 static void rr_SendFile(ENetPeer *peer, const char *name, int fileIndex, int fileTotal)
 {
-    int fil = kopen4loadfrommod(name, 0);
-    if (fil == -1) { LOG_F(WARNING, "RR: can't open %s to send", name); return; }
-    int const size = kfilelength(fil);
-    char *data = (char *)Xmalloc(size + 1);
-    kread(fil, data, size); kclose(fil);
-    uint32_t const crc = VB_FileCrc(data, size);
-    int const total = (size + VB_FILE_CHUNK_SIZE - 1) / VB_FILE_CHUNK_SIZE;
-    LOG_F(INFO, "RR: sending %s (%d bytes, %d chunks) to joiner", name, size, total);
-
-    char hdr[80]; int hl = 0;
-    hdr[hl++] = (char)VB_FILE_HEADER;
-    VB_put32(&hdr[hl], (uint32_t)size); hl += 4;
-    VB_put32(&hdr[hl], crc); hl += 4;
-    VB_put16(&hdr[hl], (uint16_t)total); hl += 2;
-    int const namelen = min((int)Bstrlen(name), 63);
-    hdr[hl++] = (char)namelen;
-    Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
-    hdr[hl++] = (char)clamp(fileIndex, 1, 255);
-    hdr[hl++] = (char)clamp(fileTotal, 1, 255);
-    enet_peer_send(peer, CHAN_GAMESTATE, enet_packet_create(hdr, hl, ENET_PACKET_FLAG_RELIABLE));
-
-    char chunk[VB_FILE_CHUNK_SIZE + 8];
-    for (int seq = 0; seq < total; seq++)
-    {
-        int const len = min(VB_FILE_CHUNK_SIZE, size - seq * VB_FILE_CHUNK_SIZE);
-        chunk[0] = (char)VB_FILE_CHUNK;
-        VB_put16(&chunk[1], (uint16_t)seq);
-        VB_put16(&chunk[3], (uint16_t)total);
-        VB_put16(&chunk[5], (uint16_t)len);
-        Bmemcpy(&chunk[7], &data[seq * VB_FILE_CHUNK_SIZE], len);
-        enet_peer_send(peer, CHAN_GAMESTATE, enet_packet_create(chunk, len + 7, ENET_PACKET_FLAG_RELIABLE));
-    }
-    Xfree(data);
+    VB_SendFile(rr_SendCb, peer, name, fileIndex, fileTotal, VB_FILE_HEADER, VB_FILE_CHUNK, "RR");
     enet_host_service(g_netServer, NULL, 0);
 }
 

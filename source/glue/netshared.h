@@ -85,6 +85,50 @@ struct vb_filerecv_t
 // initgroupfile, LOG_F, Xmalloc, ...), so include this header AFTER the engine/game
 // headers that declare them (it is, in every game's netcode TU).
 
+// Host-side file sender. Builds the HEADER + CHUNK packets and hands each to <send>
+// (the game's transport: enet for Blood/RR, mmulti for SW). hdrType/chunkType are the
+// leading packet-type bytes (VB_FILE_HEADER/CHUNK for the enet games; SW passes its
+// own mmulti packet types). <ctx> is passed through to the callback (a peer, a slot).
+typedef void (*vb_sendfn)(void *ctx, const void *buf, int len);
+static inline void VB_SendFile(vb_sendfn send, void *ctx, const char *name,
+                               int fileIndex, int fileTotal, uint8_t hdrType, uint8_t chunkType,
+                               const char *tag)
+{
+    int fil = kopen4loadfrommod(name, 0);
+    if (fil == -1) { LOG_F(WARNING, "%s: can't open %s to send", tag, name); return; }
+    int const size = kfilelength(fil);
+    char *data = (char *)Xmalloc(size + 1);
+    kread(fil, data, size); kclose(fil);
+    uint32_t const crc = VB_FileCrc(data, size);
+    int const total = (size + VB_FILE_CHUNK_SIZE - 1) / VB_FILE_CHUNK_SIZE;
+    LOG_F(INFO, "%s: sending %s (%d bytes, %d chunks) to joiner(s)", tag, name, size, total);
+
+    char hdr[80]; int hl = 0;
+    hdr[hl++] = (char)hdrType;
+    VB_put32(&hdr[hl], (uint32_t)size); hl += 4;
+    VB_put32(&hdr[hl], crc); hl += 4;
+    VB_put16(&hdr[hl], (uint16_t)total); hl += 2;
+    int const namelen = min((int)Bstrlen(name), 63);
+    hdr[hl++] = (char)namelen;
+    Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
+    hdr[hl++] = (char)clamp(fileIndex, 1, 255);
+    hdr[hl++] = (char)clamp(fileTotal, 1, 255);
+    send(ctx, hdr, hl);
+
+    char chunk[VB_FILE_CHUNK_SIZE + 8];
+    for (int seq = 0; seq < total; seq++)
+    {
+        int const len = min(VB_FILE_CHUNK_SIZE, size - seq * VB_FILE_CHUNK_SIZE);
+        chunk[0] = (char)chunkType;
+        VB_put16(&chunk[1], (uint16_t)seq);
+        VB_put16(&chunk[3], (uint16_t)total);
+        VB_put16(&chunk[5], (uint16_t)len);
+        Bmemcpy(&chunk[7], &data[seq * VB_FILE_CHUNK_SIZE], len);
+        send(ctx, chunk, len + 7);
+    }
+    Xfree(data);
+}
+
 // Do we already have <name> at this size+crc? Searches mounted groups + the cwd.
 static inline int VB_HaveFile(const char *name, int size, uint32_t crc)
 {

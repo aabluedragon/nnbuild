@@ -1497,48 +1497,21 @@ void Net_AddNetFile(const char *path) { if (s_swNetFileCount < VB_MAX_NETFILES) 
 
 // VB_HaveFile (shared dedup check) lives in netshared.h.
 
-#define SW_FILE_WANTS(i) ((i) != myconnectindex && (slot < 0 ? mmulti_slotconnected(i) : ((i) == slot && mmulti_slotconnected(i))))
-
+// mmulti transport callback for the shared VB_SendFile. ctx carries the target slot
+// (-1 = all connected joiners); SW streams over mmulti's reliable channel.
+static void Net_SendCbSW(void *ctx, const void *buf, int len)
+{
+    int const slot = (int)(intptr_t)ctx;
+    for (int i = 0; i < numplayers; i++)
+        if (i != myconnectindex && (slot < 0 ? mmulti_slotconnected(i) : (i == slot && mmulti_slotconnected(i))))
+            mmulti_sendpacket(i, (unsigned char *)buf, len);
+}
 void Net_SendFile(int slot, const char *name, int fileIndex, int fileTotal)
 {
     if (myconnectindex != connecthead) return;
-    int fil = kopen4loadfrommod(name, 0);
-    if (fil == -1) { LOG_F(WARNING, "Net_SendFile: can't open %s", name); return; }
-    int const size = kfilelength(fil);
-    char *data = (char *)Xmalloc(size + 1);
-    kread(fil, data, size); kclose(fil);
-    uint32_t const crc = VB_FileCrc(data, size);
-    int const total = (size + VB_FILE_CHUNK_SIZE - 1) / VB_FILE_CHUNK_SIZE;
-    LOG_F(INFO, "SW: sending %s (%d bytes, %d chunks)%s", name, size, total, slot < 0 ? " to all" : "");
-
-    char hdr[80]; int hl = 0;
-    hdr[hl++] = PACKET_TYPE_FILE_HEADER;
-    VB_put32(&hdr[hl], (uint32_t)size); hl += 4;
-    VB_put32(&hdr[hl], crc); hl += 4;
-    VB_put16(&hdr[hl], (uint16_t)total); hl += 2;
-    int const namelen = min((int)strlen(name), 63);
-    hdr[hl++] = (char)namelen;
-    Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
-    hdr[hl++] = (char)clamp(fileIndex, 1, 255);
-    hdr[hl++] = (char)clamp(fileTotal, 1, 255);
-    for (int i = 0; i < numplayers; i++)
-        if (SW_FILE_WANTS(i)) mmulti_sendpacket(i, (unsigned char *)hdr, hl);
-
-    char chunk[VB_FILE_CHUNK_SIZE + 8];
-    for (int seq = 0; seq < total; seq++)
-    {
-        int const len = min(VB_FILE_CHUNK_SIZE, size - seq * VB_FILE_CHUNK_SIZE);
-        chunk[0] = PACKET_TYPE_FILE_CHUNK;
-        VB_put16(&chunk[1], (uint16_t)seq);
-        VB_put16(&chunk[3], (uint16_t)total);
-        VB_put16(&chunk[5], (uint16_t)len);
-        Bmemcpy(&chunk[7], &data[seq * VB_FILE_CHUNK_SIZE], len);
-        for (int i = 0; i < numplayers; i++)
-            if (SW_FILE_WANTS(i)) mmulti_sendpacket(i, (unsigned char *)chunk, len + 7);
-    }
-    Xfree(data);
+    VB_SendFile(Net_SendCbSW, (void *)(intptr_t)slot, name, fileIndex, fileTotal,
+                PACKET_TYPE_FILE_HEADER, PACKET_TYPE_FILE_CHUNK, "SW");
 }
-#undef SW_FILE_WANTS
 
 // Host: push every file a joiner needs (extra GRPs + the current usermap).
 void Net_SendGameFiles(int slot)
