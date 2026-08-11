@@ -16,6 +16,24 @@
 
 #if SDL_MAJOR_VERSION >= 2 && defined(USE_OPENGL)
 # include "imgui.h"
+# include "imgui_impl_sdl2.h"
+# include "imgui_impl_opengl3.h"
+# include "sdl_inc.h"
+# include "glbuild.h"
+# ifdef __APPLE__
+#  include <sys/socket.h>
+#  include <netinet/in.h>
+#  include <arpa/inet.h>
+#  include <fcntl.h>
+#  include <signal.h>
+#  include <unistd.h>
+#  include <pthread.h>
+extern "C" void VBJS_CocoaMakeKeyWindow(SDL_Window *window);
+extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window);
+extern "C" void VBJS_CocoaDevtoolsShow(void);
+extern "C" void VBJS_CocoaDevtoolsRefresh(void);
+extern "C" int VBJS_CocoaDevtoolsProcessEvent(void const *event);
+# endif
 #endif
 
 extern hashtable_t h_gamevars;   // gamevars.cpp
@@ -242,9 +260,435 @@ void spriteXYZ(int spriteNum, int *x, int *y, int *z, int *ok)
 
 } // namespace vbjs_game
 
+#if SDL_MAJOR_VERSION >= 2 && defined(USE_OPENGL)
+static SDL_Window *s_devtoolsWindow = nullptr;
+static SDL_GLContext s_devtoolsContext = nullptr;
+static ImGuiContext *s_devtoolsImGui = nullptr;
+static Uint32 s_devtoolsWindowId = 0;
+static int s_devtoolsWindowClosed = 0;
+
+#ifdef __APPLE__
+static int s_webDevtoolsListen = -1;
+static int s_webDevtoolsPort = 0;
+static int s_webDevtoolsLaunched = 0;
+static int s_webDebuggerListen = -1;
+static int s_webDebuggerPort = 0;
+static pthread_t s_webDebuggerThread;
+static int s_webDebuggerThreadStarted = 0;
+
+static void vbjs_web_devtools_focus(void)
+{
+    if (s_webDevtoolsPort <= 0) return;
+    char url[96]; snprintf(url, sizeof(url), "http://127.0.0.1:%d/", s_webDevtoolsPort);
+    if (fork() == 0) { execl("/usr/bin/open", "open", "-a", "Google Chrome", url, (char *)nullptr); _exit(127); }
+}
+
+static void vbjs_web_reply(int fd, char const *body, char const *type = "text/plain; charset=utf-8")
+{
+    char header[256];
+    int const headerLen = snprintf(header, sizeof(header), "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n", type, strlen(body));
+    send(fd, header, headerLen, 0); send(fd, body, strlen(body), 0);
+}
+
+static void vbjs_web_decode(char *dst, size_t dstSize, char const *src)
+{
+    size_t n = 0;
+    while (*src && *src != '&' && *src != ' ' && n + 1 < dstSize)
+    {
+        if (*src == '%' && src[1] && src[2]) { char hex[3] = { src[1], src[2], 0 }; dst[n++] = (char)strtol(hex, nullptr, 16); src += 3; }
+        else dst[n++] = *src++ == '+' ? ' ' : src[-1];
+    }
+    dst[n] = 0;
+}
+
+/* This listener deliberately lives off the game thread.  QuickJS can block
+ * that thread at a source breakpoint while this endpoint continues receiving
+ * Continue/Step/Inspect commands from the standalone DevTools window. */
+static void *vbjs_web_debugger_thread(void *)
+{
+    for (;;)
+    {
+        int fd = accept(s_webDebuggerListen, nullptr, nullptr);
+        if (fd < 0) break;
+        char request[16384]; int bytes = (int)recv(fd, request, sizeof(request) - 1, 0); request[bytes > 0 ? bytes : 0] = 0;
+        if (strncmp(request, "GET /send?m=", 12) == 0)
+        {
+            char json[8192]; vbjs_web_decode(json, sizeof(json), request + 12);
+            VBJS_DevtoolsDebuggerSend(json); vbjs_web_reply(fd, "queued");
+        }
+        else if (strncmp(request, "GET /terminate", 14) == 0)
+        {
+            // Duke treats SDL_QUIT as an Escape/menu action while in-game, so
+            // that does not reliably close the process. A debugger Stop must
+            // terminate the game even for an attached session (no Node child
+            // PID is available in that case). Reply first, then use SIGTERM;
+            // the engine's installed signal handler flushes and exits cleanly.
+            vbjs_web_reply(fd, "terminating");
+            close(fd);
+            kill(getpid(), SIGTERM);
+            continue;
+        }
+        else if (strncmp(request, "GET /poll", 9) == 0)
+        {
+            int const vscode = strstr(request, "client=vscode") != nullptr;
+            char json[8192]; if (!VBJS_DevtoolsDebuggerReceiveForClient(vscode, json, sizeof(json))) strcpy(json, "");
+            vbjs_web_reply(fd, json, "application/json; charset=utf-8");
+        }
+        else vbjs_web_reply(fd, "not found");
+        close(fd);
+    }
+    return nullptr;
+}
+
+static void vbjs_web_debugger_start(void)
+{
+    if (s_webDebuggerThreadStarted) return;
+    s_webDebuggerListen = socket(AF_INET, SOCK_STREAM, 0); if (s_webDebuggerListen < 0) return;
+    int one = 1; setsockopt(s_webDebuggerListen, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    // A stable, localhost-only port lets an external Debug Adapter attach to
+    // a running game. The browser inspector uses the same bridge internally.
+    sockaddr_in address {}; address.sin_family = AF_INET; address.sin_addr.s_addr = htonl(INADDR_LOOPBACK); address.sin_port = htons(4712);
+    if (bind(s_webDebuggerListen, (sockaddr *)&address, sizeof(address)) || listen(s_webDebuggerListen, 8)) { close(s_webDebuggerListen); s_webDebuggerListen = -1; return; }
+    socklen_t length = sizeof(address); getsockname(s_webDebuggerListen, (sockaddr *)&address, &length); s_webDebuggerPort = ntohs(address.sin_port);
+    if (!pthread_create(&s_webDebuggerThread, nullptr, vbjs_web_debugger_thread, nullptr)) { pthread_detach(s_webDebuggerThread); s_webDebuggerThreadStarted = 1; }
+    else { close(s_webDebuggerListen); s_webDebuggerListen = -1; }
+}
+
+static void vbjs_web_devtools_tick(void)
+{
+    // SDL reapplies its saved window coordinates during early video setup on
+    // Cocoa.  Keep the debug-layout game position authoritative while -dt is
+    // active instead of allowing a one-frame snap back to the right.
+    VBJS_CocoaPlaceGameLeft(SDL_GL_GetCurrentWindow());
+    if (s_webDevtoolsListen < 0)
+    {
+        s_webDevtoolsListen = socket(AF_INET, SOCK_STREAM, 0);
+        if (s_webDevtoolsListen < 0) return;
+        int one = 1; setsockopt(s_webDevtoolsListen, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+        sockaddr_in address {}; address.sin_family = AF_INET; address.sin_addr.s_addr = htonl(INADDR_LOOPBACK); address.sin_port = 0;
+        if (bind(s_webDevtoolsListen, (sockaddr *)&address, sizeof(address)) || listen(s_webDevtoolsListen, 4)) { close(s_webDevtoolsListen); s_webDevtoolsListen = -1; return; }
+        socklen_t length = sizeof(address); getsockname(s_webDevtoolsListen, (sockaddr *)&address, &length); s_webDevtoolsPort = ntohs(address.sin_port);
+        fcntl(s_webDevtoolsListen, F_SETFL, fcntl(s_webDevtoolsListen, F_GETFL) | O_NONBLOCK);
+    }
+    vbjs_web_debugger_start();
+    if (!s_webDevtoolsLaunched)
+    {
+        s_webDevtoolsLaunched = 1;
+        char url[128]; snprintf(url, sizeof(url), "--app=http://127.0.0.1:%d/", s_webDevtoolsPort);
+        if (fork() == 0) { execl("/usr/bin/open", "open", "-na", "Google Chrome", "--args", url, "--window-size=516,666", (char *)nullptr); _exit(127); }
+    }
+    for (;;)
+    {
+        int fd = accept(s_webDevtoolsListen, nullptr, nullptr);
+        if (fd < 0) break;
+        char request[8192]; int bytes = (int)recv(fd, request, sizeof(request)-1, 0); request[bytes > 0 ? bytes : 0] = 0;
+        if (strncmp(request, "GET /api/log", 12) == 0)
+        {
+            char body[8192] = "";
+            for (int i = 0; i < 12; ++i) { char const *line = VBJS_DevtoolsLog(i); if (line) { strncat(body, line, sizeof(body)-strlen(body)-2); strncat(body, "\n", sizeof(body)-strlen(body)-1); } }
+            vbjs_web_reply(fd, body);
+        }
+        else if (strncmp(request, "GET /api/eval?e=", 16) == 0)
+        {
+            char expression[1024], result[2048]; vbjs_web_decode(expression, sizeof(expression), request + 16);
+            VBJS_DevtoolsEvaluate(expression, result, sizeof(result)); vbjs_web_reply(fd, result);
+        }
+        else if (strncmp(request, "GET /api/sources", 16) == 0)
+        {
+            char body[4096] = "";
+            for (int i = 0; i < VBJS_DevtoolsSourceCount(); ++i) { char const *path = VBJS_DevtoolsSourcePath(i); if (path) { strncat(body, path, sizeof(body)-strlen(body)-2); strncat(body, "\n", sizeof(body)-strlen(body)-1); } }
+            vbjs_web_reply(fd, body);
+        }
+        else if (strncmp(request, "GET /api/source?i=", 18) == 0)
+        {
+            int index = atoi(request + 18); char body[32768];
+            if (!VBJS_DevtoolsReadSource(index, body, sizeof(body))) snprintf(body, sizeof(body), "Unable to read source.");
+            vbjs_web_reply(fd, body);
+        }
+        else
+        {
+            static char const page[] = R"HTML(<!doctype html><meta charset=utf-8><title>VibeBuild32 JavaScript DevTools</title><style>body{margin:0;background:#1e1e1e;color:#ddd;font:14px ui-monospace,Menlo,monospace}header{padding:10px;border-bottom:1px solid #555;font:600 16px system-ui}main{display:grid;grid-template-columns:220px 1fr;height:calc(100vh - 42px)}aside{padding:8px;border-right:1px solid #555;overflow:auto}button{margin:3px;padding:6px;background:#367bd6;color:white;border:0;border-radius:4px}pre{margin:0;padding:10px;overflow:auto;white-space:pre-wrap}#source{height:52vh;border-bottom:1px solid #555}#log{height:20vh}input{width:72%;background:#282828;color:#eee;border:1px solid #666;padding:7px;font:inherit}</style><header>VibeBuild32 JavaScript DevTools <button onclick=refreshSources()>Sources</button></header><main><aside><b>Sources</b><div id=files></div></aside><section><pre id=source>Select a script.</pre><pre id=log>Loading…</pre><input id=e value="$event" title="Inspect globals or the paused event"><button onclick=run()>Evaluate / Hover inspection</button></section></main><script>const log=document.querySelector('#log'),src=document.querySelector('#source');async function refresh(){log.textContent=await (await fetch('/api/log')).text();setTimeout(refresh,300)}async function run(){let r=await (await fetch('/api/eval?e='+encodeURIComponent(e.value))).text();log.textContent='> '+e.value+'\n'+r}async function refreshSources(){let a=(await (await fetch('/api/sources')).text()).trim().split('\n');files.innerHTML='';a.forEach((n,i)=>{let b=document.createElement('button');b.textContent=n.split('/').pop();b.onclick=async()=>src.textContent=await (await fetch('/api/source?i='+i)).text();files.append(b,document.createElement('br'))})}e.onkeydown=x=>{if(x.key==='Enter')run()};refresh();refreshSources()</script>)HTML";
+            char body[16384];
+            static char const debuggerClient[] = R"HTML(
+<script>
+window.vbDebugPort=%d;
+(()=>{
+ let seq=1,currentPath='',sourceText='',currentFrame=0,paused=false,pausedPath='',pausedLine=0,breakpoints={},pending=new Set();
+ const endpoint='http://127.0.0.1:'+window.vbDebugPort;
+ const section=document.querySelector('section'), toolbar=document.createElement('div');
+ toolbar.style.cssText='padding:6px;border-bottom:1px solid #555';
+ const stack=document.createElement('pre'), scopes=document.createElement('pre');
+ stack.style.cssText=scopes.style.cssText='margin:0;padding:8px;max-height:16vh;overflow:auto;border-top:1px solid #555;color:#9cdcfe';
+ section.append(toolbar,stack,scopes);
+ function button(label,command){let b=document.createElement('button');b.textContent=label;b.onclick=()=>request(command,{});toolbar.append(b)}
+ button('Continue','continue');button('Step over','next');button('Step into','stepIn');button('Step out','stepOut');
+ async function send(m){await fetch(endpoint+'/send?m='+encodeURIComponent(JSON.stringify(m)))}
+ function request(command,args){let request_seq=seq++;pending.add(request_seq);return send({type:'request',request:{request_seq,command,args:args||{}}})}
+ window.cont=()=>request('continue'); window.run=()=>request('evaluate',{expression:e.value,frame:currentFrame});
+ const style=document.createElement('style');style.textContent='#source{white-space:pre!important;line-height:16px}.vb-line{display:block}.vb-line.paused{background:#5b4720}.vb-gutter{display:inline-block;width:2.4em;color:#777;cursor:pointer;text-align:center}.vb-gutter.set{color:#ff5f56;font-weight:bold}.vb-number{display:inline-block;width:3em;color:#777;text-align:right;padding-right:1em;user-select:none}.tok-key{color:#c586c0}.tok-str{color:#ce9178}.tok-num{color:#b5cea8}.tok-com{color:#6a9955}.tok-type{color:#4ec9b0}';document.head.append(style);
+ const escapeHtml=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+ const highlight=s=>{let out='',last=0,re=/\/\/.*$|\/\*[\s\S]*?\*\/|`(?:\\.|[^`])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:const|let|var|function|return|if|else|for|while|switch|case|break|continue|new|class|extends|import|export|from|async|await|throw|try|catch|finally|interface|type|enum|as|readonly|public|private|protected|declare|implements)\b|\b(?:string|number|boolean|unknown|any|void|never|object|undefined|null)\b|\b\d+(?:\.\d+)?\b/g;s.replace(re,m=>{out+=escapeHtml(s.slice(last,m.index));let t=escapeHtml(m[0]),k=m[0][0]==='/'?'com':m[0][0]==='"'||m[0][0]==="'"||m[0][0]==='`'?'str':/^\d/.test(m[0])?'num':/^(string|number|boolean|unknown|any|void|never|object|undefined|null)$/.test(m[0])?'type':'key';out+=`<span class="tok-${k}">${t}</span>`;last=m.index+m[0].length;return m[0]});return out+escapeHtml(s.slice(last));};
+ function renderSource(){src.innerHTML=sourceText.split('\n').map((text,i)=>{let line=i+1,key=currentPath+':'+line,set=!!breakpoints[key],at=pausedPath===currentPath&&pausedLine===line;return `<span class="vb-line ${at?'paused':''}" data-line="${line}"><span class="vb-gutter ${set?'set':''}" title="Toggle breakpoint">${set?'●':'○'}</span><span class="vb-number">${line}</span>${highlight(text)}</span>`}).join('');let at=src.querySelector('.vb-line.paused');if(at)at.scrollIntoView({block:'center'});}
+ window.refreshSources=async()=>{let a=(await (await fetch('/api/sources')).text()).trim().split('\n');files.innerHTML='';a.forEach((path,i)=>{let b=document.createElement('button');b.textContent=path.split('/').pop();b.onclick=async()=>{currentPath=path;sourceText=await (await fetch('/api/source?i='+i)).text();renderSource();};files.append(b,document.createElement('br'))})};
+ src.title='Click the circle in the left gutter to toggle a breakpoint';
+ src.onclick=ev=>{if(!ev.target.closest('.vb-gutter'))return;let row=ev.target.closest('.vb-line');if(!currentPath||!row)return;let line=+row.dataset.line,key=currentPath+':'+line;breakpoints[key]=!breakpoints[key];let lines=Object.keys(breakpoints).filter(k=>breakpoints[k]&&k.startsWith(currentPath+':')).map(k=>({line:+k.slice(currentPath.length+1)}));send({type:'breakpoints',breakpoints:{path:currentPath,breakpoints:lines}});renderSource();stack.textContent=(breakpoints[key]?'Breakpoint set: ':'Breakpoint cleared: ')+key;};
+ function renderScopes(items){scopes.textContent=items.map(x=>x.name||'Scope').join('\n');if(items[0])request('variables',{variablesReference:items[0].reference})}
+ async function poll(){try{let text=await (await fetch(endpoint+'/poll')).text();if(text){let m=JSON.parse(text),body=m.body;if(m.type==='event'){paused=true;pausedPath=m.event.filename||'';pausedLine=m.event.line||0;if(pausedPath===currentPath)renderSource();stack.textContent='Paused — '+m.event.reason+'\n'+pausedPath+':'+pausedLine;request('stackTrace')}else if(m.type==='response'&&pending.delete(m.request_seq)){if(Array.isArray(body)){if(body.length&&body[0].filename!==undefined){stack.textContent=body.map((f,i)=>`${i===currentFrame?'▶ ':'  '}${f.name}  ${f.filename||''}:${f.line||''}`).join('\n');stack.onclick=ev=>{currentFrame=Math.max(0,Math.floor(ev.offsetY/16));request('scopes',{frame:currentFrame})};request('scopes',{frame:currentFrame})}else renderScopes(body)}else if(body&&body.result!==undefined)log.textContent='> '+e.value+'\n'+body.result;else if(body&&typeof body==='object')scopes.textContent=Object.entries(body).map(([k,v])=>k+' = '+String(v)).join('\n');}}}catch(_){}setTimeout(poll,70)}
+ poll();refreshSources();
+})();
+</script>)HTML";
+            snprintf(body, sizeof(body), "%s", page);
+            size_t pageLength = strlen(body);
+            snprintf(body + pageLength, sizeof(body) - pageLength, debuggerClient, s_webDebuggerPort);
+            vbjs_web_reply(fd, body, "text/html; charset=utf-8");
+        }
+        close(fd);
+    }
+}
+#endif
+
+static void vbjs_devtools_draw_contents(void)
+{
+    static char expression[256] = "$event";
+    static char result[1024] = "";
+
+    int windowW = 516, windowH = 666;
+    if (s_devtoolsWindow) SDL_GetWindowSize(s_devtoolsWindow, &windowW, &windowH);
+    ImGui::SetNextWindowPos(ImVec2(8.f, 8.f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2((float)windowW - 16.f, (float)windowH - 16.f), ImGuiCond_Always);
+    ImGuiWindowFlags const flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+    ImGui::Begin("VibeBuild32 JavaScript DevTools", nullptr, flags);
+
+    if (VBJS_DevtoolsPaused())
+    {
+        ImGui::TextColored(ImVec4(1.f, .75f, .1f, 1.f), "PAUSED at %s", VBJS_DevtoolsCurrentEvent() ? VBJS_DevtoolsCurrentEvent() : "breakpoint");
+        ImGui::SameLine();
+        if (ImGui::Button("Resume")) VBJS_DevtoolsResume();
+    }
+    else ImGui::TextDisabled("Running");
+
+    if (ImGui::BeginTabBar("js-devtools-tabs"))
+    {
+        if (ImGui::BeginTabItem("Console"))
+        {
+            ImGui::BeginChild("console-log", ImVec2(0, -36), ImGuiChildFlags_Borders);
+            for (int i = 0; i < 12; ++i)
+            {
+                const char *line = VBJS_DevtoolsLog(i);
+                if (line) ImGui::TextWrapped("%s", line);
+            }
+            ImGui::EndChild();
+            if (ImGui::InputText("Evaluate", expression, sizeof(expression), ImGuiInputTextFlags_EnterReturnsTrue))
+                VBJS_DevtoolsEvaluate(expression, result, sizeof(result));
+            if (ImGui::Button("Run")) VBJS_DevtoolsEvaluate(expression, result, sizeof(result));
+            ImGui::SameLine(); ImGui::TextWrapped("%s", result);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Scope"))
+        {
+            ImGui::TextUnformatted("Evaluate global expressions or inspect the last event.");
+            ImGui::BulletText("$event: %s", VBJS_DevtoolsCurrentEvent() ? VBJS_DevtoolsCurrentEvent() : "none");
+            ImGui::BulletText("Examples: vb.player(), globalThis.myValue");
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    ImGui::End();
+}
+
+static void vbjs_devtools_open_window(void)
+{
+    if (s_devtoolsWindow || s_devtoolsWindowClosed) return;
+    SDL_Window *const gameWindow = SDL_GL_GetCurrentWindow();
+    SDL_GLContext const gameContext = SDL_GL_GetCurrentContext();
+    int gameX = SDL_WINDOWPOS_CENTERED, gameY = SDL_WINDOWPOS_CENTERED, gameW = 1024, gameH = 768;
+    if (gameWindow) { SDL_GetWindowPosition(gameWindow, &gameX, &gameY); SDL_GetWindowSize(gameWindow, &gameW, &gameH); }
+    SDL_Rect usable = { 0, 0, 1920, 1080 };
+    int const display = gameWindow ? SDL_GetWindowDisplayIndex(gameWindow) : 0;
+    SDL_GetDisplayUsableBounds(display >= 0 ? display : 0, &usable);
+    int const gap = 12;
+    int const devW = max(360, min(516, usable.w - gameW - gap));
+    int const devH = min(666, usable.h - 24);
+    if (gameW + gap + devW <= usable.w)
+    {
+        gameX = usable.x + (usable.w - gameW - gap - devW) / 2;
+        gameY = usable.y + max(12, (usable.h - gameH) / 2);
+        if (gameWindow) SDL_SetWindowPosition(gameWindow, gameX, gameY);
+    }
+    else
+    {
+        gameX = max(usable.x, min(gameX, usable.x + usable.w - gameW));
+        gameY = max(usable.y, min(gameY, usable.y + usable.h - gameH));
+    }
+    int const devX = min(usable.x + usable.w - devW, gameX + gameW + gap);
+    int const devY = max(usable.y, min(gameY, usable.y + usable.h - devH));
+    // SDL relative mouse mode is process-wide on macOS. Release it before the
+    // second window exists, otherwise its first mouse click is captured by the
+    // game and Cocoa immediately reactivates the game window.
+    if (gameWindow) SDL_SetWindowGrab(gameWindow, SDL_FALSE);
+    SDL_SetRelativeMouseMode(SDL_FALSE);
+    // SDL's default drops the mouse-down that gives a secondary window focus.
+    // Set this before creating DevTools so that first click reaches ImGui.
+#ifdef SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH
+    SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
+#endif
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+    s_devtoolsWindow = SDL_CreateWindow("VibeBuild32 JavaScript DevTools", devX, devY, devW, devH,
+                                         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    if (!s_devtoolsWindow) { LOG_F(ERROR, "Could not open JavaScript DevTools window: %s", SDL_GetError()); return; }
+    s_devtoolsContext = SDL_GL_CreateContext(s_devtoolsWindow);
+    if (!s_devtoolsContext)
+    {
+        LOG_F(ERROR, "Could not create JavaScript DevTools context: %s", SDL_GetError());
+        SDL_DestroyWindow(s_devtoolsWindow); s_devtoolsWindow = nullptr;
+        return;
+    }
+    s_devtoolsWindowId = SDL_GetWindowID(s_devtoolsWindow);
+    ImGuiContext *const old = ImGui::GetCurrentContext();
+    s_devtoolsImGui = ImGui::CreateContext();
+    ImGui::SetCurrentContext(s_devtoolsImGui);
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NoMouseCursorChange;
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui_ImplSDL2_InitForOpenGL(s_devtoolsWindow, s_devtoolsContext);
+    // VibeBuild32's macOS renderer can expose an OpenGL 2.1 context; the
+    // backend default (#version 150) fails there, while GLSL 120 is portable.
+    ImGui_ImplOpenGL3_Init("#version 120");
+    ImGui::GetIO().Fonts->AddFontDefault();
+    ImGui::SetCurrentContext(old);
+    SDL_GL_MakeCurrent(gameWindow, gameContext);
+    // Explicitly make this a normal foreground Cocoa window.  Without this,
+    // a relative-mode game window can retain the first mouse activation and
+    // immediately pull keyboard/mouse focus back to itself.
+    SDL_RaiseWindow(s_devtoolsWindow);
+#ifdef __APPLE__
+    VBJS_CocoaMakeKeyWindow(s_devtoolsWindow);
+#endif
+}
+
+static void vbjs_devtools_render_window(void)
+{
+    vbjs_devtools_open_window();
+    if (!s_devtoolsWindow || !s_devtoolsContext || !s_devtoolsImGui) return;
+    SDL_Window *const gameWindow = SDL_GL_GetCurrentWindow();
+    SDL_GLContext const gameContext = SDL_GL_GetCurrentContext();
+    ImGuiContext *const old = ImGui::GetCurrentContext();
+    SDL_GL_MakeCurrent(s_devtoolsWindow, s_devtoolsContext);
+    ImGui::SetCurrentContext(s_devtoolsImGui);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+    vbjs_devtools_draw_contents();
+    ImGui::Render();
+    int w, h; SDL_GL_GetDrawableSize(s_devtoolsWindow, &w, &h);
+    glViewport(0, 0, w, h);
+    glClearColor(.08f, .08f, .08f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    SDL_GL_SwapWindow(s_devtoolsWindow);
+    ImGui::SetCurrentContext(old);
+    SDL_GL_MakeCurrent(gameWindow, gameContext);
+}
+
+extern "C" int VBJS_DevtoolsProcessEvent(const void *event)
+{
+#ifdef __APPLE__
+    if (VBJS_CocoaDevtoolsProcessEvent(event)) return 1;
+#endif
+    if (!s_devtoolsWindow || !s_devtoolsImGui || !event) return 0;
+    SDL_Event const *const ev = (SDL_Event const *)event;
+    Uint32 id = 0;
+    switch (ev->type)
+    {
+        case SDL_WINDOWEVENT: id = ev->window.windowID; break;
+        case SDL_KEYDOWN: case SDL_KEYUP: id = ev->key.windowID; break;
+        case SDL_TEXTINPUT: id = ev->text.windowID; break;
+        case SDL_MOUSEMOTION: id = ev->motion.windowID; break;
+        case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP: id = ev->button.windowID; break;
+        case SDL_MOUSEWHEEL: id = ev->wheel.windowID; break;
+        default: return 0;
+    }
+    bool const mouseEvent = ev->type == SDL_MOUSEMOTION || ev->type == SDL_MOUSEBUTTONDOWN ||
+                            ev->type == SDL_MOUSEBUTTONUP || ev->type == SDL_MOUSEWHEEL;
+    bool const keyboardEvent = ev->type == SDL_KEYDOWN || ev->type == SDL_KEYUP || ev->type == SDL_TEXTINPUT;
+    // Cocoa can give an input event windowID 0 during the handoff out of
+    // SDL relative mouse mode.  The actual SDL focus is authoritative here.
+    if (id != s_devtoolsWindowId &&
+        !(mouseEvent && SDL_GetMouseFocus() == s_devtoolsWindow) &&
+        !(keyboardEvent && SDL_GetKeyboardFocus() == s_devtoolsWindow)) return 0;
+    if (ev->type == SDL_WINDOWEVENT && ev->window.event == SDL_WINDOWEVENT_CLOSE)
+    {
+        SDL_HideWindow(s_devtoolsWindow);
+        s_devtoolsWindowClosed = 1;
+        return 1;
+    }
+    ImGuiContext *const old = ImGui::GetCurrentContext();
+    ImGui::SetCurrentContext(s_devtoolsImGui);
+    ImGui_ImplSDL2_ProcessEvent(ev);
+    ImGui::SetCurrentContext(old);
+    return 1;
+}
+
+extern "C" int VBJS_DevtoolsOwnsInput(void)
+{
+    return s_devtoolsWindow &&
+           (SDL_GetKeyboardFocus() == s_devtoolsWindow || SDL_GetMouseFocus() == s_devtoolsWindow);
+}
+
+extern "C" int VBJS_DevtoolsSuppressGameMouseCapture(void)
+{
+#ifdef __APPLE__
+    return VBJS_DevtoolsEnabled();
+#else
+    return s_devtoolsWindow != nullptr && !s_devtoolsWindowClosed;
+#endif
+}
+
+extern "C" void VBJS_DevtoolsFocus(void)
+{
+#ifdef __APPLE__
+    vbjs_web_devtools_focus();
+#endif
+}
+
+extern "C" void VBJS_DevtoolsStartDebuggerBridge(void)
+{
+#ifdef __APPLE__
+    vbjs_web_debugger_start();
+#endif
+}
+
+extern "C" void VBJS_DevtoolsShutdownWindow(void)
+{
+#ifdef __APPLE__
+    if (s_webDevtoolsListen >= 0) { close(s_webDevtoolsListen); s_webDevtoolsListen = -1; }
+    if (s_webDebuggerListen >= 0) { close(s_webDebuggerListen); s_webDebuggerListen = -1; }
+    s_webDebuggerThreadStarted = 0;
+#endif
+    if (!s_devtoolsWindow) return;
+    ImGuiContext *const old = ImGui::GetCurrentContext();
+    ImGui::SetCurrentContext(s_devtoolsImGui);
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext(s_devtoolsImGui);
+    ImGui::SetCurrentContext(old);
+    SDL_GL_DeleteContext(s_devtoolsContext);
+    SDL_DestroyWindow(s_devtoolsWindow);
+    s_devtoolsWindow = nullptr; s_devtoolsContext = nullptr; s_devtoolsImGui = nullptr;
+    s_devtoolsWindowId = 0;
+}
+#else
+extern "C" int VBJS_DevtoolsProcessEvent(const void *) { return 0; }
+extern "C" int VBJS_DevtoolsOwnsInput(void) { return 0; }
+extern "C" int VBJS_DevtoolsSuppressGameMouseCapture(void) { return 0; }
+extern "C" void VBJS_DevtoolsFocus(void) {}
+extern "C" void VBJS_DevtoolsStartDebuggerBridge(void) {}
+extern "C" void VBJS_DevtoolsShutdownWindow(void) {}
+#endif
+
 // HUD draw: render every script-registered text line (called from the overlay pass).
 extern "C" void VBJS_DrawHUD(void)
 {
+    VBJS_DevtoolsPump();
     int n = 0;
     vbjs_text_t *t = VBJS_TextSlots(&n);
     for (int i = 0; i < n; i++)
@@ -254,64 +698,11 @@ extern "C" void VBJS_DrawHUD(void)
 
 #if SDL_MAJOR_VERSION >= 2 && defined(USE_OPENGL)
     if (VBJS_DevtoolsEnabled())
-    {
-        static char expression[256] = "$event";
-        static char result[1024] = "";
-        static const char *events[] = { "start", "frame", "playerDied", "actorSpawned", "chatMessage", "shutdown" };
-
-        engineBeginImGuiFrame();
-        ImGui::SetNextWindowPos(ImVec2((float)xdim - 410.f, 8.f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(402.f, (float)ydim - 16.f), ImGuiCond_Always);
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
-        ImGui::Begin("VibeBuild32 JavaScript DevTools", nullptr, flags);
-
-        if (VBJS_DevtoolsPaused())
-        {
-            ImGui::TextColored(ImVec4(1.f, .75f, .1f, 1.f), "PAUSED at %s", VBJS_DevtoolsCurrentEvent() ? VBJS_DevtoolsCurrentEvent() : "breakpoint");
-            ImGui::SameLine();
-            if (ImGui::Button("Resume")) VBJS_DevtoolsResume();
-        }
-        else ImGui::TextDisabled("Running");
-
-        if (ImGui::BeginTabBar("js-devtools-tabs"))
-        {
-            if (ImGui::BeginTabItem("Console"))
-            {
-                ImGui::BeginChild("console-log", ImVec2(0, -36), ImGuiChildFlags_Borders);
-                for (int i = 0; i < 12; ++i)
-                {
-                    const char *line = VBJS_DevtoolsLog(i);
-                    if (line) ImGui::TextWrapped("%s", line);
-                }
-                ImGui::EndChild();
-                if (ImGui::InputText("Evaluate", expression, sizeof(expression), ImGuiInputTextFlags_EnterReturnsTrue))
-                    VBJS_DevtoolsEvaluate(expression, result, sizeof(result));
-                if (ImGui::Button("Run")) VBJS_DevtoolsEvaluate(expression, result, sizeof(result));
-                ImGui::SameLine(); ImGui::TextWrapped("%s", result);
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("Breakpoints"))
-            {
-                ImGui::TextUnformatted("Event breakpoints pause after a listener runs.");
-                ImGui::TextDisabled("Use vb.breakpoint() for an exact source-line pause.");
-                for (auto event : events)
-                {
-                    bool enabled = VBJS_DevtoolsHasEventBreakpoint(event) != 0;
-                    if (ImGui::Checkbox(event, &enabled)) VBJS_DevtoolsSetEventBreakpoint(event, enabled);
-                }
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("Scope"))
-            {
-                ImGui::TextUnformatted("Evaluate global expressions or inspect the last event.");
-                ImGui::BulletText("$event: %s", VBJS_DevtoolsCurrentEvent() ? VBJS_DevtoolsCurrentEvent() : "none");
-                ImGui::BulletText("Examples: vb.player(), globalThis.myValue");
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-        }
-        ImGui::End();
-    }
+# ifdef __APPLE__
+        vbjs_web_devtools_tick();
+# else
+        vbjs_devtools_render_window();
+# endif
 #else
     // Software-renderer fallback: retain a small read-only console panel.
     if (VBJS_DevtoolsEnabled())

@@ -32,10 +32,30 @@ int  VBJS_DevtoolsEnabled(void);
 const char *VBJS_DevtoolsLog(int index);    // oldest-first recent console log, or NULL
 int  VBJS_DevtoolsPaused(void);
 void VBJS_DevtoolsResume(void);
-void VBJS_DevtoolsSetEventBreakpoint(const char *event, int enabled);
-int  VBJS_DevtoolsHasEventBreakpoint(const char *event);
 const char *VBJS_DevtoolsCurrentEvent(void);
 int  VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize);
+void VBJS_DevtoolsFocus(void);             // show/focus the external DevTools surface
+void VBJS_DevtoolsStartDebuggerBridge(void);
+int  VBJS_DevtoolsSourceCount(void);
+const char *VBJS_DevtoolsSourcePath(int index);
+int  VBJS_DevtoolsReadSource(int index, char *out, int outSize);
+/* Thread-safe JSON transport used by the standalone DevTools surface. */
+int  VBJS_DevtoolsDebuggerSend(const char *json);
+int  VBJS_DevtoolsDebuggerReceive(char *out, int outSize);
+int  VBJS_DevtoolsDebuggerReceiveForClient(int client, char *out, int outSize);
+void VBJS_DevtoolsPump(void);
+// Give the detached DevTools window first refusal of its own SDL input event.
+// `event` is an SDL_Event pointer, intentionally opaque to game-independent users.
+int  VBJS_DevtoolsProcessEvent(const void *event);
+// True while the detached DevTools, rather than the game, owns keyboard or
+// mouse focus.  SDL's Cocoa mouse events may not always retain a window ID
+// while relative mouse mode is being disabled.
+int  VBJS_DevtoolsOwnsInput(void);
+// SDL relative mouse mode is process-wide on Cocoa.  While a detached
+// DevTools window is visible, the game must not recapture it or macOS routes
+// the DevTools activation click back to the game window.
+int  VBJS_DevtoolsSuppressGameMouseCapture(void);
+void VBJS_DevtoolsShutdownWindow(void);
 void VBJS_Init(void);                      // build the runtime and run the script (once, after game init)
 void VBJS_Shutdown(void);                  // tear the runtime down
 void VBJS_RunFrame(void);                  // per-frame: fire "frame", pump pending JS jobs/timers

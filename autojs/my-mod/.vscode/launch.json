@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch VibeBuild32 (Duke)",
+      "type": "node",
+      "request": "launch",
+      "debugServer": 4711,
+      "preLaunchTask": "VibeBuild32: Start VS Code debug adapter",
+      "gameExecutable": "${workspaceFolder}/../../vibebuild32",
+      "gameData": "/Users/alonamir/games/duke3da/duke3d.grp",
+      "cwd": "${workspaceFolder}/../..",
+      "game": "duke",
+      "debugPort": 4712
+    },
+    {
+      "name": "Attach to running VibeBuild32",
+      "type": "node",
+      "request": "attach",
+      "debugServer": 4711,
+      "preLaunchTask": "VibeBuild32: Start VS Code debug adapter",
+      "debugPort": 4712
+    }
+  ]
+}

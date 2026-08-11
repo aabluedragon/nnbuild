@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osd.h"
 #include "osdcmds.h"
 #include "config.h"
+#include "vbjs.h"
 #include <sys/stat.h>
 
 extern char inputloc;
@@ -5395,6 +5396,11 @@ VOLUME_ALL_40x:
     }
 
     X_OnEvent(EVENT_DISPLAYMENUREST, g_player[myconnectindex].ps->i, myconnectindex, -1);
+
+    // The normal HUD path draws DevTools during gameplay. Draw it here too at
+    // title/menu screens, where there is no HUD pass yet.
+    if ((ud.gm & MODE_GAME) == 0)
+        VBJS_DrawHUD();
 
     if ((ud.gm&MODE_MENU) != MODE_MENU)
     {

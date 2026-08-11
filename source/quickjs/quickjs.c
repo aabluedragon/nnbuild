@@ -45,6 +45,7 @@
 #include "cutils.h"
 #include "list.h"
 #include "quickjs.h"
+#include "quickjs-debugger.h"
 #include "libregexp.h"
 #include "dtoa.h"
 
@@ -412,6 +413,10 @@ struct JSRuntime {
     void *user_opaque;
     void *libc_opaque;
     JSRuntimeFinalizerState *finalizers;
+
+    /* Optional source debugger.  Kept entirely dormant until a transport is
+       attached, so normal embedded QuickJS execution keeps its fast path. */
+    JSDebuggerInfo debugger_info;
 };
 
 struct JSClass {
@@ -888,6 +893,7 @@ typedef struct JSFunctionBytecode {
     int pc2line_len;
     uint8_t *pc2line_buf;
     char *source;
+    struct JSDebuggerFunctionInfo debugger;
 } JSFunctionBytecode;
 
 typedef struct JSBoundFunction {
@@ -2641,6 +2647,11 @@ void JS_SetRuntimeInfo(JSRuntime *rt, const char *s)
         rt->rt_info = s;
 }
 
+JSDebuggerInfo *js_debugger_info(JSRuntime *rt)
+{
+    return &rt->debugger_info;
+}
+
 void JS_FreeRuntime(JSRuntime *rt)
 {
     struct list_head *el, *el1;
@@ -2648,6 +2659,7 @@ void JS_FreeRuntime(JSRuntime *rt)
     int i;
 
     rt->in_free = true;
+    js_debugger_free(rt, &rt->debugger_info);
     JS_FreeValueRT(rt, rt->current_exception);
 
     list_for_each_safe(el, el1, &rt->job_list) {
@@ -2891,6 +2903,7 @@ JSContext *JS_NewContextRaw(JSRuntime *rt)
         JS_FreeContext(ctx);
         return NULL;
     }
+    js_debugger_new_context(ctx);
     return ctx;
 }
 
@@ -3045,6 +3058,7 @@ void JS_FreeContext(JSContext *ctx)
     if (--JS_REF_COUNT(ctx) > 0)
         return;
     assert(JS_REF_COUNT(ctx) == 0);
+    js_debugger_free_context(ctx);
 
 #ifdef ENABLE_DUMPS // JS_DUMP_ATOMS
     if (check_dump_flag(rt, JS_DUMP_ATOMS))
@@ -8021,6 +8035,7 @@ JSValue JS_Throw(JSContext *ctx, JSValue obj)
     JSRuntime *rt = ctx->rt;
     JS_FreeValue(ctx, rt->current_exception);
     rt->current_exception = obj;
+    js_debugger_exception(ctx);
     return JS_EXCEPTION;
 }
 
@@ -18091,7 +18106,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 #define SWITCH(pc)      DUMP_BYTECODE_OR_DONT(pc) __extension__ ({ goto *dispatch_table[opcode = *pc++]; });
 #define CASE(op)        case_ ## op
 #define DEFAULT         case_default
-#define BREAK           SWITCH(pc)
+#define BREAK           do { if (ctx->rt->debugger_info.transport_close) js_debugger_check(ctx, pc); SWITCH(pc); } while (0)
 #endif
 
     if (js_poll_interrupts(caller_ctx))
@@ -18195,6 +18210,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
     for(;;) {
         int call_argc;
         JSValue *call_argv;
+
+        if (ctx->rt->debugger_info.transport_close)
+            js_debugger_check(ctx, pc);
 
         SWITCH(pc) {
         CASE(OP_push_i32):
@@ -37182,6 +37200,7 @@ static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b)
     JS_FreeAtomRT(rt, b->filename);
     js_free_rt(rt, b->pc2line_buf);
     js_free_rt(rt, b->source);
+    js_free_rt(rt, b->debugger.breakpoints);
 
     remove_gc_object(&b->header);
     if (rt->gc_phase == JS_GC_PHASE_REMOVE_CYCLES && JS_REF_COUNT(b) != 0) {
@@ -64836,3 +64855,139 @@ uintptr_t js_std_cmd(int cmd, ...) {
 #undef malloc
 #undef free
 #undef realloc
+
+/* ---- private debugger introspection ------------------------------------ */
+JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *pc)
+{
+    JSDebuggerLocation location = { JS_ATOM_NULL, 0, 0 };
+    JSStackFrame *frame = ctx->rt->current_stack_frame;
+    if (!frame || JS_VALUE_GET_TAG(frame->cur_func) != JS_TAG_OBJECT) return location;
+    JSObject *function = JS_VALUE_GET_OBJ(frame->cur_func);
+    if (!function || !js_class_has_bytecode(function->class_id)) return location;
+    JSFunctionBytecode *bytecode = function->u.func.function_bytecode;
+    const uint8_t *at = pc ? pc : frame->cur_pc;
+    if (!bytecode || !at) return location;
+    int column = bytecode->col_num;
+    location.filename = bytecode->filename;
+    location.line = bytecode->line_num;
+    if (bytecode->pc2line_buf)
+        location.line = find_line_num(ctx, bytecode, (uint32_t)(at - bytecode->byte_code_buf), &column);
+    location.column = column;
+    return location;
+}
+
+uint32_t js_debugger_stack_depth(JSContext *ctx)
+{
+    uint32_t depth = 0;
+    for (JSStackFrame *frame = ctx->rt->current_stack_frame; frame; frame = frame->prev_frame) ++depth;
+    return depth;
+}
+
+JSValue js_debugger_build_backtrace(JSContext *ctx, const uint8_t *pc)
+{
+    JSValue result = JS_NewArray(ctx);
+    uint32_t index = 0;
+    for (JSStackFrame *frame = ctx->rt->current_stack_frame; frame; frame = frame->prev_frame, ++index)
+    {
+        JSValue entry = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, entry, "id", JS_NewUint32(ctx, index));
+        const char *name = get_func_name(ctx, frame->cur_func);
+        JS_SetPropertyStr(ctx, entry, "name", JS_NewString(ctx, name && name[0] ? name : "<anonymous>"));
+        if (name) JS_FreeCString(ctx, name);
+        if (JS_VALUE_GET_TAG(frame->cur_func) == JS_TAG_OBJECT)
+        {
+            JSObject *function = JS_VALUE_GET_OBJ(frame->cur_func);
+            if (function && js_class_has_bytecode(function->class_id))
+            {
+                JSFunctionBytecode *bytecode = function->u.func.function_bytecode;
+                const uint8_t *at = (frame == ctx->rt->current_stack_frame && pc) ? pc : frame->cur_pc;
+                if (bytecode && at)
+                {
+                    int column = bytecode->col_num, line = bytecode->line_num;
+                    if (bytecode->pc2line_buf)
+                        line = find_line_num(ctx, bytecode, (uint32_t)(at - bytecode->byte_code_buf), &column);
+                    JS_SetPropertyStr(ctx, entry, "filename", JS_AtomToString(ctx, bytecode->filename));
+                    JS_SetPropertyStr(ctx, entry, "line", JS_NewInt32(ctx, line));
+                    JS_SetPropertyStr(ctx, entry, "column", JS_NewInt32(ctx, column));
+                }
+            }
+        }
+        JS_SetPropertyUint32(ctx, result, index, entry);
+    }
+    return result;
+}
+
+JSValue js_debugger_local_variables(JSContext *ctx, int wanted)
+{
+    JSValue result = JS_NewObject(ctx);
+    int index = 0;
+    for (JSStackFrame *frame = ctx->rt->current_stack_frame; frame; frame = frame->prev_frame, ++index)
+    {
+        if (index != wanted || JS_VALUE_GET_TAG(frame->cur_func) != JS_TAG_OBJECT) continue;
+        JSObject *function = JS_VALUE_GET_OBJ(frame->cur_func);
+        if (!function || !js_class_has_bytecode(function->class_id)) break;
+        JSFunctionBytecode *bytecode = function->u.func.function_bytecode;
+        for (uint32_t i = 0; i < bytecode->arg_count + bytecode->var_count; ++i)
+        {
+            JSValue value = i < bytecode->arg_count ? frame->arg_buf[i] : frame->var_buf[i - bytecode->arg_count];
+            if (!JS_IsUninitialized(value)) JS_SetProperty(ctx, result, bytecode->vardefs[i].var_name, js_dup(value));
+        }
+        break;
+    }
+    return result;
+}
+
+JSValue js_debugger_closure_variables(JSContext *ctx, int wanted)
+{
+    JSValue result = JS_NewObject(ctx);
+    int index = 0;
+    for (JSStackFrame *frame = ctx->rt->current_stack_frame; frame; frame = frame->prev_frame, ++index)
+    {
+        if (index != wanted || JS_VALUE_GET_TAG(frame->cur_func) != JS_TAG_OBJECT) continue;
+        JSObject *function = JS_VALUE_GET_OBJ(frame->cur_func);
+        if (!function || !js_class_has_bytecode(function->class_id)) break;
+        JSFunctionBytecode *bytecode = function->u.func.function_bytecode;
+        for (uint32_t i = 0; i < bytecode->closure_var_count; ++i)
+        {
+            JSVarRef *ref = function->u.func.var_refs ? function->u.func.var_refs[i] : NULL;
+            if (ref && ref->pvalue && !JS_IsUninitialized(*ref->pvalue))
+                JS_SetProperty(ctx, result, bytecode->closure_var[i].var_name, js_dup(*ref->pvalue));
+        }
+        break;
+    }
+    return result;
+}
+
+int js_debugger_check_breakpoint(JSContext *ctx, uint32_t generation, const uint8_t *pc)
+{
+    JSStackFrame *frame = ctx->rt->current_stack_frame;
+    if (!frame || JS_VALUE_GET_TAG(frame->cur_func) != JS_TAG_OBJECT) return 0;
+    JSObject *function = JS_VALUE_GET_OBJ(frame->cur_func);
+    if (!function || !js_class_has_bytecode(function->class_id)) return 0;
+    JSFunctionBytecode *bytecode = function->u.func.function_bytecode;
+    if (!bytecode || !bytecode->filename) return 0;
+
+    JSDebuggerInfo *debugger = js_debugger_info(ctx->rt);
+    const char *path = JS_AtomToCString(ctx, bytecode->filename);
+    if (!path) return 0;
+    int column = bytecode->col_num, line = bytecode->line_num;
+    const uint8_t *at = pc ? pc : frame->cur_pc;
+    if (bytecode->pc2line_buf && at)
+        line = find_line_num(ctx, bytecode, (uint32_t)(at - bytecode->byte_code_buf), &column);
+    int hit = 0;
+    for (int i = 0; i < debugger->breakpoint_file_count && !hit; ++i)
+        if (!strcmp(path, debugger->breakpoint_files[i].path))
+            for (int j = 0; j < debugger->breakpoint_files[i].line_count; ++j)
+            {
+                int const requested = debugger->breakpoint_files[i].lines[j];
+                // Some declarations (notably a local `const` initializer) are
+                // folded into the following bytecode operation.  Their source
+                // line therefore has no PC of its own.  Bind such a request to
+                // the immediately following executable line, as IDEs do,
+                // while never skipping farther into unrelated code.
+                if (line == requested || line == requested + 1) { hit = 1; break; }
+            }
+    JS_FreeCString(ctx, path);
+    (void)generation;
+    return hit;
+}

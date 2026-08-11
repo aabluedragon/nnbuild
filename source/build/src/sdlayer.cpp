@@ -49,6 +49,9 @@
 
 #include "vfs.h"
 #include "communityapi.h"
+#ifdef VBJS
+# include "vbjs.h"
+#endif
 
 #define MICROPROFILE_IMPL
 #include "microprofile.h"
@@ -1317,6 +1320,19 @@ static void SetWindowGrab(SDL_Window *pWindow, int const clipToWindow)
 static inline char grabmouse_low(char a)
 {
 #if !defined EDUKE32_TOUCH_DEVICES
+    // macOS implements SDL relative mouse mode for the entire process, not
+    // per SDL_Window.  Once DevTools exists, allowing the game to enable it
+    // makes the next DevTools click activate/capture the game window before
+    // SDL can dispatch that click to the secondary window.
+# ifdef VBJS
+    if (a && VBJS_DevtoolsSuppressGameMouseCapture())
+    {
+        if (sdl_window)
+            SDL_SetWindowGrab(sdl_window, SDL_FALSE);
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+        return 0;
+    }
+# endif
     /* FIXME: Maybe it's better to make sure that grabmouse_low
        is called only when a window is ready?                */
     if (sdl_window)
@@ -1630,7 +1646,8 @@ void engineSetupImGui(void)
 
 #ifdef USE_OPENGL
     ImGui_ImplSDL2_InitForOpenGL(sdl_window, sdl_context);
-    ImGui_ImplOpenGL3_Init();
+    // Keep the engine and detached VibeBuild DevTools compatible with OpenGL 2.1.
+    ImGui_ImplOpenGL3_Init("#version 120");
 #endif
 
     g_ImGui_IO->Fonts->AddFontDefault();
@@ -1978,6 +1995,18 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
         if (!sdl_surface)
             SDL2_VIDEO_ERR("SDL_GetWindowSurface");
     }
+
+#ifdef VBJS
+    // In -dt mode reserve the left side for the game from its first visible
+    // frame.  The external DevTools window may take a moment to start, but
+    // the game must not begin life on the right and then jump later.
+    if (!fullscreen && sdl_window && VBJS_DevtoolsEnabled())
+    {
+        SDL_Rect usable;
+        if (SDL_GetDisplayUsableBounds(display, &usable) == 0)
+            SDL_SetWindowPosition(sdl_window, usable.x + 20, usable.y + max(0, (usable.h - y) / 2));
+    }
+#endif
 
     setvideomode_sdlcommonpost(x, y, c, fs, regrab);
 
@@ -2585,6 +2614,33 @@ int32_t handleevents_pollsdl(void)
 
     while (SDL_PollEvent(&ev))
     {
+#ifdef VBJS
+        // The detached JavaScript DevTools owns input targeted at its window;
+        // never let those keystrokes or clicks control the game as well.
+        if (VBJS_DevtoolsProcessEvent(&ev))
+        {
+            // Any DevTools interaction must release relative mode immediately.
+            // On Cocoa, waiting for the later focus event lets the game's
+            // captured mouse pull focus straight back to its own window.
+            appactive = false;
+            if (sdl_window) SDL_SetWindowGrab(sdl_window, SDL_FALSE);
+            SDL_SetRelativeMouseMode(SDL_FALSE);
+            continue;
+        }
+        // Do not let an input event with a missing/incorrect window ID reach
+        // the game while Cocoa says DevTools owns focus.  This is the race
+        // that otherwise re-enables Duke's relative mouse capture on click.
+        if (VBJS_DevtoolsOwnsInput() &&
+            (ev.type == SDL_TEXTINPUT || ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP ||
+             ev.type == SDL_MOUSEMOTION || ev.type == SDL_MOUSEBUTTONDOWN ||
+             ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_MOUSEWHEEL))
+        {
+            appactive = false;
+            if (sdl_window) SDL_SetWindowGrab(sdl_window, SDL_FALSE);
+            SDL_SetRelativeMouseMode(SDL_FALSE);
+            continue;
+        }
+#endif
         if (g_ImGui_IO)
         {
             if (g_ImGui_IO->WantCaptureKeyboard && (ev.type == SDL_TEXTINPUT || ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP))
@@ -2620,6 +2676,16 @@ int32_t handleevents_pollsdl(void)
             case SDL_KEYDOWN:
             case SDL_KEYUP:
             {
+#ifdef VBJS
+                // Browser-equivalent DevTools shortcut: Command+Option+I on
+                // macOS focuses the detached external DevTools surface.
+                if (ev.key.type == SDL_KEYDOWN && ev.key.keysym.scancode == SDL_SCANCODE_I &&
+                    (ev.key.keysym.mod & KMOD_GUI) && (ev.key.keysym.mod & KMOD_ALT))
+                {
+                    VBJS_DevtoolsFocus();
+                    break;
+                }
+#endif
                 auto const &sc = ev.key.keysym.scancode;
                 code = keytranslation[sc];
 

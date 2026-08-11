@@ -10,9 +10,188 @@
 #include "baselayer.h"
 #include "grpscan.h"
 #include "osxbits.h"
+#include "sdl_inc.h"
+#include "SDL_syswm.h"
+#include "vbjs.h"
 
 #import "GrpFile.game.h"
 #import "GameListSource.game.h"
+
+// SDL_RaiseWindow only orders a Cocoa window forward.  A separate DevTools
+// window also needs to become the key window, otherwise the game's SDL
+// relative-mouse view remains the target of the activation click.
+extern "C" void VBJS_CocoaMakeKeyWindow(SDL_Window *window)
+{
+    if (!window) return;
+
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (!SDL_GetWindowWMInfo(window, &info) || info.subsystem != SDL_SYSWM_COCOA)
+        return;
+
+    NSWindow *nativeWindow = info.info.cocoa.window;
+    [nativeWindow setAcceptsMouseMovedEvents:YES];
+    [NSApp activateIgnoringOtherApps:YES];
+    [nativeWindow makeKeyAndOrderFront:nil];
+}
+
+extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window)
+{
+    if (!window) return;
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (!SDL_GetWindowWMInfo(window, &info) || info.subsystem != SDL_SYSWM_COCOA) return;
+    NSWindow *nativeWindow = info.info.cocoa.window;
+    // DevTools opens on the leftmost available display.  macOS's
+    // mainScreen can still be the game display in a multi-display layout, so
+    // select the display with the smallest global x coordinate explicitly.
+    NSScreen *screen = [NSScreen mainScreen];
+    for (NSScreen *candidate in [NSScreen screens])
+        if ([candidate visibleFrame].origin.x < [screen visibleFrame].origin.x)
+            screen = candidate;
+    NSRect const usable = [screen visibleFrame];
+    NSRect const frame = [nativeWindow frame];
+    CGFloat const y = usable.origin.y + ((usable.size.height > frame.size.height) ? (usable.size.height - frame.size.height) / 2 : 0);
+    [nativeWindow setFrameOrigin:NSMakePoint(usable.origin.x + 20, y)];
+}
+
+// SDL relative mouse mode is process-wide on macOS.  A native AppKit window
+// avoids the second-SDL-window activation/capture race entirely.
+@interface VBJSCocoaDevtools : NSObject
+{
+    NSWindow *window;
+    NSTextView *console;
+    NSTextField *expression;
+    NSString *lastConsole;
+}
+- (void)show;
+- (void)refresh;
+- (void)run:(id)sender;
+- (BOOL)handleSDLEvent:(SDL_Event const *)event;
+@end
+
+@implementation VBJSCocoaDevtools
+- (id)init
+{
+    self = [super init];
+    if (!self) return nil;
+    window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 516, 666)
+                                          styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
+                                            backing:NSBackingStoreBuffered defer:NO];
+    [window setTitle:@"VibeBuild32 JavaScript DevTools"];
+    [window setMinSize:NSMakeSize(360, 420)];
+    [window setReleasedWhenClosed:NO];
+    NSView *content = [window contentView];
+    NSTextField *title = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 630, 492, 22)];
+    [title setStringValue:@"VibeBuild32 JavaScript DevTools"];
+    [title setEditable:NO]; [title setSelectable:NO]; [title setBezeled:NO]; [title setDrawsBackground:NO];
+    [title setFont:[NSFont boldSystemFontOfSize:14]]; [content addSubview:title]; [title release];
+    NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(12, 116, 492, 502)];
+    [scroll setHasVerticalScroller:YES]; [scroll setBorderType:NSBezelBorder];
+    console = [[NSTextView alloc] initWithFrame:[[scroll contentView] bounds]];
+    [console setEditable:NO]; [console setSelectable:YES]; [console setFont:[NSFont userFixedPitchFontOfSize:12]];
+    [scroll setDocumentView:console]; [content addSubview:scroll]; [scroll release];
+    expression = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 78, 390, 26)];
+    [expression setStringValue:@"$event"]; [expression setTarget:self]; [expression setAction:@selector(run:)]; [content addSubview:expression];
+    NSButton *run = [[NSButton alloc] initWithFrame:NSMakeRect(410, 78, 94, 26)];
+    [run setTitle:@"Evaluate"]; [run setTarget:self]; [run setAction:@selector(run:)]; [content addSubview:run]; [run release];
+    return self;
+}
+- (void)dealloc { [lastConsole release]; [expression release]; [console release]; [window release]; [super dealloc]; }
+- (void)show
+{
+    // Keep the game on the left and DevTools on the right when the display
+    // has room, so both windows remain visible and independently clickable.
+    SDL_Window *gameSDLWindow = SDL_GL_GetCurrentWindow();
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (gameSDLWindow && SDL_GetWindowWMInfo(gameSDLWindow, &info) && info.subsystem == SDL_SYSWM_COCOA)
+    {
+        NSWindow *gameWindow = info.info.cocoa.window;
+        NSScreen *screen = [gameWindow screen] ?: [NSScreen mainScreen];
+        NSRect usable = [screen visibleFrame];
+        NSRect gameFrame = [gameWindow frame];
+        NSRect devFrame = [window frame];
+        CGFloat const gap = 12;
+        if (gameFrame.size.width + gap + devFrame.size.width <= usable.size.width)
+        {
+            CGFloat const totalWidth = gameFrame.size.width + gap + devFrame.size.width;
+            CGFloat const x = usable.origin.x + (usable.size.width - totalWidth) / 2;
+            CGFloat const gameY = usable.origin.y + ((usable.size.height - gameFrame.size.height) / 2 > 0 ? (usable.size.height - gameFrame.size.height) / 2 : 0);
+            [gameWindow setFrameOrigin:NSMakePoint(x, gameY)];
+            [window setFrameOrigin:NSMakePoint(x + gameFrame.size.width + gap,
+                                               usable.origin.y + ((usable.size.height - devFrame.size.height) / 2 > 0 ? (usable.size.height - devFrame.size.height) / 2 : 0))];
+        }
+    }
+    [NSApp activateIgnoringOtherApps:YES];
+    [window makeKeyAndOrderFront:nil];
+}
+- (void)refresh
+{
+    NSMutableString *text = [NSMutableString string];
+    for (int i = 0; i < 12; ++i) { char const *line = VBJS_DevtoolsLog(i); if (line) [text appendFormat:@"%s\n", line]; }
+    if (![text isEqualToString:lastConsole]) { [console setString:text]; [lastConsole release]; lastConsole = [text copy]; }
+}
+- (void)run:(id)sender
+{
+    UNREFERENCED_PARAMETER(sender); char result[1024];
+    VBJS_DevtoolsEvaluate([[expression stringValue] UTF8String], result, sizeof(result));
+    [console setString:[NSString stringWithFormat:@"> %@\n%s", [expression stringValue], result]];
+}
+- (BOOL)handleSDLEvent:(SDL_Event const *)event
+{
+    if (!event || ![window isVisible]) return NO;
+    if (event->type == SDL_MOUSEBUTTONDOWN)
+    {
+        // SDL's Cocoa pump owns the NSApplication event loop.  Query the
+        // actual desktop cursor instead of SDL's (game-relative) coordinates.
+        NSPoint const inWindow = [window convertPointFromScreen:[NSEvent mouseLocation]];
+        NSPoint const inContent = [[window contentView] convertPoint:inWindow fromView:nil];
+        NSView *hit = [[window contentView] hitTest:inContent];
+        if (!hit) return NO;
+        [NSApp activateIgnoringOtherApps:YES];
+        [window makeKeyAndOrderFront:nil];
+        if (hit == expression || [hit isDescendantOf:expression])
+        {
+            [window makeFirstResponder:expression];
+            return YES;
+        }
+        for (NSView *view = hit; view && view != [window contentView]; view = [view superview])
+            if ([view isKindOfClass:[NSButton class]]) { [(NSButton *)view performClick:nil]; return YES; }
+        return YES; // the console is selectable, but must never control Duke.
+    }
+
+    id responder = [window firstResponder];
+    BOOL const editingExpression = responder == expression || [responder isKindOfClass:[NSTextView class]];
+    if (!editingExpression) return NO;
+    if (event->type == SDL_TEXTINPUT)
+    {
+        NSString *typed = [NSString stringWithUTF8String:event->text.text];
+        if (typed) [expression setStringValue:[[expression stringValue] stringByAppendingString:typed]];
+        return YES;
+    }
+    if (event->type == SDL_KEYDOWN)
+    {
+        if (event->key.keysym.scancode == SDL_SCANCODE_RETURN || event->key.keysym.scancode == SDL_SCANCODE_KP_ENTER)
+        {
+            [self run:nil]; return YES;
+        }
+        if (event->key.keysym.scancode == SDL_SCANCODE_BACKSPACE)
+        {
+            NSString *value = [expression stringValue];
+            if ([value length]) [expression setStringValue:[value substringToIndex:[value length] - 1]];
+            return YES;
+        }
+    }
+    return NO;
+}
+@end
+
+static VBJSCocoaDevtools *g_vbjsDevtools = nil;
+extern "C" void VBJS_CocoaDevtoolsShow(void) { if (!g_vbjsDevtools) { g_vbjsDevtools = [[VBJSCocoaDevtools alloc] init]; [g_vbjsDevtools show]; } }
+extern "C" void VBJS_CocoaDevtoolsRefresh(void) { [g_vbjsDevtools refresh]; }
+extern "C" int VBJS_CocoaDevtoolsProcessEvent(void const *event) { return [g_vbjsDevtools handleSDLEvent:(SDL_Event const *)event] ? 1 : 0; }
+extern "C" void VBJS_CocoaDevtoolsShutdown(void) { [g_vbjsDevtools release]; g_vbjsDevtools = nil; }
 
 #ifndef MAC_OS_X_VERSION_10_5
 # define NSImageScaleNone NSScaleNone

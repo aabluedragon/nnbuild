@@ -16,9 +16,12 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <deque>
 
 extern "C" {
 #include "quickjs.h"
+#include "quickjs-debugger.h"
 }
 #include "vbjs.h"
 
@@ -59,37 +62,58 @@ static JSContext *s_ctx = nullptr;
 static char  s_scriptDir[1024]  = {0};   // dir of the script currently being loaded (require base)
 static int   s_enabled = 0;
 static int   s_initTried = 0;            // guards a single init attempt
+static int   s_startPending = 0;
+static int   s_startWaitFrames = 0;
+static int   s_scriptsLoaded = 0;
 static int   s_devtools = 0;
 enum { VBJS_DEVTOOLS_LOGS = 12 };
 static char s_devtoolsLogs[VBJS_DEVTOOLS_LOGS][192];
 static int s_devtoolsLogCount = 0;
-static char s_devtoolsBreakpointEvents[16][64];
-static int s_devtoolsBreakpointCount = 0;
 static int s_devtoolsPaused = 0;
 static char s_devtoolsCurrentEvent[64];
 static JSValue s_devtoolsEvent = JS_UNDEFINED;
+
+/* The engine pauses on the game thread, while the DevTools HTTP listener runs
+ * independently.  This transport is the narrow, synchronized bridge between
+ * them; no QuickJS object is ever touched from the listener thread. */
+struct vbjs_debug_transport_t
+{
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_cond_t changed = PTHREAD_COND_INITIALIZER;
+    std::deque<char> inbound, outbound[2]; // browser inspector, VS Code DAP bridge
+    int closed = 0;
+};
+static vbjs_debug_transport_t s_debugTransport;
+
+static size_t vbjs_debug_read(void *opaque, char *buffer, size_t length)
+{
+    vbjs_debug_transport_t *transport = (vbjs_debug_transport_t *)opaque;
+    pthread_mutex_lock(&transport->mutex);
+    while (transport->inbound.empty() && !transport->closed) pthread_cond_wait(&transport->changed, &transport->mutex);
+    size_t n = 0; while (n < length && !transport->inbound.empty()) { buffer[n++] = transport->inbound.front(); transport->inbound.pop_front(); }
+    pthread_mutex_unlock(&transport->mutex); return n;
+}
+static size_t vbjs_debug_write(void *opaque, const char *buffer, size_t length)
+{
+    vbjs_debug_transport_t *transport = (vbjs_debug_transport_t *)opaque;
+    pthread_mutex_lock(&transport->mutex); for (int client = 0; client < 2; ++client) for (size_t i = 0; i < length; ++i) transport->outbound[client].push_back(buffer[i]); pthread_cond_broadcast(&transport->changed); pthread_mutex_unlock(&transport->mutex); return length;
+}
+static size_t vbjs_debug_peek(void *opaque)
+{
+    vbjs_debug_transport_t *transport = (vbjs_debug_transport_t *)opaque;
+    pthread_mutex_lock(&transport->mutex); size_t n = transport->inbound.size(); pthread_mutex_unlock(&transport->mutex); return n;
+}
+static void vbjs_debug_close(JSRuntime *, void *opaque)
+{
+    vbjs_debug_transport_t *transport = (vbjs_debug_transport_t *)opaque;
+    pthread_mutex_lock(&transport->mutex); transport->closed = 1; pthread_cond_broadcast(&transport->changed); pthread_mutex_unlock(&transport->mutex);
+}
 
 static void vbjs_devtools_log(const char *line)
 {
     if (!s_devtools) return;
     snprintf(s_devtoolsLogs[s_devtoolsLogCount % VBJS_DEVTOOLS_LOGS], sizeof(s_devtoolsLogs[0]), "%s", line ? line : "");
     ++s_devtoolsLogCount;
-}
-
-static int vbjs_devtools_has_breakpoint(const char *event)
-{
-    for (int i = 0; i < s_devtoolsBreakpointCount; ++i)
-        if (!strcmp(s_devtoolsBreakpointEvents[i], event)) return 1;
-    return 0;
-}
-
-static void vbjs_devtools_set_event(const char *event, int argc, JSValueConst *argv)
-{
-    if (!s_devtools || !vbjs_devtools_has_breakpoint(event)) return;
-    snprintf(s_devtoolsCurrentEvent, sizeof(s_devtoolsCurrentEvent), "%s", event);
-    JS_FreeValue(s_ctx, s_devtoolsEvent);
-    s_devtoolsEvent = argc ? JS_DupValue(s_ctx, argv[0]) : JS_UNDEFINED;
-    s_devtoolsPaused = 1; // cooperative pause: no subsequent JS events/jobs run until Resume.
 }
 
 // The set of scripts to load: -js files plus autojs/<name>/index.{ts,js}.
@@ -276,19 +300,24 @@ static JSValue js_vb_on(JSContext *ctx, JSValueConst, int argc, JSValueConst *ar
         return JS_ThrowTypeError(ctx, "vb.on(event, handler)");
     const char *ev = JS_ToCString(ctx, argv[0]);
     if (!ev) return JS_EXCEPTION;
-    JSValue arr = JS_GetPropertyStr(ctx, s_events, ev);
+    // The public API accepts both `STRAFELEFT` and `EVENT_STRAFELEFT`, but
+    // engine dispatch always uses the canonical EVENT_* spelling. Store under
+    // that spelling so the callback (and a source breakpoint inside it) is
+    // actually reachable.
+    int const conEv = vbjs_game::eventNum(ev);
+    const char *eventKey = conEv >= 0 ? vbjs_game::eventName(conEv) : ev;
+    JSValue arr = JS_GetPropertyStr(ctx, s_events, eventKey);
     if (!JS_IsArray(arr))
     {
         JS_FreeValue(ctx, arr);
         arr = JS_NewArray(ctx);
-        JS_SetPropertyStr(ctx, s_events, ev, JS_DupValue(ctx, arr));
+        JS_SetPropertyStr(ctx, s_events, eventKey, JS_DupValue(ctx, arr));
     }
     JSValue lenv = JS_GetPropertyStr(ctx, arr, "length");
     uint32_t len = 0; JS_ToUint32(ctx, &len, lenv); JS_FreeValue(ctx, lenv);
     JS_SetPropertyUint32(ctx, arr, len, JS_DupValue(ctx, argv[1]));
     JS_FreeValue(ctx, arr);
     // If this is a CON event name, mark it so the CON dispatch hook fires it.
-    int const conEv = vbjs_game::eventNum(ev);
     if (conEv >= 0 && conEv < VBJS_MAXCONEVENTS) s_conEventListened[conEv] = 1;
     JS_FreeCString(ctx, ev);
     return JS_UNDEFINED;
@@ -298,7 +327,13 @@ static JSValue js_vb_off(JSContext *ctx, JSValueConst, int argc, JSValueConst *a
 {
     if (argc < 1) return JS_UNDEFINED;
     const char *ev = JS_ToCString(ctx, argv[0]);
-    if (ev) { JS_SetPropertyStr(ctx, s_events, ev, JS_NewArray(ctx)); JS_FreeCString(ctx, ev); }
+    if (ev)
+    {
+        int const conEv = vbjs_game::eventNum(ev);
+        const char *eventKey = conEv >= 0 ? vbjs_game::eventName(conEv) : ev;
+        JS_SetPropertyStr(ctx, s_events, eventKey, JS_NewArray(ctx));
+        JS_FreeCString(ctx, ev);
+    }
     return JS_UNDEFINED;
 }
 
@@ -322,7 +357,6 @@ static void vbjs_fire(const char *event, int argc, JSValueConst *argv)
         }
     }
     JS_FreeValue(ctx, arr);
-    vbjs_devtools_set_event(event, argc, argv);
 }
 
 // ----------------------------------------------------------------- vb: HUD ---
@@ -751,6 +785,35 @@ void VBJS_SetScriptPath(const char *path) { vbjs_add_script(path); }
 
 void VBJS_SetDevtools(int enabled) { s_devtools = enabled != 0; }
 int VBJS_DevtoolsEnabled(void) { return s_devtools; }
+void VBJS_DevtoolsPump(void)
+{
+    if (!s_ctx) return;
+    js_debugger_cooperate(s_ctx);
+}
+int VBJS_DevtoolsDebuggerSend(const char *json)
+{
+    if (!json || !json[0]) return 0;
+    size_t length = strlen(json); char header[10]; snprintf(header, sizeof(header), "%08x\n", (unsigned)(length + 1));
+    pthread_mutex_lock(&s_debugTransport.mutex);
+    for (int i = 0; i < 9; ++i) s_debugTransport.inbound.push_back(header[i]);
+    for (size_t i = 0; i < length; ++i) s_debugTransport.inbound.push_back(json[i]);
+    s_debugTransport.inbound.push_back('\n'); pthread_cond_broadcast(&s_debugTransport.changed); pthread_mutex_unlock(&s_debugTransport.mutex);
+    return 1;
+}
+int VBJS_DevtoolsDebuggerReceiveForClient(int client, char *out, int outSize)
+{
+    if (!out || outSize < 2) return 0;
+    client = client == 1 ? 1 : 0;
+    pthread_mutex_lock(&s_debugTransport.mutex);
+    if (s_debugTransport.outbound[client].size() < 9) { pthread_mutex_unlock(&s_debugTransport.mutex); return 0; }
+    char header[10]; for (int i = 0; i < 9; ++i) header[i] = s_debugTransport.outbound[client][i]; header[8] = 0;
+    unsigned length = 0; if (sscanf(header, "%x", &length) != 1 || !length || s_debugTransport.outbound[client].size() < 9u + length) { pthread_mutex_unlock(&s_debugTransport.mutex); return 0; }
+    size_t copied = length > (unsigned)outSize - 1 ? (unsigned)outSize - 1 : length - 1;
+    for (int i = 0; i < 9; ++i) s_debugTransport.outbound[client].pop_front();
+    for (unsigned i = 0; i < length; ++i) { char c = s_debugTransport.outbound[client].front(); s_debugTransport.outbound[client].pop_front(); if (i < copied) out[i] = c; }
+    out[copied] = 0; pthread_mutex_unlock(&s_debugTransport.mutex); return (int)copied;
+}
+int VBJS_DevtoolsDebuggerReceive(char *out, int outSize) { return VBJS_DevtoolsDebuggerReceiveForClient(0, out, outSize); }
 const char *VBJS_DevtoolsLog(int index)
 {
     if (index < 0 || index >= VBJS_DEVTOOLS_LOGS || index >= s_devtoolsLogCount) return nullptr;
@@ -760,22 +823,6 @@ const char *VBJS_DevtoolsLog(int index)
 }
 int VBJS_DevtoolsPaused(void) { return s_devtoolsPaused; }
 void VBJS_DevtoolsResume(void) { s_devtoolsPaused = 0; }
-void VBJS_DevtoolsSetEventBreakpoint(const char *event, int enabled)
-{
-    if (!event || !event[0]) return;
-    for (int i = 0; i < s_devtoolsBreakpointCount; ++i)
-        if (!strcmp(s_devtoolsBreakpointEvents[i], event))
-        {
-            if (enabled) return;
-            memmove(&s_devtoolsBreakpointEvents[i], &s_devtoolsBreakpointEvents[i + 1],
-                    (size_t)(s_devtoolsBreakpointCount - i - 1) * sizeof(s_devtoolsBreakpointEvents[0]));
-            --s_devtoolsBreakpointCount;
-            return;
-        }
-    if (enabled && s_devtoolsBreakpointCount < (int)(sizeof(s_devtoolsBreakpointEvents) / sizeof(s_devtoolsBreakpointEvents[0])))
-        snprintf(s_devtoolsBreakpointEvents[s_devtoolsBreakpointCount++], sizeof(s_devtoolsBreakpointEvents[0]), "%s", event);
-}
-int VBJS_DevtoolsHasEventBreakpoint(const char *event) { return event && vbjs_devtools_has_breakpoint(event); }
 const char *VBJS_DevtoolsCurrentEvent(void) { return s_devtoolsCurrentEvent[0] ? s_devtoolsCurrentEvent : nullptr; }
 int VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize)
 {
@@ -793,6 +840,16 @@ int VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize)
     JS_FreeValue(s_ctx, json);
     JS_FreeValue(s_ctx, value);
     return 0;
+}
+
+int VBJS_DevtoolsSourceCount(void) { return s_scriptCount; }
+const char *VBJS_DevtoolsSourcePath(int index) { return (unsigned)index < (unsigned)s_scriptCount ? s_scripts[index].path : nullptr; }
+int VBJS_DevtoolsReadSource(int index, char *out, int outSize)
+{
+    if (!out || outSize < 1 || (unsigned)index >= (unsigned)s_scriptCount) return 0;
+    size_t length = 0; char *source = vbjs_load_source(s_scripts[index].path, &length);
+    if (!source) { out[0] = 0; return 0; }
+    snprintf(out, outSize, "%s", source); free(source); return 1;
 }
 
 int VBJS_GenerateProject(const char *requestedName, int typescript)
@@ -964,6 +1021,22 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     snprintf(path, sizeof(path), "%s/index.%s", project, typescript ? "ts" : "js");
     if (vbjs_write_text(path, typescript ? indexTs : indexJs)) return -1;
     snprintf(path, sizeof(path), "%s/vb.d.ts", project); if (vbjs_write_text(path, types)) return -1;
+    // Bootstrap the exact VS Code DAP setup used by the bundled starter mod.
+    // It works for either index.ts or index.js because the adapter receives
+    // source paths directly from VS Code.
+    char vscode[1400]; snprintf(vscode, sizeof(vscode), "%s/.vscode", project);
+    if (mkdir(vscode, 0755) != 0) return -1;
+    const char *vscodeFiles[] = { "launch.json", "tasks.json", "README.md", "vibebuild32-debug-adapter.js" };
+    for (auto file : vscodeFiles)
+    {
+        char source[1400], target[1400]; size_t length = 0;
+        snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", s_launchDir, file);
+        char *contents = vbjs_read_file(source, &length);
+        if (!contents) return -1;
+        snprintf(target, sizeof(target), "%s/%s", vscode, file);
+        int failed = vbjs_write_text(target, contents); free(contents);
+        if (failed) return -1;
+    }
     fprintf(stdout, "Created JavaScript project: %s\n", project);
     return 0;
 }
@@ -1012,7 +1085,23 @@ void VBJS_Init(void)
     if (!s_ctx) { JS_FreeRuntime(s_rt); s_rt = nullptr; vbjs_game::log("[js] failed to create context"); return; }
 
     vbjs_setup_context(s_ctx);
+    // The browser inspector is opt-in via -dt, but VS Code can attach to any
+    // running JS/TS mod. Keep its localhost-only bridge available either way.
+    pthread_mutex_lock(&s_debugTransport.mutex);
+    s_debugTransport.closed = 0; s_debugTransport.inbound.clear(); s_debugTransport.outbound[0].clear(); s_debugTransport.outbound[1].clear();
+    pthread_mutex_unlock(&s_debugTransport.mutex);
+    js_debugger_attach(s_ctx, vbjs_debug_read, vbjs_debug_write, vbjs_debug_peek, vbjs_debug_close, &s_debugTransport);
+    VBJS_DevtoolsStartDebuggerBridge();
+    // VS Code has to attach and submit breakpoints after the runtime starts.
+    // Hold both top-level module evaluation and the one-shot `start` callback
+    // until then, so breakpoints work everywhere in a freshly launched mod.
+    s_scriptsLoaded = 0;
+    s_startPending = 1;
+    s_startWaitFrames = 0;
+}
 
+static void vbjs_load_scripts(void)
+{
     for (int i = 0; i < s_scriptCount; i++)
     {
         const char *path = s_scripts[i].path;
@@ -1030,20 +1119,24 @@ void VBJS_Init(void)
         JS_FreeValue(s_ctx, r);
         { char m[1100]; snprintf(m, sizeof(m), "loaded %s", path); vbjs_game::log(m); }
     }
-
+    s_scriptsLoaded = 1;
     s_enabled = 1;
-    VBJS_FireSimple("start");
 }
 
 void VBJS_Shutdown(void)
 {
     if (!s_ctx) return;
     VBJS_FireSimple("shutdown");
+#ifdef __APPLE__
+    extern void VBJS_CocoaDevtoolsShutdown(void);
+    VBJS_CocoaDevtoolsShutdown();
+#endif
+    VBJS_DevtoolsShutdownWindow();
     JS_FreeValue(s_ctx, s_events);
     JS_FreeValue(s_ctx, s_requireCache);
     JS_FreeValue(s_ctx, s_devtoolsEvent); s_devtoolsEvent = JS_UNDEFINED;
     JS_FreeContext(s_ctx); JS_FreeRuntime(s_rt);
-    s_ctx = nullptr; s_rt = nullptr; s_enabled = 0;
+    s_ctx = nullptr; s_rt = nullptr; s_enabled = 0; s_scriptsLoaded = 0; s_startPending = 0;
 }
 
 void VBJS_RunFrame(void)
@@ -1053,6 +1146,17 @@ void VBJS_RunFrame(void)
         if (s_initTried) return;
         VBJS_Init();          // lazy: first frame is a safe point (game/engine are up)
         if (!s_ctx) return;   // no scripts, or init failed; VBJS_Init set s_initTried so we won't retry
+    }
+    VBJS_DevtoolsPump();
+    if (s_startPending)
+    {
+        // Normal launches do not have a debugger client, so preserve startup
+        // behavior after a brief bounded wait (~0.5 seconds at 60 fps).
+        if (!js_debugger_configuration_done(s_ctx) && ++s_startWaitFrames < 30)
+            return;
+        s_startPending = 0;
+        vbjs_load_scripts();
+        VBJS_FireSimple("start");
     }
     if (s_devtoolsPaused) return;
     VBJS_FireSimple("frame");
