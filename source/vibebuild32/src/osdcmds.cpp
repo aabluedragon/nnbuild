@@ -1704,6 +1704,7 @@ int registerosdcommands(void)
     {
         OSD_RegisterFunction("changelevel","changelevel <volume> <level>: warps to the given level", osdcmd_changelevel);
         OSD_RegisterFunction("map","map <mapfile>: loads the given user map", osdcmd_map);
+        OSD_RegisterFunction("changemap","changemap <mapfile|E#L#>: alias of map", osdcmd_map);   // VibeBuild32: friendlier name (e.g. cvar.run('/changemap E1L3'))
     }
 
     OSD_RegisterFunction("addpath","addpath <path>: adds path to game filesystem", osdcmd_addpath);
