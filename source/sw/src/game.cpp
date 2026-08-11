@@ -2824,6 +2824,10 @@ Control(int32_t argc, char const * const * argv)
     }
 
     CleanExit = TRUE;
+    // The debugger bridge owns a listener thread. Stop it while SW's engine
+    // state is still alive; otherwise macOS can tear down its shared globals
+    // underneath that thread when the game window is closed.
+    VBJS_DevtoolsShutdownWindow();
     TerminateGame();
 }
 

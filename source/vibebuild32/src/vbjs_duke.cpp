@@ -421,7 +421,7 @@ static void vbjs_web_debugger_start(void)
     sockaddr_in address {}; address.sin_family = AF_INET; address.sin_addr.s_addr = htonl(INADDR_LOOPBACK); address.sin_port = htons(VBJS_DebugPort());
     if (bind(s_webDebuggerListen, (sockaddr *)&address, sizeof(address)) || listen(s_webDebuggerListen, 8)) { close(s_webDebuggerListen); s_webDebuggerListen = -1; return; }
     socklen_t length = sizeof(address); getsockname(s_webDebuggerListen, (sockaddr *)&address, &length); s_webDebuggerPort = ntohs(address.sin_port);
-    if (!pthread_create(&s_webDebuggerThread, nullptr, vbjs_web_debugger_thread, nullptr)) { pthread_detach(s_webDebuggerThread); s_webDebuggerThreadStarted = 1; }
+    if (!pthread_create(&s_webDebuggerThread, nullptr, vbjs_web_debugger_thread, nullptr)) s_webDebuggerThreadStarted = 1;
     else { close(s_webDebuggerListen); s_webDebuggerListen = -1; }
 }
 
@@ -732,8 +732,19 @@ extern "C" void VBJS_DevtoolsShutdownWindow(void)
 {
 #ifdef __APPLE__
     if (s_webDevtoolsListen >= 0) { close(s_webDevtoolsListen); s_webDevtoolsListen = -1; }
-    if (s_webDebuggerListen >= 0) { close(s_webDebuggerListen); s_webDebuggerListen = -1; }
-    s_webDebuggerThreadStarted = 0;
+    if (s_webDebuggerListen >= 0)
+    {
+        // Wake accept() before joining so no debugger thread survives engine
+        // teardown.  Closing alone is not sufficient on every macOS socket
+        // implementation when it happens from a different thread.
+        shutdown(s_webDebuggerListen, SHUT_RDWR);
+        close(s_webDebuggerListen); s_webDebuggerListen = -1;
+    }
+    if (s_webDebuggerThreadStarted)
+    {
+        pthread_join(s_webDebuggerThread, nullptr);
+        s_webDebuggerThreadStarted = 0;
+    }
 #endif
     if (!s_devtoolsWindow) return;
     ImGuiContext *const old = ImGui::GetCurrentContext();
