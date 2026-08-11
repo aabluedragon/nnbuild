@@ -44,6 +44,9 @@ namespace vbjs_game {
     int  shoot(int sprite, int tile);
     void addAmmo(int playerNum, int weapon, int amount);
     void addWeapon(int playerNum, int weapon, int switchTo);
+    int  A_Spawn(int spriteNum, int tileNum);
+    int  A_InsertSprite(int whatsect, int s_x, int s_y, int s_z, int s_pn, int s_s,
+                        int s_xr, int s_yr, int s_a, int s_ve, int s_zv, int s_ow, int s_ss);
     // CON event (EVENT_*) name<->number, for listening to all CON events.
     int         eventNum(const char *name);   // "EVENT_SPAWN" -> id, or -1
     const char *eventName(int num);           // id -> "EVENT_SPAWN", or null
@@ -423,6 +426,25 @@ static JSValue js_vb_spawn(JSContext *ctx, JSValueConst, int argc, JSValueConst 
     return JS_NewInt32(ctx, vbjs_game::spawn(tile, x, y, z, owner));
 }
 
+// Exact Duke actor APIs. Keep the native names and parameter order so scripts
+// can use the same calls as engine code when they need low-level control.
+static JSValue js_vb_A_Spawn(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 2) return JS_ThrowTypeError(ctx, "A_Spawn(spriteNum, tileNum)");
+    int32_t spriteNum = 0, tileNum = 0;
+    JS_ToInt32(ctx, &spriteNum, argv[0]); JS_ToInt32(ctx, &tileNum, argv[1]);
+    return JS_NewInt32(ctx, vbjs_game::A_Spawn(spriteNum, tileNum));
+}
+
+static JSValue js_vb_A_InsertSprite(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 13) return JS_ThrowTypeError(ctx, "A_InsertSprite(whatsect, s_x, s_y, s_z, s_pn, s_s, s_xr, s_yr, s_a, s_ve, s_zv, s_ow, s_ss)");
+    int32_t values[13] = {};
+    for (int i = 0; i < 13; ++i) JS_ToInt32(ctx, &values[i], argv[i]);
+    return JS_NewInt32(ctx, vbjs_game::A_InsertSprite(values[0], values[1], values[2], values[3], values[4], values[5], values[6],
+                                                        values[7], values[8], values[9], values[10], values[11], values[12]));
+}
+
 static JSValue js_vb_sendMessage(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (argc < 1) return JS_UNDEFINED;
@@ -575,6 +597,8 @@ static void vbjs_define_vb(JSContext *ctx, JSValue target)
     JS_SetPropertyStr(ctx, target, "clearText",   JS_NewCFunction(ctx, js_vb_clearText,   "clearText", 1));
     JS_SetPropertyStr(ctx, target, "breakpoint",  JS_NewCFunction(ctx, js_vb_breakpoint,  "breakpoint", 0));
     JS_SetPropertyStr(ctx, target, "spawn",       JS_NewCFunction(ctx, js_vb_spawn,       "spawn", 4));
+    JS_SetPropertyStr(ctx, target, "A_Spawn",     JS_NewCFunction(ctx, js_vb_A_Spawn,     "A_Spawn", 2));
+    JS_SetPropertyStr(ctx, target, "A_InsertSprite", JS_NewCFunction(ctx, js_vb_A_InsertSprite, "A_InsertSprite", 13));
     JS_SetPropertyStr(ctx, target, "sendMessage", JS_NewCFunction(ctx, js_vb_sendMessage, "sendMessage", 1));
     JS_SetPropertyStr(ctx, target, "getGamevar",  JS_NewCFunction(ctx, js_vb_getGamevar,  "getGamevar", 1));
     JS_SetPropertyStr(ctx, target, "setGamevar",  JS_NewCFunction(ctx, js_vb_setGamevar,  "setGamevar", 2));
@@ -615,7 +639,7 @@ static void vbjs_define_fs(JSContext *ctx, JSValue target)
 
 // ES-module init for `import ... from 'vb'` / 'fs' (default + named exports).
 static const char *k_vb_exports[] = {
-    "on","off","log","drawText","clearText","breakpoint","spawn","sendMessage","getGamevar","setGamevar","player","run","define",
+    "on","off","log","drawText","clearText","breakpoint","spawn","A_Spawn","A_InsertSprite","sendMessage","getGamevar","setGamevar","player","run","define",
     "sound","shoot","addAmmo","addWeapon",
     "getActor","setActor","getPlayer","setPlayer","getInput","setInput","getSector","setSector","getWall","setWall",
     "getProjectile","setProjectile","getActiveProjectile","setActiveProjectile","getTileData","setTileData","getUserdef","setUserdef",
@@ -998,7 +1022,10 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "  off<K extends VBEventName>(name?: K): void;\n"
         "  off(name?: string): void;\n"
         "  log(...args: unknown[]): void; drawText(id: number, x: number, y: number, text: string, pal?: number, shade?: number): void; clearText(id?: number): void; breakpoint(): void;\n"
-        "  spawn(tile: number, x?: number, y?: number, z?: number, owner?: number): number; sendMessage(text: string): void; player(): Player;\n"
+        "  spawn(tile: number, x?: number, y?: number, z?: number, owner?: number): number;\n"
+        "  A_Spawn(spriteNum: number, tileNum: number): number;\n"
+        "  A_InsertSprite(whatsect: number, s_x: number, s_y: number, s_z: number, s_pn: number, s_s: number, s_xr: number, s_yr: number, s_a: number, s_ve: number, s_zv: number, s_ow: number, s_ss: number): number;\n"
+        "  sendMessage(text: string): void; player(): Player;\n"
         "  getGamevar(name: string, sprite?: number, player?: number): ConValue; setGamevar(name: string, value: number, sprite?: number, player?: number): void;\n"
         "  getActor(i: number, member: string, parm2?: number): ConValue; setActor(i: number, member: string, value: number, parm2?: number): void;\n"
         "  getPlayer(i: number, member: string, parm2?: number): ConValue; setPlayer(i: number, member: string, value: number, parm2?: number): void;\n"
@@ -1012,7 +1039,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "declare interface CVar { run(command: string): void; set(name: string, value: unknown): void; }\n"
         "declare const console: VBConsole; declare const vb: VB; declare const cvar: CVar;\n"
         "declare function require(name: 'vb'): VB; declare function require(name: 'fs'): FS; declare function require(name: 'cvar'): CVar; declare function require(name: string): unknown;\n"
-        "declare module 'vb' { export type { ActorEvent, ChatEvent, ConEvent, ConEventName, ConEventShortName, ConValue, Player, VBEventMap, VBEventName, VBLifecycleEventName, VBConsole }; const api: VB; export default api; export const on: VB['on']; export const off: VB['off']; export const log: VB['log']; export const drawText: VB['drawText']; export const clearText: VB['clearText']; export const breakpoint: VB['breakpoint']; export const spawn: VB['spawn']; export const sendMessage: VB['sendMessage']; export const player: VB['player']; export const getGamevar: VB['getGamevar']; export const setGamevar: VB['setGamevar']; export const run: VB['run']; export const define: VB['define']; export const sound: VB['sound']; export const shoot: VB['shoot']; export const addAmmo: VB['addAmmo']; export const addWeapon: VB['addWeapon']; export const getActor: VB['getActor']; export const setActor: VB['setActor']; export const getPlayer: VB['getPlayer']; export const setPlayer: VB['setPlayer']; export const getInput: VB['getInput']; export const setInput: VB['setInput']; export const getSector: VB['getSector']; export const setSector: VB['setSector']; export const getWall: VB['getWall']; export const setWall: VB['setWall']; export const getProjectile: VB['getProjectile']; export const setProjectile: VB['setProjectile']; export const getActiveProjectile: VB['getActiveProjectile']; export const setActiveProjectile: VB['setActiveProjectile']; export const getTileData: VB['getTileData']; export const setTileData: VB['setTileData']; export const getUserdef: VB['getUserdef']; export const setUserdef: VB['setUserdef']; }\n"
+        "declare module 'vb' { export type { ActorEvent, ChatEvent, ConEvent, ConEventName, ConEventShortName, ConValue, Player, VBEventMap, VBEventName, VBLifecycleEventName, VBConsole }; const api: VB; export default api; export const on: VB['on']; export const off: VB['off']; export const log: VB['log']; export const drawText: VB['drawText']; export const clearText: VB['clearText']; export const breakpoint: VB['breakpoint']; export const spawn: VB['spawn']; export const A_Spawn: VB['A_Spawn']; export const A_InsertSprite: VB['A_InsertSprite']; export const sendMessage: VB['sendMessage']; export const player: VB['player']; export const getGamevar: VB['getGamevar']; export const setGamevar: VB['setGamevar']; export const run: VB['run']; export const define: VB['define']; export const sound: VB['sound']; export const shoot: VB['shoot']; export const addAmmo: VB['addAmmo']; export const addWeapon: VB['addWeapon']; export const getActor: VB['getActor']; export const setActor: VB['setActor']; export const getPlayer: VB['getPlayer']; export const setPlayer: VB['setPlayer']; export const getInput: VB['getInput']; export const setInput: VB['setInput']; export const getSector: VB['getSector']; export const setSector: VB['setSector']; export const getWall: VB['getWall']; export const setWall: VB['setWall']; export const getProjectile: VB['getProjectile']; export const setProjectile: VB['setProjectile']; export const getActiveProjectile: VB['getActiveProjectile']; export const setActiveProjectile: VB['setActiveProjectile']; export const getTileData: VB['getTileData']; export const setTileData: VB['setTileData']; export const getUserdef: VB['getUserdef']; export const setUserdef: VB['setUserdef']; }\n"
         "declare module 'fs' { const api: FS; export default api; export const readFile: FS['readFile']; export const writeFile: FS['writeFile']; export const appendFile: FS['appendFile']; export const exists: FS['exists']; }\n"
         "declare module 'cvar' { const api: CVar; export default api; export const run: CVar['run']; export const set: CVar['set']; }\n";
     snprintf(path, sizeof(path), "%s/package.json", project); if (vbjs_write_text(path, typescript ? packageTs : packageJs)) return -1;

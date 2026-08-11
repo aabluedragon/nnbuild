@@ -48,6 +48,17 @@ static int vbjs_playerSprite(void)
 
 namespace vbjs_game {
 
+int A_Spawn(int spriteNum, int tileNum)
+{
+    return ::A_Spawn(spriteNum, tileNum);
+}
+
+int A_InsertSprite(int whatsect, int s_x, int s_y, int s_z, int s_pn, int s_s,
+                   int s_xr, int s_yr, int s_a, int s_ve, int s_zv, int s_ow, int s_ss)
+{
+    return ::A_InsertSprite(whatsect, s_x, s_y, s_z, s_pn, s_s, s_xr, s_yr, s_a, s_ve, s_zv, s_ow, s_ss);
+}
+
 void log(const char *s)
 {
     LOG_F(INFO, "[js] %s", s ? s : "");
@@ -74,7 +85,15 @@ int spawn(int tile, int x, int y, int z, int owner)
     }
     if (sect < 0) return -1;
 
-    return A_InsertSprite(sect, x, y, z, tile, 0, 48, 48, 0, 0, 0, (owner >= 0 ? owner : psp), 1);
+    int const spawned = A_InsertSprite(sect, x, y, z, tile, 0, 48, 48, 0, 0, 0, (owner >= 0 ? owner : psp), 1);
+    if (spawned >= 0)
+    {
+        // A_InsertSprite only allocates a raw Build sprite. A_Spawn performs
+        // the CON actor initialization that gives enemies health, collision,
+        // AI, and normal damage handling.
+        A_Spawn(-1, spawned);
+    }
+    return spawned;
 }
 
 void sendChat(const char *text)
