@@ -1825,46 +1825,32 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "}\n";
     const char *indexTs =
         "// VibeBuild32 auto-loads only index.ts (or index.js) from this project.\n"
-        "import { VBComponent, createPrefab, on, log, drawText, define } from 'vb';\n"
-        "import fs from 'fs';\n"
-        "const vbLegacy = require('vb'); // CommonJS require() is supported too.\n\n"
+        "// Optional debug-only launch args, for example:\n"
+        "// /// vbd.params=\"-gm duke -g ~/games/duke3da/duke3d.grp -sc\"\n"
+        "import { on, log } from 'vb';\n\n"
         "let frames = 0;\n"
-        "const liztroop = define('LIZTROOP');\n"
-        "class TrooperComponent extends VBComponent { onSpawn() { log('Component attached:', this.sprite); } }\n"
-        "const trooperPrefab = liztroop === undefined ? undefined : createPrefab(liztroop, TrooperComponent);\n\n"
         "on('start', () => {\n"
-        "  log('TypeScript mod loaded. LIZTROOP is', liztroop, 'player:', vbLegacy.player().sprite);\n"
-        "  // Built-in modules are typed too; this is safe even when the file does not exist.\n"
-        "  if (fs.exists('autojs-notes.txt')) log(fs.readFile('autojs-notes.txt'));\n"
-        "  // Spawn with components: if (trooperPrefab) spawnPrefab(trooperPrefab);\n"
-        "});\n\n"
-        "on('actorSpawned', event => {\n"
-        "  if (event.tile === liztroop) log('A trooper spawned:', event.sprite);\n"
+        "  log('TypeScript mod loaded.');\n"
         "});\n\n"
         "on('frame', () => {\n"
-        "  if (++frames % 60 === 0) drawText(9001, 8, 8, `TS mod: ${frames} frames`);\n"
+        "  const breakpointProbe = `TypeScript frame ${++frames}`;\n"
+        "  if (frames % 60 === 0) log(breakpointProbe);\n"
         "});\n";
     const char *indexJs =
         "// VibeBuild32 auto-loads only index.js (or index.ts) from this project.\n"
+        "// Optional debug-only launch args, for example:\n"
+        "// /// vbd.params=\"-gm duke -g ~/games/duke3da/duke3d.grp -sc\"\n"
         "// @ts-check\n"
         "/** @type {import('vb').default} */\n"
         "const vb = require('vb');\n"
-        "const fs = require('fs');\n"
         "\n"
         "let frames = 0;\n"
-        "const liztroop = vb.define('LIZTROOP');\n"
-        "class TrooperComponent extends vb.VBComponent { onSpawn() { vb.log('Component attached:', this.sprite); } }\n"
-        "const trooperPrefab = liztroop === undefined ? undefined : vb.createPrefab(liztroop, TrooperComponent);\n\n"
         "vb.on('start', () => {\n"
-        "  vb.log('JavaScript mod loaded. LIZTROOP is', liztroop);\n"
-        "  if (fs.exists('autojs-notes.txt')) vb.log(fs.readFile('autojs-notes.txt'));\n"
-        "  // Spawn with components: if (trooperPrefab) vb.spawnPrefab(trooperPrefab);\n"
-        "});\n\n"
-        "vb.on('actorSpawned', event => {\n"
-        "  if (event.tile === liztroop) vb.log('A trooper spawned:', event.sprite);\n"
+        "  vb.log('JavaScript mod loaded.');\n"
         "});\n\n"
         "vb.on('frame', () => {\n"
-        "  if (++frames % 60 === 0) vb.drawText(9001, 8, 8, `JS mod: ${frames} frames`);\n"
+        "  const breakpointProbe = `JavaScript frame ${++frames}`;\n"
+        "  if (frames % 60 === 0) vb.log(breakpointProbe);\n"
         "});\n";
     const char *jsconfig =
         "{\n"
@@ -1991,7 +1977,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         int failed = vbjs_write_text(target, contents); free(contents);
         if (failed) return -1;
     }
-    fprintf(stdout, "Created JavaScript project: %s\n", project);
+    fprintf(stdout, "Created %s project: %s\n", typescript ? "TypeScript" : "JavaScript", project);
     return 0;
 }
 

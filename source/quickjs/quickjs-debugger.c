@@ -155,8 +155,10 @@ static int ignore_current_breakpoint(JSDebuggerInfo *d, JSDebuggerLocation at)
 void js_debugger_check(JSContext *ctx, const uint8_t *pc)
 {
     JSDebuggerInfo *d = js_debugger_info(JS_GetRuntime(ctx)); if (d->is_debugging) return; d->is_debugging = 1; d->ctx = ctx;
+    while (!d->is_paused && d->transport_peek && d->transport_peek(d->transport_udata) && process_one(d, pc)) {}
+    if (!d->is_paused && !d->stepping && d->breakpoint_file_count <= 0) { d->is_debugging = 0; return; }
     JSDebuggerLocation at = js_debugger_current_location(ctx, pc); int depth = (int)js_debugger_stack_depth(ctx);
-    int hit = !ignore_current_breakpoint(d, at) && js_debugger_check_breakpoint(ctx, d->breakpoints_dirty_counter, pc);
+    int hit = at.filename && !ignore_current_breakpoint(d, at) && js_debugger_check_breakpoint(ctx, d->breakpoints_dirty_counter, pc);
     int const sameLocation = at.filename == d->step_over.filename && at.line == d->step_over.line && at.column == d->step_over.column;
     if (d->stepping)
     {
@@ -177,7 +179,7 @@ void js_debugger_check(JSContext *ctx, const uint8_t *pc)
         /* A breakpoint update can arrive immediately before a handler's
            first opcode. Re-evaluate this exact source location so a short
            function cannot run past a newly-installed source breakpoint. */
-        if (!d->is_paused && !ignore_current_breakpoint(d, at) && js_debugger_check_breakpoint(ctx, d->breakpoints_dirty_counter, pc))
+        if (!d->is_paused && at.filename && !ignore_current_breakpoint(d, at) && js_debugger_check_breakpoint(ctx, d->breakpoints_dirty_counter, pc))
         {
             d->is_paused = 1; stopped(d, "breakpoint", pc);
             while (d->is_paused && process_one(d, pc)) {}

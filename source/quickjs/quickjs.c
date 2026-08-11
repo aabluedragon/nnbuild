@@ -64857,6 +64857,20 @@ uintptr_t js_std_cmd(int cmd, ...) {
 #undef realloc
 
 /* ---- private debugger introspection ------------------------------------ */
+static int js_debugger_pc_offset(JSFunctionBytecode *bytecode, const uint8_t *pc,
+                                 uint32_t *offset)
+{
+    if (!bytecode || !bytecode->byte_code_buf || !pc)
+        return 0;
+    uintptr_t const start = (uintptr_t)bytecode->byte_code_buf;
+    uintptr_t const end = start + (uintptr_t)bytecode->byte_code_len;
+    uintptr_t const at = (uintptr_t)pc;
+    if (end < start || at < start || at > end)
+        return 0;
+    *offset = (uint32_t)(at - start);
+    return 1;
+}
+
 JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *pc)
 {
     JSDebuggerLocation location = { JS_ATOM_NULL, 0, 0 };
@@ -64867,11 +64881,13 @@ JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *p
     JSFunctionBytecode *bytecode = function->u.func.function_bytecode;
     const uint8_t *at = pc ? pc : frame->cur_pc;
     if (!bytecode || !at) return location;
+    uint32_t offset = 0;
+    if (!js_debugger_pc_offset(bytecode, at, &offset)) return location;
     int column = bytecode->col_num;
     location.filename = bytecode->filename;
     location.line = bytecode->line_num;
     if (bytecode->pc2line_buf)
-        location.line = find_line_num(ctx, bytecode, (uint32_t)(at - bytecode->byte_code_buf), &column);
+        location.line = find_line_num(ctx, bytecode, offset, &column);
     location.column = column;
     return location;
 }
@@ -64901,11 +64917,12 @@ JSValue js_debugger_build_backtrace(JSContext *ctx, const uint8_t *pc)
             {
                 JSFunctionBytecode *bytecode = function->u.func.function_bytecode;
                 const uint8_t *at = (frame == ctx->rt->current_stack_frame && pc) ? pc : frame->cur_pc;
-                if (bytecode && at)
+                uint32_t offset = 0;
+                if (js_debugger_pc_offset(bytecode, at, &offset))
                 {
                     int column = bytecode->col_num, line = bytecode->line_num;
                     if (bytecode->pc2line_buf)
-                        line = find_line_num(ctx, bytecode, (uint32_t)(at - bytecode->byte_code_buf), &column);
+                        line = find_line_num(ctx, bytecode, offset, &column);
                     JS_SetPropertyStr(ctx, entry, "filename", JS_AtomToString(ctx, bytecode->filename));
                     JS_SetPropertyStr(ctx, entry, "line", JS_NewInt32(ctx, line));
                     JS_SetPropertyStr(ctx, entry, "column", JS_NewInt32(ctx, column));
@@ -64960,6 +64977,8 @@ JSValue js_debugger_closure_variables(JSContext *ctx, int wanted)
 
 int js_debugger_check_breakpoint(JSContext *ctx, uint32_t generation, const uint8_t *pc)
 {
+    JSDebuggerInfo *debugger = js_debugger_info(ctx->rt);
+    if (debugger->breakpoint_file_count <= 0) return 0;
     JSStackFrame *frame = ctx->rt->current_stack_frame;
     if (!frame || JS_VALUE_GET_TAG(frame->cur_func) != JS_TAG_OBJECT) return 0;
     JSObject *function = JS_VALUE_GET_OBJ(frame->cur_func);
@@ -64967,13 +64986,18 @@ int js_debugger_check_breakpoint(JSContext *ctx, uint32_t generation, const uint
     JSFunctionBytecode *bytecode = function->u.func.function_bytecode;
     if (!bytecode || !bytecode->filename) return 0;
 
-    JSDebuggerInfo *debugger = js_debugger_info(ctx->rt);
     const char *path = JS_AtomToCString(ctx, bytecode->filename);
     if (!path) return 0;
     int column = bytecode->col_num, line = bytecode->line_num;
     const uint8_t *at = pc ? pc : frame->cur_pc;
-    if (bytecode->pc2line_buf && at)
-        line = find_line_num(ctx, bytecode, (uint32_t)(at - bytecode->byte_code_buf), &column);
+    uint32_t offset = 0;
+    if (!js_debugger_pc_offset(bytecode, at, &offset))
+    {
+        JS_FreeCString(ctx, path);
+        return 0;
+    }
+    if (bytecode->pc2line_buf)
+        line = find_line_num(ctx, bytecode, offset, &column);
     int hit = 0;
     for (int i = 0; i < debugger->breakpoint_file_count && !hit; ++i)
         if (!strcmp(path, debugger->breakpoint_files[i].path))
