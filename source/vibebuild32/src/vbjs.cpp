@@ -36,7 +36,16 @@ namespace vbjs_game {
     int  shoot(int sprite, int tile);
     void addAmmo(int playerNum, int weapon, int amount);
     void addWeapon(int playerNum, int weapon, int switchTo);
+    // CON event (EVENT_*) name<->number, for listening to all CON events.
+    int         eventNum(const char *name);   // "EVENT_SPAWN" -> id, or -1
+    const char *eventName(int num);           // id -> "EVENT_SPAWN", or null
 }
+
+// Which CON event numbers have a JS listener. Exposed as a plain global so the
+// engine's VM_HaveEvent() can OR it in inline (see gameexec.h): a CON event is
+// dispatched when a CON handler OR a JS listener wants it.
+extern "C" { unsigned char g_vbjsConEventListened[VBJS_MAXCONEVENTS]; }
+#define s_conEventListened g_vbjsConEventListened
 
 // ------------------------------------------------------------------------------
 
@@ -178,6 +187,9 @@ static JSValue js_vb_on(JSContext *ctx, JSValueConst, int argc, JSValueConst *ar
     uint32_t len = 0; JS_ToUint32(ctx, &len, lenv); JS_FreeValue(ctx, lenv);
     JS_SetPropertyUint32(ctx, arr, len, JS_DupValue(ctx, argv[1]));
     JS_FreeValue(ctx, arr);
+    // If this is a CON event name, mark it so the CON dispatch hook fires it.
+    int const conEv = vbjs_game::eventNum(ev);
+    if (conEv >= 0 && conEv < VBJS_MAXCONEVENTS) s_conEventListened[conEv] = 1;
     JS_FreeCString(ctx, ev);
     return JS_UNDEFINED;
 }
@@ -698,6 +710,20 @@ void VBJS_FireChat(const char *event, int playerNum, const char *text)
     JS_SetPropertyStr(s_ctx, o, "text",   JS_NewString(s_ctx, text ? text : ""));
     JSValueConst args[1] = { o };
     vbjs_fire(event, 1, args);
+    JS_FreeValue(s_ctx, o);
+}
+
+void VBJS_FireConEvent(int eventNum, int spriteNum, int playerNum, int dist)
+{
+    if (!s_ctx || (unsigned)eventNum >= VBJS_MAXCONEVENTS || !s_conEventListened[eventNum]) return;
+    const char *name = vbjs_game::eventName(eventNum);
+    if (!name) return;
+    JSValue o = JS_NewObject(s_ctx);
+    JS_SetPropertyStr(s_ctx, o, "sprite", JS_NewInt32(s_ctx, spriteNum));
+    JS_SetPropertyStr(s_ctx, o, "player", JS_NewInt32(s_ctx, playerNum));
+    JS_SetPropertyStr(s_ctx, o, "dist",   JS_NewInt32(s_ctx, dist));
+    JSValueConst args[1] = { o };
+    vbjs_fire(name, 1, args);
     JS_FreeValue(s_ctx, o);
 }
 

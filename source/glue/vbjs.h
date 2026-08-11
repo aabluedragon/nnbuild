@@ -35,6 +35,16 @@ void VBJS_FireSimple(const char *event);                                     // 
 void VBJS_FireActor(const char *event, int spriteNum, int owner, int tile);  // e.g. "actorSpawned"/"itemTaken"
 void VBJS_FireChat(const char *event, int playerNum, const char *text);  // e.g. "chatMessage"/"netMessage"
 
+// Fire a CON event (EVENT_*) into JS. Called from the CON event dispatcher so every
+// CON event is listenable as vb.on("EVENT_NAME", e => ...). Cheap no-op when no
+// script listens for that event number.
+void VBJS_FireConEvent(int eventNum, int spriteNum, int playerNum, int dist);
+
+// Per-event-number flag: does a JS script listen for this CON event? The engine's
+// VM_HaveEvent() ORs this in so the event gets dispatched even without a CON handler.
+#define VBJS_MAXCONEVENTS 1024
+extern unsigned char g_vbjsConEventListened[VBJS_MAXCONEVENTS];
+
 // HUD: draw all script-registered text. Call from the game's HUD/overlay pass.
 void VBJS_DrawHUD(void);
 

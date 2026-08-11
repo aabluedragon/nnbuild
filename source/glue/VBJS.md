@@ -21,6 +21,22 @@ const mine = require('./util.js');
 
 Relative imports/requires resolve against the main script's directory.
 
+## CON events
+
+Every CON event (`EVENT_GAME`, `EVENT_SPAWN`, `EVENT_DISPLAYREST`, `EVENT_JUMP`,
+`EVENT_FIRE`, `EVENT_KILLIT`, … all `EVENT_*`) is listenable, whether or not any
+CON code handles it:
+
+```js
+vb.on('EVENT_SPAWN', e => { /* e = {sprite, player, dist} */ });
+vb.on('EVENT_GAME',  e => { /* runs every tic, per actor */ });
+```
+
+The handler gets `{sprite, player, dist}`. To read or override the event's CON
+return value, use the RETURN gamevar: `vb.getGamevar('RETURN', e.sprite, e.player)`
+/ `vb.setGamevar('RETURN', v, e.sprite, e.player)`. The `EVENT_` prefix is
+optional (`vb.on('SPAWN', …)` also works).
+
 ## `vb` — the game API (also available as the global `vb`)
 
 Events — `vb.on(name, handler)` / `vb.off(name)`:

@@ -177,6 +177,30 @@ void addWeapon(int playerNum, int weapon, int switchTo)
         P_AddWeapon(g_player[playerNum].ps, weapon, switchTo);
 }
 
+// --- CON event (EVENT_*) name <-> number ---
+
+int eventNum(const char *name)
+{
+    if (!name) return -1;
+    for (int i = 0; i < MAXEVENTS; i++)
+        if (EventNames[i] && !Bstrcasecmp(EventNames[i], name))
+            return i;
+    // also accept the name without the EVENT_ prefix, e.g. "SPAWN"
+    if (Bstrncasecmp(name, "EVENT_", 6) != 0)
+    {
+        char buf[64]; Bsnprintf(buf, sizeof(buf), "EVENT_%s", name);
+        for (int i = 0; i < MAXEVENTS; i++)
+            if (EventNames[i] && !Bstrcasecmp(EventNames[i], buf))
+                return i;
+    }
+    return -1;
+}
+
+const char *eventName(int num)
+{
+    return ((unsigned)num < MAXEVENTS) ? EventNames[num] : nullptr;
+}
+
 void spriteXYZ(int spriteNum, int *x, int *y, int *z, int *ok)
 {
     if ((unsigned)spriteNum >= MAXSPRITES) { if (ok) *ok = 0; return; }

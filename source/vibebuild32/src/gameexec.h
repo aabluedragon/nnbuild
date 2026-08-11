@@ -4,6 +4,7 @@
 #include "build.h"
 #include "gamedef.h"  // vmstate_t
 #include "sector.h"  // mapstate_t
+#include "vbjs.h"     // g_vbjsConEventListened (JS CON-event listeners)
 
 enum vmflags_t
 {
@@ -23,9 +24,13 @@ int A_GetFurthestAngle(int const spriteNum, int const angDiv);
 void A_GetZLimits(int iActor);
 void A_Fall(int iActor);
 
+// VibeBuild32: an event is "live" if a CON handler is compiled for it OR a JS
+// script listens for it, so guarded call sites (if VM_HaveEvent(x)) X_OnEvent(x))
+// still dispatch it to JS. X_OnEvent runs the CON body only when apScriptEvents
+// is real, so a JS-only listener never executes a null script.
 static FORCE_INLINE int VM_HaveEvent(int const nEventID)
 {
-    return !!apScriptEvents[nEventID];
+    return apScriptEvents[nEventID] || g_vbjsConEventListened[nEventID];
 }
 
 void VM_DrawTileGeneric(int32_t x, int32_t y, int32_t zoom, int32_t tilenum,
