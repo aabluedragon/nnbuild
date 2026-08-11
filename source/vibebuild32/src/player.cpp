@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "osd.h"
 #include "gamedef.h"
+#include "vbjs.h"
 
 int g_currentweapon;
 int g_gun_pos;
@@ -2843,6 +2844,8 @@ static void P_HandleDeath(int snum)
             p->dead_flag = (512 - ((seed_krand(&g_random.player) & 1) << 10) + (seed_krand(&g_random.player) & 255) - 512) & 2047;
             if (p->dead_flag == 0)
                 p->dead_flag++;
+
+            VBJS_FireSimple("playerDied");   // VibeBuild32: player death -> JS
 
             if((s->cstat & 32768) == 0)
                 s->cstat = 0;

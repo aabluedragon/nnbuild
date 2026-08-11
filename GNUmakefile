@@ -141,6 +141,23 @@ endif
 glad_cflags :=
 
 
+#### quickjs (VibeBuild32 JS scripting engine, quickjs-ng)
+
+quickjs := quickjs
+
+quickjs_root := $(source)/$(quickjs)
+quickjs_src := $(quickjs_root)
+quickjs_inc := $(quickjs_root)
+quickjs_obj := $(obj)/$(quickjs)
+
+quickjs_objs := $(call getfiltered,quickjs,*.c)
+
+# Vendored C11 code. This tree compiles .c as C++ (COMPILER_C=COMPILER_CXX), but
+# QuickJS is C-only, so force real C mode (-x c overrides the earlier -x c++),
+# pin C11, and silence its warnings (it is not our code).
+quickjs_cflags := -x c -std=gnu11 -w -DNDEBUG
+
+
 #### mimalloc
 
 mimalloc := mimalloc
@@ -710,9 +727,9 @@ vibebuild32_src := $(vibebuild32_root)/src
 vibebuild32_rsrc := $(vibebuild32_root)/rsrc
 vibebuild32_obj := $(obj)/$(vibebuild32)
 
-vibebuild32_cflags := -I$(vibebuild32_src) 
+vibebuild32_cflags := -I$(vibebuild32_src) -I$(quickjs_inc) -I$(source)/glue -DVBJS
 
-vibebuild32_game_deps := audiolib mact
+vibebuild32_game_deps := audiolib mact quickjs
 
 ifeq ($(USE_DISCORDRPC), 1)
     vibebuild32_game_deps += discordrpc
@@ -763,6 +780,8 @@ vibebuild32_game_objs := \
     sounds.cpp \
     sync.cpp \
     utils.cpp \
+    vbjs.cpp \
+    vbjs_duke.cpp \
 
 vibebuild32_game_rsrc_objs :=
 vibebuild32_game_gen_objs :=
@@ -833,6 +852,7 @@ libraries := \
     mact \
     voidwrap \
     discordrpc \
+    quickjs \
 
 ifneq (0,$(USE_MIMALLOC))
     libraries += mimalloc

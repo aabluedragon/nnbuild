@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "duke3d.h"
 //#include "demo.h"
 #include "screens.h"
+#include "vbjs.h"
 #include "renderlayer.h"
 #include "cmdline.h"
 #include "masterserver.h"
@@ -213,6 +214,18 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     {
                         Bstrcpy(g_modDir, argv[i + 1]);
                         G_AddPath(argv[i + 1]);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                // VibeBuild32: --js <file.js> loads a QuickJS user script.
+                if (!Bstrcasecmp(c + 1, "js"))
+                {
+                    if (argc > i + 1)
+                    {
+                        VBJS_SetScriptPath(argv[i + 1]);
+                        LOG_F(INFO, "JS script: %s", argv[i + 1]);
                         i++;
                     }
                     i++;

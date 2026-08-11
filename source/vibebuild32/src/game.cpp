@@ -42,6 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "scriptfile.h"
 #include "grpscan.h"
 #include "kplib.h"
+#include "vbjs.h"
 //#include "crc32.h"
 //#include "util_lib.h"
 #include "hightile.h"
@@ -1198,6 +1199,8 @@ void G_AddUserQuote(const char *daquote)
     if (Bstrlen(daquote) > MAXUSERQUOTELEN)
         return;
 
+    VBJS_FireChat("chatMessage", -1, daquote);   // VibeBuild32: user quotes / MP chat -> JS
+
     for (i=MAXUSERQUOTES-1;i>0;i--)
     {
         Bstrcpy(user_quote[i],user_quote[i-1]);
@@ -1649,6 +1652,8 @@ extern int g_doQuickSave;
 
 void G_GameExit(const char *t)
 {
+    VBJS_Shutdown();   // VibeBuild32: fire "shutdown" and tear down the JS runtime
+
     // If we're an advertised host, tell the masterserver we're going away so our
     // listing is removed immediately instead of lingering until its TTL expires.
     // Self-gates on whether we're actually advertising, so it's a no-op for
@@ -2133,6 +2138,8 @@ static void G_FadePalaccum(const palaccum_t* pa)
 
 void G_DisplayRest(int smoothratio)
 {
+    VBJS_RunFrame();   // VibeBuild32: lazy-init the JS runtime, fire "frame", pump JS jobs
+
     int a, i, j;
     palaccum_t tint = PALACCUM_INITIALIZER;
 
@@ -2311,6 +2318,8 @@ void G_DisplayRest(int smoothratio)
 
     G_PrintGameQuotes();
     G_PrintLevelName();
+
+    VBJS_DrawHUD();   // VibeBuild32: script-registered HUD text
 
     if (KB_KeyPressed(sc_Escape) && ud.overhead_on == 0
             && ud.show_help == 0
@@ -5487,6 +5496,8 @@ SPAWN_END:
         int32_t playerNum = A_FindPlayer(&sprite[newSprite], &pDist);
         X_OnEvent(EVENT_SPAWN, newSprite, playerNum, pDist);
     }
+
+    VBJS_FireActor("actorSpawned", newSprite, spriteNum, sprite[newSprite].picnum);   // VibeBuild32: spawn -> JS (filter by tile)
 
     return newSprite;
 }
