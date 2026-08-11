@@ -40,6 +40,15 @@ function splitVBParams(text) {
     (arg.startsWith('~/') && process.env.HOME ? path.join(process.env.HOME, arg.slice(2)) : arg));
 }
 
+function unwrapVBParams(text) {
+  text = text.trim();
+  // The directive convention quotes the whole list. Strip only a matching
+  // outer pair so splitVBParams can still honour quotes inside an argument.
+  if (text.length >= 2 && (text[0] === '"' || text[0] === "'") && text.at(-1) === text[0])
+    return text.slice(1, -1);
+  return text;
+}
+
 function readVBParams(projectRoot) {
   for (const filename of ['index.ts', 'index.js']) {
     let source;
@@ -47,7 +56,7 @@ function readVBParams(projectRoot) {
     catch (_) { continue; }
     for (const line of source.split(/\r?\n/, 32)) {
       const match = /^\s*\/\/\/\s*vbd?\.params\s*=\s*(.*?)\s*$/.exec(line);
-      if (match) return splitVBParams(match[1]);
+      if (match) return splitVBParams(unwrapVBParams(match[1]));
       // The directive is intentionally a header option, not a runtime comment.
       if (line.trim() && !/^\s*\/\//.test(line)) break;
     }

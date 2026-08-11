@@ -16,8 +16,19 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
 #include <pthread.h>
+#include <atomic>
 #include <deque>
+#include <vector>
+#include <unordered_map>
+#include <string>
+#include <curl/curl.h>
 
 extern "C" {
 #include "quickjs.h"
@@ -33,6 +44,15 @@ namespace vbjs_game {
     int  getGamevar(const char *name, int spriteNum, int playerNum, int *ok);
     void setGamevar(const char *name, int value, int spriteNum, int playerNum);
     int  playerSprite(void);                                  // current view player's sprite, or -1
+    int  gameStarted(void);
+    int  skill(void), episode(void), level(void), localPlayer(void), hostPlayer(void), playerCount(void), playerAt(int ordinal), playerSpriteAt(int player);
+    const char *episodeName(void), *levelName(void), *userMap(void), *playerName(int player), *connectedServer(void);
+    void setMenuBackground(int tile);
+    int currentMenu(void);
+    void openMenu(int menu);
+    int menuOpen(void);
+    int menuSelection(void);
+    void setMenuSelection(int selection);
     void spriteXYZ(int spriteNum, int *x, int *y, int *z, int *ok);
     void runCommand(const char *cmd);                         // execute an OSD console/cvar command
     // Generic CON struct access (kind = VBJS_ACTOR/PLAYER/... from vbjs.h).
@@ -68,6 +88,30 @@ static int   s_initTried = 0;            // guards a single init attempt
 static int   s_startPending = 0;
 static int   s_startWaitFrames = 0;
 static int   s_scriptsLoaded = 0;
+static int   s_gameStartedPending = 0;
+static int   s_gameSessionActive = 0;
+struct vbjs_fs_callback_t { JSValue callback, value; int error, existsStyle; };
+static std::vector<vbjs_fs_callback_t> s_fsCallbacks;
+
+// UDP sockets are non-blocking and polled by VBJS_RunFrame.  That keeps all
+// QuickJS calls on the game thread while preserving Node's event-driven dgram
+// model.
+struct vbjs_dgram_socket_t { int fd = -1; int family = AF_INET; JSValue listeners = JS_UNDEFINED; };
+static JSClassID s_dgramSocketClass;
+static std::vector<vbjs_dgram_socket_t *> s_dgramSockets;
+struct vbjs_net_socket_t { int fd = -1; int connecting = 0; int closed = 0; JSValue listeners = JS_UNDEFINED; };
+static JSClassID s_netSocketClass;
+static std::vector<vbjs_net_socket_t *> s_netSockets;
+struct vbjs_fetch_result_t { JSValue resolve, reject; long status = 0; std::string body, error, url; std::unordered_map<std::string, std::string> headers; };
+static pthread_mutex_t s_fetchMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::deque<vbjs_fetch_result_t *> s_fetchReady;
+static std::atomic<bool> s_fetchShuttingDown { false };
+struct vbjs_fetch_request_t { char *url; char *method; std::vector<uint8_t> body; std::vector<std::string> headers; vbjs_fetch_result_t *result; };
+static int   s_observedMenuOpen = -1;
+static int   s_observedMenuId = -1;
+// The game calls VBJS_RunFrame every rendered frame. Avoid crossing into
+// QuickJS at all when no script has requested the high-frequency event.
+static int   s_frameEventListened = 0;
 static int   s_devtools = 0;
 enum { VBJS_DEVTOOLS_LOGS = 12 };
 static char s_devtoolsLogs[VBJS_DEVTOOLS_LOGS][192];
@@ -87,6 +131,31 @@ struct vbjs_debug_transport_t
     int closed = 0;
 };
 static vbjs_debug_transport_t s_debugTransport;
+// The debugger listener runs on its own thread.  Avoid taking the transport
+// mutex in every game frame when neither the browser inspector nor VS Code has
+// submitted a request.
+static std::atomic<bool> s_debuggerWorkPending { false };
+static std::unordered_map<std::string, std::string> s_menuTextOverrides;
+static std::unordered_map<uint64_t, int> s_menuRoutes;
+
+static uint64_t vbjs_menu_route_key(int menu, int item)
+{
+    return (uint64_t)(uint32_t)menu << 32 | (uint32_t)item;
+}
+
+extern "C" const char *VBJS_MenuText(const char *text)
+{
+    if (!text) return text;
+    auto const it = s_menuTextOverrides.find(text);
+    return it == s_menuTextOverrides.end() ? text : it->second.c_str();
+}
+
+extern "C" int VBJS_MenuRoute(int fromMenu, int itemIndex, int requestedMenu)
+{
+    auto it = s_menuRoutes.find(vbjs_menu_route_key(fromMenu, itemIndex));
+    if (it == s_menuRoutes.end()) it = s_menuRoutes.find(vbjs_menu_route_key(fromMenu, -1));
+    return it == s_menuRoutes.end() ? requestedMenu : it->second;
+}
 
 static size_t vbjs_debug_read(void *opaque, char *buffer, size_t length)
 {
@@ -152,9 +221,11 @@ static int vbjs_safe_project_name(const char *in, char *out, size_t outsz)
 static void vbjs_add_script(const char *path)
 {
     if (!path || s_scriptCount >= VBJS_MAX_SCRIPTS) return;
+    char canonical[2048];
+    const char *storedPath = realpath(path, canonical) ? canonical : path;
     for (int i = 0; i < s_scriptCount; i++)
-        if (!strcmp(s_scripts[i].path, path)) return;   // dedupe
-    snprintf(s_scripts[s_scriptCount++].path, sizeof(s_scripts[0].path), "%s", path);
+        if (!strcmp(s_scripts[i].path, storedPath)) return;   // dedupe
+    snprintf(s_scripts[s_scriptCount++].path, sizeof(s_scripts[0].path), "%s", storedPath);
 }
 
 static JSValue s_events;   // { eventName: [fn, ...] }
@@ -219,12 +290,16 @@ static void vbjs_resolve(const char *name, char *out, size_t outsz)
         snprintf(out, outsz, "%s/%s", s_scriptDir, name);
 }
 
-static void vbjs_dump_error(JSContext *ctx)
+static void vbjs_dump_error(JSContext *ctx, const char *context = nullptr)
 {
     JSValue exc = JS_GetException(ctx);
     const char *msg = JS_ToCString(ctx, exc);
-    vbjs_game::log(msg ? msg : "(unknown JS error)");
-    vbjs_devtools_log(msg ? msg : "(unknown JS error)");
+    char line[1400];
+    snprintf(line, sizeof(line), "%s%s%s", context ? "" : "JavaScript error", context ? context : "", context ? ": " : "");
+    size_t used = strlen(line);
+    snprintf(line + used, sizeof(line) - used, "%s", msg ? msg : "(unknown JS error)");
+    vbjs_game::log(line);
+    vbjs_devtools_log(line);
     if (msg) JS_FreeCString(ctx, msg);
     JSValue stack = JS_GetPropertyStr(ctx, exc, "stack");
     if (!JS_IsUndefined(stack))
@@ -234,6 +309,30 @@ static void vbjs_dump_error(JSContext *ctx)
     }
     JS_FreeValue(ctx, stack);
     JS_FreeValue(ctx, exc);
+}
+
+// QuickJS reports a bare `Promise.reject()` through this runtime hook instead
+// of JS_ExecutePendingJob().  Without it, an unhandled async failure vanishes.
+static void vbjs_promise_rejection_tracker(JSContext *ctx, JSValueConst, JSValueConst reason, bool isHandled, void *)
+{
+    if (isHandled) return;
+    const char *message = JS_ToCString(ctx, reason);
+    char line[1400];
+    snprintf(line, sizeof(line), "unhandled promise rejection: %s", message ? message : "(unknown rejection)");
+    vbjs_game::log(line);
+    vbjs_devtools_log(line);
+    if (message) JS_FreeCString(ctx, message);
+
+    if (JS_IsObject(reason))
+    {
+        JSValue stack = JS_GetPropertyStr(ctx, reason, "stack");
+        if (!JS_IsUndefined(stack))
+        {
+            const char *text = JS_ToCString(ctx, stack);
+            if (text) { vbjs_game::log(text); vbjs_devtools_log(text); JS_FreeCString(ctx, text); }
+        }
+        JS_FreeValue(ctx, stack);
+    }
 }
 
 // ------------------------------------------------------------------ console ---
@@ -256,9 +355,320 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst, int argc, JSValueCon
     return JS_UNDEFINED;
 }
 
+// -------------------------------------------------------------- dgram module ---
+
+static void vbjs_dgram_remove(vbjs_dgram_socket_t *socket)
+{
+    for (auto it = s_dgramSockets.begin(); it != s_dgramSockets.end(); ++it)
+        if (*it == socket) { s_dgramSockets.erase(it); break; }
+}
+
+static void js_dgram_socket_finalizer(JSRuntime *rt, JSValue value)
+{
+    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque(value, s_dgramSocketClass);
+    if (!socket) return;
+    if (socket->fd >= 0) close(socket->fd);
+    vbjs_dgram_remove(socket);
+    JS_FreeValueRT(rt, socket->listeners);
+    delete socket;
+}
+
+static JSValue js_dgram_emit(JSContext *ctx, vbjs_dgram_socket_t *socket, const char *event, int argc, JSValueConst *argv)
+{
+    JSValue list = JS_GetPropertyStr(ctx, socket->listeners, event);
+    if (JS_IsUndefined(list)) { JS_FreeValue(ctx, list); return JS_UNDEFINED; }
+    int64_t length = 0; JS_GetLength(ctx, list, &length);
+    for (uint32_t i = 0; i < (uint64_t)length; ++i)
+    {
+        JSValue listener = JS_GetPropertyUint32(ctx, list, i);
+        if (JS_IsFunction(ctx, listener))
+        {
+            JSValue result = JS_Call(ctx, listener, JS_UNDEFINED, argc, argv);
+            if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram handler");
+            JS_FreeValue(ctx, result);
+        }
+        JS_FreeValue(ctx, listener);
+    }
+    JS_FreeValue(ctx, list);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_dgram_on(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    if (!socket) return JS_EXCEPTION;
+    if (argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_ThrowTypeError(ctx, "socket.on(event, listener)");
+    const char *event = JS_ToCString(ctx, argv[0]); if (!event) return JS_EXCEPTION;
+    JSValue list = JS_GetPropertyStr(ctx, socket->listeners, event);
+    if (JS_IsUndefined(list)) { JS_FreeValue(ctx, list); list = JS_NewArray(ctx); JS_SetPropertyStr(ctx, socket->listeners, event, JS_DupValue(ctx, list)); }
+    int64_t length = 0; JS_GetLength(ctx, list, &length);
+    JS_SetPropertyUint32(ctx, list, (uint32_t)length, JS_DupValue(ctx, argv[1]));
+    JS_FreeValue(ctx, list); JS_FreeCString(ctx, event);
+    return JS_DupValue(ctx, this_val);
+}
+
+static int js_dgram_resolve(JSContext *ctx, JSValueConst portValue, JSValueConst hostValue, int family, sockaddr_storage *address, socklen_t *addressLength)
+{
+    int32_t port = 0; if (JS_ToInt32(ctx, &port, portValue) || port < 0 || port > 65535) { JS_ThrowRangeError(ctx, "port must be between 0 and 65535"); return -1; }
+    const char *host = JS_IsUndefined(hostValue) ? nullptr : JS_ToCString(ctx, hostValue);
+    if (!JS_IsUndefined(hostValue) && !host) return -1;
+    char service[16]; snprintf(service, sizeof(service), "%d", port);
+    addrinfo hints {}; hints.ai_family = family; hints.ai_socktype = SOCK_DGRAM;
+    addrinfo *result = nullptr; int const rc = getaddrinfo(host, service, &hints, &result);
+    if (host) JS_FreeCString(ctx, host);
+    if (rc || !result) { JS_ThrowReferenceError(ctx, "dgram: cannot resolve address"); return -1; }
+    memcpy(address, result->ai_addr, result->ai_addrlen); *addressLength = (socklen_t)result->ai_addrlen; freeaddrinfo(result);
+    return 0;
+}
+
+static JSValue js_dgram_bind(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    if (!socket) return JS_EXCEPTION;
+    if (argc < 1) return JS_ThrowTypeError(ctx, "socket.bind(port[, address][, callback])");
+    int callback = argc > 1 && JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
+    JSValueConst host = callback > 1 ? argv[1] : JS_UNDEFINED;
+    sockaddr_storage address {}; socklen_t addressLength = 0;
+    if (js_dgram_resolve(ctx, argv[0], host, socket->family, &address, &addressLength)) return JS_EXCEPTION;
+    if (bind(socket->fd, (sockaddr *)&address, addressLength)) return JS_ThrowReferenceError(ctx, "dgram.bind: cannot bind socket");
+    js_dgram_emit(ctx, socket, "listening", 0, nullptr);
+    if (callback >= 0) { JSValue result = JS_Call(ctx, argv[callback], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram bind callback"); JS_FreeValue(ctx, result); }
+    return JS_DupValue(ctx, this_val);
+}
+
+static int js_dgram_copy_bytes(JSContext *ctx, JSValueConst value, std::vector<uint8_t> *bytes)
+{
+    if (JS_IsString(value)) { size_t length = 0; const char *text = JS_ToCStringLen(ctx, &length, value); if (!text) return -1; bytes->assign((const uint8_t *)text, (const uint8_t *)text + length); JS_FreeCString(ctx, text); return 0; }
+    size_t offset = 0, length = 0, elementSize = 0; JSValue buffer = JS_GetTypedArrayBuffer(ctx, value, &offset, &length, &elementSize);
+    if (!JS_IsException(buffer)) { size_t bufferLength = 0; uint8_t *base = JS_GetArrayBuffer(ctx, &bufferLength, buffer); if (base && offset + length <= bufferLength) { bytes->assign(base + offset, base + offset + length); JS_FreeValue(ctx, buffer); return 0; } JS_FreeValue(ctx, buffer); }
+    return JS_ThrowTypeError(ctx, "dgram message must be a string or Uint8Array"), -1;
+}
+
+static JSValue js_dgram_send(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    if (!socket) return JS_EXCEPTION;
+    if (argc < 2) return JS_ThrowTypeError(ctx, "socket.send(message, port[, address][, callback])");
+    int callback = JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
+    int const addressIndex = callback == 3 ? 2 : (callback < 0 && argc > 2 ? 2 : -1);
+    sockaddr_storage address {}; socklen_t addressLength = 0;
+    if (js_dgram_resolve(ctx, argv[1], addressIndex >= 0 ? argv[addressIndex] : JS_UNDEFINED, socket->family, &address, &addressLength)) return JS_EXCEPTION;
+    std::vector<uint8_t> data;
+    if (js_dgram_copy_bytes(ctx, argv[0], &data)) return JS_EXCEPTION;
+    ssize_t const sent = sendto(socket->fd, data.data(), data.size(), 0, (sockaddr *)&address, addressLength);
+    if (callback >= 0) { JSValue args[1] = { sent < 0 ? JS_NewError(ctx) : JS_NULL }; JSValue result = JS_Call(ctx, argv[callback], JS_UNDEFINED, 1, args); JS_FreeValue(ctx, args[0]); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram send callback"); JS_FreeValue(ctx, result); }
+    if (sent < 0) return JS_ThrowReferenceError(ctx, "dgram.send: cannot send datagram");
+    return JS_UNDEFINED;
+}
+
+static JSValue js_dgram_close(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    if (!socket) return JS_EXCEPTION;
+    if (socket->fd >= 0) { close(socket->fd); socket->fd = -1; js_dgram_emit(ctx, socket, "close", 0, nullptr); }
+    if (argc && JS_IsFunction(ctx, argv[0])) { JSValue result = JS_Call(ctx, argv[0], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram close callback"); JS_FreeValue(ctx, result); }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_dgram_address(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
+{
+    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    if (!socket) return JS_EXCEPTION;
+    sockaddr_storage address {}; socklen_t length = sizeof(address);
+    if (socket->fd < 0 || getsockname(socket->fd, (sockaddr *)&address, &length)) return JS_ThrowReferenceError(ctx, "dgram.address: socket is closed");
+    char host[NI_MAXHOST] = "", service[NI_MAXSERV] = ""; getnameinfo((sockaddr *)&address, length, host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+    JSValue result = JS_NewObject(ctx); JS_SetPropertyStr(ctx, result, "address", JS_NewString(ctx, host)); JS_SetPropertyStr(ctx, result, "port", JS_NewInt32(ctx, atoi(service))); JS_SetPropertyStr(ctx, result, "family", JS_NewString(ctx, socket->family == AF_INET6 ? "IPv6" : "IPv4")); return result;
+}
+
+static JSValue js_dgram_createSocket(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 1) return JS_ThrowTypeError(ctx, "dgram.createSocket(type[, callback])");
+    const char *type = JS_ToCString(ctx, argv[0]); if (!type) return JS_EXCEPTION;
+    int const family = !strcmp(type, "udp6") ? AF_INET6 : !strcmp(type, "udp4") ? AF_INET : 0; JS_FreeCString(ctx, type);
+    if (!family) return JS_ThrowTypeError(ctx, "dgram.createSocket type must be 'udp4' or 'udp6'");
+    auto *socket = new vbjs_dgram_socket_t; socket->family = family;
+    socket->fd = ::socket(socket->family, SOCK_DGRAM, 0);
+    if (socket->fd < 0) { delete socket; return JS_ThrowReferenceError(ctx, "dgram.createSocket: cannot create socket"); }
+    fcntl(socket->fd, F_SETFL, fcntl(socket->fd, F_GETFL) | O_NONBLOCK); socket->listeners = JS_NewObject(ctx);
+    JSValue object = JS_NewObjectClass(ctx, s_dgramSocketClass); JS_SetOpaque(object, socket); s_dgramSockets.push_back(socket);
+    if (argc > 1 && JS_IsFunction(ctx, argv[1]))
+    {
+        JSValue args[2] = { JS_NewString(ctx, "message"), JS_DupValue(ctx, argv[1]) };
+        JSValue result = js_dgram_on(ctx, object, 2, args);
+        JS_FreeValue(ctx, result); JS_FreeValue(ctx, args[0]); JS_FreeValue(ctx, args[1]);
+    }
+    return object;
+}
+
+static void vbjs_dgram_poll(JSContext *ctx)
+{
+    for (auto *socket : s_dgramSockets)
+    {
+        if (socket->fd < 0) continue;
+        for (;;)
+        {
+            uint8_t data[65536]; sockaddr_storage from {}; socklen_t fromLength = sizeof(from); ssize_t const received = recvfrom(socket->fd, data, sizeof(data), 0, (sockaddr *)&from, &fromLength);
+            if (received < 0) { if (errno != EAGAIN && errno != EWOULDBLOCK) { JSValue error = JS_NewError(ctx); js_dgram_emit(ctx, socket, "error", 1, &error); JS_FreeValue(ctx, error); } break; }
+            char host[NI_MAXHOST] = "", service[NI_MAXSERV] = ""; getnameinfo((sockaddr *)&from, fromLength, host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+            JSValue args[2] = { JS_NewUint8ArrayCopy(ctx, data, (size_t)received), JS_NewObject(ctx) }; JS_SetPropertyStr(ctx, args[1], "address", JS_NewString(ctx, host)); JS_SetPropertyStr(ctx, args[1], "port", JS_NewInt32(ctx, atoi(service))); JS_SetPropertyStr(ctx, args[1], "family", JS_NewString(ctx, from.ss_family == AF_INET6 ? "IPv6" : "IPv4")); JS_SetPropertyStr(ctx, args[1], "size", JS_NewInt32(ctx, (int)received)); js_dgram_emit(ctx, socket, "message", 2, args); JS_FreeValue(ctx, args[0]); JS_FreeValue(ctx, args[1]);
+        }
+    }
+}
+
+// --------------------------------------------------------------- net module ---
+
+static void vbjs_net_remove(vbjs_net_socket_t *socket)
+{
+    for (auto it = s_netSockets.begin(); it != s_netSockets.end(); ++it)
+        if (*it == socket) { s_netSockets.erase(it); break; }
+}
+static void js_net_socket_finalizer(JSRuntime *rt, JSValue value)
+{
+    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque(value, s_netSocketClass);
+    if (!socket) return; if (socket->fd >= 0) close(socket->fd); vbjs_net_remove(socket); JS_FreeValueRT(rt, socket->listeners); delete socket;
+}
+static void js_net_emit(JSContext *ctx, vbjs_net_socket_t *socket, const char *event, int argc, JSValueConst *argv)
+{
+    JSValue list = JS_GetPropertyStr(ctx, socket->listeners, event); if (JS_IsUndefined(list)) { JS_FreeValue(ctx, list); return; }
+    int64_t length = 0; JS_GetLength(ctx, list, &length);
+    for (uint32_t i = 0; i < (uint64_t)length; ++i) { JSValue listener = JS_GetPropertyUint32(ctx, list, i); if (JS_IsFunction(ctx, listener)) { JSValue result = JS_Call(ctx, listener, JS_UNDEFINED, argc, argv); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net handler"); JS_FreeValue(ctx, result); } JS_FreeValue(ctx, listener); }
+    JS_FreeValue(ctx, list);
+}
+static JSValue js_net_on(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
+    if (argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_ThrowTypeError(ctx, "socket.on(event, listener)");
+    const char *event = JS_ToCString(ctx, argv[0]); if (!event) return JS_EXCEPTION;
+    JSValue list = JS_GetPropertyStr(ctx, socket->listeners, event); if (JS_IsUndefined(list)) { JS_FreeValue(ctx, list); list = JS_NewArray(ctx); JS_SetPropertyStr(ctx, socket->listeners, event, JS_DupValue(ctx, list)); }
+    int64_t length = 0; JS_GetLength(ctx, list, &length); JS_SetPropertyUint32(ctx, list, (uint32_t)length, JS_DupValue(ctx, argv[1])); JS_FreeValue(ctx, list); JS_FreeCString(ctx, event); return JS_DupValue(ctx, this_val);
+}
+static void js_net_close(JSContext *ctx, vbjs_net_socket_t *socket, int hadError)
+{
+    if (socket->closed) return; socket->closed = 1; if (socket->fd >= 0) { close(socket->fd); socket->fd = -1; } JSValue args[1] = { JS_NewBool(ctx, hadError) }; js_net_emit(ctx, socket, "close", 1, args); JS_FreeValue(ctx, args[0]);
+}
+static JSValue js_net_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
+    if (!argc) return JS_ThrowTypeError(ctx, "socket.write(data[, callback])"); if (socket->closed) return JS_ThrowReferenceError(ctx, "net.Socket is closed");
+    std::vector<uint8_t> data; if (js_dgram_copy_bytes(ctx, argv[0], &data)) return JS_EXCEPTION;
+    ssize_t const written = send(socket->fd, data.data(), data.size(), 0); int const failed = written < 0;
+    if (argc > 1 && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net write callback"); JS_FreeValue(ctx, result); }
+    if (failed) { JSValue error = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &error); JS_FreeValue(ctx, error); return JS_FALSE; } return JS_TRUE;
+}
+static JSValue js_net_end(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
+    if (argc && !JS_IsFunction(ctx, argv[0])) { JSValue result = js_net_write(ctx, this_val, 1, argv); if (JS_IsException(result)) return result; JS_FreeValue(ctx, result); }
+    if (!socket->closed) shutdown(socket->fd, SHUT_WR); if (argc && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net end callback"); JS_FreeValue(ctx, result); } return JS_DupValue(ctx, this_val);
+}
+static JSValue js_net_destroy(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
+{
+    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION; js_net_close(ctx, socket, 0); return JS_DupValue(ctx, this_val);
+}
+static JSValue js_net_setNoDelay(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION; int enabled = 1; if (argc) enabled = JS_ToBool(ctx, argv[0]); setsockopt(socket->fd, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof(enabled)); return JS_DupValue(ctx, this_val);
+}
+static JSValue js_net_createConnection(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (!argc) return JS_ThrowTypeError(ctx, "net.createConnection(port[, host][, callback])"); int callback = JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
+    int32_t port = 0; if (JS_ToInt32(ctx, &port, argv[0]) || port < 1 || port > 65535) return JS_ThrowRangeError(ctx, "port must be between 1 and 65535");
+    int freeHost = 0; const char *host = "127.0.0.1";
+    if (argc > 1 && callback != 1) { host = JS_ToCString(ctx, argv[1]); freeHost = 1; if (!host) return JS_EXCEPTION; }
+    char service[16]; snprintf(service, sizeof(service), "%d", port); addrinfo hints {}; hints.ai_socktype = SOCK_STREAM; hints.ai_family = AF_UNSPEC; addrinfo *result = nullptr; int const rc = getaddrinfo(host, service, &hints, &result); if (freeHost) JS_FreeCString(ctx, host);
+    if (rc || !result) return JS_ThrowReferenceError(ctx, "net.createConnection: cannot resolve host");
+    auto *socket = new vbjs_net_socket_t; socket->fd = ::socket(result->ai_family, SOCK_STREAM, 0); if (socket->fd < 0) { freeaddrinfo(result); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot create socket"); }
+    fcntl(socket->fd, F_SETFL, fcntl(socket->fd, F_GETFL) | O_NONBLOCK); int const connectResult = connect(socket->fd, result->ai_addr, result->ai_addrlen); freeaddrinfo(result);
+    if (connectResult && errno != EINPROGRESS) { close(socket->fd); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot connect"); }
+    socket->connecting = connectResult != 0; socket->listeners = JS_NewObject(ctx); JSValue object = JS_NewObjectClass(ctx, s_netSocketClass); JS_SetOpaque(object, socket); s_netSockets.push_back(socket);
+    if (callback >= 0) { JSValue args[2] = { JS_NewString(ctx, "connect"), JS_DupValue(ctx, argv[callback]) }; JSValue ignored = js_net_on(ctx, object, 2, args); JS_FreeValue(ctx, ignored); JS_FreeValue(ctx, args[0]); JS_FreeValue(ctx, args[1]); }
+    return object;
+}
+static void vbjs_net_poll(JSContext *ctx)
+{
+    for (auto *socket : s_netSockets) { if (socket->closed) continue; if (socket->connecting) { fd_set writeSet; FD_ZERO(&writeSet); FD_SET(socket->fd, &writeSet); timeval timeout {}; int const ready = select(socket->fd + 1, nullptr, &writeSet, nullptr, &timeout); if (ready > 0) { int error = 0; socklen_t length = sizeof(error); getsockopt(socket->fd, SOL_SOCKET, SO_ERROR, &error, &length); if (!error) { socket->connecting = 0; js_net_emit(ctx, socket, "connect", 0, nullptr); } else { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } } } if (socket->connecting) continue; for (;;) { uint8_t data[65536]; ssize_t const received = recv(socket->fd, data, sizeof(data), 0); if (received > 0) { JSValue value = JS_NewUint8ArrayCopy(ctx, data, (size_t)received); js_net_emit(ctx, socket, "data", 1, &value); JS_FreeValue(ctx, value); continue; } if (!received) { js_net_emit(ctx, socket, "end", 0, nullptr); js_net_close(ctx, socket, 0); } else if (errno != EAGAIN && errno != EWOULDBLOCK) { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } break; } }
+}
+
+// ------------------------------------------------------------ fetch (libcurl) ---
+
+static size_t vbjs_fetch_write(char *data, size_t size, size_t count, void *opaque)
+{
+    auto *result = (vbjs_fetch_result_t *)opaque; result->body.append(data, size * count); return size * count;
+}
+static size_t vbjs_fetch_header(char *data, size_t size, size_t count, void *opaque)
+{
+    auto *result = (vbjs_fetch_result_t *)opaque; std::string line(data, size * count); size_t const colon = line.find(':');
+    if (colon != std::string::npos) { std::string name = line.substr(0, colon), value = line.substr(colon + 1); while (!value.empty() && isspace((unsigned char)value.front())) value.erase(value.begin()); while (!value.empty() && isspace((unsigned char)value.back())) value.pop_back(); for (char &c : name) c = (char)tolower((unsigned char)c); result->headers[name] = value; }
+    return size * count;
+}
+static void *vbjs_fetch_thread(void *opaque)
+{
+    auto *request = (vbjs_fetch_request_t *)opaque; CURL *curl = curl_easy_init();
+    if (!curl) request->result->error = "fetch: unable to create HTTP client";
+    else
+    {
+        curl_slist *headers = nullptr; for (auto const &header : request->headers) headers = curl_slist_append(headers, header.c_str()); if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_URL, request->url); curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L); curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, vbjs_fetch_write); curl_easy_setopt(curl, CURLOPT_WRITEDATA, request->result); curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, vbjs_fetch_header); curl_easy_setopt(curl, CURLOPT_HEADERDATA, request->result);
+        if (request->method && strcmp(request->method, "GET")) curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request->method);
+        if (!request->body.empty()) { curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request->body.data()); curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)request->body.size()); }
+        CURLcode const code = curl_easy_perform(curl); if (code != CURLE_OK) request->result->error = curl_easy_strerror(code); else { char *effectiveUrl = nullptr; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &request->result->status); curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl); if (effectiveUrl) request->result->url = effectiveUrl; } curl_slist_free_all(headers); curl_easy_cleanup(curl);
+    }
+    free(request->url); free(request->method);
+    pthread_mutex_lock(&s_fetchMutex);
+    if (!s_fetchShuttingDown) s_fetchReady.push_back(request->result);
+    else delete request->result; // The owning QuickJS runtime is gone; do not touch JSValue handles.
+    pthread_mutex_unlock(&s_fetchMutex); delete request; return nullptr;
+}
+static JSValue js_fetch_body(JSContext *ctx, JSValueConst this_val, int json)
+{
+    JSValue resolving[2]; JSValue promise = JS_NewPromiseCapability(ctx, resolving); JSValue body = JS_GetPropertyStr(ctx, this_val, "_body"); JSValue value = body;
+    if (json) { const char *text = JS_ToCString(ctx, body); value = text ? JS_ParseJSON(ctx, text, strlen(text), "fetch response") : JS_EXCEPTION; if (text) JS_FreeCString(ctx, text); JS_FreeValue(ctx, body); }
+    JSValue callback = JS_IsException(value) ? resolving[1] : resolving[0]; JSValue argument = JS_IsException(value) ? JS_GetException(ctx) : value; JSValue ignored = JS_Call(ctx, callback, JS_UNDEFINED, 1, &argument); JS_FreeValue(ctx, ignored); JS_FreeValue(ctx, argument); JS_FreeValue(ctx, resolving[0]); JS_FreeValue(ctx, resolving[1]); return promise;
+}
+static JSValue js_fetch_text(JSContext *ctx, JSValueConst this_val, int, JSValueConst *) { return js_fetch_body(ctx, this_val, 0); }
+static JSValue js_fetch_json(JSContext *ctx, JSValueConst this_val, int, JSValueConst *) { return js_fetch_body(ctx, this_val, 1); }
+static JSValue js_fetch_arrayBuffer(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
+{
+    JSValue resolving[2], promise = JS_NewPromiseCapability(ctx, resolving); if (JS_IsException(promise)) return promise;
+    size_t offset = 0, length = 0, elementSize = 0;
+    JSValue bytes = JS_GetPropertyStr(ctx, this_val, "_bytes"), buffer = JS_GetTypedArrayBuffer(ctx, bytes, &offset, &length, &elementSize); JS_FreeValue(ctx, bytes);
+    JSValue callback = JS_IsException(buffer) ? resolving[1] : resolving[0]; JSValue argument = JS_IsException(buffer) ? JS_GetException(ctx) : buffer; JSValue ignored = JS_Call(ctx, callback, JS_UNDEFINED, 1, &argument); JS_FreeValue(ctx, ignored); JS_FreeValue(ctx, argument); JS_FreeValue(ctx, resolving[0]); JS_FreeValue(ctx, resolving[1]); return promise;
+}
+static JSValue js_fetch_headers_get(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    if (!argc) return JS_NULL; const char *name = JS_ToCString(ctx, argv[0]); if (!name) return JS_EXCEPTION; std::string key(name); JS_FreeCString(ctx, name); for (char &c : key) c = (char)tolower((unsigned char)c); JSValue values = JS_GetPropertyStr(ctx, this_val, "_values"); JSValue value = JS_GetPropertyStr(ctx, values, key.c_str()); JS_FreeValue(ctx, values); if (JS_IsUndefined(value)) { JS_FreeValue(ctx, value); return JS_NULL; } return value;
+}
+static JSValue js_fetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (!argc) return JS_ThrowTypeError(ctx, "fetch(url[, options])"); const char *url = JS_ToCString(ctx, argv[0]); if (!url) return JS_EXCEPTION;
+    auto *result = new vbjs_fetch_result_t; JSValue resolving[2]; JSValue promise = JS_NewPromiseCapability(ctx, resolving); result->resolve = resolving[0]; result->reject = resolving[1]; auto *request = new vbjs_fetch_request_t {}; request->url = strdup(url); JS_FreeCString(ctx, url); request->result = result;
+    if (argc > 1 && JS_IsObject(argv[1])) { JSValue method = JS_GetPropertyStr(ctx, argv[1], "method"), body = JS_GetPropertyStr(ctx, argv[1], "body"), headers = JS_GetPropertyStr(ctx, argv[1], "headers"); if (JS_IsString(method)) { const char *text = JS_ToCString(ctx, method); request->method = text ? strdup(text) : nullptr; if (text) JS_FreeCString(ctx, text); } if (!JS_IsUndefined(body) && !JS_IsNull(body) && js_dgram_copy_bytes(ctx, body, &request->body)) { JS_FreeValue(ctx, method); JS_FreeValue(ctx, body); JS_FreeValue(ctx, headers); free(request->url); free(request->method); delete request; JS_FreeValue(ctx, result->resolve); JS_FreeValue(ctx, result->reject); delete result; return JS_EXCEPTION; } if (JS_IsObject(headers)) { JSPropertyEnum *names = nullptr; uint32_t count = 0; if (!JS_GetOwnPropertyNames(ctx, &names, &count, headers, JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY)) { for (uint32_t i = 0; i < count; ++i) { char const *name = JS_AtomToCString(ctx, names[i].atom); JSValue value = JS_GetProperty(ctx, headers, names[i].atom); char const *text = JS_ToCString(ctx, value); if (name && text) request->headers.emplace_back(std::string(name) + ": " + text); if (name) JS_FreeCString(ctx, name); if (text) JS_FreeCString(ctx, text); JS_FreeValue(ctx, value); JS_FreeAtom(ctx, names[i].atom); } js_free(ctx, names); } } JS_FreeValue(ctx, method); JS_FreeValue(ctx, body); JS_FreeValue(ctx, headers); }
+    pthread_t thread; if (pthread_create(&thread, nullptr, vbjs_fetch_thread, request)) { free(request->url); free(request->method); delete request; JS_FreeValue(ctx, result->resolve); JS_FreeValue(ctx, result->reject); delete result; return JS_ThrowInternalError(ctx, "fetch: cannot create worker thread"); } pthread_detach(thread); return promise;
+}
+static void vbjs_fetch_drain(JSContext *ctx)
+{
+    std::deque<vbjs_fetch_result_t *> ready; pthread_mutex_lock(&s_fetchMutex); ready.swap(s_fetchReady); pthread_mutex_unlock(&s_fetchMutex);
+    for (auto *result : ready) { JSValue argument; JSValue callback; if (!result->error.empty()) { argument = JS_NewError(ctx); JS_SetPropertyStr(ctx, argument, "message", JS_NewString(ctx, result->error.c_str())); callback = result->reject; } else { argument = JS_NewObject(ctx); JS_SetPropertyStr(ctx, argument, "status", JS_NewInt32(ctx, (int)result->status)); JS_SetPropertyStr(ctx, argument, "ok", JS_NewBool(ctx, result->status >= 200 && result->status < 300)); JS_SetPropertyStr(ctx, argument, "url", JS_NewString(ctx, result->url.c_str())); JS_SetPropertyStr(ctx, argument, "_body", JS_NewStringLen(ctx, result->body.data(), result->body.size())); JS_SetPropertyStr(ctx, argument, "_bytes", JS_NewUint8ArrayCopy(ctx, (const uint8_t *)result->body.data(), result->body.size())); JS_SetPropertyStr(ctx, argument, "text", JS_NewCFunction(ctx, js_fetch_text, "text", 0)); JS_SetPropertyStr(ctx, argument, "json", JS_NewCFunction(ctx, js_fetch_json, "json", 0)); JS_SetPropertyStr(ctx, argument, "arrayBuffer", JS_NewCFunction(ctx, js_fetch_arrayBuffer, "arrayBuffer", 0)); JSValue headers = JS_NewObject(ctx), values = JS_NewObject(ctx); for (auto const &header : result->headers) JS_SetPropertyStr(ctx, values, header.first.c_str(), JS_NewString(ctx, header.second.c_str())); JS_SetPropertyStr(ctx, headers, "_values", values); JS_SetPropertyStr(ctx, headers, "get", JS_NewCFunction(ctx, js_fetch_headers_get, "get", 1)); JS_SetPropertyStr(ctx, argument, "headers", headers); callback = result->resolve; } JSValue ignored = JS_Call(ctx, callback, JS_UNDEFINED, 1, &argument); JS_FreeValue(ctx, ignored); JS_FreeValue(ctx, argument); JS_FreeValue(ctx, result->resolve); JS_FreeValue(ctx, result->reject); delete result; }
+}
+
 // ----------------------------------------------------------------- fs module ---
 
-static JSValue js_fs_readFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static int js_fs_text_encoding(JSContext *ctx, int argc, JSValueConst *argv, int optionIndex)
+{
+    if (argc <= optionIndex || JS_IsUndefined(argv[optionIndex])) return 0;
+    if (JS_IsNull(argv[optionIndex])) return 0;
+    if (JS_IsString(argv[optionIndex])) return 1;
+    if (JS_IsObject(argv[optionIndex]))
+    {
+        JSValue encoding = JS_GetPropertyStr(ctx, argv[optionIndex], "encoding");
+        int const text = JS_IsString(encoding);
+        JS_FreeValue(ctx, encoding);
+        return text;
+    }
+    return 0;
+}
+
+static JSValue js_fs_readFile_impl(JSContext *ctx, int argc, JSValueConst *argv, int legacyText)
 {
     if (argc < 1) return JS_ThrowTypeError(ctx, "fs.readFile(path)");
     const char *path = JS_ToCString(ctx, argv[0]);
@@ -266,10 +676,15 @@ static JSValue js_fs_readFile(JSContext *ctx, JSValueConst, int argc, JSValueCon
     size_t len = 0; char *buf = vbjs_read_file(path, &len);
     JS_FreeCString(ctx, path);
     if (!buf) return JS_ThrowReferenceError(ctx, "fs.readFile: cannot open file");
-    JSValue v = JS_NewStringLen(ctx, buf, len);
+    JSValue v = (legacyText || js_fs_text_encoding(ctx, argc, argv, 1))
+        ? JS_NewStringLen(ctx, buf, len) : JS_NewUint8ArrayCopy(ctx, (const uint8_t *)buf, len);
     free(buf);
     return v;
 }
+static JSValue js_fs_readFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return js_fs_readFile_impl(ctx, argc, argv, 1); } // legacy VibeBuild32 form
+static JSValue js_fs_readFileSync_node(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return js_fs_readFile_impl(ctx, argc, argv, 0); }
 
 static JSValue js_fs_writeImpl(JSContext *ctx, int argc, JSValueConst *argv, const char *mode)
 {
@@ -287,6 +702,8 @@ static JSValue js_fs_writeImpl(JSContext *ctx, int argc, JSValueConst *argv, con
 static JSValue js_fs_writeFile (JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) { return js_fs_writeImpl(ctx, argc, argv, "wb"); }
 static JSValue js_fs_appendFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) { return js_fs_writeImpl(ctx, argc, argv, "ab"); }
 
+using vbjs_fs_function_t = JSValue (*)(JSContext *, JSValueConst, int, JSValueConst *);
+
 static JSValue js_fs_exists(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (argc < 1) return JS_FALSE;
@@ -298,6 +715,108 @@ static JSValue js_fs_exists(JSContext *ctx, JSValueConst, int argc, JSValueConst
     JS_FreeCString(ctx, path);
     return JS_NewBool(ctx, ex);
 }
+
+static JSValue js_fs_unlinkSync(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 1) return JS_ThrowTypeError(ctx, "fs.unlinkSync(path)");
+    const char *path = JS_ToCString(ctx, argv[0]); if (!path) return JS_EXCEPTION;
+    int const ok = unlink(path) == 0; JS_FreeCString(ctx, path);
+    return ok ? JS_UNDEFINED : JS_ThrowReferenceError(ctx, "fs.unlink: cannot remove file");
+}
+static JSValue js_fs_renameSync(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 2) return JS_ThrowTypeError(ctx, "fs.renameSync(oldPath, newPath)");
+    const char *from = JS_ToCString(ctx, argv[0]), *to = JS_ToCString(ctx, argv[1]);
+    if (!from || !to) { if (from) JS_FreeCString(ctx, from); if (to) JS_FreeCString(ctx, to); return JS_EXCEPTION; }
+    int const ok = rename(from, to) == 0; JS_FreeCString(ctx, from); JS_FreeCString(ctx, to);
+    return ok ? JS_UNDEFINED : JS_ThrowReferenceError(ctx, "fs.rename: cannot rename file");
+}
+static JSValue js_fs_mkdirSync(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (!argc) return JS_ThrowTypeError(ctx, "fs.mkdirSync(path[, options])"); const char *path = JS_ToCString(ctx, argv[0]); if (!path) return JS_EXCEPTION; int const ok = mkdir(path, 0755) == 0 || errno == EEXIST; JS_FreeCString(ctx, path); return ok ? JS_UNDEFINED : JS_ThrowReferenceError(ctx, "fs.mkdirSync: cannot create directory");
+}
+static JSValue js_fs_stat_isFile(JSContext *ctx, JSValueConst this_val, int, JSValueConst *) { JSValue mode = JS_GetPropertyStr(ctx, this_val, "_mode"); int32_t value = 0; JS_ToInt32(ctx, &value, mode); JS_FreeValue(ctx, mode); return JS_NewBool(ctx, S_ISREG(value)); }
+static JSValue js_fs_stat_isDirectory(JSContext *ctx, JSValueConst this_val, int, JSValueConst *) { JSValue mode = JS_GetPropertyStr(ctx, this_val, "_mode"); int32_t value = 0; JS_ToInt32(ctx, &value, mode); JS_FreeValue(ctx, mode); return JS_NewBool(ctx, S_ISDIR(value)); }
+static JSValue js_fs_readdirSync(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (!argc) return JS_ThrowTypeError(ctx, "fs.readdirSync(path[, options])"); const char *path = JS_ToCString(ctx, argv[0]); if (!path) return JS_EXCEPTION; DIR *dir = opendir(path); JS_FreeCString(ctx, path); if (!dir) return JS_ThrowReferenceError(ctx, "fs.readdirSync: cannot open directory"); JSValue entries = JS_NewArray(ctx); uint32_t index = 0; while (dirent *entry = readdir(dir)) if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) JS_SetPropertyUint32(ctx, entries, index++, JS_NewString(ctx, entry->d_name)); closedir(dir); return entries;
+}
+static JSValue js_fs_statSync(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (!argc) return JS_ThrowTypeError(ctx, "fs.statSync(path[, options])"); const char *path = JS_ToCString(ctx, argv[0]); if (!path) return JS_EXCEPTION; struct stat info {}; int const ok = stat(path, &info) == 0; JS_FreeCString(ctx, path); if (!ok) return JS_ThrowReferenceError(ctx, "fs.statSync: cannot stat path"); JSValue result = JS_NewObject(ctx); JS_SetPropertyStr(ctx, result, "size", JS_NewFloat64(ctx, (double)info.st_size)); JS_SetPropertyStr(ctx, result, "isFile", JS_NewCFunction(ctx, js_fs_stat_isFile, "isFile", 0)); JS_SetPropertyStr(ctx, result, "isDirectory", JS_NewCFunction(ctx, js_fs_stat_isDirectory, "isDirectory", 0)); JS_SetPropertyStr(ctx, result, "_mode", JS_NewInt32(ctx, (int)info.st_mode)); return result;
+}
+
+// Callback APIs are queued to the next engine tick. The file operation itself
+// is currently synchronous, but callbacks never run re-entrantly from the
+// JavaScript call that initiated them.
+static JSValue js_fs_callback_call(JSContext *ctx, int argc, JSValueConst *argv, vbjs_fs_function_t function, int existsStyle = 0)
+{
+    if (argc < 2 || !JS_IsFunction(ctx, argv[argc - 1]))
+        return JS_EXCEPTION;
+    JSValue result = function(ctx, JS_UNDEFINED, argc - 1, argv);
+    int const error = JS_IsException(result);
+    JSValue value = error ? JS_GetException(ctx) : result;
+    s_fsCallbacks.push_back({ JS_DupValue(ctx, argv[argc - 1]), value, error, existsStyle });
+    return JS_UNDEFINED;
+}
+
+static JSValue js_fs_readFile_node(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc > 1 && JS_IsFunction(ctx, argv[argc - 1])) return js_fs_callback_call(ctx, argc, argv, js_fs_readFileSync_node);
+    return js_fs_readFileSync_node(ctx, JS_UNDEFINED, argc, argv);
+}
+static JSValue js_fs_writeFile_node(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc > 2 && JS_IsFunction(ctx, argv[argc - 1])) return js_fs_callback_call(ctx, argc, argv, js_fs_writeFile);
+    return js_fs_writeFile(ctx, JS_UNDEFINED, argc, argv);
+}
+static JSValue js_fs_appendFile_node(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc > 2 && JS_IsFunction(ctx, argv[argc - 1])) return js_fs_callback_call(ctx, argc, argv, js_fs_appendFile);
+    return js_fs_appendFile(ctx, JS_UNDEFINED, argc, argv);
+}
+static JSValue js_fs_exists_node(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc > 1 && JS_IsFunction(ctx, argv[argc - 1])) return js_fs_callback_call(ctx, argc, argv, js_fs_exists, 1);
+    return js_fs_exists(ctx, JS_UNDEFINED, argc, argv);
+}
+static JSValue js_fs_unlink_node(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return argc > 1 && JS_IsFunction(ctx, argv[argc - 1]) ? js_fs_callback_call(ctx, argc, argv, js_fs_unlinkSync) : js_fs_unlinkSync(ctx, JS_UNDEFINED, argc, argv); }
+static JSValue js_fs_rename_node(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return argc > 2 && JS_IsFunction(ctx, argv[argc - 1]) ? js_fs_callback_call(ctx, argc, argv, js_fs_renameSync) : js_fs_renameSync(ctx, JS_UNDEFINED, argc, argv); }
+
+// The engine filesystem is synchronous, but expose it through genuine
+// JavaScript Promises so `await fs.promises.*()` has normal Promise/error
+// semantics and composes with the rest of a mod's async code.
+static JSValue js_fs_promise_call(JSContext *ctx, int argc, JSValueConst *argv, vbjs_fs_function_t function)
+{
+    JSValue resolving[2];
+    JSValue promise = JS_NewPromiseCapability(ctx, resolving);
+    if (JS_IsException(promise)) return promise;
+
+    JSValue result = function(ctx, JS_UNDEFINED, argc, argv);
+    int const rejected = JS_IsException(result);
+    JSValue argument = rejected ? JS_GetException(ctx) : result;
+    JSValue settled = JS_Call(ctx, resolving[rejected ? 1 : 0], JS_UNDEFINED, 1, &argument);
+    JS_FreeValue(ctx, settled);
+    JS_FreeValue(ctx, argument);
+    JS_FreeValue(ctx, resolving[0]);
+    JS_FreeValue(ctx, resolving[1]);
+    return promise;
+}
+
+static JSValue js_fs_promises_readFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return js_fs_promise_call(ctx, argc, argv, js_fs_readFileSync_node); }
+static JSValue js_fs_promises_writeFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return js_fs_promise_call(ctx, argc, argv, js_fs_writeFile); }
+static JSValue js_fs_promises_appendFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return js_fs_promise_call(ctx, argc, argv, js_fs_appendFile); }
+static JSValue js_fs_promises_exists(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return js_fs_promise_call(ctx, argc, argv, js_fs_exists); }
+static JSValue js_fs_promises_unlink(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return js_fs_promise_call(ctx, argc, argv, js_fs_unlinkSync); }
+static JSValue js_fs_promises_rename(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{ return js_fs_promise_call(ctx, argc, argv, js_fs_renameSync); }
 
 // ----------------------------------------------------------------- vb: events ---
 
@@ -326,6 +845,7 @@ static JSValue js_vb_on(JSContext *ctx, JSValueConst, int argc, JSValueConst *ar
     JS_FreeValue(ctx, arr);
     // If this is a CON event name, mark it so the CON dispatch hook fires it.
     if (conEv >= 0 && conEv < VBJS_MAXCONEVENTS) s_conEventListened[conEv] = 1;
+    if (!strcmp(eventKey, "frame")) s_frameEventListened = 1;
     JS_FreeCString(ctx, ev);
     return JS_UNDEFINED;
 }
@@ -339,6 +859,7 @@ static JSValue js_vb_off(JSContext *ctx, JSValueConst, int argc, JSValueConst *a
         int const conEv = vbjs_game::eventNum(ev);
         const char *eventKey = conEv >= 0 ? vbjs_game::eventName(conEv) : ev;
         JS_SetPropertyStr(ctx, s_events, eventKey, JS_NewArray(ctx));
+        if (!strcmp(eventKey, "frame")) s_frameEventListened = 0;
         JS_FreeCString(ctx, ev);
     }
     return JS_UNDEFINED;
@@ -357,8 +878,22 @@ static void vbjs_fire(const char *event, int argc, JSValueConst *argv)
         for (uint32_t i = 0; i < len; i++)
         {
             JSValue fn = JS_GetPropertyUint32(ctx, arr, i);
+            if (!JS_IsFunction(ctx, fn))
+            {
+                JS_FreeValue(ctx, fn);
+                continue;
+            }
             JSValue r  = JS_Call(ctx, fn, JS_UNDEFINED, argc, (JSValueConst *)argv);
-            if (JS_IsException(r)) vbjs_dump_error(ctx);
+            if (JS_IsException(r))
+            {
+                char context[128];
+                snprintf(context, sizeof(context), "uncaught exception in %s handler #%u (disabled)", event, i + 1);
+                vbjs_dump_error(ctx, context);
+                // An uncaught handler must not destabilize the game or throw on
+                // every subsequent frame/input event.  It remains visible in
+                // the logs and can be registered again after the mod is fixed.
+                JS_SetPropertyUint32(ctx, arr, i, JS_UNDEFINED);
+            }
             JS_FreeValue(ctx, r);
             JS_FreeValue(ctx, fn);
         }
@@ -589,6 +1124,111 @@ static JSValue js_vb_player(JSContext *ctx, JSValueConst, int, JSValueConst *)
     return o;
 }
 
+static void vbjs_set_string(JSContext *ctx, JSValueConst object, const char *name, const char *value)
+{
+    JS_SetPropertyStr(ctx, object, name, value ? JS_NewString(ctx, value) : JS_UNDEFINED);
+}
+
+// A snapshot of real engine state.  Values are intentionally copied, so a
+// script can keep it without holding a pointer into mutable game structures.
+static JSValue js_vb_session(JSContext *ctx, JSValueConst, int, JSValueConst *)
+{
+    JSValue session = JS_NewObject(ctx);
+    int const host = vbjs_game::hostPlayer();
+    JS_SetPropertyStr(ctx, session, "started", JS_NewBool(ctx, vbjs_game::gameStarted()));
+    JS_SetPropertyStr(ctx, session, "skill", JS_NewInt32(ctx, vbjs_game::skill()));
+    JS_SetPropertyStr(ctx, session, "episode", JS_NewInt32(ctx, vbjs_game::episode()));
+    JS_SetPropertyStr(ctx, session, "level", JS_NewInt32(ctx, vbjs_game::level()));
+    JS_SetPropertyStr(ctx, session, "localPlayer", JS_NewInt32(ctx, vbjs_game::localPlayer()));
+    JS_SetPropertyStr(ctx, session, "hostPlayer", host >= 0 ? JS_NewInt32(ctx, host) : JS_UNDEFINED);
+    vbjs_set_string(ctx, session, "hostName", host >= 0 ? vbjs_game::playerName(host) : nullptr);
+    vbjs_set_string(ctx, session, "episodeName", vbjs_game::episodeName());
+    vbjs_set_string(ctx, session, "levelName", vbjs_game::levelName());
+    vbjs_set_string(ctx, session, "userMap", vbjs_game::userMap());
+    vbjs_set_string(ctx, session, "serverAddress", vbjs_game::connectedServer());
+    JSValue players = JS_NewArray(ctx);
+    int const count = vbjs_game::playerCount();
+    for (int ordinal = 0; ordinal < count; ++ordinal)
+    {
+        int const index = vbjs_game::playerAt(ordinal);
+        if (index < 0) continue;
+        JSValue player = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, player, "index", JS_NewInt32(ctx, index));
+        JS_SetPropertyStr(ctx, player, "sprite", JS_NewInt32(ctx, vbjs_game::playerSpriteAt(index)));
+        JS_SetPropertyStr(ctx, player, "isLocal", JS_NewBool(ctx, index == vbjs_game::localPlayer()));
+        JS_SetPropertyStr(ctx, player, "isHost", JS_NewBool(ctx, index == host));
+        const char *name = vbjs_game::playerName(index);
+        JS_SetPropertyStr(ctx, player, "name", JS_NewString(ctx, name ? name : ""));
+        JS_SetPropertyUint32(ctx, players, ordinal, player);
+    }
+    JS_SetPropertyStr(ctx, session, "players", players);
+    return session;
+}
+
+static JSValue js_vb_setMenuText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 2) return JS_ThrowTypeError(ctx, "vb.setMenuText(original, replacement)");
+    const char *original = JS_ToCString(ctx, argv[0]);
+    const char *replacement = JS_ToCString(ctx, argv[1]);
+    if (!original || !replacement) { if (original) JS_FreeCString(ctx, original); if (replacement) JS_FreeCString(ctx, replacement); return JS_EXCEPTION; }
+    s_menuTextOverrides[original] = replacement;
+    JS_FreeCString(ctx, original); JS_FreeCString(ctx, replacement);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_vb_setMenuBackground(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    int32_t tile = -1;
+    if (argc > 0 && !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0]) && JS_ToInt32(ctx, &tile, argv[0]))
+        return JS_EXCEPTION;
+    vbjs_game::setMenuBackground(tile);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_vb_currentMenu(JSContext *ctx, JSValueConst, int, JSValueConst *)
+{
+    return JS_NewInt32(ctx, vbjs_game::currentMenu());
+}
+
+static JSValue js_vb_openMenu(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    int32_t menu = 0;
+    if (argc < 1 || JS_ToInt32(ctx, &menu, argv[0]))
+        return JS_ThrowTypeError(ctx, "vb.openMenu(menuId)");
+    vbjs_game::openMenu(menu);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_vb_setMenuRoute(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    int32_t menu = 0, item = 0, destination = 0;
+    if (argc < 3 || JS_ToInt32(ctx, &menu, argv[0]) || JS_ToInt32(ctx, &item, argv[1]))
+        return JS_ThrowTypeError(ctx, "vb.setMenuRoute(menuId, itemIndex, destination | null)");
+    uint64_t const key = vbjs_menu_route_key(menu, item);
+    if (JS_IsNull(argv[2]) || JS_IsUndefined(argv[2]))
+        s_menuRoutes.erase(key);
+    else
+    {
+        if (JS_ToInt32(ctx, &destination, argv[2])) return JS_EXCEPTION;
+        s_menuRoutes[key] = destination;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_vb_menuSelection(JSContext *ctx, JSValueConst, int, JSValueConst *)
+{
+    return JS_NewInt32(ctx, vbjs_game::menuSelection());
+}
+
+static JSValue js_vb_setMenuSelection(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    int32_t selection = 0;
+    if (argc < 1 || JS_ToInt32(ctx, &selection, argv[0]))
+        return JS_ThrowTypeError(ctx, "vb.setMenuSelection(index)");
+    vbjs_game::setMenuSelection(selection);
+    return JS_UNDEFINED;
+}
+
 // --------------------------------------------------- vb/fs export helpers ---
 
 static void vbjs_setup_components(JSContext *ctx)
@@ -604,20 +1244,24 @@ static void vbjs_setup_components(JSContext *ctx)
         "  const key = entity => entity instanceof VBNode ? 'node:' + entity.id : 'sprite:' + entity;\n"
         "  const list = entity => entities[key(entity)] || (entities[key(entity)] = []);\n"
         "  const active = component => component.enabled && (!component.node || component.node.activeInHierarchy);\n"
+        "  const entityOf = component => component.sprite >= 0 ? component.sprite : component.node;\n"
+        "  const release = component => { if (active(component)) call(component, 'onDisable'); call(component, 'onDestroy'); trackUpdates(component, -1); component.sprite = -1; component.node = null; };\n"
         "  class VBComponent { constructor(){ this.sprite = -1; this.node = null; this._enabled = true; Object.defineProperty(this, 'enabled', { enumerable: true, get: () => this._enabled, set: value => setComponentEnabled(this, value) }); Object.defineProperty(this, 'transform', { enumerable: true, get: () => this.node ? this.node.transform : undefined }); }\n"
-        "    get gameObject(){ return this.node; } get isActiveAndEnabled(){ return active(this); } GetComponent(type){ return this.sprite >= 0 ? getComponent(this.sprite, type) : this.node ? getComponent(this.node, type) : undefined; } GetComponents(type){ return this.sprite >= 0 ? getComponents(this.sprite, type) : this.node ? getComponents(this.node, type) : []; } AddComponent(type){ return this.sprite >= 0 ? attach(this.sprite, type) : this.node ? attach(this.node, type) : undefined; } Destroy(){ return this.sprite >= 0 ? detach(this.sprite, this) : this.node ? detach(this.node, this) : false; }\n"
+        "    get gameObject(){ return this.node; } get isActiveAndEnabled(){ return active(this); } GetComponent(type){ const entity = entityOf(this); return entity === null ? undefined : getComponent(entity, type); } GetComponents(type){ const entity = entityOf(this); return entity === null ? [] : getComponents(entity, type); } AddComponent(type){ const entity = entityOf(this); return entity === null ? undefined : attach(entity, type); } Destroy(){ const entity = entityOf(this); return entity === null ? false : detach(entity, this); }\n"
         "    awake(){} start(){} onSpawn(){} fixedUpdate(dt){} update(dt){} lateUpdate(dt){} onDestroy(){} onEnable(){} onDisable(){} }\n"
         "  class VBPrefab { constructor(tile, ...components){ this.tile = tile; this.components = components; } }\n"
+        "  const updateNames = ['fixedUpdate', 'update', 'lateUpdate']; const updateCounts = { fixedUpdate: 0, update: 0, lateUpdate: 0 };\n"
+        "  const trackUpdates = (component, delta) => { for (const name of updateNames) if (component[name] !== VBComponent.prototype[name]) updateCounts[name] += delta; };\n"
         "  function attach(entity, componentOrType) {\n"
         "    if (!(entity instanceof VBNode) && (!Number.isInteger(entity) || entity < 0)) throw new TypeError('vb.attach(entity, component) requires a sprite or VBNode');\n"
         "    if (entity instanceof VBNode && entity.destroyed) throw new Error('Cannot attach to a destroyed VBNode');\n"
         "    const component = typeof componentOrType === 'function' ? new componentOrType() : componentOrType;\n"
         "    if (!(component instanceof VBComponent)) throw new TypeError('Components must extend VBComponent');\n"
         "    if (component.sprite >= 0 || component.node) throw new Error('Component is already attached');\n"
-        "    component.sprite = entity instanceof VBNode ? -1 : entity; component.node = entity instanceof VBNode ? entity : null; list(entity).push(component); call(component, 'awake'); if (active(component)) call(component, 'onEnable'); call(component, 'onSpawn'); call(component, 'start'); return component;\n"
+        "    ensureComponentLifecycle(); component.sprite = entity instanceof VBNode ? -1 : entity; component.node = entity instanceof VBNode ? entity : null; trackUpdates(component, 1); if (updateNames.some(name => updateCounts[name])) ensureComponentLoop(); list(entity).push(component); call(component, 'awake'); if (active(component)) call(component, 'onEnable'); call(component, 'onSpawn'); call(component, 'start'); return component;\n"
         "  }\n"
-        "  function detach(entity, component) { const entityKey = key(entity), components = entities[entityKey]; if (!components) return false; const index = components.indexOf(component); if (index < 0) return false; components.splice(index, 1); if (active(component)) call(component, 'onDisable'); call(component, 'onDestroy'); component.sprite = -1; component.node = null; if (!components.length) delete entities[entityKey]; return true; }\n"
-        "  function destroyComponents(entity) { const entityKey = key(entity), components = entities[entityKey]; if (!components) return; delete entities[entityKey]; for (const component of components.slice()) { if (active(component)) call(component, 'onDisable'); call(component, 'onDestroy'); component.sprite = -1; component.node = null; } }\n"
+        "  function detach(entity, component) { const entityKey = key(entity), components = entities[entityKey]; if (!components) return false; const index = components.indexOf(component); if (index < 0) return false; components.splice(index, 1); release(component); if (!components.length) delete entities[entityKey]; return true; }\n"
+        "  function destroyComponents(entity) { const entityKey = key(entity), components = entities[entityKey]; if (!components) return; delete entities[entityKey]; for (const component of components.slice()) release(component); }\n"
         "  function getComponent(entity, type) { const components = entities[key(entity)] || []; return components.find(component => component instanceof type); }\n"
         "  function getComponents(entity, type) { const components = (entities[key(entity)] || []).slice(); return type ? components.filter(component => component instanceof type) : components; }\n"
         "  function setComponentEnabled(component, enabled) { enabled = !!enabled; if (component._enabled === enabled) return; const wasActive = active(component); component._enabled = enabled; if (wasActive && !active(component)) call(component, 'onDisable'); else if (!wasActive && active(component)) call(component, 'onEnable'); }\n"
@@ -626,10 +1270,15 @@ static void vbjs_setup_components(JSContext *ctx)
         "  function createNode(...components) { const node = new VBNode(); for (const type of components) attach(node, type); return node; }\n"
         "  function setNodeActive(node, enabled) { if (!(node instanceof VBNode) || node.destroyed) return false; enabled = !!enabled; if (node._activeSelf === enabled) return true; const components = (entities[key(node)] || []).slice(); const wasActive = node.activeInHierarchy; node._activeSelf = enabled; for (const component of components) if (component.enabled) call(component, wasActive && !enabled ? 'onDisable' : !wasActive && enabled ? 'onEnable' : 'awake'); return true; }\n"
         "  function destroyNode(node) { if (!(node instanceof VBNode) || node.destroyed) return false; destroyComponents(node); node.destroyed = true; return true; }\n"
-        "  const each = (name, dt) => { for (const key of Object.keys(entities)) for (const component of entities[key].slice()) if (active(component)) call(component, name, dt); };\n"
-        "  // Duke's game tick is fixed at 60 Hz; update follows each rendered/game frame.\n"
-        "  vb.on('frame', () => { const dt = 1 / 60; each('fixedUpdate', dt); each('update', dt); each('lateUpdate', dt); });\n"
-        "  vb.on('actorDestroyed', event => destroyComponents(event.sprite));\n"
+        "  const eachUpdate = (name, dt) => { const base = VBComponent.prototype[name]; for (const key of Object.keys(entities)) for (const component of entities[key].slice()) { const fn = component[name]; if (active(component) && fn !== base) fn.call(component, dt); } };\n"
+        "  let componentLifecycleInstalled = false, componentLoopInstalled = false;\n"
+        "  function ensureComponentLifecycle() { if (componentLifecycleInstalled) return; componentLifecycleInstalled = true; vb.on('actorDestroyed', event => destroyComponents(event.sprite)); }\n"
+        "  function ensureComponentLoop() { if (componentLoopInstalled) return; componentLoopInstalled = true; let lastTime = 0, fixedAccum = 0;\n"
+        "    vb.on('frame', () => { const now = Date.now(), dt = lastTime ? Math.min((now - lastTime) / 1000, .25) : 0; lastTime = now;\n"
+        "      if (updateCounts.fixedUpdate) { fixedAccum = Math.min(fixedAccum + dt, .25); for (let steps = 0; fixedAccum >= 1 / 60 && steps < 4; ++steps) { eachUpdate('fixedUpdate', 1 / 60); fixedAccum -= 1 / 60; } }\n"
+        "      if (updateCounts.update) eachUpdate('update', dt); if (updateCounts.lateUpdate) eachUpdate('lateUpdate', dt);\n"
+        "    });\n"
+        "  }\n"
         "  return { VBComponent, VBNode, VBPrefab, attach, detach, getComponent, getComponents, setComponentEnabled, createNode, destroyNode, createPrefab, spawnPrefab };\n"
         "})(vb)";
     JSValue value = JS_Eval(ctx, source, strlen(source), "<vb-components>", JS_EVAL_TYPE_GLOBAL);
@@ -653,6 +1302,14 @@ static void vbjs_define_vb(JSContext *ctx, JSValue target)
     JS_SetPropertyStr(ctx, target, "getGamevar",  JS_NewCFunction(ctx, js_vb_getGamevar,  "getGamevar", 1));
     JS_SetPropertyStr(ctx, target, "setGamevar",  JS_NewCFunction(ctx, js_vb_setGamevar,  "setGamevar", 2));
     JS_SetPropertyStr(ctx, target, "player",      JS_NewCFunction(ctx, js_vb_player,      "player", 0));
+    JS_SetPropertyStr(ctx, target, "session",     JS_NewCFunction(ctx, js_vb_session,     "session", 0));
+    JS_SetPropertyStr(ctx, target, "setMenuText", JS_NewCFunction(ctx, js_vb_setMenuText, "setMenuText", 2));
+    JS_SetPropertyStr(ctx, target, "setMenuBackground", JS_NewCFunction(ctx, js_vb_setMenuBackground, "setMenuBackground", 1));
+    JS_SetPropertyStr(ctx, target, "currentMenu", JS_NewCFunction(ctx, js_vb_currentMenu, "currentMenu", 0));
+    JS_SetPropertyStr(ctx, target, "openMenu", JS_NewCFunction(ctx, js_vb_openMenu, "openMenu", 1));
+    JS_SetPropertyStr(ctx, target, "setMenuRoute", JS_NewCFunction(ctx, js_vb_setMenuRoute, "setMenuRoute", 3));
+    JS_SetPropertyStr(ctx, target, "menuSelection", JS_NewCFunction(ctx, js_vb_menuSelection, "menuSelection", 0));
+    JS_SetPropertyStr(ctx, target, "setMenuSelection", JS_NewCFunction(ctx, js_vb_setMenuSelection, "setMenuSelection", 1));
     JS_SetPropertyStr(ctx, target, "run",         JS_NewCFunction(ctx, js_cvar_run,       "run", 1));   // alias of cvar.run
     JS_SetPropertyStr(ctx, target, "define",      JS_NewCFunction(ctx, js_vb_define,      "define", 1));
     JS_SetPropertyStr(ctx, target, "sound",       JS_NewCFunction(ctx, js_vb_sound,      "sound", 1));
@@ -686,21 +1343,53 @@ static void vbjs_define_cvar(JSContext *ctx, JSValue target)
 }
 static void vbjs_define_fs(JSContext *ctx, JSValue target)
 {
-    JS_SetPropertyStr(ctx, target, "readFile",   JS_NewCFunction(ctx, js_fs_readFile,   "readFile", 1));
-    JS_SetPropertyStr(ctx, target, "writeFile",  JS_NewCFunction(ctx, js_fs_writeFile,  "writeFile", 2));
-    JS_SetPropertyStr(ctx, target, "appendFile", JS_NewCFunction(ctx, js_fs_appendFile, "appendFile", 2));
-    JS_SetPropertyStr(ctx, target, "exists",     JS_NewCFunction(ctx, js_fs_exists,     "exists", 1));
+    JS_SetPropertyStr(ctx, target, "readFile",   JS_NewCFunction(ctx, js_fs_readFile_node,   "readFile", 3));
+    JS_SetPropertyStr(ctx, target, "writeFile",  JS_NewCFunction(ctx, js_fs_writeFile_node,  "writeFile", 4));
+    JS_SetPropertyStr(ctx, target, "appendFile", JS_NewCFunction(ctx, js_fs_appendFile_node, "appendFile", 4));
+    JS_SetPropertyStr(ctx, target, "exists",     JS_NewCFunction(ctx, js_fs_exists_node,     "exists", 2));
+    JS_SetPropertyStr(ctx, target, "unlink", JS_NewCFunction(ctx, js_fs_unlink_node, "unlink", 2));
+    JS_SetPropertyStr(ctx, target, "rename", JS_NewCFunction(ctx, js_fs_rename_node, "rename", 3));
+    JS_SetPropertyStr(ctx, target, "readFileSync", JS_NewCFunction(ctx, js_fs_readFileSync_node, "readFileSync", 2));
+    JS_SetPropertyStr(ctx, target, "writeFileSync", JS_NewCFunction(ctx, js_fs_writeFile, "writeFileSync", 2));
+    JS_SetPropertyStr(ctx, target, "appendFileSync", JS_NewCFunction(ctx, js_fs_appendFile, "appendFileSync", 2));
+    JS_SetPropertyStr(ctx, target, "existsSync", JS_NewCFunction(ctx, js_fs_exists, "existsSync", 1));
+    JS_SetPropertyStr(ctx, target, "unlinkSync", JS_NewCFunction(ctx, js_fs_unlinkSync, "unlinkSync", 1));
+    JS_SetPropertyStr(ctx, target, "renameSync", JS_NewCFunction(ctx, js_fs_renameSync, "renameSync", 2));
+    JS_SetPropertyStr(ctx, target, "mkdirSync", JS_NewCFunction(ctx, js_fs_mkdirSync, "mkdirSync", 2));
+    JS_SetPropertyStr(ctx, target, "readdirSync", JS_NewCFunction(ctx, js_fs_readdirSync, "readdirSync", 2));
+    JS_SetPropertyStr(ctx, target, "statSync", JS_NewCFunction(ctx, js_fs_statSync, "statSync", 2));
+    JSValue promises = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, promises, "readFile", JS_NewCFunction(ctx, js_fs_promises_readFile, "readFile", 1));
+    JS_SetPropertyStr(ctx, promises, "writeFile", JS_NewCFunction(ctx, js_fs_promises_writeFile, "writeFile", 2));
+    JS_SetPropertyStr(ctx, promises, "appendFile", JS_NewCFunction(ctx, js_fs_promises_appendFile, "appendFile", 2));
+    JS_SetPropertyStr(ctx, promises, "exists", JS_NewCFunction(ctx, js_fs_promises_exists, "exists", 1));
+    JS_SetPropertyStr(ctx, promises, "unlink", JS_NewCFunction(ctx, js_fs_promises_unlink, "unlink", 1));
+    JS_SetPropertyStr(ctx, promises, "rename", JS_NewCFunction(ctx, js_fs_promises_rename, "rename", 2));
+    JS_SetPropertyStr(ctx, target, "promises", promises);
+}
+static void vbjs_define_dgram(JSContext *ctx, JSValue target)
+{
+    JS_SetPropertyStr(ctx, target, "createSocket", JS_NewCFunction(ctx, js_dgram_createSocket, "createSocket", 2));
+}
+static void vbjs_define_net(JSContext *ctx, JSValue target)
+{
+    JSValue connect = JS_NewCFunction(ctx, js_net_createConnection, "createConnection", 3);
+    JS_SetPropertyStr(ctx, target, "createConnection", JS_DupValue(ctx, connect));
+    JS_SetPropertyStr(ctx, target, "connect", connect);
 }
 
 // ES-module init for `import ... from 'vb'` / 'fs' (default + named exports).
 static const char *k_vb_exports[] = {
-    "on","off","log","drawText","clearText","breakpoint","spawn","A_Spawn","A_InsertSprite","sendMessage","getGamevar","setGamevar","player","run","define",
+    "on","off","log","drawText","clearText","breakpoint","spawn","A_Spawn","A_InsertSprite","sendMessage","getGamevar","setGamevar","player","session","setMenuText","setMenuBackground","currentMenu","openMenu","setMenuRoute","menuSelection","setMenuSelection","run","define",
     "sound","shoot","addAmmo","addWeapon",
     "getActor","setActor","getPlayer","setPlayer","getInput","setInput","getSector","setSector","getWall","setWall",
     "getProjectile","setProjectile","getActiveProjectile","setActiveProjectile","getTileData","setTileData","getUserdef","setUserdef",
     "VBComponent","VBNode","VBPrefab","attach","detach","getComponent","getComponents","setComponentEnabled","createNode","destroyNode","createPrefab","spawnPrefab",
 };
-static const char *k_fs_exports[] = { "readFile","writeFile","appendFile","exists" };
+static const char *k_fs_exports[] = { "readFile","writeFile","appendFile","exists","unlink","rename","readFileSync","writeFileSync","appendFileSync","existsSync","unlinkSync","renameSync","mkdirSync","readdirSync","statSync","promises" };
+static const char *k_fs_promises_exports[] = { "readFile","writeFile","appendFile","exists","unlink","rename" };
+static const char *k_dgram_exports[] = { "createSocket" };
+static const char *k_net_exports[] = { "createConnection", "connect" };
 static const char *k_cvar_exports[] = { "run","set" };
 
 static int vb_module_init(JSContext *ctx, JSModuleDef *m)
@@ -715,6 +1404,29 @@ static int fs_module_init(JSContext *ctx, JSModuleDef *m)
     JSValue o = JS_NewObject(ctx); vbjs_define_fs(ctx, o);
     for (auto n : k_fs_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
     JS_SetModuleExport(ctx, m, "default", o);
+    return 0;
+}
+static int dgram_module_init(JSContext *ctx, JSModuleDef *m)
+{
+    JSValue o = JS_NewObject(ctx); vbjs_define_dgram(ctx, o);
+    for (auto n : k_dgram_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
+    JS_SetModuleExport(ctx, m, "default", o);
+    return 0;
+}
+static int net_module_init(JSContext *ctx, JSModuleDef *m)
+{
+    JSValue o = JS_NewObject(ctx); vbjs_define_net(ctx, o);
+    for (auto n : k_net_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
+    JS_SetModuleExport(ctx, m, "default", o);
+    return 0;
+}
+static int fs_promises_module_init(JSContext *ctx, JSModuleDef *m)
+{
+    JSValue fs = JS_NewObject(ctx); vbjs_define_fs(ctx, fs);
+    JSValue promises = JS_GetPropertyStr(ctx, fs, "promises");
+    for (auto n : k_fs_promises_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, promises, n));
+    JS_SetModuleExport(ctx, m, "default", promises);
+    JS_FreeValue(ctx, fs);
     return 0;
 }
 static int cvar_module_init(JSContext *ctx, JSModuleDef *m)
@@ -736,11 +1448,14 @@ static JSValue js_require(JSContext *ctx, JSValueConst, int argc, JSValueConst *
     if (!name) return JS_EXCEPTION;
 
     // Builtins are also require-able.
-    if (!strcmp(name, "vb") || !strcmp(name, "fs") || !strcmp(name, "cvar"))
+    if (!strcmp(name, "vb") || !strcmp(name, "fs") || !strcmp(name, "node:fs") || !strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises") || !strcmp(name, "dgram") || !strcmp(name, "node:dgram") || !strcmp(name, "net") || !strcmp(name, "node:net") || !strcmp(name, "cvar"))
     {
         JSValue o = JS_NewObject(ctx);
         if (!strcmp(name, "vb")) vbjs_define_vb(ctx, o);
-        else if (!strcmp(name, "fs")) vbjs_define_fs(ctx, o);
+        else if (!strcmp(name, "fs") || !strcmp(name, "node:fs")) vbjs_define_fs(ctx, o);
+        else if (!strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises")) { vbjs_define_fs(ctx, o); JSValue promises = JS_GetPropertyStr(ctx, o, "promises"); JS_FreeValue(ctx, o); o = promises; }
+        else if (!strcmp(name, "dgram") || !strcmp(name, "node:dgram")) vbjs_define_dgram(ctx, o);
+        else if (!strcmp(name, "net") || !strcmp(name, "node:net")) vbjs_define_net(ctx, o);
         else vbjs_define_cvar(ctx, o);
         JS_FreeCString(ctx, name);
         return o;
@@ -762,7 +1477,7 @@ static JSValue js_require(JSContext *ctx, JSValueConst, int argc, JSValueConst *
     free(src);
     JSValue fn = JS_Eval(ctx, wrap, (size_t)wlen, path, JS_EVAL_TYPE_GLOBAL);
     free(wrap);
-    if (JS_IsException(fn)) { vbjs_dump_error(ctx); return fn; }
+    if (JS_IsException(fn)) return fn;
 
     JSValue module  = JS_NewObject(ctx);
     JSValue exports  = JS_NewObject(ctx);
@@ -771,7 +1486,7 @@ static JSValue js_require(JSContext *ctx, JSValueConst, int argc, JSValueConst *
     JSValueConst args[3] = { exports, module, reqfn };
     JSValue r = JS_Call(ctx, fn, JS_UNDEFINED, 3, args);
     JS_FreeValue(ctx, fn); JS_FreeValue(ctx, reqfn);
-    if (JS_IsException(r)) { vbjs_dump_error(ctx); JS_FreeValue(ctx, exports); JS_FreeValue(ctx, module); return r; }
+    if (JS_IsException(r)) { JS_FreeValue(ctx, exports); JS_FreeValue(ctx, module); return r; }
     JS_FreeValue(ctx, r);
 
     JSValue result = JS_GetPropertyStr(ctx, module, "exports");  // module.exports may have been replaced
@@ -785,7 +1500,7 @@ static JSValue js_require(JSContext *ctx, JSValueConst, int argc, JSValueConst *
 
 static char *vbjs_normalize(JSContext *ctx, const char *base, const char *name, void *)
 {
-    if (!strcmp(name, "vb") || !strcmp(name, "fs") || !strcmp(name, "cvar"))
+    if (!strcmp(name, "vb") || !strcmp(name, "fs") || !strcmp(name, "node:fs") || !strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises") || !strcmp(name, "dgram") || !strcmp(name, "node:dgram") || !strcmp(name, "net") || !strcmp(name, "node:net") || !strcmp(name, "cvar"))
         return js_strdup(ctx, name);
     // Relative to the importing module's directory when possible, else the script dir.
     char resolved[1024];
@@ -819,7 +1534,31 @@ static void vbjs_setup_context(JSContext *ctx)
     s_events       = JS_NewObject(ctx);
     s_requireCache = JS_NewObject(ctx);
 
+    JS_NewClassID(s_rt, &s_dgramSocketClass);
+    JSClassDef dgramSocketClass {};
+    dgramSocketClass.class_name = "Socket";
+    dgramSocketClass.finalizer = js_dgram_socket_finalizer;
+    JS_NewClass(s_rt, s_dgramSocketClass, &dgramSocketClass);
+    JSValue dgramPrototype = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, dgramPrototype, "on", JS_NewCFunction(ctx, js_dgram_on, "on", 2));
+    JS_SetPropertyStr(ctx, dgramPrototype, "bind", JS_NewCFunction(ctx, js_dgram_bind, "bind", 3));
+    JS_SetPropertyStr(ctx, dgramPrototype, "send", JS_NewCFunction(ctx, js_dgram_send, "send", 4));
+    JS_SetPropertyStr(ctx, dgramPrototype, "close", JS_NewCFunction(ctx, js_dgram_close, "close", 1));
+    JS_SetPropertyStr(ctx, dgramPrototype, "address", JS_NewCFunction(ctx, js_dgram_address, "address", 0));
+    JS_SetClassProto(ctx, s_dgramSocketClass, dgramPrototype);
+    JS_NewClassID(s_rt, &s_netSocketClass);
+    JSClassDef netSocketClass {}; netSocketClass.class_name = "Socket"; netSocketClass.finalizer = js_net_socket_finalizer;
+    JS_NewClass(s_rt, s_netSocketClass, &netSocketClass);
+    JSValue netPrototype = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, netPrototype, "on", JS_NewCFunction(ctx, js_net_on, "on", 2));
+    JS_SetPropertyStr(ctx, netPrototype, "write", JS_NewCFunction(ctx, js_net_write, "write", 2));
+    JS_SetPropertyStr(ctx, netPrototype, "end", JS_NewCFunction(ctx, js_net_end, "end", 2));
+    JS_SetPropertyStr(ctx, netPrototype, "destroy", JS_NewCFunction(ctx, js_net_destroy, "destroy", 0));
+    JS_SetPropertyStr(ctx, netPrototype, "setNoDelay", JS_NewCFunction(ctx, js_net_setNoDelay, "setNoDelay", 1));
+    JS_SetClassProto(ctx, s_netSocketClass, netPrototype);
+
     JSValue g = JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, g, "fetch", JS_NewCFunction(ctx, js_fetch, "fetch", 2));
 
     // console
     JSValue console = JS_NewObject(ctx);
@@ -854,6 +1593,27 @@ static void vbjs_setup_context(JSContext *ctx)
     JSModuleDef *mfs = JS_NewCModule(ctx, "fs", fs_module_init);
     for (auto n : k_fs_exports) JS_AddModuleExport(ctx, mfs, n);
     JS_AddModuleExport(ctx, mfs, "default");
+    JSModuleDef *mnodefs = JS_NewCModule(ctx, "node:fs", fs_module_init);
+    for (auto n : k_fs_exports) JS_AddModuleExport(ctx, mnodefs, n);
+    JS_AddModuleExport(ctx, mnodefs, "default");
+    JSModuleDef *mfsp = JS_NewCModule(ctx, "fs/promises", fs_promises_module_init);
+    for (auto n : k_fs_promises_exports) JS_AddModuleExport(ctx, mfsp, n);
+    JS_AddModuleExport(ctx, mfsp, "default");
+    JSModuleDef *mnodefsp = JS_NewCModule(ctx, "node:fs/promises", fs_promises_module_init);
+    for (auto n : k_fs_promises_exports) JS_AddModuleExport(ctx, mnodefsp, n);
+    JS_AddModuleExport(ctx, mnodefsp, "default");
+    JSModuleDef *mdgram = JS_NewCModule(ctx, "dgram", dgram_module_init);
+    for (auto n : k_dgram_exports) JS_AddModuleExport(ctx, mdgram, n);
+    JS_AddModuleExport(ctx, mdgram, "default");
+    JSModuleDef *mnodedgram = JS_NewCModule(ctx, "node:dgram", dgram_module_init);
+    for (auto n : k_dgram_exports) JS_AddModuleExport(ctx, mnodedgram, n);
+    JS_AddModuleExport(ctx, mnodedgram, "default");
+    JSModuleDef *mnet = JS_NewCModule(ctx, "net", net_module_init);
+    for (auto n : k_net_exports) JS_AddModuleExport(ctx, mnet, n);
+    JS_AddModuleExport(ctx, mnet, "default");
+    JSModuleDef *mnodenet = JS_NewCModule(ctx, "node:net", net_module_init);
+    for (auto n : k_net_exports) JS_AddModuleExport(ctx, mnodenet, n);
+    JS_AddModuleExport(ctx, mnodenet, "default");
     JSModuleDef *mcvar = JS_NewCModule(ctx, "cvar", cvar_module_init);
     for (auto n : k_cvar_exports) JS_AddModuleExport(ctx, mcvar, n);
     JS_AddModuleExport(ctx, mcvar, "default");
@@ -873,8 +1633,12 @@ void VBJS_SetDevtools(int enabled) { s_devtools = enabled != 0; }
 int VBJS_DevtoolsEnabled(void) { return s_devtools; }
 void VBJS_DevtoolsPump(void)
 {
-    if (!s_ctx) return;
+    if (!s_ctx || !s_debuggerWorkPending.exchange(false, std::memory_order_acq_rel)) return;
     js_debugger_cooperate(s_ctx);
+    // QuickJS processes one protocol message per cooperate call. Keep the
+    // existing pacing when a client queued multiple requests, but stay idle
+    // on the common no-debugger path.
+    if (vbjs_debug_peek(&s_debugTransport)) s_debuggerWorkPending.store(true, std::memory_order_release);
 }
 int VBJS_DevtoolsDebuggerSend(const char *json)
 {
@@ -884,6 +1648,7 @@ int VBJS_DevtoolsDebuggerSend(const char *json)
     for (int i = 0; i < 9; ++i) s_debugTransport.inbound.push_back(header[i]);
     for (size_t i = 0; i < length; ++i) s_debugTransport.inbound.push_back(json[i]);
     s_debugTransport.inbound.push_back('\n'); pthread_cond_broadcast(&s_debugTransport.changed); pthread_mutex_unlock(&s_debugTransport.mutex);
+    s_debuggerWorkPending.store(true, std::memory_order_release);
     return 1;
 }
 int VBJS_DevtoolsDebuggerReceiveForClient(int client, char *out, int outSize)
@@ -999,17 +1764,15 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "// VibeBuild32 auto-loads only index.ts (or index.js) from this project.\n"
         "import { VBComponent, createPrefab, on, log, drawText, define } from 'vb';\n"
         "import fs from 'fs';\n"
-        "import cvar from 'cvar';\n"
         "const vbLegacy = require('vb'); // CommonJS require() is supported too.\n\n"
         "let frames = 0;\n"
         "const liztroop = define('LIZTROOP');\n"
-        "class TrooperComponent extends VBComponent { onSpawn() { log('Component attached:', this.sprite); } fixedUpdate(dt: number) { void dt; } }\n"
+        "class TrooperComponent extends VBComponent { onSpawn() { log('Component attached:', this.sprite); } }\n"
         "const trooperPrefab = liztroop === undefined ? undefined : createPrefab(liztroop, TrooperComponent);\n\n"
         "on('start', () => {\n"
         "  log('TypeScript mod loaded. LIZTROOP is', liztroop, 'player:', vbLegacy.player().sprite);\n"
         "  // Built-in modules are typed too; this is safe even when the file does not exist.\n"
         "  if (fs.exists('autojs-notes.txt')) log(fs.readFile('autojs-notes.txt'));\n"
-        "  cvar.set('r_maxfps', 60);\n"
         "  // Spawn with components: if (trooperPrefab) spawnPrefab(trooperPrefab);\n"
         "});\n\n"
         "on('actorSpawned', event => {\n"
@@ -1024,15 +1787,14 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "/** @type {import('vb').default} */\n"
         "const vb = require('vb');\n"
         "const fs = require('fs');\n"
-        "const cvar = require('cvar');\n\n"
+        "\n"
         "let frames = 0;\n"
         "const liztroop = vb.define('LIZTROOP');\n"
-        "class TrooperComponent extends vb.VBComponent { onSpawn() { vb.log('Component attached:', this.sprite); } fixedUpdate(dt) { void dt; } }\n"
+        "class TrooperComponent extends vb.VBComponent { onSpawn() { vb.log('Component attached:', this.sprite); } }\n"
         "const trooperPrefab = liztroop === undefined ? undefined : vb.createPrefab(liztroop, TrooperComponent);\n\n"
         "vb.on('start', () => {\n"
         "  vb.log('JavaScript mod loaded. LIZTROOP is', liztroop);\n"
         "  if (fs.exists('autojs-notes.txt')) vb.log(fs.readFile('autojs-notes.txt'));\n"
-        "  cvar.set('r_maxfps', 60);\n"
         "  // Spawn with components: if (trooperPrefab) vb.spawnPrefab(trooperPrefab);\n"
         "});\n\n"
         "vb.on('actorSpawned', event => {\n"
@@ -1056,10 +1818,17 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "declare type VBComponentConstructor<T extends VBComponent = VBComponent> = new () => T;\n"
         "declare class VBPrefab { readonly tile: number; readonly components: readonly VBComponentConstructor[]; }\n"
         "declare type ChatEvent = { player: number; text: string };\n"
+        "declare type MenuEvent = { menu: number; previousMenu?: number };\n"
         "declare type ConEvent = { sprite: number; player: number; dist: number };\n"
         "declare type Player = { sprite: number; x: number; y: number; z: number };\n"
+        "declare type SessionPlayer = { index: number; name: string; sprite: number; isLocal: boolean; isHost: boolean };\n"
+        "declare type GameSession = { started: boolean; skill: number; episode: number; level: number; episodeName?: string; levelName?: string; userMap?: string; localPlayer: number; hostPlayer?: number; hostName?: string; serverAddress?: string; players: SessionPlayer[]; };\n"
         "declare type ConValue = number | undefined;\n"
         "declare interface VBConsole { log(...args: unknown[]): void; error(...args: unknown[]): void; warn(...args: unknown[]): void; info(...args: unknown[]): void; }\n"
+        "declare interface VBHeaders { get(name: string): string | null; }\n"
+        "declare interface VBFetchResponse { readonly status: number; readonly ok: boolean; readonly url: string; readonly headers: VBHeaders; text(): Promise<string>; json<T = unknown>(): Promise<T>; arrayBuffer(): Promise<ArrayBuffer>; }\n"
+        "declare interface VBFetchOptions { method?: string; body?: string | Uint8Array; headers?: Record<string, string>; }\n"
+        "declare function fetch(url: string, options?: VBFetchOptions): Promise<VBFetchResponse>;\n"
         "// Every CON EVENT_* name accepted by vb.on(). The prefix is optional at runtime.\n"
         "declare type ConEventShortName =\n"
         "  | 'ACTIVATESWITCH' | 'AIMDOWN' | 'AIMUP' | 'ALTFIRE' | 'ALTWEAPON' | 'ANIMATESPRITES'\n"
@@ -1083,10 +1852,11 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "  | 'WEAPKEY1' | 'WEAPKEY2' | 'WEAPKEY3' | 'WEAPKEY4' | 'WEAPKEY5' | 'WEAPKEY6'\n"
         "  | 'WEAPKEY7' | 'WEAPKEY8' | 'WEAPKEY9' | 'WEAPKEY10' | 'WORLD';\n"
         "declare type ConEventName = ConEventShortName | `EVENT_${ConEventShortName}`;\n"
-        "declare type VBLifecycleEventName = 'start' | 'shutdown' | 'frame' | 'playerDied';\n"
-        "declare type VBEventName = VBLifecycleEventName | 'actorSpawned' | 'actorDestroyed' | 'chatMessage' | ConEventName;\n"
+        "declare type VBLifecycleEventName = 'start' | 'shutdown' | 'frame' | 'playerDied' | 'gameStarted' | 'levelChanged' | 'levelFinished' | 'leftGame' | 'beforeQuit';\n"
+        "declare type VBEventName = VBLifecycleEventName | 'menuOpened' | 'menuClosed' | 'menuChanged' | 'escapeMenuOpened' | 'actorSpawned' | 'actorDestroyed' | 'chatMessage' | ConEventName;\n"
         "declare type VBEventMap = {\n"
-        "  start: void; shutdown: void; frame: void; playerDied: void;\n"
+        "  start: void; shutdown: void; frame: void; playerDied: void; gameStarted: void; levelChanged: void; levelFinished: void; leftGame: void; beforeQuit: void;\n"
+        "  menuOpened: MenuEvent; menuClosed: MenuEvent; menuChanged: MenuEvent; escapeMenuOpened: MenuEvent;\n"
         "  actorSpawned: ActorEvent; actorDestroyed: ActorEvent; chatMessage: ChatEvent;\n"
         "} & { [K in ConEventName]: ConEvent };\n"
         "declare interface VB {\n"
@@ -1100,7 +1870,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "  A_Spawn(spriteNum: number, tileNum: number): number;\n"
         "  A_InsertSprite(whatsect: number, s_x: number, s_y: number, s_z: number, s_pn: number, s_s: number, s_xr: number, s_yr: number, s_a: number, s_ve: number, s_zv: number, s_ow: number, s_ss: number): number;\n"
         "  VBComponent: typeof VBComponent; VBNode: typeof VBNode; VBPrefab: typeof VBPrefab; attach<T extends VBComponent>(entity: number | VBNode, component: T | VBComponentConstructor<T>): T; detach(entity: number | VBNode, component: VBComponent): boolean; getComponent<T extends VBComponent>(entity: number | VBNode, type: VBComponentConstructor<T>): T | undefined; getComponents<T extends VBComponent>(entity: number | VBNode, type?: VBComponentConstructor<T>): T[]; setComponentEnabled(component: VBComponent, enabled: boolean): void; createNode(...components: VBComponentConstructor[]): VBNode; destroyNode(node: VBNode): boolean; createPrefab(tile: number, ...components: VBComponentConstructor[]): VBPrefab; spawnPrefab(prefab: VBPrefab, x?: number, y?: number, z?: number, owner?: number): number;\n"
-        "  sendMessage(text: string): void; player(): Player;\n"
+        "  sendMessage(text: string): void; player(): Player; session(): GameSession; setMenuText(original: string, replacement: string): void; setMenuBackground(tile: number | null): void; currentMenu(): number; openMenu(menuId: number): void; setMenuRoute(menuId: number, itemIndex: number, destination: number | null): void; menuSelection(): number; setMenuSelection(index: number): void;\n"
         "  getGamevar(name: string, sprite?: number, player?: number): ConValue; setGamevar(name: string, value: number, sprite?: number, player?: number): void;\n"
         "  getActor(i: number, member: string, parm2?: number): ConValue; setActor(i: number, member: string, value: number, parm2?: number): void;\n"
         "  getPlayer(i: number, member: string, parm2?: number): ConValue; setPlayer(i: number, member: string, value: number, parm2?: number): void;\n"
@@ -1110,12 +1880,28 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "  getUserdef(member: string, parm2?: number): ConValue; setUserdef(member: string, value: number, parm2?: number): void; define(name: string): ConValue;\n"
         "  sound(num: number, sprite?: number): void; shoot(sprite: number, tile: number): number; addAmmo(player: number, weapon: number, amount: number): void; addWeapon(player: number, weapon: number, switchTo?: number): void; run(command: string): void;\n"
         "}\n"
-        "declare interface FS { readFile(path: string): string; writeFile(path: string, data: string): void; appendFile(path: string, data: string): void; exists(path: string): boolean; }\n"
+        "declare interface FSPromises { readFile(path: string, options?: unknown): Promise<string | Uint8Array>; writeFile(path: string, data: string, options?: unknown): Promise<void>; appendFile(path: string, data: string, options?: unknown): Promise<void>; exists(path: string): Promise<boolean>; unlink(path: string): Promise<void>; rename(oldPath: string, newPath: string): Promise<void>; }\n"
+        "declare interface FS { readFile(path: string, options?: unknown): string | Uint8Array; readFile(path: string, options: unknown, callback: (error: Error | null, data?: string | Uint8Array) => void): void; readFile(path: string, callback: (error: Error | null, data?: string | Uint8Array) => void): void; writeFile(path: string, data: string): void; writeFile(path: string, data: string, options: unknown, callback: (error: Error | null) => void): void; writeFile(path: string, data: string, callback: (error: Error | null) => void): void; appendFile(path: string, data: string): void; appendFile(path: string, data: string, options: unknown, callback: (error: Error | null) => void): void; appendFile(path: string, data: string, callback: (error: Error | null) => void): void; exists(path: string): boolean; exists(path: string, callback: (exists: boolean) => void): void; readFileSync(path: string, options?: unknown): string | Uint8Array; writeFileSync(path: string, data: string, options?: unknown): void; appendFileSync(path: string, data: string, options?: unknown): void; existsSync(path: string): boolean; readonly promises: FSPromises; }\n"
         "declare interface CVar { run(command: string): void; set(name: string, value: unknown): void; }\n"
         "declare const console: VBConsole; declare const vb: VB; declare const cvar: CVar;\n"
-        "declare function require(name: 'vb'): VB; declare function require(name: 'fs'): FS; declare function require(name: 'cvar'): CVar; declare function require(name: string): unknown;\n"
+        "declare interface DgramRemoteInfo { address: string; family: 'IPv4' | 'IPv6'; port: number; size: number; }\n"
+        "declare interface DgramSocket { on(event: 'message', listener: (message: Uint8Array, rinfo: DgramRemoteInfo) => void): this; on(event: 'error', listener: (error: Error) => void): this; on(event: 'listening' | 'close', listener: () => void): this; bind(port: number, callback?: () => void): this; bind(port: number, address: string, callback?: () => void): this; send(message: string | Uint8Array, port: number, callback?: (error: Error | null) => void): void; send(message: string | Uint8Array, port: number, address: string, callback?: (error: Error | null) => void): void; close(callback?: () => void): void; address(): { address: string; family: 'IPv4' | 'IPv6'; port: number }; }\n"
+        "declare interface Dgram { createSocket(type: 'udp4' | 'udp6', callback?: (message: Uint8Array, rinfo: DgramRemoteInfo) => void): DgramSocket; }\n"
+        "declare interface NetSocket { on(event: 'connect' | 'end', listener: () => void): this; on(event: 'data', listener: (data: Uint8Array) => void): this; on(event: 'error', listener: (error: Error) => void): this; on(event: 'close', listener: (hadError: boolean) => void): this; write(data: string | Uint8Array, callback?: () => void): boolean; end(data?: string | Uint8Array, callback?: () => void): this; destroy(): this; setNoDelay(noDelay?: boolean): this; }\n"
+        "declare interface Net { createConnection(port: number, callback?: () => void): NetSocket; createConnection(port: number, host: string, callback?: () => void): NetSocket; connect: Net['createConnection']; }\n"
+        "declare function require(name: 'vb'): VB; declare function require(name: 'fs'): FS; declare function require(name: 'dgram'): Dgram; declare function require(name: 'net'): Net; declare function require(name: 'cvar'): CVar; declare function require(name: string): unknown;\n"
         "declare module 'vb' { export { VBComponent, VBNode, VBPrefab }; export type { ActorEvent, ChatEvent, ConEvent, ConEventName, ConEventShortName, ConValue, Player, VBComponentConstructor, VBEventMap, VBEventName, VBLifecycleEventName, VBConsole, VBTransform, VBVector3 }; const api: VB; export default api; export const on: VB['on']; export const off: VB['off']; export const log: VB['log']; export const drawText: VB['drawText']; export const clearText: VB['clearText']; export const breakpoint: VB['breakpoint']; export const spawn: VB['spawn']; export const A_Spawn: VB['A_Spawn']; export const A_InsertSprite: VB['A_InsertSprite']; export const attach: VB['attach']; export const detach: VB['detach']; export const getComponent: VB['getComponent']; export const getComponents: VB['getComponents']; export const setComponentEnabled: VB['setComponentEnabled']; export const createNode: VB['createNode']; export const destroyNode: VB['destroyNode']; export const createPrefab: VB['createPrefab']; export const spawnPrefab: VB['spawnPrefab']; export const sendMessage: VB['sendMessage']; export const player: VB['player']; export const getGamevar: VB['getGamevar']; export const setGamevar: VB['setGamevar']; export const run: VB['run']; export const define: VB['define']; export const sound: VB['sound']; export const shoot: VB['shoot']; export const addAmmo: VB['addAmmo']; export const addWeapon: VB['addWeapon']; export const getActor: VB['getActor']; export const setActor: VB['setActor']; export const getPlayer: VB['getPlayer']; export const setPlayer: VB['setPlayer']; export const getInput: VB['getInput']; export const setInput: VB['setInput']; export const getSector: VB['getSector']; export const setSector: VB['setSector']; export const getWall: VB['getWall']; export const setWall: VB['setWall']; export const getProjectile: VB['getProjectile']; export const setProjectile: VB['setProjectile']; export const getActiveProjectile: VB['getActiveProjectile']; export const setActiveProjectile: VB['setActiveProjectile']; export const getTileData: VB['getTileData']; export const setTileData: VB['setTileData']; export const getUserdef: VB['getUserdef']; export const setUserdef: VB['setUserdef']; }\n"
-        "declare module 'fs' { const api: FS; export default api; export const readFile: FS['readFile']; export const writeFile: FS['writeFile']; export const appendFile: FS['appendFile']; export const exists: FS['exists']; }\n"
+        "declare module 'vb' { export type { SessionPlayer, GameSession, MenuEvent }; export const session: VB['session']; export const setMenuText: VB['setMenuText']; export const setMenuBackground: VB['setMenuBackground']; export const currentMenu: VB['currentMenu']; export const openMenu: VB['openMenu']; export const setMenuRoute: VB['setMenuRoute']; export const menuSelection: VB['menuSelection']; export const setMenuSelection: VB['setMenuSelection']; }\n"
+        "declare module 'fs' { export type { FSPromises }; const api: FS; export default api; export const readFile: FS['readFile']; export const writeFile: FS['writeFile']; export const appendFile: FS['appendFile']; export const exists: FS['exists']; export const readFileSync: FS['readFileSync']; export const writeFileSync: FS['writeFileSync']; export const appendFileSync: FS['appendFileSync']; export const existsSync: FS['existsSync']; export const promises: FS['promises']; }\n"
+        "declare module 'node:fs' { export * from 'fs'; import api from 'fs'; export default api; }\n"
+        "declare module 'fs/promises' { import api from 'fs'; const promises: FSPromises; export default promises; export const readFile: FSPromises['readFile']; export const writeFile: FSPromises['writeFile']; export const appendFile: FSPromises['appendFile']; export const exists: FSPromises['exists']; export const unlink: FSPromises['unlink']; export const rename: FSPromises['rename']; }\n"
+        "declare module 'node:fs/promises' { export * from 'fs/promises'; import api from 'fs/promises'; export default api; }\n"
+        "declare module 'dgram' { export type { DgramRemoteInfo, DgramSocket }; const api: Dgram; export default api; export const createSocket: Dgram['createSocket']; }\n"
+        "declare module 'node:dgram' { export * from 'dgram'; import api from 'dgram'; export default api; }\n"
+        "declare module 'net' { export type { NetSocket }; const api: Net; export default api; export const createConnection: Net['createConnection']; export const connect: Net['connect']; }\n"
+        "declare module 'node:net' { export * from 'net'; import api from 'net'; export default api; }\n"
+        "declare module 'fs' { export const unlink: (path: string, callback?: (error: Error | null) => void) => void; export const rename: (oldPath: string, newPath: string, callback?: (error: Error | null) => void) => void; export const unlinkSync: (path: string) => void; export const renameSync: (oldPath: string, newPath: string) => void; }\n"
+        "declare interface FS { unlink(path: string, callback?: (error: Error | null) => void): void; rename(oldPath: string, newPath: string, callback?: (error: Error | null) => void): void; unlinkSync(path: string): void; renameSync(oldPath: string, newPath: string): void; }\n"
         "declare module 'cvar' { const api: CVar; export default api; export const run: CVar['run']; export const set: CVar['set']; }\n";
     snprintf(path, sizeof(path), "%s/package.json", project); if (vbjs_write_text(path, typescript ? packageTs : packageJs)) return -1;
     snprintf(path, sizeof(path), "%s/%sconfig.json", project, typescript ? "ts" : "js");
@@ -1181,8 +1967,11 @@ void VBJS_Init(void)
     vbjs_scan_autojs();                 // add autojs/<name>/index.{ts,js}
     if (s_scriptCount == 0) return;     // nothing to run
 
+    s_fetchShuttingDown = false;
+    curl_global_init(CURL_GLOBAL_DEFAULT);
     s_rt = JS_NewRuntime();
     if (!s_rt) { vbjs_game::log("[js] failed to create runtime"); return; }
+    JS_SetHostPromiseRejectionTracker(s_rt, vbjs_promise_rejection_tracker, nullptr);
     s_ctx = JS_NewContext(s_rt);
     if (!s_ctx) { JS_FreeRuntime(s_rt); s_rt = nullptr; vbjs_game::log("[js] failed to create context"); return; }
 
@@ -1192,12 +1981,18 @@ void VBJS_Init(void)
     pthread_mutex_lock(&s_debugTransport.mutex);
     s_debugTransport.closed = 0; s_debugTransport.inbound.clear(); s_debugTransport.outbound[0].clear(); s_debugTransport.outbound[1].clear();
     pthread_mutex_unlock(&s_debugTransport.mutex);
+    s_debuggerWorkPending.store(false, std::memory_order_release);
     js_debugger_attach(s_ctx, vbjs_debug_read, vbjs_debug_write, vbjs_debug_peek, vbjs_debug_close, &s_debugTransport);
     VBJS_DevtoolsStartDebuggerBridge();
     // VS Code has to attach and submit breakpoints after the runtime starts.
     // Hold both top-level module evaluation and the one-shot `start` callback
     // until then, so breakpoints work everywhere in a freshly launched mod.
     s_scriptsLoaded = 0;
+    s_frameEventListened = 0;
+    s_observedMenuOpen = -1;
+    s_observedMenuId = -1;
+    s_menuTextOverrides.clear();
+    s_menuRoutes.clear();
     s_startPending = 1;
     s_startWaitFrames = 0;
 }
@@ -1217,9 +2012,17 @@ static void vbjs_load_scripts(void)
 
         JSValue r = JS_Eval(s_ctx, src, len, path, JS_EVAL_TYPE_MODULE);   // module so import/export work
         free(src);
-        if (JS_IsException(r)) vbjs_dump_error(s_ctx);
+        if (JS_IsException(r))
+        {
+            char context[1200];
+            snprintf(context, sizeof(context), "failed to load %s", path);
+            vbjs_dump_error(s_ctx, context);
+        }
+        else
+        {
+            char m[1100]; snprintf(m, sizeof(m), "loaded %s", path); vbjs_game::log(m);
+        }
         JS_FreeValue(s_ctx, r);
-        { char m[1100]; snprintf(m, sizeof(m), "loaded %s", path); vbjs_game::log(m); }
     }
     s_scriptsLoaded = 1;
     s_enabled = 1;
@@ -1234,12 +2037,20 @@ void VBJS_Shutdown(void)
     VBJS_CocoaDevtoolsShutdown();
 #endif
     VBJS_DevtoolsShutdownWindow();
+    // Detached libcurl workers must never publish JSValue handles after this
+    // runtime has been destroyed. libcurl stays globally initialized until
+    // process exit, which is required while those workers unwind.
+    s_fetchShuttingDown = true;
+    vbjs_fetch_drain(s_ctx);
+    for (auto &call : s_fsCallbacks) { JS_FreeValue(s_ctx, call.callback); JS_FreeValue(s_ctx, call.value); }
+    s_fsCallbacks.clear();
     JS_FreeValue(s_ctx, s_events);
     JS_FreeValue(s_ctx, s_requireCache);
     JS_FreeValue(s_ctx, s_componentExports); s_componentExports = JS_UNDEFINED;
     JS_FreeValue(s_ctx, s_devtoolsEvent); s_devtoolsEvent = JS_UNDEFINED;
     JS_FreeContext(s_ctx); JS_FreeRuntime(s_rt);
-    s_ctx = nullptr; s_rt = nullptr; s_enabled = 0; s_scriptsLoaded = 0; s_startPending = 0;
+    s_ctx = nullptr; s_rt = nullptr; s_enabled = 0; s_scriptsLoaded = 0; s_startPending = 0; s_frameEventListened = 0; s_gameStartedPending = 0; s_gameSessionActive = 0;
+    s_menuTextOverrides.clear(); s_menuRoutes.clear(); s_observedMenuOpen = -1; s_observedMenuId = -1;
 }
 
 void VBJS_RunFrame(void)
@@ -1260,18 +2071,72 @@ void VBJS_RunFrame(void)
         s_startPending = 0;
         vbjs_load_scripts();
         VBJS_FireSimple("start");
+        if (s_gameStartedPending)
+        {
+            s_gameStartedPending = 0;
+            VBJS_FireSimple("gameStarted");
+        }
     }
+    // Network events remain live while the visual debugger is paused, just as
+    // they do in Node while a debugger is attached.
+    vbjs_dgram_poll(s_ctx);
+    vbjs_net_poll(s_ctx);
+    vbjs_fetch_drain(s_ctx);
     if (s_devtoolsPaused) return;
-    VBJS_FireSimple("frame");
-    // pump promise jobs / microtasks
-    JSContext *c;
-    while (JS_ExecutePendingJob(s_rt, &c) > 0) {}
+    int const menuOpen = vbjs_game::menuOpen();
+    if (s_observedMenuOpen >= 0 && s_observedMenuOpen != menuOpen)
+        VBJS_FireMenu(menuOpen ? "menuOpened" : "menuClosed", vbjs_game::currentMenu(), s_observedMenuId);
+    s_observedMenuOpen = menuOpen;
+    s_observedMenuId = vbjs_game::currentMenu();
+    for (auto &call : s_fsCallbacks)
+    {
+        JSValue args[2]; int argc = 0;
+        if (call.existsStyle) args[argc++] = call.value;
+        else { args[argc++] = call.error ? call.value : JS_NULL; if (!call.error) args[argc++] = call.value; }
+        JSValue result = JS_Call(s_ctx, call.callback, JS_UNDEFINED, argc, args);
+        if (JS_IsException(result)) vbjs_dump_error(s_ctx, "uncaught exception in fs callback");
+        JS_FreeValue(s_ctx, result); JS_FreeValue(s_ctx, call.callback); JS_FreeValue(s_ctx, call.value);
+    }
+    s_fsCallbacks.clear();
+    if (s_frameEventListened) VBJS_FireSimple("frame");
+    // Promise jobs are uncommon in an idle mod.  JS_ExecutePendingJob() also
+    // performs this empty-queue test internally, but avoiding that heavier
+    // call on every rendered frame keeps the no-work scripting path minimal.
+    if (JS_IsJobPending(s_rt))
+    {
+        JSContext *c = nullptr;
+        int result = 0;
+        while ((result = JS_ExecutePendingJob(s_rt, &c)) > 0) {}
+        if (result < 0) vbjs_dump_error(c ? c : s_ctx, "unhandled promise rejection");
+    }
 }
 
 void VBJS_FireSimple(const char *event)
 {
-    if (!s_ctx) return;
+    if (event && !strcmp(event, "gameStarted"))
+    {
+        if (s_gameSessionActive) return;
+        s_gameSessionActive = 1;
+    }
+    else if (event && !strcmp(event, "leftGame"))
+        s_gameSessionActive = 0;
+    if (!s_ctx)
+    {
+        if (event && !strcmp(event, "gameStarted")) s_gameStartedPending = 1;
+        return;
+    }
     vbjs_fire(event, 0, nullptr);
+}
+
+void VBJS_FireMenu(const char *event, int menu, int previousMenu)
+{
+    if (!s_ctx) return;
+    JSValue value = JS_NewObject(s_ctx);
+    JS_SetPropertyStr(s_ctx, value, "menu", JS_NewInt32(s_ctx, menu));
+    JS_SetPropertyStr(s_ctx, value, "previousMenu", previousMenu >= 0 ? JS_NewInt32(s_ctx, previousMenu) : JS_UNDEFINED);
+    JSValueConst args[1] = { value };
+    vbjs_fire(event, 1, args);
+    JS_FreeValue(s_ctx, value);
 }
 
 void VBJS_FireActor(const char *event, int spriteNum, int owner, int tile)

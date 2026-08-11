@@ -1929,8 +1929,14 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
               { SDL_GL_CONTEXT_FLAGS,
 #ifndef NDEBUG
               SDL_GL_CONTEXT_DEBUG_FLAG |
+              // Robust access helps catch invalid GL usage while developing,
+              // but can make the driver add bounds checks to every command.
+              // Release builds prioritize the normal fast rendering path.
+              SDL_GL_CONTEXT_ROBUST_ACCESS_FLAG
+#else
+              0
 #endif
-              SDL_GL_CONTEXT_ROBUST_ACCESS_FLAG },
+              },
               { SDL_GL_CONTEXT_RESET_NOTIFICATION, SDL_GL_CONTEXT_RESET_LOSE_CONTEXT },
               { SDL_GL_DOUBLEBUFFER, 1 },
 

@@ -63,6 +63,7 @@ void VBJS_RunFrame(void);                  // per-frame: fire "frame", pump pend
 // Event dispatch — call these from real game hook points. `event` is a short
 // name the script listens for with vb.on("name", fn).
 void VBJS_FireSimple(const char *event);                                     // e.g. "playerDied"
+void VBJS_FireMenu(const char *event, int menu, int previousMenu);
 void VBJS_FireActor(const char *event, int spriteNum, int owner, int tile);  // e.g. "actorSpawned"/"itemTaken"
 void VBJS_FireChat(const char *event, int playerNum, const char *text);  // e.g. "chatMessage"/"netMessage"
 
@@ -78,6 +79,12 @@ extern unsigned char g_vbjsConEventListened[VBJS_MAXCONEVENTS];
 
 // HUD: draw all script-registered text. Call from the game's HUD/overlay pass.
 void VBJS_DrawHUD(void);
+
+// Menu integration.  The JavaScript API can replace any string rendered by
+// menutext() and select a tile used for the standard menu background.
+const char *VBJS_MenuText(const char *text);
+int VBJS_MenuBackground(void); // tile number, or -1 when not overridden
+int VBJS_MenuRoute(int fromMenu, int itemIndex, int requestedMenu);
 
 // Script-registered HUD text, shared between the QuickJS side (which fills it)
 // and the game side (which draws it). x/y are in 0..320 / 0..200 HUD space.

@@ -614,6 +614,7 @@ endif
 
 ifeq ($(PLATFORM),DARWIN)
     LIBS += -lFLAC \
+            -lcurl \
             -Wl,-framework,Cocoa -Wl,-framework,Carbon \
             -Wl,-framework,CoreMIDI -Wl,-framework,AudioUnit \
             -Wl,-framework,AudioToolbox -Wl,-framework,IOKit

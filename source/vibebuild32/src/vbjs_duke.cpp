@@ -46,6 +46,8 @@ static int vbjs_playerSprite(void)
     return g_player[myconnectindex].ps->i;
 }
 
+static int s_vbjsMenuBackground = -1;
+
 namespace vbjs_game {
 
 int A_Spawn(int spriteNum, int tileNum)
@@ -62,7 +64,6 @@ int A_InsertSprite(int whatsect, int s_x, int s_y, int s_z, int s_pn, int s_s,
 void log(const char *s)
 {
     LOG_F(INFO, "[js] %s", s ? s : "");
-    OSD_Printf("[js] %s\n", s ? s : "");
 }
 
 int spawn(int tile, int x, int y, int z, int owner)
@@ -143,12 +144,63 @@ void setGamevar(const char *name, int value, int spriteNum, int playerNum)
 
 int playerSprite(void) { return vbjs_playerSprite(); }
 
+int gameStarted(void) { return (ud.gm & MODE_GAME) != 0; }
+int skill(void) { return ud.player_skill + 1; }
+int episode(void) { return ud.volume_number + 1; }
+int level(void) { return ud.level_number + 1; }
+int localPlayer(void) { return (unsigned)myconnectindex < MAXPLAYERS ? myconnectindex : -1; }
+int hostPlayer(void) { return (unsigned)connecthead < MAXPLAYERS ? connecthead : -1; }
+int playerCount(void) { return max(0, numplayers); }
+int playerAt(int ordinal)
+{
+    if (ordinal < 0 || ordinal >= numplayers) return -1;
+    int player = connecthead;
+    for (int i = 0; i < ordinal && (unsigned)player < MAXPLAYERS; ++i) player = connectpoint2[player];
+    return (unsigned)player < MAXPLAYERS ? player : -1;
+}
+int playerSpriteAt(int player)
+{
+    return (unsigned)player < MAXPLAYERS && g_player[player].ps ? g_player[player].ps->i : -1;
+}
+const char *playerName(int player)
+{
+    return (unsigned)player < MAXPLAYERS ? g_player[player].user_name : nullptr;
+}
+const char *episodeName(void)
+{
+    return (unsigned)ud.volume_number < MAXVOLUMES ? EpisodeNames[ud.volume_number] : nullptr;
+}
+const char *levelName(void)
+{
+    int const index = ud.volume_number * MAXLEVELS + ud.level_number;
+    return (unsigned)index < (MAXVOLUMES + 1) * MAXLEVELS ? g_mapInfo[index].name : nullptr;
+}
+const char *userMap(void) { return boardfilename[0] ? boardfilename : nullptr; }
+const char *connectedServer(void)
+{
+    // The join target is retained for lobby/direct connections. A local host
+    // has no remote server address, so report undefined instead of inventing one.
+    return myconnectindex != connecthead && g_punchTargetAddr[0] ? g_punchTargetAddr : nullptr;
+}
+void setMenuBackground(int tile) { s_vbjsMenuBackground = (unsigned)tile < MAXTILES ? tile : -1; }
+int currentMenu(void) { return g_currentMenu; }
+void openMenu(int menu) { ChangeToMenu(menu); }
+int menuOpen(void) { return (ud.gm & MODE_MENU) != 0; }
+int menuSelection(void) { return probey; }
+void setMenuSelection(int selection) { probey = selection; }
+
 void runCommand(const char *cmd)
 {
     if (!cmd) return;
     while (*cmd == '/' || *cmd == ' ') cmd++;   // tolerate a leading console-style '/'
     if (*cmd) OSD_Dispatch(cmd);
 }
+
+} // namespace vbjs_game
+
+extern "C" int VBJS_MenuBackground(void) { return s_vbjsMenuBackground; }
+
+namespace vbjs_game {
 
 // --- generic CON struct access (drives vb.getActor / getPlayer / getSector / ...) ---
 
@@ -707,7 +759,6 @@ extern "C" void VBJS_DevtoolsShutdownWindow(void) {}
 // HUD draw: render every script-registered text line (called from the overlay pass).
 extern "C" void VBJS_DrawHUD(void)
 {
-    VBJS_DevtoolsPump();
     int n = 0;
     vbjs_text_t *t = VBJS_TextSlots(&n);
     for (int i = 0; i < n; i++)

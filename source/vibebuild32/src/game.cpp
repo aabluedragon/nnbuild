@@ -1652,6 +1652,7 @@ extern int g_doQuickSave;
 
 void G_GameExit(const char *t)
 {
+    VBJS_FireSimple("beforeQuit");
     VBJS_Shutdown();   // VibeBuild32: fire "shutdown" and tear down the JS runtime
 
     // If we're an advertised host, tell the masterserver we're going away so our
@@ -2359,6 +2360,7 @@ void G_DisplayRest(int smoothratio)
             else
                 ChangeToMenu(0);
 
+            VBJS_FireMenu("escapeMenuOpened", g_currentMenu, -1);
             screenpeek = myconnectindex;
         }
     }
@@ -2523,7 +2525,10 @@ void G_DrawBackground(void)
     {
         // when not rendering a game, fullscreen wipe
 #define MENUTILE (!videoGetRenderMode()?MENUSCREEN:LOADSCREEN)
-        Gv_SetVar(sysVarIDs.RETURN, tilesiz[MENUTILE].x == 320 && tilesiz[MENUTILE].y == 200 ? MENUTILE : BIGHOLE, -1, -1);
+        int const vbjsMenuTile = VBJS_MenuBackground();
+        int const defaultMenuTile = tilesiz[MENUTILE].x == 320 && tilesiz[MENUTILE].y == 200 ? MENUTILE : BIGHOLE;
+        int const selectedMenuTile = vbjsMenuTile >= 0 && tilesiz[vbjsMenuTile].x > 0 && tilesiz[vbjsMenuTile].y > 0 ? vbjsMenuTile : defaultMenuTile;
+        Gv_SetVar(sysVarIDs.RETURN, selectedMenuTile, -1, -1);
         X_OnEvent(EVENT_GETMENUTILE, g_player[screenpeek].ps->i, screenpeek, -1);
         if (Gv_GetVarByLabel("MENU_TILE", tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?0:1, -1, -1))
         {
@@ -8479,6 +8484,8 @@ void G_UpdatePlayerFromMenu(void)
 
 void G_BackToMenu(void)
 {
+    if (ud.gm & MODE_GAME)
+        VBJS_FireSimple("leftGame");
     boardfilename[0] = 0;
 
     if (ud.recstat == 1)
@@ -8519,6 +8526,7 @@ static int G_EndOfLevel(void)
 
     if (ud.gm & MODE_EOL)
     {
+        VBJS_FireSimple("levelFinished");
         G_CloseDemoWrite();
 
         if (p.player_par > 0 && (p.player_par < ud.playerbest || ud.playerbest < 0) && ud.display_bonus_screen == 1)
@@ -8546,6 +8554,7 @@ static int G_EndOfLevel(void)
                     G_DoOrderScreen();
                 }
                 ud.gm = MODE_MENU;
+                VBJS_FireSimple("leftGame");
                 ChangeToMenu(0);
                 probey = 0;
                 return 2;
@@ -9876,6 +9885,7 @@ RECHECK:
 
                 ud.gm |= MODE_MENU;
                 ChangeToMenu(0);
+                VBJS_FireMenu("escapeMenuOpened", g_currentMenu, -1);
                 S_MenuSound();
             }
 

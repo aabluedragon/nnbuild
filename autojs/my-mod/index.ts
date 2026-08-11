@@ -1,9 +1,8 @@
-/// vbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -l1 -v1"
+/// vbd.params="-gm sw -g '/Users/alonamir/games/Shadow Warrior Complete/Sw.grp'"
 
 // VibeBuild32 auto-loads only index.ts (or index.js) from this project.
 import { VBComponent, createPrefab, on, log, drawText, define, getActor, spawnPrefab } from 'vb';
 import fs from 'fs';
-import cvar from 'cvar';
 const vbLegacy = require('vb'); // CommonJS require() is supported too.
 
 let frames = 0;
@@ -12,12 +11,6 @@ const liztroop = define('LIZTROOP');
 class TrooperComponent extends VBComponent {
   onSpawn() {
     log('Component attached to trooper', this.sprite);
-  }
-
-  fixedUpdate(dt: number) {
-    // `dt` is the engine's fixed 60 Hz tick; component callbacks are ready
-    // for movement, AI, or other per-actor gameplay here.
-    void dt;
   }
 }
 
@@ -28,7 +21,6 @@ on('start', () => {
   log('TypeScript mod loaded. LIZTROOP is', liztroop, 'player:', vbLegacy.player().sprite);
   // Built-in modules are typed too; this is safe even when the file does not exist.
   if (fs.exists('autojs-notes.txt')) log(fs.readFile('autojs-notes.txt'));
-  cvar.set('r_maxfps', 60);
 });
 
 on('STRAFELEFT', () => {

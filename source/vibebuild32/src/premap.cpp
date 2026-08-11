@@ -1976,6 +1976,8 @@ int G_EnterLevel(int g)
     }
 
     OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
+    VBJS_FireSimple("gameStarted");
+    VBJS_FireSimple("levelChanged");
     return 0;
 }
 
@@ -2000,4 +2002,3 @@ void G_FreeMapState(int mapnum)
     Xfree(g_mapInfo[mapnum].savedstate);
     g_mapInfo[mapnum].savedstate = NULL;
 }
-

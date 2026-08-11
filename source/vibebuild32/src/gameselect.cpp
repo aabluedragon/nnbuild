@@ -143,12 +143,25 @@ static void gs_addDebugParam(char const *text, size_t length)
 static void gs_parseDebugParams(char const *text)
 {
     char const *p = text;
-    while (*p)
+    while (*p && isspace((unsigned char)*p)) ++p;
+    char const *end = text + Bstrlen(text);
+    while (end > p && isspace((unsigned char)end[-1])) --end;
+    // The usual directive form quotes the entire argument list:
+    //   /// vbd.params="-gm duke -g ~/games/duke3d.grp"
+    // Those outer quotes delimit the header value; they must not turn the
+    // complete list into one argv token. Inner quotes remain available for a
+    // value that itself contains whitespace.
+    if (end - p >= 2 && (*p == '\'' || *p == '"') && end[-1] == *p)
     {
-        while (*p && isspace((unsigned char)*p)) ++p;
-        if (!*p) break;
+        ++p;
+        --end;
+    }
+    while (p < end)
+    {
+        while (p < end && isspace((unsigned char)*p)) ++p;
+        if (p >= end) break;
         char token[1024]; size_t length = 0; char quote = 0; int escaped = 0;
-        while (*p)
+        while (p < end)
         {
             char const c = *p++;
             if (escaped) { if (length + 1 < sizeof(token)) token[length++] = c; escaped = 0; continue; }
@@ -201,12 +214,18 @@ static void gs_collectDebugParams(void)
     while ((entry = readdir(directory)) != NULL)
     {
         if (entry->d_name[0] == '.') continue;
+        // Match auto-loading: TypeScript wins when both index files exist.
         char path[BMAX_PATH * 2];
-        Bsnprintf(path, sizeof(path), "autojs/%s/index.ts", entry->d_name);
-        FILE *ts = fopen(path, "r");
-        if (ts) { fclose(ts); gs_collectDebugParamsFromFile(path); continue; }
-        Bsnprintf(path, sizeof(path), "autojs/%s/index.js", entry->d_name);
-        gs_collectDebugParamsFromFile(path);
+        char const *extensions[] = { "ts", "js" };
+        for (auto extension : extensions)
+        {
+            Bsnprintf(path, sizeof(path), "autojs/%s/index.%s", entry->d_name, extension);
+            FILE *file = fopen(path, "r");
+            if (!file) continue;
+            fclose(file);
+            gs_collectDebugParamsFromFile(path);
+            break;
+        }
     }
     closedir(directory);
 }

@@ -293,7 +293,20 @@ struct TS {
             if (ternary) { if (sp > 0) stk[sp-1].ternary--; else s_topTernary--; putc_(c); i++; prevValue = 0; return; }
             if (inObject) { putc_(c); i++; prevValue = 0; return; }     // object literal key
             // type annotation -> drop ':' and the type
-            i++; skipType(); return;
+            size_t const afterColon = i + 1;
+            size_t j = afterColon;
+            while (j < len && (s[j] == ' ' || s[j] == '\t' || s[j] == '\r' || s[j] == '\n')) j++;
+            // Do not silently turn invalid TypeScript such as `let x: = 1`
+            // into valid JavaScript. Keep the colon in the output so QuickJS
+            // reports a source-located syntax error to the modder.
+            if (j >= len || s[j] == '=' || s[j] == ',' || s[j] == ';' || s[j] == ')' || s[j] == '}' || s[j] == ']')
+            {
+                putc_(':');
+                i = afterColon;
+                prevValue = 0;
+                return;
+            }
+            i = afterColon; skipType(); return;
         }
         case '!':
             // non-null assertion: value '!' not followed by '=' -> drop

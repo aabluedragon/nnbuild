@@ -94,7 +94,11 @@ static void creditscminitext(int32_t x, int32_t y, const char *t)
 
 void ChangeToMenu(int cm)
 {
+    int const previousMenu = g_currentMenu;
+    cm = VBJS_MenuRoute(g_currentMenu, probey, cm);
     g_currentMenu = cm;
+    if (previousMenu != cm)
+        VBJS_FireMenu("menuChanged", cm, previousMenu);
 
     if ((cm >= 1000 && cm <= 1009))
         return;
@@ -241,6 +245,8 @@ int menutext_(int x,int y,int s,int p,const char *t,int bits)
 {
     short i, ac, centre;
 //    int ht = usehightile;
+
+    t = VBJS_MenuText(t);
 
     y -= 12;
 
