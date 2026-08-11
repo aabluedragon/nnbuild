@@ -95,11 +95,13 @@ class Session {
   }
 }
 const server = net.createServer(socket => {
-  if (activeSession) return socket.destroy();
-  if (idleTimer) clearTimeout(idleTimer); const session = activeSession = new Session(socket); let buffer = Buffer.alloc(0);
+  // The short-lived preLaunchTask probes this port before handing it to VS
+  // Code.  A bare TCP probe is not a DAP client: do not create/close a
+  // session until the first DAP request actually arrives.
+  let session = null, buffer = Buffer.alloc(0);
   socket.on('error', () => {});
-  socket.on('data', chunk => { buffer = Buffer.concat([buffer, chunk]); for (;;) { const split = buffer.indexOf('\r\n\r\n'); if (split < 0) return; const match = /^Content-Length:\s*(\d+)/im.exec(buffer.subarray(0, split).toString()); if (!match) return socket.destroy(); const end = split + 4 + Number(match[1]); if (buffer.length < end) return; const request = JSON.parse(buffer.subarray(split + 4, end).toString()); buffer = buffer.subarray(end); if (request.type === 'request') session.handle(request); } });
-  socket.on('close', () => { if (!session.ended) session.finish(!!session.child); });
+  socket.on('data', chunk => { buffer = Buffer.concat([buffer, chunk]); for (;;) { const split = buffer.indexOf('\r\n\r\n'); if (split < 0) return; const match = /^Content-Length:\s*(\d+)/im.exec(buffer.subarray(0, split).toString()); if (!match) return socket.destroy(); const end = split + 4 + Number(match[1]); if (buffer.length < end) return; const request = JSON.parse(buffer.subarray(split + 4, end).toString()); buffer = buffer.subarray(end); if (request.type === 'request') { if (!session) { if (activeSession) return socket.destroy(); if (idleTimer) clearTimeout(idleTimer); session = activeSession = new Session(socket); } session.handle(request); } } });
+  socket.on('close', () => { if (session && !session.ended) session.finish(!!session.child); });
 });
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `VibeBuild32 DAP port ${listenPort} is busy; wait for the previous debug session to finish.` : error.message); process.exit(1); });
 server.listen(listenPort, '127.0.0.1', () => { console.log(`VibeBuild32 DAP adapter listening on ${listenPort}`); idleTimer = setTimeout(shutdownAdapter, 60000); });
