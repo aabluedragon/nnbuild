@@ -6,10 +6,14 @@
 #include "duke3d.h"
 #include "funct.h"
 #include "gamevars.h"
+#include "gamedef.h"
+#include "gamestructures.h"
+#include "global.h"
 #include "osd.h"
 #include "vbjs.h"
 
 extern hashtable_t h_gamevars;   // gamevars.cpp
+extern hashtable_t h_labels;     // gamedef.cpp (CON defines/constants)
 
 static int vbjs_playerSprite(void)
 {
@@ -77,6 +81,100 @@ void runCommand(const char *cmd)
     if (!cmd) return;
     while (*cmd == '/' || *cmd == ' ') cmd++;   // tolerate a leading console-style '/'
     if (*cmd) OSD_Dispatch(cmd);
+}
+
+// --- generic CON struct access (drives vb.getActor / getPlayer / getSector / ...) ---
+
+static hashtable_t *vbjs_tableFor(int kind)
+{
+    switch (kind)
+    {
+        case VBJS_ACTOR:       return &h_actor;
+        case VBJS_PLAYER:      return &h_player;
+        case VBJS_INPUT:       return &h_input;
+        case VBJS_SECTOR:      return &h_sector;
+        case VBJS_WALL:        return &h_wall;
+        case VBJS_PROJECTILE:  return &h_projectile;
+        case VBJS_ACTIVEPROJ:  return &h_projectile;
+        case VBJS_TILEDATA:    return &h_tiledata;
+        case VBJS_USERDEF:     return &h_userdef;
+        default:               return nullptr;
+    }
+}
+
+int conGet(int kind, int index, const char *member, int parm2, int *ok)
+{
+    hashtable_t *t = vbjs_tableFor(kind);
+    int const label = t ? hash_findcase(t, member) : -1;
+    if (label < 0) { if (ok) *ok = 0; return 0; }
+    if (ok) *ok = 1;
+    switch (kind)
+    {
+        case VBJS_ACTOR:      return VM_GetSprite(index, label, parm2);
+        case VBJS_PLAYER:     return VM_GetPlayer(index, label, parm2);
+        case VBJS_INPUT:      return VM_GetPlayerInput(index, label);
+        case VBJS_SECTOR:     return VM_GetSector(index, label);
+        case VBJS_WALL:       return VM_GetWall(index, label);
+        case VBJS_PROJECTILE: return VM_GetProjectile(index, label);
+        case VBJS_ACTIVEPROJ: return VM_GetActiveProjectile(index, label);
+        case VBJS_TILEDATA:   return VM_GetTileData(index, label);
+        case VBJS_USERDEF:    return VM_GetUserdef(label, parm2);
+        default:              if (ok) *ok = 0; return 0;
+    }
+}
+
+void conSet(int kind, int index, const char *member, int value, int parm2)
+{
+    hashtable_t *t = vbjs_tableFor(kind);
+    int const label = t ? hash_findcase(t, member) : -1;
+    if (label < 0) return;
+    switch (kind)
+    {
+        case VBJS_ACTOR:      VM_SetSprite(index, label, parm2, value); break;
+        case VBJS_PLAYER:     VM_SetPlayer(index, label, parm2, value); break;
+        case VBJS_INPUT:      VM_SetPlayerInput(index, label, value); break;
+        case VBJS_SECTOR:     VM_SetSector(index, label, value); break;
+        case VBJS_WALL:       VM_SetWall(index, label, value); break;
+        case VBJS_PROJECTILE: VM_SetProjectile(index, label, value); break;
+        case VBJS_ACTIVEPROJ: VM_SetActiveProjectile(index, label, value); break;
+        case VBJS_TILEDATA:   VM_SetTileData(index, label, value); break;
+        case VBJS_USERDEF:    VM_SetUserdef(label, parm2, value); break;
+        default: break;
+    }
+}
+
+int conDefine(const char *name, int *ok)
+{
+    int const id = hash_find(&h_labels, name);
+    if (id >= 0 && (labeltype[id] & LABEL_DEFINE)) { if (ok) *ok = 1; return labelcode[id]; }
+    if (ok) *ok = 0;
+    return 0;
+}
+
+// --- CON action commands ---
+
+void sound(int num, int sprite)
+{
+    if ((unsigned)sprite < MAXSPRITES) A_PlaySound(num, sprite);
+    else                               S_PlaySound(num);
+}
+
+int shoot(int sprite, int tile)
+{
+    if ((unsigned)sprite >= MAXSPRITES) return -1;
+    return A_Shoot(sprite, tile);
+}
+
+void addAmmo(int playerNum, int weapon, int amount)
+{
+    if ((unsigned)playerNum < MAXPLAYERS && g_player[playerNum].ps)
+        P_AddAmmo(weapon, g_player[playerNum].ps, amount);
+}
+
+void addWeapon(int playerNum, int weapon, int switchTo)
+{
+    if ((unsigned)playerNum < MAXPLAYERS && g_player[playerNum].ps)
+        P_AddWeapon(g_player[playerNum].ps, weapon, switchTo);
 }
 
 void spriteXYZ(int spriteNum, int *x, int *y, int *z, int *ok)

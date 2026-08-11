@@ -50,6 +50,35 @@ vb.player()                          // -> { sprite, x, y, z }
 The gamevar bridge exposes **every CON gamevar** by label, which is how scripts
 read/write game state that CON scripts use.
 
+## All CON data (members + defines)
+
+The full CON member surface is reachable by name, using the same label tables CON
+itself uses. Every getter has a matching setter (`setActor`, `setPlayer`, …):
+
+```js
+vb.getActor(sprite, member, parm2=0)     // sprite[]/actor[] members (e.g. 'extra','picnum','xvel')
+vb.getPlayer(player, member, parm2=0)    // player[] members (e.g. 'curr_weapon','ammo_amount' w/ parm2)
+vb.getInput(player, member)              // input[]
+vb.getSector(sector, member)             // sector[] (e.g. 'floorz','lotag')
+vb.getWall(wall, member)                 // wall[]
+vb.getUserdef(member, parm2=0)           // userdef[]
+vb.getProjectile(tile, member)           // per-tile projectile defaults
+vb.getActiveProjectile(sprite, member)   // a live projectile's state
+vb.getTileData(tile, member)             // tiledata[]
+vb.define(name)                          // any CON define/constant -> e.g. vb.define('LIZTROOP') === 1680
+```
+
+`parm2` is the array index some members take (e.g. `ammo_amount[weapon]`).
+
+### CON action commands
+
+```js
+vb.sound(num, sprite=-1)        // play a sound (positional if sprite given)
+vb.shoot(sprite, tile)          // fire a projectile from a sprite -> new sprite
+vb.addAmmo(player, weapon, amount)
+vb.addWeapon(player, weapon, switchTo=1)
+```
+
 ## `cvar` — console / cvar commands
 
 Run any OSD console command or cvar assignment (also available as `vb.run`):

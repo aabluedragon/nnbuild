@@ -27,6 +27,15 @@ namespace vbjs_game {
     int  playerSprite(void);                                  // current view player's sprite, or -1
     void spriteXYZ(int spriteNum, int *x, int *y, int *z, int *ok);
     void runCommand(const char *cmd);                         // execute an OSD console/cvar command
+    // Generic CON struct access (kind = VBJS_ACTOR/PLAYER/... from vbjs.h).
+    int  conGet(int kind, int index, const char *member, int parm2, int *ok);
+    void conSet(int kind, int index, const char *member, int value, int parm2);
+    int  conDefine(const char *name, int *ok);                // resolve a CON define/constant by name
+    // CON action commands.
+    void sound(int num, int sprite);
+    int  shoot(int sprite, int tile);
+    void addAmmo(int playerNum, int weapon, int amount);
+    void addWeapon(int playerNum, int weapon, int switchTo);
 }
 
 // ------------------------------------------------------------------------------
@@ -310,6 +319,75 @@ static JSValue js_cvar_set(JSContext *ctx, JSValueConst, int argc, JSValueConst 
     return JS_UNDEFINED;
 }
 
+// Generic CON struct getters/setters. `magic` is the struct kind (VBJS_ACTOR, ...).
+// Args: index-based kinds -> (index, member[, parm2]); userdef -> (member[, parm2]).
+static JSValue js_con_get(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic)
+{
+    int32_t index = 0, parm2 = 0; int ai = 0;
+    if (magic != VBJS_USERDEF) { if (argc < 2) return JS_ThrowTypeError(ctx, "getX(index, member)"); JS_ToInt32(ctx, &index, argv[0]); ai = 1; }
+    else if (argc < 1) return JS_ThrowTypeError(ctx, "getUserdef(member)");
+    const char *member = JS_ToCString(ctx, argv[ai]);
+    if (!member) return JS_EXCEPTION;
+    if (argc > ai + 1) JS_ToInt32(ctx, &parm2, argv[ai + 1]);
+    int ok = 0; int v = vbjs_game::conGet(magic, index, member, parm2, &ok);
+    JS_FreeCString(ctx, member);
+    return ok ? JS_NewInt32(ctx, v) : JS_UNDEFINED;
+}
+
+static JSValue js_con_set(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic)
+{
+    int32_t index = 0, value = 0, parm2 = 0; int ai = 0;
+    if (magic != VBJS_USERDEF) { if (argc < 3) return JS_ThrowTypeError(ctx, "setX(index, member, value)"); JS_ToInt32(ctx, &index, argv[0]); ai = 1; }
+    else if (argc < 2) return JS_ThrowTypeError(ctx, "setUserdef(member, value)");
+    const char *member = JS_ToCString(ctx, argv[ai]);
+    if (!member) return JS_EXCEPTION;
+    JS_ToInt32(ctx, &value, argv[ai + 1]);
+    if (argc > ai + 2) JS_ToInt32(ctx, &parm2, argv[ai + 2]);
+    vbjs_game::conSet(magic, index, member, value, parm2);
+    JS_FreeCString(ctx, member);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_vb_sound(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    int32_t num = 0, sprite = -1;
+    if (argc > 0) JS_ToInt32(ctx, &num, argv[0]);
+    if (argc > 1) JS_ToInt32(ctx, &sprite, argv[1]);
+    vbjs_game::sound(num, sprite);
+    return JS_UNDEFINED;
+}
+static JSValue js_vb_shoot(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 2) return JS_ThrowTypeError(ctx, "vb.shoot(sprite, tile)");
+    int32_t sprite = 0, tile = 0; JS_ToInt32(ctx, &sprite, argv[0]); JS_ToInt32(ctx, &tile, argv[1]);
+    return JS_NewInt32(ctx, vbjs_game::shoot(sprite, tile));
+}
+static JSValue js_vb_addAmmo(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 3) return JS_ThrowTypeError(ctx, "vb.addAmmo(player, weapon, amount)");
+    int32_t pl = 0, w = 0, amt = 0; JS_ToInt32(ctx, &pl, argv[0]); JS_ToInt32(ctx, &w, argv[1]); JS_ToInt32(ctx, &amt, argv[2]);
+    vbjs_game::addAmmo(pl, w, amt);
+    return JS_UNDEFINED;
+}
+static JSValue js_vb_addWeapon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 2) return JS_ThrowTypeError(ctx, "vb.addWeapon(player, weapon[, switchTo])");
+    int32_t pl = 0, w = 0, sw = 1; JS_ToInt32(ctx, &pl, argv[0]); JS_ToInt32(ctx, &w, argv[1]);
+    if (argc > 2) JS_ToInt32(ctx, &sw, argv[2]);
+    vbjs_game::addWeapon(pl, w, sw);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_vb_define(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+{
+    if (argc < 1) return JS_ThrowTypeError(ctx, "vb.define(name)");
+    const char *name = JS_ToCString(ctx, argv[0]);
+    if (!name) return JS_EXCEPTION;
+    int ok = 0; int v = vbjs_game::conDefine(name, &ok);
+    JS_FreeCString(ctx, name);
+    return ok ? JS_NewInt32(ctx, v) : JS_UNDEFINED;
+}
+
 static JSValue js_vb_player(JSContext *ctx, JSValueConst, int, JSValueConst *)
 {
     int sp = vbjs_game::playerSprite();
@@ -339,6 +417,25 @@ static void vbjs_define_vb(JSContext *ctx, JSValue target)
     JS_SetPropertyStr(ctx, target, "setGamevar",  JS_NewCFunction(ctx, js_vb_setGamevar,  "setGamevar", 2));
     JS_SetPropertyStr(ctx, target, "player",      JS_NewCFunction(ctx, js_vb_player,      "player", 0));
     JS_SetPropertyStr(ctx, target, "run",         JS_NewCFunction(ctx, js_cvar_run,       "run", 1));   // alias of cvar.run
+    JS_SetPropertyStr(ctx, target, "define",      JS_NewCFunction(ctx, js_vb_define,      "define", 1));
+    JS_SetPropertyStr(ctx, target, "sound",       JS_NewCFunction(ctx, js_vb_sound,      "sound", 1));
+    JS_SetPropertyStr(ctx, target, "shoot",       JS_NewCFunction(ctx, js_vb_shoot,      "shoot", 2));
+    JS_SetPropertyStr(ctx, target, "addAmmo",     JS_NewCFunction(ctx, js_vb_addAmmo,    "addAmmo", 3));
+    JS_SetPropertyStr(ctx, target, "addWeapon",   JS_NewCFunction(ctx, js_vb_addWeapon,  "addWeapon", 2));
+
+    // Generic CON struct data access — every member CON exposes, by name.
+    struct { const char *get, *set; int kind; } const acc[] = {
+        { "getActor","setActor", VBJS_ACTOR }, { "getPlayer","setPlayer", VBJS_PLAYER },
+        { "getInput","setInput", VBJS_INPUT }, { "getSector","setSector", VBJS_SECTOR },
+        { "getWall","setWall", VBJS_WALL }, { "getProjectile","setProjectile", VBJS_PROJECTILE },
+        { "getActiveProjectile","setActiveProjectile", VBJS_ACTIVEPROJ },
+        { "getTileData","setTileData", VBJS_TILEDATA }, { "getUserdef","setUserdef", VBJS_USERDEF },
+    };
+    for (auto const &a : acc)
+    {
+        JS_SetPropertyStr(ctx, target, a.get, JS_NewCFunctionMagic(ctx, js_con_get, a.get, 2, JS_CFUNC_generic_magic, a.kind));
+        JS_SetPropertyStr(ctx, target, a.set, JS_NewCFunctionMagic(ctx, js_con_set, a.set, 3, JS_CFUNC_generic_magic, a.kind));
+    }
 }
 static void vbjs_define_cvar(JSContext *ctx, JSValue target)
 {
@@ -354,7 +451,12 @@ static void vbjs_define_fs(JSContext *ctx, JSValue target)
 }
 
 // ES-module init for `import ... from 'vb'` / 'fs' (default + named exports).
-static const char *k_vb_exports[] = { "on","off","log","drawText","clearText","spawn","sendMessage","getGamevar","setGamevar","player" };
+static const char *k_vb_exports[] = {
+    "on","off","log","drawText","clearText","spawn","sendMessage","getGamevar","setGamevar","player","run","define",
+    "sound","shoot","addAmmo","addWeapon",
+    "getActor","setActor","getPlayer","setPlayer","getInput","setInput","getSector","setSector","getWall","setWall",
+    "getProjectile","setProjectile","getActiveProjectile","setActiveProjectile","getTileData","setTileData","getUserdef","setUserdef",
+};
 static const char *k_fs_exports[] = { "readFile","writeFile","appendFile","exists" };
 static const char *k_cvar_exports[] = { "run","set" };
 

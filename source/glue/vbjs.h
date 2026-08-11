@@ -14,6 +14,14 @@
 extern "C" {
 #endif
 
+// CON struct kinds for the generic data accessors (vb.getActor/getPlayer/...).
+// These mirror the label tables CON itself uses, so every CON-exposed member is
+// reachable by name.
+enum {
+    VBJS_ACTOR = 0, VBJS_PLAYER, VBJS_INPUT, VBJS_SECTOR, VBJS_WALL,
+    VBJS_PROJECTILE, VBJS_ACTIVEPROJ, VBJS_TILEDATA, VBJS_USERDEF
+};
+
 // -js handling / lifecycle.
 int  VBJS_IsEnabled(void);                 // a script was requested and the runtime is up
 void VBJS_SetScriptPath(const char *path); // remember the -js argument (before init)
