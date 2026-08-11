@@ -1,13 +1,27 @@
-/// vbd.params="-l1 --gm duke -g ~/games/duke3da/duke3d.grp -l1 -v1"
+/// vbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -l1 -v1"
 
 // VibeBuild32 auto-loads only index.ts (or index.js) from this project.
-import { on, log, drawText, define, getActor, spawn } from 'vb';
+import { VBComponent, createPrefab, on, log, drawText, define, getActor, spawnPrefab } from 'vb';
 import fs from 'fs';
 import cvar from 'cvar';
 const vbLegacy = require('vb'); // CommonJS require() is supported too.
 
 let frames = 0;
 const liztroop = define('LIZTROOP');
+
+class TrooperComponent extends VBComponent {
+  onSpawn() {
+    log('Component attached to trooper', this.sprite);
+  }
+
+  fixedUpdate(dt: number) {
+    // `dt` is the engine's fixed 60 Hz tick; component callbacks are ready
+    // for movement, AI, or other per-actor gameplay here.
+    void dt;
+  }
+}
+
+const trooperPrefab = liztroop === undefined ? undefined : createPrefab(liztroop, TrooperComponent);
 
 
 on('start', () => {
@@ -34,8 +48,9 @@ on('frame', () => {
   const angle = Number(getActor(player.sprite, 'ang'));
   const distance = 1024;
   const radians = angle * Math.PI / 1024;
-  spawn(
-    liztroop,
+  if (!trooperPrefab) return;
+  spawnPrefab(
+    trooperPrefab,
     Math.round(player.x + Math.cos(radians) * distance),
     Math.round(player.y + Math.sin(radians) * distance),
     player.z,

@@ -158,6 +158,10 @@ static void vbjs_add_script(const char *path)
 }
 
 static JSValue s_events;   // { eventName: [fn, ...] }
+// JS-defined component classes/functions shared by the global, CommonJS, and
+// ES-module forms of `vb`.  They intentionally live in one closure so a
+// component attached through any import style is visible everywhere.
+static JSValue s_componentExports = JS_UNDEFINED;
 
 // Script-registered HUD text, kept C-side so the draw hook is trivial.
 // (vbjs_text_t is declared in vbjs.h so the game-side draw code shares the layout.)
@@ -587,6 +591,52 @@ static JSValue js_vb_player(JSContext *ctx, JSValueConst, int, JSValueConst *)
 
 // --------------------------------------------------- vb/fs export helpers ---
 
+static void vbjs_setup_components(JSContext *ctx)
+{
+    // Keep this in JavaScript: user subclasses then have normal JS/TS class
+    // semantics, while the lifecycle itself is driven by real engine events.
+    static const char *source =
+        "(function(vb){\n"
+        "  const entities = Object.create(null); let nextNodeId = 1;\n"
+        "  const call = (component, name, ...args) => { const fn = component[name]; if (typeof fn === 'function') fn.apply(component, args); };\n"
+        "  class VBNode { constructor(){ this.id = nextNodeId++; this.name = 'Node ' + this.id; this.tag = 'Untagged'; this.destroyed = false; this._activeSelf = true; Object.defineProperty(this, 'activeSelf', { enumerable: true, get: () => this._activeSelf, set: active => setNodeActive(this, active) }); this.transform = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } }; }\n"
+        "    get activeInHierarchy(){ return !this.destroyed && this._activeSelf; } SetActive(active){ return setNodeActive(this, active); } AddComponent(type){ return attach(this, type); } GetComponent(type){ return getComponent(this, type); } GetComponents(type){ return getComponents(this, type); } Destroy(){ return destroyNode(this); } }\n"
+        "  const key = entity => entity instanceof VBNode ? 'node:' + entity.id : 'sprite:' + entity;\n"
+        "  const list = entity => entities[key(entity)] || (entities[key(entity)] = []);\n"
+        "  const active = component => component.enabled && (!component.node || component.node.activeInHierarchy);\n"
+        "  class VBComponent { constructor(){ this.sprite = -1; this.node = null; this._enabled = true; Object.defineProperty(this, 'enabled', { enumerable: true, get: () => this._enabled, set: value => setComponentEnabled(this, value) }); Object.defineProperty(this, 'transform', { enumerable: true, get: () => this.node ? this.node.transform : undefined }); }\n"
+        "    get gameObject(){ return this.node; } get isActiveAndEnabled(){ return active(this); } GetComponent(type){ return this.sprite >= 0 ? getComponent(this.sprite, type) : this.node ? getComponent(this.node, type) : undefined; } GetComponents(type){ return this.sprite >= 0 ? getComponents(this.sprite, type) : this.node ? getComponents(this.node, type) : []; } AddComponent(type){ return this.sprite >= 0 ? attach(this.sprite, type) : this.node ? attach(this.node, type) : undefined; } Destroy(){ return this.sprite >= 0 ? detach(this.sprite, this) : this.node ? detach(this.node, this) : false; }\n"
+        "    awake(){} start(){} onSpawn(){} fixedUpdate(dt){} update(dt){} lateUpdate(dt){} onDestroy(){} onEnable(){} onDisable(){} }\n"
+        "  class VBPrefab { constructor(tile, ...components){ this.tile = tile; this.components = components; } }\n"
+        "  function attach(entity, componentOrType) {\n"
+        "    if (!(entity instanceof VBNode) && (!Number.isInteger(entity) || entity < 0)) throw new TypeError('vb.attach(entity, component) requires a sprite or VBNode');\n"
+        "    if (entity instanceof VBNode && entity.destroyed) throw new Error('Cannot attach to a destroyed VBNode');\n"
+        "    const component = typeof componentOrType === 'function' ? new componentOrType() : componentOrType;\n"
+        "    if (!(component instanceof VBComponent)) throw new TypeError('Components must extend VBComponent');\n"
+        "    if (component.sprite >= 0 || component.node) throw new Error('Component is already attached');\n"
+        "    component.sprite = entity instanceof VBNode ? -1 : entity; component.node = entity instanceof VBNode ? entity : null; list(entity).push(component); call(component, 'awake'); if (active(component)) call(component, 'onEnable'); call(component, 'onSpawn'); call(component, 'start'); return component;\n"
+        "  }\n"
+        "  function detach(entity, component) { const entityKey = key(entity), components = entities[entityKey]; if (!components) return false; const index = components.indexOf(component); if (index < 0) return false; components.splice(index, 1); if (active(component)) call(component, 'onDisable'); call(component, 'onDestroy'); component.sprite = -1; component.node = null; if (!components.length) delete entities[entityKey]; return true; }\n"
+        "  function destroyComponents(entity) { const entityKey = key(entity), components = entities[entityKey]; if (!components) return; delete entities[entityKey]; for (const component of components.slice()) { if (active(component)) call(component, 'onDisable'); call(component, 'onDestroy'); component.sprite = -1; component.node = null; } }\n"
+        "  function getComponent(entity, type) { const components = entities[key(entity)] || []; return components.find(component => component instanceof type); }\n"
+        "  function getComponents(entity, type) { const components = (entities[key(entity)] || []).slice(); return type ? components.filter(component => component instanceof type) : components; }\n"
+        "  function setComponentEnabled(component, enabled) { enabled = !!enabled; if (component._enabled === enabled) return; const wasActive = active(component); component._enabled = enabled; if (wasActive && !active(component)) call(component, 'onDisable'); else if (!wasActive && active(component)) call(component, 'onEnable'); }\n"
+        "  function createPrefab(tile, ...components) { return new VBPrefab(tile, ...components); }\n"
+        "  function spawnPrefab(prefab, x, y, z, owner) { if (!(prefab instanceof VBPrefab)) throw new TypeError('spawnPrefab expects a VBPrefab'); const sprite = vb.spawn(prefab.tile, x, y, z, owner); if (sprite >= 0) for (const type of prefab.components) attach(sprite, type); return sprite; }\n"
+        "  function createNode(...components) { const node = new VBNode(); for (const type of components) attach(node, type); return node; }\n"
+        "  function setNodeActive(node, enabled) { if (!(node instanceof VBNode) || node.destroyed) return false; enabled = !!enabled; if (node._activeSelf === enabled) return true; const components = (entities[key(node)] || []).slice(); const wasActive = node.activeInHierarchy; node._activeSelf = enabled; for (const component of components) if (component.enabled) call(component, wasActive && !enabled ? 'onDisable' : !wasActive && enabled ? 'onEnable' : 'awake'); return true; }\n"
+        "  function destroyNode(node) { if (!(node instanceof VBNode) || node.destroyed) return false; destroyComponents(node); node.destroyed = true; return true; }\n"
+        "  const each = (name, dt) => { for (const key of Object.keys(entities)) for (const component of entities[key].slice()) if (active(component)) call(component, name, dt); };\n"
+        "  // Duke's game tick is fixed at 60 Hz; update follows each rendered/game frame.\n"
+        "  vb.on('frame', () => { const dt = 1 / 60; each('fixedUpdate', dt); each('update', dt); each('lateUpdate', dt); });\n"
+        "  vb.on('actorDestroyed', event => destroyComponents(event.sprite));\n"
+        "  return { VBComponent, VBNode, VBPrefab, attach, detach, getComponent, getComponents, setComponentEnabled, createNode, destroyNode, createPrefab, spawnPrefab };\n"
+        "})(vb)";
+    JSValue value = JS_Eval(ctx, source, strlen(source), "<vb-components>", JS_EVAL_TYPE_GLOBAL);
+    if (JS_IsException(value)) { vbjs_dump_error(ctx); return; }
+    s_componentExports = value;
+}
+
 // Attach every vb function to the given object (used for both the module and the global).
 static void vbjs_define_vb(JSContext *ctx, JSValue target)
 {
@@ -623,6 +673,11 @@ static void vbjs_define_vb(JSContext *ctx, JSValue target)
         JS_SetPropertyStr(ctx, target, a.get, JS_NewCFunctionMagic(ctx, js_con_get, a.get, 2, JS_CFUNC_generic_magic, a.kind));
         JS_SetPropertyStr(ctx, target, a.set, JS_NewCFunctionMagic(ctx, js_con_set, a.set, 3, JS_CFUNC_generic_magic, a.kind));
     }
+    if (JS_IsObject(s_componentExports))
+    {
+        static const char *names[] = { "VBComponent", "VBNode", "VBPrefab", "attach", "detach", "getComponent", "getComponents", "setComponentEnabled", "createNode", "destroyNode", "createPrefab", "spawnPrefab" };
+        for (auto name : names) JS_SetPropertyStr(ctx, target, name, JS_GetPropertyStr(ctx, s_componentExports, name));
+    }
 }
 static void vbjs_define_cvar(JSContext *ctx, JSValue target)
 {
@@ -643,6 +698,7 @@ static const char *k_vb_exports[] = {
     "sound","shoot","addAmmo","addWeapon",
     "getActor","setActor","getPlayer","setPlayer","getInput","setInput","getSector","setSector","getWall","setWall",
     "getProjectile","setProjectile","getActiveProjectile","setActiveProjectile","getTileData","setTileData","getUserdef","setUserdef",
+    "VBComponent","VBNode","VBPrefab","attach","detach","getComponent","getComponents","setComponentEnabled","createNode","destroyNode","createPrefab","spawnPrefab",
 };
 static const char *k_fs_exports[] = { "readFile","writeFile","appendFile","exists" };
 static const char *k_cvar_exports[] = { "run","set" };
@@ -779,6 +835,12 @@ static void vbjs_setup_context(JSContext *ctx)
     JS_SetPropertyStr(ctx, g, "require", JS_NewCFunction(ctx, js_require, "require", 1));
     JSValue vb = JS_NewObject(ctx); vbjs_define_vb(ctx, vb);
     JS_SetPropertyStr(ctx, g, "vb", vb);
+    vbjs_setup_components(ctx);
+    // The global object was created before the component kernel.  Decorate it
+    // once the kernel has supplied the shared class/function identities.
+    JSValue globalVb = JS_GetPropertyStr(ctx, g, "vb");
+    vbjs_define_vb(ctx, globalVb);
+    JS_FreeValue(ctx, globalVb);
     JSValue cvar = JS_NewObject(ctx); vbjs_define_cvar(ctx, cvar);
     JS_SetPropertyStr(ctx, g, "cvar", cvar);
 
@@ -935,17 +997,20 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "}\n";
     const char *indexTs =
         "// VibeBuild32 auto-loads only index.ts (or index.js) from this project.\n"
-        "import { on, log, drawText, define } from 'vb';\n"
+        "import { VBComponent, createPrefab, on, log, drawText, define } from 'vb';\n"
         "import fs from 'fs';\n"
         "import cvar from 'cvar';\n"
         "const vbLegacy = require('vb'); // CommonJS require() is supported too.\n\n"
         "let frames = 0;\n"
-        "const liztroop = define('LIZTROOP');\n\n"
+        "const liztroop = define('LIZTROOP');\n"
+        "class TrooperComponent extends VBComponent { onSpawn() { log('Component attached:', this.sprite); } fixedUpdate(dt: number) { void dt; } }\n"
+        "const trooperPrefab = liztroop === undefined ? undefined : createPrefab(liztroop, TrooperComponent);\n\n"
         "on('start', () => {\n"
         "  log('TypeScript mod loaded. LIZTROOP is', liztroop, 'player:', vbLegacy.player().sprite);\n"
         "  // Built-in modules are typed too; this is safe even when the file does not exist.\n"
         "  if (fs.exists('autojs-notes.txt')) log(fs.readFile('autojs-notes.txt'));\n"
         "  cvar.set('r_maxfps', 60);\n"
+        "  // Spawn with components: if (trooperPrefab) spawnPrefab(trooperPrefab);\n"
         "});\n\n"
         "on('actorSpawned', event => {\n"
         "  if (event.tile === liztroop) log('A trooper spawned:', event.sprite);\n"
@@ -961,11 +1026,14 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "const fs = require('fs');\n"
         "const cvar = require('cvar');\n\n"
         "let frames = 0;\n"
-        "const liztroop = vb.define('LIZTROOP');\n\n"
+        "const liztroop = vb.define('LIZTROOP');\n"
+        "class TrooperComponent extends vb.VBComponent { onSpawn() { vb.log('Component attached:', this.sprite); } fixedUpdate(dt) { void dt; } }\n"
+        "const trooperPrefab = liztroop === undefined ? undefined : vb.createPrefab(liztroop, TrooperComponent);\n\n"
         "vb.on('start', () => {\n"
         "  vb.log('JavaScript mod loaded. LIZTROOP is', liztroop);\n"
         "  if (fs.exists('autojs-notes.txt')) vb.log(fs.readFile('autojs-notes.txt'));\n"
         "  cvar.set('r_maxfps', 60);\n"
+        "  // Spawn with components: if (trooperPrefab) vb.spawnPrefab(trooperPrefab);\n"
         "});\n\n"
         "vb.on('actorSpawned', event => {\n"
         "  if (event.tile === liztroop) vb.log('A trooper spawned:', event.sprite);\n"
@@ -981,6 +1049,12 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     const char *types =
         "// VibeBuild32 embedded JavaScript API declarations.\n"
         "declare type ActorEvent = { sprite: number; owner: number; tile: number };\n"
+        "declare type VBVector3 = { x: number; y: number; z: number };\n"
+        "declare type VBTransform = { position: VBVector3; rotation: VBVector3; scale: VBVector3 };\n"
+        "declare class VBNode { readonly id: number; name: string; tag: string; readonly destroyed: boolean; readonly activeSelf: boolean; readonly activeInHierarchy: boolean; transform: VBTransform; SetActive(active: boolean): boolean; AddComponent<T extends VBComponent>(type: VBComponentConstructor<T>): T; GetComponent<T extends VBComponent>(type: VBComponentConstructor<T>): T | undefined; GetComponents<T extends VBComponent>(type?: VBComponentConstructor<T>): T[]; Destroy(): boolean; }\n"
+        "declare abstract class VBComponent { sprite: number; node: VBNode | null; readonly gameObject: VBNode | null; readonly transform: VBTransform | undefined; enabled: boolean; readonly isActiveAndEnabled: boolean; GetComponent<T extends VBComponent>(type: VBComponentConstructor<T>): T | undefined; GetComponents<T extends VBComponent>(type?: VBComponentConstructor<T>): T[]; AddComponent<T extends VBComponent>(type: VBComponentConstructor<T>): T | undefined; Destroy(): boolean; awake(): void; start(): void; onSpawn(): void; fixedUpdate(dt: number): void; update(dt: number): void; lateUpdate(dt: number): void; onDestroy(): void; onEnable(): void; onDisable(): void; }\n"
+        "declare type VBComponentConstructor<T extends VBComponent = VBComponent> = new () => T;\n"
+        "declare class VBPrefab { readonly tile: number; readonly components: readonly VBComponentConstructor[]; }\n"
         "declare type ChatEvent = { player: number; text: string };\n"
         "declare type ConEvent = { sprite: number; player: number; dist: number };\n"
         "declare type Player = { sprite: number; x: number; y: number; z: number };\n"
@@ -1010,10 +1084,10 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "  | 'WEAPKEY7' | 'WEAPKEY8' | 'WEAPKEY9' | 'WEAPKEY10' | 'WORLD';\n"
         "declare type ConEventName = ConEventShortName | `EVENT_${ConEventShortName}`;\n"
         "declare type VBLifecycleEventName = 'start' | 'shutdown' | 'frame' | 'playerDied';\n"
-        "declare type VBEventName = VBLifecycleEventName | 'actorSpawned' | 'chatMessage' | ConEventName;\n"
+        "declare type VBEventName = VBLifecycleEventName | 'actorSpawned' | 'actorDestroyed' | 'chatMessage' | ConEventName;\n"
         "declare type VBEventMap = {\n"
         "  start: void; shutdown: void; frame: void; playerDied: void;\n"
-        "  actorSpawned: ActorEvent; chatMessage: ChatEvent;\n"
+        "  actorSpawned: ActorEvent; actorDestroyed: ActorEvent; chatMessage: ChatEvent;\n"
         "} & { [K in ConEventName]: ConEvent };\n"
         "declare interface VB {\n"
         "  on<K extends VBEventName>(name: K, handler: (event: VBEventMap[K]) => void): void;\n"
@@ -1025,6 +1099,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "  spawn(tile: number, x?: number, y?: number, z?: number, owner?: number): number;\n"
         "  A_Spawn(spriteNum: number, tileNum: number): number;\n"
         "  A_InsertSprite(whatsect: number, s_x: number, s_y: number, s_z: number, s_pn: number, s_s: number, s_xr: number, s_yr: number, s_a: number, s_ve: number, s_zv: number, s_ow: number, s_ss: number): number;\n"
+        "  VBComponent: typeof VBComponent; VBNode: typeof VBNode; VBPrefab: typeof VBPrefab; attach<T extends VBComponent>(entity: number | VBNode, component: T | VBComponentConstructor<T>): T; detach(entity: number | VBNode, component: VBComponent): boolean; getComponent<T extends VBComponent>(entity: number | VBNode, type: VBComponentConstructor<T>): T | undefined; getComponents<T extends VBComponent>(entity: number | VBNode, type?: VBComponentConstructor<T>): T[]; setComponentEnabled(component: VBComponent, enabled: boolean): void; createNode(...components: VBComponentConstructor[]): VBNode; destroyNode(node: VBNode): boolean; createPrefab(tile: number, ...components: VBComponentConstructor[]): VBPrefab; spawnPrefab(prefab: VBPrefab, x?: number, y?: number, z?: number, owner?: number): number;\n"
         "  sendMessage(text: string): void; player(): Player;\n"
         "  getGamevar(name: string, sprite?: number, player?: number): ConValue; setGamevar(name: string, value: number, sprite?: number, player?: number): void;\n"
         "  getActor(i: number, member: string, parm2?: number): ConValue; setActor(i: number, member: string, value: number, parm2?: number): void;\n"
@@ -1039,7 +1114,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "declare interface CVar { run(command: string): void; set(name: string, value: unknown): void; }\n"
         "declare const console: VBConsole; declare const vb: VB; declare const cvar: CVar;\n"
         "declare function require(name: 'vb'): VB; declare function require(name: 'fs'): FS; declare function require(name: 'cvar'): CVar; declare function require(name: string): unknown;\n"
-        "declare module 'vb' { export type { ActorEvent, ChatEvent, ConEvent, ConEventName, ConEventShortName, ConValue, Player, VBEventMap, VBEventName, VBLifecycleEventName, VBConsole }; const api: VB; export default api; export const on: VB['on']; export const off: VB['off']; export const log: VB['log']; export const drawText: VB['drawText']; export const clearText: VB['clearText']; export const breakpoint: VB['breakpoint']; export const spawn: VB['spawn']; export const A_Spawn: VB['A_Spawn']; export const A_InsertSprite: VB['A_InsertSprite']; export const sendMessage: VB['sendMessage']; export const player: VB['player']; export const getGamevar: VB['getGamevar']; export const setGamevar: VB['setGamevar']; export const run: VB['run']; export const define: VB['define']; export const sound: VB['sound']; export const shoot: VB['shoot']; export const addAmmo: VB['addAmmo']; export const addWeapon: VB['addWeapon']; export const getActor: VB['getActor']; export const setActor: VB['setActor']; export const getPlayer: VB['getPlayer']; export const setPlayer: VB['setPlayer']; export const getInput: VB['getInput']; export const setInput: VB['setInput']; export const getSector: VB['getSector']; export const setSector: VB['setSector']; export const getWall: VB['getWall']; export const setWall: VB['setWall']; export const getProjectile: VB['getProjectile']; export const setProjectile: VB['setProjectile']; export const getActiveProjectile: VB['getActiveProjectile']; export const setActiveProjectile: VB['setActiveProjectile']; export const getTileData: VB['getTileData']; export const setTileData: VB['setTileData']; export const getUserdef: VB['getUserdef']; export const setUserdef: VB['setUserdef']; }\n"
+        "declare module 'vb' { export { VBComponent, VBNode, VBPrefab }; export type { ActorEvent, ChatEvent, ConEvent, ConEventName, ConEventShortName, ConValue, Player, VBComponentConstructor, VBEventMap, VBEventName, VBLifecycleEventName, VBConsole, VBTransform, VBVector3 }; const api: VB; export default api; export const on: VB['on']; export const off: VB['off']; export const log: VB['log']; export const drawText: VB['drawText']; export const clearText: VB['clearText']; export const breakpoint: VB['breakpoint']; export const spawn: VB['spawn']; export const A_Spawn: VB['A_Spawn']; export const A_InsertSprite: VB['A_InsertSprite']; export const attach: VB['attach']; export const detach: VB['detach']; export const getComponent: VB['getComponent']; export const getComponents: VB['getComponents']; export const setComponentEnabled: VB['setComponentEnabled']; export const createNode: VB['createNode']; export const destroyNode: VB['destroyNode']; export const createPrefab: VB['createPrefab']; export const spawnPrefab: VB['spawnPrefab']; export const sendMessage: VB['sendMessage']; export const player: VB['player']; export const getGamevar: VB['getGamevar']; export const setGamevar: VB['setGamevar']; export const run: VB['run']; export const define: VB['define']; export const sound: VB['sound']; export const shoot: VB['shoot']; export const addAmmo: VB['addAmmo']; export const addWeapon: VB['addWeapon']; export const getActor: VB['getActor']; export const setActor: VB['setActor']; export const getPlayer: VB['getPlayer']; export const setPlayer: VB['setPlayer']; export const getInput: VB['getInput']; export const setInput: VB['setInput']; export const getSector: VB['getSector']; export const setSector: VB['setSector']; export const getWall: VB['getWall']; export const setWall: VB['setWall']; export const getProjectile: VB['getProjectile']; export const setProjectile: VB['setProjectile']; export const getActiveProjectile: VB['getActiveProjectile']; export const setActiveProjectile: VB['setActiveProjectile']; export const getTileData: VB['getTileData']; export const setTileData: VB['setTileData']; export const getUserdef: VB['getUserdef']; export const setUserdef: VB['setUserdef']; }\n"
         "declare module 'fs' { const api: FS; export default api; export const readFile: FS['readFile']; export const writeFile: FS['writeFile']; export const appendFile: FS['appendFile']; export const exists: FS['exists']; }\n"
         "declare module 'cvar' { const api: CVar; export default api; export const run: CVar['run']; export const set: CVar['set']; }\n";
     snprintf(path, sizeof(path), "%s/package.json", project); if (vbjs_write_text(path, typescript ? packageTs : packageJs)) return -1;
@@ -1161,6 +1236,7 @@ void VBJS_Shutdown(void)
     VBJS_DevtoolsShutdownWindow();
     JS_FreeValue(s_ctx, s_events);
     JS_FreeValue(s_ctx, s_requireCache);
+    JS_FreeValue(s_ctx, s_componentExports); s_componentExports = JS_UNDEFINED;
     JS_FreeValue(s_ctx, s_devtoolsEvent); s_devtoolsEvent = JS_UNDEFINED;
     JS_FreeContext(s_ctx); JS_FreeRuntime(s_rt);
     s_ctx = nullptr; s_rt = nullptr; s_enabled = 0; s_scriptsLoaded = 0; s_startPending = 0;

@@ -1448,6 +1448,10 @@ void A_DeleteSprite(int s)
 
     S_DetachSoundsFromSprite(s);
 
+    // Give JS components a real lifecycle notification before the Build
+    // sprite slot is recycled.  Components can still inspect their sprite
+    // from onDestroy(), exactly as they can from Unity's callback.
+    VBJS_FireActor("actorDestroyed", s, sprite[s].owner, sprite[s].picnum);
     deletesprite(s);
 }
 
@@ -8773,4 +8777,3 @@ void G_MoveWorld(void)
     G_DoSectorAnimations();
     G_MoveFX();               //ST 11
 }
-
