@@ -562,8 +562,9 @@ int main(int argc, char *argv[])
     {
         if (!argv[ha] || argv[ha][0] != '-') continue;
         const char *a = argv[ha];
-        while (*a == '-') a++;                          // accept -headless and --headless
-        if (!Bstrcasecmp(a, "headless") || !Bstrcasecmp(a, "console") || !Bstrcasecmp(a, "dedicated"))
+        while (*a == '-') a++;                          // accept --headless and -hl
+        if (!Bstrcasecmp(a, "headless") || !Bstrcasecmp(a, "hl") ||
+            !Bstrcasecmp(a, "console") || !Bstrcasecmp(a, "dedicated") || !Bstrcasecmp(a, "dd"))
         {
             g_forceHeadless = 1;
             break;

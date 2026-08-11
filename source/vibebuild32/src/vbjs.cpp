@@ -11,6 +11,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
+#include <ctype.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 extern "C" {
 #include "quickjs.h"
@@ -51,9 +56,79 @@ extern "C" { unsigned char g_vbjsConEventListened[VBJS_MAXCONEVENTS]; }
 
 static JSRuntime *s_rt  = nullptr;
 static JSContext *s_ctx = nullptr;
-static char  s_scriptPath[1024] = {0};
-static char  s_scriptDir[1024]  = {0};
+static char  s_scriptDir[1024]  = {0};   // dir of the script currently being loaded (require base)
 static int   s_enabled = 0;
+static int   s_initTried = 0;            // guards a single init attempt
+static int   s_devtools = 0;
+enum { VBJS_DEVTOOLS_LOGS = 12 };
+static char s_devtoolsLogs[VBJS_DEVTOOLS_LOGS][192];
+static int s_devtoolsLogCount = 0;
+static char s_devtoolsBreakpointEvents[16][64];
+static int s_devtoolsBreakpointCount = 0;
+static int s_devtoolsPaused = 0;
+static char s_devtoolsCurrentEvent[64];
+static JSValue s_devtoolsEvent = JS_UNDEFINED;
+
+static void vbjs_devtools_log(const char *line)
+{
+    if (!s_devtools) return;
+    snprintf(s_devtoolsLogs[s_devtoolsLogCount % VBJS_DEVTOOLS_LOGS], sizeof(s_devtoolsLogs[0]), "%s", line ? line : "");
+    ++s_devtoolsLogCount;
+}
+
+static int vbjs_devtools_has_breakpoint(const char *event)
+{
+    for (int i = 0; i < s_devtoolsBreakpointCount; ++i)
+        if (!strcmp(s_devtoolsBreakpointEvents[i], event)) return 1;
+    return 0;
+}
+
+static void vbjs_devtools_set_event(const char *event, int argc, JSValueConst *argv)
+{
+    if (!s_devtools || !vbjs_devtools_has_breakpoint(event)) return;
+    snprintf(s_devtoolsCurrentEvent, sizeof(s_devtoolsCurrentEvent), "%s", event);
+    JS_FreeValue(s_ctx, s_devtoolsEvent);
+    s_devtoolsEvent = argc ? JS_DupValue(s_ctx, argv[0]) : JS_UNDEFINED;
+    s_devtoolsPaused = 1; // cooperative pause: no subsequent JS events/jobs run until Resume.
+}
+
+// The set of scripts to load: -js files plus autojs/<name>/index.{ts,js}.
+struct vbjs_script_t { char path[1024]; };
+enum { VBJS_MAX_SCRIPTS = 64 };
+static vbjs_script_t s_scripts[VBJS_MAX_SCRIPTS];
+static int s_scriptCount = 0;
+static char s_launchDir[1024];   // captured at app_main() before any chdir; holds autojs/
+
+static int vbjs_write_text(const char *path, const char *text)
+{
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    int failed = fputs(text, f) < 0 || fclose(f) != 0;
+    return failed ? -1 : 0;
+}
+
+static int vbjs_safe_project_name(const char *in, char *out, size_t outsz)
+{
+    if (!in || !in[0]) return 0;
+    size_t n = 0;
+    for (; *in; ++in)
+    {
+        unsigned char c = (unsigned char)*in;
+        if (!(isalnum(c) || c == '-' || c == '_')) return -1;
+        if (n + 1 >= outsz) return -1;
+        out[n++] = (char)c;
+    }
+    out[n] = 0;
+    return n ? 0 : -1;
+}
+
+static void vbjs_add_script(const char *path)
+{
+    if (!path || s_scriptCount >= VBJS_MAX_SCRIPTS) return;
+    for (int i = 0; i < s_scriptCount; i++)
+        if (!strcmp(s_scripts[i].path, path)) return;   // dedupe
+    snprintf(s_scripts[s_scriptCount++].path, sizeof(s_scripts[0].path), "%s", path);
+}
 
 static JSValue s_events;   // { eventName: [fn, ...] }
 
@@ -81,6 +156,29 @@ static char *vbjs_read_file(const char *path, size_t *out_len)
     return buf;
 }
 
+// TypeScript -> JavaScript (implemented in vbjs_ts.cpp; strips type syntax so .ts runs).
+extern "C" char *vbjs_ts_to_js(const char *src, size_t *len);
+
+// Read a source file; transpile it from TypeScript if it ends in .ts / .mts / .cts.
+static char *vbjs_load_source(const char *path, size_t *out_len)
+{
+    size_t len = 0; char *src = vbjs_read_file(path, &len);
+    if (!src) return nullptr;
+    size_t n = strlen(path);
+    int isTs = (n >= 3 && (!strcasecmp(path + n - 3, ".ts") ||
+               (n >= 4 && (!strcasecmp(path + n - 4, ".mts") || !strcasecmp(path + n - 4, ".cts")))));
+    if (isTs)
+    {
+        size_t jslen = 0;
+        char *js = vbjs_ts_to_js(src, &jslen);
+        free(src);
+        if (out_len) *out_len = jslen;
+        return js;
+    }
+    if (out_len) *out_len = len;
+    return src;
+}
+
 // Resolve a (possibly relative) module/require path against the main script dir.
 static void vbjs_resolve(const char *name, char *out, size_t outsz)
 {
@@ -95,12 +193,13 @@ static void vbjs_dump_error(JSContext *ctx)
     JSValue exc = JS_GetException(ctx);
     const char *msg = JS_ToCString(ctx, exc);
     vbjs_game::log(msg ? msg : "(unknown JS error)");
+    vbjs_devtools_log(msg ? msg : "(unknown JS error)");
     if (msg) JS_FreeCString(ctx, msg);
     JSValue stack = JS_GetPropertyStr(ctx, exc, "stack");
     if (!JS_IsUndefined(stack))
     {
         const char *st = JS_ToCString(ctx, stack);
-        if (st) { vbjs_game::log(st); JS_FreeCString(ctx, st); }
+        if (st) { vbjs_game::log(st); vbjs_devtools_log(st); JS_FreeCString(ctx, st); }
     }
     JS_FreeValue(ctx, stack);
     JS_FreeValue(ctx, exc);
@@ -122,6 +221,7 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst, int argc, JSValueCon
         if (off >= sizeof(line) - 1) break;
     }
     vbjs_game::log(line);
+    vbjs_devtools_log(line);
     return JS_UNDEFINED;
 }
 
@@ -205,7 +305,7 @@ static JSValue js_vb_off(JSContext *ctx, JSValueConst, int argc, JSValueConst *a
 // Fire an event to every registered handler with the given args.
 static void vbjs_fire(const char *event, int argc, JSValueConst *argv)
 {
-    if (!s_ctx) return;
+    if (!s_ctx || s_devtoolsPaused) return;
     JSContext *ctx = s_ctx;
     JSValue arr = JS_GetPropertyStr(ctx, s_events, event);
     if (JS_IsArray(arr))
@@ -222,6 +322,7 @@ static void vbjs_fire(const char *event, int argc, JSValueConst *argv)
         }
     }
     JS_FreeValue(ctx, arr);
+    vbjs_devtools_set_event(event, argc, argv);
 }
 
 // ----------------------------------------------------------------- vb: HUD ---
@@ -257,6 +358,21 @@ static JSValue js_vb_clearText(JSContext *ctx, JSValueConst, int argc, JSValueCo
     int32_t id = 0; int all = (argc < 1);
     if (!all) JS_ToInt32(ctx, &id, argv[0]);
     for (auto &t : s_text) if (all || (t.used && t.id == id)) t.used = 0;
+    return JS_UNDEFINED;
+}
+
+// Explicit source-level breakpoint. This is intentionally cooperative: QuickJS-ng
+// has no debugger protocol, so the game pauses further JS dispatch at a safe frame
+// boundary and the ImGui inspector can examine globals/current event and resume it.
+static JSValue js_vb_breakpoint(JSContext *ctx, JSValueConst, int, JSValueConst *)
+{
+    if (s_devtools)
+    {
+        snprintf(s_devtoolsCurrentEvent, sizeof(s_devtoolsCurrentEvent), "vb.breakpoint()");
+        JS_FreeValue(ctx, s_devtoolsEvent);
+        s_devtoolsEvent = JS_UNDEFINED;
+        s_devtoolsPaused = 1;
+    }
     return JS_UNDEFINED;
 }
 
@@ -423,6 +539,7 @@ static void vbjs_define_vb(JSContext *ctx, JSValue target)
     JS_SetPropertyStr(ctx, target, "log",         JS_NewCFunction(ctx, js_console_log,    "log", 1));
     JS_SetPropertyStr(ctx, target, "drawText",    JS_NewCFunction(ctx, js_vb_drawText,    "drawText", 4));
     JS_SetPropertyStr(ctx, target, "clearText",   JS_NewCFunction(ctx, js_vb_clearText,   "clearText", 1));
+    JS_SetPropertyStr(ctx, target, "breakpoint",  JS_NewCFunction(ctx, js_vb_breakpoint,  "breakpoint", 0));
     JS_SetPropertyStr(ctx, target, "spawn",       JS_NewCFunction(ctx, js_vb_spawn,       "spawn", 4));
     JS_SetPropertyStr(ctx, target, "sendMessage", JS_NewCFunction(ctx, js_vb_sendMessage, "sendMessage", 1));
     JS_SetPropertyStr(ctx, target, "getGamevar",  JS_NewCFunction(ctx, js_vb_getGamevar,  "getGamevar", 1));
@@ -464,7 +581,7 @@ static void vbjs_define_fs(JSContext *ctx, JSValue target)
 
 // ES-module init for `import ... from 'vb'` / 'fs' (default + named exports).
 static const char *k_vb_exports[] = {
-    "on","off","log","drawText","clearText","spawn","sendMessage","getGamevar","setGamevar","player","run","define",
+    "on","off","log","drawText","clearText","breakpoint","spawn","sendMessage","getGamevar","setGamevar","player","run","define",
     "sound","shoot","addAmmo","addWeapon",
     "getActor","setActor","getPlayer","setPlayer","getInput","setInput","getSector","setSector","getWall","setWall",
     "getProjectile","setProjectile","getActiveProjectile","setActiveProjectile","getTileData","setTileData","getUserdef","setUserdef",
@@ -522,7 +639,7 @@ static JSValue js_require(JSContext *ctx, JSValueConst, int argc, JSValueConst *
     if (!JS_IsUndefined(cached)) return cached;
     JS_FreeValue(ctx, cached);
 
-    size_t len = 0; char *src = vbjs_read_file(path, &len);
+    size_t len = 0; char *src = vbjs_load_source(path, &len);
     if (!src) return JS_ThrowReferenceError(ctx, "require: cannot find module '%s'", path);
 
     // CommonJS wrapper: (function(exports, module, require){ <src> }); return module.exports
@@ -571,7 +688,7 @@ static char *vbjs_normalize(JSContext *ctx, const char *base, const char *name, 
 
 static JSModuleDef *vbjs_module_loader(JSContext *ctx, const char *module_name, void *)
 {
-    size_t len = 0; char *buf = vbjs_read_file(module_name, &len);
+    size_t len = 0; char *buf = vbjs_load_source(module_name, &len);
     if (!buf) { JS_ThrowReferenceError(ctx, "could not load module '%s'", module_name); return nullptr; }
     JSValue fv = JS_Eval(ctx, buf, len, module_name, JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
     free(buf);
@@ -599,7 +716,8 @@ static void vbjs_setup_context(JSContext *ctx)
     JS_SetPropertyStr(ctx, console, "info",  logfn);
     JS_SetPropertyStr(ctx, g, "console", console);
 
-    // global require + a global `vb` object (so scripts work without imports too)
+    // Global require + a global `vb` object for compatibility with simple scripts.
+    // The preferred API is the explicit `vb` ES module.
     JS_SetPropertyStr(ctx, g, "require", JS_NewCFunction(ctx, js_require, "require", 1));
     JSValue vb = JS_NewObject(ctx); vbjs_define_vb(ctx, vb);
     JS_SetPropertyStr(ctx, g, "vb", vb);
@@ -627,18 +745,267 @@ extern "C" {
 
 int VBJS_IsEnabled(void) { return s_enabled; }
 
-void VBJS_SetScriptPath(const char *path)
+void VBJS_CaptureLaunchDir(void) { if (!s_launchDir[0]) getcwd(s_launchDir, sizeof(s_launchDir)); }
+
+void VBJS_SetScriptPath(const char *path) { vbjs_add_script(path); }
+
+void VBJS_SetDevtools(int enabled) { s_devtools = enabled != 0; }
+int VBJS_DevtoolsEnabled(void) { return s_devtools; }
+const char *VBJS_DevtoolsLog(int index)
 {
-    if (!path) return;
-    snprintf(s_scriptPath, sizeof(s_scriptPath), "%s", path);
-    snprintf(s_scriptDir, sizeof(s_scriptDir), "%s", path);
-    char *slash = strrchr(s_scriptDir, '/');
-    if (slash) *slash = 0; else s_scriptDir[0] = 0;
+    if (index < 0 || index >= VBJS_DEVTOOLS_LOGS || index >= s_devtoolsLogCount) return nullptr;
+    int first = s_devtoolsLogCount > VBJS_DEVTOOLS_LOGS ? s_devtoolsLogCount - VBJS_DEVTOOLS_LOGS : 0;
+    if (index + first >= s_devtoolsLogCount) return nullptr;
+    return s_devtoolsLogs[(first + index) % VBJS_DEVTOOLS_LOGS];
+}
+int VBJS_DevtoolsPaused(void) { return s_devtoolsPaused; }
+void VBJS_DevtoolsResume(void) { s_devtoolsPaused = 0; }
+void VBJS_DevtoolsSetEventBreakpoint(const char *event, int enabled)
+{
+    if (!event || !event[0]) return;
+    for (int i = 0; i < s_devtoolsBreakpointCount; ++i)
+        if (!strcmp(s_devtoolsBreakpointEvents[i], event))
+        {
+            if (enabled) return;
+            memmove(&s_devtoolsBreakpointEvents[i], &s_devtoolsBreakpointEvents[i + 1],
+                    (size_t)(s_devtoolsBreakpointCount - i - 1) * sizeof(s_devtoolsBreakpointEvents[0]));
+            --s_devtoolsBreakpointCount;
+            return;
+        }
+    if (enabled && s_devtoolsBreakpointCount < (int)(sizeof(s_devtoolsBreakpointEvents) / sizeof(s_devtoolsBreakpointEvents[0])))
+        snprintf(s_devtoolsBreakpointEvents[s_devtoolsBreakpointCount++], sizeof(s_devtoolsBreakpointEvents[0]), "%s", event);
+}
+int VBJS_DevtoolsHasEventBreakpoint(const char *event) { return event && vbjs_devtools_has_breakpoint(event); }
+const char *VBJS_DevtoolsCurrentEvent(void) { return s_devtoolsCurrentEvent[0] ? s_devtoolsCurrentEvent : nullptr; }
+int VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize)
+{
+    if (!out || outSize <= 0) return -1;
+    out[0] = 0;
+    if (!s_ctx || !expression || !expression[0]) return -1;
+    JSValue value;
+    if (!strcmp(expression, "$event")) value = JS_DupValue(s_ctx, s_devtoolsEvent);
+    else value = JS_Eval(s_ctx, expression, strlen(expression), "<devtools>", JS_EVAL_TYPE_GLOBAL);
+    if (JS_IsException(value)) { vbjs_dump_error(s_ctx); snprintf(out, (size_t)outSize, "<exception>"); return -1; }
+    JSValue json = JS_JSONStringify(s_ctx, value, JS_NULL, JS_UNDEFINED);
+    const char *text = JS_IsException(json) || JS_IsUndefined(json) ? JS_ToCString(s_ctx, value) : JS_ToCString(s_ctx, json);
+    snprintf(out, (size_t)outSize, "%s", text ? text : "undefined");
+    if (text) JS_FreeCString(s_ctx, text);
+    JS_FreeValue(s_ctx, json);
+    JS_FreeValue(s_ctx, value);
+    return 0;
+}
+
+int VBJS_GenerateProject(const char *requestedName, int typescript)
+{
+    VBJS_CaptureLaunchDir();
+    if (!s_launchDir[0]) return -1;
+
+    char name[96] = {0};
+    if (requestedName)
+    {
+        if (vbjs_safe_project_name(requestedName, name, sizeof(name)) != 0) return -1;
+    }
+    else
+    {
+        for (unsigned int n = 1; n < 10000; ++n)
+        {
+            snprintf(name, sizeof(name), "mod-%u", n);
+            char candidate[1200]; struct stat st;
+            snprintf(candidate, sizeof(candidate), "%s/autojs/%s", s_launchDir, name);
+            if (stat(candidate, &st) != 0 && errno == ENOENT) break;
+        }
+    }
+
+    char autojs[1100], project[1200];
+    snprintf(autojs, sizeof(autojs), "%s/autojs", s_launchDir);
+    if (mkdir(autojs, 0755) != 0 && errno != EEXIST) return -1;
+    snprintf(project, sizeof(project), "%s/%s", autojs, name);
+    if (mkdir(project, 0755) != 0) return -1; // never overwrite a project
+
+    char path[1400];
+    const char *packageTs =
+        "{\n"
+        "  \"name\": \"vbjs-mod\",\n"
+        "  \"private\": true,\n"
+        "  \"version\": \"0.1.0\",\n"
+        "  \"description\": \"VibeBuild32 auto-loaded JavaScript mod\",\n"
+        "  \"types\": \"./vb.d.ts\",\n"
+        "  \"scripts\": { \"check\": \"tsc --noEmit -p tsconfig.json\" },\n"
+        "  \"devDependencies\": { \"typescript\": \"^5.0.0\" }\n"
+        "}\n";
+    const char *packageJs =
+        "{\n"
+        "  \"name\": \"vbjs-mod\",\n"
+        "  \"private\": true,\n"
+        "  \"version\": \"0.1.0\",\n"
+        "  \"description\": \"VibeBuild32 auto-loaded JavaScript mod\",\n"
+        "  \"types\": \"./vb.d.ts\",\n"
+        "  \"scripts\": { \"check\": \"tsc --noEmit -p jsconfig.json\" },\n"
+        "  \"devDependencies\": { \"typescript\": \"^5.0.0\" }\n"
+        "}\n";
+    const char *tsconfig =
+        "{\n"
+        "  \"compilerOptions\": {\n"
+        "    \"target\": \"ES2020\", \"lib\": [\"ES2020\"], \"module\": \"ESNext\",\n"
+        "    \"moduleResolution\": \"Bundler\", \"allowImportingTsExtensions\": true, \"strict\": true,\n"
+        "    \"noEmit\": true, \"skipLibCheck\": true\n"
+        "  },\n"
+        "  \"include\": [\"*.ts\", \"vb.d.ts\"]\n"
+        "}\n";
+    const char *indexTs =
+        "// VibeBuild32 auto-loads only index.ts (or index.js) from this project.\n"
+        "import { on, log, drawText, define } from 'vb';\n"
+        "import fs from 'fs';\n"
+        "import cvar from 'cvar';\n"
+        "const vbLegacy = require('vb'); // CommonJS require() is supported too.\n\n"
+        "let frames = 0;\n"
+        "const liztroop = define('LIZTROOP');\n\n"
+        "on('start', () => {\n"
+        "  log('TypeScript mod loaded. LIZTROOP is', liztroop, 'player:', vbLegacy.player().sprite);\n"
+        "  // Built-in modules are typed too; this is safe even when the file does not exist.\n"
+        "  if (fs.exists('autojs-notes.txt')) log(fs.readFile('autojs-notes.txt'));\n"
+        "  cvar.set('r_maxfps', 60);\n"
+        "});\n\n"
+        "on('actorSpawned', event => {\n"
+        "  if (event.tile === liztroop) log('A trooper spawned:', event.sprite);\n"
+        "});\n\n"
+        "on('frame', () => {\n"
+        "  if (++frames % 60 === 0) drawText(9001, 8, 8, `TS mod: ${frames} frames`);\n"
+        "});\n";
+    const char *indexJs =
+        "// VibeBuild32 auto-loads only index.js (or index.ts) from this project.\n"
+        "// @ts-check\n"
+        "/** @type {import('vb').default} */\n"
+        "const vb = require('vb');\n"
+        "const fs = require('fs');\n"
+        "const cvar = require('cvar');\n\n"
+        "let frames = 0;\n"
+        "const liztroop = vb.define('LIZTROOP');\n\n"
+        "vb.on('start', () => {\n"
+        "  vb.log('JavaScript mod loaded. LIZTROOP is', liztroop);\n"
+        "  if (fs.exists('autojs-notes.txt')) vb.log(fs.readFile('autojs-notes.txt'));\n"
+        "  cvar.set('r_maxfps', 60);\n"
+        "});\n\n"
+        "vb.on('actorSpawned', event => {\n"
+        "  if (event.tile === liztroop) vb.log('A trooper spawned:', event.sprite);\n"
+        "});\n\n"
+        "vb.on('frame', () => {\n"
+        "  if (++frames % 60 === 0) vb.drawText(9001, 8, 8, `JS mod: ${frames} frames`);\n"
+        "});\n";
+    const char *jsconfig =
+        "{\n"
+        "  \"compilerOptions\": { \"target\": \"ES2020\", \"lib\": [\"ES2020\"], \"checkJs\": true, \"allowJs\": true, \"noEmit\": true, \"strict\": true },\n"
+        "  \"include\": [\"*.js\", \"vb.d.ts\"]\n"
+        "}\n";
+    const char *types =
+        "// VibeBuild32 embedded JavaScript API declarations.\n"
+        "declare type ActorEvent = { sprite: number; owner: number; tile: number };\n"
+        "declare type ChatEvent = { player: number; text: string };\n"
+        "declare type ConEvent = { sprite: number; player: number; dist: number };\n"
+        "declare type Player = { sprite: number; x: number; y: number; z: number };\n"
+        "declare type ConValue = number | undefined;\n"
+        "declare interface VBConsole { log(...args: unknown[]): void; error(...args: unknown[]): void; warn(...args: unknown[]): void; info(...args: unknown[]): void; }\n"
+        "// Every CON EVENT_* name accepted by vb.on(). The prefix is optional at runtime.\n"
+        "declare type ConEventShortName =\n"
+        "  | 'ACTIVATESWITCH' | 'AIMDOWN' | 'AIMUP' | 'ALTFIRE' | 'ALTWEAPON' | 'ANIMATESPRITES'\n"
+        "  | 'BOTGETSPRITESCORE' | 'CHANGEWEAPON' | 'CHEATGETBOOT' | 'CHEATGETFIRSTAID' | 'CHEATGETHEAT'\n"
+        "  | 'CHEATGETHOLODUKE' | 'CHEATGETJETPACK' | 'CHEATGETSCUBA' | 'CHEATGETSHIELD' | 'CHEATGETSTEROIDS'\n"
+        "  | 'CHECKTOUCHDAMAGE' | 'CROUCH' | 'DAMAGECEILING' | 'DAMAGEFLOOR' | 'DAMAGESPRITE'\n"
+        "  | 'DISPLAYACCESS' | 'DISPLAYBONUSSCREEN' | 'DISPLAYCROSSHAIR' | 'DISPLAYLEVELSTATS'\n"
+        "  | 'DISPLAYLOADINGSCREEN' | 'DISPLAYMENU' | 'DISPLAYMENUREST' | 'DISPLAYREST' | 'DISPLAYROOMS'\n"
+        "  | 'DISPLAYSBAR' | 'DISPLAYSTART' | 'DISPLAYTIP' | 'DISPLAYWEAPON' | 'DOFIRE' | 'DOQUAKE'\n"
+        "  | 'DRAWWEAPON' | 'EGS' | 'ENTERLEVEL' | 'FAKEDOMOVETHINGS' | 'FIRE' | 'FIREWEAPON'\n"
+        "  | 'FRAGGED' | 'GAME' | 'GETAUTOAIMANGLE' | 'GETLOADTILE' | 'GETMENUTILE' | 'GETSHOTRANGE'\n"
+        "  | 'HOLODUKEOFF' | 'HOLODUKEON' | 'HOLSTER' | 'INCURDAMAGE' | 'INIT' | 'INVENTORY'\n"
+        "  | 'INVENTORYLEFT' | 'INVENTORYRIGHT' | 'JUMP' | 'KILLIT' | 'LASTWEAPON' | 'LOADACTOR'\n"
+        "  | 'LOGO' | 'LOOKDOWN' | 'LOOKLEFT' | 'LOOKRIGHT' | 'LOOKUP' | 'MOVEBACKWARD' | 'MOVEFORWARD'\n"
+        "  | 'NEWGAME' | 'NEXTWEAPON' | 'POSTDAMAGESPRITE' | 'POSTWEAPONSHOOT' | 'PREGAME' | 'PRELEVEL'\n"
+        "  | 'PRESSEDFIRE' | 'PREVIOUSWEAPON' | 'PREWEAPONSHOOT' | 'PREWORLD' | 'PROCESSINPUT'\n"
+        "  | 'QUICKKICK' | 'RESETINVENTORY' | 'RESETPLAYER' | 'RESETWEAPONS' | 'RETURNTOCENTER'\n"
+        "  | 'SELECTWEAPON' | 'SETDEFAULTS' | 'SOARDOWN' | 'SOARUP' | 'SOUND' | 'SPAWN'\n"
+        "  | 'STRAFELEFT' | 'STRAFERIGHT' | 'SWIMDOWN' | 'SWIMUP' | 'TURNAROUND' | 'TURNLEFT'\n"
+        "  | 'TURNRIGHT' | 'USE' | 'USEJETPACK' | 'USEMEDKIT' | 'USENIGHTVISION' | 'USESTEROIDS'\n"
+        "  | 'WEAPKEY1' | 'WEAPKEY2' | 'WEAPKEY3' | 'WEAPKEY4' | 'WEAPKEY5' | 'WEAPKEY6'\n"
+        "  | 'WEAPKEY7' | 'WEAPKEY8' | 'WEAPKEY9' | 'WEAPKEY10' | 'WORLD';\n"
+        "declare type ConEventName = ConEventShortName | `EVENT_${ConEventShortName}`;\n"
+        "declare type VBLifecycleEventName = 'start' | 'shutdown' | 'frame' | 'playerDied';\n"
+        "declare type VBEventName = VBLifecycleEventName | 'actorSpawned' | 'chatMessage' | ConEventName;\n"
+        "declare type VBEventMap = {\n"
+        "  start: void; shutdown: void; frame: void; playerDied: void;\n"
+        "  actorSpawned: ActorEvent; chatMessage: ChatEvent;\n"
+        "} & { [K in ConEventName]: ConEvent };\n"
+        "declare interface VB {\n"
+        "  on<K extends VBEventName>(name: K, handler: (event: VBEventMap[K]) => void): void;\n"
+        "  /** Supports engine/plugin events that are not part of the built-in event list. */\n"
+        "  on(name: string, handler: (event?: unknown) => void): void;\n"
+        "  off<K extends VBEventName>(name?: K): void;\n"
+        "  off(name?: string): void;\n"
+        "  log(...args: unknown[]): void; drawText(id: number, x: number, y: number, text: string, pal?: number, shade?: number): void; clearText(id?: number): void; breakpoint(): void;\n"
+        "  spawn(tile: number, x?: number, y?: number, z?: number, owner?: number): number; sendMessage(text: string): void; player(): Player;\n"
+        "  getGamevar(name: string, sprite?: number, player?: number): ConValue; setGamevar(name: string, value: number, sprite?: number, player?: number): void;\n"
+        "  getActor(i: number, member: string, parm2?: number): ConValue; setActor(i: number, member: string, value: number, parm2?: number): void;\n"
+        "  getPlayer(i: number, member: string, parm2?: number): ConValue; setPlayer(i: number, member: string, value: number, parm2?: number): void;\n"
+        "  getInput(i: number, member: string): ConValue; setInput(i: number, member: string, value: number): void;\n"
+        "  getSector(i: number, member: string, parm2?: number): ConValue; setSector(i: number, member: string, value: number, parm2?: number): void; getWall(i: number, member: string, parm2?: number): ConValue; setWall(i: number, member: string, value: number, parm2?: number): void;\n"
+        "  getProjectile(i: number, member: string, parm2?: number): ConValue; setProjectile(i: number, member: string, value: number, parm2?: number): void; getActiveProjectile(i: number, member: string, parm2?: number): ConValue; setActiveProjectile(i: number, member: string, value: number, parm2?: number): void; getTileData(i: number, member: string, parm2?: number): ConValue; setTileData(i: number, member: string, value: number, parm2?: number): void;\n"
+        "  getUserdef(member: string, parm2?: number): ConValue; setUserdef(member: string, value: number, parm2?: number): void; define(name: string): ConValue;\n"
+        "  sound(num: number, sprite?: number): void; shoot(sprite: number, tile: number): number; addAmmo(player: number, weapon: number, amount: number): void; addWeapon(player: number, weapon: number, switchTo?: number): void; run(command: string): void;\n"
+        "}\n"
+        "declare interface FS { readFile(path: string): string; writeFile(path: string, data: string): void; appendFile(path: string, data: string): void; exists(path: string): boolean; }\n"
+        "declare interface CVar { run(command: string): void; set(name: string, value: unknown): void; }\n"
+        "declare const console: VBConsole; declare const vb: VB; declare const cvar: CVar;\n"
+        "declare function require(name: 'vb'): VB; declare function require(name: 'fs'): FS; declare function require(name: 'cvar'): CVar; declare function require(name: string): unknown;\n"
+        "declare module 'vb' { export type { ActorEvent, ChatEvent, ConEvent, ConEventName, ConEventShortName, ConValue, Player, VBEventMap, VBEventName, VBLifecycleEventName, VBConsole }; const api: VB; export default api; export const on: VB['on']; export const off: VB['off']; export const log: VB['log']; export const drawText: VB['drawText']; export const clearText: VB['clearText']; export const breakpoint: VB['breakpoint']; export const spawn: VB['spawn']; export const sendMessage: VB['sendMessage']; export const player: VB['player']; export const getGamevar: VB['getGamevar']; export const setGamevar: VB['setGamevar']; export const run: VB['run']; export const define: VB['define']; export const sound: VB['sound']; export const shoot: VB['shoot']; export const addAmmo: VB['addAmmo']; export const addWeapon: VB['addWeapon']; export const getActor: VB['getActor']; export const setActor: VB['setActor']; export const getPlayer: VB['getPlayer']; export const setPlayer: VB['setPlayer']; export const getInput: VB['getInput']; export const setInput: VB['setInput']; export const getSector: VB['getSector']; export const setSector: VB['setSector']; export const getWall: VB['getWall']; export const setWall: VB['setWall']; export const getProjectile: VB['getProjectile']; export const setProjectile: VB['setProjectile']; export const getActiveProjectile: VB['getActiveProjectile']; export const setActiveProjectile: VB['setActiveProjectile']; export const getTileData: VB['getTileData']; export const setTileData: VB['setTileData']; export const getUserdef: VB['getUserdef']; export const setUserdef: VB['setUserdef']; }\n"
+        "declare module 'fs' { const api: FS; export default api; export const readFile: FS['readFile']; export const writeFile: FS['writeFile']; export const appendFile: FS['appendFile']; export const exists: FS['exists']; }\n"
+        "declare module 'cvar' { const api: CVar; export default api; export const run: CVar['run']; export const set: CVar['set']; }\n";
+    snprintf(path, sizeof(path), "%s/package.json", project); if (vbjs_write_text(path, typescript ? packageTs : packageJs)) return -1;
+    snprintf(path, sizeof(path), "%s/%sconfig.json", project, typescript ? "ts" : "js");
+    if (vbjs_write_text(path, typescript ? tsconfig : jsconfig)) return -1;
+    snprintf(path, sizeof(path), "%s/index.%s", project, typescript ? "ts" : "js");
+    if (vbjs_write_text(path, typescript ? indexTs : indexJs)) return -1;
+    snprintf(path, sizeof(path), "%s/vb.d.ts", project); if (vbjs_write_text(path, types)) return -1;
+    fprintf(stdout, "Created JavaScript project: %s\n", project);
+    return 0;
+}
+
+// Scan <base>/autojs/<name>/index.{ts,js} — exactly one folder deep — and queue each
+// (full paths, since the game's CWD is elsewhere).
+static void vbjs_scan_autojs_in(const char *base)
+{
+    if (!base || !base[0]) return;
+    char adir[1024]; snprintf(adir, sizeof(adir), "%s/autojs", base);
+    DIR *d = opendir(adir);
+    if (!d) return;
+    struct dirent *e;
+    while ((e = readdir(d)) != nullptr)
+    {
+        if (e->d_name[0] == '.') continue;
+        char sub[1200]; snprintf(sub, sizeof(sub), "%s/%s", adir, e->d_name);
+        struct stat st;
+        if (stat(sub, &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+        char ts[1300], js[1300]; struct stat s2;
+        snprintf(ts, sizeof(ts), "%s/index.ts", sub);
+        snprintf(js, sizeof(js), "%s/index.js", sub);
+        if      (stat(ts, &s2) == 0) vbjs_add_script(ts);   // TypeScript preferred
+        else if (stat(js, &s2) == 0) vbjs_add_script(js);
+    }
+    closedir(d);
+}
+
+static void vbjs_scan_autojs(void)
+{
+    vbjs_scan_autojs_in(s_launchDir);   // the game's data/launch dir (holds autojs/)
+    char cwd[1024]; if (getcwd(cwd, sizeof(cwd)) && strcmp(cwd, s_launchDir)) vbjs_scan_autojs_in(cwd);
 }
 
 void VBJS_Init(void)
 {
-    if (s_scriptPath[0] == 0 || s_ctx) return;
+    if (s_ctx || s_initTried) return;
+    s_initTried = 1;
+
+    vbjs_scan_autojs();                 // add autojs/<name>/index.{ts,js}
+    if (s_scriptCount == 0) return;     // nothing to run
+
     s_rt = JS_NewRuntime();
     if (!s_rt) { vbjs_game::log("[js] failed to create runtime"); return; }
     s_ctx = JS_NewContext(s_rt);
@@ -646,17 +1013,25 @@ void VBJS_Init(void)
 
     vbjs_setup_context(s_ctx);
 
-    size_t len = 0; char *src = vbjs_read_file(s_scriptPath, &len);
-    if (!src) { vbjs_game::log("[js] could not read script"); return; }
+    for (int i = 0; i < s_scriptCount; i++)
+    {
+        const char *path = s_scripts[i].path;
+        // require() resolves relative to the script currently being loaded.
+        snprintf(s_scriptDir, sizeof(s_scriptDir), "%s", path);
+        char *slash = strrchr(s_scriptDir, '/');
+        if (slash) *slash = 0; else s_scriptDir[0] = 0;
 
-    // Run the main file as a module so import/export work.
-    JSValue r = JS_Eval(s_ctx, src, len, s_scriptPath, JS_EVAL_TYPE_MODULE);
-    free(src);
-    if (JS_IsException(r)) vbjs_dump_error(s_ctx);
-    JS_FreeValue(s_ctx, r);
+        size_t len = 0; char *src = vbjs_load_source(path, &len);
+        if (!src) { char m[1100]; snprintf(m, sizeof(m), "could not read %s", path); vbjs_game::log(m); continue; }
+
+        JSValue r = JS_Eval(s_ctx, src, len, path, JS_EVAL_TYPE_MODULE);   // module so import/export work
+        free(src);
+        if (JS_IsException(r)) vbjs_dump_error(s_ctx);
+        JS_FreeValue(s_ctx, r);
+        { char m[1100]; snprintf(m, sizeof(m), "loaded %s", path); vbjs_game::log(m); }
+    }
 
     s_enabled = 1;
-    { char m[1100]; snprintf(m, sizeof(m), "loaded %s", s_scriptPath); vbjs_game::log(m); }
     VBJS_FireSimple("start");
 }
 
@@ -666,6 +1041,7 @@ void VBJS_Shutdown(void)
     VBJS_FireSimple("shutdown");
     JS_FreeValue(s_ctx, s_events);
     JS_FreeValue(s_ctx, s_requireCache);
+    JS_FreeValue(s_ctx, s_devtoolsEvent); s_devtoolsEvent = JS_UNDEFINED;
     JS_FreeContext(s_ctx); JS_FreeRuntime(s_rt);
     s_ctx = nullptr; s_rt = nullptr; s_enabled = 0;
 }
@@ -674,10 +1050,11 @@ void VBJS_RunFrame(void)
 {
     if (!s_ctx)
     {
-        if (s_scriptPath[0] == 0) return;
+        if (s_initTried) return;
         VBJS_Init();          // lazy: first frame is a safe point (game/engine are up)
-        if (!s_ctx) { s_scriptPath[0] = 0; return; }   // init failed; don't retry every frame
+        if (!s_ctx) return;   // no scripts, or init failed; VBJS_Init set s_initTried so we won't retry
     }
+    if (s_devtoolsPaused) return;
     VBJS_FireSimple("frame");
     // pump promise jobs / microtasks
     JSContext *c;

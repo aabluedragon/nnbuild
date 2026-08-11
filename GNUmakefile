@@ -781,6 +781,7 @@ vibebuild32_game_objs := \
     sync.cpp \
     utils.cpp \
     vbjs.cpp \
+    vbjs_ts.cpp \
     vbjs_duke.cpp \
 
 vibebuild32_game_rsrc_objs :=

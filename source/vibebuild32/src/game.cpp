@@ -9151,6 +9151,11 @@ int Duke_app_main(int32_t argc, char const* const* argv)
     OSD_SetParameters(0, 0, 0, 12, 2, 12, OSD_ERROR, OSDTEXT_RED, OSDTEXT_DARKRED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
     registerosdcommands();
 
+    // Load autojs/<project>/index.{ts,js} as soon as its game and OSD bindings
+    // are ready. Waiting for the first render callback made auto-loaded mods
+    // appear only after the menu/game had already started.
+    VBJS_Init();
+
     if (CONTROL_Startup(controltype_keyboardandmouse, &GetTime, TICRATE))
     {
 #ifdef DISCORD_RPC

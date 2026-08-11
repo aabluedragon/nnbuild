@@ -3,12 +3,49 @@
 Run the game with a user script:
 
 ```
-vibebuild32 -game duke --js myscript.js
+vibebuild32 -gm duke -js myscript.js
 ```
 
 The script runs in an embedded [QuickJS-ng](https://github.com/quickjs-ng/quickjs)
 runtime (ES2023). It is loaded as an **ES module**, so `import`/`export` work, and
 a CommonJS-style `require()` and an `fs` module are also provided.
+
+Use `import { on, off, log } from 'vb'` for the event and logging helpers, or
+import the default `vb` object. `console.log()` is equivalent to `vb.log()`.
+
+VibeBuild32 options use `--long-name` for their full form and `-short-name` for
+their shorthand: for example `--grp`/`-g`, `--game`/`-gm`, and
+`--gen-ts`/`-gts`. Older one-dash full names remain accepted for compatibility.
+
+## Auto-loaded projects and TypeScript
+
+On startup VibeBuild32 scans the launch directory's `autojs/` folder. It loads
+only `autojs/<project>/index.ts` or `autojs/<project>/index.js` (TypeScript wins
+when both exist), so loose files directly in `autojs/` are intentionally ignored.
+TypeScript is transpiled in-process; it does not require Node.js at game runtime.
+
+Create a ready-to-open project with either spelling below:
+
+```
+vibebuild32 -gjs my-mod          # JavaScript: index.js + jsconfig.json
+vibebuild32 -gjs                 # JavaScript with the next unused name, e.g. mod-1
+vibebuild32 -gts my-mod          # TypeScript: index.ts + tsconfig.json
+vibebuild32 -gts
+```
+
+The generated project includes `index.js` or `index.ts`, `vb.d.ts`, a matching
+`jsconfig.json` or `tsconfig.json`, and `package.json`. `index.ts` (or `index.js`)
+is the only auto-loaded entry point.
+Open that project folder in VS Code for completion and static
+errors for every built-in `vb`, `fs`, and `cvar` API. `npm install` is optional and
+only needed for the generated `npm run check` editor/type-check command.
+
+`--devtools` (or `-dt`) forces windowed mode and opens a lightweight docked
+DevTools panel on the right of the game. It has console logs, expression
+evaluation (`$event` is the last listener argument), event breakpoints, and a
+global-scope inspector. For a precise source breakpoint, add `vb.breakpoint()` at
+the line you want to stop at, then inspect expressions and press Resume. The
+regular in-game OSD remains available with F12.
 
 ## Modules
 
@@ -37,6 +74,19 @@ return value, use the RETURN gamevar: `vb.getGamevar('RETURN', e.sprite, e.playe
 / `vb.setGamevar('RETURN', v, e.sprite, e.player)`. The `EVENT_` prefix is
 optional (`vb.on('SPAWN', …)` also works).
 
+Generated projects declare every supported `EVENT_*` value (and its prefix-free
+form) in `vb.d.ts`. VS Code therefore completes event names and narrows the
+callback payload automatically: `actorSpawned` gets `{ sprite, owner, tile }`,
+`chatMessage` gets `{ player, text }`, every CON event gets `{ sprite, player,
+dist }`, and lifecycle events (`start`, `frame`, `shutdown`, `playerDied`) have
+no payload.
+
+The generated declaration is the complete contract for the embedded runtime:
+the global `vb`, `cvar`, `console`, typed `require()`, and the `vb`, `fs`, and
+`cvar` ES modules. Lookups such as `vb.getGamevar()`, `vb.define()`, and the
+`getActor`/`getPlayer` family are correctly typed as `number | undefined`, since
+the engine returns `undefined` for an unknown gamevar, define, or CON member.
+
 ## `vb` — the game API (also available as the global `vb`)
 
 Events — `vb.on(name, handler)` / `vb.off(name)`:
@@ -57,7 +107,7 @@ vb.log(...args)                      // -> game console + log file
 vb.drawText(id, x, y, text, pal=0, shade=0)  // HUD text at (0..320, 0..200); reuse id to update
 vb.clearText(id)                     // remove one (or all if no id)
 vb.spawn(tile, x=0, y=0, z=0, owner=-1) // -> spriteNum (x/y/z=0 spawns at the player)
-vb.sendMessage(text)                 // show a message line (broadcast: WIP)
+vb.sendMessage(text)                 // send a multiplayer chat message (also shown locally)
 vb.getGamevar(name, sprite=-1, player=-1) // read any CON gamevar
 vb.setGamevar(name, value, sprite=-1, player=-1) // write any CON gamevar
 vb.player()                          // -> { sprite, x, y, z }

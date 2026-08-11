@@ -7,14 +7,14 @@
 // own arg parser (they use different frameworks) just detects a token and forwards
 // it here via VB_NetArg(); the action lives in one place.
 //
-//   -advertise <master>   host a listen server and register it with a masterserver
-//   -lobbylist <master>   print the servers a masterserver is advertising
-//   -joinlobby <master>   query a masterserver and join the first advertised server
-//   -netfile  <path>      (host) offer this file to joiners (mod grp / user map)
-//   -nplayers <N>         players to wait for before a dedicated server auto-starts (default 2)
-//   -wait                 dedicated server: DON'T auto-start; hold in the lobby for players
-//   -startnow             force auto-start even on a windowed -server (dedicated already does)
-//   -headless|-dedicated|-console   run a windowless dedicated server (auto-starts by default)
+//   --advertise/-ad <master>  host a listen server and register it with a masterserver
+//   --lobbylist/-ll <master>  print the servers a masterserver is advertising
+//   --joinlobby/-jl <master>  query a masterserver and join the first advertised server
+//   --netfile/-nf <path>      (host) offer this file to joiners (mod grp / user map)
+//   --nplayers/-np <N>        players to wait for before a dedicated server auto-starts (default 2)
+//   --wait/-w                 dedicated server: DON'T auto-start; hold in the lobby for players
+//   --startnow/-sn            force auto-start even on a windowed -server (dedicated already does)
+//   --headless/-hl or --dedicated/-dd   run a windowless dedicated server (auto-starts by default)
 //
 // A game passes NULL for any hook/var it does not support; that flag is still
 // accepted (and consumed) but does nothing, so command lines stay portable.
@@ -25,14 +25,16 @@
 // documented in exactly one place.
 #define VB_NETARGS_HELP \
 "\nMultiplayer (VibeBuild32):\n" \
-"  --advertise <master>      host a server and register it with a masterserver\n" \
-"  --lobbylist <master>      list the servers a masterserver is advertising\n" \
-"  --joinlobby <master>      join the first server a masterserver is advertising\n" \
-"  --netfile <path>          (host) offer a mod/map file to joiners\n" \
-"  --headless / --dedicated  run a windowless dedicated server (auto-starts by default)\n" \
-"  --nplayers <N>            players to wait for before a dedicated server auto-starts (default 2)\n" \
-"  --wait                    dedicated: hold in the lobby instead of auto-starting\n" \
-"  (options also accept --flag=value and the legacy single-dash form)\n"
+"  --advertise / -ad <master>    host a server and register it with a masterserver\n" \
+"  --lobbylist / -ll <master>    list the servers a masterserver is advertising\n" \
+"  --joinlobby / -jl <master>    join the first server a masterserver is advertising\n" \
+"  --netfile / -nf <path>        (host) offer a mod/map file to joiners\n" \
+"  --headless / -hl              run a windowless dedicated server (auto-starts by default)\n" \
+"  --dedicated / -dd             run a windowless dedicated server (auto-starts by default)\n" \
+"  --nplayers / -np <N>          players to wait for before a dedicated server auto-starts (default 2)\n" \
+"  --startnow / -sn              auto-start with present players\n" \
+"  --wait / -w                   dedicated: hold in the lobby instead of auto-starting\n" \
+"  (options also accept --flag=value; old -long-name spellings remain compatible)\n"
 
 struct vb_netarg_ctx
 {
@@ -51,7 +53,8 @@ struct vb_netarg_ctx
 };
 
 // <arg> is an argv token that may carry its leading dashes and a "=value" suffix
-// (modern forms: --flag, --flag=value, and legacy -flag / -flag value). <next> is the
+// (canonical forms: --long-name, --long-name=value, -short-name; old -long-name
+// spellings remain accepted). <next> is the
 // following argv token (or NULL). Returns argv tokens consumed:
 //   0 = <arg> is not a VibeBuild32 net flag (the caller handles it),
 //   1 = handled with no separate value (value-less flag, or an inline --flag=value),
@@ -76,7 +79,7 @@ static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *arg, const char
     const char *const val = inlineVal ? inlineVal : next;
     int const valConsumed = inlineVal ? 1 : 2;
 
-    if (!Bstrcasecmp(flag, "advertise"))
+    if (!Bstrcasecmp(flag, "advertise") || !Bstrcasecmp(flag, "ad"))
     {
         if (!val) return 1;
         if (cx->networkMode) *cx->networkMode = cx->serverMode;
@@ -85,13 +88,13 @@ static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *arg, const char
         if (cx->setAdvertise) cx->setAdvertise(val);
         return valConsumed;
     }
-    if (!Bstrcasecmp(flag, "lobbylist"))
+    if (!Bstrcasecmp(flag, "lobbylist") || !Bstrcasecmp(flag, "ll"))
     {
         if (!val) return 1;
         if (cx->queryLobby) cx->queryLobby(val);
         return valConsumed;
     }
-    if (!Bstrcasecmp(flag, "joinlobby"))
+    if (!Bstrcasecmp(flag, "joinlobby") || !Bstrcasecmp(flag, "jl"))
     {
         if (!val) return 1;
         if (cx->noSetup) *cx->noSetup = 1;
@@ -99,13 +102,13 @@ static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *arg, const char
         if (cx->joinLobby) cx->joinLobby(val);
         return valConsumed;
     }
-    if (!Bstrcasecmp(flag, "netfile"))
+    if (!Bstrcasecmp(flag, "netfile") || !Bstrcasecmp(flag, "nf"))
     {
         if (!val) return 1;
         if (cx->addNetFile) cx->addNetFile(val);
         return valConsumed;
     }
-    if (!Bstrcasecmp(flag, "nplayers"))
+    if (!Bstrcasecmp(flag, "nplayers") || !Bstrcasecmp(flag, "np"))
     {
         if (!val) return 1;
         if (cx->startNowPlayers)
@@ -116,17 +119,18 @@ static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *arg, const char
         }
         return valConsumed;
     }
-    if (!Bstrcasecmp(flag, "startnow"))
+    if (!Bstrcasecmp(flag, "startnow") || !Bstrcasecmp(flag, "sn"))
     {
         if (cx->startNow) *cx->startNow = 1;
         return 1;
     }
-    if (!Bstrcasecmp(flag, "wait"))   // hold a dedicated server in the lobby instead of auto-starting
+    if (!Bstrcasecmp(flag, "wait") || !Bstrcasecmp(flag, "w"))   // hold a dedicated server in the lobby instead of auto-starting
     {
         if (cx->wait) *cx->wait = 1;
         return 1;
     }
-    if (!Bstrcasecmp(flag, "headless") || !Bstrcasecmp(flag, "dedicated") || !Bstrcasecmp(flag, "console"))
+    if (!Bstrcasecmp(flag, "headless") || !Bstrcasecmp(flag, "hl") ||
+        !Bstrcasecmp(flag, "dedicated") || !Bstrcasecmp(flag, "dd") || !Bstrcasecmp(flag, "console"))
     {
         // the engine's early argv scan already set g_forceHeadless; here we just make
         // it a dedicated server and skip the interactive setup/logo.

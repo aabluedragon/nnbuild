@@ -24,7 +24,18 @@ enum {
 
 // -js handling / lifecycle.
 int  VBJS_IsEnabled(void);                 // a script was requested and the runtime is up
+void VBJS_CaptureLaunchDir(void);          // record the launch cwd early (before the game chdir's); holds autojs/
 void VBJS_SetScriptPath(const char *path); // remember the -js argument (before init)
+int  VBJS_GenerateProject(const char *name, int typescript); // create autojs/<name>/ JS or TS starter; 0 on success
+void VBJS_SetDevtools(int enabled);         // enable the lightweight JavaScript diagnostics overlay
+int  VBJS_DevtoolsEnabled(void);
+const char *VBJS_DevtoolsLog(int index);    // oldest-first recent console log, or NULL
+int  VBJS_DevtoolsPaused(void);
+void VBJS_DevtoolsResume(void);
+void VBJS_DevtoolsSetEventBreakpoint(const char *event, int enabled);
+int  VBJS_DevtoolsHasEventBreakpoint(const char *event);
+const char *VBJS_DevtoolsCurrentEvent(void);
+int  VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize);
 void VBJS_Init(void);                      // build the runtime and run the script (once, after game init)
 void VBJS_Shutdown(void);                  // tear the runtime down
 void VBJS_RunFrame(void);                  // per-frame: fire "frame", pump pending JS jobs/timers

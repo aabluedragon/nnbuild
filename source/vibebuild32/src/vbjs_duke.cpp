@@ -9,8 +9,14 @@
 #include "gamedef.h"
 #include "gamestructures.h"
 #include "global.h"
+#include "oldnet.h"
+#include "chatpipe.h"
 #include "osd.h"
 #include "vbjs.h"
+
+#if SDL_MAJOR_VERSION >= 2 && defined(USE_OPENGL)
+# include "imgui.h"
+#endif
 
 extern hashtable_t h_gamevars;   // gamevars.cpp
 extern hashtable_t h_labels;     // gamedef.cpp (CON defines/constants)
@@ -55,9 +61,33 @@ int spawn(int tile, int x, int y, int z, int owner)
 
 void sendChat(const char *text)
 {
-    // v1: show the message locally (user-quote line). Networked broadcast is a
-    // later addition once a clean single-call send path is exposed.
-    if (text) G_AddUserQuote(text);
+    if (!text || !text[0]) return;
+
+    // Match the game's normal "send to all" path: format the player name,
+    // deliver it locally, write to the optional chat pipe, and route it through
+    // the master so every connected player receives the same packet.
+    char message[MAXUSERQUOTELEN];
+    char packet[MAXUSERQUOTELEN + 2];
+    Bsnprintf(message, sizeof(message), "%s^07: %s", g_player[myconnectindex].user_name, text);
+    packet[0] = PACKET_TYPE_MESSAGE;
+    packet[1] = 255;  // all players
+    Bstrncpyz(packet + 2, message, sizeof(packet) - 2);
+
+    G_AddUserQuote(message);
+    ChatPipe_SendMessage(text);
+
+    if (ud.multimode > 1)
+    {
+        int player;
+        int const length = (int)Bstrlen(packet + 2) + 2;
+        TRAVERSE_CONNECT(player)
+        {
+            if (player != myconnectindex)
+                mmulti_sendpacket(player, (unsigned char *)packet, length);
+            // In master/slave mode, clients send only to the master; it relays.
+            if (myconnectindex != connecthead) break;
+        }
+    }
 }
 
 int getGamevar(const char *name, int spriteNum, int playerNum, int *ok)
@@ -221,4 +251,78 @@ extern "C" void VBJS_DrawHUD(void)
         if (t[i].used)
             G_PrintGameText(0, STARTALPHANUM, t[i].x, t[i].y, t[i].str, t[i].shade, t[i].pal,
                             8 + 16, 0, 0, xdim - 1, ydim - 1, 65536);
+
+#if SDL_MAJOR_VERSION >= 2 && defined(USE_OPENGL)
+    if (VBJS_DevtoolsEnabled())
+    {
+        static char expression[256] = "$event";
+        static char result[1024] = "";
+        static const char *events[] = { "start", "frame", "playerDied", "actorSpawned", "chatMessage", "shutdown" };
+
+        engineBeginImGuiFrame();
+        ImGui::SetNextWindowPos(ImVec2((float)xdim - 410.f, 8.f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(402.f, (float)ydim - 16.f), ImGuiCond_Always);
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+        ImGui::Begin("VibeBuild32 JavaScript DevTools", nullptr, flags);
+
+        if (VBJS_DevtoolsPaused())
+        {
+            ImGui::TextColored(ImVec4(1.f, .75f, .1f, 1.f), "PAUSED at %s", VBJS_DevtoolsCurrentEvent() ? VBJS_DevtoolsCurrentEvent() : "breakpoint");
+            ImGui::SameLine();
+            if (ImGui::Button("Resume")) VBJS_DevtoolsResume();
+        }
+        else ImGui::TextDisabled("Running");
+
+        if (ImGui::BeginTabBar("js-devtools-tabs"))
+        {
+            if (ImGui::BeginTabItem("Console"))
+            {
+                ImGui::BeginChild("console-log", ImVec2(0, -36), ImGuiChildFlags_Borders);
+                for (int i = 0; i < 12; ++i)
+                {
+                    const char *line = VBJS_DevtoolsLog(i);
+                    if (line) ImGui::TextWrapped("%s", line);
+                }
+                ImGui::EndChild();
+                if (ImGui::InputText("Evaluate", expression, sizeof(expression), ImGuiInputTextFlags_EnterReturnsTrue))
+                    VBJS_DevtoolsEvaluate(expression, result, sizeof(result));
+                if (ImGui::Button("Run")) VBJS_DevtoolsEvaluate(expression, result, sizeof(result));
+                ImGui::SameLine(); ImGui::TextWrapped("%s", result);
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Breakpoints"))
+            {
+                ImGui::TextUnformatted("Event breakpoints pause after a listener runs.");
+                ImGui::TextDisabled("Use vb.breakpoint() for an exact source-line pause.");
+                for (auto event : events)
+                {
+                    bool enabled = VBJS_DevtoolsHasEventBreakpoint(event) != 0;
+                    if (ImGui::Checkbox(event, &enabled)) VBJS_DevtoolsSetEventBreakpoint(event, enabled);
+                }
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Scope"))
+            {
+                ImGui::TextUnformatted("Evaluate global expressions or inspect the last event.");
+                ImGui::BulletText("$event: %s", VBJS_DevtoolsCurrentEvent() ? VBJS_DevtoolsCurrentEvent() : "none");
+                ImGui::BulletText("Examples: vb.player(), globalThis.myValue");
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
+        ImGui::End();
+    }
+#else
+    // Software-renderer fallback: retain a small read-only console panel.
+    if (VBJS_DevtoolsEnabled())
+    {
+        G_PrintGameText(0, STARTALPHANUM, 218, 4, "JS DEVTOOLS", 0, 14, 8 + 16, 0, 0, xdim - 1, ydim - 1, 65536);
+        G_PrintGameText(0, STARTALPHANUM, 218, 12, "Console (F12 opens OSD)", 0, 8, 8 + 16, 0, 0, xdim - 1, ydim - 1, 65536);
+        for (int i = 0; i < 12; ++i)
+        {
+            const char *line = VBJS_DevtoolsLog(i);
+            if (line) G_PrintGameText(0, STARTALPHANUM, 218, 22 + i * 8, line, 0, 7, 8 + 16, 0, 0, xdim - 1, ydim - 1, 65536);
+        }
+    }
+#endif
 }

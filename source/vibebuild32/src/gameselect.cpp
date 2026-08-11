@@ -7,8 +7,8 @@
 // canonical names here route to the active game.
 //
 // Selection (per spec):
-//   -game <sw|duke>   pick a game explicitly
-//   -nogamemenu       bypass the picker (use -game, else the single available
+//   --game/-gm <sw|duke>  pick a game explicitly
+//   --no-game-menu/-ngm  bypass the picker (use --game, else the single available
 //                     game, else Duke)
 // The GRP is looked for both in the working directory and in a per-game subdir
 // (duke3d/DUKE3D.GRP, sw/Sw.grp); the chosen game switches into that folder.
@@ -18,7 +18,9 @@
 
 #include "compat.h"
 #include "baselayer.h"
+#include "vbjs.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef _WIN32
 # include <direct.h>
@@ -59,6 +61,28 @@ static int gs_fileExists(const char *path)
     if (!f) return 0;
     fclose(f);
     return 1;
+}
+
+// VibeBuild32's public spelling is --long-name or -short-name.  Keep the old
+// one-dash words as compatibility aliases so existing launch scripts do not
+// break while the help and docs consistently advertise the new form.
+static int gs_option(const char *arg, const char *longName, const char *shortName,
+                     const char *legacyName, const char **inlineValue)
+{
+    const char *const names[] = { longName, shortName, legacyName };
+    if (inlineValue) *inlineValue = NULL;
+    for (auto const name : names)
+    {
+        if (!name) continue;
+        size_t const n = Bstrlen(name);
+        if (!Bstrcasecmp(arg, name)) return 1;
+        if (inlineValue && !Bstrncasecmp(arg, name, n) && arg[n] == '=')
+        {
+            *inlineValue = arg + n + 1;
+            return 1;
+        }
+    }
+    return 0;
 }
 
 // Look for `grp` in the working dir, then in `subdir/`. On success writes the
@@ -124,8 +148,14 @@ static void gs_choose(int argc, char const * const * argv)
     int bypass = 0;
     for (int i = 1; i < argc; i++)
     {
-        if (!Bstrcasecmp(argv[i], "-game") && i + 1 < argc) want = argv[i + 1];
-        else if (!Bstrcasecmp(argv[i], "-nogamemenu")) bypass = 1;
+        const char *inlineValue = NULL;
+        if (gs_option(argv[i], "--game", "-gm", "-game", &inlineValue))
+        {
+            if (inlineValue) want = inlineValue;
+            else if (i + 1 < argc) want = argv[++i];
+        }
+        else if (gs_option(argv[i], "--no-game-menu", "-ngm", "-nogamemenu", NULL))
+            bypass = 1;
     }
 
     char dukeDir[BMAX_PATH] = "", swDir[BMAX_PATH] = "", bloodDir[BMAX_PATH] = "", rrDir[BMAX_PATH] = "";
@@ -178,8 +208,9 @@ static void gs_choose(int argc, char const * const * argv)
     LOG_F(INFO, "Game selector: launching %s", name);
 }
 
-// Build a copy of argv with the selector's own options (-game <name>,
-// -nogamemenu) removed, so the chosen game's parser never sees them. Also splits the
+// Build a copy of argv with the selector's own options (--game/-gm <name>,
+// --no-game-menu/-ngm, and --js/-js <file>) removed, so the chosen game's parser
+// never sees them. Also splits the
 // modern "--name=value" form into two tokens ("--name", "value") so every game's
 // option parser (which reads the value as the following token) accepts it uniformly.
 static char const **gs_filterArgv(int argc, char const * const * argv, int *outArgc)
@@ -190,8 +221,19 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
     int haveGameGrp = 0;
     for (int i = 0; i < argc; i++)
     {
-        if (!Bstrcasecmp(argv[i], "-game")) { i++; continue; }   // skip flag + its value
-        if (!Bstrcasecmp(argv[i], "-nogamemenu")) continue;
+        const char *inlineValue = NULL;
+        if (gs_option(argv[i], "--game", "-gm", "-game", &inlineValue))
+        {
+            if (!inlineValue) i++;  // skip flag + its separate value
+            continue;
+        }
+        if (gs_option(argv[i], "--no-game-menu", "-ngm", "-nogamemenu", NULL)) continue;
+        inlineValue = NULL;
+        if (gs_option(argv[i], "--js", "-js", NULL, &inlineValue))
+        {
+            if (!inlineValue) i++;  // the script path was already captured by app_main
+            continue;
+        }
         if (!Bstrcasecmp(argv[i], "-gamegrp")) haveGameGrp = 1;
 
         // Modern args: split an option token's "=value" off into its own token.
@@ -222,6 +264,46 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
 // --- the engine entry point --------------------------------------------------
 int app_main(int32_t argc, char const * const * argv)
 {
+    VBJS_CaptureLaunchDir();   // VibeBuild32: record the launch dir now (before any chdir) for autojs/
+
+    // Parse launcher-owned script arguments before Duke's legacy parser. In
+    // particular, the legacy -net option treats later tokens as network data;
+    // a VibeBuild option must work in any position instead of being swallowed.
+    for (int i = 1; i < argc; ++i)
+    {
+        const char *inlineValue = NULL;
+        if (!gs_option(argv[i], "--js", "-js", NULL, &inlineValue)) continue;
+        const char *path = inlineValue;
+        if (!path && i + 1 < argc) path = argv[++i];
+        if (path && path[0]) VBJS_SetScriptPath(path);
+    }
+
+    // This is a launcher command, not a Duke-only gameplay option: generate a
+    // project before choosing a game, then exit without opening a game window.
+    for (int i = 1; i < argc; ++i)
+    {
+        const char *arg = argv[i];
+        const char *name = nullptr;
+        int typescript = 0;
+        if (!Bstrncasecmp(arg, "--gen-js=", 9) || !Bstrncasecmp(arg, "-gjs=", 5))
+            name = strchr(arg, '=') + 1;
+        else if (!Bstrcasecmp(arg, "--gen-js") || !Bstrcasecmp(arg, "-gjs"))
+            name = (i + 1 < argc && argv[i + 1][0] != '-') ? argv[++i] : nullptr;
+        else if (!Bstrncasecmp(arg, "--gen-ts=", 9) || !Bstrncasecmp(arg, "-gts=", 5))
+            typescript = 1, name = strchr(arg, '=') + 1;
+        else if (!Bstrcasecmp(arg, "--gen-ts") || !Bstrcasecmp(arg, "-gts"))
+            typescript = 1, name = (i + 1 < argc && argv[i + 1][0] != '-') ? argv[++i] : nullptr;
+        else continue;
+
+        if (name && !name[0]) name = nullptr;
+        if (VBJS_GenerateProject(name, typescript) != 0)
+        {
+            fprintf(stderr, "Could not create JavaScript project.\n");
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
+    }
+
     gs_choose(argc, argv);
 
     int fargc = 0;

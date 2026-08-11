@@ -59,9 +59,17 @@ static void G_ShowParameterHelp(void)
         "-cfg [file.cfg]\tUse an alternate configuration file\n"
         "-c#\t\tUse MP mode #, 1 = Dukematch, 2 = Coop, 3 = Team Dukematch\n"
         "-d[file.dmo]\tPlay a demo\n"
-        "-g[file.grp]\tUse an extra group file\n"
+        "-g, --grp [file.grp]\tUse an extra group file\n"
         "-h[file.def]\tUse an alternate def\n"
         "-j[dir]\t\tAdds a directory to EDuke32's search list\n"
+        "-gm, --game <name>\tChoose Duke, SW, Blood, or RR\n"
+        "-gjs, --gen-js [name]\tCreate autojs/<name>/ JavaScript mod starter and exit\n"
+        "-gts, --gen-ts [name]\tCreate autojs/<name>/ TypeScript mod starter and exit\n"
+        "-js, --js [file.js]\tLoad a JavaScript user script\n"
+        "-dt, --devtools\tEnable JavaScript diagnostics and force windowed mode\n"
+        "-e, --enemies <n>\tSet enemies: 0 disables them; 1+ selects skill\n"
+        "-r, --record\t\tRecord a demo\n"
+        "-pb, --playback [file]\tPlay a demo\n"
         "-l#\t\tWarp to level #, see -v\n"
         "-map [file.map]\tLoads a map\n"
         "-m\t\tDisable monsters\n"
@@ -72,16 +80,16 @@ static void G_ShowParameterHelp(void)
         "-net /n0:3\tHost 3-player match in master/slave mode.\n"
         "-net /n0 192.168.0.1\tJoin specified IP in master/slave mode.\n"
         "\n"
-        "-async\t\tHost: server-authoritative netplay - never stall on a slow\n"
+        "-as, --async\tHost: server-authoritative netplay - never stall on a slow\n"
         "\t\tclient (their own input gets more latency instead). Default\n"
         "\t\tis lockstep (equal lag for all).\n"
-        "-latejoin\tHost: start with open slots that players may join mid-game.\n"
-        "-startnow\tHost: begin immediately with whoever is present (even alone);\n"
-        "\t\tremaining slots stay open to join anytime. Implies -latejoin.\n"
-        "-dedicated\tHost: read admin commands from stdin (kick/ban/etc).\n"
+        "-lj, --latejoin\tHost: start with open slots that players may join mid-game.\n"
+        "-sn, --startnow\tHost: begin immediately with whoever is present (even alone);\n"
+        "\t\tremaining slots stay open to join anytime. Implies --latejoin.\n"
+        "-dd, --dedicated\tHost: read admin commands from stdin (kick/ban/etc).\n"
         "\t\tConsole commands: kick, ban, unban, listban, listplayers.\n"
-        "-headless\tHost: dedicated server with no window, graphics or sound -\n"
-        "\t\tterminal only. Implies -dedicated. (alias: -console)\n"
+        "-hl, --headless\tHost: dedicated server with no window, graphics or sound -\n"
+        "\t\tterminal only. Implies --dedicated. (legacy alias: -console)\n"
         "\n"
         "-noffire\t\tDisable friendly fire\n"
         "-rts [file.rts]\tLoad a custom Remote Ridicule sound bank\n"
@@ -203,6 +211,11 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     if (argc > i + 1)
                     {
                         G_AddGroup(argv[i + 1]);
+                        // A caller that supplied its own game data is explicitly
+                        // asking to launch, not to wait in the platform setup UI.
+                        // This is especially important on macOS, where that window
+                        // may be behind the terminal that launched the game.
+                        g_noSetup = 1;
                         i++;
                     }
                     i++;
@@ -219,7 +232,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                // VibeBuild32: --js <file.js> loads a QuickJS user script.
+                // VibeBuild32: --js/-js <file.js> loads a QuickJS user script.
                 if (!Bstrcasecmp(c + 1, "js"))
                 {
                     if (argc > i + 1)
@@ -231,8 +244,30 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                // VibeBuild32 canonical cross-game flag: --enemies <n> (0 = no enemies, 1+ = skill).
-                if (!Bstrcasecmp(c + 1, "enemies") || !Bstrcasecmp(c + 1, "-enemies"))
+                // Create an editor-ready TypeScript project.  The value is optional:
+                // without it VBJS chooses a short unused directory name.
+                if (!Bstrcasecmp(c + 1, "gen-js") || !Bstrcasecmp(c + 1, "gjs") ||
+                    !Bstrcasecmp(c + 1, "gen-ts") || !Bstrcasecmp(c + 1, "gts"))
+                {
+                    int const typescript = !Bstrcasecmp(c + 1, "gen-ts") || !Bstrcasecmp(c + 1, "gts");
+                    const char *name = (i + 1 < argc && argv[i + 1][0] != '-') ? argv[++i] : NULL;
+                    if (VBJS_GenerateProject(name, typescript) != 0)
+                    {
+                        LOG_F(ERROR, "Could not create JavaScript project.");
+                        Bexit(EXIT_FAILURE);
+                    }
+                    Bexit(EXIT_SUCCESS);
+                }
+                if (!Bstrcasecmp(c + 1, "devtools") || !Bstrcasecmp(c + 1, "dt"))
+                {
+                    VBJS_SetDevtools(1);
+                    ud.config.ScreenMode = 0; // Devtools is a side overlay: never start fullscreen.
+                    LOG_F(INFO, "JavaScript devtools enabled (windowed mode).");
+                    i++;
+                    continue;
+                }
+                // VibeBuild32 canonical cross-game flag: --enemies/-e <n> (0 = no enemies, 1+ = skill).
+                if (!Bstrcasecmp(c + 1, "enemies") || !Bstrcasecmp(c + 1, "-enemies") || !Bstrcasecmp(c + 1, "e"))
                 {
                     int const n = (argc > i + 1) ? atoi(argv[i + 1]) : 0;   // 1-based
                     if (n <= 0)
@@ -250,7 +285,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                // VibeBuild32 canonical demo flags: --record / --playback [file] (cross-game).
+                // VibeBuild32 canonical demo flags: --record/-r and --playback/-pb [file] (cross-game).
                 if (!Bstrcasecmp(c + 1, "record") || !Bstrcasecmp(c + 1, "-record"))
                 {
                     ud.m_recstat = 1;
@@ -258,7 +293,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "playback") || !Bstrcasecmp(c + 1, "-playback"))
+                if (!Bstrcasecmp(c + 1, "playback") || !Bstrcasecmp(c + 1, "-playback") || !Bstrcasecmp(c + 1, "pb"))
                 {
                     if (argc > i + 1 && argv[i + 1][0] != '-')
                     {
@@ -485,7 +520,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "latejoin"))
+                if (!Bstrcasecmp(c + 1, "latejoin") || !Bstrcasecmp(c + 1, "lj"))
                 {
                     // Host: start once at least one other player is present
                     // and let the remaining slots join mid-game.
@@ -494,7 +529,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "startnow") || !Bstrcasecmp(c + 1, "nowait"))
+                if (!Bstrcasecmp(c + 1, "startnow") || !Bstrcasecmp(c + 1, "sn") || !Bstrcasecmp(c + 1, "nowait"))
                 {
                     // Host: begin the match immediately with whoever is present
                     // (even just the host alone) instead of waiting for the
@@ -507,7 +542,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "async"))
+                if (!Bstrcasecmp(c + 1, "async") || !Bstrcasecmp(c + 1, "as"))
                 {
                     // Host: server-authoritative netplay - the master never
                     // blocks on slow clients (vs lockstep's equal-lag model).
@@ -523,7 +558,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "dedicated"))
+                if (!Bstrcasecmp(c + 1, "dedicated") || !Bstrcasecmp(c + 1, "dd"))
                 {
                     // Host: read admin commands from stdin, log to stdout. The
                     // operator has no view and no speakers, so run fully headless
@@ -539,7 +574,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "advertise"))
+                if (!Bstrcasecmp(c + 1, "advertise") || !Bstrcasecmp(c + 1, "ad"))
                 {
                     // Host: publish this server to a masterserver so it shows up
                     // in the in-game lobby. Next arg is the masterserver
@@ -552,7 +587,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "punchtarget"))
+                if (!Bstrcasecmp(c + 1, "punchtarget") || !Bstrcasecmp(c + 1, "pt"))
                 {
                     // Client: the "host:port" this client is joining, so the
                     // connection loop can request a masterserver NAT hole-punch
@@ -566,7 +601,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "masteraddr"))
+                if (!Bstrcasecmp(c + 1, "masteraddr") || !Bstrcasecmp(c + 1, "ma"))
                 {
                     // Client: the masterserver address the lobby used, carried
                     // across the join relaunch so the connecting client contacts
@@ -579,7 +614,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "joinerror"))
+                if (!Bstrcasecmp(c + 1, "joinerror") || !Bstrcasecmp(c + 1, "je"))
                 {
                     // Client: a message describing why the previous join failed,
                     // shown once in the JOIN GAME menu after relaunching there.
@@ -591,7 +626,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "headless") || !Bstrcasecmp(c + 1, "console"))
+                if (!Bstrcasecmp(c + 1, "headless") || !Bstrcasecmp(c + 1, "hl") || !Bstrcasecmp(c + 1, "console"))
                 {
                     // Dedicated console server with no graphics at all: no
                     // window, no OpenGL, no sound - just the terminal. Implies
