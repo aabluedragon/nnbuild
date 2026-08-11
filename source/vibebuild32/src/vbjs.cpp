@@ -35,6 +35,7 @@ extern "C" {
 #include "quickjs-debugger.h"
 }
 #include "vbjs.h"
+#include "baselayer.h"
 
 // ---- Duke game hooks (implemented at the bottom, kept together for porting) ----
 namespace vbjs_game {
@@ -90,6 +91,7 @@ static int   s_startWaitFrames = 0;
 static int   s_scriptsLoaded = 0;
 static int   s_gameStartedPending = 0;
 static int   s_gameSessionActive = 0;
+static int   s_fatalScriptError = 0;
 struct vbjs_fs_callback_t { JSValue callback, value; int error, existsStyle; };
 static std::vector<vbjs_fs_callback_t> s_fsCallbacks;
 
@@ -292,25 +294,44 @@ static void vbjs_resolve(const char *name, char *out, size_t outsz)
         snprintf(out, outsz, "%s/%s", s_scriptDir, name);
 }
 
+[[noreturn]] static void vbjs_fatal_error(const char *context, const char *message, const char *stack = nullptr)
+{
+    char summary[8192];
+    snprintf(summary, sizeof(summary), "%s%s%s", context ? context : "JavaScript error", context ? ": " : "", message ? message : "(unknown JavaScript error)");
+    vbjs_game::log(summary);
+    vbjs_devtools_log(summary);
+    if (stack && stack[0]) { vbjs_game::log(stack); vbjs_devtools_log(stack); }
+
+    // Native message boxes on macOS provide selectable/copyable message text.
+    // Show this before ending the process: errors otherwise vanish into the
+    // engine log, especially for a TypeScript parse failure during startup.
+    if (!s_fatalScriptError++)
+    {
+        char detail[12000];
+        snprintf(detail, sizeof(detail), "%s%s%s\n\nThe full text has been copied to the clipboard and written to the VibeBuild32 log. The game will close after this dialog is dismissed.", summary,
+                 stack && stack[0] ? "\n\n" : "", stack && stack[0] ? stack : "");
+        SDL_SetClipboardText(detail);
+        wm_msgbox("VibeBuild32 JavaScript Error", "%s", detail);
+    }
+    exit(EXIT_FAILURE);
+}
+
 static void vbjs_dump_error(JSContext *ctx, const char *context = nullptr)
 {
     JSValue exc = JS_GetException(ctx);
     const char *msg = JS_ToCString(ctx, exc);
-    char line[1400];
-    snprintf(line, sizeof(line), "%s%s%s", context ? "" : "JavaScript error", context ? context : "", context ? ": " : "");
-    size_t used = strlen(line);
-    snprintf(line + used, sizeof(line) - used, "%s", msg ? msg : "(unknown JS error)");
-    vbjs_game::log(line);
-    vbjs_devtools_log(line);
+    char message[2048]; snprintf(message, sizeof(message), "%s", msg ? msg : "(unknown JS error)");
     if (msg) JS_FreeCString(ctx, msg);
+    char stackText[6144] = {};
     JSValue stack = JS_GetPropertyStr(ctx, exc, "stack");
     if (!JS_IsUndefined(stack))
     {
         const char *st = JS_ToCString(ctx, stack);
-        if (st) { vbjs_game::log(st); vbjs_devtools_log(st); JS_FreeCString(ctx, st); }
+        if (st) { snprintf(stackText, sizeof(stackText), "%s", st); JS_FreeCString(ctx, st); }
     }
     JS_FreeValue(ctx, stack);
     JS_FreeValue(ctx, exc);
+    vbjs_fatal_error(context ? context : "JavaScript error", message, stackText);
 }
 
 // QuickJS reports a bare `Promise.reject()` through this runtime hook instead
@@ -319,11 +340,9 @@ static void vbjs_promise_rejection_tracker(JSContext *ctx, JSValueConst, JSValue
 {
     if (isHandled) return;
     const char *message = JS_ToCString(ctx, reason);
-    char line[1400];
-    snprintf(line, sizeof(line), "unhandled promise rejection: %s", message ? message : "(unknown rejection)");
-    vbjs_game::log(line);
-    vbjs_devtools_log(line);
+    char text[2048]; snprintf(text, sizeof(text), "%s", message ? message : "(unknown rejection)");
     if (message) JS_FreeCString(ctx, message);
+    char stackText[6144] = {};
 
     if (JS_IsObject(reason))
     {
@@ -331,10 +350,11 @@ static void vbjs_promise_rejection_tracker(JSContext *ctx, JSValueConst, JSValue
         if (!JS_IsUndefined(stack))
         {
             const char *text = JS_ToCString(ctx, stack);
-            if (text) { vbjs_game::log(text); vbjs_devtools_log(text); JS_FreeCString(ctx, text); }
+            if (text) { snprintf(stackText, sizeof(stackText), "%s", text); JS_FreeCString(ctx, text); }
         }
         JS_FreeValue(ctx, stack);
     }
+    vbjs_fatal_error("unhandled promise rejection", text, stackText);
 }
 
 // ------------------------------------------------------------------ console ---
@@ -1920,7 +1940,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     // source paths directly from VS Code.
     char vscode[1400]; snprintf(vscode, sizeof(vscode), "%s/.vscode", project);
     if (mkdir(vscode, 0755) != 0) return -1;
-    const char *vscodeFiles[] = { "launch.json", "tasks.json", "README.md", "vibebuild32-debug-adapter.js" };
+    const char *vscodeFiles[] = { "launch.json", "tasks.json", "README.md", "vibebuild32-debug-adapter.js", "vibebuild32-start-debug-adapter.js" };
     for (auto file : vscodeFiles)
     {
         char source[1400], target[1400]; size_t length = 0;
