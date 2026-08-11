@@ -1,178 +1,105 @@
 #!/usr/bin/env node
-// Zero-dependency Debug Adapter Protocol bridge for VibeBuild32.
-// VS Code speaks DAP here; this translates it to the game's localhost-only
-// source-debugger bridge at http://127.0.0.1:<debugPort>.
+// One-shot, zero-dependency Debug Adapter Protocol bridge for VibeBuild32.
+// It deliberately exits with its DAP client: no adapter or game is left behind.
 const net = require('net');
 const http = require('http');
 const { spawn } = require('child_process');
 
-const listenPort = Number(process.argv[process.argv.indexOf('--port') + 1] || 4711);
-let nextSeq = 1;
+const portArg = process.argv.indexOf('--port');
+const listenPort = Number(portArg >= 0 ? process.argv[portArg + 1] : 4711);
+let nextSeq = 1, activeSession = null, idleTimer = null, shuttingDown = false;
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const write = (socket, message) => {
-  if (socket.destroyed || socket.writableEnded || !socket.writable) return false;
+  if (!socket || socket.destroyed || socket.writableEnded || !socket.writable) return false;
   const json = JSON.stringify({ seq: nextSeq++, ...message });
   return socket.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
 };
-const response = (socket, request, body = {}, success = true, message) =>
-  write(socket, { type: 'response', request_seq: request.seq, command: request.command, success, message, body });
-const event = (socket, name, body = {}) => write(socket, { type: 'event', event: name, body });
-
+const response = (s, r, body = {}, success = true, message) => write(s, { type: 'response', request_seq: r.seq, command: r.command, success, message, body });
+const event = (s, name, body = {}) => write(s, { type: 'event', event: name, body });
 function httpGet(port, path) {
   return new Promise((resolve, reject) => {
     const req = http.get({ host: '127.0.0.1', port, path, timeout: 700 }, res => {
-      let body = ''; res.setEncoding('utf8'); res.on('data', chunk => body += chunk); res.on('end', () => resolve(body));
+      let body = ''; res.setEncoding('utf8'); res.on('data', c => body += c); res.on('end', () => resolve(body));
     });
-    req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error('timeout'))); req.on('error', reject);
   });
 }
-
+function shutdownAdapter() {
+  if (shuttingDown) return; shuttingDown = true;
+  if (idleTimer) clearTimeout(idleTimer);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 300).unref();
+}
 class Session {
-  constructor(socket) { this.socket = socket; this.port = 8501; this.engineSeq = 100000; this.pending = new Map(); this.polling = false; this.child = null; this.bridgeFailures = 0; this.ended = false; }
-  endSession() {
-    if (this.ended) return;
-    this.ended = true; this.polling = false;
-    event(this.socket, 'terminated'); setTimeout(() => this.socket.end(), 0);
-  }
+  constructor(socket) { this.socket = socket; this.port = 8501; this.engineSeq = 100000; this.pending = new Map(); this.polling = false; this.child = null; this.ended = false; this.finishing = false; this.bridgeFailures = 0; }
   async bridge(message) { await httpGet(this.port, `/send?m=${encodeURIComponent(JSON.stringify(message))}`); }
-  async terminateGame() {
-    // A source breakpoint blocks the game thread until Continue. Release it
-    // before stopping the process so Stop never leaves the game paused.
-    try { await this.bridge({ type: 'request', request: { request_seq: this.engineSeq++, command: 'continue', args: {} } }); } catch (_) {}
-    try { await httpGet(this.port, '/terminate'); } catch (_) { /* It may already be gone. */ }
-    // A launch session owns the game's PID, so terminate it directly as well.
-    // This is deliberately independent of the bridge response: the debug
-    // transport may already be gone while the child is still running.
-    if (this.child && !this.child.killed) {
-      try { this.child.kill('SIGTERM'); } catch (_) { /* It already exited. */ }
-    }
-  }
-  async engine(command, args, request) {
-    const request_seq = this.engineSeq++;
-    this.pending.set(request_seq, request);
-    await this.bridge({ type: 'request', request: { request_seq, command, args: args || {} } });
-  }
   async waitForBridge() {
-    for (let tries = 0; tries < 100; ++tries) {
-      try { await httpGet(this.port, '/poll?client=vscode'); this.startPolling(); return; }
-      catch (_) { await new Promise(resolve => setTimeout(resolve, 100)); }
-    }
-    throw new Error(`Could not attach to VibeBuild32 on port ${this.port}. Start it with -dbg or --debug.`);
+    for (let i = 0; i < 100; ++i) { try { await httpGet(this.port, '/poll?client=vscode'); this.startPolling(); return; } catch (_) { await delay(100); } }
+    throw new Error(`Could not attach to VibeBuild32 on port ${this.port}.`);
   }
   startPolling() {
     if (this.polling) return; this.polling = true;
     const poll = async () => {
-      if (!this.polling) return;
+      if (!this.polling || this.ended) return;
       try { const text = await httpGet(this.port, '/poll?client=vscode'); this.bridgeFailures = 0; if (text) this.handleEngine(JSON.parse(text)); }
-      catch (_) { if (++this.bridgeFailures >= 3) { this.endSession(); return; } }
+      catch (_) { if (++this.bridgeFailures >= 3) return this.finish(false); }
       setTimeout(poll, 40);
-    };
-    poll();
+    }; poll();
   }
   handleEngine(message) {
-    if (message.type === 'event') {
-      const stopped = message.event || {};
-      event(this.socket, 'stopped', { reason: stopped.reason || 'breakpoint', threadId: 1, allThreadsStopped: true, description: `${stopped.filename || ''}:${stopped.line || 0}` });
-      return;
-    }
+    if (message.type === 'event') { const stopped = message.event || {}; event(this.socket, 'stopped', { reason: stopped.reason || 'breakpoint', threadId: 1, allThreadsStopped: true, description: `${stopped.filename || ''}:${stopped.line || 0}` }); return; }
     if (message.type !== 'response') return;
-    const request = this.pending.get(message.request_seq);
-    if (!request) return;
-    this.pending.delete(message.request_seq);
+    const request = this.pending.get(message.request_seq); if (!request) return; this.pending.delete(message.request_seq);
     const body = message.body;
-    if (request.command === 'stackTrace') {
-      const stackFrames = (Array.isArray(body) ? body : []).map(frame => ({ id: frame.id, name: frame.name || '<anonymous>', source: frame.filename ? { name: frame.filename.split('/').pop(), path: frame.filename } : undefined, line: frame.line || 1, column: frame.column || 1 }));
-      response(this.socket, request, { stackFrames, totalFrames: stackFrames.length });
-    } else if (request.command === 'scopes') {
-      response(this.socket, request, { scopes: (Array.isArray(body) ? body : []).map(scope => ({ name: scope.name, variablesReference: scope.reference || 0, expensive: scope.name === 'Global' })) });
-    } else if (request.command === 'variables') {
-      const variables = Object.entries(body || {}).map(([name, value]) => ({ name, value: typeof value === 'string' ? value : JSON.stringify(value), variablesReference: 0 }));
-      response(this.socket, request, { variables });
-    } else if (request.command === 'evaluate') response(this.socket, request, { result: body && body.result !== undefined ? String(body.result) : 'undefined', variablesReference: 0 });
+    if (request.command === 'stackTrace') { const frames = (Array.isArray(body) ? body : []).map(f => ({ id: f.id, name: f.name || '<anonymous>', source: f.filename ? { name: f.filename.split('/').pop(), path: f.filename } : undefined, line: f.line || 1, column: f.column || 1 })); response(this.socket, request, { stackFrames: frames, totalFrames: frames.length }); }
+    else if (request.command === 'scopes') response(this.socket, request, { scopes: (Array.isArray(body) ? body : []).map(s => ({ name: s.name, variablesReference: s.reference || 0, expensive: s.name === 'Global' })) });
+    else if (request.command === 'variables') response(this.socket, request, { variables: Object.entries(body || {}).map(([name, value]) => ({ name, value: typeof value === 'string' ? value : JSON.stringify(value), variablesReference: 0 })) });
+    else if (request.command === 'evaluate') response(this.socket, request, { result: body && body.result !== undefined ? String(body.result) : 'undefined', variablesReference: 0 });
     else if (request.command === 'continue') { response(this.socket, request, { allThreadsContinued: true }); event(this.socket, 'continued', { threadId: 1, allThreadsContinued: true }); }
     else response(this.socket, request, {});
   }
+  async stopOwnedChild() {
+    if (!this.child || this.child.exitCode !== null || this.child.signalCode !== null) return;
+    try { await this.bridge({ type: 'request', request: { request_seq: this.engineSeq++, command: 'continue', args: {} } }); } catch (_) {}
+    this.child.kill('SIGTERM');
+    for (let i = 0; i < 20 && this.child.exitCode === null && this.child.signalCode === null; ++i) await delay(100);
+    if (this.child.exitCode === null && this.child.signalCode === null) { try { this.child.kill('SIGKILL'); } catch (_) {} }
+  }
+  async finish(stopGame) {
+    if (this.finishing || this.ended) return; this.finishing = true; this.polling = false;
+    if (stopGame) await this.stopOwnedChild();
+    this.ended = true; this.pending.clear();
+    event(this.socket, 'terminated');
+    if (!this.socket.destroyed) this.socket.end();
+    activeSession = null; setTimeout(shutdownAdapter, 20);
+  }
+  async engine(command, args, request) { const request_seq = this.engineSeq++; this.pending.set(request_seq, request); await this.bridge({ type: 'request', request: { request_seq, command, args: args || {} } }); }
   async handle(request) {
     if (this.ended) return;
-    try {
-      switch (request.command) {
-        case 'initialize':
-          response(this.socket, request, { supportsConfigurationDoneRequest: true, supportsEvaluateForHovers: true, supportsStepBack: false, supportsRestartRequest: false, supportsTerminateRequest: true }); break;
-        case 'launch': {
-          this.port = Number(request.arguments.debugPort || 8501);
-          const executable = request.arguments.gameExecutable;
-          if (!executable) throw new Error('launch requires gameExecutable');
-          // VibeBuild32 itself reads /// vbd.params after receiving -dbg. The
-          // adapter must inject no game arguments beyond -dbg, otherwise the
-          // same directive is applied twice by the launcher.
-          const gameArgs = ['-dbg'];
-          this.child = spawn(executable, gameArgs, { cwd: request.arguments.cwd || process.cwd(), stdio: 'inherit' });
-          // The game can be closed from its own window, not only through DAP
-          // Stop. Notify VS Code immediately in either case; waiting for the
-          // localhost debugger bridge to time out leaves the UI looking live.
-          this.child.once('exit', () => this.endSession());
-          this.child.once('error', () => this.endSession());
-          await this.waitForBridge(); response(this.socket, request, {}); event(this.socket, 'initialized'); break;
-        }
-        case 'attach': this.port = Number(request.arguments.debugPort || 8501); await this.waitForBridge(); response(this.socket, request, {}); event(this.socket, 'initialized'); break;
-        case 'configurationDone':
-          // Tell the runtime it may now fire its one-shot `start` callbacks:
-          // source breakpoints have been installed at this point.
-          await this.bridge({ type: 'configurationDone' });
-          response(this.socket, request, {}); break;
-        case 'setBreakpoints': {
-          const source = request.arguments.source || {}, wanted = request.arguments.breakpoints || [];
-          await this.bridge({ type: 'breakpoints', breakpoints: { path: source.path, breakpoints: wanted.map(bp => ({ line: bp.line })) } });
-          response(this.socket, request, { breakpoints: wanted.map(bp => ({ verified: true, line: bp.line })) }); break;
-        }
-        case 'threads': response(this.socket, request, { threads: [{ id: 1, name: 'VibeBuild32 JavaScript' }] }); break;
-        case 'stackTrace': await this.engine('stackTrace', {}, request); break;
-        case 'scopes': await this.engine('scopes', { frame: request.arguments.frameId || 0 }, request); break;
-        case 'variables': await this.engine('variables', { variablesReference: request.arguments.variablesReference }, request); break;
-        case 'evaluate': await this.engine('evaluate', { expression: request.arguments.expression || '', frame: request.arguments.frameId || 0 }, request); break;
-        case 'continue': await this.engine('continue', {}, request); break;
-        case 'next': await this.engine('next', {}, request); break;
-        case 'stepIn': await this.engine('stepIn', {}, request); break;
-        case 'stepOut': await this.engine('stepOut', {}, request); break;
-        case 'terminate':
-          this.polling = false; await this.terminateGame(); response(this.socket, request, {});
-          this.endSession(); break;
-        case 'disconnect':
-          this.polling = false; await this.terminateGame(); response(this.socket, request, {});
-          // VS Code's Stop button normally uses `disconnect`, not `terminate`.
-          // Sending a response alone leaves its debug UI active; DAP requires
-          // the terminated event to end the session in the client.
-          this.endSession(); break;
-        default: response(this.socket, request, {}, false, `Unsupported request: ${request.command}`);
+    try { switch (request.command) {
+      case 'initialize': response(this.socket, request, { supportsConfigurationDoneRequest: true, supportsEvaluateForHovers: true, supportsTerminateRequest: true }); break;
+      case 'launch': {
+        this.port = Number(request.arguments.debugPort || 8501); const exe = request.arguments.gameExecutable; if (!exe) throw new Error('launch requires gameExecutable');
+        this.child = spawn(exe, ['-dbg'], { cwd: request.arguments.cwd || process.cwd(), stdio: 'inherit' });
+        this.child.once('exit', () => this.finish(false)); this.child.once('error', () => this.finish(false));
+        await this.waitForBridge(); response(this.socket, request, {}); event(this.socket, 'initialized'); break;
       }
-    } catch (error) { response(this.socket, request, {}, false, error.message); }
+      case 'attach': this.port = Number(request.arguments.debugPort || 8501); await this.waitForBridge(); response(this.socket, request, {}); event(this.socket, 'initialized'); break;
+      case 'configurationDone': await this.bridge({ type: 'configurationDone' }); response(this.socket, request, {}); break;
+      case 'setBreakpoints': { const source = request.arguments.source || {}, wanted = request.arguments.breakpoints || []; await this.bridge({ type: 'breakpoints', breakpoints: { path: source.path, breakpoints: wanted.map(bp => ({ line: bp.line })) } }); response(this.socket, request, { breakpoints: wanted.map(bp => ({ verified: true, line: bp.line })) }); break; }
+      case 'threads': response(this.socket, request, { threads: [{ id: 1, name: 'VibeBuild32 JavaScript' }] }); break;
+      case 'stackTrace': case 'scopes': case 'variables': case 'evaluate': case 'continue': case 'next': case 'stepIn': case 'stepOut': await this.engine(request.command, request.command === 'scopes' ? { frame: request.arguments.frameId || 0 } : request.command === 'variables' ? { variablesReference: request.arguments.variablesReference } : request.command === 'evaluate' ? { expression: request.arguments.expression || '', frame: request.arguments.frameId || 0 } : {}, request); break;
+      case 'terminate': case 'disconnect': response(this.socket, request, {}); await this.finish(!!this.child); break;
+      default: response(this.socket, request, {}, false, `Unsupported request: ${request.command}`);
+    }} catch (error) { response(this.socket, request, {}, false, error.message); }
   }
 }
-
 const server = net.createServer(socket => {
-  let buffer = Buffer.alloc(0); const session = new Session(socket);
-  socket.on('error', () => {}); // A client can close while an async engine reply is in flight.
-  socket.on('data', chunk => {
-    buffer = Buffer.concat([buffer, chunk]);
-    for (;;) {
-      const split = buffer.indexOf('\r\n\r\n'); if (split < 0) return;
-      const match = /^Content-Length:\s*(\d+)/im.exec(buffer.subarray(0, split).toString()); if (!match) { socket.destroy(); return; }
-      const end = split + 4 + Number(match[1]); if (buffer.length < end) return;
-      const request = JSON.parse(buffer.subarray(split + 4, end).toString()); buffer = buffer.subarray(end);
-      if (request.type === 'request') session.handle(request);
-    }
-  });
-  socket.on('close', () => session.polling = false);
+  if (activeSession) return socket.destroy();
+  if (idleTimer) clearTimeout(idleTimer); const session = activeSession = new Session(socket); let buffer = Buffer.alloc(0);
+  socket.on('error', () => {});
+  socket.on('data', chunk => { buffer = Buffer.concat([buffer, chunk]); for (;;) { const split = buffer.indexOf('\r\n\r\n'); if (split < 0) return; const match = /^Content-Length:\s*(\d+)/im.exec(buffer.subarray(0, split).toString()); if (!match) return socket.destroy(); const end = split + 4 + Number(match[1]); if (buffer.length < end) return; const request = JSON.parse(buffer.subarray(split + 4, end).toString()); buffer = buffer.subarray(end); if (request.type === 'request') session.handle(request); } });
+  socket.on('close', () => { if (!session.ended) session.finish(!!session.child); });
 });
-
-// VS Code may run the pre-launch task again while the adapter from an earlier
-// debug session is still alive. The existing adapter is exactly what the
-// debugServer setting needs, so treat that as success instead of a task error.
-server.on('error', error => {
-  if (error.code === 'EADDRINUSE') {
-    console.log(`VibeBuild32 DAP adapter already listening on ${listenPort}`);
-    process.exit(0);
-  }
-  throw error;
-});
-server.listen(listenPort, '127.0.0.1', () => console.log(`VibeBuild32 DAP adapter listening on ${listenPort}`));
+server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `VibeBuild32 DAP port ${listenPort} is busy; wait for the previous debug session to finish.` : error.message); process.exit(1); });
+server.listen(listenPort, '127.0.0.1', () => { console.log(`VibeBuild32 DAP adapter listening on ${listenPort}`); idleTimer = setTimeout(shutdownAdapter, 60000); });

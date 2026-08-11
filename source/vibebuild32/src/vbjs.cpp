@@ -1977,7 +1977,10 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     // source paths directly from VS Code.
     char vscode[1400]; snprintf(vscode, sizeof(vscode), "%s/.vscode", project);
     if (mkdir(vscode, 0755) != 0) return -1;
-    const char *vscodeFiles[] = { "launch.json", "tasks.json", "README.md", "vibebuild32-debug-adapter.js", "vibebuild32-start-debug-adapter.js" };
+    // The adapter is a single-use background task.  It exits when the DAP
+    // client or the game exits, so a later VS Code launch never attaches to
+    // stale state from an earlier run.
+    const char *vscodeFiles[] = { "launch.json", "tasks.json", "README.md", "vibebuild32-debug-adapter.js" };
     for (auto file : vscodeFiles)
     {
         char source[1400], target[1400]; size_t length = 0;
