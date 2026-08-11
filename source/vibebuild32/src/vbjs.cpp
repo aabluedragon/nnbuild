@@ -1980,7 +1980,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     // The adapter is a single-use background task.  It exits when the DAP
     // client or the game exits, so a later VS Code launch never attaches to
     // stale state from an earlier run.
-    const char *vscodeFiles[] = { "launch.json", "tasks.json", "README.md", "vibebuild32-debug-adapter.js" };
+    const char *vscodeFiles[] = { "launch.json", "tasks.json", "README.md", "vibebuild32-debug-adapter.js", "vibebuild32-start-debug-adapter.js" };
     for (auto file : vscodeFiles)
     {
         char source[1400], target[1400]; size_t length = 0;

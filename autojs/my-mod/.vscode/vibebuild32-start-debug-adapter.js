@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Start the persistent DAP adapter, then exit only after it is accepting
+// Start a single-session DAP adapter, then exit only after it is accepting.
+// The adapter exits as soon as VS Code or the game exits, so this detached
+// bootstrap never leaves an old debug session behind.
 // connections.  A normal (non-background) VS Code preLaunchTask avoids the
 // race where `debugServer` is contacted before a background task's matcher
 // has observed its ready line.
