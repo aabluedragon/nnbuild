@@ -1,3 +1,5 @@
+/// vbd.params="-l1 --gm duke -g ~/games/duke3da/duke3d.grp -l1 -v1"
+
 // VibeBuild32 auto-loads only index.ts (or index.js) from this project.
 import { on, log, drawText, define } from 'vb';
 import fs from 'fs';

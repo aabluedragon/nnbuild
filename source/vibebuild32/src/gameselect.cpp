@@ -19,6 +19,8 @@
 #include "compat.h"
 #include "baselayer.h"
 #include "vbjs.h"
+#include <ctype.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -76,6 +78,10 @@ static int gs_option(const char *arg, const char *longName, const char *shortNam
         if (!name) continue;
         size_t const n = Bstrlen(name);
         if (!Bstrcasecmp(arg, name)) return 1;
+        // Compatibility for a double-dash shorthand such as --gm. Public
+        // docs prefer -gm / --game, but a generated debug directive should
+        // not accidentally feed --gm into Duke's legacy group-file parser.
+        if (shortName && arg[0] == '-' && arg[1] == '-' && !Bstrcasecmp(arg + 1, shortName)) return 1;
         if (inlineValue && !Bstrncasecmp(arg, name, n) && arg[n] == '=')
         {
             *inlineValue = arg + n + 1;
@@ -83,6 +89,137 @@ static int gs_option(const char *arg, const char *longName, const char *shortNam
         }
     }
     return 0;
+}
+
+// Normalize a value-taking option whose legacy game parser expects the value
+// directly after its short spelling (for example, -l1). This accepts either
+// the documented long spelling or the short spelling, with a value attached,
+// after '=', or in the following argv token.
+static int gs_compactValueOption(char const *arg, char const *longName, char const *shortName, char const **inlineValue)
+{
+    char const *names[] = { longName, shortName };
+    if (inlineValue) *inlineValue = NULL;
+    for (auto const name : names)
+    {
+        size_t const length = Bstrlen(name);
+        if (Bstrncasecmp(arg, name, length)) continue;
+        char const *value = arg + length;
+        if (*value == '=') ++value;
+        if (*value || !Bstrcasecmp(arg, name)) { if (inlineValue) *inlineValue = value; return 1; }
+    }
+    return 0;
+}
+
+// Debug-only launch parameters live in an index-file header, for example:
+//   /// vbd.params="-l 1 -v 1"
+// They are parsed into argv tokens directly: this is not shell input.
+static char const *gs_debugParams[64];
+static int gs_debugParamCount = 0;
+
+static void gs_addDebugParam(char const *text, size_t length)
+{
+    if (!length || gs_debugParamCount >= (int)(sizeof(gs_debugParams) / sizeof(gs_debugParams[0]))) return;
+    // Debug directives are parsed directly into argv (not by a shell), so
+    // explicitly provide the familiar ~/ expansion for file arguments.
+    if (length >= 2 && text[0] == '~' && text[1] == '/')
+    {
+        char const *home = getenv("HOME");
+        if (home && home[0])
+        {
+            size_t const homeLength = Bstrlen(home);
+            char *copy = (char *)Xmalloc(homeLength + length);
+            Bmemcpy(copy, home, homeLength);
+            Bmemcpy(copy + homeLength, text + 1, length);
+            copy[homeLength + length - 1] = 0;
+            gs_debugParams[gs_debugParamCount++] = copy;
+            return;
+        }
+    }
+    char *copy = (char *)Xmalloc(length + 1);
+    Bmemcpy(copy, text, length); copy[length] = 0;
+    gs_debugParams[gs_debugParamCount++] = copy;
+}
+
+static void gs_parseDebugParams(char const *text)
+{
+    char const *p = text;
+    while (*p)
+    {
+        while (*p && isspace((unsigned char)*p)) ++p;
+        if (!*p) break;
+        char token[1024]; size_t length = 0; char quote = 0; int escaped = 0;
+        while (*p)
+        {
+            char const c = *p++;
+            if (escaped) { if (length + 1 < sizeof(token)) token[length++] = c; escaped = 0; continue; }
+            if (c == '\\') { escaped = 1; continue; }
+            if (quote) { if (c == quote) quote = 0; else if (length + 1 < sizeof(token)) token[length++] = c; continue; }
+            if (c == '\'' || c == '"') { quote = c; continue; }
+            if (isspace((unsigned char)c)) break;
+            if (length + 1 < sizeof(token)) token[length++] = c;
+        }
+        if (escaped && length + 1 < sizeof(token)) token[length++] = '\\';
+        gs_addDebugParam(token, length);
+    }
+}
+
+static void gs_collectDebugParamsFromFile(char const *filename)
+{
+    FILE *file = fopen(filename, "r");
+    if (!file) return;
+    char line[2048];
+    for (int i = 0; i < 32 && fgets(line, sizeof(line), file); ++i)
+    {
+        char *p = line; while (*p && isspace((unsigned char)*p)) ++p;
+        if (!Bstrncasecmp(p, "///", 3))
+        {
+            p += 3; while (*p && isspace((unsigned char)*p)) ++p;
+            if (!Bstrncasecmp(p, "vbd.params", 10))
+            {
+                p += 10; while (*p && isspace((unsigned char)*p)) ++p;
+                if (*p == '=') { ++p; gs_parseDebugParams(p); }
+                break;
+            }
+        }
+        else if (*p && Bstrncasecmp(p, "//", 2)) break;
+    }
+    fclose(file);
+}
+
+static int gs_debugModeRequested(int argc, char const * const *argv)
+{
+    for (int i = 1; i < argc; ++i)
+        if (gs_option(argv[i], "--devtools", "-dt", NULL, NULL)) return 1;
+    return 0;
+}
+
+static void gs_collectDebugParams(void)
+{
+    DIR *directory = opendir("autojs");
+    if (!directory) return;
+    dirent *entry;
+    while ((entry = readdir(directory)) != NULL)
+    {
+        if (entry->d_name[0] == '.') continue;
+        char path[BMAX_PATH * 2];
+        Bsnprintf(path, sizeof(path), "autojs/%s/index.ts", entry->d_name);
+        FILE *ts = fopen(path, "r");
+        if (ts) { fclose(ts); gs_collectDebugParamsFromFile(path); continue; }
+        Bsnprintf(path, sizeof(path), "autojs/%s/index.js", entry->d_name);
+        gs_collectDebugParamsFromFile(path);
+    }
+    closedir(directory);
+}
+
+static char const **gs_buildArgvWithDebugParams(int argc, char const * const *argv, int *outArgc)
+{
+    if (!gs_debugParamCount) { *outArgc = argc; return (char const **)argv; }
+    char const **out = (char const **)Xmalloc((size_t)(argc + gs_debugParamCount + 1) * sizeof(char *));
+    for (int i = 0; i < argc; ++i) out[i] = argv[i];
+    for (int i = 0; i < gs_debugParamCount; ++i) out[argc + i] = gs_debugParams[i];
+    *outArgc = argc + gs_debugParamCount;
+    out[*outArgc] = NULL;
+    return out;
 }
 
 // Look for `grp` in the working dir, then in `subdir/`. On success writes the
@@ -222,6 +359,26 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
     for (int i = 0; i < argc; i++)
     {
         const char *inlineValue = NULL;
+        // Duke's legacy -l/-v parser only understands attached numbers.
+        // Present a single canonical form for every public spelling:
+        // -l1, -l 1, --level1, --level 1 (and the volume equivalents).
+        char const *compactName = NULL;
+        if (gs_compactValueOption(argv[i], "--level", "-l", &inlineValue)) compactName = "-l";
+        else if (gs_compactValueOption(argv[i], "--volume", "-v", &inlineValue)) compactName = "-v";
+        if (compactName)
+        {
+            if (!inlineValue || !inlineValue[0])
+            {
+                if (i + 1 >= argc) { out[n++] = compactName; continue; }
+                inlineValue = argv[++i];
+            }
+            size_t const nameLength = Bstrlen(compactName), valueLength = Bstrlen(inlineValue);
+            char *combined = (char *)Xmalloc(nameLength + valueLength + 1);
+            Bmemcpy(combined, compactName, nameLength);
+            Bmemcpy(combined + nameLength, inlineValue, valueLength + 1);
+            out[n++] = combined;
+            continue;
+        }
         if (gs_option(argv[i], "--game", "-gm", "-game", &inlineValue))
         {
             if (!inlineValue) i++;  // skip flag + its separate value
@@ -265,34 +422,37 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
 int app_main(int32_t argc, char const * const * argv)
 {
     VBJS_CaptureLaunchDir();   // VibeBuild32: record the launch dir now (before any chdir) for autojs/
+    if (gs_debugModeRequested(argc, argv)) gs_collectDebugParams();
+    int launchArgc = argc;
+    char const **launchArgv = gs_buildArgvWithDebugParams(argc, argv, &launchArgc);
 
     // Parse launcher-owned script arguments before Duke's legacy parser. In
     // particular, the legacy -net option treats later tokens as network data;
     // a VibeBuild option must work in any position instead of being swallowed.
-    for (int i = 1; i < argc; ++i)
+    for (int i = 1; i < launchArgc; ++i)
     {
         const char *inlineValue = NULL;
-        if (!gs_option(argv[i], "--js", "-js", NULL, &inlineValue)) continue;
+        if (!gs_option(launchArgv[i], "--js", "-js", NULL, &inlineValue)) continue;
         const char *path = inlineValue;
-        if (!path && i + 1 < argc) path = argv[++i];
+        if (!path && i + 1 < launchArgc) path = launchArgv[++i];
         if (path && path[0]) VBJS_SetScriptPath(path);
     }
 
     // This is a launcher command, not a Duke-only gameplay option: generate a
     // project before choosing a game, then exit without opening a game window.
-    for (int i = 1; i < argc; ++i)
+    for (int i = 1; i < launchArgc; ++i)
     {
-        const char *arg = argv[i];
+        const char *arg = launchArgv[i];
         const char *name = nullptr;
         int typescript = 0;
         if (!Bstrncasecmp(arg, "--gen-js=", 9) || !Bstrncasecmp(arg, "-gjs=", 5))
             name = strchr(arg, '=') + 1;
         else if (!Bstrcasecmp(arg, "--gen-js") || !Bstrcasecmp(arg, "-gjs"))
-            name = (i + 1 < argc && argv[i + 1][0] != '-') ? argv[++i] : nullptr;
+            name = (i + 1 < launchArgc && launchArgv[i + 1][0] != '-') ? launchArgv[++i] : nullptr;
         else if (!Bstrncasecmp(arg, "--gen-ts=", 9) || !Bstrncasecmp(arg, "-gts=", 5))
             typescript = 1, name = strchr(arg, '=') + 1;
         else if (!Bstrcasecmp(arg, "--gen-ts") || !Bstrcasecmp(arg, "-gts"))
-            typescript = 1, name = (i + 1 < argc && argv[i + 1][0] != '-') ? argv[++i] : nullptr;
+            typescript = 1, name = (i + 1 < launchArgc && launchArgv[i + 1][0] != '-') ? launchArgv[++i] : nullptr;
         else continue;
 
         if (name && !name[0]) name = nullptr;
@@ -304,10 +464,10 @@ int app_main(int32_t argc, char const * const * argv)
         return EXIT_SUCCESS;
     }
 
-    gs_choose(argc, argv);
+    gs_choose(launchArgc, launchArgv);
 
     int fargc = 0;
-    char const **fargv = gs_filterArgv(argc, argv, &fargc);
+    char const **fargv = gs_filterArgv(launchArgc, launchArgv, &fargc);
 
 #ifdef WITH_SW
     if (g_activeGame == 1)

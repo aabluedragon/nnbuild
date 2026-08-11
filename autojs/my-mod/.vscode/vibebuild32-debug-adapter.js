@@ -4,6 +4,8 @@
 // source-debugger bridge at http://127.0.0.1:<debugPort>.
 const net = require('net');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { spawn } = require('child_process');
 
 const listenPort = Number(process.argv[process.argv.indexOf('--port') + 1] || 4711);
@@ -16,6 +18,42 @@ const write = (socket, message) => {
 const response = (socket, request, body = {}, success = true, message) =>
   write(socket, { type: 'response', request_seq: request.seq, command: request.command, success, message, body });
 const event = (socket, name, body = {}) => write(socket, { type: 'event', event: name, body });
+
+// `/// vbd.params="-l 1 -v 1"` is an optional top-of-index debug directive.
+// `vb.params` remains accepted for compatibility. Keep
+// parsing local instead of invoking a shell: whitespace and quotes work, but
+// no shell expansion or command substitution can occur.
+function splitVBParams(text) {
+  const args = []; let token = '', quote = '', escaped = false;
+  for (const char of text) {
+    if (escaped) { token += char; escaped = false; continue; }
+    if (char === '\\') { escaped = true; continue; }
+    if (quote) { if (char === quote) quote = ''; else token += char; continue; }
+    if (char === '"' || char === "'") { quote = char; continue; }
+    if (/\s/.test(char)) { if (token) { args.push(token); token = ''; } continue; }
+    token += char;
+  }
+  if (escaped) token += '\\';
+  if (quote) throw new Error('Unterminated quote in /// vbd.params directive');
+  if (token) args.push(token);
+  return args.map(arg => arg === '~' ? (process.env.HOME || arg) :
+    (arg.startsWith('~/') && process.env.HOME ? path.join(process.env.HOME, arg.slice(2)) : arg));
+}
+
+function readVBParams(projectRoot) {
+  for (const filename of ['index.ts', 'index.js']) {
+    let source;
+    try { source = fs.readFileSync(path.join(projectRoot, filename), 'utf8'); }
+    catch (_) { continue; }
+    for (const line of source.split(/\r?\n/, 32)) {
+      const match = /^\s*\/\/\/\s*vbd?\.params\s*=\s*(.*?)\s*$/.exec(line);
+      if (match) return splitVBParams(match[1]);
+      // The directive is intentionally a header option, not a runtime comment.
+      if (line.trim() && !/^\s*\/\//.test(line)) break;
+    }
+  }
+  return [];
+}
 
 function httpGet(port, path) {
   return new Promise((resolve, reject) => {
@@ -103,7 +141,11 @@ class Session {
           const executable = request.arguments.gameExecutable;
           const data = request.arguments.gameData;
           if (!executable || !data) throw new Error('launch requires gameExecutable and gameData');
-          this.child = spawn(executable, ['-gm', request.arguments.game || 'duke', '-g', data], { cwd: request.arguments.cwd || process.cwd(), stdio: 'inherit' });
+          const projectRoot = request.arguments.modRoot || path.resolve(__dirname, '..');
+          const params = readVBParams(projectRoot);
+          const gameArgs = ['-gm', request.arguments.game || 'duke', '-g', data, ...params];
+          if (params.length) console.log(`VibeBuild32 parameters from ${path.basename(projectRoot)}/index: ${params.join(' ')}`);
+          this.child = spawn(executable, gameArgs, { cwd: request.arguments.cwd || process.cwd(), stdio: 'inherit' });
           // The game can be closed from its own window, not only through DAP
           // Stop. Notify VS Code immediately in either case; waiting for the
           // localhost debugger bridge to time out leaves the UI looking live.

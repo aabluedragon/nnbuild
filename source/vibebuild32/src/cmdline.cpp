@@ -71,6 +71,7 @@ static void G_ShowParameterHelp(void)
         "-r, --record\t\tRecord a demo\n"
         "-pb, --playback [file]\tPlay a demo\n"
         "-l#\t\tWarp to level #, see -v\n"
+        "--level [#]\tWarp to level #\n"
         "-map [file.map]\tLoads a map\n"
         "-m\t\tDisable monsters\n"
         "-nam/-ww2gi\tRun in NAM or WW2GI-compatible mode\n"
@@ -104,6 +105,7 @@ static void G_ShowParameterHelp(void)
 #endif
         "-u#########\tUser's favorite weapon order (default: 3425689071)\n"
         "-v#\t\tWarp to volume #, see -l\n"
+        "--volume [#]\tWarp to volume #\n"
         "-wstay\t\tEnable Weapon Stay\n"
         "-x[game.con]\tLoad custom CON script\n"
         "-y##\t\tSet frag limit for DukeMatch\n"
