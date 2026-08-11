@@ -1,190 +1,192 @@
-# VibeBuild32 JavaScript scripting (QuickJS)
+# VibeBuild32 JavaScript and TypeScript mods
 
-Run the game with a user script:
+VibeBuild32 embeds QuickJS and loads mods as ES modules. Mods can use either
+TypeScript or JavaScript; TypeScript is transpiled by the game, so Node.js is
+not needed when the game runs.
 
-```
-vibebuild32 -gm duke -js myscript.js
-```
+## Create and run a project
 
-The script runs in an embedded [QuickJS-ng](https://github.com/quickjs-ng/quickjs)
-runtime (ES2023). It is loaded as an **ES module**, so `import`/`export` work, and
-a CommonJS-style `require()` and an `fs` module are also provided.
+Use `--long-name` for a long option and `-short-name` for its short option.
+The following forms create an editor-ready mod and exit without opening a game:
 
-Use `import { on, off, log } from 'vb'` for the event and logging helpers, or
-import the default `vb` object. `console.log()` is equivalent to `vb.log()`.
-
-VibeBuild32 options use `--long-name` for their full form and `-short-name` for
-their shorthand: for example `--grp`/`-g`, `--game`/`-gm`, and
-`--gen-ts`/`-gts`. Older one-dash full names remain accepted for compatibility.
-
-## Auto-loaded projects and TypeScript
-
-On startup VibeBuild32 scans the launch directory's `autojs/` folder. It loads
-only `autojs/<project>/index.ts` or `autojs/<project>/index.js` (TypeScript wins
-when both exist), so loose files directly in `autojs/` are intentionally ignored.
-TypeScript is transpiled in-process; it does not require Node.js at game runtime.
-
-Create a ready-to-open project with either spelling below:
-
-```
-vibebuild32 -gjs my-mod          # JavaScript: index.js + jsconfig.json
-vibebuild32 -gjs                 # JavaScript with the next unused name, e.g. mod-1
-vibebuild32 -gts my-mod          # TypeScript: index.ts + tsconfig.json
-vibebuild32 -gts
+```sh
+./vibebuild32 --gen-ts my-mod    # or: -gts my-mod
+./vibebuild32 --gen-js my-mod    # or: -gjs my-mod
 ```
 
-The generated project includes `index.js` or `index.ts`, `vb.d.ts`, a matching
-`jsconfig.json` or `tsconfig.json`, and `package.json`. `index.ts` (or `index.js`)
-is the only auto-loaded entry point.
-Open that project folder in VS Code for completion and static
-errors for every built-in `vb`, `fs`, and `cvar` API. `npm install` is optional and
-only needed for the generated `npm run check` editor/type-check command.
+When no name is supplied, VibeBuild32 selects the next unused `mod-N` name.
+The generated project contains exactly one auto-loaded entry point:
 
-`--devtools` (or `-dt`) forces windowed mode and opens a lightweight docked
-DevTools panel on the right of the game. It has console logs, expression
-evaluation (`$event` is the last listener argument), event breakpoints, and a
-global-scope inspector. For a precise source breakpoint, add `vb.breakpoint()` at
-the line you want to stop at, then inspect expressions and press Resume. The
-regular in-game OSD remains available with F12.
+| mode | entry point | editor config |
+|---|---|---|
+| TypeScript | `autojs/<name>/index.ts` | `tsconfig.json` |
+| JavaScript | `autojs/<name>/index.js` | `jsconfig.json` |
 
-## Modules
+Each project also receives `vb.d.ts`, `package.json`, and `.vscode/` files for
+launching and debugging. Open **the generated project folder** in VS Code.
+`npm install` is optional; it is only needed for `npm run check`.
 
-```js
-import fs from 'fs';            // ES module
-import { on, spawn } from 'vb'; // named imports from the vb builtin
-const fs2 = require('fs');      // CommonJS also works
-const mine = require('./util.js');
+At launch, VibeBuild32 scans `autojs/<project>/` and loads only `index.ts` or
+`index.js`; if both exist, `index.ts` wins. Loose files under `autojs/` are not
+auto-loaded. Relative `import` and `require()` paths resolve from the importing
+script.
+
+```sh
+./vibebuild32 --game duke --grp ~/games/duke3d/duke3d.grp
+./vibebuild32 --game sw --grp '/Users/me/games/Shadow Warrior Complete/Sw.grp'
 ```
 
-Relative imports/requires resolve against the main script's directory.
+`--game`/`-gm` and `--grp`/`-g` accept their value immediately or after one or
+more spaces (for example `-g/path/file.grp`, `-g /path/file.grp`, and
+`--game duke`).
 
-## CON events
+## API imports
 
-Every CON event (`EVENT_GAME`, `EVENT_SPAWN`, `EVENT_DISPLAYREST`, `EVENT_JUMP`,
-`EVENT_FIRE`, `EVENT_KILLIT`, … all `EVENT_*`) is listenable, whether or not any
-CON code handles it:
+Prefer imports; `on`, `off`, and `log` are not implicit globals.
 
-```js
-vb.on('EVENT_SPAWN', e => { /* e = {sprite, player, dist} */ });
-vb.on('EVENT_GAME',  e => { /* runs every tic, per actor */ });
-```
-
-The handler gets `{sprite, player, dist}`. To read or override the event's CON
-return value, use the RETURN gamevar: `vb.getGamevar('RETURN', e.sprite, e.player)`
-/ `vb.setGamevar('RETURN', v, e.sprite, e.player)`. The `EVENT_` prefix is
-optional (`vb.on('SPAWN', …)` also works).
-
-Generated projects declare every supported `EVENT_*` value (and its prefix-free
-form) in `vb.d.ts`. VS Code therefore completes event names and narrows the
-callback payload automatically: `actorSpawned` gets `{ sprite, owner, tile }`,
-`chatMessage` gets `{ player, text }`, every CON event gets `{ sprite, player,
-dist }`, and lifecycle events (`start`, `frame`, `shutdown`, `playerDied`) have
-no payload.
-
-The generated declaration is the complete contract for the embedded runtime:
-the global `vb`, `cvar`, `console`, typed `require()`, and the `vb`, `fs`, and
-`cvar` ES modules. Lookups such as `vb.getGamevar()`, `vb.define()`, and the
-`getActor`/`getPlayer` family are correctly typed as `number | undefined`, since
-the engine returns `undefined` for an unknown gamevar, define, or CON member.
-
-## `vb` — the game API (also available as the global `vb`)
-
-Events — `vb.on(name, handler)` / `vb.off(name)`:
-
-| event          | handler arg                        | fires when                         |
-|----------------|------------------------------------|------------------------------------|
-| `start`        | –                                  | the script has loaded              |
-| `shutdown`     | –                                  | the game is exiting                |
-| `frame`        | –                                  | every rendered frame               |
-| `playerDied`   | –                                  | the local player dies              |
-| `actorSpawned` | `{sprite, owner, tile}`            | any actor/sprite is spawned        |
-| `chatMessage`  | `{player, text}`                   | a message/quote is shown (incl. MP chat) |
-
-Functions:
-
-```js
-vb.log(...args)                      // -> game console + log file
-vb.drawText(id, x, y, text, pal=0, shade=0)  // HUD text at (0..320, 0..200); reuse id to update
-vb.clearText(id)                     // remove one (or all if no id)
-vb.spawn(tile, x=0, y=0, z=0, owner=-1) // -> spriteNum (x/y/z=0 spawns at the player)
-vb.sendMessage(text)                 // send a multiplayer chat message (also shown locally)
-vb.getGamevar(name, sprite=-1, player=-1) // read any CON gamevar
-vb.setGamevar(name, value, sprite=-1, player=-1) // write any CON gamevar
-vb.player()                          // -> { sprite, x, y, z }
-```
-
-The gamevar bridge exposes **every CON gamevar** by label, which is how scripts
-read/write game state that CON scripts use.
-
-## All CON data (members + defines)
-
-The full CON member surface is reachable by name, using the same label tables CON
-itself uses. Every getter has a matching setter (`setActor`, `setPlayer`, …):
-
-```js
-vb.getActor(sprite, member, parm2=0)     // sprite[]/actor[] members (e.g. 'extra','picnum','xvel')
-vb.getPlayer(player, member, parm2=0)    // player[] members (e.g. 'curr_weapon','ammo_amount' w/ parm2)
-vb.getInput(player, member)              // input[]
-vb.getSector(sector, member)             // sector[] (e.g. 'floorz','lotag')
-vb.getWall(wall, member)                 // wall[]
-vb.getUserdef(member, parm2=0)           // userdef[]
-vb.getProjectile(tile, member)           // per-tile projectile defaults
-vb.getActiveProjectile(sprite, member)   // a live projectile's state
-vb.getTileData(tile, member)             // tiledata[]
-vb.define(name)                          // any CON define/constant -> e.g. vb.define('LIZTROOP') === 1680
-```
-
-`parm2` is the array index some members take (e.g. `ammo_amount[weapon]`).
-
-### CON action commands
-
-```js
-vb.sound(num, sprite=-1)        // play a sound (positional if sprite given)
-vb.shoot(sprite, tile)          // fire a projectile from a sprite -> new sprite
-vb.addAmmo(player, weapon, amount)
-vb.addWeapon(player, weapon, switchTo=1)
-```
-
-## `cvar` — console / cvar commands
-
-Run any OSD console command or cvar assignment (also available as `vb.run`):
-
-```js
-cvar.run('map E1L3');      // warp; a leading '/' is tolerated: cvar.run('/map E1L3')
-cvar.run('god');           // cheats, commands, anything the console accepts
-cvar.set('r_maxfps', 60);  // convenience for run('r_maxfps 60')
-```
-
-## `fs` — files
-
-```js
-fs.readFile(path)          // -> string (throws if missing)
-fs.writeFile(path, data)   // overwrite
-fs.appendFile(path, data)  // append
-fs.exists(path)            // -> bool
-```
-
-## Example
-
-```js
+```ts
+import { on, log, drawText, define } from 'vb';
 import fs from 'fs';
-let kills = 0;
-vb.on('start', () => vb.log('mod loaded'));
-vb.on('frame', () => vb.drawText(1, 20, 18, 'kills: ' + kills));
-vb.on('playerDied', () => { fs.appendFile('/tmp/deaths.log', Date.now() + '\n'); });
-vb.on('actorSpawned', e => { if (e.tile === 1680 /*LIZTROOP*/) kills++; });
+import cvar from 'cvar';
+
+on('start', () => log('mod loaded'));
+on('frame', () => drawText(1, 8, 8, 'Hello from TypeScript'));
+
+// CommonJS remains supported.
+const vb = require('vb');
 ```
 
-## Adding more events / bindings
+`console.log()` uses the same logger as `log()`. Duke logs appear in the game
+console/log; the debugger also shows them. In games using the shared generic
+runtime, logs are written to the process log and debugger.
 
-The C seam is small and easy to extend:
+The generated `vb.d.ts` is the authoritative editor contract. It declares all
+exported `vb` functions, component types, CON names/events, `fs`, `fs/promises`,
+`dgram`, `net`, `cvar`, and `fetch` support. Do not add globals to work around a
+missing import—add or correct the typed module export instead.
 
-* **New event** — call `VBJS_FireSimple("name")`, `VBJS_FireActor("name", sprite, owner, tile)`,
-  or `VBJS_FireChat("name", player, text)` from any hook point in the game code.
-* **New binding** — add a `JSValue js_vb_foo(...)` in `vbjs.cpp`, register it in
-  `vbjs_define_vb()`, and (if it touches the game) route it through the
-  `vbjs_game::` seam implemented in `vbjs_duke.cpp`.
+## Events and Duke bindings
 
-Files: `source/glue/vbjs.h` (API), `source/vibebuild32/src/vbjs.cpp` (QuickJS
-runtime — game-agnostic), `source/vibebuild32/src/vbjs_duke.cpp` (Duke bindings).
-Other games can provide the same API by implementing the `vbjs_game::` seam.
+```ts
+import { on, getActor, setGamevar } from 'vb';
+
+on('actorSpawned', event => {
+  // event is { sprite, owner, tile }
+});
+
+on('EVENT_SPAWN', event => {
+  // Every CON EVENT_* name is supported; EVENT_ is optional.
+  setGamevar('RETURN', 0, event.sprite, event.player);
+});
+```
+
+Lifecycle events include `start`, `shutdown`, `frame`, `gameStarted`,
+`levelChanged`, `levelFinished`, `leftGame`, and `beforeQuit`. Menu events are
+`menuOpened`, `menuClosed`, `menuChanged`, and `escapeMenuOpened`.
+
+The Duke runtime exports `drawText`, actor/player/sector/wall accessors,
+`define`, `spawn`/`A_Spawn`/`A_InsertSprite`, gamevars, menu controls, sound,
+weapon helpers, components/prefabs, and session information. The generated
+declarations list their exact names and parameters.
+
+Shadow Warrior currently hosts the safe cross-game subset: module imports,
+`on`, `off`, `log`, `breakpoint`, standard modules, `fetch`, and VS Code
+debugging. Duke-only game-state APIs deliberately throw a JavaScript exception
+in Shadow Warrior rather than dereferencing Duke state. An uncaught script
+error is logged, displayed in a selectable/copyable in-game dialog, and closes
+the game rather than continuing with a broken mod.
+
+## Components and nodes
+
+The Duke API supports Unity-style components. Components must subclass
+`VBComponent`; instances can be attached to sprites or empty `VBNode`s.
+
+```ts
+import { VBComponent, createNode, createPrefab, spawnPrefab } from 'vb';
+
+class Spin extends VBComponent {
+  update(dt: number) { /* use this.node?.transform */ }
+  onSpawn() {}
+  onDestroy() {}
+}
+
+const node = createNode(Spin);
+node.transform.position = { x: 0, y: 0, z: 0 };
+node.transform.rotation = { x: 0, y: 0, z: 0 };
+node.transform.scale = { x: 1, y: 1, z: 1 };
+
+const prefab = createPrefab(1680, Spin);
+const sprite = spawnPrefab(prefab);
+```
+
+Supported lifecycle methods are `awake`, `start`, `onSpawn`, `fixedUpdate`,
+`update`, `lateUpdate`, `onEnable`, `onDisable`, and `onDestroy`.
+
+## Built-in modules
+
+The API intentionally resembles Node where it is implemented:
+
+```ts
+import fs from 'fs';
+import promises from 'fs/promises';
+import dgram from 'dgram';
+import net from 'net';
+
+fs.writeFileSync('note.txt', 'hello');
+const text = await promises.readFile('note.txt');
+
+const udp = dgram.createSocket('udp4');
+udp.send('hello', 1234, '127.0.0.1');
+
+const tcp = net.createConnection(1234, '127.0.0.1');
+tcp.write('hello');
+
+const response = await fetch('https://example.invalid/api', { method: 'GET' });
+```
+
+Consult `vb.d.ts` for the implemented overloads. This is an embedded runtime,
+not a complete Node distribution: only declared APIs are supported. HTTP(S)
+requests are available through `fetch`; Node's `http` and `https` module
+objects are not currently exported.
+
+## Debugging in VS Code
+
+Generated `.vscode/launch.json` provides:
+
+- **Launch VibeBuild32**: starts `vibebuild32 -dbg` and attaches automatically.
+- **Attach to running VibeBuild32**: attaches to a game already started with
+  `-dbg`/`--debug` or `-dt`/`--devtools`.
+
+The generated pre-launch task starts the project-local DAP adapter on localhost
+port **4714**. The game debugger bridge uses port **8501** by default; `-dbg`
+with no value selects that port. Do not manually add game arguments in the
+VS Code launch config: the adapter passes only `-dbg`.
+
+Use ordinary red-dot source breakpoints in `index.ts` or `index.js`. Breakpoints
+are installed before top-level module evaluation and `start` handlers run.
+Hover values, Variables, Continue, and Stop are supported. Stop closes the
+game and ends the VS Code debug session.
+
+Use the optional debug-only header directive to add launch arguments from a
+mod:
+
+```ts
+/// vbd.params="--game sw --grp '/Users/me/games/Shadow Warrior Complete/Sw.grp'"
+```
+
+`vbd.params` applies only to debug/devtools launches. Put it at the top of
+`index.ts` or `index.js`. The launcher parses quoted paths and the normal option
+spellings.
+
+`--devtools`/`-dt` opens the separate DevTools window; `--debug`/`-dbg`,
+`--devtools`/`-dt` imply `--skip-menu`/`-sm`. `--skip-menu`/`-sm` skips the
+native game-selector GUI, while `--menu`/`-m` forces it.
+
+## Extending the runtime
+
+The lifecycle/API seam is in `source/glue/vbjs.h` and
+`source/vibebuild32/src/vbjs.cpp`. Duke game-state bindings are implemented in
+`source/vibebuild32/src/vbjs_duke.cpp`. When adding an API, implement the real
+binding, export it from `vb`, and update the generated `vb.d.ts`; do not ship a
+stub. Add an explicit safe implementation or a deliberate throwing boundary
+for every other supported game.

@@ -33,7 +33,7 @@ and dispatched from `source/vibebuild32/src/gameselect.cpp` on `g_activeGame == 
 ## Selection
 
 `REDNECK.GRP` (or `redneck.grp`) in the working directory, or in an `rr/` subdir,
-makes Redneck Rampage available. Pick it with `-game rr` (aliases: `redneck`,
+makes Redneck Rampage available. Pick it with `--game rr` (short form `-gm rr`; aliases: `redneck`,
 `redneckrampage`), or from the console game picker when more than one game's data
 is present. RR uses the engine's native ENet netcode (like Blood), so the
 multiplayer feature set is ported onto that transport.

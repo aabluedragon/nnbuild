@@ -92,8 +92,21 @@ static int   s_scriptsLoaded = 0;
 static int   s_gameStartedPending = 0;
 static int   s_gameSessionActive = 0;
 static int   s_fatalScriptError = 0;
+static int   s_genericMode = 0;
 struct vbjs_fs_callback_t { JSValue callback, value; int error, existsStyle; };
 static std::vector<vbjs_fs_callback_t> s_fsCallbacks;
+
+// The shared runtime is also used by games that do not have Duke's logging
+// globals.  Keep their script diagnostics on the process log instead of
+// touching Duke's OSD state.
+static void vbjs_log(const char *message)
+{
+    if (s_genericMode)
+    {
+        initprintf("[js] %s\n", message ? message : "");
+    }
+    else vbjs_game::log(message);
+}
 
 // UDP sockets are non-blocking and polled by VBJS_RunFrame.  That keeps all
 // QuickJS calls on the game thread while preserving Node's event-driven dgram
@@ -298,9 +311,9 @@ static void vbjs_resolve(const char *name, char *out, size_t outsz)
 {
     char summary[8192];
     snprintf(summary, sizeof(summary), "%s%s%s", context ? context : "JavaScript error", context ? ": " : "", message ? message : "(unknown JavaScript error)");
-    vbjs_game::log(summary);
+    vbjs_log(summary);
     vbjs_devtools_log(summary);
-    if (stack && stack[0]) { vbjs_game::log(stack); vbjs_devtools_log(stack); }
+    if (stack && stack[0]) { vbjs_log(stack); vbjs_devtools_log(stack); }
 
     // Native message boxes on macOS provide selectable/copyable message text.
     // Show this before ending the process: errors otherwise vanish into the
@@ -372,7 +385,7 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst, int argc, JSValueCon
         }
         if (off >= sizeof(line) - 1) break;
     }
-    vbjs_game::log(line);
+    vbjs_log(line);
     vbjs_devtools_log(line);
     return JS_UNDEFINED;
 }
@@ -1357,6 +1370,29 @@ static void vbjs_define_vb(JSContext *ctx, JSValue target)
         static const char *names[] = { "VBComponent", "VBNode", "VBPrefab", "attach", "detach", "getComponent", "getComponents", "setComponentEnabled", "createNode", "destroyNode", "createPrefab", "spawnPrefab" };
         for (auto name : names) JS_SetPropertyStr(ctx, target, name, JS_GetPropertyStr(ctx, s_componentExports, name));
     }
+
+    // SW currently shares the JS host/debugger, but not Duke's game-state
+    // bindings.  Convert accidental Duke calls into a normal JS exception,
+    // which produces the in-game, copyable error dialog instead of a crash.
+    if (s_genericMode)
+    {
+        static const char *unsupported[] = {
+            "drawText", "clearText", "spawn", "A_Spawn", "A_InsertSprite", "sendMessage",
+            "getGamevar", "setGamevar", "player", "session", "setMenuText", "setMenuBackground",
+            "currentMenu", "openMenu", "setMenuRoute", "menuSelection", "setMenuSelection", "run",
+            "define", "sound", "shoot", "addAmmo", "addWeapon", "getActor", "setActor", "getPlayer",
+            "setPlayer", "getInput", "setInput", "getSector", "setSector", "getWall", "setWall",
+            "getProjectile", "setProjectile", "getActiveProjectile", "setActiveProjectile", "getTileData",
+            "setTileData", "getUserdef", "setUserdef", "VBComponent", "VBNode", "VBPrefab", "attach",
+            "detach", "getComponent", "getComponents", "setComponentEnabled", "createNode", "destroyNode",
+            "createPrefab", "spawnPrefab"
+        };
+        for (auto name : unsupported)
+            JS_SetPropertyStr(ctx, target, name, JS_NewCFunction(ctx,
+                [](JSContext *context, JSValueConst, int, JSValueConst *) -> JSValue {
+                    return JS_ThrowReferenceError(context, "This vb API is not supported by the active game");
+                }, name, 0));
+    }
 }
 static void vbjs_define_cvar(JSContext *ctx, JSValue target)
 {
@@ -1648,6 +1684,7 @@ extern "C" {
 int VBJS_IsEnabled(void) { return s_enabled; }
 
 void VBJS_CaptureLaunchDir(void) { if (!s_launchDir[0]) getcwd(s_launchDir, sizeof(s_launchDir)); }
+void VBJS_SetGenericMode(int enabled) { s_genericMode = enabled != 0; }
 
 void VBJS_SetScriptPath(const char *path) { vbjs_add_script(path); }
 
@@ -1996,10 +2033,10 @@ void VBJS_Init(void)
     s_fetchShuttingDown = false;
     curl_global_init(CURL_GLOBAL_DEFAULT);
     s_rt = JS_NewRuntime();
-    if (!s_rt) { vbjs_game::log("[js] failed to create runtime"); return; }
+    if (!s_rt) { vbjs_log("[js] failed to create runtime"); return; }
     JS_SetHostPromiseRejectionTracker(s_rt, vbjs_promise_rejection_tracker, nullptr);
     s_ctx = JS_NewContext(s_rt);
-    if (!s_ctx) { JS_FreeRuntime(s_rt); s_rt = nullptr; vbjs_game::log("[js] failed to create context"); return; }
+    if (!s_ctx) { JS_FreeRuntime(s_rt); s_rt = nullptr; vbjs_log("[js] failed to create context"); return; }
 
     vbjs_setup_context(s_ctx);
     // -dbg exposes the localhost attach endpoint. -dt implies it and also
@@ -2037,7 +2074,7 @@ static void vbjs_load_scripts(void)
         if (slash) *slash = 0; else s_scriptDir[0] = 0;
 
         size_t len = 0; char *src = vbjs_load_source(path, &len);
-        if (!src) { char m[1100]; snprintf(m, sizeof(m), "could not read %s", path); vbjs_game::log(m); continue; }
+        if (!src) { char m[1100]; snprintf(m, sizeof(m), "could not read %s", path); vbjs_log(m); continue; }
 
         JSValue r = JS_Eval(s_ctx, src, len, path, JS_EVAL_TYPE_MODULE);   // module so import/export work
         free(src);
@@ -2049,7 +2086,7 @@ static void vbjs_load_scripts(void)
         }
         else
         {
-            char m[1100]; snprintf(m, sizeof(m), "loaded %s", path); vbjs_game::log(m);
+            char m[1100]; snprintf(m, sizeof(m), "loaded %s", path); vbjs_log(m);
         }
         JS_FreeValue(s_ctx, r);
     }
@@ -2117,11 +2154,14 @@ void VBJS_RunFrame(void)
     vbjs_net_poll(s_ctx);
     vbjs_fetch_drain(s_ctx);
     if (s_devtoolsPaused) return;
-    int const menuOpen = vbjs_game::menuOpen();
-    if (s_observedMenuOpen >= 0 && s_observedMenuOpen != menuOpen)
-        VBJS_FireMenu(menuOpen ? "menuOpened" : "menuClosed", vbjs_game::currentMenu(), s_observedMenuId);
-    s_observedMenuOpen = menuOpen;
-    s_observedMenuId = vbjs_game::currentMenu();
+    if (!s_genericMode)
+    {
+        int const menuOpen = vbjs_game::menuOpen();
+        if (s_observedMenuOpen >= 0 && s_observedMenuOpen != menuOpen)
+            VBJS_FireMenu(menuOpen ? "menuOpened" : "menuClosed", vbjs_game::currentMenu(), s_observedMenuId);
+        s_observedMenuOpen = menuOpen;
+        s_observedMenuId = vbjs_game::currentMenu();
+    }
     for (auto &call : s_fsCallbacks)
     {
         JSValue args[2]; int argc = 0;

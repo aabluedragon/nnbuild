@@ -1,6 +1,6 @@
 # Adding Blood (from NotBlood) to the vibebuild32 executable
 
-## STATUS: DONE - Blood RUNS end-to-end in the unified binary (3 games in 1 exe)
+## STATUS: DONE — Blood runs end-to-end in the unified binary
 With your Blood data (notblood-win64: BLOOD.RFF + notblood.pk3 + TILES*.ART) in a
 `blood/` subdir and a seeded `~/.config/notblood/notblood.cfg` (ForceSetup=0, to
 skip the shared first-run setup window - same as SW's voidsw.cfg), `-game blood`
@@ -10,14 +10,19 @@ the demo-attract loop - VERIFIED actively running (99% CPU, state RN, in the gam
 loop, not deadlocked; sound gracefully degrades under dummy audio). One fix needed:
 guard FireInit's null-deref on tile 2342 (fire.cpp). Blood support is ACHIEVED.
 
-`make WITH_SW=1 WITH_BLOOD=1 vibebuild32` builds ONE 5.6MB binary that dispatches
-all three games. VERIFIED: `-game duke` -> Duke, `-game sw` -> Shadow Warrior, `-game blood` ->
-Blood, each running its own game from the one binary. Remaining: port the MP
-features onto Blood (its enet netcode is NETCODE_DISABLE'd; re-home onto shared
-mmulti + the weak-linked Masterserver_* pattern proven on SW).
+`make WITH_SW=1 WITH_BLOOD=1 WITH_RR=1 vibebuild32` builds one binary that
+dispatches all four supported games: Duke Nukem 3D, Shadow Warrior, Blood, and
+Redneck Rampage. Select Blood with `--game blood` (short form `-gm blood`).
+Blood retains its native ENet multiplayer; its masterserver/lobby integration is
+documented below.
+
+> Historical notes: the implementation log below records the original Blood
+> merge work. Several sections describe intermediate error counts or future
+> steps that are now complete; the status and build command above are the
+> current source of truth.
 
 
-Goal: a fourth `-game blood` in the one `vibebuild32` binary, sharing our engine,
+Historical goal: add `--game blood` (short form `-gm blood`) to the unified binary, sharing our engine,
 sourced from NotBlood (`/Users/alonamir/dev/NotBlood`). Same merge pattern as SW
 (see ../sw/UNIFY_WITH_VIBEBUILD32.md): compile Blood's game module against OUR
 engine, `ld -r` localize the game-internal collisions, dispatch `app_main` in
@@ -125,7 +130,7 @@ Engine changes landed (all null/no-op defaults, zero Duke/SW regression):
   CONTROL_GetControllerAxisIsTwinAxisStick, mouseMoveToCenter) via
   source/blood/src/vb_compat.cpp.
 
-## Remaining to a running -game blood (build wiring + runtime)
+## Historical remaining-to-running checklist (completed)
 A. Makefile: blood_obj + a WITH_BLOOD block mirroring WITH_SW (compile
    source/blood/src, exclude the 5 files above, ld -r localize collisions vs
    Duke+SW, blood_merged.o into vibebuild32_game_miscdeps).

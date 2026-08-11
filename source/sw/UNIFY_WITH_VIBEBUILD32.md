@@ -62,7 +62,7 @@ copies internally and they stop colliding with Duke's. No source edits. (Proven:
 ### [A] engine-referenced collisions — the shared engine/mact calls these
 These must resolve to one definition that routes to the **active** game.
 - `app_main` -> a new **game-selector** `app_main` (glue TU): detect the game
-  (GRP autodetect / `-game sw`), set `g_activeGame`, call `Duke_app_main` or
+  (GRP autodetect / `--game sw` or `-gm sw`), set `g_activeGame`, call `Duke_app_main` or
   `SW_app_main`.
 - `startwin_*` (6) + the ObjC `GameListSource`/`GrpFile`/`StartupWindow` classes
   -> **drop SW's startup-window objects** (`*.game.mm`, `startosx`/`startwin`,
@@ -117,6 +117,30 @@ These must resolve to one definition that routes to the **active** game.
    `EncodeBits`/`DecodeBits`), NOT Duke's `oldnet.cpp` (4153 LOC) that we extended
    with deterministic lockstep + masterserver/IPv6/STUN/mid-game transfer/skins.
    Each feature is Duke-game-specific and must be re-homed onto SW's net path.
+
+### JavaScript/TypeScript runtime and VS Code debugging
+
+Shadow Warrior now initializes the shared QuickJS host and runs it from both
+the menu and gameplay loops. This provides auto-loaded `autojs/<mod>/index.ts`
+or `index.js`, `on`/`off`/`log`, common modules, and VS Code source debugging
+when launched with `-dbg`/`--debug` (or `-dt`/`--devtools`). The safe generic
+runtime is intentionally not Duke's game-state API: Duke-only calls such as
+`define`, `player`, actor accessors, spawning, HUD drawing, and components
+throw a JavaScript error in SW. The error is logged and shown in the game's
+copyable error dialog rather than risking memory corruption.
+
+For a runnable SW debug starter, use only the shared imports and put a launch
+directive at the top of the entry file:
+
+```ts
+/// vbd.params="--game sw --grp '/path/to/Sw.grp' --skip-cinema"
+import { log, on } from 'vb';
+
+on('frame', () => log('safe SW frame callback'));
+```
+
+See `source/glue/VBJS.md` for generated projects, imports, supported APIs, and
+the VS Code adapter contract.
 
    What's already SHARED (free for SW via the engine, no port needed):
    - `mmulti.cpp` transport: dual-stack IPv4/IPv6 peers, STUN (`mmulti_punchto_str`/

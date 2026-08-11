@@ -2157,6 +2157,7 @@ MenuLevel(void)
     {
         handleevents();
         OSD_DispatchQueued();
+        VBJS_RunFrame();
 
         if (quitevent) CON_Quit();
 
@@ -2804,10 +2805,8 @@ Control(int32_t argc, char const * const * argv)
         return;
 
     MONO_PRINT("InitGame done");
-    // Shadow Warrior can expose the VS Code endpoint, but the current JS game
-    // bindings are Duke-specific. Do not instantiate that runtime here: doing
-    // so dereferences Duke game state and corrupts SW's heap.
-    if (VBJS_DebugEnabled()) VBJS_DevtoolsStartDebuggerBridge();
+    VBJS_SetGenericMode(1);
+    VBJS_Init();
     MNU_InitMenus();
     InGame = TRUE;
     GameIntro();
@@ -2827,7 +2826,7 @@ Control(int32_t argc, char const * const * argv)
     // The debugger bridge owns a listener thread. Stop it while SW's engine
     // state is still alive; otherwise macOS can tear down its shared globals
     // underneath that thread when the game window is closed.
-    VBJS_DevtoolsShutdownWindow();
+    VBJS_Shutdown();
     TerminateGame();
 }
 
@@ -3078,6 +3077,7 @@ RunLevel(void)
     {
         handleevents();
         OSD_DispatchQueued();
+        VBJS_RunFrame();
 
         if (quitevent) CON_Quit();
 
