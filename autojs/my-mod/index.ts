@@ -1,4 +1,4 @@
-/// vbd.params="-gm sw -g '/Users/alonamir/games/Shadow Warrior Complete/Sw.grp'"
+/// vbd.params="-gm sw -g '/Users/alonamir/games/Shadow Warrior Complete/Sw.grp' -l1"
 
 // VibeBuild32 auto-loads only index.ts (or index.js) from this project.
 import { VBComponent, createPrefab, on, log, drawText, define, getActor, spawnPrefab } from 'vb';

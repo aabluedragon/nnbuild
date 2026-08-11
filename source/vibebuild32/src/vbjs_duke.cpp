@@ -418,7 +418,7 @@ static void vbjs_web_debugger_start(void)
     int one = 1; setsockopt(s_webDebuggerListen, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
     // A stable, localhost-only port lets an external Debug Adapter attach to
     // a running game. The browser inspector uses the same bridge internally.
-    sockaddr_in address {}; address.sin_family = AF_INET; address.sin_addr.s_addr = htonl(INADDR_LOOPBACK); address.sin_port = htons(4712);
+    sockaddr_in address {}; address.sin_family = AF_INET; address.sin_addr.s_addr = htonl(INADDR_LOOPBACK); address.sin_port = htons(VBJS_DebugPort());
     if (bind(s_webDebuggerListen, (sockaddr *)&address, sizeof(address)) || listen(s_webDebuggerListen, 8)) { close(s_webDebuggerListen); s_webDebuggerListen = -1; return; }
     socklen_t length = sizeof(address); getsockname(s_webDebuggerListen, (sockaddr *)&address, &length); s_webDebuggerPort = ntohs(address.sin_port);
     if (!pthread_create(&s_webDebuggerThread, nullptr, vbjs_web_debugger_thread, nullptr)) { pthread_detach(s_webDebuggerThread); s_webDebuggerThreadStarted = 1; }

@@ -29,6 +29,10 @@ void VBJS_SetScriptPath(const char *path); // remember the -js argument (before 
 int  VBJS_GenerateProject(const char *name, int typescript); // create autojs/<name>/ JS or TS starter; 0 on success
 void VBJS_SetDevtools(int enabled);         // enable the lightweight JavaScript diagnostics overlay
 int  VBJS_DevtoolsEnabled(void);
+void VBJS_SetDebug(int enabled);            // enable the localhost debugger attach endpoint
+int  VBJS_DebugEnabled(void);
+void VBJS_SetDebugPort(int port);
+int  VBJS_DebugPort(void);
 const char *VBJS_DevtoolsLog(int index);    // oldest-first recent console log, or NULL
 int  VBJS_DevtoolsPaused(void);
 void VBJS_DevtoolsResume(void);

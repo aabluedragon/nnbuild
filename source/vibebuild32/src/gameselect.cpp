@@ -21,6 +21,7 @@
 #include "vbjs.h"
 #include <ctype.h>
 #include <dirent.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -202,8 +203,119 @@ static void gs_collectDebugParamsFromFile(char const *filename)
 static int gs_debugModeRequested(int argc, char const * const *argv)
 {
     for (int i = 1; i < argc; ++i)
-        if (gs_option(argv[i], "--devtools", "-dt", NULL, NULL)) return 1;
+    {
+        char const *arg = argv[i];
+        if (gs_option(arg, "--devtools", "-dt", NULL, NULL) || gs_option(arg, "--debug", "-dbg", NULL, NULL)) return 1;
+
+        // -dbg8501 and --debug8501 are valid port forms too.
+        if (!Bstrncasecmp(arg, "-dbg", 4) || !Bstrncasecmp(arg, "--debug", 7))
+        {
+            char const *port = (arg[1] == '-') ? arg + 7 : arg + 4;
+            if (*port && isdigit((unsigned char)*port)) return 1;
+        }
+    }
     return 0;
+}
+
+// Public colour order is Shadow Warrior's native player-colour order.  Other
+// games map it to their closest native player palette, so the same command
+// works across the combined binary.  Arbitrary #rrggbb values choose the
+// closest one of these eight palette-safe colours.
+static int gs_playerColorIndex(char const *value)
+{
+    static char const *const names[] = { "brown", "gray", "purple", "red", "yellow", "olive", "green", "blue" };
+    for (int i = 0; i < 8; ++i)
+        if (!Bstrcasecmp(value, names[i])) return i;
+
+    if (!value || value[0] != '#' || Bstrlen(value) != 7) return -1;
+    int rgb[3] = {};
+    for (int i = 0; i < 6; ++i)
+    {
+        int const c = value[i + 1];
+        int const digit = isdigit(c) ? c - '0' : (c >= 'a' && c <= 'f') ? c - 'a' + 10 : (c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
+        if (digit < 0) return -1;
+        rgb[i >> 1] = (rgb[i >> 1] << 4) | digit;
+    }
+    static int const palette[8][3] = {
+        { 128, 80, 32 }, { 128, 128, 128 }, { 128, 64, 160 }, { 224, 32, 32 },
+        { 240, 224, 32 }, { 128, 128, 32 }, { 32, 180, 48 }, { 32, 80, 224 },
+    };
+    int best = 0, bestDistance = INT_MAX;
+    for (int i = 0; i < 8; ++i)
+    {
+        int const dr = rgb[0] - palette[i][0], dg = rgb[1] - palette[i][1], db = rgb[2] - palette[i][2];
+        int const distance = dr * dr + dg * dg + db * db;
+        if (distance < bestDistance) best = i, bestDistance = distance;
+    }
+    return best;
+}
+
+static int gs_nativePlayerColor(int color)
+{
+    // Duke/RR palette lookups and Blood's colour-preference slots differ from
+    // SW's 0..7 selector, but each row preserves the requested hue.
+    static int const dukeRR[8] = { 15, 12, 21, 10, 23, 14, 11, 9 };
+    static int const blood[8]  = { 6, 4, 3, 2, 5, 6, 3, 1 };
+    if (g_activeGame == 1) return color;
+    if (g_activeGame == 2) return blood[color];
+    return dukeRR[color];
+}
+
+static int gs_colorOption(char const *arg, char const **inlineValue)
+{
+    if (gs_option(arg, "--color", "-clr", NULL, inlineValue)) return 1;
+    if (!Bstrncasecmp(arg, "--color", 7) && arg[7])
+    {
+        *inlineValue = arg + 7;
+        return 1;
+    }
+    if (!Bstrncasecmp(arg, "-clr", 4) && arg[4])
+    {
+        *inlineValue = arg + 4;
+        return 1;
+    }
+    return 0;
+}
+
+static int gs_resolutionOption(char const *arg, char const **inlineValue)
+{
+    if (gs_option(arg, "--resolution", "-res", NULL, inlineValue)) return 1;
+    if (!Bstrncasecmp(arg, "--resolution", 12) && arg[12])
+    {
+        *inlineValue = arg + 12;
+        return 1;
+    }
+    if (!Bstrncasecmp(arg, "-res", 4) && arg[4])
+    {
+        *inlineValue = arg + 4;
+        return 1;
+    }
+    return 0;
+}
+
+static int gs_monsterOption(char const *arg, char const **inlineValue)
+{
+    if (gs_option(arg, "--monsters", "-mnst", NULL, inlineValue)) return 1;
+    if (!Bstrncasecmp(arg, "--monsters", 10) && arg[10])
+    {
+        *inlineValue = arg + 10 + (arg[10] == '=');
+        return 1;
+    }
+    if (!Bstrncasecmp(arg, "-mnst", 5) && arg[5])
+    {
+        *inlineValue = arg + 5 + (arg[5] == '=');
+        return 1;
+    }
+    return 0;
+}
+
+static int gs_parseResolution(char const *value, int *width, int *height)
+{
+    char separator = 0, trailing = 0;
+    if (!value || sscanf(value, "%d%c%d%c", width, &separator, height, &trailing) != 3 ||
+        (separator != 'x' && separator != 'X') || *width < 320 || *width > 8192 || *height < 200 || *height > 4320)
+        return 0;
+    return 1;
 }
 
 static void gs_collectDebugParams(void)
@@ -301,7 +413,10 @@ static int gs_menu(int dukeAvail, int swAvail, int bloodAvail, int rrAvail)
 static void gs_choose(int argc, char const * const * argv)
 {
     const char *want = NULL;
-    int bypass = 0;
+    // A debugger launch must never wait for the interactive game picker: VS
+    // Code has no way to answer it.  Explicit --game/-gm still wins; without
+    // one, retain the normal first-available fallback below.
+    int bypass = gs_debugModeRequested(argc, argv);
     for (int i = 1; i < argc; i++)
     {
         const char *inlineValue = NULL;
@@ -310,7 +425,8 @@ static void gs_choose(int argc, char const * const * argv)
             if (inlineValue) want = inlineValue;
             else if (i + 1 < argc) want = argv[++i];
         }
-        else if (gs_option(argv[i], "--no-game-menu", "-ngm", "-nogamemenu", NULL))
+        else if (gs_option(argv[i], "--no-game-menu", "-ngm", "-nogamemenu", NULL) ||
+                 gs_option(argv[i], "--skip-menu", "-sm", NULL, NULL))
             bypass = 1;
     }
 
@@ -375,6 +491,10 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
     char const **out = (char const **)Xmalloc((2 * argc + 4) * sizeof(char *));
     int n = 0;
     int haveGameGrp = 0;
+    // All games already understand -nosetup.  Translate the VibeBuild32
+    // launcher spelling once, after the game selector has consumed it.
+    int skipMenu = gs_debugModeRequested(argc, argv);
+    int forceMenu = 0;
     for (int i = 0; i < argc; i++)
     {
         const char *inlineValue = NULL;
@@ -384,6 +504,7 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
         char const *compactName = NULL;
         if (gs_compactValueOption(argv[i], "--level", "-l", &inlineValue)) compactName = "-l";
         else if (gs_compactValueOption(argv[i], "--volume", "-v", &inlineValue)) compactName = "-v";
+        else if (gs_compactValueOption(argv[i], "--episode", "-e", &inlineValue)) compactName = "-v";
         if (compactName)
         {
             if (!inlineValue || !inlineValue[0])
@@ -391,9 +512,13 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
                 if (i + 1 >= argc) { out[n++] = compactName; continue; }
                 inlineValue = argv[++i];
             }
-            size_t const nameLength = Bstrlen(compactName), valueLength = Bstrlen(inlineValue);
+            // SW's original command line uses an attached `-level#` rather
+            // than Duke's `-l#`.  Keep the public VibeBuild32 spelling the
+            // same for every game while translating it at the final dispatch.
+            char const *const targetName = (g_activeGame == 1 && !Bstrcmp(compactName, "-l")) ? "-level" : compactName;
+            size_t const nameLength = Bstrlen(targetName), valueLength = Bstrlen(inlineValue);
             char *combined = (char *)Xmalloc(nameLength + valueLength + 1);
-            Bmemcpy(combined, compactName, nameLength);
+            Bmemcpy(combined, targetName, nameLength);
             Bmemcpy(combined + nameLength, inlineValue, valueLength + 1);
             out[n++] = combined;
             continue;
@@ -404,6 +529,75 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
             continue;
         }
         if (gs_option(argv[i], "--no-game-menu", "-ngm", "-nogamemenu", NULL)) continue;
+        if (gs_option(argv[i], "--skip-menu", "-sm", NULL, NULL)) { skipMenu = 1; continue; }
+        if (gs_option(argv[i], "--menu", "-m", NULL, NULL))
+        {
+            // All game frontends understand their longstanding -setup switch.
+            // Keep this explicit override even when -dbg implied --skip-menu.
+            forceMenu = 1;
+            out[n++] = "-setup";
+            continue;
+        }
+        if (gs_option(argv[i], "--skip-cinema", "-sc", NULL, NULL))
+        {
+            // -nologo is the shared engine-level suppression used by Duke,
+            // Shadow Warrior, Blood, and Redneck for their startup movies.
+            out[n++] = "-nologo";
+            continue;
+        }
+        inlineValue = NULL;
+        if (gs_monsterOption(argv[i], &inlineValue))
+        {
+            // RR's legacy parser calls this option `-enemies`; the other
+            // games receive the public spelling directly.
+            out[n++] = g_activeGame == 3 ? "-enemies" : "-monsters";
+            if (inlineValue) out[n++] = inlineValue;
+            continue;
+        }
+        if (gs_option(argv[i], "--window", "-wnd", NULL, NULL))
+        {
+            out[n++] = "-window";
+            continue;
+        }
+        if (gs_option(argv[i], "--fullscreen", "-fscr", NULL, NULL))
+        {
+            out[n++] = "-fullscreen";
+            continue;
+        }
+        inlineValue = NULL;
+        if (gs_resolutionOption(argv[i], &inlineValue))
+        {
+            char const *value = inlineValue;
+            if (!value && i + 1 < argc) value = argv[++i];
+            int width = 0, height = 0;
+            if (!gs_parseResolution(value, &width, &height))
+            {
+                fprintf(stderr, "Invalid resolution '%s' (use WIDTHxHEIGHT, from 320x200 through 8192x4320).\n", value ? value : "");
+                continue;
+            }
+            char *resolution = (char *)Xmalloc(24);
+            Bsnprintf(resolution, 24, "%dx%d", width, height);
+            out[n++] = "-resolution";
+            out[n++] = resolution;
+            continue;
+        }
+        inlineValue = NULL;
+        if (gs_colorOption(argv[i], &inlineValue))
+        {
+            char const *value = inlineValue;
+            if (!value && i + 1 < argc) value = argv[++i];
+            int const color = value ? gs_playerColorIndex(value) : -1;
+            if (color < 0)
+            {
+                fprintf(stderr, "Invalid player color '%s' (use brown, gray, purple, red, yellow, olive, green, blue, or #rrggbb).\n", value ? value : "");
+                continue;
+            }
+            char *nativeColor = (char *)Xmalloc(4);
+            Bsprintf(nativeColor, "%d", gs_nativePlayerColor(color));
+            out[n++] = "-color";
+            out[n++] = nativeColor;
+            continue;
+        }
         inlineValue = NULL;
         if (gs_option(argv[i], "--js", "-js", NULL, &inlineValue))
         {
@@ -432,6 +626,7 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
         out[n++] = "-gamegrp";
         out[n++] = gs_rrGrpFile;
     }
+    if (skipMenu && !forceMenu) out[n++] = "-nosetup";
     out[n] = NULL;
     *outArgc = n;
     return out;
@@ -441,7 +636,16 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
 int app_main(int32_t argc, char const * const * argv)
 {
     VBJS_CaptureLaunchDir();   // VibeBuild32: record the launch dir now (before any chdir) for autojs/
-    if (gs_debugModeRequested(argc, argv)) gs_collectDebugParams();
+    if (gs_debugModeRequested(argc, argv))
+    {
+        // Enable the shared debugger before dispatch. Shadow Warrior has its
+        // own command-line parser and therefore never reaches Duke's -dbg
+        // branch, but VS Code still needs the same localhost bridge.
+        VBJS_SetDebug(1);
+        for (int i = 1; i < argc; ++i)
+            if (gs_option(argv[i], "--devtools", "-dt", NULL, NULL)) { VBJS_SetDevtools(1); break; }
+        gs_collectDebugParams();
+    }
     int launchArgc = argc;
     char const **launchArgv = gs_buildArgvWithDebugParams(argc, argv, &launchArgc);
 

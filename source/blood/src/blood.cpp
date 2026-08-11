@@ -1425,9 +1425,13 @@ SWITCH switches[] = {
     { "level", 4, 2 },
     { "volume", 86, 1 },     // VibeBuild32 canonical: --volume <e> selects the episode
     { "v", 86, 1 },
+    { "color", 87, 1 },      // VibeBuild32 shared player-colour selector
+    { "window", 88, 0 },     // VibeBuild32 shared video-mode selectors
+    { "fullscreen", 89, 0 },
+    { "resolution", 90, 1 },
     { "nodudes", 5, 1 },
-    { "enemies", 85, 1 },    // VibeBuild32 canonical: --enemies <n> (0 = none, 1+ = skill)
-    { "e", 85, 1 },
+    { "monsters", 85, 1 },   // VibeBuild32 canonical: --monsters <n> (0 = none, 1+ = skill)
+    { "mnst", 85, 1 },
     //{ "playback", 6, 1 },
     //{ "record", 7, 1 },
     { "validate", 44, 1 },
@@ -1690,6 +1694,24 @@ void ParseOptions(void)
             bUseInternalMap = 1;
             bNoDemo = 1;
             break;
+        case 87:  // VibeBuild32 shared player-colour selector
+            if (OptArgc >= 1)
+                gPlayerColorPreference = ClipRange(atoi(OptArgv[0]), 0, 7);
+            break;
+        case 88:
+            gSetup.fullscreen = 0;
+            break;
+        case 89:
+            gSetup.fullscreen = 1;
+            break;
+        case 90:
+            if (OptArgc >= 1)
+            {
+                int width = 0, height = 0;
+                if (sscanf(OptArgv[0], "%dx%d", &width, &height) == 2 && width >= 320 && height >= 200)
+                    gSetup.xdim = width, gSetup.ydim = height;
+            }
+            break;
         case 30:
             if (OptArgc < 1)
                 ThrowError("Missing argument");
@@ -1714,7 +1736,7 @@ void ParseOptions(void)
         case 5:
             gGameOptions.nMonsterSettings = 0;
             break;
-        case 85:  // VibeBuild32 canonical: --enemies <n> / -e <n>; 0 = no enemies, 1+ = skill
+        case 85:  // VibeBuild32: --monsters <n> / -mnst <n>; 0 = no monsters, 1+ = skill
         {
             int const n = (OptArgc >= 1) ? (int)strtol(OptArgv[0], NULL, 0) : 0;  // 1-based: 0 = none, 1 = first skill
             if (n <= 0)

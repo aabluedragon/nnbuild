@@ -525,6 +525,32 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
+                if (!Bstrcasecmp(c+1, "color") && i + 1 < argc)
+                {
+                    ud.color = atoi(argv[++i]);
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c+1, "window"))
+                {
+                    ud.setup.fullscreen = 0;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c+1, "fullscreen"))
+                {
+                    ud.setup.fullscreen = 1;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c+1, "resolution") && i + 1 < argc)
+                {
+                    int width = 0, height = 0;
+                    if (sscanf(argv[++i], "%dx%d", &width, &height) == 2 && width >= 320 && height >= 200)
+                        ud.setup.xdim = width, ud.setup.ydim = height;
+                    i++;
+                    continue;
+                }
                 if (!Bstrcasecmp(c+1, "rotatesprite-no-widescreen"))
                 {
                     g_rotatespriteNoWidescreen = 1;
@@ -588,7 +614,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     { "group",'g',1 }, { "def",'h',1 }, { "demo",'d',1 }, { "playback",'d',1 },
                     { "con",'x',1 }, { "path",'j',1 }, { "coop",'c',1 }, { "players",'q',1 },
                     { "respawn",'t',1 }, { "weapons",'u',1 }, { "ai",'a',0 }, { "record",'r',0 },
-                    { "coords",'w',0 }, { "enemies",'e',1 },   // canonical cross-game names
+                    { "coords",'w',0 }, { "monsters",'e',1 }, { "mnst",'e',1 },
                 };
                 char name[24]; const char *inlineVal = Bstrchr(c+1, '=');
                 if (inlineVal) { int n = min((int)(inlineVal-(c+1)), 23); Bmemcpy(name, c+1, n); name[n] = 0; inlineVal++; }
@@ -626,7 +652,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     }
                     ud.m_coop--;
                     break;
-                case 'e':   // VibeBuild32 canonical: -e<n> / --enemies <n>; 0 = no enemies, 1+ = skill
+                case 'e':   // Internal RR mapping for --monsters/-mnst; 0 = no monsters, 1+ = skill
                 {
                     c++;
                     int const n = Batoi(c);   // 1-based: 0 = no enemies, 1 = first skill, ...

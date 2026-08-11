@@ -113,6 +113,8 @@ static int   s_observedMenuId = -1;
 // QuickJS at all when no script has requested the high-frequency event.
 static int   s_frameEventListened = 0;
 static int   s_devtools = 0;
+static int   s_debug = 0;
+static int   s_debugPort = 8501;
 enum { VBJS_DEVTOOLS_LOGS = 12 };
 static char s_devtoolsLogs[VBJS_DEVTOOLS_LOGS][192];
 static int s_devtoolsLogCount = 0;
@@ -1629,8 +1631,12 @@ void VBJS_CaptureLaunchDir(void) { if (!s_launchDir[0]) getcwd(s_launchDir, size
 
 void VBJS_SetScriptPath(const char *path) { vbjs_add_script(path); }
 
-void VBJS_SetDevtools(int enabled) { s_devtools = enabled != 0; }
+void VBJS_SetDevtools(int enabled) { s_devtools = enabled != 0; if (s_devtools) s_debug = 1; }
 int VBJS_DevtoolsEnabled(void) { return s_devtools; }
+void VBJS_SetDebug(int enabled) { s_debug = enabled != 0; }
+int VBJS_DebugEnabled(void) { return s_debug; }
+void VBJS_SetDebugPort(int port) { if (port > 0 && port <= 65535) s_debugPort = port; }
+int VBJS_DebugPort(void) { return s_debugPort; }
 void VBJS_DevtoolsPump(void)
 {
     if (!s_ctx || !s_debuggerWorkPending.exchange(false, std::memory_order_acq_rel)) return;
@@ -1976,14 +1982,17 @@ void VBJS_Init(void)
     if (!s_ctx) { JS_FreeRuntime(s_rt); s_rt = nullptr; vbjs_game::log("[js] failed to create context"); return; }
 
     vbjs_setup_context(s_ctx);
-    // The browser inspector is opt-in via -dt, but VS Code can attach to any
-    // running JS/TS mod. Keep its localhost-only bridge available either way.
-    pthread_mutex_lock(&s_debugTransport.mutex);
-    s_debugTransport.closed = 0; s_debugTransport.inbound.clear(); s_debugTransport.outbound[0].clear(); s_debugTransport.outbound[1].clear();
-    pthread_mutex_unlock(&s_debugTransport.mutex);
-    s_debuggerWorkPending.store(false, std::memory_order_release);
-    js_debugger_attach(s_ctx, vbjs_debug_read, vbjs_debug_write, vbjs_debug_peek, vbjs_debug_close, &s_debugTransport);
-    VBJS_DevtoolsStartDebuggerBridge();
+    // -dbg exposes the localhost attach endpoint. -dt implies it and also
+    // opens the visual inspector; ordinary mods incur no debugger overhead.
+    if (s_debug)
+    {
+        pthread_mutex_lock(&s_debugTransport.mutex);
+        s_debugTransport.closed = 0; s_debugTransport.inbound.clear(); s_debugTransport.outbound[0].clear(); s_debugTransport.outbound[1].clear();
+        pthread_mutex_unlock(&s_debugTransport.mutex);
+        s_debuggerWorkPending.store(false, std::memory_order_release);
+        js_debugger_attach(s_ctx, vbjs_debug_read, vbjs_debug_write, vbjs_debug_peek, vbjs_debug_close, &s_debugTransport);
+        VBJS_DevtoolsStartDebuggerBridge();
+    }
     // VS Code has to attach and submit breakpoints after the runtime starts.
     // Hold both top-level module evaluation and the one-shot `start` callback
     // until then, so breakpoints work everywhere in a freshly launched mod.
@@ -2064,10 +2073,15 @@ void VBJS_RunFrame(void)
     VBJS_DevtoolsPump();
     if (s_startPending)
     {
-        // Normal launches do not have a debugger client, so preserve startup
-        // behavior after a brief bounded wait (~0.5 seconds at 60 fps).
-        if (!js_debugger_configuration_done(s_ctx) && ++s_startWaitFrames < 30)
-            return;
+        // A VS Code client installs source breakpoints before sending
+        // configurationDone.  In -dbg/-dt mode, do not race that handshake:
+        // top-level statements and one-shot `start` handlers must remain
+        // breakable even on a slow editor/task startup.  Non-debug launches
+        // retain the short bounded wait used for ordinary auto-loaded mods.
+        if (!js_debugger_configuration_done(s_ctx))
+        {
+            if (s_debug || ++s_startWaitFrames < 30) return;
+        }
         s_startPending = 0;
         vbjs_load_scripts();
         VBJS_FireSimple("start");

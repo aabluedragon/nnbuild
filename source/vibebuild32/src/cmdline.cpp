@@ -66,8 +66,17 @@ static void G_ShowParameterHelp(void)
         "-gjs, --gen-js [name]\tCreate autojs/<name>/ JavaScript mod starter and exit\n"
         "-gts, --gen-ts [name]\tCreate autojs/<name>/ TypeScript mod starter and exit\n"
         "-js, --js [file.js]\tLoad a JavaScript user script\n"
-        "-dt, --devtools\tEnable JavaScript diagnostics and force windowed mode\n"
-        "-e, --enemies <n>\tSet enemies: 0 disables them; 1+ selects skill\n"
+        "-sm, --skip-menu\tSkip the game picker and native startup window\n"
+        "-m, --menu\t\tForce the native startup window (overrides -sm)\n"
+        "-sc, --skip-cinema\tSkip startup cinematics and logo animations\n"
+        "-clr, --color <name|#rrggbb>\tSet player color\n"
+        "-wnd, --window\tForce windowed video mode\n"
+        "-fscr, --fullscreen\tForce fullscreen video mode\n"
+        "-res, --resolution <WIDTHxHEIGHT>\tForce video resolution\n"
+        "-dbg, --debug\tEnable the JavaScript debugger attach endpoint\n"
+        "-dt, --devtools\tOpen JavaScript DevTools (implies -dbg; forces windowed mode)\n"
+        "-mnst, --monsters <n>\tSet monsters: 0 disables them; 1+ selects skill\n"
+        "-e, --episode <n>\tAlias for -v, --volume <n>\n"
         "-r, --record\t\tRecord a demo\n"
         "-pb, --playback [file]\tPlay a demo\n"
         "-l#\t\tWarp to level #, see -v\n"
@@ -177,15 +186,9 @@ void G_CheckCommandLine(int argc, char const* const* argv)
 
     if (argc > 1)
     {
-        Bstrcpy(tempbuf, "Application parameters: ");
-
-        while (i < argc)
-        {
-            Bstrcat(tempbuf, argv[i++]);
-            Bstrcat(tempbuf, " ");
-        }
-
-        LOG_F(INFO, "%s", tempbuf);
+        LOG_F(INFO, "Application parameters (%d):", argc - 1);
+        for (int arg = 0; arg < argc; ++arg)
+            LOG_F(INFO, "Command line argument %d: %s", arg, argv[arg]);
 
         i = 1;
         while (i < argc)
@@ -264,12 +267,26 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     VBJS_SetDevtools(1);
                     ud.config.ScreenMode = 0; // Devtools is a side overlay: never start fullscreen.
+                    g_noSetup = 1;            // debugger launches cannot wait in the native setup window
+                    g_commandSetup = 0;
                     LOG_F(INFO, "JavaScript devtools enabled (windowed mode).");
                     i++;
                     continue;
                 }
-                // VibeBuild32 canonical cross-game flag: --enemies/-e <n> (0 = no enemies, 1+ = skill).
-                if (!Bstrcasecmp(c + 1, "enemies") || !Bstrcasecmp(c + 1, "-enemies") || !Bstrcasecmp(c + 1, "e"))
+                if ((!Bstrncasecmp(c + 1, "debug", 5) && (!c[6] || isdigit((unsigned char)c[6]))) ||
+                    (!Bstrncasecmp(c + 1, "dbg", 3) && (!c[4] || isdigit((unsigned char)c[4]))))
+                {
+                    VBJS_SetDebug(1);
+                    g_noSetup = 1;            // launch straight into the game for VS Code
+                    g_commandSetup = 0;
+                    const char *portText = !Bstrncasecmp(c + 1, "debug", 5) ? c + 6 : c + 4;
+                    if (*portText) VBJS_SetDebugPort(atoi(portText));
+                    else if (i + 1 < argc && isdigit((unsigned char)argv[i + 1][0])) VBJS_SetDebugPort(atoi(argv[++i]));
+                    LOG_F(INFO, "JavaScript debugger attach endpoint enabled on port %d.", VBJS_DebugPort());
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "monsters") || !Bstrcasecmp(c + 1, "mnst"))
                 {
                     int const n = (argc > i + 1) ? atoi(argv[i + 1]) : 0;   // 1-based
                     if (n <= 0)
@@ -452,6 +469,33 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 if (!Bstrcasecmp(c + 1, "nologo"))
                 {
                     g_noLogo = 1;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "color") && i + 1 < argc)
+                {
+                    ud.m_color = ud.color = atoi(argv[++i]);
+                    LOG_F(INFO, "Player color palette: %d", ud.color);
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "window"))
+                {
+                    ud.config.ScreenMode = 0;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "fullscreen"))
+                {
+                    ud.config.ScreenMode = 1;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "resolution") && i + 1 < argc)
+                {
+                    int width = 0, height = 0;
+                    if (sscanf(argv[++i], "%dx%d", &width, &height) == 2 && width >= 320 && height >= 200)
+                        ud.config.ScreenWidth = width, ud.config.ScreenHeight = height;
                     i++;
                     continue;
                 }
@@ -737,24 +781,6 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                         LOG_F(INFO, "Play demo %s.", c);
                         Bstrcpy(firstdemofile, c);
                         break;
-                    case 'e':   // VibeBuild32 canonical: -e<n>; 0 = no enemies, 1+ = skill.
-                    case 'E':
-                    {
-                        c++;
-                        int const n = atoi(c);   // 1-based: 0 = no enemies, 1 = first skill, ...
-                        if (n <= 0)
-                        {
-                            M_DMFLAGS_SET(DMFLAG_NOMONSTERS, true);
-                            ud.m_player_skill = ud.player_skill = 0;
-                            LOG_F(INFO, "No enemies.");
-                        }
-                        else
-                        {
-                            M_DMFLAGS_SET(DMFLAG_NOMONSTERS, false);
-                            ud.m_player_skill = ud.player_skill = clamp(n - 1, 0, 4);
-                        }
-                        break;
-                    }
                     case 'g':
                     case 'G':
                         c++;

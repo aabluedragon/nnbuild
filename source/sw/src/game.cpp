@@ -62,6 +62,7 @@ Things required to make savegames work:
 #include "lists.h"
 #include "network.h"
 #include "netargs.h"   // VibeBuild32: unified multiplayer command-line flags
+#include "vbjs.h"
 #include "pal.h"
 #include "fx_man.h"
 
@@ -2803,6 +2804,10 @@ Control(int32_t argc, char const * const * argv)
         return;
 
     MONO_PRINT("InitGame done");
+    // Shadow Warrior can expose the VS Code endpoint, but the current JS game
+    // bindings are Duke-specific. Do not instantiate that runtime here: doing
+    // so dereferences Duke game state and corrupts SW's heap.
+    if (VBJS_DebugEnabled()) VBJS_DevtoolsStartDebuggerBridge();
     MNU_InitMenus();
     InGame = TRUE;
     GameIntro();
@@ -3309,6 +3314,24 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
         {
             g_noLogo = 1;
         }
+        else if (!Bstrcasecmp(o, "color") && i + 1 < argc)
+        {
+            gs.NetColor = clamp(atoi(argv[++i]), 0, 7);
+        }
+        else if (!Bstrcasecmp(o, "window"))
+        {
+            ud_setup.ScreenMode = 0;
+        }
+        else if (!Bstrcasecmp(o, "fullscreen"))
+        {
+            ud_setup.ScreenMode = 1;
+        }
+        else if (!Bstrcasecmp(o, "resolution") && i + 1 < argc)
+        {
+            int width = 0, height = 0;
+            if (sscanf(argv[++i], "%dx%d", &width, &height) == 2 && width >= 320 && height >= 200)
+                ud_setup.ScreenWidth = width, ud_setup.ScreenHeight = height;
+        }
         else if (!Bstrcasecmp(o, "punchto") && i+1 < argc)
         {
             Net_SetPunchTarget(argv[i+1]);  // SW-specific: client NAT-punch toward this server
@@ -3658,11 +3681,10 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
         {
             DebugActor = TRUE;
         }
-        // VibeBuild32 canonical: --enemies <n> / -e<n>; 0 = no enemies, 1+ = skill level.
-        else if (Bstrncasecmp(arg, "enemies", 7) == 0 || (Btolower(arg[0]) == 'e' && (isdigit((uint8_t)arg[1]) || arg[1] == 0)))
+        // --monsters/-mnst <n>; -e is reserved as the shared episode alias.
+        else if (Bstrncasecmp(arg, "monsters", 8) == 0 || Bstrncasecmp(arg, "mnst", 4) == 0)
         {
-            const char *nstr = (Btolower(arg[0]) == 'e' && arg[1]) ? arg + 1
-                             : (cnt + 1 < argc ? argv[++cnt] : "0");
+            const char *nstr = (cnt + 1 < argc ? argv[++cnt] : "0");
             int const n = atoi(nstr);
             if (n <= 0)
                 DebugActor = TRUE;              // no enemies

@@ -4,8 +4,6 @@
 // source-debugger bridge at http://127.0.0.1:<debugPort>.
 const net = require('net');
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
 const { spawn } = require('child_process');
 
 const listenPort = Number(process.argv[process.argv.indexOf('--port') + 1] || 4711);
@@ -19,51 +17,6 @@ const response = (socket, request, body = {}, success = true, message) =>
   write(socket, { type: 'response', request_seq: request.seq, command: request.command, success, message, body });
 const event = (socket, name, body = {}) => write(socket, { type: 'event', event: name, body });
 
-// `/// vbd.params="-l 1 -v 1"` is an optional top-of-index debug directive.
-// `vb.params` remains accepted for compatibility. Keep
-// parsing local instead of invoking a shell: whitespace and quotes work, but
-// no shell expansion or command substitution can occur.
-function splitVBParams(text) {
-  const args = []; let token = '', quote = '', escaped = false;
-  for (const char of text) {
-    if (escaped) { token += char; escaped = false; continue; }
-    if (char === '\\') { escaped = true; continue; }
-    if (quote) { if (char === quote) quote = ''; else token += char; continue; }
-    if (char === '"' || char === "'") { quote = char; continue; }
-    if (/\s/.test(char)) { if (token) { args.push(token); token = ''; } continue; }
-    token += char;
-  }
-  if (escaped) token += '\\';
-  if (quote) throw new Error('Unterminated quote in /// vbd.params directive');
-  if (token) args.push(token);
-  return args.map(arg => arg === '~' ? (process.env.HOME || arg) :
-    (arg.startsWith('~/') && process.env.HOME ? path.join(process.env.HOME, arg.slice(2)) : arg));
-}
-
-function unwrapVBParams(text) {
-  text = text.trim();
-  // The directive convention quotes the whole list. Strip only a matching
-  // outer pair so splitVBParams can still honour quotes inside an argument.
-  if (text.length >= 2 && (text[0] === '"' || text[0] === "'") && text.at(-1) === text[0])
-    return text.slice(1, -1);
-  return text;
-}
-
-function readVBParams(projectRoot) {
-  for (const filename of ['index.ts', 'index.js']) {
-    let source;
-    try { source = fs.readFileSync(path.join(projectRoot, filename), 'utf8'); }
-    catch (_) { continue; }
-    for (const line of source.split(/\r?\n/, 32)) {
-      const match = /^\s*\/\/\/\s*vbd?\.params\s*=\s*(.*?)\s*$/.exec(line);
-      if (match) return splitVBParams(unwrapVBParams(match[1]));
-      // The directive is intentionally a header option, not a runtime comment.
-      if (line.trim() && !/^\s*\/\//.test(line)) break;
-    }
-  }
-  return [];
-}
-
 function httpGet(port, path) {
   return new Promise((resolve, reject) => {
     const req = http.get({ host: '127.0.0.1', port, path, timeout: 700 }, res => {
@@ -75,7 +28,7 @@ function httpGet(port, path) {
 }
 
 class Session {
-  constructor(socket) { this.socket = socket; this.port = 4712; this.engineSeq = 100000; this.pending = new Map(); this.polling = false; this.child = null; this.bridgeFailures = 0; this.ended = false; }
+  constructor(socket) { this.socket = socket; this.port = 8501; this.engineSeq = 100000; this.pending = new Map(); this.polling = false; this.child = null; this.bridgeFailures = 0; this.ended = false; }
   endSession() {
     if (this.ended) return;
     this.ended = true; this.polling = false;
@@ -104,7 +57,7 @@ class Session {
       try { await httpGet(this.port, '/poll?client=vscode'); this.startPolling(); return; }
       catch (_) { await new Promise(resolve => setTimeout(resolve, 100)); }
     }
-    throw new Error(`Could not attach to VibeBuild32 on port ${this.port}. Start it with -dt.`);
+    throw new Error(`Could not attach to VibeBuild32 on port ${this.port}. Start it with -dbg or --debug.`);
   }
   startPolling() {
     if (this.polling) return; this.polling = true;
@@ -146,14 +99,13 @@ class Session {
         case 'initialize':
           response(this.socket, request, { supportsConfigurationDoneRequest: true, supportsEvaluateForHovers: true, supportsStepBack: false, supportsRestartRequest: false, supportsTerminateRequest: true }); break;
         case 'launch': {
-          this.port = Number(request.arguments.debugPort || 4712);
+          this.port = Number(request.arguments.debugPort || 8501);
           const executable = request.arguments.gameExecutable;
-          const data = request.arguments.gameData;
-          if (!executable || !data) throw new Error('launch requires gameExecutable and gameData');
-          const projectRoot = request.arguments.modRoot || path.resolve(__dirname, '..');
-          const params = readVBParams(projectRoot);
-          const gameArgs = ['-gm', request.arguments.game || 'duke', '-g', data, ...params];
-          if (params.length) console.log(`VibeBuild32 parameters from ${path.basename(projectRoot)}/index: ${params.join(' ')}`);
+          if (!executable) throw new Error('launch requires gameExecutable');
+          // VibeBuild32 itself reads /// vbd.params after receiving -dbg. The
+          // adapter must inject no game arguments beyond -dbg, otherwise the
+          // same directive is applied twice by the launcher.
+          const gameArgs = ['-dbg'];
           this.child = spawn(executable, gameArgs, { cwd: request.arguments.cwd || process.cwd(), stdio: 'inherit' });
           // The game can be closed from its own window, not only through DAP
           // Stop. Notify VS Code immediately in either case; waiting for the
@@ -162,7 +114,7 @@ class Session {
           this.child.once('error', () => this.endSession());
           await this.waitForBridge(); response(this.socket, request, {}); event(this.socket, 'initialized'); break;
         }
-        case 'attach': this.port = Number(request.arguments.debugPort || 4712); await this.waitForBridge(); response(this.socket, request, {}); event(this.socket, 'initialized'); break;
+        case 'attach': this.port = Number(request.arguments.debugPort || 8501); await this.waitForBridge(); response(this.socket, request, {}); event(this.socket, 'initialized'); break;
         case 'configurationDone':
           // Tell the runtime it may now fire its one-shot `start` callbacks:
           // source breakpoints have been installed at this point.

@@ -471,7 +471,7 @@ static struct {
 
 
         // always show checkbox
-        alwaysShowButton = makeCheckbox(@"Always show this window at startup");
+        alwaysShowButton = makeCheckbox(@"Show startup menu by default");
         [[tabViewItemSetup view] addSubview:alwaysShowButton];
         NSSize const alwaysShowButtonSize = [alwaysShowButton frame].size;
         NSRect const alwaysShowButtonFrame = NSSizeAddXY(alwaysShowButtonSize, tabViewItemSetupFrame.size.width - alwaysShowButtonSize.width, 0);
