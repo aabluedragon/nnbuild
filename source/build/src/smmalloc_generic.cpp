@@ -21,7 +21,12 @@
 // 	THE SOFTWARE.
 
 
-#ifdef USE_MIMALLOC
+#if defined(USE_MIMALLOC) && !defined(__APPLE__)
+// libc++ stores per-thread bookkeeping in pthread TLS. On macOS its TLS
+// destructor releases that bookkeeping through the system allocator, so a
+// process-wide mimalloc operator new/delete override corrupts shutdown for
+// worker threads (notably Shadow Warrior's audio pool). Keep mimalloc's
+// explicit allocation API, but let macOS use its matching C++ allocator.
 # include "mimalloc-new-delete.h"
 #endif
 
