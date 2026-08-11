@@ -3,29 +3,12 @@
   "tasks": [
     {
       "label": "VibeBuild32: Start VS Code debug adapter",
-      "type": "shell",
+      "type": "process",
       "command": "node",
-      "args": ["${workspaceFolder}/.vscode/vibebuild32-debug-adapter.js", "--port", "4714"],
+      "args": ["${workspaceFolder}/.vscode/vibebuild32-start-debug-adapter.js", "--port", "4714"],
       "options": {
         "env": {
           "NODE_OPTIONS": ""
-        }
-      },
-      "isBackground": true,
-      "problemMatcher": {
-        "owner": "vibebuild32",
-        "fileLocation": "absolute",
-        "pattern": {
-          "regexp": "^(.*):(\\d+):(\\d+):\\s*(.*)$",
-          "file": 1,
-          "line": 2,
-          "column": 3,
-          "message": 4
-        },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "^VibeBuild32 DAP adapter (already )?listening on 4714$",
-          "endsPattern": "^VibeBuild32 DAP adapter (already )?listening on 4714$"
         }
       }
     }

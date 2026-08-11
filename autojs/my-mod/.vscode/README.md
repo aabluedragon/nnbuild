@@ -20,7 +20,7 @@ Use `-res` / `--resolution WIDTHxHEIGHT` (for example, `-res 1280x720`) to
 force the video resolution.
 
 Set TypeScript or JavaScript breakpoints in `index.ts` / `index.js`, then press F5.
-The adapter is dependency-free and is started automatically by the included task (localhost port 4714).
+The adapter is dependency-free and is started automatically by the included task (localhost port 4714). The task waits for it to accept connections before VS Code starts the debug session.
 
 Pass your game and game-data arguments through the optional debug-only header directive near the top of `index.ts` or
 `index.js`:
