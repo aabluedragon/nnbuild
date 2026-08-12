@@ -1,3 +1,4 @@
 // VibeBuild32 shares Duke's macOS GRP-file interface.
-#pragma once
-#include "../../duke3d/src/GrpFile.game.h"
+#define GRPFILE_GAME_GRPSCAN_HEADER "../../vibebuild32/src/grpscan.h"
+#include "../../build/include/GrpFile.game.wrapper.h"
+#undef GRPFILE_GAME_GRPSCAN_HEADER

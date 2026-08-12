@@ -6,18 +6,21 @@
 // games define (see UNIFY_WITH_VIBEBUILD32.md) are renamed Duke_*/SW_*, and the
 // canonical names here route to the active game.
 //
-// Selection (per spec):
-//   --game/-gm <sw|duke>  pick a game explicitly
-//   --no-game-menu/-ngm  bypass the picker (use --game, else the single available
-//                     game, else Duke)
-// The GRP is looked for both in the working directory and in a per-game subdir
-// (duke3d/DUKE3D.GRP, sw/Sw.grp); the chosen game switches into that folder.
+// Selection:
+//   --game/-gm <duke|sw|blood|rr>  pick a game explicitly
+//   -g/--grp/-gamegrp <data-file>   infer the game from known data files
+//   --no-game-menu/-ngm             bypass the picker
+// The canonical data file is looked for both in the working directory and in a
+// per-game subdir (duke3d/DUKE3D.GRP, sw/Sw.grp, etc.); the chosen game
+// switches into that folder.
 //
-// SW is only linked (and dispatched to) when built with WITH_SW; without it this
-// is a transparent pass-through to Duke, so the default build is unchanged.
+// Extra games are linked and dispatched when built with their WITH_* flags.  The
+// default VibeBuild32 make target enables those flags, while explicit minimal
+// builds still fall back to Duke for games that are not linked.
 
 #include "compat.h"
 #include "baselayer.h"
+#include "crc32.h"
 #include "vbjs.h"
 #include <ctype.h>
 #include <dirent.h>
@@ -33,9 +36,18 @@
 # define gs_chdir chdir
 #endif
 
+enum
+{
+    GS_GAME_DUKE  = 0,
+    GS_GAME_SW    = 1,
+    GS_GAME_BLOOD = 2,
+    GS_GAME_RR    = 3,
+    GS_GAME_COUNT = 4,
+};
+
 // 0 = Duke3D (vibebuild32), 1 = Shadow Warrior, 2 = Blood, 3 = Redneck Rampage.
 // Read by the dispatchers.
-int g_activeGame = 0;
+int g_activeGame = GS_GAME_DUKE;
 
 // --- each game's real entry + the callbacks both games define (renamed) -------
 extern int Duke_app_main(int32_t argc, char const * const * argv);
@@ -66,6 +78,182 @@ static int gs_fileExists(const char *path)
     return 1;
 }
 
+static int gs_directoryExists(const char *path)
+{
+    DIR *directory = opendir(path);
+    if (!directory) return 0;
+    closedir(directory);
+    return 1;
+}
+
+static char const * const gs_dukeDataFiles[]  = { "DUKE3D.GRP", "duke3d.grp", NULL };
+static char const * const gs_swDataFiles[]    = { "SW.GRP", "Sw.grp", "sw.grp", NULL };
+static char const * const gs_bloodDataFiles[] = { "BLOOD.RFF", "blood.rff", NULL };
+static char const * const gs_rrDataFiles[]    = { "REDNECK.GRP", "redneck.grp", NULL };
+
+struct gs_gameSpec_t
+{
+    int id;
+    char const *name;
+    char const *subdir;
+    char const * const *defaultDataFiles;
+};
+
+static gs_gameSpec_t const gs_gameSpecs[GS_GAME_COUNT] =
+{
+    { GS_GAME_DUKE,  "Duke Nukem 3D",   "duke3d", gs_dukeDataFiles  },
+    { GS_GAME_SW,    "Shadow Warrior",  "sw",     gs_swDataFiles    },
+    { GS_GAME_BLOOD, "Blood",           "blood",  gs_bloodDataFiles },
+    { GS_GAME_RR,    "Redneck Rampage", "rr",     gs_rrDataFiles    },
+};
+
+static char const *gs_gameName(int game)
+{
+    return (unsigned)game < GS_GAME_COUNT ? gs_gameSpecs[game].name : "Duke Nukem 3D";
+}
+
+static int gs_linkedGameOrDuke(int game)
+{
+    if (game == GS_GAME_DUKE) return GS_GAME_DUKE;
+#ifdef WITH_SW
+    if (game == GS_GAME_SW) return GS_GAME_SW;
+#endif
+#ifdef WITH_BLOOD
+    if (game == GS_GAME_BLOOD) return GS_GAME_BLOOD;
+#endif
+#ifdef WITH_RR
+    if (game == GS_GAME_RR) return GS_GAME_RR;
+#endif
+    return GS_GAME_DUKE;
+}
+
+static gs_gameSpec_t const *gs_gameSpec(int game)
+{
+    return (unsigned)game < GS_GAME_COUNT ? &gs_gameSpecs[game] : &gs_gameSpecs[GS_GAME_DUKE];
+}
+
+static int gs_gameFromName(char const *name)
+{
+    if (!name) return -1;
+    if (!Bstrcasecmp(name, "duke") || !Bstrcasecmp(name, "duke3d") || !Bstrcasecmp(name, "dukenukem3d"))
+        return GS_GAME_DUKE;
+    if (!Bstrcasecmp(name, "sw") || !Bstrcasecmp(name, "shadowwarrior") || !Bstrcasecmp(name, "shadow-warrior"))
+        return GS_GAME_SW;
+    if (!Bstrcasecmp(name, "blood"))
+        return GS_GAME_BLOOD;
+    if (!Bstrcasecmp(name, "rr") || !Bstrcasecmp(name, "redneck") || !Bstrcasecmp(name, "redneckrampage") ||
+        !Bstrcasecmp(name, "redneck-rampage"))
+        return GS_GAME_RR;
+    return -1;
+}
+
+static char const *gs_basename(char const *path)
+{
+    if (!path) return "";
+    char const *slash = strrchr(path, '/');
+#ifdef _WIN32
+    char const *backslash = strrchr(path, '\\');
+    if (!slash || (backslash && backslash > slash)) slash = backslash;
+#endif
+    return slash ? slash + 1 : path;
+}
+
+static int gs_extEquals(char const *path, char const *extension)
+{
+    char const *dot = strrchr(gs_basename(path), '.');
+    return dot && !Bstrcasecmp(dot, extension);
+}
+
+static char const *gs_skipValueWhitespace(char const *value)
+{
+    while (value && isspace((unsigned char)*value)) ++value;
+    return value;
+}
+
+static int gs_hasPathSeparator(char const *path)
+{
+    if (!path) return 0;
+    if (strchr(path, '/')) return 1;
+#ifdef _WIN32
+    if (strchr(path, '\\')) return 1;
+#endif
+    return 0;
+}
+
+static char const *gs_expandHomePath(char const *path, char *buffer, int bufferSize)
+{
+    if (!path) return "";
+    if (path[0] == '~' && path[1] == '/')
+    {
+        char const *home = getenv("HOME");
+        if (home && home[0])
+        {
+            Bsnprintf(buffer, bufferSize, "%s%s", home, path + 1);
+            return buffer;
+        }
+    }
+    return path;
+}
+
+static int gs_splitPathDirectoryAndBase(char const *path, char **directory, char const **base)
+{
+    if (directory) *directory = NULL;
+    if (base) *base = gs_basename(path);
+    if (!path || !path[0]) return 0;
+
+    char expanded[BMAX_PATH];
+    char const *const fullPath = gs_expandHomePath(path, expanded, sizeof(expanded));
+    char const *slash = strrchr(fullPath, '/');
+#ifdef _WIN32
+    char const *backslash = strrchr(fullPath, '\\');
+    if (!slash || (backslash && backslash > slash)) slash = backslash;
+#endif
+    if (!slash) return 0;
+
+    if (base) *base = gs_basename(path);
+    if (directory)
+    {
+        size_t const length = (size_t)(slash - fullPath);
+        char *copy = (char *)Xmalloc(length ? length + 1 : 2);
+        if (length)
+        {
+            Bmemcpy(copy, fullPath, length);
+            copy[length] = 0;
+        }
+        else
+        {
+            Bstrcpy(copy, "/");
+        }
+        *directory = copy;
+    }
+    return 1;
+}
+
+static void gs_setInferredDataDir(char const *path);
+static int gs_inferGameFromDirectory(char const *path);
+
+static int gs_inferGameFromContainingDirectory(char const *path, int setDirForGame)
+{
+    char *directory = NULL;
+    int game = -1;
+
+    if (gs_splitPathDirectoryAndBase(path, &directory, NULL))
+    {
+        game = gs_inferGameFromDirectory(directory);
+        if (game >= 0 && (setDirForGame < 0 || game == setDirForGame))
+            gs_setInferredDataDir(directory);
+        Xfree(directory);
+    }
+    else
+    {
+        game = gs_inferGameFromDirectory(".");
+        if (game >= 0 && (setDirForGame < 0 || game == setDirForGame))
+            gs_setInferredDataDir(".");
+    }
+
+    return game;
+}
+
 // VibeBuild32's public spelling is --long-name or -short-name.  Keep the old
 // one-dash words as compatibility aliases so existing launch scripts do not
 // break while the help and docs consistently advertise the new form.
@@ -85,11 +273,52 @@ static int gs_option(const char *arg, const char *longName, const char *shortNam
         if (shortName && arg[0] == '-' && arg[1] == '-' && !Bstrcasecmp(arg + 1, shortName)) return 1;
         if (inlineValue && !Bstrncasecmp(arg, name, n) && arg[n] == '=')
         {
-            *inlineValue = arg + n + 1;
+            *inlineValue = gs_skipValueWhitespace(arg + n + 1);
             return 1;
         }
     }
     return 0;
+}
+
+static int gs_valueOptionWithAttached(char const *arg, char const *longName, char const *shortName,
+                                      char const *legacyName, char const **inlineValue)
+{
+    if (gs_option(arg, longName, shortName, legacyName, inlineValue)) return 1;
+
+    char const *const names[] = { longName, shortName, legacyName };
+    if (inlineValue) *inlineValue = NULL;
+    for (auto const name : names)
+    {
+        if (!name) continue;
+        size_t const length = Bstrlen(name);
+        if (Bstrncasecmp(arg, name, length)) continue;
+        if (!arg[length] || arg[length] == '=') continue;
+        if (inlineValue) *inlineValue = gs_skipValueWhitespace(arg + length);
+        return 1;
+    }
+    return 0;
+}
+
+static char const *gs_takeOptionValue(int *index, int argc, char const * const *argv, char const *inlineValue)
+{
+    if (inlineValue) return inlineValue;
+    if (*index + 1 >= argc) return NULL;
+    return argv[++(*index)];
+}
+
+static void gs_emitOptionValue(char const **out, int *count, char const *option, char const *value)
+{
+    out[(*count)++] = option;
+    if (value) out[(*count)++] = value;
+}
+
+static int gs_gameOption(char const *arg, char const **inlineValue)
+{
+    if (!Bstrncasecmp(arg, "--gamegrp", 9) || !Bstrncasecmp(arg, "-gamegrp", 8))
+        return 0;
+    if (!Bstrncasecmp(arg, "--game-dir", 10) || !Bstrncasecmp(arg, "-game_dir", 9))
+        return 0;
+    return gs_valueOptionWithAttached(arg, "--game", "-gm", "-game", inlineValue);
 }
 
 // Normalize a value-taking option whose legacy game parser expects the value
@@ -256,57 +485,24 @@ static int gs_nativePlayerColor(int color)
     // SW's 0..7 selector, but each row preserves the requested hue.
     static int const dukeRR[8] = { 15, 12, 21, 10, 23, 14, 11, 9 };
     static int const blood[8]  = { 6, 4, 3, 2, 5, 6, 3, 1 };
-    if (g_activeGame == 1) return color;
-    if (g_activeGame == 2) return blood[color];
+    if (g_activeGame == GS_GAME_SW) return color;
+    if (g_activeGame == GS_GAME_BLOOD) return blood[color];
     return dukeRR[color];
 }
 
 static int gs_colorOption(char const *arg, char const **inlineValue)
 {
-    if (gs_option(arg, "--color", "-clr", NULL, inlineValue)) return 1;
-    if (!Bstrncasecmp(arg, "--color", 7) && arg[7])
-    {
-        *inlineValue = arg + 7;
-        return 1;
-    }
-    if (!Bstrncasecmp(arg, "-clr", 4) && arg[4])
-    {
-        *inlineValue = arg + 4;
-        return 1;
-    }
-    return 0;
+    return gs_valueOptionWithAttached(arg, "--color", "-clr", NULL, inlineValue);
 }
 
 static int gs_resolutionOption(char const *arg, char const **inlineValue)
 {
-    if (gs_option(arg, "--resolution", "-res", NULL, inlineValue)) return 1;
-    if (!Bstrncasecmp(arg, "--resolution", 12) && arg[12])
-    {
-        *inlineValue = arg + 12;
-        return 1;
-    }
-    if (!Bstrncasecmp(arg, "-res", 4) && arg[4])
-    {
-        *inlineValue = arg + 4;
-        return 1;
-    }
-    return 0;
+    return gs_valueOptionWithAttached(arg, "--resolution", "-res", NULL, inlineValue);
 }
 
 static int gs_monsterOption(char const *arg, char const **inlineValue)
 {
-    if (gs_option(arg, "--monsters", "-mnst", NULL, inlineValue)) return 1;
-    if (!Bstrncasecmp(arg, "--monsters", 10) && arg[10])
-    {
-        *inlineValue = arg + 10 + (arg[10] == '=');
-        return 1;
-    }
-    if (!Bstrncasecmp(arg, "-mnst", 5) && arg[5])
-    {
-        *inlineValue = arg + 5 + (arg[5] == '=');
-        return 1;
-    }
-    return 0;
+    return gs_valueOptionWithAttached(arg, "--monsters", "-mnst", NULL, inlineValue);
 }
 
 static int gs_parseResolution(char const *value, int *width, int *height)
@@ -342,9 +538,9 @@ static void gs_collectDebugParams(void)
     closedir(directory);
 }
 
-static char const **gs_buildArgvWithDebugParams(int argc, char const * const *argv, int *outArgc)
+static char const * const *gs_buildArgvWithDebugParams(int argc, char const * const *argv, int *outArgc)
 {
-    if (!gs_debugParamCount) { *outArgc = argc; return (char const **)argv; }
+    if (!gs_debugParamCount) { *outArgc = argc; return argv; }
     char const **out = (char const **)Xmalloc((size_t)(argc + gs_debugParamCount + 1) * sizeof(char *));
     for (int i = 0; i < argc; ++i) out[i] = argv[i];
     for (int i = 0; i < gs_debugParamCount; ++i) out[argc + i] = gs_debugParams[i];
@@ -353,51 +549,421 @@ static char const **gs_buildArgvWithDebugParams(int argc, char const * const *ar
     return out;
 }
 
-// Look for `grp` in the working dir, then in `subdir/`. On success writes the
-// directory to hold the data (".", or the subdir) into outdir and returns 1.
-static int gs_findGrp(const char *grp, const char *subdir, char *outdir, int outsz)
+// Redneck Rampage needs an explicit -gamegrp in some paths because its CRC
+// autodetect does not recognize every REDNECK.GRP revision.
+static char gs_rrGrpFile[BMAX_PATH] = "";
+static char gs_inferredDataDir[BMAX_PATH] = "";
+
+static void gs_setRRGrpFile(char const *path)
 {
-    if (gs_fileExists(grp)) { Bstrncpyz(outdir, ".", outsz); return 1; }
-    char path[BMAX_PATH];
-    Bsnprintf(path, sizeof(path), "%s/%s", subdir, grp);
-    if (gs_fileExists(path)) { Bstrncpyz(outdir, subdir, outsz); return 1; }
-    return 1 == 0;  // false
+    if (path && path[0])
+        Bstrncpyz(gs_rrGrpFile, path, sizeof(gs_rrGrpFile));
 }
 
-// Duke ships DUKE3D.GRP; SW ships Sw.grp (a few case variants seen in the wild).
-static int gs_dukeAvail(char *dir, int sz) { return gs_findGrp("DUKE3D.GRP", "duke3d", dir, sz)
-                                                  || gs_findGrp("duke3d.grp", "duke3d", dir, sz); }
-static int gs_swAvail(char *dir, int sz)   { return gs_findGrp("SW.GRP", "sw", dir, sz)
-                                                  || gs_findGrp("Sw.grp", "sw", dir, sz)
-                                                  || gs_findGrp("sw.grp", "sw", dir, sz); }
-// Blood ships BLOOD.RFF (resource file), in the cwd or a blood/ subdir.
-static int gs_bloodAvail(char *dir, int sz){ return gs_findGrp("BLOOD.RFF", "blood", dir, sz)
-                                                  || gs_findGrp("blood.rff", "blood", dir, sz); }
-// Redneck Rampage ships REDNECK.GRP, in the cwd or an rr/ subdir. Remember which
-// spelling matched so we can hand RR an explicit -gamegrp (its CRC autodetect does
-// not recognize every REDNECK.GRP revision, and without a mounted grp all art/sound
-// is missing).
-static char gs_rrGrpFile[64] = "";
-static int gs_rrAvail(char *dir, int sz)
+static void gs_setInferredDataDir(char const *path)
 {
-    if (gs_findGrp("REDNECK.GRP", "rr", dir, sz)) { Bstrncpyz(gs_rrGrpFile, "REDNECK.GRP", sizeof(gs_rrGrpFile)); return 1; }
-    if (gs_findGrp("redneck.grp", "rr", dir, sz)) { Bstrncpyz(gs_rrGrpFile, "redneck.grp", sizeof(gs_rrGrpFile)); return 1; }
+    if (!path || !path[0]) return;
+    char expanded[BMAX_PATH];
+    char const *dir = gs_expandHomePath(path, expanded, sizeof(expanded));
+    if (gs_directoryExists(dir))
+        Bstrncpyz(gs_inferredDataDir, dir, sizeof(gs_inferredDataDir));
+}
+
+// Look for a game's canonical data file in the working dir, then in its
+// per-game subdir. On success writes the directory to hold the data (".", or
+// the subdir) into outdir and returns 1.
+static int gs_findGameDataFile(int game, char *outdir, int outsz, char *matched, int matchedsz)
+{
+    gs_gameSpec_t const *spec = gs_gameSpec(game);
+    for (char const * const *file = spec->defaultDataFiles; file && *file; ++file)
+    {
+        if (gs_fileExists(*file))
+        {
+            Bstrncpyz(outdir, ".", outsz);
+            if (matched) Bstrncpyz(matched, *file, matchedsz);
+            return 1;
+        }
+
+        char path[BMAX_PATH];
+        Bsnprintf(path, sizeof(path), "%s/%s", spec->subdir, *file);
+        if (gs_fileExists(path))
+        {
+            Bstrncpyz(outdir, spec->subdir, outsz);
+            if (matched) Bstrncpyz(matched, *file, matchedsz);
+            return 1;
+        }
+    }
     return 0;
+}
+
+static int gs_gameAvail(int game, char *dir, int sz)
+{
+    char matched[BMAX_PATH] = "";
+    int const found = gs_findGameDataFile(game, dir, sz, matched, sizeof(matched));
+    if (found && game == GS_GAME_RR)
+        gs_setRRGrpFile(matched);
+    return found;
+}
+
+struct gs_dataSignature_t
+{
+    int game;
+    int32_t size;
+    uint32_t crc;
+};
+
+static gs_dataSignature_t const gs_dataSignatures[] =
+{
+    // Duke Nukem 3D main GRPs and common official/add-on GRPs.
+    { GS_GAME_DUKE,  26524524, 0xBBC9CE44u },
+    { GS_GAME_DUKE,  26385383, 0xAA4F6A40u },
+    { GS_GAME_DUKE,  44356548, 0xFD3DCFF1u },
+    { GS_GAME_DUKE,  44356548, 0x982AFE4Au },
+    { GS_GAME_DUKE,  44348015, 0xF514A6ACu },
+    { GS_GAME_DUKE,   9690241, 0x02F18900u },
+    { GS_GAME_DUKE,  10429258, 0xA28AA589u },
+    { GS_GAME_DUKE,  10442980, 0x912E1E8Du },
+    { GS_GAME_DUKE,  11035779, 0x983AD923u },
+    { GS_GAME_DUKE,  10444391, 0xC5F71561u },
+    { GS_GAME_DUKE,  10628573, 0x73A15EE7u },
+    { GS_GAME_DUKE,   7926624, 0xA9242158u },
+    { GS_GAME_DUKE,   8225517, 0xB79D997Fu },
+    { GS_GAME_DUKE,   8410183, 0xA8CF80DAu },
+    { GS_GAME_DUKE,   8410187, 0x39A692BFu },
+    { GS_GAME_DUKE,   8410149, 0xC63B6A8Bu },
+    { GS_GAME_DUKE,  23559381, 0x4A2DBB62u },
+    { GS_GAME_DUKE,  22551333, 0x2F4FCCEEu },
+    { GS_GAME_DUKE,  22521880, 0xB62B42FDu },
+    { GS_GAME_DUKE,  22213819, 0x18F01C5Bu },
+    { GS_GAME_DUKE,  22397273, 0x65B5F690u },
+    { GS_GAME_DUKE,  22213795, 0x64CF2351u },
+    { GS_GAME_DUKE,  16169365, 0xF1CAE8E4u },
+    { GS_GAME_DUKE,  10965909, 0xC7EFBFA9u },
+    { GS_GAME_DUKE,  26135388, 0x82C1B47Fu },
+    { GS_GAME_DUKE,  44100411, 0x7FB6117Cu },
+    { GS_GAME_DUKE,   3186656, 0x1E9516F1u },
+    { GS_GAME_DUKE,   2112419, 0x7CD82A3Bu },
+    { GS_GAME_DUKE,   4247491, 0xCF928A58u },
+    { GS_GAME_DUKE,  43448927, 0x75C1F07Bu },
+    { GS_GAME_DUKE,  44365728, 0x3DE1589Au },
+    { GS_GAME_DUKE,  77939508, 0x907B82BFu },
+    { GS_GAME_DUKE,  37852572, 0xD1ED8C0Cu },
+
+    // Shadow Warrior main/shareware/add-on GRPs.
+    { GS_GAME_SW,    47536148, 0x7545319Fu },
+    { GS_GAME_SW,    47536148, 0xD4A1E153u },
+    { GS_GAME_SW,    47536148, 0x3EE68767u },
+    { GS_GAME_SW,    47537951, 0x1A8776D2u },
+    { GS_GAME_SW,    25702245, 0xDAA6BECEu },
+    { GS_GAME_SW,    25833456, 0xF21A6B35u },
+    { GS_GAME_SW,    26056769, 0x08A7FA1Fu },
+    { GS_GAME_SW,    26056769, 0x4227F535u },
+    { GS_GAME_SW,    48698128, 0xA9AAA7B7u },
+    { GS_GAME_SW,    12499012, 0xA1A65BE8u },
+    { GS_GAME_SW,     6235578, 0xACC8DCDEu },
+    { GS_GAME_SW,     6236287, 0xB5B71277u },
+
+    // Redneck Rampage / Rides Again.
+    { GS_GAME_RR,   141174222, 0x19D9BC79u },
+    { GS_GAME_RR,   191798609, 0x958018C6u },
+};
+
+static int gs_fileSignature(char const *path, int32_t *size, uint32_t *crc)
+{
+    FILE *file = fopen(path, "rb");
+    if (!file) return 0;
+
+    static int crcTableReady = 0;
+    if (!crcTableReady)
+    {
+        initcrc32table();
+        crcTableReady = 1;
+    }
+
+    unsigned char buffer[65536];
+    uint32_t value = 0;
+    long total = 0;
+    size_t bytes = 0;
+
+    while ((bytes = fread(buffer, 1, sizeof(buffer), file)) > 0)
+    {
+        if (total > INT_MAX - (long)bytes)
+        {
+            fclose(file);
+            return 0;
+        }
+        value = Bcrc32(buffer, (int)bytes, value);
+        total += (long)bytes;
+    }
+
+    int const ok = !ferror(file);
+    fclose(file);
+    if (!ok) return 0;
+
+    *size = (int32_t)total;
+    *crc = value;
+    return 1;
+}
+
+static int gs_isBloodRffFile(char const *path)
+{
+    if (!gs_extEquals(path, ".rff")) return 0;
+
+    FILE *file = fopen(path, "rb");
+    if (!file) return 0;
+
+    unsigned char header[6] = {};
+    size_t const bytes = fread(header, 1, sizeof(header), file);
+    fclose(file);
+
+    if (bytes != sizeof(header) || Bmemcmp(header, "RFF\x1a", 4))
+        return 0;
+
+    uint16_t const version = (uint16_t)(header[4] | (header[5] << 8));
+    return (version & 0xff00) == 0x0200 || (version & 0xff00) == 0x0300;
+}
+
+static int gs_isBloodIniFile(char const *path)
+{
+    if (!gs_extEquals(path, ".ini")) return 0;
+
+    FILE *file = fopen(path, "r");
+    if (!file) return 0;
+
+    int hasEpisode = 0;
+    int hasMapEntry = 0;
+    int hasInstall = 0;
+    char line[1024];
+
+    for (int i = 0; i < 256 && fgets(line, sizeof(line), file); ++i)
+    {
+        char *p = line;
+        while (*p && isspace((unsigned char)*p)) ++p;
+
+        if (!Bstrncasecmp(p, "[Episode", 8))
+            hasEpisode = 1;
+        else if (!Bstrncasecmp(p, "[Install]", 9))
+            hasInstall = 1;
+        else if (!Bstrncasecmp(p, "Map", 3) && strchr(p, '='))
+            hasMapEntry = 1;
+
+        if (hasEpisode && (hasMapEntry || hasInstall))
+            break;
+    }
+
+    fclose(file);
+    return hasEpisode && (hasMapEntry || hasInstall);
+}
+
+static int gs_inferGameFromSignature(int32_t size, uint32_t crc)
+{
+    for (auto const &signature : gs_dataSignatures)
+        if (signature.size == size && signature.crc == crc)
+            return signature.game;
+    return -1;
+}
+
+static int gs_inferGameFromBasename(char const *path)
+{
+    char const *base = gs_basename(path);
+    if (!Bstrcasecmp(base, "DUKE3D.GRP") || !Bstrcasecmp(base, "duke.grp"))
+        return GS_GAME_DUKE;
+    if (!Bstrcasecmp(base, "SW.GRP") || !Bstrcasecmp(base, "WANTON.GRP") ||
+        !Bstrcasecmp(base, "TD.GRP") || !Bstrcasecmp(base, "TWIN DRAGON.GRP") ||
+        !Bstrcasecmp(base, "TWIN_DRAGON.GRP"))
+        return GS_GAME_SW;
+    if (!Bstrcasecmp(base, "BLOOD.RFF") || !Bstrcasecmp(base, "BLOOD.INI"))
+        return GS_GAME_BLOOD;
+    if (!Bstrcasecmp(base, "REDNECK.GRP") || !Bstrcasecmp(base, "RR.GRP") ||
+        !Bstrcasecmp(base, "RRRA.GRP") || !Bstrcasecmp(base, "RIDES.GRP"))
+        return GS_GAME_RR;
+    return -1;
+}
+
+static int gs_inferGameFromDirectory(char const *path)
+{
+    char expanded[BMAX_PATH];
+    char const *dir = gs_expandHomePath(path, expanded, sizeof(expanded));
+    int foundGame = -1;
+    for (auto const &spec : gs_gameSpecs)
+    {
+        for (char const * const *file = spec.defaultDataFiles; file && *file; ++file)
+        {
+            char candidate[BMAX_PATH * 2];
+            Bsnprintf(candidate, sizeof(candidate), "%s/%s", dir, *file);
+            if (!gs_fileExists(candidate)) continue;
+            if (foundGame >= 0 && foundGame != spec.id) return -1;
+            foundGame = spec.id;
+            break;
+        }
+    }
+    return foundGame;
+}
+
+static int gs_inferGameFromDataPath(char const *path)
+{
+    if (!path || !path[0]) return -1;
+
+    char expanded[BMAX_PATH];
+    char const *dataPath = gs_expandHomePath(path, expanded, sizeof(expanded));
+
+    int32_t size = 0;
+    uint32_t crc = 0;
+    if (gs_fileSignature(dataPath, &size, &crc))
+    {
+        int const game = gs_inferGameFromSignature(size, crc);
+        if (game >= 0)
+        {
+            if (game == GS_GAME_RR) gs_setRRGrpFile(dataPath);
+            return game;
+        }
+    }
+
+    if (gs_isBloodRffFile(dataPath) || gs_isBloodIniFile(dataPath))
+    {
+        gs_setInferredDataDir(dataPath);
+        gs_inferGameFromContainingDirectory(dataPath, GS_GAME_BLOOD);
+        return GS_GAME_BLOOD;
+    }
+
+    int game = gs_inferGameFromBasename(dataPath);
+    if (game >= 0)
+    {
+        if (game == GS_GAME_RR) gs_setRRGrpFile(dataPath);
+        gs_inferGameFromContainingDirectory(dataPath, game);
+        return game;
+    }
+
+    game = gs_inferGameFromDirectory(dataPath);
+    if (game >= 0) gs_setInferredDataDir(dataPath);
+    if (game == GS_GAME_RR) gs_setRRGrpFile("REDNECK.GRP");
+    if (game >= 0) return game;
+
+    if (gs_hasPathSeparator(dataPath))
+    {
+        game = gs_inferGameFromContainingDirectory(dataPath, -1);
+        if (game == GS_GAME_RR) gs_setRRGrpFile("REDNECK.GRP");
+        return game;
+    }
+
+    return -1;
+}
+
+static int gs_gameGrpOption(char const *arg, char const **inlineValue)
+{
+    return gs_valueOptionWithAttached(arg, "--gamegrp", "-gamegrp", NULL, inlineValue);
+}
+
+static int gs_grpOption(char const *arg, char const **inlineValue)
+{
+    if (gs_valueOptionWithAttached(arg, "--grp", "-grp", NULL, inlineValue)) return 1;
+    if (gs_option(arg, NULL, "-g", NULL, inlineValue)) return 1;
+    if (!Bstrncasecmp(arg, "-g", 2) && arg[2] && arg[2] != '=' &&
+        Bstrncasecmp(arg, "-gm", 3) && Bstrncasecmp(arg, "-game", 5) &&
+        Bstrncasecmp(arg, "-gjs", 4) && Bstrncasecmp(arg, "-gts", 4))
+    {
+        if (inlineValue) *inlineValue = arg + 2;
+        return 1;
+    }
+    return 0;
+}
+
+static int gs_dataFileOption(char const *arg, char const **inlineValue)
+{
+    return gs_grpOption(arg, inlineValue) || gs_gameGrpOption(arg, inlineValue) ||
+           gs_valueOptionWithAttached(arg, "--rff", "-rff", NULL, inlineValue) ||
+           gs_valueOptionWithAttached(arg, "--ini", "-ini", NULL, inlineValue);
+}
+
+static int gs_gameDirOption(char const *arg, char const **inlineValue)
+{
+    return gs_valueOptionWithAttached(arg, "--game-dir", "-game_dir", "-game_dir", inlineValue);
+}
+
+static int gs_searchPathOption(char const *arg, char const **inlineValue)
+{
+    // Do not let the `-j` path shorthand consume VibeBuild32's `-js` script option.
+    if (!Bstrncasecmp(arg, "-js", 3)) return 0;
+    return gs_valueOptionWithAttached(arg, "--search-path", "-j", NULL, inlineValue) ||
+           gs_valueOptionWithAttached(arg, "--path", NULL, NULL, inlineValue);
+}
+
+static int gs_inferGameFromArgs(int argc, char const * const *argv, char *reason, int reasonSize)
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        char const *inlineValue = NULL;
+        char const *value = NULL;
+
+        if (gs_dataFileOption(argv[i], &inlineValue))
+        {
+            value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            int const game = gs_inferGameFromDataPath(value);
+            if (game >= 0)
+            {
+                if (reason) Bsnprintf(reason, reasonSize, "data file '%s'", value ? value : "");
+                return game;
+            }
+            continue;
+        }
+
+        if (gs_gameDirOption(argv[i], &inlineValue))
+        {
+            value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            int const game = gs_inferGameFromDirectory(value);
+            if (game >= 0)
+            {
+                gs_setInferredDataDir(value);
+                if (reason) Bsnprintf(reason, reasonSize, "game directory '%s'", value ? value : "");
+                return game;
+            }
+            continue;
+        }
+
+        if (gs_searchPathOption(argv[i], &inlineValue))
+        {
+            value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            int const game = gs_inferGameFromDirectory(value);
+            if (game >= 0)
+            {
+                gs_setInferredDataDir(value);
+                if (reason) Bsnprintf(reason, reasonSize, "search path '%s'", value ? value : "");
+                return game;
+            }
+            continue;
+        }
+
+        // A bare data file on the command line is accepted by the existing
+        // game parsers; use it for selection too.
+        if (argv[i][0] != '-')
+        {
+            int const game = gs_inferGameFromDataPath(argv[i]);
+            if (game >= 0)
+            {
+                if (reason) Bsnprintf(reason, reasonSize, "data file '%s'", argv[i]);
+                return game;
+            }
+        }
+    }
+    return -1;
 }
 
 // First-cut picker: a console prompt listing whichever games are present.
 // (A graphical picker in the startup window is a follow-up.) Returns the game
 // index (0=Duke, 1=SW, 2=Blood, 3=Redneck Rampage).
-static int gs_menu(int dukeAvail, int swAvail, int bloodAvail, int rrAvail)
+static int gs_menu(int const gameAvail[GS_GAME_COUNT])
 {
-    int opt[4], nopt = 0;
+    int opt[GS_GAME_COUNT], nopt = 0;
     fprintf(stderr, "\nSelect a game:\n");
-    if (dukeAvail)  { opt[nopt] = 0; fprintf(stderr, "  %d) Duke Nukem 3D\n",  nopt + 1); nopt++; }
-    if (swAvail)    { opt[nopt] = 1; fprintf(stderr, "  %d) Shadow Warrior\n", nopt + 1); nopt++; }
-    if (bloodAvail) { opt[nopt] = 2; fprintf(stderr, "  %d) Blood\n",          nopt + 1); nopt++; }
-    if (rrAvail)    { opt[nopt] = 3; fprintf(stderr, "  %d) Redneck Rampage\n", nopt + 1); nopt++; }
+    for (auto const &spec : gs_gameSpecs)
+    {
+        if (!gameAvail[spec.id]) continue;
+        opt[nopt] = spec.id;
+        fprintf(stderr, "  %d) %s\n", nopt + 1, spec.name);
+        nopt++;
+    }
     if (nopt <= 1)
-        return nopt == 1 ? opt[0] : 0;
+        return nopt == 1 ? opt[0] : GS_GAME_DUKE;
     fprintf(stderr, "Choice [1]: ");
     fflush(stderr);
     char line[16] = "";
@@ -410,6 +976,22 @@ static int gs_menu(int dukeAvail, int swAvail, int bloodAvail, int rrAvail)
     return opt[pick - 1];
 }
 
+static int gs_firstAvailable(int const gameAvail[GS_GAME_COUNT])
+{
+    for (auto const &spec : gs_gameSpecs)
+        if (gameAvail[spec.id])
+            return spec.id;
+    return GS_GAME_DUKE;
+}
+
+static int gs_availableCount(int const gameAvail[GS_GAME_COUNT])
+{
+    int count = 0;
+    for (auto const &spec : gs_gameSpecs)
+        count += gameAvail[spec.id] ? 1 : 0;
+    return count;
+}
+
 static void gs_choose(int argc, char const * const * argv)
 {
     const char *want = NULL;
@@ -420,64 +1002,66 @@ static void gs_choose(int argc, char const * const * argv)
     for (int i = 1; i < argc; i++)
     {
         const char *inlineValue = NULL;
-        if (gs_option(argv[i], "--game", "-gm", "-game", &inlineValue))
+        if (gs_gameOption(argv[i], &inlineValue))
         {
-            if (inlineValue) want = inlineValue;
-            else if (i + 1 < argc) want = argv[++i];
+            want = gs_takeOptionValue(&i, argc, argv, inlineValue);
         }
         else if (gs_option(argv[i], "--no-game-menu", "-ngm", "-nogamemenu", NULL) ||
                  gs_option(argv[i], "--skip-menu", "-sm", NULL, NULL))
             bypass = 1;
     }
 
-    char dukeDir[BMAX_PATH] = "", swDir[BMAX_PATH] = "", bloodDir[BMAX_PATH] = "", rrDir[BMAX_PATH] = "";
-    int const dukeAvail  = gs_dukeAvail(dukeDir, sizeof(dukeDir));
-    int const swAvail    = gs_swAvail(swDir, sizeof(swDir));
-    int const bloodAvail = gs_bloodAvail(bloodDir, sizeof(bloodDir));
-    int const rrAvail    = gs_rrAvail(rrDir, sizeof(rrDir));
-
-    // pick the first available game (Duke > SW > Blood > RR) as the fallback default
-    #define GS_FIRST_AVAIL (dukeAvail ? 0 : (swAvail ? 1 : (bloodAvail ? 2 : 3)))
+    gs_rrGrpFile[0] = 0;
+    gs_inferredDataDir[0] = 0;
+    char gameDirs[GS_GAME_COUNT][BMAX_PATH] = {};
+    int gameAvail[GS_GAME_COUNT] = {};
+    for (auto const &spec : gs_gameSpecs)
+        gameAvail[spec.id] = gs_gameAvail(spec.id, gameDirs[spec.id], sizeof(gameDirs[spec.id]));
 
     int sel = -1;
     if (want)
+        sel = gs_gameFromName(want);
+    else
     {
-        if (!Bstrcasecmp(want, "sw") || !Bstrcasecmp(want, "shadowwarrior")) sel = 1;
-        else if (!Bstrcasecmp(want, "blood")) sel = 2;
-        else if (!Bstrcasecmp(want, "rr") || !Bstrcasecmp(want, "redneck") || !Bstrcasecmp(want, "redneckrampage")) sel = 3;
-        else if (!Bstrcasecmp(want, "duke") || !Bstrcasecmp(want, "duke3d")) sel = 0;
+        char inferenceReason[BMAX_PATH * 2] = "";
+        int const inferred = gs_inferGameFromArgs(argc, argv, inferenceReason, sizeof(inferenceReason));
+        if (inferred >= 0)
+        {
+            sel = inferred;
+            LOG_F(INFO, "Game selector: inferred %s from %s", gs_gameName(sel), inferenceReason);
+        }
     }
     if (sel < 0)
     {
-        int const nAvail = (dukeAvail ? 1 : 0) + (swAvail ? 1 : 0) + (bloodAvail ? 1 : 0) + (rrAvail ? 1 : 0);
+        int const nAvail = gs_availableCount(gameAvail);
         if (nAvail == 1)
-            sel = GS_FIRST_AVAIL;
+            sel = gs_firstAvailable(gameAvail);
         else if (nAvail > 1)
-            sel = bypass ? GS_FIRST_AVAIL : gs_menu(dukeAvail, swAvail, bloodAvail, rrAvail);
+            sel = bypass ? gs_firstAvailable(gameAvail) : gs_menu(gameAvail);
         else
-            sel = 0;  // none found; let Duke's normal grp search report it
+            sel = GS_GAME_DUKE;  // none found; let Duke's normal grp search report it
     }
-    #undef GS_FIRST_AVAIL
 
-#ifndef WITH_SW
-    if (sel == 1) sel = 0;  // SW not compiled in
-#endif
-#ifndef WITH_BLOOD
-    if (sel == 2) sel = 0;  // Blood not compiled in
-#endif
-#ifndef WITH_RR
-    if (sel == 3) sel = 0;  // Redneck Rampage not compiled in
-#endif
+    sel = gs_linkedGameOrDuke(sel);
     g_activeGame = sel;
 
-    const char *const name = (sel == 3) ? "Redneck Rampage" : (sel == 2) ? "Blood" : (sel == 1) ? "Shadow Warrior" : "Duke Nukem 3D";
-    const char *dir = (sel == 3) ? rrDir : (sel == 2) ? bloodDir : (sel == 1) ? swDir : dukeDir;
+    const char *const name = gs_gameName(sel);
+    const char *dir = gs_inferredDataDir[0] ? gs_inferredDataDir : gameDirs[sel];
     if (dir[0] && Bstrcmp(dir, "."))
     {
         if (gs_chdir(dir) == 0)
             LOG_F(INFO, "Game selector: switched into '%s' for %s", dir, name);
     }
     LOG_F(INFO, "Game selector: launching %s", name);
+}
+
+static void gs_emitIniOption(char const **out, int *count, char const *value)
+{
+    char *directory = NULL;
+    char const *base = value;
+    if (g_activeGame == GS_GAME_BLOOD && value && gs_splitPathDirectoryAndBase(value, &directory, &base))
+        gs_emitOptionValue(out, count, "-game_dir", directory);
+    gs_emitOptionValue(out, count, "-ini", value ? base : NULL);
 }
 
 // Build a copy of argv with the selector's own options (--game/-gm <name>,
@@ -488,7 +1072,7 @@ static void gs_choose(int argc, char const * const * argv)
 static char const **gs_filterArgv(int argc, char const * const * argv, int *outArgc)
 {
     // Up to 2 entries per arg (a "-name=value" splits in two), plus injected -gamegrp.
-    char const **out = (char const **)Xmalloc((2 * argc + 4) * sizeof(char *));
+    char const **out = (char const **)Xmalloc((3 * argc + 8) * sizeof(char *));
     int n = 0;
     int haveGameGrp = 0;
     // All games already understand -nosetup.  Translate the VibeBuild32
@@ -515,7 +1099,7 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
             // SW's original command line uses an attached `-level#` rather
             // than Duke's `-l#`.  Keep the public VibeBuild32 spelling the
             // same for every game while translating it at the final dispatch.
-            char const *const targetName = (g_activeGame == 1 && !Bstrcmp(compactName, "-l")) ? "-level" : compactName;
+            char const *const targetName = (g_activeGame == GS_GAME_SW && !Bstrcmp(compactName, "-l")) ? "-level" : compactName;
             size_t const nameLength = Bstrlen(targetName), valueLength = Bstrlen(inlineValue);
             char *combined = (char *)Xmalloc(nameLength + valueLength + 1);
             Bmemcpy(combined, targetName, nameLength);
@@ -523,9 +1107,9 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
             out[n++] = combined;
             continue;
         }
-        if (gs_option(argv[i], "--game", "-gm", "-game", &inlineValue))
+        if (gs_gameOption(argv[i], &inlineValue))
         {
-            if (!inlineValue) i++;  // skip flag + its separate value
+            (void)gs_takeOptionValue(&i, argc, argv, inlineValue);  // skip flag + its separate value
             continue;
         }
         if (gs_option(argv[i], "--no-game-menu", "-ngm", "-nogamemenu", NULL)) continue;
@@ -550,8 +1134,8 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
         {
             // RR's legacy parser calls this option `-enemies`; the other
             // games receive the public spelling directly.
-            out[n++] = g_activeGame == 3 ? "-enemies" : "-monsters";
-            if (inlineValue) out[n++] = inlineValue;
+            char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            gs_emitOptionValue(out, &n, g_activeGame == GS_GAME_RR ? "-enemies" : "-monsters", value);
             continue;
         }
         if (gs_option(argv[i], "--window", "-wnd", NULL, NULL))
@@ -567,8 +1151,7 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
         inlineValue = NULL;
         if (gs_resolutionOption(argv[i], &inlineValue))
         {
-            char const *value = inlineValue;
-            if (!value && i + 1 < argc) value = argv[++i];
+            char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
             int width = 0, height = 0;
             if (!gs_parseResolution(value, &width, &height))
             {
@@ -577,15 +1160,13 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
             }
             char *resolution = (char *)Xmalloc(24);
             Bsnprintf(resolution, 24, "%dx%d", width, height);
-            out[n++] = "-resolution";
-            out[n++] = resolution;
+            gs_emitOptionValue(out, &n, "-resolution", resolution);
             continue;
         }
         inlineValue = NULL;
         if (gs_colorOption(argv[i], &inlineValue))
         {
-            char const *value = inlineValue;
-            if (!value && i + 1 < argc) value = argv[++i];
+            char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
             int const color = value ? gs_playerColorIndex(value) : -1;
             if (color < 0)
             {
@@ -593,18 +1174,71 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
                 continue;
             }
             char *nativeColor = (char *)Xmalloc(4);
-            Bsprintf(nativeColor, "%d", gs_nativePlayerColor(color));
-            out[n++] = "-color";
-            out[n++] = nativeColor;
+            Bsnprintf(nativeColor, 4, "%d", gs_nativePlayerColor(color));
+            gs_emitOptionValue(out, &n, "-color", nativeColor);
+            continue;
+        }
+        inlineValue = NULL;
+        if (gs_gameDirOption(argv[i], &inlineValue))
+        {
+            char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            gs_emitOptionValue(out, &n, "-game_dir", value);
+            continue;
+        }
+        inlineValue = NULL;
+        if (gs_searchPathOption(argv[i], &inlineValue))
+        {
+            char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            gs_emitOptionValue(out, &n, "-j", value);
+            continue;
+        }
+        inlineValue = NULL;
+        int const isGameGrp = gs_gameGrpOption(argv[i], &inlineValue);
+        if (isGameGrp || gs_grpOption(argv[i], &inlineValue))
+        {
+            char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+
+            if (isGameGrp)
+            {
+                haveGameGrp = 1;
+                gs_emitOptionValue(out, &n, "-gamegrp", value);
+                continue;
+            }
+
+            if (g_activeGame == GS_GAME_BLOOD && value && gs_extEquals(value, ".rff"))
+            {
+                gs_emitOptionValue(out, &n, "-rff", value);
+                continue;
+            }
+            if (g_activeGame == GS_GAME_BLOOD && value && gs_extEquals(value, ".ini"))
+            {
+                gs_emitIniOption(out, &n, value);
+                continue;
+            }
+
+            gs_emitOptionValue(out, &n, "-g", value);
+            continue;
+        }
+        inlineValue = NULL;
+        if (gs_valueOptionWithAttached(argv[i], "--rff", "-rff", NULL, &inlineValue))
+        {
+            char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            gs_emitOptionValue(out, &n, "-rff", value);
+            continue;
+        }
+        inlineValue = NULL;
+        if (gs_valueOptionWithAttached(argv[i], "--ini", "-ini", NULL, &inlineValue))
+        {
+            char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            gs_emitIniOption(out, &n, value);
             continue;
         }
         inlineValue = NULL;
         if (gs_option(argv[i], "--js", "-js", NULL, &inlineValue))
         {
-            if (!inlineValue) i++;  // the script path was already captured by app_main
+            (void)gs_takeOptionValue(&i, argc, argv, inlineValue);  // the script path was already captured by app_main
             continue;
         }
-        if (!Bstrcasecmp(argv[i], "-gamegrp")) haveGameGrp = 1;
 
         // Modern args: split an option token's "=value" off into its own token.
         const char *a = argv[i], *eq;
@@ -621,10 +1255,9 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
     }
     // RR's grp CRC autodetect misses some REDNECK.GRP revisions; since we already
     // located the file, name it explicitly so its art/sound actually mount.
-    if (g_activeGame == 3 && gs_rrGrpFile[0] && !haveGameGrp)
+    if (g_activeGame == GS_GAME_RR && gs_rrGrpFile[0] && !haveGameGrp)
     {
-        out[n++] = "-gamegrp";
-        out[n++] = gs_rrGrpFile;
+        gs_emitOptionValue(out, &n, "-gamegrp", gs_rrGrpFile);
     }
     if (skipMenu && !forceMenu) out[n++] = "-nosetup";
     out[n] = NULL;
@@ -647,7 +1280,7 @@ int app_main(int32_t argc, char const * const * argv)
         gs_collectDebugParams();
     }
     int launchArgc = argc;
-    char const **launchArgv = gs_buildArgvWithDebugParams(argc, argv, &launchArgc);
+    char const * const *launchArgv = gs_buildArgvWithDebugParams(argc, argv, &launchArgc);
 
     // Parse launcher-owned script arguments before Duke's legacy parser. In
     // particular, the legacy -net option treats later tokens as network data;
@@ -656,8 +1289,7 @@ int app_main(int32_t argc, char const * const * argv)
     {
         const char *inlineValue = NULL;
         if (!gs_option(launchArgv[i], "--js", "-js", NULL, &inlineValue)) continue;
-        const char *path = inlineValue;
-        if (!path && i + 1 < launchArgc) path = launchArgv[++i];
+        const char *path = gs_takeOptionValue(&i, launchArgc, launchArgv, inlineValue);
         if (path && path[0]) VBJS_SetScriptPath(path);
     }
 
@@ -689,19 +1321,25 @@ int app_main(int32_t argc, char const * const * argv)
 
     gs_choose(launchArgc, launchArgv);
 
+    if (getenv("VIBEBUILD32_SELECTOR_DRY_RUN"))
+    {
+        LOG_F(INFO, "Game selector: selected %s", gs_gameName(g_activeGame));
+        return EXIT_SUCCESS;
+    }
+
     int fargc = 0;
     char const **fargv = gs_filterArgv(launchArgc, launchArgv, &fargc);
 
 #ifdef WITH_SW
-    if (g_activeGame == 1)
+    if (g_activeGame == GS_GAME_SW)
         return SW_app_main(fargc, fargv);
 #endif
 #ifdef WITH_BLOOD
-    if (g_activeGame == 2)
+    if (g_activeGame == GS_GAME_BLOOD)
         return Blood_app_main(fargc, fargv);
 #endif
 #ifdef WITH_RR
-    if (g_activeGame == 3)
+    if (g_activeGame == GS_GAME_RR)
         return RR_app_main(fargc, fargv);
 #endif
     return Duke_app_main(fargc, fargv);
@@ -712,13 +1350,13 @@ int app_main(int32_t argc, char const * const * argv)
 extern "C" const char *G_DefaultDefFile(void)
 {
 #ifdef WITH_SW
-    if (g_activeGame == 1) return SW_G_DefaultDefFile();
+    if (g_activeGame == GS_GAME_SW) return SW_G_DefaultDefFile();
 #endif
 #ifdef WITH_BLOOD
-    if (g_activeGame == 2) return Blood_G_DefaultDefFile();
+    if (g_activeGame == GS_GAME_BLOOD) return Blood_G_DefaultDefFile();
 #endif
 #ifdef WITH_RR
-    if (g_activeGame == 3) return RR_G_DefaultDefFile();
+    if (g_activeGame == GS_GAME_RR) return RR_G_DefaultDefFile();
 #endif
     return Duke_G_DefaultDefFile();
 }
@@ -726,13 +1364,13 @@ extern "C" const char *G_DefaultDefFile(void)
 extern "C" void faketimerhandler(void)
 {
 #ifdef WITH_SW
-    if (g_activeGame == 1) { SW_faketimerhandler(); return; }
+    if (g_activeGame == GS_GAME_SW) { SW_faketimerhandler(); return; }
 #endif
 #ifdef WITH_BLOOD
-    if (g_activeGame == 2) { Blood_faketimerhandler(); return; }
+    if (g_activeGame == GS_GAME_BLOOD) { Blood_faketimerhandler(); return; }
 #endif
 #ifdef WITH_RR
-    if (g_activeGame == 3) { RR_faketimerhandler(); return; }
+    if (g_activeGame == GS_GAME_RR) { RR_faketimerhandler(); return; }
 #endif
     Duke_faketimerhandler();
 }

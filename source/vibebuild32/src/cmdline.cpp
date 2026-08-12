@@ -59,10 +59,10 @@ static void G_ShowParameterHelp(void)
         "-cfg [file.cfg]\tUse an alternate configuration file\n"
         "-c#\t\tUse MP mode #, 1 = Dukematch, 2 = Coop, 3 = Team Dukematch\n"
         "-d[file.dmo]\tPlay a demo\n"
-        "-g, --grp [file.grp]\tUse an extra group file\n"
+        "-g, --grp [file.grp]\tUse a group/data file; also infers game if -gm is omitted\n"
         "-h[file.def]\tUse an alternate def\n"
         "-j[dir]\t\tAdds a directory to EDuke32's search list\n"
-        "-gm, --game <name>\tChoose Duke, SW, Blood, or RR\n"
+        "-gm, --game <name>\tForce Duke, SW, Blood, or RR (optional when data path identifies it)\n"
         "-gjs, --gen-js [name]\tCreate autojs/<name>/ JavaScript mod starter and exit\n"
         "-gts, --gen-ts [name]\tCreate autojs/<name>/ TypeScript mod starter and exit\n"
         "-js, --js [file.js]\tLoad a JavaScript user script\n"
@@ -182,11 +182,11 @@ void G_CheckCommandLine(int argc, char const* const* argv)
     g_player[0].wchoice[7] = 2;
     g_player[0].wchoice[8] = 9;
     g_player[0].wchoice[9] = 1;
-    Bsprintf(ud.wchoice, "3457860291");
+    Bsnprintf(ud.wchoice, sizeof(ud.wchoice), "3457860291");
 
     if (argc > 1)
     {
-        LOG_F(INFO, "Application parameters (%d):", argc - 1);
+        LOG_F(INFO, "Application parameters (%d):", argc);
         for (int arg = 0; arg < argc; ++arg)
             LOG_F(INFO, "Command line argument %d: %s", arg, argv[arg]);
 
@@ -948,7 +948,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                             g_player[0].wchoice[7] = 2;
                             g_player[0].wchoice[8] = 9;
                             g_player[0].wchoice[9] = 1;
-                            Bsprintf(ud.wchoice, "3457860291");
+                            Bsnprintf(ud.wchoice, sizeof(ud.wchoice), "3457860291");
                         }
                         break;
                     case 'v':

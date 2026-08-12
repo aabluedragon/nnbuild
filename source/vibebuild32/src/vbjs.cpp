@@ -275,6 +275,25 @@ static char *vbjs_read_file(const char *path, size_t *out_len)
     return buf;
 }
 
+static char *vbjs_read_vscode_template(const char *file, size_t *out_len)
+{
+    char source[1400];
+
+    snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", s_launchDir, file);
+    if (char *contents = vbjs_read_file(source, out_len)) return contents;
+
+    char *appdir = Bgetappdir();
+    if (appdir)
+    {
+        snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", appdir, file);
+        char *contents = vbjs_read_file(source, out_len);
+        Xfree(appdir);
+        if (contents) return contents;
+    }
+
+    return nullptr;
+}
+
 // TypeScript -> JavaScript (implemented in vbjs_ts.cpp; strips type syntax so .ts runs).
 extern "C" char *vbjs_ts_to_js(const char *src, size_t *len);
 
@@ -1969,9 +1988,8 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     const char *vscodeFiles[] = { "launch.json", "tasks.json", "README.md", "vibebuild32-debug-adapter.js", "vibebuild32-start-debug-adapter.js" };
     for (auto file : vscodeFiles)
     {
-        char source[1400], target[1400]; size_t length = 0;
-        snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", s_launchDir, file);
-        char *contents = vbjs_read_file(source, &length);
+        char target[1400]; size_t length = 0;
+        char *contents = vbjs_read_vscode_template(file, &length);
         if (!contents) return -1;
         snprintf(target, sizeof(target), "%s/%s", vscode, file);
         int failed = vbjs_write_text(target, contents); free(contents);

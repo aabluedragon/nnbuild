@@ -9,10 +9,20 @@ const portArg = process.argv.indexOf('--port');
 const listenPort = Number(portArg >= 0 ? process.argv[portArg + 1] : 4711);
 let nextSeq = 1, activeSession = null, idleTimer = null, shuttingDown = false;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const healthProbe = Buffer.from('VibeBuild32-DAP-Health\n');
+function armIdleTimer() {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(shutdownAdapter, 60000);
+  idleTimer.unref?.();
+}
 const write = (socket, message) => {
   if (!socket || socket.destroyed || socket.writableEnded || !socket.writable) return false;
   const json = JSON.stringify({ seq: nextSeq++, ...message });
-  return socket.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
+  try {
+    return socket.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
+  } catch (_) {
+    return false;
+  }
 };
 const response = (s, r, body = {}, success = true, message) => write(s, { type: 'response', request_seq: r.seq, command: r.command, success, message, body });
 const event = (s, name, body = {}) => write(s, { type: 'event', event: name, body });
@@ -95,13 +105,41 @@ class Session {
   }
 }
 const server = net.createServer(socket => {
+  if (shuttingDown) return socket.destroy();
   // The short-lived preLaunchTask probes this port before handing it to VS
-  // Code.  A bare TCP probe is not a DAP client: do not create/close a
-  // session until the first DAP request actually arrives.
+  // Code.  A health probe is not a DAP client: do not create/close a session
+  // until the first DAP request actually arrives.
   let session = null, buffer = Buffer.alloc(0);
   socket.on('error', () => {});
-  socket.on('data', chunk => { buffer = Buffer.concat([buffer, chunk]); for (;;) { const split = buffer.indexOf('\r\n\r\n'); if (split < 0) return; const match = /^Content-Length:\s*(\d+)/im.exec(buffer.subarray(0, split).toString()); if (!match) return socket.destroy(); const end = split + 4 + Number(match[1]); if (buffer.length < end) return; const request = JSON.parse(buffer.subarray(split + 4, end).toString()); buffer = buffer.subarray(end); if (request.type === 'request') { if (!session) { if (activeSession) return socket.destroy(); if (idleTimer) clearTimeout(idleTimer); session = activeSession = new Session(socket); } session.handle(request); } } });
+  socket.on('data', chunk => {
+    buffer = Buffer.concat([buffer, chunk]);
+    if (!session && buffer.length <= healthProbe.length && healthProbe.subarray(0, buffer.length).equals(buffer)) {
+      if (buffer.length === healthProbe.length) {
+        armIdleTimer();
+        socket.end('ok\n');
+      }
+      return;
+    }
+    for (;;) {
+      const split = buffer.indexOf('\r\n\r\n');
+      if (split < 0) return;
+      const match = /^Content-Length:\s*(\d+)/im.exec(buffer.subarray(0, split).toString());
+      if (!match) return socket.destroy();
+      const end = split + 4 + Number(match[1]);
+      if (buffer.length < end) return;
+      const request = JSON.parse(buffer.subarray(split + 4, end).toString());
+      buffer = buffer.subarray(end);
+      if (request.type === 'request') {
+        if (!session) {
+          if (activeSession) return socket.destroy();
+          if (idleTimer) clearTimeout(idleTimer);
+          session = activeSession = new Session(socket);
+        }
+        session.handle(request);
+      }
+    }
+  });
   socket.on('close', () => { if (session && !session.ended) session.finish(!!session.child); });
 });
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `VibeBuild32 DAP port ${listenPort} is busy; wait for the previous debug session to finish.` : error.message); process.exit(1); });
-server.listen(listenPort, '127.0.0.1', () => { console.log(`VibeBuild32 DAP adapter listening on ${listenPort}`); idleTimer = setTimeout(shutdownAdapter, 60000); });
+server.listen(listenPort, '127.0.0.1', () => { console.log(`VibeBuild32 DAP adapter listening on ${listenPort}`); armIdleTimer(); });

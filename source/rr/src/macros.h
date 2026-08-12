@@ -27,6 +27,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 // Macros, some from SW source
 
+#ifndef ZOFFSET3
+# define ZOFFSET3 (8<<8)
+#endif
+
+int RT_KRand2(void);
+int32_t A_InsertSprite(int16_t whatsect, int32_t s_x, int32_t s_y, int32_t s_z, int16_t s_pn, int8_t s_s, uint8_t s_xr,
+                       uint8_t s_yr, int16_t s_a, int16_t s_ve, int16_t s_zv, int16_t s_ow, int16_t s_ss);
+
 static FORCE_INLINE int32_t _krand(void)
 {
     randomseed = (randomseed * 27584621ul) + 1ul;
@@ -117,45 +125,7 @@ static inline void RANDOMSCRAP(spritetype *s, int i)
 #define SK_INVENTORY    30
 #define SK_ESCAPE       31
 
-// rotatesprite flags
-#define ROTATE_SPRITE_TRANSLUCENT   (BIT(0))
-#define ROTATE_SPRITE_VIEW_CLIP     (BIT(1)) // clip to view
-#define ROTATE_SPRITE_YFLIP         (BIT(2))
-#define ROTATE_SPRITE_IGNORE_START_MOST (BIT(3)) // don't clip to startumost
-#define ROTATE_SPRITE_SCREEN_CLIP   (BIT(1)|BIT(3)) // use window
-#define ROTATE_SPRITE_CORNER        (BIT(4)) // place sprite from upper left corner
-#define ROTATE_SPRITE_TRANS_FLIP    (BIT(5))
-#define ROTATE_SPRITE_NON_MASK      (BIT(6)) // non masked sprites
-#define ROTATE_SPRITE_ALL_PAGES     (BIT(7)) // copies to all pages
-
-#define RS_SCALE                    BIT(16)
-
-// system defines for status bits
-#define CEILING_STAT_PLAX           BIT(0)
-#define CEILING_STAT_SLOPE          BIT(1)
-#define CEILING_STAT_SWAPXY         BIT(2)
-#define CEILING_STAT_SMOOSH         BIT(3)
-#define CEILING_STAT_XFLIP          BIT(4)
-#define CEILING_STAT_YFLIP          BIT(5)
-#define CEILING_STAT_RELATIVE       BIT(6)
-#define CEILING_STAT_TYPE_MASK     (BIT(7)|BIT(8))
-#define CEILING_STAT_MASKED         BIT(7)
-#define CEILING_STAT_TRANS          BIT(8)
-#define CEILING_STAT_TRANS_FLIP     (BIT(7)|BIT(8))
-#define CEILING_STAT_FAF_BLOCK_HITSCAN      BIT(15)
-
-#define FLOOR_STAT_PLAX           BIT(0)
-#define FLOOR_STAT_SLOPE          BIT(1)
-#define FLOOR_STAT_SWAPXY         BIT(2)
-#define FLOOR_STAT_SMOOSH         BIT(3)
-#define FLOOR_STAT_XFLIP          BIT(4)
-#define FLOOR_STAT_YFLIP          BIT(5)
-#define FLOOR_STAT_RELATIVE       BIT(6)
-#define FLOOR_STAT_TYPE_MASK     (BIT(7)|BIT(8))
-#define FLOOR_STAT_MASKED         BIT(7)
-#define FLOOR_STAT_TRANS          BIT(8)
-#define FLOOR_STAT_TRANS_FLIP     (BIT(7)|BIT(8))
-#define FLOOR_STAT_FAF_BLOCK_HITSCAN      BIT(15)
+#include "../../build/include/game_stat_flags_shared.h"
 
 #define CSTAT_WALL_BLOCK            BIT(0)
 #define CSTAT_WALL_BOTTOM_SWAP      BIT(1)

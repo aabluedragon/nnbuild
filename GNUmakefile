@@ -17,6 +17,15 @@ endif
 ### Platform and Toolchain Configuration
 include Common.mak
 
+# VibeBuild32 is the multi-game binary.  A plain `make vibebuild32` should
+# include every linked game by default; callers can still override any one with
+# WITH_SW=0, WITH_BLOOD=0, or WITH_RR=0.
+ifneq (,$(filter vibebuild32,$(MAKECMDGOALS)))
+    WITH_SW ?= 1
+    WITH_BLOOD ?= 1
+    WITH_RR ?= 1
+endif
+
 ### File Extensions
 asm := nasm
 o := o

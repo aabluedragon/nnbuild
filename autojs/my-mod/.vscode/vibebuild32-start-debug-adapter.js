@@ -12,19 +12,27 @@ const { spawn } = require('child_process');
 const portArgument = process.argv.indexOf('--port');
 const port = Number(portArgument >= 0 ? process.argv[portArgument + 1] : 4714);
 const adapter = path.join(__dirname, 'vibebuild32-debug-adapter.js');
+const healthProbe = 'VibeBuild32-DAP-Health\n';
 
-function listening() {
+function adapterReady() {
   return new Promise(resolve => {
     const socket = net.connect({ host: '127.0.0.1', port });
-    const done = value => { socket.destroy(); resolve(value); };
-    socket.once('connect', () => done(true));
+    let doneOnce = false;
+    const done = value => {
+      if (doneOnce) return;
+      doneOnce = true;
+      socket.destroy();
+      resolve(value);
+    };
+    socket.once('connect', () => socket.write(healthProbe));
+    socket.on('data', chunk => done(chunk.toString('utf8') === 'ok\n'));
     socket.once('error', () => done(false));
     socket.setTimeout(250, () => done(false));
   });
 }
 
 async function main() {
-  if (await listening()) return;
+  if (await adapterReady()) return;
 
   const child = spawn(process.execPath, [adapter, '--port', String(port)], {
     detached: true,
@@ -34,7 +42,7 @@ async function main() {
 
   for (let attempt = 0; attempt < 50; ++attempt) {
     await new Promise(resolve => setTimeout(resolve, 50));
-    if (await listening()) return;
+    if (await adapterReady()) return;
   }
   throw new Error(`VibeBuild32 DAP adapter did not start on port ${port}`);
 }

@@ -239,19 +239,8 @@ static INT_PTR CALLBACK ConfigPageProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
         //    if (settings.shared.bpp == 8) settings.shared.bpp = 32;
         //    PopulateForm(POPULATE_VIDEO);
         //    return TRUE;
-        case IDCVMODE:
-            if (HIWORD(wParam) == CBN_SELCHANGE)
-            {
-                int i = ComboBox_GetCurSel((HWND)lParam);
-                if (i != CB_ERR) i = ComboBox_GetItemData((HWND)lParam, i);
-                if (i != CB_ERR)
-                {
-                    settings.shared.xdim = validmode[i].xdim;
-                    settings.shared.ydim = validmode[i].ydim;
-                    settings.shared.bpp  = validmode[i].bpp;
-                }
-            }
-            return TRUE;
+        #define STARTWIN_WIN32_SHARED_CASE_VMODE
+        #include "../../build/include/startwin_win32_shared.cpp.inc"
         case IDCALWAYSSHOW:
             settings.shared.forcesetup = IsDlgButtonChecked(hwndDlg, IDCALWAYSSHOW) == BST_CHECKED;
             return TRUE;
@@ -261,58 +250,11 @@ static INT_PTR CALLBACK ConfigPageProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
         case IDCQUICKSTART:
             settings.shared.quickstart = (IsDlgButtonChecked(hwndDlg, IDCQUICKSTART) == BST_CHECKED);
             return TRUE;
-        case IDCINPUT:
-            if (HIWORD(wParam) == CBN_SELCHANGE)
-            {
-                int i = ComboBox_GetCurSel((HWND)lParam);
-                if (i != CB_ERR) i = ComboBox_GetItemData((HWND)lParam, i);
-                if (i != CB_ERR)
-                {
-                    switch (i)
-                    {
-                    case INPUT_KB:
-                        settings.shared.usemouse = settings.shared.usejoystick = 0;
-                        break;
-                    case INPUT_MOUSE:
-                        settings.shared.usemouse = 1;
-                        settings.shared.usejoystick = 0;
-                        break;
-                    case INPUT_JOYSTICK:
-                        settings.shared.usemouse = 0;
-                        settings.shared.usejoystick = 1;
-                        break;
-                    case INPUT_ALL:
-                        settings.shared.usemouse = settings.shared.usejoystick = 1;
-                        break;
-                    }
-                }
-            }
-            return TRUE;
+        #define STARTWIN_WIN32_SHARED_CASE_INPUT
+        #include "../../build/include/startwin_win32_shared.cpp.inc"
 
-        case IDCGAMEDIR:
-            if (HIWORD(wParam) == CBN_SELCHANGE)
-            {
-                int i = ComboBox_GetCurSel((HWND)lParam);
-                if (i != CB_ERR) i = ComboBox_GetItemData((HWND)lParam, i);
-                if (i != CB_ERR)
-                {
-                    if (i==0)
-                        settings.gamedir = NULL;
-                    else
-                    {
-                        BUILDVFS_FIND_REC *dir = finddirs;
-                        for (int j = 1; dir != NULL; dir = dir->next, j++)
-                        {
-                            if (j == i)
-                            {
-                                settings.gamedir = dir->name;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            return TRUE;
+        #define STARTWIN_WIN32_SHARED_CASE_GAMEDIR
+        #include "../../build/include/startwin_win32_shared.cpp.inc"
         case IDCDATA:
         {
             if (HIWORD(wParam) != LBN_SELCHANGE) break;
@@ -360,19 +302,8 @@ static INT_PTR CALLBACK ConfigPageProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
     }
     return FALSE;
 }
-
-
-static void SetPage(int pageNum)
-{
-    HWND tab = GetDlgItem(startupdlg, WIN_STARTWIN_TABCTL);
-    auto const cur = SendMessage(tab, TCM_GETCURSEL, 0, 0);
-    ShowWindow(pages[cur], SW_HIDE);
-    SendMessage(tab, TCM_SETCURSEL, pageNum, 0);
-    ShowWindow(pages[pageNum], SW_SHOW);
-    mode = pageNum;
-
-    SetFocus(GetDlgItem(startupdlg, WIN_STARTWIN_TABCTL));
-}
+#define STARTWIN_WIN32_SHARED_SET_PAGE
+#include "../../build/include/startwin_win32_shared.cpp.inc"
 
 static void EnableConfig(bool n)
 {
@@ -635,114 +566,18 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
 
     return FALSE;
 }
-
-bool startwin_isopen(void)
-{
-    return !!startupdlg;
-}
-
-int32_t startwin_open(void)
-{
-    if (startupdlg) return 1;
-    INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_TAB_CLASSES };
-    InitCommonControlsEx(&icc);
-    startupdlg = CreateDialog((HINSTANCE)win_gethinstance(), MAKEINTRESOURCE(WIN_STARTWIN), NULL, startup_dlgproc);
-    if (startupdlg)
-    {
-        SetPage(TAB_MESSAGES);
-        EnableConfig(0);
-        return 0;
-    }
-    return -1;
-}
-
-int32_t startwin_close(void)
-{
-    if (!startupdlg) return 1;
-    DestroyWindow(startupdlg);
-    startupdlg = NULL;
-    return 0;
-}
-
-int32_t startwin_puts(const char *buf)
-{
-    if (!startupdlg) return 1;
-
-    const HWND edctl = pages[TAB_MESSAGES];
-
-    if (!edctl) return -1;
-
-    static HWND dactrl = NULL;
-    if (!dactrl) dactrl = GetDlgItem(startupdlg, WIN_STARTWIN_TABCTL);
-
-    int const vis = ((int)SendMessage(dactrl, TCM_GETCURSEL,0,0) == TAB_MESSAGES);
-
-    if (vis)
-        SendMessage(edctl, WM_SETREDRAW, FALSE, 0);
-
-    int const curlen = SendMessage(edctl, WM_GETTEXTLENGTH, 0,0);
-    SendMessage(edctl, EM_SETSEL, (WPARAM)curlen, (LPARAM)curlen);
-
-    int const   numlines = SendMessage(edctl, EM_GETLINECOUNT, 0, 0);
-    static bool newline  = false;
-    const char *p        = buf;
-
-    while (*p)
-    {
-        if (newline)
-        {
-            SendMessage(edctl, EM_REPLACESEL, 0, (LPARAM)"\r\n");
-            newline = false;
-        }
-        const char *q = p;
-        while (*q && *q != '\n') q++;
-        static char workbuf[1024];
-        Bmemcpy(workbuf, p, q-p);
-        if (*q == '\n')
-        {
-            if (!q[1])
-            {
-                newline = true;
-                workbuf[q-p] = 0;
-            }
-            else
-            {
-                workbuf[q-p] = '\r';
-                workbuf[q-p+1] = '\n';
-                workbuf[q-p+2] = 0;
-            }
-            p = q+1;
-        }
-        else
-        {
-            workbuf[q-p] = 0;
-            p = q;
-        }
-        SendMessage(edctl, EM_REPLACESEL, 0, (LPARAM)workbuf);
-    }
-
-    int const newnumlines = SendMessage(edctl, EM_GETLINECOUNT, 0, 0);
-    SendMessage(edctl, EM_LINESCROLL, 0, newnumlines - numlines);
-
-    if (vis)
-        SendMessage(edctl, WM_SETREDRAW, TRUE, 0);
-
-    return 0;
-}
-
-int32_t startwin_settitle(const char *str)
-{
-    if (!startupdlg) return 1;
-    SetWindowText(startupdlg, str);
-    return 0;
-}
-
-int32_t startwin_idle(void *v)
-{
-    if (!startupdlg || !IsWindow(startupdlg)) return 0;
-    if (IsDialogMessage(startupdlg, (MSG *)v)) return 1;
-    return 0;
-}
+#define STARTWIN_WIN32_SHARED_ISOPEN
+#include "../../build/include/startwin_win32_shared.cpp.inc"
+#define STARTWIN_WIN32_SHARED_OPEN
+#include "../../build/include/startwin_win32_shared.cpp.inc"
+#define STARTWIN_WIN32_SHARED_CLOSE
+#include "../../build/include/startwin_win32_shared.cpp.inc"
+#define STARTWIN_WIN32_SHARED_PUTS
+#include "../../build/include/startwin_win32_shared.cpp.inc"
+#define STARTWIN_WIN32_SHARED_SETTITLE
+#include "../../build/include/startwin_win32_shared.cpp.inc"
+#define STARTWIN_WIN32_SHARED_IDLE
+#include "../../build/include/startwin_win32_shared.cpp.inc"
 
 int32_t startwin_run(void)
 {
