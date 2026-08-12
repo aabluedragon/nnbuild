@@ -11,8 +11,9 @@ loop, not deadlocked; sound gracefully degrades under dummy audio). One fix need
 guard FireInit's null-deref on tile 2342 (fire.cpp). Blood support is ACHIEVED.
 
 `make WITH_SW=1 WITH_BLOOD=1 WITH_RR=1 vibebuild32` builds one binary that
-dispatches all four supported games: Duke Nukem 3D, Shadow Warrior, Blood, and
-Redneck Rampage. Select Blood with `--game blood` (short form `-gm blood`).
+dispatches Duke Nukem 3D, Shadow Warrior, Blood, Redneck Rampage, and
+Duke/NAM-family selector entries such as World War II GI. Select Blood with
+`--game blood` (short form `-gm blood`).
 Blood retains its native ENet multiplayer; its masterserver/lobby integration is
 documented below.
 

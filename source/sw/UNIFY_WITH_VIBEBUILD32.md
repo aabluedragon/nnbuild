@@ -96,6 +96,27 @@ These must resolve to one definition that routes to the **active** game.
 - `vibebuild32` target links: Duke objects (with `-D` renames for the [A] callbacks
   to `Duke_*`) + `sw_merged.o` + `gameselect.o`.
 
+## Adding more Build-engine games
+
+Add new games through the selector and the smallest existing runtime surface that
+already supports them. Do not copy a per-game source tree or fork glue code when
+metadata and argument routing are sufficient. For example, World War II GI is a
+Duke/NAM-family game already supported by the Duke GRP scanner and runtime, so
+`gameselect.cpp` exposes it as its own selector entry (`-gm ww2gi`,
+`WW2GI.GRP`/`PLATOONL.GRP` inference) while still dispatching to `Duke_app_main`
+and injecting `-gamegrp` so the native Duke parser sets `GAMEFLAG_WW2GI`.
+
+When adding another game:
+
+1. Reuse an already linked runtime if the game is a variant/add-on supported by
+   that runtime's GRP scanner or game flags.
+2. Extend `gs_gameSpecs`, basename/signature inference, and any required native
+   argument translation in `source/vibebuild32/src/gameselect.cpp`.
+3. Only add a new merged module when the game has its own incompatible game code
+   that cannot run inside an existing runtime.
+4. Keep shared behavior in helper functions; avoid adding one-off branches that
+   duplicate an existing selector path.
+
 ## Staged plan
 1. (done) Prove `ld -r` localize; enumerate + categorize the 54 collisions.
 2. (done) Glue TU + game selector; wire the combined link; reach a clean link.

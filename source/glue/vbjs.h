@@ -25,6 +25,7 @@ enum {
 // -js handling / lifecycle.
 int  VBJS_IsEnabled(void);                 // a script was requested and the runtime is up
 void VBJS_CaptureLaunchDir(void);          // record the launch cwd early (before the game chdir's); holds autojs/
+void VBJS_SetExecutablePath(const char *path); // record argv[0] so generators can find bundled templates safely
 void VBJS_SetGenericMode(int enabled);     // run core JS/debugger APIs without Duke game-state bindings
 void VBJS_SetScriptPath(const char *path); // remember the -js argument (before init)
 int  VBJS_GenerateProject(const char *name, int typescript); // create autojs/<name>/ JS or TS starter; 0 on success

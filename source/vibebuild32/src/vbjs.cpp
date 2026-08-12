@@ -30,6 +30,10 @@
 #include <string>
 #include <curl/curl.h>
 
+#ifdef _WIN32
+# include <direct.h>
+#endif
+
 extern "C" {
 #include "quickjs.h"
 #include "quickjs-debugger.h"
@@ -211,6 +215,7 @@ enum { VBJS_MAX_SCRIPTS = 64 };
 static vbjs_script_t s_scripts[VBJS_MAX_SCRIPTS];
 static int s_scriptCount = 0;
 static char s_launchDir[1024];   // captured at app_main() before any chdir; holds autojs/
+static char s_exeDir[1024];      // argv[0] directory; used by --gen-* template fallback.
 
 static int vbjs_write_text(const char *path, const char *text)
 {
@@ -282,13 +287,10 @@ static char *vbjs_read_vscode_template(const char *file, size_t *out_len)
     snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", s_launchDir, file);
     if (char *contents = vbjs_read_file(source, out_len)) return contents;
 
-    char *appdir = Bgetappdir();
-    if (appdir)
+    if (s_exeDir[0])
     {
-        snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", appdir, file);
-        char *contents = vbjs_read_file(source, out_len);
-        Xfree(appdir);
-        if (contents) return contents;
+        snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", s_exeDir, file);
+        if (char *contents = vbjs_read_file(source, out_len)) return contents;
     }
 
     return nullptr;
@@ -1703,6 +1705,45 @@ extern "C" {
 int VBJS_IsEnabled(void) { return s_enabled; }
 
 void VBJS_CaptureLaunchDir(void) { if (!s_launchDir[0]) getcwd(s_launchDir, sizeof(s_launchDir)); }
+
+void VBJS_SetExecutablePath(const char *path)
+{
+    if (!path || !path[0] || s_exeDir[0]) return;
+
+    char full[2048] = {};
+#ifdef _WIN32
+    if (_fullpath(full, path, sizeof(full)) == NULL)
+#else
+    if (realpath(path, full) == NULL)
+#endif
+    {
+        if (path[0] == '/')
+            snprintf(full, sizeof(full), "%s", path);
+        else if (strchr(path, '/'))
+        {
+            char cwd[1024];
+            if (getcwd(cwd, sizeof(cwd)))
+                snprintf(full, sizeof(full), "%s/%s", cwd, path);
+        }
+    }
+
+    if (!full[0]) return;
+    char *slash = strrchr(full, '/');
+#ifdef _WIN32
+    char *backslash = strrchr(full, '\\');
+    if (!slash || (backslash && backslash > slash)) slash = backslash;
+#endif
+    if (!slash) return;
+
+    if (slash == full)
+        Bstrncpyz(s_exeDir, "/", sizeof(s_exeDir));
+    else
+    {
+        *slash = 0;
+        Bstrncpyz(s_exeDir, full, sizeof(s_exeDir));
+    }
+}
+
 void VBJS_SetGenericMode(int enabled) { s_genericMode = enabled != 0; }
 
 void VBJS_SetScriptPath(const char *path) { vbjs_add_script(path); }
@@ -1860,7 +1901,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "// Optional debug-only launch args, for example:\n"
         "// /// vbd.params=\"-gm duke -g ~/games/duke3da/duke3d.grp -sc\"\n"
         "// @ts-check\n"
-        "/** @type {import('vb').default} */\n"
+        "/** @type {typeof import('vb').default} */\n"
         "const vb = require('vb');\n"
         "\n"
         "let frames = 0;\n"

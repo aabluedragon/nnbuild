@@ -1,5 +1,5 @@
-// Game selector: one vibebuild32 binary that can launch either Duke3D
-// (vibebuild32) or Shadow Warrior (the VoidSW port), sharing the engine.
+// Game selector: one vibebuild32 binary that can launch Duke3D-family games,
+// Shadow Warrior (VoidSW), Blood, and Redneck Rampage, sharing the engine.
 //
 // The engine's main() calls app_main(); this file provides that app_main as a
 // dispatcher. Each game's real entry and the few engine callbacks that both
@@ -7,8 +7,8 @@
 // canonical names here route to the active game.
 //
 // Selection:
-//   --game/-gm <duke|sw|blood|rr>  pick a game explicitly
-//   -g/--grp/-gamegrp <data-file>   infer the game from known data files
+//   --game/-gm <duke|sw|blood|rr|ww2gi>  pick a game explicitly
+//   -g/--grp/-gamegrp <data-file>         infer the game from known data files
 //   --no-game-menu/-ngm             bypass the picker
 // The canonical data file is looked for both in the working directory and in a
 // per-game subdir (duke3d/DUKE3D.GRP, sw/Sw.grp, etc.); the chosen game
@@ -42,10 +42,12 @@ enum
     GS_GAME_SW    = 1,
     GS_GAME_BLOOD = 2,
     GS_GAME_RR    = 3,
-    GS_GAME_COUNT = 4,
+    GS_GAME_WW2GI = 4,
+    GS_GAME_COUNT = 5,
 };
 
-// 0 = Duke3D (vibebuild32), 1 = Shadow Warrior, 2 = Blood, 3 = Redneck Rampage.
+// 0 = Duke3D (vibebuild32), 1 = Shadow Warrior, 2 = Blood, 3 = Redneck Rampage,
+// 4 = World War II GI (Duke/NAM-family runtime).
 // Read by the dispatchers.
 int g_activeGame = GS_GAME_DUKE;
 
@@ -90,6 +92,7 @@ static char const * const gs_dukeDataFiles[]  = { "DUKE3D.GRP", "duke3d.grp", NU
 static char const * const gs_swDataFiles[]    = { "SW.GRP", "Sw.grp", "sw.grp", NULL };
 static char const * const gs_bloodDataFiles[] = { "BLOOD.RFF", "blood.rff", NULL };
 static char const * const gs_rrDataFiles[]    = { "REDNECK.GRP", "redneck.grp", NULL };
+static char const * const gs_ww2giDataFiles[] = { "WW2GI.GRP", "ww2gi.grp", NULL };
 
 struct gs_gameSpec_t
 {
@@ -105,6 +108,7 @@ static gs_gameSpec_t const gs_gameSpecs[GS_GAME_COUNT] =
     { GS_GAME_SW,    "Shadow Warrior",  "sw",     gs_swDataFiles    },
     { GS_GAME_BLOOD, "Blood",           "blood",  gs_bloodDataFiles },
     { GS_GAME_RR,    "Redneck Rampage", "rr",     gs_rrDataFiles    },
+    { GS_GAME_WW2GI, "World War II GI",  "ww2gi",  gs_ww2giDataFiles },
 };
 
 static char const *gs_gameName(int game)
@@ -115,6 +119,7 @@ static char const *gs_gameName(int game)
 static int gs_linkedGameOrDuke(int game)
 {
     if (game == GS_GAME_DUKE) return GS_GAME_DUKE;
+    if (game == GS_GAME_WW2GI) return GS_GAME_WW2GI; // uses the linked Duke runtime
 #ifdef WITH_SW
     if (game == GS_GAME_SW) return GS_GAME_SW;
 #endif
@@ -132,6 +137,21 @@ static gs_gameSpec_t const *gs_gameSpec(int game)
     return (unsigned)game < GS_GAME_COUNT ? &gs_gameSpecs[game] : &gs_gameSpecs[GS_GAME_DUKE];
 }
 
+static char const *gs_defaultMainGameGrp(int game)
+{
+    switch (game)
+    {
+        case GS_GAME_RR: return "REDNECK.GRP";
+        case GS_GAME_WW2GI: return "WW2GI.GRP";
+        default: return NULL;
+    }
+}
+
+static int gs_needsMainGameGrpInjection(int game)
+{
+    return gs_defaultMainGameGrp(game) != NULL;
+}
+
 static int gs_gameFromName(char const *name)
 {
     if (!name) return -1;
@@ -144,6 +164,10 @@ static int gs_gameFromName(char const *name)
     if (!Bstrcasecmp(name, "rr") || !Bstrcasecmp(name, "redneck") || !Bstrcasecmp(name, "redneckrampage") ||
         !Bstrcasecmp(name, "redneck-rampage"))
         return GS_GAME_RR;
+    if (!Bstrcasecmp(name, "ww2gi") || !Bstrcasecmp(name, "wwii") || !Bstrcasecmp(name, "wwiigi") ||
+        !Bstrcasecmp(name, "wwii-gi") || !Bstrcasecmp(name, "worldwariigi") ||
+        !Bstrcasecmp(name, "world-war-ii-gi") || !Bstrcasecmp(name, "gi"))
+        return GS_GAME_WW2GI;
     return -1;
 }
 
@@ -549,15 +573,16 @@ static char const * const *gs_buildArgvWithDebugParams(int argc, char const * co
     return out;
 }
 
-// Redneck Rampage needs an explicit -gamegrp in some paths because its CRC
-// autodetect does not recognize every REDNECK.GRP revision.
-static char gs_rrGrpFile[BMAX_PATH] = "";
+// Some selector entries use a linked runtime whose native autodetect needs the
+// selected main game data named explicitly. Keep this generic so new entries add
+// metadata instead of one-off routing code.
+static char gs_mainGameGrpFile[BMAX_PATH] = "";
 static char gs_inferredDataDir[BMAX_PATH] = "";
 
-static void gs_setRRGrpFile(char const *path)
+static void gs_setMainGameGrpFile(char const *path)
 {
     if (path && path[0])
-        Bstrncpyz(gs_rrGrpFile, path, sizeof(gs_rrGrpFile));
+        Bstrncpyz(gs_mainGameGrpFile, path, sizeof(gs_mainGameGrpFile));
 }
 
 static void gs_setInferredDataDir(char const *path)
@@ -596,13 +621,9 @@ static int gs_findGameDataFile(int game, char *outdir, int outsz, char *matched,
     return 0;
 }
 
-static int gs_gameAvail(int game, char *dir, int sz)
+static int gs_gameAvail(int game, char *dir, int sz, char *matched, int matchedsz)
 {
-    char matched[BMAX_PATH] = "";
-    int const found = gs_findGameDataFile(game, dir, sz, matched, sizeof(matched));
-    if (found && game == GS_GAME_RR)
-        gs_setRRGrpFile(matched);
-    return found;
+    return gs_findGameDataFile(game, dir, sz, matched, matchedsz);
 }
 
 struct gs_dataSignature_t
@@ -646,8 +667,11 @@ static gs_dataSignature_t const gs_dataSignatures[] =
     { GS_GAME_DUKE,   4247491, 0xCF928A58u },
     { GS_GAME_DUKE,  43448927, 0x75C1F07Bu },
     { GS_GAME_DUKE,  44365728, 0x3DE1589Au },
-    { GS_GAME_DUKE,  77939508, 0x907B82BFu },
-    { GS_GAME_DUKE,  37852572, 0xD1ED8C0Cu },
+
+    // World War II GI and its official Platoon Leader add-on use the Duke/NAM
+    // runtime but must be selected as their own game so -gamegrp sets WW2GI mode.
+    { GS_GAME_WW2GI, 77939508, 0x907B82BFu },
+    { GS_GAME_WW2GI, 37852572, 0xD1ED8C0Cu },
 
     // Shadow Warrior main/shareware/add-on GRPs.
     { GS_GAME_SW,    47536148, 0x7545319Fu },
@@ -777,6 +801,8 @@ static int gs_inferGameFromBasename(char const *path)
     if (!Bstrcasecmp(base, "REDNECK.GRP") || !Bstrcasecmp(base, "RR.GRP") ||
         !Bstrcasecmp(base, "RRRA.GRP") || !Bstrcasecmp(base, "RIDES.GRP"))
         return GS_GAME_RR;
+    if (!Bstrcasecmp(base, "WW2GI.GRP") || !Bstrcasecmp(base, "PLATOONL.GRP"))
+        return GS_GAME_WW2GI;
     return -1;
 }
 
@@ -814,7 +840,7 @@ static int gs_inferGameFromDataPath(char const *path)
         int const game = gs_inferGameFromSignature(size, crc);
         if (game >= 0)
         {
-            if (game == GS_GAME_RR) gs_setRRGrpFile(dataPath);
+            if (gs_needsMainGameGrpInjection(game)) gs_setMainGameGrpFile(dataPath);
             return game;
         }
     }
@@ -829,20 +855,20 @@ static int gs_inferGameFromDataPath(char const *path)
     int game = gs_inferGameFromBasename(dataPath);
     if (game >= 0)
     {
-        if (game == GS_GAME_RR) gs_setRRGrpFile(dataPath);
+        if (gs_needsMainGameGrpInjection(game)) gs_setMainGameGrpFile(dataPath);
         gs_inferGameFromContainingDirectory(dataPath, game);
         return game;
     }
 
     game = gs_inferGameFromDirectory(dataPath);
     if (game >= 0) gs_setInferredDataDir(dataPath);
-    if (game == GS_GAME_RR) gs_setRRGrpFile("REDNECK.GRP");
+    if (gs_needsMainGameGrpInjection(game)) gs_setMainGameGrpFile(gs_defaultMainGameGrp(game));
     if (game >= 0) return game;
 
     if (gs_hasPathSeparator(dataPath))
     {
         game = gs_inferGameFromContainingDirectory(dataPath, -1);
-        if (game == GS_GAME_RR) gs_setRRGrpFile("REDNECK.GRP");
+        if (gs_needsMainGameGrpInjection(game)) gs_setMainGameGrpFile(gs_defaultMainGameGrp(game));
         return game;
     }
 
@@ -1011,16 +1037,21 @@ static void gs_choose(int argc, char const * const * argv)
             bypass = 1;
     }
 
-    gs_rrGrpFile[0] = 0;
+    gs_mainGameGrpFile[0] = 0;
     gs_inferredDataDir[0] = 0;
     char gameDirs[GS_GAME_COUNT][BMAX_PATH] = {};
+    char gameMainGrpFiles[GS_GAME_COUNT][BMAX_PATH] = {};
     int gameAvail[GS_GAME_COUNT] = {};
     for (auto const &spec : gs_gameSpecs)
-        gameAvail[spec.id] = gs_gameAvail(spec.id, gameDirs[spec.id], sizeof(gameDirs[spec.id]));
+        gameAvail[spec.id] = gs_gameAvail(spec.id, gameDirs[spec.id], sizeof(gameDirs[spec.id]),
+                                          gameMainGrpFiles[spec.id], sizeof(gameMainGrpFiles[spec.id]));
 
     int sel = -1;
     if (want)
+    {
         sel = gs_gameFromName(want);
+        (void)gs_inferGameFromArgs(argc, argv, NULL, 0);
+    }
     else
     {
         char inferenceReason[BMAX_PATH * 2] = "";
@@ -1044,6 +1075,8 @@ static void gs_choose(int argc, char const * const * argv)
 
     sel = gs_linkedGameOrDuke(sel);
     g_activeGame = sel;
+    if (gs_needsMainGameGrpInjection(sel) && !gs_mainGameGrpFile[0] && gameMainGrpFiles[sel][0])
+        gs_setMainGameGrpFile(gameMainGrpFiles[sel]);
 
     const char *const name = gs_gameName(sel);
     const char *dir = gs_inferredDataDir[0] ? gs_inferredDataDir : gameDirs[sel];
@@ -1205,6 +1238,18 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
                 continue;
             }
 
+            // Public -g/--grp is commonly used as "the game data file". For
+            // Duke-runtime derivatives that need a specific main GRP, translate
+            // a recognized data file into -gamegrp so the native parser sets
+            // the correct g_gameType instead of mounting it as an add-on.
+            if (gs_needsMainGameGrpInjection(g_activeGame) &&
+                gs_inferGameFromBasename(value) == g_activeGame)
+            {
+                haveGameGrp = 1;
+                gs_emitOptionValue(out, &n, "-gamegrp", value);
+                continue;
+            }
+
             if (g_activeGame == GS_GAME_BLOOD && value && gs_extEquals(value, ".rff"))
             {
                 gs_emitOptionValue(out, &n, "-rff", value);
@@ -1253,11 +1298,15 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
         }
         out[n++] = a;
     }
-    // RR's grp CRC autodetect misses some REDNECK.GRP revisions; since we already
-    // located the file, name it explicitly so its art/sound actually mount.
-    if (g_activeGame == GS_GAME_RR && gs_rrGrpFile[0] && !haveGameGrp)
+    // If the selector chose a game whose runtime depends on a main GRP, name it
+    // explicitly so the native parser switches into that game's data/type.
+    if (gs_needsMainGameGrpInjection(g_activeGame) && gs_mainGameGrpFile[0] && !haveGameGrp)
     {
-        gs_emitOptionValue(out, &n, "-gamegrp", gs_rrGrpFile);
+        gs_emitOptionValue(out, &n, "-gamegrp", gs_mainGameGrpFile);
+    }
+    else if (gs_needsMainGameGrpInjection(g_activeGame) && !haveGameGrp)
+    {
+        gs_emitOptionValue(out, &n, "-gamegrp", gs_defaultMainGameGrp(g_activeGame));
     }
     if (skipMenu && !forceMenu) out[n++] = "-nosetup";
     out[n] = NULL;
@@ -1269,6 +1318,7 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
 int app_main(int32_t argc, char const * const * argv)
 {
     VBJS_CaptureLaunchDir();   // VibeBuild32: record the launch dir now (before any chdir) for autojs/
+    VBJS_SetExecutablePath(argc > 0 ? argv[0] : NULL);
     if (gs_debugModeRequested(argc, argv))
     {
         // Enable the shared debugger before dispatch. Shadow Warrior has its
