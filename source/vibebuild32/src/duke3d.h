@@ -50,6 +50,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define VOLUMEALL (g_Shareware==0)
 #define PLUTOPAK (g_scriptVersion==14)
+#define WORLDTOUR (DUKE && g_scriptVersion>=16)
 #define VOLUMEONE (g_Shareware==1)
 
 #define MAXSLEEPDIST  16384
@@ -744,4 +745,3 @@ static inline int32_t G_DefaultActorHealthForTile(int const tileNum)
 }
 
 #endif
-

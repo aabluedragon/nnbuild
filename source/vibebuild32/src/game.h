@@ -14,6 +14,7 @@
 #define USERMAPMUSICFAKESLOT ((USERMAPMUSICFAKEVOLUME * MAXLEVELS) + USERMAPMUSICFAKELEVEL)
 
 #define VIEWSCREEN_ACTIVE_DISTANCE 2048
+#define WORLDTOUR_COMMENTARY_MARKER 5294
 #if defined(GEKKO) || defined(__OPENDINGUX__)
     #define VIEWSCREENFACTOR 0
 #elif defined(__ANDROID__)
@@ -160,6 +161,10 @@ extern "C" {
 
 void M32RunScript(const char* s); // Needed, because reasons.
 void G_InitTimer(int32_t ticspersec);
+
+extern int g_worldTourCommentary;
+void G_WorldTourLoadDeveloperCommentary(void);
+int G_WorldTourMaybeActivateCommentary(int playerNum, int nearSprite);
 
 #ifdef __cplusplus
 }

@@ -513,7 +513,7 @@ void S_Cleanup(void)
 }
 
 // returns number of bytes read
-int32_t S_LoadSound(int num)
+int32_t S_LoadSound(uint32_t num)
 {
     if ((unsigned)num > (unsigned)g_highestSoundIdx || EDUKE32_PREDICT_FALSE(g_sounds[num] == &nullsound))
         return 0;
@@ -547,34 +547,56 @@ void S_PrecacheSounds(void)
 
     LOG_F(INFO, "Precaching sounds...");
 
+    int loadedSounds = 0;
+    int missingSounds = 0;
+
     for (int i = 0, j = 0; i <= g_highestSoundIdx; ++i)
     {
         if (g_sounds[i] != &nullsound && g_sounds[i]->ptr == nullptr)
         {
-            S_LoadSound(i);
+            int32_t const loadedBytes = S_LoadSound(i);
+
+            if (loadedBytes > 0)
+                loadedSounds++;
+            else
+                missingSounds++;
+
             j += g_sounds[i]->len;
             if (j >= 4 * 1024 * 1024)
                 gameHandleEvents(), j = 0;
         }
     }
 
-    LOG_F(INFO, "Sound precache finished in %dms", timerGetTicks() - precachestart);
+    LOG_F(INFO, "Sound precache finished in %dms (%d loaded, %d missing)", timerGetTicks() - precachestart, loadedSounds, missingSounds);
 }
 
 static int32_t S_DefineAudioIfSupported(char** fn, const char* name)
 {
+    char * const normalizedName = Xstrdup(name);
+
+    for (char *ch = normalizedName; *ch; ++ch)
+        if (*ch == '\\')
+            *ch = '/';
+
 #if !defined HAVE_FLAC || !defined HAVE_VORBIS
-    const char* extension = Bstrrchr(name, '.');
+    const char* extension = Bstrrchr(normalizedName, '.');
 # if !defined HAVE_FLAC
     if (extension && !Bstrcasecmp(extension, ".flac"))
+    {
+        Xfree(normalizedName);
         return -2;
+    }
 # endif
 # if !defined HAVE_VORBIS
     if (extension && !Bstrcasecmp(extension, ".ogg"))
+    {
+        Xfree(normalizedName);
         return -2;
+    }
 # endif
 #endif
-    realloc_copy(fn, name);
+    realloc_copy(fn, normalizedName);
+    Xfree(normalizedName);
     return 0;
 }
 

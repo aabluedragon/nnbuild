@@ -521,6 +521,51 @@ static buildvfs_kfd S_TryExtensionReplacements(char * const testfn, char const s
     return buildvfs_kfd_invalid;
 }
 
+static buildvfs_kfd S_TryLegacySoundExtensions(char * const testfn, char const searchfirst)
+{
+    char * const extension = Bstrrchr(testfn, '.');
+
+    if (extension == NULL)
+        return buildvfs_kfd_invalid;
+
+    static char const * extensions[] = { ".voc", ".wav" };
+
+    for (char const * ext : extensions)
+    {
+        Bstrcpy(extension, ext);
+        buildvfs_kfd const fp = kopen4loadfrommod(testfn, searchfirst);
+        if (fp != buildvfs_kfd_invalid)
+            return fp;
+    }
+
+    return buildvfs_kfd_invalid;
+}
+
+static buildvfs_kfd S_TryLegacySoundFallbacks(char * const testfn, const char *fn, char const searchfirst)
+{
+    Bstrcpy(testfn, fn);
+
+    buildvfs_kfd fp = S_TryLegacySoundExtensions(testfn, searchfirst);
+    if (fp != buildvfs_kfd_invalid)
+        return fp;
+
+    char const *basename = Bstrrchr(fn, '/');
+    char const *winbase = Bstrrchr(fn, '\\');
+
+    if (winbase != NULL && (basename == NULL || winbase > basename))
+        basename = winbase;
+
+    if (basename == NULL)
+        return buildvfs_kfd_invalid;
+
+    Bstrcpy(testfn, basename + 1);
+    fp = kopen4loadfrommod(testfn, searchfirst);
+    if (fp != buildvfs_kfd_invalid)
+        return fp;
+
+    return S_TryLegacySoundExtensions(testfn, searchfirst);
+}
+
 buildvfs_kfd S_OpenAudio(const char *fn, char searchfirst, uint8_t const ismusic)
 {
     buildvfs_kfd const origfp      = kopen4loadfrommod(fn, searchfirst);
@@ -539,6 +584,15 @@ buildvfs_kfd S_OpenAudio(const char *fn, char searchfirst, uint8_t const ismusic
     buildvfs_kfd fp = S_TryExtensionReplacements(testfn, searchfirst, ismusic);
     if (fp != buildvfs_kfd_invalid)
         goto success;
+
+    // Some WT/compatible definitions reference upgraded assets as
+    // sound/<name>.ogg while older groups or add-ons keep root <name>.voc/.wav.
+    if (!ismusic)
+    {
+        fp = S_TryLegacySoundFallbacks(testfn, fn, searchfirst);
+        if (fp != buildvfs_kfd_invalid)
+            goto success;
+    }
 
 #ifndef USE_PHYSFS
     // look in ./music/<file's parent GRP name>/

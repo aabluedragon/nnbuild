@@ -4406,6 +4406,7 @@ cheat_for_port_credits2:
                     WW2GI ? "WW2GI talk" : NAM ? "NAM talk" : "Duke talk",
                     WW2GI ? "GI Match player sounds" : NAM ? "GruntMatch player sounds" : "DukeMatch player sounds",
                     "Ambient sounds",
+                    WORLDTOUR ? "Developer commentary" : NULL,
                     NULL
                 };
 
@@ -4634,6 +4635,13 @@ cheat_for_port_credits2:
                         if (enabled && x == io)
                             ud.config.AmbienceToggle = 1-ud.config.AmbienceToggle;
                         mgametextpal(d,yy, ud.config.AmbienceToggle? "Yes" : "No", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, enabled?0:1);
+                        break;
+                    case 12:
+                        enabled = (WORLDTOUR && ud.config.SoundToggle && ud.config.FXDevice >= 0);
+                        modval(0,1,(int *)&g_worldTourCommentary,1,enabled && probey==io);
+                        if (enabled && x == io)
+                            g_worldTourCommentary = 1-g_worldTourCommentary;
+                        mgametextpal(d,yy, g_worldTourCommentary? "Yes" : "No", enabled?MENUHIGHLIGHT(io):DISABLEDMENUSHADE, enabled?0:1);
                         break;
 
                     default:

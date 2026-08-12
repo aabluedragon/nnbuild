@@ -92,6 +92,8 @@ int user_quote_time[MAXUSERQUOTES];
 char user_quote[MAXUSERQUOTES][MAXUSERQUOTELEN];
 // char typebuflen,typebuf[41];
 
+int g_worldTourCommentary = 0;
+
 int32_t MAXCACHE1DSIZE = (96*1024*1024);
 
 int tempwallptr;
@@ -102,6 +104,237 @@ static void G_DrawCameraText(short i);
 static int G_MoveLoop(void);
 static int G_DoMoveThings(void);
 static int G_PlaybackDemo(void);
+
+enum
+{
+    WT_COMMENTARY_MAX = 511,
+    WT_COMMENTARY_SOUND_BASE = MAXSOUNDS - 512,
+    WT_COMMENTARY_USE_DISTANCE = 2048,
+    WT_COMMENTARY_USE_ANGLE = 512,
+};
+
+static char *g_wtCommentaryPaths[WT_COMMENTARY_MAX + 1];
+static uint8_t g_wtCommentaryLoadedDefinitions;
+
+static int G_WorldTourIsCommentaryMarker(int const spriteNum)
+{
+    return (unsigned)spriteNum < MAXSPRITES && sprite[spriteNum].picnum == WORLDTOUR_COMMENTARY_MARKER;
+}
+
+static void G_WorldTourNormalizePath(char *path)
+{
+    for (; *path; ++path)
+        if (*path == '\\')
+            *path = '/';
+}
+
+static void G_WorldTourSetCommentaryPath(int const num, char const *path)
+{
+    if ((unsigned)num > WT_COMMENTARY_MAX || num <= 0 || !path || !path[0])
+        return;
+
+    DO_FREE_AND_NULL(g_wtCommentaryPaths[num]);
+    g_wtCommentaryPaths[num] = Xstrdup(path);
+    G_WorldTourNormalizePath(g_wtCommentaryPaths[num]);
+}
+
+static char *G_WorldTourFindChar(char *start, char const * const end, char const needle)
+{
+    for (; start < end; ++start)
+        if (*start == needle)
+            return start;
+
+    return nullptr;
+}
+
+static char *G_WorldTourFindQuotedValue(char *start, char *end)
+{
+    char *quote = G_WorldTourFindChar(start, end, '"');
+
+    return quote ? quote + 1 : nullptr;
+}
+
+void G_WorldTourLoadDeveloperCommentary(void)
+{
+    if (g_wtCommentaryLoadedDefinitions || !WORLDTOUR)
+        return;
+
+    g_wtCommentaryLoadedDefinitions = 1;
+
+    buildvfs_kfd const fp = kopen4loadfrommod("def/developer_commentary.def", 0);
+
+    if (fp == buildvfs_kfd_invalid)
+        return;
+
+    int32_t const fileLen = kfilelength(fp);
+
+    if (fileLen <= 0)
+    {
+        kclose(fp);
+        return;
+    }
+
+    char * const data = (char *)Xmalloc(fileLen + 1);
+
+    if (kread(fp, data, fileLen) != fileLen)
+    {
+        kclose(fp);
+        Xfree(data);
+        return;
+    }
+
+    kclose(fp);
+    data[fileLen] = '\0';
+
+    char *cursor = data;
+    int count = 0;
+
+    while ((cursor = Bstrstr(cursor, "def sound")) != nullptr)
+    {
+        char * const blockStart = Bstrchr(cursor, '{');
+        if (!blockStart)
+            break;
+
+        char * const blockEnd = Bstrchr(blockStart, '}');
+        if (!blockEnd)
+            break;
+
+        char *pathToken = Bstrstr(blockStart, "path");
+        char *numToken = Bstrstr(blockStart, "num");
+
+        if (pathToken && pathToken < blockEnd && numToken && numToken < blockEnd)
+        {
+            char *pathStart = G_WorldTourFindQuotedValue(pathToken, blockEnd);
+
+            if (pathStart)
+            {
+                char *pathEnd = G_WorldTourFindChar(pathStart, blockEnd, '"');
+
+                if (pathEnd)
+                {
+                    char savedPathEnd = *pathEnd;
+                    *pathEnd = '\0';
+
+                    char *colon = Bstrchr(numToken, ':');
+                    if (colon && colon < blockEnd)
+                    {
+                        int const num = Batol(colon + 1);
+                        if ((unsigned)num <= WT_COMMENTARY_MAX && num > 0)
+                        {
+                            G_WorldTourSetCommentaryPath(num, pathStart);
+                            count++;
+                        }
+                    }
+
+                    *pathEnd = savedPathEnd;
+                }
+            }
+        }
+
+        cursor = blockEnd + 1;
+    }
+
+    LOG_F(INFO, "World Tour developer commentary: loaded %d entries; wt_commentary is off by default.", count);
+    Xfree(data);
+}
+
+static int G_WorldTourCommentarySoundForMarker(int const markerSprite)
+{
+    if (!G_WorldTourIsCommentaryMarker(markerSprite))
+        return -1;
+
+    int const commentaryNum = sprite[markerSprite].lotag;
+
+    if ((unsigned)commentaryNum > WT_COMMENTARY_MAX || commentaryNum <= 0)
+        return -1;
+
+    char const * const path = g_wtCommentaryPaths[commentaryNum];
+
+    if (!path)
+        return -1;
+
+    int const soundNum = WT_COMMENTARY_SOUND_BASE + commentaryNum;
+
+    if (!S_SoundIsValid(soundNum))
+    {
+        S_DefineSound(soundNum, path, 0, 0, 255, SF_GLOBAL, 0, 1.0f);
+        S_LoadSound(soundNum);
+    }
+
+    return S_SoundIsValid(soundNum) ? soundNum : -1;
+}
+
+static int G_WorldTourFindCommentaryMarker(DukePlayer_t const * const p, int const nearSprite)
+{
+    if (G_WorldTourIsCommentaryMarker(nearSprite))
+        return nearSprite;
+
+    int bestSprite = -1;
+    int bestDist = WT_COMMENTARY_USE_DISTANCE;
+    int const playerAng = fix16_to_int(p->q16ang);
+
+    for (int spriteNum = headspritestat[STAT_DEFAULT]; spriteNum >= 0; spriteNum = nextspritestat[spriteNum])
+    {
+        spritetype const * const marker = &sprite[spriteNum];
+
+        if (marker->picnum != WORLDTOUR_COMMENTARY_MARKER)
+            continue;
+
+        int const spriteDist = ldist(&sprite[p->i], marker);
+
+        if (spriteDist >= bestDist)
+            continue;
+
+        int const angleDelta = klabs(G_GetAngleDelta(playerAng, getangle(marker->x - p->pos.x, marker->y - p->pos.y)));
+
+        if (angleDelta > WT_COMMENTARY_USE_ANGLE && spriteDist > 512)
+            continue;
+
+        if (!cansee(p->pos.x, p->pos.y, p->pos.z - (24 << 8), p->cursectnum,
+                    marker->x, marker->y, marker->z - (8 << 8), marker->sectnum))
+            continue;
+
+        bestSprite = spriteNum;
+        bestDist = spriteDist;
+    }
+
+    return bestSprite;
+}
+
+int G_WorldTourMaybeActivateCommentary(int const playerNum, int const nearSprite)
+{
+    if (!WORLDTOUR || !g_worldTourCommentary || (unsigned)playerNum >= MAXPLAYERS)
+        return 0;
+
+    G_WorldTourLoadDeveloperCommentary();
+
+    DukePlayer_t * const p = g_player[playerNum].ps;
+
+    if (!p)
+        return 0;
+
+    int const markerSprite = G_WorldTourFindCommentaryMarker(p, nearSprite);
+
+    if (markerSprite < 0)
+        return 0;
+
+    int const commentaryNum = sprite[markerSprite].lotag;
+    int const soundNum = G_WorldTourCommentarySoundForMarker(markerSprite);
+
+    if (soundNum < 0)
+    {
+        LOG_F(WARNING, "World Tour commentary %d has no playable sound.", commentaryNum);
+        return 1;
+    }
+
+    if (!A_CheckSoundPlaying(markerSprite, soundNum))
+    {
+        LOG_F(INFO, "Playing World Tour commentary %d: %s", commentaryNum, g_wtCommentaryPaths[commentaryNum]);
+        S_PlaySound3D(soundNum, markerSprite, sprite[markerSprite].xyz);
+    }
+
+    return 1;
+}
 
 enum gametokens
 {
@@ -5589,6 +5822,12 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         i = t->owner;
         s = &sprite[i];
 
+        if (WORLDTOUR && !g_worldTourCommentary && t->picnum == WORLDTOUR_COMMENTARY_MARKER)
+        {
+            t->xrepeat = t->yrepeat = 0;
+            continue;
+        }
+
         switch (tileGetMapping(s->picnum))
         {
         case SECTOREFFECTOR__:
@@ -8187,6 +8426,9 @@ static void G_Cleanup(void)
         Xfree(apXStrings[i]);
     }
 
+    for (i=WT_COMMENTARY_MAX;i>=0;i--)
+        Xfree(g_wtCommentaryPaths[i]);
+
     for (i=MAXPLAYERS-1;i>=0;i--)
     {
         if (g_player[i].ps != NULL)
@@ -9119,6 +9361,8 @@ int Duke_app_main(int32_t argc, char const* const* argv)
         LOG_F(INFO, "Definitions file \"%s\" loaded in %d ms.", defsfile, etime - stime);
     }
     loaddefinitions_game(defsfile, FALSE);
+
+    G_WorldTourLoadDeveloperCommentary();
 
     S_PrecacheSounds();
 

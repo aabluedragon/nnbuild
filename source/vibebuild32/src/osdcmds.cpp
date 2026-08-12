@@ -959,6 +959,7 @@ osdcvardata_t cvar[] =
     { "snd_numchannels", "snd_numchannels: the number of sound channels", (void*)&ud.config.NumChannels, CVAR_INT, 0, 2 },
     { "snd_numvoices", "snd_numvoices: the number of concurrent sounds", (void*)&ud.config.NumVoices, CVAR_INT | CVAR_FUNCPTR, 0, 32 },
     //{ "snd_reversestereo", "snd_reversestereo: reverses the stereo channels", (void*)&ud.config.ReverseStereo, CVAR_BOOL, 0, 16 },
+    { "wt_commentary", "wt_commentary: show and enable World Tour developer commentary markers", (void*)&g_worldTourCommentary, CVAR_BOOL, 0, 1 },
 
     { "vid_gamma","gamma component of gamma ramp",(void*)&g_videoGamma, CVAR_FLOAT | CVAR_FUNCPTR, 0, 10 },
     { "vid_contrast","contrast component of gamma ramp",(void*)&g_videoContrast, CVAR_FLOAT | CVAR_FUNCPTR, 0, 10 },
@@ -1786,4 +1787,3 @@ int registerosdcommands(void)
 
     return 0;
 }
-

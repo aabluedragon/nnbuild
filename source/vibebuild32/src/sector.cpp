@@ -3442,6 +3442,9 @@ void P_CheckSectors(int snum)
         if (neartagsector >= 0 && (sector[neartagsector].lotag&16384))
             return;
 
+        if (G_WorldTourMaybeActivateCommentary(snum, neartagsprite))
+            return;
+
         if (neartagsprite == -1 && neartagwall == -1)
             if (sector[p->cursectnum].lotag == ST_2_UNDERWATER)
             {
@@ -3590,4 +3593,3 @@ void P_CheckSectors(int snum)
         }
     }
 }
-
