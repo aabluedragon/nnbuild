@@ -62,7 +62,7 @@ static void G_ShowParameterHelp(void)
         "-g, --grp [file.grp]\tUse a group/data file; also infers game if -gm is omitted\n"
         "-h[file.def]\tUse an alternate def\n"
         "-j[dir]\t\tAdds a directory to EDuke32's search list\n"
-        "-gm, --game <name>\tForce Duke, SW, Blood, or RR (optional when data path identifies it)\n"
+        "-gm, --game <name>\tForce Duke, World Tour, SW, Blood, RR, NAM, Napalm, WW2GI, or Exhumed\n"
         "-gjs, --gen-js [name]\tCreate autojs/<name>/ JavaScript mod starter and exit\n"
         "-gts, --gen-ts [name]\tCreate autojs/<name>/ TypeScript mod starter and exit\n"
         "-js, --js [file.js]\tLoad a JavaScript user script\n"
