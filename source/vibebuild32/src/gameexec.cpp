@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <time.h>
 
+#include "communityapi.h"
 #include "duke3d.h"
 #include "vbjs.h"
 #include "gamedef.h"
@@ -2550,12 +2551,21 @@ static int X_DoExecute(void)
         }
 
     case CON_MULSCALE:
+    case CON_DIVSCALE:
+    case CON_SCALEVAR:
         insptr++;
         {
-            int var1 = *insptr++, var2 = Gv_GetVarX(*insptr++);
-            int var3 = Gv_GetVarX(*insptr++), var4 = Gv_GetVarX(*insptr++);
+            int const var1 = *insptr++;
+            int const var2 = Gv_GetVarX(*insptr++);
+            int const var3 = Gv_GetVarX(*insptr++);
+            int const var4 = Gv_GetVarX(*insptr++);
 
-            Gv_SetVarX(var1, mulscale(var2, var3, var4));
+            if (tw == CON_MULSCALE)
+                Gv_SetVarX(var1, mulscale(var2, var3, var4));
+            else if (tw == CON_DIVSCALE)
+                Gv_SetVarX(var1, divscale(var2, var3, var4));
+            else
+                Gv_SetVarX(var1, scale(var2, var3, var4));
             break;
         }
 
@@ -4481,6 +4491,132 @@ static int X_DoExecute(void)
             break;
         }
 
+    case CON_READARRAYFROMFILE:
+        insptr++;
+        {
+            int const arrayNum = *insptr++;
+            int const quoteFilename = *insptr++;
+
+            VM_ABORT_IF((unsigned)quoteFilename >= MAXQUOTES, "invalid quote %d", quoteFilename);
+            VM_ABORT_IF(apStrings[quoteFilename] == NULL, "null quote %d", quoteFilename);
+
+            buildvfs_kfd kFile = kopen4loadfrommod(apStrings[quoteFilename], 0);
+
+            if (kFile == buildvfs_kfd_invalid)
+                break;
+
+            size_t const filelength = kfilelength(kFile);
+            size_t const numElements = Gv_GetArrayCountForAllocSize(arrayNum, filelength);
+
+            if (numElements > 0)
+            {
+                size_t const newBytes = Gv_GetArrayAllocSizeForCount(arrayNum, numElements);
+                size_t const readBytes = min(newBytes, filelength);
+                size_t const oldBytes = Gv_GetArrayAllocSize(arrayNum);
+
+                intptr_t *&pValues = aGameArrays[arrayNum].pValues;
+
+                if (newBytes != oldBytes)
+                {
+                    Xaligned_free(pValues);
+                    pValues = (intptr_t *)Xaligned_alloc(ARRAY_ALIGNMENT, newBytes);
+                }
+
+                aGameArrays[arrayNum].size = numElements;
+
+                uintptr_t const flags = aGameArrays[arrayNum].flags;
+
+                switch (flags & GAMEARRAY_SIZE_MASK)
+                {
+                    case 0:
+#ifdef BITNESS64
+                    {
+                        void *const pArray = Xcalloc(1, newBytes);
+
+                        kread(kFile, pArray, readBytes);
+
+                        if (flags & GAMEARRAY_UNSIGNED)
+                        {
+                            for (unative_t i = 0; i < numElements; ++i)
+                                pValues[i] = ((uint32_t *)pArray)[i];
+                        }
+                        else
+                        {
+                            for (unative_t i = 0; i < numElements; ++i)
+                                pValues[i] = ((int32_t *)pArray)[i];
+                        }
+
+                        Xfree(pArray);
+                        break;
+                    }
+#endif
+                    default:
+                        Bmemset((char *)pValues + readBytes, 0, newBytes - readBytes);
+                        kread(kFile, pValues, readBytes);
+                        break;
+                }
+            }
+
+            kclose(kFile);
+            break;
+        }
+
+    case CON_WRITEARRAYTOFILE:
+        insptr++;
+        {
+            int const arrayNum = *insptr++;
+            int const quoteFilename = *insptr++;
+
+            VM_ABORT_IF((unsigned)quoteFilename >= MAXQUOTES, "invalid quote %d", quoteFilename);
+            VM_ABORT_IF(apStrings[quoteFilename] == NULL, "null quote %d", quoteFilename);
+
+            char temp[BMAX_PATH];
+            int const len = (g_modDir[0] != '/')
+                ? Bsnprintf(temp, sizeof(temp), "%s/%s", g_modDir, apStrings[quoteFilename])
+                : Bsnprintf(temp, sizeof(temp), "%s", apStrings[quoteFilename]);
+
+            if (EDUKE32_PREDICT_FALSE((unsigned)len >= sizeof(temp)))
+            {
+                LOG_F(ERROR, "Unable to save array to %s: resulting filename is too long.", apStrings[quoteFilename]);
+                vm.flags |= VM_RETURN;
+                break;
+            }
+
+            buildvfs_FILE const fil = buildvfs_fopen_write(temp);
+
+            if (EDUKE32_PREDICT_FALSE(fil == NULL))
+            {
+                LOG_F(ERROR, "Unable to save array to %s: unknown error.", temp);
+                vm.flags |= VM_RETURN;
+                break;
+            }
+
+            switch (aGameArrays[arrayNum].flags & GAMEARRAY_SIZE_MASK)
+            {
+                case 0:
+#ifdef BITNESS64
+                {
+                    size_t const numElements = aGameArrays[arrayNum].size;
+                    size_t const numDiskBytes = numElements * sizeof(int32_t);
+                    int32_t *const pArray = (int32_t *)Xmalloc(numDiskBytes);
+
+                    for (unative_t k = 0; k < numElements; ++k)
+                        pArray[k] = Gv_GetArrayValue(arrayNum, k);
+
+                    buildvfs_fwrite(pArray, 1, numDiskBytes, fil);
+                    Xfree(pArray);
+                    break;
+                }
+#endif
+                default:
+                    buildvfs_fwrite(aGameArrays[arrayNum].pValues, 1, Gv_GetArrayAllocSize(arrayNum), fil);
+                    break;
+            }
+
+            buildvfs_fclose(fil);
+            break;
+        }
+
     case CON_RANDVAR:
         insptr++;
         Gv_SetVarX(*insptr, mulscale16(krand(), *(insptr+1)+1));
@@ -5066,6 +5202,45 @@ static int X_DoExecute(void)
                 break;
             }
             G_AddUserQuote(apStrings[i]);
+        }
+        break;
+
+    case CON_ECHO:
+        insptr++;
+        {
+            int i = Gv_GetVarX(*insptr++);
+
+            if ((apStrings[i] == NULL) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "null quote %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), i);
+                break;
+            }
+            VLOG_F(LOG_VM, "%s", apStrings[i]);
+        }
+        break;
+
+    case CON_CAPIA:
+        insptr++;
+        {
+            int const quoteNum = Gv_GetVarX(*insptr++);
+
+            VM_ABORT_IF((unsigned)quoteNum >= MAXQUOTES, "invalid quote %d", quoteNum);
+            VM_ABORT_IF(apStrings[quoteNum] == NULL, "null quote %d", quoteNum);
+
+            communityapiUnlockAchievement(apStrings[quoteNum]);
+        }
+        break;
+
+    case CON_CAPIS:
+        insptr++;
+        {
+            int const quoteNum = Gv_GetVarX(*insptr++);
+            int const value = Gv_GetVarX(*insptr++);
+
+            VM_ABORT_IF((unsigned)quoteNum >= MAXQUOTES, "invalid quote %d", quoteNum);
+            VM_ABORT_IF(apStrings[quoteNum] == NULL, "null quote %d", quoteNum);
+
+            communityapiSetStat(apStrings[quoteNum], value);
         }
         break;
 

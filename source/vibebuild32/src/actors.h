@@ -50,6 +50,7 @@ typedef struct {
     short htpicnum, htang, htextra, htowner, movflag;
     short tempang, actorstayput, dispicnum;
     short timetosleep;
+    int8_t floorzoffset, waterzoffset;
     char cgg;
     char filler;
     projectile_t projectile;

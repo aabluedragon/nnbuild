@@ -460,6 +460,7 @@ const tokenmap_t vm_keywords[] =
 
     { "randvar",                CON_RANDVAR },
     { "randvarvar",             CON_RANDVARVAR },
+    { "rand",                   CON_RANDVARVAR },
     { "displayrandvar",         CON_DISPLAYRANDVAR },
     { "displayrandvarvar",      CON_DISPLAYRANDVARVAR },
     
@@ -492,20 +493,34 @@ const tokenmap_t vm_keywords[] =
 
     { "setsector",              CON_SETSECTOR },
     { "getsector",              CON_GETSECTOR },
+    { "sets",                   CON_SETSECTOR },
+    { "gets",                   CON_GETSECTOR },
     { "setactor",               CON_SETACTOR },
     { "getactor",               CON_GETACTOR },
+    { "seta",                   CON_SETACTOR },
+    { "geta",                   CON_GETACTOR },
     { "setactorvar",            CON_SETACTORVAR },
     { "getactorvar",            CON_GETACTORVAR },
+    { "setav",                  CON_SETACTORVAR },
+    { "getav",                  CON_GETACTORVAR },
     { "setwall",                CON_SETWALL },
     { "getwall",                CON_GETWALL },
+    { "setw",                   CON_SETWALL },
+    { "getw",                   CON_GETWALL },
     { "setplayer",              CON_SETPLAYER },
     { "getplayer",              CON_GETPLAYER },
+    { "setp",                   CON_SETPLAYER },
+    { "getp",                   CON_GETPLAYER },
     { "setuserdef",             CON_SETUSERDEF },
     { "getuserdef",             CON_GETUSERDEF },
+    { "setu",                   CON_SETUSERDEF },
+    { "getu",                   CON_GETUSERDEF },
     { "settspr",                CON_SETTSPR },
     { "gettspr",                CON_GETTSPR },
     { "getinput",               CON_GETINPUT },
     { "setinput",               CON_SETINPUT },
+    { "geti",                   CON_GETINPUT },
+    { "seti",                   CON_SETINPUT },
     { "settiledata",            CON_SETTILEDATA },
     { "gettiledata",            CON_GETTILEDATA },
 
@@ -579,6 +594,8 @@ const tokenmap_t vm_keywords[] =
     { "time",                   CON_TIME },
     { "getplayervar",           CON_GETPLAYERVAR },
     { "setplayervar",           CON_SETPLAYERVAR },
+    { "getpv",                  CON_GETPLAYERVAR },
+    { "setpv",                  CON_SETPLAYERVAR },
     { "mulscale",               CON_MULSCALE },
     { "setaspect",              CON_SETASPECT },
     { "ezshoot",                CON_EZSHOOT },
@@ -601,6 +618,7 @@ const tokenmap_t vm_keywords[] =
     { "precache",               CON_PRECACHE },
     { "definegamefuncname",     CON_DEFINEGAMEFUNCNAME },
     { "redefinequote",          CON_REDEFINEQUOTE },
+    { "qputs",                  CON_REDEFINEQUOTE },
     { "qsprintf",               CON_QSPRINTF },
     { "getpname",               CON_GETPNAME },
     { "qstrcat",                CON_QSTRCAT },
@@ -624,6 +642,9 @@ const tokenmap_t vm_keywords[] =
     { "findnearsprite3dvar",    CON_FINDNEARSPRITE3DVAR },
     { "dynamicremap",           CON_DYNAMICREMAP },
     { "dynamicsoundremap",      CON_DYNAMICSOUNDREMAP },
+    { "capia",                  CON_CAPIA },
+    { "capis",                  CON_CAPIS },
+    { "echo",                   CON_ECHO },
 
     { "save",                   CON_SAVE },
     { "cansee",                 CON_CANSEE },
@@ -658,6 +679,8 @@ const tokenmap_t vm_keywords[] =
     { "spritenopal",            CON_SPRITENOPAL },
     { "hitradiusvar",           CON_HITRADIUSVAR },
     { "rotatesprite16",         CON_ROTATESPRITE16 },
+    { "divscale",               CON_DIVSCALE },
+    { "scalevar",               CON_SCALEVAR },
 
     { "array",                  CON_GAMEARRAY },
     { "gamearray",              CON_GAMEARRAY },
@@ -1216,6 +1239,21 @@ static void C_GetNextLabelName(void)
 
     if (!(g_errorCnt | g_warningCnt) && g_scriptDebug > 1)
         VLOG_F(LOG_CON, "%s:%d: label '%s'.", g_scriptFileName, g_lineNumber, LAST_LABEL);
+}
+
+static int32_t C_GetNextGameArrayName(void)
+{
+    C_GetNextLabelName();
+    int32_t const i = GetADefID(LAST_LABEL);
+    if (EDUKE32_PREDICT_FALSE(i < 0))
+    {
+        g_errorCnt++;
+        C_ReportError(ERROR_NOTAGAMEARRAY);
+        return -1;
+    }
+
+    scriptWriteValue(i);
+    return i;
 }
 
 static int C_GetKeyword(void)
@@ -3392,7 +3430,9 @@ DO_DEFSTATE:
             case CON_GUNIQHUDID:
             case CON_SAVEGAMEVAR:
             case CON_READGAMEVAR:
+            case CON_CAPIA:
             case CON_USERQUOTE:
+            case CON_ECHO:
             case CON_STARTTRACK:
             case CON_CLEARMAPSTATE:
             case CON_ACTIVATECHEAT:
@@ -3576,6 +3616,15 @@ setvar:
                 C_GetNextVar();
                 continue;
 
+            case CON_WRITEARRAYTOFILE:
+            case CON_READARRAYFROMFILE:
+                i = C_GetNextGameArrayName();
+                if (EDUKE32_PREDICT_FALSE(i < 0))
+                    return 1;
+
+                C_GetNextValue(LABEL_DEFINE);
+                continue;
+
             case CON_RANDVARVAR:
                 if (!C_CheckEventSync(g_currentEvent))
                 {
@@ -3649,6 +3698,8 @@ setvarvar:
             case CON_GETINCANGLE:
             case CON_GETANGLE:
             case CON_MULSCALE:
+            case CON_DIVSCALE:
+            case CON_SCALEVAR:
             case CON_SETASPECT:
                 // get the ID of the DEF
                 switch (tw)
@@ -3657,6 +3708,8 @@ setvarvar:
                     case CON_LDIST:
                     case CON_GETANGLE:
                     case CON_GETINCANGLE:
+                    case CON_DIVSCALE:
+                    case CON_SCALEVAR:
                         C_GetNextVarType(GAMEVAR_READONLY);
                         break;
                     default:
@@ -3678,6 +3731,8 @@ setvarvar:
                         C_GetNextVar();
                         break;
                     case CON_MULSCALE:
+                    case CON_DIVSCALE:
+                    case CON_SCALEVAR:
                         C_GetManyVars(2);
                         break;
                 }
@@ -4454,6 +4509,7 @@ repeatcase:
             case CON_NEXTSPRITESECT:
             case CON_ACTORSOUND:
             case CON_STOPACTORSOUND:
+            case CON_CAPIS:
                 C_GetManyVars(2);
                 continue;
             case CON_QSTRDIM:
@@ -5679,6 +5735,7 @@ static void C_AddDefaultDefinitions(void)
     C_AddDefinition("GAMEVAR_NORESET",              GAMEVAR_NORESET,                        LABEL_DEFINE);
     C_AddDefinition("GAMEVAR_PERACTOR",             GAMEVAR_PERACTOR,                       LABEL_DEFINE);
     C_AddDefinition("GAMEVAR_PERPLAYER",            GAMEVAR_PERPLAYER,                      LABEL_DEFINE);
+    C_AddDefinition("GAMEVAR_SERIALIZE",            GAMEVAR_SERIALIZE,                      LABEL_DEFINE);
     C_AddDefinition("GAMEVAR_NOMULTI_PERPLAYER",    GAMEVAR_NOMULTI | GAMEVAR_PERPLAYER,    LABEL_DEFINE);
     C_AddDefinition("GAMEVAR_NOMULTI_PERACTOR",     GAMEVAR_NOMULTI | GAMEVAR_PERACTOR,     LABEL_DEFINE);
 

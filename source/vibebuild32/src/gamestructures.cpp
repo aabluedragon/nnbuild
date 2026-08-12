@@ -128,6 +128,8 @@ const memberlabel_t ActorLabels[] =
     { "htmovflag",      ACTOR_HTMOVFLAG, 0, 0, -1 },
     { "httempang",      ACTOR_HTTEMPANG, 0, 0, -1 },
     { "htactorstayput", ACTOR_HTSTAYPUT, 0, 0, -1 },
+    { "htfloorzoffset", ACTOR_HTFLOORZOFFSET, 0, 0, -1 },
+    { "htwaterzoffset", ACTOR_HTWATERZOFFSET, 0, 0, -1 },
     { "htdispicnum",    ACTOR_HTDISPICNUM, 0, 0, -1 },
     { "httimetosleep",  ACTOR_HTTIMETOSLEEP, 0, 0, -1 },
     { "htfloorz",       ACTOR_HTFLOORZ, 0, 0, -1 },
@@ -1707,6 +1709,8 @@ int32_t __fastcall VM_GetSprite(int const spriteNum, int32_t labelNum, int const
         case ACTOR_HTMOVFLAG:       return act.movflag;
         case ACTOR_HTTEMPANG:       return act.tempang;
         case ACTOR_HTSTAYPUT:       return act.actorstayput;
+        case ACTOR_HTFLOORZOFFSET:  return act.floorzoffset;
+        case ACTOR_HTWATERZOFFSET:  return act.waterzoffset;
         case ACTOR_HTDISPICNUM:     return act.dispicnum;
         case ACTOR_HTTIMETOSLEEP:   return act.timetosleep;
         case ACTOR_HTFLOORZ:        return act.floorz;
@@ -1784,6 +1788,8 @@ void __fastcall VM_SetSprite(int const spriteNum, int const labelNum, int const 
         case ACTOR_HTMOVFLAG:       act.movflag             = newValue; return;
         case ACTOR_HTTEMPANG:       act.tempang             = newValue; return;
         case ACTOR_HTSTAYPUT:       act.actorstayput        = newValue; return;
+        case ACTOR_HTFLOORZOFFSET:  act.floorzoffset        = newValue; return;
+        case ACTOR_HTWATERZOFFSET:  act.waterzoffset        = newValue; return;
         case ACTOR_HTDISPICNUM:     act.dispicnum           = newValue; return;
         case ACTOR_HTTIMETOSLEEP:   act.timetosleep         = newValue; return;
         case ACTOR_HTFLOORZ:        act.floorz              = newValue; return;
