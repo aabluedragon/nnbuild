@@ -3790,8 +3790,11 @@ void Net_LaunchHost(int32_t advertise)
         nv[n++] = g_procArgv[i];
     }
     nv[n++] = "-startnow";
-    nv[n++] = "-v1";
-    nv[n++] = "-l1";
+    static char volumeArg[16], levelArg[16];
+    Bsnprintf(volumeArg, sizeof(volumeArg), "-v%d", ud.m_volume_number + 1);
+    Bsnprintf(levelArg, sizeof(levelArg), "-l%d", ud.m_level_number + 1);
+    nv[n++] = volumeArg;
+    nv[n++] = levelArg;
     if (advertise && g_masterServerAddr[0])
     {
         nv[n++] = "-advertise";

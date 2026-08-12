@@ -31,6 +31,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "gamestructures.h"
 
+#include <string>
+#include <unordered_map>
+
 #define LINE_NUMBER (g_lineNumber << 12)
 
 int g_scriptVersion = 13; // 13 = 1.3D-style CON files, 14 = 1.4/1.5 style CON files
@@ -41,6 +44,119 @@ static char g_szCurrentBlockName[BMAX_PATH] = "(none)", g_szLastBlockName[BMAX_P
 int g_totalLines,g_lineNumber;
 static int g_checkingIfElse,g_processingState;
 char g_szBuf[1024];
+
+extern char *textptr;
+
+static bool g_worldTourLocaleLoaded = false;
+static std::unordered_map<std::string, std::string> g_worldTourLocaleStrings;
+
+static void C_LoadWorldTourLocale(void)
+{
+    if (g_worldTourLocaleLoaded)
+        return;
+
+    g_worldTourLocaleLoaded = true;
+
+    buildvfs_kfd kFile = kopen4loadfrommod("locale/english/strings.txt", 0);
+    if (kFile == buildvfs_kfd_invalid)
+        return;
+
+    int const kFileLen = kfilelength(kFile);
+    char *data = (char *)Xmalloc(kFileLen + 1);
+    data[kFileLen] = 0;
+    kread(kFile, data, kFileLen);
+    kclose(kFile);
+
+    for (char *line = data; line && *line;)
+    {
+        char *next = Bstrchr(line, '\n');
+        if (next)
+            *next++ = 0;
+
+        char *p = line;
+        while (*p == ' ' || *p == '\t' || *p == '\r')
+            ++p;
+
+        if (*p != '#' || (p[0] == '/' && p[1] == '/'))
+        {
+            line = next;
+            continue;
+        }
+
+        char *keyStart = p;
+        while (*p && *p != ' ' && *p != '\t' && *p != '\r')
+            ++p;
+
+        std::string key(keyStart, p - keyStart);
+
+        while (*p == ' ' || *p == '\t' || *p == '\r')
+            ++p;
+
+        if (*p != '"')
+        {
+            line = next;
+            continue;
+        }
+        ++p;
+
+        std::string value;
+        while (*p && *p != '"')
+        {
+            if (*p == '\\' && p[1])
+            {
+                ++p;
+                switch (*p)
+                {
+                    case 'n': value.push_back('\n'); break;
+                    case 't': value.push_back('\t'); break;
+                    case '\\': value.push_back('\\'); break;
+                    case '"': value.push_back('"'); break;
+                    default: value.push_back(*p); break;
+                }
+                ++p;
+                continue;
+            }
+
+            value.push_back(*p++);
+        }
+
+        if (!key.empty())
+            g_worldTourLocaleStrings[key] = value;
+
+        line = next;
+    }
+
+    Xfree(data);
+}
+
+static char const *C_LocalizeWorldTourString(char const *text)
+{
+    if (!text || text[0] != '#')
+        return text;
+
+    C_LoadWorldTourLocale();
+
+    auto const found = g_worldTourLocaleStrings.find(text);
+    return found == g_worldTourLocaleStrings.end() ? text : found->second.c_str();
+}
+
+static int C_ReadRestOfLine(char *buffer, int bufferSize)
+{
+    int i = 0;
+
+    while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
+    {
+        if (i < bufferSize - 1)
+            buffer[i++] = *textptr;
+        ++textptr;
+    }
+
+    while (i > 0 && (buffer[i - 1] == ' ' || buffer[i - 1] == '\t' || buffer[i - 1] == '\r'))
+        --i;
+
+    buffer[i] = '\0';
+    return i;
+}
 
 // Switch/Case
 intptr_t* g_caseTablePtr = NULL; // the pointer to the start of the case table in a switch statement. first entry is 'default' code.
@@ -194,6 +310,7 @@ const tokenmap_t vm_keywords[] =
     { "ifhitspace",             CON_IFHITSPACE },
     { "ifoutside",              CON_IFOUTSIDE },
     { "ifmultiplayer",          CON_IFMULTIPLAYER },
+    { "ifplaybackon",           CON_IFPLAYBACKON },
     { "operate",                CON_OPERATE },
     { "ifinspace",              CON_IFINSPACE },
     { "debug",                  CON_DEBUG },
@@ -4485,7 +4602,7 @@ repeatcase:
             case CON_IFNOTMOVING:
             case CON_IFONWATER:
             case CON_IFOUTSIDE:
-                //case CON_IFPLAYBACKON:
+            case CON_IFPLAYBACKON:
             case CON_IFRESPAWN:
                 //case CON_IFSERVER:
             case CON_IFSQUISHED:
@@ -4574,6 +4691,7 @@ repeatcase:
                 continue;
 
             case CON_DEFINEVOLUMENAME:
+            {
                 g_scriptPtr--;
 
                 C_GetNextValue(LABEL_DEFINE);
@@ -4591,25 +4709,22 @@ repeatcase:
                     continue;
                 }
 
-                i = 0;
-
-                while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
+                char localName[1024];
+                C_ReadRestOfLine(localName, sizeof(localName));
+                char const *resolvedName = C_LocalizeWorldTourString(localName);
+                i = Bstrlen(resolvedName);
+                if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(EpisodeNames[j])))
                 {
-                    EpisodeNames[j][i] = *textptr;
-                    textptr++, i++;
-                    if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(EpisodeNames[j])))
-                    {
-                        LOG_F(WARNING, "%s:%d: truncating volume name to %d characters.",
-                            g_scriptFileName, g_lineNumber, (int32_t)sizeof(EpisodeNames[j]) - 1);
-                        i--;
-                        g_warningCnt++;
-                        scriptSkipLine();
-                        break;
-                    }
+                    LOG_F(WARNING, "%s:%d: truncating volume name to %d characters.",
+                        g_scriptFileName, g_lineNumber, (int32_t)sizeof(EpisodeNames[j]) - 1);
+                    i = sizeof(EpisodeNames[j]) - 1;
+                    g_warningCnt++;
                 }
                 g_numVolumes = j + 1;
+                Bmemcpy(EpisodeNames[j], resolvedName, i);
                 EpisodeNames[j][i] = '\0';
                 continue;
+            }
 
             case CON_DEFINEGAMEFUNCNAME:
                 g_scriptPtr--;
@@ -4660,6 +4775,7 @@ repeatcase:
                 continue;
 
             case CON_DEFINESKILLNAME:
+            {
                 g_scriptPtr--;
 
                 C_GetNextValue(LABEL_DEFINE);
@@ -4676,22 +4792,20 @@ repeatcase:
                     continue;
                 }
 
-                i = 0;
-
-                while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
+                char localName[1024];
+                C_ReadRestOfLine(localName, sizeof(localName));
+                char const *resolvedName = C_LocalizeWorldTourString(localName);
+                i = Bstrlen(resolvedName);
+                if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(g_skillNames[j])))
                 {
-                    g_skillNames[j][i] = toupper(*textptr);
-                    textptr++, i++;
-                    if (EDUKE32_PREDICT_FALSE(i >= (signed)sizeof(g_skillNames[j])))
-                    {
-                        LOG_F(WARNING, "%s:%d: truncating skill name to %d characters.",
-                              g_scriptFileName, g_lineNumber, (int32_t)sizeof(g_skillNames[j]) - 1);
-                        i--;
-                        g_warningCnt++;
-                        scriptSkipLine();
-                        break;
-                    }
+                    LOG_F(WARNING, "%s:%d: truncating skill name to %d characters.",
+                          g_scriptFileName, g_lineNumber, (int32_t)sizeof(g_skillNames[j]) - 1);
+                    i = sizeof(g_skillNames[j]) - 1;
+                    g_warningCnt++;
                 }
+
+                for (int nameIndex = 0; nameIndex < i; ++nameIndex)
+                    g_skillNames[j][nameIndex] = toupper((uint8_t)resolvedName[nameIndex]);
 
                 if (EDUKE32_PREDICT_FALSE(i == 0))
                 {
@@ -4702,6 +4816,7 @@ repeatcase:
 
                 g_skillNames[j][i] = '\0';
                 continue;
+            }
 
             case CON_SETGAMENAME:
             {
@@ -4845,6 +4960,7 @@ repeatcase:
                 continue;
 
             case CON_DEFINELEVELNAME:
+            {
                 g_scriptPtr--;
                 C_GetNextValue(LABEL_DEFINE);
                 g_scriptPtr--;
@@ -4917,38 +5033,34 @@ repeatcase:
                 }
                 else if (g_scriptVersion == 10) g_scriptVersion = 9;
 
-                i = 0;
-
-                while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
+                char levelName[1024];
+                C_ReadRestOfLine(levelName, sizeof(levelName));
+                char const *resolvedLevelName = C_LocalizeWorldTourString(levelName);
+                i = Bstrlen(resolvedLevelName);
+                if (EDUKE32_PREDICT_FALSE(i >= 32))
                 {
-                    tempbuf[i] = *textptr;
-                    textptr++, i++;
-                    if (EDUKE32_PREDICT_FALSE(i >= 32))
-                    {
-                        LOG_F(WARNING, "%s:%d: truncating level name to %d characters.",
-                            g_scriptFileName, g_lineNumber, 31);
-                        i--;
-                        g_warningCnt++;
-                        scriptSkipLine();
-                        break;
-                    }
+                    LOG_F(WARNING, "%s:%d: truncating level name to %d characters.",
+                        g_scriptFileName, g_lineNumber, 31);
+                    i = 31;
+                    g_warningCnt++;
                 }
 
-                tempbuf[i] = '\0';
-
                 if (g_mapInfo[j * MAXLEVELS + k].name == NULL)
-                    g_mapInfo[j * MAXLEVELS + k].name = (char*)Xcalloc(Bstrlen(tempbuf) + 1, sizeof(uint8_t));
-                else if ((Bstrlen(tempbuf) + 1) > sizeof(g_mapInfo[j * MAXLEVELS + k].name))
-                    g_mapInfo[j * MAXLEVELS + k].name = (char*)Xrealloc(g_mapInfo[j * MAXLEVELS + k].name, (Bstrlen(tempbuf) + 1));
+                    g_mapInfo[j * MAXLEVELS + k].name = (char*)Xcalloc(i + 1, sizeof(uint8_t));
+                else
+                    g_mapInfo[j * MAXLEVELS + k].name = (char*)Xrealloc(g_mapInfo[j * MAXLEVELS + k].name, i + 1);
 
                 /*         initprintf("level name string len: %d\n",Bstrlen(tempbuf)); */
 
-                Bstrcpy(g_mapInfo[j * MAXLEVELS + k].name, tempbuf);
+                Bmemcpy(g_mapInfo[j * MAXLEVELS + k].name, resolvedLevelName, i);
+                g_mapInfo[j * MAXLEVELS + k].name[i] = '\0';
 
                 continue;
+            }
 
             case CON_DEFINEQUOTE:
             case CON_REDEFINEQUOTE:
+            {
                 if (tw == CON_DEFINEQUOTE)
                 {
                     g_scriptPtr--;
@@ -4973,8 +5085,6 @@ repeatcase:
                 if (tw == CON_DEFINEQUOTE)
                     g_scriptPtr--;
 
-                i = 0;
-
                 scriptSkipSpaces();
 
                 if (tw == CON_REDEFINEQUOTE && !g_switchCountPhase)
@@ -4983,34 +5093,15 @@ repeatcase:
                         apXStrings[g_numXStrings] = (char*)Xcalloc(MAXQUOTELEN, sizeof(uint8_t));
                 }
 
-                while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0)
+                char quoteText[1024];
+                C_ReadRestOfLine(quoteText, sizeof(quoteText));
+                char const *resolvedQuote = C_LocalizeWorldTourString(quoteText);
+                i = Bstrlen(resolvedQuote);
+                if (EDUKE32_PREDICT_FALSE(i >= MAXQUOTELEN))
                 {
-                    /*
-                    if (*textptr == '%' && *(textptr+1) == 's')
-                    {
-                    LOG_F(ERROR, "%s:%d: quote text contains string identifier.",g_szScriptFileName,g_lineNumber);
-                    g_numCompilerErrors++;
-                    while (*textptr != 0x0a && *textptr != 0x0d && *textptr != 0) textptr++;
-                    break;
-                    }
-                    */
-                    if (!g_switchCountPhase)
-                    {
-                        if (tw == CON_DEFINEQUOTE)
-                            *(apStrings[k] + i) = *textptr;
-                        else
-                            *(apXStrings[g_numXStrings] + i) = *textptr;
-                    }
-
-                    textptr++, i++;
-                    if (EDUKE32_PREDICT_FALSE(i >= MAXQUOTELEN))
-                    {
-                        LOG_F(WARNING, "%s:%d: truncating quote text to %d characters.", g_scriptFileName, g_lineNumber, MAXQUOTELEN - 1);
-                        i--;
-                        g_warningCnt++;
-                        scriptSkipLine();
-                        break;
-                    }
+                    LOG_F(WARNING, "%s:%d: truncating quote text to %d characters.", g_scriptFileName, g_lineNumber, MAXQUOTELEN - 1);
+                    i = MAXQUOTELEN - 1;
+                    g_warningCnt++;
                 }
 
                 if (!g_switchCountPhase)
@@ -5018,15 +5109,20 @@ repeatcase:
                     if (tw == CON_DEFINEQUOTE)
                     {
                         if ((unsigned)k < MAXQUOTES)
+                        {
+                            Bmemcpy(apStrings[k], resolvedQuote, i);
                             *(apStrings[k] + i) = '\0';
+                        }
                     }
                     else
                     {
+                        Bmemcpy(apXStrings[g_numXStrings], resolvedQuote, i);
                         *(apXStrings[g_numXStrings] + i) = '\0';
                         scriptWriteValue(g_numXStrings++);
                     }
                 }
                 continue;
+            }
 
             case CON_CHEATKEYS:
                 g_scriptPtr--;
@@ -5262,28 +5358,31 @@ repeatcase:
 
             case CON_GAMESTARTUP:
             {
-                int params[30];
+                int params[31];
 
                 g_scriptPtr--;
-                for (j = 0; j < 30; j++)
+                for (j = 0; j < 31; j++)
                 {
                     C_GetNextValue(LABEL_DEFINE);
                     g_scriptPtr--;
                     params[j] = *g_scriptPtr;
 
-                    if (j != 25) continue;
+                    if (j != 12 && j != 21 && j != 25 && j != 29) continue;
 
                     if (C_GetKeyword() != -1)
                     {
-                        //                LOG_F("Duke Nukem 3D v1.3D style CON files detected.\n");
+                        if (j == 12)
+                            g_scriptVersion = 10;
+                        else if (j == 21)
+                            g_scriptVersion = 11;
+                        else if (j == 25)
+                            g_scriptVersion = 13;
+                        else if (j == 29)
+                            g_scriptVersion = 14;
                         break;
                     }
                     else
-                    {
-                        g_scriptVersion = 14;
-                        //                LOG_F("Duke Nukem 3D v1.4+ style CON files detected.\n");
-                    }
-
+                        g_scriptVersion = 16;
                 }
 
                 /*
@@ -5326,19 +5425,25 @@ repeatcase:
                 g_player[0].ps->max_player_health = g_player[0].ps->max_shield_amount = params[j++];
                 g_startArmorAmount = params[j++];
                 g_actorRespawnTime = params[j++];
-                g_itemRespawnTime = params[j++];
-                g_playerFriction = params[j++];
+                g_itemRespawnTime = (g_scriptVersion >= 11) ? params[j++] : g_actorRespawnTime;
 
-                if (g_scriptVersion == 14)
+                if (g_scriptVersion >= 11)
+                    g_playerFriction = params[j++];
+
+                if (g_scriptVersion >= 14)
                     g_spriteGravity = params[j++];
 
-                g_rpgBlastRadius = params[j++];
-                g_pipebombBlastRadius = params[j++];
-                g_shrinkerBlastRadius = params[j++];
-                g_tripbombBlastRadius = params[j++];
-                g_morterBlastRadius = params[j++];
-                g_bouncemineBlastRadius = params[j++];
-                g_seenineBlastRadius = params[j++];
+                if (g_scriptVersion >= 11)
+                {
+                    g_rpgBlastRadius = params[j++];
+                    g_pipebombBlastRadius = params[j++];
+                    g_shrinkerBlastRadius = params[j++];
+                    g_tripbombBlastRadius = params[j++];
+                    g_morterBlastRadius = params[j++];
+                    g_bouncemineBlastRadius = params[j++];
+                    g_seenineBlastRadius = params[j++];
+                }
+
                 g_player[0].ps->max_ammo_amount[PISTOL_WEAPON] = params[j++];
                 g_player[0].ps->max_ammo_amount[SHOTGUN_WEAPON] = params[j++];
                 g_player[0].ps->max_ammo_amount[CHAINGUN_WEAPON] = params[j++];
@@ -5347,25 +5452,27 @@ repeatcase:
                 g_player[0].ps->max_ammo_amount[SHRINKER_WEAPON] = params[j++];
                 g_player[0].ps->max_ammo_amount[DEVISTATOR_WEAPON] = params[j++];
                 g_player[0].ps->max_ammo_amount[TRIPBOMB_WEAPON] = params[j++];
-                g_player[0].ps->max_ammo_amount[FREEZE_WEAPON] = params[j++];
 
-                if (g_scriptVersion == 14)
-                    g_player[0].ps->max_ammo_amount[GROW_WEAPON] = params[j++];
-
-                g_damageCameras = params[j++];
-                g_numFreezeBounces = params[j++];
-                g_freezerSelfDamage = params[j++];
-
-                if (g_scriptVersion == 14)
+                if (g_scriptVersion >= 13)
                 {
-                    g_spriteDeleteQueueSize = params[j++];
-                    if (g_spriteDeleteQueueSize > 1024)
-                        g_spriteDeleteQueueSize = 1024;
-                    else if (g_spriteDeleteQueueSize < 0)
-                        g_spriteDeleteQueueSize = 0;
+                    g_player[0].ps->max_ammo_amount[FREEZE_WEAPON] = params[j++];
 
+                    if (g_scriptVersion >= 14)
+                        g_player[0].ps->max_ammo_amount[GROW_WEAPON] = params[j++];
+
+                    g_damageCameras = params[j++];
+                    g_numFreezeBounces = params[j++];
+                    g_freezerSelfDamage = params[j++];
+                }
+
+                if (g_scriptVersion >= 14)
+                {
+                    g_spriteDeleteQueueSize = clamp(params[j++], 0, ARRAY_SSIZE(SpriteDeletionQueue));
                     g_tripbombLaserMode = params[j++];
                 }
+
+                if (g_scriptVersion >= 16)
+                    g_player[0].ps->max_ammo_amount[FLAMETHROWER_WEAPON] = params[j++];
                 continue;
             }
         }

@@ -912,14 +912,12 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(216, 52, 20)
     },
 
-#if 0
     {
         FLAMETHROWER_WEAPON, 0, 0, 2, 16, 0,
         WEAPON_RESET,
         FIREBALL__, 0, 0, 0, FLAMETHROWER_INTRO, FLAMETHROWER_INTRO, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(216, 52, 20)
     },
-#endif
 
 #endif
 };

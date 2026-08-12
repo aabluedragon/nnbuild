@@ -28,5 +28,4 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #define DNAMES_EXTRA_VIBEBUILD32_SOUNDS
 #define DNAMES_EXPOSE_DYN_TILE_LIST_SIZE
-#define DNAMES_DISABLE_FLAMETHROWER_PICKUP
 #include "../../build/include/dnames_shared.cpp.inc"

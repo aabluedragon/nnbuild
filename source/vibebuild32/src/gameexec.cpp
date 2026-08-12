@@ -3561,6 +3561,10 @@ static int X_DoExecute(void)
         branch(ud.multimode > 1);
         break;
 
+    case CON_IFPLAYBACKON:
+        branch(false);
+        break;
+
     case CON_OPERATE:
         insptr++;
         if (sector[vm.pSprite->sectnum].lotag == ST_0_NO_EFFECT)
