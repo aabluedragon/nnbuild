@@ -1,6 +1,6 @@
 // Game selector: one vibebuild32 binary that can launch Duke3D-family games,
-// Shadow Warrior (VoidSW), Blood, Redneck Rampage, and PCExhumed/PowerSlave,
-// sharing the engine.
+// Ion Fury, Shadow Warrior (VoidSW), Blood, Redneck Rampage, and
+// PCExhumed/PowerSlave, sharing the engine.
 //
 // The engine's main() calls app_main(); this file provides that app_main as a
 // dispatcher. Each game's real entry and the few engine callbacks that both
@@ -8,7 +8,7 @@
 // canonical names here route to the active game.
 //
 // Selection:
-//   --game/-gm <duke|worldtour|sw|blood|rr|nam|napalm|ww2gi|exhumed>  pick a game explicitly
+//   --game/-gm <duke|worldtour|ionfury|sw|blood|rr|nam|napalm|ww2gi|exhumed>  pick a game explicitly
 //   -g/--grp/-gamegrp <data-file>         infer the game from known data files
 //   --no-game-menu/-ngm             bypass the picker
 // The canonical data file is looked for both in the working directory and in a
@@ -48,12 +48,14 @@ enum
     GS_GAME_NAPALM = 6,
     GS_GAME_WW2GI = 7,
     GS_GAME_EXHUMED = 8,
-    GS_GAME_COUNT = 9,
+    GS_GAME_IONFURY = 9,
+    GS_GAME_COUNT = 10,
 };
 
 // 0 = Duke3D (vibebuild32), 1 = Duke3D World Tour, 2 = Shadow Warrior,
 // 3 = Blood, 4 = Redneck Rampage, 5 = NAM, 6 = Napalm,
-// 7 = World War II GI (Duke/NAM-family runtime), 8 = Powerslave/Exhumed.
+// 7 = World War II GI (Duke/NAM-family runtime), 8 = Powerslave/Exhumed,
+// 9 = Ion Fury (Duke-family runtime).
 // Read by the dispatchers.
 int g_activeGame = GS_GAME_DUKE;
 
@@ -108,6 +110,7 @@ static char const * const gs_napalmDataFiles[] = { "NAPALM.GRP", "napalm.grp", N
 static char const * const gs_ww2giDataFiles[] = { "WW2GI.GRP", "ww2gi.grp", NULL };
 static char const * const gs_exhumedDataFiles[] = { "STUFF.DAT", "stuff.dat", NULL };
 static char const * const gs_worldTourDataFiles[] = { "DUKE3D.GRP", "duke3d.grp", NULL };
+static char const * const gs_ionFuryDataFiles[] = { "fury.grp", "FURY.GRP", NULL };
 
 struct gs_gameSpec_t
 {
@@ -128,6 +131,7 @@ static gs_gameSpec_t const gs_gameSpecs[GS_GAME_COUNT] =
     { GS_GAME_NAPALM, "Napalm",         "napalm", gs_napalmDataFiles },
     { GS_GAME_WW2GI, "World War II GI",  "ww2gi",  gs_ww2giDataFiles },
     { GS_GAME_EXHUMED, "Powerslave/Exhumed", "exhumed", gs_exhumedDataFiles },
+    { GS_GAME_IONFURY, "Ion Fury",       "ionfury", gs_ionFuryDataFiles },
 };
 
 static char const *gs_gameName(int game)
@@ -138,7 +142,7 @@ static char const *gs_gameName(int game)
 static int gs_usesDukeRuntime(int game)
 {
     return game == GS_GAME_DUKE || game == GS_GAME_WORLDTOUR || game == GS_GAME_NAM ||
-           game == GS_GAME_NAPALM || game == GS_GAME_WW2GI;
+           game == GS_GAME_NAPALM || game == GS_GAME_WW2GI || game == GS_GAME_IONFURY;
 }
 
 static int gs_linkedGameOrDuke(int game)
@@ -174,6 +178,7 @@ static char const *gs_defaultMainGameGrp(int game)
         case GS_GAME_NAPALM: return "NAPALM.GRP";
         case GS_GAME_WW2GI: return "WW2GI.GRP";
         case GS_GAME_EXHUMED: return "STUFF.DAT";
+        case GS_GAME_IONFURY: return "fury.grp";
         default: return NULL;
     }
 }
@@ -215,6 +220,11 @@ static int gs_gameFromName(char const *name)
         !Bstrcasecmp(name, "power-slave") || !Bstrcasecmp(name, "power slave") ||
         !Bstrcasecmp(name, "pcexhumed"))
         return GS_GAME_EXHUMED;
+    if (!Bstrcasecmp(name, "ionfury") || !Bstrcasecmp(name, "ion-fury") ||
+        !Bstrcasecmp(name, "ion fury") || !Bstrcasecmp(name, "fury") ||
+        !Bstrcasecmp(name, "aftershock") || !Bstrcasecmp(name, "ionfury-aftershock") ||
+        !Bstrcasecmp(name, "ion-fury-aftershock"))
+        return GS_GAME_IONFURY;
     return -1;
 }
 
@@ -795,6 +805,11 @@ static gs_dataSignature_t const gs_dataSignatures[] =
     { GS_GAME_WW2GI, 77939508, 0x907B82BFu },
     { GS_GAME_WW2GI, 37852572, 0xD1ED8C0Cu },
 
+    // Ion Fury / Aftershock. The install also ships fury.grpinfo, but keeping
+    // the known signature here lets the selector infer the runtime before
+    // Duke's GRP scanner has parsed grpinfo metadata.
+    { GS_GAME_IONFURY, 160826590, 0xE175FB41u },
+
     // Shadow Warrior main/shareware/add-on GRPs.
     { GS_GAME_SW,    47536148, 0x7545319Fu },
     { GS_GAME_SW,    47536148, 0xD4A1E153u },
@@ -937,6 +952,8 @@ static int gs_inferGameFromBasename(char const *path)
         return GS_GAME_WW2GI;
     if (!Bstrcasecmp(base, "STUFF.DAT"))
         return GS_GAME_EXHUMED;
+    if (!Bstrcasecmp(base, "fury.grp"))
+        return GS_GAME_IONFURY;
     return -1;
 }
 
@@ -992,6 +1009,8 @@ static int gs_inferGameFromDataPath(char const *path)
                     return GS_GAME_WORLDTOUR;
                 }
             }
+            if (gs_hasPathSeparator(dataPath))
+                gs_inferGameFromContainingDirectory(dataPath, game);
             if (gs_needsMainGameGrpInjection(game)) gs_setMainGameGrpFile(dataPath);
             return game;
         }
@@ -1281,6 +1300,8 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
     int n = 0;
     int haveGameGrp = 0;
     int haveCon = 0;
+    int netArgStart = -1;
+    char const *netInlineValue = NULL;
     // All games already understand -nosetup.  Translate the VibeBuild32
     // launcher spelling once, after the game selector has consumed it.
     int skipMenu = gs_debugModeRequested(argc, argv);
@@ -1312,6 +1333,13 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
             Bmemcpy(combined + nameLength, inlineValue, valueLength + 1);
             out[n++] = combined;
             continue;
+        }
+        inlineValue = NULL;
+        if (gs_option(argv[i], "--net", "-net", NULL, &inlineValue))
+        {
+            netArgStart = i;
+            netInlineValue = inlineValue;
+            break;
         }
         if (gs_gameOption(argv[i], &inlineValue))
         {
@@ -1493,6 +1521,14 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
     if (g_activeGame == GS_GAME_WORLDTOUR && !haveCon)
         gs_emitOptionValue(out, &n, "-x", "GAME.CON");
     if (skipMenu && !forceMenu) out[n++] = "-nosetup";
+    if (netArgStart >= 0)
+    {
+        out[n++] = "-net";
+        if (netInlineValue && netInlineValue[0])
+            out[n++] = netInlineValue;
+        for (int i = netArgStart + 1; i < argc; ++i)
+            out[n++] = argv[i];
+    }
     out[n] = NULL;
     *outArgc = n;
     return out;
