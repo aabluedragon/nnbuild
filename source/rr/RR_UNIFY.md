@@ -2,9 +2,11 @@
 
 Redneck Rampage (plus Redneck-family data such as RRRA) is linked into the
 single `vibebuild32` binary as a fourth game, alongside Duke Nukem 3D, Shadow
-Warrior and Blood. NAM-family games such as World War II GI are not a separate
-RR module in VibeBuild32; they reuse the Duke/NAM runtime through selector
-metadata and `-gamegrp` routing. Build the unified binary with:
+Warrior and Blood. NAM-family games such as NAM, Napalm, and World War II GI
+are not a separate RR module in VibeBuild32; they reuse the Duke/NAM runtime
+through selector metadata and `-gamegrp` routing. Powerslave/Exhumed is also
+not RR code; it is linked as its own PCExhumed merged runtime. Build the unified
+binary with:
 
     make WITH_SW=1 WITH_BLOOD=1 WITH_RR=1 vibebuild32
 

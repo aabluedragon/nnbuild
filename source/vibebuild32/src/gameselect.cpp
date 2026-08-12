@@ -1,5 +1,6 @@
 // Game selector: one vibebuild32 binary that can launch Duke3D-family games,
-// Shadow Warrior (VoidSW), Blood, and Redneck Rampage, sharing the engine.
+// Shadow Warrior (VoidSW), Blood, Redneck Rampage, and PCExhumed/PowerSlave,
+// sharing the engine.
 //
 // The engine's main() calls app_main(); this file provides that app_main as a
 // dispatcher. Each game's real entry and the few engine callbacks that both
@@ -7,7 +8,7 @@
 // canonical names here route to the active game.
 //
 // Selection:
-//   --game/-gm <duke|sw|blood|rr|ww2gi>  pick a game explicitly
+//   --game/-gm <duke|sw|blood|rr|nam|napalm|ww2gi|exhumed>  pick a game explicitly
 //   -g/--grp/-gamegrp <data-file>         infer the game from known data files
 //   --no-game-menu/-ngm             bypass the picker
 // The canonical data file is looked for both in the working directory and in a
@@ -42,12 +43,16 @@ enum
     GS_GAME_SW    = 1,
     GS_GAME_BLOOD = 2,
     GS_GAME_RR    = 3,
-    GS_GAME_WW2GI = 4,
-    GS_GAME_COUNT = 5,
+    GS_GAME_NAM   = 4,
+    GS_GAME_NAPALM = 5,
+    GS_GAME_WW2GI = 6,
+    GS_GAME_EXHUMED = 7,
+    GS_GAME_COUNT = 8,
 };
 
 // 0 = Duke3D (vibebuild32), 1 = Shadow Warrior, 2 = Blood, 3 = Redneck Rampage,
-// 4 = World War II GI (Duke/NAM-family runtime).
+// 4 = NAM, 5 = Napalm, 6 = World War II GI (Duke/NAM-family runtime),
+// 7 = Powerslave/Exhumed.
 // Read by the dispatchers.
 int g_activeGame = GS_GAME_DUKE;
 
@@ -69,6 +74,11 @@ extern void Blood_faketimerhandler(void);
 extern int RR_app_main(int32_t argc, char const * const * argv);
 extern const char *RR_G_DefaultDefFile(void);
 extern void RR_faketimerhandler(void);
+#endif
+#ifdef WITH_EXHUMED
+extern int Exhumed_app_main(int argc, char const * const * argv);
+extern const char *Exhumed_G_DefaultDefFile(void);
+extern void Exhumed_faketimerhandler(void);
 #endif
 
 // --- helpers -----------------------------------------------------------------
@@ -92,7 +102,10 @@ static char const * const gs_dukeDataFiles[]  = { "DUKE3D.GRP", "duke3d.grp", NU
 static char const * const gs_swDataFiles[]    = { "SW.GRP", "Sw.grp", "sw.grp", NULL };
 static char const * const gs_bloodDataFiles[] = { "BLOOD.RFF", "blood.rff", NULL };
 static char const * const gs_rrDataFiles[]    = { "REDNECK.GRP", "redneck.grp", NULL };
+static char const * const gs_namDataFiles[]   = { "NAM.GRP", "nam.grp", NULL };
+static char const * const gs_napalmDataFiles[] = { "NAPALM.GRP", "napalm.grp", NULL };
 static char const * const gs_ww2giDataFiles[] = { "WW2GI.GRP", "ww2gi.grp", NULL };
+static char const * const gs_exhumedDataFiles[] = { "STUFF.DAT", "stuff.dat", NULL };
 
 struct gs_gameSpec_t
 {
@@ -108,7 +121,10 @@ static gs_gameSpec_t const gs_gameSpecs[GS_GAME_COUNT] =
     { GS_GAME_SW,    "Shadow Warrior",  "sw",     gs_swDataFiles    },
     { GS_GAME_BLOOD, "Blood",           "blood",  gs_bloodDataFiles },
     { GS_GAME_RR,    "Redneck Rampage", "rr",     gs_rrDataFiles    },
+    { GS_GAME_NAM,   "NAM",             "nam",    gs_namDataFiles   },
+    { GS_GAME_NAPALM, "Napalm",         "napalm", gs_napalmDataFiles },
     { GS_GAME_WW2GI, "World War II GI",  "ww2gi",  gs_ww2giDataFiles },
+    { GS_GAME_EXHUMED, "Powerslave/Exhumed", "exhumed", gs_exhumedDataFiles },
 };
 
 static char const *gs_gameName(int game)
@@ -116,10 +132,15 @@ static char const *gs_gameName(int game)
     return (unsigned)game < GS_GAME_COUNT ? gs_gameSpecs[game].name : "Duke Nukem 3D";
 }
 
+static int gs_usesDukeRuntime(int game)
+{
+    return game == GS_GAME_DUKE || game == GS_GAME_NAM ||
+           game == GS_GAME_NAPALM || game == GS_GAME_WW2GI;
+}
+
 static int gs_linkedGameOrDuke(int game)
 {
-    if (game == GS_GAME_DUKE) return GS_GAME_DUKE;
-    if (game == GS_GAME_WW2GI) return GS_GAME_WW2GI; // uses the linked Duke runtime
+    if (gs_usesDukeRuntime(game)) return game;
 #ifdef WITH_SW
     if (game == GS_GAME_SW) return GS_GAME_SW;
 #endif
@@ -128,6 +149,9 @@ static int gs_linkedGameOrDuke(int game)
 #endif
 #ifdef WITH_RR
     if (game == GS_GAME_RR) return GS_GAME_RR;
+#endif
+#ifdef WITH_EXHUMED
+    if (game == GS_GAME_EXHUMED) return GS_GAME_EXHUMED;
 #endif
     return GS_GAME_DUKE;
 }
@@ -142,7 +166,10 @@ static char const *gs_defaultMainGameGrp(int game)
     switch (game)
     {
         case GS_GAME_RR: return "REDNECK.GRP";
+        case GS_GAME_NAM: return "NAM.GRP";
+        case GS_GAME_NAPALM: return "NAPALM.GRP";
         case GS_GAME_WW2GI: return "WW2GI.GRP";
+        case GS_GAME_EXHUMED: return "STUFF.DAT";
         default: return NULL;
     }
 }
@@ -164,11 +191,19 @@ static int gs_gameFromName(char const *name)
     if (!Bstrcasecmp(name, "rr") || !Bstrcasecmp(name, "redneck") || !Bstrcasecmp(name, "redneckrampage") ||
         !Bstrcasecmp(name, "redneck-rampage"))
         return GS_GAME_RR;
+    if (!Bstrcasecmp(name, "nam") || !Bstrcasecmp(name, "nam3d") || !Bstrcasecmp(name, "nam-3d"))
+        return GS_GAME_NAM;
+    if (!Bstrcasecmp(name, "napalm") || !Bstrcasecmp(name, "napalm3d") || !Bstrcasecmp(name, "napalm-3d"))
+        return GS_GAME_NAPALM;
     if (!Bstrcasecmp(name, "ww2gi") || !Bstrcasecmp(name, "wwii") || !Bstrcasecmp(name, "wwiigi") ||
         !Bstrcasecmp(name, "wwii-gi") || !Bstrcasecmp(name, "wwii gi") ||
         !Bstrcasecmp(name, "worldwariigi") || !Bstrcasecmp(name, "world-war-ii-gi") ||
         !Bstrcasecmp(name, "world war ii gi") || !Bstrcasecmp(name, "gi"))
         return GS_GAME_WW2GI;
+    if (!Bstrcasecmp(name, "exhumed") || !Bstrcasecmp(name, "powerslave") ||
+        !Bstrcasecmp(name, "power-slave") || !Bstrcasecmp(name, "power slave") ||
+        !Bstrcasecmp(name, "pcexhumed"))
+        return GS_GAME_EXHUMED;
     return -1;
 }
 
@@ -666,8 +701,11 @@ static gs_dataSignature_t const gs_dataSignatures[] =
     { GS_GAME_DUKE,   3186656, 0x1E9516F1u },
     { GS_GAME_DUKE,   2112419, 0x7CD82A3Bu },
     { GS_GAME_DUKE,   4247491, 0xCF928A58u },
-    { GS_GAME_DUKE,  43448927, 0x75C1F07Bu },
-    { GS_GAME_DUKE,  44365728, 0x3DE1589Au },
+
+    // NAM-family games use the Duke runtime but need a distinct selector entry
+    // so their main data is passed as -gamegrp and sets the native game flags.
+    { GS_GAME_NAM,    43448927, 0x75C1F07Bu },
+    { GS_GAME_NAPALM, 44365728, 0x3DE1589Au },
 
     // World War II GI and its official Platoon Leader add-on use the Duke/NAM
     // runtime but must be selected as their own game so -gamegrp sets WW2GI mode.
@@ -691,6 +729,12 @@ static gs_dataSignature_t const gs_dataSignatures[] =
     // Redneck Rampage / Rides Again.
     { GS_GAME_RR,   141174222, 0x19D9BC79u },
     { GS_GAME_RR,   191798609, 0x958018C6u },
+
+    // PCExhumed / Powerslave full and demo data files.
+    { GS_GAME_EXHUMED, 27020745, 0x303CBD89u },
+    { GS_GAME_EXHUMED, 27108170, 0xE3B172F1u },
+    { GS_GAME_EXHUMED, 15904838, 0x1D8C7645u },
+    { GS_GAME_EXHUMED, 16481687, 0x1A6E27FAu },
 };
 
 static int gs_fileSignature(char const *path, int32_t *size, uint32_t *crc)
@@ -802,8 +846,14 @@ static int gs_inferGameFromBasename(char const *path)
     if (!Bstrcasecmp(base, "REDNECK.GRP") || !Bstrcasecmp(base, "RR.GRP") ||
         !Bstrcasecmp(base, "RRRA.GRP") || !Bstrcasecmp(base, "RIDES.GRP"))
         return GS_GAME_RR;
+    if (!Bstrcasecmp(base, "NAM.GRP"))
+        return GS_GAME_NAM;
+    if (!Bstrcasecmp(base, "NAPALM.GRP"))
+        return GS_GAME_NAPALM;
     if (!Bstrcasecmp(base, "WW2GI.GRP") || !Bstrcasecmp(base, "PLATOONL.GRP"))
         return GS_GAME_WW2GI;
+    if (!Bstrcasecmp(base, "STUFF.DAT"))
+        return GS_GAME_EXHUMED;
     return -1;
 }
 
@@ -1393,6 +1443,10 @@ int app_main(int32_t argc, char const * const * argv)
     if (g_activeGame == GS_GAME_RR)
         return RR_app_main(fargc, fargv);
 #endif
+#ifdef WITH_EXHUMED
+    if (g_activeGame == GS_GAME_EXHUMED)
+        return Exhumed_app_main(fargc, fargv);
+#endif
     return Duke_app_main(fargc, fargv);
 }
 
@@ -1409,6 +1463,9 @@ extern "C" const char *G_DefaultDefFile(void)
 #ifdef WITH_RR
     if (g_activeGame == GS_GAME_RR) return RR_G_DefaultDefFile();
 #endif
+#ifdef WITH_EXHUMED
+    if (g_activeGame == GS_GAME_EXHUMED) return Exhumed_G_DefaultDefFile();
+#endif
     return Duke_G_DefaultDefFile();
 }
 
@@ -1422,6 +1479,9 @@ extern "C" void faketimerhandler(void)
 #endif
 #ifdef WITH_RR
     if (g_activeGame == GS_GAME_RR) { RR_faketimerhandler(); return; }
+#endif
+#ifdef WITH_EXHUMED
+    if (g_activeGame == GS_GAME_EXHUMED) { Exhumed_faketimerhandler(); return; }
 #endif
     Duke_faketimerhandler();
 }

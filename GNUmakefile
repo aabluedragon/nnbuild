@@ -19,11 +19,12 @@ include Common.mak
 
 # VibeBuild32 is the multi-game binary.  A plain `make vibebuild32` should
 # include every linked game by default; callers can still override any one with
-# WITH_SW=0, WITH_BLOOD=0, or WITH_RR=0.
+# WITH_SW=0, WITH_BLOOD=0, WITH_RR=0, or WITH_EXHUMED=0.
 ifneq (,$(filter vibebuild32,$(MAKECMDGOALS)))
     WITH_SW ?= 1
     WITH_BLOOD ?= 1
     WITH_RR ?= 1
+    WITH_EXHUMED ?= 1
 endif
 
 ### File Extensions
@@ -1029,6 +1030,38 @@ rrmerge_objs := $(addprefix $(rr_obj)/,$(addsuffix .$o,$(basename $(rr_game_objs
 $(eval $(call MERGE_RULE,rr,$(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs)))
 
 vibebuild32_game_miscdeps += $(obj)/rr_merged.o
+endif
+
+# ---- WITH_EXHUMED: link PCExhumed into vibebuild32 ---------------------------
+# PCExhumed comes from NBlood's source/exhumed tree. It is a separate Build-game
+# runtime, so it is prelinked exactly like SW/Blood/RR and its internal symbol
+# collisions are localized against the games already linked into VibeBuild32.
+# Startup-window objects are excluded; the shared launcher/selector owns startup.
+ifeq ($(WITH_EXHUMED),1)
+vibebuild32_cflags += -DWITH_EXHUMED
+exhumed := exhumed
+exhumed_root := $(source)/exhumed
+exhumed_src := $(exhumed_root)/src
+exhumed_obj := $(obj)/exhumed
+exhumed_cflags := -I$(exhumed_src) -Wno-c++11-narrowing -Wno-narrowing
+exhumed_game_objs := \
+    aistuff.cpp anims.cpp anubis.cpp bubbles.cpp bullet.cpp cd.cpp \
+    common.cpp config.cpp enginesubs.cpp exhumed.cpp exscript.cpp fish.cpp \
+    grenade.cpp grpscan.cpp gun.cpp init.cpp input.cpp items.cpp lavadude.cpp \
+    light.cpp lighting.cpp lion.cpp map.cpp memorystream.cpp menu.cpp mono.cpp \
+    move.cpp movie.cpp mummy.cpp network.cpp object.cpp osdcmds.cpp player.cpp \
+    queen.cpp ra.cpp ramses.cpp random.cpp rat.cpp record.cpp rex.cpp roach.cpp \
+    runlist.cpp save.cpp scorp.cpp sequence.cpp serial.cpp set.cpp snake.cpp \
+    sound.cpp spider.cpp status.cpp stream.cpp switch.cpp text2.cpp timer.cpp \
+    trigdat.cpp version.cpp view.cpp wasp.cpp \
+
+components += exhumed
+dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+exhumedmerge_objs := $(addprefix $(exhumed_obj)/,$(addsuffix .$o,$(basename $(exhumed_game_objs))))
+
+$(eval $(call MERGE_RULE,exhumed,$(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs) $(rrmerge_objs)))
+
+vibebuild32_game_miscdeps += $(obj)/exhumed_merged.o
 endif
 
 
