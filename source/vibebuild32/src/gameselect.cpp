@@ -165,8 +165,9 @@ static int gs_gameFromName(char const *name)
         !Bstrcasecmp(name, "redneck-rampage"))
         return GS_GAME_RR;
     if (!Bstrcasecmp(name, "ww2gi") || !Bstrcasecmp(name, "wwii") || !Bstrcasecmp(name, "wwiigi") ||
-        !Bstrcasecmp(name, "wwii-gi") || !Bstrcasecmp(name, "worldwariigi") ||
-        !Bstrcasecmp(name, "world-war-ii-gi") || !Bstrcasecmp(name, "gi"))
+        !Bstrcasecmp(name, "wwii-gi") || !Bstrcasecmp(name, "wwii gi") ||
+        !Bstrcasecmp(name, "worldwariigi") || !Bstrcasecmp(name, "world-war-ii-gi") ||
+        !Bstrcasecmp(name, "world war ii gi") || !Bstrcasecmp(name, "gi"))
         return GS_GAME_WW2GI;
     return -1;
 }
