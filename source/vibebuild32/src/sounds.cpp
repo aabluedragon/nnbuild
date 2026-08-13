@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "al_midi.h"
 #include "compat.h"
 #include "duke3d.h"
+#include "gameexec.h"
 #include "renderlayer.h"  // for win_gethwnd()
 #include "vfs.h"
 
@@ -270,7 +271,11 @@ void S_MenuSound(void)
         SELECT_WEAPON
     };
 
-    S_PlaySound(menusnds[SoundNum++ % ARRAY_SIZE(menusnds)]);
+    int const soundNum = FURY ? -1 : menusnds[SoundNum++ % ARRAY_SIZE(menusnds)];
+    int const eventSound = X_OnEventWithReturn(EVENT_OPENMENUSOUND, g_player[screenpeek].ps->i, screenpeek, soundNum);
+
+    if (eventSound != -1)
+        S_PlaySound(eventSound);
 }
 
 static int S_PlayMusic(const char* fn)

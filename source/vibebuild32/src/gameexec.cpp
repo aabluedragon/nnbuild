@@ -1112,7 +1112,7 @@ static int X_DoExecute(void)
 
     int j, l, s, tw = *insptr;
 
-    if (vm.flags & (VM_RETURN | VM_KILL | VM_NOEXECUTE)) return 1;
+    if (vm.flags & (VM_RETURN | VM_KILL | VM_NOEXECUTE | VM_EXIT | VM_TERMINATE)) return 1;
 
     //      Bsprintf(g_szBuf,"Parsing: %d",*insptr);
     //      AddLog(g_szBuf);
@@ -1567,6 +1567,24 @@ static int X_DoExecute(void)
             break;
         }
 
+    case CON_SETACTORSOUNDPITCH:
+        insptr++;
+        {
+            int const spriteNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(*(insptr - 1)) : vm.spriteNum;
+            int const soundNum = Gv_GetVarX(*insptr++);
+            int const newPitch = Gv_GetVarX(*insptr++);
+
+            if ((unsigned)soundNum >= MAXSOUNDS)
+            {
+                CON_ERRPRINTF("invalid sound %d\n", soundNum);
+                break;
+            }
+
+            S_ChangeSoundPitch(soundNum, spriteNum, newPitch);
+
+            break;
+        }
+
     case CON_GLOBALSOUND:
         insptr++;
         {
@@ -1627,6 +1645,14 @@ static int X_DoExecute(void)
     case CON_BREAK:
     case CON_ENDS:
         return 1;
+
+    case CON_EXIT:
+        vm.flags |= VM_EXIT;
+        break;
+
+    case CON_TERMINATE:
+        vm.flags |= VM_TERMINATE;
+        break;
 
     case CON_ADDAMMO:
         insptr++;
@@ -2566,6 +2592,15 @@ static int X_DoExecute(void)
                 Gv_SetVarX(var1, divscale(var2, var3, var4));
             else
                 Gv_SetVarX(var1, scale(var2, var3, var4));
+            break;
+        }
+
+    case CON_CLAMP:
+        insptr++;
+        {
+            int const varNum = *insptr++;
+            int const minValue = Gv_GetVarX(*insptr++);
+            Gv_SetVarX(varNum, clamp(Gv_GetVarX(varNum), minValue, Gv_GetVarX(*insptr++)));
             break;
         }
 
@@ -4991,7 +5026,8 @@ static int X_DoExecute(void)
         {
             insptr = savedinsptr;
             branch((j = (Gv_GetVarX(insptr[-1]) != *insptr)));
-        } while (j && (vm.flags & VM_RETURN) == 0);
+        } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
+        vm.flags &= ~VM_EXIT;
         break;
     }
 
@@ -5005,7 +5041,8 @@ static int X_DoExecute(void)
             j = (j != Gv_GetVarX(*insptr++));
             insptr--;
             branch(j);
-        } while (j && (vm.flags & VM_RETURN) == 0);
+        } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
+        vm.flags &= ~VM_EXIT;
         break;
     }
 
@@ -5337,7 +5374,7 @@ void A_LoadActor(int iActor)
 
     insptr = g_tile[vm.pSprite->picnum].loadPtr;
 
-    vm.flags &= ~(VM_RETURN | VM_KILL | VM_NOEXECUTE);
+    vm.flags &= ~(VM_RETURN | VM_KILL | VM_NOEXECUTE | VM_EXIT | VM_TERMINATE);
 
     if (vm.pSprite->sectnum < 0 || vm.pSprite->sectnum >= MAXSECTORS)
     {

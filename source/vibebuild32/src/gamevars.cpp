@@ -660,14 +660,12 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 CHECK_INDEX(MAXTILES);
                 returnValue = VM_GetTileData(arrayIndex, labelNum);
                 break;
-#if 0
             case STRUCT_PALDATA:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
                     arrayIndex = vm.pSprite->pal;
                 CHECK_INDEX(MAXPALOOKUPS);
                 returnValue = VM_GetPalData(arrayIndex, labelNum);
                 break;
-#endif
 
             case STRUCT_INPUT:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
@@ -1036,7 +1034,7 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("userdef",        -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
     Gv_NewVar("input",          -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
     Gv_NewVar("tiledata",       -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
-    //Gv_NewVar("paldata",        -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("paldata",        -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
 
     if (NAM_WW2GI)
     {

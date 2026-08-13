@@ -29,6 +29,8 @@ void    __fastcall VM_SetActiveProjectile(int const spriteNum, int const labelNu
 int32_t __fastcall VM_GetTileData(int const tileNum, int32_t labelNum);
 void    __fastcall VM_SetTileData(int const tileNum, int const labelNum, int32_t newValue);
 
+int32_t __fastcall VM_GetPalData(int const palNum, int32_t labelNum);
+
 int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2);
 void    __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t const newValue);
 
@@ -48,6 +50,7 @@ extern const memberlabel_t PlayerLabels[];
 extern const memberlabel_t ProjectileLabels[];
 extern const memberlabel_t UserdefsLabels[];
 extern const memberlabel_t InputLabels[];
+extern const memberlabel_t PalDataLabels[];
 extern const memberlabel_t TsprLabels[];
 extern const memberlabel_t TileDataLabels[];
 
@@ -63,7 +66,7 @@ extern hashtable_t h_userdef;
 extern hashtable_t h_wall;
 
 static hashtable_t* const vmStructHashTablePtrs[] = {
-    &h_actor, &h_input, /*&h_paldata,*/ &h_player, &h_projectile, &h_sector, &h_tiledata, &h_tsprite, &h_userdef, &h_wall,
+    &h_actor, &h_input, &h_paldata, &h_player, &h_projectile, &h_sector, &h_tiledata, &h_tsprite, &h_userdef, &h_wall,
 };
 
 #define LABEL_TYPES (LABEL_CHAR|LABEL_SHORT|LABEL_INT|LABEL_UNSIGNED)
@@ -357,6 +360,7 @@ enum UserdefsLabel_t
     USERDEFS_TEAMSUICIDES,
     USERDEFS_DMFLAGS,
     USERDEFS_M_DMFLAGS,
+    USERDEFS_DRAW_Y,
     USERDEFS_DRAW_YXASPECT,
     USERDEFS_MONSTERS_KILLED,
     USERDEFS_LIMIT_HIT,
@@ -546,6 +550,13 @@ enum TileDataLabel_t
     TILEDATA_ANIMTYPE,
     TILEDATA_GAMEFLAGS,
     TILEDATA_END
+};
+
+enum PalDataLabel_t
+{
+    PALDATA_NOFLOORPAL,
+    PALDATA_DUMMY,
+    PALDATA_END
 };
 
 #endif

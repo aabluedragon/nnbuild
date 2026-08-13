@@ -489,6 +489,7 @@ const memberlabel_t UserdefsLabels[] =
     { "teamsuicides",           USERDEFS_TEAMSUICIDES,          LABEL_HASPARM2, MAXPLAYERS, -1 },
     { "dmflags",                USERDEFS_DMFLAGS,               0, 0, -1 },
     { "m_dmflags",              USERDEFS_M_DMFLAGS,             0, 0, -1 },
+    { "draw_y",                 USERDEFS_DRAW_Y,                0, 0, -1 },
     { "draw_yxaspect",          USERDEFS_DRAW_YXASPECT,         0, 0, -1 },
     { "monsters_killed",        USERDEFS_MONSTERS_KILLED,       0, 0, -1 },
     { "limit_hit",              USERDEFS_LIMIT_HIT,             0, 0, -1 },
@@ -524,12 +525,17 @@ const memberlabel_t TileDataLabels[] =
     { "gameflags",  TILEDATA_GAMEFLAGS,  0, 0, -1 },
     { "",           -1,                  0, 0, -1 } // END OF LIST
 };
+
+const memberlabel_t PalDataLabels[] =
+{
+    { "nofloorpal", PALDATA_NOFLOORPAL, 0, 0, -1 },
+};
 #undef MEMBER
 #undef LABEL
 
 hashtable_t h_actor         = { ACTOR_END >> 1, NULL };
 hashtable_t h_input         = { INPUT_END >> 1, NULL };
-//hashtable_t h_paldata    = { PALDATA_END>>1, NULL };
+hashtable_t h_paldata       = { PALDATA_END >> 1, NULL };
 hashtable_t h_player        = { PLAYER_END >> 1, NULL };
 hashtable_t h_projectile    = { PROJ_END >> 1, NULL };
 hashtable_t h_sector        = { SECTOR_END >> 1, NULL };
@@ -555,7 +561,7 @@ void VM_InitHashTables(void)
 
     STRUCT_HASH_SETUP(h_actor, ActorLabels);
     STRUCT_HASH_SETUP(h_input, InputLabels);
-    //STRUCT_HASH_SETUP(h_paldata, PalDataLabels);
+    STRUCT_HASH_SETUP(h_paldata, PalDataLabels);
     STRUCT_HASH_SETUP(h_player, PlayerLabels);
     STRUCT_HASH_SETUP(h_projectile, ProjectileLabels);
     STRUCT_HASH_SETUP(h_sector, SectorLabels);
@@ -623,6 +629,21 @@ void __fastcall VM_SetTileData(int const tileNum, int const labelNum, int32_t ne
         case TILEDATA_ANIMSPEED: p.sf = (p.sf & ~PICANM_ANIMSPEED_MASK) | (newValue & PICANM_ANIMSPEED_MASK); return;
         case TILEDATA_ANIMTYPE:  p.sf = (p.sf & ~PICANM_ANIMTYPE_MASK) | ((newValue << PICANM_ANIMTYPE_SHIFT) & PICANM_ANIMTYPE_MASK); return;
         default: return;
+    }
+}
+
+int32_t __fastcall VM_GetPalData(int const palNum, int32_t labelNum)
+{
+    if (EDUKE32_PREDICT_FALSE((unsigned)palNum >= MAXPALOOKUPS))
+    {
+        CON_ERRPRINTF("invalid palette %d\n", palNum);
+        return -1;
+    }
+
+    switch (labelNum)
+    {
+        case PALDATA_NOFLOORPAL: return g_noFloorPal[palNum];
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
 
@@ -760,6 +781,7 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
         case USERDEFS_TEAMSUICIDES:         return teams[lParm2].suicides;
         case USERDEFS_DMFLAGS:              return ud.dmflags;
         case USERDEFS_M_DMFLAGS:            return ud.m_dmflags;
+        case USERDEFS_DRAW_Y:               return rotatesprite_y_offset;
         case USERDEFS_DRAW_YXASPECT:        return rotatesprite_yxaspect;
         case USERDEFS_MONSTERS_KILLED:      return ud.monsters_killed;
         case USERDEFS_LIMIT_HIT:            return ud.limit_hit;
@@ -915,6 +937,7 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
         case USERDEFS_TEAMSUICIDES:     teams[lParm2].suicides  = newValue; return;
         case USERDEFS_DMFLAGS:          ud.dmflags              = newValue; return;
         case USERDEFS_M_DMFLAGS:        ud.m_dmflags            = newValue; return;
+        case USERDEFS_DRAW_Y:           rotatesprite_y_offset   = newValue; return;
         case USERDEFS_DRAW_YXASPECT:    rotatesprite_yxaspect   = newValue; return;
         case USERDEFS_MONSTERS_KILLED:  ud.monsters_killed      = newValue; return;
         case USERDEFS_LIMIT_HIT:        ud.limit_hit            = newValue; return;

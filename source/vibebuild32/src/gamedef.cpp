@@ -42,7 +42,7 @@ char g_scriptFileName[BMAX_PATH] = "(none)";  // file we're currently compiling
 static char g_szCurrentBlockName[BMAX_PATH] = "(none)", g_szLastBlockName[BMAX_PATH] = "NULL";
 
 int g_totalLines,g_lineNumber;
-static int g_checkingIfElse,g_processingState;
+static int g_checkingIfElse,g_processingState,g_checkingLoop;
 char g_szBuf[1024];
 
 extern char *textptr;
@@ -487,6 +487,7 @@ const tokenmap_t vm_keywords[] =
     { "getangletotarget",       CON_GETANGLETOTARGET },
     { "getactorangle",          CON_GETACTORANGLE },
     { "setactorangle",          CON_SETACTORANGLE },
+    { "setactorsoundpitch",     CON_SETACTORSOUNDPITCH },
     { "getplayerangle",         CON_GETPLAYERANGLE },
     { "setplayerangle",         CON_SETPLAYERANGLE },
     { "lockplayer",             CON_LOCKPLAYER },
@@ -602,6 +603,7 @@ const tokenmap_t vm_keywords[] =
     { "spritenoshade",          CON_SPRITENOSHADE },
     { "movesprite",             CON_MOVESPRITE },
     { "checkavailweapon",       CON_CHECKAVAILWEAPON },
+    { "clamp",                  CON_CLAMP },
     { "soundoncevar",           CON_SOUNDONCEVAR },
     { "updatesectorz",          CON_UPDATESECTORZ },
     { "stopallsounds",          CON_STOPALLSOUNDS },
@@ -662,6 +664,7 @@ const tokenmap_t vm_keywords[] =
 
     { "getcurraddress",         CON_GETCURRADDRESS },
     { "jump",                   CON_JUMP },
+    { "exit",                   CON_EXIT },
     { "qstrlen",                CON_QSTRLEN },
     { "getincangle",            CON_GETINCANGLE },
     { "quake",                  CON_QUAKE },
@@ -709,6 +712,7 @@ const tokenmap_t vm_keywords[] =
     { "return",                 CON_RETURN },
     { "actorsound",             CON_ACTORSOUND },
     { "stopactorsound",         CON_STOPACTORSOUND },
+    { "terminate",              CON_TERMINATE },
     { "rotatespritea",          CON_ROTATESPRITEA },
     { "damageeventtile",        CON_DAMAGEEVENTTILE },
     { "damageeventtilerange",   CON_DAMAGEEVENTTILERANGE },
@@ -1481,7 +1485,7 @@ static void C_GetNextVarType(int32_t type)
                 case STRUCT_USERDEF:        labelNum = C_GetLabelNameOffset(&h_userdef, Bstrtolower(LAST_LABEL)); break;
                 case STRUCT_INPUT:          labelNum = C_GetLabelNameOffset(&h_input, Bstrtolower(LAST_LABEL)); break;
                 case STRUCT_TILEDATA:       labelNum = C_GetLabelNameOffset(&h_tiledata, Bstrtolower(LAST_LABEL)); break;
-                //case STRUCT_PALDATA:        labelNum = C_GetLabelNameOffset(&h_paldata, Bstrtolower(LAST_LABEL)); break;
+                case STRUCT_PALDATA:        labelNum = C_GetLabelNameOffset(&h_paldata, Bstrtolower(LAST_LABEL)); break;
 
                 case STRUCT_ACTORVAR:
                 case STRUCT_PLAYERVAR:      labelNum = GetDefID(LAST_LABEL); break;
@@ -1563,7 +1567,7 @@ static void C_GetNextVarType(int32_t type)
                 case STRUCT_THISPROJECTILE:
                 case STRUCT_INPUT:
                 case STRUCT_TILEDATA:
-                //case STRUCT_PALDATA:
+                case STRUCT_PALDATA:
                     scriptWriteValue(labelNum);
                     break;
                 case STRUCT_USERDEF:
@@ -3399,6 +3403,11 @@ DO_DEFSTATE:
                 C_GetNextVarType(GAMEVAR_READONLY);
                 continue;
 
+            case CON_CLAMP:
+                C_GetNextVarType(GAMEVAR_READONLY);
+                C_GetManyVars(2);
+                continue;
+
             case CON_SHOOT:
             case CON_ESHOOT:
             case CON_ESPAWNVAR:
@@ -3740,6 +3749,7 @@ setvarvar:
 
             case CON_DRAGPOINT:
             case CON_GETKEYNAME:
+            case CON_SETACTORSOUNDPITCH:
                 C_GetManyVars(3);
                 continue;
 
@@ -4000,7 +4010,9 @@ setvarvar:
                 auto const offset = g_scriptPtr - apScript;
                 g_scriptPtr++; // Leave a spot for the fail location
 
+                ++g_checkingLoop;
                 C_ParseCommand();
+                --g_checkingLoop;
 
                 if (C_CheckEmptyBranch(tw, lastScriptPtr))
                     continue;
@@ -4047,7 +4059,9 @@ ifvar:
                 auto const offset = g_scriptPtr - apScript;
                 g_scriptPtr++; //Leave a spot for the fail location
 
+                ++g_checkingLoop;
                 C_ParseCommand();
+                --g_checkingLoop;
 
                 if (C_CheckEmptyBranch(tw, lastScriptPtr))
                     continue;
@@ -5370,6 +5384,18 @@ repeatcase:
                 Bsprintf(g_szCurrentBlockName, "(none)");
                 continue;
 
+            case CON_EXIT:
+                if (EDUKE32_PREDICT_FALSE(!g_checkingLoop))
+                {
+                    C_ReportError(-1);
+                    LOG_F(ERROR, "%s:%d: found 'exit' statement when not in loop", g_scriptFileName, g_lineNumber);
+                    ++g_errorCnt;
+                }
+                continue;
+
+            case CON_TERMINATE:
+                continue;
+
             case CON_RETURN:
                 if (g_checkingSwitch)
                 {
@@ -5703,6 +5729,51 @@ static void C_AddDefaultDefinitions(void)
     C_AddEvent(EVENT_BOTGETSPRITESCORE);
     C_AddEvent(EVENT_FRAGGED);
     C_AddEvent(EVENT_ACTIVATESWITCH);
+    C_AddEvent(EVENT_DISPLAYINACTIVEMENU);
+    C_AddEvent(EVENT_DISPLAYINACTIVEMENUREST);
+    C_AddEvent(EVENT_DISPLAYSPIT);
+    C_AddEvent(EVENT_DISPLAYFIST);
+    C_AddEvent(EVENT_DISPLAYKNEE);
+    C_AddEvent(EVENT_DISPLAYKNUCKLES);
+    C_AddEvent(EVENT_DISPLAYSCUBA);
+    C_AddEvent(EVENT_MOVESECTOR);
+    C_AddEvent(EVENT_MOVEEFFECTORS);
+    C_AddEvent(EVENT_DISPLAYOVERHEADMAPTEXT);
+    C_AddEvent(EVENT_PRELOADGAME);
+    C_AddEvent(EVENT_POSTSAVEGAME);
+    C_AddEvent(EVENT_PRECUTSCENE);
+    C_AddEvent(EVENT_SKIPCUTSCENE);
+    C_AddEvent(EVENT_SCREEN);
+    C_AddEvent(EVENT_DISPLAYROOMSEND);
+    C_AddEvent(EVENT_DISPLAYEND);
+    C_AddEvent(EVENT_OPENMENUSOUND);
+    C_AddEvent(EVENT_RECOGSOUND);
+    C_AddEvent(EVENT_UPDATESCREENAREA);
+    C_AddEvent(EVENT_DISPLAYBORDER);
+    C_AddEvent(EVENT_MAINMENUSCREEN);
+    C_AddEvent(EVENT_NEWGAMESCREEN);
+    C_AddEvent(EVENT_ENDLEVELSCREEN);
+    C_AddEvent(EVENT_EXITGAMESCREEN);
+    C_AddEvent(EVENT_EXITPROGRAMSCREEN);
+    C_AddEvent(EVENT_DISPLAYOVERHEADMAPPLAYER);
+    C_AddEvent(EVENT_MENUCURSORLEFT);
+    C_AddEvent(EVENT_MENUCURSORRIGHT);
+    C_AddEvent(EVENT_MENUCURSORSHADE);
+    C_AddEvent(EVENT_MENUSHADESELECTED);
+    C_AddEvent(EVENT_PLAYLEVELMUSICSLOT);
+    C_AddEvent(EVENT_CONTINUELEVELMUSICSLOT);
+    C_AddEvent(EVENT_DISPLAYPOINTER);
+    C_AddEvent(EVENT_DISPLAYROOMSCAMERATILE);
+    C_AddEvent(EVENT_RESETGOTPICS);
+    C_AddEvent(EVENT_VALIDATESTART);
+    C_AddEvent(EVENT_NEWGAMECUSTOM);
+    C_AddEvent(EVENT_INITCOMPLETE);
+    C_AddEvent(EVENT_CAPIR);
+    C_AddEvent(EVENT_PREUPDATEANGLES);
+    C_AddEvent(EVENT_POSTUPDATEANGLES);
+    C_AddEvent(EVENT_GETBONUSTILE);
+    C_AddEvent(EVENT_PREACTORDAMAGE);
+    C_AddEvent(EVENT_OPERATEACTIVATORS);
 
     C_AddDefinition("STR_MAPNAME",          STR_MAPNAME,        LABEL_DEFINE);
     C_AddDefinition("STR_MAPFILENAME",      STR_MAPFILENAME,    LABEL_DEFINE);
