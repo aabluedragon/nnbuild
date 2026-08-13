@@ -2815,6 +2815,25 @@ int32_t polymost_spriteIsModelOrVoxel(tspritetype const * const tspr)
 }
 
 #ifdef POLYMOST2
+static void polymost2_restoreLegacyDrawState(void)
+{
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+
+    buildgl_bindBuffer(GL_ARRAY_BUFFER, 0);
+    buildgl_bindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    buildgl_setDisabled(GL_CULL_FACE);
+
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+
+    // Polymost's legacy draw path uses client-state pointers into the shared
+    // drawpoly VBO. Polymost2 uses generic vertex attributes and arbitrary VBOs,
+    // so restore the legacy pointers before returning to regular Polymost draws.
+    polymost_resetVertexPointers();
+}
+
 static void polymost2_drawVBO(GLenum mode,
                               int32_t vertexBufferID,
                               int32_t indexBufferID,
@@ -2858,6 +2877,8 @@ static void polymost2_drawVBO(GLenum mode,
 
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(float) * 5, 0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, false, sizeof(float) * 5, (GLvoid *)(sizeof(float) * 3));
 
     if (palookup[globalpal] == NULL)
     {
@@ -2880,6 +2901,7 @@ static void polymost2_drawVBO(GLenum mode,
             Bsprintf(ptempbuf, "pth==NULL! (bad pal?) pic=%d pal=%d", globalpicnum, globalpal);
             polymost_printtext256(8,8, editorcolors[15],editorcolors[5], ptempbuf, 0);
         }
+        polymost2_restoreLegacyDrawState();
         return;
     }
 
@@ -2966,19 +2988,8 @@ static void polymost2_drawVBO(GLenum mode,
                        0);
     }
 
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-
     //POGOTODO: again, these state changes should be batched in the future, rather than on each VBO rendered
-    buildgl_bindBuffer(GL_ARRAY_BUFFER, 0);
-    buildgl_bindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    buildgl_setDisabled(GL_CULL_FACE);
-
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-
-    //polymost_resetVertexPointers();
+    polymost2_restoreLegacyDrawState();
 }
 #endif // POLYMOST2
 
@@ -3153,6 +3164,7 @@ void polymost_startBufferedDrawing(int nn)
         }
         else
         {
+            polymost_resetVertexPointers();
             glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 5 * drawpolyVertsBufferLength, NULL, GL_STREAM_DRAW);
             drawpolyVertsOffset = 0;
         }
@@ -3168,6 +3180,8 @@ void polymost_bufferVert(vec3f_t const v, vec2f_t const t)
 
 void polymost_finishBufferedDrawing(int mode)
 {
+    polymost_resetVertexPointers();
+
     if (!persistentStreamBuffer)
     {
         // Orphan-and-upload: replace the whole VBO with just this batch via glBufferData

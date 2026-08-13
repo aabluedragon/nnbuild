@@ -9,6 +9,16 @@
 
 #define MAX_RETURN_VALUES 6
 
+#define MAXMENUGAMEPLAYLAYERS 3
+#define MAXMENUGAMEPLAYENTRIES 7
+
+#define MEF_Enabled      0
+#define MEF_Disabled     (1 << 0)
+#define MEF_LookDisabled (1 << 1)
+#define MEF_Hidden       (1 << 2)
+
+#define MGE_UserContent  (1 << 0)
+
 #define USERMAPMUSICFAKEVOLUME MAXVOLUMES
 #define USERMAPMUSICFAKELEVEL (MAXLEVELS-1)
 #define USERMAPMUSICFAKESLOT ((USERMAPMUSICFAKEVOLUME * MAXLEVELS) + USERMAPMUSICFAKELEVEL)
@@ -166,6 +176,22 @@ typedef struct {
     } config;
 } user_defs;
 extern user_defs ud;
+
+typedef struct MenuGameplayEntry
+{
+    char name[64];
+    int32_t flags;
+    int32_t gameFlags;
+    MenuGameplayEntry *subentries;
+
+    bool isValid() const { return name[0] != '\0'; }
+} MenuGameplayEntry;
+
+extern MenuGameplayEntry g_MenuGameplayEntries[MAXMENUGAMEPLAYENTRIES];
+
+void G_ClearNewGameChoices(void);
+MenuGameplayEntry *G_GetNewGameCustomEntry(int const *indexes, int count);
+bool G_HasNewGameCustomChoices(void);
 
 #define MAX_ARRAYRANGE_VALUES 32
 

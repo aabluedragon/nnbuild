@@ -1944,16 +1944,11 @@ int G_EnterLevel(int g)
 
     Net_WaitForPlayers();
 
-    // Video isn't up yet if a client enters a level straight from Net_WaitForPlayers
-    // during G_InitMultiplayer; app_main draws the first frame later in that case.
-    if (in3dmode())
-    {
-        G_FadePalette(0,0,0,0);
-        G_UpdateScreenArea();
-        videoClearViewableArea(0L);
-        G_DrawBackground();
-        G_DrawRooms(myconnectindex,65536);
-    }
+    // Do not draw the first world frame from inside level setup. The main loop
+    // draws it immediately after G_EnterLevel() returns, once render state and
+    // frame timing are coherent. Drawing here can hit platform GL drivers while
+    // the level is still transitioning; Ion Fury on macOS/Metal GL faults in
+    // gleRunVertexSubmitImmediate on this eager draw path.
 
     g_player[myconnectindex].ps->over_shoulder_on = 0;
 

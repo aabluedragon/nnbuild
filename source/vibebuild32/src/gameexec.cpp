@@ -5131,7 +5131,8 @@ static int X_DoExecute(void)
 
     case CON_STARTSCREEN:
         insptr++;
-        Screen_Play();
+        if (!g_noLogoAnim)
+            Screen_Play();
         break;
 
     case CON_ACTIVATECHEAT:
@@ -5152,16 +5153,46 @@ static int X_DoExecute(void)
 
     case CON_STARTCUTSCENE:
         insptr++;
-        Gv_GetVarX(*insptr++);
+        {
+            int const quoteNum = Gv_GetVarX(*insptr++);
+
+            VM_ABORT_IF((unsigned)quoteNum >= MAXQUOTES, "invalid quote %d", quoteNum);
+            VM_ABORT_IF(apStrings[quoteNum] == nullptr, "null quote %d", quoteNum);
+
+            int const playerNum = (vm.playerNum >= 0 && vm.playerNum < MAXPLAYERS) ? vm.playerNum : screenpeek;
+            DukePlayer_t * const player = ((unsigned)playerNum < MAXPLAYERS) ? g_player[playerNum].ps : nullptr;
+            uint32_t const oldPalette = player ? player->palette : BASEPAL;
+
+            G_PlayAnim(apStrings[quoteNum], 0);
+
+            if (player)
+                P_SetGamePalette(player, oldPalette, 0);
+        }
         break;
 
+    case CON_GETNGCFLAGS:
     case CON_SETNGCFLAGS:
         insptr++;
-        Gv_GetVarX(*insptr++);
         {
-            int argCount = *insptr++;
-            while (argCount-- > 0)
-                Gv_GetVarX(*insptr++);
+            int const valueVar = *insptr++;
+            int const argCount = *insptr++;
+            int indexes[MAXMENUGAMEPLAYLAYERS] = {};
+
+            VM_ABORT_IF(argCount < 1 || argCount > MAXMENUGAMEPLAYLAYERS,
+                        "invalid new-game-custom menu depth %d", argCount);
+
+            for (int i = 0; i < argCount; ++i)
+                indexes[i] = Gv_GetVarX(*insptr++);
+
+            MenuGameplayEntry * const entry = G_GetNewGameCustomEntry(indexes, argCount);
+            VM_ABORT_IF(entry == nullptr,
+                        "invalid new-game-custom menu path %d/%d/%d depth %d",
+                        indexes[0], indexes[1], indexes[2], argCount);
+
+            if (tw == CON_GETNGCFLAGS)
+                Gv_SetVarX(valueVar, entry->flags);
+            else
+                entry->flags = Gv_GetVarX(valueVar);
         }
         break;
 

@@ -212,6 +212,9 @@ void G_PlayAnim(const char *fn, char t)
 
     //    return;
 
+    if (g_noLogoAnim)
+        return;
+
     if (t != 7 && t != 9 && t != 10 && t != 11)
         KB_FlushKeyboardQueue();
 

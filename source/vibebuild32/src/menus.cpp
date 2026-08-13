@@ -40,6 +40,19 @@ static int musicdevice = 0;
 static int lastsavehead=0,last_menu_pos=0,last_menu,sh,onbar,buttonstat;
 static int last_zero,last_fifty,last_onehundred,last_twoohtwo,last_threehundred = 0;
 
+enum
+{
+    MENU_MAIN = 0,
+    MENU_MAIN_INGAME = 50,
+    MENU_EPISODE = 100,
+    MENU_USERMAP = 101,
+    MENU_NEWGAMECUSTOM = 102,
+    MENU_NEWGAMECUSTOMSUB = 103,
+    MENU_NEWGAMECUSTOML3 = 104,
+    MENU_USERMAP_BROWSER = 105,
+    MENU_SKILL = 110,
+};
+
 static char menunamecnt;
 
 static BUILDVFS_FIND_REC *finddirs=NULL, *findfiles=NULL, *finddirshigh=NULL, *findfileshigh=NULL;
@@ -542,6 +555,188 @@ static struct savehead savehead;
 //static char brdfn[BMAX_PATH];
 int g_lastSaveSlot = -1;
 
+static int Menu_NgcVisibleEntries(MenuGameplayEntry const *entries, int *visible)
+{
+    int count = 0;
+
+    if (!entries)
+        return 0;
+
+    for (int i = 0; i < MAXMENUGAMEPLAYENTRIES; ++i)
+    {
+        if (!entries[i].isValid())
+            break;
+
+        if (entries[i].flags & MEF_Hidden)
+            continue;
+
+        visible[count++] = i;
+    }
+
+    return count;
+}
+
+static bool Menu_NgcHasVisibleSubentries(MenuGameplayEntry const &entry)
+{
+    int visible[MAXMENUGAMEPLAYENTRIES];
+    return Menu_NgcVisibleEntries(entry.subentries, visible) > 0;
+}
+
+static MenuGameplayEntry *Menu_NgcEntriesForCurrentMenu(char const **title)
+{
+    static char const s_newGameTitle[] = "NEW GAME";
+
+    *title = s_newGameTitle;
+
+    if (g_currentMenu == MENU_NEWGAMECUSTOM)
+        return g_MenuGameplayEntries;
+
+    if (g_currentMenu == MENU_NEWGAMECUSTOMSUB)
+    {
+        int indexes[1] = { ud.m_newgamecustom };
+        MenuGameplayEntry *entry = G_GetNewGameCustomEntry(indexes, 1);
+
+        if (!entry)
+            return nullptr;
+
+        *title = entry->name;
+        return entry->subentries;
+    }
+
+    if (g_currentMenu == MENU_NEWGAMECUSTOML3)
+    {
+        int indexes[2] = { ud.m_newgamecustom, ud.m_newgamecustomsub };
+        MenuGameplayEntry *entry = G_GetNewGameCustomEntry(indexes, 2);
+
+        if (!entry)
+            return nullptr;
+
+        *title = entry->name;
+        return entry->subentries;
+    }
+
+    return nullptr;
+}
+
+static void Menu_NgcSetCurrentSelection(int rawIndex)
+{
+    if (g_currentMenu == MENU_NEWGAMECUSTOM)
+        ud.m_newgamecustom = rawIndex;
+    else if (g_currentMenu == MENU_NEWGAMECUSTOMSUB)
+        ud.m_newgamecustomsub = rawIndex;
+    else if (g_currentMenu == MENU_NEWGAMECUSTOML3)
+        ud.m_newgamecustoml3 = rawIndex;
+}
+
+static void Menu_NgcFireSelectionEvent(void)
+{
+    ud.returnvar[0] = ud.returnvar[1] = ud.returnvar[2] = -1;
+
+    if (g_currentMenu == MENU_NEWGAMECUSTOMSUB)
+        ud.returnvar[0] = ud.m_newgamecustomsub;
+    else if (g_currentMenu == MENU_NEWGAMECUSTOML3)
+    {
+        ud.returnvar[0] = ud.m_newgamecustomsub;
+        ud.returnvar[1] = ud.m_newgamecustoml3;
+    }
+
+    X_OnEventWithReturn(EVENT_NEWGAMECUSTOM, -1, myconnectindex, ud.m_newgamecustom);
+}
+
+static void Menu_NgcBack(void)
+{
+    switch (g_currentMenu)
+    {
+        case MENU_NEWGAMECUSTOM:
+            ChangeToMenu((ud.gm & MODE_GAME) ? MENU_MAIN_INGAME : MENU_MAIN);
+            break;
+        case MENU_NEWGAMECUSTOMSUB:
+            ChangeToMenu(MENU_NEWGAMECUSTOM);
+            break;
+        case MENU_NEWGAMECUSTOML3:
+            ChangeToMenu(MENU_NEWGAMECUSTOMSUB);
+            break;
+    }
+}
+
+static void Menu_NgcActivate(MenuGameplayEntry const &entry)
+{
+    if (entry.flags & MEF_Disabled)
+        return;
+
+    if (entry.gameFlags & MGE_UserContent)
+    {
+        Menu_NgcFireSelectionEvent();
+        currentlist = 1;
+        last_menu_pos = probey;
+        ChangeToMenu(MENU_USERMAP);
+        return;
+    }
+
+    if (Menu_NgcHasVisibleSubentries(entry))
+    {
+        if (g_currentMenu == MENU_NEWGAMECUSTOM)
+            ChangeToMenu(MENU_NEWGAMECUSTOMSUB);
+        else if (g_currentMenu == MENU_NEWGAMECUSTOMSUB)
+            ChangeToMenu(MENU_NEWGAMECUSTOML3);
+        else
+        {
+            Menu_NgcFireSelectionEvent();
+            ChangeToMenu(MENU_SKILL);
+        }
+
+        return;
+    }
+
+    Menu_NgcFireSelectionEvent();
+    ChangeToMenu(MENU_SKILL);
+}
+
+static void Menu_DisplayNewGameCustom(void)
+{
+    char const *title = nullptr;
+    MenuGameplayEntry *entries = Menu_NgcEntriesForCurrentMenu(&title);
+    int visible[MAXMENUGAMEPLAYENTRIES];
+    int const visibleCount = Menu_NgcVisibleEntries(entries, visible);
+    int const startY = 60 - (visibleCount * 2);
+
+    if (!entries || visibleCount <= 0)
+    {
+        ChangeToMenu(MENU_EPISODE);
+        return;
+    }
+
+    rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+    menutext(160, 24, 0, 0, title ? title : "NEW GAME");
+
+    int x = M_Probe(160, startY, 20, visibleCount);
+
+    if (probey < 0 || probey >= visibleCount)
+        probey = 0;
+
+    int const selectedRawIndex = visible[probey];
+    Menu_NgcSetCurrentSelection(selectedRawIndex);
+
+    if (x == -1)
+    {
+        Menu_NgcBack();
+        KB_FlushKeyboardQueue();
+        return;
+    }
+
+    if (x >= 0)
+        Menu_NgcActivate(entries[visible[x]]);
+
+    for (int i = 0; i < visibleCount; ++i)
+    {
+        MenuGameplayEntry const &entry = entries[visible[i]];
+        int const disabled = entry.flags & (MEF_Disabled | MEF_LookDisabled);
+
+        menutext(160, startY + (20 * i), disabled ? DISABLEDMENUSHADE : MENUHIGHLIGHT(i),
+                 (entry.flags & MEF_Disabled) ? 1 : PHX(-2 - i), entry.name);
+    }
+}
+
 static void M_DisplaySaveGameList(void)
 {
     int x, c = 160;
@@ -631,7 +826,7 @@ void M_DisplayMenus(void)
     {
         switch (g_currentMenu)
         {
-        case 102:
+        case MENU_USERMAP_BROWSER:
         case 210:
         case 360:
         case 361:
@@ -1483,7 +1678,7 @@ void M_DisplayMenus(void)
             if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Y) || LMB)
             {
                 KB_FlushKeyboardQueue();
-                ChangeToMenu(100);
+                ChangeToMenu(G_HasNewGameCustomChoices() ? MENU_NEWGAMECUSTOM : MENU_EPISODE);
             }
             if (KB_KeyPressed(sc_N) || KB_KeyPressed(sc_Escape) || RMB)
             {
@@ -1891,7 +2086,7 @@ cheat_for_port_credits2:
                     switch (x)
                     {
                     case 0:
-                        ChangeToMenu(100);
+                        ChangeToMenu(G_HasNewGameCustomChoices() ? MENU_NEWGAMECUSTOM : MENU_EPISODE);
                         break;
                     case 1:
                         KB_FlushKeyboardQueue();
@@ -2096,12 +2291,20 @@ cheat_for_port_credits2:
             if (boardfilename[0] == 0) strcpy(boardfilename, "./");
             Bcorrectfilename(boardfilename, 1);
             getfilenames(boardfilename, "*.map");
-            ChangeToMenu(102);
+            ChangeToMenu(MENU_USERMAP_BROWSER);
             KB_FlushKeyboardQueue();
             fallthrough__;
         }
 
-        case 102:
+        case MENU_NEWGAMECUSTOM:
+        case MENU_NEWGAMECUSTOMSUB:
+        case MENU_NEWGAMECUSTOML3:
+        {
+            Menu_DisplayNewGameCustom();
+            break;
+        }
+
+        case MENU_USERMAP_BROWSER:
         {
             rotatesprite(160<<16,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
             menutext(160,24,0,0,"SELECT A USER MAP");

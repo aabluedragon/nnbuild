@@ -36,6 +36,10 @@ int32_t g_noMusic = 0;
 int32_t g_noLogoAnim = 0;
 int32_t g_noLogo = 0;
 
+static int32_t g_commandScreenMode = -1;
+static int32_t g_commandScreenWidth = 0;
+static int32_t g_commandScreenHeight = 0;
+
 int32_t g_keepAddr = 0; // Seemingly unused...
 
 const char* CommandMap = NULL;
@@ -47,6 +51,68 @@ char** netparam = NULL;
 
 char firstdemofile[80] = { '\0' };
 int32_t userconfiles = 0;
+
+static void G_SetCommandLineScreenMode(int32_t mode)
+{
+    g_commandScreenMode = mode;
+    ud.config.ScreenMode = mode;
+}
+
+static void G_SetCommandLineResolution(int32_t width, int32_t height)
+{
+    if (width < 320 || height < 200)
+        return;
+
+    g_commandScreenWidth = width;
+    g_commandScreenHeight = height;
+    ud.config.ScreenWidth = width;
+    ud.config.ScreenHeight = height;
+}
+
+void G_ApplyCommandLineVideoOverrides(void)
+{
+    if (g_commandScreenMode >= 0)
+        ud.config.ScreenMode = g_commandScreenMode;
+
+    if (g_commandScreenWidth > 0 && g_commandScreenHeight > 0)
+    {
+        ud.config.ScreenWidth = g_commandScreenWidth;
+        ud.config.ScreenHeight = g_commandScreenHeight;
+    }
+}
+
+static const char *G_CommandLineOptionValue(const char *option, const char *shortName, const char *longName,
+                                            short *argIndex, int argc, char const * const *argv)
+{
+    size_t const shortLen = Bstrlen(shortName);
+    size_t const longLen = Bstrlen(longName);
+
+    if (!Bstrncasecmp(option, longName, longLen))
+    {
+        const char *value = option + longLen;
+        if (*value == '=')
+            ++value;
+        if (*value)
+            return isalpha((unsigned char)*value) ? nullptr : value;
+        if (*argIndex + 1 < argc)
+            return argv[++*argIndex];
+        return nullptr;
+    }
+
+    if (!Bstrncasecmp(option, shortName, shortLen))
+    {
+        const char *value = option + shortLen;
+        if (*value == '=')
+            ++value;
+        if (*value)
+            return isalpha((unsigned char)*value) ? nullptr : value;
+        if (*argIndex + 1 < argc)
+            return argv[++*argIndex];
+        return nullptr;
+    }
+
+    return nullptr;
+}
 
 static void G_ShowParameterHelp(void)
 {
@@ -266,7 +332,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 if (!Bstrcasecmp(c + 1, "devtools") || !Bstrcasecmp(c + 1, "dt"))
                 {
                     VBJS_SetDevtools(1);
-                    ud.config.ScreenMode = 0; // Devtools is a side overlay: never start fullscreen.
+                    G_SetCommandLineScreenMode(0); // Devtools is a side overlay: never start fullscreen.
                     g_noSetup = 1;            // debugger launches cannot wait in the native setup window
                     g_commandSetup = 0;
                     LOG_F(INFO, "JavaScript devtools enabled (windowed mode).");
@@ -469,6 +535,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 if (!Bstrcasecmp(c + 1, "nologo"))
                 {
                     g_noLogo = 1;
+                    g_noLogoAnim = 1;
                     i++;
                     continue;
                 }
@@ -479,23 +546,26 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "window"))
+                if (!Bstrcasecmp(c + 1, "window") || !Bstrcasecmp(c + 1, "wnd"))
                 {
-                    ud.config.ScreenMode = 0;
+                    G_SetCommandLineScreenMode(0);
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "fullscreen"))
+                if (!Bstrcasecmp(c + 1, "fullscreen") || !Bstrcasecmp(c + 1, "fscr"))
                 {
-                    ud.config.ScreenMode = 1;
+                    G_SetCommandLineScreenMode(1);
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "resolution") && i + 1 < argc)
+                if (!Bstrncasecmp(c + 1, "resolution", 10) || !Bstrncasecmp(c + 1, "res", 3))
                 {
-                    int width = 0, height = 0;
-                    if (sscanf(argv[++i], "%dx%d", &width, &height) == 2 && width >= 320 && height >= 200)
-                        ud.config.ScreenWidth = width, ud.config.ScreenHeight = height;
+                    if (const char *resolution = G_CommandLineOptionValue(c + 1, "res", "resolution", &i, argc, argv))
+                    {
+                        int width = 0, height = 0;
+                        if (sscanf(resolution, "%dx%d", &width, &height) == 2)
+                            G_SetCommandLineResolution(width, height);
+                    }
                     i++;
                     continue;
                 }
@@ -719,26 +789,28 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 continue;
             }
 
-            // VibeBuild32: canonical long aliases for the value-taking single-char options
-            // below. Rewrite "--name value"/"--name=value" to the short "-Xvalue" form the
-            // switch already handles, so Duke matches RR/SW/Blood option names.
+            // VibeBuild32: canonical long aliases for value-taking single-char options.
+            // Normalize "--name value", "--name=value", "--namevalue", "-x value",
+            // "-x=value", and "-xvalue" into the attached short form handled below.
             static char s_optbuf[BMAX_PATH + 4];
             if (c[0] == '-')
             {
-                static const struct { const char *lng; char shrt; int val; } aliases[] = {
-                    { "level",'l',1 }, { "volume",'v',1 }, { "skill",'s',1 }, { "coop",'c',1 },
-                    { "players",'q',1 }, { "respawn",'t',1 }, { "weapons",'u',1 }, { "def",'h',1 },
-                    { "path",'j',1 }, { "demo",'d',1 },
+                static const struct { const char *lng; char shrt; } aliases[] = {
+                    { "level", 'l' }, { "volume", 'v' }, { "episode", 'v' }, { "skill", 's' }, { "coop", 'c' },
+                    { "players", 'q' }, { "respawn", 't' }, { "weapons", 'u' }, { "def", 'h' },
+                    { "path", 'j' }, { "demo", 'd' },
                 };
-                char name[24]; const char *inlineVal = Bstrchr(c + 1, '=');
-                if (inlineVal) { int n = min((int)(inlineVal - (c + 1)), 23); Bmemcpy(name, c + 1, n); name[n] = 0; inlineVal++; }
-                else Bstrncpyz(name, c + 1, sizeof(name));
-                for (auto const & al : aliases)
+                const char *option = c + 1;
+
+                for (auto const &alias : aliases)
                 {
-                    if (Bstrcasecmp(name, al.lng)) continue;
-                    const char *v = inlineVal ? inlineVal : (al.val && i + 1 < argc ? argv[i + 1] : "");
-                    Bsnprintf(s_optbuf, sizeof(s_optbuf), "-%c%s", al.shrt, al.val ? v : "");
-                    if (al.val && !inlineVal && i + 1 < argc) i++;   // consumed the separate value token
+                    const char shortName[2] = { alias.shrt, '\0' };
+                    const char *value = G_CommandLineOptionValue(option, shortName, alias.lng, &i, argc, argv);
+
+                    if (value == nullptr)
+                        continue;
+
+                    Bsnprintf(s_optbuf, sizeof(s_optbuf), "-%c%s", alias.shrt, value);
                     c = s_optbuf;
                     break;
                 }

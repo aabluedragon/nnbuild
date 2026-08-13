@@ -705,6 +705,7 @@ const tokenmap_t vm_keywords[] =
     { "prevspritesect",         CON_PREVSPRITESECT },
     { "nextspritesect",         CON_NEXTSPRITESECT },
     { "getkeyname",             CON_GETKEYNAME },
+    { "getngcflags",            CON_GETNGCFLAGS },
     { "qsubstr",                CON_QSUBSTR },
     { "gametextz",              CON_GAMETEXTZ },
     { "digitalnumberz",         CON_DIGITALNUMBERZ },
@@ -4384,9 +4385,14 @@ ifvar:
                 C_GetManyVarsType(GAMEVAR_READONLY, 8);
                 continue;
 
+            case CON_GETNGCFLAGS:
             case CON_SETNGCFLAGS:
             {
-                C_GetNextVar();
+                if (tw == CON_GETNGCFLAGS)
+                    C_GetNextVarType(GAMEVAR_READONLY);
+                else
+                    C_GetNextVar();
+
                 intptr_t const countOffset = g_scriptPtr - apScript;
                 scriptWriteValue(0);
 
@@ -6076,9 +6082,10 @@ static void C_AddDefaultDefinitions(void)
     C_AddDefinition("STR_USERMAPFILENAME",  STR_USERMAPFILENAME,LABEL_DEFINE);
     C_AddDefinition("STR_REVISION",         STR_REVISION,       LABEL_DEFINE);
 
-    C_AddDefinition("MEF_Enabled",          0,                  LABEL_DEFINE);
-    C_AddDefinition("MEF_Disabled",         1 << 0,             LABEL_DEFINE);
-    C_AddDefinition("MEF_Hidden",           1 << 2,             LABEL_DEFINE);
+    C_AddDefinition("MEF_Enabled",          MEF_Enabled,        LABEL_DEFINE);
+    C_AddDefinition("MEF_Disabled",         MEF_Disabled,       LABEL_DEFINE);
+    C_AddDefinition("MEF_LookDisabled",     MEF_LookDisabled,   LABEL_DEFINE);
+    C_AddDefinition("MEF_Hidden",           MEF_Hidden,         LABEL_DEFINE);
 
     C_AddDefinition("MAX_WEAPONS",          MAX_WEAPONS,        LABEL_DEFINE);
     C_AddDefinition("MAXSPRITES",           MAXSPRITES,         LABEL_DEFINE);

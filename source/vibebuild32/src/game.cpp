@@ -358,12 +358,73 @@ enum gametokens
     T_TYPE,
     T_DISTANCE,
     T_VOLUME,
+    T_NEWGAMECHOICES,
+    T_CHOICE,
+    T_NAME,
+    T_LOCKED,
+    T_HIDDEN,
+    T_USERCONTENT,
 };
 
 void SetIfGreater(int32_t *variable, int32_t potentialValue)
 {
     if (potentialValue > *variable)
         *variable = potentialValue;
+}
+
+MenuGameplayEntry g_MenuGameplayEntries[MAXMENUGAMEPLAYENTRIES];
+
+static void G_ClearNewGameChoice(MenuGameplayEntry *entry)
+{
+    if (!entry)
+        return;
+
+    if (entry->subentries)
+    {
+        for (int i = 0; i < MAXMENUGAMEPLAYENTRIES; ++i)
+            G_ClearNewGameChoice(&entry->subentries[i]);
+
+        DO_FREE_AND_NULL(entry->subentries);
+    }
+
+    *entry = {};
+}
+
+void G_ClearNewGameChoices(void)
+{
+    for (int i = 0; i < MAXMENUGAMEPLAYENTRIES; ++i)
+        G_ClearNewGameChoice(&g_MenuGameplayEntries[i]);
+}
+
+bool G_HasNewGameCustomChoices(void)
+{
+    return g_MenuGameplayEntries[0].isValid();
+}
+
+MenuGameplayEntry *G_GetNewGameCustomEntry(int const *indexes, int count)
+{
+    if (!indexes || count < 1 || count > MAXMENUGAMEPLAYLAYERS)
+        return nullptr;
+
+    if ((unsigned)indexes[0] >= MAXMENUGAMEPLAYENTRIES)
+        return nullptr;
+
+    MenuGameplayEntry *entry = &g_MenuGameplayEntries[indexes[0]];
+
+    if (!entry->isValid())
+        return nullptr;
+
+    for (int i = 1; i < count; ++i)
+    {
+        if (!entry->subentries || (unsigned)indexes[i] >= MAXMENUGAMEPLAYENTRIES)
+            return nullptr;
+
+        entry = &entry->subentries[indexes[i]];
+        if (!entry->isValid())
+            return nullptr;
+    }
+
+    return entry;
 }
 
 // get the string length until the next '\n'
@@ -7935,6 +7996,89 @@ static void parsedefinitions_game_include(const char* fileName, scriptfile* pScr
     }
 }
 
+static const tokenlist newGameTokens[] =
+{
+    { "choice",      T_CHOICE },
+};
+
+static const tokenlist newGameChoiceTokens[] =
+{
+    { "name",        T_NAME },
+    { "locked",      T_LOCKED },
+    { "hidden",      T_HIDDEN },
+    { "choice",      T_CHOICE },
+    { "usercontent", T_USERCONTENT },
+};
+
+static int parsedefinitions_newgamechoice(scriptfile *pScript, MenuGameplayEntry &entry);
+
+static int parsedefinitions_newgamesubchoice(scriptfile *pScript, MenuGameplayEntry &parent)
+{
+    char *choicePtr = pScript->ltextptr;
+    char *choiceEnd;
+    int32_t choiceID;
+
+    if (scriptfile_getsymbol(pScript, &choiceID))
+        return -1;
+    if (scriptfile_getbraces(pScript, &choiceEnd))
+        return -1;
+
+    if ((unsigned)choiceID >= MAXMENUGAMEPLAYENTRIES)
+    {
+        LOG_F(ERROR, "%s:%d: error: maximum newgamechoices entries exceeded",
+              pScript->filename, scriptfile_getlinum(pScript, choicePtr));
+        pScript->textptr = choiceEnd + 1;
+        return -1;
+    }
+
+    if (!parent.subentries)
+        parent.subentries = (MenuGameplayEntry *)Xcalloc(MAXMENUGAMEPLAYENTRIES, sizeof(MenuGameplayEntry));
+
+    MenuGameplayEntry &entry = parent.subentries[choiceID];
+    G_ClearNewGameChoice(&entry);
+    entry.subentries = (MenuGameplayEntry *)Xcalloc(MAXMENUGAMEPLAYENTRIES, sizeof(MenuGameplayEntry));
+
+    while (pScript->textptr < choiceEnd)
+        parsedefinitions_newgamechoice(pScript, entry);
+
+    return 0;
+}
+
+static int parsedefinitions_newgamechoice(scriptfile *pScript, MenuGameplayEntry &entry)
+{
+    switch (getatoken(pScript, newGameChoiceTokens, ARRAY_SIZE(newGameChoiceTokens)))
+    {
+        case T_CHOICE:
+            return parsedefinitions_newgamesubchoice(pScript, entry);
+
+        case T_NAME:
+        {
+            char *name = nullptr;
+            if (scriptfile_getstring(pScript, &name))
+                return -1;
+
+            Bmemset(entry.name, 0, sizeof(entry.name));
+            Bstrncpy(entry.name, name, sizeof(entry.name) - 1);
+            return 0;
+        }
+
+        case T_LOCKED:
+            entry.flags |= MEF_Disabled;
+            return 0;
+
+        case T_HIDDEN:
+            entry.flags |= MEF_Hidden;
+            return 0;
+
+        case T_USERCONTENT:
+            entry.gameFlags |= MGE_UserContent;
+            return 0;
+
+        default:
+            return 0;
+    }
+}
+
 static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 {
     int tokn;
@@ -7953,6 +8097,7 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         { "sound",             T_SOUND            },
         { "addplayercolor",    T_ADDPLAYERCOL     },
         { "delplayercolor",    T_DELPLAYERCOL     },
+        { "newgamechoices",    T_NEWGAMECHOICES   },
     };
 
     static const tokenlist soundTokens[] =
@@ -8127,6 +8272,62 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
                 // maybe I should have just packed this into a sound_t and passed a reference...
                 if (S_DefineSound(soundNum, fileName, minpitch, maxpitch, priority, type, distance, volume) == -1)
                     LOG_F(ERROR, "Invalid sound ID on line %s:%d", pScript->filename, scriptfile_getlinum(pScript, pToken));
+            }
+        }
+        break;
+
+        case T_NEWGAMECHOICES:
+        {
+            char *choicesEnd;
+
+            if (scriptfile_getbraces(pScript, &choicesEnd))
+                break;
+
+            if (firstPass)
+            {
+                pScript->textptr = choicesEnd + 1;
+                break;
+            }
+
+            G_ClearNewGameChoices();
+
+            while (pScript->textptr < choicesEnd)
+            {
+                switch (getatoken(pScript, newGameTokens, ARRAY_SIZE(newGameTokens)))
+                {
+                    case T_CHOICE:
+                    {
+                        char *choicePtr = pScript->ltextptr;
+                        char *choiceEnd;
+                        int32_t choiceID;
+
+                        if (scriptfile_getsymbol(pScript, &choiceID))
+                            break;
+                        if (scriptfile_getbraces(pScript, &choiceEnd))
+                            break;
+
+                        if ((unsigned)choiceID >= MAXMENUGAMEPLAYENTRIES)
+                        {
+                            LOG_F(ERROR, "%s:%d: error: maximum newgamechoices entries exceeded",
+                                  pScript->filename, scriptfile_getlinum(pScript, choicePtr));
+                            pScript->textptr = choiceEnd + 1;
+                            break;
+                        }
+
+                        MenuGameplayEntry &entry = g_MenuGameplayEntries[choiceID];
+                        G_ClearNewGameChoice(&entry);
+                        entry.subentries = (MenuGameplayEntry *)Xcalloc(MAXMENUGAMEPLAYENTRIES, sizeof(MenuGameplayEntry));
+
+                        while (pScript->textptr < choiceEnd)
+                            parsedefinitions_newgamechoice(pScript, entry);
+
+                        break;
+                    }
+
+                    case T_EOF:
+                        pScript->textptr = choicesEnd;
+                        break;
+                }
             }
         }
         break;
@@ -8475,6 +8676,8 @@ static void G_Cleanup(void)
     // NetDuke32: Clear dukeanim here once backported.
     inthash_free(&h_dsound);
     inthash_free(&h_dynamictilemap);
+
+    G_ClearNewGameChoices();
 
     Duke_CommonCleanup();
 }
@@ -9251,6 +9454,7 @@ int Duke_app_main(int32_t argc, char const* const* argv)
 
     LOG_F(INFO, "Using config file '%s'.", g_setupFileName);
     int32_t const readSetup = CONFIG_ReadSetup();
+    G_ApplyCommandLineVideoOverrides();
 
 #ifdef _WIN32
 //    LOG_F(INFO, "build %d",(char)atoi(BUILDDATE));
@@ -9283,6 +9487,8 @@ int Duke_app_main(int32_t argc, char const* const* argv)
         }
     }
 #endif
+
+    G_ApplyCommandLineVideoOverrides();
 
     G_LoadGroups(!g_noAutoLoad);
 
@@ -9392,6 +9598,7 @@ int Duke_app_main(int32_t argc, char const* const* argv)
     // [JM] I'll need to make sure this doesn't fuck up a few command lines.
     CONFIG_WriteSetup(1);
     CONFIG_ReadSetup();
+    G_ApplyCommandLineVideoOverrides();
 
     char const* rtsname = g_rtsNamePtr ? g_rtsNamePtr : ud.rtsname;
     RTS_Init(rtsname);
