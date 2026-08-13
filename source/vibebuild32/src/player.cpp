@@ -3438,7 +3438,7 @@ void P_ProcessInput(int snum)
 
     // Shrinking code
 
-    floorZOffset = PLAYER_ZOFF_NORMAL;
+    floorZOffset = p->floorzoffset;
 
     if (sectorLotag == ST_2_UNDERWATER)
     {
@@ -3538,16 +3538,16 @@ void P_ProcessInput(int snum)
 
         if (sectorLotag == ST_1_ABOVE_WATER) //&& p->spritebridge == 0)
         {
-            floorZOffset = PLAYER_ZOFF_SHRUNK;
+            floorZOffset = p->shrunkzoffset;
 
             // Sinking into water
             if (shrunk == 0)
             {
-                floorZOffset = PLAYER_ZOFF_WATER;
+                floorZOffset = p->waterzoffset;
                 doFloatbob = true;
             }
 
-            if (shrunk == 0 && (noSE7Water || (trueFloorDist <= PHEIGHT)) && !oldnet_predicting)
+            if (shrunk == 0 && (noSE7Water || (trueFloorDist <= p->spritezoffset)) && !oldnet_predicting)
             {
                 if (p->on_ground == 1)
                 {
@@ -3665,7 +3665,7 @@ void P_ProcessInput(int snum)
 
             p->on_ground = 1;
 
-            if (floorZOffset == PLAYER_ZOFF_NORMAL)
+            if (floorZOffset == p->floorzoffset)
             {
                 //Smooth on the ground
                 int Zdiff = ((floorZ - floorZOffset) - p->pos.z) >> 1;
@@ -3682,17 +3682,17 @@ void P_ProcessInput(int snum)
             else if (p->jumping_counter == 0)
             {
                 p->pos.z += ((floorZ - (floorZOffset >> 1)) - p->pos.z) >> 1; //Smooth on the water
-                if (p->on_warping_sector == 0 && p->pos.z > floorZ - PLAYER_MINWATERZDIST)
+                if (p->on_warping_sector == 0 && p->pos.z > floorZ - p->minwaterzdist)
                 {
-                    p->pos.z = floorZ - PLAYER_MINWATERZDIST;
+                    p->pos.z = floorZ - p->minwaterzdist;
                     p->vel.z >>= 1;
                 }
             }
 
             // HACK: If we're in TROR water, and the water is too shallow, clamp and prevent floating bob.
-            if (noSE7Water && (p->pos.z > (waterFloor - PLAYER_ZOFF_NORMAL)))
+            if (noSE7Water && (p->pos.z > (waterFloor - p->floorzoffset)))
             {
-                p->pos.z = waterFloor - PLAYER_ZOFF_NORMAL;
+                p->pos.z = waterFloor - p->floorzoffset;
                 doFloatbob = false;
             }
 
@@ -3703,7 +3703,7 @@ void P_ProcessInput(int snum)
                 X_OnEvent(EVENT_CROUCH, playerSprite, snum, -1);
                 if (Gv_GetVar(sysVarIDs.RETURN, playerSprite, snum) == 0)
                 {
-                    p->pos.z += PLAYER_CROUCH_INC;
+                    p->pos.z += p->crouchzincrement;
                     p->crack_time = 777;
                 }
             }

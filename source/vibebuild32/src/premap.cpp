@@ -642,6 +642,13 @@ static void P_ResetStatus(int snum)
 {
     DukePlayer_t *p = g_player[snum].ps;
 
+    p->floorzoffset     = PLAYER_ZOFF_NORMAL;
+    p->waterzoffset     = PLAYER_ZOFF_WATER;
+    p->minwaterzdist    = PLAYER_MINWATERZDIST;
+    p->shrunkzoffset    = PLAYER_ZOFF_SHRUNK;
+    p->spritezoffset    = PHEIGHT;
+    p->crouchzincrement = PLAYER_CROUCH_INC;
+
     ud.show_help        = 0;
     ud.showallmap       = 0;
     p->dead_flag        = 0;

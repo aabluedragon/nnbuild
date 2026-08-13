@@ -70,6 +70,9 @@ typedef struct {
     fix16_t q16horiz, q16horizoff, oq16horiz, oq16horizoff;
     fix16_t q16ang, oq16ang, q16angvel;
 
+    int16_t floorzoffset, spritezoffset, minwaterzdist, waterzoffset, shrunkzoffset;
+    int16_t crouchzincrement;
+
     uint32_t interface_toggle_flag;
 
     palette_t pals;

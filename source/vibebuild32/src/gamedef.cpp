@@ -470,6 +470,7 @@ const tokenmap_t vm_keywords[] =
     { "onevent",                CON_ONEVENT },
     { "appendevent",            CON_APPENDEVENT },
     { "endevent",               CON_ENDEVENT },
+    { "calchypotenuse",         CON_CALCHYPOTENUSE },
     
     { "spgetlotag",             CON_SPGETLOTAG },
     { "spgethitag",             CON_SPGETHITAG },
@@ -482,6 +483,8 @@ const tokenmap_t vm_keywords[] =
 
     { "starttrack",             CON_STARTTRACK }, 
     { "starttrackvar",          CON_STARTTRACK },
+    { "starttrackslot",         CON_STARTTRACKSLOT },
+    { "startscreen",            CON_STARTSCREEN },
 
     { "enhanced",               CON_ENHANCED },
     { "getangletotarget",       CON_GETANGLETOTARGET },
@@ -607,6 +610,7 @@ const tokenmap_t vm_keywords[] =
     { "soundoncevar",           CON_SOUNDONCEVAR },
     { "updatesectorz",          CON_UPDATESECTORZ },
     { "stopallsounds",          CON_STOPALLSOUNDS },
+    { "stopallmusic",           CON_STOPALLMUSIC },
     { "ssp",                    CON_SSP },
     { "stopsoundvar",           CON_STOPSOUNDVAR },
     { "checkavailinven",        CON_CHECKAVAILINVEN },
@@ -2809,6 +2813,8 @@ DO_DEFSTATE:
                 }
                 fallthrough__;
             case CON_STOPALLSOUNDS:
+            case CON_STOPALLMUSIC:
+            case CON_STARTSCREEN:
             case CON_SPGETLOTAG: // !DEPRECATED!
             case CON_SPGETHITAG: // !DEPRECATED!
             case CON_SECTGETLOTAG: // !DEPRECATED!
@@ -2837,9 +2843,6 @@ DO_DEFSTATE:
                 scriptWriteValue(CON_NULLOP | LINE_NUMBER);
                 continue;
 
-            case CON_ESPAWN:
-            case CON_QSPAWN:
-            case CON_EQSPAWN:
             case CON_STRENGTH:
             case CON_ADDPHEALTH:
             case CON_SPAWN:
@@ -3403,6 +3406,7 @@ DO_DEFSTATE:
                 C_GetNextVarType(GAMEVAR_READONLY);
                 continue;
 
+            case CON_CALCHYPOTENUSE:
             case CON_CLAMP:
                 C_GetNextVarType(GAMEVAR_READONLY);
                 C_GetManyVars(2);
@@ -3410,6 +3414,9 @@ DO_DEFSTATE:
 
             case CON_SHOOT:
             case CON_ESHOOT:
+            case CON_ESPAWN:
+            case CON_QSPAWN:
+            case CON_EQSPAWN:
             case CON_ESPAWNVAR:
             case CON_QSPAWNVAR:
             case CON_EQSPAWNVAR:
@@ -4511,6 +4518,7 @@ repeatcase:
             case CON_GETPNAME:
             case CON_GETTEAMNAME:
             case CON_STARTLEVEL:
+            case CON_STARTTRACKSLOT:
             case CON_QSTRCAT:
             case CON_QSTRCPY:
             case CON_QSTRLEN:
@@ -5720,7 +5728,7 @@ static void C_AddDefaultDefinitions(void)
     C_AddEvent(EVENT_POSTDAMAGESPRITE);
     C_AddEvent(EVENT_DAMAGEFLOOR);
     C_AddEvent(EVENT_DAMAGECEILING);
-    C_AddEvent(EVENT_DAMAGECEILING);
+    C_AddEvent(EVENT_DAMAGEWALL);
     C_AddEvent(EVENT_ALTWEAPON);
     C_AddEvent(EVENT_LASTWEAPON);
     C_AddEvent(EVENT_ALTFIRE);

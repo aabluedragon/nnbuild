@@ -227,7 +227,10 @@ const memberlabel_t PlayerLabels[] =
     { "aim_mode",               PLAYER_AIM_MODE, 0, 0, -1 },
     { "ang",                    PLAYER_ANG, 0, 0, -1 },
     { "oang",                   PLAYER_OANG, 0, 0, -1 },
+    { "q16ang",                 PLAYER_Q16ANG, 0, 0, -1 },
+    { "oq16ang",                PLAYER_OQ16ANG, 0, 0, -1 },
     { "angvel",                 PLAYER_ANGVEL, 0, 0, -1 },
+    { "q16angvel",              PLAYER_Q16ANGVEL, 0, 0, -1 },
     { "cursectnum",             PLAYER_CURSECTNUM, 0, 0, -1 },
     { "look_ang",               PLAYER_LOOK_ANG, 0, 0, -1 },
     { "last_extra",             PLAYER_LAST_EXTRA, 0, 0, -1 },
@@ -339,6 +342,12 @@ const memberlabel_t PlayerLabels[] =
     { "connected",              PLAYER_CONNECTED, 0, 0, -1 },
     { "lowsprite",              PLAYER_LOWSPRITE, 0, 0, -1 },
     { "highsprite",             PLAYER_HIGHSPRITE, 0, 0, -1 },
+    { "floorzoffset",           PLAYER_FLOORZOFFSET_MEMBER, 0, 0, -1 },
+    { "spritezoffset",          PLAYER_SPRITEZOFFSET_MEMBER, 0, 0, -1 },
+    { "minwaterzdist",          PLAYER_MINWATERZDIST_MEMBER, 0, 0, -1 },
+    { "waterzoffset",           PLAYER_WATERZOFFSET_MEMBER, 0, 0, -1 },
+    { "shrunkzoffset",          PLAYER_SHRUNKZOFFSET_MEMBER, 0, 0, -1 },
+    { "crouchzincrement",       PLAYER_CROUCHZINCREMENT_MEMBER, 0, 0, -1 },
     { "",                       -1, 0, 0, -1 } // END OF LIST
 };
 
@@ -491,6 +500,8 @@ const memberlabel_t UserdefsLabels[] =
     { "m_dmflags",              USERDEFS_M_DMFLAGS,             0, 0, -1 },
     { "draw_y",                 USERDEFS_DRAW_Y,                0, 0, -1 },
     { "draw_yxaspect",          USERDEFS_DRAW_YXASPECT,         0, 0, -1 },
+    { "music_episode",          USERDEFS_MUSIC_EPISODE,         0, 0, -1 },
+    { "music_level",            USERDEFS_MUSIC_LEVEL,           0, 0, -1 },
     { "monsters_killed",        USERDEFS_MONSTERS_KILLED,       0, 0, -1 },
     { "limit_hit",              USERDEFS_LIMIT_HIT,             0, 0, -1 },
     { "winner",                 USERDEFS_WINNER,                0, 0, -1 },
@@ -783,6 +794,8 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
         case USERDEFS_M_DMFLAGS:            return ud.m_dmflags;
         case USERDEFS_DRAW_Y:               return rotatesprite_y_offset;
         case USERDEFS_DRAW_YXASPECT:        return rotatesprite_yxaspect;
+        case USERDEFS_MUSIC_EPISODE:        return ud.music_episode;
+        case USERDEFS_MUSIC_LEVEL:          return ud.music_level;
         case USERDEFS_MONSTERS_KILLED:      return ud.monsters_killed;
         case USERDEFS_LIMIT_HIT:            return ud.limit_hit;
         case USERDEFS_WINNER:               return ud.winner;
@@ -939,6 +952,8 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
         case USERDEFS_M_DMFLAGS:        ud.m_dmflags            = newValue; return;
         case USERDEFS_DRAW_Y:           rotatesprite_y_offset   = newValue; return;
         case USERDEFS_DRAW_YXASPECT:    rotatesprite_yxaspect   = newValue; return;
+        case USERDEFS_MUSIC_EPISODE:    ud.music_episode        = newValue; return;
+        case USERDEFS_MUSIC_LEVEL:      ud.music_level          = newValue; return;
         case USERDEFS_MONSTERS_KILLED:  ud.monsters_killed      = newValue; return;
         case USERDEFS_LIMIT_HIT:        ud.limit_hit            = newValue; return;
         case USERDEFS_WINNER:           ud.winner               = newValue; return;
@@ -1101,7 +1116,10 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
 
         case PLAYER_ANG:                return fix16_to_int(ps.q16ang);
         case PLAYER_OANG:               return fix16_to_int(ps.oq16ang);
+        case PLAYER_Q16ANG:             return ps.q16ang;
+        case PLAYER_OQ16ANG:            return ps.oq16ang;
         case PLAYER_ANGVEL:             return fix16_to_int(ps.q16angvel);
+        case PLAYER_Q16ANGVEL:          return ps.q16angvel;
 
         case PLAYER_CURSECTNUM:         return ps.cursectnum;
         case PLAYER_LOOK_ANG:           return ps.look_ang;
@@ -1234,6 +1252,12 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
 
         case PLAYER_LOWSPRITE:              return ps.lowsprite; // [JM] Lowest sprite touching. Read-only.
         case PLAYER_HIGHSPRITE:             return ps.highsprite; // [JM] Lowest sprite touching. // Read-only.
+        case PLAYER_FLOORZOFFSET_MEMBER:    return ps.floorzoffset;
+        case PLAYER_SPRITEZOFFSET_MEMBER:   return ps.spritezoffset;
+        case PLAYER_MINWATERZDIST_MEMBER:   return ps.minwaterzdist;
+        case PLAYER_WATERZOFFSET_MEMBER:    return ps.waterzoffset;
+        case PLAYER_SHRUNKZOFFSET_MEMBER:   return ps.shrunkzoffset;
+        case PLAYER_CROUCHZINCREMENT_MEMBER:return ps.crouchzincrement;
 
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
@@ -1304,7 +1328,10 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
 
         case PLAYER_ANG:                ps.q16ang               = fix16_from_int(newValue); return;
         case PLAYER_OANG:               ps.oq16ang              = fix16_from_int(newValue); return;
+        case PLAYER_Q16ANG:             ps.q16ang               = newValue; return;
+        case PLAYER_OQ16ANG:            ps.oq16ang              = newValue; return;
         case PLAYER_ANGVEL:             ps.q16angvel            = fix16_from_int(newValue); return;
+        case PLAYER_Q16ANGVEL:          ps.q16angvel            = newValue; return;
 
         case PLAYER_CURSECTNUM:         ps.cursectnum           = newValue; return;
         case PLAYER_LOOK_ANG:           ps.look_ang             = newValue; return;
@@ -1453,6 +1480,12 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
 
         case PLAYER_LOWSPRITE:              return; // [JM] Lowest sprite touching. Read-only.
         case PLAYER_HIGHSPRITE:             return; // [JM] Lowest sprite touching. // Read-only.
+        case PLAYER_FLOORZOFFSET_MEMBER:    ps.floorzoffset           = newValue; return;
+        case PLAYER_SPRITEZOFFSET_MEMBER:   ps.spritezoffset          = newValue; return;
+        case PLAYER_MINWATERZDIST_MEMBER:   ps.minwaterzdist          = newValue; return;
+        case PLAYER_WATERZOFFSET_MEMBER:    ps.waterzoffset           = newValue; return;
+        case PLAYER_SHRUNKZOFFSET_MEMBER:   ps.shrunkzoffset          = newValue; return;
+        case PLAYER_CROUCHZINCREMENT_MEMBER:ps.crouchzincrement       = newValue; return;
 
         default: EDUKE32_UNREACHABLE_SECTION(return);
     }

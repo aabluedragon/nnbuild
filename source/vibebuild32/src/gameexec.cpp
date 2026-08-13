@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 //-------------------------------------------------------------------------
 
+#include <cmath>
 #include <time.h>
 
 #include "communityapi.h"
@@ -44,6 +45,8 @@ int g_errorLineNum;
 int g_tw;
 
 static int X_DoExecute(void);
+extern int32_t I_CheckAllInput(void);
+extern void I_ClearAllInput(void);
 
 // Replace with mainline versions later.
 #if defined _MSC_VER
@@ -1029,6 +1032,35 @@ static void G_ShowView(vec3_t vec, fix16_t a, fix16_t horiz, int sect, int ix1, 
     G_RestoreInterpolations();
     G_UpdateScreenArea();
     renderSetAspect(viewingRange, yxAspect);
+}
+
+static void Screen_Play(void)
+{
+    bool running = true;
+    int const gm = ud.gm;
+
+    ud.gm &= ~MODE_MENU;
+
+    I_ClearAllInput();
+
+    do
+    {
+        gameHandleEvents();
+
+        ototalclock = totalclock + 1;
+        if (!engineFPSLimit(true))
+            continue;
+
+        videoClearScreen(0);
+
+        if (X_OnEventWithReturn(EVENT_SCREEN, -1, myconnectindex, I_CheckAllInput()))
+            running = false;
+
+        I_ClearAllInput();
+        videoNextPage();
+    } while (running);
+
+    ud.gm = gm;
 }
 
 static inline void SetArray(int const arrayNum, int const arrayIndex, int const newValue)
@@ -2654,7 +2686,7 @@ static int X_DoExecute(void)
             break;
         }
 
-        j = A_Spawn(vm.spriteNum,*insptr++);
+        j = A_Spawn(vm.spriteNum, Gv_GetVarX(*insptr++));
 
         switch (tw)
         {
@@ -3556,6 +3588,11 @@ static int X_DoExecute(void)
             FX_StopAllSounds();
         return 0;
 
+    case CON_STOPALLMUSIC:
+        insptr++;
+        S_StopMusic();
+        return 0;
+
     case CON_IFGAPZL:
         insptr++;
         branch(((actor[vm.spriteNum].floorz - actor[vm.spriteNum].ceilingz) >> 8) < *insptr);
@@ -3939,6 +3976,18 @@ static int X_DoExecute(void)
             int lInVarID=*insptr++, lOutVarID=*insptr++;
 
             Gv_SetVarX(lOutVarID, ksqrt(Gv_GetVarX(lInVarID)));
+            break;
+        }
+
+    case CON_CALCHYPOTENUSE:
+        insptr++;
+        {
+            int const returnVar = *insptr++;
+            int const x = Gv_GetVarX(*insptr++);
+            int const y = Gv_GetVarX(*insptr++);
+            int64_t const hypSq = (int64_t)x * x + (int64_t)y * y;
+
+            Gv_SetVarX(returnVar, hypSq > (int64_t)INT32_MAX ? (int32_t)std::sqrt((double)hypSq) : ksqrt((uint32_t)hypSq));
             break;
         }
 
@@ -4904,6 +4953,20 @@ static int X_DoExecute(void)
     case CON_STARTTRACK:
         insptr++;
         G_StartTrackSlotWrap(ud.volume_number, Gv_GetVarX(*(insptr++)));
+        break;
+
+    case CON_STARTTRACKSLOT:
+        insptr++;
+        {
+            int const volumeNum = Gv_GetVarX(*(insptr++));
+            int const levelNum = Gv_GetVarX(*(insptr++));
+            G_StartTrackSlotWrap(volumeNum == -1 ? MAXVOLUMES : volumeNum, levelNum);
+            break;
+        }
+
+    case CON_STARTSCREEN:
+        insptr++;
+        Screen_Play();
         break;
 
     case CON_ACTIVATECHEAT:
