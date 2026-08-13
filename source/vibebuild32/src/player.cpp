@@ -3612,7 +3612,7 @@ void P_ProcessInput(int snum)
             else
             {
                 p->on_ground = 0;
-                p->vel.z += (g_spriteGravity + 80); // (TICSPERFRAME<<6);
+                p->vel.z += p->gravity; // (TICSPERFRAME<<6);
 
                 if (p->vel.z >= ACTOR_MAXFALLINGZVEL)
                     p->vel.z = ACTOR_MAXFALLINGZVEL;
@@ -3670,11 +3670,11 @@ void P_ProcessInput(int snum)
                 //Smooth on the ground
                 int Zdiff = ((floorZ - floorZOffset) - p->pos.z) >> 1;
 
-                if (klabs(Zdiff) < 256)
+                if (klabs(Zdiff) < p->floorzcutoff)
                     Zdiff = 0;
                 p->pos.z += Zdiff;
 
-                p->vel.z -= 768;
+                p->vel.z -= p->floorzrebound;
 
                 if (p->vel.z < 0)
                     p->vel.z = 0;

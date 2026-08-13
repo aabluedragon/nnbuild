@@ -70,15 +70,17 @@ typedef struct {
     fix16_t q16horiz, q16horizoff, oq16horiz, oq16horizoff;
     fix16_t q16ang, oq16ang, q16angvel;
 
+    int16_t floorzrebound, floorzcutoff;
     int16_t floorzoffset, spritezoffset, minwaterzdist, waterzoffset, shrunkzoffset;
     int16_t crouchzincrement;
+    int16_t gravity;
 
     uint32_t interface_toggle_flag;
 
     palette_t pals;
 
     int32_t actors_killed;
-    int32_t runspeed, movement_lock, team;
+    int32_t runspeed, movement_lock, team, autostep, autostep_sbw;
     int32_t max_player_health, max_shield_amount;
 
     int32_t scream_voice;
@@ -107,7 +109,7 @@ typedef struct {
     int16_t orotscrnang, rotscrnang, dead_flag, show_empty_weapon;   // JBF 20031220: added orotscrnang
     
     int16_t holoduke_on, pycount, weapon_pos, frag_ps;
-    int16_t transporter_hold, last_full_weapon;
+    int16_t transporter_hold, clipdist, last_full_weapon;
 
     uint8_t palette, palookup;
 

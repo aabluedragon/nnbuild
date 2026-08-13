@@ -88,7 +88,7 @@ void C_DefineProjectile(int32_t tileNum, int32_t labelNum, int32_t val)
         case PROJ_BSOUND:      proj->bsound     = val; break;
         case PROJ_RANGE:       proj->range      = val; break;
         case PROJ_FLASH_COLOR: proj->flashcolor = val; break;
-        //case PROJ_USERDATA:    proj->userdata   = val; break;
+        case PROJ_USERDATA:    proj->userdata   = val; break;
         default: break;
     }
 

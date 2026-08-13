@@ -44,6 +44,7 @@ static char g_szCurrentBlockName[BMAX_PATH] = "(none)", g_szLastBlockName[BMAX_P
 int g_totalLines,g_lineNumber;
 static int g_checkingIfElse,g_processingState,g_checkingLoop;
 char g_szBuf[1024];
+static intptr_t apScriptStateEnd[MAXLABELS];
 
 extern char *textptr;
 
@@ -204,6 +205,8 @@ static intptr_t apScriptGameEventEnd[MAXEVENTS];
 static intptr_t g_scriptEventOffset;
 static intptr_t g_scriptEventBreakOffset;
 static intptr_t g_scriptEventChainOffset;
+static intptr_t g_scriptStateBreakOffset;
+static intptr_t g_scriptStateChainOffset;
 int32_t g_currentEvent = -1;
 
 char *textptr;
@@ -261,6 +264,7 @@ const tokenmap_t vm_keywords[] =
     { "shootvar",               CON_SHOOT },
 
     { "palfrom",                CON_PALFROM },          // used for player screen shading effect, sets p->pals_time and p->pals[0-2]
+    { "screenpal",              CON_SCREENPAL },
     { "sound",                  CON_SOUND },            // plays a sound that was defined with definesound
     { "fall",                   CON_FALL },             // causes actor to fall to sector floor height
     { "state",                  CON_STATE },            // begins defining a state if used outside a state or actor, otherwise calls a state
@@ -287,6 +291,7 @@ const tokenmap_t vm_keywords[] =
     { "cstat",                  CON_CSTAT },
     { "ifmove",                 CON_IFMOVE },
     { "resetplayer",            CON_RESETPLAYER },
+    { "resetplayerflags",       CON_RESETPLAYERFLAGS },
     { "ifonwater",              CON_IFONWATER },
     { "ifinwater",              CON_IFINWATER },
     { "ifcanshoottarget",       CON_IFCANSHOOTTARGET },
@@ -410,8 +415,12 @@ const tokenmap_t vm_keywords[] =
 
     { "for",                    CON_FOR },
 
+    { "whilevare",              CON_WHILEVARE },
+    { "whilevarl",              CON_WHILEVARL },
     { "whilevarn",              CON_WHILEVARN },
+    { "whilevarvarl",           CON_WHILEVARVARL },
     { "whilevarvarn",           CON_WHILEVARVARN },
+    { "whilel",                 CON_WHILEVARVARL },
     { "whilen",                 CON_WHILEVARVARN },
 
     { "setvar",                 CON_SETVAR },
@@ -465,6 +474,7 @@ const tokenmap_t vm_keywords[] =
     { "displayrandvarvar",      CON_DISPLAYRANDVARVAR },
     
     { "addlogvar",              CON_ADDLOGVAR },
+    { "al",                     CON_ADDLOGVAR },
     { "addlog",                 CON_ADDLOG },
 
     { "onevent",                CON_ONEVENT },
@@ -607,8 +617,11 @@ const tokenmap_t vm_keywords[] =
     { "movesprite",             CON_MOVESPRITE },
     { "checkavailweapon",       CON_CHECKAVAILWEAPON },
     { "clamp",                  CON_CLAMP },
+    { "getgamefuncbind",        CON_GETGAMEFUNCBIND },
     { "soundoncevar",           CON_SOUNDONCEVAR },
+    { "updatesectorneighbor",   CON_UPDATESECTORNEIGHBOR },
     { "updatesectorz",          CON_UPDATESECTORZ },
+    { "updatesectorneighborz",  CON_UPDATESECTORNEIGHBORZ },
     { "stopallsounds",          CON_STOPALLSOUNDS },
     { "stopallmusic",           CON_STOPALLMUSIC },
     { "ssp",                    CON_SSP },
@@ -619,15 +632,23 @@ const tokenmap_t vm_keywords[] =
     { "getthisprojectile",      CON_GETTHISPROJECTILE },
     { "setthisprojectile",      CON_SETTHISPROJECTILE },
     { "definecheat",            CON_DEFINECHEAT },
+    { "definecheatdescription", CON_DEFINECHEATDESCRIPTION },
+    { "undefinecheat",          CON_UNDEFINECHEAT },
     { "cheatkeys",              CON_CHEATKEYS },
+    { "dc",                     CON_DEFINECHEAT },
+    { "dcd",                    CON_DEFINECHEATDESCRIPTION },
+    { "udc",                    CON_UNDEFINECHEAT },
+    { "ck",                     CON_CHEATKEYS },
     { "userquote",              CON_USERQUOTE },
     { "precache",               CON_PRECACHE },
     { "definegamefuncname",     CON_DEFINEGAMEFUNCNAME },
+    { "undefinegamefunc",       CON_UNDEFINEGAMEFUNC },
     { "redefinequote",          CON_REDEFINEQUOTE },
     { "qputs",                  CON_REDEFINEQUOTE },
     { "qsprintf",               CON_QSPRINTF },
     { "getpname",               CON_GETPNAME },
     { "qstrcat",                CON_QSTRCAT },
+    { "qstrncat",               CON_QSTRNCAT },
     { "qstrcpy",                CON_QSTRCPY },
     { "setsprite",              CON_SETSPRITE },
     { "rotatepoint",            CON_ROTATEPOINT },
@@ -637,6 +658,7 @@ const tokenmap_t vm_keywords[] =
     { "getceilzofslope",        CON_GETCEILZOFSLOPE },
     { "getflorzofslope",        CON_GETFLORZOFSLOPE },
     { "neartag",                CON_NEARTAG },
+    { "nextsectorneighborz",    CON_NEXTSECTORNEIGHBORZ },
     { "definegametype",         CON_DEFINEGAMETYPE },
     { "changespritesect",       CON_CHANGESPRITESECT },
     { "spriteflags",            CON_SPRITEFLAGS },
@@ -673,6 +695,9 @@ const tokenmap_t vm_keywords[] =
     { "getincangle",            CON_GETINCANGLE },
     { "quake",                  CON_QUAKE },
     { "showview",               CON_SHOWVIEW },
+    { "showviewunbiased",       CON_SHOWVIEWUNBIASED },
+    { "showviewq16",            CON_SHOWVIEWQ16 },
+    { "showviewq16unbiased",    CON_SHOWVIEWQ16UNBIASED },
     { "headspritestat",         CON_HEADSPRITESTAT },
     { "prevspritestat",         CON_PREVSPRITESTAT },
     { "nextspritestat",         CON_NEXTSPRITESTAT },
@@ -692,7 +717,10 @@ const tokenmap_t vm_keywords[] =
     { "array",                  CON_GAMEARRAY },
     { "gamearray",              CON_GAMEARRAY },
     { "setarray",               CON_SETARRAY },
+    { "setarraysequence",       CON_SETARRAYSEQUENCE },
+    { "setarrayseq",            CON_SETARRAYSEQUENCE },
     { "resizearray",            CON_RESIZEARRAY },
+    { "swaparrays",             CON_SWAPARRAYS },
     { "writearraytofile",       CON_WRITEARRAYTOFILE },
     { "readarrayfromfile",      CON_READARRAYFROMFILE },
 
@@ -707,8 +735,10 @@ const tokenmap_t vm_keywords[] =
     { "gettimedate",            CON_GETTIMEDATE },
     { "activatecheat",          CON_ACTIVATECHEAT },
     { "setgamepalette",         CON_SETGAMEPALETTE },
+    { "startcutscene",          CON_STARTCUTSCENE },
     { "setdefname",             CON_SETDEFNAME },
     { "setcfgname",             CON_SETCFGNAME },
+    { "setngcflags",            CON_SETNGCFLAGS },
     { "getarraysize",           CON_GETARRAYSIZE },
     { "savenn",                 CON_SAVENN },
     { "qstrdim",                CON_QSTRDIM },
@@ -720,9 +750,12 @@ const tokenmap_t vm_keywords[] =
     { "rotatespritea",          CON_ROTATESPRITEA },
     { "damageeventtile",        CON_DAMAGEEVENTTILE },
     { "damageeventtilerange",   CON_DAMAGEEVENTTILERANGE },
+    { "continue",               CON_CONTINUE },
     { "getteamname",            CON_GETTEAMNAME },
     { "abs",                    CON_KLABS },
     { "defstate",               CON_DEFSTATE },
+    { "prependstate",           CON_PREPENDSTATE },
+    { "appendstate",            CON_APPENDSTATE },
     { "interpolate",            CON_INTERPOLATE },
 };
 
@@ -756,7 +789,7 @@ static const vec2_t varvartable[] =
     { CON_SHIFTVARVARL,      CON_SHIFTVARL },
     { CON_SHIFTVARVARR,      CON_SHIFTVARR },
     { CON_SUBVARVAR,         CON_SUBVAR },
-    //{ CON_WHILEVARVARL,      CON_WHILEVARL },
+    { CON_WHILEVARVARL,      CON_WHILEVARL },
     { CON_WHILEVARVARN,      CON_WHILEVARN },
     { CON_XORVARVAR,         CON_XORVAR },
 };
@@ -2083,7 +2116,7 @@ DO_DEFSTATE:
                     labelcode[g_labelCnt] = g_scriptPtr - apScript;
                     labeltype[g_labelCnt] = LABEL_STATE;
 
-                    g_processingState = 1;
+                    g_processingState = g_labelCnt + 1;
                     Bsprintf(g_szCurrentBlockName, "%s", LAST_LABEL);
 
                     if (EDUKE32_PREDICT_FALSE(hash_find(&h_keywords, LAST_LABEL) >= 0))
@@ -2133,6 +2166,70 @@ DO_DEFSTATE:
                 scriptWritePointer((intptr_t)(apScript + labelcode[j]), g_scriptPtr++);
                 continue;
 
+            case CON_PREPENDSTATE:
+            case CON_APPENDSTATE:
+            {
+                if (EDUKE32_PREDICT_FALSE(g_processingState || g_scriptActorOffset))
+                {
+                    C_ReportError(ERROR_FOUNDWITHIN);
+                    g_errorCnt++;
+                    continue;
+                }
+
+                C_GetNextLabelName();
+                g_scriptPtr--;
+
+                int const currentOffset = g_scriptPtr - apScript;
+                int const stateLabelNum = hash_find(&h_labels, LAST_LABEL);
+
+                if (EDUKE32_PREDICT_FALSE(stateLabelNum < 0))
+                {
+                    C_ReportError(-1);
+                    LOG_F(ERROR, "%s:%d: error: state '%s' not found.", g_scriptFileName, g_lineNumber, LAST_LABEL);
+                    g_errorCnt++;
+                    g_scriptPtr++;
+                    continue;
+                }
+
+                if (EDUKE32_PREDICT_FALSE((labeltype[stateLabelNum] & LABEL_STATE) != LABEL_STATE))
+                {
+                    char* gl = (char*)C_GetLabelType(labeltype[stateLabelNum]);
+                    C_ReportError(-1);
+                    LOG_F(ERROR, "%s:%d: expected state, found %s.", g_scriptFileName, g_lineNumber, gl);
+                    g_errorCnt++;
+                    Xfree(gl);
+                    g_scriptPtr++;
+                    continue;
+                }
+
+                if (EDUKE32_PREDICT_FALSE(apScriptStateEnd[stateLabelNum] == 0))
+                {
+                    C_ReportError(-1);
+                    LOG_F(ERROR, "%s:%d: state '%s' has no recorded end.", g_scriptFileName, g_lineNumber, LAST_LABEL);
+                    g_errorCnt++;
+                    g_scriptPtr++;
+                    continue;
+                }
+
+                if (tw == CON_PREPENDSTATE)
+                {
+                    g_scriptStateChainOffset = labelcode[stateLabelNum];
+                    labelcode[stateLabelNum] = currentOffset;
+                }
+                else
+                {
+                    auto previousStateEnd = apScript + apScriptStateEnd[stateLabelNum];
+                    scriptWriteAtOffset(CON_JUMP | LINE_NUMBER, previousStateEnd++);
+                    scriptWriteAtOffset(GV_FLAG_CONSTANT, previousStateEnd++);
+                    C_FillEventBreakStackWithJump((intptr_t*)*previousStateEnd, currentOffset);
+                    scriptWriteAtOffset(currentOffset, previousStateEnd++);
+                }
+
+                g_processingState = stateLabelNum + 1;
+                Bsprintf(g_szCurrentBlockName, "%s", LAST_LABEL);
+                continue;
+            }
+
             case CON_ENDS:
                 if (EDUKE32_PREDICT_FALSE(g_processingState == 0))
                 {
@@ -2155,7 +2252,26 @@ DO_DEFSTATE:
                     g_checkingSwitch = 0; // can't be checking anymore...
                 }
 
-                g_processingState = 0;
+                if (g_scriptStateChainOffset)
+                {
+                    g_scriptPtr--;
+                    scriptWriteValue(CON_JUMP | LINE_NUMBER);
+                    scriptWriteValue(GV_FLAG_CONSTANT);
+                    scriptWriteValue(g_scriptStateChainOffset);
+                    scriptWriteValue(CON_ENDS | LINE_NUMBER);
+
+                    C_FillEventBreakStackWithJump((intptr_t*)g_scriptStateBreakOffset, g_scriptStateChainOffset);
+                    g_scriptStateChainOffset = 0;
+                }
+                else
+                {
+                    apScriptStateEnd[g_processingState - 1] = &g_scriptPtr[-1] - apScript;
+                    scriptWriteValue(CON_ENDS | LINE_NUMBER);
+                    scriptWriteValue(g_scriptStateBreakOffset);
+                    scriptWriteValue(CON_ENDS | LINE_NUMBER);
+                }
+
+                g_processingState = g_scriptStateBreakOffset = 0;
                 Bsprintf(g_szCurrentBlockName, "(none)");
                 continue;
 
@@ -2894,6 +3010,7 @@ DO_DEFSTATE:
                 }
                 continue;
 
+            case CON_HITRADIUS:
             case CON_HITRADIUSVAR:
                 if (!C_CheckEventSync(g_currentEvent))
                 {
@@ -2902,13 +3019,7 @@ DO_DEFSTATE:
                 }
                 C_GetManyVars(5);
                 continue;
-            case CON_HITRADIUS:
-                C_GetNextValue(LABEL_DEFINE);
-                C_GetNextValue(LABEL_DEFINE);
-                C_GetNextValue(LABEL_DEFINE);
-                fallthrough__;
             case CON_ADDAMMO:
-            case CON_ADDWEAPON:
             case CON_SIZETO:
             case CON_SIZEAT:
             case CON_DEBRIS:
@@ -3015,13 +3126,13 @@ DO_DEFSTATE:
                 // -1 for none found
 
                 C_GetNextValue(LABEL_DEFINE); // get <type>
-                C_GetNextValue(LABEL_DEFINE); // get maxdist
+                C_GetNextVar(); // get maxdist
 
                 switch (tw)
                 {
                     case CON_FINDNEARACTORZ:
                     case CON_FINDNEARSPRITEZ:
-                        C_GetNextValue(LABEL_DEFINE);
+                        C_GetNextVar();
                     default:
                         break;
                 }
@@ -3433,6 +3544,7 @@ DO_DEFSTATE:
                     g_warningCnt++;
                 }
                 fallthrough__;
+            case CON_RESETPLAYERFLAGS:
             case CON_JUMP:
             case CON_CMENU:
             case CON_SOUND:
@@ -3453,6 +3565,7 @@ DO_DEFSTATE:
             case CON_CLEARMAPSTATE:
             case CON_ACTIVATECHEAT:
             case CON_SETGAMEPALETTE:
+            case CON_STARTCUTSCENE:
             case CON_SECTCLEARINTERPOLATION:
             case CON_SECTSETINTERPOLATION:
                 C_GetNextVar();
@@ -3632,6 +3745,67 @@ setvar:
                 C_GetNextVar();
                 continue;
 
+            case CON_SETARRAYSEQUENCE:
+            {
+                i = C_GetNextGameArrayName();
+                if (EDUKE32_PREDICT_FALSE(i < 0))
+                    return 1;
+
+                C_SkipComments();
+
+                auto pSize = g_scriptPtr++;
+
+                for (j = 0; j < MAX_ARRAYRANGE_VALUES; ++j)
+                {
+                    if (C_GetKeyword() != -1)
+                        break;
+
+                    C_GetNextVar();
+                }
+
+                scriptWriteAtOffset(j, pSize);
+                continue;
+            }
+
+            case CON_SWAPARRAYS:
+            {
+                i = C_GetNextGameArrayName();
+                if (EDUKE32_PREDICT_FALSE(i < 0))
+                    return 1;
+
+                if (aGameArrays[i].flags & (GAMEARRAY_READONLY | GAMEARRAY_SYSTEM | GAMEARRAY_VARSIZE))
+                {
+                    g_errorCnt++;
+                    C_ReportError(-1);
+                    LOG_F(ERROR, "%s:%d: can't swap system array '%s'.", g_scriptFileName, g_lineNumber, LAST_LABEL);
+                    return 1;
+                }
+
+                C_SkipComments();
+
+                tw = C_GetNextGameArrayName();
+                if (EDUKE32_PREDICT_FALSE(tw < 0))
+                    return 1;
+
+                if (aGameArrays[tw].flags & (GAMEARRAY_READONLY | GAMEARRAY_SYSTEM | GAMEARRAY_VARSIZE))
+                {
+                    g_errorCnt++;
+                    C_ReportError(-1);
+                    LOG_F(ERROR, "%s:%d: can't swap system array '%s'.", g_scriptFileName, g_lineNumber, LAST_LABEL);
+                    return 1;
+                }
+
+                if ((aGameArrays[i].flags & GAMEARRAY_STORAGE_MASK) != (aGameArrays[tw].flags & GAMEARRAY_STORAGE_MASK))
+                {
+                    g_errorCnt++;
+                    C_ReportError(-1);
+                    LOG_F(ERROR, "%s:%d: can't swap arrays of different storage classes.", g_scriptFileName, g_lineNumber);
+                    return 1;
+                }
+
+                continue;
+            }
+
             case CON_WRITEARRAYTOFILE:
             case CON_READARRAYFROMFILE:
                 i = C_GetNextGameArrayName();
@@ -3697,6 +3871,7 @@ setvarvar:
                 continue;
 
             case CON_SMAXAMMO:
+            case CON_ADDWEAPON:
             case CON_ADDWEAPONVAR:
             case CON_ACTIVATEBYSECTOR:
             case CON_OPERATESECTORS:
@@ -3774,6 +3949,10 @@ setvarvar:
             case CON_LDISTVAR:
                 C_GetManyVars(4);
                 C_GetNextVarType(GAMEVAR_READONLY);
+                continue;
+
+            case CON_SCREENPAL:
+                C_GetManyVars(4);
                 continue;
 
             case CON_DISTVAR:
@@ -3977,6 +4156,7 @@ setvarvar:
             case CON_IFVARVAROR:
             case CON_IFVARVARXOR:
             case CON_IFVARVAREITHER:
+            case CON_WHILEVARVARL:
             case CON_WHILEVARVARN:
             {
                 auto const ins = &g_scriptPtr[-1];
@@ -4027,7 +4207,7 @@ setvarvar:
                 auto const tempscrptr = apScript + offset;
                 scriptWritePointer((intptr_t)g_scriptPtr, tempscrptr);
 
-                if (tw != CON_WHILEVARVARN /*&& tw != CON_WHILEVARVARL*/)
+                if (tw != CON_WHILEVARVARN && tw != CON_WHILEVARVARL)
                 {
                     j = C_GetKeyword();
 
@@ -4047,6 +4227,8 @@ setvarvar:
             case CON_IFVAROR:
             case CON_IFVARXOR:
             case CON_IFVAREITHER:
+            case CON_WHILEVARE:
+            case CON_WHILEVARL:
             case CON_WHILEVARN:
             {
 ifvar:
@@ -4076,7 +4258,7 @@ ifvar:
                 auto const tempscrptr = apScript + offset;
                 scriptWritePointer((intptr_t)g_scriptPtr, tempscrptr);
 
-                if (tw != CON_WHILEVARN /*&& tw != CON_WHILEVARL*/)
+                if (tw != CON_WHILEVARE && tw != CON_WHILEVARN && tw != CON_WHILEVARL)
                 {
                     j = C_GetKeyword();
 
@@ -4156,6 +4338,9 @@ ifvar:
                 continue;
 
             case CON_SHOWVIEW:
+            case CON_SHOWVIEWUNBIASED:
+            case CON_SHOWVIEWQ16:
+            case CON_SHOWVIEWQ16UNBIASED:
                 if (g_scriptEventOffset == 0 && g_processingState == 0)
                 {
                     C_ReportError(ERROR_EVENTONLY);
@@ -4199,8 +4384,26 @@ ifvar:
                 C_GetManyVarsType(GAMEVAR_READONLY, 8);
                 continue;
 
+            case CON_SETNGCFLAGS:
+            {
+                C_GetNextVar();
+                intptr_t const countOffset = g_scriptPtr - apScript;
+                scriptWriteValue(0);
+
+                int argCount = 0;
+                while (argCount < 4 && C_GetKeyword() == -1)
+                {
+                    C_GetNextVar();
+                    argCount++;
+                }
+
+                scriptWriteAtOffset(argCount, apScript + countOffset);
+                continue;
+            }
+
             case CON_MOVESPRITE:
             case CON_SETSPRITE:
+            case CON_NEXTSECTORNEIGHBORZ:
                 if (!C_CheckEventSync(g_currentEvent))
                 {
                     C_ReportError(WARNING_EVENTSYNC);
@@ -4246,9 +4449,11 @@ ifvar:
                 continue;
 
             case CON_UPDATESECTOR:
+            case CON_UPDATESECTORNEIGHBOR:
             case CON_UPDATESECTORZ:
+            case CON_UPDATESECTORNEIGHBORZ:
                 C_GetManyVars(2);
-                if (tw == CON_UPDATESECTORZ)
+                if (tw == CON_UPDATESECTORZ || tw == CON_UPDATESECTORNEIGHBORZ)
                     C_GetNextVar();
                 C_GetNextVarType(GAMEVAR_READONLY);
                 continue;
@@ -4523,6 +4728,7 @@ repeatcase:
             case CON_QSTRCPY:
             case CON_QSTRLEN:
             case CON_QGETSYSSTR:
+            case CON_GETGAMEFUNCBIND:
             case CON_HEADSPRITESTAT:
             case CON_PREVSPRITESTAT:
             case CON_NEXTSPRITESTAT:
@@ -4533,6 +4739,9 @@ repeatcase:
             case CON_STOPACTORSOUND:
             case CON_CAPIS:
                 C_GetManyVars(2);
+                continue;
+            case CON_QSTRNCAT:
+                C_GetManyVars(3);
                 continue;
             case CON_QSTRDIM:
                 C_GetNextVarType(GAMEVAR_READONLY);
@@ -4849,6 +5058,26 @@ repeatcase:
                 }
                 gamefunctions[j][i] = '\0';
                 hash_add(&h_gamefuncs, gamefunctions[j], j, 0);
+
+                continue;
+
+            case CON_UNDEFINEGAMEFUNC:
+                g_scriptPtr--;
+                C_GetNextValue(LABEL_DEFINE);
+                g_scriptPtr--;
+                j = *g_scriptPtr;
+
+                if (EDUKE32_PREDICT_FALSE((unsigned)j > NUMGAMEFUNCTIONS - 1))
+                {
+                    LOG_F(ERROR, "%s:%d: function number exceeds number of game functions.",
+                        g_scriptFileName, g_lineNumber);
+                    g_errorCnt++;
+                    scriptSkipLine();
+                    continue;
+                }
+
+                hash_delete(&h_gamefuncs, gamefunctions[j]);
+                gamefunctions[j][0] = '\0';
 
                 continue;
 
@@ -5211,12 +5440,29 @@ repeatcase:
                 g_scriptPtr -= 2;
                 continue;
 
+            case CON_UNDEFINECHEAT:
+                g_scriptPtr--;
+                C_GetNextValue(LABEL_DEFINE);
+                k = *(g_scriptPtr - 1);
+
+                if ((unsigned)k >= NUMCHEATS)
+                {
+                    LOG_F(ERROR, "%s:%d: cheat undefinition attempts to undefine nonexistant cheat.", g_scriptFileName, g_lineNumber);
+                    g_errorCnt++;
+                    scriptSkipLine();
+                    continue;
+                }
+
+                g_scriptPtr--;
+                CheatStrings[k][0] = '\0';
+                continue;
+
             case CON_DEFINECHEAT:
                 g_scriptPtr--;
                 C_GetNextValue(LABEL_DEFINE);
                 k = *(g_scriptPtr - 1);
 
-                if (k > 25)
+                if ((unsigned)k >= NUMCHEATS)
                 {
                     LOG_F(ERROR, "%s:%d: cheat redefinition attempts to redefine nonexistant cheat.", g_scriptFileName, g_lineNumber);
                     g_errorCnt++;
@@ -5242,6 +5488,21 @@ repeatcase:
                     }
                 }
                 CheatStrings[k][i] = '\0';
+                continue;
+
+            case CON_DEFINECHEATDESCRIPTION:
+                g_scriptPtr--;
+                C_GetNextValue(LABEL_DEFINE);
+                k = *(g_scriptPtr - 1);
+
+                if ((unsigned)k >= NUMCHEATS)
+                {
+                    LOG_F(ERROR, "%s:%d: cheat description attempts to redefine nonexistant cheat.", g_scriptFileName, g_lineNumber);
+                    g_errorCnt++;
+                }
+
+                g_scriptPtr--;
+                scriptSkipLine();
                 continue;
 
             case CON_DEFINESOUND:
@@ -5401,6 +5662,10 @@ repeatcase:
                 }
                 continue;
 
+            case CON_CONTINUE:
+                g_scriptPtr--;
+                scriptWriteValue(CON_BREAK | LINE_NUMBER);
+                fallthrough__;
             case CON_TERMINATE:
                 continue;
 
@@ -5434,6 +5699,14 @@ repeatcase:
                     scriptWriteValue(GV_FLAG_CONSTANT);
                     scriptWriteValue(g_scriptEventBreakOffset);
                     g_scriptEventBreakOffset = &g_scriptPtr[-1] - apScript;
+                }
+                else if (g_processingState)
+                {
+                    g_scriptPtr--;
+                    scriptWriteValue(CON_JUMP | LINE_NUMBER);
+                    scriptWriteValue(GV_FLAG_CONSTANT);
+                    scriptWriteValue(g_scriptStateBreakOffset);
+                    g_scriptStateBreakOffset = &g_scriptPtr[-1] - apScript;
                 }
                 continue;
 
@@ -5734,6 +6007,7 @@ static void C_AddDefaultDefinitions(void)
     C_AddEvent(EVENT_ALTFIRE);
     C_AddEvent(EVENT_DOQUAKE);
     C_AddEvent(EVENT_CHECKTOUCHDAMAGE);
+    C_AddEvent(EVENT_CHECKFLOORDAMAGE);
     C_AddEvent(EVENT_BOTGETSPRITESCORE);
     C_AddEvent(EVENT_FRAGGED);
     C_AddEvent(EVENT_ACTIVATESWITCH);
@@ -5748,6 +6022,8 @@ static void C_AddDefaultDefinitions(void)
     C_AddEvent(EVENT_MOVEEFFECTORS);
     C_AddEvent(EVENT_DISPLAYOVERHEADMAPTEXT);
     C_AddEvent(EVENT_PRELOADGAME);
+    C_AddEvent(EVENT_LOADGAME);
+    C_AddEvent(EVENT_SAVEGAME);
     C_AddEvent(EVENT_POSTSAVEGAME);
     C_AddEvent(EVENT_PRECUTSCENE);
     C_AddEvent(EVENT_SKIPCUTSCENE);
@@ -5782,12 +6058,27 @@ static void C_AddDefaultDefinitions(void)
     C_AddEvent(EVENT_GETBONUSTILE);
     C_AddEvent(EVENT_PREACTORDAMAGE);
     C_AddEvent(EVENT_OPERATEACTIVATORS);
+    C_AddEvent(EVENT_ACTIVATECHEAT);
+    C_AddEvent(EVENT_CUTSCENE);
+    C_AddEvent(EVENT_CHANGEMENU);
+    C_AddEvent(EVENT_DISPLAYCURSOR);
 
     C_AddDefinition("STR_MAPNAME",          STR_MAPNAME,        LABEL_DEFINE);
     C_AddDefinition("STR_MAPFILENAME",      STR_MAPFILENAME,    LABEL_DEFINE);
     C_AddDefinition("STR_PLAYERNAME",       STR_PLAYERNAME,     LABEL_DEFINE);
     C_AddDefinition("STR_VERSION",          STR_VERSION,        LABEL_DEFINE);
     C_AddDefinition("STR_GAMETYPE",         STR_GAMETYPE,       LABEL_DEFINE);
+    C_AddDefinition("STR_VOLUMENAME",       STR_VOLUMENAME,     LABEL_DEFINE);
+    C_AddDefinition("STR_YOURTIME",         STR_YOURTIME,       LABEL_DEFINE);
+    C_AddDefinition("STR_PARTIME",          STR_PARTIME,        LABEL_DEFINE);
+    C_AddDefinition("STR_DESIGNERTIME",     STR_DESIGNERTIME,   LABEL_DEFINE);
+    C_AddDefinition("STR_BESTTIME",         STR_BESTTIME,       LABEL_DEFINE);
+    C_AddDefinition("STR_USERMAPFILENAME",  STR_USERMAPFILENAME,LABEL_DEFINE);
+    C_AddDefinition("STR_REVISION",         STR_REVISION,       LABEL_DEFINE);
+
+    C_AddDefinition("MEF_Enabled",          0,                  LABEL_DEFINE);
+    C_AddDefinition("MEF_Disabled",         1 << 0,             LABEL_DEFINE);
+    C_AddDefinition("MEF_Hidden",           1 << 2,             LABEL_DEFINE);
 
     C_AddDefinition("MAX_WEAPONS",          MAX_WEAPONS,        LABEL_DEFINE);
     C_AddDefinition("MAXSPRITES",           MAXSPRITES,         LABEL_DEFINE);
@@ -5862,11 +6153,13 @@ static void C_AddDefaultDefinitions(void)
     C_AddDefinition("PROJ_TRAIL",       PROJ_TRAIL,         LABEL_DEFINE);
     C_AddDefinition("PROJ_TXREPEAT",    PROJ_TXREPEAT,      LABEL_DEFINE);
     C_AddDefinition("PROJ_TYREPEAT",    PROJ_TYREPEAT,      LABEL_DEFINE);
+    C_AddDefinition("PROJ_USERDATA",    PROJ_USERDATA,      LABEL_DEFINE);
     C_AddDefinition("PROJ_VEL_MULT",    PROJ_MOVECNT,       LABEL_DEFINE);
     C_AddDefinition("PROJ_VEL",         PROJ_VEL,           LABEL_DEFINE);
     C_AddDefinition("PROJ_WORKSLIKE",   PROJ_WORKSLIKE,     LABEL_DEFINE);
     C_AddDefinition("PROJ_XREPEAT",     PROJ_XREPEAT,       LABEL_DEFINE);
     C_AddDefinition("PROJ_YREPEAT",     PROJ_YREPEAT,       LABEL_DEFINE);
+    C_AddDefinition("PF_HITRADIUS_ADDITIVE", PROJECTILE_HITRADIUS_ADDITIVE, LABEL_DEFINE);
 
     C_AddDefinition("SFLAG_BADGUY",             SFLAG_BADGUY,           LABEL_DEFINE);
     C_AddDefinition("SFLAG_DAMAGEEVENT",        SFLAG_DAMAGEEVENT,      LABEL_DEFINE);
@@ -6092,6 +6385,9 @@ void C_Compile(const char* fileName)
 {
     Bmemset(apScriptEvents, 0, sizeof(apScriptEvents));
     Bmemset(apScriptGameEventEnd, 0, sizeof(apScriptGameEventEnd));
+    Bmemset(apScriptStateEnd, 0, sizeof(apScriptStateEnd));
+    g_scriptStateBreakOffset = 0;
+    g_scriptStateChainOffset = 0;
 
     for (auto& i : g_tile)
         Bmemset(&i, 0, sizeof(tiledata_t));
@@ -6196,6 +6492,22 @@ void C_Compile(const char* fileName)
         {
             breakPtr = apScript + (intptr_t)breakPtr;
             scriptWriteAtOffset(CON_ENDEVENT | LINE_NUMBER, breakPtr - 2);
+            breakPtr = (intptr_t*)*breakPtr;
+        }
+    }
+
+    for (intptr_t i : apScriptStateEnd)
+    {
+        if (!i)
+            continue;
+
+        auto const stateEnd = apScript + i;
+        auto breakPtr = (intptr_t*)*(stateEnd + 2);
+
+        while (breakPtr)
+        {
+            breakPtr = apScript + (intptr_t)breakPtr;
+            scriptWriteAtOffset(CON_ENDS | LINE_NUMBER, breakPtr - 2);
             breakPtr = (intptr_t*)*breakPtr;
         }
     }

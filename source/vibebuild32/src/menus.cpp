@@ -95,7 +95,25 @@ static void creditscminitext(int32_t x, int32_t y, const char *t)
 void ChangeToMenu(int cm)
 {
     int const previousMenu = g_currentMenu;
+
+    cm = X_OnEventWithReturn(EVENT_CHANGEMENU, g_player[screenpeek].ps->i, screenpeek, cm);
+    if (cm == -1)
+        cm = previousMenu;
+    else if (cm == -2)
+    {
+        ud.gm &= ~MODE_MENU;
+        cm = 0;
+    }
+
     cm = VBJS_MenuRoute(g_currentMenu, probey, cm);
+    if (cm == -1)
+        cm = previousMenu;
+    else if (cm == -2)
+    {
+        ud.gm &= ~MODE_MENU;
+        cm = 0;
+    }
+
     g_currentMenu = cm;
     if (previousMenu != cm)
         VBJS_FireMenu("menuChanged", cm, previousMenu);

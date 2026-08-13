@@ -32,8 +32,10 @@ typedef struct {
 
     int32_t runkey_mode, statusbarscale, mouseaiming, weaponswitch, drawweapon;   // JBF 20031125
     int32_t democams, color, m_color, msgdisptime, statusbarmode;
+    int32_t statusbarflags;
     int32_t autovote, automsg, idplayers, showweapons;
     int32_t team, skin, viewbob, weaponsway, althud, weaponscale, textscale;
+    int32_t m_newgamecustom, m_newgamecustomsub, m_newgamecustoml3;
 
     int32_t entered_name, screen_tilting, shadows, fta_on, executions, auto_run;
     int32_t coords, showfps, levelstats, m_coop, coop, screen_size, lockout, crosshair;
@@ -50,6 +52,27 @@ typedef struct {
     int32_t playerbest;
 
     int32_t configversion;
+    int32_t userbytever;
+
+    int32_t autosave;
+    int32_t autosavedeletion, maxautosaves;
+    int32_t screenfade;
+    int32_t menu_shadedeselected, menu_shadedisabled;
+    int32_t menutext_zoom, menutext_xspace, menutext_tracking;
+    int32_t menutext_pal, menutext_palselected, menutext_paldeselected, menutext_paldisabled;
+    int32_t menutext_palselected_right, menutext_paldeselected_right, menutext_paldisabled_right;
+    int32_t gametext_zoom, gametext_xspace, gametext_tracking;
+    int32_t gametext_pal, gametext_palselected, gametext_paldeselected, gametext_paldisabled;
+    int32_t gametext_palselected_right, gametext_paldeselected_right, gametext_paldisabled_right;
+    int32_t minitext_zoom, minitext_xspace, minitext_tracking;
+    int32_t minitext_pal, minitext_palselected, minitext_paldeselected, minitext_paldisabled;
+    int32_t minitext_palselected_right, minitext_paldeselected_right, minitext_paldisabled_right;
+    int32_t menutitle_pal;
+    int32_t menu_slidebarz, menu_slidecursorz, menu_slidebarmargin;
+    int32_t slidebar_palselected, slidebar_paldisabled;
+    int32_t menu_scrollbartilenum, menu_scrollbarz, menu_scrollcursorz;
+    int32_t shadow_pal;
+    int32_t gamepadactive;
 
     int32_t fov;
 
@@ -143,6 +166,8 @@ typedef struct {
     } config;
 } user_defs;
 extern user_defs ud;
+
+#define MAX_ARRAYRANGE_VALUES 32
 
 // Externs
 extern char boardfilename[BMAX_PATH];

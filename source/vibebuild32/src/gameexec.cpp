@@ -1751,7 +1751,7 @@ static int X_DoExecute(void)
     case CON_ADDWEAPON:
         insptr++;
         {
-            int32_t weap=*insptr++, amount=*insptr++;
+            int32_t weap=Gv_GetVarX(*insptr++), amount=Gv_GetVarX(*insptr++);
             VM_AddWeapon(weap, amount, g_player[vm.playerNum].ps);
         }
         break;
@@ -2094,6 +2094,68 @@ static int X_DoExecute(void)
                 Bstrcpy(apStrings[i],tempbuf);
             break;
         }
+    case CON_GETGAMEFUNCBIND:
+        insptr++;
+        {
+            int const quoteIndex = Gv_GetVarX(*insptr++);
+            int const gameFunc = Gv_GetVarX(*insptr++);
+
+            if ((quoteIndex < 0 || quoteIndex >= MAXQUOTES) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "invalid quote ID %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), quoteIndex);
+                break;
+            }
+            if ((apStrings[quoteIndex] == NULL) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "null quote %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), quoteIndex);
+                break;
+            }
+            if ((gameFunc < 0 || gameFunc >= NUMGAMEFUNCTIONS) && g_scriptSanityChecks)
+            {
+                OSD_Printf(CON_ERROR "invalid function %d\n", g_errorLineNum, VM_GetKeywordForID(g_tw), gameFunc);
+                break;
+            }
+
+            tempbuf[0] = '\0';
+
+            for (int keySlot = 0; keySlot < 2 && !tempbuf[0]; ++keySlot)
+            {
+                char const *keyName = KB_ScanCodeToString(ud.config.KeyboardKeys[gameFunc][keySlot]);
+                if (keyName != NULL && keyName[0] != '\0')
+                    Bsnprintf(tempbuf, sizeof(tempbuf), "[%s]", keyName);
+            }
+
+            for (int mouseButton = 0; mouseButton < MAXMOUSEBUTTONS && !tempbuf[0]; ++mouseButton)
+            {
+                for (int clickSlot = 0; clickSlot < 2; ++clickSlot)
+                {
+                    if (ud.config.MouseFunctions[mouseButton][clickSlot] == gameFunc)
+                    {
+                        Bsnprintf(tempbuf, sizeof(tempbuf), "<MouseButton%d%s>", mouseButton, clickSlot ? "Clicked" : "");
+                        break;
+                    }
+                }
+            }
+
+            for (int joyButton = 0; joyButton < MAXJOYBUTTONSANDHATS && !tempbuf[0]; ++joyButton)
+            {
+                for (int clickSlot = 0; clickSlot < 2; ++clickSlot)
+                {
+                    if (ud.config.JoystickFunctions[joyButton][clickSlot] == gameFunc)
+                    {
+                        Bsnprintf(tempbuf, sizeof(tempbuf), "(ControllerButton%d%s)", joyButton, clickSlot ? "Clicked" : "");
+                        break;
+                    }
+                }
+            }
+
+            if (!tempbuf[0])
+                Bstrcpy(tempbuf, "[UNBOUND]");
+
+            Bstrncpy(apStrings[quoteIndex], tempbuf, MAXQUOTELEN - 1);
+            apStrings[quoteIndex][MAXQUOTELEN - 1] = '\0';
+            break;
+        }
     case CON_QSUBSTR:
         insptr++;
         {
@@ -2122,6 +2184,7 @@ static int X_DoExecute(void)
 
     case CON_GETPNAME:
     case CON_QSTRCAT:
+    case CON_QSTRNCAT:
     case CON_QSTRCPY:
     case CON_QGETSYSSTR:
     case CON_CHANGESPRITESECT:
@@ -2186,6 +2249,22 @@ static int X_DoExecute(void)
                 case STR_GAMETYPE:
                     Bstrcpy(apStrings[i],Gametypes[ud.coop].name);
                     break;
+                case STR_VOLUMENAME:
+                    Bsnprintf(apStrings[i], MAXQUOTELEN, "Volume %d", ud.volume_number + 1);
+                    break;
+                case STR_USERMAPFILENAME:
+                    Bstrncpy(apStrings[i], boardfilename, MAXQUOTELEN - 1);
+                    apStrings[i][MAXQUOTELEN - 1] = '\0';
+                    break;
+                case STR_YOURTIME:
+                case STR_PARTIME:
+                case STR_DESIGNERTIME:
+                case STR_BESTTIME:
+                    apStrings[i][0] = '\0';
+                    break;
+                case STR_REVISION:
+                    Bstrcpy(apStrings[i], &s_buildRev[1]);
+                    break;
                 default:
                     OSD_Printf(CON_ERROR "unknown str ID %d %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),i,j);
                 }
@@ -2197,6 +2276,15 @@ static int X_DoExecute(void)
                     break;
                 }
                 Bstrncat(apStrings[i],apStrings[j],(MAXQUOTELEN-1)-Bstrlen(apStrings[i]));
+                break;
+            case CON_QSTRNCAT:
+                if ((apStrings[i] == NULL || apStrings[j] == NULL) && g_scriptSanityChecks)
+                {
+                    OSD_Printf(CON_ERROR "null quote %d\n",g_errorLineNum,VM_GetKeywordForID(g_tw),apStrings[i] ? j : i);
+                    insptr++;
+                    break;
+                }
+                Bstrncat(apStrings[i],apStrings[j],Gv_GetVarX(*insptr++));
                 break;
             case CON_QSTRCPY:
                 if ((apStrings[i] == NULL || apStrings[j] == NULL) && g_scriptSanityChecks)
@@ -2808,11 +2896,14 @@ static int X_DoExecute(void)
     }
 
     case CON_SHOWVIEW:
+    case CON_SHOWVIEWUNBIASED:
+    case CON_SHOWVIEWQ16:
+    case CON_SHOWVIEWQ16UNBIASED:
         insptr++;
         {
             vec3_t vec = { Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++), Gv_GetVarX(*insptr++) };
-            fix16_t a = fix16_from_int(Gv_GetVarX(*insptr++));
-            fix16_t horiz = fix16_from_int(Gv_GetVarX(*insptr++));
+            fix16_t a = Gv_GetVarX(*insptr++);
+            fix16_t horiz = Gv_GetVarX(*insptr++);
 
             int sect=Gv_GetVarX(*insptr++);
             int ix1=Gv_GetVarX(*insptr++);
@@ -2820,7 +2911,14 @@ static int X_DoExecute(void)
             int ix2=Gv_GetVarX(*insptr++);
             int iy2=Gv_GetVarX(*insptr++);
 
-            G_ShowView(vec, a, horiz, sect, ix1, iy1, ix2, iy2, 0);
+            if (tw != CON_SHOWVIEWQ16 && tw != CON_SHOWVIEWQ16UNBIASED)
+            {
+                a = fix16_from_int(a);
+                horiz = fix16_from_int(horiz);
+            }
+
+            G_ShowView(vec, a, horiz, sect, ix1, iy1, ix2, iy2,
+                       tw != CON_SHOWVIEW && tw != CON_SHOWVIEWQ16);
             break;
         }
 
@@ -3202,18 +3300,48 @@ static int X_DoExecute(void)
     }
 
     case CON_UPDATESECTOR:
+    case CON_UPDATESECTORNEIGHBOR:
     case CON_UPDATESECTORZ:
+    case CON_UPDATESECTORNEIGHBORZ:
         insptr++;
         {
             int x=Gv_GetVarX(*insptr++), y=Gv_GetVarX(*insptr++);
-            int z=(tw==CON_UPDATESECTORZ)?Gv_GetVarX(*insptr++):0;
+            int z=(tw==CON_UPDATESECTORZ || tw==CON_UPDATESECTORNEIGHBORZ)?Gv_GetVarX(*insptr++):0;
             int var=*insptr++;
-            short w=sprite[vm.spriteNum].sectnum;
+            int16_t w=Gv_GetVarX(var);
 
-            if (tw==CON_UPDATESECTOR) updatesector(x,y,&w);
-            else updatesectorz(x,y,z,&w);
+            if ((unsigned)w >= MAXSECTORS)
+                w = sprite[vm.spriteNum].sectnum;
+
+            switch (tw)
+            {
+                case CON_UPDATESECTORNEIGHBOR:
+                    updatesectorneighbor(x,y,&w,getsectordist({x, y}, w));
+                    break;
+                case CON_UPDATESECTORNEIGHBORZ:
+                    updatesectorneighborz(x,y,z,&w,getsectordist({x, y}, w));
+                    break;
+                case CON_UPDATESECTORZ:
+                    updatesectorz(x,y,z,&w);
+                    break;
+                default:
+                    updatesector(x,y,&w);
+                    break;
+            }
 
             Gv_SetVarX(var, w);
+            break;
+        }
+
+    case CON_NEXTSECTORNEIGHBORZ:
+        insptr++;
+        {
+            int const sectNum = Gv_GetVarX(*insptr++);
+            int const z = Gv_GetVarX(*insptr++);
+            int const topBottom = Gv_GetVarX(*insptr++);
+            int const direction = Gv_GetVarX(*insptr++);
+
+            Gv_SetVarX(sysVarIDs.RETURN, nextsectorneighborz(sectNum, z, topBottom, direction));
             break;
         }
 
@@ -3341,13 +3469,15 @@ static int X_DoExecute(void)
         break;
 
     case CON_RESETPLAYER:
+    case CON_RESETPLAYERFLAGS:
     {
         insptr++;
+        int const resetFlags = (tw == CON_RESETPLAYERFLAGS) ? Gv_GetVarX(*insptr++) : 0;
 
         //AddLog("resetplayer");
         if (ud.multimode < 2)
         {
-            if (g_lastSaveSlot >= 0 && ud.recstat != 2)
+            if (g_lastSaveSlot >= 0 && ud.recstat != 2 && !(resetFlags & 8))
             {
                 ud.gm = MODE_MENU;
                 KB_ClearKeyDown(sc_Space);
@@ -3458,6 +3588,7 @@ static int X_DoExecute(void)
         insptr++;
         break;
 
+    case CON_HITRADIUS:
     case CON_HITRADIUSVAR:
         insptr++;
         {
@@ -3465,11 +3596,6 @@ static int X_DoExecute(void)
             int v4=Gv_GetVarX(*insptr++),v5=Gv_GetVarX(*insptr++);
             A_RadiusDamage(vm.spriteNum,v1,v2,v3,v4,v5);
         }
-        break;
-
-    case CON_HITRADIUS:
-        A_RadiusDamage(vm.spriteNum,*(insptr+1),*(insptr+2),*(insptr+3),*(insptr+4),*(insptr+5));
-        insptr+=6;
         break;
 
     case CON_IFP:
@@ -3717,6 +3843,17 @@ static int X_DoExecute(void)
             palette_t const pal = { uint8_t(insptr[1]), uint8_t(insptr[2]), uint8_t(insptr[3]), uint8_t(insptr[0]) };
             insptr += 4;
             P_PalFrom(g_player[vm.playerNum].ps, pal.f, pal.r, pal.g, pal.b);
+        }
+        break;
+
+    case CON_SCREENPAL:
+        insptr++;
+        {
+            int32_t const r = Gv_GetVarX(*insptr++);
+            int32_t const g = Gv_GetVarX(*insptr++);
+            int32_t const b = Gv_GetVarX(*insptr++);
+            int32_t const offset = Gv_GetVarX(*insptr++);
+            videoFadePalette(r, g, b, offset);
         }
         break;
 
@@ -4002,7 +4139,7 @@ static int X_DoExecute(void)
             // that is of <type> into <getvar>
             // -1 for none found
             // <type> <maxdist> <varid>
-            int lType=*insptr++, lMaxDist=*insptr++, lVarID=*insptr++;
+            int lType=*insptr++, lMaxDist=Gv_GetVarX(*insptr++), lVarID=*insptr++;
             int lFound=-1, j, k = MAXSTATUS-1;
 
             if (tw == CON_FINDNEARACTOR || tw == CON_FINDNEARACTOR3D)
@@ -4155,7 +4292,7 @@ static int X_DoExecute(void)
             // that is of <type> into <getvar>
             // -1 for none found
             // <type> <maxdist> <varid>
-            int lType=*insptr++, lMaxDist=*insptr++, lMaxZDist=*insptr++, lVarID=*insptr++;
+            int lType=*insptr++, lMaxDist=Gv_GetVarX(*insptr++), lMaxZDist=Gv_GetVarX(*insptr++), lVarID=*insptr++;
             int lTemp, lTemp2, lFound=-1, j, k=MAXSTATUS-1;
             do
             {
@@ -4558,6 +4695,34 @@ static int X_DoExecute(void)
             SetArray(arrayNum, arrayIndex, Gv_GetVarX(*insptr++));
             break;
         }
+
+    case CON_SETARRAYSEQUENCE:
+        insptr++;
+        {
+            int const arrayNum = *insptr++;
+            int const sequenceSize = *insptr++;
+
+            VM_ABORT_IF((unsigned)arrayNum >= (unsigned)g_gameArrayCount, "invalid array %d", arrayNum);
+
+            ResizeArray(arrayNum, sequenceSize);
+
+            for (int arrayIndex = 0; arrayIndex < sequenceSize; ++arrayIndex)
+                SetArray(arrayNum, arrayIndex, Gv_GetVarX(*insptr++));
+
+            break;
+        }
+
+    case CON_SWAPARRAYS:
+        insptr++;
+        {
+            auto &array1 = aGameArrays[*insptr++];
+            auto &array2 = aGameArrays[*insptr++];
+
+            swap(&array1.size, &array2.size);
+            swap(&array1.pValues, &array2.pValues);
+            break;
+        }
+
     case CON_GETARRAYSIZE:
         insptr++;
         {
@@ -4985,6 +5150,21 @@ static int X_DoExecute(void)
         P_SetGamePalette(g_player[vm.playerNum].ps, Gv_GetVarX(*(insptr++)), 0);
         break;
 
+    case CON_STARTCUTSCENE:
+        insptr++;
+        Gv_GetVarX(*insptr++);
+        break;
+
+    case CON_SETNGCFLAGS:
+        insptr++;
+        Gv_GetVarX(*insptr++);
+        {
+            int argCount = *insptr++;
+            while (argCount-- > 0)
+                Gv_GetVarX(*insptr++);
+        }
+        break;
+
     case CON_GETTEXTURECEILING:
         insptr++;
         Gv_SetVarX(sysVarIDs.TEXTURE, sector[vm.pSprite->sectnum].ceilingpicnum);
@@ -5082,6 +5262,30 @@ static int X_DoExecute(void)
         branch(Gv_GetVarX(j) != *insptr);
         break;
 
+    case CON_WHILEVARE:
+    {
+        auto const savedinsptr = &insptr[2];
+        do
+        {
+            insptr = savedinsptr;
+            branch((j = (Gv_GetVarX(insptr[-1]) == *insptr)));
+        } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
+        vm.flags &= ~VM_EXIT;
+        break;
+    }
+
+    case CON_WHILEVARL:
+    {
+        auto const savedinsptr = &insptr[2];
+        do
+        {
+            insptr = savedinsptr;
+            branch((j = (Gv_GetVarX(insptr[-1]) < *insptr)));
+        } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
+        vm.flags &= ~VM_EXIT;
+        break;
+    }
+
     case CON_WHILEVARN:
     {
         auto const savedinsptr = &insptr[2];
@@ -5089,6 +5293,21 @@ static int X_DoExecute(void)
         {
             insptr = savedinsptr;
             branch((j = (Gv_GetVarX(insptr[-1]) != *insptr)));
+        } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
+        vm.flags &= ~VM_EXIT;
+        break;
+    }
+
+    case CON_WHILEVARVARL:
+    {
+        auto const savedinsptr = &insptr[2];
+        do
+        {
+            insptr = savedinsptr;
+            j = Gv_GetVarX(insptr[-1]);
+            j = (j < Gv_GetVarX(*insptr++));
+            insptr--;
+            branch(j);
         } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
         vm.flags &= ~VM_EXIT;
         break;

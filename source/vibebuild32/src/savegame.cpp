@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //-------------------------------------------------------------------------
 
 #include "duke3d.h"
+#include "gameexec.h"
 #include "md4.h"
 
 #define BITPTR_POINTER 1
@@ -745,6 +746,8 @@ int32_t G_SavePlayer(int32_t spot)
 
     ready2send = 0;
 
+    X_OnEvent(EVENT_SAVEGAME, g_player[myconnectindex].ps->i, myconnectindex, -1);
+
     Bsprintf(g_szBuf,"EDuke32");
     i=strlen(g_szBuf);
     dfwrite(&i,sizeof(i),1,fil);
@@ -1012,4 +1015,3 @@ int32_t G_SavePlayer(int32_t spot)
 
     return(0);
 }
-  

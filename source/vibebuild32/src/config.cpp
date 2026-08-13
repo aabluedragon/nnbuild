@@ -250,6 +250,7 @@ void CONFIG_SetDefaults(void)
     ud.showweapons = 1;
     ud.shadows = 1;
     ud.statusbarmode = 0;
+    ud.statusbarflags = 0;
     ud.statusbarscale = 100;
     ud.team = 0;
     ud.skin = 0;
@@ -263,8 +264,59 @@ void CONFIG_SetDefaults(void)
     ud.display_bonus_screen = 1;
     ud.show_level_text = 1;
     ud.configversion = 0;
+    ud.userbytever = 0;
+    ud.autosave = 1;
+    ud.autosavedeletion = 1;
+    ud.maxautosaves = 5;
+    ud.screenfade = 1;
+    ud.menu_shadedeselected = 16;
+    ud.menu_shadedisabled = 16;
+    ud.menutext_zoom = 65536;
+    ud.menutext_xspace = 0;
+    ud.menutext_tracking = 0;
+    ud.menutext_pal = 0;
+    ud.menutext_palselected = 0;
+    ud.menutext_paldeselected = 0;
+    ud.menutext_paldisabled = 0;
+    ud.menutext_palselected_right = 0;
+    ud.menutext_paldeselected_right = 0;
+    ud.menutext_paldisabled_right = 0;
+    ud.gametext_zoom = 65536;
+    ud.gametext_xspace = 0;
+    ud.gametext_tracking = 0;
+    ud.gametext_pal = 0;
+    ud.gametext_palselected = 0;
+    ud.gametext_paldeselected = 0;
+    ud.gametext_paldisabled = 0;
+    ud.gametext_palselected_right = 0;
+    ud.gametext_paldeselected_right = 0;
+    ud.gametext_paldisabled_right = 0;
+    ud.minitext_zoom = 32768;
+    ud.minitext_xspace = 0;
+    ud.minitext_tracking = 0;
+    ud.minitext_pal = 0;
+    ud.minitext_palselected = 0;
+    ud.minitext_paldeselected = 0;
+    ud.minitext_paldisabled = 0;
+    ud.minitext_palselected_right = 0;
+    ud.minitext_paldeselected_right = 0;
+    ud.minitext_paldisabled_right = 0;
+    ud.menutitle_pal = 0;
+    ud.menu_slidebarz = 65536;
+    ud.menu_slidecursorz = 65536;
+    ud.menu_slidebarmargin = 0;
+    ud.slidebar_palselected = 0;
+    ud.slidebar_paldisabled = 0;
+    ud.menu_scrollbartilenum = -1;
+    ud.menu_scrollbarz = 65536;
+    ud.menu_scrollcursorz = 65536;
+    ud.shadow_pal = 4;
+    ud.gamepadactive = 0;
     ud.weaponscale = 100;
     ud.textscale = 200;
+    ud.m_newgamecustom = 0;
+    ud.m_newgamecustomsub = 0;
+    ud.m_newgamecustoml3 = 0;
 
     Bstrcpy(ud.rtsname, G_DefaultRtsFile());
 
@@ -1128,4 +1180,3 @@ int32_t CONFIG_SetMapBestTime(uint8_t const* const mapmd4, int32_t tm)
 /*
  * vim:ts=4:sw=4:
  */
-

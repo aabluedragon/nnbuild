@@ -643,11 +643,14 @@ static void P_ResetStatus(int snum)
     DukePlayer_t *p = g_player[snum].ps;
 
     p->floorzoffset     = PLAYER_ZOFF_NORMAL;
+    p->floorzrebound    = 768;
+    p->floorzcutoff     = 256;
     p->waterzoffset     = PLAYER_ZOFF_WATER;
     p->minwaterzdist    = PLAYER_MINWATERZDIST;
     p->shrunkzoffset    = PLAYER_ZOFF_SHRUNK;
     p->spritezoffset    = PHEIGHT;
     p->crouchzincrement = PLAYER_CROUCH_INC;
+    p->gravity          = g_spriteGravity + 80;
 
     ud.show_help        = 0;
     ud.showallmap       = 0;
@@ -678,6 +681,9 @@ static void P_ResetStatus(int snum)
     p->crack_time       = 0;
     p->hbomb_hold_delay = 0;
     p->transporter_hold = 0;
+    p->clipdist         = 164;
+    p->autostep         = 20 << 8;
+    p->autostep_sbw     = 4 << 8;
     p->wantweaponfire   = -1;
     p->hurt_delay       = 0;
     p->footprintcount   = 0;

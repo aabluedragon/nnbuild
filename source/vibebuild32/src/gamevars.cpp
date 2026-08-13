@@ -1157,6 +1157,7 @@ static void Gv_AddSystemVars(void)
 
     Gv_NewVar("current_menu",(intptr_t)&g_currentMenu, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY);
     Gv_NewVar("numplayers",(intptr_t)&numplayers, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY);
+    Gv_NewVar("automapping",(intptr_t)&automapping, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
     Gv_NewVar("viewingrange",(intptr_t)&viewingrange, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("yxaspect",(intptr_t)&yxaspect, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("gravitationalconstant",(intptr_t)&g_spriteGravity, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
@@ -1342,6 +1343,7 @@ void Gv_RefreshPointers(void)
     aGameVars[Gv_GetVarIndex("numsectors")].lValue = (intptr_t)&numsectors;
     aGameVars[Gv_GetVarIndex("numplayers")].lValue = (intptr_t)&numplayers;
     aGameVars[Gv_GetVarIndex("current_menu")].lValue = (intptr_t)&g_currentMenu;
+    aGameVars[Gv_GetVarIndex("automapping")].lValue = (intptr_t)&automapping;
     aGameVars[Gv_GetVarIndex("viewingrange")].lValue = (intptr_t)&viewingrange;
     aGameVars[Gv_GetVarIndex("yxaspect")].lValue = (intptr_t)&yxaspect;
     aGameVars[Gv_GetVarIndex("gravitationalconstant")].lValue = (intptr_t)&g_spriteGravity;
