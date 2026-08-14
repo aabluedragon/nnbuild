@@ -144,7 +144,7 @@ static inline int32_t Menu_ApplyScriptOriginY(int32_t const y) { return y + Menu
 static inline int32_t Menu_ApplyScriptOriginX16(int32_t const x) { return x + g_menuScriptOrigin.x; }
 static inline int32_t Menu_ApplyScriptOriginY16(int32_t const y) { return y + g_menuScriptOrigin.y; }
 
-static constexpr int32_t FURY_BLUE_ZOOM = 32768;
+static constexpr int32_t FURY_BLUE_ZOOM = 16384;
 static constexpr int32_t FURY_BLUE_SPACE = 5 << 16;
 static constexpr int32_t FURY_BLUE_YLINE = 7 << 16;
 
@@ -163,8 +163,8 @@ static int32_t Menu_GameText(int32_t const x, int32_t const y, char const *text,
     int32_t const zoom = ud.gametext_zoom > 0 ? ud.gametext_zoom : FURY_BLUE_ZOOM;
     int32_t const xspace = ud.gametext_xspace != 0 ? ud.gametext_xspace : FURY_BLUE_SPACE;
     int32_t const xbetween = ud.gametext_tracking;
-    int32_t const textFlags = (x == (320 >> 1)) ? TEXT_XCENTER : 0;
-    int32_t const orientation = bits | RS_AUTO | RS_NOCLIP | RS_TOPLEFT | ROTATESPRITE_FULL16;
+    int32_t const textFlags = TEXT_VARHEIGHT | ((x == (320 >> 1)) ? TEXT_XCENTER : 0);
+    int32_t const orientation = (bits & ~RS_TOPLEFT) | RS_AUTO | RS_NOCLIP | ROTATESPRITE_FULL16;
 
     vec2_t const dim = G_ScreenText(STARTALPHANUM,
                                     Menu_ApplyScriptOriginX16(x << 16),
@@ -461,9 +461,9 @@ int menutext_(int x,int y,int s,int p,const char *t,int bits)
 
 static void Menu_FurySmallText(int const x, int const y, char const* const text, int const shade, int const pal, int const flags = 0)
 {
-    G_ScreenText(MINIFONT, Menu_ApplyScriptOriginX(x), Menu_ApplyScriptOriginY(y), 32768, 0, 0, text, shade, pal,
-                 RS_AUTO | RS_NOCLIP | RS_TOPLEFT, 0, 3, 5, 1, 1,
-                 TEXT_UPPERCASE | flags, 0, 0, xdim, ydim);
+    G_ScreenText(STARTALPHANUM, Menu_ApplyScriptOriginX(x), Menu_ApplyScriptOriginY(y), FURY_BLUE_ZOOM, 0, 0, text, shade, pal,
+                 RS_AUTO | RS_NOCLIP, 0, FURY_BLUE_SPACE >> 16, FURY_BLUE_YLINE >> 16, 0, 0,
+                 TEXT_VARHEIGHT | TEXT_UPPERCASE | flags, 0, 0, xdim, ydim);
 }
 
 static void Menu_FuryBackdrop(void)
@@ -505,7 +505,7 @@ static void Menu_FuryPromptText(int32_t const x, int32_t const y, char const * c
 
     G_ScreenText(STARTALPHANUM, Menu_ApplyScriptOriginX16(x), Menu_ApplyScriptOriginY16(y), zoom,
                  0, 0, text, 0, pal, RS_AUTO | RS_NOCLIP | ROTATESPRITE_FULL16, 0,
-                 xspace, 0, xbetween, 0, flags, 0, 0, xdim - 1, ydim - 1);
+                 xspace, 0, xbetween, 0, TEXT_VARHEIGHT | flags, 0, 0, xdim - 1, ydim - 1);
 }
 
 static int32_t Menu_FuryPromptLineStep(void)
@@ -958,7 +958,7 @@ static void Menu_ApplyFuryTextDefaults(void)
     if (ud.menutext_paldisabled_right == 0)
         ud.menutext_paldisabled_right = 7;
 
-    if (ud.gametext_zoom == 65536 || ud.gametext_zoom == 16384)
+    if (ud.gametext_zoom == 65536 || ud.gametext_zoom == 32768)
         ud.gametext_zoom = FURY_BLUE_ZOOM;
     if (ud.gametext_xspace == 0 || ud.gametext_xspace == (8 << 16))
         ud.gametext_xspace = FURY_BLUE_SPACE;

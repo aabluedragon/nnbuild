@@ -1472,9 +1472,9 @@ int minitext_(int x, int y, const char* t, int s, int p, int sb)
 
     if (FURY && !cmode)
     {
-        vec2_t const dim = G_ScreenText(MINIFONT, x, y, 32768, 0, 0, t, s, p,
-                                        sb | RS_AUTO | RS_NOCLIP | RS_TOPLEFT, 0,
-                                        4, 5, 1, 1, TEXT_UPPERCASE,
+        vec2_t const dim = G_ScreenText(STARTALPHANUM, x, y, 16384, 0, 0, t, s, p,
+                                        (sb & ~RS_TOPLEFT) | RS_AUTO | RS_NOCLIP, 0,
+                                        5, 7, 0, 0, TEXT_VARHEIGHT | TEXT_UPPERCASE,
                                         0, 0, xdim - 1, ydim - 1);
         return x + dim.x;
     }
