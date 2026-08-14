@@ -13,6 +13,7 @@ enum vmflags_t
     VM_NOEXECUTE    = 0x00000004,
     VM_EXIT         = 0x00000008,
     VM_TERMINATE    = 0x00000010,
+    VM_CONTINUE     = 0x00000020,
 };
 
 void VM_ScriptInfo(intptr_t const* const ptr, int const range);

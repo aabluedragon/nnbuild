@@ -1040,11 +1040,12 @@ void S_StopEnvSound(int soundNum, int spriteNum)
     if (!Net_InPredictableState(spriteNum))
         return;
 
-    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum)))
-    {
-        LOG_F(WARNING, "Invalid sound #%d", soundNum);
+    // Match the modern/Fury behavior: stopping an invalid, undefined, or
+    // currently non-playing sound is a harmless no-op. Ion Fury scripts use
+    // this defensively for optional state values, and warning here produces
+    // false-positive log spam such as "Invalid sound #2000".
+    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum) || g_sounds[soundNum] == &nullsound || g_sounds[soundNum]->playing == 0))
         return;
-    }
 
     int j;
 

@@ -438,9 +438,8 @@ static void G_SetupCamTile(int spriteNum, int tileNum, int smoothRatio)
     //if (waloff[wn] == 0) loadtile(wn);
     renderSetTarget(tileNum, tilesiz[tileNum].y, tilesiz[tileNum].x);
 
-#if 0
     int const playerNum = screenpeek;
-    int const noDraw = VM_OnEventWithReturn(EVENT_DISPLAYROOMSCAMERATILE, spriteNum, playerNum, 0);
+    int const noDraw = X_OnEventWithReturn(EVENT_DISPLAYROOMSCAMERATILE, spriteNum, playerNum, 0);
 
     if (noDraw == 1)
         goto finishTileSetup;
@@ -448,7 +447,6 @@ static void G_SetupCamTile(int spriteNum, int tileNum, int smoothRatio)
     else if (EDUKE32_PREDICT_FALSE(noDraw != 0)) // event return values other than 0 and 1 are reserved
         OSD_Printf(OSD_ERROR "ERROR: EVENT_DISPLAYROOMSCAMERATILE return value must be 0 or 1, "
             "other values are reserved.\n");
-#endif
 #endif
 
     yax_preparedrawrooms();
@@ -460,7 +458,7 @@ static void G_SetupCamTile(int spriteNum, int tileNum, int smoothRatio)
     display_mirror = saveMirror;
     renderDrawMasks();
 
-//finishTileSetup:
+finishTileSetup:
     renderRestoreTarget();
     squarerotatetile(tileNum);
     tileInvalidate(tileNum, -1, 255);
@@ -2571,10 +2569,99 @@ void A_DamageObject_Internal(int i,int sn)
     }
 }
 
+void A_DamageObject_Generic(int i, int sn)
+{
+    i &= (MAXSPRITES-1);
+
+    if (A_CheckSpriteFlags(i, SFLAG_DAMAGEEVENT))
+    {
+        if (X_OnEventWithReturn(EVENT_DAMAGESPRITE, sn, -1, i) < 0)
+            return;
+    }
+
+    switch (tileGetMapping(PN(i)))
+    {
+    case GRATE1__:
+        PN(i) = BGRATE1;
+        CS(i) &= (65535-256-1);
+        break;
+
+    case FANSPRITE__:
+        PN(i) = FANSPRITEBROKE;
+        CS(i) &= (65535-257);
+        break;
+
+    case PLAYERONWATER__:
+        i = OW(i);
+        fallthrough__;
+
+    default:
+        if ((sprite[i].cstat & 16) && SHT(i) == 0 && SLT(i) == 0 && sprite[i].statnum == STAT_DEFAULT)
+            break;
+
+        if (sprite[sn].owner != i && sprite[i].statnum != STAT_PROJECTILE)
+        {
+            if (A_CheckEnemySprite(&sprite[i]))
+            {
+                if (!A_CheckSpriteFlags(i, SFLAG_NODAMAGEPUSH) && sprite[i].extra > 0)
+                {
+                    if ((sprite[i].cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_FACING)
+                        SA(i) = (sprite[sn].ang + 1024) & 2047;
+
+                    sprite[i].xvel = -(sprite[sn].extra << 2);
+
+                    int16_t sectNum = SECT(i);
+                    if ((unsigned)sectNum < MAXSECTORS)
+                    {
+                        pushmove(&sprite[i].xyz, &sectNum, 128L, 4L << 8, 4L << 8, CLIPMASK0);
+                        if (sectNum != SECT(i) && (unsigned)sectNum < MAXSECTORS)
+                            changespritesect(i, sectNum);
+                    }
+                }
+
+                if (sprite[i].statnum == STAT_ZOMBIEACTOR)
+                {
+                    changespritestat(i, STAT_ACTOR);
+                    actor[i].timetosleep = SLEEPTIME;
+                }
+            }
+
+            if (sprite[i].statnum != STAT_ZOMBIEACTOR)
+            {
+                actor[i].htpicnum = sprite[sn].picnum;
+                actor[i].htextra += sprite[sn].extra;
+                actor[i].htang = sprite[sn].ang;
+                actor[i].htowner = sprite[sn].owner;
+
+                if (A_CheckSpriteFlags(i, SFLAG_DAMAGEEVENT))
+                    X_OnEventWithReturn(EVENT_POSTDAMAGESPRITE, sn, -1, i);
+            }
+
+            if (sprite[i].statnum == STAT_PLAYER)
+            {
+                int const playerNum = sprite[i].yvel;
+
+                if (g_player[playerNum].ps->newowner >= 0)
+                    G_ClearCameraView(g_player[playerNum].ps);
+
+                if (sprite[actor[i].htowner].picnum != APLAYER)
+                    if (ud.player_skill >= 3)
+                        sprite[sn].extra += (sprite[sn].extra >> 1);
+            }
+        }
+
+        break;
+    }
+}
+
 void A_DamageObject(int i, int sn)
 {
     ud.returnvar[0] = -1;
-    A_DamageObject_Internal(i, sn);
+
+    if (FURY)
+        A_DamageObject_Generic(i, sn);
+    else
+        A_DamageObject_Internal(i, sn);
 }
 
 void allignwarpelevators(void)

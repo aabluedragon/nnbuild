@@ -327,9 +327,16 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&ud.level_number,sizeof(ud.level_number),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.player_skill,sizeof(ud.player_skill),1,fil) != 1) goto corrupt;
 
+    Gv_SetVar(sysVarIDs.RETURN, ud.volume_number, g_player[myconnectindex].ps->i, myconnectindex);
+    ud.returnvar[0] = ud.level_number;
+    ud.volume_number = X_OnEventWithReturn(EVENT_VALIDATESTART, g_player[myconnectindex].ps->i, myconnectindex, ud.volume_number);
+    ud.level_number = ud.returnvar[0];
+
     ud.m_level_number = ud.level_number;
     ud.m_volume_number = ud.volume_number;
     ud.m_player_skill = ud.player_skill;
+
+    X_OnEvent(EVENT_PRELOADGAME, g_player[screenpeek].ps->i, screenpeek, -1);
 
     char boardName[BMAX_PATH];
     if (kdfread(&boardName[0], BMAX_PATH, 1, fil) != 1) goto corrupt;
@@ -678,6 +685,8 @@ int32_t G_LoadPlayer(int32_t spot)
         G_ResetTimers();
         calc_sector_reachability();
     }
+
+    X_OnEvent(EVENT_LOADGAME, g_player[screenpeek].ps->i, screenpeek, -1);
 
     return(0);
 corrupt:

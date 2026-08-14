@@ -717,6 +717,7 @@ const tokenmap_t vm_keywords[] =
 
     { "array",                  CON_GAMEARRAY },
     { "gamearray",              CON_GAMEARRAY },
+    { "copy",                   CON_COPY },
     { "setarray",               CON_SETARRAY },
     { "setarraysequence",       CON_SETARRAYSEQUENCE },
     { "setarrayseq",            CON_SETARRAYSEQUENCE },
@@ -1141,6 +1142,11 @@ static int C_CheckEventSync(int iEventID)
     return 1;
 }
 
+static int C_ShouldWarnEventMutation(void)
+{
+    return !FURY && !C_CheckEventSync(g_currentEvent);
+}
+
 static inline int GetDefID(char const* label) { return hash_find(&h_gamevars, label); }
 static inline int GetADefID(char const* label) { return hash_find(&h_arrays, label); }
 
@@ -1158,6 +1164,59 @@ static inline bool isdigterm(const char c)
 static inline bool C_IsLabelChar(const char c, int32_t const i)
 {
     return (isalnum(c) || c == '_' || c == '*' || c == '?' || (i > 0 && (c == '+' || c == '-')));
+}
+
+static bool C_CurrentTokenStartsVar(void)
+{
+    while (true)
+    {
+        while (*textptr == ' ' || *textptr == '\t')
+            textptr++;
+
+        if (textptr[0] == '/' && textptr[1] == '/')
+        {
+            scriptSkipLine();
+            return false;
+        }
+
+        if (textptr[0] != '/' || textptr[1] != '*')
+            break;
+
+        textptr += 2;
+        while (*textptr && (textptr[0] != '*' || textptr[1] != '/'))
+        {
+            if (*textptr == '\n')
+                g_lineNumber++;
+            textptr++;
+        }
+
+        if (EDUKE32_PREDICT_FALSE(!*textptr))
+        {
+            C_ReportError(-1);
+            LOG_F(ERROR, "%s:%d: found '/*' with no '*/'.", g_scriptFileName, g_lineNumber);
+            g_scriptActorOffset = 0;
+            g_processingState = g_numBraces = 0;
+            g_errorCnt++;
+            return false;
+        }
+
+        textptr += 2;
+    }
+
+    if (*textptr == 0 || *textptr == '\n' || *textptr == '\r' || *textptr == '{' || *textptr == '}' || *textptr == ';')
+        return false;
+
+    int len = 0;
+    while (isaltok(textptr[len]))
+        len++;
+
+    if (len <= 0)
+        return false;
+
+    Bmemcpy(tempbuf, textptr, len);
+    tempbuf[len] = 0;
+
+    return hash_find(&h_keywords, tempbuf) < 0;
 }
 
 static int32_t parse_decimal_number(void)  // (textptr)
@@ -2278,7 +2337,7 @@ DO_DEFSTATE:
 
             case CON_SETTHISPROJECTILE:
             case CON_SETPROJECTILE:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                     C_ReportError(WARNING_EVENTSYNC);
                 fallthrough__;
             case CON_GETTHISPROJECTILE:
@@ -2923,7 +2982,7 @@ DO_DEFSTATE:
             case CON_MIKESND:
             case CON_TOSSWEAPON:
             case CON_INSERTSPRITEQ:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -2945,9 +3004,12 @@ DO_DEFSTATE:
                 continue;
 
             case CON_NULLOP:
-                if (C_GetKeyword() != CON_ELSE)
+            {
+                int const keyword = C_GetKeyword();
+                if (keyword != CON_ELSE && keyword != CON_RIGHTBRACE)
                     LOG_F(WARNING, "%s:%d: found 'nullop' without 'else'", g_scriptFileName, g_lineNumber);
                 continue;
+            }
 
             case CON_QSPRINTF:
                 C_GetManyVars(2);
@@ -2980,7 +3042,7 @@ DO_DEFSTATE:
             case CON_LOTSOFGLASS:
             case CON_SAVENN:
             case CON_SAVE:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3013,7 +3075,7 @@ DO_DEFSTATE:
 
             case CON_HITRADIUS:
             case CON_HITRADIUSVAR:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3026,7 +3088,7 @@ DO_DEFSTATE:
             case CON_DEBRIS:
             case CON_ADDINVENTORY:
             case CON_GUTS:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3084,7 +3146,7 @@ DO_DEFSTATE:
             }
 
             case CON_SETSECTOR:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3183,7 +3245,7 @@ DO_DEFSTATE:
             }
 
             case CON_SETWALL:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3213,7 +3275,7 @@ DO_DEFSTATE:
             }
 
             case CON_SETPLAYER:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3246,7 +3308,7 @@ DO_DEFSTATE:
             }
 
             case CON_SETINPUT:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3266,7 +3328,7 @@ DO_DEFSTATE:
             }
 
             case CON_SETTILEDATA:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3325,7 +3387,7 @@ DO_DEFSTATE:
 
             case CON_SETACTORVAR:
             case CON_SETPLAYERVAR:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3463,7 +3525,7 @@ DO_DEFSTATE:
                     }
 
                     // Check if were setting something that isn't sync safe in a local event
-                    if (!C_CheckEventSync(g_currentEvent))
+                    if (C_ShouldWarnEventMutation())
                     {
                         switch (label.lId)
                         {
@@ -3488,7 +3550,7 @@ DO_DEFSTATE:
             case CON_GETTSPR:
             case CON_SETTSPR:
             {
-                if (g_currentEvent != EVENT_ANIMATESPRITES)
+                if (g_currentEvent != EVENT_ANIMATESPRITES && !(FURY && g_processingState))
                 {
                     C_ReportError(-1);
                     LOG_F(WARNING, "%s:%d: found `%s' outside of EVENT_ANIMATESPRITES", g_scriptFileName, g_lineNumber, tempbuf);
@@ -3507,7 +3569,7 @@ DO_DEFSTATE:
             }
 
             case CON_GETTICKS:
-                if (C_CheckEventSync(g_currentEvent))
+                if (!FURY && C_CheckEventSync(g_currentEvent))
                 {
                     C_ReportError(WARNING_REVEVENTSYNC);
                     g_warningCnt++;
@@ -3539,7 +3601,7 @@ DO_DEFSTATE:
             case CON_INITTIMER:
             case CON_LOCKPLAYER:
             case CON_QUAKE:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3632,7 +3694,7 @@ DO_DEFSTATE:
                 continue;
 
             case CON_RANDVAR:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3701,6 +3763,30 @@ setvar:
                 scriptUpdateOpcodeForVariableType(ins);
                 continue;
             }
+
+            case CON_COPY:
+                i = C_GetNextGameArrayName();
+                if (EDUKE32_PREDICT_FALSE(i < 0))
+                    return 1;
+
+                C_SkipComments();
+                if (*textptr != '[')
+                {
+                    g_errorCnt++;
+                    C_ReportError(ERROR_GAMEARRAYBNO);
+                    return 1;
+                }
+                textptr++;
+                C_GetNextVar();
+                C_SkipComments();// skip comments and whitespace
+                if (*textptr != ']')
+                {
+                    g_errorCnt++;
+                    C_ReportError(ERROR_GAMEARRAYBNC);
+                    return 1;
+                }
+                textptr++;
+                fallthrough__;
 
             case CON_SETARRAY:
                 C_GetNextLabelName();
@@ -3817,7 +3903,7 @@ setvar:
                 continue;
 
             case CON_RANDVARVAR:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -3878,7 +3964,7 @@ setvarvar:
             case CON_OPERATESECTORS:
             case CON_OPERATEACTIVATORS:
             case CON_SSP:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -4291,7 +4377,9 @@ ifvar:
                 intptr_t const offset = g_scriptPtr - apScript;
                 g_scriptPtr++; //Leave a spot for the location to jump to after completion
 
+                ++g_checkingLoop;
                 C_ParseCommand();
+                --g_checkingLoop;
 
                 // write relative offset
                 auto const tscrptr = (intptr_t*)apScript + offset;
@@ -4397,7 +4485,7 @@ ifvar:
                 scriptWriteValue(0);
 
                 int argCount = 0;
-                while (argCount < 4 && C_GetKeyword() == -1)
+                while (argCount < MAXMENUGAMEPLAYLAYERS && C_CurrentTokenStartsVar())
                 {
                     C_GetNextVar();
                     argCount++;
@@ -4410,7 +4498,7 @@ ifvar:
             case CON_MOVESPRITE:
             case CON_SETSPRITE:
             case CON_NEXTSECTORNEIGHBORZ:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -4720,7 +4808,7 @@ repeatcase:
             case CON_EZSHOOT:
             case CON_CHANGESPRITESTAT:
             case CON_CHANGESPRITESECT:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     g_warningCnt++;
                     C_ReportError(WARNING_EVENTSYNC);
@@ -4759,7 +4847,7 @@ repeatcase:
                 continue;
             case CON_SETACTORANGLE:
             case CON_SETPLAYERANGLE:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     g_warningCnt++;
                     C_ReportError(WARNING_EVENTSYNC);
@@ -4784,7 +4872,7 @@ repeatcase:
 
             case CON_IFRND:
             case CON_IFPINVENTORY:
-                if (!C_CheckEventSync(g_currentEvent))
+                if (C_ShouldWarnEventMutation())
                 {
                     C_ReportError(WARNING_EVENTSYNC);
                     g_warningCnt++;
@@ -5659,6 +5747,11 @@ repeatcase:
                 Bsprintf(g_szCurrentBlockName, "(none)");
                 continue;
 
+            case CON_CONTINUE:
+                g_scriptPtr--;
+                scriptWriteValue((g_checkingLoop ? CON_CONTINUE : CON_RETURN) | LINE_NUMBER);
+                continue;
+
             case CON_EXIT:
                 if (EDUKE32_PREDICT_FALSE(!g_checkingLoop))
                 {
@@ -5668,10 +5761,6 @@ repeatcase:
                 }
                 continue;
 
-            case CON_CONTINUE:
-                g_scriptPtr--;
-                scriptWriteValue(CON_BREAK | LINE_NUMBER);
-                fallthrough__;
             case CON_TERMINATE:
                 continue;
 
@@ -6116,7 +6205,7 @@ static void C_AddDefaultDefinitions(void)
     C_AddDefinition("GAMEVAR_NOMULTI_PERPLAYER",    GAMEVAR_NOMULTI | GAMEVAR_PERPLAYER,    LABEL_DEFINE);
     C_AddDefinition("GAMEVAR_NOMULTI_PERACTOR",     GAMEVAR_NOMULTI | GAMEVAR_PERACTOR,     LABEL_DEFINE);
 
-    C_AddDefinition("STAT_DEFAULT",     STAT_ACTOR,         LABEL_DEFINE);
+    C_AddDefinition("STAT_DEFAULT",     STAT_DEFAULT,       LABEL_DEFINE);
     C_AddDefinition("STAT_ACTOR",       STAT_ACTOR,         LABEL_DEFINE);
     C_AddDefinition("STAT_ZOMBIEACTOR", STAT_ZOMBIEACTOR,   LABEL_DEFINE);
     C_AddDefinition("STAT_EFFECTOR",    STAT_EFFECTOR,      LABEL_DEFINE);
@@ -6166,6 +6255,8 @@ static void C_AddDefaultDefinitions(void)
     C_AddDefinition("PROJ_WORKSLIKE",   PROJ_WORKSLIKE,     LABEL_DEFINE);
     C_AddDefinition("PROJ_XREPEAT",     PROJ_XREPEAT,       LABEL_DEFINE);
     C_AddDefinition("PROJ_YREPEAT",     PROJ_YREPEAT,       LABEL_DEFINE);
+    C_AddDefinition("PF_REALCLIPDIST", PROJECTILE_REALCLIPDIST, LABEL_DEFINE);
+    C_AddDefinition("PF_RPG_IMPACT_DAMAGE", PROJECTILE_RPG_IMPACT_DAMAGE, LABEL_DEFINE);
     C_AddDefinition("PF_HITRADIUS_ADDITIVE", PROJECTILE_HITRADIUS_ADDITIVE, LABEL_DEFINE);
 
     C_AddDefinition("SFLAG_BADGUY",             SFLAG_BADGUY,           LABEL_DEFINE);

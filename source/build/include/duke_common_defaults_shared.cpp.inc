@@ -44,7 +44,9 @@ void clearScriptNamePtr(void)
 const char *G_DefaultGrpFile(void)
 {
 #ifndef EDUKE32_STANDALONE
-    if (DUKE)
+    if (FURY)
+        return "fury.grp";
+    else if (DUKE)
         return defaultgamegrp[GAME_DUKE];
     else if (NAPALM)
         return defaultgamegrp[GAME_NAPALM];
@@ -62,7 +64,9 @@ const char *G_DefaultGrpFile(void)
 const char *DUKE_COMMON_DEFAULT_DEF_FILE_SYMBOL(void)
 {
 #ifndef EDUKE32_STANDALONE
-    if (DUKE)
+    if (FURY)
+        return "ashock.def";
+    else if (DUKE)
         return defaultdeffilename[GAME_DUKE];
     else if (WW2GI)
         return defaultdeffilename[GAME_WW2GI];
@@ -90,7 +94,9 @@ const char *DUKE_COMMON_DEFAULT_DEF_FILE_SYMBOL(void)
 const char *G_DefaultConFile(void)
 {
 #ifndef EDUKE32_STANDALONE
-    if (DUKE && testkopen(defaultgameconfilename[GAME_DUKE],0))
+    if (FURY)
+        return "scripts/main.con";
+    else if (DUKE && testkopen(defaultgameconfilename[GAME_DUKE],0))
         return defaultgameconfilename[GAME_DUKE];
     else if (WW2GI && testkopen(defaultgameconfilename[GAME_WW2GI],0))
         return defaultgameconfilename[GAME_WW2GI];

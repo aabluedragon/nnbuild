@@ -2884,6 +2884,9 @@ static void P_HandleDamagingFloors(int snum)
     int floorPic = sector[s->sectnum].floorpicnum;
     int useBoot = 0;
 
+    if ((unsigned)(floorPic = X_OnEventWithReturn(EVENT_CHECKFLOORDAMAGE, playerSprite, snum, floorPic)) >= MAXTILES)
+        return;
+
     if (floorPic == PURPLELAVA || sector[s->sectnum].ceilingpicnum == PURPLELAVA)
     {
         if (p->inv_amount[GET_BOOTS] > 0)
@@ -3780,6 +3783,9 @@ void P_ProcessInput(int snum)
         p->pyoff = sintable[p->pycount] >> 7;
     }
 
+    X_OnEvent(EVENT_PREUPDATEANGLES, playerSprite, snum, -1);
+    playerBits = pInput->bits;
+
     // Halt on Kicking/Tripmines/Nukebuttons
     if (p->fist_incs ||
         p->transporter_hold > 2 ||
@@ -4094,6 +4100,9 @@ HORIZONLY:
     p->q16horiz += pInput->q16horz;
     p->q16horiz = fix16_clamp(p->q16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
     p->q16horizoff = fix16_clamp(p->q16horizoff, F16(HORIZ_MIN), F16(HORIZ_MAX));
+
+    X_OnEvent(EVENT_POSTUPDATEANGLES, playerSprite, snum, -1);
+    playerBits = pInput->bits;
 
     //Shooting code/changes
 

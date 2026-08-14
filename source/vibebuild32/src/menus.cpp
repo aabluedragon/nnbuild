@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osdcmds.h"
 #include "config.h"
 #include "vbjs.h"
+#include "communityapi.h"
 #include <sys/stat.h>
 
 extern char inputloc;
@@ -42,6 +43,17 @@ static int last_zero,last_fifty,last_onehundred,last_twoohtwo,last_threehundred 
 
 enum
 {
+    FURY_TOP_MENU_X = 40,
+    FURY_TOP_MENU_Y = 148,
+    FURY_TOP_MENU_STEP = 11,
+    FURY_CENTER_MENU_X = 160,
+};
+
+enum
+{
+    MENU_NULL = INT32_MIN,
+    MENU_CLOSE = -2,
+    MENU_PREVIOUS = -1,
     MENU_MAIN = 0,
     MENU_MAIN_INGAME = 50,
     MENU_EPISODE = 100,
@@ -51,7 +63,62 @@ enum
     MENU_NEWGAMECUSTOML3 = 104,
     MENU_USERMAP_BROWSER = 105,
     MENU_SKILL = 110,
+    MENU_GAMESETUP = 200,
+    MENU_OPTIONS = 202,
+    MENU_VIDEOSETUP = 203,
+    MENU_KEYBOARDSETUP = 204,
+    MENU_MOUSESETUP = 205,
+    MENU_JOYSTICKSETUP = 206,
+    MENU_JOYSTICKBTNS = 207,
+    MENU_JOYSTICKAXES = 208,
+    MENU_KEYBOARDKEYS = 209,
+    MENU_MOUSEBTNS = 210,
+    MENU_MOUSEADVANCED = 212,
+    MENU_JOYSTICKAXIS = 213,
+    MENU_CONTROLS = 220,
+    MENU_RENDERERSETUP = 230,
+    MENU_COLCORR = 231,
+    MENU_COLCORR_INGAME = 232,
+    MENU_SCREENSETUP = 233,
+    MENU_DISPLAYSETUP = 234,
+    MENU_LOAD = 300,
+    MENU_SAVE = 350,
+    MENU_STORY = 400,
+    MENU_F1HELP = 401,
+    MENU_QUIT = 500,
+    MENU_QUITTOTITLE = 501,
+    MENU_QUIT_INGAME = 502,
+    MENU_NETSETUP = 600,
+    MENU_NETWAITMASTER = 601,
+    MENU_NETWAITVOTES = 603,
+    MENU_SOUND = 700,
+    MENU_SOUND_INGAME = 701,
+    MENU_ADVSOUND = 702,
+    MENU_CREDITS = 990,
+    MENU_CREDITS2 = 991,
+    MENU_CREDITS3 = 992,
+    MENU_CREDITS4 = 993,
+    MENU_CREDITS5 = 994,
+    MENU_LOADVERIFY = 1000,
+    MENU_NEWVERIFY = 1500,
+    MENU_SAVEVERIFY = 2000,
+    MENU_ADDONS = 3000,
+    MENU_ADDONSVERIFY = 3001,
+    MENU_ADULTPASSWORD = 10001,
+    MENU_RESETPLAYER = 15000,
+    MENU_RESETSTATSVERIFY = 15002,
+    MENU_BUYDUKE = 20000,
+    MENU_NETWORK = 20001,
+    MENU_PLAYER = 20002,
+    MENU_MACROS = 20004,
+    MENU_NETHOST = 20010,
+    MENU_NETOPTIONS = 20011,
+    MENU_NETUSERMAP = 20012,
+    MENU_NETJOIN = 20020,
 };
+
+static int last_skill_parent_menu = MENU_EPISODE;
+static vec2_t g_menuScriptOrigin;
 
 static char menunamecnt;
 
@@ -70,12 +137,22 @@ static const char *mousebuttonnames[] = { "Mouse1", "Mouse2", "Mouse3", "Mouse4"
 
 #define USERMAPENTRYLENGTH 25
 
-#define mgametext(x,y,t,s,dabits) G_PrintGameText(2,STARTALPHANUM, x,y,t,s,0,dabits,0, 0, xdim-1, ydim-1, 65536)
-#define mgametextpal(x,y,t,s,p) G_PrintGameText(2,STARTALPHANUM, x,y,t,s,p,26,0, 0, xdim-1, ydim-1, 65536)
+static inline int32_t Menu_ScriptOriginPixelX(void) { return g_menuScriptOrigin.x >> 16; }
+static inline int32_t Menu_ScriptOriginPixelY(void) { return g_menuScriptOrigin.y >> 16; }
+static inline int32_t Menu_ApplyScriptOriginX(int32_t const x) { return x + Menu_ScriptOriginPixelX(); }
+static inline int32_t Menu_ApplyScriptOriginY(int32_t const y) { return y + Menu_ScriptOriginPixelY(); }
+static inline int32_t Menu_ApplyScriptOriginX16(int32_t const x) { return x + g_menuScriptOrigin.x; }
+static inline int32_t Menu_ApplyScriptOriginY16(int32_t const y) { return y + g_menuScriptOrigin.y; }
+
+#define mgametext(x,y,t,s,dabits) G_PrintGameText(2,STARTALPHANUM, Menu_ApplyScriptOriginX(x),Menu_ApplyScriptOriginY(y),t,s,0,dabits,0, 0, xdim-1, ydim-1, 65536)
+#define mgametextpal(x,y,t,s,p) G_PrintGameText(2,STARTALPHANUM, Menu_ApplyScriptOriginX(x),Menu_ApplyScriptOriginY(y),t,s,p,26,0, 0, xdim-1, ydim-1, 65536)
 
 // BUILD SHIT THAT NEEDS TO BE EXTERNED:
 extern int32_t r_yshearing;
 extern int32_t r_shadeinterpolate;
+
+static int Menu_DefinedSkillCount(void);
+static int Menu_FirstDefinedSkill(void);
 
 static char const* MEOSN_SOUND_MIDIDRIVER[] = {
     "OPL3 emu.",
@@ -145,7 +222,7 @@ void ChangeToMenu(int cm)
     else if (cm >= 300 && cm < 400)
         probey = last_threehundred;
     else if (cm == 110)
-        probey = 1;
+        probey = FURY ? clamp(ud.m_player_skill - 1, Menu_FirstDefinedSkill(), max<int>(Menu_DefinedSkillCount() - 1, 0)) : 1;
     else probey = 0;
     lastsavehead = -1;
 }
@@ -177,7 +254,43 @@ static void Menu_BlackRectangle(int32_t x, int32_t y, int32_t width, int32_t hei
 {
     const int32_t xscale = divscale16(width, tilesiz[0].x << 16), yscale = divscale16(height, tilesiz[0].y << 16);
 
-    rotatesprite_(x, y, max(xscale, yscale), 0, 0, 127, 4, (orientation & (1 | 32)) | 2 | 8 | 16, 0, 0, get_xdim_16(x), get_ydim_16(y), get_xdim_16(x + width), get_ydim_16(y + height));
+    rotatesprite_(x, y, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, (orientation & (1 | 32)) | 2 | 8 | 16, 0, 0, get_xdim_16(x), get_ydim_16(y), get_xdim_16(x + width), get_ydim_16(y + height));
+}
+
+static inline int Menu_BlackTranslucentBackgroundOK(int cm)
+{
+    switch (cm)
+    {
+    case MENU_COLCORR:
+    case MENU_COLCORR_INGAME:
+        return 0;
+    default:
+        return 1;
+    }
+}
+
+static inline int Menu_IsVerifyPrompt(int cm)
+{
+    return cm == MENU_NEWVERIFY
+        || cm == MENU_RESETSTATSVERIFY
+        || (cm >= MENU_LOADVERIFY && cm < MENU_LOADVERIFY + 10)
+        || (cm >= MENU_SAVEVERIFY && cm < MENU_SAVEVERIFY + 10);
+}
+
+static inline int Menu_UpdateScreenOK(int cm)
+{
+    if (cm == MENU_NEWVERIFY)
+        return 0;
+    if (cm == MENU_RESETSTATSVERIFY)
+        return 0;
+    if (cm == MENU_LOAD || cm == MENU_SAVE)
+        return 0;
+    if (cm >= MENU_LOADVERIFY && cm < MENU_LOADVERIFY + 10)
+        return 0;
+    if (cm >= MENU_SAVEVERIFY && cm < MENU_SAVEVERIFY + 10)
+        return 0;
+
+    return 1;
 }
 
 static int probe_(int type,int x,int y,int i,int numItems)
@@ -223,6 +336,9 @@ static int probe_(int type,int x,int y,int i,int numItems)
     if (probey >= numItems)
         probey = 0;
 
+    if (FURY)
+        goto skipcursor;
+
     if (centre)
     {
         //        rotatesprite(((320>>1)+(centre)+54)<<16,(y+(probey*i)-4)<<16,65536L,0,SPINNINGNUKEICON+6-((6+((int32_t)totalclock>>3))%7),sh,0,10,0,0,xdim-1,ydim-1);
@@ -234,6 +350,7 @@ static int probe_(int type,int x,int y,int i,int numItems)
     else
         rotatesprite((x<<16)-((tilesiz[SPINNINGNUKEICON].x-4)<<(16-type)),(y+(probey*i)-(4>>type))<<16,65536L>>type,0,SPINNINGNUKEICON+((((int32_t)totalclock>>3))%7),sh,0,10,0,0,xdim-1,ydim-1);
 
+skipcursor:
     if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Enter) || (LMB && !onbar))
     {
         if (g_currentMenu != 110)
@@ -272,129 +389,219 @@ static inline int probesm(int x,int y,int i,int numItems)
     return probe_(1,x,y,i, numItems);
 }
 
+#define UNSELMENUSHADE (ud.menu_shadedeselected != 0 ? ud.menu_shadedeselected : 10)
+#define DISABLEDMENUSHADE (ud.menu_shadedisabled != 0 ? ud.menu_shadedisabled : 20)
+#define MENUHIGHLIGHT(x) (probey == (x) ? (sintable[((int32_t)totalclock << 5) & 2047] >> 12) : UNSELMENUSHADE)
+
 int menutext_(int x,int y,int s,int p,const char *t,int bits)
 {
-    short i, ac, centre;
-//    int ht = usehightile;
+    if (t == nullptr)
+        return x;
 
     t = VBJS_MenuText(t);
 
-    y -= 12;
-
-    i = centre = 0;
-
-    if (x == (320>>1))
+    if (p == 0)
     {
-        while (*(t+i))
-        {
-            if (*(t+i) == ' ')
-            {
-                centre += 5;
-                i++;
-                continue;
-            }
-            ac = 0;
-            if (*(t+i) >= '0' && *(t+i) <= '9')
-                ac = *(t+i) - '0' + BIGALPHANUM-10;
-            else if (*(t+i) >= 'a' && *(t+i) <= 'z')
-                ac = toupper(*(t+i)) - 'A' + BIGALPHANUM;
-            else if (*(t+i) >= 'A' && *(t+i) <= 'Z')
-                ac = *(t+i) - 'A' + BIGALPHANUM;
-            else switch (*(t+i))
-                {
-                case '-':
-                    ac = BIGALPHANUM-11;
-                    break;
-                case '.':
-                    ac = BIGPERIOD;
-                    break;
-                case '\'':
-                    ac = BIGAPPOS;
-                    break;
-                case ',':
-                    ac = BIGCOMMA;
-                    break;
-                case '!':
-                    ac = BIGX_;
-                    break;
-                case '?':
-                    ac = BIGQ;
-                    break;
-                case ';':
-                    ac = BIGSEMI;
-                    break;
-                case ':':
-                    ac = BIGSEMI;
-                    break;
-                default:
-                    centre += 5;
-                    i++;
-                    continue;
-                }
-
-            centre += tilesiz[ac].x-1;
-            i++;
-        }
+        if (s == DISABLEDMENUSHADE)
+            p = ud.menutext_paldisabled;
+        else if (s == UNSELMENUSHADE)
+            p = ud.menutext_paldeselected;
+        else
+            p = ud.menutext_palselected;
     }
 
-    if (centre)
-        x = (320-centre-10)>>1;
+    int32_t const textFlags = TEXT_BIGALPHANUM | TEXT_UPPERCASE | TEXT_LITERALESCAPE
+                            | (x == (320 >> 1) ? TEXT_XCENTER : 0);
+    int32_t const orientation = bits | ROTATESPRITE_FULL16;
+    int32_t const zoom = ud.menutext_zoom > 0 ? ud.menutext_zoom : 65536;
+    int32_t const xspace = ud.menutext_xspace != 0 ? ud.menutext_xspace : (5 << 16);
+    int32_t const yline = (FURY ? 10 : 15) << 16;
+    int32_t const xbetween = ud.menutext_tracking;
+    vec2_t const dim = G_ScreenText(BIGALPHANUM,
+                                    Menu_ApplyScriptOriginX16(x << 16),
+                                    Menu_ApplyScriptOriginY16((y << 16) - ((FURY ? 0 : 12) << 16)),
+                                    zoom, 0, 0, t, s, p, orientation, 0,
+                                    xspace, yline, xbetween, 0, textFlags,
+                                    0, 0, xdim - 1, ydim - 1);
 
-//    usehightile = (ht && r_downsize < 3);
-    while (*t)
+    return x + (dim.x >> 16);
+}
+
+static void Menu_FurySmallText(int const x, int const y, char const* const text, int const shade, int const pal, int const flags = 0)
+{
+    G_ScreenText(MINIFONT, Menu_ApplyScriptOriginX(x), Menu_ApplyScriptOriginY(y), 32768, 0, 0, text, shade, pal,
+                 RS_AUTO | RS_NOCLIP | RS_TOPLEFT, 0, 3, 5, 1, 1,
+                 TEXT_UPPERCASE | flags, 0, 0, xdim, ydim);
+}
+
+static void Menu_FuryBackdrop(void)
+{
+    // Pending 2D menu sprites from the previous frame can otherwise survive
+    // over the Fury modal after the rooms are redrawn.
+    renderFlushPerms();
+    videoClearViewableArea(-1);
+    videoClearScreen(0);
+
+    if (ud.gm & MODE_GAME)
     {
-        if (*t == ' ')
-        {
-            x+=5;
-            t++;
+        // Verify prompts are displayed by native code after the old menu loop
+        // may have just switched state. Make sure the gameplay viewport is not
+        // inherited from a previous save/load/options menu before repainting.
+        G_UpdateScreenArea();
+
+        // The legacy menu loop can leave the previous native menu frame in the
+        // active backbuffer. Redraw the gameplay view before fading so Fury's
+        // modal prompts do not inherit save/load rows or other stale menu text.
+        G_DrawRooms(screenpeek, 65536);
+        if (videoGetRenderMode() >= 3)
+            G_DrawBackground();
+    }
+    else
+    {
+        videoClearViewableArea(-1);
+    }
+
+    videoFadeToBlack(1);
+}
+
+static constexpr int32_t FURY_BLUE_ZOOM = 16384;
+static constexpr int32_t FURY_BLUE_SPACE = 8 << 16;
+static constexpr int32_t FURY_BLUE_YLINE = 10 << 16;
+
+static void Menu_FuryPromptText(int32_t const x, int32_t const y, char const * const text, int32_t const flags = TEXT_XCENTER)
+{
+    int32_t const zoom = ud.gametext_zoom > 0 ? ud.gametext_zoom : FURY_BLUE_ZOOM;
+    int32_t const xspace = ud.gametext_xspace != 0 ? ud.gametext_xspace : FURY_BLUE_SPACE;
+    int32_t const xbetween = ud.gametext_tracking;
+    int32_t const pal = ud.gametext_pal != 0 ? ud.gametext_pal : 11;
+
+    G_ScreenText(STARTALPHANUM, Menu_ApplyScriptOriginX16(x), Menu_ApplyScriptOriginY16(y), zoom,
+                 0, 0, text, 0, pal, RS_AUTO | RS_NOCLIP | ROTATESPRITE_FULL16, 0,
+                 xspace, 0, xbetween, 0, flags, 0, 0, xdim - 1, ydim - 1);
+}
+
+static int32_t Menu_FuryPromptLineStep(void)
+{
+    return FURY_BLUE_YLINE;
+}
+
+static void Menu_FuryVerifyPrompt(char const * const line1, char const * const line2 = nullptr, char const * const input = "(Y/N)")
+{
+    // EVENT_DISPLAYMENU returns a script origin for animated/scripted menus.
+    // Native verify prompts are not part of that scripted layout; carrying the
+    // previous origin offsets the prompt and makes it line up with stale rows.
+    g_menuScriptOrigin = {};
+
+    Menu_FuryBackdrop();
+
+    char const * const lines[] = { line1, line2, input };
+    int32_t const numLines = (line1 != nullptr) + (line2 != nullptr) + (input != nullptr);
+    int32_t const lineStep = Menu_FuryPromptLineStep();
+    int32_t y = 90 << 16;
+
+    int32_t const backingTop = y - (12 << 16);
+    int32_t const backingHeight = ((numLines - 1) * lineStep) + (34 << 16);
+    Menu_BlackRectangle(24 << 16, backingTop, 272 << 16, backingHeight, RS_TRANS1 | RS_TRANS2);
+
+    for (char const * const line : lines)
+    {
+        if (line == nullptr)
             continue;
-        }
-        ac = 0;
-        if (*t >= '0' && *t <= '9')
-            ac = *t - '0' + BIGALPHANUM-10;
-        else if (*t >= 'a' && *t <= 'z')
-            ac = toupper(*t) - 'A' + BIGALPHANUM;
-        else if (*t >= 'A' && *t <= 'Z')
-            ac = *t - 'A' + BIGALPHANUM;
-        else switch (*t)
-            {
-            case '-':
-                ac = BIGALPHANUM-11;
-                break;
-            case '.':
-                ac = BIGPERIOD;
-                break;
-            case ',':
-                ac = BIGCOMMA;
-                break;
-            case '!':
-                ac = BIGX_;
-                break;
-            case '\'':
-                ac = BIGAPPOS;
-                break;
-            case '?':
-                ac = BIGQ;
-                break;
-            case ';':
-                ac = BIGSEMI;
-                break;
-            case ':':
-                ac = BIGCOLIN;
-                break;
-            default:
-                x += 5;
-                t++;
-                continue;
-            }
 
-        rotatesprite(x<<16,y<<16,65536L,0,ac,s,p,bits,0,0,xdim-1,ydim-1);
-
-        x += tilesiz[ac].x;
-        t++;
+        Menu_FuryPromptText(160 << 16, y, line);
+        y += lineStep;
     }
-//    usehightile = ht;
-    return (x);
+}
+
+static void Menu_FuryLateVerifyPrompt(void)
+{
+    if (!FURY)
+        return;
+
+    if (g_currentMenu == MENU_NEWVERIFY)
+    {
+        Menu_FuryVerifyPrompt("Abort this game?");
+        return;
+    }
+
+    if (g_currentMenu >= MENU_LOADVERIFY && g_currentMenu < MENU_LOADVERIFY + 10)
+    {
+        Bsprintf(tempbuf, "\"%.18s\"", ud.savegame[g_currentMenu - MENU_LOADVERIFY]);
+        Menu_FuryVerifyPrompt("Load game:", tempbuf);
+        return;
+    }
+
+    if (g_currentMenu >= MENU_SAVEVERIFY && g_currentMenu < MENU_SAVEVERIFY + 10)
+    {
+        Menu_FuryVerifyPrompt("Overwrite saved game?");
+        return;
+    }
+
+    if (g_currentMenu == MENU_RESETSTATSVERIFY)
+        Menu_FuryVerifyPrompt("Reset stats/achievements?");
+}
+
+static int Menu_CapirResetAvailable(void)
+{
+    return communityapiEnabled() || VM_HaveEvent(EVENT_CAPIR);
+}
+
+static void Menu_ResetStatsAndDispatchCapir(void)
+{
+    if (communityapiEnabled())
+        communityapiResetStats();
+
+    if (VM_HaveEvent(EVENT_CAPIR))
+        X_OnEvent(EVENT_CAPIR, g_player[screenpeek].ps->i, screenpeek, -1);
+}
+
+static void Menu_FuryControlText(int const x, int const y, char const* const text, int const shade, int const pal, int const flags = 0)
+{
+    if (FURY)
+        Menu_FurySmallText(x, y, text, shade, pal, flags);
+    else
+        minitextshade(x, y, text, shade, pal, 10 + 16);
+}
+
+static int Menu_KeybindFuncCount(void)
+{
+    if (keybind_order_custom[0] < 0)
+        return NUMGAMEFUNCTIONS;
+
+    int count = 0;
+
+    while (count < NUMGAMEFUNCTIONS && keybind_order_custom[count] >= 0)
+        ++count;
+
+    return count;
+}
+
+static int Menu_KeybindFuncAt(int const visibleIndex)
+{
+    if (visibleIndex < 0)
+        return -1;
+
+    if (keybind_order_custom[0] >= 0)
+        return (visibleIndex < NUMGAMEFUNCTIONS) ? keybind_order_custom[visibleIndex] : -1;
+
+    return (visibleIndex < NUMGAMEFUNCTIONS) ? visibleIndex : -1;
+}
+
+static int Menu_VisibleIndexForFunc(int const gameFunc)
+{
+    if ((unsigned)gameFunc >= NUMGAMEFUNCTIONS)
+        return 0;
+
+    if (keybind_order_custom[0] >= 0)
+    {
+        for (int i = 0; i < NUMGAMEFUNCTIONS && keybind_order_custom[i] >= 0; ++i)
+            if (keybind_order_custom[i] == gameFunc)
+                return i;
+
+        return 0;
+    }
+
+    return gameFunc;
 }
 
 static void _bar(int type, int x,int y,int *p,int dainc,int damodify,int s, int pa, int min, int max)
@@ -533,10 +740,6 @@ static void modval(int min, int max,int *p,int dainc,int damodify)
     }
 }
 
-#define UNSELMENUSHADE 10
-#define DISABLEDMENUSHADE 20
-#define MENUHIGHLIGHT(x) probey==x?(sintable[((int32_t)totalclock<<5)&2047]>>12):UNSELMENUSHADE
-
 // In-game lobby (masterserver) state.
 static char g_joinAddrBuf[64];
 // #define MENUHIGHLIGHT(x) probey==x?-(sintable[((int32_t)totalclock<<4)&2047]>>12):probey-x>=0?(probey-x)<<2:-((probey-x)<<2)
@@ -574,6 +777,54 @@ static int Menu_NgcVisibleEntries(MenuGameplayEntry const *entries, int *visible
     }
 
     return count;
+}
+
+static int Menu_DefinedSkillCount(void)
+{
+    int count = 0;
+
+    for (int i = 0; i < (int)ARRAY_SIZE(g_skillNames); ++i)
+    {
+        if (g_skillNames[i][0])
+            count = i + 1;
+    }
+
+    return count;
+}
+
+static int Menu_FirstDefinedSkill(void)
+{
+    for (int i = 0; i < (int)ARRAY_SIZE(g_skillNames); ++i)
+    {
+        if (g_skillNames[i][0])
+            return i;
+    }
+
+    return 0;
+}
+
+static int Menu_NgcVisiblePositionForRawIndex(MenuGameplayEntry const *entries, int rawIndex)
+{
+    if (!entries || (unsigned)rawIndex >= MAXMENUGAMEPLAYENTRIES)
+        return 0;
+
+    int position = 0;
+
+    for (int i = 0; i < MAXMENUGAMEPLAYENTRIES; ++i)
+    {
+        if (!entries[i].isValid())
+            break;
+
+        if (entries[i].flags & MEF_Hidden)
+            continue;
+
+        if (i == rawIndex)
+            return position;
+
+        ++position;
+    }
+
+    return 0;
 }
 
 static bool Menu_NgcHasVisibleSubentries(MenuGameplayEntry const &entry)
@@ -626,6 +877,139 @@ static void Menu_NgcSetCurrentSelection(int rawIndex)
         ud.m_newgamecustomsub = rawIndex;
     else if (g_currentMenu == MENU_NEWGAMECUSTOML3)
         ud.m_newgamecustoml3 = rawIndex;
+}
+
+static int Menu_NgcCurrentRawSelection(void)
+{
+    switch (g_currentMenu)
+    {
+        case MENU_NEWGAMECUSTOM:   return ud.m_newgamecustom;
+        case MENU_NEWGAMECUSTOMSUB: return ud.m_newgamecustomsub;
+        case MENU_NEWGAMECUSTOML3:  return ud.m_newgamecustoml3;
+        default:                   return probey;
+    }
+}
+
+static int Menu_ScriptVisibleMenuID(int menuID)
+{
+    if (menuID >= MENU_LOADVERIFY && menuID < MENU_LOADVERIFY + 10)
+        return MENU_LOADVERIFY;
+    if (menuID >= MENU_SAVEVERIFY && menuID < MENU_SAVEVERIFY + 10)
+        return MENU_SAVEVERIFY;
+
+    return menuID;
+}
+
+static void Menu_ApplyFuryTextDefaults(void)
+{
+    if (!FURY)
+        return;
+
+    if (ud.menu_shadedeselected == 16)
+        ud.menu_shadedeselected = 10;
+    if (ud.menu_shadedisabled == 16)
+        ud.menu_shadedisabled = 10;
+    if (ud.menutext_zoom == 65536)
+        ud.menutext_zoom = 12288;
+    if (ud.menutext_xspace == 0)
+        ud.menutext_xspace = 5 << 16;
+    if (ud.menutext_tracking == 0)
+        ud.menutext_tracking = 2 << 16;
+    if (ud.menutext_pal == 0)
+        ud.menutext_pal = 11;
+    if (ud.menutext_palselected == 0)
+        ud.menutext_palselected = 10;
+    if (ud.menutext_paldeselected == 0)
+        ud.menutext_paldeselected = 10;
+    if (ud.menutext_paldisabled == 0)
+        ud.menutext_paldisabled = 7;
+    if (ud.menutext_palselected_right == 0)
+        ud.menutext_palselected_right = 11;
+    if (ud.menutext_paldeselected_right == 0)
+        ud.menutext_paldeselected_right = 11;
+    if (ud.menutext_paldisabled_right == 0)
+        ud.menutext_paldisabled_right = 7;
+
+    if (ud.gametext_zoom == 65536)
+        ud.gametext_zoom = FURY_BLUE_ZOOM;
+    if (ud.gametext_xspace == 0)
+        ud.gametext_xspace = FURY_BLUE_SPACE;
+    if (ud.gametext_pal == 0)
+        ud.gametext_pal = 11;
+    if (ud.gametext_palselected == 0)
+        ud.gametext_palselected = 10;
+    if (ud.gametext_paldeselected == 0)
+        ud.gametext_paldeselected = 10;
+    if (ud.gametext_paldisabled == 0)
+        ud.gametext_paldisabled = 7;
+    if (ud.gametext_palselected_right == 0)
+        ud.gametext_palselected_right = 11;
+    if (ud.gametext_paldeselected_right == 0)
+        ud.gametext_paldeselected_right = 11;
+    if (ud.gametext_paldisabled_right == 0)
+        ud.gametext_paldisabled_right = 7;
+}
+
+static void Menu_SetDisplayEventReturnVars(int32_t originX, int32_t originY)
+{
+    ud.returnvar[0] = originX;
+    ud.returnvar[1] = originY;
+    ud.returnvar[2] = Menu_NgcCurrentRawSelection();
+    ud.returnvar[3] = -1;
+
+    if (g_currentMenu == MENU_NEWGAMECUSTOMSUB)
+        ud.returnvar[3] = ud.m_newgamecustom;
+    else if (g_currentMenu == MENU_NEWGAMECUSTOML3)
+        ud.returnvar[3] = ud.m_newgamecustomsub;
+}
+
+static void Menu_RunDisplayEvent(int eventID)
+{
+    Menu_SetDisplayEventReturnVars(0, 0);
+
+    if (eventID == EVENT_DISPLAYMENU)
+        g_menuScriptOrigin = {};
+
+    int const nativeMenu = g_currentMenu;
+
+    // Ion Fury confirmation prompts are native modal UI. Do not run scripted
+    // menu draw events while they are active; those events repaint save/load
+    // rows under the modal in this older menu implementation.
+    if (FURY && Menu_IsVerifyPrompt(nativeMenu))
+        return;
+
+    int const scriptMenu = Menu_ScriptVisibleMenuID(nativeMenu);
+
+    if (scriptMenu != nativeMenu)
+        g_currentMenu = scriptMenu;
+
+    X_OnEventWithReturn(eventID, g_player[screenpeek].ps->i, screenpeek, scriptMenu);
+
+    if (eventID == EVENT_DISPLAYMENU)
+        g_menuScriptOrigin = { ud.returnvar[0], ud.returnvar[1] };
+
+    if (scriptMenu != nativeMenu)
+        g_currentMenu = nativeMenu;
+}
+
+static void Menu_DisplayScriptCursor(void)
+{
+    if (!VM_HaveEvent(EVENT_DISPLAYCURSOR))
+        return;
+
+    vec2_t mousePos;
+
+    if (!mouseReadAbs(&mousePos, &g_mouseAbs))
+        return;
+
+    ud.returnvar[0] = mousePos.x;
+    ud.returnvar[1] = mousePos.y;
+    ud.returnvar[2] = 255 / 3;
+
+    int32_t const tile = X_OnEventWithReturn(EVENT_DISPLAYCURSOR, g_player[screenpeek].ps->i, screenpeek, CROSSHAIR);
+
+    if ((unsigned)tile < MAXTILES && tilesiz[tile].x > 0 && tilesiz[tile].y > 0)
+        rotatesprite_fs_alpha(mousePos.x, mousePos.y, FURY ? 32768 : 65536, 0, tile, 0, 0, 2 | 8 | (FURY ? 1024 : 0), 255 / 3);
 }
 
 static void Menu_NgcFireSelectionEvent(void)
@@ -682,6 +1066,7 @@ static void Menu_NgcActivate(MenuGameplayEntry const &entry)
         else
         {
             Menu_NgcFireSelectionEvent();
+            last_skill_parent_menu = g_currentMenu;
             ChangeToMenu(MENU_SKILL);
         }
 
@@ -689,6 +1074,7 @@ static void Menu_NgcActivate(MenuGameplayEntry const &entry)
     }
 
     Menu_NgcFireSelectionEvent();
+    last_skill_parent_menu = g_currentMenu;
     ChangeToMenu(MENU_SKILL);
 }
 
@@ -698,7 +1084,7 @@ static void Menu_DisplayNewGameCustom(void)
     MenuGameplayEntry *entries = Menu_NgcEntriesForCurrentMenu(&title);
     int visible[MAXMENUGAMEPLAYENTRIES];
     int const visibleCount = Menu_NgcVisibleEntries(entries, visible);
-    int const startY = 60 - (visibleCount * 2);
+    int const startY = FURY ? 58 + ((3 - visibleCount) * 6) : 60 - (visibleCount * 2);
 
     if (!entries || visibleCount <= 0)
     {
@@ -706,13 +1092,28 @@ static void Menu_DisplayNewGameCustom(void)
         return;
     }
 
-    rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
-    menutext(160, 24, 0, 0, title ? title : "NEW GAME");
+    if (!FURY)
+    {
+        rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+        menutext(160, 24, 0, 0, title ? title : "NEW GAME");
+    }
 
-    int x = M_Probe(160, startY, 20, visibleCount);
+    int x = M_Probe(160, startY, FURY ? FURY_TOP_MENU_STEP : 20, visibleCount);
 
     if (probey < 0 || probey >= visibleCount)
-        probey = 0;
+    {
+        int rawSelection = 0;
+
+        switch (g_currentMenu)
+        {
+            case MENU_NEWGAMECUSTOM:    rawSelection = ud.m_newgamecustom; break;
+            case MENU_NEWGAMECUSTOMSUB: rawSelection = ud.m_newgamecustomsub; break;
+            case MENU_NEWGAMECUSTOML3:  rawSelection = ud.m_newgamecustoml3; break;
+            default: break;
+        }
+
+        probey = Menu_NgcVisiblePositionForRawIndex(entries, rawSelection);
+    }
 
     int const selectedRawIndex = visible[probey];
     Menu_NgcSetCurrentSelection(selectedRawIndex);
@@ -732,7 +1133,7 @@ static void Menu_DisplayNewGameCustom(void)
         MenuGameplayEntry const &entry = entries[visible[i]];
         int const disabled = entry.flags & (MEF_Disabled | MEF_LookDisabled);
 
-        menutext(160, startY + (20 * i), disabled ? DISABLEDMENUSHADE : MENUHIGHLIGHT(i),
+        menutext(160, startY + ((FURY ? FURY_TOP_MENU_STEP : 20) * i), disabled ? DISABLEDMENUSHADE : MENUHIGHLIGHT(i),
                  (entry.flags & MEF_Disabled) ? 1 : PHX(-2 - i), entry.name);
     }
 }
@@ -752,6 +1153,23 @@ static void M_DisplaySaveGameList(void)
 
     for (x=0;x<=9;x++)
         minitext(c,48+(12*x),ud.savegame[x],2,10+16);
+}
+
+static void M_DisplayFurySaveGameList(void)
+{
+    for (int i = 0; i < 10; ++i)
+    {
+        char const *name = ud.savegame[i][0] ? ud.savegame[i] : "EMPTY";
+        int const shade = (probey == i) ? (sintable[((int32_t)totalclock << 5) & 2047] >> 12) : 0;
+        int const pal = (probey == i) ? ud.menutext_palselected : ud.menutext_paldeselected;
+
+        char clipped[sizeof(ud.savegame[0])];
+        Bstrncpyz(clipped, name, sizeof(clipped));
+        for (int j = 18; clipped[j]; ++j)
+            clipped[j] = '\0';
+
+        Menu_FurySmallText(184, 54 + (i * 9), clipped, shade, pal);
+    }
 }
 
 static void clearfilenames(void)
@@ -802,7 +1220,11 @@ void M_DisplayMenus(void)
         return;
     }
 
-    X_OnEvent(EVENT_DISPLAYMENU, g_player[screenpeek].ps->i, screenpeek, -1);
+    int const backgroundOK = Menu_BlackTranslucentBackgroundOK(g_currentMenu);
+    int const menuOverGame = (ud.gm & MODE_GAME) || ud.recstat == 2;
+    int const furyVerifyPrompt = FURY && Menu_IsVerifyPrompt(g_currentMenu);
+
+    Menu_ApplyFuryTextDefaults();
 
     ud.gm &= (0xff-MODE_TYPE);
     g_player[myconnectindex].ps->fta = 0;
@@ -811,7 +1233,10 @@ void M_DisplayMenus(void)
 
     sh = 4-(sintable[((int32_t)totalclock<<4)&2047]>>11);
 
-    if (videoGetRenderMode() >= 3)
+    if (!FURY && menuOverGame && backgroundOK)
+        videoFadeToBlack(1);
+
+    if (videoGetRenderMode() >= 3 && !FURY)
     {
         int x,y=0;
         for (;y<ydim;y+=tilesiz[MENUSCREEN].y)
@@ -819,15 +1244,24 @@ void M_DisplayMenus(void)
                 rotatesprite(x<<16,y<<16,65536L,0,MENUSCREEN,80,0,1+8+16,0,0,xdim-1,ydim-1);
     }
 
-    if (!(g_currentMenu >= 1000 && g_currentMenu <= 2999 && g_currentMenu >= 300 && g_currentMenu <= 369))
+    if (Menu_UpdateScreenOK(g_currentMenu))
         G_UpdateScreenArea();
+
+    if (FURY && !furyVerifyPrompt)
+        Menu_RunDisplayEvent(EVENT_DISPLAYINACTIVEMENU);
+
+    if (!furyVerifyPrompt)
+        Menu_RunDisplayEvent(EVENT_DISPLAYMENU);
+
+    if (FURY && (menuOverGame || g_currentMenu == MENU_SKILL) && backgroundOK && !furyVerifyPrompt)
+        videoFadeToBlack(1);
 
     if (KB_KeyPressed(sc_Q))
     {
         switch (g_currentMenu)
         {
         case MENU_USERMAP_BROWSER:
-        case 210:
+        case MENU_MOUSEBTNS:
         case 360:
         case 361:
         case 362:
@@ -838,11 +1272,11 @@ void M_DisplayMenus(void)
         case 367:
         case 368:
         case 369:
-        case 500:
-        case 501:
-        case 502:
-        case 603:
-        case 10001:
+        case MENU_QUIT:
+        case MENU_QUITTOTITLE:
+        case MENU_QUIT_INGAME:
+        case MENU_NETWAITVOTES:
+        case MENU_ADULTPASSWORD:
         case 20003:
         case 20005:
             break;
@@ -851,7 +1285,7 @@ void M_DisplayMenus(void)
             {
                 last_menu = g_currentMenu;
                 last_menu_pos = probey;
-                ChangeToMenu(502);
+                ChangeToMenu(MENU_QUIT_INGAME);
             }
             break;
         }
@@ -1417,12 +1851,20 @@ void M_DisplayMenus(void)
         case 15001:
         case 15000:
         {
-            mgametext(160, 90, "LOAD last game:", 0, 2 + 8 + 16);
+            if (FURY)
+            {
+                Bsprintf(tempbuf, "\"%.18s\"", ud.savegame[g_lastSaveSlot]);
+                Menu_FuryVerifyPrompt("Load last game:", tempbuf);
+            }
+            else
+            {
+                mgametext(160, 90, "LOAD last game:", 0, 2 + 8 + 16);
 
-            sprintf(tempbuf, "\"%s\"", ud.savegame[g_lastSaveSlot]);
-            mgametext(160, 99, tempbuf, 0, 2 + 8 + 16);
+                sprintf(tempbuf, "\"%s\"", ud.savegame[g_lastSaveSlot]);
+                mgametext(160, 99, tempbuf, 0, 2 + 8 + 16);
 
-            mgametext(160, 99 + 9, "(Y/N)", 0, 2 + 8 + 16);
+                mgametext(160, 99 + 9, "(Y/N)", 0, 2 + 8 + 16);
+            }
 
             if (KB_KeyPressed(sc_Escape) || KB_KeyPressed(sc_N) || RMB)
             {
@@ -1579,26 +2021,34 @@ void M_DisplayMenus(void)
         case 1008:
         case 1009:
         {
-            rotatesprite(160 << 16, 200 << 15, 65536L, 0, MENUSCREEN, 16, 0, 10 + 64, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
-            menutext(160, 24, 0, 0, "LOAD GAME");
-            rotatesprite(101 << 16, 97 << 16, 65536 >> 1, 512, TILE_LOADSHOT, -32, 0, 4 + 10 + 64, 0, 0, xdim - 1, ydim - 1);
+            if (FURY)
+            {
+                // Drawn once by Menu_FuryLateVerifyPrompt() after scripted
+                // menu background events have had a chance to clear the frame.
+            }
+            else
+            {
+                rotatesprite(160 << 16, 200 << 15, 65536L, 0, MENUSCREEN, 16, 0, 10 + 64, 0, 0, xdim - 1, ydim - 1);
+                rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+                menutext(160, 24, 0, 0, "LOAD GAME");
+                rotatesprite(101 << 16, 97 << 16, 65536 >> 1, 512, TILE_LOADSHOT, -32, 0, 4 + 10 + 64, 0, 0, xdim - 1, ydim - 1);
 
-            M_DisplaySaveGameList();
+                M_DisplaySaveGameList();
 
-            sprintf(tempbuf, "PLAYERS: %-2d                      ", savehead.numplr);
-            mgametext(160, 156, tempbuf, 0, 2 + 8 + 16);
+                sprintf(tempbuf, "PLAYERS: %-2d                      ", savehead.numplr);
+                mgametext(160, 156, tempbuf, 0, 2 + 8 + 16);
 
-            sprintf(tempbuf, "EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d", 1 + savehead.volnum, 1 + savehead.levnum, savehead.plrskl);
-            mgametext(160, 168, tempbuf, 0, 2 + 8 + 16);
+                sprintf(tempbuf, "EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d", 1 + savehead.volnum, 1 + savehead.levnum, savehead.plrskl);
+                mgametext(160, 168, tempbuf, 0, 2 + 8 + 16);
 
-            if (savehead.volnum == 0 && savehead.levnum == 7)
-                mgametext(160, 180, savehead.boardfn, 0, 2 + 8 + 16);
+                if (savehead.volnum == 0 && savehead.levnum == 7)
+                    mgametext(160, 180, savehead.boardfn, 0, 2 + 8 + 16);
 
-            mgametext(160, 90, "LOAD game:", 0, 2 + 8 + 16);
-            sprintf(tempbuf, "\"%s\"", ud.savegame[g_currentMenu - 1000]);
-            mgametext(160, 99, tempbuf, 0, 2 + 8 + 16);
-            mgametext(160, 99 + 9, "(Y/N)", 0, 2 + 8 + 16);
+                mgametext(160, 90, "LOAD game:", 0, 2 + 8 + 16);
+                sprintf(tempbuf, "\"%s\"", ud.savegame[g_currentMenu - 1000]);
+                mgametext(160, 99, tempbuf, 0, 2 + 8 + 16);
+                mgametext(160, 99 + 9, "(Y/N)", 0, 2 + 8 + 16);
+            }
 
             if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Y) || LMB)
             {
@@ -1694,8 +2144,53 @@ void M_DisplayMenus(void)
                 break;
             }
             M_Probe(186, 124, 0, 0);
-            mgametext(160, 90, "ABORT this game?", 0, 2 + 8 + 16);
-            mgametext(160, 90 + 9, "(Y/N)", 0, 2 + 8 + 16);
+            if (FURY)
+            {
+                // Drawn once by Menu_FuryLateVerifyPrompt() after the frame
+                // has been refreshed; drawing here preserves stale menu rows.
+            }
+            else
+            {
+                mgametext(160, 90, "ABORT THIS GAME?", 0, 2 + 8 + 16);
+                mgametext(160, 90 + 9, "(Y/N)", 0, 2 + 8 + 16);
+            }
+
+            break;
+        }
+
+        case MENU_RESETSTATSVERIFY:
+        {
+            if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Y) || LMB)
+            {
+                KB_FlushKeyboardQueue();
+                Menu_ResetStatsAndDispatchCapir();
+                S_PlaySound(PISTOL_BODYHIT);
+                ChangeToMenu(201);
+                probey = 11;
+                break;
+            }
+
+            if (KB_KeyPressed(sc_N) || KB_KeyPressed(sc_Escape) || RMB)
+            {
+                KB_ClearKeyDown(sc_N);
+                KB_ClearKeyDown(sc_Escape);
+                S_PlaySound(EXITMENUSOUND);
+                ChangeToMenu(201);
+                probey = 11;
+                break;
+            }
+
+            M_Probe(186, 124, 0, 0);
+            if (FURY)
+            {
+                // Drawn once by Menu_FuryLateVerifyPrompt() after the frame
+                // has been refreshed; drawing here preserves stale menu rows.
+            }
+            else
+            {
+                mgametext(160, 90, "RESET STATS/ACHIEVEMENTS?", 0, 2 + 8 + 16);
+                mgametext(160, 90 + 9, "(Y/N)", 0, 2 + 8 + 16);
+            }
 
             break;
         }
@@ -1712,24 +2207,32 @@ void M_DisplayMenus(void)
         case 2009:
         {
 
-            rotatesprite(160 << 16, 200 << 15, 65536L, 0, MENUSCREEN, 16, 0, 10 + 64, 0, 0, xdim - 1, ydim - 1);
-            rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
-            menutext(160, 24, 0, 0, "SAVE GAME");
+            if (FURY)
+            {
+                // Drawn once by Menu_FuryLateVerifyPrompt() after scripted
+                // menu background events have had a chance to clear the frame.
+            }
+            else
+            {
+                rotatesprite(160 << 16, 200 << 15, 65536L, 0, MENUSCREEN, 16, 0, 10 + 64, 0, 0, xdim - 1, ydim - 1);
+                rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+                menutext(160, 24, 0, 0, "SAVE GAME");
 
-            rotatesprite(101 << 16, 97 << 16, 65536L >> 1, 512, TILE_LOADSHOT, -32, 0, 4 + 10 + 64, 0, 0, xdim - 1, ydim - 1);
-            sprintf(tempbuf, "PLAYERS: %-2d                      ", ud.multimode);
-            mgametext(160, 156, tempbuf, 0, 2 + 8 + 16);
+                rotatesprite(101 << 16, 97 << 16, 65536L >> 1, 512, TILE_LOADSHOT, -32, 0, 4 + 10 + 64, 0, 0, xdim - 1, ydim - 1);
+                sprintf(tempbuf, "PLAYERS: %-2d                      ", ud.multimode);
+                mgametext(160, 156, tempbuf, 0, 2 + 8 + 16);
 
-            sprintf(tempbuf, "EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d", 1 + ud.volume_number, 1 + ud.level_number, ud.player_skill);
-            mgametext(160, 168, tempbuf, 0, 2 + 8 + 16);
+                sprintf(tempbuf, "EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d", 1 + ud.volume_number, 1 + ud.level_number, ud.player_skill);
+                mgametext(160, 168, tempbuf, 0, 2 + 8 + 16);
 
-            if (ud.volume_number == 0 && ud.level_number == 7)
-                mgametext(160, 180, boardfilename, 0, 2 + 8 + 16);
+                if (ud.volume_number == 0 && ud.level_number == 7)
+                    mgametext(160, 180, boardfilename, 0, 2 + 8 + 16);
 
-            M_DisplaySaveGameList();
+                M_DisplaySaveGameList();
 
-            mgametext(160, 90, "OVERWRITE previous SAVED game?", 0, 2 + 8 + 16);
-            mgametext(160, 90 + 9, "(Y/N)", 0, 2 + 8 + 16);
+                mgametext(160, 90, "OVERWRITE previous SAVED game?", 0, 2 + 8 + 16);
+                mgametext(160, 90 + 9, "(Y/N)", 0, 2 + 8 + 16);
+            }
 
             if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Y) || LMB)
             {
@@ -2066,19 +2569,25 @@ cheat_for_port_credits2:
             break;
         }
 
-        case 0:
+        case MENU_MAIN:
         {
-            c = (320>>1);
-            rotatesprite(c<<16,28<<16,65536L,0,INGAMEDUKETHREEDEE,0,0,10,0,0,xdim-1,ydim-1);
-            if (PLUTOPAK)   // JBF 20030804
-                rotatesprite((c+100)<<16,36<<16,65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t)totalclock<<4)&2047]>>11),0,2+8,0,0,xdim-1,ydim-1);
-            x = M_Probe(c,67,16,7);
+            c = FURY ? FURY_TOP_MENU_X : (320>>1);
+            if (!FURY)
+            {
+                rotatesprite(c<<16,28<<16,65536L,0,INGAMEDUKETHREEDEE,0,0,10,0,0,xdim-1,ydim-1);
+                if (PLUTOPAK)   // JBF 20030804
+                    rotatesprite((c+100)<<16,36<<16,65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t)totalclock<<4)&2047]>>11),0,2+8,0,0,xdim-1,ydim-1);
+            }
+            int const menuY = FURY ? FURY_TOP_MENU_Y : 67;
+            int const menuStep = FURY ? FURY_TOP_MENU_STEP : 16;
+            int const menuItems = FURY ? 5 : 7;
+            x = M_Probe(c, menuY, menuStep, menuItems);
             if (x >= 0)
             {
                 if (ud.multimode > 1 && x == 0 && ud.recstat != 2)
                 {
                     last_zero = 0;
-                    ChangeToMenu(600);
+                    ChangeToMenu(MENU_NETSETUP);
                 }
                 else
                 {
@@ -2089,30 +2598,43 @@ cheat_for_port_credits2:
                         ChangeToMenu(G_HasNewGameCustomChoices() ? MENU_NEWGAMECUSTOM : MENU_EPISODE);
                         break;
                     case 1:
-                        KB_FlushKeyboardQueue();
-                        ChangeToMenu(20001);   // MULTIPLAYER (host / join)
+                        if (FURY)
+                        {
+                            last_zero = 1;
+                            ChangeToMenu(MENU_LOAD);
+                        }
+                        else
+                        {
+                            KB_FlushKeyboardQueue();
+                            ChangeToMenu(MENU_NETWORK);   // MULTIPLAYER (host / join)
+                        }
                         break;
                     case 2:
-                        ChangeToMenu(202);
+                        ChangeToMenu(MENU_OPTIONS);
                         break;   // JBF 20031205: was 200
                     case 3:
-                        ChangeToMenu(300);
+                        ChangeToMenu(FURY ? MENU_STORY : MENU_LOAD);
                         break;
                     case 4:
-                        KB_FlushKeyboardQueue();
-                        ChangeToMenu(400);
+                        if (FURY)
+                            ChangeToMenu(MENU_QUIT);
+                        else
+                        {
+                            KB_FlushKeyboardQueue();
+                            ChangeToMenu(MENU_STORY);
+                        }
                         break;
                     case 5:
-                        ChangeToMenu(990);
+                        ChangeToMenu(MENU_CREDITS);
                         break;
                     case 6:
-                        ChangeToMenu(500);
+                        ChangeToMenu(MENU_QUIT);
                         break;
                     }
                 }
             }
 
-            if (KB_KeyPressed(sc_Q)) ChangeToMenu(500);
+            if (KB_KeyPressed(sc_Q)) ChangeToMenu(MENU_QUIT);
 
             if (x == -1 && (ud.gm&MODE_GAME || ud.recstat == 2))
             {
@@ -2124,36 +2646,52 @@ cheat_for_port_credits2:
                 }
             }
 
-            menutext(c,67+16*0,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
-            menutext(c,67+16*1,MENUHIGHLIGHT(1),0,"MULTIPLAYER");
-            menutext(c,67+16*2,MENUHIGHLIGHT(2),PHX(-3),"OPTIONS");
-            menutext(c,67+16*3,MENUHIGHLIGHT(3),PHX(-4),"LOAD GAME");
-
-            if (!VOLUMEALL)
-                menutext(c,67+16*4,MENUHIGHLIGHT(4),PHX(-5),"HOW TO ORDER");
+            menutext(c, menuY + menuStep * 0, MENUHIGHLIGHT(0), PHX(-2), "NEW GAME");
+            if (FURY)
+            {
+                menutext(c, menuY + menuStep * 1, MENUHIGHLIGHT(1), 0, "CONTINUE");
+                menutext(c, menuY + menuStep * 2, MENUHIGHLIGHT(2), PHX(-3), "OPTIONS");
+                menutext(c, menuY + menuStep * 3, MENUHIGHLIGHT(3), PHX(-4), "READ ME!");
+                menutext(c, menuY + menuStep * 4, MENUHIGHLIGHT(4), PHX(-5), "QUIT");
+            }
             else
-                menutext(c,67+16*4,MENUHIGHLIGHT(4),PHX(-5),"HELP");
+            {
+                menutext(c,menuY+menuStep*1,MENUHIGHLIGHT(1),0,"MULTIPLAYER");
+                menutext(c,menuY+menuStep*2,MENUHIGHLIGHT(2),PHX(-3),"OPTIONS");
+                menutext(c,menuY+menuStep*3,MENUHIGHLIGHT(3),PHX(-4),"LOAD GAME");
 
-            menutext(c,67+16*5,MENUHIGHLIGHT(5),PHX(-6),"CREDITS");
-            menutext(c,67+16*6,MENUHIGHLIGHT(6),PHX(-7),"QUIT");
+                if (!VOLUMEALL)
+                    menutext(c,menuY+menuStep*4,MENUHIGHLIGHT(4),PHX(-5),"HOW TO ORDER");
+                else
+                    menutext(c,menuY+menuStep*4,MENUHIGHLIGHT(4),PHX(-5),"HELP");
+
+                menutext(c,menuY+menuStep*5,MENUHIGHLIGHT(5),PHX(-6),"CREDITS");
+                menutext(c,menuY+menuStep*6,MENUHIGHLIGHT(6),PHX(-7),"QUIT");
+            }
             break;
         }
 
-        case 50:
+        case MENU_MAIN_INGAME:
         {
-            c = (320>>1);
-            rotatesprite(c<<16,32<<16,65536L,0,INGAMEDUKETHREEDEE,0,0,10,0,0,xdim-1,ydim-1);
-            if (PLUTOPAK)   // JBF 20030804
-                rotatesprite((c+100)<<16,36<<16,65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t)totalclock<<4)&2047]>>11),0,2+8,0,0,xdim-1,ydim-1);
-            x = M_Probe(c,67,16,7);
+            c = FURY ? FURY_TOP_MENU_X : (320>>1);
+            if (!FURY)
+            {
+                rotatesprite(c<<16,32<<16,65536L,0,INGAMEDUKETHREEDEE,0,0,10,0,0,xdim-1,ydim-1);
+                if (PLUTOPAK)   // JBF 20030804
+                    rotatesprite((c+100)<<16,36<<16,65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t)totalclock<<4)&2047]>>11),0,2+8,0,0,xdim-1,ydim-1);
+            }
+            int const menuY = FURY ? FURY_TOP_MENU_Y : 67;
+            int const menuStep = FURY ? FURY_TOP_MENU_STEP : 16;
+            int const menuItems = FURY ? 5 : 7;
+            x = M_Probe(c, menuY, menuStep, menuItems);
             switch (x)
             {
             case 0:
                 if (ud.multimode < 2 || ud.recstat == 2)
-                    ChangeToMenu(1500);
+                    ChangeToMenu(MENU_NEWVERIFY);
                 else
                 {
-                    ChangeToMenu(600);
+                    ChangeToMenu(MENU_NETSETUP);
                     last_fifty = 0;
                 }
                 break;
@@ -2161,33 +2699,32 @@ cheat_for_port_credits2:
                 if (ud.recstat != 2)
                 {
                     last_fifty = 1;
-                    ChangeToMenu(350);
+                    ChangeToMenu(MENU_SAVE);
                     videoSetViewableArea(0,0,xdim-1,ydim-1);
                 }
                 break;
             case 2:
                 last_fifty = 2;
-                ChangeToMenu(300);
+                ChangeToMenu(FURY ? MENU_OPTIONS : MENU_LOAD);
                 break;
             case 3:
                 last_fifty = 3;
-                ChangeToMenu(202);     // JBF 20031205: was 200
+                ChangeToMenu(FURY ? MENU_STORY : MENU_OPTIONS);     // JBF 20031205: was 200
                 break;
             case 4:
                 last_fifty = 4;
-                KB_FlushKeyboardQueue();
-                ChangeToMenu(400);
+                ChangeToMenu(FURY ? MENU_QUITTOTITLE : MENU_STORY);
                 break;
             case 5:
                 if (numplayers < 2)
                 {
                     last_fifty = 5;
-                    ChangeToMenu(501);
+                    ChangeToMenu(MENU_QUITTOTITLE);
                 }
                 break;
             case 6:
                 last_fifty = 6;
-                ChangeToMenu(500);
+                ChangeToMenu(MENU_QUIT);
                 break;
             case -1:
                 ud.gm &= ~MODE_MENU;
@@ -2200,25 +2737,35 @@ cheat_for_port_credits2:
             }
 
             if (KB_KeyPressed(sc_Q))
-                ChangeToMenu(500);
+                ChangeToMenu(MENU_QUIT);
 
-            menutext(c,67                  ,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
-            menutext(c,67+16               ,MENUHIGHLIGHT(1),PHX(-3),"SAVE GAME");
-            menutext(c,67+16+16            ,MENUHIGHLIGHT(2),PHX(-4),"LOAD GAME");
-
-            menutext(c,67+16+16+16         ,MENUHIGHLIGHT(3),PHX(-5),"OPTIONS");
-            if (!VOLUMEALL)
+            menutext(c, menuY, MENUHIGHLIGHT(0), PHX(-2), "NEW GAME");
+            if (FURY)
             {
-                menutext(c,67+16+16+16+16      ,MENUHIGHLIGHT(4),PHX(-6),"HOW TO ORDER");
+                menutext(c, menuY + menuStep * 1, MENUHIGHLIGHT(1), PHX(-3), "SAVE GAME");
+                menutext(c, menuY + menuStep * 2, MENUHIGHLIGHT(2), PHX(-4), "OPTIONS");
+                menutext(c, menuY + menuStep * 3, MENUHIGHLIGHT(3), PHX(-5), "READ ME!");
+                menutext(c, menuY + menuStep * 4, MENUHIGHLIGHT(4), PHX(-6), "QUIT");
             }
             else
             {
-                menutext(c,67+16+16+16+16      ,MENUHIGHLIGHT(4),PHX(-6)," HELP");
+                menutext(c,menuY+menuStep       ,MENUHIGHLIGHT(1),PHX(-3),"SAVE GAME");
+                menutext(c,menuY+menuStep+menuStep,MENUHIGHLIGHT(2),PHX(-4),"LOAD GAME");
+
+                menutext(c,menuY+menuStep+menuStep+menuStep,MENUHIGHLIGHT(3),PHX(-5),"OPTIONS");
+                if (!VOLUMEALL)
+                {
+                    menutext(c,menuY+menuStep+menuStep+menuStep+menuStep,MENUHIGHLIGHT(4),PHX(-6),"HOW TO ORDER");
+                }
+                else
+                {
+                    menutext(c,menuY+menuStep+menuStep+menuStep+menuStep,MENUHIGHLIGHT(4),PHX(-6)," HELP");
+                }
+                if (numplayers > 1)
+                    menutext(c,menuY+menuStep+menuStep+menuStep+menuStep+menuStep,MENUHIGHLIGHT(5),1,"QUIT TO TITLE");
+                else menutext(c,menuY+menuStep+menuStep+menuStep+menuStep+menuStep,MENUHIGHLIGHT(5),PHX(-7),"QUIT TO TITLE");
+                menutext(c,menuY+menuStep+menuStep+menuStep+menuStep+menuStep+menuStep,MENUHIGHLIGHT(6),PHX(-8),"QUIT GAME");
             }
-            if (numplayers > 1)
-                menutext(c,67+16+16+16+16+16   ,MENUHIGHLIGHT(5),1,"QUIT TO TITLE");
-            else menutext(c,67+16+16+16+16+16   ,MENUHIGHLIGHT(5),PHX(-7),"QUIT TO TITLE");
-            menutext(c,67+16+16+16+16+16+16,MENUHIGHLIGHT(6),PHX(-8),"QUIT GAME");
             break;
         }
 
@@ -2513,9 +3060,17 @@ cheat_for_port_credits2:
         case 110:
         {
             c = (320>>1);
-            rotatesprite(c<<16,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(c,24,0,0,"SELECT SKILL");
-            x = M_Probe(c,70,19,4);
+            int const skillCount = FURY ? Menu_DefinedSkillCount() : 4;
+            int const skillY = FURY ? 58 + ((4 - skillCount) * 6) : 70;
+            int const skillStep = FURY ? FURY_TOP_MENU_STEP : 19;
+
+            if (!FURY)
+            {
+                rotatesprite(c<<16,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
+                menutext(c,24,0,0,"SELECT SKILL");
+            }
+
+            x = M_Probe(c, skillY, skillStep, skillCount);
             if (x >= 0)
             {
                 switch (x)
@@ -2554,14 +3109,12 @@ cheat_for_port_credits2:
             }
             else if (x == -1)
             {
-                ChangeToMenu(100);
+                ChangeToMenu(FURY ? last_skill_parent_menu : MENU_EPISODE);
                 KB_FlushKeyboardQueue();
             }
 
-            menutext(c,70,MENUHIGHLIGHT(0),PHX(-2),g_skillNames[0]);
-            menutext(c,70+19,MENUHIGHLIGHT(1),PHX(-3),g_skillNames[1]);
-            menutext(c,70+19+19,MENUHIGHLIGHT(2),PHX(-4),g_skillNames[2]);
-            menutext(c,70+19+19+19,MENUHIGHLIGHT(3),PHX(-5),g_skillNames[3]);
+            for (i = 0; i < skillCount; ++i)
+                menutext(c, skillY + skillStep * i, MENUHIGHLIGHT(i), PHX(-2 - i), g_skillNames[i]);
             break;
         }
 
@@ -3105,7 +3658,7 @@ cheat_for_port_credits2:
                     "-",
                     "Console text style",
                     "-",
-                    "-",
+                    "Reset stats/achievements",
                     "-",
                     "-",
                     "Previous page",
@@ -3221,6 +3774,12 @@ cheat_for_port_credits2:
                     }
 
                     case 11:
+                        enabled = Menu_CapirResetAvailable();
+                        if (enabled && x==io)
+                            ChangeToMenu(MENU_RESETSTATSVERIFY);
+                        break;
+
+                    case 12:
                         if (x==io) ChangeToMenu(200);
                         break;
                     default:
@@ -3680,37 +4239,52 @@ cheat_for_port_credits2:
 
         case 204:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"KEYBOARD SETUP");
+            int const keybindFuncCount = Menu_KeybindFuncCount();
+            int const resetDefaultsIndex = keybindFuncCount;
+            int const resetClassicIndex = keybindFuncCount + 1;
+
+            if (probey > resetClassicIndex)
+                probey = resetClassicIndex;
+
+            if (!FURY)
+            {
+                rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
+                menutext(320>>1,24,0,0,"KEYBOARD SETUP");
+            }
 
             c = (320>>1)-120;
 
             onbar = 0;
 
-            if (probey == NUMGAMEFUNCTIONS)
-                x = probesm(60,145,0,NUMGAMEFUNCTIONS+2);
-            else if (probey == NUMGAMEFUNCTIONS+1)
-                x = probesm(60,152,0,NUMGAMEFUNCTIONS+2);
-            else x = probesm(0,0,0,NUMGAMEFUNCTIONS+2);
+            if (probey == resetDefaultsIndex)
+                x = probesm(60,145,0,keybindFuncCount+2);
+            else if (probey == resetClassicIndex)
+                x = probesm(60,152,0,keybindFuncCount+2);
+            else x = probesm(0,0,0,keybindFuncCount+2);
 
             if (x==-1)
             {
                 ChangeToMenu(202);
                 probey = 4;
             }
-            else if (x == NUMGAMEFUNCTIONS)
+            else if (x == resetDefaultsIndex)
             {
                 CONFIG_SetDefaultKeys(keydefaults);
+                CONFIG_RepairFuryDefaults();
                 break;
             }
-            else if (x == NUMGAMEFUNCTIONS+1)
+            else if (x == resetClassicIndex)
             {
                 CONFIG_SetDefaultKeys(oldkeydefaults);
+                CONFIG_RepairFuryDefaults();
                 break;
             }
             else if (x>=0)
             {
-                function = probey;
+                function = Menu_KeybindFuncAt(probey);
+                if ((unsigned)function >= NUMGAMEFUNCTIONS)
+                    break;
+
                 whichkey = currentlist;
                 ChangeToMenu(210);
                 KB_FlushKeyboardQueue();
@@ -3721,9 +4295,12 @@ cheat_for_port_credits2:
             // the top of our list
             m = probey - 6;
             if (m < 0) m = 0;
-            else if (m + 13 >= NUMGAMEFUNCTIONS) m = NUMGAMEFUNCTIONS-13;
+            else if (m + 13 >= keybindFuncCount) m = keybindFuncCount-13;
+            if (m < 0) m = 0;
 
-            if (probey == gamefunc_Show_Console) currentlist = 0;
+            int const selectedFunc = Menu_KeybindFuncAt(probey);
+
+            if (selectedFunc == gamefunc_Show_Console) currentlist = 0;
             else if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4) ||
                      KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6) ||
                      KB_KeyPressed(sc_Tab))
@@ -3738,42 +4315,57 @@ cheat_for_port_credits2:
             }
             else if (KB_KeyPressed(sc_Delete))
             {
-                char key[2];
-                key[0] = ud.config.KeyboardKeys[probey][0];
-                key[1] = ud.config.KeyboardKeys[probey][1];
-                ud.config.KeyboardKeys[probey][currentlist] = 0xff;
-                CONFIG_MapKey(probey, ud.config.KeyboardKeys[probey][0], key[0], ud.config.KeyboardKeys[probey][1], key[1]);
+                if ((unsigned)selectedFunc < NUMGAMEFUNCTIONS)
+                {
+                    char key[2];
+                    key[0] = ud.config.KeyboardKeys[selectedFunc][0];
+                    key[1] = ud.config.KeyboardKeys[selectedFunc][1];
+                    ud.config.KeyboardKeys[selectedFunc][currentlist] = 0xff;
+                    CONFIG_MapKey(selectedFunc, ud.config.KeyboardKeys[selectedFunc][0], key[0], ud.config.KeyboardKeys[selectedFunc][1], key[1]);
+                }
                 S_PlaySound(KICK_HIT);
                 KB_ClearKeyDown(sc_Delete);
             }
 
-            for (l=min(13,NUMGAMEFUNCTIONS)-1; l >= 0 ; l--)
+            for (l=min(13,keybindFuncCount)-1; l >= 0 ; l--)
             {
-                p = CONFIG_FunctionNumToName(m+l);
+                int const drawFunc = Menu_KeybindFuncAt(m+l);
+                p = CONFIG_FunctionNumToName(drawFunc);
                 if (!p) continue;
 
                 strcpy(tempbuf, p);
                 for (i=0;tempbuf[i];i++) if (tempbuf[i]=='_') tempbuf[i] = ' ';
-                minitextshade(70,34+l*8,tempbuf,(m+l == probey)?0:16,1,10+16);
+                Menu_FuryControlText(FURY ? 58 : 70, 34+l*8,tempbuf,(m+l == probey)?0:16,FURY ? 7 : 1);
 
                 //strcpy(tempbuf, KB_ScanCodeToString(ud.config.KeyboardKeys[m+l][0]));
-                strcpy(tempbuf, keyGetName(ud.config.KeyboardKeys[m+l][0]));
+                strcpy(tempbuf, keyGetName(ud.config.KeyboardKeys[drawFunc][0]));
                 if (!tempbuf[0]) strcpy(tempbuf, "  -");
-                minitextshade(70+100,34+l*8,tempbuf,
-                              (m+l == probey && !currentlist?0:16),2,10+16);
+                Menu_FuryControlText(FURY ? 166 : 70+100, 34+l*8, tempbuf,
+                                     (m+l == probey && !currentlist?0:16), FURY ? 10 : 2);
 
                 //strcpy(tempbuf, KB_ScanCodeToString(ud.config.KeyboardKeys[m+l][1]));
-                strcpy(tempbuf, keyGetName(ud.config.KeyboardKeys[m+l][1]));
+                strcpy(tempbuf, keyGetName(ud.config.KeyboardKeys[drawFunc][1]));
                 if (!tempbuf[0]) strcpy(tempbuf, "  -");
-                minitextshade(70+120+34,34+l*8,tempbuf,
-                              (m+l == probey && currentlist?0:16),2,10+16);
+                Menu_FuryControlText(FURY ? 226 : 70+120+34, 34+l*8, tempbuf,
+                                     (m+l == probey && currentlist?0:16), FURY ? 10 : 2);
             }
 
-            mgametextpal(160,140,  "RESET KEYS TO DEFAULTS",MENUHIGHLIGHT(NUMGAMEFUNCTIONS),10);
-            mgametextpal(160,140+7,"SET CLASSIC KEY LAYOUT",MENUHIGHLIGHT(NUMGAMEFUNCTIONS+1),10);
-            mgametext(160,144+9+3,"UP/DOWN = SELECT ACTION",0,2+8+16);
-            mgametext(160,144+9+9+3,"LEFT/RIGHT = SELECT LIST",0,2+8+16);
-            mgametext(160,144+9+9+9+3,"ENTER = MODIFY   DELETE = CLEAR",0,2+8+16);
+            if (FURY)
+            {
+                Menu_FurySmallText(160, 140, "RESET KEYS TO DEFAULTS", MENUHIGHLIGHT(resetDefaultsIndex), 10, TEXT_XCENTER);
+                Menu_FurySmallText(160, 147, "SET CLASSIC KEY LAYOUT", MENUHIGHLIGHT(resetClassicIndex), 10, TEXT_XCENTER);
+                Menu_FurySmallText(160, 158, "UP/DOWN = SELECT ACTION", 0, 11, TEXT_XCENTER);
+                Menu_FurySmallText(160, 165, "LEFT/RIGHT = SELECT LIST", 0, 11, TEXT_XCENTER);
+                Menu_FurySmallText(160, 172, "ENTER = MODIFY   DELETE = CLEAR", 0, 11, TEXT_XCENTER);
+            }
+            else
+            {
+                mgametextpal(160,140,  "RESET KEYS TO DEFAULTS",MENUHIGHLIGHT(resetDefaultsIndex),10);
+                mgametextpal(160,140+7,"SET CLASSIC KEY LAYOUT",MENUHIGHLIGHT(resetClassicIndex),10);
+                mgametext(160,144+9+3,"UP/DOWN = SELECT ACTION",0,2+8+16);
+                mgametext(160,144+9+9+3,"LEFT/RIGHT = SELECT LIST",0,2+8+16);
+                mgametext(160,144+9+9+9+3,"ENTER = MODIFY   DELETE = CLEAR",0,2+8+16);
+            }
 
             break;
         }
@@ -3781,13 +4373,23 @@ cheat_for_port_credits2:
         case 210:
         {
             int32_t sc;
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"KEYBOARD SETUP");
+            if (FURY)
+            {
+                Menu_FurySmallText(160, 90, "PRESS THE KEY TO ASSIGN AS", 0, 10, TEXT_XCENTER);
+                sprintf(tempbuf,"%s FOR \"%s\"", whichkey?"SECONDARY":"PRIMARY", CONFIG_FunctionNumToName(function));
+                Menu_FurySmallText(160, 98, tempbuf, 0, 10, TEXT_XCENTER);
+                Menu_FurySmallText(160, 116, "PRESS \"ESCAPE\" TO CANCEL", 0, 11, TEXT_XCENTER);
+            }
+            else
+            {
+                rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
+                menutext(320>>1,24,0,0,"KEYBOARD SETUP");
 
-            mgametext(320>>1,90,"PRESS THE KEY TO ASSIGN AS",0,2+8+16);
-            sprintf(tempbuf,"%s FOR \"%s\"", whichkey?"SECONDARY":"PRIMARY", CONFIG_FunctionNumToName(function));
-            mgametext(320>>1,90+9,tempbuf,0,2+8+16);
-            mgametext(320>>1,90+9+9+9,"PRESS \"ESCAPE\" TO CANCEL",0,2+8+16);
+                mgametext(320>>1,90,"PRESS THE KEY TO ASSIGN AS",0,2+8+16);
+                sprintf(tempbuf,"%s FOR \"%s\"", whichkey?"SECONDARY":"PRIMARY", CONFIG_FunctionNumToName(function));
+                mgametext(320>>1,90+9,tempbuf,0,2+8+16);
+                mgametext(320>>1,90+9+9+9,"PRESS \"ESCAPE\" TO CANCEL",0,2+8+16);
+            }
 
             sc = KB_GetLastScanCode();
             if (sc != sc_None || RMB)
@@ -3814,7 +4416,7 @@ cheat_for_port_credits2:
                 ChangeToMenu(204);
 
                 currentlist = whichkey;
-                probey = function;
+                probey = Menu_VisibleIndexForFunc(function);
 
                 KB_ClearKeyDown(sc);
             }
@@ -3941,13 +4543,19 @@ cheat_for_port_credits2:
 
         case 211:
         {
+            int const keybindFuncCount = Menu_KeybindFuncCount();
+            int const noneFuncIndex = keybindFuncCount;
+
+            if (probey > noneFuncIndex)
+                probey = noneFuncIndex;
+
             rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
             if (function == 0) menutext(320>>1,24,0,0,"MOUSE SETUP");
             else if (function == 1) menutext(320>>1,24,0,0,"ADVANCED MOUSE");
             else if (function == 2) menutext(320>>1,24,0,0,"JOYSTICK BUTTONS");
             else if (function == 3) menutext(320>>1,24,0,0,"JOYSTICK AXES");
 
-            x = M_Probe(0,0,0,NUMGAMEFUNCTIONS);
+            x = M_Probe(0,0,0,keybindFuncCount + 1);
 
             if (x==-1)
             {
@@ -3979,7 +4587,7 @@ cheat_for_port_credits2:
             }
             else if (x >= 0)
             {
-                if (x == NUMGAMEFUNCTIONS-1) x = -1;
+                x = (x == noneFuncIndex) ? -1 : Menu_KeybindFuncAt(x);
 
                 if (function == 0)
                 {
@@ -4080,7 +4688,7 @@ cheat_for_port_credits2:
             if (KB_KeyPressed(sc_End))
             {
                 KB_ClearKeyDown(sc_End);
-                probey = NUMGAMEFUNCTIONS-1;
+                probey = noneFuncIndex;
                 S_PlaySound(KICK_HIT);
             }
             else if (KB_KeyPressed(sc_Home))
@@ -4092,14 +4700,15 @@ cheat_for_port_credits2:
 
             m = probey - 6;
             if (m < 0) m = 0;
-            else if (m + 13 >= NUMGAMEFUNCTIONS) m = NUMGAMEFUNCTIONS-13;
+            else if (m + 13 >= keybindFuncCount + 1) m = keybindFuncCount + 1 - 13;
+            if (m < 0) m = 0;
 
-            for (l=0; l < min(13,NUMGAMEFUNCTIONS); l++)
+            for (l=0; l < min(13,keybindFuncCount + 1); l++)
             {
-                if (l+m == NUMGAMEFUNCTIONS-1)
+                if (l+m == noneFuncIndex)
                     strcpy(tempbuf, "  -NONE-");
                 else
-                    strcpy(tempbuf, CONFIG_FunctionNumToName(m+l));
+                    strcpy(tempbuf, CONFIG_FunctionNumToName(Menu_KeybindFuncAt(m+l)));
 
                 for (i=0;tempbuf[i];i++) if (tempbuf[i]=='_') tempbuf[i] = ' ';
                 minitext(100,51+l*8,tempbuf,(m+l == probey)?0:16,10+16);
@@ -4877,7 +5486,7 @@ cheat_for_port_credits2:
             break;
         }
 
-        case 350:
+        case MENU_SAVE:
         {
             ChangeToMenu(351);
             g_screenCapture = 1;
@@ -4898,23 +5507,29 @@ cheat_for_port_credits2:
         case 368:
         case 369:
         case 351:
-        case 300:
+        case MENU_LOAD:
         {
             c = 320>>1;
-            rotatesprite(c<<16,200<<15,65536L,0,MENUSCREEN,16,0,10+64,0,0,xdim-1,ydim-1);
-            rotatesprite(c<<16,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
+            if (!FURY)
+            {
+                rotatesprite(c<<16,200<<15,65536L,0,MENUSCREEN,16,0,10+64,0,0,xdim-1,ydim-1);
+                rotatesprite(c<<16,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
 
-            if (g_currentMenu == 300) menutext(c,24,0,0,"LOAD GAME");
-            else menutext(c,24,0,0,"SAVE GAME");
+                if (g_currentMenu == MENU_LOAD) menutext(c,24,0,0,"LOAD GAME");
+                else menutext(c,24,0,0,"SAVE GAME");
+            }
 
             if (g_currentMenu >= 360 && g_currentMenu <= 369)
             {
-                sprintf(tempbuf,"PLAYERS: %-2d                      ",ud.multimode);
-                mgametext(160,156,tempbuf,0,2+8+16);
-                sprintf(tempbuf,"EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d",1+ud.volume_number,1+ud.level_number,ud.player_skill);
-                mgametext(160,168,tempbuf,0,2+8+16);
-                if (ud.volume_number == 0 && ud.level_number == 7)
-                    mgametext(160,180,currentboardfilename,0,2+8+16);
+                if (!FURY)
+                {
+                    sprintf(tempbuf,"PLAYERS: %-2d                      ",ud.multimode);
+                    mgametext(160,156,tempbuf,0,2+8+16);
+                    sprintf(tempbuf,"EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d",1+ud.volume_number,1+ud.level_number,ud.player_skill);
+                    mgametext(160,168,tempbuf,0,2+8+16);
+                    if (ud.volume_number == 0 && ud.level_number == 7)
+                        mgametext(160,180,currentboardfilename,0,2+8+16);
+                }
 
                 x = G_EnterText((320>>1),184,&ud.savegame[g_currentMenu-360][0],19, 999);
 
@@ -4955,9 +5570,14 @@ cheat_for_port_credits2:
                     }
                 }
 
-                rotatesprite(101<<16,97<<16,65536>>1,512,TILE_SAVESHOT,-32,0,2+4+8+64,0,0,xdim-1,ydim-1);
-                M_DisplaySaveGameList();
-                rotatesprite((c+67+strlen(&ud.savegame[g_currentMenu-360][0])*4)<<16,(50+12*probey)<<16,32768L-10240,0,SPINNINGNUKEICON+((((int32_t)totalclock)>>3)%7),0,0,10,0,0,xdim-1,ydim-1);
+                if (!FURY)
+                {
+                    rotatesprite(101<<16,97<<16,65536>>1,512,TILE_SAVESHOT,-32,0,2+4+8+64,0,0,xdim-1,ydim-1);
+                    M_DisplaySaveGameList();
+                    rotatesprite((c+67+strlen(&ud.savegame[g_currentMenu-360][0])*4)<<16,(50+12*probey)<<16,32768L-10240,0,SPINNINGNUKEICON+((((int32_t)totalclock)>>3)%7),0,0,10,0,0,xdim-1,ydim-1);
+                }
+                else
+                    M_DisplayFurySaveGameList();
                 break;
             }
 
@@ -4965,7 +5585,7 @@ cheat_for_port_credits2:
 
             x = M_Probe(c+68,54,12,10);
 
-            if (g_currentMenu == 300)
+            if (g_currentMenu == MENU_LOAD)
             {
                 if (ud.savegame[probey][0])
                 {
@@ -4975,15 +5595,18 @@ cheat_for_port_credits2:
                         lastsavehead = probey;
                     }
 
-                    rotatesprite(101<<16,97<<16,65536L>>1,512,TILE_LOADSHOT,-32,0,4+10+64,0,0,xdim-1,ydim-1);
-                    sprintf(tempbuf,"PLAYERS: %-2d                      ",savehead.numplr);
-                    mgametext(160,156,tempbuf,0,2+8+16);
-                    sprintf(tempbuf,"EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d",1+savehead.volnum,1+savehead.levnum,savehead.plrskl);
-                    mgametext(160,168,tempbuf,0,2+8+16);
-                    if (savehead.volnum == 0 && savehead.levnum == 7)
-                        mgametext(160,180,savehead.boardfn,0,2+8+16);
+                    if (!FURY)
+                    {
+                        rotatesprite(101<<16,97<<16,65536L>>1,512,TILE_LOADSHOT,-32,0,4+10+64,0,0,xdim-1,ydim-1);
+                        sprintf(tempbuf,"PLAYERS: %-2d                      ",savehead.numplr);
+                        mgametext(160,156,tempbuf,0,2+8+16);
+                        sprintf(tempbuf,"EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d",1+savehead.volnum,1+savehead.levnum,savehead.plrskl);
+                        mgametext(160,168,tempbuf,0,2+8+16);
+                        if (savehead.volnum == 0 && savehead.levnum == 7)
+                            mgametext(160,180,savehead.boardfn,0,2+8+16);
+                    }
                 }
-                else menutext(69,70,0,0,"EMPTY");
+                else if (!FURY) menutext(69,70,0,0,"EMPTY");
             }
             else
             {
@@ -4992,21 +5615,25 @@ cheat_for_port_credits2:
                     if (lastsavehead != probey)
                         G_LoadSaveHeader(probey,&savehead);
                     lastsavehead = probey;
-                    rotatesprite(101<<16,97<<16,65536L>>1,512,TILE_LOADSHOT,-32,0,4+10+64,0,0,xdim-1,ydim-1);
+                    if (!FURY)
+                        rotatesprite(101<<16,97<<16,65536L>>1,512,TILE_LOADSHOT,-32,0,4+10+64,0,0,xdim-1,ydim-1);
                 }
-                else menutext(69,70,0,0,"EMPTY");
-                sprintf(tempbuf,"PLAYERS: %-2d                      ",ud.multimode);
-                mgametext(160,156,tempbuf,0,2+8+16);
-                sprintf(tempbuf,"EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d",1+ud.volume_number,1+ud.level_number,ud.player_skill);
-                mgametext(160,168,tempbuf,0,2+8+16);
-                if (ud.volume_number == 0 && ud.level_number == 7)
-                    mgametext(160,180,currentboardfilename,0,2+8+16);
+                else if (!FURY) menutext(69,70,0,0,"EMPTY");
+                if (!FURY)
+                {
+                    sprintf(tempbuf,"PLAYERS: %-2d                      ",ud.multimode);
+                    mgametext(160,156,tempbuf,0,2+8+16);
+                    sprintf(tempbuf,"EPISODE: %-2d / LEVEL: %-2d / SKILL: %-2d",1+ud.volume_number,1+ud.level_number,ud.player_skill);
+                    mgametext(160,168,tempbuf,0,2+8+16);
+                    if (ud.volume_number == 0 && ud.level_number == 7)
+                        mgametext(160,180,currentboardfilename,0,2+8+16);
+                }
             }
 
             switch (x)
             {
             case -1:
-                if (g_currentMenu == 300)
+                if (g_currentMenu == MENU_LOAD)
                 {
                     if ((ud.gm&MODE_GAME) != MODE_GAME)
                     {
@@ -5036,7 +5663,7 @@ cheat_for_port_credits2:
             case 7:
             case 8:
             case 9:
-                if (g_currentMenu == 300)
+                if (g_currentMenu == MENU_LOAD)
                 {
                     if (ud.savegame[x][0])
                         g_currentMenu = (1000+x);
@@ -5057,12 +5684,71 @@ cheat_for_port_credits2:
             }
 
 DISPLAYNAMES:
-            M_DisplaySaveGameList();
+            if (FURY)
+                M_DisplayFurySaveGameList();
+            else
+                M_DisplaySaveGameList();
             break;
         }
 
-        case 400:
-        case 401:
+        case MENU_STORY:
+        case MENU_F1HELP:
+            if (FURY)
+            {
+                int const goPrevious =
+                    KB_KeyPressed(sc_LeftArrow) ||
+                    KB_KeyPressed(sc_kpad_4) ||
+                    KB_KeyPressed(sc_UpArrow) ||
+                    KB_KeyPressed(sc_PgUp) ||
+                    KB_KeyPressed(sc_kpad_8) ||
+                    WHEELDOWN;
+
+                int const goNext =
+                    KB_KeyPressed(sc_PgDn) ||
+                    KB_KeyPressed(sc_Enter) ||
+                    KB_KeyPressed(sc_kpad_Enter) ||
+                    KB_KeyPressed(sc_RightArrow) ||
+                    KB_KeyPressed(sc_DownArrow) ||
+                    KB_KeyPressed(sc_kpad_2) ||
+                    KB_KeyPressed(sc_kpad_9) ||
+                    KB_KeyPressed(sc_Space) ||
+                    KB_KeyPressed(sc_kpad_6) ||
+                    LMB ||
+                    WHEELUP;
+
+                x = M_Probe(0, 0, 0, 1);
+
+                if (x == -1)
+                {
+                    ChangeToMenu((ud.gm & MODE_GAME) ? MENU_MAIN_INGAME : MENU_MAIN);
+                    return;
+                }
+
+                if (goPrevious || goNext || x >= 0)
+                {
+                    KB_ClearKeyDown(sc_LeftArrow);
+                    KB_ClearKeyDown(sc_kpad_4);
+                    KB_ClearKeyDown(sc_UpArrow);
+                    KB_ClearKeyDown(sc_PgUp);
+                    KB_ClearKeyDown(sc_kpad_8);
+                    KB_ClearKeyDown(sc_PgDn);
+                    KB_ClearKeyDown(sc_Enter);
+                    KB_ClearKeyDown(sc_RightArrow);
+                    KB_ClearKeyDown(sc_kpad_Enter);
+                    KB_ClearKeyDown(sc_kpad_6);
+                    KB_ClearKeyDown(sc_kpad_9);
+                    KB_ClearKeyDown(sc_kpad_2);
+                    KB_ClearKeyDown(sc_DownArrow);
+                    KB_ClearKeyDown(sc_Space);
+                    MOUSE_ClearButton(M_LEFTBUTTON);
+                    MOUSE_ClearButton(M_WHEELUP);
+                    MOUSE_ClearButton(M_WHEELDOWN);
+                    S_PlaySound(KICK_HIT);
+
+                    ChangeToMenu(goPrevious ? MENU_STORY : MENU_F1HELP);
+                }
+                break;
+            }
             if (VOLUMEALL) goto VOLUME_ALL_40x;
             fallthrough__;
         case 402:
@@ -5193,13 +5879,20 @@ VOLUME_ALL_40x:
             break;
         }
 
-        case 500:
-        case 502:
+        case MENU_QUIT:
+        case MENU_QUIT_INGAME:
         {
             c = 320>>1;
 
-            mgametext(c,90,"Are you sure you want to quit?",0,2+8+16);
-            mgametext(c,99,"(Y/N)",0,2+8+16);
+            if (FURY)
+            {
+                // Ion Fury draws its themed quit modal from EVENT_DISPLAYMENUREST.
+            }
+            else
+            {
+                mgametext(c,90,"Are you sure you want to quit?",0,2+8+16);
+                mgametext(c,99,"(Y/N)",0,2+8+16);
+            }
 
             if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Y) || LMB)
             {
@@ -5217,7 +5910,7 @@ VOLUME_ALL_40x:
                     ud.gm = MODE_DEMO;
                 else
                 {
-                    if (g_currentMenu == 502)
+                    if (g_currentMenu == MENU_QUIT_INGAME)
                     {
                         ChangeToMenu(last_menu);
                         probey = last_menu_pos;
@@ -5235,11 +5928,18 @@ VOLUME_ALL_40x:
             break;
         }
 
-        case 501:
+        case MENU_QUITTOTITLE:
         {
             c = 320>>1;
-            mgametext(c,90,"Quit to Title?",0,2+8+16);
-            mgametext(c,99,"(Y/N)",0,2+8+16);
+            if (FURY)
+            {
+                // Ion Fury draws its themed quit modal from EVENT_DISPLAYMENUREST.
+            }
+            else
+            {
+                mgametext(c,90,"Quit to Title?",0,2+8+16);
+                mgametext(c,99,"(Y/N)",0,2+8+16);
+            }
 
             if (KB_KeyPressed(sc_Space) || KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || KB_KeyPressed(sc_Y) || LMB)
             {
@@ -5630,7 +6330,11 @@ VOLUME_ALL_40x:
         }
     }
 
-    X_OnEvent(EVENT_DISPLAYMENUREST, g_player[myconnectindex].ps->i, myconnectindex, -1);
+    if (!furyVerifyPrompt)
+        Menu_RunDisplayEvent(EVENT_DISPLAYMENUREST);
+    Menu_FuryLateVerifyPrompt();
+    if (!(FURY && Menu_IsVerifyPrompt(g_currentMenu)))
+        Menu_DisplayScriptCursor();
 
     // The normal HUD path draws DevTools during gameplay. Draw it here too at
     // title/menu screens, where there is no HUD pass yet.

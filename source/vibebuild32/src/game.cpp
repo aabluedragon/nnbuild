@@ -364,7 +364,22 @@ enum gametokens
     T_LOCKED,
     T_HIDDEN,
     T_USERCONTENT,
+    T_KEYCONFIG,
 };
+
+static const char *G_GamefuncSymbolName(int const gameFunc)
+{
+    switch (gameFunc)
+    {
+        case gamefunc_Holo_Duke:     return "gamefunc_Holo_Duke";
+        case gamefunc_Jetpack:       return "gamefunc_Jetpack";
+        case gamefunc_NightVision:   return "gamefunc_NightVision";
+        case gamefunc_MedKit:        return "gamefunc_MedKit";
+        case gamefunc_Steroids:      return "gamefunc_Steroids";
+        case gamefunc_Quick_Kick:    return "gamefunc_Quick_Kick";
+        default:                     return gamefunc_symbol_names[gameFunc];
+    }
+}
 
 void SetIfGreater(int32_t *variable, int32_t potentialValue)
 {
@@ -909,6 +924,9 @@ vec2_t G_ScreenText(const int32_t font,
     {
         int32_t lines = G_GetStringNumLines(text, end, iter);
 
+        if ((f & TEXT_VARHEIGHT) && !(o & RS_TOPLEFT))
+            origin.y = scale((tilesiz[font].y >> 1) << 16, z, 65536);
+
         if ((f & TEXT_XJUSTIFY) || (f & TEXT_XRIGHT) || (f & TEXT_XCENTER))
         {
             const int32_t length = G_GetStringLineLength(text, end, iter);
@@ -1021,6 +1039,9 @@ vec2_t G_ScreenText(const int32_t font,
 
             G_AddCoordsFromRotation(&location, &Xdirection, pos.x);
             G_AddCoordsFromRotation(&location, &Ydirection, pos.y);
+
+            if ((f & TEXT_VARHEIGHT) && !(orientation & RS_TOPLEFT))
+                G_AddCoordsFromRotation(&location, &Xdirection, (tilesiz[tile].x * z) >> 1);
 
             rotatesprite_(location.x, location.y, z, angle, tile, shade, pal, 2 | orientation, alpha, 0, x1, y1, x2, y2);
 
@@ -2593,10 +2614,15 @@ void G_DisplayRest(int smoothratio)
 
             if (ud.overhead_on == 2)
             {
-                if (ud.screen_size > 0) a = 147;
-                else a = 179;
-                minitext(5,a+6,EpisodeNames[ud.volume_number],0,2+8+16);
-                minitext(5,a+6+6,g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name,0,2+8+16);
+                int32_t const textret = X_OnEventWithReturn(EVENT_DISPLAYOVERHEADMAPTEXT, g_player[screenpeek].ps->i, screenpeek, 0);
+
+                if (textret == 0)
+                {
+                    if (ud.screen_size > 0) a = 147;
+                    else a = 179;
+                    minitext(5,a+6,EpisodeNames[ud.volume_number],0,2+8+16);
+                    minitext(5,a+6+6,g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name,0,2+8+16);
+                }
             }
         }
     }
@@ -2712,6 +2738,8 @@ void G_DisplayRest(int smoothratio)
             applied = 0;
         }
     }
+
+    X_OnEvent(EVENT_DISPLAYEND, g_player[screenpeek].ps->i, screenpeek, -1);
 }
 
 static void G_DoThirdPerson(DukePlayer_t *pp, vec3_t *vect, short *vsectnum, int16_t ang, int16_t horiz)
@@ -2796,12 +2824,6 @@ void G_DrawBackground(void)
         break;
     }
 
-    if (tilesiz[dapicnum].x == 0 || tilesiz[dapicnum].y == 0)
-    {
-        pus = pub = NUMPAGES;
-        return;
-    }
-
     y1 = 0;
     y2 = ydim;
     if (ud.gm & MODE_GAME || ud.recstat == 2)
@@ -2822,15 +2844,35 @@ void G_DrawBackground(void)
         int const vbjsMenuTile = VBJS_MenuBackground();
         int const defaultMenuTile = tilesiz[MENUTILE].x == 320 && tilesiz[MENUTILE].y == 200 ? MENUTILE : BIGHOLE;
         int const selectedMenuTile = vbjsMenuTile >= 0 && tilesiz[vbjsMenuTile].x > 0 && tilesiz[vbjsMenuTile].y > 0 ? vbjsMenuTile : defaultMenuTile;
-        Gv_SetVar(sysVarIDs.RETURN, selectedMenuTile, -1, -1);
-        X_OnEvent(EVENT_GETMENUTILE, g_player[screenpeek].ps->i, screenpeek, -1);
+
+        videoClearScreen(0);
+
+        int const menuTile = X_OnEventWithReturn(EVENT_GETMENUTILE, g_player[screenpeek].ps->i, screenpeek, selectedMenuTile);
+        if ((unsigned)menuTile >= MAXTILES || tilesiz[menuTile].x <= 0 || tilesiz[menuTile].y <= 0)
+        {
+            if (FURY)
+            {
+                int const furyMenuTile = Gv_GetVarByLabel("exp_aftershock", 0, -1, -1) && tilesiz[17500].x > 0 && tilesiz[17500].y > 0
+                                      ? 17500 : 5463;
+                if (tilesiz[furyMenuTile].x > 0 && tilesiz[furyMenuTile].y > 0)
+                    rotatesprite_fs(320<<15, 240<<15, 32768L, 0, furyMenuTile, 0, 0, 2+8+ROTATESPRITE_FULL16+RS_STRETCH);
+            }
+            return;
+        }
+
         if (Gv_GetVarByLabel("MENU_TILE", tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?0:1, -1, -1))
         {
-            for (y=y1;y<y2;y+=tilesiz[Gv_GetVar(sysVarIDs.RETURN, -1, -1)].y)
-                for (x=0;x<xdim;x+=tilesiz[Gv_GetVar(sysVarIDs.RETURN, -1, -1)].x)
-                    rotatesprite(x<<16,y<<16,65536L,0,Gv_GetVar(sysVarIDs.RETURN, -1, -1),bpp==8?16:8,0,8+16+64,0,0,xdim-1,ydim-1);
+            for (y=y1;y<y2;y+=tilesiz[menuTile].y)
+                for (x=0;x<xdim;x+=tilesiz[menuTile].x)
+                    rotatesprite_fs(x<<16,y<<16,65536L,0,menuTile,bpp==8?16:8,0,8+16+64);
         }
-        else rotatesprite(320<<15,200<<15,65536L,0,Gv_GetVar(sysVarIDs.RETURN, -1, -1),bpp==8?16:8,0,2+8+64,0,0,xdim-1,ydim-1);
+        else rotatesprite_fs(160<<16,100<<16,65536L,0,menuTile,bpp==8?16:8,0,2+8+64+RS_STRETCH);
+        return;
+    }
+
+    if (tilesiz[dapicnum].x == 0 || tilesiz[dapicnum].y == 0)
+    {
+        pus = pub = NUMPAGES;
         return;
     }
 
@@ -3499,31 +3541,34 @@ void G_DrawRooms(int snum,int smoothratio)
             break;
         }
 
-        X_OnEvent(EVENT_DISPLAYROOMS, g_player[screenpeek].ps->i, screenpeek, -1);
+        int const noDraw = X_OnEventWithReturn(EVENT_DISPLAYROOMS, p->i, snum, 0);
 
         ud.cameraq16horiz = fix16_clamp(ud.cameraq16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
 
-        G_HandleMirror(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, ud.cameraq16ang, ud.cameraq16horiz, smoothratio);
-        G_ClearGotMirror();
+        if (noDraw != 1)
+        {
+            G_HandleMirror(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, ud.cameraq16ang, ud.cameraq16horiz, smoothratio);
+            G_ClearGotMirror();
 
-        G_SE40(smoothratio);
+            G_SE40(smoothratio);
 
 #ifdef POLYMER
-        if (videoGetRenderMode() == REND_POLYMER)
-            polymer_setanimatesprites(G_DoSpriteAnimations, CAMERA(pos.x), CAMERA(pos.y), CAMERA(pos.z), fix16_to_int(CAMERA(q16ang)), smoothratio);
+            if (videoGetRenderMode() == REND_POLYMER)
+                polymer_setanimatesprites(G_DoSpriteAnimations, CAMERA(pos.x), CAMERA(pos.y), CAMERA(pos.z), fix16_to_int(CAMERA(q16ang)), smoothratio);
 #endif
 
-        yax_preparedrawrooms();
-        renderDrawRoomsQ16(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,ud.camerasect);
-        yax_drawrooms(G_DoSpriteAnimations, ud.camerasect, 0, smoothratio);
+            yax_preparedrawrooms();
+            renderDrawRoomsQ16(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,ud.camerasect);
+            yax_drawrooms(G_DoSpriteAnimations, ud.camerasect, 0, smoothratio);
 
-        // dupe the sprites touching the portal to the other sector
-        if ((unsigned)ror_sprite < MAXSPRITES && drawing_ror == 1)
-            G_OROR_DupeSprites(&sprite[ror_sprite]);
+            // dupe the sprites touching the portal to the other sector
+            if ((unsigned)ror_sprite < MAXSPRITES && drawing_ror == 1)
+                G_OROR_DupeSprites(&sprite[ror_sprite]);
 
-        G_DoSpriteAnimations(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,fix16_to_int(ud.cameraq16ang),smoothratio);
-        drawing_ror = 0;
-        renderDrawMasks();
+            G_DoSpriteAnimations(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,fix16_to_int(ud.cameraq16ang),smoothratio);
+            drawing_ror = 0;
+            renderDrawMasks();
+        }
 
         if (g_screenCapture == 1)
         {
@@ -3597,6 +3642,8 @@ void G_DrawRooms(int snum,int smoothratio)
         newaspect_enable = 0;
         renderSetAspect(viewingRange, tabledivide32_noinline(65536 * ydim * 8, xdim * 5));
     }
+
+    X_OnEvent(EVENT_DISPLAYROOMSEND, g_player[screenpeek].ps->i, screenpeek, -1);
 }
 
 static void G_DumpDebugInfo(void)
@@ -6984,6 +7031,15 @@ static void G_DoCheats(void)
 
 FOUNDCHEAT:
             {
+                k = X_OnEventWithReturn(EVENT_ACTIVATECHEAT, g_player[myconnectindex].ps->i, myconnectindex, k);
+
+                if ((unsigned)k >= NUMCHEATCODES)
+                {
+                    KB_FlushKeyboardQueue();
+                    g_player[myconnectindex].ps->cheat_phase = 0;
+                    return;
+                }
+
                 switch (k)
                 {
                 case CHEAT_WEAPONS:
@@ -8092,12 +8148,14 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         { "#define",           T_DEFINE,          },
         { "loadgrp",           T_LOADGRP          },
         { "cachesize",         T_CACHESIZE        },
+        { "noautoload",        T_NOAUTOLOAD       },
         { "noautload",         T_NOAUTOLOAD       },
         { "music",             T_MUSIC            },
         { "sound",             T_SOUND            },
         { "addplayercolor",    T_ADDPLAYERCOL     },
         { "delplayercolor",    T_DELPLAYERCOL     },
         { "newgamechoices",    T_NEWGAMECHOICES   },
+        { "keyconfig",         T_KEYCONFIG        },
     };
 
     static const tokenlist soundTokens[] =
@@ -8111,6 +8169,18 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         { "distance", T_DISTANCE },
         { "volume",   T_VOLUME },
     };
+
+    for (int f = 0; f < NUMGAMEFUNCTIONS; ++f)
+        scriptfile_addsymbolvalue(gamefunc_symbol_names[f], f);
+
+#ifndef EDUKE32_STANDALONE
+    scriptfile_addsymbolvalue("gamefunc_Holo_Duke", gamefunc_Holo_Duke);
+    scriptfile_addsymbolvalue("gamefunc_Jetpack", gamefunc_Jetpack);
+    scriptfile_addsymbolvalue("gamefunc_NightVision", gamefunc_NightVision);
+    scriptfile_addsymbolvalue("gamefunc_MedKit", gamefunc_MedKit);
+    scriptfile_addsymbolvalue("gamefunc_Steroids", gamefunc_Steroids);
+    scriptfile_addsymbolvalue("gamefunc_Quick_Kick", gamefunc_Quick_Kick);
+#endif
 
     while (1)
     {
@@ -8332,6 +8402,73 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         }
         break;
 
+        case T_KEYCONFIG:
+        {
+            char *keyRemapEnd = nullptr;
+            int32_t currSlot = 0;
+            int32_t keyIndex = -1;
+            uint64_t gamefuncBitmap = 0ULL;
+
+            Bassert(NUMGAMEFUNCTIONS <= 64);
+
+            if (scriptfile_getbraces(pScript, &keyRemapEnd))
+                break;
+
+            if (firstPass)
+            {
+                pScript->textptr = keyRemapEnd + 1;
+                break;
+            }
+
+            while (pScript->textptr < keyRemapEnd - 1)
+            {
+                char *mapPtr = pScript->ltextptr;
+
+                if (currSlot >= NUMGAMEFUNCTIONS)
+                {
+                    LOG_F(ERROR, "%s:%d: error: keyconfig exceeds number of valid game functions %d.",
+                          pScript->filename, scriptfile_getlinum(pScript, mapPtr), NUMGAMEFUNCTIONS);
+                    pScript->textptr = keyRemapEnd + 1;
+                    break;
+                }
+
+                if (scriptfile_getsymbol(pScript, &keyIndex))
+                    continue;
+
+                if ((unsigned)keyIndex >= NUMGAMEFUNCTIONS)
+                {
+                    LOG_F(ERROR, "%s:%d: error: invalid keyconfig game function index %d.",
+                          pScript->filename, scriptfile_getlinum(pScript, mapPtr), keyIndex);
+                    continue;
+                }
+
+                if (gamefuncBitmap & (1ULL << keyIndex))
+                {
+                    LOG_F(WARNING, "%s:%d: warning: duplicate keyconfig entry '%s'.",
+                          pScript->filename, scriptfile_getlinum(pScript, mapPtr), G_GamefuncSymbolName(keyIndex));
+                    continue;
+                }
+
+                keybind_order_custom[currSlot++] = keyIndex;
+                gamefuncBitmap |= 1ULL << keyIndex;
+            }
+
+            while (currSlot < NUMGAMEFUNCTIONS)
+                keybind_order_custom[currSlot++] = -1;
+
+            for (keyIndex = 0; keyIndex < NUMGAMEFUNCTIONS; ++keyIndex)
+            {
+                if (!(gamefuncBitmap & (1ULL << keyIndex)))
+                {
+                    if (gamefunctions[keyIndex][0] != '\0')
+                        hash_delete(&h_gamefuncs, gamefunctions[keyIndex]);
+                    gamefunctions[keyIndex][0] = '\0';
+                }
+            }
+
+            break;
+        }
+
         case T_ADDPLAYERCOL:
         {
             int palnum;
@@ -8368,7 +8505,9 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 const char* G_DefaultRtsFile(void)
 {
 #ifndef EDUKE32_STANDALONE
-    if (DUKE)
+    if (FURY)
+        return "";
+    else if (DUKE)
         return defaultrtsfilename[GAME_DUKE];
     else if (WW2GI)
         return defaultrtsfilename[GAME_WW2GI];
@@ -8457,7 +8596,10 @@ static void G_DisplayLogo(void)
     S_StopMusic();
     FX_StopAllSounds(); // JBF 20031228
 
-    if (ud.multimode < 2 && (logoflags & LOGO_ENABLED) && !g_noLogo)
+    if (FURY)
+        Gv_SetVarByLabel("main_menu_set", 3, g_player[myconnectindex].ps->i, myconnectindex);
+
+    if (ud.multimode < 2 && X_OnEventWithReturn(EVENT_MAINMENUSCREEN, g_player[myconnectindex].ps->i, myconnectindex, 0) == 0 && (logoflags & LOGO_ENABLED) && !g_noLogo)
     {
         if (VOLUMEALL && (logoflags & LOGO_PLAYANIM))
         {
@@ -8895,6 +9037,8 @@ static void G_Startup(void)
         G_GameExit("Failed loading art.");
 
     G_LoadLookups();
+
+    X_OnEvent(EVENT_INITCOMPLETE, -1, -1, -1);
 
     ReadSaveGameHeaders();
 
@@ -9676,8 +9820,15 @@ int Duke_app_main(int32_t argc, char const* const* argv)
     OSD_Exec("autoexec.cfg");
 
     CONFIG_SetDefaultKeys(keydefaults, true);
+    CONFIG_RepairFuryDefaults();
 
     system_getcvars();
+
+    // Settings/autoexec can restore stale key command strings after setup has
+    // already shown the right key names. Rebind Fury controls after the final
+    // cvar/settings restore so W/S/E and mouse2 work without forcing users to
+    // reassign them in the menu.
+    CONFIG_RepairFuryDefaults();
 
     // Re-apply the command-line audio mute here, as the LAST thing before audio
     // init: every earlier restore point (CONFIG_ReadSetup, CONFIG_ReadSettings
@@ -9697,12 +9848,22 @@ int Duke_app_main(int32_t argc, char const* const* argv)
     }
     else
     {
-        LOG_F(INFO, "Initializing music...");
-        S_MusicStartup();
-        LOG_F(INFO, "Initializing sound...");
-        S_SoundStartup();
+        if (ud.config.MusicToggle)
+        {
+            LOG_F(INFO, "Initializing music...");
+            S_MusicStartup();
+        }
+        else
+            LOG_F(INFO, "Music disabled.");
 
-        FX_StopAllSounds();
+        if (ud.config.SoundToggle)
+        {
+            LOG_F(INFO, "Initializing sound...");
+            S_SoundStartup();
+            FX_StopAllSounds();
+        }
+        else
+            LOG_F(INFO, "Sound disabled.");
     }
 
     if (ud.warp_on > 1 && ud.multimode < 2)

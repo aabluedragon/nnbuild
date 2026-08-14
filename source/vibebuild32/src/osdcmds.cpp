@@ -1251,9 +1251,11 @@ static int osdcmd_button(osdcmdptr_t parm)
     int constexpr strlen_gamefunc_ = ARRAY_SIZE(s_gamefunc_) - 1;
 
     char const* p = parm->name + strlen_gamefunc_;
+    int const gameFunc = CONFIG_FunctionNameToNum(p);
 
     //    if (ud.gm == MODE_GAME) // only trigger these if in game
-    CONTROL_ButtonFlags[CONFIG_FunctionNameToNum(p)] = 1; // FIXME
+    if ((unsigned)gameFunc < NUMGAMEFUNCTIONS)
+        CONTROL_ButtonFlags[gameFunc] = 1;
 
     return OSDCMD_OK;
 }
@@ -1731,19 +1733,28 @@ int registerosdcommands(void)
 
     OSD_RegisterFunction("fileinfo","fileinfo <file>: gets a file's information", osdcmd_fileinfo);
 
+    auto registerGameFuncCommand = [](char const* commandName)
+    {
+        if (!commandName || commandName[0] == '\0')
+            return;
+
+        char *t = Xstrdup(commandName);
+        for (int j = Bstrlen(t); j >= 0; --j)
+            t[j] = Btolower(t[j]);
+
+        char help[2 * MAXGAMEFUNCLEN + 16];
+        Bsprintf(help, "%s: game button", commandName);
+        OSD_RegisterFunction(t, Xstrdup(help), osdcmd_button);
+    };
+
     for (i=0;i<NUMGAMEFUNCTIONS;i++)
     {
-        char *t;
-        int j;
+        registerGameFuncCommand(gamefunc_symbol_names[i]);
 
         if (!Bstrcmp(gamefunctions[i],"Show_Console")) continue;
 
         Bsprintf(tempbuf,"gamefunc_%s",gamefunctions[i]);
-        t = Xstrdup(tempbuf);
-        for (j=Bstrlen(t);j>=0;j--)
-            t[j] = Btolower(t[j]);
-        Bstrcat(tempbuf,": game button");
-        OSD_RegisterFunction(t,Xstrdup(tempbuf),osdcmd_button);
+        registerGameFuncCommand(tempbuf);
     }
 
 //    OSD_RegisterFunction("setbrightness","setbrightness <value>: changes brightness (obsolete)", osdcmd_setbrightness);

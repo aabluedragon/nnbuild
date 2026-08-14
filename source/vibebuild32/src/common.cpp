@@ -149,10 +149,18 @@ void G_ScanGroups(void)
     g_selectedGrp = NULL;
 
     char const * const currentGrp = G_GrpFile();
+    char const *currentBaseName = Bstrrchr(currentGrp, '/');
+#ifdef _WIN32
+    char const * const currentWinBaseName = Bstrrchr(currentGrp, '\\');
+    if (currentWinBaseName != NULL && (currentBaseName == NULL || currentWinBaseName > currentBaseName))
+        currentBaseName = currentWinBaseName;
+#endif
+    currentBaseName = currentBaseName ? currentBaseName + 1 : currentGrp;
 
     for (grpfile_t const *fg = foundgrps; fg; fg=fg->next)
     {
-        if (!Bstrcasecmp(fg->filename, currentGrp))
+        if (!Bstrcasecmp(fg->filename, currentGrp) ||
+            (currentBaseName && !Bstrcasecmp(fg->filename, currentBaseName)))
         {
             g_selectedGrp = fg;
             break;

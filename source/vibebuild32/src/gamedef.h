@@ -44,7 +44,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define VM_IFELSE_MAGIC_BIT (1<<31)
 #define VM_INSTMASK 0xfff
-
 #define VM_DECODE_INST(xxx) ((int)((xxx) & VM_INSTMASK))
 #define VM_DECODE_LINE_NUMBER(xxx) ((int)((xxx&~VM_IFELSE_MAGIC_BIT) >> 12))
 
@@ -581,6 +580,7 @@ enum ScriptKeywords_t
     CON_DIGITALNUMBERZ,
     CON_HITRADIUSVAR,
     CON_ROTATESPRITE16,
+    CON_COPY,
     CON_SETARRAY,
     CON_SETARRAYSEQUENCE,
     CON_RESIZEARRAY,

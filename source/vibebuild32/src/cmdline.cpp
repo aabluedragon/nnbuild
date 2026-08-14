@@ -143,6 +143,8 @@ static void G_ShowParameterHelp(void)
         "-dt, --devtools\tOpen JavaScript DevTools (implies -dbg; forces windowed mode)\n"
         "-mnst, --monsters <n>\tSet monsters: 0 disables them; 1+ selects skill\n"
         "-e, --episode <n>\tAlias for -v, --volume <n>\n"
+        "-nosound\t\tDisable sound effects\n"
+        "-nomusic\t\tDisable music\n"
         "-r, --record\t\tRecord a demo\n"
         "-pb, --playback [file]\tPlay a demo\n"
         "-l#\t\tWarp to level #, see -v\n"
@@ -536,6 +538,20 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     g_noLogo = 1;
                     g_noLogoAnim = 1;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "nosound"))
+                {
+                    g_noSound = 2;
+                    LOG_F(INFO, "Sound off.");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "nomusic"))
+                {
+                    g_noMusic = 1;
+                    LOG_F(INFO, "Music off.");
                     i++;
                     continue;
                 }

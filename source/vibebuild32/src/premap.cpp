@@ -889,7 +889,7 @@ static void resetprestat(int snum,int g)
 
 static void prelevel(char g)
 {
-    int i, nexti, j, startwall, endwall, lotaglist;
+    int i, j, startwall, endwall, lotaglist;
     int lotags[MAXSPRITES];
     int switchpicnum;
     extern char ror_protectedsectors[MAXSECTORS];
@@ -909,6 +909,16 @@ static void prelevel(char g)
 
     g_numClouds = 0;
     G_SetupGlobalPsky();
+
+    if (FURY)
+    {
+        // Ion Fury's CON expects per-actor vars to be reset for every map
+        // sprite before EVENT_PRELEVEL runs. Upstream Fury does this globally
+        // here; resetting only STAT_DEFAULT sprites later leaves non-default
+        // sprite actorvars stale and can erase state prepared by PRELEVEL.
+        for (i = 0; i < Numsprites; ++i)
+            A_ResetVars(i);
+    }
 
     X_OnEvent(EVENT_PRELEVEL, -1, -1, -1);
 
@@ -954,13 +964,19 @@ static void prelevel(char g)
         }
     }
 
-    i = headspritestat[STAT_DEFAULT];
-    while (i >= 0)
+    for (int nextSprite, SPRITES_OF_STAT_SAFE(STAT_DEFAULT, i, nextSprite))
     {
-        nexti = nextspritestat[i];
-        A_ResetVars(i);
+        if (!FURY)
+            A_ResetVars(i);
+
         A_LoadActor(i);
+        if (sprite[i].statnum == MAXSTATUS || (unsigned)sprite[i].sectnum >= MAXSECTORS)
+            continue;
+
         X_OnEvent(EVENT_LOADACTOR, i, -1, -1);
+        if (sprite[i].statnum == MAXSTATUS || (unsigned)sprite[i].sectnum >= MAXSECTORS)
+            continue;
+
         if (sprite[i].lotag == -1 && (sprite[i].cstat&16))
         {
             for (ALL_PLAYERS(j))
@@ -973,7 +989,8 @@ static void prelevel(char g)
             {
             case GPSPEED__:
                 sector[SECT(i)].extra = SLT(i);
-                A_DeleteSprite(i);
+                if (!FURY)
+                    A_DeleteSprite(i);
                 break;
 
             case CYCLER__:
@@ -989,7 +1006,8 @@ static void prelevel(char g)
                 cyclers[g_numCyclers][4] = SHT(i);
                 cyclers[g_numCyclers][5] = (SA(i) == 1536);
                 g_numCyclers++;
-                A_DeleteSprite(i);
+                if (!FURY)
+                    A_DeleteSprite(i);
                 break;
 
             case SECTOREFFECTOR__:
@@ -1000,10 +1018,26 @@ static void prelevel(char g)
             case LOCATORS__:
             case MASTERSWITCH__:
             case RESPAWN__:
-                sprite[i].cstat = 0;
+                if (FURY)
+                    sprite[i].cstat &= ~(CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN | CSTAT_SPRITE_ALIGNMENT_MASK);
+                else
+                    sprite[i].cstat = 0;
                 break;
             }
-        i = nexti;
+    }
+
+    if (FURY)
+    {
+        // Ion Fury expects GPSPEED/CYCLER to stay in STAT_DEFAULT until all
+        // LOADACTOR handlers have run, then deletes them before global spawn.
+        for (int nextSprite, SPRITES_OF_STAT_SAFE(STAT_DEFAULT, i, nextSprite))
+            switch (tileGetMapping(PN(i)))
+            {
+            case GPSPEED__:
+            case CYCLER__:
+                A_DeleteSprite(i);
+                break;
+            }
     }
 
     for (i=0;i < MAXSPRITES;i++)

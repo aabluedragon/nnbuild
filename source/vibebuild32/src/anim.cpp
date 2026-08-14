@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "duke3d.h"
 #include "animlib.h"
+#include "gameexec.h"
 #include "mouse.h"
 #include "compat.h"
 
@@ -255,6 +256,10 @@ void G_PlayAnim(const char *fn, char t)
 
     for (i = 1; i<numframes; i++)
     {
+        i = X_OnEventWithReturn(EVENT_PRECUTSCENE, g_player[screenpeek].ps->i, screenpeek, i);
+        if (i < 1 || i >= numframes)
+            break;
+
         if (i > 4 && totalclock > frametime + 60)
         {
             OSD_Printf("WARNING: slowdown in %s, skipping playback\n", fn);
@@ -280,6 +285,9 @@ void G_PlayAnim(const char *fn, char t)
             }
 
             rotatesprite(0 << 16, 0 << 16, 65536L, 512, TILE_ANIM, 0, 0, 2 + 4 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
+            i = X_OnEventWithReturn(EVENT_CUTSCENE, g_player[screenpeek].ps->i, screenpeek, i);
+            if (i < 1 || i >= numframes)
+                goto ENDOFANIMLOOP;
             videoNextPage();
         }
 

@@ -21,6 +21,7 @@
 
 #include "compat.h"
 #include "baselayer.h"
+#include "common_game.h"
 #include "crc32.h"
 #include "vbjs.h"
 #include <ctype.h>
@@ -143,6 +144,18 @@ static int gs_usesDukeRuntime(int game)
 {
     return game == GS_GAME_DUKE || game == GS_GAME_WORLDTOUR || game == GS_GAME_NAM ||
            game == GS_GAME_NAPALM || game == GS_GAME_WW2GI || game == GS_GAME_IONFURY;
+}
+
+static int32_t gs_dukeRuntimeGameFlags(int game)
+{
+    switch (game)
+    {
+        case GS_GAME_NAM:      return GAMEFLAG_NAM;
+        case GS_GAME_NAPALM:   return GAMEFLAG_NAM | GAMEFLAG_NAPALM;
+        case GS_GAME_WW2GI:    return GAMEFLAG_WW2GI;
+        case GS_GAME_IONFURY:  return GAMEFLAG_FURY | GAMEFLAG_NOCLASSIC | GAMEFLAG_NOPOLYMER;
+        default:               return GAMEFLAG_DUKE;
+    }
 }
 
 static int gs_linkedGameOrDuke(int game)
@@ -1266,6 +1279,8 @@ static void gs_choose(int argc, char const * const * argv)
 
     sel = gs_linkedGameOrDuke(sel);
     g_activeGame = sel;
+    if (gs_usesDukeRuntime(sel))
+        g_gameType = gs_dukeRuntimeGameFlags(sel);
     if (gs_needsMainGameGrpInjection(sel) && !gs_mainGameGrpFile[0] && gameMainGrpFiles[sel][0])
         gs_setMainGameGrpFile(gameMainGrpFiles[sel]);
 
@@ -1635,6 +1650,7 @@ extern "C" const char *G_DefaultDefFile(void)
 #ifdef WITH_EXHUMED
     if (g_activeGame == GS_GAME_EXHUMED) return Exhumed_G_DefaultDefFile();
 #endif
+    if (g_activeGame == GS_GAME_IONFURY) return "ashock.def";
     return Duke_G_DefaultDefFile();
 }
 

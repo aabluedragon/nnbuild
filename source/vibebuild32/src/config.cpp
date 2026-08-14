@@ -55,10 +55,53 @@ hashtable_t h_gamefuncs    = { NUMGAMEFUNCTIONS<<1, NULL };
 
 int32_t CONFIG_FunctionNameToNum(const char* func)
 {
-    if (!func)
+    if (!func || func[0] == '\0')
         return -1;
 
-    return hash_findcase(&h_gamefuncs, func);
+    int const hashed = hash_findcase(&h_gamefuncs, func);
+
+    if (hashed >= 0)
+        return hashed;
+
+    static char const gamefuncPrefix[] = "gamefunc_";
+    int constexpr gamefuncPrefixLen = ARRAY_SIZE(gamefuncPrefix) - 1;
+
+    char const* const bareFunc = !Bstrncasecmp(func, gamefuncPrefix, gamefuncPrefixLen) ? func + gamefuncPrefixLen : func;
+
+    for (int i = 0; i < NUMGAMEFUNCTIONS; ++i)
+    {
+        if (!Bstrcasecmp(gamefunc_symbol_names[i], func))
+            return i;
+
+        if (!Bstrcasecmp(gamefunc_symbol_names[i] + gamefuncPrefixLen, bareFunc))
+            return i;
+
+        char const* legacyName = nullptr;
+        switch (i)
+        {
+            case gamefunc_Holo_Duke:   legacyName = "gamefunc_Holo_Duke"; break;
+            case gamefunc_Jetpack:     legacyName = "gamefunc_Jetpack"; break;
+            case gamefunc_NightVision: legacyName = "gamefunc_NightVision"; break;
+            case gamefunc_MedKit:      legacyName = "gamefunc_MedKit"; break;
+            case gamefunc_Steroids:    legacyName = "gamefunc_Steroids"; break;
+            case gamefunc_Quick_Kick:  legacyName = "gamefunc_Quick_Kick"; break;
+            default: break;
+        }
+
+        if (legacyName)
+        {
+            if (!Bstrcasecmp(legacyName, func))
+                return i;
+
+            if (!Bstrcasecmp(legacyName + gamefuncPrefixLen, bareFunc))
+                return i;
+        }
+
+        if (gamefunctions[i][0] != '\0' && !Bstrcasecmp(gamefunctions[i], bareFunc))
+            return i;
+    }
+
+    return -1;
 }
 
 /*
@@ -181,6 +224,65 @@ void CONFIG_SetDefaultKeys(const char(*keyptr)[MAXGAMEFUNCLEN], bool lazy/*=fals
             OSD_CaptureKey(key[0]);
         else
             CONFIG_MapKey(i, key[0], 0, key[1], 0);
+    }
+}
+
+static void CONFIG_SetFuryKeyDefault(int const gameFunc, char const* const keyName)
+{
+    int const key = KB_StringToScanCode(keyName);
+
+    if (gameFunc < 0 || gameFunc >= NUMGAMEFUNCTIONS || key <= 0)
+        return;
+
+    if (ud.config.KeyboardKeys[gameFunc][0] == key || ud.config.KeyboardKeys[gameFunc][1] == key)
+    {
+        CONFIG_MapKey(gameFunc, ud.config.KeyboardKeys[gameFunc][0], 0, ud.config.KeyboardKeys[gameFunc][1], 0);
+        return;
+    }
+
+    uint8_t const old0 = ud.config.KeyboardKeys[gameFunc][0];
+    uint8_t const old1 = ud.config.KeyboardKeys[gameFunc][1];
+
+    ud.config.KeyboardKeys[gameFunc][1] = old0;
+    ud.config.KeyboardKeys[gameFunc][0] = key;
+    CONFIG_MapKey(gameFunc, ud.config.KeyboardKeys[gameFunc][0], old0, ud.config.KeyboardKeys[gameFunc][1], old1);
+
+    LOG_F(INFO, "Ion Fury controls: mapped %s to %s.", keyName, CONFIG_FunctionNumToName(gameFunc));
+}
+
+void CONFIG_RepairFuryDefaults(void)
+{
+    if (!FURY)
+        return;
+
+    CONFIG_SetFuryKeyDefault(gamefunc_Move_Forward, "W");
+    CONFIG_SetFuryKeyDefault(gamefunc_Move_Backward, "S");
+    CONFIG_SetFuryKeyDefault(gamefunc_Open, "E");
+
+    bool const mouse2Changed = ud.config.MouseFunctions[1][0] != gamefunc_Alt_Fire;
+
+    if (mouse2Changed)
+    {
+        ud.config.MouseFunctions[1][0] = gamefunc_Alt_Fire;
+        if (ud.config.scripthandle >= 0)
+            SCRIPT_PutString(ud.config.scripthandle, "Controls", "MouseButton1", CONFIG_FunctionNumToName(gamefunc_Alt_Fire));
+        LOG_F(INFO, "Ion Fury controls: mapped mouse2 to Alt_Fire.");
+    }
+
+    CONTROL_MapButton(gamefunc_Alt_Fire, 1, 0, controldevice_mouse);
+    CONTROL_BindMouse(1, "gamefunc_Alt_Fire", 1, "mouse2");
+
+    for (int i = 0; i < NUMGAMEFUNCTIONS; ++i)
+    {
+        if (i == gamefunc_Show_Console)
+        {
+            if (ud.config.KeyboardKeys[i][0] != 0xff && ud.config.KeyboardKeys[i][0] != 0)
+                OSD_CaptureKey(ud.config.KeyboardKeys[i][0]);
+            continue;
+        }
+
+        if (ud.config.KeyboardKeys[i][0] != 0xff || ud.config.KeyboardKeys[i][1] != 0xff)
+            CONFIG_MapKey(i, ud.config.KeyboardKeys[i][0], 0, ud.config.KeyboardKeys[i][1], 0);
     }
 }
 
@@ -424,7 +526,7 @@ void CONFIG_MapKey(int which, kb_scancode key1, kb_scancode oldkey1, kb_scancode
         {
             if (ud.config.KeyboardKeys[i][0] == keys[k] || ud.config.KeyboardKeys[i][1] == keys[k])
             {
-                Bsprintf(buf, "gamefunc_%s; ", CONFIG_FunctionNumToName(i));
+                Bsprintf(buf, "%s; ", gamefunc_symbol_names[i]);
                 Bstrcat(tempbuf, buf);
             }
         }

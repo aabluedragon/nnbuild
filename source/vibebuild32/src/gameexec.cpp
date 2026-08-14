@@ -41,6 +41,16 @@ void G_SaveMapState(mapstate_t *save);
 
 vmstate_t vm;
 
+static uspritetype s_dummySprite;
+static ActorData_t s_dummyActor;
+
+static inline void VM_UseDummySprite(void)
+{
+    vm.pUSprite = &s_dummySprite;
+    vm.pActor = &s_dummyActor;
+    vm.pData = &s_dummyActor.t_data[0];
+}
+
 int g_errorLineNum;
 int g_tw;
 
@@ -65,10 +75,41 @@ extern void I_ClearAllInput(void);
     }
 #endif
 
+static inline int VM_GetCurrentActorSector(void)
+{
+    return vm.pSprite ? vm.pSprite->sectnum : -1;
+}
+
+static inline int VM_GetSectorIndexFromVar(int const indexVar)
+{
+    if (indexVar == sysVarIDs.THISACTOR)
+        return VM_GetCurrentActorSector();
+
+    int const sectNum = Gv_GetVarX(indexVar);
+
+    // Some Fury/modern CON struct shortcuts compile an empty sector index
+    // through the legacy THISACTOR sentinel value (MAXSPRITES). For sectors,
+    // "gets[]" means the current actor's sector, not sector 4096.
+    return (sectNum == MAXSPRITES) ? VM_GetCurrentActorSector() : sectNum;
+}
+
 void VM_ScriptInfo(intptr_t const* const ptr, int const range)
 {
     if (!ptr || (g_currentEvent == -1 && insptr == nullptr))
         return;
+
+    if (!apScript || g_scriptSize <= 0)
+        return;
+
+    uintptr_t const scriptBegin = reinterpret_cast<uintptr_t>(apScript);
+    uintptr_t const scriptEnd = reinterpret_cast<uintptr_t>(apScript + g_scriptSize);
+    uintptr_t const scriptPtr = reinterpret_cast<uintptr_t>(ptr);
+
+    if (scriptPtr < scriptBegin || scriptPtr >= scriptEnd)
+    {
+        LOG_F(ERROR, "VM script info unavailable: instruction pointer is outside the compiled script buffer.");
+        return;
+    }
 
     int foundInst = 0;
     int lastLine = 0;
@@ -120,13 +161,13 @@ void VM_ScriptInfo(intptr_t const* const ptr, int const range)
 
 void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
 {
-    ERROR_CONTEXT("VM event execution", &EventNames[iEventID][0]);
-
     if (iEventID<0 || iEventID >= MAXEVENTS)
     {
         OSD_Printf(CON_ERROR "invalid event ID",g_errorLineNum,VM_GetKeywordForID(g_tw));
         return;
     }
+
+    ERROR_CONTEXT("VM event execution", &EventNames[iEventID][0]);
 
     VBJS_FireConEvent(iEventID, iActor, iPlayer, lDist);   // VibeBuild32: every CON event -> JS (no-op if unlistened)
 
@@ -134,18 +175,26 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         return;
 
     {
-        int og_i=vm.spriteNum, og_p=vm.playerNum, okillit_flag=vm.flags;
-        int og_x=vm.playerDist;// *og_t=vm.pData;
+        vmstate_t const oldVM = vm;
         int oevent = g_currentEvent;
         intptr_t* oinsptr = insptr;
-        int32_t* og_t = vm.pData;
-        spritetype *og_sp=vm.pSprite;
 
-        vm.spriteNum = iActor&(MAXSPRITES-1);
-        vm.playerNum = iPlayer&(MAXPLAYERS-1);
+        int const maskedActor = iActor&(MAXSPRITES-1);
+        int const maskedPlayer = iPlayer&(MAXPLAYERS-1);
+
+        vm.spriteNum = iActor;
+        vm.playerNum = iPlayer;
         vm.playerDist = lDist;    // ?
-        vm.pSprite = &sprite[vm.spriteNum];
-        vm.pData = &actor[vm.spriteNum].t_data[0];
+        vm.pSprite = &sprite[maskedActor];
+        vm.pActor = &actor[maskedActor];
+        vm.pData = &actor[maskedActor].t_data[0];
+        vm.pPlayer = g_player[maskedPlayer].ps;
+
+        if ((unsigned)iActor >= MAXSPRITES)
+            VM_UseDummySprite();
+
+        if ((unsigned)iPlayer >= MAXPLAYERS || vm.pPlayer == nullptr)
+            vm.pPlayer = g_player[0].ps;
 
         g_currentEvent = iEventID;
         vm.flags = 0;
@@ -157,21 +206,18 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         if (vm.flags & VM_KILL)
         {
             // if player was set to squish, first stop that...
-            if (vm.playerNum >= 0)
+            if ((unsigned)vm.playerNum < MAXPLAYERS && g_player[vm.playerNum].ps != nullptr)
             {
                 if (g_player[vm.playerNum].ps->actorsqu == vm.spriteNum)
                     g_player[vm.playerNum].ps->actorsqu = -1;
             }
-            A_DeleteSprite(vm.spriteNum);
+
+            if ((unsigned)vm.spriteNum < MAXSPRITES)
+                A_DeleteSprite(vm.spriteNum);
         }
 
         // restore old values...
-        vm.spriteNum = og_i;
-        vm.playerNum = og_p;
-        vm.playerDist = og_x;
-        vm.pSprite = og_sp;
-        vm.pData = og_t;
-        vm.flags = okillit_flag;
+        vm = oldVM;
         g_currentEvent = oevent;
         insptr = oinsptr;
 
@@ -1021,6 +1067,10 @@ static void G_ShowView(vec3_t vec, fix16_t a, fix16_t horiz, int sect, int ix1, 
     G_DoInterpolations(smoothratio);
     if (!display_mirror)
         G_HandleMirror(vec.x, vec.y, vec.z, a, horiz, smoothratio);
+#ifdef POLYMER
+    if (videoGetRenderMode() == REND_POLYMER)
+        polymer_setanimatesprites(G_DoSpriteAnimations, vec.x, vec.y, vec.z, fix16_to_int(a), smoothratio);
+#endif
     yax_preparedrawrooms();
     renderDrawRoomsQ16(vec.x, vec.y, vec.z, a, horiz, sect);
     yax_drawrooms(G_DoSpriteAnimations, sect, 0, smoothratio);
@@ -1144,7 +1194,7 @@ static int X_DoExecute(void)
 
     int j, l, s, tw = *insptr;
 
-    if (vm.flags & (VM_RETURN | VM_KILL | VM_NOEXECUTE | VM_EXIT | VM_TERMINATE)) return 1;
+    if (vm.flags & (VM_RETURN | VM_KILL | VM_NOEXECUTE | VM_EXIT | VM_TERMINATE | VM_CONTINUE)) return 1;
 
     //      Bsprintf(g_szBuf,"Parsing: %d",*insptr);
     //      AddLog(g_szBuf);
@@ -1686,6 +1736,10 @@ static int X_DoExecute(void)
         vm.flags |= VM_TERMINATE;
         break;
 
+    case CON_CONTINUE:
+        vm.flags |= VM_CONTINUE;
+        return 1;
+
     case CON_ADDAMMO:
         insptr++;
         {
@@ -1825,6 +1879,7 @@ static int X_DoExecute(void)
         auto tempscrptr = &insptr[2];
         insptr = (intptr_t*)insptr[1];
         while (!X_DoExecute());
+        vm.flags &= ~VM_TERMINATE;
         insptr = tempscrptr;
     }
     break;
@@ -2501,31 +2556,49 @@ static int X_DoExecute(void)
             auto const pEnd = insptr + *insptr;
             auto const pNext = ++insptr;
 
+            struct controlflow
+            {
+                unsigned int doBreak : 1;
+                unsigned int doContinue : 1;
+                unsigned int doReturn : 1;
+            };
+
             auto execute = [&](int const index) {
                 Gv_SetVarX(returnVar, index);
                 insptr = pNext;
                 X_DoExecute();
-                return !!(vm.flags & VM_RETURN);
+                controlflow const ret = { !!(vm.flags & VM_EXIT), !!(vm.flags & VM_CONTINUE), !!(vm.flags & (VM_RETURN | VM_TERMINATE)) };
+                vm.flags &= ~(VM_EXIT | VM_CONTINUE);
+                return ret;
             };
 
             auto spriteexecute = [&](int const index) {
                 {
                     //MICROPROFILE_SCOPE_TOKEN(g_statnumTokens[sprite[index].statnum]);
-                    execute(index);
+                    return execute(index);
                 }
-                return !!(vm.flags & VM_RETURN);
             };
 
             switch (iterType)
             {
+#define HANDLE_FOR_CONTROL_FLOW(flags) \
+    do { \
+        if ((flags).doBreak) \
+            goto breakfor; \
+        if ((flags).doContinue) \
+            continue; \
+        if ((flags).doReturn) \
+            return 1; \
+    } while (0)
+
                 case ITER_ALLSPRITES:
                     for (native_t jj = 0; jj < MAXSPRITES; ++jj)
                     {
                         if (sprite[jj].statnum == MAXSTATUS)
                             continue;
 
-                        if (spriteexecute(jj))
-                            return 1;
+                        auto const flags = spriteexecute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
                     }
                     break;
 
@@ -2534,8 +2607,8 @@ static int X_DoExecute(void)
                     {
                         for (native_t kk, SPRITES_OF_STAT_SAFE(statNum, jj, kk))
                         {
-                            if (spriteexecute(jj))
-                                return 1;
+                            auto const flags = spriteexecute(jj);
+                            HANDLE_FOR_CONTROL_FLOW(flags);
                         }
                     }
                     break;
@@ -2545,22 +2618,26 @@ static int X_DoExecute(void)
                     {
                         for (native_t kk, SPRITES_OF_SECT_SAFE(sectNum, jj, kk))
                         {
-                            if (spriteexecute(jj))
-                                return 1;
+                            auto const flags = spriteexecute(jj);
+                            HANDLE_FOR_CONTROL_FLOW(flags);
                         }
                     }
                     break;
 
                 case ITER_ALLSECTORS:
                     for (native_t jj = 0; jj < numsectors; ++jj)
-                        if (execute(jj))
-                            return 1;
+                    {
+                        auto const flags = execute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
+                    }
                     break;
 
                 case ITER_ALLWALLS:
                     for (native_t jj = 0; jj < numwalls; ++jj)
-                        if (execute(jj))
-                            return 1;
+                    {
+                        auto const flags = execute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
+                    }
                     break;
 
                 case ITER_ACTIVELIGHTS:
@@ -2570,16 +2647,18 @@ static int X_DoExecute(void)
                         if (!prlights[jj].flags.active)
                             continue;
 
-                        if (execute(jj))
-                            return 1;
+                        auto const flags = execute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
                     }
 #endif
                     break;
 
                 case ITER_DRAWNSPRITES:
                     for (native_t jj = 0; jj < spritesortcnt; jj++)
-                        if (execute(jj))
-                            return 1;
+                    {
+                        auto const flags = execute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
+                    }
                     break;
 
                 case ITER_SPRITESOFSECTOR:
@@ -2588,8 +2667,8 @@ static int X_DoExecute(void)
 
                     for (native_t kk, SPRITES_OF_SECT_SAFE(nIndex, jj, kk))
                     {
-                        if (spriteexecute(jj))
-                            return 1;
+                        auto const flags = spriteexecute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
                     }
                     break;
 
@@ -2599,8 +2678,8 @@ static int X_DoExecute(void)
 
                     for (native_t kk, SPRITES_OF_STAT_SAFE(nIndex, jj, kk))
                     {
-                        if (spriteexecute(jj))
-                            return 1;
+                        auto const flags = spriteexecute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
                     }
                     break;
 
@@ -2609,8 +2688,10 @@ static int X_DoExecute(void)
                         goto badindex;
 
                     for (native_t jj = sector[nIndex].wallptr, endwall = jj + sector[nIndex].wallnum - 1; jj <= endwall; jj++)
-                        if (execute(jj))
-                            return 1;
+                    {
+                        auto const flags = execute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
+                    }
                     break;
 
                 case ITER_LOOPOFWALL:
@@ -2620,7 +2701,15 @@ static int X_DoExecute(void)
                         int jj = nIndex;
                         do
                         {
-                            if (execute(jj))
+                            auto const flags = execute(jj);
+                            if (flags.doBreak)
+                                goto breakfor;
+                            if (flags.doContinue)
+                            {
+                                jj = wall[jj].point2;
+                                continue;
+                            }
+                            if (flags.doReturn)
                                 return 1;
 
                             jj = wall[jj].point2;
@@ -2630,14 +2719,18 @@ static int X_DoExecute(void)
 
                 case ITER_RANGE:
                     for (native_t jj = 0; jj < nIndex; jj++)
-                        if (execute(jj))
-                            return 1;
+                    {
+                        auto const flags = execute(jj);
+                        HANDLE_FOR_CONTROL_FLOW(flags);
+                    }
                     break;
+#undef HANDLE_FOR_CONTROL_FLOW
                 badindex:
                     VLOG_F(LOG_VM, "%s:%d: for %s: index %d out of range!", VM_FILENAME(insptr), VM_DECODE_LINE_NUMBER(g_tw), iter_tokens[iterType].token, nIndex);
                     vm.flags |= VM_RETURN;
                     break;
             }
+        breakfor:
             insptr = pEnd;
         }
         break;
@@ -4072,7 +4165,7 @@ static int X_DoExecute(void)
     case CON_GETSECTOR:
         insptr++;
         {
-            int const sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.pSprite->sectnum;
+            int const sectNum = VM_GetSectorIndexFromVar(*insptr++);
             int const labelNum = *insptr++;
             int const lVar2 = *insptr++;
 
@@ -4090,7 +4183,7 @@ static int X_DoExecute(void)
     case CON_GETSECTORSTRUCT:
         insptr++;
         {
-            int const sectNum = (*insptr++ != sysVarIDs.THISACTOR) ? Gv_GetVarX(insptr[-1]) : vm.pSprite->sectnum;
+            int const sectNum = VM_GetSectorIndexFromVar(*insptr++);
             int const labelNum = *insptr++;
             int const lVar2 = *insptr++;
 
@@ -4688,11 +4781,61 @@ static int X_DoExecute(void)
         insptr++;
         {
             int const arrayNum = *insptr++;
-            int const arrayIndex = Gv_GetVarX(*insptr++);
-            VM_ABORT_IF(((unsigned)arrayNum >= (unsigned)g_gameArrayCount) | ((unsigned)arrayIndex >= (unsigned)aGameArrays[arrayNum & (MAXGAMEARRAYS - 1)].size),
+            int arrayIndex = Gv_GetVarX(*insptr++);
+            VM_ABORT_IF((unsigned)arrayNum >= (unsigned)g_gameArrayCount,
                 "invalid array %d or index %d", arrayNum, arrayIndex);
+            arrayIndex = Gv_NormalizeArrayIndex(arrayNum, arrayIndex);
+            VM_ABORT_IF((unsigned)arrayIndex >= (unsigned)aGameArrays[arrayNum].size, "invalid array %d or index %d", arrayNum, arrayIndex);
 
             SetArray(arrayNum, arrayIndex, Gv_GetVarX(*insptr++));
+            break;
+        }
+
+    case CON_COPY:
+        insptr++;
+        {
+            int const srcArray = *insptr++;
+            int srcArrayIndex = Gv_GetVarX(*insptr++);
+            int const destArray = *insptr++;
+            int destArrayIndex = Gv_GetVarX(*insptr++);
+            int numElements = Gv_GetVarX(*insptr++);
+
+            VM_ABORT_IF(((unsigned)srcArray >= (unsigned)g_gameArrayCount) | ((unsigned)destArray >= (unsigned)g_gameArrayCount),
+                "invalid array %d or %d", srcArray, destArray);
+
+            auto& src = aGameArrays[srcArray];
+            auto& dest = aGameArrays[destArray];
+
+            int const srcArraySize = (src.flags & GAMEARRAY_VARSIZE) ? Gv_GetVarX(src.size) : src.size;
+            int const destArraySize = (dest.flags & GAMEARRAY_VARSIZE) ? Gv_GetVarX(dest.size) : dest.size;
+
+            if (srcArrayIndex < 0 || destArrayIndex < 0 || numElements <= 0 || srcArrayIndex >= srcArraySize || destArrayIndex >= destArraySize)
+                break;
+
+            if ((srcArrayIndex + numElements) > srcArraySize)
+                numElements = srcArraySize - srcArrayIndex;
+
+            if ((destArrayIndex + numElements) > destArraySize)
+                numElements = destArraySize - destArrayIndex;
+
+            int const srcInc = 1 << (int)!!(src.flags & GAMEARRAY_STRIDE2);
+            int const destInc = 1 << (int)!!(dest.flags & GAMEARRAY_STRIDE2);
+
+            if ((src.flags & GAMEARRAY_SIZE_MASK) == (dest.flags & GAMEARRAY_SIZE_MASK)
+                && !((src.flags | dest.flags) & GAMEARRAY_BITMAP) && srcInc == 1 && destInc == 1)
+            {
+                Bmemcpy((uint8_t*)dest.pValues + (destArrayIndex * Gv_GetArrayElementSize(destArray)),
+                        (uint8_t*)src.pValues + (srcArrayIndex * Gv_GetArrayElementSize(srcArray)),
+                        numElements * Gv_GetArrayElementSize(srcArray));
+                break;
+            }
+
+            for (; numElements > 0; --numElements)
+            {
+                SetArray(destArray, destArrayIndex, Gv_GetArrayValue(srcArray, srcArrayIndex));
+                ++srcArrayIndex;
+                destArrayIndex += destInc;
+            }
             break;
         }
 
@@ -5174,25 +5317,31 @@ static int X_DoExecute(void)
     case CON_SETNGCFLAGS:
         insptr++;
         {
-            int const valueVar = *insptr++;
-            int const argCount = *insptr++;
+            int const valueVar = (tw == CON_GETNGCFLAGS) ? *insptr++ : -1;
+            int const newFlags = (tw == CON_SETNGCFLAGS) ? Gv_GetVarX(*insptr++) : 0;
             int indexes[MAXMENUGAMEPLAYLAYERS] = {};
-
+            int const argCount = *insptr++;
             VM_ABORT_IF(argCount < 1 || argCount > MAXMENUGAMEPLAYLAYERS,
                         "invalid new-game-custom menu depth %d", argCount);
 
             for (int i = 0; i < argCount; ++i)
+            {
                 indexes[i] = Gv_GetVarX(*insptr++);
+                VM_ABORT_IF((unsigned)indexes[i] >= MAXMENUGAMEPLAYENTRIES,
+                            "invalid new-game-custom menu entry on layer %d: %d",
+                            i, indexes[i]);
+            }
 
-            MenuGameplayEntry * const entry = G_GetNewGameCustomEntry(indexes, argCount);
+            int const entryDepth = argCount;
+            MenuGameplayEntry * const entry = G_GetNewGameCustomEntry(indexes, entryDepth);
             VM_ABORT_IF(entry == nullptr,
                         "invalid new-game-custom menu path %d/%d/%d depth %d",
-                        indexes[0], indexes[1], indexes[2], argCount);
+                        indexes[0], indexes[1], indexes[2], entryDepth);
 
             if (tw == CON_GETNGCFLAGS)
                 Gv_SetVarX(valueVar, entry->flags);
             else
-                entry->flags = Gv_GetVarX(valueVar);
+                entry->flags = newFlags;
         }
         break;
 
@@ -5300,8 +5449,13 @@ static int X_DoExecute(void)
         {
             insptr = savedinsptr;
             branch((j = (Gv_GetVarX(insptr[-1]) == *insptr)));
+            vm.flags &= ~VM_CONTINUE;
         } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
-        vm.flags &= ~VM_EXIT;
+        if (vm.flags & VM_EXIT)
+        {
+            insptr = (intptr_t*)savedinsptr[1];
+            vm.flags &= ~VM_EXIT;
+        }
         break;
     }
 
@@ -5312,8 +5466,13 @@ static int X_DoExecute(void)
         {
             insptr = savedinsptr;
             branch((j = (Gv_GetVarX(insptr[-1]) < *insptr)));
+            vm.flags &= ~VM_CONTINUE;
         } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
-        vm.flags &= ~VM_EXIT;
+        if (vm.flags & VM_EXIT)
+        {
+            insptr = (intptr_t*)savedinsptr[1];
+            vm.flags &= ~VM_EXIT;
+        }
         break;
     }
 
@@ -5324,8 +5483,13 @@ static int X_DoExecute(void)
         {
             insptr = savedinsptr;
             branch((j = (Gv_GetVarX(insptr[-1]) != *insptr)));
+            vm.flags &= ~VM_CONTINUE;
         } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
-        vm.flags &= ~VM_EXIT;
+        if (vm.flags & VM_EXIT)
+        {
+            insptr = (intptr_t*)savedinsptr[1];
+            vm.flags &= ~VM_EXIT;
+        }
         break;
     }
 
@@ -5339,8 +5503,13 @@ static int X_DoExecute(void)
             j = (j < Gv_GetVarX(*insptr++));
             insptr--;
             branch(j);
+            vm.flags &= ~VM_CONTINUE;
         } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
-        vm.flags &= ~VM_EXIT;
+        if (vm.flags & VM_EXIT)
+        {
+            insptr = (intptr_t*)savedinsptr[1];
+            vm.flags &= ~VM_EXIT;
+        }
         break;
     }
 
@@ -5354,8 +5523,13 @@ static int X_DoExecute(void)
             j = (j != Gv_GetVarX(*insptr++));
             insptr--;
             branch(j);
+            vm.flags &= ~VM_CONTINUE;
         } while (j && (vm.flags & (VM_RETURN | VM_EXIT | VM_TERMINATE)) == 0);
-        vm.flags &= ~VM_EXIT;
+        if (vm.flags & VM_EXIT)
+        {
+            insptr = (intptr_t*)savedinsptr[1];
+            vm.flags &= ~VM_EXIT;
+        }
         break;
     }
 
@@ -5677,17 +5851,22 @@ static int X_DoExecute(void)
 
 void A_LoadActor(int iActor)
 {
+    if ((unsigned)iActor >= MAXSPRITES || sprite[iActor].statnum == MAXSTATUS || (unsigned)sprite[iActor].sectnum >= MAXSECTORS)
+        return;
+
     vm.spriteNum = iActor;    // Sprite ID
     vm.playerNum = -1; // playerNum;    // Player ID
     vm.playerDist = -1; // playerDist;    // ??
     vm.pSprite = &sprite[vm.spriteNum];    // Pointer to sprite structure
+    vm.pActor = &actor[vm.spriteNum];
     vm.pData = &actor[vm.spriteNum].t_data[0];   // Sprite's 'extra' data
+    vm.pPlayer = g_player[0].ps;
 
     if (g_tile[vm.pSprite->picnum].loadPtr == 0) return;
 
     insptr = g_tile[vm.pSprite->picnum].loadPtr;
 
-    vm.flags &= ~(VM_RETURN | VM_KILL | VM_NOEXECUTE | VM_EXIT | VM_TERMINATE);
+    vm.flags &= ~(VM_RETURN | VM_KILL | VM_NOEXECUTE | VM_EXIT | VM_TERMINATE | VM_CONTINUE);
 
     if (vm.pSprite->sectnum < 0 || vm.pSprite->sectnum >= MAXSECTORS)
     {
@@ -5730,6 +5909,12 @@ void VM_UpdateAnim(int const spriteNum, int32_t* const pData)
 
 void A_Execute(int spriteNum, int playerNum, int playerDist)
 {
+    if ((unsigned)spriteNum >= MAXSPRITES || sprite[spriteNum].statnum == MAXSTATUS || (unsigned)sprite[spriteNum].sectnum >= MAXSECTORS)
+        return;
+
+    if ((unsigned)playerNum >= MAXPLAYERS || g_player[playerNum].ps == nullptr)
+        return;
+
     // for some reason this is faster than using the C++ syntax; e.g vm = vmstate_t{ ... }
     vmstate_t const tempvm
         = { spriteNum, playerNum, playerDist, 0, &sprite[spriteNum], &actor[spriteNum].t_data[0], g_player[playerNum].ps, &actor[spriteNum] };
@@ -5761,6 +5946,7 @@ void A_Execute(int spriteNum, int playerNum, int playerDist)
     insptr = 4 + (g_tile[vm.pSprite->picnum].execPtr);
     while (!X_DoExecute());
     insptr = NULL;
+    vm.flags &= ~VM_TERMINATE;
 
     if (vm.flags & VM_KILL)
     {

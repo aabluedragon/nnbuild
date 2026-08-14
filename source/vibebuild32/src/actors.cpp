@@ -1167,7 +1167,10 @@ SKIPWALLCHECK:
                     {
                         if (A_CheckEnemySprite(sj) && !cansee(sj->x, sj->y,sj->z+q, sj->sectnum, s->x, s->y, s->z+q, s->sectnum))
                             goto BOLT;
-                        A_DamageObject_Internal(j, i);
+                        if (FURY)
+                            A_DamageObject_Generic(j, i);
+                        else
+                            A_DamageObject_Internal(j, i);
                     }
             }
             else if (sj->extra >= 0 && sj != s && (sj->picnum == TRIPBOMB || A_CheckEnemySprite(sj) || sj->picnum == QUEBALL || sj->picnum == STRIPEBALL || (sj->cstat&257) || sj->picnum == DUKELYINGDEAD))
@@ -1249,13 +1252,13 @@ SKIPWALLCHECK:
                             X_OnEvent(EVENT_POSTDAMAGESPRITE, i, -1, -1);
                         }
 
-                        if (sj->picnum == PODFEM1 || sj->picnum == FEM1 ||
+                        if (!FURY && (sj->picnum == PODFEM1 || sj->picnum == FEM1 ||
                                 sj->picnum == FEM2 || sj->picnum == FEM3 ||
                                 sj->picnum == FEM4 || sj->picnum == FEM5 ||
                                 sj->picnum == FEM6 || sj->picnum == FEM7 ||
                                 sj->picnum == FEM8 || sj->picnum == FEM9 ||
                                 sj->picnum == FEM10 || sj->picnum == STATUE ||
-                                sj->picnum == STATUEFLASH || sj->picnum == SPACEMARINE || sj->picnum == QUEBALL || sj->picnum == STRIPEBALL)
+                                sj->picnum == STATUEFLASH || sj->picnum == SPACEMARINE || sj->picnum == QUEBALL || sj->picnum == STRIPEBALL))
                             A_DamageObject_Internal(j, i);
                     }
                     else if (s->extra == 0) actor[j].htextra = 0;
@@ -1584,8 +1587,10 @@ static void ms(int i)
     //T1,T2 and T3 are used for all the sector moving stuff!!!
     spritetype *s = &sprite[i];
 
+    int32_t playerDist;
+    int const playerNum = A_FindPlayer(s, &playerDist);
     int originIdx = T2(i);
-    int rotateAngle = T3(i);
+    int rotateAngle = X_OnEventWithReturn(EVENT_MOVESECTOR, i, playerNum, T3(i));
     vec2_t result;
 
     s->x += (s->xvel*(sintable[(s->ang+512)&2047]))>>14;
@@ -1730,6 +1735,12 @@ int A_IncurDamage(int spriteNum)
     auto const pSprite = &sprite[spriteNum];
     auto const pActor = &actor[spriteNum];
 
+    if (pActor->htextra < 0 || pSprite->extra < 0 || pActor->htpicnum < 0)
+    {
+        pActor->htextra = -1;
+        return -1;
+    }
+
     if (pActor->htextra >= 0)
     {
         if (sprite[spriteNum].extra >= 0)
@@ -1784,7 +1795,7 @@ int A_IncurDamage(int spriteNum)
                             break;
                         default:
                         {
-                            int const isRPG = (A_CheckSpriteTileFlags(pActor->htpicnum, SFLAG_PROJECTILE) && (actor[spriteNum].projectile.workslike & PROJECTILE_RPG));
+                            int const isRPG = (A_CheckSpriteTileFlags(pActor->htpicnum, SFLAG_PROJECTILE) && (Proj_GetProjectile(pActor->htpicnum)->workslike & PROJECTILE_RPG));
                             P_Nudge(playerNum, spriteNum, 1 << isRPG);
                             break;
                         }
@@ -3743,6 +3754,9 @@ static void G_MoveWeapons(void)
                             //actor[j].htowner = s->owner;
                             //actor[j].htpicnum = s->picnum;
                             //actor[j].htextra += pProj->extra;
+
+                            if (pProj->workslike & PROJECTILE_RPG_IMPACT_DAMAGE)
+                                actor[j].htextra += pProj->extra;
 
                             A_DoProjectileEffects(spriteNum, &davect, 0);
 
@@ -6431,6 +6445,14 @@ static void G_MoveEffectors(void)   //STATNUM 3
         int const  nextSprite = nextspritestat[spriteNum];
         auto const pSprite = &sprite[spriteNum];
         sectortype* const pSector = &sector[pSprite->sectnum];
+        int32_t playerDist;
+        int const playerNum = A_FindPlayer(pSprite, &playerDist);
+
+        if (X_OnEventWithReturn(EVENT_MOVEEFFECTORS, spriteNum, playerNum, 0))
+        {
+            spriteNum = nextSprite;
+            continue;
+        }
 
         st = pSprite->lotag;
         sh = pSprite->hitag;

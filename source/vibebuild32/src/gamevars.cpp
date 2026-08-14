@@ -565,6 +565,9 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
         int       arrayIndexVar = *insptr++;
         int       arrayIndex = Gv_GetVar(arrayIndexVar, spriteNum, playerNum);
         int const labelNum = *insptr++;
+        auto const currentActorSector = [&]() {
+            return (unsigned)spriteNum < MAXSPRITES ? sprite[spriteNum].sectnum : -1;
+        };
 
         switch (gv - sysVarIDs.structs)
         {
@@ -590,15 +593,15 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 break;
 
             case STRUCT_SECTOR:
-                if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = vm.pSprite->sectnum;
+                if (arrayIndexVar == sysVarIDs.THISACTOR || arrayIndex == MAXSPRITES)
+                    arrayIndex = currentActorSector();
                 CHECK_INDEX(MAXSECTORS);
                 returnValue = VM_GetSector(arrayIndex, labelNum);
                 break;
 
             case STRUCT_SECTOR_INTERNAL__:
-                if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = vm.pSprite->sectnum;
+                if (arrayIndexVar == sysVarIDs.THISACTOR || arrayIndex == MAXSPRITES)
+                    arrayIndex = currentActorSector();
                 CHECK_INDEX(MAXSECTORS);
                 returnValue = VM_GetStruct(SectorLabels[labelNum].flags, (intptr_t*)((intptr_t)&sector[arrayIndex] + SectorLabels[labelNum].offset));
                 break;
@@ -682,7 +685,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
     }
     else // if (gameVar & GV_FLAG_ARRAY)
     {
-        int const arrayIndex = Gv_GetVar(*insptr++, spriteNum, playerNum);
+        int const arrayIndex = Gv_NormalizeArrayIndex(gv, Gv_GetVar(*insptr++, spriteNum, playerNum));
 
         CHECK_INDEX(aGameArrays[gv].size);
 
@@ -795,6 +798,17 @@ int Gv_GetVarByLabel(const char *szGameLabel, int lDefault, int iActor, int iPla
 {
     int gameVar = hash_find(&h_gamevars,szGameLabel);
     return EDUKE32_PREDICT_TRUE(gameVar >= 0) ? Gv_GetVar(gameVar, iActor, iPlayer) : lDefault;
+}
+
+int Gv_SetVarByLabel(const char *szGameLabel, int lValue, int iActor, int iPlayer)
+{
+    int const gameVar = hash_find(&h_gamevars, szGameLabel);
+
+    if (EDUKE32_PREDICT_FALSE(gameVar < 0))
+        return 0;
+
+    Gv_SetVar(gameVar, lValue, iActor, iPlayer);
+    return 1;
 }
 
 static intptr_t* Gv_GetVarDataPtr(const char* szGameLabel)

@@ -103,6 +103,7 @@ void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags);
 void Gv_NewArray(const char* pszLabel, void* arrayptr, intptr_t asize, uint32_t flags);
 
 int Gv_GetVarByLabel(const char* szGameLabel, int lDefault, int iActor, int iPlayer);
+int Gv_SetVarByLabel(const char* szGameLabel, int lValue, int iActor, int iPlayer);
 void Gv_DumpValues(void);
 void Gv_ResetSystemDefaults(void);
 void Gv_InitWeaponPointers(void);
@@ -118,8 +119,22 @@ unsigned __fastcall Gv_GetArrayElementSize(int const arrayIdx);
 // Inline functions
 static FORCE_INLINE size_t Gv_GetArrayAllocSize(int const arrayIdx) { return Gv_GetArrayAllocSizeForCount(arrayIdx, aGameArrays[arrayIdx].size); }
 
+static FORCE_INLINE int __fastcall Gv_NormalizeArrayIndex(int const id, int const index)
+{
+    // Fury uses 65536-entry boolean arrays as tag bitsets. Build map tags are
+    // stored as signed 16-bit fields, so tags in the upper half of the valid
+    // range arrive in CON as negative values unless they are read through the
+    // newer unsigned tag labels.
+    if ((aGameArrays[id].flags & GAMEARRAY_BITMAP) && aGameArrays[id].size == 65536)
+        return (uint16_t)index;
+
+    return index;
+}
+
 static FORCE_INLINE int __fastcall Gv_GetArrayValue(int const id, int index)
 {
+    index = Gv_NormalizeArrayIndex(id, index);
+
     if (aGameArrays[id].flags & GAMEARRAY_STRIDE2)
         index <<= 1;
 

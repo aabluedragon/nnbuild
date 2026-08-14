@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "gamedef.h"
 #include "osd.h"
 #include "gamestructures.h"
+#include "screens.h"
 
 #define LABEL(struct, memb, name, idx)                                                              \
     {                                                                                                               \
@@ -1081,8 +1082,22 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
                 ud.returnvar[lParm2 - 1] = newValue;
             return;
         }
-        case USERDEFS_VM_PLAYER:            vm.playerNum = newValue; return; //vm.playerNum;
-        case USERDEFS_VM_SPRITE:            vm.spriteNum = newValue; return; //vm.spriteNum;
+        case USERDEFS_VM_PLAYER:
+            if ((unsigned)newValue < MAXPLAYERS)
+            {
+                vm.playerNum = newValue;
+                vm.pPlayer = g_player[newValue].ps;
+            }
+            return;
+        case USERDEFS_VM_SPRITE:
+            if ((unsigned)newValue < MAXSPRITES)
+            {
+                vm.spriteNum = newValue;
+                vm.pSprite = &sprite[newValue];
+                vm.pActor = &actor[newValue];
+                vm.pData = &actor[newValue].t_data[0];
+            }
+            return;
         case USERDEFS_VM_DISTANCE:          vm.playerDist = newValue; return; //vm.playerDist;
 
         case USERDEFS_TEAMPAL:          teams[lParm2].palnum    = newValue; return;
@@ -1410,6 +1425,7 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
         case PLAYER_HOLSTER_WEAPON:         return ps.holster_weapon;
         case PLAYER_FALLING_COUNTER:        return ps.falling_counter;
         case PLAYER_GOTWEAPON:              return ps.gotweapon[lParm2];
+        case PLAYER_PALETTE:                return ps.palette;
         case PLAYER_TOGGLE_KEY_FLAG:        return ps.toggle_key_flag;
         case PLAYER_KNUCKLE_INCS:           return ps.knuckle_incs;
         case PLAYER_WALKING_SND_TOGGLE:     return ps.walking_snd_toggle;
@@ -1645,6 +1661,7 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
         case PLAYER_HOLSTER_WEAPON:         ps.holster_weapon           = newValue; return;
         case PLAYER_FALLING_COUNTER:        ps.falling_counter          = newValue; return;
         case PLAYER_GOTWEAPON:              ps.gotweapon[lParm2]        = newValue; return;
+        case PLAYER_PALETTE:                P_SetGamePalette(&ps, newValue, 2 + 16); return;
         case PLAYER_TOGGLE_KEY_FLAG:        ps.toggle_key_flag          = newValue; return;
         case PLAYER_KNUCKLE_INCS:           ps.knuckle_incs             = newValue; return;
         case PLAYER_WALKING_SND_TOGGLE:     ps.walking_snd_toggle       = newValue; return;

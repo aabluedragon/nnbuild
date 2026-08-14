@@ -725,6 +725,7 @@ enum ScreenTextFlags_t {
     TEXT_DIGITALNUMBER = 0x00080000,
     TEXT_BIGALPHANUM = 0x00100000,
     TEXT_GRAYFONT = 0x00200000,
+    TEXT_VARHEIGHT = 0x00800000,
 };
 
 extern int g_numRealPalettes;
