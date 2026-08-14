@@ -1599,8 +1599,9 @@ static void resetpspritevars(char g)
 // level started: a real APLAYER sprite at a spawn point, full health, weapons
 // and inventory. Called deterministically on every machine already in the game
 // (and captured in the snapshot the joiner loads), so the sprite index and
-// state line up everywhere. Consumes no synced RNG. Level-wide key access is
-// preserved so integrating a joiner doesn't re-lock doors for everyone.
+// state line up everywhere. Deathmatch spawn scattering consumes synced RNG, so
+// callers must run this at the same tick with the same RNG state. Level-wide key
+// access is preserved so integrating a joiner doesn't re-lock doors for everyone.
 void P_SpawnLateJoiner(int snum)
 {
     if (g_numPlayerSprites <= 0)

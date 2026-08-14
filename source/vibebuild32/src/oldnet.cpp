@@ -100,7 +100,18 @@ static int32_t g_lateJoinRestoreFrag = 0, g_lateJoinRestoreFraggedself = 0, g_la
 // so a score-restore decision can be made and broadcast.
 static bool g_slotAwaitingRestore[MAXPLAYERS];
 static uint16_t lateJoinGoMask;
-static int32_t lateJoinGoRNG[6];
+enum
+{
+    LATEJOIN_RNG_RANDOMSEED,
+    LATEJOIN_RNG_GLOBAL_RANDOM,
+    LATEJOIN_RNG_AUX_GLOBAL,
+    LATEJOIN_RNG_ANIMWALL,
+    LATEJOIN_RNG_PLAYER,
+    LATEJOIN_RNG_PLAYERWEAPON,
+    LATEJOIN_RNG_WRANDOMSEED,
+    LATEJOIN_RNG_COUNT
+};
+static int32_t lateJoinGoRNG[LATEJOIN_RNG_COUNT];
 static void Net_IntegrateLateJoin(int32_t slot);
 static void Net_CompleteLateJoin(int32_t slot);
 static void Net_DropLaggard(int32_t slot);
@@ -116,6 +127,17 @@ static void Net_ClearLateJoinSnapshot(void)
     snapshotChunksGot = 0;
     snapshotChunkTotal = 0;
     snapshotLastLen = 0;
+}
+
+static void Net_ApplyLateJoinRNG(void)
+{
+    randomseed           = (uint32_t)lateJoinGoRNG[LATEJOIN_RNG_RANDOMSEED];
+    g_globalRandom       = (short)lateJoinGoRNG[LATEJOIN_RNG_GLOBAL_RANDOM];
+    g_random.global      = lateJoinGoRNG[LATEJOIN_RNG_AUX_GLOBAL];
+    g_random.animwall    = lateJoinGoRNG[LATEJOIN_RNG_ANIMWALL];
+    g_random.player      = lateJoinGoRNG[LATEJOIN_RNG_PLAYER];
+    g_random.playerweapon = lateJoinGoRNG[LATEJOIN_RNG_PLAYERWEAPON];
+    wrandomseed          = (uint32_t)lateJoinGoRNG[LATEJOIN_RNG_WRANDOMSEED];
 }
 
 static int g_chatPlayer = -1;
@@ -2311,7 +2333,7 @@ void Net_ParsePackets(void)
                 // all machines fold the new player in on the identical tick.
                 lateJoinGoSlot = (uint8_t)packbuf[1];
                 lateJoinGoMask = B_UNBUF16(&packbuf[2]);
-                for (i = 0; i < 6; i++)
+                for (i = 0; i < LATEJOIN_RNG_COUNT; i++)
                     lateJoinGoRNG[i] = (int32_t)B_UNBUF32(&packbuf[4 + i * 4]);
                 break;
             }
@@ -3100,13 +3122,10 @@ static void Net_CompleteLateJoin(int32_t slot)
     Net_RebuildConnectList();
     LOG_F(INFO, "Late join: restored roster mask 0x%x for slot %d", lateJoinGoMask, slot);
 
-    // Auxiliary RNG streams live outside the savegame; adopt the master's.
-    g_globalRandom        = (short)lateJoinGoRNG[0];
-    g_random.global       = lateJoinGoRNG[1];
-    g_random.animwall     = lateJoinGoRNG[2];
-    g_random.player       = lateJoinGoRNG[3];
-    g_random.playerweapon = lateJoinGoRNG[4];
-    wrandomseed           = (uint32_t)lateJoinGoRNG[5];
+    // RNG state lives outside the savegame snapshot. Deathmatch late-spawn
+    // placement consumes randomseed, so restore the master's exact state before
+    // running P_SpawnLateJoiner.
+    Net_ApplyLateJoinRNG();
 
     // The snapshot is a pre-spawn world (our slot was never present, so it is
     // dead at the origin). Spawn ourselves now with the exact same code every
@@ -3133,6 +3152,7 @@ void Net_PeerCheckLateJoin(void)
     int32_t const slot = lateJoinGoSlot;
     lateJoinGoSlot = -1;
     Net_ApplyConnectedMask(lateJoinGoMask);
+    Net_ApplyLateJoinRNG();
     // Existing peers spawn the joiner's player locally, deterministically and at
     // this same (master-locked) tick, matching the host's pre-snapshot spawn.
     // The joiner itself gets the spawned player from the snapshot, so it does
@@ -3293,18 +3313,20 @@ void Net_MasterCheckLateJoin(void)
     packbuf[0] = PACKET_TYPE_LATEJOIN_GO;
     packbuf[1] = (char)slot;
     B_BUF16(&packbuf[2], Net_ConnectedMask());
-    // The auxiliary RNG streams aren't part of the savegame snapshot; ship
-    // them along so the joiner can seed them after loading.
-    B_BUF32(&packbuf[4], (int32_t)g_globalRandom);
-    B_BUF32(&packbuf[8], g_random.global);
-    B_BUF32(&packbuf[12], g_random.animwall);
-    B_BUF32(&packbuf[16], g_random.player);
-    B_BUF32(&packbuf[20], g_random.playerweapon);
-    B_BUF32(&packbuf[24], (int32_t)wrandomseed);
+    // RNG state isn't fully covered by the savegame snapshot. Deathmatch late
+    // spawn placement consumes randomseed, and sync.cpp validates it, so the GO
+    // packet carries the exact pre-spawn RNG state used by all machines.
+    B_BUF32(&packbuf[4], (int32_t)randomseed);
+    B_BUF32(&packbuf[8], (int32_t)g_globalRandom);
+    B_BUF32(&packbuf[12], g_random.global);
+    B_BUF32(&packbuf[16], g_random.animwall);
+    B_BUF32(&packbuf[20], g_random.player);
+    B_BUF32(&packbuf[24], g_random.playerweapon);
+    B_BUF32(&packbuf[28], (int32_t)wrandomseed);
 
     for (int32_t i = 0; i < numplayers; i++)
         if (i != myconnectindex && g_player[i].connected)
-            mmulti_sendpacket(i, (unsigned char *)packbuf, 28);
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 4 + LATEJOIN_RNG_COUNT * 4);
 
     Net_IntegrateLateJoin(slot);
     // Snapshot was pre-spawn; spawn the joiner into our live world with the
