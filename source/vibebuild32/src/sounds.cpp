@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "compat.h"
 #include "duke3d.h"
 #include "gameexec.h"
+#include "multivoc.h"
 #include "renderlayer.h"  // for win_gethwnd()
 #include "vfs.h"
 
@@ -51,6 +52,24 @@ static std::atomic<uint32_t> freeSlotReadIndex, freeSlotWriteIndex;
 sound_t** g_sounds;
 sound_t nullsound;
 voiceinfo_t nullvoice = { -1, FX_Ok, UINT16_MAX, 0, -1, { 0, 0, 0 } };
+
+static void S_LogPlaybackFailure(char const * const prefix, char const * const filename)
+{
+    char const * const error = FX_ErrorString(FX_Error);
+
+    // FX_VoiceAvailable() is checked immediately before playback, but OGG
+    // voices initialize asynchronously and another sound can claim the last
+    // slot before FX_Play*() allocates. Ion Fury can legitimately burst several
+    // optional one-shot sounds at once, so do not spam hard ERROR lines for
+    // that recoverable race.
+    if (FX_ErrorCode == FX_MultiVocError && MV_ErrorCode == MV_NoVoices)
+    {
+        DVLOG_F(LOG_DEBUG, "%s %s: %s", prefix, filename, error);
+        return;
+    }
+
+    LOG_F(ERROR, "%s %s: %s", prefix, filename, error);
+}
 
 void S_AllocIndexes(int sndidx)
 {
@@ -965,7 +984,7 @@ error:
 
     if (voice <= FX_Ok)
     {
-        LOG_F(ERROR, "Unable to play %s: unsupported format or file corrupt.", snd->filename);
+        S_LogPlaybackFailure("Unable to play", snd->filename);
         bitmap_clear(&snd->playing, sndSlot);
         goto error;
     }
@@ -1019,7 +1038,7 @@ error:
 
     if (voice <= FX_Ok)
     {
-        LOG_F(ERROR, "Error attempting to play %s", snd->filename);
+        S_LogPlaybackFailure("Error attempting to play", snd->filename);
         bitmap_clear(&snd->playing, sndnum);
         goto error;
     }

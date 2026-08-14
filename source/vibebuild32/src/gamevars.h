@@ -109,8 +109,8 @@ void Gv_ResetSystemDefaults(void);
 void Gv_InitWeaponPointers(void);
 void Gv_RefreshPointers(void);
 void Gv_Init(void);
-void Gv_WriteSave(FILE* fil);
-int Gv_ReadSave(int fil);
+void Gv_WriteSave(FILE* fil, bool skipMapStates = false);
+int Gv_ReadSave(int fil, bool lateJoinSnapshot = false);
 
 size_t __fastcall Gv_GetArrayAllocSizeForCount(int const arrayIdx, size_t const count);
 size_t __fastcall Gv_GetArrayCountForAllocSize(int const arrayIdx, size_t const filelength);

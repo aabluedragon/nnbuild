@@ -46,6 +46,7 @@ enum
     FURY_TOP_MENU_X = 40,
     FURY_TOP_MENU_Y = 148,
     FURY_TOP_MENU_STEP = 11,
+    FURY_SKILL_MENU_X = 160,
     FURY_CENTER_MENU_X = 160,
 };
 
@@ -325,19 +326,20 @@ static inline int Menu_UpdateScreenOK(int cm)
     return 1;
 }
 
-static int probe_(int type,int x,int y,int i,int numItems)
+static void Menu_ReadProbeInput(void)
 {
-    short centre;
+    CONTROL_GetInput(&minfo);
+    mi += (minfo.mousey + minfo.dz);
+    mii += minfo.mousex;
+}
 
+static void Menu_UpdateProbeSelection(int numItems)
+{
+    if (numItems <= 0)
     {
-        CONTROL_GetInput(&minfo);
-        mi += (minfo.mousey+minfo.dz);
-        mii += minfo.mousex;
+        probey = 0;
+        return;
     }
-
-    if (x == (320>>1))
-        centre = 320>>2;
-    else centre = 0;
 
     if (!buttonstat || buttonstat == 16 || buttonstat == 32)
     {
@@ -367,6 +369,21 @@ static int probe_(int type,int x,int y,int i,int numItems)
 
     if (probey >= numItems)
         probey = 0;
+}
+
+static int probe_(int type,int x,int y,int i,int numItems, bool processSelection = true)
+{
+    short centre;
+
+    if (processSelection)
+    {
+        Menu_ReadProbeInput();
+        Menu_UpdateProbeSelection(numItems);
+    }
+
+    if (x == (320>>1))
+        centre = 320>>2;
+    else centre = 0;
 
     if (FURY)
         goto skipcursor;
@@ -416,6 +433,11 @@ static inline int M_Probe(int x,int y,int i,int numItems)
     return probe_(0,x,y,i, numItems);
 }
 
+static inline int M_ProbeAlreadyProcessed(int x,int y,int i,int numItems)
+{
+    return probe_(0,x,y,i, numItems, false);
+}
+
 static inline int probesm(int x,int y,int i,int numItems)
 {
     return probe_(1,x,y,i, numItems);
@@ -425,7 +447,7 @@ static inline int probesm(int x,int y,int i,int numItems)
 #define DISABLEDMENUSHADE (ud.menu_shadedisabled != 0 ? ud.menu_shadedisabled : 20)
 #define MENUHIGHLIGHT(x) (probey == (x) ? (sintable[((int32_t)totalclock << 5) & 2047] >> 12) : UNSELMENUSHADE)
 
-int menutext_(int x,int y,int s,int p,const char *t,int bits)
+int menutext_(int x,int y,int s,int p,const char *t,int bits, bool centerAtMenuMidpoint)
 {
     if (t == nullptr)
         return x;
@@ -443,7 +465,7 @@ int menutext_(int x,int y,int s,int p,const char *t,int bits)
     }
 
     int32_t const textFlags = TEXT_BIGALPHANUM | TEXT_UPPERCASE | TEXT_LITERALESCAPE
-                            | (x == (320 >> 1) ? TEXT_XCENTER : 0);
+                            | (centerAtMenuMidpoint && x == (320 >> 1) ? TEXT_XCENTER : 0);
     int32_t const orientation = bits | ROTATESPRITE_FULL16;
     int32_t const zoom = ud.menutext_zoom > 0 ? ud.menutext_zoom : 65536;
     int32_t const xspace = ud.menutext_xspace != 0 ? ud.menutext_xspace : (5 << 16);
@@ -457,6 +479,83 @@ int menutext_(int x,int y,int s,int p,const char *t,int bits)
                                     0, 0, xdim - 1, ydim - 1);
 
     return x + (dim.x >> 16);
+}
+
+int menutext_(int x,int y,int s,int p,const char *t,int bits)
+{
+    return menutext_(x, y, s, p, t, bits, true);
+}
+
+static int Menu_DrawLeftMenuText(int x,int y,int s,int p,const char *t)
+{
+    return menutext_(x, y, s, p, OSD_StripColors(menutextbuf, t), 10+16, false);
+}
+
+static void Menu_DrawTopBarTitle(int const y, char const * const title, int const titleY = -1)
+{
+    rotatesprite(320 << 15, y << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+    menutext(320 >> 1, FURY ? max(0, y - 16) : (titleY >= 0 ? titleY : y + 5), 0, 0, title);
+}
+
+static inline bool Menu_IsRenderableTile(int const tile)
+{
+    return (unsigned)tile < MAXTILES && tilesiz[tile].x > 0 && tilesiz[tile].y > 0;
+}
+
+static int Menu_FirstRenderableAnimationTile(int const baseTile, int const startFrame, int const frameCount,
+                                             int const viewType, int const preferredFrame)
+{
+    int const frames = max(frameCount, 1);
+    int const stride = max(viewType, 1);
+
+    for (int i = 0; i < frames; ++i)
+    {
+        int const frame = (preferredFrame + i) % frames;
+        int const tile = baseTile + startFrame + stride * frame;
+        if (Menu_IsRenderableTile(tile))
+            return tile;
+    }
+
+    if (Menu_IsRenderableTile(baseTile + startFrame))
+        return baseTile + startFrame;
+    if (Menu_IsRenderableTile(baseTile))
+        return baseTile;
+    if (Menu_IsRenderableTile(1441))
+        return 1441;
+    return Menu_IsRenderableTile(APLAYER) ? APLAYER : -1;
+}
+
+static int Menu_PlayerPreviewTile(void)
+{
+    int const previewFrame = ((4 - ((int32_t)totalclock >> 4)) & 3);
+
+    if (P_ValidateSkin(ud.skin))
+    {
+        int skinStart, skinFrames, skinViewType;
+        int const skinBase = P_SkinBaseTile(ud.skin);
+
+        P_GetSkinFrame(ud.skin, 20, 4, &skinStart, &skinFrames, &skinViewType);
+        return Menu_FirstRenderableAnimationTile(skinBase, skinStart, skinFrames, skinViewType,
+                                                 previewFrame % max(skinFrames, 1));
+    }
+
+    int const dukeTile = 1441 - (previewFrame * 5);
+    if (Menu_IsRenderableTile(dukeTile))
+        return dukeTile;
+    if (Menu_IsRenderableTile(1441))
+        return 1441;
+    return Menu_IsRenderableTile(APLAYER) ? APLAYER : -1;
+}
+
+static void Menu_DrawPlayerPreview(int const pal)
+{
+    int const tile = Menu_PlayerPreviewTile();
+    if (tile < 0)
+        return;
+
+    int const anchorTile = Menu_IsRenderableTile(APLAYER) ? APLAYER : tile;
+    rotatesprite(260 << 16, (24 + (tilesiz[anchorTile].y >> 1)) << 16, 49152L, 0, tile,
+                 0, pal, 10, 0, 0, xdim - 1, ydim - 1);
 }
 
 static void Menu_FurySmallText(int const x, int const y, char const* const text, int const shade, int const pal, int const flags = 0)
@@ -632,6 +731,48 @@ static int Menu_VisibleIndexForFunc(int const gameFunc)
     return gameFunc;
 }
 
+static inline int Menu_FurySliderPal(int const damodify, int const pa)
+{
+    if (pa)
+        return ud.slidebar_paldisabled != 0 ? ud.slidebar_paldisabled : pa;
+
+    return damodify && ud.slidebar_palselected != 0 ? ud.slidebar_palselected : 0;
+}
+
+static bool Menu_DrawFurySlider(int const type, int const x, int const y, int const value, int const minValue, int const maxValue,
+                                int const damodify, int const shade, int const pal, int const reverse)
+{
+    if (!FURY)
+        return false;
+
+    int32_t const slidebarz = ud.menu_slidebarz > 0 ? ud.menu_slidebarz : (65536L >> type);
+    int32_t const slidecursorz = ud.menu_slidecursorz > 0 ? ud.menu_slidecursorz : slidebarz;
+
+    int32_t const slidebarwidth = tilesiz[SLIDEBAR].x * slidebarz;
+    int32_t const slidebarheight = tilesiz[SLIDEBAR].y * slidebarz;
+    int32_t const slidecursorwidth = tilesiz[SLIDEBAR + 1].x * slidecursorz;
+    int32_t const slidecursorheight = tilesiz[SLIDEBAR + 1].y * slidecursorz;
+
+    if (slidebarwidth <= 0 || slidebarheight <= 0 || slidecursorwidth <= 0 || slidecursorheight <= 0)
+        return false;
+
+    int const range = maxValue - minValue;
+    int32_t const slidebarmargin = ud.menu_slidebarmargin > 0 ? ud.menu_slidebarmargin : 0;
+    int32_t const sx = x << 16;
+    int32_t const sy = (y << 16) - (slidebarheight >> 1);
+    int32_t const rawslideregionwidth = slidebarwidth - (slidebarmargin << 1) - slidecursorwidth;
+    int32_t const slideregionwidth = rawslideregionwidth > 0 ? rawslideregionwidth : 1;
+    int const clampedValue = clamp(value - minValue, 0, range > 0 ? range : 0);
+    int32_t const slidepointoffset = scale(slideregionwidth, reverse ? (range - clampedValue) : clampedValue, range > 0 ? range : 1);
+    int32_t const slidepointx = sx + slidebarmargin + slidepointoffset;
+    int32_t const slidepointy = sy + (slidebarheight >> 1) - (slidecursorheight >> 1);
+
+    rotatesprite(sx, sy, slidebarz, 0, SLIDEBAR, shade, Menu_FurySliderPal(damodify, pal), 2 | 8 | 16, 0, 0, xdim - 1, ydim - 1);
+    rotatesprite(slidepointx, slidepointy, slidecursorz, 0, SLIDEBAR + 1, shade, Menu_FurySliderPal(damodify, pal), 2 | 8 | 16, 0, 0, xdim - 1, ydim - 1);
+
+    return true;
+}
+
 static void _bar(int type, int x,int y,int *p,int dainc,int damodify,int s, int pa, int min, int max)
 {
     int xloc;
@@ -680,6 +821,9 @@ static void _bar(int type, int x,int y,int *p,int dainc,int damodify,int s, int 
     }
 
     xloc = *p;
+    if (Menu_DrawFurySlider(type, x, y, xloc, min, max, damodify, s, pa, rev))
+        return;
+
     rotatesprite((x<<16)+(22<<(16-type)),(y<<16)-(3<<(16-type)),65536L>>type,0,SLIDEBAR,s,pa,10,0,0,xdim-1,ydim-1);
     if (rev == 0)
         rotatesprite((x<<16)+((scale(64,xloc-min,max-min)+1)<<(16-type)),(y<<16)+(1<<(16-type)),65536L>>type,0,SLIDEBAR+1,s,pa,10,0,0,xdim-1,ydim-1);
@@ -829,6 +973,19 @@ static int Menu_FirstDefinedSkill(void)
     }
 
     return 0;
+}
+
+static void Menu_SyncFurySkillSelection(void)
+{
+    if (!FURY || g_currentMenu != MENU_SKILL)
+        return;
+
+    int const skillCount = Menu_DefinedSkillCount();
+    if (skillCount <= 0)
+        return;
+
+    probey = clamp(probey, 0, skillCount - 1);
+    ud.m_player_skill = probey + 1;
 }
 
 static int Menu_NgcVisiblePositionForRawIndex(MenuGameplayEntry const *entries, int rawIndex)
@@ -999,6 +1156,8 @@ static void Menu_RunDisplayEvent(int eventID)
         g_menuScriptOrigin = {};
 
     int const nativeMenu = g_currentMenu;
+    bool const furySkillPreview = FURY && nativeMenu == MENU_SKILL;
+    int const savedPlayerSkill = ud.player_skill;
 
     // Ion Fury confirmation prompts are native modal UI. Do not run scripted
     // menu draw events while they are active; those events repaint save/load
@@ -1011,7 +1170,13 @@ static void Menu_RunDisplayEvent(int eventID)
     if (scriptMenu != nativeMenu)
         g_currentMenu = scriptMenu;
 
+    if (furySkillPreview)
+        ud.player_skill = ud.m_player_skill;
+
     X_OnEventWithReturn(eventID, g_player[screenpeek].ps->i, screenpeek, scriptMenu);
+
+    if (furySkillPreview)
+        ud.player_skill = savedPlayerSkill;
 
     if (eventID == EVENT_DISPLAYMENU)
         g_menuScriptOrigin = { ud.returnvar[0], ud.returnvar[1] };
@@ -1232,6 +1397,7 @@ void M_DisplayMenus(void)
     int c,x,i;
     int l,m;
     const char *p = NULL;
+    bool furySkillSelectionPreprocessed = false;
 
     if (buttonstat != 0 && !onbar)
     {
@@ -1274,6 +1440,15 @@ void M_DisplayMenus(void)
 
     if (Menu_UpdateScreenOK(g_currentMenu))
         G_UpdateScreenArea();
+
+    if (FURY && g_currentMenu == MENU_SKILL)
+    {
+        Menu_ReadProbeInput();
+        Menu_UpdateProbeSelection(Menu_DefinedSkillCount());
+        furySkillSelectionPreprocessed = true;
+    }
+
+    Menu_SyncFurySkillSelection();
 
     if (FURY && !furyVerifyPrompt)
         Menu_RunDisplayEvent(EVENT_DISPLAYINACTIVEMENU);
@@ -1485,8 +1660,7 @@ void M_DisplayMenus(void)
         case 20002:
         case 20003:
         {
-            rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
-            menutext(160, 24, 0, 0, "PLAYER SETUP");
+            Menu_DrawTopBarTitle(19, "PLAYER SETUP", 24);
             c = (320 >> 1) - 120;
             {
                 int io, ii, yy = 37, d = c + 140, enabled;
@@ -1517,10 +1691,7 @@ void M_DisplayMenus(void)
                 if (probey == 2)
                     x = teams[ud.team].palnum;
 
-                if (P_ValidateSkin(ud.skin))
-                    rotatesprite((260) << 16, (24 + (tilesiz[APLAYER].y >> 1)) << 16, 49152L, 0, P_SkinBaseTile(ud.skin) + ((((4 - ((int32_t)totalclock >> 4))) & 3) * 5), 0, x, 10, 0, 0, xdim - 1, ydim - 1);
-                else
-                    rotatesprite((260) << 16, (24 + (tilesiz[APLAYER].y >> 1)) << 16, 49152L, 0, 1441 - ((((4 - ((int32_t)totalclock >> 4))) & 3) * 5), 0, x, 10, 0, 0, xdim - 1, ydim - 1);
+                Menu_DrawPlayerPreview(x);
 
                 for (ii = io = 0; opts[ii]; ii++)
                 {
@@ -3087,7 +3258,7 @@ cheat_for_port_credits2:
 
         case 110:
         {
-            c = (320>>1);
+            c = FURY ? FURY_SKILL_MENU_X : (320 >> 1);
             int const skillCount = FURY ? Menu_DefinedSkillCount() : 4;
             int const skillY = FURY ? 58 + ((4 - skillCount) * 6) : 70;
             int const skillStep = FURY ? FURY_TOP_MENU_STEP : 19;
@@ -3098,7 +3269,10 @@ cheat_for_port_credits2:
                 menutext(c,24,0,0,"SELECT SKILL");
             }
 
-            x = M_Probe(c, skillY, skillStep, skillCount);
+            x = furySkillSelectionPreprocessed
+                ? M_ProbeAlreadyProcessed(c, skillY, skillStep, skillCount)
+                : M_Probe(c, skillY, skillStep, skillCount);
+            Menu_SyncFurySkillSelection();
             if (x >= 0)
             {
                 switch (x)
@@ -3142,15 +3316,19 @@ cheat_for_port_credits2:
             }
 
             for (i = 0; i < skillCount; ++i)
-                menutext(c, skillY + skillStep * i, MENUHIGHLIGHT(i), PHX(-2 - i), g_skillNames[i]);
+            {
+                if (FURY)
+                    Menu_DrawLeftMenuText(c, skillY + skillStep * i, MENUHIGHLIGHT(i), PHX(-2 - i), g_skillNames[i]);
+                else
+                    menutext(c, skillY + skillStep * i, MENUHIGHLIGHT(i), PHX(-2 - i), g_skillNames[i]);
+            }
             break;
         }
 
         case 230:
         {
 #if defined(USE_OPENGL)
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"RENDERER SETUP");
+            Menu_DrawTopBarTitle(19, "RENDERER SETUP", 24);
 
             c = (320>>1)-120;
 
@@ -3399,8 +3577,7 @@ cheat_for_port_credits2:
         case 231:
         case 232:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"COLOR CORRECTION");
+            Menu_DrawTopBarTitle(19, "COLOR CORRECTION", 24);
 
             c = (320>>1)-120;
 
@@ -3488,8 +3665,7 @@ cheat_for_port_credits2:
 
         case 200:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"GAME SETUP");
+            Menu_DrawTopBarTitle(19, "GAME SETUP", 24);
 
             c = (320>>1)-120;
 
@@ -3662,8 +3838,7 @@ cheat_for_port_credits2:
 
         case 201:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"GAME SETUP");
+            Menu_DrawTopBarTitle(19, "GAME SETUP", 24);
 
             c = (320>>1)-120;
 
@@ -3824,8 +3999,7 @@ cheat_for_port_credits2:
         // JBF 20031205: Second level options menu selection
         case 202:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"OPTIONS");
+            Menu_DrawTopBarTitle(19, "OPTIONS", 24);
 
             c = 50;
 
@@ -3909,8 +4083,7 @@ cheat_for_port_credits2:
         // JBF 20031206: Video settings menu
         case 203:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"VIDEO SETUP");
+            Menu_DrawTopBarTitle(19, "VIDEO SETUP", 24);
 
             c = (320>>1)-120;
 
@@ -4274,11 +4447,7 @@ cheat_for_port_credits2:
             if (probey > resetClassicIndex)
                 probey = resetClassicIndex;
 
-            if (!FURY)
-            {
-                rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-                menutext(320>>1,24,0,0,"KEYBOARD SETUP");
-            }
+            Menu_DrawTopBarTitle(19, "KEYBOARD SETUP", 24);
 
             c = (320>>1)-120;
 
@@ -4410,8 +4579,7 @@ cheat_for_port_credits2:
             }
             else
             {
-                rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-                menutext(320>>1,24,0,0,"KEYBOARD SETUP");
+                Menu_DrawTopBarTitle(19, "KEYBOARD SETUP", 24);
 
                 mgametext(320>>1,90,"PRESS THE KEY TO ASSIGN AS",0,2+8+16);
                 sprintf(tempbuf,"%s FOR \"%s\"", whichkey?"SECONDARY":"PRIMARY", CONFIG_FunctionNumToName(function));
@@ -4454,8 +4622,7 @@ cheat_for_port_credits2:
 
         case 205:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"MOUSE SETUP");
+            Menu_DrawTopBarTitle(19, "MOUSE SETUP", 24);
 
             c = 60-4;
 
@@ -4577,11 +4744,10 @@ cheat_for_port_credits2:
             if (probey > noneFuncIndex)
                 probey = noneFuncIndex;
 
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            if (function == 0) menutext(320>>1,24,0,0,"MOUSE SETUP");
-            else if (function == 1) menutext(320>>1,24,0,0,"ADVANCED MOUSE");
-            else if (function == 2) menutext(320>>1,24,0,0,"JOYSTICK BUTTONS");
-            else if (function == 3) menutext(320>>1,24,0,0,"JOYSTICK AXES");
+            if (function == 0) Menu_DrawTopBarTitle(19, "MOUSE SETUP", 24);
+            else if (function == 1) Menu_DrawTopBarTitle(19, "ADVANCED MOUSE", 24);
+            else if (function == 2) Menu_DrawTopBarTitle(19, "JOYSTICK BUTTONS", 24);
+            else if (function == 3) Menu_DrawTopBarTitle(19, "JOYSTICK AXES", 24);
 
             x = M_Probe(0,0,0,keybindFuncCount + 1);
 
@@ -4749,8 +4915,7 @@ cheat_for_port_credits2:
 
         case 212:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"ADVANCED MOUSE");
+            Menu_DrawTopBarTitle(19, "ADVANCED MOUSE", 24);
 
             c = (320>>1)-120;
             static const int axes_start_menu_idx = 2;
@@ -4838,8 +5003,7 @@ cheat_for_port_credits2:
             mgametext(c+160-16,46+16-8,tempbuf,MENUHIGHLIGHT(1),2+8+16);
 
             // Digital Axes
-            rotatesprite(320<<15,94<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,43+16+16+16+8,0,0,"DIGITAL AXES SETUP");
+            Menu_DrawTopBarTitle(94, "DIGITAL AXES SETUP", 43 + 16 + 16 + 16 + 8);
 
             static const char* directions[] = { "UP:", "DOWN:", "LEFT:", "RIGHT:" };
 
@@ -4866,8 +5030,7 @@ cheat_for_port_credits2:
 
         case 206:
         {
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"JOYSTICK SETUP");
+            Menu_DrawTopBarTitle(19, "JOYSTICK SETUP", 24);
 
             x = M_Probe(160,100-18,18,3);
 
@@ -4895,8 +5058,7 @@ cheat_for_port_credits2:
 
         case 207:
         {
-            rotatesprite(320<<15,10<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,15,0,0,"JOYSTICK BUTTONS");
+            Menu_DrawTopBarTitle(10, "JOYSTICK BUTTONS", 15);
 
             c = 2*joystick.numButtons + 4*(joystick.numHats>0);
 
@@ -4977,8 +5139,7 @@ cheat_for_port_credits2:
         {
             int thispage, twothispage;
 
-            rotatesprite(320<<15,10<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,15,0,0,"JOYSTICK AXES");
+            Menu_DrawTopBarTitle(10, "JOYSTICK AXES", 15);
 
             thispage = (g_currentMenu < 217) ? (g_currentMenu-208) : (g_currentMenu-217)+2;
             twothispage = (thispage*2+1 < joystick.numAxes);
@@ -5164,8 +5325,7 @@ cheat_for_port_credits2:
         {
             // Pray this is enough pages for now :-|
             int first,last;
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"JOY DEAD ZONES");
+            Menu_DrawTopBarTitle(19, "JOY DEAD ZONES", 24);
 
             first = 4*(g_currentMenu-213);
             last  = min(4*(g_currentMenu-213)+4,joystick.numAxes);
@@ -5225,8 +5385,7 @@ cheat_for_port_credits2:
         case 701:
         {
             c = (320>>1)-120;
-            rotatesprite(320<<15,19<<16,65536L,0,MENUBAR,16,0,10,0,0,xdim-1,ydim-1);
-            menutext(320>>1,24,0,0,"SOUND SETUP");
+            Menu_DrawTopBarTitle(19, "SOUND SETUP", 24);
 
             if (!(changesmade & 8))
             {
@@ -6212,8 +6371,7 @@ VOLUME_ALL_40x:
 
         case 604:
         {
-            rotatesprite(320 << 15, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
-            menutext(320 >> 1, 24, 0, 0, "GAME FLAGS");
+            Menu_DrawTopBarTitle(19, "GAME FLAGS", 24);
 
             c = (320 >> 1) - 120;
 
