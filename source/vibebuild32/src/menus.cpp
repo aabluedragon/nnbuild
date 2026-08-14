@@ -144,8 +144,40 @@ static inline int32_t Menu_ApplyScriptOriginY(int32_t const y) { return y + Menu
 static inline int32_t Menu_ApplyScriptOriginX16(int32_t const x) { return x + g_menuScriptOrigin.x; }
 static inline int32_t Menu_ApplyScriptOriginY16(int32_t const y) { return y + g_menuScriptOrigin.y; }
 
-#define mgametext(x,y,t,s,dabits) G_PrintGameText(2,STARTALPHANUM, Menu_ApplyScriptOriginX(x),Menu_ApplyScriptOriginY(y),t,s,0,dabits,0, 0, xdim-1, ydim-1, 65536)
-#define mgametextpal(x,y,t,s,p) G_PrintGameText(2,STARTALPHANUM, Menu_ApplyScriptOriginX(x),Menu_ApplyScriptOriginY(y),t,s,p,26,0, 0, xdim-1, ydim-1, 65536)
+static constexpr int32_t FURY_BLUE_ZOOM = 32768;
+static constexpr int32_t FURY_BLUE_SPACE = 5 << 16;
+static constexpr int32_t FURY_BLUE_YLINE = 7 << 16;
+
+static int32_t Menu_GameText(int32_t const x, int32_t const y, char const *text,
+                             int32_t const shade, int32_t const pal, int32_t const bits)
+{
+    if (!FURY)
+        return G_PrintGameText(2, STARTALPHANUM, Menu_ApplyScriptOriginX(x), Menu_ApplyScriptOriginY(y), text,
+                               shade, pal, bits, 0, 0, xdim - 1, ydim - 1, 65536);
+
+    if (text == nullptr)
+        return x;
+
+    text = VBJS_MenuText(text);
+
+    int32_t const zoom = ud.gametext_zoom > 0 ? ud.gametext_zoom : FURY_BLUE_ZOOM;
+    int32_t const xspace = ud.gametext_xspace != 0 ? ud.gametext_xspace : FURY_BLUE_SPACE;
+    int32_t const xbetween = ud.gametext_tracking;
+    int32_t const textFlags = (x == (320 >> 1)) ? TEXT_XCENTER : 0;
+    int32_t const orientation = bits | RS_AUTO | RS_NOCLIP | RS_TOPLEFT | ROTATESPRITE_FULL16;
+
+    vec2_t const dim = G_ScreenText(STARTALPHANUM,
+                                    Menu_ApplyScriptOriginX16(x << 16),
+                                    Menu_ApplyScriptOriginY16(y << 16),
+                                    zoom, 0, 0, text, shade, pal, orientation, 0,
+                                    xspace, FURY_BLUE_YLINE, xbetween, 0, textFlags,
+                                    0, 0, xdim - 1, ydim - 1);
+
+    return x + (dim.x >> 16);
+}
+
+#define mgametext(x,y,t,s,dabits) Menu_GameText((x),(y),(t),(s),0,(dabits))
+#define mgametextpal(x,y,t,s,p) Menu_GameText((x),(y),(t),(s),(p),26)
 
 // BUILD SHIT THAT NEEDS TO BE EXTERNED:
 extern int32_t r_yshearing;
@@ -463,10 +495,6 @@ static void Menu_FuryBackdrop(void)
 
     videoFadeToBlack(1);
 }
-
-static constexpr int32_t FURY_BLUE_ZOOM = 16384;
-static constexpr int32_t FURY_BLUE_SPACE = 8 << 16;
-static constexpr int32_t FURY_BLUE_YLINE = 10 << 16;
 
 static void Menu_FuryPromptText(int32_t const x, int32_t const y, char const * const text, int32_t const flags = TEXT_XCENTER)
 {
@@ -930,9 +958,9 @@ static void Menu_ApplyFuryTextDefaults(void)
     if (ud.menutext_paldisabled_right == 0)
         ud.menutext_paldisabled_right = 7;
 
-    if (ud.gametext_zoom == 65536)
+    if (ud.gametext_zoom == 65536 || ud.gametext_zoom == 16384)
         ud.gametext_zoom = FURY_BLUE_ZOOM;
-    if (ud.gametext_xspace == 0)
+    if (ud.gametext_xspace == 0 || ud.gametext_xspace == (8 << 16))
         ud.gametext_xspace = FURY_BLUE_SPACE;
     if (ud.gametext_pal == 0)
         ud.gametext_pal = 11;
