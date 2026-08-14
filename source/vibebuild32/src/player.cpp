@@ -2472,7 +2472,11 @@ static void P_ProcessWeapon(int playerNum)
         else
         {
             // the basic weapon...
+            int const previousKickback = *kb;
             (*kb)++; // Increment Kickback Pic
+            int const fireDelay = aplWeaponFireDelay[p->curr_weapon][playerNum];
+            int const fireFrame = max(fireDelay, 2);
+            int const crossedFireFrame = (previousKickback < fireFrame && *kb >= fireFrame);
 
             if (aplWeaponFlags[p->curr_weapon][playerNum] & WEAPON_CHECKATRELOAD)
             {
@@ -2584,7 +2588,7 @@ static void P_ProcessWeapon(int playerNum)
                         }
                         else
                         {
-                            if (*kb == aplWeaponFireDelay[p->curr_weapon][playerNum])
+                            if (crossedFireFrame)
                             {
                                 P_FireWeapon(p);
                                 //                                P_DoWeaponSpawn(playerNum);
@@ -2607,7 +2611,7 @@ static void P_ProcessWeapon(int playerNum)
                         }
                         else
                         {
-                            if (*kb == aplWeaponFireDelay[p->curr_weapon][playerNum])
+                            if (crossedFireFrame)
                             {
                                 P_FireWeapon(p);
                                 //                                P_DoWeaponSpawn(playerNum);
@@ -2615,7 +2619,7 @@ static void P_ProcessWeapon(int playerNum)
                         }
                     }
                 }
-                else if (*kb == aplWeaponFireDelay[p->curr_weapon][playerNum])
+                else if (crossedFireFrame)
                     P_FireWeapon(p);
             }
         }
