@@ -119,6 +119,28 @@ When adding another game:
 4. Keep shared behavior in helper functions; avoid adding one-off branches that
    duplicate an existing selector path.
 
+## Duke-map crossplay bridge status
+
+The Shadow Warrior runtime can be asked to load Duke-family maps with
+`-gm.lvls duke` / `--game.levels duke`. The active engineering handoff for that
+bridge is `source/sw/DUKE_CROSSPLAY_BRIDGE.md`.
+
+Current intent: Duke levels should behave like Duke levels even when the active
+runtime/player/weapons are Shadow Warrior. That includes sector effectors,
+trains, teleporters, doors, map sounds/music, Duke actors, Duke breakables,
+tripmines, projectiles, and Duke map art/palette handling.
+
+Current recorded state:
+
+- `make -j8 vibebuild32` passed after the latest bridge edits.
+- SW runtime + Duke E1L1 startup smoke passed until timeout.
+- SW runtime + Duke E3L6/Rabid Transit currently has a recorded `SIGSEGV`
+  during startup after bridge capture. Debug that before claiming Rabid Transit
+  compatibility is fixed.
+
+This bridge should be fixed broadly through map/control-sprite semantics and
+shared bridge helpers, not by one-off fixes for individual screenshots.
+
 ## Staged plan
 1. (done) Prove `ld -r` localize; enumerate + categorize the 54 collisions.
 2. (done) Glue TU + game selector; wire the combined link; reach a clean link.

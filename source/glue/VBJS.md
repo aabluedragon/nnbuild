@@ -4,6 +4,8 @@ VibeBuild32 embeds QuickJS and loads mods as ES modules. Mods can use either
 TypeScript or JavaScript; TypeScript is transpiled by the game, so Node.js is
 not needed when the game runs.
 
+For restart-level engineering context, see `../../VIBEBUILD32_HANDOFF.md`.
+
 ## Create and run a project
 
 Use `--long-name` for a long option and `-short-name` for its short option.
@@ -145,9 +147,18 @@ const response = await fetch('https://example.invalid/api', { method: 'GET' });
 ```
 
 Consult `vb.d.ts` for the implemented overloads. This is an embedded runtime,
-not a complete Node distribution: only declared APIs are supported. HTTP(S)
-requests are available through `fetch`; Node's `http` and `https` module
-objects are not currently exported.
+not a complete Node distribution: only declared APIs are supported. Current
+module support is:
+
+| API | Import names | Current scope |
+|---|---|---|
+| filesystem | `fs`, `node:fs` | sync, callback-style, and `fs.promises` helpers declared in `vb.d.ts` |
+| filesystem promises | `fs/promises`, `node:fs/promises` | promise wrappers for the implemented file helpers |
+| UDP | `dgram`, `node:dgram` | `createSocket`, `bind`, `send`, `close`, events |
+| TCP | `net`, `node:net` | outbound `createConnection` / `connect`; no TCP server API yet |
+| HTTP(S) | global `fetch` | `fetch(url, options)` using the embedded libcurl bridge |
+
+Node's `http` and `https` module objects are not currently exported.
 
 ## Debugging in VS Code
 
