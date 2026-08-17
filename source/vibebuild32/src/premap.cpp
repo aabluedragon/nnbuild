@@ -1292,6 +1292,16 @@ static void prelevel(char g)
                 actor[i].flags |= SFLAG_NOSHADE;
         }
 
+    // Reference dump for the SW crossplay bridge: what Duke's own spawn leaves
+    // on every map sprite.  A_Spawn(-1,i) keeps the map's sprite index, so this
+    // diffs line-by-line against the bridge's dump of the same level.
+    if (Bgetenv("VB_CP_CSTAT_DUMP") != NULL)
+        for (i=0; i < MAXSPRITES; i++)
+            if (sprite[i].statnum < MAXSTATUS)
+                OSD_Printf("CSTATDUMP spr=%d tile=%d cstat=%d stat=%d x=%d y=%d z=%d\n",
+                           (int)i, (int)sprite[i].picnum, (int)sprite[i].cstat, (int)sprite[i].statnum,
+                           (int)sprite[i].x, (int)sprite[i].y, (int)sprite[i].z);
+
     lotaglist = 0;
 
     i = headspritestat[STAT_DEFAULT];

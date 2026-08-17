@@ -41,6 +41,7 @@ void VB_DukeAI_RunTic(void);
 int VB_DukeAI_IsEnemyTile(int tileNum);
 int VB_DukeAI_IsAdoptableTile(int tileNum);
 int VB_DukeAI_HasActorCode(int tileNum);
+int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag);
 int VB_DukeAI_TileIsTripmine(int tileNum);
 int VB_DukeAI_TileIsLaserLine(int tileNum);
 int VB_DukeAI_TileIsFireExt(int tileNum);
@@ -125,6 +126,195 @@ int VB_DukeAI_IsEnemyTile(int tileNum)
 // is flagged as an enemy: E3L6's LIZMANSTAYPUT is a plain `actor` block that
 // turns itself into a LIZMAN via `cactor` on its first tic, so an enemy-tile
 // test alone leaves it behind on the host's approximation layer.
+// The blocking bits Duke's own spawn leaves on a map sprite of this tile.
+//
+// The host keeps most Duke props on its own approximation layer instead of
+// adopting them, so Duke's A_Spawn() never runs for them and the solidity it
+// would have applied is lost.  The host used to guess from a short hand-written
+// list, and everything missing from it was walk-through: E1L1's rooftop vent
+// fan, its grates, every masked wall and every wall switch on the level.  This
+// answers the same question from Duke's side, with Duke's own tile names and
+// Duke's own generic rules, so it can be kept beside A_Spawn() as that changes.
+//
+// The per-tile cases are mechanically derived from the cstat assignments in
+// A_Spawn(); tiles it makes merely hittable (QUEBALL/STRIPEBALL) are absent,
+// and the cases A_Spawn() guards on game state are guarded here the same way.
+int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
+{
+    int bits = mapCstat & (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+
+    if ((unsigned)tileNum >= MAXTILES)
+        return bits;
+
+    // A_Spawn()'s generic pass over aligned map sprites, which runs before the
+    // per-tile switch and returns straight out of it.
+    if ((mapCstat & CSTAT_SPRITE_ALIGNMENT) && tileNum != SPEAKER && tileNum != LETTER && tileNum != DUCK &&
+        tileNum != TARGET && tileNum != TRIPBOMB && tileNum != VIEWSCREEN && tileNum != VIEWSCREEN2 &&
+        !(tileNum >= CRACK1 && tileNum <= CRACK4))
+    {
+        if (A_CheckSwitchTileNum(tileNum) && (mapCstat & CSTAT_SPRITE_ALIGNMENT_WALL))
+            return bits | CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN;
+
+        // A tagged aligned sprite becomes a shootable faller.
+        if (mapHitag)
+            return bits | CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN;
+    }
+
+    switch (tileGetMapping(tileNum))
+    {
+    // A_Spawn() assigns these a bare hittable cstat, wiping any blocking bit
+    // the map gave them.
+    case FEMMAG1__:
+    case FEMMAG2__:
+    case NATURALLIGHTNING__:
+    case QUEBALL__:
+    case STRIPEBALL__:
+        return 0;
+
+    case CAMERA1__:
+    case CAMERAPOLE__:
+        return g_damageCameras ? (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN) : 0;
+
+    case PODFEM1__:
+    case NAKED1__:
+    case TOUGHGAL__:
+    case BLOODYPOLE__:
+    case ANTENNA__:
+    case BLIMP__:
+    case BOTTLE1__:
+    case BOTTLE10__:
+    case BOTTLE11__:
+    case BOTTLE12__:
+    case BOTTLE13__:
+    case BOTTLE14__:
+    case BOTTLE15__:
+    case BOTTLE16__:
+    case BOTTLE17__:
+    case BOTTLE18__:
+    case BOTTLE19__:
+    case BOTTLE2__:
+    case BOTTLE3__:
+    case BOTTLE4__:
+    case BOTTLE5__:
+    case BOTTLE6__:
+    case BOTTLE7__:
+    case BOTTLE8__:
+    case BOUNCEMINE__:
+    case BOX__:
+    case CACTUS__:
+    case CACTUSBROKE__:
+    case CAMERALIGHT__:
+    case CANWITHSOMETHING__:
+    case CANWITHSOMETHING2__:
+    case CANWITHSOMETHING3__:
+    case CANWITHSOMETHING4__:
+    case CHAIR1__:
+    case CHAIR2__:
+    case CHAIR3__:
+    case CONE__:
+    case CRACK1__:
+    case CRACK2__:
+    case CRACK3__:
+    case CRACK4__:
+    case CRANE__:
+    case DOMELITE__:
+    case DOORSHOCK__:
+    case DUCK__:
+    case DUKECAR__:
+    case DUKELYINGDEAD__:
+    case EGG__:
+    case EXPLODINGBARREL__:
+    case FANSPRITE__:
+    case FETUS__:
+    case FETUSBROKE__:
+    case FIREBARREL__:
+    case FIREEXT__:
+    case FIREVASE__:
+    case FUELPOD__:
+    case GRATE1__:
+    case HANGLIGHT__:
+    case HEAVYHBOMB__:
+    case HELECOPT__:
+    case HORSEONSIDE__:
+    case HYDRENT__:
+    case INDY__:
+    case IVUNIT__:
+    case JURYGUY__:
+    case LETTER__:
+    case LUKE__:
+    case MASKWALL1__:
+    case MASKWALL10__:
+    case MASKWALL11__:
+    case MASKWALL12__:
+    case MASKWALL13__:
+    case MASKWALL14__:
+    case MASKWALL15__:
+    case MASKWALL2__:
+    case MASKWALL3__:
+    case MASKWALL4__:
+    case MASKWALL5__:
+    case MASKWALL6__:
+    case MASKWALL7__:
+    case MASKWALL8__:
+    case MASKWALL9__:
+    case MONK__:
+    case MOVIECAMERA__:
+    case NUKEBARREL__:
+    case NUKEBARRELDENTED__:
+    case NUKEBARRELLEAKED__:
+    case OCEANSPRITE1__:
+    case OCEANSPRITE2__:
+    case OCEANSPRITE3__:
+    case OCEANSPRITE5__:
+    case OOZFILTER__:
+    case PANNEL1__:
+    case PANNEL2__:
+    case PIPE1__:
+    case PIPE2__:
+    case PIPE3__:
+    case PIPE4__:
+    case PIPE5__:
+    case PIPE6__:
+    case POT1__:
+    case POT2__:
+    case POT3__:
+    case RUBBERCAN__:
+    case SATELITE__:
+    case SCALE__:
+    case SEENINE__:
+    case SOLARPANNEL__:
+    case SPACEMARINE__:
+    case STALL__:
+    case SUSHIPLATE1__:
+    case SUSHIPLATE2__:
+    case SUSHIPLATE3__:
+    case SUSHIPLATE4__:
+    case SUSHIPLATE5__:
+    case TARGET__:
+    case TIRE__:
+    case TOILET__:
+    case TREE1__:
+    case TREE2__:
+    case TRIPODCAMERA__:
+    case VACUUM__:
+    case VASE__:
+    case WAITTOBESEATED__:
+    case WATERFOUNTAIN__:
+    case WOODENHORSE__:
+        bits |= CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN;
+        break;
+
+    default:
+        break;
+    }
+
+    // Duke's last word on any map sprite: solid implies hittable.
+    if (bits & CSTAT_SPRITE_BLOCK)
+        bits |= CSTAT_SPRITE_BLOCK_HITSCAN;
+
+    return bits;
+}
+
 int VB_DukeAI_HasActorCode(int tileNum)
 {
     if ((unsigned)tileNum >= MAXTILES)

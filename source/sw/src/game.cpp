@@ -1369,6 +1369,9 @@ static int32_t g_swCrossplayDukeLastTeleportTic = -1;
 static int32_t g_swCrossplayDukeMinTeleportGap = -1;
 static int32_t g_swCrossplayDukeTripmineDetonations;
 
+// Asks Duke for the blocking bits its own spawn leaves on a map sprite.
+extern "C" int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag);
+
 // SW removes sprites through KillSprite(), which detaches any 3D sounds that are
 // owned by, or follow, the sprite.  The Duke bridge cannot use KillSprite() (these
 // sprites have no SW USER record), so detach the sounds here: leaving a looping or
@@ -2204,6 +2207,15 @@ static int32_t SW_CrossplayDukeSpriteShouldBlock(int16_t sourcePicnum, uint16_t 
     if (flags & VB_CROSSPLAY_DUKE_SPRITE_ACTOR)
         return 1;
 
+    // Duke's own spawn code is the authority on which props are solid.  This
+    // used to be a short hand-written list, and everything missing from it was
+    // walk-through: E1L1's rooftop vent fan, its grates, and every masked wall
+    // on the level.
+    // Asked with an empty map cstat, this reports only what Duke's spawn forces
+    // solid on its own, which is the question this helper answers.
+    if (VB_DukeAI_MapSpriteSolidBits(sourcePicnum, 0, 0) & CSTAT_SPRITE_BLOCK)
+        return 1;
+
     switch (sourcePicnum)
     {
     case VB_DUKE_ATM:
@@ -2389,25 +2401,33 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
             }
             else
             {
-                // Duke has no list of which props are solid: a map sprite keeps
-                // the blocking bit its author gave it, and Duke's break code is
-                // what clears it.  Overriding that bit walled the player out of
-                // nothing and let them walk through what should stop them --
-                // E1L1's rooftop vent is a floor-aligned PANNEL1 whose blocking
-                // bit is what keeps the duct shut until it is shot open.  The
-                // list is still consulted, for the tiles Duke's own spawn code
-                // makes solid regardless of the map.
+                // Solidity is Duke's answer, not the bridge's: Duke's own spawn
+                // decides it from the tile, the map's cstat and the map's tag,
+                // and its break code is what clears it later.  Guessing it from
+                // a short list here let the player walk through E1L1's rooftop
+                // vent, its grates and every masked wall on the level.
+                int const solidBits = VB_DukeAI_MapSpriteSolidBits(originalPicnum, sp->cstat, sp->hitag);
+
                 SET(sp->cstat, CSTAT_SPRITE_BLOCK_HITSCAN);
-                if (SW_CrossplayDukeSpriteShouldBlock(originalPicnum, behaviorFlags))
+                if ((solidBits & CSTAT_SPRITE_BLOCK) ||
+                    SW_CrossplayDukeSpriteShouldBlock(originalPicnum, behaviorFlags))
                     SET(sp->cstat, CSTAT_SPRITE_BLOCK);
+                else
+                    RESET(sp->cstat, CSTAT_SPRITE_BLOCK);
 
                 if (TEST(sp->cstat, CSTAT_SPRITE_BLOCK) && Bgetenv("VB_CP_BREAK_DEBUG") != NULL)
                     LOG_F(INFO, "CPBREAK solid spr=%d tile=%d cstat=%d", i, originalPicnum,
                           TrackerCast(sp->cstat));
             }
+            // Scenery the bridge drives nothing for still takes Duke's answer:
+            // masked walls, railings and fences are solid in Duke, and clearing
+            // that outright let the player walk through all of it.
             else
             {
+                int const solidBits = VB_DukeAI_MapSpriteSolidBits(originalPicnum, sp->cstat, sp->hitag);
+
                 RESET(sp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+                SET(sp->cstat, solidBits);
             }
 
             if (behaviorFlags & VB_CROSSPLAY_DUKE_SPRITE_INVISIBLE_SOURCE)
@@ -2449,6 +2469,17 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
 
     if (removed > 0)
         LOG_F(INFO, "Crossplay: culled %d Duke control/player marker sprite(s) after building Shadow Warrior compatibility bridges.", removed);
+
+    // Diffs against the same dump from a native Duke run of this level
+    // (premap.cpp), which is how solidity mismatches are found rather than
+    // guessed: same map, same sprite indices, so the two dumps line up.
+    if (Bgetenv("VB_CP_CSTAT_DUMP") != NULL)
+        for (int32_t i = 0; i < MAXSPRITES; ++i)
+            if (sprite[i].statnum != MAXSTATUS)
+                LOG_F(INFO, "CSTATDUMP spr=%d tile=%d cstat=%d stat=%d x=%d y=%d z=%d",
+                      i, (int)artCrossplayOriginalMapSpritePicnum(i), TrackerCast(sprite[i].cstat),
+                      TrackerCast(sprite[i].statnum), TrackerCast(sprite[i].x), TrackerCast(sprite[i].y),
+                      TrackerCast(sprite[i].z));
 }
 
 static void SW_CrossplaySanitizeForeignMapSectors(void)

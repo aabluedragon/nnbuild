@@ -8659,17 +8659,20 @@ int A_CheckEnemySprite(const void *s)
     return(A_CheckEnemyTile(((uspriteptr_t)s)->picnum));
 }
 
-int A_CheckSwitchTile(int i)
+// Split out from A_CheckSwitchTile() so the SW crossplay bridge can ask the same
+// question about a tile it has not spawned: the bridge has to reproduce the
+// solidity Duke's spawn gives a wall switch.
+int A_CheckSwitchTileNum(int tileNum)
 {
     int j;
     //MULTISWITCH has 4 states so deal with it separately
-    if ((PN(i) >= MULTISWITCH) && (PN(i) <=MULTISWITCH+3)) return 1;
+    if ((tileNum >= MULTISWITCH) && (tileNum <=MULTISWITCH+3)) return 1;
     // ACCESSSWITCH and ACCESSSWITCH2 are only active in 1 state so deal with them separately
-    if ((PN(i) == ACCESSSWITCH) || (PN(i) == ACCESSSWITCH2)) return 1;
+    if ((tileNum == ACCESSSWITCH) || (tileNum == ACCESSSWITCH2)) return 1;
     //loop to catch both states of switches
     for (j=1;j>=0;j--)
     {
-        switch (tileGetMapping(PN(i)-j))
+        switch (tileGetMapping(tileNum-j))
         {
         case HANDPRINTSWITCH__:
             //case HANDPRINTSWITCH+1:
@@ -8715,6 +8718,11 @@ int A_CheckSwitchTile(int i)
         }
     }
     return 0;
+}
+
+int A_CheckSwitchTile(int i)
+{
+    return A_CheckSwitchTileNum(PN(i));
 }
 
 static void G_RecordOldSpritePos(void)
