@@ -633,6 +633,31 @@ Fixed since:
   answered each resolution -- the fix takes E1L1 from 17 `via=maptile` hits to
   none.
 
+- **A charge has to shake the room itself.**  E1L1's rooftop canisters went off
+  without the jolt Duke gives them.  Duke opens `DETONATE` with
+  `g_earthquakeTime = 16` and every charge, crack and tripmine reaches it -- but
+  a charge is one of the few things the bridge deliberately does *not* hand to
+  Duke, because detonating one drives the SE_13 that opens the wall and those
+  effectors are the host's.  So the host's own detonation path has to shake for
+  itself; both it and the per-tic harvest of Duke's earthquakes now go through
+  one place.
+
+- **A blast reaches every sprite, not just the ones the bridge has a name for.**
+  The yellow "POLICE LINE DO NOT CROSS" tape on E1L1's rooftop survived the
+  canisters going off beside it.  Duke's `A_RadiusDamage()` hands *every* sprite
+  in range to `A_DamageObject_Internal()` and lets Duke's code decide; the bridge
+  only delivered the blast to sprites its own behavior table had classified, and
+  the tape (tile 930) is unnamed decorative art that no table lists.  What
+  destroys it is Duke's generic spawn rule rather than any per-tile case: a
+  *tagged, aligned* map sprite becomes a `STAT_FALLER`, and `G_MoveFallers()`
+  drops it once an explosion has worn its health down.  Every Duke map sprite the
+  host is not animating now reaches Duke's damage code, so Duke can apply that
+  rule.  The host's own machinery is excluded -- sector effectors, activators,
+  locators and the pickups converted into SW items are the host's to drive, and
+  handing either to Duke would take it out of the system that runs it.
+  `VB_CP_TEST_BLAST=<hitag>` detonates a charge group the way shooting one does,
+  which is how this was reproduced without a human at the keyboard.
+
 - **A sprite must never be in two of the engine's lists at once.**  Handing props
   to Duke made this the bridge's easiest mistake to make, and it cost three
   separate hangs.  The engine keeps its free slots on a status list of their own
@@ -793,6 +818,7 @@ reproductions passed while the user's own game failed.
 | `VB_CP_BREAK_DEBUG=1` | log each broken Duke prop's tile and break sound |
 | `VB_CP_PAL_DEBUG=1` | log every (tile, Duke pal) art resolution and which path answered it |
 | `VB_CP_SPRITE_DEBUG=1` | after each Duke tic, log `Numsprites`, linked sprites and free-chain length |
+| `VB_CP_TEST_BLAST=<hitag>` | detonate the Duke charge group with that hitag (E1L1's rooftop canisters are 253) |
 | `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
 | `VB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
 | `VB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |
