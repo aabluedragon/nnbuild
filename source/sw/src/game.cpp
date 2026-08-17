@@ -1396,6 +1396,25 @@ static void SW_CrossplayDeleteDukeSprite(int32_t spriteNum)
     if ((unsigned)spriteNum >= MAXSPRITES || sprite[spriteNum].statnum == MAXSTATUS)
         return;
 
+    // Every record the bridge keeps about a Duke sprite is written on one tic and
+    // read on a later one, and in between the slot it names can be freed and
+    // handed straight back out to the host.  A sprite carrying an SW USER record
+    // is the host's -- Duke's bridge sprites never have one -- so a claim on it is
+    // stale by definition, and acting on it here deletes a live host sprite
+    // through the engine, behind SW's back: no KillSprite() runs, so the USER
+    // record leaks and nothing on the SW side ever learns the sprite is gone.
+    //
+    // This is what ate SW's rockets.  A rocket that happened to draw a slot the
+    // bridge still had a claim on was deleted within a tic of leaving the
+    // launcher -- ammo spent, sound played, recoil applied, no projectile, and no
+    // explosion either, because the SW code that would have drawn one was never
+    // told.  Drop the claim instead of the sprite.
+    if (User[spriteNum] != NULL)
+    {
+        SW_CrossplayReleaseDukeSpriteOwnership(spriteNum);
+        return;
+    }
+
     DeleteNoSoundOwner((short)spriteNum);
     DeleteNoFollowSoundOwner((short)spriteNum);
     deletesprite((short)spriteNum);
@@ -3240,6 +3259,7 @@ extern "C" int VB_DukeAI_IsAdoptableTile(int tileNum);
 extern "C" int VB_DukeAI_HasActorCode(int tileNum);
 extern "C" int VB_DukeAI_IsEnemyTile(int tileNum);
 int InitRocket(PLAYERp pp);   // weapon.cpp
+extern int16_t g_swCrossplayLastRocket;   // weapon.cpp
 int SW_CrossplayDukeAIDukePicnumOf(int spriteNum);
 
 // Duke should own any living actor it has CON code for, not just tiles flagged
@@ -12587,6 +12607,18 @@ static void SW_CrossplayDukeAIEnterDukeSpace(void)
 {
     g_swCrossplayDukeAISwCount = 0;
 
+    // Ownership is recorded once per tic and read on the next one, so by the time
+    // it is read the slot it names can have been freed and handed back out to the
+    // host.  Retire those flags before anything consults them: a sprite carrying
+    // an SW USER record is the host's, whatever the flag says, and Duke's own
+    // sprites never carry one.  Left stale, the host's new sprite went into Duke's
+    // lists as if it were Duke's and Duke's actor code deleted it -- the rocket
+    // that leaves the launcher and simply is not there.
+    for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+        if (g_swCrossplayDukeAIOwned[spriteNum] &&
+            (sprite[spriteNum].statnum == MAXSTATUS || User[spriteNum] != NULL))
+            g_swCrossplayDukeAIOwned[spriteNum] = 0;
+
     for (int32_t statnum = 0; statnum < MAXSTATUS; ++statnum)
     {
         for (int32_t spriteNum = headspritestat[statnum]; spriteNum >= 0; spriteNum = nextspritestat[spriteNum])
@@ -13571,13 +13603,23 @@ static void SW_CrossplayDukeAITick(void)
                 int32_t const before = Numsprites;
                 InitRocket(pp);
 
-                // The rocket is whatever STAT_MISSILE sprite is newest.
-                int16_t found = -1;
-                for (int32_t sn = headspritestat[STAT_MISSILE]; sn >= 0; sn = nextspritestat[sn])
-                {
-                    found = (int16_t)sn;
-                    break;
-                }
+                // InitRocket() publishes the slot it created, so the probe
+                // follows the real rocket rather than whatever happens to head
+                // the missile list.  -1 means the shot never produced one.
+                int16_t const found = g_swCrossplayLastRocket;
+
+                // Sprite slots are recycled, so an earlier entry can still be
+                // watching the slot this rocket just took.  Retire it first --
+                // otherwise both entries follow one rocket and one of them
+                // reports a flight of zero that never happened.
+                if (found >= 0)
+                    for (int32_t i = 0; i < firedCount; ++i)
+                        if (fired[i] == found && !firedDone[i])
+                        {
+                            firedDone[i] = 1;
+                            LOG_F(INFO, "CPROCKET spr=%d retired: slot reused after %d units", (int)found,
+                                  firedDist[i]);
+                        }
 
                 fired[firedCount] = found;
                 firedTic[firedCount] = rocketTic;

@@ -669,6 +669,32 @@ Fixed since:
   which is where their state is set up properly.  What is left is what should have
   been there all along -- the tape, the vent cover, the fan, the masked walls.
 
+- **A stale claim on a recycled slot must never delete a live host sprite.**
+  This is what was eating SW's rockets.  Every record the bridge keeps about a
+  Duke sprite is written on one tic and read on a later one, and in between the
+  engine can free that slot and hand it straight back to the host.  A rocket that
+  happened to draw such a slot was deleted by `SW_CrossplayDeleteDukeSprite()`
+  within a tic of leaving the launcher: ammo spent, sound played, recoil applied,
+  no projectile -- and no explosion either, because the deletion went through the
+  engine's `deletesprite()` rather than SW's `KillSprite()`, so the USER record
+  leaked and nothing on the SW side ever learned the sprite was gone.  That
+  silence is why it looked like the launcher had simply failed to fire.
+
+  The fix is the discriminator the rest of the bridge already uses: a sprite
+  carrying an SW `User[]` record is the host's, because Duke's bridge sprites
+  never have one, so a claim on it is stale by definition.  The deleter now drops
+  the claim instead of the sprite, and `SW_CrossplayDukeAIEnterDukeSpace()`
+  retires ownership flags naming a freed or host-owned slot before anything reads
+  them.
+
+  Measured with `VB_CP_TEST_ROCKET=1` (64 shots per run): E1L1 went from 9 rockets
+  destroyed without moving to 0, repeatably, and every remaining rocket now dies
+  through SW's own hit path with an explosion.  E1L4 was and stays 64/64.  Note
+  that a rocket legitimately dies in preflight when something solid is within
+  ~1200 units ahead -- `TestMissileSetPos()` -- which is vanilla SW behaviour and
+  accounts for all 64 kills on E1L2, where the player start faces a wall 500 units
+  away.
+
 - **Scenery Duke shoots through must not stop the host's bullets.**  The bridge
   set `CSTAT_SPRITE_BLOCK_HITSCAN` on *every* prop it classified, where Duke adds
   it only to a sprite the map already made solid or that its own per-tile spawn

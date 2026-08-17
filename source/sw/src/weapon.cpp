@@ -106,6 +106,7 @@ short ElectroFindClosestEnemy(short SpriteNum);
 int InitElectroJump(SPRITEp wp, SPRITEp sp);
 SWBOOL TestDontStickSector(short hit_sect);
 int SpawnShrapX(short SpriteNum);
+int16_t g_swCrossplayLastRocket = -1;
 SWBOOL WeaponMoveHit(short SpriteNum);
 int HelpMissileLateral(int16_t Weapon, int dist);
 void SpawnMidSplash(short SpriteNum);
@@ -10252,6 +10253,25 @@ DoRocket(int16_t Weapon)
     {
         if (WeaponMoveHit(Weapon) && u->ret)
         {
+            if (Bgetenv("VB_CP_TEST_ROCKET") != NULL && !TEST(u->Flags, SPR_SET_POS_DONT_KILL))
+            {
+                int const hit = TEST(u->ret, HIT_MASK);
+                int idx = -1, pic = -1;
+                if (hit == HIT_WALL)
+                    idx = NORM_WALL(u->ret);
+                else if (hit == HIT_SPRITE)
+                {
+                    idx = NORM_SPRITE(u->ret);
+                    pic = TrackerCast(sprite[idx].picnum);
+                }
+                else if (hit == HIT_SECTOR)
+                    idx = NORM_SECTOR(u->ret);
+                LOG_F(INFO, "CPROCKET died spr=%d hit=%s idx=%d pic=%d ret=%d", (int)Weapon,
+                      hit == HIT_SECTOR ? "SECTOR" : hit == HIT_WALL ? "WALL" :
+                      hit == HIT_SPRITE ? "SPRITE" : hit == HIT_PLAX_WALL ? "PLAX" : "other",
+                      idx, pic, (int)u->ret);
+            }
+
             if (u->ID == BOLT_THINMAN_R4)
             {
                 SpawnBunnyExp(Weapon);
@@ -15464,6 +15484,7 @@ InitZillaRail(short SpriteNum)
 int
 InitRocket(PLAYERp pp)
 {
+    g_swCrossplayLastRocket = -1;
     USERp u = User[pp->PlayerSprite];
     USERp wu;
     SPRITEp wp;
@@ -15571,6 +15592,36 @@ InitRocket(PLAYERp pp)
     wu->Counter = 1;
     if (TestMissileSetPos(w, DoRocket, 1200, zvel))
     {
+    if (Bgetenv("VB_CP_TEST_ROCKET") != NULL)
+        {
+            int const hit = TEST(wu->ret, HIT_MASK);
+            int cz = 0, fz = 0;
+            if ((unsigned)wp->sectnum < (unsigned)numsectors)
+            {
+                cz = sector[wp->sectnum].ceilingz;
+                fz = sector[wp->sectnum].floorz;
+            }
+            int hitdist = -1, hitidx = -1;
+            if (hit == HIT_WALL)
+            {
+                hitidx = NORM_WALL(wu->ret);
+                int64_t const wx = (int64_t)wall[hitidx].x - nx, wy = (int64_t)wall[hitidx].y - ny;
+                hitdist = (int)ksqrt((uint32_t)min<int64_t>(wx * wx + wy * wy, 0x7fffffff));
+            }
+            else if (hit == HIT_SPRITE)
+            {
+                hitidx = NORM_SPRITE(wu->ret);
+                int64_t const sx = (int64_t)sprite[hitidx].x - nx, sy = (int64_t)sprite[hitidx].y - ny;
+                hitdist = (int)ksqrt((uint32_t)min<int64_t>(sx * sx + sy * sy, 0x7fffffff));
+            }
+            LOG_F(INFO, "CPROCKET preflight-kill hit=%s idx=%d dist=%d moved=%d sect=%d z=%d ceil=%d floor=%d headroom=%d",
+                  hit == HIT_SECTOR ? "SECTOR" : hit == HIT_WALL ? "WALL" :
+                  hit == HIT_SPRITE ? "SPRITE" : hit == HIT_PLAX_WALL ? "PLAX" : "other",
+                  hitidx, hitdist,
+                  (int)ksqrt((uint32_t)min<int64_t>(((int64_t)wp->x - nx) * ((int64_t)wp->x - nx) +
+                                                   ((int64_t)wp->y - ny) * ((int64_t)wp->y - ny), 0x7fffffff)),
+                  (int)wp->sectnum, (int)wp->z, cz, fz, (int)(wp->z - cz));
+        }
         pp->SpriteP->clipdist = oclipdist;
         KillSprite(w);
         return 0;
@@ -15592,6 +15643,7 @@ InitRocket(PLAYERp pp)
     wu->ychange = MOVEy(wp->xvel, wp->ang);
     wu->zchange = zvel;
 
+    g_swCrossplayLastRocket = w;
     return 0;
 }
 
