@@ -531,6 +531,18 @@ Fixed since:
   Duke breaks a vent panel, it does not operate its tag.
   `VB_CP_BREAK_DEBUG=1` logs the tile and sound of every break.
 
+- **A solid prop stays solid until it is broken.**  The player could walk into
+  E1L1's rooftop vent without shooting it open.  Duke has no list of which props
+  are solid -- a map sprite keeps the blocking bit its author gave it, and the
+  break code is what clears it (`CS(i) &= 65535-256-1`).  The bridge was
+  overriding that bit from a guess list and clearing it for everything not on
+  it, so the vent cover (a floor-aligned PANNEL1, map `cstat` 289) was open
+  ground.  The map's bit is now preserved; the list still applies on top, for
+  tiles Duke's own spawn code makes solid regardless of the map.  A
+  `breakable-clears-block` check keeps the other half honest -- a prop that
+  started solid must stop blocking once broken, or the player is walled out of
+  whatever it was covering.
+
 Verified across E1L1-E1L8 and E3L6, run per group: all 36 group-runs report
 `fail=0`.
 

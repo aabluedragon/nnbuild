@@ -2389,11 +2389,21 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
             }
             else
             {
+                // Duke has no list of which props are solid: a map sprite keeps
+                // the blocking bit its author gave it, and Duke's break code is
+                // what clears it.  Overriding that bit walled the player out of
+                // nothing and let them walk through what should stop them --
+                // E1L1's rooftop vent is a floor-aligned PANNEL1 whose blocking
+                // bit is what keeps the duct shut until it is shot open.  The
+                // list is still consulted, for the tiles Duke's own spawn code
+                // makes solid regardless of the map.
                 SET(sp->cstat, CSTAT_SPRITE_BLOCK_HITSCAN);
                 if (SW_CrossplayDukeSpriteShouldBlock(originalPicnum, behaviorFlags))
                     SET(sp->cstat, CSTAT_SPRITE_BLOCK);
-                else
-                    RESET(sp->cstat, CSTAT_SPRITE_BLOCK);
+
+                if (TEST(sp->cstat, CSTAT_SPRITE_BLOCK) && Bgetenv("VB_CP_BREAK_DEBUG") != NULL)
+                    LOG_F(INFO, "CPBREAK solid spr=%d tile=%d cstat=%d", i, originalPicnum,
+                          TrackerCast(sp->cstat));
             }
             else
             {
@@ -4406,8 +4416,10 @@ static void SW_CrossplayBreakDukeSprite(int32_t spriteNum, vec3_t const *hitPos)
     SW_CrossplaySpawnDukeBreakDebris(spriteNum, sourcePicnum, hitPos);
 
     int32_t const breakSound = SW_CrossplayDukeSpriteBreakSound(sourcePicnum);
-    if (Bgetenv("VB_CP_BREAK_DEBUG") != NULL)
-        LOG_F(INFO, "CPBREAK spr=%d tile=%d sound=%d", spriteNum, sourcePicnum, breakSound);
+    int32_t const debugBreak = Bgetenv("VB_CP_BREAK_DEBUG") != NULL;
+    if (debugBreak)
+        LOG_F(INFO, "CPBREAK spr=%d tile=%d sound=%d cstat=%d", spriteNum, sourcePicnum, breakSound,
+              TrackerCast(sprite[spriteNum].cstat));
 
     SW_CrossplayPlayDukeSpriteSound(spriteNum, hitPos, breakSound);
 
@@ -4427,6 +4439,9 @@ static void SW_CrossplayBreakDukeSprite(int32_t spriteNum, vec3_t const *hitPos)
         RESET(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK_HITSCAN);
         if (!SW_CrossplayDukeSpriteShouldBlock(brokenTile, 0))
             RESET(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK);
+        if (debugBreak)
+            LOG_F(INFO, "CPBREAK spr=%d broke to tile=%d cstat=%d", spriteNum, brokenTile,
+                  TrackerCast(sprite[spriteNum].cstat));
         SW_CrossplayClearDukeSpriteBehavior(spriteNum);
         return;
     }
@@ -11184,6 +11199,11 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
 {
     int32_t tested = 0;
     int32_t broken = 0;
+    // A prop the map made solid has to stop blocking once it is broken, or the
+    // player is walled out of whatever it was covering.  E1L1's rooftop vent is
+    // the case that named this check.
+    int32_t solidTested = 0;
+    int32_t solidCleared = 0;
 
     for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && tested < VB_CROSSPLAY_SELFTEST_MAX_BREAKABLES; ++spriteNum)
     {
@@ -11198,6 +11218,7 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
         ++tested;
 
         int16_t const startPicnum = sprite[spriteNum].picnum;
+        int32_t const startedSolid = TEST(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK) ? 1 : 0;
         vec3_t const hitPos = sprite[spriteNum].xyz;
 
         for (int32_t hit = 0; hit < 64; ++hit)
@@ -11209,9 +11230,17 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
             SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, spriteNum, &hitPos);
         }
 
-        if (sprite[spriteNum].statnum == MAXSTATUS || sprite[spriteNum].picnum != startPicnum ||
-            !(g_swCrossplayDukeSpriteBehaviors[spriteNum].flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE))
+        int32_t const wasBroken = sprite[spriteNum].statnum == MAXSTATUS || sprite[spriteNum].picnum != startPicnum ||
+                                  !(g_swCrossplayDukeSpriteBehaviors[spriteNum].flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE);
+        if (wasBroken)
             ++broken;
+
+        if (startedSolid && wasBroken)
+        {
+            ++solidTested;
+            if (sprite[spriteNum].statnum == MAXSTATUS || !TEST(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK))
+                ++solidCleared;
+        }
     }
 
     char detail[128];
@@ -11221,6 +11250,13 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
         SW_CrossplaySelfTestReport(1, "breakables-present", "no Duke breakables in this map, skipped");
     else
         SW_CrossplaySelfTestReport(broken == tested, "breakable-damage", detail);
+
+    if (solidTested > 0)
+    {
+        char solidDetail[128];
+        Bsnprintf(solidDetail, sizeof(solidDetail), "solid=%d cleared=%d", solidTested, solidCleared);
+        SW_CrossplaySelfTestReport(solidCleared == solidTested, "breakable-clears-block", solidDetail);
+    }
 
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_EXPLOSIVES);
 }
