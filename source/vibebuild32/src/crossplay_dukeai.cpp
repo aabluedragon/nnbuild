@@ -382,6 +382,19 @@ int VB_DukeAI_IsAdoptableTile(int tileNum)
     case FIREEXT__:
         return 1;
 
+    // A cracked wall reaches Duke the same way, and for the same reason.  The
+    // crack is a STAT_STANDABLE actor: Duke watches it for an explosive hit,
+    // and answers by arming the charges that share its hitag, jumping to
+    // DETONATE -- which hands that hitag to the host's hook, shakes the room,
+    // blows the wall open and deletes the crack.  The bridge classified it as
+    // nothing at all, so shooting it did nothing and the crack stayed drawn
+    // across a wall that had been opened some other way.
+    case CRACK1__:
+    case CRACK2__:
+    case CRACK3__:
+    case CRACK4__:
+        return 1;
+
     // A locator is an inert, invisible waypoint, but Duke's RECON navigates by
     // them: A_FindLocator() walks STAT_LOCATOR, and a RECON that cannot find the
     // next one kills itself on the spot.  That is why E1L2's patrol vehicle

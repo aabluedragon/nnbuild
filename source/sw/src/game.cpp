@@ -3220,6 +3220,7 @@ static void SW_CrossplayDukeAIAdoptSprite(int32_t spriteNum, int16_t dukePicnum)
 extern "C" int VB_DukeAI_IsAdoptableTile(int tileNum);
 extern "C" int VB_DukeAI_HasActorCode(int tileNum);
 extern "C" int VB_DukeAI_IsEnemyTile(int tileNum);
+int SW_CrossplayDukeAIDukePicnumOf(int spriteNum);
 
 // Duke should own any living actor it has CON code for, not just tiles flagged
 // as enemies: some enemy variants (LIZMANSTAYPUT) are plain `actor` blocks that
@@ -6263,15 +6264,43 @@ static void SW_CrossplayArmDukeChargeChain(int32_t spriteNum)
 // explosive sectors, door effectors and the host's charges by hitag, and Duke's
 // own copies of those are not the ones being run.  Installed as Duke's map
 // trigger hook, so an adopted FIREEXT sets off exactly what it does in Duke.
+// Tags Duke handed over during its tic, to be acted on once the tic is over.
+static int16_t g_swCrossplayDukeMapTriggerQueue[32];
+static int32_t g_swCrossplayDukeMapTriggerQueueCount;
+
+// Installed into Duke's DETONATE, which is how a charge or a cracked wall reaches
+// the effectors that open it.  Those effectors are the host's, so Duke passes the
+// tag out here.
+//
+// It is only recorded here.  Acting on it drives host code -- arming charges,
+// running explosive sectors -- and that spawns host sprites, which are spliced
+// into whatever status lists are installed.  Inside a Duke tic those lists are
+// Duke's, so a host effect would land in one of them and the swap back would
+// adopt it as a Duke sprite: a blank slot, picnum 0, drawn ever after as
+// whatever tile 0 generates.  That is the "crack still there" left over a wall
+// that had already been blown open.
 static void SW_CrossplayDukeMapTrigger(int hitag)
 {
-    if (hitag <= 0)
+    if (hitag <= 0 || g_swCrossplayDukeMapTriggerQueueCount >= (int32_t)ARRAY_SIZE(g_swCrossplayDukeMapTriggerQueue))
         return;
 
     ++g_swCrossplayDukeMapTriggerEvents;
+    g_swCrossplayDukeMapTriggerQueue[g_swCrossplayDukeMapTriggerQueueCount++] = (int16_t)hitag;
+}
 
-    SW_CrossplayArmDukeChargesWithHitag((int16_t)hitag, -1);
-    SW_CrossplayActivateDukeExplosivesWithHitag((int16_t)hitag);
+// Drained after the Duke tic, with the host's own status lists back in place.
+static void SW_CrossplayApplyDukeMapTriggers(void)
+{
+    int32_t const count = g_swCrossplayDukeMapTriggerQueueCount;
+    g_swCrossplayDukeMapTriggerQueueCount = 0;
+
+    for (int32_t i = 0; i < count; ++i)
+    {
+        int16_t const hitag = g_swCrossplayDukeMapTriggerQueue[i];
+
+        SW_CrossplayArmDukeChargesWithHitag(hitag, -1);
+        SW_CrossplayActivateDukeExplosivesWithHitag(hitag);
+    }
 }
 
 static void SW_CrossplayTickDukeCharges(void)
@@ -12473,6 +12502,13 @@ static int32_t SW_CrossplayDukeAIHitKind(int32_t spriteNum)
 
 static uint8_t g_swCrossplayDukeAIOwned[MAXSPRITES];
 static int16_t g_swCrossplayDukeAIDukePicnum[MAXSPRITES];
+
+// The Duke tile an adopted sprite is currently carrying, for diagnostics: outside
+// a Duke tic the sprite shows the host's generated art instead.
+int SW_CrossplayDukeAIDukePicnumOf(int spriteNum)
+{
+    return (unsigned)spriteNum < MAXSPRITES ? g_swCrossplayDukeAIDukePicnum[spriteNum] : -1;
+}
 static int16_t g_swCrossplayDukeAIDukeStat[MAXSPRITES];
 static uint8_t g_swCrossplayDukeAIDukePal[MAXSPRITES];
 
@@ -12764,6 +12800,7 @@ static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum)
 }
 
 static void SW_CrossplayDukeRadiusDamage(int spriteNum, int x, int y, int z, int sectnum, int radius, int damage);
+static void SW_CrossplayApplyDukeMapTriggers(void);
 static void SW_CrossplayApplyDukeBlasts(void);
 
 static void SW_CrossplayDukeAISetupSounds(void)
@@ -13365,10 +13402,10 @@ static void SW_CrossplayDukeAITick(void)
     SW_CrossplayZGuard("duke-tic");
 
     // Duke shakes the view with a countdown its own code sets -- a detonating
-    // charge is 16 tics of it.  The host owns the camera, so it drives its own
-    // quake from Duke's, which is what makes an exploding canister feel like it
-    // does in Duke.
-    SW_CrossplaySpawnDukeQuake(VB_DukeAI_TakeEarthquake());
+    // charge is 16 tics of it.  Take the number now; the host's own quake is
+    // spawned after the swap back, because spawning one is a host sprite insert
+    // and Duke's status lists are still installed here.
+    int32_t const dukeQuakeTics = VB_DukeAI_TakeEarthquake();
 
     {
         static int32_t logged = 0;
@@ -13397,9 +13434,14 @@ static void SW_CrossplayDukeAITick(void)
     SW_CrossplayDukeAILeaveDukeSpace();
     SW_CrossplayZGuard("left");
 
-    // The host's status lists are back; anything Duke blew up during the tic can
-    // safely be dealt to the host's own props now.
+    // The host's status lists are back; anything Duke blew up, triggered or shook
+    // during the tic can safely be acted on now.  Each of these spawns host
+    // sprites, and a host sprite spliced into a Duke list is adopted as a Duke
+    // one -- the quake sprite landing in the slot a detonating crack had just
+    // freed is what left a blank sprite drawn across the opened wall.
+    SW_CrossplayApplyDukeMapTriggers();
     SW_CrossplayApplyDukeBlasts();
+    SW_CrossplaySpawnDukeQuake(dukeQuakeTics);
 
     // VB_CP_TEST_BLAST=<hitag>: debug -- detonate the Duke charge group carrying
     // that hitag, the way the player does by shooting one of them, so a "the
@@ -13418,6 +13460,78 @@ static void SW_CrossplayDukeAITick(void)
         {
             LOG_F(INFO, "CPBLAST arming Duke charge group hitag=%d", blastHitag);
             SW_CrossplayArmDukeChargesWithHitag((int16_t)blastHitag, -1);
+
+            // Not every explosive group has a charge in it: a cracked wall is
+            // triggered by shooting the crack itself.  Deliver an explosive hit
+            // to any explosive source sprite carrying the tag, which is what an
+            // RPG landing on the crack does.
+            for (int32_t sn = 0; sn < MAXSPRITES; ++sn)
+            {
+                if (sprite[sn].statnum == MAXSTATUS || sprite[sn].hitag != blastHitag)
+                    continue;
+
+                if (!SW_CrossplayIsDukeExplosiveSourceTile(artCrossplayOriginalMapSpritePicnum(sn)))
+                    continue;
+
+                LOG_F(INFO, "CPBLAST hitting explosive source spr=%d tile=%d flags=%d stat=%d hitag=%d", sn,
+                      artCrossplayOriginalMapSpritePicnum(sn), g_swCrossplayDukeSpriteBehaviors[sn].flags,
+                      TrackerCast(sprite[sn].statnum), TrackerCast(sprite[sn].hitag));
+                SW_CrossplayDamageDukeMapSpriteInternal(Player[myconnectindex].PlayerSprite, sn,
+                                                        &sprite[sn].xyz, VB_DUKEAI_HIT_EXPLOSION);
+            }
+        }
+    }
+
+    // VB_CP_WATCH_TILES=<t,t,...>: debug -- report every change to the sprites
+    // whose *Duke* tile is one of these, which is how a "X should have been
+    // destroyed and was not" report gets pinned to a sprite index.
+    {
+        static int16_t watched[16];
+        static int32_t watchCount = -1;
+        if (watchCount < 0)
+        {
+            watchCount = 0;
+            char const *env = Bgetenv("VB_CP_WATCH_TILES");
+            while (env != NULL && *env != '\0' && watchCount < (int32_t)ARRAY_SIZE(watched))
+            {
+                watched[watchCount++] = (int16_t)Batoi(env);
+                char const *comma = Bstrchr(env, ',');
+                env = comma != NULL ? comma + 1 : NULL;
+            }
+        }
+
+        if (watchCount > 0)
+        {
+            static int16_t lastPic[MAXSPRITES];
+            static int16_t lastStat[MAXSPRITES];
+            static uint8_t inited;
+            if (!inited)
+            {
+                inited = 1;
+                for (int32_t s = 0; s < MAXSPRITES; ++s)
+                {
+                    lastPic[s] = sprite[s].picnum;
+                    lastStat[s] = sprite[s].statnum;
+                }
+            }
+
+            for (int32_t s = 0; s < MAXSPRITES; ++s)
+            {
+                int16_t const orig = artCrossplayOriginalMapSpritePicnum(s);
+                int32_t match = 0;
+                for (int32_t w = 0; w < watchCount; ++w)
+                    match |= (orig == watched[w]);
+
+                if (!match || (sprite[s].picnum == lastPic[s] && sprite[s].statnum == lastStat[s]))
+                    continue;
+
+                LOG_F(INFO, "CPWATCH spr=%d dukeTile=%d pic %d->%d stat %d->%d cstat=%d owned=%d nowDuke=%d", s,
+                      orig, lastPic[s], TrackerCast(sprite[s].picnum), lastStat[s],
+                      TrackerCast(sprite[s].statnum), TrackerCast(sprite[s].cstat),
+                      SW_CrossplayDukeAIOwnsSprite(s), SW_CrossplayDukeAIDukePicnumOf(s));
+                lastPic[s] = sprite[s].picnum;
+                lastStat[s] = sprite[s].statnum;
+            }
         }
     }
 

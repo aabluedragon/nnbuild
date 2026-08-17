@@ -669,6 +669,30 @@ Fixed since:
   which is where their state is set up properly.  What is left is what should have
   been there all along -- the tape, the vent cover, the fan, the masked walls.
 
+- **A cracked wall is Duke's to run, and nothing host-side may run inside a Duke
+  tic.**  Shooting a crack did nothing, and a crack left over a wall opened some
+  other way stayed drawn across it.  Two causes, one report.
+
+  The crack was classified as nothing at all -- no behavior record, so no damage
+  path reached it.  It is a `STAT_STANDABLE` actor: Duke watches it for an
+  explosive hit and answers by arming the charges that share its hitag and
+  jumping to `DETONATE`, which hands that hitag to the host's trigger hook,
+  shakes the room, blows the wall open and deletes the crack.  So `CRACK1`..`4`
+  are adoptable now, exactly as `FIREEXT` already was and for the same reason:
+  the hook is what lets Duke's detonation drive the host's effectors.
+
+  That exposed the second cause, which was mine.  Duke's earthquake was spawned
+  as soon as its countdown was read -- *before* the swap back, while Duke's
+  status lists were still installed.  `SpawnQuake()` is a host sprite insert, so
+  it took the slot the detonating crack had just freed and linked it into a Duke
+  list, and the swap back adopted it: a blank sprite, picnum 0, drawn ever after
+  as whatever tile 0 generates, sitting exactly where the crack had been.  The
+  quake, the map triggers and the blasts are all deferred past
+  `LeaveDukeSpace()` now.  The rule this keeps proving: **host code must never
+  create or delete sprites while Duke's lists are installed.**
+  `VB_CP_WATCH_TILES=<t,t,...>` reports every change to the sprites of a given
+  Duke tile, which is how both halves of this were pinned down.
+
 - **A sprite must never be in two of the engine's lists at once.**  Handing props
   to Duke made this the bridge's easiest mistake to make, and it cost three
   separate hangs.  The engine keeps its free slots on a status list of their own
@@ -829,7 +853,8 @@ reproductions passed while the user's own game failed.
 | `VB_CP_BREAK_DEBUG=1` | log each broken Duke prop's tile and break sound |
 | `VB_CP_PAL_DEBUG=1` | log every (tile, Duke pal) art resolution and which path answered it |
 | `VB_CP_SPRITE_DEBUG=1` | after each Duke tic, log `Numsprites`, linked sprites and free-chain length |
-| `VB_CP_TEST_BLAST=<hitag>` | detonate the Duke charge group with that hitag (E1L1's rooftop canisters are 253) |
+| `VB_CP_TEST_BLAST=<hitag>` | detonate the Duke charge group with that hitag, and hit any explosive source sprite carrying it (E1L1: rooftop canisters 253, cracked walls 214/223/237) |
+| `VB_CP_WATCH_TILES=<t,t,...>` | report every picnum/statnum change to sprites whose Duke tile is one of these |
 | `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
 | `VB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
 | `VB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |
