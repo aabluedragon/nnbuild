@@ -831,6 +831,8 @@ enum
     VB_DUKE_FEMMAG1 = 568,
     VB_DUKE_FEMMAG2 = 577,
     VB_DUKE_CAMERA1 = 621,
+    VB_DUKE_BROKEFIREHYDRENT = 950,
+    VB_DUKE_TOILETWATER = 921,
     VB_DUKE_VIEWSCREEN2 = 499,
     VB_DUKE_VIEWSCREENBROKE = 501,
     VB_DUKE_VIEWSCREEN = 502,
@@ -1382,6 +1384,12 @@ extern "C" int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHi
 extern "C" int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
 extern "C" int VB_DukeAI_DrinkingSound(void);
 extern "C" int VB_DukeAI_MonitorSound(void);
+extern "C" int VB_DukeAI_WaterSound(void);
+int SW_CrossplayDukeSoundPlayCount(int soundNum);
+int SW_CrossplayDukeHealEventCount(void);
+extern "C" void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum));
+extern "C" void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
+extern "C" void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
 // Hands a hit on a host-owned Duke prop to Duke's own damage code, which runs at
 // the top of the next Duke tic.
 extern "C" void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
@@ -3094,6 +3102,16 @@ struct sw_crossplay_duke_viewscreen_t
 
 static sw_crossplay_duke_viewscreen_t g_swCrossplayDukeViewscreens[VB_CROSSPLAY_MAX_DUKE_VIEWSCREENS];
 static int32_t g_swCrossplayDukeViewscreenCount;
+// The self-test drives the use key from outside SW's input, which is rebuilt
+// from the real device every frame; without this the harness's key press is
+// wiped before the Duke tic that would read it.
+static int32_t g_swCrossplaySelfTestForceUseKey;
+
+// ...and the same for the facing angle: SW rebuilds the player's angle from the
+// input device every frame, so a value the harness writes is gone before the
+// Duke tic that would read it.  Duke's `pfacing` allows only 128 angle units
+// either side, which is far too tight to reach by nudging SW's own input.
+static int32_t g_swCrossplaySelfTestFaceSprite = -1;
 static int16_t g_swCrossplayDukeCameras[VB_CROSSPLAY_MAX_DUKE_CAMERAS];
 static int32_t g_swCrossplayDukeCameraCount;
 
@@ -11218,6 +11236,7 @@ enum
     VB_CROSSPLAY_SELFTEST_TRAIN_OBSERVE,
     VB_CROSSPLAY_SELFTEST_CAMERAS,
     VB_CROSSPLAY_SELFTEST_CRACKS,
+    VB_CROSSPLAY_SELFTEST_HYDRANT,
     VB_CROSSPLAY_SELFTEST_BREAKABLES,
     VB_CROSSPLAY_SELFTEST_EXPLOSIVES,
     VB_CROSSPLAY_SELFTEST_OPERABLE_SETUP,
@@ -11279,6 +11298,14 @@ static int32_t g_swCrossplaySelfTestCameraScreen = -1;
 static int32_t g_swCrossplaySelfTestCameraFirst = -1;
 static int32_t g_swCrossplaySelfTestCameraSeen;
 static int32_t g_swCrossplaySelfTestCameraRendered;
+static int32_t g_swCrossplaySelfTestHydrantStage;
+static int32_t g_swCrossplaySelfTestHydrantSprite = -1;
+static int32_t g_swCrossplaySelfTestHydrantWater = -1;
+static int32_t g_swCrossplaySelfTestHydrantSoundBase;
+static int32_t g_swCrossplaySelfTestHydrantHealthBase;
+static int32_t g_swCrossplaySelfTestHydrantStandX, g_swCrossplaySelfTestHydrantStandY;
+static int32_t g_swCrossplaySelfTestHydrantStandAng;
+static int16_t g_swCrossplaySelfTestHydrantStandSect = -1;
 static int32_t g_swCrossplaySelfTestCrackSprite = -1;
 static int32_t g_swCrossplaySelfTestCrackSpriteB = -1;
 static int32_t g_swCrossplaySelfTestCrackSpriteC = -1;
@@ -12116,6 +12143,175 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
     SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
 }
 
+// A broken fire hydrant.  Everything about one is Duke's TOILETWATER CON actor:
+// it runs the gurgle with `soundonce` -- play unless already playing -- and heals
+// the player a point at a time through `ifhitspace`, rate-limited by its own
+// action count.  Both depend on state the host owns, so both are checked here.
+static void SW_CrossplaySelfTestRunHydrant(PLAYERp const pp)
+{
+    if (pp == NULL || User[pp->PlayerSprite] == NULL)
+    {
+        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestHydrantStage == 0)
+    {
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestHydrantSprite < 0; ++spriteNum)
+        {
+            if (sprite[spriteNum].statnum == MAXSTATUS)
+                continue;
+
+            if (SW_CrossplayDukeAISpriteDukePicnum(spriteNum) == VB_DUKE_HYDRENT ||
+                artCrossplayOriginalMapSpritePicnum(spriteNum) == VB_DUKE_HYDRENT)
+                g_swCrossplaySelfTestHydrantSprite = spriteNum;
+        }
+
+        if (g_swCrossplaySelfTestHydrantSprite < 0)
+        {
+            SW_CrossplaySelfTestReport(1, "hydrant-present", "no Duke hydrant in this map, skipped");
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            return;
+        }
+
+        // Break it the way a rocket would.
+        vec3_t const hitPos = sprite[g_swCrossplaySelfTestHydrantSprite].xyz;
+        SW_CrossplayExplodeDukeMapSprites(pp->PlayerSprite, hitPos.x, hitPos.y, hitPos.z,
+                                          sprite[g_swCrossplaySelfTestHydrantSprite].sectnum, 2048, 140);
+
+        g_swCrossplaySelfTestHydrantStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_HYDRANT);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestPhaseTic < 30)
+        return;
+
+    char detail[192];
+
+    if (g_swCrossplaySelfTestHydrantStage == 1)
+    {
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestHydrantWater < 0; ++spriteNum)
+            if (sprite[spriteNum].statnum != MAXSTATUS &&
+                SW_CrossplayDukeAISpriteDukePicnum(spriteNum) == VB_DUKE_TOILETWATER)
+                g_swCrossplaySelfTestHydrantWater = spriteNum;
+
+        Bsnprintf(detail, sizeof(detail), "hydrant=%d water=%d", g_swCrossplaySelfTestHydrantSprite,
+                  g_swCrossplaySelfTestHydrantWater);
+        SW_CrossplaySelfTestReport(g_swCrossplaySelfTestHydrantWater >= 0, "hydrant-sprays", detail);
+
+        if (g_swCrossplaySelfTestHydrantWater < 0)
+        {
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            return;
+        }
+
+        // Stand in the water's own sector, close enough for CON's `ifpdistl 844`
+        // to let the player drink, facing it so `pfacing` and `cansee` hold.
+        // That distance is three-dimensional, so landing in a neighbouring sector
+        // whose floor is a storey away puts the player out of range however close
+        // they look on the map.
+        SPRITEp const water = &sprite[g_swCrossplaySelfTestHydrantWater];
+        int32_t stood = 0;
+
+        for (int32_t radius = 256; radius <= 640 && !stood; radius += 128)
+        {
+            for (int32_t step = 0; step < 16 && !stood; ++step)
+            {
+                int32_t const probeAng = NORM_ANGLE(step * 128);
+                int32_t const tryX = water->x + ((sintable[(probeAng + 512) & 2047] * radius) >> 14);
+                int32_t const tryY = water->y + ((sintable[probeAng & 2047] * radius) >> 14);
+                int16_t trySect = water->sectnum;
+
+                updatesector(tryX, tryY, &trySect);
+                if (trySect != water->sectnum)
+                    continue;
+
+                if (!SW_CrossplaySelfTestWarpPlayerZ(pp, tryX, tryY, INT32_MIN, trySect))
+                    continue;
+
+                if (FindDistance3D(pp->posx - water->x, pp->posy - water->y, pp->posz - water->z) >= 800)
+                    continue;
+
+                pp->q16ang = fix16_from_int(NORM_ANGLE(getangle(water->x - tryX, water->y - tryY)));
+                g_swCrossplaySelfTestHydrantStandX = tryX;
+                g_swCrossplaySelfTestHydrantStandY = tryY;
+                g_swCrossplaySelfTestHydrantStandAng = fix16_to_int(pp->q16ang);
+                g_swCrossplaySelfTestHydrantStandSect = trySect;
+                stood = 1;
+            }
+        }
+
+        if (!stood)
+        {
+            SW_CrossplaySelfTestReport(0, "hydrant-reachable", "no floor spot within Duke's drinking distance");
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            return;
+        }
+
+        SW_CrossplaySelfTestReport(1, "hydrant-reachable", "water is in reach of the use key");
+
+        // The harness pins health at 1000 every tic to keep the player alive, so
+        // the health value itself cannot show a heal.  Count the heals the bridge
+        // actually carried across from Duke instead.
+        g_swCrossplaySelfTestHydrantHealthBase = SW_CrossplayDukeHealEventCount();
+        g_swCrossplaySelfTestHydrantSoundBase = SW_CrossplayDukeSoundPlayCount(VB_DukeAI_WaterSound());
+
+        g_swCrossplaySelfTestHydrantStage = 2;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_HYDRANT);
+        return;
+    }
+
+    // Hold the use key down while the water runs, keep the player hurt, and keep
+    // them standing where they were put.  Duke only lets you drink below
+    // MAXPLAYERHEALTH; the harness otherwise pins health at 1000 every tic to
+    // stop the player dying mid-suite, and SW's own physics walks them away from
+    // the spot within a few tics.
+    g_swCrossplaySelfTestForceUseKey = 1;
+    g_swCrossplaySelfTestFaceSprite = g_swCrossplaySelfTestHydrantWater;
+    User[pp->PlayerSprite]->Health = 50;
+
+    SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestHydrantStandX, g_swCrossplaySelfTestHydrantStandY,
+                                    INT32_MIN, g_swCrossplaySelfTestHydrantStandSect);
+
+    // Aim at the water every tic rather than trusting an angle stored at
+    // placement: Duke's `pfacing` allows only 128 angle units either side.
+    {
+        SPRITEp const water = &sprite[g_swCrossplaySelfTestHydrantWater];
+        pp->q16ang = fix16_from_int(NORM_ANGLE(getangle(water->x - pp->posx, water->y - pp->posy)));
+    }
+
+    if (g_swCrossplaySelfTestPhaseTic < 200)
+        return;
+
+    g_swCrossplaySelfTestForceUseKey = 0;
+    g_swCrossplaySelfTestFaceSprite = -1;
+
+    int32_t const gurgles = SW_CrossplayDukeSoundPlayCount(VB_DukeAI_WaterSound()) -
+                            g_swCrossplaySelfTestHydrantSoundBase;
+    // Count the heals the bridge actually carried back from Duke into the host's
+    // health.  The harness pins health at 1000 every tic to keep the player
+    // alive, so the health value itself cannot show this.
+    int32_t const drinks = SW_CrossplayDukeHealEventCount() - g_swCrossplaySelfTestHydrantHealthBase;
+
+    char soundDetail[192];
+
+    // `soundonce` means the gurgle restarts only when the last one has finished.
+    // Left broken it restarted on every tic, which over 200 tics is a drone of
+    // overlapping voices rather than a running tap.
+    Bsnprintf(soundDetail, sizeof(soundDetail), "water=%d gurgles=%d over 200 tics",
+              g_swCrossplaySelfTestHydrantWater, gurgles);
+    SW_CrossplaySelfTestReport(gurgles > 0 && gurgles < 40, "hydrant-sound-once", soundDetail);
+
+    // Duke heals one point per `ifactioncount 32`, so 200 tics of holding the key
+    // is a handful of points -- slow, which is the behaviour being checked.
+    Bsnprintf(soundDetail, sizeof(soundDetail), "water=%d drinks=%d over 200 tics",
+              g_swCrossplaySelfTestHydrantWater, drinks);
+    SW_CrossplaySelfTestReport(drinks > 0, "hydrant-drink-heals", soundDetail);
+
+    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+}
+
 // Duke's cracked walls.  Duke gives CRACK1-4 an explicit rule in actors.cpp: the
 // crack detonates only when A_IncurDamage() reports FIREEXT, RPG,
 // RADIUSEXPLOSION, SEENINE or OOZFILTER, and any other weapon leaves it standing
@@ -12126,7 +12322,7 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
 {
     if (pp == NULL || User[pp->PlayerSprite] == NULL)
     {
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_HYDRANT);
         return;
     }
 
@@ -12171,7 +12367,7 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
         if (g_swCrossplaySelfTestCrackSprite < 0 || g_swCrossplaySelfTestCrackSpriteB < 0)
         {
             SW_CrossplaySelfTestReport(1, "crack-none", "map has no two independently tagged Duke cracks");
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_HYDRANT);
             return;
         }
     }
@@ -12242,7 +12438,7 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
 
         if (g_swCrossplaySelfTestCrackSpriteC < 0)
         {
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_HYDRANT);
             return;
         }
 
@@ -12268,7 +12464,7 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
               g_swCrossplaySelfTestCrackSpriteC, blastFired, blastGone);
     SW_CrossplaySelfTestReport(blastFired > 0 && blastGone, "crack-blast-opens", detail);
 
-    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_HYDRANT);
 }
 
 static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
@@ -13115,6 +13311,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_TRAIN_OBSERVE: SW_CrossplaySelfTestRunTrainObserve(pp); break;
     case VB_CROSSPLAY_SELFTEST_CAMERAS: SW_CrossplaySelfTestRunCameras(pp); break;
     case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
+    case VB_CROSSPLAY_SELFTEST_HYDRANT: SW_CrossplaySelfTestRunHydrant(pp); break;
     case VB_CROSSPLAY_SELFTEST_BREAKABLES: SW_CrossplaySelfTestRunBreakables(pp); break;
     case VB_CROSSPLAY_SELFTEST_EXPLOSIVES: SW_CrossplaySelfTestRunExplosives(pp); break;
     case VB_CROSSPLAY_SELFTEST_OPERABLE_SETUP: SW_CrossplaySelfTestRunOperableSetup(pp); break;
@@ -13227,6 +13424,9 @@ static int32_t g_swCrossplayDukeAISwCount;
 static int32_t g_swCrossplayDukeAIActive;
 static int32_t g_swCrossplayDukeAIAdopted;
 static int32_t g_swCrossplayDukeAIPlayerDamageEvents;
+static int32_t g_swCrossplayDukeAIPlayerHealEvents;
+
+int SW_CrossplayDukeHealEventCount(void) { return g_swCrossplayDukeAIPlayerHealEvents; }
 
 #define VB_CROSSPLAY_MAX_DUKE_SOUNDS 1024
 
@@ -13531,6 +13731,86 @@ static int32_t SW_CrossplayDukeAIFindDigiForFilename(char const *filename)
     return DIGI_NULL;
 }
 
+// What the host currently has playing on Duke's behalf.  CON's `soundonce` is
+// "play unless this is already playing", and Duke answers that from bookkeeping
+// the host's playback never fills in -- so a sound meant to loop by repetition,
+// like the gurgle from a broken hydrant, was started again every tic and piled
+// up into a loud, shifting drone.  Remembering the voice handle lets the answer
+// be the true one.
+struct sw_crossplay_duke_voice_t
+{
+    int16_t soundNum;
+    int16_t spriteNum;
+    int32_t handle;
+};
+
+static sw_crossplay_duke_voice_t g_swCrossplayDukeVoices[32];
+static int32_t g_swCrossplayDukeVoiceCount;
+
+// How many times Duke has asked for each sound.  The self-test reads this: the
+// difference between "started once and left to run" and "restarted every tic" is
+// only visible as a count.
+static int32_t g_swCrossplayDukeAISoundPlays[VB_CROSSPLAY_MAX_DUKE_SOUNDS];
+
+int SW_CrossplayDukeSoundPlayCount(int soundNum)
+{
+    return (unsigned)soundNum < ARRAY_SIZE(g_swCrossplayDukeAISoundPlays) ? g_swCrossplayDukeAISoundPlays[soundNum]
+                                                                          : 0;
+}
+
+static void SW_CrossplayRememberDukeVoice(int soundNum, int spriteNum, int32_t handle)
+{
+    if (handle <= FX_Ok)
+        return;
+
+    int32_t slot = -1;
+
+    for (int32_t i = 0; i < g_swCrossplayDukeVoiceCount; ++i)
+    {
+        if (g_swCrossplayDukeVoices[i].soundNum == soundNum &&
+            g_swCrossplayDukeVoices[i].spriteNum == spriteNum)
+        {
+            slot = i;
+            break;
+        }
+
+        // Reuse anything that has finished rather than growing the table.
+        if (slot < 0 && !FX_SoundValidAndActive(g_swCrossplayDukeVoices[i].handle))
+            slot = i;
+    }
+
+    if (slot < 0)
+    {
+        if (g_swCrossplayDukeVoiceCount >= (int32_t)ARRAY_SIZE(g_swCrossplayDukeVoices))
+            return;
+
+        slot = g_swCrossplayDukeVoiceCount++;
+    }
+
+    g_swCrossplayDukeVoices[slot] = { (int16_t)soundNum, (int16_t)spriteNum, handle };
+}
+
+// Duke's A_CheckSoundPlaying() in the host's terms: -1 for the sprite means
+// "is this sound playing at all", which is how Duke defines it too.
+static int SW_CrossplayDukeAICheckSoundPlaying(int soundNum, int spriteNum)
+{
+    for (int32_t i = 0; i < g_swCrossplayDukeVoiceCount; ++i)
+    {
+        sw_crossplay_duke_voice_t const &voice = g_swCrossplayDukeVoices[i];
+
+        if (voice.soundNum != soundNum)
+            continue;
+
+        if (spriteNum >= 0 && voice.spriteNum != spriteNum)
+            continue;
+
+        if (FX_SoundValidAndActive(voice.handle))
+            return 1;
+    }
+
+    return 0;
+}
+
 static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum)
 {
     if ((unsigned)soundNum >= ARRAY_SIZE(g_swCrossplayDukeAISoundMap))
@@ -13541,18 +13821,23 @@ static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum)
         return -1;
 
     ++g_swCrossplayDukeAISoundEvents;
+    if ((unsigned)soundNum < ARRAY_SIZE(g_swCrossplayDukeAISoundPlays))
+        ++g_swCrossplayDukeAISoundPlays[soundNum];
+
+    int32_t handle;
 
     if ((unsigned)spriteNum < MAXSPRITES && sprite[spriteNum].statnum != MAXSTATUS)
     {
         SPRITEp const sp = &sprite[spriteNum];
-        PlaySound(digi, &sp->x, &sp->y, &sp->z, v3df_dontpan | v3df_follow);
+        handle = PlaySound(digi, &sp->x, &sp->y, &sp->z, v3df_dontpan | v3df_follow);
     }
     else
     {
         PLAYERp const pp = Player + myconnectindex;
-        PlaySound(digi, &pp->posx, &pp->posy, &pp->posz, v3df_dontpan);
+        handle = PlaySound(digi, &pp->posx, &pp->posy, &pp->posz, v3df_dontpan);
     }
 
+    SW_CrossplayRememberDukeVoice(soundNum, spriteNum, handle);
     return 0;
 }
 
@@ -13578,6 +13863,7 @@ static void SW_CrossplayDukeAISetupSounds(void)
     }
 
     VB_DukeAI_SetSoundHook(SW_CrossplayDukeAIPlaySound);
+    VB_DukeAI_SetSoundCheckHook(SW_CrossplayDukeAICheckSoundPlaying);
     VB_DukeAI_SetMapTriggerHook(SW_CrossplayDukeMapTrigger);
     VB_DukeAI_SetRadiusDamageHook(SW_CrossplayDukeRadiusDamage);
 }
@@ -14048,8 +14334,27 @@ static void SW_CrossplayDukeAITick(void)
         if ((unsigned)other->PlayerSprite >= MAXSPRITES)
             continue;
 
-        VB_DukeAI_SetPlayer(pnum, other->PlayerSprite, other->posx, other->posy, other->posz,
-                            fix16_to_int(other->q16ang), other->cursectnum);
+        int32_t mirroredAng = fix16_to_int(other->q16ang);
+
+        if (g_swCrossplaySelfTestFaceSprite >= 0 && (unsigned)g_swCrossplaySelfTestFaceSprite < MAXSPRITES)
+            mirroredAng = getangle(sprite[g_swCrossplaySelfTestFaceSprite].x - other->posx,
+                                   sprite[g_swCrossplaySelfTestFaceSprite].y - other->posy);
+
+        VB_DukeAI_SetPlayer(pnum, other->PlayerSprite, other->posx, other->posy, other->posz, mirroredAng,
+                            other->cursectnum);
+
+        // Duke's props that answer to the use key do it through CON's
+        // `ifhitspace`, which reads the player's input bits -- so the host's key
+        // state has to reach them.  Drinking from a broken hydrant, a toilet or a
+        // smashed fountain is entirely this: TOILETWATER heals a point at a time
+        // while the key is held, rate-limited by its own action count.
+        VB_DukeAI_SetPlayerUseKey(pnum, (TEST_SYNC_KEY(other, SK_OPERATE) || g_swCrossplaySelfTestForceUseKey) ? 1
+                                                                                                               : 0);
+
+        // ...and the real health, so Duke's own health tests are about the player
+        // the host is actually running.
+        if ((unsigned)other->PlayerSprite < MAXSPRITES && User[other->PlayerSprite] != NULL)
+            VB_DukeAI_SetPlayerHealth(pnum, User[other->PlayerSprite]->Health);
     }
 
     {
@@ -14205,6 +14510,8 @@ static void SW_CrossplayDukeAITick(void)
         }
     }
 
+    // Signed: positive is damage Duke's actors did, negative is health its props
+    // gave back.
     int32_t damageForPlayer[MAX_SW_PLAYERS_REG] = {};
     TRAVERSE_CONNECT(pnum)
     {
@@ -14480,10 +14787,14 @@ static void SW_CrossplayDukeAITick(void)
 
     TRAVERSE_CONNECT(pnum)
     {
-        if ((unsigned)pnum >= ARRAY_SIZE(damageForPlayer) || damageForPlayer[pnum] <= 0)
+        if ((unsigned)pnum >= ARRAY_SIZE(damageForPlayer) || damageForPlayer[pnum] == 0)
             continue;
 
-        ++g_swCrossplayDukeAIPlayerDamageEvents;
+        if (damageForPlayer[pnum] > 0)
+            ++g_swCrossplayDukeAIPlayerDamageEvents;
+        else
+            ++g_swCrossplayDukeAIPlayerHealEvents;
+
         PlayerUpdateHealth(Player + pnum, (short)-damageForPlayer[pnum]);
     }
 }

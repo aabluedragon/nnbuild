@@ -35,6 +35,8 @@ int VB_DukeAI_CompileScripts(void);
 int VB_DukeAI_BeginLevel(int playerSkill);
 int VB_DukeAI_SpawnMapActor(int spriteNum);
 void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int32_t z, int32_t ang, int16_t sectnum);
+void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
+void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
 void VB_DukeAI_SetPlayerCount(int count);
 int VB_DukeAI_TakePlayerDamageFor(int playerNum);
 void VB_DukeAI_RunTic(void);
@@ -45,6 +47,7 @@ int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag);
 int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
 int VB_DukeAI_DrinkingSound(void);
 int VB_DukeAI_MonitorSound(void);
+int VB_DukeAI_WaterSound(void);
 void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
                                     int impactAng, int ownerSprite);
 int VB_DukeAI_TakeEarthquake(void);
@@ -62,6 +65,7 @@ int VB_DukeAI_WatchedPicnum(void);
 char const *VB_DukeAI_SoundFilename(int soundNum);
 int VB_DukeAI_HighestSoundIndex(void);
 void VB_DukeAI_SetSoundHook(int (*hook)(int soundNum, int spriteNum));   // sounds.cpp
+void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum));   // sounds.cpp
 void VB_DukeAI_SetMapTriggerHook(void (*hook)(int hitag));               // actors.cpp
 int VB_DukeAI_SpriteIsAlive(int spriteNum);
 int VB_DukeAI_SpriteIsEnemy(int spriteNum);
@@ -87,6 +91,10 @@ enum
 // and has to fit sprite.extra, which is 16-bit; it only needs to be far above
 // any single tic's damage so Duke's own death handling never runs.
 static int32_t const kMirroredPlayerHealth = 30000;
+
+// What was last written into each mirrored player's sprite, so the delta read
+// back at the end of the tic is measured against the right baseline.
+static int32_t g_dukeAIMirroredHealth[MAXPLAYERS];
 
 static int32_t g_dukeAILevelReady;
 static uint8_t g_dukeAIPendingDamage[MAXSPRITES];
@@ -349,6 +357,23 @@ int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag)
     }
 }
 
+// CON reads the use key straight out of the player's input bits -- `ifhitspace`
+// -- and several of Duke's props answer only through that: the water from a
+// broken hydrant, a toilet or a smashed fountain heals a point at a time while
+// the key is held, and the microphone and statues talk back.  The host owns
+// input, so it has to hand the state over or none of them ever respond.
+void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld)
+{
+    if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS ||
+        g_player[playerNum].inputBits == NULL)
+        return;
+
+    if (useHeld)
+        g_player[playerNum].inputBits->bits |= BIT(SK_OPEN);
+    else
+        g_player[playerNum].inputBits->bits &= ~BIT(SK_OPEN);
+}
+
 // Duke's own sound number for drinking, so the host does not hardcode one.
 int VB_DukeAI_DrinkingSound(void)
 {
@@ -359,6 +384,17 @@ int VB_DukeAI_DrinkingSound(void)
 int VB_DukeAI_MonitorSound(void)
 {
     return MONITOR_ACTIVE;
+}
+
+// The gurgle a broken hydrant, toilet or fountain runs with.  CON keeps it going
+// with `soundonce`, so the host needs to know which sound that is to check it.
+// WATER_GURGLE is one of the fixed definitions that is not exposed as a runtime
+// symbol, so the id is used directly the way player.cpp does for the enemy
+// pain/dying sounds; the value mirrors soundefs.h.
+int VB_DukeAI_WaterSound(void)
+{
+    enum { S_WATER_GURGLE = 220 };
+    return S_WATER_GURGLE;
 }
 
 int VB_DukeAI_HasActorCode(int tileNum)
@@ -558,8 +594,35 @@ void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int
     pPlayer->curr_weapon = PISTOL_WEAPON;
 
     // Duke keeps player health on the player's sprite.  The host owns the real
-    // health, so give Duke a large pool and read back what its actors take off.
+    // health, so a value is written here and whatever moved it is read back at
+    // the end of the tic.  It used to be a flat 30000-point pool, which made
+    // every health test in CON meaningless: `ifphealthl MAXPLAYERHEALTH` was
+    // permanently false, so the props that only give you something when you are
+    // hurt -- the water from a hydrant, a toilet, a fountain -- never fired.
+    // The host's real health goes in instead; VB_DukeAI_SetPlayerHealth()
+    // overwrites this for players whose health the host has told us about.
     sprite[spriteNum].extra = kMirroredPlayerHealth;
+    g_dukeAIMirroredHealth[playerNum] = kMirroredPlayerHealth;
+}
+
+// The host's real health for this player, so Duke's own health tests mean what
+// they say.  Floored at 1: Duke treats a sprite at zero extra as a corpse, and a
+// tic in which its actors outdamage the player's remaining health would
+// otherwise have every actor react to a dead player before the host has even
+// been told.
+void VB_DukeAI_SetPlayerHealth(int playerNum, int health)
+{
+    if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS)
+        return;
+
+    DukePlayer_t *const pPlayer = g_player[playerNum].ps;
+    if (pPlayer == NULL || (unsigned)pPlayer->i >= MAXSPRITES)
+        return;
+
+    int32_t const mirrored = health > 1 ? health : 1;
+
+    sprite[pPlayer->i].extra = mirrored;
+    g_dukeAIMirroredHealth[playerNum] = mirrored;
 }
 
 // Damage Duke's actors dealt to a mirrored player since the last call.
@@ -572,10 +635,14 @@ int VB_DukeAI_TakePlayerDamageFor(int playerNum)
     if (pPlayer == NULL || (unsigned)pPlayer->i >= MAXSPRITES)
         return 0;
 
-    int32_t const damage = kMirroredPlayerHealth - sprite[pPlayer->i].extra;
-    sprite[pPlayer->i].extra = kMirroredPlayerHealth;
+    // Signed on purpose: Duke's CON moves this pool both ways.  `addphealth`
+    // raises it -- drinking from a hydrant, a toilet or a fountain is nothing but
+    // that -- and discarding anything below zero here threw every one of those
+    // away, so the host's health never moved no matter what the player drank.
+    int32_t const delta = g_dukeAIMirroredHealth[playerNum] - sprite[pPlayer->i].extra;
+    sprite[pPlayer->i].extra = g_dukeAIMirroredHealth[playerNum];
 
-    return damage > 0 ? damage : 0;
+    return delta;
 }
 
 // Duke decides what is an enemy from the actor's own SFLAG_BADGUY, which stays

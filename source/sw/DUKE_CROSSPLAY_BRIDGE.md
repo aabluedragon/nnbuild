@@ -739,6 +739,46 @@ Fixed since:
   `VB_CP_WATCH_TILES=<t,t,...>` reports every change to the sprites of a given
   Duke tile, which is how both halves of this were pinned down.
 
+- **A broken hydrant, and everything else Duke drives through CON's player
+  state.**  The water from a smashed fire hydrant roared -- far too loud, and
+  shifting constantly -- and could not be drunk from.  Both are one CON actor,
+  `TOILETWATER`, which a hydrant, a toilet and a smashed fountain all spawn, and
+  both came from state the host owns and was not handing over.
+
+  *The sound.*  CON runs the gurgle with `soundonce`, which is "play unless this
+  is already playing", answered by `A_CheckSoundPlaying()`.  With the host owning
+  playback, Duke's own `g_sounds[]` bookkeeping is never filled in, so that
+  answer was always "nothing is playing" and the gurgle restarted on **every
+  tic** -- a pile of overlapping voices rather than a running tap.  The host now
+  remembers the voice handle it started for each (sound, sprite) and answers the
+  question itself, through `VB_DukeAI_SetSoundCheckHook()`.  Measured: two
+  gurgles over 200 tics, where before there was one per tic.
+
+  *The drinking.*  Three separate things had to be true and none were.  CON asks
+  `ifhitspace`, which reads the player's input bits -- the host never wrote them,
+  so the branch could not fire; the use key is mirrored each tic now.  It then
+  asks `ifphealthl MAXPLAYERHEALTH`, and Duke's mirrored player carried a flat
+  30000-point pool so that damage could be read back as a delta -- which made
+  every health test in CON meaningless, this one permanently false.  The host's
+  real health is mirrored instead, and the delta is measured against whatever was
+  written.  Finally the delta itself was clamped to positive on the way back, so
+  even once Duke healed the player the host never heard about it: `addphealth`
+  moves that pool *up*, and discarding anything below zero threw away every heal
+  Duke's props hand out.  It is signed now.
+
+  This last part is worth stating plainly, because it is not specific to
+  hydrants: **Duke's props that give the player something back all work this
+  way**, and none of them could function until the mirror carried health both
+  ways.  Duke's own pacing survives -- `ifactioncount 32` means one point per 32
+  action tics, which is the slow trickle the original has.
+
+  `VB_CP_SELFTEST=destruct` covers it as `hydrant-sprays`, `hydrant-reachable`,
+  `hydrant-sound-once` and `hydrant-drink-heals` (4 heals over 200 tics, matching
+  the four `addphealth` calls Duke's CON makes in that time).  The harness has to
+  force the use key and the facing angle through the mirror rather than writing
+  SW's own input, because SW rebuilds both from the input device every frame and
+  Duke's `pfacing` allows only 128 angle units either side.
+
 - **Duke's security cameras.**  A monitor showed the blank screen art and nothing
   else; pressing use on one did nothing.  The cameras themselves were already
   fine -- `CAMERA1` is an adoptable tile, so Duke's own actor code pans the ones
