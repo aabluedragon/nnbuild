@@ -3138,10 +3138,16 @@ static int32_t g_swCrossplayDukeMirrorsBroken;
 // world on its own clock instead.
 #define VB_CROSSPLAY_SW_TICS_PER_SEC 40
 
-// Duke's toilet countdown, in host tics: the flush and the "much better" a second
-// in, the weapon back up a second after that.
-#define VB_CROSSPLAY_DUKE_PISS_RELIEF_AT (VB_CROSSPLAY_SW_TICS_PER_SEC)
-#define VB_CROSSPLAY_DUKE_PISS_TICS (VB_CROSSPLAY_SW_TICS_PER_SEC * 2)
+// Duke's toilet countdown, in host tics.  Two timings live in here and they are
+// nothing like each other: the little sequence at the start -- the flush and the
+// "much better" a second in, the weapon back up a second after that -- and the
+// cooldown that runs on long afterwards.  Duke sets last_pissed_time to
+// 26*220 and only lets the player relieve himself again once it reaches zero, so
+// the health is a once-every-few-minutes thing rather than something to stand
+// there and repeat.  Anything in between just flushes.
+#define VB_CROSSPLAY_DUKE_PISS_TICS (VB_CROSSPLAY_SW_TICS_PER_SEC * 220)
+#define VB_CROSSPLAY_DUKE_PISS_RELIEF_AT (VB_CROSSPLAY_DUKE_PISS_TICS - VB_CROSSPLAY_SW_TICS_PER_SEC)
+#define VB_CROSSPLAY_DUKE_PISS_WEAPON_UP_AT (VB_CROSSPLAY_DUKE_PISS_TICS - VB_CROSSPLAY_SW_TICS_PER_SEC * 2)
 #define VB_CROSSPLAY_DUKE_TICS_PER_SEC 30   // Duke's REALGAMETICSPERSEC
 
 // Duke's toilet.  Using one holsters the weapon, heals a tenth of full health and
@@ -11243,6 +11249,11 @@ void SW_CrossplayTickDukeToilet(PLAYERp pp)
         SW_CrossplayDukeAIPlaySound(VB_DukeAI_PissReliefSound(), pp->PlayerSprite);
     }
 
+    // The weapon comes back up two seconds in; the cooldown carries on running
+    // for minutes after that, which is what stops the health being repeatable.
+    if (g_swCrossplayDukePissTimer[pnum] == VB_CROSSPLAY_DUKE_PISS_WEAPON_UP_AT)
+        RESET(pp->Flags, PF_WEAPON_DOWN);
+
     if (g_swCrossplayDukePissTimer[pnum] <= 0)
     {
         g_swCrossplayDukePissTimer[pnum] = 0;
@@ -11477,6 +11488,8 @@ static int32_t g_swCrossplaySelfTestToiletSprite = -1;
 static int32_t g_swCrossplaySelfTestToiletHealthBase;
 static int32_t g_swCrossplaySelfTestToiletUrinateBase;
 static int32_t g_swCrossplaySelfTestToiletReliefBase;
+static int32_t g_swCrossplaySelfTestToiletSecondHeal;
+static int32_t g_swCrossplaySelfTestToiletSecondUse;
 static int32_t g_swCrossplaySelfTestMirrorStage;
 static int32_t g_swCrossplaySelfTestMirrorWall = -1;
 static int32_t g_swCrossplaySelfTestMirrorBrokeBase;
@@ -12234,21 +12247,60 @@ static void SW_CrossplaySelfTestRunToilet(PLAYERp const pp)
         return;
     }
 
-    // The countdown runs from the host's own tic, so just let it.
-    if (g_swCrossplaySelfTestPhaseTic < VB_CROSSPLAY_DUKE_PISS_TICS + 20)
+    // The countdown runs from the host's own tic, so just let the opening
+    // sequence play out.  Only the first two seconds of it are worth waiting
+    // for; the cooldown behind it runs for minutes.
+    if (g_swCrossplaySelfTestPhaseTic < VB_CROSSPLAY_SW_TICS_PER_SEC * 2 + 20)
         return;
 
-    Bsnprintf(detail, sizeof(detail), "spr=%d relief=%d weaponDown=%d", toilet,
-              SW_CrossplayDukeSoundPlayCount(VB_DukeAI_PissReliefSound()) - g_swCrossplaySelfTestToiletReliefBase,
-              TEST(pp->Flags, PF_WEAPON_DOWN) ? 1 : 0);
+    if (g_swCrossplaySelfTestToiletStage == 1)
+    {
+        Bsnprintf(detail, sizeof(detail), "spr=%d relief=%d weaponDown=%d", toilet,
+                  SW_CrossplayDukeSoundPlayCount(VB_DukeAI_PissReliefSound()) - g_swCrossplaySelfTestToiletReliefBase,
+                  TEST(pp->Flags, PF_WEAPON_DOWN) ? 1 : 0);
 
-    // "Ahhh, much better", a second after the weapon went down.
-    SW_CrossplaySelfTestReport(SW_CrossplayDukeSoundPlayCount(VB_DukeAI_PissReliefSound()) >
-                                   g_swCrossplaySelfTestToiletReliefBase,
-                               "toilet-relief-sound", detail);
+        // "Ahhh, much better", a second after the weapon went down.
+        SW_CrossplaySelfTestReport(SW_CrossplayDukeSoundPlayCount(VB_DukeAI_PissReliefSound()) >
+                                       g_swCrossplaySelfTestToiletReliefBase,
+                                   "toilet-relief-sound", detail);
 
-    // ...and the weapon comes back up on its own.
-    SW_CrossplaySelfTestReport(!TEST(pp->Flags, PF_WEAPON_DOWN), "toilet-weapon-returns", detail);
+        // ...and the weapon comes back up on its own.
+        SW_CrossplaySelfTestReport(!TEST(pp->Flags, PF_WEAPON_DOWN), "toilet-weapon-returns", detail);
+
+        // Now use it again, well inside Duke's cooldown.  This must flush and
+        // nothing else: no second helping of health, and no second sound of the
+        // player relieving himself.
+        USERp const u = User[pp->PlayerSprite];
+        u->Health = 50;
+        g_swCrossplaySelfTestToiletHealthBase = u->Health;
+        g_swCrossplaySelfTestToiletUrinateBase = SW_CrossplayDukeSoundPlayCount(VB_DukeAI_UrinateSound());
+
+        int32_t const usedAgain = SW_CrossplayUseDukeProp(pp, toilet);
+        g_swCrossplaySelfTestToiletSecondUse = usedAgain;
+
+        // Read the health back in this same tic: the harness pins it to 1000
+        // every tic to keep the player alive, so a later reading measures the
+        // keep-alive rather than the toilet.
+        g_swCrossplaySelfTestToiletSecondHeal = u->Health - g_swCrossplaySelfTestToiletHealthBase;
+
+        g_swCrossplaySelfTestToiletStage = 2;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TOILET);
+        return;
+    }
+
+    int32_t const healedAgain = g_swCrossplaySelfTestToiletSecondHeal;
+    int32_t const urinatedAgain =
+        SW_CrossplayDukeSoundPlayCount(VB_DukeAI_UrinateSound()) - g_swCrossplaySelfTestToiletUrinateBase;
+    Bsnprintf(detail, sizeof(detail), "spr=%d second use: answered=%d health +%d urinate=%d", toilet,
+              g_swCrossplaySelfTestToiletSecondUse, healedAgain, urinatedAgain);
+
+    // The toilet still answers the key -- Duke flushes it -- but gives nothing
+    // else away until the cooldown is up.  Whether the flush is audible on a
+    // given press depends on whether the last one has finished, which a headless
+    // run cannot judge (it never retires its voice nodes), so what is asserted
+    // here is that the press was answered and that it handed out nothing.
+    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestToiletSecondUse != 0, "toilet-cooldown-answers", detail);
+    SW_CrossplaySelfTestReport(healedAgain == 0 && urinatedAgain == 0, "toilet-cooldown-no-repeat", detail);
 
     SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
 }
@@ -12495,9 +12547,16 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
         return;
     }
 
-    // Let the frame that shows the feed actually be drawn before judging it.
-    if (g_swCrossplaySelfTestPhaseTic < 30)
+    // Let the frame that shows the feed actually be drawn before judging it, and
+    // hold the player where they were put: a monitor only runs a feed for a
+    // player standing within Duke's active distance of it, and SW's own physics
+    // walks them out of that in a few tics.
+    if (g_swCrossplaySelfTestPhaseTic < 40)
     {
+        SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestCameraStandX, g_swCrossplaySelfTestCameraStandY,
+                                        INT32_MIN, g_swCrossplaySelfTestCameraStandSect);
+        pp->q16ang = fix16_from_int(g_swCrossplaySelfTestCameraStandAng);
+
         int const camTile = SW_CrossplayDukeViewscreenTile(g_swCrossplaySelfTestCameraScreen);
         if (camTile >= 0 && waloff[camTile] != 0)
             g_swCrossplaySelfTestCameraRendered = 1;
@@ -14134,22 +14193,6 @@ static int32_t SW_CrossplayDukeAIFindDigiForFilename(char const *filename)
     return DIGI_NULL;
 }
 
-// What the host currently has playing on Duke's behalf.  CON's `soundonce` is
-// "play unless this is already playing", and Duke answers that from bookkeeping
-// the host's playback never fills in -- so a sound meant to loop by repetition,
-// like the gurgle from a broken hydrant, was started again every tic and piled
-// up into a loud, shifting drone.  Remembering the voice handle lets the answer
-// be the true one.
-struct sw_crossplay_duke_voice_t
-{
-    int16_t soundNum;
-    int16_t spriteNum;
-    int32_t handle;
-};
-
-static sw_crossplay_duke_voice_t g_swCrossplayDukeVoices[32];
-static int32_t g_swCrossplayDukeVoiceCount;
-
 // How many times Duke has asked for each sound.  The self-test reads this: the
 // difference between "started once and left to run" and "restarted every tic" is
 // only visible as a count.
@@ -14161,55 +14204,31 @@ int SW_CrossplayDukeSoundPlayCount(int soundNum)
                                                                           : 0;
 }
 
-static void SW_CrossplayRememberDukeVoice(int soundNum, int spriteNum, int32_t handle)
-{
-    if (handle <= FX_Ok)
-        return;
-
-    int32_t slot = -1;
-
-    for (int32_t i = 0; i < g_swCrossplayDukeVoiceCount; ++i)
-    {
-        if (g_swCrossplayDukeVoices[i].soundNum == soundNum &&
-            g_swCrossplayDukeVoices[i].spriteNum == spriteNum)
-        {
-            slot = i;
-            break;
-        }
-
-        // Reuse anything that has finished rather than growing the table.
-        if (slot < 0 && !FX_SoundValidAndActive(g_swCrossplayDukeVoices[i].handle))
-            slot = i;
-    }
-
-    if (slot < 0)
-    {
-        if (g_swCrossplayDukeVoiceCount >= (int32_t)ARRAY_SIZE(g_swCrossplayDukeVoices))
-            return;
-
-        slot = g_swCrossplayDukeVoiceCount++;
-    }
-
-    g_swCrossplayDukeVoices[slot] = { (int16_t)soundNum, (int16_t)spriteNum, handle };
-}
-
-// Duke's A_CheckSoundPlaying() in the host's terms: -1 for the sprite means
-// "is this sound playing at all", which is how Duke defines it too.
+// Duke's A_CheckSoundPlaying() in the host's terms.  The answer comes from SW's
+// own 3D voice list rather than from the handle the bridge remembered, because
+// handles are recycled: once a voice finishes, its slot can be handed to an
+// unrelated sound, and testing the old handle then reports the first sound as
+// still playing forever.  A voice node carries the digi number it is playing, so
+// matching on that is exact.
+//
+// SW does not record an owner for one-shot voices (only looping ones), so a
+// per-sprite question is answered as "is this sound playing at all" -- which is
+// what Duke's own A_CheckSoundPlaying() does when given -1, and is right for the
+// use CON makes of it: `soundonce` asks whether to start the sound again.
 static int SW_CrossplayDukeAICheckSoundPlaying(int soundNum, int spriteNum)
 {
-    for (int32_t i = 0; i < g_swCrossplayDukeVoiceCount; ++i)
-    {
-        sw_crossplay_duke_voice_t const &voice = g_swCrossplayDukeVoices[i];
+    UNREFERENCED_PARAMETER(spriteNum);
 
-        if (voice.soundNum != soundNum)
-            continue;
+    if ((unsigned)soundNum >= ARRAY_SIZE(g_swCrossplayDukeAISoundMap))
+        return 0;
 
-        if (spriteNum >= 0 && voice.spriteNum != spriteNum)
-            continue;
+    int32_t const digi = g_swCrossplayDukeAISoundMap[soundNum];
+    if (digi <= DIGI_NULL || digi >= DIGI_MAX)
+        return 0;
 
-        if (FX_SoundValidAndActive(voice.handle))
+    for (VOC3D_INFOp vp = voc3dstart; vp != NULL; vp = vp->next)
+        if (vp->num == digi && !vp->deleted && FX_SoundValidAndActive(vp->handle))
             return 1;
-    }
 
     return 0;
 }
@@ -14240,7 +14259,7 @@ static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum)
         handle = PlaySound(digi, &pp->posx, &pp->posy, &pp->posz, v3df_dontpan);
     }
 
-    SW_CrossplayRememberDukeVoice(soundNum, spriteNum, handle);
+    UNREFERENCED_PARAMETER(handle);
     return 0;
 }
 
@@ -14264,6 +14283,8 @@ static void SW_CrossplayDukeAISetupSounds(void)
         if (digi > DIGI_NULL)
             ++g_swCrossplayDukeAISoundMapCount;
     }
+
+
 
     VB_DukeAI_SetSoundHook(SW_CrossplayDukeAIPlaySound);
     VB_DukeAI_SetSoundCheckHook(SW_CrossplayDukeAICheckSoundPlaying);

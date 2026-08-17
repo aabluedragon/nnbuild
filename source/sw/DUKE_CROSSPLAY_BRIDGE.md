@@ -761,11 +761,32 @@ Fixed since:
   no `digi` entry for `pissing.voc` or `ahmuch03.voc`, so those two sounds mapped
   to nothing and simply did not play; `flush.voc` was already there.
 
+  Two timings live in Duke's `last_pissed_time` and they are nothing like each
+  other.  The little sequence above happens in its first two seconds, but the
+  value starts at `26*220` and the player cannot relieve himself again until it
+  reaches zero -- so the health is a once-every-few-minutes thing, not something
+  to stand there and repeat.  Reading only the near end of that countdown made
+  the whole thing a two-second cooldown, and the toilet handed out health as fast
+  as the key could be pressed.  The cooldown is the full 220 seconds now, with
+  the flush/relief at one second in and the weapon back up at two; a press inside
+  it still answers -- Duke flushes -- but gives nothing away.
+
   `VB_CP_SELFTEST=world` covers it as `toilet-reachable`, `toilet-use-answers`,
-  `toilet-heals`, `toilet-urinate-sound`, `toilet-holsters`, `toilet-relief-sound`
-  and `toilet-weapon-returns`.  The test presses through `neartag()` and
+  `toilet-heals`, `toilet-urinate-sound`, `toilet-holsters`, `toilet-relief-sound`,
+  `toilet-weapon-returns`, `toilet-cooldown-answers` and
+  `toilet-cooldown-no-repeat`.  The test presses through `neartag()` and
   `SW_CrossplayOperateDukeMapEffectors()` rather than calling the prop handler
-  directly, so it covers the path the use key actually takes.
+  directly, so it covers the path the use key actually takes.  Whether the flush
+  is audible on a given press depends on whether the last one has finished, which
+  a headless run cannot judge -- it never retires its voice nodes -- so the
+  cooldown checks assert that the press was answered and handed out nothing,
+  rather than asserting a sound.
+
+  `A_CheckSoundPlaying()` is answered from SW's own 3D voice list rather than
+  from a handle the bridge remembered, because handles are recycled: once a voice
+  finishes its slot can go to an unrelated sound, and testing the old handle then
+  reports the first sound as playing forever.  A voice node carries the digi
+  number it is playing, so matching on that is exact.
 
 - **A rocket must explode on a mirror, not slide along it.**  Fired at a Duke
   mirror the rocket skated across the glass and kept going.  Two faults, one of
