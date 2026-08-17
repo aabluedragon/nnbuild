@@ -831,6 +831,7 @@ enum
     VB_DUKE_FEMMAG1 = 568,
     VB_DUKE_FEMMAG2 = 577,
     VB_DUKE_CAMERA1 = 621,
+    VB_DUKE_MIRRORBROKE = 70,
     VB_DUKE_BROKEFIREHYDRENT = 950,
     VB_DUKE_TOILETWATER = 921,
     VB_DUKE_VIEWSCREEN2 = 499,
@@ -1387,6 +1388,7 @@ extern "C" int VB_DukeAI_MonitorSound(void);
 extern "C" int VB_DukeAI_WaterSound(void);
 int SW_CrossplayDukeSoundPlayCount(int soundNum);
 int SW_CrossplayDukeHealEventCount(void);
+int SW_CrossplayDukeMirrorsBroken(void);
 extern "C" void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum));
 extern "C" void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
 extern "C" void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
@@ -2563,8 +2565,29 @@ static void SW_CrossplaySanitizeForeignMapSectors(void)
         ++sanitized;
     }
 
-    if (sanitized > 0)
-        LOG_F(INFO, "Crossplay: sanitized %d foreign sector extra value(s) for Shadow Warrior compatibility.", sanitized);
+    // Walls carry the same trap and it bites harder.  SW keeps its own WALLFX
+    // bitfield in wall[].extra and assumes every wall has one -- WeaponMoveHit()
+    // even asserts it is not -1 -- while a Duke map leaves it at -1, every bit
+    // set.  So every wall in the level read as WALLFX_SECTOR_OBJECT (and every
+    // other flag), and a rocket hitting one went down SW's sector-object path,
+    // found no sector object, fell through to a re-probing hitscan and returned
+    // "nothing was hit".  The missile then survived its own impact and hit the
+    // same wall again on the next tic: the rocket that slides along a mirror
+    // instead of exploding on it.
+    int32_t sanitizedWalls = 0;
+
+    for (int32_t i = 0; i < numwalls; ++i)
+    {
+        if (wall[i].extra == 0)
+            continue;
+
+        wall[i].extra = 0;
+        ++sanitizedWalls;
+    }
+
+    if (sanitized > 0 || sanitizedWalls > 0)
+        LOG_F(INFO, "Crossplay: sanitized %d foreign sector and %d wall extra value(s) for Shadow Warrior "
+                    "compatibility.", sanitized, sanitizedWalls);
 }
 
 static void SW_CrossplayResetSectorObjects(void)
@@ -3102,6 +3125,9 @@ struct sw_crossplay_duke_viewscreen_t
 
 static sw_crossplay_duke_viewscreen_t g_swCrossplayDukeViewscreens[VB_CROSSPLAY_MAX_DUKE_VIEWSCREENS];
 static int32_t g_swCrossplayDukeViewscreenCount;
+static int32_t g_swCrossplayDukeMirrorsBroken;
+
+int SW_CrossplayDukeMirrorsBroken(void) { return g_swCrossplayDukeMirrorsBroken; }
 // The self-test drives the use key from outside SW's input, which is rebuilt
 // from the real device every frame; without this the harness's key press is
 // wiped before the Duke tic that would read it.
@@ -4791,6 +4817,30 @@ int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitP
         SW_CrossplayDukeAIHitKind(spriteNum) == VB_DUKEAI_HIT_EXPLOSION
         ? SW_CrossplayActivateDukeExplosivesForWall(wallNum, hitPos)
         : 0;
+
+    // A mirror is Duke's own rule and an explosive-only one: RADIUSEXPLOSION,
+    // SEENINE, HEAVYHBOMB, RPG, HYDRENT, OOZFILTER or EXPLODINGBARREL breaks it,
+    // anything else leaves it alone.  Breaking clears the masking bit and swaps
+    // the tile for MIRRORBROKE, which also takes the wall off SW's mirror tile --
+    // JS_DrawMirrors() only renders a reflection for a mirror tile the renderer
+    // asked for, so the reflection stops with the art.
+    if (originalOverpicnum == VB_DukeAI_MirrorTile() && wall[wallNum].pal != 4 &&
+        SW_CrossplayDukeAIHitKind(spriteNum) == VB_DUKEAI_HIT_EXPLOSION)
+    {
+        int16_t const brokenTile = SW_CrossplayRemapDukeTileForRuntime(VB_DUKE_MIRRORBROKE);
+        int16_t const nextWall = wall[wallNum].nextwall;
+
+        if (wall[wallNum].overpicnum != brokenTile &&
+            (nextWall < 0 || (unsigned)nextWall >= (unsigned)numwalls || wall[nextWall].pal != 4))
+        {
+            RESET(wall[wallNum].cstat, 16);
+            SW_CrossplaySetDukeWallPicnum(wallNum, VB_DUKE_MIRRORBROKE);
+            SW_CrossplaySetDukeWallOverpicnum(wallNum, VB_DUKE_MIRRORBROKE);
+            SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_GLASS_HEAVYBREAK);
+            ++g_swCrossplayDukeMirrorsBroken;
+            return 1;
+        }
+    }
 
     if (originalOverpicnum == VB_DUKE_GLASS)
     {
@@ -11235,6 +11285,7 @@ enum
     VB_CROSSPLAY_SELFTEST_TRAIN_SETUP,
     VB_CROSSPLAY_SELFTEST_TRAIN_OBSERVE,
     VB_CROSSPLAY_SELFTEST_CAMERAS,
+    VB_CROSSPLAY_SELFTEST_MIRRORS,
     VB_CROSSPLAY_SELFTEST_CRACKS,
     VB_CROSSPLAY_SELFTEST_HYDRANT,
     VB_CROSSPLAY_SELFTEST_BREAKABLES,
@@ -11290,6 +11341,9 @@ static int32_t g_swCrossplaySelfTestActorsEngaged;
 static int32_t g_swCrossplaySelfTestActorsAttacked;
 static int32_t g_swCrossplaySelfTestActorsAnimated;
 static int32_t g_swCrossplaySelfTestActorsSounded;
+static int32_t g_swCrossplaySelfTestMirrorStage;
+static int32_t g_swCrossplaySelfTestMirrorWall = -1;
+static int32_t g_swCrossplaySelfTestMirrorBrokeBase;
 static int32_t g_swCrossplaySelfTestCameraStage;
 static int32_t g_swCrossplaySelfTestCameraStandX, g_swCrossplaySelfTestCameraStandY;
 static int32_t g_swCrossplaySelfTestCameraStandAng;
@@ -11935,6 +11989,94 @@ static int32_t g_swCrossplaySelfTestSolidBreakableCount;
 static int32_t g_swCrossplaySelfTestBreakablesTested;
 static int32_t g_swCrossplaySelfTestBreakablesHit;
 
+// Duke's mirrors.  A rocket must explode on one rather than slide along it, and
+// an explosive -- and only an explosive -- must break it, which is Duke's own
+// rule in A_DamageWall_Internal().
+static void SW_CrossplaySelfTestRunMirrors(PLAYERp const pp)
+{
+    int const dukeMirrorTile = VB_DukeAI_MirrorTile();
+
+    if (pp == NULL || dukeMirrorTile <= 0)
+    {
+        SW_CrossplaySelfTestReport(1, "mirrors-present", "no Duke mirrors in this map, skipped");
+        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestMirrorWall < 0)
+    {
+        for (int32_t wallNum = 0; wallNum < numwalls && g_swCrossplaySelfTestMirrorWall < 0; ++wallNum)
+            if (artCrossplayOriginalMapWallOverpicnum(wallNum) == dukeMirrorTile && wall[wallNum].nextsector >= 0)
+                g_swCrossplaySelfTestMirrorWall = wallNum;
+
+        if (g_swCrossplaySelfTestMirrorWall < 0)
+        {
+            SW_CrossplaySelfTestReport(1, "mirrors-present", "no Duke mirrors in this map, skipped");
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            return;
+        }
+    }
+
+    int32_t const wallNum = g_swCrossplaySelfTestMirrorWall;
+    char detail[192];
+
+    if (g_swCrossplaySelfTestMirrorStage == 0)
+    {
+        // A non-explosive hit must leave the glass alone.
+        g_swCrossplaySelfTestMirrorBrokeBase = SW_CrossplayDukeMirrorsBroken();
+
+        USERp const u = User[pp->PlayerSprite];
+        int16_t const savedWeapon = u->WeaponNum;
+        u->WeaponNum = WPN_STAR;
+        SW_CrossplayDamageDukeMapWall(pp->PlayerSprite, wallNum, &sprite[pp->PlayerSprite].xyz);
+        u->WeaponNum = savedWeapon;
+
+        Bsnprintf(detail, sizeof(detail), "wall=%d shuriken: broke=%d", wallNum,
+                  SW_CrossplayDukeMirrorsBroken() - g_swCrossplaySelfTestMirrorBrokeBase);
+        SW_CrossplaySelfTestReport(SW_CrossplayDukeMirrorsBroken() == g_swCrossplaySelfTestMirrorBrokeBase,
+                                   "mirror-needs-explosive", detail);
+
+        // ...and an explosive one must break it, the way Duke does.
+        int16_t const overBefore = wall[wallNum].overpicnum;
+        u->WeaponNum = WPN_ROCKET;
+        int32_t const handled =
+            SW_CrossplayDamageDukeMapWall(pp->PlayerSprite, wallNum, &sprite[pp->PlayerSprite].xyz);
+        u->WeaponNum = savedWeapon;
+
+        Bsnprintf(detail, sizeof(detail), "wall=%d rocket: handled=%d broke=%d cstat=%d", wallNum, handled,
+                  SW_CrossplayDukeMirrorsBroken() - g_swCrossplaySelfTestMirrorBrokeBase,
+                  TrackerCast(wall[wallNum].cstat));
+        SW_CrossplaySelfTestReport(SW_CrossplayDukeMirrorsBroken() > g_swCrossplaySelfTestMirrorBrokeBase,
+                                   "mirror-explosive-breaks", detail);
+
+        // The tile has to change too, and that is what stops the reflection:
+        // JS_DrawMirrors() only renders one for a mirror tile the renderer asked
+        // for.  (Duke also clears the masking bit here; the mirrors in these maps
+        // carry cstat 97/101 and never had it, so that is not worth asserting.)
+        Bsnprintf(detail, sizeof(detail), "wall=%d overpicnum %d -> %d", wallNum, overBefore,
+                  TrackerCast(wall[wallNum].overpicnum));
+        SW_CrossplaySelfTestReport(wall[wallNum].overpicnum != overBefore, "mirror-stops-reflecting", detail);
+
+        g_swCrossplaySelfTestMirrorStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
+        return;
+    }
+
+    // And a second explosive hit must not "break" the same glass again.
+    int32_t const before = SW_CrossplayDukeMirrorsBroken();
+    USERp const u = User[pp->PlayerSprite];
+    int16_t const savedWeapon = u->WeaponNum;
+    u->WeaponNum = WPN_ROCKET;
+    SW_CrossplayDamageDukeMapWall(pp->PlayerSprite, wallNum, &sprite[pp->PlayerSprite].xyz);
+    u->WeaponNum = savedWeapon;
+
+    Bsnprintf(detail, sizeof(detail), "wall=%d second rocket: broke again=%d", wallNum,
+              SW_CrossplayDukeMirrorsBroken() - before);
+    SW_CrossplaySelfTestReport(SW_CrossplayDukeMirrorsBroken() == before, "mirror-breaks-once", detail);
+
+    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+}
+
 // Duke's security cameras.  Pressing use on a monitor should put the player
 // behind a camera from its group, step to the next one on each further press,
 // and hand the view back once the group is exhausted -- Duke's P_CycleCameras().
@@ -11944,7 +12086,7 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
     if (pp == NULL || g_swCrossplayDukeViewscreenCount <= 0 || g_swCrossplayDukeCameraCount <= 0)
     {
         SW_CrossplaySelfTestReport(1, "cameras-present", "no Duke monitors/cameras in this map, skipped");
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
         return;
     }
 
@@ -11970,7 +12112,7 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
         if (g_swCrossplaySelfTestCameraScreen < 0)
         {
             SW_CrossplaySelfTestReport(1, "cameras-present", "no monitor has a matching camera, skipped");
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
             return;
         }
 
@@ -12049,7 +12191,7 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
         if (!placed)
         {
             SW_CrossplaySelfTestReport(0, "camera-reachable", "no floor spot sees the monitor through neartag()");
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
             return;
         }
 
@@ -12140,7 +12282,7 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
               stillViewing);
     SW_CrossplaySelfTestReport(!stillViewing, "camera-move-releases", detail);
 
-    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
 }
 
 // A broken fire hydrant.  Everything about one is Duke's TOILETWATER CON actor:
@@ -13310,6 +13452,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_TRAIN_SETUP: SW_CrossplaySelfTestRunTrainSetup(pp); break;
     case VB_CROSSPLAY_SELFTEST_TRAIN_OBSERVE: SW_CrossplaySelfTestRunTrainObserve(pp); break;
     case VB_CROSSPLAY_SELFTEST_CAMERAS: SW_CrossplaySelfTestRunCameras(pp); break;
+    case VB_CROSSPLAY_SELFTEST_MIRRORS: SW_CrossplaySelfTestRunMirrors(pp); break;
     case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
     case VB_CROSSPLAY_SELFTEST_HYDRANT: SW_CrossplaySelfTestRunHydrant(pp); break;
     case VB_CROSSPLAY_SELFTEST_BREAKABLES: SW_CrossplaySelfTestRunBreakables(pp); break;
@@ -14564,6 +14707,47 @@ static void SW_CrossplayDukeAITick(void)
                     if (badSect <= 5 || (badSect % 50) == 0)
                         LOG_F(WARNING, "CPROCKET player cursectnum=%d invalid (%d tics so far) -- weapons will "
                                        "refuse to fire", (int)pp->cursectnum, badSect);
+                }
+            }
+
+            if (rocketTic == 60 && Bgetenv("VB_CP_TEST_ROCKET_MIRROR") != NULL)
+            {
+                PLAYERp const pp = Player + myconnectindex;
+                int const dukeMirrorTile = VB_DukeAI_MirrorTile();
+
+                for (int32_t wallNum = 0; wallNum < numwalls; ++wallNum)
+                {
+                    if (artCrossplayOriginalMapWallOverpicnum(wallNum) != dukeMirrorTile ||
+                        wall[wallNum].nextsector < 0)
+                        continue;
+
+                    int32_t const mx = (wall[wallNum].x + wall[wall[wallNum].point2].x) >> 1;
+                    int32_t const my = (wall[wallNum].y + wall[wall[wallNum].point2].y) >> 1;
+                    int32_t const wallAng = getangle(wall[wall[wallNum].point2].x - wall[wallNum].x,
+                                                     wall[wall[wallNum].point2].y - wall[wallNum].y);
+                    int32_t const inward = NORM_ANGLE(wallAng - 512);
+
+                    for (int32_t back = 512; back <= 1536; back += 256)
+                    {
+                        int32_t const sx = mx + ((sintable[(inward + 512) & 2047] * back) >> 14);
+                        int32_t const sy = my + ((sintable[inward & 2047] * back) >> 14);
+                        int16_t ss = wall[wallNum].nextsector;
+
+                        updatesector(sx, sy, &ss);
+                        if ((unsigned)ss >= (unsigned)numsectors)
+                            continue;
+
+                        int32_t cz, fz;
+                        getzsofslope(ss, sx, sy, &cz, &fz);
+                        pp->posx = pp->oposx = sx;
+                        pp->posy = pp->oposy = sy;
+                        pp->posz = pp->oposz = fz - Z(36);
+                        pp->cursectnum = ss;
+                        pp->q16ang = fix16_from_int(NORM_ANGLE(getangle(mx - sx, my - sy)));
+                        LOG_F(INFO, "CPMIR parked at (%d,%d) sect=%d facing wall=%d", sx, sy, (int)ss, wallNum);
+                        break;
+                    }
+                    break;
                 }
             }
 

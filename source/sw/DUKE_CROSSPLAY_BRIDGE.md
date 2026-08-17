@@ -739,6 +739,39 @@ Fixed since:
   `VB_CP_WATCH_TILES=<t,t,...>` reports every change to the sprites of a given
   Duke tile, which is how both halves of this were pinned down.
 
+- **A rocket must explode on a mirror, not slide along it.**  Fired at a Duke
+  mirror the rocket skated across the glass and kept going.  Two faults, one of
+  them general.
+
+  The general one: SW keeps its own `WALLFX` bitfield in `wall[].extra` and
+  assumes every wall has one -- `WeaponMoveHit()` asserts it is not -1 -- while a
+  Duke map leaves it at -1, every bit set.  So every wall in a Duke level read as
+  `WALLFX_SECTOR_OBJECT` and more besides.  Wall extra is sanitised at load now,
+  alongside the sector extra that already was (1975 walls on E1L1).
+
+  The one that caused the sliding was the bridge's own.  `WeaponMoveHit()` gave
+  the wall to `SW_CrossplayDamageDukeMapWall()` and, when it reported the hit
+  handled, set `u->ret = 0` before returning true.  But `DoRocket()` only
+  detonates `if (WeaponMoveHit() && u->ret)`, so the rocket survived its own
+  impact and hit the same wall again on the next tic, and the next.  A mirror
+  triggers it because its sector carries a light, so the bridge reported the hit
+  handled for that alone.  Nothing about a Duke wall reacting -- breaking,
+  flickering, setting off a charge -- is a reason for the missile to live, so the
+  flag is left alone now.  Measured with `VB_CP_TEST_ROCKET_MIRROR=1`, which
+  parks the rocket harness in front of a mirror: E1L1 went from 1099 wall impacts
+  to 1.
+
+  Breaking the glass is then Duke's rule, and an explosive-only one:
+  `RADIUSEXPLOSION`, `SEENINE`, `HEAVYHBOMB`, `RPG`, `HYDRENT`, `OOZFILTER` or
+  `EXPLODINGBARREL` swaps the tile for `MIRRORBROKE` and clears the masking bit;
+  anything else leaves it standing.  Swapping the tile is also what stops the
+  reflection, because `JS_DrawMirrors()` only renders one for a mirror tile the
+  renderer asked for.  `VB_CP_SELFTEST=world` covers it as
+  `mirror-needs-explosive`, `mirror-explosive-breaks`, `mirror-stops-reflecting`
+  and `mirror-breaks-once`.  Note that the mirrors in these maps carry cstat
+  97/101 and never had the masking bit, so Duke's `cstat &= ~16` is a no-op on
+  them and is not worth asserting -- the tile change is the real evidence.
+
 - **A broken hydrant, and everything else Duke drives through CON's player
   state.**  The water from a smashed fire hydrant roared -- far too loud, and
   shifting constantly -- and could not be drunk from.  Both are one CON actor,
@@ -1005,6 +1038,7 @@ reproductions passed while the user's own game failed.
 | `VB_CP_SPRITE_DEBUG=1` | after each Duke tic, log `Numsprites`, linked sprites and free-chain length |
 | `VB_CP_TEST_BLAST=<hitag>` | detonate the Duke charge group with that hitag, and hit any explosive source sprite carrying it (E1L1: rooftop canisters 253, cracked walls 214/223/237) |
 | `VB_CP_WATCH_TILES=<t,t,...>` | report every picnum/statnum change to sprites whose Duke tile is one of these |
+| `VB_CP_TEST_ROCKET_MIRROR=1` | with `VB_CP_TEST_ROCKET`, parks the harness in front of the first Duke mirror wall so rocket-versus-mirror behaviour can be counted |
 | `VB_CP_TEST_ROCKET=1` | fire SW's rocket launcher repeatedly, reporting each rocket's flight distance and what was solid at the muzzle if it died there |
 | `VB_CP_STRAY_DEBUG=1` | log host sprites found in Duke's lists and put back |
 | `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |

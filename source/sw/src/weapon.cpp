@@ -4666,11 +4666,21 @@ WeaponMoveHit(short SpriteNum)
 
         ASSERT(wph->extra != -1);
 
+        if (Bgetenv("VB_CP_MIRROR_DEBUG") != NULL)
+            LOG_F(INFO, "CPMIR missile spr=%d hit wall=%d pic=%d over=%d extra=%d lotag=%d cstat=%d", (int)SpriteNum,
+                  (int)hitinfo.wall, TrackerCast(wph->picnum), TrackerCast(wph->overpicnum),
+                  TrackerCast(wph->extra), TrackerCast(wph->lotag), TrackerCast(wph->cstat));
+
+        // A Duke wall answering the hit -- breaking, flickering a light, setting
+        // off a charge -- is not a reason for the missile to survive it.  Zeroing
+        // u->ret here used to say "handled, nothing was hit", and DoRocket() only
+        // detonates `if (WeaponMoveHit() && u->ret)`, so the rocket lived through
+        // its own impact and hit the same wall again on the next tic.  That is
+        // the rocket seen sliding along a mirror instead of exploding on it: the
+        // mirror's sector carries a light, the bridge reported the hit handled,
+        // and the explosion never happened.
         if (SW_CrossplayProjectileDamageDukeMapWall(SpriteNum, hitinfo.wall))
-        {
-            u->ret = 0;
             return TRUE;
-        }
 
         if (TEST(wph->extra, WALLFX_SECTOR_OBJECT))
         {
