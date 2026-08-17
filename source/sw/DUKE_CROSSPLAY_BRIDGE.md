@@ -669,21 +669,25 @@ Fixed since:
   which is where their state is set up properly.  What is left is what should have
   been there all along -- the tape, the vent cover, the fan, the masked walls.
 
-- **Scenery Duke shoots through must not stop the host's bullets.**  SW's rocket
-  launcher "sometimes did not fire": about half the rockets loosed from E1L1's
-  start detonated the instant they left the launcher, so the shot never appeared.
-  They were hitting tile 852 -- an unnamed rock face, decoration with no gameplay
-  meaning in Duke at all -- standing a stride from the player.  The bridge set
-  `CSTAT_SPRITE_BLOCK_HITSCAN` on *every* prop it classified, where Duke adds it
-  only to a sprite the map already made solid or that its own per-tile spawn
+- **Scenery Duke shoots through must not stop the host's bullets.**  The bridge
+  set `CSTAT_SPRITE_BLOCK_HITSCAN` on *every* prop it classified, where Duke adds
+  it only to a sprite the map already made solid or that its own per-tile spawn
   makes solid.  Both bits are Duke's answer now
   (`VB_DukeAI_MapSpriteSolidBits()`), with the bridge's own list applied on top so
   a prop it drives stays hittable and its damage path can still run.  E1L1's
   rooftop vent, fan and grates keep exactly the cstats they had.
-  `VB_CP_TEST_ROCKET=1` fires the launcher on a cadence that keeps landing on
-  Duke tics and reports how far each rocket got, naming anything solid at the
-  muzzle when one dies without moving: 9 of 18 instant deaths before, 10 of 64
-  after, the rest averaging 8756 units of flight.
+
+  This was found while chasing a report that SW's rocket launcher sometimes did
+  not fire, and it is worth recording that **it did not fix that**: A/B'd with the
+  old behaviour restored, rocket survival was identical (E1L1 10 instant deaths
+  of 64 either way, E1L4 19 of 64).  It stands as a fidelity fix and nothing more.
+  Two measurement traps were behind an earlier, wrong conclusion that it had
+  helped -- the before and after numbers had been taken with different liveness
+  predicates, and the probe that named a rock sprite as the culprit was computing
+  distance with `SQ()` on full map coordinates, which overflows 32 bits and put a
+  sprite 53768 units away "at the muzzle".  Both are fixed;
+  `VB_CP_TEST_ROCKET=1` reports flight distance and names anything solid within
+  900 units of the muzzle when a rocket dies without moving.
 
 - **A cracked wall is Duke's to run, and nothing host-side may run inside a Duke
   tic.**  Shooting a crack did nothing, and a crack left over a wall opened some

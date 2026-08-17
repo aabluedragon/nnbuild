@@ -2427,14 +2427,14 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
                 int const solidBits = VB_DukeAI_MapSpriteSolidBits(originalPicnum, sp->cstat, sp->hitag);
 
                 // Both bits are Duke's answer, the hitscan one included.  It used
-                // to be forced on for every prop, which made scenery Duke leaves
-                // alone stop bullets and rockets: E1L1's start has a rock sprite
-                // (tile 852) a stride from the player, and roughly half the
-                // rockets fired there detonated on it the instant they left the
-                // launcher -- the shot simply never appeared.  Duke only adds
-                // BLOCK_HITSCAN where the map already made the sprite solid, or
-                // where its own per-tile spawn does, which is what keeps its real
-                // props shootable without turning the backdrop solid.
+                // to be forced on for every prop, so scenery Duke lets a shot
+                // pass through stopped the host's bullets instead.  Duke adds
+                // BLOCK_HITSCAN only where the map already made the sprite solid
+                // or where its own per-tile spawn does, which keeps its real
+                // props shootable without turning the backdrop solid.  This is a
+                // fidelity fix on its own terms: measured against the rocket
+                // harness it changed nothing, so it is not the cause of any
+                // reported weapon problem.
                 RESET(sp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
                 SET(sp->cstat, solidBits & (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN));
 
@@ -13617,7 +13617,9 @@ static void SW_CrossplayDukeAITick(void)
 
                 if (alive)
                 {
-                    int32_t const d = ksqrt(SQ(sprite[sn].x - firedX[i]) + SQ(sprite[sn].y - firedY[i]));
+                    int64_t const rx = (int64_t)sprite[sn].x - firedX[i];
+                    int64_t const ry = (int64_t)sprite[sn].y - firedY[i];
+                    int32_t const d = (int32_t)ksqrt((uint32_t)min<int64_t>(rx * rx + ry * ry, 0x7fffffff));
                     if (d > firedDist[i])
                         firedDist[i] = d;
 
@@ -13642,9 +13644,11 @@ static void SW_CrossplayDukeAITick(void)
                         if (!TEST(sprite[o].cstat, CSTAT_SPRITE_BLOCK_HITSCAN))
                             continue;
 
-                        int32_t const d = ksqrt(SQ(sprite[o].x - firedX[i]) + SQ(sprite[o].y - firedY[i]));
-                        if (d > 900)
+                        int64_t const dx = (int64_t)sprite[o].x - firedX[i];
+                        int64_t const dy = (int64_t)sprite[o].y - firedY[i];
+                        if (dx * dx + dy * dy > (int64_t)900 * 900)
                             continue;
+                        int32_t const d = (int32_t)ksqrt((uint32_t)(dx * dx + dy * dy));
 
                         LOG_F(INFO, "CPROCKET   muzzle blocker spr=%d dukeTile=%d dist=%d xrep=%d cstat=%d "
                                     "dukeOwned=%d user=%d", o, artCrossplayOriginalMapSpritePicnum(o), d,
