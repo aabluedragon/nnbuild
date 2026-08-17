@@ -44,6 +44,7 @@ int VB_DukeAI_HasActorCode(int tileNum);
 int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag);
 int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
 int VB_DukeAI_DrinkingSound(void);
+int VB_DukeAI_MonitorSound(void);
 void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
                                     int impactAng, int ownerSprite);
 int VB_DukeAI_TakeEarthquake(void);
@@ -352,6 +353,12 @@ int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag)
 int VB_DukeAI_DrinkingSound(void)
 {
     return DUKE_DRINKING;
+}
+
+// ...and the one a security monitor makes when it picks up a camera.
+int VB_DukeAI_MonitorSound(void)
+{
+    return MONITOR_ACTIVE;
 }
 
 int VB_DukeAI_HasActorCode(int tileNum)

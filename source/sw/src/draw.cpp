@@ -753,6 +753,12 @@ analyzesprites(int viewx, int viewy, int viewz, SWBOOL mirror)
                 tsp->picnum = (int16_t)dukeTile;
                 tsp->cstat = dukeCstat;
             }
+
+            // ...and a security monitor showing a camera draws that camera's
+            // feed instead of the blank screen art.
+            int const camTile = SW_CrossplayDukeViewscreenTile(SpriteNum);
+            if (camTile >= 0)
+                tsp->picnum = (int16_t)camTile;
         }
 
         {
@@ -2473,6 +2479,23 @@ drawscreen(PLAYERp pp)
         tq16horiz = fix16_min(tq16horiz, fix16_from_int(PLAYER_HORIZ_MAX));
     }
 
+    // A Duke security camera replaces the viewpoint outright while the player is
+    // watching one, which is what Duke does through p->newowner.
+    {
+        int32_t camX, camY, camZ;
+        fix16_t camAng, camHoriz;
+        int16_t camSect;
+        if (SW_CrossplayDukeCameraView(&camX, &camY, &camZ, &camAng, &camHoriz, &camSect))
+        {
+            tx = camX;
+            ty = camY;
+            tz = camZ;
+            tq16ang = camAng;
+            tq16horiz = camHoriz;
+            tsectnum = camSect;
+        }
+    }
+
     if (r_usenewaspect)
     {
         newaspect_enable = 1;
@@ -2499,6 +2522,11 @@ drawscreen(PLAYERp pp)
         // TEST this! Changed to camerapp
         //JS_DrawMirrors(camerapp, tx, ty, tz, tq16ang, tq16horiz);
         JS_DrawMirrors(pp, tx, ty, tz, tq16ang, tq16horiz);
+
+        // Duke's security monitors are rendered the same way and for the same
+        // reason: each is a view of the world from somewhere else, drawn into a
+        // tile before the frame that shows it.
+        SW_CrossplayDrawDukeViewscreens(pp);
     }
 
     // TODO: This call is redundant if the tiled overhead map is shown, but the

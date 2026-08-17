@@ -1864,6 +1864,26 @@ int16_t artCrossplayLoadForeignGameTile(int32_t game, int16_t sourceTile)
     return artCrossplayLoadForeignGameTilePal(game, sourceTile, 0);
 }
 
+// Claims a blank tile of the given size for the caller to render into, and marks
+// it taken so the generated-art allocator above cannot hand the same slot out
+// again.  Duke's security-camera feeds use this: each viewscreen owns one tile
+// that the host redraws from its camera's viewpoint.
+int16_t artCrossplayReserveTile(int32_t xsize, int32_t ysize)
+{
+    if (xsize <= 0 || ysize <= 0 || g_crossplayGeneratedTileCount >= (int32_t)ARRAY_SIZE(g_crossplayGeneratedTiles))
+        return -1;
+
+    int16_t const destTile = artCrossplayFindFreeTile();
+    if (destTile < 0)
+        return -1;
+
+    if (!tileCreate(destTile, xsize, ysize))
+        return -1;
+
+    g_crossplayGeneratedTiles[g_crossplayGeneratedTileCount++] = destTile;
+    return destTile;
+}
+
 static void artCrossplayMarkTile(char *usedTiles, int32_t tile)
 {
     if ((unsigned)tile < MAXUSERTILES)

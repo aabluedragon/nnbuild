@@ -2584,6 +2584,8 @@ PlayerOperateEnv(PLAYERp pp)
 
     if (artCrossplayMapArtPrepared())
     {
+        SW_CrossplayTickDukeCameras(pp);
+
         if (TEST_SYNC_KEY(pp, SK_OPERATE))
         {
             if (FLAG_KEY_PRESSED(pp, SK_OPERATE) && SW_CrossplayOperateDukeMapEffectors(pp))

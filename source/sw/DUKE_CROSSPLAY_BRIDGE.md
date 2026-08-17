@@ -739,6 +739,40 @@ Fixed since:
   `VB_CP_WATCH_TILES=<t,t,...>` reports every change to the sprites of a given
   Duke tile, which is how both halves of this were pinned down.
 
+- **Duke's security cameras.**  A monitor showed the blank screen art and nothing
+  else; pressing use on one did nothing.  The cameras themselves were already
+  fine -- `CAMERA1` is an adoptable tile, so Duke's own actor code pans the ones
+  whose hitag asks for it -- but nothing connected them to a screen.
+
+  Duke pairs them by tag: a `VIEWSCREEN`/`VIEWSCREEN2` carries the hitag of the
+  camera group it watches and a `CAMERA1` carries that same value as its lotag
+  (E1L1: five monitors on hitag 317, seven cameras on lotag 317).  Both are
+  captured at load, and pressing use steps through the group the way
+  `P_CycleCameras()` does -- putting the player's view behind the camera, moving
+  to the next one on each further press, and handing the view back once the group
+  runs out.  Walking away releases it, as Duke does.
+
+  The feed is rendered with SW's own `drawroomstotile()`, the call its camera
+  mirrors already use, so a monitor shows the world exactly as SW draws it rather
+  than as Duke would.  Each monitor owns one tile, claimed through the new
+  `artCrossplayReserveTile()` so the generated-art allocator cannot hand the same
+  slot out twice; a feed is only redrawn for a monitor the player is standing
+  within Duke's `VIEWSCREEN_ACTIVE_DISTANCE` of *and* that the renderer actually
+  asked to draw last frame, because each one costs a full second pass over the
+  world.
+
+  Two things about this are worth keeping in mind.  A monitor is recognised by
+  its own capture list rather than the sprite behavior table, which never
+  classified it -- the lotag `A_Spawn()` gives it exists only so `neartag()` can
+  find it, and treating that as a map tag would operate everything else in the
+  level wearing tag 1.  And monitors sit in shallow alcove sectors, so there is
+  no arithmetic that reliably says "in front of one": `VB_CP_SELFTEST=world`
+  finds a stand point by probing rooms that adjoin the alcove until `neartag()`
+  itself returns the monitor, which is why `camera-reachable` is a reported check
+  rather than test scaffolding.  The rest of the group is `camera-use-engages`,
+  `camera-matches-group`, `camera-feed-drawn`, `camera-use-cycles` and
+  `camera-move-releases`, and they pass on E1L1, E1L2 and E1L4.
+
 - **Only an explosion opens a cracked wall, and opening it must take the crack
   with it.**  A thrown shuriken blew Duke's cracked walls open, and once open the
   crack stayed drawn across the hole.  Both came from one shortcut.
