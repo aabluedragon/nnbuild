@@ -3219,6 +3219,7 @@ static int32_t SW_CrossplayOperateDukeRespawns(int16_t lotag);
 static void SW_CrossplayDukeAIAdoptSprite(int32_t spriteNum, int16_t dukePicnum);
 extern "C" int VB_DukeAI_IsAdoptableTile(int tileNum);
 extern "C" int VB_DukeAI_HasActorCode(int tileNum);
+extern "C" int VB_DukeAI_IsEnemyTile(int tileNum);
 
 // Duke should own any living actor it has CON code for, not just tiles flagged
 // as enemies: some enemy variants (LIZMANSTAYPUT) are plain `actor` blocks that
@@ -6498,6 +6499,25 @@ static void SW_CrossplayKillDukeActorSprite(int32_t spriteNum, vec3_t const *hit
 // keep animating, so both are supplied here and Duke adopts the sprite once it
 // has run.  Returns 0 when Duke cannot take it, so the caller keeps its own
 // fallback for a run with the Duke AI disabled.
+// Whether Duke's spawn would make this tile something Duke *runs* -- an enemy, or
+// anything else carrying CON actor code, which includes its charges and its
+// burnables.  Handing one of those to the damage path means calling Duke's
+// A_Spawn() on it, and A_Spawn() builds a live actor: blowing up E1L1's rooftop
+// canisters filled the roof with pigcops that way, resurrected out of the slots
+// of ones already dealt with.  Anything Duke runs reaches Duke through adoption
+// at load or respawn time instead, which is where its state is set up properly.
+// The host's charges belong here too.  Duke's SEENINE and OOZFILTER carry no CON
+// actor block -- their fuse is hardcoded C -- so the tests above miss them, and
+// respawning a spent one turns it back into a live charge.
+static int32_t SW_CrossplayDukeTileIsRunByDuke(int16_t sourcePicnum)
+{
+    if (sourcePicnum <= 0)
+        return 0;
+
+    return VB_DukeAI_HasActorCode(sourcePicnum) || VB_DukeAI_IsEnemyTile(sourcePicnum) ||
+           SW_CrossplayIsDukeExplosiveSprite(sourcePicnum) || SW_CrossplayIsDukeExplosiveSourceTile(sourcePicnum);
+}
+
 static int32_t SW_CrossplayQueueDukeObjectDamage(int32_t spriteNum, int32_t targetSpriteNum, vec3_t const *hitPos,
                                                  sw_crossplay_duke_sprite_behavior_t const &behavior, int32_t hitKind)
 {
@@ -6577,6 +6597,7 @@ static int SW_CrossplayDamageDukeMapSpriteInternal(int spriteNum, int targetSpri
         // status list.
         if (sourcePicnum > 0 && (behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_ANIMATES) == 0 &&
             !SW_CrossplayIsHiddenDukeControlSprite(sourcePicnum) &&
+            !SW_CrossplayDukeTileIsRunByDuke(sourcePicnum) &&
             sprite[targetSpriteNum].statnum == STAT_NO_STATE)
         {
             if (Bgetenv("VB_CP_BREAK_DEBUG") != NULL)
@@ -13468,6 +13489,7 @@ static int32_t SW_CrossplayExplodeDukeMapSpritesInternal(int blastSprite, int32_
                                     (g_swCrossplayDukeSpriteBehaviors[spriteNum].flags &
                                      VB_CROSSPLAY_DUKE_SPRITE_ANIMATES) == 0 &&
                                     !SW_CrossplayIsHiddenDukeControlSprite(sourcePicnum) &&
+                                    !SW_CrossplayDukeTileIsRunByDuke(sourcePicnum) &&
                                     sprite[spriteNum].statnum == STAT_NO_STATE;
 
         if (!dukeOwned && !alive && !dukeScenery)

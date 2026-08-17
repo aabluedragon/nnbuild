@@ -658,6 +658,17 @@ Fixed since:
   `VB_CP_TEST_BLAST=<hitag>` detonates a charge group the way shooting one does,
   which is how this was reproduced without a human at the keyboard.
 
+  Widening that delivery has one hard limit, learned the loud way: handing a
+  sprite to the damage path means calling Duke's `A_Spawn()` on it, and
+  `A_Spawn()` builds a *live* actor.  Pointed at an enemy's slot it resurrects
+  the enemy -- blowing up E1L1's rooftop canisters filled the roof with pigcops,
+  raised out of the slots of ones already dealt with -- and pointed at a spent
+  charge it re-arms it.  So the widening covers scenery only: anything Duke would
+  run (`VB_DukeAI_HasActorCode()`, `VB_DukeAI_IsEnemyTile()`) and the host's own
+  charges are held back, and reach Duke through adoption at load or respawn time,
+  which is where their state is set up properly.  What is left is what should have
+  been there all along -- the tape, the vent cover, the fan, the masked walls.
+
 - **A sprite must never be in two of the engine's lists at once.**  Handing props
   to Duke made this the bridge's easiest mistake to make, and it cost three
   separate hangs.  The engine keeps its free slots on a status list of their own
