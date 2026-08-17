@@ -808,6 +808,19 @@ enum
     VB_DUKE_W_HITTECHWALL1 = 363,
     VB_DUKE_FANSPRITE = 407,
     VB_DUKE_FANSPRITEBROKE = 411,
+    VB_DUKE_FANSHADOW = 412,
+    VB_DUKE_FANSHADOWBROKE = 416,
+    // Duke's vent covers and grates.  A_DamageObject_Internal() breaks all of
+    // these and they share one sound; E1L1's rooftop vent is a PANNEL1.
+    VB_DUKE_BPANNEL1 = 341,
+    VB_DUKE_PANNEL1 = 342,
+    VB_DUKE_PANNEL2 = 343,
+    VB_DUKE_GRATE1 = 595,
+    VB_DUKE_BGRATE1 = 596,
+    VB_DUKE_CIRCLEPANNEL = 1113,
+    VB_DUKE_CIRCLEPANNELBROKE = 1114,
+    VB_DUKE_PANNEL3 = 4099,
+    VB_DUKE_BPANNEL3 = 4100,
     VB_DUKE_GLASS = 503,
     VB_DUKE_GLASS2 = 504,
     VB_DUKE_STAINGLASS1 = 510,
@@ -1969,6 +1982,11 @@ static int32_t SW_CrossplayIsDukeBreakableSprite(int16_t sourcePicnum)
     {
     case VB_DUKE_FANSPRITE:
     case VB_DUKE_WATERFOUNTAIN:
+    case VB_DUKE_GRATE1:
+    case VB_DUKE_PANNEL1:
+    case VB_DUKE_PANNEL2:
+    case VB_DUKE_PANNEL3:
+    case VB_DUKE_CIRCLEPANNEL:
     case VB_DUKE_FEMMAG1:
     case VB_DUKE_FEMMAG2:
     case VB_DUKE_CAMERA1:
@@ -3605,6 +3623,15 @@ static void SW_CrossplayPlayDukeWallBreakSound(int32_t wallNum, vec3_t const *hi
     PlaySound(soundNum, &x, &y, &z, v3df_dontpan|v3df_doppler);
 }
 
+// Duke funnels its machines and tech walls through G_BreakWall(), which plays
+// this pair.  Nothing Duke breaks uses SHORT_CIRCUIT -- that sound belongs to
+// the shrinker and to sparking fixtures -- so the bridge must not either.
+static void SW_CrossplayPlayDukeBrokenWallSound(int32_t wallNum, vec3_t const *hitPos)
+{
+    SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_VENT_BUST);
+    SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_GLASS_HEAVYBREAK);
+}
+
 static void SW_CrossplayClearDukeSpriteBehavior(int32_t spriteNum)
 {
     if ((unsigned)spriteNum >= MAXSPRITES)
@@ -4292,6 +4319,15 @@ static int16_t SW_CrossplayDukeBrokenSpriteTile(int16_t sourcePicnum)
         return VB_DUKE_FANSPRITEBROKE;
     case VB_DUKE_WATERFOUNTAIN:
         return VB_DUKE_WATERFOUNTAINBROKE;
+    case VB_DUKE_GRATE1:
+        return VB_DUKE_BGRATE1;
+    case VB_DUKE_PANNEL1:
+    case VB_DUKE_PANNEL2:
+        return VB_DUKE_BPANNEL1;
+    case VB_DUKE_PANNEL3:
+        return VB_DUKE_BPANNEL3;
+    case VB_DUKE_CIRCLEPANNEL:
+        return VB_DUKE_CIRCLEPANNELBROKE;
     case VB_DUKE_ATM:
         return VB_DUKE_ATMBROKE;
     case VB_DUKE_VENDMACHINE:
@@ -4332,12 +4368,23 @@ static int32_t SW_CrossplayDukeSpriteBreakSound(int16_t sourcePicnum)
     case VB_DUKE_BOTTLE18:
     case VB_DUKE_BOTTLE19:
         return DIGI_DUKE_GLASS_BREAKING;
+    // Duke breaks a machine through G_BreakWall(), which is glass, not sparks.
     case VB_DUKE_ATM:
     case VB_DUKE_VENDMACHINE:
     case VB_DUKE_COLAMACHINE:
+    // A_DamageObject_Internal() gives the fan GLASS_HEAVYBREAK.  It used to get
+    // SHORT_CIRCUIT here, which is why E1L1's rooftop vent fan broke with an
+    // electrical sound instead of Duke's.
     case VB_DUKE_FANSPRITE:
+        return DIGI_DUKE_GLASS_HEAVYBREAK;
+    // Duke's water fountain breaks silently; it only spawns its water.
     case VB_DUKE_WATERFOUNTAIN:
-        return DIGI_DUKE_SHORT_CIRCUIT;
+        return DIGI_NULL;
+    case VB_DUKE_GRATE1:
+    case VB_DUKE_PANNEL1:
+    case VB_DUKE_PANNEL2:
+    case VB_DUKE_PANNEL3:
+    case VB_DUKE_CIRCLEPANNEL:
     case VB_DUKE_CANWITHSOMETHING:
     case VB_DUKE_CANWITHSOMETHING2:
     case VB_DUKE_CANWITHSOMETHING3:
@@ -4357,7 +4404,21 @@ static void SW_CrossplayBreakDukeSprite(int32_t spriteNum, vec3_t const *hitPos)
     int16_t const sourcePicnum = behavior.sourcePicnum >= 0 ? behavior.sourcePicnum : artCrossplayOriginalMapSpritePicnum(spriteNum);
 
     SW_CrossplaySpawnDukeBreakDebris(spriteNum, sourcePicnum, hitPos);
-    SW_CrossplayPlayDukeSpriteSound(spriteNum, hitPos, SW_CrossplayDukeSpriteBreakSound(sourcePicnum));
+
+    int32_t const breakSound = SW_CrossplayDukeSpriteBreakSound(sourcePicnum);
+    if (Bgetenv("VB_CP_BREAK_DEBUG") != NULL)
+        LOG_F(INFO, "CPBREAK spr=%d tile=%d sound=%d", spriteNum, sourcePicnum, breakSound);
+
+    SW_CrossplayPlayDukeSpriteSound(spriteNum, hitPos, breakSound);
+
+    // A broken fan drops its shadow with it.
+    if (sourcePicnum == VB_DUKE_FANSPRITE)
+    {
+        int16_t const sectNum = sprite[spriteNum].sectnum;
+        if ((unsigned)sectNum < (unsigned)numsectors &&
+            artCrossplayOriginalMapSectorFloorPicnum(sectNum) == VB_DUKE_FANSHADOW)
+            sector[sectNum].floorpicnum = SW_CrossplayRemapDukeTileForRuntime(VB_DUKE_FANSHADOWBROKE);
+    }
 
     int16_t const brokenTile = SW_CrossplayDukeBrokenSpriteTile(sourcePicnum);
     if (brokenTile >= 0)
@@ -4497,7 +4558,8 @@ int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitP
         wall[wallNum].cstat = 0;
         if (wall[wallNum].nextwall >= 0)
             wall[wall[wallNum].nextwall].cstat = 0;
-        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_GLASS_HEAVYBREAK);
+        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_VENT_BUST);
+        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_GLASS_BREAKING);
         return 1;
     }
 
@@ -4506,7 +4568,7 @@ int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitP
     case VB_DUKE_COLAMACHINE:
     case VB_DUKE_VENDMACHINE:
         SW_CrossplaySetDukeWallPicnum(wallNum, originalPicnum + 2);
-        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_SHORT_CIRCUIT);
+        SW_CrossplayPlayDukeBrokenWallSound(wallNum, hitPos);
         return 1;
 
     case VB_DUKE_ATM:
@@ -4521,15 +4583,16 @@ int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitP
     if (SW_CrossplayIsDukeScreenBreakTile(originalPicnum))
     {
         SW_CrossplaySetDukeWallPicnum(wallNum, VB_DUKE_W_SCREENBREAK + (krand1() % 3));
-        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_GLASS_BREAKING);
+        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_GLASS_HEAVYBREAK);
         return 1;
     }
 
     int16_t brokenTile = SW_CrossplayDukeBrokenTechWallTile(originalPicnum);
     if (brokenTile >= 0)
     {
+        // Every tech wall reaches Duke through G_BreakWall().
         SW_CrossplaySetDukeWallPicnum(wallNum, brokenTile);
-        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_SHORT_CIRCUIT);
+        SW_CrossplayPlayDukeBrokenWallSound(wallNum, hitPos);
         return 1;
     }
 
@@ -4537,7 +4600,9 @@ int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitP
     if (brokenTile >= 0)
     {
         SW_CrossplaySetDukeWallPicnum(wallNum, brokenTile);
-        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_GLASS_BREAKING);
+        // Duke picks between the two glass sounds per shot.
+        SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos,
+                                           (krand1() & 1) ? DIGI_DUKE_GLASS_HEAVYBREAK : DIGI_DUKE_GLASS_BREAKING);
         return 1;
     }
 

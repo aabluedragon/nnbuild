@@ -512,6 +512,25 @@ Fixed since:
   carries the bridge's ACTOR|ALIVE behavior flags.  Found by the
   `no-old-layer-actors` invariant added with the respawn fix.
 
+- **Nothing Duke breaks sounds electrical.**  E1L1's rooftop vent fan broke with
+  a short-circuit crackle (`shorted.voc`).  Duke gives FANSPRITE
+  `GLASS_HEAVYBREAK` in `A_DamageObject_Internal()`; the bridge's own break
+  table had guessed `SHORT_CIRCUIT` for it, and for the water fountain and the
+  machines and tech walls as well.  Duke never uses that sound for breaking
+  anything -- it belongs to the shrinker and to sparking fixtures -- so every
+  one of those was re-derived from Duke's own code: the fan and the machines
+  break as glass, the water fountain breaks silently (it only spawns its
+  water), everything Duke routes through `G_BreakWall()` plays Duke's
+  `VENT_BUST` + `GLASS_HEAVYBREAK` pair, wall lights pick between the two glass
+  sounds per shot as Duke does, and a broken fan drops its floor shadow to
+  `FANSHADOWBROKE`.
+  Duke's vent covers came along with it: GRATE1, PANNEL1/2/3 and CIRCLEPANNEL
+  are breakable now (E1L1's rooftop vent cover is a PANNEL1, and was inert),
+  each with Duke's broken tile and `VENT_BUST`.  Note this also takes those
+  tiles off the bridge's generic tagged-sprite operator path, which is correct:
+  Duke breaks a vent panel, it does not operate its tag.
+  `VB_CP_BREAK_DEBUG=1` logs the tile and sound of every break.
+
 Verified across E1L1-E1L8 and E3L6, run per group: all 36 group-runs report
 `fail=0`.
 
@@ -617,6 +636,7 @@ reproductions passed while the user's own game failed.
 | `VB_CP_FIRE_RESPAWNS=1` | fire every captured map trigger, to exercise respawned actors |
 | `VB_CP_ADOPT_DEBUG=1` | log tiles adopted via CON actor code rather than enemy flags |
 | `VB_CP_TEST_SWITCH=1` | log switch activation and the resulting frame |
+| `VB_CP_BREAK_DEBUG=1` | log each broken Duke prop's tile and break sound |
 | `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
 | `VB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
 | `VB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |
