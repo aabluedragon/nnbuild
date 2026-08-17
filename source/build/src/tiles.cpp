@@ -684,6 +684,12 @@ struct artCrossplayForeignTileRemap
     int32_t game;
     int16_t sourceTile;
     int16_t destTile;
+    // The source game's palette index the art was recoloured through, or 0 for
+    // the tile's own colours.  Duke draws a lot of its art through an alternate
+    // palookup -- every assault trooper is pal 22 -- and the host cannot simply
+    // carry that index over, because the same number is a different palette
+    // there.  The recolour is baked into the generated tile instead.
+    int16_t sourcePal;
 };
 
 static artCrossplayForeignTileRemap g_crossplayForeignTileRemap[MAXTILES];
@@ -1408,6 +1414,76 @@ static uint8_t const *artCrossplayPaletteRemapForPath(char const *containerPath)
     return g_crossplayPaletteRemap;
 }
 
+// The source game's LOOKUP.DAT, which is where its alternate palettes live.
+static char g_crossplayLookupPath[BMAX_PATH];
+static int32_t g_crossplayLookupLoaded;
+static uint8_t g_crossplayLookupTable[256][256];
+static uint8_t g_crossplayLookupPresent[256];
+
+static void artCrossplayClearLookups(void)
+{
+    g_crossplayLookupPath[0] = 0;
+    g_crossplayLookupLoaded = 0;
+    Bmemset(g_crossplayLookupPresent, 0, sizeof(g_crossplayLookupPresent));
+}
+
+static int artCrossplayReadLookups(char const *containerPath, char **data, int32_t *size)
+{
+    if (artCrossplayReadContainerEntry(containerPath, "lookup.dat", data, size))
+        return 1;
+
+    return artCrossplayReadContainerEntry(containerPath, "LOOKUP.DAT", data, size);
+}
+
+// Build's LOOKUP.DAT: a count byte, then that many (palette number, 256-byte
+// remap) records.  Only the remaps matter here -- the trailing base palettes
+// are the runtime's business, not the art's.
+static int artCrossplayLoadForeignLookups(char const *containerPath)
+{
+    if (!containerPath || !containerPath[0])
+        return 0;
+
+    if (g_crossplayLookupLoaded && !Bstrcasecmp(g_crossplayLookupPath, containerPath))
+        return 1;
+
+    artCrossplayClearLookups();
+    Bstrncpyz(g_crossplayLookupPath, containerPath, sizeof(g_crossplayLookupPath));
+    g_crossplayLookupLoaded = 1;
+
+    char *lookupData = NULL;
+    int32_t lookupSize = 0;
+    if (!artCrossplayReadLookups(containerPath, &lookupData, &lookupSize) || lookupSize < 1)
+    {
+        DO_FREE_AND_NULL(lookupData);
+        return 0;
+    }
+
+    uint8_t const *const bytes = (uint8_t const *)lookupData;
+    int32_t const numLookups = bytes[0];
+    int32_t offset = 1;
+    int32_t loaded = 0;
+
+    for (int32_t i = 0; i < numLookups; ++i)
+    {
+        if (offset + 1 + 256 > lookupSize)
+            break;
+
+        uint8_t const palNum = bytes[offset++];
+        Bmemcpy(g_crossplayLookupTable[palNum], bytes + offset, 256);
+        g_crossplayLookupPresent[palNum] = 1;
+        offset += 256;
+        ++loaded;
+    }
+
+    Xfree(lookupData);
+
+    if (loaded > 0)
+        LOG_F(INFO, "Crossplay: loaded %d alternate palette(s) from %s for foreign art recolouring.", loaded,
+              containerPath);
+
+    return loaded > 0;
+}
+
 static int artCrossplayGeneratedTileAlreadyUsed(int32_t tile)
 {
     for (int32_t i = 0; i < g_crossplayGeneratedTileCount; ++i)
@@ -1694,9 +1770,23 @@ static int artCrossplayLoadForeignTile(char const *grpPath, int16_t sourceTile)
     return 0;
 }
 
-static int artCrossplayCopyForeignTileFromPath(char const *grpPath, int16_t sourceTile, int16_t destTile)
+static int artCrossplayCopyForeignTileFromPath(char const *grpPath, int16_t sourceTile, int16_t destTile,
+                                              int32_t sourcePal)
 {
     uint8_t const *paletteRemap = artCrossplayPaletteRemapForPath(grpPath);
+
+    // Recolour through the source game's own alternate palette first, then into
+    // the runtime's palette.  Without this the art arrives in its base colours,
+    // which for a Duke assault trooper is the unrecoloured blue.
+    uint8_t composedRemap[256];
+    if (sourcePal > 0 && artCrossplayLoadForeignLookups(grpPath) && g_crossplayLookupPresent[sourcePal & 255])
+    {
+        uint8_t const *const lookup = g_crossplayLookupTable[sourcePal & 255];
+        for (int32_t i = 0; i < 255; ++i)
+            composedRemap[i] = paletteRemap ? paletteRemap[lookup[i]] : lookup[i];
+        composedRemap[255] = 255;   // Build's masked-pixel index stays put
+        paletteRemap = composedRemap;
+    }
     int32_t preferred = sourceTile / 256;
     for (int32_t pass = 0; pass < ART_CROSSPLAY_MAX_BASE_ART_FILES + 1; ++pass)
     {
@@ -1716,15 +1806,19 @@ static int artCrossplayCopyForeignTileFromPath(char const *grpPath, int16_t sour
     return 0;
 }
 
-int16_t artCrossplayLoadForeignGameTile(int32_t game, int16_t sourceTile)
+int16_t artCrossplayLoadForeignGameTilePal(int32_t game, int16_t sourceTile, int32_t sourcePal)
 {
     artCrossplayEnsureLevelStateInitialized();
 
     if ((unsigned)sourceTile >= MAXUSERTILES || game < 0)
         return -1;
 
+    if ((unsigned)sourcePal > 255)
+        sourcePal = 0;
+
     for (int32_t i = 0; i < g_crossplayForeignTileRemapCount; ++i)
-        if (g_crossplayForeignTileRemap[i].game == game && g_crossplayForeignTileRemap[i].sourceTile == sourceTile)
+        if (g_crossplayForeignTileRemap[i].game == game && g_crossplayForeignTileRemap[i].sourceTile == sourceTile &&
+            g_crossplayForeignTileRemap[i].sourcePal == (int16_t)sourcePal)
             return g_crossplayForeignTileRemap[i].destTile;
 
     if (g_crossplayForeignTileRemapCount >= (int32_t)ARRAY_SIZE(g_crossplayForeignTileRemap) ||
@@ -1749,19 +1843,25 @@ int16_t artCrossplayLoadForeignGameTile(int32_t game, int16_t sourceTile)
                 continue;
 
             artCrossplayClearArtCache();
-            if (!artCrossplayCopyForeignTileFromPath(g_crossplayForeignData[i], sourceTile, destTile))
+            if (!artCrossplayCopyForeignTileFromPath(g_crossplayForeignData[i], sourceTile, destTile, sourcePal))
                 continue;
 
             artCrossplayClearArtCache();
 
             g_crossplayGeneratedTiles[g_crossplayGeneratedTileCount++] = destTile;
-            g_crossplayForeignTileRemap[g_crossplayForeignTileRemapCount++] = { game, sourceTile, destTile };
+            g_crossplayForeignTileRemap[g_crossplayForeignTileRemapCount++] = { game, sourceTile, destTile,
+                                                                               (int16_t)sourcePal };
             return destTile;
         }
     }
 
     artCrossplayClearArtCache();
     return -1;
+}
+
+int16_t artCrossplayLoadForeignGameTile(int32_t game, int16_t sourceTile)
+{
+    return artCrossplayLoadForeignGameTilePal(game, sourceTile, 0);
 }
 
 static void artCrossplayMarkTile(char *usedTiles, int32_t tile)

@@ -3626,6 +3626,29 @@ static int16_t SW_CrossplayRemapDukeTileForRuntime(int16_t sourceTile)
     return remappedTile;
 }
 
+// Same remap, but through the Duke palette Duke would have drawn the sprite
+// with.  Duke's spawn puts most of its enemies on an alternate palookup (every
+// assault trooper is pal 22), and the host cannot carry that index over because
+// the same number is a different palette there -- so the recolour is baked into
+// a separate generated tile per (tile, Duke pal).
+static int16_t SW_CrossplayRemapDukeTileForRuntimePal(int16_t sourceTile, int32_t dukePal)
+{
+    if (dukePal <= 0)
+        return SW_CrossplayRemapDukeTileForRuntime(sourceTile);
+
+    if ((unsigned)sourceTile >= MAXTILES)
+        return sourceTile;
+
+    int16_t const mapRemapped = artCrossplayRemapMapTile(sourceTile);
+    if (mapRemapped != sourceTile)
+        return mapRemapped;
+
+    int16_t const remapped = artCrossplayLoadForeignGameTilePal(
+        artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS), sourceTile, dukePal);
+
+    return remapped >= 0 ? remapped : SW_CrossplayRemapDukeTileForRuntime(sourceTile);
+}
+
 static void SW_CrossplaySetDukeWallPicnum(int32_t wallNum, int16_t sourceTile)
 {
     if ((unsigned)wallNum >= (unsigned)numwalls)
@@ -12245,12 +12268,14 @@ static void SW_CrossplayDukeAILeaveDukeSpace(void)
         // write one client's camera into shared simulation state -- a desync in
         // a netgame.  Duke resolves it at draw time on the tsprite copy, and so
         // does the bridge: see SW_CrossplayDukeMapSpriteDisplayTile().
-        sprite[spriteNum].picnum = SW_CrossplayRemapDukeTileForRuntime(g_swCrossplayDukeAIDukePicnum[spriteNum]);
-
         // Duke's spawn code assigns Duke palookup indices (a LIZTROOP gets pal 22),
-        // which select a different palette in the host; the remapped foreign art
-        // already carries Duke's own colors, so it draws at pal 0.
+        // and the same index means a different palette in the host, so it cannot
+        // be carried over.  The art is generated through Duke's own palette
+        // instead and drawn at pal 0 -- carrying Duke's index over unrecoloured
+        // is what made every trooper the blue of its base art.
         g_swCrossplayDukeAIDukePal[spriteNum] = sprite[spriteNum].pal;
+        sprite[spriteNum].picnum = SW_CrossplayRemapDukeTileForRuntimePal(g_swCrossplayDukeAIDukePicnum[spriteNum],
+                                                                         g_swCrossplayDukeAIDukePal[spriteNum]);
         sprite[spriteNum].pal = 0;
 
         SW_CrossplayDukeAIListInsert(spriteNum, STAT_NO_STATE);
@@ -12527,7 +12552,8 @@ int SW_CrossplayDukeMapSpriteDisplayTile(int spriteNum, int32_t camX, int32_t ca
     if (dukeDisplayTile < 0)
         dukeDisplayTile = g_swCrossplayDukeAIDukePicnum[spriteNum];
 
-    int16_t runtimeTile = SW_CrossplayRemapDukeTileForRuntime((int16_t)dukeDisplayTile);
+    int32_t const dukePal = g_swCrossplayDukeAIDukePal[spriteNum];
+    int16_t runtimeTile = SW_CrossplayRemapDukeTileForRuntimePal((int16_t)dukeDisplayTile, dukePal);
 
     // Duke steps back through frames whose art is missing.  That test has to be
     // made after the tile is in the runtime's numbering, not Duke's.
@@ -12544,7 +12570,7 @@ int SW_CrossplayDukeMapSpriteDisplayTile(int spriteNum, int32_t camX, int32_t ca
             break;
         }
 
-        runtimeTile = SW_CrossplayRemapDukeTileForRuntime((int16_t)dukeDisplayTile);
+        runtimeTile = SW_CrossplayRemapDukeTileForRuntimePal((int16_t)dukeDisplayTile, dukePal);
 
         if (guard == 15 && ((unsigned)runtimeTile >= MAXTILES || tilesiz[runtimeTile].x == 0))
             ++g_swCrossplayDukeAIFrameResolveFailures;
@@ -12651,8 +12677,9 @@ static void SW_CrossplayDukeAIAdoptSprite(int32_t spriteNum, int16_t dukePicnum)
     g_swCrossplayDukeAIDukeStat[spriteNum] = sprite[spriteNum].statnum;
     g_swCrossplayDukeAIDukePicnum[spriteNum] = sprite[spriteNum].picnum;
 
-    sprite[spriteNum].picnum = SW_CrossplayRemapDukeTileForRuntime(g_swCrossplayDukeAIDukePicnum[spriteNum]);
     g_swCrossplayDukeAIDukePal[spriteNum] = sprite[spriteNum].pal;
+    sprite[spriteNum].picnum = SW_CrossplayRemapDukeTileForRuntimePal(g_swCrossplayDukeAIDukePicnum[spriteNum],
+                                                                     g_swCrossplayDukeAIDukePal[spriteNum]);
     sprite[spriteNum].pal = 0;
     changespritestat((int16_t)spriteNum, STAT_NO_STATE);
 

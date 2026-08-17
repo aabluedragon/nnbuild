@@ -1279,6 +1279,9 @@ int32_t artCrossplayReadForeignDataEntry(char const *entryName, char **data, int
 int32_t artCrossplayReadForeignGameDataEntry(int32_t game, char const *entryName, char **data, int32_t *size, char *sourcePath, size_t sourcePathSize);
 int32_t artCrossplayHasForeignGameData(int32_t game);
 int16_t artCrossplayLoadForeignGameTile(int32_t game, int16_t sourceTile);
+// As above, but recoloured through the source game's own alternate palette, for
+// art the source game draws at a non-zero pal (Duke's assault troopers are 22).
+int16_t artCrossplayLoadForeignGameTilePal(int32_t game, int16_t sourceTile, int32_t sourcePal);
 void    artCrossplayResetLevel(void);
 void    artCrossplayCaptureMapSprites(void);
 int32_t artCrossplayIsOriginalMapSprite(int32_t spriteNum);

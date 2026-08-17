@@ -543,6 +543,29 @@ Fixed since:
   started solid must stop blocking once broken, or the player is walled out of
   whatever it was covering.
 
+- **Duke's enemies wear Duke's colours.**  Every assault trooper was the blue of
+  its raw art.  Duke's `A_Spawn()` puts most of its enemies on an alternate
+  palookup -- a pal-0 LIZTROOP is assigned `pal = 22` -- and the bridge could not
+  carry that index over, because palette 22 is a different palette in the host.
+  It zeroed the pal instead, which drew the art unrecoloured.  The recolour is
+  now baked into the generated art: `artCrossplayLoadForeignGameTilePal()` reads
+  the source game's own `LOOKUP.DAT` and composes its palette with the existing
+  runtime-palette match, so the tile arrives already wearing Duke's colours and
+  still draws at pal 0.  Generated tiles are keyed by (tile, source pal), so a
+  tile used at two Duke palettes costs two art slots.
+
+- **A solid prop stays solid until it is broken, and Duke decides which.**  The
+  map's own blocking bit is preserved, and `VB_DukeAI_MapSpriteSolidBits()` asks
+  Duke for the rest: its per-tile `A_Spawn()` cases plus its generic rules (a
+  wall-aligned switch tile is solid, a tagged aligned sprite becomes a shootable
+  faller, solid implies hittable).  The bridge used to guess this from a short
+  list, so the player walked through E1L1's rooftop vent, its grates and every
+  masked wall on the level.  `VB_CP_CSTAT_DUMP=1` dumps every map sprite's
+  post-setup cstat; the same dump runs in native Duke (`premap.cpp`) and
+  `A_Spawn(-1,i)` keeps the map's sprite index, so the two diff sprite for
+  sprite.  That diff is how this was found and is the tool for any future
+  "doesn't match Duke" report about sprite state.
+
 Verified across E1L1-E1L8 and E3L6, run per group: all 36 group-runs report
 `fail=0`.
 
