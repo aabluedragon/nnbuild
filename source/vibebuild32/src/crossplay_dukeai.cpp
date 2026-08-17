@@ -48,6 +48,9 @@ int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
 int VB_DukeAI_DrinkingSound(void);
 int VB_DukeAI_MonitorSound(void);
 int VB_DukeAI_WaterSound(void);
+int VB_DukeAI_UrinateSound(void);
+int VB_DukeAI_FlushSound(void);
+int VB_DukeAI_PissReliefSound(void);
 void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
                                     int impactAng, int ownerSprite);
 int VB_DukeAI_TakeEarthquake(void);
@@ -391,6 +394,28 @@ int VB_DukeAI_MonitorSound(void)
 // WATER_GURGLE is one of the fixed definitions that is not exposed as a runtime
 // symbol, so the id is used directly the way player.cpp does for the enemy
 // pain/dying sounds; the value mirrors soundefs.h.
+// The three sounds Duke's toilet uses: the relief on the way in, then the flush
+// and the "much better" a second later.  Fixed definitions rather than runtime
+// symbols, so the ids are used directly the way player.cpp does for the enemy
+// pain/dying sounds; the values mirror soundefs.h.
+int VB_DukeAI_UrinateSound(void)
+{
+    enum { S_DUKE_URINATE = 28 };
+    return S_DUKE_URINATE;
+}
+
+int VB_DukeAI_FlushSound(void)
+{
+    enum { S_FLUSH_TOILET = 79 };
+    return S_FLUSH_TOILET;
+}
+
+int VB_DukeAI_PissReliefSound(void)
+{
+    enum { S_DUKE_PISSRELIEF = 218 };
+    return S_DUKE_PISSRELIEF;
+}
+
 int VB_DukeAI_WaterSound(void)
 {
     enum { S_WATER_GURGLE = 220 };

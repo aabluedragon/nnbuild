@@ -1140,5 +1140,9 @@ DIGI_ENTRY("lsrbmbwn.voc",DIGI_DUKE_LASERTRIP_ARMING,771,     PRI_ENVIRONMENT, 0
 DIGI_ENTRY("bombexpl.voc",DIGI_DUKE_LASERTRIP_EXPLODE,772,    PRI_ENVIRONMENT,-512,    0, 0, DIST_NORMAL, VF_NORMAL)
 DIGI_ENTRY("ventbust.voc",DIGI_DUKE_VENT_BUST,773,            PRI_ENVIRONMENT,-32,    32, 0, DIST_NORMAL, VF_NORMAL)
 DIGI_ENTRY("squish.voc",  DIGI_DUKE_SQUISHED,774,             PRI_ENVIRONMENT,-128,    0, 0, DIST_NORMAL, VF_NORMAL)
+// Duke's toilet: the relief on the way in, then the "much better" a second later.
+// flush.voc is already above as DIGI_DUKE_MAP_FLUSH_TOILET.
+DIGI_ENTRY("pissing.voc", DIGI_DUKE_URINATE,775,               PRI_PLAYERVOICE, 0,      0, 0, DIST_NORMAL, VF_NORMAL)
+DIGI_ENTRY("ahmuch03.voc",DIGI_DUKE_PISSRELIEF,776,            PRI_PLAYERVOICE, 0,      0, 0, DIST_NORMAL, VF_NORMAL)
 
 #undef DIGI_ENTRY

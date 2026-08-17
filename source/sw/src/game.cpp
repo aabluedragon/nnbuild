@@ -831,6 +831,8 @@ enum
     VB_DUKE_FEMMAG1 = 568,
     VB_DUKE_FEMMAG2 = 577,
     VB_DUKE_CAMERA1 = 621,
+    VB_DUKE_TOILET = 569,
+    VB_DUKE_STALL = 571,
     VB_DUKE_MIRRORBROKE = 70,
     VB_DUKE_BROKEFIREHYDRENT = 950,
     VB_DUKE_TOILETWATER = 921,
@@ -1386,9 +1388,13 @@ extern "C" int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
 extern "C" int VB_DukeAI_DrinkingSound(void);
 extern "C" int VB_DukeAI_MonitorSound(void);
 extern "C" int VB_DukeAI_WaterSound(void);
+extern "C" int VB_DukeAI_UrinateSound(void);
+extern "C" int VB_DukeAI_FlushSound(void);
+extern "C" int VB_DukeAI_PissReliefSound(void);
 int SW_CrossplayDukeSoundPlayCount(int soundNum);
 int SW_CrossplayDukeHealEventCount(void);
 int SW_CrossplayDukeMirrorsBroken(void);
+int SW_CrossplayDukePissEventCount(void);
 extern "C" void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum));
 extern "C" void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
 extern "C" void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
@@ -3126,6 +3132,29 @@ struct sw_crossplay_duke_viewscreen_t
 static sw_crossplay_duke_viewscreen_t g_swCrossplayDukeViewscreens[VB_CROSSPLAY_MAX_DUKE_VIEWSCREENS];
 static int32_t g_swCrossplayDukeViewscreenCount;
 static int32_t g_swCrossplayDukeMirrorsBroken;
+
+// SW moves at 40 tics per second and Duke at 30, so running one Duke tic per SW
+// tic makes every Duke enemy move and animate a third too fast.  Step Duke's
+// world on its own clock instead.
+#define VB_CROSSPLAY_SW_TICS_PER_SEC 40
+
+// Duke's toilet countdown, in host tics: the flush and the "much better" a second
+// in, the weapon back up a second after that.
+#define VB_CROSSPLAY_DUKE_PISS_RELIEF_AT (VB_CROSSPLAY_SW_TICS_PER_SEC)
+#define VB_CROSSPLAY_DUKE_PISS_TICS (VB_CROSSPLAY_SW_TICS_PER_SEC * 2)
+#define VB_CROSSPLAY_DUKE_TICS_PER_SEC 30   // Duke's REALGAMETICSPERSEC
+
+// Duke's toilet.  Using one holsters the weapon, heals a tenth of full health and
+// starts a countdown: a second later the flush and the "much better", a second
+// after that the weapon comes back up.  Duke drives this from p->last_pissed_time
+// counting down once per player tic; the host owns the player, so it counts here.
+// Duke's tics run at 26 to the second in that path and SW's at 40, so the delays
+// are expressed in SW tics to keep the same timing.
+static int32_t g_swCrossplayDukePissTimer[MAX_SW_PLAYERS_REG];
+static int16_t g_swCrossplayDukePissSprite[MAX_SW_PLAYERS_REG];
+static int32_t g_swCrossplayDukePissEvents;
+
+int SW_CrossplayDukePissEventCount(void) { return g_swCrossplayDukePissEvents; }
 
 int SW_CrossplayDukeMirrorsBroken(void) { return g_swCrossplayDukeMirrorsBroken; }
 // The self-test drives the use key from outside SW's input, which is rebuilt
@@ -10976,6 +11005,7 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
 }
 
 static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum);
+static int SW_CrossplayDukeAICheckSoundPlaying(int soundNum, int spriteNum);
 
 // Duke props whose answer to the use key is their own, not a map tag.  Duke
 // reaches these through the picnum switch in P_CheckSectors() rather than
@@ -11174,17 +11204,117 @@ void SW_CrossplayTickDukeCameras(PLAYERp pp)
         SW_CrossplayClearDukeCameraView();
 }
 
+static int32_t SW_CrossplayPlayerNum(PLAYERp pp)
+{
+    if (pp == NULL)
+        return -1;
+
+    int32_t const pnum = (int32_t)(pp - Player);
+
+    return (unsigned)pnum < ARRAY_SIZE(g_swCrossplayDukePissTimer) ? pnum : -1;
+}
+
+// SW's full health, which is what Duke's "a tenth of max_player_health" has to
+// mean here -- the host owns the health bar, so its scale is the one to use.
+static int32_t SW_CrossplayDukePlayerMaxHealth(void)
+{
+    return 100;
+}
+
+// Runs the toilet countdown for a player.  Duke does this from its own player
+// tic; the host owns the player, so it happens here.
+void SW_CrossplayTickDukeToilet(PLAYERp pp)
+{
+    int32_t const pnum = SW_CrossplayPlayerNum(pp);
+    if (pnum < 0 || g_swCrossplayDukePissTimer[pnum] <= 0)
+        return;
+
+    --g_swCrossplayDukePissTimer[pnum];
+
+    if (g_swCrossplayDukePissTimer[pnum] == VB_CROSSPLAY_DUKE_PISS_RELIEF_AT)
+    {
+        int16_t const toilet = g_swCrossplayDukePissSprite[pnum];
+
+        if ((unsigned)toilet < MAXSPRITES && sprite[toilet].statnum != MAXSTATUS)
+            SW_CrossplayDukeAIPlaySound(VB_DukeAI_FlushSound(), toilet);
+        else
+            SW_CrossplayDukeAIPlaySound(VB_DukeAI_FlushSound(), pp->PlayerSprite);
+
+        SW_CrossplayDukeAIPlaySound(VB_DukeAI_PissReliefSound(), pp->PlayerSprite);
+    }
+
+    if (g_swCrossplayDukePissTimer[pnum] <= 0)
+    {
+        g_swCrossplayDukePissTimer[pnum] = 0;
+        g_swCrossplayDukePissSprite[pnum] = -1;
+        RESET(pp->Flags, PF_WEAPON_DOWN);
+    }
+}
+
 static int32_t SW_CrossplayUseDukeProp(PLAYERp pp, int32_t spriteNum)
 {
     if (pp == NULL || (unsigned)spriteNum >= MAXSPRITES)
         return 0;
 
     sw_crossplay_duke_sprite_behavior_t &behavior = g_swCrossplayDukeSpriteBehaviors[spriteNum];
-    if (!(behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE))
+
+    // A sprite the bridge never classified still has the map's own record of what
+    // tile it was, and Duke answers the use key from the tile rather than from any
+    // state of ours.  Reading only the behavior record left every unclassified
+    // prop inert -- Duke's toilets and urinals among them, which carry no
+    // behavior record at all.
+    int16_t const sourcePicnum = ((behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE) && behavior.sourcePicnum > 0)
+                                 ? behavior.sourcePicnum
+                                 : artCrossplayOriginalMapSpritePicnum(spriteNum);
+
+    if (sourcePicnum <= 0)
         return 0;
 
-    switch (behavior.sourcePicnum)
+    switch (sourcePicnum)
     {
+    // Duke's toilet, which is a small sequence rather than a single action:
+    // the weapon goes down, Duke relieves himself and gets a tenth of his health
+    // back, and a second later the flush and the "much better" play and the
+    // weapon comes back up.  Pressing it again before that finishes just flushes.
+    case VB_DUKE_TOILET:
+    case VB_DUKE_STALL:
+    {
+        int32_t const pnum = SW_CrossplayPlayerNum(pp);
+        if (pnum < 0)
+            return 0;
+
+        if (g_swCrossplayDukePissTimer[pnum] > 0)
+        {
+            // Duke will not stack the flush on top of itself.
+            if (!SW_CrossplayDukeAICheckSoundPlaying(VB_DukeAI_FlushSound(), spriteNum))
+                SW_CrossplayDukeAIPlaySound(VB_DukeAI_FlushSound(), spriteNum);
+
+            return 1;
+        }
+
+        SW_CrossplayDukeAIPlaySound(VB_DukeAI_UrinateSound(), pp->PlayerSprite);
+
+        g_swCrossplayDukePissTimer[pnum] = VB_CROSSPLAY_DUKE_PISS_TICS;
+        g_swCrossplayDukePissSprite[pnum] = (int16_t)spriteNum;
+        ++g_swCrossplayDukePissEvents;
+
+        SET(pp->Flags, PF_WEAPON_DOWN);
+
+        // Duke's own arithmetic: a tenth of full health, and topped up to full
+        // rather than overshooting when that tenth would take him past it.
+        USERp const u = User[pp->PlayerSprite];
+        if (u != NULL)
+        {
+            int32_t const maxHealth = SW_CrossplayDukePlayerMaxHealth();
+            if (u->Health <= maxHealth - (maxHealth / 10))
+                PlayerUpdateHealth(pp, (short)(maxHealth / 10));
+            else if (u->Health < maxHealth)
+                PlayerUpdateHealth(pp, (short)(maxHealth - u->Health));
+        }
+
+        return 1;
+    }
+
     // Duke heals one point per press while the fountain runs, and the fountain
     // shows its water for as long as the player keeps drinking.
     case VB_DUKE_WATERFOUNTAIN:
@@ -11286,6 +11416,7 @@ enum
     VB_CROSSPLAY_SELFTEST_TRAIN_OBSERVE,
     VB_CROSSPLAY_SELFTEST_CAMERAS,
     VB_CROSSPLAY_SELFTEST_MIRRORS,
+    VB_CROSSPLAY_SELFTEST_TOILET,
     VB_CROSSPLAY_SELFTEST_CRACKS,
     VB_CROSSPLAY_SELFTEST_HYDRANT,
     VB_CROSSPLAY_SELFTEST_BREAKABLES,
@@ -11341,6 +11472,11 @@ static int32_t g_swCrossplaySelfTestActorsEngaged;
 static int32_t g_swCrossplaySelfTestActorsAttacked;
 static int32_t g_swCrossplaySelfTestActorsAnimated;
 static int32_t g_swCrossplaySelfTestActorsSounded;
+static int32_t g_swCrossplaySelfTestToiletStage;
+static int32_t g_swCrossplaySelfTestToiletSprite = -1;
+static int32_t g_swCrossplaySelfTestToiletHealthBase;
+static int32_t g_swCrossplaySelfTestToiletUrinateBase;
+static int32_t g_swCrossplaySelfTestToiletReliefBase;
 static int32_t g_swCrossplaySelfTestMirrorStage;
 static int32_t g_swCrossplaySelfTestMirrorWall = -1;
 static int32_t g_swCrossplaySelfTestMirrorBrokeBase;
@@ -11989,6 +12125,134 @@ static int32_t g_swCrossplaySelfTestSolidBreakableCount;
 static int32_t g_swCrossplaySelfTestBreakablesTested;
 static int32_t g_swCrossplaySelfTestBreakablesHit;
 
+// Duke's toilet.  Using one is a short sequence, not a single action: the weapon
+// goes down, Duke relieves himself and gets a tenth of his health back, and a
+// second later the flush and the "much better" play and the weapon comes back up.
+static void SW_CrossplaySelfTestRunToilet(PLAYERp const pp)
+{
+    if (pp == NULL || User[pp->PlayerSprite] == NULL)
+    {
+        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestToiletSprite < 0)
+    {
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestToiletSprite < 0; ++spriteNum)
+        {
+            if (sprite[spriteNum].statnum == MAXSTATUS)
+                continue;
+
+            int16_t const src = artCrossplayOriginalMapSpritePicnum(spriteNum);
+            if (src == VB_DUKE_TOILET || src == VB_DUKE_STALL)
+                g_swCrossplaySelfTestToiletSprite = spriteNum;
+        }
+
+        if (g_swCrossplaySelfTestToiletSprite < 0)
+        {
+            SW_CrossplaySelfTestReport(1, "toilet-present", "no Duke toilet in this map, skipped");
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            return;
+        }
+    }
+
+    int32_t const toilet = g_swCrossplaySelfTestToiletSprite;
+    char detail[192];
+
+    if (g_swCrossplaySelfTestToiletStage == 0)
+    {
+        USERp const u = User[pp->PlayerSprite];
+        u->Health = 50;
+        RESET(pp->Flags, PF_WEAPON_DOWN);
+
+        g_swCrossplaySelfTestToiletHealthBase = u->Health;
+        g_swCrossplaySelfTestToiletUrinateBase = SW_CrossplayDukeSoundPlayCount(VB_DukeAI_UrinateSound());
+        g_swCrossplaySelfTestToiletReliefBase = SW_CrossplayDukeSoundPlayCount(VB_DukeAI_PissReliefSound());
+
+        // Stand where the use key can actually reach it and press for real, so
+        // what is checked is the whole path -- neartag() included -- rather than
+        // the prop handler in isolation.
+        SPRITEp const tsp = &sprite[toilet];
+        int32_t placed = 0;
+
+        for (int32_t radius = 384; radius <= 1024 && !placed; radius += 128)
+        {
+            for (int32_t step = 0; step < 16 && !placed; ++step)
+            {
+                int32_t const probeAng = NORM_ANGLE(step * 128);
+                int32_t const tryX = tsp->x + ((sintable[(probeAng + 512) & 2047] * radius) >> 14);
+                int32_t const tryY = tsp->y + ((sintable[probeAng & 2047] * radius) >> 14);
+                int16_t trySect = tsp->sectnum;
+
+                updatesector(tryX, tryY, &trySect);
+                if ((unsigned)trySect >= (unsigned)numsectors)
+                    continue;
+
+                if (!SW_CrossplaySelfTestWarpPlayerZ(pp, tryX, tryY, INT32_MIN, trySect))
+                    continue;
+
+                pp->q16ang = fix16_from_int(NORM_ANGLE(getangle(tsp->x - tryX, tsp->y - tryY)));
+
+                static const int32_t probeZ[] = { 0, Z(16), Z(32) };
+                for (unsigned zi = 0; zi < ARRAY_SIZE(probeZ) && !placed; ++zi)
+                {
+                    int16_t nearSector = -1, nearWall = -1, nearSprite = -1;
+                    int32_t nearDist = 0;
+
+                    neartag(pp->posx, pp->posy, pp->posz + probeZ[zi], pp->cursectnum, fix16_to_int(pp->q16ang),
+                            &nearSector, &nearWall, &nearSprite, &nearDist, 1280, NTAG_SEARCH_LO, NULL);
+
+                    if (nearSprite == toilet && nearDist < 1792)
+                        placed = 1;
+                }
+            }
+        }
+
+        SW_CrossplaySelfTestReport(placed != 0, "toilet-reachable",
+                                   placed ? "toilet is in reach of the use key"
+                                          : "no floor spot sees the toilet through neartag()");
+
+        int32_t const used = placed ? SW_CrossplayOperateDukeMapEffectors(pp) : 0;
+
+        Bsnprintf(detail, sizeof(detail), "spr=%d used=%d health %d -> %d", toilet, used,
+                  g_swCrossplaySelfTestToiletHealthBase, u->Health);
+        SW_CrossplaySelfTestReport(used != 0, "toilet-use-answers", detail);
+
+        // A tenth of full health, Duke's own arithmetic.
+        SW_CrossplaySelfTestReport(u->Health > g_swCrossplaySelfTestToiletHealthBase, "toilet-heals", detail);
+
+        Bsnprintf(detail, sizeof(detail), "spr=%d urinate=%d weaponDown=%d", toilet,
+                  SW_CrossplayDukeSoundPlayCount(VB_DukeAI_UrinateSound()) - g_swCrossplaySelfTestToiletUrinateBase,
+                  TEST(pp->Flags, PF_WEAPON_DOWN) ? 1 : 0);
+        SW_CrossplaySelfTestReport(SW_CrossplayDukeSoundPlayCount(VB_DukeAI_UrinateSound()) >
+                                       g_swCrossplaySelfTestToiletUrinateBase,
+                                   "toilet-urinate-sound", detail);
+        SW_CrossplaySelfTestReport(TEST(pp->Flags, PF_WEAPON_DOWN) != 0, "toilet-holsters", detail);
+
+        g_swCrossplaySelfTestToiletStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TOILET);
+        return;
+    }
+
+    // The countdown runs from the host's own tic, so just let it.
+    if (g_swCrossplaySelfTestPhaseTic < VB_CROSSPLAY_DUKE_PISS_TICS + 20)
+        return;
+
+    Bsnprintf(detail, sizeof(detail), "spr=%d relief=%d weaponDown=%d", toilet,
+              SW_CrossplayDukeSoundPlayCount(VB_DukeAI_PissReliefSound()) - g_swCrossplaySelfTestToiletReliefBase,
+              TEST(pp->Flags, PF_WEAPON_DOWN) ? 1 : 0);
+
+    // "Ahhh, much better", a second after the weapon went down.
+    SW_CrossplaySelfTestReport(SW_CrossplayDukeSoundPlayCount(VB_DukeAI_PissReliefSound()) >
+                                   g_swCrossplaySelfTestToiletReliefBase,
+                               "toilet-relief-sound", detail);
+
+    // ...and the weapon comes back up on its own.
+    SW_CrossplaySelfTestReport(!TEST(pp->Flags, PF_WEAPON_DOWN), "toilet-weapon-returns", detail);
+
+    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+}
+
 // Duke's mirrors.  A rocket must explode on one rather than slide along it, and
 // an explosive -- and only an explosive -- must break it, which is Duke's own
 // rule in A_DamageWall_Internal().
@@ -11999,7 +12263,7 @@ static void SW_CrossplaySelfTestRunMirrors(PLAYERp const pp)
     if (pp == NULL || dukeMirrorTile <= 0)
     {
         SW_CrossplaySelfTestReport(1, "mirrors-present", "no Duke mirrors in this map, skipped");
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TOILET);
         return;
     }
 
@@ -12012,7 +12276,7 @@ static void SW_CrossplaySelfTestRunMirrors(PLAYERp const pp)
         if (g_swCrossplaySelfTestMirrorWall < 0)
         {
             SW_CrossplaySelfTestReport(1, "mirrors-present", "no Duke mirrors in this map, skipped");
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TOILET);
             return;
         }
     }
@@ -12074,7 +12338,7 @@ static void SW_CrossplaySelfTestRunMirrors(PLAYERp const pp)
               SW_CrossplayDukeMirrorsBroken() - before);
     SW_CrossplaySelfTestReport(SW_CrossplayDukeMirrorsBroken() == before, "mirror-breaks-once", detail);
 
-    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TOILET);
 }
 
 // Duke's security cameras.  Pressing use on a monitor should put the player
@@ -13453,6 +13717,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_TRAIN_OBSERVE: SW_CrossplaySelfTestRunTrainObserve(pp); break;
     case VB_CROSSPLAY_SELFTEST_CAMERAS: SW_CrossplaySelfTestRunCameras(pp); break;
     case VB_CROSSPLAY_SELFTEST_MIRRORS: SW_CrossplaySelfTestRunMirrors(pp); break;
+    case VB_CROSSPLAY_SELFTEST_TOILET: SW_CrossplaySelfTestRunToilet(pp); break;
     case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
     case VB_CROSSPLAY_SELFTEST_HYDRANT: SW_CrossplaySelfTestRunHydrant(pp); break;
     case VB_CROSSPLAY_SELFTEST_BREAKABLES: SW_CrossplaySelfTestRunBreakables(pp); break;
@@ -13573,11 +13838,6 @@ int SW_CrossplayDukeHealEventCount(void) { return g_swCrossplayDukeAIPlayerHealE
 
 #define VB_CROSSPLAY_MAX_DUKE_SOUNDS 1024
 
-// SW moves at 40 tics per second and Duke at 30, so running one Duke tic per SW
-// tic makes every Duke enemy move and animate a third too fast.  Step Duke's
-// world on its own clock instead.
-#define VB_CROSSPLAY_SW_TICS_PER_SEC 40
-#define VB_CROSSPLAY_DUKE_TICS_PER_SEC 30   // Duke's REALGAMETICSPERSEC
 
 static int32_t g_swCrossplayDukeAITicAccumulator;
 

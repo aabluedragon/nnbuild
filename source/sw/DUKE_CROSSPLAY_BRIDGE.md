@@ -739,6 +739,34 @@ Fixed since:
   `VB_CP_WATCH_TILES=<t,t,...>` reports every change to the sprites of a given
   Duke tile, which is how both halves of this were pinned down.
 
+- **Duke's toilet.**  Pressing use on one did nothing.  In Duke it is a short
+  sequence rather than a single action, and it is worth writing out because none
+  of it lives in CON: `P_CheckSectors()` plays `DUKE_URINATE`, holsters the
+  weapon, and gives back a tenth of full health (topping up to full rather than
+  overshooting); a second later the player tic plays `FLUSH_TOILET` and
+  `DUKE_PISSRELIEF` -- the "ahh, much better" -- and a second after that the
+  weapon comes back up.  Pressing it again before that finishes only flushes.
+
+  The bridge does not run `P_CheckSectors()`, so all of it is implemented against
+  the host: `PF_WEAPON_DOWN` is SW's own holster flag, the health is the host's,
+  and the countdown runs from the host's player tic.  Duke's countdown ticks at
+  26 to the second and SW's at 40, so the delays are expressed in SW tics to keep
+  the same timing rather than the same numbers.
+
+  Two things had to be fixed to get there.  `SW_CrossplayUseDukeProp()` read the
+  tile out of the bridge's sprite behavior table, and Duke's toilets carry no
+  behavior record at all -- the same thing that hides the security monitors -- so
+  every unclassified prop was silently inert; it falls back to the map's own
+  record of the tile now, which is what the damage path already did.  And SW had
+  no `digi` entry for `pissing.voc` or `ahmuch03.voc`, so those two sounds mapped
+  to nothing and simply did not play; `flush.voc` was already there.
+
+  `VB_CP_SELFTEST=world` covers it as `toilet-reachable`, `toilet-use-answers`,
+  `toilet-heals`, `toilet-urinate-sound`, `toilet-holsters`, `toilet-relief-sound`
+  and `toilet-weapon-returns`.  The test presses through `neartag()` and
+  `SW_CrossplayOperateDukeMapEffectors()` rather than calling the prop handler
+  directly, so it covers the path the use key actually takes.
+
 - **A rocket must explode on a mirror, not slide along it.**  Fired at a Duke
   mirror the rocket skated across the glass and kept going.  Two faults, one of
   them general.

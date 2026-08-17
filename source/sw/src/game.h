@@ -2312,6 +2312,7 @@ int SW_CrossplayDukeCameraView(int32_t *x, int32_t *y, int32_t *z, fix16_t *q16a
 void SW_CrossplayDrawDukeViewscreens(PLAYERp pp); // game.c
 int SW_CrossplayDukeViewscreenTile(int spriteNum); // game.c
 void SW_CrossplayTickDukeCameras(PLAYERp pp); // game.c
+void SW_CrossplayTickDukeToilet(PLAYERp pp); // game.c
 int SW_CrossplayDukeMapBridgeActive(void); // game.c
 int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitPos); // game.c
 int SW_CrossplayDukeSpriteExplosionDamage(int spriteNum); // game.c

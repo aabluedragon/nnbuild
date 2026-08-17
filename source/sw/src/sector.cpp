@@ -2585,6 +2585,7 @@ PlayerOperateEnv(PLAYERp pp)
     if (artCrossplayMapArtPrepared())
     {
         SW_CrossplayTickDukeCameras(pp);
+        SW_CrossplayTickDukeToilet(pp);
 
         if (TEST_SYNC_KEY(pp, SK_OPERATE))
         {
