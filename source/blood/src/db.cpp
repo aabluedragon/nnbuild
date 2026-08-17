@@ -1656,6 +1656,12 @@ unsigned int dbReadMapCRC(const char *pPath)
 #endif
     if (memcmp(header.signature, "BLM\x1a", 4))
     {
+        gSysRes.Unlock(pNode);
+        if (artCrossplayForeignDataCount() > 0)
+        {
+            LOG_F(INFO, "Crossplay: %s is not a Blood BLM map; deferring to plain Build map fallback.", pPath);
+            return 0;
+        }
         ThrowError("Map file corrupted");
     }
     if ((header.version & 0xff00) == 0x600)
@@ -1667,6 +1673,12 @@ unsigned int dbReadMapCRC(const char *pPath)
     }
     else
     {
+        gSysRes.Unlock(pNode);
+        if (artCrossplayForeignDataCount() > 0)
+        {
+            LOG_F(INFO, "Crossplay: %s has a non-Blood map version; deferring to plain Build map fallback.", pPath);
+            return 0;
+        }
         ThrowError("Map file is wrong version");
     }
     unsigned int nCRC = *(unsigned int*)(pData+nSize-4);
@@ -1742,7 +1754,8 @@ int dbLoadMap(const char *pPath, int *pX, int *pY, int *pZ, short *pAngle, short
 #endif
     if (memcmp(header.signature, "BLM\x1a", 4))
     {
-        LOG_F(ERROR, "Map file corrupted");
+        if (artCrossplayForeignDataCount() == 0)
+            LOG_F(ERROR, "Map file corrupted");
         gSysRes.Unlock(pNode);
         return -1;
     }
@@ -1770,7 +1783,8 @@ int dbLoadMap(const char *pPath, int *pX, int *pY, int *pZ, short *pAngle, short
     } else if ((header.version & 0xff00) == 0x600) {
         // no-op
     } else {
-        LOG_F(ERROR, "Map file is wrong version");
+        if (artCrossplayForeignDataCount() == 0)
+            LOG_F(ERROR, "Map file is wrong version");
         gSysRes.Unlock(pNode);
         return -1;
     }

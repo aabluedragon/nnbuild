@@ -10815,7 +10815,7 @@ static FORCE_INLINE int32_t have_maptext(void)
     return (mapversion >= 10);
 }
 
-static int enginePrepareLoadBoard(buildvfs_kfd fil, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
+static void engineResetLoadBoardState(void)
 {
     initspritelists();
 #ifdef USE_MIMALLOC
@@ -10836,7 +10836,11 @@ static int enginePrepareLoadBoard(buildvfs_kfd fil, vec3_t *dapos, int16_t *daan
 #ifdef USE_OPENGL
     Polymost_prepare_loadboard();
 #endif
+}
 
+static int enginePrepareLoadBoard(buildvfs_kfd fil, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
+{
+    engineResetLoadBoardState();
     if (!have_maptext())
     {
         if (kread_and_test(fil, &dapos->x, 4)) return -1;
@@ -11105,6 +11109,344 @@ int32_t (*loadboard_maptext)(buildvfs_kfd fil, vec3_t *dapos, int16_t *daang, in
 
 #include "md4.h"
 
+enum
+{
+    BLOOD_BLM_HEADER_NEW = 0x7474614D,  // 'ttaM'
+    BLOOD_BLM_HEADER_OLD = 0x4D617474,  // 'Matt'
+    BLOOD_BLM_XSECTOR_SIZE = 60,
+    BLOOD_BLM_XSPRITE_SIZE = 56,
+    BLOOD_BLM_XWALL_SIZE = 24,
+};
+
+static void engineBloodCrypt(char *ptr, int32_t length, int32_t key)
+{
+    for (int32_t i = 0; i < length; ++i)
+        ptr[i] ^= key++;
+}
+
+static int32_t engineBloodReadI32(char const *buffer)
+{
+    return B_LITTLE32(B_UNBUF32(buffer));
+}
+
+static int16_t engineBloodReadI16(char const *buffer)
+{
+    return B_LITTLE16(B_UNBUF16(buffer));
+}
+
+static int32_t engineLoadBloodBLMBoard(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
+{
+    const char myflags = flags&(~3);
+
+    buildvfs_kfd fil = kopen4load(filename, flags&3);
+    char *buffer = NULL;
+    int32_t fileSize = -1;
+
+    if (fil != buildvfs_kfd_invalid)
+    {
+        fileSize = kfilelength(fil);
+        if (fileSize < 0)
+        {
+            kclose(fil);
+            return -2;
+        }
+
+        buffer = (char *)Xmalloc(fileSize ? fileSize : 1);
+        int const ok = kread(fil, buffer, fileSize) == fileSize;
+        kclose(fil);
+
+        if (!ok)
+        {
+            Xfree(buffer);
+            return -2;
+        }
+    }
+    else if (!artCrossplayReadForeignDataEntry(filename, &buffer, &fileSize, NULL, 0))
+    {
+        return -1;
+    }
+
+    if (fileSize < 6 + 37 + 4)
+    {
+        Xfree(buffer);
+        return -2;
+    }
+
+    if (Bmemcmp(buffer, "BLM\x1a", 4))
+    {
+        Xfree(buffer);
+        return -2;
+    }
+
+    int32_t const bloodVersion = engineBloodReadI16(buffer + 4);
+    int const encrypted = (bloodVersion & 0xff00) == 0x700;
+    if (!encrypted && (bloodVersion & 0xff00) != 0x600)
+    {
+        Xfree(buffer);
+        return -2;
+    }
+
+    char *cursor = buffer + 6;
+    char mapHeader[37];
+    Bmemcpy(mapHeader, cursor, sizeof(mapHeader));
+    cursor += sizeof(mapHeader);
+
+    int32_t songId = engineBloodReadI32(mapHeader + 22);
+    if (songId != 0 && songId != BLOOD_BLM_HEADER_NEW && songId != BLOOD_BLM_HEADER_OLD)
+    {
+        engineBloodCrypt(mapHeader, sizeof(mapHeader), BLOOD_BLM_HEADER_NEW);
+        songId = engineBloodReadI32(mapHeader + 22);
+    }
+
+    if ((encrypted && songId != 0 && songId != BLOOD_BLM_HEADER_NEW && songId != BLOOD_BLM_HEADER_OLD)
+        || (!encrypted && songId != 0))
+    {
+        Xfree(buffer);
+        return -2;
+    }
+
+    dapos->x = engineBloodReadI32(mapHeader + 0);
+    dapos->y = engineBloodReadI32(mapHeader + 4);
+    dapos->z = engineBloodReadI32(mapHeader + 8);
+    *daang = engineBloodReadI16(mapHeader + 12) & 2047;
+    *dacursectnum = engineBloodReadI16(mapHeader + 14);
+
+    int32_t const pskyBits = engineBloodReadI16(mapHeader + 16);
+    g_visibility = engineBloodReadI32(mapHeader + 18);
+    parallaxtype = mapHeader[26];
+    int32_t const mapRevision = engineBloodReadI32(mapHeader + 27);
+    int16_t const bloodNumSectors = engineBloodReadI16(mapHeader + 31);
+    int16_t const bloodNumWalls = engineBloodReadI16(mapHeader + 33);
+    int16_t const bloodNumSprites = engineBloodReadI16(mapHeader + 35);
+
+    if ((unsigned)bloodNumSectors >= MYMAXSECTORS() + 1
+        || (unsigned)bloodNumWalls >= MYMAXWALLS() + 1
+        || (unsigned)bloodNumSprites >= MYMAXSPRITES() + 1
+        || (unsigned)pskyBits > 8
+        || cursor > buffer + fileSize - 4)
+    {
+        Xfree(buffer);
+        return -3;
+    }
+
+    int32_t xSpriteSize = BLOOD_BLM_XSPRITE_SIZE;
+    int32_t xWallSize = BLOOD_BLM_XWALL_SIZE;
+    int32_t xSectorSize = BLOOD_BLM_XSECTOR_SIZE;
+
+    if (encrypted)
+    {
+        if (cursor + 128 > buffer + fileSize - 4)
+        {
+            Xfree(buffer);
+            return -3;
+        }
+
+        char mapHeader2[128];
+        Bmemcpy(mapHeader2, cursor, sizeof(mapHeader2));
+        engineBloodCrypt(mapHeader2, sizeof(mapHeader2), bloodNumWalls);
+        cursor += sizeof(mapHeader2);
+
+        xSpriteSize = engineBloodReadI32(mapHeader2 + 64);
+        xWallSize = engineBloodReadI32(mapHeader2 + 68);
+        xSectorSize = engineBloodReadI32(mapHeader2 + 72);
+
+        if (xSpriteSize < 0 || xSpriteSize > BLOOD_BLM_XSPRITE_SIZE
+            || xWallSize < 0 || xWallSize > BLOOD_BLM_XWALL_SIZE
+            || xSectorSize < 0 || xSectorSize > BLOOD_BLM_XSECTOR_SIZE)
+        {
+            Xfree(buffer);
+            return -3;
+        }
+    }
+
+    psky_t *pSky = tileSetupSky(0);
+    pSky->horizfrac = 65536;
+    pSky->lognumtiles = pskyBits;
+
+    int32_t const skyCount = 1 << pskyBits;
+    if (cursor + skyCount * (int32_t)sizeof(int16_t) > buffer + fileSize - 4)
+    {
+        Xfree(buffer);
+        return -3;
+    }
+
+    int16_t skyOffsets[256];
+    Bmemcpy(skyOffsets, cursor, skyCount * sizeof(skyOffsets[0]));
+    if (encrypted)
+        engineBloodCrypt((char *)skyOffsets, skyCount * (int32_t)sizeof(skyOffsets[0]), skyCount * 2);
+
+    for (int32_t i = 0; i < min(skyCount, (int32_t)MAXPSKYTILES); ++i)
+        pSky->tileofs[i] = B_LITTLE16(skyOffsets[i]);
+    cursor += skyCount * (int32_t)sizeof(int16_t);
+
+    engineResetLoadBoardState();
+
+    mapversion = 7;
+    numsectors = bloodNumSectors;
+    numwalls = bloodNumWalls;
+
+    for (int32_t i = 0; i < numsectors; ++i)
+    {
+        if (cursor + (int32_t)sizeof(sectortypev7) > buffer + fileSize - 4)
+            goto corrupt_blood_map;
+
+        sectortypev7 diskSector;
+        Bmemcpy(&diskSector, cursor, sizeof(diskSector));
+        if (encrypted)
+            engineBloodCrypt((char *)&diskSector, sizeof(diskSector), mapRevision * (int32_t)sizeof(sectortype));
+        cursor += sizeof(diskSector);
+
+#ifdef NEW_MAP_FORMAT
+        Bmemmove(&sector[i], &diskSector, sizeof(sectortypevx));
+        inplace_vx_from_v7_sector(&sector[i]);
+#else
+        Bmemmove(&sector[i], &diskSector, sizeof(sectortype));
+#endif
+        sector[i].wallptr       = B_LITTLE16(sector[i].wallptr);
+        sector[i].wallnum       = B_LITTLE16(sector[i].wallnum);
+        sector[i].ceilingz      = B_LITTLE32(sector[i].ceilingz);
+        sector[i].floorz        = B_LITTLE32(sector[i].floorz);
+        sector[i].ceilingstat   = B_LITTLE16(sector[i].ceilingstat);
+        sector[i].floorstat     = B_LITTLE16(sector[i].floorstat);
+        sector[i].ceilingpicnum = B_LITTLE16(sector[i].ceilingpicnum);
+        sector[i].ceilingheinum = B_LITTLE16(sector[i].ceilingheinum);
+        sector[i].floorpicnum   = B_LITTLE16(sector[i].floorpicnum);
+        sector[i].floorheinum   = B_LITTLE16(sector[i].floorheinum);
+        sector[i].lotag         = B_LITTLE16(sector[i].lotag);
+        sector[i].hitag         = B_LITTLE16(sector[i].hitag);
+        sector[i].extra         = B_LITTLE16(sector[i].extra);
+#ifdef NEW_MAP_FORMAT
+        inplace_vx_tweak_sector(&sector[i], 0);
+#endif
+        if (sector[i].extra > 0)
+        {
+            if (cursor + xSectorSize > buffer + fileSize - 4)
+                goto corrupt_blood_map;
+            cursor += xSectorSize;
+        }
+        sector[i].extra = -1;
+        sector[i].lotag = 0;
+        sector[i].hitag = 0;
+        sector[i].fogpal = 0;
+    }
+
+    for (int32_t i = 0; i < numwalls; ++i)
+    {
+        if (cursor + (int32_t)sizeof(walltypev7) > buffer + fileSize - 4)
+            goto corrupt_blood_map;
+
+        walltypev7 diskWall;
+        Bmemcpy(&diskWall, cursor, sizeof(diskWall));
+        if (encrypted)
+            engineBloodCrypt((char *)&diskWall, sizeof(diskWall), (mapRevision * (int32_t)sizeof(sectortype)) | BLOOD_BLM_HEADER_NEW);
+        cursor += sizeof(diskWall);
+
+#ifdef NEW_MAP_FORMAT
+        Bmemmove(&wall[i], &diskWall, sizeof(walltypevx));
+        inplace_vx_from_v7_wall(&wall[i]);
+#else
+        Bmemmove(&wall[i], &diskWall, sizeof(walltype));
+#endif
+        wall[i].x          = B_LITTLE32(wall[i].x);
+        wall[i].y          = B_LITTLE32(wall[i].y);
+        wall[i].point2     = B_LITTLE16(wall[i].point2);
+        wall[i].nextwall   = B_LITTLE16(wall[i].nextwall);
+        wall[i].nextsector = B_LITTLE16(wall[i].nextsector);
+        wall[i].cstat      = B_LITTLE16(wall[i].cstat);
+        wall[i].picnum     = B_LITTLE16(wall[i].picnum);
+        wall[i].overpicnum = B_LITTLE16(wall[i].overpicnum);
+        wall[i].lotag      = B_LITTLE16(wall[i].lotag);
+        wall[i].hitag      = B_LITTLE16(wall[i].hitag);
+        wall[i].extra      = B_LITTLE16(wall[i].extra);
+#ifdef NEW_MAP_FORMAT
+        inplace_vx_tweak_wall(&wall[i], 0);
+#endif
+        if (wall[i].extra > 0)
+        {
+            if (cursor + xWallSize > buffer + fileSize - 4)
+                goto corrupt_blood_map;
+            cursor += xWallSize;
+        }
+        wall[i].extra = -1;
+        wall[i].lotag = 0;
+        wall[i].hitag = 0;
+    }
+
+    for (int32_t i = 0; i < bloodNumSprites; ++i)
+    {
+        if (cursor + (int32_t)sizeof(spritetype) > buffer + fileSize - 4)
+            goto corrupt_blood_map;
+
+        Bmemcpy(&sprite[i], cursor, sizeof(spritetype));
+        if (encrypted)
+            engineBloodCrypt((char *)&sprite[i], sizeof(spritetype), (mapRevision * (int32_t)sizeof(spritetype)) | BLOOD_BLM_HEADER_NEW);
+        cursor += sizeof(spritetype);
+
+        sprite[i].x       = B_LITTLE32(sprite[i].x);
+        sprite[i].y       = B_LITTLE32(sprite[i].y);
+        sprite[i].z       = B_LITTLE32(sprite[i].z);
+        sprite[i].cstat   = B_LITTLE16(sprite[i].cstat);
+        sprite[i].picnum  = B_LITTLE16(sprite[i].picnum);
+        sprite[i].sectnum = B_LITTLE16(sprite[i].sectnum);
+        sprite[i].statnum = B_LITTLE16(sprite[i].statnum);
+        sprite[i].ang     = B_LITTLE16(sprite[i].ang);
+        sprite[i].owner   = B_LITTLE16(sprite[i].owner);
+        sprite[i].xvel    = B_LITTLE16(sprite[i].xvel);
+        sprite[i].yvel    = B_LITTLE16(sprite[i].yvel);
+        sprite[i].zvel    = B_LITTLE16(sprite[i].zvel);
+        sprite[i].lotag   = B_LITTLE16(sprite[i].lotag);
+        sprite[i].hitag   = B_LITTLE16(sprite[i].hitag);
+        sprite[i].extra   = B_LITTLE16(sprite[i].extra);
+
+        if (sprite[i].extra > 0)
+        {
+            if (cursor + xSpriteSize > buffer + fileSize - 4)
+                goto corrupt_blood_map;
+            cursor += xSpriteSize;
+        }
+
+        sprite[i].statnum = 0;
+        sprite[i].owner = -1;
+        sprite[i].lotag = 0;
+        sprite[i].hitag = 0;
+        sprite[i].extra = -1;
+        check_sprite(i);
+    }
+
+    {
+        uint32_t const expectedCRC = B_LITTLE32(B_UNBUF32(buffer + fileSize - 4));
+        if (Bcrc32(buffer, fileSize - 4, 0) != expectedCRC)
+        {
+            LOG_F(ERROR, "Blood map \"%s\" does not match CRC.", filename);
+            Xfree(buffer);
+            return -3;
+        }
+    }
+
+    md4once((uint8_t *)buffer, fileSize, g_loadedMapHack.md4);
+    Xfree(buffer);
+
+    g_loadedMapVersion = mapversion;
+    if ((myflags&8)==0)
+    {
+        char fn[BMAX_PATH];
+        Bstrcpy(fn, filename);
+        append_ext_UNSAFE(fn, ".cfg");
+        OSD_Exec(fn);
+        system_getcvars();
+        artSetupMapArt(filename);
+    }
+
+    LOG_F(INFO, "Crossplay: loaded Blood BLM map %s in visual compatibility mode.", filename);
+    return engineFinishLoadBoard(dapos, dacursectnum, bloodNumSprites, myflags);
+
+corrupt_blood_map:
+    Xfree(buffer);
+    numsectors = 0;
+    numwalls = 0;
+    return -3;
+}
+
 // flags: 1, 2: former parameter "fromwhere"
 //           4: don't call polymer_loadboard
 //           8: don't autoexec <mapname>.cfg
@@ -11113,10 +11455,8 @@ int32_t (*loadboard_maptext)(buildvfs_kfd fil, vec3_t *dapos, int16_t *daang, in
 //          -2: invalid version
 //          -3: invalid number of sectors, walls or sprites
 //       <= -4: map-text error
-int32_t engineLoadBoard(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
+int32_t engineLoadBoardNative(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
 {
-    if (loadboard_replace)  // Blood parses its own map format
-        return loadboard_replace(filename, flags, dapos, daang, dacursectnum);
     int32_t i;
     int16_t numsprites;
     const char myflags = flags&(~3);
@@ -11125,12 +11465,28 @@ int32_t engineLoadBoard(const char *filename, char flags, vec3_t *dapos, int16_t
 
     buildvfs_kfd fil;
     if ((fil = kopen4load(filename,flags)) == buildvfs_kfd_invalid)
-        { mapversion = 7; return -1; }
+    {
+        if (artCrossplayForeignDataCount() > 0)
+        {
+            int32_t const status = engineLoadBloodBLMBoard(filename, flags|myflags, dapos, daang, dacursectnum);
+            if (status != -1)
+                return status;
+        }
+
+        mapversion = 7;
+        return -1;
+    }
 
     if (kread(fil, &mapversion, 4) != 4)
     {
         kclose(fil);
         return -2;
+    }
+
+    if (!Bmemcmp(&mapversion, "BLM\x1a", 4))
+    {
+        kclose(fil);
+        return engineLoadBloodBLMBoard(filename, flags|myflags, dapos, daang, dacursectnum);
     }
 
     {
@@ -11353,6 +11709,63 @@ skip_reading_mapbin:
     // initprintf("Loaded map \"%s\" (md4sum: %08x%08x%08x%08x)\n", filename, B_BIG32(*((int32_t*)&md4out[0])), B_BIG32(*((int32_t*)&md4out[4])), B_BIG32(*((int32_t*)&md4out[8])), B_BIG32(*((int32_t*)&md4out[12])));
 
     return engineFinishLoadBoard(dapos, dacursectnum, numsprites, myflags);
+}
+
+static int32_t engineLoadBoardCrossplayForeign(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
+{
+    int32_t const levelsGame = artCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS);
+    if (levelsGame < 0 || levelsGame == artCrossplayRuntimeGame())
+        return -1;
+
+    char *mapData = NULL;
+    int32_t mapSize = 0;
+    char sourcePath[BMAX_PATH];
+    if (!artCrossplayReadForeignDataEntry(filename, &mapData, &mapSize, sourcePath, sizeof(sourcePath)))
+        return -1;
+
+    if (mapSize <= 0)
+    {
+        DO_FREE_AND_NULL(mapData);
+        return -2;
+    }
+
+    static uint32_t tempSerial;
+    char tempPath[BMAX_PATH];
+    Bsnprintf(tempPath, sizeof(tempPath), "__vibebuild32_crossplay_%u_%u.map",
+              (unsigned)Btime(), (unsigned)tempSerial++);
+
+    FILE *fp = fopen(tempPath, "wb");
+    if (!fp)
+    {
+        Xfree(mapData);
+        return -2;
+    }
+
+    int const wrote = fwrite(mapData, 1, (size_t)mapSize, fp) == (size_t)mapSize;
+    fclose(fp);
+
+    Xfree(mapData);
+
+    if (!wrote)
+    {
+        unlink(tempPath);
+        return -2;
+    }
+
+    LOG_F(INFO, "Crossplay: loading foreign level %s from %s.", filename ? filename : "", sourcePath);
+    int32_t const status = engineLoadBoardNative(tempPath, flags, dapos, daang, dacursectnum);
+    unlink(tempPath);
+    return status;
+}
+
+int32_t engineLoadBoard(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum)
+{
+    if (loadboard_replace)  // Blood parses its own map format
+        return loadboard_replace(filename, flags, dapos, daang, dacursectnum);
+    if (artCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) >= 0 &&
+        artCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) != artCrossplayRuntimeGame())
+        return engineLoadBoardCrossplayForeign(filename, flags, dapos, daang, dacursectnum);
+    return engineLoadBoardNative(filename, flags, dapos, daang, dacursectnum);
 }
 
 

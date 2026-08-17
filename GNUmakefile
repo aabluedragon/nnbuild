@@ -763,6 +763,7 @@ vibebuild32_game_objs := \
     cmdline.cpp \
     config.cpp \
     common.cpp \
+    crossplay_dukeai.cpp \
     discord.cpp \
     dnames.cpp \
     dukebot.cpp \

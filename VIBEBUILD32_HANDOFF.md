@@ -202,17 +202,26 @@ The intended behavior is: when the SW runtime plays a Duke-family level, the
 Duke level should behave like a Duke level while the SW player/weapons remain
 playable.
 
-Current status from the last recorded smoke tests:
+Duke enemies now run Duke's own CON/actor code inside the SW session rather
+than an approximation of it; see the bridge doc for the architecture. The
+bridge has an automated self-test:
 
-- `make -j8 vibebuild32` passed.
-- SW runtime + Duke E1L1 startup smoke passed long enough to initialize the
-  bridge and run.
-- SW runtime + Duke E3L6/Rabid Transit currently crashes with `SIGSEGV` shortly
-  after bridge capture. This is the first issue a new agent should reproduce and
-  debug before claiming the bridge is fixed.
+```sh
+VB_CP_SELFTEST=1 ./vibebuild32 -gm sw -g "/path/Sw.grp" -gm.lvls duke \
+    -g /path/duke3d.grp -map E1L1.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
+```
 
-Do not mark the crossplay goal complete until these are verified in-game or via
-reliable automation:
+Current status:
+
+- `make -j8 vibebuild32` passes.
+- E1L1 through E1L8 and E3L6 all report `fail=0`, run per phase group
+  (`VB_CP_SELFTEST=actors|world|destruct|tripmines`); 36 group-runs, 0 failures.
+- The E3L6 startup `SIGSEGV` no longer reproduces, and leaving a Duke level no
+  longer crashes.
+- Duke enemy sounds play: Duke's `A_PlaySound()` is routed to the host, which
+  owns the audio device.
+
+Remaining items to verify in-game or via automation:
 
 - Duke E1L1 pipe/shaft teleporter works.
 - Duke E1L1 spinning/rotating doors work.

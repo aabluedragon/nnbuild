@@ -59,6 +59,12 @@ enum
 // 9 = Ion Fury (Duke-family runtime).
 // Read by the dispatchers.
 int g_activeGame = GS_GAME_DUKE;
+static int g_crossplayRequestedDomainGames[ART_CROSSPLAY_DOMAIN_COUNT] =
+{
+    ART_CROSSPLAY_GAME_UNKNOWN,
+    ART_CROSSPLAY_GAME_UNKNOWN,
+    ART_CROSSPLAY_GAME_UNKNOWN,
+};
 
 // --- each game's real entry + the callbacks both games define (renamed) -------
 extern int Duke_app_main(int32_t argc, char const * const * argv);
@@ -138,6 +144,17 @@ static gs_gameSpec_t const gs_gameSpecs[GS_GAME_COUNT] =
 static char const *gs_gameName(int game)
 {
     return (unsigned)game < GS_GAME_COUNT ? gs_gameSpecs[game].name : "Duke Nukem 3D";
+}
+
+static char const *gs_crossplayDomainName(int domain)
+{
+    switch (domain)
+    {
+        case ART_CROSSPLAY_DOMAIN_LEVELS: return "levels";
+        case ART_CROSSPLAY_DOMAIN_ITEMS: return "items";
+        case ART_CROSSPLAY_DOMAIN_WEAPONS: return "weapons";
+        default: return "unknown";
+    }
 }
 
 static int gs_usesDukeRuntime(int game)
@@ -289,6 +306,35 @@ static char const *gs_expandHomePath(char const *path, char *buffer, int bufferS
     return path;
 }
 
+static char const *gs_absolutePath(char const *path, char *buffer, int bufferSize)
+{
+    char expanded[BMAX_PATH];
+    char const *const dataPath = gs_expandHomePath(path, expanded, sizeof(expanded));
+    if (!dataPath || !dataPath[0])
+    {
+        buffer[0] = 0;
+        return buffer;
+    }
+
+#ifdef _WIN32
+    if (dataPath[0] == '/' || dataPath[0] == '\\' || (isalpha((unsigned char)dataPath[0]) && dataPath[1] == ':'))
+#else
+    if (dataPath[0] == '/')
+#endif
+    {
+        Bstrncpyz(buffer, dataPath, bufferSize);
+        return buffer;
+    }
+
+    char cwd[BMAX_PATH];
+    if (Bgetcwd(cwd, sizeof(cwd)))
+        Bsnprintf(buffer, bufferSize, "%s/%s", cwd, dataPath);
+    else
+        Bstrncpyz(buffer, dataPath, bufferSize);
+
+    return buffer;
+}
+
 static int gs_splitPathDirectoryAndBase(char const *path, char **directory, char const **base)
 {
     if (directory) *directory = NULL;
@@ -411,6 +457,8 @@ static int gs_gameOption(char const *arg, char const **inlineValue)
     if (!Bstrncasecmp(arg, "--gamegrp", 9) || !Bstrncasecmp(arg, "-gamegrp", 8))
         return 0;
     if (!Bstrncasecmp(arg, "--game-dir", 10) || !Bstrncasecmp(arg, "-game_dir", 9))
+        return 0;
+    if (!Bstrncasecmp(arg, "--game.", 7) || !Bstrncasecmp(arg, "-gm.", 4))
         return 0;
     return gs_valueOptionWithAttached(arg, "--game", "-gm", "-game", inlineValue);
 }
@@ -597,6 +645,74 @@ static int gs_resolutionOption(char const *arg, char const **inlineValue)
 static int gs_monsterOption(char const *arg, char const **inlineValue)
 {
     return gs_valueOptionWithAttached(arg, "--monsters", "-mnst", NULL, inlineValue);
+}
+
+static int gs_crossplayDomainOption(char const *arg, int *domain, char const **inlineValue)
+{
+    if (gs_valueOptionWithAttached(arg, "--game.levels", "-gm.lvls", NULL, inlineValue))
+    {
+        if (domain) *domain = ART_CROSSPLAY_DOMAIN_LEVELS;
+        return 1;
+    }
+    if (gs_valueOptionWithAttached(arg, "--game.items", "-gm.its", NULL, inlineValue))
+    {
+        if (domain) *domain = ART_CROSSPLAY_DOMAIN_ITEMS;
+        return 1;
+    }
+    if (gs_valueOptionWithAttached(arg, "--game.weapons", "-gm.wpns", NULL, inlineValue))
+    {
+        if (domain) *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return 1;
+    }
+    return 0;
+}
+
+static char const *gs_takeDomainOptionValue(int *index, int argc, char const * const *argv, char const *inlineValue)
+{
+    if (inlineValue && inlineValue[0] == '=')
+        inlineValue = gs_skipValueWhitespace(inlineValue + 1);
+    if (inlineValue && inlineValue[0])
+        return inlineValue;
+
+    if (*index + 1 >= argc)
+        return NULL;
+
+    char const *value = argv[++(*index)];
+    if (!Bstrcmp(value, "="))
+    {
+        if (*index + 1 >= argc)
+            return NULL;
+        value = argv[++(*index)];
+    }
+    else if (value[0] == '=')
+        value = gs_skipValueWhitespace(value + 1);
+
+    return value;
+}
+
+static void gs_parseCrossplayDomainArgs(int argc, char const * const *argv)
+{
+    for (int32_t domain = 0; domain < ART_CROSSPLAY_DOMAIN_COUNT; ++domain)
+        g_crossplayRequestedDomainGames[domain] = ART_CROSSPLAY_GAME_UNKNOWN;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        char const *inlineValue = NULL;
+        int domain = -1;
+        if (!gs_crossplayDomainOption(argv[i], &domain, &inlineValue))
+            continue;
+
+        char const *value = gs_takeDomainOptionValue(&i, argc, argv, inlineValue);
+        int const game = gs_gameFromName(value);
+        if (game < 0)
+        {
+            fprintf(stderr, "Invalid --game.%s value '%s'. Use duke, worldtour, ionfury, sw, blood, rr, nam, napalm, ww2gi, or exhumed.\n",
+                    gs_crossplayDomainName(domain), value ? value : "");
+            continue;
+        }
+
+        g_crossplayRequestedDomainGames[domain] = game;
+    }
 }
 
 static int gs_parseResolution(char const *value, int *width, int *height)
@@ -1068,6 +1184,159 @@ static int gs_inferGameFromDataPath(char const *path)
     return -1;
 }
 
+static void gs_trackForeignDataPath(char const *path)
+{
+    if (!path || !path[0])
+        return;
+
+    char absolute[BMAX_PATH];
+    char const *dataPath = gs_absolutePath(path, absolute, sizeof(absolute));
+
+    int32_t size = 0;
+    uint32_t crc = 0;
+    int game = -1;
+    if (gs_fileSignature(dataPath, &size, &crc))
+        game = gs_inferGameFromSignature(size, crc);
+    if (game < 0 && (gs_isBloodRffFile(dataPath) || gs_isBloodIniFile(dataPath)))
+        game = GS_GAME_BLOOD;
+    if (game < 0)
+        game = gs_inferGameFromBasename(dataPath);
+    if (game < 0)
+        game = gs_inferGameFromDirectory(dataPath);
+
+    if (game >= 0 && game != g_activeGame && artCrossplayAddForeignGameData(dataPath, game))
+        LOG_F(INFO, "Crossplay: treating %s as foreign game data (%s).", dataPath, gs_gameName(game));
+
+    if (game == GS_GAME_BLOOD && game != g_activeGame && gs_hasPathSeparator(dataPath))
+    {
+        char *directory = NULL;
+        if (gs_splitPathDirectoryAndBase(dataPath, &directory, NULL))
+        {
+            if (gs_inferGameFromDirectory(directory) == GS_GAME_BLOOD && artCrossplayAddForeignGameData(directory, GS_GAME_BLOOD))
+                LOG_F(INFO, "Crossplay: treating %s as foreign game data (%s art directory).", directory, gs_gameName(game));
+            Xfree(directory);
+        }
+    }
+}
+
+static int gs_dataFileOption(char const *arg, char const **inlineValue);
+static int gs_gameDirOption(char const *arg, char const **inlineValue);
+static int gs_searchPathOption(char const *arg, char const **inlineValue);
+
+static int gs_captureExplicitGameDataPath(char const *path, int targetGame)
+{
+    if (!path || !path[0] || targetGame < 0)
+        return 0;
+
+    char expanded[BMAX_PATH];
+    char const *dataPath = gs_expandHomePath(path, expanded, sizeof(expanded));
+
+    int32_t size = 0;
+    uint32_t crc = 0;
+    if (gs_fileSignature(dataPath, &size, &crc))
+    {
+        int game = gs_inferGameFromSignature(size, crc);
+
+        if (targetGame == GS_GAME_WORLDTOUR && game == GS_GAME_DUKE && size == 44356548 && crc == 0x982AFE4Au)
+            game = gs_inferGameFromContainingDirectory(dataPath, GS_GAME_WORLDTOUR);
+
+        if (game == targetGame)
+        {
+            if (gs_hasPathSeparator(dataPath))
+                gs_inferGameFromContainingDirectory(dataPath, targetGame);
+            if (gs_needsMainGameGrpInjection(targetGame))
+                gs_setMainGameGrpFile(dataPath);
+            return 1;
+        }
+
+        return 0;
+    }
+
+    int game = -1;
+    if (targetGame == GS_GAME_BLOOD && (gs_isBloodRffFile(dataPath) || gs_isBloodIniFile(dataPath)))
+        game = GS_GAME_BLOOD;
+    else
+        game = gs_inferGameFromBasename(dataPath);
+
+    if (game == targetGame)
+    {
+        if (gs_needsMainGameGrpInjection(targetGame))
+            gs_setMainGameGrpFile(dataPath);
+        gs_inferGameFromContainingDirectory(dataPath, targetGame);
+        return 1;
+    }
+
+    game = gs_inferGameFromDirectory(dataPath);
+    if (game == targetGame)
+    {
+        if (targetGame == GS_GAME_WORLDTOUR)
+            gs_setWorldTourDataDir(dataPath);
+        else
+            gs_setInferredDataDir(dataPath);
+        if (gs_needsMainGameGrpInjection(targetGame) && targetGame != GS_GAME_WORLDTOUR)
+            gs_setMainGameGrpFile(gs_defaultMainGameGrp(targetGame));
+        return 1;
+    }
+
+    if (gs_hasPathSeparator(dataPath))
+    {
+        game = gs_inferGameFromContainingDirectory(dataPath, targetGame);
+        if (game == targetGame)
+        {
+            if (gs_needsMainGameGrpInjection(targetGame) && targetGame != GS_GAME_WORLDTOUR)
+                gs_setMainGameGrpFile(gs_defaultMainGameGrp(targetGame));
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void gs_captureExplicitGameArgs(int argc, char const * const *argv, int targetGame)
+{
+    if (targetGame < 0)
+        return;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        char const *inlineValue = NULL;
+        char const *value = NULL;
+        int crossplayDomain = -1;
+
+        if (gs_crossplayDomainOption(argv[i], &crossplayDomain, &inlineValue))
+        {
+            (void)gs_takeDomainOptionValue(&i, argc, argv, inlineValue);
+            continue;
+        }
+
+        if (gs_dataFileOption(argv[i], &inlineValue))
+        {
+            value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            gs_captureExplicitGameDataPath(value, targetGame);
+            continue;
+        }
+
+        if (gs_gameDirOption(argv[i], &inlineValue) || gs_searchPathOption(argv[i], &inlineValue))
+        {
+            value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            int const game = gs_inferGameFromDirectory(value);
+            if (game == targetGame)
+            {
+                if (targetGame == GS_GAME_WORLDTOUR)
+                    gs_setWorldTourDataDir(value);
+                else
+                    gs_setInferredDataDir(value);
+                if (gs_needsMainGameGrpInjection(targetGame) && targetGame != GS_GAME_WORLDTOUR)
+                    gs_setMainGameGrpFile(gs_defaultMainGameGrp(targetGame));
+            }
+            continue;
+        }
+
+        if (argv[i][0] != '-')
+            gs_captureExplicitGameDataPath(argv[i], targetGame);
+    }
+}
+
 static int gs_gameGrpOption(char const *arg, char const **inlineValue)
 {
     return gs_valueOptionWithAttached(arg, "--gamegrp", "-gamegrp", NULL, inlineValue);
@@ -1118,6 +1387,13 @@ static int gs_inferGameFromArgs(int argc, char const * const *argv, char *reason
     {
         char const *inlineValue = NULL;
         char const *value = NULL;
+        int crossplayDomain = -1;
+
+        if (gs_crossplayDomainOption(argv[i], &crossplayDomain, &inlineValue))
+        {
+            (void)gs_takeDomainOptionValue(&i, argc, argv, inlineValue);
+            continue;
+        }
 
         if (gs_dataFileOption(argv[i], &inlineValue))
         {
@@ -1222,6 +1498,90 @@ static int gs_availableCount(int const gameAvail[GS_GAME_COUNT])
     return count;
 }
 
+static int gs_effectiveCrossplayDomainGame(int domain)
+{
+    if ((unsigned)domain >= ART_CROSSPLAY_DOMAIN_COUNT)
+        return g_activeGame;
+
+    return g_crossplayRequestedDomainGames[domain] >= 0 ? g_crossplayRequestedDomainGames[domain] : g_activeGame;
+}
+
+static int gs_configuredCrossplayDomainGame(int domain)
+{
+    if ((unsigned)domain >= ART_CROSSPLAY_DOMAIN_COUNT)
+        return ART_CROSSPLAY_GAME_UNKNOWN;
+
+    return g_crossplayRequestedDomainGames[domain];
+}
+
+static int gs_foreignCrossplayDataGame(char const *path)
+{
+    if (!path || !path[0])
+        return -1;
+
+    char expanded[BMAX_PATH];
+    char const *dataPath = gs_expandHomePath(path, expanded, sizeof(expanded));
+
+    int32_t size = 0;
+    uint32_t crc = 0;
+    int game = -1;
+
+    if (gs_fileSignature(dataPath, &size, &crc))
+        game = gs_inferGameFromSignature(size, crc);
+    if (game < 0 && (gs_isBloodRffFile(dataPath) || gs_isBloodIniFile(dataPath)))
+        game = GS_GAME_BLOOD;
+    if (game < 0)
+        game = gs_inferGameFromBasename(dataPath);
+    if (game < 0)
+        game = gs_inferGameFromDirectory(dataPath);
+
+    return (game >= 0 && game != g_activeGame) ? game : -1;
+}
+
+static void gs_trackAvailableCrossplayDomainData(int game, char gameDirs[GS_GAME_COUNT][BMAX_PATH],
+                                                 char gameMainGrpFiles[GS_GAME_COUNT][BMAX_PATH])
+{
+    if (game < 0 || game >= GS_GAME_COUNT || game == g_activeGame)
+        return;
+
+    if (gameDirs[game][0] && gameMainGrpFiles[game][0])
+    {
+        char path[BMAX_PATH * 2];
+        gs_joinPath(path, sizeof(path), gameDirs[game], gameMainGrpFiles[game]);
+        gs_trackForeignDataPath(path);
+        return;
+    }
+
+    if (gameDirs[game][0])
+        gs_trackForeignDataPath(gameDirs[game]);
+}
+
+static void gs_applyCrossplayDomains(char gameDirs[GS_GAME_COUNT][BMAX_PATH],
+                                     char gameMainGrpFiles[GS_GAME_COUNT][BMAX_PATH])
+{
+    int const levelsGame = gs_configuredCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS);
+    int const itemsGame = gs_configuredCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_ITEMS);
+    int const weaponsGame = gs_configuredCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_WEAPONS);
+    int const effectiveLevelsGame = gs_effectiveCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS);
+    int const effectiveItemsGame = gs_effectiveCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_ITEMS);
+    int const effectiveWeaponsGame = gs_effectiveCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_WEAPONS);
+
+    artCrossplaySetGameDomains(g_activeGame, levelsGame, itemsGame, weaponsGame);
+
+    if (levelsGame >= 0 || itemsGame >= 0 || weaponsGame >= 0)
+    {
+        LOG_F(INFO, "Crossplay: runtime=%s, levels=%s, items=%s, weapons=%s.",
+              gs_gameName(g_activeGame), gs_gameName(effectiveLevelsGame), gs_gameName(effectiveItemsGame), gs_gameName(effectiveWeaponsGame));
+    }
+
+    if (levelsGame >= 0)
+        gs_trackAvailableCrossplayDomainData(levelsGame, gameDirs, gameMainGrpFiles);
+    if (itemsGame >= 0)
+        gs_trackAvailableCrossplayDomainData(itemsGame, gameDirs, gameMainGrpFiles);
+    if (weaponsGame >= 0)
+        gs_trackAvailableCrossplayDomainData(weaponsGame, gameDirs, gameMainGrpFiles);
+}
+
 static void gs_choose(int argc, char const * const * argv)
 {
     const char *want = NULL;
@@ -1254,7 +1614,7 @@ static void gs_choose(int argc, char const * const * argv)
     if (want)
     {
         sel = gs_gameFromName(want);
-        (void)gs_inferGameFromArgs(argc, argv, NULL, 0);
+        gs_captureExplicitGameArgs(argc, argv, sel);
     }
     else
     {
@@ -1283,6 +1643,8 @@ static void gs_choose(int argc, char const * const * argv)
         g_gameType = gs_dukeRuntimeGameFlags(sel);
     if (gs_needsMainGameGrpInjection(sel) && !gs_mainGameGrpFile[0] && gameMainGrpFiles[sel][0])
         gs_setMainGameGrpFile(gameMainGrpFiles[sel]);
+
+    gs_applyCrossplayDomains(gameDirs, gameMainGrpFiles);
 
     const char *const name = gs_gameName(sel);
     const char *dir = gs_inferredDataDir[0] ? gs_inferredDataDir : gameDirs[sel];
@@ -1356,6 +1718,14 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
             netInlineValue = inlineValue;
             break;
         }
+        inlineValue = NULL;
+        int crossplayDomain = -1;
+        if (gs_crossplayDomainOption(argv[i], &crossplayDomain, &inlineValue))
+        {
+            (void)gs_takeDomainOptionValue(&i, argc, argv, inlineValue);
+            continue;
+        }
+        inlineValue = NULL;
         if (gs_gameOption(argv[i], &inlineValue))
         {
             (void)gs_takeOptionValue(&i, argc, argv, inlineValue);  // skip flag + its separate value
@@ -1431,6 +1801,14 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
         if (gs_gameDirOption(argv[i], &inlineValue))
         {
             char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            gs_trackForeignDataPath(value);
+            int const foreignGame = gs_foreignCrossplayDataGame(value);
+            if (foreignGame >= 0)
+            {
+                LOG_F(INFO, "Crossplay: not mounting %s as runtime game data; using it only as %s foreign data.",
+                      value ? value : "", gs_gameName(foreignGame));
+                continue;
+            }
             gs_emitOptionValue(out, &n, "-game_dir", value);
             continue;
         }
@@ -1438,6 +1816,14 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
         if (gs_searchPathOption(argv[i], &inlineValue))
         {
             char const *value = gs_takeOptionValue(&i, argc, argv, inlineValue);
+            gs_trackForeignDataPath(value);
+            int const foreignGame = gs_foreignCrossplayDataGame(value);
+            if (foreignGame >= 0)
+            {
+                LOG_F(INFO, "Crossplay: not mounting %s as runtime search path; using it only as %s foreign data.",
+                      value ? value : "", gs_gameName(foreignGame));
+                continue;
+            }
             gs_emitOptionValue(out, &n, "-j", value);
             continue;
         }
@@ -1475,6 +1861,19 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
             if (g_activeGame == GS_GAME_BLOOD && value && gs_extEquals(value, ".ini"))
             {
                 gs_emitIniOption(out, &n, value);
+                continue;
+            }
+
+            gs_trackForeignDataPath(value);
+
+            if (value && (gs_extEquals(value, ".rff") || gs_extEquals(value, ".ini")))
+                continue;
+
+            int const foreignGame = gs_foreignCrossplayDataGame(value);
+            if (foreignGame >= 0)
+            {
+                LOG_F(INFO, "Crossplay: not mounting %s as runtime GRP; using it only as %s foreign data.",
+                      value ? value : "", gs_gameName(foreignGame));
                 continue;
             }
 
@@ -1552,6 +1951,7 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
 // --- the engine entry point --------------------------------------------------
 int app_main(int32_t argc, char const * const * argv)
 {
+    artCrossplayClearForeignData();
     VBJS_CaptureLaunchDir();   // VibeBuild32: record the launch dir now (before any chdir) for autojs/
     VBJS_SetExecutablePath(argc > 0 ? argv[0] : NULL);
     if (gs_debugModeRequested(argc, argv))
@@ -1566,6 +1966,7 @@ int app_main(int32_t argc, char const * const * argv)
     }
     int launchArgc = argc;
     char const * const *launchArgv = gs_buildArgvWithDebugParams(argc, argv, &launchArgc);
+    gs_parseCrossplayDomainArgs(launchArgc, launchArgv);
 
     // Parse launcher-owned script arguments before Duke's legacy parser. In
     // particular, the legacy -net option treats later tokens as network data;

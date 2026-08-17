@@ -194,6 +194,7 @@ void PlayerUpdateKeys(PLAYERp pp);
 void PlayerUpdateArmor(PLAYERp pp,short value);
 void pToggleCrosshair(void);
 void pKillSprite(PANEL_SPRITEp psp);
+void pClearSpriteList(PLAYERp pp);
 void InitChops(PLAYERp pp);
 void ChopsSetRetract(PLAYERp pp);
 void PlayerUpdateTimeLimit(PLAYERp pp);

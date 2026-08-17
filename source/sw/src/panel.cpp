@@ -7317,6 +7317,154 @@ pWeaponBob(PANEL_SPRITEp psp, short condition)
 //////////////////////////////////////////////////////////////////////////////////////////
 
 SWBOOL DrawBeforeView = FALSE;
+
+static int SW_CrossplayUsingForeignLevelDomain(void)
+{
+    return artCrossplayMapArtPrepared() ||
+           artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) != artCrossplayRuntimeGame();
+}
+
+static int SW_CrossplayIsNativePanelWeaponTile(short picnum)
+{
+    switch (picnum)
+    {
+        case SWORD_REST:
+        case SWORD_SWING0:
+        case SWORD_SWING1:
+        case SWORD_SWING2:
+        case BLOODYSWORD_REST:
+        case BLOODYSWORD_SWING0:
+        case BLOODYSWORD_SWING1:
+        case BLOODYSWORD_SWING2:
+        case FIST_REST:
+        case FIST_SWING0:
+        case FIST_SWING1:
+        case FIST_SWING2:
+        case BLOODYFIST_REST:
+        case BLOODYFIST_SWING0:
+        case BLOODYFIST_SWING1:
+        case BLOODYFIST_SWING2:
+        case FIST2_REST:
+        case FIST2_SWING0:
+        case FIST2_SWING1:
+        case FIST2_SWING2:
+        case BLOODYFIST2_REST:
+        case BLOODYFIST2_SWING0:
+        case BLOODYFIST2_SWING1:
+        case BLOODYFIST2_SWING2:
+        case FIST3_REST:
+        case FIST3_SWING0:
+        case FIST3_SWING1:
+        case FIST3_SWING2:
+        case BLOODYFIST3_REST:
+        case BLOODYFIST3_SWING0:
+        case BLOODYFIST3_SWING1:
+        case BLOODYFIST3_SWING2:
+        case KICK0:
+        case KICK1:
+        case BLOODYKICK0:
+        case BLOODYKICK1:
+        case STAR_REST:
+        case STAR_REST + 1:
+        case STAR_REST + 2:
+        case STAR_REST + 3:
+        case STAR_REST + 4:
+        case STAR_REST + 5:
+        case STAR_REST + 6:
+        case STAR_REST + 7:
+        case 2138: // Bloody shuriken hand.
+        case 2510:
+        case 2511:
+        case 2512:
+        case 2513:
+        case 2514:
+        case 2515:
+        case 2516:
+        case 2517:
+        case 2518: // Bloody dart hand.
+        case UZI_REST:
+        case UZI_FIRE_0:
+        case UZI_FIRE_1:
+        case UZI_EJECT:
+        case UZI_CLIP:
+        case UZI_RELOAD:
+        case UZI_COPEN:
+        case UZI_CCLOSED:
+        case UZI_CLIT:
+        case UZI_CRELOAD:
+        case UZI_SHELL:
+        case UZI_SHELL + 1:
+        case UZI_SHELL + 2:
+        case UZI_SHELL + 3:
+        case UZI_SHELL + 4:
+        case UZI_SHELL + 5:
+        case SHOTGUN_REST:
+        case SHOTGUN_FIRE:
+        case SHOTGUN_FIRE + 1:
+        case SHOTGUN_RELOAD0:
+        case SHOTGUN_RELOAD1:
+        case SHOTGUN_RELOAD2:
+        case SHOTGUN_AUTO:
+        case SHOTGUN_SHELL:
+        case SHOTGUN_SHELL + 1:
+        case SHOTGUN_SHELL + 2:
+        case SHOTGUN_SHELL + 3:
+        case SHOTGUN_SHELL + 4:
+        case SHOTGUN_SHELL + 5:
+        case SHOTGUN_SHELL + 6:
+        case SHOTGUN_SHELL + 7:
+        case RAIL_REST:
+        case RAIL_REST + 1:
+        case RAIL_REST + 2:
+        case RAIL_REST + 3:
+        case RAIL_REST + 4:
+        case RAIL_CHARGE:
+        case RAIL_CHARGE + 1:
+        case RAIL_CHARGE + 2:
+        case RAIL_FIRE:
+        case RAIL_FIRE + 1:
+        case HOTHEAD_REST:
+        case HOTHEAD_ATTACK:
+        case HOTHEAD_CENTER:
+        case HOTHEAD_TURN:
+        case HOTHEAD_TURN + 1:
+        case HOTHEAD_TURN + 2:
+        case HOTHEAD_TURN + 3:
+        case HOTHEAD_CHOMP:
+        case MICRO_REST:
+        case MICRO_FIRE:
+        case MICRO_FIRE + 1:
+        case MICRO_FIRE + 2:
+        case MICRO_FIRE + 3:
+        case MICRO_SIGHT:
+        case MICRO_SHOT_20:
+        case MICRO_SHOT_1:
+        case MICRO_HEAT:
+        case GRENADE_REST:
+        case GRENADE_FIRE:
+        case GRENADE_FIRE + 1:
+        case GRENADE_FIRE + 2:
+        case GRENADE_RELOAD:
+        case GRENADE_RELOAD + 1:
+        case MINE_REST:
+        case MINE_REST + 1:
+        case MINE_THROW:
+        case HEART_REST:
+        case HEART_REST + 1:
+        case HEART_ATTACK:
+        case HEART_ATTACK + 1:
+        case HEART_BLOOD:
+        case HEART_BLOOD + 1:
+        case HEART_BLOOD + 2:
+        case HEART_BLOOD + 3:
+        case HEART_BLOOD + 4:
+        case HEART_BLOOD + 5:
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
 void
 pDisplaySprites(PLAYERp pp)
 {
@@ -7330,6 +7478,7 @@ pDisplaySprites(PLAYERp pp)
     short ang;
     int flags;
     int x1,y1,x2,y2;
+    int const crossplayForeignLevel = SW_CrossplayUsingForeignLevelDomain();
 
     TRAVERSE(&pp->PanelSpriteList, psp, next)
     {
@@ -7463,7 +7612,10 @@ pDisplaySprites(PLAYERp pp)
             continue;
 
         // if its a weapon sprite and the view is set to the outside don't draw the sprite
-        if (TEST(psp->flags, PANF_WEAPON_SPRITE))
+        int const isWeaponSprite = TEST(psp->flags, PANF_WEAPON_SPRITE);
+        int const isNativePanelWeaponTile = SW_CrossplayIsNativePanelWeaponTile(picnum);
+
+        if (isWeaponSprite)
         {
             SECT_USERp sectu = nullptr;
             int16_t floorshade = 0;
@@ -7482,6 +7634,16 @@ pDisplaySprites(PLAYERp pp)
                 if (pal == PALETTE_FOG || pal == PALETTE_DIVE || pal == PALETTE_DIVE_LAVA)
                     pal = psp->pal; // Set it back
             }
+
+            // Crossplay foreign levels may carry sector floorpal values from
+            // another game's lookup table layout. Those values are valid for
+            // world rendering in the source game, but applying them to native
+            // Shadow Warrior first-person weapon sprites recolors Lo Wang's
+            // hands/weapons incorrectly (e.g. blue fists on Duke maps). Keep the
+            // native SW weapon art on the default palette while still preserving
+            // the sector's shade above.
+            if (crossplayForeignLevel)
+                pal = PALETTE_DEFAULT;
 
             ///////////
 
@@ -7507,6 +7669,9 @@ pDisplaySprites(PLAYERp pp)
             if (sectu && TEST(sectu->flags, SECTFU_DONT_COPY_PALETTE))
                 pal = 0;
         }
+
+        if (crossplayForeignLevel && (!TEST(psp->flags, PANF_STATUS_AREA) || isNativePanelWeaponTile))
+            pal = PALETTE_DEFAULT;
 
         //PANF_STATUS_AREA | PANF_SCREEN_CLIP | PANF_KILL_AFTER_SHOW,
 
@@ -7561,7 +7726,7 @@ pDisplaySprites(PLAYERp pp)
                 shade /= 2;
         }
 
-        if (pal == PALETTE_DEFAULT)
+        if (pal == PALETTE_DEFAULT && !(crossplayForeignLevel && (isWeaponSprite || isNativePanelWeaponTile)))
         {
             switch (picnum)
             {
@@ -7639,7 +7804,10 @@ pDisplaySprites(PLAYERp pp)
             {
                 rotatesprite((x + psp->over[i].xoff) << 16, (y + psp->over[i].yoff) << 16,
                              psp->scale, ang,
-                             picnum, overlay_shade, pal,
+                             picnum, overlay_shade,
+                             crossplayForeignLevel && (!TEST(psp->flags, PANF_STATUS_AREA) || SW_CrossplayIsNativePanelWeaponTile(picnum))
+                                 ? PALETTE_DEFAULT
+                                 : pal,
                              flags, x1, y1, x2, y2);
             }
         }

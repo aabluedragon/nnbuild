@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "osd.h"
 #include "gamedef.h"
+#include "sounds.h"
 #include "vbjs.h"
 
 int g_currentweapon;
@@ -50,7 +51,8 @@ char pColorNames[MAXPALOOKUPS][32] = { "Auto" };
 // numbers below come from the stock GAME.CON action definitions.
 const char *g_playerSkinNames[MAXPLAYERSKINS] = {
     "Duke", "Assault Trooper", "Assault Captain", "Octabrain",
-    "Assault Commander", "Enforcer", "Pig Cop", "Alien Beast"
+    "Assault Commander", "Enforcer", "Pig Cop", "Alien Beast",
+    "Lo Wang", "Shelly"
 };
 
 // Which stock enemy each skin is drawn as. Assault Captain shares the Assault
@@ -70,6 +72,92 @@ int32_t P_SkinBaseTile(int32_t skin)
     return -1;
 }
 
+int32_t P_SkinHasEnemySpriteArt(int32_t skin)
+{
+    return P_SkinBaseTile(skin) >= 0;
+}
+
+int32_t P_SkinHasRenderableArt(int32_t skin)
+{
+    if (P_SkinHasEnemySpriteArt(skin))
+        return 1;
+
+    if (skin == 8)
+        return artCrossplayRuntimeGame() == ART_CROSSPLAY_GAME_SW || artCrossplayHasForeignGameData(ART_CROSSPLAY_GAME_SW);
+
+    return 0;
+}
+
+int32_t P_SkinUsesPlayerPalette(int32_t skin)
+{
+    return P_SkinHasEnemySpriteArt(skin);
+}
+
+int32_t P_SkinIsCrossplayProfile(int32_t skin)
+{
+    return skin == 8 || skin == 9;
+}
+
+int32_t P_SkinVoiceGame(int32_t skin)
+{
+    switch (skin)
+    {
+        case 8: return ART_CROSSPLAY_GAME_SW;
+        case 9: return ART_CROSSPLAY_GAME_IONFURY;
+        default: return ART_CROSSPLAY_GAME_DUKE;
+    }
+}
+
+static void P_NormalizeSkinName(char const *name, char *out, size_t outSize)
+{
+    size_t w = 0;
+
+    if (!outSize)
+        return;
+
+    if (name)
+    {
+        for (char const *p = name; *p && w + 1 < outSize; ++p)
+        {
+            if (*p == ' ' || *p == '-' || *p == '_' || *p == '\'')
+                continue;
+            out[w++] = Btolower(*p);
+        }
+    }
+
+    out[w] = 0;
+}
+
+int32_t P_SkinIndexFromName(char const *name)
+{
+    if (!name || !name[0])
+        return -1;
+
+    char *end = NULL;
+    long const numeric = Bstrtol(name, &end, 10);
+    if (end && !*end && numeric >= 0 && numeric < MAXPLAYERSKINS)
+        return (int32_t)numeric;
+
+    char normalized[64];
+    P_NormalizeSkinName(name, normalized, sizeof(normalized));
+
+    if (!Bstrcmp(normalized, "lowang") || !Bstrcmp(normalized, "wang") || !Bstrcmp(normalized, "shadowwarrior"))
+        return 8;
+
+    if (!Bstrcmp(normalized, "shelly") || !Bstrcmp(normalized, "shellyharrison") || !Bstrcmp(normalized, "ionfury"))
+        return 9;
+
+    for (int32_t i = 0; i < MAXPLAYERSKINS; ++i)
+    {
+        char skinName[64];
+        P_NormalizeSkinName(g_playerSkinNames[i], skinName, sizeof(skinName));
+        if (!Bstrcmp(normalized, skinName))
+            return i;
+    }
+
+    return -1;
+}
+
 // World-z offset from a sprite's origin down to its feet for a given tile and
 // size, using the engine's own rule (see spriteheightofsptr): tile height scaled
 // by yrepeat, the CSTAT_YCENTER bit, and - only when alsotileyofs is set - the
@@ -79,6 +167,9 @@ int32_t P_SkinBaseTile(int32_t skin)
 // but places the enemy tile WITH its yoffset so it renders as the game intends.
 int32_t P_SkinFootOffset(int32_t picnum, int32_t yrepeat, int32_t cstat, int32_t alsotileyofs)
 {
+    if ((unsigned)picnum >= MAXTILES)
+        return 0;
+
     int32_t const hei = (tilesiz[picnum].y * yrepeat) << 2;
     int32_t zofs = (cstat & 128) ? (hei >> 1) : 0;
     if (alsotileyofs)
@@ -90,6 +181,12 @@ int32_t P_ValidateSkin(int32_t skin)
 {
     if (skin <= 0 || skin >= MAXPLAYERSKINS)
         return 0;
+
+    if (P_SkinIsCrossplayProfile(skin))
+    {
+        int32_t const voiceGame = P_SkinVoiceGame(skin);
+        return artCrossplayRuntimeGame() == voiceGame || artCrossplayHasForeignGameData(voiceGame) ? skin : 0;
+    }
 
     // Fall back to Duke if the art isn't there (e.g. total conversions).
     int32_t const tile = P_SkinBaseTile(skin);
@@ -107,16 +204,44 @@ int32_t P_ValidateSkin(int32_t skin)
 // view as used for pain/death). aplayerNumFrames distinguishes the two things
 // that share APLAYER start-frame 106: PFLINTCHING (1 frame = getting hit) from
 // PEXPLODE/PTHROWNBACK (5 frames = dying).
+enum
+{
+    SKIN_STATE_STAND,
+    SKIN_STATE_WALK,
+    SKIN_STATE_WALKBACK,
+    SKIN_STATE_ATTACK,
+    SKIN_STATE_JUMP,
+    SKIN_STATE_DUCK,
+    SKIN_STATE_PAIN,
+    SKIN_STATE_DYING,
+    SKIN_STATE_DEAD,
+    SKIN_STATE_COUNT,
+};
+
+static int32_t P_SkinStateForAPlayerAction(int32_t aplayerStartFrame, int32_t aplayerNumFrames)
+{
+    switch (aplayerStartFrame)
+    {
+        case 20:  case 375:            return SKIN_STATE_WALK;      // PWALK/PRUN/PFROZEN, PSWIMMING
+        case 45:                       return SKIN_STATE_WALKBACK;  // PWALKBACK/PRUNBACK
+        case 40:                       return SKIN_STATE_ATTACK;    // PAKICKING
+        case 15:  case 50:  case 65:   return SKIN_STATE_JUMP;      // PJPHOUVER/PJUMPING/PFALLING
+        case 86:                       return SKIN_STATE_DUCK;      // PDUCKING/PCRAWLING
+        case 106:                      return (aplayerNumFrames <= 1) ? SKIN_STATE_PAIN : SKIN_STATE_DYING;
+        case 113:                      return SKIN_STATE_DEAD;      // PLYINGDEAD/PEXPLODEAD
+        default:                       return SKIN_STATE_STAND;     // PSTAND/PTREDWATER/...
+    }
+}
+
 void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t aplayerNumFrames,
                     int32_t *startFrame, int32_t *numFrames, int32_t *viewType)
 {
-    enum { ST_STAND, ST_WALK, ST_WALKBACK, ST_ATTACK, ST_JUMP, ST_DUCK, ST_PAIN, ST_DYING, ST_DEAD, ST_COUNT };
     struct frameinfo { int16_t start, frames, viewtype; };
 
     // [skin][state]. Enemies without a distinct action for a state reuse the
     // nearest sensible one (floaters have no jump/duck -> roam/stand; enemies
     // with no flinch -> the first dying frame as a brief wince).
-    static const frameinfo tbl[MAXPLAYERSKINS][ST_COUNT] =
+    static const frameinfo tbl[MAXPLAYERSKINS][SKIN_STATE_COUNT] =
     {
         {},  // 0 = Duke (never skinned)
         // 1 Assault Trooper (LIZTROOP)
@@ -135,26 +260,225 @@ void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t aplayerNumF
         { {10,1,5}, {10,4,5}, {10,4,5}, {30,3,5}, {80,2,5}, {10,1,5}, {71,1,1}, {72,8,1}, {79,1,1} },
     };
 
-    int state;
-    switch (aplayerStartFrame)
-    {
-        case 20:  case 375:            state = ST_WALK;     break;  // PWALK/PRUN/PFROZEN, PSWIMMING
-        case 45:                       state = ST_WALKBACK; break;  // PWALKBACK/PRUNBACK
-        case 40:                       state = ST_ATTACK;   break;  // PAKICKING
-        case 15:  case 50:  case 65:   state = ST_JUMP;     break;  // PJPHOUVER/PJUMPING/PFALLING
-        case 86:                       state = ST_DUCK;     break;  // PDUCKING/PCRAWLING
-        case 106: state = (aplayerNumFrames <= 1) ? ST_PAIN : ST_DYING; break; // flinch vs dying
-        case 113:                      state = ST_DEAD;     break;  // PLYINGDEAD/PEXPLODEAD
-        default:                       state = ST_STAND;    break;  // PSTAND/PTREDWATER/...
-    }
+    int const state = P_SkinStateForAPlayerAction(aplayerStartFrame, aplayerNumFrames);
 
-    if ((unsigned)skin >= MAXPLAYERSKINS || skin <= 0)
+    if ((unsigned)skin >= MAXPLAYERSKINS || skin <= 0 || !P_SkinHasEnemySpriteArt(skin))
         skin = 1;
 
     frameinfo const f = tbl[skin][state];
     *startFrame = f.start;
     *numFrames  = f.frames;
     *viewType   = f.viewtype;
+}
+
+static int32_t P_LoWangSourceTile(int32_t state, int32_t curframe, int32_t direction)
+{
+    enum
+    {
+        PLAYER_NINJA_SHOOT_R0 = 1069,
+        PLAYER_NINJA_RUN_R0 = 1094,
+        PLAYER_NINJA_JUMP_R0 = 1074,
+        PLAYER_NINJA_CRAWL_R0 = 1044,
+        PLAYER_NINJA_SWORD_R0 = 1161,
+        PLAYER_NINJA_DIE = 1152,
+    };
+
+    struct wangframe { int16_t base, frames, directional; };
+    static const wangframe tbl[SKIN_STATE_COUNT] =
+    {
+        { PLAYER_NINJA_RUN_R0,   1, 1 },  // stand
+        { PLAYER_NINJA_RUN_R0,   4, 1 },  // walk
+        { PLAYER_NINJA_RUN_R0,   4, 1 },  // walk back
+        { PLAYER_NINJA_SWORD_R0, 3, 1 },  // attack
+        { PLAYER_NINJA_JUMP_R0,  4, 1 },  // jump/fall
+        { PLAYER_NINJA_CRAWL_R0, 4, 1 },  // duck/crawl
+        { PLAYER_NINJA_DIE,      1, 0 },  // pain
+        { PLAYER_NINJA_DIE,      9, 0 },  // dying
+        { PLAYER_NINJA_DIE + 8,  1, 0 },  // dead
+    };
+
+    if ((unsigned)state >= SKIN_STATE_COUNT)
+        state = SKIN_STATE_STAND;
+
+    wangframe const f = tbl[state];
+    int32_t const frame = f.frames > 1 ? klabs(curframe) % f.frames : 0;
+
+    if (!f.directional)
+        return f.base + frame;
+
+    direction = clamp(direction, 0, 4);
+
+    // Shadow Warrior's one-frame shooting set stores R4 before R1.  The rest of
+    // Lo Wang's player-ninja directional animation sets are contiguous R0..R4.
+    if (f.base == PLAYER_NINJA_SHOOT_R0)
+    {
+        static const int8_t shootDirOffset[5] = { 0, 2, 3, 4, 1 };
+        return f.base + shootDirOffset[direction];
+    }
+
+    return f.base + direction * f.frames + frame;
+}
+
+int32_t P_SkinRenderTile(int32_t skin, int32_t aplayerStartFrame, int32_t aplayerNumFrames, int32_t curframe, int32_t direction)
+{
+    if (P_SkinHasEnemySpriteArt(skin))
+    {
+        int32_t skinStart, skinFrames, skinViewtype;
+        P_GetSkinFrame(skin, aplayerStartFrame, aplayerNumFrames, &skinStart, &skinFrames, &skinViewtype);
+        int32_t const skinBase = P_SkinBaseTile(skin);
+        int32_t const skinOffset = skinViewtype == 5 ? clamp(direction, 0, 4) : 0;
+        return skinBase + skinStart + skinOffset + skinViewtype * (klabs(curframe) % skinFrames);
+    }
+
+    if (skin == 8)
+    {
+        int32_t const state = P_SkinStateForAPlayerAction(aplayerStartFrame, aplayerNumFrames);
+        int32_t const sourceTile = P_LoWangSourceTile(state, curframe, direction);
+        return artCrossplayLoadForeignGameTile(ART_CROSSPLAY_GAME_SW, (int16_t)sourceTile);
+    }
+
+    return -1;
+}
+
+int32_t P_SkinReferenceTile(int32_t skin)
+{
+    if (P_SkinHasEnemySpriteArt(skin))
+    {
+        int32_t rs, rf, rv;
+        P_GetSkinFrame(skin, 0, 1, &rs, &rf, &rv);
+        return P_SkinBaseTile(skin) + rs;
+    }
+
+    if (skin == 8)
+        return artCrossplayLoadForeignGameTile(ART_CROSSPLAY_GAME_SW, (int16_t)P_LoWangSourceTile(SKIN_STATE_STAND, 0, 0));
+
+    return -1;
+}
+
+enum
+{
+    VB_CROSSPLAY_VOICE_BASE = MAXSOUNDS - 768,
+    VB_CROSSPLAY_SW_BASE = VB_CROSSPLAY_VOICE_BASE,
+    VB_CROSSPLAY_IONFURY_BASE = VB_CROSSPLAY_VOICE_BASE + 64,
+};
+
+struct crossplay_voice_sound_t
+{
+    int16_t id;
+    int16_t game;
+    char const *path;
+};
+
+static int32_t P_CrossplayVoiceSound(crossplay_voice_sound_t const *sounds, int32_t count)
+{
+    if (count <= 0)
+        return -1;
+
+    int32_t const pick = count == 1 ? 0 : (krand() % count);
+    int32_t const soundNum = sounds[pick].id;
+
+    if (S_SoundIsValid(soundNum))
+        return soundNum;
+
+    char name[BMAX_PATH];
+    char const *gamePrefix = "duke";
+
+    switch (sounds[pick].game)
+    {
+        case ART_CROSSPLAY_GAME_SW: gamePrefix = "sw"; break;
+        case ART_CROSSPLAY_GAME_IONFURY: gamePrefix = "ionfury"; break;
+        case ART_CROSSPLAY_GAME_WORLDTOUR: gamePrefix = "worldtour"; break;
+        default: break;
+    }
+
+    Bsprintf(name, "vb-crossplay://%s/%s", gamePrefix, sounds[pick].path);
+    S_DefineSound(soundNum, name, 0, 0, 255, SF_TALK, 0, 1.0f);
+    S_LoadSound(soundNum);
+
+    return S_SoundIsValid(soundNum) ? soundNum : -1;
+}
+
+static int32_t P_CrossplayLoWangVoice(int32_t soundNum, int32_t playerDead)
+{
+    static crossplay_voice_sound_t const pain[] =
+    {
+        { VB_CROSSPLAY_SW_BASE + 0, ART_CROSSPLAY_GAME_SW, "CHOTO7.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 1, ART_CROSSPLAY_GAME_SW, "SWPAIN05.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 2, ART_CROSSPLAY_GAME_SW, "SWPAIN03.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 3, ART_CROSSPLAY_GAME_SW, "SWPAIN07.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 4, ART_CROSSPLAY_GAME_SW, "SWPAIN22.VOC" },
+    };
+    static crossplay_voice_sound_t const dying[] =
+    {
+        { VB_CROSSPLAY_SW_BASE + 5, ART_CROSSPLAY_GAME_SW, "SWYELL03.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 6, ART_CROSSPLAY_GAME_SW, "SWYELL05.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 7, ART_CROSSPLAY_GAME_SW, "SWYELL06.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 8, ART_CROSSPLAY_GAME_SW, "SWDIE02.VOC" },
+    };
+    static crossplay_voice_sound_t const talk[] =
+    {
+        { VB_CROSSPLAY_SW_BASE + 9,  ART_CROSSPLAY_GAME_SW, "BADMAN04.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 10, ART_CROSSPLAY_GAME_SW, "COMEGET2.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 11, ART_CROSSPLAY_GAME_SW, "GHOP07.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 12, ART_CROSSPLAY_GAME_SW, "GOODDAY4.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 13, ART_CROSSPLAY_GAME_SW, "KILLU05.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 14, ART_CROSSPLAY_GAME_SW, "NATURAL4.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 15, ART_CROSSPLAY_GAME_SW, "NOHONOR6.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 16, ART_CROSSPLAY_GAME_SW, "SAYON09.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 17, ART_CROSSPLAY_GAME_SW, "TAKSAN1.VOC" },
+        { VB_CROSSPLAY_SW_BASE + 18, ART_CROSSPLAY_GAME_SW, "SNATCH01.VOC" },
+    };
+
+    if (playerDead || soundNum == DUKE_SCREAM)
+        return P_CrossplayVoiceSound(dying, ARRAY_SIZE(dying));
+
+    if (soundNum == DUKE_GRUNT || soundNum == DUKE_LONGTERM_PAIN || soundNum == DUKE_LAND_HURT)
+        return P_CrossplayVoiceSound(pain, ARRAY_SIZE(pain));
+
+    return P_CrossplayVoiceSound(talk, ARRAY_SIZE(talk));
+}
+
+static int32_t P_CrossplayShellyVoice(int32_t soundNum, int32_t playerDead)
+{
+    static crossplay_voice_sound_t const pain[] =
+    {
+        { VB_CROSSPLAY_IONFURY_BASE + 0, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt01.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 1, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt02.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 2, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt03.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 3, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad01.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 4, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad02.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 5, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad03.ogg" },
+    };
+    static crossplay_voice_sound_t const dying[] =
+    {
+        { VB_CROSSPLAY_IONFURY_BASE + 6,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtfatal01.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 7,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtfatal02.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 8,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/BS_Hurt_Noises-01.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 9,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/BS_Hurt_Noises-02.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 10, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-07.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 11, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-08.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 12, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-09.ogg" },
+    };
+    static crossplay_voice_sound_t const talk[] =
+    {
+        { VB_CROSSPLAY_IONFURY_BASE + 13, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_03.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 14, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_04.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 15, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_05.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 16, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_12.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 17, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Reactionary_Kill_07.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 18, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Reactionary_Kill_08.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 19, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_018_say_my_name_alt8.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 20, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_019_were_done_alt5.ogg" },
+        { VB_CROSSPLAY_IONFURY_BASE + 21, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_022_dance_fucker_dance.ogg" },
+    };
+
+    if (playerDead || soundNum == DUKE_SCREAM)
+        return P_CrossplayVoiceSound(dying, ARRAY_SIZE(dying));
+
+    if (soundNum == DUKE_GRUNT || soundNum == DUKE_LONGTERM_PAIN || soundNum == DUKE_LAND_HURT)
+        return P_CrossplayVoiceSound(pain, ARRAY_SIZE(pain));
+
+    return P_CrossplayVoiceSound(talk, ARRAY_SIZE(talk));
 }
 
 int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead)
@@ -181,6 +505,8 @@ int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead)
         case 5: pain = S_LIZARD_PAIN;dying = S_LIZARD_PAIN;roam = S_LIZARD_PAIN;recog = S_LIZARD_PAIN; break; // Enforcer (only a pain sound is stock)
         case 6: pain = PIG_PAIN;     dying = PIG_DYING;    roam = PIG_ROAM;     recog = PIG_RECOG; break;   // Pig Cop
         case 7: pain = NEWBEAST_PAIN;dying = NEWBEAST_DYING;roam = NEWBEAST_ROAM;recog = NEWBEAST_RECOG; break; // Alien Beast
+        case 8: { int32_t const voice = P_CrossplayLoWangVoice(soundNum, playerDead); return voice >= 0 ? voice : soundNum; }
+        case 9: { int32_t const voice = P_CrossplayShellyVoice(soundNum, playerDead); return voice >= 0 ? voice : soundNum; }
         default: return soundNum;
     }
 

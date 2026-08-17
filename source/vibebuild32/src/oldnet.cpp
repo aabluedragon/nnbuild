@@ -1,6 +1,8 @@
 #define OLDNET_CPP_
 
 #include "duke3d.h"
+#include "crc32.h"
+#include "grpscan.h"
 #include "oldnet.h"
 #include "net_predict.h"
 #include "masterserver.h"
@@ -1305,12 +1307,123 @@ static uint32_t Net_FileCrc(const char *data, int32_t len)
     return h;
 }
 
+static const char *Net_FileBaseName(const char *name)
+{
+    const char *fslash = Bstrrchr(name, '/');
+    const char *bslash = Bstrrchr(name, '\\');
+    const char *base = max(fslash, bslash);
+    return base ? base + 1 : name;
+}
+
+static int Net_ReadFileForTransfer(const char *name, char **data, int32_t *size)
+{
+    int32_t fil = kopen4loadfrommod(name, 0);
+    if (fil != -1)
+    {
+        int32_t const len = kfilelength(fil);
+        char *tmp = (char *)Xmalloc(len);
+        kread(fil, tmp, len);
+        kclose(fil);
+        *data = tmp;
+        *size = len;
+        return 1;
+    }
+
+    FILE *fp = fopen(name, "rb");
+    if (!fp)
+        return 0;
+
+    if (fseek(fp, 0, SEEK_END) != 0)
+    {
+        fclose(fp);
+        return 0;
+    }
+    long const len = ftell(fp);
+    if (len < 0 || len > INT32_MAX || fseek(fp, 0, SEEK_SET) != 0)
+    {
+        fclose(fp);
+        return 0;
+    }
+
+    char *tmp = (char *)Xmalloc((int32_t)len);
+    size_t const rd = fread(tmp, 1, (size_t)len, fp);
+    fclose(fp);
+    if (rd != (size_t)len)
+    {
+        Xfree(tmp);
+        return 0;
+    }
+
+    *data = tmp;
+    *size = (int32_t)len;
+    return 1;
+}
+
+static int Net_FileOnDiskMatches(const char *path, const char *wantBase, int32_t size, uint32_t crc)
+{
+    if (!path || !path[0])
+        return 0;
+
+    const char *base = Net_FileBaseName(path);
+    if (wantBase && wantBase[0] && Bstrcasecmp(base, wantBase))
+        return 0;
+
+    struct stat st;
+    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode) || (int32_t)st.st_size != size)
+        return 0;
+
+    FILE *fp = fopen(path, "rb");
+    if (!fp)
+        return 0;
+
+    char *tmp = (char *)Xmalloc(size);
+    size_t const rd = fread(tmp, 1, size, fp);
+    fclose(fp);
+    int const matches = (int32_t)rd == size && Net_FileCrc(tmp, size) == crc;
+    Xfree(tmp);
+    return matches;
+}
+
+static uint32_t Net_GroupScannerCrc(const char *data, int32_t size)
+{
+    static int crcTableReady = 0;
+    if (!crcTableReady)
+    {
+        initcrc32table();
+        crcTableReady = 1;
+    }
+
+    return Bcrc32(data, size, 0);
+}
+
+static grpinfo_t const *Net_KnownGameDataInfo(const char *name)
+{
+    char *data = NULL;
+    int32_t size = 0;
+    if (!Net_ReadFileForTransfer(name, &data, &size))
+        return NULL;
+
+    uint32_t const crc = Net_GroupScannerCrc(data, size);
+    Xfree(data);
+
+    for (grpinfo_t const *info = listgrps; info; info = info->next)
+        if (info->size == size && (uint32_t)info->crcval == crc)
+            return info;
+
+    return NULL;
+}
+
 // True if the client already has this file with a matching size+crc.
 static int Net_HaveFile(const char *name, int32_t size, uint32_t crc)
 {
+    for (int32_t i = 0; i < g_netModFileCount; ++i)
+        if (Net_FileOnDiskMatches(g_netModFiles[i], Net_FileBaseName(name), size, crc))
+            return 1;
+
     int32_t fil = kopen4loadfrommod(name, 0);
     if (fil == -1)
-        return 0;
+        return Net_FileOnDiskMatches(name, NULL, size, crc);
+
     int32_t const len = kfilelength(fil);
     if (len != size)
     {
@@ -1383,12 +1496,18 @@ static int Net_FindExistingFile(const char *name, int32_t size, uint32_t crc, ch
 {
     if (size <= 0)
         return 0;
-    const char *fslash = Bstrrchr(name, '/');
-    const char *bslash = Bstrrchr(name, '\\');
-    const char *base = max(fslash, bslash);
-    base = base ? base + 1 : name;
+    const char *base = Net_FileBaseName(name);
     if (!base[0])
         return 0;
+
+    for (int32_t i = 0; i < g_netModFileCount; ++i)
+    {
+        if (Net_FileOnDiskMatches(g_netModFiles[i], base, size, crc))
+        {
+            Bstrncpyz(out, g_netModFiles[i], outcap);
+            return 1;
+        }
+    }
 
     // Scan the working-directory tree only. Also scan g_modDir when it is a
     // real, scoped subfolder - never a filesystem root like "/" (which would
@@ -1448,20 +1567,21 @@ void Net_SendFile(int32_t slot, const char *name, int32_t fileIndex, int32_t fil
     if (myconnectindex != connecthead)
         return;
 
-    int32_t fil = kopen4loadfrommod(name, 0);
-    if (fil == -1)
+    char *data = NULL;
+    int32_t size = 0;
+    if (!Net_ReadFileForTransfer(name, &data, &size))
     {
         LOG_F(WARNING, "Net_SendFile: can't open %s", name);
         return;
     }
-    int32_t const size = kfilelength(fil);
-    char *data = (char *)Xmalloc(size + 1);
-    kread(fil, data, size);
-    kclose(fil);
+
     uint32_t const crc = Net_FileCrc(data, size);
+    const char *wireName = Net_FileBaseName(name);
+    if (!wireName[0])
+        wireName = name;
 
     int32_t const total = (size + FILE_CHUNK_SIZE - 1) / FILE_CHUNK_SIZE;
-    LOG_F(INFO, "Sending %s (%d bytes, %d chunks)%s", name, size, total,
+    LOG_F(INFO, "Sending %s (%d bytes, %d chunks)%s", wireName, size, total,
           slot < 0 ? " to all" : "");
 
     char hdr[80];
@@ -1470,9 +1590,9 @@ void Net_SendFile(int32_t slot, const char *name, int32_t fileIndex, int32_t fil
     B_BUF32(&hdr[hl], size); hl += 4;
     B_BUF32(&hdr[hl], (int32_t)crc); hl += 4;
     B_BUF16(&hdr[hl], (uint16_t)total); hl += 2;
-    int32_t const namelen = min((int32_t)strlen(name), 63);
+    int32_t const namelen = min((int32_t)strlen(wireName), 63);
     hdr[hl++] = (char)namelen;
-    Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
+    Bmemcpy(&hdr[hl], wireName, namelen); hl += namelen;
     // 1-based position of this file within the set, and the set size, so the
     // joiner can show "downloading file X of Y" for multi-file transfers.
     hdr[hl++] = (char)clamp(fileIndex, 1, 255);
@@ -1510,7 +1630,7 @@ void Net_SendFile(int32_t slot, const char *name, int32_t fileIndex, int32_t fil
 
         if (!Net_DrainReliableWindow())
         {
-            LOG_F(WARNING, "File transfer of %s aborted: a receiver stopped acking", name);
+            LOG_F(WARNING, "File transfer of %s aborted: a receiver stopped acking", wireName);
             break;  // a peer died mid-transfer; stop rather than freeze the server
         }
     }
@@ -1527,10 +1647,26 @@ void Net_SendGameFiles(int32_t slot)
     if (myconnectindex != connecthead)
         return;
 
-    int32_t const total = g_netModFileCount + (boardfilename[0] ? 1 : 0);
+    grpinfo_t const *knownGameData[MAXNETMODFILES] = {};
+    int32_t total = boardfilename[0] ? 1 : 0;
+    for (int32_t i = 0; i < g_netModFileCount; i++)
+    {
+        knownGameData[i] = Net_KnownGameDataInfo(g_netModFiles[i]);
+        if (!knownGameData[i])
+            total++;
+    }
+
     int32_t idx = 0;
     for (int32_t i = 0; i < g_netModFileCount; i++)
+    {
+        if (knownGameData[i])
+        {
+            LOG_F(INFO, "Network file sync: %s is known game data (%s); peers must provide it locally.",
+                  g_netModFiles[i], knownGameData[i]->name ? knownGameData[i]->name : Net_FileBaseName(g_netModFiles[i]));
+            continue;
+        }
         Net_SendFile(slot, g_netModFiles[i], ++idx, total);
+    }
 
     if (boardfilename[0])
         Net_SendFile(slot, boardfilename, ++idx, total);

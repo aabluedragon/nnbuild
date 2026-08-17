@@ -529,7 +529,7 @@ static int Menu_PlayerPreviewTile(void)
 {
     int const previewFrame = ((4 - ((int32_t)totalclock >> 4)) & 3);
 
-    if (P_ValidateSkin(ud.skin))
+    if (P_ValidateSkin(ud.skin) && P_SkinHasEnemySpriteArt(ud.skin))
     {
         int skinStart, skinFrames, skinViewType;
         int const skinBase = P_SkinBaseTile(ud.skin);

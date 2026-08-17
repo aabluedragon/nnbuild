@@ -7973,6 +7973,10 @@ static void G_Startup(void)
         // engine's artGetIndexedFileName() substitutes digits positionally into a literal
         // "tilesNNN.art" name; a format string produced "tiles000i.art", so zero ART files
         // loaded and the game rendered black (same bug that hit Blood).
+        artSetBaseSearchFirst(artCrossplayForeignDataCount() > 0 ? 1 : 0);
+        if (artCrossplayForeignDataCount() > 0)
+            LOG_F(INFO, "Crossplay: base runtime ART pinned to main game data.");
+
         if (g_modDir[0] != '/' && (cwd = getcwd(NULL, 0)))
         {
             Bchdir(g_modDir);

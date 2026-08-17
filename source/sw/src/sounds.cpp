@@ -161,6 +161,61 @@ AMB_INFO ambarray[] =
 static SWBOOL OpenSound(VOC_INFOp vp, buildvfs_kfd * handle, int * length);
 int ReadSound(int handle, VOC_INFOp vp, int length);
 
+static int32_t SW_CrossplayDukeLikeLevelGame(void)
+{
+    int32_t const game = artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS);
+    return (game == ART_CROSSPLAY_GAME_DUKE || game == ART_CROSSPLAY_GAME_WORLDTOUR) ? game : ART_CROSSPLAY_GAME_UNKNOWN;
+}
+
+static SWBOOL SW_CrossplayReadForeignGameAudioEntry(int32_t game, char const *entryName, char **data, int32_t *size)
+{
+    if (game < 0 || entryName == NULL || entryName[0] == '\0' || data == NULL || size == NULL)
+        return FALSE;
+
+    if (artCrossplayReadForeignGameDataEntry(game, entryName, data, size, NULL, 0))
+        return TRUE;
+
+    // World Tour GRPs commonly do not contain every classic Duke VOC/MID.
+    if (game == ART_CROSSPLAY_GAME_WORLDTOUR)
+        return artCrossplayReadForeignGameDataEntry(ART_CROSSPLAY_GAME_DUKE, entryName, data, size, NULL, 0) ? TRUE : FALSE;
+
+    return FALSE;
+}
+
+static int32_t SW_CrossplayForeignGameForSoundSlot(int32_t num)
+{
+    if ((num >= DIGI_DUKE_PRED_RECOG && num <= DIGI_DUKE_RIPHEADNECK) ||
+        (num >= DIGI_DUKE_MAP_POOLBALLHIT && num <= DIGI_DUKE_SQUISHED))
+        return SW_CrossplayDukeLikeLevelGame();
+
+    return ART_CROSSPLAY_GAME_UNKNOWN;
+}
+
+static int32_t SW_CrossplayIsDukeMusicFilename(char const *filename)
+{
+    static char const * const dukeMusicNames[] =
+    {
+        "GRABBAG.MID", "BRIEFING.MID",
+        "stalker.mid", "dethtoll.mid", "streets.mid", "watrwld1.mid", "snake1.mid",
+        "thecall.mid", "ahgeez.mid", "futurmil.mid", "storm.mid", "gutwrnch.mid",
+        "robocrep.mid", "stalag.mid", "pizzed.mid", "alienz.mid", "xplasma.mid",
+        "alfredh.mid", "gloomy.mid", "intents.mid", "inhiding.mid", "FATCMDR.mid",
+        "NAMES.MID", "subway.mid", "invader.mid", "gotham.mid", "233c.mid",
+        "lordofla.mid", "urban.mid", "spook.mid", "whomp.mid", "missimp.mid",
+        "prepd.mid", "bakedgds.mid", "cf.mid", "lemchill.mid", "pob.mid",
+        "warehaus.mid", "layers.mid", "floghorn.mid", "depart.mid", "restrict.mid",
+    };
+
+    if (filename == NULL || filename[0] == '\0')
+        return 0;
+
+    for (unsigned i = 0; i < ARRAY_SIZE(dukeMusicNames); ++i)
+        if (!Bstrcasecmp(filename, dukeMusicNames[i]))
+            return 1;
+
+    return 0;
+}
+
 // 3d sound engine function prototype
 VOC3D_INFOp Insert3DSound(void);
 
@@ -789,8 +844,16 @@ SWBOOL CacheSound(int num, int /*type*/)
     {
         buildvfs_kfd handle;
         int length;
+        char *foreignData = NULL;
+        int32_t foreignLength = 0;
+        int const foreignGame = SW_CrossplayForeignGameForSoundSlot(num);
+        int const usingForeignData = SW_CrossplayReadForeignGameAudioEntry(foreignGame, vp->name, &foreignData, &foreignLength);
 
-        if (!OpenSound(vp, &handle, &length))
+        if (usingForeignData)
+        {
+            length = foreignLength;
+        }
+        else if (!OpenSound(vp, &handle, &length))
         {
             sprintf(ds,"Could not open sound %s, num %d, priority %d\n",vp->name,num,vp->priority);
             CON_ConMessage("%s", ds);
@@ -829,7 +892,16 @@ SWBOOL CacheSound(int num, int /*type*/)
             ///////
 
             ASSERT(vp->data);
-            ReadSound(handle, vp, length);
+            if (usingForeignData)
+            {
+                Bmemcpy(vp->data, foreignData, length);
+                vp->datalen = length;
+                Xfree(foreignData);
+            }
+            else
+            {
+                ReadSound(handle, vp, length);
+            }
 
 #if 0
             //DEBUG
@@ -1161,6 +1233,27 @@ LoadSong(const char *filename)
     buildvfs_kfd handle;
     int size;
     char *ptr;
+    int32_t const crossplayGame = SW_CrossplayDukeLikeLevelGame();
+    char *foreignData = NULL;
+    int32_t foreignSize = 0;
+
+    if (SW_CrossplayIsDukeMusicFilename(filename) &&
+        SW_CrossplayReadForeignGameAudioEntry(crossplayGame, filename, &foreignData, &foreignSize))
+    {
+        ptr = (char *) AllocMem(foreignSize);
+        if (ptr == NULL)
+        {
+            Xfree(foreignData);
+            return FALSE;
+        }
+
+        Bmemcpy(ptr, foreignData, foreignSize);
+        Xfree(foreignData);
+
+        SongPtr = ptr;
+        SongLength = foreignSize;
+        return TRUE;
+    }
 
     if ((handle = kopen4load(filename, 0)) == buildvfs_kfd_invalid)
     {

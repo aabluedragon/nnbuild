@@ -118,6 +118,55 @@ char *pUserTiles = NULL;
 char *pUserSoundRFF = NULL;
 char *pUserRFF = NULL;
 
+static void BloodCrossplaySanitizePlainBuildMap(void)
+{
+    for (int i = 0; i < numsectors; i++)
+        sector[i].extra = -1;
+
+    for (int i = 0; i < numwalls; i++)
+        wall[i].extra = -1;
+
+    for (int i = 0; i < kMaxSprites; i++)
+    {
+        spritetype * const pSprite = &sprite[i];
+        pSprite->extra = -1;
+
+        if ((unsigned)pSprite->statnum >= (unsigned)kMaxStatus)
+            continue;
+
+        pSprite->type = 0;
+        pSprite->inittype = 0;
+        pSprite->flags = 0;
+
+        if (pSprite->statnum != kStatDecoration)
+            ChangeSpriteStat(i, kStatDecoration);
+    }
+}
+
+static int BloodCrossplayMapNameHasExtension(char const *mapName)
+{
+    char const *base = mapName;
+    if (char const *slash = Bstrrchr(mapName, '/'))
+        base = slash + 1;
+    if (char const *slash = Bstrrchr(base, '\\'))
+        base = slash + 1;
+    return Bstrchr(base, '.') != NULL;
+}
+
+static int BloodCrossplayLoadPlainBuildMap(char const *mapName, vec3_t *startPos, int16_t *startAng, int16_t *startSector, char *resolvedMapName, size_t resolvedMapNameSize)
+{
+    Bstrncpyz(resolvedMapName, mapName, resolvedMapNameSize);
+    int loadStatus = engineLoadBoardNative(resolvedMapName, 0, startPos, startAng, startSector);
+
+    if (loadStatus < 0 && !BloodCrossplayMapNameHasExtension(mapName))
+    {
+        Bsnprintf(resolvedMapName, resolvedMapNameSize, "%s.MAP", mapName);
+        loadStatus = engineLoadBoardNative(resolvedMapName, 0, startPos, startAng, startSector);
+    }
+
+    return loadStatus;
+}
+
 double g_gameUpdateTime, g_gameUpdateAndDrawTime;
 double g_gameUpdateAvgTime = 0.001;
 
@@ -789,11 +838,39 @@ void StartLevel(GAMEOPTIONS *pOpt)
         }
     }
     drawLoadingScreen(gStatsPicnum);
-    if (dbLoadMap(pOpt->zLevelName,(int*)&startpos.x,(int*)&startpos.y,(int*)&startpos.z,&startang,&startsectnum,(unsigned int*)&pOpt->uMapCRC))
+    artCrossplayResetLevel();
+    char crossplayMapName[BMAX_PATH];
+    Bstrncpyz(crossplayMapName, pOpt->zLevelName, sizeof(crossplayMapName));
+    int loadStatus = dbLoadMap(pOpt->zLevelName,(int*)&startpos.x,(int*)&startpos.y,(int*)&startpos.z,&startang,&startsectnum,(unsigned int*)&pOpt->uMapCRC);
+    if (loadStatus && artCrossplayForeignDataCount() > 0)
+    {
+        vec3_t nativeStartPos = startpos;
+        int16_t nativeStartAng = startang;
+        int16_t nativeStartSector = startsectnum;
+
+        dbInit();
+        int const nativeLoadStatus = BloodCrossplayLoadPlainBuildMap(pOpt->zLevelName, &nativeStartPos, &nativeStartAng, &nativeStartSector, crossplayMapName, sizeof(crossplayMapName));
+        if (nativeLoadStatus >= 0)
+        {
+            startpos = nativeStartPos;
+            startang = nativeStartAng;
+            startsectnum = nativeStartSector;
+            pOpt->uMapCRC = 0;
+            BloodCrossplaySanitizePlainBuildMap();
+            LOG_F(INFO, "Crossplay: loaded plain Build map %s in Blood visual compatibility mode.", crossplayMapName);
+            loadStatus = 0;
+        }
+        else
+            LOG_F(ERROR, "Crossplay: could not load plain Build map %s in Blood compatibility mode (status %d).", pOpt->zLevelName, nativeLoadStatus);
+    }
+    if (loadStatus)
     {
         gQuitGame = true;
         return;
     }
+    artCrossplayCaptureMapSprites();
+    artCrossplayPrepareForeignMapArt(crossplayMapName);
+    artCrossplayApplyMapTileRemap();
     gWeather.Restart();
     gWeather.LoadPreset(pOpt->uMapCRC);
     char levelName[BMAX_PATH];

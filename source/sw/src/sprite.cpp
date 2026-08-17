@@ -78,6 +78,35 @@ SECTOR_OBJECT SectorObject[MAX_SECTOR_OBJECTS];
 
 int DirArr[] = {NORTH, NE, EAST, SE, SOUTH, SW, WEST, NW, NORTH, NE, EAST, SE, SOUTH, SW, WEST, NW};
 
+static SWBOOL SW_CrossplayIgnoreDukeMapMissilePreflightHit(short spritenum, int retval)
+{
+    if (!retval || !SW_CrossplayDukeMapBridgeActive() || (unsigned)spritenum >= MAXSPRITES)
+        return FALSE;
+
+    USERp const u = User[spritenum];
+    if (u == NULL || !TEST(u->Flags, SPR_SET_POS_DONT_KILL))
+        return FALSE;
+
+    switch (TEST(retval, HIT_MASK))
+    {
+    case HIT_PLAX_WALL:
+        return TRUE;
+
+    case HIT_SECTOR:
+    {
+        short const sectnum = NORM_SECTOR(retval);
+        if ((unsigned)sectnum >= (unsigned)numsectors)
+            return FALSE;
+
+        return TEST(sector[sectnum].ceilingstat, CEILING_STAT_PLAX) ||
+               TEST(sector[sectnum].floorstat, FLOOR_STAT_PLAX);
+    }
+
+    default:
+        return FALSE;
+    }
+}
+
 #define SCROLL_RATE 20
 #define SCROLL_FIRE_RATE 20
 
@@ -7256,10 +7285,12 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
     SPRITEp sp;
     USERp u = User[spritenum];
     short lastsectnum;
+    vec3_t oldpos;
 
     sp = &sprite[spritenum];
 
     ASSERT(u);
+    oldpos = sp->xyz;
 
     // Can't modify sprite sectors
     // directly becuase of linked lists
@@ -7292,6 +7323,15 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
         // we've gone beyond a white wall - kill it
         retval = 0;
         SET(retval, HIT_PLAX_WALL);
+        if (SW_CrossplayIgnoreDukeMapMissilePreflightHit(spritenum, retval))
+        {
+            sp->xyz = oldpos;
+            if (u != NULL)
+                u->ret = 0;
+
+            return 0;
+        }
+
         return retval;
     }
 
@@ -7380,6 +7420,18 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
             RESET(retval, HIT_WALL|HIT_SECTOR);
             SET(retval, HIT_PLAX_WALL);
         }
+    }
+
+    if (SW_CrossplayIgnoreDukeMapMissilePreflightHit(spritenum, retval))
+    {
+        if (sp->sectnum != lastsectnum && (unsigned)lastsectnum < (unsigned)numsectors)
+            changespritesect(spritenum, lastsectnum);
+
+        sp->xyz = oldpos;
+        if (u != NULL)
+            u->ret = 0;
+
+        return 0;
     }
 
     return retval;

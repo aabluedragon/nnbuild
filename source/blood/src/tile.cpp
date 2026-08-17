@@ -97,6 +97,9 @@ int tileInit(char a1, const char *a2)
     UNREFERENCED_PARAMETER(a1);
     if (artLoaded)
         return 1;
+    artSetBaseSearchFirst(artCrossplayForeignDataCount() > 0 ? 1 : 0);
+    if (artCrossplayForeignDataCount() > 0)
+        LOG_F(INFO, "Crossplay: base runtime ART pinned to main game data.");
     artLoadFiles(a2 ? a2 : pzBaseFileName, MAXCACHE1DSIZE);
     for (int i = 0; i < kMaxTiles; i++)
         voxelIndex[i] = 0;

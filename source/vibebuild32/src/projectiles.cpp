@@ -1734,8 +1734,21 @@ static int32_t A_ShootHardcoded(int spriteNum, int projecTile, int shootAng, vec
 }
 #endif
 
+// VibeBuild32 crossplay: how many shots Duke's actors have fired.  A foreign
+// runtime hosting them needs a direct signal that an actor is attacking, since
+// whether a shot actually lands on the player depends on the map's geometry.
+int g_vbDukeAIShotCount;
+
+extern "C" int VB_DukeAI_ShotCount(void)
+{
+    return g_vbDukeAIShotCount;
+}
+
 int A_Shoot(int spriteNum, int projecTile, int const forceZvel)
 {
+    if ((unsigned)spriteNum < MAXSPRITES && sprite[spriteNum].picnum != APLAYER)
+        ++g_vbDukeAIShotCount;
+
     Bassert(projecTile >= 0);
 
     auto const pSprite = &sprite[spriteNum];

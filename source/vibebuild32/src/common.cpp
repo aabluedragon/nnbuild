@@ -8,6 +8,7 @@
 #include "build.h"
 #include "common_game.h"
 #include "compat.h"
+#include "crc32.h"
 #include "grpscan.h"
 #include "palette.h"
 #include "texcache.h"
@@ -43,6 +44,108 @@ static void G_LoadAddon(void);
 int32_t g_groupFileHandle;
 
 static struct strllist *CommandPaths, *CommandGrps;
+
+static uint32_t G_GroupScannerCrc(const unsigned char *data, int32_t size)
+{
+    static int crcTableReady = 0;
+    if (!crcTableReady)
+    {
+        initcrc32table();
+        crcTableReady = 1;
+    }
+
+    return Bcrc32(data, size, 0);
+}
+
+static grpinfo_t const *G_KnownGameDataInfo(char const *name)
+{
+    FILE *fp = fopen(name, "rb");
+    if (!fp)
+        return NULL;
+
+    if (fseek(fp, 0, SEEK_END) != 0)
+    {
+        fclose(fp);
+        return NULL;
+    }
+
+    long const sizeLong = ftell(fp);
+    if (sizeLong <= 0 || sizeLong > INT32_MAX || fseek(fp, 0, SEEK_SET) != 0)
+    {
+        fclose(fp);
+        return NULL;
+    }
+
+    int32_t const size = (int32_t)sizeLong;
+    auto *data = (unsigned char *)Xmalloc(size);
+    bool const ok = fread(data, 1, size, fp) == (size_t)size;
+    fclose(fp);
+
+    if (!ok)
+    {
+        Xfree(data);
+        return NULL;
+    }
+
+    uint32_t const crc = G_GroupScannerCrc(data, size);
+    Xfree(data);
+
+    for (grpinfo_t const *info = listgrps; info; info = info->next)
+        if (info->size == size && (uint32_t)info->crcval == crc)
+            return info;
+
+    return NULL;
+}
+
+static void G_ResolveCrossplayGroupPath(char const *path, char *resolved, size_t resolvedSize)
+{
+    Bstrncpyz(resolved, path, resolvedSize);
+
+    FILE *fp = fopen(resolved, "rb");
+    if (fp)
+    {
+        fclose(fp);
+        return;
+    }
+
+    char *found = NULL;
+    if (findfrompath(path, &found) == 0 && found)
+    {
+        Bstrncpyz(resolved, found, resolvedSize);
+        Xfree(found);
+    }
+}
+
+static int32_t G_CrossplayGameFromGrpInfo(int32_t gameFlags)
+{
+    if (gameFlags & GAMEFLAG_FURY)
+        return ART_CROSSPLAY_GAME_IONFURY;
+    if (gameFlags & GAMEFLAG_WW2GI)
+        return ART_CROSSPLAY_GAME_WW2GI;
+    if (gameFlags & GAMEFLAG_NAPALM)
+        return ART_CROSSPLAY_GAME_NAPALM;
+    if (gameFlags & GAMEFLAG_NAM)
+        return ART_CROSSPLAY_GAME_NAM;
+
+    return ART_CROSSPLAY_GAME_DUKE;
+}
+
+static void G_MaybeTrackCrossplayGroup(char const *path)
+{
+    char resolved[BMAX_PATH];
+    G_ResolveCrossplayGroupPath(path, resolved, sizeof(resolved));
+
+    grpinfo_t const *info = G_KnownGameDataInfo(resolved);
+    if (!info)
+        return;
+
+    int32_t const runtimeMask = GAMEFLAG_DUKE | GAMEFLAG_NAM | GAMEFLAG_NAPALM | GAMEFLAG_WW2GI | GAMEFLAG_FURY;
+    if ((info->game & runtimeMask) == (g_gameType & runtimeMask))
+        return;
+
+    if (artCrossplayAddForeignGameData(resolved, G_CrossplayGameFromGrpInfo(info->game)))
+        LOG_F(INFO, "Crossplay: treating %s as foreign game data (%s).", resolved, info->name ? info->name : "known game data");
+}
 
 void G_ExtPreInit(int32_t argc,char const * const * argv)
 {
@@ -174,6 +277,7 @@ void G_ScanGroups(void)
 #define DUKE_COMMON_AFTER_COMMAND_GRP_LOAD(path) do { \
     if (g_netModFileCount < MAXNETMODFILES) \
         Bstrncpyz(g_netModFiles[g_netModFileCount++], (path), BMAX_PATH); \
+    G_MaybeTrackCrossplayGroup(path); \
 } while (0)
 #include "../../build/include/duke_common_grpload_shared.cpp.inc"
 #undef DUKE_COMMON_AFTER_COMMAND_GRP_LOAD

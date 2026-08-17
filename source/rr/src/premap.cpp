@@ -2407,7 +2407,9 @@ int G_EnterLevel(int gameMode)
 {
     int32_t i, mii;
     char levelName[BMAX_PATH];
+    char const *crossplayMapName = NULL;
 
+    artCrossplayResetLevel();
 //    flushpackets();
 //    waitforeverybody();
     vote_map = vote_episode = voting = -1;
@@ -2527,6 +2529,7 @@ int G_EnterLevel(int gameMode)
 
         G_LoadMapHack(levelName, "endgame.map");
         G_SetupFilenameBasedMusic(levelName, "endgame.map", ud.m_level_number);
+        crossplayMapName = "endgame.map";
     }
     else if (!VOLUMEONE && Menu_HaveUserMap())
     {
@@ -2538,6 +2541,7 @@ int G_EnterLevel(int gameMode)
 
         G_LoadMapHack(levelName, boardfilename);
         G_SetupFilenameBasedMusic(levelName, boardfilename, ud.m_level_number);
+        crossplayMapName = boardfilename;
     }
     else if (REALITY)
     {
@@ -2551,6 +2555,14 @@ int G_EnterLevel(int gameMode)
     else
     {
         G_LoadMapHack(levelName, g_mapInfo[mii].filename);
+        crossplayMapName = g_mapInfo[mii].filename;
+    }
+
+    if (!REALITY && crossplayMapName)
+    {
+        artCrossplayCaptureMapSprites();
+        artCrossplayPrepareForeignMapArt(crossplayMapName);
+        artCrossplayApplyMapTileRemap();
     }
 
     if (RR && !RRRA && ud.volume_number == 1 && ud.level_number == 1)

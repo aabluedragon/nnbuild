@@ -154,7 +154,7 @@ void paletteLoadFromDisk(void)
 #endif
 
     buildvfs_kfd fil;
-    if ((fil = kopen4load("palette.dat", 0)) == buildvfs_kfd_invalid)
+    if ((fil = kopen4load("palette.dat", artGetBaseSearchFirst())) == buildvfs_kfd_invalid)
         return;
 
 

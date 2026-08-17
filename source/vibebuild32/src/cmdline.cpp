@@ -114,6 +114,39 @@ static const char *G_CommandLineOptionValue(const char *option, const char *shor
     return nullptr;
 }
 
+static const char *G_CommandLineOptionTextValue(const char *option, const char *shortName, const char *longName,
+                                                short *argIndex, int argc, char const * const *argv)
+{
+    size_t const shortLen = Bstrlen(shortName);
+    size_t const longLen = Bstrlen(longName);
+
+    if (!Bstrncasecmp(option, longName, longLen))
+    {
+        const char *value = option + longLen;
+        if (*value == '=')
+            ++value;
+        if (*value)
+            return value;
+        if (*argIndex + 1 < argc)
+            return argv[++*argIndex];
+        return nullptr;
+    }
+
+    if (!Bstrncasecmp(option, shortName, shortLen))
+    {
+        const char *value = option + shortLen;
+        if (*value == '=')
+            ++value;
+        if (*value)
+            return value;
+        if (*argIndex + 1 < argc)
+            return argv[++*argIndex];
+        return nullptr;
+    }
+
+    return nullptr;
+}
+
 static void G_ShowParameterHelp(void)
 {
     const char* s = "Usage: " APPBASENAME " [files] [options]\n"
@@ -129,9 +162,13 @@ static void G_ShowParameterHelp(void)
         "-h[file.def]\tUse an alternate def\n"
         "-j[dir]\t\tAdds a directory to EDuke32's search list\n"
         "-gm, --game <name>\tForce Duke, World Tour, Ion Fury, SW, Blood, RR, NAM, Napalm, WW2GI, or Exhumed\n"
+        "-gm.lvls, --game.levels <name>\tCrossplay: use this game's levels/maps\n"
+        "-gm.its, --game.items <name>\tCrossplay: use this game's item rules/data\n"
+        "-gm.wpns, --game.weapons <name>\tCrossplay: use this game's weapon rules/data\n"
         "-gjs, --gen-js [name]\tCreate autojs/<name>/ JavaScript mod starter and exit\n"
         "-gts, --gen-ts [name]\tCreate autojs/<name>/ TypeScript mod starter and exit\n"
         "-js, --js [file.js]\tLoad a JavaScript user script\n"
+        "-skn, --skin <name|#>\tPlayer multiplayer skin/profile (e.g. Duke, LoWang, Shelly)\n"
         "-sm, --skip-menu\tSkip the game picker and native startup window\n"
         "-m, --menu\t\tForce the native startup window (overrides -sm)\n"
         "-sc, --skip-cinema\tSkip startup cinematics and logo animations\n"
@@ -157,6 +194,9 @@ static void G_ShowParameterHelp(void)
         "net command examples:\n"
         "-net /n0:3\tHost 3-player match in master/slave mode.\n"
         "-net /n0 192.168.0.1\tJoin specified IP in master/slave mode.\n"
+        "cross-game example:\n"
+        APPBASENAME " -gm ionfury --game-dir /path/to/Ion\\ Fury -g /path/to/DUKE3D.GRP -map E3L6\n"
+        "\t\tRun Duke3D Atomic's Rabid Transit map with Ion Fury as the main game.\n"
         "\n"
         "-as, --async\tHost: server-authoritative netplay - never stall on a slow\n"
         "\t\tclient (their own input gets more latency instead). Default\n"
@@ -559,6 +599,24 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     ud.m_color = ud.color = atoi(argv[++i]);
                     LOG_F(INFO, "Player color palette: %d", ud.color);
+                    i++;
+                    continue;
+                }
+                if (!Bstrncasecmp(c + 1, "skin", 4) || !Bstrncasecmp(c + 1, "skn", 3))
+                {
+                    if (const char *skinName = G_CommandLineOptionTextValue(c + 1, "skn", "skin", &i, argc, argv))
+                    {
+                        int32_t const skin = P_SkinIndexFromName(skinName);
+                        if (skin >= 0)
+                        {
+                            ud.skin = skin;
+                            LOG_F(INFO, "Player skin/profile: %s (%d)", g_playerSkinNames[skin], skin);
+                        }
+                        else
+                        {
+                            LOG_F(WARNING, "Unknown player skin/profile '%s'.", skinName);
+                        }
+                    }
                     i++;
                     continue;
                 }

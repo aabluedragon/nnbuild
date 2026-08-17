@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //-------------------------------------------------------------------------
 
 #include "compat.h"
+#include "build.h"
 #include "keyboard.h"
 #include "control.h"
 #include "init.h"
@@ -139,6 +140,7 @@ bool LoadLevel(int nMap)
 {
     char fileName[BMAX_PATH];
 
+    artCrossplayResetLevel();
     initspritelists();
 
     if (bUserMap)
@@ -389,6 +391,9 @@ bool LoadLevel(int nMap)
     initx = startPos.x;
     inity = startPos.y;
     initz = startPos.z;
+    artCrossplayCaptureMapSprites();
+    artCrossplayPrepareForeignMapArt(fileName);
+    artCrossplayApplyMapTileRemap();
 
 #ifdef YAX_ENABLE
     yax_update(1);
@@ -443,6 +448,10 @@ void InstallEngine()
     // initgroupfile("stuff.dat");
 
     char *cwd;
+
+    artSetBaseSearchFirst(artCrossplayForeignDataCount() > 0 ? 1 : 0);
+    if (artCrossplayForeignDataCount() > 0)
+        LOG_F(INFO, "Crossplay: base runtime ART pinned to main game data.");
 
     if (g_modDir[0] != '/' && (cwd = buildvfs_getcwd(NULL, 0)))
     {

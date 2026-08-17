@@ -238,14 +238,24 @@ void P_QuickKill(DukePlayer_t* p);
 void P_GetInput(int snum, bool uncapped);
 void P_ProcessInput(int snum);
 
-// Multiplayer enemy skins. Skin 0 is Duke; see g_playerSkinNames. Skins whose
-// art isn't present in the running game (e.g. Alien Beast, which needs the
-// Atomic Edition GRP) fall back to Duke via P_ValidateSkin.
-#define MAXPLAYERSKINS 8
+// Multiplayer skins / crossplay character profiles. Skin 0 is Duke; see
+// g_playerSkinNames. Duke enemy skins require local Duke art. Crossplay
+// profiles require their source game's data and currently fall back to the
+// native player sprite for rendering while keeping the selected character's
+// voice.
+#define MAXPLAYERSKINS 10
 extern const char *g_playerSkinNames[MAXPLAYERSKINS];
 int32_t P_SkinBaseTile(int32_t skin);
 int32_t P_ValidateSkin(int32_t skin);
+int32_t P_SkinIndexFromName(char const *name);
+int32_t P_SkinHasEnemySpriteArt(int32_t skin);
+int32_t P_SkinHasRenderableArt(int32_t skin);
+int32_t P_SkinUsesPlayerPalette(int32_t skin);
+int32_t P_SkinIsCrossplayProfile(int32_t skin);
+int32_t P_SkinVoiceGame(int32_t skin);
 void P_GetSkinFrame(int32_t skin, int32_t aplayerStartFrame, int32_t aplayerNumFrames, int32_t *startFrame, int32_t *numFrames, int32_t *viewType);
+int32_t P_SkinRenderTile(int32_t skin, int32_t aplayerStartFrame, int32_t aplayerNumFrames, int32_t curframe, int32_t direction);
+int32_t P_SkinReferenceTile(int32_t skin);
 int32_t P_SkinFootOffset(int32_t picnum, int32_t yrepeat, int32_t cstat, int32_t alsotileyofs);
 int32_t P_SkinRemapVoice(int32_t skin, int32_t soundNum, int32_t playerDead);
 

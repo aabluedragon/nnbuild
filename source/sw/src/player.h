@@ -34,16 +34,17 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 #define MIN_SWIM_DEPTH 15
 
-// Player view height
-#define PLAYER_HEIGHT Z(58)
-#define PLAYER_CRAWL_HEIGHT Z(36)
+// Player view height.  Native SW keeps Lo Wang's dimensions, while SW-on-Duke
+// crossplay maps switch these through the helper functions below.
+#define SW_NATIVE_PLAYER_HEIGHT Z(58)
+#define SW_NATIVE_PLAYER_CRAWL_HEIGHT Z(36)
 #define PLAYER_SWIM_HEIGHT Z(26)
 #define PLAYER_DIVE_HEIGHT Z(26)
 #define PLAYER_DIE_DOWN_HEIGHT Z(4)
 #define PLAYER_DIE_UP_HEIGHT Z(8)
 
 // step heights - effects floor_dist's
-#define PLAYER_STEP_HEIGHT Z(30)
+#define SW_NATIVE_PLAYER_STEP_HEIGHT Z(30)
 //#define PLAYER_STEP_HEIGHT Z(34)
 //#define PLAYER_STEP_HEIGHT Z(38)
 
@@ -57,23 +58,48 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 //#define PLAYER_JUMP_STEP_HEIGHT Z(34)
 //#define PLAYER_FALL_STEP_HEIGHT Z(24)
 
-#define PLAYER_JUMP_STEP_HEIGHT Z(48)
-#define PLAYER_FALL_STEP_HEIGHT Z(24)
+#define SW_NATIVE_PLAYER_JUMP_STEP_HEIGHT Z(48)
+#define SW_NATIVE_PLAYER_FALL_STEP_HEIGHT Z(24)
+
+int SW_CrossplayUseDukePlayerDimensions(void);
+int SW_PlayerHeight(void);
+int SW_PlayerCrawlHeight(void);
+int SW_PlayerStepHeight(void);
+int SW_PlayerJumpStepHeight(void);
+int SW_PlayerFallStepHeight(void);
+int SW_PlayerRunFloorDist(void);
+int SW_PlayerCrawlFloorDist(void);
+int SW_PlayerWadeFloorDist(void);
+int SW_PlayerJumpFloorDist(void);
+int SW_PlayerFallFloorDist(void);
+int SW_PlayerRunCeilingDist(void);
+int SW_PlayerSpriteClipdist(void);
+int SW_PlayerActorRadius(void);
+int SW_PlayerSpriteXRepeat(void);
+void SW_CrossplayScalePlayerTSprite(tspriteptr_t tsp);
+int SW_PlayerSpriteYRepeat(void);
+
+#define PLAYER_HEIGHT SW_PlayerHeight()
+#define PLAYER_CRAWL_HEIGHT SW_PlayerCrawlHeight()
+#define PLAYER_STEP_HEIGHT SW_PlayerStepHeight()
+#define PLAYER_JUMP_STEP_HEIGHT SW_PlayerJumpStepHeight()
+#define PLAYER_FALL_STEP_HEIGHT SW_PlayerFallStepHeight()
 
 // FLOOR_DIST variables are the difference in the Players view and the sector floor.
 // Must be at LEAST this distance or you cannot move onto sector.
-#define PLAYER_RUN_FLOOR_DIST (PLAYER_HEIGHT - PLAYER_STEP_HEIGHT)
-#define PLAYER_CRAWL_FLOOR_DIST (PLAYER_CRAWL_HEIGHT - PLAYER_CRAWL_STEP_HEIGHT)
-#define PLAYER_WADE_FLOOR_DIST (PLAYER_HEIGHT - PLAYER_STEP_HEIGHT)
-#define PLAYER_JUMP_FLOOR_DIST (PLAYER_HEIGHT - PLAYER_JUMP_STEP_HEIGHT)
-#define PLAYER_FALL_FLOOR_DIST (PLAYER_HEIGHT - PLAYER_FALL_STEP_HEIGHT)
+#define PLAYER_RUN_FLOOR_DIST SW_PlayerRunFloorDist()
+#define PLAYER_CRAWL_FLOOR_DIST SW_PlayerCrawlFloorDist()
+#define PLAYER_WADE_FLOOR_DIST SW_PlayerWadeFloorDist()
+#define PLAYER_JUMP_FLOOR_DIST SW_PlayerJumpFloorDist()
+#define PLAYER_FALL_FLOOR_DIST SW_PlayerFallFloorDist()
 #define PLAYER_SWIM_FLOOR_DIST (PLAYER_SWIM_HEIGHT - PLAYER_SWIM_STEP_HEIGHT)
 #define PLAYER_DIVE_FLOOR_DIST (PLAYER_DIVE_HEIGHT - PLAYER_DIVE_STEP_HEIGHT)
 
 
 // FLOOR_DIST variables are the difference in the Players view and the sector floor.
 // Must be at LEAST this distance or you cannot move onto sector.
-#define PLAYER_RUN_CEILING_DIST Z(10)
+#define SW_NATIVE_PLAYER_RUN_CEILING_DIST Z(10)
+#define PLAYER_RUN_CEILING_DIST SW_PlayerRunCeilingDist()
 #define PLAYER_SWIM_CEILING_DIST (Z(12))
 #define PLAYER_DIVE_CEILING_DIST (Z(22))
 #define PLAYER_CRAWL_CEILING_DIST (Z(12))
@@ -116,8 +142,10 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 //#define PLAYER_NINJA_XREPEAT (56)
 //#define PLAYER_NINJA_YREPEAT (56)
-#define PLAYER_NINJA_XREPEAT (47)
-#define PLAYER_NINJA_YREPEAT (33)
+#define SW_NATIVE_PLAYER_NINJA_XREPEAT (47)
+#define SW_NATIVE_PLAYER_NINJA_YREPEAT (33)
+#define PLAYER_NINJA_XREPEAT SW_PlayerSpriteXRepeat()
+#define PLAYER_NINJA_YREPEAT SW_PlayerSpriteYRepeat()
 
 int SetVisHigh(void);
 int SetVisNorm(void);
@@ -131,6 +159,7 @@ void InitMultiPlayerInfo(void);
 void MoveScrollMode2D(PLAYERp pp);
 void DoPlayerDivePalette(PLAYERp pp);
 void DoPlayerNightVisionPalette(PLAYERp pp);
+void DoPlayerBeginDiveNoWarp(PLAYERp pp);
 void DoPlayerStopDiveNoWarp(PLAYERp pp);
 void DoPlayerResetMovement(PLAYERp pp);
 void DoPlayerZrange(PLAYERp pp);

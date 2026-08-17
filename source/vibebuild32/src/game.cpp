@@ -1559,6 +1559,22 @@ void G_HandleSpecialKeys(void)
         G_UpdateScreenArea();
     }
 
+    // Same debug aid the SW crossplay bridge uses: VB_CP_CAPTURE=<frames> saves
+    // one screenshot that many frames in, so a Duke level under the Duke runtime
+    // can be compared against the same level under a foreign runtime.
+    {
+        static int32_t autoCaptureFrames = -1;
+
+        if (autoCaptureFrames < 0)
+        {
+            char const *const env = Bgetenv("VB_CP_CAPTURE");
+            autoCaptureFrames = env != NULL ? Batoi(env) : 0;
+        }
+
+        if (autoCaptureFrames > 0 && --autoCaptureFrames == 0)
+            videoCaptureScreen("cpshot0000.png", 0);
+    }
+
     if (KB_UnBoundKeyPressed(sc_F12))
     {
         KB_ClearKeyDown(sc_F12);
@@ -3867,8 +3883,23 @@ static inline bool OnEvenGround(spritetype* pSprite, int32_t radius)
     return true;
 }
 
+extern int g_vbDukeWatchSprite;
+
 int A_Spawn(int spriteNum, int tileNum)
 {
+    {
+        static int32_t watchTile = -2;
+        if (watchTile == -2)
+        {
+            char const *const env = Bgetenv("VB_CP_WATCH_TILE");
+            watchTile = env != NULL ? Batoi(env) : -1;
+        }
+
+        if (watchTile > 0 && g_vbDukeWatchSprite < 0 && spriteNum == -1 &&
+            (unsigned)tileNum < MAXSPRITES && sprite[tileNum].picnum == watchTile)
+            g_vbDukeWatchSprite = tileNum;
+    }
+
     spritetype*  const pParent = (spriteNum >= 0) ? &sprite[spriteNum] : nullptr;
     spritetype*  pSprite;
     ActorData_t* pActor;
@@ -6185,18 +6216,20 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 // draw that skin's dead frame instead.
                 int32_t const ow = s->owner;
                 int32_t const dp = (ow >= 0 && sprite[ow].picnum == APLAYER) ? sprite[ow].yvel : -1;
-                if ((unsigned)dp < MAXPLAYERS && t->pal != 1 && P_ValidateSkin(g_player[dp].pskin))
+                if ((unsigned)dp < MAXPLAYERS && t->pal != 1 && P_ValidateSkin(g_player[dp].pskin)
+                    && P_SkinHasRenderableArt(g_player[dp].pskin))
                 {
-                    int32_t ds, df, dv;
-                    P_GetSkinFrame(g_player[dp].pskin, 113, 1, &ds, &df, &dv);  // PLYINGDEAD -> dead frame
+                    int32_t const renderTile = P_SkinRenderTile(g_player[dp].pskin, 113, 1, 0, 0);
+                    if (renderTile < 0)
+                    {
+                        t->z += (24 << 8);
+                        break;
+                    }
 
-                    int32_t const skinBase = P_SkinBaseTile(g_player[dp].pskin);
-                    t->picnum = skinBase + ds;   // single-view dead frame
-                    t->pal = g_player[dp].ps->palookup;
+                    t->picnum = renderTile;   // single-view dead frame
+                    t->pal = P_SkinUsesPlayerPalette(g_player[dp].pskin) ? g_player[dp].ps->palookup : 0;
 
-                    int32_t rs, rf, rv;
-                    P_GetSkinFrame(g_player[dp].pskin, 0, 1, &rs, &rf, &rv);  // stand reference for size
-                    int32_t const refTile = skinBase + rs;
+                    int32_t const refTile = P_SkinReferenceTile(g_player[dp].pskin);
                     if ((unsigned)refTile < MAXTILES && tilesiz[refTile].y > 0 && tilesiz[APLAYER].y > 0)
                     {
                         int32_t const num = tilesiz[APLAYER].y, den = tilesiz[refTile].y;
@@ -6482,19 +6515,11 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 // chosen enemy's, translating the current CON action of APLAYER
                 // (PSTAND/PWALK/...) to the enemy's equivalent frames. Purely
                 // cosmetic - the game sprite stays APLAYER.
-                if (s->owner >= 0 && P_ValidateSkin(g_player[p].pskin) && t->pal != 1
+                if (s->owner >= 0 && P_ValidateSkin(g_player[p].pskin) && P_SkinHasRenderableArt(g_player[p].pskin) && t->pal != 1
                     && (unsigned)scrofs_action + ACTION_PARAM_COUNT <= (unsigned)g_scriptSize
                     && apScript[scrofs_action + ACTION_PARAM_COUNT] == CON_END)
                 {
-                    int32_t skinStart, skinFrames, skinViewtype;
                     int32_t const aplayerStart = apScript[scrofs_action + ACTION_STARTFRAME];
-                    P_GetSkinFrame(g_player[p].pskin, aplayerStart,
-                                   apScript[scrofs_action + ACTION_NUMFRAMES],
-                                   &skinStart, &skinFrames, &skinViewtype);
-
-                    int32_t skinOffset = 0;
-                    if (skinViewtype == 5)
-                        skinOffset = getofs_viewtype_mirrored<5>(t->cstat, s->ang - a);
 
                     // Remember the player's ground position (its sprite origin,
                     // ignoring the player tile's own art yoffset) so we can plant
@@ -6502,19 +6527,22 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     int32_t const origPicnum   = t->picnum;
                     int32_t const origFootOfs  = P_SkinFootOffset(origPicnum, t->yrepeat, t->cstat, 0);
 
-                    int32_t const skinBase = P_SkinBaseTile(g_player[p].pskin);
-                    t->picnum = skinBase + skinStart + skinOffset
-                                + skinViewtype * (klabs(curframe) % skinFrames);
-                    t->pal = g_player[p].ps->palookup;
+                    int32_t const skinDirection = getofs_viewtype_mirrored<5>(t->cstat, s->ang - a);
+                    int32_t const renderTile = P_SkinRenderTile(g_player[p].pskin, aplayerStart,
+                                                                apScript[scrofs_action + ACTION_NUMFRAMES],
+                                                                curframe, skinDirection);
+                    if (renderTile < 0)
+                        goto PALONLY;
+
+                    t->picnum = renderTile;
+                    t->pal = P_SkinUsesPlayerPalette(g_player[p].pskin) ? g_player[p].ps->palookup : 0;
                     scrofs_action = 0;  // The generic CON action block below must not re-offset.
 
                     // Size: scale uniformly (preserving aspect and each frame's
                     // relative proportions) so the enemy's stand frame is drawn
                     // at the player tile's world height - otherwise a tall enemy
                     // tile towers and a short one shrinks at the player's repeat.
-                    int32_t rs, rf, rv;
-                    P_GetSkinFrame(g_player[p].pskin, 0, 1, &rs, &rf, &rv);  // PSTAND reference
-                    int32_t const refTile = skinBase + rs;
+                    int32_t const refTile = P_SkinReferenceTile(g_player[p].pskin);
                     // Use the fixed APLAYER stand tile as the reference height (a
                     // constant), not the player's current frame, so the enemy's
                     // size stays steady instead of pulsing as the player animates.
@@ -9020,10 +9048,20 @@ static void G_Startup(void)
             Bcorrectfilename(boardfilename,0);
 
             i = kopen4loadfrommod(boardfilename,0);
-            if (i!=-1)
+            int crossplayMapFound = 0;
+            if (i == -1 && artCrossplayForeignDataCount() > 0)
+            {
+                char *crossplayMapData = NULL;
+                int32_t crossplayMapSize = 0;
+                crossplayMapFound = artCrossplayReadForeignDataEntry(boardfilename, &crossplayMapData, &crossplayMapSize, NULL, 0);
+                if (crossplayMapData)
+                    Xfree(crossplayMapData);
+            }
+            if (i!=-1 || crossplayMapFound)
             {
                 LOG_F(INFO, "Using level: '%s'.",boardfilename);
-                kclose(i);
+                if (i != -1)
+                    kclose(i);
             }
             else
             {
@@ -9041,6 +9079,10 @@ static void G_Startup(void)
 
     //LOG_F("* Hold Esc to Abort. *\n");
     //LOG_F("Loading art header...\n");
+
+    artSetBaseSearchFirst(artCrossplayForeignDataCount() > 0 ? 1 : 0);
+    if (artCrossplayForeignDataCount() > 0)
+        LOG_F(INFO, "Crossplay: base runtime ART pinned to main game data.");
 
     if (artLoadFiles("tiles000.art", MAXCACHE1DSIZE) < 0)
         G_GameExit("Failed loading art.");
@@ -11045,4 +11087,113 @@ void M32RunScript(const char* s) { UNREFERENCED_PARAMETER(s); }
 int GetTime(void)
 {
     return (int32_t)totalclock;
+}
+
+// ---------------------------------------------------------------------------
+// VibeBuild32 crossplay: Duke actor AI hosted by another game's runtime.
+//
+// When a non-Duke runtime (currently Shadow Warrior) plays a Duke-family level,
+// the enemies must behave exactly like Duke's, which means running Duke's own
+// CON scripts and actor code rather than an approximation.  These entry points
+// bring up just the Duke state that the actor system needs; they are named
+// VB_DukeAI_* so they stay globally visible after the per-game symbol merge.
+// See source/sw/DUKE_CROSSPLAY_BRIDGE.md.
+// ---------------------------------------------------------------------------
+
+extern "C" int VB_DukeAI_CompileScripts(void)
+{
+    static int compiled = 0;
+
+    if (compiled)
+        return compiled;
+
+    // The host runtime started through its own app_main, so none of Duke's
+    // game state exists yet.  Bring up the minimum the CON compiler and the
+    // actor system need: one allocated player, then scripts and the derived
+    // enemy flag tables.
+    ud.multimode = 1;
+    G_MaybeAllocPlayer(0);
+    g_player[0].connected = 1;
+
+    if (g_player[0].ps == NULL)
+        return 0;
+
+    G_CompileScripts();
+    G_InitDynamicNames();
+    G_PostCreateGameState();
+
+    compiled = 1;
+    return compiled;
+}
+
+// VibeBuild32 crossplay: the tile a Duke actor should be drawn with.
+//
+// Duke never animates an actor by changing sprite[].picnum; the drawn tile is
+// derived at render time from the actor's current CON action (its start frame,
+// view type and current frame) plus a rotation offset that depends on where the
+// viewer is standing.  A foreign runtime drawing these sprites itself therefore
+// has to ask for the same tile, or every enemy stands frozen on one frame.
+// This mirrors the actor case of G_DoSpriteAnimations().
+extern "C" int VB_DukeAI_DisplayPicnum(int spriteNum, int32_t camX, int32_t camY, int32_t camAng, uint16_t *cstat,
+                                       int *viewtypeStep)
+{
+    if (viewtypeStep != NULL)
+        *viewtypeStep = 0;
+
+    if ((unsigned)spriteNum >= MAXSPRITES)
+        return -1;
+
+    auto const s = &sprite[spriteNum];
+
+    if (!G_TileHasActor(s->picnum))
+        return s->picnum;
+
+    int32_t const curframe = AC_CURFRAME(actor[spriteNum].t_data);
+    int32_t const scrofs_action = AC_ACTION_ID(actor[spriteNum].t_data);
+
+    if ((unsigned)scrofs_action + ACTION_PARAM_COUNT > (unsigned)g_scriptSize ||
+        apScript[scrofs_action + ACTION_PARAM_COUNT] != CON_END)
+        return s->picnum;
+
+    int32_t const viewtype = apScript[scrofs_action + ACTION_VIEWTYPE];
+    uint16_t const action_flags = apScript[scrofs_action + ACTION_FLAGS];
+
+    int const invertp = viewtype < 0;
+    int const l = klabs(viewtype);
+
+    uint16_t spriteCstat = cstat != NULL ? *cstat : s->cstat;
+    int frameOffset;
+
+    int const viewAng = ((l > 4 && l != 8) || action_flags & AF_VIEWPOINT) ? getangle(s->x - camX, s->y - camY) : camAng;
+    int const angDiff = invertp ? viewAng - s->ang : s->ang - viewAng;
+
+    switch (l)
+    {
+        case 2:  frameOffset = getofs_viewtype<8>(angDiff) & 1; break;
+        case 3:
+        case 4:  frameOffset = viewtype_mirror<7>(spriteCstat, getofs_viewtype<16>(angDiff) & 7); break;
+        case 5:  frameOffset = getofs_viewtype_mirrored<5>(spriteCstat, angDiff); break;
+        case 7:  frameOffset = getofs_viewtype_mirrored<7>(spriteCstat, angDiff); break;
+        case 8:  frameOffset = getofs_viewtype<8>(angDiff); spriteCstat &= ~4; break;
+        case 9:  frameOffset = getofs_viewtype_mirrored<9>(spriteCstat, angDiff); break;
+        case 12: frameOffset = getofs_viewtype<12>(angDiff); spriteCstat &= ~4; break;
+        case 16: frameOffset = getofs_viewtype<16>(angDiff); spriteCstat &= ~4; break;
+        default: frameOffset = 0; break;
+    }
+
+    int const picnum = s->picnum + frameOffset + apScript[scrofs_action + ACTION_STARTFRAME] + viewtype * curframe;
+
+    if ((unsigned)picnum >= MAXTILES)
+        return s->picnum;
+
+    // Duke also walks backwards past frames whose art is missing.  That test has
+    // to be made against Duke's art, so a foreign host -- whose tile numbering is
+    // its own -- gets the step and applies the walk after remapping the tile.
+    if (viewtypeStep != NULL && viewtype > 0)
+        *viewtypeStep = l;
+
+    if (cstat != NULL)
+        *cstat = spriteCstat;
+
+    return picnum;
 }

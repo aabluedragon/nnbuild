@@ -1225,6 +1225,7 @@ void   initspritelists(void);
 int32_t engineFatalError(char const * msg);
 
 int32_t   engineLoadBoard(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum);
+int32_t   engineLoadBoardNative(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum);
 int32_t   engineLoadMHK(const char *filename);
 void engineClearLightsFromMHK();
 #ifdef HAVE_CLIPSHAPE_FEATURE
@@ -1243,6 +1244,53 @@ void    tileConvertAnimFormat(int32_t picnum, uint32_t const picanmdisk);
 void    artReadManifest(buildvfs_kfd fil, artheader_t * const local);
 void    artPreloadFile(buildvfs_kfd fil, artheader_t * const local);
 int32_t artLoadFiles(const char *filename, int32_t askedsize);
+void    artSetBaseSearchFirst(char searchfirst);
+char    artGetBaseSearchFirst(void);
+enum
+{
+    ART_CROSSPLAY_GAME_UNKNOWN = -1,
+    ART_CROSSPLAY_GAME_DUKE = 0,
+    ART_CROSSPLAY_GAME_WORLDTOUR = 1,
+    ART_CROSSPLAY_GAME_SW = 2,
+    ART_CROSSPLAY_GAME_BLOOD = 3,
+    ART_CROSSPLAY_GAME_RR = 4,
+    ART_CROSSPLAY_GAME_NAM = 5,
+    ART_CROSSPLAY_GAME_NAPALM = 6,
+    ART_CROSSPLAY_GAME_WW2GI = 7,
+    ART_CROSSPLAY_GAME_EXHUMED = 8,
+    ART_CROSSPLAY_GAME_IONFURY = 9,
+};
+enum
+{
+    ART_CROSSPLAY_DOMAIN_LEVELS = 0,
+    ART_CROSSPLAY_DOMAIN_ITEMS = 1,
+    ART_CROSSPLAY_DOMAIN_WEAPONS = 2,
+    ART_CROSSPLAY_DOMAIN_COUNT = 3,
+};
+void    artCrossplaySetGameDomains(int32_t runtimeGame, int32_t levelsGame, int32_t itemsGame, int32_t weaponsGame);
+int32_t artCrossplayRuntimeGame(void);
+int32_t artCrossplayDomainGame(int32_t domain);
+int32_t artCrossplayEffectiveDomainGame(int32_t domain);
+void    artCrossplayClearForeignData(void);
+int32_t artCrossplayAddForeignData(char const *path);
+int32_t artCrossplayAddForeignGameData(char const *path, int32_t game);
+int32_t artCrossplayForeignDataCount(void);
+int32_t artCrossplayReadForeignDataEntry(char const *entryName, char **data, int32_t *size, char *sourcePath, size_t sourcePathSize);
+int32_t artCrossplayReadForeignGameDataEntry(int32_t game, char const *entryName, char **data, int32_t *size, char *sourcePath, size_t sourcePathSize);
+int32_t artCrossplayHasForeignGameData(int32_t game);
+int16_t artCrossplayLoadForeignGameTile(int32_t game, int16_t sourceTile);
+void    artCrossplayResetLevel(void);
+void    artCrossplayCaptureMapSprites(void);
+int32_t artCrossplayIsOriginalMapSprite(int32_t spriteNum);
+int16_t artCrossplayOriginalMapSpritePicnum(int32_t spriteNum);
+int16_t artCrossplayOriginalMapSectorCeilingPicnum(int32_t sectorNum);
+int16_t artCrossplayOriginalMapSectorFloorPicnum(int32_t sectorNum);
+int16_t artCrossplayOriginalMapWallPicnum(int32_t wallNum);
+int16_t artCrossplayOriginalMapWallOverpicnum(int32_t wallNum);
+int16_t artCrossplayRemapMapTile(int16_t tile);
+int32_t artCrossplayPrepareForeignMapArt(char const *mapName);
+int32_t artCrossplayMapArtPrepared(void);
+void    artCrossplayApplyMapTileRemap(void);
 void    artClearMapArt(void);
 void    artSetupMapArt(const char *filename);
 bool    tileLoad(int16_t tilenume);

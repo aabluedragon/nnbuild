@@ -97,6 +97,8 @@ ANIMATOR DoSuicide, DoUziSmoke;
 ANIMATOR DoShrapJumpFall;
 ANIMATOR DoFastShrapJumpFall;
 
+static SWBOOL SW_CrossplayMeleeDamageDukeMapWall(short hit_wall, int hit_x, int hit_y, int hit_z, short owner);
+static SWBOOL SW_CrossplayProjectileDamageDukeMapWall(short weapon, short hit_wall);
 int SpawnSmokePuff(short SpriteNum);
 SWBOOL WarpToUnderwater(short *sectnum, int *x, int *y, int *z);
 SWBOOL WarpToSurface(short *sectnum, int *x, int *y, int *z);
@@ -4400,6 +4402,9 @@ VehicleMoveHit(short SpriteNum)
         short hit_sprite = NORM_SPRITE(u->ret);
         SPRITEp hsp = &sprite[hit_sprite];
 
+        if (SW_CrossplayDamageDukeMapSprite(SpriteNum, hit_sprite, &sprite[SpriteNum].xyz))
+            return TRUE;
+
         if (TEST(hsp->extra, SPRX_BREAKABLE))
         {
             HitBreakSprite(hit_sprite, u->ID);
@@ -4570,6 +4575,9 @@ WeaponMoveHit(short SpriteNum)
         hsp = &sprite[hit_sprite];
         hu = User[hit_sprite];
 
+        if (SW_CrossplayDamageDukeMapSprite(SpriteNum, hit_sprite, &sp->xyz))
+            return TRUE;
+
         if (hsp->statnum == STAT_ENEMY)
         {
             ////DSPRINTF(ds, "Bullet Hit Monster %d, stat %d ", hsp-sprite, (short)hsp->statnum);
@@ -4656,6 +4664,12 @@ WeaponMoveHit(short SpriteNum)
         SECTOR_OBJECTp sop;
 
         ASSERT(wph->extra != -1);
+
+        if (SW_CrossplayProjectileDamageDukeMapWall(SpriteNum, hitinfo.wall))
+        {
+            u->ret = 0;
+            return TRUE;
+        }
 
         if (TEST(wph->extra, WALLFX_SECTOR_OBJECT))
         {
@@ -7777,6 +7791,24 @@ void TraverseBreakableWalls(short start_sect, int x, int y, int z, short ang, in
 }
 
 
+// Maps an explosion sprite's ID to its DamageData entry, mirroring the choices
+// DoDamage() makes for the same IDs.  Used where damage has to be computed for a
+// target that has no SW USER record, such as a Duke crossplay sprite.
+static int SW_ExplosionDamageIndex(short id)
+{
+    switch (id)
+    {
+    case BOLT_EXP:        return DMG_BOLT_EXP;
+    case TANK_SHELL_EXP:  return DMG_TANK_SHELL_EXP;
+    case MICRO_EXP:
+    case MINE_EXP:        return DMG_MINE_EXP;
+    case NAP_EXP:         return DMG_NAPALM_EXP;
+    case MUSHROOM_CLOUD:  return DMG_NUCLEAR_EXP;
+    case GRENADE_EXP:
+    default:              return DMG_GRENADE_EXP;
+    }
+}
+
 int DoExpDamageTest(short Weapon)
 {
     SPRITEp wp = &sprite[Weapon];
@@ -7843,6 +7875,14 @@ int DoExpDamageTest(short Weapon)
             }
         }
     }
+
+    // Duke's sprites are not in SW's damage lists, so the blast has to reach them
+    // separately; without this an SW grenade could go off inside a Duke enemy and
+    // leave it untouched.  The strength comes from SW's own DamageData entry for
+    // this explosion, so the weapon hits Duke's actors exactly as hard as it hits
+    // SW's own.
+    SW_CrossplayExplodeDukeMapSprites(Weapon, wp->x, wp->y, wp->z, wp->sectnum, wu->Radius,
+                                      DamageData[SW_ExplosionDamageIndex(wu->ID)].damage_hi);
 
     if (wu->ID == MUSHROOM_CLOUD) return 0;   // Central Nuke doesn't break stuff
     // Only secondaries do that
@@ -8038,6 +8078,12 @@ DoStar(int16_t Weapon)
 
 #define STAR_STICK_RNUM 400
 #define STAR_BOUNCE_RNUM 600
+
+            if (SW_CrossplayProjectileDamageDukeMapWall(Weapon, hit_wall))
+            {
+                KillSprite(Weapon);
+                return TRUE;
+            }
 
             if (wph->lotag == TAG_WALL_BREAK)
             {
@@ -13789,6 +13835,10 @@ InitSwordAttack(PLAYERp pp)
                 extern STATE s_TrashCanPain[];
                 SPRITEp hsp = &sprite[hitinfo.sprite];
                 tu = User[hitinfo.sprite];
+                vec3_t const hitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+                if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &hitPos))
+                    return 0;
 
                 if (tu) // JBF: added null check
                     switch (tu->ID)
@@ -13847,6 +13897,11 @@ InitSwordAttack(PLAYERp pp)
                             return 0;
                         }
                     }
+                }
+
+                if (SW_CrossplayMeleeDamageDukeMapWall(hitinfo.wall, hitinfo.x, hitinfo.y, hitinfo.z, pp->PlayerSprite))
+                {
+                    return 0;
                 }
 
                 if (wall[hitinfo.wall].lotag == TAG_WALL_BREAK)
@@ -13979,6 +14034,10 @@ InitFistAttack(PLAYERp pp)
                 extern STATE s_TrashCanPain[];
                 SPRITEp hsp = &sprite[hitinfo.sprite];
                 tu = User[hitinfo.sprite];
+                vec3_t const hitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+                if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &hitPos))
+                    return 0;
 
                 if (tu)     // JBF: added null check
                     switch (tu->ID)
@@ -14050,6 +14109,11 @@ InitFistAttack(PLAYERp pp)
                             return 0;
                         }
                     }
+                }
+
+                if (SW_CrossplayMeleeDamageDukeMapWall(hitinfo.wall, hitinfo.x, hitinfo.y, hitinfo.z, pp->PlayerSprite))
+                {
+                    return 0;
                 }
 
                 if (wall[hitinfo.wall].lotag == TAG_WALL_BREAK)
@@ -17630,6 +17694,9 @@ BulletHitSprite(SPRITEp sp, short hit_sprite, int hit_x, int hit_y, int hit_z, s
     short New;
     short id;
 
+    if (SW_CrossplayDamageDukeMapSprite(sp - sprite, hit_sprite, &hit_pos))
+        return TRUE;
+
     // hit a NPC or PC?
     if (TEST(hsp->extra, SPRX_PLAYER_OR_ENEMY))
     {
@@ -19770,6 +19837,9 @@ InitEnemyFireball(short SpriteNum)
 SWBOOL
 WarpToUnderwater(short *sectnum, int *x, int *y, int *z)
 {
+    if (sectnum == NULL || (unsigned)*sectnum >= (unsigned)numsectors)
+        return FALSE;
+
     short i, nexti;
     SECT_USERp sectu = SectUser[*sectnum];
     SPRITEp under_sp = NULL, over_sp = NULL;
@@ -19778,7 +19848,7 @@ WarpToUnderwater(short *sectnum, int *x, int *y, int *z)
     int sx, sy;
 
     // 0 not valid for water match tags
-    if (sectu->number == 0)
+    if (sectu == NULL || sectu->number == 0)
         return FALSE;
 
     // search for DIVE_AREA "over" sprite for reference point
@@ -19849,6 +19919,9 @@ WarpToUnderwater(short *sectnum, int *x, int *y, int *z)
 SWBOOL
 WarpToSurface(short *sectnum, int *x, int *y, int *z)
 {
+    if (sectnum == NULL || (unsigned)*sectnum >= (unsigned)numsectors)
+        return FALSE;
+
     short i, nexti;
     SECT_USERp sectu = SectUser[*sectnum];
     short over, under;
@@ -19858,7 +19931,7 @@ WarpToSurface(short *sectnum, int *x, int *y, int *z)
     char Found = FALSE;
 
     // 0 not valid for water match tags
-    if (sectu->number == 0)
+    if (sectu == NULL || sectu->number == 0)
         return FALSE;
 
     // search for UNDERWATER "under" sprite for reference point
@@ -19921,6 +19994,9 @@ WarpToSurface(short *sectnum, int *x, int *y, int *z)
 SWBOOL
 SpriteWarpToUnderwater(SPRITEp sp)
 {
+    if (sp == NULL || (unsigned)sp->sectnum >= (unsigned)numsectors)
+        return FALSE;
+
     USERp u = User[sp - sprite];
     short i, nexti;
     SECT_USERp sectu = SectUser[sp->sectnum];
@@ -19930,7 +20006,7 @@ SpriteWarpToUnderwater(SPRITEp sp)
     int sx, sy;
 
     // 0 not valid for water match tags
-    if (sectu->number == 0)
+    if (sectu == NULL || sectu->number == 0)
         return FALSE;
 
     // search for DIVE_AREA "over" sprite for reference point
@@ -19999,6 +20075,9 @@ SpriteWarpToUnderwater(SPRITEp sp)
 SWBOOL
 SpriteWarpToSurface(SPRITEp sp)
 {
+    if (sp == NULL || (unsigned)sp->sectnum >= (unsigned)numsectors)
+        return FALSE;
+
     USERp u = User[sp - sprite];
     short i, nexti;
     SECT_USERp sectu = SectUser[sp->sectnum];
@@ -20009,7 +20088,7 @@ SpriteWarpToSurface(SPRITEp sp)
     char Found = FALSE;
 
     // 0 not valid for water match tags
-    if (sectu->number == 0)
+    if (sectu == NULL || sectu->number == 0)
         return FALSE;
 
     // search for UNDERWATER "under" sprite for reference point
@@ -20598,6 +20677,11 @@ int QueueHole(short hit_sect, short hit_wall, int hit_x, int hit_y, int hit_z)
     SPRITEp sp;
     short sectnum;
 
+    {
+        vec3_t hitPos = { hit_x, hit_y, hit_z };
+        if (SW_CrossplayDamageDukeMapWall(-1, hit_wall, &hitPos))
+            return -1;
+    }
 
     if (TestDontStick(-1,hit_wall))
         return -1;
@@ -20645,6 +20729,21 @@ int QueueHole(short hit_sect, short hit_wall, int hit_x, int hit_y, int hit_z)
         changespritesect(SpriteNum, sectnum);
 
     return SpriteNum;
+}
+
+static SWBOOL SW_CrossplayMeleeDamageDukeMapWall(short hit_wall, int hit_x, int hit_y, int hit_z, short owner)
+{
+    vec3_t hitPos = { hit_x, hit_y, hit_z };
+    return SW_CrossplayDamageDukeMapWall(owner, hit_wall, &hitPos) != 0;
+}
+
+static SWBOOL SW_CrossplayProjectileDamageDukeMapWall(short weapon, short hit_wall)
+{
+    if ((unsigned)weapon >= (unsigned)MAXSPRITES)
+        return FALSE;
+
+    SPRITEp const sp = &sprite[weapon];
+    return SW_CrossplayDamageDukeMapWall(weapon, hit_wall, &sp->xyz) != 0;
 }
 
 #define FLOORBLOOD_RATE 30

@@ -1,9 +1,0 @@
-{
-  "name": "vbjs-mod",
-  "private": true,
-  "version": "0.1.0",
-  "description": "VibeBuild32 auto-loaded JavaScript mod",
-  "types": "./vb.d.ts",
-  "scripts": { "check": "tsc --noEmit -p tsconfig.json" },
-  "devDependencies": { "typescript": "^5.0.0" }
-}

@@ -53,6 +53,37 @@ sound_t** g_sounds;
 sound_t nullsound;
 voiceinfo_t nullvoice = { -1, FX_Ok, UINT16_MAX, 0, -1, { 0, 0, 0 } };
 
+static int S_CrossplayGameFromSoundPrefix(char const *name, char const **entryName)
+{
+    static char constexpr prefix[] = "vb-crossplay://";
+
+    if (!name || Bstrncmp(name, prefix, sizeof(prefix) - 1))
+        return ART_CROSSPLAY_GAME_UNKNOWN;
+
+    char const *game = name + sizeof(prefix) - 1;
+    char const *slash = Bstrchr(game, '/');
+
+    if (!slash || slash == game || !slash[1])
+        return ART_CROSSPLAY_GAME_UNKNOWN;
+
+    int32_t gameId = ART_CROSSPLAY_GAME_UNKNOWN;
+    if (!Bstrncasecmp(game, "duke", slash - game))
+        gameId = ART_CROSSPLAY_GAME_DUKE;
+    else if (!Bstrncasecmp(game, "worldtour", slash - game))
+        gameId = ART_CROSSPLAY_GAME_WORLDTOUR;
+    else if (!Bstrncasecmp(game, "sw", slash - game) || !Bstrncasecmp(game, "shadowwarrior", slash - game))
+        gameId = ART_CROSSPLAY_GAME_SW;
+    else if (!Bstrncasecmp(game, "ionfury", slash - game) || !Bstrncasecmp(game, "fury", slash - game))
+        gameId = ART_CROSSPLAY_GAME_IONFURY;
+
+    if (gameId < 0)
+        return ART_CROSSPLAY_GAME_UNKNOWN;
+
+    if (entryName)
+        *entryName = slash + 1;
+    return gameId;
+}
+
 static void S_LogPlaybackFailure(char const * const prefix, char const * const filename)
 {
     char const * const error = FX_ErrorString(FX_Error);
@@ -545,19 +576,36 @@ int32_t S_LoadSound(uint32_t num)
     auto& snd = g_sounds[num];
 
     buildvfs_kfd fp = S_OpenAudio(snd->filename, g_loadFromGroupOnly, 0);
+    char *crossplayData = NULL;
+    int32_t crossplaySize = 0;
 
     if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
     {
-        DVLOG_F(LOG_DEBUG, "Unable to load sound #%d: file %s not found.", num, snd->filename);
-        return 0;
+        char const *crossplayEntry = NULL;
+        int32_t const crossplayGame = S_CrossplayGameFromSoundPrefix(snd->filename, &crossplayEntry);
+
+        if (crossplayGame < 0 || !artCrossplayReadForeignGameDataEntry(crossplayGame, crossplayEntry, &crossplayData, &crossplaySize, NULL, 0))
+        {
+            DVLOG_F(LOG_DEBUG, "Unable to load sound #%d: file %s not found.", num, snd->filename);
+            return 0;
+        }
     }
 
-    int32_t l = kfilelength(fp);
+    int32_t l = crossplayData ? crossplaySize : kfilelength(fp);
     g_sounds[num]->lock = CACHE1D_PERMANENT;
     snd->len = l;
     g_cache.allocateBlock((intptr_t*)&snd->ptr, l, (char*)&g_sounds[num]->lock);
-    l = kread(fp, snd->ptr, l);
-    kclose(fp);
+
+    if (crossplayData)
+    {
+        Bmemcpy(snd->ptr, crossplayData, l);
+        Xfree(crossplayData);
+    }
+    else
+    {
+        l = kread(fp, snd->ptr, l);
+        kclose(fp);
+    }
 
     return l;
 }
@@ -994,8 +1042,23 @@ error:
     return voice;
 }
 
+// VibeBuild32 crossplay: when a foreign runtime hosts Duke's actors, that
+// runtime owns the audio device -- Duke must not call FX_Init()/FX_SetCallBack()
+// underneath it.  Duke still decides which sound plays and when, which is the
+// part that is actor behavior; the host just plays it.  See
+// source/vibebuild32/src/crossplay_dukeai.cpp.
+static int (*g_vbDukeAISoundHook)(int soundNum, int spriteNum);
+
+extern "C" void VB_DukeAI_SetSoundHook(int (*hook)(int soundNum, int spriteNum))
+{
+    g_vbDukeAISoundHook = hook;
+}
+
 int S_PlaySound(int num)
 {
+    if (g_vbDukeAISoundHook != NULL)
+        return g_vbDukeAISoundHook(num, -1);
+
     if (!Net_InPredictableState())
         return -1;
 
@@ -1050,6 +1113,9 @@ error:
 
 int A_PlaySound(int soundNum, int spriteNum)
 {
+    if (g_vbDukeAISoundHook != NULL)
+        return g_vbDukeAISoundHook(soundNum, spriteNum);
+
     return (unsigned)spriteNum >= MAXSPRITES ? S_PlaySound(soundNum) :
         S_PlaySound3D(soundNum, spriteNum, sprite[spriteNum].xyz);
 }

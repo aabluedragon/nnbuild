@@ -31,7 +31,6 @@ int g_numRealPalettes;
 
 static char precachehightile[2][MAXTILES>>3];
 static int  g_precacheCount;
-
 static void flag_precache(int32_t tile, int32_t type)
 {
     if (!bitmap_test(gotpic, tile))
@@ -887,6 +886,237 @@ static void resetprestat(int snum,int g)
     g_player[snum].fraggedby_time = g_player[snum].fragged_time = 0;
 }
 
+enum
+{
+    VB_SW_ICON_STAR = 1793,
+    VB_SW_ICON_SHOTGUN = 1794,
+    VB_SW_ICON_LG_ROCKET = 1796,
+    VB_SW_ICON_UZI = 1797,
+    VB_SW_ICON_LG_UZI_AMMO = 1799,
+    VB_SW_ICON_MICRO_BATTERY = 1800,
+    VB_SW_ICON_SM_MEDKIT = 1802,
+    VB_SW_ICON_MEDKIT = 1803,
+    VB_SW_ICON_CLOAK = 1804,
+    VB_SW_ICON_FLASHBOMB = 1805,
+    VB_SW_ICON_UZIFLOOR = 1807,
+    VB_SW_ICON_CHEMBOMB = 1808,
+    VB_SW_ICON_NUKE = 1809,
+    VB_SW_ICON_BOOSTER = 1810,
+    VB_SW_ICON_RAIL_GUN = 1811,
+    VB_SW_ICON_RAIL_AMMO = 1812,
+    VB_SW_ICON_REPAIR_KIT = 1813,
+    VB_SW_ICON_GUARD_HEAD = 1814,
+    VB_SW_ICON_GRENADE_LAUNCHER = 1817,
+    VB_SW_ICON_MICRO_GUN = 1818,
+    VB_SW_ICON_HEAT_CARD = 1819,
+    VB_SW_ICON_HEART_LG_AMMO = 1820,
+    VB_SW_ICON_AUTORIOT = 1822,
+    VB_SW_ICON_LG_SHOTSHELL = 1823,
+    VB_SW_ICON_HEART = 1824,
+    VB_SW_ICON_CALTROPS = 1829,
+    VB_SW_ICON_LG_GRENADE = 1831,
+    VB_SW_ICON_LG_MINE = 1842,
+    VB_SW_ICON_ROCKET = 1843,
+    VB_SW_ICON_NIGHT_VISION = 3031,
+    VB_SW_ICON_ARMOR = 3030,
+    VB_SW_ICON_FIREBALL_LG_AMMO = 3035,
+    VB_SW_BLUE_CARD = 1767,
+    VB_SW_RED_CARD = 1771,
+    VB_SW_GREEN_CARD = 1775,
+    VB_SW_YELLOW_CARD = 1779,
+};
+
+static int32_t G_CrossplayIsDukeLikeGame(int32_t game)
+{
+    switch (game)
+    {
+    case ART_CROSSPLAY_GAME_DUKE:
+    case ART_CROSSPLAY_GAME_WORLDTOUR:
+    case ART_CROSSPLAY_GAME_NAM:
+    case ART_CROSSPLAY_GAME_NAPALM:
+    case ART_CROSSPLAY_GAME_WW2GI:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int16_t G_CrossplayShadowWarriorCardPalette(int16_t sourcePicnum)
+{
+    switch (sourcePicnum)
+    {
+    case VB_SW_RED_CARD:
+        return 21;
+    case VB_SW_YELLOW_CARD:
+        return 23;
+    case VB_SW_GREEN_CARD:
+        return 11;
+    default:
+        return 0;
+    }
+}
+
+static int16_t G_CrossplayShadowWarriorPickupToDuke(int16_t sourcePicnum, int32_t *domain, int16_t *pal)
+{
+    *domain = ART_CROSSPLAY_DOMAIN_ITEMS;
+    *pal = 0;
+
+    switch (sourcePicnum)
+    {
+    case VB_SW_ICON_SM_MEDKIT:
+        return SIXPAK;
+    case VB_SW_ICON_MEDKIT:
+    case VB_SW_ICON_REPAIR_KIT:
+        return FIRSTAID;
+    case VB_SW_ICON_BOOSTER:
+        return ATOMICHEALTH;
+    case VB_SW_ICON_ARMOR:
+        return SHIELD;
+    case VB_SW_ICON_HEAT_CARD:
+    case VB_SW_ICON_NIGHT_VISION:
+        return HEATSENSOR;
+    case VB_SW_ICON_CLOAK:
+        return HOLODUKE;
+    case VB_SW_BLUE_CARD:
+    case VB_SW_RED_CARD:
+    case VB_SW_GREEN_CARD:
+    case VB_SW_YELLOW_CARD:
+        *pal = G_CrossplayShadowWarriorCardPalette(sourcePicnum);
+        return ACCESSCARD;
+
+    case VB_SW_ICON_STAR:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return FIRSTGUNSPRITE;
+    case VB_SW_ICON_SHOTGUN:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return SHOTGUNSPRITE;
+    case VB_SW_ICON_UZI:
+    case VB_SW_ICON_UZIFLOOR:
+    case VB_SW_ICON_AUTORIOT:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return CHAINGUNSPRITE;
+    case VB_SW_ICON_MICRO_GUN:
+    case VB_SW_ICON_ROCKET:
+    case VB_SW_ICON_LG_ROCKET:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return RPGSPRITE;
+    case VB_SW_ICON_GRENADE_LAUNCHER:
+    case VB_SW_ICON_CHEMBOMB:
+    case VB_SW_ICON_FLASHBOMB:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return HEAVYHBOMB;
+    case VB_SW_ICON_LG_MINE:
+    case VB_SW_ICON_CALTROPS:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return TRIPBOMBSPRITE;
+    case VB_SW_ICON_RAIL_GUN:
+    case VB_SW_ICON_GUARD_HEAD:
+    case VB_SW_ICON_HEART:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return SHRINKERSPRITE;
+    case VB_SW_ICON_NUKE:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return DEVISTATORSPRITE;
+
+    case VB_SW_ICON_LG_UZI_AMMO:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return AMMO;
+    case VB_SW_ICON_LG_SHOTSHELL:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return SHOTGUNAMMO;
+    case VB_SW_ICON_MICRO_BATTERY:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return RPGAMMO;
+    case VB_SW_ICON_LG_GRENADE:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return HBOMBAMMO;
+    case VB_SW_ICON_RAIL_AMMO:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return CRYSTALAMMO;
+    case VB_SW_ICON_FIREBALL_LG_AMMO:
+    case VB_SW_ICON_HEART_LG_AMMO:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return DEVISTATORAMMO;
+    default:
+        return -1;
+    }
+}
+
+static int32_t G_CrossplayConvertShadowWarriorMapSpriteToDuke(int32_t spriteNum, int32_t *itemsConverted, int32_t *weaponsConverted)
+{
+    int16_t const sourcePicnum = artCrossplayOriginalMapSpritePicnum(spriteNum);
+    if (sourcePicnum < 0)
+        return 0;
+
+    int32_t domain = ART_CROSSPLAY_DOMAIN_ITEMS;
+    int16_t pal = 0;
+    int16_t const dukePicnum = G_CrossplayShadowWarriorPickupToDuke(sourcePicnum, &domain, &pal);
+    if (dukePicnum < 0)
+        return 0;
+
+    if (!G_CrossplayIsDukeLikeGame(artCrossplayEffectiveDomainGame(domain)))
+        return 0;
+
+    auto &sp = sprite[spriteNum];
+    sp.picnum = dukePicnum;
+    sp.cstat = 0;
+    sp.shade = 0;
+    sp.pal = pal;
+    sp.clipdist = 32;
+    sp.xrepeat = 32;
+    sp.yrepeat = 32;
+    sp.xoffset = 0;
+    sp.yoffset = 0;
+    sp.xvel = 0;
+    sp.yvel = 0;
+    sp.zvel = 0;
+    sp.owner = -1;
+    sp.lotag = 0;
+    sp.hitag = 0;
+    sp.extra = 0;
+    changespritestat(spriteNum, STAT_DEFAULT);
+
+    if (domain == ART_CROSSPLAY_DOMAIN_WEAPONS)
+        ++*weaponsConverted;
+    else
+        ++*itemsConverted;
+
+    return 1;
+}
+
+static void G_CrossplayPrepareForeignMapSpritesForDukeRuntime(void)
+{
+    if (!artCrossplayMapArtPrepared())
+        return;
+
+    if (!G_CrossplayIsDukeLikeGame(artCrossplayRuntimeGame()) ||
+        artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) != ART_CROSSPLAY_GAME_SW)
+        return;
+
+    int32_t itemsConverted = 0;
+    int32_t weaponsConverted = 0;
+    int32_t removed = 0;
+
+    for (int32_t i = MAXSPRITES - 1; i >= 0; --i)
+    {
+        if (sprite[i].statnum == MAXSTATUS || !artCrossplayIsOriginalMapSprite(i))
+            continue;
+
+        if (G_CrossplayConvertShadowWarriorMapSpriteToDuke(i, &itemsConverted, &weaponsConverted))
+            continue;
+
+        A_DeleteSprite(i);
+        ++removed;
+    }
+
+    if (itemsConverted > 0 || weaponsConverted > 0)
+        LOG_F(INFO, "Crossplay: converted %d Shadow Warrior item pickup(s) and %d Shadow Warrior weapon/ammo pickup(s) to Duke runtime pickups.",
+              itemsConverted, weaponsConverted);
+
+    if (removed > 0)
+        LOG_F(INFO, "Crossplay: culled %d foreign Shadow Warrior map sprite(s) for Duke runtime compatibility.", removed);
+}
+
 static void prelevel(char g)
 {
     int i, j, startwall, endwall, lotaglist;
@@ -963,6 +1193,8 @@ static void prelevel(char g)
             continue;
         }
     }
+
+    G_CrossplayPrepareForeignMapSpritesForDukeRuntime();
 
     for (int nextSprite, SPRITES_OF_STAT_SAFE(STAT_DEFAULT, i, nextSprite))
     {
@@ -1789,6 +2021,8 @@ int G_EnterLevel(int g)
 {
     int i;
 
+    artCrossplayResetLevel();
+
     // G_ApplyMenuToGameFlags?
     // ---------------------------------
     vote = votedata_t();
@@ -1902,6 +2136,10 @@ int G_EnterLevel(int g)
     {
         G_LoadMapHack(levelName, m.filename);
     }
+
+    artCrossplayCaptureMapSprites();
+    artCrossplayPrepareForeignMapArt(Menu_HaveUserMap() ? boardfilename : m.filename);
+    artCrossplayApplyMapTileRemap();
 
     g_player[0].ps->q16ang = fix16_from_int(playerAngle);
 
@@ -2018,7 +2256,10 @@ int G_EnterLevel(int g)
             break;
     }
 
-    OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
+    if (currentboardfilename[0])
+        OSD_Printf(OSDTEXT_YELLOW "User map: %s\n", currentboardfilename);
+    else
+        OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
     VBJS_FireSimple("gameStarted");
     VBJS_FireSimple("levelChanged");
     return 0;

@@ -2305,6 +2305,18 @@ void AnimateCacheCursor(void);  // game.c
 void MapSetAll2D(uint8_t fill);    // game.c
 void TerminateGame(void);   // game.c
 void TerminateLevel(void);  // game.c
+void SW_CrossplayMoveForeignMapEffectors(void); // game.c
+int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp); // game.c
+int SW_CrossplayDukeMapBridgeActive(void); // game.c
+int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitPos); // game.c
+int SW_CrossplayDukeSpriteExplosionDamage(int spriteNum); // game.c
+int SW_CrossplayDukeMapSpriteShade(int spriteNum, int *outShade); // game.c
+int SW_CrossplayDukeMapSpriteOldPos(int spriteNum, int32_t *x, int32_t *y, int32_t *z); // game.c
+int SW_CrossplayDukeMapSpriteDisplayTile(int spriteNum, int32_t camX, int32_t camY, int32_t camAng,
+                                         uint16_t *cstat); // game.c
+int SW_CrossplayExplodeDukeMapSprites(int blastSprite, int32_t x, int32_t y, int32_t z, int16_t sectnum,
+                                      int32_t radius, int32_t maxDamage); // game.c
+int SW_CrossplayDamageDukeMapSprite(int spriteNum, int targetSpriteNum, vec3_t const *hitPos); // game.c
 void ResetKeys(void);   // game.c
 SWBOOL KeyPressed(void);  // game.c
 void drawoverheadmap(int cposx,int cposy,int czoom,short cang); // game.c
