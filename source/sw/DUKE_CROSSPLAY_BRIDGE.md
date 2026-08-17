@@ -739,6 +739,36 @@ Fixed since:
   `VB_CP_WATCH_TILES=<t,t,...>` reports every change to the sprites of a given
   Duke tile, which is how both halves of this were pinned down.
 
+- **Only an explosion opens a cracked wall, and opening it must take the crack
+  with it.**  A thrown shuriken blew Duke's cracked walls open, and once open the
+  crack stayed drawn across the hole.  Both came from one shortcut.
+
+  Duke registers `CRACK1`-`CRACK4` as explosive *source* sprites, and the bridge
+  had its own path from a wall hit to the charge group nearby: any hit on any
+  wall in the sector, or within 2048 units, armed every charge whose hitag a
+  source in range carried.  That answered to a shuriken, a bullet or a sword just
+  as readily as to a rocket, and because it fired the charges directly it never
+  touched the crack -- so `DETONATE`'s `KILLIT()` never ran and the sprite stayed
+  on the wall.
+
+  Duke's rule is in `actors.cpp` and is exact: a crack gives way only when
+  `A_IncurDamage()` reports `FIREEXT`, `RPG`, `RADIUSEXPLOSION`, `SEENINE` or
+  `OOZFILTER`, and any other weapon puts its cstat and angle back and leaves it
+  standing.  Cracks are Duke's actors already, so the fix is to stop competing
+  with them: the wall-hit path skips crack sources entirely, and what remains of
+  it only runs for an explosive hit at all, since Duke's charges answer to blast
+  damage rather than to being shot at.  Shooting the wall still works, by the
+  route Duke uses -- the explosion's own radius pass hands the crack to Duke,
+  which detonates it and deletes it.
+
+  `VB_CP_SELFTEST=destruct` covers this as `crack-needs-explosive` (a shuriken
+  fires no charges and leaves the crack standing), `crack-explosive-opens` /
+  `crack-sprite-removed` (a rocket on the crack fires its group and removes it)
+  and `crack-blast-opens` (an explosion *near* a crack does the same, which is
+  how it is actually played).  The stages deliberately use cracks with different
+  hitags: Duke's charges are one-shot, and running every stage against one crack
+  made each stage measure the previous one's leftovers.
+
 - **A sprite must never be in two of the engine's lists at once.**  Handing props
   to Duke made this the bridge's easiest mistake to make, and it cost three
   separate hangs.  The engine keeps its free slots on a status list of their own

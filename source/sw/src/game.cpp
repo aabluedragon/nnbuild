@@ -2850,6 +2850,9 @@ struct sw_crossplay_duke_explosive_source_t
     int16_t sectnum;
     int16_t hitag;
     vec2_t pos;
+    // A crack is Duke's own actor and decides for itself when it gives way, so
+    // the bridge's proximity trigger has to leave it alone.
+    int8_t isCrack;
 };
 
 struct sw_crossplay_duke_light_t
@@ -3232,6 +3235,15 @@ int SW_CrossplayDukeAIFrameResolveFailures(void);
 int SW_CrossplayDukeAISpriteDukePicnum(int spriteNum);
 int SW_CrossplayDukeAISpriteDukeStatnum(int spriteNum);
 int SW_CrossplayDukeAIOwnedCount(void);
+// Weapon classes understood by VB_DukeAI_DamageActor().
+enum
+{
+    VB_DUKEAI_HIT_BULLET,
+    VB_DUKEAI_HIT_MELEE,
+    VB_DUKEAI_HIT_EXPLOSION,
+    VB_DUKEAI_HIT_PROJECTILE,
+};
+
 static int32_t SW_CrossplayDukeAIHitKind(int32_t spriteNum);
 extern "C" void VB_DukeAI_DamageActor(int spriteNum, int damage, int hitKind, int impactAng, int ownerSprite);
 extern "C" int VB_DukeAI_SpriteIsAlive(int spriteNum);
@@ -4708,15 +4720,22 @@ static int32_t SW_CrossplayIsDukeScreenBreakTile(int16_t originalPicnum)
 // protocol so their reaction (pain, gibbing, chained charge explosions) is Duke's.
 int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitPos)
 {
-    UNREFERENCED_PARAMETER(spriteNum);
-
     if (!SW_CrossplayDukeMapBridgeActive() || (unsigned)wallNum >= (unsigned)numwalls)
         return 0;
 
     int16_t const originalPicnum = artCrossplayOriginalMapWallPicnum(wallNum);
     int16_t const originalOverpicnum = artCrossplayOriginalMapWallOverpicnum(wallNum);
     int32_t const lightActivated = SW_CrossplayActivateDukeLightsForWall(wallNum);
-    int32_t const explosiveActivated = SW_CrossplayActivateDukeExplosivesForWall(wallNum, hitPos);
+
+    // Duke's charges answer to blast damage, not to being shot at: a bullet, a
+    // shuriken or a sword leaves a SEENINE chain alone.  This used to fire on any
+    // hit whatsoever, which let a thrown shuriken blow a cracked wall open.  The
+    // wall's own breakables below are a different matter and still take any hit,
+    // the way Duke's glass and screens do.
+    int32_t const explosiveActivated =
+        SW_CrossplayDukeAIHitKind(spriteNum) == VB_DUKEAI_HIT_EXPLOSION
+        ? SW_CrossplayActivateDukeExplosivesForWall(wallNum, hitPos)
+        : 0;
 
     if (originalOverpicnum == VB_DUKE_GLASS)
     {
@@ -5743,6 +5762,16 @@ static int32_t SW_CrossplayActivateDukeExplosivesForWall(int32_t wallNum, vec3_t
     {
         sw_crossplay_duke_explosive_source_t const &source = g_swCrossplayDukeExplosiveSources[i];
         if (source.hitag <= 0 || !SW_CrossplayDukeExplosiveSourceNearWallHit(source, wallSect, nextSect, hitSect, hitPos))
+            continue;
+
+        // A crack is Duke's own actor and has its own rule for when it gives way
+        // (actors.cpp: only FIREEXT, RPG, RADIUSEXPLOSION, SEENINE or OOZFILTER),
+        // ending in the KILLIT() that takes the crack off the wall.  Opening the
+        // wall from here instead skips both halves: it answered to any weapon at
+        // all, and it left the crack sprite drawn across the hole it had just
+        // made.  Hitting near a crack still reaches it -- an explosion's own
+        // radius pass hands it to Duke, which is how Duke does it too.
+        if (source.isCrack)
             continue;
 
         activated |= SW_CrossplayActivateDukeExplosivesWithHitag(source.hitag);
@@ -9997,6 +10026,7 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
             source.sectnum = sectnum;
             source.hitag = sprite[i].hitag;
             source.pos = sprite[i].xy;
+            source.isCrack = originalPicnum >= VB_DUKE_CRACK1 && originalPicnum <= VB_DUKE_CRACK4;
             continue;
         }
 
@@ -10925,6 +10955,7 @@ enum
     VB_CROSSPLAY_SELFTEST_TELEPORT_OBSERVE,
     VB_CROSSPLAY_SELFTEST_TRAIN_SETUP,
     VB_CROSSPLAY_SELFTEST_TRAIN_OBSERVE,
+    VB_CROSSPLAY_SELFTEST_CRACKS,
     VB_CROSSPLAY_SELFTEST_BREAKABLES,
     VB_CROSSPLAY_SELFTEST_EXPLOSIVES,
     VB_CROSSPLAY_SELFTEST_OPERABLE_SETUP,
@@ -10978,6 +11009,12 @@ static int32_t g_swCrossplaySelfTestActorsEngaged;
 static int32_t g_swCrossplaySelfTestActorsAttacked;
 static int32_t g_swCrossplaySelfTestActorsAnimated;
 static int32_t g_swCrossplaySelfTestActorsSounded;
+static int32_t g_swCrossplaySelfTestCrackSprite = -1;
+static int32_t g_swCrossplaySelfTestCrackSpriteB = -1;
+static int32_t g_swCrossplaySelfTestCrackSpriteC = -1;
+static int32_t g_swCrossplaySelfTestCrackWall = -1;
+static int32_t g_swCrossplaySelfTestCrackStage;
+static int32_t g_swCrossplaySelfTestCrackActivationBase;
 static int32_t g_swCrossplaySelfTestBlastHits;
 static int32_t g_swCrossplaySelfTestExplosivesArmed;
 static int32_t g_swCrossplaySelfTestExplosivesBefore;
@@ -11464,7 +11501,7 @@ static void SW_CrossplaySelfTestRunTrainSetup(PLAYERp const pp)
     {
         if (g_swCrossplayDukeTrainCount == 0)
             SW_CrossplaySelfTestReport(1, "trains-present", "no Duke trains in this map, skipped");
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
         return;
     }
 
@@ -11600,6 +11637,161 @@ static int16_t g_swCrossplaySelfTestBreakableStartPic[VB_CROSSPLAY_SELFTEST_MAX_
 static int32_t g_swCrossplaySelfTestSolidBreakableCount;
 static int32_t g_swCrossplaySelfTestBreakablesTested;
 static int32_t g_swCrossplaySelfTestBreakablesHit;
+
+// Duke's cracked walls.  Duke gives CRACK1-4 an explicit rule in actors.cpp: the
+// crack detonates only when A_IncurDamage() reports FIREEXT, RPG,
+// RADIUSEXPLOSION, SEENINE or OOZFILTER, and any other weapon leaves it standing
+// with its cstat and angle put back.  When it does go, DETONATE ends in KILLIT()
+// and the crack sprite is gone.  Both halves are checked here, because the bridge
+// had its own shortcut that answered to anything and left the sprite behind.
+static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
+{
+    if (pp == NULL || User[pp->PlayerSprite] == NULL)
+    {
+        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+        return;
+    }
+
+    // Two cracks wired to different hitags, so the non-explosive stage cannot
+    // spend the charge group the explosive stage is about to measure.  Duke's
+    // charges are one-shot, and testing both stages against one crack made the
+    // second stage read the first stage's leftovers.
+    if (g_swCrossplaySelfTestCrackSprite < 0)
+    {
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+        {
+            if (sprite[spriteNum].statnum == MAXSTATUS || sprite[spriteNum].hitag <= 0)
+                continue;
+
+            int16_t const dukePicnum = (int16_t)SW_CrossplayDukeAISpriteDukePicnum(spriteNum);
+            if (dukePicnum < VB_DUKE_CRACK1 || dukePicnum > VB_DUKE_CRACK4)
+                continue;
+
+            int16_t const sectnum = sprite[spriteNum].sectnum;
+            if ((unsigned)sectnum >= (unsigned)numsectors)
+                continue;
+
+            if (g_swCrossplaySelfTestCrackSprite < 0)
+            {
+                g_swCrossplaySelfTestCrackSprite = spriteNum;
+                g_swCrossplaySelfTestCrackWall = sector[sectnum].wallptr;
+            }
+            else if (g_swCrossplaySelfTestCrackSpriteB < 0 &&
+                     sprite[spriteNum].hitag != sprite[g_swCrossplaySelfTestCrackSprite].hitag)
+            {
+                g_swCrossplaySelfTestCrackSpriteB = spriteNum;
+            }
+            else if (g_swCrossplaySelfTestCrackSpriteB >= 0 &&
+                     sprite[spriteNum].hitag != sprite[g_swCrossplaySelfTestCrackSprite].hitag &&
+                     sprite[spriteNum].hitag != sprite[g_swCrossplaySelfTestCrackSpriteB].hitag)
+            {
+                g_swCrossplaySelfTestCrackSpriteC = spriteNum;
+                break;
+            }
+        }
+
+        if (g_swCrossplaySelfTestCrackSprite < 0 || g_swCrossplaySelfTestCrackSpriteB < 0)
+        {
+            SW_CrossplaySelfTestReport(1, "crack-none", "map has no two independently tagged Duke cracks");
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            return;
+        }
+    }
+
+    int32_t const crackSprite = g_swCrossplaySelfTestCrackSprite;
+    int32_t const crackWall = g_swCrossplaySelfTestCrackWall;
+    vec3_t const hitPos = sprite[crackSprite].xyz;
+    USERp const u = User[pp->PlayerSprite];
+
+    // Stage 0 fires a shuriken at the crack and at the wall carrying it; stage 1
+    // does the same with the rocket launcher.  Going through the host's own
+    // weapon classification is the point -- that is the path the report came
+    // from.
+    if (g_swCrossplaySelfTestCrackStage == 0)
+    {
+        g_swCrossplaySelfTestCrackActivationBase = g_swCrossplayDukeExplosiveActivations;
+
+        int16_t const savedWeapon = u->WeaponNum;
+        u->WeaponNum = WPN_STAR;
+        SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, crackSprite, &hitPos);
+        if (crackWall >= 0)
+            SW_CrossplayDamageDukeMapWall(pp->PlayerSprite, crackWall, &hitPos);
+        u->WeaponNum = savedWeapon;
+
+        g_swCrossplaySelfTestCrackStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_CRACKS);
+        return;
+    }
+
+    // Give Duke a few tics to have acted on the hit before judging it.
+    if (g_swCrossplaySelfTestPhaseTic < 60)
+        return;
+
+    if (g_swCrossplaySelfTestCrackStage == 1)
+    {
+        char detail[128];
+        int32_t const fired = g_swCrossplayDukeExplosiveActivations - g_swCrossplaySelfTestCrackActivationBase;
+        int32_t const alive = sprite[crackSprite].statnum != MAXSTATUS;
+
+        Bsnprintf(detail, sizeof(detail), "spr=%d shuriken: charges fired=%d crack alive=%d", crackSprite, fired,
+                  alive);
+        SW_CrossplaySelfTestReport(fired == 0 && alive, "crack-needs-explosive", detail);
+
+        g_swCrossplaySelfTestCrackActivationBase = g_swCrossplayDukeExplosiveActivations;
+
+        vec3_t const hitPosB = sprite[g_swCrossplaySelfTestCrackSpriteB].xyz;
+        int16_t const savedWeapon = u->WeaponNum;
+        u->WeaponNum = WPN_ROCKET;
+        SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, g_swCrossplaySelfTestCrackSpriteB, &hitPosB);
+        u->WeaponNum = savedWeapon;
+
+        g_swCrossplaySelfTestCrackStage = 2;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_CRACKS);
+        return;
+    }
+
+    char detail[128];
+
+    if (g_swCrossplaySelfTestCrackStage == 2)
+    {
+        int32_t const fired = g_swCrossplayDukeExplosiveActivations - g_swCrossplaySelfTestCrackActivationBase;
+        int32_t const gone = sprite[g_swCrossplaySelfTestCrackSpriteB].statnum == MAXSTATUS;
+
+        Bsnprintf(detail, sizeof(detail), "spr=%d rocket: charges fired=%d crack removed=%d",
+                  g_swCrossplaySelfTestCrackSpriteB, fired, gone);
+        SW_CrossplaySelfTestReport(fired > 0, "crack-explosive-opens", detail);
+        SW_CrossplaySelfTestReport(gone, "crack-sprite-removed", detail);
+
+        if (g_swCrossplaySelfTestCrackSpriteC < 0)
+        {
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            return;
+        }
+
+        // The way this actually gets played: the rocket hits the wall, not the
+        // crack sprite on it.  Nothing routes that to the crack any more except
+        // the explosion's own radius pass, which is how Duke reaches it too, so
+        // check the blast alone still opens the wall and clears the crack.
+        g_swCrossplaySelfTestCrackActivationBase = g_swCrossplayDukeExplosiveActivations;
+
+        vec3_t const blastPos = sprite[g_swCrossplaySelfTestCrackSpriteC].xyz;
+        SW_CrossplayExplodeDukeMapSprites(pp->PlayerSprite, blastPos.x, blastPos.y, blastPos.z,
+                                          sprite[g_swCrossplaySelfTestCrackSpriteC].sectnum, 2048, 140);
+
+        g_swCrossplaySelfTestCrackStage = 3;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_CRACKS);
+        return;
+    }
+
+    int32_t const blastFired = g_swCrossplayDukeExplosiveActivations - g_swCrossplaySelfTestCrackActivationBase;
+    int32_t const blastGone = sprite[g_swCrossplaySelfTestCrackSpriteC].statnum == MAXSTATUS;
+
+    Bsnprintf(detail, sizeof(detail), "spr=%d blast: charges fired=%d crack removed=%d",
+              g_swCrossplaySelfTestCrackSpriteC, blastFired, blastGone);
+    SW_CrossplaySelfTestReport(blastFired > 0 && blastGone, "crack-blast-opens", detail);
+
+    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+}
 
 static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
 {
@@ -12424,7 +12616,7 @@ static void SW_CrossplaySelfTestTick(void)
                 SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP);
                 break;
             case VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT:
-                SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_BREAKABLES);
+                SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_CRACKS);
                 break;
             case VB_CROSSPLAY_SELFTEST_GROUP_TRIPMINES:
                 SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TRIPMINES);
@@ -12443,6 +12635,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_TELEPORT_OBSERVE: SW_CrossplaySelfTestRunTeleportObserve(pp); break;
     case VB_CROSSPLAY_SELFTEST_TRAIN_SETUP: SW_CrossplaySelfTestRunTrainSetup(pp); break;
     case VB_CROSSPLAY_SELFTEST_TRAIN_OBSERVE: SW_CrossplaySelfTestRunTrainObserve(pp); break;
+    case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
     case VB_CROSSPLAY_SELFTEST_BREAKABLES: SW_CrossplaySelfTestRunBreakables(pp); break;
     case VB_CROSSPLAY_SELFTEST_EXPLOSIVES: SW_CrossplaySelfTestRunExplosives(pp); break;
     case VB_CROSSPLAY_SELFTEST_OPERABLE_SETUP: SW_CrossplaySelfTestRunOperableSetup(pp); break;
@@ -12507,15 +12700,6 @@ static int16_t g_swCrossplayDukeAIPlayerStat;
 static int16_t g_swCrossplayDukeAIPlayerYvel;
 static int16_t g_swCrossplayDukeAIPlayerExtra;
 static vec2_16_t g_swCrossplayDukeAIPlayerTileSize;
-
-// Weapon classes understood by VB_DukeAI_DamageActor().
-enum
-{
-    VB_DUKEAI_HIT_BULLET,
-    VB_DUKEAI_HIT_MELEE,
-    VB_DUKEAI_HIT_EXPLOSION,
-    VB_DUKEAI_HIT_PROJECTILE,
-};
 
 // Which Duke weapon class the SW weapon that produced this hit resembles, so
 // Duke's actors show the reaction Duke would show.
