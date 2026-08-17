@@ -669,6 +669,22 @@ Fixed since:
   which is where their state is set up properly.  What is left is what should have
   been there all along -- the tape, the vent cover, the fan, the masked walls.
 
+- **Scenery Duke shoots through must not stop the host's bullets.**  SW's rocket
+  launcher "sometimes did not fire": about half the rockets loosed from E1L1's
+  start detonated the instant they left the launcher, so the shot never appeared.
+  They were hitting tile 852 -- an unnamed rock face, decoration with no gameplay
+  meaning in Duke at all -- standing a stride from the player.  The bridge set
+  `CSTAT_SPRITE_BLOCK_HITSCAN` on *every* prop it classified, where Duke adds it
+  only to a sprite the map already made solid or that its own per-tile spawn
+  makes solid.  Both bits are Duke's answer now
+  (`VB_DukeAI_MapSpriteSolidBits()`), with the bridge's own list applied on top so
+  a prop it drives stays hittable and its damage path can still run.  E1L1's
+  rooftop vent, fan and grates keep exactly the cstats they had.
+  `VB_CP_TEST_ROCKET=1` fires the launcher on a cadence that keeps landing on
+  Duke tics and reports how far each rocket got, naming anything solid at the
+  muzzle when one dies without moving: 9 of 18 instant deaths before, 10 of 64
+  after, the rest averaging 8756 units of flight.
+
 - **A cracked wall is Duke's to run, and nothing host-side may run inside a Duke
   tic.**  Shooting a crack did nothing, and a crack left over a wall opened some
   other way stayed drawn across it.  Two causes, one report.
@@ -855,6 +871,8 @@ reproductions passed while the user's own game failed.
 | `VB_CP_SPRITE_DEBUG=1` | after each Duke tic, log `Numsprites`, linked sprites and free-chain length |
 | `VB_CP_TEST_BLAST=<hitag>` | detonate the Duke charge group with that hitag, and hit any explosive source sprite carrying it (E1L1: rooftop canisters 253, cracked walls 214/223/237) |
 | `VB_CP_WATCH_TILES=<t,t,...>` | report every picnum/statnum change to sprites whose Duke tile is one of these |
+| `VB_CP_TEST_ROCKET=1` | fire SW's rocket launcher repeatedly, reporting each rocket's flight distance and what was solid at the muzzle if it died there |
+| `VB_CP_STRAY_DEBUG=1` | log host sprites found in Duke's lists and put back |
 | `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
 | `VB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
 | `VB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |

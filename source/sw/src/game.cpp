@@ -1389,6 +1389,8 @@ extern "C" int VB_DukeAI_TakeEarthquake(void);
 // sprites have no SW USER record), so detach the sounds here: leaving a looping or
 // following voc3d entry pointing at a recycled sprite slot corrupts the 3D sound
 // list and crashes when the level is torn down.
+static void SW_CrossplayReleaseDukeSpriteOwnership(int32_t spriteNum);
+
 static void SW_CrossplayDeleteDukeSprite(int32_t spriteNum)
 {
     if ((unsigned)spriteNum >= MAXSPRITES || sprite[spriteNum].statnum == MAXSTATUS)
@@ -1397,6 +1399,10 @@ static void SW_CrossplayDeleteDukeSprite(int32_t spriteNum)
     DeleteNoSoundOwner((short)spriteNum);
     DeleteNoFollowSoundOwner((short)spriteNum);
     deletesprite((short)spriteNum);
+
+    // The slot is back in the pool, so it is no longer Duke's; leaving the claim
+    // set lets whatever SW spawns there next be mistaken for a Duke sprite.
+    SW_CrossplayReleaseDukeSpriteOwnership(spriteNum);
 }
 
 int SW_CrossplayDukeAIOwnsSprite(int spriteNum);
@@ -2420,12 +2426,25 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
                 // vent, its grates and every masked wall on the level.
                 int const solidBits = VB_DukeAI_MapSpriteSolidBits(originalPicnum, sp->cstat, sp->hitag);
 
-                SET(sp->cstat, CSTAT_SPRITE_BLOCK_HITSCAN);
-                if ((solidBits & CSTAT_SPRITE_BLOCK) ||
-                    SW_CrossplayDukeSpriteShouldBlock(originalPicnum, behaviorFlags))
-                    SET(sp->cstat, CSTAT_SPRITE_BLOCK);
-                else
-                    RESET(sp->cstat, CSTAT_SPRITE_BLOCK);
+                // Both bits are Duke's answer, the hitscan one included.  It used
+                // to be forced on for every prop, which made scenery Duke leaves
+                // alone stop bullets and rockets: E1L1's start has a rock sprite
+                // (tile 852) a stride from the player, and roughly half the
+                // rockets fired there detonated on it the instant they left the
+                // launcher -- the shot simply never appeared.  Duke only adds
+                // BLOCK_HITSCAN where the map already made the sprite solid, or
+                // where its own per-tile spawn does, which is what keeps its real
+                // props shootable without turning the backdrop solid.
+                RESET(sp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+                SET(sp->cstat, solidBits & (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN));
+
+                // The bridge's own list still applies on top: a prop it drives
+                // has to be hittable for its damage path to ever run.
+                if (SW_CrossplayDukeSpriteShouldBlock(originalPicnum, behaviorFlags))
+                    SET(sp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+                else if (behaviorFlags & (VB_CROSSPLAY_DUKE_SPRITE_BREAKABLE | VB_CROSSPLAY_DUKE_SPRITE_SWITCH |
+                                          VB_CROSSPLAY_DUKE_SPRITE_EXPLOSIVE | VB_CROSSPLAY_DUKE_SPRITE_ACTOR))
+                    SET(sp->cstat, CSTAT_SPRITE_BLOCK_HITSCAN);
 
                 if (TEST(sp->cstat, CSTAT_SPRITE_BLOCK) && Bgetenv("VB_CP_BREAK_DEBUG") != NULL)
                     LOG_F(INFO, "CPBREAK solid spr=%d tile=%d cstat=%d", i, originalPicnum,
@@ -3220,6 +3239,7 @@ static void SW_CrossplayDukeAIAdoptSprite(int32_t spriteNum, int16_t dukePicnum)
 extern "C" int VB_DukeAI_IsAdoptableTile(int tileNum);
 extern "C" int VB_DukeAI_HasActorCode(int tileNum);
 extern "C" int VB_DukeAI_IsEnemyTile(int tileNum);
+int InitRocket(PLAYERp pp);   // weapon.cpp
 int SW_CrossplayDukeAIDukePicnumOf(int spriteNum);
 
 // Duke should own any living actor it has CON code for, not just tiles flagged
@@ -12645,6 +12665,12 @@ static void SW_CrossplayDukeAILeaveDukeSpace(void)
     static int16_t dukeStats[MAXSPRITES];
     int32_t dukeCount = 0;
 
+    // Host sprites found in Duke's lists: ones host code created during the tic.
+    // They go back into their own status list rather than being adopted.
+    static int16_t straySprites[256];
+    static int16_t strayStats[256];
+    int32_t strayCount = 0;
+
     for (int32_t statnum = 0; statnum < MAXSTATUS; ++statnum)
     {
         for (int32_t spriteNum = headspritestat[statnum]; spriteNum >= 0; spriteNum = nextspritestat[spriteNum])
@@ -12654,6 +12680,26 @@ static void SW_CrossplayDukeAILeaveDukeSpace(void)
 
             if (spriteNum == g_swCrossplayDukeAIPlayerSprite)
                 continue;
+
+            // A sprite with an SW USER record is the host's, whatever list it is
+            // sitting in.  Duke's own sprites never have one -- that is why the
+            // bridge cannot delete them through KillSprite() -- so this is an
+            // exact test, and it is the backstop for the mistake this bridge
+            // keeps making: host code that creates a sprite while Duke's status
+            // lists are installed leaves it in one of them, and the swap back
+            // would then adopt it as Duke's, park it in STAT_NO_STATE and take
+            // it out of the list SW runs it from.  For a rocket in flight that
+            // means it stops moving and stops being drawn.
+            if (User[spriteNum] != NULL)
+            {
+                if (strayCount < (int32_t)ARRAY_SIZE(straySprites))
+                {
+                    straySprites[strayCount] = (int16_t)spriteNum;
+                    strayStats[strayCount] = (int16_t)statnum;
+                    ++strayCount;
+                }
+                continue;
+            }
 
             dukeSprites[dukeCount] = (int16_t)spriteNum;
             dukeStats[dukeCount] = (int16_t)statnum;
@@ -12716,6 +12762,22 @@ static void SW_CrossplayDukeAILeaveDukeSpace(void)
             continue;
 
         SW_CrossplayDukeAIListInsert(spriteNum, g_swCrossplayDukeAISwStats[i]);
+    }
+
+    // ...and the host sprites that appeared during the tic go back into the list
+    // SW runs them from.  A rocket fired on the same frame the Duke tic ran was
+    // being adopted and parked instead, which is why it sometimes left the
+    // launcher and then simply was not there.
+    for (int32_t i = strayCount - 1; i >= 0; --i)
+    {
+        if (sprite[straySprites[i]].statnum >= MAXSTATUS)
+            continue;
+
+        SW_CrossplayDukeAIListInsert(straySprites[i], strayStats[i]);
+
+        if (Bgetenv("VB_CP_STRAY_DEBUG") != NULL)
+            LOG_F(INFO, "CPSTRAY spr=%d picnum=%d stat=%d put back", straySprites[i],
+                  TrackerCast(sprite[straySprites[i]].picnum), strayStats[i]);
     }
 
     for (int32_t i = dukeCount - 1; i >= 0; --i)
@@ -13048,9 +13110,33 @@ int SW_CrossplayDukeAIActive(void)
     return g_swCrossplayDukeAIActive;
 }
 
+static void SW_CrossplayReleaseDukeSpriteOwnership(int32_t spriteNum)
+{
+    if ((unsigned)spriteNum < MAXSPRITES)
+        g_swCrossplayDukeAIOwned[spriteNum] = 0;
+}
+
 int SW_CrossplayDukeAIOwnsSprite(int spriteNum)
 {
-    return (unsigned)spriteNum < MAXSPRITES && g_swCrossplayDukeAIOwned[spriteNum];
+    if ((unsigned)spriteNum >= MAXSPRITES || !g_swCrossplayDukeAIOwned[spriteNum])
+        return 0;
+
+    // Ownership is rebuilt from Duke's lists as the tic ends, but the host goes
+    // on destroying Duke sprites after that -- a charge detonating, a prop
+    // breaking, a blast being replayed -- and each of those frees a slot the
+    // flag still claims.  SW allocates from the same pool, so the next sprite it
+    // spawns can land on one and inherit the claim.  That is enough to make it
+    // disappear: the renderer asks this before drawing, and a sprite it believes
+    // is Duke's is drawn with Duke's tile instead of its own.  A rocket that
+    // reused such a slot left the launcher and was simply not there.
+    //
+    // Two things say otherwise, both exact: a freed slot is not Duke's, and
+    // neither is one carrying an SW USER record, which only the host's sprites
+    // ever have.
+    if (sprite[spriteNum].statnum == MAXSTATUS || User[spriteNum] != NULL)
+        return 0;
+
+    return 1;
 }
 
 int SW_CrossplayDukeAISpriteDukePicnum(int spriteNum)
@@ -13442,6 +13528,133 @@ static void SW_CrossplayDukeAITick(void)
     SW_CrossplayApplyDukeMapTriggers();
     SW_CrossplayApplyDukeBlasts();
     SW_CrossplaySpawnDukeQuake(dukeQuakeTics);
+
+    // VB_CP_TEST_ROCKET=1: debug -- fire SW's rocket launcher every few tics and
+    // report what became of each rocket a moment later.  A weapon fired on the
+    // same frame as a Duke tic is the case that matters, so this fires on a
+    // cadence that keeps landing on one.
+    {
+        static int32_t rocketTest = -2;
+        static int32_t rocketTic = 0;
+        static int16_t fired[64];
+        static int32_t firedTic[64];
+        static int32_t firedX[64], firedY[64], firedDist[64];
+        static int16_t firedPic[64];
+        static uint8_t firedDone[64];
+        static int32_t firedCount = 0;
+
+        if (rocketTest == -2)
+            rocketTest = Bgetenv("VB_CP_TEST_ROCKET") != NULL ? 1 : -1;
+
+        if (rocketTest > 0)
+        {
+            ++rocketTic;
+
+            // SW's weapons refuse to fire at all when the player's sector is
+            // invalid (InitRocket() returns straight out on cursectnum < 0), so
+            // count how often the bridge leaves it that way.
+            {
+                static int32_t badSect = 0;
+                PLAYERp const pp = Player + myconnectindex;
+                if ((unsigned)pp->cursectnum >= (unsigned)numsectors)
+                {
+                    ++badSect;
+                    if (badSect <= 5 || (badSect % 50) == 0)
+                        LOG_F(WARNING, "CPROCKET player cursectnum=%d invalid (%d tics so far) -- weapons will "
+                                       "refuse to fire", (int)pp->cursectnum, badSect);
+                }
+            }
+
+            if (rocketTic > 90 && (rocketTic % 7) == 0 && firedCount < (int32_t)ARRAY_SIZE(fired))
+            {
+                PLAYERp const pp = Player + myconnectindex;
+                int32_t const before = Numsprites;
+                InitRocket(pp);
+
+                // The rocket is whatever STAT_MISSILE sprite is newest.
+                int16_t found = -1;
+                for (int32_t sn = headspritestat[STAT_MISSILE]; sn >= 0; sn = nextspritestat[sn])
+                {
+                    found = (int16_t)sn;
+                    break;
+                }
+
+                fired[firedCount] = found;
+                firedTic[firedCount] = rocketTic;
+                firedX[firedCount] = found >= 0 ? sprite[found].x : 0;
+                firedY[firedCount] = found >= 0 ? sprite[found].y : 0;
+                firedPic[firedCount] = found >= 0 ? sprite[found].picnum : -1;
+                firedDist[firedCount] = 0;
+                firedDone[firedCount] = 0;
+                ++firedCount;
+                LOG_F(INFO, "CPROCKET fired -> spr=%d picnum=%d stat=%d (Numsprites %d->%d)", found,
+                      found >= 0 ? TrackerCast(sprite[found].picnum) : -1,
+                      found >= 0 ? TrackerCast(sprite[found].statnum) : -1, before, Numsprites);
+            }
+
+            // Any host sprite still claimed by Duke is one the renderer would
+            // draw with Duke's tile instead of its own.
+            for (int32_t sn = 0; sn < MAXSPRITES; ++sn)
+            {
+                if (sprite[sn].statnum == MAXSTATUS || User[sn] == NULL)
+                    continue;
+
+                if (g_swCrossplayDukeAIOwned[sn])
+                    LOG_F(WARNING, "CPROCKET host sprite %d (picnum %d, stat %d) is still flagged as Duke's",
+                          sn, TrackerCast(sprite[sn].picnum), TrackerCast(sprite[sn].statnum));
+            }
+
+            // Follow each rocket until it dies and report how far it got.  A
+            // rocket that never leaves the muzzle is being stopped by something
+            // right in front of the player.
+            for (int32_t i = 0; i < firedCount; ++i)
+            {
+                int16_t const sn = fired[i];
+                if (sn < 0 || firedDone[i])
+                    continue;
+
+                int32_t const alive = sprite[sn].statnum == STAT_MISSILE && User[sn] != NULL;
+
+                if (alive)
+                {
+                    int32_t const d = ksqrt(SQ(sprite[sn].x - firedX[i]) + SQ(sprite[sn].y - firedY[i]));
+                    if (d > firedDist[i])
+                        firedDist[i] = d;
+
+                    if (rocketTic - firedTic[i] < 40)
+                        continue;
+                }
+
+                firedDone[i] = 1;
+                LOG_F(INFO, "CPROCKET spr=%d flew %d units over %d tics (xvel=%d stat=%d pic=%d)", sn,
+                      firedDist[i], rocketTic - firedTic[i], TrackerCast(sprite[sn].xvel),
+                      TrackerCast(sprite[sn].statnum), TrackerCast(sprite[sn].picnum));
+
+                // A rocket that died without moving hit something at the muzzle.
+                // Report every hitscan-blocking sprite close enough to be it,
+                // and whether it is one the player could even see.
+                if (firedDist[i] == 0)
+                {
+                    for (int32_t o = 0; o < MAXSPRITES; ++o)
+                    {
+                        if (sprite[o].statnum == MAXSTATUS || o == sn)
+                            continue;
+                        if (!TEST(sprite[o].cstat, CSTAT_SPRITE_BLOCK_HITSCAN))
+                            continue;
+
+                        int32_t const d = ksqrt(SQ(sprite[o].x - firedX[i]) + SQ(sprite[o].y - firedY[i]));
+                        if (d > 900)
+                            continue;
+
+                        LOG_F(INFO, "CPROCKET   muzzle blocker spr=%d dukeTile=%d dist=%d xrep=%d cstat=%d "
+                                    "dukeOwned=%d user=%d", o, artCrossplayOriginalMapSpritePicnum(o), d,
+                              TrackerCast(sprite[o].xrepeat), TrackerCast(sprite[o].cstat),
+                              SW_CrossplayDukeAIOwnsSprite(o), User[o] != NULL ? 1 : 0);
+                    }
+                }
+            }
+        }
+    }
 
     // VB_CP_TEST_BLAST=<hitag>: debug -- detonate the Duke charge group carrying
     // that hitag, the way the player does by shooting one of them, so a "the
