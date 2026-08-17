@@ -42,6 +42,11 @@ int VB_DukeAI_IsEnemyTile(int tileNum);
 int VB_DukeAI_IsAdoptableTile(int tileNum);
 int VB_DukeAI_HasActorCode(int tileNum);
 int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag);
+int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
+int VB_DukeAI_DrinkingSound(void);
+void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
+                                    int impactAng, int ownerSprite);
+int VB_DukeAI_TakeEarthquake(void);
 int VB_DukeAI_TileIsTripmine(int tileNum);
 int VB_DukeAI_TileIsLaserLine(int tileNum);
 int VB_DukeAI_TileIsFireExt(int tileNum);
@@ -315,6 +320,40 @@ int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
     return bits;
 }
 
+// The other thing A_Spawn() gives a map sprite that the map itself does not:
+// a lotag.  Duke's use key finds what is in front of the player with a
+// lotag-only neartag() search, so a sprite A_Spawn() never tagged is invisible
+// to it -- which is why a Duke water fountain could not be drunk from in the
+// host: its lotag is assigned at spawn, and the bridge was carrying the map's
+// untagged sprite straight through.
+int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag)
+{
+    if ((unsigned)tileNum >= MAXTILES)
+        return mapLotag;
+
+    switch (tileGetMapping(tileNum))
+    {
+    case WATERFOUNTAIN__:
+    case TOILET__:
+    case STALL__:
+    case VIEWSCREEN__:
+    case VIEWSCREEN2__:
+        return 1;
+
+    case PLUG__:
+        return 9999;
+
+    default:
+        return mapLotag;
+    }
+}
+
+// Duke's own sound number for drinking, so the host does not hardcode one.
+int VB_DukeAI_DrinkingSound(void)
+{
+    return DUKE_DRINKING;
+}
+
 int VB_DukeAI_HasActorCode(int tileNum)
 {
     if ((unsigned)tileNum >= MAXTILES)
@@ -341,6 +380,15 @@ int VB_DukeAI_IsAdoptableTile(int tileNum)
     // receive that tag.  Without the hook it would explode without triggering
     // anything, which is why it was previously left out.
     case FIREEXT__:
+        return 1;
+
+    // A locator is an inert, invisible waypoint, but Duke's RECON navigates by
+    // them: A_FindLocator() walks STAT_LOCATOR, and a RECON that cannot find the
+    // next one kills itself on the spot.  That is why E1L2's patrol vehicle
+    // vanished the moment it woke up.  The host reads locators by scanning every
+    // sprite rather than by status list, so handing them to Duke costs it
+    // nothing.
+    case LOCATORS__:
         return 1;
 
     // Duke's own destructible props.  Each of these is self-contained in Duke --
@@ -696,12 +744,185 @@ void VB_DukeAI_WatchedState(int *outStat, int *outXvel, int *outZvel, int *outCu
     if (outHitag)    *outHitag = g_dukeAIWatchHitag;
 }
 
+
+// Damage the host asks Duke to deal to one of its own map props.
+//
+// The host keeps props (breakables, cracks, tape, hydrants) on its own layer so
+// they keep animating, so they are not in Duke's status lists and Duke's damage
+// code never sees them -- the host reimplemented that code instead, and the copy
+// kept drifting: wrong break sounds, props that survived a blast, hydrants that
+// sprayed no water, cracks left on a wall Duke had already blown open.  The prop
+// is handed to Duke instead: the queue drains at the top of a Duke tic, where
+// Duke's status lists are installed, and each hit spawns its prop through
+// Duke's own A_Spawn() and fills in Duke's damage inbox.  From there Duke breaks
+// it from inside its own actor tic, which is where a Duke prop breaks.
+//
+// Whatever Duke spawns in response (water, glass, scrap, explosions) lands in
+// Duke's lists and the host adopts it when it takes the lists back, which is the
+// same path an enemy's gibs already take.
+struct VB_DukeAIMapObjectHit
+{
+    int16_t spriteNum;
+    int16_t dukePicnum;
+    int16_t dukeStat;
+    int16_t weaponTile;
+    int16_t damage;
+    int16_t impactAng;
+    int16_t ownerSprite;
+};
+
+static VB_DukeAIMapObjectHit g_dukeAIMapObjectHits[256];
+static int32_t g_dukeAIMapObjectHitCount;
+
+void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
+                                    int impactAng, int ownerSprite)
+{
+    if (!g_dukeAILevelReady || (unsigned)spriteNum >= MAXSPRITES || (unsigned)dukePicnum >= MAXTILES)
+        return;
+
+    if (g_dukeAIMapObjectHitCount >= (int32_t)ARRAY_SIZE(g_dukeAIMapObjectHits))
+        return;
+
+    // One entry per sprite per tic: draining the queue splices the sprite into a
+    // Duke status list, and a second entry would splice it in twice and make the
+    // list circular.  Further hits on the same prop in the same tic add their
+    // damage to the entry already there, the way Duke's own damage inbox
+    // accumulates within a tic.
+    for (int32_t i = 0; i < g_dukeAIMapObjectHitCount; ++i)
+    {
+        if (g_dukeAIMapObjectHits[i].spriteNum != spriteNum)
+            continue;
+
+        g_dukeAIMapObjectHits[i].damage = (int16_t)min(32000, g_dukeAIMapObjectHits[i].damage + max(1, damage));
+        return;
+    }
+
+    int16_t weaponTile;
+    switch (hitKind)
+    {
+    case VB_DUKEAI_HIT_MELEE:      weaponTile = KNEE; break;
+    case VB_DUKEAI_HIT_EXPLOSION:  weaponTile = RPG; break;
+    case VB_DUKEAI_HIT_PROJECTILE: weaponTile = FIRELASER; break;
+    default:                       weaponTile = SHOTSPARK1; break;
+    }
+
+    g_dukeAIMapObjectHits[g_dukeAIMapObjectHitCount++] = { (int16_t)spriteNum,  (int16_t)dukePicnum,
+                                                           (int16_t)dukeStat,   weaponTile,
+                                                           (int16_t)max(1, damage), (int16_t)(impactAng & 2047),
+                                                           (int16_t)ownerSprite };
+}
+
+static void VB_DukeAI_ApplyMapObjectDamage(void)
+{
+    int32_t const count = g_dukeAIMapObjectHitCount;
+    g_dukeAIMapObjectHitCount = 0;
+
+    if (count <= 0)
+        return;
+
+    // Which slots the engine still counts as free.  A slot on that chain must
+    // never be spliced into a status list: it would stay on the free chain as
+    // well, welding the two together, and the engine would then hand the same
+    // slot out again -- 16000 free slots collapsed to 175 that way, and the next
+    // spawn failed with a world barely 300 sprites deep.
+    static uint8_t onFreeList[MAXSPRITES];
+    Bmemset(onFreeList, 0, sizeof(onFreeList));
+    for (int32_t sn = headspritestat[MAXSTATUS], guard = 0; sn >= 0 && guard <= MAXSPRITES;
+         sn = nextspritestat[sn], ++guard)
+        onFreeList[sn] = 1;
+
+    for (int32_t i = 0; i < count; ++i)
+    {
+        VB_DukeAIMapObjectHit const &hit = g_dukeAIMapObjectHits[i];
+        int const spriteNum = hit.spriteNum;
+
+        if (sprite[spriteNum].statnum >= MAXSTATUS || onFreeList[spriteNum])
+            continue;
+
+        // Restore the sprite's Duke tile and hand it to Duke's own spawn, which
+        // is what decides its Duke status list, its CON strength, its clipdist
+        // and its actor_t state -- the same call the bridge makes when it adopts
+        // an enemy.  Duke's props break from inside their own actor tic
+        // (G_MoveStandables reads actor[].htextra through A_IncurDamage), so a
+        // prop that is not spawned and listed as Duke's would never break no
+        // matter what damage it was handed.
+        //
+        // A_Spawn() expects the sprite to be linked, and inside a Duke tic the
+        // host's sprites are in no status list at all -- the swap cleared the
+        // list heads and relinked only Duke's own, while sprite[].statnum still
+        // reads the host's parking list.  Splicing it in by hand first is what
+        // makes changespritestat() inside A_Spawn() valid; asking the engine to
+        // move it from a list it is not in leaves that list circular and hangs
+        // the next walk over it.
+        sprite[spriteNum].picnum = hit.dukePicnum;
+        {
+            int16_t const statnum = (int16_t)((unsigned)hit.dukeStat < MAXSTATUS ? hit.dukeStat : 0);
+            int16_t const head = headspritestat[statnum];
+
+            sprite[spriteNum].statnum = statnum;
+            nextspritestat[spriteNum] = head;
+            prevspritestat[spriteNum] = -1;
+
+            if (head >= 0)
+                prevspritestat[head] = (int16_t)spriteNum;
+
+            headspritestat[statnum] = (int16_t)spriteNum;
+        }
+
+        A_ResetVars(spriteNum);
+        A_Spawn(-1, spriteNum);
+
+        if (sprite[spriteNum].statnum >= MAXSTATUS)
+            continue;
+
+        // Duke's damage inbox, exactly as its own hitscan fills it in.  This is
+        // what the props that break from inside their own actor tic read.
+        actor[spriteNum].htpicnum = hit.weaponTile;
+        actor[spriteNum].htextra += hit.damage;
+        actor[spriteNum].htang = hit.impactAng;
+        actor[spriteNum].htowner = (int16_t)((unsigned)hit.ownerSprite < MAXSPRITES ? hit.ownerSprite
+                                                                                    : (int16_t)spriteNum);
+
+        // ...and A_DamageObject(), which is where Duke breaks the rest of them:
+        // its projectile code calls it on impact rather than leaving it to the
+        // prop's own tic.  It reads the *source* sprite -- that tile is what
+        // decides whether this counts as an explosion, which is the difference
+        // between a tree that catches fire and one that shrugs the hit off --
+        // so give it one and take it away again.
+        int const sourceSprite = A_InsertSprite(sprite[spriteNum].sectnum, sprite[spriteNum].x, sprite[spriteNum].y,
+                                                sprite[spriteNum].z, hit.weaponTile, -32, 0, 0,
+                                                hit.impactAng, 0, 0, spriteNum, 5);
+
+        if (sourceSprite < 0)
+            continue;
+
+        sprite[sourceSprite].extra = hit.damage;
+        sprite[sourceSprite].owner = (int16_t)((unsigned)hit.ownerSprite < MAXSPRITES ? hit.ownerSprite : spriteNum);
+        sprite[sourceSprite].cstat = CSTAT_SPRITE_INVISIBLE;
+
+        A_DamageObject_Internal(spriteNum, sourceSprite);
+
+        if (sprite[sourceSprite].statnum < MAXSTATUS)
+            A_DeleteSprite(sourceSprite);
+    }
+}
+
+// Duke shakes the view by setting a countdown; the host has its own quake, so
+// it takes the value and drives its own.
+int VB_DukeAI_TakeEarthquake(void)
+{
+    int const tics = g_earthquakeTime;
+    g_earthquakeTime = 0;
+    return tics;
+}
+
 void VB_DukeAI_RunTic(void)
 {
     if (!g_dukeAILevelReady)
         return;
 
     VB_DukeAI_ApplyPendingDamage();
+    VB_DukeAI_ApplyMapObjectDamage();
     VB_DukeAI_MoveActorsOnly();
 
     // Duke's actors queue the damage they deal in the target's actor record;

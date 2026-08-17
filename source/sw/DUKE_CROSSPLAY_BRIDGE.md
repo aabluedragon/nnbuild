@@ -539,9 +539,11 @@ Fixed since:
   it, so the vent cover (a floor-aligned PANNEL1, map `cstat` 289) was open
   ground.  The map's bit is now preserved; the list still applies on top, for
   tiles Duke's own spawn code makes solid regardless of the map.  A
-  `breakable-clears-block` check keeps the other half honest -- a prop that
+  `breakable-clears-block` check kept the other half honest -- a prop that
   started solid must stop blocking once broken, or the player is walled out of
-  whatever it was covering.
+  whatever it was covering.  (That check has since become
+  `breakable-keeps-dukes-solidity`: once Duke's own damage code runs on the prop,
+  whether the bit clears is Duke's decision, not the bridge's.  See below.)
 
 - **Duke's enemies wear Duke's colours.**  Every assault trooper was the blue of
   its raw art.  Duke's `A_Spawn()` puts most of its enemies on an alternate
@@ -565,6 +567,123 @@ Fixed since:
   `A_Spawn(-1,i)` keeps the map's sprite index, so the two diff sprite for
   sprite.  That diff is how this was found and is the tool for any future
   "doesn't match Duke" report about sprite state.
+
+- **Duke's own code decides what a damaged prop does.**  Five separate reports
+  -- the vent's break sound, props that stayed solid, E1L1's yellow tape and
+  vent surviving a gas-canister blast, a hydrant that broke without spraying
+  water, a wall crack still drawn on a wall Duke had already blown open -- were
+  one bug: the bridge carried a hand-written copy of Duke's
+  `A_DamageObject()` / `A_DamageWall()` / `A_RadiusDamage()`, built from tables,
+  and the copy drifted from Duke every time Duke's real code did something the
+  tables did not describe.  It is gone.  `SW_CrossplayDamageDukeMapSprite()` now
+  hands the hit to `VB_DukeAI_QueueMapObjectDamage()`, and Duke's own
+  `A_DamageObject_Internal()` runs on the prop at the top of the next Duke tic
+  -- where Duke's status lists are installed, so `A_Spawn()` works.  The queue
+  supplies the prop's Duke tile and a temporary invisible source projectile
+  (Duke's damage code reads the *source* sprite's tile to decide what kind of
+  hit it was, and its `extra` for the damage), then deletes it again.
+  Anything Duke spawns in response -- a hydrant's water, a crack's explosion,
+  glass and scrap -- lands in Duke's lists and the host adopts it when it takes
+  the lists back, which is the same path enemy gibs already take.
+  The one-tic delay is real and visible to tests: the harness's breakables phase
+  arms on one visit and judges on a later one instead of checking synchronously.
+
+- **An exploding canister shakes the room.**  Duke shakes the view by setting a
+  countdown (`g_earthquakeTime`, 16 tics for a detonating charge or an RPG); the
+  host owns the camera, so it drains that value with `VB_DukeAI_TakeEarthquake()`
+  after each Duke tic and drives its own `SpawnQuake()` from it.
+
+- **A blast reaches everything near it, whoever set it off.**  Duke's
+  `A_RadiusDamage()` walks Duke's own status lists, and the host's props live
+  outside them so they keep animating -- so a Duke gas canister going off beside
+  E1L1's yellow tape and vent cover left both untouched.  The host now installs
+  `VB_DukeAI_SetRadiusDamageHook()` and runs the same blast over its own props
+  (Duke-owned sprites are skipped: Duke already dealt to those).  The host's own
+  explosion path had the mirror-image hole -- a detonating charge, crack or
+  tripmine only ever hurt the player -- so it runs the full blast too, which is
+  also what finally removes a crack from a wall the charge just opened.  Chained
+  detonations are Duke's behaviour and are kept; a depth guard only stops two
+  props setting each other off forever.
+
+- **The use key needs the tag Duke's spawn hands out.**  Duke finds what is in
+  front of the player with a lotag-only `neartag()` search, and `A_Spawn()` is
+  what puts a lotag on a water fountain, a toilet and a stall (and 9999 on a
+  PLUG).  The bridge carried the map's untagged sprite straight through, so the
+  use key never saw a Duke water fountain and the player could not drink from
+  it.  `VB_DukeAI_MapSpriteSpawnLotag()` supplies that tag, the same way
+  `VB_DukeAI_MapSpriteSolidBits()` supplies the cstat.  Props whose answer to a
+  use press is their own rather than a map tag are handled before the tag is
+  treated as a map tag -- otherwise a fountain's tag 1 would operate whatever
+  else on the level wears tag 1.  The fountain heals a point per press and shows
+  its water only while it is being drunk from, as Duke's does; the bridge used
+  to run that animation constantly.
+
+- **...and it has to wear them on every frame.**  A trooper drew in Duke's
+  colours while it walked and snapped back to the blue of its raw art the moment
+  it shot.  The recolour is generated per (tile, Duke pal), but the lookup took
+  the level's existing map remap first whenever the tile had one -- and that
+  remap is the tile's *pal 0* art, generated by the level's own art pass without
+  a palette.  The tiles a map places are exactly the base tiles of each actor
+  family (`LIZTROOP`, `LIZTROOPSTAYPUT`, `LIZTROOPDUCKING`, `LIZTROOPJETPACK`,
+  `LIZTROOPONTOILET`), so every frame generated on demand was correct and every
+  frame that landed on a base tile was not.  It also made a pal 21 and a pal 22
+  trooper draw identically, since both resolved to that one uncoloured tile.
+  The recolour is generated first now; the map's copy is only the fallback for a
+  tile whose recolour cannot be made.  `VB_CP_PAL_DEBUG=1` reports which path
+  answered each resolution -- the fix takes E1L1 from 17 `via=maptile` hits to
+  none.
+
+- **A sprite must never be in two of the engine's lists at once.**  Handing props
+  to Duke made this the bridge's easiest mistake to make, and it cost three
+  separate hangs.  The engine keeps its free slots on a status list of their own
+  (`headspritestat[MAXSTATUS]`), so a slot spliced into a status list while it is
+  still on the free chain welds the two together and the engine hands the same
+  slot out twice; a slot spliced in twice leaves one list circular, and the next
+  walk over it never ends.  Three rules now hold, one per place the bridge splices
+  by hand:
+  - the swap back skips a sprite Duke adopted during the tic (it is already in
+    Duke's list),
+  - ...and one Duke *deleted* during the tic, which is on the free chain now --
+    a normal outcome, since a prop handed to Duke's damage code is Duke's to
+    destroy,
+  - and the damage queue skips any slot on the free chain, and takes one entry
+    per sprite per tic.
+  The symptom is worth recognising: the engine answers an exhausted pool by
+  dumping every sprite and every per-actor gamevar, so a corrupted list shows up
+  as the game apparently freezing while it writes hundreds of megabytes of log --
+  E1L1's destruct pass produced 623MB of one gib tile before this was fixed.
+  `VB_CP_SPRITE_DEBUG=1` prints `Numsprites`, the number of linked sprites and
+  the length of the free chain after each Duke tic; when those three disagree, a
+  list is crossed.
+
+- **The bridge's "breakable" list is wider than Duke's.**  Delegating the damage
+  exposed this: `PODFEM1`, `RUBBERCAN`, `FEMMAG1` and an undamageable `CAMERA1`
+  are on the bridge's breakable list but have no case in Duke's
+  `A_DamageObject_Internal()` at all, so Duke leaves them standing however hard
+  they are hit -- and Duke's burnables (a tree, a box, a cone) only give way to
+  an explosion or a fire weapon, never to bullets.  The old approximation broke
+  all of them, which is why nobody noticed.  The `breakable-damage` check
+  therefore asks for what the bridge owes -- every prop reaches Duke, and the
+  ones Duke does break, break -- rather than for the approximation's behaviour.
+  The list itself is still the bridge's own; deriving it from Duke, the way
+  solidity now is, is the remaining piece of this work.
+
+  The same correction applies to what a broken prop does about blocking.  Duke
+  clears the blocking bit on a vent cover or a panel and *leaves it* on a water
+  fountain, which breaks into `WATERFOUNTAINBROKE` and goes on standing there --
+  E3L6's fountain is the case that showed it.  Since a damaged prop is Duke's by
+  the time it is judged, its cstat is Duke's own answer, so the check
+  (`breakable-keeps-dukes-solidity`) now only insists the bridge never *adds*
+  solidity of its own; the `VB_CP_CSTAT_DUMP` diff against native Duke remains
+  the tool for the rest.
+
+- **A RECON needs somewhere to go.**  E1L2's patrol vehicle vanished the moment
+  it noticed the player.  Duke's RECON navigates between LOCATORS sprites
+  through `A_FindLocator()`, which walks `STAT_LOCATOR` -- and if it finds
+  nothing it kills itself on the spot.  The host treats locators as hidden
+  control sprites, so Duke's list was empty.  Locators are adoptable now; they
+  are inert invisible markers, and the host reads its own by scanning every
+  sprite rather than by status list, so handing them to Duke costs it nothing.
 
 Verified across E1L1-E1L8 and E3L6, run per group: all 36 group-runs report
 `fail=0`.
@@ -672,6 +791,8 @@ reproductions passed while the user's own game failed.
 | `VB_CP_ADOPT_DEBUG=1` | log tiles adopted via CON actor code rather than enemy flags |
 | `VB_CP_TEST_SWITCH=1` | log switch activation and the resulting frame |
 | `VB_CP_BREAK_DEBUG=1` | log each broken Duke prop's tile and break sound |
+| `VB_CP_PAL_DEBUG=1` | log every (tile, Duke pal) art resolution and which path answered it |
+| `VB_CP_SPRITE_DEBUG=1` | after each Duke tic, log `Numsprites`, linked sprites and free-chain length |
 | `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
 | `VB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
 | `VB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |

@@ -1078,8 +1078,25 @@ void G_RefreshLights(void)
 }
 #endif // POLYMER
 
+// A_RadiusDamage() only reaches sprites in Duke's own status lists, and under
+// crossplay the host's map props (breakables, cracked walls, the yellow tape
+// and vent covers on E1L1's rooftop) are parked outside them so they keep
+// animating.  A Duke gas canister therefore exploded right next to them without
+// touching them.  The host installs a hook here and runs its own blast over its
+// own props with the same origin, radius and strength.
+static void (*g_vbDukeAIRadiusDamageHook)(int spriteNum, int x, int y, int z, int sectnum, int radius, int damage);
+
+extern "C" void VB_DukeAI_SetRadiusDamageHook(void (*hook)(int spriteNum, int x, int y, int z, int sectnum,
+                                                           int radius, int damage))
+{
+    g_vbDukeAIRadiusDamageHook = hook;
+}
+
 void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
 {
+    if (g_vbDukeAIRadiusDamageHook != NULL)
+        g_vbDukeAIRadiusDamageHook(i, sprite[i].x, sprite[i].y, sprite[i].z, sprite[i].sectnum, klabs(r), hp4);
+
     spritetype *s=&sprite[i],*sj;
     walltype *wal;
     int d, q, x1, y1;

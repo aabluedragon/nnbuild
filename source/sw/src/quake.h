@@ -24,6 +24,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 */
 //-------------------------------------------------------------------------
 
+int SpawnQuake(short sectnum, int x, int y, int z, short tics, short amt, int radius);
 void DoQuakeMatch(short match);
 void ProcessQuakeOn(void);
 void ProcessQuakeSpot(void);

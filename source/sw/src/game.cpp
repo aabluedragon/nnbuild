@@ -57,6 +57,7 @@ Things required to make savegames work:
 #include "interpso.h"
 #include "tags.h"
 #include "sector.h"
+#include "quake.h"
 #include "sprite.h"
 #include "weapon.h"
 #include "player.h"
@@ -1328,6 +1329,9 @@ struct sw_crossplay_duke_sprite_behavior_t
     int8_t strafeDir;
     uint8_t switchState;
     uint8_t tick;
+    // Duke's water fountain is still until someone drinks from it, and runs its
+    // water for as long as they keep the use key down; this is Duke's pData[0].
+    uint8_t useTimer;
     uint16_t attackEvents;
 };
 
@@ -1371,6 +1375,14 @@ static int32_t g_swCrossplayDukeTripmineDetonations;
 
 // Asks Duke for the blocking bits its own spawn leaves on a map sprite.
 extern "C" int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag);
+// ...and for the lotag its spawn assigns, which is what Duke's use key searches on.
+extern "C" int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
+extern "C" int VB_DukeAI_DrinkingSound(void);
+// Hands a hit on a host-owned Duke prop to Duke's own damage code, which runs at
+// the top of the next Duke tic.
+extern "C" void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
+                                               int impactAng, int ownerSprite);
+extern "C" int VB_DukeAI_TakeEarthquake(void);
 
 // SW removes sprites through KillSprite(), which detaches any 3D sounds that are
 // owned by, or follow, the sprite.  The Duke bridge cannot use KillSprite() (these
@@ -2430,6 +2442,12 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
                 SET(sp->cstat, solidBits);
             }
 
+            // Duke's use key searches for a *tagged* sprite, and A_Spawn() is
+            // what tags a few of them (a water fountain, a toilet, a stall).
+            // Without this the host's use key never found them, so a Duke water
+            // fountain could not be drunk from.
+            sp->lotag = (int16_t)VB_DukeAI_MapSpriteSpawnLotag(originalPicnum, sp->lotag);
+
             if (behaviorFlags & VB_CROSSPLAY_DUKE_SPRITE_INVISIBLE_SOURCE)
                 SET(sp->cstat, CSTAT_SPRITE_INVISIBLE);
 
@@ -3079,10 +3097,13 @@ static int32_t g_swCrossplayDukeWaterWarpHold[MAX_SW_PLAYERS_REG];
 static int16_t g_swCrossplayDukeRuntimeTileCache[MAXTILES];
 static uint8_t g_swCrossplayDukeRuntimeTileCacheReady;
 
+static void SW_CrossplayResetDukePalTileCaches(void);
+
 static void SW_CrossplayResetDukeRuntimeTileCache(void)
 {
     Bmemset(g_swCrossplayDukeRuntimeTileCache, 0xff, sizeof(g_swCrossplayDukeRuntimeTileCache));
     g_swCrossplayDukeRuntimeTileCacheReady = 1;
+    SW_CrossplayResetDukePalTileCaches();
 }
 
 static void SW_CrossplayResetDukeBridgeCounters(void)
@@ -3631,22 +3652,65 @@ static int16_t SW_CrossplayRemapDukeTileForRuntime(int16_t sourceTile)
 // assault trooper is pal 22), and the host cannot carry that index over because
 // the same number is a different palette there -- so the recolour is baked into
 // a separate generated tile per (tile, Duke pal).
+// One cache per Duke palette actually in use; a level touches only a handful.
+// Without memoising, a tile whose recolour cannot be generated is retried on
+// every draw call, which re-reads the source palette each time and stalls the
+// game outright.
+static int16_t *g_swCrossplayDukePalTileCache[256];
+
+static void SW_CrossplayResetDukePalTileCaches(void)
+{
+    for (int32_t pal = 0; pal < 256; ++pal)
+        DO_FREE_AND_NULL(g_swCrossplayDukePalTileCache[pal]);
+}
+
 static int16_t SW_CrossplayRemapDukeTileForRuntimePal(int16_t sourceTile, int32_t dukePal)
 {
-    if (dukePal <= 0)
+    if (dukePal <= 0 || dukePal > 255)
         return SW_CrossplayRemapDukeTileForRuntime(sourceTile);
 
     if ((unsigned)sourceTile >= MAXTILES)
         return sourceTile;
 
-    int16_t const mapRemapped = artCrossplayRemapMapTile(sourceTile);
-    if (mapRemapped != sourceTile)
-        return mapRemapped;
+    int16_t *cache = g_swCrossplayDukePalTileCache[dukePal];
+    if (cache == NULL)
+    {
+        cache = (int16_t *)Xmalloc(MAXTILES * sizeof(int16_t));
+        for (int32_t i = 0; i < MAXTILES; ++i)
+            cache[i] = -1;
+        g_swCrossplayDukePalTileCache[dukePal] = cache;
+    }
+    else if (cache[sourceTile] >= 0)
+        return cache[sourceTile];
 
+    // The recolour has to be generated even when the tile already has a map
+    // remap, because that remap is the tile's *pal 0* art: the level's own art
+    // pass generated it without a palette.  Taking it here would drop the Duke
+    // palette on exactly the tiles a map places -- LIZTROOP, LIZTROOPSTAYPUT,
+    // LIZTROOPDUCKING and the rest of the family -- so a trooper drew in Duke's
+    // colours while it walked, on frames generated on demand, and snapped back
+    // to the blue of its raw art the moment an action landed on one of its base
+    // tiles.  It also made pal 21 and pal 22 troopers draw identically.
     int16_t const remapped = artCrossplayLoadForeignGameTilePal(
         artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS), sourceTile, dukePal);
 
-    return remapped >= 0 ? remapped : SW_CrossplayRemapDukeTileForRuntime(sourceTile);
+    // Only when the recolour cannot be generated is the tile's own art the best
+    // answer -- the map's copy of it first, since that is the one this level
+    // already has loaded.  Either way the answer is cached, so the attempt is
+    // made once rather than on every draw.
+    int16_t result = remapped;
+    if (result < 0)
+    {
+        int16_t const mapRemapped = artCrossplayRemapMapTile(sourceTile);
+        result = mapRemapped != sourceTile ? mapRemapped : SW_CrossplayRemapDukeTileForRuntime(sourceTile);
+    }
+
+    if (Bgetenv("VB_CP_PAL_DEBUG") != NULL)
+        LOG_F(INFO, "CPPAL tile=%d pal=%d -> %d via=%s", sourceTile, dukePal, result,
+              remapped >= 0 ? "generated" : "FALLBACK-uncoloured");
+
+    cache[sourceTile] = result;
+    return result;
 }
 
 static void SW_CrossplaySetDukeWallPicnum(int32_t wallNum, int16_t sourceTile)
@@ -6281,6 +6345,32 @@ static int32_t SW_CrossplayExplodeDukeSourceSprite(int32_t spriteNum, vec3_t con
     SW_CrossplayDukeActorAreaDamage(spriteNum, 2048, 48);
     SW_CrossplayActivateDukeExplosivesForSprite(spriteNum, &explosionPos);
 
+    // Duke's charges, cracks and tripmines all detonate through A_RadiusDamage(),
+    // which damages everything nearby -- the neighbouring charge, the crack in
+    // the wall, the tape and vent covers, and Duke's own actors.  This path only
+    // hurt the player, so a wall opened with its crack still drawn across it and
+    // props beside the blast were untouched.
+    //
+    // One blast deep, never nested.  A chain is how Duke behaves, but Duke walks
+    // it a tic at a time -- each charge it arms burns its own fuse.  Letting one
+    // blast detonate its neighbours *within the same call* walks the whole chain
+    // at once instead, and every link spawns its explosion, its scrap and its
+    // gibs before the first one has returned: E1L1's destruct pass ran the sprite
+    // pool dry that way, and Duke answers an exhausted pool by dumping every
+    // sprite and every per-actor gamevar to the log -- hundreds of megabytes, and
+    // minutes of writing it.  The neighbours still go off; they go off on the
+    // tics that follow, through their own fuses.
+    {
+        static int32_t blasting;
+        if (!blasting)
+        {
+            blasting = 1;
+            SW_CrossplayExplodeDukeMapSprites(spriteNum, explosionPos.x, explosionPos.y, explosionPos.z, sectnum,
+                                              2048, 48);
+            blasting = 0;
+        }
+    }
+
     SW_CrossplayClearDukeSpriteBehavior(spriteNum);
     SW_CrossplayDeleteDukeSprite(spriteNum);
     return 1;
@@ -6374,8 +6464,48 @@ static void SW_CrossplayKillDukeActorSprite(int32_t spriteNum, vec3_t const *hit
     SW_CrossplayDeleteDukeSprite(spriteNum);
 }
 
-int SW_CrossplayDamageDukeMapSprite(int spriteNum, int targetSpriteNum, vec3_t const *hitPos)
+// Hands a prop hit to Duke.  Duke needs the sprite's own Duke tile and the Duke
+// status list it belongs in; the bridge parks props outside Duke's lists so they
+// keep animating, so both are supplied here and Duke adopts the sprite once it
+// has run.  Returns 0 when Duke cannot take it, so the caller keeps its own
+// fallback for a run with the Duke AI disabled.
+static int32_t SW_CrossplayQueueDukeObjectDamage(int32_t spriteNum, int32_t targetSpriteNum, vec3_t const *hitPos,
+                                                 sw_crossplay_duke_sprite_behavior_t const &behavior, int32_t hitKind)
 {
+    if (!SW_CrossplayDukeAIActive() || (unsigned)targetSpriteNum >= MAXSPRITES)
+        return 0;
+
+    int16_t const dukePicnum = behavior.sourcePicnum >= 0 ? behavior.sourcePicnum
+                                                          : artCrossplayOriginalMapSpritePicnum(targetSpriteNum);
+    if (dukePicnum <= 0)
+        return 0;
+
+    int32_t const impactAng = hitPos != NULL
+                              ? getangle(sprite[targetSpriteNum].x - hitPos->x, sprite[targetSpriteNum].y - hitPos->y)
+                              : sprite[targetSpriteNum].ang;
+
+    // Duke spawns its map props into STAT_DEFAULT; its damage code only needs
+    // them out of the host's parking list.
+    VB_DukeAI_QueueMapObjectDamage(targetSpriteNum, dukePicnum, 0, hitKind,
+                                   SW_CrossplayDukeSpriteHitDamage(spriteNum), impactAng, spriteNum);
+
+    // The behavior stays until Duke has actually taken the sprite, which happens
+    // at the end of the next Duke tic.  Dropping it here would make every
+    // further hit in the meantime a no-op -- the prop is not Duke's yet and no
+    // longer the bridge's -- so a burst of fire would land as a single shot.
+    return 1;
+}
+
+// hitKindOverride is the weapon class to tell Duke about, or -1 to read it off
+// the attacking sprite.  A blast has to say so explicitly: Duke's props answer
+// to the weapon that hit them (a tree or a box only gives way to an explosion or
+// a fire weapon), and the sprite at the centre of an explosion is not always one
+// the host would classify as explosive -- it may be the thing that just blew up.
+static int SW_CrossplayDamageDukeMapSpriteInternal(int spriteNum, int targetSpriteNum, vec3_t const *hitPos,
+                                                   int hitKindOverride)
+{
+    int const hitKind = hitKindOverride >= 0 ? hitKindOverride : SW_CrossplayDukeAIHitKind(spriteNum);
+
     // Duke's own actors take damage through Duke's damage protocol, so their
     // pain, knockback, gibbing and death are Duke's rather than the bridge's.
     if (SW_CrossplayDukeAIOwnsSprite(targetSpriteNum))
@@ -6385,7 +6515,7 @@ int SW_CrossplayDamageDukeMapSprite(int spriteNum, int targetSpriteNum, vec3_t c
                                   : sprite[targetSpriteNum].ang;
 
         VB_DukeAI_DamageActor(targetSpriteNum, SW_CrossplayDukeSpriteHitDamage(spriteNum),
-                              SW_CrossplayDukeAIHitKind(spriteNum), impactAng, spriteNum);
+                              hitKind, impactAng, spriteNum);
         return 1;
     }
 
@@ -6456,8 +6586,16 @@ int SW_CrossplayDamageDukeMapSprite(int spriteNum, int targetSpriteNum, vec3_t c
         return 1;
     }
 
+
     if (behavior.flags & (VB_CROSSPLAY_DUKE_SPRITE_BREAKABLE | VB_CROSSPLAY_DUKE_SPRITE_EXPLOSIVE))
     {
+        // Duke's own damage code owns what happens to a prop: which frame it
+        // breaks to, what it sounds like, and what it spawns (a hydrant's water,
+        // a crack's explosion, the glass and scrap).  The bridge used to
+        // reimplement that from tables, and the copy kept drifting from Duke.
+        if (SW_CrossplayQueueDukeObjectDamage(spriteNum, targetSpriteNum, hitPos, behavior, hitKind))
+            return 1;
+
         behavior.health = (int16_t)max<int32_t>(behavior.health - SW_CrossplayDukeSpriteHitDamage(spriteNum), 0);
         if (behavior.health <= 0)
             SW_CrossplayBreakDukeSprite(targetSpriteNum, hitPos);
@@ -6467,6 +6605,11 @@ int SW_CrossplayDamageDukeMapSprite(int spriteNum, int targetSpriteNum, vec3_t c
     return 0;
 }
 
+int SW_CrossplayDamageDukeMapSprite(int spriteNum, int targetSpriteNum, vec3_t const *hitPos)
+{
+    return SW_CrossplayDamageDukeMapSpriteInternal(spriteNum, targetSpriteNum, hitPos, -1);
+}
+
 static int16_t SW_CrossplayAnimatedDukeSpriteFrame(sw_crossplay_duke_sprite_behavior_t const &behavior)
 {
     int16_t const base = behavior.basePicnum;
@@ -6474,8 +6617,12 @@ static int16_t SW_CrossplayAnimatedDukeSpriteFrame(sw_crossplay_duke_sprite_beha
     switch (base)
     {
     case VB_DUKE_FANSPRITE:
-    case VB_DUKE_WATERFOUNTAIN:
         return base + ((behavior.tick >> 1) & 3);
+    // Duke's fountain shows its arc of water only while it is being drunk from;
+    // the bridge used to run it continuously, which is not what a Duke level
+    // looks like.
+    case VB_DUKE_WATERFOUNTAIN:
+        return behavior.useTimer == 0 ? base : (int16_t)(base + 1 + (behavior.tick & 1));
     case VB_DUKE_STEAM:
     case VB_DUKE_CEILINGSTEAM:
         return base + ((behavior.tick >> 2) & 3);
@@ -6730,6 +6877,11 @@ static void SW_CrossplayTickDukeSpriteBehaviors(void)
         }
 
         ++behavior.tick;
+
+        // Duke runs a fountain's water while it is being drunk from and stops it
+        // when the player steps away; the use key re-arms this every press.
+        if (behavior.useTimer > 0)
+            --behavior.useTimer;
 
         if (behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_VISUAL_OVERRIDE)
         {
@@ -10513,6 +10665,39 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
               g_swCrossplayDukeMapSoundCount);
 }
 
+static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum);
+
+// Duke props whose answer to the use key is their own, not a map tag.  Duke
+// reaches these through the picnum switch in P_CheckSectors() rather than
+// through a sector effector, and the sprite carries a lotag only so Duke's
+// tag-only neartag() search can find it -- so the bridge has to answer them here
+// before it treats that lotag as a map tag.
+static int32_t SW_CrossplayUseDukeProp(PLAYERp pp, int32_t spriteNum)
+{
+    if (pp == NULL || (unsigned)spriteNum >= MAXSPRITES)
+        return 0;
+
+    sw_crossplay_duke_sprite_behavior_t &behavior = g_swCrossplayDukeSpriteBehaviors[spriteNum];
+    if (!(behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE))
+        return 0;
+
+    switch (behavior.sourcePicnum)
+    {
+    // Duke heals one point per press while the fountain runs, and the fountain
+    // shows its water for as long as the player keeps drinking.
+    case VB_DUKE_WATERFOUNTAIN:
+        if (behavior.useTimer == 0)
+            SW_CrossplayDukeAIPlaySound(VB_DukeAI_DrinkingSound(), spriteNum);
+
+        behavior.useTimer = 20;
+        PlayerUpdateHealth(pp, 1);
+        return 1;
+
+    default:
+        return 0;
+    }
+}
+
 int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp)
 {
     if (pp == NULL || !SW_CrossplayDukeMapBridgeActive())
@@ -10535,6 +10720,13 @@ int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp)
             sw_crossplay_duke_sprite_behavior_t const &behavior = g_swCrossplayDukeSpriteBehaviors[nearSprite];
             if ((behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH) &&
                 SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, nearSprite, &sprite[nearSprite].xyz))
+                return 1;
+
+            // Props Duke answers with something of its own rather than a tag.
+            // This has to come first: the lotag these carry is the one A_Spawn()
+            // gave them so that Duke's use key could find them at all, and
+            // operating the map with it would trigger whatever else wears tag 1.
+            if (SW_CrossplayUseDukeProp(pp, nearSprite))
                 return 1;
 
             if (sprite[nearSprite].lotag != 0 && SW_CrossplayOperateDukeTag(sprite[nearSprite].lotag, pp))
@@ -11249,15 +11441,132 @@ static void SW_CrossplaySelfTestRunTrainObserve(PLAYERp const pp)
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TRAIN_SETUP);
 }
 
+// Duke's damage runs at the top of the next Duke tic, not inside this call, so
+// the results are judged on a second visit to the phase rather than immediately.
+static int16_t g_swCrossplaySelfTestSolidBreakables[VB_CROSSPLAY_SELFTEST_MAX_BREAKABLES];
+static int16_t g_swCrossplaySelfTestBreakables[VB_CROSSPLAY_SELFTEST_MAX_BREAKABLES];
+static int16_t g_swCrossplaySelfTestBreakableStartPic[VB_CROSSPLAY_SELFTEST_MAX_BREAKABLES];
+static int32_t g_swCrossplaySelfTestSolidBreakableCount;
+static int32_t g_swCrossplaySelfTestBreakablesTested;
+static int32_t g_swCrossplaySelfTestBreakablesHit;
+
 static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
 {
+    if (g_swCrossplaySelfTestBreakablesHit)
+    {
+        // Give Duke a few tics to run the damage and settle the props.
+        if (g_swCrossplaySelfTestPhaseTic < 30)
+            return;
+
+        int32_t broken = 0;
+        int32_t notDelegated = 0;
+        int32_t gainedBlocking = 0;
+        int32_t solidTested = 0;
+        int32_t solidCleared = 0;
+
+        for (int32_t i = 0; i < g_swCrossplaySelfTestBreakablesTested; ++i)
+        {
+            int32_t const spriteNum = g_swCrossplaySelfTestBreakables[i];
+
+            // Deleted, or showing a different frame.  The bridge's own "no
+            // longer alive" flag is not evidence: handing a prop to Duke clears
+            // it before Duke has done anything, so counting it would pass this
+            // check without a single prop actually breaking.
+            int32_t startedSolid = 0;
+            for (int32_t j = 0; j < g_swCrossplaySelfTestSolidBreakableCount; ++j)
+                if (g_swCrossplaySelfTestSolidBreakables[j] == spriteNum)
+                {
+                    startedSolid = 1;
+                    break;
+                }
+
+            // The bridge's job is to hand the prop to Duke; what Duke then does
+            // with it is Duke's.
+            if (sprite[spriteNum].statnum != MAXSTATUS && !SW_CrossplayDukeAIOwnsSprite(spriteNum) &&
+                SW_CrossplayDukeAIActive())
+                ++notDelegated;
+
+            int32_t const gone = sprite[spriteNum].statnum == MAXSTATUS;
+            int32_t const stoppedBlocking = gone || !TEST(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK);
+
+            // Duke destroys a prop in one of three ways: it deletes it, it swaps
+            // it for its broken frame, or -- for the things that burn, like a
+            // tree or a box -- it sets it alight and clears its blocking bit
+            // while the tile stays put.  Any of the three counts.
+            int32_t const wasBroken = gone ||
+                                      sprite[spriteNum].picnum != g_swCrossplaySelfTestBreakableStartPic[i] ||
+                                      (startedSolid && stoppedBlocking);
+            if (!wasBroken)
+            {
+                if (Bgetenv("VB_CP_BREAK_DEBUG") != NULL)
+                    LOG_F(INFO, "CPBREAK intact spr=%d origTile=%d pic=%d cstat=%d stat=%d dukeOwned=%d",
+                          spriteNum, artCrossplayOriginalMapSpritePicnum(spriteNum),
+                          TrackerCast(sprite[spriteNum].picnum), TrackerCast(sprite[spriteNum].cstat),
+                          TrackerCast(sprite[spriteNum].statnum), SW_CrossplayDukeAIOwnsSprite(spriteNum));
+                continue;
+            }
+
+            ++broken;
+
+            // A broken prop must never come out *more* solid than it went in.
+            // It may well stay solid: Duke clears the blocking bit on a vent
+            // cover or a panel and leaves it on a water fountain, which breaks
+            // into WATERFOUNTAINBROKE and goes on standing there.  Since the
+            // prop is Duke's by now, its cstat is Duke's own answer, and
+            // demanding it be anything else is demanding the bridge overrule
+            // Duke.  What the bridge still owes is that it never adds solidity
+            // of its own -- the `VB_CP_CSTAT_DUMP` diff against native Duke is
+            // the tool for the rest.
+            if (startedSolid)
+            {
+                ++solidTested;
+                if (stoppedBlocking)
+                    ++solidCleared;
+                else if (Bgetenv("VB_CP_BREAK_DEBUG") != NULL)
+                    LOG_F(INFO, "CPBREAK still-solid spr=%d origTile=%d pic=%d cstat=%d stat=%d dukeOwned=%d",
+                          spriteNum, artCrossplayOriginalMapSpritePicnum(spriteNum),
+                          TrackerCast(sprite[spriteNum].picnum), TrackerCast(sprite[spriteNum].cstat),
+                          TrackerCast(sprite[spriteNum].statnum), SW_CrossplayDukeAIOwnsSprite(spriteNum));
+            }
+            else if (!stoppedBlocking)
+            {
+                ++gainedBlocking;
+                LOG_F(WARNING, "CPBREAK spr=%d (orig tile %d) gained a blocking bit by breaking",
+                      spriteNum, artCrossplayOriginalMapSpritePicnum(spriteNum));
+            }
+        }
+
+        char detail[160];
+        Bsnprintf(detail, sizeof(detail), "tested=%d broken=%d notDelegated=%d",
+                  g_swCrossplaySelfTestBreakablesTested, broken, notDelegated);
+
+        // Not every prop the bridge lists as breakable is one Duke destroys:
+        // PODFEM1, RUBBERCAN, FEMMAG1 and an undamageable CAMERA1 have no case
+        // in A_DamageObject_Internal() at all, and Duke leaves them standing.
+        // So this asks for what the bridge owes: every prop reaches Duke, and
+        // the ones Duke does break, break.  Demanding all of them break would be
+        // demanding the old approximation's behaviour back.
+        if (g_swCrossplaySelfTestBreakablesTested == 0)
+            SW_CrossplaySelfTestReport(1, "breakables-present", "no Duke breakables in this map, skipped");
+        else
+            SW_CrossplaySelfTestReport(notDelegated == 0 && broken > 0, "breakable-damage", detail);
+
+        if (solidTested > 0 || gainedBlocking > 0)
+        {
+            char solidDetail[160];
+            Bsnprintf(solidDetail, sizeof(solidDetail), "solid=%d cleared=%d gained=%d", solidTested, solidCleared,
+                      gainedBlocking);
+            SW_CrossplaySelfTestReport(gainedBlocking == 0, "breakable-keeps-dukes-solidity", solidDetail);
+        }
+
+        g_swCrossplaySelfTestBreakablesHit = 0;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_EXPLOSIVES);
+        return;
+    }
+
     int32_t tested = 0;
-    int32_t broken = 0;
-    // A prop the map made solid has to stop blocking once it is broken, or the
-    // player is walled out of whatever it was covering.  E1L1's rooftop vent is
-    // the case that named this check.
-    int32_t solidTested = 0;
-    int32_t solidCleared = 0;
+
+    g_swCrossplaySelfTestSolidBreakableCount = 0;
 
     for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && tested < VB_CROSSPLAY_SELFTEST_MAX_BREAKABLES; ++spriteNum)
     {
@@ -11269,50 +11578,37 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
             sprite[spriteNum].statnum == MAXSTATUS)
             continue;
 
+        g_swCrossplaySelfTestBreakables[tested] = (int16_t)spriteNum;
+        g_swCrossplaySelfTestBreakableStartPic[tested] = sprite[spriteNum].picnum;
         ++tested;
 
-        int16_t const startPicnum = sprite[spriteNum].picnum;
-        int32_t const startedSolid = TEST(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK) ? 1 : 0;
+        // A prop the map made solid has to stop blocking once it is broken, or
+        // the player is walled out of whatever it was covering.  E1L1's rooftop
+        // vent is the case that named this check.
+        if (TEST(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK) &&
+            g_swCrossplaySelfTestSolidBreakableCount < (int32_t)ARRAY_SIZE(g_swCrossplaySelfTestSolidBreakables))
+            g_swCrossplaySelfTestSolidBreakables[g_swCrossplaySelfTestSolidBreakableCount++] = (int16_t)spriteNum;
+
         vec3_t const hitPos = sprite[spriteNum].xyz;
 
-        for (int32_t hit = 0; hit < 64; ++hit)
-        {
-            if (sprite[spriteNum].statnum == MAXSTATUS ||
-                !(g_swCrossplayDukeSpriteBehaviors[spriteNum].flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE))
-                break;
-
+        // Keep shooting until the sprite is gone.  Stopping when the bridge's
+        // own ALIVE flag clears would land exactly one hit now that the first
+        // one hands the prop to Duke -- the flag goes out immediately, long
+        // before Duke has worn the prop's health down.
+        for (int32_t hit = 0; hit < 64 && sprite[spriteNum].statnum != MAXSTATUS; ++hit)
             SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, spriteNum, &hitPos);
-        }
 
-        int32_t const wasBroken = sprite[spriteNum].statnum == MAXSTATUS || sprite[spriteNum].picnum != startPicnum ||
-                                  !(g_swCrossplayDukeSpriteBehaviors[spriteNum].flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE);
-        if (wasBroken)
-            ++broken;
-
-        if (startedSolid && wasBroken)
-        {
-            ++solidTested;
-            if (sprite[spriteNum].statnum == MAXSTATUS || !TEST(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK))
-                ++solidCleared;
-        }
+        // ...and then blow it up.  Bullets alone do not settle this: Duke's
+        // props answer to the weapon that hit them, and a tree, a box or a cone
+        // only gives way to an explosion or a fire weapon.  A map whose props
+        // are all of that kind would otherwise read as a bridge that destroys
+        // nothing.
+        SW_CrossplayExplodeDukeMapSprites(pp->PlayerSprite, hitPos.x, hitPos.y, hitPos.z,
+                                          sprite[spriteNum].sectnum, 1024, 96);
     }
 
-    char detail[128];
-    Bsnprintf(detail, sizeof(detail), "tested=%d broken=%d", tested, broken);
-
-    if (tested == 0)
-        SW_CrossplaySelfTestReport(1, "breakables-present", "no Duke breakables in this map, skipped");
-    else
-        SW_CrossplaySelfTestReport(broken == tested, "breakable-damage", detail);
-
-    if (solidTested > 0)
-    {
-        char solidDetail[128];
-        Bsnprintf(solidDetail, sizeof(solidDetail), "solid=%d cleared=%d", solidTested, solidCleared);
-        SW_CrossplaySelfTestReport(solidCleared == solidTested, "breakable-clears-block", solidDetail);
-    }
-
-    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_EXPLOSIVES);
+    g_swCrossplaySelfTestBreakablesTested = tested;
+    g_swCrossplaySelfTestBreakablesHit = 1;
 }
 
 // Duke explosive props (gas bottles, and the invisible explosive source sprites that
@@ -11956,6 +12252,10 @@ static void SW_CrossplaySelfTestTick(void)
         LOG_F(INFO, "CPTEST BEGIN behaviors=%d teleporters=%d trains=%d tripmines=%d",
                   g_swCrossplayDukeSpriteBehaviorCount, g_swCrossplayDukeTeleporterCount,
                   g_swCrossplayDukeTrainCount, g_swCrossplayDukeTripmineCount);
+            // The breakables phase arms on one visit and judges on a later one;
+            // a run that starts with the flag still set would judge sprites it
+            // never hit and never leave the phase.
+            g_swCrossplaySelfTestBreakablesHit = 0;
             switch (g_swCrossplaySelfTestGroup)
             {
             case VB_CROSSPLAY_SELFTEST_GROUP_WORLD:
@@ -12027,6 +12327,8 @@ char const *VB_DukeAI_SoundFilename(int soundNum);
 int VB_DukeAI_HighestSoundIndex(void);
 void VB_DukeAI_SetSoundHook(int (*hook)(int soundNum, int spriteNum));
 void VB_DukeAI_SetMapTriggerHook(void (*hook)(int hitag));
+void VB_DukeAI_SetRadiusDamageHook(void (*hook)(int spriteNum, int x, int y, int z, int sectnum, int radius,
+                                                int damage));
 int VB_DukeAI_SpriteIsEnemy(int spriteNum);
 int VB_DukeAI_PlayerStatnum(void);
 int VB_DukeAI_PlayerTileNumber(void);
@@ -12241,6 +12543,11 @@ static void SW_CrossplayDukeAILeaveDukeSpace(void)
         g_swCrossplayDukeAIOwned[spriteNum] = 1;
         g_swCrossplayDukeAIDukeStat[spriteNum] = dukeStats[i];
         g_swCrossplayDukeAIDukePicnum[spriteNum] = sprite[spriteNum].picnum;
+
+        // Duke has the sprite now, so the bridge's own approximation must stop
+        // driving it -- this is where a prop handed to Duke's damage code, and
+        // anything Duke spawned from it, changes hands.
+        SW_CrossplayClearDukeSpriteBehavior(spriteNum);
     }
 
     if (g_swCrossplayDukeAIPlayerSprite >= 0)
@@ -12257,7 +12564,30 @@ static void SW_CrossplayDukeAILeaveDukeSpace(void)
     }
 
     for (int32_t i = g_swCrossplayDukeAISwCount - 1; i >= 0; --i)
-        SW_CrossplayDukeAIListInsert(g_swCrossplayDukeAISwSprites[i], g_swCrossplayDukeAISwStats[i]);
+    {
+        int16_t const spriteNum = g_swCrossplayDukeAISwSprites[i];
+
+        // A sprite the host held at the start of the tic can belong to Duke by
+        // the end of it -- that is how a prop handed to Duke's damage code, or
+        // anything Duke spawned from it, gets adopted.  Replaying the host's old
+        // list blind would splice such a sprite into two status lists at once,
+        // and the second splice leaves the first list circular: the game then
+        // spins forever on the next walk over it.
+        if (g_swCrossplayDukeAIOwned[spriteNum])
+            continue;
+
+        // ...and a slot Duke *deleted* during the tic is on the engine's free
+        // list now.  Splicing that into a status list leaves it on both, so the
+        // free chain runs into the status list and the engine hands the same
+        // slot out twice; the pool then reads as empty a few hundred sprites in.
+        // Duke can delete a host sprite legitimately -- a prop handed to its
+        // damage code is Duke's to destroy -- so this is a normal outcome, not a
+        // corruption to repair.
+        if (sprite[spriteNum].statnum >= MAXSTATUS)
+            continue;
+
+        SW_CrossplayDukeAIListInsert(spriteNum, g_swCrossplayDukeAISwStats[i]);
+    }
 
     for (int32_t i = dukeCount - 1; i >= 0; --i)
     {
@@ -12340,6 +12670,9 @@ static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum)
     return 0;
 }
 
+static void SW_CrossplayDukeRadiusDamage(int spriteNum, int x, int y, int z, int sectnum, int radius, int damage);
+static void SW_CrossplayApplyDukeBlasts(void);
+
 static void SW_CrossplayDukeAISetupSounds(void)
 {
     Bmemset(g_swCrossplayDukeAISoundMap, 0, sizeof(g_swCrossplayDukeAISoundMap));
@@ -12359,6 +12692,7 @@ static void SW_CrossplayDukeAISetupSounds(void)
 
     VB_DukeAI_SetSoundHook(SW_CrossplayDukeAIPlaySound);
     VB_DukeAI_SetMapTriggerHook(SW_CrossplayDukeMapTrigger);
+    VB_DukeAI_SetRadiusDamageHook(SW_CrossplayDukeRadiusDamage);
 }
 
 // SW's mirror marker tile (jnames.h MIRROR); named locally so this file does not
@@ -12937,6 +13271,21 @@ static void SW_CrossplayDukeAITick(void)
     VB_DukeAI_RunTic();
     SW_CrossplayZGuard("duke-tic");
 
+    // Duke shakes the view with a countdown its own code sets -- a detonating
+    // charge is 16 tics of it.  The host owns the camera, so it drives its own
+    // quake from Duke's, which is what makes an exploding canister feel like it
+    // does in Duke.
+    {
+        int const quakeTics = VB_DukeAI_TakeEarthquake();
+        if (quakeTics > 0)
+        {
+            PLAYERp const quakePlayer = Player + myconnectindex;
+            if (quakePlayer != NULL && (unsigned)quakePlayer->cursectnum < (unsigned)numsectors)
+                SpawnQuake(quakePlayer->cursectnum, quakePlayer->posx, quakePlayer->posy, quakePlayer->posz,
+                           quakeTics * 2, 4, 60000);
+        }
+    }
+
     {
         static int32_t logged = 0;
         static int32_t sampleTic = 0;
@@ -12964,6 +13313,31 @@ static void SW_CrossplayDukeAITick(void)
     SW_CrossplayDukeAILeaveDukeSpace();
     SW_CrossplayZGuard("left");
 
+    // The host's status lists are back; anything Duke blew up during the tic can
+    // safely be dealt to the host's own props now.
+    SW_CrossplayApplyDukeBlasts();
+
+    if (Bgetenv("VB_CP_SPRITE_DEBUG") != NULL)
+    {
+        static int32_t lastReported = -1;
+        int32_t linked = 0;
+        for (int32_t s = 0; s < MAXSTATUS; ++s)
+            for (int32_t sn = headspritestat[s], guard = 0; sn >= 0 && guard < MAXSPRITES;
+                 sn = nextspritestat[sn], ++guard)
+                ++linked;
+
+        int32_t freeSlots = 0;
+        for (int32_t sn = headspritestat[MAXSTATUS], guard = 0; sn >= 0 && guard <= MAXSPRITES;
+             sn = nextspritestat[sn], ++guard)
+            ++freeSlots;
+
+        if (Numsprites != lastReported)
+        {
+            lastReported = Numsprites;
+            LOG_F(INFO, "CPSPR Numsprites=%d linked=%d free=%d", Numsprites, linked, freeSlots);
+        }
+    }
+
     TRAVERSE_CONNECT(pnum)
     {
         if ((unsigned)pnum >= ARRAY_SIZE(damageForPlayer) || damageForPlayer[pnum] <= 0)
@@ -12981,8 +13355,9 @@ int SW_CrossplayDukeSpriteExplosionDamage(int spriteNum)
     return SW_CrossplayDukeSpriteHitDamage(spriteNum);
 }
 
-int SW_CrossplayExplodeDukeMapSprites(int blastSprite, int32_t x, int32_t y, int32_t z, int16_t sectnum,
-                                      int32_t radius, int32_t maxDamage)
+static int32_t SW_CrossplayExplodeDukeMapSpritesInternal(int blastSprite, int32_t x, int32_t y, int32_t z,
+                                                         int16_t sectnum, int32_t radius, int32_t maxDamage,
+                                                         int32_t propsOnly)
 {
     if (!SW_CrossplayDukeMapBridgeActive() || radius <= 0)
         return 0;
@@ -12996,6 +13371,11 @@ int SW_CrossplayExplodeDukeMapSprites(int blastSprite, int32_t x, int32_t y, int
 
         int32_t const dukeOwned = SW_CrossplayDukeAIOwnsSprite(spriteNum);
         if (!dukeOwned && !(g_swCrossplayDukeSpriteBehaviors[spriteNum].flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE))
+            continue;
+
+        // A blast Duke itself set off has already been dealt to everything in
+        // Duke's own lists; only the host's props were missed.
+        if (propsOnly && dukeOwned)
             continue;
 
         if (spriteNum == blastSprite)
@@ -13015,7 +13395,8 @@ int SW_CrossplayExplodeDukeMapSprites(int blastSprite, int32_t x, int32_t y, int
         if (!dukeOwned)
         {
             // Bridge-owned Duke props: breakables, switches, explosive sources.
-            damaged += SW_CrossplayDamageDukeMapSprite(blastSprite, spriteNum, &hitPos) ? 1 : 0;
+            damaged += SW_CrossplayDamageDukeMapSpriteInternal(blastSprite, spriteNum, &hitPos,
+                                                              VB_DUKEAI_HIT_EXPLOSION) ? 1 : 0;
             continue;
         }
 
@@ -13042,6 +13423,60 @@ int SW_CrossplayExplodeDukeMapSprites(int blastSprite, int32_t x, int32_t y, int
     }
 
     return damaged;
+}
+
+int SW_CrossplayExplodeDukeMapSprites(int blastSprite, int32_t x, int32_t y, int32_t z, int16_t sectnum,
+                                      int32_t radius, int32_t maxDamage)
+{
+    return SW_CrossplayExplodeDukeMapSpritesInternal(blastSprite, x, y, z, sectnum, radius, maxDamage, 0);
+}
+
+// Blasts Duke set off during its tic, to be replayed over the host's props once
+// the tic is over.
+struct sw_crossplay_duke_blast_t
+{
+    int32_t spriteNum, x, y, z, radius, damage;
+    int16_t sectnum;
+};
+
+static sw_crossplay_duke_blast_t g_swCrossplayDukeBlasts[64];
+static int32_t g_swCrossplayDukeBlastCount;
+
+// Installed into Duke's A_RadiusDamage().  Duke's blast reaches everything in
+// Duke's own status lists, but the host parks its map props outside them so they
+// keep animating -- which is why E1L1's yellow tape and vent cover survived a
+// gas canister going off beside them.
+//
+// It only records the blast here.  Running it on the spot would run host code --
+// which spawns and deletes host sprites, and so splices them into whatever
+// status lists are installed -- in the middle of a Duke tic, where the lists are
+// Duke's.  A host sprite spliced into a Duke list is in two lists at once, and
+// the second splice leaves one of them circular: E1L1's destruct pass ended with
+// a status list looping through its gibs forever, which the engine then walked
+// forever while dumping the world to the log.
+static void SW_CrossplayDukeRadiusDamage(int spriteNum, int x, int y, int z, int sectnum, int radius, int damage)
+{
+    if (g_swCrossplayDukeBlastCount >= (int32_t)ARRAY_SIZE(g_swCrossplayDukeBlasts))
+        return;
+
+    g_swCrossplayDukeBlasts[g_swCrossplayDukeBlastCount++] = { spriteNum, x, y, z, radius, damage, (int16_t)sectnum };
+}
+
+// Drained after the Duke tic, with the host's own status lists back in place.
+static void SW_CrossplayApplyDukeBlasts(void)
+{
+    int32_t const count = g_swCrossplayDukeBlastCount;
+    g_swCrossplayDukeBlastCount = 0;
+
+    for (int32_t i = 0; i < count; ++i)
+    {
+        sw_crossplay_duke_blast_t const &blast = g_swCrossplayDukeBlasts[i];
+
+        // Duke has already dealt this blast to everything in its own lists, so
+        // only the host's props are owed it.
+        SW_CrossplayExplodeDukeMapSpritesInternal(blast.spriteNum, blast.x, blast.y, blast.z, blast.sectnum,
+                                                  blast.radius, blast.damage, 1);
+    }
 }
 
 

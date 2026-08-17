@@ -216,10 +216,19 @@ Current status:
 - `make -j8 vibebuild32` passes.
 - E1L1 through E1L8 and E3L6 all report `fail=0`, run per phase group
   (`VB_CP_SELFTEST=actors|world|destruct|tripmines`); 36 group-runs, 0 failures.
+  Re-run over E1L1, E1L2, E1L3, E1L4, E1L7 and E3L6 after the damage delegation:
+  24 group-runs, 0 failures.
 - The E3L6 startup `SIGSEGV` no longer reproduces, and leaving a Duke level no
   longer crashes.
 - Duke enemy sounds play: Duke's `A_PlaySound()` is routed to the host, which
   owns the audio device.
+
+Duke props no longer have a bridge-written copy of Duke's damage code: a hit on
+one is queued and Duke's own `A_DamageObject_Internal()` runs on it at the top of
+the next Duke tic, so its broken frame, its sound and whatever it spawns are
+Duke's.  Explosions reach the host's props from both sides -- Duke's
+`A_RadiusDamage()` through a hook, and the host's own detonations -- and Duke's
+earthquake drives the host's `SpawnQuake()`.  See the bridge doc.
 
 Remaining items to verify in-game or via automation:
 
