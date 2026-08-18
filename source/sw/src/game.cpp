@@ -3249,6 +3249,23 @@ static int32_t g_swCrossplayDukeCameraCount;
 static int32_t g_swCrossplayDukeCameraView = -1;
 static int32_t g_swCrossplayDukeCameraScreen = -1;
 
+// Duke's g_curViewscreen: the one monitor running a feed.  There is exactly one,
+// and it stays bound after the player comes back out of the camera -- the screen
+// goes on showing what the camera sees until they walk away from it.
+static int32_t g_swCrossplayDukeCurViewscreen = -1;
+
+// Duke keeps these on the camera sprite itself: yvel marks a camera already
+// spent in this pass of the group, and t[1] is where its sweep has got to.
+static uint8_t g_swCrossplayDukeCameraInUse[VB_CROSSPLAY_MAX_DUKE_CAMERAS];
+static int32_t g_swCrossplayDukeCameraPanTic[VB_CROSSPLAY_MAX_DUKE_CAMERAS];
+
+// Where the player was standing when they looked into a camera.  Duke's
+// P_ProcessInput() returns before it reads a movement key while the view is in a
+// camera, so the player simply does not move until they press use again.
+static vec3_t g_swCrossplayDukeCameraHoldPos;
+static int32_t g_swCrossplayDukeCameraHoldAng;
+static int16_t g_swCrossplayDukeCameraHoldSect = -1;
+
 static sw_crossplay_duke_explosive_source_t g_swCrossplayDukeExplosiveSources[VB_CROSSPLAY_MAX_DUKE_EXPLOSIVE_SOURCES];
 static sw_crossplay_duke_light_t g_swCrossplayDukeLights[VB_CROSSPLAY_MAX_DUKE_LIGHTS];
 static sw_crossplay_duke_lightning_t g_swCrossplayDukeLightnings[VB_CROSSPLAY_MAX_DUKE_LIGHTNINGS];
@@ -3364,6 +3381,10 @@ static void SW_CrossplayClearDukeMapEffectors(void)
     g_swCrossplayDukeCameraCount = 0;
     g_swCrossplayDukeCameraView = -1;
     g_swCrossplayDukeCameraScreen = -1;
+    g_swCrossplayDukeCurViewscreen = -1;
+    g_swCrossplayDukeCameraHoldSect = -1;
+    Bmemset(g_swCrossplayDukeCameraInUse, 0, sizeof(g_swCrossplayDukeCameraInUse));
+    Bmemset(g_swCrossplayDukeCameraPanTic, 0, sizeof(g_swCrossplayDukeCameraPanTic));
     g_swCrossplayDukeLightCount = 0;
     g_swCrossplayDukeLightningCount = 0;
     g_swCrossplayDukeWaterWarpCount = 0;
@@ -10298,6 +10319,16 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
 
         if (originalPicnum == VB_DUKE_CAMERA1)
         {
+            // A camera with a palette is a deathmatch camera, and Duke's
+            // A_Spawn() shrinks it to nothing and files it out of the way in
+            // single player.  Offering them here put viewpoints in the cycle
+            // that Duke never shows -- E1L1 has two of them on its lobby group.
+            if (numplayers <= 1 && sprite[i].pal != 0)
+            {
+                sprite[i].xrepeat = sprite[i].yrepeat = 0;
+                continue;
+            }
+
             if (g_swCrossplayDukeCameraCount < (int32_t)ARRAY_SIZE(g_swCrossplayDukeCameras))
                 g_swCrossplayDukeCameras[g_swCrossplayDukeCameraCount++] = (int16_t)i;
             continue;
@@ -11198,18 +11229,66 @@ static int32_t SW_CrossplayDukeCameraIsUsable(int32_t cameraSprite, int16_t hita
     return sprite[cameraSprite].lotag == hitag;
 }
 
+// Duke's G_ClearCameraView(): the player gets their own eyes back and every
+// camera in the level becomes available again.  It deliberately leaves
+// g_curViewscreen and the screen's bound camera alone, which is why a monitor
+// goes on showing its feed after the player has stepped back out of it.
+// Duke's CAMERA1 actor sweeps: the hitag is how wide the sweep is, and the actor
+// walks the angle across it -- out, back twice as far, out again, then a jump
+// and round once more.  This is the arithmetic from actors.cpp verbatim, run on
+// Duke's own tic so a camera pans at the speed it pans in Duke.
+static void SW_CrossplayTickDukeCameraSweep(void)
+{
+    for (int32_t i = 0; i < g_swCrossplayDukeCameraCount; ++i)
+    {
+        int32_t const cameraSprite = g_swCrossplayDukeCameras[i];
+
+        if ((unsigned)cameraSprite >= MAXSPRITES || sprite[cameraSprite].statnum == MAXSTATUS ||
+            (sprite[cameraSprite].cstat & CSTAT_SPRITE_INVISIBLE))
+            continue;
+
+        int32_t const sweep = sprite[cameraSprite].hitag;
+        if (sweep <= 0)
+            continue;
+
+        int32_t &panTic = g_swCrossplayDukeCameraPanTic[i];
+        int32_t ang = sprite[cameraSprite].ang;
+
+        panTic += 8;
+
+        if (panTic < sweep)
+            ang += 8;
+        else if (panTic < sweep * 3)
+            ang -= 8;
+        else if (panTic < sweep * 4)
+            ang += 8;
+        else
+        {
+            panTic = 8;
+            ang += 16;
+        }
+
+        sprite[cameraSprite].ang = (int16_t)NORM_ANGLE(ang);
+    }
+}
+
+// Duke's VIEWSCREEN_ACTIVE_DISTANCE, with the per-screen override its mappers
+// can put in the sprite's xvel.
+static int32_t SW_CrossplayDukeViewscreenActiveDistance(int32_t spriteNum)
+{
+    if ((unsigned)spriteNum < MAXSPRITES && sprite[spriteNum].xvel > 0)
+        return sprite[spriteNum].xvel;
+
+    return VB_CROSSPLAY_DUKE_VIEWSCREEN_DISTANCE;
+}
+
 static void SW_CrossplayClearDukeCameraView(void)
 {
-    if (g_swCrossplayDukeCameraScreen >= 0)
-    {
-        sw_crossplay_duke_viewscreen_t *const screen =
-            SW_CrossplayFindDukeViewscreen(g_swCrossplayDukeCameraScreen);
-        if (screen != NULL)
-            screen->camera = -1;
-    }
+    Bmemset(g_swCrossplayDukeCameraInUse, 0, sizeof(g_swCrossplayDukeCameraInUse));
 
     g_swCrossplayDukeCameraView = -1;
     g_swCrossplayDukeCameraScreen = -1;
+    g_swCrossplayDukeCameraHoldSect = -1;
 }
 
 // Steps to the next camera in this screen's group, or leaves camera view when the
@@ -11220,25 +11299,30 @@ static int32_t SW_CrossplayCycleDukeCameras(PLAYERp pp, int32_t spriteNum)
     if (screen == NULL)
         return 0;
 
-    // Where in the camera list the current one sits, so "next" means next.
-    int32_t start = 0;
-    if (screen->camera >= 0)
-        for (int32_t i = 0; i < g_swCrossplayDukeCameraCount; ++i)
-            if (g_swCrossplayDukeCameras[i] == screen->camera)
-            {
-                start = i + 1;
-                break;
-            }
-
-    for (int32_t i = start; i < g_swCrossplayDukeCameraCount; ++i)
+    // Duke walks the camera list in order and takes the first of this monitor's
+    // group that has not been spent yet, marking it as it goes; when the group
+    // runs out the view goes back to the player and every mark is cleared, so
+    // the next press starts the round again.
+    for (int32_t i = 0; i < g_swCrossplayDukeCameraCount; ++i)
     {
         int32_t const cameraSprite = g_swCrossplayDukeCameras[i];
-        if (!SW_CrossplayDukeCameraIsUsable(cameraSprite, screen->hitag))
+
+        if (g_swCrossplayDukeCameraInUse[i] || !SW_CrossplayDukeCameraIsUsable(cameraSprite, screen->hitag))
             continue;
 
+        g_swCrossplayDukeCameraInUse[i] = 1;
+
         screen->camera = (int16_t)cameraSprite;
+        g_swCrossplayDukeCurViewscreen = spriteNum;
         g_swCrossplayDukeCameraView = cameraSprite;
         g_swCrossplayDukeCameraScreen = spriteNum;
+
+        if (pp != NULL)
+        {
+            g_swCrossplayDukeCameraHoldPos = pp->pos;
+            g_swCrossplayDukeCameraHoldAng = fix16_to_int(pp->q16ang);
+            g_swCrossplayDukeCameraHoldSect = pp->cursectnum;
+        }
 
         SW_CrossplayDukeAIPlaySound(VB_DukeAI_MonitorSound(), spriteNum);
         return 1;
@@ -11273,83 +11357,123 @@ int SW_CrossplayDukeCameraView(int32_t *x, int32_t *y, int32_t *z, fix16_t *q16a
     return 1;
 }
 
-// Renders each screen's feed.  Called once per frame from the host's mirror pass,
-// which is where SW already does this kind of work.
+// Renders the bound screen's feed.  Called once per frame from the host's mirror
+// pass, which is where SW already does this kind of work.  Duke runs exactly one
+// of these at a time -- g_curViewscreen -- and this renders the whole world
+// again, so a wall of five monitors (E1L1's lobby) would otherwise cost five
+// extra world renders a frame.
 void SW_CrossplayDrawDukeViewscreens(PLAYERp pp)
 {
-    if (!SW_CrossplayDukeMapBridgeActive() || pp == NULL || g_swCrossplayDukeViewscreenCount <= 0)
+    if (!SW_CrossplayDukeMapBridgeActive() || pp == NULL || g_swCrossplayDukeCurViewscreen < 0)
         return;
 
-    for (int32_t i = 0; i < g_swCrossplayDukeViewscreenCount; ++i)
+    sw_crossplay_duke_viewscreen_t *const screen = SW_CrossplayFindDukeViewscreen(g_swCrossplayDukeCurViewscreen);
+
+    if (screen == NULL || screen->camera < 0 || (unsigned)screen->spriteNum >= MAXSPRITES ||
+        sprite[screen->spriteNum].statnum == MAXSTATUS)
+        return;
+
+    if (!SW_CrossplayDukeCameraIsUsable(screen->camera, screen->hitag))
     {
-        sw_crossplay_duke_viewscreen_t &screen = g_swCrossplayDukeViewscreens[i];
-
-        if (screen.camera < 0 || (unsigned)screen.spriteNum >= MAXSPRITES ||
-            sprite[screen.spriteNum].statnum == MAXSTATUS)
-            continue;
-
-        if (!SW_CrossplayDukeCameraIsUsable(screen.camera, screen.hitag))
-        {
-            screen.camera = -1;
-            continue;
-        }
-
-        // Duke only runs a feed for a screen the player is standing near, and
-        // only one that the renderer actually asked to draw last frame.  Both
-        // matter: this renders the whole world again per screen.
-        if (FindDistance2D(pp->posx - sprite[screen.spriteNum].x, pp->posy - sprite[screen.spriteNum].y) >=
-            VB_CROSSPLAY_DUKE_VIEWSCREEN_DISTANCE)
-            continue;
-
-        if (screen.camTile < 0)
-        {
-            screen.camTile = artCrossplayReserveTile(128, 128);
-            if (screen.camTile < 0)
-                continue;
-        }
-        else if (!bitmap_test(gotpic, screen.camTile))
-            continue;
-
-        bitmap_clear(gotpic, screen.camTile);
-
-        SPRITEp const cam = &sprite[screen.camera];
-        drawroomstotile(cam->x, cam->y, cam->z, fix16_from_int(cam->ang), fix16_from_int(100 + cam->shade),
-                        cam->sectnum, screen.camTile);
+        screen->camera = -1;
+        return;
     }
+
+    // Duke only runs a feed for a screen the player is standing near, and only
+    // one that the renderer actually asked to draw last frame.
+    if (FindDistance2D(pp->posx - sprite[screen->spriteNum].x, pp->posy - sprite[screen->spriteNum].y) >=
+        SW_CrossplayDukeViewscreenActiveDistance(screen->spriteNum))
+        return;
+
+    if (screen->camTile < 0)
+    {
+        screen->camTile = artCrossplayReserveTile(128, 128);
+        if (screen->camTile < 0)
+            return;
+    }
+    else if (!bitmap_test(gotpic, screen->camTile))
+        return;
+
+    bitmap_clear(gotpic, screen->camTile);
+
+    SPRITEp const cam = &sprite[screen->camera];
+    drawroomstotile(cam->x, cam->y, cam->z, fix16_from_int(cam->ang), fix16_from_int(100 + cam->shade),
+                    cam->sectnum, screen->camTile);
 }
 
 // The tile a viewscreen should be drawn with, or -1 to leave it as it was.
 int SW_CrossplayDukeViewscreenTile(int spriteNum)
 {
-    for (int32_t i = 0; i < g_swCrossplayDukeViewscreenCount; ++i)
-    {
-        sw_crossplay_duke_viewscreen_t const &screen = g_swCrossplayDukeViewscreens[i];
-        if (screen.spriteNum == spriteNum && screen.camera >= 0 && screen.camTile >= 0)
-            return screen.camTile;
-    }
+    if (spriteNum != g_swCrossplayDukeCurViewscreen)
+        return -1;
 
-    return -1;
+    sw_crossplay_duke_viewscreen_t const *const screen = SW_CrossplayFindDukeViewscreen(spriteNum);
+
+    return screen != NULL && screen->camera >= 0 && screen->camTile >= 0 ? screen->camTile : -1;
 }
 
-// Duke drops the player out of a camera the moment they try to walk, and on
-// escape.  Called each tic.
+// Read-only views of the captured lists, for the self-test.
+static int32_t SW_CrossplayDukeCameraListCount(void) { return g_swCrossplayDukeCameraCount; }
+static int32_t SW_CrossplayDukeCameraListSprite(int32_t i)
+{
+    return (unsigned)i < (unsigned)g_swCrossplayDukeCameraCount ? g_swCrossplayDukeCameras[i] : -1;
+}
+
+// How many monitors are showing a feed this frame.  Duke runs exactly one.
+static int32_t SW_CrossplayDukeLiveViewscreenCount(void)
+{
+    int32_t live = 0;
+    for (int32_t i = 0; i < g_swCrossplayDukeViewscreenCount; ++i)
+        live += g_swCrossplayDukeViewscreens[i].camera >= 0 && g_swCrossplayDukeViewscreens[i].camTile >= 0;
+
+    return live;
+}
+
+// Called each tic.  While the view is in a camera the player is held exactly
+// where they were -- Duke's P_ProcessInput() returns before it reads a movement
+// key, so the only way out is the use key -- and the bound monitor is released
+// once they are too far from it to see it.
 void SW_CrossplayTickDukeCameras(PLAYERp pp)
 {
+    // Duke's own actor code drops g_curViewscreen when the player leaves the
+    // screen's active range, and does not bring it back on its own: a stock
+    // monitor is lit by the use key, not by walking up to it.
+    if (g_swCrossplayDukeCurViewscreen >= 0 && pp != NULL && g_swCrossplayDukeCameraView < 0 &&
+        FindDistance2D(pp->posx - sprite[g_swCrossplayDukeCurViewscreen].x,
+                       pp->posy - sprite[g_swCrossplayDukeCurViewscreen].y) >=
+            SW_CrossplayDukeViewscreenActiveDistance(g_swCrossplayDukeCurViewscreen))
+    {
+        sw_crossplay_duke_viewscreen_t *const screen =
+            SW_CrossplayFindDukeViewscreen(g_swCrossplayDukeCurViewscreen);
+        if (screen != NULL)
+            screen->camera = -1;
+
+        g_swCrossplayDukeCurViewscreen = -1;
+    }
+
     if (g_swCrossplayDukeCameraView < 0)
         return;
-
-    if (pp != NULL && (klabs(pp->xvect) > 12288 || klabs(pp->yvect) > 12288))
-    {
-        SW_CrossplayClearDukeCameraView();
-        return;
-    }
 
     // A camera that has been shot out, or a screen that has been destroyed,
     // cannot keep showing anything.
     if ((unsigned)g_swCrossplayDukeCameraView >= MAXSPRITES ||
         sprite[g_swCrossplayDukeCameraView].statnum == MAXSTATUS ||
         (sprite[g_swCrossplayDukeCameraView].cstat & CSTAT_SPRITE_INVISIBLE))
+    {
         SW_CrossplayClearDukeCameraView();
+        return;
+    }
+
+    if (pp == NULL || (unsigned)g_swCrossplayDukeCameraHoldSect >= (unsigned)numsectors)
+        return;
+
+    pp->xvect = pp->yvect = 0;
+    pp->pos = g_swCrossplayDukeCameraHoldPos;
+    pp->oposx = pp->posx;
+    pp->oposy = pp->posy;
+    pp->oposz = pp->posz;
+    pp->cursectnum = g_swCrossplayDukeCameraHoldSect;
+    pp->q16ang = fix16_from_int(g_swCrossplayDukeCameraHoldAng);
 }
 
 static int32_t SW_CrossplayPlayerNum(PLAYERp pp)
@@ -11586,6 +11710,16 @@ int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp)
             return 1;
     }
 
+    // Duke's last word on the use key: if nothing else answered it and the view
+    // is in a camera, the player gets their own eyes back.  The player is held
+    // still while looking through one, so without this a monitor destroyed in
+    // the meantime would leave them there for good.
+    if (g_swCrossplayDukeCameraView >= 0)
+    {
+        SW_CrossplayClearDukeCameraView();
+        return 1;
+    }
+
     return 0;
 }
 
@@ -11699,6 +11833,11 @@ static int32_t g_swCrossplaySelfTestCameraScreen = -1;
 static int32_t g_swCrossplaySelfTestCameraFirst = -1;
 static int32_t g_swCrossplaySelfTestCameraSeen;
 static int32_t g_swCrossplaySelfTestCameraRendered;
+static int32_t g_swCrossplaySelfTestCameraPanSprite = -1;
+static int32_t g_swCrossplaySelfTestCameraPanAng;
+static int32_t g_swCrossplaySelfTestCameraFixedSprite = -1;
+static int32_t g_swCrossplaySelfTestCameraFixedAng;
+static int32_t g_swCrossplaySelfTestCameraReleasePresses;
 static int32_t g_swCrossplaySelfTestHydrantStage;
 static int32_t g_swCrossplaySelfTestHydrantSprite = -1;
 static int32_t g_swCrossplaySelfTestHydrantWater = -1;
@@ -12504,10 +12643,11 @@ static void SW_CrossplaySelfTestRunToilet(PLAYERp const pp)
 }
 
 // Looks for a floor spot in front of a Duke sprite from which neartag() -- the
-// same search the use key runs -- actually returns it, and records it.  Wall
+// same search the use key runs -- actually returns it, and reports it.  Wall
 // props are often mounted over a ledge or in an alcove whose own sector the
 // player cannot stand in, so the sectors next door are searched too.
-static int32_t SW_CrossplaySelfTestFindCardReaderStand(PLAYERp const pp, int32_t spriteNum)
+static int32_t SW_CrossplaySelfTestFindUseStand(PLAYERp const pp, int32_t spriteNum, int32_t *outX, int32_t *outY,
+                                                int32_t *outAng, int16_t *outSect)
 {
     SPRITEp const sp = &sprite[spriteNum];
     if ((unsigned)sp->sectnum >= (unsigned)numsectors)
@@ -12571,10 +12711,10 @@ static int32_t SW_CrossplaySelfTestFindCardReaderStand(PLAYERp const pp, int32_t
                         if (nearSprite != spriteNum)
                             break;
 
-                        g_swCrossplaySelfTestCardStandX = tryX;
-                        g_swCrossplaySelfTestCardStandY = tryY;
-                        g_swCrossplaySelfTestCardStandAng = faceAng;
-                        g_swCrossplaySelfTestCardStandSect = trySect;
+                        *outX = tryX;
+                        *outY = tryY;
+                        *outAng = faceAng;
+                        *outSect = trySect;
                         return 1;
                     }
 
@@ -12623,7 +12763,10 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
 
             ++g_swCrossplaySelfTestCardReaders;
 
-            if (SW_CrossplaySelfTestFindCardReaderStand(pp, spriteNum))
+            if (SW_CrossplaySelfTestFindUseStand(pp, spriteNum, &g_swCrossplaySelfTestCardStandX,
+                                                &g_swCrossplaySelfTestCardStandY,
+                                                &g_swCrossplaySelfTestCardStandAng,
+                                                &g_swCrossplaySelfTestCardStandSect))
             {
                 g_swCrossplaySelfTestCardSwitch = spriteNum;
                 g_swCrossplaySelfTestCardKeyIndex = SW_CrossplayDukeCardKeyIndex(behavior.displayPal);
@@ -12932,11 +13075,15 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
         return;
     }
 
-    // Stand in front of the first monitor that has a camera to show, facing it,
-    // so the use key reaches it through the same neartag() search the game uses.
+    // Stand in front of a monitor that has a camera to show, facing it, so the
+    // use key reaches it through the same neartag() search the game runs.  A
+    // level often mounts monitors where the harness cannot stand -- E1L3 puts
+    // its first one over a ledge -- so every monitor is tried in turn.
     if (g_swCrossplaySelfTestCameraScreen < 0)
     {
-        for (int32_t i = 0; i < g_swCrossplayDukeViewscreenCount; ++i)
+        int32_t placed = 0;
+
+        for (int32_t i = 0; i < g_swCrossplayDukeViewscreenCount && !placed; ++i)
         {
             sw_crossplay_duke_viewscreen_t const &screen = g_swCrossplayDukeViewscreens[i];
             int32_t cameras = 0;
@@ -12947,97 +13094,35 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
             if (cameras <= 0 || (unsigned)screen.spriteNum >= MAXSPRITES)
                 continue;
 
-            g_swCrossplaySelfTestCameraScreen = screen.spriteNum;
-            break;
+            g_swCrossplaySelfTestCameraSeen = 1;
+
+            if (SW_CrossplaySelfTestFindUseStand(pp, screen.spriteNum, &g_swCrossplaySelfTestCameraStandX,
+                                                 &g_swCrossplaySelfTestCameraStandY,
+                                                 &g_swCrossplaySelfTestCameraStandAng,
+                                                 &g_swCrossplaySelfTestCameraStandSect))
+            {
+                g_swCrossplaySelfTestCameraScreen = screen.spriteNum;
+                placed = 1;
+            }
         }
 
-        if (g_swCrossplaySelfTestCameraScreen < 0)
+        if (!g_swCrossplaySelfTestCameraSeen)
         {
             SW_CrossplaySelfTestReport(1, "cameras-present", "no monitor has a matching camera, skipped");
             SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
             return;
         }
 
-        SPRITEp const sp = &sprite[g_swCrossplaySelfTestCameraScreen];
-
-        // Duke mounts its monitors in shallow alcove sectors, so "in front of it"
-        // is not something to derive arithmetically -- and standing in the wrong
-        // room puts the monitor storeys above the player's eye, where neartag()'s
-        // horizontal ray can never reach it.  Stand on the floor of a room that
-        // actually adjoins the alcove, and keep the first spot from which
-        // neartag() -- the search the use key itself runs -- returns this sprite.
-        int32_t placed = 0;
-        int16_t candidates[24];
-        int32_t candidateCount = 0;
-
-        candidates[candidateCount++] = sp->sectnum;
-        for (int32_t w = sector[sp->sectnum].wallptr;
-             w < sector[sp->sectnum].wallptr + sector[sp->sectnum].wallnum &&
-             candidateCount < (int32_t)ARRAY_SIZE(candidates); ++w)
-        {
-            int16_t const next = wall[w].nextsector;
-            if ((unsigned)next >= (unsigned)numsectors)
-                continue;
-
-            int32_t seen = 0;
-            for (int32_t c = 0; c < candidateCount; ++c)
-                seen |= candidates[c] == next;
-
-            if (!seen)
-                candidates[candidateCount++] = next;
-        }
-
-        for (int32_t c = 0; c < candidateCount && !placed; ++c)
-        {
-            for (int32_t radius = 256; radius <= 1024 && !placed; radius += 256)
-            {
-                for (int32_t step = 0; step < 16 && !placed; ++step)
-                {
-                    int32_t const probeAng = NORM_ANGLE(step * 128);
-                    int32_t const tryX = sp->x + ((sintable[(probeAng + 512) & 2047] * radius) >> 14);
-                    int32_t const tryY = sp->y + ((sintable[probeAng & 2047] * radius) >> 14);
-                    int16_t trySect = candidates[c];
-
-                    updatesector(tryX, tryY, &trySect);
-                    if (trySect != candidates[c])
-                        continue;
-
-                    if (!SW_CrossplaySelfTestWarpPlayerZ(pp, tryX, tryY, INT32_MIN, trySect))
-                        continue;
-
-                    pp->q16ang = fix16_from_int(NORM_ANGLE(getangle(sp->x - tryX, sp->y - tryY)));
-
-                    // The use key's own ray, offsets and all -- a monitor hung
-                    // at a Duke height can sit above a probe that only ever
-                    // looks down.
-                    for (unsigned zi = 0; zi < ARRAY_SIZE(g_swCrossplayDukeUseProbeZ) && !placed; ++zi)
-                    {
-                        int16_t nearSector = -1, nearWall = -1, nearSprite = -1;
-                        int32_t nearDist = 0;
-
-                        neartag(pp->posx, pp->posy, pp->posz + g_swCrossplayDukeUseProbeZ[zi], pp->cursectnum,
-                                fix16_to_int(pp->q16ang), &nearSector, &nearWall, &nearSprite, &nearDist, 1280,
-                                NTAG_SEARCH_LO, NULL);
-
-                        if (nearSprite == g_swCrossplaySelfTestCameraScreen && nearDist < 1792)
-                        {
-                            placed = 1;
-                            g_swCrossplaySelfTestCameraStandX = tryX;
-                            g_swCrossplaySelfTestCameraStandY = tryY;
-                            g_swCrossplaySelfTestCameraStandAng = fix16_to_int(pp->q16ang);
-                            g_swCrossplaySelfTestCameraStandSect = trySect;
-                        }
-                    }
-                }
-            }
-        }
-
         if (!placed)
         {
-            SW_CrossplaySelfTestReport(0, "camera-reachable", "no floor spot sees the monitor through neartag()");
+            SW_CrossplaySelfTestReport(0, "camera-reachable", "no floor spot sees any monitor through neartag()");
             SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
             return;
         }
+
+        SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestCameraStandX, g_swCrossplaySelfTestCameraStandY,
+                                        INT32_MIN, g_swCrossplaySelfTestCameraStandSect);
+        pp->q16ang = fix16_from_int(g_swCrossplaySelfTestCameraStandAng);
 
         SW_CrossplaySelfTestReport(1, "camera-reachable", "monitor is in reach of the use key");
         SW_CrossplaySelfTestKeepPlayerAlive(pp);
@@ -13119,19 +13204,151 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
         return;
     }
 
-    // Walking away must hand the view straight back, the way Duke does.
-    pp->xvect = 16384;
-    SW_CrossplayTickDukeCameras(pp);
-    pp->xvect = 0;
-
     int32_t camX, camY, camZ;
     fix16_t camAng, camHoriz;
     int16_t camSect;
-    int32_t const stillViewing = SW_CrossplayDukeCameraView(&camX, &camY, &camZ, &camAng, &camHoriz, &camSect);
 
-    Bsnprintf(detail, sizeof(detail), "screen=%d viewing-after-move=%d", g_swCrossplaySelfTestCameraScreen,
-              stillViewing);
-    SW_CrossplaySelfTestReport(!stillViewing, "camera-move-releases", detail);
+    if (g_swCrossplaySelfTestCameraStage == 2)
+    {
+        // A monitor whose group holds one camera is already back in the player's
+        // own eyes by now -- cycling past the last one hands the view back --
+        // so put the view into a camera again before shoving it.
+        if (!SW_CrossplayDukeCameraView(&camX, &camY, &camZ, &camAng, &camHoriz, &camSect))
+        {
+            SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestCameraStandX,
+                                            g_swCrossplaySelfTestCameraStandY, INT32_MIN,
+                                            g_swCrossplaySelfTestCameraStandSect);
+            pp->q16ang = fix16_from_int(g_swCrossplaySelfTestCameraStandAng);
+            SW_CrossplayOperateDukeMapEffectors(pp);
+        }
+
+        // Duke freezes the player while they are looking through a camera --
+        // P_ProcessInput() returns before it reads a single movement key -- and
+        // the only way out is the use key.  Shoving the player must therefore
+        // leave the view exactly where it was.
+        pp->xvect = 16384;
+        SW_CrossplayTickDukeCameras(pp);
+        pp->xvect = 0;
+
+        int32_t const stillViewing =
+            SW_CrossplayDukeCameraView(&camX, &camY, &camZ, &camAng, &camHoriz, &camSect);
+
+        Bsnprintf(detail, sizeof(detail), "screen=%d viewing-after-shove=%d", g_swCrossplaySelfTestCameraScreen,
+                  stillViewing);
+        SW_CrossplaySelfTestReport(stillViewing != 0, "camera-holds-player", detail);
+
+        g_swCrossplaySelfTestCameraStage = 3;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_CAMERAS);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestCameraStage == 3)
+    {
+        // Pressing use walks the group and then hands the view back.  However
+        // many cameras the group has, it has to end.
+        while (g_swCrossplaySelfTestCameraReleasePresses < VB_CROSSPLAY_MAX_DUKE_CAMERAS + 2 &&
+               SW_CrossplayDukeCameraView(&camX, &camY, &camZ, &camAng, &camHoriz, &camSect))
+        {
+            SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestCameraStandX,
+                                            g_swCrossplaySelfTestCameraStandY, INT32_MIN,
+                                            g_swCrossplaySelfTestCameraStandSect);
+            pp->q16ang = fix16_from_int(g_swCrossplaySelfTestCameraStandAng);
+
+            SW_CrossplayOperateDukeMapEffectors(pp);
+            ++g_swCrossplaySelfTestCameraReleasePresses;
+        }
+
+        int32_t const stillViewing =
+            SW_CrossplayDukeCameraView(&camX, &camY, &camZ, &camAng, &camHoriz, &camSect);
+
+        Bsnprintf(detail, sizeof(detail), "screen=%d released after %d press(es)",
+                  g_swCrossplaySelfTestCameraScreen, g_swCrossplaySelfTestCameraReleasePresses);
+        SW_CrossplaySelfTestReport(!stillViewing, "camera-use-releases", detail);
+
+        // Duke leaves g_curViewscreen set when the player comes back out of the
+        // camera, so the monitor goes on showing the feed for as long as they
+        // stand near it.  Sample the pan angles here too, before the wait.
+        for (int32_t i = 0; i < SW_CrossplayDukeCameraListCount(); ++i)
+        {
+            int32_t const cam = SW_CrossplayDukeCameraListSprite(i);
+            if ((unsigned)cam >= MAXSPRITES || sprite[cam].statnum == MAXSTATUS)
+                continue;
+
+            if (sprite[cam].hitag > 0 && g_swCrossplaySelfTestCameraPanSprite < 0)
+            {
+                g_swCrossplaySelfTestCameraPanSprite = cam;
+                g_swCrossplaySelfTestCameraPanAng = sprite[cam].ang;
+            }
+            else if (sprite[cam].hitag == 0 && g_swCrossplaySelfTestCameraFixedSprite < 0)
+            {
+                g_swCrossplaySelfTestCameraFixedSprite = cam;
+                g_swCrossplaySelfTestCameraFixedAng = sprite[cam].ang;
+            }
+        }
+
+        g_swCrossplaySelfTestCameraStage = 4;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_CAMERAS);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestPhaseTic < 40)
+    {
+        SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestCameraStandX, g_swCrossplaySelfTestCameraStandY,
+                                        INT32_MIN, g_swCrossplaySelfTestCameraStandSect);
+        pp->q16ang = fix16_from_int(g_swCrossplaySelfTestCameraStandAng);
+        return;
+    }
+
+    int const feedTile = SW_CrossplayDukeViewscreenTile(g_swCrossplaySelfTestCameraScreen);
+    Bsnprintf(detail, sizeof(detail), "screen=%d tile-after-exit=%d live-screens=%d",
+              g_swCrossplaySelfTestCameraScreen, feedTile, SW_CrossplayDukeLiveViewscreenCount());
+    SW_CrossplaySelfTestReport(feedTile >= 0 && waloff[feedTile] != 0, "camera-feed-persists", detail);
+
+    // Duke keeps one g_curViewscreen, and renders the world again only for that
+    // one.  Five monitors on one wall -- E1L1 has exactly that -- is five extra
+    // full renders a frame if every one of them runs its own feed.
+    SW_CrossplaySelfTestReport(SW_CrossplayDukeLiveViewscreenCount() <= 1, "camera-feed-exclusive", detail);
+
+    // Duke's cameras sweep: a hitag is the width of the sweep, and A_Execute()
+    // walks the angle across it every tic.  A camera without one stands still.
+    if (g_swCrossplaySelfTestCameraPanSprite >= 0)
+    {
+        int32_t const cam = g_swCrossplaySelfTestCameraPanSprite;
+        Bsnprintf(detail, sizeof(detail), "camera=%d hitag=%d ang %d -> %d", cam, sprite[cam].hitag,
+                  g_swCrossplaySelfTestCameraPanAng, sprite[cam].ang);
+        SW_CrossplaySelfTestReport(sprite[cam].ang != g_swCrossplaySelfTestCameraPanAng, "camera-pans", detail);
+    }
+    else
+        SW_CrossplaySelfTestReport(1, "camera-pans", "no sweeping camera in this map, skipped");
+
+    if (g_swCrossplaySelfTestCameraFixedSprite >= 0)
+    {
+        int32_t const cam = g_swCrossplaySelfTestCameraFixedSprite;
+        Bsnprintf(detail, sizeof(detail), "camera=%d hitag=0 ang %d -> %d", cam,
+                  g_swCrossplaySelfTestCameraFixedAng, sprite[cam].ang);
+        SW_CrossplaySelfTestReport(sprite[cam].ang == g_swCrossplaySelfTestCameraFixedAng, "camera-holds-still",
+                                   detail);
+    }
+    else
+        SW_CrossplaySelfTestReport(1, "camera-holds-still", "no fixed camera in this map, skipped");
+
+    // Duke's A_Spawn() throws away a camera with a palette in single player --
+    // those are the deathmatch ones -- so none should be on offer here.
+    int32_t coloured = -1;
+    for (int32_t i = 0; i < SW_CrossplayDukeCameraListCount(); ++i)
+    {
+        int32_t const cam = SW_CrossplayDukeCameraListSprite(i);
+        if ((unsigned)cam < MAXSPRITES && sprite[cam].statnum != MAXSTATUS &&
+            sprite[cam].pal != 0)
+        {
+            coloured = cam;
+            break;
+        }
+    }
+
+    Bsnprintf(detail, sizeof(detail), "%d camera(s) captured, first with a palette: %d",
+              SW_CrossplayDukeCameraListCount(), coloured);
+    SW_CrossplaySelfTestReport(coloured < 0, "cameras-are-single-player", detail);
 
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
 }
@@ -15439,6 +15656,10 @@ static void SW_CrossplayDukeAITick(void)
 
     VB_DukeAI_RunTic();
     SW_CrossplayZGuard("duke-tic");
+
+    // Duke's cameras are actors, so they sweep on Duke's tic like everything
+    // else Duke runs.
+    SW_CrossplayTickDukeCameraSweep();
 
     // Duke shakes the view with a countdown its own code sets -- a detonating
     // charge is 16 tics of it.  Take the number now; the host's own quake is

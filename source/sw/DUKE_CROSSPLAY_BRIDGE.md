@@ -921,9 +921,8 @@ Fixed since:
   Duke's `pfacing` allows only 128 angle units either side.
 
 - **Duke's security cameras.**  A monitor showed the blank screen art and nothing
-  else; pressing use on one did nothing.  The cameras themselves were already
-  fine -- `CAMERA1` is an adoptable tile, so Duke's own actor code pans the ones
-  whose hitag asks for it -- but nothing connected them to a screen.
+  else; pressing use on one did nothing.  Nothing connected the cameras to a
+  screen.
 
   Duke pairs them by tag: a `VIEWSCREEN`/`VIEWSCREEN2` carries the hitag of the
   camera group it watches and a `CAMERA1` carries that same value as its lotag
@@ -931,28 +930,78 @@ Fixed since:
   captured at load, and pressing use steps through the group the way
   `P_CycleCameras()` does -- putting the player's view behind the camera, moving
   to the next one on each further press, and handing the view back once the group
-  runs out.  Walking away releases it, as Duke does.
+  runs out.
 
   The feed is rendered with SW's own `drawroomstotile()`, the call its camera
   mirrors already use, so a monitor shows the world exactly as SW draws it rather
-  than as Duke would.  Each monitor owns one tile, claimed through the new
+  than as Duke would.  A screen owns one tile, claimed through the new
   `artCrossplayReserveTile()` so the generated-art allocator cannot hand the same
-  slot out twice; a feed is only redrawn for a monitor the player is standing
-  within Duke's `VIEWSCREEN_ACTIVE_DISTANCE` of *and* that the renderer actually
-  asked to draw last frame, because each one costs a full second pass over the
-  world.
+  slot out twice.
 
-  Two things about this are worth keeping in mind.  A monitor is recognised by
-  its own capture list rather than the sprite behavior table, which never
-  classified it -- the lotag `A_Spawn()` gives it exists only so `neartag()` can
-  find it, and treating that as a map tag would operate everything else in the
-  level wearing tag 1.  And monitors sit in shallow alcove sectors, so there is
-  no arithmetic that reliably says "in front of one": `VB_CP_SELFTEST=world`
-  finds a stand point by probing rooms that adjoin the alcove until `neartag()`
-  itself returns the monitor, which is why `camera-reachable` is a reported check
-  rather than test scaffolding.  The rest of the group is `camera-use-engages`,
-  `camera-matches-group`, `camera-feed-drawn`, `camera-use-cycles` and
-  `camera-move-releases`, and they pass on E1L1, E1L2 and E1L4.
+  A monitor is recognised by its own capture list rather than the sprite behavior
+  table, which never classified it -- the lotag `A_Spawn()` gives it exists only
+  so `neartag()` can find it, and treating that as a map tag would operate
+  everything else in the level wearing tag 1.
+
+  That much worked, and then four things about it turned out not to be Duke:
+
+  - **The cameras did not move.**  It had been recorded here that `CAMERA1` is an
+    adoptable tile and Duke's own actor code panned the ones whose hitag asked
+    for it.  It does not: a captured camera is the bridge's, not Duke's, and
+    nothing ran its sweep -- `camera-pans` measured E1L1's camera 54 (hitag 200)
+    holding one angle for forty tics.  Duke's `CAMERA1` case reads the hitag as
+    the width of a sweep and walks `ang` across it -- out, back twice as far, out
+    again, then a jump and round once more -- and that arithmetic now runs on
+    Duke's own tic, beside `VB_DukeAI_RunTic()`, so a camera pans at the speed it
+    pans in Duke.  Most stock cameras have a hitag; the ones without stand still,
+    which `camera-holds-still` pins down so the sweep cannot leak onto them.
+  - **The deathmatch cameras were in the cycle.**  `A_Spawn()` shrinks a
+    `CAMERA1` with a palette to nothing and files it away in single player --
+    those are the multiplayer ones -- and the bridge captured them anyway, so
+    pressing use walked through viewpoints Duke never shows (two of E1L1's
+    seven).  They are skipped at capture now, and shrunk the way Duke shrinks
+    them.
+  - **The player could walk out of a camera.**  Duke's `P_ProcessInput()` returns
+    before it reads a single movement key while `newowner >= 0`: the player is
+    frozen at the spot where they pressed use and the only way out is the use key.
+    The bridge instead handed the view back the moment they nudged a direction.
+    The player is held now, and the use key -- cycling on, then off the end of the
+    group -- is what releases them.  It is also the last thing
+    `SW_CrossplayOperateDukeMapEffectors()` tries, so a monitor destroyed while
+    the player is inside its camera cannot leave them frozen there for good.
+  - **The feed died when the player stepped back out.**  `G_ClearCameraView()`
+    deliberately leaves `g_curViewscreen` and the screen's bound camera alone, so
+    in Duke a monitor goes on showing what its camera sees until the player walks
+    away from it.  The bridge cleared the binding along with the view, so the
+    screen went dark the moment the player came back to their own eyes.  Clearing
+    now does what Duke's does -- hand back the view, free the cameras, leave the
+    screen bound -- and the screen is released when the player leaves its active
+    range.
+
+  That last change also fixed something the bridge had been doing per monitor:
+  Duke keeps a single `g_curViewscreen` and renders the world again only for
+  that one.  The bridge ran a feed for *every* screen in range, which on E1L1's
+  lobby wall is five extra full renders a frame.  `camera-feed-exclusive` holds
+  it to one.
+
+  Monitors sit in shallow alcove sectors, so there is no arithmetic that reliably
+  says "in front of one": `VB_CP_SELFTEST=world` finds a stand point by probing
+  rooms that adjoin the alcove until `neartag()` itself returns the monitor,
+  which is why `camera-reachable` is a reported check rather than test
+  scaffolding.  It now walks the use key's own probe heights in the use key's own
+  order, and tries every monitor rather than only the first -- E1L3 mounts its
+  first one where the harness cannot stand, and that check had been failing on
+  that level since it was written.  The rest of the group is
+  `camera-use-engages`, `camera-matches-group`, `camera-feed-drawn`,
+  `camera-use-cycles`, `camera-holds-player`, `camera-use-releases`,
+  `camera-feed-persists`, `camera-feed-exclusive`, `camera-pans`,
+  `camera-holds-still` and `cameras-are-single-player`.
+
+  Not modelled: shooting a camera out.  Duke only allows it when a CON asks for
+  it, and stock Duke3D sets `CAMERASDESTRUCTABLE NO`, so the `STATIC` a broken
+  camera puts on its monitor never happens in the shipped game.  The selection
+  path already refuses a camera that has been hidden, which is the state Duke's
+  damaged-camera code leaves behind.
 
 - **Only an explosion opens a cracked wall, and opening it must take the crack
   with it.**  A thrown shuriken blew Duke's cracked walls open, and once open the
