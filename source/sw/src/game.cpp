@@ -1412,6 +1412,7 @@ int SW_CrossplayDukeMirrorsBroken(void);
 int SW_CrossplayDukePissEventCount(void);
 extern "C" void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum));
 extern "C" void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
+extern "C" void VB_DukeAI_SetPlayerFireKey(int playerNum, int fireHeld);
 extern "C" void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
 extern "C" void VB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz);
 extern "C" int VB_DukeAI_SomethingOnPlayer(int playerNum);
@@ -3253,6 +3254,7 @@ int SW_CrossplayDukeMirrorsBroken(void) { return g_swCrossplayDukeMirrorsBroken;
 // The self-test drives the use key from outside SW's input, which is rebuilt
 // from the real device every frame; without this the harness's key press is
 // wiped before the Duke tic that would read it.
+static int32_t g_swCrossplaySelfTestForceFireKey;
 static int32_t g_swCrossplaySelfTestForceUseKey;
 
 // ...and the same for the facing angle: SW rebuilds the player's angle from the
@@ -12768,6 +12770,10 @@ static int32_t g_swCrossplaySelfTestSlimerScan;
 static int32_t g_swCrossplaySelfTestSlimerDamageBase;
 static int32_t g_swCrossplaySelfTestSlimerAttached = -1;
 static int32_t g_swCrossplaySelfTestSlimerNearest = INT32_MAX;
+int InitShotgun(PLAYERp);   // weapon.cpp
+
+static int32_t g_swCrossplaySelfTestSlimerShotFired;
+static int32_t g_swCrossplaySelfTestSlimerHealthAtShot;
 
 static void SW_CrossplaySelfTestRunSlimerSetup(PLAYERp const pp)
 {
@@ -12794,6 +12800,7 @@ static void SW_CrossplaySelfTestRunSlimerSetup(PLAYERp const pp)
         g_swCrossplaySelfTestSlimerSprite = spriteNum;
         g_swCrossplaySelfTestSlimerAttached = -1;
         g_swCrossplaySelfTestSlimerNearest = INT32_MAX;
+        g_swCrossplaySelfTestSlimerShotFired = 0;
         // Not the player's health: the harness pins that at 1000 every tic so the
         // run survives, which would make any "did it hurt me" test vacuous.
         g_swCrossplaySelfTestSlimerDamageBase = SW_CrossplayDukeAIPlayerDamageEvents();
@@ -12826,7 +12833,41 @@ static void SW_CrossplaySelfTestRunSlimerObserve(PLAYERp const pp)
         g_swCrossplaySelfTestSlimerNearest = min(g_swCrossplaySelfTestSlimerNearest, dist);
     }
 
-    if (g_swCrossplaySelfTestPhaseTic < 240)
+    // Second half of the phase: having established that it is on the player's
+    // face, shoot it off.  In Duke you kill a slimer that has latched on by
+    // firing -- there is no shake-off code, the shot simply hits the sprite
+    // parked in front of your eye -- so the same has to be true here.
+    if (g_swCrossplaySelfTestPhaseTic == 240 && g_swCrossplaySelfTestSlimerAttached >= 0)
+    {
+        g_swCrossplaySelfTestSlimerHealthAtShot = VB_DukeAI_SpriteHealth(g_swCrossplaySelfTestSlimerAttached);
+
+        if (Bgetenv("VB_CP_SLIME_DEBUG") != NULL)
+        {
+            int32_t const latched = g_swCrossplaySelfTestSlimerAttached;
+            int32_t const faceAng = fix16_to_int(pp->q16ang);
+            int32_t const zvect = (100 - fix16_to_int(pp->q16horiz)) * 2000;
+            hitdata_t hitinfo;
+
+            FAFhitscan(pp->posx, pp->posy, pp->posz, pp->cursectnum, sintable[(faceAng + 512) & 2047],
+                       sintable[faceAng & 2047], zvect, &hitinfo, CLIPMASK_MISSILE);
+
+            LOG_F(INFO, "CPSLIME latched=%d cstat=%d stat=%d extra=%d owned=%d | ray hit spr=%d wall=%d sect=%d | "
+                        "player (%d,%d,%d) sect=%d, slime (%d,%d,%d) sect=%d",
+                  latched, (int)sprite[latched].cstat, (int)sprite[latched].statnum, (int)sprite[latched].extra,
+                  SW_CrossplayDukeAIOwnsSprite(latched), hitinfo.sprite, hitinfo.wall, hitinfo.sect,
+                  pp->posx, pp->posy, pp->posz, pp->cursectnum,
+                  (int)sprite[latched].x, (int)sprite[latched].y, (int)sprite[latched].z,
+                  (int)sprite[latched].sectnum);
+        }
+
+        // Held, not fired: Duke's slimer reads SK_FIRE off the input bits rather
+        // than waiting to be hit, because it has zeroed its own cstat and no shot
+        // can reach it.  Pulling the trigger some other way proves nothing.
+        g_swCrossplaySelfTestForceFireKey = 1;
+        g_swCrossplaySelfTestSlimerShotFired = 1;
+    }
+
+    if (g_swCrossplaySelfTestPhaseTic < 320)
         return;
 
     int32_t const bites = SW_CrossplayDukeAIPlayerDamageEvents() - g_swCrossplaySelfTestSlimerDamageBase;
@@ -12844,6 +12885,21 @@ static void SW_CrossplaySelfTestRunSlimerObserve(PLAYERp const pp)
 
         Bsnprintf(detail, sizeof(detail), "%d damage event(s) while latched on", bites);
         SW_CrossplaySelfTestReport(bites > 0, "slimer-bites", detail);
+
+        if (g_swCrossplaySelfTestSlimerShotFired)
+        {
+            int32_t const latched = g_swCrossplaySelfTestSlimerAttached;
+            int32_t const healthNow = VB_DukeAI_SpriteHealth(latched);
+            int32_t const gone = sprite[latched].statnum == MAXSTATUS || !VB_DukeAI_SpriteIsAlive(latched);
+            int32_t const letGo = VB_DukeAI_SomethingOnPlayer(0) != latched;
+
+            Bsnprintf(detail, sizeof(detail), "spr=%d health %d -> %d, gone=%d, letgo=%d", latched,
+                      g_swCrossplaySelfTestSlimerHealthAtShot, healthNow, gone, letGo);
+            SW_CrossplaySelfTestReport(gone || letGo || healthNow < g_swCrossplaySelfTestSlimerHealthAtShot,
+                                       "slimer-dies-when-shot", detail);
+        }
+
+        g_swCrossplaySelfTestForceFireKey = 0;
     }
 
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP);
@@ -14524,7 +14580,6 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_HYDRANT);
 }
 
-int InitShotgun(PLAYERp);
 
 static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
 {
@@ -16706,6 +16761,23 @@ static void SW_CrossplayDukeAITick(void)
         // while the key is held, rate-limited by its own action count.
         VB_DukeAI_SetPlayerUseKey(pnum, (TEST_SYNC_KEY(other, SK_OPERATE) || g_swCrossplaySelfTestForceUseKey) ? 1
                                                                                                                : 0);
+
+        // The fire key, which one piece of Duke's actor code reads directly: a
+        // slimer on the player's face zeroes its own cstat, so no shot can reach
+        // it, and Duke kills it off the input bit instead.  Duke exempts the
+        // weapons you cannot shoot a thing off your own face with -- the pipe
+        // bomb, its detonator and the tripbomb -- so their Shadow Warrior
+        // counterparts are exempt here too.
+        {
+            USERp const otherUser = User[other->PlayerSprite];
+            int32_t const bombInHand = otherUser != NULL &&
+                                       (otherUser->WeaponNum == WPN_GRENADE || otherUser->WeaponNum == WPN_MINE);
+
+            VB_DukeAI_SetPlayerFireKey(pnum, (!bombInHand && (TEST_SYNC_KEY(other, SK_SHOOT) ||
+                                                              g_swCrossplaySelfTestForceFireKey))
+                                                 ? 1
+                                                 : 0);
+        }
 
         // ...and the real health, so Duke's own health tests are about the player
         // the host is actually running.

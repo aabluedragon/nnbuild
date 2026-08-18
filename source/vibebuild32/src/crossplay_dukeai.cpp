@@ -36,6 +36,7 @@ int VB_DukeAI_BeginLevel(int playerSkill);
 int VB_DukeAI_SpawnMapActor(int spriteNum);
 void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int32_t z, int32_t ang, int16_t sectnum);
 void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
+void VB_DukeAI_SetPlayerFireKey(int playerNum, int fireHeld);
 void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
 void VB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz);
 int VB_DukeAI_SomethingOnPlayer(int playerNum);
@@ -385,6 +386,23 @@ void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld)
         g_player[playerNum].inputBits->bits |= BIT(SK_OPEN);
     else
         g_player[playerNum].inputBits->bits &= ~BIT(SK_OPEN);
+}
+
+// ...and the fire key, for the same reason.  A slimer riding the player's face
+// sets its own cstat to 0 -- "Don't block anything if on player" -- so no shot
+// can reach it and there is nothing to hit.  Duke kills it by reading SK_FIRE
+// out of the player's input directly, which is why firing shakes one off in Duke
+// and did nothing here.
+void VB_DukeAI_SetPlayerFireKey(int playerNum, int fireHeld)
+{
+    if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS ||
+        g_player[playerNum].inputBits == NULL)
+        return;
+
+    if (fireHeld)
+        g_player[playerNum].inputBits->bits |= BIT(SK_FIRE);
+    else
+        g_player[playerNum].inputBits->bits &= ~BIT(SK_FIRE);
 }
 
 // Duke's own sound number for drinking, so the host does not hardcode one.

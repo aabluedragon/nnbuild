@@ -1392,8 +1392,21 @@ run's result should not be read too closely.
   because both games are the same engine.  Duke leaves its `sectnum` stale while
   it rides, which is Duke's own quirk and is left alone.
 
+  Firing kills it, and not because the bullet reaches it: the slimer sets its
+  own `cstat = 0` the moment it is on the player -- *"Don't block anything if on
+  player"* -- so no shot can hit it and there is nothing there to damage.  Duke
+  instead reads `SK_FIRE` straight out of the player's input bits and squibs the
+  thing on the spot.  That was the only piece of Duke's actor code reading the
+  fire bit, and the bridge had never mirrored it, so a latched slimer was
+  unkillable: `VB_DukeAI_SetPlayerFireKey()` now carries it across beside the use
+  key.  Duke exempts the weapons you cannot shoot something off your own face
+  with -- pipe bomb, its detonator and the tripbomb -- so SW's grenade launcher
+  and sticky bombs are exempt in the same way.
+
   Covered on E2L5 by `slimer-leeches-on`, `slimer-rides-the-face` (closest
-  approach 124 units) and `slimer-bites`.  The bite is counted as Duke player-
+  approach 124 units), `slimer-bites` and `slimer-dies-when-shot`, the last of
+  which holds the fire key rather than calling a weapon directly -- pulling the
+  trigger some other way would prove nothing about the path Duke actually uses.  The bite is counted as Duke player-
   damage events, not as a health drop: the harness pins the player at 1000 health
   every tic so runs survive, which would have made a health test vacuous.  With
   the sentinel reset commented out, `slimer-leeches-on` fails with
@@ -1532,6 +1545,7 @@ reproductions passed while the user's own game failed.
 | `VB_CP_TEST_ROCKET_MIRROR=1` | with `VB_CP_TEST_ROCKET`, parks the harness in front of the first Duke mirror wall so rocket-versus-mirror behaviour can be counted |
 | `VB_CP_TEST_ROCKET=1` | fire SW's rocket launcher repeatedly, reporting each rocket's flight distance and what was solid at the muzzle if it died there |
 | `VB_CP_STRAY_DEBUG=1` | log host sprites found in Duke's lists and put back |
+| `VB_CP_SLIME_DEBUG` | when a slimer is on the player's face, logs its cstat, statnum, health and what a ray fired straight ahead actually hits |
 | `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
 | `VB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
 | `VB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |
