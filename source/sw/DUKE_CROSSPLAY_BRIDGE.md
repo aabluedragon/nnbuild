@@ -1441,6 +1441,29 @@ run's result should not be read too closely.
   a deliberate divergence from Duke, and would work against the earlier fix that
   stops Duke scenery from eating the host's bullets.
 
+- **An enemy has to be able to finish the player off.**  Health from Duke's
+  actors would sink to zero and stay there while a slimer or a pigcop went on
+  hitting a player who could not die.  Shadow Warrior never kills a player inside
+  `PlayerUpdateHealth()` -- that function only moves the number and redraws the
+  bar; every one of SW's own damage sites pairs it with `PlayerCheckDeath()`,
+  which is what picks a death type and calls `DoPlayerBeginDie()`.  Four bridge
+  sites updated health without ever asking the question: the shared path that
+  applies everything Duke's actor code dealt during a tic, the Duke blast radius
+  damage, and both branches of the approximation layer's melee.
+
+  The killer is handed over as -1 deliberately.  `PlayerCheckDeath()` dereferences
+  `User[Weapon]` without a null check, and a Duke-owned sprite need not carry an
+  SW `USER` record at all -- the neighbouring sites already guard this by way of
+  `SW_CrossplayNativeWeaponForPlayerDamage()`, which returns -1 for exactly that
+  case.
+
+  Covered on E2L5 by `duke-actor-damage-kills-the-player`.  The harness pins the
+  player at 1000 health every tic so runs survive, so the check turns that off
+  for its own phase (`g_swCrossplaySelfTestAllowDeath`), drops the player to 3
+  health with a slimer already latched on, and waits for the next bite.  It takes
+  a second slimer to do it, since the first is shot off the player's face by
+  `slimer-dies-when-shot`.  Before the fix it reported `health 0, PF_DEAD=0`.
+
 Still open:
 
 - Duke map palette/art mixing is only checked by eye.

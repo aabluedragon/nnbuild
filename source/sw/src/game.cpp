@@ -6565,6 +6565,7 @@ static void SW_CrossplayDukeActorAreaDamage(int32_t spriteNum, int32_t radius, i
 
         int32_t const scaledDamage = max<int32_t>(1, damage - ((damage * dist) / max<int32_t>(radius, 1)));
         PlayerUpdateHealth(pp, -scaledDamage);
+        PlayerCheckDeath(pp, SW_CrossplayNativeWeaponForPlayerDamage(spriteNum));
     }
 }
 
@@ -7538,6 +7539,7 @@ static void SW_CrossplayTickDukeActorSprite(int32_t spriteNum, sw_crossplay_duke
     {
         SW_CrossplayPlayDukeSpriteSound(spriteNum, NULL, profile.attackSound);
         PlayerUpdateHealth(pp, -profile.meleeDamage);
+        PlayerCheckDeath(pp, SW_CrossplayNativeWeaponForPlayerDamage(spriteNum));
         SW_CrossplayKillDukeActorSprite(spriteNum, NULL);
         return;
     }
@@ -7550,6 +7552,7 @@ static void SW_CrossplayTickDukeActorSprite(int32_t spriteNum, sw_crossplay_duke
             behavior.attackCooldown = profile.attackDelay;
             SW_CrossplayPlayDukeSpriteSound(spriteNum, NULL, profile.attackSound);
             PlayerUpdateHealth(pp, -profile.meleeDamage);
+            PlayerCheckDeath(pp, SW_CrossplayNativeWeaponForPlayerDamage(spriteNum));
             ++behavior.attackEvents;
             ++g_swCrossplayDukeActorAttackEvents;
         }
@@ -12438,9 +12441,14 @@ static PLAYERp SW_CrossplaySelfTestPlayer(void)
     return pp;
 }
 
+// Set while a test is deliberately letting the player be killed.  Everything
+// else in the suite needs the player upright to keep running, so the default is
+// to resurrect them every tic.
+static int32_t g_swCrossplaySelfTestAllowDeath;
+
 static void SW_CrossplaySelfTestKeepPlayerAlive(PLAYERp const pp)
 {
-    if (pp == NULL)
+    if (pp == NULL || g_swCrossplaySelfTestAllowDeath)
         return;
 
     USERp const u = User[pp->PlayerSprite];
@@ -12773,6 +12781,8 @@ static int32_t g_swCrossplaySelfTestSlimerNearest = INT32_MAX;
 int InitShotgun(PLAYERp);   // weapon.cpp
 
 static int32_t g_swCrossplaySelfTestSlimerShotFired;
+static int32_t g_swCrossplaySelfTestSlimerPass;
+static int32_t g_swCrossplaySelfTestSlimerKilledPlayer;
 static int32_t g_swCrossplaySelfTestSlimerHealthAtShot;
 
 static void SW_CrossplaySelfTestRunSlimerSetup(PLAYERp const pp)
@@ -12801,17 +12811,23 @@ static void SW_CrossplaySelfTestRunSlimerSetup(PLAYERp const pp)
         g_swCrossplaySelfTestSlimerAttached = -1;
         g_swCrossplaySelfTestSlimerNearest = INT32_MAX;
         g_swCrossplaySelfTestSlimerShotFired = 0;
+        g_swCrossplaySelfTestSlimerKilledPlayer = 0;
         // Not the player's health: the harness pins that at 1000 every tic so the
         // run survives, which would make any "did it hurt me" test vacuous.
         g_swCrossplaySelfTestSlimerDamageBase = SW_CrossplayDukeAIPlayerDamageEvents();
         ++g_swCrossplaySelfTestSlimerScan;
+        ++g_swCrossplaySelfTestSlimerPass;
         SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_OBSERVE);
         return;
     }
 
-    if (g_swCrossplaySelfTestSlimerSprite < 0)
+    if (g_swCrossplaySelfTestSlimerPass == 0)
         SW_CrossplaySelfTestReport(1, "slimer-present", "no Duke slimer in this map, skipped");
+    else if (g_swCrossplaySelfTestSlimerPass < 2)
+        SW_CrossplaySelfTestReport(1, "second-slimer-present",
+                                   "only one Duke slimer in this map, death check skipped");
 
+    g_swCrossplaySelfTestAllowDeath = 0;
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP);
 }
 
@@ -12833,7 +12849,48 @@ static void SW_CrossplaySelfTestRunSlimerObserve(PLAYERp const pp)
         g_swCrossplaySelfTestSlimerNearest = min(g_swCrossplaySelfTestSlimerNearest, dist);
     }
 
-    // Second half of the phase: having established that it is on the player's
+    // Second pass over the map's slimers: instead of shooting this one off, let
+    // it finish the player.  Damage from Duke's actors reaches the host through
+    // one shared path, and that path updated health without ever asking whether
+    // the player had just died -- health would sit at zero while an enemy kept
+    // hitting, and nothing happened.
+    if (g_swCrossplaySelfTestSlimerPass >= 2)
+    {
+        if (g_swCrossplaySelfTestPhaseTic == 240 && g_swCrossplaySelfTestSlimerAttached >= 0)
+        {
+            // Less than one bite's worth, so the next bite has to be fatal.
+            g_swCrossplaySelfTestAllowDeath = 1;
+
+            USERp const u = User[pp->PlayerSprite];
+            if (u != NULL)
+                u->Health = 3;
+        }
+
+        if (g_swCrossplaySelfTestPhaseTic > 240 && TEST(pp->Flags, PF_DEAD))
+            g_swCrossplaySelfTestSlimerKilledPlayer = 1;
+
+        if (g_swCrossplaySelfTestPhaseTic < 400)
+            return;
+
+        USERp const u = User[pp->PlayerSprite];
+
+        if (g_swCrossplaySelfTestSlimerAttached >= 0)
+        {
+            char deathDetail[176];
+            Bsnprintf(deathDetail, sizeof(deathDetail), "spr=%d, health %d, PF_DEAD=%d",
+                      g_swCrossplaySelfTestSlimerAttached, u != NULL ? (int)u->Health : -1,
+                      TEST(pp->Flags, PF_DEAD) != 0);
+            SW_CrossplaySelfTestReport(g_swCrossplaySelfTestSlimerKilledPlayer,
+                                       "duke-actor-damage-kills-the-player", deathDetail);
+        }
+
+        // Back on their feet, so the rest of the suite has a player to work with.
+        g_swCrossplaySelfTestAllowDeath = 0;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
+        return;
+    }
+
+    // First pass: having established that it is on the player's
     // face, shoot it off.  In Duke you kill a slimer that has latched on by
     // firing -- there is no shake-off code, the shot simply hits the sprite
     // parked in front of your eye -- so the same has to be true here.
@@ -12902,7 +12959,8 @@ static void SW_CrossplaySelfTestRunSlimerObserve(PLAYERp const pp)
         g_swCrossplaySelfTestForceFireKey = 0;
     }
 
-    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP);
+    // Round again for a second slimer, which gets to finish the player off.
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
 }
 
 static void SW_CrossplaySelfTestRunTeleportSetup(PLAYERp const pp)
@@ -17270,6 +17328,16 @@ static void SW_CrossplayDukeAITick(void)
             ++g_swCrossplayDukeAIPlayerHealEvents;
 
         PlayerUpdateHealth(Player + pnum, (short)-damageForPlayer[pnum]);
+
+        // ...and then ask whether that killed them.  SW never kills a player
+        // inside PlayerUpdateHealth() -- every one of its own damage sites pairs
+        // the two calls -- so without this, health from Duke's actors would sink
+        // to zero and stay there while an enemy went on hitting a player who
+        // could not die.  The killer is passed as -1 deliberately: PlayerCheckDeath()
+        // dereferences User[Weapon] unguarded, and a Duke-owned sprite need not
+        // have a USER record at all.
+        if (damageForPlayer[pnum] > 0)
+            PlayerCheckDeath(Player + pnum, -1);
     }
 }
 
