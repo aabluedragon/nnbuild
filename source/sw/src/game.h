@@ -911,6 +911,11 @@ typedef struct
 #define MAX_LEVELS_SW 4
 #define MAX_LEVELS (SW_SHAREWARE ? MAX_LEVELS_SW : MAX_LEVELS_REG)
 
+// A Duke GRP holds up to four episodes of eleven, which does not fit Shadow
+// Warrior's own twenty-nine.  The table is sized for either.
+#define MAX_LEVELS_CROSSPLAY 72
+#define MAX_EPISODES_CROSSPLAY 8
+
 typedef struct
 {
     const char *LevelName;
@@ -920,13 +925,20 @@ typedef struct
     const char *ParTime;
 } LEVEL_INFO, *LEVEL_INFOp, * *LEVEL_INFOpp;
 
-extern LEVEL_INFO LevelInfo[MAX_LEVELS_REG+2];
+extern LEVEL_INFO LevelInfo[MAX_LEVELS_CROSSPLAY+2];
 
 #define MAX_EPISODE_NAME_LEN 24
-extern char EpisodeNames[2][MAX_EPISODE_NAME_LEN+2];    // +2 = leading '^' and trailing NULL
+extern char EpisodeNames[MAX_EPISODES_CROSSPLAY][MAX_EPISODE_NAME_LEN+2];    // +2 = leading '^' and trailing NULL
 
 #define MAX_EPISODE_SUBTITLE_LEN 40
-extern char EpisodeSubtitles[2][MAX_EPISODE_SUBTITLE_LEN+1];
+extern char EpisodeSubtitles[MAX_EPISODES_CROSSPLAY][MAX_EPISODE_SUBTITLE_LEN+1];
+
+// Duke episodes and levels, discovered from whichever Duke GRP was handed over.
+void SW_CrossplayBuildDukeLevelTable(void);
+int  SW_CrossplayDukeEpisodeCount(void);
+int  SW_CrossplayDukeEpisodeFirstLevel(int episode);
+int  SW_CrossplayActiveMaxLevels(void);
+void SW_CrossplayEndDukeLevel(int secretExit);
 
 #define MAX_SKILL_NAME_LEN 24
 extern char SkillNames[4][MAX_SKILL_NAME_LEN+2];
@@ -2313,6 +2325,9 @@ void SW_CrossplayDrawDukeViewscreens(PLAYERp pp); // game.c
 int SW_CrossplayDukeViewscreenTile(int spriteNum); // game.c
 void SW_CrossplayTickDukeCameras(PLAYERp pp); // game.c
 void SW_CrossplayTickDukeToilet(PLAYERp pp); // game.c
+void SW_CrossplayTickDukeNukeButton(PLAYERp pp); // game.c
+int  SW_CrossplayDukeNukeButtonPresses(void);
+int  SW_CrossplayDukeNukeButtonRunning(void);
 int SW_CrossplayDukeMapBridgeActive(void); // game.c
 int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitPos); // game.c
 int SW_CrossplayDukeSpriteExplosionDamage(int spriteNum); // game.c

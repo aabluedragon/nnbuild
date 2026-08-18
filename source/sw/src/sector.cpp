@@ -2586,6 +2586,7 @@ PlayerOperateEnv(PLAYERp pp)
     {
         SW_CrossplayTickDukeCameras(pp);
         SW_CrossplayTickDukeToilet(pp);
+        SW_CrossplayTickDukeNukeButton(pp);
 
         if (TEST_SYNC_KEY(pp, SK_OPERATE))
         {

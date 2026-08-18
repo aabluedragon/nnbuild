@@ -401,15 +401,43 @@ MenuItem skill_i[] =
 
 MenuGroup skillgroup = {100, 5, "^Skill", skill_i, pic_newgametitl, 0, m_defshade, NULL, NULL, 2};
 
-MenuItem episode_i[] =
+MenuItem episode_i[MAX_EPISODES_CROSSPLAY + 1] =
 {
     {DefLayer(KEYSC_S, &EpisodeNames[0][0], &skillgroup), 30, 46, pic_episode1, m_defshade, 0, MNU_EpisodeCustom, NULL, NULL},
     {DefLayer(KEYSC_F, &EpisodeNames[1][0], &skillgroup), 30, 78, pic_episode2, m_defshade, 0, MNU_EpisodeCustom, MNU_ShareWareCheck, MNU_ShareWareMessage},
-    //{DefLayer(KEYSC_S, NULL, &skillgroup), 60, 30, pic_episode1, m_defshade, 0, MNU_EpisodeCustom},
-    //{DefLayer(KEYSC_F, NULL, &skillgroup), 60, 46, pic_episode2, m_defshade, 0, MNU_EpisodeCustom},
-    //{DefLayer(KEYSC_T, NULL, &skillgroup), 60, 62, pic_episode3, m_defshade, 0, MNU_EpisodeCustom},
     {DefNone}
 };
+
+// Shadow Warrior ships two episodes and lays them out by hand.  A Duke GRP can
+// carry four, so when one is in play the list is rebuilt from what the GRP turned
+// out to hold -- and the shareware gate comes off, because whether an episode is
+// there at all has already been decided by whether its first map exists.
+void MNU_BuildCrossplayEpisodeMenu(void)
+{
+    int const episodes = SW_CrossplayDukeEpisodeCount();
+
+    if (episodes <= 0)
+        return;
+
+    int const spacing = episodes > 4 ? 20 : 32;
+    int const top = 46 - ((episodes - 2) * spacing) / 2;
+
+    for (int i = 0; i < episodes && i < MAX_EPISODES_CROSSPLAY; ++i)
+    {
+        MenuItem item = {DefLayer(KEYSC_S, &EpisodeNames[0][0], &skillgroup),
+                         30, 46, pic_episode1, m_defshade, 0, MNU_EpisodeCustom, NULL, NULL};
+
+        item.text = &EpisodeNames[i][0];
+        item.hotkey = (unsigned char)('1' + i);
+        item.y = max(20, top + i * spacing);
+        item.pic = (short)(i == 0 ? pic_episode1 : pic_episode2);
+
+        episode_i[i] = item;
+    }
+
+    MenuItem const terminator = {DefNone};
+    episode_i[min(episodes, MAX_EPISODES_CROSSPLAY)] = terminator;
+}
 
 MenuGroup episodegroup = {100, 5, "^Episode", episode_i, pic_newgametitl, 0, m_defshade, MNU_DoEpisodeSelect, NULL, 0};
 
@@ -642,6 +670,22 @@ MNU_DoEpisodeSelect(UserCall UNUSED(call), MenuItem *UNUSED(item))
 {
     short w,h;
     char *extra_text;
+
+    int const crossplayEpisodes = SW_CrossplayDukeEpisodeCount();
+
+    if (crossplayEpisodes > 0)
+    {
+        // One subtitle under each episode the GRP turned out to hold, at whatever
+        // spacing MNU_BuildCrossplayEpisodeMenu() laid them out with.
+        for (int i = 0; i < crossplayEpisodes && i < MAX_EPISODES_CROSSPLAY; ++i)
+        {
+            extra_text = EpisodeSubtitles[i];
+            MNU_MeasureString(extra_text, &w, &h);
+            MNU_DrawString(30, episode_i[i].y + 17, extra_text, 1, 16);
+        }
+
+        return TRUE;
+    }
 
     extra_text = EpisodeSubtitles[0];
     MNU_MeasureString(extra_text, &w, &h);
@@ -1853,7 +1897,9 @@ MNU_StartGame(void)
     ready2send = 0;
     Skill = currentmenu->cursor;
 
-    if (EpisodeMenuSelection >= 1)
+    if (SW_CrossplayDukeEpisodeCount() > 0)
+        Level = SW_CrossplayDukeEpisodeFirstLevel(EpisodeMenuSelection);
+    else if (EpisodeMenuSelection >= 1)
         Level = 5;
     else
         Level = 1;
@@ -2122,6 +2168,8 @@ void
 MNU_InitMenus(void)
 {
     pClearTextLine(Player + myconnectindex, TEXT_INFO_LINE(0));
+
+    MNU_BuildCrossplayEpisodeMenu();
 
     slidersettings[sldr_mouse] = gs.MouseSpeed/(MOUSE_SENS_MAX_VALUE/SLDR_MOUSESENSEMAX);
 

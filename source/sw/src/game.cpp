@@ -1457,7 +1457,7 @@ static int16_t SW_CrossplayDukeSwitchBaseTile(int16_t sourcePicnum, int32_t *sta
     static int16_t const switchBases[] = {
         VB_DUKE_ACCESSSWITCH, VB_DUKE_ACCESSSWITCH2, VB_DUKE_SLOTDOOR, VB_DUKE_LIGHTSWITCH,
         VB_DUKE_SPACEDOORSWITCH, VB_DUKE_SPACELIGHTSWITCH, VB_DUKE_FRANKENSTINESWITCH,
-        VB_DUKE_NUKEBUTTON, VB_DUKE_DIPSWITCH, VB_DUKE_DIPSWITCH2, VB_DUKE_DIPSWITCH3,
+        VB_DUKE_DIPSWITCH, VB_DUKE_DIPSWITCH2, VB_DUKE_DIPSWITCH3,
         VB_DUKE_TECHSWITCH, VB_DUKE_HANDSWITCH, VB_DUKE_PULLSWITCH, VB_DUKE_ALIENSWITCH,
         VB_DUKE_HANDPRINTSWITCH, VB_DUKE_LIGHTSWITCH2, VB_DUKE_POWERSWITCH1,
         VB_DUKE_LOCKSWITCH1, VB_DUKE_POWERSWITCH2,
@@ -1640,7 +1640,6 @@ static int32_t SW_CrossplayCanGenericTaggedDukeSpriteOperate(int16_t sourcePicnu
     case VB_DUKE_SPACEDOORSWITCH:
     case VB_DUKE_SPACELIGHTSWITCH:
     case VB_DUKE_FRANKENSTINESWITCH:
-    case VB_DUKE_NUKEBUTTON:
     case VB_DUKE_MULTISWITCH:
     case VB_DUKE_DIPSWITCH:
     case VB_DUKE_DIPSWITCH2:
@@ -3206,6 +3205,16 @@ static int32_t g_swCrossplayDukeMirrorsBroken;
 // 26*220 and only lets the player relieve himself again once it reaches zero, so
 // the health is a once-every-few-minutes thing rather than something to stand
 // there and repeat.  Anything in between just flushes.
+// Duke's nuke button, in Duke's own tics: frame +1 at 8, frame +2 at 16 where the
+// fist starts, frame +3 at fist 26, the bang and the white flash at 28, and the
+// level ends past 42 -- 58 tics from the press, and none of it happens at all if
+// the button is only treated as a two-frame switch.
+#define VB_CROSSPLAY_DUKE_NUKE_FRAME1_AT 8
+#define VB_CROSSPLAY_DUKE_NUKE_FRAME2_AT 16
+#define VB_CROSSPLAY_DUKE_NUKE_FRAME3_AT (16 + 26)
+#define VB_CROSSPLAY_DUKE_NUKE_BANG_AT (16 + 28)
+#define VB_CROSSPLAY_DUKE_NUKE_END_AT (16 + 43)
+
 #define VB_CROSSPLAY_DUKE_PISS_TICS (VB_CROSSPLAY_SW_TICS_PER_SEC * 220)
 #define VB_CROSSPLAY_DUKE_PISS_RELIEF_AT (VB_CROSSPLAY_DUKE_PISS_TICS - VB_CROSSPLAY_SW_TICS_PER_SEC)
 #define VB_CROSSPLAY_DUKE_PISS_WEAPON_UP_AT (VB_CROSSPLAY_DUKE_PISS_TICS - VB_CROSSPLAY_SW_TICS_PER_SEC * 2)
@@ -7785,6 +7794,13 @@ static int32_t SW_CrossplayDukeRateToSwTic(int32_t perDukeTic)
 }
 
 // A count of Duke's tics, in SW's.
+// ...and the other way, for a countdown the bridge keeps in SW's tics but has to
+// compare against numbers written in Duke's.
+static int32_t SW_CrossplayDukeSwTicsToDukeTics(int32_t swTics)
+{
+    return (swTics * VB_CROSSPLAY_DUKE_TICS_PER_SEC) / VB_CROSSPLAY_SW_TICS_PER_SEC;
+}
+
 static int32_t SW_CrossplayDukeTicsToSwTics(int32_t dukeTics)
 {
     return (dukeTics * VB_CROSSPLAY_SW_TICS_PER_SEC) / VB_CROSSPLAY_DUKE_TICS_PER_SEC;
@@ -9709,6 +9725,13 @@ static int32_t SW_CrossplayOperateDukeTag(int16_t lotag, PLAYERp pp)
 {
     if (lotag == 0 || !SW_CrossplayDukeMapBridgeActive())
         return 0;
+
+    // Duke's own end-of-level tag, straight out of P_ActivateSwitch().
+    if ((uint16_t)lotag == 65535u)
+    {
+        SW_CrossplayEndDukeLevel(0);
+        return 1;
+    }
 
     if (SW_CrossplayDukeCheckActivatorMotion(lotag))
         return 0;
@@ -11642,6 +11665,75 @@ static int32_t SW_CrossplayDukePlayerMaxHealth(void)
 
 // Runs the toilet countdown for a player.  Duke does this from its own player
 // tic; the host owns the player, so it happens here.
+static int32_t g_swCrossplayDukeNukeTic;
+static int16_t g_swCrossplayDukeNukeSprite = -1;
+static int32_t g_swCrossplayDukeNukeSecret;
+static int32_t g_swCrossplayDukeNukePresses;
+
+int SW_CrossplayDukeNukeButtonPresses(void) { return g_swCrossplayDukeNukePresses; }
+int SW_CrossplayDukeNukeButtonRunning(void) { return g_swCrossplayDukeNukeSprite >= 0; }
+
+// Duke's NUKEBUTTON: pressed once, it runs a fixed sequence of its own and ends
+// the level.  The bridge had it in the generic switch table, so it flipped between
+// two frames and operated its lotag -- which on a nuke button is the secret level
+// number rather than a map tag -- and the level never ended.
+static int32_t SW_CrossplayUseDukeNukeButton(PLAYERp pp, int32_t spriteNum)
+{
+    if (g_swCrossplayDukeNukeSprite >= 0)
+        return 1;   // already counting down; Duke ignores further presses
+
+    g_swCrossplayDukeNukeSprite = (int16_t)spriteNum;
+    g_swCrossplayDukeNukeTic = 0;
+    g_swCrossplayDukeNukeSecret = sprite[spriteNum].pal != 0;
+    ++g_swCrossplayDukeNukePresses;
+
+    if (pp != NULL)
+        SET(pp->Flags, PF_WEAPON_DOWN);
+
+    return 1;
+}
+
+void SW_CrossplayTickDukeNukeButton(PLAYERp pp)
+{
+    if (g_swCrossplayDukeNukeSprite < 0)
+        return;
+
+    int32_t const spriteNum = g_swCrossplayDukeNukeSprite;
+
+    if ((unsigned)spriteNum >= MAXSPRITES || sprite[spriteNum].statnum == MAXSTATUS)
+    {
+        g_swCrossplayDukeNukeSprite = -1;
+        return;
+    }
+
+    int32_t const wasAt = SW_CrossplayDukeSwTicsToDukeTics(g_swCrossplayDukeNukeTic);
+    int32_t const nowAt = SW_CrossplayDukeSwTicsToDukeTics(++g_swCrossplayDukeNukeTic);
+
+    if (wasAt == nowAt)
+        return;
+
+    if (nowAt == VB_CROSSPLAY_DUKE_NUKE_FRAME1_AT)
+        SW_CrossplaySetDukeSpritePicnum(spriteNum, VB_DUKE_NUKEBUTTON + 1);
+    else if (nowAt == VB_CROSSPLAY_DUKE_NUKE_FRAME2_AT)
+        SW_CrossplaySetDukeSpritePicnum(spriteNum, VB_DUKE_NUKEBUTTON + 2);
+    else if (nowAt == VB_CROSSPLAY_DUKE_NUKE_FRAME3_AT)
+        SW_CrossplaySetDukeSpritePicnum(spriteNum, VB_DUKE_NUKEBUTTON + 3);
+    else if (nowAt == VB_CROSSPLAY_DUKE_NUKE_BANG_AT)
+    {
+        SW_CrossplayPlayDukeSpriteSound(spriteNum, NULL, DIGI_DUKE_PIPEBOMB_EXPLODE);
+        if (pp != NULL)
+            SetFadeAmt(pp, 32, 1);
+    }
+    else if (nowAt >= VB_CROSSPLAY_DUKE_NUKE_END_AT)
+    {
+        if (pp != NULL)
+            RESET(pp->Flags, PF_WEAPON_DOWN);
+
+        g_swCrossplayDukeNukeSprite = -1;
+        SW_CrossplayEndDukeLevel(g_swCrossplayDukeNukeSecret);
+    }
+}
+
 void SW_CrossplayTickDukeToilet(PLAYERp pp)
 {
     int32_t const pnum = SW_CrossplayPlayerNum(pp);
@@ -11741,6 +11833,9 @@ static int32_t SW_CrossplayUseDukeProp(PLAYERp pp, int32_t spriteNum)
 
     // Duke heals one point per press while the fountain runs, and the fountain
     // shows its water for as long as the player keeps drinking.
+    case VB_DUKE_NUKEBUTTON:
+        return SW_CrossplayUseDukeNukeButton(pp, spriteNum);
+
     case VB_DUKE_WATERFOUNTAIN:
         if (behavior.useTimer == 0)
             SW_CrossplayDukeAIPlaySound(VB_DukeAI_DrinkingSound(), spriteNum);
@@ -11894,6 +11989,7 @@ enum
     VB_CROSSPLAY_SELFTEST_MIRRORS,
     VB_CROSSPLAY_SELFTEST_TOILET,
     VB_CROSSPLAY_SELFTEST_KEYCARDS,
+    VB_CROSSPLAY_SELFTEST_NUKEBUTTON,
     VB_CROSSPLAY_SELFTEST_CRACKS,
     VB_CROSSPLAY_SELFTEST_HYDRANT,
     VB_CROSSPLAY_SELFTEST_BREAKABLES,
@@ -11969,6 +12065,11 @@ static int32_t g_swCrossplaySelfTestCardRefusedUse;
 static int32_t g_swCrossplaySelfTestCardReaders;
 static int32_t g_swCrossplaySelfTestCardsInMap;
 static int32_t g_swCrossplaySelfTestCardHadKey;
+static int32_t g_swCrossplaySelfTestNukeStage;
+static int32_t g_swCrossplaySelfTestNukeSprite = -1;
+static int32_t g_swCrossplaySelfTestNukeFramesSeen;
+static int32_t g_swCrossplaySelfTestNukeLevelBefore;
+static int32_t g_swCrossplaySelfTestNukeEnded;
 static int32_t g_swCrossplaySelfTestMirrorStage;
 static int32_t g_swCrossplaySelfTestMirrorWall = -1;
 static int32_t g_swCrossplaySelfTestMirrorBrokeBase;
@@ -12801,6 +12902,87 @@ static void SW_CrossplaySelfTestRunToilet(PLAYERp const pp)
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
 }
 
+// Duke's nuke button: one press, a four-frame sequence of its own, and then the
+// level ends.  Nothing else here covers a level ending, so the exit is checked
+// too -- and then undone, or the rest of the suite would have no level to run in.
+static void SW_CrossplaySelfTestRunNukeButton(PLAYERp const pp)
+{
+    extern SWBOOL ExitLevel, FinishedLevel;
+
+    if (pp == NULL)
+    {
+        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestNukeStage == 0)
+    {
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestNukeSprite < 0; ++spriteNum)
+            if (sprite[spriteNum].statnum != MAXSTATUS &&
+                artCrossplayOriginalMapSpritePicnum(spriteNum) == VB_DUKE_NUKEBUTTON)
+                g_swCrossplaySelfTestNukeSprite = spriteNum;
+
+        if (g_swCrossplaySelfTestNukeSprite < 0)
+        {
+            SW_CrossplaySelfTestReport(1, "nuke-button-present", "no Duke nuke button in this map, skipped");
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            return;
+        }
+
+        g_swCrossplaySelfTestNukeLevelBefore = Level;
+        SW_CrossplayUseDukeNukeButton(pp, g_swCrossplaySelfTestNukeSprite);
+
+        SW_CrossplaySelfTestReport(SW_CrossplayDukeNukeButtonRunning(), "nuke-button-starts",
+                                   "the press started Duke's sequence");
+
+        g_swCrossplaySelfTestNukeStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestNukeStage == 1)
+    {
+        int32_t const prop = g_swCrossplaySelfTestNukeSprite;
+
+        // Which of Duke's four frames has been shown so far.  The sprite draws a
+        // remapped tile, so each frame is compared against the remap of the frame
+        // it should be.
+        for (int32_t frame = 0; frame < 4; ++frame)
+            if (sprite[prop].picnum == SW_CrossplayRemapDukeTileForRuntime(VB_DUKE_NUKEBUTTON + frame))
+                g_swCrossplaySelfTestNukeFramesSeen |= 1 << frame;
+
+        if (ExitLevel || FinishedLevel)
+            g_swCrossplaySelfTestNukeEnded = 1;
+
+        if (!g_swCrossplaySelfTestNukeEnded && g_swCrossplaySelfTestPhaseTic < 200)
+            return;
+
+        char detail[176];
+        Bsnprintf(detail, sizeof(detail), "spr=%d frames=%s%s%s%s level %d -> %d ended=%d", prop,
+                  (g_swCrossplaySelfTestNukeFramesSeen & 1) ? "0" : "-",
+                  (g_swCrossplaySelfTestNukeFramesSeen & 2) ? "1" : "-",
+                  (g_swCrossplaySelfTestNukeFramesSeen & 4) ? "2" : "-",
+                  (g_swCrossplaySelfTestNukeFramesSeen & 8) ? "3" : "-",
+                  g_swCrossplaySelfTestNukeLevelBefore, Level, g_swCrossplaySelfTestNukeEnded);
+
+        // All four of Duke's frames, not the two a generic switch would flip.
+        SW_CrossplaySelfTestReport(g_swCrossplaySelfTestNukeFramesSeen == 0xf, "nuke-button-animates", detail);
+        SW_CrossplaySelfTestReport(g_swCrossplaySelfTestNukeEnded, "nuke-button-ends-level", detail);
+        SW_CrossplaySelfTestReport(Level == g_swCrossplaySelfTestNukeLevelBefore + 1, "nuke-button-advances-level",
+                                   detail);
+
+        // Put the level back so the rest of the suite has one to run in.
+        ExitLevel = FALSE;
+        FinishedLevel = FALSE;
+        Level = (short)g_swCrossplaySelfTestNukeLevelBefore;
+
+        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        return;
+    }
+
+    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+}
+
 // Looks for a floor spot in front of a Duke sprite from which neartag() -- the
 // same search the use key runs -- actually returns it, and reports it.  Wall
 // props are often mounted over a ledge or in an alcove whose own sector the
@@ -12896,7 +13078,7 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
 {
     if (pp == NULL)
     {
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
         return;
     }
 
@@ -12939,7 +13121,7 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
         if (g_swCrossplaySelfTestCardReaders == 0)
         {
             SW_CrossplaySelfTestReport(1, "card-readers-present", "no Duke card reader in this map, skipped");
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
             return;
         }
 
@@ -12952,7 +13134,7 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
 
         if (g_swCrossplaySelfTestCardSwitch < 0)
         {
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
             return;
         }
 
@@ -13130,7 +13312,7 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
     SW_CrossplaySelfTestReport(usedAgain == 0 && spentAgain == 0 && pp->HasKey[keyIndex],
                                "card-reader-is-one-shot", detail);
 
-    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
 }
 
 // Duke's mirrors.  A rocket must explode on one rather than slide along it, and
@@ -14985,6 +15167,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_MIRRORS: SW_CrossplaySelfTestRunMirrors(pp); break;
     case VB_CROSSPLAY_SELFTEST_TOILET: SW_CrossplaySelfTestRunToilet(pp); break;
     case VB_CROSSPLAY_SELFTEST_KEYCARDS: SW_CrossplaySelfTestRunKeycards(pp); break;
+    case VB_CROSSPLAY_SELFTEST_NUKEBUTTON: SW_CrossplaySelfTestRunNukeButton(pp); break;
     case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
     case VB_CROSSPLAY_SELFTEST_HYDRANT: SW_CrossplaySelfTestRunHydrant(pp); break;
     case VB_CROSSPLAY_SELFTEST_BREAKABLES: SW_CrossplaySelfTestRunBreakables(pp); break;
@@ -17525,6 +17708,10 @@ InitGame(int32_t argc, char const * const * argv)
     if (!SW_SHAREWARE)
         LoadCustomInfoFromScript("swcustom.txt");   // Load user customisation information
 
+    // Whichever Duke GRP was handed over decides which episodes exist, so the
+    // level table is built before anything reads it.
+    SW_CrossplayBuildDukeLevelTable();
+
     char const * const deffile = G_DefFile();
     uint32_t stime = timerGetTicks();
     if (!loaddefinitionsfile(deffile))
@@ -17594,7 +17781,7 @@ YOKOHA03 MID
 char LevelSong[16];
 short SongLevelNum;
 //#ifndef SW_SHAREWARE
-LEVEL_INFO LevelInfo[MAX_LEVELS_REG+2] =
+LEVEL_INFO LevelInfo[MAX_LEVELS_CROSSPLAY+2] =
 {
     {"title.map",      "theme.mid", " ", " ", " "  },
     {"$bullet.map",    "e1l01.mid", "Seppuku Station", "0 : 55", "5 : 00"  },
@@ -17708,14 +17895,14 @@ static LevelNamePatch const LevelNamesTD[] =
 };
 #endif
 
-char EpisodeNames[2][MAX_EPISODE_NAME_LEN+2] =
+char EpisodeNames[MAX_EPISODES_CROSSPLAY][MAX_EPISODE_NAME_LEN+2] =
 {
     "^Enter the Wang",
     "^Code of Honor"
 };
 static char const s_EpisodeNameWD[] = "^Wanton Destruction"; // "^Wanton Destr"
 static char const s_EpisodeNameTD[] = "^Twin Dragon";
-char EpisodeSubtitles[2][MAX_EPISODE_SUBTITLE_LEN+1] =
+char EpisodeSubtitles[MAX_EPISODES_CROSSPLAY][MAX_EPISODE_SUBTITLE_LEN+1] =
 {
     "Four levels (Shareware Version)",
     "Eighteen levels (Full Version Only)"
@@ -17751,11 +17938,147 @@ void InitNewGame(void)
     memset(puser, 0, sizeof(puser));
 }
 
+// ---------------------------------------------------------------------------
+// Duke episodes and levels.
+//
+// SW's progression is a flat index: Level indexes LevelInfo[], the episode menu
+// picks the index that episode's first level sits at, and finishing a level does
+// Level++.  Duke's levels are named E<episode>L<level>.MAP, so the table is built
+// by asking the GRP which of those it actually contains -- shareware Duke has one
+// episode, Atomic has four -- and the episode menu is built from what turns up.
+// ---------------------------------------------------------------------------
+
+#define VB_CROSSPLAY_MAX_DUKE_EPISODE_LEVELS 16
+
+static char g_swCrossplayDukeLevelFile[MAX_LEVELS_CROSSPLAY + 2][16];
+static char g_swCrossplayDukeLevelTitle[MAX_LEVELS_CROSSPLAY + 2][MAX_EPISODE_SUBTITLE_LEN + 1];
+static int16_t g_swCrossplayDukeEpisodeFirst[MAX_EPISODES_CROSSPLAY];
+static int16_t g_swCrossplayDukeEpisodeLevels[MAX_EPISODES_CROSSPLAY];
+static int32_t g_swCrossplayDukeEpisodeCount;
+static int32_t g_swCrossplayDukeLevelTotal;
+
+int SW_CrossplayDukeEpisodeCount(void) { return g_swCrossplayDukeEpisodeCount; }
+
+int SW_CrossplayDukeEpisodeFirstLevel(int episode)
+{
+    return (unsigned)episode < (unsigned)g_swCrossplayDukeEpisodeCount ? g_swCrossplayDukeEpisodeFirst[episode] : 1;
+}
+
+// The highest Level index that means anything right now.  SW's own MAX_LEVELS is
+// a compile-time constant, and a Duke GRP has more levels than it.
+int SW_CrossplayActiveMaxLevels(void)
+{
+    return g_swCrossplayDukeLevelTotal > 0 ? g_swCrossplayDukeLevelTotal : MAX_LEVELS;
+}
+
+static int32_t SW_CrossplayDukeGrpHasLevel(int32_t episode, int32_t level)
+{
+    char entry[16];
+    Bsnprintf(entry, sizeof(entry), "E%dL%d.MAP", episode, level);
+
+    char *data = NULL;
+    int32_t size = 0;
+    char source[BMAX_PATH];
+
+    if (!artCrossplayReadForeignGameDataEntry(ART_CROSSPLAY_GAME_DUKE, entry, &data, &size, source, sizeof(source)))
+        return 0;
+
+    Xfree(data);
+    return size > 0;
+}
+
+void SW_CrossplayBuildDukeLevelTable(void)
+{
+    static int32_t built = 0;
+
+    if (built)
+        return;
+
+    built = 1;
+    g_swCrossplayDukeEpisodeCount = 0;
+    g_swCrossplayDukeLevelTotal = 0;
+
+    if (artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) != ART_CROSSPLAY_GAME_DUKE)
+        return;
+
+    static char const *const episodeTitles[] = {
+        "L.A. Meltdown", "Lunar Apocalypse", "Shrapnel City", "The Birth",
+    };
+
+    int32_t nextLevel = 1;   // LevelInfo[0] stays the title map
+
+    for (int32_t episode = 1; episode <= MAX_EPISODES_CROSSPLAY; ++episode)
+    {
+        if (!SW_CrossplayDukeGrpHasLevel(episode, 1) || g_swCrossplayDukeEpisodeCount >= MAX_EPISODES_CROSSPLAY)
+            continue;
+
+        int32_t const first = nextLevel;
+        int32_t levels = 0;
+
+        for (int32_t level = 1; level <= VB_CROSSPLAY_MAX_DUKE_EPISODE_LEVELS; ++level)
+        {
+            if (nextLevel > MAX_LEVELS_CROSSPLAY || !SW_CrossplayDukeGrpHasLevel(episode, level))
+                break;
+
+            Bsnprintf(g_swCrossplayDukeLevelFile[nextLevel], sizeof(g_swCrossplayDukeLevelFile[0]), "E%dL%d.MAP",
+                      episode, level);
+            Bsnprintf(g_swCrossplayDukeLevelTitle[nextLevel], sizeof(g_swCrossplayDukeLevelTitle[0]), "E%dL%d",
+                      episode, level);
+
+            LevelInfo[nextLevel].LevelName = g_swCrossplayDukeLevelFile[nextLevel];
+            // PlayLevelSong() picks Duke's own track from the map name.
+            LevelInfo[nextLevel].SongName = "";
+            LevelInfo[nextLevel].Description = g_swCrossplayDukeLevelTitle[nextLevel];
+            LevelInfo[nextLevel].BestTime = " ";
+            LevelInfo[nextLevel].ParTime = " ";
+
+            ++nextLevel;
+            ++levels;
+        }
+
+        if (levels == 0)
+            continue;
+
+        int32_t const ep = g_swCrossplayDukeEpisodeCount++;
+        g_swCrossplayDukeEpisodeFirst[ep] = (int16_t)first;
+        g_swCrossplayDukeEpisodeLevels[ep] = (int16_t)levels;
+
+        Bsnprintf(EpisodeNames[ep], sizeof(EpisodeNames[0]), "^%s",
+                  (unsigned)(episode - 1) < ARRAY_SIZE(episodeTitles) ? episodeTitles[episode - 1] : "Duke Episode");
+        Bsnprintf(EpisodeSubtitles[ep], sizeof(EpisodeSubtitles[0]), "%d level%s", levels, levels == 1 ? "" : "s");
+    }
+
+    g_swCrossplayDukeLevelTotal = nextLevel - 1;
+
+    if (nextLevel <= MAX_LEVELS_CROSSPLAY + 1)
+        Bmemset(&LevelInfo[nextLevel], 0, sizeof(LevelInfo[0]));
+
+    if (g_swCrossplayDukeEpisodeCount > 0)
+        LOG_F(INFO, "Crossplay: found %d Duke episode(s) and %d level(s) in the foreign game data.",
+              g_swCrossplayDukeEpisodeCount, g_swCrossplayDukeLevelTotal);
+}
+
+// Duke's own end of level, driven from the nuke button and from a switch tagged
+// 65535.  SW wants the next Level index and its two flags; the level loop does
+// the rest.
+void SW_CrossplayEndDukeLevel(int secretExit)
+{
+    extern SWBOOL ExitLevel, FinishedLevel;
+
+    UNREFERENCED_PARAMETER(secretExit);
+
+    if (Level < SW_CrossplayActiveMaxLevels())
+        ++Level;
+
+    ExitLevel = TRUE;
+    FinishedLevel = TRUE;
+}
+
 void FindLevelInfo(char *map_name, short *level)
 {
     short j;
 
-    for (j = 1; j <= MAX_LEVELS; j++)
+    for (j = 1; j <= SW_CrossplayActiveMaxLevels(); j++)
     {
         if (LevelInfo[j].LevelName)
         {
@@ -17877,7 +18200,7 @@ InitLevel(void)
         if (Level < 0)
             Level = 0;
 
-        if (Level > MAX_LEVELS)
+        if (Level > SW_CrossplayActiveMaxLevels())
             Level = 1;
 
         // extra code in case something is resetting these values

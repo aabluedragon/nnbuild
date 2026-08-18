@@ -283,6 +283,7 @@ typedef struct MenuGroup
 
 // Custom Routine Prototypes ////////////////////////////////////////////////////////////////////
 
+void MNU_BuildCrossplayEpisodeMenu(void);
 SWBOOL MNU_QuitCustom(UserCall call, MenuItem *item);
 SWBOOL MNU_QuickLoadCustom(UserCall call, MenuItem *item);
 SWBOOL MNU_LoadSaveTouchupCustom(UserCall call, MenuItem *item);

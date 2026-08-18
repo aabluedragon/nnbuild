@@ -1073,6 +1073,39 @@ Fixed since:
   Their windows now allow for a fuse's worth of Duke tics rather than a handful
   of SW's.
 
+- **Duke's episodes, and finishing a level.**  New Game offered Shadow Warrior's
+  two episodes, and no Duke level ever ended: the nuke button flipped between two
+  frames and nothing more, and the bridge had no level-exit path at all.
+
+  SW's progression is a flat index -- `Level` indexes `LevelInfo[]`, the episode
+  menu picks the index its first level sits at, and finishing a level does
+  `Level++` -- so the Duke side needs a table in the same shape.  Duke names its
+  levels `E<episode>L<level>.MAP`, so the table is built at startup by asking the
+  GRP which of those it actually contains rather than assuming a layout: the
+  Atomic GRP reports four episodes and 41 levels, 1.3D fewer, and shareware one.
+  `LevelInfo[]` and the episode name arrays are sized for either game now, since
+  Duke has more levels than Shadow Warrior's twenty-nine, and `MAX_LEVELS` was a
+  compile-time bound in two places that had to become a runtime one.
+
+  The episode menu is laid out by hand in Shadow Warrior for exactly two entries;
+  it is rebuilt from whatever the GRP held when a Duke GRP is in play, with the
+  subtitles following the rows.  The shareware gate comes off those rows, because
+  whether an episode exists has already been settled by whether its first map does.
+
+  Duke's `NUKEBUTTON` is not a switch and was being run as one.  It is a fixed
+  sequence: frame +1 at 8 tics, +2 at 16 where the fist starts, +3 at fist 26, the
+  pipebomb bang and a white flash at 28, and the level ends past 42.  Its lotag is
+  the secret-level number, not a map tag, so operating it as one fired whatever
+  else in the level wore that number.  It has its own handler now, on its own
+  countdown, and the countdown is in Duke's tics rather than SW's.  Duke's other
+  exit -- a switch tagged 65535 -- ends the level too.
+
+  `VB_CP_SELFTEST=world` covers it as `nuke-button-starts`,
+  `nuke-button-animates` (all four of Duke's frames, not the two a generic switch
+  would flip), `nuke-button-ends-level` and `nuke-button-advances-level`.  The
+  phase puts the level back afterwards, since otherwise the rest of the suite
+  would have no level left to run in.
+
 - **Duke's doors, lifts and platforms move at Duke's speed, and the right way.**
   Reported as "the door in the arcade room doesn't open properly".  Reasoning
   about it from the source went nowhere -- the swing arithmetic checked out, the
