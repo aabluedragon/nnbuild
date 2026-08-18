@@ -15009,6 +15009,17 @@ int ContinueHitscan(PLAYERp pp, short sectnum, int x, int y, int z, short ang, i
                 return 0;
         }
 
+        // A Duke prop is Duke's to answer for, and it answers to a bullet as
+        // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+        // list and stopped there, so nothing Duke owns could be shot at all --
+        // only an explosion, which reaches a sprite without consulting its cstat.
+        {
+            vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+            if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
+                return 0;
+        }
+
         if (TEST(hsp->extra, SPRX_BREAKABLE))
         {
             HitBreakSprite(hitinfo.sprite,0);
@@ -15180,6 +15191,17 @@ InitShotgun(PLAYERp pp)
             if (hsp->lotag == TAG_SPRITE_HIT_MATCH)
             {
                 if (MissileHitMatch(-1, WPN_SHOTGUN, hitinfo.sprite))
+                    continue;
+            }
+
+            // A Duke prop is Duke's to answer for, and it answers to a bullet as
+            // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+            // list and stopped there, so nothing Duke owns could be shot at all --
+            // only an explosion, which reaches a sprite without consulting its cstat.
+            {
+                vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+                if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
                     continue;
             }
 
@@ -18074,6 +18096,17 @@ InitUzi(PLAYERp pp)
                 return 0;
         }
 
+        // A Duke prop is Duke's to answer for, and it answers to a bullet as
+        // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+        // list and stopped there, so nothing Duke owns could be shot at all --
+        // only an explosion, which reaches a sprite without consulting its cstat.
+        {
+            vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+            if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
+                return 0;
+        }
+
         if (TEST(hsp->extra, SPRX_BREAKABLE) && HitBreakSprite(hitinfo.sprite,0))
         {
             return 0;
@@ -18247,6 +18280,17 @@ InitEMP(PLAYERp pp)
         if (hsp->lotag == TAG_SPRITE_HIT_MATCH)
         {
             if (MissileHitMatch(-1, WPN_UZI, hitinfo.sprite))
+                return 0;
+        }
+
+        // A Duke prop is Duke's to answer for, and it answers to a bullet as
+        // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+        // list and stopped there, so nothing Duke owns could be shot at all --
+        // only an explosion, which reaches a sprite without consulting its cstat.
+        {
+            vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+            if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
                 return 0;
         }
 
@@ -18762,6 +18806,17 @@ InitSobjMachineGun(short SpriteNum, PLAYERp pp)
             return 0;
         }
 
+        // A Duke prop is Duke's to answer for, and it answers to a bullet as
+        // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+        // list and stopped there, so nothing Duke owns could be shot at all --
+        // only an explosion, which reaches a sprite without consulting its cstat.
+        {
+            vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+            if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
+                return 0;
+        }
+
         if (TEST(hsp->extra, SPRX_BREAKABLE))
         {
             HitBreakSprite(hitinfo.sprite,0);
@@ -19194,6 +19249,17 @@ InitTurretMgun(SECTOR_OBJECTp sop)
                 if (hsp->lotag == TAG_SPRITE_HIT_MATCH)
                 {
                     if (MissileHitMatch(-1, WPN_UZI, hitinfo.sprite))
+                        continue;
+                }
+
+                // A Duke prop is Duke's to answer for, and it answers to a bullet as
+                // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+                // list and stopped there, so nothing Duke owns could be shot at all --
+                // only an explosion, which reaches a sprite without consulting its cstat.
+                {
+                    vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+                    if (SW_CrossplayDamageDukeMapSprite(sp - sprite, hitinfo.sprite, &dukeHitPos))
                         continue;
                 }
 

@@ -1200,11 +1200,16 @@ static int16_t SW_CrossplayDukePickupToShadowWarrior(int16_t sourcePicnum, int16
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return ICON_GRENADE_LAUNCHER;
 
+    // Duke's GAME.CON feeds both AMMO and AMMOLOTS to PISTOL_WEAPON, and the
+    // pistol arrives here as the shuriken -- so its ammo is the shuriken too,
+    // which in Shadow Warrior is the same pickup as the weapon.  These used to
+    // show the uzi clip, which belongs to the chaingun.  (AMMOBOX has no actor
+    // in Duke at all; it rides along with the others.)
     case VB_DUKE_AMMO:
     case VB_DUKE_AMMOBOX:
     case VB_DUKE_AMMOLOTS:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
-        return ICON_LG_UZI_AMMO;
+        return ICON_STAR;
     case VB_DUKE_SHOTGUNAMMO:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return ICON_LG_SHOTSHELL;
@@ -1408,6 +1413,8 @@ int SW_CrossplayDukePissEventCount(void);
 extern "C" void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum));
 extern "C" void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
 extern "C" void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
+extern "C" void VB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz);
+extern "C" int VB_DukeAI_SomethingOnPlayer(int playerNum);
 // Hands a hit on a host-owned Duke prop to Duke's own damage code, which runs at
 // the top of the next Duke tic.
 extern "C" void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
@@ -12203,6 +12210,8 @@ enum
     VB_CROSSPLAY_SELFTEST_ACTOR_SETUP,
     VB_CROSSPLAY_SELFTEST_ACTOR_OBSERVE,
     VB_CROSSPLAY_SELFTEST_ACTOR_DAMAGE,
+    VB_CROSSPLAY_SELFTEST_SLIMER_SETUP,
+    VB_CROSSPLAY_SELFTEST_SLIMER_OBSERVE,
     VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP,
     VB_CROSSPLAY_SELFTEST_TELEPORT_OBSERVE,
     VB_CROSSPLAY_SELFTEST_TRAIN_SETUP,
@@ -12528,7 +12537,7 @@ static void SW_CrossplaySelfTestRunActorSetup(PLAYERp const pp)
 {
     if (g_swCrossplaySelfTestActorsTested >= VB_CROSSPLAY_SELFTEST_MAX_ACTORS)
     {
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_ACTORS, VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
         return;
     }
 
@@ -12537,7 +12546,7 @@ static void SW_CrossplaySelfTestRunActorSetup(PLAYERp const pp)
     {
         if (g_swCrossplaySelfTestActorsTested == 0)
             SW_CrossplaySelfTestReport(1, "actors-present", "no Duke actors in this map, skipped");
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_ACTORS, VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
         return;
     }
 
@@ -12747,6 +12756,97 @@ static void SW_CrossplaySelfTestRunActorDamage(PLAYERp const pp)
     SW_CrossplaySelfTestReport(dead, "actor-damage-kill", detail);
 
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_ACTOR_SETUP);
+}
+
+// A slimer riding the player's face is Duke's own actor code start to finish:
+// it latches on when `somethingonplayer` reads -1, then rewrites its own
+// position from the player's eye every tic and bites for 5-8 points.  The
+// bridge never ran Duke's premap, so that field sat at a zeroed 0 and the latch
+// could never happen -- these three assertions are what caught it.
+static int32_t g_swCrossplaySelfTestSlimerSprite = -1;
+static int32_t g_swCrossplaySelfTestSlimerScan;
+static int32_t g_swCrossplaySelfTestSlimerDamageBase;
+static int32_t g_swCrossplaySelfTestSlimerAttached = -1;
+static int32_t g_swCrossplaySelfTestSlimerNearest = INT32_MAX;
+
+static void SW_CrossplaySelfTestRunSlimerSetup(PLAYERp const pp)
+{
+    for (; g_swCrossplaySelfTestSlimerScan < MAXSPRITES; ++g_swCrossplaySelfTestSlimerScan)
+    {
+        int32_t const spriteNum = g_swCrossplaySelfTestSlimerScan;
+        SPRITEp const sp = &sprite[spriteNum];
+
+        if (sp->statnum == MAXSTATUS || sp->xrepeat == 0)
+            continue;
+        if (artCrossplayOriginalMapSpritePicnum(spriteNum) != VB_DUKE_GREENSLIME)
+            continue;
+        if (!SW_CrossplayDukeAIOwnsSprite(spriteNum) || !VB_DukeAI_SpriteIsAlive(spriteNum))
+            continue;
+
+        // Stand right on top of it: Duke only lets a slimer latch on inside 768
+        // units, and only once it has slowed to a crawl.
+        if (!SW_CrossplaySelfTestWarpPlayer(pp, sp->x, sp->y, sp->sectnum))
+            continue;
+
+        pp->q16ang = fix16_from_int(NORM_ANGLE(sp->ang + 1024));
+        pp->oq16ang = pp->q16ang;
+
+        g_swCrossplaySelfTestSlimerSprite = spriteNum;
+        g_swCrossplaySelfTestSlimerAttached = -1;
+        g_swCrossplaySelfTestSlimerNearest = INT32_MAX;
+        // Not the player's health: the harness pins that at 1000 every tic so the
+        // run survives, which would make any "did it hurt me" test vacuous.
+        g_swCrossplaySelfTestSlimerDamageBase = SW_CrossplayDukeAIPlayerDamageEvents();
+        ++g_swCrossplaySelfTestSlimerScan;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_OBSERVE);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestSlimerSprite < 0)
+        SW_CrossplaySelfTestReport(1, "slimer-present", "no Duke slimer in this map, skipped");
+
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP);
+}
+
+static void SW_CrossplaySelfTestRunSlimerObserve(PLAYERp const pp)
+{
+    // Whichever slimer got there first, not necessarily the one we walked up to:
+    // standing on one in a nest of seven regularly wakes a neighbour that beats
+    // it to the player's face, and that is Duke behaving correctly.
+    int32_t const onPlayer = VB_DukeAI_SomethingOnPlayer(0);
+
+    if ((unsigned)onPlayer < MAXSPRITES &&
+        artCrossplayOriginalMapSpritePicnum(onPlayer) == VB_DUKE_GREENSLIME)
+    {
+        g_swCrossplaySelfTestSlimerAttached = onPlayer;
+
+        // Duke parks it a fixed short reach in front of the eye.  Anything
+        // further away is not on the player's face.
+        int32_t const dist = ldist(&sprite[pp->PlayerSprite], &sprite[onPlayer]);
+        g_swCrossplaySelfTestSlimerNearest = min(g_swCrossplaySelfTestSlimerNearest, dist);
+    }
+
+    if (g_swCrossplaySelfTestPhaseTic < 240)
+        return;
+
+    int32_t const bites = SW_CrossplayDukeAIPlayerDamageEvents() - g_swCrossplaySelfTestSlimerDamageBase;
+
+    char detail[160];
+
+    Bsnprintf(detail, sizeof(detail), "walked up to spr=%d, latched spr=%d", g_swCrossplaySelfTestSlimerSprite,
+              g_swCrossplaySelfTestSlimerAttached);
+    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestSlimerAttached >= 0, "slimer-leeches-on", detail);
+
+    if (g_swCrossplaySelfTestSlimerAttached >= 0)
+    {
+        Bsnprintf(detail, sizeof(detail), "closest approach %d units", g_swCrossplaySelfTestSlimerNearest);
+        SW_CrossplaySelfTestReport(g_swCrossplaySelfTestSlimerNearest <= 512, "slimer-rides-the-face", detail);
+
+        Bsnprintf(detail, sizeof(detail), "%d damage event(s) while latched on", bites);
+        SW_CrossplaySelfTestReport(bites > 0, "slimer-bites", detail);
+    }
+
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP);
 }
 
 static void SW_CrossplaySelfTestRunTeleportSetup(PLAYERp const pp)
@@ -12960,6 +13060,7 @@ static int32_t g_swCrossplaySelfTestConPropStage;
 static int32_t g_swCrossplaySelfTestConPropSprite = -1;
 static int16_t g_swCrossplaySelfTestConPropStartPic;
 static int16_t g_swCrossplaySelfTestConPropTile;
+static int32_t g_swCrossplaySelfTestConPropShot;
 
 // Duke's toilet.  Using one is a short sequence, not a single action: the weapon
 // goes down, Duke relieves himself and gets a tenth of his health back, and a
@@ -14423,6 +14524,8 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_HYDRANT);
 }
 
+int InitShotgun(PLAYERp);
+
 static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
 {
     // Duke gives much of its scenery a `useractor` state rather than a place on
@@ -14432,26 +14535,101 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
     // below.
     if (g_swCrossplaySelfTestConPropStage == 0)
     {
-        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestConPropSprite < 0; ++spriteNum)
+        // Two passes: first a prop a bullet can actually reach, so the shot path is
+        // the one under test, and only then any CON-scripted prop at all.  Duke
+        // leaves plenty of its scenery without the hitscan bit -- a clock is one --
+        // and those can only be reached by a blast, in Duke as much as here.
+        for (int32_t pass = 0; pass < 2 && g_swCrossplaySelfTestConPropSprite < 0; ++pass)
         {
-            if (sprite[spriteNum].statnum != STAT_NO_STATE || SW_CrossplayDukeAIOwnsSprite(spriteNum) ||
-                (g_swCrossplayDukeSpriteBehaviors[spriteNum].flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE))
-                continue;
+            for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestConPropSprite < 0; ++spriteNum)
+            {
+                if (sprite[spriteNum].statnum != STAT_NO_STATE || SW_CrossplayDukeAIOwnsSprite(spriteNum) ||
+                    (g_swCrossplayDukeSpriteBehaviors[spriteNum].flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE))
+                    continue;
 
-            int16_t const tile = artCrossplayOriginalMapSpritePicnum(spriteNum);
-            if (tile <= 0 || !VB_DukeAI_HasActorCode(tile) || VB_DukeAI_IsEnemyTile(tile) ||
-                sprite[spriteNum].xrepeat == 0)
-                continue;
+                if (pass == 0 && !TEST(sprite[spriteNum].cstat, CSTAT_SPRITE_BLOCK_HITSCAN))
+                    continue;
 
-            g_swCrossplaySelfTestConPropSprite = spriteNum;
-            g_swCrossplaySelfTestConPropStartPic = sprite[spriteNum].picnum;
-            g_swCrossplaySelfTestConPropTile = tile;
+                int16_t const tile = artCrossplayOriginalMapSpritePicnum(spriteNum);
+                if (tile <= 0 || !VB_DukeAI_HasActorCode(tile) || VB_DukeAI_IsEnemyTile(tile) ||
+                    sprite[spriteNum].xrepeat == 0)
+                    continue;
+
+                g_swCrossplaySelfTestConPropSprite = spriteNum;
+                g_swCrossplaySelfTestConPropStartPic = sprite[spriteNum].picnum;
+                g_swCrossplaySelfTestConPropTile = tile;
+            }
         }
 
         if (g_swCrossplaySelfTestConPropSprite >= 0)
         {
-            vec3_t const hitPos = sprite[g_swCrossplaySelfTestConPropSprite].xyz;
-            SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, g_swCrossplaySelfTestConPropSprite, &hitPos);
+            // Shot, not detonated: the riot gun and the rest of Duke's hitscan
+            // weapons reach a prop by a different path from a blast, and that path
+            // used to stop at Shadow Warrior's own breakable list.  Stand in front
+            // of it with the riot gun and pull the trigger.
+            int32_t const prop = g_swCrossplaySelfTestConPropSprite;
+            SPRITEp const psp = &sprite[prop];
+
+            // A spot with a clear shot at it, which is not the same question as
+            // neartag()'s: the clock carries no tag and the use key cannot reach
+            // it at all, but a bullet can.  The test is that the hitscan actually
+            // lands on the prop before the trigger is pulled.
+            int32_t placed = 0;
+
+            for (int32_t radius = 512; radius <= 2048 && !placed; radius += 256)
+            {
+                for (int32_t step = 0; step < 16 && !placed; ++step)
+                {
+                    int32_t const probeAng = NORM_ANGLE(step * 128);
+                    int32_t const tryX = psp->x + ((sintable[(probeAng + 512) & 2047] * radius) >> 14);
+                    int32_t const tryY = psp->y + ((sintable[probeAng & 2047] * radius) >> 14);
+                    int16_t trySect = psp->sectnum;
+
+                    updatesector(tryX, tryY, &trySect);
+                    if ((unsigned)trySect >= (unsigned)numsectors)
+                        continue;
+
+                    if (!SW_CrossplaySelfTestWarpPlayerZ(pp, tryX, tryY, INT32_MIN, trySect))
+                        continue;
+
+                    int32_t const faceAng = NORM_ANGLE(getangle(psp->x - tryX, psp->y - tryY));
+                    pp->q16ang = fix16_from_int(faceAng);
+
+                    // SW aims a hitscan with `zvect = (100 - horiz) * 2000`, so the
+                    // horizon is set to whatever points the ray at the prop and the
+                    // weapon then works it out for itself.
+                    int32_t const dist2d = max(FindDistance2D(psp->x - tryX, psp->y - tryY), 1);
+                    int32_t const zvect = ((psp->z - pp->posz) * 16384) / dist2d;
+
+                    pp->q16horiz = fix16_from_int(100 - zvect / 2000);
+
+                    hitdata_t hitinfo;
+                    FAFhitscan(pp->posx, pp->posy, pp->posz, pp->cursectnum,
+                               sintable[(faceAng + 512) & 2047], sintable[faceAng & 2047], zvect,
+                               &hitinfo, CLIPMASK_MISSILE);
+
+                    if (hitinfo.sprite != prop)
+                        continue;
+
+                    placed = 1;
+                }
+            }
+
+            if (placed)
+            {
+                USERp const u = User[pp->PlayerSprite];
+                int16_t const savedWeapon = u->WeaponNum;
+                u->WeaponNum = WPN_SHOTGUN;
+                InitShotgun(pp);
+                u->WeaponNum = savedWeapon;
+
+                g_swCrossplaySelfTestConPropShot = 1;
+            }
+            else
+            {
+                vec3_t const hitPos = psp->xyz;
+                SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, prop, &hitPos);
+            }
         }
 
         g_swCrossplaySelfTestConPropStage = 1;
@@ -14476,11 +14654,19 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
                                      sprite[prop].picnum != g_swCrossplaySelfTestConPropStartPic;
 
             char propDetail[176];
-            Bsnprintf(propDetail, sizeof(propDetail), "spr=%d tile=%d pic %d -> %d owned=%d gone=%d", prop,
+            Bsnprintf(propDetail, sizeof(propDetail), "spr=%d tile=%d pic %d -> %d owned=%d gone=%d shot=%d", prop,
                       g_swCrossplaySelfTestConPropTile, g_swCrossplaySelfTestConPropStartPic,
                       TrackerCast(sprite[prop].picnum), SW_CrossplayDukeAIOwnsSprite(prop),
-                      sprite[prop].statnum == MAXSTATUS);
+                      sprite[prop].statnum == MAXSTATUS, g_swCrossplaySelfTestConPropShot);
             SW_CrossplaySelfTestReport(answered, "duke-con-prop-takes-a-hit", propDetail);
+
+            // Reported separately, and only when a bullet could actually be put
+            // into it, so the assertion is never vacuous: the direct-damage
+            // fallback above proves nothing about the hitscan path.  Every one of
+            // Shadow Warrior's hitscan weapons used to stop at its own breakable
+            // list, so no Duke prop could be shot at all.
+            if (g_swCrossplaySelfTestConPropShot)
+                SW_CrossplaySelfTestReport(answered, "duke-prop-takes-a-bullet", propDetail);
         }
 
         g_swCrossplaySelfTestConPropStage = 2;
@@ -15501,6 +15687,8 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_ACTOR_SETUP: SW_CrossplaySelfTestRunActorSetup(pp); break;
     case VB_CROSSPLAY_SELFTEST_ACTOR_OBSERVE: SW_CrossplaySelfTestRunActorObserve(); break;
     case VB_CROSSPLAY_SELFTEST_ACTOR_DAMAGE: SW_CrossplaySelfTestRunActorDamage(pp); break;
+    case VB_CROSSPLAY_SELFTEST_SLIMER_SETUP: SW_CrossplaySelfTestRunSlimerSetup(pp); break;
+    case VB_CROSSPLAY_SELFTEST_SLIMER_OBSERVE: SW_CrossplaySelfTestRunSlimerObserve(pp); break;
     case VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP: SW_CrossplaySelfTestRunTeleportSetup(pp); break;
     case VB_CROSSPLAY_SELFTEST_TELEPORT_OBSERVE: SW_CrossplaySelfTestRunTeleportObserve(pp); break;
     case VB_CROSSPLAY_SELFTEST_TRAIN_SETUP: SW_CrossplaySelfTestRunTrainSetup(pp); break;
@@ -16504,6 +16692,12 @@ static void SW_CrossplayDukeAITick(void)
 
         VB_DukeAI_SetPlayer(pnum, other->PlayerSprite, other->posx, other->posy, other->posz, mirroredAng,
                             other->cursectnum);
+
+        // The view pitch, in Build's own units on both sides.  A slimer on the
+        // player's face is drawn where Duke's actor code puts it, and that
+        // calculation is entirely `100 - horiz` -- leaving this unsynced pins
+        // the thing in place while the player looks up and down.
+        VB_DukeAI_SetPlayerHoriz(pnum, other->q16horiz + other->q16horizoff);
 
         // Duke's props that answer to the use key do it through CON's
         // `ifhitspace`, which reads the player's input bits -- so the host's key

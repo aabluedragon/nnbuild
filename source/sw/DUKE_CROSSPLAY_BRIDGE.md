@@ -1371,6 +1371,63 @@ mechanism itself passes on E1L3 and E1L7).  The suite is sensitive to phase
 timing -- changing the length of one phase moves every later one -- so a single
 run's result should not be read too closely.
 
+- **A slimer has to be able to get onto the player's face.**  Duke's slimer is
+  not CON at all -- it is hardcoded in `G_MoveActors()`, and it latches on with
+  one test: `if (g_player[p].ps->somethingonplayer == -1)`.  Duke sets that
+  sentinel in its premap, which this bridge does not run, so the field sat at the
+  zero every static starts life with and the test was permanently false.  The
+  slimer would chase, crawl and sit at the player's feet forever, and never once
+  bite.  `VB_DukeAI_BeginLevel()` now marks each player unset and
+  `VB_DukeAI_SetPlayer()` seeds `somethingonplayer` (and `on_crane`, the same
+  sentinel for the same reason -- a zero there reads as "sprite 0 already has
+  me", which is what stops a crane picking the player up) on the first sync of a
+  level.
+
+  Once attached, Duke rewrites the slimer's position from the player's eye every
+  tic, and that calculation is `s->z += (100 - horiz) << 4`.  The bridge had
+  never mirrored the host's view pitch, so the thing would have hung at a fixed
+  height while the player looked around; `VB_DukeAI_SetPlayerHoriz()` now carries
+  SW's `q16horiz + q16horizoff` across.  Nothing else is needed for the view --
+  the slimer is an ordinary sprite parked in front of the camera, and SW draws it
+  because both games are the same engine.  Duke leaves its `sectnum` stale while
+  it rides, which is Duke's own quirk and is left alone.
+
+  Covered on E2L5 by `slimer-leeches-on`, `slimer-rides-the-face` (closest
+  approach 124 units) and `slimer-bites`.  The bite is counted as Duke player-
+  damage events, not as a health drop: the harness pins the player at 1000 health
+  every tic so runs survive, which would have made a health test vacuous.  With
+  the sentinel reset commented out, `slimer-leeches-on` fails with
+  `latched spr=-1`.
+
+- **Duke's pistol ammo showed the wrong Shadow Warrior pickup.**  Duke's own
+  `GAME.CON` feeds both `AMMO` and `AMMOLOTS` to `PISTOL_WEAPON`, and the bridge
+  hands the pistol over as the shuriken -- but its ammo was mapped to the uzi
+  clip, which belongs to the chaingun.  Both now show the shuriken, which in
+  Shadow Warrior is the same pickup as the weapon.
+
+- **No hitscan weapon could damage a Duke prop.**  Six of Shadow Warrior's
+  hitscan paths -- `InitShotgun`, `InitUzi`, `InitEMP`, `InitHeartAttack`,
+  `InitTurretMgun`, `InitSobjMachineGun` -- each reached SW's own
+  `SPRX_BREAKABLE` list and stopped there, so a bullet passed through everything
+  Duke owns.  Only a blast reached them, because `A_RadiusDamage()` never
+  consults a sprite's cstat.  Each site now offers the hit to
+  `SW_CrossplayDamageDukeMapSprite()` first.  Asserted as
+  `duke-prop-takes-a-bullet`, which is reported *only* on maps where the harness
+  could actually put a bullet into a Duke prop -- the direct-damage fallback the
+  older `duke-con-prop-takes-a-hit` uses proves nothing about the hitscan path,
+  and a pass from it would have been vacuous.
+
+  Not fixed, deliberately: **the clock still cannot be shot**, in the bridge or
+  in Duke.  Duke's `A_Spawn()` leaves `CLOCK` at `cstat = 80` -- wall-aligned and
+  one-sided, without bit 8 (`CSTAT_SPRITE_BLOCK_HITSCAN`) -- and Duke's own
+  weapons trace with `CLIPMASK1`, whose sprite mask *is* that bit.  Measured in
+  Duke's own runtime: `hitscan()` from 64 positions around E1L1's clock reaches
+  no clock at all, and force-setting the bit makes the very same probe report
+  `hitscan CAN reach spr=181`.  A clock in Duke breaks to an explosion and
+  ignores gunfire.  Giving Duke's CON-scripted wall props that bit here would be
+  a deliberate divergence from Duke, and would work against the earlier fix that
+  stops Duke scenery from eating the host's bullets.
+
 Still open:
 
 - Duke map palette/art mixing is only checked by eye.

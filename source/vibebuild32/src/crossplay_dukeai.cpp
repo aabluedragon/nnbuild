@@ -37,6 +37,8 @@ int VB_DukeAI_SpawnMapActor(int spriteNum);
 void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int32_t z, int32_t ang, int16_t sectnum);
 void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
 void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
+void VB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz);
+int VB_DukeAI_SomethingOnPlayer(int playerNum);
 void VB_DukeAI_SetPlayerCount(int count);
 int VB_DukeAI_TakePlayerDamageFor(int playerNum);
 void VB_DukeAI_RunTic(void);
@@ -100,6 +102,7 @@ static int32_t const kMirroredPlayerHealth = 30000;
 static int32_t g_dukeAIMirroredHealth[MAXPLAYERS];
 
 static int32_t g_dukeAILevelReady;
+static uint8_t g_dukeAIPlayerFresh[MAXPLAYERS];
 static uint8_t g_dukeAIPendingDamage[MAXSPRITES];
 
 int VB_DukeAI_BeginLevel(int playerSkill)
@@ -121,6 +124,13 @@ int VB_DukeAI_BeginLevel(int playerSkill)
 
     for (int i = 0; i < MAXSPRITES; ++i)
         A_ResetVars(i);
+
+    // Duke's own premap sets the per-player fields this bridge never runs, and
+    // one of them decides whether a slimer may attach at all.  Zeroed statics
+    // leave `somethingonplayer` at 0, and Duke only lets a slimer latch on when
+    // it reads -1 -- so the leech simply never happened.  The reset is deferred
+    // to VB_DukeAI_SetPlayer(): g_player[].ps is not necessarily wired up yet.
+    Bmemset(g_dukeAIPlayerFresh, 0, sizeof(g_dukeAIPlayerFresh));
 
     g_dukeAILevelReady = 1;
     return 1;
@@ -598,6 +608,15 @@ void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int
     if (pPlayer == NULL)
         return;
 
+    if (!g_dukeAIPlayerFresh[playerNum])
+    {
+        g_dukeAIPlayerFresh[playerNum] = 1;
+        pPlayer->somethingonplayer = -1;
+        pPlayer->on_crane          = -1;   // same sentinel, same reason: 0 reads as "sprite 0 has me"
+        pPlayer->q16horiz          = F16(100);
+        pPlayer->pyoff             = 0;
+    }
+
     pPlayer->opos = pPlayer->pos;
     pPlayer->pos = { x, y, z };
 
@@ -648,6 +667,34 @@ void VB_DukeAI_SetPlayerHealth(int playerNum, int health)
 
     sprite[pPlayer->i].extra = mirrored;
     g_dukeAIMirroredHealth[playerNum] = mirrored;
+}
+
+// The host's view pitch.  A slimer riding the player's face places itself from
+// this every tic -- `s->z += (100 - horiz) << 4` -- so without it the thing sits
+// at a fixed height and refuses to follow where the player is looking.
+void VB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz)
+{
+    if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS)
+        return;
+
+    DukePlayer_t *const pPlayer = g_player[playerNum].ps;
+    if (pPlayer == NULL)
+        return;
+
+    pPlayer->q16horiz = q16horiz;
+}
+
+// Which sprite, if any, is currently latched onto this player's face.
+int VB_DukeAI_SomethingOnPlayer(int playerNum)
+{
+    if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS)
+        return -1;
+
+    DukePlayer_t *const pPlayer = g_player[playerNum].ps;
+    if (pPlayer == NULL)
+        return -1;
+
+    return pPlayer->somethingonplayer;
 }
 
 // Damage Duke's actors dealt to a mirrored player since the last call.
