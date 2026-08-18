@@ -1003,6 +1003,89 @@ Fixed since:
   path already refuses a camera that has been hidden, which is the state Duke's
   damaged-camera code leaves behind.
 
+- **Duke's doors, lifts and platforms move at Duke's speed, and the right way.**
+  Reported as "the door in the arcade room doesn't open properly".  Reasoning
+  about it from the source went nowhere -- the swing arithmetic checked out, the
+  distances checked out -- so the answer was to stop reasoning and build an
+  oracle: a door tracer compiled into *both* runtimes, operating the same sector
+  on the same map and printing that sector's floorz, ceilingz, lotag and every
+  wall coordinate once a tic.  Running E1L1 under `-gm duke` and under
+  `-gm sw -gm.lvls duke` and diffing the two gave the answer in one pass, and
+  four separate faults with it.  Two notes on building one of these, both learned
+  the hard way: the two sides have to call the *same* entry point (`activatebysector()`
+  and `SW_CrossplayActivateDukeBySector()`, not Duke's single-sector
+  `G_OperateSectors()`), and the two runtimes tick at different rates -- 30 for
+  Duke, 40 for SW -- so what is compared is the settled geometry and the time in
+  *seconds*, never the state at tic N.
+
+  - **Everything moved at a third of Duke's speed.**  Two causes multiplying
+    together.  Duke advances a sector animation by `extra * TICSPERFRAME` -- four
+    times the sector's speed value -- on every one of its thirty-a-second tics;
+    the bridge stepped by the bare value once per forty-a-second tic.  And the
+    speed value itself was always the 256 default, because Duke's `prelevel()`
+    writes 256 into every sector's extra and then `A_Spawn()` lets a GPSPEED
+    sprite overwrite it -- while the bridge looked for a GPSPEED sprite only when
+    a door was actually pressed, by which time the control-sprite cull had long
+    since deleted it.  E1L1 has three doors whose GPSPEED says 320, 160 and 360.
+    Both are captured at load now, into the bridge's own table rather than into
+    `sector[].extra`, which SW uses for its own purposes and the bridge zeroes.
+  - **Sliding doors slid the wrong way.**  Duke turns the effector round rather
+    than running the travel backwards -- `SA(i) += 1024` in `G_OperateSectors()`
+    -- and the door then always slides forwards along the angle it is now facing.
+    Sliding along the angle the mapper placed sent every one of them the wrong
+    way on the first press, into the doorway they were supposed to clear.
+  - **A door pair travelled together instead of parting.**  Duke's
+    `STAT_EFFECTOR` list runs highest sprite index first, because
+    `changespritestat()` pushes to the head and the map spawns in ascending
+    order.  Where two leaves share a wall point both drag it, and the last one to
+    run decides where it ends up -- so the order is not an implementation detail,
+    it is which way the middle of the door goes.  The bridge ran capture order,
+    which is the other way round.
+  - **Auto-closing doors closed late, or never.**  Duke counts an SE 10's delay
+    from the moment the door is open, *including* while it is still opening, and
+    only defers the actual close if the door is still moving when the count runs
+    out.  The bridge suspended counting until the door had settled, which added
+    the opening time to every delay -- and the delay was being counted in SW's
+    tics against a number written in Duke's.
+
+  - **A door left standing open in the map read as shut.**  Duke's `prelevel()`
+    marks a ceiling or splitting door whose floor is already below its ceiling as
+    open, so the first press closes it.  Without that the bridge asked such a
+    door to open to where it already was: nothing moved, and it only began
+    working on the second press.
+
+  `VB_CP_SELFTEST=destruct` covers the doors as `operable-moves`, one line per
+  door.  Four things were wrong with that check, and all four hid faults:
+
+  - it sampled two doors per kind, which is how a sliding door that slid
+    backwards survived in E1L1 for as long as it did.  It takes every door now;
+  - it never saw Duke's ceiling doors, floor doors, lifts or platforms at all --
+    those have no capture list of their own, being started straight off the
+    sector lotag -- and they were exactly the ones running at a third speed.
+    They are collected off the lotag now, skipping locked sectors and sectors
+    holding an activator, since Duke aims a press on those somewhere else;
+  - its "did the sector move" signature was `ceilingz + floorz`, and a splitting
+    door drops its floor by precisely as much as it lifts its ceiling.  Every one
+    of Duke's splitting doors read as "never moved".  The two are weighted
+    differently now;
+  - and a door asked to travel to where it already stood was scored as a
+    failure.  Duke's ceiling doors do that legitimately -- one with no higher
+    neighbour to open into resolves its target to its own floor -- so the check
+    now demands motion only when the animation was given somewhere to go.
+
+  Also fixed there: the destruct group ended at the hydrant, so breakables,
+  explosives and every door had been silently skipped in the group sweep since
+  the hydrant phase was added.
+
+  Measured on E1L1 against Duke's own runtime: 17 of the level's 25 door sectors
+  now settle in the same place within 0.02s of the time Duke takes, where before
+  the change none of the ones that moved vertically did.  Still divergent, and
+  not chased down: the `ST_27` extend-o-bridges (sectors 1/2/21/22/147/148),
+  where one press extends all six halves at once in the bridge while Duke
+  staggers them.  Their 8-units-a-tic step has had the same rate conversion
+  applied.  Note also that the Duke-side tracer segfaults its own runtime after a
+  few of those sectors, so that is where any future comparison has to start.
+
 - **Only an explosion opens a cracked wall, and opening it must take the crack
   with it.**  A thrown shuriken blew Duke's cracked walls open, and once open the
   crack stayed drawn across the hole.  Both came from one shortcut.

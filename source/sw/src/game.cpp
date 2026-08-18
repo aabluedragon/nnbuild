@@ -2909,8 +2909,8 @@ struct sw_crossplay_duke_sliding_door_t
     int16_t originStart;
     int16_t originCount;
     int16_t angle;
-    int32_t currentDistance;
-    int32_t targetDistance;
+    vec2_t offset;
+    int32_t remaining;
     int32_t totalDistance;
     int32_t step;
     uint8_t active;
@@ -3505,6 +3505,7 @@ static void SW_CrossplayTickDukeRespawns(void);
 static int32_t SW_CrossplayDukePlayerInMovingSector(PLAYERp const pp, int16_t sectnum);
 static int32_t SW_CrossplayDukeSectorBaseLotag(int16_t sectnum);
 static int32_t SW_CrossplayStepDukeZ(int32_t *z, int32_t targetZ, int32_t speed);
+static int32_t SW_CrossplayDukeZAnimStepPerTic(int32_t speed);
 static int32_t SW_CrossplayActivateDukeBySector(int16_t sectnum, PLAYERp pp);
 static int32_t SW_CrossplayOperateDukeTag(int16_t lotag, PLAYERp pp);
 static void SW_CrossplayTickDukeSpriteBehaviors(void);
@@ -3843,19 +3844,47 @@ static void SW_CrossplaySetSectorWallInterpolation(int16_t sectnum)
     }
 }
 
-static int32_t SW_CrossplayDukeGpspeedForSector(int16_t sectnum)
+// Duke's per-sector speed, the way Duke arrives at it: prelevel() writes 256 into
+// every sector's extra, and then A_Spawn() lets a GPSPEED sprite in the sector
+// overwrite it with its lotag.  Both have to be captured at load, because GPSPEED
+// is a control sprite and the bridge culls those -- so looking for one when a
+// door is actually pressed finds nothing, and every door in the level ran at the
+// 256 default.  SW uses sector extra for its own purposes and the bridge zeroes
+// it for that reason, so the value is kept here rather than there.
+static int16_t g_swCrossplayDukeSectorSpeed[MAXSECTORS];
+
+static void SW_CrossplayCaptureDukeSectorSpeeds(void)
 {
-    for (int32_t i = 0; i < MAXSPRITES; ++i)
+    for (int32_t i = 0; i < MAXSECTORS; ++i)
+        g_swCrossplayDukeSectorSpeed[i] = 256;
+
+    // The rest of Duke's prelevel() sector pass: a ceiling or splitting door
+    // that the mapper left standing open is marked open, so the first press
+    // closes it.  Without this the bridge read every such door as shut, and the
+    // first press asked it to open to where it already was -- nothing moved, and
+    // the door only started working on the second press.
+    for (int32_t i = 0; i < numsectors; ++i)
     {
-        if (sprite[i].statnum == MAXSTATUS ||
-            sprite[i].sectnum != sectnum ||
-            artCrossplayOriginalMapSpritePicnum(i) != VB_DUKE_GPSPEED)
+        if (sector[i].lotag != VB_DUKE_ST_CEILING_DOOR && sector[i].lotag != VB_DUKE_ST_SPLITTING_DOOR)
             continue;
 
-        return sprite[i].lotag;
+        if (sector[i].floorz > sector[i].ceilingz)
+            sector[i].lotag |= 0x8000u;
     }
 
-    return sector[sectnum].extra > 0 ? sector[sectnum].extra : 0;
+    for (int32_t i = 0; i < MAXSPRITES; ++i)
+    {
+        if (sprite[i].statnum == MAXSTATUS || artCrossplayOriginalMapSpritePicnum(i) != VB_DUKE_GPSPEED ||
+            (unsigned)sprite[i].sectnum >= (unsigned)numsectors || sprite[i].lotag <= 0)
+            continue;
+
+        g_swCrossplayDukeSectorSpeed[sprite[i].sectnum] = sprite[i].lotag;
+    }
+}
+
+static int32_t SW_CrossplayDukeGpspeedForSector(int16_t sectnum)
+{
+    return (unsigned)sectnum < MAXSECTORS ? g_swCrossplayDukeSectorSpeed[sectnum] : 0;
 }
 
 static int32_t SW_CrossplayDukeSectorBaseLotag(int16_t sectnum)
@@ -7691,7 +7720,8 @@ static int32_t SW_CrossplayStartDukeSectorZAnim(int16_t sectnum, int32_t moveFlo
 
     if (speed <= 0)
         speed = SW_CrossplayDukeSectorSpeedForSector(sectnum);
-    speed = clamp(speed, 1, 8192);
+
+    speed = SW_CrossplayDukeZAnimStepPerTic(speed);
 
     sw_crossplay_duke_sector_zanim_t *anim = SW_CrossplayFindDukeSectorZAnim(sectnum);
     if (anim == NULL)
@@ -7720,6 +7750,42 @@ static int32_t SW_CrossplayStartDukeSectorZAnim(int16_t sectnum, int32_t moveFlo
         setinterpolation(&sector[sectnum].ceilingz);
 
     return 1;
+}
+
+// Duke moves a sector animation by `speed * TICSPERFRAME` -- four times the
+// sector's speed value -- on every one of its own thirty-a-second tics.  The
+// bridge stepped by the bare speed value once per SW tic, which at forty tics a
+// second is a third of the speed Duke's doors, lifts and platforms actually
+// travel at.  Convert once, here, so every sector animation lands on Duke's
+// ground speed rather than on Duke's tic count.
+#define VB_CROSSPLAY_DUKE_TICS_PER_SEC 30
+#define VB_CROSSPLAY_DUKE_TICSPERFRAME 4
+
+// Duke's sliding doors and swinging doors carry their own per-tic constants
+// rather than a sector speed.  Those are per *Duke* tic, so they need the same
+// conversion to SW's forty.
+static int32_t SW_CrossplayDukeRateToSwTic(int32_t perDukeTic)
+{
+    return max(1, (perDukeTic * VB_CROSSPLAY_DUKE_TICS_PER_SEC) / VB_CROSSPLAY_SW_TICS_PER_SEC);
+}
+
+// A count of Duke's tics, in SW's.
+static int32_t SW_CrossplayDukeTicsToSwTics(int32_t dukeTics)
+{
+    return (dukeTics * VB_CROSSPLAY_SW_TICS_PER_SEC) / VB_CROSSPLAY_DUKE_TICS_PER_SEC;
+}
+
+static int32_t SW_CrossplayDukeSlideStepPerTic(void)
+{
+    return SW_CrossplayDukeRateToSwTic(16);
+}
+
+static int32_t SW_CrossplayDukeZAnimStepPerTic(int32_t speed)
+{
+    speed = clamp(speed, 1, 8192);
+
+    return max(1, (speed * VB_CROSSPLAY_DUKE_TICSPERFRAME * VB_CROSSPLAY_DUKE_TICS_PER_SEC) /
+                      VB_CROSSPLAY_SW_TICS_PER_SEC);
 }
 
 static int32_t SW_CrossplayStepDukeZ(int32_t *z, int32_t targetZ, int32_t speed)
@@ -8362,6 +8428,23 @@ static void SW_CrossplayMoveDukeSectorZAnim(sw_crossplay_duke_sector_zanim_t &an
         anim.active = 0;
 }
 
+// True when the animation the sector is running asks it to end up exactly where
+// it already is.  Duke's doors do this legitimately: a ceiling door with no
+// higher neighbour to open into resolves its target to its own floor, which for
+// a shut door is where the ceiling already is, and Duke moves nothing either.
+static int32_t SW_CrossplayDukeSectorZAnimIsNoOp(int16_t sectnum)
+{
+    sw_crossplay_duke_sector_zanim_t const *const anim = SW_CrossplayFindDukeSectorZAnim(sectnum);
+
+    if (anim == NULL || !anim->active || (unsigned)sectnum >= (unsigned)numsectors)
+        return 0;
+
+    int32_t const floorSettled = !anim->moveFloor || anim->targetFloorZ == sector[sectnum].floorz;
+    int32_t const ceilingSettled = !anim->moveCeiling || anim->targetCeilingZ == sector[sectnum].ceilingz;
+
+    return floorSettled && ceilingSettled;
+}
+
 static int32_t SW_CrossplayDukeSectorHasActiveZAnim(int16_t sectnum)
 {
     sw_crossplay_duke_sector_zanim_t const *const anim = SW_CrossplayFindDukeSectorZAnim(sectnum);
@@ -8910,8 +8993,15 @@ static int32_t SW_CrossplayOperateDukeSlidingDoor(int16_t sectnum)
         if (door.hitag != source->hitag)
             continue;
 
+        // Duke turns the effector round rather than running the same travel
+        // backwards: `SA(i) += 1024` in G_OperateSectors(), and the door then
+        // always slides forwards along the angle it is now facing.  Sliding
+        // along the angle the mapper placed instead sent every one of Duke's
+        // sliding doors the wrong way on the first press -- into the doorway it
+        // was supposed to clear.
+        door.angle = (int16_t)NORM_ANGLE(door.angle + 1024);
         door.open = !door.open;
-        door.targetDistance = door.open ? door.totalDistance : 0;
+        door.remaining = door.totalDistance;
         door.active = 1;
 
         if ((unsigned)door.sectnum < (unsigned)numsectors)
@@ -8928,23 +9018,24 @@ static void SW_CrossplayMoveDukeSlidingDoor(sw_crossplay_duke_sliding_door_t &do
     if (!door.active || (unsigned)door.sectnum >= (unsigned)numsectors)
         return;
 
-    int32_t const delta = door.targetDistance - door.currentDistance;
-    if (delta == 0)
+    if (door.remaining <= 0)
     {
         door.active = 0;
         return;
     }
 
-    int32_t const oldDistance = door.currentDistance;
-    int32_t const step = min(klabs(delta), door.step);
-    door.currentDistance += ksgn(delta) * step;
+    int32_t const step = min(door.remaining, door.step);
+    door.remaining -= step;
 
-    int32_t const xMove = ((door.currentDistance - oldDistance) * sintable[(door.angle + 512) & 2047]) >> 14;
-    int32_t const yMove = ((door.currentDistance - oldDistance) * sintable[door.angle & 2047]) >> 14;
+    int32_t const xMove = (step * sintable[(door.angle + 512) & 2047]) >> 14;
+    int32_t const yMove = (step * sintable[door.angle & 2047]) >> 14;
     SW_CrossplayTranslateDukeSectorContents(door.sectnum, xMove, yMove);
 
-    int32_t const xOffset = (door.currentDistance * sintable[(door.angle + 512) & 2047]) >> 14;
-    int32_t const yOffset = (door.currentDistance * sintable[door.angle & 2047]) >> 14;
+    door.offset.x += xMove;
+    door.offset.y += yMove;
+
+    int32_t const xOffset = door.offset.x;
+    int32_t const yOffset = door.offset.y;
     int32_t const startWall = sector[door.sectnum].wallptr;
     int32_t const sectorWallCount = sector[door.sectnum].wallnum;
     int32_t const wallCount = min((int32_t)door.originCount, sectorWallCount);
@@ -8955,7 +9046,7 @@ static void SW_CrossplayMoveDukeSlidingDoor(sw_crossplay_duke_sliding_door_t &do
         dragpoint(startWall + wallOffset, origin.x + xOffset, origin.y + yOffset, 0);
     }
 
-    if (door.currentDistance == door.targetDistance)
+    if (door.remaining <= 0)
         door.active = 0;
 }
 
@@ -9255,13 +9346,23 @@ static void SW_CrossplayTickDukeAutoCloses(void)
             continue;
         }
 
-        if (SW_CrossplayDukeAutoCloseTargetIsActive(autoClose.sectnum) ||
-            SW_CrossplayDukeAutoCloseSectorHasPlayer(autoClose.sectnum))
+        if (SW_CrossplayDukeAutoCloseSectorHasPlayer(autoClose.sectnum))
             continue;
 
         if (autoClose.count > autoClose.delay)
         {
-            if (SW_CrossplayActivateDukeBySector(autoClose.sectnum, NULL))
+            // Duke will not shut a door that is still opening -- but it has been
+            // counting the whole time it was.  Holding the count back until the
+            // door settled, as this did, added the opening time to every delay,
+            // and a door whose delay ran past the moment the player walked away
+            // simply never closed.
+            if (SW_CrossplayDukeAutoCloseTargetIsActive(autoClose.sectnum))
+                continue;
+
+            int32_t const fired = SW_CrossplayActivateDukeBySector(autoClose.sectnum, NULL);
+            if (Bgetenv("VB_CP_DOOR_DEBUG") != NULL)
+                LOG_F(INFO, "CPAC sect=%d delay=%d fired=%d", autoClose.sectnum, autoClose.delay, fired);
+            if (fired)
                 autoClose.count = 0;
         }
         else
@@ -10232,6 +10333,8 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
     if (!artCrossplayMapArtPrepared() || !SW_CrossplayIsDukeLikeGame(artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS)))
         return;
 
+    SW_CrossplayCaptureDukeSectorSpeeds();
+
     for (int32_t i = 0; i < MAXSPRITES; ++i)
     {
         if (sprite[i].statnum == MAXSTATUS ||
@@ -10544,7 +10647,8 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
 
             sw_crossplay_duke_auto_close_t &autoClose = g_swCrossplayDukeAutoCloses[g_swCrossplayDukeAutoCloseCount++];
             autoClose.sectnum = sectnum;
-            autoClose.delay = max<int16_t>(sprite[i].hitag, 0);
+            // The hitag is a count of Duke's tics, and this counts SW's.
+            autoClose.delay = (int16_t)SW_CrossplayDukeTicsToSwTics(max<int16_t>(sprite[i].hitag, 0));
             autoClose.count = 0;
             continue;
         }
@@ -10964,10 +11068,12 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
             door.originStart = g_swCrossplayDukeSlidingDoorOriginCount;
             door.originCount = wallCount;
             door.angle = sprite[i].ang;
-            door.currentDistance = 0;
-            door.targetDistance = 0;
-            door.totalDistance = max(128, speed << 1);
-            door.step = 16;
+            door.offset = {};
+            door.remaining = 0;
+            // Duke slides the door's sector 16 units on each of its own tics
+            // until it has taken `yvel>>3` of them, yvel being the sector speed.
+            door.totalDistance = max(16, (speed >> 3) * 16);
+            door.step = SW_CrossplayDukeSlideStepPerTic();
             door.active = 0;
             door.open = (sector[sectnum].lotag & 0x8000u) != 0;
 
@@ -11030,7 +11136,8 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
             bridge.currentDistance = 0;
             bridge.targetDistance = 0;
             bridge.totalDistance = max(64, speed);
-            bridge.step = 8;
+            // Duke extends a bridge by 8 units on each of its own tics.
+            bridge.step = SW_CrossplayDukeRateToSwTic(8);
             bridge.active = 0;
             bridge.open = (sector[sectnum].lotag & 0x8000u) != 0;
 
@@ -11879,6 +11986,7 @@ static char const *g_swCrossplaySelfTestOperableKinds[64];
 static int64_t g_swCrossplaySelfTestOperableSignature;
 static int32_t g_swCrossplaySelfTestOperableActivated;
 static int32_t g_swCrossplaySelfTestOperableMoved;
+static int32_t g_swCrossplaySelfTestOperableNoOp;
 
 static int32_t g_swCrossplaySelfTestTrainIndex;
 static vec2_t g_swCrossplaySelfTestTrainStart;
@@ -13361,7 +13469,7 @@ static void SW_CrossplaySelfTestRunHydrant(PLAYERp const pp)
 {
     if (pp == NULL || User[pp->PlayerSprite] == NULL)
     {
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_BREAKABLES);
         return;
     }
 
@@ -13380,7 +13488,7 @@ static void SW_CrossplaySelfTestRunHydrant(PLAYERp const pp)
         if (g_swCrossplaySelfTestHydrantSprite < 0)
         {
             SW_CrossplaySelfTestReport(1, "hydrant-present", "no Duke hydrant in this map, skipped");
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_BREAKABLES);
             return;
         }
 
@@ -13412,7 +13520,7 @@ static void SW_CrossplaySelfTestRunHydrant(PLAYERp const pp)
 
         if (g_swCrossplaySelfTestHydrantWater < 0)
         {
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_BREAKABLES);
             return;
         }
 
@@ -13455,7 +13563,7 @@ static void SW_CrossplaySelfTestRunHydrant(PLAYERp const pp)
         if (!stood)
         {
             SW_CrossplaySelfTestReport(0, "hydrant-reachable", "no floor spot within Duke's drinking distance");
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_BREAKABLES);
             return;
         }
 
@@ -13519,7 +13627,7 @@ static void SW_CrossplaySelfTestRunHydrant(PLAYERp const pp)
               g_swCrossplaySelfTestHydrantWater, drinks);
     SW_CrossplaySelfTestReport(drinks > 0, "hydrant-drink-heals", soundDetail);
 
-    SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_DESTRUCT, VB_CROSSPLAY_SELFTEST_BREAKABLES);
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_BREAKABLES);
 }
 
 // Duke's cracked walls.  Duke gives CRACK1-4 an explicit rule in actors.cpp: the
@@ -14003,7 +14111,10 @@ static int64_t SW_CrossplaySelfTestSectorSignature(int16_t sectnum)
     if ((unsigned)sectnum >= (unsigned)numsectors)
         return 0;
 
-    int64_t signature = (int64_t)sector[sectnum].ceilingz + (int64_t)sector[sectnum].floorz;
+    // Weighted, not summed: a splitting door moves its floor down by exactly as
+    // much as it lifts its ceiling, so a plain sum of the two is identical open
+    // and shut, and every one of Duke's splitting doors read as "never moved".
+    int64_t signature = (int64_t)sector[sectnum].ceilingz * 3 + (int64_t)sector[sectnum].floorz * 5;
 
     int32_t const startWall = sector[sectnum].wallptr;
     int32_t const endWall = startWall + sector[sectnum].wallnum;
@@ -14066,13 +14177,13 @@ static void SW_CrossplaySelfTestCollectOperables(void)
 
     for (size_t source = 0; source < ARRAY_SIZE(sources); ++source)
     {
-        // Two per kind keeps the run short while still covering each mechanism.
-        // Only sectors Duke would operate on a use-press are sampled, so the
-        // check can insist on movement rather than excusing the ones that were
-        // never going to move.
-        int32_t takenForKind = 0;
-
-        for (int32_t i = 0; i < sources[source].count && takenForKind < 2; ++i)
+        // Every one of them, not a sample: the faults that turned up in these --
+        // a sliding door that slid the wrong way, a speed that ignored the
+        // sector's own GPSPEED -- were specific to particular sectors, and two
+        // per kind walked straight past them.  Only sectors Duke would operate on
+        // a use-press are collected, so the check can insist on movement rather
+        // than excusing the ones that were never going to move.
+        for (int32_t i = 0; i < sources[source].count; ++i)
         {
             if ((unsigned)g_swCrossplaySelfTestOperableCount >= ARRAY_SIZE(g_swCrossplaySelfTestOperableSectors))
                 return;
@@ -14081,12 +14192,62 @@ static void SW_CrossplaySelfTestCollectOperables(void)
             if ((unsigned)sectnum >= (unsigned)numsectors || !SW_CrossplaySelfTestSectorIsOperableDoor(sectnum))
                 continue;
 
-            ++takenForKind;
-
             g_swCrossplaySelfTestOperableSectors[g_swCrossplaySelfTestOperableCount] = sectnum;
             g_swCrossplaySelfTestOperableKinds[g_swCrossplaySelfTestOperableCount] = sources[source].kind;
             ++g_swCrossplaySelfTestOperableCount;
         }
+    }
+
+    // Duke's ceiling and floor doors, lifts and platforms have no capture list of
+    // their own -- they are started straight off the sector's lotag when the use
+    // key reaches them -- so nothing above finds them, and they went untested.
+    // They are exactly the ones that turned out to be running at a third of
+    // Duke's speed, so they are collected here off the lotag instead.
+    for (int32_t sectnum = 0; sectnum < numsectors; ++sectnum)
+    {
+        if ((unsigned)g_swCrossplaySelfTestOperableCount >= ARRAY_SIZE(g_swCrossplaySelfTestOperableSectors))
+            return;
+
+        if (!SW_CrossplaySelfTestSectorIsOperableDoor((int16_t)sectnum))
+            continue;
+
+        switch (SW_CrossplayDukeSectorBaseLotag((int16_t)sectnum))
+        {
+        case VB_DUKE_ST_PLATFORM_DOWN:
+        case VB_DUKE_ST_PLATFORM_UP:
+        case VB_DUKE_ST_ELEVATOR_DOWN:
+        case VB_DUKE_ST_ELEVATOR_UP:
+        case VB_DUKE_ST_CEILING_DOOR:
+        case VB_DUKE_ST_FLOOR_DOOR:
+        case VB_DUKE_ST_SPLITTING_DOOR:
+        case VB_DUKE_ST_SPLITTING_ST_DOOR:
+        case VB_DUKE_ST_TEETH_DOOR:
+            break;
+        default:
+            continue;
+        }
+
+        // A sector with an activator in it does not answer the use key itself --
+        // Duke's activatebysector() hands the press to that activator's tag, and
+        // what moves may be somewhere else entirely -- so "press it and it must
+        // move" is not a claim that can be made about it.
+        int32_t hasActivator = 0;
+        for (int32_t i = 0; i < g_swCrossplayDukeActivatorCount && !hasActivator; ++i)
+            hasActivator = g_swCrossplayDukeActivators[i].sectnum == sectnum;
+
+        if (hasActivator)
+            continue;
+
+        int32_t seen = 0;
+        for (int32_t i = 0; i < g_swCrossplaySelfTestOperableCount; ++i)
+            seen |= g_swCrossplaySelfTestOperableSectors[i] == sectnum;
+
+        if (seen)
+            continue;
+
+        g_swCrossplaySelfTestOperableSectors[g_swCrossplaySelfTestOperableCount] = (int16_t)sectnum;
+        g_swCrossplaySelfTestOperableKinds[g_swCrossplaySelfTestOperableCount] = "z-door";
+        ++g_swCrossplaySelfTestOperableCount;
     }
 }
 
@@ -14111,6 +14272,9 @@ static void SW_CrossplaySelfTestRunOperableSetup(PLAYERp const pp)
     if (!g_swCrossplaySelfTestOperableActivated && sector[sectnum].hitag != 0)
         g_swCrossplaySelfTestOperableActivated = SW_CrossplayOperateDukeTag(sector[sectnum].hitag, pp) ? 2 : 0;
 
+    g_swCrossplaySelfTestOperableNoOp = SW_CrossplayDukeSectorZAnimIsNoOp(sectnum);
+
+
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_OPERABLE_OBSERVE);
 }
 
@@ -14123,17 +14287,23 @@ static void SW_CrossplaySelfTestRunOperableObserve(void)
     if (SW_CrossplaySelfTestSectorSignature(sectnum) != g_swCrossplaySelfTestOperableSignature)
         g_swCrossplaySelfTestOperableMoved = 1;
 
-    if (g_swCrossplaySelfTestPhaseTic < 120)
+    // Long enough for the slowest of Duke's doors to have visibly started, short
+    // enough that a level's whole set of them fits in one run.
+    if (g_swCrossplaySelfTestPhaseTic < 60)
         return;
 
 
     char detail[160];
-    Bsnprintf(detail, sizeof(detail), "kind=%s sect=%d lotag=%d hitag=%d activated=%d moved=%d",
+    Bsnprintf(detail, sizeof(detail), "kind=%s sect=%d lotag=%d hitag=%d activated=%d moved=%d fz=%d cz=%d",
               g_swCrossplaySelfTestOperableKinds[g_swCrossplaySelfTestOperableIndex], sectnum,
               sector[sectnum].lotag, sector[sectnum].hitag, g_swCrossplaySelfTestOperableActivated,
-              g_swCrossplaySelfTestOperableMoved);
+              g_swCrossplaySelfTestOperableMoved, TrackerCast(sector[sectnum].floorz),
+              TrackerCast(sector[sectnum].ceilingz));
 
-    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestOperableMoved, "operable-moves", detail);
+    // A door that was asked to travel to where it already stood has nothing to
+    // prove; one that was given a real destination has to reach for it.
+    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestOperableMoved || g_swCrossplaySelfTestOperableNoOp,
+                               "operable-moves", detail);
 
     ++g_swCrossplaySelfTestOperableIndex;
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_OPERABLE_SETUP);
@@ -16244,6 +16414,8 @@ static void SW_CrossplayZGuard(char const *segment)
     primed = 1;
 }
 
+// The other half of the door tracer in vibebuild32's actors.cpp: same sector,
+// same lines, so a bridged door can be diffed against Duke's own.
 void SW_CrossplayMoveForeignMapEffectors(void)
 {
     SW_CrossplayZGuard("sw-world");
@@ -16465,10 +16637,16 @@ void SW_CrossplayMoveForeignMapEffectors(void)
     for (int32_t elevatorIndex = 0; elevatorIndex < g_swCrossplayDukeWarpElevatorCount; ++elevatorIndex)
         SW_CrossplayMoveDukeWarpElevator(g_swCrossplayDukeWarpElevators[elevatorIndex]);
 
-    for (int32_t doorIndex = 0; doorIndex < g_swCrossplayDukeSwingDoorCount; ++doorIndex)
+    // Backwards, because Duke's STAT_EFFECTOR list is: changespritestat() pushes
+    // to the head, and the map's sprites are spawned in ascending order, so the
+    // effectors run highest index first.  It matters wherever two door leaves
+    // share a wall point -- both drag it and the last one to run decides where
+    // it ends up, which is what makes E1L1's twin sliding doors part in the
+    // middle instead of travelling together.
+    for (int32_t doorIndex = g_swCrossplayDukeSwingDoorCount - 1; doorIndex >= 0; --doorIndex)
         SW_CrossplayMoveDukeSwingDoor(g_swCrossplayDukeSwingDoors[doorIndex]);
 
-    for (int32_t doorIndex = 0; doorIndex < g_swCrossplayDukeSlidingDoorCount; ++doorIndex)
+    for (int32_t doorIndex = g_swCrossplayDukeSlidingDoorCount - 1; doorIndex >= 0; --doorIndex)
         SW_CrossplayMoveDukeSlidingDoor(g_swCrossplayDukeSlidingDoors[doorIndex]);
 
     SW_CrossplayTickDukeWallAnims();
