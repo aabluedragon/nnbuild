@@ -1020,6 +1020,28 @@ Fixed since:
   requires Duke to have answered.  Nothing else covered this class: such a prop
   has no behavior record, so it never appeared in the breakable list.
 
+- **What an enemy drops has to be pickable.**  Duke's enemies drop by spawning a
+  Duke pickup mid-fight (`state drop_shotgun` and friends, gated on
+  `SPAWNAMMOODDS`), and the pass that turns a Duke pickup into a Shadow Warrior
+  one runs only at map load.  A drop therefore kept Duke's tile and, having no SW
+  `USER` record, could not be picked up at all.
+
+  Converting one after the fact needs two things the load-time path gets for
+  free: the Duke tile, which a runtime sprite has no map record of and which comes
+  from Duke's own side instead, and the `USER` record plus state that
+  `SpriteSetup()`'s per-icon switch would have given it.  That switch is a
+  whole-map pass, so the icon-to-state lookup it implies now lives beside those
+  states in `sprite.cpp` and can be applied to one sprite.  The conversion runs
+  once per Duke tic with the host's status lists back in place, because converting
+  a sprite splices it into an SW status list and doing that inside Duke's tic
+  would leave it in Duke's.
+
+  `VB_CP_SELFTEST=actors` covers it as `duke-drops-become-pickups`.  Duke's drop
+  is random, so what is asserted is the invariant rather than the event: nothing
+  Duke owns may still be sitting on a tile that should have become an SW pickup.
+  Worth knowing: Duke actors do not die in the headless harness, so the conversion
+  itself has not been watched happening -- only the invariant it maintains.
+
 - **A converted pickup shows Shadow Warrior's icon, not Duke's.**  Items used to
   keep the Duke map's art on the grounds that it is what the level was built to
   look like, while weapons showed the SW icon.  That left the player reading

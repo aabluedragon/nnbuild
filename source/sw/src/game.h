@@ -2326,6 +2326,8 @@ int SW_CrossplayDukeViewscreenTile(int spriteNum); // game.c
 void SW_CrossplayTickDukeCameras(PLAYERp pp); // game.c
 void SW_CrossplayTickDukeToilet(PLAYERp pp); // game.c
 void SW_CrossplayTickDukeNukeButton(PLAYERp pp); // game.c
+SWBOOL SW_CrossplaySetupConvertedDukePickup(int16_t SpriteNum); // sprite.c
+int  SW_CrossplayDukeDropsConverted(void);
 int  SW_CrossplayDukeNukeButtonPresses(void);
 int  SW_CrossplayDukeNukeButtonRunning(void);
 int SW_CrossplayDukeMapBridgeActive(void); // game.c

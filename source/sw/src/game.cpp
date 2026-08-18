@@ -1231,10 +1231,13 @@ static int16_t SW_CrossplayDukePickupToShadowWarrior(int16_t sourcePicnum, int16
 
 // Returns non-zero when the sprite became an SW pickup, and reports which
 // crossplay domain it came from so the caller can decide whose art it shows.
-static int32_t SW_CrossplayConvertDukeMapSpriteToShadowWarrior(int32_t spriteNum, int32_t *itemsConverted,
-                                                               int32_t *weaponsConverted, int32_t *outDomain)
+// `sourcePicnum` is the Duke tile it was: a map sprite has that on record, but a
+// pickup an enemy dropped mid-game has no map record at all and its caller has to
+// supply the tile from Duke's own side.
+static int32_t SW_CrossplayConvertDukeSpriteToShadowWarrior(int32_t spriteNum, int16_t sourcePicnum,
+                                                            int32_t *itemsConverted, int32_t *weaponsConverted,
+                                                            int32_t *outDomain)
 {
-    int16_t const sourcePicnum = artCrossplayOriginalMapSpritePicnum(spriteNum);
     if (sourcePicnum < 0 || SW_CrossplayIsHiddenDukeControlSprite(sourcePicnum))
         return 0;
 
@@ -1275,6 +1278,13 @@ static int32_t SW_CrossplayConvertDukeMapSpriteToShadowWarrior(int32_t spriteNum
         *outDomain = domain;
 
     return 1;
+}
+
+static int32_t SW_CrossplayConvertDukeMapSpriteToShadowWarrior(int32_t spriteNum, int32_t *itemsConverted,
+                                                               int32_t *weaponsConverted, int32_t *outDomain)
+{
+    return SW_CrossplayConvertDukeSpriteToShadowWarrior(spriteNum, artCrossplayOriginalMapSpritePicnum(spriteNum),
+                                                        itemsConverted, weaponsConverted, outDomain);
 }
 
 enum
@@ -15048,6 +15058,35 @@ static void SW_CrossplaySelfTestRunReport(void)
         SW_CrossplaySelfTestReport(g_swCrossplaySelfTestActorsAttacked >= half, "duke-actors-attack", actorDetail);
         SW_CrossplaySelfTestReport(g_swCrossplaySelfTestActorsAnimated >= half, "duke-actors-animate", actorDetail);
         SW_CrossplaySelfTestReport(g_swCrossplaySelfTestActorsSounded >= half, "duke-actors-sound", actorDetail);
+
+        // A Duke enemy drops its weapon by spawning a Duke pickup mid-fight, and
+        // Duke's own drop is random (`ifrnd SPAWNAMMOODDS`), so what is asserted is
+        // the invariant rather than the event: nothing Duke owns may still be
+        // sitting on a tile that should have become a Shadow Warrior pickup, since
+        // one that does cannot be picked up at all.
+        int32_t strandedDrop = -1;
+        int16_t strandedTile = 0;
+
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && strandedDrop < 0; ++spriteNum)
+        {
+            if (!SW_CrossplayDukeAIOwnsSprite(spriteNum) || sprite[spriteNum].statnum == MAXSTATUS ||
+                artCrossplayOriginalMapSpritePicnum(spriteNum) >= 0)
+                continue;
+
+            int16_t const dukePicnum = (int16_t)SW_CrossplayDukeAISpriteDukePicnum(spriteNum);
+            int32_t domain = ART_CROSSPLAY_DOMAIN_ITEMS;
+
+            if (dukePicnum > 0 && SW_CrossplayDukePickupToShadowWarrior(dukePicnum, sprite[spriteNum].pal, &domain) >= 0)
+            {
+                strandedDrop = spriteNum;
+                strandedTile = dukePicnum;
+            }
+        }
+
+        char dropDetail[160];
+        Bsnprintf(dropDetail, sizeof(dropDetail), "converted=%d deaths=%d stranded spr=%d tile=%d",
+                  SW_CrossplayDukeDropsConverted(), g_swCrossplayDukeActorDeathEvents, strandedDrop, strandedTile);
+        SW_CrossplaySelfTestReport(strandedDrop < 0, "duke-drops-become-pickups", dropDetail);
     }
 
     {
@@ -15657,6 +15696,7 @@ static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum)
 static void SW_CrossplayDukeRadiusDamage(int spriteNum, int x, int y, int z, int sectnum, int radius, int damage);
 static void SW_CrossplayApplyDukeMapTriggers(void);
 static void SW_CrossplayApplyDukeBlasts(void);
+static void SW_CrossplayConvertDroppedDukePickups(void);
 
 static void SW_CrossplayDukeAISetupSounds(void)
 {
@@ -16348,6 +16388,7 @@ static void SW_CrossplayDukeAITick(void)
     // freed is what left a blank sprite drawn across the opened wall.
     SW_CrossplayApplyDukeMapTriggers();
     SW_CrossplayApplyDukeBlasts();
+    SW_CrossplayConvertDroppedDukePickups();
     SW_CrossplaySpawnDukeQuake(dukeQuakeTics);
 
     // VB_CP_TEST_ROCKET=1: debug -- fire SW's rocket launcher every few tics and
@@ -16792,6 +16833,54 @@ static void SW_CrossplayDukeRadiusDamage(int spriteNum, int x, int y, int z, int
 }
 
 // Drained after the Duke tic, with the host's own status lists back in place.
+static int32_t g_swCrossplayDukeDropsConverted;
+
+int SW_CrossplayDukeDropsConverted(void) { return g_swCrossplayDukeDropsConverted; }
+
+// A Duke enemy drops its weapon by spawning a Duke pickup mid-game.  The pass that
+// turns a Duke pickup into a Shadow Warrior one runs at map load, so a drop was
+// never converted: it kept Duke's tile and, having no SW USER record, could not be
+// picked up at all.  Run once per Duke tic with the host's own status lists back in
+// place, since converting one splices it into an SW status list.
+static void SW_CrossplayConvertDroppedDukePickups(void)
+{
+    if (!SW_CrossplayDukeMapBridgeActive() || !SW_CrossplayDukeAIActive())
+        return;
+
+    for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+    {
+        if (!SW_CrossplayDukeAIOwnsSprite(spriteNum) || sprite[spriteNum].statnum == MAXSTATUS)
+            continue;
+
+        // A map sprite has its own record and was dealt with at load; this is only
+        // for the ones Duke made during play.
+        if (artCrossplayOriginalMapSpritePicnum(spriteNum) >= 0)
+            continue;
+
+        int16_t const dukePicnum = (int16_t)SW_CrossplayDukeAISpriteDukePicnum(spriteNum);
+        if (dukePicnum <= 0)
+            continue;
+
+        int32_t domain = ART_CROSSPLAY_DOMAIN_ITEMS;
+        if (SW_CrossplayDukePickupToShadowWarrior(dukePicnum, sprite[spriteNum].pal, &domain) < 0)
+            continue;
+
+        // It stops being Duke's the moment it becomes an SW pickup, or the next
+        // list swap would carry an SW item sprite into Duke's own lists.
+        SW_CrossplayReleaseDukeSpriteOwnership(spriteNum);
+        SW_CrossplayClearDukeSpriteBehavior(spriteNum);
+
+        int32_t items = 0, weapons = 0;
+        if (!SW_CrossplayConvertDukeSpriteToShadowWarrior(spriteNum, dukePicnum, &items, &weapons, NULL))
+            continue;
+
+        // SpriteSetup() gave the map's pickups their USER record at load; one that
+        // turns up now has to be set up on the spot or nothing will pick it up.
+        SW_CrossplaySetupConvertedDukePickup(spriteNum);
+        ++g_swCrossplayDukeDropsConverted;
+    }
+}
+
 static void SW_CrossplayApplyDukeBlasts(void)
 {
     int32_t const count = g_swCrossplayDukeBlastCount;
