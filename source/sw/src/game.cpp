@@ -2444,7 +2444,6 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
     int32_t const canConvertDukePickups = SW_CrossplayIsDukeLikeGame(sourceGame);
     int32_t itemsConverted = 0;
     int32_t weaponsConverted = 0;
-    int32_t pickupVisualsPreserved = 0;
     int32_t preserved = 0;
     int32_t skillFiltered = 0;
     int32_t removed = 0;
@@ -2469,7 +2468,6 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
         if (canConvertDukePickups)
         {
             int16_t const originalPicnum = artCrossplayOriginalMapSpritePicnum(i);
-            int16_t const originalPal = sprite[i].pal;
 
             if (SW_CrossplayDukeSpriteSuppressedBySkill(i, originalPicnum))
             {
@@ -2492,14 +2490,11 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
             int32_t convertedDomain = ART_CROSSPLAY_DOMAIN_ITEMS;
             if (SW_CrossplayConvertDukeMapSpriteToShadowWarrior(i, &itemsConverted, &weaponsConverted, &convertedDomain))
             {
-                // A Duke weapon pickup gives the player an SW weapon, so it shows
-                // the SW weapon's own icon.  Items keep the Duke map's art, which
-                // is what the level was built to look like.
-                if (convertedDomain != ART_CROSSPLAY_DOMAIN_WEAPONS)
-                {
-                    SW_CrossplayRegisterDukeSpriteVisualOverride(i, originalPicnum, originalPal);
-                    ++pickupVisualsPreserved;
-                }
+                // A converted pickup gives the player an SW thing, so it shows the
+                // SW thing's own icon -- an SW medkit, not Duke's first aid box.
+                // Items used to keep the Duke map's art, on the grounds that it is
+                // what the level was built to look like; that left the player
+                // reading Duke's icons for Shadow Warrior's contents.
                 continue;
             }
 
@@ -2598,8 +2593,6 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
         LOG_F(INFO, "Crossplay: hid %d narrow Duke explosive charge(s) the way Duke's own spawn does.",
               g_swCrossplayDukeHiddenCharges);
 
-    if (pickupVisualsPreserved > 0)
-        LOG_F(INFO, "Crossplay: preserved Duke map art for %d converted pickup sprite(s).", pickupVisualsPreserved);
 
     if (preserved > 0)
         LOG_F(INFO, "Crossplay: preserved %d visible Duke map sprite(s) for Shadow Warrior crossplay.", preserved);
@@ -6870,13 +6863,24 @@ static void SW_CrossplayKillDukeActorSprite(int32_t spriteNum, vec3_t const *hit
 // The host's charges belong here too.  Duke's SEENINE and OOZFILTER carry no CON
 // actor block -- their fuse is hardcoded C -- so the tests above miss them, and
 // respawning a spent one turns it back into a live charge.
+// Tiles the bridge must never hand to Duke as a plain object.  Enemies are
+// actors and reach Duke through the AI; charges have their own arming path.
+//
+// A tile that merely *has* CON actor code is deliberately not in this set, and
+// used to be.  Duke gives half its scenery a `useractor` state -- CLOCK is
+// `useractor notenemy CLOCK WEAK state breakobject` -- so the old test read those
+// props as "Duke is already running this" when in truth nothing had adopted the
+// sprite: it sat in the bridge's scenery list, and both the melee path and the
+// blast path declined every hit on it.  E1L1's clocks could not be broken at all.
+// A sprite Duke really does own is caught by the ownership test the callers
+// already make before they get here.
 static int32_t SW_CrossplayDukeTileIsRunByDuke(int16_t sourcePicnum)
 {
     if (sourcePicnum <= 0)
         return 0;
 
-    return VB_DukeAI_HasActorCode(sourcePicnum) || VB_DukeAI_IsEnemyTile(sourcePicnum) ||
-           SW_CrossplayIsDukeExplosiveSprite(sourcePicnum) || SW_CrossplayIsDukeExplosiveSourceTile(sourcePicnum);
+    return VB_DukeAI_IsEnemyTile(sourcePicnum) || SW_CrossplayIsDukeExplosiveSprite(sourcePicnum) ||
+           SW_CrossplayIsDukeExplosiveSourceTile(sourcePicnum);
 }
 
 static int32_t SW_CrossplayQueueDukeObjectDamage(int32_t spriteNum, int32_t targetSpriteNum, vec3_t const *hitPos,
@@ -11968,6 +11972,9 @@ static int32_t g_swCrossplaySelfTestCardHadKey;
 static int32_t g_swCrossplaySelfTestMirrorStage;
 static int32_t g_swCrossplaySelfTestMirrorWall = -1;
 static int32_t g_swCrossplaySelfTestMirrorBrokeBase;
+static int32_t g_swCrossplaySelfTestMirrorSolidTested;
+static int32_t g_swCrossplaySelfTestMirrorSolidBreached = -1;
+static int32_t g_swCrossplaySelfTestMirrorSolidBreachZ;
 static int32_t g_swCrossplaySelfTestCameraStage;
 static int32_t g_swCrossplaySelfTestCameraStandX, g_swCrossplaySelfTestCameraStandY;
 static int32_t g_swCrossplaySelfTestCameraStandAng;
@@ -12622,6 +12629,10 @@ static int16_t g_swCrossplaySelfTestBreakableStartPic[VB_CROSSPLAY_SELFTEST_MAX_
 static int32_t g_swCrossplaySelfTestSolidBreakableCount;
 static int32_t g_swCrossplaySelfTestBreakablesTested;
 static int32_t g_swCrossplaySelfTestBreakablesHit;
+static int32_t g_swCrossplaySelfTestConPropStage;
+static int32_t g_swCrossplaySelfTestConPropSprite = -1;
+static int16_t g_swCrossplaySelfTestConPropStartPic;
+static int16_t g_swCrossplaySelfTestConPropTile;
 
 // Duke's toilet.  Using one is a short sequence, not a single action: the weapon
 // goes down, Duke relieves himself and gets a tenth of his health back, and a
@@ -13152,6 +13163,96 @@ static void SW_CrossplaySelfTestRunMirrors(PLAYERp const pp)
 
     int32_t const wallNum = g_swCrossplaySelfTestMirrorWall;
     char detail[192];
+
+    // The sector behind a mirror is not a room.  Duke keeps the player out of it
+    // with nothing but the mirror wall's blocking bit, and a player who does get
+    // in has no way back out.  Driven through clipmove() with the player's own
+    // clipdist and clip mask -- exactly what DoPlayerMove() does -- at a spread
+    // of heights, so a jump is covered as well as a walk.
+    if (!g_swCrossplaySelfTestMirrorSolidTested)
+    {
+        g_swCrossplaySelfTestMirrorSolidTested = 1;
+
+        for (int32_t w = 0; w < numwalls && g_swCrossplaySelfTestMirrorSolidBreached < 0; ++w)
+        {
+            if (artCrossplayOriginalMapWallOverpicnum(w) != dukeMirrorTile)
+                continue;
+
+            int16_t const mirrorSect = wall[w].nextsector;
+            int16_t const frontSect = sectorofwall((int16_t)w);
+            if ((unsigned)mirrorSect >= (unsigned)numsectors || (unsigned)frontSect >= (unsigned)numsectors)
+                continue;
+
+            int32_t const midX = (wall[w].x + wall[wall[w].point2].x) >> 1;
+            int32_t const midY = (wall[w].y + wall[wall[w].point2].y) >> 1;
+            int32_t const wallAng = getangle(wall[wall[w].point2].x - wall[w].x,
+                                             wall[wall[w].point2].y - wall[w].y);
+            // Which way is "in front" depends on the wall's winding, so both
+            // normals are tried and the one that lands in the wall's own sector
+            // wins.  Guessing it put the probe inside the mirror sector to begin
+            // with, and every mirror then read as breached.
+            int32_t inAng = NORM_ANGLE(wallAng + 512);
+            int32_t standX = 0, standY = 0;
+            int32_t placed = 0;
+
+            for (int32_t flip = 0; flip < 2 && !placed; ++flip)
+            {
+                int32_t const tryAng = flip ? NORM_ANGLE(inAng + 1024) : inAng;
+                int32_t const tryX = midX - ((sintable[(tryAng + 512) & 2047] * 640) >> 14);
+                int32_t const tryY = midY - ((sintable[tryAng & 2047] * 640) >> 14);
+                int16_t trySect = frontSect;
+
+                updatesector(tryX, tryY, &trySect);
+                if (trySect != frontSect)
+                    continue;
+
+                inAng = tryAng;
+                standX = tryX;
+                standY = tryY;
+                placed = 1;
+            }
+
+            if (!placed)
+                continue;
+
+            int32_t ceilingZ, floorZ;
+            getzsofslope(frontSect, standX, standY, &ceilingZ, &floorZ);
+
+            static const int32_t heights[] = { 4, 16, 32, 48, 64 };
+            for (unsigned h = 0; h < ARRAY_SIZE(heights) && g_swCrossplaySelfTestMirrorSolidBreached < 0; ++h)
+            {
+                vec3_t probe = { standX, standY, floorZ - Z(heights[h]) };
+                int16_t probeSect = frontSect;
+
+                updatesector(probe.x, probe.y, &probeSect);
+                if ((unsigned)probeSect >= (unsigned)numsectors)
+                    continue;
+
+                for (int32_t push = 0; push < 8 && g_swCrossplaySelfTestMirrorSolidBreached < 0; ++push)
+                {
+                    clipmove(&probe, &probeSect, sintable[(inAng + 512) & 2047] * 2048,
+                             sintable[inAng & 2047] * 2048, ((int)pp->SpriteP->clipdist << 2),
+                             pp->ceiling_dist, pp->floor_dist, CLIPMASK_PLAYER);
+
+                    if (probeSect == mirrorSect)
+                    {
+                        g_swCrossplaySelfTestMirrorSolidBreached = w;
+                        g_swCrossplaySelfTestMirrorSolidBreachZ = heights[h];
+                    }
+                }
+            }
+        }
+
+        Bsnprintf(detail, sizeof(detail), "breached wall=%d at %d units above the floor",
+                  g_swCrossplaySelfTestMirrorSolidBreached, g_swCrossplaySelfTestMirrorSolidBreachZ);
+        SW_CrossplaySelfTestReport(g_swCrossplaySelfTestMirrorSolidBreached < 0, "mirror-keeps-player-out",
+                                   g_swCrossplaySelfTestMirrorSolidBreached < 0
+                                       ? "no Duke mirror lets the player through"
+                                       : detail);
+
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
+        return;
+    }
 
     if (g_swCrossplaySelfTestMirrorStage == 0)
     {
@@ -13829,6 +13930,69 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
 
 static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
 {
+    // Duke gives much of its scenery a `useractor` state rather than a place on
+    // any of the bridge's own tables -- a clock, for one -- and those props are
+    // Duke's to answer for when something hits them.  Nothing else here covers
+    // them: they have no behavior record, so they are not in the breakable list
+    // below.
+    if (g_swCrossplaySelfTestConPropStage == 0)
+    {
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestConPropSprite < 0; ++spriteNum)
+        {
+            if (sprite[spriteNum].statnum != STAT_NO_STATE || SW_CrossplayDukeAIOwnsSprite(spriteNum) ||
+                (g_swCrossplayDukeSpriteBehaviors[spriteNum].flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE))
+                continue;
+
+            int16_t const tile = artCrossplayOriginalMapSpritePicnum(spriteNum);
+            if (tile <= 0 || !VB_DukeAI_HasActorCode(tile) || VB_DukeAI_IsEnemyTile(tile) ||
+                sprite[spriteNum].xrepeat == 0)
+                continue;
+
+            g_swCrossplaySelfTestConPropSprite = spriteNum;
+            g_swCrossplaySelfTestConPropStartPic = sprite[spriteNum].picnum;
+            g_swCrossplaySelfTestConPropTile = tile;
+        }
+
+        if (g_swCrossplaySelfTestConPropSprite >= 0)
+        {
+            vec3_t const hitPos = sprite[g_swCrossplaySelfTestConPropSprite].xyz;
+            SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, g_swCrossplaySelfTestConPropSprite, &hitPos);
+        }
+
+        g_swCrossplaySelfTestConPropStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_BREAKABLES);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestConPropStage == 1)
+    {
+        // Duke's own tic has to run before it has done anything with it.
+        if (g_swCrossplaySelfTestConPropSprite >= 0 && g_swCrossplaySelfTestPhaseTic < 60)
+            return;
+
+        if (g_swCrossplaySelfTestConPropSprite < 0)
+            SW_CrossplaySelfTestReport(1, "duke-con-prop-takes-a-hit",
+                                       "no Duke CON-scripted scenery prop in this map, skipped");
+        else
+        {
+            int32_t const prop = g_swCrossplaySelfTestConPropSprite;
+            int32_t const answered = sprite[prop].statnum == MAXSTATUS ||
+                                     SW_CrossplayDukeAIOwnsSprite(prop) ||
+                                     sprite[prop].picnum != g_swCrossplaySelfTestConPropStartPic;
+
+            char propDetail[176];
+            Bsnprintf(propDetail, sizeof(propDetail), "spr=%d tile=%d pic %d -> %d owned=%d gone=%d", prop,
+                      g_swCrossplaySelfTestConPropTile, g_swCrossplaySelfTestConPropStartPic,
+                      TrackerCast(sprite[prop].picnum), SW_CrossplayDukeAIOwnsSprite(prop),
+                      sprite[prop].statnum == MAXSTATUS);
+            SW_CrossplaySelfTestReport(answered, "duke-con-prop-takes-a-hit", propDetail);
+        }
+
+        g_swCrossplaySelfTestConPropStage = 2;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_BREAKABLES);
+        return;
+    }
+
     if (g_swCrossplaySelfTestBreakablesHit)
     {
         // Give Duke a few tics to run the damage and settle the props.  Duke's
@@ -16546,6 +16710,28 @@ static void SW_CrossplayZGuard(char const *segment)
 // same lines, so a bridged door can be diffed against Duke's own.
 void SW_CrossplayMoveForeignMapEffectors(void)
 {
+    {
+        static int32_t mirrorDumped = 0;
+        if (!mirrorDumped && Bgetenv("VB_CP_MIRROR_DEBUG") != NULL && SW_CrossplayDukeMapBridgeActive())
+        {
+            mirrorDumped = 1;
+            int const dukeMirrorTile = VB_DukeAI_MirrorTile();
+            for (int32_t w = 0; w < numwalls; ++w)
+            {
+                if (artCrossplayOriginalMapWallOverpicnum(w) != dukeMirrorTile)
+                    continue;
+
+                int32_t const ns = wall[w].nextsector;
+                LOG_F(INFO, "CPMIR live wall=%d cstat=%d pic=%d over=%d nextsect=%d fz=%d cz=%d fstat=%d",
+                      w, TrackerCast(wall[w].cstat), TrackerCast(wall[w].picnum),
+                      TrackerCast(wall[w].overpicnum), ns,
+                      ns >= 0 ? TrackerCast(sector[ns].floorz) : 0,
+                      ns >= 0 ? TrackerCast(sector[ns].ceilingz) : 0,
+                      ns >= 0 ? TrackerCast(sector[ns].floorstat) : 0);
+            }
+        }
+    }
+
     SW_CrossplayZGuard("sw-world");
 
     if (Bgetenv("VB_CP_PLAYERSIZE_DEBUG") != NULL)

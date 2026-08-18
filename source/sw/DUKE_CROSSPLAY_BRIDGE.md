@@ -1003,6 +1003,29 @@ Fixed since:
   path already refuses a camera that has been hidden, which is the state Duke's
   damaged-camera code leaves behind.
 
+- **A prop with CON actor code is still Duke's to answer for.**  E1L1's clocks
+  could not be broken -- melee, bullets, blasts, nothing.  Duke gives much of its
+  scenery a `useractor` state (`useractor notenemy CLOCK WEAK state breakobject`),
+  and the bridge read that as "Duke is already running this tile, leave it alone".
+  Nothing had adopted the sprite, though: it sat in the bridge's own scenery list
+  with no behavior record, so both the melee path and the blast pass declined
+  every hit and no one ran it.  The test is about the *tile* where it should have
+  been about the *sprite*, and the callers already check ownership before they get
+  there.  Enemy tiles and charge tiles are still excluded -- those reach Duke by
+  other routes -- but a tile that merely has actor code is handed over now, and
+  Duke turns the clock into a `BROKENCLOCK` as it should.
+
+  `VB_CP_SELFTEST=destruct` covers it as `duke-con-prop-takes-a-hit`, which picks
+  a Duke scenery prop that has CON code and is not owned by Duke, hits it, and
+  requires Duke to have answered.  Nothing else covered this class: such a prop
+  has no behavior record, so it never appeared in the breakable list.
+
+- **A converted pickup shows Shadow Warrior's icon, not Duke's.**  Items used to
+  keep the Duke map's art on the grounds that it is what the level was built to
+  look like, while weapons showed the SW icon.  That left the player reading
+  Duke's icons for Shadow Warrior's contents -- a Duke first aid box that gives an
+  SW medkit.  Both now show what they actually give.
+
 - **The earthquake by E1L1's stairs has to blow the hole open, not just crack
   the ground.**  The quake ran -- the floor split and tilted, the room shook --
   but the opening in the side never appeared.
