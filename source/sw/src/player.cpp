@@ -8568,6 +8568,14 @@ InitMultiPlayerInfo(void)
             User[start0] = NULL;
         }
         sprite[start0].picnum = ST1;
+
+        // A start position, not something to look at.  Shadow Warrior's own ART
+        // draws nothing for this tile so it has always got away with being left
+        // visible, but on a Duke level the tile resolves into Duke's art, where
+        // the sprite at that index is the editor's SECTOREFFECTOR -- which is
+        // drawn with the word "ST1" across it, hanging in the air at the spot the
+        // player spawned.
+        SET(sprite[start0].cstat, CSTAT_SPRITE_INVISIBLE);
     }
 
     memset(SpawnPositionUsed,0,sizeof(SpawnPositionUsed));

@@ -90,6 +90,11 @@ enum
     VB_DUKEAI_HIT_MELEE,
     VB_DUKEAI_HIT_EXPLOSION,
     VB_DUKEAI_HIT_PROJECTILE,
+    // A blast, as opposed to a rocket landing square on something.  Duke keeps
+    // these apart and its own code depends on the difference: A_RadiusDamage()
+    // leaves RADIUSEXPLOSION in htpicnum, and every dead body in GAME.CON comes
+    // apart on `ifwasweapon RADIUSEXPLOSION` and on nothing else.
+    VB_DUKEAI_HIT_RADIUS,
 };
 
 // Duke's player health is mirrored, not owned, here: the host applies the
@@ -471,6 +476,16 @@ int VB_DukeAI_IsAdoptableTile(int tileNum)
     case TRIPBOMB__:
         return 1;
 
+    // E1L1 opens with Duke's ship coming down on the roof.  A_Spawn() gives a
+    // DUKECAR its zvel, and G_MoveActors() flies it down, trails explosions off
+    // it, and finally blows it up and shakes the level -- all of it Duke's own
+    // code, none of which the bridge was running, so the ship simply hung in the
+    // sky.  The earthquake it ends on already has a route out through
+    // VB_DukeAI_TakeEarthquake().
+    case DUKECAR__:
+    case HELECOPT__:
+        return 1;
+
     // FIREEXT arms the host's charges and drives its effectors by hitag; it is
     // adoptable because the host installs VB_DukeAI_SetMapTriggerHook() to
     // receive that tag.  Without the hook it would explode without triggering
@@ -822,6 +837,7 @@ void VB_DukeAI_DamageActor(int spriteNum, int damage, int hitKind, int impactAng
     {
     case VB_DUKEAI_HIT_MELEE:      weaponTile = KNEE; break;
     case VB_DUKEAI_HIT_EXPLOSION:  weaponTile = RPG; break;
+    case VB_DUKEAI_HIT_RADIUS:     weaponTile = RADIUSEXPLOSION; break;
     case VB_DUKEAI_HIT_PROJECTILE: weaponTile = FIRELASER; break;
     default:                       weaponTile = SHOTSPARK1; break;
     }
@@ -979,6 +995,7 @@ void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat,
     {
     case VB_DUKEAI_HIT_MELEE:      weaponTile = KNEE; break;
     case VB_DUKEAI_HIT_EXPLOSION:  weaponTile = RPG; break;
+    case VB_DUKEAI_HIT_RADIUS:     weaponTile = RADIUSEXPLOSION; break;
     case VB_DUKEAI_HIT_PROJECTILE: weaponTile = FIRELASER; break;
     default:                       weaponTile = SHOTSPARK1; break;
     }

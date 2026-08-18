@@ -937,6 +937,7 @@ enum
     VB_DUKE_LIZMANFEEDING = 2160,
     VB_DUKE_LIZMANJUMP = 2165,
     VB_DUKE_ROTATEGUN = 2360,
+    VB_DUKE_DUKECAR = 2491,
     VB_DUKE_GREENSLIME = 2370,
     VB_DUKE_ORGANTIC = 2420,
     VB_DUKE_BOSS1 = 2630,
@@ -3466,6 +3467,11 @@ enum
     VB_DUKEAI_HIT_MELEE,
     VB_DUKEAI_HIT_EXPLOSION,
     VB_DUKEAI_HIT_PROJECTILE,
+    // A blast, as opposed to a rocket landing square on something.  Duke keeps
+    // these apart and its own code depends on the difference: A_RadiusDamage()
+    // leaves RADIUSEXPLOSION in htpicnum, and every dead body in GAME.CON comes
+    // apart on `ifwasweapon RADIUSEXPLOSION` and on nothing else.
+    VB_DUKEAI_HIT_RADIUS,
 };
 
 static int32_t SW_CrossplayDukeAIHitKind(int32_t spriteNum);
@@ -12215,6 +12221,7 @@ enum
     VB_CROSSPLAY_SELFTEST_ACTOR_SETUP,
     VB_CROSSPLAY_SELFTEST_ACTOR_OBSERVE,
     VB_CROSSPLAY_SELFTEST_ACTOR_DAMAGE,
+    VB_CROSSPLAY_SELFTEST_CORPSE,
     VB_CROSSPLAY_SELFTEST_SLIMER_SETUP,
     VB_CROSSPLAY_SELFTEST_SLIMER_OBSERVE,
     VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP,
@@ -12281,6 +12288,12 @@ static int32_t g_swCrossplaySelfTestActorSamples;
 static int32_t g_swCrossplaySelfTestActorsEngaged;
 static int32_t g_swCrossplaySelfTestActorsAttacked;
 static int32_t g_swCrossplaySelfTestActorsAnimated;
+static int32_t g_swCrossplaySelfTestCorpseSprite = -1;
+static int32_t g_swCrossplaySelfTestCorpseTile;
+static int32_t g_swCrossplaySelfTestCorpseReported;
+static int32_t g_swCrossplaySelfTestCorpseDeathTic;
+static int32_t g_swCrossplaySelfTestCorpseBlasted;
+static int32_t g_swCrossplaySelfTestCorpseDukePic;
 static int32_t g_swCrossplaySelfTestActorsSounded;
 static int32_t g_swCrossplaySelfTestToiletStage;
 static int32_t g_swCrossplaySelfTestToiletSprite = -1;
@@ -12339,6 +12352,7 @@ static int32_t g_swCrossplaySelfTestHydrantStandAng;
 static int16_t g_swCrossplaySelfTestHydrantStandSect = -1;
 static int32_t g_swCrossplaySelfTestCrackSprite = -1;
 static int32_t g_swCrossplaySelfTestCrackSpriteB = -1;
+static int32_t g_swCrossplaySelfTestCrackDukePic = -1;
 static int32_t g_swCrossplaySelfTestCrackSpriteC = -1;
 static int32_t g_swCrossplaySelfTestCrackWall = -1;
 static int32_t g_swCrossplaySelfTestCrackStage;
@@ -12445,6 +12459,10 @@ static PLAYERp SW_CrossplaySelfTestPlayer(void)
 // else in the suite needs the player upright to keep running, so the default is
 // to resurrect them every tic.
 static int32_t g_swCrossplaySelfTestAllowDeath;
+static int32_t g_swCrossplaySelfTestDukeCarsAtStart;
+static int32_t g_swCrossplaySelfTestDukeCarSprite = -1;
+static int32_t g_swCrossplaySelfTestDukeCarStartZ;
+static int32_t g_swCrossplaySelfTestDukeCarMaxFall;
 
 static void SW_CrossplaySelfTestKeepPlayerAlive(PLAYERp const pp)
 {
@@ -12547,7 +12565,9 @@ static void SW_CrossplaySelfTestRunActorSetup(PLAYERp const pp)
 {
     if (g_swCrossplaySelfTestActorsTested >= VB_CROSSPLAY_SELFTEST_MAX_ACTORS)
     {
-        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
+        SW_CrossplaySelfTestSetPhase(g_swCrossplaySelfTestCorpseReported
+                                         ? VB_CROSSPLAY_SELFTEST_SLIMER_SETUP
+                                         : VB_CROSSPLAY_SELFTEST_CORPSE);
         return;
     }
 
@@ -12556,7 +12576,9 @@ static void SW_CrossplaySelfTestRunActorSetup(PLAYERp const pp)
     {
         if (g_swCrossplaySelfTestActorsTested == 0)
             SW_CrossplaySelfTestReport(1, "actors-present", "no Duke actors in this map, skipped");
-        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
+        SW_CrossplaySelfTestSetPhase(g_swCrossplaySelfTestCorpseReported
+                                         ? VB_CROSSPLAY_SELFTEST_SLIMER_SETUP
+                                         : VB_CROSSPLAY_SELFTEST_CORPSE);
         return;
     }
 
@@ -12768,11 +12790,107 @@ static void SW_CrossplaySelfTestRunActorDamage(PLAYERp const pp)
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_ACTOR_SETUP);
 }
 
-// A slimer riding the player's face is Duke's own actor code start to finish:
-// it latches on when `somethingonplayer` reads -1, then rewrites its own
-// position from the player's eye every tic and bites for 5-8 points.  The
-// bridge never ran Duke's premap, so that field sat at a zeroed 0 and the latch
-// could never happen -- these three assertions are what caught it.
+// A rocket landing on a Duke corpse has to take it apart, the way Shadow
+// Warrior's own bodies come apart.  The body has to be made first, and made the
+// right way: the actor phase kills with alternating blasts, and a blast gibs an
+// enemy outright rather than leaving anything to blow up -- the slot it frees
+// gets reused by the ammo the enemy dropped, which is what the first version of
+// this check ended up measuring.  So this one kills its own actor with nothing
+// but direct hits, lets the body settle, and only then drops an explosion on it.
+static void SW_CrossplaySelfTestRunCorpse(PLAYERp const pp)
+{
+    int32_t const tic = g_swCrossplaySelfTestPhaseTic;
+
+    if (g_swCrossplaySelfTestCorpseSprite < 0)
+    {
+        for (int32_t sn = 0; sn < MAXSPRITES && g_swCrossplaySelfTestCorpseSprite < 0; ++sn)
+        {
+            if (sprite[sn].statnum == MAXSTATUS || !SW_CrossplayDukeAIOwnsSprite(sn))
+                continue;
+            if (!SW_CrossplayDukeAISpriteIsEnemy(sn) || !VB_DukeAI_SpriteIsAlive(sn))
+                continue;
+
+            g_swCrossplaySelfTestCorpseSprite = sn;
+            g_swCrossplaySelfTestCorpseTile = artCrossplayOriginalMapSpritePicnum(sn);
+        }
+
+        if (g_swCrossplaySelfTestCorpseSprite < 0)
+        {
+            g_swCrossplaySelfTestCorpseReported = 1;
+            SW_CrossplaySelfTestReport(1, "duke-corpse-gibs-to-a-blast",
+                                       "no live Duke enemy left to make a body from, skipped");
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
+            return;
+        }
+    }
+
+    int32_t const spriteNum = g_swCrossplaySelfTestCorpseSprite;
+
+    if (!g_swCrossplaySelfTestCorpseBlasted && sprite[spriteNum].statnum == MAXSTATUS)
+    {
+        g_swCrossplaySelfTestCorpseReported = 1;
+        SW_CrossplaySelfTestReport(1, "duke-corpse-gibs-to-a-blast", "the kill left no body behind, skipped");
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
+        return;
+    }
+
+    // Direct hits only, so what is left is a body rather than a cloud of gibs.
+    if (!g_swCrossplaySelfTestCorpseBlasted && VB_DukeAI_SpriteIsAlive(spriteNum))
+    {
+        if (tic > 400)
+        {
+            g_swCrossplaySelfTestCorpseReported = 1;
+            SW_CrossplaySelfTestReport(1, "duke-corpse-gibs-to-a-blast",
+                                       "could not kill an actor with direct hits, skipped");
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
+            return;
+        }
+
+        vec3_t const hitPos = sprite[spriteNum].xyz;
+        SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, spriteNum, &hitPos);
+        g_swCrossplaySelfTestCorpseDeathTic = tic;
+        return;
+    }
+
+    // Let the body finish its death animation and come to rest.
+    int32_t const settled = g_swCrossplaySelfTestCorpseDeathTic + 240;
+
+    if (tic < settled)
+        return;
+
+    if (tic == settled)
+    {
+        // The body's identity, taken before the blast.  A freed slot does not stay
+        // free: the ammo this enemy dropped on death lands in it within a tic or
+        // two, and testing "is the slot still occupied" reported a corpse that had
+        // in fact been blown apart.
+        g_swCrossplaySelfTestCorpseDukePic = SW_CrossplayDukeAISpriteDukePicnum(spriteNum);
+        g_swCrossplaySelfTestCorpseBlasted = 1;
+
+        vec3_t const hitPos = sprite[spriteNum].xyz;
+        SW_CrossplayExplodeDukeMapSprites(pp->PlayerSprite, hitPos.x, hitPos.y, hitPos.z,
+                                          sprite[spriteNum].sectnum, 4096, 140);
+        return;
+    }
+
+    if (tic < settled + 90)
+        return;
+
+    g_swCrossplaySelfTestCorpseReported = 1;
+
+    int32_t const nowDukePic = SW_CrossplayDukeAISpriteDukePicnum(spriteNum);
+    int32_t const gone = sprite[spriteNum].statnum == MAXSTATUS ||
+                         nowDukePic != g_swCrossplaySelfTestCorpseDukePic;
+
+    char detail[176];
+    Bsnprintf(detail, sizeof(detail), "spr=%d tile=%d dukePic %d -> %d, slotFree=%d, gone=%d", spriteNum,
+              g_swCrossplaySelfTestCorpseTile, g_swCrossplaySelfTestCorpseDukePic, nowDukePic,
+              sprite[spriteNum].statnum == MAXSTATUS, gone);
+    SW_CrossplaySelfTestReport(gone, "duke-corpse-gibs-to-a-blast", detail);
+
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SLIMER_SETUP);
+}
+
 static int32_t g_swCrossplaySelfTestSlimerSprite = -1;
 static int32_t g_swCrossplaySelfTestSlimerScan;
 static int32_t g_swCrossplaySelfTestSlimerDamageBase;
@@ -14585,6 +14703,13 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
         g_swCrossplaySelfTestCrackActivationBase = g_swCrossplayDukeExplosiveActivations;
 
         vec3_t const hitPosB = sprite[g_swCrossplaySelfTestCrackSpriteB].xyz;
+
+        // The crack's identity, taken before the shot.  A freed slot does not stay
+        // free -- Duke's own scrap lands in it within a tic or two -- so asking
+        // whether the slot is still occupied reports a crack that has gone.
+        g_swCrossplaySelfTestCrackDukePic =
+            SW_CrossplayDukeAISpriteDukePicnum(g_swCrossplaySelfTestCrackSpriteB);
+
         int16_t const savedWeapon = u->WeaponNum;
         u->WeaponNum = WPN_ROCKET;
         SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, g_swCrossplaySelfTestCrackSpriteB, &hitPosB);
@@ -14600,10 +14725,13 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
     if (g_swCrossplaySelfTestCrackStage == 2)
     {
         int32_t const fired = g_swCrossplayDukeExplosiveActivations - g_swCrossplaySelfTestCrackActivationBase;
-        int32_t const gone = sprite[g_swCrossplaySelfTestCrackSpriteB].statnum == MAXSTATUS;
+        int32_t const crackPicNow = SW_CrossplayDukeAISpriteDukePicnum(g_swCrossplaySelfTestCrackSpriteB);
+        int32_t const gone = sprite[g_swCrossplaySelfTestCrackSpriteB].statnum == MAXSTATUS ||
+                             crackPicNow != g_swCrossplaySelfTestCrackDukePic;
 
-        Bsnprintf(detail, sizeof(detail), "spr=%d rocket: charges fired=%d crack removed=%d",
-                  g_swCrossplaySelfTestCrackSpriteB, fired, gone);
+        Bsnprintf(detail, sizeof(detail), "spr=%d rocket: charges fired=%d crack removed=%d (dukePic %d -> %d)",
+                  g_swCrossplaySelfTestCrackSpriteB, fired, gone, g_swCrossplaySelfTestCrackDukePic,
+                  crackPicNow);
         SW_CrossplaySelfTestReport(fired > 0, "crack-explosive-opens", detail);
         SW_CrossplaySelfTestReport(gone, "crack-sprite-removed", detail);
 
@@ -15692,6 +15820,47 @@ static void SW_CrossplaySelfTestRunReport(void)
     }
 
     {
+        // Shadow Warrior spawns two ST1 marker sprites at the player's start to
+        // stand in for multiplayer start positions the map does not carry.  Its
+        // own art draws nothing for that tile, so leaving them visible never
+        // showed; on a Duke level the same index is the editor's SECTOREFFECTOR,
+        // which has "ST1" written across it.
+        // Scanned by tile rather than by status list: the markers are spawned into
+        // STAT_MULTI_START/STAT_CO_OP_START but do not stay there, and a
+        // list-based check passed whether they were drawn or not.
+        int32_t visibleStarts = 0;
+        for (int32_t sn = 0; sn < MAXSPRITES; ++sn)
+            if (sprite[sn].statnum != MAXSTATUS && sprite[sn].picnum == ST1 &&
+                !TEST(sprite[sn].cstat, CSTAT_SPRITE_INVISIBLE))
+                ++visibleStarts;
+
+        char startDetail[96];
+        Bsnprintf(startDetail, sizeof(startDetail), "%d drawn start marker(s)", visibleStarts);
+        SW_CrossplaySelfTestReport(visibleStarts == 0, "start-markers-not-drawn", startDetail);
+    }
+
+    {
+        // E1L1 opens with Duke's ship coming down on the roof.  Duke's own actor
+        // code flies it, trails explosions off it and finally blows it up; if the
+        // bridge is not running that code the ship just hangs in the sky.
+        if (g_swCrossplaySelfTestDukeCarsAtStart == 0)
+            SW_CrossplaySelfTestReport(1, "dukecar-crashes", "no Duke car in this map, skipped");
+        else
+        {
+            // Asserted as movement, not as "it is gone".  Two traps: the ship blows
+            // itself up after eight seconds of Duke tics, so a long group has
+            // nothing left to look at, while a short one ends before it has fallen
+            // at all; and an *unadopted* ship reads as gone too, because it never
+            // had a Duke picnum to lose.  The furthest it was seen to fall answers
+            // both, and is zero exactly when Duke is not flying it.
+            char carDetail[128];
+            Bsnprintf(carDetail, sizeof(carDetail), "spr=%d fell %d units at its furthest",
+                      g_swCrossplaySelfTestDukeCarSprite, g_swCrossplaySelfTestDukeCarMaxFall);
+            SW_CrossplaySelfTestReport(g_swCrossplaySelfTestDukeCarMaxFall > 0, "dukecar-crashes", carDetail);
+        }
+    }
+
+    {
         int32_t oldLayerActors = 0;
         for (int32_t sn = 0; sn < MAXSPRITES; ++sn)
         {
@@ -15767,11 +15936,34 @@ static void SW_CrossplaySelfTestTick(void)
     SW_CrossplaySelfTestKeepPlayerAlive(pp);
     ++g_swCrossplaySelfTestPhaseTic;
 
+    // Sampled every tic rather than read at the end: the ship blows itself up
+    // after eight seconds of Duke tics, and by then there is nothing left to
+    // measure -- while the shorter groups finish before it has got that far.
+    {
+        int32_t const car = g_swCrossplaySelfTestDukeCarSprite;
+        if ((unsigned)car < MAXSPRITES && sprite[car].statnum != MAXSTATUS &&
+            SW_CrossplayDukeAISpriteDukePicnum(car) == VB_DUKE_DUKECAR)
+            g_swCrossplaySelfTestDukeCarMaxFall =
+                max(g_swCrossplaySelfTestDukeCarMaxFall, (int32_t)sprite[car].z - g_swCrossplaySelfTestDukeCarStartZ);
+    }
+
     switch (g_swCrossplaySelfTestPhase)
     {
     case VB_CROSSPLAY_SELFTEST_WARMUP:
         if (g_swCrossplaySelfTestPhaseTic >= 60)
         {
+        for (int32_t sn = 0; sn < MAXSPRITES; ++sn)
+                if (sprite[sn].statnum != MAXSTATUS &&
+                    artCrossplayOriginalMapSpritePicnum(sn) == VB_DUKE_DUKECAR)
+                {
+                    if (g_swCrossplaySelfTestDukeCarsAtStart == 0)
+                    {
+                        g_swCrossplaySelfTestDukeCarSprite = sn;
+                        g_swCrossplaySelfTestDukeCarStartZ = sprite[sn].z;
+                    }
+                    ++g_swCrossplaySelfTestDukeCarsAtStart;
+                }
+
         LOG_F(INFO, "CPTEST BEGIN behaviors=%d teleporters=%d trains=%d tripmines=%d",
                   g_swCrossplayDukeSpriteBehaviorCount, g_swCrossplayDukeTeleporterCount,
                   g_swCrossplayDukeTrainCount, g_swCrossplayDukeTripmineCount);
@@ -15800,6 +15992,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_ACTOR_SETUP: SW_CrossplaySelfTestRunActorSetup(pp); break;
     case VB_CROSSPLAY_SELFTEST_ACTOR_OBSERVE: SW_CrossplaySelfTestRunActorObserve(); break;
     case VB_CROSSPLAY_SELFTEST_ACTOR_DAMAGE: SW_CrossplaySelfTestRunActorDamage(pp); break;
+    case VB_CROSSPLAY_SELFTEST_CORPSE: SW_CrossplaySelfTestRunCorpse(pp); break;
     case VB_CROSSPLAY_SELFTEST_SLIMER_SETUP: SW_CrossplaySelfTestRunSlimerSetup(pp); break;
     case VB_CROSSPLAY_SELFTEST_SLIMER_OBSERVE: SW_CrossplaySelfTestRunSlimerObserve(pp); break;
     case VB_CROSSPLAY_SELFTEST_TELEPORT_SETUP: SW_CrossplaySelfTestRunTeleportSetup(pp); break;
@@ -17428,7 +17621,11 @@ static int32_t SW_CrossplayExplodeDukeMapSpritesInternal(int blastSprite, int32_
         if (damage <= 0)
             continue;
 
-        VB_DukeAI_DamageActor(spriteNum, damage, VB_DUKEAI_HIT_EXPLOSION,
+        // Told as a blast rather than as a rocket impact, because that is what it
+        // is and because Duke's actors read the difference: a body only comes
+        // apart for RADIUSEXPLOSION, so telling Duke every explosion was an RPG
+        // meant a rocket landing on a corpse left it lying there.
+        VB_DukeAI_DamageActor(spriteNum, damage, VB_DUKEAI_HIT_RADIUS,
                               getangle(sp->x - x, sp->y - y), blastSprite);
         ++damaged;
     }

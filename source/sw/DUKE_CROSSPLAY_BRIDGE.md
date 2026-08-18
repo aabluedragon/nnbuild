@@ -1464,6 +1464,63 @@ run's result should not be read too closely.
   a second slimer to do it, since the first is shot off the player's face by
   `slimer-dies-when-shot`.  Before the fix it reported `health 0, PF_DEAD=0`.
 
+- **A rocket has to take a body apart.**  Duke keeps a direct hit and a blast
+  apart, and its own code depends on the difference: a rocket landing square on
+  something leaves `RPG` in `htpicnum`, while `A_RadiusDamage()` leaves
+  `RADIUSEXPLOSION`.  Every dead body in `GAME.CON` comes apart on
+  `ifhitweapon; ifwasweapon RADIUSEXPLOSION` and on nothing else -- twenty
+  occurrences, from `handle_dead_dukes` to `lizdyingstate`.  The bridge told Duke
+  that every explosion was an RPG, so a rocket landing on a corpse left it lying
+  there.  The blast path now says what it is.
+
+  Covered by `duke-corpse-gibs-to-a-blast`.  Getting that check to mean anything
+  took three goes, and both wrong versions passed:
+
+  - It first reused the actor-damage phase's victim.  That phase kills with
+    alternating blasts, and a blast gibs an enemy outright -- there was never a
+    body, and the freed slot had already been taken by the ammo the enemy
+    dropped.  The check was reading a pickup.
+  - It then asked whether the slot was still occupied.  A freed slot does not
+    stay free for long, for the same reason, so a corpse that had genuinely been
+    blown apart still read as present.  The identity of the body is now recorded
+    before the blast and compared afterwards.
+
+  The phase makes its own body: it takes a live Duke enemy, kills it with direct
+  hits only so something is left, waits for the death animation to settle, and
+  only then drops an explosion on it.  With the weapon class put back to `RPG`
+  it fails on E1L1 and E2L5 with `dukePic 1680 -> 1680, gone=0`.
+
+- **E1L1's rooftop ship has to come down.**  The level opens with Duke's car
+  falling out of the sky onto the roof.  `A_Spawn()` gives a `DUKECAR` its zvel
+  and `G_MoveActors()` flies it down, trails explosions off it, and finally blows
+  it up and shakes the level -- all of it Duke's own code, none of which the
+  bridge was running, because `DUKECAR` was not on the adoptable list.  The ship
+  simply hung there.  The earthquake it ends on already had a route out through
+  `VB_DukeAI_TakeEarthquake()`.  Covered by `dukecar-crashes`, which asserts movement rather than "the ship is
+  gone".  Two traps sit either side of that: the ship blows itself up after eight
+  seconds of Duke tics, so the longer test groups have nothing left to look at,
+  while the short ones end before it has fallen at all -- and an *unadopted* ship
+  reads as gone too, because it never had a Duke picnum to lose, which is how the
+  first version of the check passed with the fix disabled.  The furthest fall
+  seen, sampled every tic, answers all three.
+
+  Adopting it also exposed a wrong assertion elsewhere: `crack-sprite-removed`
+  asked whether the crack's *sprite slot* was still occupied, and the 32 scrap
+  sprites the ship throws off when it explodes now land in that slot within a tic
+  or two.  The crack had been removed correctly the whole time.  It records the
+  crack's identity before the shot and compares afterwards, like the corpse check
+  above.
+
+- **The "ST1" hanging in the sky.**  Not a Duke sprite at all.
+  `InitMultiPlayerInfo()` spawns two `ST1` marker sprites at the player's start
+  to stand in for multiplayer start positions a map does not carry, and never
+  hides them -- Shadow Warrior's own art draws nothing for that tile, so it has
+  always got away with it.  On a Duke level the same index resolves into Duke's
+  art, where the sprite is the editor's `SECTOREFFECTOR`, drawn with "ST1"
+  written across it.  Covered by `start-markers-not-drawn`, which scans by tile:
+  the first version walked the `STAT_MULTI_START`/`STAT_CO_OP_START` lists and
+  passed either way, because the markers do not stay in those lists.
+
 Still open:
 
 - Duke map palette/art mixing is only checked by eye.
