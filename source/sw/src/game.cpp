@@ -11135,7 +11135,10 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
             bridge.wall2Origin = wall[closestWall2].xy;
             bridge.currentDistance = 0;
             bridge.targetDistance = 0;
-            bridge.totalDistance = max(64, speed);
+            // Duke steps by 8 until `(t3>>6) >= (yvel>>6)`, then puts the last
+            // step back -- so the bridge comes to rest eight units short of the
+            // sector speed rounded down to a multiple of 64.
+            bridge.totalDistance = max(8, (speed & ~63) - 8);
             // Duke extends a bridge by 8 units on each of its own tics.
             bridge.step = SW_CrossplayDukeRateToSwTic(8);
             bridge.active = 0;
@@ -14031,9 +14034,9 @@ static void SW_CrossplaySelfTestRunExplosives(PLAYERp const pp)
         return;
     }
 
-    char detail[128];
-    Bsnprintf(detail, sizeof(detail), "before=%d remaining=%d invisibleSources=%d sectorExplosives=%d",
-              g_swCrossplaySelfTestExplosivesBefore, tested, invisibleTested,
+    char detail[160];
+    Bsnprintf(detail, sizeof(detail), "before=%d remaining=%d invisibleSources=%d explosiveSectors=%d activations=%d",
+              g_swCrossplaySelfTestExplosivesBefore, tested, invisibleTested, g_swCrossplayDukeExplosiveCount,
               g_swCrossplayDukeExplosiveActivations);
     UNREFERENCED_PARAMETER(detonated);
 
@@ -14042,7 +14045,16 @@ static void SW_CrossplaySelfTestRunExplosives(PLAYERp const pp)
     else
     {
         SW_CrossplaySelfTestReport(tested < g_swCrossplaySelfTestExplosivesBefore, "explosive-detonates", detail);
-        SW_CrossplaySelfTestReport(g_swCrossplayDukeExplosiveActivations > 0, "blast-triggers-map-explosives", detail);
+
+        // Only a map that has SE 13 sectors can show a blast setting one off.
+        // E2L5 has charges but not one of those, and asserting it anyway made
+        // the check fail for something the level does not contain.
+        if (g_swCrossplayDukeExplosiveCount == 0)
+            SW_CrossplaySelfTestReport(1, "blast-triggers-map-explosives",
+                                       "no Duke explosive sectors in this map, skipped");
+        else
+            SW_CrossplaySelfTestReport(g_swCrossplayDukeExplosiveActivations > 0, "blast-triggers-map-explosives",
+                                       detail);
     }
 
     // An adopted Duke actor that drives map machinery must reach the host's

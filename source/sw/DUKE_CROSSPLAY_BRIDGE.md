@@ -1077,14 +1077,25 @@ Fixed since:
   explosives and every door had been silently skipped in the group sweep since
   the hydrant phase was added.
 
-  Measured on E1L1 against Duke's own runtime: 17 of the level's 25 door sectors
-  now settle in the same place within 0.02s of the time Duke takes, where before
-  the change none of the ones that moved vertically did.  Still divergent, and
-  not chased down: the `ST_27` extend-o-bridges (sectors 1/2/21/22/147/148),
-  where one press extends all six halves at once in the bridge while Duke
-  staggers them.  Their 8-units-a-tic step has had the same rate conversion
-  applied.  Note also that the Duke-side tracer segfaults its own runtime after a
-  few of those sectors, so that is where any future comparison has to start.
+  The `ST_27` extend-o-bridges took one more pass.  They looked like a grouping
+  fault -- Duke appearing to extend one walkway where the bridge extended all six
+  -- and that reading was wrong: it was an artefact of a tracer that operated one
+  sector per time slot, so by the time a given sector's slot came round its group
+  had already been run and finished in an earlier one.  Traced properly, with a
+  single press and all six sectors logged together, both runtimes extend all six.
+  What was left was the stopping point: Duke steps by 8 until `(t3>>6) >=
+  (yvel>>6)` and then puts the last step back, so a bridge comes to rest eight
+  units short of its sector speed rounded down to a multiple of 64.
+
+  Measured on E1L1 against Duke's own runtime: every door, lift, platform and
+  bridge in the level now settles in the same place, within 0.02s of the time
+  Duke takes.  Before the change, none of the ones that moved vertically did.
+
+  Two things to know before building another of these tracers.  Its Duke half
+  segfaults Duke's own runtime if it is left to operate sector after sector over
+  a long run -- one press per run is what is known to be safe.  And a
+  slot-per-sector design cannot be trusted for anything that moves in groups, for
+  the reason above; log every sector of interest on every tic instead.
 
 - **Only an explosion opens a cracked wall, and opening it must take the crack
   with it.**  A thrown shuriken blew Duke's cracked walls open, and once open the
