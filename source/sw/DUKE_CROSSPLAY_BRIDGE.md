@@ -788,6 +788,65 @@ Fixed since:
   reports the first sound as playing forever.  A voice node carries the digi
   number it is playing, so matching on that is exact.
 
+- **Keycards and card readers.**  A Duke `ACCESSCARD` was already converted into
+  the matching Shadow Warrior card at load, so the player could pick one up, but
+  the reader it opens ignored it entirely: `ACCESSSWITCH`/`ACCESSSWITCH2` were
+  treated as ordinary switches, so pressing use on one opened the door whether or
+  not the player was carrying anything, and carrying the card was worth nothing.
+
+  Duke's rule is in `checkhitswitch()` and is short: the reader's *palette* names
+  the card -- 0 blue, 21 red, 23 yellow -- and without it the player gets a quote
+  (`BLUE/RED/YELLOW ACCESS CARD REQUIRED`) and nothing else.  With it, the reader
+  operates its lotag, `P_ConsumeKeycard()` takes the card back out of the HUD,
+  and the sprite advances to its lit frame -- which Duke's switch table does not
+  list, so a used reader is inert from then on and cannot be swiped twice.
+
+  All of that now happens on the bridge's side, keyed off the same palette.  The
+  card the player is holding is read out of SW's own `HasKey[]` slots, because
+  that is where the pickup put it: SW files cards as red 0, blue 1, green 2,
+  yellow 3, which is what its HUD and its own locked doors read.  Three smaller
+  faults came out with it:
+
+  - The bridge fell back to operating a switch's *hitag* as a second map tag when
+    the lotag opened nothing.  Duke never does: `P_ActivateSwitch()` plays the
+    hitag as a **sound**, through `S_SoundIsValid()`.  Every stock card reader
+    carries 212 (`MONITOR_ACTIVE`) there, so the fallback fired whatever else in
+    the level happened to wear tag 212.  It is played as a sound now -- the beep
+    a reader makes -- and never operated.
+  - A refused reader fell through to the operate loop's plain "sprite has a
+    lotag" search, which opened the door anyway.  A switch sprite is the last
+    word on its own tag now.
+  - The use ray only ever walked *down* from the player's eyes, the way Duke's
+    does, but SW's eyes are not where Duke's are.  E1L1's only card reader sits
+    above the ray entirely and could not be pressed at all.  The ray is walked up
+    as well as down now.
+  - On some levels there was no card to find at all.  The bridge applied Duke's
+    pickup skill filter -- `lotag > player_skill`, delete -- to everything it
+    recognised as a pickup, but Duke runs that check *above* `case ACCESSCARD` in
+    `A_Spawn()`, so a card never sees it, and mappers use a card's lotag for
+    other things: E3L6 tags each of its two cards with the door tag it opens
+    (6166 and 6666).  Read as a skill both are above every difficulty, so both
+    cards were deleted at load and the level could not be finished.  Keycards are
+    exempt from the skill lotag now.
+
+  Not modelled: Duke's twelve-tic pause with the hand-and-card drawn on the HUD
+  before the door moves.  The reader answers immediately here.
+
+  `VB_CP_SELFTEST=world` covers it as `card-reader-reachable`,
+  `card-reader-refuses-without-card`, `card-reader-stays-dark`,
+  `card-pickup-grants-key`, `card-reader-opens-with-card`,
+  `card-reader-consumes-card`, `card-reader-lights-up`,
+  `card-reader-is-one-shot` and `cards-survive-load` -- the last counts keycards
+  the load pass deleted and asserts it is zero, since a level whose card is gone
+  cannot be finished and nothing else would notice.  The test presses through `neartag()` and
+  `SW_CrossplayOperateDukeMapEffectors()`, and picks the card up by walking onto
+  it rather than by setting the flag, so both halves are the real path.  A level
+  usually has several readers in places the harness cannot stand in front of, so
+  they are tried in turn until one answers `neartag()`.  The card sprite is
+  matched on its `USER` record's `ID` rather than its picnum: a Duke level loads
+  Duke's art, so SW's own item tiles are relocated into the generated range and
+  the picnum no longer reads as `RED_CARD`.
+
 - **A rocket must explode on a mirror, not slide along it.**  Fired at a Duke
   mirror the rocket skated across the glass and kept going.  Two faults, one of
   them general.
@@ -1082,6 +1141,7 @@ reproductions passed while the user's own game failed.
 | `VB_CP_FIRE_RESPAWNS=1` | fire every captured map trigger, to exercise respawned actors |
 | `VB_CP_ADOPT_DEBUG=1` | log tiles adopted via CON actor code rather than enemy flags |
 | `VB_CP_TEST_SWITCH=1` | log switch activation and the resulting frame |
+| `VB_CP_KEY_DEBUG=1` | log what the use key found at each probe height: sprite, distance, behavior flags, source tile, switch state, lotag |
 | `VB_CP_BREAK_DEBUG=1` | log each broken Duke prop's tile and break sound |
 | `VB_CP_PAL_DEBUG=1` | log every (tile, Duke pal) art resolution and which path answered it |
 | `VB_CP_SPRITE_DEBUG=1` | after each Duke tic, log `Numsprites`, linked sprites and free-chain length |

@@ -1494,6 +1494,52 @@ static int32_t SW_CrossplayIsDukeSwitchSprite(int16_t sourcePicnum)
     return SW_CrossplayDukeSwitchBaseTile(sourcePicnum, NULL) >= 0;
 }
 
+// Duke's card readers.  These are ordinary switches in every respect but one:
+// their palette names the card that opens them -- 0 blue, 21 red, 23 yellow --
+// and Duke refuses them outright until the player is carrying it, then spends
+// it.  Both frames answer, because a map may place a reader already used.
+static int32_t SW_CrossplayIsDukeAccessSwitch(int16_t sourcePicnum)
+{
+    return sourcePicnum == VB_DUKE_ACCESSSWITCH || sourcePicnum == VB_DUKE_ACCESSSWITCH + 1 ||
+           sourcePicnum == VB_DUKE_ACCESSSWITCH2 || sourcePicnum == VB_DUKE_ACCESSSWITCH2 + 1;
+}
+
+// The card the player is carrying lives in SW's own key slots, because that is
+// where the pickup put it: a Duke ACCESSCARD is converted into the matching SW
+// card sprite at map load, and SW's pickup code files those as red 0, blue 1,
+// green 2, yellow 3.  Reading the same slots here keeps the reader, the HUD and
+// SW's own locked doors all talking about one card.
+static int32_t SW_CrossplayDukeCardKeyIndex(int16_t pal)
+{
+    switch (pal)
+    {
+    case 21:
+        return 0;   // red
+    case 11:
+        return 2;   // green -- not a Duke card, but SW's own maps place one
+    case 23:
+        return 3;   // yellow
+    default:
+        return 1;   // blue
+    }
+}
+
+// Duke's quotes 70-72, verbatim from USER.CON.
+static char const *SW_CrossplayDukeCardRequiredMessage(int16_t pal)
+{
+    switch (pal)
+    {
+    case 21:
+        return "RED ACCESS CARD REQUIRED";
+    case 11:
+        return "GREEN ACCESS CARD REQUIRED";
+    case 23:
+        return "YELLOW ACCESS CARD REQUIRED";
+    default:
+        return "BLUE ACCESS CARD REQUIRED";
+    }
+}
+
 static int32_t SW_CrossplayDukeTileMatchesRuntimePicnum(int16_t runtimePicnum, int16_t dukePicnum)
 {
     return runtimePicnum == dukePicnum || runtimePicnum == artCrossplayRemapMapTile(dukePicnum);
@@ -2242,10 +2288,26 @@ static int32_t SW_CrossplayDukeCurrentSkill(void)
     return clamp<int32_t>(Skill, 0, 3);
 }
 
+// Keycards taken off the map before the player could reach them.  A level whose
+// card is gone cannot be finished, so this is asserted to be zero rather than
+// merely logged.
+static int32_t g_swCrossplayDukeCardsRemovedAtLoad;
+
+static int32_t SW_CrossplayDukeCardsRemovedAtLoad(void) { return g_swCrossplayDukeCardsRemovedAtLoad; }
+
 static int32_t SW_CrossplayDukeSpriteUsesSkillLotag(int16_t sourcePicnum)
 {
     if (SW_CrossplayIsDukeActorSprite(sourcePicnum))
         return 1;
+
+    // ...but not a keycard.  Duke's A_Spawn() runs the pickup skill check just
+    // *above* `case ACCESSCARD`, so a card never sees it, and mappers use the
+    // card's lotag for other things: E3L6 tags each of its two cards with the
+    // door tag they open (6166, 6666).  Read as a skill, both are above every
+    // difficulty, so both cards were deleted at load and the level could not be
+    // finished.
+    if (sourcePicnum == VB_DUKE_ACCESSCARD)
+        return 0;
 
     int32_t domain = ART_CROSSPLAY_DOMAIN_ITEMS;
     return SW_CrossplayDukePickupToShadowWarrior(sourcePicnum, 0, &domain) >= 0;
@@ -2397,6 +2459,10 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
 
         // Duke already owns its actors, including their skill filtering and
         // their size; SW's preparation must not convert, hide or cull them.
+        if (Bgetenv("VB_CP_KEY_DEBUG") != NULL && artCrossplayOriginalMapSpritePicnum(i) == VB_DUKE_ACCESSCARD)
+            LOG_F(INFO, "CPKEY prepare card spr=%d pal=%d statnum=%d cstat=%d owned=%d", i, sprite[i].pal,
+                  sprite[i].statnum, sprite[i].cstat, SW_CrossplayDukeAIOwnsSprite(i));
+
         if (SW_CrossplayDukeAIOwnsSprite(i))
             continue;
 
@@ -2407,6 +2473,7 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
 
             if (SW_CrossplayDukeSpriteSuppressedBySkill(i, originalPicnum))
             {
+                g_swCrossplayDukeCardsRemovedAtLoad += originalPicnum == VB_DUKE_ACCESSCARD;
                 SW_CrossplayClearDukeSpriteBehavior(i);
                 SW_CrossplayDeleteDukeSprite(i);
                 ++skillFiltered;
@@ -2415,6 +2482,7 @@ static void SW_CrossplayPrepareForeignMapSprites(void)
 
             if (SW_CrossplaySpriteIsHiddenDukeControlSprite(i))
             {
+                g_swCrossplayDukeCardsRemovedAtLoad += originalPicnum == VB_DUKE_ACCESSCARD;
                 SW_CrossplayClearDukeSpriteBehavior(i);
                 SW_CrossplayDeleteDukeSprite(i);
                 ++removed;
@@ -6787,6 +6855,60 @@ static int32_t SW_CrossplayQueueDukeObjectDamage(int32_t spriteNum, int32_t targ
     return 1;
 }
 
+static int32_t g_swCrossplayDukeCardUses;
+static int32_t g_swCrossplayDukeCardDenials;
+
+static int32_t SW_CrossplayDukeCardUses(void) { return g_swCrossplayDukeCardUses; }
+static int32_t SW_CrossplayDukeCardDenials(void) { return g_swCrossplayDukeCardDenials; }
+
+static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum);
+
+// Duke's card reader, up to the point where it operates its tag: it takes the
+// card its palette names and nothing else, says so when the player has not got
+// it, and keeps the card.  Returns non-zero when the reader should go on and
+// operate.
+static int32_t SW_CrossplayTakeDukeAccessCard(PLAYERp pp, int16_t pal)
+{
+    if (pp == NULL)
+        return 0;
+
+    int32_t const keyIndex = SW_CrossplayDukeCardKeyIndex(pal);
+
+    if (!pp->HasKey[keyIndex])
+    {
+        ++g_swCrossplayDukeCardDenials;
+        if (pp == Player + myconnectindex)
+            PutStringInfo(pp, SW_CrossplayDukeCardRequiredMessage(pal));
+        return 0;
+    }
+
+    // Duke keeps the card: P_ConsumeKeycard() clears the bit and the icon goes
+    // out of the HUD.
+    pp->HasKey[keyIndex] = FALSE;
+    PlayerUpdateKeys(pp);
+    ++g_swCrossplayDukeCardUses;
+    return 1;
+}
+
+static int32_t SW_CrossplayUseDukeAccessSwitch(PLAYERp pp, int32_t spriteNum,
+                                               sw_crossplay_duke_sprite_behavior_t const &behavior)
+{
+    // Already swiped.  Duke advances a used reader to its lit frame and then no
+    // longer recognises the tile at all, so the card is spent exactly once.
+    if (behavior.switchState != 0)
+        return 0;
+
+    if (!SW_CrossplayTakeDukeAccessCard(pp, behavior.displayPal))
+        return 0;
+
+    // The reader beeps.  Duke keeps that sound in the switch's hitag rather than
+    // hardcoding it; every stock card reader carries MONITOR_ACTIVE there.
+    if ((unsigned)spriteNum < MAXSPRITES && sprite[spriteNum].hitag != 0)
+        SW_CrossplayDukeAIPlaySound(sprite[spriteNum].hitag, spriteNum);
+
+    return 1;
+}
+
 // hitKindOverride is the weapon class to tell Duke about, or -1 to read it off
 // the attacking sprite.  A blast has to say so explicitly: Duke's props answer
 // to the weapon that hit them (a tree or a box only gives way to an explosion or
@@ -6852,12 +6974,32 @@ static int SW_CrossplayDamageDukeMapSpriteInternal(int spriteNum, int targetSpri
     if (behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH)
     {
         PLAYERp const pp = SW_CrossplayPlayerForDukeSpriteOperator(spriteNum);
+        int32_t const accessSwitch = SW_CrossplayIsDukeAccessSwitch(behavior.sourcePicnum);
         int32_t activated = 0;
 
+        // A card reader answers to the card, not to whatever pressed it.  An
+        // untagged one opens nothing, and Duke leaves those alone before it ever
+        // looks at the card, so it does not eat one either.
+        if (accessSwitch && (target->lotag == 0 || !SW_CrossplayUseDukeAccessSwitch(pp, targetSpriteNum, behavior)))
+            return 0;
+
+        // Only the lotag.  Duke keeps a switch's *sound* in its hitag -- see
+        // P_ActivateSwitch(), which plays it through S_SoundIsValid() -- and
+        // operating that as a second map tag fired whatever else in the level
+        // wore the number, which for every stock card reader is 212.
         if (target->lotag != 0)
             activated |= SW_CrossplayOperateDukeTag(target->lotag, pp);
-        if (!activated && target->hitag != 0)
-            activated |= SW_CrossplayOperateDukeTag(target->hitag, pp);
+
+        if (accessSwitch)
+        {
+            // Duke lights the reader whether or not the tag moved anything, and
+            // reads nothing back from the lit frame, so this is what stops the
+            // player spending a second card on a reader already used.
+            if (behavior.switchState == 0)
+                SW_CrossplayToggleDukeSwitchSprite(targetSpriteNum);
+
+            return 1;
+        }
 
         if (!activated)
         {
@@ -11341,21 +11483,26 @@ static int32_t SW_CrossplayUseDukeProp(PLAYERp pp, int32_t spriteNum)
     }
 }
 
+// Duke walks its use ray down from the player's eyes, because that is where
+// Duke's eyes are relative to the props its mappers hung on walls.  SW's are not
+// in the same place, so a reader or a switch placed at a Duke height can sit
+// above the ray entirely -- E1L1's only card reader does -- and the ray has to
+// be walked up as well as down to find it.
+static const int32_t g_swCrossplayDukeUseProbeZ[] = { 0, Z(16), Z(32), -Z(16), -Z(32) };
+
 int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp)
 {
     if (pp == NULL || !SW_CrossplayDukeMapBridgeActive())
         return 0;
 
-    static const int32_t zOffsets[] = { 0, Z(16), Z(32) };
-
-    for (unsigned i = 0; i < ARRAY_SIZE(zOffsets); ++i)
+    for (unsigned i = 0; i < ARRAY_SIZE(g_swCrossplayDukeUseProbeZ); ++i)
     {
         int16_t nearSector = -1;
         int16_t nearWall = -1;
         int16_t nearSprite = -1;
         int32_t nearDist = 0;
 
-        neartag(pp->posx, pp->posy, pp->posz + zOffsets[i], pp->cursectnum, fix16_to_int(pp->q16ang),
+        neartag(pp->posx, pp->posy, pp->posz + g_swCrossplayDukeUseProbeZ[i], pp->cursectnum, fix16_to_int(pp->q16ang),
                 &nearSector, &nearWall, &nearSprite, &nearDist, 1280, NTAG_SEARCH_LO, NULL);
 
         if (nearSprite >= 0 && nearDist < 1792)
@@ -11369,9 +11516,21 @@ int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp)
                 return SW_CrossplayCycleDukeCameras(pp, nearSprite);
 
             sw_crossplay_duke_sprite_behavior_t const &behavior = g_swCrossplayDukeSpriteBehaviors[nearSprite];
-            if ((behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH) &&
-                SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, nearSprite, &sprite[nearSprite].xyz))
-                return 1;
+            if (Bgetenv("VB_CP_KEY_DEBUG") != NULL)
+                LOG_F(INFO, "CPKEY use z=%u spr=%d dist=%d flags=%04x src=%d state=%d lotag=%d owned=%d", i,
+                      nearSprite, nearDist, behavior.flags, behavior.sourcePicnum, behavior.switchState,
+                      sprite[nearSprite].lotag, SW_CrossplayDukeAIOwnsSprite(nearSprite));
+            if (behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH)
+            {
+                if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, nearSprite, &sprite[nearSprite].xyz))
+                    return 1;
+
+                // A card reader that turned the player away is the last word on
+                // its own tag.  Falling through to the tag search below opened
+                // the door anyway, which is the whole of what the reader is for.
+                if (SW_CrossplayIsDukeAccessSwitch(behavior.sourcePicnum))
+                    return 0;
+            }
 
             // Props Duke answers with something of its own rather than a tag.
             // This has to come first: the lotag these carry is the one A_Spawn()
@@ -11384,9 +11543,34 @@ int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp)
                 return 1;
         }
 
-        if (nearWall >= 0 && nearDist < 1792 && wall[nearWall].lotag != 0 &&
-            SW_CrossplayOperateDukeTag(wall[nearWall].lotag, pp))
-            return 1;
+        if (nearWall >= 0 && nearDist < 1792 && wall[nearWall].lotag != 0)
+        {
+            // Duke's card readers can be built into a wall as well as hung on a
+            // sprite, and the wall form is gated by exactly the same rule.  It
+            // has no behavior record to remember it by, so the lit frame Duke
+            // leaves behind is read back off the wall itself.
+            int16_t const wallSwitch = artCrossplayOriginalMapWallPicnum(nearWall);
+
+            if (SW_CrossplayIsDukeAccessSwitch(wallSwitch))
+            {
+                int16_t const base = (wallSwitch == VB_DUKE_ACCESSSWITCH2 || wallSwitch == VB_DUKE_ACCESSSWITCH2 + 1)
+                                     ? VB_DUKE_ACCESSSWITCH2 : VB_DUKE_ACCESSSWITCH;
+
+                if (wall[nearWall].picnum == SW_CrossplayRemapDukeTileForRuntime(base + 1) ||
+                    !SW_CrossplayTakeDukeAccessCard(pp, wall[nearWall].pal))
+                    return 0;
+
+                if (wall[nearWall].hitag != 0)
+                    SW_CrossplayDukeAIPlaySound(wall[nearWall].hitag, -1);
+
+                SW_CrossplayOperateDukeTag(wall[nearWall].lotag, pp);
+                SW_CrossplaySetDukeWallPicnum(nearWall, (int16_t)(base + 1));
+                return 1;
+            }
+
+            if (SW_CrossplayOperateDukeTag(wall[nearWall].lotag, pp))
+                return 1;
+        }
 
         if (nearSector >= 0 && nearDist < 1792 && (sector[nearSector].lotag & VB_DUKE_SECTOR_LOCKED) == 0)
         {
@@ -11428,6 +11612,7 @@ enum
     VB_CROSSPLAY_SELFTEST_CAMERAS,
     VB_CROSSPLAY_SELFTEST_MIRRORS,
     VB_CROSSPLAY_SELFTEST_TOILET,
+    VB_CROSSPLAY_SELFTEST_KEYCARDS,
     VB_CROSSPLAY_SELFTEST_CRACKS,
     VB_CROSSPLAY_SELFTEST_HYDRANT,
     VB_CROSSPLAY_SELFTEST_BREAKABLES,
@@ -11490,6 +11675,19 @@ static int32_t g_swCrossplaySelfTestToiletUrinateBase;
 static int32_t g_swCrossplaySelfTestToiletReliefBase;
 static int32_t g_swCrossplaySelfTestToiletSecondHeal;
 static int32_t g_swCrossplaySelfTestToiletSecondUse;
+static int32_t g_swCrossplaySelfTestCardStage;
+static int32_t g_swCrossplaySelfTestCardSwitch = -1;
+static int32_t g_swCrossplaySelfTestCardSprite = -1;
+static int32_t g_swCrossplaySelfTestCardKeyIndex;
+static int16_t g_swCrossplaySelfTestCardSwitchPic;
+static int32_t g_swCrossplaySelfTestCardStandX, g_swCrossplaySelfTestCardStandY;
+static int32_t g_swCrossplaySelfTestCardStandAng;
+static int16_t g_swCrossplaySelfTestCardStandSect = -1;
+static int32_t g_swCrossplaySelfTestCardUseBase, g_swCrossplaySelfTestCardDenyBase;
+static int32_t g_swCrossplaySelfTestCardRefusedUse;
+static int32_t g_swCrossplaySelfTestCardReaders;
+static int32_t g_swCrossplaySelfTestCardsInMap;
+static int32_t g_swCrossplaySelfTestCardHadKey;
 static int32_t g_swCrossplaySelfTestMirrorStage;
 static int32_t g_swCrossplaySelfTestMirrorWall = -1;
 static int32_t g_swCrossplaySelfTestMirrorBrokeBase;
@@ -12145,7 +12343,7 @@ static void SW_CrossplaySelfTestRunToilet(PLAYERp const pp)
 {
     if (pp == NULL || User[pp->PlayerSprite] == NULL)
     {
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
         return;
     }
 
@@ -12164,7 +12362,7 @@ static void SW_CrossplaySelfTestRunToilet(PLAYERp const pp)
         if (g_swCrossplaySelfTestToiletSprite < 0)
         {
             SW_CrossplaySelfTestReport(1, "toilet-present", "no Duke toilet in this map, skipped");
-            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
             return;
         }
     }
@@ -12301,6 +12499,334 @@ static void SW_CrossplaySelfTestRunToilet(PLAYERp const pp)
     // here is that the press was answered and that it handed out nothing.
     SW_CrossplaySelfTestReport(g_swCrossplaySelfTestToiletSecondUse != 0, "toilet-cooldown-answers", detail);
     SW_CrossplaySelfTestReport(healedAgain == 0 && urinatedAgain == 0, "toilet-cooldown-no-repeat", detail);
+
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
+}
+
+// Looks for a floor spot in front of a Duke sprite from which neartag() -- the
+// same search the use key runs -- actually returns it, and records it.  Wall
+// props are often mounted over a ledge or in an alcove whose own sector the
+// player cannot stand in, so the sectors next door are searched too.
+static int32_t SW_CrossplaySelfTestFindCardReaderStand(PLAYERp const pp, int32_t spriteNum)
+{
+    SPRITEp const sp = &sprite[spriteNum];
+    if ((unsigned)sp->sectnum >= (unsigned)numsectors)
+        return 0;
+
+    int16_t candidates[24];
+    int32_t candidateCount = 0;
+
+    candidates[candidateCount++] = sp->sectnum;
+    for (int32_t w = sector[sp->sectnum].wallptr;
+         w < sector[sp->sectnum].wallptr + sector[sp->sectnum].wallnum &&
+         candidateCount < (int32_t)ARRAY_SIZE(candidates); ++w)
+    {
+        int16_t const next = wall[w].nextsector;
+        if ((unsigned)next >= (unsigned)numsectors)
+            continue;
+
+        int32_t seen = 0;
+        for (int32_t c = 0; c < candidateCount; ++c)
+            seen |= candidates[c] == next;
+
+        if (!seen)
+            candidates[candidateCount++] = next;
+    }
+
+    for (int32_t c = 0; c < candidateCount; ++c)
+    {
+        for (int32_t radius = 256; radius <= 1280; radius += 128)
+        {
+            for (int32_t step = 0; step < 32; ++step)
+            {
+                int32_t const probeAng = NORM_ANGLE(step * 64);
+                int32_t const tryX = sp->x + ((sintable[(probeAng + 512) & 2047] * radius) >> 14);
+                int32_t const tryY = sp->y + ((sintable[probeAng & 2047] * radius) >> 14);
+                int16_t trySect = candidates[c];
+
+                updatesector(tryX, tryY, &trySect);
+                if (trySect != candidates[c])
+                    continue;
+
+                if (!SW_CrossplaySelfTestWarpPlayerZ(pp, tryX, tryY, INT32_MIN, trySect))
+                    continue;
+
+                int32_t const faceAng = NORM_ANGLE(getangle(sp->x - tryX, sp->y - tryY));
+                pp->q16ang = fix16_from_int(faceAng);
+
+                // Walk the use key's own ray, in its own order: it acts on the
+                // first thing it finds, so a spot where something else answers
+                // first is not a spot the reader can be pressed from, and a test
+                // standing there would measure whatever that other thing did.
+                for (unsigned zi = 0; zi < ARRAY_SIZE(g_swCrossplayDukeUseProbeZ); ++zi)
+                {
+                    int16_t nearSector = -1, nearWall = -1, nearSprite = -1;
+                    int32_t nearDist = 0;
+
+                    neartag(pp->posx, pp->posy, pp->posz + g_swCrossplayDukeUseProbeZ[zi], pp->cursectnum,
+                            faceAng, &nearSector, &nearWall, &nearSprite, &nearDist, 1280, NTAG_SEARCH_LO, NULL);
+
+                    if (nearSprite >= 0 && nearDist < 1792)
+                    {
+                        if (nearSprite != spriteNum)
+                            break;
+
+                        g_swCrossplaySelfTestCardStandX = tryX;
+                        g_swCrossplaySelfTestCardStandY = tryY;
+                        g_swCrossplaySelfTestCardStandAng = faceAng;
+                        g_swCrossplaySelfTestCardStandSect = trySect;
+                        return 1;
+                    }
+
+                    if (nearWall >= 0 && nearDist < 1792 && wall[nearWall].lotag != 0)
+                        break;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+// Duke's keycards.  A card reader takes the card its palette names and nothing
+// else: it turns away a player who has not got one, spends the card of a player
+// who has, and never answers a second time.  The card itself is a Duke
+// ACCESSCARD the bridge converted into the matching SW card at map load, so the
+// pickup is part of what is checked here.
+static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
+{
+    if (pp == NULL)
+    {
+        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        return;
+    }
+
+    char detail[192];
+
+    if (g_swCrossplaySelfTestCardSwitch < 0)
+    {
+        // Stand where the use key can actually reach a reader and press for
+        // real, so what is checked is the whole path rather than the gate alone.
+        // Any of the map's readers will do, and a level often has several in
+        // places the harness cannot stand in front of, so they are tried in turn
+        // until one of them answers neartag().  An untagged reader opens nothing
+        // and so is not a test of anything.
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestCardSwitch < 0; ++spriteNum)
+        {
+            if (sprite[spriteNum].statnum == MAXSTATUS || sprite[spriteNum].lotag == 0)
+                continue;
+
+            sw_crossplay_duke_sprite_behavior_t const &behavior = g_swCrossplayDukeSpriteBehaviors[spriteNum];
+            if (!(behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH) ||
+                !SW_CrossplayIsDukeAccessSwitch(behavior.sourcePicnum) || behavior.switchState != 0)
+                continue;
+
+            ++g_swCrossplaySelfTestCardReaders;
+
+            if (SW_CrossplaySelfTestFindCardReaderStand(pp, spriteNum))
+            {
+                g_swCrossplaySelfTestCardSwitch = spriteNum;
+                g_swCrossplaySelfTestCardKeyIndex = SW_CrossplayDukeCardKeyIndex(behavior.displayPal);
+            }
+        }
+
+        Bsnprintf(detail, sizeof(detail), "%d keycard(s) taken off the map at load",
+                  SW_CrossplayDukeCardsRemovedAtLoad());
+        SW_CrossplaySelfTestReport(SW_CrossplayDukeCardsRemovedAtLoad() == 0, "cards-survive-load", detail);
+
+        if (g_swCrossplaySelfTestCardReaders == 0)
+        {
+            SW_CrossplaySelfTestReport(1, "card-readers-present", "no Duke card reader in this map, skipped");
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            return;
+        }
+
+        Bsnprintf(detail, sizeof(detail), "%d card reader(s) in this map, standing at spr=%d",
+                  g_swCrossplaySelfTestCardReaders, g_swCrossplaySelfTestCardSwitch);
+        SW_CrossplaySelfTestReport(g_swCrossplaySelfTestCardSwitch >= 0, "card-reader-reachable",
+                                   g_swCrossplaySelfTestCardSwitch >= 0
+                                       ? detail
+                                       : "no floor spot sees any card reader through neartag()");
+
+        if (g_swCrossplaySelfTestCardSwitch < 0)
+        {
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            return;
+        }
+
+        if (Bgetenv("VB_CP_KEY_DEBUG") != NULL)
+        {
+            LOG_F(INFO, "CPKEY keys red=%d blue=%d green=%d yellow=%d", pp->HasKey[0], pp->HasKey[1],
+                  pp->HasKey[2], pp->HasKey[3]);
+            for (int32_t d = 0; d < MAXSPRITES; ++d)
+                if (artCrossplayOriginalMapSpritePicnum(d) == VB_DUKE_ACCESSCARD)
+                    LOG_F(INFO, "CPKEY slot %d statnum=%d picnum=%d userID=%d", d, sprite[d].statnum,
+                          sprite[d].picnum, User[d] != NULL ? User[d]->ID : -1);
+        }
+
+        // The card that opens it.  Conversion clears the sprite's Duke palette,
+        // so the colour has to be read back off the SW tile it became.
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+        {
+            if (sprite[spriteNum].statnum == MAXSTATUS ||
+                artCrossplayOriginalMapSpritePicnum(spriteNum) != VB_DUKE_ACCESSCARD)
+                continue;
+
+            ++g_swCrossplaySelfTestCardsInMap;
+            if (Bgetenv("VB_CP_KEY_DEBUG") != NULL)
+                LOG_F(INFO, "CPKEY card spr=%d picnum=%d statnum=%d userID=%d", spriteNum,
+                      sprite[spriteNum].picnum, sprite[spriteNum].statnum,
+                      User[spriteNum] != NULL ? User[spriteNum]->ID : -1);
+
+            if (g_swCrossplaySelfTestCardSprite >= 0)
+                continue;
+
+            // The SW tile the card became, not the sprite's picnum: a Duke level
+            // loads Duke's art, so SW's own item tiles are relocated into the
+            // generated range and only the USER record still names the card.
+            int32_t cardKey;
+            switch (User[spriteNum] != NULL ? User[spriteNum]->ID : sprite[spriteNum].picnum)
+            {
+            case RED_CARD:    cardKey = 0; break;
+            case BLUE_CARD:   cardKey = 1; break;
+            case GREEN_CARD:  cardKey = 2; break;
+            case YELLOW_CARD: cardKey = 3; break;
+            default:          continue;
+            }
+
+            if (cardKey == g_swCrossplaySelfTestCardKeyIndex)
+                g_swCrossplaySelfTestCardSprite = spriteNum;
+        }
+    }
+
+    int32_t const switchSprite = g_swCrossplaySelfTestCardSwitch;
+    int32_t const keyIndex = g_swCrossplaySelfTestCardKeyIndex;
+
+    if (g_swCrossplaySelfTestCardStage == 0)
+    {
+        g_swCrossplaySelfTestCardHadKey = pp->HasKey[keyIndex] ? 1 : 0;
+        pp->HasKey[keyIndex] = FALSE;
+        PlayerUpdateKeys(pp);
+
+        g_swCrossplaySelfTestCardSwitchPic = sprite[switchSprite].picnum;
+        g_swCrossplaySelfTestCardUseBase = SW_CrossplayDukeCardUses();
+        g_swCrossplaySelfTestCardDenyBase = SW_CrossplayDukeCardDenials();
+
+        SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestCardStandX, g_swCrossplaySelfTestCardStandY,
+                                        INT32_MIN, g_swCrossplaySelfTestCardStandSect);
+        pp->q16ang = fix16_from_int(g_swCrossplaySelfTestCardStandAng);
+
+        g_swCrossplaySelfTestCardRefusedUse = SW_CrossplayOperateDukeMapEffectors(pp);
+
+        int32_t const denied = SW_CrossplayDukeCardDenials() - g_swCrossplaySelfTestCardDenyBase;
+        int32_t const spent = SW_CrossplayDukeCardUses() - g_swCrossplaySelfTestCardUseBase;
+
+        Bsnprintf(detail, sizeof(detail), "spr=%d key=%d without card: answered=%d denied=%d spent=%d",
+                  switchSprite, keyIndex, g_swCrossplaySelfTestCardRefusedUse, denied, spent);
+        SW_CrossplaySelfTestReport(g_swCrossplaySelfTestCardRefusedUse == 0 && denied == 1 && spent == 0,
+                                   "card-reader-refuses-without-card", detail);
+        SW_CrossplaySelfTestReport(sprite[switchSprite].picnum == g_swCrossplaySelfTestCardSwitchPic,
+                                   "card-reader-stays-dark", detail);
+
+        g_swCrossplaySelfTestCardStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestCardStage == 1)
+    {
+        if (g_swCrossplaySelfTestCardSprite < 0)
+        {
+            // The card may simply have been walked over by an earlier phase --
+            // the harness warps the player the length of the level -- and that
+            // is itself the pickup working, so say which of the two it was.
+            Bsnprintf(detail, sizeof(detail),
+                      "%d access card(s) left in the map, none matching key %d; already carried=%d",
+                      g_swCrossplaySelfTestCardsInMap, keyIndex, g_swCrossplaySelfTestCardHadKey);
+            SW_CrossplaySelfTestReport(g_swCrossplaySelfTestCardHadKey || g_swCrossplaySelfTestCardsInMap == 0,
+                                       "card-pickup-grants-key", detail);
+            pp->HasKey[keyIndex] = TRUE;
+            PlayerUpdateKeys(pp);
+            g_swCrossplaySelfTestCardStage = 3;
+        }
+        else
+        {
+            g_swCrossplaySelfTestCardStage = 2;
+        }
+
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
+        return;
+    }
+
+    // Walk onto the card and let SW's own pickup take it -- pinned, because the
+    // host's physics slides the player off a warped-to spot within a tic or two.
+    if (g_swCrossplaySelfTestCardStage == 2)
+    {
+        int32_t const card = g_swCrossplaySelfTestCardSprite;
+        int32_t const gone = sprite[card].statnum == MAXSTATUS;
+
+        if (!gone)
+            SW_CrossplaySelfTestWarpPlayerZ(pp, sprite[card].x, sprite[card].y, INT32_MIN, sprite[card].sectnum);
+
+        if (!pp->HasKey[keyIndex] && g_swCrossplaySelfTestPhaseTic < VB_CROSSPLAY_SW_TICS_PER_SEC)
+            return;
+
+        Bsnprintf(detail, sizeof(detail), "card spr=%d tile=%d key=%d picked up in %d tics", card,
+                  gone ? -1 : sprite[card].picnum, keyIndex, g_swCrossplaySelfTestPhaseTic);
+        SW_CrossplaySelfTestReport(pp->HasKey[keyIndex] != 0, "card-pickup-grants-key", detail);
+
+        if (!pp->HasKey[keyIndex])
+        {
+            pp->HasKey[keyIndex] = TRUE;
+            PlayerUpdateKeys(pp);
+        }
+
+        g_swCrossplaySelfTestCardStage = 3;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
+        return;
+    }
+
+    SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestCardStandX, g_swCrossplaySelfTestCardStandY,
+                                    INT32_MIN, g_swCrossplaySelfTestCardStandSect);
+    pp->q16ang = fix16_from_int(g_swCrossplaySelfTestCardStandAng);
+
+    if (g_swCrossplaySelfTestCardStage == 3)
+    {
+        g_swCrossplaySelfTestCardUseBase = SW_CrossplayDukeCardUses();
+        g_swCrossplaySelfTestCardDenyBase = SW_CrossplayDukeCardDenials();
+
+        int32_t const used = SW_CrossplayOperateDukeMapEffectors(pp);
+        int32_t const spent = SW_CrossplayDukeCardUses() - g_swCrossplaySelfTestCardUseBase;
+
+        Bsnprintf(detail, sizeof(detail), "spr=%d with card: answered=%d spent=%d stillHasKey=%d pic %d -> %d",
+                  switchSprite, used, spent, pp->HasKey[keyIndex] ? 1 : 0,
+                  g_swCrossplaySelfTestCardSwitchPic, sprite[switchSprite].picnum);
+
+        SW_CrossplaySelfTestReport(used != 0 && spent == 1, "card-reader-opens-with-card", detail);
+        SW_CrossplaySelfTestReport(!pp->HasKey[keyIndex], "card-reader-consumes-card", detail);
+        SW_CrossplaySelfTestReport(sprite[switchSprite].picnum != g_swCrossplaySelfTestCardSwitchPic,
+                                   "card-reader-lights-up", detail);
+
+        g_swCrossplaySelfTestCardStage = 4;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
+        return;
+    }
+
+    // Duke reads nothing back from a lit reader, so a second press is not a
+    // second door and -- with the card handed back -- not a second card either.
+    pp->HasKey[keyIndex] = TRUE;
+    PlayerUpdateKeys(pp);
+
+    g_swCrossplaySelfTestCardUseBase = SW_CrossplayDukeCardUses();
+    g_swCrossplaySelfTestCardDenyBase = SW_CrossplayDukeCardDenials();
+
+    int32_t const usedAgain = SW_CrossplayOperateDukeMapEffectors(pp);
+    int32_t const spentAgain = SW_CrossplayDukeCardUses() - g_swCrossplaySelfTestCardUseBase;
+
+    Bsnprintf(detail, sizeof(detail), "spr=%d second use: answered=%d spent=%d stillHasKey=%d", switchSprite,
+              usedAgain, spentAgain, pp->HasKey[keyIndex] ? 1 : 0);
+    SW_CrossplaySelfTestReport(usedAgain == 0 && spentAgain == 0 && pp->HasKey[keyIndex],
+                               "card-reader-is-one-shot", detail);
 
     SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
 }
@@ -12481,13 +13007,15 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
 
                     pp->q16ang = fix16_from_int(NORM_ANGLE(getangle(sp->x - tryX, sp->y - tryY)));
 
-                    static const int32_t probeZ[] = { 0, Z(16), Z(32) };
-                    for (unsigned zi = 0; zi < ARRAY_SIZE(probeZ) && !placed; ++zi)
+                    // The use key's own ray, offsets and all -- a monitor hung
+                    // at a Duke height can sit above a probe that only ever
+                    // looks down.
+                    for (unsigned zi = 0; zi < ARRAY_SIZE(g_swCrossplayDukeUseProbeZ) && !placed; ++zi)
                     {
                         int16_t nearSector = -1, nearWall = -1, nearSprite = -1;
                         int32_t nearDist = 0;
 
-                        neartag(pp->posx, pp->posy, pp->posz + probeZ[zi], pp->cursectnum,
+                        neartag(pp->posx, pp->posy, pp->posz + g_swCrossplayDukeUseProbeZ[zi], pp->cursectnum,
                                 fix16_to_int(pp->q16ang), &nearSector, &nearWall, &nearSprite, &nearDist, 1280,
                                 NTAG_SEARCH_LO, NULL);
 
@@ -13777,6 +14305,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_CAMERAS: SW_CrossplaySelfTestRunCameras(pp); break;
     case VB_CROSSPLAY_SELFTEST_MIRRORS: SW_CrossplaySelfTestRunMirrors(pp); break;
     case VB_CROSSPLAY_SELFTEST_TOILET: SW_CrossplaySelfTestRunToilet(pp); break;
+    case VB_CROSSPLAY_SELFTEST_KEYCARDS: SW_CrossplaySelfTestRunKeycards(pp); break;
     case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
     case VB_CROSSPLAY_SELFTEST_HYDRANT: SW_CrossplaySelfTestRunHydrant(pp); break;
     case VB_CROSSPLAY_SELFTEST_BREAKABLES: SW_CrossplaySelfTestRunBreakables(pp); break;
