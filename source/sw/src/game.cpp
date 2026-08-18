@@ -3521,6 +3521,7 @@ static void SW_CrossplayTickDukeRespawns(void);
 static int32_t SW_CrossplayDukePlayerInMovingSector(PLAYERp const pp, int16_t sectnum);
 static int32_t SW_CrossplayDukeSectorBaseLotag(int16_t sectnum);
 static int32_t SW_CrossplayStepDukeZ(int32_t *z, int32_t targetZ, int32_t speed);
+static int32_t SW_CrossplayDukeSwTicsToDukeTics(int32_t swTics);
 static int32_t SW_CrossplayDukeZAnimStepPerTic(int32_t speed);
 static int32_t SW_CrossplayActivateDukeBySector(int16_t sectnum, PLAYERp pp);
 static int32_t SW_CrossplayOperateDukeTag(int16_t lotag, PLAYERp pp);
@@ -7300,6 +7301,20 @@ int SW_CrossplayDamageDukeMapSprite(int spriteNum, int targetSpriteNum, vec3_t c
     return SW_CrossplayDamageDukeMapSpriteInternal(spriteNum, targetSpriteNum, hitPos, -1);
 }
 
+// One frame of a Duke CON `action`, in Duke's terms: `start` is a tile offset from
+// the base, `frames` how many there are, and `delay` how many of Duke's tics each
+// one is held for.  The bridge's tick counts SW's, so it is converted first.
+static int16_t SW_CrossplayDukeConActionFrame(int16_t base, uint16_t tick, int32_t start, int32_t frames,
+                                              int32_t delay)
+{
+    if (frames <= 0)
+        return base;
+
+    int32_t const dukeTic = SW_CrossplayDukeSwTicsToDukeTics(tick);
+
+    return (int16_t)(base + start + ((dukeTic / max(delay, 1)) % frames));
+}
+
 static int16_t SW_CrossplayAnimatedDukeSpriteFrame(sw_crossplay_duke_sprite_behavior_t const &behavior)
 {
     int16_t const base = behavior.basePicnum;
@@ -7313,20 +7328,27 @@ static int16_t SW_CrossplayAnimatedDukeSpriteFrame(sw_crossplay_duke_sprite_beha
     // looks like.
     case VB_DUKE_WATERFOUNTAIN:
         return behavior.useTimer == 0 ? base : (int16_t)(base + 1 + (behavior.tick & 1));
-    case VB_DUKE_STEAM:
-    case VB_DUKE_CEILINGSTEAM:
-        return base + ((behavior.tick >> 2) & 3);
     case VB_DUKE_TRANSPORTERBEAM:
         return base + ((behavior.tick >> 2) & 3);
     case VB_DUKE_TRANSPORTERSTAR:
         return base + ((behavior.tick >> 2) & 7);
+
+    // The rest are CON actions in Duke, and were being approximated here by a
+    // handful of frames on a slow counter -- a fire showing four of its fourteen
+    // frames, a quarter of the time, which is what "the fire isn't smooth" was.
+    // The numbers below are the `action` lines from GAME.CON, and the counter runs
+    // on Duke's tic rather than SW's so they play at Duke's speed too.
+    case VB_DUKE_STEAM:
+    case VB_DUKE_CEILINGSTEAM:
+        return SW_CrossplayDukeConActionFrame(base, behavior.tick, 0, 5, 1);    // STEAMFRAMES 0 5 1 1 1
     case VB_DUKE_BURNING:
     case VB_DUKE_BURNING2:
-        return base + ((behavior.tick >> 2) & 7);
+        return SW_CrossplayDukeConActionFrame(base, behavior.tick, 0, 12, 2);   // BURNING_FLAME 0 12 1 1 2
     case VB_DUKE_FIRE:
     case VB_DUKE_FIRE2:
+        return SW_CrossplayDukeConActionFrame(base, behavior.tick, -1, 14, 1);  // FIRE_FRAMES -1 14 1 1 1
     case VB_DUKE_FLOORFLAME:
-        return base + ((behavior.tick >> 2) & 3);
+        return SW_CrossplayDukeConActionFrame(base, behavior.tick, 0, 16, 1);   // FFLAME_FR 0 16 1 1 1
     default:
         return -1;
     }
@@ -11853,6 +11875,46 @@ static int32_t SW_CrossplayUseDukeNukeButton(PLAYERp pp, int32_t spriteNum)
     return 1;
 }
 
+static int32_t g_swCrossplayMirrorEjections;
+
+int SW_CrossplayMirrorEjections(void) { return g_swCrossplayMirrorEjections; }
+
+// A mirror is rendered from inside a small sector behind the glass, and nothing
+// keeps the player out of it but the mirror wall's blocking bit.  That bit stops
+// clipmove() crossing, but it does not stop the player *ending up* there: a jump
+// that lands on the wall line can flip cursectnum across it, and pushmove() --
+// which SW runs twice per move to unwedge the player -- then shoves them further
+// in.  Once inside, the same bit blocks them from walking out, which is the
+// "walked into the mirror and can't get out".
+//
+// Nothing can legitimately stand in one, so being there at all is the error, and
+// the fix is the one SW already uses when a player falls out of the world: put
+// them back where they last legitimately were.
+void SW_CrossplayKeepPlayerOutOfMirrors(PLAYERp pp)
+{
+    if (pp == NULL || mirrorcnt <= 0 || (unsigned)pp->cursectnum >= (unsigned)numsectors)
+        return;
+
+    for (int32_t i = 0; i < mirrorcnt; ++i)
+    {
+        if (mirror[i].mirrorsector != pp->cursectnum)
+            continue;
+
+        if ((unsigned)pp->lastcursectnum >= (unsigned)numsectors)
+            return;
+
+        pp->posx = pp->oldposx;
+        pp->posy = pp->oldposy;
+        pp->posz = pp->oldposz;
+        pp->cursectnum = pp->lastcursectnum;
+        pp->xvect = pp->yvect = 0;
+        pp->slide_xvect = pp->slide_yvect = 0;
+
+        ++g_swCrossplayMirrorEjections;
+        return;
+    }
+}
+
 void SW_CrossplayTickDukeNukeButton(PLAYERp pp)
 {
     if (g_swCrossplayDukeNukeSprite < 0)
@@ -12150,6 +12212,7 @@ enum
     VB_CROSSPLAY_SELFTEST_TOILET,
     VB_CROSSPLAY_SELFTEST_KEYCARDS,
     VB_CROSSPLAY_SELFTEST_NUKEBUTTON,
+    VB_CROSSPLAY_SELFTEST_FLAMES,
     VB_CROSSPLAY_SELFTEST_CRACKS,
     VB_CROSSPLAY_SELFTEST_HYDRANT,
     VB_CROSSPLAY_SELFTEST_BREAKABLES,
@@ -12230,6 +12293,9 @@ static int32_t g_swCrossplaySelfTestNukeSprite = -1;
 static int32_t g_swCrossplaySelfTestNukeFramesSeen;
 static int32_t g_swCrossplaySelfTestNukeLevelBefore;
 static int32_t g_swCrossplaySelfTestNukeEnded;
+static int32_t g_swCrossplaySelfTestFlameSprite = -1;
+static int16_t g_swCrossplaySelfTestFlameFrames[32];
+static int32_t g_swCrossplaySelfTestFlameFrameCount;
 static int32_t g_swCrossplaySelfTestMirrorStage;
 static int32_t g_swCrossplaySelfTestMirrorWall = -1;
 static int32_t g_swCrossplaySelfTestMirrorBrokeBase;
@@ -13136,9 +13202,61 @@ static void SW_CrossplaySelfTestRunNukeButton(PLAYERp const pp)
         FinishedLevel = FALSE;
         Level = (short)g_swCrossplaySelfTestNukeLevelBefore;
 
-        SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_FLAMES);
         return;
     }
+
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_FLAMES);
+}
+
+// Duke's flames and steam are CON actions with a frame count and a delay of their
+// own, and the bridge used to approximate them with a handful of frames on a slow
+// counter.  What is checked is that the sprite actually walks the whole range Duke
+// gives it, which four-of-fourteen would not.
+static void SW_CrossplaySelfTestRunFlames(PLAYERp const)
+{
+
+    if (g_swCrossplaySelfTestFlameSprite < 0)
+    {
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && g_swCrossplaySelfTestFlameSprite < 0; ++spriteNum)
+        {
+            int16_t const src = artCrossplayOriginalMapSpritePicnum(spriteNum);
+            if (sprite[spriteNum].statnum != MAXSTATUS &&
+                (src == VB_DUKE_FIRE || src == VB_DUKE_FIRE2 || src == VB_DUKE_BURNING ||
+                 src == VB_DUKE_BURNING2 || src == VB_DUKE_FLOORFLAME))
+                g_swCrossplaySelfTestFlameSprite = spriteNum;
+        }
+
+        if (g_swCrossplaySelfTestFlameSprite < 0)
+        {
+            SW_CrossplaySelfTestReport(1, "flame-animates", "no Duke flame in this map, skipped");
+            SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
+            return;
+        }
+    }
+
+    int32_t const flame = g_swCrossplaySelfTestFlameSprite;
+    int16_t const shown = sprite[flame].picnum;
+    int32_t seen = 0;
+
+    for (int32_t i = 0; i < g_swCrossplaySelfTestFlameFrameCount; ++i)
+        seen |= g_swCrossplaySelfTestFlameFrames[i] == shown;
+
+    if (!seen && (unsigned)g_swCrossplaySelfTestFlameFrameCount < ARRAY_SIZE(g_swCrossplaySelfTestFlameFrames))
+        g_swCrossplaySelfTestFlameFrames[g_swCrossplaySelfTestFlameFrameCount++] = shown;
+
+    // Long enough for the slowest of them -- twelve frames at two tics each, on
+    // Duke's clock -- to have come all the way round.
+    if (g_swCrossplaySelfTestPhaseTic < 120)
+        return;
+
+    char detail[128];
+    Bsnprintf(detail, sizeof(detail), "spr=%d tile=%d distinct frames=%d", flame,
+              artCrossplayOriginalMapSpritePicnum(flame), g_swCrossplaySelfTestFlameFrameCount);
+
+    // Duke's shortest flame action is five frames; the old approximation showed
+    // four and would fail this.
+    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestFlameFrameCount >= 5, "flame-animates", detail);
 
     SW_CrossplaySelfTestEndGroup(VB_CROSSPLAY_SELFTEST_GROUP_WORLD, VB_CROSSPLAY_SELFTEST_CRACKS);
 }
@@ -13505,6 +13623,41 @@ static void SW_CrossplaySelfTestRunMirrors(PLAYERp const pp)
 
     int32_t const wallNum = g_swCrossplaySelfTestMirrorWall;
     char detail[192];
+
+    // Being put inside one, and getting straight back out.  Nothing can stand in a
+    // mirror sector, so the bridge treats being there as the error and returns the
+    // player to where they last legitimately were.
+    if (g_swCrossplaySelfTestMirrorSolidTested == 1 && mirrorcnt > 0)
+    {
+        g_swCrossplaySelfTestMirrorSolidTested = 2;
+
+        int32_t const before = SW_CrossplayMirrorEjections();
+        int16_t const trapped = mirror[0].mirrorsector;
+        int32_t const savedX = pp->posx, savedY = pp->posy, savedZ = pp->posz;
+        int16_t const savedSect = pp->cursectnum;
+
+        pp->oldposx = pp->posx;
+        pp->oldposy = pp->posy;
+        pp->oldposz = pp->posz;
+        pp->lastcursectnum = pp->cursectnum;
+        pp->cursectnum = trapped;
+
+        SW_CrossplayKeepPlayerOutOfMirrors(pp);
+
+        char trapDetail[160];
+        Bsnprintf(trapDetail, sizeof(trapDetail), "put in mirror sector %d, came back to %d (ejections %d -> %d)",
+                  (int)trapped, (int)pp->cursectnum, before, SW_CrossplayMirrorEjections());
+        SW_CrossplaySelfTestReport(pp->cursectnum != trapped && SW_CrossplayMirrorEjections() > before,
+                                   "mirror-releases-player", trapDetail);
+
+        pp->posx = savedX;
+        pp->posy = savedY;
+        pp->posz = savedZ;
+        pp->cursectnum = savedSect;
+
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_MIRRORS);
+        return;
+    }
 
     // The sector behind a mirror is not a room.  Duke keeps the player out of it
     // with nothing but the mirror wall's blocking bit, and a player who does get
@@ -15357,6 +15510,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_TOILET: SW_CrossplaySelfTestRunToilet(pp); break;
     case VB_CROSSPLAY_SELFTEST_KEYCARDS: SW_CrossplaySelfTestRunKeycards(pp); break;
     case VB_CROSSPLAY_SELFTEST_NUKEBUTTON: SW_CrossplaySelfTestRunNukeButton(pp); break;
+    case VB_CROSSPLAY_SELFTEST_FLAMES: SW_CrossplaySelfTestRunFlames(pp); break;
     case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
     case VB_CROSSPLAY_SELFTEST_HYDRANT: SW_CrossplaySelfTestRunHydrant(pp); break;
     case VB_CROSSPLAY_SELFTEST_BREAKABLES: SW_CrossplaySelfTestRunBreakables(pp); break;
@@ -16075,6 +16229,9 @@ int SW_CrossplayDukeMapSpriteDisplayTile(int spriteNum, int32_t camX, int32_t ca
             break;
 
         ++g_swCrossplayDukeAIFrameFallbacks;
+        if (Bgetenv("VB_CP_FRAME_DEBUG") != NULL)
+            LOG_F(INFO, "CPFRAME fallback spr=%d dukeBase=%d wanted=%d step=%d runtime=%d", spriteNum,
+                  g_swCrossplayDukeAIDukePicnum[spriteNum], dukeDisplayTile, viewtypeStep, runtimeTile);
         dukeDisplayTile -= viewtypeStep;
         if (dukeDisplayTile <= 0)
         {

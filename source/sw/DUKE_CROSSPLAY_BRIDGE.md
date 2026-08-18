@@ -1020,6 +1020,40 @@ Fixed since:
   requires Duke to have answered.  Nothing else covered this class: such a prop
   has no behavior record, so it never appeared in the breakable list.
 
+- **Duke's flames animate the way Duke animates them.**  Reported as the street
+  fire in E1L1 not being smooth.  It was not the art -- the crossplay layer
+  already copies a tile's animation data and reserves a consecutive run for its
+  frames -- and not the frame-resolution fallback either, which turns out to fire
+  only for E1L4's octabrain.  Duke's flames are not picanm at all: they are CON
+  `action`s, and the bridge was approximating them with a handful of frames on a
+  slow counter.  `FIRE_FRAMES` is `-1 14 1 1 1` -- fourteen frames from one tile
+  below the base, a new one every tic -- against the four-every-four-tics the
+  bridge showed.  All four of them are Duke's own numbers now, counted on Duke's
+  tic rather than SW's: `STEAMFRAMES 0 5 1 1 1`, `BURNING_FLAME 0 12 1 1 2`,
+  `FIRE_FRAMES -1 14 1 1 1`, `FFLAME_FR 0 16 1 1 1`.  Covered by `flame-animates`,
+  which watches a flame for two seconds and requires it to reach at least five
+  distinct frames; the old four-frame approximation fails it.
+
+- **A player who gets behind a mirror has to come back.**  A mirror is drawn from
+  inside a small sector behind the glass, and nothing keeps the player out of it
+  but the mirror wall's blocking bit.
+
+  That bit does hold: `clipmove()` was driven into every Duke mirror wall in E1L1
+  and E1L2, at five heights, with the player's own clipdist and clip mask, and it
+  never crosses -- so the reported walk-in is not a hole in the wall.  What the
+  bit does not stop is the player *ending up* there: a jump that lands on the wall
+  line can flip `cursectnum` across it, and `pushmove()` -- which SW runs twice
+  per move to unwedge the player -- then shoves them further in.  Once inside, the
+  same bit blocks them from walking out.
+
+  Nothing can legitimately stand in a mirror sector, so the bridge treats being
+  there as the error and does what SW already does when a player falls out of the
+  world: puts them back where they last legitimately were.  Covered by
+  `mirror-keeps-player-out` (the wall holds) and `mirror-releases-player` (a
+  player placed inside one is returned).  Worth being straight about: the exact
+  route in was never reproduced, so the guard is the fix rather than the cause
+  being removed.
+
 - **Player skins, from both games.**  Shadow Warrior dresses its player by
   palette -- eight colours of Lo Wang, and only in multiplayer -- while Duke
   dresses its own by art, and already carries a skin list holding Duke, the stock

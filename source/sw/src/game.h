@@ -2326,6 +2326,8 @@ int SW_CrossplayDukeViewscreenTile(int spriteNum); // game.c
 void SW_CrossplayTickDukeCameras(PLAYERp pp); // game.c
 void SW_CrossplayTickDukeToilet(PLAYERp pp); // game.c
 void SW_CrossplayTickDukeNukeButton(PLAYERp pp); // game.c
+void SW_CrossplayKeepPlayerOutOfMirrors(PLAYERp pp); // game.c
+int  SW_CrossplayMirrorEjections(void);
 SWBOOL SW_CrossplaySetupConvertedDukePickup(int16_t SpriteNum); // sprite.c
 int  SW_CrossplayDukeDropsConverted(void);
 int  SW_CrossplaySkinCount(void);
