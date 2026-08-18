@@ -1003,6 +1003,53 @@ Fixed since:
   path already refuses a camera that has been hidden, which is the state Duke's
   damaged-camera code leaves behind.
 
+- **The earthquake by E1L1's stairs has to blow the hole open, not just crack
+  the ground.**  The quake ran -- the floor split and tilted, the room shook --
+  but the opening in the side never appeared.
+
+  The quake itself turned out to be exact.  Traced against Duke's own runtime,
+  every one of E1L1's five `SE 2` sectors ends on the same coordinates and the
+  same `floorheinum` as Duke's, on all four of the level's quake tags.  The hole
+  is not part of the quake at all: tag 215's touchplate fires three master
+  switches, two of which start the quakes in sectors 127 and 128, while the third
+  sits in sector 122 on a 32-tic delay next to a `SEENINE` charge and an `SE 13`
+  explosive sector.  Duke's master switch arms the charges standing in its own
+  sector -- `shade = -31`, which is what lights a Duke fuse -- and it is that
+  charge going off which sets off the `SE 13` and blows the hole.
+
+  The bridge's master switch drove the effectors in its sector (quakes, drop
+  floors, rise/falls, shooters, lights) but never armed the charges, so the third
+  switch did nothing at all.  It arms them now, the way Duke does: a charge Duke
+  has adopted gets the shade, since Duke's own code is what will run it, and one
+  the bridge is running gets its fuse lit directly.
+
+  Three timings came out with it, all the same conversion the doors needed: the
+  master switch's hitag delay is a count of Duke's tics rather than SW's, so is a
+  charge's fuse, and `SE 13` assigns its ceiling home unconditionally on the
+  non-512 branch -- the step above that line is dead code in Duke's own source,
+  so a sector blown open this way arrives in a single tic rather than sliding
+  into place.
+
+  With those, sector 122 opens to exactly Duke's geometry, 1.27s after the
+  touchplate against Duke's 1.43s.  What is left of that gap is not this
+  mechanism: Duke's actor code is driven once per SW tic, so everything Duke owns
+  runs a third faster than it does in Duke.  That is a much larger question than
+  one charge, and is left alone deliberately.
+
+  `VB_CP_SELFTEST=destruct` covers it as `master-switch-arms-charges`, checked
+  before the phase's own blast because that blast sets off every charge on the
+  map and would hide it.  It arms the switch directly rather than through
+  `SW_CrossplayOperateDukeTag()`, which refuses a tag whose sectors are still
+  moving from an earlier phase, and it samples every tic -- a charge with no fuse
+  time of its own is armed, pops and is gone again well inside the wait.
+
+  Correcting the fuse rate moved when charges go off, which moved what the rest
+  of the destruct group sees, and three of its checks turned out to have been
+  passing on the old timing by luck: `crack-sprite-removed` and
+  `breakable-damage` judged the hit before Duke's own tic had run the hand-over.
+  Their windows now allow for a fuse's worth of Duke tics rather than a handful
+  of SW's.
+
 - **Duke's doors, lifts and platforms move at Duke's speed, and the right way.**
   Reported as "the door in the arcade room doesn't open properly".  Reasoning
   about it from the source went nowhere -- the swing arithmetic checked out, the

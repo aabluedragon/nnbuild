@@ -6545,7 +6545,11 @@ enum
 };
 
 static uint8_t g_swCrossplayDukeChargeState[MAXSPRITES];
-static int16_t g_swCrossplayDukeChargeFuse[MAXSPRITES];
+// Duke burns a charge's fuse by 3 of its lotag units on each of its own tics.
+// SW's tics are more frequent, so the fuse is held at four times Duke's scale
+// and burned by nine a tic -- 90 units a second either way.
+#define VB_CROSSPLAY_DUKE_FUSE_SCALE 4
+static int32_t g_swCrossplayDukeChargeFuse[MAXSPRITES];
 static uint8_t g_swCrossplayDukeChargeStageTic[MAXSPRITES];
 static uint8_t g_swCrossplayDukeChargeStage[MAXSPRITES];
 
@@ -6573,7 +6577,7 @@ static void SW_CrossplayArmDukeChargesWithHitag(int16_t hitag, int32_t seedSprit
             continue;
 
         g_swCrossplayDukeChargeState[other] = VB_CROSSPLAY_DUKE_CHARGE_FUSE;
-        g_swCrossplayDukeChargeFuse[other] = sprite[other].lotag;
+        g_swCrossplayDukeChargeFuse[other] = sprite[other].lotag * VB_CROSSPLAY_DUKE_FUSE_SCALE;
         g_swCrossplayDukeChargeStageTic[other] = 0;
         g_swCrossplayDukeChargeStage[other] = 0;
     }
@@ -6647,7 +6651,8 @@ static void SW_CrossplayTickDukeCharges(void)
         {
             if (g_swCrossplayDukeChargeFuse[spriteNum] > 0)
             {
-                g_swCrossplayDukeChargeFuse[spriteNum] -= 3;
+                g_swCrossplayDukeChargeFuse[spriteNum] -=
+                    3 * VB_CROSSPLAY_DUKE_FUSE_SCALE * VB_CROSSPLAY_DUKE_TICS_PER_SEC / VB_CROSSPLAY_SW_TICS_PER_SEC;
                 continue;
             }
 
@@ -7654,7 +7659,13 @@ static void SW_CrossplayTickDukeExplosives(void)
             int32_t const oldFloorZ = sector[explosive.sectnum].floorz;
             floorDone = SW_CrossplayStepDukeZ(&sector[explosive.sectnum].floorz, explosive.targetFloorZ, step);
             SW_CrossplayMoveDukeSectorFloorContents(explosive.sectnum, sector[explosive.sectnum].floorz - oldFloorZ);
-            ceilingDone = SW_CrossplayStepDukeZ(&sector[explosive.sectnum].ceilingz, explosive.targetCeilingZ, step);
+
+            // Duke steps the ceiling here and then assigns it home anyway, which
+            // makes the step above it dead code in Duke's own source.  The
+            // ceiling of a sector blown open this way arrives in a single tic.
+            SW_CrossplayStepDukeZ(&sector[explosive.sectnum].ceilingz, explosive.targetCeilingZ, step);
+            sector[explosive.sectnum].ceilingz = explosive.targetCeilingZ;
+            ceilingDone = 1;
         }
 
         if (++explosive.ticks > 256 || (floorDone && ceilingDone))
@@ -9800,6 +9811,27 @@ static void SW_CrossplayTickDukeMasterSwitches(void)
         if (--master.delay > 0)
             continue;
 
+        // Duke's master switch also arms the charges standing in its own sector:
+        // a SEENINE or OOZFILTER there gets shade -31, which is what lights its
+        // fuse.  E1L1's tag 215 puts one behind the wall by the stairs on a
+        // 32-tic delay, and it is that charge going off -- not the earthquake --
+        // that blows the hole open.  Without this the ground shook and cracked
+        // and nothing else happened.
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+        {
+            if (sprite[spriteNum].statnum == MAXSTATUS || sprite[spriteNum].sectnum != master.sectnum ||
+                !SW_CrossplayIsDukeChargeSprite(spriteNum))
+                continue;
+
+            // A charge Duke has adopted is run by Duke's own code, and shade is
+            // how that code is told to start; one the bridge is running has its
+            // own fuse to light.
+            if (SW_CrossplayDukeAIOwnsSprite(spriteNum))
+                sprite[spriteNum].shade = -31;
+            else
+                SW_CrossplayArmDukeChargeChain(spriteNum);
+        }
+
         int32_t const sectorOperated = SW_CrossplayOperateDukeSector(master.sectnum, NULL);
         int32_t const nonSectorActivated =
             SW_CrossplayActivateDukeZMoverInSector(master.sectnum) ||
@@ -10520,7 +10552,8 @@ static void SW_CrossplayCaptureDukeMapEffectors(void)
             sw_crossplay_duke_masterswitch_t &master = g_swCrossplayDukeMasterSwitches[g_swCrossplayDukeMasterSwitchCount++];
             master.sectnum = sectnum;
             master.lotag = sprite[i].lotag;
-            master.initialDelay = sprite[i].hitag;
+            // A count of Duke's tics, and this counts SW's.
+            master.initialDelay = (int16_t)SW_CrossplayDukeTicsToSwTics(sprite[i].hitag);
             master.delay = sprite[i].hitag;
             master.active = 0;
             master.repeat = sprite[i].pal == 23;
@@ -11964,6 +11997,10 @@ static int32_t g_swCrossplaySelfTestCrackStage;
 static int32_t g_swCrossplaySelfTestCrackActivationBase;
 static int32_t g_swCrossplaySelfTestBlastHits;
 static int32_t g_swCrossplaySelfTestExplosivesArmed;
+static int32_t g_swCrossplaySelfTestMasterChargeStage;
+static int32_t g_swCrossplaySelfTestMasterChargeSprite = -1;
+static int32_t g_swCrossplaySelfTestMasterChargeSwitch = -1;
+static int32_t g_swCrossplaySelfTestMasterChargeArmed;
 static int32_t g_swCrossplaySelfTestExplosivesBefore;
 static int32_t g_swCrossplaySelfTestMapTriggerBase;
 static int32_t g_swCrossplaySelfTestFireExtTagged;
@@ -13718,8 +13755,10 @@ static void SW_CrossplaySelfTestRunCracks(PLAYERp const pp)
         return;
     }
 
-    // Give Duke a few tics to have acted on the hit before judging it.
-    if (g_swCrossplaySelfTestPhaseTic < 60)
+    // Give Duke a few tics to have acted on the hit before judging it.  A charge
+    // burns its fuse at Duke's rate rather than SW's, so this has to be long
+    // enough to cover a fuse's worth of Duke tics as well as the hit itself.
+    if (g_swCrossplaySelfTestPhaseTic < 120)
         return;
 
     if (g_swCrossplaySelfTestCrackStage == 1)
@@ -13792,8 +13831,10 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
 {
     if (g_swCrossplaySelfTestBreakablesHit)
     {
-        // Give Duke a few tics to run the damage and settle the props.
-        if (g_swCrossplaySelfTestPhaseTic < 30)
+        // Give Duke a few tics to run the damage and settle the props.  Duke's
+        // side of this runs on Duke's own tic, so the window has to be generous
+        // enough to hold several of them.
+        if (g_swCrossplaySelfTestPhaseTic < 120)
             return;
 
         int32_t broken = 0;
@@ -13964,6 +14005,81 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
 // map authors hide inside geometry) must detonate from SW weapon damage.
 static void SW_CrossplaySelfTestRunExplosives(PLAYERp const pp)
 {
+    // Duke's master switch arms the charges standing in its own sector, which is
+    // how E1L1 blows the hole open by the stairs after the earthquake.  Checked
+    // before anything else here, because the blast below sets off every charge on
+    // the map and would hide it.
+    if (g_swCrossplaySelfTestMasterChargeStage == 0)
+    {
+        for (int32_t i = 0; i < g_swCrossplayDukeMasterSwitchCount &&
+                            g_swCrossplaySelfTestMasterChargeSprite < 0; ++i)
+        {
+            sw_crossplay_duke_masterswitch_t const &master = g_swCrossplayDukeMasterSwitches[i];
+
+            for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+            {
+                if (sprite[spriteNum].statnum == MAXSTATUS || sprite[spriteNum].sectnum != master.sectnum ||
+                    !SW_CrossplayIsDukeChargeSprite(spriteNum) ||
+                    g_swCrossplayDukeChargeState[spriteNum] != VB_CROSSPLAY_DUKE_CHARGE_IDLE)
+                    continue;
+
+                g_swCrossplaySelfTestMasterChargeSprite = spriteNum;
+                g_swCrossplaySelfTestMasterChargeSwitch = i;
+
+                // Straight at the master switch rather than through
+                // SW_CrossplayOperateDukeTag(): that refuses a tag whose sectors
+                // are still in motion from an earlier phase, which has nothing to
+                // do with what is being checked here.
+                SW_CrossplayOperateDukeMasterSwitches(master.lotag);
+                break;
+            }
+        }
+
+        g_swCrossplaySelfTestMasterChargeStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_EXPLOSIVES);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestMasterChargeStage == 1)
+    {
+        // Sample every tic: a charge with no fuse time of its own is armed, pops
+        // and is gone again well inside the wait, and looking only at the end
+        // would find it back at rest and call that a failure.
+        if (g_swCrossplaySelfTestMasterChargeSprite >= 0)
+        {
+            int32_t const charge = g_swCrossplaySelfTestMasterChargeSprite;
+            if (sprite[charge].statnum == MAXSTATUS ||
+                g_swCrossplayDukeChargeState[charge] != VB_CROSSPLAY_DUKE_CHARGE_IDLE ||
+                sprite[charge].shade <= -31)
+                g_swCrossplaySelfTestMasterChargeArmed = 1;
+
+            // Let the switch's own delay run out, whatever the mapper set it to.
+            if (g_swCrossplaySelfTestPhaseTic <
+                g_swCrossplayDukeMasterSwitches[g_swCrossplaySelfTestMasterChargeSwitch].initialDelay + 40)
+                return;
+        }
+
+        if (g_swCrossplaySelfTestMasterChargeSprite < 0)
+            SW_CrossplaySelfTestReport(1, "master-switch-arms-charges",
+                                       "no Duke master switch with a charge in its sector, skipped");
+        else
+        {
+            int32_t const charge = g_swCrossplaySelfTestMasterChargeSprite;
+
+            char armedDetail[160];
+            Bsnprintf(armedDetail, sizeof(armedDetail), "switch sect=%d charge spr=%d armed=%d state=%d shade=%d gone=%d",
+                      g_swCrossplayDukeMasterSwitches[g_swCrossplaySelfTestMasterChargeSwitch].sectnum, charge,
+                      g_swCrossplaySelfTestMasterChargeArmed, g_swCrossplayDukeChargeState[charge],
+                      TrackerCast(sprite[charge].shade), sprite[charge].statnum == MAXSTATUS);
+            SW_CrossplaySelfTestReport(g_swCrossplaySelfTestMasterChargeArmed, "master-switch-arms-charges",
+                                       armedDetail);
+        }
+
+        g_swCrossplaySelfTestMasterChargeStage = 2;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_EXPLOSIVES);
+        return;
+    }
+
     // Duke's charges burn a fuse before they go off, so the blast is set up on
     // the first pass and judged once the chain has had time to run.
     if (g_swCrossplaySelfTestExplosivesArmed && g_swCrossplaySelfTestPhaseTic < 180)
