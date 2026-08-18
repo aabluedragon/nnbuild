@@ -365,8 +365,17 @@ MenuItem inputsetup_i[] =
 };
 MenuGroup inputsetupgroup = {65, 5, "^Input Setup", inputsetup_i, pic_newgametitl, 0, m_defshade, NULL,NULL, 0};
 
+MenuItem playersetup_i[] =
+{
+    {DefSlider(sldr_playerskin, 0, "Skin"), OPT_XS, OPT_LINE(0), 1, m_defshade, 0, NULL, NULL, NULL},
+    {DefNone}
+};
+
+MenuGroup playersetupgroup = {65, 5, "^Player Setup", playersetup_i, pic_newgametitl, 0, m_defshade, NULL, NULL, 0};
+
 MenuItem options_i[] =
 {
+    {DefLayer(0, "Player Setup", &playersetupgroup),OPT_XS,      OPT_LINE(15), 1, m_defshade,0,NULL, NULL, NULL},
     {DefLayer(0, "Screen Menu", &screengroup),OPT_XS,            OPT_LINE(0), 1, m_defshade,0,NULL, NULL, NULL},
     {DefLayer(0, "Mouse Menu", &mousegroup),OPT_XS,              OPT_LINE(1), 1, m_defshade,0,NULL, MNU_MouseCheck, NULL},
     {DefLayer(0, "Sound Menu", &soundgroup),OPT_XS,              OPT_LINE(2), 1, m_defshade,0,MNU_TryMusicInit, MNU_MusicFxCheck, NULL},
@@ -2226,6 +2235,7 @@ MNU_InitMenus(void)
     slidersettings[sldr_killlimit] = gs.NetKillLimit;
     slidersettings[sldr_timelimit] = gs.NetTimeLimit;
     slidersettings[sldr_playercolor] = gs.NetColor;
+    slidersettings[sldr_playerskin] = gs.PlayerSkin;
 
     buttonsettings[btn_nuke] = gs.NetNuke;
     buttonsettings[btn_markers] = gs.NetSpawnMarkers;
@@ -3823,6 +3833,27 @@ MNU_DoSlider(short dir, MenuItem_p item, SWBOOL draw)
         MNU_DrawString(OPT_XSIDE+86, item->y, tmp_text, 1, 16);
         gs.NetTimeLimit = offset;
         break;
+
+    case sldr_playerskin:
+    {
+        int const skins = SW_CrossplaySkinCount();
+
+        barwidth = skins;
+        offset = slidersettings[sldr_playerskin] += dir;
+
+        if (TEST(item->flags, mf_disabled))
+            break;
+
+        offset = max(offset, short(0));
+        offset = min(offset, short(skins - 1));
+        slidersettings[sldr_playerskin] = offset;
+
+        extra_text = (char *)SW_CrossplaySkinName(offset);
+        MNU_DrawString(OPT_XSIDE + 40, item->y, extra_text, 1,
+                       SW_CrossplaySkinIsDuke(offset) ? 16 : PALETTE_PLAYER0 + SW_CrossplaySkinPalette(offset));
+        gs.PlayerSkin = (uint8_t)offset;
+        break;
+    }
 
     case sldr_playercolor:
         barwidth = SLDR_PLAYERCOLORMAX;

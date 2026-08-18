@@ -1020,6 +1020,29 @@ Fixed since:
   requires Duke to have answered.  Nothing else covered this class: such a prop
   has no behavior record, so it never appeared in the breakable list.
 
+- **Player skins, from both games.**  Shadow Warrior dresses its player by
+  palette -- eight colours of Lo Wang, and only in multiplayer -- while Duke
+  dresses its own by art, and already carries a skin list holding Duke, the stock
+  enemies, Lo Wang and Shelly.  On a Duke level both sets should be on offer.
+
+  Duke's half of this already existed and did not need rewriting: `P_SkinRenderTile()`
+  maps an APLAYER action onto the equivalent frames of whichever skin is chosen,
+  and its Lo Wang skin already reaches across for Shadow Warrior's art.  What was
+  needed was the same lookup addressed from the other side, so the bridge passes a
+  state and a frame rather than one of Duke's CON action numbers, and the tile that
+  comes back is brought across with `artCrossplayLoadForeignGameTile()` -- a host
+  that is not Duke has none of Duke's art loaded, so the raw tile number would
+  index the wrong game's tiles.  Two things had to be added on Duke's side: its own
+  APLAYER art, which `P_SkinRenderTile()` does not answer for because Duke's
+  renderer draws that directly, and a validity test that does not read the host's
+  tiles at Duke's tile numbers.
+
+  The list is Shadow Warrior's colours followed by whichever of Duke's skins the
+  loaded game data can draw -- eighteen with an Atomic GRP -- and it is chosen from
+  a Player Setup entry under Options.  A colour skin sets the drawn player's
+  palette; a Duke skin swaps the drawn player's art.  Only the drawn copy changes:
+  the world sprite keeps what it had, because Duke's enemies aim at that.
+
 - **What an enemy drops has to be pickable.**  Duke's enemies drop by spawning a
   Duke pickup mid-fight (`state drop_shotgun` and friends, gated on
   `SPAWNAMMOODDS`), and the pass that turns a Duke pickup into a Shadow Warrior

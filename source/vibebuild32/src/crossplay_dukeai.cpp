@@ -1053,3 +1053,82 @@ void VB_DukeAI_RunTic(void)
         g_dukeAIWatchHitag = sprite[g_dukeAIWatchSprite].hitag;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Player skins, for a host running Duke's levels.
+//
+// Duke already carries the skin machinery -- it can draw its own player as any
+// of the stock enemies, as Lo Wang, or as Shelly -- so a Shadow Warrior runtime
+// asking to be drawn as one of Duke's skins needs the same lookup rather than a
+// second copy of it.  The host works in its own animation states, so what crosses
+// here is a state and a frame, not one of Duke's CON action numbers.
+// ---------------------------------------------------------------------------
+extern "C" int VB_DukeAI_PlayerSkinCount(void) { return MAXPLAYERSKINS; }
+
+extern "C" char const *VB_DukeAI_PlayerSkinName(int skin)
+{
+    return (unsigned)skin < MAXPLAYERSKINS ? g_playerSkinNames[skin] : "";
+}
+
+extern "C" int VB_DukeAI_PlayerSkinUsable(int skin)
+{
+    if ((unsigned)skin >= MAXPLAYERSKINS)
+        return 0;
+
+    // On a host that is not Duke, P_ValidateSkin()'s art check reads the host's
+    // own tiles at Duke's tile numbers and answers about the wrong game; what
+    // matters there is only whether Duke's data is on hand to bring across.
+    if (artCrossplayRuntimeGame() != ART_CROSSPLAY_GAME_DUKE)
+        return P_SkinIsCrossplayProfile(skin) ? P_ValidateSkin(skin) == skin
+                                              : artCrossplayHasForeignGameData(ART_CROSSPLAY_GAME_DUKE);
+
+    return P_ValidateSkin(skin) == skin;
+}
+
+// The host's states, in the order the bridge passes them.  Mapped onto the
+// APLAYER action each one corresponds to, because that is what Duke's own skin
+// lookup is written in terms of.
+extern "C" int VB_DukeAI_PlayerSkinTile(int skin, int state, int frame, int direction)
+{
+    static struct { int32_t start, frames; } const stateAction[] = {
+        {  0, 1 },   // standing
+        { 20, 4 },   // walking or running
+        { 45, 4 },   // walking backwards
+        { 40, 1 },   // attacking
+        { 50, 1 },   // jumping or falling
+        { 70, 1 },   // ducking
+        {106, 1 },   // taking a hit
+        {106, 5 },   // dying
+        {126, 1 },   // dead
+    };
+
+    if ((unsigned)state >= ARRAY_SIZE(stateAction))
+        return -1;
+
+    int32_t const start = stateAction[state].start;
+    int32_t const frames = stateAction[state].frames;
+    int32_t tile;
+
+    if (skin == 0)
+    {
+        // Duke himself, whose art P_SkinRenderTile() does not answer for because
+        // Duke's own renderer draws APLAYER directly.  Same arithmetic, though:
+        // APLAYER is directional, five views to a frame.
+        tile = APLAYER + start + clamp(direction, 0, 4) + 5 * (klabs(frame) % max(frames, 1));
+    }
+    else
+    {
+        tile = P_SkinRenderTile(skin, start, frames, frame, direction);
+    }
+
+    if (tile < 0)
+        return -1;
+
+    // A host that is not Duke has none of Duke's art loaded, so the tile number
+    // means nothing until it is brought across.  P_SkinRenderTile() already does
+    // this for the Lo Wang skin, which is the same trick in the other direction.
+    if (artCrossplayRuntimeGame() != ART_CROSSPLAY_GAME_DUKE && !P_SkinIsCrossplayProfile(skin))
+        tile = artCrossplayLoadForeignGameTile(ART_CROSSPLAY_GAME_DUKE, (int16_t)tile);
+
+    return tile;
+}

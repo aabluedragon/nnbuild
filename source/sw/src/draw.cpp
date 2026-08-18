@@ -700,7 +700,10 @@ analyzesprites(int viewx, int viewy, int viewz, SWBOOL mirror)
         // enemies can aim at it; the drawn copy gets Lo Wang's own proportions.
         if (crossplayForeignLevel && tu != NULL && tu->PlayerP != NULL &&
             (unsigned)SpriteNum < MAXSPRITES && SpriteNum == tu->PlayerP->PlayerSprite)
+        {
             SW_CrossplayScalePlayerTSprite(tsp);
+            SW_CrossplayApplyPlayerSkin(tsp, tu);
+        }
 
         //if(tsp->statnum == STAT_GENERIC_QUEUE)
         //    CON_ConMessage("tsp->pal = %d",tsp->pal);

@@ -3466,6 +3466,10 @@ extern "C" int VB_DukeAI_TileIsTripmine(int tileNum);
 extern "C" int VB_DukeAI_TileIsLaserLine(int tileNum);
 extern "C" int VB_DukeAI_TileIsFireExt(int tileNum);
 extern "C" int VB_DukeAI_MirrorTile(void);
+extern "C" int VB_DukeAI_PlayerSkinCount(void);
+extern "C" char const *VB_DukeAI_PlayerSkinName(int skin);
+extern "C" int VB_DukeAI_PlayerSkinUsable(int skin);
+extern "C" int VB_DukeAI_PlayerSkinTile(int skin, int state, int frame, int direction);
 extern "C" int VB_DukeAI_SpriteIsNoShade(int spriteNum);
 extern "C" int VB_DukeAI_ShotCount(void);
 extern "C" void VB_DukeAI_ActorState(int spriteNum, int *outStat, int *outAction, int *outMove, int *outCurFrame,
@@ -3892,6 +3896,152 @@ static void SW_CrossplayCaptureDukeSectorSpeeds(void)
 
         g_swCrossplayDukeSectorSpeed[sprite[i].sectnum] = sprite[i].lotag;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Player skins.
+//
+// Shadow Warrior dresses its player by palette -- eight colours of Lo Wang --
+// and Duke dresses its own by art, carrying a list that already includes Duke,
+// the stock enemies, Lo Wang and Shelly.  On a Duke level both sets are on offer,
+// so the list here is Shadow Warrior's colours followed by whichever of Duke's
+// skins the loaded game data can actually draw.
+// ---------------------------------------------------------------------------
+#define VB_CROSSPLAY_SW_SKIN_COUNT 8
+
+static char g_swCrossplaySkinNames[VB_CROSSPLAY_SW_SKIN_COUNT + 16][40];
+static int8_t g_swCrossplaySkinIsDuke[VB_CROSSPLAY_SW_SKIN_COUNT + 16];
+static int8_t g_swCrossplaySkinValue[VB_CROSSPLAY_SW_SKIN_COUNT + 16];
+static int32_t g_swCrossplaySkinCount;
+
+static void SW_CrossplayBuildSkinList(void)
+{
+    static char const *const swColours[VB_CROSSPLAY_SW_SKIN_COUNT] = {
+        "Brown", "Gray", "Purple", "Red", "Yellow", "Olive", "Green", "Blue",
+    };
+
+    g_swCrossplaySkinCount = 0;
+
+    for (int32_t i = 0; i < VB_CROSSPLAY_SW_SKIN_COUNT; ++i)
+    {
+        Bsnprintf(g_swCrossplaySkinNames[g_swCrossplaySkinCount], sizeof(g_swCrossplaySkinNames[0]), "Lo Wang %s",
+                  swColours[i]);
+        g_swCrossplaySkinIsDuke[g_swCrossplaySkinCount] = 0;
+        g_swCrossplaySkinValue[g_swCrossplaySkinCount] = (int8_t)i;
+        ++g_swCrossplaySkinCount;
+    }
+
+    // Duke's own skins, but only the ones whose art is actually present.
+    for (int32_t skin = 0; skin < VB_DukeAI_PlayerSkinCount(); ++skin)
+    {
+        if ((size_t)g_swCrossplaySkinCount >= ARRAY_SIZE(g_swCrossplaySkinNames) ||
+            !VB_DukeAI_PlayerSkinUsable(skin))
+            continue;
+
+        Bstrncpyz(g_swCrossplaySkinNames[g_swCrossplaySkinCount], VB_DukeAI_PlayerSkinName(skin),
+                  sizeof(g_swCrossplaySkinNames[0]));
+        g_swCrossplaySkinIsDuke[g_swCrossplaySkinCount] = 1;
+        g_swCrossplaySkinValue[g_swCrossplaySkinCount] = (int8_t)skin;
+        ++g_swCrossplaySkinCount;
+    }
+}
+
+int SW_CrossplaySkinCount(void)
+{
+    if (g_swCrossplaySkinCount == 0)
+    {
+        SW_CrossplayBuildSkinList();
+
+        if (Bgetenv("VB_CP_SKIN_DEBUG") != NULL)
+            for (int32_t i = 0; i < g_swCrossplaySkinCount; ++i)
+                LOG_F(INFO, "CPSKIN %d: %-20s %s", i, g_swCrossplaySkinNames[i],
+                      g_swCrossplaySkinIsDuke[i] ? "(Duke)" : "(Shadow Warrior)");
+    }
+
+    return g_swCrossplaySkinCount;
+}
+
+char const *SW_CrossplaySkinName(int index)
+{
+    SW_CrossplaySkinCount();
+
+    return (unsigned)index < (unsigned)g_swCrossplaySkinCount ? g_swCrossplaySkinNames[index] : "";
+}
+
+int SW_CrossplaySkinIsDuke(int index)
+{
+    SW_CrossplaySkinCount();
+
+    return (unsigned)index < (unsigned)g_swCrossplaySkinCount && g_swCrossplaySkinIsDuke[index];
+}
+
+int SW_CrossplaySkinPalette(int index)
+{
+    SW_CrossplaySkinCount();
+
+    return (unsigned)index < (unsigned)g_swCrossplaySkinCount && !g_swCrossplaySkinIsDuke[index]
+           ? g_swCrossplaySkinValue[index] : 0;
+}
+
+// Works out which of the bridge's animation states the player is in, from the
+// flags Shadow Warrior already keeps, and swaps the drawn sprite for the skin's
+// own art.  The world sprite is left alone: Duke's enemies aim at that.
+void SW_CrossplayApplyPlayerSkin(tspriteptr_t tsp, USERp tu)
+{
+    if (tsp == NULL || tu == NULL || tu->PlayerP == NULL)
+        return;
+
+    int const skin = gs.PlayerSkin;
+
+    if (!SW_CrossplaySkinIsDuke(skin))
+    {
+        // Shadow Warrior's own skins are a palette on Lo Wang.
+        tsp->pal = (uint8_t)(PALETTE_PLAYER0 + SW_CrossplaySkinPalette(skin));
+        return;
+    }
+
+    PLAYERp const pp = tu->PlayerP;
+    int state;
+
+    if (tu->Health <= 0)
+        state = 8;                                  // dead
+    else if (TEST(pp->Flags, PF_DEAD))
+        state = 7;                                  // dying
+    else if (TEST(pp->Flags, PF_CRAWLING))
+        state = 5;                                  // ducking
+    else if (TEST(pp->Flags, PF_JUMPING | PF_FALLING))
+        state = 4;                                  // jumping or falling
+    else if (pp->xvect != 0 || pp->yvect != 0)
+        state = 1;                                  // walking or running
+    else
+        state = 0;                                  // standing
+
+    // Which way the player is facing relative to the eye, in the five steps
+    // Duke's directional art is cut into.
+    int const viewAngle = NORM_ANGLE(getangle(tsp->x - Player[screenpeek].posx, tsp->y - Player[screenpeek].posy) -
+                                     tsp->ang + 1024 + 128);
+    int const direction = viewAngle >> 8;
+
+    int const tile = SW_CrossplayPlayerSkinTile(skin, state, (int)(totalclock >> 3), direction);
+
+    if (tile >= 0)
+    {
+        tsp->picnum = (int16_t)tile;
+        tsp->pal = 0;
+    }
+}
+
+// The tile the drawn player should use for this skin, or -1 to leave Lo Wang's
+// own art alone.  The host's animation state is worked out from the player's
+// USER state rather than guessed from the tile.
+int SW_CrossplayPlayerSkinTile(int index, int state, int frame, int direction)
+{
+    SW_CrossplaySkinCount();
+
+    if (!SW_CrossplaySkinIsDuke(index))
+        return -1;
+
+    return VB_DukeAI_PlayerSkinTile(g_swCrossplaySkinValue[index], state, frame, direction);
 }
 
 static int32_t SW_CrossplayDukeGpspeedForSector(int16_t sectnum)
@@ -17800,6 +17950,7 @@ InitGame(int32_t argc, char const * const * argv)
     // Whichever Duke GRP was handed over decides which episodes exist, so the
     // level table is built before anything reads it.
     SW_CrossplayBuildDukeLevelTable();
+    SW_CrossplaySkinCount();
 
     char const * const deffile = G_DefFile();
     uint32_t stime = timerGetTicks();

@@ -2328,6 +2328,12 @@ void SW_CrossplayTickDukeToilet(PLAYERp pp); // game.c
 void SW_CrossplayTickDukeNukeButton(PLAYERp pp); // game.c
 SWBOOL SW_CrossplaySetupConvertedDukePickup(int16_t SpriteNum); // sprite.c
 int  SW_CrossplayDukeDropsConverted(void);
+int  SW_CrossplaySkinCount(void);
+char const *SW_CrossplaySkinName(int index);
+int  SW_CrossplaySkinIsDuke(int index);
+int  SW_CrossplaySkinPalette(int index);
+int  SW_CrossplayPlayerSkinTile(int index, int state, int frame, int direction);
+void SW_CrossplayApplyPlayerSkin(tspriteptr_t tsp, USERp tu);
 int  SW_CrossplayDukeNukeButtonPresses(void);
 int  SW_CrossplayDukeNukeButtonRunning(void);
 int SW_CrossplayDukeMapBridgeActive(void); // game.c
