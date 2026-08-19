@@ -195,18 +195,58 @@ int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
 
     switch (tileGetMapping(tileNum))
     {
-    // A_Spawn() assigns these a bare hittable cstat, wiping any blocking bit
-    // the map gave them.
+    // A_Spawn() assigns these a bare cstat, wiping any blocking bit the map gave
+    // them.
     case FEMMAG1__:
     case FEMMAG2__:
     case NATURALLIGHTNING__:
-    case QUEBALL__:
-    case STRIPEBALL__:
         return 0;
 
+    // Not blocking, but hittable: A_Spawn() assigns a pool ball
+    // `cstat = CSTAT_SPRITE_BLOCK_HITSCAN` outright.  Returning nothing at all
+    // took that bit away too, so a pool ball could not be shot.
+    case QUEBALL__:
+    case STRIPEBALL__:
+        return CSTAT_SPRITE_BLOCK_HITSCAN;
+
+    // A_Spawn() wipes a camera's cstat down to its invisible bit, so whatever
+    // the map said about it is gone.
     case CAMERA1__:
-    case CAMERAPOLE__:
         return g_damageCameras ? (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN) : 0;
+
+    // A camera pole is not the same case: A_Spawn() only *clears* its invisible
+    // bit, so the map's own blocking survives.  Grouping it with CAMERA1 made a
+    // solid pole walk-through whenever cameras are not damageable.
+    case CAMERAPOLE__:
+        return bits | (g_damageCameras ? (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN) : 0);
+
+    // Blocking, but not to a bullet.  A_Spawn() assigns a masked wall
+    // `cstat = <alignment bits> | CSTAT_SPRITE_BLOCK` and a crack
+    // `cstat |= 1` (plus the wall-alignment bit when it needs one) -- neither
+    // gets CSTAT_SPRITE_BLOCK_HITSCAN, which is why Duke lets you shoot through
+    // a fence or a railing.  These return here rather than falling through to
+    // the tail below, which would promote the blocking bit into a hitscan bit
+    // and stop the shot.
+    case MASKWALL1__:
+    case MASKWALL2__:
+    case MASKWALL3__:
+    case MASKWALL4__:
+    case MASKWALL5__:
+    case MASKWALL6__:
+    case MASKWALL7__:
+    case MASKWALL8__:
+    case MASKWALL9__:
+    case MASKWALL10__:
+    case MASKWALL11__:
+    case MASKWALL12__:
+    case MASKWALL13__:
+    case MASKWALL14__:
+    case MASKWALL15__:
+    case CRACK1__:
+    case CRACK2__:
+    case CRACK3__:
+    case CRACK4__:
+        return bits | CSTAT_SPRITE_BLOCK;
 
     case PODFEM1__:
     case NAKED1__:
@@ -260,10 +300,6 @@ int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
     case CHAIR2__:
     case CHAIR3__:
     case CONE__:
-    case CRACK1__:
-    case CRACK2__:
-    case CRACK3__:
-    case CRACK4__:
     case CRANE__:
     case DOMELITE__:
     case DOORSHOCK__:
@@ -290,21 +326,6 @@ int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
     case JURYGUY__:
     case LETTER__:
     case LUKE__:
-    case MASKWALL1__:
-    case MASKWALL10__:
-    case MASKWALL11__:
-    case MASKWALL12__:
-    case MASKWALL13__:
-    case MASKWALL14__:
-    case MASKWALL15__:
-    case MASKWALL2__:
-    case MASKWALL3__:
-    case MASKWALL4__:
-    case MASKWALL5__:
-    case MASKWALL6__:
-    case MASKWALL7__:
-    case MASKWALL8__:
-    case MASKWALL9__:
     case MONK__:
     case MOVIECAMERA__:
     case NUKEBARREL__:
@@ -356,7 +377,10 @@ int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
         break;
     }
 
-    // Duke's last word on any map sprite: solid implies hittable.
+    // Solid implies hittable, which is what A_Spawn() does to the bits the *map*
+    // supplied -- and it does it before the per-tile switch, so a tile whose own
+    // case assigns blocking without hitscan keeps it that way.  Those cases
+    // return above rather than reaching this.
     if (bits & CSTAT_SPRITE_BLOCK)
         bits |= CSTAT_SPRITE_BLOCK_HITSCAN;
 
@@ -519,6 +543,27 @@ int VB_DukeAI_IsAdoptableTile(int tileNum)
     case CRACK2__:
     case CRACK3__:
     case CRACK4__:
+        return 1;
+
+    // Duke's reactor.  Its whole life is in G_MoveActors() -- it flashes, it
+    // damages the player, and when it has taken enough it turns itself and its
+    // sparks into the burnt frames and kills the sector's pivot effector -- and
+    // that mover already runs under crossplay.  It has no CON actor block at
+    // all, so nothing else here would have claimed it; left unclaimed it was
+    // walk-through, because A_Spawn()'s `cstat |= BLOCK|BLOCK_HITSCAN` for it
+    // never ran.
+    case REACTOR__:
+    case REACTOR2__:
+        return 1;
+
+    // The stay-put bosses.  Both are plain `actor` blocks in GAME.CON rather
+    // than `useractor enemy`, so A_CheckEnemyTile() says no and the host's own
+    // actor list does not name them either -- they were neither given Duke's AI
+    // nor made solid.  BOSS1STAYPUT turns itself into BOSS1 on its first tic
+    // through `cactor`, which is exactly the LIZMANSTAYPUT shape this list
+    // already exists for.
+    case BOSS1STAYPUT__:
+    case BOSS4STAYPUT__:
         return 1;
 
     // A locator is an inert, invisible waypoint, but Duke's RECON navigates by

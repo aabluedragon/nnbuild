@@ -11764,7 +11764,17 @@ int32_t engineLoadBoard(const char *filename, char flags, vec3_t *dapos, int16_t
         return loadboard_replace(filename, flags, dapos, daang, dacursectnum);
     if (artCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) >= 0 &&
         artCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) != artCrossplayRuntimeGame())
-        return engineLoadBoardCrossplayForeign(filename, flags, dapos, daang, dacursectnum);
+    {
+        int32_t const status = engineLoadBoardCrossplayForeign(filename, flags, dapos, daang, dacursectnum);
+
+        // -1 means the foreign data does not hold that map, which is exactly what
+        // a user map is: a loose .MAP file beside the game or on a search path.
+        // Falling through to the ordinary loader is what lets one be played at
+        // all; without this every user map answered "Level not found".
+        if (status != -1)
+            return status;
+    }
+
     return engineLoadBoardNative(filename, flags, dapos, daang, dacursectnum);
 }
 

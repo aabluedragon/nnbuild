@@ -1655,6 +1655,206 @@ run's result should not be read too closely.
   setup, which is the quickest way to see whose CON compiled: with vacation.grp
   it reads "VACATION DUKEMATCH" and "LIFE'S A BEACH" with VACA1..VACA7 in it.
 
+- **User maps, mod PK3s, and the sound the audio device was answering.**  A
+  second pass over what "a Duke mod works" actually requires turned up four more
+  things, three of them bugs in code that predates the mod work:
+
+  - **A user map could not be loaded at all.**  `engineLoadBoard()` routed every
+    crossplay level through `engineLoadBoardCrossplayForeign()`, which stages the
+    map out of the foreign data -- and when the map is not in any container it
+    returned -1 and nothing else was tried, so a loose `.MAP` answered "Level not
+    found".  A -1 now falls through to the ordinary loader.  The art follows: the
+    level's container stack no longer needs a container at the front of it, so a
+    loose map still gets the Duke data's art, palette and sky.  Shadow Warrior's
+    own argument parser also accepted `-game_dir` and stepped straight over its
+    value, and did not recognise `-j` at all, so the only directory a user map
+    could live in was the working directory; both now add a search path.
+
+  - **A mod PK3 was never registered.**  Every game-inference step in
+    `gs_trackForeignDataPath()` is a test for *retail* data -- a known size and
+    CRC, a known basename, a directory holding one of those -- and a mod matches
+    none of them, so an unrecognised container was dropped: not foreign data, not
+    in any crossplay lookup.  It is now registered as add-on data for whichever
+    game's levels are being played, which puts it ahead of the base game in the
+    newest-first search, exactly as a mod goes ahead of the game it modifies.
+    (Registering it as "unknown" instead drops it into the second pass of the
+    two-pass lookups and the stock files answer first -- the opposite of a mod.
+    That was tried and it is how Duke 64's CONs came out with a hundred
+    undefined parameters.)
+
+  - **Zip name matching was one-directional.**  A PK3 keeps its files in folders
+    -- `cons/GAME.CON`, `maps/BIO3.MAP` -- while the names asked for come from a
+    GRP-shaped world: a bare `GAME.CON` from the CON compiler, or `/E1L1.MAP`
+    from `definelevelname`, which stores a leading slash.  The matcher would find
+    `maps/BIO3.MAP` when asked for `BIO3.MAP` and nothing else, so a leading
+    slash or a directory on the wanted side failed against every entry in the
+    file.  Both sides are now reduced to a basename after a leading slash is
+    dropped.  `artCrossplayContainerHasFileStrict()` also exists now: the
+    forgiving probe ends in a search-path fallback, which meant the container
+    picked as a level's *primary art source* could be one that does not hold the
+    level at all.
+
+  - **The audio device was answering a simulation question.**  Duke's `soundonce`
+    asks whether the last one has finished; the bridge answered by walking Shadow
+    Warrior's live voice list and asking the mixer.  That makes the answer a
+    property of the machine -- with SFX off, or the actor too far from the *local*
+    camera, or no free voice, it is always "no" and the sound restarts every tic
+    -- and it put an audio callback thread inside a deterministic lockstep
+    simulation.  The bridge keeps its own answer now: a play records a deadline
+    taken from the sound file's own length, and the check compares against the
+    bridge's tic counter.  It is keyed by sprite as well as by sound, which is
+    what Duke's `A_CheckSoundPlaying()` asks and which stops one actor's voice
+    suppressing every other actor's.  This is what `hydrant-sound-once` had been
+    failing on: it now reports one or two gurgles over 200 tics instead of 149.
+
+    Separately, `PlaySound()` picks a pitch with `STD_RANDOM_RANGE()`, which
+    draws from `wrand()` -- and `wrandomseed` is synchronized state in this build,
+    shipped in the late-join handoff and printed in the sync dump.  Since whether
+    a sound plays at all is a local matter, the number of draws differed per
+    client and the seed drifted.  The bridge restores the seed around the call.
+    Duke's own `S_GetPitch()` already refuses to do this for the same reason.
+
+  An audit of `VB_DukeAI_MapSpriteSolidBits()` against `A_Spawn()`, tile by tile,
+  turned up five more: `REACTOR`/`REACTOR2` were walk-through and are now adopted
+  outright (their whole life is in `G_MoveActors()`, which already runs);
+  `BOSS1STAYPUT`/`BOSS4STAYPUT` are plain `actor` blocks rather than
+  `useractor enemy`, so nothing claimed them and they were neither solid nor
+  running Duke's AI; the masked walls and cracks were being given
+  `CSTAT_SPRITE_BLOCK_HITSCAN` that `A_Spawn()` withholds, because the tail
+  "solid implies hittable" promotion in Duke runs *before* the per-tile switch
+  and so only applies to bits the map supplied -- Duke lets you shoot through a
+  fence; `QUEBALL`/`STRIPEBALL` were returning nothing where `A_Spawn()` makes
+  them hittable, so a pool ball could not be shot; and `CAMERAPOLE` was grouped
+  with `CAMERA1`, which wipes its cstat, where `A_Spawn()` only clears the pole's
+  invisible bit and leaves the map's blocking alone.
+
+- **Art a mod declares in a .def instead of an ART file.**  A modern Duke mod
+  ships PNGs and a `.def` that says `tilefromtexture <tile> { file "x.png" }`.
+  The engine's own DEF parser is no use here: it is static, it is a three-thousand
+  line switch whose other tokens reach into the running game's palettes, models,
+  skyboxes and sounds, and it installs at the *Duke* tile number -- which under
+  another runtime is somebody else's art.  It also runs once at startup, long
+  before the host knows which level it is loading.
+
+  So the bridge reads the mod's `.def` files itself, reacting to three tokens
+  (`define`, `include`, `tilefromtexture`) and stepping over everything else, and
+  remembers only "this Duke tile comes from that image file".  The image is
+  decoded with the engine's own `kpgetdim`/`kprender` straight out of the
+  container's bytes, matched into the runtime palette, and installed into a
+  generated slot -- on demand, when a level actually references the tile, and
+  only after every ART file in the level's container stack has been asked first.
+
+  The `.def` files are found by *enumerating* the container rather than probing a
+  name list: teamduke and StrikerDM ship `duke3d.def`, but Duke 64's is
+  `duke64.def`, and its main def declares no tiles at all -- all 777 of them are
+  in the two files it includes.  Reading the def through the engine's search path
+  would not do either, since that resolves through one global chain shared by
+  every mounted archive and cannot say which container answered -- the same
+  shape as the bug documented above.
+
+  Two traps worth naming, because both produce art that looks plausible and is
+  wrong.  Build tiles are column-major, so a pixel goes to `[x * ysiz + y]`; row
+  order gives a diagonally sheared tile that still draws.  And `palette_t` names
+  its bytes `r,g,b,f` while `kprender` fills them B,G,R,A, so the colour match is
+  written `(col->b, col->g, col->r)` -- the apparent swap is the correction, and
+  "fixing" it swaps red and blue.  Verified by dumping an imported tile back out
+  through the runtime palette and comparing it against the source PNG.
+
+  Duke 64's first level went from 221 tiles remapped with 28 missing to 249 with
+  none.  StrikerDM's own maps pull 616 declarations out of its 27 def files; the
+  enumeration of that 338MB archive takes about a second and only happens when a
+  tile is actually missing from every ART file, so stock Duke never pays for it.
+
+  Three things a container can do to this code had to be shut off first, since
+  its bytes are whatever somebody put in the archive:
+
+  - `include` branches as well as nests, so a depth limit alone is no limit at
+    all -- a def that includes itself twenty times is read four hundred times two
+    levels down and the level never finishes loading.  A file already read is
+    skipped, which is also just correct: reading it twice can only repeat what it
+    said.
+  - The zip walk seeks past each entry with `fseek`, whose offset is a signed
+    `long` -- 32 bits on Windows, and `obj-win32` is a live build here.  A size
+    with the top bit set became a *backward* seek, and an archive that chose its
+    bytes could make the walk circle forever.  Both the enumerator and the
+    reader it was forked from now refuse a size that cannot be represented.
+  - The PNG decoder ignores the length it is handed and walks the chunk chain off
+    the file's own 32-bit sizes, so one chunk claiming two gigabytes sends it off
+    the end of the buffer; the few bytes of slack the engine's own loader adds are
+    no answer to a stride that size.  The chain is checked here first -- every
+    chunk has to fit in what was actually read, the first has to be IHDR, and the
+    walk has to reach image data -- and anything else is refused.  Only PNG is
+    accepted, which costs nothing: every `tilefromtexture` in every mod examined
+    names a `.png`.
+
+    The first version of that check passed the crafted file it was written to
+    stop.  It returned "sound" when the chain ran off the end without reaching
+    IDAT, which is precisely the shape of the attack -- the last thing in the
+    file is a chunk header pointing at nothing.  Running out is a refusal now.
+    Worth remembering that the check was only known to be wrong because it was
+    run against the input it was supposed to reject.
+
+- **What a mod's music and its `artfile` art needed.**  Two more things turned up
+  once whole mods were actually played rather than just loaded:
+
+  - **A track with a path in its name was cut in half.**  `LevelSong` is a
+    sixteen-character field, and its width is part of the demo header, so it
+    cannot simply be widened.  Vacation's tracks are bare names and fit; every
+    one of StrikerDM's is `music/<name>.mid`, which is sixteen characters before
+    the terminator, so the name handed to the player was `music/sirius.mi` and
+    nothing was found.  The crossplay path keeps the full name in a buffer of its
+    own and hands that to `PlaySong()`; `LevelSong` still gets what fits, for the
+    demo and anything else reading it.  A track that cannot be played now says so
+    -- it was silent in both senses before.
+
+  - **`artfile` was not read.**  `artfile { file "x.art" tile N }` puts a whole
+    ART unit at a tile number of the mod's choosing, under a name that is not
+    `TILES%03d.ART`, so the ordinary scan never looked at it.  StrikerDM keeps
+    three of them and that is exactly where its ten missing tiles were.  The def
+    scanner records them, and the tile lookup asks them after the numbered ART
+    files and before the DEF images.  The `tile N` override is applied by
+    rewriting the header's tilestart in the loaded copy, which is what the
+    engine's own parser does to it, and which lets the ordinary ART reader index
+    it by the Duke tile number with no special case.
+
+  `blast-triggers-map-explosives` also had to learn the same lesson as VACASL's
+  elevator: it demanded that a blast set off one of the map's explosive sectors,
+  which a deathmatch map is free to put nowhere near a charge.  It now checks
+  whether any explosive sector's source was within the blast radius at all, and
+  says so rather than failing when none was.
+
+- **A mod's sounds were never played, and the self-test could not see it.**  Two
+  faults, one of which had nothing to do with mods being long-named.
+
+  `SW_CrossplayForeignGameForSoundSlot()` decides which sound slots are looked
+  for in the Duke data, and it named only the two hand-written `DIGI_DUKE_*`
+  ranges.  The reserved block the bridge fills in from a mod's own CON sits above
+  them, so every sound it claimed a slot for was searched for in Shadow
+  Warrior's data, where by definition it does not exist.  All of them were
+  silent -- vacation's as much as StrikerDM's.
+
+  And `VOCstruct::name` holds thirteen characters, which is a name out of a GRP
+  and not a name out of a mod: two hundred and twenty-two of StrikerDM's three
+  hundred and seventy-four sounds are `sounds/<name>.wav`, longer than the field
+  before the path is counted, and the claim was refusing them outright.  The
+  record now keeps the base name, which is all anything matches on, and the name
+  the file is actually read by lives beside it.  The reserved block also had to
+  grow from 256 to 512: StrikerDM needs 265 and nine were being dropped.
+
+  Worth dwelling on why this was not caught earlier.  `duke-actors-sound` counts
+  the play *events* the bridge raises, not whether any audio was found, so it
+  passed over silence -- and it was cited as evidence that vacation's sounds
+  worked.  A count of things attempted is not a measurement of things achieved.
+  `VB_CP_SOUND_PROBE=1` now answers the question directly by reading each claimed
+  file out of the foreign data: stock Duke's E1L1 finds 192 of 201, vacation 207
+  of 215, StrikerDM 256 of 265.  The handful absent in each case is the same set
+  -- `hlminhal.voc`, `yes.voc`, `fan.voc`, `hover.voc` and friends -- names stock
+  Duke's CON declares that no GRP ships, and which are missing in real Duke too.
+
+  Format is not a problem: `FX_Play()` dispatches on the data rather than the
+  extension, so `.wav` and `.ogg` reach `MV_PlayWAV`/`MV_PlayVorbis` the same way
+  `.voc` reaches `MV_PlayVOC`.
+
 Still open:
 
 - `hydrant-sound-once` depends on a real audio voice being alive: `soundonce`
@@ -1770,6 +1970,7 @@ reproductions passed while the user's own game failed.
 | `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
 | `VB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
 | `VB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |
+| `VB_CP_SOUND_PROBE=1` | at level setup, read every Duke sound the bridge claimed a slot for and report how many are actually present in the foreign data.  Off by default because it reads all of them |
 
 ## Debugging approach
 

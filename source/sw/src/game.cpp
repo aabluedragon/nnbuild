@@ -12461,6 +12461,7 @@ static int32_t g_swCrossplaySelfTestMasterChargeArmed;
 static int32_t g_swCrossplaySelfTestExplosivesBefore;
 static int32_t g_swCrossplaySelfTestMapTriggerBase;
 static int32_t g_swCrossplaySelfTestFireExtTagged;
+static int32_t g_swCrossplaySelfTestExplosiveSourceInRange;
 
 // Set by the self-test to have the renderer save a frame; see draw.cpp.
 int32_t g_swCrossplayCaptureRequest;
@@ -15502,6 +15503,19 @@ static void SW_CrossplaySelfTestRunExplosives(PLAYERp const pp)
             ++g_swCrossplaySelfTestFireExtTagged;
 
             vec3_t const hitPos = sprite[spriteNum].xyz;
+
+            // Was any explosive sector's source actually close enough for this
+            // blast to reach?  A map is free to put its SE 13 sectors nowhere
+            // near its charges -- StrikerDM's deathmatch maps do -- and demanding
+            // an activation there is demanding something the level does not have.
+            for (int32_t src = 0; src < g_swCrossplayDukeExplosiveSourceCount; ++src)
+            {
+                sw_crossplay_duke_explosive_source_t const &source = g_swCrossplayDukeExplosiveSources[src];
+
+                if (klabs(source.pos.x - hitPos.x) <= 4096 && klabs(source.pos.y - hitPos.y) <= 4096)
+                    g_swCrossplaySelfTestExplosiveSourceInRange = 1;
+            }
+
             SW_CrossplayExplodeDukeMapSprites(pp->PlayerSprite, hitPos.x, hitPos.y, hitPos.z,
                                               sprite[spriteNum].sectnum, 4096, 200);
         }
@@ -15532,6 +15546,9 @@ static void SW_CrossplaySelfTestRunExplosives(PLAYERp const pp)
         if (g_swCrossplayDukeExplosiveCount == 0)
             SW_CrossplaySelfTestReport(1, "blast-triggers-map-explosives",
                                        "no Duke explosive sectors in this map, skipped");
+        else if (!g_swCrossplaySelfTestExplosiveSourceInRange)
+            SW_CrossplaySelfTestReport(1, "blast-triggers-map-explosives",
+                                       "no Duke explosive sector source within blast range, skipped");
         else
             SW_CrossplaySelfTestReport(g_swCrossplayDukeExplosiveActivations > 0, "blast-triggers-map-explosives",
                                        detail);
@@ -16729,20 +16746,119 @@ int SW_CrossplayDukeSoundPlayCount(int soundNum)
 // per-sprite question is answered as "is this sound playing at all" -- which is
 // what Duke's own A_CheckSoundPlaying() does when given -1, and is right for the
 // use CON makes of it: `soundonce` asks whether to start the sound again.
+// How long a Duke sound counts as still playing.
+//
+// Duke's `soundonce` asks whether the last one has finished before starting
+// another.  The bridge used to answer that by walking Shadow Warrior's live
+// voice list and asking the mixer, which makes the answer a property of the
+// machine rather than of the simulation: with the SFX toggle off, or the actor
+// too far from the *local* camera, or no free voice, the answer is always "no"
+// and the sound restarts every single tic.  It also made the answer depend on an
+// audio callback thread, and this build's netcode is deterministic lockstep.
+//
+// So the bridge keeps its own answer.  A play records a deadline; the check is a
+// comparison against the bridge's own tic counter.  The deadline comes from the
+// sound file's own length, which is the same on every machine, and the entry is
+// keyed by sprite as well as by sound because that is what Duke's
+// A_CheckSoundPlaying() asks -- one actor's voice used to suppress every other
+// actor's `soundonce` for the same sound.
+#define VB_CROSSPLAY_DUKE_SOUND_HOLDS 384
+
+typedef struct
+{
+    int16_t soundNum;
+    int16_t spriteNum;
+    int32_t expiryTic;
+} sw_crossplay_duke_sound_hold_t;
+
+static sw_crossplay_duke_sound_hold_t g_swCrossplayDukeSoundHolds[VB_CROSSPLAY_DUKE_SOUND_HOLDS];
+static int32_t g_swCrossplayDukeSoundHoldCount;
+static int32_t g_swCrossplayDukeSoundTic;
+
+static void SW_CrossplayResetDukeSoundHolds(void)
+{
+    g_swCrossplayDukeSoundHoldCount = 0;
+    g_swCrossplayDukeSoundTic = 0;
+}
+
+// The clip's length in host tics, from the file rather than from the mixer.
+// Duke's VOCs are 8-bit mono at 11025Hz; the header adds a few dozen bytes,
+// which at this resolution does not matter.  A sound whose data cannot be
+// measured gets a second, which is longer than most effects and shorter than
+// any line of speech.
+static int32_t SW_CrossplayDukeSoundHoldTics(int32_t digi)
+{
+    static int32_t const defaultTics = VB_CROSSPLAY_SW_TICS_PER_SEC;
+
+    if ((unsigned)digi >= DIGI_MAX)
+        return defaultTics;
+
+    VOC_INFOp const vp = &voc[digi];
+
+    // CacheSound() only reads the file, so asking for it here costs nothing the
+    // sound was not about to pay anyway, and the answer does not depend on
+    // whether the audio device took it.
+    if (vp->data == NULL && vp->name[0] != '\0')
+        CacheSound(digi, CACHE_SOUND_PLAY);
+
+    if (vp->data == NULL || vp->datalen <= 0)
+        return defaultTics;
+
+    int32_t const tics = (int32_t)(((int64_t)vp->datalen * VB_CROSSPLAY_SW_TICS_PER_SEC) / 11025);
+
+    return clamp(tics, 4, VB_CROSSPLAY_SW_TICS_PER_SEC * 30);
+}
+
+static void SW_CrossplayHoldDukeSound(int32_t soundNum, int32_t spriteNum, int32_t digi)
+{
+    int32_t const expiry = g_swCrossplayDukeSoundTic + SW_CrossplayDukeSoundHoldTics(digi);
+    int32_t firstExpired = -1;
+
+    for (int32_t i = 0; i < g_swCrossplayDukeSoundHoldCount; ++i)
+    {
+        sw_crossplay_duke_sound_hold_t &hold = g_swCrossplayDukeSoundHolds[i];
+
+        if (hold.soundNum == (int16_t)soundNum && hold.spriteNum == (int16_t)spriteNum)
+        {
+            hold.expiryTic = expiry;
+            return;
+        }
+
+        if (firstExpired < 0 && hold.expiryTic <= g_swCrossplayDukeSoundTic)
+            firstExpired = i;
+    }
+
+    int32_t slot = firstExpired;
+
+    if (slot < 0)
+    {
+        if (g_swCrossplayDukeSoundHoldCount >= VB_CROSSPLAY_DUKE_SOUND_HOLDS)
+            return;   // every hold is live; the new one simply is not tracked
+
+        slot = g_swCrossplayDukeSoundHoldCount++;
+    }
+
+    g_swCrossplayDukeSoundHolds[slot].soundNum = (int16_t)soundNum;
+    g_swCrossplayDukeSoundHolds[slot].spriteNum = (int16_t)spriteNum;
+    g_swCrossplayDukeSoundHolds[slot].expiryTic = expiry;
+}
+
 static int SW_CrossplayDukeAICheckSoundPlaying(int soundNum, int spriteNum)
 {
-    UNREFERENCED_PARAMETER(spriteNum);
-
     if ((unsigned)soundNum >= ARRAY_SIZE(g_swCrossplayDukeAISoundMap))
         return 0;
 
-    int32_t const digi = g_swCrossplayDukeAISoundMap[soundNum];
-    if (digi <= DIGI_NULL || digi >= DIGI_MAX)
-        return 0;
+    for (int32_t i = 0; i < g_swCrossplayDukeSoundHoldCount; ++i)
+    {
+        sw_crossplay_duke_sound_hold_t const &hold = g_swCrossplayDukeSoundHolds[i];
 
-    for (VOC3D_INFOp vp = voc3dstart; vp != NULL; vp = vp->next)
-        if (vp->num == digi && !vp->deleted && FX_SoundValidAndActive(vp->handle))
+        if (hold.soundNum != (int16_t)soundNum || hold.expiryTic <= g_swCrossplayDukeSoundTic)
+            continue;
+
+        // Duke passes -1 for "is this sound playing on anything".
+        if (spriteNum < 0 || hold.spriteNum == (int16_t)spriteNum)
             return 1;
+    }
 
     return 0;
 }
@@ -16760,7 +16876,23 @@ static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum)
     if ((unsigned)soundNum < ARRAY_SIZE(g_swCrossplayDukeAISoundPlays))
         ++g_swCrossplayDukeAISoundPlays[soundNum];
 
+    // Recorded before the sound is handed to the mixer, and whether or not the
+    // mixer takes it.  That is the whole point: the simulation's answer to "is
+    // it still playing" must not depend on the audio device.
+    SW_CrossplayHoldDukeSound(soundNum, spriteNum, digi);
+
     int32_t handle;
+
+    // Playing a sound must not move the shared random seed.  Shadow Warrior's
+    // PlaySound() picks a pitch with STD_RANDOM_RANGE(), which draws from
+    // wrand(), and `wrandomseed` is synchronized state in this build -- the
+    // late-join handoff ships it and the sync dump prints it.  Whether a given
+    // sound plays at all depends on the local machine: the SFX toggle, the
+    // distance from the *local* camera, whether a voice was free.  So the number
+    // of draws differs per client, and the seed drifts apart.  Duke's own
+    // S_GetPitch() already refuses to do this for the same reason; the bridge was
+    // reintroducing it one layer down.
+    uint32_t const seedBeforeSound = wrandomseed;
 
     if ((unsigned)spriteNum < MAXSPRITES && sprite[spriteNum].statnum != MAXSTATUS)
     {
@@ -16772,6 +16904,8 @@ static int SW_CrossplayDukeAIPlaySound(int soundNum, int spriteNum)
         PLAYERp const pp = Player + myconnectindex;
         handle = PlaySound(digi, &pp->posx, &pp->posy, &pp->posz, v3df_dontpan);
     }
+
+    wrandomseed = seedBeforeSound;
 
     UNREFERENCED_PARAMETER(handle);
     return 0;
@@ -16791,6 +16925,22 @@ static void SW_CrossplayConvertDroppedDukePickups(void);
 // they are filled here from the compiled Duke CON, so a sound exists because
 // Duke's script defines it.  The file itself is read out of the Duke data by the
 // same path as every other Duke sound.
+// The name a claimed slot's file really has.  Shadow Warrior's own sound record
+// holds thirteen characters, which is enough for a name out of a GRP and not for
+// a name out of a mod: two hundred and twenty-two of StrikerDM's sounds are
+// `sounds/<name>.wav`, longer than the field before the path is even counted.
+// So the record keeps the base name, for anything that matches on it, and the
+// path the file is actually read by lives here.
+static char *g_swCrossplayDukeSoundPath[DIGI_DUKE_MODSOUND511 - DIGI_DUKE_MODSOUND0 + 1];
+
+char const *SW_CrossplayDukeSoundFileName(int32_t num)
+{
+    if (num < DIGI_DUKE_MODSOUND0 || num > DIGI_DUKE_MODSOUND511)
+        return NULL;
+
+    return g_swCrossplayDukeSoundPath[num - DIGI_DUKE_MODSOUND0];
+}
+
 static int32_t SW_CrossplayClaimDukeSoundSlot(char const *filename)
 {
     char const *base = filename;
@@ -16798,15 +16948,21 @@ static int32_t SW_CrossplayClaimDukeSoundSlot(char const *filename)
         if (*scan == '/' || *scan == '\\')
             base = scan + 1;
 
-    if (base[0] == '\0' || Bstrlen(base) >= sizeof(voc[0].name))
+    if (base[0] == '\0')
         return DIGI_NULL;
 
-    for (int32_t digi = DIGI_DUKE_MODSOUND0; digi <= DIGI_DUKE_MODSOUND255; ++digi)
+    for (int32_t digi = DIGI_DUKE_MODSOUND0; digi <= DIGI_DUKE_MODSOUND511; ++digi)
     {
         if (voc[digi].name[0] != '\0')
             continue;
 
+        // Truncated on purpose: this is only what the slot is recognised by.
         Bstrncpyz(voc[digi].name, base, sizeof(voc[digi].name));
+
+        char **const path = &g_swCrossplayDukeSoundPath[digi - DIGI_DUKE_MODSOUND0];
+        Xfree(*path);
+        *path = Xstrdup(filename);
+
         return digi;
     }
 
@@ -16815,8 +16971,11 @@ static int32_t SW_CrossplayClaimDukeSoundSlot(char const *filename)
 
 static void SW_CrossplayReleaseDukeSoundSlots(void)
 {
-    for (int32_t digi = DIGI_DUKE_MODSOUND0; digi <= DIGI_DUKE_MODSOUND255; ++digi)
+    for (int32_t digi = DIGI_DUKE_MODSOUND0; digi <= DIGI_DUKE_MODSOUND511; ++digi)
+    {
         voc[digi].name[0] = '\0';
+        DO_FREE_AND_NULL(g_swCrossplayDukeSoundPath[digi - DIGI_DUKE_MODSOUND0]);
+    }
 }
 
 static void SW_CrossplayDukeAISetupSounds(void)
@@ -16825,10 +16984,12 @@ static void SW_CrossplayDukeAISetupSounds(void)
     g_swCrossplayDukeAISoundMapCount = 0;
 
     SW_CrossplayReleaseDukeSoundSlots();
+    SW_CrossplayResetDukeSoundHolds();
 
     int32_t const highestSound = min<int32_t>(VB_DukeAI_HighestSoundIndex(),
                                               (int32_t)ARRAY_SIZE(g_swCrossplayDukeAISoundMap) - 1);
     int32_t claimed = 0;
+    int32_t unclaimed = 0;
 
     for (int32_t soundNum = 0; soundNum <= highestSound; ++soundNum)
     {
@@ -16843,6 +17004,8 @@ static void SW_CrossplayDukeAISetupSounds(void)
             digi = SW_CrossplayClaimDukeSoundSlot(filename);
             if (digi > DIGI_NULL)
                 ++claimed;
+            else
+                ++unclaimed;
         }
 
         g_swCrossplayDukeAISoundMap[soundNum] = (int16_t)digi;
@@ -16852,6 +17015,48 @@ static void SW_CrossplayDukeAISetupSounds(void)
 
     if (claimed > 0)
         LOG_F(INFO, "Crossplay: gave %d Duke sound(s) with no entry of their own a reserved slot.", claimed);
+
+    // Whether those files can actually be found, as opposed to merely named.  A
+    // slot with nothing behind it is silent and says nothing about it, so this
+    // asks the data directly.  Off by default because it reads every one of
+    // them, which on a large archive is not free.
+    if (claimed > 0 && Bgetenv("VB_CP_SOUND_PROBE") != NULL)
+    {
+        int32_t found = 0, absent = 0;
+
+        for (int32_t digi = DIGI_DUKE_MODSOUND0; digi <= DIGI_DUKE_MODSOUND511; ++digi)
+        {
+            char const *const name = SW_CrossplayDukeSoundFileName(digi);
+            if (name == NULL || voc[digi].name[0] == '\0')
+                continue;
+
+            char *data = NULL;
+            int32_t size = 0;
+
+            if (artCrossplayReadForeignGameDataEntry(ART_CROSSPLAY_GAME_DUKE, name, &data, &size, NULL, 0) && size > 0)
+            {
+                ++found;
+                Xfree(data);
+            }
+            else
+            {
+                DO_FREE_AND_NULL(data);
+                if (absent < 8)
+                    LOG_F(WARNING, "CPSOUND absent: %s", name);
+                ++absent;
+            }
+        }
+
+        LOG_F(INFO, "CPSOUND probe: %d of %d claimed Duke sound file(s) present in the foreign data (%d absent).",
+              found, found + absent, absent);
+    }
+
+    // The reserved block is finite, and running out is silent otherwise: the
+    // sounds past the end simply never play.  Say so rather than let a big mod
+    // lose its audio without a word.
+    if (unclaimed > 0)
+        LOG_F(WARNING, "Crossplay: %d Duke sound(s) got no slot and will not play; the reserved block holds %d.",
+              unclaimed, (int32_t)(DIGI_DUKE_MODSOUND511 - DIGI_DUKE_MODSOUND0 + 1));
 
 
 
@@ -17295,6 +17500,8 @@ static void SW_CrossplayDukeAITick(void)
         return;
 
     g_swCrossplayDukeAITicAccumulator -= VB_CROSSPLAY_SW_TICS_PER_SEC;
+
+    ++g_swCrossplayDukeSoundTic;
 
     // Every connected player is mirrored, in player order.  Mirroring only the
     // local one would give Duke a different target on each client, so the actors
@@ -19232,7 +19439,7 @@ static char const *SW_CrossplayDukeMusicName(char const *music)
 
 static char g_swCrossplayDukeLevelFile[MAX_LEVELS_CROSSPLAY + 2][32];
 static char g_swCrossplayDukeLevelTitle[MAX_LEVELS_CROSSPLAY + 2][MAX_EPISODE_SUBTITLE_LEN + 1];
-static char g_swCrossplayDukeLevelMusic[MAX_LEVELS_CROSSPLAY + 2][32];
+static char g_swCrossplayDukeLevelMusic[MAX_LEVELS_CROSSPLAY + 2][BMAX_PATH];
 static int16_t g_swCrossplayDukeEpisodeFirst[MAX_EPISODES_CROSSPLAY];
 static int16_t g_swCrossplayDukeEpisodeLevels[MAX_EPISODES_CROSSPLAY];
 static int32_t g_swCrossplayDukeEpisodeCount;
@@ -21377,18 +21584,31 @@ void PlayLevelSong(void)
 {
     int track;
     char const *dukeLevelSong = SW_CrossplayDukeLevelMusicName();
-    if (dukeLevelSong != NULL)
-    {
-        if (Bstrcasecmp(LevelSong, dukeLevelSong))
-            LOG_F(INFO, "Crossplay: using Duke level music %s for %s.", dukeLevelSong, LevelName);
-        Bstrncpyz(LevelSong, dukeLevelSong, sizeof(LevelSong));
-    }
 
     if (dukeLevelSong != NULL)
     {
-        track = -1;
+        // A mod names its tracks with a path -- every one of StrikerDM's is
+        // "music/<name>.mid" -- and `LevelSong` is a sixteen-character field whose
+        // width is part of the demo header, so a name that long was cut in half on
+        // the way to the player and nothing was found.  The full name is kept here
+        // instead; LevelSong still gets what fits, for the demo and for anything
+        // else reading it.
+        static char dukeSongPath[BMAX_PATH];
+
+        if (Bstrcasecmp(dukeSongPath, dukeLevelSong))
+            LOG_F(INFO, "Crossplay: using Duke level music %s for %s.", dukeLevelSong, LevelName);
+
+        Bstrncpyz(dukeSongPath, dukeLevelSong, sizeof(dukeSongPath));
+        Bstrncpyz(LevelSong, dukeLevelSong, sizeof(LevelSong));
+
+        // A track that cannot be played is otherwise silent in both senses.
+        if (!PlaySong(dukeSongPath, -1, TRUE, TRUE) && gs.MusicOn)
+            LOG_F(WARNING, "Crossplay: could not play Duke level music %s.", dukeSongPath);
+
+        return;
     }
-    else if (Level == 0)
+
+    if (Level == 0)
     {
         track = RedBookSong[4 + RANDOM_RANGE(10)];
     }
@@ -22382,9 +22602,26 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
             if (strchr(UserMapName, '.') == 0)
                 strcat(UserMapName, ".map");
         }
-        else if ((Bstrcasecmp(arg, "game_dir") == 0 || Bstrcasecmp(arg, "game-dir") == 0) && cnt + 1 < argc)
+        // A directory to look in, which is how a user map is played: the map is a
+        // loose .MAP file in a folder of its own rather than an entry in any
+        // GRP.  These were both accepted and then ignored -- game_dir stepped
+        // over its value and `-j` was not recognised at all -- so the only place
+        // a user map could live was the working directory.
+        else if ((Bstrcasecmp(arg, "game_dir") == 0 || Bstrcasecmp(arg, "game-dir") == 0 ||
+                  Bstrcasecmp(arg, "j") == 0) && cnt + 1 < argc)
         {
-            cnt++;
+            char const *const dir = argv[++cnt];
+            if (addsearchpath(dir) < 0)
+                LOG_F(WARNING, "Could not add search path %s", dir);
+            else
+                LOG_F(INFO, "Added search path %s", dir);
+        }
+        else if (Bstrncasecmp(arg, "j", 1) == 0 && strlen(arg) > 1)
+        {
+            if (addsearchpath(arg + 1) < 0)
+                LOG_F(WARNING, "Could not add search path %s", arg + 1);
+            else
+                LOG_F(INFO, "Added search path %s", arg + 1);
         }
         else if (!SW_SHAREWARE &&
                  (Bstrcasecmp(arg, "g") == 0 || Bstrcasecmp(arg, "grp") == 0 || Bstrcasecmp(arg, "gamegrp") == 0) &&

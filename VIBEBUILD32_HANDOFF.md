@@ -246,6 +246,32 @@ and its own music and sound files.  See the bridge doc for how each of those is
 resolved; the short version is that the mod GRP comes first in every lookup and
 falls through to the base game for anything it does not replace.
 
+A `.pk3`/`.zip` mod works the same way -- its files live in folders inside the
+archive and the lookups reduce both sides to a basename.  Verified with
+teamduke-0.92.pk3 (three episodes, 63 levels, its own art) and
+duke64_nd32_beta2.pk3 (four episodes, 34 levels).
+
+A **user map** is a loose `.MAP` file; play it with `-map` plus `-j <dir>` if it
+is not in the working directory:
+
+```sh
+./vibebuild32 -gm sw -g "/path/Sw.grp" -gm.lvls duke \
+    -g /path/duke3d.grp -j /path/with/the/map -map MYLEVEL.MAP -wnd -res1280x720
+```
+
+A mod's sounds and music are its own as well: sounds are given slots from a
+reserved block filled in from the mod's own CON and read by the name that CON
+gave (path and all), and the level's track comes from the same `definelevelname`
+/ `music` lines that name the level.  `VB_CP_SOUND_PROBE=1` reports how many of
+a mod's sound files are actually present in its data.
+
+Art a mod declares through a `.def` (`tilefromtexture` with PNG files) is
+imported too: the bridge enumerates the container for `.def` files, reads the
+`tilefromtexture` declarations out of them, and decodes the image on demand when
+a level references a tile that no ART file in the stack carries.  Whatever is
+still missing after that is counted in the "remapped N ... ; missing M" line at
+level load, so a shortfall is visible rather than silent.
+
 Remaining items to verify in-game or via automation:
 
 - Duke E1L1 pipe/shaft teleporter works.

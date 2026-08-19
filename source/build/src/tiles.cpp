@@ -10,11 +10,14 @@
 #include "build.h"
 #include "cache1d.h"
 #include "colmatch.h"
+#include "common.h"
 #include "compat.h"
 #include "crc32.h"
 #include "engine_priv.h"
+#include "kplib.h"
 #include "lz4.h"
 #include "miniz.h"
+#include "scriptfile.h"
 #include "texcache.h"
 #include "vfs.h"
 
@@ -1189,16 +1192,34 @@ static int artCrossplayReadGrpEntry(char const *grpPath, char const *entryName, 
     return 1;
 }
 
+// Whether a zip entry answers for the name being asked for.
+//
+// Both sides carry paths and neither side's shape is under our control.  A pk3
+// keeps its files in folders -- "cons/GAME.CON", "maps/BIO3.MAP" -- while the
+// name being asked for comes from a GRP-shaped world: a bare "GAME.CON" from the
+// CON compiler, or "/E1L1.MAP" from `definelevelname`, which stores a leading
+// slash so Duke's own loader reads from the root of the search path.  The match
+// used to be one-directional -- it would find "maps/BIO3.MAP" when asked for
+// "BIO3.MAP" and nothing else -- so a leading slash or a directory in the wanted
+// name failed against every pk3 entry there is.  Comparing basenames on both
+// sides after dropping a leading slash makes the two shapes meet.
 static int artCrossplayZipNameMatches(char const *zipName, char const *entryName)
 {
+    while (*entryName == '/' || *entryName == '\\')
+        ++entryName;
+
     if (!Bstrcasecmp(zipName, entryName))
         return 1;
 
-    if (artCrossplayBaseName(entryName) != entryName)
+    char const *const zipBase = artCrossplayBaseName(zipName);
+    char const *const wantedBase = artCrossplayBaseName(entryName);
+
+    // A bare name must not match an entry that is itself bare and different, so
+    // this only fires when at least one side actually had a directory.
+    if (zipBase == zipName && wantedBase == entryName)
         return 0;
 
-    char const *zipBase = artCrossplayBaseName(zipName);
-    return zipBase != zipName && !Bstrcasecmp(zipBase, entryName);
+    return !Bstrcasecmp(zipBase, wantedBase);
 }
 
 static int artCrossplayReadZipEntry(char const *zipPath, char const *entryName, char **data, int32_t *size)
@@ -1247,7 +1268,8 @@ static int artCrossplayReadZipEntry(char const *zipPath, char const *entryName, 
 
         if (!matches)
         {
-            if (fseek(fp, compressedSize, SEEK_CUR))
+            // Signed, and 32-bit on Windows -- see the enumerator below.
+            if (compressedSize > (uint32_t)LONG_MAX || fseek(fp, (long)compressedSize, SEEK_CUR))
                 break;
             continue;
         }
@@ -1338,6 +1360,41 @@ static int artCrossplayReadContainerEntry(char const *containerPath, char const 
         return 1;
 
     return artCrossplayReadVfsEntry(entryName, data, size);
+}
+
+// Does this container itself hold the entry?  No search-path fallback: the
+// question is about the container, and answering it with "somebody has it"
+// picked the wrong container as a level's primary art source.
+static int artCrossplayContainerHasFileStrict(char const *containerPath, char const *entryName)
+{
+    if (artCrossplayDirectoryHasFile(containerPath, entryName))
+        return 1;
+
+    char wanted[13];
+    artCrossplayGrpName(entryName, wanted, sizeof(wanted));
+
+    FILE *fp = fopen(containerPath, "rb");
+    if (fp)
+    {
+        int32_t offset = 0, size = 0;
+        int const found = artCrossplayFindGrpEntry(fp, wanted, &offset, &size);
+        fclose(fp);
+        if (found)
+            return 1;
+    }
+
+    char *zipData = NULL;
+    int32_t zipSize = 0;
+    if (artCrossplayReadZipEntry(containerPath, entryName, &zipData, &zipSize))
+    {
+        Xfree(zipData);
+        return 1;
+    }
+
+    if (artCrossplayRffHasFile(containerPath, entryName))
+        return 1;
+
+    return artCrossplaySiblingDirectoryHasFile(containerPath, entryName);
 }
 
 static int artCrossplayContainerHasFile(char const *containerPath, char const *entryName)
@@ -1784,37 +1841,23 @@ static int artCrossplayReadArtFileCached(int32_t slot, int32_t artIndex, char co
     return 1;
 }
 
-static int artCrossplayLoadForeignTileFromSlot(int32_t slot, int16_t sourceTile)
+// One tile out of one ART buffer, with its whole animation range.  Returns 1
+// when the tile was installed, 0 to go on looking in the next ART file, and -1
+// when there is no point looking any further.
+static int artCrossplayInstallTileFromArtBuffer(char const *artData, int32_t artSize, int16_t sourceTile,
+                                                uint8_t const *paletteRemap)
 {
-    if ((unsigned)sourceTile >= MAXUSERTILES)
-        return 0;
-
-    if (g_crossplayTileRemap[sourceTile] >= 0)
-        return 1;
-
-    uint8_t const *paletteRemap = artCrossplayPaletteRemapForSlot(slot);
-    int32_t preferred = sourceTile / 256;
-    for (int32_t pass = 0; pass < ART_CROSSPLAY_MAX_BASE_ART_FILES + 1; ++pass)
     {
-        int32_t const artIndex = pass == 0 ? preferred : pass - 1;
-        if (pass > 0 && artIndex == preferred)
-            continue;
-
-        char const *artData = NULL;
-        int32_t artSize = 0;
-        if (!artCrossplayReadArtFileCached(slot, artIndex, &artData, &artSize))
-            continue;
-
         uint32_t diskPicanm = 0;
         if (!artCrossplayReadDiskPicanmFromArtBuffer(artData, artSize, sourceTile, &diskPicanm))
-            continue;
+            return 0;
 
         int32_t startOffset = 0, endOffset = 0;
         artCrossplayAnimOffsetsFromDiskPicanm(diskPicanm, &startOffset, &endOffset);
 
         int32_t const frameCount = endOffset - startOffset + 1;
         if (frameCount <= 0 || g_crossplayGeneratedTileCount + frameCount > (int32_t)ARRAY_SIZE(g_crossplayGeneratedTiles))
-            return 0;
+            return -1;
 
         int sourceRangeValid = 1;
         for (int32_t offset = startOffset; offset <= endOffset; ++offset)
@@ -1826,12 +1869,12 @@ static int artCrossplayLoadForeignTileFromSlot(int32_t slot, int16_t sourceTile)
             }
         }
         if (!sourceRangeValid)
-            continue;
+            return 0;
 
         {
             int16_t const destBase = artCrossplayFindFreeTileRange(startOffset, endOffset);
             if (destBase < 0)
-                return 0;
+                return -1;
 
             int16_t copiedTiles[128];
             int32_t copiedCount = 0;
@@ -1856,7 +1899,7 @@ static int artCrossplayLoadForeignTileFromSlot(int32_t slot, int16_t sourceTile)
                 while (copiedCount > 0)
                     tileDelete(copiedTiles[--copiedCount]);
 
-                continue;
+                return 0;
             }
 
             for (int32_t offset = startOffset; offset <= endOffset; ++offset)
@@ -1870,15 +1913,879 @@ static int artCrossplayLoadForeignTileFromSlot(int32_t slot, int16_t sourceTile)
             return 1;
         }
     }
+}
+
+static int artCrossplayLoadForeignTileFromSlot(int32_t slot, int16_t sourceTile)
+{
+    if ((unsigned)sourceTile >= MAXUSERTILES)
+        return 0;
+
+    if (g_crossplayTileRemap[sourceTile] >= 0)
+        return 1;
+
+    uint8_t const *const paletteRemap = artCrossplayPaletteRemapForSlot(slot);
+    int32_t const preferred = sourceTile / 256;
+
+    for (int32_t pass = 0; pass < ART_CROSSPLAY_MAX_BASE_ART_FILES + 1; ++pass)
+    {
+        int32_t const artIndex = pass == 0 ? preferred : pass - 1;
+        if (pass > 0 && artIndex == preferred)
+            continue;
+
+        char const *artData = NULL;
+        int32_t artSize = 0;
+        if (!artCrossplayReadArtFileCached(slot, artIndex, &artData, &artSize))
+            continue;
+
+        int const status = artCrossplayInstallTileFromArtBuffer(artData, artSize, sourceTile, paletteRemap);
+        if (status > 0)
+            return 1;
+        if (status < 0)
+            return 0;
+    }
 
     return 0;
 }
 
-// A map tile, taken from the first container in the level's stack that has it.
+////////// Crossplay: art a mod declares in a .def rather than in an ART file //////////
+//
+// A modern Duke mod does not always ship TILES*.ART.  It ships PNGs and a .def
+// that says `tilefromtexture <tile> { file "x.png" }`, and the engine's own DEF
+// parser installs those at startup.  That parser is no use here: it is static, it
+// is a three-thousand-line switch whose other tokens reach into the running
+// game's palettes, models, skyboxes and sounds, and it installs at the *Duke*
+// tile number -- which under another runtime is somebody else's art.  It also
+// runs once at startup, long before the host knows which level it is loading.
+//
+// So the bridge reads the mod's .def files itself, reacting to three tokens and
+// nothing else, and remembers only "this Duke tile comes from that image file".
+// The image is decoded and installed on the same terms as an ART tile: on demand,
+// into a generated slot, when a level actually references it.
+
+typedef struct
+{
+    int16_t tile;
+    int16_t alphacut;
+    int8_t  xofs;
+    int8_t  yofs;
+    char   *file;      // owned
+} artCrossplayDefTile;
+
+// An ART file a def names outright.  `artfile { file "x.art" tile N }` places a
+// whole ART unit at a tile number of the mod's choosing, under a name that is not
+// TILES%03d.ART -- so the ordinary scan never looks at it.  StrikerDM keeps three
+// of them and that is where its missing tiles were.
+typedef struct
+{
+    char *file;        // owned
+    int32_t tileBase;  // the tile the unit starts at, or -1 to use the ART's own
+    char *data;        // owned, loaded on first use
+    int32_t size;
+    int8_t loaded;
+} artCrossplayDefArt;
+
+#define ART_CROSSPLAY_MAX_DEF_ART 16
+
+static artCrossplayDefArt g_crossplayDefArt[ART_CROSSPLAY_ART_CACHE_SLOTS][ART_CROSSPLAY_MAX_DEF_ART];
+static int32_t g_crossplayDefArtCount[ART_CROSSPLAY_ART_CACHE_SLOTS];
+
+// Which def files this scan has already read.  A depth limit on its own is not
+// enough: `include` branches as well as nests, so a file that includes itself
+// twenty times is re-read twenty times at one level down, four hundred at two,
+// and the scan never finishes.  Skipping a file already seen is also simply
+// correct -- reading it a second time can only repeat what it already said.
+#define ART_CROSSPLAY_MAX_DEF_FILES 256
+
+static char *g_crossplayDefSeen[ART_CROSSPLAY_MAX_DEF_FILES];
+static int32_t g_crossplayDefSeenCount;
+
+static void artCrossplayClearDefSeen(void)
+{
+    for (int32_t i = 0; i < g_crossplayDefSeenCount; ++i)
+        DO_FREE_AND_NULL(g_crossplayDefSeen[i]);
+
+    g_crossplayDefSeenCount = 0;
+}
+
+// True the first time an entry is offered, false every time after -- and false
+// once the budget is spent, which bounds a container that simply has a great
+// many def files as well as one that loops.
+static int artCrossplayClaimDefFile(char const *entryName)
+{
+    for (int32_t i = 0; i < g_crossplayDefSeenCount; ++i)
+        if (!Bstrcasecmp(g_crossplayDefSeen[i], entryName))
+            return 0;
+
+    if (g_crossplayDefSeenCount >= ART_CROSSPLAY_MAX_DEF_FILES)
+        return 0;
+
+    g_crossplayDefSeen[g_crossplayDefSeenCount++] = Xstrdup(entryName);
+    return 1;
+}
+
+static artCrossplayDefTile *g_crossplayDefTiles[ART_CROSSPLAY_ART_CACHE_SLOTS];
+static int32_t g_crossplayDefTileCount[ART_CROSSPLAY_ART_CACHE_SLOTS];
+static int32_t g_crossplayDefTileAlloc[ART_CROSSPLAY_ART_CACHE_SLOTS];
+static int8_t g_crossplayDefScanned[ART_CROSSPLAY_ART_CACHE_SLOTS];
+
+static void artCrossplayClearDefTiles(int32_t slot)
+{
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS)
+        return;
+
+    for (int32_t i = 0; i < g_crossplayDefTileCount[slot]; ++i)
+        Xfree(g_crossplayDefTiles[slot][i].file);
+
+    DO_FREE_AND_NULL(g_crossplayDefTiles[slot]);
+    g_crossplayDefTileCount[slot] = 0;
+    g_crossplayDefTileAlloc[slot] = 0;
+    g_crossplayDefScanned[slot] = 0;
+
+    for (int32_t i = 0; i < g_crossplayDefArtCount[slot]; ++i)
+    {
+        DO_FREE_AND_NULL(g_crossplayDefArt[slot][i].file);
+        DO_FREE_AND_NULL(g_crossplayDefArt[slot][i].data);
+        g_crossplayDefArt[slot][i].loaded = 0;
+        g_crossplayDefArt[slot][i].size = 0;
+    }
+
+    g_crossplayDefArtCount[slot] = 0;
+}
+
+static void artCrossplayRecordDefArt(int32_t slot, char const *file, int32_t tileBase)
+{
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS || !file || !file[0] ||
+        g_crossplayDefArtCount[slot] >= ART_CROSSPLAY_MAX_DEF_ART)
+        return;
+
+    for (int32_t i = 0; i < g_crossplayDefArtCount[slot]; ++i)
+        if (!Bstrcasecmp(g_crossplayDefArt[slot][i].file, file))
+            return;
+
+    artCrossplayDefArt &entry = g_crossplayDefArt[slot][g_crossplayDefArtCount[slot]++];
+    entry.file = Xstrdup(file);
+    entry.tileBase = tileBase;
+    entry.data = NULL;
+    entry.size = 0;
+    entry.loaded = 0;
+}
+
+static void artCrossplayClearAllDefTiles(void)
+{
+    for (int32_t slot = 0; slot < ART_CROSSPLAY_ART_CACHE_SLOTS; ++slot)
+        artCrossplayClearDefTiles(slot);
+}
+
+static void artCrossplayRecordDefTile(int32_t slot, int32_t tile, char const *file, int32_t alphacut,
+                                      int32_t xofs, int32_t yofs)
+{
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS || (unsigned)tile >= MAXUSERTILES || !file || !file[0])
+        return;
+
+    // A later declaration wins, which is what a def that includes another one
+    // and then overrides part of it expects.
+    for (int32_t i = 0; i < g_crossplayDefTileCount[slot]; ++i)
+        if (g_crossplayDefTiles[slot][i].tile == (int16_t)tile)
+        {
+            Xfree(g_crossplayDefTiles[slot][i].file);
+            g_crossplayDefTiles[slot][i].file = Xstrdup(file);
+            g_crossplayDefTiles[slot][i].alphacut = (int16_t)alphacut;
+            g_crossplayDefTiles[slot][i].xofs = (int8_t)xofs;
+            g_crossplayDefTiles[slot][i].yofs = (int8_t)yofs;
+            return;
+        }
+
+    if (g_crossplayDefTileCount[slot] >= g_crossplayDefTileAlloc[slot])
+    {
+        int32_t const grown = g_crossplayDefTileAlloc[slot] ? g_crossplayDefTileAlloc[slot] * 2 : 64;
+        g_crossplayDefTiles[slot] = (artCrossplayDefTile *)Xrealloc(g_crossplayDefTiles[slot],
+                                                                    (size_t)grown * sizeof(artCrossplayDefTile));
+        g_crossplayDefTileAlloc[slot] = grown;
+    }
+
+    artCrossplayDefTile &entry = g_crossplayDefTiles[slot][g_crossplayDefTileCount[slot]++];
+    entry.tile = (int16_t)tile;
+    entry.alphacut = (int16_t)alphacut;
+    entry.xofs = (int8_t)xofs;
+    entry.yofs = (int8_t)yofs;
+    entry.file = Xstrdup(file);
+}
+
+static artCrossplayDefTile const *artCrossplayFindDefTile(int32_t slot, int32_t tile)
+{
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS)
+        return NULL;
+
+    for (int32_t i = 0; i < g_crossplayDefTileCount[slot]; ++i)
+        if (g_crossplayDefTiles[slot][i].tile == (int16_t)tile)
+            return &g_crossplayDefTiles[slot][i];
+
+    return NULL;
+}
+
+// ---- container enumeration -------------------------------------------------
+//
+// Needed because a mod's def is not reliably named: teamduke and StrikerDM ship
+// duke3d.def, but Duke 64's is duke64.def, and probing a list of names would
+// miss it.  Reading it through the engine's search path is not an option either:
+// that resolves through one global chain shared by every mounted archive, so the
+// answer is "some duke3d.def", not "this container's".
+
+typedef int (*artCrossplayEntryCallback)(void *ctx, char const *entryName);
+
+static void artCrossplayEnumerateZipEntries(char const *zipPath, artCrossplayEntryCallback cb, void *ctx)
+{
+    FILE *fp = fopen(zipPath, "rb");
+    if (!fp)
+        return;
+
+    for (;;)
+    {
+        uint8_t header[30];
+        if (fread(header, 1, sizeof(header), fp) != sizeof(header))
+            break;
+
+        // The central directory signature is the clean end of the walk.
+        if (B_LITTLE32(B_UNBUF32(&header[0])) != 0x04034b50u)
+            break;
+
+        uint16_t const flags = B_LITTLE16(B_UNBUF16(&header[6]));
+        uint32_t const compressedSize = B_LITTLE32(B_UNBUF32(&header[18]));
+        uint16_t const nameLength = B_LITTLE16(B_UNBUF16(&header[26]));
+        uint16_t const extraLength = B_LITTLE16(B_UNBUF16(&header[28]));
+
+        // Same bail-out as the reader, and for the same reason: with a data
+        // descriptor both size fields here are zero, so there is nothing to seek
+        // past without parsing the central directory.
+        if (flags & 8)
+            break;
+
+        char *zipName = (char *)Xmalloc(nameLength + 1);
+        if (fread(zipName, 1, nameLength, fp) != nameLength)
+        {
+            Xfree(zipName);
+            break;
+        }
+        zipName[nameLength] = 0;
+
+        int stop = 0;
+        if (fseek(fp, extraLength, SEEK_CUR) == 0 && nameLength && zipName[nameLength - 1] != '/')
+            stop = cb(ctx, zipName);
+
+        Xfree(zipName);
+
+        // fseek() takes a signed long, which is 32 bits on Windows: a size with
+        // the top bit set would become a *backward* seek and the walk could
+        // circle forever over bytes an archive chose.
+        if (stop || compressedSize > (uint32_t)LONG_MAX || fseek(fp, (long)compressedSize, SEEK_CUR))
+            break;
+    }
+
+    fclose(fp);
+}
+
+static void artCrossplayEnumerateGrpEntries(char const *grpPath, artCrossplayEntryCallback cb, void *ctx)
+{
+    FILE *fp = fopen(grpPath, "rb");
+    if (!fp)
+        return;
+
+    char header[16];
+    if (fread(header, 1, sizeof(header), fp) != sizeof(header) || Bmemcmp(header, "KenSilverman", 12))
+    {
+        fclose(fp);
+        return;
+    }
+
+    int32_t const numFiles = B_LITTLE32(B_UNBUF32(&header[12]));
+
+    for (int32_t i = 0; i < numFiles && i < (1 << 20); ++i)
+    {
+        char entry[16];
+        if (fread(entry, 1, sizeof(entry), fp) != sizeof(entry))
+            break;
+
+        char name[13];
+        Bmemcpy(name, entry, 12);
+        name[12] = 0;
+
+        if (cb(ctx, name))
+            break;
+    }
+
+    fclose(fp);
+}
+
+static int artCrossplayNameHasExtension(char const *name, char const *ext)
+{
+    size_t const nameLen = Bstrlen(name);
+    size_t const extLen = Bstrlen(ext);
+
+    return nameLen > extLen && !Bstrcasecmp(name + nameLen - extLen, ext);
+}
+
+// ---- the selective .def scanner --------------------------------------------
+
+enum
+{
+    ART_CROSSPLAY_DEF_INCLUDE = 0,
+    ART_CROSSPLAY_DEF_DEFINE,
+    ART_CROSSPLAY_DEF_TILEFROMTEXTURE,
+    ART_CROSSPLAY_DEF_ARTFILE,
+};
+
+static tokenlist const g_crossplayDefTokens[] = {
+    { "include", ART_CROSSPLAY_DEF_INCLUDE },
+    { "#include", ART_CROSSPLAY_DEF_INCLUDE },
+    { "define", ART_CROSSPLAY_DEF_DEFINE },
+    { "#define", ART_CROSSPLAY_DEF_DEFINE },
+    { "tilefromtexture", ART_CROSSPLAY_DEF_TILEFROMTEXTURE },
+    { "artfile", ART_CROSSPLAY_DEF_ARTFILE },
+};
+
+enum
+{
+    ART_CROSSPLAY_TFT_FILE = 0,
+    ART_CROSSPLAY_TFT_ALPHACUT,
+    ART_CROSSPLAY_TFT_XOFFSET,
+    ART_CROSSPLAY_TFT_YOFFSET,
+    ART_CROSSPLAY_TFT_IFCRC,
+    ART_CROSSPLAY_TFT_IFMATCH,
+};
+
+enum
+{
+    ART_CROSSPLAY_ARTFILE_FILE = 0,
+    ART_CROSSPLAY_ARTFILE_TILE,
+};
+
+static tokenlist const g_crossplayArtFileTokens[] = {
+    { "file", ART_CROSSPLAY_ARTFILE_FILE },
+    { "tile", ART_CROSSPLAY_ARTFILE_TILE },
+};
+
+static tokenlist const g_crossplayTileFromTextureTokens[] = {
+    { "file", ART_CROSSPLAY_TFT_FILE },     { "name", ART_CROSSPLAY_TFT_FILE },
+    { "alphacut", ART_CROSSPLAY_TFT_ALPHACUT },
+    { "xoffset", ART_CROSSPLAY_TFT_XOFFSET }, { "xoff", ART_CROSSPLAY_TFT_XOFFSET },
+    { "yoffset", ART_CROSSPLAY_TFT_YOFFSET }, { "yoff", ART_CROSSPLAY_TFT_YOFFSET },
+    { "ifcrc", ART_CROSSPLAY_TFT_IFCRC },   { "ifmatch", ART_CROSSPLAY_TFT_IFMATCH },
+};
+
+// scriptfile_getbraces() can return success without writing the end pointer when
+// the block is unterminated, so every use of it is clamped.
+static char *artCrossplayDefBlockEnd(scriptfile *sf, char *end)
+{
+    return (!end || end > sf->eof) ? sf->eof : end;
+}
+
+// A token this scanner does not know has already been consumed by getatoken();
+// all that is left is to step over the block it may have opened, so that its
+// contents are not read back as if they were top-level commands.
+static void artCrossplayDefSkipUnknown(scriptfile *sf)
+{
+    if (!sf->ltextptr || sf->ltextptr[0] != '{')
+        return;
+
+    sf->textptr = sf->ltextptr;
+
+    char *blockEnd = NULL;
+    if (scriptfile_getbraces(sf, &blockEnd))
+    {
+        sf->textptr = sf->eof;
+        return;
+    }
+
+    blockEnd = artCrossplayDefBlockEnd(sf, blockEnd);
+    sf->textptr = (blockEnd < sf->eof) ? blockEnd + 1 : sf->eof;
+}
+
+static void artCrossplayScanDefText(int32_t slot, char const *containerPath, char const *text, char const *name,
+                                    int32_t depth);
+
+static void artCrossplayScanDefEntry(int32_t slot, char const *containerPath, char const *entryName, int32_t depth)
+{
+    if (depth > 8 || !artCrossplayClaimDefFile(entryName))
+        return;
+
+    char *data = NULL;
+    int32_t size = 0;
+
+    if (!artCrossplayReadContainerEntryStrict(containerPath, entryName, &data, &size) || size <= 0)
+    {
+        DO_FREE_AND_NULL(data);
+        return;
+    }
+
+    char *text = (char *)Xmalloc((size_t)size + 1);
+    Bmemcpy(text, data, size);
+    text[size] = 0;
+    Xfree(data);
+
+    artCrossplayScanDefText(slot, containerPath, text, entryName, depth);
+    Xfree(text);
+}
+
+static void artCrossplayScanDefText(int32_t slot, char const *containerPath, char const *text, char const *name,
+                                    int32_t depth)
+{
+    scriptfile *script = scriptfile_fromstring(text);
+    if (!script)
+        return;
+
+    script->filename = Xstrdup(name ? name : "<def>");
+
+    for (;;)
+    {
+        int32_t const token = getatoken(script, g_crossplayDefTokens, ARRAY_SIZE(g_crossplayDefTokens));
+
+        if (token == T_EOF)
+            break;
+
+        switch (token)
+        {
+        case ART_CROSSPLAY_DEF_INCLUDE:
+        {
+            char *includeName = NULL;
+            if (!scriptfile_getstring(script, &includeName) && includeName != NULL)
+            {
+                // Read out of the same container.  A def's includes are its own
+                // files, and the mod's whole point is that they are not the
+                // host's.
+                char *copy = Xstrdup(includeName);
+                artCrossplayScanDefEntry(slot, containerPath, copy, depth + 1);
+                Xfree(copy);
+            }
+            break;
+        }
+
+        case ART_CROSSPLAY_DEF_DEFINE:
+        {
+            char *symbolName = NULL;
+            int32_t value = 0;
+
+            if (scriptfile_getstring(script, &symbolName) || symbolName == NULL)
+                break;
+
+            char *copy = Xstrdup(symbolName);
+            if (!scriptfile_getsymbol(script, &value))
+                scriptfile_addsymbolvalue(copy, value);
+            Xfree(copy);
+            break;
+        }
+
+        case ART_CROSSPLAY_DEF_TILEFROMTEXTURE:
+        {
+            int32_t tile = -1;
+            char *blockEnd = NULL;
+
+            if (scriptfile_getsymbol(script, &tile) || scriptfile_getbraces(script, &blockEnd))
+                break;
+
+            blockEnd = artCrossplayDefBlockEnd(script, blockEnd);
+
+            char *file = NULL;
+            int32_t alphacut = 255, xofs = 0, yofs = 0;
+
+            while (script->textptr < blockEnd && !scriptfile_eof(script))
+            {
+                switch (getatoken(script, g_crossplayTileFromTextureTokens,
+                                  ARRAY_SIZE(g_crossplayTileFromTextureTokens)))
+                {
+                case ART_CROSSPLAY_TFT_FILE:
+                    scriptfile_getstring(script, &file);
+                    break;
+                case ART_CROSSPLAY_TFT_ALPHACUT:
+                    scriptfile_getsymbol(script, &alphacut);
+                    alphacut = clamp(alphacut, 0, 255);
+                    break;
+                case ART_CROSSPLAY_TFT_XOFFSET:
+                    scriptfile_getsymbol(script, &xofs);
+                    xofs = clamp(xofs, -128, 127);
+                    break;
+                case ART_CROSSPLAY_TFT_YOFFSET:
+                    scriptfile_getsymbol(script, &yofs);
+                    yofs = clamp(yofs, -128, 127);
+                    break;
+                case ART_CROSSPLAY_TFT_IFCRC:
+                {
+                    int32_t crc = 0;
+                    scriptfile_getsymbol(script, &crc);
+                    break;
+                }
+                case ART_CROSSPLAY_TFT_IFMATCH:
+                {
+                    char *matchEnd = NULL;
+                    if (!scriptfile_getbraces(script, &matchEnd))
+                    {
+                        matchEnd = artCrossplayDefBlockEnd(script, matchEnd);
+                        script->textptr = (matchEnd < script->eof) ? matchEnd + 1 : script->eof;
+                    }
+                    break;
+                }
+                default:
+                    // Includes the closing brace and every flag this scanner does
+                    // not care about; none of them carry arguments.
+                    break;
+                }
+            }
+
+            if ((unsigned)tile < MAXUSERTILES && file != NULL)
+                artCrossplayRecordDefTile(slot, tile, file, alphacut, xofs, yofs);
+
+            break;
+        }
+
+        case ART_CROSSPLAY_DEF_ARTFILE:
+        {
+            char *blockEnd = NULL;
+            if (scriptfile_getbraces(script, &blockEnd))
+                break;
+
+            blockEnd = artCrossplayDefBlockEnd(script, blockEnd);
+
+            char *file = NULL;
+            int32_t tileBase = -1;
+
+            while (script->textptr < blockEnd && !scriptfile_eof(script))
+            {
+                switch (getatoken(script, g_crossplayArtFileTokens, ARRAY_SIZE(g_crossplayArtFileTokens)))
+                {
+                case ART_CROSSPLAY_ARTFILE_FILE:
+                    scriptfile_getstring(script, &file);
+                    break;
+                case ART_CROSSPLAY_ARTFILE_TILE:
+                    scriptfile_getsymbol(script, &tileBase);
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            if (file != NULL)
+                artCrossplayRecordDefArt(slot, file, tileBase);
+
+            break;
+        }
+
+        default:
+            artCrossplayDefSkipUnknown(script);
+            break;
+        }
+    }
+
+    scriptfile_close(script);
+}
+
+typedef struct
+{
+    int32_t slot;
+    char const *containerPath;
+    int32_t defsFound;
+} artCrossplayDefScanContext;
+
+static int artCrossplayCollectDefEntry(void *ctx, char const *entryName)
+{
+    auto *scan = (artCrossplayDefScanContext *)ctx;
+
+    if (!artCrossplayNameHasExtension(entryName, ".def"))
+        return 0;
+
+    ++scan->defsFound;
+    artCrossplayScanDefEntry(scan->slot, scan->containerPath, entryName, 0);
+    return 0;
+}
+
+static void artCrossplayScanContainerDefs(int32_t slot)
+{
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS || g_crossplayDefScanned[slot] ||
+        !g_crossplayArtCachePath[slot][0])
+        return;
+
+    g_crossplayDefScanned[slot] = 1;
+
+    char const *const containerPath = g_crossplayArtCachePath[slot];
+    artCrossplayDefScanContext scan = { slot, containerPath, 0 };
+
+    // The symbol table is global and is empty by the time a level loads -- the
+    // host's own def parse clears it when it finishes -- so the mod's `define`s
+    // can go in it and come back out again without disturbing anything.
+    scriptfile_clearsymbols();
+    artCrossplayClearDefSeen();
+
+    if (artCrossplayIsDirectory(containerPath))
+    {
+        // A directory container: the def sits beside the data under its own name,
+        // and the probe list is enough because there is nothing to enumerate
+        // cheaply and portably here.
+        static char const *const defNames[] = { "duke3d.def", "eduke.def", "game.def", "tiles.def" };
+
+        for (auto const &defName : defNames)
+            artCrossplayScanDefEntry(slot, containerPath, defName, 0);
+    }
+    else
+    {
+        artCrossplayEnumerateZipEntries(containerPath, artCrossplayCollectDefEntry, &scan);
+
+        if (scan.defsFound == 0)
+            artCrossplayEnumerateGrpEntries(containerPath, artCrossplayCollectDefEntry, &scan);
+    }
+
+    scriptfile_clearsymbols();
+    artCrossplayClearDefSeen();
+
+    if (g_crossplayDefTileCount[slot] > 0)
+        LOG_F(INFO, "Crossplay: %s declares %d tile(s) in its .def files.", containerPath,
+              g_crossplayDefTileCount[slot]);
+}
+
+// ---- installing one of them ------------------------------------------------
+
+// Whether these bytes are a PNG whose structure is self-consistent.
+//
+// The image decoders are not defensive: the PNG one ignores the length it is
+// given entirely and walks the chunk chain off the file's own 32-bit sizes, so a
+// chunk that claims two gigabytes sends it straight off the end of the buffer.
+// Growing the buffer by a few bytes, which is what the engine's own loader does,
+// is no answer to a stride that large.  A mod's tiles come out of a container the
+// bridge picked up rather than out of the game's own data, so the chain is walked
+// here first and anything that does not add up is refused.
+//
+// PNG only, deliberately: every `tilefromtexture` in every mod examined names a
+// .png, and a format whose header cannot be checked this cheaply is not worth
+// handing to a decoder that will not check it either.
+static int artCrossplayImageIsSanePng(char const *buf, int32_t len)
+{
+    static uint8_t const signature[8] = { 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A };
+
+    if (!buf || len < 8 + 25 || Bmemcmp(buf, signature, sizeof(signature)))
+        return 0;
+
+    int32_t offset = 8;
+    int sawHeader = 0;
+
+    while (offset + 12 <= len)
+    {
+        uint32_t const chunkLength = B_BIG32(B_UNBUF32(buf + offset));
+        uint32_t const chunkType = B_UNBUF32(buf + offset + 4);
+
+        // The chunk has to fit in what we actually hold, length and CRC included.
+        if (chunkLength > (uint32_t)(len - offset - 12))
+            return 0;
+
+        if (!sawHeader)
+        {
+            // The first chunk must be IHDR, and IHDR is thirteen bytes.
+            if (chunkType != B_LITTLE32(0x52444849) || chunkLength != 13)
+                return 0;
+
+            sawHeader = 1;
+        }
+
+        // Everything from the first IDAT on is a compressed stream the decoder
+        // reads by its own rules; the chain up to here is what had to be sound.
+        if (chunkType == B_LITTLE32(0x54414449))
+            return 1;
+
+        offset += (int32_t)chunkLength + 12;
+    }
+
+    // Falling out of the loop means the chain ran off the end without reaching
+    // any image data -- the last thing in the file is a chunk header the decoder
+    // would step over into nothing.  That is exactly the shape of the crafted
+    // case this function exists for, so running out is a refusal, not a pass.
+    return 0;
+}
+
+// A tile out of an ART file a def named, rather than out of TILES%03d.ART.
+//
+// `artfile { file "x.art" tile N }` overrides where the unit starts, exactly as
+// the engine's own parser does -- it rewrites the header's tilestart rather than
+// adding an offset.  The in-memory header is rewritten here for the same reason,
+// which lets the ordinary ART reader below index it by the Duke tile number with
+// no special case of its own.
+static int artCrossplayLoadForeignDefArtTile(int32_t slot, int16_t sourceTile)
+{
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS || (unsigned)sourceTile >= MAXUSERTILES)
+        return 0;
+
+    if (g_crossplayTileRemap[sourceTile] >= 0)
+        return 1;
+
+    artCrossplayScanContainerDefs(slot);
+
+    uint8_t const *const paletteRemap = artCrossplayPaletteRemapForSlot(slot);
+
+    for (int32_t i = 0; i < g_crossplayDefArtCount[slot]; ++i)
+    {
+        artCrossplayDefArt &entry = g_crossplayDefArt[slot][i];
+
+        if (!entry.loaded)
+        {
+            entry.loaded = 1;
+            artCrossplayReadContainerEntryStrict(g_crossplayArtCachePath[slot], entry.file, &entry.data, &entry.size);
+
+            if (entry.data != NULL && entry.size >= 16 && entry.tileBase >= 0)
+            {
+                // Move the unit to where the def put it.  The header's own
+                // tilestart is what every reader below keys off, so rewriting it
+                // is the whole of the translation.
+                int32_t const headerOffset = (entry.size >= 24 && !Bmemcmp(entry.data, "BUILDART", 8)) ? 8 : 0;
+                int32_t const tileStart = B_LITTLE32(B_UNBUF32(&entry.data[headerOffset + 8]));
+                int32_t const tileEnd = B_LITTLE32(B_UNBUF32(&entry.data[headerOffset + 12]));
+                int32_t const numTiles = tileEnd - tileStart + 1;
+
+                if (numTiles > 0 && entry.tileBase + numTiles - 1 < MAXUSERTILES)
+                {
+                    B_BUF32(&entry.data[headerOffset + 8], B_LITTLE32(entry.tileBase));
+                    B_BUF32(&entry.data[headerOffset + 12], B_LITTLE32(entry.tileBase + numTiles - 1));
+                }
+            }
+        }
+
+        if (entry.data == NULL || entry.size <= 0)
+            continue;
+
+        int const status = artCrossplayInstallTileFromArtBuffer(entry.data, entry.size, sourceTile, paletteRemap);
+        if (status > 0)
+            return 1;
+        if (status < 0)
+            return 0;
+    }
+
+    return 0;
+}
+
+static int artCrossplayLoadForeignDefTile(int32_t slot, int16_t sourceTile)
+{
+    if ((unsigned)sourceTile >= MAXUSERTILES)
+        return 0;
+
+    if (g_crossplayTileRemap[sourceTile] >= 0)
+        return 1;
+
+    artCrossplayScanContainerDefs(slot);
+
+    artCrossplayDefTile const *const entry = artCrossplayFindDefTile(slot, sourceTile);
+    if (entry == NULL)
+        return 0;
+
+    // Every pixel is matched into the runtime palette, so there has to be one.
+    if (!(paletteloaded & PALETTE_MAIN))
+        return 0;
+
+    if (g_crossplayGeneratedTileCount >= (int32_t)ARRAY_SIZE(g_crossplayGeneratedTiles))
+        return 0;
+
+    char *image = NULL;
+    int32_t imageSize = 0;
+
+    if (!artCrossplayReadContainerEntryStrict(g_crossplayArtCachePath[slot], entry->file, &image, &imageSize) ||
+        imageSize <= 0)
+    {
+        DO_FREE_AND_NULL(image);
+        return 0;
+    }
+
+    if (!artCrossplayImageIsSanePng(image, imageSize))
+    {
+        Xfree(image);
+        return 0;
+    }
+
+    // The decoders also read a word or so past the end of a well-formed image, so
+    // the buffer is grown and the slack zeroed.  The engine's own loader does the
+    // same; the structural check above is what makes that sufficient.
+    image = (char *)Xrealloc(image, (size_t)imageSize + 4);
+    Bmemset(image + imageSize, 0, 4);
+
+    int32_t xsiz = 0, ysiz = 0;
+    kpgetdim(image, imageSize, &xsiz, &ysiz);
+
+    if (xsiz <= 0 || ysiz <= 0 || xsiz > 4096 || ysiz > 4096)
+    {
+        Xfree(image);
+        return 0;
+    }
+
+    // kplib always renders four bytes per pixel.  Zeroed, because it does not
+    // clear what it does not reach.
+    auto *pixels32 = (palette_t *)Xcalloc((size_t)xsiz * (size_t)ysiz, 4);
+
+    if (kprender(image, imageSize, (intptr_t)pixels32, xsiz << 2, xsiz, ysiz) < 0)
+    {
+        Xfree(pixels32);
+        Xfree(image);
+        return 0;
+    }
+
+    Xfree(image);
+
+    // Claimed before the size is set: the finder skips any tile that already has
+    // one.
+    int16_t const destTile = artCrossplayFindFreeTile();
+    if (destTile < 0)
+    {
+        Xfree(pixels32);
+        return 0;
+    }
+
+    int32_t const pixelCount = xsiz * ysiz;
+    char *indexed = (char *)Xmalloc(pixelCount);
+
+    paletteFlushClosestColor();
+
+    for (int32_t y = 0; y < ysiz; ++y)
+        for (int32_t x = 0; x < xsiz; ++x)
+        {
+            palette_t const *const col = &pixels32[y * xsiz + x];
+
+            // palette_t names its bytes r,g,b,f but kplib fills them B,G,R,A, so
+            // the members read back swapped and the call below looks inverted on
+            // purpose -- the engine's own converter is written the same way.
+            // Index 255 is Build's masked pixel, so the match stops at 254.
+            indexed[x * ysiz + y] = (col->f < entry->alphacut)
+                                    ? (char)255
+                                    : (char)paletteGetClosestColorUpToIndex(col->b, col->g, col->r, 254);
+        }
+
+    Xfree(pixels32);
+
+    tileSetSize(destTile, (int16_t)xsiz, (int16_t)ysiz);
+    tileSetData(destTile, pixelCount, indexed);
+    Xfree(indexed);
+
+    if (!bitmap_test(faketile, destTile))
+    {
+        tileDelete(destTile);
+        return 0;
+    }
+
+    Bmemset(&picanm[destTile], 0, sizeof(picanm_t));
+    picanm[destTile].xofs = entry->xofs;
+    picanm[destTile].yofs = entry->yofs;
+
+    g_crossplayTileRemap[sourceTile] = destTile;
+    g_crossplayGeneratedTiles[g_crossplayGeneratedTileCount++] = destTile;
+
+    return 1;
+}
+
+// A map tile, taken from the first container in the level's stack that has it --
+// out of its ART files first, and out of the images its .def declares if no ART
+// file anywhere in the stack carries it.
 static int artCrossplayLoadForeignTile(int16_t sourceTile)
 {
     for (int32_t slot = 1; slot <= g_crossplayLevelContainerCount; ++slot)
         if (artCrossplayLoadForeignTileFromSlot(slot, sourceTile))
+            return 1;
+
+    for (int32_t slot = 1; slot <= g_crossplayLevelContainerCount; ++slot)
+        if (artCrossplayLoadForeignDefArtTile(slot, sourceTile))
+            return 1;
+
+    for (int32_t slot = 1; slot <= g_crossplayLevelContainerCount; ++slot)
+        if (artCrossplayLoadForeignDefTile(slot, sourceTile))
             return 1;
 
     return 0;
@@ -2053,12 +2960,12 @@ static int artCrossplayDukeMapUsesSky(char const *usedTiles, int16_t baseTile)
     return 0;
 }
 
-static int artCrossplayLoadDukeSkyTile(char const *grpPath, int16_t sourceTile)
+static int artCrossplayLoadDukeSkyTile(int16_t sourceTile)
 {
     return (unsigned)sourceTile < MAXUSERTILES && artCrossplayLoadForeignTile(sourceTile);
 }
 
-static void artCrossplaySetupDukeSky(char const *grpPath, char const *usedTiles)
+static void artCrossplaySetupDukeSky(char const *usedTiles)
 {
     if (!artCrossplayIsDukeLikeGame(artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS)))
         return;
@@ -2074,10 +2981,10 @@ static void artCrossplaySetupDukeSky(char const *grpPath, char const *usedTiles)
             continue;
 
         int const numTiles = 1 << skyDef.lognumtiles;
-        int loaded = artCrossplayLoadDukeSkyTile(grpPath, skyDef.baseTile);
+        int loaded = artCrossplayLoadDukeSkyTile(skyDef.baseTile);
 
         for (int i = 0; i < numTiles; ++i)
-            loaded += artCrossplayLoadDukeSkyTile(grpPath, skyDef.baseTile + skyDef.sourceTileOfs[i]);
+            loaded += artCrossplayLoadDukeSkyTile(skyDef.baseTile + skyDef.sourceTileOfs[i]);
 
         int16_t const remappedBase = artCrossplayRemapTile(skyDef.baseTile);
         if (!loaded || remappedBase == skyDef.baseTile)
@@ -2139,7 +3046,7 @@ static char const *artCrossplayFindForeignDataForMap(char const *mapName)
                     continue;
             }
 
-            if (artCrossplayContainerHasFile(g_crossplayForeignData[i], mapName))
+            if (artCrossplayContainerHasFileStrict(g_crossplayForeignData[i], mapName))
                 return g_crossplayForeignData[i];
         }
     }
@@ -2184,8 +3091,11 @@ int32_t artCrossplayEffectiveDomainGame(int32_t domain)
     return configured >= 0 ? configured : artCrossplayRuntimeGame();
 }
 
+static void artCrossplayClearAllDefTiles(void);
+
 void artCrossplayClearForeignData(void)
 {
+    artCrossplayClearAllDefTiles();
     g_crossplayForeignDataCount = 0;
     Bmemset(g_crossplayForeignData, 0, sizeof(g_crossplayForeignData));
     for (int32_t i = 0; i < ART_CROSSPLAY_MAX_FOREIGN_DATA; ++i)
@@ -2403,6 +3313,7 @@ static void artCrossplayBuildLevelContainers(char const *primaryPath)
     for (int32_t slot = 1; slot < ART_CROSSPLAY_ART_CACHE_SLOTS; ++slot)
     {
         artCrossplayClearArtCacheSlot(slot);
+        artCrossplayClearDefTiles(slot);
         g_crossplayArtCachePath[slot][0] = 0;
         g_crossplayPaletteRemapState[slot] = -1;
     }
@@ -2440,12 +3351,17 @@ int32_t artCrossplayPrepareForeignMapArt(char const *mapName)
 {
     artCrossplayEnsureLevelStateInitialized();
 
+    // The container the map came from, when it came from one at all.  A user map
+    // is a loose .MAP file that is in no container, and its art is still the
+    // foreign game's -- so a missing primary is not a reason to give up, only a
+    // stack with nothing at the front of it.
     char const *grpPath = artCrossplayFindForeignDataForMap(mapName);
-    if (!grpPath)
-        return 0;
 
     artCrossplayClearArtCache();
     artCrossplayBuildLevelContainers(grpPath);
+
+    if (g_crossplayLevelContainerCount <= 0)
+        return 0;
 
     char *usedTiles = (char *)Xcalloc(MAXUSERTILES, sizeof(char));
 
@@ -2465,7 +3381,7 @@ int32_t artCrossplayPrepareForeignMapArt(char const *mapName)
         if (g_crossplayOriginalMapSprite[i] && sprite[i].statnum != MAXSTATUS)
             artCrossplayMarkTile(usedTiles, sprite[i].picnum);
 
-    artCrossplaySetupDukeSky(grpPath, usedTiles);
+    artCrossplaySetupDukeSky(usedTiles);
 
     int32_t copied = 0, missing = 0;
     for (int32_t tile = 0; tile < MAXUSERTILES; ++tile)

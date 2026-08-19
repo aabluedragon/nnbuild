@@ -1184,6 +1184,18 @@ static int gs_inferGameFromDataPath(char const *path)
     return -1;
 }
 
+static int gs_configuredCrossplayDomainGame(int domain);
+
+// A file that could plausibly be game content rather than, say, a config or a
+// text file.  Deliberately narrow: this decides what gets registered sight
+// unseen.
+static int gs_isContainerCandidate(char const *path)
+{
+    return path && path[0] && gs_fileExists(path) &&
+           (gs_extEquals(path, ".grp") || gs_extEquals(path, ".pk3") || gs_extEquals(path, ".zip") ||
+            gs_extEquals(path, ".pk4") || gs_extEquals(path, ".ssi"));
+}
+
 static void gs_trackForeignDataPath(char const *path)
 {
     if (!path || !path[0])
@@ -1203,6 +1215,29 @@ static void gs_trackForeignDataPath(char const *path)
         game = gs_inferGameFromBasename(dataPath);
     if (game < 0)
         game = gs_inferGameFromDirectory(dataPath);
+
+    // A mod is not any of the games we can recognise.  Every inference above is
+    // a test for *retail* data -- a known size and CRC, a known basename, a
+    // directory holding one of those -- and a Duke mod GRP or PK3 matches none
+    // of them, so it was dropped on the floor: not registered as foreign data,
+    // and therefore invisible to every crossplay lookup for art, CON, sounds and
+    // levels.  When the player has asked to play another game's levels, an
+    // unrecognised container handed over on the command line is content for that
+    // game, so register it as such.  It goes in as UNKNOWN rather than as the
+    // game the player asked to play the levels of, which is what puts it ahead of
+    // the base game in every lookup: the list is searched newest-first and a mod
+    // is passed after the game it modifies, so its CONs, art, sounds and maps
+    // win -- exactly as a mod does in Duke.  Registering it as "unknown" instead
+    // would drop it into the second pass of the two-pass lookups and the base
+    // game's stock files would answer first, which is the opposite of a mod.
+    int const addOnGame = gs_configuredCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS);
+
+    if (game < 0 && addOnGame >= 0 && addOnGame != g_activeGame && gs_isContainerCandidate(dataPath) &&
+        artCrossplayAddForeignGameData(dataPath, addOnGame))
+    {
+        LOG_F(INFO, "Crossplay: treating %s as add-on data for %s.", dataPath, gs_gameName(addOnGame));
+        return;
+    }
 
     if (game >= 0 && game != g_activeGame && artCrossplayAddForeignGameData(dataPath, game))
         LOG_F(INFO, "Crossplay: treating %s as foreign game data (%s).", dataPath, gs_gameName(game));

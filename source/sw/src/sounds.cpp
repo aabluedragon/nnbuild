@@ -182,10 +182,17 @@ static SWBOOL SW_CrossplayReadForeignGameAudioEntry(int32_t game, char const *en
     return FALSE;
 }
 
+char const *SW_CrossplayDukeSoundFileName(int32_t num);   // game.cpp
+
 static int32_t SW_CrossplayForeignGameForSoundSlot(int32_t num)
 {
+    // The hand-written Duke entries, and the reserved block the bridge fills in
+    // from a mod's own CON.  The reserved block was missing from this test, so
+    // every sound the bridge claimed a slot for was looked for in Shadow
+    // Warrior's data, where it does not exist, and none of them ever played.
     if ((num >= DIGI_DUKE_PRED_RECOG && num <= DIGI_DUKE_RIPHEADNECK) ||
-        (num >= DIGI_DUKE_MAP_POOLBALLHIT && num <= DIGI_DUKE_SQUISHED))
+        (num >= DIGI_DUKE_MAP_POOLBALLHIT && num <= DIGI_DUKE_SQUISHED) ||
+        (num >= DIGI_DUKE_MODSOUND0 && num <= DIGI_DUKE_MODSOUND511))
         return SW_CrossplayDukeLikeLevelGame();
 
     return ART_CROSSPLAY_GAME_UNKNOWN;
@@ -837,7 +844,12 @@ SWBOOL CacheSound(int num, int /*type*/)
         char *foreignData = NULL;
         int32_t foreignLength = 0;
         int const foreignGame = SW_CrossplayForeignGameForSoundSlot(num);
-        int const usingForeignData = SW_CrossplayReadForeignGameAudioEntry(foreignGame, vp->name, &foreignData, &foreignLength);
+
+        // A mod's sound is read by the name its CON gave, path and all; the
+        // record's own name field is too short to hold one.
+        char const *const crossplayName = SW_CrossplayDukeSoundFileName(num);
+        int const usingForeignData = SW_CrossplayReadForeignGameAudioEntry(
+            foreignGame, crossplayName != NULL ? crossplayName : vp->name, &foreignData, &foreignLength);
 
         if (usingForeignData)
         {
