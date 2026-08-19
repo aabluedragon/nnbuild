@@ -2033,6 +2033,10 @@ int G_EnterLevel(int g)
 
     artCrossplayResetLevel();
 
+    // Nothing is speaking in a level that has not started yet, and the sprite
+    // index the last one was talking through belongs to something else now.
+    G_WorldTourResetCommentary();
+
     // G_ApplyMenuToGameFlags?
     // ---------------------------------
     vote = votedata_t();

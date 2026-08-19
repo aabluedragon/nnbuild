@@ -264,6 +264,49 @@ static int G_WorldTourCommentarySoundForMarker(int const markerSprite)
     return S_SoundIsValid(soundNum) ? soundNum : -1;
 }
 
+// Which marker is talking.  World Tour lets a second press shut a line off, and
+// lights the marker while it is speaking, so both need to know what is playing;
+// only one line runs at a time.
+static int16_t g_wtCommentaryActiveMarker = -1;
+static int16_t g_wtCommentaryActiveSound = -1;
+
+static void G_WorldTourStopCommentary(void)
+{
+    if (g_wtCommentaryActiveMarker < 0)
+        return;
+
+    if (g_wtCommentaryActiveSound >= 0)
+        S_StopEnvSound(g_wtCommentaryActiveSound, g_wtCommentaryActiveMarker);
+
+    g_wtCommentaryActiveMarker = -1;
+    g_wtCommentaryActiveSound = -1;
+}
+
+void G_WorldTourResetCommentary(void)
+{
+    g_wtCommentaryActiveMarker = -1;
+    g_wtCommentaryActiveSound = -1;
+}
+
+// Whether this marker should be drawn lit.  Asked of the sound itself rather
+// than of a timer, so a line that runs to its end puts the marker back to white
+// on its own.
+static int G_WorldTourCommentaryIsSpeaking(int const spriteNum)
+{
+    if (g_wtCommentaryActiveMarker < 0 || spriteNum != g_wtCommentaryActiveMarker)
+        return 0;
+
+    if (g_wtCommentaryActiveSound < 0 ||
+        !A_CheckSoundPlaying(g_wtCommentaryActiveMarker, g_wtCommentaryActiveSound))
+    {
+        g_wtCommentaryActiveMarker = -1;
+        g_wtCommentaryActiveSound = -1;
+        return 0;
+    }
+
+    return 1;
+}
+
 static int G_WorldTourFindCommentaryMarker(DukePlayer_t const * const p, int const nearSprite)
 {
     if (G_WorldTourIsCommentaryMarker(nearSprite))
@@ -327,11 +370,28 @@ int G_WorldTourMaybeActivateCommentary(int const playerNum, int const nearSprite
         return 1;
     }
 
-    if (!A_CheckSoundPlaying(markerSprite, soundNum))
+    // Pressing use on a marker that is already talking shuts it up, which is what
+    // World Tour does with it -- the press used to be swallowed and the line ran
+    // to its end whatever the player did.
+    if (A_CheckSoundPlaying(markerSprite, soundNum))
     {
-        LOG_F(INFO, "Playing World Tour commentary %d: %s", commentaryNum, g_wtCommentaryPaths[commentaryNum]);
-        S_PlaySound3D(soundNum, markerSprite, sprite[markerSprite].xyz);
+        LOG_F(INFO, "Stopping World Tour commentary %d", commentaryNum);
+        S_StopEnvSound(soundNum, markerSprite);
+
+        if (g_wtCommentaryActiveMarker == markerSprite)
+            G_WorldTourResetCommentary();
+
+        return 1;
     }
+
+    // One line at a time: starting another marker cuts the one still speaking.
+    G_WorldTourStopCommentary();
+
+    LOG_F(INFO, "Playing World Tour commentary %d: %s", commentaryNum, g_wtCommentaryPaths[commentaryNum]);
+    S_PlaySound3D(soundNum, markerSprite, sprite[markerSprite].xyz);
+
+    g_wtCommentaryActiveMarker = (int16_t)markerSprite;
+    g_wtCommentaryActiveSound = (int16_t)soundNum;
 
     return 1;
 }
@@ -5970,10 +6030,20 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         i = t->owner;
         s = &sprite[i];
 
-        if (WORLDTOUR && !g_worldTourCommentary && t->picnum == WORLDTOUR_COMMENTARY_MARKER)
+        if (WORLDTOUR && t->picnum == WORLDTOUR_COMMENTARY_MARKER)
         {
-            t->xrepeat = t->yrepeat = 0;
-            continue;
+            if (!g_worldTourCommentary)
+            {
+                t->xrepeat = t->yrepeat = 0;
+                continue;
+            }
+
+            // The lit frame while the marker is speaking.  Drawn only, never
+            // written back to the sprite: whether the local player is listening
+            // is a client setting, and the simulation has to stay identical on
+            // every machine.
+            if (G_WorldTourCommentaryIsSpeaking(i))
+                t->picnum = WORLDTOUR_COMMENTARY_MARKER_ACTIVE;
         }
 
         switch (tileGetMapping(s->picnum))

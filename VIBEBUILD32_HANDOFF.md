@@ -243,6 +243,50 @@ Remaining items to verify in-game or via automation:
 - Duke map sounds/music are selected for Duke maps.
 - Duke map palette/art stays correct when mixed with SW runtime art.
 
+## World Tour developer commentary
+
+Enabled with the `wt_commentary` cvar (or Options -> Developer commentary, which
+only appears under World Tour).  The markers are `DEVELOPERCOMMENTARY` sprites,
+tile 5294; each one's `lotag` picks a line out of
+`def/developer_commentary.def`, which World Tour ships with 236 entries.  When
+the cvar is off the markers are drawn at zero size rather than removed.
+
+Three things the port has to get right, all in `source/vibebuild32/src/game.cpp`:
+
+- **The use key starts a line.**  `G_WorldTourMaybeActivateCommentary()` is
+  called from `P_CheckSectors()` and finds the marker either by neartag or by
+  the distance/angle/`cansee` sweep in `G_WorldTourFindCommentaryMarker()`.
+- **The use key stops it again.**  Pressing use on a marker that is still
+  speaking calls `S_StopEnvSound()` on it.  This used to be swallowed -- the
+  line ran to its end whatever the player did.
+- **The marker lights up while it speaks.**  Tile 5295 is the same bubble in
+  green; the white 5294 is the idle frame.  The swap happens in
+  `G_AnimateSprites()` on the tsprite only and is never written back to
+  `sprite[].picnum`: whether the local player is listening is a client cvar, and
+  a sprite's picnum is simulation state that has to match on every machine.
+  `G_WorldTourCommentaryIsSpeaking()` asks the sound whether it is still
+  playing, so a line that runs out reverts the marker on its own with nothing
+  timing it.
+
+Only one line plays at a time -- starting another marker cuts the one still
+speaking -- and `G_EnterLevel()` calls `G_WorldTourResetCommentary()`, because
+the sprite index the last line was talking through belongs to something else in
+the next level.
+
+Verified against World Tour's own E1L1 (35 markers) by driving the player to
+marker 753, pressing use, and reading the state back: the sound plays and the
+drawn tile becomes 5295; a second press logs `Stopping World Tour commentary 3`
+and the tile goes back; left alone, the marker reverts by itself when the clip
+ends (~18 s).  Disabling the stop branch put the second press back to restarting
+the line, which is the bug this fixes.  Note that a test run needs sound on --
+the repo's `vibebuild32_settings.cfg` has `snd_enabled "0"`, so copy it aside and
+launch with `-cfg`, never edit the user's own config:
+
+```sh
+./vibebuild32 -gm worldtour -g "/path/World Tour/DUKE3D.GRP" \
+    -j /path/with/WT/maps -map E1L1.MAP -cfg /tmp/wt.cfg -wnd -res640x480 -nomusic
+```
+
 ## Documentation maintenance rule
 
 When changing behavior, update the relevant Markdown in the same patch:

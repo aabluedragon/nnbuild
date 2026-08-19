@@ -25,6 +25,8 @@
 
 #define VIEWSCREEN_ACTIVE_DISTANCE 2048
 #define WORLDTOUR_COMMENTARY_MARKER 5294
+// The same bubble lit green, which World Tour shows while the line is playing.
+#define WORLDTOUR_COMMENTARY_MARKER_ACTIVE 5295
 #if defined(GEKKO) || defined(__OPENDINGUX__)
     #define VIEWSCREENFACTOR 0
 #elif defined(__ANDROID__)
@@ -216,6 +218,7 @@ void G_InitTimer(int32_t ticspersec);
 extern int g_worldTourCommentary;
 void G_WorldTourLoadDeveloperCommentary(void);
 int G_WorldTourMaybeActivateCommentary(int playerNum, int nearSprite);
+void G_WorldTourResetCommentary(void);
 
 #ifdef __cplusplus
 }
