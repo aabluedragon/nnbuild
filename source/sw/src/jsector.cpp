@@ -681,6 +681,15 @@ JS_DrawMirrors(PLAYERp pp, int tx, int ty, int tz, fix16_t tpq16ang, fix16_t tpq
                 {
                     bIsWallMirror = TRUE;
                     bitmap_clear(gotpic, cnt + MIRRORLABEL);
+
+                    // A mirror whose wall has been retired -- the crossplay
+                    // bridge does this when a Duke mirror is blown out -- has no
+                    // wall to reflect in and, more to the point, must not have
+                    // its label tile written back onto the wall at the end of
+                    // this function, which is what made a broken Duke mirror
+                    // reflect again on the very next frame.
+                    if (mirror[cnt].mirrorwall < 0)
+                        continue;
                 }
                 //else if (bitmap_test(gotpic, cnt + CAMSPRITE))
                 else if ((unsigned)mirror[cnt].campic < MAXTILES && bitmap_test(gotpic, mirror[cnt].campic))

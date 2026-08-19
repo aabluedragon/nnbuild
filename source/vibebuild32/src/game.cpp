@@ -11188,13 +11188,63 @@ extern "C" int VB_DukeAI_CompileScripts(void)
     if (g_player[0].ps == NULL)
         return 0;
 
+    // Duke's CONs come out of the foreign game data for the duration of this
+    // compile, so a Duke mod GRP handed to the host brings its own actors,
+    // sounds and level names with it.  See C_CrossplayReadFile().
+    extern int g_crossplayDukeCon;
+    g_crossplayDukeCon = 1;
     G_CompileScripts();
+    g_crossplayDukeCon = 0;
     G_InitDynamicNames();
     G_PostCreateGameState();
 
     compiled = 1;
     return compiled;
 }
+
+// VibeBuild32 crossplay: Duke's own episode/level table, as its CON defines it.
+//
+// The host used to work out which levels existed by asking the GRP for
+// E<episode>L<level>.MAP, which is true of stock Duke and of nothing else: a mod
+// GRP names its maps whatever it likes (vacation.grp ships VACA1..VACA7), gives
+// its episodes its own titles and carries a par time and a music track per
+// level.  All of that is already in Duke's `g_mapInfo` once the mod's CON has
+// compiled, so the host reads it from there instead of guessing.
+extern "C" int VB_DukeAI_VolumeCount(void)
+{
+    VB_DukeAI_CompileScripts();
+    return g_numVolumes > 0 ? g_numVolumes : 0;
+}
+
+extern "C" char const *VB_DukeAI_VolumeName(int const volumeNum)
+{
+    if ((unsigned)volumeNum >= MAXVOLUMES)
+        return NULL;
+
+    return EpisodeNames[volumeNum][0] ? EpisodeNames[volumeNum] : NULL;
+}
+
+extern "C" int VB_DukeAI_LevelInfo(int const volumeNum, int const levelNum, char const **filename, char const **title,
+                                   char const **music, int *partime, int *designertime)
+{
+    if ((unsigned)volumeNum >= MAXVOLUMES || (unsigned)levelNum >= MAXLEVELS)
+        return 0;
+
+    map_t const &info = g_mapInfo[volumeNum * MAXLEVELS + levelNum];
+
+    if (!info.filename || !info.filename[0])
+        return 0;
+
+    if (filename)      *filename = info.filename;
+    if (title)         *title = info.name;
+    if (music)         *music = info.musicfn;
+    if (partime)       *partime = info.partime;
+    if (designertime)  *designertime = info.designertime;
+
+    return 1;
+}
+
+extern "C" int VB_DukeAI_MaxLevelsPerVolume(void) { return MAXLEVELS; }
 
 // VibeBuild32 crossplay: the tile a Duke actor should be drawn with.
 //

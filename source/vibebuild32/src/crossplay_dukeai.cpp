@@ -212,6 +212,21 @@ int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
     case NAKED1__:
     case TOUGHGAL__:
     case BLOODYPOLE__:
+    // A_Spawn() gives the whole FEM1..FEM10 family, and STATUE, the same
+    // blocking pair as PODFEM1 and NAKED1 beside them; they were the only
+    // members of that case missing here, so Duke's dancers and statues were
+    // walk-through until something adopted them and Duke's own spawn ran.
+    case FEM1__:
+    case FEM2__:
+    case FEM3__:
+    case FEM4__:
+    case FEM5__:
+    case FEM6__:
+    case FEM7__:
+    case FEM8__:
+    case FEM9__:
+    case FEM10__:
+    case STATUE__:
     case ANTENNA__:
     case BLIMP__:
     case BOTTLE1__:

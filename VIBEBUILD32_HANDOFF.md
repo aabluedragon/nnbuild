@@ -230,6 +230,22 @@ Duke's.  Explosions reach the host's props from both sides -- Duke's
 `A_RadiusDamage()` through a hook, and the host's own detonations -- and Duke's
 earthquake drives the host's `SpawnQuake()`.  See the bridge doc.
 
+### Duke mods and user maps
+
+A Duke mod GRP is layered on the base game and both are handed over as foreign
+data, newest wins:
+
+```sh
+./vibebuild32 -gm sw -g "/path/Sw.grp" -gm.lvls duke \
+    -g /path/duke3d.grp -g /path/vacation.grp -map VACA1.MAP -wnd -res1280x720 -sc -sm
+```
+
+The mod supplies its own CONs (so its actors, sounds, level names and music are
+its own), its own ART layered over the base game's, its own episodes and levels,
+and its own music and sound files.  See the bridge doc for how each of those is
+resolved; the short version is that the mod GRP comes first in every lookup and
+falls through to the base game for anything it does not replace.
+
 Remaining items to verify in-game or via automation:
 
 - Duke E1L1 pipe/shaft teleporter works.

@@ -1556,7 +1556,113 @@ run's result should not be read too closely.
   which made the whole phase skip itself when the gate was disabled instead of
   failing.
 
+- **Duke mods and user maps.**  A Duke mod is a GRP layered over the base game --
+  `-g duke3d.grp -g vacation.grp` -- and the bridge treated only the first one as
+  Duke.  Duke Caribbean (vacation.grp) came up as stock Duke's episodes, stock
+  Duke's actors, stock Duke's music and, on its own maps, art that was not its
+  own.  Five separate things had to answer from the mod instead:
+
+  - **The CONs.**  `C_Compile()` reads through `kopen4loadfrommod()`, and Duke's
+    data is deliberately *not* mounted in the engine's search path -- mounting it
+    would let Duke's filenames answer for the host's art and sounds -- so the
+    Duke CONs being compiled were whatever happened to be lying beside the
+    executable.  `C_CrossplayReadFile()` now reads them out of the foreign data
+    while `g_crossplayDukeCon` is set, which is only around the crossplay
+    compile; the foreign list is searched newest-first, so a mod GRP passed after
+    the base game wins, exactly as a mod does in Duke.  Everything below follows
+    from having the mod's own CON: its actors, its `definesound` table, its level
+    names and its music.
+
+  - **A container must not answer for files it does not have.**
+    `artCrossplayReadContainerEntry()` falls back to the engine's search path when
+    the container itself does not hold the file.  That is right for data the host
+    is expected to supply and completely wrong for "does *this* GRP have it":
+    vacation.grp carries ten of Duke's ART files and no others, and the fallback
+    made it appear to carry Shadow Warrior's -- so every tile the mod does not
+    replace was taken from the *host's* art and drawn through Duke's palette,
+    which is why its beach came out as orange mush.  The same fallback made the
+    mod appear to carry the host's `PALETTE.DAT`, which then matched the runtime
+    palette exactly and switched the remap off.  Art, palette and lookup reads now
+    go through `artCrossplayReadContainerEntryStrict()`.
+
+  - **Art comes from a stack, not from one container.**
+    `artCrossplayBuildLevelContainers()` orders them most specific first: the
+    container the map came from, then the rest of the data for the same game,
+    then anything whose game could not be told.  The ART cache is per container,
+    and each container gets its own palette remap -- one without a `PALETTE.DAT`
+    borrows the first container in the stack that has one, which is what makes a
+    mod's tiles come out in the base game's colours.
+
+  - **Episodes and levels come from `g_mapInfo`.**  The table used to be built by
+    asking the GRP whether it held `E<episode>L<level>.MAP`, which describes stock
+    Duke and nothing else; vacation's third episode is VACA1..VACA7 and VACASL.
+    `SW_CrossplayBuildDukeLevelTableFromCon()` reads Duke's own table instead --
+    volume names, level names, filenames -- and skips any level the data does not
+    actually contain, because Atomic's USER.CON lists eleven levels for episode
+    one and the GRP holds eight.  The old GRP scan stays as the fallback for data
+    whose CON defines no level at all.
+
+  - **Music per level, not per E#L#.**  A hand-written 4x11 table of stock Duke's
+    tracks has become `SW_CrossplayDukeLevelMusicForMap()`, which reads the track
+    off the same `definelevelname`/`music` lines that name the level.  Duke stores
+    it as `/name.mid`; the host's loader wants the bare name.  `LoadSong()` also
+    used to check the requested name against a hand-written list of stock Duke's
+    forty-odd `.mid` names before it would look in the Duke data, so a mod's own
+    music was never found; it now simply asks the Duke data first and falls
+    through to the host's search path as before.
+
+  - **Sounds.**  Duke sounds are paired with Shadow Warrior sound slots by
+    filename, and those slots are hand-written in `digi.h`, so a Duke sound nobody
+    had added was silent -- which for a mod is nearly all of them.  `digi.h`
+    reserves 256 empty slots and `SW_CrossplayDukeAISetupSounds()` fills them from
+    the compiled Duke CON, so a sound exists because Duke's script defines it.
+    The hand-written entries still win, because they carry pitch, priority and
+    distance somebody tuned.  This closes the same gap for stock Duke: E1L1 went
+    from 167 mapped sounds to 374.
+
+  Two bugs the mod maps turned up on the way, both of which also apply to stock
+  Duke:
+
+  - **A broken mirror reflected again on the next frame.**  `JS_InitMirrors()`
+    gives the mirror sector's ceiling and floor the same `MIRRORLABEL` tile as the
+    wall, so the renderer keeps asking for that tile however the wall is painted,
+    and the end of `JS_DrawMirrors()` writes the label back onto the wall every
+    frame it draws one.  Repainting the wall was therefore undone within a frame,
+    and the mirror could be broken over and over.  `SW_CrossplayRetireMirrorWall()`
+    takes the entry out of the list and `JS_DrawMirrors()` skips a retired one.
+    E1L1 passed only because its mirror is out of view when the check runs;
+    `VB_CP_SELFTEST=world` on VACA1 caught it as `mirror-breaks-once`.
+
+  - **FEM1..FEM10 and STATUE were walk-through.**  `A_Spawn()` gives that whole
+    case -- PODFEM1, NAKED1, STATUE, TOUGHGAL and the ten FEMs -- `CSTAT_SPRITE_BLOCK`
+    and `CSTAT_SPRITE_BLOCK_HITSCAN`, and `VB_DukeAI_MapSpriteSolidBits()` listed
+    every member of it but those eleven.  Caught as
+    `breakable-keeps-dukes-solidity` on VACA5, VACA6 and VACA7, where a dancer
+    that had been walk-through gained her blocking bits the moment Duke adopted
+    her.
+
+  One more thing the mod maps caught, in the suite rather than in the bridge:
+  `operable-moves` scored VACASL's lotag-18 elevator as a door that would not
+  move.  Duke's own code for an elevator or platform looks for a connected sector
+  at a different floor height and returns having done nothing when there is none,
+  and that sector is walled in by sectors at its own height, so the bridge was
+  matching Duke exactly.  `SW_CrossplayDukeSectorZAnimIsNoOp()` now says so, and
+  the phase also tries the plain use-key path for an operable with neither an
+  activator nor a hitag, which is how an unwired elevator is started.
+
+  Verified with the ordinary suite run over the mod's own maps: VACA1..VACA7 and
+  VACASL x four groups.  The episode list is logged a line per episode at level
+  setup, which is the quickest way to see whose CON compiled: with vacation.grp
+  it reads "VACATION DUKEMATCH" and "LIFE'S A BEACH" with VACA1..VACA7 in it.
+
 Still open:
+
+- `hydrant-sound-once` depends on a real audio voice being alive: `soundonce`
+  asks whether the last gurgle has finished, and with no voice to ask about the
+  CON restarts it every tic.  It is therefore a check on the machine's audio
+  state as much as on the bridge -- built at the previous commit and run on the
+  same machine it fails identically, so a failure here is not evidence of a code
+  change.
 
 - Duke map palette/art mixing is only checked by eye.
 - An actor that stands still is not necessarily wrong: reading Duke's own state

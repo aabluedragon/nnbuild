@@ -670,14 +670,36 @@ static char g_crossplayOriginalMapSprite[MAXSPRITES];
 static int16_t g_crossplayOriginalMapSpritePicnum[MAXSPRITES];
 static int g_crossplayPreparedMapArt;
 static int g_crossplayLevelStateInitialized;
-static char *g_crossplayArtCacheData[ART_CROSSPLAY_MAX_BASE_ART_FILES];
-static int32_t g_crossplayArtCacheSize[ART_CROSSPLAY_MAX_BASE_ART_FILES];
-static char g_crossplayArtCacheLoaded[ART_CROSSPLAY_MAX_BASE_ART_FILES];
-static char g_crossplayPaletteRemapPath[BMAX_PATH];
-static int g_crossplayPaletteRemapLoaded;
-static int g_crossplayPaletteRemapAvailable;
+// The containers a foreign level's art may come from, in the order they are
+// asked.
+//
+// A Duke mod is a GRP layered over the base game: vacation.grp carries ten
+// TILES*.ART files and the rest of Duke's art is still in DUKE3D.GRP.  The map
+// art used to be pulled out of the single container the *map* was found in,
+// which for a mod meant every tile the mod does not itself replace was simply
+// missing.  So the map's own container comes first -- a mod overrides the base
+// game, exactly as it does in Duke -- and the other containers for the same game
+// follow it.  Slot 0 of the cache is scratch, for the one-off tile loads that
+// name their own container.
+static constexpr int ART_CROSSPLAY_MAX_LEVEL_CONTAINERS = ART_CROSSPLAY_MAX_FOREIGN_DATA;
+static constexpr int ART_CROSSPLAY_ART_CACHE_SLOTS = ART_CROSSPLAY_MAX_LEVEL_CONTAINERS + 1;
+static constexpr int ART_CROSSPLAY_ART_CACHE_SCRATCH = 0;
+
+static char g_crossplayArtCachePath[ART_CROSSPLAY_ART_CACHE_SLOTS][BMAX_PATH];
+static char *g_crossplayArtCacheData[ART_CROSSPLAY_ART_CACHE_SLOTS][ART_CROSSPLAY_MAX_BASE_ART_FILES];
+static int32_t g_crossplayArtCacheSize[ART_CROSSPLAY_ART_CACHE_SLOTS][ART_CROSSPLAY_MAX_BASE_ART_FILES];
+static char g_crossplayArtCacheLoaded[ART_CROSSPLAY_ART_CACHE_SLOTS][ART_CROSSPLAY_MAX_BASE_ART_FILES];
+static int32_t g_crossplayLevelContainerCount;
+
+// One palette remap per container, because a mod may ship a PALETTE.DAT of its
+// own and its tiles must then be read through it rather than through the base
+// game's.  A container without one borrows the first container in the stack that
+// has one, which is what makes vacation.grp's art come out in Duke's colours
+// instead of raw palette indices.
+static int8_t g_crossplayPaletteRemapState[ART_CROSSPLAY_ART_CACHE_SLOTS];   // -1 unknown, 0 none, 1 available
+static uint8_t g_crossplayPaletteRemapSlot[ART_CROSSPLAY_ART_CACHE_SLOTS][256];
 static uint8_t g_crossplayPaletteRemapRuntimePalette[768];
-static uint8_t g_crossplayPaletteRemap[256];
+static int g_crossplayPaletteRemapLoaded;
 
 struct artCrossplayForeignTileRemap
 {
@@ -1281,7 +1303,19 @@ static int artCrossplayReadZipEntry(char const *zipPath, char const *entryName, 
     return found;
 }
 
-static int artCrossplayReadContainerEntry(char const *containerPath, char const *entryName, char **data, int32_t *size)
+// An entry read from the named container and from nowhere else.
+//
+// The forgiving read below falls back to the engine's own search path when the
+// container does not have the file, which is right for data the host is expected
+// to supply but very wrong when the question is "does *this* container have it".
+// A Duke mod GRP answers that question constantly: vacation.grp carries ten of
+// Duke's ART files and no others, and the fallback made it appear to carry
+// Shadow Warrior's -- so every tile the mod does not replace was quietly taken
+// from the host's own art, drawn through Duke's palette, and came out as
+// coloured mush.  It also made the mod appear to carry the host's PALETTE.DAT,
+// which then matched the runtime palette exactly and switched the remap off.
+static int artCrossplayReadContainerEntryStrict(char const *containerPath, char const *entryName, char **data,
+                                                int32_t *size)
 {
     if (artCrossplayReadDirectoryEntry(containerPath, entryName, data, size))
         return 1;
@@ -1295,7 +1329,12 @@ static int artCrossplayReadContainerEntry(char const *containerPath, char const 
     if (artCrossplayReadRffEntry(containerPath, entryName, data, size))
         return 1;
 
-    if (artCrossplayReadSiblingDirectoryEntry(containerPath, entryName, data, size))
+    return artCrossplayReadSiblingDirectoryEntry(containerPath, entryName, data, size);
+}
+
+static int artCrossplayReadContainerEntry(char const *containerPath, char const *entryName, char **data, int32_t *size)
+{
+    if (artCrossplayReadContainerEntryStrict(containerPath, entryName, data, size))
         return 1;
 
     return artCrossplayReadVfsEntry(entryName, data, size);
@@ -1345,12 +1384,15 @@ static int artCrossplayContainerHasFile(char const *containerPath, char const *e
 
 static void artCrossplayClearPaletteRemap(void)
 {
-    g_crossplayPaletteRemapPath[0] = 0;
     g_crossplayPaletteRemapLoaded = 0;
-    g_crossplayPaletteRemapAvailable = 0;
     Bmemset(g_crossplayPaletteRemapRuntimePalette, 0, sizeof(g_crossplayPaletteRemapRuntimePalette));
-    for (int32_t i = 0; i < 256; ++i)
-        g_crossplayPaletteRemap[i] = (uint8_t)i;
+
+    for (int32_t slot = 0; slot < ART_CROSSPLAY_ART_CACHE_SLOTS; ++slot)
+    {
+        g_crossplayPaletteRemapState[slot] = -1;
+        for (int32_t i = 0; i < 256; ++i)
+            g_crossplayPaletteRemapSlot[slot][i] = (uint8_t)i;
+    }
 }
 
 static uint8_t artCrossplayPaletteByte(uint8_t value)
@@ -1360,32 +1402,25 @@ static uint8_t artCrossplayPaletteByte(uint8_t value)
 
 static int artCrossplayReadPalette(char const *containerPath, char **data, int32_t *size)
 {
-    if (artCrossplayReadContainerEntry(containerPath, "palette.dat", data, size))
+    if (artCrossplayReadContainerEntryStrict(containerPath, "palette.dat", data, size))
         return 1;
 
-    return artCrossplayReadContainerEntry(containerPath, "PALETTE.DAT", data, size);
+    return artCrossplayReadContainerEntryStrict(containerPath, "PALETTE.DAT", data, size);
 }
 
-static uint8_t const *artCrossplayPaletteRemapForPath(char const *containerPath)
+static int artCrossplayBuildPaletteRemapForSlot(int32_t slot)
 {
-    if (!containerPath || !containerPath[0])
-        return NULL;
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS || !g_crossplayArtCachePath[slot][0])
+        return 0;
 
-    if (g_crossplayPaletteRemapLoaded && !Bstrcasecmp(g_crossplayPaletteRemapPath, containerPath) &&
-        !Bmemcmp(g_crossplayPaletteRemapRuntimePalette, palette, sizeof(g_crossplayPaletteRemapRuntimePalette)))
-        return g_crossplayPaletteRemapAvailable ? g_crossplayPaletteRemap : NULL;
-
-    artCrossplayClearPaletteRemap();
-    Bstrncpyz(g_crossplayPaletteRemapPath, containerPath, sizeof(g_crossplayPaletteRemapPath));
-    Bmemcpy(g_crossplayPaletteRemapRuntimePalette, palette, sizeof(g_crossplayPaletteRemapRuntimePalette));
-    g_crossplayPaletteRemapLoaded = 1;
+    char const *const containerPath = g_crossplayArtCachePath[slot];
 
     char *paletteData = NULL;
     int32_t paletteSize = 0;
     if (!artCrossplayReadPalette(containerPath, &paletteData, &paletteSize) || paletteSize < 768)
     {
         DO_FREE_AND_NULL(paletteData);
-        return NULL;
+        return 0;
     }
 
     uint8_t sourcePalette[768];
@@ -1393,25 +1428,67 @@ static uint8_t const *artCrossplayPaletteRemapForPath(char const *containerPath)
         sourcePalette[i] = artCrossplayPaletteByte((uint8_t)paletteData[i]);
     Xfree(paletteData);
 
+    g_crossplayPaletteRemapState[slot] = 0;
+
     if (!Bmemcmp(sourcePalette, palette, sizeof(sourcePalette)))
-        return NULL;
+        return 1;   // the container has a palette; it just needs no remapping
 
     for (int32_t i = 0; i < 255; ++i)
     {
         uint8_t const r = sourcePalette[i * 3 + 0];
         uint8_t const g = sourcePalette[i * 3 + 1];
         uint8_t const b = sourcePalette[i * 3 + 2];
-        g_crossplayPaletteRemap[i] = (uint8_t)paletteGetClosestColorUpToIndexNoCache(r, g, b, 254);
+        g_crossplayPaletteRemapSlot[slot][i] = (uint8_t)paletteGetClosestColorUpToIndexNoCache(r, g, b, 254);
     }
 
     // Preserve Build's masked-pixel index.  Mapping this through RGB matching
     // can turn transparent texels into visible pixels or visible pixels into
     // holes depending on the destination palette.
-    g_crossplayPaletteRemap[255] = 255;
-    g_crossplayPaletteRemapAvailable = 1;
+    g_crossplayPaletteRemapSlot[slot][255] = 255;
+    g_crossplayPaletteRemapState[slot] = 1;
 
     LOG_F(INFO, "Crossplay: remapping foreign ART palette from %s to the active runtime palette.", containerPath);
-    return g_crossplayPaletteRemap;
+    return 1;
+}
+
+// The remap a container's art must be read through.  A container that carries no
+// PALETTE.DAT -- which is most mod GRPs -- is drawn in whatever palette the game
+// it was built for uses, so it borrows the first container in the stack that
+// does have one.
+static uint8_t const *artCrossplayPaletteRemapForSlot(int32_t slot)
+{
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS)
+        return NULL;
+
+    if (!g_crossplayPaletteRemapLoaded ||
+        Bmemcmp(g_crossplayPaletteRemapRuntimePalette, palette, sizeof(g_crossplayPaletteRemapRuntimePalette)))
+    {
+        artCrossplayClearPaletteRemap();
+        Bmemcpy(g_crossplayPaletteRemapRuntimePalette, palette, sizeof(g_crossplayPaletteRemapRuntimePalette));
+        g_crossplayPaletteRemapLoaded = 1;
+    }
+
+    if (g_crossplayPaletteRemapState[slot] < 0 && !artCrossplayBuildPaletteRemapForSlot(slot))
+    {
+        // No palette of its own.  Fall back to the stack's, which is the whole
+        // point: a mod GRP's tiles are drawn in the base game's colours.
+        for (int32_t other = 1; other < ART_CROSSPLAY_ART_CACHE_SLOTS; ++other)
+        {
+            if (other == slot || !g_crossplayArtCachePath[other][0])
+                continue;
+
+            if (g_crossplayPaletteRemapState[other] < 0)
+                artCrossplayBuildPaletteRemapForSlot(other);
+
+            if (g_crossplayPaletteRemapState[other] >= 0)
+                return g_crossplayPaletteRemapState[other] > 0 ? g_crossplayPaletteRemapSlot[other] : NULL;
+        }
+
+        g_crossplayPaletteRemapState[slot] = 0;
+        return NULL;
+    }
+
+    return g_crossplayPaletteRemapState[slot] > 0 ? g_crossplayPaletteRemapSlot[slot] : NULL;
 }
 
 // The source game's LOOKUP.DAT, which is where its alternate palettes live.
@@ -1429,10 +1506,10 @@ static void artCrossplayClearLookups(void)
 
 static int artCrossplayReadLookups(char const *containerPath, char **data, int32_t *size)
 {
-    if (artCrossplayReadContainerEntry(containerPath, "lookup.dat", data, size))
+    if (artCrossplayReadContainerEntryStrict(containerPath, "lookup.dat", data, size))
         return 1;
 
-    return artCrossplayReadContainerEntry(containerPath, "LOOKUP.DAT", data, size);
+    return artCrossplayReadContainerEntryStrict(containerPath, "LOOKUP.DAT", data, size);
 }
 
 // Build's LOOKUP.DAT: a count byte, then that many (palette number, 256-byte
@@ -1649,38 +1726,65 @@ static int artCrossplayCopyTileFromArtBuffer(char const *buffer, int32_t bufferS
     return 0;
 }
 
-static void artCrossplayClearArtCache(void)
+static void artCrossplayClearArtCacheSlot(int32_t slot)
 {
-    for (int32_t i = 0; i < ART_CROSSPLAY_MAX_BASE_ART_FILES; ++i)
-        DO_FREE_AND_NULL(g_crossplayArtCacheData[i]);
+    if ((unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS)
+        return;
 
-    Bmemset(g_crossplayArtCacheSize, 0, sizeof(g_crossplayArtCacheSize));
-    Bmemset(g_crossplayArtCacheLoaded, 0, sizeof(g_crossplayArtCacheLoaded));
+    for (int32_t i = 0; i < ART_CROSSPLAY_MAX_BASE_ART_FILES; ++i)
+        DO_FREE_AND_NULL(g_crossplayArtCacheData[slot][i]);
+
+    Bmemset(g_crossplayArtCacheSize[slot], 0, sizeof(g_crossplayArtCacheSize[slot]));
+    Bmemset(g_crossplayArtCacheLoaded[slot], 0, sizeof(g_crossplayArtCacheLoaded[slot]));
 }
 
-static int artCrossplayReadArtFileCached(char const *grpPath, int32_t artIndex, char const **data, int32_t *size)
+static void artCrossplayClearArtCache(void)
 {
-    if ((unsigned)artIndex >= ART_CROSSPLAY_MAX_BASE_ART_FILES)
+    for (int32_t slot = 0; slot < ART_CROSSPLAY_ART_CACHE_SLOTS; ++slot)
+        artCrossplayClearArtCacheSlot(slot);
+}
+
+// Puts a container in the scratch slot, for the one-off loads that name their
+// own container rather than going through the level's stack.
+static void artCrossplaySetScratchContainer(char const *containerPath)
+{
+    if (!containerPath)
+        containerPath = "";
+
+    if (!Bstrcasecmp(g_crossplayArtCachePath[ART_CROSSPLAY_ART_CACHE_SCRATCH], containerPath))
+        return;
+
+    artCrossplayClearArtCacheSlot(ART_CROSSPLAY_ART_CACHE_SCRATCH);
+    Bstrncpyz(g_crossplayArtCachePath[ART_CROSSPLAY_ART_CACHE_SCRATCH], containerPath, BMAX_PATH);
+    g_crossplayPaletteRemapState[ART_CROSSPLAY_ART_CACHE_SCRATCH] = -1;
+}
+
+static int artCrossplayReadArtFileCached(int32_t slot, int32_t artIndex, char const **data, int32_t *size)
+{
+    if ((unsigned)artIndex >= ART_CROSSPLAY_MAX_BASE_ART_FILES || (unsigned)slot >= ART_CROSSPLAY_ART_CACHE_SLOTS ||
+        !g_crossplayArtCachePath[slot][0])
         return 0;
 
-    if (!g_crossplayArtCacheLoaded[artIndex])
+    if (!g_crossplayArtCacheLoaded[slot][artIndex])
     {
         char artName[13];
         Bsprintf(artName, "TILES%03d.ART", artIndex);
 
-        g_crossplayArtCacheLoaded[artIndex] = 1;
-        artCrossplayReadContainerEntry(grpPath, artName, &g_crossplayArtCacheData[artIndex], &g_crossplayArtCacheSize[artIndex]);
+        g_crossplayArtCacheLoaded[slot][artIndex] = 1;
+        artCrossplayReadContainerEntryStrict(g_crossplayArtCachePath[slot], artName,
+                                             &g_crossplayArtCacheData[slot][artIndex],
+                                             &g_crossplayArtCacheSize[slot][artIndex]);
     }
 
-    if (!g_crossplayArtCacheData[artIndex])
+    if (!g_crossplayArtCacheData[slot][artIndex])
         return 0;
 
-    *data = g_crossplayArtCacheData[artIndex];
-    *size = g_crossplayArtCacheSize[artIndex];
+    *data = g_crossplayArtCacheData[slot][artIndex];
+    *size = g_crossplayArtCacheSize[slot][artIndex];
     return 1;
 }
 
-static int artCrossplayLoadForeignTile(char const *grpPath, int16_t sourceTile)
+static int artCrossplayLoadForeignTileFromSlot(int32_t slot, int16_t sourceTile)
 {
     if ((unsigned)sourceTile >= MAXUSERTILES)
         return 0;
@@ -1688,7 +1792,7 @@ static int artCrossplayLoadForeignTile(char const *grpPath, int16_t sourceTile)
     if (g_crossplayTileRemap[sourceTile] >= 0)
         return 1;
 
-    uint8_t const *paletteRemap = artCrossplayPaletteRemapForPath(grpPath);
+    uint8_t const *paletteRemap = artCrossplayPaletteRemapForSlot(slot);
     int32_t preferred = sourceTile / 256;
     for (int32_t pass = 0; pass < ART_CROSSPLAY_MAX_BASE_ART_FILES + 1; ++pass)
     {
@@ -1698,7 +1802,7 @@ static int artCrossplayLoadForeignTile(char const *grpPath, int16_t sourceTile)
 
         char const *artData = NULL;
         int32_t artSize = 0;
-        if (!artCrossplayReadArtFileCached(grpPath, artIndex, &artData, &artSize))
+        if (!artCrossplayReadArtFileCached(slot, artIndex, &artData, &artSize))
             continue;
 
         uint32_t diskPicanm = 0;
@@ -1770,10 +1874,22 @@ static int artCrossplayLoadForeignTile(char const *grpPath, int16_t sourceTile)
     return 0;
 }
 
+// A map tile, taken from the first container in the level's stack that has it.
+static int artCrossplayLoadForeignTile(int16_t sourceTile)
+{
+    for (int32_t slot = 1; slot <= g_crossplayLevelContainerCount; ++slot)
+        if (artCrossplayLoadForeignTileFromSlot(slot, sourceTile))
+            return 1;
+
+    return 0;
+}
+
 static int artCrossplayCopyForeignTileFromPath(char const *grpPath, int16_t sourceTile, int16_t destTile,
                                               int32_t sourcePal)
 {
-    uint8_t const *paletteRemap = artCrossplayPaletteRemapForPath(grpPath);
+    artCrossplaySetScratchContainer(grpPath);
+
+    uint8_t const *paletteRemap = artCrossplayPaletteRemapForSlot(ART_CROSSPLAY_ART_CACHE_SCRATCH);
 
     // Recolour through the source game's own alternate palette first, then into
     // the runtime's palette.  Without this the art arrives in its base colours,
@@ -1796,7 +1912,7 @@ static int artCrossplayCopyForeignTileFromPath(char const *grpPath, int16_t sour
 
         char const *artData = NULL;
         int32_t artSize = 0;
-        if (!artCrossplayReadArtFileCached(grpPath, artIndex, &artData, &artSize))
+        if (!artCrossplayReadArtFileCached(ART_CROSSPLAY_ART_CACHE_SCRATCH, artIndex, &artData, &artSize))
             continue;
 
         if (artCrossplayCopyTileFromArtBuffer(artData, artSize, sourceTile, destTile, paletteRemap))
@@ -1939,7 +2055,7 @@ static int artCrossplayDukeMapUsesSky(char const *usedTiles, int16_t baseTile)
 
 static int artCrossplayLoadDukeSkyTile(char const *grpPath, int16_t sourceTile)
 {
-    return (unsigned)sourceTile < MAXUSERTILES && artCrossplayLoadForeignTile(grpPath, sourceTile);
+    return (unsigned)sourceTile < MAXUSERTILES && artCrossplayLoadForeignTile(sourceTile);
 }
 
 static void artCrossplaySetupDukeSky(char const *grpPath, char const *usedTiles)
@@ -2277,6 +2393,49 @@ int16_t artCrossplayRemapMapTile(int16_t tile)
     return artCrossplayRemapTile(tile);
 }
 
+// The stack of containers a level's art is taken from, most specific first: the
+// container the map itself came from, then the rest of the data for the same
+// game, then any container whose game could not be told.  A Duke mod GRP handed
+// to the host after the base game therefore overrides it and falls through to it
+// for everything it does not replace, which is what a mod does in Duke.
+static void artCrossplayBuildLevelContainers(char const *primaryPath)
+{
+    for (int32_t slot = 1; slot < ART_CROSSPLAY_ART_CACHE_SLOTS; ++slot)
+    {
+        artCrossplayClearArtCacheSlot(slot);
+        g_crossplayArtCachePath[slot][0] = 0;
+        g_crossplayPaletteRemapState[slot] = -1;
+    }
+
+    g_crossplayLevelContainerCount = 0;
+
+    int32_t const levelsGame = artCrossplayDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS);
+
+    auto add = [&](char const *path) {
+        if (!path || !path[0] || g_crossplayLevelContainerCount >= ART_CROSSPLAY_MAX_LEVEL_CONTAINERS)
+            return;
+
+        for (int32_t i = 1; i <= g_crossplayLevelContainerCount; ++i)
+            if (!Bstrcasecmp(g_crossplayArtCachePath[i], path))
+                return;
+
+        Bstrncpyz(g_crossplayArtCachePath[++g_crossplayLevelContainerCount], path, BMAX_PATH);
+    };
+
+    add(primaryPath);
+
+    for (int32_t pass = 0; pass < 2; ++pass)
+        for (int32_t i = 0; i < g_crossplayForeignDataCount; ++i)
+        {
+            int32_t const dataGame = g_crossplayForeignDataGame[i];
+
+            if (pass == 0 ? (levelsGame >= 0 && dataGame != levelsGame) : dataGame >= 0)
+                continue;
+
+            add(g_crossplayForeignData[i]);
+        }
+}
+
 int32_t artCrossplayPrepareForeignMapArt(char const *mapName)
 {
     artCrossplayEnsureLevelStateInitialized();
@@ -2286,6 +2445,7 @@ int32_t artCrossplayPrepareForeignMapArt(char const *mapName)
         return 0;
 
     artCrossplayClearArtCache();
+    artCrossplayBuildLevelContainers(grpPath);
 
     char *usedTiles = (char *)Xcalloc(MAXUSERTILES, sizeof(char));
 
@@ -2313,7 +2473,7 @@ int32_t artCrossplayPrepareForeignMapArt(char const *mapName)
         if (!usedTiles[tile])
             continue;
 
-        if (artCrossplayLoadForeignTile(grpPath, (int16_t)tile))
+        if (artCrossplayLoadForeignTile((int16_t)tile))
             copied++;
         else
             missing++;

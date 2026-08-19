@@ -191,29 +191,19 @@ static int32_t SW_CrossplayForeignGameForSoundSlot(int32_t num)
     return ART_CROSSPLAY_GAME_UNKNOWN;
 }
 
+// A track a Duke-family level asks for.
+//
+// This used to be a hand-written list of stock Duke's forty-odd .mid names, and
+// nothing outside it was ever looked for in the Duke data: a mod GRP brings its
+// own music (vacation.grp ships IRIEPRTY.mid and five more) and every one of
+// those fell through to Shadow Warrior's own data, where it does not exist.  The
+// question the list was trying to answer is simply whether the Duke data has the
+// file, so it is asked directly instead.  A name the Duke data does not have
+// still falls through to the host's own search path, which is where Shadow
+// Warrior's own tracks come from.
 static int32_t SW_CrossplayIsDukeMusicFilename(char const *filename)
 {
-    static char const * const dukeMusicNames[] =
-    {
-        "GRABBAG.MID", "BRIEFING.MID",
-        "stalker.mid", "dethtoll.mid", "streets.mid", "watrwld1.mid", "snake1.mid",
-        "thecall.mid", "ahgeez.mid", "futurmil.mid", "storm.mid", "gutwrnch.mid",
-        "robocrep.mid", "stalag.mid", "pizzed.mid", "alienz.mid", "xplasma.mid",
-        "alfredh.mid", "gloomy.mid", "intents.mid", "inhiding.mid", "FATCMDR.mid",
-        "NAMES.MID", "subway.mid", "invader.mid", "gotham.mid", "233c.mid",
-        "lordofla.mid", "urban.mid", "spook.mid", "whomp.mid", "missimp.mid",
-        "prepd.mid", "bakedgds.mid", "cf.mid", "lemchill.mid", "pob.mid",
-        "warehaus.mid", "layers.mid", "floghorn.mid", "depart.mid", "restrict.mid",
-    };
-
-    if (filename == NULL || filename[0] == '\0')
-        return 0;
-
-    for (unsigned i = 0; i < ARRAY_SIZE(dukeMusicNames); ++i)
-        if (!Bstrcasecmp(filename, dukeMusicNames[i]))
-            return 1;
-
-    return 0;
+    return filename != NULL && filename[0] != '\0';
 }
 
 // 3d sound engine function prototype

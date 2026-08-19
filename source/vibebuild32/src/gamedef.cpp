@@ -2028,28 +2028,69 @@ void C_AddFileOffset(int const offset, const char* fileName)
     vmoffset = newofs;
 }
 
+// VibeBuild32 crossplay: where a Duke CON comes from when another game's runtime
+// is running Duke's scripts.
+//
+// The host has Duke's data as *foreign* data -- deliberately not mounted in the
+// engine's search path, or its art and sounds would answer to the host's own
+// filenames -- so kopen4loadfrommod() cannot see a single line of it.  The Duke
+// CONs were therefore whatever happened to be lying beside the executable, which
+// meant stock Duke and only stock Duke: a mod GRP such as vacation.grp ships its
+// own GAME.CON, and none of its actors, sounds or level names existed.
+//
+// The foreign data list is searched newest-first, so a mod GRP passed after the
+// base game wins, exactly as a mod does in Duke.  Only the crossplay compile
+// takes this path; a native Duke run reads its CONs the way it always has.
+int g_crossplayDukeCon = 0;
+
+static int C_CrossplayReadFile(char const *fileName, char **buffer, int32_t *length)
+{
+    if (!g_crossplayDukeCon || !fileName || !fileName[0])
+        return 0;
+
+    char *data = NULL;
+    int32_t size = 0;
+
+    if (!artCrossplayReadForeignGameDataEntry(ART_CROSSPLAY_GAME_DUKE, fileName, &data, &size, NULL, 0) || size <= 0)
+        return 0;
+
+    // The compiler wants a NUL-terminated buffer it owns.
+    char *text = (char *)Xmalloc(size + 1);
+    Bmemcpy(text, data, size);
+    text[size] = 0;
+    Xfree(data);
+
+    *buffer = text;
+    *length = size;
+    return 1;
+}
+
 static void C_Include(const char* confile)
 {
-    buildvfs_kfd fp = kopen4loadfrommod(confile, g_loadFromGroupOnly);
+    char *mptr = NULL;
+    int32_t len = 0;
 
-    if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
+    if (!C_CrossplayReadFile(confile, &mptr, &len))
     {
-        g_errorCnt++;
-        LOG_F(ERROR, "%s:%d: could not find file %s", g_scriptFileName, g_lineNumber, confile);
-        return;
-    }
+        buildvfs_kfd fp = kopen4loadfrommod(confile, g_loadFromGroupOnly);
 
-    int32_t const len = kfilelength(fp);
-    char* mptr = (char*)Xmalloc(len + 1);
+        if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
+        {
+            g_errorCnt++;
+            LOG_F(ERROR, "%s:%d: could not find file %s", g_scriptFileName, g_lineNumber, confile);
+            return;
+        }
+
+        len = kfilelength(fp);
+        mptr = (char*)Xmalloc(len + 1);
+        kread(fp, mptr, len);
+        kclose(fp);
+        mptr[len] = 0;
+    }
 
     VLOG_F(LOG_CON, "Including: %s (%d bytes)", confile, len);
 
     C_AddFileOffset((g_scriptPtr - apScript), confile);
-
-    kread(fp, mptr, len);
-    kclose(fp);
-
-    mptr[len] = 0;
 
     if (*textptr == '"') // skip past the closing quote if it's there so we don't screw up the next line
         textptr++;
@@ -6496,9 +6537,14 @@ void C_Compile(const char* fileName)
     Gv_Init();
     C_InitProjectiles();
 
-    buildvfs_kfd kFile = kopen4loadfrommod(fileName, g_loadFromGroupOnly);
+    char *crossplayScript = NULL;
+    int32_t crossplayScriptLen = 0;
+    int const haveCrossplayScript = C_CrossplayReadFile(fileName, &crossplayScript, &crossplayScriptLen);
 
-    if (kFile == buildvfs_kfd_invalid) // JBF: was 0
+    buildvfs_kfd kFile = haveCrossplayScript ? buildvfs_kfd_invalid
+                                             : kopen4loadfrommod(fileName, g_loadFromGroupOnly);
+
+    if (!haveCrossplayScript && kFile == buildvfs_kfd_invalid) // JBF: was 0
     {
         if (g_loadFromGroupOnly == 1 || numgroupfiles == 0)
         {
@@ -6521,7 +6567,7 @@ void C_Compile(const char* fileName)
         return; //Not there
         }
 
-    int const kFileLen = kfilelength(kFile);
+    int const kFileLen = haveCrossplayScript ? crossplayScriptLen : kfilelength(kFile);
 
     VLOG_F(LOG_CON, "Compiling: %s (%d bytes)", fileName, kFileLen);
 
@@ -6529,12 +6575,22 @@ void C_Compile(const char* fileName)
 
     uint32_t const startcompiletime = timerGetTicks();
 
-    char* mptr = (char*)Xmalloc(kFileLen + 1);
-    mptr[kFileLen] = 0;
+    char* mptr;
 
-    textptr = (char*)mptr;
-    kread(kFile, (char*)textptr, kFileLen);
-    kclose(kFile);
+    if (haveCrossplayScript)
+    {
+        mptr = crossplayScript;
+        textptr = (char*)mptr;
+    }
+    else
+    {
+        mptr = (char*)Xmalloc(kFileLen + 1);
+        mptr[kFileLen] = 0;
+
+        textptr = (char*)mptr;
+        kread(kFile, (char*)textptr, kFileLen);
+        kclose(kFile);
+    }
 
     Xfree(apScript);
 

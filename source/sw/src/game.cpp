@@ -5130,6 +5130,27 @@ static int32_t SW_CrossplayIsDukeScreenBreakTile(int16_t originalPicnum)
 // Duke enemies, charges and breakables without touching them.  This is the blast
 // pass for those, and it hands Duke's actors the damage through Duke's own
 // protocol so their reaction (pain, gibbing, chained charge explosions) is Duke's.
+// Take a broken mirror out of Shadow Warrior's mirror list.
+//
+// Changing the wall's art is not enough on its own.  JS_InitMirrors() gives the
+// mirror sector's ceiling and floor the same MIRRORLABEL tile as the wall, so
+// the renderer keeps asking for that tile however the wall is painted, and the
+// end of JS_DrawMirrors() writes the label back onto the wall every frame it
+// draws -- so a Duke mirror blown out while the player was looking at it was
+// whole again on the next frame, and could be broken over and over.  Retiring
+// the entry stops both: the draw loop skips it, and nothing writes the wall.
+static void SW_CrossplayRetireMirrorWall(int32_t wallNum)
+{
+    for (int32_t mi = 0; mi < mirrorcnt; ++mi)
+    {
+        if (mirror[mi].mirrorwall != wallNum)
+            continue;
+
+        mirror[mi].mirrorwall = -1;
+        bitmap_clear(gotpic, MIRRORLABEL + mi);
+    }
+}
+
 int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitPos)
 {
     if (!SW_CrossplayDukeMapBridgeActive() || (unsigned)wallNum >= (unsigned)numwalls)
@@ -5167,6 +5188,7 @@ int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitP
             RESET(wall[wallNum].cstat, 16);
             SW_CrossplaySetDukeWallPicnum(wallNum, VB_DUKE_MIRRORBROKE);
             SW_CrossplaySetDukeWallOverpicnum(wallNum, VB_DUKE_MIRRORBROKE);
+            SW_CrossplayRetireMirrorWall(wallNum);
             SW_CrossplayPlayDukeWallBreakSound(wallNum, hitPos, DIGI_DUKE_GLASS_HEAVYBREAK);
             ++g_swCrossplayDukeMirrorsBroken;
             return 1;
@@ -8711,9 +8733,32 @@ static void SW_CrossplayMoveDukeSectorZAnim(sw_crossplay_duke_sector_zanim_t &an
 // a shut door is where the ceiling already is, and Duke moves nothing either.
 static int32_t SW_CrossplayDukeSectorZAnimIsNoOp(int16_t sectnum)
 {
+    if ((unsigned)sectnum >= (unsigned)numsectors)
+        return 0;
+
+    // An elevator or platform with nowhere to travel to.  Duke's own code for
+    // these looks for a connected sector at a different floor height and, when
+    // there is none, returns having done nothing at all -- VACASL has a lotag-18
+    // elevator walled in by sectors at its own height.  Asking such a sector to
+    // move is asking the bridge to overrule Duke.
+    switch (SW_CrossplayDukeSectorBaseLotag(sectnum))
+    {
+    case VB_DUKE_ST_PLATFORM_DOWN:
+    case VB_DUKE_ST_PLATFORM_UP:
+    case VB_DUKE_ST_ELEVATOR_DOWN:
+    case VB_DUKE_ST_ELEVATOR_UP:
+        if (nextsectorneighborz(sectnum, sector[sectnum].floorz, 1, -1) < 0 &&
+            nextsectorneighborz(sectnum, sector[sectnum].floorz, 1, 1) < 0)
+            return 1;
+        break;
+
+    default:
+        break;
+    }
+
     sw_crossplay_duke_sector_zanim_t const *const anim = SW_CrossplayFindDukeSectorZAnim(sectnum);
 
-    if (anim == NULL || !anim->active || (unsigned)sectnum >= (unsigned)numsectors)
+    if (anim == NULL || !anim->active)
         return 0;
 
     int32_t const floorSettled = !anim->moveFloor || anim->targetFloorZ == sector[sectnum].floorz;
@@ -15238,8 +15283,10 @@ static void SW_CrossplaySelfTestRunBreakables(PLAYERp const pp)
             else if (!stoppedBlocking)
             {
                 ++gainedBlocking;
-                LOG_F(WARNING, "CPBREAK spr=%d (orig tile %d) gained a blocking bit by breaking",
-                      spriteNum, artCrossplayOriginalMapSpritePicnum(spriteNum));
+                LOG_F(WARNING, "CPBREAK spr=%d (orig tile %d) gained a blocking bit by breaking cstat=%d pic=%d stat=%d owned=%d",
+                      spriteNum, artCrossplayOriginalMapSpritePicnum(spriteNum), TrackerCast(sprite[spriteNum].cstat),
+                      TrackerCast(sprite[spriteNum].picnum), TrackerCast(sprite[spriteNum].statnum),
+                      SW_CrossplayDukeAIOwnsSprite(spriteNum));
             }
         }
 
@@ -15716,6 +15763,13 @@ static void SW_CrossplaySelfTestRunOperableSetup(PLAYERp const pp)
     g_swCrossplaySelfTestOperableActivated = SW_CrossplayActivateDukeBySector(sectnum, pp);
     if (!g_swCrossplaySelfTestOperableActivated && sector[sectnum].hitag != 0)
         g_swCrossplaySelfTestOperableActivated = SW_CrossplayOperateDukeTag(sector[sectnum].hitag, pp) ? 2 : 0;
+
+    // Neither an activator nor a tag: this is one Duke starts straight off the
+    // sector's lotag when the use key reaches it, which is how a plain elevator
+    // with no wiring works.  Vacation's VACASL has one, and asking it only the
+    // first two questions scored it as a door that would not move.
+    if (!g_swCrossplaySelfTestOperableActivated)
+        g_swCrossplaySelfTestOperableActivated = SW_CrossplayOperateDukeSector(sectnum, pp) ? 3 : 0;
 
     g_swCrossplaySelfTestOperableNoOp = SW_CrossplayDukeSectorZAnimIsNoOp(sectnum);
 
@@ -16728,22 +16782,76 @@ static void SW_CrossplayApplyDukeMapTriggers(void);
 static void SW_CrossplayApplyDukeBlasts(void);
 static void SW_CrossplayConvertDroppedDukePickups(void);
 
+// A slot for a Duke sound this build's own table does not name.
+//
+// The table pairs Duke's sounds with Shadow Warrior sound slots by filename, and
+// those slots are hand-written, so a Duke sound nobody had added was silent --
+// which for a Duke *mod* is nearly all of them: vacation.grp defines eighty-three
+// VOCs of its own.  digi.h reserves a block of empty slots for exactly this, and
+// they are filled here from the compiled Duke CON, so a sound exists because
+// Duke's script defines it.  The file itself is read out of the Duke data by the
+// same path as every other Duke sound.
+static int32_t SW_CrossplayClaimDukeSoundSlot(char const *filename)
+{
+    char const *base = filename;
+    for (char const *scan = filename; *scan != '\0'; ++scan)
+        if (*scan == '/' || *scan == '\\')
+            base = scan + 1;
+
+    if (base[0] == '\0' || Bstrlen(base) >= sizeof(voc[0].name))
+        return DIGI_NULL;
+
+    for (int32_t digi = DIGI_DUKE_MODSOUND0; digi <= DIGI_DUKE_MODSOUND255; ++digi)
+    {
+        if (voc[digi].name[0] != '\0')
+            continue;
+
+        Bstrncpyz(voc[digi].name, base, sizeof(voc[digi].name));
+        return digi;
+    }
+
+    return DIGI_NULL;
+}
+
+static void SW_CrossplayReleaseDukeSoundSlots(void)
+{
+    for (int32_t digi = DIGI_DUKE_MODSOUND0; digi <= DIGI_DUKE_MODSOUND255; ++digi)
+        voc[digi].name[0] = '\0';
+}
+
 static void SW_CrossplayDukeAISetupSounds(void)
 {
     Bmemset(g_swCrossplayDukeAISoundMap, 0, sizeof(g_swCrossplayDukeAISoundMap));
     g_swCrossplayDukeAISoundMapCount = 0;
 
+    SW_CrossplayReleaseDukeSoundSlots();
+
     int32_t const highestSound = min<int32_t>(VB_DukeAI_HighestSoundIndex(),
                                               (int32_t)ARRAY_SIZE(g_swCrossplayDukeAISoundMap) - 1);
+    int32_t claimed = 0;
 
     for (int32_t soundNum = 0; soundNum <= highestSound; ++soundNum)
     {
-        int32_t const digi = SW_CrossplayDukeAIFindDigiForFilename(VB_DukeAI_SoundFilename(soundNum));
+        char const *const filename = VB_DukeAI_SoundFilename(soundNum);
+        int32_t digi = SW_CrossplayDukeAIFindDigiForFilename(filename);
+
+        // Nothing in the table answers for it, so give it one of the reserved
+        // slots.  The hand-written entries still win: they carry the pitch,
+        // priority and distance somebody tuned for that particular sound.
+        if (digi <= DIGI_NULL && filename != NULL && filename[0] != '\0')
+        {
+            digi = SW_CrossplayClaimDukeSoundSlot(filename);
+            if (digi > DIGI_NULL)
+                ++claimed;
+        }
 
         g_swCrossplayDukeAISoundMap[soundNum] = (int16_t)digi;
         if (digi > DIGI_NULL)
             ++g_swCrossplayDukeAISoundMapCount;
     }
+
+    if (claimed > 0)
+        LOG_F(INFO, "Crossplay: gave %d Duke sound(s) with no entry of their own a reserved slot.", claimed);
 
 
 
@@ -19110,12 +19218,31 @@ void InitNewGame(void)
 
 #define VB_CROSSPLAY_MAX_DUKE_EPISODE_LEVELS 16
 
-static char g_swCrossplayDukeLevelFile[MAX_LEVELS_CROSSPLAY + 2][16];
+// Duke's CON parser stores a track as "/name.mid" so that Duke's own loader
+// takes it from the root of the search path; the host's loader wants the bare
+// name.
+static char const *SW_CrossplayDukeMusicName(char const *music)
+{
+    if (music == NULL)
+        return NULL;
+
+    return music[0] == '/' || music[0] == '\\' ? music + 1 : music;
+}
+
+
+static char g_swCrossplayDukeLevelFile[MAX_LEVELS_CROSSPLAY + 2][32];
 static char g_swCrossplayDukeLevelTitle[MAX_LEVELS_CROSSPLAY + 2][MAX_EPISODE_SUBTITLE_LEN + 1];
+static char g_swCrossplayDukeLevelMusic[MAX_LEVELS_CROSSPLAY + 2][32];
 static int16_t g_swCrossplayDukeEpisodeFirst[MAX_EPISODES_CROSSPLAY];
 static int16_t g_swCrossplayDukeEpisodeLevels[MAX_EPISODES_CROSSPLAY];
 static int32_t g_swCrossplayDukeEpisodeCount;
 static int32_t g_swCrossplayDukeLevelTotal;
+
+extern "C" int VB_DukeAI_VolumeCount(void);
+extern "C" char const *VB_DukeAI_VolumeName(int volumeNum);
+extern "C" int VB_DukeAI_LevelInfo(int volumeNum, int levelNum, char const **filename, char const **title,
+                                   char const **music, int *partime, int *designertime);
+extern "C" int VB_DukeAI_MaxLevelsPerVolume(void);
 
 int SW_CrossplayDukeEpisodeCount(void) { return g_swCrossplayDukeEpisodeCount; }
 
@@ -19131,41 +19258,136 @@ int SW_CrossplayActiveMaxLevels(void)
     return g_swCrossplayDukeLevelTotal > 0 ? g_swCrossplayDukeLevelTotal : MAX_LEVELS;
 }
 
-static int32_t SW_CrossplayDukeGrpHasLevel(int32_t episode, int32_t level)
+static int32_t SW_CrossplayDukeGrpHasMap(char const *mapName)
 {
-    char entry[16];
-    Bsnprintf(entry, sizeof(entry), "E%dL%d.MAP", episode, level);
+    if (mapName == NULL || mapName[0] == 0)
+        return 0;
 
     char *data = NULL;
     int32_t size = 0;
     char source[BMAX_PATH];
 
-    if (!artCrossplayReadForeignGameDataEntry(ART_CROSSPLAY_GAME_DUKE, entry, &data, &size, source, sizeof(source)))
+    if (!artCrossplayReadForeignGameDataEntry(ART_CROSSPLAY_GAME_DUKE, mapName, &data, &size, source, sizeof(source)))
         return 0;
 
     Xfree(data);
     return size > 0;
 }
 
-void SW_CrossplayBuildDukeLevelTable(void)
+static int32_t SW_CrossplayDukeGrpHasLevel(int32_t episode, int32_t level)
 {
-    static int32_t built = 0;
+    char entry[16];
+    Bsnprintf(entry, sizeof(entry), "E%dL%d.MAP", episode, level);
 
-    if (built)
-        return;
+    return SW_CrossplayDukeGrpHasMap(entry);
+}
 
-    built = 1;
-    g_swCrossplayDukeEpisodeCount = 0;
-    g_swCrossplayDukeLevelTotal = 0;
+// A map name as the level table holds it: no directory, upper case, so a CON's
+// "VACA1.map" and a command line's "VACA1.MAP" are one level and not two.
+static void SW_CrossplayDukeMapKey(char const *path, char *out, size_t outSize)
+{
+    char const *base = path;
 
-    if (artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) != ART_CROSSPLAY_GAME_DUKE)
-        return;
+    for (char const *p = path; *p; ++p)
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
 
+    size_t i = 0;
+    for (; base[i] && i + 1 < outSize; ++i)
+        out[i] = (char)Btoupper(base[i]);
+    out[i] = 0;
+}
+
+// Duke's own episode and level table, straight out of the CON that was compiled
+// for it.
+//
+// This used to ask the GRP whether it held E<episode>L<level>.MAP, which
+// describes stock Duke and nothing else.  A Duke mod names its maps whatever it
+// likes -- vacation.grp's third episode is VACA1..VACA7 and VACASL -- titles its
+// own episodes and carries a per-level music track, and every bit of that is
+// already in `g_mapInfo` once its CON has compiled.  Reading it from there gets
+// stock Duke right for free (its USER.CON defines exactly the E#L# set the old
+// scan guessed) and gets every mod right as well.
+//
+// A level named by the CON but absent from the data is skipped: Atomic's
+// USER.CON lists eleven levels for episode one and the GRP holds eight.
+static void SW_CrossplayBuildDukeLevelTableFromCon(int32_t *nextLevelOut)
+{
+    int32_t const volumes = VB_DukeAI_VolumeCount();
+    int32_t const levelsPerVolume = VB_DukeAI_MaxLevelsPerVolume();
+    int32_t nextLevel = *nextLevelOut;
+
+    for (int32_t volume = 0; volume < volumes; ++volume)
+    {
+        if (g_swCrossplayDukeEpisodeCount >= MAX_EPISODES_CROSSPLAY)
+            break;
+
+        int32_t const first = nextLevel;
+        int32_t levels = 0;
+
+        for (int32_t level = 0; level < levelsPerVolume; ++level)
+        {
+            char const *filename = NULL;
+            char const *title = NULL;
+            char const *music = NULL;
+
+            if (!VB_DukeAI_LevelInfo(volume, level, &filename, &title, &music, NULL, NULL))
+                continue;
+
+            if (nextLevel > MAX_LEVELS_CROSSPLAY)
+                break;
+
+            char mapKey[32];
+            SW_CrossplayDukeMapKey(filename, mapKey, sizeof(mapKey));
+
+            if (!SW_CrossplayDukeGrpHasMap(mapKey))
+                continue;
+
+            Bstrncpyz(g_swCrossplayDukeLevelFile[nextLevel], mapKey, sizeof(g_swCrossplayDukeLevelFile[0]));
+            Bstrncpyz(g_swCrossplayDukeLevelTitle[nextLevel], title != NULL && title[0] ? title : mapKey,
+                      sizeof(g_swCrossplayDukeLevelTitle[0]));
+            Bstrncpyz(g_swCrossplayDukeLevelMusic[nextLevel],
+                      music != NULL ? SW_CrossplayDukeMusicName(music) : "",
+                      sizeof(g_swCrossplayDukeLevelMusic[0]));
+
+            LevelInfo[nextLevel].LevelName = g_swCrossplayDukeLevelFile[nextLevel];
+            // PlayLevelSong() reads the track out of the table above.
+            LevelInfo[nextLevel].SongName = "";
+            LevelInfo[nextLevel].Description = g_swCrossplayDukeLevelTitle[nextLevel];
+            LevelInfo[nextLevel].BestTime = " ";
+            LevelInfo[nextLevel].ParTime = " ";
+
+            ++nextLevel;
+            ++levels;
+        }
+
+        if (levels == 0)
+            continue;
+
+        char const *volumeName = VB_DukeAI_VolumeName(volume);
+        int32_t const ep = g_swCrossplayDukeEpisodeCount++;
+
+        g_swCrossplayDukeEpisodeFirst[ep] = (int16_t)first;
+        g_swCrossplayDukeEpisodeLevels[ep] = (int16_t)levels;
+
+        Bsnprintf(EpisodeNames[ep], sizeof(EpisodeNames[0]), "^%s",
+                  volumeName != NULL && volumeName[0] ? volumeName : "Duke Episode");
+        Bsnprintf(EpisodeSubtitles[ep], sizeof(EpisodeSubtitles[0]), "%d level%s", levels, levels == 1 ? "" : "s");
+    }
+
+    *nextLevelOut = nextLevel;
+}
+
+// What the table looked like before any Duke CON was available: stock Duke's own
+// naming, guessed from the GRP.  Kept as the fallback for data whose CON defines
+// no level at all.
+static void SW_CrossplayBuildDukeLevelTableFromGrp(int32_t *nextLevelOut)
+{
     static char const *const episodeTitles[] = {
         "L.A. Meltdown", "Lunar Apocalypse", "Shrapnel City", "The Birth",
     };
 
-    int32_t nextLevel = 1;   // LevelInfo[0] stays the title map
+    int32_t nextLevel = *nextLevelOut;
 
     for (int32_t episode = 1; episode <= MAX_EPISODES_CROSSPLAY; ++episode)
     {
@@ -19184,9 +19406,9 @@ void SW_CrossplayBuildDukeLevelTable(void)
                       episode, level);
             Bsnprintf(g_swCrossplayDukeLevelTitle[nextLevel], sizeof(g_swCrossplayDukeLevelTitle[0]), "E%dL%d",
                       episode, level);
+            g_swCrossplayDukeLevelMusic[nextLevel][0] = 0;
 
             LevelInfo[nextLevel].LevelName = g_swCrossplayDukeLevelFile[nextLevel];
-            // PlayLevelSong() picks Duke's own track from the map name.
             LevelInfo[nextLevel].SongName = "";
             LevelInfo[nextLevel].Description = g_swCrossplayDukeLevelTitle[nextLevel];
             LevelInfo[nextLevel].BestTime = " ";
@@ -19208,14 +19430,83 @@ void SW_CrossplayBuildDukeLevelTable(void)
         Bsnprintf(EpisodeSubtitles[ep], sizeof(EpisodeSubtitles[0]), "%d level%s", levels, levels == 1 ? "" : "s");
     }
 
+    *nextLevelOut = nextLevel;
+}
+
+// The music track for a level, as its own CON names it.
+char const *SW_CrossplayDukeLevelMusicForMap(char const *mapName)
+{
+    if (mapName == NULL || mapName[0] == 0)
+        return NULL;
+
+    char mapKey[32];
+    SW_CrossplayDukeMapKey(mapName, mapKey, sizeof(mapKey));
+
+    for (int32_t i = 1; i <= g_swCrossplayDukeLevelTotal; ++i)
+        if (!Bstrcasecmp(g_swCrossplayDukeLevelFile[i], mapKey) && g_swCrossplayDukeLevelMusic[i][0])
+            return g_swCrossplayDukeLevelMusic[i];
+
+    // A map handed straight to -map need not be in any episode, but its CON may
+    // still name a track for it.
+    int32_t const volumes = VB_DukeAI_VolumeCount();
+    int32_t const levelsPerVolume = VB_DukeAI_MaxLevelsPerVolume();
+
+    for (int32_t volume = 0; volume < volumes; ++volume)
+        for (int32_t level = 0; level < levelsPerVolume; ++level)
+        {
+            char const *filename = NULL;
+            char const *music = NULL;
+
+            if (!VB_DukeAI_LevelInfo(volume, level, &filename, NULL, &music, NULL, NULL) || music == NULL || !music[0])
+                continue;
+
+            char otherKey[32];
+            SW_CrossplayDukeMapKey(filename, otherKey, sizeof(otherKey));
+
+            if (!Bstrcasecmp(otherKey, mapKey))
+                return SW_CrossplayDukeMusicName(music);
+        }
+
+    return NULL;
+}
+
+void SW_CrossplayBuildDukeLevelTable(void)
+{
+    static int32_t built = 0;
+
+    if (built)
+        return;
+
+    built = 1;
+    g_swCrossplayDukeEpisodeCount = 0;
+    g_swCrossplayDukeLevelTotal = 0;
+
+    if (artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) != ART_CROSSPLAY_GAME_DUKE)
+        return;
+
+    int32_t nextLevel = 1;   // LevelInfo[0] stays the title map
+
+    SW_CrossplayBuildDukeLevelTableFromCon(&nextLevel);
+
+    if (g_swCrossplayDukeEpisodeCount == 0)
+        SW_CrossplayBuildDukeLevelTableFromGrp(&nextLevel);
+
     g_swCrossplayDukeLevelTotal = nextLevel - 1;
 
     if (nextLevel <= MAX_LEVELS_CROSSPLAY + 1)
         Bmemset(&LevelInfo[nextLevel], 0, sizeof(LevelInfo[0]));
 
     if (g_swCrossplayDukeEpisodeCount > 0)
+    {
         LOG_F(INFO, "Crossplay: found %d Duke episode(s) and %d level(s) in the foreign game data.",
               g_swCrossplayDukeEpisodeCount, g_swCrossplayDukeLevelTotal);
+
+        // Worth a line each: with a mod GRP these are the mod's own names, and
+        // seeing them is how you tell its CON was the one that compiled.
+        for (int32_t ep = 0; ep < g_swCrossplayDukeEpisodeCount; ++ep)
+            LOG_F(INFO, "Crossplay:   episode %d \"%s\": %d level(s) from %s", ep + 1, EpisodeNames[ep] + 1,
+                  g_swCrossplayDukeEpisodeLevels[ep], g_swCrossplayDukeLevelFile[g_swCrossplayDukeEpisodeFirst[ep]]);
+    }
 }
 
 // Duke's own end of level, driven from the nuke button and from a switch tagged
@@ -21067,42 +21358,19 @@ void InitPlayerGameSettings(void)
         RESET(Player[myconnectindex].Flags, PF_MOUSE_AIMING_ON);
 }
 
+char const *SW_CrossplayDukeLevelMusicForMap(char const *mapName);   // above
+
+// Which track a Duke level plays.  This used to be a hand-written 4x11 table of
+// stock Duke's tracks keyed off an E<episode>L<level> map name, so a mod's own
+// music never played and a mod's own map names matched nothing at all.  Duke
+// keeps a track per level in its `g_mapInfo`, filled in by the same
+// `definelevelname` line that names the level, so the answer comes from there.
 static char const *SW_CrossplayDukeLevelMusicName(void)
 {
-    static char const * const dukeMusic[4][11] =
-    {
-        { "stalker.mid",  "dethtoll.mid", "streets.mid",  "watrwld1.mid", "snake1.mid",  "thecall.mid",
-          "ahgeez.mid",   "dethtoll.mid", "streets.mid",  "watrwld1.mid", "snake1.mid" },
-        { "futurmil.mid", "storm.mid",    "gutwrnch.mid", "robocrep.mid", "stalag.mid",  "pizzed.mid",
-          "alienz.mid",   "xplasma.mid",  "alfredh.mid",  "gloomy.mid",   "intents.mid" },
-        { "inhiding.mid", "FATCMDR.mid",  "NAMES.MID",    "subway.mid",   "invader.mid", "gotham.mid",
-          "233c.mid",     "lordofla.mid", "urban.mid",    "spook.mid",    "whomp.mid" },
-        { "missimp.mid",  "prepd.mid",    "bakedgds.mid", "cf.mid",       "lemchill.mid","pob.mid",
-          "warehaus.mid", "layers.mid",   "floghorn.mid", "depart.mid",   "restrict.mid" },
-    };
-
     if (!SW_CrossplayDukeMapBridgeActive())
         return NULL;
 
-    char const *baseName = LevelName;
-    char const *slash = Bstrrchr(baseName, '/');
-    char const *backslash = Bstrrchr(baseName, '\\');
-    if (slash != NULL && slash[1] != '\0')
-        baseName = slash + 1;
-    if (backslash != NULL && backslash[1] != '\0' && backslash > baseName)
-        baseName = backslash + 1;
-
-    char e = 0, l = 0;
-    int episode = 0, level = 0;
-    if (sscanf(baseName, "%c%d%c%d", &e, &episode, &l, &level) != 4 ||
-        Btoupper(e) != 'E' || Btoupper(l) != 'L')
-        return NULL;
-
-    if ((unsigned)(episode - 1) >= ARRAY_SIZE(dukeMusic) ||
-        (unsigned)(level - 1) >= ARRAY_SIZE(dukeMusic[0]))
-        return NULL;
-
-    return dukeMusic[episode - 1][level - 1];
+    return SW_CrossplayDukeLevelMusicForMap(LevelName);
 }
 
 void PlayLevelSong(void)
