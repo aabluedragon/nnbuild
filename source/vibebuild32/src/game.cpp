@@ -11265,10 +11265,54 @@ extern "C" int VB_DukeAI_DisplayPicnum(int spriteNum, int32_t camX, int32_t camY
 
     auto const s = &sprite[spriteNum];
 
+    int32_t const curframe = AC_CURFRAME(actor[spriteNum].t_data);
+    uint16_t preCstat = cstat != NULL ? *cstat : s->cstat;
+
+    // A few tiles are turned by a rule of their own rather than by the viewtype
+    // on their current action, in a switch G_DoSpriteAnimations() runs *before*
+    // it ever reaches the actor case.  Only the generic case was mirrored here.
+    //
+    // The patrol vehicle is the one that shows: the generic frame is
+    // `picnum + offset + startframe + viewtype * curframe`, and a RECON's
+    // curframe is not an animation frame at all -- it is the turn counter Duke
+    // calls RECON_T4 -- so multiplying it by the viewtype walked the tile clean
+    // out of the vehicle's own art.  Sampled on E1L2 it was landing in the RPG
+    // frames.  Duke never runs that formula on a RECON.
+    switch (tileGetMapping(s->picnum))
+    {
+        case RECON__:
+        {
+            int frameOffset = getofs_viewtype_mirrored<7>(preCstat, s->ang - getangle(s->x - camX, s->y - camY));
+
+            // RECON_T4: past a certain point in its turn the car is banked, and
+            // Duke has a second set of seven frames for that.
+            if (klabs(curframe) > 64)
+                frameOffset += 7;
+
+            if (cstat != NULL)
+                *cstat = preCstat;
+
+            return RECON + frameOffset;
+        }
+
+        case RPG__:
+        {
+            int const frameOffset =
+                getofs_viewtype_mirrored<7>(preCstat, s->ang - getangle(s->x - camX, s->y - camY));
+
+            if (cstat != NULL)
+                *cstat = preCstat;
+
+            return RPG + frameOffset;
+        }
+
+        default:
+            break;
+    }
+
     if (!G_TileHasActor(s->picnum))
         return s->picnum;
 
-    int32_t const curframe = AC_CURFRAME(actor[spriteNum].t_data);
     int32_t const scrofs_action = AC_ACTION_ID(actor[spriteNum].t_data);
 
     if ((unsigned)scrofs_action + ACTION_PARAM_COUNT > (unsigned)g_scriptSize ||
@@ -11281,7 +11325,7 @@ extern "C" int VB_DukeAI_DisplayPicnum(int spriteNum, int32_t camX, int32_t camY
     int const invertp = viewtype < 0;
     int const l = klabs(viewtype);
 
-    uint16_t spriteCstat = cstat != NULL ? *cstat : s->cstat;
+    uint16_t spriteCstat = preCstat;
     int frameOffset;
 
     int const viewAng = ((l > 4 && l != 8) || action_flags & AF_VIEWPOINT) ? getangle(s->x - camX, s->y - camY) : camAng;

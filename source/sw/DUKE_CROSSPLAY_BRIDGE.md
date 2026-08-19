@@ -1855,6 +1855,22 @@ run's result should not be read too closely.
   extension, so `.wav` and `.ogg` reach `MV_PlayWAV`/`MV_PlayVorbis` the same way
   `.voc` reaches `MV_PlayVOC`.
 
+- **The patrol vehicle never turned.**  `G_DoSpriteAnimations()` turns a handful
+  of tiles by a rule of their own, in a switch that runs *before* it ever reaches
+  the generic actor case, and only the generic case had been mirrored into
+  `VB_DukeAI_DisplayPicnum()`.  RECON is one of them, and it is the one that
+  shows: the generic frame is `picnum + offset + startframe + viewtype *
+  curframe`, and a RECON's curframe is not an animation frame at all -- it is the
+  turn counter Duke calls RECON_T4 -- so multiplying it by the viewtype walked
+  the tile clean out of the vehicle's own art.  Sampled on E1L2 it was landing in
+  the RPG frames.  RPG has a case of its own for the same reason and got one too.
+
+  Checked by asking for the drawn tile from sixteen viewpoints on a ring around
+  the sprite, which isolates the rotation from whether the vehicle happens to be
+  awake: it now answers 1960..1966 -- RECON and its six rotation frames,
+  symmetric about the axis, which is what a mirrored-seven viewtype should give.
+  With the case disabled the same ring answers 2605..2611, which is RPG.
+
 Still open:
 
 - `hydrant-sound-once` depends on a real audio voice being alive: `soundonce`
