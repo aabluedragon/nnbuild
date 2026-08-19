@@ -7154,6 +7154,86 @@ static int32_t SW_CrossplayUseDukeAccessSwitch(PLAYERp pp, int32_t spriteNum,
     return 1;
 }
 
+// Working a switch, the way the use key works one.  This is Duke's
+// P_ActivateSwitch() in the shape the bridge needs it: the card reader's gate on
+// the card, the tag, and the frame the switch is left showing.
+static int32_t SW_CrossplayOperateDukeSwitchSprite(int spriteNum, int targetSpriteNum, vec3_t const *hitPos)
+{
+    if ((unsigned)targetSpriteNum >= MAXSPRITES)
+        return 0;
+
+    sw_crossplay_duke_sprite_behavior_t &behavior = g_swCrossplayDukeSpriteBehaviors[targetSpriteNum];
+    SPRITEp const target = &sprite[targetSpriteNum];
+    PLAYERp const pp = SW_CrossplayPlayerForDukeSpriteOperator(spriteNum);
+    int32_t const accessSwitch = SW_CrossplayIsDukeAccessSwitch(behavior.sourcePicnum);
+    int32_t activated = 0;
+
+    // A card reader answers to the card, not to whatever pressed it.  An
+    // untagged one opens nothing, and Duke leaves those alone before it ever
+    // looks at the card, so it does not eat one either.
+    if (accessSwitch && (target->lotag == 0 || !SW_CrossplayUseDukeAccessSwitch(pp, targetSpriteNum, behavior)))
+        return 0;
+
+    // Only the lotag.  Duke keeps a switch's *sound* in its hitag -- see
+    // P_ActivateSwitch(), which plays it through S_SoundIsValid() -- and
+    // operating that as a second map tag fired whatever else in the level
+    // wore the number, which for every stock card reader is 212.
+    if (target->lotag != 0)
+        activated |= SW_CrossplayOperateDukeTag(target->lotag, pp);
+
+    if (accessSwitch)
+    {
+        // Duke lights the reader whether or not the tag moved anything, and
+        // reads nothing back from the lit frame, so this is what stops the
+        // player spending a second card on a reader already used.
+        if (behavior.switchState == 0)
+            SW_CrossplayToggleDukeSwitchSprite(targetSpriteNum);
+
+        return 1;
+    }
+
+    if (!activated)
+    {
+        SW_CrossplayToggleDukeSwitchSprite(targetSpriteNum);
+        SW_CrossplayPlayDukeSpriteSound(targetSpriteNum, hitPos, DIGI_DUKE_SWITCH_ON);
+        activated = 1;
+    }
+
+    return activated;
+}
+
+// Whether a hit works a switch at all, which in Duke depends on both the hit and
+// the tile.  Gunfire reaches P_ActivateSwitch() only through
+// P_PostFireHitscan(), and only after CheckShootSwitchTile() agrees -- and that
+// names four tiles and no others: the three dip switches and the hand switch.
+// A light switch, a slot door, an alien switch, a card reader stay exactly as
+// they are however much you shoot them.  A blast does not work one either:
+// A_DamageObject_Duke3D() has no switch case at all, and Duke's own projectiles
+// are not hitscan so they never reach that call.  The mighty foot is the one
+// thing that works any switch, and it too refuses the card readers -- see the
+// ACCESSSWITCH test in P_FireWeapon()'s knee code, and both calls are made only
+// for a player.  Every hit used to work every switch here, which let a stray
+// shot flip a light switch across the room.
+static int32_t SW_CrossplayDukeSwitchAnswersToHit(int spriteNum, int16_t sourcePicnum, int32_t hitKind)
+{
+    // Both of Duke's calls are guarded on `playerNum >= 0`: a switch answers to
+    // the player and to nothing else, so an enemy's burst cannot open the door
+    // it was standing in front of.
+    if (SW_CrossplayPlayerForDukeSpriteOperator(spriteNum) == NULL)
+        return 0;
+
+    if (hitKind == VB_DUKEAI_HIT_MELEE)
+        return !SW_CrossplayIsDukeAccessSwitch(sourcePicnum);
+
+    if (hitKind != VB_DUKEAI_HIT_BULLET)
+        return 0;
+
+    int32_t const base = SW_CrossplayDukeSwitchBaseTile(sourcePicnum, NULL);
+
+    return base == VB_DUKE_DIPSWITCH || base == VB_DUKE_DIPSWITCH2 || base == VB_DUKE_DIPSWITCH3 ||
+           base == VB_DUKE_HANDSWITCH;
+}
+
 // hitKindOverride is the weapon class to tell Duke about, or -1 to read it off
 // the attacking sprite.  A blast has to say so explicitly: Duke's props answer
 // to the weapon that hit them (a tree or a box only gives way to an explosion or
@@ -7214,46 +7294,12 @@ static int SW_CrossplayDamageDukeMapSpriteInternal(int spriteNum, int targetSpri
         return 0;
     }
 
-    SPRITEp const target = &sprite[targetSpriteNum];
-
     if (behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH)
     {
-        PLAYERp const pp = SW_CrossplayPlayerForDukeSpriteOperator(spriteNum);
-        int32_t const accessSwitch = SW_CrossplayIsDukeAccessSwitch(behavior.sourcePicnum);
-        int32_t activated = 0;
-
-        // A card reader answers to the card, not to whatever pressed it.  An
-        // untagged one opens nothing, and Duke leaves those alone before it ever
-        // looks at the card, so it does not eat one either.
-        if (accessSwitch && (target->lotag == 0 || !SW_CrossplayUseDukeAccessSwitch(pp, targetSpriteNum, behavior)))
+        if (!SW_CrossplayDukeSwitchAnswersToHit(spriteNum, behavior.sourcePicnum, hitKind))
             return 0;
 
-        // Only the lotag.  Duke keeps a switch's *sound* in its hitag -- see
-        // P_ActivateSwitch(), which plays it through S_SoundIsValid() -- and
-        // operating that as a second map tag fired whatever else in the level
-        // wore the number, which for every stock card reader is 212.
-        if (target->lotag != 0)
-            activated |= SW_CrossplayOperateDukeTag(target->lotag, pp);
-
-        if (accessSwitch)
-        {
-            // Duke lights the reader whether or not the tag moved anything, and
-            // reads nothing back from the lit frame, so this is what stops the
-            // player spending a second card on a reader already used.
-            if (behavior.switchState == 0)
-                SW_CrossplayToggleDukeSwitchSprite(targetSpriteNum);
-
-            return 1;
-        }
-
-        if (!activated)
-        {
-            SW_CrossplayToggleDukeSwitchSprite(targetSpriteNum);
-            SW_CrossplayPlayDukeSpriteSound(targetSpriteNum, hitPos, DIGI_DUKE_SWITCH_ON);
-            activated = 1;
-        }
-
-        return activated;
+        return SW_CrossplayOperateDukeSwitchSprite(spriteNum, targetSpriteNum, hitPos);
     }
 
     if (behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_TRIPMINE)
@@ -12128,7 +12174,10 @@ int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp)
                       sprite[nearSprite].lotag, SW_CrossplayDukeAIOwnsSprite(nearSprite));
             if (behavior.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH)
             {
-                if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, nearSprite, &sprite[nearSprite].xyz))
+                // Straight to the switch, not through the damage path: the use
+                // key works every switch, and the damage path now turns away
+                // the ones Duke will not let a weapon touch.
+                if (SW_CrossplayOperateDukeSwitchSprite(pp->PlayerSprite, nearSprite, &sprite[nearSprite].xyz))
                     return 1;
 
                 // A card reader that turned the player away is the last word on
@@ -12232,6 +12281,7 @@ enum
     VB_CROSSPLAY_SELFTEST_MIRRORS,
     VB_CROSSPLAY_SELFTEST_TOILET,
     VB_CROSSPLAY_SELFTEST_KEYCARDS,
+    VB_CROSSPLAY_SELFTEST_SHOOTSWITCH,
     VB_CROSSPLAY_SELFTEST_NUKEBUTTON,
     VB_CROSSPLAY_SELFTEST_FLAMES,
     VB_CROSSPLAY_SELFTEST_CRACKS,
@@ -13461,6 +13511,187 @@ static void SW_CrossplaySelfTestRunToilet(PLAYERp const pp)
     SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_KEYCARDS);
 }
 
+// Shooting a switch.  Duke lets gunfire work exactly four switch tiles -- the
+// three dip switches and the hand switch, which is the whole of
+// CheckShootSwitchTile() -- and no others; a light switch takes the use key or
+// the mighty foot and nothing else.  So this shoots a switch that is not on
+// Duke's list and requires it not to move, then works the same switch with the
+// use key and requires that it does, so a switch stuck fast cannot pass either.
+static int32_t g_swCrossplaySelfTestShootSwitchSprite = -1;
+static int32_t g_swCrossplaySelfTestShootSwitchStage;
+static int16_t g_swCrossplaySelfTestShootSwitchPic;
+static int32_t g_swCrossplaySelfTestDipSwitchSprite = -1;
+static int16_t g_swCrossplaySelfTestDipSwitchPic;
+
+static void SW_CrossplaySelfTestRunShootSwitch(PLAYERp const pp)
+{
+    if (pp == NULL)
+    {
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestShootSwitchStage == 0)
+    {
+        // Prefer one wired to nothing, so working it at the end of the test
+        // moves its own frame and not half the level.
+        for (int32_t pass = 0; pass < 2 && g_swCrossplaySelfTestShootSwitchSprite < 0; ++pass)
+            for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+            {
+                sw_crossplay_duke_sprite_behavior_t const &b = g_swCrossplayDukeSpriteBehaviors[spriteNum];
+
+                if (sprite[spriteNum].statnum == MAXSTATUS || !(b.flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE) ||
+                    !(b.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH))
+                    continue;
+
+                // Named tile by tile rather than asked of the code under test,
+                // which would make the check agree with whatever that code says.
+                int32_t const base = SW_CrossplayDukeSwitchBaseTile(b.sourcePicnum, NULL);
+
+                if (base < 0 || base == VB_DUKE_DIPSWITCH || base == VB_DUKE_DIPSWITCH2 ||
+                    base == VB_DUKE_DIPSWITCH3 || base == VB_DUKE_HANDSWITCH ||
+                    SW_CrossplayIsDukeAccessSwitch(b.sourcePicnum))
+                    continue;
+
+                if (pass == 0 && sprite[spriteNum].lotag != 0)
+                    continue;
+
+                g_swCrossplaySelfTestShootSwitchSprite = spriteNum;
+                break;
+            }
+
+        if (g_swCrossplaySelfTestShootSwitchSprite < 0)
+        {
+            SW_CrossplaySelfTestReport(1, "shootable-switch-present",
+                                       "no Duke switch in this map that gunfire must not work, skipped");
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+            return;
+        }
+
+        int32_t const switchSprite = g_swCrossplaySelfTestShootSwitchSprite;
+        USERp const u = User[pp->PlayerSprite];
+
+        g_swCrossplaySelfTestShootSwitchPic = sprite[switchSprite].picnum;
+
+        // Through the host's own weapon classification, because that is the path
+        // a shot arrives by.
+        int16_t const savedWeapon = u->WeaponNum;
+        u->WeaponNum = WPN_UZI;
+        SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, switchSprite, &sprite[switchSprite].xyz);
+        u->WeaponNum = savedWeapon;
+
+        g_swCrossplaySelfTestShootSwitchStage = 1;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SHOOTSWITCH);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestPhaseTic < 30)
+        return;
+
+    int32_t const switchSprite = g_swCrossplaySelfTestShootSwitchSprite;
+    char detail[192];
+
+    if (g_swCrossplaySelfTestShootSwitchStage == 1)
+    {
+        Bsnprintf(detail, sizeof(detail), "spr=%d tile=%d uzi: pic %d -> %d", switchSprite,
+                  g_swCrossplayDukeSpriteBehaviors[switchSprite].sourcePicnum,
+                  g_swCrossplaySelfTestShootSwitchPic, TrackerCast(sprite[switchSprite].picnum));
+        SW_CrossplaySelfTestReport(sprite[switchSprite].picnum == g_swCrossplaySelfTestShootSwitchPic,
+                                   "switch-ignores-gunfire", detail);
+
+        SW_CrossplayOperateDukeSwitchSprite(pp->PlayerSprite, switchSprite, &sprite[switchSprite].xyz);
+
+        g_swCrossplaySelfTestShootSwitchStage = 2;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SHOOTSWITCH);
+        return;
+    }
+
+    if (g_swCrossplaySelfTestShootSwitchStage == 2)
+    {
+        Bsnprintf(detail, sizeof(detail), "spr=%d use: pic %d -> %d", switchSprite,
+                  g_swCrossplaySelfTestShootSwitchPic, TrackerCast(sprite[switchSprite].picnum));
+        SW_CrossplaySelfTestReport(sprite[switchSprite].picnum != g_swCrossplaySelfTestShootSwitchPic,
+                                   "switch-answers-use", detail);
+
+        // The other half of Duke's rule: the four tiles gunfire *does* work.
+        // Without this the gate could be welded shut and still pass.
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+        {
+            sw_crossplay_duke_sprite_behavior_t const &b = g_swCrossplayDukeSpriteBehaviors[spriteNum];
+
+            if (sprite[spriteNum].statnum == MAXSTATUS || !(b.flags & VB_CROSSPLAY_DUKE_SPRITE_ALIVE) ||
+                !(b.flags & VB_CROSSPLAY_DUKE_SPRITE_SWITCH))
+                continue;
+
+            int32_t const base = SW_CrossplayDukeSwitchBaseTile(b.sourcePicnum, NULL);
+
+            if (base == VB_DUKE_DIPSWITCH || base == VB_DUKE_DIPSWITCH2 || base == VB_DUKE_DIPSWITCH3 ||
+                base == VB_DUKE_HANDSWITCH)
+            {
+                g_swCrossplaySelfTestDipSwitchSprite = spriteNum;
+                break;
+            }
+        }
+
+        if (g_swCrossplaySelfTestDipSwitchSprite < 0)
+        {
+            SW_CrossplaySelfTestReport(1, "shootable-switch-present",
+                                       "no dip switch or hand switch in this map, skipped");
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+            return;
+        }
+
+        int32_t const dip = g_swCrossplaySelfTestDipSwitchSprite;
+        g_swCrossplaySelfTestDipSwitchPic = sprite[dip].picnum;
+
+        // Fired by something that is not a player.  Duke guards both of its
+        // P_ActivateSwitch() calls on `playerNum >= 0`, so an enemy's burst must
+        // leave even a shootable switch alone.
+        int32_t enemySource = -1;
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES && enemySource < 0; ++spriteNum)
+        {
+            if (sprite[spriteNum].statnum == MAXSTATUS || spriteNum == dip || User[spriteNum] != NULL)
+                continue;
+
+            int16_t const owner = sprite[spriteNum].owner;
+
+            if ((unsigned)owner < MAXSPRITES && User[owner] != NULL && User[owner]->PlayerP != NULL)
+                continue;
+
+            enemySource = spriteNum;
+        }
+
+        if (enemySource >= 0)
+            SW_CrossplayDamageDukeMapSprite(enemySource, dip, &sprite[dip].xyz);
+
+        Bsnprintf(detail, sizeof(detail), "spr=%d tile=%d shooter=%d: pic %d -> %d", dip,
+                  g_swCrossplayDukeSpriteBehaviors[dip].sourcePicnum, enemySource,
+                  g_swCrossplaySelfTestDipSwitchPic, TrackerCast(sprite[dip].picnum));
+        SW_CrossplaySelfTestReport(enemySource < 0 || sprite[dip].picnum == g_swCrossplaySelfTestDipSwitchPic,
+                                   "switch-ignores-enemy-fire", detail);
+
+        USERp const u = User[pp->PlayerSprite];
+        int16_t const savedWeapon = u->WeaponNum;
+        u->WeaponNum = WPN_UZI;
+        SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, dip, &sprite[dip].xyz);
+        u->WeaponNum = savedWeapon;
+
+        g_swCrossplaySelfTestShootSwitchStage = 3;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SHOOTSWITCH);
+        return;
+    }
+
+    int32_t const dip = g_swCrossplaySelfTestDipSwitchSprite;
+
+    Bsnprintf(detail, sizeof(detail), "spr=%d tile=%d uzi: pic %d -> %d", dip,
+              g_swCrossplayDukeSpriteBehaviors[dip].sourcePicnum, g_swCrossplaySelfTestDipSwitchPic,
+              TrackerCast(sprite[dip].picnum));
+    SW_CrossplaySelfTestReport(sprite[dip].picnum != g_swCrossplaySelfTestDipSwitchPic,
+                               "shootable-switch-answers-gunfire", detail);
+
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+}
+
 // Duke's nuke button: one press, a four-frame sequence of its own, and then the
 // level ends.  Nothing else here covers a level ending, so the exit is checked
 // too -- and then undone, or the rest of the suite would have no level to run in.
@@ -13689,7 +13920,7 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
 {
     if (pp == NULL)
     {
-        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SHOOTSWITCH);
         return;
     }
 
@@ -13732,7 +13963,7 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
         if (g_swCrossplaySelfTestCardReaders == 0)
         {
             SW_CrossplaySelfTestReport(1, "card-readers-present", "no Duke card reader in this map, skipped");
-            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SHOOTSWITCH);
             return;
         }
 
@@ -13745,7 +13976,7 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
 
         if (g_swCrossplaySelfTestCardSwitch < 0)
         {
-            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SHOOTSWITCH);
             return;
         }
 
@@ -13923,7 +14154,7 @@ static void SW_CrossplaySelfTestRunKeycards(PLAYERp const pp)
     SW_CrossplaySelfTestReport(usedAgain == 0 && spentAgain == 0 && pp->HasKey[keyIndex],
                                "card-reader-is-one-shot", detail);
 
-    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_SHOOTSWITCH);
 }
 
 // Duke's mirrors.  A rocket must explode on one rather than slide along it, and
@@ -16003,6 +16234,7 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_MIRRORS: SW_CrossplaySelfTestRunMirrors(pp); break;
     case VB_CROSSPLAY_SELFTEST_TOILET: SW_CrossplaySelfTestRunToilet(pp); break;
     case VB_CROSSPLAY_SELFTEST_KEYCARDS: SW_CrossplaySelfTestRunKeycards(pp); break;
+    case VB_CROSSPLAY_SELFTEST_SHOOTSWITCH: SW_CrossplaySelfTestRunShootSwitch(pp); break;
     case VB_CROSSPLAY_SELFTEST_NUKEBUTTON: SW_CrossplaySelfTestRunNukeButton(pp); break;
     case VB_CROSSPLAY_SELFTEST_FLAMES: SW_CrossplaySelfTestRunFlames(pp); break;
     case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
@@ -17996,7 +18228,7 @@ void SW_CrossplayMoveForeignMapEffectors(void)
                     int32_t const stateBefore = b.switchState;
 
                     if (switchTic != 90)
-                        SW_CrossplayDamageDukeMapSprite(Player[myconnectindex].PlayerSprite, sn, &sprite[sn].xyz);
+                        SW_CrossplayOperateDukeSwitchSprite(Player[myconnectindex].PlayerSprite, sn, &sprite[sn].xyz);
 
                     LOG_F(INFO, "CPSW tic=%d spr=%d %s pic:%d->%d src:%d->%d state:%d->%d base=%d lotag=%d hitag=%d",
                           switchTic, sn, switchTic == 90 ? "initial" : "operated",

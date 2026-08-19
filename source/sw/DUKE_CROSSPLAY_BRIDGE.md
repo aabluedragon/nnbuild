@@ -1521,6 +1521,41 @@ run's result should not be read too closely.
   the first version walked the `STAT_MULTI_START`/`STAT_CO_OP_START` lists and
   passed either way, because the markers do not stay in those lists.
 
+- **A bullet must not work a switch.**  Every hit the bridge handed a Duke switch
+  sprite worked it -- a bullet, a shuriken, a blast, anything -- so a stray shot
+  flipped a light switch, and the door it was wired to opened from across the
+  room.  Duke is much stricter than that, and in two separate places.  Gunfire
+  reaches `P_ActivateSwitch()` only through `P_PostFireHitscan()`, and only after
+  `CheckShootSwitchTile()` agrees; that function names four tiles and no others
+  -- `DIPSWITCH`, `DIPSWITCH2`, `DIPSWITCH3`, `HANDSWITCH` and their lit frames.
+  A light switch, a slot door, an alien switch stay exactly as they are however
+  much you shoot them.  A blast works none at all: `A_DamageObject_Duke3D()` has
+  no switch case, and Duke's own rockets and shrinker are not hitscan so they
+  never reach the hitscan call either.  The mighty foot is the one exception that
+  works any switch, and it too refuses the card readers.
+
+  The switch handling accordingly moved out of the damage path into
+  `SW_CrossplayOperateDukeSwitchSprite()`, which the use key calls directly; the
+  damage path asks `SW_CrossplayDukeSwitchAnswersToHit()` first, which allows the
+  melee kind (SW's fist and sword, Duke's foot) any switch but a card reader, the
+  bullet kind only Duke's four tiles, and nothing else anything.  A shot that is
+  turned away returns 0, so the host's hitscan carries on and puts a puff on the
+  switch, which is what Duke does with it too.
+
+  Both of Duke's calls are also made only for a player (`playerNum >= 0`), so an
+  enemy's burst works nothing at all, not even a dip switch.
+
+  `VB_CP_SELFTEST=world` covers it in four lines: `switch-ignores-gunfire` (an
+  uzi burst into a switch that is not on Duke's list leaves its frame alone),
+  `switch-answers-use` (the use key on the same switch does change it),
+  `switch-ignores-enemy-fire` (the same burst from a source that resolves to no
+  player leaves even a dip switch alone) and `shootable-switch-answers-gunfire`
+  (the player's uzi does work that dip switch) -- so a gate welded shut fails as
+  loudly as a gate left open.  The phase picks its switches by naming Duke's four
+  tiles itself rather than asking the code under test; the first version asked,
+  which made the whole phase skip itself when the gate was disabled instead of
+  failing.
+
 Still open:
 
 - Duke map palette/art mixing is only checked by eye.
