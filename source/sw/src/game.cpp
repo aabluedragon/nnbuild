@@ -3502,6 +3502,7 @@ static int32_t SW_CrossplayOperateDukeRespawns(int16_t lotag);
 static void SW_CrossplayDukeAIAdoptSprite(int32_t spriteNum, int16_t dukePicnum);
 extern "C" int VB_DukeAI_IsAdoptableTile(int tileNum);
 extern "C" int VB_DukeAI_HasActorCode(int tileNum);
+extern "C" int VB_DukeAI_ActorDrawsOffsetFrames(int tileNum);
 extern "C" int VB_DukeAI_IsEnemyTile(int tileNum);
 void drawroomstotile(int daposx, int daposy, int daposz, fix16_t daq16ang, fix16_t daq16horiz,
                      short dacursectnum, short tilenume);   // jsector.cpp
@@ -3521,15 +3522,41 @@ static int32_t SW_CrossplayDukeShouldRunDukeAI(int16_t dukePicnum, uint16_t beha
     if (VB_DukeAI_IsAdoptableTile(dukePicnum))
         return 1;
 
+    if (!VB_DukeAI_HasActorCode(dukePicnum))
+        return 0;
+
     int32_t const viaActorCode =
-        ((behaviorFlags & (VB_CROSSPLAY_DUKE_SPRITE_ACTOR | VB_CROSSPLAY_DUKE_SPRITE_ALIVE)) ==
-         (VB_CROSSPLAY_DUKE_SPRITE_ACTOR | VB_CROSSPLAY_DUKE_SPRITE_ALIVE)) &&
-        VB_DukeAI_HasActorCode(dukePicnum);
+        (behaviorFlags & (VB_CROSSPLAY_DUKE_SPRITE_ACTOR | VB_CROSSPLAY_DUKE_SPRITE_ALIVE)) ==
+        (VB_CROSSPLAY_DUKE_SPRITE_ACTOR | VB_CROSSPLAY_DUKE_SPRITE_ALIVE);
 
-    if (viaActorCode && Bgetenv("VB_CP_ADOPT_DEBUG") != NULL)
-        LOG_F(INFO, "CPADOPT tile %d adopted via CON actor code", dukePicnum);
+    // The flags above come from the host's own tile list, which can only ever
+    // name *stock* Duke tiles, so a mod's own actors never matched and were left
+    // drawing their bare map tile.  Duke's compiled CON knows better: if the
+    // actor's first action starts at an offset frame or has a view type, Duke
+    // draws something other than the map picnum, and not adopting the sprite is
+    // guaranteed to show the wrong art.  That is the Caribbean add-on's beach
+    // bather -- `actor BEACHBATHER1` on FEM1 with `action BEACHBATHER 2338`, so
+    // Duke draws tile 3650 -- which showed stock Duke's standing dancer until a
+    // punch pushed it through the damage path into Duke's hands.
+    //
+    // Actors that draw in place (FIRE, CLOCK, the access cards) are deliberately
+    // left alone: the bridge drives those itself, and adopting them broke their
+    // animation and pickup tests.
+    // Control and marker tiles are excluded: the bridge hides those, and Duke
+    // never runs a map APLAYER's actor code either -- adopting them un-hid
+    // thirteen player-start markers on VACA1 and drew them as actors.
+    int32_t const viaOffsetFrames =
+        !viaActorCode &&
+        !(behaviorFlags & (VB_CROSSPLAY_DUKE_SPRITE_SWITCH | VB_CROSSPLAY_DUKE_SPRITE_EXPLOSIVE |
+                           VB_CROSSPLAY_DUKE_SPRITE_TRIPMINE)) &&
+        !SW_CrossplayIsHiddenDukeControlSprite(dukePicnum) &&
+        VB_DukeAI_ActorDrawsOffsetFrames(dukePicnum);
 
-    return viaActorCode;
+    if ((viaActorCode || viaOffsetFrames) && Bgetenv("VB_CP_ADOPT_DEBUG") != NULL)
+        LOG_F(INFO, "CPADOPT tile %d adopted via CON %s (flags 0x%x)", dukePicnum,
+              viaActorCode ? "actor code" : "offset frames", behaviorFlags);
+
+    return (viaActorCode || viaOffsetFrames) ? 1 : 0;
 }
 static void SW_CrossplayTickDukeRespawns(void);
 static int32_t SW_CrossplayDukePlayerInMovingSector(PLAYERp const pp, int16_t sectnum);
@@ -17532,6 +17559,28 @@ int SW_CrossplayDukeMapSpriteDisplayTile(int spriteNum, int32_t camX, int32_t ca
 
         if (guard == 15 && ((unsigned)runtimeTile >= MAXTILES || tilesiz[runtimeTile].x == 0))
             ++g_swCrossplayDukeAIFrameResolveFailures;
+    }
+
+    {
+        static int32_t watchSpr = -2;
+        if (watchSpr == -2)
+        {
+            char const *e = Bgetenv("VB_CP_TILE_DEBUG");
+            watchSpr = (e != NULL) ? Batoi(e) : -1;
+        }
+        if (watchSpr == spriteNum)
+        {
+            static int32_t lastLog = -1;
+            if (lastLog != dukeDisplayTile)
+            {
+                lastLog = dukeDisplayTile;
+                LOG_F(INFO, "CPTILE spr=%d dukeBase=%d dukeDisplay=%d pal=%d runtime=%d size=%dx%d",
+                      spriteNum, (int)g_swCrossplayDukeAIDukePicnum[spriteNum], dukeDisplayTile, dukePal,
+                      (int)runtimeTile,
+                      (unsigned)runtimeTile < MAXTILES ? tilesiz[runtimeTile].x : -1,
+                      (unsigned)runtimeTile < MAXTILES ? tilesiz[runtimeTile].y : -1);
+            }
+        }
     }
 
     return runtimeTile;

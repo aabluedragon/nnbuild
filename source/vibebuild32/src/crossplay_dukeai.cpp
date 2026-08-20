@@ -502,6 +502,34 @@ int VB_DukeAI_HasActorCode(int tileNum)
     return g_tile[tileNum].execPtr != NULL ? 1 : 0;
 }
 
+// Nonzero when Duke's own CON would draw this tile's actor at a frame other than
+// the sprite's bare picnum -- the actor block names a first action with a
+// nonzero start frame or a view type.  A sprite like that has to be adopted or
+// it draws its raw map tile forever: the Caribbean add-on's `actor BEACHBATHER1`
+// sits on FEM1 with `action BEACHBATHER 2338`, so Duke draws tile 3650 and the
+// un-adopted sprite showed stock Duke's dancer instead.  Tiles whose actor draws
+// in place (FIRE, CLOCK, the access cards) answer 0 and stay with the host.
+extern "C" int VB_DukeAI_ActorDrawsOffsetFrames(int tileNum)
+{
+    if ((unsigned)tileNum >= MAXTILES)
+        return 0;
+
+    auto const actorPtr = g_tile[tileNum].execPtr;
+
+    if (actorPtr == NULL)
+        return 0;
+
+    int32_t const scrofs_action = (int32_t)actorPtr[1];
+
+    if (scrofs_action <= 0 || (unsigned)scrofs_action + ACTION_PARAM_COUNT > (unsigned)g_scriptSize ||
+        apScript[scrofs_action + ACTION_PARAM_COUNT] != CON_END)
+        return 0;
+
+    return (apScript[scrofs_action + ACTION_STARTFRAME] != 0 ||
+            apScript[scrofs_action + ACTION_VIEWTYPE] != 0)
+           ? 1 : 0;
+}
+
 int VB_DukeAI_IsAdoptableTile(int tileNum)
 {
     if ((unsigned)tileNum >= MAXTILES)

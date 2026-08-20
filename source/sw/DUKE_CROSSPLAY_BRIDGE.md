@@ -508,9 +508,37 @@ Fixed since:
   itself into a LIZMAN via `cactor` on its first tic, so an enemy-tile test left
   it on the approximation layer.  `VB_DukeAI_HasActorCode()` reports whether
   Duke's compiled CON has *any* actor block for the tile, and
-  `SW_CrossplayDukeShouldRunDukeAI()` adopts on that when the sprite also
-  carries the bridge's ACTOR|ALIVE behavior flags.  Found by the
+  `SW_CrossplayDukeShouldRunDukeAI()` adopts on that.  Found by the
   `no-old-layer-actors` invariant added with the respawn fix.
+
+- **A mod's own actors are Duke's too, and the giveaway is an offset frame.**
+  The rule above also demands the bridge's ACTOR|ALIVE behavior flags, and those
+  come from `SW_CrossplayIsDukeActorSprite()` -- a hand-written tile list, which
+  by construction can only ever name *stock* Duke tiles, so a mod's own actors
+  never matched it and were never adopted.  The Caribbean add-on shows the
+  failure plainly: it declares `actor BEACHBATHER1` on FEM1 (1312) with
+  `action BEACHBATHER 2338`, so Duke draws the sunbather at 1312+2338 = 3650, a
+  woman in a deck chair.  Un-adopted, the sprite kept its bare map tile and drew
+  stock Duke's standing dancer instead -- and *snapped to the right art after a
+  single punch*, because damage routes a map sprite through
+  `SW_CrossplayQueueDukeObjectDamage()` into Duke's hands, which is where it
+  should have been since level load.
+
+  Adopting everything with CON actor code is far too broad -- it swallowed the
+  flames, the access cards, the nuke button and E1L1's breakables, and the sweep
+  went from clean to sixteen failures.  The precise criterion is *whether Duke
+  would draw the sprite at a tile other than its own picnum*:
+  `VB_DukeAI_ActorDrawsOffsetFrames()` reads the actor block's first action out
+  of the compiled CON (`g_tile[tile].execPtr[1]` is the action's script offset)
+  and answers yes when its `ACTION_STARTFRAME` or `ACTION_VIEWTYPE` is nonzero.
+  An actor that draws in place -- FIRE, CLOCK, the cards -- answers no and stays
+  with the host, so nothing that already worked changes hands.  Sprites the
+  bridge drives as machinery (SWITCH, EXPLOSIVE, TRIPMINE) and the hidden control
+  tiles are excluded as well; without the latter, VACA1's thirteen APLAYER start
+  markers were adopted, un-hidden and drawn, since
+  `SW_CrossplaySpriteIsHiddenDukeControlSprite()` stops culling anything Duke
+  owns.  `VB_CP_ADOPT_DEBUG=1` names each adoption and which of the two rules
+  took it; `VB_CP_TILE_DEBUG=<spr>` shows the frame a sprite actually resolves to.
 
 - **Nothing Duke breaks sounds electrical.**  E1L1's rooftop vent fan broke with
   a short-circuit crackle (`shorted.voc`).  Duke gives FANSPRITE
@@ -2039,7 +2067,8 @@ reproductions passed while the user's own game failed.
 | `VB_CP_BURN=1` | apply fire damage to the watched actor |
 | `VB_CP_FORCEHIDE` / `FORCEBOX` / `ZGUARD` | isolate visibility, collision box and z-clamp effects |
 | `VB_CP_FIRE_RESPAWNS=1` | fire every captured map trigger, to exercise respawned actors |
-| `VB_CP_ADOPT_DEBUG=1` | log tiles adopted via CON actor code rather than enemy flags |
+| `VB_CP_ADOPT_DEBUG=1` | log tiles adopted via CON actor code rather than enemy flags, and each rejection with its behavior flags |
+| `VB_CP_TILE_DEBUG=<spr>` | log that sprite's Duke base tile, resolved Duke display frame, pal and runtime tile whenever the frame changes |
 | `VB_CP_TEST_SWITCH=1` | log switch activation and the resulting frame |
 | `VB_CP_KEY_DEBUG=1` | log what the use key found at each probe height: sprite, distance, behavior flags, source tile, switch state, lotag |
 | `VB_CP_BREAK_DEBUG=1` | log each broken Duke prop's tile and break sound |
