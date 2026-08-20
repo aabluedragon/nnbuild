@@ -1871,6 +1871,74 @@ run's result should not be read too closely.
   symmetric about the axis, which is what a mirrored-seven viewtype should give.
   With the case disabled the same ring answers 2605..2611, which is RPG.
 
+- **You could dive, and then never come back up.**  Duke stacks two sectors for
+  water -- a lotag-1 one you swim down out of and a lotag-2 one you arrive in,
+  paired by an SE 7 at each end -- and crossing the surface plane moves you
+  between them.  Going under worked.  Surfacing never fired at all.
+
+  The cause was a rule borrowed from the teleporters.  A floor teleporter is held
+  off until the player steps off the pad it put them on, because standing there
+  is exactly what would fire it again, and the water warp had inherited that:
+  `while the player is still in the sector the warp delivered them to, do
+  nothing`.  For a teleporter that is a bounce guard.  For a water stack it is
+  the whole dive -- being in that sector *is* swimming -- so the tick returned
+  before it looked at a single warp, for as long as the player stayed under.
+
+  Nothing was needed there in the first place, because surfacing is already
+  edge-triggered: it asks for a head that has crossed the ceiling plane or is
+  moving upward, and the warp leaves the player still and just beneath it, so it
+  cannot re-fire on its own.  The tic hold on its own is enough.
+
+  `VB_CP_SELFTEST=world` covers it as `dive-enters-water`, `dive-sets-diving`,
+  `dive-leaves-water` and `dive-clears-diving`: the player is stood on the
+  surface, pushed down until the warp fires, then pushed back up, and both the
+  sector they end in and Shadow Warrior's own diving flag are checked each way.
+  Written before the fix, it reported the dive passing and the return failing
+  with `events=0` -- no warp fired -- which is what pointed at the gate rather
+  than at the crossing test.
+
+  It tries *every* water surface on the map rather than the first, which matters:
+  E1L7 has seventeen of them and one bad pair is the difference between a level
+  you can finish and one you cannot.  The first version asked that the player
+  land in the paired sector exactly, and E1L7 showed that up as too strict --
+  the arrival point is the player's own offset from the effector, so drifting a
+  little in a wide pool legitimately lands in the neighbouring sector of the same
+  pool.  What is asked now is what Duke actually guarantees: that crossing down
+  leaves you under water and swimming, and crossing back up leaves you out of it.
+  Seventeen of seventeen on E1L7, eight of eight on E1L4, two of two on E2L1 and
+  E4L1.
+
+  E1L7 has also been added to the sweep's map list.  It was not in it, which is
+  why a level whose middle is under water went untested.
+
+  Running the check over every surface then turned up two more things, neither of
+  which the single-surface version could have seen:
+
+  - **Only the sectors holding an effector were marked as water.**  A Duke pool is
+    usually several sectors and just one of them carries the SE 7, and the flags
+    Shadow Warrior needs -- `SECTFX_DIVE_AREA`, `SECTFX_UNDERWATER` -- were being
+    set on the pair each warp names and nowhere else.  Counted over the stock
+    maps: E1L4 has 202 water sectors and 68 of them hold an effector, so 134 were
+    never marked; E2L1 nine of thirteen; E4L1 five of nine; vacation's VACA6 64 of
+    112.  It is not cosmetic -- `DoPlayerBeginDiveNoWarp()` returns without doing
+    anything unless the sector the player is standing in is an underwater area --
+    so two-thirds of E1L4's water did not count as water.  Every sector whose Duke
+    lotag says it is water is marked now.
+
+  - **The player arrived two units clear of the surface.**  `DoPlayerDive()` ends
+    the dive when the head comes within `Z(10)` of the sector ceiling, and the
+    warp was placing the player at `ceiling + Z(12)`.  On most pools they sank
+    clear of it before it mattered.  They now arrive at `PLAYER_DIVE_CEILING_DIST
+    + Z(8)` below the ceiling, and a pool too shallow to hold that keeps the old
+    margin rather than being pushed through its own floor.
+
+  One VACA6 surface still does not set the diving flag, and should not: its
+  underwater sector has its floor and ceiling at the same height, and Shadow
+  Warrior's dive code is right to refuse to keep a swimmer inside a sector with
+  no headroom.  The phase skips a destination that cannot hold the player and
+  counts it as `noHeadroom` rather than failing -- the same judgement as VACASL's
+  elevator with nowhere to travel.
+
 Still open:
 
 - `hydrant-sound-once` depends on a real audio voice being alive: `soundonce`

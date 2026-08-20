@@ -3311,7 +3311,6 @@ static int16_t g_swCrossplayDukeTrainPlayerLastCarrySector[MAX_SW_PLAYERS_REG];
 static int32_t g_swCrossplayDukeTrainPlayerCarryGrace[MAX_SW_PLAYERS_REG];
 static int16_t g_swCrossplayDukeTeleporterBlockSector[MAX_SW_PLAYERS_REG];
 static int16_t g_swCrossplayDukeTeleporterBlockSprite[MAX_SW_PLAYERS_REG];
-static int16_t g_swCrossplayDukeWaterWarpBlockSector[MAX_SW_PLAYERS_REG];
 static int32_t g_swCrossplayDukeRotatorCount;
 static int32_t g_swCrossplayDukeRotatorOriginCount;
 static int32_t g_swCrossplayDukeTrainCount;
@@ -3336,6 +3335,7 @@ static int32_t g_swCrossplayDukeExplosiveSourceCount;
 static int32_t g_swCrossplayDukeLightCount;
 static int32_t g_swCrossplayDukeLightningCount;
 static int32_t g_swCrossplayDukeWaterWarpCount;
+static int32_t g_swCrossplayDukeWaterWarpEvents;
 static int32_t g_swCrossplayDukeRespawnCount;
 static int32_t g_swCrossplayDukeDropFloorCount;
 static int32_t g_swCrossplayDukeTeethDoorCount;
@@ -3446,7 +3446,6 @@ static void SW_CrossplayClearDukeMapEffectors(void)
     Bmemset(g_swCrossplayDukeTrainPlayerCarryGrace, 0, sizeof(g_swCrossplayDukeTrainPlayerCarryGrace));
     Bmemset(g_swCrossplayDukeTeleporterBlockSector, 0xff, sizeof(g_swCrossplayDukeTeleporterBlockSector));
     Bmemset(g_swCrossplayDukeTeleporterBlockSprite, 0xff, sizeof(g_swCrossplayDukeTeleporterBlockSprite));
-    Bmemset(g_swCrossplayDukeWaterWarpBlockSector, 0xff, sizeof(g_swCrossplayDukeWaterWarpBlockSector));
     Bmemset(g_swCrossplayDukeTeleporterHold, 0, sizeof(g_swCrossplayDukeTeleporterHold));
     Bmemset(g_swCrossplayDukeWaterWarpHold, 0, sizeof(g_swCrossplayDukeWaterWarpHold));
 }
@@ -3780,13 +3779,22 @@ static void SW_CrossplaySetDukeWaterSectorFlags(int16_t sectnum)
         SET(sector[sectnum].extra, SECTFX_UNDERWATER | SECTFX_LIQUID_WATER);
 }
 
+// Every sector Duke calls water, not only the ones holding an effector.
+//
+// A Duke pool is usually several sectors and only one of them carries the SE 7;
+// flagging just the pair the warp names left every neighbouring sector of the
+// same pool looking like dry land to Shadow Warrior.  That is not cosmetic:
+// DoPlayerBeginDiveNoWarp() returns without doing anything unless the sector the
+// player is standing in is an underwater area, so surfacing into -- or drifting
+// sideways within -- an unflagged part of a pool left the player under water and
+// not swimming.  VACA6 has such a pool, and it is what `dive-sets-diving` caught.
 static void SW_CrossplayApplyDukeWaterSectorFlags(void)
 {
-    for (int32_t i = 0; i < g_swCrossplayDukeWaterWarpCount; ++i)
-    {
-        SW_CrossplaySetDukeWaterSectorFlags(g_swCrossplayDukeWaterWarps[i].sourceSect);
-        SW_CrossplaySetDukeWaterSectorFlags(g_swCrossplayDukeWaterWarps[i].destSect);
-    }
+    if (g_swCrossplayDukeWaterWarpCount <= 0)
+        return;
+
+    for (int32_t sectnum = 0; sectnum < numsectors; ++sectnum)
+        SW_CrossplaySetDukeWaterSectorFlags((int16_t)sectnum);
 }
 
 static void SW_CrossplayWarpDukePlayerToWaterStack(PLAYERp const pp, sw_crossplay_duke_water_warp_t const &warp)
@@ -3806,7 +3814,23 @@ static void SW_CrossplayWarpDukePlayerToWaterStack(PLAYERp const pp, sw_crosspla
     pp->posy += warp.dest.y - warp.source.y;
 
     if (warp.destLotag == VB_DUKE_ST_UNDERWATER)
-        pp->posz = sector[warp.destSect].ceilingz + max<int32_t>(Z(12), pp->ceiling_dist + Z(2));
+    {
+        // Far enough under the surface that Shadow Warrior's own dive code does
+        // not immediately decide the player has come back up.  DoPlayerDive()
+        // ends the dive when the head is within Z(10) of the sector ceiling and
+        // there is nothing above to move into, and arriving at ceiling + Z(12)
+        // left a margin of Z(2) -- on most pools the player sank clear of it, and
+        // on a tight one they surfaced again in the same breath, under water and
+        // not swimming.
+        int32_t const destCeilingZ = sector[warp.destSect].ceilingz;
+        int32_t const destFloorZ = sector[warp.destSect].floorz;
+        int32_t const wanted = destCeilingZ + max<int32_t>(PLAYER_DIVE_CEILING_DIST + Z(8), pp->ceiling_dist + Z(2));
+        int32_t const deepest = destFloorZ - PLAYER_DIVE_FLOOR_DIST;
+
+        // A pool too shallow to hold that keeps the old margin rather than being
+        // pushed through its own floor.
+        pp->posz = wanted <= deepest ? wanted : max<int32_t>(deepest, destCeilingZ + Z(12));
+    }
     else
         pp->posz = sector[warp.destSect].floorz - max<int32_t>(pp->floor_dist, SW_PlayerRunFloorDist()) - Z(2);
 
@@ -5974,17 +5998,16 @@ static void SW_CrossplayTickDukeWaterWarps(void)
             continue;
 
         PLAYERp const pp = Player + pnum;
-        if (SW_CrossplayDukePlayerStillOnBlockedTeleporterSector(pp, g_swCrossplayDukeWaterWarpBlockSector[pnum]))
-        {
-            if (g_swCrossplayDukeWaterWarpHold[pnum] > 0)
-                --g_swCrossplayDukeWaterWarpHold[pnum];
-            else
-                g_swCrossplayDukeWaterWarpHold[pnum] = 2;
-            continue;
-        }
 
-        g_swCrossplayDukeWaterWarpBlockSector[pnum] = -1;
-
+        // Only a tic hold, deliberately.  A teleporter is held off until the
+        // player steps off the pad it put them on, because standing there is
+        // what would fire it again -- but a water stack is the opposite: being
+        // in the sector it delivered you to is *swimming*, the state you spend
+        // the whole dive in, and holding the warp off for as long as that lasts
+        // meant you could go under and never come back up.  Nothing is needed
+        // there anyway, because surfacing is edge-triggered: it asks for a head
+        // that has crossed the ceiling plane or is moving up, and the warp
+        // leaves the player still and just under it.
         if (g_swCrossplayDukeWaterWarpHold[pnum] > 0)
         {
             --g_swCrossplayDukeWaterWarpHold[pnum];
@@ -5998,8 +6021,8 @@ static void SW_CrossplayTickDukeWaterWarps(void)
                 continue;
 
             SW_CrossplayWarpDukePlayerToWaterStack(pp, warp);
+            ++g_swCrossplayDukeWaterWarpEvents;
             g_swCrossplayDukeWaterWarpHold[pnum] = VB_CROSSPLAY_DUKE_WATER_WARP_HOLD_TICS;
-            g_swCrossplayDukeWaterWarpBlockSector[pnum] = warp.destSect;
             break;
         }
     }
@@ -12327,6 +12350,8 @@ enum
     VB_CROSSPLAY_SELFTEST_TOILET,
     VB_CROSSPLAY_SELFTEST_KEYCARDS,
     VB_CROSSPLAY_SELFTEST_SHOOTSWITCH,
+    VB_CROSSPLAY_SELFTEST_DIVE_SETUP,
+    VB_CROSSPLAY_SELFTEST_DIVE_OBSERVE,
     VB_CROSSPLAY_SELFTEST_NUKEBUTTON,
     VB_CROSSPLAY_SELFTEST_FLAMES,
     VB_CROSSPLAY_SELFTEST_CRACKS,
@@ -13573,7 +13598,7 @@ static void SW_CrossplaySelfTestRunShootSwitch(PLAYERp const pp)
 {
     if (pp == NULL)
     {
-        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_SETUP);
         return;
     }
 
@@ -13610,7 +13635,7 @@ static void SW_CrossplaySelfTestRunShootSwitch(PLAYERp const pp)
         {
             SW_CrossplaySelfTestReport(1, "shootable-switch-present",
                                        "no Duke switch in this map that gunfire must not work, skipped");
-            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_SETUP);
             return;
         }
 
@@ -13683,7 +13708,7 @@ static void SW_CrossplaySelfTestRunShootSwitch(PLAYERp const pp)
         {
             SW_CrossplaySelfTestReport(1, "shootable-switch-present",
                                        "no dip switch or hand switch in this map, skipped");
-            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_SETUP);
             return;
         }
 
@@ -13735,7 +13760,230 @@ static void SW_CrossplaySelfTestRunShootSwitch(PLAYERp const pp)
     SW_CrossplaySelfTestReport(sprite[dip].picnum != g_swCrossplaySelfTestDipSwitchPic,
                                "shootable-switch-answers-gunfire", detail);
 
-    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_SETUP);
+}
+
+// Going under water, and coming back up.
+//
+// Duke stacks two sectors: a lotag-1 one you swim down out of and a lotag-2 one
+// you arrive in, paired by an SE 7 at each end, and crossing the surface plane
+// moves you between them.  Every water surface on the map is tried, not just the
+// first -- a level can have seventeen of them and one bad pair is the difference
+// between a level you can finish and one you cannot.
+//
+// What is asked is what Duke guarantees: that crossing down leaves the player
+// under water and swimming, and that crossing back up leaves them out of it.
+// Which particular sector they surface into is the map's business -- the arrival
+// point is the player's own offset from the effector, so drifting a little in a
+// wide pool legitimately lands in the neighbouring sector of the same pool.
+#define VB_CROSSPLAY_SELFTEST_MAX_DIVES 20
+
+static int32_t g_swCrossplaySelfTestDiveIndex;
+static int32_t g_swCrossplaySelfTestDiveWarp = -1;
+static int32_t g_swCrossplaySelfTestDiveStage;
+static int32_t g_swCrossplaySelfTestDiveBase;
+static int32_t g_swCrossplaySelfTestDiveWentUnder;
+static int32_t g_swCrossplaySelfTestDiveCameBack;
+static int32_t g_swCrossplaySelfTestDivesTried;
+static int32_t g_swCrossplaySelfTestDivesDown;
+static int32_t g_swCrossplaySelfTestDivesUp;
+static int32_t g_swCrossplaySelfTestDivesDiving;
+static int32_t g_swCrossplaySelfTestDivesSurfaced;
+static int32_t g_swCrossplaySelfTestDivesTooShallow;
+static int32_t g_swCrossplaySelfTestDiveFirstBadDown = -1;
+static int32_t g_swCrossplaySelfTestDiveFirstBadUp = -1;
+static int16_t g_swCrossplaySelfTestDiveUnderSect = -1;
+
+static int32_t SW_CrossplaySelfTestSectorIsUnderwater(int16_t sectnum)
+{
+    return (unsigned)sectnum < (unsigned)numsectors &&
+           SW_CrossplayDukeSectorBaseLotag(sectnum) == VB_DUKE_ST_UNDERWATER;
+}
+
+static int32_t SW_CrossplaySelfTestSectorIsAboveWater(int16_t sectnum)
+{
+    return (unsigned)sectnum < (unsigned)numsectors &&
+           SW_CrossplayDukeSectorBaseLotag(sectnum) == VB_DUKE_ST_ABOVE_WATER;
+}
+
+static void SW_CrossplaySelfTestReportDives(void)
+{
+    char detail[224];
+    Bsnprintf(detail, sizeof(detail),
+              "surfaces=%d wentUnder=%d divingSet=%d cameBack=%d divingCleared=%d noHeadroom=%d "
+              "firstBadDown=%d firstBadUp=%d",
+              g_swCrossplaySelfTestDivesTried, g_swCrossplaySelfTestDivesDown, g_swCrossplaySelfTestDivesDiving,
+              g_swCrossplaySelfTestDivesUp, g_swCrossplaySelfTestDivesSurfaced,
+              g_swCrossplaySelfTestDivesTooShallow,
+              g_swCrossplaySelfTestDiveFirstBadDown, g_swCrossplaySelfTestDiveFirstBadUp);
+
+    if (g_swCrossplaySelfTestDivesTried == 0)
+    {
+        SW_CrossplaySelfTestReport(1, "dive-water-present", "no Duke water surface in this map, skipped");
+        return;
+    }
+
+    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestDivesDown == g_swCrossplaySelfTestDivesTried,
+                               "dive-enters-water", detail);
+    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestDivesDiving == g_swCrossplaySelfTestDivesTried,
+                               "dive-sets-diving", detail);
+    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestDivesUp == g_swCrossplaySelfTestDivesDown,
+                               "dive-leaves-water", detail);
+    SW_CrossplaySelfTestReport(g_swCrossplaySelfTestDivesSurfaced == g_swCrossplaySelfTestDivesDown,
+                               "dive-clears-diving", detail);
+}
+
+static void SW_CrossplaySelfTestRunDiveSetup(PLAYERp const pp)
+{
+    if (pp == NULL)
+    {
+        SW_CrossplaySelfTestReportDives();
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+        return;
+    }
+
+    // The next untried surface, skipping any whose underwater side has no room
+    // for a swimmer.  VACA6 has one where the floor and ceiling are the same
+    // height, and Shadow Warrior's dive code correctly refuses to keep a player
+    // swimming inside a sector with no headroom -- so asking it to is asking for
+    // something the map does not offer, not something the bridge owes.
+    g_swCrossplaySelfTestDiveWarp = -1;
+    for (int32_t i = g_swCrossplaySelfTestDiveIndex; i < g_swCrossplayDukeWaterWarpCount; ++i)
+    {
+        sw_crossplay_duke_water_warp_t const &candidate = g_swCrossplayDukeWaterWarps[i];
+
+        if (candidate.sourceLotag != VB_DUKE_ST_ABOVE_WATER || candidate.destLotag != VB_DUKE_ST_UNDERWATER)
+            continue;
+
+        g_swCrossplaySelfTestDiveIndex = i + 1;
+
+        if ((unsigned)candidate.destSect < (unsigned)numsectors &&
+            sector[candidate.destSect].floorz - sector[candidate.destSect].ceilingz < PLAYER_DIVE_HEIGHT)
+        {
+            ++g_swCrossplaySelfTestDivesTooShallow;
+            continue;
+        }
+
+        g_swCrossplaySelfTestDiveWarp = i;
+        break;
+    }
+
+    if (g_swCrossplaySelfTestDiveWarp < 0 || g_swCrossplaySelfTestDivesTried >= VB_CROSSPLAY_SELFTEST_MAX_DIVES)
+    {
+        SW_CrossplaySelfTestReportDives();
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+        return;
+    }
+
+    sw_crossplay_duke_water_warp_t const &warp = g_swCrossplayDukeWaterWarps[g_swCrossplaySelfTestDiveWarp];
+
+    int32_t ceilingZ = 0, floorZ = 0;
+    getzsofslope(warp.sourceSect, warp.source.x, warp.source.y, &ceilingZ, &floorZ);
+
+    if (!SW_CrossplaySelfTestWarpPlayerZ(pp, warp.source.x, warp.source.y,
+                                         floorZ - max<int32_t>(pp->floor_dist, SW_PlayerRunFloorDist()) - Z(24),
+                                         warp.sourceSect))
+    {
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_SETUP);
+        return;
+    }
+
+    RESET(pp->Flags, PF_DIVING);
+    ++g_swCrossplaySelfTestDivesTried;
+    g_swCrossplaySelfTestDiveBase = g_swCrossplayDukeWaterWarpEvents;
+    g_swCrossplaySelfTestDiveStage = 0;
+    g_swCrossplaySelfTestDiveWentUnder = 0;
+    g_swCrossplaySelfTestDiveCameBack = 0;
+    g_swCrossplaySelfTestDiveUnderSect = -1;
+
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_OBSERVE);
+}
+
+static void SW_CrossplaySelfTestRunDiveObserve(PLAYERp const pp)
+{
+    if (pp == NULL || g_swCrossplaySelfTestDiveWarp < 0)
+    {
+        SW_CrossplaySelfTestReportDives();
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_NUKEBUTTON);
+        return;
+    }
+
+    // Stage 0 sinks, stage 1 rises.  The player is pushed by hand rather than
+    // swum, because what is being checked is the crossing, not SW's swimming.
+    if (g_swCrossplaySelfTestDiveStage == 0)
+    {
+        if (!g_swCrossplaySelfTestDiveWentUnder)
+        {
+            pp->oldposz = pp->posz;
+            pp->posz += Z(12);
+            pp->z_speed = Z(12);
+            SW_CrossplaySyncDukeMovedPlayer(pp, 0, 1);
+
+            if (g_swCrossplayDukeWaterWarpEvents > g_swCrossplaySelfTestDiveBase)
+            {
+                g_swCrossplaySelfTestDiveWentUnder = 1;
+                g_swCrossplaySelfTestDiveUnderSect = pp->cursectnum;
+            }
+        }
+
+        // Generous on purpose.  The push is a few tics' work when the crossing
+        // works at all, so this budget only ever bites on a real failure -- and
+        // a tight one made the check report how busy the machine was instead of
+        // whether the player got under the water.
+        if (!g_swCrossplaySelfTestDiveWentUnder && g_swCrossplaySelfTestPhaseTic < 90)
+            return;
+
+        if (g_swCrossplaySelfTestDiveWentUnder && SW_CrossplaySelfTestSectorIsUnderwater(pp->cursectnum))
+            ++g_swCrossplaySelfTestDivesDown;
+        else if (g_swCrossplaySelfTestDiveFirstBadDown < 0)
+            g_swCrossplaySelfTestDiveFirstBadDown = g_swCrossplaySelfTestDiveWarp;
+
+        if (g_swCrossplaySelfTestDiveWentUnder && TEST(pp->Flags, PF_DIVING))
+            ++g_swCrossplaySelfTestDivesDiving;
+        else if (Bgetenv("VB_CP_DIVE_DEBUG") != NULL)
+            LOG_F(INFO, "CPDIVE bad warp=%d srcSect=%d dstSect=%d cursect=%d lotag=%d extra=%d wentUnder=%d diving=%d",
+                  g_swCrossplaySelfTestDiveWarp,
+                  g_swCrossplayDukeWaterWarps[g_swCrossplaySelfTestDiveWarp].sourceSect,
+                  g_swCrossplayDukeWaterWarps[g_swCrossplaySelfTestDiveWarp].destSect, pp->cursectnum,
+                  (unsigned)pp->cursectnum < (unsigned)numsectors ? SW_CrossplayDukeSectorBaseLotag(pp->cursectnum) : -1,
+                  (unsigned)pp->cursectnum < (unsigned)numsectors ? TrackerCast(sector[pp->cursectnum].extra) : -1,
+                  g_swCrossplaySelfTestDiveWentUnder, TEST(pp->Flags, PF_DIVING) != 0);
+
+        if (!g_swCrossplaySelfTestDiveWentUnder)
+        {
+            SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_SETUP);
+            return;
+        }
+
+        g_swCrossplaySelfTestDiveStage = 1;
+        g_swCrossplaySelfTestDiveBase = g_swCrossplayDukeWaterWarpEvents;
+        SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_OBSERVE);
+        return;
+    }
+
+    if (!g_swCrossplaySelfTestDiveCameBack)
+    {
+        pp->oldposz = pp->posz;
+        pp->posz -= Z(12);
+        pp->z_speed = -Z(12);
+        SW_CrossplaySyncDukeMovedPlayer(pp, 0, 1);
+
+        if (g_swCrossplayDukeWaterWarpEvents > g_swCrossplaySelfTestDiveBase)
+            g_swCrossplaySelfTestDiveCameBack = 1;
+    }
+
+    if (!g_swCrossplaySelfTestDiveCameBack && g_swCrossplaySelfTestPhaseTic < 90)
+        return;
+
+    if (g_swCrossplaySelfTestDiveCameBack && SW_CrossplaySelfTestSectorIsAboveWater(pp->cursectnum))
+        ++g_swCrossplaySelfTestDivesUp;
+    else if (g_swCrossplaySelfTestDiveFirstBadUp < 0)
+        g_swCrossplaySelfTestDiveFirstBadUp = g_swCrossplaySelfTestDiveWarp;
+
+    if (g_swCrossplaySelfTestDiveCameBack && !TEST(pp->Flags, PF_DIVING))
+        ++g_swCrossplaySelfTestDivesSurfaced;
+
+    SW_CrossplaySelfTestSetPhase(VB_CROSSPLAY_SELFTEST_DIVE_SETUP);
 }
 
 // Duke's nuke button: one press, a four-frame sequence of its own, and then the
@@ -16306,6 +16554,8 @@ static void SW_CrossplaySelfTestTick(void)
     case VB_CROSSPLAY_SELFTEST_TOILET: SW_CrossplaySelfTestRunToilet(pp); break;
     case VB_CROSSPLAY_SELFTEST_KEYCARDS: SW_CrossplaySelfTestRunKeycards(pp); break;
     case VB_CROSSPLAY_SELFTEST_SHOOTSWITCH: SW_CrossplaySelfTestRunShootSwitch(pp); break;
+    case VB_CROSSPLAY_SELFTEST_DIVE_SETUP: SW_CrossplaySelfTestRunDiveSetup(pp); break;
+    case VB_CROSSPLAY_SELFTEST_DIVE_OBSERVE: SW_CrossplaySelfTestRunDiveObserve(pp); break;
     case VB_CROSSPLAY_SELFTEST_NUKEBUTTON: SW_CrossplaySelfTestRunNukeButton(pp); break;
     case VB_CROSSPLAY_SELFTEST_FLAMES: SW_CrossplaySelfTestRunFlames(pp); break;
     case VB_CROSSPLAY_SELFTEST_CRACKS: SW_CrossplaySelfTestRunCracks(pp); break;
