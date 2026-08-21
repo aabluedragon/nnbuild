@@ -1683,6 +1683,22 @@ static void GameDisplay(void)
     G_PrintFPS();
 
     videoNextPage();
+
+    // Debug aid shared with the other merged games: VB_CP_CAPTURE=<frames> saves
+    // one screenshot that many drawn frames in, so a Powerslave run can be
+    // checked visually without a human at the keyboard.
+    {
+        static int32_t autoCaptureFrames = -1;
+
+        if (autoCaptureFrames < 0)
+        {
+            char const *const env = Bgetenv("VB_CP_CAPTURE");
+            autoCaptureFrames = env != NULL ? Batoi(env) : 0;
+        }
+
+        if (autoCaptureFrames > 0 && --autoCaptureFrames == 0)
+            videoCaptureScreen("cpshot0000.png", 0);
+    }
 }
 
 static void GameMove(void)
@@ -2137,7 +2153,10 @@ int Exhumed_app_main(int argc, char const* const* argv)
     G_ScanGroups();
 
 #ifdef STARTUP_SETUP_WINDOW
-    if (readSetup < 0 || (!g_noSetup && gSetup.forcesetup) || g_commandSetup)
+    // VibeBuild32: -nosetup must also skip the first-run (readSetup<0) startup window,
+    // else a fresh config hangs on a setup dialog we don't ship for this game.
+    // Matches the SW, Blood and RR fixes.
+    if ((readSetup < 0 && !g_noSetup) || (!g_noSetup && gSetup.forcesetup) || g_commandSetup)
     {
         if (quitevent || !startwin_run())
         {

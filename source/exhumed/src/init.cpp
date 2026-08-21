@@ -449,6 +449,11 @@ void InstallEngine()
 
     char *cwd;
 
+    // VibeBuild32: pass the literal "tiles000.art" (not a "%03i" format). The eduke32
+    // engine's artGetIndexedFileName() substitutes digits positionally into a literal
+    // "tilesNNN.art" name; a format string produced "tiles000i.art", so zero ART files
+    // loaded -- every tilesiz stayed 0x0, the title screen drew nothing, and PlayMovie()
+    // crashed writing through a null waloff[kMovieTile] (same bug that hit Blood and RR).
     artSetBaseSearchFirst(artCrossplayForeignDataCount() > 0 ? 1 : 0);
     if (artCrossplayForeignDataCount() > 0)
         LOG_F(INFO, "Crossplay: base runtime ART pinned to main game data.");
@@ -456,10 +461,10 @@ void InstallEngine()
     if (g_modDir[0] != '/' && (cwd = buildvfs_getcwd(NULL, 0)))
     {
         buildvfs_chdir(g_modDir);
-        if (artLoadFiles("tiles%03i.art", MAXCACHE1DSIZE) < 0)
+        if (artLoadFiles("tiles000.art", MAXCACHE1DSIZE) < 0)
         {
             buildvfs_chdir(cwd);
-            if (artLoadFiles("tiles%03i.art", MAXCACHE1DSIZE) < 0)
+            if (artLoadFiles("tiles000.art", MAXCACHE1DSIZE) < 0)
                 bail2dos("Failed loading art.");
         }
         buildvfs_chdir(cwd);
@@ -467,7 +472,7 @@ void InstallEngine()
         Xfree(cwd);
 #endif
     }
-    else if (artLoadFiles("tiles%03i.art",MAXCACHE1DSIZE) < 0)
+    else if (artLoadFiles("tiles000.art",MAXCACHE1DSIZE) < 0)
         bail2dos("Failed loading art.");
 
     // TEMP
