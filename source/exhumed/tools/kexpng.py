@@ -211,3 +211,26 @@ def read_dds_dxt1(path, block_average=True):
             q = (row + bx) * 4
             out[q] = r // 16; out[q+1] = g // 16; out[q+2] = b // 16; out[q+3] = 255
     return bw, bh, out
+
+def blank(w,h):
+    return bytearray(w*h*4)
+
+def paste(dw,dh,dst, sw,sh,src, ox,oy):
+    """Alpha-over one image onto another at (ox,oy)."""
+    for y in range(sh):
+        dy=oy+y
+        if dy<0 or dy>=dh: continue
+        for x in range(sw):
+            dx=ox+x
+            if dx<0 or dx>=dw: continue
+            s=(y*sw+x)*4; a=src[s+3]
+            if a==0: continue
+            d=(dy*dw+dx)*4
+            if a==255:
+                dst[d:d+4]=src[s:s+4]
+            else:
+                ia=255-a
+                for c in range(3):
+                    dst[d+c]=(src[s+c]*a + dst[d+c]*ia)//255
+                dst[d+3]=min(255, dst[d+3]+a)
+    return dst

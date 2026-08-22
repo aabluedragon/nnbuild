@@ -404,6 +404,30 @@ and this level before the change measure 0. It is not the tile's aspect
 turning Build's parallax bit on instead makes the lighting worse without fixing
 it. Unresolved.
 
+**Scenery.** Build PowerSlave only knows the actors its own lotags spawn, which
+left the levels as bare boxes -- TOMB alone has 36 fire pots and 23 vases that
+were simply not there. All of it is in the .kpf, reachable by following the
+chain the game itself uses:
+
+```
+defs/defines.txt          actor name -> the number a map stores
+defs/actors/**.txt        actor name -> spawnAnim, scale, fullbright
+sprites/<g>/*_anim.txt    anim       -> frames, each a STACK of sprite layers
+sprites/<g>/*_sprite.txt  index      -> rectangle on that group's sheet
+```
+
+A frame is a stack rather than a single image -- a fire pot is the pot plus its
+flame, each with its own offset -- so the layers are composited into one tile.
+87 actor types resolve this way, and TOMB now places 120 of its 124 actors
+against 40 before.
+
+Gameplay actors are deliberately left alone: anything in `ACTOR_MAP` keeps Build
+PowerSlave's lotag spawning so its AI and its art take over. The scenery goes in
+as plain lotag-0 sprites, which `ExamineSprites()` leaves at statnum 0 and draws.
+Sprite size comes from the actor's `scale` alone -- a Build sprite's world height
+is `tileheight * yrepeat / 4` and Kex authors at one texel per unit, so the
+repeat does not depend on the tile.
+
 **Sky.** Kex has no sky tile: the sky is named in the map header and a ceiling
 simply carries *no tiles* where it shows through. Untextured ceilings were being
 handed texture slot 0 -- 169 of them in KARNAK alone -- so its courtyards were

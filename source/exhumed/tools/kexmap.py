@@ -606,20 +606,174 @@ ACTOR_MAP = {
     AT['PYRAMID']:   (60, 0),   # golden sarcophagus: ends the level
 }
 
-def build_sprites(m, sects, walls, ranges, remap):
+# ---------------------------------------------------------------------------
+# The remaster's own scenery
+#
+# Build PowerSlave only knows the actors its own lotags spawn, which leaves the
+# levels as bare boxes -- the rooms in the remaster are full of fire pots,
+# vases, torches and lamps (36 fire pots and 23 vases in TOMB alone). All of it
+# is in the .kpf, reachable by following the chain the game itself uses:
+#
+#   defs/defines.txt      actor name  -> the number a map stores
+#   defs/actors/**.txt    actor name  -> spawnAnim, scale, fullbright
+#   sprites/<g>/*_anim.txt    anim    -> frames, each a stack of sprite layers
+#   sprites/<g>/*_sprite.txt  index   -> rectangle on that group's sheet
+#
+# A frame is a STACK, not a single image -- a fire pot is the pot plus the
+# flame, each with its own offset -- so the layers are composited into one tile.
+# ---------------------------------------------------------------------------
+def load_kex_actors(Z):
+    """{type number: {name, anim, scale, fullbright}} from the remaster's defs."""
+    names = {n.lower(): n for n in Z.namelist()}
+    def read(path):
+        real = names.get(path.lower())
+        return Z.read(real).decode('latin-1') if real else None
+
+    name2type = {}
+    defines = read('defs/defines.txt') or ''
+    for m in re.finditer(r'^#define\s+(\w+)\s+(\d+)', defines, re.M):
+        name2type[m.group(1)] = int(m.group(2))
+
+    defs = {}
+    for n in Z.namelist():
+        if not (n.lower().startswith('defs/actors/') and n.lower().endswith('.txt')):
+            continue
+        txt = Z.read(n).decode('latin-1').replace('\r', '')
+        for m in re.finditer(r'^Actor\s+(\w+)\s*\{(.*?)\n\}', txt, re.S | re.M):
+            nm, body = m.group(1), m.group(2)
+            def field(k, d=None):
+                mm = re.search(k + r'\s+"?([^"\n]+)"?', body)
+                return mm.group(1).strip() if mm else d
+            defs[nm] = dict(name=nm, anim=field('spawnAnim'),
+                            scale=float(field('scale', '1') or 1),
+                            fullbright=int(field('fullbright', '0') or 0))
+
+    out = {}
+    for nm, t in name2type.items():
+        d = defs.get(nm)
+        if d and d['anim']:
+            out[t] = d
+    return out
+
+
+def _sprite_table(Z, names, group, sheetbase):
+    """index -> (x, y, w, h) for one sprite sheet."""
+    txt = None
+    real = names.get(('sprites/%s/%s_sprite.txt' % (group, sheetbase)).lower())
+    if real: txt = Z.read(real).decode('latin-1')
+    if txt is None: return {}
+    return {int(m.group(1)): tuple(int(v) for v in m.groups()[1:])
+            for m in re.finditer(r'sprite\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)', txt)}
+
+
+def _first_frame(Z, names, anim):
+    """The layers of an animation's first frame: [(group, sheetbase, index, ox, oy)]."""
+    if '/' not in anim: return []
+    group, animname = anim.split('/', 1)
+    for n in Z.namelist():
+        ln = n.lower()
+        if not (ln.startswith('sprites/%s/' % group.lower()) and ln.endswith('_anim.txt')):
+            continue
+        txt = Z.read(n).decode('latin-1').replace('\r', '')
+        m = re.search(r'^' + re.escape(animname) + r'\s*\n\{(.*?)\n\}', txt, re.S | re.M)
+        if not m: continue
+        fm = re.search(r'frame\s*\{(.*?)\n\s*\}', m.group(1), re.S)
+        if not fm: continue
+        layers = []
+        for lm in re.finditer(r'\{\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)', fm.group(1)):
+            ref = lm.group(1)
+            g, base = ref.split('/', 1) if '/' in ref else (group, ref)
+            layers.append((g, base, int(lm.group(2)), int(lm.group(3)), int(lm.group(4))))
+        if layers: return layers
+    return []
+
+
+def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True):
+    """Composite each actor's first frame into a tile. {type: (tile, scale, fullbright)}"""
+    import kexpng as _png
+    names = {n.lower(): n for n in Z.namelist()}
+    outdir_art = os.path.join(outdir, 'kexart', 'actors')
+    os.makedirs(outdir_art, exist_ok=True)
+
+    sheets = {}
+    def sheet(group, base):
+        key = (group, base)
+        if key not in sheets:
+            real = names.get(('sprites/%s/%s.png' % (group, base)).lower())
+            if real is None:
+                sheets[key] = None
+            else:
+                tmp = os.path.join(outdir_art, '_%s_%s.png' % (group, base))
+                open(tmp, 'wb').write(Z.read(real))
+                sheets[key] = _png.read(tmp)
+                os.remove(tmp)
+        return sheets[key]
+
+    out = {}; tile = tilebase; defs = []
+    for t in sorted(wanted_types):
+        a = kexactors.get(t)
+        if not a: continue
+        layers = _first_frame(Z, names, a['anim'])
+        if not layers: continue
+        rects = []
+        for g, base, idx, ox, oy in layers:
+            tbl = _sprite_table(Z, names, g, base)
+            r = tbl.get(idx)
+            sh = sheet(g, base)
+            if r is None or sh is None: continue
+            rects.append((sh, r, ox, oy))
+        if not rects: continue
+        x0 = min(ox for _, _, ox, oy in rects)
+        y0 = min(oy for _, _, ox, oy in rects)
+        x1 = max(ox + r[2] for _, r, ox, oy in rects)
+        y1 = max(oy + r[3] for _, r, ox, oy in rects)
+        w, h = max(1, x1 - x0), max(1, y1 - y0)
+        if w > 512 or h > 512: continue
+        img = _png.blank(w, h)
+        for (sw, sh_, spix), r, ox, oy in rects:
+            sub = _png.crop(sw, sh_, spix, r[0], r[1], r[2], r[3])
+            _png.paste(w, h, img, r[2], r[3], sub, ox - x0, oy - y0)
+        fn = 'kexart/actors/a%03d.png' % t
+        _png.write(os.path.join(outdir, fn), w, h, img)
+        out[t] = (tile, a['scale'], a['fullbright'])
+        defs.append((tile, fn))
+        tile += 1
+    if verbose:
+        print("  scenery: %d actor types drawn from the remaster's own sprites" % len(out))
+    return out, defs
+
+
+def build_sprites(m, sects, walls, ranges, remap, decor=None):
     """Kex actors -> Build sprites carrying the lotag Build PowerSlave expects."""
     out = []
     for a in m.actors:
         ent = ACTOR_MAP.get(a.type)
-        if ent is None:
+        dec = (decor or {}).get(a.type)
+        if ent is None and dec is None:
             continue
         x, y = a.x, -a.y
         si = find_sector(sects, walls, ranges, x, y)
         if si < 0 or si not in remap:
             continue                       # actor sits in a sector we dropped
-        lotag, hitag = ent
-        out.append(dict(x=x * WORLD, y=y * WORLD, z=sects[si]['floorz'], sectnum=remap[si],
-                        ang=build_angle(a.ang), lotag=lotag, hitag=hitag))
+        if ent is not None:
+            # Gameplay actors keep Build PowerSlave's own lotag spawning, so its
+            # AI and its art take over.
+            lotag, hitag = ent
+            out.append(dict(x=x * WORLD, y=y * WORLD, z=sects[si]['floorz'],
+                            sectnum=remap[si], ang=build_angle(a.ang),
+                            lotag=lotag, hitag=hitag, picnum=1, shade=0,
+                            xrepeat=64, yrepeat=64))
+        else:
+            tile, scale, fullbright = dec
+            # A Build sprite's world height is (tileheight * yrepeat) / 4, and
+            # Kex authors at one texel per unit, so the repeat depends only on
+            # the actor's scale and the world factor -- not on the tile size.
+            rep = max(1, min(255, int(round(4.0 * scale * WORLD))))
+            out.append(dict(x=x * WORLD, y=y * WORLD, z=sects[si]['floorz'],
+                            sectnum=remap[si], ang=build_angle(a.ang),
+                            lotag=0, hitag=0, picnum=tile,
+                            shade=(-96 if fullbright else KEX_SHADE_MIN),
+                            xrepeat=rep, yrepeat=rep))
     return out
 
 
@@ -667,7 +821,8 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
     b += struct.pack('<H', len(sprites))
     for s in sprites:
         b += struct.pack('<iiihhbBBBBBbbhhhhhhhhhh',
-            s['x'], s['y'], s['z'], 0, 1, 0, 0, 32, 0, 64, 64, 0, 0,
+            s['x'], s['y'], s['z'], 0, s['picnum'], s['shade'], 0, 32, 0,
+            s['xrepeat'], s['yrepeat'], 0, 0,
             s['sectnum'], 0, s['ang'], -1, 0, 0, 0, s['lotag'], s['hitag'], 0)
     open(path,'wb').write(b)
     return len(keep), len(out_walls), len(sprites)
@@ -769,6 +924,16 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
         if t == '}': cur = None
     anims = {k: v for k, v in anims.items() if v[1]}
 
+    # Every actor type that appears in any level, so the scenery art can be
+    # sliced once and shared.
+    with zipfile.ZipFile(kpf) as z:
+        kexactors = load_kex_actors(z)
+        used_types = set()
+        for m in parsed.values():
+            used_types.update(a.type for a in m.actors)
+        used_types -= set(ACTOR_MAP)          # those keep Build's own art
+        used_types.discard(AT_PLAYER)
+
     assign = {}; nexttile = tilebase
     animdefs = []
     wanted = []
@@ -785,6 +950,11 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
                 assign.setdefault(f, nexttile)   # frames get the tiles that follow
                 nexttile += 1
             animdefs.append((assign[t], assign[t] + len(frames), speed))
+
+    with zipfile.ZipFile(kpf) as z:
+        decor, decordefs = build_actor_tiles(z, outdir, used_types, kexactors,
+                                             nexttile, verbose)
+    nexttile += len(decordefs)
 
     done = 0
     for name in sorted(parsed):
@@ -809,7 +979,7 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
                 s['ceilingshade'] = KEX_SHADE_MIN
         start = player_start(m, sects, walls, ranges)
         _, remap = sector_remap(sects, ranges)
-        sprites = build_sprites(m, sects, walls, ranges, remap)
+        sprites = build_sprites(m, sects, walls, ranges, remap, decor)
         ns, nw, nsp = write_build(os.path.join(outdir, name.upper()),
                                   sects, walls, ranges, start, sprites)
         portals = sum(1 for w in walls if w['nextsector'] >= 0)
@@ -818,8 +988,11 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
                   "%3d/%d actors" % (name, m.nsector, ns, nw, portals, nsp, m.nactor))
         done += 1
 
+
     sizes = collect(kpf, list(assign))
     usable = {tile: name for name, tile in assign.items() if name in sizes}
+    for tl, fn in decordefs:
+        usable[tl] = fn
 
     # The skies ship as 256x512 portrait tiles. Used as a ceiling texture that
     # made Build sample past the top of the tile: a band of RGB noise along the
