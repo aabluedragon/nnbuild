@@ -347,7 +347,20 @@ Three things here are worth knowing before changing them:
    received GRP the moment it completes, so a joiner blocks in
    `ExNet_ReceiveGameFiles()` until the host's `EXNET_PT_FILES_DONE` arrives —
    if it mounted after the ART was read, a mod GRP would have no effect.
-3. **Rule of thumb 3 applies here too.** `ExNet_SendCb` drains the reliable
+3. **The barrier counts level starts; it does not latch a flag.** A joiner
+   drains the host's game-file stream before loading ART, and the host announces
+   READY while the joiner is still in `InstallEngine()` — so a peer's READY
+   routinely arrives *before* this machine reaches the barrier. The old code
+   cleared a `s_ready[]` flag on entry and therefore threw that packet away and
+   waited out the full 30 s timeout. READY now carries a generation
+   (`s_levelGen`, incremented once per level start, identical on every machine)
+   and the barrier waits for `s_readyGen[p] >= s_levelGen`, which also makes a
+   straggler's re-announce for the level we just left harmless. The re-announce
+   is edge-triggered for the same reason rule of thumb 3 exists: the barrier
+   loop spins thousands of times per second while `totalclock` moves at 120 Hz,
+   so an `elapsed % 120 == 0` test queued hundreds of duplicate READYs and
+   filled mmulti's output ring.
+4. **Rule of thumb 3 applies here too.** `ExNet_SendCb` drains the reliable
    window (`EXNET_RELIABLE_WINDOW_MAX 480`) before every chunk. Without it a
    file past ~512 KB wraps mmulti's 512-entry per-peer ring, chunks a peer never
    acked are overwritten, and the joiner waits forever for something that will

@@ -104,7 +104,16 @@ static int         s_broadcastMode;  // mmulti P2P (everyone talks to everyone)
 static int         s_syncFailed;
 static uint32_t    s_syncCrc[EXNET_RINGSIZ];
 static uint8_t     s_syncHave[EXNET_RINGSIZ];
-static uint8_t     s_ready[kMaxPlayers];
+// Level-start barrier. A machine can reach the barrier AFTER a peer's READY has
+// already been pumped in (the joiner drains the host's game-file stream first,
+// and the host announces READY while the joiner is still loading ART), so a
+// plain "have we seen READY" flag that the barrier cleared on entry lost the
+// packet and waited there forever. Count level starts instead -- every machine
+// runs the same number of them -- and treat a peer as ready for this level once
+// the generation it announced has caught up. That also makes a straggler's
+// re-announce for the level we just left harmless.
+static uint32_t    s_levelGen;
+static uint32_t    s_readyGen[kMaxPlayers];
 static uint32_t    s_lastInputMs[kMaxPlayers];  // master only: liveness watchdog
 
 // ---- configuration ---------------------------------------------------------
@@ -315,9 +324,14 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
         }
 
         case EXNET_PT_READY:
-            if ((unsigned)from < kMaxPlayers)
-                s_ready[from] = 1;
+        {
+            if (len < 5 || (unsigned)from >= kMaxPlayers)
+                break;
+            uint32_t const gen = VB_get32(&pkt[1]);
+            if (gen > s_readyGen[from])
+                s_readyGen[from] = gen;
             break;
+        }
 
         case EXNET_PT_SYNC:
         {
@@ -438,9 +452,14 @@ void ExNet_ClientPunchAttempt(void)
     if (!Masterserver_MakePunchReq || !s_punchTarget[0] || !s_masterAddr[0])
         return;
 
-    static int throttle = 0;
-    if ((throttle++ % 60) != 0)
+    // Wall-clock throttle, not an iteration counter: the connect cycle this runs
+    // from spins far faster than the tic rate, and counting iterations turned
+    // "every 60" into a punch request several hundred times a second.
+    static int lastPunch = 0;
+    int const now = (int)totalclock;
+    if (lastPunch && now - lastPunch < 60)
         return;
+    lastPunch = now ? now : 1;
 
     char msEp[128];
     unsigned char pbuf[160];
@@ -693,7 +712,7 @@ void ExNet_LevelStart(void)
     Bmemset(s_ring,     0, sizeof(s_ring));
     Bmemset(s_ringHave, 0, sizeof(s_ringHave));
     Bmemset(s_syncHave, 0, sizeof(s_syncHave));
-    Bmemset(s_ready,    0, sizeof(s_ready));
+    s_levelGen++;
     s_netTick   = 0;
     s_sendTick  = 0;
     s_syncFailed = 0;
@@ -706,14 +725,17 @@ void ExNet_LevelStart(void)
         for (uint32_t t = 0; t < EXNET_INPUT_DELAY; t++)
             s_ringHave[p][t & EXNET_RINGMASK] = 1;
 
-    s_ready[myconnectindex] = 1;
+    s_readyGen[myconnectindex] = s_levelGen;
 
-    uint8_t pkt[1] = { EXNET_PT_READY };
-    ExNet_Broadcast(pkt, 1);
+    uint8_t pkt[5];
+    pkt[0] = EXNET_PT_READY;
+    VB_put32((char *)&pkt[1], s_levelGen);
+    ExNet_Broadcast(pkt, sizeof(pkt));
 
     LOG_F(INFO, "Exhumed net: waiting for all %d players at the level-start barrier...", numplayers);
 
     int const startTic = (int)totalclock;
+    int lastAnnounce = startTic;
     for (;;)
     {
         handleevents();
@@ -722,7 +744,7 @@ void ExNet_LevelStart(void)
 
         int all = 1;
         for (int p = 0; p < numplayers; p++)
-            if (!s_ready[p] && !s_gone[p]) { all = 0; break; }
+            if (s_readyGen[p] < s_levelGen && !s_gone[p]) { all = 0; break; }
         if (all)
             break;
 
@@ -731,8 +753,19 @@ void ExNet_LevelStart(void)
 
         // Re-announce periodically: a peer that was still loading when our first
         // READY went out has no other way to learn we are here.
-        if ((((int)totalclock - startTic) % 120) == 0)
+        //
+        // Edge-triggered on purpose. This loop spins thousands of times per
+        // second while totalclock only advances at 120 Hz, so a plain
+        // "elapsed % 120 == 0" test re-broadcast on EVERY iteration that fell
+        // inside the matching tic -- hundreds of duplicate READYs, which filled
+        // mmulti's 512-entry output ring ("output pakbuf filled for peer 0")
+        // and cost us the host's own READY. A joiner that reached the barrier
+        // before the host then waited there forever.
+        if ((int)totalclock - lastAnnounce >= 120)
+        {
+            lastAnnounce = (int)totalclock;
             ExNet_Broadcast(pkt, 1);
+        }
 
         if ((int)totalclock - startTic > 120 * 30)
         {

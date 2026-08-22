@@ -106,7 +106,13 @@ not by the wall clock, so the pipeline is self-regulating: a stalled peer stops
 us producing too, and nothing runs away.
 
 Every machine meets at a ready barrier before tick 0 of each level
-(`ExNet_LevelStart`), so the tick streams all start from the same instant.
+(`ExNet_LevelStart`), so the tick streams all start from the same instant. The
+barrier counts level starts rather than latching a flag: a peer's READY
+routinely lands *before* this machine gets to the barrier (the joiner drains the
+host's file stream first, and the host announces while the joiner is still
+loading ART), and a flag cleared on entry threw that packet away -- the joiner
+then sat at the barrier until the host's watchdog dropped it. READY carries a
+generation instead, and a peer counts as ready once its generation catches up.
 
 **Desync detection** stamps a CRC over exactly the state the shared input stream
 is supposed to determine -- every player's position, angle and health, plus the
