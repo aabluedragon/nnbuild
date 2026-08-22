@@ -878,11 +878,10 @@ enum
     kKexTileHudRed   = 7064, kKexTileHudBlue  = 7065,
 };
 
-#define KEX_HUD_Y   183
-#define KEX_HUD_H   16
+#define KEX_HUD_Y   186
+#define KEX_HUD_H   14
 
-extern short airframe;      // status.cpp: current air-meter frame, 0..
-extern short nMagicLevel;
+extern short airframe;      // status.cpp: current air-meter frame
 
 int KexHud_Available(void)
 {
@@ -894,41 +893,39 @@ void KexHud_Draw(void)
     if (!KexHud_Available())
         return;
 
-    int const headW = 15, headH = 18;
-    int const barY = KEX_HUD_Y + 2, barH = KEX_HUD_H - 4;
+    // The remaster's bar is one continuous band: heads at the ends, standing a
+    // little taller than the bar itself, and the two gauges meeting in the
+    // middle with no gap. Leaving gaps let the black backing show through in
+    // three places, which is what made it read as a placeholder.
+    int const headH = KEX_HUD_H + 6;
+    int const headW = scale(headH, tilesiz[kKexTileHudHeadL].x, max(1, (int)tilesiz[kKexTileHudHeadL].y));
+    int const headY = 200 - headH;
 
-    // Backing strip, so the bar reads against whatever is behind it.
-    KexDrawTiled(kKexTileBlack, 0, KEX_HUD_Y, 320, 200, 16, 0);
+    KexDrawTiled(kKexTileBlack, 0, headY, 320, 200, 16, 0);
 
-    KexDrawTile(kKexTileHudHeadL, 1, KEX_HUD_Y, headW, headH, 0, 0, 0);
-    KexDrawTile(kKexTileHudHeadR, 320 - headW - 1, KEX_HUD_Y, headW, headH, 0, 0, 0);
+    int const lx = headW, rx = 320 - headW;
+    int const mid = (lx + rx) / 2;
+    int const inset = 2, fh = KEX_HUD_H - inset * 2;
 
-    int const lx = headW + 6, rx = 320 - headW - 6;
-    int const half = (rx - lx) / 2 - 6;
-
-    // Air on the left, health on the right, each filled proportionally inside
-    // the remaster's own bar frame.
     int const air = clamp((int)airframe * 100 / 16, 0, 100);
     int const hp = PlayerList[nLocalPlayer].nHealth;
     int const hpPct = clamp((hp * 100) / kMaxHealth, 0, 100);
 
-    if (half > 8)
-    {
-        // Frame first, fill inset on top of it: these frames are solid stone
-        // through the middle, so a fill drawn underneath is simply hidden.
-        int const inset = 3, fh = KEX_HUD_H - inset * 2;
+    // Air on the left, health on the right; fills sit on top of their frames
+    // because the frames are solid through the middle.
+    KexDrawTile(kKexTileHudBarL, lx, KEX_HUD_Y, mid - lx, KEX_HUD_H, 0, 0, 0);
+    int const aw = ((mid - lx - inset * 2) * air) / 100;
+    if (aw > 0)
+        KexDrawTiled(kKexTileHudBlue, lx + inset, KEX_HUD_Y + inset,
+                     lx + inset + aw, KEX_HUD_Y + inset + fh, fh, 0);
 
-        KexDrawTile(kKexTileHudBarL, lx, KEX_HUD_Y, half, KEX_HUD_H, 0, 0, 0);
-        int const aw = ((half - inset * 2) * air) / 100;
-        if (aw > 0)
-            KexDrawTiled(kKexTileHudBlue, lx + inset, KEX_HUD_Y + inset,
-                         lx + inset + aw, KEX_HUD_Y + inset + fh, fh, 0);
+    KexDrawTile(kKexTileHudBarR, mid, KEX_HUD_Y, rx - mid, KEX_HUD_H, 0, 0, 0);
+    int const hw = ((rx - mid - inset * 2) * hpPct) / 100;
+    if (hw > 0)
+        KexDrawTiled(kKexTileHudRed, mid + inset, KEX_HUD_Y + inset,
+                     mid + inset + hw, KEX_HUD_Y + inset + fh, fh, 0);
 
-        int const r0 = rx - half;
-        KexDrawTile(kKexTileHudBarR, r0, KEX_HUD_Y, half, KEX_HUD_H, 0, 0, 0);
-        int const hw = ((half - inset * 2) * hpPct) / 100;
-        if (hw > 0)
-            KexDrawTiled(kKexTileHudRed, r0 + inset, KEX_HUD_Y + inset,
-                         r0 + inset + hw, KEX_HUD_Y + inset + fh, fh, 0);
-    }
+    // Heads last, so they overlap the bar ends cleanly.
+    KexDrawTile(kKexTileHudHeadL, 0, headY, headW, headH, 0, 0, 0);
+    KexDrawTile(kKexTileHudHeadR, 320 - headW, headY, headW, headH, 0, 0, 0);
 }

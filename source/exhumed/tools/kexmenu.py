@@ -270,14 +270,25 @@ def extract(kexdir, outdir, verbose=True):
         # The remaster's status bar: two Anubis heads at the ends, an air bar
         # and a health bar. Its pieces ship separately, so they are laid out at
         # draw time rather than blitted as one strip.
-        for name, tile in (('gfx/head_left.png',  TILE_HUD_HEAD_L),
-                           ('gfx/head_right.png', TILE_HUD_HEAD_R),
-                           ('gfx/bar_left.png',   TILE_HUD_BAR_L),
-                           ('gfx/bar_right.png',  TILE_HUD_BAR_R)):
+        # Authored at exactly the aspect kexmenu.cpp draws them at. rotatesprite
+        # scales uniformly, so a 176x24 bar asked for a 144x14 rectangle draws
+        # only 102 wide and leaves a gap -- which is what put black holes in the
+        # middle and ends of the bar. HUD_BAR_* / HUD_HEAD_* here are twice the
+        # drawn size in Build's 320x200 space.
+        HUD_BAR = (288, 28)     # drawn at 144x14
+        HUD_HEAD = (32, 40)     # drawn at  16x20
+        for name, tile, size in (('gfx/head_left.png',  TILE_HUD_HEAD_L, HUD_HEAD),
+                                 ('gfx/head_right.png', TILE_HUD_HEAD_R, HUD_HEAD),
+                                 ('gfx/bar_left.png',   TILE_HUD_BAR_L,  HUD_BAR),
+                                 ('gfx/bar_right.png',  TILE_HUD_BAR_R,  HUD_BAR)):
             blob = grab(name)
             if blob is None: continue
             fn = 'kexart/' + os.path.basename(name)
-            open(os.path.join(outdir, fn), 'wb').write(blob)
+            tmp = os.path.join(outdir, fn)
+            open(tmp, 'wb').write(blob)
+            w_, h_, pix = png.read(tmp)
+            if (w_, h_) != size:
+                png.write(tmp, size[0], size[1], png.resize(w_, h_, pix, *size))
             lines.append((tile, fn))
         # Flat fills for the bars themselves, tinted the way the remaster tints
         # them: air blue on the left, health red on the right.
