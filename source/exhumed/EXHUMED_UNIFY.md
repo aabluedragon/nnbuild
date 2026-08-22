@@ -372,6 +372,23 @@ four corners and dropped if any lands more than 8 world units out. On TOMB that
 keeps 52 of 92 with a worst-case error of 6.3 world units; before the check the
 worst was 803.
 
+**Sky.** Kex has no sky tile: the sky is named in the map header and a ceiling
+simply carries *no tiles* where it shows through. Untextured ceilings were being
+handed texture slot 0 -- 169 of them in KARNAK alone -- so its courtyards were
+capped with garbage. They now get the map's own sky with Build's parallax bit.
+
+**Animated surfaces.** `defs/animPicInfo.txt` lists each animated texture's
+frames and speed. Build plays an animation as a run of *consecutive* tiles, so
+tile numbers can no longer be handed out as levels are read: the converter now
+parses every level first, then assigns tiles, placing an animated texture's
+frames directly after it and emitting `animtilerange`.
+
+**Music.** Every level names its own track in `defs/mapInfo.txt` and the OGGs sit
+beside the .kpf, so `-kex` puts the install directory on the search path and the
+converter writes the pairing to `kexmusic.txt`. Falling back to the CD track
+numbering would play whatever the *original* game's level N used, which is a
+different level entirely.
+
 **Facing.** The actor record's float at offset 16 is not the angle the text
 source shows -- the source's angle in radians is `radians(90 - stored)`, checked
 against every sample map with a turned actor. That source angle is a compass

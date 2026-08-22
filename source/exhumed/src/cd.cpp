@@ -49,6 +49,46 @@ void setCDaudiovolume(int val)
     }
 }
 
+// VibeBuild32: play a music file named outright, rather than by track number.
+// The Kex remaster gives every level its own track in defs/mapInfo.txt, so the
+// converted levels need to ask for one by name. Everything below the file open
+// is what playCDtrack() already does.
+bool playMusicFile(const char *name, bool bLoop)
+{
+    if (!name || !name[0])
+        return false;
+
+    StopCD();
+
+    int32_t hFile = S_OpenAudio(name, 0, 1);
+    if (hFile < 0)
+    {
+        OSD_Printf("Error opening music file %s\n", name);
+        return false;
+    }
+
+    int32_t const nFileLen = kfilelength(hFile);
+    pTrack = (char *)Xaligned_alloc(16, nFileLen);
+    if (pTrack == NULL) { kclose(hFile); return false; }
+
+    int const nRead = kread(hFile, pTrack, nFileLen);
+    kclose(hFile);
+    if (nRead != nFileLen)
+    {
+        Xaligned_free(pTrack); pTrack = NULL;
+        return false;
+    }
+
+    trackhandle = FX_Play(pTrack, nRead, bLoop ? 0 : -1, 0, 0, MusicVolume, MusicVolume,
+                          MusicVolume, FX_MUSIC_PRIORITY, fix16_one, MUSIC_ID);
+    if (trackhandle <= FX_Ok)
+    {
+        Xaligned_free(pTrack); pTrack = NULL;
+        return false;
+    }
+    return true;
+}
+
 bool playCDtrack(int nTrack, bool bLoop)
 {
 //  if (!MusicToggle)

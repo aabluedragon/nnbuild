@@ -39,7 +39,7 @@ THE FORMAT
     docs/examples/ -- every field was checked against the matching text source.
     See PSM.__init__ below for the layout.
 """
-import os, struct, sys, zipfile
+import os, re, struct, sys, zipfile
 import kexmenu
 
 # ---------------------------------------------------------------------------
@@ -428,7 +428,12 @@ def convert(m, tilebase=4096):
             if _slope_error(m, ff, z_, h_, wx0, wy0, dxw, dyw) <= KEX_SLOPE_TOLERANCE:
                 fz, fheinum = z_, h_
         if cz >= fz: cz = fz - 8           # never let the ceiling sit under the floor
+        # Kex has no sky tile: the sky is named in the map header and a ceiling
+        # simply carries NO tiles where the sky shows through. Untextured
+        # ceilings were being given texture slot 0 -- 169 of them in KARNAK --
+        # which is why its outdoor areas looked wrong.
         sects.append(dict(wallptr=start, wallnum=len(walls)-start,
+                          ceilingsky=(cf.tileStart < 0),
                           ceilingz=cz, floorz=fz,
                           ceilingheinum=cheinum, floorheinum=fheinum,
                           ceilingstat=(2 if cheinum else 0), floorstat=(2 if fheinum else 0),
@@ -675,7 +680,7 @@ def collect(kpf_path, names):
             if sz: out[n] = sz
     return out
 
-def write_def(path, assignments):
+def write_def(path, assignments, animdefs=()):
     """One DEF entry per Kex texture.
 
     tilefromtexture gives the engine a real tile (it needs the dimensions to
@@ -689,6 +694,12 @@ def write_def(path, assignments):
         for tile, name in sorted(assignments.items()):
             f.write('tilefromtexture %d { file "%s" }\n' % (tile, name))
             f.write('texture %d { pal 0 { file "%s" } }\n' % (tile, name))
+        if animdefs:
+            f.write("\n// Animated surfaces -- water, slime and the like. Build plays an\n")
+            f.write("// animation as a run of consecutive tiles, which is why the frames\n")
+            f.write("// are allocated directly after the texture they belong to.\n")
+            for first, last, speed in animdefs:
+                f.write('animtilerange %d %d %d %d\n' % (first, first, last, max(1, speed)))
 
 
 # ---------------------------------------------------------------------------
@@ -708,27 +719,72 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
                  if n.lower().startswith('maps/') and n.lower().endswith('.map')
                  and '/old/' not in n.lower() and '/testmaps/' not in n.lower()]
         maps = {os.path.basename(n): z.read(n) for n in sorted(names)}
+        anim_src = z.read([n for n in z.namelist()
+                           if n.lower() == 'defs/animpicinfo.txt'][0]).decode('latin-1') \
+                   if any(n.lower() == 'defs/animpicinfo.txt' for n in z.namelist()) else ''
 
-    # One tile number per distinct texture across the whole install, so every
-    # converted level can share a single DEF.
-    assign = {}; nexttile = tilebase
-    done = 0; failed = []
+    # Parse every level first, then assign tiles. Tile numbers cannot be handed
+    # out as levels are read any more: Build animates a texture by playing a
+    # RANGE of consecutive tiles, so an animated texture's frames have to sit
+    # immediately after it, and that has to be known before any level bakes a
+    # picnum.
+    parsed = {}
+    failed = []
     for name, blob in sorted(maps.items()):
         try:
-            m = PSM_from_bytes(blob)
+            parsed[name] = PSM_from_bytes(blob)
         except Exception as e:
-            failed.append((name, str(e))); continue
-        for t in m.textures:
-            if t and t not in assign:
-                assign[t] = nexttile; nexttile += 1
+            failed.append((name, str(e)))
+
+    # base texture -> (speed, [frame files]), from the remaster's own table
+    anims = {}
+    cur = None
+    for line in anim_src.replace('\r', '').split('\n'):
+        t = line.strip()
+        m2 = re.match(r'^"([^"]+)"', t)
+        if m2 and '{' not in t:
+            cur = m2.group(1); anims[cur] = [5, []]; continue
+        if cur is None: continue
+        if t.startswith('speed'):
+            try: anims[cur][0] = int(t.split()[1])
+            except Exception: pass
+        m3 = re.match(r'^texture_\d+\s+"([^"]+)"', t)
+        if m3: anims[cur][1].append(m3.group(1))
+        if t == '}': cur = None
+    anims = {k: v for k, v in anims.items() if v[1]}
+
+    assign = {}; nexttile = tilebase
+    animdefs = []
+    wanted = []
+    for name in sorted(parsed):
+        m = parsed[name]
+        wanted.extend(t for t in m.textures if t)
+        if m.sky: wanted.append(m.sky)
+    for t in wanted:
+        if t in assign: continue
+        assign[t] = nexttile; nexttile += 1
+        if t in anims:
+            speed, frames = anims[t]
+            for f in frames:
+                assign.setdefault(f, nexttile)   # frames get the tiles that follow
+                nexttile += 1
+            animdefs.append((assign[t], assign[t] + len(frames), speed))
+
+    done = 0
+    for name in sorted(parsed):
+        m = parsed[name]
         local = [assign.get(t, tilebase) for t in m.textures]
         sects, walls, ranges = convert(m, tilebase=0)
         for w in walls:
             w['picnum'] = local[w['picnum']] if w['picnum'] < len(local) else tilebase
+        skytile = assign.get(m.sky)
         for s in sects:
             if s is None: continue
             s['ceilingpicnum'] = local[s['ceilingpicnum']] if s['ceilingpicnum'] < len(local) else tilebase
             s['floorpicnum']   = local[s['floorpicnum']]   if s['floorpicnum']   < len(local) else tilebase
+            if s['ceilingsky'] and skytile is not None:
+                s['ceilingpicnum'] = skytile
+                s['ceilingstat'] |= 1        # Build's parallaxed sky
         start = player_start(m, sects, walls, ranges)
         _, remap = sector_remap(sects, ranges)
         sprites = build_sprites(m, sects, walls, ranges, remap)
@@ -742,7 +798,7 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
 
     sizes = collect(kpf, list(assign))
     usable = {tile: name for name, tile in assign.items() if name in sizes}
-    write_def(os.path.join(outdir, "exhumed.def"), usable)
+    write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs)
 
     # The menu art rides along: exhumed.def is the one file the game loads by
     # name, so it pulls in the generated menu definitions.

@@ -1697,6 +1697,59 @@ static void GameDisplay(void)
     Exhumed_CaptureFrame();
 }
 
+// VibeBuild32: which music track a converted Kex level asks for. kexmusic.txt is
+// written by source/exhumed/tools/kexmap.py straight out of the remaster's
+// defs/mapInfo.txt, so the pairing is the remaster's own.
+char const *Kex_MusicForMap(char const *mapname)
+{
+    static char s_table[8192];
+    static int  s_loaded = 0;
+    static char s_result[BMAX_PATH];
+
+    if (!mapname || !mapname[0])
+        return NULL;
+
+    if (!s_loaded)
+    {
+        s_loaded = 1;
+        int const fil = kopen4loadfrommod("kexmusic.txt", 0);
+        if (fil != -1)
+        {
+            int const len = min(kfilelength(fil), (int)sizeof(s_table) - 1);
+            kread(fil, s_table, len);
+            s_table[len] = 0;
+            kclose(fil);
+        }
+    }
+    if (!s_table[0])
+        return NULL;
+
+    char const *p = s_table;
+    while (*p)
+    {
+        char const *eol = Bstrchr(p, '\n');
+        int const linelen = eol ? (int)(eol - p) : (int)Bstrlen(p);
+        char line[BMAX_PATH * 2];
+        Bstrncpyz(line, p, min(linelen + 1, (int)sizeof(line)));
+
+        char *sp = Bstrchr(line, ' ');
+        if (sp)
+        {
+            *sp = 0;
+            if (!Bstrcasecmp(line, mapname))
+            {
+                Bstrncpyz(s_result, sp + 1, sizeof(s_result));
+                for (char *q = s_result; *q; q++)
+                    if (*q == '\r' || *q == '\n') { *q = 0; break; }
+                return s_result[0] ? s_result : NULL;
+            }
+        }
+        if (!eol) break;
+        p = eol + 1;
+    }
+    return NULL;
+}
+
 // Debug aid shared with the other merged games: VB_CP_CAPTURE=<frames> saves one
 // screenshot that many drawn frames in, so a Powerslave run -- in a level or
 // sitting on the menu -- can be checked visually without a human at the keyboard.
@@ -2144,10 +2197,13 @@ int Exhumed_app_main(int argc, char const* const* argv)
                 // levels converted by source/exhumed/tools/kexmap.py get their
                 // textures from -- straight out of the remaster's archive, with
                 // nothing copied and no palette reduction.
+                char const *kexdir = argv[++i];
                 char kpf[BMAX_PATH];
-                Bsnprintf(kpf, sizeof(kpf), "%s/PowerslaveEX.kpf", argv[++i]);
+                Bsnprintf(kpf, sizeof(kpf), "%s/PowerslaveEX.kpf", kexdir);
                 LOG_F(INFO, "Kex data: %s", kpf);
                 G_AddGroup(kpf);
+                // The soundtrack sits beside the .kpf rather than inside it.
+                G_AddPath(kexdir);
             }
             else if (Bstrcasecmp(pChar, "h") == 0)
             {
@@ -2738,12 +2794,23 @@ LOOP3:
         // Section B
         if (cdSuccess && !CDplaying() && !nFreeze && !nNetPlayerCount)
         {
-            int nTrack = levelnum;
-            if (nTrack != 0) {
-                nTrack--;
-            }
+            // VibeBuild32: in Kex mode every level names its own track in the
+            // remaster's mapInfo.txt; the converter writes those out beside the
+            // maps. Falling back to the CD track numbering would play whatever
+            // the original game's level N used, which is a different level.
+            char const *const kexTrack = g_kexMode ? Kex_MusicForMap(gUserMapFilename) : NULL;
 
-            cdSuccess = playCDtrack((nTrack % 8) + 11, true);
+            if (kexTrack)
+                cdSuccess = playMusicFile(kexTrack, true);
+            else
+            {
+                int nTrack = levelnum;
+                if (nTrack != 0) {
+                    nTrack--;
+                }
+
+                cdSuccess = playCDtrack((nTrack % 8) + 11, true);
+            }
         }
 
 // TODO		CONTROL_GetButtonInput();

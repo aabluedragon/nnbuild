@@ -340,6 +340,16 @@ def extract(kexdir, outdir, verbose=True):
         loc = read('localization/loc_english.txt')
 
     if mapinfo:
+        # Every level names its own track; the OGGs sit beside the .kpf.
+        pairs = []
+        for m2 in re.finditer(r'map\s+"maps/([^"]+)".*?musicTrack\s+"([^"]+)"', mapinfo, re.S):
+            pairs.append((os.path.basename(m2.group(1)).upper(), m2.group(2)))
+        if pairs:
+            with open(os.path.join(outdir, 'kexmusic.txt'), 'w') as f:
+                for mp, tr in pairs:
+                    f.write("%s %s\n" % (mp, tr))
+            if verbose: print("  music: %d levels" % len(pairs))
+
         names = {}
         if loc:
             for m in re.finditer(r'(str_\d+)\s*=\s*"([^"]*)"', loc):
