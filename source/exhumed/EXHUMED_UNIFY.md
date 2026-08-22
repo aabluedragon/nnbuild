@@ -560,10 +560,34 @@ would have killed it before any code was written.
 
 `-kex` replaces Build PowerSlave's ornate panel with the remaster's slim bar:
 an Anubis head at each end, the air meter on the left and health on the right.
-The pieces ship separately in the .kpf (`head_left/right`, `bar_left/right`), so
-they are laid out at draw time rather than blitted as one strip, and the fills
-are drawn *on top* of their frames -- the frames are solid stone through the
-middle, so a fill underneath is simply invisible.
+The pieces ship separately in the .kpf, so they are laid out at draw time
+rather than blitted as one strip. The in-game frames are `main_left` /
+`main_right` (136x24 each) -- **not** `bar_left` / `bar_right`, which are the
+*menu* plates and carry neither the gauge boxes nor the jewel. The whole thing
+is a 416-unit assembly stretched to the screen width:
+
+    head(40) scarab(32) main_left(136) main_right(136) scarab(32) head(40)
+
+which at 320 units is 30 / 25 / 105 / 105 / 25 / 30. Measured off a 1970px-wide
+capture of the remaster: the blue slot starts at x=501 and the red at x=1151,
+so 141 native units span 477px and the horizontal scale is 4.63 px/unit. That
+scale then predicts the two gauge boxes at native x 13.2..26.7 and 17.7..31.6;
+they are actually at 13..26 and 18..31, and the jewel where the two frames meet
+lands on the exact horizontal centre. Three independent confirmations, so the
+layout is measured rather than guessed.
+
+Each bar slot is a **hole** in the frame -- alpha 0 at x 31..117, rows 6..9 of
+24 -- not a painted trough. The fill is therefore drawn *first* and the frame
+laid over it, and the hole clips the fill to the slot's slanted end for free. I
+had this backwards at first: a PNG viewer renders alpha 0 as white, and I read
+the slot as a painted white area and drew the fills on top.
+
+Every piece is authored by the tool at exactly the aspect it is drawn at, for
+the same reason the menu plates are: `rotatesprite` scales uniformly, so a
+176x24 bar asked for a 144x14 rectangle draws only 102 wide. That is what left
+black holes in the middle and at both ends of the earlier bar. Flat fills are
+the exception -- their aspect changes with the fill level, so they are drawn as
+a run of square cells the height of the slot instead.
 
 Pickup captions come from the remaster's localization table for the items that
 mean the same thing in both games; anything ambiguous keeps the original
