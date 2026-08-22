@@ -1750,6 +1750,56 @@ char const *Kex_MusicForMap(char const *mapname)
     return NULL;
 }
 
+// The remaster's own wording for a pickup, keyed by the Build lotag the
+// converter assigns. Written by source/exhumed/tools/kexmenu.py out of the
+// remaster's localization table.
+char const *Kex_PickupCaption(int lotag)
+{
+    static char s_table[4096];
+    static int  s_loaded = 0;
+    static char s_result[128];
+
+    if (!s_loaded)
+    {
+        s_loaded = 1;
+        int const fil = kopen4loadfrommod("kexpickup.txt", 0);
+        if (fil != -1)
+        {
+            int const len = min(kfilelength(fil), (int)sizeof(s_table) - 1);
+            kread(fil, s_table, len);
+            s_table[len] = 0;
+            kclose(fil);
+        }
+    }
+    if (!s_table[0])
+        return NULL;
+
+    char const *p = s_table;
+    while (*p)
+    {
+        char const *eol = Bstrchr(p, '\n');
+        int const linelen = eol ? (int)(eol - p) : (int)Bstrlen(p);
+        char line[192];
+        Bstrncpyz(line, p, min(linelen + 1, (int)sizeof(line)));
+
+        char *sp = Bstrchr(line, ' ');
+        if (sp)
+        {
+            *sp = 0;
+            if (Batoi(line) == lotag)
+            {
+                Bstrncpyz(s_result, sp + 1, sizeof(s_result));
+                for (char *q = s_result; *q; q++)
+                    if (*q == '\r' || *q == '\n') { *q = 0; break; }
+                return s_result[0] ? s_result : NULL;
+            }
+        }
+        if (!eol) break;
+        p = eol + 1;
+    }
+    return NULL;
+}
+
 // Debug aid shared with the other merged games: VB_CP_CAPTURE=<frames> saves one
 // screenshot that many drawn frames in, so a Powerslave run -- in a level or
 // sitting on the menu -- can be checked visually without a human at the keyboard.

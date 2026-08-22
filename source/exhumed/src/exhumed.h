@@ -56,6 +56,7 @@ void Exhumed_CaptureFrame(void);
 // Nonzero when -kex named a Nightdive PowerSlave Exhumed install: this session
 // is playing the remaster's levels, so it gets the remaster's menu too.
 extern int g_kexMode;
+char const *Kex_PickupCaption(int lotag);
 
 #pragma pack(push, 1)
 struct demo_header

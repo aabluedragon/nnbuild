@@ -1167,6 +1167,17 @@ static void SetItemPickupMessage(int nPlayer, int nVal)
     if (nPlayer != nLocalPlayer)
         return;
 
+    // VibeBuild32: in Kex mode the remaster's own wording wins, for the items
+    // that mean the same thing in both games.
+    if (g_kexMode && nTotalPlayers == 1)
+    {
+        if (char const *const caption = Kex_PickupCaption(nVal))
+        {
+            StatusMessage(400, "%s", caption);
+            return;
+        }
+    }
+
     if (nItemText[nVal] > -1 && nTotalPlayers == 1)
     {
         StatusMessage(400, gString[nItemTextIndex + nItemText[nVal]]);

@@ -14,7 +14,6 @@ which keeps the tool and the C++ side in step without either hardcoding the
 other's numbering.
 """
 import os, re, sys, zipfile
-from kexmap import KEX_MAP_PREFIX
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kexpng as png
 
@@ -90,6 +89,9 @@ def parse_kfont(text):
     return out, scale
 
 def extract(kexdir, outdir, verbose=True):
+    # Imported here rather than at module scope: kexmap imports this module, so
+    # a top-level import of it would be circular.
+    from kexmap import KEX_MAP_PREFIX
     kpf = os.path.join(kexdir, 'PowerslaveEX.kpf')
     artdir = os.path.join(outdir, 'kexart')
     os.makedirs(artdir, exist_ok=True)
@@ -327,6 +329,41 @@ def extract(kexdir, outdir, verbose=True):
         for tile, path in lines:
             f.write('tilefromtexture %d { file "%s" }\n' % (tile, path))
             f.write('texture %d { pal 0 { file "%s" } }\n' % (tile, path))
+
+    # Pickup captions, in the remaster's own words. Build PowerSlave already has
+    # a SetItemPickupMessage(); this just supplies the remaster's wording for the
+    # items that exist in both, keyed by the Build lotag the converter assigns.
+    loc_txt = None
+    with zipfile.ZipFile(kpf) as z:
+        for n in z.namelist():
+            if n.lower().endswith('localization/loc_english.txt'):
+                loc_txt = z.read(n).decode('latin-1'); break
+    if loc_txt:
+        strs = dict(re.findall(r'(str_\d+)\s*=\s*"([^"]*)"', loc_txt.replace('\r', '')))
+        # Build lotag -> localization key. Only items that mean the same thing in
+        # both games; anything ambiguous is left to the original wording.
+        PICKUPS = {
+            9:  'str_095',   # grenade / Amun bomb
+            12: 'str_106',   # small health
+            14: 'str_107',   # full health
+            23: 'str_101',   # Sobek mask
+            28: 'str_093',   # pistol
+            29: 'str_094',   # M-60
+            30: 'str_096',   # flame thrower
+            32: 'str_097',   # cobra staff
+            33: 'str_098',   # ring of Ra
+            45: 'str_112',   # the four symbols
+            46: 'str_113',
+            47: 'str_114',
+            48: 'str_115',
+            11: 'str_111',   # map
+        }
+        rows = [(lot, strs[k]) for lot, k in sorted(PICKUPS.items()) if k in strs]
+        if rows:
+            with open(os.path.join(outdir, 'kexpickup.txt'), 'w') as f:
+                for lot, txt in rows:
+                    f.write("%d %s\n" % (lot, txt))
+            if verbose: print("  pickup captions: %d" % len(rows))
 
     # The overworld: the remaster picks levels off a hand-painted map rather
     # than a list. mapInfo.txt has each level's position on it and how the
