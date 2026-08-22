@@ -37,6 +37,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "movie.h"
 #include "names.h"
 #include "menu.h"
+#include "kexmenu.h"
 #include "player.h"
 #include "network.h"
 #include "vbnet.h"    // VibeBuild32: Powerslave multiplayer
@@ -736,6 +737,11 @@ int bVanilla = 0;
 
 char debugBuffer[256];
 char gUserMapFilename[BMAX_PATH];
+
+// VibeBuild32: set by -kex, i.e. "this session is playing the Nightdive
+// remaster's content". It gates the remaster-styled menu, which must not appear
+// when the original Build PowerSlave is what's being played.
+int g_kexMode = 0;
 bool bUserMap = false;
 
 short wConsoleNode; // TODO - move me into network file
@@ -1688,21 +1694,24 @@ static void GameDisplay(void)
 
     videoNextPage();
 
-    // Debug aid shared with the other merged games: VB_CP_CAPTURE=<frames> saves
-    // one screenshot that many drawn frames in, so a Powerslave run can be
-    // checked visually without a human at the keyboard.
+    Exhumed_CaptureFrame();
+}
+
+// Debug aid shared with the other merged games: VB_CP_CAPTURE=<frames> saves one
+// screenshot that many drawn frames in, so a Powerslave run -- in a level or
+// sitting on the menu -- can be checked visually without a human at the keyboard.
+void Exhumed_CaptureFrame(void)
+{
+    static int32_t autoCaptureFrames = -1;
+
+    if (autoCaptureFrames < 0)
     {
-        static int32_t autoCaptureFrames = -1;
-
-        if (autoCaptureFrames < 0)
-        {
-            char const *const env = Bgetenv("VB_CP_CAPTURE");
-            autoCaptureFrames = env != NULL ? Batoi(env) : 0;
-        }
-
-        if (autoCaptureFrames > 0 && --autoCaptureFrames == 0)
-            videoCaptureScreen("cpshot0000.png", 0);
+        char const *const env = Bgetenv("VB_CP_CAPTURE");
+        autoCaptureFrames = env != NULL ? Batoi(env) : 0;
     }
+
+    if (autoCaptureFrames > 0 && --autoCaptureFrames == 0)
+        videoCaptureScreen("cpshot0000.png", 0);
 }
 
 static void GameMove(void)
@@ -2119,8 +2128,16 @@ int Exhumed_app_main(int argc, char const* const* argv)
                     i++;
                 }
             }
+            else if (Bstrcasecmp(pOpt, "nologo") == 0 || Bstrcasecmp(pOpt, "nlogo") == 0)
+            {
+                // VibeBuild32: skip the logo/title sequence and go straight to
+                // the menu, the same flag the other merged games accept.
+                doTitle = kFalse;
+                stopTitle = kTrue;
+            }
             else if (Bstrcasecmp(pOpt, "kex") == 0 && i + 1 < argc)
             {
+                g_kexMode = 1;
                 // VibeBuild32: -kex <dir> points at a Nightdive PowerSlave
                 // Exhumed install and mounts its PowerslaveEX.kpf, which is a
                 // plain zip the Build engine reads natively. That is where the
@@ -2486,6 +2503,30 @@ int Exhumed_app_main(int argc, char const* const* argv)
 MENU:
     SavePosition = -1;
     nMenu = menu_Menu(0);
+
+    // VibeBuild32: in Kex mode a new game means the remaster's campaign, not
+    // the original game's LEV1. The converter writes the campaign's first map
+    // out of the remaster's own mapInfo.txt, so nothing is hardcoded here.
+    if (nMenu == 1 && g_kexMode && !bUserMap)
+    {
+        int const fil = kopen4loadfrommod("kexstart.txt", 0);
+        if (fil != -1)
+        {
+            char name[BMAX_PATH] = "";
+            int const len = min(kfilelength(fil), (int)sizeof(name) - 1);
+            kread(fil, name, len);
+            kclose(fil);
+            for (char *p = name; *p; p++)
+                if (*p == '\r' || *p == '\n') { *p = 0; break; }
+            if (name[0])
+            {
+                Bstrncpyz(gUserMapFilename, name, sizeof(gUserMapFilename));
+                bUserMap = true;
+                LOG_F(INFO, "Kex campaign: starting at %s", gUserMapFilename);
+            }
+        }
+    }
+
     switch (nMenu)
     {
     case -1:
@@ -3111,6 +3152,13 @@ void FadeInScreen(int nTile)
 
 void DoTitle()
 {
+    // VibeBuild32: in Kex mode the opening is the book cinematic and then a
+    // PRESS START hold -- no publisher logos, no skull animation. The movie is
+    // still played from here rather than from kexmenu.cpp: its loop only
+    // advances when the audio backend feeds it a sample, so it has to run after
+    // the same setup the classic sequence does, or it spins forever.
+    int const kexTitle = KexMenu_Available();
+
     short skullDurations[] = { 6, 25, 43, 50, 68, 78, 101, 111, 134, 158, 173, 230, 6000 };
 
     videoSetViewableArea(0, 0, xdim - 1, ydim - 1);
@@ -3132,7 +3180,7 @@ void DoTitle()
 
     ClearAllKeys();
 
-    WaitAnyKey(2);
+    WaitAnyKey(kexTitle ? 0 : 2);
 
     if (videoGetRenderMode() == REND_CLASSIC)
         FadeOut(0);
@@ -3158,7 +3206,7 @@ void DoTitle()
 
     PlayLogoSound();
 
-    WaitAnyKey(2);
+    WaitAnyKey(kexTitle ? 0 : 2);
 
     if (videoGetRenderMode() == REND_CLASSIC)
         FadeOut(0);
@@ -3176,6 +3224,12 @@ void DoTitle()
 
     SetOverscan(BASEPAL);
     GrabPalette();
+
+    if (kexTitle)
+    {
+        KexMenu_TitleHold();
+        return;
+    }
 
     SetLocalChan(1);
     PlayLocalSound(StaticSound[59], 0);

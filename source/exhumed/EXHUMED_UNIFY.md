@@ -363,3 +363,39 @@ Not converted:
 `"map"` and then read the filename from `pChar+4`, one past the terminating NUL
 of a token that had to be exactly `-map`. No spelling of the flag could name a
 file. It now accepts `-map <file>` and `-map<file>`.
+
+### The remaster's menu
+
+`-kex` also switches the front end to the remaster's: the book cinematic, a
+PRESS START hold on the twin-Anubis backdrop, and a stone-panel menu with the
+gold display font, red row highlight and the facing statue cursors.
+
+It is gated on `-kex`, not on the art being present. That distinction matters:
+the converted levels and the base game normally share a directory, so the menu
+art can easily be on the search path while the *original* PowerSlave is what's
+being played -- and the classic menu is the right one then.
+
+`source/exhumed/tools/kexmenu.py` extracts the art. Three things about it are
+worth knowing:
+
+- **Everything is drawn with `rotatesprite`, which scales uniformly.** A plate
+  authored at one aspect and drawn at another letterboxes, so the row and button
+  plates are resized by the tool to exactly the rectangle the game draws them at
+  (`ROW_W`/`ROW_H`, `BTN_W`/`BTN_H`, mirrored by the same constants in
+  kexmenu.cpp). The stone panel is tiled in *square* cells for the same reason,
+  with the last row and column pulled back to the edge so they overlap rather
+  than leave a notch.
+- **The first attempt drew rectangles by writing to `frameplace`.** That works
+  in the software renderer and segfaults under OpenGL, where there is no such
+  buffer. There are no framebuffer writes left.
+- **The font needed two passes.** Kex ships one atlas plus a `.kfont` metrics
+  file, and `rotatesprite` can only draw whole tiles, so each glyph is sliced
+  into its own tile. bigfont is blue-bodied with a gold outline -- which is what
+  the save-slot labels use -- while the menu entries are the other way round, so
+  the tool emits both colourways. And bigfont has no `?`, `.` or `!` at all;
+  those come from smallfont, upscaled to match, or a question mark would
+  silently vanish from "quit the game?".
+
+The cinematic is still played from `DoTitle()` rather than from the menu code:
+`PlayMovie()`'s loop only advances when the audio backend feeds it a sample, so
+calling it before the rest of the title setup spins forever.

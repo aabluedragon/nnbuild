@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "player.h"
 #include "sequence.h"
 #include "menu.h"
+#include "kexmenu.h"
 #include "names.h"
 #include "engine.h"
 #include "keyboard.h"
@@ -1597,6 +1598,11 @@ void menu_ResetZoom()
 
 int menu_Menu(int bInLevelMenus)
 {
+    // VibeBuild32: when the Nightdive remaster's data is mounted (-kex), draw
+    // its menu instead of the classic one. Same return codes either way.
+    if (KexMenu_Available())
+        return KexMenu_Main(bInLevelMenus);
+
     GrabPalette();
 
     int var_1C = 0;

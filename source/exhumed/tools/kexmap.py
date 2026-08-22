@@ -40,6 +40,7 @@ THE FORMAT
     See PSM.__init__ below for the layout.
 """
 import os, struct, sys, zipfile
+import kexmenu
 
 # ---------------------------------------------------------------------------
 # Reading the Kex map
@@ -507,6 +508,13 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
     sizes = collect(kpf, list(assign))
     usable = {tile: name for name, tile in assign.items() if name in sizes}
     write_def(os.path.join(outdir, "exhumed.def"), usable)
+
+    # The menu art rides along: exhumed.def is the one file the game loads by
+    # name, so it pulls in the generated menu definitions.
+    print("menu art:")
+    kexmenu.extract(kexdir, outdir)
+    with open(os.path.join(outdir, "exhumed.def"), "a") as f:
+        f.write('\ninclude "kexmenu.def"\n')
     print("converted %d/%d levels into %s" % (done, len(maps), outdir))
     print("%d textures wired up in exhumed.def (%d had no PNG in the .kpf)"
           % (len(usable), len(assign) - len(usable)))

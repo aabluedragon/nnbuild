@@ -49,6 +49,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 void handleevents();
 #endif
 
+// VibeBuild32: VB_CP_CAPTURE=<frames> screenshot hook, shared by the in-game
+// display and the Kex menu so either can be checked visually headlessly.
+void Exhumed_CaptureFrame(void);
+
+// Nonzero when -kex named a Nightdive PowerSlave Exhumed install: this session
+// is playing the remaster's levels, so it gets the remaster's menu too.
+extern int g_kexMode;
+
 #pragma pack(push, 1)
 struct demo_header
 {
