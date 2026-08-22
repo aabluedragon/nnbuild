@@ -31,5 +31,9 @@ char RandomByte();
 uint16_t RandomWord();
 int RandomLong();
 int RandomSize(int nSize);
+// The synced RNG cursor. VibeBuild32 multiplayer folds it into the per-tick
+// state CRC: two machines that have consumed randomness differently have
+// already desynced, even if nothing has visibly moved apart yet.
+int RandomGetSeed();
 
 #endif

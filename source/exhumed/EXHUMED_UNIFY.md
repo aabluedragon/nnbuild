@@ -71,3 +71,166 @@ Known demo-data limits (not bugs): the demo ships no CD audio, so
 
 `-gm exhumed` is optional when the `-g` path names `STUFF.DAT` -- the selector
 infers the game from the basename and from the full/demo data-file signatures.
+
+## Multiplayer
+
+PCExhumed shipped with its network layer stubbed out -- `network.cpp` was a set
+of empty function bodies, and nothing of the original PowerSlave serial/IPX code
+survived the port. So Powerslave multiplayer here is new code
+(`source/exhumed/src/vbnet.cpp` / `.h`) built on the same VibeBuild32 stack the
+other games use.
+
+What made it tractable is that the *game-side* multiplayer scaffolding was never
+removed: `nNetStartSprite[]` is already filled from map sprites with lotag 62,
+`RestartPlayer()` already spawns at those starts and paints the per-player floor
+marker, `PlayerList[]` / `nPlayerScore[]` / `playerNames[]` are already
+per-player, and `LogoffPlayer()` already tears a player down. Only the transport
+and the input exchange were missing.
+
+### Architecture
+
+**Transport** is mmulti (`source/build/src/mmulti.cpp`) -- the same reliable,
+ordered, dual-stack IPv4+IPv6 UDP channel Duke and Shadow Warrior use, so `-net`
+peer specs, the masterserver, the NAT hole-punch and the file transfer behave
+identically here. In mmulti's master/slave mode a slave-to-slave message is
+wrapped in a proxy header and fanned out by the master, exactly as SW does it;
+in P2P mode the wrapper is skipped.
+
+**Simulation** is deterministic lockstep with a fixed input delay, which is a
+natural fit: Exhumed's sim is one `GameMove()` per tick reading
+`sPlayerInput[0..N-1]`, so there is nothing to reconcile. Each machine publishes
+its own `PlayerInput` for a tick `EXNET_INPUT_DELAY` (3 ticks, 100 ms at 30 Hz)
+ahead of the one being simulated, and no machine runs tick T until it holds
+every live player's input for T. Publishing is driven by *simulation* progress,
+not by the wall clock, so the pipeline is self-regulating: a stalled peer stops
+us producing too, and nothing runs away.
+
+Every machine meets at a ready barrier before tick 0 of each level
+(`ExNet_LevelStart`), so the tick streams all start from the same instant.
+
+**Desync detection** stamps a CRC over exactly the state the shared input stream
+is supposed to determine -- every player's position, angle and health, plus the
+RNG cursor (`RandomGetSeed()`) and `totalmoves` -- after every tick, and
+publishes it every 8 ticks. A mismatch logs `Out Of Sync` once and shows it on
+the HUD. `VB_EXNET_DEBUG=<ticks>` traces the lockstep cursor (tick, CRC, publish
+cursor, local position, health): without it a clean "no desyncs" result proves
+little, since a sim that never advanced also never disagrees.
+
+**Leaving.** A clean quit broadcasts the leave with the tick it takes effect on,
+so every machine drops the player at the same instant. A client that *crashed*
+never publishes another input, and lockstep would otherwise wait on it forever;
+the master notices the silence after 12 s and broadcasts the eviction with an
+agreed tick, so the survivors stay identical.
+
+**Chat** (`T` to open, Enter to send, Esc to cancel) is deliberately outside the
+tick stream: it travels on the same reliable channel but never reaches
+`sPlayerInput` or any simulated state, so a message can land on different ticks
+on different machines without costing a bit of determinism. The prompt is a
+per-frame state machine rather than the blocking text entry the save menu uses,
+because a blocking prompt would stall this machine's tick stream and leave every
+peer waiting on it. The same line can be sent from the console with
+`say <text>`, which is the only way a headless dedicated server -- which has no
+HUD -- can talk to its players.
+
+**Player names** are set by `-name` locally and by each peer's `OPTIONS` packet,
+during the connect, well before the first `RestartPlayer()`. That function used
+to overwrite them unconditionally with the stock `JOEn` placeholder, so every
+level start renamed everyone; it now only fills a name in when the netcode has
+not supplied one.
+
+**Host->joiner file transfer** (`--netfile`, and the user map when one is named)
+has two constraints that are easy to get wrong:
+
+- The receiver mounts a completed GRP immediately, so a joiner has to have every
+  file *before* `InstallEngine()` reads the ART -- otherwise the mod is mounted
+  after the tiles are already loaded and changes nothing. The host therefore ends
+  the stream with an explicit "files done" packet and the joiner blocks on it
+  (`ExNet_ReceiveGameFiles`).
+- mmulti's per-peer reliable ring holds 512 unacked entries and a file is sent as
+  one packet per 1 KB chunk with no natural pacing, so the sender drains the
+  window before every chunk (`EXNET_RELIABLE_WINDOW_MAX`, the same shape as
+  Duke's `Net_DrainReliableWindow`). Without that, a 2 MB `--netfile` did not
+  even deliver its header: the ring wrapped, unacked chunks were overwritten,
+  and the joiner sat waiting until the master's watchdog dropped it.
+
+### Options
+
+Every VibeBuild32 multiplayer flag (`source/glue/netargs.h`) is accepted, with
+the same meaning it has in the other games:
+
+| Flag | Effect |
+|------|--------|
+| `-net /p<port> /n0:<N>` | host, listening on `<port>`, for `N` players |
+| `-net /p<port> /n0 <host>:<port>` | join `<host>` |
+| `--advertise` / `-ad <master>` | register this listen server with a masterserver |
+| `--lobbylist` / `-ll <master>` | print what a masterserver is advertising |
+| `--joinlobby` / `-jl <master>` | query a masterserver and join the first server it lists |
+| `--netfile` / `-nf <path>` | (host) stream this file to joiners before the level loads |
+| `--headless` / `-hl`, `--dedicated` / `-dd` | windowless dedicated server with a stdin console |
+| `--nplayers` / `-np <N>` | start once `N` players are connected |
+| `--startnow` / `-sn` | start with whoever is present |
+| `--wait` / `-w` | dedicated: hold in the lobby instead of auto-starting |
+| `-name <name>`, `-color <0-7>` | player identity |
+| `-punchto <addr>`, `-masteraddr <addr>` | client NAT hole-punch |
+
+Every flag above is accepted with one dash or two (`-name` / `--name`,
+`-joinlobby` / `--joinlobby`), and `--flag=value` works as well. This matters
+more than it looks: `--joinlobby` used to fall through to the shared
+`VB_NetArg()` handler, which accepted and silently swallowed it because Exhumed
+passes `NULL` for that hook, so the canonical spelling of the flag did nothing.
+
+`--lobbylist` prints the listing and then continues launching the game, exactly
+as it does in the other games; it is not a query-and-exit tool.
+
+A networked launch skips the title sequence and the menu and goes straight to
+level 1 (or to `-<n>` / `-map <file>` if given).
+
+### Local test recipe
+
+```
+# dedicated server, 2 slots, starts as soon as both are in
+./vibebuild32 -gm exhumed -g <STUFF.DAT> -nosetup -name SERVER \
+    -dedicated -startnow -net /p23513 /n0:2
+
+# client
+./vibebuild32 -gm exhumed -g <STUFF.DAT> -nosetup -name PLAYER \
+    -wnd -res640x480 -net /p23514 /n0 127.0.0.1:23513
+```
+
+Confirm with `VB_EXNET_DEBUG=120` on both that the tick numbers advance and the
+CRCs at equal ticks are identical, and that neither log contains `Out Of Sync`.
+
+Masterserver / lobby path, all on one machine:
+
+```
+# 1. the standalone lobby + STUN server (no game, no data files)
+./vibebuild32 -masterserver 23519
+
+# 2. an advertised dedicated Powerslave server, offering a mod file to joiners
+./vibebuild32 -gm exhumed -j <demo dir> -nosound -nomusic -headless \
+    --dedicated --advertise 127.0.0.1:23519 --nplayers 2 --netfile MYMOD.GRP \
+    -name HOSTY -net -n0:2
+
+# 3. see what the masterserver is advertising
+./vibebuild32 -gm exhumed -j <demo dir> --lobbylist 127.0.0.1:23519
+
+# 4. join whatever it lists -- no address typed anywhere
+./vibebuild32 -gm exhumed -j <other dir> -name JOINER --joinlobby 127.0.0.1:23519
+```
+
+The server's stdin is a console, so `say hello` on the host's terminal shows up
+on the joiner. `-n0:N` is mmulti's own syntax (master/slave, `N` players);
+mmulti takes `-` or `/` for its own flags, and a bare address with no `/n#`
+defaults to `/n0`, which is what `--joinlobby` hands it.
+
+### Not yet supported
+
+- **Late join and rejoin.** A player has to be present when the level starts.
+  Duke's late-join path streams a savegame snapshot to the joiner and integrates
+  it at a frozen tick; Exhumed's savegame code is not wired to the net path, so
+  that is still to do.
+- **In-menu server browser.** Exhumed has no such menu; `--joinlobby` covers
+  discovery and joining from the command line.
+- **The demo's own maps have no deathmatch starts.** `ExamineSprites()` falls
+  back to the single-player start for everyone when a map has no lotag-62
+  sprites, so on the demo levels players spawn together.

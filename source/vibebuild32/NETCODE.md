@@ -285,6 +285,8 @@ Files: `source/vibebuild32/src/masterserver.cpp` / `.h` (protocol + rendezvous),
 | `source/vibebuild32/src/game.cpp` | sim loop `G_MoveLoop` / `G_DoMoveThings`, `movefifoplc` |
 | `source/vibebuild32/src/premap.cpp` | `P_SpawnLateJoiner`, `P_RandomSpawnPoint` |
 | `source/vibebuild32/src/osdcmds.cpp` | console commands (`map`, admin) |
+| `source/exhumed/src/vbnet.cpp` | the whole Powerslave/Exhumed netcode (see §10) |
+| `source/glue/netshared.h`, `source/glue/netargs.h` | masterserver client, file transfer and the shared `--flag` set, used by every game |
 
 ---
 
@@ -299,3 +301,64 @@ Files: `source/vibebuild32/src/masterserver.cpp` / `.h` (protocol + rendezvous),
    let a big transfer outrun the ring (`Net_DrainReliableWindow`).
 4. After any change, run the two-instance test and confirm **0** desyncs across
    a join, sustained play, and a leave/rejoin cycle.
+
+---
+
+## 10. Powerslave / Exhumed (`source/exhumed/src/vbnet.cpp`)
+
+PCExhumed shipped with `network.cpp` stubbed out (empty function bodies), so the
+Exhumed netcode is written from scratch rather than ported. It reuses this
+document's transport (mmulti) and the shared glue in `source/glue/`, but **not**
+Duke's `oldnet.cpp` sim plumbing — Exhumed's simulation has a much simpler shape.
+
+**Why fixed-delay lockstep and not Duke's FIFO.** Exhumed runs exactly one
+`GameMove()` per tick, and everything that tick consumes is in
+`sPlayerInput[0..N-1]`. So the exchange is: each machine publishes its own
+`PlayerInput` for tick `T + EXNET_INPUT_DELAY` (3 ticks ≈ 100 ms at the 30 Hz
+sim rate), and no machine runs tick `T` until it holds every live player's input
+for `T`. Publishing is driven by **simulation** progress, not the wall clock —
+one new input per tick actually run — which makes the pipeline self-regulating:
+if a peer stalls us we stop producing too, and nothing runs away.
+
+| Piece | Where |
+|---|---|
+| Per-tick input exchange, ring `s_ring[kMaxPlayers][256]` | `ExNet_Update` / `ExNet_LoadTickInputs` |
+| How many ticks may run right now | `ExNet_MoveFrames` (called from the game loop in `exhumed.cpp`) |
+| Desync detection: FNV-1a over each player's x/y/z/ang + health, `RandomGetSeed()`, `totalmoves` | `ExNet_EndTick`, every 8 ticks |
+| Level-start barrier (tick 0 is the same moment everywhere) | `ExNet_LevelStart` |
+| Master/slave proxy relay (a slave only has a link to the master) | `ExNet_Broadcast` / `ExNet_Recv`, packet type `EXNET_PT_PROXY` |
+| Silent-peer watchdog: master broadcasts `EXNET_PT_DROP` after 12 s and calls `mmulti_dropslot` | `ExNet_CheckTimeouts` |
+| Masterserver advertise / lobby / NAT punch | `ExNet_HostAdvertise`, `ExNet_ClientPunchAttempt`, `ExNet_ResolveAutoJoin` |
+| Host→joiner file transfer (`--netfile` GRPs, user maps) | `ExNet_SendGameFiles` / `ExNet_ReceiveGameFiles` |
+| Chat (HUD only, never simulated) | `ExNet_ChatUpdate` / `ExNet_ChatDraw` / `ExNet_ChatSendText`, plus the `say` console command |
+
+Three things here are worth knowing before changing them:
+
+1. **`faketimerhandler()` must run before `bInMove` is set.** The networked
+   branch of the game loop keeps `bInMove` set for its whole body, and
+   `Exhumed_faketimerhandler()` refuses to call `PlayerInterruptKeys()` while
+   `bInMove` is set — which is what turns the keyboard and mouse into
+   `nPlayerDAng` / `lPlayerXVel` / `nVertPan`. Without the explicit
+   `faketimerhandler()` call at the top of that branch a networked player can
+   walk and shoot but never *turn*. Calling `faketimerhandler()` (rather than
+   `PlayerInterruptKeys()` directly) keeps the same 120 Hz throttle
+   single-player gets, so the turn rate matches.
+2. **Files must land before `InstallEngine()`.** `VB_RecvFileChunk` mounts a
+   received GRP the moment it completes, so a joiner blocks in
+   `ExNet_ReceiveGameFiles()` until the host's `EXNET_PT_FILES_DONE` arrives —
+   if it mounted after the ART was read, a mod GRP would have no effect.
+3. **Rule of thumb 3 applies here too.** `ExNet_SendCb` drains the reliable
+   window (`EXNET_RELIABLE_WINDOW_MAX 480`) before every chunk. Without it a
+   file past ~512 KB wraps mmulti's 512-entry per-peer ring, chunks a peer never
+   acked are overwritten, and the joiner waits forever for something that will
+   never be resent — verified: with the drain disabled a 2 MB `--netfile`
+   transfer never even delivered its header and the joiner was dropped by the
+   watchdog.
+
+`nVertPan[]` is the one piece of per-player state that is written outside
+`sPlayerInput`, but it only feeds the local camera (`player.cpp:381`/`435`,
+guarded to `nLocalPlayer`) and the local machine's own `horizon` publish, so it
+cannot diverge; `PlayerList[p].q16horiz` and `Ra[p].nTarget` are both assigned
+straight from the synced input.
+
+Test recipe and the full option list: `source/exhumed/EXHUMED_UNIFY.md`.

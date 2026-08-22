@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "compat.h"
 #include "player.h"
+#include "vbnet.h"
 #include "runlist.h"
 #include "exhumed.h"
 #include "names.h"
@@ -914,7 +915,12 @@ void RestartPlayer(short nPlayer)
         SetMapPosition(sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].ang);
     }
 
-    sprintf(playerNames[nPlayer], "JOE%d", nPlayer);
+    // VibeBuild32: -name (locally) and each peer's OPTIONS packet fill playerNames[]
+    // during ExNet_Connect(), long before the first RestartPlayer(). Keep those --
+    // otherwise every level start renamed everyone back to the stock "JOEn"
+    // placeholder and chat lines were attributed to the wrong-looking player.
+    if (!ExNet_Enabled() || !playerNames[nPlayer][0])
+        sprintf(playerNames[nPlayer], "JOE%d", nPlayer);
     namelen[nPlayer] = strlen(playerNames[nPlayer]);
 
     totalvel[nPlayer] = 0;

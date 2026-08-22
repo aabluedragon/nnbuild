@@ -109,6 +109,9 @@ extern short nPistolClip[];
 
 extern short nPlayerScore[];
 
+extern short nPlayerColor[];
+extern char  playerNames[kMaxPlayers][11];
+
 extern short nPlayerClip[];
 
 extern short obobangle, bobangle;

@@ -1044,7 +1044,7 @@ exhumed := exhumed
 exhumed_root := $(source)/exhumed
 exhumed_src := $(exhumed_root)/src
 exhumed_obj := $(obj)/exhumed
-exhumed_cflags := -I$(exhumed_src) -Wno-c++11-narrowing -Wno-narrowing
+exhumed_cflags := -I$(source)/glue -I$(exhumed_src) -Wno-c++11-narrowing -Wno-narrowing
 exhumed_game_objs := \
     aistuff.cpp anims.cpp anubis.cpp bubbles.cpp bullet.cpp cd.cpp \
     common.cpp config.cpp enginesubs.cpp exhumed.cpp exscript.cpp fish.cpp \
@@ -1054,7 +1054,7 @@ exhumed_game_objs := \
     queen.cpp ra.cpp ramses.cpp random.cpp rat.cpp record.cpp rex.cpp roach.cpp \
     runlist.cpp save.cpp scorp.cpp sequence.cpp serial.cpp set.cpp snake.cpp \
     sound.cpp spider.cpp status.cpp stream.cpp switch.cpp text2.cpp timer.cpp \
-    trigdat.cpp version.cpp view.cpp wasp.cpp \
+    trigdat.cpp vbnet.cpp version.cpp view.cpp wasp.cpp \
 
 components += exhumed
 dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))

@@ -39,6 +39,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "menu.h"
 #include "player.h"
 #include "network.h"
+#include "vbnet.h"    // VibeBuild32: Powerslave multiplayer
+#include "netargs.h"  // VibeBuild32: unified multiplayer command-line flags
 #include "input.h"
 #include "sound.h"
 #include "cd.h"
@@ -1682,6 +1684,8 @@ static void GameDisplay(void)
 
     G_PrintFPS();
 
+    ExNet_ChatDraw();
+
     videoNextPage();
 
     // Debug aid shared with the other merged games: VB_CP_CAPTURE=<frames> saves
@@ -1815,7 +1819,16 @@ void ExitGame()
     }
     else
     {
-        if (nNetPlayerCount != 0) {
+        // VibeBuild32 multiplayer: announce the leave on the reliable channel and
+        // let it drain, so the peers drop this player at an agreed tick instead
+        // of stalling forever waiting for input that will never come.
+        if (ExNet_Enabled())
+        {
+            ExNet_SendQuit();
+            ExNet_Shutdown();
+        }
+        else if (nNetPlayerCount != 0)
+        {
             SendGoodbye();
         }
     }
@@ -1891,6 +1904,23 @@ int Exhumed_app_main(int argc, char const* const* argv)
 
     int nMenu = 0; // TEMP
 
+    // VibeBuild32: argv index of the first mmulti token after -net (0 = no -net).
+    // Everything from there on belongs to the transport, not to us.
+    int firstnet = 0;
+
+    // VibeBuild32: the shared multiplayer flags every game accepts identically
+    // (--advertise/--lobbylist/--joinlobby/--netfile/--headless/--dedicated/
+    // --nplayers/--startnow/--wait). Exhumed takes its server role from the
+    // mmulti args, so networkMode stays NULL; the auto-start knobs are collected
+    // here and handed to the netcode once parsing is done.
+    int netDedicated = 0, netStartNow = 0, netWait = 0, netStartNowPlayers = 2;
+    vb_netarg_ctx const exNetArg = {
+        &netDedicated, 1, 0,
+        &g_noSetup, NULL,
+        &netStartNow, &netStartNowPlayers, &netWait, kMaxPlayers,
+        ExNet_SetAdvertise, ExNet_QueryLobby, NULL, ExNet_AddNetFile
+    };
+
     // Check for any command line arguments
     for (i = 1; i < argc; i++)
     {
@@ -1905,9 +1935,50 @@ int Exhumed_app_main(int argc, char const* const* argv)
             pChar++;
             //strlwr(pChar);
 
+            // VibeBuild32: accept the canonical "--flag" spelling for every
+            // VibeBuild32 multiplayer flag, not just the one-dash form. pChar has
+            // had exactly one dash removed, so a "--joinlobby" still reads as
+            // "-joinlobby" here and used to fall through to the shared VB_NetArg
+            // handler -- which accepted and swallowed it without doing anything,
+            // because Exhumed passes NULL for that hook. Compare the net flags
+            // against the fully-undashed token instead.
+            const char *pOpt = (*pChar == '-') ? pChar + 1 : pChar;
+
             if (!Bstrcasecmp(pChar, "?") || !Bstrcasecmp(pChar, "help") || !Bstrcasecmp(pChar, "-help")) {
                 PrintHelp();
             }
+            // ---- VibeBuild32 multiplayer -------------------------------------
+            else if (!Bstrcasecmp(pOpt, "net"))
+            {
+                firstnet = i + 1;
+                break;              // the rest of argv is mmulti's
+            }
+            else if (!Bstrcasecmp(pOpt, "name") && i + 1 < argc)
+            {
+                ExNet_SetPlayerName(argv[++i]);
+            }
+            else if (!Bstrcasecmp(pOpt, "color") && i + 1 < argc)
+            {
+                ExNet_SetPlayerColor(Batoi(argv[++i]));
+            }
+            else if (!Bstrcasecmp(pOpt, "punchto") && i + 1 < argc)
+            {
+                ExNet_SetPunchTarget(argv[++i]);
+            }
+            else if (!Bstrcasecmp(pOpt, "masteraddr") && i + 1 < argc)
+            {
+                ExNet_SetMasterAddr(argv[++i]);
+            }
+            else if (!Bstrcasecmp(pOpt, "joinlobby") || !Bstrcasecmp(pOpt, "jl"))
+            {
+                if (i + 1 < argc) ExNet_SetAutoJoin(argv[++i]);
+                g_noSetup = 1;
+            }
+            else if (int const nc = VB_NetArg(&exNetArg, pOpt, (i + 1 < argc) ? argv[i + 1] : NULL))
+            {
+                i += nc - 1;        // the for-loop does the other ++
+            }
+            // ------------------------------------------------------------------
             else if (Bstrcasecmp(pChar, "nocreatures") == 0) {
                 bNoCreatures = kTrue;
             }
@@ -2113,6 +2184,13 @@ int Exhumed_app_main(int argc, char const* const* argv)
         forcelevel = 1;
     }
 
+    // VibeBuild32: hand the parsed multiplayer knobs to the netcode. A dedicated
+    // server auto-starts with whoever is present (that is what makes it
+    // dedicated) unless --wait was given to hold it in the lobby.
+    ExNet_SetStartNowPlayers(netStartNowPlayers);
+    ExNet_SetStartNow(netStartNow || (netDedicated && !netWait));
+    ExNet_SetWait(netWait);
+
     // This needs to happen afterwards, as G_CheckCommandLine() is where we set
     // up the command-line-provided search paths (duh).
     G_ExtInit();
@@ -2301,6 +2379,23 @@ int Exhumed_app_main(int argc, char const* const* argv)
         }
     }
 #endif
+
+    // VibeBuild32 multiplayer: bring the mmulti transport up here, after the
+    // group files are mounted (so a joiner can receive and mount a mod GRP) but
+    // before InstallEngine() reads the ART, and before the title sequence -- a
+    // networked launch skips straight to the level.
+    ExNet_Connect(argc, argv, firstnet);
+
+    if (ExNet_Enabled())
+    {
+        ExNet_SendGameFiles(-1);        // host streams --netfile GRPs + the usermap
+        ExNet_ReceiveGameFiles();       // joiner blocks here until they have landed
+
+        doTitle = kFalse;
+        stopTitle = kTrue;
+        if (forcelevel < 0)
+            forcelevel = 1;
+    }
 
     // temp - moving InstallEngine(); before FadeOut as we use nextpage() in FadeOut
     InstallEngine();
@@ -2551,6 +2646,11 @@ LOOP3:
     tclocks2 = totalclock;
     CONTROL_BindsEnabled = 1;
 
+    // VibeBuild32 multiplayer: every machine meets here before tick 0, so the
+    // lockstep streams all start from the same moment.
+    ExNet_LevelStart();
+    tclocks = tclocks2 = totalclock;
+
     cdSuccess = true;
     // Game Loop
     while (1)
@@ -2579,14 +2679,32 @@ LOOP3:
         CheckKeys();
         UpdateSounds();
 
-        if (bRecord || bPlayback)
+        if (bRecord || bPlayback || ExNet_Enabled())
         {
+            if (ExNet_Enabled())
+            {
+                // PlayerInterruptKeys() is what turns the keyboard and mouse into
+                // nPlayerDAng / lPlayerXVel / nVertPan, and Exhumed_faketimerhandler()
+                // refuses to call it while bInMove is set -- which this branch keeps
+                // set for its whole body. The single-player path clears bInMove and
+                // calls faketimerhandler() itself; the record/playback path never
+                // needed to, because the VCR supplies the input. Networked play does,
+                // or the player can walk and shoot but never turn.  bInMove is still
+                // clear here (the previous pass cleared it), and the moveframes this
+                // may bump is recomputed from the wall clock immediately below.
+                ExNet_ChatUpdate();
+                faketimerhandler();   // same 120 Hz throttle single-player gets
+            }
+
             bInMove = kTrue;
 
             moveframes = ((int)totalclock - (int)tclocks2) / 4;
 
-            if (moveframes > 4)
-                moveframes = 4;
+            // A networked machine that fell behind (a stalled peer, a slow
+            // frame) has to be able to catch up faster than one tick per
+            // rendered frame, or it never closes the gap.
+            if (moveframes > (ExNet_Enabled() ? 8 : 4))
+                moveframes = ExNet_Enabled() ? 8 : 4;
 
             if (moveframes != 0)
                 tclocks2 = totalclock;
@@ -2611,9 +2729,18 @@ LOOP3:
                     goto MENU;
                 }
             }
-            else if (bRecord || moveframes)
+            else if (bRecord || moveframes || ExNet_Enabled())
             {
                 GetLocalInput();
+
+                // While a chat line is being typed the letters must not also be
+                // walking the player around.
+                if (ExNet_ChatActive())
+                {
+                    lPlayerXVel = lPlayerYVel = 0;
+                    nPlayerDAng = 0;
+                    lLocalButtons = lLocalCodes = 0;
+                }
 
                 sPlayerInput[nLocalPlayer].xVel = lPlayerXVel;
                 sPlayerInput[nLocalPlayer].yVel = lPlayerYVel;
@@ -2635,7 +2762,16 @@ LOOP3:
             }
             */
 
-            if (nNetPlayerCount)
+            if (ExNet_Enabled())
+            {
+                // Publish this machine's input for the ticks ahead and read what
+                // the peers published, then run only the ticks every live player
+                // has covered. Falling short of moveframes is the normal
+                // lockstep stall, not an error.
+                ExNet_Update();
+                moveframes = ExNet_MoveFrames(moveframes);
+            }
+            else if (nNetPlayerCount)
             {
                 if (moveframes)
                 {
@@ -2665,7 +2801,11 @@ LOOP3:
                     WritePlaybackInputs();
                 }
 
+                ExNet_LoadTickInputs();     // install every player's input for this tick
+
                 GameMove();
+
+                ExNet_EndTick();            // stamp the tick's state CRC, publish it periodically
                 // if (nNetTime > 0)
                 // {
                 //     nNetTime--;

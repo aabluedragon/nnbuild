@@ -32,6 +32,11 @@ void InitRandom()
     randseed = 0x1010101;
 }
 
+int RandomGetSeed()
+{
+    return randseed;
+}
+
 int RandomBit()
 {
     randseed = (randseed >> 1) | ((((randseed >> 1) ^ (randseed >> 28)) & 1) << 28);

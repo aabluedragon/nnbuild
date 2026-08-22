@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define __network_h__
 
 extern short nNetMoveFrames;
+extern short wConsoleNode;
 
 void SendGoodbye();
 void UpdateNetInputs();

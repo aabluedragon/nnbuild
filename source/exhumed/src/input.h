@@ -64,6 +64,7 @@ void UpdateInputs();
 void ClearSpaceBar(short nPlayer);
 
 void GetLocalInput();
+void LogoffPlayer(int nPlayer);
 
 extern PlayerInput sPlayerInput[];
 extern int nNetMoves;
