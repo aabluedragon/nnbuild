@@ -514,6 +514,23 @@ def convert(m, tilebase=4096):
     for wi,w in enumerate(walls):          # a portal only counts if both halves agree
         if w['nextwall'] >= 0 and walls[w['nextwall']]['nextwall'] != wi:
             w['nextwall'] = -1; w['nextsector'] = -1
+
+    # Kex event 50 is NOT Build sector effect 50 -- see KEX_EVENT_50 below. It
+    # needs the finished nextsector links to decide what it can safely become,
+    # so it is resolved here rather than in the sector loop above.
+    for si,s_ in enumerate(sects):
+        if s_ is None or s_['lotag'] != KEX_EVENT_50:
+            continue
+        start, num = ranges[si]
+        lower = False
+        for i in range(num):
+            ns = walls[start+i]['nextsector']
+            # Build z grows downward, so a GREATER floorz is a lower floor.
+            if 0 <= ns < len(sects) and sects[ns] and sects[ns]['floorz'] > s_['floorz']:
+                lower = True; break
+        s_['lotag'] = 8 if lower else 0
+        if not lower:
+            s_['hitag'] = 0
     return sects, walls, ranges
 
 def build_angle(stored_deg):
@@ -645,6 +662,76 @@ ACTOR_MAP = {
     AT['PYRAMID']:   (60, 0),   # golden sarcophagus: ends the level
 }
 
+# Kex event 50: the one event type whose number does NOT mean what the Build
+# number means.
+#
+# The rest of the event table lines up with Build PowerSlave's own sector
+# effects (1 = ceiling door, 7 = touchplate floor lower, 21 = touchplate, and
+# so on), because the console and DOS versions descend from one design. 50 does
+# not, and mapping it straight through was quietly wrecking geometry all over
+# the game:
+#
+#   * Build effect 50 ("floor lower / raise") builds an elevator whose FIRST
+#     position is a neighbour's floorz, and an elevator starts at position 0 --
+#     so every sector carrying it sank to its neighbour's floor the moment the
+#     level loaded. In TOMB that is the raised block the .357 sits on, which is
+#     why it drew as a patch of different floor texture instead of a step.
+#   * Build effect 50 appears in NONE of the six levels that ship in STUFF.DAT,
+#     while Kex event 50 is by far the most common event in the remaster's maps
+#     (418 records across the 25 levels, ~4% of all sectors). Two numbers that
+#     far apart in frequency are not the same effect.
+#   * 159 of those 418 sectors have every neighbour at exactly their own floor
+#     height, where a floor elevator would have nothing to travel between.
+#
+# What it does mean is still open. Until that is settled the conversion keeps
+# the authored height, which is what the remaster shows: where the sector has a
+# neighbour below it, effect 8 ("permanent floor lower") gives the same channel
+# -driven travel but starts at the sector's OWN floorz; where it does not, the
+# sector is left untagged and static rather than given a mover that would move
+# it somewhere wrong.
+KEX_EVENT_50 = 50
+
+# Item lotag -> the picnum the original maps give that item's sprite.
+#
+# Build PowerSlave spawns an item from its sprite's lotag, but for most items
+# BuildItemAnim() finds nItemAnimInfo[lotag - 6].a == -1 and builds no anim
+# sprite -- so the sprite keeps whatever picnum the MAP gave it, forever. The
+# converter was writing picnum 1 for every gameplay actor, and tile 1 in
+# PowerSlave's art is a 64x128 carved stone face panel. That is why a slab was
+# standing where the .357 belongs in TOMB.
+#
+# Recovered by scanning the six levels that ship in STUFF.DAT and taking the
+# picnum each item lotag actually carries; every one of these was unanimous or
+# near-unanimous across the maps, and each tile was checked by eye against the
+# item it claims to be (877 is the speed loader, 488 the revolver, 899 the
+# cobra staff, and so on).
+#
+# Enemies are absent on purpose: BuildAnubis() and friends assign picnum
+# themselves and then let the SEQ system drive it per frame, so the map's value
+# is never seen.
+ITEM_PICNUM = {
+    6:  877,    # speed loader
+    7:  879,    # fuel canister
+    8:  881,    # M-60 ammo belt
+    9:  878,    # grenade
+    12: 718,    # berry twig
+    14: 332,    # cobra venom bowl
+    23: 754,    # Sobek mask
+    28: 488,    # .357
+    29: 490,    # M-60
+    30: 491,    # flame thrower
+    32: 899,    # cobra staff
+    37: 3457,   # cobra staff ammo
+    45: 3328,   # power key
+    46: 3320,   # time key
+    47: 3340,   # war key
+    48: 1580,   # earth key
+    60: 3458,   # golden sarcophagus
+    # 33, the Eye of Ra, appears in no map that ships in STUFF.DAT, so there is
+    # no picnum to recover for it. It gets a tile built from the remaster's own
+    # sprite instead -- see build_sprites().
+}
+
 # ---------------------------------------------------------------------------
 # The remaster's own scenery
 #
@@ -683,9 +770,15 @@ def load_kex_actors(Z):
             def field(k, d=None):
                 mm = re.search(k + r'\s+"?([^"\n]+)"?', body)
                 return mm.group(1).strip() if mm else d
+            # noAdvanceFrames means the engine holds the actor on frame 0.
+            # The vases and barrels all carry it: the extra frames in their
+            # spawnAnim are not an animation, they are variant looks and
+            # break-up shards, so cycling them made a vase flicker between a
+            # pot and a sliver of debris.
             defs[nm] = dict(name=nm, anim=field('spawnAnim'),
                             scale=float(field('scale', '1') or 1),
-                            fullbright=int(field('fullbright', '0') or 0))
+                            fullbright=int(field('fullbright', '0') or 0),
+                            still=int(field('noAdvanceFrames', '0') or 0))
 
     out = {}
     for nm, t in name2type.items():
@@ -767,6 +860,8 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
         if not a: continue
         frames = _all_frames(Z, names, a['anim'])
         if not frames: continue
+        if a.get('still'):
+            frames = frames[:1]
 
         # Every frame of one actor is composited into the SAME box, so the
         # sprite does not jitter as the flame changes shape.
@@ -824,11 +919,17 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
             continue                       # actor sits in a sector we dropped
         if ent is not None:
             # Gameplay actors keep Build PowerSlave's own lotag spawning, so its
-            # AI and its art take over.
+            # AI and its art take over. Enemies overwrite picnum themselves, but
+            # an item whose nItemAnimInfo entry has no anim keeps the picnum the
+            # map gave it -- so it has to be the real one, or the item draws as
+            # whatever tile 1 happens to be.
             lotag, hitag = ent
+            pic = ITEM_PICNUM.get(lotag)
+            if pic is None and dec is not None:
+                pic = dec[0]        # no original tile: the remaster's own sprite
             out.append(dict(x=x * WORLD, y=y * WORLD, z=sects[si]['floorz'],
                             sectnum=remap[si], ang=build_angle(a.ang),
-                            lotag=lotag, hitag=hitag, picnum=1, shade=0,
+                            lotag=lotag, hitag=hitag, picnum=(pic or 1), shade=0,
                             xrepeat=64, yrepeat=64))
         else:
             tile, scale, fullbright = dec
@@ -1010,7 +1111,11 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
         used_types = set()
         for m in parsed.values():
             used_types.update(a.type for a in m.actors)
-        used_types -= set(ACTOR_MAP)          # those keep Build's own art
+        # Gameplay actors keep Build's own art -- except the few items for which
+        # no original picnum could be recovered, which need a tile built from
+        # the remaster's sprite to have anything to draw.
+        used_types -= {t for t, (lo, _h) in ACTOR_MAP.items() if lo in ITEM_PICNUM
+                       or lo >= 100}
         used_types.discard(AT_PLAYER)
 
     assign = {}; nexttile = tilebase
