@@ -2801,7 +2801,29 @@ LOOP3:
             char const *const kexTrack = g_kexMode ? Kex_MusicForMap(gUserMapFilename) : NULL;
 
             if (kexTrack)
-                cdSuccess = playMusicFile(kexTrack, true);
+            {
+                // Attempt the level's track exactly once. This block runs every
+                // frame until it reports success, and a failed attempt used to
+                // leave cdSuccess false -- so with music disabled, or any other
+                // reason FX_Play refuses, it re-read a 14 MB ogg and allocated a
+                // fresh buffer on every single frame. That thrash was what put a
+                // band of RGB noise along the top of the screen; the original
+                // playCDtrack() never showed it only because the track files it
+                // asks for do not exist, so it fails at the open and costs
+                // nothing.
+                // bNoSound, not MusicToggle: this port does not implement
+                // -nomusic at all, so MusicToggle is always 1 and guarding on it
+                // guards nothing. With sound off the FX system is never brought
+                // up, and handing it a 14 MB buffer is what corrupts the frame.
+                static char lastTried[BMAX_PATH];
+                if (Bstrcmp(lastTried, kexTrack))
+                {
+                    Bstrncpyz(lastTried, kexTrack, sizeof(lastTried));
+                    if (!bNoSound && MusicToggle)
+                        playMusicFile(kexTrack, true);
+                }
+                cdSuccess = true;
+            }
             else
             {
                 int nTrack = levelnum;

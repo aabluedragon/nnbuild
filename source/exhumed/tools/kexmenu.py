@@ -14,6 +14,7 @@ which keeps the tool and the C++ side in step without either hardcoding the
 other's numbering.
 """
 import os, re, sys, zipfile
+from kexmap import KEX_MAP_PREFIX
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kexpng as png
 
@@ -347,7 +348,7 @@ def extract(kexdir, outdir, verbose=True):
         if pairs:
             with open(os.path.join(outdir, 'kexmusic.txt'), 'w') as f:
                 for mp, tr in pairs:
-                    f.write("%s %s\n" % (mp, tr))
+                    f.write("%s%s %s\n" % (KEX_MAP_PREFIX, mp, tr))
             if verbose: print("  music: %d levels" % len(pairs))
 
         names = {}
@@ -363,7 +364,7 @@ def extract(kexdir, outdir, verbose=True):
                 return m.group(2).strip() if m else default
             title = field('title')
             title = names.get(title.lstrip('$'), title.lstrip('$'))
-            mapfile = os.path.basename(field('map')).upper()
+            mapfile = KEX_MAP_PREFIX + os.path.basename(field('map')).upper()
             links = []
             for d in ('north', 'east', 'south', 'west'):
                 nxt = field('nextmap_' + d, '')
@@ -395,7 +396,7 @@ def extract(kexdir, outdir, verbose=True):
         m = re.search(r'map\s+"maps/([^"]+)"', info)
         if m:
             with open(os.path.join(outdir, 'kexstart.txt'), 'w') as f:
-                f.write(m.group(1).upper() + "\n")
+                f.write(KEX_MAP_PREFIX + m.group(1).upper() + "\n")
             if verbose: print("  campaign starts at %s" % m.group(1).upper())
 
     with open(os.path.join(outdir, 'kexfont.txt'), 'w') as f:

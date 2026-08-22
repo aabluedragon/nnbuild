@@ -170,6 +170,14 @@ def load(path):
 SCALE = 16
 AT_PLAYER = 0
 
+# Converted maps are written with this prefix because their names would
+# otherwise collide with the remaster's own maps/*.MAP inside the mounted .kpf,
+# and the engine resolves the name into the archive instead of to the converted
+# file on disk. That collision is what produced the band of RGB noise along the
+# top of the screen: byte-identical map data rendered clean under a unique name
+# and broken under TOMB.MAP, every time.
+KEX_MAP_PREFIX = "KEX_"
+
 # Kex and Build PowerSlave are the same spaces at different scales, and the
 # player that walks these levels is Build PowerSlave's: eye height 14080 z units
 # (880 world), collision radius 232, step clearance 5120 z (320 world). Kex
@@ -988,7 +996,7 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
         start = player_start(m, sects, walls, ranges)
         _, remap = sector_remap(sects, ranges)
         sprites = build_sprites(m, sects, walls, ranges, remap, decor)
-        ns, nw, nsp = write_build(os.path.join(outdir, name.upper()),
+        ns, nw, nsp = write_build(os.path.join(outdir, KEX_MAP_PREFIX + name.upper()),
                                   sects, walls, ranges, start, sprites)
         portals = sum(1 for w in walls if w['nextsector'] >= 0)
         if verbose:

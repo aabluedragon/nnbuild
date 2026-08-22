@@ -397,43 +397,30 @@ against a stale cache. And `-res` does not take effect here; every capture came
 out 1470x956 regardless, which briefly made a resolution test look meaningful
 when it was comparing identical renders.
 
-**Known bug, cause not found:** a band of RGB noise runs along the very top of
-the screen in every converted level -- neighbour-pixel roughness 248, where the
-stock game measured against the same binary and the same capture size is 0. So
-it is something in the converted map data, not the renderer or the capture.
+**The noise band, and how not to debug one.** Converted levels showed a band of
+RGB noise along the top of the screen -- neighbour-pixel roughness 248 against
+the stock game's 0. It was blamed in turn on the sky ceilings, the tile aspect,
+`texturecache`, resolution, parallax, ceiling heights, the 1D cache size and a
+filename collision with the .kpf. All wrong.
 
-It was first attributed to the sky ceilings; that was wrong. Disabling the sky
-feature outright leaves the band at exactly 248.3, as do squaring the sky tile,
-clearing texturecache, toggling Build's parallax bit and capping sky ceiling
-height. The figure being bit-identical across five structurally different
-changes is itself the clue worth following next: whatever produces it is not
-being touched by any of them.
+The actual cause was the per-level music. This block runs every frame until it
+reports success, and a failed attempt left `cdSuccess` false -- so the game
+re-read a 14 MB ogg and allocated a fresh buffer *on every frame*, and that
+thrash scribbled the frame. The original `playCDtrack()` never showed it only
+because the track files it asks for do not exist, so it fails at the open and
+costs nothing.
 
-**Scenery.** Build PowerSlave only knows the actors its own lotags spawn, which
-left the levels as bare boxes -- TOMB alone has 36 fire pots and 23 vases that
-were simply not there. All of it is in the .kpf, reachable by following the
-chain the game itself uses:
+Two things made it look like a map bug for far longer than it should have. The
+figure was bit-identical, 248.3, through every change -- which reads as "nothing
+you are changing is involved", not "try a different map feature". And the
+bisects were confounded: byte-identical map data rendered clean under one name
+and broken under another, because the *name* decided whether `kexmusic.txt` had
+an entry and therefore whether music was attempted at all.
 
-```
-defs/defines.txt          actor name -> the number a map stores
-defs/actors/**.txt        actor name -> spawnAnim, scale, fullbright
-sprites/<g>/*_anim.txt    anim       -> frames, each a STACK of sprite layers
-sprites/<g>/*_sprite.txt  index      -> rectangle on that group's sheet
-```
+The guard is on `bNoSound`, not `MusicToggle`: this port never implements
+`-nomusic`, so `MusicToggle` is always 1 and guarding on it guards nothing.
 
-A frame is a stack rather than a single image -- a fire pot is the pot plus its
-flame, each with its own offset -- so the layers are composited into one tile.
-87 actor types resolve this way, and TOMB now places 120 of its 124 actors
-against 40 before.
-
-Gameplay actors are deliberately left alone: anything in `ACTOR_MAP` keeps Build
-PowerSlave's lotag spawning so its AI and its art take over. The scenery goes in
-as plain lotag-0 sprites, which `ExamineSprites()` leaves at statnum 0 and draws.
-Sprite size comes from the actor's `scale` alone -- a Build sprite's world height
-is `tileheight * yrepeat / 4` and Kex authors at one texel per unit, so the
-repeat does not depend on the tile.
-
-**Sky.** Kex has no sky tile: the sky is named in the map header and a ceiling
+**Sky.** Kex has no sky tile:**Sky.** Kex has no sky tile: the sky is named in the map header and a ceiling
 simply carries *no tiles* where it shows through. Untextured ceilings were being
 handed texture slot 0 -- 169 of them in KARNAK alone -- so its courtyards were
 capped with garbage. They now get the map's own sky with Build's parallax bit.
