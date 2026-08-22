@@ -358,8 +358,8 @@ def _zspan(m, f):
 # rendered luminance (17 -> 85, 25 -> 75, 47 -> 39, 105 -> 0), which is flat at
 # the top and then falls off a cliff -- nothing like the linear ramp that
 # reasoning from Build's palette would suggest.
-KEX_SHADE_MIN  = 30         # brightest surface: still not fullbright
-KEX_SHADE_SPAN = 30         # darkest lands ~75, dim but never crushed to black
+KEX_SHADE_MIN  = -10         # brightest surface: still not fullbright
+KEX_SHADE_SPAN = 88         # darkest lands ~75, dim but never crushed to black
 KEX_SHADE_MAX  = 127
 
 def _shade(m, f):
@@ -381,7 +381,7 @@ def _shade(m, f):
     if not n:
         return 0
     lum = (tot / float(n)) / 255.0
-    return max(0, min(KEX_SHADE_MAX,
+    return max(-128, min(KEX_SHADE_MAX,
                       int(round(KEX_SHADE_MIN + (1.0 - lum ** 0.5) * KEX_SHADE_SPAN))))
 
 
@@ -705,8 +705,14 @@ def _sprite_table(Z, names, group, sheetbase):
             for m in re.finditer(r'sprite\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)', txt)}
 
 
-def _first_frame(Z, names, anim):
-    """The layers of an animation's first frame: [(group, sheetbase, index, ox, oy)]."""
+# How many frames of an animation are turned into tiles. Fire and water are the
+# reason this exists at all -- with only the first frame every flame in the game
+# stood still. Capped because Build animates a run of consecutive tiles and the
+# run has to stay small enough to be worth the tile numbers.
+KEX_ANIM_MAX_FRAMES = 8
+
+def _all_frames(Z, names, anim, limit=KEX_ANIM_MAX_FRAMES):
+    """Each frame's layers: [[(group, sheetbase, index, ox, oy), ...], ...]"""
     if '/' not in anim: return []
     group, animname = anim.split('/', 1)
     for n in Z.namelist():
@@ -716,15 +722,22 @@ def _first_frame(Z, names, anim):
         txt = Z.read(n).decode('latin-1').replace('\r', '')
         m = re.search(r'^' + re.escape(animname) + r'\s*\n\{(.*?)\n\}', txt, re.S | re.M)
         if not m: continue
-        fm = re.search(r'frame\s*\{(.*?)\n\s*\}', m.group(1), re.S)
-        if not fm: continue
-        layers = []
-        for lm in re.finditer(r'\{\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)', fm.group(1)):
-            ref = lm.group(1)
-            g, base = ref.split('/', 1) if '/' in ref else (group, ref)
-            layers.append((g, base, int(lm.group(2)), int(lm.group(3)), int(lm.group(4))))
-        if layers: return layers
+        frames = []
+        for fm in re.finditer(r'frame\s*\{(.*?)\n\s*\}', m.group(1), re.S):
+            layers = []
+            for lm in re.finditer(r'\{\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)', fm.group(1)):
+                ref = lm.group(1)
+                g, base = ref.split('/', 1) if '/' in ref else (group, ref)
+                layers.append((g, base, int(lm.group(2)), int(lm.group(3)), int(lm.group(4))))
+            if layers: frames.append(layers)
+            if len(frames) >= limit: break
+        if frames: return frames
     return []
+
+
+def _first_frame(Z, names, anim):
+    f = _all_frames(Z, names, anim, 1)
+    return f[0] if f else []
 
 
 def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True):
@@ -748,38 +761,53 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
                 os.remove(tmp)
         return sheets[key]
 
-    out = {}; tile = tilebase; defs = []
+    out = {}; tile = tilebase; defs = []; animdefs = []
     for t in sorted(wanted_types):
         a = kexactors.get(t)
         if not a: continue
-        layers = _first_frame(Z, names, a['anim'])
-        if not layers: continue
-        rects = []
-        for g, base, idx, ox, oy in layers:
-            tbl = _sprite_table(Z, names, g, base)
-            r = tbl.get(idx)
-            sh = sheet(g, base)
-            if r is None or sh is None: continue
-            rects.append((sh, r, ox, oy))
-        if not rects: continue
-        x0 = min(ox for _, _, ox, oy in rects)
-        y0 = min(oy for _, _, ox, oy in rects)
-        x1 = max(ox + r[2] for _, r, ox, oy in rects)
-        y1 = max(oy + r[3] for _, r, ox, oy in rects)
+        frames = _all_frames(Z, names, a['anim'])
+        if not frames: continue
+
+        # Every frame of one actor is composited into the SAME box, so the
+        # sprite does not jitter as the flame changes shape.
+        allrects = []
+        for layers in frames:
+            rects = []
+            for g, base, idx, ox, oy in layers:
+                tbl = _sprite_table(Z, names, g, base)
+                r = tbl.get(idx)
+                sh = sheet(g, base)
+                if r is None or sh is None: continue
+                rects.append((sh, r, ox, oy))
+            allrects.append(rects)
+        allrects = [r for r in allrects if r]
+        if not allrects: continue
+
+        flat = [x for rects in allrects for x in rects]
+        x0 = min(ox for _, _, ox, oy in flat)
+        y0 = min(oy for _, _, ox, oy in flat)
+        x1 = max(ox + r[2] for _, r, ox, oy in flat)
+        y1 = max(oy + r[3] for _, r, ox, oy in flat)
         w, h = max(1, x1 - x0), max(1, y1 - y0)
         if w > 512 or h > 512: continue
-        img = _png.blank(w, h)
-        for (sw, sh_, spix), r, ox, oy in rects:
-            sub = _png.crop(sw, sh_, spix, r[0], r[1], r[2], r[3])
-            _png.paste(w, h, img, r[2], r[3], sub, ox - x0, oy - y0)
-        fn = 'kexart/actors/a%03d.png' % t
-        _png.write(os.path.join(outdir, fn), w, h, img)
-        out[t] = (tile, a['scale'], a['fullbright'])
-        defs.append((tile, fn))
-        tile += 1
+
+        first = tile
+        for fi, rects in enumerate(allrects):
+            img = _png.blank(w, h)
+            for (sw, sh_, spix), r, ox, oy in rects:
+                sub = _png.crop(sw, sh_, spix, r[0], r[1], r[2], r[3])
+                _png.paste(w, h, img, r[2], r[3], sub, ox - x0, oy - y0)
+            fn = 'kexart/actors/a%03d_%d.png' % (t, fi)
+            _png.write(os.path.join(outdir, fn), w, h, img)
+            defs.append((tile, fn))
+            tile += 1
+        out[t] = (first, a['scale'], a['fullbright'])
+        if len(allrects) > 1:
+            animdefs.append((first, tile - 1, 3))
     if verbose:
-        print("  scenery: %d actor types drawn from the remaster's own sprites" % len(out))
-    return out, defs
+        print("  scenery: %d actor types, %d animated, from the remaster's own sprites"
+              % (len(out), len(animdefs)))
+    return out, defs, animdefs
 
 
 def build_sprites(m, sects, walls, ranges, remap, decor=None):
@@ -891,7 +919,7 @@ def collect(kpf_path, names):
             if sz: out[n] = sz
     return out
 
-def write_def(path, assignments, animdefs=()):
+def write_def(path, assignments, animdefs=(), skytiles=()):
     """One DEF entry per Kex texture.
 
     tilefromtexture gives the engine a real tile (it needs the dimensions to
@@ -905,12 +933,23 @@ def write_def(path, assignments, animdefs=()):
         for tile, name in sorted(assignments.items()):
             f.write('tilefromtexture %d { file "%s" }\n' % (tile, name))
             f.write('texture %d { pal 0 { file "%s" } }\n' % (tile, name))
+        if skytiles:
+            f.write("\n// Parallax skies. Build will not treat a tile as a sky panorama\n")
+            f.write("// until tileSetupSky() has seen it, which is what multipsky does --\n")
+            f.write("// without this the ceiling drew black however the tile was prepared.\n")
+            for st in sorted(skytiles):
+                f.write('multipsky %d { horizfrac 65536 lognumtiles 0 tile 0 %d }\n' % (st, st))
+
         if animdefs:
             f.write("\n// Animated surfaces -- water, slime and the like. Build plays an\n")
             f.write("// animation as a run of consecutive tiles, which is why the frames\n")
             f.write("// are allocated directly after the texture they belong to.\n")
+            # animtilerange <firsttile> <lasttile> <speed> <type>. The first
+            # version passed the first tile twice, which pushed speed into the
+            # type slot and made the engine reject every one of them. Type 2 is
+            # a forward loop; speed is clamped 0..15, higher being slower.
             for first, last, speed in animdefs:
-                f.write('animtilerange %d %d %d %d\n' % (first, first, last, max(1, speed)))
+                f.write('animtilerange %d %d %d 2\n' % (first, last, max(0, min(15, speed))))
 
 
 # ---------------------------------------------------------------------------
@@ -992,9 +1031,10 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
             animdefs.append((assign[t], assign[t] + len(frames), speed))
 
     with zipfile.ZipFile(kpf) as z:
-        decor, decordefs = build_actor_tiles(z, outdir, used_types, kexactors,
-                                             nexttile, verbose)
+        decor, decordefs, decoranims = build_actor_tiles(z, outdir, used_types, kexactors,
+                                                        nexttile, verbose)
     nexttile += len(decordefs)
+    animdefs.extend(decoranims)
 
     done = 0
     for name in sorted(parsed):
@@ -1024,7 +1064,14 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
                 # A plain ceiling shows the right sky colour and costs only the
                 # parallax scroll, which barely reads in these walled courtyards.
                 s['ceilingpicnum'] = skytile
-                s['ceilingshade'] = KEX_SHADE_MIN
+                # The sky is lit by definition -- shading it down was what made
+                # a daylit level read as night.
+                s['ceilingshade'] = 0
+                # Parallax: a sky has to sit at the horizon rather than be a lid
+                # painted on the ceiling plane. An earlier attempt at this drew
+                # black, but that was a portrait tile shaded down to 30; squared
+                # and unshaded it is worth trying properly.
+                s['ceilingstat'] |= 1
         start = player_start(m, sects, walls, ranges)
         _, remap = sector_remap(sects, ranges)
         sprites = build_sprites(m, sects, walls, ranges, remap, decor)
@@ -1065,7 +1112,11 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
                 pix = _png.resize(w_, h_, pix, 256, 256)
                 _png.write(tmp, 256, 256, pix)
             usable[tile] = 'kexart/' + os.path.basename(name)
-    write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs)
+    skytiles = set()
+    for m in parsed.values():
+        if m.sky and m.sky in assign:
+            skytiles.add(assign[m.sky])
+    write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs, skytiles)
 
     # The menu art rides along: exhumed.def is the one file the game loads by
     # name, so it pulls in the generated menu definitions.

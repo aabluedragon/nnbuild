@@ -420,7 +420,23 @@ an entry and therefore whether music was attempted at all.
 The guard is on `bNoSound`, not `MusicToggle`: this port never implements
 `-nomusic`, so `MusicToggle` is always 1 and guarding on it guards nothing.
 
-**Sky.** Kex has no sky tile:**Sky.** Kex has no sky tile: the sky is named in the map header and a ceiling
+**Sky.** Build will not treat a tile as a sky panorama until `tileSetupSky()`
+has seen it, which is what the DEF's `multipsky` does. Without it a parallaxed
+ceiling draws black however the tile is prepared -- which is why two earlier
+attempts at this concluded, wrongly, that parallax simply did not work here and
+fell back to painting the sky flat on the ceiling plane. With `multipsky` the
+sky sits at the horizon properly: p50 goes from 20 to 63 and p95 to 150 against
+the remaster's 162.
+
+Kex has no sky tile:**Sky.** Build will not treat a tile as a sky panorama until `tileSetupSky()`
+has seen it, which is what the DEF's `multipsky` does. Without it a parallaxed
+ceiling draws black however the tile is prepared -- which is why two earlier
+attempts at this concluded, wrongly, that parallax simply did not work here and
+fell back to painting the sky flat on the ceiling plane. With `multipsky` the
+sky sits at the horizon properly: p50 goes from 20 to 63 and p95 to 150 against
+the remaster's 162.
+
+Kex has no sky tile: the sky is named in the map header and a ceiling
 simply carries *no tiles* where it shows through. Untextured ceilings were being
 handed texture slot 0 -- 169 of them in KARNAK alone -- so its courtyards were
 capped with garbage. They now get the map's own sky with Build's parallax bit.
