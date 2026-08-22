@@ -1,0 +1,445 @@
+#!/usr/bin/env python3
+"""kexmap -- play the Nightdive PowerSlave Exhumed levels in VibeBuild32.
+
+The 2022 Nightdive remaster is a Kex engine game: its own map format, its own
+PNG art, none of the original Build data. But its levels are close cousins of
+Build levels -- convex sectors, exactly one floor and one ceiling each,
+always-vertical walls, portals between sectors -- so the geometry converts.
+
+    ./kexmap.py "/path/to/PowerSlave Exhumed" /path/to/your/powerslave/dir
+
+writes one Build .map per Kex level plus an exhumed.def that points the
+renderer at the remaster's own PNG textures. Then:
+
+    ./vibebuild32 -gm exhumed -j /path/to/your/powerslave/dir \
+        -g "/path/to/PowerSlave Exhumed/PowerslaveEX.kpf" -map KARNAK.MAP
+
+The .kpf is a zip, which the Build engine mounts natively, so the textures are
+read straight out of the remaster's own archive -- nothing is copied or
+converted, and no palette reduction happens.
+
+You still need the Build-engine PowerSlave data (STUFF.DAT) for the HUD,
+weapons and sounds; this brings the remaster's *levels*, not a whole game.
+
+WHAT CONVERTS
+    Sector and wall geometry, floor and ceiling heights, portals between
+    sectors, wall/floor/ceiling textures, the player start.
+
+WHAT DOES NOT (yet)
+    Actors -- enemies, pickups, doors, switches, triggers. The levels are
+    walkable but empty.
+    Room-over-room. Kex lets one wall link several sectors; plain Build cannot,
+    so only the tallest portal on an edge survives and sectors that are not a
+    single closed ring are dropped (about 2% of them across the retail maps).
+    Sloped floors and ceilings, which come out flat.
+    Baked vertex lighting, which the format carries but Build has no place for.
+
+THE FORMAT
+    Reverse-engineered against the .dmap/.map pairs Nightdive ships in
+    docs/examples/ -- every field was checked against the matching text source.
+    See PSM.__init__ below for the layout.
+"""
+import os, struct, sys, zipfile
+
+# ---------------------------------------------------------------------------
+# Reading the Kex map
+# ---------------------------------------------------------------------------
+# 
+# Reverse-engineered against the .dmap/.map pairs Nightdive ships in
+# docs/examples/: every field below was checked against the matching text source.
+# 
+#   header   'PSM\\x01' + 8 x u32:
+#              ntex, nvert, nsector, nface, ntile, nzone, nevent, nactor
+#   strings  u16-length-prefixed: the sky texture then the texture table. The
+#            exact entry count is ambiguous (an empty sky and the empty
+#            "no texture" slot are indistinguishable), so the caller locates the
+#            vertex array by validating the face table that follows -- see
+#            locate().
+#   verts    nvert x 16: float x, y, z + RGBA (baked vertex lighting)
+#   sectors  nsector x 20: u16 faceStart, u16 wallFaceEnd, ...
+#            faces[faceStart..wallFaceEnd] are the walls; wallFaceEnd+1 is the
+#            ceiling face and wallFaceEnd+2 the floor face.
+#   faces    nface x 32: i16 tileStart, i16 tileEnd (-1 = untextured),
+#            u16 vertexStart (4 corners), i16 sectorLink (-1 = solid),
+#            float angle, float nx, ny, nz, u16 flags, i16 pad,
+#            i16 tileVertStart, i16 tileVertEnd
+#   tiles    ntile x 16: u8[4], u16[4] vertex indices, u16 textureIndex, u16 pad
+#   actors   nactor x 20, at the very end of the file:
+#            u16 type, u16 ?, i16 x, i16 y, i16 z, i16 tag,
+#            u16 param1, u16 param2, u16 layer, u16 ?
+
+
+class Face:
+    __slots__=('tileStart','tileEnd','vertStart','link','angle','n','flags',
+               'tileVertStart','tileVertEnd')
+class Sector:
+    __slots__=('faceStart','wallEnd','raw')
+class Actor:
+    __slots__=('type','x','y','z','tag','p1','p2','layer','raw')
+
+class PSM:
+    def __init__(self, data, vstart=None):
+        d=self.data=data
+        if d[:4]!=b'PSM\x01': raise ValueError('not a Kex PSM map')
+        (self.ntex,self.nvert,self.nsector,self.nface,
+         self.ntile,self.nzone,self.nevent,self.nactor)=struct.unpack_from('<8I',d,4)
+        o=36; strs=[]
+        while len(strs) < self.ntex+2:
+            ln=struct.unpack_from('<H',d,o)[0]; o+=2
+            strs.append(d[o:o+ln].decode('latin-1')); o+=ln
+        self.sky=strs[0]
+        self.textures=[s for s in strs[1:]]
+        if vstart is None: vstart=o
+        self.vstart=vstart
+        o=vstart
+        self.verts=[]
+        for _ in range(self.nvert):
+            x,y,z=struct.unpack_from('<3f',d,o)
+            self.verts.append((x,y,z,(d[o+12],d[o+13],d[o+14],d[o+15]))); o+=16
+        self.secOff=o
+        self.sectors=[]
+        for i in range(self.nsector):
+            s=Sector(); p=self.secOff+i*20
+            s.faceStart,s.wallEnd=struct.unpack_from('<2H',d,p)
+            s.raw=struct.unpack_from('<10H',d,p)
+            self.sectors.append(s)
+        self.faceOff=self.secOff+self.nsector*20
+        self.faces=[]
+        for i in range(self.nface):
+            f=Face(); p=self.faceOff+i*32
+            f.tileStart,f.tileEnd=struct.unpack_from('<2h',d,p)
+            f.vertStart=struct.unpack_from('<H',d,p+4)[0]
+            f.link=struct.unpack_from('<h',d,p+6)[0]
+            f.angle=struct.unpack_from('<f',d,p+8)[0]
+            f.n=struct.unpack_from('<3f',d,p+12)
+            f.flags=struct.unpack_from('<H',d,p+24)[0]
+            f.tileVertStart,f.tileVertEnd=struct.unpack_from('<2h',d,p+28)
+            self.faces.append(f)
+        self.tileOff=self.faceOff+self.nface*32
+        self.tiles=[]
+        for i in range(self.ntile):
+            p=self.tileOff+i*16
+            self.tiles.append((struct.unpack_from('<4H',d,p+4),
+                               struct.unpack_from('<H',d,p+12)[0]))
+        actOff=len(d)-self.nactor*20
+        self.actors=[]
+        for i in range(self.nactor):
+            a=Actor(); p=actOff+i*20
+            u=struct.unpack_from('<10h',d,p)
+            a.type=u[0]&0xffff; a.x,a.y,a.z=u[2],u[3],u[4]
+            a.tag=u[5]; a.p1=u[6]; a.p2=u[7]; a.layer=u[8]; a.raw=u
+            self.actors.append(a)
+
+    def valid(self):
+        """The face table is self-checking: tile ranges must partition
+        0..ntile-1 in order and every link must name a real sector."""
+        last=-1
+        for f in self.faces:
+            if not (-1 <= f.link < self.nsector): return False
+            if f.vertStart+3 >= self.nvert: return False
+            if f.tileStart==-1:
+                if f.tileEnd!=-1: return False
+            else:
+                if f.tileStart!=last+1 or f.tileEnd<f.tileStart or f.tileEnd>=self.ntile:
+                    return False
+                last=f.tileEnd
+        return last==self.ntile-1 and self.tileOff+self.ntile*16 <= len(self.data)-self.nactor*20
+
+def locate(data):
+    """Parse with the correct vertex-array start, found by validating."""
+    probe=PSM(data)
+    base=probe.vstart
+    for delta in (0,-2,2,-4,4,-6,6):
+        try: m=PSM(data, base+delta)
+        except Exception: continue
+        if m.valid(): return m
+    raise ValueError('could not locate the face table')
+
+def load(path):
+    return locate(open(path, "rb").read())
+
+# ---------------------------------------------------------------------------
+# Kex geometry -> Build sectors and walls
+# ---------------------------------------------------------------------------
+
+SCALE = 16
+AT_PLAYER = 0
+
+def _edges(m, si):
+    """The sector's 2D edges, chained into a closed loop.
+
+    Kex stores a sector's wall faces in no particular order -- the loop has to
+    be rebuilt by walking end-point to start-point. Faces that share an edge
+    (a portal plus the solid pieces above and below it) collapse into one.
+    """
+    s = m.sectors[si]
+    order = []; groups = {}
+    for fi in range(s.faceStart, min(s.wallEnd+1, m.nface)):
+        f = m.faces[fi]
+        a = m.verts[f.vertStart]; b = m.verts[f.vertStart+1]
+        key = (round(a[0],2), round(a[1],2), round(b[0],2), round(b[1],2))
+        if key[0:2] == key[2:4]:
+            continue                      # zero-length edge, nothing to walk
+        if key not in groups:
+            groups[key] = []; order.append(key)
+        groups[key].append(fi)
+    if not order:
+        return []
+    bystart = {}
+    for k in order:
+        bystart.setdefault(k[0:2], []).append(k)
+    loop = []; seen = set()
+    cur = order[0]
+    while cur is not None and cur not in seen:
+        seen.add(cur); loop.append(cur)
+        nxt = None
+        for cand in bystart.get(cur[2:4], ()):
+            if cand not in seen: nxt = cand; break
+        cur = nxt
+    if len(loop) != len(order):
+        # Not a single closed ring (stacked/room-over-room geometry). Keeping a
+        # partial loop would emit a broken sector, so drop it.
+        return []
+    if loop[-1][2:4] != loop[0][0:2]:
+        return []
+    return [(k, groups[k]) for k in loop]
+
+def _zspan(m, f):
+    zs = [m.verts[f.vertStart+k][2] for k in range(4)]
+    return min(zs), max(zs)
+
+def _pic(m, f, tilebase):
+    if f.tileStart < 0: return tilebase
+    return tilebase + m.tiles[f.tileStart][1]
+
+def convert(m, tilebase=4096):
+    walls = []; sects = []; ranges = []
+    for si in range(m.nsector):
+        s = m.sectors[si]
+        edges = _edges(m, si)
+        if len(edges) < 3:
+            ranges.append((len(walls), 0))
+            sects.append(None); continue
+        pts = [(k[0], -k[1]) for k,_ in edges]
+        area = sum(pts[i][0]*pts[(i+1)%len(pts)][1] - pts[(i+1)%len(pts)][0]*pts[i][1]
+                   for i in range(len(pts)))
+        # Build wants a sector's outer loop clockwise in its own coordinate
+        # space, where y grows downward -- which is a POSITIVE shoelace sum.
+        if area < 0:
+            edges = [( (k[2],k[3],k[0],k[1]), f) for k,f in reversed(edges)]
+        start = len(walls)
+        for i,(k,fis) in enumerate(edges):
+            portal = None; pspan = -1.0
+            for fi in fis:
+                f = m.faces[fi]
+                if f.link >= 0:
+                    lo,hi = _zspan(m,f)
+                    if hi-lo >= pspan: pspan = hi-lo; portal = f
+            solid = next((m.faces[fi] for fi in fis if m.faces[fi].link < 0), m.faces[fis[0]])
+            walls.append(dict(x=int(round(k[0])), y=int(round(-k[1])),
+                              point2=start+((i+1)%len(edges)),
+                              nextwall=-1,
+                              nextsector=portal.link if portal is not None else -1,
+                              cstat=0, picnum=_pic(m, solid, tilebase)))
+        ranges.append((start, len(walls)-start))
+        cf = m.faces[min(s.wallEnd+1, m.nface-1)]
+        ff = m.faces[min(s.wallEnd+2, m.nface-1)]
+        clo,chi = _zspan(m,cf); flo,fhi = _zspan(m,ff)
+        if chi <= flo: chi = flo + 8       # never let the ceiling sit under the floor
+        sects.append(dict(wallptr=start, wallnum=len(walls)-start,
+                          ceilingz=int(round(-chi*SCALE)), floorz=int(round(-flo*SCALE)),
+                          ceilingpicnum=_pic(m,cf,tilebase), floorpicnum=_pic(m,ff,tilebase)))
+
+    # nextwall: the neighbour's wall carrying the same edge reversed
+    for si,(start,num) in enumerate(ranges):
+        for i in range(num):
+            w = walls[start+i]
+            ns = w['nextsector']
+            if not (0 <= ns < len(ranges)) or ranges[ns][1] == 0:
+                w['nextsector'] = -1; continue
+            nxt = walls[w['point2']]
+            ns_start, ns_num = ranges[ns]
+            hit = -1
+            for j in range(ns_num):
+                o = walls[ns_start+j]; op = walls[o['point2']]
+                if (o['x'],o['y']) == (nxt['x'],nxt['y']) and (op['x'],op['y']) == (w['x'],w['y']):
+                    hit = ns_start+j; break
+            w['nextwall'] = hit
+            if hit < 0: w['nextsector'] = -1
+    for wi,w in enumerate(walls):          # a portal only counts if both halves agree
+        if w['nextwall'] >= 0 and walls[w['nextwall']]['nextwall'] != wi:
+            w['nextwall'] = -1; w['nextsector'] = -1
+    return sects, walls, ranges
+
+def player_start(m, sects, walls, ranges):
+    for a in m.actors:
+        if a.type == AT_PLAYER:
+            x,y,z = a.x, -a.y, a.z
+            si = find_sector(sects, walls, ranges, x, y)
+            if si >= 0:
+                return x, y, sects[si]['floorz']-(52*SCALE), si
+    for si,s in enumerate(sects):
+        if s and ranges[si][1] >= 3:
+            xs = [walls[ranges[si][0]+i]['x'] for i in range(ranges[si][1])]
+            ys = [walls[ranges[si][0]+i]['y'] for i in range(ranges[si][1])]
+            return sum(xs)//len(xs), sum(ys)//len(ys), s['floorz']-(52*SCALE), si
+    return 0,0,0,0
+
+def find_sector(sects, walls, ranges, x, y):
+    for si,(start,num) in enumerate(ranges):
+        if num < 3: continue
+        inside=False; j=num-1
+        for i in range(num):
+            xi,yi = walls[start+i]['x'], walls[start+i]['y']
+            xj,yj = walls[start+j]['x'], walls[start+j]['y']
+            if (yi>y) != (yj>y) and x < (xj-xi)*(y-yi)/float(yj-yi if yj!=yi else 1)+xi:
+                inside = not inside
+            j=i
+        if inside: return si
+    return -1
+
+def write_build(path, sects, walls, ranges, start):
+    sx,sy,sz,ss = start
+    keep = [i for i,s in enumerate(sects) if s is not None and ranges[i][1] >= 3]
+    remap = {old:new for new,old in enumerate(keep)}
+    wremap = {}; out_walls = []
+    for old in keep:
+        st,num = ranges[old]
+        for i in range(num):
+            wremap[st+i] = len(out_walls); out_walls.append(dict(walls[st+i]))
+    for w in out_walls:
+        w['point2'] = wremap[w['point2']]
+        if w['nextsector'] in remap and w['nextwall'] in wremap:
+            w['nextwall'] = wremap[w['nextwall']]; w['nextsector'] = remap[w['nextsector']]
+        else:
+            w['nextwall'] = -1; w['nextsector'] = -1
+        if w['nextsector'] >= 0: w['cstat'] |= 0x20 if False else 0
+    b = bytearray()
+    b += struct.pack('<i', 7)
+    b += struct.pack('<iii', sx, sy, sz)   # x/y are world units; only z is 1/16
+    b += struct.pack('<hh', 0, remap.get(ss,0))
+    b += struct.pack('<H', len(keep))
+    for old in keep:
+        s = sects[old]; st,num = ranges[old]
+        b += struct.pack('<hhiihhhhbBBBhhbBBBBBhhh',
+            wremap[st], num, s['ceilingz'], s['floorz'], 0, 0,
+            s['ceilingpicnum'], 0, 0, 0, 0, 0,
+            s['floorpicnum'], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    b += struct.pack('<H', len(out_walls))
+    for w in out_walls:
+        b += struct.pack('<iihhhhhhbBBBBBhhh',
+            w['x'], w['y'], w['point2'], w['nextwall'], w['nextsector'],
+            w['cstat'], w['picnum'], 0, 0, 0, 8, 8, 0, 0, 0, 0, 0)
+    b += struct.pack('<H', 0)
+    open(path,'wb').write(b)
+    return len(keep), len(out_walls)
+
+# ---------------------------------------------------------------------------
+# Textures
+# ---------------------------------------------------------------------------
+
+def png_size(blob):
+    # IHDR is always the first chunk: 8-byte signature, 4-byte length, "IHDR"
+    if blob[:8] != b'\x89PNG\r\n\x1a\n': return None
+    w, h = struct.unpack_from('>II', blob, 16)
+    return w, h
+
+def collect(kpf_path, names):
+    """Return {name: (w,h)} for each texture, read straight out of the .kpf."""
+    out = {}
+    with zipfile.ZipFile(kpf_path) as z:
+        have = {n.lower(): n for n in z.namelist()}
+        for n in names:
+            if not n: continue
+            real = have.get(n.lower())
+            if real is None: continue
+            with z.open(real) as f:
+                sz = png_size(f.read(32))
+            if sz: out[n] = sz
+    return out
+
+def write_def(path, assignments):
+    """One DEF entry per Kex texture.
+
+    tilefromtexture gives the engine a real tile (it needs the dimensions to
+    size a wall's texture repeat, and the software renderer needs pixels);
+    texture points the hardware renderer at the same PNG so nothing is lost to
+    a palette conversion.
+    """
+    with open(path, 'w') as f:
+        f.write("// VibeBuild32: textures from the Nightdive PowerSlave Exhumed remaster.\n")
+        f.write("// Generated by source/exhumed/tools/kexmap.py -- do not edit by hand.\n\n")
+        for tile, name in sorted(assignments.items()):
+            f.write('tilefromtexture %d { file "%s" }\n' % (tile, name))
+            f.write('texture %d { pal 0 { file "%s" } }\n' % (tile, name))
+
+
+# ---------------------------------------------------------------------------
+# Driver
+# ---------------------------------------------------------------------------
+KPF = "PowerslaveEX.kpf"
+
+def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
+    kpf = os.path.join(kexdir, KPF)
+    if not os.path.isfile(kpf):
+        raise SystemExit("no %s in %s -- point me at the PowerSlave Exhumed install"
+                         % (KPF, kexdir))
+    os.makedirs(outdir, exist_ok=True)
+
+    with zipfile.ZipFile(kpf) as z:
+        names = [n for n in z.namelist()
+                 if n.lower().startswith('maps/') and n.lower().endswith('.map')
+                 and '/old/' not in n.lower() and '/testmaps/' not in n.lower()]
+        maps = {os.path.basename(n): z.read(n) for n in sorted(names)}
+
+    # One tile number per distinct texture across the whole install, so every
+    # converted level can share a single DEF.
+    assign = {}; nexttile = tilebase
+    done = 0; failed = []
+    for name, blob in sorted(maps.items()):
+        try:
+            m = PSM_from_bytes(blob)
+        except Exception as e:
+            failed.append((name, str(e))); continue
+        for t in m.textures:
+            if t and t not in assign:
+                assign[t] = nexttile; nexttile += 1
+        local = [assign.get(t, tilebase) for t in m.textures]
+        sects, walls, ranges = convert(m, tilebase=0)
+        for w in walls:
+            w['picnum'] = local[w['picnum']] if w['picnum'] < len(local) else tilebase
+        for s in sects:
+            if s is None: continue
+            s['ceilingpicnum'] = local[s['ceilingpicnum']] if s['ceilingpicnum'] < len(local) else tilebase
+            s['floorpicnum']   = local[s['floorpicnum']]   if s['floorpicnum']   < len(local) else tilebase
+        start = player_start(m, sects, walls, ranges)
+        ns, nw = write_build(os.path.join(outdir, name.upper()), sects, walls, ranges, start)
+        portals = sum(1 for w in walls if w['nextsector'] >= 0)
+        if verbose:
+            print("  %-16s %4d kex sectors -> %4d build sectors, %5d walls, %4d portals"
+                  % (name, m.nsector, ns, nw, portals))
+        done += 1
+
+    sizes = collect(kpf, list(assign))
+    usable = {tile: name for name, tile in assign.items() if name in sizes}
+    write_def(os.path.join(outdir, "exhumed.def"), usable)
+    print("converted %d/%d levels into %s" % (done, len(maps), outdir))
+    print("%d textures wired up in exhumed.def (%d had no PNG in the .kpf)"
+          % (len(usable), len(assign) - len(usable)))
+    for name, err in failed:
+        print("  FAILED %s: %s" % (name, err))
+    print()
+    print("Play one with:")
+    print('  ./vibebuild32 -gm exhumed -j %s \\' % outdir)
+    print('      -g "%s" -map %s' % (kpf, sorted(maps)[0].upper() if maps else "LEVEL.MAP"))
+    return done
+
+
+def PSM_from_bytes(blob):
+    return locate(blob)
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 3:
+        raise SystemExit(__doc__.strip().split('\n\n')[1])
+    convert_install(sys.argv[1], sys.argv[2])

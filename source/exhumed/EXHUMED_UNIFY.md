@@ -252,3 +252,100 @@ defaults to `/n0`, which is what `--joinlobby` hands it.
 - **The demo's own maps have no deathmatch starts.** `ExamineSprites()` falls
   back to the single-player start for everyone when a map has no lotag-62
   sprites, so on the demo levels players spawn together.
+
+---
+
+## The Nightdive remaster (Kex engine)
+
+*PowerSlave Exhumed* (Nightdive, 2022) is not a Build game at all: it is a Kex
+engine title with its own map format, its own PNG art and none of the original
+data. It is also not the same game as the one this port plays -- the remaster is
+built from the **console** (PSX/Saturn) version, whose 25 levels are a different
+campaign from the DOS Build version's.
+
+What makes a bridge possible is that Kex levels are close cousins of Build
+levels. From Nightdive's own level-editing document: *"The levels in Powerslave
+are very similar to BUILD engine games... only one ceiling and floor can exist
+per sector and walls are always fully vertical."* Sectors are convex, walls are
+vertical, portals connect sectors. So the geometry converts.
+
+`source/exhumed/tools/kexmap.py` does that conversion:
+
+```
+source/exhumed/tools/kexmap.py "/path/to/PowerSlave Exhumed" ~/games/powerslave
+
+./vibebuild32 -gm exhumed -j ~/games/powerslave \
+    -kex "/path/to/PowerSlave Exhumed" -map THOTH.MAP
+```
+
+It writes one Build `.map` per level plus an `exhumed.def`. `-kex <dir>` mounts
+the install's `PowerslaveEX.kpf`, which is a plain zip the Build engine reads
+natively, so the levels are drawn with the remaster's **own** PNG textures --
+nothing is copied out and no palette reduction happens. You still need the Build
+PowerSlave data (`STUFF.DAT`) for the HUD, weapons and sounds: this brings the
+remaster's levels, not a whole game.
+
+All 25 retail levels convert, keeping 97.7% of their sectors.
+
+### The map format
+
+Nightdive ships `.dmap` text sources alongside compiled `.map` files for the
+sample levels in `docs/examples/`, which is what made the binary format
+tractable -- every field below was checked against the matching text source.
+The retail levels ship compiled only.
+
+```
+header   'PSM\x01' + 8 x u32: ntex, nvert, nsector, nface, ntile,
+                               nzone, nevent, nactor
+strings  u16-length-prefixed: sky texture, then the texture table
+verts    nvert x 16: float x, y, z + RGBA (baked vertex lighting)
+sectors  nsector x 20: u16 faceStart, u16 wallFaceEnd, ...
+         faces[faceStart..wallFaceEnd] are the walls; wallFaceEnd+1 is the
+         ceiling face and wallFaceEnd+2 the floor face
+faces    nface x 32: i16 tileStart, i16 tileEnd (-1 = untextured),
+         u16 vertexStart (4 corners), i16 sectorLink (-1 = solid),
+         float angle, float nx/ny/nz, u16 flags, i16 pad,
+         i16 tileVertStart, i16 tileVertEnd
+tiles    ntile x 16: u8[4], u16[4] vertex indices, u16 textureIndex, u16 pad
+actors   nactor x 20, at the very end: u16 type, u16 ?, i16 x, i16 y, i16 z,
+         i16 tag, u16 param1, u16 param2, u16 layer, u16 ?
+```
+
+Two things are worth knowing before touching the reader:
+
+- **The string table's length is ambiguous.** An empty sky and the empty
+  "no texture" slot are indistinguishable, so the entry count is `ntex+1` for
+  some maps and `ntex+2` for others. Rather than guess, the reader locates the
+  vertex array by *validating* the face table that follows it: face tile ranges
+  must partition `0..ntile-1` in order and every link must name a real sector.
+  That is a strong enough check to pin the offset, and it parses all 39 maps
+  Nightdive ships.
+- **A sector's wall faces are not stored in loop order.** They have to be
+  chained end-point to start-point to recover the polygon. Taking them as given
+  produces sectors whose walls do not join, which Build loads without complaint
+  and then renders as nothing.
+
+### What converts, and what does not
+
+Converted: sector and wall geometry, floor and ceiling heights, portals between
+sectors, wall/floor/ceiling textures, the player start.
+
+Not converted:
+
+- **Actors.** Enemies, pickups, doors, switches and triggers are all read (type,
+  position, tag, params) but nothing is emitted yet, so the levels are walkable
+  and empty. This is the biggest remaining piece.
+- **Room-over-room.** Kex lets one wall link several sectors; plain Build cannot,
+  so only the tallest portal on an edge survives, and a sector whose walls are
+  not a single closed ring is dropped rather than emitted broken (226 of 9837
+  sectors across the retail maps).
+- **Sloped floors and ceilings**, which come out flat.
+- **Baked vertex lighting**, which the format carries per vertex and Build has
+  no place for.
+
+### Related fixes
+
+`-map` never worked in this port: it compared the whole argument token against
+`"map"` and then read the filename from `pChar+4`, one past the terminating NUL
+of a token that had to be exactly `-map`. No spelling of the flag could name a
+file. It now accepts `-map <file>` and `-map<file>`.

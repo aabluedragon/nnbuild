@@ -2013,10 +2013,14 @@ int Exhumed_app_main(int argc, char const* const* argv)
                     }
                 }
             }
-            else if (Bstrcasecmp(pChar, "map") == 0)
+            else if (Bstrncasecmp(pOpt, "map", 3) == 0 && (pOpt[3] || i + 1 < argc))
             {
-                pChar += 4;
-                strcpy(gUserMapFilename, pChar);
+                // VibeBuild32: this used to compare the whole token against "map"
+                // and then read the filename from pChar+4 -- i.e. from one past
+                // the terminating NUL of a token that had to be exactly "-map".
+                // No spelling of the flag could ever name a file. Accept both
+                // "-map<file>" and "-map <file>".
+                Bstrncpyz(gUserMapFilename, pOpt[3] ? pOpt + 3 : argv[++i], sizeof(gUserMapFilename));
 
                 bUserMap = true;
                 doTitle = kFalse;
@@ -2114,6 +2118,19 @@ int Exhumed_app_main(int argc, char const* const* argv)
                     G_AddGroup(argv[i + 1]);
                     i++;
                 }
+            }
+            else if (Bstrcasecmp(pOpt, "kex") == 0 && i + 1 < argc)
+            {
+                // VibeBuild32: -kex <dir> points at a Nightdive PowerSlave
+                // Exhumed install and mounts its PowerslaveEX.kpf, which is a
+                // plain zip the Build engine reads natively. That is where the
+                // levels converted by source/exhumed/tools/kexmap.py get their
+                // textures from -- straight out of the remaster's archive, with
+                // nothing copied and no palette reduction.
+                char kpf[BMAX_PATH];
+                Bsnprintf(kpf, sizeof(kpf), "%s/PowerslaveEX.kpf", argv[++i]);
+                LOG_F(INFO, "Kex data: %s", kpf);
+                G_AddGroup(kpf);
             }
             else if (Bstrcasecmp(pChar, "h") == 0)
             {
