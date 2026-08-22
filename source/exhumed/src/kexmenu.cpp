@@ -874,18 +874,49 @@ const char *KexMenu_ChosenMap(void)
 enum
 {
     kKexTileHudHeadL = 7060, kKexTileHudHeadR = 7061,
-    kKexTileHudBarL  = 7062, kKexTileHudBarR  = 7063,
+    kKexTileHudMainL = 7062, kKexTileHudMainR = 7063,
     kKexTileHudRed   = 7064, kKexTileHudBlue  = 7065,
+    kKexTileHudScarab= 7066, kKexTileHudTrough= 7067,
 };
 
-#define KEX_HUD_Y   186
-#define KEX_HUD_H   14
+// The remaster's bar is a 416-unit-wide assembly stretched to the screen:
+//   head(40) scarab(32) main_left(136) main_right(136) scarab(32) head(40)
+// At 320 units wide that is 30 / 25 / 105 / 105 / 25 / 30, which puts the jewel
+// where the two frames meet on the exact horizontal centre -- as it is in the
+// remaster. The band is 16 tall and the heads stand 32, overhanging it.
+#define KEX_HUD_BAND_H  16
+#define KEX_HUD_HEAD_H  32
+#define KEX_HUD_HEAD_W  30
+#define KEX_HUD_SCAR_W  25
+#define KEX_HUD_MAIN_W  105
+
+// The bar slot is cut out of the frame art: alpha 0 at x 31..117 of 136, rows
+// 6..9 of 24. Scaled into the drawn 105x16 frame that is x+24 wide 66, four
+// rows down, three tall.
+#define KEX_HUD_SLOT_W  66
+#define KEX_HUD_SLOT_H  3
+#define KEX_HUD_SLOT_Y  (200 - KEX_HUD_BAND_H + 4)
+
+// Flat fills have to be tiled rather than stretched: KexDrawTile reconciles the
+// two axes by taking the smaller scale, so a square swatch asked for a 66x3
+// rectangle would come out 3 wide. Square cells the height of the slot give the
+// run its real length, and the overlap of the pulled-back last cell is
+// invisible in a flat colour.
+static void KexHud_Bar(int x, int tile, int pct)
+{
+    KexDrawTiled(kKexTileHudTrough, x, KEX_HUD_SLOT_Y, x + KEX_HUD_SLOT_W,
+                 KEX_HUD_SLOT_Y + KEX_HUD_SLOT_H, KEX_HUD_SLOT_H, 0);
+    int const w = (KEX_HUD_SLOT_W * pct) / 100;
+    if (w > 0)
+        KexDrawTiled(tile, x, KEX_HUD_SLOT_Y, x + w,
+                     KEX_HUD_SLOT_Y + KEX_HUD_SLOT_H, KEX_HUD_SLOT_H, 0);
+}
 
 extern short airframe;      // status.cpp: current air-meter frame
 
 int KexHud_Available(void)
 {
-    return KexMenu_Available() && tilesiz[kKexTileHudBarL].x > 0;
+    return KexMenu_Available() && tilesiz[kKexTileHudMainL].x > 0;
 }
 
 void KexHud_Draw(void)
@@ -893,39 +924,31 @@ void KexHud_Draw(void)
     if (!KexHud_Available())
         return;
 
-    // The remaster's bar is one continuous band: heads at the ends, standing a
-    // little taller than the bar itself, and the two gauges meeting in the
-    // middle with no gap. Leaving gaps let the black backing show through in
-    // three places, which is what made it read as a placeholder.
-    int const headH = KEX_HUD_H + 6;
-    int const headW = scale(headH, tilesiz[kKexTileHudHeadL].x, max(1, (int)tilesiz[kKexTileHudHeadL].y));
-    int const headY = 200 - headH;
+    int const bandY = 200 - KEX_HUD_BAND_H;
+    int const headY = 200 - KEX_HUD_HEAD_H;
+    int const lmain = KEX_HUD_HEAD_W + KEX_HUD_SCAR_W;   //  55
+    int const rmain = lmain + KEX_HUD_MAIN_W;            // 160, the centre
+    int const rscar = rmain + KEX_HUD_MAIN_W;            // 265
 
-    KexDrawTiled(kKexTileBlack, 0, headY, 320, 200, 16, 0);
-
-    int const lx = headW, rx = 320 - headW;
-    int const mid = (lx + rx) / 2;
-    int const inset = 2, fh = KEX_HUD_H - inset * 2;
-
-    int const air = clamp((int)airframe * 100 / 16, 0, 100);
-    int const hp = PlayerList[nLocalPlayer].nHealth;
+    int const air   = clamp((int)airframe * 100 / 16, 0, 100);
+    int const hp    = PlayerList[nLocalPlayer].nHealth;
     int const hpPct = clamp((hp * 100) / kMaxHealth, 0, 100);
 
-    // Air on the left, health on the right; fills sit on top of their frames
-    // because the frames are solid through the middle.
-    KexDrawTile(kKexTileHudBarL, lx, KEX_HUD_Y, mid - lx, KEX_HUD_H, 0, 0, 0);
-    int const aw = ((mid - lx - inset * 2) * air) / 100;
-    if (aw > 0)
-        KexDrawTiled(kKexTileHudBlue, lx + inset, KEX_HUD_Y + inset,
-                     lx + inset + aw, KEX_HUD_Y + inset + fh, fh, 0);
+    // Fills first: the slot is a hole in the frame, so the frame laid over them
+    // clips each bar to the slot's slanted end for free. Air on the left,
+    // health on the right, the way the remaster reads them.
+    KexHud_Bar(lmain + 24, kKexTileHudBlue, air);
+    KexHud_Bar(rmain + 28, kKexTileHudRed,  hpPct);
 
-    KexDrawTile(kKexTileHudBarR, mid, KEX_HUD_Y, rx - mid, KEX_HUD_H, 0, 0, 0);
-    int const hw = ((rx - mid - inset * 2) * hpPct) / 100;
-    if (hw > 0)
-        KexDrawTiled(kKexTileHudRed, mid + inset, KEX_HUD_Y + inset,
-                     mid + inset + hw, KEX_HUD_Y + inset + fh, fh, 0);
+    KexDrawTile(kKexTileHudMainL, lmain, bandY, KEX_HUD_MAIN_W, KEX_HUD_BAND_H, 0, 0, 0);
+    KexDrawTile(kKexTileHudMainR, rmain, bandY, KEX_HUD_MAIN_W, KEX_HUD_BAND_H, 0, 0, 0);
 
-    // Heads last, so they overlap the bar ends cleanly.
-    KexDrawTile(kKexTileHudHeadL, 0, headY, headW, headH, 0, 0, 0);
-    KexDrawTile(kKexTileHudHeadR, 320 - headW, headY, headW, headH, 0, 0, 0);
+    KexDrawTile(kKexTileHudScarab, KEX_HUD_HEAD_W, bandY, KEX_HUD_SCAR_W, KEX_HUD_BAND_H, 0, 0, 0);
+    KexDrawTile(kKexTileHudScarab, rscar,          bandY, KEX_HUD_SCAR_W, KEX_HUD_BAND_H, 0, 0, 0);
+
+    // Heads last: they overhang the band, and their surround is transparent so
+    // the view shows through beside them, as it does in the remaster.
+    KexDrawTile(kKexTileHudHeadL, 0, headY, KEX_HUD_HEAD_W, KEX_HUD_HEAD_H, 0, 0, 0);
+    KexDrawTile(kKexTileHudHeadR, rscar + KEX_HUD_SCAR_W, headY,
+                KEX_HUD_HEAD_W, KEX_HUD_HEAD_H, 0, 0, 0);
 }

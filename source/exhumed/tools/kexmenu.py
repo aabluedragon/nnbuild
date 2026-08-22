@@ -33,10 +33,12 @@ TILE_BLACK      = 7015      # flat black, for banners and panel borders
 TILE_EYE_BASE   = 7020      # the spinning Eye of Ra, one tile per frame (31)
 TILE_HUD_HEAD_L = 7060      # the remaster's status bar
 TILE_HUD_HEAD_R = 7061
-TILE_HUD_BAR_L  = 7062
-TILE_HUD_BAR_R  = 7063
+TILE_HUD_MAIN_L = 7062      # the in-game frames are main_left/main_right;
+TILE_HUD_MAIN_R = 7063      # bar_left/bar_right are the *menu* plates
 TILE_HUD_RED    = 7064
 TILE_HUD_BLUE   = 7065
+TILE_HUD_SCARAB = 7066      # ornament between each head and its frame
+TILE_HUD_TROUGH = 7067      # the unfilled part of a bar slot
 TILE_ROW        = 7003      # menu row, unselected
 TILE_ROW_SEL    = 7004      # menu row, selected (red)
 TILE_BTN        = 7005      # dialog button, unselected
@@ -267,20 +269,31 @@ def extract(kexdir, outdir, verbose=True):
         png.write(os.path.join(artdir, 'marker.png'), mk, mk, pix)
         lines.append((TILE_MARKER, 'kexart/marker.png'))
 
-        # The remaster's status bar: two Anubis heads at the ends, an air bar
-        # and a health bar. Its pieces ship separately, so they are laid out at
-        # draw time rather than blitted as one strip.
-        # Authored at exactly the aspect kexmenu.cpp draws them at. rotatesprite
-        # scales uniformly, so a 176x24 bar asked for a 144x14 rectangle draws
-        # only 102 wide and leaves a gap -- which is what put black holes in the
-        # middle and ends of the bar. HUD_BAR_* / HUD_HEAD_* here are twice the
-        # drawn size in Build's 320x200 space.
-        HUD_BAR = (288, 28)     # drawn at 144x14
-        HUD_HEAD = (32, 40)     # drawn at  16x20
+        # The remaster's status bar. The in-game frames are main_left /
+        # main_right (136x24) -- bar_left / bar_right, which this used to draw,
+        # are the *menu* plates and have neither the gauge boxes nor the jewel.
+        #
+        # The bar is one 416-unit-wide assembly stretched to the screen width:
+        #   head(40) scarab(32) main_left(136) main_right(136) scarab(32) head(40)
+        # Measured off a capture of the remaster (1970px wide): the blue slot
+        # starts at x=501 and the red at x=1151, which puts 141 native units
+        # between them and pins the horizontal scale at 4.63 px/unit. That
+        # scale then predicts the gauge boxes at native x 13.2..26.7 and
+        # 17.7..31.6; they are actually at 13..26 and 18..31, and the jewel
+        # where the two frames meet lands on the exact horizontal centre.
+        #
+        # Each piece is authored at exactly the aspect kexmenu.cpp draws it at,
+        # because rotatesprite scales uniformly: a 176x24 bar asked for a
+        # 144x14 rectangle draws only 102 wide, which is what left black holes
+        # in the middle and at both ends of the previous bar.
+        HUD_MAIN = (210, 32)    # drawn at 105x16
+        HUD_HEAD = (60, 64)     # drawn at  30x32, standing above the band
+        HUD_SCAR = (50, 32)     # drawn at  25x16
         for name, tile, size in (('gfx/head_left.png',  TILE_HUD_HEAD_L, HUD_HEAD),
                                  ('gfx/head_right.png', TILE_HUD_HEAD_R, HUD_HEAD),
-                                 ('gfx/bar_left.png',   TILE_HUD_BAR_L,  HUD_BAR),
-                                 ('gfx/bar_right.png',  TILE_HUD_BAR_R,  HUD_BAR)):
+                                 ('gfx/main_left.png',  TILE_HUD_MAIN_L, HUD_MAIN),
+                                 ('gfx/main_right.png', TILE_HUD_MAIN_R, HUD_MAIN),
+                                 ('gfx/scarab.png',     TILE_HUD_SCARAB, HUD_SCAR)):
             blob = grab(name)
             if blob is None: continue
             fn = 'kexart/' + os.path.basename(name)
@@ -290,12 +303,15 @@ def extract(kexdir, outdir, verbose=True):
             if (w_, h_) != size:
                 png.write(tmp, size[0], size[1], png.resize(w_, h_, pix, *size))
             lines.append((tile, fn))
-        # Flat fills for the bars themselves, tinted the way the remaster tints
-        # them: air blue on the left, health red on the right.
-        png.write(os.path.join(artdir, 'hud_red.png'), 8, 8, png.solid(8, 8, 196, 24, 24))
-        png.write(os.path.join(artdir, 'hud_blue.png'), 8, 8, png.solid(8, 8, 40, 90, 220))
+        # Flat fills, sampled from the same capture. These go down *under* the
+        # frame: the slot is cut out of the frame art (alpha 0 at x 31..117,
+        # rows 6..9), so the hole clips the fill to the slot's slanted end.
+        png.write(os.path.join(artdir, 'hud_red.png'), 8, 8, png.solid(8, 8, 235, 77, 49))
+        png.write(os.path.join(artdir, 'hud_blue.png'), 8, 8, png.solid(8, 8, 34, 48, 245))
+        png.write(os.path.join(artdir, 'hud_trough.png'), 8, 8, png.solid(8, 8, 96, 72, 48))
         lines.append((TILE_HUD_RED, 'kexart/hud_red.png'))
         lines.append((TILE_HUD_BLUE, 'kexart/hud_blue.png'))
+        lines.append((TILE_HUD_TROUGH, 'kexart/hud_trough.png'))
 
         kf = grab('fonts/bigfont.kfont')
         atlas = grab('fonts/bigfont.png')
