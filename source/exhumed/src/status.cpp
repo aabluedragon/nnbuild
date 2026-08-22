@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "player.h"
 #include "anims.h"
 #include "status.h"
+#include "kexmenu.h"
 #include "exhumed.h"
 #include "sequence.h"
 #include "init.h"
@@ -687,6 +688,14 @@ void DrawSnakeCamStatus()
 
 void DrawStatus()
 {
+    // VibeBuild32: in Kex mode draw the remaster's slim bar instead of Build
+    // PowerSlave's ornate panel.
+    if (g_kexMode && KexHud_Available())
+    {
+        KexHud_Draw();
+        return;
+    }
+
     char numberBuf[10] = {0};
     char stringBuf[20] = {0};
     char coordBuf[50] = {0}; // not sure of the size for this?

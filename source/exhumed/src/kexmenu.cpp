@@ -31,6 +31,7 @@
 #include "view.h"
 #include "colmatch.h"
 #include "movie.h"
+#include "status.h"
 #include "kexmenu.h"
 
 // Mirrors the TILE_* constants in source/exhumed/tools/kexmenu.py.
@@ -862,4 +863,72 @@ const char *KexMenu_LevelMap(int i)
 const char *KexMenu_ChosenMap(void)
 {
     return s_chosenMap[0] ? s_chosenMap : NULL;
+}
+
+// ---------------------------------------------------------------------------
+// The remaster's status bar: two Anubis heads at the ends, an air bar and a
+// health bar between them, in place of Build PowerSlave's ornate panel. The
+// pieces ship separately in the .kpf, so they are laid out here rather than
+// blitted as one strip.
+// ---------------------------------------------------------------------------
+enum
+{
+    kKexTileHudHeadL = 7060, kKexTileHudHeadR = 7061,
+    kKexTileHudBarL  = 7062, kKexTileHudBarR  = 7063,
+    kKexTileHudRed   = 7064, kKexTileHudBlue  = 7065,
+};
+
+#define KEX_HUD_Y   183
+#define KEX_HUD_H   16
+
+extern short airframe;      // status.cpp: current air-meter frame, 0..
+extern short nMagicLevel;
+
+int KexHud_Available(void)
+{
+    return KexMenu_Available() && tilesiz[kKexTileHudBarL].x > 0;
+}
+
+void KexHud_Draw(void)
+{
+    if (!KexHud_Available())
+        return;
+
+    int const headW = 15, headH = 18;
+    int const barY = KEX_HUD_Y + 2, barH = KEX_HUD_H - 4;
+
+    // Backing strip, so the bar reads against whatever is behind it.
+    KexDrawTiled(kKexTileBlack, 0, KEX_HUD_Y, 320, 200, 16, 0);
+
+    KexDrawTile(kKexTileHudHeadL, 1, KEX_HUD_Y, headW, headH, 0, 0, 0);
+    KexDrawTile(kKexTileHudHeadR, 320 - headW - 1, KEX_HUD_Y, headW, headH, 0, 0, 0);
+
+    int const lx = headW + 6, rx = 320 - headW - 6;
+    int const half = (rx - lx) / 2 - 6;
+
+    // Air on the left, health on the right, each filled proportionally inside
+    // the remaster's own bar frame.
+    int const air = clamp((int)airframe * 100 / 16, 0, 100);
+    int const hp = PlayerList[nLocalPlayer].nHealth;
+    int const hpPct = clamp((hp * 100) / kMaxHealth, 0, 100);
+
+    if (half > 8)
+    {
+        // Frame first, fill inset on top of it: these frames are solid stone
+        // through the middle, so a fill drawn underneath is simply hidden.
+        int const inset = 3, fh = KEX_HUD_H - inset * 2;
+
+        KexDrawTile(kKexTileHudBarL, lx, KEX_HUD_Y, half, KEX_HUD_H, 0, 0, 0);
+        int const aw = ((half - inset * 2) * air) / 100;
+        if (aw > 0)
+            KexDrawTiled(kKexTileHudBlue, lx + inset, KEX_HUD_Y + inset,
+                         lx + inset + aw, KEX_HUD_Y + inset + fh, fh, 0);
+
+        int const r0 = rx - half;
+        KexDrawTile(kKexTileHudBarR, r0, KEX_HUD_Y, half, KEX_HUD_H, 0, 0, 0);
+        int const hw = ((half - inset * 2) * hpPct) / 100;
+        if (hw > 0)
+            KexDrawTiled(kKexTileHudRed, r0 + inset, KEX_HUD_Y + inset,
+                         r0 + inset + hw, KEX_HUD_Y + inset + fh, fh, 0);
+    }
 }

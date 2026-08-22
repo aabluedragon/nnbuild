@@ -30,7 +30,13 @@ TILE_ARROW_DOWN = 7012
 TILE_ARROW_LEFT = 7013
 TILE_KEYCAP     = 7014      # key-cap plate on the hint bar
 TILE_BLACK      = 7015      # flat black, for banners and panel borders
-TILE_EYE_BASE   = 7020      # the spinning Eye of Ra, one tile per frame
+TILE_EYE_BASE   = 7020      # the spinning Eye of Ra, one tile per frame (31)
+TILE_HUD_HEAD_L = 7060      # the remaster's status bar
+TILE_HUD_HEAD_R = 7061
+TILE_HUD_BAR_L  = 7062
+TILE_HUD_BAR_R  = 7063
+TILE_HUD_RED    = 7064
+TILE_HUD_BLUE   = 7065
 TILE_ROW        = 7003      # menu row, unselected
 TILE_ROW_SEL    = 7004      # menu row, selected (red)
 TILE_BTN        = 7005      # dialog button, unselected
@@ -260,6 +266,25 @@ def extract(kexdir, outdir, verbose=True):
                     pix[q:q+4] = bytes(col + (255,))
         png.write(os.path.join(artdir, 'marker.png'), mk, mk, pix)
         lines.append((TILE_MARKER, 'kexart/marker.png'))
+
+        # The remaster's status bar: two Anubis heads at the ends, an air bar
+        # and a health bar. Its pieces ship separately, so they are laid out at
+        # draw time rather than blitted as one strip.
+        for name, tile in (('gfx/head_left.png',  TILE_HUD_HEAD_L),
+                           ('gfx/head_right.png', TILE_HUD_HEAD_R),
+                           ('gfx/bar_left.png',   TILE_HUD_BAR_L),
+                           ('gfx/bar_right.png',  TILE_HUD_BAR_R)):
+            blob = grab(name)
+            if blob is None: continue
+            fn = 'kexart/' + os.path.basename(name)
+            open(os.path.join(outdir, fn), 'wb').write(blob)
+            lines.append((tile, fn))
+        # Flat fills for the bars themselves, tinted the way the remaster tints
+        # them: air blue on the left, health red on the right.
+        png.write(os.path.join(artdir, 'hud_red.png'), 8, 8, png.solid(8, 8, 196, 24, 24))
+        png.write(os.path.join(artdir, 'hud_blue.png'), 8, 8, png.solid(8, 8, 40, 90, 220))
+        lines.append((TILE_HUD_RED, 'kexart/hud_red.png'))
+        lines.append((TILE_HUD_BLUE, 'kexart/hud_blue.png'))
 
         kf = grab('fonts/bigfont.kfont')
         atlas = grab('fonts/bigfont.png')

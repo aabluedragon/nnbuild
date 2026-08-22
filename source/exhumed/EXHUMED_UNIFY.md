@@ -512,6 +512,19 @@ The cinematic is still played from `DoTitle()` rather than from the menu code:
 `PlayMovie()`'s loop only advances when the audio backend feeds it a sample, so
 calling it before the rest of the title setup spins forever.
 
+### The status bar
+
+`-kex` replaces Build PowerSlave's ornate panel with the remaster's slim bar:
+an Anubis head at each end, the air meter on the left and health on the right.
+The pieces ship separately in the .kpf (`head_left/right`, `bar_left/right`), so
+they are laid out at draw time rather than blitted as one strip, and the fills
+are drawn *on top* of their frames -- the frames are solid stone through the
+middle, so a fill underneath is simply invisible.
+
+Pickup captions come from the remaster's localization table for the items that
+mean the same thing in both games; anything ambiguous keeps the original
+wording rather than being given a caption that is merely plausible.
+
 ### The overworld
 
 The remaster picks levels off a hand-painted map rather than from a list: each

@@ -6,6 +6,8 @@
 // classic Build PowerSlave menu is used unchanged.
 int  KexMenu_Available(void);
 int  KexMenu_Main(int bInLevelMenus);      // same return codes as menu_Menu()
+int  KexHud_Available(void);
+void KexHud_Draw(void);                    // the remaster's status bar
 void KexMenu_TitleHold(void);              // PRESS START hold, after the cinematic
 
 // Overworld level select: walk the remaster's map with the arrow keys. Returns
