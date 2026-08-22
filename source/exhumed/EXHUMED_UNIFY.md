@@ -397,12 +397,17 @@ against a stale cache. And `-res` does not take effect here; every capture came
 out 1470x956 regardless, which briefly made a resolution test look meaningful
 when it was comparing identical renders.
 
-**Known regression:** the sky ceilings introduced a band of RGB noise along the
-very top of the screen -- neighbour-pixel roughness 248 where both the stock game
-and this level before the change measure 0. It is not the tile's aspect
-(squaring it changes nothing), not the texture cache, and not the resolution;
-turning Build's parallax bit on instead makes the lighting worse without fixing
-it. Unresolved.
+**Known bug, cause not found:** a band of RGB noise runs along the very top of
+the screen in every converted level -- neighbour-pixel roughness 248, where the
+stock game measured against the same binary and the same capture size is 0. So
+it is something in the converted map data, not the renderer or the capture.
+
+It was first attributed to the sky ceilings; that was wrong. Disabling the sky
+feature outright leaves the band at exactly 248.3, as do squaring the sky tile,
+clearing texturecache, toggling Build's parallax bit and capping sky ceiling
+height. The figure being bit-identical across five structurally different
+changes is itself the clue worth following next: whatever produces it is not
+being touched by any of them.
 
 **Scenery.** Build PowerSlave only knows the actors its own lotags spawn, which
 left the levels as bare boxes -- TOMB alone has 36 fire pots and 23 vases that

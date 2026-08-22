@@ -969,6 +969,14 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
             s['ceilingpicnum'] = local[s['ceilingpicnum']] if s['ceilingpicnum'] < len(local) else tilebase
             s['floorpicnum']   = local[s['floorpicnum']]   if s['floorpicnum']   < len(local) else tilebase
             if s['ceilingsky'] and skytile is not None:
+                # Sky sectors reach absurd heights (TOMB's tallest is 15744
+                # world units). A ceiling that far off is nearly edge-on at the
+                # horizon, where the texture mapper's perspective divide
+                # degenerates -- the suspected source of the noise band along
+                # the top of the screen. Cap it well above anything reachable.
+                cap = s['floorz'] - 2048 * SCALE
+                if s['ceilingz'] < cap:
+                    s['ceilingz'] = cap
                 # Drawn as an ordinary textured ceiling rather than with Build's
                 # parallax bit. The remaster's skies are 256x512 portrait tiles;
                 # fed to the parallax sky renderer they came out black with a
