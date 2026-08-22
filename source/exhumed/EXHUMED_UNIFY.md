@@ -350,6 +350,28 @@ texel covers 6, which is finer, as it should be. `yrepeat` is a vertical scale
 and does not depend on length: the original pairs yrepeat 7 with its 20.4 units
 per texel, pinning the constant at ~143, so 6 units per texel gives 24.
 
+**Lighting.** Kex bakes its lighting into vertex colours, greyscale in these
+levels (measured: colour spread 0 at both the median and the 90th percentile),
+so it maps onto Build's shade with nothing lost. The catch is *which* vertices:
+a face's four corner vertices carry a flat 32 on every face in the level, while
+the tile vertices span 25..255 with a median of 58. Averaging the corners gives
+every surface an identical shade -- the flat, unlit look. The curve is a square
+root, because Build's shade table darkens fast and a linear map of a median-58
+level puts most of it where nothing is legible.
+
+**Slopes.** Build tilts a sector about its FIRST WALL: height varies with the
+perpendicular distance from it, `z = z0 + heinum*perpDist/256`. Only the
+component of the plane's gradient perpendicular to that wall survives -- so the
+converter rotates each sector's wall loop to start on the wall most
+perpendicular to the slope, which makes most of them exact. That is safe because
+nextwall is matched by coordinate afterwards, not by index.
+
+The rest cannot be represented at all, and a mis-tilted floor is worse than a
+flat one, so every slope is checked against Build's own formula at the face's
+four corners and dropped if any lands more than 8 world units out. On TOMB that
+keeps 52 of 92 with a worst-case error of 6.3 world units; before the check the
+worst was 803.
+
 **Facing.** The actor record's float at offset 16 is not the angle the text
 source shows -- the source's angle in radians is `radians(90 - stored)`, checked
 against every sample map with a turned actor. That source angle is a compass

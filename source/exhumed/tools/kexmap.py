@@ -235,9 +235,109 @@ def _edges(m, si):
         return []
     return [(k, groups[k]) for k in loop]
 
+def _plane_build(m, f):
+    """A Kex floor/ceiling face as a Build-space plane: (z0, gx, gy).
+
+    z is taken at the face's first vertex; gx/gy are the gradient in Build z
+    units per world unit. Kex has z up and this conversion flips y, so
+        bz = -kz * 16 * WORLD,  bx = kx * WORLD,  by = -ky * WORLD
+    and the plane's Kex gradient (-nx/nz, -ny/nz) becomes (16*nx/nz, -16*ny/nz).
+    """
+    nx, ny, nz = f.n
+    if abs(nz) < 1e-6:
+        return None
+    gx = 16.0 * nx / nz
+    gy = -16.0 * ny / nz
+    vx, vy, vz = m.verts[f.vertStart][0], m.verts[f.vertStart][1], m.verts[f.vertStart][2]
+    return (-vz * SCALE * WORLD, vx * WORLD, -vy * WORLD, gx, gy)
+
+
+def _slope(plane, wx, wy, dx, dy):
+    """Build heinum and the z at the first wall, for a plane.
+
+    Build tilts a sector about its FIRST WALL: the height changes with the
+    perpendicular distance from that wall, positive to its left, as
+    z = z0 + heinum*perpDist/256 (from getflorzofslopeptr). So only the
+    component of the gradient perpendicular to that wall survives -- which is
+    why the wall loop is rotated to line up with the slope before this runs.
+    """
+    import math as _m
+    z0, px, py, gx, gy = plane
+    L = _m.hypot(dx, dy)
+    if L < 1e-6:
+        return int(round(z0 + gx*(wx-px) + gy*(wy-py))), 0
+    nxu, nyu = -dy / L, dx / L          # left normal of the wall direction
+    heinum = int(round(256.0 * (gx*nxu + gy*nyu)))
+    zwall = z0 + gx*(wx-px) + gy*(wy-py)
+    return int(round(zwall)), max(-32768, min(32767, heinum))
+
+
+def _slope_error(m, f, z0, heinum, wx, wy, dx, dy):
+    """Largest corner error, in Build z units, if this face is emitted sloped.
+
+    Build tilts about ONE wall, so a plane whose gradient is not perpendicular
+    to any of the sector's walls cannot be represented -- the component along
+    the wall is simply lost. Rotating the loop fixes most of them exactly; this
+    measures what is left so the rest can fall back to flat rather than being
+    emitted wildly mis-tilted.
+    """
+    import math as _m
+    i = int(_m.hypot(dx, dy)) << 5
+    if i == 0:
+        return 0.0
+    worst = 0.0
+    for k in range(4):
+        idx = f.vertStart + k
+        if idx >= len(m.verts): break
+        v = m.verts[idx]
+        ax, ay = v[0]*WORLD, -v[1]*WORLD
+        j = int(dx*(ay-wy) - dy*(ax-wx)) >> 3
+        got = z0 + (heinum * j) // i
+        worst = max(worst, abs(got - (-v[2]*SCALE*WORLD)))
+    return worst
+
+
+# A slope is kept only if every corner lands within this many Build z units
+# (128 = 8 world units); past that a flat surface is the smaller lie.
+KEX_SLOPE_TOLERANCE = 128
+
+
 def _zspan(m, f):
     zs = [m.verts[f.vertStart+k][2] for k in range(4)]
     return min(zs), max(zs)
+
+# Kex bakes its lighting into the vertex colours, and in these levels it is
+# greyscale (measured: colour spread 0 at both the median and the 90th
+# percentile), so it maps onto Build's shade with nothing lost. The range is
+# wide and dark -- TOMB's median vertex luminance is 40 of 255 -- which is
+# exactly the atmosphere that goes missing when everything is drawn at shade 0.
+#
+# The curve is a square root rather than linear: Build's shade table darkens
+# fast, and a straight mapping of a median-40 level puts most of it at the
+# bottom of the ramp where nothing is legible.
+KEX_SHADE_RANGE = 28
+
+def _shade(m, f):
+    # The lighting is on the face's TILE vertices, not its four corners: the
+    # corner quad carries a flat 32 on every face in the level (measured), while
+    # the tile vertices span 25..255 with a median of 58. Averaging the corners
+    # gives every surface the same shade, which is exactly the flat, unlit look.
+    n = 0; tot = 0
+    if f.tileVertStart >= 0 and f.tileVertEnd >= f.tileVertStart:
+        for i in range(f.tileVertStart, min(f.tileVertEnd + 1, len(m.verts))):
+            r, g, b, a = m.verts[i][3]
+            tot += (r*30 + g*59 + b*11) // 100; n += 1
+    if not n:
+        for k in range(4):
+            i = f.vertStart + k
+            if i >= len(m.verts): break
+            r, g, b, a = m.verts[i][3]
+            tot += (r*30 + g*59 + b*11) // 100; n += 1
+    if not n:
+        return 0
+    lum = (tot / float(n)) / 255.0
+    return max(0, min(KEX_SHADE_RANGE, int(round((1.0 - lum ** 0.5) * KEX_SHADE_RANGE))))
+
 
 def _pic(m, f, tilebase):
     if f.tileStart < 0: return tilebase
@@ -258,6 +358,31 @@ def convert(m, tilebase=4096):
         # space, where y grows downward -- which is a POSITIVE shoelace sum.
         if area < 0:
             edges = [( (k[2],k[3],k[0],k[1]), f) for k,f in reversed(edges)]
+
+        # Build can only tilt a sector about its first wall, so if this sector's
+        # floor or ceiling is sloped, start the loop on the wall most
+        # perpendicular to the slope -- then the tilt is exact instead of a
+        # projection. Rotating the ring is safe: nextwall is matched by
+        # coordinate afterwards, not by index.
+        cf_p = _plane_build(m, m.faces[min(s.wallEnd+1, m.nface-1)])
+        ff_p = _plane_build(m, m.faces[min(s.wallEnd+2, m.nface-1)])
+        grad = None
+        for pl in (ff_p, cf_p):
+            if pl and (abs(pl[3]) > 1e-3 or abs(pl[4]) > 1e-3):
+                grad = (pl[3], pl[4]); break
+        if grad is not None and len(edges) > 2:
+            import math as _m
+            gl = _m.hypot(*grad) or 1.0
+            best = 0; bestdot = None
+            for i2, (k2, _f2) in enumerate(edges):
+                dx2, dy2 = k2[2]-k2[0], -(k2[3]-k2[1])
+                L2 = _m.hypot(dx2, dy2)
+                if L2 < 1e-6: continue
+                dot = abs((dx2*grad[0] + dy2*grad[1]) / (L2*gl))
+                if bestdot is None or dot < bestdot:
+                    bestdot = dot; best = i2
+            edges = edges[best:] + edges[:best]
+
         start = len(walls)
         for i,(k,fis) in enumerate(edges):
             portal = None; pspan = -1.0
@@ -282,15 +407,33 @@ def convert(m, tilebase=4096):
                               nextsector=portal.link if portal is not None else -1,
                               cstat=0, picnum=_pic(m, solid, tilebase),
                               xrepeat=max(1, min(255, int(round(length * WORLD / (8.0 * KEX_UNITS_PER_TEXEL))))),
-                              yrepeat=KEX_YREPEAT))
+                              yrepeat=KEX_YREPEAT,
+                              shade=_shade(m, solid)))
         ranges.append((start, len(walls)-start))
         cf = m.faces[min(s.wallEnd+1, m.nface-1)]
         ff = m.faces[min(s.wallEnd+2, m.nface-1)]
         clo,chi = _zspan(m,cf); flo,fhi = _zspan(m,ff)
-        if chi <= flo: chi = flo + 8       # never let the ceiling sit under the floor
+        cz = int(round(-chi*SCALE*WORLD)); fz = int(round(-flo*SCALE*WORLD))
+        cheinum = fheinum = 0
+        w0 = walls[start]
+        w1 = walls[start + 1] if len(walls) - start > 1 else w0
+        dxw, dyw = (w1['x'] - w0['x']) * WORLD, (w1['y'] - w0['y']) * WORLD
+        wx0, wy0 = w0['x']*WORLD, w0['y']*WORLD
+        if cf_p and (abs(cf_p[3]) > 1e-3 or abs(cf_p[4]) > 1e-3):
+            z_, h_ = _slope(cf_p, wx0, wy0, dxw, dyw)
+            if _slope_error(m, cf, z_, h_, wx0, wy0, dxw, dyw) <= KEX_SLOPE_TOLERANCE:
+                cz, cheinum = z_, h_
+        if ff_p and (abs(ff_p[3]) > 1e-3 or abs(ff_p[4]) > 1e-3):
+            z_, h_ = _slope(ff_p, wx0, wy0, dxw, dyw)
+            if _slope_error(m, ff, z_, h_, wx0, wy0, dxw, dyw) <= KEX_SLOPE_TOLERANCE:
+                fz, fheinum = z_, h_
+        if cz >= fz: cz = fz - 8           # never let the ceiling sit under the floor
         sects.append(dict(wallptr=start, wallnum=len(walls)-start,
-                          ceilingz=int(round(-chi*SCALE*WORLD)), floorz=int(round(-flo*SCALE*WORLD)),
-                          ceilingpicnum=_pic(m,cf,tilebase), floorpicnum=_pic(m,ff,tilebase)))
+                          ceilingz=cz, floorz=fz,
+                          ceilingheinum=cheinum, floorheinum=fheinum,
+                          ceilingstat=(2 if cheinum else 0), floorstat=(2 if fheinum else 0),
+                          ceilingpicnum=_pic(m,cf,tilebase), floorpicnum=_pic(m,ff,tilebase),
+                          ceilingshade=_shade(m,cf), floorshade=_shade(m,ff)))
 
     # nextwall: the neighbour's wall carrying the same edge reversed
     for si,(start,num) in enumerate(ranges):
@@ -491,14 +634,15 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
     for old in keep:
         s = sects[old]; st,num = ranges[old]
         b += struct.pack('<hhiihhhhbBBBhhbBBBBBhhh',
-            wremap[st], num, s['ceilingz'], s['floorz'], 0, 0,
-            s['ceilingpicnum'], 0, 0, 0, 0, 0,
-            s['floorpicnum'], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            wremap[st], num, s['ceilingz'], s['floorz'],
+            s['ceilingstat'], s['floorstat'],
+            s['ceilingpicnum'], s['ceilingheinum'], s['ceilingshade'], 0, 0, 0,
+            s['floorpicnum'], s['floorheinum'], s['floorshade'], 0, 0, 0, 0, 0, 0, 0, 0)
     b += struct.pack('<H', len(out_walls))
     for w in out_walls:
         b += struct.pack('<iihhhhhhbBBBBBhhh',
             w['x'] * WORLD, w['y'] * WORLD, w['point2'], w['nextwall'], w['nextsector'],
-            w['cstat'], w['picnum'], 0, 0, 0, w['xrepeat'], w['yrepeat'], 0, 0, 0, 0, 0)
+            w['cstat'], w['picnum'], 0, w['shade'], 0, w['xrepeat'], w['yrepeat'], 0, 0, 0, 0, 0)
     b += struct.pack('<H', len(sprites))
     for s in sprites:
         b += struct.pack('<iiihhbBBBBBbbhhhhhhhhhh',
