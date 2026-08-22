@@ -24,7 +24,13 @@ TILE_CURSOR     = 7002
 TILE_CURSOR_R   = 7007      # pre-mirrored: rotatesprite has no x-flip bit
 TILE_OVERWORLD  = 7008      # the level-select map
 TILE_MARKER     = 7009      # current-level marker on that map
-TILE_ARROW      = 7010      # direction indicator toward a linked level
+TILE_ARROW_UP   = 7010      # direction indicators toward a linked level
+TILE_ARROW_RIGHT= 7011
+TILE_ARROW_DOWN = 7012
+TILE_ARROW_LEFT = 7013
+TILE_KEYCAP     = 7014      # key-cap plate on the hint bar
+TILE_BLACK      = 7015      # flat black, for banners and panel borders
+TILE_EYE_BASE   = 7020      # the spinning Eye of Ra, one tile per frame
 TILE_ROW        = 7003      # menu row, unselected
 TILE_ROW_SEL    = 7004      # menu row, selected (red)
 TILE_BTN        = 7005      # dialog button, unselected
@@ -46,9 +52,20 @@ ART = [
     ('gfx/title_backdrop.png',      TILE_BACKDROP,  (BACKDROP_W, BACKDROP_H)),
     ('gfx/menu/menu_bg.png',        TILE_PANEL,     None),
     ('gfx/menu/cursor.png',         TILE_CURSOR,    None),
-    ('gfx/overworld_orig.png',      TILE_OVERWORLD, None),
-    ('gfx/menu/menuarrow_right.png',TILE_ARROW,     None),
 ]
+
+# The overworld is drawn from the remaster's repainted map (gfx/overworld.dds),
+# not the original gfx/overworld_orig.png -- the two are different paintings and
+# the reference screens show the repaint. mapInfo.txt's overworld_x/y are still
+# in the ORIGINAL map's 640x512 space, so they have to be carried across.
+#
+# The transform below was measured, not guessed: both maps were reduced to
+# luminance and a 4-parameter (offset, scale per axis) search maximised their
+# correlation, giving 0.71 -- high for a repaint. Node positions placed through
+# it land on the right landmarks.
+OW_AX, OW_AW = 0.1800, 0.6450     # original u -> repaint u
+OW_AY, OW_AH = -0.0050, 1.0100    # original v -> repaint v
+OVERWORLD_W, OVERWORLD_H = 1200, 614
 
 KFONT_LINE = re.compile(r'^\s*(\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)')
 
@@ -77,12 +94,25 @@ def extract(kexdir, outdir, verbose=True):
     os.makedirs(artdir, exist_ok=True)
     lines = []
 
+    owsize = None
     with zipfile.ZipFile(kpf) as z:
         have = {n.lower(): n for n in z.namelist()}
 
         def grab(name):
             real = have.get(name.lower())
             return z.read(real) if real else None
+
+        dds = grab('gfx/overworld.dds')
+        if dds is not None:
+            ddspath = os.path.join(artdir, 'overworld.dds')
+            open(ddspath, 'wb').write(dds)
+            dw, dh, drgba = png.read_dds_dxt1(ddspath)
+            drgba = png.downsample(dw, dh, drgba, OVERWORLD_W, OVERWORLD_H)
+            png.write(os.path.join(artdir, 'overworld.png'), OVERWORLD_W, OVERWORLD_H, drgba)
+            os.remove(ddspath)
+            owsize = (OVERWORLD_W, OVERWORLD_H)
+            lines.append((TILE_OVERWORLD, 'kexart/overworld.png'))
+            if verbose: print("  tile %d  %-30s %dx%d" % (TILE_OVERWORLD, 'overworld.dds', OVERWORLD_W, OVERWORLD_H))
 
         for name, tile, resize in ART:
             blob = grab(name)
@@ -147,6 +177,71 @@ def extract(kexdir, outdir, verbose=True):
             png.write(os.path.join(artdir, 'cursor_r.png'), cw, ch, m)
             lines.append((TILE_CURSOR_R, 'kexart/cursor_r.png'))
             if verbose: print("  tile %d  %-30s %dx%d" % (TILE_CURSOR_R, 'cursor_r.png', cw, ch))
+
+        # The overworld marker is the Eye of Ra, spinning: the remaster ships it
+        # as a 31-frame sheet plus a sprite table (index -> rect) and an
+        # animation table naming the frame order. Both are parsed rather than
+        # eyeballed, so the spin plays in the order Kex plays it. The four
+        # direction arrows live on the same sheet.
+        eyecount = 0
+        spritetxt = grab('sprites/misc/overworld_hd_sprite.txt')
+        animtxt = grab('sprites/misc/overworld_hd_anim.txt')
+        sheet = grab('sprites/misc/overworld_hd.png')
+        if spritetxt is not None: spritetxt = spritetxt.decode('latin-1')
+        if animtxt is not None: animtxt = animtxt.decode('latin-1')
+        if spritetxt and animtxt and sheet:
+            sheetpath = os.path.join(artdir, 'overworld_hd.png')
+            open(sheetpath, 'wb').write(sheet)
+            ow, oh, orgba = png.read(sheetpath)
+            rects = {}
+            for m in re.finditer(r'sprite\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)', spritetxt):
+                i, x, y, w, h = (int(v) for v in m.groups())
+                rects[i] = (x, y, w, h)
+
+            def anim_frames(name):
+                m = re.search(re.escape(name) + r'\s*\{(.*?)\n\}', animtxt, re.S)
+                if not m: return []
+                return [int(v) for v in re.findall(r'"[^"]*"\s*,\s*(\d+)', m.group(1))]
+
+            os.makedirs(os.path.join(artdir, 'eye'), exist_ok=True)
+            for n, idx in enumerate(anim_frames('mapcursor_hd')):
+                r = rects.get(idx)
+                if r is None: continue
+                x, y, w, h = r
+                fn = 'kexart/eye/f%02d.png' % n
+                png.write(os.path.join(outdir, fn), w, h, png.crop(ow, oh, orgba, x, y, w, h))
+                lines.append((TILE_EYE_BASE + n, fn))
+                eyecount = n + 1
+
+            for name, tile in (('maparrow_up_hd', TILE_ARROW_UP),
+                               ('maparrow_right_hd', TILE_ARROW_RIGHT),
+                               ('maparrow_down_hd', TILE_ARROW_DOWN),
+                               ('maparrow_left_hd', TILE_ARROW_LEFT)):
+                f = anim_frames(name)
+                if not f: continue
+                r = rects.get(f[0])
+                if r is None: continue
+                x, y, w, h = r
+                fn = 'kexart/%s.png' % name
+                png.write(os.path.join(outdir, fn), w, h, png.crop(ow, oh, orgba, x, y, w, h))
+                lines.append((tile, fn))
+            if verbose: print("  overworld cursor: %d spin frames + 4 arrows" % eyecount)
+            with open(os.path.join(outdir, 'kexanim.txt'), 'w') as f:
+                f.write("eyeframes %d\n" % eyecount)
+
+        # Flat plates the layout needs and the remaster does not ship as art:
+        # a black square (tiled for banners and the panels' black surround) and
+        # the grey key-cap the hint bar puts around "Enter" and "Esc".
+        png.write(os.path.join(artdir, 'black.png'), 8, 8, png.solid(8, 8, 0, 0, 0))
+        lines.append((TILE_BLACK, 'kexart/black.png'))
+        kc = png.solid(26, 14, 96, 96, 96)
+        for yy in range(14):
+            for xx in range(26):
+                if xx == 0 or yy == 0 or xx == 25 or yy == 13:
+                    q = (yy * 26 + xx) * 4
+                    kc[q:q+3] = bytes((150, 150, 150))
+        png.write(os.path.join(artdir, 'keycap.png'), 26, 14, kc)
+        lines.append((TILE_KEYCAP, 'kexart/keycap.png'))
 
         # A marker for where you are on the overworld. The remaster draws its
         # player sprite there; nothing in the .kpf is a clean stand-in, so this
@@ -263,8 +358,14 @@ def extract(kexdir, outdir, verbose=True):
             for d in ('north', 'east', 'south', 'west'):
                 nxt = field('nextmap_' + d, '')
                 links.append(order.index(nxt) if nxt in order else -1)
-            rows.append((mapfile, field('overworld_x', '0'), field('overworld_y', '0'),
-                         title, links))
+            # Carried into the repainted map's pixel space here, so the game
+            # never has to know the two maps differ.
+            ox = float(field('overworld_x', '0')) / 640.0
+            oy = float(field('overworld_y', '0')) / 512.0
+            w_, h_ = owsize if owsize else (640, 512)
+            px = int(round((OW_AX + ox * OW_AW) * w_)) if owsize else int(ox * 640)
+            py = int(round((OW_AY + oy * OW_AH) * h_)) if owsize else int(oy * 512)
+            rows.append((mapfile, str(px), str(py), title, links))
         with open(os.path.join(outdir, 'kexworld.txt'), 'w') as f:
             f.write("# map x y north east south west title\n")
             for mapfile, x, y, title, links in rows:

@@ -44,6 +44,13 @@ enum
     kKexTileBtn       = 7005,
     kKexTileBtnSel    = 7006,
     kKexTileCursorR   = 7007,
+    kKexTileArrowUp   = 7010,
+    kKexTileArrowRight= 7011,
+    kKexTileArrowDown = 7012,
+    kKexTileArrowLeft = 7013,
+    kKexTileKeycap    = 7014,
+    kKexTileBlack     = 7015,
+    kKexTileEyeBase   = 7020,
     kKexFontBase      = 7100,   // gold body / dark outline: menu entries
     kKexFontAlt       = 7300,   // the atlas as shipped: blue body / gold outline
 };
@@ -140,15 +147,33 @@ static void KexDrawTile(int tile, int x, int y, int w, int h, int shade, int pal
 // uniform scale and leave a notch -- so the last row and column are pulled back
 // to the panel edge and simply overlap. The swatch is noise; the seam is not
 // visible, whereas the notches were.
-static void KexDrawPanel(int x0, int y0, int x1, int y1, int shade)
+static void KexDrawTiled(int tile, int x0, int y0, int x1, int y1, int cell, int stat)
 {
-    int const cell = 32;
+    if (x1 <= x0 || y1 <= y0)
+        return;
+    cell = min(cell, min(x1 - x0, y1 - y0));
+    if (cell <= 0)
+        return;
     for (int y = y0; y < y1; y += cell)
     {
         int const py = min(y, y1 - cell);
         for (int x = x0; x < x1; x += cell)
-            KexDrawTile(kKexTilePanel, min(x, x1 - cell), py, cell, cell, shade, 0, 0);
+            KexDrawTile(tile, min(x, x1 - cell), py, cell, cell, 0, 0, stat);
     }
+}
+
+static void KexDrawPanel(int x0, int y0, int x1, int y1, int shade)
+{
+    UNREFERENCED_PARAMETER(shade);
+    KexDrawTiled(kKexTilePanel, x0, y0, x1, y1, 32, 0);
+}
+
+// The remaster sets every panel in a black surround, which is what lifts it off
+// the artwork behind. Drawn as flat tiles rather than by touching the
+// framebuffer, so it works under both renderers.
+static void KexDrawBorder(int x0, int y0, int x1, int y1, int width)
+{
+    KexDrawTiled(kKexTileBlack, x0 - width, y0 - width, x1 + width, y1 + width, 24, 0);
 }
 
 int KexMenu_TextWidth(const char *str, int height)
@@ -242,9 +267,26 @@ static void KexMenu_Cursor(int rowY)
 
 }
 
-static void KexMenu_Hint(const char *text)
+// The hint bar is a black band with the key drawn in a cap, the way the
+// remaster labels its controls.
+static void KexMenu_Hint(const char *key1, const char *label1,
+                         const char *key2 = NULL, const char *label2 = NULL)
 {
-    KexMenu_Text(6, 200 - 12, text, 9, 0, 0, 0);
+    KexDrawTiled(kKexTileBlack, 0, 184, 320, 200, 16, 0);
+
+    int x = 6;
+    for (int i = 0; i < 2; i++)
+    {
+        const char *k = i ? key2 : key1, *l = i ? label2 : label1;
+        if (!k || !l)
+            break;
+        int const kw = max(18, KexMenu_TextWidth(k, 6) + 8);
+        KexDrawTile(kKexTileKeycap, x, 187, kw, 11, 0, 0, 0);
+        KexMenu_Text(x + kw / 2, 189, k, 6, 0, 0, 1, 1);
+        x += kw + 5;
+        KexMenu_Text(x, 188, l, 8, 0, 0, 0);
+        x += KexMenu_TextWidth(l, 8) + 12;
+    }
 }
 
 // A framed panel sized to hold <rows> rows plus a header, centred vertically.
@@ -260,7 +302,9 @@ static int KexMenu_PanelTop(int rows)
 
 static void KexMenu_Frame(int top, int rows)
 {
-    KexDrawPanel(KEX_PANEL_X0, top, KEX_PANEL_X1, top + KexMenu_PanelHeight(rows), 0);
+    int const bottom = top + KexMenu_PanelHeight(rows);
+    KexDrawBorder(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 5);
+    KexDrawPanel(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +361,7 @@ static int KexMenu_Confirm(const char *line1, const char *line2)
         KexMenu_Text(lx + KEX_BTN_W / 2, by + 2, "YES", 9, 0, 0, 1);
         KexMenu_Text(rx + KEX_BTN_W / 2, by + 2, "NO",  9, 0, 0, 1);
 
-        KexMenu_Hint("ENTER  SELECT ITEM");
+        KexMenu_Hint("ENTER", "SELECT ITEM");
         videoNextPage();
         Exhumed_CaptureFrame();
 
@@ -362,7 +406,7 @@ static int KexMenu_SlotList(const char *title)
         KexMenu_Row(y, "GO BACK", sel == 5, 1);
         if (sel == 5) KexMenu_Cursor(y);
 
-        KexMenu_Hint("ENTER  SELECT ITEM");
+        KexMenu_Hint("ENTER", "SELECT ITEM");
         videoNextPage();
         Exhumed_CaptureFrame();
 
@@ -405,7 +449,7 @@ static void KexMenu_Credits(void)
             if (lines[i][0]) KexMenu_Text(160, y + 2, lines[i], 10, 0, 0, 1);
             y += KEX_ROW_H;
         }
-        KexMenu_Hint("ESC  GO BACK");
+        KexMenu_Hint("ESC", "GO BACK");
         videoNextPage();
         Exhumed_CaptureFrame();
 
@@ -422,6 +466,8 @@ static void KexMenu_Credits(void)
 // ---------------------------------------------------------------------------
 enum { kKexNewGame = 0, kKexLoadGame, kKexOptions, kKexCredits, kKexQuit, kKexItems };
 
+static int KexMenu_Pause(void);   // the in-level menu, defined below
+
 int KexMenu_Main(int bInLevelMenus)
 {
     static char const * const labels[kKexItems] =
@@ -434,6 +480,10 @@ int KexMenu_Main(int bInLevelMenus)
     StopLocalSound();
     KB_FlushKeyboardQueue();
     KB_ClearKeysDown();
+
+    // In a level this is the pause menu, not the front end.
+    if (bInLevelMenus)
+        return KexMenu_Pause();
 
     int enabled[kKexItems] = { 1, 1, 1, 1, 1 };
     if (nNetPlayerCount) { enabled[kKexNewGame] = 0; enabled[kKexLoadGame] = 0; }
@@ -461,7 +511,7 @@ int KexMenu_Main(int bInLevelMenus)
             y += KEX_ROW_H;
         }
 
-        KexMenu_Hint("ENTER  SELECT ITEM");
+        KexMenu_Hint("ENTER", "SELECT ITEM");
         videoNextPage();
         Exhumed_CaptureFrame();
 
@@ -524,6 +574,78 @@ int KexMenu_Main(int bInLevelMenus)
             KB_ClearKeysDown();
         }
 
+        if (quitevent) return 0;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pause menu. The remaster's in-level menu is the same stone panel over
+// whatever is behind it, with its own entries. menu_Menu(1) is what the game
+// calls for it, so this is what that returns into.
+//   -1 resume, 0 quit, 4 exit to title
+// ---------------------------------------------------------------------------
+enum { kKexPauseResume = 0, kKexPauseOptions, kKexPauseExit, kKexPauseQuit, kKexPauseItems };
+
+static int KexMenu_Pause(void)
+{
+    static char const * const labels[kKexPauseItems] =
+        { "RESUME", "OPTIONS", "EXIT TO TITLE SCREEN", "QUIT" };
+
+    int sel = 0;
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+
+    while (1)
+    {
+        HandleAsync();
+        OSD_DispatchQueued();
+
+        int const top = KexMenu_PanelTop(kKexPauseItems);
+        KexMenu_Frame(top, kKexPauseItems);
+        int y = top + KEX_PAD;
+        KexMenu_Row(y, "GAME PAUSED", 0, 1);
+        y += KEX_ROW_H + KEX_HEADGAP;
+        for (int i = 0; i < kKexPauseItems; i++)
+        {
+            KexMenu_Row(y, labels[i], sel == i, 1);
+            if (sel == i) KexMenu_Cursor(y);
+            y += KEX_ROW_H;
+        }
+
+        KexMenu_Hint("ENTER", "SELECT ITEM");
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        int const key = KexMenu_PollKey();
+        if (key == kKexKeyUp || key == kKexKeyDown)
+        {
+            sel = (sel + (key == kKexKeyUp ? kKexPauseItems - 1 : 1)) % kKexPauseItems;
+            KexMenu_Beep();
+        }
+        else if (key == kKexKeyEsc)
+        {
+            KexMenu_Beep();
+            return -1;
+        }
+        else if (key == kKexKeyEnter)
+        {
+            KexMenu_Beep();
+            switch (sel)
+            {
+                case kKexPauseResume: return -1;
+                case kKexPauseOptions: menu_AdjustVolume(); break;
+                case kKexPauseExit:
+                    if (KexMenu_Confirm("ARE YOU SURE YOU WISH TO", "EXIT TO THE TITLE SCREEN?"))
+                        return 4;
+                    break;
+                case kKexPauseQuit:
+                    if (KexMenu_Confirm("ARE YOU SURE YOU WISH TO", "QUIT THE GAME?"))
+                        return 0;
+                    break;
+            }
+            KB_FlushKeyboardQueue();
+            KB_ClearKeysDown();
+        }
         if (quitevent) return 0;
     }
 }
@@ -592,6 +714,7 @@ struct kexlevel_t
 
 static kexlevel_t s_level[KEX_MAX_LEVELS];
 static int s_levelCount = -1;
+static int s_eyeFrames = 0;
 
 static void KexMenu_LoadWorld(void)
 {
@@ -622,7 +745,15 @@ static void KexMenu_LoadWorld(void)
         s_levelCount++;
     }
     Xfree(text);
-    LOG_F(INFO, "Kex overworld: %d levels", s_levelCount);
+    // How many frames the eye's spin has; the tool writes it out beside the art.
+    s_eyeFrames = 0;
+    for (int i = 0; i < 64; i++)
+    {
+        if (tilesiz[kKexTileEyeBase + i].x <= 0)
+            break;
+        s_eyeFrames = i + 1;
+    }
+    LOG_F(INFO, "Kex overworld: %d levels, %d eye frames", s_levelCount, s_eyeFrames);
 }
 
 // Returns the chosen level's index, or -1 to go back to the menu.
@@ -636,9 +767,10 @@ int KexMenu_Overworld(int start)
     int cur = clamp(start, 0, s_levelCount - 1);
 
     int const mw = tilesiz[kKexTileOverworld].x, mh = tilesiz[kKexTileOverworld].y;
-    // Zoomed in about twice as far as a fit would be, which is roughly what the
-    // remaster shows, and panned to keep the current level centred.
-    int const z = max(divscale16(320, mw), divscale16(200, mh)) * 2;
+    // The remaster frames the map close in -- roughly a fifth of it across the
+    // screen -- rather than fitting the whole thing, so this is a fixed zoom on
+    // the art's own scale rather than a fit-to-screen.
+    int const z = divscale16(320, mw * 10 / 27);
 
     KB_FlushKeyboardQueue();
     KB_ClearKeysDown();
@@ -657,25 +789,37 @@ int KexMenu_Overworld(int start)
 
         // Neighbours first, so the marker sits on top of its own arrows.
         static int const adx[4] = { 0, 1, 0, -1 }, ady[4] = { -1, 0, 1, 0 };
-        static int const aang[4] = { 512, 0, 1536, 1024 };
+        static int const atile[4] = { kKexTileArrowUp, kKexTileArrowRight,
+                                      kKexTileArrowDown, kKexTileArrowLeft };
         for (int d = 0; d < 4; d++)
         {
             if (L.link[d] < 0 || L.link[d] >= s_levelCount)
                 continue;
-            int const ax = px - ox + adx[d] * 14, ay = py - oy + ady[d] * 14;
-            rotatesprite(ax << 16, ay << 16, 65536, (short)aang[d], kKexTileArrow, 0, 0,
-                         RS_AUTO, 0, 0, xdim - 1, ydim - 1);
+            int const t = atile[d];
+            if (tilesiz[t].x <= 0)
+                continue;
+            int const aw = tilesiz[t].x / 5, ah = tilesiz[t].y / 5;
+            KexDrawTile(t, px - ox + adx[d] * 21 - aw / 2, py - oy + ady[d] * 18 - ah / 2,
+                        aw, ah, 0, 0, 0);
         }
-        rotatesprite((px - ox) << 16, (py - oy) << 16, 65536, 0, kKexTileMarker, 0, 0,
-                     RS_AUTO, 0, 0, xdim - 1, ydim - 1);
 
-        // Title banner across the top, in the font's shipped colours -- the
-        // remaster uses the blue-bodied form here, not the menu's gold.
-        int const bw = KexMenu_TextWidth(L.title, 14) + 24;
-        KexDrawTile(kKexTileRow, 160 - bw / 2, 14, bw, 22, 0, 0, 0);
-        KexMenu_Text(160, 18, L.title, 14, 0, 0, 1, 1);
+        // The marker is the Eye of Ra, spinning: one tile per frame of the
+        // remaster's own 31-frame cycle, stepped off the game clock.
+        int const frame = s_eyeFrames > 0 ? (((int)totalclock / 3) % s_eyeFrames) : -1;
+        int const eye = frame >= 0 ? kKexTileEyeBase + frame : kKexTileMarker;
+        if (tilesiz[eye].x > 0)
+        {
+            int const ew = tilesiz[eye].x / 5, eh = tilesiz[eye].y / 5;
+            KexDrawTile(eye, px - ox - ew / 2, py - oy - eh / 2, ew, eh, 0, 0, 0);
+        }
 
-        KexMenu_Hint("ENTER  SELECT ITEM    ESC  OPEN MENU");
+        // Title banner: a dark band across the top with the name in the font's
+        // shipped blue-bodied colours, not the menu's gold.
+        int const bw = KexMenu_TextWidth(L.title, 18) + 40;
+        KexDrawTiled(kKexTileBlack, 160 - bw / 2, 16, 160 + bw / 2, 44, 28, RS_TRANS1);
+        KexMenu_Text(160, 21, L.title, 18, 0, 0, 1, 1);
+
+        KexMenu_Hint("ENTER", "SELECT ITEM", "ESC", "OPEN MENU");
         videoNextPage();
         Exhumed_CaptureFrame();
 

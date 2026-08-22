@@ -404,9 +404,35 @@ calling it before the rest of the title setup spins forever.
 
 The remaster picks levels off a hand-painted map rather than from a list: each
 level sits at a point on it, joined to its neighbours by compass directions, and
-the arrow keys walk that graph. New Game goes there after the save slot.
+the arrow keys walk that graph. New Game goes there after the save slot. The
+marker is the Eye of Ra, spinning through the remaster's own 31-frame cycle --
+the sprite sheet, the index-to-rectangle table and the frame order are all
+parsed out of `sprites/misc/overworld_hd_*`, so it spins the way Kex spins it.
 
 None of the campaign is hardcoded. `kexmenu.py` reads the positions and the
 `nextmap_north/east/south/west` links out of the remaster's own
 `defs/mapInfo.txt` and resolves the `$str_NNN` level names against its
 localization table, writing the lot to `kexworld.txt` for the game to load.
+
+**Two maps, one coordinate space.** The remaster ships both the original
+`gfx/overworld_orig.png` (640x512) and a repaint, `gfx/overworld.dds`
+(6000x3072, DXT1) -- and it draws the repaint, while `mapInfo.txt`'s
+`overworld_x/y` are still in the *original's* space. The transform between them
+was measured rather than guessed: both were reduced to luminance and a
+four-parameter search maximised their correlation, which peaked at 0.71 -- high
+for a repaint -- and node positions placed through it land on the right
+landmarks. The tool bakes the result into `kexworld.txt`, so the game never has
+to know the two maps differ.
+
+The DDS is decoded by averaging each DXT1 block rather than expanding it: 1.4
+million blocks is more than a pure-Python per-pixel decode wants, the block
+already stores its endpoints and weights, and the quarter-size result is more
+resolution than a Build tile needs anyway.
+
+### The pause menu
+
+`menu_Menu(1)` -- the in-level menu -- gets the remaster's version too: GAME
+PAUSED, RESUME, OPTIONS, EXIT TO TITLE SCREEN, QUIT, over whatever is behind it.
+"Exit to title screen" is a new return code (4) that the classic menu never
+produces, so the case added to the in-level dispatch is only ever reached in
+Kex mode.

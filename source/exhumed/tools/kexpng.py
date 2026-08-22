@@ -168,3 +168,46 @@ def swap_fill_outline(w,h,rgba, fill=(245,170,45), outline=(20,20,60)):
         tgt = fill if out[p+2] > out[p] else outline
         out[p]=tgt[0]; out[p+1]=tgt[1]; out[p+2]=tgt[2]
     return out
+
+def read_dds_dxt1(path, block_average=True):
+    """Decode a DXT1 .dds to RGBA.
+
+    The remaster's overworld is a 6000x3072 DXT1 texture -- 1.4 million blocks,
+    which is more than a pure-Python per-pixel decode wants to chew through, and
+    far more resolution than a Build tile needs. Each DXT1 block already stores
+    two endpoint colours and 2-bit weights, so averaging the four texels of a
+    block is a couple of lookups; doing that gives a correctly filtered
+    quarter-size image in one pass and skips the full decode entirely.
+    """
+    d = open(path, 'rb').read()
+    if d[:4] != b'DDS ':
+        raise ValueError('not a DDS: %s' % path)
+    h, w = struct.unpack_from('<II', d, 12)
+    if d[84:88] != b'DXT1':
+        raise ValueError('only DXT1 is supported (%s has %r)' % (path, d[84:88]))
+    off = 4 + struct.unpack_from('<I', d, 4)[0]
+    bw, bh = (w + 3) // 4, (h + 3) // 4
+    if not block_average:
+        raise NotImplementedError
+    out = bytearray(bw * bh * 4)
+    for by in range(bh):
+        row = by * bw
+        for bx in range(bw):
+            p = off + (row + bx) * 8
+            c0, c1, bits = struct.unpack_from('<HHI', d, p)
+            r0 = ((c0 >> 11) & 31) * 255 // 31; g0 = ((c0 >> 5) & 63) * 255 // 63; b0 = (c0 & 31) * 255 // 31
+            r1 = ((c1 >> 11) & 31) * 255 // 31; g1 = ((c1 >> 5) & 63) * 255 // 63; b1 = (c1 & 31) * 255 // 31
+            if c0 > c1:
+                pal = ((r0,g0,b0), (r1,g1,b1),
+                       ((2*r0+r1)//3, (2*g0+g1)//3, (2*b0+b1)//3),
+                       ((r0+2*r1)//3, (g0+2*g1)//3, (b0+2*b1)//3))
+            else:
+                pal = ((r0,g0,b0), (r1,g1,b1),
+                       ((r0+r1)//2, (g0+g1)//2, (b0+b1)//2), (0,0,0))
+            r = g = b = 0
+            for i in range(16):
+                c = pal[(bits >> (i*2)) & 3]
+                r += c[0]; g += c[1]; b += c[2]
+            q = (row + bx) * 4
+            out[q] = r // 16; out[q+1] = g // 16; out[q+2] = b // 16; out[q+3] = 255
+    return bw, bh, out

@@ -2975,6 +2975,16 @@ LOOP3:
                     case 1:
                         goto STARTGAME1;
 
+                    // VibeBuild32: the Kex pause menu's "exit to title screen".
+                    // The classic menu has no such entry, so this code is only
+                    // ever reached in Kex mode.
+                    case 4:
+                        bUserMap = false;
+                        gUserMapFilename[0] = 0;
+                        forcelevel = -1;
+                        FadeOut(0);
+                        goto MENU;
+
                     case 2:
                         levelnum = levelnew = menu_GameLoad(SavePosition);
                         lastlevel = -1;
