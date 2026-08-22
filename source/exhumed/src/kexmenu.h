@@ -7,6 +7,13 @@
 int  KexMenu_Available(void);
 int  KexMenu_Main(int bInLevelMenus);      // same return codes as menu_Menu()
 void KexMenu_TitleHold(void);              // PRESS START hold, after the cinematic
+
+// Overworld level select: walk the remaster's map with the arrow keys. Returns
+// the chosen level's index, or -1 to go back to the menu.
+int  KexMenu_Overworld(int start);
+int  KexMenu_LevelCount(void);
+const char *KexMenu_LevelMap(int i);
+const char *KexMenu_ChosenMap(void);       // level picked on the overworld, or NULL
 void KexMenu_Backdrop(void);
 void KexMenu_Text(int x, int y, const char *str, int height, int shade, int pal, int centred, int altFont = 0);
 int  KexMenu_TextWidth(const char *str, int height);

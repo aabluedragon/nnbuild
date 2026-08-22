@@ -22,6 +22,9 @@ TILE_BACKDROP   = 7000
 TILE_PANEL      = 7001
 TILE_CURSOR     = 7002
 TILE_CURSOR_R   = 7007      # pre-mirrored: rotatesprite has no x-flip bit
+TILE_OVERWORLD  = 7008      # the level-select map
+TILE_MARKER     = 7009      # current-level marker on that map
+TILE_ARROW      = 7010      # direction indicator toward a linked level
 TILE_ROW        = 7003      # menu row, unselected
 TILE_ROW_SEL    = 7004      # menu row, selected (red)
 TILE_BTN        = 7005      # dialog button, unselected
@@ -43,6 +46,8 @@ ART = [
     ('gfx/title_backdrop.png',      TILE_BACKDROP,  (BACKDROP_W, BACKDROP_H)),
     ('gfx/menu/menu_bg.png',        TILE_PANEL,     None),
     ('gfx/menu/cursor.png',         TILE_CURSOR,    None),
+    ('gfx/overworld_orig.png',      TILE_OVERWORLD, None),
+    ('gfx/menu/menuarrow_right.png',TILE_ARROW,     None),
 ]
 
 KFONT_LINE = re.compile(r'^\s*(\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)')
@@ -143,6 +148,21 @@ def extract(kexdir, outdir, verbose=True):
             lines.append((TILE_CURSOR_R, 'kexart/cursor_r.png'))
             if verbose: print("  tile %d  %-30s %dx%d" % (TILE_CURSOR_R, 'cursor_r.png', cw, ch))
 
+        # A marker for where you are on the overworld. The remaster draws its
+        # player sprite there; nothing in the .kpf is a clean stand-in, so this
+        # is a small gold pip with a dark surround, which reads at map scale.
+        mk = 9
+        pix = png.solid(mk, mk, 0, 0, 0, 0)
+        for yy in range(mk):
+            for xx in range(mk):
+                d = abs(xx - mk // 2) + abs(yy - mk // 2)
+                q = (yy * mk + xx) * 4
+                if d <= mk // 2:
+                    col = (250, 200, 70) if d <= mk // 2 - 2 else (25, 25, 60)
+                    pix[q:q+4] = bytes(col + (255,))
+        png.write(os.path.join(artdir, 'marker.png'), mk, mk, pix)
+        lines.append((TILE_MARKER, 'kexart/marker.png'))
+
         kf = grab('fonts/bigfont.kfont')
         atlas = grab('fonts/bigfont.png')
         if kf is None or atlas is None:
@@ -211,6 +231,46 @@ def extract(kexdir, outdir, verbose=True):
         for tile, path in lines:
             f.write('tilefromtexture %d { file "%s" }\n' % (tile, path))
             f.write('texture %d { pal 0 { file "%s" } }\n' % (tile, path))
+
+    # The overworld: the remaster picks levels off a hand-painted map rather
+    # than a list. mapInfo.txt has each level's position on it and how the
+    # levels join up; the display names live in the localization table.
+    with zipfile.ZipFile(kpf) as z:
+        def read(pathname):
+            for n in z.namelist():
+                if n.lower() == pathname:
+                    return z.read(n).decode('latin-1')
+            return None
+        mapinfo = read('defs/mapinfo.txt')
+        loc = read('localization/loc_english.txt')
+
+    if mapinfo:
+        names = {}
+        if loc:
+            for m in re.finditer(r'(str_\d+)\s*=\s*"([^"]*)"', loc):
+                names[m.group(1)] = m.group(2)
+        blocks = re.findall(r'Map\s+(\w+)\s*\{(.*?)\n\}', mapinfo, re.S)
+        order = [b[0] for b in blocks]
+        rows = []
+        for ident, body in blocks:
+            def field(key, default=''):
+                m = re.search(key + r'\s+("?)([^"\n]*)\1', body)
+                return m.group(2).strip() if m else default
+            title = field('title')
+            title = names.get(title.lstrip('$'), title.lstrip('$'))
+            mapfile = os.path.basename(field('map')).upper()
+            links = []
+            for d in ('north', 'east', 'south', 'west'):
+                nxt = field('nextmap_' + d, '')
+                links.append(order.index(nxt) if nxt in order else -1)
+            rows.append((mapfile, field('overworld_x', '0'), field('overworld_y', '0'),
+                         title, links))
+        with open(os.path.join(outdir, 'kexworld.txt'), 'w') as f:
+            f.write("# map x y north east south west title\n")
+            for mapfile, x, y, title, links in rows:
+                f.write("%s %s %s %d %d %d %d %s\n"
+                        % (mapfile, x, y, links[0], links[1], links[2], links[3], title))
+        if verbose: print("  overworld: %d levels" % len(rows))
 
     # The campaign's first level, so "NEW GAME" starts the remaster's campaign
     # rather than the original game's level 1. mapInfo.txt lists the maps in

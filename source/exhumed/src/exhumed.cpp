@@ -2505,25 +2505,34 @@ MENU:
     nMenu = menu_Menu(0);
 
     // VibeBuild32: in Kex mode a new game means the remaster's campaign, not
-    // the original game's LEV1. The converter writes the campaign's first map
-    // out of the remaster's own mapInfo.txt, so nothing is hardcoded here.
+    // the original game's LEV1. The level comes from the overworld the menu
+    // just showed; the converter also writes the campaign's opening map out of
+    // the remaster's own mapInfo.txt, as the fallback.
     if (nMenu == 1 && g_kexMode && !bUserMap)
     {
-        int const fil = kopen4loadfrommod("kexstart.txt", 0);
-        if (fil != -1)
+        char const *pick = KexMenu_ChosenMap();
+        char name[BMAX_PATH] = "";
+
+        if (pick)
+            Bstrncpyz(name, pick, sizeof(name));
+        else
         {
-            char name[BMAX_PATH] = "";
-            int const len = min(kfilelength(fil), (int)sizeof(name) - 1);
-            kread(fil, name, len);
-            kclose(fil);
-            for (char *p = name; *p; p++)
-                if (*p == '\r' || *p == '\n') { *p = 0; break; }
-            if (name[0])
+            int const fil = kopen4loadfrommod("kexstart.txt", 0);
+            if (fil != -1)
             {
-                Bstrncpyz(gUserMapFilename, name, sizeof(gUserMapFilename));
-                bUserMap = true;
-                LOG_F(INFO, "Kex campaign: starting at %s", gUserMapFilename);
+                int const len = min(kfilelength(fil), (int)sizeof(name) - 1);
+                kread(fil, name, len);
+                kclose(fil);
+                for (char *p = name; *p; p++)
+                    if (*p == '\r' || *p == '\n') { *p = 0; break; }
             }
+        }
+
+        if (name[0])
+        {
+            Bstrncpyz(gUserMapFilename, name, sizeof(gUserMapFilename));
+            bUserMap = true;
+            LOG_F(INFO, "Kex campaign: starting at %s", gUserMapFilename);
         }
     }
 

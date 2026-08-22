@@ -399,3 +399,14 @@ worth knowing:
 The cinematic is still played from `DoTitle()` rather than from the menu code:
 `PlayMovie()`'s loop only advances when the audio backend feeds it a sample, so
 calling it before the rest of the title setup spins forever.
+
+### The overworld
+
+The remaster picks levels off a hand-painted map rather than from a list: each
+level sits at a point on it, joined to its neighbours by compass directions, and
+the arrow keys walk that graph. New Game goes there after the save slot.
+
+None of the campaign is hardcoded. `kexmenu.py` reads the positions and the
+`nextmap_north/east/south/west` links out of the remaster's own
+`defs/mapInfo.txt` and resolves the `$str_NNN` level names against its
+localization table, writing the lot to `kexworld.txt` for the game to load.

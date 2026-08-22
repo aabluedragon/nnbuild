@@ -57,6 +57,7 @@ struct kexglyph_t { int16_t tile, w, h, yoff; };
 static kexglyph_t s_glyph[KEX_NUMCHARS];
 static int  s_state = -1;      // -1 = not probed yet, 0 = unavailable, 1 = ready
 static int  s_fontHeight = 76; // tallest glyph in the atlas, for scaling
+static char s_chosenMap[32];   // level picked on the overworld, for the game loop
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -486,6 +487,14 @@ int KexMenu_Main(int bInLevelMenus)
                     if (!enabled[sel]) break;
                     SavePosition = (short)KexMenu_SlotList("NEW GAME");
                     if (SavePosition == -1) break;
+                    // The remaster picks the level off its overworld map, not
+                    // straight into level 1.
+                    if (KexMenu_LevelCount() > 0)
+                    {
+                        int const pick = KexMenu_Overworld(0);
+                        if (pick < 0) break;
+                        Bstrncpyz(s_chosenMap, KexMenu_LevelMap(pick), sizeof(s_chosenMap));
+                    }
                     FadeOut(1);
                     StopAllSounds();
                     MySetView(nViewLeft, nViewTop, nViewRight, nViewBottom);
@@ -558,4 +567,155 @@ void KexMenu_TitleHold(void)
         if (quitevent)
             return;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Overworld level select.
+//
+// The remaster picks levels off a hand-painted map rather than from a list:
+// each level sits at a point on it, joined to its neighbours by compass
+// directions, and the arrow keys walk that graph. kexmenu.py writes the map's
+// positions, links and display names out of the remaster's own mapInfo.txt and
+// localization table, so nothing about the campaign is hardcoded here.
+// ---------------------------------------------------------------------------
+enum { kKexTileOverworld = 7008, kKexTileMarker = 7009, kKexTileArrow = 7010 };
+
+#define KEX_MAX_LEVELS 64
+
+struct kexlevel_t
+{
+    char map[32];
+    char title[48];
+    int16_t x, y;
+    int16_t link[4];      // north, east, south, west
+};
+
+static kexlevel_t s_level[KEX_MAX_LEVELS];
+static int s_levelCount = -1;
+
+static void KexMenu_LoadWorld(void)
+{
+    s_levelCount = 0;
+
+    int const fil = kopen4loadfrommod("kexworld.txt", 0);
+    if (fil == -1)
+        return;
+
+    int const len = kfilelength(fil);
+    char *text = (char *)Xmalloc(len + 1);
+    kread(fil, text, len);
+    text[len] = 0;
+    kclose(fil);
+
+    for (char *line = strtok(text, "\r\n"); line; line = strtok(NULL, "\r\n"))
+    {
+        if (line[0] == '#' || !line[0] || s_levelCount >= KEX_MAX_LEVELS)
+            continue;
+        kexlevel_t &L = s_level[s_levelCount];
+        int x, y, n, e, so, w, used = 0;
+        if (Bsscanf(line, "%31s %d %d %d %d %d %d %n", L.map, &x, &y, &n, &e, &so, &w, &used) < 7)
+            continue;
+        L.x = (int16_t)x; L.y = (int16_t)y;
+        L.link[0] = (int16_t)n; L.link[1] = (int16_t)e;
+        L.link[2] = (int16_t)so; L.link[3] = (int16_t)w;
+        Bstrncpyz(L.title, used > 0 ? line + used : "", sizeof(L.title));
+        s_levelCount++;
+    }
+    Xfree(text);
+    LOG_F(INFO, "Kex overworld: %d levels", s_levelCount);
+}
+
+// Returns the chosen level's index, or -1 to go back to the menu.
+int KexMenu_Overworld(int start)
+{
+    if (s_levelCount < 0)
+        KexMenu_LoadWorld();
+    if (s_levelCount <= 0 || tilesiz[kKexTileOverworld].x <= 0)
+        return -1;
+
+    int cur = clamp(start, 0, s_levelCount - 1);
+
+    int const mw = tilesiz[kKexTileOverworld].x, mh = tilesiz[kKexTileOverworld].y;
+    // Zoomed in about twice as far as a fit would be, which is roughly what the
+    // remaster shows, and panned to keep the current level centred.
+    int const z = max(divscale16(320, mw), divscale16(200, mh)) * 2;
+
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+
+    while (1)
+    {
+        HandleAsync();
+
+        kexlevel_t const &L = s_level[cur];
+        int const px = mulscale16(L.x, z), py = mulscale16(L.y, z);
+        int ox = clamp(px - 160, 0, max(0, mulscale16(mw, z) - 320));
+        int oy = clamp(py - 100, 0, max(0, mulscale16(mh, z) - 200));
+
+        rotatesprite((-ox) << 16, (-oy) << 16, z, 0, kKexTileOverworld, 0, 0,
+                     RS_TOPLEFT | RS_AUTO | RS_NOCLIP, 0, 0, xdim - 1, ydim - 1);
+
+        // Neighbours first, so the marker sits on top of its own arrows.
+        static int const adx[4] = { 0, 1, 0, -1 }, ady[4] = { -1, 0, 1, 0 };
+        static int const aang[4] = { 512, 0, 1536, 1024 };
+        for (int d = 0; d < 4; d++)
+        {
+            if (L.link[d] < 0 || L.link[d] >= s_levelCount)
+                continue;
+            int const ax = px - ox + adx[d] * 14, ay = py - oy + ady[d] * 14;
+            rotatesprite(ax << 16, ay << 16, 65536, (short)aang[d], kKexTileArrow, 0, 0,
+                         RS_AUTO, 0, 0, xdim - 1, ydim - 1);
+        }
+        rotatesprite((px - ox) << 16, (py - oy) << 16, 65536, 0, kKexTileMarker, 0, 0,
+                     RS_AUTO, 0, 0, xdim - 1, ydim - 1);
+
+        // Title banner across the top, in the font's shipped colours -- the
+        // remaster uses the blue-bodied form here, not the menu's gold.
+        int const bw = KexMenu_TextWidth(L.title, 14) + 24;
+        KexDrawTile(kKexTileRow, 160 - bw / 2, 14, bw, 22, 0, 0, 0);
+        KexMenu_Text(160, 18, L.title, 14, 0, 0, 1, 1);
+
+        KexMenu_Hint("ENTER  SELECT ITEM    ESC  OPEN MENU");
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        int const key = KexMenu_PollKey();
+        int dir = -1;
+        switch (key)
+        {
+            case kKexKeyUp:    dir = 0; break;
+            case kKexKeyRight: dir = 1; break;
+            case kKexKeyDown:  dir = 2; break;
+            case kKexKeyLeft:  dir = 3; break;
+            case kKexKeyEnter: KexMenu_Beep(); return cur;
+            case kKexKeyEsc:   KexMenu_Beep(); return -1;
+            default: break;
+        }
+        if (dir >= 0 && L.link[dir] >= 0 && L.link[dir] < s_levelCount)
+        {
+            cur = L.link[dir];
+            KexMenu_Beep();
+        }
+        if (quitevent)
+            return -1;
+    }
+}
+
+int KexMenu_LevelCount(void)
+{
+    if (s_levelCount < 0)
+        KexMenu_LoadWorld();
+    return s_levelCount;
+}
+
+const char *KexMenu_LevelMap(int i)
+{
+    return (unsigned)i < (unsigned)s_levelCount ? s_level[i].map : NULL;
+}
+
+// The level the player picked on the overworld, or NULL if they did not get
+// that far. The game loop reads this instead of starting at level 1.
+const char *KexMenu_ChosenMap(void)
+{
+    return s_chosenMap[0] ? s_chosenMap : NULL;
 }
