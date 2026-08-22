@@ -362,6 +362,21 @@ KEX_SHADE_MIN  = -10         # brightest surface: still not fullbright
 KEX_SHADE_SPAN = 88         # darkest lands ~75, dim but never crushed to black
 KEX_SHADE_MAX  = 127
 
+def _lit(f):
+    """Does this face carry baked lighting of its own?
+
+    A Kex face is lit on its TILE vertices, and a face with no tiles has none:
+    the four corner vertices carry a flat 32 on every face in the level. In TOMB
+    901 of 1629 wall faces have no tile vertices and 884 of those are portals --
+    the openings between sectors, which Kex does not texture because you see
+    through them. Build still draws a portal wall's upper and lower parts, so
+    every step and ledge in the game was being drawn at the one shade the flat
+    32 produces (47 of 64 -- almost black), which is most of why the levels read
+    grey and unlit.
+    """
+    return f.tileVertStart >= 0 and f.tileVertEnd >= f.tileVertStart
+
+
 def _shade(m, f):
     # The lighting is on the face's TILE vertices, not its four corners: the
     # corner quad carries a flat 32 on every face in the level (measured), while
@@ -416,8 +431,9 @@ def convert(m, tilebase=4096):
         # perpendicular to the slope -- then the tilt is exact instead of a
         # projection. Rotating the ring is safe: nextwall is matched by
         # coordinate afterwards, not by index.
+        ff_face = m.faces[min(s.wallEnd+2, m.nface-1)]
         cf_p = _plane_build(m, m.faces[min(s.wallEnd+1, m.nface-1)])
-        ff_p = _plane_build(m, m.faces[min(s.wallEnd+2, m.nface-1)])
+        ff_p = _plane_build(m, ff_face)
         grad = None
         for pl in (ff_p, cf_p):
             if pl and (abs(pl[3]) > 1e-3 or abs(pl[4]) > 1e-3):
@@ -460,7 +476,13 @@ def convert(m, tilebase=4096):
                               cstat=0, picnum=_pic(m, solid, tilebase),
                               xrepeat=max(1, min(255, int(round(length * WORLD / (8.0 * KEX_UNITS_PER_TEXEL))))),
                               yrepeat=KEX_YREPEAT,
-                              shade=_shade(m, solid)))
+                              # An unlit portal face has nothing of its own to
+                              # go on, so borrow the sector's floor -- a step's
+                              # visible face sits on the floor and is lit with
+                              # it. The flat corner value it used to fall back
+                              # to is the same number everywhere and says
+                              # nothing at all.
+                              shade=_shade(m, solid if _lit(solid) else ff_face)))
         ranges.append((start, len(walls)-start))
         cf = m.faces[min(s.wallEnd+1, m.nface-1)]
         ff = m.faces[min(s.wallEnd+2, m.nface-1)]
@@ -1194,12 +1216,36 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
     for tl, fn in decordefs:
         usable[tl] = fn
 
-    # The skies ship as 256x512 portrait tiles. Used as a ceiling texture that
-    # made Build sample past the top of the tile: a band of RGB noise along the
-    # top of the screen, measured at a neighbour-pixel roughness of 248 where
-    # both the stock game and this level before the change sat at 0. Squaring
-    # them fixes it, and a sky read as a flat colour field loses nothing.
+    # The skies ship as 256x512 portrait tiles, and they are DOME maps, not
+    # Build panoramas: the top rows are the zenith, the bottom rows the nadir,
+    # and both are flat pole colour with the cloud band in between. Squashing
+    # the whole thing into Build's parallax band -- which is what this used to
+    # do -- puts the nadir's flat navy on screen as a dark stripe above the
+    # clouds, which is the banded sky. Cropping the nadir off first leaves the
+    # tile running zenith at the top to horizon at the bottom, which is exactly
+    # what Build's parallax band wants: the clouds land on the horizon and
+    # looking up clamps to the zenith colour.
     import kexpng as _png
+
+    def _crop_nadir(w, h, pix):
+        """Drop the flat pole band at the bottom of a dome map."""
+        def row_flat(y, ref):
+            for x in range(0, w, 4):
+                o = (y * w + x) * 4
+                if (abs(pix[o] - ref[0]) > 6 or abs(pix[o+1] - ref[1]) > 6
+                        or abs(pix[o+2] - ref[2]) > 6):
+                    return False
+            return True
+        o = ((h - 1) * w) * 4
+        ref = (pix[o], pix[o+1], pix[o+2])
+        y = h - 1
+        while y > 0 and row_flat(y, ref):
+            y -= 1
+        cut = y + 1
+        # Only trust it when the flat band is a real pole, not a stray row.
+        if cut >= h or (h - cut) < h // 10:
+            return w, h, pix
+        return w, cut, _png.crop(w, h, pix, 0, 0, w, cut)
     skydir = os.path.join(outdir, 'kexart')
     os.makedirs(skydir, exist_ok=True)
     with zipfile.ZipFile(kpf) as z:
@@ -1213,7 +1259,8 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
             tmp = os.path.join(skydir, os.path.basename(name))
             open(tmp, 'wb').write(z.read(real))
             w_, h_, pix = _png.read(tmp)
-            if w_ != h_:
+            w_, h_, pix = _crop_nadir(w_, h_, pix)
+            if (w_, h_) != (256, 256):
                 pix = _png.resize(w_, h_, pix, 256, 256)
                 _png.write(tmp, 256, 256, pix)
             usable[tile] = 'kexart/' + os.path.basename(name)

@@ -471,15 +471,60 @@ engine actually spawned: KARNAK 88 creatures / 103 live sprites, SLAVCAMP
 
 Not converted:
 
-- **Scenery actors.** Torches, plants, columns, camp props and the like are pure
-  decoration in Kex with no Build equivalent, so they are skipped deliberately.
-- **Room-over-room.** Kex lets one wall link several sectors; plain Build cannot,
-  so only the tallest portal on an edge survives, and a sector whose walls are
-  not a single closed ring is dropped rather than emitted broken (226 of 9837
-  sectors across the retail maps).
-- **Sloped floors and ceilings**, which come out flat.
-- **Baked vertex lighting**, which the format carries per vertex and Build has
-  no place for.
+- **Stacked sectors (room-over-room).** This is the big one, and it is a Build
+  limit rather than a gap in the converter. Kex freely puts one room on top of
+  another: in TOMB the entrance porch (floor 1152, ceiling 1536) sits directly
+  above the passage that runs under it (floor 128, ceiling 640), on the same
+  footprint. 98 of TOMB's 270 sectors overlap another sector by more than 60%
+  of their area. Plain Build has one sector per point on the floor plan, so both
+  are emitted flat and fight over the same space -- which is what makes the
+  entrance overhang look wrong. Doing this properly needs TROR, which eduke32
+  has but this port does not wire up. A sector whose walls are not a single
+  closed ring is dropped rather than emitted broken (226 of 9837 across the
+  retail maps).
+- **Light that varies across one surface.** Build has exactly one shade per wall
+  and one per floor, and Kex bakes its lighting per vertex, several vertices to
+  a wall. The falloff around a fire is mostly *vertical*: on the wall behind
+  TOMB's first fire pot the baked luminance runs 39 at the top to 255 at the
+  bottom of a single 384-unit face. A Build wall cannot gradient at all, so the
+  pool of light the remaster paints around a flame comes out as one averaged
+  shade for the whole wall. Walls near a fire do end up brighter than walls
+  away from it -- the ambient step is there -- but the soft edge is not.
+- **Sloped floors and ceilings** are converted, but dropped per sector when the
+  fit is worse than 8 world units at any corner.
+
+### Lighting
+
+The baked lighting lives on each face's TILE vertices. A face with no tiles has
+none, and its four corner vertices carry a flat 32 on every face in the level --
+so the corner fallback is a constant that says nothing. That mattered more than
+it sounds: in TOMB 901 of 1629 wall faces have no tile vertices, and **884 of
+those are portals**, which Kex leaves untextured because you see through them.
+Build still draws a portal wall's upper and lower parts, so every step, ledge
+and doorframe in the game was being drawn at the single shade a luminance of 32
+produces -- 47 of the engine's 64 -- and that is most of why the levels read
+grey and flat. Those faces now borrow the sector's floor shade, which is lit and
+which a step's visible face sits on. Median wall shade in TOMB went 47 -> 29.
+
+Measured against a capture of the remaster from the same spot in the same level,
+the solid (non-sky) pixels moved from p05/p25/p50 = 18/34/54 to 24/52/72,
+against the remaster's 26/48/92.
+
+### The sky
+
+The skies are **dome maps, not Build panoramas**: 256x512, with the top rows the
+zenith, the bottom rows the nadir, and both flat pole colour with the cloud band
+between them. Squashing the whole tile into Build's parallax band -- which is
+what the converter used to do -- puts the nadir's flat navy on screen as a dark
+stripe above the clouds. Cropping the nadir off first leaves the tile running
+zenith at the top to horizon at the bottom, which is exactly what the parallax
+band wants: the clouds land on the horizon, and looking up clamps to the zenith
+colour. The band is detected rather than hardcoded, by walking up from the last
+row while it stays flat, and only trusted when it is at least a tenth of the
+image.
+
+Build will not treat a tile as a sky panorama until `tileSetupSky()` has seen
+it, which is what `multipsky` does -- without it a parallax ceiling draws black.
 
 ### Related fixes
 
