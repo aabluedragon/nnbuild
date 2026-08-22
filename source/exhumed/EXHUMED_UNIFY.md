@@ -429,6 +429,12 @@ million blocks is more than a pure-Python per-pixel decode wants, the block
 already stores its endpoints and weights, and the quarter-size result is more
 resolution than a Build tile needs anyway.
 
+**The classic port's own level-map screen is skipped in Kex mode.** `showmap()`
+runs before every level start, and leaving it in meant picking a level twice --
+the overworld, then the old map screen. Worse, `showmap()` returns a level
+*number*, which overrode the map the overworld had just chosen. Skipping it also
+cured a level that quit back out a few seconds after starting.
+
 ### The pause menu
 
 `menu_Menu(1)` -- the in-level menu -- gets the remaster's version too: GAME

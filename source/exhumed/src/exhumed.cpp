@@ -2641,7 +2641,11 @@ LOOP1:
         menu_GameSave(SavePosition);
     }
 LOOP2:
-    if (!nNetPlayerCount && !bPlayback && levelnew > 0 && levelnew <= kMap20) {
+    // VibeBuild32: showmap() is the classic port's own level-map screen. In Kex
+    // mode the overworld has already been shown and a level chosen, so putting
+    // this up as well means picking a level twice -- and its return value is a
+    // level NUMBER, which would override the map the overworld just chose.
+    if (!g_kexMode && !nNetPlayerCount && !bPlayback && levelnew > 0 && levelnew <= kMap20) {
         levelnew = showmap(levelnum, levelnew, nBestLevel);
     }
 
