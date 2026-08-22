@@ -65,6 +65,14 @@ import kexmenu
 #            float angle, float nx, ny, nz, u16 flags, i16 pad,
 #            i16 tileVertStart, i16 tileVertEnd
 #   tiles    ntile x 16: u8[4], u16[4] vertex indices, u16 textureIndex, u16 pad
+#   zones    nzone x 32
+#   events   nevent x 8: u16 eventType, u16 sector, i16 eventTag, i16 params
+#            eventType is the SAME numbering Build PowerSlave uses for its own
+#            sector effects (1 = ceiling door, 7 = touchplate floor lower,
+#            21 = touchplate, 24 = channel-triggered ceiling door), because the
+#            console and DOS versions descend from one design. So an event maps
+#            straight onto sector.lotag/hitag and the game's own
+#            runlist_ProcessSectorTag() builds the door.
 #   actors   nactor x 20, at the very end of the file:
 #            u16 type, u16 ?, i16 x, i16 y, i16 z, i16 tag,
 #            u16 param1, u16 param2, u16 layer, u16 ?
@@ -122,6 +130,20 @@ class PSM:
             p=self.tileOff+i*16
             self.tiles.append((struct.unpack_from('<4H',d,p+4),
                                struct.unpack_from('<H',d,p+12)[0]))
+        # zones (32 bytes each) then events (8), then the actors at the end.
+        # Both sizes were solved from the gap between the tile array and the
+        # actor array across all fifteen sample maps: gap = nzone*32 + nevent*8,
+        # exact for every one of them.
+        self.zoneOff = self.tileOff + self.ntile*16
+        self.eventOff = self.zoneOff + self.nzone*32
+        self.events = []
+        for i in range(self.nevent):
+            q = self.eventOff + i*8
+            if q + 8 > len(d): break
+            etype, esect = struct.unpack_from('<2H', d, q)
+            etag, eparam = struct.unpack_from('<2h', d, q+4)
+            self.events.append((etype, esect, etag, eparam))
+
         actOff=len(d)-self.nactor*20
         self.actors=[]
         for i in range(self.nactor):
@@ -369,6 +391,12 @@ def _pic(m, f, tilebase):
 
 def convert(m, tilebase=4096):
     walls = []; sects = []; ranges = []
+    # Kex keeps a sector's trigger in a separate event table; Build PowerSlave
+    # wants it on the sector as lotag (the effect) and hitag (the channel).
+    sector_events = {}
+    for etype, esect, etag, eparam in getattr(m, 'events', ()):
+        if esect < m.nsector and etype:
+            sector_events[esect] = (etype, esect, etag, eparam)
     for si in range(m.nsector):
         s = m.sectors[si]
         edges = _edges(m, si)
@@ -456,7 +484,10 @@ def convert(m, tilebase=4096):
         # simply carries NO tiles where the sky shows through. Untextured
         # ceilings were being given texture slot 0 -- 169 of them in KARNAK --
         # which is why its outdoor areas looked wrong.
+        ev = sector_events.get(si)
         sects.append(dict(wallptr=start, wallnum=len(walls)-start,
+                          lotag=(ev[0] if ev else 0),
+                          hitag=(max(0, ev[2]) if ev else 0),
                           ceilingsky=(cf.tileStart < 0),
                           ceilingz=cz, floorz=fz,
                           ceilingheinum=cheinum, floorheinum=fheinum,
@@ -820,7 +851,8 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
             wremap[st], num, s['ceilingz'], s['floorz'],
             s['ceilingstat'], s['floorstat'],
             s['ceilingpicnum'], s['ceilingheinum'], s['ceilingshade'], 0, 0, 0,
-            s['floorpicnum'], s['floorheinum'], s['floorshade'], 0, 0, 0, 0, 0, 0, 0, 0)
+            s['floorpicnum'], s['floorheinum'], s['floorshade'], 0, 0, 0, 0, 0,
+            s['lotag'], s['hitag'], 0)
     b += struct.pack('<H', len(out_walls))
     for w in out_walls:
         b += struct.pack('<iihhhhhhbBBBBBhhh',

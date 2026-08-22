@@ -457,10 +457,6 @@ Not converted:
 
 - **Scenery actors.** Torches, plants, columns, camp props and the like are pure
   decoration in Kex with no Build equivalent, so they are skipped deliberately.
-- **Doors, switches, lifts and triggers.** Kex keeps these in its own event and
-  zone tables, which this reader identifies but does not decode. Keys and the
-  golden sarcophagus are placed, but nothing they should open moves yet -- this
-  is the biggest remaining piece.
 - **Room-over-room.** Kex lets one wall link several sectors; plain Build cannot,
   so only the tallest portal on an edge survives, and a sector whose walls are
   not a single closed ring is dropped rather than emitted broken (226 of 9837
@@ -511,6 +507,38 @@ worth knowing:
 The cinematic is still played from `DoTitle()` rather than from the menu code:
 `PlayMovie()`'s loop only advances when the audio backend feeds it a sample, so
 calling it before the rest of the title setup spins forever.
+
+### Doors, switches and lifts
+
+Kex keeps a sector's trigger in a separate event table rather than on the sector.
+Its size fell out of arithmetic: the gap between the tile array and the actors is
+exactly `nzone*32 + nevent*8` across all fifteen sample maps, so zones are 32
+bytes and events 8. The record is
+
+```
+u16 eventType   u16 sector   i16 eventTag   i16 params
+```
+
+verified against the `.dmap` sources on every event in test_door, test_switch
+and test_lifts.
+
+The useful part is what `eventType` turned out to be: **the same numbering Build
+PowerSlave uses for its own sector effects.** Kex type 1 is Exhumed's "Ceiling
+Doom door", 7 is "Touchplate floor lower, multiple", 21 is "Touchplate", 23 is
+"Floor raise, Synchronize", 24 is "Ceiling door, channel trigger only". The
+console and DOS versions descend from one design and kept the tag numbers.
+
+So no new game code was needed. An event becomes `sector.lotag` (the effect) and
+`sector.hitag` (the channel), and `runlist_ProcessSectorTag()` builds the
+elevator and its press-trigger exactly as it does for the original levels. TOMB
+gets 12 tagged sectors, KARNAK 34.
+
+A wrong turn worth recording: an earlier attempt read the door target straight
+out of the sector record, having matched `targetCeiling 256` against a 256 at
+index 3. That produced 258 doors in a 268-sector level -- index 3 is the ceiling
+*height*, and the match was a coincidence of a 256-tall room. One counter-example
+from data already in hand (test_breakables has 512 there with no target at all)
+would have killed it before any code was written.
 
 ### The status bar
 
