@@ -777,6 +777,21 @@ void ExNet_LevelStart(void)
     LOG_F(INFO, "Exhumed net: all players ready, starting level %d", (int)levelnum);
 }
 
+// Is a new tick's worth of local input about to be published?  The game loop
+// asks before gathering, because gathering CONSUMES the accumulators:
+// PlayerInterruptKeys() does "nPlayerDAng += q16avel" every 120 Hz tic (and the
+// keyboard's contribution only lands on every 4th call), while GetLocalInput()
+// zeroes nPlayerDAng after copying it into sPlayerInput.  The game loop spins
+// far faster than either rate -- measured at ~10,000 passes per published tick
+// -- so gathering unconditionally threw away all but ~0.01% of the turn input
+// the player had actually accumulated, and a networked player could walk and
+// shoot but not turn.  Single-player has the same structure and solves it the
+// same way: it only gathers on a tick boundary.
+int ExNet_WantsInput(void)
+{
+    return s_enabled && s_sendTick < s_netTick + EXNET_INPUT_DELAY;
+}
+
 // ---------------------------------------------------------------------------
 // Per game-loop pass: read what arrived, then publish local input far enough
 // ahead that the simulation never has to wait on our own machine.

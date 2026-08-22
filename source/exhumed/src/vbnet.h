@@ -43,6 +43,7 @@ int  ExNet_IsServer(void);                     // this machine is the mmulti mas
 void ExNet_SendGameFiles(int slot);            // host: stream --netfile files + the usermap
 void ExNet_ReceiveGameFiles(void);             // joiner: block until the host's files land
 void ExNet_LevelStart(void);                   // ready barrier + tick reset, per level
+int  ExNet_WantsInput(void);                   // is a new tick's local input due? (gather gate)
 void ExNet_Update(void);                       // once per game-loop pass: pump + publish
 int  ExNet_MoveFrames(int wallClockFrames);    // how many ticks may run right now
 void ExNet_LoadTickInputs(void);               // before each GameMove(): install tick inputs

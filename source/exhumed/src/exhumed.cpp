@@ -2729,7 +2729,11 @@ LOOP3:
                     goto MENU;
                 }
             }
-            else if (bRecord || moveframes || ExNet_Enabled())
+            // Gathering consumes nPlayerDAng / lLocalCodes, so it must happen at
+            // the rate the input is actually consumed downstream -- a tick
+            // boundary -- not on every pass of a loop that spins orders of
+            // magnitude faster. See ExNet_WantsInput().
+            else if (ExNet_Enabled() ? ExNet_WantsInput() : (bRecord || moveframes))
             {
                 GetLocalInput();
 

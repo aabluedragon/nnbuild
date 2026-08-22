@@ -334,15 +334,23 @@ if a peer stalls us we stop producing too, and nothing runs away.
 
 Three things here are worth knowing before changing them:
 
-1. **`faketimerhandler()` must run before `bInMove` is set.** The networked
-   branch of the game loop keeps `bInMove` set for its whole body, and
-   `Exhumed_faketimerhandler()` refuses to call `PlayerInterruptKeys()` while
-   `bInMove` is set — which is what turns the keyboard and mouse into
-   `nPlayerDAng` / `lPlayerXVel` / `nVertPan`. Without the explicit
-   `faketimerhandler()` call at the top of that branch a networked player can
-   walk and shoot but never *turn*. Calling `faketimerhandler()` (rather than
-   `PlayerInterruptKeys()` directly) keeps the same 120 Hz throttle
-   single-player gets, so the turn rate matches.
+1. **Turning needs two things, and both are easy to miss.** The symptom of
+   getting either wrong is identical: a networked player can walk and shoot but
+   never *turn*.
+   - `Exhumed_faketimerhandler()` refuses to call `PlayerInterruptKeys()` while
+     `bInMove` is set, and the networked branch keeps `bInMove` set for its whole
+     body — so that branch calls `faketimerhandler()` explicitly at the top,
+     before setting the flag. (Calling it rather than `PlayerInterruptKeys()`
+     directly keeps single-player's 120 Hz throttle, so the turn rate matches.)
+   - Gathering local input **consumes** the accumulators.
+     `PlayerInterruptKeys()` does `nPlayerDAng += q16avel` at 120 Hz, and only
+     every 4th call contributes the keyboard's share; `GetLocalInput()` zeroes
+     `nPlayerDAng` after copying it. The game loop runs orders of magnitude
+     faster than either rate — **measured at ~10,000 passes per published tick**
+     — so gathering on every pass discarded all but ~0.01% of the turn the
+     player had accumulated. Gather only when a tick's input is actually due
+     (`ExNet_WantsInput()`); single-player has the same structure and gates the
+     same way, on a tick boundary.
 2. **Files must land before `InstallEngine()`.** `VB_RecvFileChunk` mounts a
    received GRP the moment it completes, so a joiner blocks in
    `ExNet_ReceiveGameFiles()` until the host's `EXNET_PT_FILES_DONE` arrives —

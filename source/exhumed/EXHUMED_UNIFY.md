@@ -159,6 +159,18 @@ has two constraints that are easy to get wrong:
   even deliver its header: the ring wrapped, unacked chunks were overwritten,
   and the joiner sat waiting until the master's watchdog dropped it.
 
+**Local input** is gathered once per *tick*, not once per game-loop pass, and
+that distinction is the whole reason turning works. `PlayerInterruptKeys()`
+accumulates (`nPlayerDAng += q16avel`) at 120 Hz with the keyboard's share
+landing only on every 4th call, and `GetLocalInput()` zeroes the accumulator as
+it copies it out. The loop spins about ten thousand times per published tick, so
+gathering unconditionally threw away all but a ten-thousandth of the turn input
+-- the player could walk and shoot but not turn, with keys or mouse. The branch
+now asks `ExNet_WantsInput()` first, which is the same tick-boundary gate
+single-player uses. (`Exhumed_faketimerhandler()` also has to be called
+explicitly at the top of that branch, before `bInMove` is set, or
+`PlayerInterruptKeys()` never runs there at all.)
+
 ### Options
 
 Every VibeBuild32 multiplayer flag (`source/glue/netargs.h`) is accepted, with
