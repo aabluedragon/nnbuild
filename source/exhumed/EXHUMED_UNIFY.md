@@ -372,6 +372,38 @@ four corners and dropped if any lands more than 8 world units out. On TOMB that
 keeps 52 of 92 with a worst-case error of 6.3 world units; before the check the
 worst was 803.
 
+**Lighting is calibrated against the remaster, not eyeballed.** Frames from a
+playthrough of TOMB were sampled over the 3D viewport and compared with the same
+view here. The level was rendering about 2.3x too bright, and matching only the
+median produced a *bimodal* image -- blown-out near walls, a third of the frame
+pure black -- whose average happened to be right. What has to match is the
+distribution:
+
+```
+reference    p05 20   p25 30   p50 37   p75 47   p95 81   black  0%
+median-only  p05  0   p25  0   p50 39   p75 82   p95 108  black 29%
+```
+
+The shade band is therefore compressed and lifted off zero (`KEX_SHADE_MIN` /
+`KEX_SHADE_SPAN`) rather than spanning the full ramp. The endpoints come from a
+measured response of shade to rendered luminance -- 17 -> 85, 25 -> 75, 47 -> 39,
+105 -> 0 -- which is flat at the top and then falls off a cliff, nothing like the
+linear ramp that reasoning from Build's palette suggests.
+
+Two cautions for anyone re-running this. eduke32 caches processed textures in
+`texturecache`, so changing a PNG under an existing tile number does nothing
+until that file is deleted -- an earlier round of these numbers was measured
+against a stale cache. And `-res` does not take effect here; every capture came
+out 1470x956 regardless, which briefly made a resolution test look meaningful
+when it was comparing identical renders.
+
+**Known regression:** the sky ceilings introduced a band of RGB noise along the
+very top of the screen -- neighbour-pixel roughness 248 where both the stock game
+and this level before the change measure 0. It is not the tile's aspect
+(squaring it changes nothing), not the texture cache, and not the resolution;
+turning Build's parallax bit on instead makes the lighting worse without fixing
+it. Unresolved.
+
 **Sky.** Kex has no sky tile: the sky is named in the map header and a ceiling
 simply carries *no tiles* where it shows through. Untextured ceilings were being
 handed texture slot 0 -- 169 of them in KARNAK alone -- so its courtyards were

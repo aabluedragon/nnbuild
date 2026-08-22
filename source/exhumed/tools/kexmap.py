@@ -315,7 +315,22 @@ def _zspan(m, f):
 # The curve is a square root rather than linear: Build's shade table darkens
 # fast, and a straight mapping of a median-40 level puts most of it at the
 # bottom of the ramp where nothing is legible.
-KEX_SHADE_RANGE = 28
+# Calibrated against the remaster itself, by sampling the 3D viewport of frames
+# from a playthrough of this level. What matters is the DISTRIBUTION, not the
+# average -- matching only the median produced a bimodal image (blown-out near
+# walls, a third of the frame pure black) whose average happened to be right:
+#
+#     reference   p05 20   p25 30   p50 37   p75 47   p95 81   black  0%
+#     median-only p05  0   p25  0   p50 39   p75 82   p95 108  black 29%
+#
+# So the shade band is compressed and lifted off zero rather than spanning the
+# full ramp. The endpoints come from a measured response curve of shade to
+# rendered luminance (17 -> 85, 25 -> 75, 47 -> 39, 105 -> 0), which is flat at
+# the top and then falls off a cliff -- nothing like the linear ramp that
+# reasoning from Build's palette would suggest.
+KEX_SHADE_MIN  = 30         # brightest surface: still not fullbright
+KEX_SHADE_SPAN = 30         # darkest lands ~75, dim but never crushed to black
+KEX_SHADE_MAX  = 127
 
 def _shade(m, f):
     # The lighting is on the face's TILE vertices, not its four corners: the
@@ -336,7 +351,8 @@ def _shade(m, f):
     if not n:
         return 0
     lum = (tot / float(n)) / 255.0
-    return max(0, min(KEX_SHADE_RANGE, int(round((1.0 - lum ** 0.5) * KEX_SHADE_RANGE))))
+    return max(0, min(KEX_SHADE_MAX,
+                      int(round(KEX_SHADE_MIN + (1.0 - lum ** 0.5) * KEX_SHADE_SPAN))))
 
 
 def _pic(m, f, tilebase):
@@ -783,8 +799,14 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
             s['ceilingpicnum'] = local[s['ceilingpicnum']] if s['ceilingpicnum'] < len(local) else tilebase
             s['floorpicnum']   = local[s['floorpicnum']]   if s['floorpicnum']   < len(local) else tilebase
             if s['ceilingsky'] and skytile is not None:
+                # Drawn as an ordinary textured ceiling rather than with Build's
+                # parallax bit. The remaster's skies are 256x512 portrait tiles;
+                # fed to the parallax sky renderer they came out black with a
+                # band of noise along the top of the screen -- 31% of the frame.
+                # A plain ceiling shows the right sky colour and costs only the
+                # parallax scroll, which barely reads in these walled courtyards.
                 s['ceilingpicnum'] = skytile
-                s['ceilingstat'] |= 1        # Build's parallaxed sky
+                s['ceilingshade'] = KEX_SHADE_MIN
         start = player_start(m, sects, walls, ranges)
         _, remap = sector_remap(sects, ranges)
         sprites = build_sprites(m, sects, walls, ranges, remap)
@@ -798,6 +820,30 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
 
     sizes = collect(kpf, list(assign))
     usable = {tile: name for name, tile in assign.items() if name in sizes}
+
+    # The skies ship as 256x512 portrait tiles. Used as a ceiling texture that
+    # made Build sample past the top of the tile: a band of RGB noise along the
+    # top of the screen, measured at a neighbour-pixel roughness of 248 where
+    # both the stock game and this level before the change sat at 0. Squaring
+    # them fixes it, and a sky read as a flat colour field loses nothing.
+    import kexpng as _png
+    skydir = os.path.join(outdir, 'kexart')
+    os.makedirs(skydir, exist_ok=True)
+    with zipfile.ZipFile(kpf) as z:
+        have = {n.lower(): n for n in z.namelist()}
+        for tile, name in list(usable.items()):
+            if '/skies/' not in name.lower():
+                continue
+            real = have.get(name.lower())
+            if real is None:
+                continue
+            tmp = os.path.join(skydir, os.path.basename(name))
+            open(tmp, 'wb').write(z.read(real))
+            w_, h_, pix = _png.read(tmp)
+            if w_ != h_:
+                pix = _png.resize(w_, h_, pix, 256, 256)
+                _png.write(tmp, 256, 256, pix)
+            usable[tile] = 'kexart/' + os.path.basename(name)
     write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs)
 
     # The menu art rides along: exhumed.def is the one file the game loads by
