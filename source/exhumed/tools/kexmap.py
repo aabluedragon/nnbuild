@@ -298,10 +298,87 @@ def find_sector(sects, walls, ranges, x, y):
         if inside: return si
     return -1
 
-def write_build(path, sects, walls, ranges, start):
-    sx,sy,sz,ss = start
+# ---------------------------------------------------------------------------
+# Actors
+# ---------------------------------------------------------------------------
+# Build PowerSlave spawns everything from a map sprite's lotag: ProcessSpriteTag()
+# turns 100..118 into creatures and 6..60 into items. So an actor converts to a
+# plain sprite with the right lotag and the engine does the rest.
+#
+# The two games' rosters are cousins, not twins -- the remaster is the console
+# version, whose enemies do not all have a Build counterpart -- so this maps what
+# genuinely corresponds and leaves the rest out rather than substituting
+# something wrong. Decorations (torches, plants, columns, camp props) are skipped
+# on purpose: they are pure scenery in Kex and have no Build equivalent at all.
+AT = dict(PLAYER=0, ANUBIS=1, BASTET=2, CROW=3, QUEEN=4, MANTIS=5, MUMMY=6,
+          MOSQUITO=7, FISH=8, SELKIS=9, SENTRY=10, SET=11, SPIDER=12,
+          BUGKEY=29, TIMEKEY=30, XKEY=31, PLANTKEY=32, PYRAMID=33,
+          MASK=35, HEALTH=40, AMMO=41, PISTOL=42, M60=43, ANUSBOMB=44,
+          FLAMER=45, STAFF=46, RING=47, FLAMEPOT=49, SNAKEPOT=50,
+          FULLAMMO=51, FULLHEALTH=52)
+
+# Kex actor type -> (Build lotag, hitag). hitag carries the pickup amount for the
+# ammo tags, which is what AddAmmo() reads.
+ACTOR_MAP = {
+    AT['ANUBIS']:   (100, 0),   # Anubis warrior
+    AT['MUMMY']:    (101, 0),
+    AT['BASTET']:   (102, 0),   # lion
+    AT['SENTRY']:   (103, 0),   # Kilmaat sentry -> roach
+    AT['MANTIS']:   (104, 0),
+    AT['SPIDER']:   (105, 0),
+    AT['FISH']:     (106, 0),
+    AT['SET']:      (111, 0),
+    AT['SELKIS']:   (112, 0),   # scorpion
+    AT['QUEEN']:    (113, 0),
+    AT['MOSQUITO']: (117, 0),   # wasp
+    AT['CROW']:     (117, 0),   # no Build crow; the wasp is the closest flier
+
+    AT['AMMO']:      (6, 10),   # speed loader
+    AT['FLAMEPOT']:  (7, 20),   # fuel canister
+    AT['FULLAMMO']:  (8, 30),   # M-60 belt
+    AT['ANUSBOMB']:  (9, 0),    # grenade
+    AT['HEALTH']:    (12, 0),   # berry twig
+    AT['FULLHEALTH']:(14, 0),   # cobra venom bowl
+    AT['MASK']:      (23, 0),   # Sobek mask
+    AT['PISTOL']:    (28, 0),   # .357
+    AT['M60']:       (29, 0),
+    AT['FLAMER']:    (30, 0),
+    AT['STAFF']:     (32, 0),   # cobra staff
+    AT['RING']:      (33, 0),   # eye of Ra
+    AT['SNAKEPOT']:  (37, 10),  # cobra staff ammo
+    AT['BUGKEY']:    (45, 0),   # power key
+    AT['TIMEKEY']:   (46, 0),
+    AT['XKEY']:      (47, 0),   # war key
+    AT['PLANTKEY']:  (48, 0),   # earth key
+    AT['PYRAMID']:   (60, 0),   # golden sarcophagus: ends the level
+}
+
+def build_sprites(m, sects, walls, ranges, remap):
+    """Kex actors -> Build sprites carrying the lotag Build PowerSlave expects."""
+    out = []
+    for a in m.actors:
+        ent = ACTOR_MAP.get(a.type)
+        if ent is None:
+            continue
+        x, y = a.x, -a.y
+        si = find_sector(sects, walls, ranges, x, y)
+        if si < 0 or si not in remap:
+            continue                       # actor sits in a sector we dropped
+        lotag, hitag = ent
+        out.append(dict(x=x, y=y, z=sects[si]['floorz'], sectnum=remap[si],
+                        ang=(a.raw[1] * 2048 // 8) & 2047, lotag=lotag, hitag=hitag))
+    return out
+
+
+def sector_remap(sects, ranges):
+    """Sectors that survived, and old index -> new index for the ones that did."""
     keep = [i for i,s in enumerate(sects) if s is not None and ranges[i][1] >= 3]
-    remap = {old:new for new,old in enumerate(keep)}
+    return keep, {old:new for new,old in enumerate(keep)}
+
+
+def write_build(path, sects, walls, ranges, start, sprites=()):
+    sx,sy,sz,ss = start
+    keep, remap = sector_remap(sects, ranges)
     wremap = {}; out_walls = []
     for old in keep:
         st,num = ranges[old]
@@ -330,9 +407,13 @@ def write_build(path, sects, walls, ranges, start):
         b += struct.pack('<iihhhhhhbBBBBBhhh',
             w['x'], w['y'], w['point2'], w['nextwall'], w['nextsector'],
             w['cstat'], w['picnum'], 0, 0, 0, 8, 8, 0, 0, 0, 0, 0)
-    b += struct.pack('<H', 0)
+    b += struct.pack('<H', len(sprites))
+    for s in sprites:
+        b += struct.pack('<iiihhbBBBBBbbhhhhhhhhhh',
+            s['x'], s['y'], s['z'], 0, 1, 0, 0, 32, 0, 64, 64, 0, 0,
+            s['sectnum'], 0, s['ang'], -1, 0, 0, 0, s['lotag'], s['hitag'], 0)
     open(path,'wb').write(b)
-    return len(keep), len(out_walls)
+    return len(keep), len(out_walls), len(sprites)
 
 # ---------------------------------------------------------------------------
 # Textures
@@ -413,11 +494,14 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
             s['ceilingpicnum'] = local[s['ceilingpicnum']] if s['ceilingpicnum'] < len(local) else tilebase
             s['floorpicnum']   = local[s['floorpicnum']]   if s['floorpicnum']   < len(local) else tilebase
         start = player_start(m, sects, walls, ranges)
-        ns, nw = write_build(os.path.join(outdir, name.upper()), sects, walls, ranges, start)
+        _, remap = sector_remap(sects, ranges)
+        sprites = build_sprites(m, sects, walls, ranges, remap)
+        ns, nw, nsp = write_build(os.path.join(outdir, name.upper()),
+                                  sects, walls, ranges, start, sprites)
         portals = sum(1 for w in walls if w['nextsector'] >= 0)
         if verbose:
-            print("  %-16s %4d kex sectors -> %4d build sectors, %5d walls, %4d portals"
-                  % (name, m.nsector, ns, nw, portals))
+            print("  %-16s %4d kex sectors -> %4d build sectors, %5d walls, %4d portals, "
+                  "%3d/%d actors" % (name, m.nsector, ns, nw, portals, nsp, m.nactor))
         done += 1
 
     sizes = collect(kpf, list(assign))

@@ -328,13 +328,27 @@ Two things are worth knowing before touching the reader:
 ### What converts, and what does not
 
 Converted: sector and wall geometry, floor and ceiling heights, portals between
-sectors, wall/floor/ceiling textures, the player start.
+sectors, wall/floor/ceiling textures, the player start, and the enemies and
+pickups.
+
+Actors ride on a happy accident of Build PowerSlave's design: `ProcessSpriteTag()`
+spawns everything from a map sprite's **lotag** -- 100..118 are creatures,
+6..60 are items -- so a Kex actor converts to a plain sprite with the right
+lotag and the engine builds the rest. The two rosters are cousins rather than
+twins (the remaster is the console version, and not every console enemy has a
+Build counterpart), so `ACTOR_MAP` maps what genuinely corresponds and omits the
+rest rather than substituting something wrong. Verified by counting what the
+engine actually spawned: KARNAK 88 creatures / 103 live sprites, SLAVCAMP
+125 / 161.
 
 Not converted:
 
-- **Actors.** Enemies, pickups, doors, switches and triggers are all read (type,
-  position, tag, params) but nothing is emitted yet, so the levels are walkable
-  and empty. This is the biggest remaining piece.
+- **Scenery actors.** Torches, plants, columns, camp props and the like are pure
+  decoration in Kex with no Build equivalent, so they are skipped deliberately.
+- **Doors, switches, lifts and triggers.** Kex keeps these in its own event and
+  zone tables, which this reader identifies but does not decode. Keys and the
+  golden sarcophagus are placed, but nothing they should open moves yet -- this
+  is the biggest remaining piece.
 - **Room-over-room.** Kex lets one wall link several sectors; plain Build cannot,
   so only the tallest portal on an edge survives, and a sector whose walls are
   not a single closed ring is dropped rather than emitted broken (226 of 9837
