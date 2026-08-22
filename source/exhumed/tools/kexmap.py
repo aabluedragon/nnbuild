@@ -76,7 +76,7 @@ class Face:
 class Sector:
     __slots__=('faceStart','wallEnd','raw')
 class Actor:
-    __slots__=('type','x','y','z','tag','p1','p2','layer','raw')
+    __slots__=('type','x','y','z','tag','p1','p2','layer','ang','raw')
 
 class PSM:
     def __init__(self, data, vstart=None):
@@ -129,6 +129,10 @@ class PSM:
             u=struct.unpack_from('<10h',d,p)
             a.type=u[0]&0xffff; a.x,a.y,a.z=u[2],u[3],u[4]
             a.tag=u[5]; a.p1=u[6]; a.p2=u[7]; a.layer=u[8]; a.raw=u
+            # Facing, as a float at offset 16 -- in degrees, and rotated:
+            # the text source's angle (radians) is radians(90 - stored).
+            # Checked against every sample map that has a turned actor.
+            a.ang=struct.unpack_from('<f', d, p+16)[0]
             self.actors.append(a)
 
     def valid(self):
@@ -165,6 +169,32 @@ def load(path):
 
 SCALE = 16
 AT_PLAYER = 0
+
+# Kex and Build PowerSlave are the same spaces at different scales, and the
+# player that walks these levels is Build PowerSlave's: eye height 14080 z units
+# (880 world), collision radius 232, step clearance 5120 z (320 world). Kex
+# authors a corridor at 256 units wide and 512 tall, so at 1:1 the player's eye
+# sits ABOVE the ceiling and its radius nearly fills the corridor -- which is
+# what made the first level render as a smear of wall.
+#
+# The factor is measured against the original game rather than guessed. Across
+# Exhumed's own LEV1 and the converted TOMB:
+#     median sector height   3200 vs  512  ->  6.25
+#     median wall length     1032 vs  181  ->  5.7
+# Two independent measures of the same ratio, so 6.
+WORLD = 6
+
+# Build shows xrepeat*8 texels across a wall, so xrepeat follows wall LENGTH.
+# The original game runs about 20.4 world units per texel (measured from its own
+# shipped xrepeat values); at WORLD=6 a Kex texel covers 6 world units, which is
+# finer -- as it should be, the remaster's art has more resolution.
+#     xrepeat = length / (8 * units_per_texel)
+KEX_UNITS_PER_TEXEL = WORLD
+
+# yrepeat is a vertical scale and does not depend on the wall's length. The
+# original game pairs yrepeat 7 with its 20.4 units per texel, which pins the
+# constant at ~143; at 6 units per texel that lands on 24.
+KEX_YREPEAT = max(1, min(255, int(round(143.0 / KEX_UNITS_PER_TEXEL))))
 
 def _edges(m, si):
     """The sector's 2D edges, chained into a closed loop.
@@ -237,18 +267,29 @@ def convert(m, tilebase=4096):
                     lo,hi = _zspan(m,f)
                     if hi-lo >= pspan: pspan = hi-lo; portal = f
             solid = next((m.faces[fi] for fi in fis if m.faces[fi].link < 0), m.faces[fis[0]])
+            # Build shows exactly xrepeat*8 texels across a wall (polymost's
+            # u spans wal->xrepeat*8), and Kex authors its levels at one texel
+            # per world unit -- Nightdive's own doc: a 64x64 texture on a wall
+            # 512 units wide takes 8 tile columns. So xrepeat follows the wall's
+            # LENGTH; a fixed value smears every wall by the ratio of its length
+            # to 64.
+            import math as _m
+            ex, ey = k[2] - k[0], k[3] - k[1]
+            length = _m.hypot(ex, ey)
             walls.append(dict(x=int(round(k[0])), y=int(round(-k[1])),
                               point2=start+((i+1)%len(edges)),
                               nextwall=-1,
                               nextsector=portal.link if portal is not None else -1,
-                              cstat=0, picnum=_pic(m, solid, tilebase)))
+                              cstat=0, picnum=_pic(m, solid, tilebase),
+                              xrepeat=max(1, min(255, int(round(length * WORLD / (8.0 * KEX_UNITS_PER_TEXEL))))),
+                              yrepeat=KEX_YREPEAT))
         ranges.append((start, len(walls)-start))
         cf = m.faces[min(s.wallEnd+1, m.nface-1)]
         ff = m.faces[min(s.wallEnd+2, m.nface-1)]
         clo,chi = _zspan(m,cf); flo,fhi = _zspan(m,ff)
         if chi <= flo: chi = flo + 8       # never let the ceiling sit under the floor
         sects.append(dict(wallptr=start, wallnum=len(walls)-start,
-                          ceilingz=int(round(-chi*SCALE)), floorz=int(round(-flo*SCALE)),
+                          ceilingz=int(round(-chi*SCALE*WORLD)), floorz=int(round(-flo*SCALE*WORLD)),
                           ceilingpicnum=_pic(m,cf,tilebase), floorpicnum=_pic(m,ff,tilebase)))
 
     # nextwall: the neighbour's wall carrying the same edge reversed
@@ -272,19 +313,66 @@ def convert(m, tilebase=4096):
             w['nextwall'] = -1; w['nextsector'] = -1
     return sects, walls, ranges
 
+def build_angle(stored_deg):
+    """Kex facing -> Build facing.
+
+    The actor record stores a float at offset 16 which is NOT the angle the text
+    source shows: the source's angle in radians is radians(90 - stored), checked
+    against every sample map that has a turned actor.
+
+    That source angle is a compass heading -- clockwise from +y -- not the usual
+    counter-clockwise-from-+x. So a Kex heading phi points along
+    (sin phi, cos phi); flipping y for Build turns that into (sin phi, -cos phi),
+    which is Build angle phi - 90. With phi = 90 - stored, the whole chain
+    collapses to simply -stored. Confirmed against TOMB, whose player then faces
+    down the hall it actually opens onto.
+    """
+    return int(round(-stored_deg * 2048.0 / 360.0)) & 2047
+
+
+def start_angle(walls, ranges, si, x, y):
+    """Face the way the level opens, not whatever wall happens to be ahead.
+
+    The Kex actor record's angle field does not survive the compile in any form
+    this reader could confirm -- the one float in it reads 90 where the text
+    source says 0 -- so rather than write down a number that is probably wrong,
+    aim at the nearest portal out of the starting sector, falling back to the
+    sector's centre. Either way the player opens facing into the level.
+    """
+    import math as _m
+    start, num = ranges[si]
+    best = None
+    cx = cy = 0.0
+    for i in range(num):
+        w = walls[start+i]; nxt = walls[w['point2']]
+        mx, my = (w['x']+nxt['x'])/2.0, (w['y']+nxt['y'])/2.0
+        cx += w['x']; cy += w['y']
+        if w['nextsector'] >= 0:
+            d = (mx-x)**2 + (my-y)**2
+            if best is None or d < best[0]: best = (d, mx, my)
+    if best is None:
+        if num: best = (0, cx/num, cy/num)
+        else: return 0
+    dx, dy = best[1]-x, best[2]-y
+    if dx == 0 and dy == 0: return 0
+    # Build angles: 0 = +x, 2048 = full turn, y grows downward.
+    return int(round(_m.atan2(dy, dx) * 1024.0 / _m.pi)) & 2047
+
+
 def player_start(m, sects, walls, ranges):
     for a in m.actors:
         if a.type == AT_PLAYER:
             x,y,z = a.x, -a.y, a.z
             si = find_sector(sects, walls, ranges, x, y)
             if si >= 0:
-                return x, y, sects[si]['floorz']-(52*SCALE), si
+                # The player's feet: Build PowerSlave adds its own eye height.
+                return x, y, sects[si]['floorz'], si, build_angle(a.ang)
     for si,s in enumerate(sects):
         if s and ranges[si][1] >= 3:
             xs = [walls[ranges[si][0]+i]['x'] for i in range(ranges[si][1])]
             ys = [walls[ranges[si][0]+i]['y'] for i in range(ranges[si][1])]
-            return sum(xs)//len(xs), sum(ys)//len(ys), s['floorz']-(52*SCALE), si
-    return 0,0,0,0
+            return sum(xs)//len(xs), sum(ys)//len(ys), s['floorz'], si, None
+    return 0,0,0,0,None
 
 def find_sector(sects, walls, ranges, x, y):
     for si,(start,num) in enumerate(ranges):
@@ -366,8 +454,8 @@ def build_sprites(m, sects, walls, ranges, remap):
         if si < 0 or si not in remap:
             continue                       # actor sits in a sector we dropped
         lotag, hitag = ent
-        out.append(dict(x=x, y=y, z=sects[si]['floorz'], sectnum=remap[si],
-                        ang=(a.raw[1] * 2048 // 8) & 2047, lotag=lotag, hitag=hitag))
+        out.append(dict(x=x * WORLD, y=y * WORLD, z=sects[si]['floorz'], sectnum=remap[si],
+                        ang=build_angle(a.ang), lotag=lotag, hitag=hitag))
     return out
 
 
@@ -378,7 +466,10 @@ def sector_remap(sects, ranges):
 
 
 def write_build(path, sects, walls, ranges, start, sprites=()):
-    sx,sy,sz,ss = start
+    sx, sy, sz, ss, sang = start
+    # The map's own facing when it has one; otherwise aim at the way out.
+    if sang is None:
+        sang = start_angle(walls, ranges, ss, sx, sy) if ss < len(ranges) else 0
     keep, remap = sector_remap(sects, ranges)
     wremap = {}; out_walls = []
     for old in keep:
@@ -394,8 +485,8 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
         if w['nextsector'] >= 0: w['cstat'] |= 0x20 if False else 0
     b = bytearray()
     b += struct.pack('<i', 7)
-    b += struct.pack('<iii', sx, sy, sz)   # x/y are world units; only z is 1/16
-    b += struct.pack('<hh', 0, remap.get(ss,0))
+    b += struct.pack('<iii', sx * WORLD, sy * WORLD, sz)   # x/y are world units; only z is 1/16
+    b += struct.pack('<hh', sang, remap.get(ss,0))
     b += struct.pack('<H', len(keep))
     for old in keep:
         s = sects[old]; st,num = ranges[old]
@@ -406,8 +497,8 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
     b += struct.pack('<H', len(out_walls))
     for w in out_walls:
         b += struct.pack('<iihhhhhhbBBBBBhhh',
-            w['x'], w['y'], w['point2'], w['nextwall'], w['nextsector'],
-            w['cstat'], w['picnum'], 0, 0, 0, 8, 8, 0, 0, 0, 0, 0)
+            w['x'] * WORLD, w['y'] * WORLD, w['point2'], w['nextwall'], w['nextsector'],
+            w['cstat'], w['picnum'], 0, 0, 0, w['xrepeat'], w['yrepeat'], 0, 0, 0, 0, 0)
     b += struct.pack('<H', len(sprites))
     for s in sprites:
         b += struct.pack('<iiihhbBBBBBbbhhhhhhhhhh',

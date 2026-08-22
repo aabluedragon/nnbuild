@@ -328,8 +328,33 @@ Two things are worth knowing before touching the reader:
 ### What converts, and what does not
 
 Converted: sector and wall geometry, floor and ceiling heights, portals between
-sectors, wall/floor/ceiling textures, the player start, and the enemies and
-pickups.
+sectors, wall/floor/ceiling textures, the player start and facing, and the
+enemies and pickups.
+
+**Scale.** Kex and Build PowerSlave are the same spaces at different sizes, and
+the player walking these levels is Build PowerSlave's: eye height 14080 z units
+(880 world), collision radius 232. Kex authors a corridor 256 units wide and 512
+tall, so converted 1:1 the player's eye sits *above the ceiling* and its radius
+nearly fills the corridor -- which is why the first level rendered as a smear of
+wall. The factor is measured, not guessed: across Exhumed's own LEV1 and the
+converted TOMB, median sector height is 3200 vs 512 (6.25) and median wall
+length 1032 vs 181 (5.7). Two independent measures of one ratio, so `WORLD = 6`;
+afterwards the converted medians are 3072 and 1086 against the original's 3200
+and 1032.
+
+**Texture scale.** Build shows exactly `xrepeat*8` texels across a wall, so
+xrepeat follows the wall's *length* -- a fixed value smears every wall by the
+ratio of its length to the tile. The original game runs about 20.4 world units
+per texel (measured from its own shipped xrepeat values); at `WORLD = 6` a Kex
+texel covers 6, which is finer, as it should be. `yrepeat` is a vertical scale
+and does not depend on length: the original pairs yrepeat 7 with its 20.4 units
+per texel, pinning the constant at ~143, so 6 units per texel gives 24.
+
+**Facing.** The actor record's float at offset 16 is not the angle the text
+source shows -- the source's angle in radians is `radians(90 - stored)`, checked
+against every sample map with a turned actor. That source angle is a compass
+heading (clockwise from +y), so after the y-flip the whole chain collapses to
+Build angle `= -stored`.
 
 Actors ride on a happy accident of Build PowerSlave's design: `ProcessSpriteTag()`
 spawns everything from a map sprite's **lotag** -- 100..118 are creatures,
