@@ -36,7 +36,8 @@
 #include "sound.h"
 #include "move.h"
 #include "player.h"
-#include "scorp.h"
+#include "spider.h"
+#include "anims.h"
 #include "random.h"
 #include "lighting.h"
 #include "kextable.h"
@@ -48,6 +49,7 @@
 struct KexBreakType
 {
     int16_t tile, health, shard0, nshards, clipdist;
+    int16_t blastradius, blastdamage;   // A_RadialBlast, in the remaster's units
 };
 
 struct KexBreakProp
@@ -63,14 +65,16 @@ static int          s_selftest;   // VB_KEXBREAK_TEST: shatter everything after 
 
 static bool KexBreak_ParseLine(char *line, int nRec)
 {
-    int tile, health, shard0, nshards, clipdist = 32;
-    if (Bsscanf(line, "%d %d %d %d %d", &tile, &health, &shard0, &nshards, &clipdist) < 4)
+    int tile, health, shard0, nshards, clipdist = 32, br = 0, bd = 0;
+    if (Bsscanf(line, "%d %d %d %d %d %d %d", &tile, &health, &shard0, &nshards,
+                &clipdist, &br, &bd) < 4)
         return false;
 
     KexBreakType &t = s_type[nRec];
     t.tile = tile; t.health = health;
     t.shard0 = shard0; t.nshards = nshards;
     t.clipdist = clamp(clipdist, 1, 255);
+    t.blastradius = br; t.blastdamage = bd;
     return true;
 }
 
@@ -242,7 +246,10 @@ static void KexBreak_DropItem(int nSprite)
     switch (r)
     {
         case 0:
-            BuildScorp(-1, x, y, z, nSector, RandomSize(11), 0);
+            // The remaster spawns AI_Scorp here -- a 20-HP critter. Build has
+            // no small scorpion; the spider is the nearest pest. An earlier
+            // version called BuildScorp, which is the 20000-HP Selkis BOSS.
+            BuildSpider(-1, x, y, z, nSector, RandomSize(11));
             return;
 
         case 1:
@@ -312,7 +319,23 @@ static void KexBreak_Shatter(int nProp)
         OSD_Printf("Kex breakables: prop %d (tile %d) -> %d/%d shards\n",
                    nProp, t.tile, nChunks, t.nshards);
 
-    KexBreak_DropItem(nSprite);
+    if (t.blastdamage > 0)
+    {
+        // The exploding pots. Same recipe as the fire cauldron's explosion in
+        // FuncObject: flash, the explosion anim on the floor (its SEQ carries
+        // the boom), then the radial. The remaster's A_RadialBlast radius is
+        // in its own units; runlist compares (|dx|+|dy|)>>8, so radius 512
+        // becomes 512 * WORLD(6) / 256 = 12 against the cauldron's 20.
+        AddFlash(sprite[nSprite].sectnum, sprite[nSprite].x, sprite[nSprite].y,
+                 sprite[nSprite].z, 128);
+        BuildAnim(-1, 36, 0, sprite[nSprite].x, sprite[nSprite].y,
+                  sector[sprite[nSprite].sectnum].floorz,
+                  sprite[nSprite].sectnum, 240, 4);
+        runlist_RadialDamageEnemy(nSprite, t.blastdamage,
+                                  (int16_t)(t.blastradius * 6 / 256));
+    }
+    else
+        KexBreak_DropItem(nSprite);
 
     // Unregister and remove the prop, the way the exploding cauldron does.
     runlist_SubRunRec(sprite[nSprite].owner);

@@ -1315,7 +1315,10 @@ ACTOR_MAP = {
     AT['MUMMY']:    (101, 0),
     AT['BASTET']:   (102, 0),   # lion
     AT['SENTRY']:   (103, 0),   # Kilmaat sentry -> roach
-    AT['MANTIS']:   (104, 0),
+    # The remaster's "Mantis" is Build's lava dude wearing a new name: its
+    # rise/attack/death frames are pixel-identical to the LAVAG tiles and its
+    # def says noLavaDamage/noExitLava/hidden. 104 was the Kilmaat roach.
+    AT['MANTIS']:   (108, 0),
     AT['SPIDER']:   (105, 0),
     AT['FISH']:     (106, 0),
     AT['SET']:      (111, 0),
@@ -1325,7 +1328,6 @@ ACTOR_MAP = {
     AT['CROW']:     (117, 0),   # no Build crow; the wasp is the closest flier
 
     AT['AMMO']:      (6, 10),   # speed loader
-    AT['FLAMEPOT']:  (7, 20),   # fuel canister
     AT['FULLAMMO']:  (8, 30),   # M-60 belt
     AT['ANUSBOMB']:  (9, 0),    # grenade
     AT['HEALTH']:    (12, 0),   # berry twig
@@ -1336,12 +1338,20 @@ ACTOR_MAP = {
     AT['FLAMER']:    (30, 0),
     AT['STAFF']:     (32, 0),   # cobra staff
     AT['RING']:      (33, 0),   # eye of Ra
-    AT['SNAKEPOT']:  (37, 10),  # cobra staff ammo
     AT['BUGKEY']:    (45, 0),   # power key
     AT['TIMEKEY']:   (46, 0),
     AT['XKEY']:      (47, 0),   # war key
     AT['PLANTKEY']:  (48, 0),   # earth key
     AT['PYRAMID']:   (60, 0),   # golden sarcophagus: ends the level
+
+    # These two numbers are straight from the remaster's defs/defines.txt, and
+    # so is the correction above: the old console enum in scripts/actorTypes.txt
+    # calls 49/50 FLAMEPOT/SNAKEPOT, but defines.txt says Obj_Vase_Explode01/02
+    # -- the exploding pots, 232 of them, which were being converted into fuel
+    # canisters and cobra ammo. They now flow through build_actor_tiles() as
+    # breakables with a radial blast (see kexbreak.txt's explode columns).
+    58:   (60, 0),   # Obj_Camel: the remaster's level exit -> Build's
+    2000: (59, 0),   # Obj_Checkpoint -> Build's save-point scarab
 }
 
 # The Kex event table. The numbers do NOT mean what Build PowerSlave's sector
@@ -1474,6 +1484,7 @@ def load_kex_actors(Z):
                             scale=float(field('scale', '1') or 1),
                             fullbright=int(field('fullbright', '0') or 0),
                             still=int(field('noAdvanceFrames', '0') or 0),
+                            randomize=int(field('randomizeFrames', '0') or 0),
                             health=int(field('health', '0') or 0),
                             shootable=int(field('shootable', '0') or 0),
                             solid=int(field('solid', '0') or 0),
@@ -1529,6 +1540,22 @@ def _all_frames(Z, names, anim, limit=KEX_ANIM_MAX_FRAMES):
     return []
 
 
+def _death_blast(Z, names, anim):
+    """(radius, damage) of the A_RadialBlast in a death anim, or None."""
+    if '/' not in anim: return None
+    group, animname = anim.split('/', 1)
+    for n in Z.namelist():
+        ln = n.lower()
+        if not (ln.startswith('sprites/%s/' % group.lower()) and ln.endswith('_anim.txt')):
+            continue
+        txt = Z.read(n).decode('latin-1').replace('\r', '')
+        m = re.search(r'^' + re.escape(animname) + r'\s*\n\{(.*?)\n\}', txt, re.S | re.M)
+        if not m: continue
+        b = re.search(r'A_RadialBlast\(\s*(\d+)\s*,\s*(\d+)', m.group(1))
+        if b: return (int(b.group(1)), int(b.group(2)))
+    return None
+
+
 def _first_frame(Z, names, anim):
     f = _all_frames(Z, names, anim, 1)
     return f[0] if f else []
@@ -1567,7 +1594,20 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
         frames = _all_frames(Z, names, a['anim'])
         if not frames: continue
         breakable = a.get('still') and a.get('shootable') and a.get('death')
-        if a.get('still') and not breakable:
+        # The exploding pots hold a random still frame (randomizeFrames) and
+        # keep their shard art in a separate *_shards anim; the blast radius
+        # and damage sit in the death anim's A_RadialBlast action.
+        explode = (0, 0)
+        if not breakable and a.get('shootable') and a.get('death') and a.get('randomize'):
+            blast = _death_blast(Z, names, a['death'])
+            if blast:
+                explode = blast
+                shards = _all_frames(Z, names, a['death'].replace('_death', '_shards'))
+                frames = frames[:1] + shards
+                breakable = len(frames) > 1
+        elif a.get('still') and not breakable:
+            frames = frames[:1]
+        if a.get('randomize') and not breakable:
             frames = frames[:1]
 
         # Every frame of one actor is composited into the SAME box, so the
@@ -1611,13 +1651,13 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
         # a real light instead; these are the tiles that should cast one.
         if 'light source' in (a.get('group') or '').lower():
             lights.append(first)
-        if len(allrects) > 1 and not a.get('still'):
+        if len(allrects) > 1 and not a.get('still') and not breakable:
             animdefs.append((first, tile - 1, 3))
         if breakable and len(allrects) > 1:
             # frame 0 is the intact object; the rest are the shards its death
             # anim tosses, one A_TossActor per shard.
             breakables.append((first, a['health'], first + 1, len(allrects) - 1,
-                               a.get('radius', 0)))
+                               a.get('radius', 0)) + explode)
     if verbose:
         print("  scenery: %d actor types, %d animated, %d breakable, from the remaster's own sprites"
               % (len(out), len(animdefs), len(breakables)))
@@ -2194,9 +2234,13 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
         # is divided by four.
         return max(1, min(255, int(round(radius * WORLD / 4.0))))
 
-    _write_table(outdir, "kexbreak.txt", "tile health shardtile0 shardcount clipdist",
-                 [(tile, health, shard0, nshards, _clipdist(radius))
-                  for tile, health, shard0, nshards, radius in sorted(breakables)],
+    # The last two columns are the radial blast of the exploding pots, in the
+    # remaster's own units (A_RadialBlast radius, damage); zero for the plain
+    # ones that just break.
+    _write_table(outdir, "kexbreak.txt",
+                 "tile health shardtile0 shardcount clipdist blastradius blastdamage",
+                 [(tile, health, shard0, nshards, _clipdist(radius), bl_r, bl_d)
+                  for tile, health, shard0, nshards, radius, bl_r, bl_d in sorted(breakables)],
                  "breakables", verbose)
 
     # Light sources: tile, then the peak brightening in shade steps and the

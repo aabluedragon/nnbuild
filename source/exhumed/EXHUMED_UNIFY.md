@@ -625,6 +625,27 @@ of them, so the fall-throughs land where they do there. The rare Item_Map and
 Item_Power rolls are left out for the same reason, and the dust puff and
 `glassbreak.wav` become PowerSlave's own pot sound.
 
+Types 49 and 50 are the EXPLODING pots -- `defs/defines.txt` names them
+`Obj_Vase_Explode01/02`, where the old console enum in scripts/actorTypes.txt
+had FLAMEPOT/SNAKEPOT, and trusting the old enum had turned all 232 of them
+into fuel-canister and cobra-ammo pickups. They hold a random still frame
+(`randomizeFrames`), keep their shard art in a separate `*_shards` anim, and
+their death anim carries `A_RadialBlast(512, 140)` -- so kexbreak.txt grew two
+blast columns, and `KexBreak_Shatter()` reuses the fire cauldron's recipe
+(flash, the floor explosion anim whose SEQ carries the boom, then
+`runlist_RadialDamageEnemy`; radius 512 Kex units x WORLD / 256 = 12 against
+the cauldron's 20). The blast sets off neighbouring pots, as it does there.
+
+Two more corrections from the same defines pass: the vase drop table's case 0
+spawned `BuildScorp` -- the 20000-HP Selkis boss -- where the remaster spawns
+a 20-HP scorpion critter; Build has no small scorpion, so the spider stands in.
+And the remaster's "Mantis" is Build's lava dude wearing a new name (its
+rise/attack/death frames are pixel-identical to the LAVAG tiles, and its def
+says noLavaDamage/noExitLava/hidden); it was mapped to 104, the Kilmaat roach,
+whose art the demo largely lacks. The camel is the remaster's level exit
+(lotag 60) and the checkpoint scarab its save point (lotag 59); both were
+standing around as decor.
+
 `VB_KEXBREAK_TEST=<ticks>` shatters every prop in the level that many ticks in,
 which is how the shard and drop paths were exercised without a player: 23 props,
 6 of 6 shards each, no crashes.
