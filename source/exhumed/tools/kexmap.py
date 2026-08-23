@@ -507,7 +507,11 @@ def convert(m, tilebase=4096):
         # ceilings were being given texture slot 0 -- 169 of them in KARNAK --
         # which is why its outdoor areas looked wrong.
         ev = sector_events.get(si)
-        sects.append(dict(wallptr=start, wallnum=len(walls)-start,
+        # Kex marks a vertical opening the same way it marks a horizontal one:
+        # the ceiling or floor FACE carries a link to the sector on the other
+        # side. 300 of them across the 25 levels. Build calls this TROR.
+        sects.append(dict(yax_ceil=cf.link, yax_floor=ff.link,
+                          wallptr=start, wallnum=len(walls)-start,
                           lotag=(ev[0] if ev else 0),
                           hitag=(max(0, ev[2]) if ev else 0),
                           ceilingsky=(cf.tileStart < 0),
@@ -605,7 +609,7 @@ def player_start(m, sects, walls, ranges):
     for a in m.actors:
         if a.type == AT_PLAYER:
             x,y,z = a.x, -a.y, a.z
-            si = find_sector(sects, walls, ranges, x, y)
+            si = find_sector(sects, walls, ranges, x, y, -z * SCALE * WORLD)
             if si >= 0:
                 # The player's feet: Build PowerSlave adds its own eye height.
                 return x, y, sects[si]['floorz'], si, build_angle(a.ang)
@@ -616,7 +620,21 @@ def player_start(m, sects, walls, ranges):
             return sum(xs)//len(xs), sum(ys)//len(ys), s['floorz'], si, None
     return 0,0,0,0,None
 
-def find_sector(sects, walls, ranges, x, y):
+def find_sector(sects, walls, ranges, x, y, z=None):
+    """The sector at (x, y) -- and, when z is given, at that height too.
+
+    Kex stacks rooms: one sector's footprint sits directly on top of another's,
+    with the passage under the entrance porch in TOMB as the clearest case. 849
+    sectors across the retail maps share an identical footprint with another
+    one, and 470 of the 4923 actors (9.5%) stand somewhere that more than one
+    sector covers. Picking the first footprint that matches puts a tenth of the
+    game's actors -- and, in TOMB, the player start -- on the wrong floor,
+    sometimes a thousand units out. So z decides between the candidates: prefer
+    a sector that actually spans it, else the one whose floor is nearest.
+
+    z is a Build z (grows downward), the same units as sects[si]['floorz'].
+    """
+    hits = []
     for si,(start,num) in enumerate(ranges):
         if num < 3: continue
         inside=False; j=num-1
@@ -626,8 +644,19 @@ def find_sector(sects, walls, ranges, x, y):
             if (yi>y) != (yj>y) and x < (xj-xi)*(y-yi)/float(yj-yi if yj!=yi else 1)+xi:
                 inside = not inside
             j=i
-        if inside: return si
-    return -1
+        if inside:
+            if z is None:
+                return si
+            hits.append(si)
+    if not hits:
+        return -1
+    if len(hits) == 1:
+        return hits[0]
+    # Build z grows downward: ceilingz <= z <= floorz means "inside this room".
+    spans = [si for si in hits
+             if sects[si] and sects[si]['ceilingz'] <= z <= sects[si]['floorz']]
+    pool = spans or hits
+    return min(pool, key=lambda si: abs(sects[si]['floorz'] - z))
 
 # ---------------------------------------------------------------------------
 # Actors
@@ -936,7 +965,7 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
         if ent is None and dec is None:
             continue
         x, y = a.x, -a.y
-        si = find_sector(sects, walls, ranges, x, y)
+        si = find_sector(sects, walls, ranges, x, y, -a.z * SCALE * WORLD)
         if si < 0 or si not in remap:
             continue                       # actor sits in a sector we dropped
         if ent is not None:
@@ -973,6 +1002,117 @@ def sector_remap(sects, ranges):
     return keep, {old:new for new,old in enumerate(keep)}
 
 
+# ---------------------------------------------------------------------------
+# True Room over Room
+#
+# Kex stacks rooms and marks the join the same way it marks a doorway: the
+# ceiling or floor FACE carries a link to the sector on the other side, exactly
+# as a wall face does. There are 300 such links across the 25 retail levels,
+# 299 of them symmetric, 299 with the upper sector's floor at precisely the
+# lower sector's ceiling, and 291 of 292 with wall rings that match edge for
+# edge. Without them those openings convert to a solid floor and a solid
+# ceiling, and the room below is unreachable and invisible.
+#
+# Build's TROR ("YAX") expresses this with *bunches*. A bunch is one horizontal
+# seam: every sector whose floor lies on it, and every sector whose ceiling
+# lies on it, share a bunch number, and the renderer draws through the seam
+# instead of capping it. eduke32 stores that in the map without changing the
+# struct layout -- the version int is 9 instead of 7, the bunch number rides in
+# ceilingxpanning / floorxpanning with YAX_BIT set in the matching stat, and a
+# seam wall's partner index rides in lotag (the sector above) or extra (the
+# sector below) with bit 1<<10 or 1<<11 set in cstat. yax_update() lifts all of
+# that into its own arrays at load and puts the hijacked fields back, which is
+# why the panning and tag fields stay usable afterwards.
+YAX_BIT          = 1024
+YAX_NEXTWALL_CEIL  = 1 << 10     # this wall has a partner in the sector above
+YAX_NEXTWALL_FLOOR = 1 << 11     # ... and in the sector below
+YAX_MAXBUNCHES   = 256
+YAX_CEILING, YAX_FLOOR = 0, 1
+
+
+def build_tror(sects, ranges, keep, remap, wremap, out_walls, verbose=False):
+    """Assign TROR bunches and seam wall links. Returns the number of bunches.
+
+    Mutates out_walls (cstat/lotag/extra) and returns {(build_sector, cf):
+    bunch} for the caller to pack into the panning fields.
+    """
+    # Collect the seams: an upper sector's floor meeting a lower sector's
+    # ceiling. The link is stored in Kex sector indices, so it has to survive
+    # the drop-and-renumber pass first.
+    seams = []
+    for old in keep:
+        s = sects[old]
+        below = s.get('yax_floor', -1)
+        if below is None or below < 0 or below not in remap:
+            continue
+        lo = sects[below]
+        # A seam is only a seam if the two planes actually coincide; one link
+        # in the retail maps does not, and a bunch there would tear.
+        if s['floorz'] != lo['ceilingz']:
+            continue
+        seams.append((remap[old], remap[below], old, below))
+
+    if not seams:
+        return {}, 0
+
+    # Union-find over sides, so that several sectors meeting on one plane end
+    # up in a single bunch rather than one bunch per pair.
+    parent = {}
+    def find(a):
+        parent.setdefault(a, a)
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]; a = parent[a]
+        return a
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb: parent[ra] = rb
+    for up, dn, _o, _b in seams:
+        union((up, YAX_FLOOR), (dn, YAX_CEILING))
+
+    groups = {}
+    for node in list(parent):
+        groups.setdefault(find(node), []).append(node)
+
+    bunch = {}
+    n = 0
+    for root, nodes in sorted(groups.items()):
+        if n >= YAX_MAXBUNCHES:
+            break
+        # Every extended ceiling must have a matching floor, or yax_update's
+        # bunch bookkeeping counts a bunch that has no other side.
+        if not any(cf == YAX_FLOOR for _s, cf in nodes): continue
+        if not any(cf == YAX_CEILING for _s, cf in nodes): continue
+        for node in nodes:
+            bunch[node] = n
+        n += 1
+
+    # Seam wall links. The two rings match edge for edge in all but one case,
+    # so pair them by coordinate; where an edge has no partner the wall simply
+    # goes unlinked, which the engine tolerates.
+    for up, dn, oldup, olddn in seams:
+        if (up, YAX_FLOOR) not in bunch:
+            continue
+        ust, unum = ranges[oldup]; dst, dnum = ranges[olddn]
+        below_edge = {}
+        for i in range(dnum):
+            w = out_walls[wremap[dst + i]]
+            below_edge[(w['x'], w['y'])] = wremap[dst + i]
+        for i in range(unum):
+            wi = wremap[ust + i]
+            w = out_walls[wi]
+            wj = below_edge.get((w['x'], w['y']))
+            if wj is None:
+                continue
+            w['cstat'] |= YAX_NEXTWALL_FLOOR
+            w['extra'] = wj
+            out_walls[wj]['cstat'] |= YAX_NEXTWALL_CEIL
+            out_walls[wj]['lotag'] = wi
+
+    if verbose and n:
+        print("  TROR: %d vertical openings -> %d bunches" % (len(seams), n))
+    return bunch, n
+
+
 def write_build(path, sects, walls, ranges, start, sprites=()):
     sx, sy, sz, ss, sang = start
     # The map's own facing when it has one; otherwise aim at the way out.
@@ -986,29 +1126,45 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
             wremap[st+i] = len(out_walls); out_walls.append(dict(walls[st+i]))
     for w in out_walls:
         w['point2'] = wremap[w['point2']]
+        w.setdefault('lotag', 0)
+        w.setdefault('extra', -1)
         if w['nextsector'] in remap and w['nextwall'] in wremap:
             w['nextwall'] = wremap[w['nextwall']]; w['nextsector'] = remap[w['nextsector']]
         else:
             w['nextwall'] = -1; w['nextsector'] = -1
-        if w['nextsector'] >= 0: w['cstat'] |= 0x20 if False else 0
+
+    bunch, nbunches = build_tror(sects, ranges, keep, remap, wremap, out_walls)
+
     b = bytearray()
-    b += struct.pack('<i', 7)
+    # Map version 9 is version 7 with TROR: identical struct layout on disk,
+    # but engineLoadBoard then runs yax_update() over it. Maps without a single
+    # vertical opening stay at 7 so nothing about them changes.
+    b += struct.pack('<i', 9 if nbunches else 7)
     b += struct.pack('<iii', sx * WORLD, sy * WORLD, sz)   # x/y are world units; only z is 1/16
     b += struct.pack('<hh', sang, remap.get(ss,0))
     b += struct.pack('<H', len(keep))
     for old in keep:
         s = sects[old]; st,num = ranges[old]
+        ns = remap[old]
+        cb = bunch.get((ns, YAX_CEILING), -1)
+        fb = bunch.get((ns, YAX_FLOOR), -1)
+        cstat = s['ceilingstat'] | (YAX_BIT if cb >= 0 else 0)
+        fstat = s['floorstat']   | (YAX_BIT if fb >= 0 else 0)
         b += struct.pack('<hhiihhhhbBBBhhbBBBBBhhh',
             wremap[st], num, s['ceilingz'], s['floorz'],
-            s['ceilingstat'], s['floorstat'],
-            s['ceilingpicnum'], s['ceilingheinum'], s['ceilingshade'], 0, 0, 0,
-            s['floorpicnum'], s['floorheinum'], s['floorshade'], 0, 0, 0, 0, 0,
+            cstat, fstat,
+            s['ceilingpicnum'], s['ceilingheinum'], s['ceilingshade'], 0,
+            max(cb, 0), 0,          # ceilingxpanning carries the ceiling bunch
+            s['floorpicnum'], s['floorheinum'], s['floorshade'], 0,
+            max(fb, 0), 0,          # floorxpanning carries the floor bunch
+            0, 0,
             s['lotag'], s['hitag'], 0)
     b += struct.pack('<H', len(out_walls))
     for w in out_walls:
         b += struct.pack('<iihhhhhhbBBBBBhhh',
             w['x'] * WORLD, w['y'] * WORLD, w['point2'], w['nextwall'], w['nextsector'],
-            w['cstat'], w['picnum'], 0, w['shade'], 0, w['xrepeat'], w['yrepeat'], 0, 0, 0, 0, 0)
+            w['cstat'], w['picnum'], 0, w['shade'], 0, w['xrepeat'], w['yrepeat'], 0, 0,
+            w['lotag'], 0, w['extra'])
     b += struct.pack('<H', len(sprites))
     for s in sprites:
         b += struct.pack('<iiihhbBBBBBbbhhhhhhhhhh',

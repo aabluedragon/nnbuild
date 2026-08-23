@@ -150,6 +150,15 @@ void InitView()
 #endif
 }
 
+static void analyzesprites();
+
+// yax_drawrooms() wants a (x, y, z, ang, smoothratio) callback; Exhumed's
+// sprite pass takes the view from globals, so the arguments go unused.
+static void ExhumedYaxSpriteAnim(int32_t, int32_t, int32_t, int32_t, int32_t)
+{
+    analyzesprites();
+}
+
 // NOTE - not to be confused with Ken's analyzesprites()
 static void analyzesprites()
 {
@@ -646,7 +655,20 @@ void DrawView(int smoothRatio)
             }
         }
 
+        // True Room over Room. The remaster's maps stack rooms -- 300 floor and
+        // ceiling faces across the 25 levels carry a vertical link, the same
+        // way a wall face carries a horizontal one -- and the converter turns
+        // those into TROR bunches. Both calls return immediately when the map
+        // has no bunches, so the original PowerSlave levels are unaffected.
+        //
+        // The per-layer sprite pass is analyzesprites(), which walks tsprite[]
+        // for whatever renderDrawRooms left in spritesortcnt -- the same shape
+        // Duke's G_DoSpriteAnimations has. The main layer is done last, so
+        // besttarget still ends up computed from the sectors the player is
+        // actually standing in.
+        yax_preparedrawrooms();
         renderDrawRoomsQ16(nCamerax, nCameray, viewz, nCameraa, nCamerapan, nSector);
+        yax_drawrooms(ExhumedYaxSpriteAnim, nSector, 0, smoothRatio);
         analyzesprites();
         renderDrawMasks();
 

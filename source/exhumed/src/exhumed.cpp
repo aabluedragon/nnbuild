@@ -1011,9 +1011,20 @@ void DoPassword(int nPassword)
     }
 }
 
+// The remaster does no distance shading at all: everything it paints is baked
+// into the vertex colours, which the converter already turns into per-surface
+// shades. Exhumed's own 2048 is four times Build's default, so in Kex mode the
+// engine applies that falloff a second time on top of the baked lighting and
+// drives anything far away to pure black -- measured at rgb(0,0,0) down the
+// entrance corridor in TOMB where the remaster still shows (39,16,4).
+int Kex_BaseVisibility(void)
+{
+    return g_kexMode ? 512 : 2048;
+}
+
 void mysetbrightness(char nBrightness)
 {
-    g_visibility = 2048 - (nBrightness << 9);
+    g_visibility = Kex_BaseVisibility() - (nBrightness << 9);
 }
 
 // Replicate original DOS EXE behaviour when pointer is null

@@ -388,6 +388,9 @@ bool LoadLevel(int nMap)
         return false;
     }
 
+    if (numyaxbunches > 0)
+        OSD_Printf("TROR: %d bunches in \"%s\"\n", numyaxbunches, fileName);
+
     initx = startPos.x;
     inity = startPos.y;
     initz = startPos.z;
@@ -417,7 +420,7 @@ bool LoadLevel(int nMap)
     pSky->horizfrac = 65536;
     pSky->yscale = 65536;
     parallaxtype = 2;
-    g_visibility = 2048;
+    g_visibility = Kex_BaseVisibility();
     flash = 0;
     precache();
 

@@ -471,17 +471,8 @@ engine actually spawned: KARNAK 88 creatures / 103 live sprites, SLAVCAMP
 
 Not converted:
 
-- **Stacked sectors (room-over-room).** This is the big one, and it is a Build
-  limit rather than a gap in the converter. Kex freely puts one room on top of
-  another: in TOMB the entrance porch (floor 1152, ceiling 1536) sits directly
-  above the passage that runs under it (floor 128, ceiling 640), on the same
-  footprint. 98 of TOMB's 270 sectors overlap another sector by more than 60%
-  of their area. Plain Build has one sector per point on the floor plan, so both
-  are emitted flat and fight over the same space -- which is what makes the
-  entrance overhang look wrong. Doing this properly needs TROR, which eduke32
-  has but this port does not wire up. A sector whose walls are not a single
-  closed ring is dropped rather than emitted broken (226 of 9837 across the
-  retail maps).
+- A sector whose walls are not a single closed ring is dropped rather than
+  emitted broken (226 of 9837 across the retail maps).
 - **Light that varies across one surface.** Build has exactly one shade per wall
   and one per floor, and Kex bakes its lighting per vertex, several vertices to
   a wall. The falloff around a fire is mostly *vertical*: on the wall behind
@@ -492,6 +483,51 @@ Not converted:
   away from it -- the ambient step is there -- but the soft edge is not.
 - **Sloped floors and ceilings** are converted, but dropped per sector when the
   fit is worse than 8 world units at any corner.
+
+### True Room over Room
+
+Kex marks a vertical join the same way it marks a doorway: the ceiling or floor
+FACE carries a `link` to the sector on the other side, exactly as a wall face
+does. There are 300 of them across the 25 retail levels, 299 symmetric, 299
+with the upper sector's floor at precisely the lower sector's ceiling, and 291
+of 292 with wall rings matching edge for edge. The converter was ignoring the
+field entirely.
+
+Build expresses this with TROR, and eduke32 stores it without changing the
+struct layout: the version int is 9 instead of 7, the bunch number rides in
+`ceilingxpanning` / `floorxpanning` with `YAX_BIT` set in the matching stat, and
+a seam wall's partner index rides in `lotag` (sector above) or `extra` (sector
+below) with bit 1<<10 or 1<<11 in `cstat`. `yax_update()` lifts all of it into
+its own arrays at load and puts the hijacked fields back, so panning and tags
+stay usable afterwards. `NEW_MAP_FORMAT` is off in this tree, so that compat
+encoding is the one that applies.
+
+The converter now groups the links into bunches with a union-find over sector
+sides -- so several sectors meeting on one plane share a bunch rather than
+getting one bunch per pair -- and links the seam walls by coordinate. 291
+bunches across 16 maps, well inside the 256-per-map limit. Exhumed also needed
+the draw path itself: only Duke called `yax_preparedrawrooms()` /
+`yax_drawrooms()`, and both return immediately when a map has no bunches, so the
+original PowerSlave levels are untouched. The per-layer sprite callback is
+`analyzesprites()`, which walks `tsprite[]` for whatever `renderDrawRooms` left
+in `spritesortcnt` -- the same shape Duke's `G_DoSpriteAnimations` has.
+
+**What it does not do is change what you see, and the reason is worth writing
+down.** Every one of the 300 linked floor faces is *textured*, and so are 299 of
+the 300 linked ceilings. A vertical link is therefore an adjacency -- "this
+sector is directly below that one" -- and not an opening. The two planes
+coincide in 299 of 300 cases, so TROR faithfully renders the neighbour's surface
+in exactly the place the sector's own surface would have been. Loading TOMB
+reports 21 bunches, and a capture from the level start is pixel-identical to the
+same capture before the change: 0 of 200,760 sampled pixels differ, maximum
+channel delta 0. The player does not fall through the start floor, because the
+surface on the other side of the seam is solid.
+
+So the remaster's levels contain no room-over-room *openings*. The support is
+real and the data is now represented rather than discarded -- which is what
+makes vertical adjacency available to clipping and to `updatesector` -- but
+nothing in these 25 levels renders differently because of it, and the entrance
+overhang is a lighting difference, not a stacking one.
 
 ### Lighting
 
@@ -509,6 +545,22 @@ which a step's visible face sits on. Median wall shade in TOMB went 47 -> 29.
 Measured against a capture of the remaster from the same spot in the same level,
 the solid (non-sky) pixels moved from p05/p25/p50 = 18/34/54 to 24/52/72,
 against the remaster's 26/48/92.
+
+### Distance shading
+
+The remaster does no distance shading at all -- everything it paints is baked
+into the vertex colours, which the converter turns into per-surface shades.
+Exhumed sets `g_visibility` to 2048, four times Build's own default of 512, so
+in Kex mode the engine was applying that falloff a second time on top of the
+baked lighting. Anything far away went to pure black: measured at rgb(0,0,0)
+down the entrance corridor in TOMB, where a capture of the remaster from the
+same spot still shows (39,16,4), and 1.0% of the frame was fully crushed where
+the remaster crushes none of it.
+
+`Kex_BaseVisibility()` returns 512 in Kex mode and Exhumed's own 2048 otherwise,
+so the original game is untouched. On the entrance view that took the solid
+pixels from p05/p25/p50/p95 = 18/35/60/135 to 36/52/78/136 against the
+remaster's 26/48/92/143, and pure black from 1.0% to none.
 
 ### The sky
 
