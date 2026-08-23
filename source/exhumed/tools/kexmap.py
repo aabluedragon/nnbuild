@@ -391,6 +391,11 @@ def _slope_error(m, f, z0, heinum, wx, wy, dx, dy):
 # (128 = 8 world units); past that a flat surface is the smaller lie.
 KEX_SLOPE_TOLERANCE = 128
 
+# Fires light their surroundings: peak brightening in Build shade steps at the
+# sprite, falling off linearly to nothing at (peak << shift) world units.
+KEX_LIGHT_PEAK = 36
+KEX_LIGHT_SHIFT = 6
+
 
 def _zspan(m, f):
     zs = [m.verts[f.vertStart+k][2] for k in range(4)]
@@ -986,7 +991,8 @@ def load_kex_actors(Z):
                             shootable=int(field('shootable', '0') or 0),
                             solid=int(field('solid', '0') or 0),
                             death=field('deathAnim'),
-                            radius=float(field('radius', '0') or 0))
+                            radius=float(field('radius', '0') or 0),
+                            group=field('group', '') or '')
 
     out = {}
     for nm, t in name2type.items():
@@ -1067,7 +1073,7 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
                 os.remove(tmp)
         return sheets[key]
 
-    out = {}; tile = tilebase; defs = []; animdefs = []; breakables = []
+    out = {}; tile = tilebase; defs = []; animdefs = []; breakables = []; lights = []
     for t in sorted(wanted_types):
         a = kexactors.get(t)
         if not a: continue
@@ -1111,6 +1117,13 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
             defs.append((tile, fn))
             tile += 1
         out[t] = (first, a['scale'], a['fullbright'])
+        # The remaster groups its fires, torches and lamps as "Light Sources" --
+        # 19 actor types. They declare no lightRadius of their own (only four
+        # projectiles do), because in Kex their glow is baked into the vertex
+        # colours. Build cannot shade part of a wall, so the glow is put back as
+        # a real light instead; these are the tiles that should cast one.
+        if 'light source' in (a.get('group') or '').lower():
+            lights.append(first)
         if len(allrects) > 1 and not a.get('still'):
             animdefs.append((first, tile - 1, 3))
         if breakable and len(allrects) > 1:
@@ -1121,7 +1134,19 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
     if verbose:
         print("  scenery: %d actor types, %d animated, %d breakable, from the remaster's own sprites"
               % (len(out), len(animdefs), len(breakables)))
-    return out, defs, animdefs, breakables
+    return out, defs, animdefs, breakables, lights
+
+
+def _write_table(outdir, fn, header, rows, what, verbose=True):
+    """One of the tables kexbreak.cpp reads: a "#" header line then one record
+    per line. Kept in one place on both sides -- KexTable_Load() there parses
+    exactly what this writes."""
+    with open(os.path.join(outdir, fn), "w") as f:
+        f.write("# %s\n" % header)
+        for row in rows:
+            f.write(" ".join(str(v) for v in row) + "\n")
+    if verbose:
+        print("  %s: %d written to %s" % (what, len(rows), fn))
 
 
 def build_sprites(m, sects, walls, ranges, remap, decor=None):
@@ -1499,7 +1524,7 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
             animdefs.append((assign[t], assign[t] + len(frames), speed))
 
     with zipfile.ZipFile(kpf) as z:
-        decor, decordefs, decoranims, breakables = build_actor_tiles(
+        decor, decordefs, decoranims, breakables, lights = build_actor_tiles(
             z, outdir, used_types, kexactors, nexttile, verbose)
     nexttile += len(decordefs)
     animdefs.extend(decoranims)
@@ -1632,16 +1657,22 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
     # anim: frame 0 is the intact pot and the frames after it are the shards,
     # which is why holding the pot on frame 0 (noAdvanceFrames) is what stops it
     # flickering into a sliver of debris.
-    with open(os.path.join(outdir, "kexbreak.txt"), "w") as f:
-        f.write("# tile health shardtile0 shardcount clipdist\n")
-        for tile, health, shard0, nshards, radius in sorted(breakables):
-            # Build clips a sprite at clipdist<<2 world units, and Kex authors
-            # the radius in its own units, so the world factor applies and the
-            # result is divided by four.
-            clip = max(1, min(255, int(round(radius * WORLD / 4.0))))
-            f.write("%d %d %d %d %d\n" % (tile, health, shard0, nshards, clip))
-    if verbose:
-        print("  breakables: %d prop types written to kexbreak.txt" % len(breakables))
+    def _clipdist(radius):
+        # Build clips a sprite at clipdist<<2 world units, and Kex authors the
+        # radius in its own units, so the world factor applies and the result
+        # is divided by four.
+        return max(1, min(255, int(round(radius * WORLD / 4.0))))
+
+    _write_table(outdir, "kexbreak.txt", "tile health shardtile0 shardcount clipdist",
+                 [(tile, health, shard0, nshards, _clipdist(radius))
+                  for tile, health, shard0, nshards, radius in sorted(breakables)],
+                 "breakables", verbose)
+
+    # Light sources: tile, then the peak brightening in shade steps and the
+    # falloff shift (radius = peak << shift, in Build world units).
+    _write_table(outdir, "kexlight.txt", "tile peak shift",
+                 [(tile, KEX_LIGHT_PEAK, KEX_LIGHT_SHIFT) for tile in sorted(lights)],
+                 "light sources", verbose)
 
     # The menu art rides along: exhumed.def is the one file the game loads by
     # name, so it pulls in the generated menu definitions.

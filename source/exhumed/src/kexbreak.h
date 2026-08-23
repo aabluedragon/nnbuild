@@ -16,4 +16,7 @@ int  KexBreak_Available(void);   // the table loaded and this is a Kex map
 void KexBreak_Init(void);        // per level: arm every breakable prop sprite
 void FuncKexBreak(int a, int b, int nRun);
 
+void KexLight_Init(void);        // per level: collect the remaster's light sources
+void KexLight_Tick(void);        // per tick: cast their glow
+
 #endif

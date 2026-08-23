@@ -1221,6 +1221,7 @@ void LoadObjects()
     // The remaster's vases and barrels are shootable props; arm them once the
     // level's own objects are in place. No-op outside Kex mode.
     KexBreak_Init();
+    KexLight_Init();
     InitRa();
     InitChunks();
 

@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "move.h"
 #include "init.h"
 #include "lighting.h"
+#include "kexbreak.h"
 #include "ramses.h"
 #include "bubbles.h"
 #include "object.h"
@@ -162,6 +163,7 @@ void MoveThings()
 {
     UndoFlashes();
     DoLights();
+    KexLight_Tick();      // the remaster's fires and torches; no-op elsewhere
 
     if (nFreeze)
     {

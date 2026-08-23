@@ -38,6 +38,7 @@
 #include "player.h"
 #include "scorp.h"
 #include "random.h"
+#include "lighting.h"
 #include "kexbreak.h"
 
 #define kMaxKexBreakTypes 64
@@ -59,12 +60,16 @@ static KexBreakProp s_prop[kMaxKexBreaks];
 static int          s_props;
 static int          s_selftest;   // VB_KEXBREAK_TEST: shatter everything after N ticks
 
-static void KexBreak_LoadTable(void)
+// Read one of the converter's generated tables. Both of them are the same
+// shape: one record per line, "#" comments, and a fixed number of integers.
+// `parse` gets a line and returns true when it consumed a record; reading stops
+// once it has taken nMax of them. A missing file is not an error -- it just
+// means this install was never converted -- and yields zero records.
+static int KexTable_Load(char const *fn, int nMax, bool (*parse)(char const *line, int nRec))
 {
-    s_types = 0;
-    int const fil = kopen4loadfrommod("kexbreak.txt", 0);
+    int const fil = kopen4loadfrommod(fn, 0);
     if (fil == -1)
-        return;
+        return 0;
 
     int const len = kfilelength(fil);
     char *buf = (char *)Xmalloc(len + 1);
@@ -72,26 +77,125 @@ static void KexBreak_LoadTable(void)
     buf[len] = 0;
     kclose(fil);
 
-    char const *p = buf;
-    while (*p && s_types < kMaxKexBreakTypes)
+    int nRecs = 0;
+    for (char const *p = buf; *p && nRecs < nMax; )
     {
         char const *eol = Bstrchr(p, '\n');
-        if (*p != '#')
-        {
-            int tile, health, shard0, nshards, clipdist = 32;
-            if (Bsscanf(p, "%d %d %d %d %d", &tile, &health, &shard0, &nshards,
-                        &clipdist) >= 4)
-            {
-                KexBreakType &t = s_type[s_types++];
-                t.tile = tile; t.health = health;
-                t.shard0 = shard0; t.nshards = nshards;
-                t.clipdist = clamp(clipdist, 1, 255);
-            }
-        }
-        if (!eol) break;
+        if (*p != '#' && parse(p, nRecs))
+            nRecs++;
+        if (!eol)
+            break;
         p = eol + 1;
     }
+
     Xfree(buf);
+    return nRecs;
+}
+
+// Both generated tables key on the tile in their first field, so one lookup
+// serves them. Returns the table index, or -1 when the tile is not in it.
+template <typename T>
+static int KexTable_FindTile(T const *tab, int nRecs, int picnum)
+{
+    for (int i = 0; i < nRecs; i++)
+        if (tab[i].tile == picnum)
+            return i;
+    return -1;
+}
+
+static bool KexBreak_ParseLine(char const *line, int nRec)
+{
+    int tile, health, shard0, nshards, clipdist = 32;
+    if (Bsscanf(line, "%d %d %d %d %d", &tile, &health, &shard0, &nshards, &clipdist) < 4)
+        return false;
+
+    KexBreakType &t = s_type[nRec];
+    t.tile = tile; t.health = health;
+    t.shard0 = shard0; t.nshards = nshards;
+    t.clipdist = clamp(clipdist, 1, 255);
+    return true;
+}
+
+static void KexBreak_LoadTable(void)
+{
+    s_types = KexTable_Load("kexbreak.txt", kMaxKexBreakTypes, KexBreak_ParseLine);
+}
+
+// ---------------------------------------------------------------------------
+// Light sources. kexmap.py writes kexlight.txt out of the actors the remaster
+// groups as "Light Sources" -- its fires, torches and lamps -- one line of
+// "<tile> <peak> <shift>" each. Their glow is baked into the vertex colours in
+// Kex, and Build cannot shade part of a wall, so it is put back as a real
+// light: on the wall behind TOMB's first fire pot the baked luminance runs 39
+// at the top to 255 at the bottom of a single face, and one shade per wall
+// cannot hold that.
+// ---------------------------------------------------------------------------
+#define kMaxKexLightTypes 32
+#define kMaxKexLights     256
+
+struct KexLightType { int16_t tile, peak, shift; };
+
+struct KexLightSource { int16_t nSprite, nType; };
+
+static KexLightType   s_lightType[kMaxKexLightTypes];
+static int            s_lightTypes = -1;    // -1 = not read yet
+static KexLightSource s_light[kMaxKexLights];
+static int            s_lights;
+
+static bool KexLight_ParseLine(char const *line, int nRec)
+{
+    int tile, peak, shift;
+    if (Bsscanf(line, "%d %d %d", &tile, &peak, &shift) != 3)
+        return false;
+
+    KexLightType &t = s_lightType[nRec];
+    t.tile = tile; t.peak = peak; t.shift = shift;
+    return true;
+}
+
+static void KexLight_LoadTable(void)
+{
+    s_lightTypes = KexTable_Load("kexlight.txt", kMaxKexLightTypes, KexLight_ParseLine);
+}
+
+void KexLight_Init(void)
+{
+    s_lights = 0;
+    if (s_lightTypes < 0)
+        KexLight_LoadTable();
+    if (!g_kexMode || !s_lightTypes)
+        return;
+
+    for (int i = 0; i < kMaxSprites && s_lights < kMaxKexLights; i++)
+    {
+        if (sprite[i].statnum >= kMaxStatus || sprite[i].sectnum < 0)
+            continue;
+
+        int const nType = KexTable_FindTile(s_lightType, s_lightTypes, sprite[i].picnum);
+        if (nType < 0)
+            continue;
+
+        s_light[s_lights].nSprite = i;
+        s_light[s_lights].nType   = nType;
+        s_lights++;
+    }
+
+    if (s_lights)
+        OSD_Printf("Kex lights: %d sources from %d types\n", s_lights, s_lightTypes);
+}
+
+// Once per tick, after UndoFlashes() has cleared the previous one.
+void KexLight_Tick(void)
+{
+    for (int i = 0; i < s_lights; i++)
+    {
+        spritetype const &s = sprite[s_light[i].nSprite];
+        if (s.sectnum < 0 || (s.cstat & 0x8000))    // deleted or invisible
+            continue;
+
+        KexLightType const &t = s_lightType[s_light[i].nType];
+        Kex_SpriteGlow(s.sectnum, s.x, s.y, t.peak, t.shift, 0);
+    }
 }
 
 int KexBreak_Available(void)
@@ -99,14 +203,6 @@ int KexBreak_Available(void)
     if (s_types < 0)
         KexBreak_LoadTable();
     return g_kexMode && s_types > 0;
-}
-
-static int KexBreak_TypeOfTile(int picnum)
-{
-    for (int i = 0; i < s_types; i++)
-        if (s_type[i].tile == picnum)
-            return i;
-    return -1;
 }
 
 // Arm one prop: solid and hitscannable, and holding a run so that the damage
@@ -146,7 +242,7 @@ void KexBreak_Init(void)
     for (int nSprite = headspritestat[0]; nSprite != -1; )
     {
         int const nNext = nextspritestat[nSprite];
-        int const nType = KexBreak_TypeOfTile(sprite[nSprite].picnum);
+        int const nType = KexTable_FindTile(s_type, s_types, sprite[nSprite].picnum);
         if (nType >= 0)
             KexBreak_Arm(nSprite, nType);
         nSprite = nNext;

@@ -120,6 +120,37 @@ int GrabFlash()
     return nLastFlash;
 }
 
+// Record one surface's current shade in the flash list, then brighten it.
+//
+// Every light in this file -- AddFlash's explosions and Kex_SpriteGlow's fires
+// alike -- does the same four things to a wall, floor, ceiling or sprite:
+// take a flash slot, save the shade into it, mark the surface by pushing its
+// pal past the palette so UndoFlashes() knows to restore it, and subtract the
+// falloff from the shade. `nType` is the flash record's tag -- the low bits
+// name the surface kind (1 floor, 2 wall, 3 ceiling, 4 sprite) and 0x80 asks
+// for the shade to be put back -- and `nIndex` is the wall, sector or sprite
+// it refers to. `add` is negative to brighten; a positive one still records
+// the surface but leaves the shade alone, which is what AddFlash's sprite pass
+// wants. Returns false when the flash list is full: there is nothing sensible
+// left to do at that point, so callers give up on the rest of the sector.
+static bool AddFlashRec(int nType, int nIndex, int8_t *pShade, uint8_t *pPal, int add)
+{
+    short const nFlash = GrabFlash();
+    if (nFlash < 0)
+        return false;
+
+    sFlash[nFlash].field_0 = nType;
+    sFlash[nFlash].field_1 = nIndex;
+    sFlash[nFlash].shade   = *pShade;
+
+    *pPal += 7;
+
+    if (add < 0)
+        *pShade = max(-127, *pShade + add);
+
+    return true;
+}
+
 void InitLights()
 {
     int i;
@@ -204,25 +235,8 @@ void AddFlash(short nSector, int x, int y, int z, int val)
             {
                 if (!pNextSector || pNextSector->floorz < sector[nSector].floorz)
                 {
-                    short nFlash = GrabFlash();
-                    if (nFlash < 0) {
+                    if (!AddFlashRec(var_20 | 2, i, &wall[i].shade, &wall[i].pal, ebx))
                         return;
-                    }
-
-                    sFlash[nFlash].field_0 = var_20 | 2;
-                    sFlash[nFlash].shade = wall[i].shade;
-                    sFlash[nFlash].field_1 = i;
-
-                    wall[i].pal += 7;
-
-                    ebx += wall[i].shade;
-                    int eax = ebx;
-
-                    if (ebx < -127) {
-                        eax = -127;
-                    }
-
-                    wall[i].shade = eax;
 
                     if (!var_1C && !wall[i].overpicnum && pNextSector)
                     {
@@ -235,94 +249,100 @@ void AddFlash(short nSector, int x, int y, int z, int val)
 
     if (var_14 && sector[nSector].floorpal < 4)
     {
-        short nFlash = GrabFlash();
-        if (nFlash < 0) {
+        if (!AddFlashRec(var_20 | 1, nSector, &sector[nSector].floorshade,
+                         &sector[nSector].floorpal, var_28))
             return;
-        }
 
-        sFlash[nFlash].field_0 = var_20 | 1;
-        sFlash[nFlash].field_1 = nSector;
-        sFlash[nFlash].shade = sector[nSector].floorshade;
-
-        sector[nSector].floorpal += 7;
-
-        int edx = sector[nSector].floorshade + var_28;
-        int eax = edx;
-
-        if (edx < -127) {
-            eax = -127;
-        }
-
-        sector[nSector].floorshade = eax;
-
-        if (!(sector[nSector].ceilingstat & 1))
+        if (!(sector[nSector].ceilingstat & 1) && sector[nSector].ceilingpal < 4)
         {
-            if (sector[nSector].ceilingpal < 4)
-            {
-                short nFlash2 = GrabFlash();
-                if (nFlash2 >= 0)
-                {
-                    sFlash[nFlash2].field_0 = var_20 | 3;
-                    sFlash[nFlash2].field_1 = nSector;
-                    sFlash[nFlash2].shade = sector[nSector].ceilingshade;
-
-                    sector[nSector].ceilingpal += 7;
-
-                    int edx = sector[nSector].ceilingshade + var_28;
-                    int eax = edx;
-
-                    if (edx < -127) {
-                        eax = -127;
-                    }
-
-                    sector[nSector].ceilingshade = eax;
-                }
-            }
+            AddFlashRec(var_20 | 3, nSector, &sector[nSector].ceilingshade,
+                        &sector[nSector].ceilingpal, var_28);
         }
 
         for (short nSprite = headspritesect[nSector]; nSprite >= 0; nSprite = nextspritesect[nSprite])
         {
             if (sprite[nSprite].pal < 4)
             {
-                short nFlash3 = GrabFlash();
-                if (nFlash3 >= 0)
+                int eax = -255;
+
+                if (!var_18)
                 {
-                    sFlash[nFlash3].field_0 = var_20 | 4;
-                    sFlash[nFlash3].shade = sprite[nSprite].shade;
-                    sFlash[nFlash3].field_1 = nSprite;
-
-                    sprite[nSprite].pal += 7;
-
-                    int eax = -255;
-
-                    if (!var_18)
-                    {
-                        int xDiff = x - sprite[nSprite].x;
-                        if (xDiff < 0) {
-                            xDiff = -xDiff;
-                        }
-
-                        int yDiff = y - sprite[nSprite].y;
-                        if (yDiff < 0) {
-                            yDiff = -yDiff;
-                        }
-
-                        eax = ((xDiff + yDiff) >> 4) - 255;
-                    }
-
-                    if (eax < 0)
-                    {
-                        short shade = sprite[nSprite].shade + eax;
-                        if (shade < -127) {
-                            shade = -127;
-                        }
-
-                        sprite[nSprite].shade = shade;
-                    }
+                    eax = ((klabs(x - sprite[nSprite].x) + klabs(y - sprite[nSprite].y)) >> 4) - 255;
                 }
+
+                AddFlashRec(var_20 | 4, nSprite, &sprite[nSprite].shade,
+                            &sprite[nSprite].pal, eax);
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// The remaster's light sources
+//
+// Kex groups its fires, torches and lamps as "Light Sources" -- 19 actor types.
+// They carry no lightRadius of their own, because in Kex the glow is baked into
+// the vertex colours: on the wall behind TOMB's first fire pot the baked
+// luminance runs 39 at the top to 255 at the bottom of one face. Build has a
+// single shade per wall and cannot reproduce that, so the glow goes back in as
+// a real light instead.
+//
+// This is AddFlash's sweep with the falloff opened up. AddFlash drives the
+// shade 255 steps toward full bright at the sprite, which is right for an
+// explosion and far too much for a pot of fire standing in a room, so the peak
+// and the radius are parameters. The two differ in what reaches the flats as
+// well: an explosion sums every wall's contribution, which saturates the floor
+// of any sector it goes off in, while a fire hands them the brightest single
+// wall so a big room stays dim at the far end. Sprites are left alone -- the
+// fire lighting itself looks wrong. Everything touched is recorded in the same
+// flash list, so UndoFlashes() puts it back at the top of the next tick and
+// nothing accumulates.
+// ---------------------------------------------------------------------------
+void Kex_SpriteGlow(short nSector, int x, int y, int peak, int shift, int nDepth)
+{
+    if (nSector < 0 || nSector >= numsectors || nDepth > 1)
+        return;
+
+    int const startwall = sector[nSector].wallptr;
+    int const endwall   = startwall + sector[nSector].wallnum;
+    int lit = 0, best = 0;
+
+    for (int i = startwall; i < endwall; i++)
+    {
+        int const w2 = wall[i].point2;
+        int const mx = (wall[i].x + wall[w2].x) / 2;
+        int const my = (wall[i].y + wall[w2].y) / 2;
+
+        int const add = ((klabs(x - mx) + klabs(y - my)) >> shift) - peak;
+        if (add >= 0)                          // out of range; negative brightens
+            continue;
+
+        lit++;
+        if (add < best)
+            best = add;
+
+        if (wall[i].pal >= 5)                  // already lit by something else
+            continue;
+
+        if (!AddFlashRec(0x80 | 2, i, &wall[i].shade, &wall[i].pal, add))
+            return;
+
+        // Carry into the next room the way AddFlash does, so a fire in a
+        // doorway lights both sides.
+        if (wall[i].nextsector > -1 && !wall[i].overpicnum)
+            Kex_SpriteGlow(wall[i].nextsector, x, y, peak, shift, nDepth + 1);
+    }
+
+    if (!lit)
+        return;
+
+    if (sector[nSector].floorpal < 4)
+        AddFlashRec(0x80 | 1, nSector, &sector[nSector].floorshade,
+                    &sector[nSector].floorpal, best);
+
+    if (!(sector[nSector].ceilingstat & 1) && sector[nSector].ceilingpal < 4)
+        AddFlashRec(0x80 | 3, nSector, &sector[nSector].ceilingshade,
+                    &sector[nSector].ceilingpal, best);
 }
 
 void UndoFlashes()

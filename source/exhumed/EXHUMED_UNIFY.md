@@ -637,6 +637,45 @@ Item_Power rolls are left out for the same reason, and the dust puff and
 which is how the shard and drop paths were exercised without a player: 23 props,
 6 of 6 shards each, no crashes.
 
+### Light sources
+
+The remaster groups 19 actor types as `group "Light Sources"` -- its fire pots,
+wall torches, candles and the water lamp. None of them declares a `lightRadius`
+or `lightIntensity` (only four projectiles in the whole game do), because in Kex
+their glow is baked into the vertex colours: on the wall behind TOMB's first
+fire pot the baked luminance runs 39 at the top of one face to 255 at the
+bottom. Build carries a single shade per wall and cannot hold a gradient across
+one, so the glow goes back in as a real light instead of coming across as part
+of the geometry.
+
+`kexmap.py` writes the tiles it should apply to into `kexlight.txt`, and
+`KexLight_Init()` collects the sprites carrying them once per level.
+`KexLight_Tick()` then casts each one from `MoveThings()`, right after
+`UndoFlashes()` has cleared the previous tick's -- so nothing accumulates,
+which is the same discipline the original explosion lighting keeps.
+
+The cast itself is `Kex_SpriteGlow()` in `lighting.cpp`, which is `AddFlash()`'s
+sweep with two deliberate differences. The falloff is parameterised: `AddFlash`
+drives the shade 255 steps toward full bright at the sprite, which is right for
+an explosion and far too much for a pot of fire standing in a room, so the peak
+and the radius come from the table (`36` and `<< 6`, i.e. 2304 world units).
+And what reaches the flats differs -- an explosion sums every wall's
+contribution, which saturates the floor of any sector it goes off in, while a
+fire hands them the brightest single wall so a large room stays dim at the far
+end. Sprites are left alone; a fire lighting itself looks wrong.
+
+The peak and shift are a first setting, not a match measured against a capture
+the way the distance shading below was.
+
+Both generated tables -- `kexbreak.txt` and `kexlight.txt` -- are the same
+shape, a `#` header and one record of integers per line, and both are read
+through one `KexTable_Load()` in `kexbreak.cpp` and written through one
+`_write_table()` in `kexmap.py`. On the engine side every light in
+`lighting.cpp`, the original explosions included, now records and brightens a
+surface through a single `AddFlashRec()`: take a flash slot, save the shade,
+push the pal past the palette so `UndoFlashes()` knows to restore it, subtract
+the falloff. That was seven copies of the same ten lines.
+
 ### Distance shading
 
 The remaster does no distance shading at all -- everything it paints is baked
