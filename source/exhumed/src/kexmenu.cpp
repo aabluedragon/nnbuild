@@ -32,6 +32,7 @@
 #include "view.h"
 #include "colmatch.h"
 #include "movie.h"
+#include "cd.h"
 #include "status.h"
 #include "kexmenu.h"
 
@@ -541,8 +542,9 @@ int KexMenu_Main(int bInLevelMenus)
                     // straight into level 1.
                     if (KexMenu_LevelCount() > 0)
                     {
+                        playMusicFile("music/overworld.ogg", true);
                         int const pick = KexMenu_Overworld(0);
-                        if (pick < 0) break;
+                        if (pick < 0) { playMusicFile("music/title.ogg", true); break; }
                         Bstrncpyz(s_chosenMap, KexMenu_LevelMap(pick), sizeof(s_chosenMap));
                     }
                     FadeOut(1);
@@ -560,7 +562,11 @@ int KexMenu_Main(int bInLevelMenus)
                     return 2;
                 }
                 case kKexOptions:  menu_AdjustVolume(); break;
-                case kKexCredits:  KexMenu_Credits(); break;
+                case kKexCredits:
+                    playMusicFile("music/credu1.ogg", true);
+                    KexMenu_Credits();
+                    playMusicFile("music/title.ogg", true);
+                    break;
                 case kKexQuit:
                     if (KexMenu_Confirm("ARE YOU SURE YOU WISH TO", "QUIT THE GAME?"))
                     {
@@ -657,6 +663,9 @@ static int KexMenu_Pause(void)
 // ---------------------------------------------------------------------------
 void KexMenu_TitleHold(void)
 {
+    // The title track carries the menu behind this screen too; starting a
+    // level replaces it, playMusicFile stopping the old track first.
+    playMusicFile("music/title.ogg", true);
     KB_FlushKeyboardQueue();
     KB_ClearKeysDown();
     GrabPalette();
