@@ -484,6 +484,33 @@ Not converted:
 - **Sloped floors and ceilings** are converted, but dropped per sector when the
   fit is worse than 8 world units at any corner.
 
+### Rebuilding a sector's wall loop
+
+Kex stores a sector's wall faces in no particular order, so the loop has to be
+rebuilt by walking end-point to start-point. Three things about the source
+broke that walk, and between them they were throwing away 230 sectors across the
+retail maps -- 106 of MINES' 605, a fifth of the level.
+
+**A face's first two vertices are not consistently wound.** One side of MINES
+sector 16 is built from ten faces along y=1152, and the same span
+(544,1152)-(640,1152) appears in one face left-to-right and in the next
+right-to-left. Keying the edge on the directed pair made those two different
+edges and the walk dead-ended. Edges are now keyed by the undirected segment and
+the ring is walked over a point adjacency, which picks the direction.
+
+**The first two vertices are not always the horizontal edge.** On some faces
+they are the vertical one, so they project to a single 2D point. Those were
+skipped as degenerate, which silently dropped a whole side. A wall face is a
+vertical quad, so the segment now comes from the widest-apart pair of its four
+projected corners.
+
+**A side can have no face at all.** MINES sector 17 is a rectangle with three
+faces: nothing is ever drawn on the fourth side, so the source does not store
+one. 90 of MINES' sectors are shaped like that. An open chain with exactly two
+loose ends is now closed with a solid wall textured from the sector's floor.
+
+Sector retention went from 97.7% to 99.7%, and MINES from 499 sectors to 604.
+
 ### Portals, and the T-junctions that were eating them
 
 Build pairs a portal by exact edge correspondence: sector A's wall from P to Q

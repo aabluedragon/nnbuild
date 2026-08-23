@@ -237,41 +237,93 @@ KEX_YREPEAT = max(1, min(255, int(round(128.0 / KEX_UNITS_PER_TEXEL))))
 def _edges(m, si):
     """The sector's 2D edges, chained into a closed loop.
 
-    Kex stores a sector's wall faces in no particular order -- the loop has to
-    be rebuilt by walking end-point to start-point. Faces that share an edge
-    (a portal plus the solid pieces above and below it) collapse into one.
+    Kex stores a sector's wall faces in no particular order, so the loop has to
+    be rebuilt by walking end-point to start-point, and faces that share an edge
+    -- a portal plus the solid bands above and below it -- collapse into one.
+
+    The catch is that a face's first two vertices are NOT consistently wound.
+    One side of MINES sector 16 is built from ten faces along y=1152, and the
+    same span (544,1152)-(640,1152) appears in one face left-to-right and in the
+    next right-to-left. Keying on the directed pair made those two different
+    edges, the walk dead-ended, and the whole sector was thrown away. That is
+    what was costing 106 of MINES' 605 sectors and 230 across the retail maps.
+
+    So edges are keyed by the UNDIRECTED segment and the ring is walked over a
+    point adjacency, which picks the direction. A sector whose walls make more
+    than one ring is still dropped: Build can hold inner loops, but the rest of
+    this converter assumes one ring per sector.
     """
     s = m.sectors[si]
-    order = []; groups = {}
+    groups = {}; order = []
     for fi in range(s.faceStart, min(s.wallEnd+1, m.nface)):
         f = m.faces[fi]
-        a = m.verts[f.vertStart]; b = m.verts[f.vertStart+1]
-        key = (round(a[0],2), round(a[1],2), round(b[0],2), round(b[1],2))
-        if key[0:2] == key[2:4]:
-            continue                      # zero-length edge, nothing to walk
+        # And the first two vertices are not always the horizontal edge: on some
+        # faces they are the vertical one, so they project to a single 2D point.
+        # Skipping those as degenerate dropped a whole side of the ring, which
+        # left 90 of MINES' sectors as an open chain of three segments. A wall
+        # face is a vertical quad, so its four corners give exactly two distinct
+        # 2D points -- take the widest-apart pair and the direction sorts itself
+        # out below.
+        pts = []
+        for k in range(4):
+            v = m.verts[f.vertStart + k]
+            pt = (round(v[0], 2), round(v[1], 2))
+            if pt not in pts:
+                pts.append(pt)
+        if len(pts) < 2:
+            continue                      # genuinely degenerate in 2D
+        if len(pts) == 2:
+            pa, pb = pts
+        else:
+            pa, pb = max(((p, q) for i, p in enumerate(pts) for q in pts[i+1:]),
+                         key=lambda pq: (pq[0][0]-pq[1][0])**2 + (pq[0][1]-pq[1][1])**2)
+        key = (pa, pb) if pa <= pb else (pb, pa)
         if key not in groups:
             groups[key] = []; order.append(key)
         groups[key].append(fi)
     if not order:
         return []
-    bystart = {}
-    for k in order:
-        bystart.setdefault(k[0:2], []).append(k)
-    loop = []; seen = set()
-    cur = order[0]
-    while cur is not None and cur not in seen:
-        seen.add(cur); loop.append(cur)
+
+    adj = {}
+    for key in order:
+        adj.setdefault(key[0], []).append(key)
+        adj.setdefault(key[1], []).append(key)
+
+    # A closed ring visits every point exactly twice. Two points visited once is
+    # an open chain, and that is common rather than broken: MINES sector 17 is a
+    # rectangle whose fourth side simply has no wall face in the source, because
+    # nothing there is ever drawn. 90 of MINES' sectors are shaped like that.
+    # Close the chain with a solid wall and keep the sector.
+    loose = [p for p, v in adj.items() if len(v) == 1]
+    if len(loose) == 2:
+        key = (loose[0], loose[1]) if loose[0] <= loose[1] else (loose[1], loose[0])
+        if key not in groups:
+            groups[key] = []          # no face: solid, textured from the floor
+            order.append(key)
+            adj.setdefault(key[0], []).append(key)
+            adj.setdefault(key[1], []).append(key)
+    if any(len(v) != 2 for v in adj.values()):
+        return []
+
+    used = set(); loop = []
+    first = order[0]
+    cur, pt = first, first[1]
+    used.add(first); loop.append((first[0], first[1]))
+    while True:
         nxt = None
-        for cand in bystart.get(cur[2:4], ()):
-            if cand not in seen: nxt = cand; break
-        cur = nxt
-    if len(loop) != len(order):
-        # Not a single closed ring (stacked/room-over-room geometry). Keeping a
-        # partial loop would emit a broken sector, so drop it.
-        return []
-    if loop[-1][2:4] != loop[0][0:2]:
-        return []
-    return [(k, groups[k]) for k in loop]
+        for cand in adj[pt]:
+            if cand not in used:
+                nxt = cand; break
+        if nxt is None:
+            break
+        used.add(nxt)
+        other = nxt[1] if nxt[0] == pt else nxt[0]
+        loop.append((pt, other))
+        pt = other
+    if len(loop) != len(order) or pt != first[0]:
+        return []                          # several rings, or it never closed
+    return [((a[0], a[1], b[0], b[1]),
+             groups[(a, b) if a <= b else (b, a)]) for a, b in loop]
 
 def _plane_build(m, f):
     """A Kex floor/ceiling face as a Build-space plane: (z0, gx, gy).
@@ -475,7 +527,13 @@ def convert(m, tilebase=4096):
                 if f.link >= 0:
                     lo,hi = _zspan(m,f)
                     if hi-lo >= pspan: pspan = hi-lo; portal = f
-            solid = next((m.faces[fi] for fi in fis if m.faces[fi].link < 0), m.faces[fis[0]])
+            if fis:
+                solid = next((m.faces[fi] for fi in fis if m.faces[fi].link < 0), m.faces[fis[0]])
+            else:
+                # A side the source never gave a face, synthesised by _edges to
+                # close the ring. Nothing is ever drawn here, so take the
+                # sector's floor for a texture and leave it solid.
+                solid = ff_face; portal = None
             # Build shows exactly xrepeat*8 texels across a wall (polymost's
             # u spans wal->xrepeat*8), and Kex authors its levels at one texel
             # per world unit -- Nightdive's own doc: a 64x64 texture on a wall
