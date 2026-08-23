@@ -773,16 +773,42 @@ u16 eventType   u16 sector   i16 eventTag   i16 params
 verified against the `.dmap` sources on every event in test_door, test_switch
 and test_lifts.
 
-The useful part is what `eventType` turned out to be: **the same numbering Build
-PowerSlave uses for its own sector effects.** Kex type 1 is Exhumed's "Ceiling
-Doom door", 7 is "Touchplate floor lower, multiple", 21 is "Touchplate", 23 is
-"Floor raise, Synchronize", 24 is "Ceiling door, channel trigger only". The
-console and DOS versions descend from one design and kept the tag numbers.
+An earlier version of this section claimed `eventType` used **the same
+numbering Build PowerSlave uses for its own sector effects**, on the strength
+of type 1 doing in test_door what Build's effect 1 does. That was wrong for
+nearly everything but 1: the remaster's editor ships the full `SLAVE_EVENT_*`
+enum inside `anubis_Shipping_Galaxy_x64.exe` (the 41 values at file offset
+0x52a820, the matching name pointers at 0xa415e0), and against that table
+roughly 900 of the 1009 events across the retail maps were being mapped to the
+wrong Build effect or to nothing. The worst was 50: Build 50 is a floor
+elevator whose first stop is a neighbour's floor, so the sector sank at load --
+but Kex 50 is `REMOTE_TRIGGER`, the walk-in trigger region, and the most
+common event in the game (436 records). Kex 3..6 are the four key doors, 7 is
+`DOOR_OPEN_ONLY_MESSAGE`, 22 lowers a floor, 23 is the touch plate, 24/25 are
+lifts, 66 is the exploding bomb wall, 200..203 are the wall switches.
 
-So no new game code was needed. An event becomes `sector.lotag` (the effect) and
-`sector.hitag` (the channel), and `runlist_ProcessSectorTag()` builds the
-elevator and its press-trigger exactly as it does for the original levels. TOMB
-gets 12 tagged sectors, KARNAK 34.
+`KEX_EVENTS` in kexmap.py now carries that enum, and `_resolve_events()` maps
+each event to the Build effect that *behaves* the same -- doors to 1/24/75
+(with the key in `hitag/1000`), triggers to touchplate 21, lifts to 9/12,
+floors to 6/8, bomb walls to 35 -- each guarded on the neighbour the Build
+mover walks to at load, since `runlist_ProcessSectorTag()` asserts it finds
+one. A switch becomes a *wall* tag: Build switches are wall lotag 7 flipping
+`picnum` to `picnum+1`, so `_place_switch()` finds the wall face carrying the
+switchInfo texture and the tile assigner pins every switch's ON texture to the
+tile after its OFF, the way animation frames follow their base.
+
+Water came out of the same pass. Kex links an air sector's floor face (flags
+bit 6) to the underwater sector beneath it; Build says the same with lotag
+98/99 sprite pairs (`SetBelow`/`SetAbove` + `SnapSectors`). The 256 links
+across the retail maps were previously read as solid floor -- nowhere in the
+game could you dive. Floors flagged lava (0x20) or slime (0x80) get Build's
+lotag 96 damage sprite.
+
+Still left untagged deliberately: the eight FLOATER moving-platform variants
+and SCRIPTED_MOVE (Build's waypoint movers need waypoint sprites synthesised
+from the angles baked into the variant names), SCRIPT/SCRIPT_REPEATABLE (the
+per-level AngelScript hooks), ARTIFACT_TRIGGER/SPAWN, ACTOR_TRIGGER, and the
+TELEPORT pair (Build PowerSlave has no sector teleporter).
 
 A wrong turn worth recording: an earlier attempt read the door target straight
 out of the sector record, having matched `targetCeiling 256` against a 256 at

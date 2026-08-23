@@ -782,7 +782,7 @@ def _surface(pl, ring, wx, wy, dx, dy, sky=False, ceiling=False):
     return int(round(mean)), 0
 
 
-def convert(m, tilebase=4096):
+def convert(m, tilebase=4096, switch_pairs=None):
     walls = []; sects = []; ranges = []
     # Kex keeps a sector's trigger in a separate event table; Build PowerSlave
     # wants it on the sector as lotag (the effect) and hitag (the channel).
@@ -891,6 +891,8 @@ def convert(m, tilebase=4096):
         # simply carries NO tiles where the sky shows through. Untextured
         # ceilings were being given texture slot 0 -- 169 of them in KARNAK --
         # which is why its outdoor areas looked wrong.
+        # Events are resolved into Build tags at the end of convert(), once the
+        # portals are known; the raw record rides along until then.
         ev = sector_events.get(src[si])
         # Kex marks a vertical opening the same way it marks a horizontal one:
         # the ceiling or floor FACE carries a link to the sector on the other
@@ -901,8 +903,8 @@ def convert(m, tilebase=4096):
         sects.append(dict(yax_ceil=(cf.link if cf.tileStart < 0 else -1),
                           yax_floor=(ff.link if ff.tileStart < 0 else -1),
                           wallptr=start, wallnum=len(walls)-start,
-                          lotag=(ev[0] if ev else 0),
-                          hitag=(max(0, ev[2]) if ev else 0),
+                          lotag=0, hitag=0,
+                          kexevent=(ev if ev else None),
                           ceilingsky=(cf.tileStart < 0),
                           ceilingz=cz, floorz=fz,
                           ceilingheinum=cheinum, floorheinum=fheinum,
@@ -936,22 +938,8 @@ def convert(m, tilebase=4096):
         if w['nextwall'] >= 0 and walls[w['nextwall']]['nextwall'] != wi:
             w['nextwall'] = -1; w['nextsector'] = -1
 
-    # Kex event 50 is NOT Build sector effect 50 -- see KEX_EVENT_50 below. It
-    # needs the finished nextsector links to decide what it can safely become,
-    # so it is resolved here rather than in the sector loop above.
-    for si,s_ in enumerate(sects):
-        if s_ is None or s_['lotag'] != KEX_EVENT_50:
-            continue
-        start, num = ranges[si]
-        lower = False
-        for i in range(num):
-            ns = walls[start+i]['nextsector']
-            # Build z grows downward, so a GREATER floorz is a lower floor.
-            if 0 <= ns < len(sects) and sects[ns] and sects[ns]['floorz'] > s_['floorz']:
-                lower = True; break
-        s_['lotag'] = 8 if lower else 0
-        if not lower:
-            s_['hitag'] = 0
+    _resolve_events(m, sects, walls, ranges, src, switch_pairs)
+    m.kex_flat_sprites = _flat_sprites(m, sects, walls, ranges, src)
     return sects, walls, ranges
 
 def _split_tjunctions(m, edge_cache, verbose=False):
@@ -1022,6 +1010,184 @@ def _split_tjunctions(m, edge_cache, verbose=False):
     if verbose and nsplit:
         print("  T-junctions: %d edge splits so both sides of a portal agree" % nsplit)
     return nsplit
+
+
+def _neighbours(sects, walls, ranges, si):
+    """The distinct live sectors this piece opens onto."""
+    start, num = ranges[si]
+    out = set()
+    for i in range(num):
+        ns = walls[start+i]['nextsector']
+        if 0 <= ns < len(sects) and sects[ns]:
+            out.add(ns)
+    return out
+
+
+def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
+    """Turn each sector's Kex event into the Build tags that DO the same thing.
+
+    Build encodes a sector effect as lotag (speed*1000 + effect) and hitag
+    (key*1000 + channel), and runlist_ProcessSectorTag() builds the movers at
+    load. The Kex event's tag is the channel and its number names the effect
+    per KEX_EVENTS. The correspondences below are behavioural, each checked
+    against the effect's own code in runlist.cpp:
+
+      DOOR_NORMAL/KEY1-4 -> 1: press-to-open ceiling door, auto-close, the key
+        carried in hitag thousands. DOOR_TRIGGER_ONLY and OPEN_ONLY_MESSAGE
+        (open only by channel; the remaster shows a "find another way" message
+        on use) -> 24, the channel-trigger-only ceiling door.
+      DOOR_CLOSE/_SLOW -> 75, the ceiling that travels to the floor.
+      FLOOR_TRIGGER_PLATE and REMOTE_TRIGGER -> 21, the touchplate: stand in
+        the sector, the channel fires. REMOTE_TRIGGER is the walk-in trigger
+        region and the most common event in the game; an earlier version read
+        it as Build 50, a floor elevator, and sank 436 sectors at load.
+      FLOOR_LOWER -> 8 (permanent floor lower), FLOOR_LOWER_WAIT_RAISE and
+        FLOOR_LOWER_ACTIVE -> 9 (lift down), FLOOR_RAISE_WAIT_LOWER -> 12
+        (lift up), DROP_PAD -> 6 (touchplate floor lower).
+      EXPLODE -> 35, the destructible sector (the bomb wall).
+      SWITCH1-4 -> nothing on the sector: the switch lives on a WALL in Build
+        (wall lotag 7, runlist_ProcessWallTag), handled below.
+
+    Every mover Build builds at load walks the neighbour list for the height it
+    travels to and asserts it found one, so each mapping is guarded on the
+    neighbour that effect actually needs; a door with nowhere to open stays
+    static rather than crashing the load or diving out of the map.
+
+    Not yet carried across, left untagged on purpose: the eight FLOATER
+    variants and SCRIPTED_MOVE (moving platforms -- Build's waypoint movers
+    need waypoint sprites synthesised from the angle baked into the variant
+    name), SCRIPT/SCRIPT_REPEATABLE (the per-level AngelScript hooks),
+    ARTIFACT_TRIGGER/_SPAWN (no artifact inventory yet), ACTOR_TRIGGER (fires
+    when tagged actors die), and TELEPORT_START/_DEST (Build PowerSlave has no
+    sector teleporter)."""
+    for si, s_ in enumerate(sects):
+        if s_ is None:
+            continue
+        ev = s_.pop('kexevent', None)
+        if not ev:
+            continue
+        etype, _esect, etag, eparam = ev
+        name = KEX_EVENTS.get(etype)
+        chan = max(0, etag) % 1000
+        nbs = _neighbours(sects, walls, ranges, si)
+        # Build z grows DOWNWARD: a neighbour ceiling above ours has a smaller
+        # ceilingz, a neighbour floor below ours a greater floorz.
+        ceil_above  = any(sects[n]['ceilingz'] < s_['ceilingz'] for n in nbs)
+        floor_below = any(sects[n]['floorz'] > s_['floorz'] for n in nbs)
+        floor_above = any(sects[n]['floorz'] < s_['floorz'] for n in nbs)
+
+        lotag = hitag = 0
+        if name in ('DOOR_NORMAL', 'DOOR_KEY1', 'DOOR_KEY2', 'DOOR_KEY3',
+                    'DOOR_KEY4') and ceil_above:
+            lotag = 1
+            key = {'DOOR_KEY1': 1, 'DOOR_KEY2': 2,
+                   'DOOR_KEY3': 3, 'DOOR_KEY4': 4}.get(name, 0)
+            hitag = key * 1000 + chan
+        elif name in ('DOOR_TRIGGER_ONLY', 'DOOR_OPEN_ONLY_MESSAGE') and ceil_above:
+            lotag, hitag = 24, chan
+        elif name in ('DOOR_CLOSE', 'DOOR_CLOSE_SLOW'):
+            lotag, hitag = 75, chan
+        elif name in ('FLOOR_TRIGGER_PLATE', 'REMOTE_TRIGGER'):
+            lotag, hitag = 21, chan
+        elif name == 'FLOOR_LOWER' and floor_below:
+            lotag, hitag = 8, chan
+        elif name in ('FLOOR_LOWER_WAIT_RAISE', 'FLOOR_LOWER_ACTIVE') and floor_below:
+            lotag, hitag = 9, chan
+        elif name == 'FLOOR_RAISE_WAIT_LOWER' and floor_above:
+            lotag, hitag = 12, chan
+        elif name == 'DROP_PAD' and floor_above:
+            lotag, hitag = 6, chan
+        elif name == 'EXPLODE':
+            lotag, hitag = 35, chan
+        elif name in ('SWITCH1', 'SWITCH2', 'SWITCH3_WOOD', 'SWITCH4_METAL'):
+            _place_switch(m, sects, walls, ranges, src, si, chan, eparam,
+                          switch_pairs or {})
+        s_['lotag'], s_['hitag'] = lotag, hitag
+
+
+def _place_switch(m, sects, walls, ranges, src, si, chan, eparam, switch_pairs):
+    """A Kex switch is a sector event; a Build switch is a WALL.
+
+    The switch graphic is one tile among several on one wall face of the event
+    sector, and the event's params field packs the map-local texture indices of
+    the off and on art as (off << 8) | on -- defs/switchInfo.txt carries the
+    same pairing by name. Build wants that wall to carry lotag 7 and the OFF
+    tile as picnum: runlist_ProcessWallTag() then builds a press switch that
+    fires the channel and flips the face to picnum+1, which is why
+    convert_install() pins every switchInfo ON texture to the tile right after
+    its OFF."""
+    off_idx = (eparam >> 8) & 0xFF
+    sec = m.sectors[src[si]]
+    start, num = ranges[si]
+    for fi in range(sec.faceStart, min(sec.wallEnd + 1, m.nface)):
+        f = m.faces[fi]
+        if f.tileStart < 0:
+            continue
+        for t in range(f.tileStart, f.tileEnd + 1):
+            tex = m.tiles[t][1]
+            name = m.textures[tex] if tex < len(m.textures) else ''
+            if tex == off_idx or name in switch_pairs:
+                # the face's wall in this piece: the one whose midpoint lies
+                # closest to the face's own centre
+                fx = sum(m.verts[f.vertStart+k][0] for k in range(4)) / 4.0
+                fy = sum(-m.verts[f.vertStart+k][1] for k in range(4)) / 4.0
+                best = None
+                for i in range(num):
+                    w = walls[start+i]; w2 = walls[w['point2']]
+                    mx = (w['x'] + w2['x']) / 2.0
+                    my = (w['y'] + w2['y']) / 2.0
+                    d = (mx - fx*WORLD)**2 + (my - fy*WORLD)**2
+                    if best is None or d < best[0]:
+                        best = (d, i)
+                if best is not None:
+                    w = walls[start+best[1]]
+                    w['lotag'] = 7
+                    w['hitag'] = chan
+                    w['picnum'] = tex
+                    return True
+    # No switch art on any wall of this piece. Only the source sector's first
+    # piece falls back -- a stray extra switch on a split half would be worse
+    # than none -- and it takes the first wall so the channel still exists and
+    # the level stays completable.
+    if num and si < m.nsector:
+        walls[start]['lotag'] = 7
+        walls[start]['hitag'] = chan
+    return False
+
+
+def _flat_sprites(m, sects, walls, ranges, src):
+    """Sprites Build wants standing in a sector to declare what its floor IS.
+
+    Water: Kex links an air sector's floor face (flags bit 6) to the water
+    sector under it, whose ceiling face links back (bit 6 | bit 14) and whose
+    inside is flagged underwater (bit 14). Build says the same thing with a
+    lotag 98 sprite in the air sector whose hitag names the water sector
+    (SetBelow + SnapSectors) and a lotag 99 in the water sector naming the air
+    (SetAbove + kSectUnderwater) -- init.cpp:960-990. 256 such pairs across
+    the retail maps were being read as solid floor: you could not dive
+    anywhere.
+
+    Lava and slime: a floor face flagged 0x20 burns and 0x80 stings in Kex;
+    Build marks the sector with a lotag 96 sprite, hitag = damage*4.
+
+    Returns (piece, lotag, partner_source_or_hitag) records; build_sprites()
+    turns them into sprites once the sector remap exists."""
+    out = []
+    for si, s_ in enumerate(sects):
+        if s_ is None:
+            continue
+        sec = m.sectors[src[si]]
+        ff = m.faces[min(sec.wallEnd + 2, m.nface - 1)]
+        cf = m.faces[min(sec.wallEnd + 1, m.nface - 1)]
+        if ff.link >= 0 and (ff.flags & 0x40):
+            out.append((si, 98, ff.link))          # air side: water below
+        if cf.link >= 0 and (cf.flags & 0x40):
+            out.append((si, 99, cf.link))          # water side: air above
+        if ff.flags & 0x20:
+            out.append((si, 96, 40))               # lava: damage 10
+        elif ff.flags & 0x80:
+            out.append((si, 96, 16))               # slime: damage 4
+    return out
 
 
 def build_angle(stored_deg):
@@ -1178,34 +1344,43 @@ ACTOR_MAP = {
     AT['PYRAMID']:   (60, 0),   # golden sarcophagus: ends the level
 }
 
-# Kex event 50: the one event type whose number does NOT mean what the Build
-# number means.
-#
-# The rest of the event table lines up with Build PowerSlave's own sector
-# effects (1 = ceiling door, 7 = touchplate floor lower, 21 = touchplate, and
-# so on), because the console and DOS versions descend from one design. 50 does
-# not, and mapping it straight through was quietly wrecking geometry all over
-# the game:
-#
-#   * Build effect 50 ("floor lower / raise") builds an elevator whose FIRST
-#     position is a neighbour's floorz, and an elevator starts at position 0 --
-#     so every sector carrying it sank to its neighbour's floor the moment the
-#     level loaded. In TOMB that is the raised block the .357 sits on, which is
-#     why it drew as a patch of different floor texture instead of a step.
-#   * Build effect 50 appears in NONE of the six levels that ship in STUFF.DAT,
-#     while Kex event 50 is by far the most common event in the remaster's maps
-#     (418 records across the 25 levels, ~4% of all sectors). Two numbers that
-#     far apart in frequency are not the same effect.
-#   * 159 of those 418 sectors have every neighbour at exactly their own floor
-#     height, where a floor elevator would have nothing to travel between.
-#
-# What it does mean is still open. Until that is settled the conversion keeps
-# the authored height, which is what the remaster shows: where the sector has a
-# neighbour below it, effect 8 ("permanent floor lower") gives the same channel
-# -driven travel but starts at the sector's OWN floorz; where it does not, the
-# sector is left untagged and static rather than given a mover that would move
-# it somewhere wrong.
-KEX_EVENT_50 = 50
+# The Kex event table. The numbers do NOT mean what Build PowerSlave's sector
+# effects mean -- only DOOR_NORMAL happens to share its 1. The names are the
+# remaster's own: its editor ships the full SLAVE_EVENT_* enum inside
+# anubis_Shipping_Galaxy_x64.exe as two parallel 41-entry tables (the values at
+# file offset 0x52a820, the name pointers at 0xa415e0), and the pairing checks
+# out against every behaviour the shipped test maps demonstrate: test_door's
+# use-doors are 1, its key door 3 with a key actor beside it, test_switch's
+# room is 200 firing a 7, test_floor_triggers' plate is 23 and its walk-in
+# trigger region 50, test_lifts' lift is 24, test_mantis_trigger fires 7 off a
+# 201, test_teleport pairs 71 with 72. An earlier version of this file assumed
+# the numbering was Build's, which made roughly 900 of the 1009 events across
+# the retail maps wrong or dead -- most visibly 50, REMOTE_TRIGGER, the walk-in
+# trigger and the most common event in the game (436 records), which Build 50
+# read as a floor elevator and sank on the spot.
+KEX_EVENTS = {
+    1: 'DOOR_NORMAL',              2: 'DOOR_TRIGGER_ONLY',
+    3: 'DOOR_KEY1',                4: 'DOOR_KEY2',
+    5: 'DOOR_KEY3',                6: 'DOOR_KEY4',
+    7: 'DOOR_OPEN_ONLY_MESSAGE',   8: 'DOOR_CLOSE',
+    9: 'DOOR_CLOSE_SLOW',
+    21: 'FLOOR_LOWER_WAIT_RAISE',  22: 'FLOOR_LOWER',
+    23: 'FLOOR_TRIGGER_PLATE',     24: 'FLOOR_RAISE_WAIT_LOWER',
+    25: 'FLOOR_LOWER_ACTIVE',
+    41: 'FLOATER_128',             42: 'FLOATER_320_Z_160',
+    43: 'FLOATER_128_ANG_60',      44: 'FLOATER_128_ANG_120',
+    45: 'FLOATER_128_ANG_180',     46: 'FLOATER_128_ANG_NEG_60',
+    47: 'FLOATER_128_ANG_NEG_120', 48: 'DROP_PAD',
+    49: 'SCRIPTED_MOVE',           50: 'REMOTE_TRIGGER',
+    52: 'SCRIPT',                  53: 'ARTIFACT_TRIGGER',
+    54: 'ARTIFACT_SPAWN',          60: 'FLOATER_64_ANG_USER',
+    63: 'SCRIPT_REPEATABLE',       65: 'FLOATER_128_ANG_RAND_256',
+    66: 'EXPLODE',                 68: 'FLOATER_512_ANG_USER',
+    69: 'FLOATER_160_Z_NEG_128',   70: 'ACTOR_TRIGGER',
+    71: 'TELEPORT_START',          72: 'TELEPORT_DEST',
+    200: 'SWITCH1',                201: 'SWITCH2',
+    202: 'SWITCH3_WOOD',           203: 'SWITCH4_METAL',
+}
 
 # Item lotag -> the picnum the original maps give that item's sprite.
 #
@@ -1498,6 +1673,26 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
                             lotag=0, hitag=0, picnum=tile,
                             shade=(-96 if fullbright else KEX_SHADE_MIN),
                             xrepeat=rep, yrepeat=rep))
+
+    # Water pairing and damage floors, recorded by _flat_sprites(). A record's
+    # partner is a SOURCE sector index; its first piece always keeps the source
+    # index, so the remap of that index is the Build sector the hitag names.
+    for si, lotag, arg in getattr(m, 'kex_flat_sprites', ()):
+        if si not in remap:
+            continue
+        if lotag in (98, 99):
+            if arg not in remap:
+                continue
+            hitag = remap[arg]
+        else:
+            hitag = arg
+        start, num = ranges[si]
+        cx = sum(walls[start+i]['x'] for i in range(num)) / max(1, num)
+        cy = sum(walls[start+i]['y'] for i in range(num)) / max(1, num)
+        out.append(dict(x=int(cx), y=int(cy), z=sects[si]['floorz'],
+                        sectnum=remap[si], ang=0,
+                        lotag=lotag, hitag=hitag, picnum=1, shade=0,
+                        xrepeat=64, yrepeat=64))
     return out
 
 
@@ -1823,6 +2018,18 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
                        or lo >= 100}
         used_types.discard(AT_PLAYER)
 
+    # Switches flip between two textures, and Build's wall switch flips between
+    # picnum and picnum+1 (BuildWallFace in runlist_ProcessWallTag) -- so every
+    # switchInfo ON texture must land on the tile right after its OFF, the same
+    # way an animation's frames follow their base.
+    with zipfile.ZipFile(kpf) as z:
+        sw_src = ''
+        for n in z.namelist():
+            if n.lower() == 'defs/switchinfo.txt':
+                sw_src = z.read(n).decode('latin-1'); break
+    sw_pairs = dict(re.findall(r'"([^"]+)"\s*\{\s*on\s+"([^"]+)"', sw_src))
+    sw_ons = set(sw_pairs.values())
+
     assign = {}; nexttile = tilebase
     animdefs = []
     wanted = []
@@ -1831,14 +2038,20 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
         wanted.extend(t for t in m.textures if t)
         if m.sky: wanted.append(m.sky)
     for t in wanted:
-        if t in assign: continue
+        if t in assign or t in sw_ons: continue   # an ON waits for its OFF
         assign[t] = nexttile; nexttile += 1
+        on = sw_pairs.get(t)
+        if on and on not in assign:
+            assign[on] = nexttile; nexttile += 1
         if t in anims:
             speed, frames = anims[t]
             for f in frames:
                 assign.setdefault(f, nexttile)   # frames get the tiles that follow
                 nexttile += 1
             animdefs.append((assign[t], assign[t] + len(frames), speed))
+    for t in wanted:
+        if t not in assign:                       # an ON whose OFF never shows
+            assign[t] = nexttile; nexttile += 1
 
     with zipfile.ZipFile(kpf) as z:
         decor, decordefs, decoranims, breakables, lights = build_actor_tiles(
@@ -1850,7 +2063,7 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
     for name in sorted(parsed):
         m = parsed[name]
         local = [assign.get(t, tilebase) for t in m.textures]
-        sects, walls, ranges = convert(m, tilebase=0)
+        sects, walls, ranges = convert(m, tilebase=0, switch_pairs=sw_pairs)
         for w in walls:
             w['picnum'] = local[w['picnum']] if w['picnum'] < len(local) else tilebase
         skytile = assign.get(m.sky)
