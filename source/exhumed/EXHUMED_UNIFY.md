@@ -666,6 +666,19 @@ colour. The band is detected rather than hardcoded, by walking up from the last
 row while it stays flat, and only trusted when it is at least a tenth of the
 image.
 
+Cropping alone is not enough, though, because **Build puts the tile's vertical
+centre on the horizon**: polymost derives the sky's v origin from
+`(tilesiz.y >> 1)`. A zenith-to-horizon crop therefore has its centre half way
+up the sky, and everything below that centre never appears -- so the whole
+visible band came from the tile's upper half, which is the flat pole colour.
+Measured on a capture: the sky was rgb(15,14,79) at every height, top to bottom,
+with a light band only in the last few rows. That is the "stretched" sky.
+
+The tile is now doubled in height with the horizon row repeated underneath, so
+the real horizon lands on the centre line and the band above it is the dome's
+zenith-to-horizon content in the right order. The same capture then reads
+rgb(122,157,200) high up and rgb(172,200,214) near the horizon.
+
 Build will not treat a tile as a sky panorama until `tileSetupSky()` has seen
 it, which is what `multipsky` does -- without it a parallax ceiling draws black.
 

@@ -1600,10 +1600,23 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
             tmp = os.path.join(skydir, os.path.basename(name))
             open(tmp, 'wb').write(z.read(real))
             w_, h_, pix = _png.read(tmp)
+            w0, h0 = w_, h_
             w_, h_, pix = _crop_nadir(w_, h_, pix)
-            if (w_, h_) != (256, 256):
-                pix = _png.resize(w_, h_, pix, 256, 256)
-                _png.write(tmp, 256, 256, pix)
+
+            # Build puts the tile's vertical CENTRE on the horizon: polymost
+            # computes the sky's v origin from (tilesiz.y >> 1). The crop above
+            # runs zenith at the top to horizon at the bottom, so its centre is
+            # half way up the sky and everything below that never appears --
+            # which is why the clouds sat too low and the visible band came out
+            # stretched over the whole view. Doubling the tile and repeating the
+            # horizon row underneath puts the real horizon on the centre line.
+            out_h = h_ * 2
+            buf = bytearray(w_ * out_h * 4)
+            buf[:w_ * h_ * 4] = pix[:w_ * h_ * 4]
+            last = pix[(h_ - 1) * w_ * 4: h_ * w_ * 4]
+            for y in range(h_, out_h):
+                buf[y * w_ * 4:(y + 1) * w_ * 4] = last
+            _png.write(tmp, w_, out_h, bytes(buf))
             usable[tile] = 'kexart/' + os.path.basename(name)
     skytiles = set()
     for m in parsed.values():
