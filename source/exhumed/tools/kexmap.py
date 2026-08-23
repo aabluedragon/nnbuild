@@ -387,9 +387,293 @@ def _slope_error(m, f, z0, heinum, wx, wy, dx, dy):
     return worst
 
 
-# A slope is kept only if every corner lands within this many Build z units
-# (128 = 8 world units); past that a flat surface is the smaller lie.
+# A slope counts as exact when every ring vertex lands within this many Build z
+# units (128 = 8 world units). Past that, whichever of "best tilt" and "flat at
+# the mean" lies less is used -- see _surface().
 KEX_SLOPE_TOLERANCE = 128
+
+# How many times one sector may be cut in half along a contour -- 4 allows 16
+# strips, which is what a crater wall steeper than Build's steepest slope
+# terraces into. See _split_slopes().
+KEX_SPLIT_DEPTH = 4
+
+
+def _plane_z(pl, x, y):
+    """Build z of a plane from _plane_build at Build world (x, y)."""
+    z0, px, py, gx, gy = pl
+    return z0 + gx*(x-px) + gy*(y-py)
+
+
+def _sloped(pl):
+    return bool(pl) and (abs(pl[3]) > 1e-3 or abs(pl[4]) > 1e-3)
+
+
+def _ring_error(pl, ring, z0, heinum, wx, wy, dx, dy):
+    """Largest error, in Build z, of the tilt (z0, heinum) about the first wall
+    (wx, wy)->(wx+dx, wy+dy), measured at the sector's OWN ring vertices against
+    the plane. Mirrors getflorzofslope's integer arithmetic.
+
+    This replaces measuring at the face's four stored vertices, which are the
+    bounding quad of the rotated plane and lie OUTSIDE any sector that is not a
+    rectangle aligned with its slope. Measured there a triangle's ceiling looked
+    wrong by more than it could ever be inside the triangle."""
+    import math as _m
+    i = int(_m.hypot(dx, dy)) << 5
+    if i == 0:
+        return 0.0
+    worst = 0.0
+    for ax, ay in ring:
+        j = int(dx*(ay-wy) - dy*(ax-wx)) >> 3
+        got = z0 + (heinum * j) // i
+        worst = max(worst, abs(got - _plane_z(pl, ax, ay)))
+    return worst
+
+
+def _surface_errors(edges, cp, fp, ring):
+    """For each wall of `edges` (Kex coords, any orientation) as the first wall:
+    (ceiling error, floor error) of the best tilt about it, at the ring."""
+    import math as _m
+    out = []
+    for k, _f in edges:
+        wx, wy = k[0]*WORLD, -k[1]*WORLD
+        dx, dy = (k[2]-k[0])*WORLD, -(k[3]-k[1])*WORLD
+        if _m.hypot(dx, dy) < 1e-6:
+            out.append((1e9, 1e9)); continue
+        errs = []
+        for pl in (cp, fp):
+            if not _sloped(pl):
+                errs.append(0.0); continue
+            z_, h_ = _slope(pl, wx, wy, dx, dy)
+            errs.append(_ring_error(pl, ring, z_, h_, wx, wy, dx, dy))
+        out.append(tuple(errs))
+    return out
+
+
+def _flat_error(pl, ring):
+    """Largest error of emitting the plane flat at its mean over the ring."""
+    if not _sloped(pl):
+        return 0.0
+    zs = [_plane_z(pl, x, y) for x, y in ring]
+    mean = sum(zs) / len(zs)
+    return max(abs(v - mean) for v in zs)
+
+
+def _best_first_wall(edges, cp, fp):
+    """Index of the wall to start the loop on: fewest surfaces left inexact,
+    then the least total lie. Build tilts BOTH surfaces about one wall, so when
+    floor and ceiling disagree this is a trade; _split_slopes() cuts such
+    sectors so the trade is only ever over the lesser surface."""
+    ring = [(k[0]*WORLD, -k[1]*WORLD) for k, _ in edges]
+    flats = (_flat_error(cp, ring), _flat_error(fp, ring))
+    best = None
+    for i, errs in enumerate(_surface_errors(edges, cp, fp, ring)):
+        fails = sum(1 for e in errs if e > KEX_SLOPE_TOLERANCE)
+        key = (fails, sum(min(e, f) for e, f in zip(errs, flats)))
+        if best is None or key < best[0]:
+            best = (key, i, errs)
+    return best[1], best[2]
+
+
+class _Cut(object):
+    """The seam a contour split leaves between the two halves of a sector: a
+    wall with no face of its own that is a portal into the other half."""
+    __slots__ = ('link',)
+    def __init__(self, link):
+        self.link = link
+
+
+def _split_slopes(m, edge_cache, verbose=False):
+    """Cut every sloped sector Build cannot tilt along contours of the slope.
+
+    Build tilts a sector about its FIRST WALL only: z changes with the distance
+    from that wall and is constant along it. So a plane is exact in a sector
+    only when some wall is a level line of the plane. Most are -- a ramp's side
+    walls run up the ramp, its ends run across it -- but 385 of the 3046 sloped
+    surfaces in the retail maps have no such wall: triangles with the slope
+    running diagonally, and the terrain of MAGMA and COLONY_SAT. Those used to
+    be emitted FLAT, and flat at the highest corner of the face's bounding quad
+    at that, which for a triangle is a point outside the sector: TOMB's
+    entrance staircase had its ceiling at 2262 over a sector whose real ceiling
+    runs 2048..2176, and the canyon floors of MAGMA were off by thousands.
+
+    The cure is geometric. A line of constant height through the sector splits
+    it in two, and in each half that line IS a wall -- a level one. Start each
+    half's loop on it and the plane is exact. That is one extra sector and one
+    portal wall per cut, and nothing else has to know: the seam is a plain
+    portal, the halves take the source sector's faces and events, and the
+    T-junctions a cut leaves on the neighbours are closed by
+    _split_tjunctions() afterwards like any other.
+
+    Cutting recurses, because one cut is not always enough. Two things send a
+    half back onto the worklist: a floor and ceiling that slope in different
+    directions (both tilt about the same first wall, so only one can be exact
+    per piece), and terrain steeper than Build's slope itself -- heinum is 16
+    bits, 128 z per xy unit, about 83 degrees, and COLONY_SAT's crater walls
+    are authored at 416. Those can never be exact, so each cut must earn its
+    keep: a piece is kept only when its worst surviving error is meaningfully
+    below its parent's, and the recursion stops at KEX_SPLIT_DEPTH either way,
+    which turns a cliff into a terrace of maximally-tilted strips rather than
+    one flat ledge at the mean.
+
+    Returns (src, pinned): src[i] is the SOURCE sector of piece i (the first
+    m.nsector entries are the identity), pinned[i] True when piece i's edge
+    list already starts on its cut and must not be rotated."""
+    import math as _m
+    src = list(range(m.nsector))
+    pinned = {}
+    ncut = 0
+
+    def cost(edges, cp, fp, first):
+        """Worst error _surface() will leave, tilting about wall `first`."""
+        k0 = edges[first][0]
+        wx, wy = k0[0]*WORLD, -k0[1]*WORLD
+        dx, dy = (k0[2]-k0[0])*WORLD, -(k0[3]-k0[1])*WORLD
+        if _m.hypot(dx, dy) < 1e-6:
+            return 1e18
+        ring = [(k[0]*WORLD, -k[1]*WORLD) for k, _ in edges]
+        worst = 0.0
+        for pl in (cp, fp):
+            if not _sloped(pl):
+                continue
+            z_, h_ = _slope(pl, wx, wy, dx, dy)
+            worst = max(worst, min(_ring_error(pl, ring, z_, h_, wx, wy, dx, dy),
+                                   _flat_error(pl, ring)))
+        return worst
+
+    def cut(edges, pl, this_index, new_index):
+        """One contour cut of `edges` along a level line of plane `pl`.
+        Returns (ring_a, ring_b) with each ring starting on its seam and
+        clockwise for Build, or None when no usable cut exists."""
+        gx, gy = pl[3], pl[4]
+        # Height along the gradient at each ring vertex, in Kex coordinates:
+        # Build x = X*WORLD, Build y = -Y*WORLD, so gx*x + gy*y ~ gx*X - gy*Y.
+        pts = [(k[0], k[1]) for k, _ in edges]
+        t = [gx*X - gy*Y for X, Y in pts]
+        tmin, tmax = min(t), max(t)
+        if tmax - tmin < 1e-6:
+            return None
+        # Cut through the vertex nearest the middle of the range -- but only a
+        # vertex genuinely inside it. Two of TOMB sector 39's floor corners
+        # differ by one z unit, and "any vertex strictly between the extremes"
+        # cut a sliver off between them. With no usable vertex the cut goes
+        # through the middle of the range instead, entering and leaving through
+        # edges; one more T-junction, but sound.
+        mid = (tmin + tmax) / 2.0
+        margin = 0.2 * (tmax - tmin)
+        inner = [(abs(t[i] - mid), i) for i in range(len(t))
+                 if t[i] - tmin > margin and tmax - t[i] > margin]
+        tv = t[min(inner)[1]] if inner else mid
+        eps = max(1e-9, 1e-6 * abs(tv))
+
+        # Walk the ring once, handing each vertex to the side(s) it is on and
+        # inserting the crossing point where an edge passes through the cut.
+        # Every point remembers the edge it starts on, so the wall it begins
+        # keeps that edge's faces; the one pair of consecutive points that lie
+        # on the cut line bound the seam.
+        A = []; B = []
+        n = len(pts)
+        for i in range(n):
+            P, Pn = pts[i], pts[(i+1) % n]
+            a, b = t[i] - tv, t[(i+1) % n] - tv
+            sa = 0 if abs(a) <= eps else (1 if a > 0 else -1)
+            sb = 0 if abs(b) <= eps else (1 if b > 0 else -1)
+            if sa >= 0: A.append((P, i, sa == 0))
+            if sa <= 0: B.append((P, i, sa == 0))
+            if sa * sb < 0:
+                u = a / (a - b)
+                Q = (P[0] + (Pn[0]-P[0])*u, P[1] + (Pn[1]-P[1])*u)
+                A.append((Q, i, True)); B.append((Q, i, True))
+        if len(A) < 3 or len(B) < 3:
+            return None
+
+        def ring_of(points, other):
+            out = []; cut_at = -1
+            for j in range(len(points)):
+                (x0, y0), e0, on0 = points[j]
+                (x1, y1), _e1, on1 = points[(j+1) % len(points)]
+                if on0 and on1 and cut_at < 0 and (x0, y0) != (x1, y1):
+                    out.append(((x0, y0, x1, y1), [_Cut(other)])); cut_at = len(out)-1
+                else:
+                    out.append(((x0, y0, x1, y1), edges[e0][1]))
+            if cut_at < 0:
+                return None
+            # Build wants the loop clockwise in its own (y-down) space, which
+            # the main loop checks with a positive shoelace sum; settle it
+            # here so the seam can be put first and stay first.
+            q = [(k[0], -k[1]) for k, _ in out]
+            area = sum(q[i][0]*q[(i+1) % len(q)][1] - q[(i+1) % len(q)][0]*q[i][1]
+                       for i in range(len(q)))
+            if area < 0:
+                out = [((k[2], k[3], k[0], k[1]), f) for k, f in reversed(out)]
+                cut_at = len(out) - 1 - cut_at
+            return out[cut_at:] + out[:cut_at]
+
+        ra = ring_of(A, new_index)
+        rb = ring_of(B, this_index)
+        if ra is None or rb is None:
+            return None
+        return ra, rb
+
+    work = [(si, 0) for si in range(m.nsector)]
+    while work:
+        si, depth = work.pop()
+        edges = edge_cache.get(si) or []
+        if len(edges) < 3 or depth >= KEX_SPLIT_DEPTH:
+            continue
+        sec = m.sectors[src[si]]
+        cf = m.faces[min(sec.wallEnd+1, m.nface-1)]
+        ff = m.faces[min(sec.wallEnd+2, m.nface-1)]
+        cp = _plane_build(m, cf) if cf.tileStart >= 0 else None
+        fp = _plane_build(m, ff)
+        if not (_sloped(cp) or _sloped(fp)):
+            continue
+        if pinned.get(si):
+            now = cost(edges, cp, fp, 0)
+        else:
+            first, errs = _best_first_wall(edges, cp, fp)
+            now = cost(edges, cp, fp, first)
+        if now <= KEX_SLOPE_TOLERANCE:
+            continue
+        # The surface that would lie more, about the wall the piece will
+        # actually use, is the one the cut follows.
+        pl = fp
+        if _sloped(cp) and _sloped(fp):
+            ring = [(k[0]*WORLD, -k[1]*WORLD) for k, _ in edges]
+            k0 = edges[0 if pinned.get(si) else first][0]
+            wx, wy = k0[0]*WORLD, -k0[1]*WORLD
+            dx, dy = (k0[2]-k0[0])*WORLD, -(k0[3]-k0[1])*WORLD
+            worst = -1.0
+            for p2 in (cp, fp):
+                z_, h_ = _slope(p2, wx, wy, dx, dy)
+                e = min(_ring_error(p2, ring, z_, h_, wx, wy, dx, dy),
+                        _flat_error(p2, ring))
+                if e > worst:
+                    worst = e; pl = p2
+        elif _sloped(cp):
+            pl = cp
+        new_index = len(src)
+        halves = cut(edges, pl, si, new_index)
+        if halves is None:
+            continue
+        ra, rb = halves
+        # Each cut has to earn its keep: on terrain steeper than heinum can
+        # tilt no cut is ever exact, and halving a flat lie forever is not
+        # progress worth its sectors.
+        after = max(cost(ra, cp, fp, 0), cost(rb, cp, fp, 0))
+        if not (after <= KEX_SLOPE_TOLERANCE or after <= 0.66 * now):
+            continue
+        edge_cache[si] = ra
+        edge_cache[new_index] = rb
+        src.append(src[si])
+        pinned[si] = True
+        pinned[new_index] = True
+        ncut += 1
+        work.append((si, depth + 1))
+        work.append((new_index, depth + 1))
+    if verbose and ncut:
+        print("  slopes: %d contour cuts so Build can tilt what Kex sloped" % ncut)
+    return src, pinned
+
 
 # Fires light their surroundings: peak brightening in Build shade steps at the
 # sprite, falling off linearly to nothing at (peak << shift) world units.
@@ -469,6 +753,35 @@ def _pic(m, f, tilebase):
     if f.tileStart < 0: return tilebase
     return tilebase + m.tiles[f.tileStart][1]
 
+def _surface(pl, ring, wx, wy, dx, dy, sky=False, ceiling=False):
+    """(z, heinum) to emit for one floor or ceiling plane over a sector whose
+    first wall is (wx, wy)->(wx+dx, wy+dy) and whose walls stand at `ring`.
+
+    A flat plane is flat. A sloped one is tilted about the first wall when that
+    reproduces it within KEX_SLOPE_TOLERANCE at every ring vertex -- which is
+    what _best_first_wall() and _split_slopes() arrange -- and otherwise
+    whichever of that tilt and flat-at-the-mean lies less is used. The mean is
+    over the sector's OWN corners; the old fallback took the highest corner of
+    the face's bounding quad, a point outside any non-rectangular sector, and
+    that is what put TOMB's staircase ceiling a hundred units above the real
+    one. A sloped sky ceiling is simply held at its highest point: nothing of
+    it is drawn, and the walls below want it out of the way."""
+    if pl is None:
+        return 0, 0
+    zs = [_plane_z(pl, x, y) for x, y in ring]
+    if not _sloped(pl):
+        return int(round(zs[0])), 0
+    if sky and ceiling:
+        return int(round(min(zs))), 0          # Build z grows downward
+    z_, h_ = _slope(pl, wx, wy, dx, dy)
+    err = _ring_error(pl, ring, z_, h_, wx, wy, dx, dy)
+    mean = sum(zs) / len(zs)
+    flat = max(abs(v - mean) for v in zs)
+    if err <= KEX_SLOPE_TOLERANCE or err <= flat:
+        return z_, h_
+    return int(round(mean)), 0
+
+
 def convert(m, tilebase=4096):
     walls = []; sects = []; ranges = []
     # Kex keeps a sector's trigger in a separate event table; Build PowerSlave
@@ -483,10 +796,17 @@ def convert(m, tilebase=4096):
             edge_cache[si] = _edges(m, si)
         except Exception:
             edge_cache[si] = []
+    # Sectors Build cannot tilt are cut in two along a contour first, so that
+    # the T-junctions the cut leaves on their neighbours are closed with the
+    # rest. Pieces are appended after the source sectors; src maps them back.
+    src, pinned = _split_slopes(m, edge_cache)
     _split_tjunctions(m, edge_cache)
+    pieces = {}
+    for i, o in enumerate(src):
+        pieces.setdefault(o, []).append(i)
 
-    for si in range(m.nsector):
-        s = m.sectors[si]
+    for si in range(len(src)):
+        s = m.sectors[src[si]]
         edges = edge_cache[si]
         if len(edges) < 3:
             ranges.append((len(walls), 0))
@@ -500,45 +820,38 @@ def convert(m, tilebase=4096):
             edges = [( (k[2],k[3],k[0],k[1]), f) for k,f in reversed(edges)]
 
         # Build can only tilt a sector about its first wall, so if this sector's
-        # floor or ceiling is sloped, start the loop on the wall most
-        # perpendicular to the slope -- then the tilt is exact instead of a
-        # projection. Rotating the ring is safe: nextwall is matched by
-        # coordinate afterwards, not by index.
+        # floor or ceiling is sloped, start the loop on the wall that leaves
+        # the least lie over both surfaces -- a level line of the slope when
+        # there is one, and then the tilt is exact. Rotating the ring is safe:
+        # nextwall is matched by coordinate afterwards, not by index. A piece
+        # cut by _split_slopes() already starts on its contour and stays put.
         ff_face = m.faces[min(s.wallEnd+2, m.nface-1)]
-        cf_p = _plane_build(m, m.faces[min(s.wallEnd+1, m.nface-1)])
+        cf_face = m.faces[min(s.wallEnd+1, m.nface-1)]
+        cf_p = _plane_build(m, cf_face) if cf_face.tileStart >= 0 else None
         ff_p = _plane_build(m, ff_face)
-        grad = None
-        for pl in (ff_p, cf_p):
-            if pl and (abs(pl[3]) > 1e-3 or abs(pl[4]) > 1e-3):
-                grad = (pl[3], pl[4]); break
-        if grad is not None and len(edges) > 2:
-            import math as _m
-            gl = _m.hypot(*grad) or 1.0
-            best = 0; bestdot = None
-            for i2, (k2, _f2) in enumerate(edges):
-                dx2, dy2 = k2[2]-k2[0], -(k2[3]-k2[1])
-                L2 = _m.hypot(dx2, dy2)
-                if L2 < 1e-6: continue
-                dot = abs((dx2*grad[0] + dy2*grad[1]) / (L2*gl))
-                if bestdot is None or dot < bestdot:
-                    bestdot = dot; best = i2
+        if not pinned.get(si) and (_sloped(cf_p) or _sloped(ff_p)):
+            best, _errs = _best_first_wall(edges, cf_p, ff_p)
             edges = edges[best:] + edges[:best]
 
         start = len(walls)
         for i,(k,fis) in enumerate(edges):
             portal = None; pspan = -1.0
             for fi in fis:
+                if isinstance(fi, _Cut):
+                    portal = fi; break
                 f = m.faces[fi]
                 if f.link >= 0:
                     lo,hi = _zspan(m,f)
                     if hi-lo >= pspan: pspan = hi-lo; portal = f
-            if fis:
+            if fis and not isinstance(fis[0], _Cut):
                 solid = next((m.faces[fi] for fi in fis if m.faces[fi].link < 0), m.faces[fis[0]])
             else:
-                # A side the source never gave a face, synthesised by _edges to
-                # close the ring. Nothing is ever drawn here, so take the
-                # sector's floor for a texture and leave it solid.
-                solid = ff_face; portal = None
+                # A side the source never gave a face: either synthesised by
+                # _edges to close the ring, where nothing is ever drawn and it
+                # stays solid, or the seam of a contour split, which is a
+                # portal into the other half. Either way the sector's floor
+                # lends the texture.
+                solid = ff_face
             # Build shows exactly xrepeat*8 texels across a wall (polymost's
             # u spans wal->xrepeat*8), and Kex authors its levels at one texel
             # per world unit -- Nightdive's own doc: a 64x64 texture on a wall
@@ -563,29 +876,22 @@ def convert(m, tilebase=4096):
                               # nothing at all.
                               shade=_shade(m, solid if _lit(solid) else ff_face)))
         ranges.append((start, len(walls)-start))
-        cf = m.faces[min(s.wallEnd+1, m.nface-1)]
-        ff = m.faces[min(s.wallEnd+2, m.nface-1)]
-        clo,chi = _zspan(m,cf); flo,fhi = _zspan(m,ff)
-        cz = int(round(-chi*SCALE*WORLD)); fz = int(round(-flo*SCALE*WORLD))
-        cheinum = fheinum = 0
+        cf = cf_face
+        ff = ff_face
         w0 = walls[start]
         w1 = walls[start + 1] if len(walls) - start > 1 else w0
         dxw, dyw = (w1['x'] - w0['x']) * WORLD, (w1['y'] - w0['y']) * WORLD
         wx0, wy0 = w0['x']*WORLD, w0['y']*WORLD
-        if cf_p and (abs(cf_p[3]) > 1e-3 or abs(cf_p[4]) > 1e-3):
-            z_, h_ = _slope(cf_p, wx0, wy0, dxw, dyw)
-            if _slope_error(m, cf, z_, h_, wx0, wy0, dxw, dyw) <= KEX_SLOPE_TOLERANCE:
-                cz, cheinum = z_, h_
-        if ff_p and (abs(ff_p[3]) > 1e-3 or abs(ff_p[4]) > 1e-3):
-            z_, h_ = _slope(ff_p, wx0, wy0, dxw, dyw)
-            if _slope_error(m, ff, z_, h_, wx0, wy0, dxw, dyw) <= KEX_SLOPE_TOLERANCE:
-                fz, fheinum = z_, h_
+        ring = [(w['x']*WORLD, w['y']*WORLD) for w in walls[start:]]
+        cz, cheinum = _surface(_plane_build(m, cf), ring, wx0, wy0, dxw, dyw,
+                               sky=(cf.tileStart < 0), ceiling=True)
+        fz, fheinum = _surface(ff_p, ring, wx0, wy0, dxw, dyw)
         if cz >= fz: cz = fz - 8           # never let the ceiling sit under the floor
         # Kex has no sky tile: the sky is named in the map header and a ceiling
         # simply carries NO tiles where the sky shows through. Untextured
         # ceilings were being given texture slot 0 -- 169 of them in KARNAK --
         # which is why its outdoor areas looked wrong.
-        ev = sector_events.get(si)
+        ev = sector_events.get(src[si])
         # Kex marks a vertical opening the same way it marks a horizontal one:
         # the ceiling or floor FACE carries a link to the sector on the other
         # side. 300 of them across the 25 levels. Build calls this TROR.
@@ -604,20 +910,26 @@ def convert(m, tilebase=4096):
                           ceilingpicnum=_pic(m,cf,tilebase), floorpicnum=_pic(m,ff,tilebase),
                           ceilingshade=_shade(m,cf), floorshade=_shade(m,ff)))
 
-    # nextwall: the neighbour's wall carrying the same edge reversed
+    # nextwall: the neighbour's wall carrying the same edge reversed. A face
+    # links to a SOURCE sector; when that sector was cut the edge may sit in
+    # any of its pieces, so all of them are searched and nextsector is set to
+    # the piece that actually has it.
     for si,(start,num) in enumerate(ranges):
         for i in range(num):
             w = walls[start+i]
             ns = w['nextsector']
-            if not (0 <= ns < len(ranges)) or ranges[ns][1] == 0:
+            if not (0 <= ns < len(ranges)):
                 w['nextsector'] = -1; continue
             nxt = walls[w['point2']]
-            ns_start, ns_num = ranges[ns]
             hit = -1
-            for j in range(ns_num):
-                o = walls[ns_start+j]; op = walls[o['point2']]
-                if (o['x'],o['y']) == (nxt['x'],nxt['y']) and (op['x'],op['y']) == (w['x'],w['y']):
-                    hit = ns_start+j; break
+            for cand in pieces.get(src[ns] if ns < len(src) else ns, [ns]):
+                ns_start, ns_num = ranges[cand]
+                for j in range(ns_num):
+                    o = walls[ns_start+j]; op = walls[o['point2']]
+                    if (o['x'],o['y']) == (nxt['x'],nxt['y']) and (op['x'],op['y']) == (w['x'],w['y']):
+                        hit = ns_start+j; break
+                if hit >= 0:
+                    w['nextsector'] = cand; break
             w['nextwall'] = hit
             if hit < 0: w['nextsector'] = -1
     for wi,w in enumerate(walls):          # a portal only counts if both halves agree
