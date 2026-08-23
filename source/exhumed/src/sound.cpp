@@ -36,6 +36,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "init.h"
 #include "object.h"
 #include "player.h"
+#include "kexbreak.h"
 #include "random.h"
 #include "snake.h"
 #include "trigdat.h"
@@ -232,6 +233,21 @@ char szSoundName[kMaxSounds][kMaxSoundNameLen];
 char *SoundBuf[kMaxSounds];
 int SoundLen[kMaxSounds];
 char SoundLock[kMaxSounds];
+// Whether the loaded data loops. A VOC answers with its own block 6 marker; a
+// remaster WAV cannot, so kexsound.txt's flag is remembered here at load.
+static char SoundLoops[kMaxSounds];
+
+// Byte 26 being 6 was the old loop test everywhere in this file -- the VOC's
+// first data block being type 6, "repeat start" -- and it only means that on
+// a VOC, which starts with "Creative". A remaster WAV starts with "RIFF" and
+// byte 26 of one is mid-sample-rate.
+static inline int SoundIsLoop(int nSound)
+{
+    if (SoundLoops[nSound])
+        return 1;
+    return SoundBuf[nSound] && memcmp(SoundBuf[nSound], "Creative", 8) == 0
+        && SoundBuf[nSound][26] == 6;
+}
 int SoundSampleRate[kMaxSounds];
 
 extern char message_text[80];
@@ -504,14 +520,24 @@ int LoadSound(const char *sound)
     char sndfilename[BMAX_PATH];
     buildvfs_kfd hSnd = buildvfs_kfd_invalid;
 
+    // The remaster's own recording of this sound, when it has one -- the .kpf
+    // is on the search path in -kex mode, so the path opens directly.
+    int nKexLoop = 0;
+    char const *pzKexPath = KexSound_Alias(buffer, &nKexLoop);
+    if (pzKexPath)
+    {
+        hSnd = kopen4loadfrommod(pzKexPath, 0);
+        SoundLoops[i] = (char)((hSnd != buildvfs_kfd_invalid) ? nKexLoop : 0);
+    }
+
     for (auto fmt : soundfileformats)
     {
+        if (hSnd != buildvfs_kfd_invalid)
+            break;
         strcpy(sndfilename, buffer);
         strcat(sndfilename, fmt);
 
         hSnd = kopen4loadfrommod(sndfilename, 0);
-        if (hSnd != buildvfs_kfd_invalid)
-            break;
     }
 
     if (hSnd != buildvfs_kfd_invalid)
@@ -874,7 +900,9 @@ void UpdateSounds()
                     }
 
                     // handle replacement sounds with different, higher rates.
-                    int nFinalPitch = 7000 * (nFreq / 11025);
+                    // Divide last: the remaster's PSX-rate wavs (10997 Hz)
+                    // made nFreq/11025 collapse to zero.
+                    int nFinalPitch = 7000 * nFreq / 11025;
                     FX_SetFrequency(pASound->hFX, nFinalPitch);
                 }
 
@@ -971,7 +999,7 @@ void PlaySound(int nSound)
         return;
     }
 
-    int bLoop = SoundBuf[nSound][26] == 6;
+    int bLoop = SoundIsLoop(nSound);
 
     if (handle >= 0)
         FX_StopSound(handle);
@@ -983,7 +1011,7 @@ void PlaySound(int nSound)
     AIL_set_sample_file(handle, SoundBuf[nSound], -1);
     AIL_set_sample_volume(handle, kMaxFXVolume >>1);
 
-    if (SoundBuf[nSound][26] == 6)
+    if (SoundIsLoop(nSound))
         AIL_set_sample_loop_count(handle, 0);
 
     AIL_start_sample(handle);
@@ -1017,7 +1045,7 @@ void PlayLocalSound(int nSound, int nRate)
     if (nLocalChan == nAmbientChannel)
         nAmbientChannel = -1;
 
-    int bLoop = SoundBuf[nSound][26] == 6;
+    int bLoop = SoundIsLoop(nSound);
 
     ActiveSound* pASound = &sActiveSound[nLocalChan];
 
@@ -1040,7 +1068,7 @@ void PlayLocalSound(int nSound, int nRate)
         }
 
         // handle replacement sounds with different, higher rates.
-        int nFinalRate = nRate * (nFreq / 11025);
+        int nFinalRate = nRate * nFreq / 11025;   // divide last; see above
         FX_SetFrequency(pASound->hFX, nFreq + nFinalRate);
     }
 #if 0
@@ -1051,7 +1079,7 @@ void PlayLocalSound(int nSound, int nRate)
     if (nRate)
         AIL_set_sample_playback_rate(pASound->f_e, AIL_sample_playback_rate(pASound->f_e)+nRate);
 
-    if (SoundBuf[nSound][26] == 6)
+    if (SoundIsLoop(nSound))
         AIL_set_sample_loop_count(pASound->f_e, 0);
 
     AIL_start_sample(pASound->f_e);
@@ -1244,7 +1272,7 @@ short PlayFX2(unsigned short nSound, short nSprite)
         short nPan = 63+(Sin(nSoundAng+1023)>>8);
         int nLeft, nRight;
 
-        int bLoop = SoundBuf[nSound][26] == 6;
+        int bLoop = SoundIsLoop(nSound);
 
         CalcASSPan(nPan, nVolume>>1, &nLeft, &nRight);
 
@@ -1273,7 +1301,7 @@ short PlayFX2(unsigned short nSound, short nSprite)
         AIL_set_sample_pan(vdi->f_e, nPan);
         AIL_set_sample_volume(vdi->f_e, nVolume>>1);
 
-        if (SoundBuf[nSound][26] == 6)
+        if (SoundIsLoop(nSound))
             AIL_set_sample_loop_count(vdi->f_e, 0);
 
         if (nPitch)

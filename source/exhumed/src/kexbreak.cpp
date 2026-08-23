@@ -160,6 +160,47 @@ void KexLight_Tick(void)
     }
 }
 
+// ---------------------------------------------------------------------------
+// Sound aliases. kexmap.py writes kexsound.txt out of a curated pairing of the
+// Build sound roster with the remaster's sounds/*.wav -- "<name> <path> <loop>"
+// per line. LoadSound() asks here first, so the remaster's own recordings play
+// wherever one corresponds; the 69 Build sounds with no counterpart fall
+// through to their VOCs. The loop flag replaces the VOC-block test, which a
+// WAV cannot answer.
+// ---------------------------------------------------------------------------
+#define kMaxKexSounds 200
+
+struct KexSoundAlias { char name[12]; char path[32]; uint8_t loop; };
+
+static KexSoundAlias s_soundAlias[kMaxKexSounds];
+static int           s_soundAliases = -1;    // -1 = not read yet
+
+static bool KexSound_ParseLine(char *line, int nRec)
+{
+    KexSoundAlias &a = s_soundAlias[nRec];
+    int loop = 0;
+    if (Bsscanf(line, "%11s %31s %d", a.name, a.path, &loop) < 2)
+        return false;
+    a.loop = !!loop;
+    return true;
+}
+
+char const *KexSound_Alias(char const *name, int *pLoop)
+{
+    if (s_soundAliases < 0)
+        s_soundAliases = KexTable_Load("kexsound.txt", kMaxKexSounds, KexSound_ParseLine);
+    if (!g_kexMode)
+        return NULL;
+    for (int i = 0; i < s_soundAliases; i++)
+        if (!Bstrncasecmp(s_soundAlias[i].name, name, sizeof(s_soundAlias[i].name) - 1))
+        {
+            if (pLoop)
+                *pLoop = s_soundAlias[i].loop;
+            return s_soundAlias[i].path;
+        }
+    return NULL;
+}
+
 int KexBreak_Available(void)
 {
     if (s_types < 0)

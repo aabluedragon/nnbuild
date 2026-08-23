@@ -692,6 +692,35 @@ surface through a single `AddFlashRec()`: take a flash slot, save the shade,
 push the pal past the palette so `UndoFlashes()` knows to restore it, subtract
 the falloff. That was seven copies of the same ten lines.
 
+### Sounds
+
+The engine asks for 190 distinct sound names -- 79 in `SoundFiles[]` plus 131
+more named inside the .SEQ files' sound tables -- and every one goes through
+the single chokepoint `LoadSound()`, which tries `<name>.ogg/.wav/.voc` on the
+search path. The remaster ships 202 `sounds/*.wav` (PCM16 mono, mostly PSX-ish
+rates), named in plain words where Build's are eight-character mnemonics
+(`anu_icu` = "anubis I-see-you" = `anubisact.wav`).
+
+`KEX_SOUNDS` in kexmap.py pairs 121 of the 190 by meaning -- the actor defs
+and anim scripts say which wav plays for which action on the remaster's side
+-- with an acoustic cross-check between each demo VOC and its candidate wav;
+three pairs are bit-identical recordings, which says the remaster reused the
+original masters. The pairing lands in `kexsound.txt`, `KexSound_Alias()`
+reads it, and `LoadSound()` asks there before opening the VOC. The 69 Build
+sounds with no counterpart (Am-mit, the drums, most ambience loops) fall
+through unchanged.
+
+Playing the remaster's files uncovered three latent engine defects. The WAV
+parser assumed `fmt ` and `data` sit back to back, so any file with a LIST
+metadata chunk between them -- several of the remaster's -- was rejected;
+`MV_PlayWAV` now walks the chunks. The loop test was `SoundBuf[26] == 6`,
+which reads the VOC "repeat start" block type and on a WAV reads the middle of
+the sample rate; `SoundIsLoop()` checks the buffer really is a VOC and takes
+the kexsound loop flag otherwise (the flag itself was read off the original
+VOCs' own loop blocks: the flamethrower jet and the stone-slide rumble). And
+the pitch scaling divided first -- `7000 * (nFreq / 11025)` -- which is zero
+for the remaster's 10997 Hz files; it divides last now.
+
 ### Distance shading
 
 The remaster does no distance shading at all -- everything it paints is baked

@@ -19,4 +19,8 @@ void FuncKexBreak(int a, int b, int nRun);
 void KexLight_Init(void);        // per level: collect the remaster's light sources
 void KexLight_Tick(void);        // per tick: cast their glow
 
+// The remaster wav that is this Build sound, or NULL; *pLoop tells whether it
+// loops (the flag stands in for the VOC loop block a WAV does not have).
+char const *KexSound_Alias(char const *name, int *pLoop);
+
 #endif
