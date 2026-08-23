@@ -224,7 +224,15 @@ KEX_UNITS_PER_TEXEL = WORLD
 # yrepeat is a vertical scale and does not depend on the wall's length. The
 # original game pairs yrepeat 7 with its 20.4 units per texel, which pins the
 # constant at ~143; at 6 units per texel that lands on 24.
-KEX_YREPEAT = max(1, min(255, int(round(143.0 / KEX_UNITS_PER_TEXEL))))
+# Build shows xrepeat*8 texels across a wall, and vertically one texel every
+# 128/yrepeat world units. That 128 is measured rather than assumed: across the
+# 13150 walls in the six levels that ship in STUFF.DAT, yrepeat * (world units
+# per texel across) has its mode at exactly 128 (5735 walls) and a median of
+# 129.6, which is what square texels give. Kex authors one texel per Kex unit
+# and a Kex unit is WORLD world units, so across is 6.0 and yrepeat wants to be
+# 128/6 = 21.3. The 143 this used to carry produced 24, squashing every wall
+# texture 12% vertically.
+KEX_YREPEAT = max(1, min(255, int(round(128.0 / KEX_UNITS_PER_TEXEL))))
 
 def _edges(m, si):
     """The sector's 2D edges, chained into a closed loop.
@@ -412,9 +420,17 @@ def convert(m, tilebase=4096):
     for etype, esect, etag, eparam in getattr(m, 'events', ()):
         if esect < m.nsector and etype:
             sector_events[esect] = (etype, esect, etag, eparam)
+    edge_cache = {}
+    for si in range(m.nsector):
+        try:
+            edge_cache[si] = _edges(m, si)
+        except Exception:
+            edge_cache[si] = []
+    _split_tjunctions(m, edge_cache)
+
     for si in range(m.nsector):
         s = m.sectors[si]
-        edges = _edges(m, si)
+        edges = edge_cache[si]
         if len(edges) < 3:
             ranges.append((len(walls), 0))
             sects.append(None); continue
@@ -510,7 +526,11 @@ def convert(m, tilebase=4096):
         # Kex marks a vertical opening the same way it marks a horizontal one:
         # the ceiling or floor FACE carries a link to the sector on the other
         # side. 300 of them across the 25 levels. Build calls this TROR.
-        sects.append(dict(yax_ceil=cf.link, yax_floor=ff.link,
+        # A vertical link is only an OPENING when the face carries no tiles, the
+        # same way a wall portal does. In the retail maps it almost never is --
+        # see build_tror().
+        sects.append(dict(yax_ceil=(cf.link if cf.tileStart < 0 else -1),
+                          yax_floor=(ff.link if ff.tileStart < 0 else -1),
                           wallptr=start, wallnum=len(walls)-start,
                           lotag=(ev[0] if ev else 0),
                           hitag=(max(0, ev[2]) if ev else 0),
@@ -558,6 +578,76 @@ def convert(m, tilebase=4096):
         if not lower:
             s_['hitag'] = 0
     return sects, walls, ranges
+
+def _split_tjunctions(m, edge_cache, verbose=False):
+    """Split every sector edge at vertices that other sectors put on it.
+
+    Build pairs a portal by exact edge correspondence: sector A's wall from P to
+    Q is only a portal into B when B has a wall from Q to P. Kex has no such
+    rule, so it happily runs one long wall alongside a neighbour whose side is
+    broken into several -- a T-junction. When that happens the reversed edge is
+    not found and the portal is dropped, which turns a doorway into a solid
+    wall. It is not a rare corner case: 978 of the 10602 portals in the first
+    eight retail maps, 9.2%, were being lost exactly this way.
+
+    Splitting A's long edge at B's intermediate vertices makes both sides agree.
+    The vertices come from every sector's ring, bucketed into a grid so each
+    edge only tests the ones near it.
+    """
+    CELL = 256.0
+    grid = {}
+    for es in edge_cache.values():
+        for k, _f in es:
+            for (x, y) in ((k[0], k[1]), (k[2], k[3])):
+                grid.setdefault((int(x // CELL), int(y // CELL)), set()).add((x, y))
+
+    nsplit = 0
+    for si, es in edge_cache.items():
+        out = []
+        for k, fis in es:
+            x1, y1, x2, y2 = k
+            dx, dy = x2 - x1, y2 - y1
+            L2 = dx*dx + dy*dy
+            if L2 <= 1e-9:
+                out.append((k, fis)); continue
+
+            # every grid cell the segment touches
+            cand = set()
+            steps = int(max(abs(dx), abs(dy)) // CELL) + 2
+            for i in range(steps + 1):
+                t = i / float(steps)
+                cx, cy = int((x1 + dx*t) // CELL), int((y1 + dy*t) // CELL)
+                for ox in (-1, 0, 1):
+                    for oy in (-1, 0, 1):
+                        cand |= grid.get((cx+ox, cy+oy), set())
+
+            hits = []
+            for (vx, vy) in cand:
+                ex, ey = vx - x1, vy - y1
+                # colinear, and strictly inside the segment
+                if abs(ex*dy - ey*dx) > 1.0 * (L2 ** 0.5):
+                    continue
+                t = (ex*dx + ey*dy) / L2
+                if t <= 1e-6 or t >= 1.0 - 1e-6:
+                    continue
+                hits.append((t, vx, vy))
+            if not hits:
+                out.append((k, fis)); continue
+
+            hits.sort()
+            px, py = x1, y1
+            for _t, vx, vy in hits:
+                if (vx, vy) == (px, py):
+                    continue
+                out.append(((px, py, vx, vy), fis))
+                px, py = vx, vy
+                nsplit += 1
+            out.append(((px, py, x2, y2), fis))
+        edge_cache[si] = out
+    if verbose and nsplit:
+        print("  T-junctions: %d edge splits so both sides of a portal agree" % nsplit)
+    return nsplit
+
 
 def build_angle(stored_deg):
     """Kex facing -> Build facing.
@@ -1028,10 +1118,27 @@ def sector_remap(sects, ranges):
 # Kex stacks rooms and marks the join the same way it marks a doorway: the
 # ceiling or floor FACE carries a link to the sector on the other side, exactly
 # as a wall face does. There are 300 such links across the 25 retail levels,
-# 299 of them symmetric, 299 with the upper sector's floor at precisely the
-# lower sector's ceiling, and 291 of 292 with wall rings that match edge for
-# edge. Without them those openings convert to a solid floor and a solid
-# ceiling, and the room below is unreachable and invisible.
+# 299 of them symmetric and 299 with the upper sector's floor at precisely the
+# lower sector's ceiling.
+#
+# They are NOT openings, though, and that distinction is what matters. Every one
+# of those 300 linked floor faces is textured, and so are 299 of the 300 linked
+# ceilings -- a wall face that is a portal carries no tiles, and these do. So a
+# vertical link means "the sector below me is that one", not "you can see or
+# fall through here", and both surfaces stay solid.
+#
+# Converting them to bunches anyway is actively wrong. A bunched floor is not
+# drawn: the engine draws the sectors on the other side of the seam instead. In
+# 220 of the 291 seams the upper sector's floor and the lower sector's ceiling
+# disagree -- usually in shade, by 8 to 16 steps -- so those floors came out
+# lit like the room underneath. Measured at 3.5% of the frame changing inside a
+# bunched sector, for no gain anywhere, since there is nothing to see through.
+#
+# So a seam only becomes a bunch when the face is genuinely untextured, which is
+# the same test a wall portal passes. Exactly one face in the retail maps meets
+# it, so in practice every level converts as plain version 7. The machinery
+# stays because it is correct, and a map with a real vertical opening would use
+# it.
 #
 # Build's TROR ("YAX") expresses this with *bunches*. A bunch is one horizontal
 # seam: every sector whose floor lies on it, and every sector whose ceiling

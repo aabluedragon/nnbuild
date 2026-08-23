@@ -484,6 +484,28 @@ Not converted:
 - **Sloped floors and ceilings** are converted, but dropped per sector when the
   fit is worse than 8 world units at any corner.
 
+### Portals, and the T-junctions that were eating them
+
+Build pairs a portal by exact edge correspondence: sector A's wall from P to Q
+is a portal into B only when B has a wall from Q to P. Kex has no such rule, so
+it happily runs one long wall alongside a neighbour whose side is broken into
+several -- a T-junction. When that happens the reversed edge is never found and
+the portal is dropped, which turns a doorway into a solid wall.
+
+It was not a corner case. 978 of the 10602 portals in the first eight retail
+maps -- 9.2% -- were being lost exactly this way. The converter now splits every
+sector edge at the vertices other sectors put on it, with the vertices bucketed
+into a grid so each edge only tests the ones near it. Portal retention went from
+90.4% to 93.0%, recovering 1044 passages, for 8.3% more walls (the largest map
+is 3160 walls against Build's 16384).
+
+What is left is 5.7%: edges that face several *different* neighbours stacked
+vertically -- a shaft in TOMB opens onto one sector at z 2048 and another at
+z -256 through the same wall. A Build wall carries one `nextsector`, so only the
+tallest survives and the other opening reads as solid. Fixing those means
+splitting the sector itself into vertical bands and joining the bands with TROR
+bunches, which is a much larger piece of work than the seam mirroring above.
+
 ### True Room over Room
 
 Kex marks a vertical join the same way it marks a doorway: the ceiling or floor
@@ -502,10 +524,10 @@ its own arrays at load and puts the hijacked fields back, so panning and tags
 stay usable afterwards. `NEW_MAP_FORMAT` is off in this tree, so that compat
 encoding is the one that applies.
 
-The converter now groups the links into bunches with a union-find over sector
+The converter groups the links into bunches with a union-find over sector
 sides -- so several sectors meeting on one plane share a bunch rather than
-getting one bunch per pair -- and links the seam walls by coordinate. 291
-bunches across 16 maps, well inside the 256-per-map limit. Exhumed also needed
+getting one bunch per pair -- and links the seam walls by coordinate, but only
+where the face is genuinely untextured. Exhumed also needed
 the draw path itself: only Duke called `yax_preparedrawrooms()` /
 `yax_drawrooms()`, and both return immediately when a map has no bunches, so the
 original PowerSlave levels are untouched. The per-layer sprite callback is
