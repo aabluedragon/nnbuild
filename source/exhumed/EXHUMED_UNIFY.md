@@ -667,10 +667,13 @@ end. Sprites are left alone; a fire lighting itself looks wrong.
 The peak and shift are a first setting, not a match measured against a capture
 the way the distance shading below was.
 
-Both generated tables -- `kexbreak.txt` and `kexlight.txt` -- are the same
-shape, a `#` header and one record of integers per line, and both are read
-through one `KexTable_Load()` in `kexbreak.cpp` and written through one
-`_write_table()` in `kexmap.py`. On the engine side every light in
+Every table the converter generates -- `kexbreak.txt`, `kexlight.txt`,
+`kexfont.txt`, `kexworld.txt` -- is the same shape: a `#` comment line, then one
+record of space-separated fields per line. Each had grown its own copy of open,
+slurp, NUL-terminate, walk the lines, skip the comments. They now share one
+`KexTable_Load()` in `kextable.h`, which hands a parse function one
+NUL-terminated line at a time; on the writing side `_write_table()` in
+`kexmap.py` emits what it expects. On the engine side every light in
 `lighting.cpp`, the original explosions included, now records and brightens a
 surface through a single `AddFlashRec()`: take a flash slot, save the shade,
 push the pal past the palette so `UndoFlashes()` knows to restore it, subtract

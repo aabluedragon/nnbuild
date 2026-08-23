@@ -20,6 +20,7 @@
 #include "baselayer.h"
 #include "keyboard.h"
 #include "control.h"
+#include "kextable.h"
 
 #include "exhumed.h"
 #include "engine.h"
@@ -70,35 +71,33 @@ static char s_chosenMap[32];   // level picked on the overworld, for the game lo
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
+static bool KexMenu_ParseGlyph(char *line, int nRec)
+{
+    UNREFERENCED_PARAMETER(nRec);
+
+    int cp, tile, w, h, yoff;
+    if (Bsscanf(line, "%d %d %d %d %d", &cp, &tile, &w, &h, &yoff) != 5)
+        return false;
+    if (cp < KEX_FIRSTCHAR || cp > KEX_LASTCHAR)
+        return false;
+
+    kexglyph_t &g = s_glyph[cp - KEX_FIRSTCHAR];
+    g.tile = (int16_t)tile; g.w = (int16_t)w; g.h = (int16_t)h; g.yoff = (int16_t)yoff;
+    return true;
+}
+
 static void KexMenu_LoadFont(void)
 {
     Bmemset(s_glyph, 0, sizeof(s_glyph));
 
-    int const fil = kopen4loadfrommod("kexfont.txt", 0);
-    if (fil == -1)
-        return;
+    // The glyphs index themselves by codepoint rather than filling the array in
+    // order, so there is no useful cap and the record count says nothing.
+    KexTable_Load("kexfont.txt", INT32_MAX, KexMenu_ParseGlyph);
 
-    int const len = kfilelength(fil);
-    char *text = (char *)Xmalloc(len + 1);
-    kread(fil, text, len);
-    text[len] = 0;
-    kclose(fil);
-
+    // The tallest glyph is the line height.
     int most = 0;
-    for (char *line = strtok(text, "\r\n"); line; line = strtok(NULL, "\r\n"))
-    {
-        if (line[0] == '#' || !isdigit((unsigned char)line[0]))
-            continue;
-        int cp, tile, w, h, yoff;
-        if (Bsscanf(line, "%d %d %d %d %d", &cp, &tile, &w, &h, &yoff) != 5)
-            continue;
-        if (cp < KEX_FIRSTCHAR || cp > KEX_LASTCHAR)
-            continue;
-        kexglyph_t &g = s_glyph[cp - KEX_FIRSTCHAR];
-        g.tile = (int16_t)tile; g.w = (int16_t)w; g.h = (int16_t)h; g.yoff = (int16_t)yoff;
-        if (h > most) most = h;
-    }
-    Xfree(text);
+    for (auto const &g : s_glyph)
+        if (g.h > most) most = g.h;
     if (most) s_fontHeight = most;
 }
 
@@ -717,35 +716,24 @@ static kexlevel_t s_level[KEX_MAX_LEVELS];
 static int s_levelCount = -1;
 static int s_eyeFrames = 0;
 
+static bool KexMenu_ParseLevel(char *line, int nRec)
+{
+    kexlevel_t &L = s_level[nRec];
+    int x, y, n, e, so, w, used = 0;
+    if (Bsscanf(line, "%31s %d %d %d %d %d %d %n", L.map, &x, &y, &n, &e, &so, &w, &used) < 7)
+        return false;
+
+    L.x = (int16_t)x; L.y = (int16_t)y;
+    L.link[0] = (int16_t)n; L.link[1] = (int16_t)e;
+    L.link[2] = (int16_t)so; L.link[3] = (int16_t)w;
+    Bstrncpyz(L.title, used > 0 ? line + used : "", sizeof(L.title));
+    return true;
+}
+
 static void KexMenu_LoadWorld(void)
 {
-    s_levelCount = 0;
+    s_levelCount = KexTable_Load("kexworld.txt", KEX_MAX_LEVELS, KexMenu_ParseLevel);
 
-    int const fil = kopen4loadfrommod("kexworld.txt", 0);
-    if (fil == -1)
-        return;
-
-    int const len = kfilelength(fil);
-    char *text = (char *)Xmalloc(len + 1);
-    kread(fil, text, len);
-    text[len] = 0;
-    kclose(fil);
-
-    for (char *line = strtok(text, "\r\n"); line; line = strtok(NULL, "\r\n"))
-    {
-        if (line[0] == '#' || !line[0] || s_levelCount >= KEX_MAX_LEVELS)
-            continue;
-        kexlevel_t &L = s_level[s_levelCount];
-        int x, y, n, e, so, w, used = 0;
-        if (Bsscanf(line, "%31s %d %d %d %d %d %d %n", L.map, &x, &y, &n, &e, &so, &w, &used) < 7)
-            continue;
-        L.x = (int16_t)x; L.y = (int16_t)y;
-        L.link[0] = (int16_t)n; L.link[1] = (int16_t)e;
-        L.link[2] = (int16_t)so; L.link[3] = (int16_t)w;
-        Bstrncpyz(L.title, used > 0 ? line + used : "", sizeof(L.title));
-        s_levelCount++;
-    }
-    Xfree(text);
     // How many frames the eye's spin has; the tool writes it out beside the art.
     s_eyeFrames = 0;
     for (int i = 0; i < 64; i++)

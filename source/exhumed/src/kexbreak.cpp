@@ -39,6 +39,7 @@
 #include "scorp.h"
 #include "random.h"
 #include "lighting.h"
+#include "kextable.h"
 #include "kexbreak.h"
 
 #define kMaxKexBreakTypes 64
@@ -60,50 +61,7 @@ static KexBreakProp s_prop[kMaxKexBreaks];
 static int          s_props;
 static int          s_selftest;   // VB_KEXBREAK_TEST: shatter everything after N ticks
 
-// Read one of the converter's generated tables. Both of them are the same
-// shape: one record per line, "#" comments, and a fixed number of integers.
-// `parse` gets a line and returns true when it consumed a record; reading stops
-// once it has taken nMax of them. A missing file is not an error -- it just
-// means this install was never converted -- and yields zero records.
-static int KexTable_Load(char const *fn, int nMax, bool (*parse)(char const *line, int nRec))
-{
-    int const fil = kopen4loadfrommod(fn, 0);
-    if (fil == -1)
-        return 0;
-
-    int const len = kfilelength(fil);
-    char *buf = (char *)Xmalloc(len + 1);
-    kread(fil, buf, len);
-    buf[len] = 0;
-    kclose(fil);
-
-    int nRecs = 0;
-    for (char const *p = buf; *p && nRecs < nMax; )
-    {
-        char const *eol = Bstrchr(p, '\n');
-        if (*p != '#' && parse(p, nRecs))
-            nRecs++;
-        if (!eol)
-            break;
-        p = eol + 1;
-    }
-
-    Xfree(buf);
-    return nRecs;
-}
-
-// Both generated tables key on the tile in their first field, so one lookup
-// serves them. Returns the table index, or -1 when the tile is not in it.
-template <typename T>
-static int KexTable_FindTile(T const *tab, int nRecs, int picnum)
-{
-    for (int i = 0; i < nRecs; i++)
-        if (tab[i].tile == picnum)
-            return i;
-    return -1;
-}
-
-static bool KexBreak_ParseLine(char const *line, int nRec)
+static bool KexBreak_ParseLine(char *line, int nRec)
 {
     int tile, health, shard0, nshards, clipdist = 32;
     if (Bsscanf(line, "%d %d %d %d %d", &tile, &health, &shard0, &nshards, &clipdist) < 4)
@@ -142,7 +100,7 @@ static int            s_lightTypes = -1;    // -1 = not read yet
 static KexLightSource s_light[kMaxKexLights];
 static int            s_lights;
 
-static bool KexLight_ParseLine(char const *line, int nRec)
+static bool KexLight_ParseLine(char *line, int nRec)
 {
     int tile, peak, shift;
     if (Bsscanf(line, "%d %d %d", &tile, &peak, &shift) != 3)
