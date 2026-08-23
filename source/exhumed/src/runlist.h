@@ -81,6 +81,7 @@ enum runTypes
     kRunRat,
     kRunEnergyBlock,
     kRunSpark,
+    kRunKexBreak,   // the remaster's breakable props
 };
 
 struct RunStruct

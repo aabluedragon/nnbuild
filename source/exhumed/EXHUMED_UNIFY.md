@@ -546,6 +546,48 @@ Measured against a capture of the remaster from the same spot in the same level,
 the solid (non-sky) pixels moved from p05/p25/p50 = 18/34/54 to 24/52/72,
 against the remaster's 26/48/92.
 
+### Breakable props
+
+The remaster's vases and barrels are shootable actors, and none of that
+survived conversion -- they came out as decor sprites that stand there and
+ignore bullets. The actor def carries `health 30`, `shootable 1`, `solid 1` and
+a `deathAnim`, and the anim is the whole recipe:
+
+    vase01_death { frame {
+        action A_PlayLocalSound("sounds/glassbreak.wav")
+        action A_Spawn("Fx_VaseExplodePuff", 0, 0, 32)
+        action A_RandomVaseItem()
+        action A_TossActor("Obj_Vase01_Shard01", 0, 0, 32, 8, 8, 4, 16)
+        ... one per shard ...
+        action A_Destroy() } }
+
+The shard art is already in the prop's own idle anim: frame 0 is the intact pot
+and the frames after it are the shards. That is also why holding the prop on
+frame 0 (`noAdvanceFrames`) is what stopped it flickering into a sliver of
+debris -- the "random sprite" it flickered to was a shard.
+
+Build has the pieces this needs. A prop registers a runlist run the way
+`BuildObject()` does, so `runlist_DamageEnemy()` -- which looks the run up
+through `sprite.owner` -- routes a 0x80000 damage message straight to it, and
+the shards are `BuildCreatureChunk()`, the same physics chunks the exploding
+fire cauldron throws. `clipdist` comes from the actor's own radius rather than
+Build's default, so the prop blocks the circle the remaster gives it. 12 prop
+types, 23 of them standing in TOMB alone.
+
+`A_RandomVaseItem` is transcribed rather than guessed: the remaster ships its
+AngelScript in the .kpf, so `scripts/p_misc.txt` gives the real table --
+`r = Max(8)`, with 0 spawning a scorpion, 3 the ammo pickup, 5 the health
+pickup, and the rest falling through or dropping nothing. The branches gated on
+the scepter, sandals or shawl cannot apply, because Exhumed has no such
+artifacts; that is the same path the remaster takes before the player owns any
+of them, so the fall-throughs land where they do there. The rare Item_Map and
+Item_Power rolls are left out for the same reason, and the dust puff and
+`glassbreak.wav` become PowerSlave's own pot sound.
+
+`VB_KEXBREAK_TEST=<ticks>` shatters every prop in the level that many ticks in,
+which is how the shard and drop paths were exercised without a player: 23 props,
+6 of 6 shards each, no crashes.
+
 ### Distance shading
 
 The remaster does no distance shading at all -- everything it paints is baked

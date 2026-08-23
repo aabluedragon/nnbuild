@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "exhumed.h"
 #include "engine.h"
 #include "runlist.h"
+#include "kexbreak.h"
 #include "player.h"
 #include "trigdat.h"
 #include "move.h"
@@ -57,7 +58,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "save.h"
 
 //#define kFuncMax	0x260000 // the number 38 stored in the high word of an int
-#define kFuncMax		39
+#define kFuncMax		40
 #define kMaxRunStack	200
 
 
@@ -119,6 +120,7 @@ AiFunc aiFunctions[kFuncMax] = {
     FuncRat,
     FuncEnergyBlock,
     FuncSpark,
+    FuncKexBreak,
 };
 
 

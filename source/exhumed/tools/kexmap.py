@@ -820,7 +820,11 @@ def load_kex_actors(Z):
             nm, body = m.group(1), m.group(2)
             def field(k, d=None):
                 mm = re.search(k + r'\s+"?([^"\n]+)"?', body)
-                return mm.group(1).strip() if mm else d
+                if not mm:
+                    return d
+                # Some defs carry a trailing // comment on the value, e.g.
+                # `radius 90.0 // 95.25`.
+                return mm.group(1).split('//')[0].strip()
             # noAdvanceFrames means the engine holds the actor on frame 0.
             # The vases and barrels all carry it: the extra frames in their
             # spawnAnim are not an animation, they are variant looks and
@@ -829,7 +833,12 @@ def load_kex_actors(Z):
             defs[nm] = dict(name=nm, anim=field('spawnAnim'),
                             scale=float(field('scale', '1') or 1),
                             fullbright=int(field('fullbright', '0') or 0),
-                            still=int(field('noAdvanceFrames', '0') or 0))
+                            still=int(field('noAdvanceFrames', '0') or 0),
+                            health=int(field('health', '0') or 0),
+                            shootable=int(field('shootable', '0') or 0),
+                            solid=int(field('solid', '0') or 0),
+                            death=field('deathAnim'),
+                            radius=float(field('radius', '0') or 0))
 
     out = {}
     for nm, t in name2type.items():
@@ -890,6 +899,11 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
     names = {n.lower(): n for n in Z.namelist()}
     outdir_art = os.path.join(outdir, 'kexart', 'actors')
     os.makedirs(outdir_art, exist_ok=True)
+    # Clear it first: an actor that used to emit seven frames and now emits one
+    # would otherwise leave the other six behind, unreferenced but confusing.
+    for stale in os.listdir(outdir_art):
+        if stale.endswith('.png'):
+            os.remove(os.path.join(outdir_art, stale))
 
     sheets = {}
     def sheet(group, base):
@@ -905,13 +919,14 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
                 os.remove(tmp)
         return sheets[key]
 
-    out = {}; tile = tilebase; defs = []; animdefs = []
+    out = {}; tile = tilebase; defs = []; animdefs = []; breakables = []
     for t in sorted(wanted_types):
         a = kexactors.get(t)
         if not a: continue
         frames = _all_frames(Z, names, a['anim'])
         if not frames: continue
-        if a.get('still'):
+        breakable = a.get('still') and a.get('shootable') and a.get('death')
+        if a.get('still') and not breakable:
             frames = frames[:1]
 
         # Every frame of one actor is composited into the SAME box, so the
@@ -948,12 +963,17 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
             defs.append((tile, fn))
             tile += 1
         out[t] = (first, a['scale'], a['fullbright'])
-        if len(allrects) > 1:
+        if len(allrects) > 1 and not a.get('still'):
             animdefs.append((first, tile - 1, 3))
+        if breakable and len(allrects) > 1:
+            # frame 0 is the intact object; the rest are the shards its death
+            # anim tosses, one A_TossActor per shard.
+            breakables.append((first, a['health'], first + 1, len(allrects) - 1,
+                               a.get('radius', 0)))
     if verbose:
-        print("  scenery: %d actor types, %d animated, from the remaster's own sprites"
-              % (len(out), len(animdefs)))
-    return out, defs, animdefs
+        print("  scenery: %d actor types, %d animated, %d breakable, from the remaster's own sprites"
+              % (len(out), len(animdefs), len(breakables)))
+    return out, defs, animdefs, breakables
 
 
 def build_sprites(m, sects, walls, ranges, remap, decor=None):
@@ -1314,8 +1334,8 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
             animdefs.append((assign[t], assign[t] + len(frames), speed))
 
     with zipfile.ZipFile(kpf) as z:
-        decor, decordefs, decoranims = build_actor_tiles(z, outdir, used_types, kexactors,
-                                                        nexttile, verbose)
+        decor, decordefs, decoranims, breakables = build_actor_tiles(
+            z, outdir, used_types, kexactors, nexttile, verbose)
     nexttile += len(decordefs)
     animdefs.extend(decoranims)
 
@@ -1425,6 +1445,25 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
         if m.sky and m.sky in assign:
             skytiles.add(assign[m.sky])
     write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs, skytiles)
+
+    # Breakables. The remaster's vases and barrels are shootable props: the
+    # actor def gives health and a deathAnim, and that anim tosses one shard
+    # actor per shard and destroys the pot -- e.g. vase01_death plays
+    # glassbreak.wav, spawns a dust puff, drops a random item and tosses
+    # Obj_Vase01_Shard01..06. The shard art is already in the object's own idle
+    # anim: frame 0 is the intact pot and the frames after it are the shards,
+    # which is why holding the pot on frame 0 (noAdvanceFrames) is what stops it
+    # flickering into a sliver of debris.
+    with open(os.path.join(outdir, "kexbreak.txt"), "w") as f:
+        f.write("# tile health shardtile0 shardcount clipdist\n")
+        for tile, health, shard0, nshards, radius in sorted(breakables):
+            # Build clips a sprite at clipdist<<2 world units, and Kex authors
+            # the radius in its own units, so the world factor applies and the
+            # result is divided by four.
+            clip = max(1, min(255, int(round(radius * WORLD / 4.0))))
+            f.write("%d %d %d %d %d\n" % (tile, health, shard0, nshards, clip))
+    if verbose:
+        print("  breakables: %d prop types written to kexbreak.txt" % len(breakables))
 
     # The menu art rides along: exhumed.def is the one file the game loads by
     # name, so it pulls in the generated menu definitions.
