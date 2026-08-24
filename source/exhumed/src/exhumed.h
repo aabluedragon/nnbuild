@@ -58,6 +58,11 @@ void Exhumed_CaptureFrame(void);
 extern int g_kexMode;
 int Kex_BaseVisibility(void);
 char const *Kex_MusicForMap(char const *mapname);
+
+// kexmovie.cpp: play an Ogg Theora movie fullscreen. 1 = played to the end or
+// skipped by the player, 0 = unavailable (no GL, no Theora build, no file) --
+// the caller falls back to whatever it showed before.
+int Kex_PlayTheora(char const *fileName);
 char const *Kex_PickupCaption(int lotag);
 
 #pragma pack(push, 1)

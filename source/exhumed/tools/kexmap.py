@@ -2491,6 +2491,7 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
     animdefs.extend(decoranims)
 
     done = 0
+    teleports = []
     for name in sorted(parsed):
         m = parsed[name]
         local = [assign.get(t, tilebase) for t in m.textures]
@@ -2530,6 +2531,25 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
         start = player_start(m, sects, walls, ranges)
         _, remap = sector_remap(sects, ranges)
         sprites = build_sprites(m, sects, walls, ranges, remap, decor)
+
+        # Teleports. Kex 72 is the pad you step on and 71 where you arrive --
+        # settled behaviourally in test_teleport (the pad sits at the player
+        # start; the facing parameter rides on the 71) -- and Build PowerSlave
+        # has no sector teleporter, so the engine reads these rows instead.
+        arrivals = {etag: (esect, epar) for et, esect, etag, epar in m.events
+                    if et == 71}
+        for et, esect, etag, _epar in m.events:
+            if et != 72 or etag not in arrivals:
+                continue
+            dsect, dang = arrivals[etag]
+            if esect not in remap or dsect not in remap or sects[dsect] is None:
+                continue
+            w0, num = ranges[dsect]
+            cx = sum(walls[w0+i]['x'] for i in range(num)) * WORLD // max(1, num)
+            cy = sum(walls[w0+i]['y'] for i in range(num)) * WORLD // max(1, num)
+            teleports.append((name.upper().rsplit('.', 1)[0], remap[esect],
+                              remap[dsect], cx, cy, sects[dsect]['floorz'],
+                              build_angle(dang)))
         ns, nw, nsp = write_build(os.path.join(outdir, KEX_MAP_PREFIX + name.upper()),
                                   sects, walls, ranges, start, sprites)
         portals = sum(1 for w in walls if w['nextsector'] >= 0)
@@ -2642,6 +2662,11 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
     _write_table(outdir, "kexlight.txt", "tile peak shift",
                  [(tile, KEX_LIGHT_PEAK, KEX_LIGHT_SHIFT) for tile in sorted(lights)],
                  "light sources", verbose)
+
+    # Teleport pads, per map: the pad's Build sector, then the arrival's
+    # sector, position and facing.
+    _write_table(outdir, "kextele.txt", "map padsector destsector x y z ang",
+                 teleports, "teleports", verbose)
 
     # Sounds: LoadSound() consults this before opening the original VOC, so the
     # remaster's own recordings play wherever one corresponds.

@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "engine.h"
 #include "exhumed.h"
 #include "osdcmds.h"
+#include "ramses.h"
 #include "anims.h"
 #include "map.h"
 #include "sequence.h"
@@ -3335,6 +3336,29 @@ void DoTitle()
     short skullDurations[] = { 6, 25, 43, 50, 68, 78, 101, 111, 134, 158, 173, 230, 6000 };
 
     videoSetViewableArea(0, 0, xdim - 1, ydim - 1);
+
+    // The remaster's own opening: the NightDive, Kex and Throwback logo
+    // movies, then the intro cinematic in the chosen language. All Theora,
+    // played when the build has the decoder; if the first cannot play there
+    // is no point trying the rest, and the classic sequence below -- ending
+    // in the same story told by book.mov -- stands in.
+    if (kexTitle)
+    {
+        static char const * const movieLang[] = { "en", "fr", "de", "es" };
+        char intro[40];
+        Bsprintf(intro, "movies/intro-%s.ogv",
+                 movieLang[clamp(kex_language, 0, 3)]);
+        if (Kex_PlayTheora("movies/NightDive.ogv"))
+        {
+            Kex_PlayTheora("movies/Kex.ogv");
+            Kex_PlayTheora("movies/throwback.ogv");
+            Kex_PlayTheora(intro);
+            SetOverscan(BASEPAL);
+            GrabPalette();
+            KexMenu_TitleHold();
+            return;
+        }
+    }
 
 //  if (videoGetRenderMode() == REND_CLASSIC)
 //     BlackOut();

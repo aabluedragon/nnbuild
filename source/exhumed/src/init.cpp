@@ -1222,6 +1222,7 @@ void LoadObjects()
     // level's own objects are in place. No-op outside Kex mode.
     KexBreak_Init();
     KexLight_Init();
+    KexTele_Init();
     InitRa();
     InitChunks();
 

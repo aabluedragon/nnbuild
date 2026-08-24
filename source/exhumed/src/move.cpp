@@ -164,6 +164,7 @@ void MoveThings()
     UndoFlashes();
     DoLights();
     KexLight_Tick();      // the remaster's fires and torches; no-op elsewhere
+    KexTele_Tick();       // its teleport pads; no-op elsewhere
 
     if (nFreeze)
     {

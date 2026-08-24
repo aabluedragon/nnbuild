@@ -692,6 +692,37 @@ surface through a single `AddFlashRec()`: take a flash slot, save the shade,
 push the pal past the palette so `UndoFlashes()` knows to restore it, subtract
 the falloff. That was seven copies of the same ten lines.
 
+### Movies
+
+Nightdive ships fifteen Ogg Theora movies next to the .kpf -- the NightDive,
+Kex and Throwback logos, the intro and both endings, each in four languages --
+and in -kex mode DoTitle() now opens with them: the three logos, then
+`movies/intro-<lang>.ogv` in the `kex_language` tongue, then the PRESS START
+hold. Without the decoder (or under the classic renderer) the old sequence,
+ending in the same story told by book.mov, stands in.
+
+kexmovie.cpp is the player: libogg splits the container, libtheoradec decodes
+the video, and the movie's own Vorbis stream goes to the engine's mixer
+untouched -- its pages, concatenated, are already a valid standalone .ogg,
+and audiolib plays Vorbis natively, so no vorbis linkage is needed. Frames
+are converted to RGB in software and drawn as one textured quad; both come
+from Homebrew's libtheoradec/libogg, detected by pkg-config in the makefile
+(HAVE_THEORA), so no sources are vendored.
+
+Two lessons paid for in screenshots. Polymost's palette-lookup program and
+matrices are re-bound by every videoNextPage() 2D flush, so ALL of the quad's
+GL state -- glUseProgram(0), matrices, binds -- is asserted per frame; set
+once before the loop, it was gone by the second frame, and the RGB texture
+sampled through the palette program came out kaleidoscoped. (The raw
+glUseProgram is deliberate: the buildgl wrapper tracks the bound program and
+thought 0 was already active.) And window activation at startup leaves
+phantom key events that skipped each logo the moment it began; the first
+dozen frames of every movie flush the keyboard instead of listening to it.
+
+The decode itself was verified pixel-perfect against ffmpeg's reading of the
+same frame before any GL debugging began -- which is what confined the search
+to the draw path.
+
 ### Creature art
 
 The engine animates every creature through STUFF.DAT's .SEQ files, and the

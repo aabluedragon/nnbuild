@@ -622,6 +622,15 @@ ifeq ($(PLATFORM),BSD)
     LIBS += -lFLAC -lexecinfo
 endif
 
+# Ogg Theora, for the PowerSlave remaster's movies (source/exhumed/src/
+# kexmovie.cpp). Optional: without it the intro falls back to book.mov.
+THEORA_CFLAGS := $(shell $(PKG_CONFIG) --cflags theoradec ogg 2>/dev/null)
+THEORA_LIBS := $(shell $(PKG_CONFIG) --libs theoradec ogg 2>/dev/null)
+ifneq ($(THEORA_LIBS),)
+    COMPILERFLAGS += -DHAVE_THEORA $(THEORA_CFLAGS)
+    LIBS += $(THEORA_LIBS)
+endif
+
 ifeq ($(PLATFORM),DARWIN)
     LIBS += -lFLAC \
             -lcurl \
@@ -1054,7 +1063,7 @@ exhumed_game_objs := \
     queen.cpp ra.cpp ramses.cpp random.cpp rat.cpp record.cpp rex.cpp roach.cpp \
     runlist.cpp save.cpp scorp.cpp sequence.cpp serial.cpp set.cpp snake.cpp \
     sound.cpp spider.cpp status.cpp stream.cpp switch.cpp text2.cpp timer.cpp \
-    trigdat.cpp vbnet.cpp version.cpp view.cpp wasp.cpp kexmenu.cpp kexbreak.cpp \
+    trigdat.cpp vbnet.cpp version.cpp view.cpp wasp.cpp kexmenu.cpp kexbreak.cpp kexmovie.cpp \
 
 components += exhumed
 dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))

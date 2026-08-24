@@ -201,6 +201,103 @@ char const *KexSound_Alias(char const *name, int *pLoop)
     return NULL;
 }
 
+// ---------------------------------------------------------------------------
+// Teleports. Kex event 72 is a pad the player steps on, 71 the arrival point
+// with its facing; Build PowerSlave has no sector teleporter, so kexmap.py
+// writes kextele.txt -- "<map> <padsector> <destsector> <x> <y> <z> <ang>" --
+// and stepping into the pad's sector moves the player the way RestartPlayer()
+// places one. One-shot per visit: leaving the pad re-arms it. There is exactly
+// one pair in the retail maps, in KILARENA.
+// ---------------------------------------------------------------------------
+#define kMaxKexTeles 16
+
+struct KexTele
+{
+    char map[16];
+    int16_t pad, dest, ang;
+    int32_t x, y, z;
+};
+
+static KexTele s_teleAll[64];
+static int     s_teleAllCount = -1;        // -1 = not read yet
+static KexTele s_tele[kMaxKexTeles];       // this level's rows
+static int     s_teles;
+static uint8_t s_teleOnPad[kMaxPlayers];
+
+static bool KexTele_ParseLine(char *line, int nRec)
+{
+    KexTele &t = s_teleAll[nRec];
+    int pad, dest, x, y, z, ang;
+    if (Bsscanf(line, "%15s %d %d %d %d %d %d", t.map, &pad, &dest,
+                &x, &y, &z, &ang) < 7)
+        return false;
+    t.pad = (int16_t)pad; t.dest = (int16_t)dest;
+    t.x = x; t.y = y; t.z = z; t.ang = (int16_t)(ang & kAngleMask);
+    return true;
+}
+
+void KexTele_Init(void)
+{
+    s_teles = 0;
+    Bmemset(s_teleOnPad, 0, sizeof(s_teleOnPad));
+    if (s_teleAllCount < 0)
+        s_teleAllCount = KexTable_Load("kextele.txt", (int)ARRAY_SIZE(s_teleAll),
+                                       KexTele_ParseLine);
+    if (!g_kexMode)
+        return;
+
+    char nameUp[BMAX_PATH];
+    Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
+    Bstrupr(nameUp);
+    for (int i = 0; i < s_teleAllCount && s_teles < kMaxKexTeles; i++)
+    {
+        if (Bstrstr(nameUp, s_teleAll[i].map))
+            s_tele[s_teles++] = s_teleAll[i];
+    }
+    if (s_teles)
+        OSD_Printf("Kex teleports: %d pads on this level\n", s_teles);
+}
+
+void KexTele_Tick(void)
+{
+    for (int nPlayer = 0; nPlayer < nTotalPlayers; nPlayer++)
+    {
+        int const nSprite = PlayerList[nPlayer].nSprite;
+        if (nSprite < 0)
+            continue;
+        int const nSector = sprite[nSprite].sectnum;
+        int onPad = 0;
+        for (int i = 0; i < s_teles; i++)
+        {
+            if (nSector != s_tele[i].pad)
+                continue;
+            onPad = 1;
+            if (s_teleOnPad[nPlayer])
+                break;
+
+            sprite[nSprite].x = s_tele[i].x;
+            sprite[nSprite].y = s_tele[i].y;
+            sprite[nSprite].z = s_tele[i].z;
+            sprite[nSprite].xvel = 0;
+            sprite[nSprite].yvel = 0;
+            sprite[nSprite].zvel = 0;
+            mychangespritesect(nSprite, s_tele[i].dest);
+            PlayerList[nPlayer].q16angle = fix16_from_int(s_tele[i].ang);
+            PlayerList[nPlayer].q16oangle = PlayerList[nPlayer].q16angle;
+            sprite[nSprite].ang = s_tele[i].ang;
+            PlayerList[nPlayer].opos = sprite[nSprite].xyz;
+
+            OSD_Printf("Kex teleport: player %d -> sector %d\n",
+                       nPlayer, s_tele[i].dest);
+            PlayFX2(StaticSound[44] | 0x2000, nSprite);   // tele_1
+            AddFlash(s_tele[i].dest, s_tele[i].x, s_tele[i].y, s_tele[i].z, 80);
+            onPad = 0;                     // arrived elsewhere; pad re-arms
+            break;
+        }
+        s_teleOnPad[nPlayer] = (uint8_t)onPad;
+    }
+}
+
 int KexBreak_Available(void)
 {
     if (s_types < 0)
