@@ -464,8 +464,15 @@ engine actually spawned: KARNAK 88 creatures / 103 live sprites, SLAVCAMP
 
 Not converted:
 
-- A sector whose walls are not a single closed ring is dropped rather than
-  emitted broken (226 of 9837 across the retail maps).
+- A sector whose walls do not make a single closed ring. That used to be 226
+  of 9837 across the retail maps and is now none of 11329: the ring walk
+  prunes what hangs off the ring -- a chain to nowhere, or a chord across the
+  room (a partition wall, a doubled face) meeting it at over-visited points,
+  shortest first and only while the graph stays in one piece -- and rejects
+  a ring that crosses itself rather than emit it. The chord is a free-standing
+  wall Build could not hold anyway; the room it was hiding is kept. The last
+  two were float noise, corners at -3456.01 beside -3456.0, which snapping the
+  ring's points to a tenth of a unit closes.
 - **Light that varies across one surface.** Build has exactly one shade per wall
   and one per floor, and Kex bakes its lighting per vertex, several vertices to
   a wall. The falloff around a fire is mostly *vertical*: on the wall behind
@@ -1230,7 +1237,10 @@ room to walk into -- and placing that set would be a cheat. And the map tile
 base moved from 6000 to 8000: with the collectibles' sprites added the
 texture run from 6000 reached 6988, one level short of the menu art at 7000.
 
-The unattended check is `VB_KEXINV_TEST=<ticks>`: that far into a level it
+Every unattended run takes `VB_HIDE_WINDOW=1` (the window is created hidden
+and never raised; rendering and screenshots go on offscreen) and `-nosound`,
+which now silences the music as well as the effects. The unattended check is
+`VB_KEXINV_TEST=<ticks>`: that far into a level it
 takes every collectible the level holds as if walked over, logs the tally,
 then pages through the status screen screenshotting each page.
 

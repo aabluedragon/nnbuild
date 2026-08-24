@@ -1738,9 +1738,10 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
     static int osx_didforeground = 0;
     if (!osx_didforeground && !g_forceHeadless)
     {
-        osx_foreground();
+        if (!getenv("VB_HIDE_WINDOW"))
+            osx_foreground();
 # if SDL_MAJOR_VERSION >= 2
-        if (sdl_window)
+        if (sdl_window && !getenv("VB_HIDE_WINDOW"))
             SDL_RaiseWindow(sdl_window);
 # endif
         osx_didforeground = 1;
@@ -1957,6 +1958,12 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
 
         if (sdl_window)
             sdl_context = SDL_GL_CreateContext(sdl_window);
+
+        // VibeBuild32: VB_HIDE_WINDOW keeps an unattended test run off the
+        // desktop -- the window is created hidden and never raised. Rendering
+        // and screenshots go on in the offscreen backbuffer.
+        if (sdl_window && getenv("VB_HIDE_WINDOW"))
+            SDL_HideWindow(sdl_window);
 
         if (!sdl_window || !sdl_context)
         {

@@ -264,10 +264,14 @@ def _edges(m, si):
         # face is a vertical quad, so its four corners give exactly two distinct
         # 2D points -- take the widest-apart pair and the direction sorts itself
         # out below.
+        # To a tenth of a unit: the data has corners at -3456.01 beside
+        # -3456.0 (SANCTUAR) and -1919.99 beside -1920 (PEAK), and read to a
+        # hundredth those are two points, which turns a closed ring into a
+        # chain with two loose ends.
         pts = []
         for k in range(4):
             v = m.verts[f.vertStart + k]
-            pt = (round(v[0], 2), round(v[1], 2))
+            pt = (round(v[0], 1), round(v[1], 1))
             if pt not in pts:
                 pts.append(pt)
         if len(pts) < 2:
@@ -302,7 +306,60 @@ def _edges(m, si):
             order.append(key)
             adj.setdefault(key[0], []).append(key)
             adj.setdefault(key[1], []).append(key)
-    if any(len(v) != 2 for v in adj.values()):
+    # What is left over after that is a ring with something hanging off it:
+    # a chain to nowhere (a point visited once), or a chord across the room --
+    # a partition wall, a doubled face -- meeting the ring at two points
+    # visited three times. Build has no free-standing walls, so the chord is
+    # let go and the ring kept; the alternative was losing the room. Leaves
+    # are pruned first, then chords between over-visited points, keeping the
+    # graph in one piece, until every point is visited exactly twice.
+    def drop(key):
+        order.remove(key)
+        for p in key:
+            adj[p].remove(key)
+            if not adj[p]:
+                del adj[p]
+    changed = True
+    while changed:
+        changed = False
+        for p, v in list(adj.items()):
+            if len(v) == 1 and p in adj:
+                drop(v[0]); changed = True
+    def connected():
+        if not adj:
+            return False
+        start = next(iter(adj)); seen = {start}; stack = [start]
+        while stack:
+            p = stack.pop()
+            for k in adj[p]:
+                q = k[1] if k[0] == p else k[0]
+                if q not in seen:
+                    seen.add(q); stack.append(q)
+        return len(seen) == len(adj)
+    def seglen(k):
+        return (k[0][0]-k[1][0])**2 + (k[0][1]-k[1][1])**2
+    while any(len(v) > 2 for v in adj.values()):
+        chords = [k for k in order if len(adj[k[0]]) > 2 and len(adj[k[1]]) > 2]
+        if not chords:
+            # A chord ending on a plain ring point: take the shortest edge at
+            # an over-visited point that leaves the rest in one piece, then
+            # prune whatever it left dangling.
+            chords = [k for k in order if len(adj[k[0]]) > 2 or len(adj[k[1]]) > 2]
+        for k in sorted(chords, key=seglen):
+            saved = {p: list(v) for p, v in adj.items()}; saved_order = list(order)
+            drop(k)
+            if connected():
+                break
+            adj.clear(); adj.update(saved); order[:] = saved_order
+        else:
+            return []
+        changed = True
+        while changed:
+            changed = False
+            for p, v in list(adj.items()):
+                if len(v) == 1 and p in adj:
+                    drop(v[0]); changed = True
+    if not order or any(len(v) != 2 for v in adj.values()):
         return []
 
     used = set(); loop = []
@@ -322,6 +379,19 @@ def _edges(m, si):
         pt = other
     if len(loop) != len(order) or pt != first[0]:
         return []                          # several rings, or it never closed
+    # A ring that crosses itself is worse than no ring: it would be drawn and
+    # walked as a sector. Only a pruned ring can come out that way.
+    def crosses(a, b, c, d):
+        def side(p, q, r):
+            return (q[0]-p[0])*(r[1]-p[1]) - (q[1]-p[1])*(r[0]-p[0])
+        return (side(a, b, c) * side(a, b, d) < 0) and (side(c, d, a) * side(c, d, b) < 0)
+    n = len(loop)
+    for i in range(n):
+        for j in range(i + 2, n):
+            if i == 0 and j == n - 1:
+                continue
+            if crosses(loop[i][0], loop[i][1], loop[j][0], loop[j][1]):
+                return []
     return [((a[0], a[1], b[0], b[1]),
              groups[(a, b) if a <= b else (b, a)]) for a, b in loop]
 

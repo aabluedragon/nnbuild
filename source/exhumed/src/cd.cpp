@@ -53,9 +53,12 @@ void setCDaudiovolume(int val)
 // The Kex remaster gives every level its own track in defs/mapInfo.txt, so the
 // converted levels need to ask for one by name. Everything below the file open
 // is what playCDtrack() already does.
+
 bool playMusicFile(const char *name, bool bLoop)
 {
     if (!name || !name[0])
+        return false;
+    if (bNoSound)           // -nosound silences the music too
         return false;
 
     StopCD();
