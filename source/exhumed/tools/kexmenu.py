@@ -45,6 +45,19 @@ TILE_BTN        = 7005      # dialog button, unselected
 TILE_BTN_SEL    = 7006      # dialog button, selected
 TILE_FONT_BASE  = 7100      # gold body / dark outline: menu entries
 TILE_FONT_ALT   = 7300      # the atlas as shipped: blue body / gold outline
+TILE_INV_WEAPON = 7400      # the status screen: eight weapon icons
+TILE_INV_KEY    = 7410      # four keys, dim then lit (7410+2*key+lit)
+TILE_INV_ARTIFACT = 7420    # six artifacts
+TILE_INV_TRANS  = 7430      # eight transmitter pieces, then the lit screen
+TILE_INV_TRANS_ON = 7438
+TILE_INV_DOLL   = 7440
+TILE_INV_MAP_CLOSED = 7441
+TILE_INV_MAP_OPEN = 7442
+TILE_INV_PLATE_L = 7443     # bar_left / bar_right: the title plates
+TILE_INV_PLATE_R = 7444
+TILE_INV_ARROW_L = 7445     # page arrows
+TILE_INV_ARROW_R = 7446
+TILE_INV_SLOT   = 7447      # wheelslot: the plate behind each weapon
 
 # Build's rotatesprite scales a tile uniformly, so anything that is not square
 # has to be authored at the exact aspect it is drawn at or it letterboxes. These
@@ -313,6 +326,35 @@ def extract(kexdir, outdir, verbose=True):
         lines.append((TILE_HUD_BLUE, 'kexart/hud_blue.png'))
         lines.append((TILE_HUD_TROUGH, 'kexart/hud_trough.png'))
 
+        # The status screen's art, one tile per piece at native size; the
+        # screen scales each to fit its cell, so nothing here needs an aspect.
+        inv = [('gfx/menu/menuweapon_%d.png' % i, TILE_INV_WEAPON + i) for i in range(8)]
+        inv += [('gfx/menu/menukey_%d_%d.png' % (k, lit), TILE_INV_KEY + 2 * k + lit)
+                for k in range(4) for lit in range(2)]
+        inv += [('gfx/menu/menuartifact_%d.png' % i, TILE_INV_ARTIFACT + i) for i in range(6)]
+        inv += [('gfx/menu/menutransmitter_%d.png' % i, TILE_INV_TRANS + i) for i in range(8)]
+        inv += [('gfx/menu/menutransmitter_on.png', TILE_INV_TRANS_ON),
+                ('gfx/menu/menuteamdoll.png',       TILE_INV_DOLL),
+                ('gfx/menu/menumap_closed.png',     TILE_INV_MAP_CLOSED),
+                ('gfx/menu/menumap_open.png',       TILE_INV_MAP_OPEN),
+                ('gfx/bar_left.png',                TILE_INV_PLATE_L),
+                ('gfx/bar_right.png',               TILE_INV_PLATE_R),
+                ('gfx/menu/menuarrow_left.png',     TILE_INV_ARROW_L),
+                ('gfx/menu/menuarrow_right.png',    TILE_INV_ARROW_R),
+                ('gfx/wheelslot.png',               TILE_INV_SLOT)]
+        os.makedirs(os.path.join(artdir, 'inv'), exist_ok=True)
+        ninv = 0
+        for name, tile in inv:
+            blob = grab(name)
+            if blob is None:
+                if verbose: print("  missing %s" % name)
+                continue
+            fn = 'kexart/inv/' + os.path.basename(name)
+            open(os.path.join(outdir, fn), 'wb').write(blob)
+            lines.append((tile, fn))
+            ninv += 1
+        if verbose: print("  status screen: %d pieces" % ninv)
+
         kf = grab('fonts/bigfont.kfont')
         atlas = grab('fonts/bigfont.png')
         if kf is None or atlas is None:
@@ -426,6 +468,30 @@ def extract(kexdir, outdir, verbose=True):
             return None
         mapinfo = read('defs/mapinfo.txt')
         loc = read('localization/loc_english.txt')
+        dolls = read('defs/actors/teamdolls.txt') or ''
+
+    # kexinv.txt: every string the status screen and the collectible pickups
+    # show, keyed by name, straight from the remaster's localization table --
+    # the weapon and artifact descriptions with their embedded "\n" left as the
+    # two characters, and "${0}" where a count goes; the engine expands both.
+    # The team dolls' names are the pickupMessage of each doll's actor def.
+    if loc:
+        strs = dict(re.findall(r'(str_\d+)\s*=\s*"([^"]*)"', loc.replace('\r', '')))
+        INV = [('status', 'str_088'), ('page0', 'str_044'), ('page1', 'str_045'),
+               ('page2', 'str_046'), ('page3', 'str_047'),
+               ('noarti', 'str_064'), ('doll', 'str_071'), ('trans', 'str_072'),
+               ('transfull', 'str_073'), ('transn', 'str_074'), ('trans0', 'str_075'),
+               ('maxhp', 'str_108'), ('mapname', 'str_111')]
+        INV += [('weap%d' % i, 'str_%03d' % (56 + i)) for i in range(8)]
+        INV += [('arti%d' % i, 'str_%03d' % (65 + i)) for i in range(6)]
+        INV += [('artiname%d' % i, 'str_%03d' % (100 + i)) for i in range(6)]
+        rows = [(k, strs[sk]) for k, sk in INV if sk in strs]
+        names = re.findall(r'Actor\s+TD_Doll(\d+).*?pickupMessage\s+"([^"]*)"', dolls, re.S)
+        rows += [('dollname%d' % (int(n) - 1), txt) for n, txt in names]
+        with open(os.path.join(outdir, 'kexinv.txt'), 'w') as f:
+            for k, txt in rows:
+                f.write("%s %s\n" % (k, txt))
+        if verbose: print("  inventory strings: %d (%d doll names)" % (len(rows), len(names)))
 
     if mapinfo:
         # Every level names its own track; the OGGs sit beside the .kpf.

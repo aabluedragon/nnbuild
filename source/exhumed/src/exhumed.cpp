@@ -85,6 +85,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <ctype.h>
 #include <time.h>
 #include <assert.h>
+#include "kexinv.h"
 
 #ifdef _WIN32
 # include "winbits.h"
@@ -1468,7 +1469,9 @@ void FinishLevel()
         {
             static char const * const movieLang[] = { "en", "fr", "de", "es" };
             char endPath[40];
-            Bsprintf(endPath, "movies/goodend-%s.ogv",
+            // Assemble the transmitter and the distress call gets out.
+            Bsprintf(endPath, "movies/%s-%s.ogv",
+                     KexInv_TransCount(0) >= KEX_TRANS_PIECES ? "goodend" : "badend",
                      movieLang[clamp(kex_language, 0, 3)]);
             Kex_PlayTheora(endPath);
         }
@@ -3230,10 +3233,23 @@ LOOP3:
                     SetNextItem(nLocalPlayer);
                     CONTROL_ClearButton(gamefunc_Inventory_Right);
                 }
-                if (BUTTON(gamefunc_Inventory))
+                if (BUTTON(gamefunc_Inventory) || KexInv_TestWantsScreen())
                 {
-                    UseCurItem(nLocalPlayer);
                     CONTROL_ClearButton(gamefunc_Inventory);
+                    if (g_kexMode && KexMenu_Available())
+                    {
+                        // The remaster's inventory screen, on the item key:
+                        // the converted maps have no usable items for it.
+                        CONTROL_BindsEnabled = 0;
+                        bInMove = kTrue;
+                        KexMenu_Status();
+                        totalclock = ototalclock = tclocks;
+                        bInMove = kFalse;
+                        CONTROL_BindsEnabled = 1;
+                        RefreshStatus();
+                    }
+                    else
+                        UseCurItem(nLocalPlayer);
                 }
             }
             else {

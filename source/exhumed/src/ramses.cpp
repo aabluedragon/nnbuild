@@ -34,6 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "player.h"
 #include "gun.h"
 #include "kexbreak.h"
+#include "kexinv.h"
 #include "init.h"
 
 
@@ -93,19 +94,32 @@ static short sKexPup[1200];
 static uint8_t sKexWasHidden[(kMaxSprites + 7) >> 3];
 static int nKexSpeaking = 0;
 
+// Which speech: transcribed from GetRamsesDialog() in the remaster's
+// scripts/map/TOMB_script.txt (talk event N is SP_xxNN+1). The artifacts rank
+// the player's progress through the game, and three of the stages split on a
+// weapon; the two "alternate" speeches are for coming back to Ramses after he
+// has already spoken once (script 3 re-arms him with bPlayAlternateDialog).
+// TOMBEND has two: 14 with the transmitter assembled, 13 without.
+static int s_kexRamsesSpokenBefore;
+
 static int Kex_RamsesSpeech(void)
 {
     char nameUp[BMAX_PATH];
     Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
     Bstrupr(nameUp);
     if (Bstrstr(nameUp, "TOMBEND"))
-        return 13;         // the finale address; 14 is the all-dolls variant
+        return KexInv_TransCount(0) >= KEX_TRANS_PIECES ? 14 : 13;
+
+    int const alt = s_kexRamsesSpokenBefore;
+    s_kexRamsesSpokenBefore = 1;
     uint16_t const w = nPlayerWeapons[0];
-    if (w & (1 << kWeaponStaff))   return 9;
-    if (w & (1 << kWeaponFlamer))  return 7;
-    if (w & (1 << kWeaponGrenade)) return 5;
-    if (w & (1 << kWeaponM60))     return 3;
-    return 1;
+    if (KexInv_HasArtifact(0, kKexArtiFeather)) return alt ? 12 : 11;
+    if (KexInv_HasArtifact(0, kKexArtiScepter)) return 10;
+    if (KexInv_HasArtifact(0, kKexArtiAnklets)) return (w & (1 << kWeaponStaff))   ? 9 : 8;
+    if (KexInv_HasArtifact(0, kKexArtiShawl))   return (w & (1 << kWeaponFlamer))  ? 7 : 6;
+    if (KexInv_HasArtifact(0, kKexArtiMask))    return (w & (1 << kWeaponGrenade)) ? 5 : 4;
+    if (KexInv_HasArtifact(0, kKexArtiSandals)) return 3;
+    return alt ? 2 : 1;
 }
 
 static int Kex_RamsesStart(void)

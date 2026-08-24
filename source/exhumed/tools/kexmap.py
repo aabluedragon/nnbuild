@@ -1570,6 +1570,37 @@ ACTOR_MAP = {
     2000: (59, 0),   # Obj_Checkpoint -> Build's save-point scarab
 }
 
+# The remaster's collectibles, which Build PowerSlave never had: the six
+# artifacts, the eight transmitter pieces, the 31 team dolls and the five
+# max-health ankhs. All 50 are in the retail maps (KILENTRY alone holds a full
+# set of artifacts). Build's item lotags 6..60 include a handful the game
+# accepts as "pickable item" and then does nothing with (10, 15, 24, 31, 34..36,
+# 39..44, 51, 58); four of those carry these, the hitag saying which one, and
+# the engine's Kex path (kexinv.cpp) turns them into inventory. Their art is the
+# remaster's own sprite, sliced by build_actor_tiles() like any other actor.
+# Keyed by actor NAME rather than number, resolved against defs/defines.txt at
+# conversion time, because the doll numbering has a hole in it (170 is unused).
+#
+# The Sobek Mask is not here: Arti_Mask is Build's own mask pickup (lotag 23)
+# and stays that, the engine flagging the artifact on the side.
+KEX_INV_LOTAG_ARTIFACT, KEX_INV_LOTAG_TRANSMITTER = 34, 36
+KEX_INV_LOTAG_DOLL, KEX_INV_LOTAG_ANKH = 39, 40
+KEX_INV_ACTORS = {
+    'Arti_Sandals': (KEX_INV_LOTAG_ARTIFACT, 0),
+    'Arti_Shawl':   (KEX_INV_LOTAG_ARTIFACT, 2),
+    'Arti_Anklets': (KEX_INV_LOTAG_ARTIFACT, 3),
+    'Arti_Scepter': (KEX_INV_LOTAG_ARTIFACT, 4),
+    'Arti_Feather': (KEX_INV_LOTAG_ARTIFACT, 5),
+}
+KEX_INV_ACTORS.update(('Transmitter_%d' % (i + 1), (KEX_INV_LOTAG_TRANSMITTER, i)) for i in range(8))
+KEX_INV_ACTORS.update(('TD_Doll%02d' % (i + 1), (KEX_INV_LOTAG_DOLL, i)) for i in range(31))
+KEX_INV_ACTORS.update(('Item_Health_Ankah%d' % i, (KEX_INV_LOTAG_ANKH, i)) for i in range(1, 6))
+
+# The Manacle is the remaster's eighth weapon; Build PowerSlave has seven and
+# no code for it, so its one pickup (CHAOS) is dropped rather than left as a
+# gun-shaped decoration nobody can take.
+KEX_SKIP_ACTORS = {'Item_Weapon_Manacle'}
+
 # The Kex event table. The numbers do NOT mean what Build PowerSlave's sector
 # effects mean -- only DOOR_NORMAL happens to share its 1. The names are the
 # remaster's own: its editor ships the full SLAVE_EVENT_* enum inside
@@ -2412,7 +2443,10 @@ def write_def(path, assignments, animdefs=(), skytiles=(), header=DEF_HEADER):
 # ---------------------------------------------------------------------------
 KPF = "PowerslaveEX.kpf"
 
-def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
+# Map textures and actor art are numbered upward from here. The menu tool owns
+# 7000..7499 (kexmenu.py), and with the collectibles' sprites added the run
+# from 6000 reached 6988 -- one level short of overwriting the menu font.
+def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
     kpf = os.path.join(kexdir, KPF)
     if not os.path.isfile(kpf):
         raise SystemExit("no %s in %s -- point me at the PowerSlave Exhumed install"
@@ -2462,9 +2496,14 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
     # sliced once and shared.
     with zipfile.ZipFile(kpf) as z:
         kexactors = load_kex_actors(z)
+        for t, d in kexactors.items():
+            if d['name'] in KEX_INV_ACTORS:
+                ACTOR_MAP[t] = KEX_INV_ACTORS[d['name']]
+        skip_types = {t for t, d in kexactors.items() if d['name'] in KEX_SKIP_ACTORS}
         used_types = set()
         for m in parsed.values():
             used_types.update(a.type for a in m.actors)
+        used_types -= skip_types
         # Gameplay actors keep Build's own art -- except the few items for which
         # no original picnum could be recovered, which need a tile built from
         # the remaster's sprite to have anything to draw.

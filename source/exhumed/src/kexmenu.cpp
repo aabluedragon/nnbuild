@@ -36,6 +36,7 @@
 #include "gun.h"
 #include "status.h"
 #include "kexmenu.h"
+#include "kexinv.h"
 
 // Mirrors the TILE_* constants in source/exhumed/tools/kexmenu.py.
 enum
@@ -965,4 +966,240 @@ void KexHud_Draw(void)
     }
     if (message_timer && message_text[0])
         printext(0, 0, message_text, kTileFont);
+}
+
+// ---------------------------------------------------------------------------
+// The status screen: the console game's inventory, which the remaster kept.
+//
+// Four pages -- Map, Arsenal, Artifacts, Transmitter -- walked with the left
+// and right arrows, the up and down arrows picking an item on the page so its
+// description (the remaster's own wording, kexinv.txt) shows in the plate at
+// the bottom. Every icon is the remaster's, at its own aspect; the plates are
+// the bar_left/bar_right pair the remaster draws its menu titles on.
+// ---------------------------------------------------------------------------
+enum
+{
+    kKexTileInvWeapon    = 7400,
+    kKexTileInvKey       = 7410,   // + 2 * key + lit
+    kKexTileInvArtifact  = 7420,
+    kKexTileInvTrans     = 7430,
+    kKexTileInvTransOn   = 7438,
+    kKexTileInvDoll      = 7440,
+    kKexTileInvMapClosed = 7441,
+    kKexTileInvMapOpen   = 7442,
+    kKexTileInvPlateL    = 7443,
+    kKexTileInvPlateR    = 7444,
+    kKexTileInvArrowL    = 7445,
+    kKexTileInvArrowR    = 7446,
+    kKexTileInvSlot      = 7447,
+};
+
+enum { kKexPageMap = 0, kKexPageArsenal, kKexPageArtifacts, kKexPageTransmitter, kKexPageCount };
+
+// A tile centred in a box at its own aspect, never larger than the box.
+static void KexDrawFit(int tile, int cx, int cy, int boxw, int boxh, int shade, int stat = 0)
+{
+    if (tilesiz[tile].x <= 0 || tilesiz[tile].y <= 0)
+        return;
+    int const z = min(divscale16(boxw, tilesiz[tile].x), divscale16(boxh, tilesiz[tile].y));
+    int const w = mulscale16(tilesiz[tile].x, z), h = mulscale16(tilesiz[tile].y, z);
+    KexDrawTile(tile, cx - w / 2, cy - h / 2, w, h, shade, 0, stat);
+}
+
+// Up to two lines, split at the newline KexInv_Format produced.
+static void KexMenu_Desc(int y, char const *text)
+{
+    char buf[256];
+    Bstrncpyz(buf, text, sizeof(buf));
+    char *nl = Bstrchr(buf, '\n');
+    if (nl) *nl++ = 0;
+    KexMenu_Text(160, y, buf, 8, 0, 0, 1);
+    if (nl && *nl)
+        KexMenu_Text(160, y + 11, nl, 7, 0, 0, 1, 1);
+}
+
+// The remaster's weapon order is the console game's; Build's differs in two
+// places (flamer and grenade swap), and the eighth, the Manacle, has no Build
+// weapon at all.
+static int const s_kexWeaponOfIcon[8] = { kWeaponSword, kWeaponPistol, kWeaponM60, kWeaponGrenade,
+                                          kWeaponFlamer, kWeaponStaff, kWeaponRing, -1 };
+
+// Where each transmitter piece sits in the assembled device, in the pieces'
+// own pixels: the monitor (7) with its screen (6, lit when complete), the
+// keyboard base (1) under it, headphones (3) and microphone (2) to the right,
+// the power pack (4), module (0) and chip (5) on the left.
+static int const s_kexTransPos[KEX_TRANS_PIECES][2] = {
+    { 4, 52 }, { 20, 46 }, { 78, 40 }, { 76, 6 }, { 0, 30 }, { 2, 64 }, { 36, 8 }, { 30, 0 } };
+#define KEX_TRANS_W 100
+#define KEX_TRANS_H 78
+
+static void KexMenu_StatusPage(int page, int sel)
+{
+    Player const &P = PlayerList[nLocalPlayer];
+    KexInv const &inv = KexInvList[nLocalPlayer];
+    char buf[256];
+    char key[32];
+    char const *desc = NULL;
+
+    switch (page)
+    {
+        case kKexPageMap:
+        {
+            // The scroll, open once this level's map is in hand; the keys in
+            // the remaster's order; the team doll and its tally.
+            KexDrawFit(inv.map ? kKexTileInvMapOpen : kKexTileInvMapClosed, 70, 92, 64, 52, 0);
+            for (int k = 0; k < 4; k++)
+            {
+                int const lit = (P.keys & (0x1000 << k)) != 0;
+                KexDrawFit(kKexTileInvKey + 2 * k + lit, 124 + k * 26, 76, 22, 21, 0);
+            }
+            KexDrawFit(kKexTileInvDoll, 240, 92, 40, 54, KexInv_DollCount(nLocalPlayer) ? 0 : 48,
+                       KexInv_DollCount(nLocalPlayer) ? 0 : RS_TRANS1);
+            KexInv_Format(buf, sizeof(buf), "doll", KexInv_DollCount(nLocalPlayer));
+            desc = buf;
+            break;
+        }
+        case kKexPageArsenal:
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                int const cx = 52 + (i % 4) * 72, cy = 64 + (i / 4) * 50;
+                int const w = s_kexWeaponOfIcon[i];
+                int const owned = w >= 0 && (nPlayerWeapons[nLocalPlayer] & (1 << w));
+                KexDrawFit(kKexTileInvSlot, cx, cy, 68, 46, sel == i ? -12 : 8, 0);
+                KexDrawFit(kKexTileInvWeapon + i, cx, cy - 3, 56, 30, owned ? 0 : 48, owned ? 0 : RS_TRANS1);
+                if (owned && WeaponInfo[w].nAmmoType > 0)
+                {
+                    Bsprintf(buf, "%d", P.nAmmo[WeaponInfo[w].nAmmoType]);
+                    KexMenu_Text(cx + 30, cy + 12, buf, 6, 0, 0, 1, 1);
+                }
+                if (sel == i)
+                {
+                    Bsprintf(key, "weap%d", i);
+                    KexInv_Format(buf, sizeof(buf), key, 0);
+                    desc = buf;
+                }
+            }
+            break;
+        }
+        case kKexPageArtifacts:
+        {
+            for (int i = 0; i < kKexArtiCount; i++)
+            {
+                int const cx = 64 + (i % 3) * 96, cy = 64 + (i / 3) * 52;
+                int const owned = KexInv_HasArtifact(nLocalPlayer, i);
+                KexDrawFit(kKexTileInvSlot, cx, cy, 88, 48, sel == i ? -12 : 8, 0);
+                KexDrawFit(kKexTileInvArtifact + i, cx, cy, 72, 40, owned ? 0 : 48, owned ? 0 : RS_TRANS1);
+                if (sel == i)
+                {
+                    Bsprintf(key, owned ? "arti%d" : "artiname%d", i);
+                    KexInv_Format(buf, sizeof(buf), key, 0);
+                    desc = buf;
+                }
+            }
+            if (!inv.artifacts)
+            {
+                KexInv_Format(buf, sizeof(buf), "noarti", 0);
+                desc = buf;
+            }
+            break;
+        }
+        case kKexPageTransmitter:
+        {
+            int const n = KexInv_TransCount(nLocalPlayer);
+            int const complete = n >= KEX_TRANS_PIECES;
+            // Native pixels 1:1 (100x78), the whole device centred on the page.
+            int const ox = 160 - KEX_TRANS_W / 2, oy = 96 - KEX_TRANS_H / 2;
+            for (int i = 0; i < KEX_TRANS_PIECES; i++)
+            {
+                int const have = (inv.transmitter >> i) & 1;
+                int const tile = (i == 6 && complete) ? kKexTileInvTransOn : kKexTileInvTrans + i;
+                if (tilesiz[tile].x <= 0)
+                    continue;
+                KexDrawTile(tile, ox + s_kexTransPos[i][0], oy + s_kexTransPos[i][1],
+                            tilesiz[tile].x, tilesiz[tile].y, have ? 0 : 30, 0, have ? 0 : RS_TRANS1);
+            }
+            KexInv_Format(buf, sizeof(buf), complete ? "transfull" : n ? "transn" : "trans0", n);
+            desc = buf;
+            break;
+        }
+    }
+
+    if (desc)
+        KexMenu_Desc(146, desc);
+}
+
+void KexMenu_Status(void)
+{
+    if (!KexMenu_Available() || tilesiz[kKexTileInvSlot].x <= 0)
+        return;
+
+    static int const s_items[kKexPageCount] = { 0, 8, kKexArtiCount, 0 };
+    static int page = kKexPageArsenal;   // the page you left is the page you return to
+    int sel = 0;
+
+    // Unattended (VB_KEXINV_TEST): hold each page for a moment, screenshot it,
+    // move on, and leave after the last.
+    int const autoFrames = KexInv_TestActive() ? 30 : 0;
+    int frame = 0, shown = 0;
+
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+    videoSetViewableArea(0, 0, xdim - 1, ydim - 1);   // the level's view window clips the top otherwise
+
+    while (1)
+    {
+        HandleAsync();
+
+        // The menu's backdrop over the whole view, and the stone panel framed
+        // on it like the menu's own.
+        KexMenu_Backdrop();
+        KexDrawBorder(8, 8, 312, 192, 4);
+        KexDrawPanel(8, 8, 312, 192, 0);
+
+        // Title plates with the page's name between the arrows, and STATUS
+        // above it in the font's shipped colours.
+        KexDrawTile(kKexTileInvPlateL, 0, 16, 160, 22, 0, 0, 0);
+        KexDrawTile(kKexTileInvPlateR, 160, 16, 160, 22, 0, 0, 0);
+        char title[64], pageKey[16];
+        Bsprintf(pageKey, "page%d", page);
+        Bstrncpyz(title, KexInv_Text(pageKey) ? KexInv_Text(pageKey) : pageKey, sizeof(title));
+        Bstrupr(title);
+        KexMenu_Text(160, 3, KexInv_Text("status") ? KexInv_Text("status") : "STATUS", 10, 0, 0, 1, 1);
+        KexMenu_Text(160, 20, title, 12, 0, 0, 1);
+        int const tw = KexMenu_TextWidth(title, 12);
+        KexDrawFit(kKexTileInvArrowL, 160 - tw / 2 - 14, 27, 12, 10, 0);
+        KexDrawFit(kKexTileInvArrowR, 160 + tw / 2 + 14, 27, 12, 10, 0);
+
+        // The description plate.
+        KexDrawTile(kKexTileRow, 30, 142, 260, 28, 0, 0, 0);
+
+        KexMenu_StatusPage(page, sel);
+
+        KexMenu_Hint("ESC", "GO BACK");
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        if (autoFrames && ++frame % autoFrames == 0)
+        {
+            videoCaptureScreen("cpshot0000.png", 0);
+            if (++shown >= kKexPageCount) { page = kKexPageArsenal; return; }
+            page = (page + 1) % kKexPageCount;
+            sel = 1;
+        }
+
+        int const n = s_items[page];
+        switch (KexMenu_PollKey())
+        {
+            case kKexKeyLeft:  page = (page + kKexPageCount - 1) % kKexPageCount; sel = 0; KexMenu_Beep(); break;
+            case kKexKeyRight: page = (page + 1) % kKexPageCount; sel = 0; KexMenu_Beep(); break;
+            case kKexKeyUp:    if (n) { sel = (sel + n - 1) % n; KexMenu_Beep(); } break;
+            case kKexKeyDown:  if (n) { sel = (sel + 1) % n; KexMenu_Beep(); } break;
+            case kKexKeyEnter:
+            case kKexKeyEsc:   KexMenu_Beep(); return;
+            default: break;
+        }
+        if (quitevent)
+            return;
+    }
 }

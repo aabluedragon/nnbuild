@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "init.h"
 #include "lighting.h"
 #include "kexbreak.h"
+#include "kexinv.h"
 #include "ramses.h"
 #include "bubbles.h"
 #include "object.h"
@@ -165,6 +166,7 @@ void MoveThings()
     DoLights();
     KexLight_Tick();      // the remaster's fires and torches; no-op elsewhere
     KexTele_Tick();       // its teleport pads; no-op elsewhere
+    KexInv_Tick();        // the collectibles self-test; no-op elsewhere
 
     if (nFreeze)
     {
@@ -453,6 +455,10 @@ int movespritez(short nSprite, int z, int height, int UNUSED(flordist), int clip
                         }
                         nSectDamage >>= 2;
                         nSectDamage = nSectDamage - (nSectDamage>>2);
+                        // The Protective Anklets: half damage from lava and slime.
+                        if (g_kexMode && pSprite->statnum == 100
+                            && KexInv_HasArtifact(GetPlayerFromSprite(nSprite), kKexArtiAnklets))
+                            nSectDamage >>= 1;
                         if (nSectDamage) {
                             runlist_DamageEnemy(nSprite, -1, nSectDamage);
                         }

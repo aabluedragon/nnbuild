@@ -59,6 +59,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include "kexinv.h"
 
 bool bDemoPlayerFinishedLevel = false;
 
@@ -669,6 +670,7 @@ void InitPlayerKeys(short nPlayer)
 void InitPlayerInventory(short nPlayer)
 {
     memset(&PlayerList[nPlayer], 0, sizeof(Player));
+    KexInv_Reset(nPlayer);
 
     nPlayerItem[nPlayer] = -1;
     nPlayerSwear[nPlayer] = 4;
@@ -1334,16 +1336,29 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                 return;
             }
 
+            // VibeBuild32: in Kex mode these four "pickable items" carry the
+            // remaster's artifacts, transmitter pieces, team dolls and ankhs,
+            // the hitag naming which (kexinv.h).
+            case kKexLotagArtifact:
+            case kKexLotagTransmitter:
+            case kKexLotagDoll:
+            case kKexLotagAnkh:
+            {
+                if (g_kexMode && KexInv_Pickup(nPlayer, nItem, sprite[nPickupSprite].hitag))
+                {
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
             case 10: // Pickable item
             case 15: // Pickable item
             case 16: // Reserved
             case 24:
             case 31:
-            case 34:
             case 35:
-            case 36:
-            case 39:
-            case 40:
             case 41:
             case 42:
             case 43:
@@ -1358,6 +1373,8 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
             case 11: // Map
             {
                 GrabMap();
+                if (g_kexMode)
+                    KexInvList[nPlayer].map = 1;
                 PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
                 break;
             }
@@ -1615,6 +1632,8 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
 
             case 23: // Sobek Mask
             {
+                if (g_kexMode)
+                    KexInv_GiveArtifact(nPlayer, kKexArtiMask);
                 if (GrabItem(nPlayer, kItemMask))
                 {
                     PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
@@ -2460,7 +2479,8 @@ loc_1AB8E:
                         if (var_5C)
                         {
                             airpages = 1;
-                            if (PlayerList[nPlayer].nMaskAmount > 0)
+                            if (PlayerList[nPlayer].nMaskAmount > 0
+                                || (g_kexMode && KexInv_HasArtifact(nPlayer, kKexArtiMask)))
                             {
                                 if (nPlayer == nLocalPlayer) {
                                     BuildStatusAnim(132, 0);
@@ -2682,9 +2702,20 @@ loc_1AB8E:
                         {
                             if (nAction < 6 || nAction > 8)
                             {
-                                sprite[nPlayerSprite].zvel = -3584;
+                                // The Sandals of Ikumptet: a quarter higher.
+                                sprite[nPlayerSprite].zvel =
+                                    (g_kexMode && KexInv_HasArtifact(nPlayer, kKexArtiSandals)) ? -4480 : -3584;
                                 nActionB = 3;
                             }
+                        }
+                        else if (g_kexMode && sprite[nPlayerSprite].zvel > 0)
+                        {
+                            // Jump held while falling: the Feather of Horus
+                            // hovers, the Shawl of Isis floats down.
+                            if (KexInv_HasArtifact(nPlayer, kKexArtiFeather))
+                                sprite[nPlayerSprite].zvel = min<int>(sprite[nPlayerSprite].zvel, 128);
+                            else if (KexInv_HasArtifact(nPlayer, kKexArtiShawl))
+                                sprite[nPlayerSprite].zvel = min<int>(sprite[nPlayerSprite].zvel, 1024);
                         }
 
                         // goto loc_1BE70:

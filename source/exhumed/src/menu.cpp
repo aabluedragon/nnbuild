@@ -50,6 +50,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #ifdef __WATCOMC__
 #include <stdlib.h>
 #endif
+#include "kexinv.h"
 
 #define kSaveFileName       "savgamea.sav"
 #define kMaxSaveSlots		5
@@ -1509,6 +1510,7 @@ short menu_GameLoad(int nSlot)
 
     menu_GameLoad2(hFile);
     kclose(hFile);
+    KexInv_Load(nSlot);
 
     return GameStats.nMap;
 }
@@ -1588,6 +1590,7 @@ void menu_GameSave(int nSaveSlot)
         menu_GameSave2(fp);
         fclose(fp);
     }
+    KexInv_Save(nSaveSlot);
 }
 
 void menu_ResetZoom()

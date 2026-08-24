@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "init.h"
 #include "runlist.h"
 #include "kexbreak.h"
+#include "kexinv.h"
 #include "switch.h"
 #include "object.h"
 #include "aistuff.h"
@@ -1223,6 +1224,7 @@ void LoadObjects()
     KexBreak_Init();
     KexLight_Init();
     KexTele_Init();
+    KexInv_LevelStart();
     InitRa();
     InitChunks();
 

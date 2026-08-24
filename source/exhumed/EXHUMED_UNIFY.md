@@ -776,10 +776,13 @@ list of totalclock ticks at which the mouth toggles -- the .PUP format -- so
 `Kex_RamsesStart()` derives those ticks from the bit-3 edges of the script
 array (one entry = 4 ticks of the 120 Hz clock) and plays the wav through the
 music channel, which is what `CDplaying()` watches anyway. Which speech: the
-hub script chooses by artifacts collected; artifacts do not exist here yet, so
-the weapon marking the same stage of the game stands in, and TOMBEND gets the
-finale address. `kex_language` (0..3) picks the language; Italian falls back
-to English in the remaster itself.
+hub script chooses by artifacts collected, and `Kex_RamsesSpeech()` is that
+function (`GetRamsesDialog()` in scripts/map/TOMB_script.txt) transcribed:
+feather 11, scepter 10, anklets 8 or 9 with the cobra staff, shawl 6 or 7 with
+the flame thrower, mask 4 or 5 with the bombs, sandals 3, nothing 1 -- and
+coming back after he has spoken once gets the "alternate" 12 or 2. TOMBEND
+gets 14 with the transmitter assembled and 13 without. `kex_language` (0..3)
+picks the language; Italian falls back to English in the remaster itself.
 
 The converter's side: the pads in TOMB and TOMBEND are the game's only
 SCRIPT_REPEATABLE (63) sectors, so KEX_RAMSES turns them into sector effect 80
@@ -1022,6 +1025,78 @@ a run of square cells the height of the slot instead.
 Pickup captions come from the remaster's localization table for the items that
 mean the same thing in both games; anything ambiguous keeps the original
 wording rather than being given a caption that is merely plausible.
+
+### The collectibles and the status screen
+
+PowerSlave Exhumed is the console game, and the console game had an inventory
+Build PowerSlave never did: six artifacts that change how the player moves,
+eight transmitter pieces that decide the ending, 31 team dolls and five
+ankhs. All of it is in the retail maps as actors -- `Arti_*`, `Transmitter_N`,
+`TD_DollNN`, `Item_Health_AnkahN` -- and all of it was being converted into
+scenery you could walk through.
+
+They are pickups now. Build's item lotags 6..60 include a handful the original
+accepts as "pickable item" and then does nothing with (10, 15, 24, 31, 34..36,
+39..44, 51, 58); the converter (`KEX_INV_ACTORS`) puts the artifacts on 34,
+the transmitter on 36, the dolls on 39 and the ankhs on 40, the hitag saying
+which one, and `kexinv.cpp` is what takes them. The art in the world is the
+remaster's own sprite, sliced by the same `build_actor_tiles()` pass as the
+vases. The actors are resolved by NAME against defs/defines.txt rather than
+by number, because the doll numbering has a hole in it (170 is unused).
+Ownership is per player in `KexInvList[]`, reset with the rest of the
+inventory on a new game, and saved beside the classic slot file as
+`kexinv.sav` -- the loader seeks into `savgamea.sav` by fixed record size, so
+growing that record was not an option.
+
+What they do, in Kex mode only:
+
+- Sandals of Ikumptet: the jump is a quarter higher (-4480 against -3584).
+- Sobek Mask: `Arti_Mask` was already Build's mask pickup (lotag 23), and
+  stays that; the artifact bit is set beside it and the underwater breathing
+  check treats it as a mask that never runs out.
+- Shawl of Isis / Feather of Horus: jump held while falling clamps the fall to
+  a float (1024) or a hover (128).
+- Protective Anklets: lava and slime damage halved, where move.cpp applies it.
+- Kilmaat Scepter: nothing to do -- the force fields it nullifies are the
+  laser-beam spawners, which are not converted.
+- Transmitter: the ending. `FinishLevel()` on TOMBEND plays `goodend-*.ogv`
+  with all eight pieces and `badend-*.ogv` otherwise, which is
+  `EndRamsesEvent()`'s `GetQuestItems() != 0xFF` test in the TOMBEND script.
+- Ankhs: the remaster raises the health ceiling; Build's is a constant that
+  the bar, the healing caps and the venom bowl all assume, so the ankh fills
+  the player up instead and shows the remaster's "Maximum Health Increased!".
+- Dolls: the tally, and the doll names as pickup captions (the pickupMessage
+  of each doll's actor def -- the Lobotomy team, and Nightdive's).
+
+The status screen is the console game's, on the Inventory key (Enter by
+default; the converted maps have no usable items for that key to do anything
+else with). Four pages -- Map, Arsenal, Artifacts, Transmitter, the remaster's
+`str_044..047` -- walked with left and right, up and down picking an item so
+its description shows in the plate at the bottom. Every icon is the
+remaster's: `gfx/menu/menuweapon_*`, `menuartifact_*`, `menukey_*` (dim and
+lit), `menutransmitter_*` and the lit screen `_on`, `menuteamdoll`,
+`menumap_open/closed`, the `bar_left/right` plates under the title and
+`wheelslot` behind each weapon. kexmenu.py slices them into tiles 7400..7447
+and writes every string the screen shows to `kexinv.txt` (`KexInv_Text()`),
+with the `\n` and `${0}` of the localization table left for the engine to
+expand. The transmitter is drawn assembled, the pieces the player lacks as
+dark silhouettes; the eight pieces' positions in the device are laid out here
+by eye (`s_kexTransPos`), the remaster keeps that layout in code, not data.
+The weapon order is the console game's, which swaps Build's flamer and
+grenade; the eighth slot, the Manacle, has no Build weapon, so it stays dim
+and its one pickup in CHAOS is dropped by the converter rather than left as a
+gun-shaped decoration nobody can take.
+
+Two things the converter leaves out on purpose. KILENTRY carries a complete
+set of the six artifacts stacked on one point outside the map with a tag on
+them -- a script-spawned hand-out for players who arrive without one, not a
+room to walk into -- and placing that set would be a cheat. And the map tile
+base moved from 6000 to 8000: with the collectibles' sprites added the
+texture run from 6000 reached 6988, one level short of the menu art at 7000.
+
+The unattended check is `VB_KEXINV_TEST=<ticks>`: that far into a level it
+takes every collectible the level holds as if walked over, logs the tally,
+then pages through the status screen screenshotting each page.
 
 ### The overworld
 

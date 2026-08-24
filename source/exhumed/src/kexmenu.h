@@ -9,6 +9,7 @@ int  KexMenu_Main(int bInLevelMenus);      // same return codes as menu_Menu()
 int  KexHud_Available(void);
 void KexHud_Draw(void);                    // the remaster's status bar
 void KexMenu_TitleHold(void);              // PRESS START hold, after the cinematic
+void KexMenu_Status(void);                 // the remaster's inventory screen
 
 // Overworld level select: walk the remaster's map with the arrow keys. Returns
 // the chosen level's index, or -1 to go back to the menu.
