@@ -1455,6 +1455,25 @@ void FinishLevel()
     FadeOut(1);
     EraseScreen(overscanindex);
 
+    // Finishing TOMBEND -- boarding the chopper -- ends the remaster's
+    // campaign, so its ending cinematic plays on the way out. The good one,
+    // hopefully: choosing by the transmitters collected needs an inventory
+    // that does not exist yet.
+    if (g_kexMode)
+    {
+        char nameUp[BMAX_PATH];
+        Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
+        Bstrupr(nameUp);
+        if (Bstrstr(nameUp, "TOMBEND"))
+        {
+            static char const * const movieLang[] = { "en", "fr", "de", "es" };
+            char endPath[40];
+            Bsprintf(endPath, "movies/goodend-%s.ogv",
+                     movieLang[clamp(kex_language, 0, 3)]);
+            Kex_PlayTheora(endPath);
+        }
+    }
+
     if (levelnum == 0)
     {
         nPlayerLives[0] = 0;
