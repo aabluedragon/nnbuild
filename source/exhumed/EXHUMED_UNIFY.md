@@ -481,8 +481,10 @@ Not converted:
   pool of light the remaster paints around a flame comes out as one averaged
   shade for the whole wall. Walls near a fire do end up brighter than walls
   away from it -- the ambient step is there -- but the soft edge is not.
-- **Sloped floors and ceilings** are converted, but dropped per sector when the
-  fit is worse than 8 world units at any corner.
+- **Sloped floors and ceilings** are converted (contour-split where Build's
+  one-axis slope cannot follow), and dropped per sector only when the fit
+  is worse than 8 world units at any corner: 6 of the 2437 sloped sectors
+  across the retail maps come out flat.
 
 ### Rebuilding a sector's wall loop
 

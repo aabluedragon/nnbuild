@@ -2400,6 +2400,16 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
             continue
         x, y = a.x, -a.y
         si = find_sector(sects, walls, ranges, x, y, -a.z * SCALE * WORLD)
+        if si < 0 and ent is None:
+            # Scenery authored a step inside its wall -- a torch, a pot on a
+            # ledge -- is walked into the room along its facing. Gameplay
+            # actors are not: KILENTRY's off-map artifact set must stay off.
+            ang = build_angle(a.ang) * math.pi / 1024.0
+            for step in range(1, 7):
+                x, y = a.x + math.cos(ang) * 8 * step, -a.y + math.sin(ang) * 8 * step
+                si = find_sector(sects, walls, ranges, x, y, -a.z * SCALE * WORLD)
+                if si >= 0:
+                    break
         if si < 0 or si not in remap:
             continue                       # actor sits in a sector we dropped
         if ent is not None:
@@ -2412,7 +2422,7 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
             pic = ITEM_PICNUM.get(lotag)
             if pic is None and dec is not None:
                 pic = dec[0]        # no original tile: the remaster's own sprite
-            out.append(dict(x=x * WORLD, y=y * WORLD, z=sects[si]['floorz'],
+            out.append(dict(x=int(round(x * WORLD)), y=int(round(y * WORLD)), z=sects[si]['floorz'],
                             sectnum=remap[si], ang=build_angle(a.ang),
                             lotag=lotag, hitag=hitag, picnum=(pic or 1), shade=0,
                             xrepeat=64, yrepeat=64))
@@ -2422,7 +2432,7 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
             # Kex authors at one texel per unit, so the repeat depends only on
             # the actor's scale and the world factor -- not on the tile size.
             rep = max(1, min(255, int(round(4.0 * scale * WORLD))))
-            out.append(dict(x=x * WORLD, y=y * WORLD, z=sects[si]['floorz'],
+            out.append(dict(x=int(round(x * WORLD)), y=int(round(y * WORLD)), z=sects[si]['floorz'],
                             sectnum=remap[si], ang=build_angle(a.ang),
                             lotag=0, hitag=0, picnum=tile,
                             shade=(-96 if fullbright else KEX_SHADE_MIN),
