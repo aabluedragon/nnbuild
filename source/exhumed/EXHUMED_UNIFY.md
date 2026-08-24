@@ -964,11 +964,20 @@ across the retail maps were previously read as solid floor -- nowhere in the
 game could you dive. Floors flagged lava (0x20) or slime (0x80) get Build's
 lotag 96 damage sprite.
 
-Still left untagged deliberately: the eight FLOATER moving-platform variants
-and SCRIPTED_MOVE (Build's waypoint movers need waypoint sprites synthesised
-from the angles baked into the variant names), SCRIPT/SCRIPT_REPEATABLE (the
-per-level AngelScript hooks), ARTIFACT_TRIGGER/SPAWN, ACTOR_TRIGGER, and the
-TELEPORT pair (Build PowerSlave has no sector teleporter).
+The FLOATER variants turned out not to be movers at all. A sector cannot move
+sideways in Kex any more than in Build, so `FLOATER_128_ANG_60` is a floor
+bobbing on a sine, the `ANG` suffix its starting phase and the number its
+excursion. Build PowerSlave already has that: a lotag 95 sprite makes the
+sector's floor bob at fixed amplitude with a 16-step phase in the hitag. Each
+FLOATER event becomes one such sprite, `KEX_FLOATER_PHASE` mapping the
+angle-suffixed names to the phase (60 deg -> 3, 120 -> 5, 180 -> 8, and the
+negatives the other way round), the `ANG_USER` variants taking the phase from
+the event parameter and `ANG_RAND` from the sprite index. MAGMA's six lava
+rafts and the three in test_platforms bob out of step with one another again.
+
+Still left untagged deliberately: SCRIPTED_MOVE (used once, for TOMB's casket
+lid), SCRIPT/SCRIPT_REPEATABLE (the per-level AngelScript hooks),
+ARTIFACT_TRIGGER/SPAWN and ACTOR_TRIGGER.
 
 A wrong turn worth recording: an earlier attempt read the door target straight
 out of the sector record, having matched `targetCeiling 256` against a 256 at

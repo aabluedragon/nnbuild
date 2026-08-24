@@ -1051,6 +1051,19 @@ def _split_tjunctions(m, edge_cache, verbose=False):
     return nsplit
 
 
+# FLOATER variants -> the 16-step phase of Build's sector bob. Degrees in the
+# name map to sixteenths of a turn; the USER and RAND variants take theirs
+# from the event parameter or the sector number at conversion.
+KEX_FLOATER_PHASE = {
+    'FLOATER_128': 0,              'FLOATER_320_Z_160': 0,
+    'FLOATER_128_ANG_60': 3,       'FLOATER_128_ANG_120': 5,
+    'FLOATER_128_ANG_180': 8,      'FLOATER_128_ANG_NEG_60': 13,
+    'FLOATER_128_ANG_NEG_120': 11, 'FLOATER_160_Z_NEG_128': 0,
+    'FLOATER_64_ANG_USER': None,   'FLOATER_512_ANG_USER': None,
+    'FLOATER_128_ANG_RAND_256': None,
+}
+
+
 def _neighbours(sects, walls, ranges, si):
     """The distinct live sectors this piece opens onto."""
     start, num = ranges[si]
@@ -1092,10 +1105,9 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
     neighbour that effect actually needs; a door with nowhere to open stays
     static rather than crashing the load or diving out of the map.
 
-    Not yet carried across, left untagged on purpose: the eight FLOATER
-    variants and SCRIPTED_MOVE (moving platforms -- Build's waypoint movers
-    need waypoint sprites synthesised from the angle baked into the variant
-    name), SCRIPT/SCRIPT_REPEATABLE (the per-level AngelScript hooks),
+    Not yet carried across, left untagged on purpose: SCRIPTED_MOVE (a
+    script-driven sector move), SCRIPT/SCRIPT_REPEATABLE (the per-level
+    AngelScript hooks),
     ARTIFACT_TRIGGER/_SPAWN (no artifact inventory yet), ACTOR_TRIGGER (fires
     when tagged actors die), and TELEPORT_START/_DEST (Build PowerSlave has no
     sector teleporter)."""
@@ -1143,6 +1155,16 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
         elif name in ('SWITCH1', 'SWITCH2', 'SWITCH3_WOOD', 'SWITCH4_METAL'):
             _place_switch(m, sects, walls, ranges, src, si, chan, eparam,
                           switch_pairs or {})
+        elif name in KEX_FLOATER_PHASE:
+            # A floating platform: a sector cannot move sideways in Kex any
+            # more than in Build, so the FLOATER variants are a floor bobbing
+            # on a sine, the ANG suffix the phase so a row of them ripples.
+            # Build's own sector bob (sprite lotag 95, init.cpp) does that
+            # with a 16-step phase in hitag; _flat_sprites() plants it.
+            phase = KEX_FLOATER_PHASE[name]
+            if phase is None:                        # ANG_USER / ANG_RAND
+                phase = (eparam if 'USER' in name else si) & 15
+            s_['kexbob'] = phase
         s_['lotag'], s_['hitag'] = lotag, hitag
 
 
@@ -1228,6 +1250,8 @@ def _flat_sprites(m, sects, walls, ranges, src):
             out.append((si, 96, 40))               # lava: damage 10
         elif ff.flags & 0x80:
             out.append((si, 96, 16))               # slime: damage 4
+        if s_.get('kexbob') is not None:
+            out.append((si, 95, s_['kexbob']))     # floating platform
     return out
 
 
