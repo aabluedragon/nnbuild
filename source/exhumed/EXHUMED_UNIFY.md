@@ -272,7 +272,8 @@ vertical, portals connect sectors. So the geometry converts.
 `source/exhumed/tools/kexmap.py` does that conversion:
 
 ```
-source/exhumed/tools/kexmap.py "/path/to/PowerSlave Exhumed" ~/games/powerslave
+source/exhumed/tools/kexmap.py "/path/to/PowerSlave Exhumed" ~/games/powerslave \
+    [/path/to/powerslave_demo]   # with STUFF.DAT: rewrites ARROW.SEQ and SET.SEQ too
 
 ./vibebuild32 -gm exhumed -j ~/games/powerslave \
     -kex "/path/to/PowerSlave Exhumed" -map THOTH.MAP
@@ -1114,9 +1115,18 @@ The first three are one Kex class, `kexSlaveFireballSpawner`: a spawner on a
 wall that fires into the room while its tag's channel is active. Build
 PowerSlave's fireball trap is the same machine -- sprite lotag 71,
 `BuildFireBall()`, `FuncTrap()` fires a bullet along the sprite's angle every
-64 ticks while its channel is on -- so all three become that, the laser bolt
-and the rolling boulder standing in as fireballs, which Build can shoot and
-the remaster's boulders and beams it cannot. The direction was the thing to
+64 ticks while its channel is on -- so the fireball and boulder spawners
+become that, the rolling boulder standing in as a fireball, which Build can
+shoot and the remaster's boulder it cannot. The laser spawner takes Build's
+other trap, the arrow (lotag 77, bullet 15): a fast straight shot, which is
+what a laser bolt is. Its ARROW.SEQ is rewritten onto the remaster's beam
+bolt -- the side view stretched into a streak the way the remaster's
+"stretchy" Proj_Beam is -- when the converter is given the demo data
+(`kexmap.py <kex dir> <out dir> <demo dir>`, `patch_demo_seqs()`), and the
+trap's `tr_arrow` sound is aliased to the sentry's laser. The same pass
+moves Set's melee hit (the 0x80 frame flag in SET.SEQ) from the DOS data's
+frames 6 and 15 of the swing to the remaster's 8 and 17, which is where
+`set_melee` connects. The direction was the thing to
 get right: the actor's own angle is 0 on most of them. The record's `p2` is
 the wall FACE the spawner sits on (the actor stands one step off that face's
 first vertex, in the face's sector), and the face normal points into the room
@@ -1276,11 +1286,8 @@ re-derive it from the code.
 - **Per-level AngelScript that is presentation**: camera moves, Ramses'
   materialise animation timings, the KILARENA intro. The sector-triggered
   parts are all transcribed (see the events and scripts sections).
-- **Laser and boulder spawners fire fireballs.** Build can shoot a fireball
-  and cannot shoot the remaster's bolt or roll its boulder; the traps are
-  where they are and fire when they should, with the wrong projectile.
+- **Boulder spawners fire fireballs.** Build can shoot a fireball and cannot
+  roll a boulder; the 14 traps are where they are and fire when they should,
+  with the wrong projectile.
 - **The air gauge art** (`gfx/airsupply_*`) is not used; the status bar's
   air slot stands.
-- **The Selkis melee frame**: the remaster's hit lands on a different frame
-  of the swing than the demo SEQ's 0x80 flag; the tile-fill keeps the demo's
-  timing.
