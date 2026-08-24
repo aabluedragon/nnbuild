@@ -1240,3 +1240,32 @@ PAUSED, RESUME, OPTIONS, EXIT TO TITLE SCREEN, QUIT, over whatever is behind it.
 "Exit to title screen" is a new return code (4) that the classic menu never
 produces, so the case added to the in-level dispatch is only ever reached in
 Kex mode.
+
+### What is still not carried
+
+Everything above is in; this is the list of what is not, so nobody has to
+re-derive it from the code.
+
+- **The Manacle**, the remaster's eighth weapon. Build PowerSlave has seven
+  and no code for it; its one pickup (CHAOS) is dropped by the converter and
+  its slot on the Arsenal page stays dim.
+- **Bird art.** The 99 crows (`AI_Bird`, seven levels) fly as wasps: Build
+  has no bird AI, and giving them their own look would mean a second
+  wasp-layout SEQ skinned from `sprites/monsters/bird.png` plus a per-sprite
+  sequence base in wasp.cpp. KEXSEQ_PLAN.md §2.2 has the frame accounting.
+- **ARTIFACT_TRIGGER pads** in KILENTRY, which make a shrine's artifact appear
+  when stepped on. The artifact simply stands on the shrine instead.
+- **KILENTRY's stacked artifact set**, six actors on one point off the map
+  with a tag: the script-side hand-out behind the shrines, and a cheat if
+  placed.
+- **Per-level AngelScript that is presentation**: camera moves, Ramses'
+  materialise animation timings, the KILARENA intro. The sector-triggered
+  parts are all transcribed (see the events and scripts sections).
+- **Laser and boulder spawners fire fireballs.** Build can shoot a fireball
+  and cannot shoot the remaster's bolt or roll its boulder; the traps are
+  where they are and fire when they should, with the wrong projectile.
+- **The air gauge and the title logo art** (`gfx/airsupply_*`, `gfx/title*`)
+  are not used; the status bar's air slot and the menu's own title stand.
+- **The Selkis melee frame**: the remaster's hit lands on a different frame
+  of the swing than the demo SEQ's 0x80 flag; the tile-fill keeps the demo's
+  timing.
