@@ -30,6 +30,7 @@ TILE_ARROW_DOWN = 7012
 TILE_ARROW_LEFT = 7013
 TILE_KEYCAP     = 7014      # key-cap plate on the hint bar
 TILE_BLACK      = 7015      # flat black, for banners and panel borders
+TILE_TITLE      = 7016      # the console title card, behind PRESS START
 TILE_EYE_BASE   = 7020      # the spinning Eye of Ra, one tile per frame (31)
 TILE_HUD_HEAD_L = 7060      # the remaster's status bar
 TILE_HUD_HEAD_R = 7061
@@ -71,6 +72,9 @@ BACKDROP_W, BACKDROP_H = 1024, 576
 
 ART = [
     ('gfx/title_backdrop.png',      TILE_BACKDROP,  (BACKDROP_W, BACKDROP_H)),
+    # 320x240 as shipped; Build's 320x200 field is the same 4:3 screen with
+    # taller pixels, so squashed to 320x200 it draws full-screen at 1:1.
+    ('gfx/title.png',               TILE_TITLE,     (320, 200)),
     ('gfx/menu/menu_bg.png',        TILE_PANEL,     None),
     ('gfx/menu/cursor.png',         TILE_CURSOR,    None),
 ]

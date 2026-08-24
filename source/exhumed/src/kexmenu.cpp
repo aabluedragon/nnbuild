@@ -55,6 +55,7 @@ enum
     kKexTileArrowLeft = 7013,
     kKexTileKeycap    = 7014,
     kKexTileBlack     = 7015,
+    kKexTileTitle     = 7016,   // the console title card, behind PRESS START
     kKexTileEyeBase   = 7020,
     kKexFontBase      = 7100,   // gold body / dark outline: menu entries
     kKexFontAlt       = 7300,   // the atlas as shipped: blue body / gold outline
@@ -678,14 +679,23 @@ void KexMenu_TitleHold(void)
     {
         HandleAsync();
         KexMenu_Backdrop();
+        // The remaster holds on the console game's title card -- the logo, the
+        // doorway, Lobotomy's 1996 copyright line -- with the prompt over it.
+        // The backdrop under it fills the widescreen margins.
+        int const card = tilesiz[kKexTileTitle].x > 0;
+        if (card)
+            KexDrawTile(kKexTileTitle, 0, 0, 320, 200, 0, 0, 0);
 
         // A slow pulse, so the prompt reads as an invitation rather than a
         // static label. Sin() is the engine's own fixed-point table.
         int const shade = (Sin(((int)totalclock - start) << 5) >> 11) - 4;
-        KexMenu_Text(160, 150, "PRESS START", 16, (int8_t)shade, 0, 1);
+        KexMenu_Text(160, card ? 148 : 150, "PRESS START", 16, (int8_t)shade, 0, 1);
 
-        KexMenu_Text(160, 182, "POWERSLAVE AND POWERSLAVE EXHUMED ARE TRADEMARKS", 5, 0, 0, 1);
-        KexMenu_Text(160, 189, "OF THROWBACK ENTERTAINMENT INC", 5, 0, 0, 1);
+        if (!card)
+        {
+            KexMenu_Text(160, 182, "POWERSLAVE AND POWERSLAVE EXHUMED ARE TRADEMARKS", 5, 0, 0, 1);
+            KexMenu_Text(160, 189, "OF THROWBACK ENTERTAINMENT INC", 5, 0, 0, 1);
+        }
 
         videoNextPage();
         Exhumed_CaptureFrame();

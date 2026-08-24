@@ -3382,11 +3382,15 @@ void DoTitle()
         char intro[40];
         Bsprintf(intro, "movies/intro-%s.ogv",
                  movieLang[clamp(kex_language, 0, 3)]);
-        if (Kex_PlayTheora("movies/NightDive.ogv"))
+        // VB_KEX_SKIPMOVIES: straight to the title hold, for checking it.
+        if (Bgetenv("VB_KEX_SKIPMOVIES") || Kex_PlayTheora("movies/NightDive.ogv"))
         {
-            Kex_PlayTheora("movies/Kex.ogv");
-            Kex_PlayTheora("movies/throwback.ogv");
-            Kex_PlayTheora(intro);
+            if (!Bgetenv("VB_KEX_SKIPMOVIES"))
+            {
+                Kex_PlayTheora("movies/Kex.ogv");
+                Kex_PlayTheora("movies/throwback.ogv");
+                Kex_PlayTheora(intro);
+            }
             SetOverscan(BASEPAL);
             GrabPalette();
             KexMenu_TitleHold();
