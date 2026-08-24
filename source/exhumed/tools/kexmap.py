@@ -1384,6 +1384,7 @@ KEX_SOUNDS = {
     'bird_atk': ('sounds/birdattack.wav', 0),
     'bird_die': ('sounds/birddeath.wav', 0),
     'bird_wng': ('sounds/birdflap01.wav', 0),
+    'tr_arrow': ('sounds/sentryfire.wav', 0),     # the laser spawners' shot
     'hawkfire': ('sounds/queenatk04.wav', 0),
     'item_key': ('sounds/keypickup.wav', 0),
     'item_reg': ('sounds/health.wav', 0),
@@ -1696,8 +1697,55 @@ KEX_INV_ACTORS.update(('Item_Health_Ankah%d' % i, (KEX_INV_LOTAG_ANKH, i)) for i
 # it; the engine's KexBeam (kexbreak.cpp) builds it from a lotag 65 origin.
 KEX_TRAP_LOTAG_FIREBALL = 71
 KEX_TRAP_LOTAG_BEAM = 65
-KEX_TRAP_ACTORS = {25: KEX_TRAP_LOTAG_FIREBALL, 126: KEX_TRAP_LOTAG_FIREBALL,
+# The laser spawner takes Build's other trap, the arrow (lotag 77, bullet 15):
+# a fast straight shot, which is what a laser bolt is. Its ARROW.SEQ is
+# rewritten onto the remaster's bolt sprite when the demo data is at hand
+# (patch_demo_seqs), so the shot looks like one too; otherwise it is a spear.
+KEX_TRAP_LOTAG_ARROW = 77
+KEX_TRAP_ACTORS = {25: KEX_TRAP_LOTAG_FIREBALL, 126: KEX_TRAP_LOTAG_ARROW,
                    128: KEX_TRAP_LOTAG_FIREBALL, 127: KEX_TRAP_LOTAG_BEAM}
+
+# Tiles beyond the stock creatures' that build_seq_tiles() composites: the
+# beam bolt as the arrow bullet's two views (7630 side-on, stretched into a
+# streak the way the remaster's "stretchy" Proj_Beam is; 7631 head-on).
+KEX_SEQ_EXTRA_TILES = {
+    7630: ('beam_side', 'projectiles/beam_loop', 0, 0),
+    7631: ('beam_head', 'projectiles/beam_loop', 0, 0),
+}
+KEX_SEQ_EXTRA_SCALE = {'beam_side': (5.0, 1.5), 'beam_head': (1.5, 1.5)}
+
+def patch_demo_seqs(demo_dir, outdir, verbose=True):
+    """Two of STUFF.DAT's sequence files, rewritten for the Kex data dir:
+
+    ARROW.SEQ: the arrow bullet's two tiles retargeted to the beam bolt, so
+    the laser spawners' shots are bolts.
+    SET.SEQ: Set's melee hit (FrameFlag 0x80) moved from the demo's frames 6
+    and 15 of the swing to the remaster's 8 and 17 -- set_melee lands two
+    frames later than the DOS data does."""
+    import kexseqtool
+    grp = os.path.join(demo_dir, 'STUFF.DAT')
+    if not os.path.exists(grp):
+        if verbose: print("  no %s: ARROW.SEQ and SET.SEQ left as shipped" % grp)
+        return
+    d = kexseqtool.grp_extract(grp, ['ARROW.SEQ', 'SET.SEQ'])
+    if 'ARROW.SEQ' in d:
+        s = kexseqtool.read_seq(d['ARROW.SEQ'])
+        s['ck_pict'] = [{1287: 7630, 1289: 7631}.get(p, p) for p in s['ck_pict']]
+        with open(os.path.join(outdir, 'ARROW.SEQ'), 'wb') as f:
+            f.write(kexseqtool.write_seq_bytes(s))
+    if 'SET.SEQ' in d:
+        s = kexseqtool.read_seq(d['SET.SEQ'])
+        moved = 0
+        for ss in range(9, 17):                    # melee, eight views
+            base, size = s['seq_base'][ss], s['seq_size'][ss]
+            for f_from, f_to in ((6, 8), (15, 17)):
+                if f_to < size and s['fr_flag'][base + f_from] & 0x80:
+                    s['fr_flag'][base + f_from] &= ~0x80
+                    s['fr_flag'][base + f_to] |= 0x80
+                    moved += 1
+        with open(os.path.join(outdir, 'SET.SEQ'), 'wb') as f:
+            f.write(kexseqtool.write_seq_bytes(s))
+        if verbose: print("  demo SEQs: ARROW.SEQ on the beam bolt, SET.SEQ melee hit moved (%d flags)" % moved)
 KEX_BEAM_PROJECTILE = 'Proj_Beam'      # the bolt sprite the beam is drawn with
 
 def _face_angle(m, fi):
@@ -2175,7 +2223,11 @@ def build_seq_tiles(Z, outdir, verbose=True):
 
     rows = []
     made = 0
-    for tile, (creature, anim, fi, d) in sorted(KEX_SEQ_TILES.items()):
+    tiles = dict(KEX_SEQ_TILES)
+    tiles.update(KEX_SEQ_EXTRA_TILES)
+    scales = dict(KEX_SEQ_SCALE)
+    scales.update(KEX_SEQ_EXTRA_SCALE)
+    for tile, (creature, anim, fi, d) in sorted(tiles.items()):
         frames = frames_of(anim)
         if not frames or fi >= len(frames):
             continue
@@ -2210,9 +2262,10 @@ def build_seq_tiles(Z, outdir, verbose=True):
                             row[(r[2]-1-xx)*4:(r[2]-xx)*4]
                 sub = flipped
             _png.paste(w, h, img, r[2], r[3], sub, ox - x0, oy - y0)
-        scale = KEX_SEQ_SCALE.get(creature, 1.0)
-        if abs(scale - 1.0) > 1e-3:
-            nw, nh = max(1, int(round(w*scale))), max(1, int(round(h*scale)))
+        scale = scales.get(creature, 1.0)
+        sx, sy = scale if isinstance(scale, tuple) else (scale, scale)
+        if abs(sx - 1.0) > 1e-3 or abs(sy - 1.0) > 1e-3:
+            nw, nh = max(1, int(round(w*sx))), max(1, int(round(h*sy)))
             img = _png.resize(w, h, img, nw, nh)
             w, h = nw, nh
         fn = 'kexart/seq/t%04d.png' % tile
@@ -2596,7 +2649,7 @@ KPF = "PowerslaveEX.kpf"
 # Map textures and actor art are numbered upward from here. The menu tool owns
 # 7000..7499 (kexmenu.py), and with the collectibles' sprites added the run
 # from 6000 reached 6988 -- one level short of overwriting the menu font.
-def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
+def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
     kpf = os.path.join(kexdir, KPF)
     if not os.path.isfile(kpf):
         raise SystemExit("no %s in %s -- point me at the PowerSlave Exhumed install"
@@ -2716,6 +2769,8 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
         if verbose: print("  crows: HAWK.SEQ written (%d chunks)" % len(KEX_BIRD_SEQ['ck_pict']))
     except ImportError:
         if verbose: print("  crows: kexbirdseq.py missing; crows keep the wasp's look")
+    if demo_dir:
+        patch_demo_seqs(demo_dir, outdir, verbose)
     nexttile += len(decordefs)
     animdefs.extend(decoranims)
     if beam_type is not None and beam_type in decor:
@@ -2943,4 +2998,4 @@ def PSM_from_bytes(blob):
 if __name__ == '__main__':
     if len(sys.argv) < 3:
         raise SystemExit(__doc__.strip().split('\n\n')[1])
-    convert_install(sys.argv[1], sys.argv[2])
+    convert_install(sys.argv[1], sys.argv[2], demo_dir=sys.argv[3] if len(sys.argv) > 3 else None)
