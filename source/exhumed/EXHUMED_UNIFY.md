@@ -1291,5 +1291,8 @@ re-derive it from the code.
 - **Per-level AngelScript that is presentation**: camera moves, Ramses'
   materialise animation timings, the KILARENA intro. The sector-triggered
   parts are all transcribed (see the events and scripts sections).
-- **The air gauge art** (`gfx/airsupply_*`) is not used; the status bar's
-  air slot stands.
+- **The console-style HUD** (`gfx/hud.png`, 256x64, with `gfx/airsupply_*`
+  as its air gauge) is the remaster's alternative HUD layout; this port
+  draws its modern bar, whose left slot is the air meter, so the gauge has
+  no place to go. Offering the second layout would be a HUD option, not a
+  fix.
