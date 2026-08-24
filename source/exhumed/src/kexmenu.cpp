@@ -33,6 +33,7 @@
 #include "colmatch.h"
 #include "movie.h"
 #include "cd.h"
+#include "gun.h"
 #include "status.h"
 #include "kexmenu.h"
 
@@ -948,4 +949,20 @@ void KexHud_Draw(void)
     KexDrawTile(kKexTileHudHeadL, 0, headY, KEX_HUD_HEAD_W, KEX_HUD_HEAD_H, 0, 0, 0);
     KexDrawTile(kKexTileHudHeadR, rscar + KEX_HUD_SCAR_W, headY,
                 KEX_HUD_HEAD_W, KEX_HUD_HEAD_H, 0, 0, 0);
+
+    extern char message_text[80];
+    extern short message_timer;
+
+    // The rest of DrawStatus() never ran in this mode, which silently dropped
+    // the message line -- the pickup captions kexpickup.txt exists to show --
+    // and the ammo count the remaster prints beside the health bar.
+    int const nWeapon = PlayerList[nLocalPlayer].nCurrentWeapon;
+    if (nWeapon > 0 && nWeapon < 7 && WeaponInfo[nWeapon].nAmmoType >= 0)
+    {
+        char ammoBuf[16];
+        Bsprintf(ammoBuf, "%d", PlayerList[nLocalPlayer].nAmmo[nWeapon]);
+        KexMenu_Text(rmain + 24, bandY + 5, ammoBuf, 7, 0, 0, 1);
+    }
+    if (message_timer && message_text[0])
+        printext(0, 0, message_text, kTileFont);
 }
