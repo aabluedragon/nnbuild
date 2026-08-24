@@ -850,7 +850,8 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                     return;
                 }
 
-                BuildWasp(nSprite, 0, 0, 0, 0, 0);
+                // VibeBuild32: hitag 1 is a crow -- the wasp in bird's feathers.
+                BuildWasp(nSprite, 0, 0, 0, 0, 0, g_kexMode && nHitag == 1);
                 return;
             }
             case 116:

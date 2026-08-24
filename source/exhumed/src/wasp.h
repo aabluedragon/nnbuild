@@ -30,7 +30,7 @@ extern short nWaspCount;
 
 void InitWasps();
 int GetWaspSprite(int nWasp);
-int BuildWasp(short nSprite, int x, int y, int z, short nSector, short nAngle);
+int BuildWasp(short nSprite, int x, int y, int z, short nSector, short nAngle, int bBird = 0);
 void FuncWasp(int eax, int edx, int nRun);
 
 #endif

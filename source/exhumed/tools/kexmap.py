@@ -1379,6 +1379,11 @@ KEX_SOUNDS = {
     'grn_boom': ('sounds/explode01.wav', 0),
     'grn_toss': ('sounds/bombthrow.wav', 0),
     'hawk_hrt': ('sounds/birdattack.wav', 0),
+    # The crows' HAWK.SEQ (kexbirdseq.py) names these in place of the wasp's.
+    'bird_act': ('sounds/birdact.wav', 0),
+    'bird_atk': ('sounds/birdattack.wav', 0),
+    'bird_die': ('sounds/birddeath.wav', 0),
+    'bird_wng': ('sounds/birdflap01.wav', 0),
     'hawkfire': ('sounds/queenatk04.wav', 0),
     'item_key': ('sounds/keypickup.wav', 0),
     'item_reg': ('sounds/health.wav', 0),
@@ -1613,7 +1618,8 @@ ACTOR_MAP = {
     AT['SELKIS']:   (112, 0),   # scorpion
     AT['QUEEN']:    (113, 0),
     AT['MOSQUITO']: (117, 0),   # wasp
-    AT['CROW']:     (117, 0),   # no Build crow; the wasp is the closest flier
+    AT['CROW']:     (117, 1),   # no Build crow: the wasp's AI in a bird's feathers
+                                # (hitag 1 -> BuildWasp animates it from HAWK.SEQ)
 
     AT['AMMO']:      (6, 10),   # speed loader
     AT['FULLAMMO']:  (8, 30),   # M-60 belt
@@ -2701,6 +2707,15 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
         decor, decordefs, decoranims, breakables, lights = build_actor_tiles(
             z, outdir, used_types, kexactors, nexttile, verbose)
         seqdefs = build_seq_tiles(z, outdir, verbose)
+    # The crows' sequence file: the wasp's layout on bird tiles.
+    try:
+        from kexbirdseq import KEX_BIRD_SEQ
+        import kexseqtool
+        with open(os.path.join(outdir, 'HAWK.SEQ'), 'wb') as f:
+            f.write(kexseqtool.write_seq_bytes(KEX_BIRD_SEQ))
+        if verbose: print("  crows: HAWK.SEQ written (%d chunks)" % len(KEX_BIRD_SEQ['ck_pict']))
+    except ImportError:
+        if verbose: print("  crows: kexbirdseq.py missing; crows keep the wasp's look")
     nexttile += len(decordefs)
     animdefs.extend(decoranims)
     if beam_type is not None and beam_type in decor:

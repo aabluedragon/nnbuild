@@ -879,8 +879,47 @@ static inline int KexBeam_Rand(int span)
     return (int)((s_beamSeed >> 16) % (unsigned)(2 * span + 1)) - span;
 }
 
+// VB_KEX_LOOKAT=<statnum>: a moment in, stand the local player a little way
+// from the first sprite of that statnum, facing it -- for looking at a
+// creature without a hand on the keys.
+static void Kex_LookAtDebug(void)
+{
+    static int s_ticks = -1, s_stat = -1;
+    if (s_ticks < 0)
+    {
+        char const *e = getenv("VB_KEX_LOOKAT");
+        s_stat = e ? Batoi(e) : -1;
+        s_ticks = e ? 90 : 0;
+    }
+    if (s_ticks <= 0 || --s_ticks != 0)
+        return;
+    int const nSprite = PlayerList[nLocalPlayer].nSprite;
+    for (int i = 0; i < kMaxSprites; i++)
+    {
+        if (sprite[i].statnum != s_stat || i == nSprite)
+            continue;
+        int const ang = (sprite[i].ang + 1024) & kAngleMask;   // face it from its front
+        int const px = sprite[i].x + mulscale14(Cos(ang), 600), py = sprite[i].y + mulscale14(Sin(ang), 600);
+        int16_t nSector = sprite[i].sectnum;
+        updatesector(px, py, &nSector);
+        if (nSector < 0)
+            continue;
+        sprite[nSprite].x = px; sprite[nSprite].y = py;
+        sprite[nSprite].z = sprite[i].z;
+        mychangespritesect(nSprite, nSector);
+        int const look = getangle(sprite[i].x - px, sprite[i].y - py);
+        PlayerList[nLocalPlayer].q16angle = fix16_from_int(look);
+        PlayerList[nLocalPlayer].q16oangle = PlayerList[nLocalPlayer].q16angle;
+        sprite[nSprite].ang = (int16_t)look;
+        PlayerList[nLocalPlayer].opos = sprite[nSprite].xyz;
+        OSD_Printf("Kex look-at: sprite %d (statnum %d, picnum %d) from sector %d\n", i, s_stat, sprite[i].picnum, nSector);
+        return;
+    }
+}
+
 void KexBeam_Tick(void)
 {
+    Kex_LookAtDebug();
     // VB_KEXBEAM_DEBUG=<n>: a moment in, stand the local player beside beam
     // n, looking along it, for a visual check without a hand on the keys.
     static int s_dbgTicks = -1, s_dbgBeam = -1;

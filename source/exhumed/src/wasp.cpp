@@ -93,7 +93,12 @@ int GetWaspSprite(int nWasp)
     return WaspList[nWasp].nSprite;
 }
 
-int BuildWasp(short nSprite, int x, int y, int z, short nSector, short nAngle)
+// VibeBuild32: the remaster's crows are wasps in the AI's eyes, animated
+// from HAWK.SEQ -- a bird-skinned copy of WASP.SEQ the converter writes.
+// Kept beside WaspList rather than in it, so the saved struct is unchanged.
+static uint8_t s_waspBird[kMaxWasps];
+
+int BuildWasp(short nSprite, int x, int y, int z, short nSector, short nAngle, int bBird)
 {
     if (nWaspCount >= kMaxWasps) {
         return -1;
@@ -127,6 +132,7 @@ int BuildWasp(short nSprite, int x, int y, int z, short nSector, short nAngle)
     sprite[nSprite].pal = sector[sprite[nSprite].sectnum].ceilingpal;
     sprite[nSprite].clipdist = 70;
 
+    s_waspBird[nWasp] = (uint8_t)(bBird != 0);
     if (bEggWasp)
     {
         sprite[nSprite].xrepeat = 20;
@@ -134,8 +140,9 @@ int BuildWasp(short nSprite, int x, int y, int z, short nSector, short nAngle)
     }
     else
     {
-        sprite[nSprite].xrepeat = 50;
-        sprite[nSprite].yrepeat = 50;
+        // The bird sheet is at actor scale 1.0 where the wasp's is 1.25.
+        sprite[nSprite].xrepeat = bBird ? 40 : 50;
+        sprite[nSprite].yrepeat = bBird ? 40 : 50;
     }
 
     sprite[nSprite].xoffset = 0;
@@ -197,7 +204,7 @@ void FuncWasp(int a, int nDamage, int nRun)
     {
         case 0x90000:
         {
-            seq_PlotSequence(a & 0xFFFF, SeqOffsets[kSeqWasp] + ActionSeq[nAction].a, WaspList[nWasp].nFrame, ActionSeq[nAction].b);
+            seq_PlotSequence(a & 0xFFFF, SeqOffsets[s_waspBird[nWasp] ? kSeqHawk : kSeqWasp] + ActionSeq[nAction].a, WaspList[nWasp].nFrame, ActionSeq[nAction].b);
             return;
         }
 
@@ -260,7 +267,7 @@ void FuncWasp(int a, int nDamage, int nRun)
 
         case 0x20000:
         {
-            short nSeq = SeqOffsets[kSeqWasp] + ActionSeq[nAction].a;
+            short nSeq = SeqOffsets[s_waspBird[nWasp] ? kSeqHawk : kSeqWasp] + ActionSeq[nAction].a;
 
             sprite[nSprite].picnum = seq_GetSeqPicnum2(nSeq, WaspList[nWasp].nFrame);
 

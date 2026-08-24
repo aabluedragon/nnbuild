@@ -5,7 +5,7 @@ Which remaster anim frame fills which zero-size stock SEQ tile:
 and the per-creature pixel scale (demo px per remaster px).
 """
 
-KEX_SEQ_SCALE = {'wasp': 1.0, 'sentry': 1.0, 'set': 1.0, 'queen': 1.0, 'queenegg': 1.0, 'selkis': 1.0}
+KEX_SEQ_SCALE = {'wasp': 1.0, 'sentry': 1.0, 'set': 1.0, 'queen': 1.0, 'queenegg': 1.0, 'selkis': 1.0, 'bird': 1.0}
 
 KEX_SEQ_TILES = {
     2432: ('wasp', 'monsters/wasp_base', 0, 0),
@@ -300,4 +300,33 @@ KEX_SEQ_TILES = {
     3312: ('queen', 'monsters/queen_snake_melee', 0, 1),
     3313: ('queen', 'monsters/queen_snake_melee', 0, 2),
     3314: ('queen', 'monsters/queen_snake_melee', 0, 3),
+    7600: ('bird', 'monsters/bird_fly_chase', 0, 0),
+    7601: ('bird', 'monsters/bird_fly_chase', 3, 0),
+    7602: ('bird', 'monsters/bird_attack', 0, 0),
+    7603: ('bird', 'monsters/bird_attack', 3, 0),
+    7604: ('bird', 'monsters/bird_attack', 3, 0),
+    7605: ('bird', 'monsters/bird_fly_chase', 0, 1),
+    7606: ('bird', 'monsters/bird_fly_chase', 3, 1),
+    7607: ('bird', 'monsters/bird_attack', 0, 1),
+    7608: ('bird', 'monsters/bird_attack', 5, 1),
+    7609: ('bird', 'monsters/bird_attack', 3, 1),
+    7610: ('bird', 'monsters/bird_fly_chase', 0, 2),
+    7611: ('bird', 'monsters/bird_fly_chase', 3, 2),
+    7612: ('bird', 'monsters/bird_attack', 0, 2),
+    7613: ('bird', 'monsters/bird_attack', 5, 2),
+    7614: ('bird', 'monsters/bird_attack', 3, 2),
+    7615: ('bird', 'monsters/bird_fly_chase', 0, 3),
+    7616: ('bird', 'monsters/bird_fly_chase', 3, 3),
+    7617: ('bird', 'monsters/bird_attack', 0, 3),
+    7618: ('bird', 'monsters/bird_attack', 5, 3),
+    7619: ('bird', 'monsters/bird_attack', 3, 3),
+    7620: ('bird', 'monsters/bird_fly_chase', 0, 4),
+    7621: ('bird', 'monsters/bird_fly_chase', 3, 4),
+    7622: ('bird', 'monsters/bird_attack', 0, 4),
+    7623: ('bird', 'monsters/bird_attack', 3, 4),
+    7624: ('bird', 'monsters/bird_attack', 3, 4),
+    7625: ('bird', 'monsters/bird_fly_chase', 0, 0),
+    7626: ('bird', 'monsters/bird_fly_chase', 3, 0),
+    7627: ('bird', 'monsters/bird_fly_chase', 0, 4),
+    7628: ('bird', 'monsters/bird_death', 0, 0),
 }

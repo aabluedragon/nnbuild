@@ -764,6 +764,26 @@ remaster's anims -- is specified to the byte in KEXSEQ_PLAN.md with a
 round-trip-proven writer (kexseqtool.py), for the day the frame timings
 themselves should follow the remaster.
 
+### The crows
+
+The 99 `AI_Bird` actors (seven levels; PASS and PEAK have 26 and 21) flew as
+wasps, and kept doing so after the creature-art pass because Build has no
+bird AI and the wasp's SEQ tiles are the wasp's. They still fly as wasps --
+the AI is the wasp's -- but they look like the remaster's crows. HAWK.SEQ is
+a file the engine loads (`kSeqHawk`) and nothing references, so
+kexseqmap_gen.py makes it a bird-skinned copy of the demo's WASP.SEQ: the
+same 31 sub-sequences, frames, chunk offsets, flags and sound events, byte
+for byte the same size, with each of the 29 wasp tiles retargeted to a bird
+tile on 7600+ (`kexbirdseq.py`, written out by the converter) that the tile
+pass composites from `sprites/monsters/bird.png` -- wings up and down from
+`bird_fly_chase`, the sting frames from `bird_attack`, the splat from
+`bird_death`. The sound table names `BIRD_ACT/ATK/DIE/WNG`, which
+`KEX_SOUNDS` aliases to the remaster's bird wavs. The converter marks a crow
+with hitag 1 and `BuildWasp()` animates it from `kSeqHawk` at repeat 40
+instead of 50, the bird sheet being at actor scale 1.0 to the wasp's 1.25.
+The flag lives beside `WaspList[]`, not in it, so the saved struct is
+untouched.
+
 ### Ramses
 
 The remaster's Ramses ships complete in the .kpf: the speeches as
@@ -1250,10 +1270,6 @@ re-derive it from the code.
 - **The Manacle**, the remaster's eighth weapon. Build PowerSlave has seven
   and no code for it; its one pickup (CHAOS) is dropped by the converter and
   its slot on the Arsenal page stays dim.
-- **Bird art.** The 99 crows (`AI_Bird`, seven levels) fly as wasps: Build
-  has no bird AI, and giving them their own look would mean a second
-  wasp-layout SEQ skinned from `sprites/monsters/bird.png` plus a per-sprite
-  sequence base in wasp.cpp. KEXSEQ_PLAN.md §2.2 has the frame accounting.
 - **KILENTRY's stacked artifact set**, six actors on one point off the map
   with a tag: the script-side hand-out behind the shrines, and a cheat if
   placed.
