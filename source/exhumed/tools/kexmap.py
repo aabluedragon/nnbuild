@@ -1105,12 +1105,12 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
     neighbour that effect actually needs; a door with nowhere to open stays
     static rather than crashing the load or diving out of the map.
 
-    Not yet carried across, left untagged on purpose: SCRIPTED_MOVE (a
-    script-driven sector move), SCRIPT/SCRIPT_REPEATABLE (the per-level
-    AngelScript hooks),
-    ARTIFACT_TRIGGER/_SPAWN (no artifact inventory yet), ACTOR_TRIGGER (fires
-    when tagged actors die), and TELEPORT_START/_DEST (Build PowerSlave has no
-    sector teleporter)."""
+    SCRIPTED_MOVE becomes a lotag 64 sprite naming the sector and its tag; the
+    moves themselves are the level scripts', transcribed in the engine.
+
+    Not yet carried across, left untagged on purpose: SCRIPT/SCRIPT_REPEATABLE
+    (the per-level AngelScript hooks), ARTIFACT_TRIGGER/_SPAWN and
+    ACTOR_TRIGGER (fires when tagged actors die)."""
     for si, s_ in enumerate(sects):
         if s_ is None:
             continue
@@ -1165,6 +1165,12 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             if phase is None:                        # ANG_USER / ANG_RAND
                 phase = (eparam if 'USER' in name else si) & 15
             s_['kexbob'] = phase
+        elif name == 'SCRIPTED_MOVE':
+            # A sector the level's script moves (the casket lids in TOMB and
+            # TOMBEND are the only two). The move itself is scripted, so the
+            # sprite only names the sector and its tag; the engine keeps the
+            # two scripts' moves (kexbreak.cpp KexScripted).
+            s_['kexscripted'] = etag
         s_['lotag'], s_['hitag'] = lotag, hitag
 
 
@@ -1252,6 +1258,8 @@ def _flat_sprites(m, sects, walls, ranges, src):
             out.append((si, 96, 16))               # slime: damage 4
         if s_.get('kexbob') is not None:
             out.append((si, 95, s_['kexbob']))     # floating platform
+        if s_.get('kexscripted') is not None:
+            out.append((si, 64, s_['kexscripted']))   # script-moved sector
     return out
 
 

@@ -237,7 +237,7 @@ static char const s_saveMagic[8] = "KEXINV1";
 
 void KexInv_Save(int nSlot)
 {
-    if ((unsigned)nSlot >= KEX_INV_SAVE_SLOTS)
+    if (!g_kexMode || (unsigned)nSlot >= KEX_INV_SAVE_SLOTS)
         return;
     KexInv slots[KEX_INV_SAVE_SLOTS];
     Bmemset(slots, 0, sizeof(slots));
@@ -264,7 +264,7 @@ void KexInv_Save(int nSlot)
 void KexInv_Load(int nSlot)
 {
     KexInv_Reset(nLocalPlayer);
-    if ((unsigned)nSlot >= KEX_INV_SAVE_SLOTS)
+    if (!g_kexMode || (unsigned)nSlot >= KEX_INV_SAVE_SLOTS)
         return;
     FILE *fp = fopen(KEX_INV_SAVE_FILE, "rb");
     if (!fp)

@@ -162,6 +162,7 @@ static int Kex_RamsesStart(void)
     nPupData = (short)(n * 2);
     bSubTitles = kFalse;       // nothing to caption: the kpf ships no transcripts
     nKexSpeaking = 1;
+    KexScripted_Trigger(0);     // TOMB's $script 1 raises the casket lid
     return 1;
 }
 
@@ -173,6 +174,9 @@ static void Kex_RamsesEnd(void)
 {
     OSD_Printf("Kex Ramses: speech over, play resumes\n");
     nKexSpeaking = 0;
+    // TOMBEND's EndRamsesEvent sinks the bier, on the good ending only.
+    if (KexInv_TransCount(0) >= KEX_TRANS_PIECES)
+        KexScripted_Trigger(1);
 
     for (int i = 0; i < kMaxSprites; i++)
     {

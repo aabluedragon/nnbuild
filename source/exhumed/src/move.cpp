@@ -167,6 +167,7 @@ void MoveThings()
     KexLight_Tick();      // the remaster's fires and torches; no-op elsewhere
     KexTele_Tick();       // its teleport pads; no-op elsewhere
     KexInv_Tick();        // the collectibles self-test; no-op elsewhere
+    KexScripted_Tick();   // the casket lids; no-op elsewhere
 
     if (nFreeze)
     {

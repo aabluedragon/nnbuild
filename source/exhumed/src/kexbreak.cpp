@@ -586,3 +586,125 @@ void FuncKexBreak(int a, int b, int nRun)
             return;
     }
 }
+
+// ---------------------------------------------------------------------------
+// The scripted sector moves. Two sectors in the whole game carry SCRIPTED_MOVE:
+// the casket lid in TOMB (tag 666) and Ramses' bier in TOMBEND (tag 0), and
+// what moves them is a line each in the level scripts:
+//
+//   TOMB    $script 0 (load):        MoveScriptedSector(666, -256, -1)
+//           $script 1 (Ramses):      MoveScriptedSector(666,  320,  4)
+//   TOMBEND $script 0 (load):        MoveScriptedSector(  0,   64, -1)
+//           EndRamsesEvent (good):   MoveScriptedSector(  0, -320,  6)
+//
+// -1 is instant. The amount is Kex units, up positive; a Kex unit is 96 of
+// Build's z (SCALE 16 x WORLD 6), down positive. The lid is an island sector
+// 320 tall, so the whole of it moves -- floor and ceiling together.
+// ---------------------------------------------------------------------------
+#define KEX_Z_PER_UNIT 96
+
+struct KexScriptedRule
+{
+    char const *map;
+    int16_t tag, atLoad, amount, speed;
+    int8_t  when;
+};
+static KexScriptedRule const s_scriptedRule[] = {
+    { "TOMB",    666, -256,  320, 4, 0 },
+    { "TOMBEND",   0,   64, -320, 6, 1 },
+};
+
+struct KexScripted
+{
+    int16_t sector, tag;
+    int32_t target;       // floor z it is moving to
+    int32_t step;         // Build z per tick, signed toward target; 0 = still
+    KexScriptedRule const *rule;
+};
+static KexScripted s_scripted[8];
+static int s_scripteds;
+
+void KexScripted_Reset(void) { s_scripteds = 0; }
+
+void KexScripted_Add(int nSector, int nTag)
+{
+    if (s_scripteds >= (int)ARRAY_SIZE(s_scripted) || (unsigned)nSector >= (unsigned)numsectors)
+        return;
+    KexScripted &m = s_scripted[s_scripteds++];
+    m.sector = (int16_t)nSector; m.tag = (int16_t)nTag;
+    m.target = sector[nSector].floorz; m.step = 0; m.rule = NULL;
+}
+
+static void KexScripted_Shift(KexScripted &m, int32_t dz)
+{
+    sector[m.sector].floorz += dz;
+    sector[m.sector].ceilingz += dz;
+}
+
+void KexScripted_Init(void)
+{
+    if (!g_kexMode || !s_scripteds)
+        return;
+    // The bare level name: gUserMapFilename is <dir>/KEX_TOMB.MAP.
+    char nameUp[BMAX_PATH];
+    Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
+    Bstrupr(nameUp);
+    char *base = nameUp;
+    for (char *p = nameUp; *p; p++)
+        if (*p == '/' || *p == '\\') base = p + 1;
+    if (!Bstrncmp(base, "KEX_", 4)) base += 4;
+    if (char *dot = Bstrrchr(base, '.')) *dot = 0;
+
+    for (int i = 0; i < s_scripteds; i++)
+    {
+        KexScripted &m = s_scripted[i];
+        for (auto const &r : s_scriptedRule)
+        {
+            if (Bstrcmp(base, r.map) || r.tag != m.tag)
+                continue;
+            m.rule = &r;
+            KexScripted_Shift(m, -r.atLoad * KEX_Z_PER_UNIT);
+            m.target = sector[m.sector].floorz;
+            OSD_Printf("Kex scripted: sector %d tag %d moved %d at load\n", m.sector, m.tag, r.atLoad);
+        }
+    }
+}
+
+void KexScripted_Trigger(int when)
+{
+    for (int i = 0; i < s_scripteds; i++)
+    {
+        KexScripted &m = s_scripted[i];
+        if (!m.rule || m.rule->when != when)
+            continue;
+        m.target = sector[m.sector].floorz - m.rule->amount * KEX_Z_PER_UNIT;
+        m.step = (m.rule->amount > 0 ? -1 : 1) * m.rule->speed * KEX_Z_PER_UNIT;
+        OSD_Printf("Kex scripted: sector %d tag %d moving %d\n", m.sector, m.tag, m.rule->amount);
+    }
+}
+
+void KexScripted_Tick(void)
+{
+    // VB_KEXSCRIPT_TEST=<ticks>: fire the Ramses move that far into the level.
+    static int s_test = -1;
+    if (s_test < 0) { char const *e = getenv("VB_KEXSCRIPT_TEST"); s_test = e ? Batoi(e) : 0; }
+    if (s_test > 0 && --s_test == 0)
+        KexScripted_Trigger(0);
+
+    for (int i = 0; i < s_scripteds; i++)
+    {
+        KexScripted &m = s_scripted[i];
+        if (!m.step)
+            continue;
+        int32_t const left = m.target - sector[m.sector].floorz;
+        int32_t dz = m.step;
+        if ((dz > 0 && dz > left) || (dz < 0 && dz < left))
+            dz = left;
+        KexScripted_Shift(m, dz);
+        if (sector[m.sector].floorz == m.target)
+        {
+            m.step = 0;
+            OSD_Printf("Kex scripted: sector %d tag %d arrived\n", m.sector, m.tag);
+        }
+    }
+}

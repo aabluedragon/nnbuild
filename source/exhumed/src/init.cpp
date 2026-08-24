@@ -647,6 +647,7 @@ void SnapSectors(short nSectorA, short nSectorB, short b)
 
 void InitSectFlag()
 {
+    KexScripted_Reset();
     for (int i = 0; i < kMaxSectors; i++)
     {
         SectSoundSect[i] = -1;
@@ -1099,6 +1100,12 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 BuildDrip(nSprite);
                 return;
             }
+            case 64:    // VibeBuild32: a sector the remaster's level script moves
+            {
+                KexScripted_Add(sprite[nSprite].sectnum, nHitag);
+                mydeletesprite(nSprite);
+                return;
+            }
             case 63:
             {
                 changespritestat(nSprite, 405);
@@ -1224,6 +1231,7 @@ void LoadObjects()
     KexBreak_Init();
     KexLight_Init();
     KexTele_Init();
+    KexScripted_Init();
     KexInv_LevelStart();
     InitRa();
     InitChunks();

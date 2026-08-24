@@ -789,7 +789,7 @@ SCRIPT_REPEATABLE (63) sectors, so KEX_RAMSES turns them into sector effect 80
 -- the 0x8000 flag the player-touch trigger tests -- and plants the lotag-61
 head sprite. Three placement lessons, all learned the visible way: the
 scripted spawn point sits BEHIND the casket (the remaster slides the casket
-open with a scripted sector move not yet carried over), a face sprite hugging
+open with a scripted sector move, carried over below), a face sprite hugging
 the near plane never draws at all (LEV1 stands its own head ~200 units out,
 translucent and z-centred -- cstat 0x82 -- and now so does this one), and a
 face sprite's z is its bottom, not its centre.
@@ -978,9 +978,23 @@ negatives the other way round), the `ANG_USER` variants taking the phase from
 the event parameter and `ANG_RAND` from the sprite index. MAGMA's six lava
 rafts and the three in test_platforms bob out of step with one another again.
 
-Still left untagged deliberately: SCRIPTED_MOVE (used once, for TOMB's casket
-lid), SCRIPT/SCRIPT_REPEATABLE (the per-level AngelScript hooks),
-ARTIFACT_TRIGGER/SPAWN and ACTOR_TRIGGER.
+SCRIPTED_MOVE is the last of the sector events, and it is used twice in the
+game: the casket lid in TOMB (tag 666) and Ramses' bier in TOMBEND (tag 0).
+The event only names the sector; what moves it is a line each in the level
+scripts -- TOMB's `$script 0` sinks the lid 256 units at load and `$script 1`
+raises it 320 at speed 4 as Ramses rises, TOMBEND's lifts the bier 64 at load
+and sinks it 320 at speed 6 after the good-ending address. The converter
+marks the sector with a lotag 64 sprite carrying the tag, and `KexScripted`
+in kexbreak.cpp keeps those four moves as a table keyed by level and tag,
+applying the load-time one in `KexScripted_Init()` and the other from the
+Ramses start and end hooks. A Kex unit is 96 of Build's z, and the lid is an
+island sector 320 tall, so floor and ceiling move together. Which is why the
+head used to appear "behind the casket": the lid it was authored behind had
+never been lowered.
+
+Still left untagged deliberately: SCRIPT/SCRIPT_REPEATABLE (the per-level
+AngelScript hooks -- only the Ramses pads and the two moves above are
+transcribed), ARTIFACT_TRIGGER/SPAWN and ACTOR_TRIGGER.
 
 A wrong turn worth recording: an earlier attempt read the door target straight
 out of the sector record, having matched `targetCeiling 256` against a 256 at

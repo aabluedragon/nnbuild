@@ -29,4 +29,12 @@ void KexDrop_RandomItem(int nSprite, int nKiller);
 void KexTele_Init(void);         // per level: this map's teleport pads
 void KexTele_Tick(void);         // per tick: step-on pads move the player
 
+// The sectors the level scripts move (the casket lids). The converter marks
+// them with a lotag 64 sprite; the moves are the scripts', kept here.
+void KexScripted_Reset(void);           // before the level's sprites are read
+void KexScripted_Add(int nSector, int nTag);
+void KexScripted_Init(void);            // after: the scripts' load-time moves
+void KexScripted_Tick(void);
+void KexScripted_Trigger(int when);     // 0 = Ramses begins, 1 = Ramses done
+
 #endif
