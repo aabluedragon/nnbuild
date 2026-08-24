@@ -1040,6 +1040,52 @@ Pickup captions come from the remaster's localization table for the items that
 mean the same thing in both games; anything ambiguous keeps the original
 wording rather than being given a caption that is merely plausible.
 
+### The traps
+
+Four actor types make up the remaster's traps, and none of them was being
+converted: `Special_FireballSpawner` (196 across the retail maps -- GORGE and
+SELPATH alone have 20 and 19), `Special_LaserSpawner` (20, COLONY),
+`Special_BoulderSpawner` (14) and `Special_LaserBeamSpawner` (127, the
+Kilmaat force fields in CHAOS, COLONY_SAT, SHRINE, SETPALAC and THOTH).
+Whole rooms were missing the thing that made them dangerous.
+
+The first three are one Kex class, `kexSlaveFireballSpawner`: a spawner on a
+wall that fires into the room while its tag's channel is active. Build
+PowerSlave's fireball trap is the same machine -- sprite lotag 71,
+`BuildFireBall()`, `FuncTrap()` fires a bullet along the sprite's angle every
+64 ticks while its channel is on -- so all three become that, the laser bolt
+and the rolling boulder standing in as fireballs, which Build can shoot and
+the remaster's boulders and beams it cannot. The direction was the thing to
+get right: the actor's own angle is 0 on most of them. The record's `p2` is
+the wall FACE the spawner sits on (the actor stands one step off that face's
+first vertex, in the face's sector), and the face normal points into the room
+-- stepping along it stays in the sector, stepping against it leaves -- so
+`_face_angle()` turns that normal into the Build angle. The tag is the
+channel, as the sector events' tags are. Build keys a wall-texture flip off
+the same hitag (the trap's "mouth" lighting up), which in a converted map
+would catch a switch wall on the same channel in the same room, so in Kex
+mode the trap is built with -1 there. `kMaxTraps` went from 40 to 64: COLONY
+carries 30 spawners.
+
+The laser beam is different: `kexSlaveLaserBeam` is a standing force field,
+drawn in the remaster as a run of 16x16 bolt sprites (`projectiles/beam_loop`,
+`A_BoltJitter`) from the emitter to the first wall, 100 damage on contact,
+switched off by its tag's channel, and -1 on the ones only the Kilmaat
+Scepter gets past. Build has nothing like it, so `KexBeam` in kexbreak.cpp
+builds it: the converter plants a lotag 65 origin (hitag = channel, 1000 for
+always-on) aimed along the face normal, `KexBeam_Init()` hitscans from it to
+find the far end and lays a bolt every 96 units along the line with the
+remaster's own bolt tile (`kextrap.txt` names it) -- the scan starting a
+stride into the room, since a ray that begins on the emitter's own wall hits
+that wall at zero length, and the spacing stretching on a level whose beams
+would otherwise run the 1024-bolt pool dry (COLONY_SAT: 55 beams, 191
+units) -- and each tick re-rolls a
+small jitter on every bolt from a private LCG -- never the game's RNG, which
+the lockstep peers must all draw from identically -- hides the run while the
+channel is active, and hits any player within 96 units of the segment at
+body height for 100 with a one-second cooldown, unless they hold the
+scepter. Which is the scepter's whole job, so it now has one.
+
 ### The collectibles and the status screen
 
 PowerSlave Exhumed is the console game, and the console game had an inventory
@@ -1071,8 +1117,7 @@ What they do, in Kex mode only:
 - Shawl of Isis / Feather of Horus: jump held while falling clamps the fall to
   a float (1024) or a hover (128).
 - Protective Anklets: lava and slime damage halved, where move.cpp applies it.
-- Kilmaat Scepter: nothing to do -- the force fields it nullifies are the
-  laser-beam spawners, which are not converted.
+- Kilmaat Scepter: walks through the laser beams (see The traps).
 - Transmitter: the ending. `FinishLevel()` on TOMBEND plays `goodend-*.ogv`
   with all eight pieces and `badend-*.ogv` otherwise, which is
   `EndRamsesEvent()`'s `GetQuestItems() != 0xFF` test in the TOMBEND script.

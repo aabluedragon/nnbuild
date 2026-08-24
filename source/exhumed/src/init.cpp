@@ -648,6 +648,7 @@ void SnapSectors(short nSectorA, short nSectorB, short b)
 void InitSectFlag()
 {
     KexScripted_Reset();
+    KexBeam_Reset();
     for (int i = 0; i < kMaxSectors; i++)
     {
         SectSoundSect[i] = -1;
@@ -1090,7 +1091,10 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             }
             case 71:
             {
-                int nFireball = BuildFireBall(nSprite, nHitag, nSpeed);
+                // VibeBuild32: in Kex mode the hitag is the channel only. The
+                // wall-texture flip Build keys off it would otherwise catch a
+                // switch on the same channel in the same room.
+                int nFireball = BuildFireBall(nSprite, g_kexMode ? -1 : nHitag, nSpeed);
 
                 runlist_AddRunRec(sRunChannels[nChannel].a, nFireball, kRunTrap);
                 return;
@@ -1098,6 +1102,11 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             case 70:
             {
                 BuildDrip(nSprite);
+                return;
+            }
+            case 65:    // VibeBuild32: the remaster's laser beam (hitag 1000 = always on)
+            {
+                KexBeam_Add(nSprite, nHitag >= 1000 ? -1 : nChannel);
                 return;
             }
             case 64:    // VibeBuild32: a sector the remaster's level script moves
@@ -1232,6 +1241,7 @@ void LoadObjects()
     KexLight_Init();
     KexTele_Init();
     KexScripted_Init();
+    KexBeam_Init();
     KexInv_LevelStart();
     InitRa();
     InitChunks();

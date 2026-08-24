@@ -51,7 +51,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define kMaxWallFace	4096
 #define kMaxSlideData	128
 #define kMaxPoints		1024
-#define kMaxTraps		40
+#define kMaxTraps		64     // VibeBuild32: COLONY carries 30 of the remaster's spawners
 #define kMaxTrails		20
 #define kMaxTrailPoints	100
 #define kMaxWallFacePics   8

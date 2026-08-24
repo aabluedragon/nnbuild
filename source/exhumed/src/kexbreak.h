@@ -37,4 +37,13 @@ void KexScripted_Init(void);            // after: the scripts' load-time moves
 void KexScripted_Tick(void);
 void KexScripted_Trigger(int when);     // 0 = Ramses begins, 1 = Ramses done
 
+// The remaster's laser beams (kexSlaveLaserBeam): a standing force field from
+// a lotag 65 origin sprite to whatever it hits, drawn as the remaster's own
+// chain of jittering bolts, hurting on touch unless the Kilmaat Scepter is
+// carried. nChannel -1 = always on; otherwise off while the channel is active.
+void KexBeam_Reset(void);
+void KexBeam_Add(int nSprite, int nChannel);
+void KexBeam_Init(void);
+void KexBeam_Tick(void);
+
 #endif

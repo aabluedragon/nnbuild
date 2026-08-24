@@ -39,7 +39,7 @@ THE FORMAT
     docs/examples/ -- every field was checked against the matching text source.
     See PSM.__init__ below for the layout.
 """
-import os, re, struct, sys, zipfile
+import math, os, re, struct, sys, zipfile
 import kexmenu
 
 # ---------------------------------------------------------------------------
@@ -1604,6 +1604,38 @@ KEX_INV_ACTORS.update(('Transmitter_%d' % (i + 1), (KEX_INV_LOTAG_TRANSMITTER, i
 KEX_INV_ACTORS.update(('TD_Doll%02d' % (i + 1), (KEX_INV_LOTAG_DOLL, i)) for i in range(31))
 KEX_INV_ACTORS.update(('Item_Health_Ankah%d' % i, (KEX_INV_LOTAG_ANKH, i)) for i in range(1, 6))
 
+# The traps. Special_FireballSpawner (196 across the retail maps), the
+# LaserSpawner (20, COLONY) and the BoulderSpawner (14) are all one Kex class,
+# kexSlaveFireballSpawner: a spawner on a wall that fires into the room while
+# its tag's channel is active. Build PowerSlave's fireball trap (sprite lotag
+# 71, BuildFireBall / FuncTrap) is the same machine -- fires along its angle
+# every 64 ticks while its channel is on -- so all three become that, the laser
+# bolt and the rolling boulder standing in as fireballs (Build has neither).
+# The record's p2 is the wall FACE the spawner sits on, and that face's normal
+# points into the room: that is the firing direction, not the actor's angle
+# (which is 0 on most of them).
+#
+# Special_LaserBeamSpawner (127) is different: kexSlaveLaserBeam, a standing
+# force field -- a jittering chain of bolt sprites from the wall to whatever
+# the beam hits, hurting on touch, off while its tag's channel is active, and
+# -1 for the ones only the Kilmaat Scepter gets past. Build has nothing like
+# it; the engine's KexBeam (kexbreak.cpp) builds it from a lotag 65 origin.
+KEX_TRAP_LOTAG_FIREBALL = 71
+KEX_TRAP_LOTAG_BEAM = 65
+KEX_TRAP_ACTORS = {25: KEX_TRAP_LOTAG_FIREBALL, 126: KEX_TRAP_LOTAG_FIREBALL,
+                   128: KEX_TRAP_LOTAG_FIREBALL, 127: KEX_TRAP_LOTAG_BEAM}
+KEX_BEAM_PROJECTILE = 'Proj_Beam'      # the bolt sprite the beam is drawn with
+
+def _face_angle(m, fi):
+    """Build angle along a wall face's inward normal, or None if not a wall."""
+    if not (0 <= fi < m.nface):
+        return None
+    nx, ny, nz = m.faces[fi].n
+    if abs(nz) > 0.5 or (abs(nx) < 1e-6 and abs(ny) < 1e-6):
+        return None
+    # Build flips y, and its angles run 0..2047 clockwise with +y down.
+    return int(round(math.atan2(-ny, nx) * 1024.0 / math.pi)) & 2047
+
 # The Manacle is the remaster's eighth weapon; Build PowerSlave has seven and
 # no code for it, so its one pickup (CHAOS) is dropped rather than left as a
 # gun-shaped decoration nobody can take.
@@ -2123,6 +2155,35 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
     """Kex actors -> Build sprites carrying the lotag Build PowerSlave expects."""
     out = []
     for a in m.actors:
+        trap = KEX_TRAP_ACTORS.get(a.type)
+        if trap is not None:
+            x, y, z = a.x, -a.y, -a.z * SCALE * WORLD
+            ang = _face_angle(m, a.p2)
+            if ang is None:
+                ang = build_angle(a.ang)
+            # Many emitters are authored a step inside their wall, where no
+            # sector claims them; walk them into the room along the beam.
+            si = find_sector(sects, walls, ranges, x, y, z)
+            step = 0
+            while (si < 0 or si not in remap) and step < 6:
+                step += 1
+                x = a.x + math.cos(ang * math.pi / 1024.0) * 8 * step
+                y = -a.y + math.sin(ang * math.pi / 1024.0) * 8 * step
+                si = find_sector(sects, walls, ranges, x, y, z)
+            if si < 0 or si not in remap:
+                continue
+            # The tag is the channel. A beam with -1 is always on (hitag 1000
+            # says so to the engine); a fireball with no tag gets a channel
+            # nothing fires, which is what Build would do with it too.
+            if trap == KEX_TRAP_LOTAG_BEAM:
+                hitag = a.tag if a.tag >= 0 else 1000
+            else:
+                hitag = a.tag if a.tag > 0 else 999
+            out.append(dict(x=int(round(x * WORLD)), y=int(round(y * WORLD)), z=int(z),
+                            sectnum=remap[si], ang=ang,
+                            lotag=trap, hitag=hitag, picnum=1, shade=0,
+                            xrepeat=64, yrepeat=64, cstat=0))
+            continue
         ent = ACTOR_MAP.get(a.type)
         dec = (decor or {}).get(a.type)
         if ent is None and dec is None:
@@ -2508,10 +2569,14 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
             if d['name'] in KEX_INV_ACTORS:
                 ACTOR_MAP[t] = KEX_INV_ACTORS[d['name']]
         skip_types = {t for t, d in kexactors.items() if d['name'] in KEX_SKIP_ACTORS}
+        beam_type = next((t for t, d in kexactors.items() if d['name'] == KEX_BEAM_PROJECTILE), None)
         used_types = set()
         for m in parsed.values():
             used_types.update(a.type for a in m.actors)
         used_types -= skip_types
+        used_types -= set(KEX_TRAP_ACTORS)
+        if beam_type is not None:
+            used_types.add(beam_type)          # the beams are drawn with its sprite
         # Gameplay actors keep Build's own art -- except the few items for which
         # no original picnum could be recovered, which need a tile built from
         # the remaster's sprite to have anything to draw.
@@ -2560,6 +2625,12 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
         seqdefs = build_seq_tiles(z, outdir, verbose)
     nexttile += len(decordefs)
     animdefs.extend(decoranims)
+    if beam_type is not None and beam_type in decor:
+        tile, scale, _fb = decor[beam_type]
+        with open(os.path.join(outdir, 'kextrap.txt'), 'w') as f:
+            f.write("# beam <tile> <repeat>   the bolt sprite KexBeam chains along a laser beam\n")
+            f.write("beam %d %d\n" % (tile, max(1, min(255, int(round(4.0 * scale * WORLD))))))
+        if verbose: print("  laser beam bolt: tile %d" % tile)
 
     done = 0
     teleports = []

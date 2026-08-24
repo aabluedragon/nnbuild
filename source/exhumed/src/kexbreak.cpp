@@ -43,6 +43,8 @@
 #include "lighting.h"
 #include "kextable.h"
 #include "kexbreak.h"
+#include "kexinv.h"
+#include "init.h"
 
 void KillCreatures();   // object.cpp, undeclared there
 
@@ -705,6 +707,266 @@ void KexScripted_Tick(void)
         {
             m.step = 0;
             OSD_Printf("Kex scripted: sector %d tag %d arrived\n", m.sector, m.tag);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Laser beams. The remaster draws a beam as a run of 16x16 bolt sprites
+// (projectiles/beam_loop, A_BoltJitter) from the emitter to the first wall
+// the beam meets; Proj_Beam does 100 on contact. Built here from the origin
+// the converter plants: a hitscan finds the far end, a bolt every
+// KEX_BOLT_STEP units along it, jittered a little each tick the way the
+// remaster's are, hidden while the beam is off.
+// ---------------------------------------------------------------------------
+#define kMaxKexBeams    64
+#define kMaxKexBolts    1024       // pool for all beams on the level (COLONY_SAT: 55 beams)
+#define KEX_BOLT_STEP   96         // Build units between bolts: the 16px bolt at repeat 24 is 96 wide
+#define KEX_BEAM_REACH  96         // how near the line counts as touching it
+#define KEX_BEAM_DAMAGE 100
+#define KEX_BEAM_COOLDOWN 30       // ticks between hits on one player
+
+struct KexBeam
+{
+    int16_t nSprite;               // the hidden origin
+    int16_t chan;                  // -1 = always on
+    int32_t x0, y0, x1, y1, z;
+    int16_t first, nBolts;         // its run in s_bolt[]
+    uint8_t on;
+    int16_t cooldown[kMaxPlayers];
+};
+struct KexBolt { int16_t nSprite; int32_t x, y, z; };
+
+static KexBeam  s_beam[kMaxKexBeams];
+static int      s_beams;
+static KexBolt  s_bolt[kMaxKexBolts];
+static int      s_bolts;
+static int      s_beamTile = -1, s_beamRepeat = 24;
+static int      s_beamTableRead;
+static uint32_t s_beamSeed = 0x9E3779B9u;   // local jitter RNG: never the game's
+
+static bool KexBeam_ParseLine(char *line, int)
+{
+    int tile, rep;
+    if (Bsscanf(line, "beam %d %d", &tile, &rep) < 2)
+        return false;
+    s_beamTile = tile; s_beamRepeat = clamp(rep, 1, 255);
+    return true;
+}
+
+void KexBeam_Reset(void) { s_beams = 0; s_bolts = 0; }
+
+void KexBeam_Add(int nSprite, int nChannel)
+{
+    if (!g_kexMode || s_beams >= kMaxKexBeams)
+    {
+        mydeletesprite(nSprite);
+        return;
+    }
+    KexBeam &b = s_beam[s_beams++];
+    Bmemset(&b, 0, sizeof(b));
+    b.nSprite = (int16_t)nSprite;
+    b.chan = (int16_t)nChannel;
+    b.x0 = sprite[nSprite].x; b.y0 = sprite[nSprite].y; b.z = sprite[nSprite].z;
+    b.x1 = b.x0; b.y1 = b.y0;
+    sprite[nSprite].cstat = 0x8000;
+    changespritestat(nSprite, 0);
+}
+
+void KexBeam_Init(void)
+{
+    if (!s_beamTableRead)
+    {
+        s_beamTableRead = 1;
+        KexTable_Load("kextrap.txt", 1, KexBeam_ParseLine);
+    }
+    if (!s_beams)
+        return;
+    if (s_beamTile < 0 || tilesiz[s_beamTile].x <= 0)
+    {
+        OSD_Printf("Kex beams: %d beams but no bolt tile (kextrap.txt); left dark\n", s_beams);
+        s_beams = 0;
+        return;
+    }
+
+    // Two passes: the scans first, so the level's total beam length can set
+    // the spacing -- COLONY_SAT's 55 beams would otherwise run the pool dry
+    // and leave the last of them dark.
+    int total = 0;
+    for (int i = 0; i < s_beams; i++)
+    {
+        KexBeam &b = s_beam[i];
+        int const nSprite = b.nSprite;
+        int const ang = sprite[nSprite].ang;
+        // Emitters are authored on their wall, and a few a step above their
+        // ceiling: keep the beam inside the room, and start the scan a stride
+        // into it so the wall it hangs on is not the first thing it hits.
+        int32_t cz, fz;
+        getzsofslope(sprite[nSprite].sectnum, b.x0, b.y0, &cz, &fz);
+        if (fz - cz > 2048)
+            b.z = clamp(b.z, cz + 1024, fz - 1024);
+        vec3_t start = { b.x0 + mulscale14(Cos(ang), 48), b.y0 + mulscale14(Sin(ang), 48), b.z };
+        hitdata_t hit;
+        hitscan(&start, sprite[nSprite].sectnum, Cos(ang), Sin(ang), 0, &hit, CLIPMASK1);
+        if (hit.sect < 0)
+            continue;
+        b.x1 = hit.pos.x; b.y1 = hit.pos.y;
+        total += ksqrt((b.x1 - b.x0) * (b.x1 - b.x0) + (b.y1 - b.y0) * (b.y1 - b.y0));
+    }
+    int const step = max(KEX_BOLT_STEP, total / (kMaxKexBolts - s_beams) + 1);
+
+    for (int i = 0; i < s_beams; i++)
+    {
+        KexBeam &b = s_beam[i];
+        int const nSprite = b.nSprite;
+        int const len = ksqrt((b.x1 - b.x0) * (b.x1 - b.x0) + (b.y1 - b.y0) * (b.y1 - b.y0));
+        if (len <= 0)
+            continue;
+        int n = len / step;
+        if (n < 1) n = 1;
+        b.first = (int16_t)s_bolts;
+        int16_t nSector = sprite[nSprite].sectnum;
+        for (int k = 0; k < n && s_bolts < kMaxKexBolts; k++)
+        {
+            // Bolts sit mid-step so the run starts just off the wall.
+            int const t = step / 2 + k * step;
+            int const bx = b.x0 + scale(b.x1 - b.x0, t, max(1, len));
+            int const by = b.y0 + scale(b.y1 - b.y0, t, max(1, len));
+            updatesector(bx, by, &nSector);
+            if (nSector < 0)
+                break;
+            int const nBolt = insertsprite(nSector, 0);
+            if (nBolt < 0)
+                break;
+            sprite[nBolt].x = bx; sprite[nBolt].y = by; sprite[nBolt].z = b.z;
+            sprite[nBolt].cstat = 0;
+            sprite[nBolt].picnum = (int16_t)s_beamTile;
+            sprite[nBolt].shade = -127;
+            sprite[nBolt].pal = 0;
+            sprite[nBolt].xrepeat = sprite[nBolt].yrepeat = (uint8_t)s_beamRepeat;
+            sprite[nBolt].xoffset = sprite[nBolt].yoffset = 0;
+            sprite[nBolt].owner = -1;
+            sprite[nBolt].lotag = sprite[nBolt].hitag = 0;
+            s_bolt[s_bolts].nSprite = (int16_t)nBolt;
+            s_bolt[s_bolts].x = bx; s_bolt[s_bolts].y = by; s_bolt[s_bolts].z = b.z;
+            s_bolts++;
+            b.nBolts++;
+        }
+        b.on = 1;
+        if (getenv("VB_KEXBEAM_DEBUG"))
+            OSD_Printf("Kex beam %d: sector %d ang %d len %d bolts %d chan %d z %d\n",
+                       i, sprite[nSprite].sectnum, sprite[nSprite].ang, len, b.nBolts, b.chan, b.z);
+    }
+    OSD_Printf("Kex beams: %d beams, %d bolts on this level (step %d, bolt tile %d, %dx%d, repeat %d)\n",
+               s_beams, s_bolts, step, s_beamTile, tilesiz[s_beamTile].x, tilesiz[s_beamTile].y, s_beamRepeat);
+}
+
+static inline int KexBeam_Rand(int span)
+{
+    s_beamSeed = s_beamSeed * 1664525u + 1013904223u;
+    return (int)((s_beamSeed >> 16) % (unsigned)(2 * span + 1)) - span;
+}
+
+void KexBeam_Tick(void)
+{
+    // VB_KEXBEAM_DEBUG=<n>: a moment in, stand the local player beside beam
+    // n, looking along it, for a visual check without a hand on the keys.
+    static int s_dbgTicks = -1, s_dbgBeam = -1;
+    if (s_dbgTicks < 0)
+    {
+        char const *e = getenv("VB_KEXBEAM_DEBUG");
+        s_dbgBeam = e ? Batoi(e) : -1;
+        s_dbgTicks = e ? 60 : 0;
+    }
+    if (s_dbgTicks > 0 && --s_dbgTicks == 0 && (unsigned)s_dbgBeam < (unsigned)s_beams)
+    {
+        KexBeam const &b = s_beam[s_dbgBeam];
+        int const nSprite = PlayerList[nLocalPlayer].nSprite;
+        int const dx = b.x1 - b.x0, dy = b.y1 - b.y0;
+        int const len = max(1, ksqrt(dx * dx + dy * dy));
+        int const mx = (b.x0 + b.x1) / 2, my = (b.y0 + b.y1) / 2;
+        int px = 0, py = 0;
+        int16_t nSector = -1;
+        for (int side = 1; side >= -1 && nSector < 0; side -= 2)   // whichever side is walkable
+        {
+            px = mx - dy * 480 * side / len; py = my + dx * 480 * side / len;
+            nSector = sprite[b.nSprite].sectnum;
+            updatesector(px, py, &nSector);
+            if (nSector >= 0 && SectDamage[nSector])
+                nSector = -1;
+        }
+        if (nSector >= 0)
+        {
+            sprite[nSprite].x = px; sprite[nSprite].y = py;
+            sprite[nSprite].z = b.z + 6144;
+            mychangespritesect(nSprite, nSector);
+            int const ang = getangle(mx - px, my - py);
+            PlayerList[nLocalPlayer].q16angle = fix16_from_int(ang);
+            PlayerList[nLocalPlayer].q16oangle = PlayerList[nLocalPlayer].q16angle;
+            sprite[nSprite].ang = (int16_t)ang;
+            PlayerList[nLocalPlayer].opos = sprite[nSprite].xyz;
+            OSD_Printf("Kex beam debug: standing beside beam %d in sector %d\n", s_dbgBeam, nSector);
+        }
+        else
+            OSD_Printf("Kex beam debug: no sector beside beam %d\n", s_dbgBeam);
+    }
+
+    for (int i = 0; i < s_beams; i++)
+    {
+        KexBeam &b = s_beam[i];
+        if (!b.nBolts)
+            continue;
+        int const on = b.chan < 0 || sRunChannels[b.chan].c <= 0;
+        if (on != b.on)
+        {
+            b.on = (uint8_t)on;
+            for (int k = 0; k < b.nBolts; k++)
+            {
+                int const nBolt = s_bolt[b.first + k].nSprite;
+                if (on) sprite[nBolt].cstat &= ~0x8000;
+                else    sprite[nBolt].cstat |= 0x8000;
+            }
+        }
+        if (!on)
+            continue;
+
+        // The jitter: a few units either way, along the perpendicular and up
+        // and down, re-rolled every tick like A_BoltJitter.
+        int const dx = b.x1 - b.x0, dy = b.y1 - b.y0;
+        int const len = max(1, ksqrt(dx * dx + dy * dy));
+        int const px = -dy * 24 / len, py = dx * 24 / len;
+        for (int k = 0; k < b.nBolts; k++)
+        {
+            KexBolt const &bt = s_bolt[b.first + k];
+            int const j = KexBeam_Rand(1);
+            sprite[bt.nSprite].x = bt.x + px * j;
+            sprite[bt.nSprite].y = bt.y + py * j;
+            sprite[bt.nSprite].z = bt.z + KexBeam_Rand(256);
+        }
+
+        // Touching it: the player's distance from the segment, within its
+        // height. The scepter walks straight through.
+        for (int nPlayer = 0; nPlayer < nTotalPlayers; nPlayer++)
+        {
+            if (b.cooldown[nPlayer] > 0) { b.cooldown[nPlayer]--; continue; }
+            int const nSprite = PlayerList[nPlayer].nSprite;
+            if (nSprite < 0 || PlayerList[nPlayer].nHealth <= 0)
+                continue;
+            if (KexInv_HasArtifact(nPlayer, kKexArtiScepter))
+                continue;
+            int const sx = sprite[nSprite].x, sy = sprite[nSprite].y;
+            // Feet are at sprite z; the beam has to cross the body.
+            if (b.z < sprite[nSprite].z - 12288 || b.z > sprite[nSprite].z + 1024)
+                continue;
+            int64_t const t64 = (int64_t)(sx - b.x0) * dx + (int64_t)(sy - b.y0) * dy;
+            int64_t const l2 = (int64_t)dx * dx + (int64_t)dy * dy;
+            if (t64 < 0 || t64 > l2)
+                continue;
+            int const cx = b.x0 + (int)(t64 * dx / l2), cy = b.y0 + (int)(t64 * dy / l2);
+            if (klabs(sx - cx) > KEX_BEAM_REACH || klabs(sy - cy) > KEX_BEAM_REACH)
+                continue;
+            b.cooldown[nPlayer] = KEX_BEAM_COOLDOWN;
+            runlist_DamageEnemy(nSprite, -1, KEX_BEAM_DAMAGE);
         }
     }
 }

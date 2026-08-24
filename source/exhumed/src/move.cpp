@@ -168,6 +168,7 @@ void MoveThings()
     KexTele_Tick();       // its teleport pads; no-op elsewhere
     KexInv_Tick();        // the collectibles self-test; no-op elsewhere
     KexScripted_Tick();   // the casket lids; no-op elsewhere
+    KexBeam_Tick();       // the laser beams; no-op elsewhere
 
     if (nFreeze)
     {
