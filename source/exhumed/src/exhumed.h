@@ -57,6 +57,7 @@ void Exhumed_CaptureFrame(void);
 // is playing the remaster's levels, so it gets the remaster's menu too.
 extern int g_kexMode;
 int Kex_BaseVisibility(void);
+char const *Kex_MusicForMap(char const *mapname);
 char const *Kex_PickupCaption(int lotag);
 
 #pragma pack(push, 1)

@@ -692,6 +692,44 @@ surface through a single `AddFlashRec()`: take a flash slot, save the shade,
 push the pal past the palette so `UndoFlashes()` knows to restore it, subtract
 the falloff. That was seven copies of the same ten lines.
 
+### Ramses
+
+The remaster's Ramses ships complete in the .kpf: the speeches as
+`ramses/SP_<LANG><NN>.wav` in four languages, and the lip-sync as AngelScript
+const-int arrays in `scripts/ramses/SP_*.txt` -- one 4-bit head state per
+1/30 s of audio, bit 3 the mouth. The spirit-head machinery in ramses.cpp (the
+swirl of golden pixels, the materialise, the eyes, the mouth tiles) is the
+same one the DOS game uses and works untouched; all a speech IS to it is a
+list of totalclock ticks at which the mouth toggles -- the .PUP format -- so
+`Kex_RamsesStart()` derives those ticks from the bit-3 edges of the script
+array (one entry = 4 ticks of the 120 Hz clock) and plays the wav through the
+music channel, which is what `CDplaying()` watches anyway. Which speech: the
+hub script chooses by artifacts collected; artifacts do not exist here yet, so
+the weapon marking the same stage of the game stands in, and TOMBEND gets the
+finale address. `kex_language` (0..3) picks the language; Italian falls back
+to English in the remaster itself.
+
+The converter's side: the pads in TOMB and TOMBEND are the game's only
+SCRIPT_REPEATABLE (63) sectors, so KEX_RAMSES turns them into sector effect 80
+-- the 0x8000 flag the player-touch trigger tests -- and plants the lotag-61
+head sprite. Three placement lessons, all learned the visible way: the
+scripted spawn point sits BEHIND the casket (the remaster slides the casket
+open with a scripted sector move not yet carried over), a face sprite hugging
+the near plane never draws at all (LEV1 stands its own head ~200 units out,
+translucent and z-centred -- cstat 0x82 -- and now so does this one), and a
+face sprite's z is its bottom, not its centre.
+
+Where the DOS game ends the level when Ramses finishes -- his speech IS its
+intro cinematic -- `Kex_RamsesEnd()` instead puts back everything
+`InitSpiritHead()` took: the sprites it hid (minus the ones that were already
+hidden, which are remembered now), the player's freeze, the one-shot pad flag,
+and the level's own music. One latent engine bug fell out: `InitSpiritHead()`
+reads the gold head tile's pixels without ever loading it, and every DOS path
+happened to have it cached; the kex path did not, and crashed.
+
+Verified end to end on TOMB: trigger, materialise, 116 seconds of SP_ENG01
+with the mouth moving, release with play resumed and no level advance.
+
 ### Sounds
 
 The engine asks for 190 distinct sound names -- 79 in `SoundFiles[]` plus 131

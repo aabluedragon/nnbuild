@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "exhumed.h"
 #include "config.h"
 #include "osdcmds.h"
+#include "ramses.h"
 #include "view.h"
 
 #include "vfs.h"
@@ -698,6 +699,9 @@ int32_t registerosdcommands(void)
         //{ "snd_speech", "enables/disables player speech", (void *)&ud.config.VoiceToggle, CVAR_INT, 0, 5 },
 
         //{ "team","change team in multiplayer", (void *)&ud.team, CVAR_INT|CVAR_MULTI, 0, 3 },
+
+        { "kex_language","Ramses speech language in the remaster campaign: 0 english, 1 french, 2 german, 3 spanish",
+          (void *)&kex_language, CVAR_INT, 0, 3 },
 
         { "vid_gamma","gamma/brightness correction",(void *) &g_videoGamma, CVAR_FLOAT|CVAR_FUNCPTR, (int)floor(MIN_GAMMA), (int)ceil(MAX_GAMMA) },
         { "vid_contrast","contrast correction",(void *) &g_videoContrast, CVAR_FLOAT|CVAR_FUNCPTR, (int)floor(MIN_CONTRAST), (int)ceil(MAX_CONTRAST) },

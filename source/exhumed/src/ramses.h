@@ -27,6 +27,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 extern short nSpiritSprite;
 extern short nHeadStage;
 
+extern int kex_language;    // cvar: the remaster speeches' language
+
 void InitSpiritHead();
 int DoSpiritHead();
 

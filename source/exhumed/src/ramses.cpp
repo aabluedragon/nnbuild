@@ -31,6 +31,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "light.h"
 #include "lighting.h"
 #include "names.h"
+#include "player.h"
+#include "gun.h"
+#include "kexbreak.h"
+#include "init.h"
 
 
 #define kSpiritX   106
@@ -69,6 +73,112 @@ short nPixelsToShow;
 short nTalkTime = 0;
 
 
+// ---------------------------------------------------------------------------
+// The remaster's Ramses. His speeches ship complete in the .kpf: the audio as
+// ramses/SP_<LANG><NN>.wav in four languages, and the lip-sync as AngelScript
+// const-int arrays in scripts/ramses/SP_*.txt, one 4-bit head state per 1/30s
+// of audio -- bit 3 is the mouth. Everything else about the spirit head --
+// the swirlies, the materialise, the eyes and blinks, the mouth tiles -- is
+// this file's own machinery and works untouched; all a speech IS to it is a
+// list of totalclock timestamps at which the mouth toggles (the .PUP format),
+// so the kex path derives those timestamps from the bit-3 edges of the script
+// array (one entry = 4 ticks of the 120 Hz clock) and plays the wav through
+// the music channel, which is what CDplaying() watches anyway. Which speech:
+// the hub script picks by the artifacts collected; artifacts do not exist
+// here yet, so the weapon that marks the same stage of the game stands in.
+// ---------------------------------------------------------------------------
+int kex_language = 0;      // cvar: 0 english, 1 french, 2 german, 3 spanish
+
+static short sKexPup[1200];
+static uint8_t sKexWasHidden[(kMaxSprites + 7) >> 3];
+static int nKexSpeaking = 0;
+
+static int Kex_RamsesSpeech(void)
+{
+    char nameUp[BMAX_PATH];
+    Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
+    Bstrupr(nameUp);
+    if (Bstrstr(nameUp, "TOMBEND"))
+        return 13;         // the finale address; 14 is the all-dolls variant
+    uint16_t const w = nPlayerWeapons[0];
+    if (w & (1 << kWeaponStaff))   return 9;
+    if (w & (1 << kWeaponFlamer))  return 7;
+    if (w & (1 << kWeaponGrenade)) return 5;
+    if (w & (1 << kWeaponM60))     return 3;
+    return 1;
+}
+
+static int Kex_RamsesStart(void)
+{
+    static char const * const langs[] = { "ENG", "FRE", "GER", "SPA" };
+    char const *lang = langs[clamp(kex_language, 0, 3)];
+    int const nSpeech = Kex_RamsesSpeech();
+
+    char path[80];
+    Bsprintf(path, "scripts/ramses/SP_%s%02d.txt", lang, nSpeech);
+    int const fil = kopen4loadfrommod(path, 0);
+    if (fil == -1)
+        return 0;
+    int const len = kfilelength(fil);
+    char *buf = (char *)Xmalloc(len + 1);
+    kread(fil, buf, len); buf[len] = 0; kclose(fil);
+
+    // Mouth-open (bit 3) edges -> .PUP-style toggle timestamps.
+    int prev = 0, n = 0, idx = 0;
+    for (char *p = buf; *p; )
+    {
+        while (*p && !isdigit((unsigned char)*p)) p++;
+        if (!*p) break;
+        int const v = (int)strtol(p, &p, 10);
+        if (((v ^ prev) & 8) && n < (int)ARRAY_SIZE(sKexPup))
+        {
+            sKexPup[n++] = (short)(idx << 2);
+            prev = v;
+        }
+        idx++;
+    }
+    Xfree(buf);
+    if (n == 0)
+        return 0;
+
+    Bsprintf(path, "ramses/SP_%s%02d.wav", lang, nSpeech);
+    playMusicFile(path, false);
+
+    pPupData = sKexPup;
+    nPupData = (short)(n * 2);
+    bSubTitles = kFalse;       // nothing to caption: the kpf ships no transcripts
+    nKexSpeaking = 1;
+    return 1;
+}
+
+// The Build game ends the level when Ramses finishes -- his speech IS its
+// intro cinematic. In the remaster's hub he vanishes and play resumes, so
+// this puts back everything InitSpiritHead() took: the other sprites, the
+// player's freeze, the one-shot pad flag, and the level's own music.
+static void Kex_RamsesEnd(void)
+{
+    OSD_Printf("Kex Ramses: speech over, play resumes\n");
+    nKexSpeaking = 0;
+
+    for (int i = 0; i < kMaxSprites; i++)
+    {
+        if (sprite[i].statnum && !(sKexWasHidden[i >> 3] & (1 << (i & 7))))
+            sprite[i].cstat &= 0x7FFF;
+    }
+    sprite[nSpiritSprite].cstat |= 0x8000;
+    sprite[nSpiritSprite].xrepeat = (uint8_t)nSpiritRepeatX;
+    sprite[nSpiritSprite].yrepeat = (uint8_t)nSpiritRepeatY;
+
+    for (int i = 0; i < numsectors; i++)
+        SectFlag[i] &= 0x7FFF;
+
+    nFreeze = 0;
+    fadecdaudio();
+    char const *track = Kex_MusicForMap(gUserMapFilename);
+    if (track)
+        playMusicFile(track, true);
+}
+
 void InitSpiritHead()
 {
     char filename[20];
@@ -79,10 +189,17 @@ void InitSpiritHead()
     nSpiritRepeatY = sprite[nSpiritSprite].yrepeat;
 
     if (!waloff[kTileRamsesNormal]) tileLoad(kTileRamsesNormal); // Ramses Normal Head
+    // The gold head is read below without ever being drawn first; every other
+    // caller happened to have it cached, the kex path does not.
+    if (!waloff[kTileRamsesGold]) tileLoad(kTileRamsesGold);
 
     for (int i = 0; i < kMaxSprites; i++)
     {
         if (sprite[i].statnum) {
+            if (sprite[i].cstat & 0x8000)
+                sKexWasHidden[i >> 3] |= (uint8_t)(1 << (i & 7));
+            else
+                sKexWasHidden[i >> 3] &= (uint8_t)~(1 << (i & 7));
             sprite[i].cstat |= 0x8000;
         }
     }
@@ -145,34 +262,35 @@ void InitSpiritHead()
 
     fadecdaudio();
 
-    int nTrack;
-
-    if (levelnum == 1) {
-        nTrack = 3;
+    if (!g_kexMode)
+    {
+        // The DOS game's speeches are CD audio: track 3 opens the game, 7
+        // opens the second act. The kex path plays its wav instead, from
+        // Kex_RamsesStart() below.
+        bSubTitles = playCDtrack(levelnum == 1 ? 3 : 7, false) == 0;
     }
-    else {
-        nTrack = 7;
-    }
-
-    bSubTitles = playCDtrack(nTrack, false) == 0;
 
     StartSwirlies();
 
-    sprintf(filename, "LEV%d.PUP", levelnum);
     lNextStateChange = (int)totalclock;
     lHeadStartClock = (int)totalclock;
 
-    headfd = kopen4loadfrommod(filename, 0);
-    nPupData = kread(headfd, cPupData, sizeof(cPupData));
-    #if B_BIG_ENDIAN == 1
-    for (int i = 0; i < ARRAY_SIZE(cPupData); i++)
+    if (!(g_kexMode && Kex_RamsesStart()))
     {
-        cPupData[i] = B_LITTLE16(cPupData[i]);
+        sprintf(filename, "LEV%d.PUP", levelnum);
+
+        headfd = kopen4loadfrommod(filename, 0);
+        nPupData = kread(headfd, cPupData, sizeof(cPupData));
+        #if B_BIG_ENDIAN == 1
+        for (int i = 0; i < ARRAY_SIZE(cPupData); i++)
+        {
+            cPupData[i] = B_LITTLE16(cPupData[i]);
+        }
+        #endif
+        pPupData = cPupData;
+        kclose(headfd);
+        headfd = buildvfs_kfd_invalid;
     }
-    #endif
-    pPupData = cPupData;
-    kclose(headfd);
-    headfd = buildvfs_kfd_invalid;
     nMouthTile = 0;
     nTalkTime = 1;
 }
@@ -487,6 +605,12 @@ int DoSpiritHead()
                     nTalkTime = 0;
                     nPupData = 0;
                 }
+            }
+            else if (nKexSpeaking)
+            {
+                // The remaster's hub: Ramses finishes and play resumes.
+                if (!CDplaying())
+                    Kex_RamsesEnd();
             }
             else if (!bSubTitles)
             {

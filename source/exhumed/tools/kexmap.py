@@ -782,7 +782,7 @@ def _surface(pl, ring, wx, wy, dx, dy, sky=False, ceiling=False):
     return int(round(mean)), 0
 
 
-def convert(m, tilebase=4096, switch_pairs=None):
+def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
     walls = []; sects = []; ranges = []
     # Kex keeps a sector's trigger in a separate event table; Build PowerSlave
     # wants it on the sector as lotag (the effect) and hitag (the channel).
@@ -940,6 +940,45 @@ def convert(m, tilebase=4096, switch_pairs=None):
 
     _resolve_events(m, sects, walls, ranges, src, switch_pairs)
     m.kex_flat_sprites = _flat_sprites(m, sects, walls, ranges, src)
+    m.kex_extra_sprites = []
+    if ramses is not None:
+        # The pad: this map's SCRIPT_REPEATABLE sectors run the Ramses script,
+        # so they take sector effect 80, the flag the player-touch trigger
+        # tests. The head: a lotag-61 sprite where the script spawns him -- or
+        # as close to it as a sector reaches. TOMB's scripted origin floats
+        # inside the casket structure, solid space no sector covers, so the
+        # point walks back toward the pad until one holds it.
+        pad = None
+        for si, s_ in enumerate(sects):
+            if s_ is not None and s_.get('kexevent63'):
+                s_['lotag'], s_['hitag'] = 80, 0
+                if pad is None:
+                    start, num = ranges[si]
+                    pad = (sum(walls[start+i]['x'] for i in range(num)) / max(1, num),
+                           sum(walls[start+i]['y'] for i in range(num)) / max(1, num))
+        kx, ky, kz = ramses
+        # Wall (and find_sector) coordinates are raw Kex units with y flipped;
+        # the Build scale is applied at write-out, and again when the sprite
+        # is emitted in build_sprites(). The scripted spawn point sits BEHIND
+        # the casket, which the remaster opens first with a scripted sector
+        # move this conversion does not carry yet -- so the head materialises
+        # in front of it instead, a step off the pad toward the casket and in
+        # the upper third of the room, where the frozen camera looks.
+        hx, hy = kx, -ky
+        tx, ty = pad if pad else (hx, hy)
+        # LEV1 stands its head ~200 Kex units from the player and marks it
+        # translucent and z-centred (cstat 0x82). Match that: too close and
+        # the face sprite hugs the near plane and never draws.
+        for t in (0.56, 0.4, 0.25, 0.1, 0.0):
+            x = tx + (hx - tx) * t
+            y = ty + (hy - ty) * t
+            si = find_sector(sects, walls, ranges, x, y)
+            if si >= 0:
+                cz, fz = sects[si]['ceilingz'], sects[si]['floorz']
+                m.kex_extra_sprites.append(dict(
+                    x=int(x), y=int(y), z=max(cz + 4096, fz - 16384),
+                    lotag=61, hitag=0, ang=0, cstat=0x82))
+                break
     return sects, walls, ranges
 
 def _split_tjunctions(m, edge_cache, verbose=False):
@@ -1068,6 +1107,8 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             continue
         etype, _esect, etag, eparam = ev
         name = KEX_EVENTS.get(etype)
+        if etype == 63:
+            s_['kexevent63'] = True     # the Ramses pads; see convert()
         chan = max(0, etag) % 1000
         nbs = _neighbours(sects, walls, ranges, si)
         # Build z grows DOWNWARD: a neighbour ceiling above ours has a smaller
@@ -1201,6 +1242,17 @@ def _flat_sprites(m, sects, walls, ranges, src):
 # off the original VOCs' own loop blocks. 69 Build sounds have no counterpart
 # in the remaster (Am-mit, the drums, most ambience loops) and stay on their
 # VOCs.
+# Where Ramses appears. The remaster spawns Obj_Ramses from each hub script --
+# TOMB_script.txt: SpawnActor("Obj_Ramses", -13, 3143, -734), TOMBEND_script:
+# (0, 3136, -224 + 160) -- and the pad in front of him is the map's only
+# event-63 (SCRIPT_REPEATABLE) sector. Build's own Ramses wants a lotag-61
+# head sprite and the 0x8000 sector flag (sector effect 80) on the pad, which
+# is exactly what these rows make the converter emit.
+KEX_RAMSES = {
+    'TOMB.MAP':    (-13, 3143, -734),
+    'TOMBEND.MAP': (0, 3136, -64),
+}
+
 KEX_SOUNDS = {
     'alarm': ('sounds/ding02.wav', 0),
     'amb_lav1': ('sounds/mantisact02.wav', 0),
@@ -1850,6 +1902,16 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
                             shade=(-96 if fullbright else KEX_SHADE_MIN),
                             xrepeat=rep, yrepeat=rep))
 
+    for e in getattr(m, 'kex_extra_sprites', ()):
+        si = find_sector(sects, walls, ranges, e['x'], e['y'])
+        if si < 0 or si not in remap:
+            continue
+        out.append(dict(x=e['x'] * WORLD, y=e['y'] * WORLD, z=e['z'],
+                        sectnum=remap[si], ang=e.get('ang', 0),
+                        cstat=e.get('cstat', 0),
+                        lotag=e['lotag'], hitag=e['hitag'], picnum=1, shade=0,
+                        xrepeat=64, yrepeat=64))
+
     # Water pairing and damage floors, recorded by _flat_sprites(). A record's
     # partner is a SOURCE sector index; its first piece always keeps the source
     # index, so the remap of that index is the Build sector the hitag names.
@@ -2061,7 +2123,7 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
     b += struct.pack('<H', len(sprites))
     for s in sprites:
         b += struct.pack('<iiihhbBBBBBbbhhhhhhhhhh',
-            s['x'], s['y'], s['z'], 0, s['picnum'], s['shade'], 0, 32, 0,
+            s['x'], s['y'], s['z'], s.get('cstat', 0), s['picnum'], s['shade'], 0, 32, 0,
             s['xrepeat'], s['yrepeat'], 0, 0,
             s['sectnum'], 0, s['ang'], -1, 0, 0, 0, s['lotag'], s['hitag'], 0)
     open(path,'wb').write(b)
@@ -2239,7 +2301,8 @@ def convert_install(kexdir, outdir, tilebase=6000, verbose=True):
     for name in sorted(parsed):
         m = parsed[name]
         local = [assign.get(t, tilebase) for t in m.textures]
-        sects, walls, ranges = convert(m, tilebase=0, switch_pairs=sw_pairs)
+        sects, walls, ranges = convert(m, tilebase=0, switch_pairs=sw_pairs,
+                                       ramses=KEX_RAMSES.get(name.upper()))
         for w in walls:
             w['picnum'] = local[w['picnum']] if w['picnum'] < len(local) else tilebase
         skytile = assign.get(m.sky)
