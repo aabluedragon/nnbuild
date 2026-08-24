@@ -1161,9 +1161,10 @@ What they do, in Kex mode only:
 - Transmitter: the ending. `FinishLevel()` on TOMBEND plays `goodend-*.ogv`
   with all eight pieces and `badend-*.ogv` otherwise, which is
   `EndRamsesEvent()`'s `GetQuestItems() != 0xFF` test in the TOMBEND script.
-- Ankhs: the remaster raises the health ceiling; Build's is a constant that
-  the bar, the healing caps and the venom bowl all assume, so the ankh fills
-  the player up instead and shows the remaster's "Maximum Health Increased!".
+- Ankhs: each raises the health ceiling by a fifth of the base, so all five
+  double it -- `KexInv_MaxHealth()` is what the respawn, the healing caps,
+  the venom bowl and the HUD bar consult in Kex mode -- and fills the player
+  up to it, with the remaster's "Maximum Health Increased!".
 - Dolls: the tally, and the doll names as pickup captions (the pickupMessage
   of each doll's actor def -- the Lobotomy team, and Nightdive's).
 

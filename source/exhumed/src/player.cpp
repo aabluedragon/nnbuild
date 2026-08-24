@@ -824,10 +824,10 @@ void RestartPlayer(short nPlayer)
     sprite[nDSprite].lotag = runlist_HeadRun() + 1;
 
     PlayerList[nPlayer].nAction = 0;
-    PlayerList[nPlayer].nHealth = kMaxHealth;
+    PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
 
     if (nNetPlayerCount) {
-        PlayerList[nPlayer].nHealth = kMaxHealth * 2;
+        PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer) * 2;
     }
 
     PlayerList[nPlayer].nFrame = 0;
@@ -1393,9 +1393,9 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                     if (!PlayerList[nPlayer].invincibility || nHealthModifier > 0)
                     {
                         PlayerList[nPlayer].nHealth += nHealthModifier;
-                        if (PlayerList[nPlayer].nHealth > kMaxHealth)
+                        if (PlayerList[nPlayer].nHealth > KexInv_MaxHealth(nPlayer))
                         {
-                            PlayerList[nPlayer].nHealth = kMaxHealth;
+                            PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
                         }
                         else
                         {
@@ -1451,9 +1451,9 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                     if (!PlayerList[nPlayer].invincibility || nHealthModifier > 0)
                     {
                         PlayerList[nPlayer].nHealth += nHealthModifier;
-                        if (PlayerList[nPlayer].nHealth > kMaxHealth)
+                        if (PlayerList[nPlayer].nHealth > KexInv_MaxHealth(nPlayer))
                         {
-                            PlayerList[nPlayer].nHealth = kMaxHealth;
+                            PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
                         }
                         else
                         {
@@ -1509,9 +1509,9 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                     if (!PlayerList[nPlayer].invincibility || nHealthModifier > 0)
                     {
                         PlayerList[nPlayer].nHealth += nHealthModifier;
-                        if (PlayerList[nPlayer].nHealth > kMaxHealth)
+                        if (PlayerList[nPlayer].nHealth > KexInv_MaxHealth(nPlayer))
                         {
-                            PlayerList[nPlayer].nHealth = kMaxHealth;
+                            PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
                         }
                         else
                         {
@@ -2609,7 +2609,7 @@ loc_1AB8E:
 
                 int var_30 = 0;
 
-                if (PlayerList[nPlayer].nHealth >= kMaxHealth)
+                if (PlayerList[nPlayer].nHealth >= KexInv_MaxHealth(nPlayer))
                 {
                     var_30 = 2;
                 }

@@ -56,6 +56,7 @@ void KexInv_GiveArtifact(int nPlayer, int nArtifact);
 int  KexInv_HasArtifact(int nPlayer, int nArtifact);
 int  KexInv_DollCount(int nPlayer);
 int  KexInv_TransCount(int nPlayer);
+int  KexInv_MaxHealth(int nPlayer);      // kMaxHealth, raised by the ankhs in Kex mode
 
 // kexinv.txt: the remaster's own wording, keyed by name (kexmenu.py writes
 // it). KexInv_Format expands "${0}" to num and "\n" to a newline.

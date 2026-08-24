@@ -77,8 +77,9 @@ void KexInv_Tick(void)
         taken++;
     }
     KexInv const &inv = KexInvList[nLocalPlayer];
-    OSD_Printf("Kex inventory: %d pickups taken -> artifacts %02x transmitter %02x dolls %d ankhs %02x\n",
-               taken, inv.artifacts, inv.transmitter, KexInv_DollCount(nLocalPlayer), inv.ankhs);
+    OSD_Printf("Kex inventory: %d pickups taken -> artifacts %02x transmitter %02x dolls %d ankhs %02x (max health %d, health %d)\n",
+               taken, inv.artifacts, inv.transmitter, KexInv_DollCount(nLocalPlayer), inv.ankhs,
+               KexInv_MaxHealth(nLocalPlayer), PlayerList[nLocalPlayer].nHealth);
     s_wantScreen = 1;
 }
 
@@ -113,6 +114,16 @@ static int KexInv_Bits(uint32_t v)
 
 int KexInv_DollCount(int nPlayer)  { return KexInv_Bits(KexInvList[nPlayer].dolls); }
 int KexInv_TransCount(int nPlayer) { return KexInv_Bits(KexInvList[nPlayer].transmitter); }
+
+// Each of the five ankhs raises the ceiling by a fifth of the base: all five
+// double it. Build's kMaxHealth is 800 for a bar that reads 100.
+#define KEX_ANKH_HEALTH (kMaxHealth / 5)
+int KexInv_MaxHealth(int nPlayer)
+{
+    if (!g_kexMode || (unsigned)nPlayer >= (unsigned)kMaxPlayers)
+        return kMaxHealth;
+    return kMaxHealth + KEX_ANKH_HEALTH * KexInv_Bits(KexInvList[nPlayer].ankhs);
+}
 
 // ---------------------------------------------------------------------------
 // Text
@@ -239,11 +250,9 @@ int KexInv_Pickup(int nPlayer, int nItem, int nHitag)
         case kKexLotagAnkh:
             if (nHitag < 1 || nHitag > 5)
                 return 0;
-            // The remaster raises the health ceiling; Build's is a constant
-            // that the bar, the healing caps and the venom bowl all assume,
-            // so the ankh fills the player up instead.
+            // Raises the ceiling (KexInv_MaxHealth) and fills up to it.
             inv.ankhs |= (uint8_t)(1 << nHitag);
-            PlayerList[nPlayer].nHealth = kMaxHealth;
+            PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
             if (nPlayer == nLocalPlayer)
                 SetHealthFrame(1);
             KexInv_Caption(nPlayer, "maxhp", 0);

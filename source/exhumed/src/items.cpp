@@ -35,6 +35,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "input.h"
 #include "object.h"
 #include "save.h"
+#include "kexinv.h"
 
 struct AnimInfo
 {
@@ -223,8 +224,8 @@ void UseTorch(short nPlayer)
 
 void UseHeart(short nPlayer)
 {
-    if (PlayerList[nPlayer].nHealth < kMaxHealth) {
-        PlayerList[nPlayer].nHealth = kMaxHealth;
+    if (PlayerList[nPlayer].nHealth < KexInv_MaxHealth(nPlayer)) {
+        PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
     }
 
     if (nPlayer == nLocalPlayer)

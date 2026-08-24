@@ -931,7 +931,7 @@ void KexHud_Draw(void)
 
     int const air   = clamp((int)airframe * 100 / 16, 0, 100);
     int const hp    = PlayerList[nLocalPlayer].nHealth;
-    int const hpPct = clamp((hp * 100) / kMaxHealth, 0, 100);
+    int const hpPct = clamp((hp * 100) / KexInv_MaxHealth(nLocalPlayer), 0, 100);
 
     // Fills first: the slot is a hole in the frame, so the frame laid over them
     // clips each bar to the slot's slanted end for free. Air on the left,
