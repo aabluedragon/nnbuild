@@ -643,11 +643,10 @@ static void KexScripted_Shift(KexScripted &m, int32_t dz)
     sector[m.sector].ceilingz += dz;
 }
 
-void KexScripted_Init(void)
+// The bare level name -- "TOMB" from <dir>/KEX_TOMB.MAP -- for the tables
+// keyed by level. An exact match, not a substring: TOMB is a prefix of TOMBEND.
+static void Kex_LevelName(char *out, int outSize)
 {
-    if (!g_kexMode || !s_scripteds)
-        return;
-    // The bare level name: gUserMapFilename is <dir>/KEX_TOMB.MAP.
     char nameUp[BMAX_PATH];
     Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
     Bstrupr(nameUp);
@@ -656,6 +655,15 @@ void KexScripted_Init(void)
         if (*p == '/' || *p == '\\') base = p + 1;
     if (!Bstrncmp(base, "KEX_", 4)) base += 4;
     if (char *dot = Bstrrchr(base, '.')) *dot = 0;
+    Bstrncpyz(out, base, outSize);
+}
+
+void KexScripted_Init(void)
+{
+    if (!g_kexMode || !s_scripteds)
+        return;
+    char base[32];
+    Kex_LevelName(base, sizeof(base));
 
     for (int i = 0; i < s_scripteds; i++)
     {
@@ -730,6 +738,7 @@ struct KexBeam
 {
     int16_t nSprite;               // the hidden origin
     int16_t chan;                  // -1 = always on
+    int16_t c0;                    // the channel's state at load: on while it stays so
     int32_t x0, y0, x1, y1, z;
     int16_t first, nBolts;         // its run in s_bolt[]
     uint8_t on;
@@ -853,9 +862,12 @@ void KexBeam_Init(void)
             b.nBolts++;
         }
         b.on = 1;
+        // A channel's state starts out as its tag number (runlist_AllocChannel
+        // matches channels by that value), so "off" is any change from it.
+        b.c0 = b.chan >= 0 ? sRunChannels[b.chan].c : 0;
         if (getenv("VB_KEXBEAM_DEBUG"))
-            OSD_Printf("Kex beam %d: sector %d ang %d len %d bolts %d chan %d z %d\n",
-                       i, sprite[nSprite].sectnum, sprite[nSprite].ang, len, b.nBolts, b.chan, b.z);
+            OSD_Printf("Kex beam %d: sector %d ang %d len %d bolts %d chan %d (c=%d) z %d\n",
+                       i, sprite[nSprite].sectnum, sprite[nSprite].ang, len, b.nBolts, b.chan, b.c0, b.z);
     }
     OSD_Printf("Kex beams: %d beams, %d bolts on this level (step %d, bolt tile %d, %dx%d, repeat %d)\n",
                s_beams, s_bolts, step, s_beamTile, tilesiz[s_beamTile].x, tilesiz[s_beamTile].y, s_beamRepeat);
@@ -916,7 +928,7 @@ void KexBeam_Tick(void)
         KexBeam &b = s_beam[i];
         if (!b.nBolts)
             continue;
-        int const on = b.chan < 0 || sRunChannels[b.chan].c <= 0;
+        int const on = b.chan < 0 || sRunChannels[b.chan].c == b.c0;
         if (on != b.on)
         {
             b.on = (uint8_t)on;
@@ -967,6 +979,299 @@ void KexBeam_Tick(void)
                 continue;
             b.cooldown[nPlayer] = KEX_BEAM_COOLDOWN;
             runlist_DamageEnemy(nSprite, -1, KEX_BEAM_DAMAGE);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Channel allotments. A Build channel is hitag % 1000 and its state starts as
+// that number; Kex tags run past 1000 and the converter allots those a free
+// number under 1000 per level, writing the allotments out as kexchan.txt so
+// the scripts below can fire a tag by the number the level script uses.
+// ---------------------------------------------------------------------------
+struct KexChanRow { char map[16]; int16_t tag, chan; };
+static KexChanRow s_chanAll[256];
+static int s_chanAllCount = -1;
+
+static bool KexChan_ParseLine(char *line, int nRec)
+{
+    KexChanRow &r = s_chanAll[nRec];
+    int tag, chan;
+    if (Bsscanf(line, "%15s %d %d", r.map, &tag, &chan) < 3)
+        return false;
+    r.tag = (int16_t)tag; r.chan = (int16_t)chan;
+    return true;
+}
+
+static int KexChan(int tag)
+{
+    if (tag < 1000)
+        return tag;
+    if (s_chanAllCount < 0)
+        s_chanAllCount = KexTable_Load("kexchan.txt", (int)ARRAY_SIZE(s_chanAll), KexChan_ParseLine);
+    char base[32];
+    Kex_LevelName(base, sizeof(base));
+    for (int i = 0; i < s_chanAllCount; i++)
+    {
+        char const *m = s_chanAll[i].map;
+        if (!Bstrncmp(m, "KEX_", 4)) m += 4;
+        char mapUp[16];
+        Bstrncpyz(mapUp, m, sizeof(mapUp));
+        if (char *dot = Bstrrchr(mapUp, '.')) *dot = 0;
+        if (!Bstrcmp(mapUp, base) && s_chanAll[i].tag == tag)
+            return s_chanAll[i].chan;
+    }
+    return tag % 1000;
+}
+
+// Fire a channel the way a touchplate does: a nonzero state, which the doors
+// read as "open", and the change flag that gets it signalled next tick.
+static void Kex_FireChannel(int nChannel)
+{
+    if (nChannel >= 0)
+        runlist_ChangeChannel(nChannel, 1);
+}
+
+// ---------------------------------------------------------------------------
+// ACTOR_TRIGGER. MAGMA's three: a pen holding one Mantis, and a door on the
+// same tag that opens when it is dead. The creatures standing in the sector
+// at load are the ones watched; runlist_DamageEnemy reports each death.
+// ---------------------------------------------------------------------------
+#define kMaxKexTriggers 8
+#define kMaxKexTriggerSprites 16
+struct KexTrigger
+{
+    int16_t sector, chan;
+    int16_t nSprite[kMaxKexTriggerSprites];
+    int16_t count, left;
+    uint8_t fired;
+};
+static KexTrigger s_trigger[kMaxKexTriggers];
+static int s_triggers;
+
+void KexTrigger_Reset(void) { s_triggers = 0; }
+
+void KexTrigger_Add(int nSprite, int nChannel)
+{
+    if (g_kexMode && s_triggers < kMaxKexTriggers)
+    {
+        KexTrigger &t = s_trigger[s_triggers++];
+        Bmemset(&t, 0, sizeof(t));
+        t.sector = sprite[nSprite].sectnum;
+        t.chan = (int16_t)nChannel;
+    }
+    mydeletesprite(nSprite);
+}
+
+void KexTrigger_Init(void)
+{
+    for (int i = 0; i < s_triggers; i++)
+    {
+        KexTrigger &t = s_trigger[i];
+        for (int j = 0; j < kMaxSprites && t.count < kMaxKexTriggerSprites; j++)
+        {
+            // The creatures' own statnums run 100..125 (anubis.cpp .. wasp.cpp).
+            if (sprite[j].statnum >= 100 && sprite[j].statnum <= 125 && sprite[j].sectnum == t.sector)
+                t.nSprite[t.count++] = (int16_t)j;
+        }
+        t.left = t.count;
+        OSD_Printf("Kex trigger: sector %d watches %d creatures for channel %d\n", t.sector, t.count, t.chan);
+    }
+}
+
+// VB_KEXTRIGGER_TEST=<ticks>: that far in, kill what each trigger watches,
+// through the same damage path a bullet takes, and see the channel fire.
+void KexTrigger_Test(void)
+{
+    static int s_test = -1;
+    if (s_test < 0) { char const *e = getenv("VB_KEXTRIGGER_TEST"); s_test = e ? Batoi(e) : 0; }
+    if (s_test <= 0 || --s_test != 0)
+        return;
+    for (int i = 0; i < s_triggers; i++)
+        for (int j = 0; j < s_trigger[i].count; j++)
+            if (s_trigger[i].nSprite[j] >= 0)
+            {
+                int const n = s_trigger[i].nSprite[j];
+                OSD_Printf("Kex trigger test: hitting sprite %d (statnum %d cstat %x)\n", n, sprite[n].statnum, sprite[n].cstat);
+                runlist_DamageEnemy(n, -1, 20000);
+            }
+}
+
+void KexTrigger_Died(int nSprite)
+{
+    for (int i = 0; i < s_triggers; i++)
+    {
+        KexTrigger &t = s_trigger[i];
+        if (t.fired)
+            continue;
+        for (int j = 0; j < t.count; j++)
+        {
+            if (t.nSprite[j] != nSprite)
+                continue;
+            t.nSprite[j] = -1;
+            if (--t.left <= 0)
+            {
+                t.fired = 1;
+                Kex_FireChannel(t.chan);
+                OSD_Printf("Kex trigger: sector %d cleared, channel %d fired\n", t.sector, t.chan);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SCRIPT sectors. The game has three, and the pads of Ramses (handled in
+// ramses.cpp). Transcribed from scripts/map/*_script.txt; a sector with tag N
+// runs $script N+1 when entered, and $script 0 runs at load:
+//
+//   KILENTRY $script 8: ChangeMap(KILARENA)          -- the arena's entrance
+//   KILARENA $script 1: GetArtifacts() = PA_ALL; ChangeMap(KILENTRY)
+//   SUNKEN   $script 0: FireRemoteEventFromTag(1001), (1002)
+//   SUNKEN   $script 1: wait until the player holds key 1, then fire 2 and 1007
+// ---------------------------------------------------------------------------
+enum { kKexScriptChangeMap = 0, kKexScriptKeyFires };
+struct KexScriptRule
+{
+    char const *map;
+    int16_t tag;
+    int8_t  kind, allArtifacts, keyBit;
+    char const *nextMap;
+    int16_t fire[2];
+};
+static KexScriptRule const s_scriptRule[] = {
+    { "KILENTRY", 7, kKexScriptChangeMap, 0, -1, "KILARENA", { 0, 0 } },
+    { "KILARENA", 0, kKexScriptChangeMap, 1, -1, "KILENTRY", { 0, 0 } },
+    { "SUNKEN",   0, kKexScriptKeyFires,  0,  0, NULL,       { 2, 1007 } },
+};
+struct KexLoadRule { char const *map; int16_t fire[2]; };
+static KexLoadRule const s_loadRule[] = {
+    { "SUNKEN", { 1001, 1002 } },
+};
+
+#define kMaxKexScripts 8
+struct KexScript
+{
+    int16_t sector, tag;
+    int16_t chan[2];
+    KexScriptRule const *rule;
+    uint8_t armed, done;
+};
+static KexScript s_script[kMaxKexScripts];
+static int s_scripts;
+
+void KexScript_Reset(void) { s_scripts = 0; }
+
+void KexScript_Add(int nSprite, int nTag)
+{
+    if (g_kexMode && s_scripts < kMaxKexScripts)
+    {
+        char base[32];
+        Kex_LevelName(base, sizeof(base));
+        KexScript &sc = s_script[s_scripts++];
+        Bmemset(&sc, 0, sizeof(sc));
+        sc.sector = sprite[nSprite].sectnum;
+        sc.tag = (int16_t)nTag;
+        sc.chan[0] = sc.chan[1] = -1;
+        for (auto const &r : s_scriptRule)
+        {
+            if (Bstrcmp(base, r.map) || r.tag != nTag)
+                continue;
+            sc.rule = &r;
+            // Channels are matched by value while the level loads, so the
+            // ones this script fires are claimed now, with the level's own.
+            for (int k = 0; k < 2; k++)
+                if (r.fire[k] > 0)
+                    sc.chan[k] = runlist_AllocChannel(KexChan(r.fire[k]));
+        }
+        if (!sc.rule)
+            s_scripts--;         // a script this port does not know: no-op
+    }
+    mydeletesprite(nSprite);
+}
+
+void KexScript_Init(void)
+{
+    if (!g_kexMode)
+        return;
+    char base[32];
+    Kex_LevelName(base, sizeof(base));
+    for (auto const &r : s_loadRule)
+    {
+        if (Bstrcmp(base, r.map))
+            continue;
+        for (int k = 0; k < 2; k++)
+            if (r.fire[k] > 0)
+            {
+                Kex_FireChannel(runlist_AllocChannel(KexChan(r.fire[k])));
+                OSD_Printf("Kex script: %s $script 0 fires tag %d\n", base, r.fire[k]);
+            }
+    }
+    if (s_scripts)
+        OSD_Printf("Kex script: %d script sectors on this level\n", s_scripts);
+}
+
+// Leave for another of the remaster's levels, keeping the campaign flow
+// (no overworld in between): the map name goes where the user map's was and
+// the game loop reloads.
+static void Kex_ChangeMap(char const *name)
+{
+    char path[BMAX_PATH];
+    Bstrncpyz(path, gUserMapFilename, sizeof(path));
+    char *base = path;
+    for (char *p = path; *p; p++)
+        if (*p == '/' || *p == '\\') base = p + 1;
+    Bsnprintf(base, sizeof(path) - (base - path), "KEX_%s.MAP", name);
+    Bstrncpyz(gUserMapFilename, path, BMAX_PATH);
+    bUserMap = true;
+    levelnew = levelnum;
+    OSD_Printf("Kex script: ChangeMap -> %s\n", path);
+}
+
+void KexScript_Tick(void)
+{
+    KexTrigger_Test();
+    for (int i = 0; i < s_scripts; i++)
+    {
+        KexScript &sc = s_script[i];
+        if (sc.done || !sc.rule)
+            continue;
+        if (!sc.armed)
+        {
+            for (int nPlayer = 0; nPlayer < nTotalPlayers && !sc.armed; nPlayer++)
+            {
+                int const nSprite = PlayerList[nPlayer].nSprite;
+                if (nSprite >= 0 && sprite[nSprite].sectnum == sc.sector)
+                    sc.armed = 1;
+            }
+            if (!sc.armed)
+                continue;
+        }
+        switch (sc.rule->kind)
+        {
+            case kKexScriptChangeMap:
+                if (sc.rule->allArtifacts)
+                    for (int nPlayer = 0; nPlayer < nTotalPlayers; nPlayer++)
+                        for (int a = 0; a < kKexArtiCount; a++)
+                            KexInv_GiveArtifact(nPlayer, a);
+                sc.done = 1;
+                Kex_ChangeMap(sc.rule->nextMap);
+                break;
+
+            case kKexScriptKeyFires:
+            {
+                int have = 0;
+                for (int nPlayer = 0; nPlayer < nTotalPlayers; nPlayer++)
+                    if (PlayerList[nPlayer].keys & (0x1000 << sc.rule->keyBit))
+                        have = 1;
+                if (!have)
+                    break;
+                for (int k = 0; k < 2; k++)
+                    Kex_FireChannel(sc.chan[k]);
+                sc.done = 1;
+                OSD_Printf("Kex script: key %d in hand, tags %d and %d fired\n",
+                           sc.rule->keyBit + 1, sc.rule->fire[0], sc.rule->fire[1]);
+                break;
+            }
         }
     }
 }

@@ -1457,9 +1457,8 @@ void FinishLevel()
     EraseScreen(overscanindex);
 
     // Finishing TOMBEND -- boarding the chopper -- ends the remaster's
-    // campaign, so its ending cinematic plays on the way out. The good one,
-    // hopefully: choosing by the transmitters collected needs an inventory
-    // that does not exist yet.
+    // campaign, so its ending cinematic plays on the way out: the good one
+    // with the transmitter assembled, the bad one without.
     if (g_kexMode)
     {
         char nameUp[BMAX_PATH];

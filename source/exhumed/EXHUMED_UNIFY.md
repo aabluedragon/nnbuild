@@ -992,9 +992,49 @@ island sector 320 tall, so floor and ceiling move together. Which is why the
 head used to appear "behind the casket": the lid it was authored behind had
 never been lowered.
 
-Still left untagged deliberately: SCRIPT/SCRIPT_REPEATABLE (the per-level
-AngelScript hooks -- only the Ramses pads and the two moves above are
-transcribed), ARTIFACT_TRIGGER/SPAWN and ACTOR_TRIGGER.
+The rest of the event table is scripts and triggers, and there turned out to
+be little of it. ACTOR_TRIGGER appears three times, all in MAGMA: a pen with
+one Mantis in it and a door on the same tag. The converter plants a lotag 66
+sprite, `KexTrigger` records the creatures standing in the sector at load,
+and the death hook in `runlist_DamageEnemy` counts them down and fires the
+channel. SCRIPT appears three times -- the arena's entrance in KILENTRY
+(`$script 8`: ChangeMap KILARENA), the arena's exit in KILARENA (`$script 1`:
+all six artifacts, ChangeMap KILENTRY) and a gate in SUNKEN (`$script 1`:
+wait until the player holds the first key, then fire tags 2 and 1007) --
+plus SUNKEN's load-time `$script 0`, which fires 1001 and 1002 to start two
+doors open. A sector with tag N runs `$script N+1` when entered, which is
+the same rule the Ramses pads follow. `KexScript` in kexbreak.cpp holds the
+four as a table keyed by level and tag, and ChangeMap puts the new level's
+file where the user map's was and lets the game loop reload -- no overworld
+in between, as in the remaster. ARTIFACT_SPAWN is KILENTRY's six shrines,
+where an artifact appears for a player who arrived without it: the converter
+plants the pickup with a mark on its hitag and `KexInv_LevelStart()` removes
+it for a player who already owns that artifact. The ARTIFACT_TRIGGER pads
+beside them, which make the artifact appear when stepped on, are not
+carried; the pickup simply stands there.
+
+Two of those scripts exposed a channel bug. A Build channel is the low three
+digits of a tag (`runlist_AllocChannel(hitag % 1000)`), and Kex tags run past
+1000: KILENTRY pairs the shrine tags 1..6 with doors on 1001..1006, and
+SUNKEN's load-time doors on 1001 and 1002 sit beside lifts on 2, so folding
+with % 1000 welded them together. The converter now allots channels per
+level -- tags under 1000 keep their number, tags from 1000 up take a free
+number from 999 down -- and writes the over-1000 part of the table out as
+`kexchan.txt`, which is how the engine's scripts fire a tag by the number the
+level script names.
+
+One thing about channels worth knowing before touching them: a channel's
+state STARTS as its tag number. `runlist_AllocChannel` matches channels by
+value, `runlist_FindChannel` seeds a fresh one with the tag, and nothing
+resets it -- the classic levels allocate channels 372 and 228 the same way.
+So the laser beams take "on" to mean "the channel is still at its load-time
+state", and "fire" is what a touchplate does: set it nonzero, which the doors
+read as open.
+
+Still left untagged deliberately: nothing in the event table. What remains
+of the scripts is the per-level AngelScript that is not sector-triggered
+(camera work, the Ramses animation itself), which is transcribed where it
+matters and skipped where it is presentation.
 
 A wrong turn worth recording: an earlier attempt read the door target straight
 out of the sector record, having matched `targetCeiling 256` against a 256 at

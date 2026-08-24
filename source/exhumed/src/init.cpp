@@ -649,6 +649,8 @@ void InitSectFlag()
 {
     KexScripted_Reset();
     KexBeam_Reset();
+    KexTrigger_Reset();
+    KexScript_Reset();
     for (int i = 0; i < kMaxSectors; i++)
     {
         SectSoundSect[i] = -1;
@@ -1104,6 +1106,16 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 BuildDrip(nSprite);
                 return;
             }
+            case 66:    // VibeBuild32: ACTOR_TRIGGER, fires when the pen's creatures are dead
+            {
+                KexTrigger_Add(nSprite, nChannel);
+                return;
+            }
+            case 67:    // VibeBuild32: a SCRIPT sector, hitag = the script's tag
+            {
+                KexScript_Add(nSprite, nHitag);
+                return;
+            }
             case 65:    // VibeBuild32: the remaster's laser beam (hitag 1000 = always on)
             {
                 KexBeam_Add(nSprite, nHitag >= 1000 ? -1 : nChannel);
@@ -1242,6 +1254,8 @@ void LoadObjects()
     KexTele_Init();
     KexScripted_Init();
     KexBeam_Init();
+    KexTrigger_Init();
+    KexScript_Init();
     KexInv_LevelStart();
     InitRa();
     InitChunks();

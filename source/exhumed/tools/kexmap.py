@@ -1064,6 +1064,35 @@ KEX_FLOATER_PHASE = {
 }
 
 
+# Build channels are the low three digits of a tag (runlist_AllocChannel gets
+# hitag % 1000), and a channel's state starts out as that number. Kex tags run
+# past 1000 -- KILENTRY pairs artifact triggers 1..6 with doors 1001..1006,
+# SUNKEN's scripts fire 1001 and 1002 beside lifts on 2 -- and folding them
+# with % 1000 welded those together. So the channels are allotted per map:
+# tags under 1000 keep their number, and every tag from 1000 up takes a free
+# number from 999 downward. The engine gets the tags-over-1000 part of the
+# table as kexchan.txt, for the scripts it runs that fire tags by name.
+def _channels(m):
+    tags = set(e[2] for e in m.events if e[2] > 0)
+    tags |= set(a.tag for a in m.actors if a.type in KEX_TRAP_ACTORS and a.tag > 0)
+    chanmap = {t: t for t in tags if t < 1000}
+    used = set(chanmap.values())
+    free = 999
+    for t in sorted(t for t in tags if t >= 1000):
+        while free in used:
+            free -= 1
+        chanmap[t] = free
+        used.add(free)
+    return chanmap
+
+def _chan(m, tag):
+    if tag <= 0:
+        return 0
+    if not hasattr(m, 'kex_chanmap'):
+        m.kex_chanmap = _channels(m)
+    return m.kex_chanmap.get(tag, tag % 1000)
+
+
 def _neighbours(sects, walls, ranges, si):
     """The distinct live sectors this piece opens onto."""
     start, num = ranges[si]
@@ -1121,7 +1150,7 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
         name = KEX_EVENTS.get(etype)
         if etype == 63:
             s_['kexevent63'] = True     # the Ramses pads; see convert()
-        chan = max(0, etag) % 1000
+        chan = _chan(m, etag)
         nbs = _neighbours(sects, walls, ranges, si)
         # Build z grows DOWNWARD: a neighbour ceiling above ours has a smaller
         # ceilingz, a neighbour floor below ours a greater floorz.
@@ -1171,6 +1200,27 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             # sprite only names the sector and its tag; the engine keeps the
             # two scripts' moves (kexbreak.cpp KexScripted).
             s_['kexscripted'] = etag
+        elif name == 'ACTOR_TRIGGER':
+            # Fires its tag when the creatures standing in it at load are all
+            # dead: MAGMA's three, each holding one Mantis and opening a door
+            # on the same tag. A lotag 66 sprite for the engine's KexTrigger.
+            s_['kexactortrig'] = chan
+        elif name in ('SCRIPT', 'SCRIPT_REPEATABLE'):
+            # Runs the level script numbered tag+1 when entered. The three
+            # SCRIPT sectors in the game (KILENTRY, KILARENA, SUNKEN) and the
+            # Ramses pads are transcribed in the engine; the sprite names
+            # the sector and the script (lotag 67, hitag = tag).
+            s_['kexscript'] = etag
+            if name == 'SCRIPT_REPEATABLE':
+                s_['kexevent63'] = True
+        elif name == 'ARTIFACT_SPAWN':
+            # KILENTRY's six shrines: artifact tag-1 appears here for a player
+            # who arrives without it. The pickup is planted with a "only if
+            # not owned" mark on its hitag; the engine removes it at load for
+            # a player who has the artifact. The ARTIFACT_TRIGGER pads paired
+            # with them (the remaster shows the artifact when the pad is
+            # stepped on) are not carried: the pickup just stands there.
+            s_['kexartispawn'] = etag
         s_['lotag'], s_['hitag'] = lotag, hitag
 
 
@@ -1260,6 +1310,17 @@ def _flat_sprites(m, sects, walls, ranges, src):
             out.append((si, 95, s_['kexbob']))     # floating platform
         if s_.get('kexscripted') is not None:
             out.append((si, 64, s_['kexscripted']))   # script-moved sector
+        if s_.get('kexactortrig') is not None:
+            out.append((si, 66, s_['kexactortrig']))  # kill-count trigger
+        if s_.get('kexscript') is not None:
+            out.append((si, 67, s_['kexscript']))     # level script sector
+        arti = s_.get('kexartispawn')
+        if arti is not None and 1 <= arti <= 6:
+            idx = arti - 1
+            if idx == 1:
+                out.append((si, 23, KEX_ARTI_CONDITIONAL + 1))   # the mask is Build's own
+            else:
+                out.append((si, KEX_INV_LOTAG_ARTIFACT, KEX_ARTI_CONDITIONAL + idx))
     return out
 
 
@@ -1592,6 +1653,10 @@ ACTOR_MAP = {
 # The Sobek Mask is not here: Arti_Mask is Build's own mask pickup (lotag 23)
 # and stays that, the engine flagging the artifact on the side.
 KEX_INV_LOTAG_ARTIFACT, KEX_INV_LOTAG_TRANSMITTER = 34, 36
+KEX_ARTI_CONDITIONAL = 16          # hitag flag: only spawn if the player lacks it
+KEX_ARTI_NAMES = ['Arti_Sandals', 'Arti_Mask', 'Arti_Shawl', 'Arti_Anklets',
+                  'Arti_Scepter', 'Arti_Feather']
+KEX_ARTI_TYPE = {}                  # artifact index -> actor type, from defines.txt
 KEX_INV_LOTAG_DOLL, KEX_INV_LOTAG_ANKH = 39, 40
 KEX_INV_ACTORS = {
     'Arti_Sandals': (KEX_INV_LOTAG_ARTIFACT, 0),
@@ -2176,9 +2241,9 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
             # says so to the engine); a fireball with no tag gets a channel
             # nothing fires, which is what Build would do with it too.
             if trap == KEX_TRAP_LOTAG_BEAM:
-                hitag = a.tag if a.tag >= 0 else 1000
+                hitag = _chan(m, a.tag) if a.tag >= 0 else 1000
             else:
-                hitag = a.tag if a.tag > 0 else 999
+                hitag = _chan(m, a.tag) if a.tag > 0 else 999
             out.append(dict(x=int(round(x * WORLD)), y=int(round(y * WORLD)), z=int(z),
                             sectnum=remap[si], ang=ang,
                             lotag=trap, hitag=hitag, picnum=1, shade=0,
@@ -2234,18 +2299,25 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
     for si, lotag, arg in getattr(m, 'kex_flat_sprites', ()):
         if si not in remap:
             continue
+        pic = 1
         if lotag in (98, 99):
             if arg not in remap:
                 continue
             hitag = remap[arg]
         else:
             hitag = arg
+        if lotag == KEX_INV_LOTAG_ARTIFACT:
+            t = KEX_ARTI_TYPE.get(arg & 15)
+            if decor and t in decor:
+                pic = decor[t][0]
+        elif lotag == 23:
+            pic = ITEM_PICNUM[23]
         start, num = ranges[si]
         cx = sum(walls[start+i]['x'] for i in range(num)) / max(1, num)
         cy = sum(walls[start+i]['y'] for i in range(num)) / max(1, num)
         out.append(dict(x=int(cx), y=int(cy), z=sects[si]['floorz'],
                         sectnum=remap[si], ang=0,
-                        lotag=lotag, hitag=hitag, picnum=1, shade=0,
+                        lotag=lotag, hitag=hitag, picnum=pic, shade=0,
                         xrepeat=64, yrepeat=64))
     return out
 
@@ -2569,6 +2641,9 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
             if d['name'] in KEX_INV_ACTORS:
                 ACTOR_MAP[t] = KEX_INV_ACTORS[d['name']]
         skip_types = {t for t, d in kexactors.items() if d['name'] in KEX_SKIP_ACTORS}
+        for t, d in kexactors.items():
+            if d['name'] in KEX_ARTI_NAMES:
+                KEX_ARTI_TYPE[KEX_ARTI_NAMES.index(d['name'])] = t
         beam_type = next((t for t, d in kexactors.items() if d['name'] == KEX_BEAM_PROJECTILE), None)
         used_types = set()
         for m in parsed.values():
@@ -2634,8 +2709,12 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
 
     done = 0
     teleports = []
+    chanrows = []
     for name in sorted(parsed):
         m = parsed[name]
+        for tag, chan in sorted(_channels(m).items()):
+            if tag >= 1000:
+                chanrows.append((KEX_MAP_PREFIX + os.path.basename(name).upper(), tag, chan))
         local = [assign.get(t, tilebase) for t in m.textures]
         sects, walls, ranges = convert(m, tilebase=0, switch_pairs=sw_pairs,
                                        ramses=KEX_RAMSES.get(name.upper()))
@@ -2809,6 +2888,9 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True):
     # sector, position and facing.
     _write_table(outdir, "kextele.txt", "map padsector destsector x y z ang",
                  teleports, "teleports", verbose)
+
+    # Tags of 1000 and up, and the channel each was allotted (see _channels).
+    _write_table(outdir, "kexchan.txt", "map tag channel", chanrows, "channel allotments", verbose)
 
     # Sounds: LoadSound() consults this before opening the original VOC, so the
     # remaster's own recordings play wherever one corresponds.

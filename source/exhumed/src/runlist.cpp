@@ -1610,7 +1610,10 @@ void runlist_DamageEnemy(int nSprite, int nSprite2, short nDamage)
 
     // is there now one less creature? (has one died)
     if (nPreCreaturesLeft > nCreaturesLeft)
+    {
         KexDrop_RandomItem(nSprite, nSprite2);   // the remaster's drop roll
+        KexTrigger_Died(nSprite);                // and its kill-count triggers
+    }
 
     if (nPreCreaturesLeft > nCreaturesLeft && nSprite2 > -1)
     {

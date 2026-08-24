@@ -27,10 +27,35 @@ void KexInv_Reset(int nPlayer)
 static int s_selftest;
 static int s_wantScreen;
 
+void DestroyItemAnim(short nSprite);     // items.cpp
+
 void KexInv_LevelStart(void)
 {
     for (int i = 0; i < kMaxPlayers; i++)
         KexInvList[i].map = 0;
+
+    // KILENTRY's shrines: an artifact planted with the "only if not owned"
+    // mark (hitag 16+n; the mask, Build's own lotag 23 pickup, 17) is for a
+    // player who arrived without it. Owned already: it is not there.
+    if (g_kexMode)
+    {
+        for (int i = 0; i < kMaxSprites; i++)
+        {
+            int const st = sprite[i].statnum, h = sprite[i].hitag;
+            int idx = -1;
+            if (st == 900 + kKexLotagArtifact && h >= 16 && h < 16 + kKexArtiCount) idx = h - 16;
+            else if (st == 923 && h == 17) idx = kKexArtiMask;
+            if (idx < 0)
+                continue;
+            if (KexInv_HasArtifact(0, idx))
+            {
+                DestroyItemAnim(i);
+                mydeletesprite(i);
+            }
+            else
+                sprite[i].hitag = (st == 923) ? 0 : (int16_t)idx;
+        }
+    }
     { char const *e = getenv("VB_KEXINV_TEST"); s_selftest = e ? Batoi(e) : 0; }
     s_wantScreen = 0;
 }

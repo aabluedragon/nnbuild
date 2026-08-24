@@ -46,4 +46,18 @@ void KexBeam_Add(int nSprite, int nChannel);
 void KexBeam_Init(void);
 void KexBeam_Tick(void);
 
+// ACTOR_TRIGGER: a lotag 66 sprite; fires its channel when every creature that
+// stood in its sector at load has died (MAGMA's three Mantis pens).
+void KexTrigger_Reset(void);
+void KexTrigger_Add(int nSprite, int nChannel);
+void KexTrigger_Init(void);
+void KexTrigger_Died(int nSprite);       // from runlist_DamageEnemy
+
+// SCRIPT sectors: a lotag 67 sprite, hitag = script tag. The remaster's three
+// level scripts (KILENTRY, KILARENA, SUNKEN) are transcribed here.
+void KexScript_Reset(void);
+void KexScript_Add(int nSprite, int nTag);
+void KexScript_Init(void);               // the load-time script, where one exists
+void KexScript_Tick(void);
+
 #endif
