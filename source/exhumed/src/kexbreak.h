@@ -23,6 +23,9 @@ void KexLight_Tick(void);        // per tick: cast their glow
 // loops (the flag stands in for the VOC loop block a WAV does not have).
 char const *KexSound_Alias(char const *name, int *pLoop);
 
+// A_RandomItem: the remaster's enemy-death drop roll; no-op outside Kex mode.
+void KexDrop_RandomItem(int nSprite, int nKiller);
+
 void KexTele_Init(void);         // per level: this map's teleport pads
 void KexTele_Tick(void);         // per tick: step-on pads move the player
 

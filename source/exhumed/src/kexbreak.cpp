@@ -38,10 +38,13 @@
 #include "player.h"
 #include "spider.h"
 #include "anims.h"
+#include "object.h"
 #include "random.h"
 #include "lighting.h"
 #include "kextable.h"
 #include "kexbreak.h"
+
+void KillCreatures();   // object.cpp, undeclared there
 
 #define kMaxKexBreakTypes 64
 #define kMaxKexBreaks     512
@@ -373,6 +376,71 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag);
 // there. The rare Item_Map and Item_Power rolls are left out for the same
 // reason. Item_Ammo is the speed loader and Item_Health the berry twig, the
 // two items those names correspond to in Build PowerSlave.
+// Stand an item up at a point and let the item machinery finish it.
+static void KexDrop_Spawn(int nSector, int x, int y, int z,
+                          short lotag, short hitag, short picnum)
+{
+    int const nItem = insertsprite(nSector, 0);
+    if (nItem < 0)
+        return;
+
+    sprite[nItem].x = x;
+    sprite[nItem].y = y;
+    sprite[nItem].z = z;
+    sprite[nItem].cstat = 0;
+    sprite[nItem].shade = -12;
+    sprite[nItem].pal = 0;
+    sprite[nItem].xrepeat = 64;
+    sprite[nItem].yrepeat = 64;
+    sprite[nItem].xoffset = 0;
+    sprite[nItem].yoffset = 0;
+    sprite[nItem].picnum = picnum;
+    sprite[nItem].ang = 0;
+    sprite[nItem].xvel = sprite[nItem].yvel = sprite[nItem].zvel = 0;
+    sprite[nItem].owner = -1;
+    sprite[nItem].extra = -1;
+
+    ProcessSpriteTag(nItem, lotag, hitag);
+}
+
+// A_RandomItem, transcribed from scripts/p_misc.txt: rolled at the end of
+// nearly every monster death (the gib anim calls it), and with the maps
+// placing almost no health or ammo at all, these drops and the vases are the
+// campaign's whole supply line. r = Max(8): 0-2 drop -- an even coin between
+// ammo and health, doubled half the time -- and 3-7 drop nothing unless the
+// KILLING player is under a quarter health, when mercy gives a berry three
+// times in four. The killer's health, not the local player's: everyone in a
+// lockstep game must roll the same numbers.
+void KexDrop_RandomItem(int nSprite, int nKiller)
+{
+    if (!g_kexMode)
+        return;
+
+    int const nSector = sprite[nSprite].sectnum;
+    if (nSector < 0)
+        return;
+    int const x = sprite[nSprite].x, y = sprite[nSprite].y;
+    int const z = sector[nSector].floorz;
+
+    int const r = RandomSize(3);
+    if (r > 2)
+    {
+        if (nKiller >= 0 && sprite[nKiller].statnum == 100)
+        {
+            int const nPlayer = GetPlayerFromSprite(nKiller);
+            if (PlayerList[nPlayer].nHealth < kMaxHealth / 4 && RandomSize(2) != 0)
+                KexDrop_Spawn(nSector, x, y, z, 12, 0, 718);   // mercy berry
+        }
+        return;
+    }
+
+    int const big = RandomBit();
+    if (RandomBit())
+        KexDrop_Spawn(nSector, x, y, z, 6, big ? 20 : 10, 877);  // speed loader
+    else
+        KexDrop_Spawn(nSector, x, y, z, 12, 0, 718);             // berry twig
+}
+
 static void KexBreak_DropItem(int nSprite)
 {
     int const nSector = sprite[nSprite].sectnum;
@@ -410,29 +478,7 @@ static void KexBreak_DropItem(int nSprite)
             return;
     }
 
-    int const nItem = insertsprite(nSector, 0);
-    if (nItem < 0)
-        return;
-
-    sprite[nItem].x = x;
-    sprite[nItem].y = y;
-    sprite[nItem].z = z;
-    sprite[nItem].cstat = 0;
-    sprite[nItem].shade = -12;
-    sprite[nItem].pal = 0;
-    sprite[nItem].xrepeat = 64;
-    sprite[nItem].yrepeat = 64;
-    sprite[nItem].xoffset = 0;
-    sprite[nItem].yoffset = 0;
-    sprite[nItem].picnum = picnum;
-    sprite[nItem].ang = 0;
-    sprite[nItem].xvel = sprite[nItem].yvel = sprite[nItem].zvel = 0;
-    sprite[nItem].owner = -1;
-    sprite[nItem].extra = -1;
-
-    // The item machinery does the rest: statnum, repeats and, where the item
-    // has one, its animation.
-    ProcessSpriteTag(nItem, lotag, hitag);
+    KexDrop_Spawn(nSector, x, y, z, lotag, hitag, picnum);
 }
 
 // The death anim: a break sound, one physics chunk per shard, the random item
@@ -492,9 +538,22 @@ void FuncKexBreak(int a, int b, int nRun)
     {
         case 0x20000:   // per tick: nothing to do, the prop just stands there
             if (s_selftest && --s_selftest == 1)
+            {
                 for (int i = 0; i < s_props; i++)
                     if (s_prop[i].nSprite >= 0)
                     { s_prop[i].nHealth = 0; KexBreak_Shatter(i); }
+
+                // And the drop roll: kill everything, count what fell.
+                int before = 0, after = 0;
+                for (int i = 0; i < kMaxSprites; i++)
+                    before += (sprite[i].statnum == 906 || sprite[i].statnum == 912);
+                int const creatures = nCreaturesLeft;
+                KillCreatures();
+                for (int i = 0; i < kMaxSprites; i++)
+                    after += (sprite[i].statnum == 906 || sprite[i].statnum == 912);
+                OSD_Printf("Kex drops: %d creatures killed, %d items dropped\n",
+                           creatures - nCreaturesLeft, after - before);
+            }
             return;
         case 0x30000:
         case 0x90000:   // drawn as an ordinary sprite, so no sequence to plot
