@@ -11,6 +11,7 @@
 #include "player.h"
 #include "status.h"
 #include "sound.h"
+#include "lighting.h"
 #include "kexinv.h"
 
 KexInv KexInvList[kMaxPlayers];
@@ -28,6 +29,94 @@ static int s_selftest;
 static int s_wantScreen;
 
 void DestroyItemAnim(short nSprite);     // items.cpp
+void ProcessSpriteTag(short nSprite, short nLotag, short nHitag);   // init.cpp
+
+// KILENTRY's shrines. Each has a pad (ARTIFACT_TRIGGER) and a spawn spot
+// (ARTIFACT_SPAWN) on the same tag: the artifact appears on the spot when
+// the pad is stepped on, for a player who does not have it. The pickup the
+// converter planted is taken off the map at load and put back on the pad.
+struct KexShrine
+{
+    int16_t padSector, nArtifact;
+    int16_t sector, lotag, hitag, picnum;
+    int32_t x, y, z;
+    uint8_t held, done;
+};
+static KexShrine s_shrine[kKexArtiCount];
+static int s_shrines;
+
+void KexInv_AddShrinePad(int nSprite, int nArtifact)
+{
+    if (g_kexMode && s_shrines < kKexArtiCount && (unsigned)nArtifact < (unsigned)kKexArtiCount)
+    {
+        KexShrine &sh = s_shrine[s_shrines++];
+        Bmemset(&sh, 0, sizeof(sh));
+        sh.padSector = sprite[nSprite].sectnum;
+        sh.nArtifact = (int16_t)nArtifact;
+    }
+    mydeletesprite(nSprite);
+}
+
+static void KexInv_ShrineHold(int nSprite, int nArtifact)
+{
+    for (int i = 0; i < s_shrines; i++)
+    {
+        KexShrine &sh = s_shrine[i];
+        if (sh.nArtifact != nArtifact || sh.held)
+            continue;
+        sh.sector = sprite[nSprite].sectnum;
+        sh.lotag = sprite[nSprite].statnum - 900;
+        sh.hitag = sprite[nSprite].hitag;
+        sh.picnum = sprite[nSprite].picnum;
+        sh.x = sprite[nSprite].x; sh.y = sprite[nSprite].y; sh.z = sprite[nSprite].z;
+        sh.held = 1;
+        DestroyItemAnim(nSprite);
+        mydeletesprite(nSprite);
+        return;
+    }
+}
+
+static void KexInv_ShrineReveal(KexShrine &sh)
+{
+    int const nSprite = insertsprite(sh.sector, 0);
+    if (nSprite < 0)
+        return;
+    sprite[nSprite].x = sh.x; sprite[nSprite].y = sh.y; sprite[nSprite].z = sh.z;
+    sprite[nSprite].picnum = sh.picnum;
+    sprite[nSprite].cstat = 0;
+    sprite[nSprite].shade = -64;
+    sprite[nSprite].pal = 0;
+    sprite[nSprite].xrepeat = sprite[nSprite].yrepeat = 64;
+    sprite[nSprite].xoffset = sprite[nSprite].yoffset = 0;
+    sprite[nSprite].ang = 0;
+    sprite[nSprite].owner = -1;
+    sprite[nSprite].lotag = sprite[nSprite].hitag = 0;
+    sprite[nSprite].extra = -1;
+    ProcessSpriteTag((short)nSprite, sh.lotag, sh.hitag);
+    AddFlash(sh.sector, sh.x, sh.y, sh.z, 80);
+    PlayFX2(StaticSound[44] | 0x2000, (short)nSprite);   // tele_1: the remaster's appear sound
+    sh.done = 1;
+    OSD_Printf("Kex shrine: artifact %d revealed in sector %d\n", sh.nArtifact, sh.sector);
+}
+
+static void KexInv_ShrineTick(void)
+{
+    for (int i = 0; i < s_shrines; i++)
+    {
+        KexShrine &sh = s_shrine[i];
+        if (!sh.held || sh.done)
+            continue;
+        for (int nPlayer = 0; nPlayer < nTotalPlayers; nPlayer++)
+        {
+            int const nSprite = PlayerList[nPlayer].nSprite;
+            if (nSprite >= 0 && sprite[nSprite].sectnum == sh.padSector)
+            {
+                KexInv_ShrineReveal(sh);
+                break;
+            }
+        }
+    }
+}
 
 void KexInv_LevelStart(void)
 {
@@ -53,8 +142,13 @@ void KexInv_LevelStart(void)
                 mydeletesprite(i);
             }
             else
+            {
                 sprite[i].hitag = (st == 923) ? 0 : (int16_t)idx;
+                KexInv_ShrineHold(i, idx);
+            }
         }
+        if (s_shrines)
+            OSD_Printf("Kex shrines: %d pads on this level\n", s_shrines);
     }
     { char const *e = getenv("VB_KEXINV_TEST"); s_selftest = e ? Batoi(e) : 0; }
     s_wantScreen = 0;
@@ -64,8 +158,14 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag);   // 
 
 void KexInv_Tick(void)
 {
+    KexInv_ShrineTick();
     if (!s_selftest || --s_selftest != 1)
         return;
+    // The test stands on every pad first, so the shrines' artifacts are there
+    // to take.
+    for (int i = 0; i < s_shrines; i++)
+        if (s_shrine[i].held && !s_shrine[i].done)
+            KexInv_ShrineReveal(s_shrine[i]);
     int taken = 0;
     for (int i = 0; i < kMaxSprites; i++)
     {

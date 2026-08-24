@@ -1217,10 +1217,11 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             # KILENTRY's six shrines: artifact tag-1 appears here for a player
             # who arrives without it. The pickup is planted with a "only if
             # not owned" mark on its hitag; the engine removes it at load for
-            # a player who has the artifact. The ARTIFACT_TRIGGER pads paired
-            # with them (the remaster shows the artifact when the pad is
-            # stepped on) are not carried: the pickup just stands there.
+            # a player who has the artifact, and holds it back until the
+            # ARTIFACT_TRIGGER pad on the same tag is stepped on.
             s_['kexartispawn'] = etag
+        elif name == 'ARTIFACT_TRIGGER':
+            s_['kexartitrig'] = etag
         s_['lotag'], s_['hitag'] = lotag, hitag
 
 
@@ -1314,6 +1315,8 @@ def _flat_sprites(m, sects, walls, ranges, src):
             out.append((si, 66, s_['kexactortrig']))  # kill-count trigger
         if s_.get('kexscript') is not None:
             out.append((si, 67, s_['kexscript']))     # level script sector
+        if s_.get('kexartitrig') is not None and 1 <= s_['kexartitrig'] <= 6:
+            out.append((si, 68, s_['kexartitrig'] - 1))   # shrine pad, hitag = artifact
         arti = s_.get('kexartispawn')
         if arti is not None and 1 <= arti <= 6:
             idx = arti - 1

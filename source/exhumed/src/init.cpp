@@ -1111,6 +1111,11 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 KexTrigger_Add(nSprite, nChannel);
                 return;
             }
+            case 68:    // VibeBuild32: a KILENTRY shrine pad, hitag = the artifact
+            {
+                KexInv_AddShrinePad(nSprite, nHitag);
+                return;
+            }
             case 67:    // VibeBuild32: a SCRIPT sector, hitag = the script's tag
             {
                 KexScript_Add(nSprite, nHitag);

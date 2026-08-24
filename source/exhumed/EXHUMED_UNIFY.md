@@ -1009,9 +1009,10 @@ file where the user map's was and lets the game loop reload -- no overworld
 in between, as in the remaster. ARTIFACT_SPAWN is KILENTRY's six shrines,
 where an artifact appears for a player who arrived without it: the converter
 plants the pickup with a mark on its hitag and `KexInv_LevelStart()` removes
-it for a player who already owns that artifact. The ARTIFACT_TRIGGER pads
-beside them, which make the artifact appear when stepped on, are not
-carried; the pickup simply stands there.
+it for a player who already owns that artifact. The ARTIFACT_TRIGGER pad on
+the same tag is a lotag 68 sprite: the pickup is taken off the map at load
+and put back -- with a flash and the teleport sound -- when a player steps on
+the pad, which is the remaster's reveal.
 
 Two of those scripts exposed a channel bug. A Build channel is the low three
 digits of a tag (`runlist_AllocChannel(hitag % 1000)`), and Kex tags run past
@@ -1253,8 +1254,6 @@ re-derive it from the code.
   has no bird AI, and giving them their own look would mean a second
   wasp-layout SEQ skinned from `sprites/monsters/bird.png` plus a per-sprite
   sequence base in wasp.cpp. KEXSEQ_PLAN.md §2.2 has the frame accounting.
-- **ARTIFACT_TRIGGER pads** in KILENTRY, which make a shrine's artifact appear
-  when stepped on. The artifact simply stands on the shrine instead.
 - **KILENTRY's stacked artifact set**, six actors on one point off the map
   with a tag: the script-side hand-out behind the shrines, and a cheat if
   placed.
@@ -1264,8 +1263,8 @@ re-derive it from the code.
 - **Laser and boulder spawners fire fireballs.** Build can shoot a fireball
   and cannot shoot the remaster's bolt or roll its boulder; the traps are
   where they are and fire when they should, with the wrong projectile.
-- **The air gauge and the title logo art** (`gfx/airsupply_*`, `gfx/title*`)
-  are not used; the status bar's air slot and the menu's own title stand.
+- **The air gauge art** (`gfx/airsupply_*`) is not used; the status bar's
+  air slot stands.
 - **The Selkis melee frame**: the remaster's hit lands on a different frame
   of the swing than the demo SEQ's 0x80 flag; the tile-fill keeps the demo's
   timing.

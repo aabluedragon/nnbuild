@@ -51,6 +51,7 @@ extern KexInv KexInvList[];
 
 void KexInv_Reset(int nPlayer);          // new game
 void KexInv_LevelStart(void);            // per level: the map scroll is per level
+void KexInv_AddShrinePad(int nSprite, int nArtifact);   // KILENTRY's ARTIFACT_TRIGGER pads
 int  KexInv_Pickup(int nPlayer, int nItem, int nHitag);   // 1 = taken
 void KexInv_GiveArtifact(int nPlayer, int nArtifact);
 int  KexInv_HasArtifact(int nPlayer, int nArtifact);
