@@ -1092,6 +1092,12 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 BuildObject(nSprite, 1, nHitag);
                 return;
             }
+            case 69:    // VibeBuild32: the remaster's boulder spawner
+            {
+                int nTrap = BuildBoulderTrap(nSprite, nSpeed);
+                runlist_AddRunRec(sRunChannels[nChannel].a, nTrap, kRunTrap);
+                return;
+            }
             case 71:
             {
                 // VibeBuild32: in Kex mode the hitag is the channel only. The

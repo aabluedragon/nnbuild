@@ -1702,8 +1702,13 @@ KEX_TRAP_LOTAG_BEAM = 65
 # rewritten onto the remaster's bolt sprite when the demo data is at hand
 # (patch_demo_seqs), so the shot looks like one too; otherwise it is a spear.
 KEX_TRAP_LOTAG_ARROW = 77
+# The boulder spawner is a fireball trap that throws bullet 17, the boulder,
+# on BOULDER.SEQ (FIRETRAP.SEQ's layout on the remaster's boulder sprite,
+# patch_demo_seqs again). It flies where the remaster's rolls; the art, the
+# damage (35) and the trap's timing are the remaster's.
+KEX_TRAP_LOTAG_BOULDER = 69
 KEX_TRAP_ACTORS = {25: KEX_TRAP_LOTAG_FIREBALL, 126: KEX_TRAP_LOTAG_ARROW,
-                   128: KEX_TRAP_LOTAG_FIREBALL, 127: KEX_TRAP_LOTAG_BEAM}
+                   128: KEX_TRAP_LOTAG_BOULDER, 127: KEX_TRAP_LOTAG_BEAM}
 
 # Tiles beyond the stock creatures' that build_seq_tiles() composites: the
 # beam bolt as the arrow bullet's two views (7630 side-on, stretched into a
@@ -1711,6 +1716,7 @@ KEX_TRAP_ACTORS = {25: KEX_TRAP_LOTAG_FIREBALL, 126: KEX_TRAP_LOTAG_ARROW,
 KEX_SEQ_EXTRA_TILES = {
     7630: ('beam_side', 'projectiles/beam_loop', 0, 0),
     7631: ('beam_head', 'projectiles/beam_loop', 0, 0),
+    7632: ('boulder',   'projectiles/boulder_loop', 0, 0),   # the boulder bullet
 }
 KEX_SEQ_EXTRA_SCALE = {'beam_side': (5.0, 1.5), 'beam_head': (1.5, 1.5)}
 
@@ -1727,7 +1733,14 @@ def patch_demo_seqs(demo_dir, outdir, verbose=True):
     if not os.path.exists(grp):
         if verbose: print("  no %s: ARROW.SEQ and SET.SEQ left as shipped" % grp)
         return
-    d = kexseqtool.grp_extract(grp, ['ARROW.SEQ', 'SET.SEQ'])
+    d = kexseqtool.grp_extract(grp, ['ARROW.SEQ', 'SET.SEQ', 'FIRETRAP.SEQ'])
+    if 'FIRETRAP.SEQ' in d:
+        # BOULDER.SEQ: the trap fireball's eight views, three frames each, all
+        # of them the one round boulder sprite.
+        s = kexseqtool.read_seq(d['FIRETRAP.SEQ'])
+        s['ck_pict'] = [7632 for _p in s['ck_pict']]
+        with open(os.path.join(outdir, 'BOULDER.SEQ'), 'wb') as f:
+            f.write(kexseqtool.write_seq_bytes(s))
     if 'ARROW.SEQ' in d:
         s = kexseqtool.read_seq(d['ARROW.SEQ'])
         s['ck_pict'] = [{1287: 7630, 1289: 7631}.get(p, p) for p in s['ck_pict']]
@@ -1745,7 +1758,7 @@ def patch_demo_seqs(demo_dir, outdir, verbose=True):
                     moved += 1
         with open(os.path.join(outdir, 'SET.SEQ'), 'wb') as f:
             f.write(kexseqtool.write_seq_bytes(s))
-        if verbose: print("  demo SEQs: ARROW.SEQ on the beam bolt, SET.SEQ melee hit moved (%d flags)" % moved)
+        if verbose: print("  demo SEQs: ARROW.SEQ on the beam bolt, BOULDER.SEQ, SET.SEQ melee hit moved (%d flags)" % moved)
 KEX_BEAM_PROJECTILE = 'Proj_Beam'      # the bolt sprite the beam is drawn with
 
 def _face_angle(m, fi):

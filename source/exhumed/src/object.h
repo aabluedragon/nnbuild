@@ -68,6 +68,7 @@ void AddSectorBob(int nSector, int nHitag, int bx);
 int BuildObject(short nSprite, int nOjectType, int nHitag);
 int BuildArrow(int nSprite, int nVal);
 int BuildFireBall(int nSprite, int a, int b);
+int BuildBoulderTrap(int nSprite, int nSpeed);
 void BuildDrip(int nSprite);
 int BuildEnergyBlock(short nSector);
 int BuildElevC(int arg1, int nChannel, int nSector, int nWallSprite, int arg5, int arg6, int nCount, ...);

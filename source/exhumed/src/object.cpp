@@ -1167,7 +1167,8 @@ int BuildTrap(int nSprite, int edx, int ebx, int ecx)
 //	GrabTimeSlot(3);
 
     sTrap[nTrap].nSprite = nSprite;
-    sTrap[nTrap].nType = (var_14 == 0) + 14;
+    // 0 = arrow (bullet 15), 1 = fireball (14), 2 = the remaster's boulder (17).
+    sTrap[nTrap].nType = var_14 == 0 ? 15 : var_14 == 2 ? 17 : 14;
     sTrap[nTrap].field_0 = -1;
 
     nTrapInterval[nTrap] = 64 - (2 * var_10);
@@ -1334,6 +1335,13 @@ int BuildArrow(int nSprite, int nVal)
 int BuildFireBall(int nSprite, int a, int b)
 {
     return BuildTrap(nSprite, 1, a, b);
+}
+
+// VibeBuild32: the remaster's boulder spawner, a fireball trap that throws
+// the boulder bullet instead (no wall to light up: -1).
+int BuildBoulderTrap(int nSprite, int nSpeed)
+{
+    return BuildTrap(nSprite, 2, -1, nSpeed);
 }
 
 int BuildSpark(int nSprite, int nVal)

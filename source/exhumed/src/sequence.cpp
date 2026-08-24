@@ -45,7 +45,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <assert.h>
 
 #define kMaxSequences	4096
-#define kMaxSEQFiles	78
+#define kMaxSEQFiles	79
 #define kMaxSEQFrames	18000
 #define kMaxSEQChunks	21000
 
@@ -155,11 +155,20 @@ const char *SeqNames[kMaxSEQFiles] =
   "deadbrn",
   "grenbubb",
   "rochfire",
-  "rat"
+  "rat",
+  "boulder"       // VibeBuild32: written by the Kex converter; absent from the classic data
 };
 
 short SeqOffsets[kMaxSEQFiles];
 
+
+// Sequence files the classic data does not carry: nothing to load is not an
+// error for these, and nothing references their sub-sequences unless the
+// file is there (the Kex converter writes them into its data directory).
+static bool seq_IsOptional(const char *seqName)
+{
+    return !Bstrcasecmp(seqName, "boulder");
+}
 
 int seq_ReadSequence(const char *seqName)
 {
@@ -173,6 +182,8 @@ int seq_ReadSequence(const char *seqName)
     int hFile = kopen4loadfrommod(buffer, 0);
     if (hFile == -1)
     {
+        if (seq_IsOptional(seqName))
+            return 0;
         LOG_F(ERROR, "Unable to open '%s'!", buffer);
         kclose(hFile);
         return 0;
@@ -369,7 +380,7 @@ void seq_LoadSequences()
     {
         SeqOffsets[i] = sequences;
 
-        if (seq_ReadSequence(SeqNames[i]) == 0) {
+        if (seq_ReadSequence(SeqNames[i]) == 0 && !seq_IsOptional(SeqNames[i])) {
             LOG_F(ERROR, "Error loading '%s'", SeqNames[i]);
         }
     }

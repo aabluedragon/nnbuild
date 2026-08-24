@@ -96,7 +96,10 @@ bulletInfo BulletInfo[] = {
     { 10,  -1,  5000, -1, 57, 76, 4,  0, -1 },
     { 40,  -1,  1500, -1, 63, 38, 4, 10, 40 },
     { 20,  -1,  2000, -1, 60, 12, 0,  0, -1 },
-    { 5,   -1, 60000, -1, 31, 76, 0,  0, -1 }
+    { 5,   -1, 60000, -1, 31, 76, 0,  0, -1 },
+    // VibeBuild32: 17, the remaster's boulder (Proj_Boulder, damage 35) as the
+    // trap fireball's twin -- same speed, poof and radius -- on BOULDER.SEQ.
+    { 35,  -1,  1500, -1, kSeqBoulder, kSeqFirePoof, 4, 10, 40 }
 };
 
 

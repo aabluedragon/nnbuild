@@ -1115,9 +1115,14 @@ The first three are one Kex class, `kexSlaveFireballSpawner`: a spawner on a
 wall that fires into the room while its tag's channel is active. Build
 PowerSlave's fireball trap is the same machine -- sprite lotag 71,
 `BuildFireBall()`, `FuncTrap()` fires a bullet along the sprite's angle every
-64 ticks while its channel is on -- so the fireball and boulder spawners
-become that, the rolling boulder standing in as a fireball, which Build can
-shoot and the remaster's boulder it cannot. The laser spawner takes Build's
+64 ticks while its channel is on -- so the fireball spawner becomes that.
+The boulder spawner becomes the same trap throwing a new bullet type, 17:
+the trap fireball's twin in speed, poof and radius, with the remaster's
+damage (35) and its boulder sprite on BOULDER.SEQ, which is FIRETRAP.SEQ's
+eight views on the one round tile. BOULDER.SEQ is a name the classic data
+does not carry, so the sequence loader treats it as optional -- absent, it
+loads nothing and says nothing. The boulder flies where the remaster's
+rolls; that much is Build's projectile model. The laser spawner takes Build's
 other trap, the arrow (lotag 77, bullet 15): a fast straight shot, which is
 what a laser bolt is. Its ARROW.SEQ is rewritten onto the remaster's beam
 bolt -- the side view stretched into a streak the way the remaster's
@@ -1286,8 +1291,5 @@ re-derive it from the code.
 - **Per-level AngelScript that is presentation**: camera moves, Ramses'
   materialise animation timings, the KILARENA intro. The sector-triggered
   parts are all transcribed (see the events and scripts sections).
-- **Boulder spawners fire fireballs.** Build can shoot a fireball and cannot
-  roll a boulder; the 14 traps are where they are and fire when they should,
-  with the wrong projectile.
 - **The air gauge art** (`gfx/airsupply_*`) is not used; the status bar's
   air slot stands.

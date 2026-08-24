@@ -104,7 +104,8 @@ enum {
     kSeqDeadBrn, // 74
     kSeqGrenBubb,
     kSeqRochfire,
-    kSeqRat
+    kSeqRat,
+    kSeqBoulder     // VibeBuild32: the remaster boulder trap; BOULDER.SEQ, optional
 };
 
 struct actionSeq
