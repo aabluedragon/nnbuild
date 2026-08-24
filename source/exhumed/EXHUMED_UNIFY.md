@@ -692,6 +692,47 @@ surface through a single `AddFlashRec()`: take a flash slot, save the shade,
 push the pal past the palette so `UndoFlashes()` knows to restore it, subtract
 the falloff. That was seven copies of the same ten lines.
 
+### Creature art
+
+The engine animates every creature through STUFF.DAT's .SEQ files, and the
+shareware demo ships all 78 of them -- but 389 of the monster tiles those
+files reference are zero-size in the demo's ART, which made every wasp, crow,
+sentry, Set, queen and Selkis a converted level spawns invisible.
+
+The fix keeps the SEQ files exactly as shipped -- their sub-seq order, trigger
+flags and sound events are an engine-side contract -- and fills the missing
+tiles on their ORIGINAL numbers through exhumed.def. kexseqmap_gen.py derives
+the mapping from the demo's own SEQ data plus the sub-seq -> remaster-anim
+tables in KEXSEQ_PLAN.md: for every frame of every mapped sub-seq, each
+zero-size chunk tile takes the remaster frame playing at that moment, first
+occurrence winning (held poses share tiles, which is the stock economy too).
+Views 5-7 need no art at all: the stock data mirrors them from views 3-1 with
+chunk x-flips, sharing tile numbers -- the same convention the remaster's
+rotation blocks use, so Build direction k maps to kex rotation k throughout.
+The result is committed as kexseqtiles.py (292 tiles); build_seq_tiles() in
+kexmap.py composites them from the sprite sheets at conversion time.
+parse_anim_full() reads the anim scripts with their eight rotation blocks
+kept apart, where the decor path had flattened every view into one image.
+
+Two measurements made this simple. Chunk positions in a SEQ are TILE-CENTRE
+coordinates, so a replacement of similar proportions lands where the original
+art did without touching offsets. And the remaster's monster sheets are the
+ORIGINAL art resolution: the sentry's surviving attack tile (3226, 97x113)
+matches its kex composite 1.000:1, and the Selkis muzzle matches its sheet
+slice -- an actor's kex `scale` is a renderer multiplier over there, already
+encoded here in each creature's Build repeat values, so nothing is rescaled.
+
+Verified in game: the wasp flies and attacks in MARSH, Selkis advances in
+SELBUROW, the sentry leaps in COLONY_PSX -- all in the remaster's art, walking
+the stock state machines with the stock trigger frames. The four sound names
+those SEQs use that neither the demo nor an alias covered (REX-BITE, REX_GRGL,
+REX-ICU, GHOST109) now alias to the remaster's nearest recordings.
+
+The fuller road not taken -- compiling entirely new SEQ files from the
+remaster's anims -- is specified to the byte in KEXSEQ_PLAN.md with a
+round-trip-proven writer (kexseqtool.py), for the day the frame timings
+themselves should follow the remaster.
+
 ### Ramses
 
 The remaster's Ramses ships complete in the .kpf: the speeches as
