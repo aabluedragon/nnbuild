@@ -890,8 +890,10 @@ and the fuse in ticks (`KEX_MINE_SIGHT`, `KEX_MINE_FUSE` = 45, the
 remaster timing its loop in code). `KexBreak_MineTick()` arms it when a
 living player it can `cansee` is within sight, blinks it while it counts,
 drops the random item if its sector is under water, and blasts through the
-exploding pots' `KexBreak_Shatter`; being shot or blasted to zero starts
-the fuse instead of shattering. `VB_KEX_LOOKAT=0 VB_KEX_LOOKAT_TILE=<its
+exploding pots' `KexBreak_Shatter` -- under water without the fire, as a
+burst of the game's own bubbles, the remaster's
+`magic8ball_explode_water`; being shot or blasted to zero starts the fuse
+instead of shattering. `VB_KEX_LOOKAT=0 VB_KEX_LOOKAT_TILE=<its
 tile>` (8761 in the current tables) with `VB_KEXBREAK_TEST=100000` logs
 the arming and the blast.
 
@@ -1515,7 +1517,9 @@ the rest are three remaster rules the scripts do not spell out:
   now refused by `KexChan()` rather than falling through to `tag % 1000` --
   channel 0, which every tag-0 effect shares.
 - **TOMB's 1020**, the message door beside Ramses' crypt and its script
-  sector, opens when his speech ends (`KexScript_RamsesEnd`).
+  sector, opens when his speech ends (`KexScript_RamsesEnd`;
+  `VB_KEXRAMSES_TEST=1` calls it at tick 100 without the speech, and with
+  `VB_KEX_LOOKAT_TAG=1020` the door is seen to rise and hold).
 
 Testing these turned up that none of the tag-past-1000 rules had ever
 reached their channel on six levels: the kexchan.txt row parser read the

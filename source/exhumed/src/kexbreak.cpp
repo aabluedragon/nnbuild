@@ -583,11 +583,23 @@ static void KexBreak_Shatter(int nProp)
         // the boom), then the radial. The remaster's A_RadialBlast radius is
         // in its own units; runlist compares (|dx|+|dy|)>>8, so radius 512
         // becomes 512 * WORLD(6) / 256 = 12 against the cauldron's 20.
-        AddFlash(sprite[nSprite].sectnum, sprite[nSprite].x, sprite[nSprite].y,
-                 sprite[nSprite].z, 128);
-        BuildAnim(-1, 36, 0, sprite[nSprite].x, sprite[nSprite].y,
-                  sector[sprite[nSprite].sectnum].floorz,
-                  sprite[nSprite].sectnum, 240, 4);
+        if (SectFlag[sprite[nSprite].sectnum] & kSectUnderwater)
+        {
+            // magic8ball_explode_water: no fire under water, a burst of the
+            // game's own bubbles (bubbles.cpp) where the blast is.
+            int BuildBubble(int x, int y, int z, short nSector);
+            for (int i = 0; i < 12; i++)
+                BuildBubble(sprite[nSprite].x + (RandomSize(7) - 64) * 8, sprite[nSprite].y + (RandomSize(7) - 64) * 8,
+                            sprite[nSprite].z - RandomSize(9) * 8, sprite[nSprite].sectnum);
+        }
+        else
+        {
+            AddFlash(sprite[nSprite].sectnum, sprite[nSprite].x, sprite[nSprite].y,
+                     sprite[nSprite].z, 128);
+            BuildAnim(-1, 36, 0, sprite[nSprite].x, sprite[nSprite].y,
+                      sector[sprite[nSprite].sectnum].floorz,
+                      sprite[nSprite].sectnum, 240, 4);
+        }
         runlist_RadialDamageEnemy(nSprite, t.blastdamage,
                                   (int16_t)(t.blastradius * 6 / 256));
     }
@@ -1566,6 +1578,13 @@ static void KexScript_BossLoad(void)
 
 void KexScript_BossTick(void)
 {
+    // VB_KEXRAMSES_TEST=1: at tick 100, act as if Ramses had just finished
+    // speaking (TOMB's crypt door), without the speech.
+    static int s_ramsesTest = -1;
+    if (s_ramsesTest < 0)
+        s_ramsesTest = getenv("VB_KEXRAMSES_TEST") ? 100 : 0;
+    if (s_ramsesTest > 0 && --s_ramsesTest == 0)
+        KexScript_RamsesEnd();
     if (s_bossTest <= 0 || --s_bossTest != 1 || !s_boss)
         return;
     if (getenv("VB_KEXBOSS_TEST")[0] == '2')
