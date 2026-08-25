@@ -1586,7 +1586,9 @@ heights every ten ticks; the tags are read back from the map file, since
   in Kex mode the block keeps the faces, takes the authored floor as where
   it drops to, blows on one blast, fires its tag and blows every sibling
   on it (`FuncEnergyBlock` on the channel message), and does none of the
-  towers bookkeeping. `VB_KEXEXPLODE_TEST=1` blows the first at tick 100;
+  towers bookkeeping, and settles whatever stood on the block onto the
+  dropped floor (SETARENA hides team doll 16 inside one).
+  `VB_KEXEXPLODE_TEST=1` blows the first at tick 100;
   with `VB_KEX_LOOKAT_TAG=668` SETARENA's sector 22 is seen to drop from
   its ceiling to its authored floor, all eleven going together.
 - **Every lift and every drop pad was untagged.** The same audit, run over

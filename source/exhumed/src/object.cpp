@@ -1719,8 +1719,14 @@ void ExplodeEnergyBlock(int nSprite)
         // with it (FuncEnergyBlock) and whatever else listens opens -- and
         // none of the finale's towers business.
         nEnergyTowers++;
+        // Whatever stood on the block -- SETARENA hides a team doll in one
+        // -- comes down with the floor; the block's own sprite stays.
+        int nSettled = 0;
+        for (int i = headspritesect[nSector]; i != -1; i = nextspritesect[i])
+            if (i != nSprite && sprite[i].z < sector[nSector].floorz)
+            { sprite[i].z = sector[nSector].floorz; nSettled++; }
         runlist_ChangeChannel(sprite[nSprite].hitag, 1);
-        OSD_Printf("Kex bomb wall: sector %d blown, channel %d fired\n", nSector, sprite[nSprite].hitag);
+        OSD_Printf("Kex bomb wall: sector %d blown, channel %d fired, %d sprites settled\n", nSector, sprite[nSprite].hitag, nSettled);
         return;
     }
 
