@@ -619,7 +619,9 @@ geometry:
   / 16384 now, the save version is 10000 for the bigger per-sector tables
   it writes, and a level past the version-7 loader's limits is written
   with map version 8 (same layout on disk; `engineLoadBoard` keys the
-  limits on the version). No level is at the budget. A sloped sector is cut along ITS contour, not the
+  limits on the version). No level is at the budget. `VB_KEXSAVE_TEST=1`
+  saves at tick 100 and loads the save back at 160, comparing the player's
+  sector and health -- MAGMA's 1060 sectors round-trip. A sloped sector is cut along ITS contour, not the
   light's (a half with no level-line wall could not be tilted at all), its
   pieces pinned to the seam, and the cut is kept only if both halves still
   tilt both surfaces within `KEX_SLOPE_TOLERANCE`; a sector on either end

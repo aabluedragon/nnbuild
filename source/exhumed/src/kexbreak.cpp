@@ -1023,10 +1023,39 @@ static void Kex_LookAtDebug(void)
     }
 }
 
+// VB_KEXSAVE_TEST=1: save at tick 100 and load the save back at 160, then
+// compare the player's place and health -- the per-sector tables the save
+// carries are kMaxSectors wide, and the levels past 1024 sectors are where
+// that has to hold.
+static void Kex_SaveTest(void)
+{
+    static int s_ticks = -1, sx, sy, sect, hp;
+    if (s_ticks < 0)
+        s_ticks = getenv("VB_KEXSAVE_TEST") ? 0 : 1000000;
+    if (s_ticks >= 1000000)
+        return;
+    int const nSprite = PlayerList[nLocalPlayer].nSprite;
+    if (++s_ticks == 100)
+    {
+        sx = sprite[nSprite].x; sy = sprite[nSprite].y; sect = sprite[nSprite].sectnum; hp = PlayerList[nLocalPlayer].nHealth;
+        void testsave(); testsave();
+        OSD_Printf("Kex save test: saved at (%d,%d) sector %d health %d, %d sectors\n", sx, sy, sect, hp, numsectors);
+    }
+    else if (s_ticks == 160)
+    {
+        void testload(); testload();
+        int const n2 = PlayerList[nLocalPlayer].nSprite;
+        OSD_Printf("Kex save test: loaded at (%d,%d) sector %d health %d, %d sectors -> %s\n",
+                   sprite[n2].x, sprite[n2].y, sprite[n2].sectnum, PlayerList[nLocalPlayer].nHealth, numsectors,
+                   (sprite[n2].sectnum == sect && PlayerList[nLocalPlayer].nHealth == hp) ? "OK" : "MISMATCH");
+    }
+}
+
 void KexBeam_Tick(void)
 {
     Kex_LookAtDebug();
     KexScript_BossTick();
+    Kex_SaveTest();
     // VB_KEXBEAM_DEBUG=<n>: a moment in, stand the local player beside beam
     // n, looking along it, for a visual check without a hand on the keys.
     static int s_dbgTicks = -1, s_dbgBeam = -1;
