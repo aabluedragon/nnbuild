@@ -1526,10 +1526,41 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             lotag, hitag = 9, chan
             if name == 'FLOOR_LOWER_ACTIVE':          # down while the tag is on: no return
                 s_['kexhold'] = True
-        elif name == 'FLOOR_RAISE_WAIT_LOWER' and floor_above:
+        elif name == 'FLOOR_RAISE_WAIT_LOWER' and floor_below:
+            # Kex authors the lift at the TOP, level with the ledge it serves,
+            # and lowers it at spawn; Build's 12 starts low and rises to the
+            # higher neighbour. So the floor drops to the lowest neighbour's
+            # here and the authored height is the ledge it rises back to.
+            # All 18 in the retail maps were untagged before this, the old
+            # guard wanting a higher neighbour that never exists.
+            s_['floorz'] = max(sects[n]['floorz'] for n in nbs)
+            s_['floorheinum'] = 0
+            s_['floorstat'] &= ~2
             lotag, hitag = 12, chan
-        elif name == 'DROP_PAD' and floor_above:
-            lotag, hitag = 6, chan
+        elif name == 'DROP_PAD':
+            # A pad that sinks under the player -- into the lake it stands
+            # in. Kex authors it at the BOTTOM, level with its neighbours,
+            # and the event's param names a reference sector whose floor is
+            # the height it stands raised to at spawn; Build's 6 does the
+            # same dance (raise at load, drop on step) but looks for a
+            # higher NEIGHBOUR for the top, which these never have (all 28
+            # were untagged). The top goes in a lotag 81 sprite at that z
+            # and the engine builds the pad from it (runlist.cpp case 6).
+            top = None
+            if 0 <= eparam < len(sects) and sects[eparam] and sects[eparam]['floorz'] < s_['floorz']:
+                top = sects[eparam]['floorz']
+            elif floor_above:
+                top = min(sects[n]['floorz'] for n in nbs)
+            if top is not None:
+                s_['kexpadtop'] = top
+                # The raised pad must not poke through its own ceiling, which
+                # Kex authors just over the bottom position: lift the ceiling
+                # to the neighbours' (the lake's) when the top would pass it.
+                if top <= s_['ceilingz'] + 4096:
+                    s_['ceilingz'] = min([top - 8192] + [sects[n]['ceilingz'] for n in nbs])
+                    s_['ceilingheinum'] = 0
+                    s_['ceilingstat'] &= ~2
+                lotag, hitag = 6, chan
         elif name == 'EXPLODE':
             # A bomb wall. Build's 35 is a sector whose floor stands raised
             # -- the block's health is that height -- and drops to the
@@ -1676,6 +1707,8 @@ def _flat_sprites(m, sects, walls, ranges, src):
             out.append((si, 73, 0))                   # the mover holds where its tag put it
         if s_.get('kexbomb') is not None:
             out.append((si, 74, 0, s_['kexbomb']))    # the bomb wall's floor once blown
+        if s_.get('kexpadtop') is not None:
+            out.append((si, 81, 0, s_['kexpadtop']))  # the drop pad's raised height
         if s_.get('kexactortrig') is not None:
             out.append((si, 66, s_['kexactortrig']))  # kill-count trigger
         if s_.get('kexscript') is not None:

@@ -1349,13 +1349,19 @@ static uint8_t s_hold[kMaxSectors];
 // floor, lands on a sibling wall or nowhere when they stand in a cluster.
 static int32_t s_bombFloor[kMaxSectors];
 static uint8_t s_bombKnown[kMaxSectors];
+// ... and the drop pads' raised height: Kex authors the pad at the bottom
+// and names, in the event's param, a reference sector whose floor is where
+// it stands until stepped on; a lotag 81 sprite carries that z.
+static int32_t s_padTop[kMaxSectors];
+static uint8_t s_padKnown[kMaxSectors];
 void KexHold_Reset(void)
 {
     Bmemset(s_hold, 0, sizeof(s_hold));
     Bmemset(s_bombKnown, 0, sizeof(s_bombKnown));
+    Bmemset(s_padKnown, 0, sizeof(s_padKnown));
     if (!g_kexMode)
         return;
-    int n = 0, nb = 0;
+    int n = 0, nb = 0, np = 0;
     for (int i = 0; i < kMaxSprites; i++)
     {
         if (sprite[i].statnum >= MAXSTATUS || (unsigned)sprite[i].sectnum >= (unsigned)kMaxSectors)
@@ -1364,9 +1370,18 @@ void KexHold_Reset(void)
         { s_hold[sprite[i].sectnum] = 1; n++; }
         else if (sprite[i].lotag == 74)
         { s_bombFloor[sprite[i].sectnum] = sprite[i].z; s_bombKnown[sprite[i].sectnum] = 1; nb++; }
+        else if (sprite[i].lotag == 81)
+        { s_padTop[sprite[i].sectnum] = sprite[i].z; s_padKnown[sprite[i].sectnum] = 1; np++; }
     }
-    if (n || nb)
-        OSD_Printf("Kex hold: %d movers hold where their tag puts them, %d bomb walls\n", n, nb);
+    if (n || nb || np)
+        OSD_Printf("Kex hold: %d movers hold where their tag puts them, %d bomb walls, %d drop pads\n", n, nb, np);
+}
+int KexHold_PadTop(int nSector, int *pZ)
+{
+    if (!g_kexMode || (unsigned)nSector >= (unsigned)kMaxSectors || !s_padKnown[nSector])
+        return 0;
+    *pZ = s_padTop[nSector];
+    return 1;
 }
 int KexHold_BombFloor(int nSector, int *pZ)
 {

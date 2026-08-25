@@ -616,6 +616,18 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
         case 6: // Touchplate floor lower, single
         {
+            int nTop;
+            if (KexHold_PadTop(nSector, &nTop))
+            {
+                // VibeBuild32: the remaster's drop pad, its raised height from
+                // the converter's marker rather than a higher neighbour.
+                int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 400, 400, 2, nTop, sector[nSector].floorz);
+                runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
+                int nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
+                runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwStepOn);
+                sector[nSector].floorz = nTop;
+                return;
+            }
             short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, -1);
             assert(nextSector > -1);
 
@@ -740,6 +752,13 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwPause);
+            if (g_kexMode && nHitag % 1000 == 0)
+            {
+                // VibeBuild32: the remaster's untagged FLOOR_RAISE_WAIT_LOWER is
+                // ridden -- step on it and it rises, waits, comes back down.
+                int nStep = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
+                runlist_AddRunRec(sRunChannels[nChannel].a, nStep, kRunSwStepOn);
+            }
             return;
         }
 

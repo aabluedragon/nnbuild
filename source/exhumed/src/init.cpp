@@ -1116,6 +1116,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             }
             case 73:    // VibeBuild32: this sector's mover holds where its tag put it
             case 74:    // VibeBuild32: a bomb wall's floor once blown (read at InitSectFlag)
+            case 81:    // VibeBuild32: a drop pad's raised height (read at InitSectFlag)
             {
                 KexHold_Add(nSprite);
                 return;

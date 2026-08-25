@@ -1589,6 +1589,23 @@ heights every ten ticks; the tags are read back from the map file, since
   towers bookkeeping. `VB_KEXEXPLODE_TEST=1` blows the first at tick 100;
   with `VB_KEX_LOOKAT_TAG=668` SETARENA's sector 22 is seen to drop from
   its ceiling to its authored floor, all eleven going together.
+- **Every lift and every drop pad was untagged.** The same audit, run over
+  the events whose Build mapping is guarded on a neighbour's height, found
+  all 18 `FLOOR_RAISE_WAIT_LOWER` lifts and all 28 `DROP_PAD`s emitted
+  with no effect at all. Kex authors the lift at the TOP, level with the
+  ledge it serves, and lowers it at spawn; Build's 12 starts low and rises
+  to a higher neighbour, which such a lift never has. The converter lowers
+  it to the lowest neighbour's floor now (the ledge is the higher neighbour
+  it rises back to), and an untagged one gets a step-on plate of its own in
+  Kex mode -- ridden, it rises, waits its 150 ticks and comes back down.
+  The pad Kex authors at the BOTTOM, level with the lake it sits in, and
+  the event's param names a reference sector whose floor is the height it
+  stands raised to until stepped on (CAVERN_PSX's 196 names 197); Build's 6
+  does that dance but wants a higher NEIGHBOUR for the top. A lotag 81
+  sprite carries the top's z, `runlist_ProcessSectorTag` builds the pad
+  from it, and the converter lifts the pad's ceiling to the lake's when the
+  top would pass it. With `VB_KEX_LOOKAT_TAG=17` on CAVERN_PSX the pad is
+  seen standing at its top from load.
 
 ### The pause menu
 

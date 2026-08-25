@@ -57,6 +57,7 @@ void KexHold_Reset(void);                // movers that hold where their tag put
 void KexHold_Add(int nSprite);
 int  KexHold_Sector(int nSector);
 int  KexHold_BombFloor(int nSector, int *pZ);   // the EXPLODE sector's authored floor (lotag 74)
+int  KexHold_PadTop(int nSector, int *pZ);      // the DROP_PAD's raised height (lotag 81)
 void KexScript_BossTick(void);          // the VB_KEXBOSS_TEST hook
 void KexScript_ArtifactTaken(int nArtifact);   // fires tag 1000 + index
 void KexScript_RamsesEnd(void);         // TOMB's crypt door
