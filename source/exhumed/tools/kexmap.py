@@ -1498,7 +1498,13 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             lotag = 1
             key = {'DOOR_KEY1': 1, 'DOOR_KEY2': 2,
                    'DOOR_KEY3': 3, 'DOOR_KEY4': 4}.get(name, 0)
-            hitag = key * 1000 + chan
+            # The thousands are a BITMASK of keys, not a number: the DOS maps
+            # carry 1, 4, 6, 7, 8 and 9 there (power 1, time 2, war 4, earth
+            # 8, and doors wanting several), and runlist.cpp tests
+            # (keys & (thousands << 12)) == mask. "3 * 1000" asked the War
+            # door for the Power and Time keys and "4 * 1000" the Earth door
+            # for the War key, on every level with those doors.
+            hitag = ((1 << (key - 1)) if key else 0) * 1000 + chan
         elif name in ('DOOR_TRIGGER_ONLY', 'DOOR_OPEN_ONLY_MESSAGE') and ceil_above:
             lotag, hitag = 24, chan
             # OPEN_ONLY: opened once by its tag (a script, a boss, an

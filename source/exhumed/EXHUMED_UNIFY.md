@@ -1610,6 +1610,16 @@ heights every ten ticks; the tags are read back from the map file, since
   seen standing at its top from load, and with `VB_KEX_LOOKAT_STAND=1` --
   the player put on the tagged sector instead of beside it -- sinking
   under the player's feet.
+- **The War and Earth key doors asked for the wrong keys.** A key door's
+  hitag thousands are a BITMASK of keys, not a number: the DOS maps carry
+  1, 4, 6, 7, 8 and 9 there (power 1, time 2, war 4, earth 8, and doors
+  wanting several), `PlayerPickupKey` sets `0x1000 << key` and
+  `runlist_ProcessSectorTag` tests `(keys & (thousands << 12)) ==
+  mask`. The converter wrote `key * 1000`, so every `DOOR_KEY3` wanted the
+  Power and Time keys and every `DOOR_KEY4` the War key -- on eighteen
+  levels. It writes `1 << (key - 1)` now. Every key door's key is in its
+  own level (a census of DOOR_KEY1..4 against Key_Power/Time/War/Earth
+  actors), so with the mask right nothing else stands in the way.
 
 ### The pause menu
 
