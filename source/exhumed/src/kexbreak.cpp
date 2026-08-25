@@ -1096,6 +1096,44 @@ static void Kex_LookAtDebug(void)
         }
         s_tag = -1;
     }
+    // VB_KEX_LOOKAT_PRESS=1: 40 ticks after the look-at, press the first
+    // wall switch (file lotag 7) on the traced tag's channel, the way the
+    // player's use key does, so the door it drives is seen to answer.
+    static int s_pressTicks = -1, s_pressWall = -1;
+    if (s_tagSector >= 0 && s_pressTicks < 0 && getenv("VB_KEX_LOOKAT_PRESS"))
+    {
+        s_pressTicks = 40;
+        buildvfs_kfd hMap = kopen4loadfrommod(gUserMapFilename, 0);
+        if (hMap != buildvfs_kfd_invalid)
+        {
+            uint8_t hdr[22];
+            if (kread(hMap, hdr, 22) == 22)
+            {
+                int const ns = B_LITTLE16(*(uint16_t *)&hdr[20]);
+                klseek(hMap, 40 * ns, SEEK_CUR);
+                uint8_t cnt[2];
+                if (kread(hMap, cnt, 2) == 2)
+                {
+                    int const nw = B_LITTLE16(*(uint16_t *)cnt);
+                    int const chan = KexChan(Batoi(getenv("VB_KEX_LOOKAT_TAG")));
+                    for (int w = 0; w < nw && w < numwalls; w++)
+                    {
+                        uint8_t rec[32];
+                        if (kread(hMap, rec, 32) != 32) break;
+                        if ((int16_t)B_LITTLE16(*(uint16_t *)&rec[26]) == 7 && (int16_t)B_LITTLE16(*(uint16_t *)&rec[28]) % 1000 == chan)
+                        { s_pressWall = w; break; }
+                    }
+                }
+            }
+            kclose(hMap);
+        }
+        OSD_Printf("Kex look-at: will press wall %d\n", s_pressWall);
+    }
+    if (s_pressTicks > 0 && --s_pressTicks == 0 && s_pressWall >= 0)
+    {
+        runlist_SignalRun(wall[s_pressWall].lotag - 1, nLocalPlayer | 0x40000);
+        OSD_Printf("Kex look-at: pressed wall %d\n", s_pressWall);
+    }
     // ... and report the sector's heights every two seconds for a while, so
     // a door that opens is seen to open even off camera.
     if (s_tagSector >= 0 && ++s_tagTicks <= 90 + 10 * 40 && (s_tagTicks - 90) % 10 == 0)

@@ -1657,6 +1657,10 @@ heights every ten ticks; the tags are read back from the map file, since
   portal wall of the sector) and kept a sector's several events (six
   sectors carry two or more: THOTH's plate that is also a switch, a key
   door doubled with a plain one) instead of the last one only.
+  `VB_KEX_LOOKAT_PRESS=1` with `VB_KEX_LOOKAT_TAG=<tag>` presses the first
+  wall switch on that tag's channel the way the use key does, 40 ticks
+  after the look-at; PEAK's switch on 89 and THOTH's on 25 are seen to
+  open their doors.
 - **Most of SUNKEN was dry.** Water, lava and slime come from the FACE
   flags (a floor face's 0x40 is a water link, 0x20 lava, 0x80 slime), and
   only a sector with an air face above it got the engine's water-side
