@@ -823,9 +823,16 @@ def _split_light(m, edge_cache, src, pinned, verbose=False):
         for f in (cf, ff):
             if f.tileStart < 0 and f.link >= 0:
                 tror.add(ks); tror.add(f.link)
+    # A sector that moves, opens, fires or is stood on stays whole: a door
+    # cut in two on tag 0 became two private doors, one of which stayed shut
+    # across the doorway when the other was used (35 plain doors and 16 key
+    # doors were), and a lift's pieces moved one at a time. Only the walk-in
+    # trigger regions may be cut -- every piece is a plate on the same
+    # channel, which is harmless.
+    keep_whole = set(e[1] for e in getattr(m, 'events', ()) if e[0] not in (50,))
     cands = []
     for si in range(len(src)):
-        if src[si] in tror:
+        if src[si] in tror or src[si] in keep_whole:
             continue
         b = best_cut(si)
         if b is not None:

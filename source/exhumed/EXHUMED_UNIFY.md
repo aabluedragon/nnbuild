@@ -1632,6 +1632,14 @@ heights every ten ticks; the tags are read back from the map file, since
   door 185. The tag-0 lifts (KILENTRY's and TOMBEND's `FLOOR_LOWER_WAIT_RAISE`,
   the `FLOOR_RAISE_WAIT_LOWER`s already covered) get a step-on plate of
   their own in Kex mode, so they are ridden.
+- **Doors cut in two by the light bands opened in halves.** The light
+  gradient cuts (see Lighting) split whatever sector had a strong gradient,
+  movers included: 35 plain doors and 16 key doors on tag 0 became two
+  private doors each, one of which stayed shut across the doorway when the
+  other was used, and a tag-0 lift's pieces moved one at a time.
+  `_split_light` keeps every event sector whole now except the walk-in
+  trigger regions, whose pieces are plates on the same channel. No mover is
+  cut by the slope splitter either.
 
 ### The pause menu
 
