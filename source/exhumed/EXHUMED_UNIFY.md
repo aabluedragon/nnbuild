@@ -597,6 +597,54 @@ Measured against a capture of the remaster from the same spot in the same level,
 the solid (non-sky) pixels moved from p05/p25/p50 = 18/34/54 to 24/52/72,
 against the remaster's 26/48/92.
 
+**Gradients.** A face is not one shade but a field of them, one per tile
+vertex, and measured over the 25 levels 46% of floors and ceilings and 40%
+of walls span six or more Build shade steps across their own extent (the
+90th percentile is 29 steps across a floor and 37 up a wall). Build has one
+shade per wall and one per floor or ceiling, so the gradient is carried by
+geometry:
+
+- `_light_fit()` fits a least-squares plane to each lit face's tile-vertex
+  luminance -- in (x, y) for a flat, (along-wall, z) for a wall -- and
+  `_shade_at()` reads it at a point, clamped to the range the face's own
+  vertices measured so nothing is extrapolated past them.
+- `_split_light()` cuts a floor or ceiling whose field spans
+  `KEX_LIGHT_CUT_STEPS` (10) or more along a contour of its light plane,
+  with the slope splitter's own `cut()`, each half then shaded at its
+  centre. The widest spans go first until the level reaches
+  `KEX_LIGHT_SECTOR_BUDGET` (1000) sectors -- the game's own tables are
+  `kMaxSectors 1024` / `kMaxWalls 8192`, and every cut costs a sector plus
+  the T-junction walls it leaves on the neighbours. MAGMA is the one level
+  that hits the budget. A sloped sector is cut along ITS contour, not the
+  light's (a half with no level-line wall could not be tilted at all), its
+  pieces pinned to the seam, and the cut is kept only if both halves still
+  tilt both surfaces within `KEX_SLOPE_TOLERANCE`; a sector on either end
+  of a vertical link stays whole, because build_tror() pairs seam rings
+  edge for edge.
+- `_split_walls_light()` subdivides a lit wall edge whose field changes
+  `KEX_LIGHT_WALL_STEPS` (8) or more along its length into up to
+  `KEX_LIGHT_WALL_PIECES` (3) pieces, and every wall -- split or not --
+  takes its shade at its own midpoint rather than the face average.
+
+KARNAK goes from 494 sectors and 2311 walls to 669 and 3793; TOMB from 285
+/ 1361 to 451 / 2515. Two things this turned up in the older passes: a
+contour cut's crossing point can land a hair (0.0004 units, KARNAK sector
+163) from a neighbour's corner, and the T-junction pass then split the seam
+into a sliver that rounds to a ZERO-LENGTH wall -- which, as a sloped
+sector's first wall, makes the engine (`i == 0` in getflorzofslope) draw
+the sector flat; `_split_tjunctions()` now ignores hits within one Build
+unit of an edge's ends. And a sloped sky ceiling was held at the highest
+point over the sector's RING, so each piece of a cut sector got its own
+sky height; it is held over the face's quad now. `kexverify.py` measures
+a converted level against the Kex planes at sample points (KARNAK's 90th
+percentile floor/ceiling error went from 672 to 38 z units with the sliver
+fix) and checks that every portal is paired.
+
+**Not carried: a wall's vertical gradient.** 40% of walls are lit
+differently top and bottom by six steps or more, and Build has no way to
+say so short of stacking sectors (TROR) at every band. The wall's shade is
+the field at mid-height.
+
 ### Breakable props
 
 The remaster's vases and barrels are shootable actors, and none of that
@@ -1370,3 +1418,5 @@ re-derive it from the code.
   parts are all transcribed (see the events and scripts sections).
 - **The centre jewel's yaw spark** and the widescreen `wings.png` (see the
   status bar section); the rest of the HUD is in.
+- **Vertical light gradients on walls**, and floor gradients beyond the
+  sector budget in MAGMA (see Lighting).

@@ -742,7 +742,182 @@ def _split_slopes(m, edge_cache, verbose=False):
         work.append((new_index, depth + 1))
     if verbose and ncut:
         print("  slopes: %d contour cuts so Build can tilt what Kex sloped" % ncut)
+    _split_slopes.cut = cut
+    _split_slopes.cost = cost
     return src, pinned
+
+
+# A floor or ceiling whose lighting spans this many Build shade steps across
+# the sector is cut in two along a contour of its light plane, each half at
+# its own shade -- the widest spans first, until the level has this many
+# sectors. The budget is the game's: PowerSlave's own map loader and its
+# per-sector tables are sized kMaxSectors 1024 / kMaxWalls 8192, and every
+# cut costs a sector plus the T-junction walls it leaves on the neighbours.
+KEX_LIGHT_CUT_STEPS = 10
+KEX_LIGHT_SECTOR_BUDGET = 1000
+# A wall whose lighting changes this much along its length is subdivided so
+# each piece can carry its own shade, into at most this many pieces.
+KEX_LIGHT_WALL_STEPS = 8
+KEX_LIGHT_WALL_PIECES = 3
+
+
+def _split_light(m, edge_cache, src, pinned, verbose=False):
+    """Cut sectors along contours of their baked light so Build's one shade
+    per floor and ceiling can follow the remaster's gradients.
+
+    The cut is _split_slopes()'s, driven by the light plane of the more
+    graded of the two surfaces instead of the height plane. A light cut
+    leaves its pieces UNPINNED: a sloped piece then re-picks its first wall
+    with _best_first_wall(), and the slope's own contour seam is still a
+    wall of each half, so the tilt stays exact. Returns {piece: (ceiling
+    shade, floor shade)} evaluated at each piece's centre; the main loop uses
+    the face average where a piece is absent."""
+    shades = {}
+    ncut = 0
+
+    def field(f):
+        fit = _light_fit(m, f)
+        if fit is None or fit[3]:
+            return None
+        return fit
+
+    def span(edges, fit):
+        a, b, c, lmin, lmax = fit[0], fit[1], fit[2], fit[6], fit[7]
+        ls = [max(lmin, min(lmax, a + b*k[0] + c*k[1])) for k, _ in edges]
+        return abs(_shade_of_lum(max(ls)) - _shade_of_lum(min(ls)))
+
+    def centre_shade(edges, f):
+        n = len(edges)
+        X = sum(k[0] for k, _ in edges) / n; Y = sum(k[1] for k, _ in edges) / n
+        return _shade_at(m, f, X, Y)
+
+    def surfaces(si):
+        sec = m.sectors[src[si]]
+        cf = m.faces[min(sec.wallEnd+1, m.nface-1)]
+        ff = m.faces[min(sec.wallEnd+2, m.nface-1)]
+        return cf, ff
+
+    def best_cut(si):
+        edges = edge_cache.get(si) or []
+        if len(edges) < 3:
+            return None
+        cf, ff = surfaces(si)
+        best = None
+        for f in ((ff,) if cf.tileStart < 0 else (ff, cf)):
+            fit = field(f)
+            if fit is None:
+                continue
+            sp = span(edges, fit)
+            if sp >= KEX_LIGHT_CUT_STEPS and (best is None or sp > best[0]):
+                best = (sp, fit)
+        return best
+
+    # A sector on either end of a vertical link stays whole: build_tror()
+    # pairs the two rings of a seam edge for edge, and a piece has no
+    # partner on the other side.
+    tror = set()
+    for ks, sec in enumerate(m.sectors):
+        cf = m.faces[min(sec.wallEnd+1, m.nface-1)]
+        ff = m.faces[min(sec.wallEnd+2, m.nface-1)]
+        for f in (cf, ff):
+            if f.tileStart < 0 and f.link >= 0:
+                tror.add(ks); tror.add(f.link)
+    cands = []
+    for si in range(len(src)):
+        if src[si] in tror:
+            continue
+        b = best_cut(si)
+        if b is not None:
+            cands.append((b[0], si, b[1]))
+    cands.sort(reverse=True)
+    skipped = 0
+    for sp, si, fit in cands:
+        if len(src) >= KEX_LIGHT_SECTOR_BUDGET:
+            skipped += 1
+            continue
+        # cut() reads the gradient in Build's y-down frame: t = gx*X - gy*Y.
+        a, b, c = fit[0], fit[1], fit[2]
+        plane = (0, 0, 0, b, -c)
+        pin = False
+        cf, ff = surfaces(si)
+        cp = _plane_build(m, cf) if cf.tileStart >= 0 else None
+        fp = _plane_build(m, ff)
+        if _sloped(fp) or _sloped(cp):
+            # A sloped sector is cut along ITS contour, not the light's: a
+            # half without a level-line wall could no longer be tilted at
+            # all. The seam is a level line, so both halves start on it and
+            # stay exact; the two shades still tell the halves apart.
+            plane = fp if _sloped(fp) else cp
+            pin = True
+        new_index = len(src)
+        halves = _split_slopes.cut(edge_cache[si], plane, si, new_index)
+        if halves is None:
+            continue
+        ra, rb = halves
+        if pin:
+            # A floor and a ceiling that slope differently were made exact by
+            # _split_slopes()' own cuts; a light cut must not undo that. Keep
+            # it only when both halves still tilt both surfaces as well as
+            # the piece did.
+            cost = _split_slopes.cost
+            now = cost(edge_cache[si], cp, fp, 0 if pinned.get(si) else
+                       _best_first_wall(edge_cache[si], cp, fp)[0])
+            after = max(cost(ra, cp, fp, 0), cost(rb, cp, fp, 0))
+            if after > KEX_SLOPE_TOLERANCE and after > now:
+                continue
+        edge_cache[si] = ra
+        edge_cache[new_index] = rb
+        src.append(src[si])
+        pinned[si] = pin
+        pinned[new_index] = pin
+        ncut += 1
+    for si in range(len(src)):
+        edges = edge_cache.get(si) or []
+        if len(edges) < 3:
+            continue
+        cf, ff = surfaces(si)
+        shades[si] = (centre_shade(edges, cf) if cf.tileStart >= 0 else _shade(m, cf),
+                      centre_shade(edges, ff))
+    if verbose and (ncut or skipped):
+        print("  light: %d contour cuts so floors and ceilings can carry their gradients%s"
+              % (ncut, (", %d more wanted but the level is at its sector budget" % skipped) if skipped else ""))
+    return shades
+
+
+def _split_walls_light(m, edge_cache, verbose=False):
+    """Subdivide lit wall edges whose light changes along their length, so
+    each piece takes the shade of its own stretch. The neighbour across a
+    portal is left with a T-junction that _split_tjunctions() closes."""
+    import math as _m
+    nsplit = 0
+    for si, edges in list(edge_cache.items()):
+        out = []
+        for k, fis in edges:
+            faces = [m.faces[fi] for fi in fis if not isinstance(fi, _Cut)]
+            f = next((q for q in faces if q.link < 0 and _lit(q)), None) \
+                or next((q for q in faces if _lit(q)), None)
+            fit = _light_fit(m, f) if f is not None else None
+            n = 1
+            if fit is not None and fit[3]:
+                a, b, c, wall, ux, uy, lmin, lmax = fit
+                lo, hi = _zspan(m, f); Z = (lo + hi) / 2.0
+                l0 = max(lmin, min(lmax, a + b*(k[0]*ux + k[1]*uy) + c*Z))
+                l1 = max(lmin, min(lmax, a + b*(k[2]*ux + k[3]*uy) + c*Z))
+                steps = abs(_shade_of_lum(l0) - _shade_of_lum(l1))
+                if steps >= KEX_LIGHT_WALL_STEPS and _m.hypot(k[2]-k[0], k[3]-k[1]) >= 2 * KEX_UNITS_PER_TEXEL:
+                    n = min(KEX_LIGHT_WALL_PIECES, 1 + int(steps // KEX_LIGHT_WALL_STEPS))
+            if n <= 1:
+                out.append((k, fis)); continue
+            # The endpoints stay exactly what they were -- a ring's edges
+            # meet by equality, and so do the two sides of a portal.
+            pts = [(k[0], k[1])] + [(k[0] + (k[2]-k[0]) * i / float(n), k[1] + (k[3]-k[1]) * i / float(n))
+                                    for i in range(1, n)] + [(k[2], k[3])]
+            for i in range(n):
+                out.append(((pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]), fis))
+            nsplit += n - 1
+        edge_cache[si] = out
+    if verbose and nsplit:
+        print("  light: %d wall pieces so walls can carry their gradients" % nsplit)
 
 
 # Fires light their surroundings: peak brightening in Build shade steps at the
@@ -819,11 +994,78 @@ def _shade(m, f):
                       int(round(KEX_SHADE_MIN + (1.0 - lum ** 0.5) * KEX_SHADE_SPAN))))
 
 
+def _shade_of_lum(lum):
+    """Vertex luminance 0..255 -> Build shade, the calibrated curve above."""
+    lum = max(0.0, min(255.0, lum)) / 255.0
+    return max(-128, min(KEX_SHADE_MAX,
+                      int(round(KEX_SHADE_MIN + (1.0 - lum ** 0.5) * KEX_SHADE_SPAN))))
+
+
+# Kex lights every TILE vertex, so a face is not one shade but a field of
+# them: measured over the 25 levels, 46% of floors and ceilings and 40% of
+# walls span six or more Build shade steps across their own extent (the 90th
+# percentile is 29 steps for a floor, 37 up a wall). Build has one shade per
+# wall and per floor, so the gradient is carried by geometry instead -- see
+# _split_light() and _split_walls_light() -- and the per-piece shade comes
+# from this: a least-squares plane through the face's tile-vertex luminance,
+# in (x, y) for a floor or ceiling and in (along-wall, z) for a wall.
+_LIGHT_FIT_CACHE = {}
+
+def _light_fit(m, f):
+    """(a, b, c) with luminance = a + b*u + c*w, or None when the face is
+    unlit. u, w are Kex (X, Y) for a flat and (along-wall, Z) for a wall."""
+    key = (id(m), f.tileVertStart, f.tileVertEnd)
+    if key in _LIGHT_FIT_CACHE:
+        return _LIGHT_FIT_CACHE[key]
+    fit = None
+    if _lit(f):
+        wall = abs(f.n[2]) <= 0.5
+        ux, uy = -f.n[1], f.n[0]
+        pts = []
+        for i in range(f.tileVertStart, min(f.tileVertEnd + 1, len(m.verts))):
+            X, Y, Z, (r, g, b, a) = m.verts[i]
+            l = (r*30 + g*59 + b*11) / 100.0
+            pts.append((X*ux + Y*uy, Z, l) if wall else (X, Y, l))
+        n = len(pts)
+        if n >= 3:
+            mu = sum(q[0] for q in pts) / n; mw = sum(q[1] for q in pts) / n
+            ml = sum(q[2] for q in pts) / n
+            suu = sum((q[0]-mu)**2 for q in pts); sww = sum((q[1]-mw)**2 for q in pts)
+            suw = sum((q[0]-mu)*(q[1]-mw) for q in pts)
+            sul = sum((q[0]-mu)*(q[2]-ml) for q in pts); swl = sum((q[1]-mw)*(q[2]-ml) for q in pts)
+            det = suu*sww - suw*suw
+            if abs(det) > 1e-6:
+                b = (sul*sww - swl*suw) / det; c = (swl*suu - sul*suw) / det
+            else:
+                b = sul/suu if suu > 1e-6 else 0.0; c = swl/sww if sww > 1e-6 else 0.0
+            # Never extrapolated past what the face's own vertices measured.
+            lmin, lmax = min(q[2] for q in pts), max(q[2] for q in pts)
+            fit = (ml - b*mu - c*mw, b, c, wall, ux, uy, lmin, lmax)
+    _LIGHT_FIT_CACHE[key] = fit
+    return fit
+
+
+def _shade_at(m, f, X, Y, Z=None):
+    """The face's shade at Kex point (X, Y[, Z]); the face average when it
+    has no usable field."""
+    fit = _light_fit(m, f)
+    if fit is None:
+        return _shade(m, f)
+    a, b, c, wall, ux, uy, lmin, lmax = fit
+    if wall:
+        if Z is None:
+            lo, hi = _zspan(m, f); Z = (lo + hi) / 2.0
+        l = a + b*(X*ux + Y*uy) + c*Z
+    else:
+        l = a + b*X + c*Y
+    return _shade_of_lum(max(lmin, min(lmax, l)))
+
+
 def _pic(m, f, tilebase):
     if f.tileStart < 0: return tilebase
     return tilebase + m.tiles[f.tileStart][1]
 
-def _surface(pl, ring, wx, wy, dx, dy, sky=False, ceiling=False):
+def _surface(pl, ring, wx, wy, dx, dy, sky=False, ceiling=False, quad=None):
     """(z, heinum) to emit for one floor or ceiling plane over a sector whose
     first wall is (wx, wy)->(wx+dx, wy+dy) and whose walls stand at `ring`.
 
@@ -842,6 +1084,12 @@ def _surface(pl, ring, wx, wy, dx, dy, sky=False, ceiling=False):
     if not _sloped(pl):
         return int(round(zs[0])), 0
     if sky and ceiling:
+        # Held at the plane's highest point over the face's own quad when
+        # given, not over this ring: a sector cut into pieces would otherwise
+        # give each piece a different sky ceiling, and the neighbour's upper
+        # wall shows up against the lower one as a slab across the sky.
+        if quad:
+            zs = [_plane_z(pl, x, y) for x, y in quad]
         return int(round(min(zs))), 0          # Build z grows downward
     z_, h_ = _slope(pl, wx, wy, dx, dy)
     err = _ring_error(pl, ring, z_, h_, wx, wy, dx, dy)
@@ -870,6 +1118,10 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
     # the T-junctions the cut leaves on their neighbours are closed with the
     # rest. Pieces are appended after the source sectors; src maps them back.
     src, pinned = _split_slopes(m, edge_cache)
+    # Then along the light, so a floor lit from one end is bands of shade
+    # rather than one average; then the walls along their length.
+    light_shades = _split_light(m, edge_cache, src, pinned)
+    _split_walls_light(m, edge_cache)
     _split_tjunctions(m, edge_cache)
     pieces = {}
     for i, o in enumerate(src):
@@ -944,7 +1196,8 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                               # it. The flat corner value it used to fall back
                               # to is the same number everywhere and says
                               # nothing at all.
-                              shade=_shade(m, solid if _lit(solid) else ff_face)))
+                              shade=_shade_at(m, solid if _lit(solid) else ff_face,
+                                              (k[0] + k[2]) / 2.0, (k[1] + k[3]) / 2.0)))
         ranges.append((start, len(walls)-start))
         cf = cf_face
         ff = ff_face
@@ -954,7 +1207,9 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
         wx0, wy0 = w0['x']*WORLD, w0['y']*WORLD
         ring = [(w['x']*WORLD, w['y']*WORLD) for w in walls[start:]]
         cz, cheinum = _surface(_plane_build(m, cf), ring, wx0, wy0, dxw, dyw,
-                               sky=(cf.tileStart < 0), ceiling=True)
+                               sky=(cf.tileStart < 0), ceiling=True,
+                               quad=[(m.verts[cf.vertStart+k][0]*WORLD, -m.verts[cf.vertStart+k][1]*WORLD)
+                                     for k in range(4) if cf.vertStart+k < len(m.verts)])
         fz, fheinum = _surface(ff_p, ring, wx0, wy0, dxw, dyw)
         if cz >= fz: cz = fz - 8           # never let the ceiling sit under the floor
         # Kex has no sky tile: the sky is named in the map header and a ceiling
@@ -980,7 +1235,8 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                           ceilingheinum=cheinum, floorheinum=fheinum,
                           ceilingstat=(2 if cheinum else 0), floorstat=(2 if fheinum else 0),
                           ceilingpicnum=_pic(m,cf,tilebase), floorpicnum=_pic(m,ff,tilebase),
-                          ceilingshade=_shade(m,cf), floorshade=_shade(m,ff)))
+                          ceilingshade=light_shades.get(si, (_shade(m,cf), 0))[0],
+                          floorshade=light_shades.get(si, (0, _shade(m,ff)))[1]))
 
     # nextwall: the neighbour's wall carrying the same edge reversed. A face
     # links to a SOURCE sector; when that sector was cut the edge may sit in
@@ -1100,7 +1356,14 @@ def _split_tjunctions(m, edge_cache, verbose=False):
                 if abs(ex*dy - ey*dx) > 1.0 * (L2 ** 0.5):
                     continue
                 t = (ex*dx + ey*dy) / L2
-                if t <= 1e-6 or t >= 1.0 - 1e-6:
+                # Not within one Build unit (1/16 here) of either end: a
+                # contour cut's crossing point can land a hair from a
+                # neighbour's corner, and the sliver that split would leave
+                # rounds to a zero-length wall -- which, as a sloped
+                # sector's first wall, makes the engine draw the sector flat
+                # (KARNAK's front door and towers were, before this).
+                L = L2 ** 0.5
+                if t * L < 1.0 / WORLD or (1.0 - t) * L < 1.0 / WORLD:
                     continue
                 hits.append((t, vx, vy))
             if not hits:
@@ -1109,7 +1372,7 @@ def _split_tjunctions(m, edge_cache, verbose=False):
             hits.sort()
             px, py = x1, y1
             for _t, vx, vy in hits:
-                if (vx, vy) == (px, py):
+                if (vx, vy) == (px, py) or ((vx-px)**2 + (vy-py)**2) < 1.0 / (WORLD * WORLD):
                     continue
                 out.append(((px, py, vx, vy), fis))
                 px, py = vx, vy
