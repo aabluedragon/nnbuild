@@ -1639,7 +1639,10 @@ heights every ten ticks; the tags are read back from the map file, since
   other was used, and a tag-0 lift's pieces moved one at a time.
   `_split_light` keeps every event sector whole now except the walk-in
   trigger regions, whose pieces are plates on the same channel. No mover is
-  cut by the slope splitter either.
+  cut by the slope splitter either, and an event sector's walls are left
+  whole by the wall-gradient splitter as well: a switch face cut into
+  pieces had only the piece nearest the face centre as the switch, the
+  rest inert though textured as it.
 
 ### The pause menu
 

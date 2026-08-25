@@ -898,8 +898,14 @@ def _split_walls_light(m, edge_cache, verbose=False):
     portal is left with a T-junction that _split_tjunctions() closes."""
     import math as _m
     nsplit = 0
+    # An event sector's walls stay whole too: a switch face cut into pieces
+    # left only the piece nearest the face centre as the switch, the rest
+    # inert though textured as it.
+    keep_whole = set(e[1] for e in getattr(m, 'events', ()) if e[0] not in (50,))
     for si, edges in list(edge_cache.items()):
         out = []
+        if si < m.nsector and si in keep_whole:
+            continue
         for k, fis in edges:
             faces = [m.faces[fi] for fi in fis if not isinstance(fi, _Cut)]
             f = next((q for q in faces if q.link < 0 and _lit(q)), None) \
