@@ -1026,6 +1026,7 @@ static void Kex_LookAtDebug(void)
 void KexBeam_Tick(void)
 {
     Kex_LookAtDebug();
+    KexScript_BossTick();
     // VB_KEXBEAM_DEBUG=<n>: a moment in, stand the local player beside beam
     // n, looking along it, for a visual check without a hand on the keys.
     static int s_dbgTicks = -1, s_dbgBeam = -1;
@@ -1242,8 +1243,11 @@ void KexTrigger_Test(void)
             }
 }
 
+void KexScript_BossDied(int nSprite);   // below
+
 void KexTrigger_Died(int nSprite)
 {
+    KexScript_BossDied(nSprite);
     for (int i = 0; i < s_triggers; i++)
     {
         KexTrigger &t = s_trigger[i];
@@ -1292,6 +1296,74 @@ struct KexLoadRule { char const *map; int16_t fire[2]; };
 static KexLoadRule const s_loadRule[] = {
     { "SUNKEN", { 1001, 1002 } },
 };
+
+// The boss levels' scripts (SELBUROW_script.txt, SETARENA_script.txt), the
+// same in both: $script 0 at load -- if the player already holds the level's
+// artifact (Selkis' scepter, Set's shawl), remove the boss (map actor 41 /
+// 67) and fire tag 1010, the exit; else poll every two seconds ($script 1)
+// and fire 1010 once the boss actor is gone. So the boss's death fires the
+// exit, and a returning player who beat it before finds it gone and the way
+// open. The boss is told apart by its statnum (scorp.cpp 122, set.cpp 120)
+// and, at load, killed the way KillCreatures() kills: by damage.
+struct KexBossRule { char const *map; int16_t statnum; int8_t artifact; int16_t fire; };
+static KexBossRule const s_bossRule[] = {
+    { "SELBUROW", 122, kKexArtiScepter, 1010 },   // Selkis
+    { "SETARENA", 120, kKexArtiShawl,   1010 },   // Set
+};
+static KexBossRule const *s_boss;     // this level's, or NULL
+static int s_bossTest;                // VB_KEXBOSS_TEST: 1 kill the boss at tick 60, 2 also hold its artifact first
+
+static void KexScript_BossFire(char const *why)
+{
+    Kex_FireChannel(runlist_AllocChannel(KexChan(s_boss->fire)));
+    OSD_Printf("Kex script: %s, tag %d fired (%s)\n", why, s_boss->fire, s_boss->map);
+}
+
+static void KexScript_BossKill(void)
+{
+    int list[16], n = 0;
+    for (int i = headspritestat[s_boss->statnum]; i != -1 && n < 16; i = nextspritestat[i])
+        list[n++] = i;
+    for (int k = 0; k < n; k++)
+        for (int hit = 0; hit < 8 && sprite[list[k]].statnum == s_boss->statnum; hit++)
+            runlist_DamageEnemy(list[k], -1, 1600);
+}
+
+void KexScript_BossDied(int nSprite)
+{
+    if (s_boss && sprite[nSprite].statnum == s_boss->statnum)
+        KexScript_BossFire("the boss is down");
+}
+
+static void KexScript_BossLoad(void)
+{
+    if (!s_boss)
+        return;
+    int held = 0;
+    for (int i = 0; i < nTotalPlayers; i++)
+        held |= KexInv_HasArtifact(i, s_boss->artifact);
+    if (!held)
+        return;
+    int const before = headspritestat[s_boss->statnum] != -1;
+    KexScript_BossKill();
+    if (!before)
+        KexScript_BossFire("the artifact is held and the boss is gone");
+    else
+        OSD_Printf("Kex script: the artifact is held, the boss removed (%s)\n", s_boss->map);
+}
+
+void KexScript_BossTick(void)
+{
+    if (s_bossTest <= 0 || --s_bossTest != 1 || !s_boss)
+        return;
+    if (getenv("VB_KEXBOSS_TEST")[0] == '2')
+    {
+        KexInv_GiveArtifact(nLocalPlayer, s_boss->artifact);
+        KexScript_BossLoad();
+    }
+    else
+        KexScript_BossKill();
+}
 
 #define kMaxKexScripts 8
 struct KexScript
@@ -1353,6 +1425,12 @@ void KexScript_Init(void)
     }
     if (s_scripts)
         OSD_Printf("Kex script: %d script sectors on this level\n", s_scripts);
+    s_boss = NULL;
+    for (auto const &r : s_bossRule)
+        if (!Bstrcmp(base, r.map))
+            s_boss = &r;
+    { char const *e = getenv("VB_KEXBOSS_TEST"); s_bossTest = e ? 60 : 0; }
+    KexScript_BossLoad();
 }
 
 // Leave for another of the remaster's levels, keeping the campaign flow

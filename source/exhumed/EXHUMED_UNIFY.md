@@ -1473,6 +1473,22 @@ the overworld, then the old map screen. Worse, `showmap()` returns a level
 *number*, which overrode the map the overworld had just chosen. Skipping it also
 cured a level that quit back out a few seconds after starting.
 
+### The boss levels' scripts
+
+The two level scripts not transcribed before, SELBUROW's and SETARENA's,
+are the same script: `$script 0` at load checks whether the player already
+holds the level's artifact -- Selkis' scepter, Set's shawl -- and if so
+removes the boss (map actor 41 / 67, Selkis and Set themselves) and fires
+tag 1010, the exit; otherwise `$script 1` polls every two seconds and fires
+1010 once the boss actor is gone. Nothing was firing 1010 here, so neither
+level could be finished. `s_bossRule` in kexbreak.cpp keys the boss on its
+statnum (scorp.cpp 122, set.cpp 120): its death, seen by the generic hook
+`runlist_DamageEnemy` already has, fires the tag; at load with the
+artifact held the boss is killed the way `KillCreatures()` kills, by
+damage, and the tag fires either way. `VB_KEXBOSS_TEST=1` kills the boss
+at tick 60, `=2` grants the artifact and runs the load rule instead; both
+log `Kex script: ... tag 1010 fired`.
+
 ### The pause menu
 
 `menu_Menu(1)` -- the in-level menu -- gets the remaster's version too: GAME
