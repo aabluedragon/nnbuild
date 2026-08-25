@@ -1455,6 +1455,10 @@ KEX_SOUNDS = {
     'bird_die': ('sounds/birddeath.wav', 0),
     'bird_wng': ('sounds/birdflap01.wav', 0),
     'tr_arrow': ('sounds/sentryfire.wav', 0),     # the laser spawners' shot
+    # The Manacle's MANACLE.SEQ names these (build_manacle_seq).
+    'brc_up':   ('sounds/braceletup.wav', 0),
+    'brc_fire': ('sounds/braceletfire.wav', 0),
+    'brc_chrg': ('sounds/shockold.wav', 0),
     'hawkfire': ('sounds/queenatk04.wav', 0),
     'item_key': ('sounds/keypickup.wav', 0),
     'item_reg': ('sounds/health.wav', 0),
@@ -1788,7 +1792,84 @@ KEX_SEQ_EXTRA_TILES = {
     7631: ('beam_head', 'projectiles/beam_loop', 0, 0),
     7632: ('boulder',   'projectiles/boulder_loop', 0, 0),   # the boulder bullet
 }
-KEX_SEQ_EXTRA_SCALE = {'beam_side': (5.0, 1.5), 'beam_head': (1.5, 1.5)}
+KEX_SEQ_EXTRA_SCALE = {'beam_side': (5.0, 1.5), 'beam_head': (1.5, 1.5),
+                       'manacle': (1.0, 200.0 / 240.0)}
+
+# The Manacle, the remaster's eighth weapon. Build PowerSlave has no such
+# weapon, so this is the one creature-or-weapon sequence authored from
+# scratch: MANACLE.SEQ, in the layout gun.cpp's WeaponInfo row expects --
+# 0 raise, 1 lower, 2 idle, 3 charge (the remaster's fire + charge anims, held
+# on the last frame while fire is down), 4 release (the shot on frame 0, flag
+# 0x80). Frames are the remaster's weapons/manacle_* anims one for one; each
+# distinct sprite becomes a tile from KEX_MANACLE_TILE_BASE, squashed to
+# Build's 320x200 from the remaster's 320x240 hand frame, and the chunk sits
+# at the sprite's centre the way every weapon SEQ in STUFF.DAT places its
+# hand art (the loader subtracts the file's centre, the draw adds 160,100).
+KEX_MANACLE_TILE_BASE = 7640
+KEX_MANACLE_ANIMS = ['weapons/manacle_raise', 'weapons/manacle_lower', 'weapons/manacle_idle',
+                     ('weapons/manacle_fire', 'weapons/manacle_charge'), 'weapons/manacle_release']
+KEX_MANACLE_YSCALE = 200.0 / 240.0
+
+def build_manacle_seq(Z, outdir, verbose=True):
+    """MANACLE.SEQ plus the tile rows its chunks reference."""
+    import kexseqtool
+    names = {n.lower(): n for n in Z.namelist()}
+    tbl = _sprite_table(Z, names, 'weapons', 'manacle')
+    tiles = {}                     # frame layer signature -> tile
+    extra = {}                     # tile -> KEX_SEQ_TILES row
+    seq = dict(tag=b'DS', centerx=160, centery=100, seq_base=[], seq_size=[], seq_flag=[],
+               fr_base=[], fr_size=[], fr_flag=[], ck_x=[], ck_y=[], ck_pict=[], ck_flag=[],
+               snd_names=[b'BRC_UP\0\0', b'BRC_FIRE', b'BRC_CHRG'], snd_events=[], trailing=b'')
+    SOUND = {('weapons/manacle_raise', 4): 0, ('weapons/manacle_release', 0): 1,
+             ('weapons/manacle_charge', 0): 2}
+    for ss, spec in enumerate(KEX_MANACLE_ANIMS):
+        anims = spec if isinstance(spec, tuple) else (spec,)
+        seq['seq_base'].append(len(seq['fr_base']))
+        nframes = 0
+        for anim in anims:
+            frames = parse_anim_full(Z, names, anim)
+            for fi, fr in enumerate(frames):
+                layers = fr.get('sprites', []) or (fr['rot'][0] if 'rot' in fr else [])
+                seq['fr_base'].append(len(seq['ck_x']))
+                nck = 0
+                # One chunk per frame: build_seq_tiles composites every layer
+                # of the frame into the one tile, so the chunk sits at the
+                # frame's bounding box, not at any one layer's.
+                rects = [(r, ox, oy) for g, base, idx, ox, oy, flip in layers
+                         for r in (tbl.get(idx),) if r is not None]
+                if rects:
+                    key = tuple((idx, ox, oy, flip) for g, base, idx, ox, oy, flip in layers)
+                    if key not in tiles:
+                        tiles[key] = KEX_MANACLE_TILE_BASE + len(tiles)
+                        extra[tiles[key]] = ('manacle', anim, fi, 0)
+                    x0 = min(ox for r, ox, oy in rects)
+                    y0 = min(oy for r, ox, oy in rects)
+                    w = max(ox + r[2] for r, ox, oy in rects) - x0
+                    h = (max(oy + r[3] for r, ox, oy in rects) - y0) * KEX_MANACLE_YSCALE
+                    cx = 160 + x0 + w / 2.0
+                    cy = (214 + y0) * KEX_MANACLE_YSCALE + h / 2.0
+                    seq['ck_x'].append(int(round(cx))); seq['ck_y'].append(int(round(cy)))
+                    seq['ck_pict'].append(tiles[key]); seq['ck_flag'].append(0)
+                    nck += 1
+                seq['fr_size'].append(nck)
+                flag = 0
+                if anim == 'weapons/manacle_release' and fi == 0:
+                    flag |= 0x80
+                if anim == 'weapons/manacle_charge':
+                    flag |= 0x04                    # the charge glows
+                seq['fr_flag'].append(flag)
+                snd = SOUND.get((anim, fi))
+                if snd is not None:
+                    seq['snd_events'].append((len(seq['fr_base']) - 1, snd))
+                nframes += 1
+        seq['seq_size'].append(nframes)
+        seq['seq_flag'].append(0)
+    with open(os.path.join(outdir, 'MANACLE.SEQ'), 'wb') as f:
+        f.write(kexseqtool.write_seq_bytes(seq))
+    if verbose:
+        print("  the Manacle: MANACLE.SEQ, %d frames, %d tiles" % (len(seq['fr_base']), len(tiles)))
+    return extra
+
 
 def patch_demo_seqs(demo_dir, outdir, verbose=True):
     """Two of STUFF.DAT's sequence files, rewritten for the Kex data dir:
@@ -1844,7 +1925,8 @@ def _face_angle(m, fi):
 # The Manacle is the remaster's eighth weapon; Build PowerSlave has seven and
 # no code for it, so its one pickup (CHAOS) is dropped rather than left as a
 # gun-shaped decoration nobody can take.
-KEX_SKIP_ACTORS = {'Item_Weapon_Manacle'}
+KEX_SKIP_ACTORS = set()
+KEX_INV_ACTORS['Item_Weapon_Manacle'] = (31, 0)   # the eighth weapon (kWeaponManacle); see build_manacle_seq
 
 # The Kex event table. The numbers do NOT mean what Build PowerSlave's sector
 # effects mean -- only DOOR_NORMAL happens to share its 1. The names are the
@@ -2852,6 +2934,7 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
     with zipfile.ZipFile(kpf) as z:
         decor, decordefs, decoranims, breakables, lights = build_actor_tiles(
             z, outdir, used_types, kexactors, nexttile, verbose)
+        KEX_SEQ_EXTRA_TILES.update(build_manacle_seq(z, outdir, verbose))
         seqdefs = build_seq_tiles(z, outdir, verbose)
     # The crows' sequence file: the wasp's layout on bird tiles.
     try:

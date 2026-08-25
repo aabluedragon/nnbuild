@@ -45,7 +45,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <assert.h>
 
 #define kMaxSequences	4096
-#define kMaxSEQFiles	79
+#define kMaxSEQFiles	80
 #define kMaxSEQFrames	18000
 #define kMaxSEQChunks	21000
 
@@ -156,7 +156,8 @@ const char *SeqNames[kMaxSEQFiles] =
   "grenbubb",
   "rochfire",
   "rat",
-  "boulder"       // VibeBuild32: written by the Kex converter; absent from the classic data
+  "boulder",      // VibeBuild32: written by the Kex converter; absent from the classic data
+  "manacle"       // VibeBuild32: likewise
 };
 
 short SeqOffsets[kMaxSEQFiles];
@@ -167,7 +168,7 @@ short SeqOffsets[kMaxSEQFiles];
 // file is there (the Kex converter writes them into its data directory).
 static bool seq_IsOptional(const char *seqName)
 {
-    return !Bstrcasecmp(seqName, "boulder");
+    return !Bstrcasecmp(seqName, "boulder") || !Bstrcasecmp(seqName, "manacle");
 }
 
 int seq_ReadSequence(const char *seqName)

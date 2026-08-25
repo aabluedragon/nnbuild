@@ -99,7 +99,10 @@ bulletInfo BulletInfo[] = {
     { 5,   -1, 60000, -1, 31, 76, 0,  0, -1 },
     // VibeBuild32: 17, the remaster's boulder (Proj_Boulder, damage 35) as the
     // trap fireball's twin -- same speed, poof and radius -- on BOULDER.SEQ.
-    { 35,  -1,  1500, -1, kSeqBoulder, kSeqFirePoof, 4, 10, 40 }
+    { 35,  -1,  1500, -1, kSeqBoulder, kSeqFirePoof, 4, 10, 40 },
+    // 18, the Manacle's bolt: the arrow (whose SEQ the converter draws as the
+    // remaster's beam bolt) with Proj_Beam's damage.
+    { 100, -1,  2000, -1, kSeqArrow, kSeqPoof, 0, 0, -1 }
 };
 
 

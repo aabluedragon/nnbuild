@@ -12,6 +12,7 @@
 #include "status.h"
 #include "sound.h"
 #include "lighting.h"
+#include "gun.h"
 #include "kexinv.h"
 
 KexInv KexInvList[kMaxPlayers];
@@ -156,9 +157,25 @@ void KexInv_LevelStart(void)
 
 void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag);   // player.cpp
 
+extern int KexManacle_LastShot;    // gun.cpp
+static int s_manacleTest;
+
+int KexInv_TestFire(void) { return s_manacleTest > 20; }
+
 void KexInv_Tick(void)
 {
     KexInv_ShrineTick();
+    if (s_manacleTest > 0)
+    {
+        // Hold fire for 60 ticks (five charge steps), then release; report.
+        s_manacleTest--;
+        if (s_manacleTest == 24 || s_manacleTest == 12)
+            videoCaptureScreen("cpshot0000.png", 0);   // charging, then the release
+        if (s_manacleTest == 1)
+            OSD_Printf("Kex manacle test: weapon %d state %d, last release fired %d bolts, ammo %d\n",
+                       PlayerList[nLocalPlayer].nCurrentWeapon, PlayerList[nLocalPlayer].nWeaponState,
+                       KexManacle_LastShot, PlayerList[nLocalPlayer].nAmmo[kWeaponManacle]);
+    }
     if (!s_selftest || --s_selftest != 1)
         return;
     // The test stands on every pad first, so the shrines' artifacts are there
@@ -176,6 +193,11 @@ void KexInv_Tick(void)
         PlayerCheckItemPickup(nLocalPlayer, i, 0);
         taken++;
     }
+    // And the Manacle: equip it, hold fire for a while, let go.
+    nPlayerWeapons[nLocalPlayer] |= 1 << kWeaponManacle;
+    PlayerList[nLocalPlayer].nAmmo[kWeaponManacle] = 6;
+    SetNewWeaponImmediate(nLocalPlayer, kWeaponManacle);
+    s_manacleTest = 80;
     KexInv const &inv = KexInvList[nLocalPlayer];
     OSD_Printf("Kex inventory: %d pickups taken -> artifacts %02x transmitter %02x dolls %d ankhs %02x (max health %d, health %d)\n",
                taken, inv.artifacts, inv.transmitter, KexInv_DollCount(nLocalPlayer), inv.ankhs,

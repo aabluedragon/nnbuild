@@ -453,6 +453,7 @@ def extract(kexdir, outdir, verbose=True):
             47: 'str_114',
             48: 'str_115',
             11: 'str_111',   # map
+            31: 'str_099',   # the Manacle
         }
         rows = [(lot, strs[k]) for lot, k in sorted(PICKUPS.items()) if k in strs]
         if rows:

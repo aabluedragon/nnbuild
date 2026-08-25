@@ -1067,6 +1067,9 @@ int AddAmmo(int nPlayer, int nWeapon, int nAmmoAmount)
     if (nAmmoAmount > 300) {
         nAmmoAmount = 300;
     }
+    if (nWeapon == kWeaponManacle && nAmmoAmount > 6) {
+        nAmmoAmount = 6;              // VibeBuild32: the Manacle carries six
+    }
 
     PlayerList[nPlayer].nAmmo[nWeapon] = nAmmoAmount;
 
@@ -1353,11 +1356,21 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                 break;
             }
 
+            case 31: // VibeBuild32: the remaster's Manacle (Kex mode); a pickable no-op otherwise
+            {
+                if (g_kexMode)
+                {
+                    WeaponPickup(nPlayer, nPickupSprite, kWeaponManacle, 6, nItem, rTint, gTint);
+                    return;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
             case 10: // Pickable item
             case 15: // Pickable item
             case 16: // Reserved
             case 24:
-            case 31:
             case 35:
             case 41:
             case 42:
@@ -2415,6 +2428,8 @@ loc_1AB8E:
             int var_5C = SectFlag[nViewSect] & kSectUnderwater;
 
             uint16_t buttons = sPlayerInput[nPlayer].buttons;
+            if (nPlayer == nLocalPlayer && KexInv_TestFire())
+                buttons |= kButtonFire;         // the Manacle self-test holding the trigger
 
             if (buttons & kButtonCheatGodMode) // LOBODEITY cheat
             {

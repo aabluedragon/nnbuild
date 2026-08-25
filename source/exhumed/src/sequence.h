@@ -105,7 +105,8 @@ enum {
     kSeqGrenBubb,
     kSeqRochfire,
     kSeqRat,
-    kSeqBoulder     // VibeBuild32: the remaster boulder trap; BOULDER.SEQ, optional
+    kSeqBoulder,    // VibeBuild32: the remaster boulder trap; BOULDER.SEQ, optional
+    kSeqManacle     // VibeBuild32: the remaster's Manacle weapon; MANACLE.SEQ, optional
 };
 
 struct actionSeq

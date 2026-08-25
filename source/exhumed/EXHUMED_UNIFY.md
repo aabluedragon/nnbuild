@@ -1228,9 +1228,7 @@ expand. The transmitter is drawn assembled, the pieces the player lacks as
 dark silhouettes; the eight pieces' positions in the device are laid out here
 by eye (`s_kexTransPos`), the remaster keeps that layout in code, not data.
 The weapon order is the console game's, which swaps Build's flamer and
-grenade; the eighth slot, the Manacle, has no Build weapon, so it stays dim
-and its one pickup in CHAOS is dropped by the converter rather than left as a
-gun-shaped decoration nobody can take.
+grenade; the eighth slot is the Manacle (below).
 
 Two things the converter leaves out on purpose. KILENTRY carries a complete
 set of the six artifacts stacked on one point outside the map with a tag on
@@ -1245,6 +1243,48 @@ which now silences the music as well as the effects. The unattended check is
 `VB_KEXINV_TEST=<ticks>`: that far into a level it
 takes every collectible the level holds as if walked over, logs the tally,
 then pages through the status screen screenshotting each page.
+
+### The Manacle
+
+The remaster's eighth weapon, the console game's charged bolt: hold fire
+and the hand crackles, release and it throws a fan of bolts, one more for
+every stretch of charge. Build PowerSlave has seven weapons and no code for
+an eighth, so this is the one weapon added from scratch. `kWeaponManacle`
+sits between the ring and the mummified hand in `gun.h`; `kMaxWeapons` is 8
+and `nAmmo[8]` takes the byte that was padding, so the save layout is
+unchanged. The CHAOS pickup is lotag 31 (`Item_Weapon_Manacle` in
+`KEX_INV_ACTORS`), which Build accepts as a pickup and did nothing with;
+`player.cpp` gives the weapon with six charges in Kex mode and leaves the
+lotag a no-op otherwise. `FillWeapons` and the weapon-select loops know the
+eighth slot; the ammo cap is six.
+
+The weapon runs on the stock state machine with the grenade's "hold the last
+frame" trick in state 2: while fire is down the charge counter climbs one
+step every `KEX_MANACLE_CHARGE_TICKS` (12) up to `KEX_MANACLE_MAX_CHARGE`
+(8); letting go moves to state 3, whose first frame fires 1 + charge bolts
+spread 24 angle units apart and shakes the view. The bolt is bullet type 18
+(100 damage, the beam bolt's `kSeqArrow` art, so it looks like the laser
+traps' shot), so it uses the trap art already carried.
+
+`MANACLE.SEQ` is written by `build_manacle_seq()` in kexmap.py in the
+layout the `WeaponInfo` row expects (raise, lower, idle, charge = the
+remaster's fire + charge anims, release with frame 0 flagged 0x80 and the
+charge frames fullbright). Each frame of the remaster's
+`weapons/manacle_*` anims is one chunk on one tile from
+`KEX_MANACLE_TILE_BASE` (7640), the frame's four or five 64x64 sprites
+composited by `build_seq_tiles()` and squashed 240 to 200 vertically; the
+chunk sits at the frame's bounding box relative to the remaster's hand
+origin (screen y 214), which is what puts the idle wrist off the bottom of
+the screen and the raised release hand fully on it. The raise's first seven
+frames are empty in the remaster too -- the hand comes up from below. Three
+sounds are cued from the SEQ (`BRC_UP`, `BRC_FIRE`, `BRC_CHRG`, aliased to
+the remaster's bracelet wavs in `KEX_SOUNDS`). `seq_IsOptional()` lists
+"manacle" with "boulder" so classic data logs nothing about the missing
+file.
+
+`VB_KEXINV_TEST` finishes its sweep by giving the weapon, holding fire and
+releasing, capturing the charge and release frames and logging
+`Kex manacle test: weapon 7 state 3, last release fired N bolts, ammo M`.
 
 ### The overworld
 
@@ -1294,9 +1334,6 @@ Kex mode.
 Everything above is in; this is the list of what is not, so nobody has to
 re-derive it from the code.
 
-- **The Manacle**, the remaster's eighth weapon. Build PowerSlave has seven
-  and no code for it; its one pickup (CHAOS) is dropped by the converter and
-  its slot on the Arsenal page stays dim.
 - **KILENTRY's stacked artifact set**, six actors on one point off the map
   with a tag: the script-side hand-out behind the shrines, and a cheat if
   placed.

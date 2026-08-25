@@ -70,5 +70,6 @@ void KexInv_Load(int nSlot);
 void KexInv_Tick(void);                  // per tick: the VB_KEXINV_TEST sweep only
 int  KexInv_TestWantsScreen(void);       // that test asking for the status screen
 int  KexInv_TestActive(void);
+int  KexInv_TestFire(void);              // the Manacle self-test holding fire
 
 #endif

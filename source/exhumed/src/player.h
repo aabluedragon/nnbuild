@@ -67,8 +67,8 @@ struct Player
     uint16_t keys;
     short nMagic;
     char items[8];
-    short nAmmo[7]; // TODO - kMaxWeapons?
-    short pad[2];
+    short nAmmo[8]; // kMaxWeapons; the eighth took the first pad short, so the layout is unchanged
+    short pad[1];
 
     short nCurrentWeapon;
     short nWeaponFrame;

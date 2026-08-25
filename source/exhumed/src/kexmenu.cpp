@@ -968,7 +968,7 @@ void KexHud_Draw(void)
     // the message line -- the pickup captions kexpickup.txt exists to show --
     // and the ammo count the remaster prints beside the health bar.
     int const nWeapon = PlayerList[nLocalPlayer].nCurrentWeapon;
-    if (nWeapon > 0 && nWeapon < 7 && WeaponInfo[nWeapon].nAmmoType >= 0)
+    if (nWeapon > 0 && nWeapon < kWeaponMummified && WeaponInfo[nWeapon].nAmmoType >= 0)
     {
         char ammoBuf[16];
         Bsprintf(ammoBuf, "%d", PlayerList[nLocalPlayer].nAmmo[nWeapon]);
@@ -1032,7 +1032,7 @@ static void KexMenu_Desc(int y, char const *text)
 // places (flamer and grenade swap), and the eighth, the Manacle, has no Build
 // weapon at all.
 static int const s_kexWeaponOfIcon[8] = { kWeaponSword, kWeaponPistol, kWeaponM60, kWeaponGrenade,
-                                          kWeaponFlamer, kWeaponStaff, kWeaponRing, -1 };
+                                          kWeaponFlamer, kWeaponStaff, kWeaponRing, kWeaponManacle };
 
 // Where each transmitter piece sits in the assembled device, in the pieces'
 // own pixels: the monitor (7) with its screen (6, lit when complete), the

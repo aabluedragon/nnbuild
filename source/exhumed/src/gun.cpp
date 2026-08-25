@@ -57,6 +57,10 @@ Weapon WeaponInfo[] = {
     { kSeqGrenade, { 0, 2, 3,  4, -1,  1,  0, 0, 0, 0, 0, 0 },  4, 0, 1, kTrue },
     { kSeqCobra,   { 0, 1, 2,  2, -1,  4,  0, 0, 0, 0, 0, 0 },  5, 0, 1, kTrue },
     { kSeqRavolt,  { 0, 1, 2,  3, -1,  4,  0, 0, 0, 0, 0, 0 },  6, 0, 1, kTrue },
+    // VibeBuild32: the Manacle. MANACLE.SEQ (kexmap.py build_manacle_seq):
+    // 0 raise, 1 lower, 2 idle, 3 charge (held while fire is down),
+    // 4 release (fires on its first frame). Ammo type 7, six shots.
+    { kSeqManacle, { 0, 2, 3,  4, -1,  1,  0, 0, 0, 0, 0, 0 },  7, 0, 1, kTrue },
     { kSeqRothands,{ 0, 1, 2, -1, -1, -1,  0, 0, 0, 0, 0, 0 },  7, 0, 0, kTrue },
     { kSeqDead,    { 1, 0, 0,  0,  0,  0,  0, 0, 0, 0, 0, 0 },  0, 1, 0, kFalse },
     { kSeqDeadEx,  { 1, 0, 0,  0,  0,  0,  0, 0, 0, 0, 0, 0 },  0, 1, 0, kFalse },
@@ -64,7 +68,7 @@ Weapon WeaponInfo[] = {
 };
 
 short nTemperature[kMaxPlayers];
-short nMinAmmo[] = { 0, 24, 51, 50, 1, 0, 0 };
+short nMinAmmo[] = { 0, 24, 51, 50, 1, 0, 0, 0 };
 short word_96E26 = 0;
 
 
@@ -97,6 +101,7 @@ void FillWeapons(short nPlayer)
             PlayerList[nPlayer].nAmmo[i] = 99;
         }
     }
+    PlayerList[nPlayer].nAmmo[kWeaponManacle] = 6;   // the Manacle carries six
 
     CheckClip(nPlayer);
 
@@ -127,6 +132,15 @@ void InitWeapons()
     memset(nPlayerGrenade, 0, sizeof(nPlayerGrenade));
     memset(nGrenadePlayer, 0, sizeof(nGrenadePlayer));
 }
+
+// VibeBuild32: the Manacle charges while fire is held -- one more bolt per
+// twelve ticks, to eight -- and lets them all go on release.
+#define KEX_MANACLE_AMMO        6
+#define KEX_MANACLE_CHARGE_TICKS 12
+#define KEX_MANACLE_MAX_CHARGE  8
+static uint8_t s_manacleTicks[kMaxPlayers];
+static uint8_t s_manacleCharge[kMaxPlayers];
+int KexManacle_LastShot;        // bolts fired by the last release, for the self-test
 
 void SetNewWeapon(short nPlayer, short nWeapon)
 {
@@ -172,7 +186,7 @@ void SetNewWeapon(short nPlayer, short nWeapon)
     {
         int nCounter;
 
-        if (nWeapon >= kWeaponSword && nWeapon <= kWeaponRing) {
+        if (nWeapon >= kWeaponSword && nWeapon <= kWeaponManacle) {
             nCounter = PlayerList[nPlayer].nAmmo[nWeapon];
         }
         else {
@@ -264,10 +278,10 @@ void SelectPreviousWeapon()
 
 void SelectNewWeapon(short nPlayer)
 {
-    int nWeapon = kWeaponRing; // start at the highest weapon number
+    int nWeapon = kWeaponManacle; // start at the highest weapon number
 
     uint16_t nAvailableWeaponBits = nPlayerWeapons[nPlayer];
-    uint16_t nBitToCheck = 0x40; // bit 7 turned on
+    uint16_t nBitToCheck = 0x80; // bit 8 turned on
 
     while (nBitToCheck)
     {
@@ -545,6 +559,23 @@ void MoveWeapons(short nPlayer)
                                 continue;
                             }
                         }
+                        else if (nWeapon == kWeaponManacle)
+                        {
+                            // The grenade's hold, counting charge: release lets go.
+                            if (!PlayerList[nPlayer].bIsFiring)
+                            {
+                                PlayerList[nPlayer].nWeaponState = 3;
+                                break;
+                            }
+                            if (++s_manacleTicks[nPlayer] >= KEX_MANACLE_CHARGE_TICKS)
+                            {
+                                s_manacleTicks[nPlayer] = 0;
+                                if (s_manacleCharge[nPlayer] < KEX_MANACLE_MAX_CHARGE)
+                                    s_manacleCharge[nPlayer]++;
+                            }
+                            PlayerList[nPlayer].nWeaponFrame = SeqSize[var_3C] - 1;
+                            continue;
+                        }
                         else if (nWeapon == kWeaponMummified)
                         {
                             PlayerList[nPlayer].nWeaponState = 0;
@@ -624,6 +655,14 @@ void MoveWeapons(short nPlayer)
                         {
                             CheckClip(nPlayer);
                             PlayerList[nPlayer].nWeaponState = 1;
+                            break;
+                        }
+                        else if (nWeapon == kWeaponManacle)
+                        {
+                            if (PlayerList[nPlayer].nAmmo[WeaponInfo[nWeapon].nAmmoType])
+                                PlayerList[nPlayer].nWeaponState = 1;
+                            else
+                                SelectNewWeapon(nPlayer);
                             break;
                         }
                         else if (nWeapon == kWeaponGrenade)
@@ -936,6 +975,26 @@ loc_flag:
                 }
                 case kWeaponRing:
                     break;
+
+                case kWeaponManacle:
+                {
+                    // One bolt, plus one per charge step, in a shallow fan.
+                    int const nBolts = 1 + s_manacleCharge[nPlayer];
+                    int var_50 = (fix16_to_int(sPlayerInput[nPlayer].horizon) - 92) << 2;
+                    nHeight -= var_50;
+                    if (sPlayerInput[nPlayer].nTarget >= 0)
+                        var_50 = sPlayerInput[nPlayer].nTarget + 10000;
+                    for (int i = 0; i < nBolts; i++)
+                    {
+                        int const spread = (i - (nBolts - 1) / 2) * 24 + ((nBolts & 1) ? 0 : 12);
+                        BuildBullet(nPlayerSprite, 18, ebp, ebx, nHeight, (nAngle + spread) & kAngleMask, var_50, var_1C);
+                    }
+                    nQuake[nPlayer] = 64 + 32 * s_manacleCharge[nPlayer];
+                    KexManacle_LastShot = nBolts;
+                    s_manacleCharge[nPlayer] = 0;
+                    s_manacleTicks[nPlayer] = 0;
+                    break;
+                }
 
                 case kWeaponMummified:
                 {
