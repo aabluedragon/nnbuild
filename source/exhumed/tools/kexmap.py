@@ -1508,6 +1508,15 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             if name == 'DOOR_OPEN_ONLY_MESSAGE':
                 s_['kexhold'] = True
         elif name in ('DOOR_CLOSE', 'DOOR_CLOSE_SLOW'):
+            # Kex authors these shut, ceiling on the floor, and opens them at
+            # spawn so the tag can close them; Build's 75 travels between the
+            # map's ceiling and its floor, so the ceiling is raised here to
+            # the highest neighbour's -- open until fired. Ten of them across
+            # seven levels stood shut for good before this.
+            if ceil_above:
+                s_['ceilingz'] = min(sects[n]['ceilingz'] for n in nbs)
+                s_['ceilingheinum'] = 0
+                s_['ceilingstat'] &= ~2
             lotag, hitag = 75, chan
         elif name in ('FLOOR_TRIGGER_PLATE', 'REMOTE_TRIGGER'):
             lotag, hitag = 21, chan

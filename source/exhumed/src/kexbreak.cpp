@@ -1695,6 +1695,19 @@ static void Kex_ChangeMap(char const *name)
 void KexScript_Tick(void)
 {
     KexTrigger_Test();
+    // VB_KEXKEY_TEST=1: at tick 100, hand the local player key 1 and arm the
+    // key rules as if the script sector had been entered (SUNKEN).
+    static int s_keyTest = -1;
+    if (s_keyTest < 0)
+        s_keyTest = getenv("VB_KEXKEY_TEST") ? 100 : 0;
+    if (s_keyTest > 0 && --s_keyTest == 0)
+    {
+        PlayerList[nLocalPlayer].keys |= 0x1000;
+        for (int i = 0; i < s_scripts; i++)
+            if (s_script[i].rule && s_script[i].rule->kind == kKexScriptKeyFires)
+                s_script[i].armed = 1;
+        OSD_Printf("Kex script test: key 1 granted, key rules armed\n");
+    }
     for (int i = 0; i < s_scripts; i++)
     {
         KexScript &sc = s_script[i];

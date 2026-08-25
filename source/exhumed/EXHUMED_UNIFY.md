@@ -1564,6 +1564,15 @@ heights every ten ticks; the tags are read back from the map file, since
   KILENTRY's lift and SETARENA's exit now stay where their tag put them;
   `DOOR_TRIGGER_ONLY` (2), driven by walk-in regions that fire again, keeps
   Build's auto-close.
+- **`DOOR_CLOSE` doors stood shut for good.** Kex authors them closed,
+  ceiling on the floor, and opens them at spawn so their tag can close
+  them; Build's 75 travels between the map's ceiling and its floor, so a
+  ceiling on the floor had nowhere to go and the ten of them across seven
+  levels (SUNKEN's three, one each in GORGE, KILENTRY, MAGMA, MINES,
+  SANCTUAR, two in SHRINE) blocked their passages from the start. The
+  converter raises such a sector's ceiling to its highest neighbour's;
+  `VB_KEXKEY_TEST=1` with `VB_KEX_LOOKAT_TAG=2` on SUNKEN shows the door
+  standing open and descending once the key rule fires.
 
 ### The pause menu
 
