@@ -1270,9 +1270,10 @@ referenced from there, so the layout had to come from the disassembly):
   (`hud_spark.png`) and `KexHud_DrawSpark` puts it at one of eight points
   around our jewel's centre.
 - **Not drawn**: `gfx/wings.png`, which the remaster draws in place of the
-  scarab ornaments only when the screen is wider than 4:3 (its canvas is
-  240 tall and `aspect * 240` wide, the bar centred with an offset of
-  `(width - 320) / 2`; ours is always the 320-wide layout).
+  scarab ornaments only when its canvas (240 tall, `aspect * 240` wide, the
+  bar centred with an offset of `(width - 320) / 2`) has room for the
+  544-unit assembly the wings make -- an aspect of 2.27:1 or wider, beyond
+  any 16:9 or 16:10 screen; ours is always the 320-wide layout.
 
 ### The traps
 
@@ -1655,8 +1656,14 @@ heights every ten ticks; the tags are read back from the map file, since
   the swim code takes `SectAbove` -1), and Build's own 94 carries the
   wading depth, hitag 10 as the DOS maps have it. SUNKEN goes from 74 to
   545 sectors under water, MARSH gets 172 to wade, and `Kex water: ...`
-  reports both at level start. Flag 32 (45 sectors in seven levels) is
-  still unread.
+  reports both at level start. Flag 32 (45 sectors in seven levels: plain
+  cave, Karnak and sanctuary floors, no events, mixed sky and ceiling) is
+  still unread; the editor's flag names in the exe (Invisible, Block
+  non-players, Solid, Block AI fallers, Slime, Toggle, Lava, Water, Portal,
+  Underwater, Force Field, Hidden) are its FACE flags -- taken as bits they
+  put 256 on "Portal" and 16 on "Slime", which the water floors those
+  sectors carry contradict -- so the sector word is read from the levels,
+  not the names.
 
 ### The pause menu
 
