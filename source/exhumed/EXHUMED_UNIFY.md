@@ -1573,6 +1573,22 @@ heights every ten ticks; the tags are read back from the map file, since
   converter raises such a sector's ceiling to its highest neighbour's;
   `VB_KEXKEY_TEST=1` with `VB_KEX_LOOKAT_TAG=2` on SUNKEN shows the door
   standing open and descending once the key rule fires.
+- **The bomb walls were open passages, and blew as the finale's towers.**
+  `EXPLODE` became Build's 35, the energy block, whose sector stands with
+  its floor raised (the block's health is that height) and drops to the
+  neighbour's floor when blown -- but Kex authors the volume open and
+  raises it at spawn, so the eleven in SETARENA, the two in MAGMA and those
+  in COLONY_PSX and SELBUROW were walkable from the start, their faces
+  repainted with the DOS energy texture, and blowing one printed "N
+  TOWERS REMAINING" and, on the last, started the DOS finale. Now the
+  converter raises the floor to the ceiling and leaves a lotag 74 sprite at
+  the authored floor (`kexbomb`), read into a table with the hold markers;
+  in Kex mode the block keeps the faces, takes the authored floor as where
+  it drops to, blows on one blast, fires its tag and blows every sibling
+  on it (`FuncEnergyBlock` on the channel message), and does none of the
+  towers bookkeeping. `VB_KEXEXPLODE_TEST=1` blows the first at tick 100;
+  with `VB_KEX_LOOKAT_TAG=668` SETARENA's sector 22 is seen to drop from
+  its ceiling to its authored floor, all eleven going together.
 
 ### The pause menu
 

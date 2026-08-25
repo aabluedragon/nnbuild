@@ -1342,17 +1342,38 @@ void KexTrigger_Reset(void) { s_triggers = 0; }
 // filled by scanning the loaded sprites from InitSectFlag(), which runs
 // first; ProcessSpriteTag() then only removes the marker.
 static uint8_t s_hold[kMaxSectors];
+// ... and the bomb walls' floors once blown: the converter raises an EXPLODE
+// sector's floor to its ceiling (solid until blown) and leaves a lotag 74
+// sprite at the floor it was authored with, which is where the energy block
+// drops it (object.cpp) -- the block's own guess, the first neighbour's
+// floor, lands on a sibling wall or nowhere when they stand in a cluster.
+static int32_t s_bombFloor[kMaxSectors];
+static uint8_t s_bombKnown[kMaxSectors];
 void KexHold_Reset(void)
 {
     Bmemset(s_hold, 0, sizeof(s_hold));
+    Bmemset(s_bombKnown, 0, sizeof(s_bombKnown));
     if (!g_kexMode)
         return;
-    int n = 0;
+    int n = 0, nb = 0;
     for (int i = 0; i < kMaxSprites; i++)
-        if (sprite[i].statnum < MAXSTATUS && sprite[i].lotag == 73 && (unsigned)sprite[i].sectnum < (unsigned)kMaxSectors)
+    {
+        if (sprite[i].statnum >= MAXSTATUS || (unsigned)sprite[i].sectnum >= (unsigned)kMaxSectors)
+            continue;
+        if (sprite[i].lotag == 73)
         { s_hold[sprite[i].sectnum] = 1; n++; }
-    if (n)
-        OSD_Printf("Kex hold: %d movers hold where their tag puts them\n", n);
+        else if (sprite[i].lotag == 74)
+        { s_bombFloor[sprite[i].sectnum] = sprite[i].z; s_bombKnown[sprite[i].sectnum] = 1; nb++; }
+    }
+    if (n || nb)
+        OSD_Printf("Kex hold: %d movers hold where their tag puts them, %d bomb walls\n", n, nb);
+}
+int KexHold_BombFloor(int nSector, int *pZ)
+{
+    if (!g_kexMode || (unsigned)nSector >= (unsigned)kMaxSectors || !s_bombKnown[nSector])
+        return 0;
+    *pZ = s_bombFloor[nSector];
+    return 1;
 }
 void KexHold_Add(int nSprite)
 {
@@ -1585,6 +1606,18 @@ void KexScript_BossTick(void)
         s_ramsesTest = getenv("VB_KEXRAMSES_TEST") ? 100 : 0;
     if (s_ramsesTest > 0 && --s_ramsesTest == 0)
         KexScript_RamsesEnd();
+    // VB_KEXEXPLODE_TEST=1: at tick 100, blow the first bomb wall (statnum
+    // 406, the energy block); its siblings on the tag should follow.
+    static int s_explodeTest = -1;
+    if (s_explodeTest < 0)
+        s_explodeTest = getenv("VB_KEXEXPLODE_TEST") ? 100 : 0;
+    if (s_explodeTest > 0 && --s_explodeTest == 0)
+    {
+        void ExplodeEnergyBlock(int nSprite);
+        int const i = headspritestat[406];
+        if (i >= 0)
+            ExplodeEnergyBlock(i);
+    }
     if (s_bossTest <= 0 || --s_bossTest != 1 || !s_boss)
         return;
     if (getenv("VB_KEXBOSS_TEST")[0] == '2')

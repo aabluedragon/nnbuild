@@ -1531,6 +1531,16 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
         elif name == 'DROP_PAD' and floor_above:
             lotag, hitag = 6, chan
         elif name == 'EXPLODE':
+            # A bomb wall. Build's 35 is a sector whose floor stands raised
+            # -- the block's health is that height -- and drops to the
+            # neighbour's floor when blown; Kex authors the volume open and
+            # raises it at spawn. So the floor goes to the ceiling here,
+            # solid until blown. The engine keeps the faces' own textures,
+            # fires the tag and chains the siblings on it (object.cpp).
+            s_['kexbomb'] = s_['floorz']       # where it drops to: a lotag 74 sprite at that z
+            s_['floorz'] = s_['ceilingz']
+            s_['floorheinum'] = 0
+            s_['floorstat'] &= ~2
             lotag, hitag = 35, chan
         elif name in ('SWITCH1', 'SWITCH2', 'SWITCH3_WOOD', 'SWITCH4_METAL'):
             _place_switch(m, sects, walls, ranges, src, si, chan, eparam,
@@ -1664,6 +1674,8 @@ def _flat_sprites(m, sects, walls, ranges, src):
             out.append((si, 64, s_['kexscripted']))   # script-moved sector
         if s_.get('kexhold'):
             out.append((si, 73, 0))                   # the mover holds where its tag put it
+        if s_.get('kexbomb') is not None:
+            out.append((si, 74, 0, s_['kexbomb']))    # the bomb wall's floor once blown
         if s_.get('kexactortrig') is not None:
             out.append((si, 66, s_['kexactortrig']))  # kill-count trigger
         if s_.get('kexscript') is not None:
@@ -2856,7 +2868,9 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
     # Water pairing and damage floors, recorded by _flat_sprites(). A record's
     # partner is a SOURCE sector index; its first piece always keeps the source
     # index, so the remap of that index is the Build sector the hitag names.
-    for si, lotag, arg in getattr(m, 'kex_flat_sprites', ()):
+    for entry in getattr(m, 'kex_flat_sprites', ()):
+        si, lotag, arg = entry[0], entry[1], entry[2]
+        z_at = entry[3] if len(entry) > 3 else None   # a marker that names a height of its own
         if si not in remap:
             continue
         pic = 1
@@ -2875,7 +2889,7 @@ def build_sprites(m, sects, walls, ranges, remap, decor=None):
         start, num = ranges[si]
         cx = sum(walls[start+i]['x'] for i in range(num)) / max(1, num)
         cy = sum(walls[start+i]['y'] for i in range(num)) / max(1, num)
-        out.append(dict(x=int(cx), y=int(cy), z=sects[si]['floorz'],
+        out.append(dict(x=int(cx), y=int(cy), z=(sects[si]['floorz'] if z_at is None else z_at),
                         sectnum=remap[si], ang=0,
                         lotag=lotag, hitag=hitag, picnum=pic, shade=0,
                         xrepeat=64, yrepeat=64))

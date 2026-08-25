@@ -986,9 +986,10 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
         case 35: // Destructible sector
         case 36:
         {
-            nEnergyTowers++;
+            if (!g_kexMode)
+                nEnergyTowers++;    // VibeBuild32: the remaster's bomb walls are not the finale's towers
 
-            int nEnergyBlock = BuildEnergyBlock(nSector);
+            int nEnergyBlock = BuildEnergyBlock(nSector, g_kexMode ? nChannel : -1);
 
             if (nLotag == 36) {
                 nFinaleSpr = nEnergyBlock;

@@ -56,6 +56,7 @@ void KexTrigger_Died(int nSprite);       // from runlist_DamageEnemy
 void KexHold_Reset(void);                // movers that hold where their tag put them (lotag 73)
 void KexHold_Add(int nSprite);
 int  KexHold_Sector(int nSector);
+int  KexHold_BombFloor(int nSector, int *pZ);   // the EXPLODE sector's authored floor (lotag 74)
 void KexScript_BossTick(void);          // the VB_KEXBOSS_TEST hook
 void KexScript_ArtifactTaken(int nArtifact);   // fires tag 1000 + index
 void KexScript_RamsesEnd(void);         // TOMB's crypt door

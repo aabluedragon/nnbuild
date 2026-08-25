@@ -1563,7 +1563,7 @@ void DoFinale()
     }
 }
 
-int BuildEnergyBlock(short nSector)
+int BuildEnergyBlock(short nSector, int nKexChannel)
 {
     short startwall = sector[nSector].wallptr;
     short nWalls = sector[nSector].wallnum;
@@ -1571,22 +1571,27 @@ int BuildEnergyBlock(short nSector)
     int x = 0;
     int y = 0;
 
+    short nextsector = wall[startwall].nextsector;
     for (int i = 0; i < nWalls; i++)
     {
         x += wall[startwall + i].x;
         y += wall[startwall + i].y;
-
-        wall[startwall + i].picnum = kClockSymbol16;
-        wall[startwall + i].pal = 0;
-        wall[startwall + i].shade = 50;
+        if (nKexChannel < 0)        // VibeBuild32: the remaster's walls keep their own faces
+        {
+            wall[startwall + i].picnum = kClockSymbol16;
+            wall[startwall + i].pal = 0;
+            wall[startwall + i].shade = 50;
+        }
+        else if (nextsector < 0 && wall[startwall + i].nextsector >= 0)
+            nextsector = wall[startwall + i].nextsector;   // the first wall need not be the portal
     }
 
     int xAvg = x / nWalls;
     int yAvg = y / nWalls;
 
     int nSprite = insertsprite(nSector, 406);
-
-    short nextsector = wall[startwall].nextsector;
+    if (nextsector < 0)
+        nextsector = nSector;
 
     sprite[nSprite].x = xAvg;
     sprite[nSprite].y = yAvg;
@@ -1596,6 +1601,7 @@ int BuildEnergyBlock(short nSector)
 //	GrabTimeSlot(3);
 
     sprite[nSprite].z = sector[nextsector].floorz;
+    { int z; if (nKexChannel >= 0 && KexHold_BombFloor(nSector, &z)) sprite[nSprite].z = z; }   // VibeBuild32: the authored floor
 
     // CHECKME - name of this variable?
     int nRepeat = (sprite[nSprite].z - sector[nSector].floorz) >> 8;
@@ -1603,15 +1609,17 @@ int BuildEnergyBlock(short nSector)
         nRepeat = 255;
     }
 
-    sprite[nSprite].xrepeat = nRepeat;
+    sprite[nSprite].xrepeat = nKexChannel >= 0 ? 1 : nRepeat;   // VibeBuild32: a bomb wall goes on one blast
     sprite[nSprite].cstat = 0x8000;
     sprite[nSprite].xvel = 0;
     sprite[nSprite].yvel = 0;
     sprite[nSprite].zvel = 0;
     sprite[nSprite].extra = -1;
     sprite[nSprite].lotag = runlist_HeadRun() + 1;
-    sprite[nSprite].hitag = 0;
+    sprite[nSprite].hitag = (int16_t)nKexChannel;   // VibeBuild32: the tag it fires and listens on, -1 in the DOS game
     sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nSprite, kRunEnergyBlock);
+    if (nKexChannel >= 0)
+        runlist_AddRunRec(sRunChannels[nKexChannel].a, nSprite, kRunEnergyBlock);   // siblings on the tag blow together
 
     nEnergyBlocks++;
 
@@ -1654,8 +1662,9 @@ void ExplodeEnergyBlock(int nSprite)
     short nWalls = sector[nSector].wallnum;
 
     int i;
+    int const bKex = sprite[nSprite].hitag >= 0 && g_kexMode;   // VibeBuild32: a remaster bomb wall
 
-    for (i = 0; i < nWalls; i++)
+    for (i = 0; i < nWalls && !bKex; i++)
     {
         short nextwall = wall[startwall + i].nextwall;
 
@@ -1669,14 +1678,17 @@ void ExplodeEnergyBlock(int nSprite)
         wall[nextwall].shade = 50;
     }
 
-    if (sector[nSector].floorpal >= 4) {
-        sector[nSector].floorpal = 7;
+    if (!bKex)
+    {
+        if (sector[nSector].floorpal >= 4) {
+            sector[nSector].floorpal = 7;
+        }
+        else {
+            sector[nSector].floorpal = 0;
+        }
+    
+        sector[nSector].floorshade = 50;
     }
-    else {
-        sector[nSector].floorpal = 0;
-    }
-
-    sector[nSector].floorshade = 50;
     sector[nSector].extra = -1;
     sector[nSector].floorz = sprite[nSprite].z;
 
@@ -1700,6 +1712,17 @@ void ExplodeEnergyBlock(int nSprite)
     }
 
     TintPalette(64, 64, 64);
+
+    if (bKex)
+    {
+        // The remaster's bomb wall: its tag fires -- the siblings on it blow
+        // with it (FuncEnergyBlock) and whatever else listens opens -- and
+        // none of the finale's towers business.
+        nEnergyTowers++;
+        runlist_ChangeChannel(sprite[nSprite].hitag, 1);
+        OSD_Printf("Kex bomb wall: sector %d blown, channel %d fired\n", nSector, sprite[nSprite].hitag);
+        return;
+    }
 
     if (nEnergyTowers == 1)
     {
@@ -1754,6 +1777,13 @@ void FuncEnergyBlock(int a, int nDamage, int nRun)
 
     switch (nMessage)
     {
+        case 0x10000:   // VibeBuild32: a sibling on the tag blew, or a script fired it
+        {
+            if (g_kexMode && sprite[nSprite].hitag >= 0 && sector[sprite[nSprite].sectnum].extra == nSprite
+                && sRunChannels[sprite[nSprite].hitag].c)
+                ExplodeEnergyBlock(nSprite);
+            return;
+        }
         case 0x20000:
         case 0x30000:
         case 0x90000:
