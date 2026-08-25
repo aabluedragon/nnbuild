@@ -1032,6 +1032,13 @@ it, which is what `multipsky` does -- without it a parallax ceiling draws black.
 
 ### Related fixes
 
+- `AngleChase()` (move.cpp) squared a flyer's step to take its length and
+  the squares overflowed past ~512 units a move, clamping the length to
+  INT_MAX -- flattening the dive -- and logging `overflow` some 1700 times a
+  level in CAVERN. The length has a closed form (the step is (cos, sin) *
+  speed * cos pitch, so its norm is |speed| * cos pitch), used where the
+  squares would not fit; the exact path is kept where it always worked.
+
 `-map` never worked in this port: it compared the whole argument token against
 `"map"` and then read the filename from `pChar+4`, one past the terminating NUL
 of a token that had to be exactly `-map`. No spelling of the flag could name a

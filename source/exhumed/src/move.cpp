@@ -1248,15 +1248,17 @@ int AngleChase(int nSprite, int nSprite2, int ebx, int ecx, int push1)
     int xshift = x >> 8;
     int yshift = y >> 8;
 
-    uint32_t sqrtNum = xshift * xshift + yshift * yshift;
+    // VibeBuild32: the squares overflow for a fast flyer (the crows past
+    // ~512 units a move logged "overflow" some 1700 times a level in CAVERN
+    // and had their length clamped, flattening the dive). The length has a
+    // closed form -- x and y are (cos, sin) * ebx * eax, so their norm is
+    // |ebx| * eax, shifted as they were -- which is used when the squares
+    // would not fit; the exact path is kept where it always worked.
+    int64_t const sq = (int64_t)xshift * xshift + (int64_t)yshift * yshift;
+    int const len = (sq <= INT_MAX) ? (int)ksqrt((uint32_t)sq)
+                                    : (int)(((int64_t)klabs(ebx) * eax) >> 22);
 
-    if (sqrtNum > INT_MAX)
-    {
-        OSD_Printf("%s %d: overflow\n", EDUKE32_FUNCTION, __LINE__);
-        sqrtNum = INT_MAX;
-    }
-
-    int z = Sin(sprite[nSprite].zvel) * ksqrt(sqrtNum);
+    int z = Sin(sprite[nSprite].zvel) * len;
 
     return movesprite(nSprite, x >> 2, y >> 2, (z >> 13) + (Sin(ecx) >> 5), 0, 0, nClipType);
 }
