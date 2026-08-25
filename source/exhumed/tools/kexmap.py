@@ -1501,6 +1501,12 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             hitag = key * 1000 + chan
         elif name in ('DOOR_TRIGGER_ONLY', 'DOOR_OPEN_ONLY_MESSAGE') and ceil_above:
             lotag, hitag = 24, chan
+            # OPEN_ONLY: opened once by its tag (a script, a boss, an
+            # artifact), it stays open; Build's 24 would close it 60 ticks
+            # later. A lotag 73 sprite tells the engine to leave out the
+            # pause switch (init.cpp, runlist.cpp).
+            if name == 'DOOR_OPEN_ONLY_MESSAGE':
+                s_['kexhold'] = True
         elif name in ('DOOR_CLOSE', 'DOOR_CLOSE_SLOW'):
             lotag, hitag = 75, chan
         elif name in ('FLOOR_TRIGGER_PLATE', 'REMOTE_TRIGGER'):
@@ -1509,6 +1515,8 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             lotag, hitag = 8, chan
         elif name in ('FLOOR_LOWER_WAIT_RAISE', 'FLOOR_LOWER_ACTIVE') and floor_below:
             lotag, hitag = 9, chan
+            if name == 'FLOOR_LOWER_ACTIVE':          # down while the tag is on: no return
+                s_['kexhold'] = True
         elif name == 'FLOOR_RAISE_WAIT_LOWER' and floor_above:
             lotag, hitag = 12, chan
         elif name == 'DROP_PAD' and floor_above:
@@ -1645,6 +1653,8 @@ def _flat_sprites(m, sects, walls, ranges, src):
             out.append((si, 95, s_['kexbob']))     # floating platform
         if s_.get('kexscripted') is not None:
             out.append((si, 64, s_['kexscripted']))   # script-moved sector
+        if s_.get('kexhold'):
+            out.append((si, 73, 0))                   # the mover holds where its tag put it
         if s_.get('kexactortrig') is not None:
             out.append((si, 66, s_['kexactortrig']))  # kill-count trigger
         if s_.get('kexscript') is not None:

@@ -1527,6 +1527,33 @@ through to `tag % 1000` and the boss and load rules on those levels were
 firing channel 0. The field is 32 wide now and an unresolved tag fires
 nothing, with a log line saying so.
 
+Watching the doors themselves (`VB_KEX_LOOKAT_TAG=<kex tag>` stands the
+player before the first sector on that tag's channel and logs its
+heights every ten ticks; the tags are read back from the map file, since
+`runlist_ProcessSectorTag` clears them) found two more:
+
+- **A channel found by its state is lost once a mover has run.**
+  `runlist_AllocChannel()` matches `sRunChannels[].c`, which starts as the
+  channel number; a door's elevator rewrites it on its first cycle, so a
+  rule that resolved its channel at fire time was allocating a fresh one
+  nobody listened on -- SANCTUAR's door never moved. The plates keep their
+  channel INDEX from build time, and now so do the rules:
+  `Kex_ChannelIndex()` resolves every tag a rule can fire in
+  `KexScript_Init`, before any mover runs, and everything fires by index.
+- **Open-only doors and active lifts came back.** Build's channel-only
+  ceiling door (24) and lift down (9) are built with a pause switch that
+  sends them back 60 / 150 ticks later, right for a plate-driven door and
+  wrong for the remaster's `DOOR_OPEN_ONLY_MESSAGE` and
+  `FLOOR_LOWER_ACTIVE`, opened or lowered once by a script, a boss or an
+  artifact. The converter plants a lotag 73 sprite in such a sector
+  (`kexhold`), `KexHold_Reset()` scans the loaded sprites for it from
+  `InitSectFlag()` -- `LoadObjects()` processes sector tags before
+  `ExamineSprites()` reaches the sprites -- and `runlist_ProcessSectorTag`
+  leaves the pause switch out for those sectors. SANCTUAR's door,
+  KILENTRY's lift and SETARENA's exit now stay where their tag put them;
+  `DOOR_TRIGGER_ONLY` (2), driven by walk-in regions that fire again, keeps
+  Build's auto-close.
+
 ### The pause menu
 
 `menu_Menu(1)` -- the in-level menu -- gets the remaster's version too: GAME

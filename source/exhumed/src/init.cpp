@@ -650,6 +650,7 @@ void InitSectFlag()
     KexScripted_Reset();
     KexBeam_Reset();
     KexTrigger_Reset();
+    KexHold_Reset();
     KexScript_Reset();
     for (int i = 0; i < kMaxSectors; i++)
     {
@@ -1111,6 +1112,11 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             case 70:
             {
                 BuildDrip(nSprite);
+                return;
+            }
+            case 73:    // VibeBuild32: this sector's mover holds where its tag put it
+            {
+                KexHold_Add(nSprite);
                 return;
             }
             case 66:    // VibeBuild32: ACTOR_TRIGGER, fires when the pen's creatures are dead

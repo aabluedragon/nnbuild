@@ -670,6 +670,8 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
+            if (KexHold_Sector(nSector))    // VibeBuild32: the remaster's active lift stays down
+                return;
             int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwPause);
@@ -865,6 +867,8 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
+            if (KexHold_Sector(nSector))    // VibeBuild32: the remaster's open-only door stays open
+                return;
             int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwPause);

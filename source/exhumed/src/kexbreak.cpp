@@ -967,6 +967,8 @@ static inline int KexBeam_Rand(int span)
 // VB_KEX_LOOKAT=<statnum>: a moment in, stand the local player a little way
 // from the first sprite of that statnum, facing it -- for looking at a
 // creature without a hand on the keys.
+static int KexChan(int tag);   // below
+
 static void Kex_LookAtDebug(void)
 {
     static int s_ticks = -1, s_stat = -1, s_pic0 = -1, s_pic1 = -1;
@@ -984,6 +986,92 @@ static void Kex_LookAtDebug(void)
     }
     static int s_target = -1;
     int const nSprite = PlayerList[nLocalPlayer].nSprite;
+    // VB_KEX_LOOKAT_TAG=<kex tag>: instead of a sprite, the first sector
+    // whose hitag is that tag's channel (a door or lift) -- the player stands
+    // in a neighbouring sector, facing it, to watch it fire.
+    static int s_tag = -2, s_tagTicks = 0, s_tagSector = -1;
+    if (s_tag == -2)
+    { char const *e = getenv("VB_KEX_LOOKAT_TAG"); s_tag = e ? Batoi(e) : -1; }
+    if (s_tag >= 0 && s_target < 0 && ++s_tagTicks == 90)
+    {
+        int const chan = KexChan(s_tag);
+        // runlist_ProcessSectorTag() clears a sector's tags once its mover is
+        // built, so the tags are read back from the map file.
+        static int16_t s_fileTags[kMaxSectors][2];
+        int nFile = 0;
+        buildvfs_kfd hMap = kopen4loadfrommod(gUserMapFilename, 0);
+        if (hMap != buildvfs_kfd_invalid)
+        {
+            uint8_t hdr[22];
+            if (kread(hMap, hdr, 22) == 22)
+            {
+                nFile = min<int>(B_LITTLE16(*(uint16_t *)&hdr[20]), kMaxSectors);
+                for (int si = 0; si < nFile; si++)
+                {
+                    uint8_t rec[40];
+                    if (kread(hMap, rec, 40) != 40) { nFile = si; break; }
+                    s_fileTags[si][0] = (int16_t)B_LITTLE16(*(uint16_t *)&rec[34]);
+                    s_fileTags[si][1] = (int16_t)B_LITTLE16(*(uint16_t *)&rec[36]);
+                }
+            }
+            kclose(hMap);
+        }
+        OSD_Printf("Kex look-at: tag %d is channel %d, %d sectors (%d tagged in the file)\n", s_tag, chan, numsectors, nFile);
+        for (int si = 0; si < numsectors && si < nFile && chan >= 0; si++)
+        {
+            if (s_fileTags[si][1] % 1000 != chan || !s_fileTags[si][0])
+                continue;
+            int nb = -1, cx = 0, cy = 0, n = 0;
+            for (int w = sector[si].wallptr; w < sector[si].wallptr + sector[si].wallnum; w++)
+            {
+                cx += wall[w].x; cy += wall[w].y; n++;
+                if (nb < 0 && wall[w].nextsector >= 0 && sector[wall[w].nextsector].floorz > sector[wall[w].nextsector].ceilingz + 2048)
+                    nb = wall[w].nextsector;
+            }
+            if (nb < 0 || !n)
+            {
+                OSD_Printf("Kex look-at: tag %d sector %d (lotag %d) has no tall neighbour (%d walls)\n", s_tag, si, s_fileTags[si][0], n);
+                continue;
+            }
+            cx /= n; cy /= n;
+            int px = 0, py = 0, m = 0;
+            for (int w = sector[nb].wallptr; w < sector[nb].wallptr + sector[nb].wallnum; w++)
+            { px += wall[w].x; py += wall[w].y; m++; }
+            px /= m; py /= m;
+            // Back off along the line from the door, as far as the sectors
+            // allow (up to 1536 units), so the whole door is in view.
+            {
+                int const ang = getangle(px - cx, py - cy);
+                int16_t ns = (int16_t)nb;
+                for (int d = 256; d <= 1536; d += 256)
+                {
+                    int const tx = cx + mulscale14(Cos(ang), d), ty = cy + mulscale14(Sin(ang), d);
+                    int16_t ts = (int16_t)nb;
+                    updatesector(tx, ty, &ts);
+                    if (ts < 0 || sector[ts].floorz - sector[ts].ceilingz < 4096)
+                        break;
+                    px = tx; py = ty; ns = ts;
+                }
+                nb = ns;
+            }
+            sprite[nSprite].x = px; sprite[nSprite].y = py;
+            sprite[nSprite].z = sector[nb].floorz - 2048;
+            mychangespritesect(nSprite, (int16_t)nb);
+            int const look = getangle(cx - px, cy - py);
+            PlayerList[nLocalPlayer].q16angle = fix16_from_int(look);
+            PlayerList[nLocalPlayer].q16oangle = PlayerList[nLocalPlayer].q16angle;
+            sprite[nSprite].ang = (int16_t)look;
+            PlayerList[nLocalPlayer].opos = sprite[nSprite].xyz;
+            OSD_Printf("Kex look-at: tag %d -> sector %d (lotag %d) from sector %d\n", s_tag, si, s_fileTags[si][0], nb);
+            s_tagSector = si;
+            break;
+        }
+        s_tag = -1;
+    }
+    // ... and report the sector's heights every two seconds for a while, so
+    // a door that opens is seen to open even off camera.
+    if (s_tagSector >= 0 && ++s_tagTicks <= 90 + 10 * 40 && (s_tagTicks - 90) % 10 == 0)
+        OSD_Printf("Kex look-at: sector %d ceiling %d floor %d\n", s_tagSector, sector[s_tagSector].ceilingz, sector[s_tagSector].floorz);
     if (s_target >= 0)
     {
         // Keep facing it for a while: a creature moves.
@@ -1232,6 +1320,37 @@ static int s_triggers;
 
 void KexTrigger_Reset(void) { s_triggers = 0; }
 
+// Movers that hold where their tag put them. Build's channel-only ceiling
+// door (24) and lift down (9) come with a pause switch that sends them back
+// 60 / 150 ticks later, which is right for a plate-driven door and wrong for
+// the remaster's DOOR_OPEN_ONLY_MESSAGE and FLOOR_LOWER_ACTIVE: opened or
+// lowered once by a script, a boss or an artifact, those stay. The converter
+// plants a lotag 73 sprite in such a sector. LoadObjects() processes the
+// sector tags BEFORE ExamineSprites() gets to the sprites, so the table is
+// filled by scanning the loaded sprites from InitSectFlag(), which runs
+// first; ProcessSpriteTag() then only removes the marker.
+static uint8_t s_hold[kMaxSectors];
+void KexHold_Reset(void)
+{
+    Bmemset(s_hold, 0, sizeof(s_hold));
+    if (!g_kexMode)
+        return;
+    int n = 0;
+    for (int i = 0; i < kMaxSprites; i++)
+        if (sprite[i].statnum < MAXSTATUS && sprite[i].lotag == 73 && (unsigned)sprite[i].sectnum < (unsigned)kMaxSectors)
+        { s_hold[sprite[i].sectnum] = 1; n++; }
+    if (n)
+        OSD_Printf("Kex hold: %d movers hold where their tag puts them\n", n);
+}
+void KexHold_Add(int nSprite)
+{
+    mydeletesprite(nSprite);
+}
+int KexHold_Sector(int nSector)
+{
+    return g_kexMode && (unsigned)nSector < (unsigned)kMaxSectors && s_hold[nSector];
+}
+
 void KexTrigger_Add(int nSprite, int nChannel)
 {
     if (g_kexMode && s_triggers < kMaxKexTriggers)
@@ -1347,17 +1466,39 @@ static KexBossRule const s_bossRule[] = {
     { "KILARENA", 121, -1,              1010 },   // the Kilmaat Queen: no artifact, the exit alone
 };
 
+// runlist_AllocChannel() finds a channel by its STATE, which starts as the
+// channel number -- and a door's elevator rewrites that state on its first
+// cycle, so a lookup made later allocates a fresh channel nobody listens on.
+// The plates hold their channel INDEX from build time; so must the rules.
+// Every tag a rule can fire is resolved here at level start, before any
+// mover has run, and fired by index from then on.
+#define kMaxKexChanCache 64
+static struct { int16_t tag, index; } s_chanCache[kMaxKexChanCache];
+static int s_chanCached;
+
+static int Kex_ChannelIndex(int tag)
+{
+    for (int i = 0; i < s_chanCached; i++)
+        if (s_chanCache[i].tag == tag)
+            return s_chanCache[i].index;
+    int const chan = KexChan(tag);
+    int const idx = chan < 0 ? -1 : runlist_AllocChannel(chan);
+    if (s_chanCached < kMaxKexChanCache)
+    { s_chanCache[s_chanCached].tag = (int16_t)tag; s_chanCache[s_chanCached++].index = (int16_t)idx; }
+    return idx;
+}
+
 // A Kex tag, fired through the channel the converter allotted it.
 void KexScript_FireTag(int tag, char const *why)
 {
-    int const chan = KexChan(tag);
-    if (chan < 0)
+    int const idx = Kex_ChannelIndex(tag);
+    if (idx < 0)
     {
         OSD_Printf("Kex script: tag %d not allotted on this level, nothing to fire (%s)\n", tag, why);
         return;
     }
-    Kex_FireChannel(runlist_AllocChannel(chan));
-    OSD_Printf("Kex script: tag %d fired (%s)\n", tag, why);
+    Kex_FireChannel(idx);
+    OSD_Printf("Kex script: tag %d fired on channel %d (%s)\n", tag, idx, why);
 }
 
 // Taking an artifact fires 1000 + its index: the tag the converter's audit
@@ -1386,7 +1527,7 @@ static int s_bossTest;                // VB_KEXBOSS_TEST: 1 kill the boss at tic
 
 static void KexScript_BossFire(char const *why)
 {
-    { int const c = KexChan(s_boss->fire); if (c >= 0) Kex_FireChannel(runlist_AllocChannel(c)); }
+    Kex_FireChannel(Kex_ChannelIndex(s_boss->fire));
     OSD_Printf("Kex script: %s, tag %d fired (%s)\n", why, s_boss->fire, s_boss->map);
 }
 
@@ -1483,6 +1624,13 @@ void KexScript_Init(void)
         return;
     char base[32];
     Kex_LevelName(base, sizeof(base));
+    // Resolve every tag a rule on this level can fire while the channels'
+    // states are still their numbers (see Kex_ChannelIndex).
+    s_chanCached = 0;
+    for (auto const &r : s_scriptRule) if (!Bstrcmp(base, r.map)) for (int k = 0; k < 2; k++) if (r.fire[k] > 0) Kex_ChannelIndex(r.fire[k]);
+    for (auto const &r : s_bossRule)   if (!Bstrcmp(base, r.map)) Kex_ChannelIndex(r.fire);
+    for (int a = 0; a < kKexArtiCount; a++) Kex_ChannelIndex(1000 + a);
+    Kex_ChannelIndex(1020);
     for (auto const &r : s_loadRule)
     {
         if (Bstrcmp(base, r.map))
@@ -1490,7 +1638,7 @@ void KexScript_Init(void)
         for (int k = 0; k < 2; k++)
             if (r.fire[k] > 0)
             {
-                { int const c = KexChan(r.fire[k]); if (c >= 0) Kex_FireChannel(runlist_AllocChannel(c)); }
+                Kex_FireChannel(Kex_ChannelIndex(r.fire[k]));
                 OSD_Printf("Kex script: %s $script 0 fires tag %d\n", base, r.fire[k]);
             }
     }
