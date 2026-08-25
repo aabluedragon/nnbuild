@@ -1489,6 +1489,42 @@ damage, and the tag fires either way. `VB_KEXBOSS_TEST=1` kills the boss
 at tick 60, `=2` grants the artifact and runs the load rule instead; both
 log `Kex script: ... tag 1010 fired`.
 
+**The completability audit.** With those two found, every map was audited:
+each event that only acts when its tag is fired (trigger-only and message
+doors, door closes, channel lifts, scripted moves) against everything that
+can fire the tag (plates, trigger regions, switches, actor triggers,
+use-activated doors sharing the tag, EXPLODE sectors -- which fire on being
+blown, as Build's bomb wall does -- and the transcribed rules). Fifteen
+tags were dangling; nine were EXPLODE listeners misread by the audit, and
+the rest are three remaster rules the scripts do not spell out:
+
+- **KILARENA's 1010** is the same boss convention: the level holds the
+  Kilmaat Queen (map actor 2), and her death opens the exit to the script
+  sector that returns to KILENTRY. A third boss rule, statnum 121, no
+  artifact.
+- **Taking an artifact fires 1000 + its index.** SANCTUAR's message door
+  1000 sits with the sandals (index 0), SETARENA's 1002 with the shawl (2),
+  KILENTRY's six lifts 1000..1005 with its six shrines, and nothing else
+  fires any of them: the remaster's own hardcoded rule.
+  `KexInv_GiveArtifact` fires it on a new artifact, and `KexScript_Init`
+  fires it at load for every artifact held, the way the boss levels' scripts
+  treat an artifact brought in. SELBUROW's scepter would fire 1004, which
+  nothing there listens on: a tag past 1000 the converter never allotted is
+  now refused by `KexChan()` rather than falling through to `tag % 1000` --
+  channel 0, which every tag-0 effect shares.
+- **TOMB's 1020**, the message door beside Ramses' crypt and its script
+  sector, opens when his speech ends (`KexScript_RamsesEnd`).
+
+Testing these turned up that none of the tag-past-1000 rules had ever
+reached their channel on six levels: the kexchan.txt row parser read the
+level name into `char[16]` with `%15s`, one short for the sixteen-character
+names (KEX_KILENTRY.MAP, KEX_KILARENA.MAP, KEX_SANCTUAR.MAP,
+KEX_SELBUROW.MAP, KEX_SETARENA.MAP, KEX_COLONY_*), so the name's last letter
+fell into the tag field and the row was rejected; the lookup then fell
+through to `tag % 1000` and the boss and load rules on those levels were
+firing channel 0. The field is 32 wide now and an unresolved tag fires
+nothing, with a log line saying so.
+
 ### The pause menu
 
 `menu_Menu(1)` -- the in-level menu -- gets the remaster's version too: GAME

@@ -1135,7 +1135,10 @@ void KexBeam_Tick(void)
 // number under 1000 per level, writing the allotments out as kexchan.txt so
 // the scripts below can fire a tag by the number the level script uses.
 // ---------------------------------------------------------------------------
-struct KexChanRow { char map[16]; int16_t tag, chan; };
+// map[16] with %15s was one short for the 16-character names (KEX_KILENTRY.MAP,
+// KEX_SETARENA.MAP ...): the rest of the name fell into the tag field, the
+// row was rejected, and those levels never resolved a tag past 1000.
+struct KexChanRow { char map[32]; int16_t tag, chan; };
 static KexChanRow s_chanAll[256];
 static int s_chanAllCount = -1;
 
@@ -1143,7 +1146,7 @@ static bool KexChan_ParseLine(char *line, int nRec)
 {
     KexChanRow &r = s_chanAll[nRec];
     int tag, chan;
-    if (Bsscanf(line, "%15s %d %d", r.map, &tag, &chan) < 3)
+    if (Bsscanf(line, "%31s %d %d", r.map, &tag, &chan) < 3)
         return false;
     r.tag = (int16_t)tag; r.chan = (int16_t)chan;
     return true;
@@ -1161,13 +1164,16 @@ static int KexChan(int tag)
     {
         char const *m = s_chanAll[i].map;
         if (!Bstrncmp(m, "KEX_", 4)) m += 4;
-        char mapUp[16];
+        char mapUp[32];
         Bstrncpyz(mapUp, m, sizeof(mapUp));
         if (char *dot = Bstrrchr(mapUp, '.')) *dot = 0;
         if (!Bstrcmp(mapUp, base) && s_chanAll[i].tag == tag)
             return s_chanAll[i].chan;
     }
-    return tag % 1000;
+    // A tag of 1000 or more the converter never allotted here: nothing on
+    // this level listens on it, and tag % 1000 would land on channel 0,
+    // which every tag-0 effect shares. Nothing to fire.
+    return -1;
 }
 
 // Fire a channel the way a touchplate does: a nonzero state, which the doors
@@ -1309,13 +1315,49 @@ struct KexBossRule { char const *map; int16_t statnum; int8_t artifact; int16_t 
 static KexBossRule const s_bossRule[] = {
     { "SELBUROW", 122, kKexArtiScepter, 1010 },   // Selkis
     { "SETARENA", 120, kKexArtiShawl,   1010 },   // Set
+    { "KILARENA", 121, -1,              1010 },   // the Kilmaat Queen: no artifact, the exit alone
 };
+
+// A Kex tag, fired through the channel the converter allotted it.
+void KexScript_FireTag(int tag, char const *why)
+{
+    int const chan = KexChan(tag);
+    if (chan < 0)
+    {
+        OSD_Printf("Kex script: tag %d not allotted on this level, nothing to fire (%s)\n", tag, why);
+        return;
+    }
+    Kex_FireChannel(runlist_AllocChannel(chan));
+    OSD_Printf("Kex script: tag %d fired (%s)\n", tag, why);
+}
+
+// Taking an artifact fires 1000 + its index: the tag the converter's audit
+// found listened on, and nothing else fired, exactly where the artifacts are
+// -- SANCTUAR's message door 1000 with the sandals (0), SETARENA's 1002 with
+// the shawl (2), KILENTRY's six lifts 1000..1005 -- so it is the remaster's
+// own rule, hardcoded there. At load it fires for every artifact held, the
+// way the boss levels' scripts treat an artifact brought in.
+void KexScript_ArtifactTaken(int nArtifact)
+{
+    if (g_kexMode && (unsigned)nArtifact < (unsigned)kKexArtiCount)
+        KexScript_FireTag(1000 + nArtifact, "artifact taken");
+}
+
+// TOMB's message door 1020 stands beside Ramses' crypt and its script
+// sector; it opens when his speech is over (ramses.cpp).
+void KexScript_RamsesEnd(void)
+{
+    char base[32];
+    Kex_LevelName(base, sizeof(base));
+    if (!Bstrcmp(base, "TOMB"))
+        KexScript_FireTag(1020, "Ramses has spoken");
+}
 static KexBossRule const *s_boss;     // this level's, or NULL
 static int s_bossTest;                // VB_KEXBOSS_TEST: 1 kill the boss at tick 60, 2 also hold its artifact first
 
 static void KexScript_BossFire(char const *why)
 {
-    Kex_FireChannel(runlist_AllocChannel(KexChan(s_boss->fire)));
+    { int const c = KexChan(s_boss->fire); if (c >= 0) Kex_FireChannel(runlist_AllocChannel(c)); }
     OSD_Printf("Kex script: %s, tag %d fired (%s)\n", why, s_boss->fire, s_boss->map);
 }
 
@@ -1337,7 +1379,7 @@ void KexScript_BossDied(int nSprite)
 
 static void KexScript_BossLoad(void)
 {
-    if (!s_boss)
+    if (!s_boss || s_boss->artifact < 0)
         return;
     int held = 0;
     for (int i = 0; i < nTotalPlayers; i++)
@@ -1398,7 +1440,7 @@ void KexScript_Add(int nSprite, int nTag)
             // ones this script fires are claimed now, with the level's own.
             for (int k = 0; k < 2; k++)
                 if (r.fire[k] > 0)
-                    sc.chan[k] = runlist_AllocChannel(KexChan(r.fire[k]));
+                    { int const c = KexChan(r.fire[k]); sc.chan[k] = c >= 0 ? runlist_AllocChannel(c) : -1; }
         }
         if (!sc.rule)
             s_scripts--;         // a script this port does not know: no-op
@@ -1419,7 +1461,7 @@ void KexScript_Init(void)
         for (int k = 0; k < 2; k++)
             if (r.fire[k] > 0)
             {
-                Kex_FireChannel(runlist_AllocChannel(KexChan(r.fire[k])));
+                { int const c = KexChan(r.fire[k]); if (c >= 0) Kex_FireChannel(runlist_AllocChannel(c)); }
                 OSD_Printf("Kex script: %s $script 0 fires tag %d\n", base, r.fire[k]);
             }
     }
@@ -1431,6 +1473,10 @@ void KexScript_Init(void)
             s_boss = &r;
     { char const *e = getenv("VB_KEXBOSS_TEST"); s_bossTest = e ? 60 : 0; }
     KexScript_BossLoad();
+    for (int a = 0; a < kKexArtiCount; a++)
+        for (int i = 0; i < nTotalPlayers; i++)
+            if (KexInv_HasArtifact(i, a))
+            { KexScript_FireTag(1000 + a, "artifact held at load"); break; }
 }
 
 // Leave for another of the remaster's levels, keeping the campaign flow

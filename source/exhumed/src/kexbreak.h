@@ -54,6 +54,9 @@ void KexTrigger_Add(int nSprite, int nChannel);
 void KexTrigger_Init(void);
 void KexTrigger_Died(int nSprite);       // from runlist_DamageEnemy
 void KexScript_BossTick(void);          // the VB_KEXBOSS_TEST hook
+void KexScript_ArtifactTaken(int nArtifact);   // fires tag 1000 + index
+void KexScript_RamsesEnd(void);         // TOMB's crypt door
+void KexScript_FireTag(int tag, char const *why);
 
 // SCRIPT sectors: a lotag 67 sprite, hitag = script tag. The remaster's three
 // level scripts (KILENTRY, KILARENA, SUNKEN) are transcribed here.

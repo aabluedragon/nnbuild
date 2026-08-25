@@ -174,6 +174,7 @@ static void Kex_RamsesEnd(void)
 {
     OSD_Printf("Kex Ramses: speech over, play resumes\n");
     nKexSpeaking = 0;
+    KexScript_RamsesEnd();      // TOMB's crypt door
     // TOMBEND's EndRamsesEvent sinks the bier, on the good ending only.
     if (KexInv_TransCount(0) >= KEX_TRANS_PIECES)
         KexScripted_Trigger(1);

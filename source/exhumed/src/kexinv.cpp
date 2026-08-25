@@ -221,7 +221,12 @@ int KexInv_TestActive(void) { return getenv("VB_KEXINV_TEST") != NULL; }
 void KexInv_GiveArtifact(int nPlayer, int nArtifact)
 {
     if ((unsigned)nPlayer < (unsigned)kMaxPlayers && (unsigned)nArtifact < (unsigned)kKexArtiCount)
+    {
+        int const had = (KexInvList[nPlayer].artifacts >> nArtifact) & 1;
         KexInvList[nPlayer].artifacts |= (uint8_t)(1 << nArtifact);
+        if (!had)
+            KexScript_ArtifactTaken(nArtifact);   // opens what the artifact opens (tag 1000 + index)
+    }
 }
 
 int KexInv_HasArtifact(int nPlayer, int nArtifact)
@@ -350,7 +355,7 @@ int KexInv_Pickup(int nPlayer, int nItem, int nHitag)
         case kKexLotagArtifact:
             if ((unsigned)nHitag >= (unsigned)kKexArtiCount)
                 return 0;
-            inv.artifacts |= (uint8_t)(1 << nHitag);
+            KexInv_GiveArtifact(nPlayer, nHitag);      // and fires what it opens
             Bsprintf(key, "artiname%d", nHitag);
             KexInv_Caption(nPlayer, key, 0);
             return 1;
