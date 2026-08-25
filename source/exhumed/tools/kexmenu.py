@@ -44,6 +44,7 @@ TILE_HUD_AIR_BACK = 7068    # the underwater air gauge: red disc, blue sphere
 TILE_HUD_AIR_FRONT = 7069
 TILE_HUD_DOLPHIN = 7070     # the team-doll reward badges, top left
 TILE_HUD_VULTURE = 7071
+TILE_HUD_SPARK  = 7072      # the jewel's heading spark, cut from hud.png
 TILE_ROW        = 7003      # menu row, unselected
 TILE_ROW_SEL    = 7004      # menu row, selected (red)
 TILE_BTN        = 7005      # dialog button, unselected
@@ -333,6 +334,32 @@ def extract(kexdir, outdir, verbose=True):
         # Flat fills, sampled from the same capture. These go down *under* the
         # frame: the slot is cut out of the frame art (alpha 0 at x 31..117,
         # rows 6..9), so the hole clips the fill to the slot's slanted end.
+        # The centre jewel's spark: hud.png (the console bar as one atlas)
+        # keeps three frames of the jewel in its right column, x 225..256,
+        # rows 0-22 / 21-43 / 42-64, a blue spark at the top, the upper right
+        # and the right of the jewel; the remaster picks one by the player's
+        # heading in 45-degree sectors and mirrors it for the other side -- a
+        # compass on the bar. Here the spark itself is cut out (its blue
+        # pixels in the first frame) and drawn at eight points around our
+        # jewel; the frames' backgrounds are already in main_left/right.
+        atlas = grab('gfx/hud.png')
+        if atlas is not None:
+            tmp = os.path.join(artdir, '_hud.png')
+            open(tmp, 'wb').write(atlas)
+            aw, ah, apix = png.read(tmp)
+            os.remove(tmp)
+            pts = [(x, y) for y in range(0, 22) for x in range(225, 256)
+                   if apix[(y*aw+x)*4+3] > 128 and apix[(y*aw+x)*4+2] > 150
+                   and apix[(y*aw+x)*4+2] > apix[(y*aw+x)*4] + 60]
+            if pts:
+                x0, y0 = min(p[0] for p in pts), min(p[1] for p in pts)
+                x1, y1 = max(p[0] for p in pts) + 1, max(p[1] for p in pts) + 1
+                sw, sh = x1 - x0, y1 - y0
+                spark = png.blank(sw, sh)
+                for (x, y) in pts:
+                    spark[((y-y0)*sw + (x-x0))*4:((y-y0)*sw + (x-x0))*4+4] = apix[(y*aw+x)*4:(y*aw+x)*4+4]
+                png.write(os.path.join(artdir, 'hud_spark.png'), sw, sh, spark)
+                lines.append((TILE_HUD_SPARK, 'kexart/hud_spark.png'))
         png.write(os.path.join(artdir, 'hud_red.png'), 8, 8, png.solid(8, 8, 235, 77, 49))
         png.write(os.path.join(artdir, 'hud_blue.png'), 8, 8, png.solid(8, 8, 34, 48, 245))
         png.write(os.path.join(artdir, 'hud_trough.png'), 8, 8, png.solid(8, 8, 96, 72, 48))

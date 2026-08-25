@@ -889,6 +889,7 @@ enum
     kKexTileHudScarab= 7066, kKexTileHudTrough= 7067,
     kKexTileHudAirBack = 7068, kKexTileHudAirFront = 7069,   // the underwater gauge
     kKexTileHudDolphin = 7070, kKexTileHudVulture  = 7071,   // the team-doll badges
+    kKexTileHudSpark   = 7072,                               // the jewel's heading spark
 };
 
 // The remaster's bar is a 416-unit-wide assembly stretched to the screen:
@@ -950,6 +951,25 @@ static void KexHud_DrawAir(void)
     int const fw = bw * air / 100, fh = bh * air / 100;
     if (fw > 0 && fh > 0)
         KexDrawTile(kKexTileHudAirFront, cx - fw / 2, cy - fh / 2, fw, fh, 0, 0, 0);
+}
+
+// The centre jewel's spark: the remaster draws one of three jewel frames
+// from hud.png, mirrored as needed, so a blue spark sits at the point of
+// the jewel's rim the player is heading toward, north up -- a compass in
+// the bar. Kex yaw 0 faces +Y (north; x = sin yaw), clockwise; Build's
+// angle 0 faces east with y down, so north is 1536 and yaw = angle + 512.
+// The spark is one tile here, at eight points around the jewel's centre.
+static void KexHud_DrawSpark(void)
+{
+    if (tilesiz[kKexTileHudSpark].x <= 0)
+        return;
+    int const yaw = (fix16_to_int(PlayerList[nLocalPlayer].q16angle) + 512) & kAngleMask;
+    int const sector = ((yaw + 128) >> 8) & 7;          // 0 north, clockwise
+    static int8_t const dx[8] = { 0, 6, 8, 6, 0, -6, -8, -6 };
+    static int8_t const dy[8] = { -7, -5, 0, 5, 7, 5, 0, -5 };
+    int const cx = 160, cy = 200 - KEX_HUD_BAND_H + 6;
+    int const w = tilesiz[kKexTileHudSpark].x, h = tilesiz[kKexTileHudSpark].y;
+    KexDrawTile(kKexTileHudSpark, cx + dx[sector] - w / 2, cy + dy[sector] - h / 2, w, h, 0, 0, 0);
 }
 
 // The team-doll rewards' badges at the top left, where the remaster puts
@@ -1020,6 +1040,7 @@ void KexHud_Draw(void)
         Bsprintf(ammoBuf, "%d", PlayerList[nLocalPlayer].nAmmo[nWeapon]);
         KexMenu_Text(rmain + 24, bandY + 5, ammoBuf, 7, 0, 0, 1);
     }
+    KexHud_DrawSpark();
     KexHud_DrawAir();
     KexHud_DrawBadges();
     if (message_timer && message_text[0])

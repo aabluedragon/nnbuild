@@ -1227,12 +1227,19 @@ referenced from there, so the layout had to come from the disassembly):
   state; here `zvel = -1536` while jump is held off the floor). Thirty-one
   only adds an achievement. `KEX_DOLLS_DOLPHIN` / `KEX_DOLLS_VULTURE` in
   kexinv.h.
+- **The jewel's spark**: `gfx/hud.png` (256x64, the console bar as one
+  atlas) keeps three frames of the centre jewel in its right column, a
+  blue spark at the top, the upper right and the right of the rim; the
+  remaster draws one by the player's heading in 45-degree sectors, mirrored
+  and flipped for the other five -- a compass on the bar, north up (Kex
+  yaw 0 faces +Y, `x = sin yaw`, clockwise; in Build's terms yaw = angle +
+  512). Here kexmenu.py cuts the spark itself out of the first frame
+  (`hud_spark.png`) and `KexHud_DrawSpark` puts it at one of eight points
+  around our jewel's centre.
 - **Not drawn**: `gfx/wings.png`, which the remaster draws in place of the
   scarab ornaments only when the screen is wider than 4:3 (its canvas is
   240 tall and `aspect * 240` wide, the bar centred with an offset of
-  `(width - 320) / 2`; ours is always the 320-wide layout), and the three
-  animation frames of the centre jewel in `gfx/hud.png` (256x64, the
-  console bar as one atlas), whose blue spark orbits with the player's yaw.
+  `(width - 320) / 2`; ours is always the 320-wide layout).
 
 ### The traps
 
@@ -1463,7 +1470,7 @@ re-derive it from the code.
 - **Per-level AngelScript that is presentation**: camera moves, Ramses'
   materialise animation timings, the KILARENA intro. The sector-triggered
   parts are all transcribed (see the events and scripts sections).
-- **The centre jewel's yaw spark** and the widescreen `wings.png` (see the
-  status bar section); the rest of the HUD is in.
+- **The widescreen `wings.png`** (see the status bar section); the rest of
+  the HUD is in.
 - **Vertical light gradients on walls**, and floor gradients beyond the
   sector budget in MAGMA (see Lighting).
