@@ -1620,6 +1620,18 @@ heights every ten ticks; the tags are read back from the map file, since
   levels. It writes `1 << (key - 1)` now. Every key door's key is in its
   own level (a census of DOOR_KEY1..4 against Key_Power/Time/War/Earth
   actors), so with the mask right nothing else stands in the way.
+- **Tag 0 is a tag.** KILARENA's five walk-in regions and its trigger-only
+  door all carry tag 0, and to Kex that links them; Build's hitag 0 gives
+  every effect a private channel, which left that door shut for good. The
+  converter allots tag 0 a real channel under the pseudo-tag 100000
+  (`KEX_TAG0`) for the event types that fire and listen on channels --
+  plain doors, keys and lifts keep 0, since a shared channel would open
+  every door in the level together -- and the engine's channel row holds a
+  32-bit tag for it. Standing on the first region (`VB_KEX_LOOKAT_TAG=100000
+  VB_KEX_LOOKAT_STAND=1`, which traces the door on the same channel) opens
+  door 185. The tag-0 lifts (KILENTRY's and TOMBEND's `FLOOR_LOWER_WAIT_RAISE`,
+  the `FLOOR_RAISE_WAIT_LOWER`s already covered) get a step-on plate of
+  their own in Kex mode, so they are ridden.
 
 ### The pause menu
 

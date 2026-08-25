@@ -1057,8 +1057,13 @@ static void Kex_LookAtDebug(void)
                 sprite[nSprite].z = sector[si].floorz - 2048;
                 mychangespritesect(nSprite, (int16_t)si);
                 PlayerList[nLocalPlayer].opos = sprite[nSprite].xyz;
-                OSD_Printf("Kex look-at: tag %d -> standing on sector %d\n", s_tag, si);
+                // Trace a door on the same channel if there is one, else the
+                // sector stood on: a plate is stood on to watch its door.
                 s_tagSector = si;
+                for (int sj = 0; sj < numsectors && sj < nFile; sj++)
+                    if (sj != si && s_fileTags[sj][1] % 1000 == chan && s_fileTags[sj][0] == 24)
+                    { s_tagSector = sj; break; }
+                OSD_Printf("Kex look-at: tag %d -> standing on sector %d, tracing sector %d\n", s_tag, si, s_tagSector);
                 break;
             }
             // Back off along the line from the door, as far as the sectors
@@ -1278,7 +1283,7 @@ void KexBeam_Tick(void)
 // map[16] with %15s was one short for the 16-character names (KEX_KILENTRY.MAP,
 // KEX_SETARENA.MAP ...): the rest of the name fell into the tag field, the
 // row was rejected, and those levels never resolved a tag past 1000.
-struct KexChanRow { char map[32]; int16_t tag, chan; };
+struct KexChanRow { char map[32]; int32_t tag; int16_t chan; };   // tag 100000 is the converter's shared tag 0
 static KexChanRow s_chanAll[256];
 static int s_chanAllCount = -1;
 
@@ -1288,7 +1293,7 @@ static bool KexChan_ParseLine(char *line, int nRec)
     int tag, chan;
     if (Bsscanf(line, "%31s %d %d", r.map, &tag, &chan) < 3)
         return false;
-    r.tag = (int16_t)tag; r.chan = (int16_t)chan;
+    r.tag = tag; r.chan = (int16_t)chan;
     return true;
 }
 

@@ -687,6 +687,13 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwPause);
+            if (g_kexMode && nHitag % 1000 == 0)
+            {
+                // VibeBuild32: the remaster's untagged FLOOR_LOWER_WAIT_RAISE is
+                // ridden -- step on it and it sinks, waits, comes back up.
+                int nStep = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
+                runlist_AddRunRec(sRunChannels[nChannel].a, nStep, kRunSwStepOn);
+            }
             return;
         }
 

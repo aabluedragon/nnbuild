@@ -1406,8 +1406,21 @@ KEX_FLOATER_PHASE = {
 # tags under 1000 keep their number, and every tag from 1000 up takes a free
 # number from 999 downward. The engine gets the tags-over-1000 part of the
 # table as kexchan.txt, for the scripts it runs that fire tags by name.
+# Kex tag 0 is a tag like any other to the events that fire and listen on
+# channels: KILARENA's five walk-in regions and its trigger-only door all
+# carry 0. Build's hitag 0 gives each effect a private channel, which would
+# leave that door shut for good, so tag 0 on those event types is allotted a
+# real channel under this pseudo-tag. Plain doors, keys and lifts keep 0 --
+# a shared channel would open every door in the level together.
+KEX_TAG0 = 100000
+KEX_SHARED0 = ('REMOTE_TRIGGER', 'FLOOR_TRIGGER_PLATE', 'SWITCH1', 'SWITCH2',
+               'SWITCH3_WOOD', 'SWITCH4_METAL', 'DOOR_TRIGGER_ONLY',
+               'DOOR_OPEN_ONLY_MESSAGE', 'FLOOR_LOWER', 'DOOR_CLOSE', 'DOOR_CLOSE_SLOW')
+
 def _channels(m):
     tags = set(e[2] for e in m.events if e[2] > 0)
+    if any(e[2] == 0 and KEX_EVENTS.get(e[0]) in KEX_SHARED0 for e in m.events):
+        tags.add(KEX_TAG0)
     tags |= set(a.tag for a in m.actors if a.type in KEX_TRAP_ACTORS and a.tag > 0)
     chanmap = {t: t for t in tags if t < 1000}
     used = set(chanmap.values())
@@ -1484,7 +1497,7 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
         name = KEX_EVENTS.get(etype)
         if etype == 63:
             s_['kexevent63'] = True     # the Ramses pads; see convert()
-        chan = _chan(m, etag)
+        chan = _chan(m, KEX_TAG0 if (etag == 0 and name in KEX_SHARED0) else etag)
         nbs = _neighbours(sects, walls, ranges, si)
         # Build z grows DOWNWARD: a neighbour ceiling above ours has a smaller
         # ceilingz, a neighbour floor below ours a greater floorz.
