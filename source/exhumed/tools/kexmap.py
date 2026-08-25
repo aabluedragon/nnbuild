@@ -755,6 +755,8 @@ def _split_slopes(m, edge_cache, verbose=False):
 # now (the DOS 1024 / 8192 used to be the budget), and a level past the
 # version-7 limits is written as version 8.
 KEX_LIGHT_CUT_STEPS = 10
+# Wading depth for sectors flagged 16 (MARSH), Build's 94 hitag -- SectDepth = hitag << 8.
+KEX_WADE_DEPTH = 10      # the DOS maps use 10
 KEX_LIGHT_SECTOR_BUDGET = 1800
 # A wall whose lighting changes this much along its length is subdivided so
 # each piece can carry its own shade, into at most this many pieces.
@@ -1731,6 +1733,16 @@ def _flat_sprites(m, sects, walls, ranges, src):
             out.append((si, 96, 40))               # lava: damage 10
         elif ff.flags & 0x80:
             out.append((si, 96, 16))               # slime: damage 4
+        # The SECTOR's own flag word (raw[9]): 256 is a submerged volume --
+        # 404 of SUNKEN's 541 sectors, of which only the 74 with an air face
+        # above carried a water marker, the rest dry to the engine -- and 16
+        # is water to wade through (MARSH's 148 marsh floors). A lotag 82
+        # sprite marks the sector under water without a surface partner
+        # (init.cpp); Build's own 94 carries the wading depth.
+        if (sec.raw[9] & 256) and not (cf.link >= 0 and (cf.flags & 0x40)):
+            out.append((si, 82, 0))                # submerged, no surface here
+        if sec.raw[9] & 16:
+            out.append((si, 94, KEX_WADE_DEPTH))   # wading water
         if s_.get('kexbob') is not None:
             out.append((si, 95, s_['kexbob']))     # floating platform
         if s_.get('kexscripted') is not None:

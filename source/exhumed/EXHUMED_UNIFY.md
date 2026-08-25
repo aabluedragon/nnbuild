@@ -1643,6 +1643,20 @@ heights every ten ticks; the tags are read back from the map file, since
   whole by the wall-gradient splitter as well: a switch face cut into
   pieces had only the piece nearest the face centre as the switch, the
   rest inert though textured as it.
+- **Most of SUNKEN was dry.** Water, lava and slime come from the FACE
+  flags (a floor face's 0x40 is a water link, 0x20 lava, 0x80 slime), and
+  only a sector with an air face above it got the engine's water-side
+  marker (99) -- 74 in SUNKEN. The SECTOR record's own flag word
+  (`raw[9]`) says more: 256 is a submerged volume (404 of SUNKEN's 541,
+  and the deeper parts of every pool -- KARNAK's 78 all on the "sunken"
+  water floors, 44 of them under a link face), 16 is water to wade
+  (MARSH's 148 marsh floors). A lotag 82 sprite now marks a submerged
+  sector with no surface above it (`kSectUnderwater` without a partner;
+  the swim code takes `SectAbove` -1), and Build's own 94 carries the
+  wading depth, hitag 10 as the DOS maps have it. SUNKEN goes from 74 to
+  545 sectors under water, MARSH gets 172 to wade, and `Kex water: ...`
+  reports both at level start. Flag 32 (45 sectors in seven levels) is
+  still unread.
 
 ### The pause menu
 

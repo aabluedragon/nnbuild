@@ -975,6 +975,12 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 BuildAnubis(nSprite, 0, 0, 0, 0, 0, 0);
                 return;
             }
+            case 82:    // VibeBuild32: the remaster's submerged sector with no surface above it
+            {
+                SectFlag[sprite[nSprite].sectnum] |= kSectUnderwater;
+                mydeletesprite(nSprite);
+                return;
+            }
             case 99: // underwater type 2
             {
                 short nSector = sprite[nSprite].sectnum;

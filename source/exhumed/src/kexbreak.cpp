@@ -1727,6 +1727,13 @@ void KexScript_Init(void)
     }
     if (s_scripts)
         OSD_Printf("Kex script: %d script sectors on this level\n", s_scripts);
+    {
+        int nUnder = 0, nWade = 0;
+        for (int i = 0; i < numsectors; i++)
+        { nUnder += (SectFlag[i] & kSectUnderwater) != 0; nWade += SectDepth[i] > 0; }
+        if (nUnder || nWade)
+            OSD_Printf("Kex water: %d sectors under water, %d to wade\n", nUnder, nWade);
+    }
     s_boss = NULL;
     for (auto const &r : s_bossRule)
         if (!Bstrcmp(base, r.map))
