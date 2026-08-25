@@ -1120,10 +1120,18 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
     walls = []; sects = []; ranges = []
     # Kex keeps a sector's trigger in a separate event table; Build PowerSlave
     # wants it on the sector as lotag (the effect) and hitag (the channel).
+    # A sector may carry several events (six do: THOTH's plate that is also
+    # a switch, SHRINE's door that is both pressed and triggered, a key
+    # door doubled with a plain one); all are kept, in an order where the
+    # one that should shape the sector comes last -- a key door over a
+    # plain one, a door over a plate -- and _resolve_events() applies each.
+    RANK = {50: 0, 23: 0, 200: 1, 201: 1, 202: 1, 203: 1, 1: 2, 2: 2, 7: 2, 3: 3, 4: 3, 5: 3, 6: 3}
     sector_events = {}
     for etype, esect, etag, eparam in getattr(m, 'events', ()):
         if esect < m.nsector and etype:
-            sector_events[esect] = (etype, esect, etag, eparam)
+            sector_events.setdefault(esect, []).append((etype, esect, etag, eparam))
+    for es in sector_events:
+        sector_events[es].sort(key=lambda e: RANK.get(e[0], 2))
     edge_cache = {}
     for si in range(m.nsector):
         try:
@@ -1280,7 +1288,7 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
         if w['nextwall'] >= 0 and walls[w['nextwall']]['nextwall'] != wi:
             w['nextwall'] = -1; w['nextsector'] = -1
 
-    _resolve_events(m, sects, walls, ranges, src, switch_pairs)
+    _resolve_events(m, sects, walls, ranges, src, switch_pairs, tilebase)
     m.kex_flat_sprites = _flat_sprites(m, sects, walls, ranges, src)
     m.kex_extra_sprites = []
     if ramses is not None:
@@ -1466,7 +1474,7 @@ def _neighbours(sects, walls, ranges, si):
     return out
 
 
-def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
+def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None, tilebase=0):
     """Turn each sector's Kex event into the Build tags that DO the same thing.
 
     Build encodes a sector effect as lotag (speed*1000 + effect) and hitag
@@ -1505,9 +1513,14 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
     for si, s_ in enumerate(sects):
         if s_ is None:
             continue
-        ev = s_.pop('kexevent', None)
-        if not ev:
+        evs = s_.pop('kexevent', None)
+        if not evs:
             continue
+        for ev in evs:
+          _resolve_one(m, sects, walls, ranges, src, switch_pairs, tilebase, si, s_, ev)
+
+
+def _resolve_one(m, sects, walls, ranges, src, switch_pairs, tilebase, si, s_, ev):
         etype, _esect, etag, eparam = ev
         name = KEX_EVENTS.get(etype)
         if etype == 63:
@@ -1609,7 +1622,7 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
             lotag, hitag = 35, chan
         elif name in ('SWITCH1', 'SWITCH2', 'SWITCH3_WOOD', 'SWITCH4_METAL'):
             _place_switch(m, sects, walls, ranges, src, si, chan, eparam,
-                          switch_pairs or {})
+                          switch_pairs or {}, tilebase)
         elif name in KEX_FLOATER_PHASE:
             # A floating platform: a sector cannot move sideways in Kex any
             # more than in Build, so the FLOATER variants are a floor bobbing
@@ -1651,7 +1664,7 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None):
         s_['lotag'], s_['hitag'] = lotag, hitag
 
 
-def _place_switch(m, sects, walls, ranges, src, si, chan, eparam, switch_pairs):
+def _place_switch(m, sects, walls, ranges, src, si, chan, eparam, switch_pairs, tilebase=0):
     """A Kex switch is a sector event; a Build switch is a WALL.
 
     The switch graphic is one tile among several on one wall face of the event
@@ -1674,17 +1687,25 @@ def _place_switch(m, sects, walls, ranges, src, si, chan, eparam, switch_pairs):
             name = m.textures[tex] if tex < len(m.textures) else ''
             if tex == off_idx or name in switch_pairs:
                 # the face's wall in this piece: the one whose midpoint lies
-                # closest to the face's own centre
+                # closest to the face's own centre -- among the walls that
+                # SHOW the switch (picnum is the face's texture and the wall
+                # is solid); a long face's centre can lie nearer a portal
+                # wall of the same sector, which THOTH's did.
                 fx = sum(m.verts[f.vertStart+k][0] for k in range(4)) / 4.0
                 fy = sum(-m.verts[f.vertStart+k][1] for k in range(4)) / 4.0
                 best = None
-                for i in range(num):
-                    w = walls[start+i]; w2 = walls[w['point2']]
-                    mx = (w['x'] + w2['x']) / 2.0
-                    my = (w['y'] + w2['y']) / 2.0
-                    d = (mx - fx*WORLD)**2 + (my - fy*WORLD)**2
-                    if best is None or d < best[0]:
-                        best = (d, i)
+                for pass_ in (0, 1):
+                    for i in range(num):
+                        w = walls[start+i]; w2 = walls[w['point2']]
+                        if pass_ == 0 and (w['picnum'] != _pic(m, f, tilebase) or w['nextsector'] >= 0):
+                            continue
+                        mx = (w['x'] + w2['x']) / 2.0
+                        my = (w['y'] + w2['y']) / 2.0
+                        d = (mx - fx*WORLD)**2 + (my - fy*WORLD)**2
+                        if best is None or d < best[0]:
+                            best = (d, i)
+                    if best is not None:
+                        break
                 if best is not None:
                     w = walls[start+best[1]]
                     w['lotag'] = 7
@@ -3161,7 +3182,7 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
         b += struct.pack('<iihhhhhhbBBBBBhhh',
             w['x'] * WORLD, w['y'] * WORLD, w['point2'], w['nextwall'], w['nextsector'],
             w['cstat'], w['picnum'], 0, w['shade'], 0, w['xrepeat'], w['yrepeat'], 0, 0,
-            w['lotag'], 0, w['extra'])
+            w['lotag'], w.get('hitag', 0), w['extra'])   # a switch's channel rides in the wall's hitag
     b += struct.pack('<H', len(sprites))
     for s in sprites:
         b += struct.pack('<iiihhbBBBBBbbhhhhhhhhhh',

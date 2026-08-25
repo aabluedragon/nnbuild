@@ -644,7 +644,10 @@ point over the sector's RING, so each piece of a cut sector got its own
 sky height; it is held over the face's quad now. `kexverify.py` measures
 a converted level against the Kex planes at sample points (KARNAK's 90th
 percentile floor/ceiling error went from 672 to 38 z units with the sliver
-fix) and checks that every portal is paired.
+fix), checks that every portal is paired, and runs the event audits: every
+guarded event with its effect, key doors with key bits, no tag listened on
+that nothing fires, no mover sector cut into pieces, every switch on a
+wall, no sprite inside a solid sector.
 
 **Not carried: a wall's vertical gradient.** 40% of walls are lit
 differently top and bottom by six steps or more, and Build has no way to
@@ -1644,6 +1647,16 @@ heights every ten ticks; the tags are read back from the map file, since
   whole by the wall-gradient splitter as well: a switch face cut into
   pieces had only the piece nearest the face centre as the switch, the
   rest inert though textured as it.
+- **No switch had ever worked.** `write_build` packed every wall's hitag as
+  a literal 0, so all 69 switches -- placed correctly on their walls with
+  lotag 7 and the channel in the wall's hitag -- fired a private channel
+  nothing listened on; whatever a switch opens in the remaster's levels
+  (PEAK has eight) stayed shut. The writer writes the hitag now. Found by
+  the event audits folded into `kexverify.py`, which also placed THOTH's
+  switch on the wall that shows it (a long face's centre lay nearer a
+  portal wall of the sector) and kept a sector's several events (six
+  sectors carry two or more: THOTH's plate that is also a switch, a key
+  door doubled with a plain one) instead of the last one only.
 - **Most of SUNKEN was dry.** Water, lava and slime come from the FACE
   flags (a floor face's 0x40 is a water link, 0x20 lava, 0x80 slime), and
   only a sector with an air face above it got the engine's water-side
