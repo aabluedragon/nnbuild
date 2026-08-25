@@ -869,6 +869,26 @@ file is missing; `VB_KEX_LOOKAT_TILE=7700-7752` with `VB_KEX_LOOKAT=99`
 picks one out to look at (the creatures share statnum 99), and the look-at
 hook now keeps facing its target for a while, since creatures move.
 
+### The mines
+
+The other actor the census found as decor, `AI_Magic8Ball`: 62 of them in
+SUNKEN and four in MAGMA, a black sphere the remaster's anims describe
+completely -- the idle polls `A_CanSeeTarget(detonate, 256)`, the detonate
+plays `mineact.wav` and starts a countdown, and `magic8ball_explode` is
+`Fx_Explosion01` plus `A_RadialBlast(512, 140)`; under water,
+`magic8ball_explode_water` also drops a random item. Its death anim is the
+countdown too (health 60, shootable). It rides the breakables: kexmap.py
+emits it as a one-tile breakable with the explode anim's blast and two
+new `kexbreak.txt` columns, the sight radius in Build units (256 * WORLD)
+and the fuse in ticks (`KEX_MINE_SIGHT`, `KEX_MINE_FUSE` = 45, the
+remaster timing its loop in code). `KexBreak_MineTick()` arms it when a
+living player it can `cansee` is within sight, blinks it while it counts,
+drops the random item if its sector is under water, and blasts through the
+exploding pots' `KexBreak_Shatter`; being shot or blasted to zero starts
+the fuse instead of shattering. `VB_KEX_LOOKAT=0 VB_KEX_LOOKAT_TILE=<its
+tile>` (8761 in the current tables) with `VB_KEXBREAK_TEST=100000` logs
+the arming and the blast.
+
 ### Ramses
 
 The remaster's Ramses ships complete in the .kpf: the speeches as

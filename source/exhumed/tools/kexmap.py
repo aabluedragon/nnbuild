@@ -2382,6 +2382,13 @@ def _all_frames(Z, names, anim, limit=KEX_ANIM_MAX_FRAMES):
     return []
 
 
+# The mine: A_CanSeeTarget's 256 units, and the countdown in engine ticks --
+# magic8ball_detonate's five frames and a detonate loop the remaster times
+# in code, about a second and a half.
+KEX_MINE_SIGHT = 256
+KEX_MINE_FUSE = 45
+
+
 def _death_blast(Z, names, anim):
     """(radius, damage) of the A_RadialBlast in a death anim, or None."""
     if '/' not in anim: return None
@@ -2451,6 +2458,21 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
             frames = frames[:1]
         if a.get('randomize') and not breakable:
             frames = frames[:1]
+        # AI_Magic8Ball, the remaster's mine (62 in SUNKEN, 4 in MAGMA): a
+        # shootable sphere that arms when it can see a player within 256
+        # units (A_CanSeeTarget in its idle), plays mineact.wav, counts down
+        # and blasts (A_RadialBlast(512, 140) in magic8ball_explode) -- or,
+        # under water, blasts and drops a random item. Its death anim is the
+        # countdown too, so shooting it only starts the fuse. One tile, no
+        # shards; the last two breakable columns carry the sight radius and
+        # the fuse.
+        mine = None
+        if a.get('anim') == 'misc/magic8ball_idle':
+            blast = _death_blast(Z, names, 'misc/magic8ball_explode') or (512, 140)
+            frames = frames[:1]
+            breakable = True
+            mine = (KEX_MINE_SIGHT * WORLD, KEX_MINE_FUSE)
+            explode = blast
 
         # Every frame of one actor is composited into the SAME box, so the
         # sprite does not jitter as the flame changes shape.
@@ -2495,11 +2517,13 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
             lights.append(first)
         if len(allrects) > 1 and not a.get('still') and not breakable:
             animdefs.append((first, tile - 1, 3))
-        if breakable and len(allrects) > 1:
+        if mine:
+            breakables.append((first, a['health'], first, 0, a.get('radius', 0)) + explode + mine)
+        elif breakable and len(allrects) > 1:
             # frame 0 is the intact object; the rest are the shards its death
             # anim tosses, one A_TossActor per shard.
             breakables.append((first, a['health'], first + 1, len(allrects) - 1,
-                               a.get('radius', 0)) + explode)
+                               a.get('radius', 0)) + explode + (0, 0))
     if verbose:
         print("  scenery: %d actor types, %d animated, %d breakable, from the remaster's own sprites"
               % (len(out), len(animdefs), len(breakables)))
@@ -3398,10 +3422,12 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
     # The last two columns are the radial blast of the exploding pots, in the
     # remaster's own units (A_RadialBlast radius, damage); zero for the plain
     # ones that just break.
+    # ... and the mine's sight radius (Build units) and fuse (ticks), zero for
+    # everything that is not a mine.
     _write_table(outdir, "kexbreak.txt",
-                 "tile health shardtile0 shardcount clipdist blastradius blastdamage",
-                 [(tile, health, shard0, nshards, _clipdist(radius), bl_r, bl_d)
-                  for tile, health, shard0, nshards, radius, bl_r, bl_d in sorted(breakables)],
+                 "tile health shardtile0 shardcount clipdist blastradius blastdamage sight fuse",
+                 [(tile, health, shard0, nshards, _clipdist(radius), bl_r, bl_d, sight, fuse)
+                  for tile, health, shard0, nshards, radius, bl_r, bl_d, sight, fuse in sorted(breakables)],
                  "breakables", verbose)
 
     # Light sources: tile, then the peak brightening in shade steps and the

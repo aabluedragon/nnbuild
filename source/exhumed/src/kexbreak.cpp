@@ -55,11 +55,13 @@ struct KexBreakType
 {
     int16_t tile, health, shard0, nshards, clipdist;
     int16_t blastradius, blastdamage;   // A_RadialBlast, in the remaster's units
+    int16_t sight, fuse;                // the mine: arms within sight (Build units), blasts fuse ticks later
 };
 
 struct KexBreakProp
 {
     int16_t nSprite, nHealth, nType, nRunFree;
+    int16_t nFuse;                      // -1 idle, else ticks to the blast
 };
 
 static KexBreakType s_type[kMaxKexBreakTypes];
@@ -70,9 +72,9 @@ static int          s_selftest;   // VB_KEXBREAK_TEST: shatter everything after 
 
 static bool KexBreak_ParseLine(char *line, int nRec)
 {
-    int tile, health, shard0, nshards, clipdist = 32, br = 0, bd = 0;
-    if (Bsscanf(line, "%d %d %d %d %d %d %d", &tile, &health, &shard0, &nshards,
-                &clipdist, &br, &bd) < 4)
+    int tile, health, shard0, nshards, clipdist = 32, br = 0, bd = 0, sight = 0, fuse = 0;
+    if (Bsscanf(line, "%d %d %d %d %d %d %d %d %d", &tile, &health, &shard0, &nshards,
+                &clipdist, &br, &bd, &sight, &fuse) < 4)
         return false;
 
     KexBreakType &t = s_type[nRec];
@@ -80,6 +82,7 @@ static bool KexBreak_ParseLine(char *line, int nRec)
     t.shard0 = shard0; t.nshards = nshards;
     t.clipdist = clamp(clipdist, 1, 255);
     t.blastradius = br; t.blastdamage = bd;
+    t.sight = sight; t.fuse = fuse;
     return true;
 }
 
@@ -332,7 +335,51 @@ static void KexBreak_Arm(int nSprite, int nType)
     s_prop[nProp].nSprite  = nSprite;
     s_prop[nProp].nType    = nType;
     s_prop[nProp].nHealth  = s_type[nType].health;
+    s_prop[nProp].nFuse    = -1;
     s_prop[nProp].nRunFree = runlist_AddRunRec(NewRun, nProp, kRunKexBreak);
+}
+
+static void KexBreak_Shatter(int nProp);
+
+// The mine (AI_Magic8Ball): arms when a player it can see comes within its
+// sight radius, or when it is destroyed -- its death anim is the countdown --
+// and blasts when the fuse runs out; under water it also drops a random item,
+// the remaster's magic8ball_explode_water. Blinks while it counts.
+static void KexBreak_MineTick(int nProp)
+{
+    KexBreakType const &t = s_type[s_prop[nProp].nType];
+    int const nSprite = s_prop[nProp].nSprite;
+    if (t.sight <= 0 && t.fuse <= 0)
+        return;
+    if (s_prop[nProp].nFuse < 0)
+    {
+        for (int i = 0; i < nTotalPlayers; i++)
+        {
+            int const nPlayer = PlayerList[i].nSprite;
+            if (nPlayer < 0 || PlayerList[i].nHealth <= 0)
+                continue;
+            if (klabs(sprite[nPlayer].x - sprite[nSprite].x) + klabs(sprite[nPlayer].y - sprite[nSprite].y) > t.sight)
+                continue;
+            if (!cansee(sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z - 512, sprite[nSprite].sectnum,
+                        sprite[nPlayer].x, sprite[nPlayer].y, sprite[nPlayer].z - 2048, sprite[nPlayer].sectnum))
+                continue;
+            s_prop[nProp].nFuse = t.fuse;
+            PlayFX2(StaticSound[kSoundItemSpecial], nSprite);
+            if (s_selftest)
+                OSD_Printf("Kex mine: prop %d armed by player %d\n", nProp, i);
+            break;
+        }
+        return;
+    }
+    sprite[nSprite].shade = (s_prop[nProp].nFuse & 4) ? -64 : 0;
+    if (--s_prop[nProp].nFuse > 0)
+        return;
+    if (SectFlag[sprite[nSprite].sectnum] & kSectUnderwater)
+        KexDrop_RandomItem(nSprite, -1);
+    s_prop[nProp].nHealth = 0;
+    if (s_selftest)
+        OSD_Printf("Kex mine: prop %d blasts\n", nProp);
+    KexBreak_Shatter(nProp);
 }
 
 void KexBreak_Init(void)
@@ -538,7 +585,10 @@ void FuncKexBreak(int a, int b, int nRun)
 
     switch (a & 0x7F0000)
     {
-        case 0x20000:   // per tick: nothing to do, the prop just stands there
+        case 0x20000:   // per tick: nothing to do, unless it is a mine
+            KexBreak_MineTick(nProp);
+            if (s_prop[nProp].nSprite < 0)
+                return;
             if (s_selftest && --s_selftest == 1)
             {
                 for (int i = 0; i < s_props; i++)
@@ -567,7 +617,13 @@ void FuncKexBreak(int a, int b, int nRun)
                 return;
             s_prop[nProp].nHealth -= (short)b;
             if (s_prop[nProp].nHealth <= 0)
-                KexBreak_Shatter(nProp);
+            {
+                // A mine's death is its countdown.
+                if (s_type[s_prop[nProp].nType].fuse > 0)
+                { s_prop[nProp].nHealth = 1; if (s_prop[nProp].nFuse < 0) s_prop[nProp].nFuse = s_type[s_prop[nProp].nType].fuse; }
+                else
+                    KexBreak_Shatter(nProp);
+            }
             return;
         }
 
@@ -580,7 +636,12 @@ void FuncKexBreak(int a, int b, int nRun)
                 return;
             s_prop[nProp].nHealth -= nDamage;
             if (s_prop[nProp].nHealth <= 0)
-                KexBreak_Shatter(nProp);
+            {
+                if (s_type[s_prop[nProp].nType].fuse > 0)
+                { s_prop[nProp].nHealth = 1; if (s_prop[nProp].nFuse < 0) s_prop[nProp].nFuse = s_type[s_prop[nProp].nType].fuse; }
+                else
+                    KexBreak_Shatter(nProp);
+            }
             return;
         }
 
