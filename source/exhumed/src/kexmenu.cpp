@@ -37,6 +37,7 @@
 #include "status.h"
 #include "kexmenu.h"
 #include "kexinv.h"
+#include "init.h"        // SectFlag, for the air gauge
 
 // Mirrors the TILE_* constants in source/exhumed/tools/kexmenu.py.
 enum
@@ -886,6 +887,8 @@ enum
     kKexTileHudMainL = 7062, kKexTileHudMainR = 7063,
     kKexTileHudRed   = 7064, kKexTileHudBlue  = 7065,
     kKexTileHudScarab= 7066, kKexTileHudTrough= 7067,
+    kKexTileHudAirBack = 7068, kKexTileHudAirFront = 7069,   // the underwater gauge
+    kKexTileHudDolphin = 7070, kKexTileHudVulture  = 7071,   // the team-doll badges
 };
 
 // The remaster's bar is a 416-unit-wide assembly stretched to the screen:
@@ -922,6 +925,49 @@ static void KexHud_Bar(int x, int tile, int pct)
 }
 
 extern short airframe;      // status.cpp: current air-meter frame
+
+// The remaster's underwater air gauge (gfx/airsupply_back, _front): a red disc
+// with a blue sphere over it that shrinks with the air left. It slides down
+// from above the screen to rest centred at (272, 52) of the remaster's
+// 320x240 canvas -- a quarter of the remaining way per frame -- and back up
+// at 8% per frame when the player surfaces; the sphere is the disc's 64
+// units scaled by air / 64, the remaster's full lungful. Here the canvas is
+// 320x200, so the y's are 5/6 of those, and the air is nAir / 100.
+static void KexHud_DrawAir(void)
+{
+    static float s_airY = -300.f;
+    Player const &pl = PlayerList[nLocalPlayer];
+    int under = KexInv_TestAir();
+    if (!under && pl.nSprite >= 0 && sprite[pl.nSprite].sectnum >= 0)
+        under = (SectFlag[sprite[pl.nSprite].sectnum] & kSectUnderwater) != 0;
+    s_airY += ((under ? 116.f : -300.f) - s_airY) * (under ? 0.25f : 0.08f);
+    if (s_airY < -60.f || tilesiz[kKexTileHudAirBack].x <= 0)
+        return;
+    int const cx = 272, cy = (int)((s_airY - 64.f) * (200.f / 240.f));
+    int const bw = 64, bh = 53;    // 64x64, squashed to 320x200 by kexmenu.py
+    KexDrawTile(kKexTileHudAirBack, cx - bw / 2, cy - bh / 2, bw, bh, 0, 0, 0);
+    int const air = KexInv_TestAir() ? 60 : clamp((int)pl.nAir, 0, 100);
+    int const fw = bw * air / 100, fh = bh * air / 100;
+    if (fw > 0 && fh > 0)
+        KexDrawTile(kKexTileHudAirFront, cx - fw / 2, cy - fh / 2, fw, fh, 0, 0, 0);
+}
+
+// The team-doll rewards' badges at the top left, where the remaster puts
+// them: the dolphin at sixteen dolls (swim three times as fast), the vulture
+// at twenty-eight (hold jump to fly). The remaster pulses each with a slow
+// sine; Build cannot overbright, so this one dims and returns instead.
+static void KexHud_DrawBadges(void)
+{
+    int const dolls = KexInv_DollCount(nLocalPlayer);
+    if (dolls < KEX_DOLLS_DOLPHIN)
+        return;
+    double const t = (double)(int)totalclock * (1000.0 / 120.0) * 0.0035;
+    int const shade = 6 - (int)(6.0 * sin(t));
+    if (tilesiz[kKexTileHudDolphin].x > 0)
+        KexDrawTile(kKexTileHudDolphin, 25, 10, 16, 27, shade, 0, 0);
+    if (dolls >= KEX_DOLLS_VULTURE && tilesiz[kKexTileHudVulture].x > 0)
+        KexDrawTile(kKexTileHudVulture, 52, 10, 28, 27, shade, 0, 0);
+}
 
 int KexHud_Available(void)
 {
@@ -974,6 +1020,8 @@ void KexHud_Draw(void)
         Bsprintf(ammoBuf, "%d", PlayerList[nLocalPlayer].nAmmo[nWeapon]);
         KexMenu_Text(rmain + 24, bandY + 5, ammoBuf, 7, 0, 0, 1);
     }
+    KexHud_DrawAir();
+    KexHud_DrawBadges();
     if (message_timer && message_text[0])
         printext(0, 0, message_text, kTileFont);
 }

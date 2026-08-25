@@ -161,6 +161,7 @@ extern int KexManacle_LastShot;    // gun.cpp
 static int s_manacleTest;
 
 int KexInv_TestFire(void) { return s_manacleTest > 20; }
+int KexInv_TestAir(void)  { return s_manacleTest > 0; }
 
 void KexInv_Tick(void)
 {
@@ -198,6 +199,8 @@ void KexInv_Tick(void)
     PlayerList[nLocalPlayer].nAmmo[kWeaponManacle] = 6;
     SetNewWeaponImmediate(nLocalPlayer, kWeaponManacle);
     s_manacleTest = 80;
+    // Every doll, so both reward badges are on the HUD in the captures.
+    KexInvList[nLocalPlayer].dolls = (1u << KEX_DOLL_COUNT) - 1;
     KexInv const &inv = KexInvList[nLocalPlayer];
     OSD_Printf("Kex inventory: %d pickups taken -> artifacts %02x transmitter %02x dolls %d ankhs %02x (max health %d, health %d)\n",
                taken, inv.artifacts, inv.transmitter, KexInv_DollCount(nLocalPlayer), inv.ankhs,

@@ -36,6 +36,8 @@ enum
 };
 
 #define KEX_DOLL_COUNT      31
+#define KEX_DOLLS_DOLPHIN   16   // the team-doll rewards: swim three times as fast
+#define KEX_DOLLS_VULTURE   28   // ... and hold jump in the air to fly
 #define KEX_TRANS_PIECES    8
 
 struct KexInv
@@ -71,5 +73,6 @@ void KexInv_Tick(void);                  // per tick: the VB_KEXINV_TEST sweep o
 int  KexInv_TestWantsScreen(void);       // that test asking for the status screen
 int  KexInv_TestActive(void);
 int  KexInv_TestFire(void);              // the Manacle self-test holding fire
+int  KexInv_TestAir(void);               // that test asking for the air gauge
 
 #endif

@@ -1111,6 +1111,34 @@ Pickup captions come from the remaster's localization table for the items that
 mean the same thing in both games; anything ambiguous keeps the original
 wording rather than being given a caption that is merely plausible.
 
+The rest of the HUD, read off the remaster's `kexSlaveHudLocal` draw code
+(the texture names `gfx/airsupply_*`, `dolphin`, `vulture` are only
+referenced from there, so the layout had to come from the disassembly):
+
+- **The underwater air gauge**, `airsupply_back` (a red disc) with
+  `airsupply_front` (a blue sphere) over it. It slides down from above the
+  screen while the player is under water -- a quarter of the remaining way
+  per frame -- to rest centred at (272, 52) of the remaster's 320x240 canvas,
+  and back up at 8% per frame on surfacing; the sphere is scaled by the air
+  left (the remaster's lungful is 64, ours `nAir` out of 100). Both are
+  drawn at 64x53 here, the canvas being 320x200 (`KexHud_DrawAir`).
+- **The team-doll badges** at the top left, the dolphin at (25, 12) and the
+  vulture at (52, 12), each pulsing on a slow sine. They are the rewards the
+  remaster keeps from the console game: at **sixteen dolls** the dolphin,
+  and the player swims three times as fast (`0.488 * 3` on the move scale
+  when not on the ground, here `x *= 3` on the input velocity in an
+  underwater sector); at **twenty-eight** the vulture, and jump held in the
+  air is flight (the remaster's jump plays `fly.wav` and sets its flying
+  state; here `zvel = -1536` while jump is held off the floor). Thirty-one
+  only adds an achievement. `KEX_DOLLS_DOLPHIN` / `KEX_DOLLS_VULTURE` in
+  kexinv.h.
+- **Not drawn**: `gfx/wings.png`, which the remaster draws in place of the
+  scarab ornaments only when the screen is wider than 4:3 (its canvas is
+  240 tall and `aspect * 240` wide, the bar centred with an offset of
+  `(width - 320) / 2`; ours is always the 320-wide layout), and the three
+  animation frames of the centre jewel in `gfx/hud.png` (256x64, the
+  console bar as one atlas), whose blue spark orbits with the player's yaw.
+
 ### The traps
 
 Four actor types make up the remaster's traps, and none of them was being
@@ -1340,8 +1368,5 @@ re-derive it from the code.
 - **Per-level AngelScript that is presentation**: camera moves, Ramses'
   materialise animation timings, the KILARENA intro. The sector-triggered
   parts are all transcribed (see the events and scripts sections).
-- **The console-style HUD** (`gfx/hud.png`, 256x64, with `gfx/airsupply_*`
-  as its air gauge) is the remaster's alternative HUD layout; this port
-  draws its modern bar, whose left slot is the air meter, so the gauge has
-  no place to go. Offering the second layout would be a HUD option, not a
-  fix.
+- **The centre jewel's yaw spark** and the widescreen `wings.png` (see the
+  status bar section); the rest of the HUD is in.

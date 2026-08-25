@@ -2090,6 +2090,15 @@ void FuncPlayer(int a, int nDamage, int nRun)
 
             int x = (sPlayerInput[nPlayer].xVel * 4) >> 2;
             int y = (sPlayerInput[nPlayer].yVel * 4) >> 2;
+
+            // The dolphin: at sixteen team dolls the remaster swims three
+            // times as fast.
+            if (g_kexMode && (SectFlag[sprite[nPlayerSprite].sectnum] & kSectUnderwater)
+                && KexInv_DollCount(nPlayer) >= KEX_DOLLS_DOLPHIN)
+            {
+                x *= 3;
+                y *= 3;
+            }
             int z = (sprite[nPlayerSprite].zvel * 4) >> 2;
 
             if (sprite[nPlayerSprite].zvel > 8192)
@@ -2722,6 +2731,12 @@ loc_1AB8E:
                                     (g_kexMode && KexInv_HasArtifact(nPlayer, kKexArtiSandals)) ? -4480 : -3584;
                                 nActionB = 3;
                             }
+                        }
+                        else if (g_kexMode && KexInv_DollCount(nPlayer) >= KEX_DOLLS_VULTURE)
+                        {
+                            // The vulture: at twenty-eight team dolls, jump
+                            // held in the air is flight.
+                            sprite[nPlayerSprite].zvel = -1536;
                         }
                         else if (g_kexMode && sprite[nPlayerSprite].zvel > 0)
                         {

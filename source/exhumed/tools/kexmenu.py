@@ -40,6 +40,10 @@ TILE_HUD_RED    = 7064
 TILE_HUD_BLUE   = 7065
 TILE_HUD_SCARAB = 7066      # ornament between each head and its frame
 TILE_HUD_TROUGH = 7067      # the unfilled part of a bar slot
+TILE_HUD_AIR_BACK = 7068    # the underwater air gauge: red disc, blue sphere
+TILE_HUD_AIR_FRONT = 7069
+TILE_HUD_DOLPHIN = 7070     # the team-doll reward badges, top left
+TILE_HUD_VULTURE = 7071
 TILE_ROW        = 7003      # menu row, unselected
 TILE_ROW_SEL    = 7004      # menu row, selected (red)
 TILE_BTN        = 7005      # dialog button, unselected
@@ -310,7 +314,13 @@ def extract(kexdir, outdir, verbose=True):
                                  ('gfx/head_right.png', TILE_HUD_HEAD_R, HUD_HEAD),
                                  ('gfx/main_left.png',  TILE_HUD_MAIN_L, HUD_MAIN),
                                  ('gfx/main_right.png', TILE_HUD_MAIN_R, HUD_MAIN),
-                                 ('gfx/scarab.png',     TILE_HUD_SCARAB, HUD_SCAR)):
+                                 ('gfx/scarab.png',     TILE_HUD_SCARAB, HUD_SCAR),
+                                 # The rest are drawn at native width, 5/6 tall
+                                 # (the remaster's 240-line canvas on 200).
+                                 ('gfx/airsupply_back.png',  TILE_HUD_AIR_BACK,  (64, 53)),
+                                 ('gfx/airsupply_front.png', TILE_HUD_AIR_FRONT, (64, 53)),
+                                 ('gfx/dolphin.png',         TILE_HUD_DOLPHIN,   (16, 27)),
+                                 ('gfx/vulture.png',         TILE_HUD_VULTURE,   (28, 27))):
             blob = grab(name)
             if blob is None: continue
             fn = 'kexart/' + os.path.basename(name)
