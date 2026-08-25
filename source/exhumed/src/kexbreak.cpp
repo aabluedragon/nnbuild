@@ -56,6 +56,7 @@ struct KexBreakType
     int16_t tile, health, shard0, nshards, clipdist;
     int16_t blastradius, blastdamage;   // A_RadialBlast, in the remaster's units
     int16_t sight, fuse;                // the mine: arms within sight (Build units), blasts fuse ticks later
+    int16_t wood;                       // a barrel: breaks to pot_pc2 (woodbreak.wav) rather than pot_pc1 (glassbreak.wav)
 };
 
 struct KexBreakProp
@@ -72,9 +73,9 @@ static int          s_selftest;   // VB_KEXBREAK_TEST: shatter everything after 
 
 static bool KexBreak_ParseLine(char *line, int nRec)
 {
-    int tile, health, shard0, nshards, clipdist = 32, br = 0, bd = 0, sight = 0, fuse = 0;
-    if (Bsscanf(line, "%d %d %d %d %d %d %d %d %d", &tile, &health, &shard0, &nshards,
-                &clipdist, &br, &bd, &sight, &fuse) < 4)
+    int tile, health, shard0, nshards, clipdist = 32, br = 0, bd = 0, sight = 0, fuse = 0, wood = 0;
+    if (Bsscanf(line, "%d %d %d %d %d %d %d %d %d %d", &tile, &health, &shard0, &nshards,
+                &clipdist, &br, &bd, &sight, &fuse, &wood) < 4)
         return false;
 
     KexBreakType &t = s_type[nRec];
@@ -82,7 +83,7 @@ static bool KexBreak_ParseLine(char *line, int nRec)
     t.shard0 = shard0; t.nshards = nshards;
     t.clipdist = clamp(clipdist, 1, 255);
     t.blastradius = br; t.blastdamage = bd;
-    t.sight = sight; t.fuse = fuse;
+    t.sight = sight; t.fuse = fuse; t.wood = wood;
     return true;
 }
 
@@ -537,7 +538,7 @@ static void KexBreak_Shatter(int nProp)
     int const nSprite = s_prop[nProp].nSprite;
     KexBreakType const &t = s_type[s_prop[nProp].nType];
 
-    PlayFX2(StaticSound[kSoundPotPc1], nSprite);
+    PlayFX2(StaticSound[kSoundPotPc1 + (t.wood ? 1 : 0)]   // pot_pc2 follows pot_pc1, nSprite);
 
     // 0x4000 is the fire cauldron's own flag for a livelier throw, which is the
     // closest thing here to the remaster's A_TossActor velocities.

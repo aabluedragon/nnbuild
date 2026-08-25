@@ -1759,8 +1759,10 @@ KEX_SOUNDS = {
     'mg_pow': ('sounds/m90fire.wav', 0),
     'p_click': ('sounds/click.wav', 0),
     'p_fire': ('sounds/pistolfire.wav', 0),
-    'pot_pc1': ('sounds/glass01.wav', 0),
-    'pot_pc2': ('sounds/glass02.wav', 0),
+    # The breakables: every vase anim plays glassbreak.wav, the barrel's
+    # woodbreak.wav (glass01-03 are the thrown vessels' impacts).
+    'pot_pc1': ('sounds/glassbreak.wav', 0),
+    'pot_pc2': ('sounds/woodbreak.wav', 0),
     'q_cry': ('sounds/queenroar.wav', 0),
     'q_deth': ('sounds/queendeath01.wav', 0),
     'q_gurgle': ('sounds/queenact02.wav', 0),
@@ -2517,13 +2519,14 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
             lights.append(first)
         if len(allrects) > 1 and not a.get('still') and not breakable:
             animdefs.append((first, tile - 1, 3))
+        wood = 1 if 'barrel' in a['anim'] else 0      # woodbreak.wav, not glassbreak.wav
         if mine:
-            breakables.append((first, a['health'], first, 0, a.get('radius', 0)) + explode + mine)
+            breakables.append((first, a['health'], first, 0, a.get('radius', 0)) + explode + mine + (wood,))
         elif breakable and len(allrects) > 1:
             # frame 0 is the intact object; the rest are the shards its death
             # anim tosses, one A_TossActor per shard.
             breakables.append((first, a['health'], first + 1, len(allrects) - 1,
-                               a.get('radius', 0)) + explode + (0, 0))
+                               a.get('radius', 0)) + explode + (0, 0, wood))
     if verbose:
         print("  scenery: %d actor types, %d animated, %d breakable, from the remaster's own sprites"
               % (len(out), len(animdefs), len(breakables)))
@@ -3425,9 +3428,9 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
     # ... and the mine's sight radius (Build units) and fuse (ticks), zero for
     # everything that is not a mine.
     _write_table(outdir, "kexbreak.txt",
-                 "tile health shardtile0 shardcount clipdist blastradius blastdamage sight fuse",
-                 [(tile, health, shard0, nshards, _clipdist(radius), bl_r, bl_d, sight, fuse)
-                  for tile, health, shard0, nshards, radius, bl_r, bl_d, sight, fuse in sorted(breakables)],
+                 "tile health shardtile0 shardcount clipdist blastradius blastdamage sight fuse wood",
+                 [(tile, health, shard0, nshards, _clipdist(radius), bl_r, bl_d, sight, fuse, wood)
+                  for tile, health, shard0, nshards, radius, bl_r, bl_d, sight, fuse, wood in sorted(breakables)],
                  "breakables", verbose)
 
     # Light sources: tile, then the peak brightening in shade steps and the

@@ -889,6 +889,18 @@ the fuse instead of shattering. `VB_KEX_LOOKAT=0 VB_KEX_LOOKAT_TILE=<its
 tile>` (8761 in the current tables) with `VB_KEXBREAK_TEST=100000` logs
 the arming and the blast.
 
+A sound audit alongside (every `sounds/*.wav` the remaster's defs and
+anims name, against `KEX_SOUNDS`): 107 of the demo's 170 VOCs are
+aliased and 82 of the 118 remaster wavs referenced are reached. The one
+that mattered was the breakables': every vase anim plays
+`glassbreak.wav` and the barrel's `woodbreak.wav`, while `pot_pc1`/`2`
+were aliased to the thrown vessels' `glass01`/`02`; they are the break
+sounds now, and a `wood` column in kexbreak.txt sends barrels to the
+second. Still unaliased and audible: `om_transmitter.wav` on a
+transmitter piece, `mineact.wav` (the mine arms with `item_spe`),
+`boulder.wav`/`pbexplode.wav` on the boulder trap, the Anubis and Set
+melee grunts -- each would need a Build sound slot of its own.
+
 ### Ramses
 
 The remaster's Ramses ships complete in the .kpf: the speeches as
