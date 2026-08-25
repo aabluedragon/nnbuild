@@ -136,9 +136,23 @@ def audit(m, path, base):
 
     # Guarded events: the sector (first m.nsector are the sources) carries the expected lotag.
     untagged = collections.Counter()
+    by_sector = collections.defaultdict(set)
     for et, es, tag, par in m.events:
-        if et in GUARDED and es < ns and tags[es][0] % 1000 != GUARDED[et]:
-            untagged[K.KEX_EVENTS.get(et, et)] += 1
+        by_sector[es].add(et)
+    for et, es, tag, par in m.events:
+        if et not in GUARDED or es >= ns or tags[es][0] % 1000 == GUARDED[et]:
+            continue
+        # A trigger door doubled with a press door comes out as the press door
+        # (which still listens on the channel), and a lift level with every
+        # neighbour has nowhere to travel: neither is a fault.
+        if et in (2, 7) and by_sector[es] & {1, 3, 4, 5, 6} and tags[es][0] % 1000 == 1:
+            continue
+        if et in (24, 21, 25, 22, 48):
+            wp, wn = sects[es]['wp'], sects[es]['wn']
+            nbf = set(sects[walls[w][4]]['fz'] for w in range(wp, wp + wn) if walls[w][4] >= 0)
+            if not (nbf - {sects[es]['fz']}):
+                continue
+        untagged[K.KEX_EVENTS.get(et, et)] += 1
     for k, v in sorted(untagged.items()):
         out.append("%d %s event(s) left without their effect" % (v, k))
 
