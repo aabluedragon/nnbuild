@@ -33,8 +33,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #define kMaxTiles	6144
 #define kMaxSprites 4096
-#define kMaxSectors 1024
-#define kMaxWalls   8192
+// VibeBuild32: the engine's own limits (MAXSECTORSV8 / MAXWALLSV8); the DOS
+// game's 1024 / 8192 capped what the Kex converter could cut a level into.
+// kMaxWalls stays a power of two: move.cpp masks a wall index with it.
+#define kMaxSectors 4096
+#define kMaxWalls   16384
 #define kMaxTiles   6144
 #define kMaxVoxels	4096
 

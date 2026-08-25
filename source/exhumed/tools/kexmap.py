@@ -750,11 +750,12 @@ def _split_slopes(m, edge_cache, verbose=False):
 # A floor or ceiling whose lighting spans this many Build shade steps across
 # the sector is cut in two along a contour of its light plane, each half at
 # its own shade -- the widest spans first, until the level has this many
-# sectors. The budget is the game's: PowerSlave's own map loader and its
-# per-sector tables are sized kMaxSectors 1024 / kMaxWalls 8192, and every
-# cut costs a sector plus the T-junction walls it leaves on the neighbours.
+# sectors. Every cut costs a sector plus the T-junction walls it leaves on
+# the neighbours; the game's tables are kMaxSectors 4096 / kMaxWalls 16384
+# now (the DOS 1024 / 8192 used to be the budget), and a level past the
+# version-7 limits is written as version 8.
 KEX_LIGHT_CUT_STEPS = 10
-KEX_LIGHT_SECTOR_BUDGET = 1000
+KEX_LIGHT_SECTOR_BUDGET = 1800
 # A wall whose lighting changes this much along its length is subdivided so
 # each piece can carry its own shade, into at most this many pieces.
 KEX_LIGHT_WALL_STEPS = 8
@@ -3022,7 +3023,10 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
     # Map version 9 is version 7 with TROR: identical struct layout on disk,
     # but engineLoadBoard then runs yax_update() over it. Maps without a single
     # vertical opening stay at 7 so nothing about them changes.
-    b += struct.pack('<i', 9 if nbunches else 7)
+    # Past the version-7 loader's 1024 sectors / 8192 walls the header says
+    # 8 (9 with TROR): same layout on disk, engineLoadBoard() lifts the limits
+    # to 4096 / 16384.
+    b += struct.pack('<i', 9 if nbunches else (8 if len(keep) > 1024 or len(out_walls) > 8192 else 7))
     b += struct.pack('<iii', sx * WORLD, sy * WORLD, sz)   # x/y are world units; only z is 1/16
     b += struct.pack('<hh', sang, remap.get(ss,0))
     b += struct.pack('<H', len(keep))

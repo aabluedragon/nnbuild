@@ -31,7 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "exhumed.h"
 
 const char kSaveSig[] = "EXSV";
-const uint16_t kSaveVersion = 9999;
+const uint16_t kSaveVersion = 10000;   // VibeBuild32: the per-sector tables grew to kMaxSectors 4096
 
 
 void testsave()

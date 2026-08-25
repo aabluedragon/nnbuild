@@ -612,10 +612,14 @@ geometry:
   `KEX_LIGHT_CUT_STEPS` (10) or more along a contour of its light plane,
   with the slope splitter's own `cut()`, each half then shaded at its
   centre. The widest spans go first until the level reaches
-  `KEX_LIGHT_SECTOR_BUDGET` (1000) sectors -- the game's own tables are
-  `kMaxSectors 1024` / `kMaxWalls 8192`, and every cut costs a sector plus
-  the T-junction walls it leaves on the neighbours. MAGMA is the one level
-  that hits the budget. A sloped sector is cut along ITS contour, not the
+  `KEX_LIGHT_SECTOR_BUDGET` (1800) sectors; every cut costs a sector plus
+  the T-junction walls it leaves on the neighbours. The budget used to be
+  the DOS game's `kMaxSectors 1024` / `kMaxWalls 8192`, which MAGMA alone
+  hit (it wants 94 cuts, 1060 sectors); those tables are the engine's 4096
+  / 16384 now, the save version is 10000 for the bigger per-sector tables
+  it writes, and a level past the version-7 loader's limits is written
+  with map version 8 (same layout on disk; `engineLoadBoard` keys the
+  limits on the version). No level is at the budget. A sloped sector is cut along ITS contour, not the
   light's (a half with no level-line wall could not be tilted at all), its
   pieces pinned to the seam, and the cut is kept only if both halves still
   tilt both surfaces within `KEX_SLOPE_TOLERANCE`; a sector on either end
@@ -1490,5 +1494,4 @@ re-derive it from the code.
   parts are all transcribed (see the events and scripts sections).
 - **The widescreen `wings.png`** (see the status bar section); the rest of
   the HUD is in.
-- **Vertical light gradients on walls**, and floor gradients beyond the
-  sector budget in MAGMA (see Lighting).
+- **Vertical light gradients on walls** (see Lighting).
