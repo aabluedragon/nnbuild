@@ -538,7 +538,7 @@ static void KexBreak_Shatter(int nProp)
     int const nSprite = s_prop[nProp].nSprite;
     KexBreakType const &t = s_type[s_prop[nProp].nType];
 
-    PlayFX2(StaticSound[kSoundPotPc1 + (t.wood ? 1 : 0)]   // pot_pc2 follows pot_pc1, nSprite);
+    PlayFX2(StaticSound[kSoundPotPc1 + (t.wood ? 1 : 0)], nSprite);   // pot_pc2 follows pot_pc1
 
     // 0x4000 is the fire cauldron's own flag for a livelier throw, which is the
     // closest thing here to the remaster's A_TossActor velocities.
