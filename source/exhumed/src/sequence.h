@@ -106,7 +106,8 @@ enum {
     kSeqRochfire,
     kSeqRat,
     kSeqBoulder,    // VibeBuild32: the remaster boulder trap; BOULDER.SEQ, optional
-    kSeqManacle     // VibeBuild32: the remaster's Manacle weapon; MANACLE.SEQ, optional
+    kSeqManacle,    // VibeBuild32: the remaster's Manacle weapon; MANACLE.SEQ, optional
+    kSeqScorpion    // VibeBuild32: the remaster's scorpion, the spider's SEQ on its own tiles; optional
 };
 
 struct actionSeq
@@ -120,6 +121,7 @@ extern short frames;
 extern short SeqBase[];
 extern short SeqSize[];
 extern short SeqOffsets[];
+int seq_IsLoaded(int nSeq);      // VibeBuild32: an optional SEQ that was actually there
 
 extern short FrameFlag[];
 

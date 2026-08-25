@@ -72,7 +72,10 @@ int GetSpiderSprite(int nSpider)
     return SpiderList[nSpider].nSprite;
 }
 
-int BuildSpider(int nSprite, int x, int y, int z, short nSector, int nAngle)
+// VibeBuild32: the remaster's scorpion is this AI in a scorpion's shell.
+static uint8_t s_spiderScorp[kMaxSpiders];
+
+int BuildSpider(int nSprite, int x, int y, int z, short nSector, int nAngle, int bScorp)
 {
     int nSpider = SpiderCount++;
     if (nSpider >= kMaxSpiders) {
@@ -121,6 +124,7 @@ int BuildSpider(int nSprite, int x, int y, int z, short nSector, int nAngle)
     SpiderList[nSpider].nSprite = nSprite;
     SpiderList[nSpider].nTarget = -1;
     SpiderList[nSpider].nHealth = 160;
+    s_spiderScorp[nSpider] = (uint8_t)(bScorp != 0 && seq_IsLoaded(kSeqScorpion));
 
     sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nSpider, kRunSpider);
 
@@ -167,7 +171,7 @@ void FuncSpider(int a, int nDamage, int nRun)
                 }
             }
 
-            int nSeq = SeqOffsets[kSeqSpider] + ActionSeq[nAction].a;
+            int nSeq = SeqOffsets[s_spiderScorp[nSpider] ? kSeqScorpion : kSeqSpider] + ActionSeq[nAction].a;
 
             sprite[nSprite].picnum = seq_GetSeqPicnum2(nSeq, SpiderList[nSpider].nFrame);
 
@@ -395,7 +399,7 @@ void FuncSpider(int a, int nDamage, int nRun)
 
         case 0x90000:
         {
-            seq_PlotSequence(a & 0xFFFF, SeqOffsets[kSeqSpider] + ActionSeq[nAction].a, SpiderList[nSpider].nFrame, ActionSeq[nAction].b);
+            seq_PlotSequence(a & 0xFFFF, SeqOffsets[s_spiderScorp[nSpider] ? kSeqScorpion : kSeqSpider] + ActionSeq[nAction].a, SpiderList[nSpider].nFrame, ActionSeq[nAction].b);
             break;
         }
 

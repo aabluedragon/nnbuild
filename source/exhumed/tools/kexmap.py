@@ -1984,6 +1984,11 @@ ACTOR_MAP = {
     # breakables with a radial blast (see kexbreak.txt's explode columns).
     58:   (60, 0),   # Obj_Camel: the remaster's level exit -> Build's
     2000: (59, 0),   # Obj_Checkpoint -> Build's save-point scarab
+    # AI_Scorp: the remaster's small scorpion, which is AI_Spider to the
+    # letter in a scorpion's shell (60 of them across eight levels). The
+    # spider's AI; hitag 1 has BuildSpider animate it from SCORPION.SEQ, the
+    # spider's layout on scorpion tiles (kexscorpseq.py).
+    14:   (105, 1),
 }
 
 # The remaster's collectibles, which Build PowerSlave never had: the six
@@ -3208,6 +3213,15 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
         if verbose: print("  crows: HAWK.SEQ written (%d chunks)" % len(KEX_BIRD_SEQ['ck_pict']))
     except ImportError:
         if verbose: print("  crows: kexbirdseq.py missing; crows keep the wasp's look")
+    # The scorpions' sequence file: the spider's layout on scorpion tiles.
+    try:
+        from kexscorpseq import KEX_SCORP_SEQ
+        import kexseqtool
+        with open(os.path.join(outdir, 'SCORPION.SEQ'), 'wb') as f:
+            f.write(kexseqtool.write_seq_bytes(KEX_SCORP_SEQ))
+        if verbose: print("  scorpions: SCORPION.SEQ written (%d chunks)" % len(KEX_SCORP_SEQ['ck_pict']))
+    except ImportError:
+        if verbose: print("  scorpions: kexscorpseq.py missing; scorpions keep the spider's look")
     if demo_dir:
         patch_demo_seqs(demo_dir, outdir, verbose)
     nexttile += len(decordefs)

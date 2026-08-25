@@ -884,19 +884,39 @@ static inline int KexBeam_Rand(int span)
 // creature without a hand on the keys.
 static void Kex_LookAtDebug(void)
 {
-    static int s_ticks = -1, s_stat = -1;
+    static int s_ticks = -1, s_stat = -1, s_pic0 = -1, s_pic1 = -1;
     if (s_ticks < 0)
     {
         char const *e = getenv("VB_KEX_LOOKAT");
         s_stat = e ? Batoi(e) : -1;
         s_ticks = e ? 90 : 0;
+        // VB_KEX_LOOKAT_TILE=<lo>-<hi>: only a sprite whose picnum is in
+        // that range -- the creatures share statnum 99, and a skinned one
+        // (scorpion 7700+) is told apart by its tiles.
+        char const *t = getenv("VB_KEX_LOOKAT_TILE");
+        if (t && sscanf(t, "%d-%d", &s_pic0, &s_pic1) != 2)
+            s_pic0 = s_pic1 = Batoi(t);
+    }
+    static int s_target = -1;
+    int const nSprite = PlayerList[nLocalPlayer].nSprite;
+    if (s_target >= 0)
+    {
+        // Keep facing it for a while: a creature moves.
+        int const look = getangle(sprite[s_target].x - sprite[nSprite].x, sprite[s_target].y - sprite[nSprite].y);
+        PlayerList[nLocalPlayer].q16angle = fix16_from_int(look);
+        PlayerList[nLocalPlayer].q16oangle = PlayerList[nLocalPlayer].q16angle;
+        sprite[nSprite].ang = (int16_t)look;
+        if (++s_ticks > 400)
+            s_target = -1;
+        return;
     }
     if (s_ticks <= 0 || --s_ticks != 0)
         return;
-    int const nSprite = PlayerList[nLocalPlayer].nSprite;
     for (int i = 0; i < kMaxSprites; i++)
     {
         if (sprite[i].statnum != s_stat || i == nSprite)
+            continue;
+        if (s_pic0 >= 0 && (sprite[i].picnum < s_pic0 || sprite[i].picnum > s_pic1))
             continue;
         int const ang = (sprite[i].ang + 1024) & kAngleMask;   // face it from its front
         int const px = sprite[i].x + mulscale14(Cos(ang), 600), py = sprite[i].y + mulscale14(Sin(ang), 600);
@@ -913,6 +933,7 @@ static void Kex_LookAtDebug(void)
         sprite[nSprite].ang = (int16_t)look;
         PlayerList[nLocalPlayer].opos = sprite[nSprite].xyz;
         OSD_Printf("Kex look-at: sprite %d (statnum %d, picnum %d) from sector %d\n", i, s_stat, sprite[i].picnum, nSector);
+        s_target = i; s_ticks = 0;
         return;
     }
 }

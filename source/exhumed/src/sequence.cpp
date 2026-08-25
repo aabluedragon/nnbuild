@@ -45,7 +45,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <assert.h>
 
 #define kMaxSequences	4096
-#define kMaxSEQFiles	80
+#define kMaxSEQFiles 81
 #define kMaxSEQFrames	18000
 #define kMaxSEQChunks	21000
 
@@ -157,10 +157,17 @@ const char *SeqNames[kMaxSEQFiles] =
   "rochfire",
   "rat",
   "boulder",      // VibeBuild32: written by the Kex converter; absent from the classic data
-  "manacle"       // VibeBuild32: likewise
+  "manacle",      // VibeBuild32: likewise
+  "scorpion"      // VibeBuild32: likewise
 };
 
 short SeqOffsets[kMaxSEQFiles];
+static uint8_t s_seqLoaded[kMaxSEQFiles];   // VibeBuild32: an optional SEQ that was actually there
+
+int seq_IsLoaded(int nSeq)
+{
+    return nSeq >= 0 && nSeq < kMaxSEQFiles && s_seqLoaded[nSeq];
+}
 
 
 // Sequence files the classic data does not carry: nothing to load is not an
@@ -168,7 +175,8 @@ short SeqOffsets[kMaxSEQFiles];
 // file is there (the Kex converter writes them into its data directory).
 static bool seq_IsOptional(const char *seqName)
 {
-    return !Bstrcasecmp(seqName, "boulder") || !Bstrcasecmp(seqName, "manacle");
+    return !Bstrcasecmp(seqName, "boulder") || !Bstrcasecmp(seqName, "manacle")
+        || !Bstrcasecmp(seqName, "scorpion");
 }
 
 int seq_ReadSequence(const char *seqName)
@@ -380,8 +388,11 @@ void seq_LoadSequences()
     for (i = 0; i < kMaxSEQFiles; i++)
     {
         SeqOffsets[i] = sequences;
+        s_seqLoaded[i] = 0;
 
-        if (seq_ReadSequence(SeqNames[i]) == 0 && !seq_IsOptional(SeqNames[i])) {
+        int const nRead = seq_ReadSequence(SeqNames[i]);
+        s_seqLoaded[i] = nRead > 0;
+        if (nRead == 0 && !seq_IsOptional(SeqNames[i])) {
             LOG_F(ERROR, "Error loading '%s'", SeqNames[i]);
         }
     }

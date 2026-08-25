@@ -921,7 +921,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                     return;
                 }
 
-                BuildSpider(nSprite, 0, 0, 0, 0, 0);
+                BuildSpider(nSprite, 0, 0, 0, 0, 0, g_kexMode && nHitag == 1);   // VibeBuild32: hitag 1 = the remaster's scorpion
                 return;
             }
             case 104:

@@ -842,6 +842,33 @@ instead of 50, the bird sheet being at actor scale 1.0 to the wasp's 1.25.
 The flag lives beside `WaspList[]`, not in it, so the saved struct is
 untouched.
 
+### The scorpions
+
+A census of every actor in the 25 retail maps (types against
+`ACTOR_MAP`, the traps, the inventory and the decor fallback) found two
+gameplay actors that were coming out as decor: `AI_Scorp`, 60 of them
+across eight levels, and `AI_Magic8Ball`, 66 in two. The remaster's
+scorpion is `AI_Spider` to the letter -- the same health (20), speed,
+radius and step height, anims of the same shape (12-frame walk, 13-frame
+attack, one-frame leap that even calls `A_SpiderLeap`, three-frame death)
+-- in a scorpion's shell, and Build has no such creature (its SCORP.SEQ is
+Selkis). So it gets the crows' treatment: `ACTOR_MAP[14] = (105, 1)`,
+spider with hitag 1, and `BuildSpider(..., bScorp)` animates it from
+`kSeqScorpion`. SCORPION.SEQ (`kexscorpseq.py`, written by
+kexseqmap_gen.py) is the demo's SPIDER.SEQ with every tile retargeted to a
+scorpion tile on 7700+ that the tile pass composites from
+`monsters/scorp_*`; unlike the other creatures, which only fill the tiles
+the demo lacks, all 53 of the spider's tiles are mapped, because the demo
+has the whole spider and none of it is a scorpion. The frame map is in
+`SCORP_GROUPS`: walk 6 for 6, idle on walk frame 0, the 13-frame attack on
+Build's 7 by even frames, the leap pose for both the leap and the airborne
+sub-sequences, the death's three frames stretched over Build's 25. The
+sounds are the spider's, which is what the scorpion's def names too.
+`seq_IsLoaded()` lets a scorpion fall back to the spider's look if the
+file is missing; `VB_KEX_LOOKAT_TILE=7700-7752` with `VB_KEX_LOOKAT=99`
+picks one out to look at (the creatures share statnum 99), and the look-at
+hook now keeps facing its target for a while, since creatures move.
+
 ### Ramses
 
 The remaster's Ramses ships complete in the .kpf: the speeches as
