@@ -1693,6 +1693,14 @@ KEX_SOUNDS = {
     'anu_hit': ('sounds/anubispain.wav', 0),
     'anu_icu': ('sounds/anubisact.wav', 0),
     'blasted': ('sounds/blasted2.wav', 0),
+    # Names no VOC carries: sounds the remaster has and Build never did,
+    # played by name through KexSound_Get() (kexbreak.cpp).
+    'k_trans': ('sounds/om_transmitter.wav', 0),   # a transmitter piece taken
+    'k_mine': ('sounds/mineact.wav', 0),           # the mine arming
+    'k_bould': ('sounds/boulder.wav', 0),          # the boulder trap's throw
+    'k_bldhit': ('sounds/pbexplode.wav', 0),       # ... and its impact
+    'k_anmele': ('sounds/anubismelee.wav', 0),     # the Anubis' melee hit
+    'k_setstp': ('sounds/setstomp02.wav', 0),      # Set's melee hit
     'blood_1': ('sounds/flesh01.wav', 0),
     'blood_2': ('sounds/flesh02.wav', 0),
     'blood_3': ('sounds/flesh03.wav', 0),

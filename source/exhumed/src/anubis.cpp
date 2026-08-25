@@ -35,6 +35,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "sound.h"
 #include "trigdat.h"
 #include "save.h"
+#include "kexbreak.h"   // VibeBuild32
 #include <assert.h>
 
 #define kMaxAnubis  80
@@ -313,6 +314,7 @@ void FuncAnubis(int a, int nDamage, int nRun)
                         {
                             if (nFlag & 0x80)
                             {
+                                { int const s = KexSound_Get("k_anmele"); if (s >= 0) D3PlayFX(s, nSprite); }
                                 runlist_DamageEnemy(nTarget, nSprite, 7);
                             }
                         }

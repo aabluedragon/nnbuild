@@ -14,6 +14,7 @@
 #include "lighting.h"
 #include "gun.h"
 #include "kexinv.h"
+#include "kexbreak.h"   // VibeBuild32: KexSound_Get
 
 KexInv KexInvList[kMaxPlayers];
 
@@ -355,6 +356,7 @@ int KexInv_Pickup(int nPlayer, int nItem, int nHitag)
             return 1;
 
         case kKexLotagTransmitter:
+            { int const s = KexSound_Get("k_trans"); if (s >= 0) PlayFX2(s, PlayerList[nPlayer].nSprite); }   // om_transmitter.wav
             if ((unsigned)nHitag >= KEX_TRANS_PIECES)
                 return 0;
             inv.transmitter |= (uint8_t)(1 << nHitag);

@@ -22,6 +22,7 @@ void KexLight_Tick(void);        // per tick: cast their glow
 // The remaster wav that is this Build sound, or NULL; *pLoop tells whether it
 // loops (the flag stands in for the VOC loop block a WAV does not have).
 char const *KexSound_Alias(char const *name, int *pLoop);
+int KexSound_Get(char const *name);      // a Kex-only sound (kexsound.txt name with no VOC), -1 if none
 
 // A_RandomItem: the remaster's enemy-death drop roll; no-op outside Kex mode.
 void KexDrop_RandomItem(int nSprite, int nKiller);

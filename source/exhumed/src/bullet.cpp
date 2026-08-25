@@ -38,6 +38,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "lighting.h"
 #include "object.h"
 #include "save.h"
+#include "kexbreak.h"   // VibeBuild32: KexSound_Get
+
+static void KexBullet_ImpactSound(bulletInfo const *pBulletInfo, int x, int y, int z, int nSector);   // below
 #include <string.h>
 #include <assert.h>
 #ifndef __WATCOMC__
@@ -181,6 +184,7 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
             }
 
             if (!RandomSize(2)) {
+                KexBullet_ImpactSound(pBulletInfo, x, y, z, nSector);
                 BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
             }
 
@@ -252,6 +256,7 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
 
     if (nStat <= 90 || nStat >= 199)
     {
+        KexBullet_ImpactSound(pBulletInfo, x, y, z, nSector);
         BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
         return;
     }
@@ -270,6 +275,7 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
             BuildAnim(-1, 39, 0, x, y, z, nSector, 40, 0);
             if (pBullet->nType > 2)
             {
+                KexBullet_ImpactSound(pBulletInfo, x, y, z, nSector);
                 BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
             }
             break;
@@ -541,6 +547,18 @@ int GetBulletSprite(int nBullet)
 {
     assert(nBullet >= 0 && nBullet < kMaxBullets);
     return BulletList[nBullet].nSprite;
+}
+
+
+// VibeBuild32: the boulder's impact is the remaster's pbexplode.wav; the
+// other bullets keep their own SEQ-carried sounds.
+static void KexBullet_ImpactSound(bulletInfo const *pBulletInfo, int x, int y, int z, int nSector)
+{
+    if (pBulletInfo->nSeq != kSeqBoulder)
+        return;
+    int const s = KexSound_Get("k_bldhit");
+    if (s >= 0)
+        PlayFXAtXYZ(s, x, y, z, nSector);
 }
 
 int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int val1, int nAngle, int val2, int val3)

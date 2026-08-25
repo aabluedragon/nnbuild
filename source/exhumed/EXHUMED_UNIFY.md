@@ -896,10 +896,16 @@ that mattered was the breakables': every vase anim plays
 `glassbreak.wav` and the barrel's `woodbreak.wav`, while `pot_pc1`/`2`
 were aliased to the thrown vessels' `glass01`/`02`; they are the break
 sounds now, and a `wood` column in kexbreak.txt sends barrels to the
-second. Still unaliased and audible: `om_transmitter.wav` on a
-transmitter piece, `mineact.wav` (the mine arms with `item_spe`),
-`boulder.wav`/`pbexplode.wav` on the boulder trap, the Anubis and Set
-melee grunts -- each would need a Build sound slot of its own.
+second. The remaining ones have no Build sound at all, so they get names
+no VOC carries -- `k_trans`, `k_mine`, `k_bould`, `k_bldhit`, `k_anmele`,
+`k_setstp` in `KEX_SOUNDS` -- and `KexSound_Get(name)` plays them:
+`LoadSound()` resolves any name through kexsound.txt, so a Kex-only name
+loads the wav straight into a free one of the 200 sound slots (the roster
+is 80), and -1 plays nothing outside Kex mode. They sound on a transmitter
+piece taken, the mine arming, the boulder trap's throw and the boulder's
+impact (`KexBullet_ImpactSound`, on bullets whose SEQ is the boulder's),
+and the Anubis' and Set's melee hits. Verified muted only -- the aliases
+resolve and nothing else changed.
 
 ### Ramses
 

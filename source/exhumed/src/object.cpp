@@ -41,6 +41,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "bullet.h"
 #include "save.h"
 #include "status.h"
+#include "kexbreak.h"   // VibeBuild32
 #include <string.h>
 #include <assert.h>
 
@@ -1306,7 +1307,8 @@ void FuncTrap(int a, int UNUSED(b), int nRun)
                                 wall[nWall].picnum = sTrap[nTrap].field_C + 1;
                             }
 
-                            D3PlayFX(StaticSound[kSoundTrapFire], nSprite);
+                            { int const s = (nType == 17) ? KexSound_Get("k_bould") : -1;   // the boulder's own throw
+                              D3PlayFX(s >= 0 ? s : StaticSound[kSoundTrapFire], nSprite); }
                         }
                     }
                 }

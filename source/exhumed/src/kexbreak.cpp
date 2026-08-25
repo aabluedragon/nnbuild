@@ -210,6 +210,29 @@ char const *KexSound_Alias(char const *name, int *pLoop)
     return NULL;
 }
 
+// A sound the remaster has and Build never did -- the transmitter piece, the
+// mine, the boulder, the Anubis and Set melee -- named in kexsound.txt under
+// a name no VOC carries (k_*). LoadSound() resolves any name through the
+// aliases, so it only needs asking; the index is cached, and -1 (no sound
+// device, no alias) plays nothing.
+#define kMaxKexOwnSounds 16
+static struct { char name[12]; int nSound; } s_ownSound[kMaxKexOwnSounds];
+static int s_ownSounds;
+
+int KexSound_Get(char const *name)
+{
+    for (int i = 0; i < s_ownSounds; i++)
+        if (!Bstrcasecmp(s_ownSound[i].name, name))
+            return s_ownSound[i].nSound;
+    if (s_ownSounds >= kMaxKexOwnSounds)
+        return -1;
+    int const n = g_kexMode && KexSound_Alias(name, NULL) ? LoadSound(name) : -1;
+    Bstrncpy(s_ownSound[s_ownSounds].name, name, sizeof(s_ownSound[0].name) - 1);
+    s_ownSound[s_ownSounds].name[sizeof(s_ownSound[0].name) - 1] = 0;
+    s_ownSound[s_ownSounds++].nSound = n;
+    return n;
+}
+
 // ---------------------------------------------------------------------------
 // Teleports. Kex event 72 is a pad the player steps on, 71 the arrival point
 // with its facing; Build PowerSlave has no sector teleporter, so kexmap.py
@@ -365,7 +388,7 @@ static void KexBreak_MineTick(int nProp)
                         sprite[nPlayer].x, sprite[nPlayer].y, sprite[nPlayer].z - 2048, sprite[nPlayer].sectnum))
                 continue;
             s_prop[nProp].nFuse = t.fuse;
-            PlayFX2(StaticSound[kSoundItemSpecial], nSprite);
+            { int const s = KexSound_Get("k_mine"); PlayFX2(s >= 0 ? s : StaticSound[kSoundItemSpecial], nSprite); }
             if (s_selftest)
                 OSD_Printf("Kex mine: prop %d armed by player %d\n", nProp, i);
             break;

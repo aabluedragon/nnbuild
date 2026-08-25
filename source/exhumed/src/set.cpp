@@ -32,6 +32,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "bullet.h"
 #include "set.h"
 #include "save.h"
+#include "kexbreak.h"   // VibeBuild32
+#include "sound.h"   // VibeBuild32
 #include <assert.h>
 
 #define kMaxSets    10
@@ -544,6 +546,7 @@ void FuncSet(int a, int nDamage, int nRun)
                         }
                         else if (nFlag & 0x80)
                         {
+                            { int const s = KexSound_Get("k_setstp"); if (s >= 0) D3PlayFX(s, nSprite); }
                             runlist_DamageEnemy(nTarget, nSprite, 5);
                         }
                     }
