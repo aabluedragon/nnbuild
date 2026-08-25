@@ -1605,7 +1605,9 @@ heights every ten ticks; the tags are read back from the map file, since
   sprite carries the top's z, `runlist_ProcessSectorTag` builds the pad
   from it, and the converter lifts the pad's ceiling to the lake's when the
   top would pass it. With `VB_KEX_LOOKAT_TAG=17` on CAVERN_PSX the pad is
-  seen standing at its top from load.
+  seen standing at its top from load, and with `VB_KEX_LOOKAT_STAND=1` --
+  the player put on the tagged sector instead of beside it -- sinking
+  under the player's feet.
 
 ### The pause menu
 

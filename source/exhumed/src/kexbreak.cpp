@@ -1050,6 +1050,17 @@ static void Kex_LookAtDebug(void)
             for (int w = sector[nb].wallptr; w < sector[nb].wallptr + sector[nb].wallnum; w++)
             { px += wall[w].x; py += wall[w].y; m++; }
             px /= m; py /= m;
+            if (getenv("VB_KEX_LOOKAT_STAND"))
+            {
+                // ... or stand ON it (a pad, a lift): its centre, its floor.
+                sprite[nSprite].x = cx; sprite[nSprite].y = cy;
+                sprite[nSprite].z = sector[si].floorz - 2048;
+                mychangespritesect(nSprite, (int16_t)si);
+                PlayerList[nLocalPlayer].opos = sprite[nSprite].xyz;
+                OSD_Printf("Kex look-at: tag %d -> standing on sector %d\n", s_tag, si);
+                s_tagSector = si;
+                break;
+            }
             // Back off along the line from the door, as far as the sectors
             // allow (up to 1536 units), so the whole door is in view.
             {
