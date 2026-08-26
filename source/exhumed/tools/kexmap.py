@@ -191,6 +191,7 @@ def load(path):
 
 SCALE = 16
 AT_PLAYER = 0
+STEEP_HEINUM = 4096      # 45 degrees: slopes at least this steep get relative texture alignment
 
 # Converted maps are written with this prefix because their names would
 # otherwise collide with the remaster's own maps/*.MAP inside the mounted .kpf,
@@ -1078,7 +1079,7 @@ def _shade_at(m, f, X, Y, Z=None):
 
 
 def _pic(m, f, tilebase):
-    if f.tileStart < 0: return tilebase
+    if f.tileStart < 0: return -1          # untextured: the writer gives it the sky
     return tilebase + m.tiles[f.tileStart][1]
 
 def _surface(pl, ring, wx, wy, dx, dy, sky=False, ceiling=False, quad=None):
@@ -1267,7 +1268,8 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
         # A vertical link is only an OPENING when the face carries no tiles, the
         # same way a wall portal does. In the retail maps it almost never is --
         # see build_tror().
-        sects.append(dict(yax_ceil=(cf.link if cf.tileStart < 0 else -1),
+        sects.append(dict(floorsky=(ff.tileStart < 0 and ff.link < 0),
+                          yax_ceil=(cf.link if cf.tileStart < 0 else -1),
                           yax_floor=(ff.link if ff.tileStart < 0 else -1),
                           wallptr=start, wallnum=len(walls)-start,
                           lotag=0, hitag=0,
@@ -3190,6 +3192,15 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
         fb = bunch.get((ns, YAX_FLOOR), -1)
         cstat = s['ceilingstat'] | (YAX_BIT if cb >= 0 else 0)
         fstat = s['floorstat']   | (YAX_BIT if fb >= 0 else 0)
+        # Kex maps a tile along its face; Build projects a floor texture onto
+        # the horizontal plane, so a steep slope stretches it by 1/cos --
+        # 2.2x on KILARENA's 63-degree machine panels, which read as noise.
+        # Relative alignment (bit 64) maps along the slope from the first
+        # wall, which the converter has already turned to the contour line.
+        # Kept off gentle terrain, where world alignment tiles seamlessly
+        # between the many small pieces and the stretch is under 1.4x.
+        if abs(s['ceilingheinum']) >= STEEP_HEINUM and not cstat & 1: cstat |= 64
+        if abs(s['floorheinum'])   >= STEEP_HEINUM and not fstat & 1: fstat |= 64
         b += struct.pack('<hhiihhhhbBBBhhbBBBBBhhh',
             wremap[st], num, s['ceilingz'], s['floorz'],
             cstat, fstat,
@@ -3437,20 +3448,29 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
         local = [assign.get(t, tilebase) for t in m.textures]
         sects, walls, ranges = convert(m, tilebase=0, switch_pairs=sw_pairs,
                                        ramses=KEX_RAMSES.get(name.upper()))
+        skytile = assign.get(m.sky)
         for w in walls:
-            w['picnum'] = local[w['picnum']] if w['picnum'] < len(local) else tilebase
+            # An untextured solid face -- some 420 across the levels, all
+            # flagged "Invisible" -- shows the sky in Kex; there is no invisible
+            # one-sided wall in Build, so it wears the sky texture rather than
+            # whichever texture index 0 happens to be.
+            w['picnum'] = local[w['picnum']] if 0 <= w['picnum'] < len(local) else (skytile if (w['picnum'] < 0 and skytile is not None) else tilebase)
             if 'overpicnum' in w:      # a masked portal's texture, the same way
                 o = w['overpicnum']
                 w['overpicnum'] = local[o] if o < len(local) else 0
                 if o in getattr(m, 'kex_force_tiles', ()):
                     m.kex_force_global = getattr(m, 'kex_force_global', set()) | {w['overpicnum']}
-        skytile = assign.get(m.sky)
-        for s in sects:
-            if s is None: continue
-            s['ceilingpicnum'] = local[s['ceilingpicnum']] if s['ceilingpicnum'] < len(local) else tilebase
         for tile in sorted(getattr(m, 'kex_force_global', ())):
             forcerows.append((KEX_MAP_PREFIX + os.path.basename(name).upper(), tile))
-            s['floorpicnum']   = local[s['floorpicnum']]   if s['floorpicnum']   < len(local) else tilebase
+        for s in sects:
+            if s is None: continue
+            s['ceilingpicnum'] = local[s['ceilingpicnum']] if 0 <= s['ceilingpicnum'] < len(local) else tilebase
+            s['floorpicnum']   = local[s['floorpicnum']]   if 0 <= s['floorpicnum']   < len(local) else tilebase
+            # An untextured floor (KILARENA's arena has 127) is the void Kex
+            # draws nothing on: the sky, parallaxed, as an untextured ceiling.
+            if s['floorpicnum'] < 0 or s.get('floorsky'):
+                s['floorpicnum'] = skytile if skytile is not None else tilebase
+                s['floorstat'] |= 1
             if s['ceilingsky'] and skytile is not None:
                 # Sky sectors reach absurd heights (TOMB's tallest is 15744
                 # world units). A ceiling that far off is nearly edge-on at the

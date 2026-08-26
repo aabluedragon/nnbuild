@@ -433,6 +433,25 @@ Kex has no sky tile: the sky is named in the map header and a ceiling
 simply carries *no tiles* where it shows through. Untextured ceilings were being
 handed texture slot 0 -- 169 of them in KARNAK alone -- so its courtyards were
 capped with garbage. They now get the map's own sky with Build's parallax bit.
+The same holds for untextured *floors* and *solid walls* -- KILARENA alone has
+127 floors, 165 ceilings and 80 walls with no tile -- which had been wearing
+whichever texture the map listed first. They wear the sky now too, the floors
+parallaxed like the ceilings. (A census that counted these on the Build side
+was briefly reporting the writer's own bug: the force-field table loop had been
+spliced into the middle of the sector remap, so floors were only remapped as a
+side effect of it, for one sector, on the seven levels that have force fields.
+KARNAK's sand and KILARENA's teal deck are back.)
+
+**Steep slopes.** Kex maps a tile along its face; Build projects a floor or
+ceiling texture onto the horizontal plane, so a slope stretches it by 1/cos of
+its angle -- 2.2x on the 63-degree machine panels flanking KILARENA's entrance,
+which rendered as grey and teal noise. Relative alignment (stat bit 64) maps the
+texture along the slope from the sector's first wall, and the converter already
+turns that wall to the slope's contour line, so the texture runs up the slope
+unstretched: the panels are `colony152`'s rings again. It is set on slopes of at
+least 45 degrees (`STEEP_HEINUM`, 520 planes across the levels, 330 of them
+over 63 degrees) and left off gentler terrain, where world alignment tiles
+seamlessly across the many small pieces and the stretch stays under 1.4x.
 
 **Animated surfaces.** `defs/animPicInfo.txt` lists each animated texture's
 frames and speed. Build plays an animation as a run of *consecutive* tiles, so
