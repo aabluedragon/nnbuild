@@ -1364,10 +1364,11 @@ KEX_TILE_Z = 64 * SCALE * WORLD    # one 64-unit texture tile, in Build z units
 # ft *= 1/16; 8 with the expand bit), a fixed scale no field can change, so a
 # 64-texel tile repeats every 1024 units -- 171 Kex units, where Kex's planar
 # mapping repeats every 64. Every flat was drawn 2.67x too coarse. A flat's
-# texture therefore gets a SECOND tile, a dummytile of 64*WORLD/16 texels a
-# side whose hires replacement is the same PNG: the tile's footprint sets the
-# repeat (24 texels * 16 = 384 units = 64 Kex units) and the image keeps every
-# pixel. Walls keep the original tile; a texture used on both gets both.
+# texture therefore gets a SECOND tile of 64*WORLD/16 texels a side -- the
+# image box-filtered down, for the classic renderer -- whose hires replacement
+# is the full PNG: the tile's footprint sets the repeat (24 texels * 16 = 384
+# units = 64 Kex units) and the image keeps every pixel under polymost. Walls
+# keep the original tile; a texture used on both gets both.
 KEX_FLAT_TEXELS = 64 * WORLD / 16.0
 
 def _wall_bands(m, sects, walls, ranges, tilebase):
@@ -3393,11 +3394,11 @@ def write_def(path, assignments, animdefs=(), skytiles=(), flatdefs=(), header=D
             f.write('tilefromtexture %d { file "%s" }\n' % (tile, name))
             f.write('texture %d { pal 0 { file "%s" } }\n' % (tile, name))
         if flatdefs:
-            f.write("// Flats: a dummytile sized for Build's fixed 16 units per texel, so the\n")
+            f.write("// Flats: a tile sized for Build's fixed 16 units per texel, so the\n")
             f.write("// texture repeats every 64 Kex units as in the remaster; the hires\n")
             f.write("// replacement is the full-size image. See KEX_FLAT_TEXELS in kexmap.py.\n")
-            for tile, w_, h_, name in flatdefs:
-                f.write('dummytile %d %d %d\n' % (tile, w_, h_))
+            for tile, small, name in flatdefs:
+                f.write('tilefromtexture %d { file "%s" }\n' % (tile, small))
                 f.write('texture %d { pal 0 { file "%s" } }\n' % (tile, name))
         if skytiles:
             f.write("\n// Parallax skies. Build will not treat a tile as a sky panorama\n")
@@ -3749,12 +3750,30 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
     for m in parsed.values():
         if m.sky and m.sky in assign:
             skytiles.add(assign[m.sky])
+    # The flat tile carries real pixels -- the image box-filtered down to its
+    # texel count -- so the classic 8-bit renderer, which never sees a hires
+    # replacement, still draws the floor; polymost draws the full image on it.
     flatdefs = []
-    for t, tl in sorted(fassign.items(), key=lambda kv: kv[1]):
-        if t not in assign or assign[t] not in usable or t not in sizes: continue
-        w_, h_ = sizes[t]
-        flatdefs.append((tl, max(1, int(round(w_ * KEX_FLAT_TEXELS / 64.0))),
-                         max(1, int(round(h_ * KEX_FLAT_TEXELS / 64.0))), usable[assign[t]]))
+    flatdir = os.path.join(outdir, 'kexart', 'flats')
+    os.makedirs(flatdir, exist_ok=True)
+    with zipfile.ZipFile(kpf) as z:
+        have = {n.lower(): n for n in z.namelist()}
+        for t, tl in sorted(fassign.items(), key=lambda kv: kv[1]):
+            if t not in assign or assign[t] not in usable or t not in sizes: continue
+            real = have.get(t.lower())
+            if real is None: continue
+            w_, h_ = sizes[t]
+            nw_ = max(1, int(round(w_ * KEX_FLAT_TEXELS / 64.0)))
+            nh_ = max(1, int(round(h_ * KEX_FLAT_TEXELS / 64.0)))
+            small = os.path.join(flatdir, os.path.basename(t))
+            tmp = small + '.src'
+            open(tmp, 'wb').write(z.read(real))
+            try:
+                sw, sh, pix = _png.read(tmp)
+                _png.write(small, nw_, nh_, _png.downsample(sw, sh, pix, nw_, nh_))
+            finally:
+                os.remove(tmp)
+            flatdefs.append((tl, 'kexart/flats/' + os.path.basename(t), usable[assign[t]]))
     write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs, skytiles, flatdefs)
     if verbose:
         print("  flats: %d textures given %d-texel tiles" % (len(flatdefs), int(KEX_FLAT_TEXELS)))

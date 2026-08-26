@@ -489,14 +489,17 @@ world units per texel (polymost's `ft *= 1/16`; 8 with the expand bit) -- a
 planar mapping repeats every 64. Every flat was drawn 2.67x too coarse: MAGMA's
 floor bricks were a third of a corridor wide, and the sand in TOMB and KARNAK
 was a different grain from the same brick on the walls. No field changes that
-scale, so a flat's texture gets a *second* tile: a `dummytile` of 64*WORLD/16
-= 24 texels a side whose hires replacement is the same PNG -- the tile's
-footprint sets the repeat (24 x 16 = 384 units = 64 Kex units) and the image
-keeps every pixel (`KEX_FLAT_TEXELS`, `fassign`; 373 across the levels,
+scale, so a flat's texture gets a *second* tile of 64*WORLD/16 = 24 texels a
+side -- the image box-filtered down to that, written to `kexart/flats/`, so
+the classic 8-bit renderer, which never sees a hires replacement, still draws
+the floor -- with the full PNG as its hires replacement: the tile's footprint
+sets the repeat (24 x 16 = 384 units = 64 Kex units) and under polymost the
+image keeps every pixel (`KEX_FLAT_TEXELS`, `fassign`; 373 across the levels,
 animated ones as consecutive runs with their own `animtilerange`). Walls keep
 the original tile, and sectors are remapped through the flat table instead.
-Proved on a probe first: MAGMA's start with its floor on such a tile, next to
-the same view on the old one.
+Proved on a probe first -- MAGMA's start with its floor on a `dummytile` of
+that size, next to the same view on the old tile -- and checked in both
+renderers (`ScreenBPP = 8` for classic).
 
 **Long walls.** `xrepeat` follows a wall's length, one texel per Kex unit, and
 is an 8-bit field: a wall over 2040 units is written with 255 and its texture
