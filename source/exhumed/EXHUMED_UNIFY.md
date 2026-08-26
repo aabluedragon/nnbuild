@@ -349,7 +349,9 @@ ratio of its length to the tile. The original game runs about 20.4 world units
 per texel (measured from its own shipped xrepeat values); at `WORLD = 6` a Kex
 texel covers 6, which is finer, as it should be. `yrepeat` is a vertical scale
 and does not depend on length: the original pairs yrepeat 7 with its 20.4 units
-per texel, pinning the constant at ~143, so 6 units per texel gives 24.
+per texel, which first pinned the constant at ~143 and yrepeat at 24; measured
+across the 13150 walls of the shipped levels the constant is 128, and yrepeat
+is 21 (see `KEX_YREPEAT`).
 
 **Lighting.** Kex bakes its lighting into vertex colours, greyscale in these
 levels (measured: colour spread 0 at both the median and the 90th percentile),
@@ -480,6 +482,21 @@ its texture shifted against its neighbours. `ypanning` (256ths of the tile)
 and `xpanning` (texels, on the axis-aligned walls; a diagonal's Kex mapping is
 not this simple) put the seams back on the grid; a wall drawn in both parts
 has one `ypanning`, and the taller part wins.
+
+**Flats at Kex scale.** Build maps a floor or ceiling texture at a fixed 16
+world units per texel (polymost's `ft *= 1/16`; 8 with the expand bit) -- a
+64-texel tile repeats every 1024 units, 171 Kex units, where the remaster's
+planar mapping repeats every 64. Every flat was drawn 2.67x too coarse: MAGMA's
+floor bricks were a third of a corridor wide, and the sand in TOMB and KARNAK
+was a different grain from the same brick on the walls. No field changes that
+scale, so a flat's texture gets a *second* tile: a `dummytile` of 64*WORLD/16
+= 24 texels a side whose hires replacement is the same PNG -- the tile's
+footprint sets the repeat (24 x 16 = 384 units = 64 Kex units) and the image
+keeps every pixel (`KEX_FLAT_TEXELS`, `fassign`; 373 across the levels,
+animated ones as consecutive runs with their own `animtilerange`). Walls keep
+the original tile, and sectors are remapped through the flat table instead.
+Proved on a probe first: MAGMA's start with its floor on such a tile, next to
+the same view on the old one.
 
 **Long walls.** `xrepeat` follows a wall's length, one texel per Kex unit, and
 is an 8-bit field: a wall over 2040 units is written with 255 and its texture
