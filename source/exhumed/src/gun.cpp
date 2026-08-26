@@ -46,6 +46,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "trigdat.h"
 #include "object.h"
 #include "save.h"
+#include "kexbreak.h"
 #include <string.h>
 #include <assert.h>
 
@@ -878,6 +879,12 @@ loc_flag:
                                 if (sprite[nSprite2].cstat & 0x50)
                                 {
                                     var_28 += 2;
+                                }
+                                else if (KexBreak_IsProp(nSprite2))
+                                {
+                                    // the remaster's machete breaks the vases too
+                                    runlist_DamageEnemy(nSprite2, nPlayerSprite, nDamage);
+                                    var_28++;
                                 }
                                 else if (sprite[nSprite2].statnum > 90 && sprite[nSprite2].statnum <= 199)
                                 {

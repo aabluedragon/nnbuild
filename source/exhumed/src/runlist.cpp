@@ -1637,6 +1637,8 @@ void runlist_DamageEnemy(int nSprite, int nSprite2, short nDamage)
 
     short nPreCreaturesLeft = nCreaturesLeft;
 
+    if (nDamage > 0 && sprite[nSprite].statnum > 100 && sprite[nSprite].statnum < 200)
+        KexFlash_Hit(nSprite);      // the remaster's hit flash (no-op outside Kex mode)
     runlist_SendMessageToRunRec(nRun, (nSprite2 & 0xFFFF) | 0x80000, nDamage * 4);
 
     // is there now one less creature? (has one died)

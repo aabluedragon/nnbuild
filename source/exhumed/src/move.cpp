@@ -165,6 +165,8 @@ void MoveThings()
     UndoFlashes();
     DoLights();
     KexLight_Tick();      // the remaster's fires and torches; no-op elsewhere
+    KexFlash_Tick();      // and its hit flash
+    KexInv_CaptionTick(); // and its pickup captions
     KexTele_Tick();       // its teleport pads; no-op elsewhere
     KexInv_Tick();        // the collectibles self-test; no-op elsewhere
     KexScripted_Tick();   // the casket lids; no-op elsewhere

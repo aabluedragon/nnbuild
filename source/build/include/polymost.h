@@ -156,6 +156,12 @@ static FORCE_INLINE float polymost_getanisotropy(int filtered = 0)
     return filtered == 0 && polymost_useindexedtextures() ? 1.f : clamp<float>(glanisotropy, 1.f, glinfo.maxanisotropy);
 }
 
+// VibeBuild32: per-vertex shading from a light field (see polymost.cpp)
+typedef struct { int32_t kind; vec2f_t n0, n1; float x0, x1, ryp0, ryp1; int32_t sectnum; int32_t isceil; } polymost_kexsurf_t;
+extern polymost_kexsurf_t polymost_kexsurf;
+extern int32_t polymost_kexVertexLight;
+extern int32_t (*polymost_kexShadeAt)(float x, float y, float z, int32_t fallback);
+
 static inline float getshadefactor(int32_t const shade)
 {
     // 8-bit tiles, i.e. non-hightiles and non-models, don't get additional

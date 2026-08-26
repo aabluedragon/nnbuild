@@ -18,6 +18,15 @@ void FuncKexBreak(int a, int b, int nRun);
 
 void KexLight_Init(void);        // per level: collect the remaster's light sources
 void KexLight_Tick(void);        // per tick: cast their glow
+#define kKexFlashPal 30
+void KexFlash_Hit(int nSprite);     // the remaster's white blink on a hit creature
+int  KexFlash_Active(int nSprite);
+void KexFlash_Tick(void);
+int  KexBreak_IsProp(int nSprite);  // a breakable prop's sprite
+void    KexVL_Load(char const *mapfile);   // the level's baked light field (KEX_<NAME>.LIT)
+void    KexVL_Free(void);
+int     KexVL_Ready(void);
+int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback);   // Build shade at a world point
 
 // The remaster wav that is this Build sound, or NULL; *pLoop tells whether it
 // loops (the flag stands in for the VOC loop block a WAV does not have).

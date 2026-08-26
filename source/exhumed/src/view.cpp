@@ -47,6 +47,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "save.h"
 #include "trigdat.h"
 #include "runlist.h"
+#include "kexbreak.h"
 
 short bSubTitles = kTrue;
 
@@ -199,6 +200,11 @@ static void analyzesprites()
         }
 
         pTSprite->pal = RemapPLU(pTSprite->pal);
+        if (KexFlash_Active(nSprite))       // the remaster's hit flash: white, fullbright
+        {
+            pTSprite->shade = -128;
+            pTSprite->pal = kKexFlashPal;
+        }
 
         // PowerSlaveGDX: Torch bouncing fix
         if ((pTSprite->picnum == kTile338 || pTSprite->picnum == kTile350) && (pTSprite->cstat & 0x80) == 0)

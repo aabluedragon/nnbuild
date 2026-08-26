@@ -119,6 +119,21 @@ static GLsync drawpolyVertsSync[3] = { 0 };
 static float defaultDrawpolyVertsArray[MAX_DRAWPOLY_VERTS*5];
 static float* drawpolyVerts = defaultDrawpolyVertsArray;
 
+// VibeBuild32 -- per-vertex shading from a light field (PowerSlave's Kex
+// levels). The game installs a shade-at-a-point callback; polymost_drawalls
+// and polymost_drawmaskwall describe the surface each polygon lies on, and
+// polymost_drawpoly recovers every screen vertex's world position from that
+// surface, asks for its shade and colours the vertex with it. The colours
+// ride in a second VBO bound to the fixed-function colour attribute, which
+// polymost1Vert.glsl already reads as v_color = gl_Color.
+int32_t polymost_kexVertexLight = 0;
+int32_t (*polymost_kexShadeAt)(float x, float y, float z, int32_t fallback) = NULL;
+polymost_kexsurf_t polymost_kexsurf = { 0, {0.f,0.f}, {0.f,0.f}, 0.f, 0.f, 0.f, 0.f, -1, 0 };
+static float  kexColors[30000 * 4];
+static float  kexCurColor[4] = { 1.f, 1.f, 1.f, 1.f };
+static int    kexColorsEnabled = 0;
+static GLuint kexColorVBO = 0;
+
 struct glfiltermodes glfiltermodes[NUMGLFILTERMODES] = { { "GL_NEAREST",                GL_NEAREST,                GL_NEAREST },
                                                          { "GL_LINEAR",                 GL_LINEAR,                 GL_LINEAR  },
                                                          { "GL_NEAREST_MIPMAP_NEAREST", GL_NEAREST_MIPMAP_NEAREST, GL_NEAREST },
@@ -3176,6 +3191,8 @@ void polymost_bufferVert(vec3f_t const v, vec2f_t const t)
     uint32_t const off = (persistentStreamBuffer * drawpolyVertsOffset + drawpolyVertsCnt++) * 5;
     *(vec3f_t *)(&drawpolyVerts[off]) = v;
     *(vec2f_t*)(&drawpolyVerts[off+3]) = t;
+    if (kexColorsEnabled && drawpolyVertsCnt <= 30000)
+        Bmemcpy(&kexColors[(drawpolyVertsCnt - 1) * 4], kexCurColor, sizeof(kexCurColor));
 }
 
 void polymost_finishBufferedDrawing(int mode)
@@ -3191,7 +3208,22 @@ void polymost_finishBufferedDrawing(int mode)
         // isn't available - and profiling showed ~95% of frame time lost to that stall.
         // glBufferData is core GL 1.5, so this works on every path. (VibeBuild32 perf.)
         glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)drawpolyVertsCnt * sizeof(float) * 5, drawpolyVerts, GL_STREAM_DRAW);
+        if (kexColorsEnabled)
+        {
+            if (!kexColorVBO) glGenBuffers(1, &kexColorVBO);
+            buildgl_bindBuffer(GL_ARRAY_BUFFER, kexColorVBO);
+            glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)drawpolyVertsCnt * sizeof(float) * 4, kexColors, GL_STREAM_DRAW);
+            glColorPointer(4, GL_FLOAT, 0, 0);
+            glEnableClientState(GL_COLOR_ARRAY);
+            buildgl_bindBuffer(GL_ARRAY_BUFFER, drawpolyVertsID);
+        }
         glDrawArrays(mode, 0, drawpolyVertsCnt);
+        if (kexColorsEnabled)
+        {
+            glDisableClientState(GL_COLOR_ARRAY);
+            glColor4f(kexCurColor[0], kexCurColor[1], kexCurColor[2], kexCurColor[3]);
+            kexColorsEnabled = 0;
+        }
         drawpolyVertsOffset = 0;
         drawpolyVertsCnt = 0;
         return;
@@ -3200,6 +3232,235 @@ void polymost_finishBufferedDrawing(int mode)
     glDrawArrays(mode, drawpolyVertsOffset, drawpolyVertsCnt);
     drawpolyVertsOffset += drawpolyVertsCnt;
     drawpolyVertsCnt = 0;
+}
+
+// A screen vertex back to the world, on the surface polymost_kexsurf names.
+// A wall: 1/depth is linear in screen x between its projected ends, so the
+// parameter along the wall follows from it, and screen y gives z through the
+// same 1/depth (calc_ypanning's t0 = (z - posz) * ryp + ghoriz). A flat: its
+// plane gives z, z and screen y give the depth, depth and screen x the camera
+// point, and the view rotation undone puts it in the world; a sloped plane
+// is refined once.
+static int32_t polymost_kexVertexShade(float sx, float sy);
+static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_t method);
+
+// The world position of a screen point on the current surface (see above).
+static int polymost_kexUnproject(float sx, float sy, float *wx, float *wy, float *wz)
+{
+    polymost_kexsurf_t const &s = polymost_kexsurf;
+    if (s.kind == 1)
+    {
+        float const dx = s.x1 - s.x0;
+        float const f = (dx != 0.f) ? clamp((sx - s.x0) / dx, 0.f, 1.f) : 0.f;
+        float const r = s.ryp0 + (s.ryp1 - s.ryp0) * f;
+        if (r <= 1e-7f) return 0;
+        float const a = 1.f / s.ryp0, b = 1.f / s.ryp1;
+        float const t = (Bfabsf(b - a) < 1e-6f) ? f : clamp(((1.f / r) - a) / (b - a), 0.f, 1.f);
+        *wx = s.n0.x + t * (s.n1.x - s.n0.x);
+        *wy = s.n0.y + t * (s.n1.y - s.n0.y);
+        *wz = (float)globalposz + (sy - ghoriz) / r;
+        return 1;
+    }
+    if (s.kind == 2 && (unsigned)s.sectnum < (unsigned)numsectors)
+    {
+        auto const sec = (usectorptr_t)&sector[s.sectnum];
+        float z = (float)(s.isceil ? sec->ceilingz : sec->floorz);
+        int const sloped = (s.isceil ? sec->ceilingstat : sec->floorstat) & 2;
+        float ox = 0.f, oy = 0.f;
+        for (int pass = 0; pass < (sloped ? 2 : 1); pass++)
+        {
+            float const dz = z - (float)globalposz;
+            if (Bfabsf(dz) < 1.f) return 0;
+            float const r = (sy - ghoriz) / dz;
+            if (r <= 1e-7f) return 0;
+            float const py = gyxscale / r;
+            float const px = py * (sx - ghalfx) / ghalfx;
+            float const D = -gsinang * gsinang2 - gcosang * gcosang2;
+            if (Bfabsf(D) < 1e-12f) return 0;
+            ox = (px * gsinang2 - gcosang * py) / D;
+            oy = (-gsinang * py - gcosang2 * px) / D;
+            if (sloped)
+                z = (float)(s.isceil ? getceilzofslope(s.sectnum, (int32_t)((float)globalposx + ox), (int32_t)((float)globalposy + oy))
+                                     : getflorzofslope(s.sectnum, (int32_t)((float)globalposx + ox), (int32_t)((float)globalposy + oy)));
+        }
+        *wx = (float)globalposx + ox; *wy = (float)globalposy + oy; *wz = z;
+        return 1;
+    }
+    return 0;
+}
+
+// A world point to the (untilted) screen, the way polymost_drawalls projects
+// a wall's ends: p = rotate(world - pos); x = ghalfx*p.x/p.y + ghalfx;
+// y = ghoriz + (z - posz) * gyxscale/p.y.
+static void polymost_kexProject(float wx, float wy, float wz, float *sx, float *sy)
+{
+    float const dx = wx - (float)globalposx, dy = wy - (float)globalposy;
+    float const px = dy * gcosang - dx * gsinang;
+    float py = dx * gcosang2 + dy * gsinang2;
+    if (py < 1.f) py = 1.f;
+    *sx = ghalfx * px / py + ghalfx;
+    *sy = ghoriz + (wz - (float)globalposz) * gyxscale / py;
+}
+
+// Cut the polygon along the world's 128-unit cell grid, so the per-vertex
+// shade has a vertex wherever the field has a sample: without it a wall or
+// floor piece hundreds of units across is shaded from its corners alone and
+// the fire pot's halo in the middle of the wall behind it averages away.
+// World grid lines project to straight screen lines, so the pieces are the
+// convex polygon split by lines; a quad cut by two families of parallel
+// lines yields pieces of at most eight vertices. Recursion draws them.
+#define KEX_TESS_CELL   (128.f * 6.f)         // one Kex cell, world units
+#define KEX_TESS_CELLZ  (128.f * 6.f * 16.f)  // in z units
+#define KEX_TESS_MAXCUT 8
+#define KEX_TESS_MAXPOLY 96
+static int s_kexTess = 0;
+
+static int polymost_kexTessellate(vec2f_t const *dpxy, int32_t n, int32_t method)
+{
+    polymost_kexsurf_t const &s = polymost_kexsurf;
+    struct kexline { float a, b, c; } cuts[2 * KEX_TESS_MAXCUT]; int ncuts = 0;
+    auto addline = [&](float x0, float y0, float x1, float y1)
+    {
+        if (ncuts >= 2 * KEX_TESS_MAXCUT) return;
+        float const a = y1 - y0, b = -(x1 - x0);
+        if (Bfabsf(a) + Bfabsf(b) < 1e-6f) return;
+        cuts[ncuts++] = { a, b, -(a * x0 + b * y0) };
+    };
+    if (s.kind == 1)
+    {
+        float const L = Bsqrtf((s.n1.x - s.n0.x) * (s.n1.x - s.n0.x) + (s.n1.y - s.n0.y) * (s.n1.y - s.n0.y));
+        // columns: world grid positions along the wall, from the wall's start
+        // (the field is on the world grid, but the seams fall where the wall's
+        // own cells do to within a sample; from the start is what the sample
+        // density asks for)
+        int ncol = (int)(L / KEX_TESS_CELL);
+        float stepc = KEX_TESS_CELL;
+        if (ncol > KEX_TESS_MAXCUT) { ncol = KEX_TESS_MAXCUT; stepc = L / (ncol + 1); }
+        float const a = 1.f / s.ryp0, b = 1.f / s.ryp1;
+        for (int k = 1; k <= ncol; k++)
+        {
+            float const t = (k * stepc) / L;
+            if (t <= 0.f || t >= 1.f) continue;
+            float const r = 1.f / ((1.f - t) * a + t * b);
+            float const f = (Bfabsf(s.ryp1 - s.ryp0) < 1e-9f) ? t : (r - s.ryp0) / (s.ryp1 - s.ryp0);
+            float const x = s.x0 + f * (s.x1 - s.x0);
+            addline(x, 0.f, x, 1.f);
+        }
+        // rows: z of the polygon's vertices
+        float zmin = 1e30f, zmax = -1e30f;
+        for (int i = 0; i < n; i++)
+        {
+            float wx, wy, wz;
+            if (polymost_kexUnproject(dpxy[i].x, dpxy[i].y, &wx, &wy, &wz)) { zmin = min(zmin, wz); zmax = max(zmax, wz); }
+        }
+        if (zmin < zmax)
+        {
+            int nrow = (int)((zmax - zmin) / KEX_TESS_CELLZ);
+            float stepz = KEX_TESS_CELLZ;
+            float zstart = ceilf(zmin / KEX_TESS_CELLZ) * KEX_TESS_CELLZ;
+            if (nrow > KEX_TESS_MAXCUT) { nrow = KEX_TESS_MAXCUT; stepz = (zmax - zmin) / (nrow + 1); zstart = zmin + stepz; }
+            for (int k = 0; k < nrow; k++)
+            {
+                float const z = zstart + k * stepz;
+                if (z <= zmin || z >= zmax) continue;
+                addline(s.x0, ghoriz + (z - (float)globalposz) * s.ryp0, s.x1, ghoriz + (z - (float)globalposz) * s.ryp1);
+            }
+        }
+    }
+    else if (s.kind == 2)
+    {
+        float xmin = 1e30f, xmax = -1e30f, ymin = 1e30f, ymax = -1e30f, zmid = 0.f; int got = 0;
+        for (int i = 0; i < n; i++)
+        {
+            float wx, wy, wz;
+            if (!polymost_kexUnproject(dpxy[i].x, dpxy[i].y, &wx, &wy, &wz)) continue;
+            xmin = min(xmin, wx); xmax = max(xmax, wx); ymin = min(ymin, wy); ymax = max(ymax, wy); zmid += wz; got++;
+        }
+        if (got < 3) return 0;
+        zmid /= got;
+        auto const sec = (usectorptr_t)&sector[s.sectnum];
+        int const sloped = (s.isceil ? sec->ceilingstat : sec->floorstat) & 2;
+        auto zat = [&](float wx, float wy) -> float
+        {
+            if (!sloped) return zmid;
+            return (float)(s.isceil ? getceilzofslope(s.sectnum, (int32_t)wx, (int32_t)wy) : getflorzofslope(s.sectnum, (int32_t)wx, (int32_t)wy));
+        };
+        for (int axis = 0; axis < 2; axis++)
+        {
+            float const lo = axis ? ymin : xmin, hi = axis ? ymax : xmax;
+            int ncut = (int)((hi - lo) / KEX_TESS_CELL);
+            float step = KEX_TESS_CELL, start = ceilf(lo / KEX_TESS_CELL) * KEX_TESS_CELL;
+            if (ncut > KEX_TESS_MAXCUT) { ncut = KEX_TESS_MAXCUT; step = (hi - lo) / (ncut + 1); start = lo + step; }
+            for (int k = 0; k < ncut; k++)
+            {
+                float const g = start + k * step;
+                if (g <= lo || g >= hi) continue;
+                float ax, ay, bx, by;
+                if (axis) { ax = xmin; ay = g; bx = xmax; by = g; } else { ax = g; ay = ymin; bx = g; by = ymax; }
+                float sx0, sy0, sx1, sy1;
+                polymost_kexProject(ax, ay, zat(ax, ay), &sx0, &sy0);
+                polymost_kexProject(bx, by, zat(bx, by), &sx1, &sy1);
+                addline(sx0, sy0, sx1, sy1);
+            }
+        }
+    }
+    if (!ncuts) return 0;
+
+    static vec2f_t polys[KEX_TESS_MAXPOLY][MAX_DRAWPOLY_VERTS + 2];
+    static int     pn[KEX_TESS_MAXPOLY];
+    int npolys = 1;
+    for (int i = 0; i < n; i++) polys[0][i] = dpxy[i];
+    pn[0] = n;
+    for (int c = 0; c < ncuts; c++)
+    {
+        int const cur = npolys;
+        for (int p = 0; p < cur; p++)
+        {
+            if (npolys >= KEX_TESS_MAXPOLY) break;
+            int const m = pn[p];
+            float d[MAX_DRAWPOLY_VERTS + 2]; int pos = 0, neg = 0;
+            for (int i = 0; i < m; i++)
+            {
+                d[i] = cuts[c].a * polys[p][i].x + cuts[c].b * polys[p][i].y + cuts[c].c;
+                if (d[i] > 0.01f) pos++; else if (d[i] < -0.01f) neg++;
+            }
+            if (!pos || !neg) continue;
+            vec2f_t A[MAX_DRAWPOLY_VERTS + 2], B[MAX_DRAWPOLY_VERTS + 2]; int na = 0, nb = 0;
+            for (int i = 0; i < m; i++)
+            {
+                int const j = (i + 1) % m;
+                vec2f_t const &P = polys[p][i], &Q = polys[p][j];
+                if (d[i] >= 0.f) { if (na < MAX_DRAWPOLY_VERTS + 2) A[na++] = P; }
+                if (d[i] <= 0.f) { if (nb < MAX_DRAWPOLY_VERTS + 2) B[nb++] = P; }
+                if ((d[i] > 0.f && d[j] < 0.f) || (d[i] < 0.f && d[j] > 0.f))
+                {
+                    float const t = d[i] / (d[i] - d[j]);
+                    vec2f_t const X = { P.x + (Q.x - P.x) * t, P.y + (Q.y - P.y) * t };
+                    if (na < MAX_DRAWPOLY_VERTS + 2) A[na++] = X;
+                    if (nb < MAX_DRAWPOLY_VERTS + 2) B[nb++] = X;
+                }
+            }
+            if (na < 3 || nb < 3 || na > MAX_DRAWPOLY_VERTS || nb > MAX_DRAWPOLY_VERTS) continue;
+            for (int i = 0; i < na; i++) polys[p][i] = A[i];
+            pn[p] = na;
+            for (int i = 0; i < nb; i++) polys[npolys][i] = B[i];
+            pn[npolys++] = nb;
+        }
+    }
+    if (npolys < 2) return 0;
+    s_kexTess = 1;
+    for (int p = 0; p < npolys; p++)
+        polymost_drawpoly(polys[p], pn[p], method);
+    s_kexTess = 0;
+    return 1;
+}
+
+static int32_t polymost_kexVertexShade(float sx, float sy)
+{
+    float wx, wy, wz;
+    if (!polymost_kexUnproject(sx, sy, &wx, &wy, &wz))
+        return globalshade;
+    return polymost_kexShadeAt(wx, wy, wz, globalshade);
 }
 
 static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_t method)
@@ -3254,6 +3515,12 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
     }
 
     Bassert(n <= MAX_DRAWPOLY_VERTS);
+
+    // VibeBuild32: per-vertex shading wants a vertex per light sample
+    if (!s_kexTess && polymost_kexVertexLight && polymost_kexShadeAt && polymost_kexsurf.kind && !persistentStreamBuffer
+        && videoGetRenderMode() == REND_POLYMOST && getpskyidx(globalpicnum) == 0 && n <= MAX_DRAWPOLY_VERTS
+        && polymost_kexTessellate(dpxy, n, method))
+        return;
 
     int j = 0;
     float px[8], py[8], dd[8], uu[8], vv[8];
@@ -3518,6 +3785,29 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
         pc[3] = 0.01f;
 
     glColor4f(pc[0], pc[1], pc[2], pc[3]);
+    Bmemcpy(kexCurColor, pc, sizeof(pc));
+    // VibeBuild32: per-vertex shade from the light field, on walls and flats
+    // of a level that has one; skies, sprites, models and 8-bit tiles keep
+    // the polygon colour.
+    int const kexvl = polymost_kexVertexLight && polymost_kexShadeAt && polymost_kexsurf.kind && !persistentStreamBuffer
+                      && !(pth->flags & PTH_INDEXED) && videoGetRenderMode() == REND_POLYMOST
+                      && getpskyidx(globalpicnum) == 0;
+    float kextint[3] = { 0.f, 0.f, 0.f };
+    if (kexvl)
+    {
+        polytint_t const & tint = hictinting[globalpal];
+        kextint[0] = tint.sr * (1.f/255.f); kextint[1] = tint.sg * (1.f/255.f); kextint[2] = tint.sb * (1.f/255.f);
+        kexColorsEnabled = 1;
+    }
+    auto kexvertex = [&](float sx, float sy)
+    {
+        if (!kexvl) return;
+        float const sf = getshadefactor(polymost_kexVertexShade(sx, sy));
+        kexCurColor[0] = (1.f - kextint[0]) * sf + kextint[0];
+        kexCurColor[1] = (1.f - kextint[1]) * sf + kextint[1];
+        kexCurColor[2] = (1.f - kextint[2]) * sf + kextint[2];
+        kexCurColor[3] = pc[3];
+    };
 
     //POGOTODO: remove this, replace it with a shader implementation
     //Hack for walls&masked walls which use textures that are not a power of 2
@@ -3632,6 +3922,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
                                     o.x * ngx.v + o.y * ngy.v + ngo.v };
                 float const r = 1.f / p.d;
 
+                kexvertex(o.x, o.y);
                 polymost_bufferVert({ (o.x - ghalfx) * r * grhalfxdown10x, (ghalfy - o.y) * r * grhalfxdown10, r * (1.f / 1024.f) },
                                     { (p.u * r - du0 + uoffs) * invtsiz2.x, p.v * r * invtsiz2.y });
             }
@@ -3648,6 +3939,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
         {
             float const r = 1.f / dd[i];
 
+            kexvertex(px[i], py[i]);
             polymost_bufferVert({ (px[i] - ghalfx) * r * grhalfxdown10x, (ghalfy - py[i]) * r * grhalfxdown10, r * (1.f / 1024.f) },
                 { uu[i] * r * scale.x, vv[i] * r * scale.y });
         }
@@ -4851,6 +5143,8 @@ static void polymost_internal_nonparallaxed(vec2f_t n0, vec2f_t n1, float ryp0, 
             //(                  0*(sx-ghalfx) + 1*(sy-ghoriz) + (                             0)*ghalfx)*d + globalposz/16 = (sec->floorz/16)
 
     float ft[4] = { fglobalposx, fglobalposy, fcosglobalang, fsinglobalang };
+    polymost_kexsurf_t const kexsurf_wall = polymost_kexsurf;
+    polymost_kexsurf = { 2, n0, n1, x0, x1, ryp0, ryp1, sectnum, !have_floor };
 
     buildgl_outputDebugMessage(3, "polymost_internal_nonparallaxed(n0:{x:%f, y:%f}, n1:{x:%f, y:%f}, ryp0:%f, ryp1:%f, x0:%f, x1:%f, y0:%f, y1:%f, sectnum:%d)",
                                   n0.x, n0.y, n1.x, n1.y, ryp0, ryp1, x0, x1, y0, y1, sectnum);
@@ -5043,6 +5337,7 @@ static void polymost_internal_nonparallaxed(vec2f_t n0, vec2f_t n1, float ryp0, 
         buildgl_setDisabled(GL_BLEND);
 
     domostpolymethod = DAMETH_NOMASK;
+    polymost_kexsurf = kexsurf_wall;
 }
 
 static void calc_ypanning(int32_t refposz, float ryp0, float ryp1,
@@ -5454,6 +5749,7 @@ static void polymost_drawalls(int32_t const bunch)
         bitmap_set(didwall, wallnum);
 
         ryp0 *= gyxscale; ryp1 *= gyxscale;
+        polymost_kexsurf = { 1, n0, n1, x0, x1, ryp0, ryp1, sectnum, 0 };
 
         float cz, fz;
 
@@ -7277,6 +7573,9 @@ static void polymost_drawmaskwallinternal(int32_t wallIndex)
     if (x1 <= x0) return;
 
     ryp0 *= gyxscale; ryp1 *= gyxscale;
+    polymost_kexsurf = { 1, { (wal2->x - wal->x) * t0 + wal->x, (wal2->y - wal->y) * t0 + wal->y },
+                            { (wal2->x - wal->x) * t1 + wal->x, (wal2->y - wal->y) * t1 + wal->y },
+                         x0, x1, ryp0, ryp1, sectnum, 0 };
 
     xtex.d = (ryp0-ryp1)*gxyaspect / (x0-x1);
     ytex.d = 0;
@@ -7414,6 +7713,7 @@ static void polymost_drawmaskwallinternal(int32_t wallIndex)
         doeditorcheck = 1;
     }
     polymost_drawpoly(dpxy, n, method);
+    polymost_kexsurf.kind = 0;
     doeditorcheck = 0;
     polymost_identityrotmat();
 }
@@ -8163,6 +8463,7 @@ void polymost_checkornamentedsprite(tspriteptr_t tspr, int16_t *wallnum, wallspr
 
 void polymost_drawsprite(int32_t snum)
 {
+    polymost_kexsurf.kind = 0;   // VibeBuild32: sprites keep their polygon shade
 #ifdef POLYMOST2
     if (r_enablepolymost2)
     {
@@ -9161,6 +9462,7 @@ void polymost_dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16
                              int8_t dashade, char dapalnum, int32_t dastat, uint8_t daalpha, uint8_t dablend,
                              int32_t cx1, int32_t cy1, int32_t cx2, int32_t cy2, int32_t uniqid)
 {
+    polymost_kexsurf.kind = 0;   // VibeBuild32: sprites keep their polygon shade
     if (usemodels && tile2model[picnum].hudmem[(dastat&4)>>2])
     {
         polymost_dorotatespritemodel(sx, sy, z, a, picnum, dashade, dapalnum, dastat, daalpha, dablend, uniqid);

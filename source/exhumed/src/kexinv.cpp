@@ -14,6 +14,7 @@
 #include "lighting.h"
 #include "gun.h"
 #include "kexinv.h"
+#include "items.h"
 #include "kexbreak.h"   // VibeBuild32: KexSound_Get
 
 KexInv KexInvList[kMaxPlayers];
@@ -333,24 +334,63 @@ void KexInv_Format(char *out, int outSize, char const *key, int num)
 // ---------------------------------------------------------------------------
 // Pickups
 // ---------------------------------------------------------------------------
+// The remaster stacks pickup captions at the top of the screen, newest at
+// the bottom, up to four at once, each in the gold menu font and pulsing
+// slowly until it times out. KexHud_Draw() draws the stack; this keeps it.
+#define KEX_CAPTION_LINES 4
+#define KEX_CAPTION_TICKS 90          // three seconds at the game's 30 Hz
+struct KexCaption { char text[64]; int ticks; };
+static KexCaption s_caption[KEX_CAPTION_LINES];
+
+int KexInv_CaptionLine(int i, char const **text, int *ticks)
+{
+    if ((unsigned)i >= KEX_CAPTION_LINES || s_caption[i].ticks <= 0)
+        return 0;
+    *text = s_caption[i].text; *ticks = s_caption[i].ticks;
+    return 1;
+}
+
+void KexInv_CaptionTick(void)
+{
+    for (int i = 0; i < KEX_CAPTION_LINES; i++)
+        if (s_caption[i].ticks > 0 && --s_caption[i].ticks == 0)
+        {
+            // close the gap so the stack stays packed from the top
+            for (int j = i; j + 1 < KEX_CAPTION_LINES; j++) s_caption[j] = s_caption[j + 1];
+            s_caption[KEX_CAPTION_LINES - 1].ticks = 0;
+            i--;
+        }
+}
+
 static void KexInv_Caption(int nPlayer, char const *key, int num)
 {
     if (nPlayer != nLocalPlayer)
         return;
     char buf[256];
     KexInv_Format(buf, sizeof(buf), key, num);
-    // The message line is one line: the descriptions' second line has to wait
+    // The caption is the first line: the descriptions' second line has to wait
     // for the status screen.
     for (char *q = buf; *q; q++)
         if (*q == '\n') { *q = 0; break; }
-    if (buf[0])
-        StatusMessage(400, "%s", buf);
+    if (!buf[0])
+        return;
+    int slot = 0;
+    while (slot < KEX_CAPTION_LINES && s_caption[slot].ticks > 0) slot++;
+    if (slot == KEX_CAPTION_LINES)          // full: the oldest goes
+    {
+        for (int j = 0; j + 1 < KEX_CAPTION_LINES; j++) s_caption[j] = s_caption[j + 1];
+        slot = KEX_CAPTION_LINES - 1;
+    }
+    Bstrncpyz(s_caption[slot].text, buf, sizeof(s_caption[slot].text));
+    s_caption[slot].ticks = KEX_CAPTION_TICKS;
 }
 
 int KexInv_Pickup(int nPlayer, int nItem, int nHitag)
 {
     if ((unsigned)nPlayer >= (unsigned)kMaxPlayers)
         return 0;
+    if (nPlayer == nLocalPlayer)
+        ItemFlash();                  // the remaster's blue wash, for these too
     KexInv &inv = KexInvList[nPlayer];
     char key[32];
 

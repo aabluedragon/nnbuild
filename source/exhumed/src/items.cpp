@@ -157,7 +157,12 @@ void DestroyItemAnim(short nSprite)
 
 void ItemFlash()
 {
-    TintPalette(16, 16, 16);
+    // The remaster washes the screen a strong blue for an instant on a
+    // pickup, where the original game gave a faint white.
+    if (g_kexMode)
+        TintPalette(24, 24, 112);
+    else
+        TintPalette(16, 16, 16);
 }
 
 void FillItems(short nPlayer)

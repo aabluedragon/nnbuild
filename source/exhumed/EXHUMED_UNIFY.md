@@ -789,10 +789,58 @@ guarded event with its effect, key doors with key bits, no tag listened on
 that nothing fires, no mover sector cut into pieces, every switch on a
 wall, no sprite inside a solid sector.
 
-**Not carried: a wall's vertical gradient.** 40% of walls are lit
-differently top and bottom by six steps or more, and Build has no way to
-say so short of stacking sectors (TROR) at every band. The wall's shade is
-the field at mid-height.
+**Per-vertex shading.** All of the above carries a smooth field as a flat
+shade per piece, and it showed: every piece a block of its own brightness
+with a seam to the next, the fire pot brightening its whole sector at once
+(`Kex_SpriteGlow`), where the remaster's fire pot throws a halo on the wall
+behind it and its floor darkens into the corners. The remaster draws each
+face as a Gouraud mosaic of its tile vertices, so the port does the same
+now. kexmap.py writes every tile vertex beside the map as `KEX_<NAME>.LIT`
+("x y z lum" in Build units; TOMB has 10,322 after merging shared corners),
+`kexvlight.cpp` loads it per level into a 1200-unit grid, and
+`KexVL_ShadeAt()` blends the samples within ~190 Kex units of a point
+(weight 1/d^4, so the nearest cell corners rule) through the converter's own
+luminance-to-shade curve. polymost does the rest in Kex mode
+(`polymost_kexVertexLight`): `polymost_drawalls` and `polymost_drawmaskwall`
+describe the surface each polygon lies on -- a wall's two projected ends
+with their 1/depth, or a flat's sector and plane -- and `polymost_drawpoly`
+recovers each screen vertex's world position from it (1/depth is linear in
+screen x along a wall; a flat's plane gives z, z and screen y the depth,
+depth and screen x the camera point, the view rotation undone), asks for its
+shade, and colours the vertex with it. A vertex per corner is not enough --
+a wall or floor piece hundreds of units across shaded from its corners
+alone averages the fire pot's halo away -- so `polymost_kexTessellate()`
+first cuts each polygon along the world's 128-unit cell grid, the mesh the
+remaster itself draws: world grid lines project to straight screen lines, so
+the pieces are a convex polygon split by lines (at most eight cuts per axis,
+96 pieces), each drawn through the same path. The colours ride in a second VBO on
+the fixed-function colour attribute, which `polymost1Vert.glsl` already
+reads as `v_color = gl_Color`; the per-polygon `glColor4f` path is untouched
+for everything else. Skies (`getpskyidx`), sprites, the HUD and 8-bit tiles
+keep their polygon shade; the sector glow of `KexLight_Tick` stays off when
+the field is loaded, since the glow is in the field. `VB_KEX_FLATLIGHT=1`
+turns it off for comparison: on TOMB's temple doorway 68% of the frame's
+pixels change, 18% by more than 60 levels -- the halo on the panels behind
+the two fire pots, the corridor fading into its depth.
+
+A wall's vertical gradient rides along with this: 40% of walls are lit
+differently top and bottom by six steps or more, which no per-wall shade
+could say; the vertex shade can.
+
+### The hit flash
+
+The remaster blinks a creature white for an instant when it takes damage.
+`runlist_DamageEnemy()` marks the sprite (`KexFlash_Hit`, four ticks, Kex
+mode only; a shot or blasted vase is marked the same way), `analyzesprites()`
+draws a marked sprite fullbright in pal 30, and pal 30 is white two ways: for
+a hires tile exhumed.def's `tint { pal 30 ... flags 64 }` screen-blends the
+pixels with white when the texture is loaded for that pal, and for a tile
+still drawn from the original 8-bit art -- which goes through a palette
+lookup, and pal 30 had none, so it drew in pal 0 -- `KexFlash_MakePal()`
+builds a lookup that maps every colour to the palette's whitest entry. The
+mark decays with `KexFlash_Tick()` beside the light tick. `VB_KEX_FLASHTEST=1`
+holds every creature and prop in the flash: COLONY_PSX's mantis (hires) and
+CAVERN_PSX's mummy and vase (8-bit) all capture as white silhouettes.
 
 ### Breakable props
 
@@ -800,6 +848,10 @@ The remaster's vases and barrels are shootable actors, and none of that
 survived conversion -- they came out as decor sprites that stand there and
 ignore bullets. The actor def carries `health 30`, `shootable 1`, `solid 1` and
 a `deathAnim`, and the anim is the whole recipe:
+
+The remaster's machete breaks the vases as well as the guns do: the sword's
+close-range hit, which only damaged creatures by statnum, now also sends its
+damage to a breakable prop's run (`KexBreak_IsProp`).
 
     vase01_death { frame {
         action A_PlayLocalSound("sounds/glassbreak.wav")
@@ -1403,7 +1455,11 @@ is a 416-unit assembly stretched to the screen width:
 
     head(40) scarab(32) main_left(136) main_right(136) scarab(32) head(40)
 
-which at 320 units is 30 / 25 / 105 / 105 / 25 / 30. Measured off a 1970px-wide
+which at 320 units is 30 / 25 / 105 / 105 / 25 / 30, and 18.5 tall with the
+heads at 37: the remaster draws its HUD on a 240-unit canvas (426 wide at
+16:9), where the band is 24 and the heads 48, and fitting the 416-unit
+assembly to 320 is a scale of 0.77. The bar was 16 tall with 32 heads before,
+a sixth too small beside the remaster. Measured off a 1970px-wide
 capture of the remaster: the blue slot starts at x=501 and the red at x=1151,
 so 141 native units span 477px and the horizontal scale is 4.63 px/unit. That
 scale then predicts the two gauge boxes at native x 13.2..26.7 and 17.7..31.6;
@@ -1426,7 +1482,15 @@ a run of square cells the height of the slot instead.
 
 Pickup captions come from the remaster's localization table for the items that
 mean the same thing in both games; anything ambiguous keeps the original
-wording rather than being given a caption that is merely plausible.
+wording rather than being given a caption that is merely plausible. They are
+shown the way the remaster shows them: stacked at the top of the screen,
+centred, newest at the bottom, up to four at once in the gold menu font, each
+pulsing slowly for three seconds (`KexInv_CaptionLine`, drawn by
+`KexHud_Draw`); the old single message line at the top left is gone. And a
+pickup washes the screen a strong blue for an instant, as the remaster does:
+`ItemFlash()` tints (24, 24, 112) in Kex mode where the original gave a faint
+white, and `KexInv_Pickup()` -- artifacts, dolls, transmitter pieces, which
+never went through `ItemFlash` -- calls it too.
 
 The rest of the HUD, read off the remaster's `kexSlaveHudLocal` draw code
 (the texture names `gfx/airsupply_*`, `dolphin`, `vulture` are only

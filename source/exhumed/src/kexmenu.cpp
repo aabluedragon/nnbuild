@@ -897,8 +897,11 @@ enum
 // At 320 units wide that is 30 / 25 / 105 / 105 / 25 / 30, which puts the jewel
 // where the two frames meet on the exact horizontal centre -- as it is in the
 // remaster. The band is 16 tall and the heads stand 32, overhanging it.
-#define KEX_HUD_BAND_H  16
-#define KEX_HUD_HEAD_H  32
+// The remaster draws the bar on a 240-unit canvas: 24 tall, the heads 48.
+// The 416-unit assembly fitted to 320 is a scale of 0.77: 18.5 and 37 --
+// not the 16 and 32 this used to draw, a sixth too small.
+#define KEX_HUD_BAND_H  18
+#define KEX_HUD_HEAD_H  37
 #define KEX_HUD_HEAD_W  30
 #define KEX_HUD_SCAR_W  25
 #define KEX_HUD_MAIN_W  105
@@ -967,7 +970,7 @@ static void KexHud_DrawSpark(void)
     int const sector = ((yaw + 128) >> 8) & 7;          // 0 north, clockwise
     static int8_t const dx[8] = { 0, 6, 8, 6, 0, -6, -8, -6 };
     static int8_t const dy[8] = { -7, -5, 0, 5, 7, 5, 0, -5 };
-    int const cx = 160, cy = 200 - KEX_HUD_BAND_H + 6;
+    int const cx = 160, cy = 200 - KEX_HUD_BAND_H + 7;
     int const w = tilesiz[kKexTileHudSpark].x, h = tilesiz[kKexTileHudSpark].y;
     KexDrawTile(kKexTileHudSpark, cx + dx[sector] - w / 2, cy + dy[sector] - h / 2, w, h, 0, 0, 0);
 }
@@ -1038,11 +1041,22 @@ void KexHud_Draw(void)
     {
         char ammoBuf[16];
         Bsprintf(ammoBuf, "%d", PlayerList[nLocalPlayer].nAmmo[nWeapon]);
-        KexMenu_Text(rmain + 24, bandY + 5, ammoBuf, 7, 0, 0, 1);
+        KexMenu_Text(rmain + 24, bandY + 6, ammoBuf, 7, 0, 0, 1);
     }
     KexHud_DrawSpark();
     KexHud_DrawAir();
     KexHud_DrawBadges();
+    // Pickup captions: the remaster stacks them at the top of the screen,
+    // centred, newest at the bottom, in the gold menu font, and pulses each
+    // slowly while it lasts. Build cannot overbright, so the pulse dims and
+    // returns, about once a second.
+    {
+        double const t = (double)(int)totalclock * (1000.0 / 120.0) * 0.006;
+        int const shade = 6 - (int)(6.0 * sin(t));
+        char const *text; int ticks;
+        for (int i = 0; KexInv_CaptionLine(i, &text, &ticks); i++)
+            KexMenu_Text(160, 12 + i * 13, text, 10, shade, 0, 1, 0);
+    }
     if (message_timer && message_text[0])
         printext(0, 0, message_text, kTileFont);
 }

@@ -308,9 +308,14 @@ def extract(kexdir, outdir, verbose=True):
         # because rotatesprite scales uniformly: a 176x24 bar asked for a
         # 144x14 rectangle draws only 102 wide, which is what left black holes
         # in the middle and at both ends of the previous bar.
-        HUD_MAIN = (210, 32)    # drawn at 105x16
-        HUD_HEAD = (60, 64)     # drawn at  30x32, standing above the band
-        HUD_SCAR = (50, 32)     # drawn at  25x16
+        # The remaster draws its HUD on a 240-unit-tall canvas (426 wide at
+        # 16:9): the band is 24 of 240, a tenth of the screen, the heads 48.
+        # Fitting the 416-unit assembly to 320 is a scale of 0.77, so the
+        # band is 18.5 tall here and the heads 37 -- not the 16 and 32 this
+        # used to draw, which came out a sixth too small beside the remaster.
+        HUD_MAIN = (210, 36)    # drawn at 105x18
+        HUD_HEAD = (60, 74)     # drawn at  30x37, standing above the band
+        HUD_SCAR = (50, 36)     # drawn at  25x18
         for name, tile, size in (('gfx/head_left.png',  TILE_HUD_HEAD_L, HUD_HEAD),
                                  ('gfx/head_right.png', TILE_HUD_HEAD_R, HUD_HEAD),
                                  ('gfx/main_left.png',  TILE_HUD_MAIN_L, HUD_MAIN),

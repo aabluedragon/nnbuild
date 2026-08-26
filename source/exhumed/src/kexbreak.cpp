@@ -26,6 +26,8 @@
 //
 //-------------------------------------------------------------------------
 #include "build.h"
+#include "palette.h"
+#include "polymost.h"
 #include "compat.h"
 #include "baselayer.h"
 
@@ -134,6 +136,16 @@ void KexLight_Init(void)
     s_lights = 0;
     if (s_lightTypes < 0)
         KexLight_LoadTable();
+    // The level's baked light field, for polymost's per-vertex shading; with
+    // it the sources' glow is already in the field, so the per-sector glow
+    // below stays off.
+    polymost_kexVertexLight = 0;
+    if (g_kexMode && gUserMapFilename[0])
+    {
+        KexVL_Load(gUserMapFilename);
+        polymost_kexShadeAt = KexVL_ShadeAt;
+        polymost_kexVertexLight = KexVL_Ready() && !Bgetenv("VB_KEX_FLATLIGHT");
+    }
     if (!g_kexMode || !s_lightTypes)
         return;
 
@@ -156,8 +168,78 @@ void KexLight_Init(void)
 }
 
 // Once per tick, after UndoFlashes() has cleared the previous one.
+// ---------------------------------------------------------------------------
+// The hit flash. The remaster blinks a creature white for an instant when it
+// takes damage. runlist_DamageEnemy() marks the sprite, analyzesprites()
+// draws a marked sprite fullbright in the flash palette -- pal kKexFlashPal,
+// which exhumed.def tints pure white with a screen blend, so the hires art
+// comes out as a white silhouette -- and the mark decays per tick.
+// ---------------------------------------------------------------------------
+static uint8_t s_flash[MAXSPRITES];
+static int     s_flashTest = -1;    // VB_KEX_FLASHTEST=1: every creature and prop held in the flash
+
+// The flash palette. A hires tile is whitened by exhumed.def's tint on pal
+// 30 (a screen blend with white, applied to the pixels when the texture is
+// loaded for that pal). A tile still drawn from the original 8-bit art goes
+// through a palette lookup instead, and pal 30 had none, so it drew in pal
+// 0: this builds one that maps every colour to the palette's whitest entry.
+static void KexFlash_MakePal(void)
+{
+    static int done;
+    if (done) return;
+    done = 1;
+    int best = 0, bestl = -1;
+    for (int i = 0; i < 256; i++)
+    {
+        int const l = palette[i * 3] + palette[i * 3 + 1] + palette[i * 3 + 2];
+        if (l > bestl) { bestl = l; best = i; }
+    }
+    char remap[256];
+    Bmemset(remap, best, sizeof(remap));
+    paletteMakeLookupTable(kKexFlashPal, remap, 63, 63, 63, 1);
+}
+
+void KexFlash_Hit(int nSprite)
+{
+    if (g_kexMode && (unsigned)nSprite < MAXSPRITES)
+    {
+        KexFlash_MakePal();
+        s_flash[nSprite] = 4;
+    }
+}
+
+int KexFlash_Active(int nSprite)
+{
+    if ((unsigned)nSprite >= MAXSPRITES)
+        return 0;
+    if (s_flashTest < 0)
+        s_flashTest = g_kexMode && Bgetenv("VB_KEX_FLASHTEST") ? 1 : 0;
+    if (s_flashTest && ((sprite[nSprite].statnum > 100 && sprite[nSprite].statnum < 200) || KexBreak_IsProp(nSprite)))
+    {
+        KexFlash_MakePal();
+        return 1;
+    }
+    return s_flash[nSprite] > 0;
+}
+
+void KexFlash_Tick(void)
+{
+    for (int i = 0; i < MAXSPRITES; i++)
+        if (s_flash[i]) s_flash[i]--;
+}
+
+int KexBreak_IsProp(int nSprite)
+{
+    for (int i = 0; i < s_props; i++)
+        if (s_prop[i].nSprite == nSprite)
+            return 1;
+    return 0;
+}
+
 void KexLight_Tick(void)
 {
+    if (polymost_kexVertexLight)
+        return;
     for (int i = 0; i < s_lights; i++)
     {
         spritetype const &s = sprite[s_light[i].nSprite];
@@ -652,6 +734,7 @@ void FuncKexBreak(int a, int b, int nRun)
             if (s_prop[nProp].nHealth <= 0)
                 return;
             s_prop[nProp].nHealth -= (short)b;
+            KexFlash_Hit(s_prop[nProp].nSprite);    // the remaster blinks a hit vase too
             if (s_prop[nProp].nHealth <= 0)
             {
                 // A mine's death is its countdown.
@@ -671,6 +754,7 @@ void FuncKexBreak(int a, int b, int nRun)
             if (nDamage <= 0)
                 return;
             s_prop[nProp].nHealth -= nDamage;
+            KexFlash_Hit(s_prop[nProp].nSprite);
             if (s_prop[nProp].nHealth <= 0)
             {
                 if (s_type[s_prop[nProp].nType].fuse > 0)

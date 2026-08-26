@@ -74,5 +74,7 @@ int  KexInv_TestWantsScreen(void);       // that test asking for the status scre
 int  KexInv_TestActive(void);
 int  KexInv_TestFire(void);              // the Manacle self-test holding fire
 int  KexInv_TestAir(void);               // that test asking for the air gauge
+int  KexInv_CaptionLine(int i, char const **text, int *ticks);   // the pickup caption stack, top down
+void KexInv_CaptionTick(void);
 
 #endif
