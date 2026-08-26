@@ -1389,9 +1389,9 @@ def _face_rows(m, f):
     9,376 of the retail levels' 24,706 textured wall faces do. A Build wall
     has one texture, so such a face gets a COMPOSITE tile: 64 texels wide
     (one repeat, the mapping repeats it across the wall) and as tall as the
-    face, each row copied from its texture in world phase. Only faces whose
-    rows are each one texture qualify (7,014; the 2,705 that vary along the
-    wall keep their first texture), and only up to Build's tallest tile.
+    face, each row copied from its texture in world phase. Only faces that
+    show one texture at every height qualify (the cells of a row need not
+    line up: cave walls stagger them), and only up to Build's tallest tile.
 
     Returns (top % 64, ((offset from top, height, texture), ...)) -- the
     phase is part of the key because the cells sit on the world grid.
@@ -1400,33 +1400,34 @@ def _face_rows(m, f):
     if f.tileStart < 0:
         return None
     V = m.verts; d = m.data
-    rows = {}
-    texs = set()
+    cells = []; texs = set()
     for ti in range(f.tileStart, f.tileEnd + 1):
         q = m.tileOff + ti * 16
         corners = [V[f.tileVertStart + k] for k in d[q:q + 4]]
         tex = m.textures[_st.unpack_from('<H', d, q + 12)[0]]
         zt = round(max(v[2] for v in corners)); zb = round(min(v[2] for v in corners))
-        if zt <= zb:
-            continue
-        rows.setdefault((zt, zb), set()).add(tex); texs.add(tex)
-    if len(texs) < 2 or any(len(v) > 1 for v in rows.values()):
+        if zt > zb:
+            cells.append((zt, zb, tex)); texs.add(tex)
+    if len(texs) < 2:
         return None
     top = round(max(V[f.vertStart + k][2] for k in range(4)))
     bot = round(min(V[f.vertStart + k][2] for k in range(4)))
     if top - bot > KEX_COMPOSITE_MAX_H or top - bot <= 0:
         return None
-    # the rows must tile the face top to bottom without gaps or overlaps
-    spans = sorted(rows)
-    spans.sort(key=lambda zz: -zz[0])
-    z = top
-    for zt, zb in spans:
-        if zt != z:
-            return None
-        z = zb
-    if z != bot:
-        return None
-    return (top % 64, tuple((top - zt, zt - zb, next(iter(rows[(zt, zb)]))) for zt, zb in spans))
+    zs = sorted(set([z for c in cells for z in c[:2]]), reverse=True)
+    if abs(zs[0] - top) > 1 or abs(zs[-1] - bot) > 1:
+        return None                      # the cells do not reach the face's edges
+    rows = []
+    for hi, lo in zip(zs, zs[1:]):
+        cover = set(t for zt, zb, t in cells if zt >= hi and zb <= lo)
+        if len(cover) != 1:
+            return None                  # a gap, or two textures at one height
+        t = cover.pop()
+        if rows and rows[-1][2] == t:
+            rows[-1][1] = lo
+        else:
+            rows.append([hi, lo, t])
+    return (top % 64, tuple((top - hi, hi - lo, t) for hi, lo, t in rows))
 
 
 def _bake_composites(kpf, comp_assign, outdir, verbose=True):
@@ -1547,6 +1548,23 @@ def _wall_bands(m, sects, walls, ranges, tilebase):
             upper = B['ceilingz'] - A['ceilingz']      # > 0: our part above the opening
             riser = B['floorz'] - A['floorz']          # > 0: their riser, in our texture
             ref = B['ceilingz'] if upper >= riser else A['floorz']
+            # A mosaic band gets a composite too, when this wall's picnum
+            # serves only that one part: the part above the opening hangs
+            # from our ceiling (cstat 4), the far riser from their floor.
+            KZ = -1.0 / (SCALE * WORLD)
+            if above is not None and riser <= 0 and upper > 0 and not A['ceilingheinum'] and not B['ceilingheinum']:
+                key = _face_rows(m, above)
+                if key is not None:
+                    flo, fhi = _zspan(m, above)
+                    if abs(fhi - A['ceilingz'] * KZ) <= 1 and abs(flo - B['ceilingz'] * KZ) <= 1:
+                        w['_comp'] = key; w['cstat'] |= 4
+            elif below is not None and above is None and upper <= 0 and riser > 0 and not A['floorheinum'] and not B['floorheinum']:
+                key = _face_rows(m, below)
+                if key is not None:
+                    flo, fhi = _zspan(m, below)
+                    # their riser runs from their floor (bottom) up to ours (top)
+                    if abs(fhi - A['floorz'] * KZ) <= 1 and abs(flo - B['floorz'] * KZ) <= 1:
+                        w['_comp'] = key; w['cstat'] &= ~4
             if 'overpicnum' in w:
                 # a grate or force field hangs from the higher ceiling
                 # (polymost's masked pass) and is the part that shows
@@ -3680,7 +3698,7 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
 
     # Composite tiles for the mosaic wall faces (see _face_rows), one per
     # distinct pattern across the levels.
-    comp_assign = {}
+    comp_assign = {}; comp_used = set()
     for m in parsed.values():
         for sec in m.sectors:
             for fi in range(sec.faceStart, min(sec.wallEnd + 1, m.nface)):
@@ -3743,7 +3761,7 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
             # one-sided wall in Build, so it wears the sky texture rather than
             # whichever texture index 0 happens to be.
             if '_comp' in w and w['_comp'] in comp_assign:
-                w['picnum'] = comp_assign[w.pop('_comp')]
+                w['picnum'] = comp_assign[w['_comp']]; comp_used.add(w.pop('_comp'))
             else:
                 w.pop('_comp', None)
                 w['picnum'] = local[w['picnum']] if 0 <= w['picnum'] < len(local) else (skytile if (w['picnum'] < 0 and skytile is not None) else tilebase)
@@ -3918,7 +3936,7 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
             flatdefs.append((tl, 'kexart/flats/' + os.path.basename(t), usable[assign[t]]))
     if verbose:
         print("  flats: %d textures given %d-texel tiles" % (len(flatdefs), int(KEX_FLAT_TEXELS)))
-    for tile, path in sorted(_bake_composites(kpf, comp_assign, outdir, verbose).items()):
+    for tile, path in sorted(_bake_composites(kpf, {k: t for k, t in comp_assign.items() if k in comp_used}, outdir, verbose).items()):
         flatdefs.append((tile, path, path))
     write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs, skytiles, flatdefs)
 

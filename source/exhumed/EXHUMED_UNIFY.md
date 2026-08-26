@@ -527,14 +527,20 @@ texture's orientation), on 128-unit cells that sit on the world grid. 9,376 of
 the retail levels' 24,706 textured wall faces hold two or more textures -- a
 trim band over a main texture is the usual shape -- and the converter had
 been keeping the first and dropping the rest. A Build wall has one texture,
-so a face whose rows are each one texture (7,014 of them) now gets a
-*composite* tile: 64 texels wide, one repeat that the wall mapping repeats
-across, and as tall as the face, each row copied from its texture in world
-phase (`_face_rows`, `_bake_composites`, `kexart/comp/`). It hangs from the
-face top with no `ypanning`, on solid one-sided walls under a flat ceiling
-over a flat floor, where the Build wall and the face coincide -- 855 distinct
-patterns across the levels, 7 MB of PNG. Faces that vary along the wall
-(2,705) and the 655 mosaic flats keep their first texture.
+so a face that shows one texture at every height (the cells of a row need
+not line up: cave walls stagger them) now gets a *composite* tile: 64 texels
+wide, one repeat that the wall mapping repeats across, and as tall as the
+face, each row copied from its texture in world phase (`_face_rows`,
+`_bake_composites`, `kexart/comp/`). It hangs from the face top with no
+`ypanning`: on a solid one-sided wall under a flat ceiling over a flat floor,
+where the Build wall and the face coincide; on the band above a doorway,
+which Build draws from this wall's own ceiling when cstat 4 is set; and on a
+step's riser, which Build draws from the far floor with the *near* wall's
+texture -- each only when that wall's picnum serves no other part. 7,223
+converted walls carry one (5,797 solid, 695 lintels, 731 risers), 866
+distinct patterns, 6 MB of PNG. Faces that show two textures at one height
+(5,629, tall cave walls mostly) and the 655 mosaic flats keep their first
+texture.
 
 **Long walls.** `xrepeat` follows a wall's length, one texel per Kex unit, and
 is an 8-bit field: a wall over 2040 units is written with 255 and its texture
