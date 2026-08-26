@@ -517,6 +517,25 @@ Proved on a probe first -- MAGMA's start with its floor on a `dummytile` of
 that size, next to the same view on the old tile -- and checked in both
 renderers (`ScreenBPP = 8` for classic).
 
+**Mosaic faces.** Nightdive's level-editing document (shipped in the
+install's `docs/`) describes a face as a mosaic of *tiles*: a 64x64 texture on
+a 512-unit wall "will require 8 tile columns", one texel per unit, and "there
+may be multiple tiles with different textures present per face". The compiled
+map keeps that: each tile record names its texture and its four corners (the
+`u8[4]` are indices into the face's tile-vertex run, the corner order the
+texture's orientation), on 128-unit cells that sit on the world grid. 9,376 of
+the retail levels' 24,706 textured wall faces hold two or more textures -- a
+trim band over a main texture is the usual shape -- and the converter had
+been keeping the first and dropping the rest. A Build wall has one texture,
+so a face whose rows are each one texture (7,014 of them) now gets a
+*composite* tile: 64 texels wide, one repeat that the wall mapping repeats
+across, and as tall as the face, each row copied from its texture in world
+phase (`_face_rows`, `_bake_composites`, `kexart/comp/`). It hangs from the
+face top with no `ypanning`, on solid one-sided walls under a flat ceiling
+over a flat floor, where the Build wall and the face coincide -- 855 distinct
+patterns across the levels, 7 MB of PNG. Faces that vary along the wall
+(2,705) and the 655 mosaic flats keep their first texture.
+
 **Long walls.** `xrepeat` follows a wall's length, one texel per Kex unit, and
 is an 8-bit field: a wall over 2040 units is written with 255 and its texture
 smeared by the ratio -- 1.57x along KILENTRY's 3200-unit arena sides, 33 walls

@@ -1239,6 +1239,17 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
             # water boundaries. The force fields are listed per level in
             # kexforce.txt so the engine can open them to the Scepter.
             walls[-1]['_fis'] = fis; walls[-1]['_portal'] = portal; walls[-1]['_ff'] = ff_face
+            if (portal is None and fis and not isinstance(fis[0], _Cut) and solid.link < 0
+                    and not _sloped(cf_p) and not _sloped(ff_p)):
+                rows = _face_rows(m, solid)
+                if rows is not None:
+                    # the Build wall spans the sector's ceiling to floor; the
+                    # composite is cut to the face, so they must coincide
+                    ft = max(m.verts[solid.vertStart + q][2] for q in range(4))
+                    fb = min(m.verts[solid.vertStart + q][2] for q in range(4))
+                    ct = _zspan(m, cf_face)[1]; fz = _zspan(m, ff_face)[0]
+                    if abs(ft - ct) <= 1.0 and abs(fb - fz) <= 1.0:
+                        walls[-1]['_comp'] = rows
             if portal is not None and not isinstance(portal, _Cut) and portal.tileStart >= 0:
                 w = walls[-1]
                 w['overpicnum'] = _pic(m, portal, tilebase)
@@ -1368,6 +1379,101 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
 
 KEX_TILE_Z = 64 * SCALE * WORLD    # one 64-unit texture tile, in Build z units
 
+KEX_COMPOSITE_MAX_H = 1024      # Build's tallest tile
+
+def _face_rows(m, f):
+    """A wall face's mosaic as rows, or None when one texture covers it.
+
+    A Kex face is a mosaic of 128-unit cells that can each hold a different
+    texture -- a trim band over a main texture is the common case -- and
+    9,376 of the retail levels' 24,706 textured wall faces do. A Build wall
+    has one texture, so such a face gets a COMPOSITE tile: 64 texels wide
+    (one repeat, the mapping repeats it across the wall) and as tall as the
+    face, each row copied from its texture in world phase. Only faces whose
+    rows are each one texture qualify (7,014; the 2,705 that vary along the
+    wall keep their first texture), and only up to Build's tallest tile.
+
+    Returns (top % 64, ((offset from top, height, texture), ...)) -- the
+    phase is part of the key because the cells sit on the world grid.
+    """
+    import struct as _st
+    if f.tileStart < 0:
+        return None
+    V = m.verts; d = m.data
+    rows = {}
+    texs = set()
+    for ti in range(f.tileStart, f.tileEnd + 1):
+        q = m.tileOff + ti * 16
+        corners = [V[f.tileVertStart + k] for k in d[q:q + 4]]
+        tex = m.textures[_st.unpack_from('<H', d, q + 12)[0]]
+        zt = round(max(v[2] for v in corners)); zb = round(min(v[2] for v in corners))
+        if zt <= zb:
+            continue
+        rows.setdefault((zt, zb), set()).add(tex); texs.add(tex)
+    if len(texs) < 2 or any(len(v) > 1 for v in rows.values()):
+        return None
+    top = round(max(V[f.vertStart + k][2] for k in range(4)))
+    bot = round(min(V[f.vertStart + k][2] for k in range(4)))
+    if top - bot > KEX_COMPOSITE_MAX_H or top - bot <= 0:
+        return None
+    # the rows must tile the face top to bottom without gaps or overlaps
+    spans = sorted(rows)
+    spans.sort(key=lambda zz: -zz[0])
+    z = top
+    for zt, zb in spans:
+        if zt != z:
+            return None
+        z = zb
+    if z != bot:
+        return None
+    return (top % 64, tuple((top - zt, zt - zb, next(iter(rows[(zt, zb)]))) for zt, zb in spans))
+
+
+def _bake_composites(kpf, comp_assign, outdir, verbose=True):
+    """Write kexart/comp/<tile>.png for every composite; {tile: path}."""
+    import kexpng as _png
+    outd = os.path.join(outdir, 'kexart', 'comp')
+    os.makedirs(outd, exist_ok=True)
+    cache = {}
+    out = {}
+    with zipfile.ZipFile(kpf) as z:
+        have = {n.lower(): n for n in z.namelist()}
+        def texture(name):
+            if name in cache:
+                return cache[name]
+            real = have.get(name.lower())
+            if real is None:
+                cache[name] = None; return None
+            tmp = os.path.join(outd, '_src.png')
+            open(tmp, 'wb').write(z.read(real))
+            try:
+                w_, h_, pix = _png.read(tmp)
+            finally:
+                os.remove(tmp)
+            if (w_, h_) != (64, 64):
+                pix = _png.resize(w_, h_, pix, 64, 64); w_, h_ = 64, 64
+            cache[name] = pix
+            return pix
+        for key, tile in sorted(comp_assign.items(), key=lambda kv: kv[1]):
+            phase, rows = key
+            H = sum(h for _o, h, _t in rows)
+            buf = bytearray(64 * H * 4)
+            for off, h, tex in rows:
+                pix = texture(tex)
+                if pix is None:
+                    continue
+                for r in range(off, off + h):
+                    # texture row 0 sits on the world grid: at world z the
+                    # row is (-z) mod 64, and z = top - r with top = phase (mod 64)
+                    src = (r - phase) % 64
+                    buf[r * 256:(r + 1) * 256] = pix[src * 256:(src + 1) * 256]
+            path = os.path.join(outd, 'c%d.png' % tile)
+            _png.write(path, 64, H, bytes(buf))
+            out[tile] = 'kexart/comp/c%d.png' % tile
+    if verbose:
+        print("  composites: %d mosaic wall faces baked into tiles" % len(out))
+    return out
+
 # Build maps a floor or ceiling texture at 16 world units per texel (polymost's
 # ft *= 1/16; 8 with the expand bit), a fixed scale no field can change, so a
 # 64-texel tile repeats every 1024 units -- 171 Kex units, where Kex's planar
@@ -1445,7 +1551,7 @@ def _wall_bands(m, sects, walls, ranges, tilebase):
                 # a grate or force field hangs from the higher ceiling
                 # (polymost's masked pass) and is the part that shows
                 ref = max(A['ceilingz'], B['ceilingz'])
-        w['ypanning'] = int(round((ref % T) / T * 256.0)) % 256
+        w['ypanning'] = 0 if '_comp' in w else int(round((ref % T) / T * 256.0)) % 256
         # along the wall, on the axis-aligned ones (the Kex mapping of a
         # diagonal is not this simple, so those keep their start)
         p2 = walls[w['point2']]
@@ -3572,6 +3678,18 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
                 fassign.setdefault(f, nexttile); nexttile += 1
             animdefs.append((fassign[t], fassign[t] + len(frames), speed))
 
+    # Composite tiles for the mosaic wall faces (see _face_rows), one per
+    # distinct pattern across the levels.
+    comp_assign = {}
+    for m in parsed.values():
+        for sec in m.sectors:
+            for fi in range(sec.faceStart, min(sec.wallEnd + 1, m.nface)):
+                f = m.faces[fi]
+                if f.link >= 0: continue
+                key = _face_rows(m, f)
+                if key is not None and key not in comp_assign:
+                    comp_assign[key] = nexttile; nexttile += 1
+
     with zipfile.ZipFile(kpf) as z:
         decor, decordefs, decoranims, breakables, lights = build_actor_tiles(
             z, outdir, used_types, kexactors, nexttile, verbose)
@@ -3624,7 +3742,11 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
             # flagged "Invisible" -- shows the sky in Kex; there is no invisible
             # one-sided wall in Build, so it wears the sky texture rather than
             # whichever texture index 0 happens to be.
-            w['picnum'] = local[w['picnum']] if 0 <= w['picnum'] < len(local) else (skytile if (w['picnum'] < 0 and skytile is not None) else tilebase)
+            if '_comp' in w and w['_comp'] in comp_assign:
+                w['picnum'] = comp_assign[w.pop('_comp')]
+            else:
+                w.pop('_comp', None)
+                w['picnum'] = local[w['picnum']] if 0 <= w['picnum'] < len(local) else (skytile if (w['picnum'] < 0 and skytile is not None) else tilebase)
             if 'overpicnum' in w:      # a masked portal's texture, the same way
                 o = w['overpicnum']
                 w['overpicnum'] = local[o] if o < len(local) else 0
@@ -3794,9 +3916,11 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
             finally:
                 os.remove(tmp)
             flatdefs.append((tl, 'kexart/flats/' + os.path.basename(t), usable[assign[t]]))
-    write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs, skytiles, flatdefs)
     if verbose:
         print("  flats: %d textures given %d-texel tiles" % (len(flatdefs), int(KEX_FLAT_TEXELS)))
+    for tile, path in sorted(_bake_composites(kpf, comp_assign, outdir, verbose).items()):
+        flatdefs.append((tile, path, path))
+    write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs, skytiles, flatdefs)
 
     # Breakables. The remaster's vases and barrels are shootable props: the
     # actor def gives health and a deathAnim, and that anim tosses one shard
