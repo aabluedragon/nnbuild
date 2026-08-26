@@ -539,7 +539,11 @@ step's riser, which Build draws from the far floor with the *near* wall's
 texture -- each only when that wall's picnum serves no other part. 7,223
 converted walls carry one (5,797 solid, 695 lintels, 731 risers), 866
 distinct patterns, 6 MB of PNG. Faces that show two textures at one height
-(5,629, tall cave walls mostly) keep their first texture.
+(5,629, tall cave walls mostly) keep their first texture; a capped 2D set of
+the small ones would be 1,589 faces in 1,521 patterns and 120 million texels,
+not worth it. A switch is one cell of such a face too: 11 of the 69 switches
+were buried under a composite until `_place_switch()` learned to drop it --
+the wall must carry the OFF tile, which the game flips to the next one.
 
 The 655 mosaic *flats* get composites too (`_flat_cells`,
 `_bake_flat_composites`, `kexart/fcomp/`): a tile the size of the face's

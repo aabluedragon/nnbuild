@@ -2093,6 +2093,7 @@ def _place_switch(m, sects, walls, ranges, src, si, chan, eparam, switch_pairs, 
                 if best is not None:
                     w = walls[start+best[1]]
                     w['lotag'] = 7
+                    w.pop('_comp', None)     # the switch art, not a composite of the face
                     w['hitag'] = chan
                     w['picnum'] = tex
                     return True
@@ -2102,6 +2103,7 @@ def _place_switch(m, sects, walls, ranges, src, si, chan, eparam, switch_pairs, 
     # the level stays completable.
     if num and si < m.nsector:
         walls[start]['lotag'] = 7
+        walls[start].pop('_comp', None)
         walls[start]['hitag'] = chan
     return False
 
