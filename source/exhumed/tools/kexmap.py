@@ -1433,6 +1433,10 @@ def _wall_bands(m, sects, walls, ranges, tilebase):
             upper = B['ceilingz'] - A['ceilingz']      # > 0: our part above the opening
             riser = B['floorz'] - A['floorz']          # > 0: their riser, in our texture
             ref = B['ceilingz'] if upper >= riser else A['floorz']
+            if 'overpicnum' in w:
+                # a grate or force field hangs from the higher ceiling
+                # (polymost's masked pass) and is the part that shows
+                ref = max(A['ceilingz'], B['ceilingz'])
         w['ypanning'] = int(round((ref % T) / T * 256.0)) % 256
         # along the wall, on the axis-aligned ones (the Kex mapping of a
         # diagonal is not this simple, so those keep their start)

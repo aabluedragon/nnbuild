@@ -481,7 +481,9 @@ wall whose ceiling is off the grid (8964 solid walls, 3483 wall parts) showed
 its texture shifted against its neighbours. `ypanning` (256ths of the tile)
 and `xpanning` (texels, on the axis-aligned walls; a diagonal's Kex mapping is
 not this simple) put the seams back on the grid; a wall drawn in both parts
-has one `ypanning`, and the taller part wins.
+has one `ypanning`, and the taller part wins -- unless the wall is masked, when
+the grate or force field, which hangs from the higher of the two ceilings, is
+the part that shows and takes it.
 
 **Flats at Kex scale.** Build maps a floor or ceiling texture at a fixed 16
 world units per texel (polymost's `ft *= 1/16`; 8 with the expand bit) -- a
