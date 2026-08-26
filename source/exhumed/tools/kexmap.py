@@ -970,6 +970,11 @@ def _zspan(m, f):
 # the top and then falls off a cliff -- nothing like the linear ramp that
 # reasoning from Build's palette would suggest.
 KEX_SHADE_MIN  = -10         # brightest surface: still not fullbright
+# Face flag 0x400: 181 solid faces across the levels, 164 of them COLONY_PSX's
+# colony142/colony149 light panels (the lit strips, the glowing slot), plus a
+# few on KILARENA, KILENTRY and PEAK -- a self-lit surface, drawn at the
+# brightest shade whatever the vertex light around it says.
+KEX_FACE_SELFLIT = 0x400
 KEX_SHADE_SPAN = 88         # darkest lands ~75, dim but never crushed to black
 KEX_SHADE_MAX  = 127
 
@@ -1222,8 +1227,9 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                               # it. The flat corner value it used to fall back
                               # to is the same number everywhere and says
                               # nothing at all.
-                              shade=_shade_at(m, solid if _lit(solid) else ff_face,
-                                              (k[0] + k[2]) / 2.0, (k[1] + k[3]) / 2.0)))
+                              shade=(KEX_SHADE_MIN if (solid.flags & KEX_FACE_SELFLIT)
+                                     else _shade_at(m, solid if _lit(solid) else ff_face,
+                                                    (k[0] + k[2]) / 2.0, (k[1] + k[3]) / 2.0))))
             # A TEXTURED portal face is something drawn across an opening --
             # 479 in the retail maps: grates, bars, the Scepter's force
             # fields (flag 512, forcefield369) -- and all but three carry
@@ -1281,8 +1287,10 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                           ceilingheinum=cheinum, floorheinum=fheinum,
                           ceilingstat=(2 if cheinum else 0), floorstat=(2 if fheinum else 0),
                           ceilingpicnum=_pic(m,cf,tilebase), floorpicnum=_pic(m,ff,tilebase),
-                          ceilingshade=light_shades.get(si, (_shade(m,cf), 0))[0],
-                          floorshade=light_shades.get(si, (0, _shade(m,ff)))[1]))
+                          ceilingshade=(KEX_SHADE_MIN if cf.flags & KEX_FACE_SELFLIT
+                                        else light_shades.get(si, (_shade(m,cf), 0))[0]),
+                          floorshade=(KEX_SHADE_MIN if ff.flags & KEX_FACE_SELFLIT
+                                      else light_shades.get(si, (0, _shade(m,ff)))[1])))
 
     # nextwall: the neighbour's wall carrying the same edge reversed. A face
     # links to a SOURCE sector; when that sector was cut the edge may sit in

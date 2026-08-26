@@ -1080,6 +1080,16 @@ so the original game is untouched. On the entrance view that took the solid
 pixels from p05/p25/p50/p95 = 18/35/60/135 to 36/52/78/136 against the
 remaster's 26/48/92/143, and pure black from 1.0% to none.
 
+**Self-lit faces.** Face flag 0x400 marks 181 solid faces, 164 of them
+COLONY_PSX's `colony142`/`colony149` light panels: a surface lit by itself. The
+converter drew them at the vertex light around them, which left some at shade
+50 beside others at -10. They take `KEX_SHADE_MIN` now (`KEX_FACE_SELFLIT`),
+walls, floors and ceilings alike. Of the other bits the census turned up,
+0x8000 is MARSH's alpha-cut tree canopies on solid walls, which Build already
+draws with the sky through the leaves; 0x2000 is on nearly every wall portal
+and 0x2/0x4/0x8/0x10/0x100/0x1000 sit on portals or plain stone with no
+visible effect to carry.
+
 ### The sky
 
 The skies are **dome maps, not Build panoramas**: 256x512, with the top rows the
