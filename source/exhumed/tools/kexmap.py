@@ -1328,8 +1328,26 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                     w['nextsector'] = cand; break
             w['nextwall'] = hit
             if hit < 0: w['nextsector'] = -1
-    for wi,w in enumerate(walls):          # a portal only counts if both halves agree
-        if w['nextwall'] >= 0 and walls[w['nextwall']]['nextwall'] != wi:
+    # A portal only counts if both halves agree -- but a half that found its
+    # partner by coordinate and whose partner is simply unpaired adopts it.
+    # TOMB's temple sill: the porch's face links to the sill, the sill's face
+    # back links to sector 257, a dummy elsewhere (260 and 262, the fire-pot
+    # platforms, do the same), so the sill's half never found the porch and
+    # both halves used to be cleared: a solid, sky-textured wall across the
+    # doorway that blocked walking and let the eye through. Only a partner
+    # that has no other partner is adopted; two halves that point at
+    # different walls are still both cleared.
+    sec_of = {}
+    for si,(st,num) in enumerate(ranges):
+        for i in range(num):
+            sec_of[st+i] = si
+    for wi,w in enumerate(walls):
+        if w['nextwall'] < 0: continue
+        o = walls[w['nextwall']]
+        if o['nextwall'] == wi: continue
+        if o['nextwall'] < 0 and wi in sec_of:
+            o['nextwall'] = wi; o['nextsector'] = sec_of[wi]
+        else:
             w['nextwall'] = -1; w['nextsector'] = -1
     for wi,w in enumerate(walls):          # a masked wall is masked from both sides
         if w['nextwall'] >= 0 and 'overpicnum' in w and 'overpicnum' not in walls[w['nextwall']]:

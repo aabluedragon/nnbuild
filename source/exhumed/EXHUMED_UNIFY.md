@@ -1195,6 +1195,30 @@ sits at 1664), roofs, lintels -- and their front bands and undersides vanished
 behind a sky plane 341 units up; the porch showed open sky where the remaster
 shows the canopy. Sky ceilings keep Kex's height now.
 
+**The player's step.** Walking into TOMB's temple stopped dead at the
+doorway, as if at an invisible wall; a jump got past it. The doorway (Kex
+sector 94, floor 1184) opens onto sector 101 whose floor is 1248: a 64-unit
+step, the remaster's standard one-cell step. Exhumed's player moves with
+`movesprite(..., 5120, -5120, ...)`, and `clipmove()` refuses a wall whose far
+floor is more than 5120 z units -- 320 world units, 53 Kex units -- above the
+feet. The remaster's player steps 66 (`Obj_Player`, `stepHeight 66`); 636
+portal steps across the levels lie between 53 and 70 units, every one of them
+a jump here. `Kex_PlayerStep()` is 70 Kex units (6720 z) in Kex mode and the
+original 5120 otherwise, at the three player calls. `VB_KEX_WALK=<ticks>`
+walks the player straight ahead for that long and logs where it gets to every
+hundred ticks, which is how this was tried: from the courtyard the walk now
+ends in sector 101, up the step.
+
+The hunt also turned up a second doorway, behind the level start: the sill
+into the other temple hall (Kex sector 261) had become a solid, sky-textured
+wall that blocked walking and let the eye through. The porch's face links to
+the sill, but the sill's face back links to sector 257, a dummy elsewhere
+(260 and 262, the fire-pot platforms, do the same), so the sill's half never
+found the porch and the "both halves agree" rule cleared both. A half that
+found its partner by coordinate now adopts a partner that is simply unpaired;
+two halves pointing at different walls are still both cleared. TOMB has 1,720
+portals now, eight more.
+
 ### Related fixes
 
 - `AngleChase()` (move.cpp) squared a flyer's step to take its length and

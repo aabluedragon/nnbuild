@@ -57,6 +57,7 @@ void Exhumed_CaptureFrame(void);
 // is playing the remaster's levels, so it gets the remaster's menu too.
 extern int g_kexMode;
 int Kex_BaseVisibility(void);
+int Kex_PlayerStep(void);
 char const *Kex_MusicForMap(char const *mapname);
 
 // kexmovie.cpp: play an Ogg Theora movie fullscreen. 1 = played to the end or

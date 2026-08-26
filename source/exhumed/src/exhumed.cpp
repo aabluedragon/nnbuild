@@ -1024,6 +1024,18 @@ int Kex_BaseVisibility(void)
     return g_kexMode ? 512 : 2048;
 }
 
+// The player's step: clipmove() refuses a wall whose far floor is more than
+// this far above the feet. The original levels were built for 5120 z units
+// (320 world units). The remaster's player steps 66 Kex units (Obj_Player,
+// stepHeight 66), and its levels use 64-unit steps everywhere -- 636 portal
+// steps between 53 and 70 units, TOMB's temple sill among them at 67 -- all
+// of which needed a jump here. 70 units, at 16 z units per world unit and
+// 6 world units per Kex unit.
+int Kex_PlayerStep(void)
+{
+    return g_kexMode ? 70 * 16 * 6 : 5120;
+}
+
 void mysetbrightness(char nBrightness)
 {
     g_visibility = Kex_BaseVisibility() - (nBrightness << 9);

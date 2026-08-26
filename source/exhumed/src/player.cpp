@@ -2122,6 +2122,30 @@ void FuncPlayer(int a, int nDamage, int nRun)
 
             int nMove = 0; // TEMP
 
+            // VibeBuild32 test hook: VB_KEX_WALK=<ticks> walks the player
+            // straight ahead for that many ticks, then logs where it got to
+            // (Kex units), so a step or a sill can be tried without a hand
+            // on the keys.
+            {
+                static int s_kexWalk = -1;
+                if (s_kexWalk < 0)
+                {
+                    char const *const env = Bgetenv("VB_KEX_WALK");
+                    s_kexWalk = env ? Batoi(env) : 0;
+                }
+                if (s_kexWalk > 0)
+                {
+                    x = Cos(sprite[nPlayerSprite].ang) * 12;
+                    y = Sin(sprite[nPlayerSprite].ang) * 12;
+                    --s_kexWalk;
+                    if (s_kexWalk % 100 == 0)
+                        LOG_F(INFO, "Kex walk: %d ticks left, at build (%d, %d, %d) ang %d, kex (%d, %d, %d), sector %d",
+                              s_kexWalk, sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z,
+                              sprite[nPlayerSprite].ang, sprite[nPlayerSprite].x / 6, -sprite[nPlayerSprite].y / 6,
+                              -sprite[nPlayerSprite].z / 96, sprite[nPlayerSprite].sectnum);
+                }
+            }
+
             if (bSlipMode)
             {
                 nMove = 0;
@@ -2136,11 +2160,11 @@ void FuncPlayer(int a, int nDamage, int nRun)
             }
             else
             {
-                nMove = movesprite(nPlayerSprite, x, y, z, 5120, -5120, CLIPMASK0);
+                nMove = movesprite(nPlayerSprite, x, y, z, 5120, -Kex_PlayerStep(), CLIPMASK0);
 
                 short var_54 = sprite[nPlayerSprite].sectnum;
 
-                pushmove_old(&sprite[nPlayerSprite].x, &sprite[nPlayerSprite].y, &sprite[nPlayerSprite].z, &var_54, sprite[nPlayerSprite].clipdist << 2, 5120, -5120, CLIPMASK0);
+                pushmove_old(&sprite[nPlayerSprite].x, &sprite[nPlayerSprite].y, &sprite[nPlayerSprite].z, &var_54, sprite[nPlayerSprite].clipdist << 2, 5120, -Kex_PlayerStep(), CLIPMASK0);
                 if (var_54 != sprite[nPlayerSprite].sectnum) {
                     mychangespritesect(nPlayerSprite, var_54);
                 }
@@ -2326,7 +2350,7 @@ void FuncPlayer(int a, int nDamage, int nRun)
                                     mychangespritesect(nPlayerSprite, spr_sectnum);
                                 }
 
-                                movesprite(nPlayerSprite, var_F4, var_F8, z, 5120, -5120, CLIPMASK0);
+                                movesprite(nPlayerSprite, var_F4, var_F8, z, 5120, -Kex_PlayerStep(), CLIPMASK0);
                                 goto loc_1AB8E;
                             }
                         }
