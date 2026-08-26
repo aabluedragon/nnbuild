@@ -539,8 +539,20 @@ step's riser, which Build draws from the far floor with the *near* wall's
 texture -- each only when that wall's picnum serves no other part. 7,223
 converted walls carry one (5,797 solid, 695 lintels, 731 risers), 866
 distinct patterns, 6 MB of PNG. Faces that show two textures at one height
-(5,629, tall cave walls mostly) and the 655 mosaic flats keep their first
-texture.
+(5,629, tall cave walls mostly) keep their first texture.
+
+The 655 mosaic *flats* get composites too (`_flat_cells`,
+`_bake_flat_composites`, `kexart/fcomp/`): a tile the size of the face's
+bounding box at the flats' 24 texels per 64 units, each texel sampled from
+the cell under it in world phase, so it joins seamlessly onto the plain
+flats around it. Build maps a flat from the world origin -- measured with a
+four-quadrant probe tile on MAGMA's start: u = x/16, v = -y/16 in Build
+units, the classic renderer's `-globalposy` -- and the flat's panning only
+reaches half a large tile (its unit is 2^floor(log2 width)/256 texels), so
+the composite is baked already shifted onto that grid: its period is the
+bounding box, so the wrap is seamless and no panning is needed. Level flats
+only; 407 floors and 183 ceilings in the converted levels, 278 patterns,
+1 MB.
 
 **Long walls.** `xrepeat` follows a wall's length, one texel per Kex unit, and
 is an 8-bit field: a wall over 2040 units is written with 255 and its texture

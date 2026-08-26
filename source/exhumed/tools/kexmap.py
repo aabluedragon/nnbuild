@@ -1287,7 +1287,10 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
         # A vertical link is only an OPENING when the face carries no tiles, the
         # same way a wall portal does. In the retail maps it almost never is --
         # see build_tror().
+        fkey = _flat_cells(m, ff) if not fheinum and ff.link < 0 else None
+        ckey = _flat_cells(m, cf) if not cheinum and cf.link < 0 else None
         sects.append(dict(floorsky=(ff.tileStart < 0 and ff.link < 0),
+                          _fcomp_f=fkey, _fcomp_c=ckey,
                           yax_ceil=(cf.link if cf.tileStart < 0 else -1),
                           yax_floor=(ff.link if ff.tileStart < 0 else -1),
                           wallptr=start, wallnum=len(walls)-start,
@@ -1428,6 +1431,95 @@ def _face_rows(m, f):
         else:
             rows.append([hi, lo, t])
     return (top % 64, tuple((top - hi, hi - lo, t) for hi, lo, t in rows))
+
+
+def _flat_cells(m, f):
+    """A floor or ceiling's mosaic, or None when one texture covers it.
+
+    Returns (x0, y0, W, H, cells): the cells' bounding box in Kex units, the
+    composite's size in texels (KEX_FLAT_TEXELS per 64 units), and the cells
+    as (x0, y0, x1, y1, texture). Build maps a flat from the world origin
+    (u = x/16, v = -y/16 in its own units, one texel per 16), and the flat's
+    panning only reaches half a large tile, so the composite is baked
+    already shifted onto that grid: its period is the bounding box, so the
+    wrap is seamless, and no panning is needed.
+    """
+    import struct as _st
+    if f.tileStart < 0:
+        return None
+    V = m.verts; d = m.data
+    cells = []; texs = set()
+    for ti in range(f.tileStart, f.tileEnd + 1):
+        q = m.tileOff + ti * 16
+        cs = [V[f.tileVertStart + k] for k in d[q:q + 4]]
+        tex = m.textures[_st.unpack_from('<H', d, q + 12)[0]]
+        x0 = min(v[0] for v in cs); x1 = max(v[0] for v in cs)
+        y0 = min(v[1] for v in cs); y1 = max(v[1] for v in cs)
+        if x1 - x0 < 0.5 or y1 - y0 < 0.5:
+            continue
+        cells.append((x0, y0, x1, y1, tex)); texs.add(tex)
+    if len(texs) < 2:
+        return None
+    bx0 = min(c[0] for c in cells); bx1 = max(c[2] for c in cells)
+    by0 = min(c[1] for c in cells); by1 = max(c[3] for c in cells)
+    W = int(round((bx1 - bx0) * KEX_FLAT_TEXELS / 64.0)); H = int(round((by1 - by0) * KEX_FLAT_TEXELS / 64.0))
+    if W < 2 or H < 2 or W > KEX_COMPOSITE_MAX_H or H > KEX_COMPOSITE_MAX_H:
+        return None
+    return (round(bx0, 2), round(by0, 2), W, H, tuple(sorted((round(c[0], 2), round(c[1], 2), round(c[2], 2), round(c[3], 2), c[4]) for c in cells)))
+
+
+def _bake_flat_composites(kpf, fcomp_assign, outdir, verbose=True):
+    """Write kexart/fcomp/<tile>.png for every flat composite; {tile: path}."""
+    import kexpng as _png
+    outd = os.path.join(outdir, 'kexart', 'fcomp')
+    os.makedirs(outd, exist_ok=True)
+    cache = {}; out = {}
+    k = KEX_FLAT_TEXELS / 64.0            # texels per Kex unit
+    with zipfile.ZipFile(kpf) as z:
+        have = {n.lower(): n for n in z.namelist()}
+        def texture(name):
+            if name in cache:
+                return cache[name]
+            real = have.get(name.lower())
+            if real is None:
+                cache[name] = None; return None
+            tmp = os.path.join(outd, '_src.png')
+            open(tmp, 'wb').write(z.read(real))
+            try:
+                w_, h_, pix = _png.read(tmp)
+            finally:
+                os.remove(tmp)
+            if (w_, h_) != (64, 64):
+                pix = _png.resize(w_, h_, pix, 64, 64)
+            cache[name] = pix
+            return pix
+        for key, tile in sorted(fcomp_assign.items(), key=lambda kv: kv[1]):
+            x0, y0, W, H, cells = key
+            buf = bytearray(W * H * 4)
+            for j in range(H):
+                # column i of the tile is world u = i (mod W); the face's
+                # u range starts at x0*k, so wrap back into the box
+                ky = y0 + ((j + 0.5 - y0 * k) % H) / k
+                for i in range(W):
+                    kx = x0 + ((i + 0.5 - x0 * k) % W) / k
+                    tex = None
+                    for cx0, cy0, cx1, cy1, t in cells:
+                        if cx0 <= kx < cx1 and cy0 <= ky < cy1:
+                            tex = t; break
+                    if tex is None:
+                        continue
+                    pix = texture(tex)
+                    if pix is None:
+                        continue
+                    sx = int(kx) % 64; sy = int(ky) % 64
+                    o = (j * W + i) * 4
+                    buf[o:o + 4] = pix[(sy * 64 + sx) * 4:(sy * 64 + sx) * 4 + 4]
+            path = os.path.join(outd, 'f%d.png' % tile)
+            _png.write(path, W, H, bytes(buf))
+            out[tile] = 'kexart/fcomp/f%d.png' % tile
+    if verbose:
+        print("  flat composites: %d mosaic floors and ceilings baked into tiles" % len(out))
+    return out
 
 
 def _bake_composites(kpf, comp_assign, outdir, verbose=True):
@@ -3698,6 +3790,15 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
 
     # Composite tiles for the mosaic wall faces (see _face_rows), one per
     # distinct pattern across the levels.
+    fcomp_assign = {}; fcomp_used = set()
+    for m in parsed.values():
+        for sec in m.sectors:
+            for fi in (sec.wallEnd + 1, sec.wallEnd + 2):
+                f = m.faces[min(fi, m.nface - 1)]
+                if f.link >= 0: continue
+                key = _flat_cells(m, f)
+                if key is not None and key not in fcomp_assign:
+                    fcomp_assign[key] = nexttile; nexttile += 1
     comp_assign = {}; comp_used = set()
     for m in parsed.values():
         for sec in m.sectors:
@@ -3777,6 +3878,11 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
             if s is None: continue
             s['ceilingpicnum'] = flocal[s['ceilingpicnum']] if 0 <= s['ceilingpicnum'] < len(flocal) else tilebase
             s['floorpicnum']   = flocal[s['floorpicnum']]   if 0 <= s['floorpicnum']   < len(flocal) else tilebase
+            fk = s.pop('_fcomp_f', None); ck = s.pop('_fcomp_c', None)
+            if fk is not None and fk in fcomp_assign:
+                s['floorpicnum'] = fcomp_assign[fk]; fcomp_used.add(fk)
+            if ck is not None and ck in fcomp_assign:
+                s['ceilingpicnum'] = fcomp_assign[ck]; fcomp_used.add(ck)
             # An untextured floor (KILARENA's arena has 127) is the void Kex
             # draws nothing on: the sky, parallaxed, as an untextured ceiling.
             if s['floorpicnum'] < 0 or s.get('floorsky'):
@@ -3937,6 +4043,8 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
     if verbose:
         print("  flats: %d textures given %d-texel tiles" % (len(flatdefs), int(KEX_FLAT_TEXELS)))
     for tile, path in sorted(_bake_composites(kpf, {k: t for k, t in comp_assign.items() if k in comp_used}, outdir, verbose).items()):
+        flatdefs.append((tile, path, path))
+    for tile, path in sorted(_bake_flat_composites(kpf, {k: t for k, t in fcomp_assign.items() if k in fcomp_used}, outdir, verbose).items()):
         flatdefs.append((tile, path, path))
     write_def(os.path.join(outdir, "exhumed.def"), usable, animdefs, skytiles, flatdefs)
 
