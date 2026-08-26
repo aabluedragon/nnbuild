@@ -1452,11 +1452,19 @@ def _wall_bands(m, sects, walls, ranges, tilebase):
         dx, dy = p2['x'] - w['x'], -(p2['y'] - w['y'])        # back to Kex y
         kx, ky = w['x'], -w['y']
         if dy == 0 and dx != 0:
-            w['xpanning'] = int(round(kx if dx > 0 else -kx)) % 64
+            xpan = kx if dx > 0 else -kx
         elif dx == 0 and dy != 0:
-            w['xpanning'] = int(round(ky if dy > 0 else -ky)) % 64
+            xpan = ky if dy > 0 else -ky
         else:
-            w['xpanning'] = 0
+            xpan = 0
+        # xrepeat shows a whole multiple of 8 texels across the wall, so a
+        # wall not a multiple of 8 units long is stretched by up to 4 texels
+        # -- 33,000 walls by a texel or more, 12,000 by three -- and with the
+        # seams pinned at the start all of it lands at the far join. Shift
+        # the texture by half the error so each end carries half.
+        L = (dx * dx + dy * dy) ** 0.5
+        xpan -= (w['xrepeat'] * 8 - L) / 2.0
+        w['xpanning'] = int(round(xpan)) % 64
     for w in walls:
         w.pop('_fis', None); w.pop('_portal', None); w.pop('_ff', None)
 

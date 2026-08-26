@@ -300,7 +300,16 @@ header   'PSM\x01' + 8 x u32: ntex, nvert, nsector, nface, ntile,
                                nzone, nevent, nactor
 strings  u16-length-prefixed: sky texture, then the texture table
 verts    nvert x 16: float x, y, z + RGBA (baked vertex lighting)
-sectors  nsector x 20: u16 faceStart, u16 wallFaceEnd, ...
+sectors  nsector x 20: u16 faceStart, u16 wallFaceEnd, u16 ?, i16 ?, i16 ?, u16[4] 0, u16 flags
+         The third word is 128 on most levels and a per-level constant
+         elsewhere (KILENTRY 89, TOMB 91, MARSH 96, SELBUROW 108, MAGMA,
+         SELPATH, SLAVCAMP and SUNKEN 112) with a handful of sectors
+         differing inside a level -- always the last few of the level,
+         KARNAK's 420-423 of 424, MAGMA's 537-539 of 540: later additions
+         carrying a newer editor default. It does not track the vertex
+         light, and it is tooling residue rather than anything drawn. The fourth and fifth read as
+         signed heights. The last word is the sector flag word (256
+         submerged, 16 wading, 32 unknown).
          faces[faceStart..wallFaceEnd] are the walls; wallFaceEnd+1 is the
          ceiling face and wallFaceEnd+2 the floor face
 faces    nface x 32: i16 tileStart, i16 tileEnd (-1 = untextured),
@@ -483,7 +492,12 @@ and `xpanning` (texels, on the axis-aligned walls; a diagonal's Kex mapping is
 not this simple) put the seams back on the grid; a wall drawn in both parts
 has one `ypanning`, and the taller part wins -- unless the wall is masked, when
 the grate or force field, which hangs from the higher of the two ceilings, is
-the part that shows and takes it.
+the part that shows and takes it. One more thing `xpanning` absorbs: `xrepeat`
+shows a whole multiple of 8 texels across a wall, so a wall not a multiple of
+8 units long is stretched by up to 4 texels -- 33,000 walls by a texel or
+more, 12,000 by three -- and with the seams pinned at the start all of that
+landed at the far join. The texture is shifted by half the error, so each end
+carries half.
 
 **Flats at Kex scale.** Build maps a floor or ceiling texture at a fixed 16
 world units per texel (polymost's `ft *= 1/16`; 8 with the expand bit) -- a
