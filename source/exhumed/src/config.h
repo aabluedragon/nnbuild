@@ -119,6 +119,7 @@ typedef struct {
 
 #define kSetupFilename  APPBASENAME ".cfg"
 extern char setupfilename[BMAX_PATH];
+const char *CONFIG_CvarsFilename(void);
 
 extern hashtable_t h_gamefuncs;
 

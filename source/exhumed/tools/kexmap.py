@@ -1148,6 +1148,7 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
     light_shades = _split_light(m, edge_cache, src, pinned)
     _split_walls_light(m, edge_cache)
     _split_tjunctions(m, edge_cache)
+    _split_long(edge_cache)
     pieces = {}
     for i, o in enumerate(src):
         pieces.setdefault(o, []).append(i)
@@ -1354,6 +1355,36 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                     lotag=61, hitag=0, ang=0, cstat=0x82))
                 break
     return sects, walls, ranges
+
+def _split_long(edge_cache):
+    """Split every edge that is too long for Build's 8-bit xrepeat.
+
+    xrepeat follows the wall's length, one texel per Kex unit, and tops out at
+    255 -- so a wall over 2040 Kex units is drawn with 255 and its texture
+    smeared by the ratio: 1.57x on KILENTRY's 3200-unit arena sides, 33 walls
+    across the levels. Cut into equal pieces, each under the limit, from the
+    lexically smaller end so that both sides of a portal edge -- which hold the
+    same two points reversed -- produce the very same split points and still
+    pair by coordinate afterwards.
+    """
+    MAXLEN = 255.0 * 8.0 * KEX_UNITS_PER_TEXEL / WORLD
+    for si, es in list(edge_cache.items()):
+        out = []
+        for k, fis in es:
+            x1, y1, x2, y2 = k
+            L = ((x2-x1)**2 + (y2-y1)**2) ** 0.5
+            n = int(L // MAXLEN) + 1
+            if n < 2:
+                out.append((k, fis)); continue
+            a, b = sorted(((x1, y1), (x2, y2)))
+            pts = [a] + [(round(a[0] + (b[0]-a[0]) * j / n, 1), round(a[1] + (b[1]-a[1]) * j / n, 1))
+                         for j in range(1, n)] + [b]
+            if (x1, y1) != a:
+                pts.reverse()
+            for j in range(n):
+                out.append(((pts[j][0], pts[j][1], pts[j+1][0], pts[j+1][1]), fis))
+        edge_cache[si] = out
+
 
 def _split_tjunctions(m, edge_cache, verbose=False):
     """Split every sector edge at vertices that other sectors put on it.

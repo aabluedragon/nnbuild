@@ -453,6 +453,13 @@ least 45 degrees (`STEEP_HEINUM`, 520 planes across the levels, 330 of them
 over 63 degrees) and left off gentler terrain, where world alignment tiles
 seamlessly across the many small pieces and the stretch stays under 1.4x.
 
+**Long walls.** `xrepeat` follows a wall's length, one texel per Kex unit, and
+is an 8-bit field: a wall over 2040 units is written with 255 and its texture
+smeared by the ratio -- 1.57x along KILENTRY's 3200-unit arena sides, 33 walls
+across the levels. `_split_long()` cuts such an edge into equal pieces after the
+T-junction pass, from the lexically smaller end so that both sides of a portal
+edge produce the same points and still pair by coordinate. No wall clamps now.
+
 **Animated surfaces.** `defs/animPicInfo.txt` lists each animated texture's
 frames and speed. Build plays an animation as a run of *consecutive* tiles, so
 tile numbers can no longer be handed out as levels are read: the converter now
@@ -1425,7 +1432,13 @@ texture run from 6000 reached 6988, one level short of the menu art at 7000.
 
 Every unattended run takes `VB_HIDE_WINDOW=1` (the window is created hidden
 and never raised; rendering and screenshots go on offscreen) and `-nosound`,
-which now silences the music as well as the effects. The unattended check is
+which now silences the music as well as the effects, and `-cfg vbtest.cfg` for
+a windowed 800x600 config of its own. That last flag had only ever existed in
+the commented-out help text: the game read and wrote `pcexhumed.cfg` whatever
+was passed -- and it writes the config at *startup* (`CONFIG_WriteSetup(1)`),
+not just on exit, so every test launch rewrote the player's file. It is parsed
+now, ahead of `CONFIG_ReadSetup()`, and the cvars file follows it as
+`<name>_cvars.cfg` (`CONFIG_CvarsFilename()`). The unattended check is
 `VB_KEXINV_TEST=<ticks>`: that far into a level it
 takes every collectible the level holds as if walked over, logs the tally,
 then pages through the status screen screenshotting each page.

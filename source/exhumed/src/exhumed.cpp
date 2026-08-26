@@ -2170,6 +2170,15 @@ int Exhumed_app_main(int argc, char const* const* argv)
                 bUserMap = true;
                 doTitle = kFalse;
             }
+            else if (Bstrcasecmp(pOpt, "cfg") == 0 && i + 1 < argc)
+            {
+                // VibeBuild32: "-cfg" was only ever in the (commented-out) help
+                // text; the game read and wrote APPBASENAME.cfg whatever was
+                // passed, so a test launch meant to use its own file rewrote
+                // the player's config on a clean exit. Parsed before
+                // CONFIG_ReadSetup(), the name reaches every read and write.
+                Bstrncpyz(setupfilename, argv[++i], BMAX_PATH);
+            }
             else if (Bstrncasecmp(pChar, "null", 4) == 0)
             {
                 pChar += 4;
@@ -2505,7 +2514,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
     Xfree(setupFileName);
 	*/
 
-    OSD_Exec(APPBASENAME "_cvars.cfg");
+    OSD_Exec(CONFIG_CvarsFilename());
     OSD_Exec(APPBASENAME "_autoexec.cfg");
 
     CONFIG_SetDefaultKeys(keydefaults, true);

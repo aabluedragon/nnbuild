@@ -808,6 +808,25 @@ void SetupInput()
         JOYSTICK_SetDeadZone(i,JoystickAnalogueDead[i],JoystickAnalogueSaturate[i]);
 }
 
+// The cvars file sits beside the config it belongs to: APPBASENAME_cvars.cfg
+// for the default, <name>_cvars.cfg for a "-cfg <name>.cfg" run -- so a test
+// launch with its own config does not rewrite the player's binds and cvars.
+const char *CONFIG_CvarsFilename(void)
+{
+    static char filename[BMAX_PATH];
+    if (!Bstrcmp(setupfilename, kSetupFilename))
+        Bstrncpyz(filename, APPBASENAME "_cvars.cfg", sizeof(filename));
+    else
+    {
+        char base[BMAX_PATH];
+        Bstrncpyz(base, setupfilename, sizeof(base));
+        char *dot = Bstrrchr(base, '.');
+        if (dot && !Bstrchr(dot, '/')) *dot = 0;
+        Bsnprintf(filename, sizeof(filename), "%s_cvars.cfg", base);
+    }
+    return filename;
+}
+
 void CONFIG_WriteSettings(void) // save binds and aliases to <cfgname>_settings.cfg
 {
     char filename[BMAX_PATH];
@@ -818,7 +837,7 @@ void CONFIG_WriteSettings(void) // save binds and aliases to <cfgname>_settings.
         Bsprintf(filename, "%s_settings.cfg", strtok(setupfilename, "."));
 	*/
 
-    Bsprintf(filename, APPBASENAME "_cvars.cfg");
+    Bstrncpyz(filename, CONFIG_CvarsFilename(), sizeof(filename));
 
     buildvfs_FILE fp = buildvfs_fopen_write(filename);
 
