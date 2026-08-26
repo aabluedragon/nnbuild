@@ -1232,6 +1232,7 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
             # (cstat 1, hitscan 64) unless flag 16384, SUNKEN's vertical
             # water boundaries. The force fields are listed per level in
             # kexforce.txt so the engine can open them to the Scepter.
+            walls[-1]['_fis'] = fis; walls[-1]['_portal'] = portal; walls[-1]['_ff'] = ff_face
             if portal is not None and not isinstance(portal, _Cut) and portal.tileStart >= 0:
                 w = walls[-1]
                 w['overpicnum'] = _pic(m, portal, tilebase)
@@ -1312,6 +1313,7 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
         if w['nextwall'] >= 0 and 'overpicnum' in w and 'overpicnum' not in walls[w['nextwall']]:
             o = walls[w['nextwall']]
             o['overpicnum'] = w['overpicnum']; o['cstat'] |= w['cstat'] & (16 | 1 | 64)
+    _wall_bands(m, sects, walls, ranges, tilebase)
 
     _resolve_events(m, sects, walls, ranges, src, switch_pairs, tilebase)
     m.kex_flat_sprites = _flat_sprites(m, sects, walls, ranges, src)
@@ -1355,6 +1357,86 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                     lotag=61, hitag=0, ang=0, cstat=0x82))
                 break
     return sects, walls, ranges
+
+KEX_TILE_Z = 64 * SCALE * WORLD    # one 64-unit texture tile, in Build z units
+
+def _wall_bands(m, sects, walls, ranges, tilebase):
+    """The texture and texture origin of each wall's drawn parts.
+
+    Build draws a two-sided wall in two parts and hands them to different
+    walls: the part above the opening wears THIS wall's picnum, the part
+    below it -- a step's riser -- wears the NEXT wall's, the one on the far
+    side. Kex keeps each band with the sector it faces: the lintel above a
+    doorway is a solid face of the room, the riser of a step a solid face of
+    the lower sector. So a wall's picnum must be its own sector's band above
+    the portal when there is one, and otherwise the far sector's band below
+    it. Taking the first solid face on the edge -- and, on an edge that is
+    all portal, the portal face itself -- gave every riser the texture of
+    whichever face came first, and lately the sky.
+
+    Kex also maps its textures in world space: the tile seams sit on
+    multiples of 64 units in z (on the faces whose top is off that grid,
+    703 interior tile vertices of KARNAK's are on it and 8 are not) and along
+    the axes. Build hangs a texture from a reference height -- the ceiling
+    for a solid wall, the far ceiling for the part above an opening, the
+    near floor for a riser -- and from the wall's first point. ypanning and
+    xpanning, in 256ths of the tile and in texels, put the seams back on the
+    grid. A wall drawn in both parts has one ypanning; the taller part wins.
+    """
+    sec_of = {}
+    for si, (st, num) in enumerate(ranges):
+        for i in range(num):
+            sec_of[st + i] = si
+    T = float(KEX_TILE_Z)
+    for wi, w in enumerate(walls):
+        fis = w.get('_fis'); portal = w.get('_portal'); ff = w.get('_ff')
+        si = sec_of.get(wi)
+        if si is None or sects[si] is None:
+            continue
+        A = sects[si]
+        nw = w['nextwall']
+        if nw < 0 or portal is None or isinstance(portal, _Cut) or fis is None:
+            ref = A['ceilingz']
+        else:
+            n = walls[nw]; B = sects[sec_of[nw]]
+            lo, hi = _zspan(m, portal)
+            def band(faces, above):
+                best = None
+                for fi in faces or ():
+                    if isinstance(fi, _Cut): continue
+                    f = m.faces[fi]
+                    if f.link >= 0 or f.tileStart < 0: continue
+                    flo, fhi = _zspan(m, f)
+                    ok = flo >= hi - 1.0 if above else fhi <= lo + 1.0
+                    if ok and (best is None or (fhi - flo) > best[0]):
+                        best = (fhi - flo, f)
+                return best[1] if best else None
+            above = band(fis, True)
+            below = band(n.get('_fis'), False)
+            if above is not None:
+                w['picnum'] = _pic(m, above, tilebase)
+            elif below is not None:
+                w['picnum'] = _pic(m, below, tilebase)
+            elif w['picnum'] < 0 and ff is not None:
+                w['picnum'] = _pic(m, ff, tilebase)
+            upper = B['ceilingz'] - A['ceilingz']      # > 0: our part above the opening
+            riser = B['floorz'] - A['floorz']          # > 0: their riser, in our texture
+            ref = B['ceilingz'] if upper >= riser else A['floorz']
+        w['ypanning'] = int(round((ref % T) / T * 256.0)) % 256
+        # along the wall, on the axis-aligned ones (the Kex mapping of a
+        # diagonal is not this simple, so those keep their start)
+        p2 = walls[w['point2']]
+        dx, dy = p2['x'] - w['x'], -(p2['y'] - w['y'])        # back to Kex y
+        kx, ky = w['x'], -w['y']
+        if dy == 0 and dx != 0:
+            w['xpanning'] = int(round(kx if dx > 0 else -kx)) % 64
+        elif dx == 0 and dy != 0:
+            w['xpanning'] = int(round(ky if dy > 0 else -ky)) % 64
+        else:
+            w['xpanning'] = 0
+    for w in walls:
+        w.pop('_fis', None); w.pop('_portal', None); w.pop('_ff', None)
+
 
 def _split_long(edge_cache):
     """Split every edge that is too long for Build's 8-bit xrepeat.
@@ -3245,7 +3327,8 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
     for w in out_walls:
         b += struct.pack('<iihhhhhhbBBBBBhhh',
             w['x'] * WORLD, w['y'] * WORLD, w['point2'], w['nextwall'], w['nextsector'],
-            w['cstat'], w['picnum'], w.get('overpicnum', 0), w['shade'], 0, w['xrepeat'], w['yrepeat'], 0, 0,
+            w['cstat'], w['picnum'], w.get('overpicnum', 0), w['shade'], 0, w['xrepeat'], w['yrepeat'],
+            w.get('xpanning', 0), w.get('ypanning', 0),
             w['lotag'], w.get('hitag', 0), w['extra'])   # a switch's channel rides in the wall's hitag
     b += struct.pack('<H', len(sprites))
     for s in sprites:

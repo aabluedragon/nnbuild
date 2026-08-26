@@ -453,6 +453,34 @@ least 45 degrees (`STEEP_HEINUM`, 520 planes across the levels, 330 of them
 over 63 degrees) and left off gentler terrain, where world alignment tiles
 seamlessly across the many small pieces and the stretch stays under 1.4x.
 
+**Which band a wall wears, and where its texture starts.** Build draws a
+two-sided wall in two parts and hands them to different walls: the part above
+the opening wears *this* wall's picnum, the part below it -- a step's riser --
+wears the *next* wall's, the one on the far side (polymost's "under" pass
+takes `nwal->picnum` and `nwal->ypanning`). Kex keeps each band with the
+sector it faces: the lintel over a doorway is a solid face of the room, the
+riser of a step a solid face of the lower sector, and the step's upper side
+has nothing on that edge but the portal. The converter took the first solid
+face on the edge, or on an all-portal edge the portal face itself, so every
+riser wore whichever face came first -- and, once untextured faces meant the
+sky, the sky: 35,000 portal walls across the levels carried the sky tile.
+`_wall_bands()` runs after the walls are paired and gives each wall its own
+sector's band above the portal if there is one, else the far sector's band
+below it (518 portal walls are left with the sky, edges with no band on either
+side, where no part is ever drawn).
+
+The same pass fixes the texture origin. Kex maps its textures in world space:
+on the faces whose top is off the 64-unit grid, 703 of KARNAK's interior tile
+vertices sit on multiples of 64 in z and 8 do not (SUNKEN 1240 to 146), so the
+seams follow the world, not the wall. Build hangs a texture from a reference
+height -- the ceiling for a solid wall, the far ceiling for the part above an
+opening, the near floor for a riser -- and from the wall's first point, so a
+wall whose ceiling is off the grid (8964 solid walls, 3483 wall parts) showed
+its texture shifted against its neighbours. `ypanning` (256ths of the tile)
+and `xpanning` (texels, on the axis-aligned walls; a diagonal's Kex mapping is
+not this simple) put the seams back on the grid; a wall drawn in both parts
+has one `ypanning`, and the taller part wins.
+
 **Long walls.** `xrepeat` follows a wall's length, one texel per Kex unit, and
 is an 8-bit field: a wall over 2040 units is written with 255 and its texture
 smeared by the ratio -- 1.57x along KILENTRY's 3200-unit arena sides, 33 walls
