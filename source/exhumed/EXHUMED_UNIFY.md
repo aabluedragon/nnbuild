@@ -543,7 +543,9 @@ distinct patterns, 6 MB of PNG. Faces that show two textures at one height
 the small ones would be 1,589 faces in 1,521 patterns and 120 million texels,
 not worth it. A switch is one cell of such a face too: 11 of the 69 switches
 were buried under a composite until `_place_switch()` learned to drop it --
-the wall must carry the OFF tile, which the game flips to the next one.
+the wall must carry the OFF tile, which the game flips to the next one. And a
+composite is still art: a face with an animated texture in it (19 faces, lava
+and water bands) keeps its plain tile so it keeps moving.
 
 The 655 mosaic *flats* get composites too (`_flat_cells`,
 `_bake_flat_composites`, `kexart/fcomp/`): a tile the size of the face's

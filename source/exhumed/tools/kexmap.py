@@ -3799,7 +3799,9 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
                 f = m.faces[min(fi, m.nface - 1)]
                 if f.link >= 0: continue
                 key = _flat_cells(m, f)
-                if key is not None and key not in fcomp_assign:
+                # a composite is still art: a face with an animated texture
+                # (lava, water) keeps its plain tile so it keeps moving
+                if key is not None and key not in fcomp_assign and not any(c[4] in anims for c in key[4]):
                     fcomp_assign[key] = nexttile; nexttile += 1
     comp_assign = {}; comp_used = set()
     for m in parsed.values():
@@ -3808,7 +3810,7 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
                 f = m.faces[fi]
                 if f.link >= 0: continue
                 key = _face_rows(m, f)
-                if key is not None and key not in comp_assign:
+                if key is not None and key not in comp_assign and not any(t in anims for _o, _h, t in key[1]):
                     comp_assign[key] = nexttile; nexttile += 1
 
     with zipfile.ZipFile(kpf) as z:
