@@ -1222,6 +1222,24 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                               # nothing at all.
                               shade=_shade_at(m, solid if _lit(solid) else ff_face,
                                               (k[0] + k[2]) / 2.0, (k[1] + k[3]) / 2.0)))
+            # A TEXTURED portal face is something drawn across an opening --
+            # 479 in the retail maps: grates, bars, the Scepter's force
+            # fields (flag 512, forcefield369) -- and all but three carry
+            # flag 1, which reads as "blocks". Build's masked wall (cstat
+            # 16, the texture in overpicnum) is exactly that; it blocks
+            # (cstat 1, hitscan 64) unless flag 16384, SUNKEN's vertical
+            # water boundaries. The force fields are listed per level in
+            # kexforce.txt so the engine can open them to the Scepter.
+            if portal is not None and not isinstance(portal, _Cut) and portal.tileStart >= 0:
+                w = walls[-1]
+                w['overpicnum'] = _pic(m, portal, tilebase)
+                w['cstat'] |= 16
+                if not (portal.flags & 16384):
+                    w['cstat'] |= 1 | 64
+                tex = m.tiles[portal.tileStart][1]
+                tname = m.textures[tex] if tex < len(m.textures) else ''
+                if (portal.flags & 512) or 'forcefield' in tname.lower():
+                    m.kex_force_tiles = getattr(m, 'kex_force_tiles', set()) | {w['overpicnum']}
         ranges.append((start, len(walls)-start))
         cf = cf_face
         ff = ff_face
@@ -1287,6 +1305,10 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
     for wi,w in enumerate(walls):          # a portal only counts if both halves agree
         if w['nextwall'] >= 0 and walls[w['nextwall']]['nextwall'] != wi:
             w['nextwall'] = -1; w['nextsector'] = -1
+    for wi,w in enumerate(walls):          # a masked wall is masked from both sides
+        if w['nextwall'] >= 0 and 'overpicnum' in w and 'overpicnum' not in walls[w['nextwall']]:
+            o = walls[w['nextwall']]
+            o['overpicnum'] = w['overpicnum']; o['cstat'] |= w['cstat'] & (16 | 1 | 64)
 
     _resolve_events(m, sects, walls, ranges, src, switch_pairs, tilebase)
     m.kex_flat_sprites = _flat_sprites(m, sects, walls, ranges, src)
@@ -3181,7 +3203,7 @@ def write_build(path, sects, walls, ranges, start, sprites=()):
     for w in out_walls:
         b += struct.pack('<iihhhhhhbBBBBBhhh',
             w['x'] * WORLD, w['y'] * WORLD, w['point2'], w['nextwall'], w['nextsector'],
-            w['cstat'], w['picnum'], 0, w['shade'], 0, w['xrepeat'], w['yrepeat'], 0, 0,
+            w['cstat'], w['picnum'], w.get('overpicnum', 0), w['shade'], 0, w['xrepeat'], w['yrepeat'], 0, 0,
             w['lotag'], w.get('hitag', 0), w['extra'])   # a switch's channel rides in the wall's hitag
     b += struct.pack('<H', len(sprites))
     for s in sprites:
@@ -3406,6 +3428,7 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
     done = 0
     teleports = []
     chanrows = []
+    forcerows = []
     for name in sorted(parsed):
         m = parsed[name]
         for tag, chan in sorted(_channels(m).items()):
@@ -3416,10 +3439,17 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
                                        ramses=KEX_RAMSES.get(name.upper()))
         for w in walls:
             w['picnum'] = local[w['picnum']] if w['picnum'] < len(local) else tilebase
+            if 'overpicnum' in w:      # a masked portal's texture, the same way
+                o = w['overpicnum']
+                w['overpicnum'] = local[o] if o < len(local) else 0
+                if o in getattr(m, 'kex_force_tiles', ()):
+                    m.kex_force_global = getattr(m, 'kex_force_global', set()) | {w['overpicnum']}
         skytile = assign.get(m.sky)
         for s in sects:
             if s is None: continue
             s['ceilingpicnum'] = local[s['ceilingpicnum']] if s['ceilingpicnum'] < len(local) else tilebase
+        for tile in sorted(getattr(m, 'kex_force_global', ())):
+            forcerows.append((KEX_MAP_PREFIX + os.path.basename(name).upper(), tile))
             s['floorpicnum']   = local[s['floorpicnum']]   if s['floorpicnum']   < len(local) else tilebase
             if s['ceilingsky'] and skytile is not None:
                 # Sky sectors reach absurd heights (TOMB's tallest is 15744
@@ -3589,6 +3619,7 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
 
     # Tags of 1000 and up, and the channel each was allotted (see _channels).
     _write_table(outdir, "kexchan.txt", "map tag channel", chanrows, "channel allotments", verbose)
+    _write_table(outdir, "kexforce.txt", "map tile", forcerows, "force field tiles", verbose)
 
     # Sounds: LoadSound() consults this before opening the original VOC, so the
     # remaster's own recordings play wherever one corresponds.

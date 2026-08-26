@@ -1661,6 +1661,22 @@ heights every ten ticks; the tags are read back from the map file, since
   wall switch on that tag's channel the way the use key does, 40 ticks
   after the look-at; PEAK's switch on 89 and THOTH's on 25 are seen to
   open their doors.
+- **Grates, bars and force fields were open air.** A TEXTURED portal face
+  is something drawn across an opening -- 479 in the retail maps, 476 of
+  them flagged 1, "blocks" -- and the converter drew none of them: the
+  wall took the solid face's texture or the floor's and stayed passable.
+  They are Build masked walls now (cstat 16, the texture in overpicnum,
+  from both sides), blocking and hitscan-solid unless flag 16384 (SUNKEN's
+  eighteen vertical water boundaries, which stay passable). The 26 faces
+  of `forcefield369` with flag 512 are the Scepter's force fields, which
+  kexinv.h had down as absent: kexforce.txt lists their tile per level and
+  `KexForce_Update()` unblocks them for a Scepter holder at load and the
+  moment the scepter is taken (SELBUROW's two: "closed", then "open to the
+  Scepter" when the boss test grants it). The untextured portals flagged 1
+  (813) and 4 (1,235) are left as they are: 374 of the former are level
+  passages and blocking them on a guess could wall a level off.
+  `VB_KEX_LOOKAT_OVERPIC=<tile>` stands the player before the first such
+  wall.
 - **Most of SUNKEN was dry.** Water, lava and slime come from the FACE
   flags (a floor face's 0x40 is a water link, 0x20 lava, 0x80 slime), and
   only a sector with an air face above it got the engine's water-side

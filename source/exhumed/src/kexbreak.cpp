@@ -1002,6 +1002,36 @@ static void Kex_LookAtDebug(void)
     // whose hitag is that tag's channel (a door or lift) -- the player stands
     // in a neighbouring sector, facing it, to watch it fire.
     static int s_tag = -2, s_tagTicks = 0, s_tagSector = -1;
+    // VB_KEX_LOOKAT_OVERPIC=<tile>: stand before the first masked wall with
+    // that overpicnum (a grate, a force field), 640 units back in its sector.
+    static int s_over = -2, s_overTicks = 0;
+    if (s_over == -2)
+    { char const *e = getenv("VB_KEX_LOOKAT_OVERPIC"); s_over = e ? Batoi(e) : -1; }
+    if (s_over >= 0 && ++s_overTicks == 90)
+    {
+        for (int w = 0; w < numwalls; w++)
+        {
+            if (wall[w].overpicnum != s_over || !(wall[w].cstat & 16))
+                continue;
+            int const w2 = wall[w].point2;
+            int const mx = (wall[w].x + wall[w2].x) / 2, my = (wall[w].y + wall[w2].y) / 2;
+            int const dx = wall[w2].x - wall[w].x, dy = wall[w2].y - wall[w].y;
+            int const ang = getangle(dx, dy);
+            // the wall's inside is to the right of its direction in Build's y-down space
+            int const px = mx + mulscale14(Cos((ang + 512) & kAngleMask), 640), py = my + mulscale14(Sin((ang + 512) & kAngleMask), 640);
+            int16_t ns = (int16_t)sectorofwall(w);
+            updatesector(px, py, &ns);
+            if (ns < 0) continue;
+            sprite[nSprite].x = px; sprite[nSprite].y = py; sprite[nSprite].z = sector[ns].floorz - 2048;
+            mychangespritesect(nSprite, ns);
+            int const look = getangle(mx - px, my - py);
+            PlayerList[nLocalPlayer].q16angle = fix16_from_int(look); PlayerList[nLocalPlayer].q16oangle = PlayerList[nLocalPlayer].q16angle;
+            sprite[nSprite].ang = (int16_t)look; PlayerList[nLocalPlayer].opos = sprite[nSprite].xyz;
+            OSD_Printf("Kex look-at: masked wall %d (overpicnum %d, cstat %d) from sector %d\n", w, s_over, wall[w].cstat, ns);
+            break;
+        }
+        s_over = -1;
+    }
     if (s_tag == -2)
     { char const *e = getenv("VB_KEX_LOOKAT_TAG"); s_tag = e ? Batoi(e) : -1; }
     if (s_tag >= 0 && s_target < 0 && ++s_tagTicks == 90)
@@ -1386,6 +1416,65 @@ static int s_triggers;
 
 void KexTrigger_Reset(void) { s_triggers = 0; }
 
+// ---------------------------------------------------------------------------
+// Force fields. The remaster's forcefield faces are masked walls here
+// (kexmap.py), listed by tile per level in kexforce.txt; the Scepter of
+// Sobek walks through them, so a holder finds them unblocked -- at level
+// start, or the moment the scepter is taken.
+// ---------------------------------------------------------------------------
+struct KexForceRow { char map[32]; int32_t tile; };
+static KexForceRow s_forceAll[64];
+static int s_forceAllCount = -1;
+
+static bool KexForce_ParseLine(char *line, int nRec)
+{
+    KexForceRow &r = s_forceAll[nRec];
+    int tile;
+    if (Bsscanf(line, "%31s %d", r.map, &tile) < 2)
+        return false;
+    r.tile = tile;
+    return true;
+}
+
+static int KexForce_IsTile(int tile)
+{
+    if (s_forceAllCount < 0)
+        s_forceAllCount = KexTable_Load("kexforce.txt", (int)ARRAY_SIZE(s_forceAll), KexForce_ParseLine);
+    char base[32];
+    Kex_LevelName(base, sizeof(base));
+    for (int i = 0; i < s_forceAllCount; i++)
+    {
+        char const *m = s_forceAll[i].map;
+        if (!Bstrncmp(m, "KEX_", 4)) m += 4;
+        char mapUp[32];
+        Bstrncpyz(mapUp, m, sizeof(mapUp));
+        if (char *dot = Bstrrchr(mapUp, '.')) *dot = 0;
+        if (!Bstrcmp(mapUp, base) && s_forceAll[i].tile == tile)
+            return 1;
+    }
+    return 0;
+}
+
+void KexForce_Update(void)
+{
+    if (!g_kexMode)
+        return;
+    int held = 0;
+    for (int i = 0; i < nTotalPlayers; i++)
+        held |= KexInv_HasArtifact(i, kKexArtiScepter);
+    int n = 0, opened = 0;
+    for (int w = 0; w < numwalls; w++)
+    {
+        if (!(wall[w].cstat & 16) || wall[w].overpicnum <= 0 || !KexForce_IsTile(wall[w].overpicnum))
+            continue;
+        n++;
+        if (held && (wall[w].cstat & 1))
+        { wall[w].cstat &= ~(1 | 64); opened++; }
+    }
+    if (n)
+        OSD_Printf("Kex force fields: %d walls, %s\n", n, held ? "open to the Scepter" : "closed");
+}
+
 // Movers that hold where their tag put them. Build's channel-only ceiling
 // door (24) and lift down (9) come with a pause switch that sends them back
 // 60 / 150 ticks later, which is right for a plate-driven door and wrong for
@@ -1765,6 +1854,7 @@ void KexScript_Init(void)
     }
     if (s_scripts)
         OSD_Printf("Kex script: %d script sectors on this level\n", s_scripts);
+    KexForce_Update();
     {
         int nUnder = 0, nWade = 0;
         for (int i = 0; i < numsectors; i++)

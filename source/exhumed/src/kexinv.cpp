@@ -225,7 +225,11 @@ void KexInv_GiveArtifact(int nPlayer, int nArtifact)
         int const had = (KexInvList[nPlayer].artifacts >> nArtifact) & 1;
         KexInvList[nPlayer].artifacts |= (uint8_t)(1 << nArtifact);
         if (!had)
+        {
             KexScript_ArtifactTaken(nArtifact);   // opens what the artifact opens (tag 1000 + index)
+            if (nArtifact == kKexArtiScepter)
+                KexForce_Update();                // and the force fields, to the Scepter
+        }
     }
 }
 

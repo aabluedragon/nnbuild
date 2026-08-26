@@ -21,7 +21,7 @@ enum
     kKexArtiMask,           // breathe under water (Build's mask, made permanent)
     kKexArtiShawl,          // hold jump while falling to float
     kKexArtiAnklets,        // half damage from lava and slime
-    kKexArtiScepter,        // force fields -- none in the converted maps
+    kKexArtiScepter,        // walks through force fields (masked walls listed in kexforce.txt) and laser beams
     kKexArtiFeather,        // hold jump while falling to hover
     kKexArtiCount
 };
