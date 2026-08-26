@@ -545,7 +545,14 @@ not worth it. A switch is one cell of such a face too: 11 of the 69 switches
 were buried under a composite until `_place_switch()` learned to drop it --
 the wall must carry the OFF tile, which the game flips to the next one. And a
 composite is still art: a face with an animated texture in it (19 faces, lava
-and water bands) keeps its plain tile so it keeps moving.
+and water bands) keeps its plain tile so it keeps moving. Two more details:
+`yrepeat` is an integer, 21 for the exact 21.33, so a wall shows 98.4% of a
+texel-per-unit tile over its height -- a repeating texture never minds, but a
+composite cut to the face would lose 16 units of a 1024-unit face's bottom
+band, so composites are baked at that ratio and the whole face lands on the
+whole wall. And a two-sided wall whose picnum serves both a lintel above the
+opening and the far riser below it can show only one texture: 96 such walls
+across the levels differ, and stay as they were.
 
 The 655 mosaic *flats* get composites too (`_flat_cells`,
 `_bake_flat_composites`, `kexart/fcomp/`): a tile the size of the face's
@@ -1175,6 +1182,18 @@ rgb(122,157,200) high up and rgb(172,200,214) near the horizon.
 
 Build will not treat a tile as a sky panorama until `tileSetupSky()` has seen
 it, which is what `multipsky` does -- without it a parallax ceiling draws black.
+
+**Sky ceilings at their real height.** A sky ceiling used to be capped 2048
+world units (341 Kex units) above its floor, on the suspicion that a ceiling
+far off, nearly edge-on at the horizon, was the source of the noise band along
+the top of the screen. The band was the map-name collision, and a parallax sky
+never draws the plane anyway. What the cap did do was cut off everything above
+it: 956 of the 2,653 capped sky sectors across the levels have a neighbour
+with a textured ceiling above the cap -- TOMB's brick canopy over the temple
+porch (Kex sector 258, ceiling `karnak259` at 1536 under a courtyard whose sky
+sits at 1664), roofs, lintels -- and their front bands and undersides vanished
+behind a sky plane 341 units up; the porch showed open sky where the remaster
+shows the canopy. Sky ceilings keep Kex's height now.
 
 ### Related fixes
 

@@ -1560,6 +1560,19 @@ def _bake_composites(kpf, comp_assign, outdir, verbose=True):
                     # row is (-z) mod 64, and z = top - r with top = phase (mod 64)
                     src = (r - phase) % 64
                     buf[r * 256:(r + 1) * 256] = pix[src * 256:(src + 1) * 256]
+            # yrepeat is an integer, 21 for 128/6 = 21.33, so a wall shows
+            # 21/21.33 = 98.4% of a texel-per-unit tile over its height: a
+            # repeating texture never minds, but a composite cut to the face
+            # would lose 16 units of a 1024-unit face's bottom band. Bake it
+            # at that ratio, so the whole face lands on the whole wall.
+            ratio = KEX_YREPEAT / (128.0 / KEX_UNITS_PER_TEXEL)
+            H2 = max(1, int(round(H * ratio)))
+            if H2 != H:
+                buf2 = bytearray(64 * H2 * 4)
+                for r2 in range(H2):
+                    r = min(H - 1, int(r2 / ratio))
+                    buf2[r2 * 256:(r2 + 1) * 256] = buf[r * 256:(r + 1) * 256]
+                buf = buf2; H = H2
             path = os.path.join(outd, 'c%d.png' % tile)
             _png.write(path, 64, H, bytes(buf))
             out[tile] = 'kexart/comp/c%d.png' % tile
@@ -3893,14 +3906,17 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None):
                 s['floorpicnum'] = skytile if skytile is not None else tilebase
                 s['floorstat'] |= 1
             if s['ceilingsky'] and skytile is not None:
-                # Sky sectors reach absurd heights (TOMB's tallest is 15744
-                # world units). A ceiling that far off is nearly edge-on at the
-                # horizon, where the texture mapper's perspective divide
-                # degenerates -- the suspected source of the noise band along
-                # the top of the screen. Cap it well above anything reachable.
-                cap = s['floorz'] - 2048 * SCALE
-                if s['ceilingz'] < cap:
-                    s['ceilingz'] = cap
+                # A sky ceiling keeps the height Kex gives it. It used to be
+                # capped 2048 world units above the floor, on the suspicion that
+                # a ceiling that far off, nearly edge-on at the horizon, was
+                # the source of the noise band along the top of the screen;
+                # the band turned out to be the map-name collision, and the
+                # parallax sky never draws the plane anyway. What the cap did
+                # do was cut off everything above it: 956 of the 2,653 capped
+                # sky sectors across the levels have a neighbour with a
+                # textured ceiling above the cap -- TOMB's brick canopy over
+                # the temple porch, roofs, lintels -- and their front bands and
+                # undersides vanished behind a sky plane 341 units up.
                 # Drawn as an ordinary textured ceiling rather than with Build's
                 # parallax bit. The remaster's skies are 256x512 portrait tiles;
                 # fed to the parallax sky renderer they came out black with a
